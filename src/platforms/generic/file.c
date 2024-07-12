@@ -1221,10 +1221,10 @@ clean:
 	return err;
 }
 
-impl Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad);
+impl Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad, Error *e_rr);
 
-Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
-	return File_loadVirtualInternal1(userData, loc, true);
+Bool File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc, Error *e_rr) {
+	return File_loadVirtualInternal1(userData, loc, true, e_rr);
 }
 
 Error File_unloadVirtualInternal(void *userData, CharString loc) {
@@ -1270,7 +1270,7 @@ clean:
 
 Bool File_isVirtualLoaded(CharString loc) {
 	FileLoadVirtual virt = (FileLoadVirtual) { 0 };
-	return !File_loadVirtualInternal1(&virt, loc, false).genericError;
+	return File_loadVirtualInternal1(&virt, loc, false, NULL);
 }
 
 Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]) {

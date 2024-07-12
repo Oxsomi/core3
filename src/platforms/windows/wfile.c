@@ -170,22 +170,22 @@ clean:
 	return err;
 }
 
-Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad) {
+Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad, Error *e_rr) {
 
 	CharString isChild = CharString_createNull();
 	ListU16 tmp = (ListU16) { 0 };
-	Error err = Error_none();
+	Bool s_uccess = true;
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	gotoIfError(clean, CharString_createCopyx(loc, &isChild))
+	gotoIfError2(clean, CharString_createCopyx(loc, &isChild))
 
 	if(CharString_length(isChild))
-		gotoIfError(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
+		gotoIfError2(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
 
 	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "File_loadVirtualInternal1() couldn't lock virtualSectionsLock"))
+		retError(clean, Error_invalidState(0, "File_loadVirtualInternal1() couldn't lock virtualSectionsLock"))
 
 	Bool foundAny = false;
 
@@ -206,29 +206,29 @@ Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool 
 			if (!section->loaded) {
 
 				if (!allowLoad)
-					gotoIfError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
+					retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
 
 				HGLOBAL handle = NULL;
 				CAFile file = (CAFile) { 0 };
 				Buffer copy = Buffer_createNull();
 
-				gotoIfError(clean0, CharString_toUTF16x(section->path, &tmp))
+				gotoIfError2(clean0, CharString_toUTF16x(section->path, &tmp))
 				HRSRC data = FindResourceW(NULL, tmp.ptr, RT_RCDATA);
 				ListU16_freex(&tmp);
 
 				if(!data)
-					gotoIfError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal1() FindResource failed"))
+					retError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal1() FindResource failed"))
 
 				U32 size = (U32) SizeofResource(NULL, data);
 				handle = LoadResource(NULL, data);
 
 				if(!handle)
-					gotoIfError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal1() LoadResource failed"))
+					retError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal1() LoadResource failed"))
 
 				const U8 *dat = (const U8*) LockResource(handle);
-				gotoIfError(clean0, Buffer_createCopyx(Buffer_createRefConst(dat, size), &copy))
+				gotoIfError2(clean0, Buffer_createCopyx(Buffer_createRefConst(dat, size), &copy))
 
-				gotoIfError(clean0, CAFile_readx(copy, userData->encryptionKey, &file))
+				gotoIfError3(clean0, CAFile_readx(copy, userData->encryptionKey, &file, e_rr))
 
 				section->loadedData = file.archive;
 				file.archive = (Archive) { 0 };
@@ -250,15 +250,12 @@ Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool 
 
 		//Otherwise we want to use error to determine if it's present or not
 
-		else err = section->loaded ? Error_none() :
-			Error_notFound(1, 1, "File_loadVirtualInternal1()::loc not found (1)");
-
-		if(err.genericError)
-			goto clean;
+		else if(!section->loaded)
+			retError(clean, Error_notFound(1, 1, "File_loadVirtualInternal1()::loc not found (1)"))
 	}
 
 	if(!foundAny)
-		err = Error_notFound(2, 1, "File_loadVirtualInternal1()::loc not found (2)");
+		retError(clean, Error_notFound(2, 1, "File_loadVirtualInternal1()::loc not found (2)"))
 
 clean:
 
@@ -266,5 +263,5 @@ clean:
 		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
 	CharString_freex(&isChild);
-	return err;
+	return s_uccess;
 }

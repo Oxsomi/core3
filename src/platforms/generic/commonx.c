@@ -183,53 +183,67 @@ Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer,
 
 Bool CAFile_freex(CAFile *caFile) { return CAFile_free(caFile, Platform_instance.alloc); }
 
-Error CAFile_writex(CAFile caFile, Buffer *result) {
-	return CAFile_write(caFile, Platform_instance.alloc, result);
+Bool CAFile_writex(CAFile caFile, Buffer *result, Error *e_rr) {
+	return CAFile_write(caFile, Platform_instance.alloc, result, e_rr);
 }
 
-Error CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile) {
-	return CAFile_read(file, encryptionKey, Platform_instance.alloc, caFile);
+Bool CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile, Error *e_rr) {
+	return CAFile_read(file, encryptionKey, Platform_instance.alloc, caFile, e_rr);
+}
+
+Bool CAFile_combinex(CAFile a, CAFile b, CAFile *combined, Error *e_rr) {
+	return CAFile_combine(a, b, Platform_instance.alloc, combined, e_rr);
 }
 
 //oiDL
 
-Error DLFile_createx(DLSettings settings, DLFile *dlFile) {
-	return DLFile_create(settings, Platform_instance.alloc, dlFile);
+Bool DLFile_createx(DLSettings settings, DLFile *dlFile, Error *e_rr) {
+	return DLFile_create(settings, Platform_instance.alloc, dlFile, e_rr);
 }
 
 Bool DLFile_freex(DLFile *dlFile) { return DLFile_free(dlFile, Platform_instance.alloc); }
 
-Error DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFile) {
-	return DLFile_createList(settings, buffers, Platform_instance.alloc, dlFile);
+Bool DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFile, Error *e_rr) {
+	return DLFile_createList(settings, buffers, Platform_instance.alloc, dlFile, e_rr);
 }
 
-Error DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
-	return DLFile_createUTF8List(settings, buffers, Platform_instance.alloc, dlFile);
+Bool DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile, Error *e_rr) {
+	return DLFile_createUTF8List(settings, buffers, Platform_instance.alloc, dlFile, e_rr);
 }
 
-Error DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
-	return DLFile_createBufferList(settings, buffers, Platform_instance.alloc, dlFile);
+Bool DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile, Error *e_rr) {
+	return DLFile_createBufferList(settings, buffers, Platform_instance.alloc, dlFile, e_rr);
 }
 
-Error DLFile_createAsciiListx(DLSettings settings, ListCharString strings, DLFile *dlFile) {
-	return DLFile_createAsciiList(settings, strings, Platform_instance.alloc, dlFile);
+Bool DLFile_createAsciiListx(DLSettings settings, ListCharString strings, DLFile *dlFile, Error *e_rr) {
+	return DLFile_createAsciiList(settings, strings, Platform_instance.alloc, dlFile, e_rr);
 }
 
-Error DLFile_addEntryx(DLFile *dlFile, Buffer entry) { return DLFile_addEntry(dlFile, entry, Platform_instance.alloc); }
-
-Error DLFile_addEntryAsciix(DLFile *dlFile, CharString entry) {
-	return DLFile_addEntryAscii(dlFile, entry, Platform_instance.alloc);
+Bool DLFile_addEntryx(DLFile *dlFile, Buffer entry, Error *e_rr) {
+	return DLFile_addEntry(dlFile, entry, Platform_instance.alloc, e_rr);
 }
 
-Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry) {
-	return DLFile_addEntryUTF8(dlFile, entry, Platform_instance.alloc);
+Bool DLFile_addEntryAsciix(DLFile *dlFile, CharString entry, Error *e_rr) {
+	return DLFile_addEntryAscii(dlFile, entry, Platform_instance.alloc, e_rr);
 }
 
-Error DLFile_writex(DLFile dlFile, Buffer *result) { return DLFile_write(dlFile, Platform_instance.alloc, result); }
-
-Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile) {
-	return DLFile_read(file, encryptionKey, allowLeftOverData, Platform_instance.alloc, dlFile);
+Bool DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry, Error *e_rr) {
+	return DLFile_addEntryUTF8(dlFile, entry, Platform_instance.alloc, e_rr);
 }
+
+Bool DLFile_writex(DLFile dlFile, Buffer *result, Error *e_rr) {
+	return DLFile_write(dlFile, Platform_instance.alloc, result, e_rr);
+}
+
+Bool DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile, Error *e_rr) {
+	return DLFile_read(file, encryptionKey, allowLeftOverData, Platform_instance.alloc, dlFile, e_rr);
+}
+
+Bool DLFile_combinex(DLFile a, DLFile b, DLFile *combined, Error *e_rr) {
+	return DLFile_combine(a, b, Platform_instance.alloc, combined, e_rr);
+}
+
+//SHFile
 
 Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr) {
 	return SHFile_create(flags, compilerVersion, sourceHash, Platform_instance.alloc, shFile, e_rr);

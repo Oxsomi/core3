@@ -68,7 +68,21 @@ clean:
 	return err;
 }
 
-Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
+Bool CLI_convertToCA(
+	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	CAFile file = (CAFile) { 0 };
+	Archive archive = (Archive) { 0 };
+	CharString resolved = CharString_createNull();
+	CharString tmp = CharString_createNull();
+	Buffer res = Buffer_createNull();
+	Bool isVirtual = false;
+
+	FileInfo fileInfo = (FileInfo) { 0 };
+	Buffer fileData = Buffer_createNull();
 
 	(void)inputInfo;
 
@@ -95,10 +109,10 @@ Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 	//Ensure encryption key isn't provided if we're not encrypting
 
 	if(encryptionKey && !settings.encryptionType)
-		return Error_invalidOperation(3, "CLI_convertToCA() encryptionKey provided but no encryption was used");
+		retError(clean, Error_invalidOperation(3, "CLI_convertToCA() encryptionKey provided but no encryption was used"))
 
 	if(!encryptionKey && settings.encryptionType)
-		return Error_unauthorized(0, "CLI_convertToCA() requires encryptionKey but not provided");
+		retError(clean, Error_unauthorized(0, "CLI_convertToCA() requires encryptionKey but not provided"))
 
 	//Compression type
 
@@ -116,27 +130,13 @@ Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 			Buffer_createRef(encryptionKey, sizeof(settings.encryptionKey))
 		);
 
-	//Create our entries
-
-	CAFile file = (CAFile) { 0 };
-	Error err = Error_none();
-
 	//Archive
 
-	Archive archive = (Archive) { 0 };
-	CharString resolved = CharString_createNull();
-	CharString tmp = CharString_createNull();
-	Buffer res = Buffer_createNull();
-	Bool isVirtual = false;
-
-	FileInfo fileInfo = (FileInfo) { 0 };
-	Buffer fileData = Buffer_createNull();
-
-	gotoIfError(clean, Archive_createx(&archive))
-	gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved))
+	gotoIfError2(clean, Archive_createx(&archive))
+	gotoIfError2(clean, File_resolvex(input, &isVirtual, 0, &resolved))
 
 	if (isVirtual)
-		gotoIfError(clean, Error_invalidOperation(0, "CLI_convertToCA() can't be used on virtual file"))
+		retError(clean, Error_invalidOperation(0, "CLI_convertToCA() can't be used on virtual file"))
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
@@ -148,12 +148,12 @@ Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 		CharString subPath = CharString_createNull();
 
 		if(!CharString_cutBeforeLastSensitive(resolved, '/', &subPath))
-			gotoIfError(clean, Error_invalidState(0, "CLI_convertToCA() cutBeforeLast failed"))
+			retError(clean, Error_invalidState(0, "CLI_convertToCA() cutBeforeLast failed"))
 
-		gotoIfError(clean, File_getInfox(resolved, &fileInfo))
-		gotoIfError(clean, File_read(resolved, 1 * SECOND, &fileData))
-		gotoIfError(clean, CharString_createCopyx(subPath, &tmp))
-		gotoIfError(clean, Archive_addFilex(&archive, tmp, fileData, fileInfo.timestamp))
+		gotoIfError2(clean, File_getInfox(resolved, &fileInfo))
+		gotoIfError2(clean, File_read(resolved, 1 * SECOND, &fileData))
+		gotoIfError2(clean, CharString_createCopyx(subPath, &tmp))
+		gotoIfError2(clean, Archive_addFilex(&archive, tmp, fileData, fileInfo.timestamp))
 
 		//Belongs to archive now
 
@@ -163,10 +163,10 @@ Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 
 	else {
 
-		gotoIfError(clean, CharString_appendx(&resolved, '/'))
+		gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 		caFileRecursion.root = resolved;
 
-		gotoIfError(clean, File_foreach(
+		gotoIfError2(clean, File_foreach(
 			caFileRecursion.root,
 			(FileCallback)addFileToCAFile,
 			&caFileRecursion,
@@ -176,12 +176,12 @@ Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 
 	//Convert to CAFile and write to file
 
-	gotoIfError(clean, CAFile_create(settings, archive, &file))
+	gotoIfError3(clean, CAFile_create(settings, archive, &file, e_rr))
 	archive = (Archive) { 0 };	//Archive has been moved to CAFile
 
-	gotoIfError(clean, CAFile_writex(file, &res))
+	gotoIfError3(clean, CAFile_writex(file, &res, e_rr))
 
-	gotoIfError(clean, File_write(res, output, 1 * SECOND))
+	gotoIfError2(clean, File_write(res, output, 1 * SECOND))
 
 clean:
 	FileInfo_freex(&fileInfo);
@@ -191,10 +191,21 @@ clean:
 	CharString_freex(&tmp);
 	Buffer_freex(&res);
 	Buffer_freex(&fileData);
-	return err;
+	return s_uccess;
 }
 
-Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
+Bool CLI_convertFromCA(
+	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	Buffer buf = Buffer_createNull();
+	CharString outputPath = CharString_createNull();
+	CharString loc = CharString_createNull();
+
+	CAFile file = (CAFile) { 0 };
+	Bool didMakeFile = false;
 
 	(void)args;
 
@@ -202,42 +213,34 @@ Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, C
 
 	if (inputInfo.type != EFileType_File) {
 		Log_errorLnx("oiCA can only be converted from single file");
-		return Error_invalidOperation(0, "CLI_convertFromCA()::inputInfo.type needs to be file");
+		retError(clean, Error_invalidOperation(0, "CLI_convertFromCA()::inputInfo.type needs to be file"))
 	}
 
 	//Read file
 
-	Buffer buf = Buffer_createNull();
-	CharString outputPath = CharString_createNull();
-	CharString loc = CharString_createNull();
-
-	Error err = Error_none();
-	CAFile file = (CAFile) { 0 };
-	Bool didMakeFile = false;
-
-	gotoIfError(clean, File_read(input, 1 * SECOND, &buf))
-	gotoIfError(clean, CAFile_readx(buf, encryptionKey, &file))
+	gotoIfError2(clean, File_read(input, 1 * SECOND, &buf))
+	gotoIfError3(clean, CAFile_readx(buf, encryptionKey, &file, e_rr))
 
 	Bool outputAsSingle = file.archive.entries.length == 1;
 	EFileType outputType = outputAsSingle ? file.archive.entries.ptr->type : EFileType_Folder;
 
-	gotoIfError(clean, File_add(output, outputType, 1 * SECOND, true))
+	gotoIfError2(clean, File_add(output, outputType, 1 * SECOND, true))
 	didMakeFile = true;
 
 	if (outputAsSingle) {
 
 		if(outputType == EFileType_File)
-			gotoIfError(clean, File_write(file.archive.entries.ptr->data, output, 1 * SECOND))
+			gotoIfError2(clean, File_write(file.archive.entries.ptr->data, output, 1 * SECOND))
 	}
 
 	else {
 
 		//Grab destination dest
 
-		gotoIfError(clean, CharString_createCopyx(output, &outputPath))
+		gotoIfError2(clean, CharString_createCopyx(output, &outputPath))
 
 		if(!CharString_endsWithSensitive(outputPath, '/', 0))
-			gotoIfError(clean, CharString_appendx(&outputPath, '/'))
+			gotoIfError2(clean, CharString_appendx(&outputPath, '/'))
 
 		//Write archive to disk
 
@@ -245,28 +248,28 @@ Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, C
 
 			ArchiveEntry ei = file.archive.entries.ptr[i];
 
-			gotoIfError(clean, CharString_createCopyx(outputPath, &loc))
-			gotoIfError(clean, CharString_appendStringx(&loc, ei.path))
+			gotoIfError2(clean, CharString_createCopyx(outputPath, &loc))
+			gotoIfError2(clean, CharString_appendStringx(&loc, ei.path))
 
 			if (ei.type == EFileType_Folder) {
-				gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND, false))
+				gotoIfError2(clean, File_add(loc, EFileType_Folder, 1 * SECOND, false))
 				CharString_freex(&loc);
 				continue;
 			}
 
-			gotoIfError(clean, File_write(ei.data, loc, 1 * SECOND))
+			gotoIfError2(clean, File_write(ei.data, loc, 1 * SECOND))
 			CharString_freex(&loc);
 		}
 	}
 
 clean:
 
-	if (didMakeFile && err.genericError)
+	if (didMakeFile && !s_uccess)
 		File_remove(output, 1 * SECOND);
 
 	CAFile_freex(&file);
 	Buffer_freex(&buf);
 	CharString_freex(&outputPath);
 	CharString_freex(&loc);
-	return err;
+	return s_uccess;
 }

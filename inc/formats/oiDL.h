@@ -42,6 +42,8 @@ typedef enum EDLSettingsFlags {
 
 typedef struct DLSettings {
 
+	//Is compared as U64[6]
+
 	EXXCompressionType compressionType;
 	EXXEncryptionType encryptionType;
 	EDLDataType dataType;
@@ -68,37 +70,40 @@ typedef struct DLFile {
 U64 DLFile_entryCount(DLFile file);
 Bool DLFile_isAllocated(DLFile file);
 
-Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile);
+Bool DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile, Error *e_rr);
 Bool DLFile_free(DLFile *dlFile, Allocator alloc);
 
 U64 DLFile_find(DLFile dlFile, U64 start, U64 end, CharString string);
 CharString DLFile_stringAt(DLFile dlFile, U64 i, Bool *success);
 
-Error DLFile_createBufferList(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile);
-Error DLFile_createAsciiList(DLSettings settings, ListCharString strings, Allocator alloc, DLFile *dlFile);
-Error DLFile_createUTF8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile);
+Bool DLFile_createBufferList(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile, Error *e_rr);
+Bool DLFile_createAsciiList(DLSettings settings, ListCharString strings, Allocator alloc, DLFile *dlFile, Error *e_rr);
+Bool DLFile_createUTF8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile, Error *e_rr);
 
 //Determine what type of list is made with settings.dataType
 
-Error DLFile_createList(DLSettings settings, ListBuffer *buffers, Allocator alloc, DLFile *dlFile);
+Bool DLFile_createList(DLSettings settings, ListBuffer *buffers, Allocator alloc, DLFile *dlFile, Error *e_rr);
 
 //DLEntry will belong to DLFile.
 //This means that freeing it will free the CharString + Buffer if they're not a ref
 //So be sure to make them a ref if needed.
 
-Error DLFile_addEntry(DLFile *dlFile, Buffer entry, Allocator alloc);
-Error DLFile_addEntryAscii(DLFile *dlFile, CharString entry, Allocator alloc);
-Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entry, Allocator alloc);
+Bool DLFile_addEntry(DLFile *dlFile, Buffer entry, Allocator alloc, Error *e_rr);
+Bool DLFile_addEntryAscii(DLFile *dlFile, CharString entry, Allocator alloc, Error *e_rr);
+Bool DLFile_addEntryUTF8(DLFile *dlFile, Buffer entry, Allocator alloc, Error *e_rr);
 
-Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result);
+Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr);
 
-Error DLFile_read(
+Bool DLFile_read(
 	Buffer file,
 	const U32 encryptionKey[8],
 	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
 	Allocator alloc,
-	DLFile *dlFile
+	DLFile *dlFile,
+	Error *e_rr
 );
+
+Bool DLFile_combine(DLFile a, DLFile b, Allocator alloc, DLFile *combined, Error *e_rr);
 
 //File headers
 

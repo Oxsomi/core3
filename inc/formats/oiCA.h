@@ -48,13 +48,14 @@ typedef struct CAFile {
 	CASettings settings;
 } CAFile;
 
-Error CAFile_create(CASettings settings, Archive archive, CAFile *caFile);
+Bool CAFile_create(CASettings settings, Archive archive, CAFile *caFile, Error *e_rr);
 Bool CAFile_free(CAFile *caFile, Allocator alloc);
 
 //Serialize
 
-Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result);
-Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile);
+Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr);
+Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile, Error *e_rr);
+Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error *e_rr);
 
 //File headers
 

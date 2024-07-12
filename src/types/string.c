@@ -881,6 +881,7 @@ Error CharString_splitString(
 
 	const Bool b = CharString_isNullTerminated(s);
 	const U64 strl = CharString_length(s);
+	const U64 otherl = CharString_length(other);
 
 	if (!length) {
 
@@ -898,7 +899,7 @@ Error CharString_splitString(
 
 		Bool match = true;
 
-		for (U64 j = i, k = 0; j < strl && k < strl; ++j, ++k)
+		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
 			if (
 				C8_transform(s.ptr[j], (EStringTransform)casing) !=
 				C8_transform(other.ptr[k], (EStringTransform)casing)
@@ -913,8 +914,8 @@ Error CharString_splitString(
 				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) :
 				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
-			last = i + strl;
-			i += strl - 1;
+			last = i + otherl;
+			i += otherl - 1;
 		}
 	}
 
@@ -1700,7 +1701,7 @@ U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSe
 			}
 
 		if (match) {
-			i += strl - 1;
+			i += otherl - 1;
 			++j;
 		}
 	}

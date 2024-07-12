@@ -799,7 +799,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			Bool madeFile = false;
 			CharString out = CharString_createNull();
 
-			gotoIfError2(cleanCa, CAFile_readx(buf, encryptionKey, &file))
+			gotoIfError3(cleanCa, CAFile_readx(buf, encryptionKey, &file, e_rr))
 
 			//Specific entry was requested
 
@@ -964,7 +964,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		case DLHeader_MAGIC: {
 
 			DLFile file = (DLFile) { 0 };
-			gotoIfError2(cleanDl, DLFile_readx(buf, encryptionKey, false, &file))
+			gotoIfError3(cleanDl, DLFile_readx(buf, encryptionKey, false, &file, e_rr))
 
 			U64 end = 0;
 

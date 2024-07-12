@@ -22,9 +22,12 @@
 #include "types/string.h"
 #include "platforms/file.h"
 
-Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad) {
+Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad, Error *e_rr) {
+	Bool s_uccess = true;
 	(void) userData;
 	(void) loc;
 	(void) allowLoad;
-	return Error_unimplemented(0, "File_loadVirtualInternal() not implemented in Linux yet");		//TODO:
+	retError(clean, Error_unimplemented(0, "File_loadVirtualInternal() not implemented in Linux yet"))		//TODO:
+clean:
+	return s_uccess;
 }

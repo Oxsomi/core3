@@ -196,7 +196,7 @@ void Operations_init() {
 		.desc = "Oxsomi Compressed Archive; a file table with file data.",
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Date | EOperationFlags_FullDate,
 		.optionalParameters = EOperationHasParameter_AES,
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_Input2,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 		.supportedCategories = { EOperationCategory_File }
 	};
@@ -206,7 +206,7 @@ void Operations_init() {
 		.desc = "Oxsomi Data List; an indexed list of data, can be text (ASCII/UTF8) or binary data.",
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Ascii | EOperationFlags_UTF8,
 		.optionalParameters = EOperationHasParameter_AES | EOperationHasParameter_SplitBy,
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_Input2,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 		.supportedCategories = { EOperationCategory_File }
 	};

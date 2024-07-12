@@ -27,6 +27,7 @@
 
 Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
+	Bool s_uccess = true;
 	Ns start = Time_now();
 
 	//Prepare for convert to/from
@@ -37,14 +38,15 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 	CharString inputArg = CharString_createNull();
 	FileInfo info = (FileInfo) { 0 };
 
-	Error err;
-	gotoIfError(clean, ListCharString_get(args.args, offset++, &inputArg))
+	//Error err;
+	Error err = Error_none(), *e_rr = &err;
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &inputArg))
 
 	//Check if output is valid
 
 	CharString outputArg = CharString_createNull();
 
-	gotoIfError(clean, ListCharString_get(args.args, offset++, &outputArg))
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &outputArg))
 
 	//TODO: Support multiple files
 
@@ -52,13 +54,16 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Check if input file and file type are valid
 
-	gotoIfError(clean, File_getInfox(inputArg, &info))
+	gotoIfError2(clean, File_getInfox(inputArg, &info))
 
 	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File)
-		gotoIfError(clean, Error_invalidState(0, "CLI_convert() Invalid file passed to convertTo. Only accepting folders."))
+		retError(clean, Error_invalidState(0, "CLI_convert() Invalid file passed to convertTo. Only accepting folders."))
 
 	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder)
-		gotoIfError(clean, Error_invalidState(1, "CLI_convert() Invalid file passed to convertTo. Only accepting files."))
+		retError(clean, Error_invalidState(1, "CLI_convert() Invalid file passed to convertTo. Only accepting files."))
+
+	if(args.parameters & EOperationHasParameter_Input2)
+		retError(clean, Error_invalidState(1, "CLI_convert() Doesn't support -input2."))
 
 	//Parse encryption key
 
@@ -73,14 +78,14 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
 			!CharString_isHex(key)
 		)
-			gotoIfError(clean, Error_invalidState(
+			retError(clean, Error_invalidState(
 				2, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
 			))
 
 		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64)
-			gotoIfError(clean, Error_invalidState(
+			retError(clean, Error_invalidState(
 				3, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
 			))
 
@@ -103,23 +108,23 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 		case EFormat_oiDL:
 
 			if(isTo)
-				gotoIfError(clean, CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey))
+				gotoIfError3(clean, CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey, e_rr))
 
-			else gotoIfError(clean, CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey))
+			else gotoIfError3(clean, CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey, e_rr))
 
 			break;
 
 		case EFormat_oiCA:
 
 			if(isTo)
-				gotoIfError(clean, CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey))
+				gotoIfError3(clean, CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey, e_rr))
 
-			else gotoIfError(clean, CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey))
+			else gotoIfError3(clean, CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey, e_rr))
 
 			break;
 
 		default:
-			gotoIfError(clean, Error_invalidOperation(0, "CLI_convert() Unsupported format"))
+			retError(clean, Error_invalidOperation(0, "CLI_convert() Unsupported format"))
 	}
 
 	//Tell CLI users
@@ -128,12 +133,12 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 clean:
 
-	if (err.genericError)
+	if (!s_uccess)
 		Log_errorLnx("File conversion failed!");
 
 	FileInfo_freex(&info);
 	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
-	return !err.genericError;
+	return s_uccess;
 }
 
 Bool CLI_convertTo(ParsedArgs args) {

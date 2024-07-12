@@ -660,7 +660,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	DLFile dlFile = (DLFile) { 0 };
 	Buffer dlFileBuf = Buffer_createNull();
-	gotoIfError2(clean, DLFile_create(settings, alloc, &dlFile))
+	gotoIfError3(clean, DLFile_create(settings, alloc, &dlFile, e_rr))
 
 	//Calculate easy sizes and add uniform names
 
@@ -683,9 +683,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				continue;
 
 			if(isUTF8)
-				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
+				gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc, e_rr))
 
-			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc))
+			else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc, e_rr))
 
 			if(dlFile.entryBuffers.length - shFile.entries.length >= (U16)(U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
@@ -735,9 +735,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform values"))
 
 			if(isUTF8)
-				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
+				gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc, e_rr))
 
-			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc))
+			else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc, e_rr))
 		}
 	}
 
@@ -748,9 +748,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		CharString includeName = shFile.includes.ptr[i].relativePath;
 
 		if(isUTF8)
-			gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(includeName), alloc))
+			gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(includeName), alloc, e_rr))
 
-		else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(includeName), alloc))
+		else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(includeName), alloc, e_rr))
 	}
 
 	//Add entries
@@ -761,9 +761,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		CharString entryName = entry.name;
 
 		if(isUTF8)
-			gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(entryName), alloc))
+			gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(entryName), alloc, e_rr))
 
-		else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(entryName), alloc))
+		else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(entryName), alloc, e_rr))
 
 		switch(entry.stage) {
 
@@ -810,7 +810,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		headerSize += entry.binaryIds.length * sizeof(U16);
 	}
 
-	gotoIfError2(clean, DLFile_write(dlFile, alloc, &dlFileBuf))
+	gotoIfError3(clean, DLFile_write(dlFile, alloc, &dlFileBuf, e_rr))
 
 	U64 len = 
 		headerSize +
@@ -1123,7 +1123,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 	//Read DLFile
 
-	gotoIfError2(clean, DLFile_read(file, NULL, true, alloc, &dlFile))
+	gotoIfError3(clean, DLFile_read(file, NULL, true, alloc, &dlFile, e_rr))
 	gotoIfError2(clean, Buffer_offset(&file, dlFile.readLength))
 
 	U64 minEntryBuffers =

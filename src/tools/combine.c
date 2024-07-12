@@ -26,6 +26,8 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
 #include "formats/oiSH.h"
+#include "formats/oiCA.h"
+#include "formats/oiDL.h"
 #include "cli.h"
 
 Bool CLI_fileCombine(ParsedArgs args) {
@@ -36,7 +38,14 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	Error err = Error_none(), *e_rr = &err;
 	CharString inputArg = CharString_createNull();
 	Buffer buf[3] = { 0 };
-	SHFile tmpSHFile[3] = { 0 };
+
+	if (args.parameters & EOperationHasParameter_SplitBy) {
+		Log_debugLnx("CLI_fileCombine() failed, -split can't be used");
+		s_uccess = false;
+		goto clean;
+	}
+
+	//TODO: Multiple files
 
 	//Get inputs and output
 
@@ -47,6 +56,45 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	CharString inputArg2 = CharString_createNull();
 
 	gotoIfError2(clean, ListCharString_get(args.args, offset++, &outputArg))
+	
+	//Parse encryption key
+
+	U32 encryptionKeyV[8] = { 0 };
+	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+
+	if (args.parameters & EOperationHasParameter_AES) {
+
+		CharString key = CharString_createNull();
+
+		if (
+			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
+			!CharString_isHex(key)
+		)
+			gotoIfError(clean, Error_invalidState(
+				2, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
+			))
+
+		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
+
+		if (CharString_length(key) - off != 64)
+			gotoIfError(clean, Error_invalidState(
+				3, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
+			))
+
+		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
+
+			U8 v0 = C8_hex(key.ptr[i]);
+			U8 v1 = C8_hex(key.ptr[++i]);
+
+			v0 = (v0 << 4) | v1;
+			*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
+		}
+
+		encryptionKey = encryptionKeyV;
+	}
+
+	//Parse input2
+
 	gotoIfError2(clean, ListCharString_get(args.args, offset++, &inputArg2))
 
 	//Read input buffers
@@ -63,26 +111,98 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	switch (args.format) {
 
-		case EFormat_oiSH:
+		case EFormat_oiSH: {
 
-			if (!SHFile_readx(buf[0], false, &tmpSHFile[0], e_rr) || !SHFile_readx(buf[1], false, &tmpSHFile[1], e_rr)) {
+			SHFile tmp[3] = { 0 };
+
+			if (!SHFile_readx(buf[0], false, &tmp[0], e_rr) || !SHFile_readx(buf[1], false, &tmp[1], e_rr)) {
 				Log_warnLnx("CLI_fileCombine() one of two SHFile couldn't be parsed");
-				goto clean;
+				goto cleanSH;
 			}
 
-			if(!SHFile_combinex(tmpSHFile[0], tmpSHFile[1], &tmpSHFile[2], e_rr)) {
+			if(!SHFile_combinex(tmp[0], tmp[1], &tmp[2], e_rr)) {
 				Log_warnLnx("CLI_fileCombine() SHFile can't be merged");
-				goto clean;
+				goto cleanSH;
 			}
 
-			if (!SHFile_writex(tmpSHFile[2], &buf[2], e_rr)) {
+			if (!SHFile_writex(tmp[2], &buf[2], e_rr)) {
 				Log_warnLnx("CLI_fileCombine() SHFile can't be serialized");
-				goto clean;
+				goto cleanSH;
 			}
 
-			break;
+		cleanSH:
 
-		//TODO: Combine oiCA and oiDL
+			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
+				SHFile_freex(&tmp[i]);
+
+			if(s_uccess)
+				break;
+
+			goto clean;
+		}
+
+		case EFormat_oiCA: {
+
+			CAFile tmp[3] = { 0 };
+
+			if (!CAFile_readx(buf[0], encryptionKey, &tmp[0], e_rr) || !CAFile_readx(buf[1], encryptionKey, &tmp[1], e_rr)) {
+				Log_warnLnx("CLI_fileCombine() one of two CAFile couldn't be parsed");
+				goto cleanCA;
+			}
+
+			if(!CAFile_combinex(tmp[0], tmp[1], &tmp[2], e_rr)) {
+				Log_warnLnx("CLI_fileCombine() CAFile can't be merged");
+				goto cleanCA;
+			}
+
+			if (!CAFile_writex(tmp[2], &buf[2], e_rr)) {
+				Log_warnLnx("CLI_fileCombine() CAFile can't be serialized");
+				goto cleanCA;
+			}
+
+		cleanCA:
+
+			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
+				CAFile_freex(&tmp[i]);
+
+			if(s_uccess)
+				break;
+
+			goto clean;
+		}
+
+		case EFormat_oiDL: {
+
+			DLFile tmp[3] = { 0 };
+
+			if (
+				!DLFile_readx(buf[0], encryptionKey, false, &tmp[0], e_rr) ||
+				!DLFile_readx(buf[1], encryptionKey, false, &tmp[1], e_rr)
+			) {
+				Log_warnLnx("CLI_fileCombine() one of two DLFile couldn't be parsed");
+				goto cleanDL;
+			}
+
+			if(!DLFile_combinex(tmp[0], tmp[1], &tmp[2], e_rr)) {
+				Log_warnLnx("CLI_fileCombine() DLFile can't be merged");
+				goto cleanDL;
+			}
+
+			if (!DLFile_writex(tmp[2], &buf[2], e_rr)) {
+				Log_warnLnx("CLI_fileCombine() DLFile can't be serialized");
+				goto cleanDL;
+			}
+
+		cleanDL:
+
+			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
+				DLFile_freex(&tmp[i]);
+
+			if(s_uccess)
+				break;
+
+			goto clean;
+		}
 
 		default:
 			Log_errorLnx("CLI_fileCombine() doesn't support the specified format");
@@ -98,10 +218,8 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 clean:
 
-	for(U8 i = 0; i < sizeof(buf) / sizeof(buf[0]); ++i) {
+	for(U8 i = 0; i < sizeof(buf) / sizeof(buf[0]); ++i)
 		Buffer_freex(&buf[i]);
-		SHFile_freex(&tmpSHFile[i]);
-	}
 
 	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 	return false;

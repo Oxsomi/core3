@@ -79,6 +79,14 @@ Bool CLI_package(ParsedArgs args) {
 
 	U32 encryptionKeyV[8] = { 0 };
 	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	Archive archive = (Archive) { 0 };
+	CharString resolved = CharString_createNull();
+	CAFile file = (CAFile) { 0 };
+	Buffer res = Buffer_createNull();
+	Bool isVirtual = false;
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
@@ -128,41 +136,26 @@ Bool CLI_package(ParsedArgs args) {
 
 	U64 offset = 0;
 	CharString input = (CharString) { 0 };
-	Error err = ListCharString_get(args.args, offset++, &input);
-
-	if (err.genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &input))
 
 	//Check if output is valid
 
 	CharString output = (CharString) { 0 };
-
-	if ((err = ListCharString_get(args.args, offset++, &output)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &output));
 
 	//Make archive
 
-	Archive archive = (Archive) { 0 };
-	CharString resolved = CharString_createNull();
-	CAFile file = (CAFile) { 0 };
-	Buffer res = Buffer_createNull();
-	Bool isVirtual = false;
+	gotoIfError2(clean, Archive_createx(&archive))
+	gotoIfError2(clean, File_resolvex(input, &isVirtual, 0, &resolved))
 
-	gotoIfError(clean, Archive_createx(&archive))
-	gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved))
-
-	gotoIfError(clean, CharString_appendx(&resolved, '/'))
+	gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
 		.root = resolved
 	};
 
-	gotoIfError(clean, File_foreach(
+	gotoIfError2(clean, File_foreach(
 		caFileRecursion.root,
 		(FileCallback) packageFile,
 		&caFileRecursion,
@@ -171,24 +164,26 @@ Bool CLI_package(ParsedArgs args) {
 
 	//Convert to CAFile and write to file
 
-	gotoIfError(clean, CAFile_create(settings, archive, &file))
+	gotoIfError3(clean, CAFile_create(settings, archive, &file, e_rr))
 	archive = (Archive) { 0 };	//Archive has been moved to CAFile
 
-	gotoIfError(clean, CAFile_writex(file, &res))
+	gotoIfError3(clean, CAFile_writex(file, &res, e_rr))
 
-	gotoIfError(clean, File_add(output, EFileType_File, 1 * SECOND, true))		//Ensure subdirs are created
-	gotoIfError(clean, File_write(res, output, 1 * SECOND))
+	gotoIfError2(clean, File_add(output, EFileType_File, 1 * SECOND, true))		//Ensure subdirs are created
+	gotoIfError2(clean, File_write(res, output, 1 * SECOND))
 
 clean:
 
-	if(!err.genericError)
+	if(s_uccess)
 		Log_debugLnx("-- Packaging %s success!", resolved.ptr);
 
 	else Log_errorLnx("-- Packaging %s failed!!", resolved.ptr);
+
+	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 
 	Buffer_freex(&res);
 	CAFile_freex(&file);
 	Archive_freex(&archive);
 	CharString_freex(&resolved);
-	return !err.genericError;
+	return s_uccess;
 }

@@ -53,25 +53,27 @@ typedef struct ListSHInclude ListSHInclude;
 
 Bool CAFile_freex(CAFile *caFile);
 
-Error CAFile_writex(CAFile caFile, Buffer *result);
-Error CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile);
+Bool CAFile_writex(CAFile caFile, Buffer *result, Error *e_rr);
+Bool CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile, Error *e_rr);
+Bool CAFile_combinex(CAFile a, CAFile b, CAFile *combined, Error *e_rr);
 
 //oiDL
 
-Error DLFile_createx(DLSettings settings, DLFile *dlFile);
+Bool DLFile_createx(DLSettings settings, DLFile *dlFile, Error *e_rr);
 Bool DLFile_freex(DLFile *dlFile);
 
-Error DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFile);
-Error DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile);
-Error DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile);
-Error DLFile_createAsciiListx(DLSettings settings, ListCharString strings, DLFile *dlFile);
+Bool DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFile, Error *e_rr);
+Bool DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile, Error *e_rr);
+Bool DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile, Error *e_rr);
+Bool DLFile_createAsciiListx(DLSettings settings, ListCharString strings, DLFile *dlFile, Error *e_rr);
 
-Error DLFile_addEntryx(DLFile *dlFile, Buffer entry);
-Error DLFile_addEntryAsciix(DLFile *dlFile, CharString entry);
-Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry);
+Bool DLFile_addEntryx(DLFile *dlFile, Buffer entry, Error *e_rr);
+Bool DLFile_addEntryAsciix(DLFile *dlFile, CharString entry, Error *e_rr);
+Bool DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry, Error *e_rr);
 
-Error DLFile_writex(DLFile dlFile, Buffer *result);
-Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile);
+Bool DLFile_writex(DLFile dlFile, Buffer *result, Error *e_rr);
+Bool DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile, Error *e_rr);
+Bool DLFile_combinex(DLFile a, DLFile b, DLFile *combined, Error *e_rr);
 
 //oiSH
 
