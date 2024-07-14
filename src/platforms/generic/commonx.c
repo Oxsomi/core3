@@ -706,80 +706,83 @@ Error CharString_formatx(CharString *result, const C8 *format, ...) {
 
 //Archive
 
-Error Archive_createx(Archive *archive) { return Archive_create(Platform_instance.alloc, archive); }
+Bool Archive_createx(Archive *archive, Error *e_rr) { return Archive_create(Platform_instance.alloc, archive, e_rr); }
 Bool Archive_freex(Archive *archive) { return Archive_free(archive, Platform_instance.alloc); }
 
 Bool Archive_hasFilex(Archive archive, CharString path) { return Archive_hasFile(archive, path, Platform_instance.alloc); }
 Bool Archive_hasFolderx(Archive archive, CharString path) { return Archive_hasFolder(archive, path, Platform_instance.alloc); }
 Bool Archive_hasx(Archive archive, CharString path) { return Archive_has(archive, path, Platform_instance.alloc); }
 
-Error Archive_addDirectoryx(Archive *archive, CharString path) {
-	return Archive_addDirectory(archive, path, Platform_instance.alloc);
+Bool Archive_addDirectoryx(Archive *archive, CharString path, Error *e_rr) {
+	return Archive_addDirectory(archive, path, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_addFilex(Archive *archive, CharString path, Buffer data, Ns timestamp) {
-	return Archive_addFile(archive, path, data, timestamp, Platform_instance.alloc);
+Bool Archive_addFilex(Archive *archive, CharString path, Buffer *data, Ns timestamp, Error *e_rr) {
+	return Archive_addFile(archive, path, data, timestamp, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_updateFileDatax(Archive *archive, CharString path, Buffer data) {
-	return Archive_updateFileData(archive, path, data, Platform_instance.alloc);
+Bool Archive_updateFileDatax(Archive *archive, CharString path, Buffer data, Error *e_rr) {
+	return Archive_updateFileData(archive, path, data, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_getFileDatax(Archive archive, CharString path, Buffer *data) {
-	return Archive_getFileData(archive, path, data, Platform_instance.alloc);
+Bool Archive_getFileDatax(Archive archive, CharString path, Buffer *data, Error *e_rr) {
+	return Archive_getFileData(archive, path, data, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_getFileDataConstx(Archive archive, CharString path, Buffer *data) {
-	return Archive_getFileDataConst(archive, path, data, Platform_instance.alloc);
+Bool Archive_getFileDataConstx(Archive archive, CharString path, Buffer *data, Error *e_rr) {
+	return Archive_getFileDataConst(archive, path, data, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_removeFilex(Archive *archive, CharString path) {
-	return Archive_removeFile(archive, path, Platform_instance.alloc);
+Bool Archive_removeFilex(Archive *archive, CharString path, Error *e_rr) {
+	return Archive_removeFile(archive, path, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_removeFolderx(Archive *archive, CharString path) {
-	return Archive_removeFolder(archive, path, Platform_instance.alloc);
+Bool Archive_removeFolderx(Archive *archive, CharString path, Error *e_rr) {
+	return Archive_removeFolder(archive, path, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_removex(Archive *archive, CharString path) { return Archive_remove(archive, path, Platform_instance.alloc); }
+Bool Archive_removex(Archive *archive, CharString path, Error *e_rr) {
+	return Archive_remove(archive, path, Platform_instance.alloc, e_rr);
+}
 
-Error Archive_renamex(Archive *archive, CharString loc, CharString newFileName) {
-	return Archive_rename(archive, loc, newFileName, Platform_instance.alloc);
+Bool Archive_renamex(Archive *archive, CharString loc, CharString newFileName, Error *e_rr) {
+	return Archive_rename(archive, loc, newFileName, Platform_instance.alloc, e_rr);
 }
 
 U64 Archive_getIndexx(Archive archive, CharString loc) {
 	return Archive_getIndex(archive, loc, Platform_instance.alloc);
 }
 
-Error Archive_movex(Archive *archive, CharString loc, CharString directoryName) {
-	return Archive_move(archive, loc, directoryName, Platform_instance.alloc);
+Bool Archive_movex(Archive *archive, CharString loc, CharString directoryName, Error *e_rr) {
+	return Archive_move(archive, loc, directoryName, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_getInfox(Archive archive, CharString loc, FileInfo *info) {
-	return Archive_getInfo(archive, loc, info, Platform_instance.alloc);
+Bool Archive_getInfox(Archive archive, CharString loc, FileInfo *info, Error *e_rr) {
+	return Archive_getInfo(archive, loc, info, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_queryFileEntryCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
-	return Archive_queryFileEntryCount(archive, loc, isRecursive, res, Platform_instance.alloc);
+Bool Archive_queryFileEntryCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res, Error *e_rr) {
+	return Archive_queryFileEntryCount(archive, loc, isRecursive, res, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_queryFileCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
-	return Archive_queryFileCount(archive, loc, isRecursive, res, Platform_instance.alloc);
+Bool Archive_queryFileCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res, Error *e_rr) {
+	return Archive_queryFileCount(archive, loc, isRecursive, res, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_queryFolderCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
-	return Archive_queryFolderCount(archive, loc, isRecursive, res, Platform_instance.alloc);
+Bool Archive_queryFolderCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res, Error *e_rr) {
+	return Archive_queryFolderCount(archive, loc, isRecursive, res, Platform_instance.alloc, e_rr);
 }
 
-Error Archive_foreachx(
+Bool Archive_foreachx(
 	Archive archive,
 	CharString loc,
 	FileCallback callback,
 	void *userData,
 	Bool isRecursive,
-	EFileType type
+	EFileType type,
+	Error *e_rr
 ) {
-	return Archive_foreach(archive, loc, callback, userData, isRecursive, type, Platform_instance.alloc);
+	return Archive_foreach(archive, loc, callback, userData, isRecursive, type, Platform_instance.alloc, e_rr);
 }
 
 //Thread

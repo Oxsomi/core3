@@ -34,25 +34,21 @@ typedef struct CAFileRecursion {
 	CharString root;
 } CAFileRecursion;
 
-Error packageFile(FileInfo file, CAFileRecursion *caFile) {
+Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
 
 	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
-		return Error_invalidState(0, "packageFile()::file.path cut failed");
+		retError(clean, Error_invalidState(0, "packageFile()::file.path cut failed"))
 
 	ArchiveEntry entry = (ArchiveEntry) {
 		.path = subPath,
 		.type = file.type
 	};
 
-	Error err = Error_none();
-	CharString copy = CharString_createNull();
-
 	if (entry.type == EFileType_File)
-		gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data))
-
-	gotoIfError(clean, CharString_createCopyx(entry.path, &copy))
+		gotoIfError3(clean, File_read(file.path, 1 * SECOND, &entry.data, e_rr))
 
 	if (file.type == EFileType_File) {
 
@@ -60,17 +56,14 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 		//We don't have a custom file yet, so for now
 		//this will just be identical to addFileToCAFile.
 
-		gotoIfError(clean, Archive_addFilex(caFile->archive, copy, entry.data, 0))
+		gotoIfError3(clean, Archive_addFilex(caFile->archive, entry.path, &entry.data, 0, e_rr))
 	}
 
-	else gotoIfError(clean, Archive_addDirectoryx(caFile->archive, copy))
-
-	return Error_none();
+	else gotoIfError3(clean, Archive_addDirectoryx(caFile->archive, entry.path, e_rr))
 
 clean:
 	Buffer_freex(&entry.data);
-	CharString_freex(&copy);
-	return err;
+	return s_uccess;
 }
 
 Bool CLI_package(ParsedArgs args) {
@@ -145,8 +138,8 @@ Bool CLI_package(ParsedArgs args) {
 
 	//Make archive
 
-	gotoIfError2(clean, Archive_createx(&archive))
-	gotoIfError2(clean, File_resolvex(input, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, Archive_createx(&archive, e_rr))
+	gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
 
 	gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 
@@ -155,22 +148,21 @@ Bool CLI_package(ParsedArgs args) {
 		.root = resolved
 	};
 
-	gotoIfError2(clean, File_foreach(
+	gotoIfError3(clean, File_foreach(
 		caFileRecursion.root,
 		(FileCallback) packageFile,
 		&caFileRecursion,
-		true
+		true,
+		e_rr
 	))
 
 	//Convert to CAFile and write to file
 
-	gotoIfError3(clean, CAFile_create(settings, archive, &file, e_rr))
-	archive = (Archive) { 0 };	//Archive has been moved to CAFile
-
+	gotoIfError3(clean, CAFile_create(settings, &archive, &file, e_rr))
 	gotoIfError3(clean, CAFile_writex(file, &res, e_rr))
 
-	gotoIfError2(clean, File_add(output, EFileType_File, 1 * SECOND, true))		//Ensure subdirs are created
-	gotoIfError2(clean, File_write(res, output, 1 * SECOND))
+	gotoIfError3(clean, File_add(output, EFileType_File, 1 * SECOND, true, e_rr))		//Ensure subdirs are created
+	gotoIfError3(clean, File_write(res, output, 1 * SECOND, e_rr))
 
 clean:
 

@@ -47,15 +47,16 @@ typedef struct FileInfo {
 	U64 fileSize;
 } FileInfo;
 
-typedef Error (*FileCallback)(FileInfo, void*);
+typedef Bool (*FileCallback)(FileInfo, void*, Error *e_rr);
 
-Error File_resolve(
+Bool File_resolve(
 	CharString loc,
 	Bool *isVirtual,
 	U64 maxFilePathLimit,
 	CharString absoluteDir,
 	Allocator alloc,
-	CharString *result
+	CharString *result,
+	Error *e_rr
 );
 
 Bool File_makeRelative(

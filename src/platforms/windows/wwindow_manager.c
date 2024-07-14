@@ -30,12 +30,10 @@
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-Error WindowManager_createNative(WindowManager *w) {
+Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
-	const Error err = Buffer_createEmptyBytesx(sizeof(WNDCLASSEXW), &w->platformData);
-
-	if (err.genericError)
-		return err;
+	Bool s_uccess = true;
+	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(WNDCLASSEXW), &w->platformData))
 
 	WNDCLASSEXW *wc = (WNDCLASSEXW*) w->platformData.ptr;
 
@@ -60,11 +58,12 @@ Error WindowManager_createNative(WindowManager *w) {
 	};
 
 	if (!RegisterClassExW(wc))
-		return Error_platformError(
+		retError(clean, Error_platformError(
 			0, GetLastError(), "WindowManager_createNative() RegisterClassEx failed"
-		);
+		))
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {

@@ -50,66 +50,59 @@ Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindow
 
 //TODO: Move this to texture class
 
-Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
+Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool resize = false;
+	Buffer old = Buffer_createNull();
+	Buffer neo = Buffer_createNull();
 
 	if (!w)
-		return Error_nullPointer(0, "Window_resizeCPUBuffer()::w is required");
+		retError(clean, Error_nullPointer(0, "Window_resizeCPUBuffer()::w is required"))
 
 	if(w->type >= EWindowType_Extended)
-		return Error_unsupportedOperation(0, "Window_resizeCPUBuffer() isn't supported for extended windows");
+		retError(clean, Error_unsupportedOperation(0, "Window_resizeCPUBuffer() isn't supported for extended windows"))
 
 	if(w->type == EWindowType_Physical && !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			0, 0, "Window_resizeCPUBuffer()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
-		);
+		))
 
 	if(I32x2_eq2(w->size, newSiz))
-		return Error_none();
+		goto clean;
 
 	if(I32x2_any(I32x2_leq(newSiz, I32x2_zero())))
-		return Error_invalidParameter(2, 0, "Window_resizeCPUBuffer()::newSiz should be >0");
+		retError(clean, Error_invalidParameter(2, 0, "Window_resizeCPUBuffer()::newSiz should be >0"))
 
 	//Because we're resizing, we assume we will be resizing more often
 	//To combat constantly reallocating, we will allocate 25% more memory than is needed.
 	//And if our buffer should be 50% the size we downsize it to +25% of the real size.
 	//Of course we will still have to resize sometimes
 
-	Buffer old = w->cpuVisibleBuffer;
-	Buffer neo = old;
+	old = w->cpuVisibleBuffer;
+	neo = old;
 
 	const U64 linSizOld = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size), 1);
 	const U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz), 1);
 
 	if(linSizOld * 5 < linSizOld)
-		return Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow");
+		retError(clean, Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow"))
 
 	//We need to grow; we're out of bounds
-
-	Bool resize = false;
 
 	const U64 oldLen = Buffer_length(old);
 
 	if (linSiz >= oldLen) {
-
 		const U64 toAllocate = linSiz * 5 / 4;
-		const Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
-
-		if(err.genericError)
-			return err;
-
+		gotoIfError2(clean, Buffer_createUninitializedBytesx(toAllocate, &neo))
 		resize = true;
 	}
 
 	//We need to shrink; we're way over allocated (>50%)
 
 	else if (oldLen > linSiz * 3 / 2) {
-
 		const U64 toAllocate = linSiz * 5 / 4;
-		const Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
-
-		if(err.genericError)
-			return err;
-
+		gotoIfError2(clean, Buffer_createUninitializedBytesx(toAllocate, &neo))
 		resize = true;
 	}
 
@@ -129,22 +122,10 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 			//If we added size, we need to clear those pixels
 
-			if(I32x2_y(newSiz) > I32x2_y(w->size)) {
-
-				const Error err = Buffer_unsetAllBits(
+			if(I32x2_y(newSiz) > I32x2_y(w->size))
+				gotoIfError2(clean, Buffer_unsetAllBits(
 					Buffer_createRef((U8*)neo.ptr + linSizOld, linSiz - linSizOld)
-				);
-
-				//Revert to old size
-
-				if(err.genericError) {
-
-					if(resize)
-						Buffer_freex(&neo);
-
-					return err;
-				}
-			}
+				))
 		}
 
 		//Row changed; we have to unfortunately copy this over
@@ -157,26 +138,10 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			//Grab buffers for simple copies later
 
 			Buffer src = Buffer_createNull();
-			Error err = Buffer_createSubset(old, 0, rowSizOld, false, &src);
-
-			if(err.genericError) {
-
-				if(resize)
-					Buffer_freex(&neo);
-
-				return err;
-			}
+			gotoIfError2(clean, Buffer_createSubset(old, 0, rowSizOld, false, &src))
 
 			Buffer dst = Buffer_createNull();
-			err = Buffer_createSubset(neo, 0, rowSiz, false, &src);
-
-			if(err.genericError) {
-
-				if(resize)
-					Buffer_freex(&neo);
-
-				return err;
-			}
+			gotoIfError2(clean, Buffer_createSubset(neo, 0, rowSiz, false, &src))
 
 			//First we ensure everything is copied to the right location
 
@@ -200,16 +165,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 					//Clear remainder of row
 
 					Buffer toClear = Buffer_createNull();
-					err = Buffer_createSubset(dst, linSizOld, sizDif, false, &toClear);
-
-					if (err.genericError) {
-
-						if(resize)
-							Buffer_freex(&neo);
-
-						return err;
-					}
-
+					gotoIfError2(clean, Buffer_createSubset(dst, linSizOld, sizDif, false, &toClear))
 					Buffer_unsetAllBits(toClear);
 
 					//Copy part
@@ -227,21 +183,16 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			//This is because it ends up at a lower address than source and
 			//we can safely read from higher addresses
 
-			else {
+			else for (I32 i = 0; i < smallY; ++i) {
 
-				//
+				//We can skip copying the first if it's the same buffer
 
-				for (I32 i = 0; i < smallY; ++i) {
+				if (!i && !resize)
+					continue;
 
-					//We can skip copying the first if it's the same buffer
-
-					if (!i && !resize)
-						continue;
-
-					Buffer_copy(dst, src);		//Automatically truncates src
-					dst.ptr += rowSiz;
-					src.ptr += rowSizOld;
-				}
+				Buffer_copy(dst, src);		//Automatically truncates src
+				dst.ptr += rowSiz;
+				src.ptr += rowSizOld;
 			}
 		}
 	}
@@ -257,18 +208,26 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	w->cpuVisibleBuffer = neo;
 	w->size = newSiz;
-	return Error_none();
+
+clean:
+
+	if(resize)
+		Buffer_freex(&neo);
+
+	return s_uccess;
 }
 
-Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout) {
+Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if (!w)
-		return Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required");
+		retError(clean, Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required"))
 
 	if(!Buffer_length(w->cpuVisibleBuffer))
-		return Error_invalidOperation(
+		retError(clean, Error_invalidOperation(
 			0, "Window_storeCPUBufferToDisk()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
-		);
+		))
 
 	Buffer file = Buffer_createNull();
 
@@ -291,18 +250,14 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 
 	SubResourceData subResource = (SubResourceData) { .data = w->cpuVisibleBuffer };
 	ListSubResourceData buf = (ListSubResourceData) { 0 };
-	Error err = ListSubResourceData_createRefConst(&subResource, 1, &buf);
+	gotoIfError2(clean, ListSubResourceData_createRefConst(&subResource, 1, &buf))
+	gotoIfError2(clean, DDS_writex(buf, info, &file))
 
-	if (err.genericError)
-		return err;
-
-	if ((err = DDS_writex(buf, info, &file)).genericError)
-		return err;
-
-	err = File_write(file, filePath, maxTimeout);
+	gotoIfError3(clean, File_write(file, filePath, maxTimeout, e_rr))
 	Buffer_freex(&file);
 
-	return err;
+clean:
+	return s_uccess;
 }
 
 Bool Window_terminate(Window *w) {

@@ -70,11 +70,11 @@
 		".dxil.oiSH"
 	};
 
-	Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
+	Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) {
 
 		Bool isPreprocess = shaderFiles->compileType == ECompileType_Preprocess;
 
-		Error err = Error_none();
+		Bool s_uccess = true;
 		CharString copy = CharString_createNull();
 		CharString tempStr = CharString_createNull();
 
@@ -84,11 +84,11 @@
 
 			if (CharString_endsWithStringInsensitive(file.path, hlsl, 0)) {
 
-				gotoIfError(clean, CharString_createCopyx(file.path, &copy))
+				gotoIfError2(clean, CharString_createCopyx(file.path, &copy))
 
 				//Move to allShaders
 
-				gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allShaders, copy))
+				gotoIfError2(clean, ListCharString_pushBackx(shaderFiles->allShaders, copy))
 				copy = CharString_createNull();
 
 				//Grab subPath
@@ -96,20 +96,20 @@
 				CharString subPath = CharString_createNull();
 
 				if(!CharString_cut(file.path, CharString_length(shaderFiles->base), 0, &subPath))
-					gotoIfError(clean, Error_invalidState(0, "registerFile() couldn't get subPath"))
+					retError(clean, Error_invalidState(0, "registerFile() couldn't get subPath"))
 
 				//Copy subPath
 
-				gotoIfError(clean, CharString_createCopyx(subPath, &copy))
+				gotoIfError2(clean, CharString_createCopyx(subPath, &copy))
 
 				//Move subPath into new folder
 
-				gotoIfError(clean, CharString_insertStringx(&copy, shaderFiles->output, 0))
+				gotoIfError2(clean, CharString_insertStringx(&copy, shaderFiles->output, 0))
 
 				//Move output file to allOutputs, unless it needs to be renamed
 
 				if(!shaderFiles->hasMultipleModes && isPreprocess) {
-					gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, copy))
+					gotoIfError2(clean, ListCharString_pushBackx(shaderFiles->allOutputs, copy))
 					copy = CharString_createNull();
 				}
 
@@ -122,7 +122,7 @@
 					if(!((shaderFiles->compileModeU64 >> i) & 1))
 						continue;
 
-					gotoIfError(clean, ListU8_pushBackx(shaderFiles->allModes, i))
+					gotoIfError2(clean, ListU8_pushBackx(shaderFiles->allModes, i))
 
 					//Add double reference to input, so we don't waste memory (besides 24 for CharString struct itself)
 					//Because we want to compile it with two different modes
@@ -133,14 +133,14 @@
 						CharString input = *ListCharString_last(*shaderFiles->allShaders);
 						input = CharString_createRefStrConst(input);
 
-						gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allShaders, input))
+						gotoIfError2(clean, ListCharString_pushBackx(shaderFiles->allShaders, input))
 					}
 
 					//Append .spv.hlsl and .dxil.hlsl at the end
 
 					if(shaderFiles->hasMultipleModes || !isPreprocess) {
 
-						gotoIfError(clean, CharString_formatx(
+						gotoIfError2(clean, CharString_formatx(
 							&tempStr, "%.*s%s",
 							(int)U64_min(
 								CharString_length(copy),
@@ -153,8 +153,8 @@
 							)
 						))
 
-						gotoIfError(clean, File_add(tempStr, EFileType_File, 1 * MS, true))
-						gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, tempStr))
+						gotoIfError3(clean, File_add(tempStr, EFileType_File, 1 * MS, true, e_rr))
+						gotoIfError2(clean, ListCharString_pushBackx(shaderFiles->allOutputs, tempStr))
 						tempStr = CharString_createNull();
 					}
 
@@ -168,7 +168,7 @@
 	clean:
 		CharString_freex(&copy);
 		CharString_freex(&tempStr);
-		return err;
+		return s_uccess;
 	}
 
 	Bool CLI_precompileShaderSingle(
@@ -299,16 +299,16 @@
 				gotoIfError2(clean, CharString_appendStringx(&tempStr, tempStr2))
 				CharString_freex(&tempStr2);
 
-				gotoIfError2(clean, File_write(CharString_bufferConst(tempStr), outputPath, 10 * MS))
+				gotoIfError3(clean, File_write(CharString_bufferConst(tempStr), outputPath, 10 * MS, e_rr))
 			}
 
 			//Otherwise we can simply output preprocessed blob
 
 			else if(compileResult.type == ECompileResultType_Text)
-				gotoIfError2(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
+				gotoIfError3(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS, e_rr))
 
 			else if(compileResult.type == ECompileResultType_Binary)
-				gotoIfError2(clean, File_write(compileResult.binary, outputPath, 10 * MS))
+				gotoIfError3(clean, File_write(compileResult.binary, outputPath, 10 * MS, e_rr))
 		}
 
 	clean:
@@ -944,7 +944,11 @@
 				F64 num = 0;
 
 				if (!CharString_parseDouble(number, &num) || num < 0 || num > 100) {
-					Log_errorLnx("Couldn't parse -threads x%, x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1");
+
+					Log_errorLnx(
+						"Couldn't parse -threads x%, x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1"
+					);
+
 					s_uccess = false;
 					goto clean;
 				}
@@ -958,7 +962,11 @@
 
 				U64 num = 0;
 				if (!CharString_parseU64(thread, &num) || num > threadCount) {
-					Log_errorLnx("Couldn't parse -threads x, where x is expected to be a F64 of (0-100)% or 0 -> threadCount - 1");
+
+					Log_errorLnx(
+						"Couldn't parse -threads x, where x is expected to be a F64 of (0-100)% or 0 -> threadCount - 1"
+					);
+
 					s_uccess = false;
 					goto clean;
 				}
@@ -1013,10 +1021,10 @@
 		if (File_hasFolder(input)) {
 
 			Bool isVirtual;
-			gotoIfError2(clean, File_resolvex(input, &isVirtual, 0, &resolved))
+			gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
 			gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 
-			gotoIfError2(clean, File_resolvex(output, &isVirtual, 0, &resolved2))
+			gotoIfError3(clean, File_resolvex(output, &isVirtual, 0, &resolved2, e_rr))
 			gotoIfError2(clean, CharString_appendx(&resolved2, '/'))
 
 			ShaderFileRecursion shaderFileRecursion = (ShaderFileRecursion) {
@@ -1030,16 +1038,17 @@
 				.compileType = compileType
 			};
 
-			gotoIfError2(clean, File_foreach(
+			gotoIfError3(clean, File_foreach(
 				input,
 				(FileCallback) registerFile,
 				&shaderFileRecursion,
-				true
+				true,
+				e_rr
 			))
 
 			//Make sure we can have a folder at output
 
-			gotoIfError2(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND, false))
+			gotoIfError3(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND, false, e_rr))
 			isFolder = true;
 		}
 
@@ -1107,7 +1116,7 @@
 
 			//Otherwise grab from file
 
-			gotoIfError2(clean, File_read(allFiles.ptr[i], 10 * MS, &temp))
+			gotoIfError3(clean, File_read(allFiles.ptr[i], 10 * MS, &temp, e_rr))
 
 			if(!Buffer_length(temp)) {
 				gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, CharString_createNull()))
@@ -1205,7 +1214,7 @@
 					gotoIfError3(clean, CLI_registerShaderEntries(&shFile, shEntries.ptr[lastJobId], binaryIndices, e_rr))
 
 					gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
-					gotoIfError2(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS))
+					gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS, e_rr))
 					Buffer_freex(&temp);
 
 					ListU16_freex(&binaryIndices);
@@ -1369,7 +1378,7 @@
 
 					if (didSucceed) {
 						gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
-						gotoIfError2(clean, File_write(temp, allOutputs.ptr[i], 100 * MS))
+						gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 100 * MS, e_rr))
 						Buffer_freex(&temp);
 					}
 
@@ -1432,7 +1441,7 @@
 				CharString_freex(&tempStr2);
 			}
 
-			gotoIfError2(clean, File_write(CharString_bufferConst(tempStr), tempStr3, 10 * MS))
+			gotoIfError3(clean, File_write(CharString_bufferConst(tempStr), tempStr3, 10 * MS, e_rr))
 		}
 
 	clean:

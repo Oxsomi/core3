@@ -826,41 +826,43 @@ Bool WindowManager_freePhysical(Window *w) {
 	return true;
 }
 
-Error Window_updatePhysicalTitle(const Window *w, CharString title) {
+Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
 
+	Bool s_uccess = true;
+	ListU16 name = (ListU16) { 0 };
 	const U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
-		return Error_nullPointer(
+		retError(clean, Error_nullPointer(
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
-		);
+		))
 
 	if (titlel >= MAX_PATH)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters"
-		);
+		))
 
-	ListU16 name = (ListU16) { 0 };
-	Error err = CharString_toUTF16x(title, &name);
-
-	if (err.genericError)
-		return err;
+	gotoIfError2(clean, CharString_toUTF16x(title, &name))
 
 	if(!SetWindowTextW(w->nativeHandle, (const wchar_t*) name.ptr))
-		gotoIfError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"))
+		retError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"))
 
 clean:
 	ListU16_freex(&name);
-	return err;
+	return s_uccess;
 }
 
-Error Window_toggleFullScreen(Window *w) {
+Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required");
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		return Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off");
+		retError(clean, Error_unsupportedOperation(
+			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
+		))
 
 	DWORD style = WS_VISIBLE;
 
@@ -904,27 +906,31 @@ Error Window_toggleFullScreen(Window *w) {
 			SWP_SHOWWINDOW | SWP_FRAMECHANGED
 		);
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error Window_presentPhysical(const Window *w) {
+Bool Window_presentPhysical(const Window *w, Error *e_rr) {
 
-	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(0, "Window_presentPhysical()::w is required");
-
-	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer");
-
+	Bool s_uccess = true;
 	PAINTSTRUCT ps;
 	HDC oldBmp = NULL;
 	U32 errId = 0;
+	HDC hdc = 0;
+	HDC hdcBmp = 0;
 
-	const HDC hdc = BeginPaint(w->nativeHandle, &ps);
+	if(!w || !I32x2_any(w->size))
+		retError(clean, Error_nullPointer(0, "Window_presentPhysical()::w is required"))
+
+	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
+		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"))
+
+	hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
-		return Error_platformError(0, GetLastError(), "Window_presentPhysical() BeginPaint failed");
+		retError(clean, Error_platformError(0, GetLastError(), "Window_presentPhysical() BeginPaint failed"))
 
-	const HDC hdcBmp = CreateCompatibleDC(hdc);
+	hdcBmp = CreateCompatibleDC(hdc);
 
 	if(!hdcBmp) {
 		errId = 2;
@@ -954,17 +960,21 @@ cleanup:
 		DeleteDC(hdcBmp);
 
 	EndPaint(w->nativeHandle, &ps);
-	return errId ? Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call") : Error_none();
+
+	if(errId)
+		retError(clean, Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call"))
+
+clean:
+	return s_uccess;
 }
 
-impl Error WindowManager_createWindowPhysical(Window *w) {
+impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Create native window
 
 	const WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
 	const HINSTANCE mainModule = Platform_instance.data;
-
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	DWORD style = WS_VISIBLE;
 
@@ -992,7 +1002,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	//Our strings are UTF8, but windows wants UTF16
 
 	ListU16 tmp = (ListU16) { 0 };
-	gotoIfError(clean, CharString_toUTF16x(w->title, &tmp))
+	gotoIfError2(clean, CharString_toUTF16x(w->title, &tmp))
 
 	const HWND nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
@@ -1003,7 +1013,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	if(!nativeWindow) {
 		const HRESULT hr = GetLastError();
-		gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"))
+		retError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"))
 	}
 
 	//Get real size and position
@@ -1017,12 +1027,12 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Alloc cpu visible buffer if needed
 
-	gotoIfError(clean, WWindow_initSize(w, w->size))
+	gotoIfError2(clean, WWindow_initSize(w, w->size))
 
 	//Lock for when we are updating this window
 
-	gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16))
-	gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16))
+	gotoIfError2(clean, ListInputDevice_reservex(&w->devices,  16))
+	gotoIfError2(clean, ListMonitor_reservex(&w->monitors, 16))
 
 	w->nativeHandle = nativeWindow;
 
@@ -1053,9 +1063,9 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	};
 
 	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
-		gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"))
+		retError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"))
 
 clean:
 	ListU16_freex(&tmp);
-	return err;
+	return s_uccess;
 }

@@ -27,18 +27,27 @@
 #endif
 
 typedef enum ECASettingsFlags {
+
 	ECASettingsFlags_None				= 0,
 	ECASettingsFlags_IncludeDate		= 1 << 0,			//--date
 	ECASettingsFlags_IncludeFullDate	= 1 << 1,			//--full-date (automatically sets --date)
 	ECASettingsFlags_UseSHA256			= 1 << 2,			//--sha256
-	ECASettingsFlags_Invalid			= 0xFFFFFFFF << 3
+
+	ECASettingsFlags_Invalid			= 0xFFFFFFFF << 3,
+	ECASettingsFlags_DateFlags			= ECASettingsFlags_IncludeDate | ECASettingsFlags_IncludeFullDate
+
 } ECASettingsFlags;
 
 typedef struct CASettings {
+
+	ECASettingsFlags flags;
+
+	//Compared as U64[5]
+
 	EXXCompressionType compressionType;
 	EXXEncryptionType encryptionType;
-	ECASettingsFlags flags;
 	U32 encryptionKey[8];
+
 } CASettings;
 
 //Check docs/oiCA.md for the file spec
@@ -48,7 +57,7 @@ typedef struct CAFile {
 	CASettings settings;
 } CAFile;
 
-Bool CAFile_create(CASettings settings, Archive archive, CAFile *caFile, Error *e_rr);
+Bool CAFile_create(CASettings settings, Archive *archive, CAFile *caFile, Error *e_rr);		//Moves archive
 Bool CAFile_free(CAFile *caFile, Allocator alloc);
 
 //Serialize

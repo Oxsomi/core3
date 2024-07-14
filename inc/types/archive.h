@@ -44,63 +44,67 @@ typedef struct Archive {
 	ListArchiveEntry entries;
 } Archive;
 
-Error Archive_create(Allocator alloc, Archive *archive);
+Bool Archive_create(Allocator alloc, Archive *archive, Error *e_rr);
 Bool Archive_free(Archive *archive, Allocator alloc);
 
 Bool Archive_hasFile(Archive archive, CharString path, Allocator alloc);
 Bool Archive_hasFolder(Archive archive, CharString path, Allocator alloc);
 Bool Archive_has(Archive archive, CharString path, Allocator alloc);
 
-Error Archive_addDirectory(Archive *archive, CharString path, Allocator alloc);
-Error Archive_addFile(Archive *archive, CharString path, Buffer data, Ns timestamp, Allocator alloc);
+Bool Archive_addDirectory(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
+Bool Archive_addFile(Archive *archive, CharString path, Buffer *data, Ns timestamp, Allocator alloc, Error *e_rr);
 
-Error Archive_updateFileData(Archive *archive, CharString path, Buffer data, Allocator alloc);
+Bool Archive_updateFileData(Archive *archive, CharString path, Buffer data, Allocator alloc, Error *e_rr);
 
-Error Archive_getFileData(Archive archive, CharString path, Buffer *data, Allocator alloc);
-Error Archive_getFileDataConst(Archive archive, CharString path, Buffer *data, Allocator alloc);
+Bool Archive_getFileData(Archive archive, CharString path, Buffer *data, Allocator alloc, Error *e_rr);
+Bool Archive_getFileDataConst(Archive archive, CharString path, Buffer *data, Allocator alloc, Error *e_rr);
 
-Error Archive_removeFile(Archive *archive, CharString path, Allocator alloc);
-Error Archive_removeFolder(Archive *archive, CharString path, Allocator alloc);
-Error Archive_remove(Archive *archive, CharString path, Allocator alloc);
+Bool Archive_removeFile(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
+Bool Archive_removeFolder(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
+Bool Archive_remove(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
 
-Error Archive_rename(Archive *archive, CharString loc, CharString newFileName, Allocator alloc);
-Error Archive_move(Archive *archive, CharString loc, CharString directoryName, Allocator alloc);
+Bool Archive_rename(Archive *archive, CharString loc, CharString newFileName, Allocator alloc, Error *e_rr);
+Bool Archive_move(Archive *archive, CharString loc, CharString directoryName, Allocator alloc, Error *e_rr);
 
 U64 Archive_getIndex(Archive archive, CharString path, Allocator alloc);		//Get index in archive
-Error Archive_getInfo(Archive archive, CharString path, FileInfo *info, Allocator alloc);
+Bool Archive_getInfo(Archive archive, CharString path, FileInfo *info, Allocator alloc, Error *e_rr);
 
-Error Archive_queryFileEntryCount(
+Bool Archive_queryFileEntryCount(
 	Archive archive,
 	CharString loc,
 	Bool isRecursive,
 	U64 *res,
-	Allocator alloc
+	Allocator alloc,
+	Error *e_rr
 );
 
-Error Archive_queryFileCount(
+Bool Archive_queryFileCount(
 	Archive archive,
 	CharString loc,
 	Bool isRecursive,
 	U64 *res,
-	Allocator alloc
+	Allocator alloc,
+	Error *e_rr
 );
 
-Error Archive_queryFolderCount(
+Bool Archive_queryFolderCount(
 	Archive archive,
 	CharString loc,
 	Bool isRecursive,
 	U64 *res,
-	Allocator alloc
+	Allocator alloc,
+	Error *e_rr
 );
 
-Error Archive_foreach(
+Bool Archive_foreach(
 	Archive archive,
 	CharString loc,
 	FileCallback callback,
 	void *userData,
 	Bool isRecursive,
 	EFileType type,
-	Allocator alloc
+	Allocator alloc,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

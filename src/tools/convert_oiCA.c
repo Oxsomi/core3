@@ -34,12 +34,13 @@ typedef struct CAFileRecursion {
 	CharString root;
 } CAFileRecursion;
 
-Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
+Bool addFileToCAFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
 
 	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
-		return Error_invalidState(0, "addFileToCAFile() cut failed");
+		retError(clean, Error_invalidState(0, "addFileToCAFile() cut failed"))
 
 	ArchiveEntry entry = (ArchiveEntry) {
 		.path = subPath,
@@ -47,25 +48,17 @@ Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 		.timestamp = file.timestamp
 	};
 
-	Error err = Error_none();
-	CharString copy = CharString_createNull();
-
 	if (entry.type == EFileType_File)
-		gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data))
-
-	gotoIfError(clean, CharString_createCopyx(entry.path, &copy))
+		gotoIfError3(clean, File_read(file.path, 1 * SECOND, &entry.data, e_rr))
 
 	if (file.type == EFileType_File)
-		gotoIfError(clean, Archive_addFilex(caFile->archive, copy, entry.data, entry.timestamp))
+		gotoIfError3(clean, Archive_addFilex(caFile->archive, entry.path, &entry.data, entry.timestamp, e_rr))
 
-	else gotoIfError(clean, Archive_addDirectoryx(caFile->archive, copy))
-
-	return Error_none();
+	else gotoIfError3(clean, Archive_addDirectoryx(caFile->archive, entry.path, e_rr))
 
 clean:
 	Buffer_freex(&entry.data);
-	CharString_freex(&copy);
-	return err;
+	return s_uccess;
 }
 
 Bool CLI_convertToCA(
@@ -77,7 +70,6 @@ Bool CLI_convertToCA(
 	CAFile file = (CAFile) { 0 };
 	Archive archive = (Archive) { 0 };
 	CharString resolved = CharString_createNull();
-	CharString tmp = CharString_createNull();
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
 
@@ -132,8 +124,8 @@ Bool CLI_convertToCA(
 
 	//Archive
 
-	gotoIfError2(clean, Archive_createx(&archive))
-	gotoIfError2(clean, File_resolvex(input, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, Archive_createx(&archive, e_rr))
+	gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
 
 	if (isVirtual)
 		retError(clean, Error_invalidOperation(0, "CLI_convertToCA() can't be used on virtual file"))
@@ -150,15 +142,9 @@ Bool CLI_convertToCA(
 		if(!CharString_cutBeforeLastSensitive(resolved, '/', &subPath))
 			retError(clean, Error_invalidState(0, "CLI_convertToCA() cutBeforeLast failed"))
 
-		gotoIfError2(clean, File_getInfox(resolved, &fileInfo))
-		gotoIfError2(clean, File_read(resolved, 1 * SECOND, &fileData))
-		gotoIfError2(clean, CharString_createCopyx(subPath, &tmp))
-		gotoIfError2(clean, Archive_addFilex(&archive, tmp, fileData, fileInfo.timestamp))
-
-		//Belongs to archive now
-
-		fileData = Buffer_createNull();
-		tmp = CharString_createNull();
+		gotoIfError3(clean, File_getInfox(resolved, &fileInfo, e_rr))
+		gotoIfError3(clean, File_read(resolved, 1 * SECOND, &fileData, e_rr))
+		gotoIfError3(clean, Archive_addFilex(&archive, subPath, &fileData, fileInfo.timestamp, e_rr))
 	}
 
 	else {
@@ -166,29 +152,26 @@ Bool CLI_convertToCA(
 		gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 		caFileRecursion.root = resolved;
 
-		gotoIfError2(clean, File_foreach(
+		gotoIfError3(clean, File_foreach(
 			caFileRecursion.root,
 			(FileCallback)addFileToCAFile,
 			&caFileRecursion,
-			!(args.flags & EOperationFlags_NonRecursive)
+			!(args.flags & EOperationFlags_NonRecursive),
+			e_rr
 		))
 	}
 
 	//Convert to CAFile and write to file
 
-	gotoIfError3(clean, CAFile_create(settings, archive, &file, e_rr))
-	archive = (Archive) { 0 };	//Archive has been moved to CAFile
-
+	gotoIfError3(clean, CAFile_create(settings, &archive, &file, e_rr))
 	gotoIfError3(clean, CAFile_writex(file, &res, e_rr))
-
-	gotoIfError2(clean, File_write(res, output, 1 * SECOND))
+	gotoIfError3(clean, File_write(res, output, 1 * SECOND, e_rr))
 
 clean:
 	FileInfo_freex(&fileInfo);
 	CAFile_freex(&file);
 	Archive_freex(&archive);
 	CharString_freex(&resolved);
-	CharString_freex(&tmp);
 	Buffer_freex(&res);
 	Buffer_freex(&fileData);
 	return s_uccess;
@@ -218,19 +201,19 @@ Bool CLI_convertFromCA(
 
 	//Read file
 
-	gotoIfError2(clean, File_read(input, 1 * SECOND, &buf))
+	gotoIfError3(clean, File_read(input, 1 * SECOND, &buf, e_rr))
 	gotoIfError3(clean, CAFile_readx(buf, encryptionKey, &file, e_rr))
 
 	Bool outputAsSingle = file.archive.entries.length == 1;
 	EFileType outputType = outputAsSingle ? file.archive.entries.ptr->type : EFileType_Folder;
 
-	gotoIfError2(clean, File_add(output, outputType, 1 * SECOND, true))
+	gotoIfError3(clean, File_add(output, outputType, 1 * SECOND, true, e_rr))
 	didMakeFile = true;
 
 	if (outputAsSingle) {
 
 		if(outputType == EFileType_File)
-			gotoIfError2(clean, File_write(file.archive.entries.ptr->data, output, 1 * SECOND))
+			gotoIfError3(clean, File_write(file.archive.entries.ptr->data, output, 1 * SECOND, e_rr))
 	}
 
 	else {
@@ -252,12 +235,12 @@ Bool CLI_convertFromCA(
 			gotoIfError2(clean, CharString_appendStringx(&loc, ei.path))
 
 			if (ei.type == EFileType_Folder) {
-				gotoIfError2(clean, File_add(loc, EFileType_Folder, 1 * SECOND, false))
+				gotoIfError3(clean, File_add(loc, EFileType_Folder, 1 * SECOND, false, e_rr))
 				CharString_freex(&loc);
 				continue;
 			}
 
-			gotoIfError2(clean, File_write(ei.data, loc, 1 * SECOND))
+			gotoIfError3(clean, File_write(ei.data, loc, 1 * SECOND, e_rr))
 			CharString_freex(&loc);
 		}
 	}
@@ -265,7 +248,7 @@ Bool CLI_convertFromCA(
 clean:
 
 	if (didMakeFile && !s_uccess)
-		File_remove(output, 1 * SECOND);
+		File_remove(output, 1 * SECOND, NULL);
 
 	CAFile_freex(&file);
 	Buffer_freex(&buf);

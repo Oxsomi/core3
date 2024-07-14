@@ -45,6 +45,12 @@ Bool CLI_fileCombine(ParsedArgs args) {
 		goto clean;
 	}
 
+	if (!(args.parameters & EOperationHasParameter_Input2)) {
+		Log_debugLnx("CLI_fileCombine() failed, -input2 is required");
+		s_uccess = false;
+		goto clean;
+	}
+
 	//TODO: Multiple files
 
 	//Get inputs and output
@@ -99,12 +105,12 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	//Read input buffers
 
-	if ((err = File_read(inputArg, 1 * SECOND, &buf[0])).genericError) {
+	if (!File_read(inputArg, 1 * SECOND, &buf[0], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (1)");
 		goto clean;
 	}
 
-	if ((err = File_read(inputArg2, 1 * SECOND, &buf[1])).genericError) {
+	if (!File_read(inputArg2, 1 * SECOND, &buf[1], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (2)");
 		goto clean;
 	}
@@ -209,7 +215,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			goto clean;
 	}
 
-	if ((err = File_write(buf[2], outputArg, 1 * SECOND)).genericError) {
+	if (!File_write(buf[2], outputArg, 1 * SECOND, e_rr)) {
 		Log_warnLnx("CLI_fileCombine() can't write to output file");
 		goto clean;
 	}

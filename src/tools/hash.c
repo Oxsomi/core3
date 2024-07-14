@@ -37,7 +37,7 @@ Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 	if(!isFile)
 		buf = CharString_bufferConst(str);
 
-	else gotoIfError2(clean, File_read(str, 1 * SECOND, &buf))
+	else gotoIfError3(clean, File_read(str, 1 * SECOND, &buf, e_rr))
 
 	switch(format) {
 
@@ -102,17 +102,15 @@ clean:
 	return s_uccess;
 }
 
-Error CLI_hashAllTheFiles(FileInfo info, EFormat *format) {
+Bool CLI_hashAllTheFiles(FileInfo info, EFormat *format, Error *e_rr) {
 
-	Error err = Error_none();
 	Bool s_uccess = true;
 
 	if(info.type == EFileType_File)
-		gotoIfError3(clean, CLI_hash(info.path, true, *format, &err))
+		gotoIfError3(clean, CLI_hash(info.path, true, *format, e_rr))
 
 clean:
-	(void) s_uccess;
-	return err;
+	return s_uccess;
 }
 
 Bool CLI_hashFile(ParsedArgs args) {
@@ -127,7 +125,7 @@ Bool CLI_hashFile(ParsedArgs args) {
 	//Otherwise we just go to the file directly
 
 	if (File_hasFolder(str))
-		return !File_foreach(str, (FileCallback) CLI_hashAllTheFiles, &args.format, true).genericError;
+		return File_foreach(str, (FileCallback) CLI_hashAllTheFiles, &args.format, true, NULL);
 
 	return CLI_hash(str, true, args.format, NULL);
 }

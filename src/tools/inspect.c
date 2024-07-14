@@ -106,7 +106,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		goto clean;
 	}
 
-	if ((err = File_read(path, 1 * SECOND, &buf)).genericError) {
+	if (!File_read(path, 1 * SECOND, &buf, &err)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
@@ -427,19 +427,19 @@ clean:
 
 //Printing an entry
 
-Error collectArchiveEntries(FileInfo info, ListCharString *arg) {
+Bool collectArchiveEntries(FileInfo info, ListCharString *arg, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString tmp = CharString_createNull();
-	Error err;
 
-	gotoIfError(clean, CharString_createCopyx(info.path, &tmp))
-	gotoIfError(clean, ListCharString_pushBackx(arg, tmp))
+	gotoIfError2(clean, CharString_createCopyx(info.path, &tmp))
+	gotoIfError2(clean, ListCharString_pushBackx(arg, tmp))
 
 	tmp = CharString_createNull();		//Belongs to list now
 
 clean:
 	CharString_freex(&tmp);
-	return err;
+	return s_uccess;
 }
 
 //Printing an entry
@@ -449,31 +449,31 @@ typedef struct OutputFolderToDisk {
 	Archive sourceArchive;
 } OutputFolderToDisk;
 
-Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
+Bool writeToDisk(FileInfo info, OutputFolderToDisk *output, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString subDir = CharString_createNull();
-	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 
 	const U64 start = CharString_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : CharString_length(output->base);
 
 	if(!CharString_cut(info.path, start, 0, &subDir))
-		gotoIfError(clean, Error_invalidOperation(0, "writeToDisk()::info.path cut failed"))
+		retError(clean, Error_invalidOperation(0, "writeToDisk()::info.path cut failed"))
 
-	gotoIfError(clean, CharString_createCopyx(output->output, &tmp))
-	gotoIfError(clean, CharString_appendStringx(&tmp, subDir))
+	gotoIfError2(clean, CharString_createCopyx(output->output, &tmp))
+	gotoIfError2(clean, CharString_appendStringx(&tmp, subDir))
 
 	if (info.type == EFileType_File) {
 		Buffer data = Buffer_createNull();
-		gotoIfError(clean, Archive_getFileDataConstx(output->sourceArchive, info.path, &data))
-		gotoIfError(clean, File_write(data, tmp, 1 * SECOND))
+		gotoIfError3(clean, Archive_getFileDataConstx(output->sourceArchive, info.path, &data, e_rr))
+		gotoIfError3(clean, File_write(data, tmp, 1 * SECOND, e_rr))
 	}
 
-	else gotoIfError(clean, File_add(tmp, EFileType_Folder, 1 * SECOND, false))
+	else gotoIfError3(clean, File_add(tmp, EFileType_Folder, 1 * SECOND, false, e_rr))
 
 clean:
 	CharString_freex(&tmp);
-	return err;
+	return s_uccess;
 }
 
 //Showing the entire file or a part to disk or to log
@@ -512,7 +512,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		}
 
 		Buffer subBuffer = Buffer_createRefConst(b.ptr + start, length);
-		gotoIfError2(clean, File_write(subBuffer, out, 1 * SECOND))
+		gotoIfError3(clean, File_write(subBuffer, out, 1 * SECOND, e_rr))
 	}
 
 	//More info about a single entry
@@ -605,7 +605,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 			goto clean;
 		}
 
-		gotoIfError2(clean, File_add(out, EFileType_Folder, 1 * SECOND, true))
+		gotoIfError3(clean, File_add(out, EFileType_Folder, 1 * SECOND, true, e_rr))
 		*madeFile = true;
 
 		gotoIfError2(clean, CharString_createCopyx(out, &tmp))
@@ -617,13 +617,14 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 			.sourceArchive = a
 		};
 
-		gotoIfError2(clean, Archive_foreachx(
+		gotoIfError3(clean, Archive_foreachx(
 			a,
 			e.path,
 			(FileCallback) writeToDisk,
 			&output,
 			true,
-			EFileType_Any
+			EFileType_Any,
+			e_rr
 		))
 
 		CharString_freex(&tmp);
@@ -666,7 +667,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		goto clean;
 	}
 
-	if ((err = File_read(path, 1 * SECOND, &buf)).genericError) {
+	if (!File_read(path, 1 * SECOND, &buf, e_rr)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
@@ -841,13 +842,14 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 						baseCount = CharString_countAllSensitive(e.path, '/', 0) + 1;
 
-						gotoIfError2(cleanCa, Archive_foreachx(
+						gotoIfError3(cleanCa, Archive_foreachx(
 							file.archive,
 							e.path,
 							(FileCallback) collectArchiveEntries,
 							&strings,
 							true,
-							EFileType_Any
+							EFileType_Any,
+							e_rr
 						))
 					}
 
@@ -882,13 +884,14 @@ Bool CLI_inspectData(ParsedArgs args) {
 					goto cleanCa;
 				}
 
-				gotoIfError2(cleanCa, Archive_foreachx(
+				gotoIfError3(cleanCa, Archive_foreachx(
 					file.archive,
 					CharString_createRefCStrConst("."),
 					(FileCallback) collectArchiveEntries,
 					&strings,
 					true,
-					EFileType_Any
+					EFileType_Any,
+					e_rr
 				))
 			}
 
@@ -947,7 +950,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		cleanCa:
 
 			if(madeFile)
-				File_remove(out, 1 * SECOND);
+				File_remove(out, 1 * SECOND, NULL);
 
 			CAFile_freex(&file);
 			ListCharString_freeUnderlyingx(&strings);

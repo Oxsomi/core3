@@ -182,16 +182,16 @@ typedef struct Window {
 
 //Implementation dependent aka physical windows
 
-impl Error Window_updatePhysicalTitle(const Window *w, CharString title);
-impl Error Window_toggleFullScreen(Window *w);
-impl Error Window_presentPhysical(const Window *w);
+impl Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr);
+impl Bool Window_toggleFullScreen(Window *w, Error *e_rr);
+impl Bool Window_presentPhysical(const Window *w, Error *e_rr);
 
 //Virtual windows
 
 //Should be called if virtual or EWindowHint_ProvideCPUBuffer
 
-Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSize);
-Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout);
+Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSize, Error *e_rr);
+Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, Error *e_rr);
 
 //Simple helper functions
 

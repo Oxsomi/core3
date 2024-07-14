@@ -91,36 +91,41 @@
 
 //Can only operate on //access, //function, //network
 
-Error File_removeVirtual(CharString loc, Ns maxTimeout);
-Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);
-Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
-Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
+Bool File_removeVirtual(CharString loc, Ns maxTimeout, Error *e_rr);
+Bool File_addVirtual(CharString loc, EFileType type, Ns maxTimeout, Error *e_rr);
+Bool File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout, Error *e_rr);
+Bool File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout, Error *e_rr);
 
-Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
+Bool File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout, Error *e_rr);
 
 //Works on almost all virtual files
 
-Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
+Bool File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout, Error *e_rr);
 
-Error File_getInfoVirtual(CharString loc, FileInfo *info);
-Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
-Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
-Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);					//Inc folders + files
+Bool File_getInfoVirtual(CharString loc, FileInfo *info, Error *e_rr);
+Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
+//Inc files only
+Bool File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res, Error *e_rr);
+
+//Inc folders + files
+Bool File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res, Error *e_rr);
 
 //Both Linux and Windows require folder to be empty before removing.
 //So we do it manually.
 
 int removeFileOrFolder(CharString str);
 
-Error recurseDelete(FileInfo info, void *unused) {
+Bool recurseDelete(FileInfo info, void *unused, Error *e_rr) {
 
 	(void)unused;
+	Bool s_uccess = true;
 
 	if (removeFileOrFolder(info.path))
-		return Error_invalidOperation(0, "recurseDelete() removeFileOrFolder failed");
+		retError(clean, Error_invalidOperation(0, "recurseDelete() removeFileOrFolder failed"))
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
 int removeFileOrFolder(CharString str) {
@@ -133,12 +138,10 @@ int removeFileOrFolder(CharString str) {
 
 	if (S_ISDIR(inf.st_mode)) {
 
-		//Delete every file, because RemoveDirecotryA requires it to be empty
+		//Delete every file, because RemoveDirectoryW requires it to be empty
 		//We'll handle recursion ourselves
 
-		const Error err = File_foreach(str, recurseDelete, NULL, false);
-
-		if(err.genericError)
+		if(!File_foreach(str, recurseDelete, NULL, false, NULL))
 			return -1;
 
 		//Now that our folder is empty, we can finally delete it
@@ -155,12 +158,13 @@ Bool FileInfo_freex(FileInfo *fileInfo) {
 	return FileInfo_free(fileInfo, Platform_instance.alloc);
 }
 
-Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result) {
+Bool File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
 	return File_resolve(
 		loc, isVirtual,
 		maxFilePathLimit,
 		Platform_instance.workingDirectory, Platform_instance.alloc,
-		result
+		result,
+		e_rr
 	);
 }
 Bool File_makeRelativex(CharString base, CharString subFile, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
@@ -173,41 +177,41 @@ Bool File_makeRelativex(CharString base, CharString subFile, U64 maxFilePathLimi
 	);
 }
 
-Error File_getInfo(CharString loc, FileInfo *info, Allocator alloc) {
+Bool File_getInfo(CharString loc, FileInfo *info, Allocator alloc, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
-	Error err;
 
 	if(!info)
-		gotoIfError(clean, Error_nullPointer(0, "File_getInfo()::info is required"))
+		retError(clean, Error_nullPointer(0, "File_getInfo()::info is required"))
 
 	if(info->path.ptr)
-		gotoIfError(clean, Error_invalidOperation(0, "File_getInfo()::info was already defined, may indicate memleak"))
+		retError(clean, Error_invalidOperation(0, "File_getInfo()::info was already defined, may indicate memleak"))
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_getInfo()::loc wasn't a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_getInfo()::loc wasn't a valid file path"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_getInfoVirtual(loc, info))
-		return Error_none();
+		gotoIfError3(clean, File_getInfoVirtual(loc, info, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolve(loc, &isVirtual, 0, Platform_instance.workingDirectory, alloc, &resolved))
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance.workingDirectory, alloc, &resolved, e_rr))
 
 	struct stat inf = (struct stat) { 0 };
 
 	if (stat(resolved.ptr, &inf))
-		gotoIfError(clean, Error_notFound(0, 0, "File_getInfo()::loc file not found"))
+		retError(clean, Error_notFound(0, 0, "File_getInfo()::loc file not found"))
 
 	if (!S_ISDIR(inf.st_mode) && !S_ISREG(inf.st_mode))
-		gotoIfError(clean, Error_invalidOperation(
+		retError(clean, Error_invalidOperation(
 			2, "File_getInfo()::loc file type not supporterd (must be file or folder)"
 		))
 
 	if (!(inf.st_mode & (S_IREAD | S_IWRITE)))
-		gotoIfError(clean, Error_unauthorized(0, "File_getInfo()::loc file must be read and/or write"))
+		retError(clean, Error_unauthorized(0, "File_getInfo()::loc file must be read and/or write"))
 
 	*info = (FileInfo) {
 
@@ -222,26 +226,27 @@ Error File_getInfo(CharString loc, FileInfo *info, Allocator alloc) {
 			(inf.st_mode & S_IREAD  ? EFileAccess_Read  : EFileAccess_None)
 	};
 
-	return Error_none();
-
 clean:
-	CharString_free(&resolved, alloc);
-	return err;
+
+	if(!s_uccess)
+		CharString_free(&resolved, alloc);
+
+	return s_uccess;
 }
 
-Error File_getInfox(CharString loc, FileInfo *info) {
-	return File_getInfo(loc, info, Platform_instance.alloc);
+Bool File_getInfox(CharString loc, FileInfo *info, Error *e_rr) {
+	return File_getInfo(loc, info, Platform_instance.alloc, e_rr);
 }
 
 Bool File_hasFile(CharString loc) { return File_hasType(loc, EFileType_File); }
 Bool File_hasFolder(CharString loc) { return File_hasType(loc, EFileType_Folder); }
 
-Error File_queryFileCount(CharString loc, Bool isRecursive, U64 *res) {
-	return File_queryFileObjectCount(loc, EFileType_File, isRecursive, res);
+Bool File_queryFileCount(CharString loc, Bool isRecursive, U64 *res, Error *e_rr) {
+	return File_queryFileObjectCount(loc, EFileType_File, isRecursive, res, e_rr);
 }
 
-Error File_queryFolderCount(CharString loc, Bool isRecursive, U64 *res) {
-	return File_queryFileObjectCount(loc, EFileType_Folder, isRecursive, res);
+Bool File_queryFolderCount(CharString loc, Bool isRecursive, U64 *res, Error *e_rr) {
+	return File_queryFileObjectCount(loc, EFileType_Folder, isRecursive, res, e_rr);
 }
 
 typedef struct FileCounter {
@@ -250,63 +255,65 @@ typedef struct FileCounter {
 	U64 counter;
 } FileCounter;
 
-Error countFileTypeVirtual(FileInfo info, FileCounter *counter) {
+Bool countFileTypeVirtual(FileInfo info, FileCounter *counter, Error *e_rr) {
+
+	(void) e_rr;
 
 	if (!counter->useType) {
 		++counter->counter;
-		return Error_none();
+		return false;
 	}
 
 	if(info.type == counter->type)
 		++counter->counter;
 
-	return Error_none();
+	return false;
 }
 
-Error File_queryFileObjectCount(CharString loc, EFileType type, Bool isRecursive, U64 *res) {
+Bool File_queryFileObjectCount(CharString loc, EFileType type, Bool isRecursive, U64 *res, Error *e_rr) {
 
-	Error err;
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 
 	if(!res)
-		gotoIfError(clean, Error_nullPointer(3, "File_queryFileObjectCount()::res is required"))
+		retError(clean, Error_nullPointer(3, "File_queryFileObjectCount()::res is required"))
 
 	//Virtual files can supply a faster way of counting files
 	//Such as caching it and updating it if something is changed
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_queryFileObjectCount()::res must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_queryFileObjectCount()::res must be a valid file path"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_queryFileObjectCountVirtual(loc, type, isRecursive, res))
-		return Error_none();
+		gotoIfError3(clean, File_queryFileObjectCountVirtual(loc, type, isRecursive, res, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { .type = type, .useType = true };
-	gotoIfError(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive))
+	gotoIfError3(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive, e_rr))
 	*res = counter.counter;
 
 clean:
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
 
-Error File_queryFileObjectCountAll(CharString loc, Bool isRecursive, U64 *res) {
+Bool File_queryFileObjectCountAll(CharString loc, Bool isRecursive, U64 *res, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
-	Error err;
 
 	if(!res)
-		gotoIfError(clean, Error_nullPointer(2, "File_queryFileObjectCountAll()::res is required"))
+		retError(clean, Error_nullPointer(2, "File_queryFileObjectCountAll()::res is required"))
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_queryFileObjectCountAll()::res must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_queryFileObjectCountAll()::res must be a valid file path"))
 
 	//Virtual files can supply a faster way of counting files
 	//Such as caching it and updating it if something is changed
@@ -314,89 +321,81 @@ Error File_queryFileObjectCountAll(CharString loc, Bool isRecursive, U64 *res) {
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_queryFileObjectCountAllVirtual(loc, isRecursive, res))
-		return Error_none();
+		gotoIfError3(clean, File_queryFileObjectCountAllVirtual(loc, isRecursive, res, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { 0 };
-	gotoIfError(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive))
+	gotoIfError3(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive, e_rr))
 	*res = counter.counter;
 
 clean:
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
 
-Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly) {
+Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Error *e_rr) {
 
 	CharString resolved = CharString_createNull();
 	ListCharString str = (ListCharString) { 0 };
 	FileInfo info = (FileInfo) { 0 };
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_add()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_add()::loc must be a valid file path"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_addVirtual(loc, type, maxTimeout))
-		return Error_none();
+		gotoIfError3(clean, File_addVirtual(loc, type, maxTimeout, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
-	err = File_getInfox(resolved, &info);
+	{
+		Error errTmp = Error_none();
+		Bool successTmp = File_getInfox(resolved, &info, &errTmp);
 
-	if(err.genericError && err.genericError != EGenericError_NotFound)
-		gotoIfError(clean, err)
+		if(!successTmp && errTmp.genericError != EGenericError_NotFound)
+			retError(clean, errTmp)
 
-	if (!err.genericError) {
-		CharString_freex(&resolved);
+		if(successTmp)
+			goto clean;
+
 		FileInfo_freex(&info);
-		return Error_none();
 	}
-
-	//Already exists
-
-	if(!err.genericError)
-		gotoIfError(clean, info.type != type ? Error_alreadyDefined(0, "File_add()::loc already exists") : Error_none())
-
-	err = Error_none();
-
-	FileInfo_freex(&info);
 
 	//Check parent directories until none left
 
 	if(CharString_containsSensitive(resolved, '/', 0, 0)) {
 
 		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance.workingDirectory, 0, 0))
-			gotoIfError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."))
+			retError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."))
 
-		gotoIfError(clean, CharString_splitSensitivex(resolved, '/', &str))
+		gotoIfError2(clean, CharString_splitSensitivex(resolved, '/', &str))
 
 		for (U64 i = 0; i < str.length - 1; ++i) {
 
 			CharString parent = CharString_createRefSized((C8*)resolved.ptr, CharString_end(str.ptr[i]) - resolved.ptr, false);
 
-			err = File_getInfox(parent, &info);
+			Error errTmp = Error_none();
+			Bool successTmp = File_getInfox(parent, &info, &errTmp);
 
-			if(err.genericError && err.genericError != EGenericError_NotFound)
-				gotoIfError(clean, err)
+			if(!successTmp && errTmp.genericError != EGenericError_NotFound)
+				retError(clean, errTmp)
 
 			if(info.type != EFileType_Folder)
-				gotoIfError(clean, Error_invalidOperation(2, "File_add() one of the parents wasn't a folder"))
+				retError(clean, Error_invalidOperation(2, "File_add() one of the parents wasn't a folder"))
 
 			FileInfo_freex(&info);
 
-			if(!err.genericError)		//Already defined, continue to child
+			if(successTmp)		//Already defined, continue to child
 				continue;
-
-			err = Error_none();
 
 			//Mkdir requires null terminated string
 			//So we hack force in a null terminator
@@ -411,7 +410,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentO
 			//Make parent
 
 			if (_mkdir(parent.ptr))
-				gotoIfError(clean, Error_stderr(0, "File_add() couldn't mkdir parent"))
+				retError(clean, Error_stderr(0, "File_add() couldn't mkdir parent"))
 
 			//Reset character that was replaced with \0
 
@@ -425,36 +424,36 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentO
 	//Create folder
 
 	if (type == EFileType_Folder && _mkdir(resolved.ptr))
-		gotoIfError(clean, Error_stderr(1, "File_add() couldn't mkdir"))
+		retError(clean, Error_stderr(1, "File_add() couldn't mkdir"))
 
 	//Create file
 
 	if(type == EFileType_File && !createParentOnly)
-		gotoIfError(clean, File_write(Buffer_createNull(), resolved, maxTimeout))
+		gotoIfError3(clean, File_write(Buffer_createNull(), resolved, maxTimeout, e_rr))
 
 clean:
 	FileInfo_freex(&info);
 	CharString_freex(&resolved);
 	ListCharString_freex(&str);
-	return err;
+	return s_uccess;
 }
 
-Error File_remove(CharString loc, Ns maxTimeout) {
+Bool File_remove(CharString loc, Ns maxTimeout, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
-	Error err;
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_remove()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_remove()::loc must be a valid file path"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_removeVirtual(resolved, maxTimeout))
-		return Error_none();
+		gotoIfError3(clean, File_removeVirtual(resolved, maxTimeout, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
 	const Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -473,55 +472,55 @@ Error File_remove(CharString loc, Ns maxTimeout) {
 	}
 
 	if (res)
-		gotoIfError(clean, Error_stderr(0, "File_remove() couldn't remove file"))
+		retError(clean, Error_stderr(0, "File_remove() couldn't remove file"))
 
 clean:
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
 
 Bool File_has(CharString loc) {
 	FileInfo info = (FileInfo) { 0 };
-	const Error err = File_getInfox(loc, &info);
+	Bool s_uccess = File_getInfox(loc, &info, NULL);
 	FileInfo_freex(&info);
-	return !err.genericError;
+	return s_uccess;
 }
 
 Bool File_hasType(CharString loc, EFileType type) {
 	FileInfo info = (FileInfo) { 0 };
-	const Error err = File_getInfox(loc, &info);
+	Bool s_uccess = File_getInfox(loc, &info, NULL);
 	const Bool sameType = info.type == type;
 	FileInfo_freex(&info);
-	return !err.genericError && sameType;
+	return s_uccess && sameType;
 }
 
-Error File_rename(CharString loc, CharString newFileName, Ns maxTimeout) {
+Bool File_rename(CharString loc, CharString newFileName, Ns maxTimeout, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
-	Error err;
 	FileInfo info = (FileInfo) { 0 };
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_rename()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_rename()::loc must be a valid file path"))
 
 	if(!CharString_isValidFileName(newFileName))
-		gotoIfError(clean, Error_invalidParameter(1, 0, "File_rename()::newFileName must be a valid file name"))
+		retError(clean, Error_invalidParameter(1, 0, "File_rename()::newFileName must be a valid file name"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_renameVirtual(loc, newFileName, maxTimeout))
-		return Error_none();
+		gotoIfError3(clean, File_renameVirtual(loc, newFileName, maxTimeout, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
 	//Check if file exists
 
 	const Bool fileExists = File_has(loc);
 
 	if(!fileExists)
-		gotoIfError(clean, Error_notFound(0, 0, "File_rename()::loc doesn't exist"))
+		retError(clean, Error_notFound(0, 0, "File_rename()::loc doesn't exist"))
 
 	const Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -539,46 +538,46 @@ Error File_rename(CharString loc, CharString newFileName, Ns maxTimeout) {
 	}
 
 	if(ren)
-		gotoIfError(clean, Error_stderr(0, "File_rename() rename failed"))
+		retError(clean, Error_stderr(0, "File_rename() rename failed"))
 
 clean:
 	FileInfo_freex(&info);
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
 
-Error File_move(CharString loc, CharString directoryName, Ns maxTimeout) {
+Bool File_move(CharString loc, CharString directoryName, Ns maxTimeout, Error *e_rr) {
 
 	CharString resolved = CharString_createNull(), resolvedFile = CharString_createNull();
-	Error err = Error_none();
+	Bool s_uccess = true;
 	FileInfo info = (FileInfo) { 0 };
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_move()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_move()::loc must be a valid file path"))
 
 	if(!CharString_isValidFilePath(directoryName))
-		gotoIfError(clean, Error_invalidParameter(1, 0, "File_move()::directoryName must be a valid file path"))
+		retError(clean, Error_invalidParameter(1, 0, "File_move()::directoryName must be a valid file path"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_moveVirtual(loc, directoryName, maxTimeout))
-		return Error_none();
+		gotoIfError3(clean, File_moveVirtual(loc, directoryName, maxTimeout, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
-	gotoIfError(clean, File_resolvex(directoryName, &isVirtual, 0, &resolvedFile))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(directoryName, &isVirtual, 0, &resolvedFile, e_rr))
 
 	if(isVirtual)
-		gotoIfError(clean, Error_invalidOperation(0, "File_move() can't resolve to virtual file here?"))
+		retError(clean, Error_invalidOperation(0, "File_move() can't resolve to virtual file here?"))
 
 	//Check if file exists
 
 	if(!File_has(resolved))
-		gotoIfError(clean, Error_notFound(0, 0, "File_move()::loc can't be found"))
+		retError(clean, Error_notFound(0, 0, "File_move()::loc can't be found"))
 
 	if(!File_hasFolder(resolvedFile))
-		gotoIfError(clean, Error_notFound(0, 1, "File_move()::directoryName can't be found"))
+		retError(clean, Error_notFound(0, 1, "File_move()::directoryName can't be found"))
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -589,8 +588,8 @@ Error File_move(CharString loc, CharString directoryName, Ns maxTimeout) {
 
 	CharString_setAt(resolvedFile, CharString_length(resolvedFile) - 1, '/');
 
-	gotoIfError(clean, CharString_appendStringx(&resolvedFile, fileName))
-	gotoIfError(clean, CharString_appendx(&resolvedFile, '\0'))
+	gotoIfError2(clean, CharString_appendStringx(&resolvedFile, fileName))
+	gotoIfError2(clean, CharString_appendx(&resolvedFile, '\0'))
 
 	int ren = rename(resolved.ptr, resolvedFile.ptr);
 
@@ -606,32 +605,32 @@ Error File_move(CharString loc, CharString directoryName, Ns maxTimeout) {
 	}
 
 	if(ren)
-		gotoIfError(clean, Error_stderr(0, "File_move() couldn't move file"))
+		retError(clean, Error_stderr(0, "File_move() couldn't move file"))
 
 clean:
 	FileInfo_freex(&info);
 	CharString_freex(&resolved);
 	CharString_freex(&resolvedFile);
-	return err;
+	return s_uccess;
 }
 
-Error File_write(Buffer buf, CharString loc, Ns maxTimeout) {
+Bool File_write(Buffer buf, CharString loc, Ns maxTimeout, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
-	Error err;
 	FILE *f = NULL;
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_writeVirtual(buf, loc, maxTimeout))
-		return Error_none();
+		gotoIfError3(clean, File_writeVirtual(buf, loc, maxTimeout, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
 	f = fopen(resolved.ptr, "wb");
 
@@ -649,42 +648,42 @@ Error File_write(Buffer buf, CharString loc, Ns maxTimeout) {
 	}
 
 	if(!f)
-		gotoIfError(clean, Error_stderr(0, "File_write() couldn't open file for write"))
+		retError(clean, Error_stderr(0, "File_write() couldn't open file for write"))
 
 	const U64 bufLen = Buffer_length(buf);
 
 	if(bufLen && fwrite(buf.ptr, 1, bufLen, f) != bufLen)
-		gotoIfError(clean, Error_stderr(1, "File_write() couldn't write file"))
+		retError(clean, Error_stderr(1, "File_write() couldn't write file"))
 
 clean:
 	if(f) fclose(f);
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
 
-Error File_read(CharString loc, Ns maxTimeout, Buffer *output) {
+Bool File_read(CharString loc, Ns maxTimeout, Buffer *output, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
-	Error err = Error_none();
 	FILE *f = NULL;
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"))
 
 	if(!output)
-		gotoIfError(clean, Error_nullPointer(2, "File_read()::output is required"))
+		retError(clean, Error_nullPointer(2, "File_read()::output is required"))
 
 	if(output->ptr)
-		gotoIfError(clean, Error_invalidOperation(0, "File_read()::output was filled, may indicate memleak"))
+		retError(clean, Error_invalidOperation(0, "File_read()::output was filled, may indicate memleak"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_readVirtual(loc, output, maxTimeout))
-		return Error_none();
+		gotoIfError3(clean, File_readVirtual(loc, output, maxTimeout, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
 	f = fopen(resolved.ptr, "rb");
 
@@ -702,53 +701,53 @@ Error File_read(CharString loc, Ns maxTimeout, Buffer *output) {
 	}
 
 	if(!f)
-		gotoIfError(clean, Error_stderr(0, "File_read() couldn't open file for read"))
+		retError(clean, Error_stderr(0, "File_read() couldn't open file for read"))
 
 	if(fseek(f, 0, SEEK_END))
-		gotoIfError(clean, Error_stderr(1, "File_read() couldn't seek end"))
+		retError(clean, Error_stderr(1, "File_read() couldn't seek end"))
 
 	U64 size = (U64)_ftelli64(f);
 
 	if(!size)			//Empty files exist too
-		goto success;
+		goto clean;
 
-	gotoIfError(clean, Buffer_createUninitializedBytesx(size, output))
+	gotoIfError2(clean, Buffer_createUninitializedBytesx(size, output))
 
 	if(fseek(f, 0, SEEK_SET))
-		gotoIfError(clean, Error_stderr(2, "File_read() couldn't seek begin"))
+		retError(clean, Error_stderr(2, "File_read() couldn't seek begin"))
 
 	Buffer b = *output;
 	U64 bufLen = Buffer_length(b);
 
 	if (fread((U8*)b.ptr, 1, bufLen, f) != bufLen)
-		gotoIfError(clean, Error_stderr(3, "File_read() couldn't read file"))
-
-	goto success;
+		retError(clean, Error_stderr(3, "File_read() couldn't read file"))
 
 clean:
-	Buffer_freex(output);
-success:
+
+	if(!s_uccess)
+		Buffer_freex(output);
+
 	if(f) fclose(f);
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
 
 //Virtual file support
 
-typedef Error (*VirtualFileFunc)(void *userData, CharString resolved);
+typedef Bool (*VirtualFileFunc)(void *userData, CharString resolved, Error *e_rr);
 
-Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *userData, Bool isWrite) {
+Bool File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *userData, Bool isWrite, Error *e_rr) {
 
 	(void)maxTimeout;
 
+	Bool s_uccess = true;
 	Bool isVirtual = false;
 	CharString resolved = CharString_createNull();
-	Error err;
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 128, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 128, &resolved, e_rr))
 
 	if(!isVirtual)
-		gotoIfError(clean, Error_unsupportedOperation(0, "File_virtualOp()::loc should resolve to virtual path (//*)"))
+		retError(clean, Error_unsupportedOperation(0, "File_virtualOp()::loc should resolve to virtual path (//*)"))
 
 	const CharString access = CharString_createRefCStrConst("//access/");
 	const CharString function = CharString_createRefCStrConst("//function/");
@@ -756,81 +755,84 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 
 	if (CharString_startsWithStringInsensitive(loc, access, 0)) {
 		//TODO: Allow //access folder
-		return Error_unimplemented(0, "File_virtualOp()::loc //access/ not supported yet");
+		retError(clean, Error_unimplemented(0, "File_virtualOp()::loc //access/ not supported yet"))
 	}
 
 	if (CharString_startsWithStringInsensitive(loc, function, 0)) {
 		//TODO: Allow //function folder (user callbacks)
-		return Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet");
+		retError(clean, Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet"))
 	}
 
 	if (CharString_startsWithStringInsensitive(loc, network, 0)) {
 		//TODO: Allow //network folder (access to \\ on windows)
-		return Error_unimplemented(1, "File_virtualOp()::loc //network/ not supported yet");
+		retError(clean, Error_unimplemented(1, "File_virtualOp()::loc //network/ not supported yet"))
 	}
 
-	err =
-		isWrite ? Error_constData(
+	if(isWrite)
+		retError(clean, Error_constData(
 			1, 0,
 			"File_virtualOp()::isWrite is disallowed when acting on virtual files "
 			"(except //access/*, //network/* or //function/*)"
-		) : (
-			!f ? Error_unimplemented(2, "File_virtualOp()::f is required") : f(userData, resolved)
-		);
+		))
+
+	if(!f)
+		retError(clean, Error_unimplemented(2, "File_virtualOp()::f is required"))
+
+	gotoIfError3(clean, f(userData, resolved, e_rr))
 
 clean:
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
 
 //These are write operations, we don't support them yet.
 
-Error File_removeVirtual(CharString loc, Ns maxTimeout) {
-	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+Bool File_removeVirtual(CharString loc, Ns maxTimeout, Error *e_rr) {
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, e_rr);
 }
 
-Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout) {
+Bool File_addVirtual(CharString loc, EFileType type, Ns maxTimeout, Error *e_rr) {
 	(void)type;
-	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, e_rr);
 }
 
-Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout) {
+Bool File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout, Error *e_rr) {
 	(void)newFileName;
-	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, e_rr);
 }
 
-Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout) {
+Bool File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout, Error *e_rr) {
 	(void)directoryName;
-	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, e_rr);
 }
 
-Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout) {
+Bool File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout, Error *e_rr) {
 	(void)buf;
-	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true, e_rr);
 }
 
 //Read operations
 
-Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSection **section) {
+Bool File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSection **section, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
 	CharString copy1 = CharString_createNull();
 	CharString copy2 = CharString_createNull();
-	Error err;
 
 	CharString_toLower(loc);
-	gotoIfError(clean, CharString_createCopyx(loc, &copy))
-	gotoIfError(clean, CharString_createCopyx(loc, &copy2))
+	gotoIfError2(clean, CharString_createCopyx(loc, &copy))
+	gotoIfError2(clean, CharString_createCopyx(loc, &copy2))
 
 	if(CharString_length(copy2))
-		gotoIfError(clean, CharString_appendx(&copy2, '/'))		//Don't append to root
+		gotoIfError2(clean, CharString_appendx(&copy2, '/'))		//Don't append to root
 
 	//Root is always present
 
 	else goto clean;
 
 	if(!SpinLock_isLockedForThread(&Platform_instance.virtualSectionsLock))
-		gotoIfError(clean, Error_invalidState(0, "File_resolveVirtual() requires virtualSectionsLock"))
+		retError(clean, Error_invalidState(0, "File_resolveVirtual() requires virtualSectionsLock"))
 
 	//Check sections
 
@@ -853,8 +855,8 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 		//Check if the section includes the referenced file/folder
 
 		CharString_freex(&copy1);
-		gotoIfError(clean, CharString_createCopyx(sectioni->path, &copy1))
-		gotoIfError(clean, CharString_appendx(&copy1, '/'))
+		gotoIfError2(clean, CharString_createCopyx(sectioni->path, &copy1))
+		gotoIfError2(clean, CharString_appendx(&copy1, '/'))
 
 		if(CharString_startsWithStringInsensitive(copy, copy1, 0)) {
 			CharString_cut(copy, CharString_length(copy1), 0, subPath);
@@ -863,44 +865,44 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 		}
 	}
 
-	gotoIfError(clean, Error_notFound(0, 0, "File_resolveVirtual() can't find section"))
+	retError(clean, Error_notFound(0, 0, "File_resolveVirtual() can't find section"))
 
 clean:
 
 	CharString_freex(&copy1);
 	CharString_freex(&copy2);
 
-	if (CharString_length(*subPath) && !err.genericError) {
+	if (CharString_length(*subPath) && s_uccess) {
 		CharString_createCopyx(*subPath, &copy1);
 		*subPath = copy1;
 		copy1 = CharString_createNull();
 	}
 
 	CharString_freex(&copy);
-	return err;
+	return s_uccess;
 }
 
-Error File_readVirtualInternal(Buffer *output, CharString loc) {
+Bool File_readVirtualInternal(Buffer *output, CharString loc, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
 	const VirtualSection *section = NULL;
-	Error err;
 	Buffer tmp = Buffer_createNull();
 	const ELockAcquire acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "File_readVirtualInternal() couldn't lock virtualSectionsLock"))
+		retError(clean, Error_invalidState(0, "File_readVirtualInternal() couldn't lock virtualSectionsLock"))
 
-	gotoIfError(clean, File_resolveVirtual(loc, &subPath, &section))
+	gotoIfError3(clean, File_resolveVirtual(loc, &subPath, &section, e_rr))
 
 	if(!section)
-		gotoIfError(clean, Error_invalidOperation(0, "File_readVirtualInternal() section couldn't be found"))
+		retError(clean, Error_invalidOperation(0, "File_readVirtualInternal() section couldn't be found"))
 
 	//Create copy of data.
 	//It's possible the file data is unloaded in parallel and then this buffer would point to invalid data.
 
-	gotoIfError(clean, Archive_getFileDataConstx(section->loadedData, subPath, &tmp))
-	gotoIfError(clean, Buffer_createCopyx(tmp, output))
+	gotoIfError3(clean, Archive_getFileDataConstx(section->loadedData, subPath, &tmp, e_rr))
+	gotoIfError2(clean, Buffer_createCopyx(tmp, output))
 
 clean:
 
@@ -909,33 +911,36 @@ clean:
 
 	Buffer_freex(&tmp);
 	CharString_freex(&subPath);
-	return err;
+	return s_uccess;
 }
 
-Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout) {
+Bool File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout, Error *e_rr) {
 
-	if(!output)
-		return Error_nullPointer(1, "File_readVirtual()::output is required");
+	if(!output) {
+		if(e_rr) *e_rr = Error_nullPointer(1, "File_readVirtual()::output is required");
+		return false;
+	}
 
 	return File_virtualOp(
 		loc, maxTimeout,
 		(VirtualFileFunc) File_readVirtualInternal,
 		output,
-		false
+		false,
+		e_rr
 	);
 }
 
-Error File_getInfoVirtualInternal(FileInfo *info, CharString loc) {
+Bool File_getInfoVirtualInternal(FileInfo *info, CharString loc, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
 	const VirtualSection *section = NULL;
-	Error err;
 	const ELockAcquire acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "File_getInfoVirtualInternal() couldn't lock virtualSectionsLock"))
+		retError(clean, Error_invalidState(0, "File_getInfoVirtualInternal() couldn't lock virtualSectionsLock"))
 
-	gotoIfError(clean, File_resolveVirtual(loc, &subPath, &section))
+	gotoIfError3(clean, File_resolveVirtual(loc, &subPath, &section, e_rr))
 
 	if(!section) {	//Parent dir
 
@@ -943,7 +948,7 @@ Error File_getInfoVirtualInternal(FileInfo *info, CharString loc) {
 			loc = CharString_createRefCStrConst(".");
 
 		CharString copy = CharString_createNull();
-		gotoIfError(clean, CharString_createCopyx(loc, &copy))
+		gotoIfError2(clean, CharString_createCopyx(loc, &copy))
 
 		*info = (FileInfo) {
 			.path = copy,
@@ -954,42 +959,48 @@ Error File_getInfoVirtualInternal(FileInfo *info, CharString loc) {
 
 	else {
 
-		gotoIfError(clean, Archive_getInfox(section->loadedData, subPath, info))
+		gotoIfError3(clean, Archive_getInfox(section->loadedData, subPath, info, e_rr))
 
 		CharString tmp = CharString_createNull();
 		CharString_cut(loc, 0, CharString_length(loc) - CharString_length(subPath), &tmp);
 
-		gotoIfError(clean, CharString_insertStringx(&info->path, tmp, 0))
+		gotoIfError2(clean, CharString_insertStringx(&info->path, tmp, 0))
 	}
 
-	gotoIfError(clean, CharString_insertStringx(&info->path, CharString_createRefCStrConst("//"), 0))
+	gotoIfError2(clean, CharString_insertStringx(&info->path, CharString_createRefCStrConst("//"), 0))
 
 clean:
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
-	if(err.genericError)
+	if(!s_uccess)
 		FileInfo_freex(info);
 
 	CharString_freex(&subPath);
-	return err;
+	return s_uccess;
 }
 
-Error File_getInfoVirtual(CharString loc, FileInfo *info) {
+Bool File_getInfoVirtual(CharString loc, FileInfo *info, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!info)
-		return Error_nullPointer(1, "File_getInfoVirtual()::info is required");
+		retError(clean, Error_nullPointer(1, "File_getInfoVirtual()::info is required"))
 
 	if(info->access)
-		return Error_invalidOperation(0, "File_getInfoVirtual()::info isn't empty, might indicate memleak");
+		retError(clean, Error_invalidOperation(0, "File_getInfoVirtual()::info isn't empty, might indicate memleak"))
 
-	return File_virtualOp(
+	gotoIfError3(clean, File_virtualOp(
 		loc, 1 * SECOND,
 		(VirtualFileFunc) File_getInfoVirtualInternal,
 		info,
-		false
-	);
+		false,
+		e_rr
+	))
+
+clean:
+	return s_uccess;
 }
 
 typedef struct ForeachFile {
@@ -999,27 +1010,27 @@ typedef struct ForeachFile {
 	CharString currentPath;
 } ForeachFile;
 
-Error File_virtualCallback(FileInfo info, ForeachFile *userData) {
+Bool File_virtualCallback(FileInfo info, ForeachFile *userData, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString fullPath = CharString_createNull();
-	Error err;
 
-	gotoIfError(clean, CharString_createCopyx(userData->currentPath, &fullPath))
-	gotoIfError(clean, CharString_appendStringx(&fullPath, info.path))
-	gotoIfError(clean, CharString_insertStringx(&fullPath, CharString_createRefCStrConst("//"), 0))
+	gotoIfError2(clean, CharString_createCopyx(userData->currentPath, &fullPath))
+	gotoIfError2(clean, CharString_appendStringx(&fullPath, info.path))
+	gotoIfError2(clean, CharString_insertStringx(&fullPath, CharString_createRefCStrConst("//"), 0))
 
 	info.path = fullPath;
 
-	gotoIfError(clean, userData->callback(info, userData->userData))
+	gotoIfError3(clean, userData->callback(info, userData->userData, e_rr))
 
 clean:
 	CharString_freex(&fullPath);
-	return err;
+	return s_uccess;
 }
 
-Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
+Bool File_foreachVirtualInternal(ForeachFile *userData, CharString resolved, Error *e_rr) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
 	CharString copy1 = CharString_createNull();
 	CharString copy2 = CharString_createNull();
@@ -1029,15 +1040,15 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	CharString_toLower(resolved);
-	gotoIfError(clean, CharString_createCopyx(resolved, &copy))
+	gotoIfError2(clean, CharString_createCopyx(resolved, &copy))
 
 	if(CharString_length(copy))
-		gotoIfError(clean, CharString_appendx(&copy, '/'))		//Don't append to root
+		gotoIfError2(clean, CharString_appendx(&copy, '/'))		//Don't append to root
 
 	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
+		retError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
 
 	U64 baseCount = CharString_countAllSensitive(copy, '/', 0);
 
@@ -1048,11 +1059,11 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		CharString_freex(&copy1);
 		CharString_freex(&copy2);
 
-		gotoIfError(clean, CharString_createCopyx(section->path, &copy1))
+		gotoIfError2(clean, CharString_createCopyx(section->path, &copy1))
 		CharString_toLower(copy1);
 
-		gotoIfError(clean, CharString_createCopyx(copy1, &copy2))
-		gotoIfError(clean, CharString_appendx(&copy2, '/'))
+		gotoIfError2(clean, CharString_createCopyx(copy1, &copy2))
+		gotoIfError2(clean, CharString_appendx(&copy2, '/'))
 
 		if(
 			!CharString_startsWithStringSensitive(copy1, copy, 0) &&
@@ -1067,7 +1078,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 			CharString parent = CharString_createNull();
 			if(!CharString_cutAfterFirstSensitive(copy1, '/', &parent))
-				gotoIfError(clean, Error_invalidState(0, "File_foreachVirtualInternal() cutAfterFirst failed"))
+				retError(clean, Error_invalidState(0, "File_foreachVirtualInternal() cutAfterFirst failed"))
 
 			Bool contains = false;
 
@@ -1081,11 +1092,11 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 				//Avoid duplicates
 
-				gotoIfError(clean, ListCharString_pushBackx(&visited, parent))
+				gotoIfError2(clean, ListCharString_pushBackx(&visited, parent))
 
 				CharString_freex(&copy3);
-				gotoIfError(clean, CharString_createCopyx(parent, &copy3))
-				gotoIfError(clean, CharString_insertStringx(&copy3, CharString_createRefCStrConst("//"), 0))
+				gotoIfError2(clean, CharString_createCopyx(parent, &copy3))
+				gotoIfError2(clean, CharString_insertStringx(&copy3, CharString_createRefCStrConst("//"), 0))
 
 				FileInfo info = (FileInfo) {
 					.path = copy3,
@@ -1093,7 +1104,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 					.access = EFileAccess_Read
 				};
 
-				gotoIfError(clean, userData->callback(info, userData->userData))
+				gotoIfError3(clean, userData->callback(info, userData->userData, e_rr))
 			}
 		}
 
@@ -1105,8 +1116,8 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		) {
 
 			CharString_freex(&copy3);
-			gotoIfError(clean, CharString_createCopyx(copy1, &copy3))
-			gotoIfError(clean, CharString_insertStringx(&copy3, CharString_createRefCStrConst("//"), 0))
+			gotoIfError2(clean, CharString_createCopyx(copy1, &copy3))
+			gotoIfError2(clean, CharString_insertStringx(&copy3, CharString_createRefCStrConst("//"), 0))
 
 			FileInfo info = (FileInfo) {
 				.path = copy3,
@@ -1114,7 +1125,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 				.access = EFileAccess_Read
 			};
 
-			gotoIfError(clean, userData->callback(info, userData->userData))
+			gotoIfError3(clean, userData->callback(info, userData->userData, e_rr))
 		}
 
 		//We can only loop through the folders if they're loaded. Otherwise, we consider them as empty.
@@ -1128,23 +1139,24 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 				CharString child = CharString_createNull();
 
 				if(baseCount > 2 && !CharString_cut(resolved, CharString_length(copy2), 0, &child))
-					gotoIfError(clean, Error_invalidState(1, "File_foreachVirtualInternal() cut failed"))
+					retError(clean, Error_invalidState(1, "File_foreachVirtualInternal() cut failed"))
 
 				if(!CharString_length(child))
 					child = root;
 
-				gotoIfError(clean, Archive_foreachx(
+				gotoIfError3(clean, Archive_foreachx(
 					section->loadedData,
 					child,
 					(FileCallback) File_virtualCallback, userData,
 					userData->isRecursive,
-					EFileType_Any
+					EFileType_Any,
+					e_rr
 				))
 			}
 		}
 	}
 
-	gotoIfError(clean, Error_unimplemented(0, "File_foreachVirtualInternal() couldn't find virtual section"))
+	retError(clean, Error_unimplemented(0, "File_foreachVirtualInternal() couldn't find virtual section"))
 
 clean:
 
@@ -1156,13 +1168,15 @@ clean:
 	CharString_freex(&copy1);
 	CharString_freex(&copy2);
 	CharString_freex(&copy3);
-	return err;
+	return s_uccess;
 }
 
-Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
+Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
 
-	if(!callback)
-		return Error_nullPointer(1, "File_foreachVirtual()::callback is required");
+	if(!callback) {
+		if(e_rr) *e_rr = Error_nullPointer(1, "File_foreachVirtual()::callback is required");
+		return false;
+	}
 
 	ForeachFile foreachFile = (ForeachFile) {
 		.callback = callback,
@@ -1174,51 +1188,54 @@ Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData,
 		loc, 1 * SECOND,
 		(VirtualFileFunc) File_foreachVirtualInternal,
 		&foreachFile,
-		false
+		false,
+		e_rr
 	);
 }
 
-Error countFileType(FileInfo info, FileCounter *counter) {
+Bool countFileType(FileInfo info, FileCounter *counter, Error *e_rr) {
+
+	(void) e_rr;
 
 	if (!counter->useType) {
 		++counter->counter;
-		return Error_none();
+		return false;
 	}
 
 	if(info.type == counter->type)
 		++counter->counter;
 
-	return Error_none();
+	return false;
 }
 
-Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res) {
+Bool File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res, Error *e_rr) {
 
-	Error err;
+	Bool s_uccess = true;
 
 	if(!res)
-		gotoIfError(clean, Error_nullPointer(3, "File_queryFileObjectCountVirtual()::res is required"))
+		retError(clean, Error_nullPointer(3, "File_queryFileObjectCountVirtual()::res is required"))
 
 	FileCounter counter = (FileCounter) { .type = type, .useType = true };
-	gotoIfError(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive))
+	gotoIfError3(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive, e_rr))
 	*res = counter.counter;
 
 clean:
-	return err;
+	return s_uccess;
 }
 
-Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res) {
+Bool File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res, Error *e_rr) {
 
-	Error err;
+	Bool s_uccess = true;
 
 	if(!res)
-		gotoIfError(clean, Error_nullPointer(2, "File_queryFileObjectCountAllVirtual()::res is required"))
+		retError(clean, Error_nullPointer(2, "File_queryFileObjectCountAllVirtual()::res is required"))
 
 	FileCounter counter = (FileCounter) { 0 };
-	gotoIfError(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive))
+	gotoIfError3(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive, e_rr))
 	*res = counter.counter;
 
 clean:
-	return err;
+	return s_uccess;
 }
 
 impl Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad, Error *e_rr);
@@ -1227,23 +1244,23 @@ Bool File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc, Error *
 	return File_loadVirtualInternal1(userData, loc, true, e_rr);
 }
 
-Error File_unloadVirtualInternal(void *userData, CharString loc) {
+Bool File_unloadVirtualInternal(void *userData, CharString loc, Error *e_rr) {
 
 	(void)userData;
 
 	CharString isChild = CharString_createNull();
-	Error err = Error_none();
 	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool s_uccess = true;
 
-	gotoIfError(clean, CharString_createCopyx(loc, &isChild))
+	gotoIfError2(clean, CharString_createCopyx(loc, &isChild))
 
 	if(CharString_length(isChild))
-		gotoIfError(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
+		gotoIfError2(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
 
 	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
+		retError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
@@ -1265,19 +1282,19 @@ clean:
 		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
 	CharString_freex(&isChild);
-	return err;
+	return s_uccess;
 }
 
-Bool File_isVirtualLoaded(CharString loc) {
+Bool File_isVirtualLoaded(CharString loc, Error *e_rr) {
 	FileLoadVirtual virt = (FileLoadVirtual) { 0 };
-	return File_loadVirtualInternal1(&virt, loc, false, NULL);
+	return File_loadVirtualInternal1(&virt, loc, false, e_rr);
 }
 
-Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]) {
+Bool File_loadVirtual(CharString loc, const U32 encryptionKey[8], Error *e_rr) {
 	FileLoadVirtual virt = (FileLoadVirtual) { .doLoad = true, .encryptionKey = encryptionKey };
-	return File_virtualOp(loc, 1 * SECOND, (VirtualFileFunc) File_loadVirtualInternal, &virt, false);
+	return File_virtualOp(loc, 1 * SECOND, (VirtualFileFunc) File_loadVirtualInternal, &virt, false, e_rr);
 }
 
-Error File_unloadVirtual(CharString loc) {
-	return File_virtualOp(loc, 1 * SECOND, File_unloadVirtualInternal, NULL, false);
+Bool File_unloadVirtual(CharString loc, Error *e_rr) {
+	return File_virtualOp(loc, 1 * SECOND, File_unloadVirtualInternal, NULL, false, e_rr);
 }

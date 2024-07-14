@@ -31,29 +31,24 @@
 #include "platforms/ext/bufferx.h"
 #include "cli.h"
 
-Error addFileToDLFile(FileInfo file, ListCharString *names) {
+Bool addFileToDLFile(FileInfo file, ListCharString *names, Error *e_rr) {
 
 	if (file.type == EFileType_Folder)
-		return Error_none();
+		return true;
 
-	Error err;
+	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
 
-	if((err = CharString_createCopyx(file.path, &copy)).genericError)
-		return err;
+	gotoIfError2(clean, CharString_createCopyx(file.path, &copy))
+	gotoIfError2(clean, ListCharString_pushBackx(names, copy))
 
-	if ((err = ListCharString_pushBackx(names, copy)).genericError) {
-		CharString_freex(&copy);
-		return err;
-	}
-
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
 Bool CLI_convertToDL(
 	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
 ) {
-
 	//TODO: EXXCompressionType_Brotli11
 
 	Bool s_uccess = true;
@@ -137,7 +132,7 @@ Bool CLI_convertToDL(
 
 	if (inputInfo.type == EFileType_File) {
 
-		gotoIfError2(clean, File_read(input, 1 * SECOND, &buf))
+		gotoIfError3(clean, File_read(input, 1 * SECOND, &buf, e_rr))
 
 		//Create oiDL from text file. Splitting by enter or custom string
 
@@ -182,9 +177,10 @@ Bool CLI_convertToDL(
 
 		gotoIfError2(clean, ListBuffer_reservex(&buffers, 256))
 
-		gotoIfError2(clean, File_foreach(
+		gotoIfError3(clean, File_foreach(
 			input, (FileCallback) addFileToDLFile, &paths,
-			!(args.flags & EOperationFlags_NonRecursive)
+			!(args.flags & EOperationFlags_NonRecursive),
+			e_rr
 		))
 
 		//Check if they're all following a linear file order
@@ -235,7 +231,7 @@ Bool CLI_convertToDL(
 			for (U64 i = 0; i < paths.length; ++i) {
 
 				CharString stri = paths.ptr[i];
-				gotoIfError2(clean, File_read(stri, 1 * SECOND, &fileBuf))
+				gotoIfError3(clean, File_read(stri, 1 * SECOND, &fileBuf, e_rr))
 				gotoIfError2(clean, ListBuffer_pushBackx(&buffers, fileBuf))
 
 				fileBuf = Buffer_createNull();
@@ -248,7 +244,7 @@ Bool CLI_convertToDL(
 		else for (U64 i = 0; i < sortedPaths.length; ++i) {
 
 			CharString stri = sortedPaths.ptr[i];
-			gotoIfError2(clean, File_read(stri, 1 * SECOND, &fileBuf))
+			gotoIfError3(clean, File_read(stri, 1 * SECOND, &fileBuf, e_rr))
 			gotoIfError2(clean, ListBuffer_pushBackx(&buffers, fileBuf))
 
 			fileBuf = Buffer_createNull();
@@ -270,8 +266,7 @@ Bool CLI_convertToDL(
 	gotoIfError3(clean, DLFile_writex(file, &res, e_rr))
 
 write:
-
-	gotoIfError2(clean, File_write(res, output, 1 * SECOND))
+	gotoIfError3(clean, File_write(res, output, 1 * SECOND, e_rr))
 
 clean:
 
@@ -315,7 +310,7 @@ Bool CLI_convertFromDL(
 
 	//Read file
 
-	gotoIfError2(clean, File_read(input, 1 * SECOND, &buf))
+	gotoIfError3(clean, File_read(input, 1 * SECOND, &buf, e_rr))
 	gotoIfError3(clean, DLFile_readx(buf, encryptionKey, false, &file, e_rr))
 
 	//Write file
@@ -329,7 +324,7 @@ Bool CLI_convertFromDL(
 	)
 		type = EFileType_File;
 
-	gotoIfError2(clean, File_add(output, type, 1 * SECOND, true))
+	gotoIfError3(clean, File_add(output, type, 1 * SECOND, true, e_rr))
 	didMakeFile = true;
 
 	//Write it as a folder
@@ -361,7 +356,7 @@ Bool CLI_convertFromDL(
 				file.settings.dataType == EDLDataType_Ascii ? CharString_bufferConst(file.entryStrings.ptr[i]) :
 				file.entryBuffers.ptr[i];
 
-			gotoIfError2(clean, File_write(fileDat, filePathi, 1 * SECOND))
+			gotoIfError3(clean, File_write(fileDat, filePathi, 1 * SECOND, e_rr))
 
 			CharString_freex(&filePathi);
 		}
@@ -395,7 +390,7 @@ Bool CLI_convertFromDL(
 
 		Buffer fileDat = Buffer_createRefConst(concatFile.ptr, CharString_length(concatFile));
 
-		gotoIfError2(clean, File_write(fileDat, output, 1 * SECOND))
+		gotoIfError3(clean, File_write(fileDat, output, 1 * SECOND, e_rr))
 
 		CharString_freex(&concatFile);
 	}
@@ -403,7 +398,7 @@ Bool CLI_convertFromDL(
 clean:
 
 	if(didMakeFile && !s_uccess)
-		File_remove(output, 1 * SECOND);
+		File_remove(output, 1 * SECOND, NULL);
 
 	CharString_freex(&concatFile);
 	CharString_freex(&filePathi);

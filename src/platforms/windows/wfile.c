@@ -32,50 +32,50 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
-Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
+Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
-Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
+Bool File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
 
+	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 	CharString resolvedNoStar = CharString_createNull();
 	CharString tmp = CharString_createNull();
 	CharString tmp2 = CharString_createNull();
 	ListU16 tmpWStr = (ListU16) { 0 };
-	Error err = Error_none();
 	HANDLE file = NULL;
 
 	if(!callback)
-		gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"))
+		retError(clean, Error_nullPointer(1, "File_foreach()::callback is required"))
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_foreach()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_foreach()::loc must be a valid file path"))
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_foreachVirtual(loc, callback, userData, isRecursive))
-		return Error_none();
+		gotoIfError3(clean, File_foreachVirtual(loc, callback, userData, isRecursive, e_rr))
+		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
 
 	if(isVirtual)
-		gotoIfError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"))
+		retError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"))
 
 	//Append /*
 
-	gotoIfError(clean, CharString_appendx(&resolved, '/'))
+	gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 
-	gotoIfError(clean, CharString_createCopyx(resolved, &resolvedNoStar))
+	gotoIfError2(clean, CharString_createCopyx(resolved, &resolvedNoStar))
 
-	gotoIfError(clean, CharString_appendx(&resolved, '*'))
+	gotoIfError2(clean, CharString_appendx(&resolved, '*'))
 
 	if(CharString_length(resolved) > MAX_PATH)
-		gotoIfError(clean, Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			0, CharString_length(resolved), MAX_PATH, "File_foreach()::loc file path is too big (>260 chars)"
 		))
 
-	gotoIfError(clean, CharString_toUTF16x(resolved, &tmpWStr))
+	gotoIfError2(clean, CharString_toUTF16x(resolved, &tmpWStr))
 
 	//Skip .
 
@@ -84,10 +84,10 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	ListU16_freex(&tmpWStr);
 
 	if(file == INVALID_HANDLE_VALUE)
-		gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"))
+		retError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"))
 
 	if(!FindNextFileW(file, &dat))
-		gotoIfError(clean, Error_notFound(0, 0, "File_foreach() FindNextFile failed (1)"))
+		retError(clean, Error_notFound(0, 0, "File_foreach() FindNextFile failed (1)"))
 
 	//Loop through real files (while instead of do while because we want to skip ..)
 
@@ -109,9 +109,9 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 
 		//Grab local file name
 
-		gotoIfError(clean, CharString_createCopyx(resolvedNoStar, &tmp))
-		gotoIfError(clean, CharString_createFromUTF16x(dat.cFileName, MAX_PATH, &tmp2))
-		gotoIfError(clean, CharString_appendStringx(&tmp, tmp2))
+		gotoIfError2(clean, CharString_createCopyx(resolvedNoStar, &tmp))
+		gotoIfError2(clean, CharString_createFromUTF16x(dat.cFileName, MAX_PATH, &tmp2))
+		gotoIfError2(clean, CharString_appendStringx(&tmp, tmp2))
 		CharString_freex(&tmp2);
 
 		//Folder parsing
@@ -125,10 +125,10 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 				.type = EFileType_Folder
 			};
 
-			gotoIfError(clean, callback(info, userData))
+			gotoIfError3(clean, callback(info, userData, e_rr))
 
 			if(isRecursive)
-				gotoIfError(clean, File_foreach(info.path, callback, userData, true))
+				gotoIfError3(clean, File_foreach(info.path, callback, userData, true, e_rr))
 
 			CharString_freex(&tmp);
 			continue;
@@ -148,14 +148,14 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			.fileSize = size.QuadPart
 		};
 
-		gotoIfError(clean, callback(info, userData))
+		gotoIfError3(clean, callback(info, userData, e_rr))
 		CharString_freex(&tmp);
 	}
 
 	DWORD hr = GetLastError();
 
 	if(hr != ERROR_NO_MORE_FILES)
-		gotoIfError(clean, Error_platformError(0, hr, "File_foreach() FindNextFile failed (2)"))
+		retError(clean, Error_platformError(0, hr, "File_foreach() FindNextFile failed (2)"))
 
 clean:
 
@@ -167,7 +167,7 @@ clean:
 	CharString_freex(&resolvedNoStar);
 	CharString_freex(&resolved);
 	ListU16_freex(&tmpWStr);
-	return err;
+	return s_uccess;
 }
 
 Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad, Error *e_rr) {

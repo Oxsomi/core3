@@ -57,14 +57,14 @@ Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 
 //
 
-Bool CAFile_create(CASettings settings, Archive archive, CAFile *caFile, Error *e_rr) {
+Bool CAFile_create(CASettings settings, Archive *archive, CAFile *caFile, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if(!caFile)
 		retError(clean, Error_nullPointer(0, "CAFile_create()::caFile is required"))
 
-	if(!archive.entries.ptr)
+	if(!archive || !archive->entries.ptr)
 		retError(clean, Error_nullPointer(1, "CAFile_create()::archive is empty"))
 
 	if(caFile->archive.entries.ptr)
@@ -82,7 +82,9 @@ Bool CAFile_create(CASettings settings, Archive archive, CAFile *caFile, Error *
 	if(settings.flags & ECASettingsFlags_Invalid)
 		retError(clean, Error_invalidParameter(0, 2, "CAFile_create()::flags is invalid"))
 
-	caFile->archive = archive;
+	caFile->archive = *archive;
+	*archive = (Archive) { 0 };
+
 	caFile->settings = settings;
 
 clean:
@@ -611,7 +613,7 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	Archive archive = (Archive) { 0 };
 	CharString tmpPath = CharString_createNull();
 
-	gotoIfError2(clean, Archive_create(alloc, &archive))
+	gotoIfError3(clean, Archive_create(alloc, &archive, e_rr))
 
 	//Validate header
 
@@ -755,7 +757,7 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 			gotoIfError2(clean, CharString_insertString(&tmpPath, parentName, 0, alloc))
 		}
 
-		gotoIfError2(clean, Archive_addDirectory(&archive, tmpPath, alloc))
+		gotoIfError3(clean, Archive_addDirectory(&archive, tmpPath, alloc, e_rr))
 
 		tmpPath = CharString_createNull();
 	}
@@ -827,10 +829,8 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 
 		//Move path and data to file
 
-		gotoIfError2(clean, Archive_addFile(&archive, tmpPath, tmpData, timestamp, alloc))
-
-		tmpPath = CharString_createNull();
-		tmpData = Buffer_createNull();
+		gotoIfError3(clean, Archive_addFile(&archive, tmpPath, &tmpData, timestamp, alloc, e_rr))
+		CharString_free(&tmpPath, alloc);
 	}
 
 	if(Buffer_length(filePtr))
@@ -874,10 +874,28 @@ clean:
 Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error *e_rr) {
 
 	Bool s_uccess = true;
-	(void) a; (void) b; (void) alloc; (void) combined;
+	Archive archive = (Archive) { 0 };
 
-	retError(clean, Error_unimplemented(0, "CAFile_combine() unimplemented"))
+	const void *aSettingsPtr = &a.settings.compressionType;
+	const void *bSettingsPtr = &b.settings.compressionType;
+
+	for(U64 i = 0; i < 5; ++i)
+		if(((const U64*)aSettingsPtr)[i] != ((const U64*)bSettingsPtr)[i])
+			retError(clean, Error_invalidParameter(1, 0, "CAFile_combine()::a is incompatible with b"))
+
+	if((a.settings.flags & ECASettingsFlags_UseSHA256) != (b.settings.flags & ECASettingsFlags_UseSHA256))
+		retError(clean, Error_invalidParameter(1, 0, "CAFile_combine()::a and b have conflicting UseSHA256 flags"))
+
+	//Combine the date flags.
+	//If time is missing from b or a but present in the other it'll just use unix epoch.
+	//If time is compact in the other, it will use extended time for both
+	
+	CASettings settings = a.settings;
+	settings.flags |= b.settings.flags & ECASettingsFlags_DateFlags;
+
+	gotoIfError3(clean, CAFile_create(settings, &archive, combined, e_rr))
 
 clean:
+	Archive_free(&archive, alloc);
 	return s_uccess;
 }

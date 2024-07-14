@@ -36,41 +36,48 @@ Bool FileInfo_free(FileInfo *info, Allocator alloc) {
 
 Bool File_isVirtual(CharString loc) { return CharString_getAt(loc, 0) == '/' && CharString_getAt(loc, 1) == '/'; }
 
-Error File_resolve(
+Bool File_resolve(
 	CharString loc,
 	Bool *isVirtual,
 	U64 maxFilePathLimit,
 	CharString absoluteDir,
 	Allocator alloc,
-	CharString *result
+	CharString *result,
+	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
+	ListCharString res = (ListCharString) { 0 };
+
+	if(!isVirtual || !result)
+		retError(clean, Error_nullPointer(!isVirtual ? 1 : 2, "File_resolve()::result and isVirtual are required"))
+
+	if(result->ptr)
+		retError(clean, Error_invalidOperation(0, "File_resolve()::result is not NULL, this might indicate a memleak"))
+
 	loc = CharString_createRefStrConst(loc);
+
+	if (CharString_equalsStringSensitive(loc, absoluteDir)) {				//Get rid of trailing / and return copy
+		loc.lenAndNullTerminated = CharString_length(loc) - 1;
+		gotoIfError2(clean, CharString_createCopy(loc, alloc, result))
+		goto clean;
+	}
 
 	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')			//myTest/ <--
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;				//unset null terminated
 
-	if(!isVirtual || !result)
-		return Error_nullPointer(!isVirtual ? 1 : 2, "File_resolve()::result and isVirtual are required");
-
-	if(result->ptr)
-		return Error_invalidOperation(0, "File_resolve()::result is not NULL, this might indicate a memleak");
-
-	ListCharString res = (ListCharString) { 0 };
-	Error err = Error_none();
-
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_resolve()::loc is not a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_resolve()::loc is not a valid file path"))
 
 	//Copy string so we can modify it
 
-	gotoIfError(clean, CharString_createCopy(loc, alloc, result))
+	gotoIfError2(clean, CharString_createCopy(loc, alloc, result))
 	*isVirtual = File_isVirtual(loc);
 
 	//Virtual files
 
 	if (*isVirtual)
-		gotoIfError(clean, CharString_popFrontCount(result, 2))
+		gotoIfError2(clean, CharString_popFrontCount(result, 2))
 
 	//Network drives are a thing on windows and allow starting a path with "\\"
 	//We shouldn't be supporting this.
@@ -82,12 +89,12 @@ Error File_resolve(
 	//TODO: We should however support this in the future as a custom instruction that allows it such as //network/
 
 	if (CharString_getAt(*result, 0) == '\\' && CharString_getAt(*result, 1) == '\\')
-		gotoIfError(clean, Error_unsupportedOperation(3, "File_resolve()::loc can't start with \\\\"))
+		retError(clean, Error_unsupportedOperation(3, "File_resolve()::loc can't start with \\\\"))
 
 	//Backslash is replaced with forward slash for easy windows compatibility
 
 	if (!CharString_replaceAllSensitive(result, '\\', '/', 0, 0))
-		gotoIfError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"))
+		retError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"))
 
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
@@ -96,19 +103,19 @@ Error File_resolve(
 	#ifdef _WIN32
 
 		if(CharString_length(*result) >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
-			gotoIfError(clean, Error_unsupportedOperation(2, "File_resolve() only supports Windows paths with [A-Z]:/*"))
+			retError(clean, Error_unsupportedOperation(2, "File_resolve() only supports Windows paths with [A-Z]:/*"))
 
 	#else
 
 		if(CharString_length(*result) && result->ptr[1] == ':')
-			gotoIfError(clean, Error_invalidOperation(6, "File_resolve() doesn't support Windows paths outside of Windows."))
+			retError(clean, Error_invalidOperation(6, "File_resolve() doesn't support Windows paths outside of Windows."))
 
 	#endif
 
 	//Now we have to discover the real directory it references to. This means resolving:
 	//Empty filename and . to mean no difference and .. to step back
 
-	gotoIfError(clean, CharString_splitSensitive(*result, '/', alloc, &res))
+	gotoIfError2(clean, CharString_splitSensitive(*result, '/', alloc, &res))
 
 	U64 realSplitLen = res.length;
 
@@ -142,7 +149,7 @@ Error File_resolve(
 
 			if(!i) {
 				res.length = realSplitLen;
-				gotoIfError(clean, Error_invalidParameter(
+				retError(clean, Error_invalidParameter(
 					0, 0, "File_resolve()::loc tried to exit working directory, this is not allowed for security reasons"
 				))
 			}
@@ -176,7 +183,7 @@ Error File_resolve(
 			#endif
 
 			res.length = realSplitLen;
-			gotoIfError(clean, Error_invalidParameter(0, 1, "File_resolve()::loc contains subpath with invalid file name"))
+			retError(clean, Error_invalidParameter(0, 1, "File_resolve()::loc contains subpath with invalid file name"))
 		}
 
 		//Continue processing the path until it's done
@@ -192,23 +199,18 @@ Error File_resolve(
 
 		CharString_free(result, alloc);		//Release temp result
 
-		gotoIfError(clean, CharString_createCopy(absoluteDir, alloc, result))
+		gotoIfError2(clean, CharString_createCopy(absoluteDir, alloc, result))
 
 		if(CharString_length(absoluteDir))
-			gotoIfError(clean, CharString_popEnd(result))							//Don't end with /
+			gotoIfError2(clean, CharString_popEnd(result))							//Don't end with /
 
-		ListCharString_free(&res, alloc);
-		return Error_none();
+		goto clean;
 	}
 
 	//Re-assemble path now
 
 	CharString tmp = CharString_createNull();
-
-	if ((err = ListCharString_concat(res, '/', alloc, &tmp)).genericError) {
-		res.length = realSplitLen;
-		ListCharString_free(&res, alloc);
-	}
+	gotoIfError2(clean, ListCharString_concat(res, '/', alloc, &tmp))
 
 	CharString_free(result, alloc);		//This can't be done before concat, because the string is still in use.
 	*result = tmp;
@@ -223,7 +225,7 @@ Error File_resolve(
 	#ifdef _WIN32	//Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
 
 		if (CharString_startsWithSensitive(*result, '/', 0))
-			gotoIfError(clean, Error_unsupportedOperation(
+			retError(clean, Error_unsupportedOperation(
 				4, "File_resolve()::loc contained Unix path (/absolute), which is unsupported on Windows"
 			))
 
@@ -238,8 +240,11 @@ Error File_resolve(
 
 	if (isAbsolute) {
 
-		if(!CharString_length(absoluteDir) || !CharString_startsWithStringInsensitive(*result, absoluteDir, 0))
-			gotoIfError(clean, Error_unauthorized(
+		if(
+			!CharString_length(absoluteDir) ||
+			!CharString_startsWithStringSensitive(*result, absoluteDir, 0)
+		)
+			retError(clean, Error_unauthorized(
 				0, "File_resolve()::loc tried to escape working directory, which is unsupported for security reasons"
 			))
 	}
@@ -247,7 +252,7 @@ Error File_resolve(
 	//Prepend our path
 
 	else if(CharString_length(absoluteDir) && !*isVirtual)
-		gotoIfError(clean, CharString_insertString(result, absoluteDir, 0, alloc))
+		gotoIfError2(clean, CharString_insertString(result, absoluteDir, 0, alloc))
 
 	//Since we're going to use this in file operations, we want to have a null terminator
 
@@ -259,16 +264,17 @@ Error File_resolve(
 	#endif
 
 	if(CharString_length(*result) >= maxFilePathLimit)
-		gotoIfError(clean, Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			0, CharString_length(*result), maxFilePathLimit, "File_resolve()::loc resolved path is longer than max file limit"
 		))
 
-	return Error_none();
-
 clean:
+
+	if(!s_uccess)
+		CharString_free(result, alloc);
+
 	ListCharString_free(&res, alloc);
-	CharString_free(result, alloc);
-	return err;
+	return s_uccess;
 }
 
 Bool File_makeRelative(
@@ -290,8 +296,8 @@ Bool File_makeRelative(
 	if(result->ptr)
 		retError(clean, Error_invalidParameter(5, 0, "File_makeRelative()::*result must be empty"))
 
-	gotoIfError2(clean, File_resolve(base, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedBase))
-	gotoIfError2(clean, File_resolve(subFile, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedSubFile))
+	gotoIfError3(clean, File_resolve(base, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedBase, e_rr))
+	gotoIfError3(clean, File_resolve(subFile, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedSubFile, e_rr))
 
 	CharString baseAbsDir = CharString_createNull();
 	CharString subFileAbsDir = CharString_createNull();

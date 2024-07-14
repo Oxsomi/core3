@@ -66,15 +66,15 @@ typedef struct WindowManager {
 
 } WindowManager;
 
-Error WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedData, WindowManager *manager);
+Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedData, WindowManager *manager, Error *e_rr);
 Bool WindowManager_isAccessible(const WindowManager *manager);
 Bool WindowManager_free(WindowManager *manager);
 
-Error WindowManager_wait(WindowManager *manager);
+Bool WindowManager_wait(WindowManager *manager, Error *e_rr);
 
 impl Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format);
 
-Error WindowManager_createWindow(
+Bool WindowManager_createWindow(
 
 	WindowManager *manager,
 
@@ -90,7 +90,8 @@ Error WindowManager_createWindow(
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	U64 extendedData,
-	Window **result
+	Window **result,
+	Error *e_rr
 );
 
 Bool WindowManager_freeWindow(WindowManager *manager, Window **w);

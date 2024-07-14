@@ -154,8 +154,8 @@ public:
 			gotoIfError2(clean, CharString_createCopy(tmp, alloc, &resolved))
 		}
 
-		else gotoIfError2(clean, File_resolve(
-			fileName, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &resolved
+		else gotoIfError3(clean, File_resolve(
+			fileName, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &resolved, e_rr
 		))
 
 		for (; i < includedFiles.length; ++i)
@@ -174,7 +174,7 @@ public:
 
 			if(!isBuiltin) {		//Builtins don't exist on disk, so they can't really be hot reloaded
 
-				gotoIfError2(clean, File_getInfo(resolved, &fileInfo, alloc))
+				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
 
 				IncludeInfo prevInclude = includedFiles.ptr[i].includeInfo;
 
@@ -188,7 +188,7 @@ public:
 
 					if (fileInfo.fileSize == prevInclude.fileSize) {
 
-						gotoIfError2(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
+						gotoIfError3(clean, File_read(resolved, 1 * SECOND, &tempBuffer, e_rr))
 
 						gotoIfError2(clean, CharString_createCopy(
 							CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
@@ -257,8 +257,8 @@ public:
 
 			if(!isBuiltin) {
 
-				gotoIfError2(clean, File_getInfo(resolved, &fileInfo, alloc))
-				gotoIfError2(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
+				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
+				gotoIfError3(clean, File_read(resolved, 1 * SECOND, &tempBuffer, e_rr))
 
 				Ns timestamp = fileInfo.timestamp;
 				FileInfo_free(&fileInfo, alloc);
@@ -648,8 +648,8 @@ Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, 
 
 	if(CharString_length(settings.includeDir)) {
 
-		gotoIfError2(clean, File_resolve(
-			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr
+		gotoIfError3(clean, File_resolve(
+			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr, e_rr
 		))
 
 		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
@@ -661,8 +661,8 @@ Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, 
 
 	if(CharString_length(settings.path)) {
 
-		gotoIfError2(clean, File_resolve(
-			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr
+		gotoIfError3(clean, File_resolve(
+			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr, e_rr
 		))
 
 		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))
