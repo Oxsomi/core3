@@ -26,7 +26,7 @@
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	(void)w; (void) e_rr;
-	return Error_none();
+	return false;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
