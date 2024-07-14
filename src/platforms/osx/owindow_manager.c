@@ -24,8 +24,8 @@
 //There is no need for this, besides managing windows.
 //The windows manage their own loops.
 
-Error WindowManager_createNative(WindowManager *w) {
-	(void)w;
+Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
+	(void)w; (void) e_rr;
 	return Error_none();
 }
 

@@ -829,32 +829,33 @@ Bool WindowManager_freePhysical(Window *w) {
 	return true;
 }*/
 
-Error Window_updatePhysicalTitle(const Window *w, CharString title) {
+Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
 
+	Bool s_uccess = true;
 	U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required");
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"))
 
 	CharString copy = CharString_createNull();
 	id wrapped;
-	Error err = ObjC_wrapString(title, &copy, &wrapped);
-	gotoIfError(clean, err);
+	gotoIfError2(clean, ObjC_wrapString(title, &copy, &wrapped))
 
 	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle(), wrapped);
 
 clean:
 	CharString_freex(&copy);
-	return err;
+	return s_uccess;
 }
 
-Error Window_toggleFullScreen(Window *w) {
+Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
+	Bool s_uccess = true;
 	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required");
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		return Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off");
+		retError(clean, Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"))
 
 	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
 
@@ -865,7 +866,8 @@ Error Window_toggleFullScreen(Window *w) {
 
 	ObjC_sendId((id)w->nativeHandle, selToggleFullScreen());
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
 /*

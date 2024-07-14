@@ -34,37 +34,37 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
+Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
-Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
+Bool File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
 
 	CharString resolved = CharString_createNull();
 	CharString resolvedChild = CharString_createNull();
-	Error err = Error_none();
 	DIR *d = NULL;
+	Bool s_uccess = true;
 
 	if(!callback)
-		gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
+		retError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
 
 	if(!CharString_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, "File_foreach()::loc must be a valid file path"));
+		retError(clean, Error_invalidParameter(0, 0, "File_foreach()::loc must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_foreachVirtual(loc, callback, userData, isRecursive));
+		gotoIfError3(clean, File_foreachVirtual(loc, callback, userData, isRecursive, e_rr));
 		goto clean;
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr));
 
 	if(isVirtual)
-		gotoIfError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));
+		retError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));
 
 	d = opendir(resolved.ptr);
 
 	if(!d)
-		gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc not found"));
+		retError(clean, Error_notFound(0, 0, "File_foreach()::loc not found"));
 
 	struct dirent *dir = NULL;
 
@@ -80,13 +80,13 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 				continue;
 		}
 
-		gotoIfError(clean, CharString_createCopyx(resolved, &resolvedChild));
-		gotoIfError(clean, CharString_appendx(&resolvedChild, '/'))
-		gotoIfError(clean, CharString_appendStringx(&resolvedChild, dirName))
+		gotoIfError2(clean, CharString_createCopyx(resolved, &resolvedChild));
+		gotoIfError2(clean, CharString_appendx(&resolvedChild, '/'))
+		gotoIfError2(clean, CharString_appendStringx(&resolvedChild, dirName))
 
 		struct stat s = (struct stat) { 0 };
 		if(stat(resolvedChild.ptr, &s))
-			gotoIfError(clean, Error_stderr(errno, "File_foreach() failed to query file properties"));
+			retError(clean, Error_stderr(errno, "File_foreach() failed to query file properties"));
 
 		CharString tmp = CharString_createRefSizedConst(resolvedChild.ptr, CharString_length(resolvedChild), true);
 
@@ -101,10 +101,10 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 				.type = EFileType_Folder
 			};
 
-			gotoIfError(clean, callback(info, userData));
+			gotoIfError3(clean, callback(info, userData, e_rr));
 
 			if(isRecursive)
-				gotoIfError(clean, File_foreach(info.path, callback, userData, true));
+				gotoIfError3(clean, File_foreach(info.path, callback, userData, true, e_rr));
 
 			CharString_freex(&resolvedChild);
 			continue;
@@ -120,7 +120,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			.fileSize = s.st_size
 		};
 
-		gotoIfError(clean, callback(info, userData));
+		gotoIfError3(clean, callback(info, userData, e_rr));
 		CharString_freex(&resolvedChild);
 	}
 
@@ -128,5 +128,5 @@ clean:
 	closedir(d);
 	CharString_freex(&resolvedChild);
 	CharString_freex(&resolved);
-	return err;
+	return s_uccess;
 }
