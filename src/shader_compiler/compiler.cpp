@@ -38,8 +38,8 @@
 #endif
 
 #define ENABLE_DXC_STATIC_LINKING
-#include <dxcompiler/dxcapi.h>
-#include <spirv-tools/optimizer.hpp>
+#include "dxcompiler/dxcapi.h"
+#include "spirv_tools/optimizer.hpp"
 #include <exception>
 
 const C8 *resources =

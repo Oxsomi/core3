@@ -108,11 +108,8 @@ class dxc(ConanFile):
 			copy(self, "*.h", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxcompiler")
 			copy(self, "*.hpp", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxcompiler")
 
-			copy(self, "*.h", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv-tools")
-			copy(self, "*.hpp", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv-tools")
-			
-			copy(self, "*.h", "../../DirectXShaderCompiler/external/SPIRV-Tools/source", "../../../p/include/source")
-			copy(self, "*.hpp", "../../DirectXShaderCompiler/external/SPIRV-Tools/source", "../../../p/include/source")
+			copy(self, "*.h", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv_tools")
+			copy(self, "*.hpp", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv_tools")
 
 			# Libs
 
@@ -147,11 +144,8 @@ class dxc(ConanFile):
 			copy(self, "*.h", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxcompiler")
 			copy(self, "*.hpp", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxcompiler")
 
-			copy(self, "*.h", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv-tools")
-			copy(self, "*.hpp", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv-tools")
-
-			copy(self, "*.h", "../DirectXShaderCompiler/external/SPIRV-Tools/source", "../../p/include/source")
-			copy(self, "*.hpp", "../DirectXShaderCompiler/external/SPIRV-Tools/source", "../../p/include/source")
+			copy(self, "*.h", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv_tools")
+			copy(self, "*.hpp", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv_tools")
 
 	def package_info(self):
 
