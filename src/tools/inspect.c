@@ -35,6 +35,10 @@
 #include "cli.h"
 #include "types/math.h"
 
+#ifdef CLI_SHADER_COMPILER
+	#include "shader_compiler/compiler.h"
+#endif
+
 typedef struct VersionString {
 	C8 v[5];		//XX.Y
 } VersionString;
@@ -478,7 +482,7 @@ clean:
 
 //Showing the entire file or a part to disk or to log
 
-Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii) {
+Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii, Bool showEntireFile) {
 
 	//Validate offset
 
@@ -531,7 +535,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		U64 max = 32 * 32;
 
 		if(!length)
-			length = U64_min(max, Buffer_length(b) - start);
+			length = showEntireFile ? Buffer_length(b) - start : U64_min(max, Buffer_length(b) - start);
 
 		else length = U64_min(max * 2, length);
 
@@ -637,7 +641,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 	//Save file
 
 	else {
-		CLI_showFile(args, e.data, start, len, false);
+		CLI_showFile(args, e.data, start, len, false, false);
 		s_uccess = true;
 		goto clean;
 	}
@@ -862,7 +866,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 						);
 
 						Log_debugLnx("%.*s", CharString_length(e.path), e.path.ptr);
-						CLI_showFile(args, e.data, start, length, isAscii);
+						CLI_showFile(args, e.data, start, length, isAscii, false);
 						goto cleanCa;
 					}
 
@@ -1000,7 +1004,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					isAscii ? CharString_bufferConst(file.entryStrings.ptr[entryI]) :
 					file.entryBuffers.ptr[entryI];
 
-				if(!CLI_showFile(args, b, start, length, isAscii))
+				if(!CLI_showFile(args, b, start, length, isAscii, false))
 					goto cleanDl;
 			}
 
@@ -1046,6 +1050,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSH doesn't have aes support!"))
 
 			SHFile file = (SHFile) { 0 };
+			Compiler comp = (Compiler) { 0 };
 			gotoIfError3(cleanSh, SHFile_readx(buf, false, &file, e_rr))
 
 			Bool binaryMode = args.flags & EOperationFlags_Bin;
@@ -1113,8 +1118,24 @@ Bool CLI_inspectData(ParsedArgs args) {
 							goto cleanSh;
 						}
 
-						if(!CLI_showFile(args, binary, start, length, false))
-							goto cleanSh;
+						//Show as disassembly (DXIL or SPIRV disassembly) unless not available
+
+						#ifdef CLI_SHADER_COMPILER
+
+							gotoIfError3(cleanSh, Compiler_createx(&comp, e_rr))
+
+							if (!Compiler_createDisassemblyx(comp, binaryType, binary, &tmp, e_rr)) {
+								Log_errorLnx("%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
+								goto cleanSh;
+							}
+
+							if(!CLI_showFile(args, CharString_bufferConst(tmp), start, length, true, true))
+								goto cleanSh;
+
+						#else
+							if(!CLI_showFile(args, binary, start, length, false, false))
+								goto cleanSh;
+						#endif
 					}
 
 					else SHBinaryInfo_printx(file.binaries.ptr[entryI]);
@@ -1184,6 +1205,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		cleanSh:
 
 			SHFile_freex(&file);
+			Compiler_freex(&comp);
 
 			if(!s_uccess)
 				goto clean;

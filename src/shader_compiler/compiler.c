@@ -305,6 +305,10 @@ Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e
 	return Compiler_mergeIncludeInfo(comp, Platform_instance.alloc, infos, e_rr);
 }
 
+Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr) {
+	return Compiler_createDisassembly(comp, type, buf, Platform_instance.alloc, result, e_rr);
+}
+
 Bool Compiler_filterWarning(CharString str) {
 	return 
 		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0) ||

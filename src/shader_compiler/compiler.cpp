@@ -1086,6 +1086,8 @@ Bool Compiler_compile(
 			&result->binary
 		))
 
+		const void *resultPtr = result->binary.ptr;
+
 		//Prevent dxil.dll load, sign it ourselves :)
 		if (settings.outputType == ESHBinaryType_DXIL) {
 
@@ -1093,7 +1095,7 @@ Bool Compiler_compile(
 
 			if(
 				Buffer_length(result->binary) <= 0x14 ||
-				*(const U32*)result->binary.ptr != C8x4('D', 'X', 'B', 'C')
+				*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C')
 			)
 				retError(clean, Error_invalidState(2, "Compiler_compile() DXIL returned is invalid"))
 			
@@ -1120,13 +1122,11 @@ Bool Compiler_compile(
 			if(
 				binLen < 0x8 ||
 				(binLen & 3) ||
-				*(const U32*)result->binary.ptr != 0x07230203
+				*(const U32*)resultPtr != 0x07230203
 			)
 				retError(clean, Error_invalidState(2, "Compiler_compile() SPIRV returned is invalid"))
 
 			if(!settings.debug) {
-
-				const void *resultPtr = result->binary.ptr;
 
 				optimizer.SetMessageConsumer(
 					[](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
@@ -1189,5 +1189,95 @@ clean:
 	Compiler_freeStrings;
 	CharString_free(&tempStr, alloc);
 	ListCharString_freeUnderlying(&stringsUTF8, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U64 binLen = Buffer_length(buf);
+	const void *resultPtr = buf.ptr;
+	IDxcResult *dxcResult = NULL;
+	IDxcBlobUtf8 *blobUtf8 = NULL;
+
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
+
+	switch (type) {
+
+		case ESHBinaryType_SPIRV: {
+
+			if(
+				binLen < 0x8 ||
+				(binLen & 3) ||
+				*(const U32*)resultPtr != 0x07230203
+			)
+				retError(clean, Error_invalidState(0, "Compiler_createDisassembly() SPIRV is invalid"))
+
+			spvtools::SpirvTools tool{ SPV_ENV_VULKAN_1_2 };
+
+			spv_binary_to_text_options_t opts = (spv_binary_to_text_options_t) (
+				SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
+				SPV_BINARY_TO_TEXT_OPTION_NESTED_INDENT |
+				SPV_BINARY_TO_TEXT_OPTION_REORDER_BLOCKS |
+				SPV_BINARY_TO_TEXT_OPTION_COMMENT |
+				SPV_BINARY_TO_TEXT_OPTION_SHOW_BYTE_OFFSET |
+				SPV_BINARY_TO_TEXT_OPTION_INDENT
+			);
+
+			std::string str;
+			if(!tool.Disassemble((const U32*)resultPtr, binLen >> 2, &str, opts))
+				retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() SPIRV couldn't be disassembled"))
+
+			gotoIfError2(clean, CharString_createCopy(
+				CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result
+			))
+
+			break;
+		}
+
+		case ESHBinaryType_DXIL: {
+		
+			if(
+				binLen <= 0x14 ||
+				*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C')
+			)
+				retError(clean, Error_invalidState(0, "Compiler_createDisassembly() DXIL is invalid"))
+
+			DxcBuffer buffer {
+				.Ptr = resultPtr,
+				.Size = binLen
+			};
+
+			HRESULT hr = interfaces->compiler->Disassemble(
+				&buffer,
+				IID_PPV_ARGS(&dxcResult)
+			);
+
+			if(FAILED(hr))
+				retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() DXIL couldn't be disassembled"))
+
+			hr = dxcResult->GetOutput(DXC_OUT_DISASSEMBLY, IID_PPV_ARGS(&blobUtf8), NULL);
+
+			if(FAILED(hr))
+				retError(clean, Error_invalidOperation(1, "Compiler_createDisassembly() DXIL disassembly couldn't be obtained"))
+
+			CharString str = CharString_createRefSizedConst(blobUtf8->GetStringPointer(), blobUtf8->GetStringLength(), false);
+			gotoIfError2(clean, CharString_createCopy(str, alloc, result))
+
+			break;
+		}
+
+		default:
+			retError(clean, Error_unimplemented(0, "Compiler_createDisassembly() has invalid type"))
+	}
+
+clean:
+
+	if(dxcResult)
+		dxcResult->Release();
+
+	if(blobUtf8)
+		blobUtf8->Release();
+
 	return s_uccess;
 }

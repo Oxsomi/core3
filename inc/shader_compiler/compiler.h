@@ -175,6 +175,9 @@ void Compiler_free(Compiler *comp, Allocator alloc);
 
 void Compiler_shutdown();
 
+//Generate disassembly from buffer
+Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
+
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.
 
@@ -238,6 +241,7 @@ void Compiler_freex(Compiler *comp);
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr);
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
+Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr);
 
 Bool Compiler_compilex(
 	Compiler comp,
