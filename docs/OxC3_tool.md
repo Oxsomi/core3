@@ -153,13 +153,13 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-threads` can be used to limit thread count. Such as `-threads 0` = default , `-threads 50%` = 50% of all threads, `-threads 4` = 4 threads. Default behavior is: If total input length >=64KiB with at least 8 files or if at least 16 files are present, then all cores will be used for threading.
 
-`-compile-output` is the outputs that are enabled. If this mode is multiple then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or other types such as .spv and .dxil (compile) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends.
+`-compile-output` is the outputs that are enabled. If this mode is multiple and --split is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
 
 `-compile-type` is the compile type. Can be one of the following: `preprocess`, `includes`, `reflect` and `compile`. Each compile mode has their own info section. By default (if the argument isn't present) the mode is `compile`.
 
 `-include-dir` can be used to add only a single include directory to search for includes (aside from relative includes).
 
-`@myFile.hlsl` specifies builtin shaders, such as `@types.hlsl` and `@resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target.
+`@myFile.hlsl` specifies builtin shaders, such as `@types.hlsl` and `@resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target and the `extension` annotation is used.
 
 ### Preprocess
 

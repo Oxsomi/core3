@@ -39,6 +39,7 @@
 
 #define ENABLE_DXC_STATIC_LINKING
 #include <dxcompiler/dxcapi.h>
+#include <spirv-tools/optimizer.hpp>
 #include <exception>
 
 const C8 *resources =
@@ -884,6 +885,7 @@ Bool Compiler_compile(
 	Bool hasErrors = false;
 	CharString tempStr = CharString_createNull();
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
+	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
 
 	Compiler_defineStrings;
 
@@ -1107,6 +1109,60 @@ Bool Compiler_compile(
 				Buffer_createRef((U8*)result->binary.ptr + sizeof(U32), sizeof(hash)),
 				Buffer_createRefConst(&hash, sizeof(hash))
 			);
+		}
+
+		else if (settings.outputType == ESHBinaryType_SPIRV) {
+		
+			//Ensure we have a valid SPIRV file
+
+			U64 binLen = Buffer_length(result->binary);
+
+			if(
+				binLen < 0x8 ||
+				(binLen & 3) ||
+				*(const U32*)result->binary.ptr != 0x07230203
+			)
+				retError(clean, Error_invalidState(2, "Compiler_compile() SPIRV returned is invalid"))
+
+			if(!settings.debug) {
+
+				const void *resultPtr = result->binary.ptr;
+
+				optimizer.SetMessageConsumer(
+					[](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
+				
+						const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
+
+						switch(level) {
+
+							case SPV_MSG_FATAL:
+							case SPV_MSG_INTERNAL_ERROR:
+							case SPV_MSG_ERROR:
+								Log_errorLnx(format, source, position.line, position.column, position.index, msg);
+								break;
+
+							case SPV_MSG_WARNING:
+								Log_warnLnx(format, source, position.line, position.column, position.index, msg);
+								break;
+
+							default:
+								Log_debugLnx(format, source, position.line, position.column, position.index, msg);
+								break;
+						}
+					}
+				);
+
+				optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
+				optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
+
+				std::vector<U32> tmp;
+
+				if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
+					retError(clean, Error_invalidState(0, "Compiler_compile() stripping spirv failed"))
+
+				Buffer_free(&result->binary, alloc);
+				gotoIfError2(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, &result->binary))
+			}
 		}
 
 		if (settings.infoAboutIncludes)
