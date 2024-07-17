@@ -1245,7 +1245,8 @@ Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, A
 
 			DxcBuffer buffer {
 				.Ptr = resultPtr,
-				.Size = binLen
+				.Size = binLen,
+				.Encoding = 0
 			};
 
 			HRESULT hr = interfaces->compiler->Disassemble(
