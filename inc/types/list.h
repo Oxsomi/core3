@@ -130,6 +130,8 @@ TListX(Name)
 #define TListSort(T) TList(T);						Bool List##T##_sort(List##T l)
 
 TListNamedBase(ListU64);
+Bool ListU64_sort(ListU64 l);
+
 TListSort(U8); TListSort(U16); TListSort(U32);
 TListSort(I8); TListSort(I16); TListSort(I32); TListSort(I64);
 TListSort(F32); TListSort(F64);

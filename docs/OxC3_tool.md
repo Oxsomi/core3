@@ -312,8 +312,8 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
 #### Special flags
 
 - `--debug` is used to toggle debug info in the binary.
-
-- `--ignore-empty-files` is used to allow it when no entrypoints are found to compile. Without this, it will error when no entrypoints are found. This is useful because the destination directory might contain includes alongside source files (rather than using -include-dir with a separate includes directory).
+- `--error-empty-files` is used to error when no entrypoints are found to compile. This is useful to enforce that the destination directory shouldn't contain includes alongside source files (rather than using -include-dir with a separate includes directory).
+- `--split` is used to split up every oiSH file into its own file. This is very useful when building for 1 dedicated target. By default this is turned off, to make sure every shader can be ran with every backend.
 
 ## Show GPU/graphics device info
 

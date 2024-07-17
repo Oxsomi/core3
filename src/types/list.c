@@ -21,6 +21,11 @@
 #include "types/list_impl.h"
 
 TListNamedBaseImpl(ListU64);
+
+Bool ListU64_sort(ListU64 l) {
+	return GenericList_sortU64(ListU64_toList(l));
+}
+
 TListSortImpl(U8);	TListSortImpl(U16); TListSortImpl(U32);
 TListSortImpl(I8);	TListSortImpl(I16); TListSortImpl(I32); TListSortImpl(I64);
 TListSortImpl(F32); TListSortImpl(F64);

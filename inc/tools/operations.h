@@ -144,10 +144,11 @@ typedef enum EOperationFlags {
 	//Compilation
 
 	EOperationFlags_Debug				= 1 << 17,
-	EOperationFlags_IgnoreEmptyFiles	= 1 << 18,
+	EOperationFlags_ErrorEmptyFiles		= 1 << 18,
 	EOperationFlags_Includes			= 1 << 19,		//Used to signal to OxC3 file data that includes should be requested
+	EOperationFlags_Split				= 1 << 20,		//Split multiple binary types (SPV, DXIL, etc.) into one per file
 
-	EOperationFlags_Count				= 20
+	EOperationFlags_Count				= 21
 
 } EOperationFlags;
 

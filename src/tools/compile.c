@@ -52,13 +52,17 @@
 		CharString base, output;
 
 		U64 compileModeU64;
+
 		Bool hasMultipleModes;
+		Bool hasCombineFlag;
+		U8 padding[2];
 
 		ECompileType compileType;
 
 	} ShaderFileRecursion;
 
-	const C8 *txtSuffix = ".txt";		//Suffix when mode is "includes" (seeing all include info)
+	const C8 *txtSuffix = ".txt";				//Suffix when mode is "includes" (seeing all include info)
+	const C8 *oiSHCombineSuffix = ".oiSH";		//Suffix when oiSH is combined
 
 	const C8 *fileSuffixes[] = {
 		".spv.hlsl",
@@ -149,7 +153,9 @@
 							copy.ptr,
 							isPreprocess ? fileSuffixes[i] : (
 								shaderFiles->compileType == ECompileType_Includes || 
-								shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : oiSHSuffixes[i]
+								shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : (
+									shaderFiles->hasCombineFlag ? oiSHCombineSuffix : oiSHSuffixes[i]
+								)
 							)
 						))
 
@@ -568,7 +574,7 @@
 						}
 					}
 
-					else if(!(job->args.flags & EOperationFlags_IgnoreEmptyFiles)) {
+					else if(job->args.flags & EOperationFlags_ErrorEmptyFiles) {
 
 						Log_errorLnx(
 							"Precompile couldn't find entrypoints for file \"%.*s\"",
@@ -857,6 +863,8 @@
 		CharString tempStr3 = CharString_createNull();
 		ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
 		SHFile shFile = (SHFile) { 0 };
+		SHFile previous = (SHFile) { 0 };
+		Bool errorInPrevious = false;
 		ListU32 compileCombinations = (ListU32) { 0 };
 		ListU16 binaryIndices = (ListU16) { 0 };
 		SHEntry shEntry = (SHEntry) { 0 };
@@ -866,6 +874,7 @@
 
 		ListListSHEntryRuntime shEntries = (ListListSHEntryRuntime) { 0 };
 		ListU64 shEntryIds = (ListU64) { 0 };
+		ListU64 shEntryIdsSorted = (ListU64) { 0 };
 		ListCompileResult compileResults = (ListCompileResult) { 0 };
 		CompileResult tempResult = (CompileResult) { 0 };
 
@@ -1035,6 +1044,7 @@
 				.output = resolved2,
 				.compileModeU64 = compileModeU64,
 				.hasMultipleModes = multipleModes,
+				.hasCombineFlag = !(args.flags & EOperationFlags_Split),
 				.compileType = compileType
 			};
 
@@ -1194,15 +1204,18 @@
 
 			ListThread_freex(&threads);
 
+			gotoIfError2(clean, ListU64_createCopyx(shEntryIds, &shEntryIdsSorted))
+			ListU64_sort(shEntryIdsSorted);
+
 			//Now, we have all results and all entry points.
 			//We will now write these files in sync, as that's way easier and the majority of the hard work is done.
 			//+1 to allow finishing up the last one in a nicer way
 
 			U32 lastJobId = U32_MAX;
 
-			for(U64 i = 0; i < shEntryIds.length + 1; ++i) {
+			for(U64 i = 0; i < shEntryIdsSorted.length + 1; ++i) {
 
-				U64 next = i == shEntryIds.length ? U64_MAX : shEntryIds.ptr[i];
+				U64 next = i == shEntryIdsSorted.length ? U64_MAX : shEntryIdsSorted.ptr[i];
 
 				U32 jobId = next >> 32;
 
@@ -1213,9 +1226,43 @@
 					gotoIfError3(clean, Compiler_getUniqueCompiles(shEntries.ptr[lastJobId], NULL, &binaryIndices, e_rr))
 					gotoIfError3(clean, CLI_registerShaderEntries(&shFile, shEntries.ptr[lastJobId], binaryIndices, e_rr))
 
-					gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
-					gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS, e_rr))
-					Buffer_freex(&temp);
+					if (
+						lastJobId &&
+						CharString_equalsStringSensitive(allOutputs.ptr[lastJobId - 1], allOutputs.ptr[lastJobId])
+					) {
+						SHFile tmp = (SHFile) { 0 };
+						gotoIfError3(clean, SHFile_combinex(previous, shFile, &tmp, e_rr))
+						SHFile_freex(&previous);
+						previous = tmp;
+					}
+
+					else errorInPrevious = false;		//Reset error report
+					
+					if(
+						lastJobId + 1 == allOutputs.length ||
+						!CharString_equalsStringSensitive(allOutputs.ptr[lastJobId + 1], allOutputs.ptr[lastJobId])
+					) {
+
+						if(errorInPrevious)
+							Log_warnLnx("One of the previous oiSH compilations failed, not producing a binary");
+
+						else {
+							
+							if(previous.entries.length)
+								gotoIfError3(clean, SHFile_writex(previous, &temp, e_rr))
+
+							else gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
+
+							gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS, e_rr))
+							Buffer_freex(&temp);
+						}
+					}
+
+					else {
+						SHFile_freex(&previous);
+						previous = shFile;
+						shFile = (SHFile) { 0 };
+					}
 
 					ListU16_freex(&binaryIndices);
 					SHFile_freex(&shFile);
@@ -1223,12 +1270,13 @@
 
 				//In case we just finished
 
-				if (i == shEntryIds.length)
+				if (i == shEntryIdsSorted.length)
 					break;
 
 				//Make sure we don't create an invalid SHFile
 
-				CompileResult *compileResult = &compileResults.ptrNonConst[i];
+				U64 unsortedI = ListU64_findFirst(shEntryIds, next, 0, NULL);
+				CompileResult *compileResult = &compileResults.ptrNonConst[unsortedI];
 
 				if(!compileResult->isSuccess) {
 					SHFile_freex(&shFile);
@@ -1252,8 +1300,10 @@
 
 				//One of the previous has failed
 
-				if(!shFile.entries.ptr)
+				if(!shFile.entries.ptr) {
+					errorInPrevious = true;
 					continue;
+				}
 
 				//Add binary to SHFile
 
@@ -1303,7 +1353,7 @@
 
 					if (!runtimeEntries.length) {
 
-						if(!(args.flags & EOperationFlags_IgnoreEmptyFiles)) {
+						if(args.flags & EOperationFlags_ErrorEmptyFiles) {
 
 							Log_errorLnx(
 								"Precompile couldn't find entrypoints for file \"%.*s\"",
@@ -1377,10 +1427,49 @@
 					//Write to disk and free temp data
 
 					if (didSucceed) {
-						gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
-						gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 100 * MS, e_rr))
-						Buffer_freex(&temp);
+
+						//Merge with previous if present
+
+						if (
+							i &&
+							CharString_equalsStringSensitive(allOutputs.ptr[i - 1], allOutputs.ptr[i])
+						) {
+							SHFile tmp = (SHFile) { 0 };
+							gotoIfError3(clean, SHFile_combinex(previous, shFile, &tmp, e_rr))
+							SHFile_freex(&previous);
+							previous = tmp;
+						}
+
+						else errorInPrevious = false;		//Reset error report
+
+						if(
+							i + 1 == allOutputs.length ||
+							!CharString_equalsStringSensitive(allOutputs.ptr[i + 1], allOutputs.ptr[i])
+						) {
+
+							if(errorInPrevious)
+								Log_warnLnx("One of the previous oiSH compilations failed, not producing a binary");
+
+							else {
+							
+								if(previous.entries.length)
+									gotoIfError3(clean, SHFile_writex(previous, &temp, e_rr))
+
+								else gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
+
+								gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 100 * MS, e_rr))
+								Buffer_freex(&temp);
+							}
+						}
+
+						else {
+							SHFile_freex(&previous);
+							previous = shFile;
+							shFile = (SHFile) { 0 };
+						}
 					}
+
+					else errorInPrevious = true;
 
 					ListU32_freex(&compileCombinations);
 					ListU16_freex(&binaryIndices);
@@ -1476,12 +1565,14 @@
 
 		ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
 		SHFile_freex(&shFile);
+		SHFile_freex(&previous);
 		SHEntry_freex(&shEntry);
 		ListU32_freex(&compileCombinations);
 		ListU16_freex(&binaryIndices);
 
 		ListListSHEntryRuntime_freeUnderlyingx(&shEntries);
 		ListU64_freex(&shEntryIds);
+		ListU64_freex(&shEntryIdsSorted);
 		ListCompileResult_freeUnderlyingx(&compileResults);
 		CompileResult_freex(&tempResult);
 
