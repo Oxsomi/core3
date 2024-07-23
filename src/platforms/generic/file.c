@@ -664,6 +664,7 @@ clean:
 Bool File_read(CharString loc, Ns maxTimeout, Buffer *output, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool allocate = false;
 	CharString resolved = CharString_createNull();
 	FILE *f = NULL;
 
@@ -680,6 +681,7 @@ Bool File_read(CharString loc, Ns maxTimeout, Buffer *output, Error *e_rr) {
 
 	if(isVirtual) {
 		gotoIfError3(clean, File_readVirtual(loc, output, maxTimeout, e_rr))
+		allocate = true;
 		goto clean;
 	}
 
@@ -712,6 +714,7 @@ Bool File_read(CharString loc, Ns maxTimeout, Buffer *output, Error *e_rr) {
 		goto clean;
 
 	gotoIfError2(clean, Buffer_createUninitializedBytesx(size, output))
+	allocate = true;
 
 	if(fseek(f, 0, SEEK_SET))
 		retError(clean, Error_stderr(2, "File_read() couldn't seek begin"))
@@ -724,7 +727,7 @@ Bool File_read(CharString loc, Ns maxTimeout, Buffer *output, Error *e_rr) {
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocate)
 		Buffer_freex(output);
 
 	if(f) fclose(f);

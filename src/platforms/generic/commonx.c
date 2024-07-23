@@ -709,6 +709,14 @@ Error CharString_formatx(CharString *result, const C8 *format, ...) {
 Bool Archive_createx(Archive *archive, Error *e_rr) { return Archive_create(Platform_instance.alloc, archive, e_rr); }
 Bool Archive_freex(Archive *archive) { return Archive_free(archive, Platform_instance.alloc); }
 
+Bool Archive_createCopyx(Archive a, Archive *archive, Error *e_rr) {
+	return Archive_createCopy(a, Platform_instance.alloc, archive, e_rr);
+}
+
+Bool Archive_combinex(Archive a, Archive b, ArchiveCombineSettings combineSettings, Archive *archive, Error *e_rr) {
+	return Archive_combine(a, b, combineSettings, Platform_instance.alloc, archive, e_rr);
+}
+
 Bool Archive_hasFilex(Archive archive, CharString path) { return Archive_hasFile(archive, path, Platform_instance.alloc); }
 Bool Archive_hasFolderx(Archive archive, CharString path) { return Archive_hasFolder(archive, path, Platform_instance.alloc); }
 Bool Archive_hasx(Archive archive, CharString path) { return Archive_has(archive, path, Platform_instance.alloc); }

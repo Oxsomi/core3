@@ -26,9 +26,13 @@
 #endif
 
 typedef struct Archive Archive;
+typedef struct ArchiveCombineSettings ArchiveCombineSettings;
 
 Bool Archive_createx(Archive *archive, Error *e_rr);
 Bool Archive_freex(Archive *archive);
+
+Bool Archive_createCopyx(Archive a, Archive *archive, Error *e_rr);
+Bool Archive_combinex(Archive a, Archive b, ArchiveCombineSettings combineSettings, Archive *archive, Error *e_rr);
 
 Bool Archive_hasFilex(Archive archive, CharString path);
 Bool Archive_hasFolderx(Archive archive, CharString path);

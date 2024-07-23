@@ -201,10 +201,9 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				5, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains compute stage"
 			);
 
-		//TODO:
-		//for(U32 j = EPipelineStage_RtStart; j < EPipelineStage_RtEnd; ++j)
-		//	if((stageFlags >> j) & 1)
-		//		return Error_invalidOperation(6, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains RT stage(s)");
+		for(U32 j = EPipelineStage_RtStart; j < EPipelineStage_RtEnd; ++j)
+			if((stageFlags >> j) & 1)
+				return Error_invalidOperation(6, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains RT stage(s)");
 
 		//Validate if stages are allowed due to GeometryShader
 

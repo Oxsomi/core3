@@ -80,7 +80,7 @@ typedef struct GraphicsDevice {
 
 	ListRefPtr resourcesInFlight[3];			//Resources in flight, TODO: HashMap
 
-	SpinLock lock;									//Lock for submission and marking resources dirty
+	SpinLock lock;								//Lock for submission and marking resources dirty
 
 	DeviceMemoryAllocator allocator;
 

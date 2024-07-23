@@ -594,6 +594,7 @@ clean:
 Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool allocate = false;
 
 	if (!caFile)
 		retError(clean, Error_nullPointer(2, "CAFile_read()::caFile is required"))
@@ -838,6 +839,7 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 
 	caFile->archive = archive;
 	archive = (Archive) { 0 };
+	allocate = true;
 
 	caFile->settings = (CASettings) {
 		.compressionType = (EXXCompressionType)(header.type >> 4),
@@ -861,7 +863,7 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocate)
 		CAFile_free(caFile, alloc);
 
 	Buffer_free(&tmpData, alloc);
@@ -893,6 +895,12 @@ Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error
 	CASettings settings = a.settings;
 	settings.flags |= b.settings.flags & ECASettingsFlags_DateFlags;
 
+	ArchiveCombineSettings archiveCombineSettings = (ArchiveCombineSettings) {
+		.mode = EArchiveCombineMode_Rename,
+		.flags = EArchiveCombineFlags_ResolveLatestTimestamp
+	};
+
+	gotoIfError3(clean, Archive_combine(a.archive, b.archive, archiveCombineSettings, alloc, &archive, e_rr))
 	gotoIfError3(clean, CAFile_create(settings, &archive, combined, e_rr))
 
 clean:

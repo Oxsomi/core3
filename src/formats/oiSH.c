@@ -1075,6 +1075,7 @@ clean:
 Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool allocate = false;
 
 	DLFile dlFile = (DLFile) { 0 };
 	SHEntry entry = (SHEntry) { 0 };
@@ -1157,6 +1158,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		flags |= ESHSettingsFlags_IsUTF8;
 
 	gotoIfError3(clean, SHFile_create(flags, header.compilerVersion, header.sourceHash, alloc, shFile, e_rr))
+	allocate = true;
 
 	//Parse binaries
 
@@ -1528,7 +1530,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocate)
 		SHFile_free(shFile, alloc);
 
 	SHInclude_free(&include, alloc);

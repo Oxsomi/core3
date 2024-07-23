@@ -673,6 +673,8 @@ An archive is just a list of ArchiveEntries, which consist of the following:
 An archive can be created and destroyed through the following functions:
 
 - Error **Archive_create**(Allocator alloc, Archive *result): create an empty archive and reserve some space for future entries.
+- Bool **Archive_createCopy**(Archive archive, Allocator alloc, Archive *result, Error *err): create copy of archive.
+- Bool **Archive_combine**(Archive a, Archive b, ArchiveCombineSettings combineSettings, Allocator alloc, Archive *archive, Error *e_rr): Combine two archives into one.
 - Bool **Archive_free**(Archive *archive, Allocator alloc): free the archive and all data contained in it.
 
 It can be modified through the following:

@@ -212,10 +212,9 @@ Bool WindowManager_createWindow(
 	if(callbacks.onResize)
 		callbacks.onResize(w);
 
-clean:
+	*result = w;
 
-	if(!s_uccess)
-		WindowManager_freeWindow(manager, result);
+clean:
 
 	Buffer_freex(&tmpWindow);
 	Buffer_freex(&extendedData);

@@ -47,6 +47,7 @@ Bool File_resolve(
 ) {
 
 	Bool s_uccess = true;
+	Bool allocate = false;
 	ListCharString res = (ListCharString) { 0 };
 
 	if(!isVirtual || !result)
@@ -56,6 +57,7 @@ Bool File_resolve(
 		retError(clean, Error_invalidOperation(0, "File_resolve()::result is not NULL, this might indicate a memleak"))
 
 	loc = CharString_createRefStrConst(loc);
+	allocate = true;
 
 	if (CharString_equalsStringSensitive(loc, absoluteDir)) {				//Get rid of trailing / and return copy
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;
@@ -270,7 +272,7 @@ Bool File_resolve(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocate)
 		CharString_free(result, alloc);
 
 	ListCharString_free(&res, alloc);

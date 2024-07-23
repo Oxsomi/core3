@@ -21,6 +21,7 @@
 #include "types/archive.h"
 #include "types/allocator.h"
 #include "types/list_impl.h"
+#include "types/math.h"
 
 TListImpl(ArchiveEntry);
 
@@ -56,6 +57,42 @@ Bool Archive_free(Archive *archive, Allocator alloc) {
 	ListArchiveEntry_free(&archive->entries, alloc);
 	*archive = (Archive) { 0 };
 	return true;
+}
+
+Bool Archive_createCopy(Archive a, Allocator alloc, Archive *archive, Error *e_rr) {
+	
+	Bool s_uccess = true;
+	Bool allocate = false;
+
+	if(!archive)
+		retError(clean, Error_nullPointer(4, "Archive_combine()::combined is required"))
+
+	if(archive->entries.ptr)
+		retError(clean, Error_invalidParameter(4, 0, "Archive_combine()::combined contains data, which could indicate a memleak"))
+
+	gotoIfError2(clean, ListArchiveEntry_createCopy(a.entries, alloc, &archive->entries))
+	allocate = true;
+
+	for(U64 i = 0; i < archive->entries.length; ++i) {						//Reset state, before creating copy of buffers and strings
+		archive->entries.ptrNonConst[i].data = Buffer_createNull();
+		archive->entries.ptrNonConst[i].path = CharString_createNull();
+	}
+
+	for(U64 i = 0; i < archive->entries.length; ++i) {
+
+		ArchiveEntry *dst = &archive->entries.ptrNonConst[i];
+		ArchiveEntry src = a.entries.ptr[i];
+
+		gotoIfError2(clean, CharString_createCopy(src.path, alloc, &dst->path))
+		gotoIfError2(clean, Buffer_createCopy(src.data, alloc, &dst->data))
+	}
+
+clean:
+	
+	if(allocate && !s_uccess)
+		Archive_free(archive, alloc);
+
+	return s_uccess;
 }
 
 Bool Archive_getPath(
@@ -106,6 +143,244 @@ Bool Archive_getPath(
 
 clean:
 	CharString_free(&resolvedPath, alloc);
+	return s_uccess;
+}
+
+Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allocator alloc, Archive *combined, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool allocate = false;
+
+	ListU64 movedBEntries = (ListU64) { 0 };
+	CharString renamed = CharString_createNull();
+
+	if(a.entries.length >> 63 || b.entries.length >> 63)
+		retError(clean, Error_invalidState(0, "Archive_combine()::a and b should be 63 bit"))
+
+	if(settings.mode == EArchiveCombineMode_Rename)
+		gotoIfError2(clean, ListU64_create(b.entries.length, alloc, &movedBEntries))
+
+	gotoIfError3(clean, Archive_createCopy(a, alloc, combined, e_rr))
+
+	for (U64 i = 0; i < b.entries.length; ++i) {
+
+		ArchiveEntry bi = b.entries.ptr[i];
+
+		ArchiveEntry ai = (ArchiveEntry) { 0 };
+		U64 aIndex = 0;
+
+		if(!Archive_getPath(a, bi.path, &ai, &aIndex, NULL, alloc, NULL))
+			goto insert;
+
+		ArchiveEntry *finalDst = &combined->entries.ptrNonConst[aIndex];
+
+		//Conflict file type has no solution that isn't defined by combine mode
+
+		if(ai.type != bi.type)
+			retError(clean, Error_invalidState(
+				0, "Archive_combine()::a and b had file that was mismatching in file type"
+			))
+
+		Bool conflict = false;
+
+		//Depending on mode, timestamp could indicate a conflict
+			
+		if (ai.timestamp != bi.timestamp) {
+
+			//Folders can safely be merged
+
+			if(ai.type == EFileType_Folder)
+				finalDst->timestamp = U64_max(ai.timestamp, bi.timestamp);
+
+			//If latest should be accepted, there won't be a problem
+
+			else if (settings.flags & EArchiveCombineFlags_ResolveAcceptLatest) {
+
+				if(Buffer_neq(ai.data, bi.data)) {
+
+					//Two timestamps the same means there is no latest
+
+					if(ai.timestamp == bi.timestamp)
+						conflict = true;
+
+					else if(ai.timestamp < bi.timestamp) {
+						Buffer_free(&finalDst->data, alloc);
+						gotoIfError2(clean, Buffer_createCopy(bi.data, alloc, &finalDst->data))
+					}
+				}
+
+				finalDst->timestamp = U64_max(ai.timestamp, bi.timestamp);
+			}
+
+			//If timestamps should be maintained, there's no solution without mode
+
+			else if (!(settings.flags & EArchiveCombineFlags_ResolveLatestTimestamp))
+				conflict = true;
+
+			//Conflict by data, not resolvable without mode
+
+			else if(Buffer_neq(ai.data, bi.data))
+				conflict = true;
+
+			//No conflict, accept newest timestamp
+
+			else finalDst->timestamp = U64_max(ai.timestamp, bi.timestamp);
+		}
+
+		//Otherwise we only have a conflict if buffer mismatches
+
+		else if(Buffer_neq(ai.data, bi.data))
+			conflict = true;
+
+		//Resolve the conflict
+
+		if (conflict)
+			switch (settings.mode) {
+
+				case EArchiveCombineMode_AcceptA:		//No-op
+					break;
+
+				case EArchiveCombineMode_AcceptB:
+					finalDst->timestamp = bi.timestamp;
+					Buffer_free(&finalDst->data, alloc);
+					gotoIfError2(clean, Buffer_createCopy(bi.data, alloc, &finalDst->data))
+					break;
+
+				case EArchiveCombineMode_RequireSame:
+					retError(clean, Error_invalidState(
+						0, "Archive_combine()::a and b had matching file paths, but mismatching contents"
+					))
+
+				//TODO: Insert -1, -2, -3, -4 before the extension and try until it works
+				//		If ends with - number, try to increment the number.
+
+				case EArchiveCombineMode_Rename: {
+
+					//-N with potentially .extension (e.g. -1.oiSH, -2.oiSH)
+					//Remember N, so we can increment.
+
+					U64 counter = 0;
+					U64 startCounter = CharString_findLastSensitive(bi.path, '-', 0, 0);
+
+					if (startCounter != U64_MAX && C8_isDec(CharString_getAt(bi.path, startCounter + 1))) {
+
+						U64 j = startCounter + 2;
+						Bool match = false;
+
+						for (; j < CharString_length(bi.path); ++j) {
+
+							if (bi.path.ptr[j] == '.') {
+								match = true;
+								break;
+							}
+
+							if(!C8_isDec(bi.path.ptr[j]))
+								break;
+						}
+
+						match |= j == CharString_length(bi.path);
+
+						//Everything from startCounter + 1 -> j contains a number. Parse it
+
+						if (match) {
+
+							CharString num = CharString_createRefSizedConst(
+								bi.path.ptr + startCounter + 1, j - startCounter - 1, false
+							);
+
+							if(!CharString_parseU64(num, &counter))
+								retError(clean, Error_invalidState(0, "Archive_combine() parse U64 failed"))
+						}
+					}
+
+					//Try to find the next until there's no next.
+					//Example:
+					//We already have:
+					//	test.png
+					//	test-1.png
+					//But we insert test.png
+					//try:		test.png
+					//try:		test-1.png
+					//found:	test-2.png
+
+					CharString basePath = bi.path;
+					CharString extension = CharString_createRefCStrConst("");
+
+					U64 lastSlash = CharString_findFirstSensitive(bi.path, '/', 0, 0);
+
+					if(lastSlash == U64_MAX)
+						lastSlash = 0;
+
+					U64 lastDot = CharString_findLastSensitive(bi.path, '.', lastSlash, 0);
+
+					if(lastDot != U64_MAX) {
+						basePath = CharString_createRefSizedConst(bi.path.ptr, lastDot, false);
+						extension = CharString_createRefSizedConst(
+							bi.path.ptr + lastDot,
+							CharString_length(bi.path) - lastDot,
+							CharString_isNullTerminated(bi.path)
+						);
+					}
+
+					do {
+
+						CharString_free(&renamed, alloc);
+
+						++counter;
+
+						gotoIfError2(clean, CharString_format(
+							alloc, &renamed, "%.*s-%"PRIu64"%.*s",
+							CharString_length(basePath), basePath.ptr,
+							counter,
+							CharString_length(extension), extension.ptr
+						))
+					}
+					while(Archive_getPath(*combined, renamed, NULL, NULL, NULL, alloc, NULL));
+
+					goto insert;
+				}
+			}
+
+		else if(settings.mode == EArchiveCombineMode_Rename)
+			movedBEntries.ptrNonConst[i] = aIndex;
+
+		continue;
+
+	insert:
+
+		ArchiveEntry entryCopy = b.entries.ptr[i];
+		entryCopy.data = Buffer_createNull();
+		entryCopy.path = CharString_createNull();
+
+		if((combined->entries.length + 1) >> 63)
+			retError(clean, Error_outOfBounds(
+				0, combined->entries.length + 1, (U64)1 << 63, "Archive_combine() final combined archive size should be 63 bit"
+			))
+
+		gotoIfError2(clean, ListArchiveEntry_pushBack(&combined->entries, entryCopy, alloc))
+
+		ArchiveEntry *entryLast = ListArchiveEntry_last(combined->entries);
+
+		if (renamed.ptr) {
+			entryLast->path = renamed;
+			renamed = CharString_createNull();
+		}
+		
+		else gotoIfError2(clean, CharString_createCopy(bi.path, alloc, &entryLast->path))
+
+		gotoIfError2(clean, Buffer_createCopy(bi.data, alloc, &entryLast->data))
+		
+		if(settings.mode == EArchiveCombineMode_Rename)
+			movedBEntries.ptrNonConst[i] = combined->entries.length - 1;
+	}
+
+clean:
+	
+	if(allocate && !s_uccess)
+		Archive_free(combined, alloc);
+
+	ListU64_free(&movedBEntries, alloc);
+	CharString_free(&renamed, alloc);
 	return s_uccess;
 }
 

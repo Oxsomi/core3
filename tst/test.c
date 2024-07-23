@@ -2110,7 +2110,7 @@ int main() {
 			0x368FFFFFFFFF870D,		//float 0x00000000.5#DeN Smallest (Collapsed to 0)
 			0x3690000000000000,		//float 0x00000000.5#DeN Nearest (Collapsed to 0)
 			0x3690000000000001,		//float 0x00000000.5#DeN Nearest+ (Rounds up)
-			0x380FFFFFBFFFB6EF,		//float 0x007FFFFF#DeN Biggest		TODO:
+			0x380FFFFFBFFFB6EF,		//float 0x007FFFFF#DeN Biggest
 			0x380FFFFFFFFFBB88,		//float 0x00800000 Smallest non DeN
 
 			//DeNs

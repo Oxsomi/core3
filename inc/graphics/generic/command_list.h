@@ -47,7 +47,7 @@ typedef struct CommandList {
 	Bool allowResize;
 	ECommandListState state;
 
-	SpinLock lock;										//Begin locks this, end unlocks this.
+	SpinLock lock;									//Begin locks this, end unlocks this.
 
 	U64 next;
 

@@ -33,8 +33,8 @@ typedef struct ArchiveEntry {
 
 	CharString path;
 	Buffer data;
-	EFileType type;		//If true, data should be empty
-	Ns timestamp;		//Shouldn't be set if isFolder. Will disappear
+	EFileType type;												//If true, data should be empty
+	Ns timestamp;												//Shouldn't be set if isFolder. Will disappear
 
 } ArchiveEntry;
 
@@ -44,8 +44,30 @@ typedef struct Archive {
 	ListArchiveEntry entries;
 } Archive;
 
+typedef enum EArchiveCombineMode {
+	EArchiveCombineMode_RequireSame,							//Files are only allowed to merge if same contents
+	EArchiveCombineMode_Rename,									//Try to rename the file on conflict
+	EArchiveCombineMode_AcceptA,								//First archive is leading on conflict
+	EArchiveCombineMode_AcceptB,								//Second archive is leading on conflict
+	EArchiveCombineMode_Count
+} EArchiveCombineMode;
+
+typedef enum EArchiveCombineFlags {
+	EArchiveCombineFlags_None					= 0,
+	EArchiveCombineFlags_ResolveLatestTimestamp = 1 << 0,		//Resolve timestamp with latest, as long as data matches
+	EArchiveCombineFlags_ResolveAcceptLatest	= 1 << 1		//Override file with latest file contents, otherwise conflict
+} EArchiveCombineFlags;
+
+typedef struct ArchiveCombineSettings {
+	EArchiveCombineMode mode;
+	EArchiveCombineFlags flags;
+} ArchiveCombineSettings;
+
 Bool Archive_create(Allocator alloc, Archive *archive, Error *e_rr);
+Bool Archive_createCopy(Archive a, Allocator alloc, Archive *archive, Error *e_rr);
 Bool Archive_free(Archive *archive, Allocator alloc);
+
+Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allocator alloc, Archive *combined, Error *e_rr);
 
 Bool Archive_hasFile(Archive archive, CharString path, Allocator alloc);
 Bool Archive_hasFolder(Archive archive, CharString path, Allocator alloc);

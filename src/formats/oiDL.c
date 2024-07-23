@@ -566,6 +566,7 @@ Bool DLFile_read(
 ) {
 
 	Bool s_uccess = true;
+	Bool allocate = false;
 
 	if(!dlFile)
 		retError(clean, Error_nullPointer(2, "DLFile_read()::dlFile is required"))
@@ -745,6 +746,7 @@ Bool DLFile_read(
 	//Create DLFile
 
 	gotoIfError3(clean, DLFile_create(settings, alloc, dlFile, e_rr))
+	allocate = true;
 
 	//Per entry
 
@@ -784,7 +786,7 @@ Bool DLFile_read(
 
 clean:
 
-	if(!s_uccess && dlFile)
+	if(!s_uccess && allocate)
 		DLFile_free(dlFile, alloc);
 
 	return s_uccess;
