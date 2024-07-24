@@ -25,10 +25,10 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - SpinLock, Atomics and Thread for multi threading purposes.
   - Log for colored and proper cross platform logging.
   - For more info check the [documentation](docs/types.md).
-- OxC3_formats: deps(OxC3_types)
+- OxC3_formats
   - A library for reading/writing files. Currently only for BMP, DDS and oiCA/oiDL (proprietary zip-style formats) and oiSH (wrapping compiled shaders into one for use in different graphics APIs).
   - For more info check the [documentation](docs/formats.md).
-- OxC3_platforms: deps(OxC3_types, OxC3_formats)
+- OxC3_platforms
   - For everything that's platform dependent (excluding some exceptions for OxC3_types).
   - Helpers for default allocator to simplify OxC3_types functions that require allocators.
   - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
@@ -37,12 +37,12 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Window for physical (OS-backed) and virtual (in memory) windows.
   - Allocator that detects memory leaks, free without alloc (or double free) and allocation stacktraces.
   - For more info check the [documentation](docs/platforms.md).
-- OxC3_graphics: deps(OxC3_platforms)
+- OxC3_graphics
   - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Currently, only Vulkan and D3D12 are supported.
   - For more info check the [documentation](docs/graphics_api.md).
-- OxC3_shader_compiler: deps(OxC3_platforms, DXC)
+- OxC3_shader_compiler
   - Abstraction layer around DXC to make it possible to statically link, execute on other platforms and sign DXIL even on non Windows PCs. This also allows being able to find symbols in shaders, preprocess files (transform to without includes + defines) and output include info. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
-- OxC3: deps(OxC3_platforms, optional: OxC3_shader_compiler)
+- OxC3(CLI)
   - Command line tool that exposes useful functions from OxC3.
   - File manipulation:
     - Conversions between oiCA/oiDL and raw files (zip-like).
@@ -166,3 +166,28 @@ To ship anything that uses OxC3_shader_compiler it doesn't require any additiona
 
 OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
 
+## Dependencies
+
+- OxC3(CLI).
+  - (optional): OxC3_shader_compiler.
+  - (optional): OxC3_graphics.
+  - OxC3_platforms, OxC3_formats.
+    - By extension OxC3_types.
+- OxC3_shader_compiler.
+  - *DXC* (and by extension LLVM, clang, DirectX-Headers, SPIRV-Headers, SPIRV-Tools): Compiling HLSL to DXIL and SPIRV.
+  - *SPIRV-Tools*: Stripping, optimizing and disassembling spirv binaries.
+  - *SPIRV-Reflect*: Reflecting SPIRV.
+  - (**TODO**): *DirectX-Headers*: Reflecting DXIL.
+  - (**TODO**): *SPIRV-Cross*: Cross compiling SPIRV to MSL (and WGSL?).
+- OxC3_graphics.
+  - *Vulkan*.
+  - or *D3D12*.
+    - *NVAPI*.
+    - *AMD_AGS*.
+    - *AgilitySDK*.
+    - (Optional): *Warp*.
+- OxC3_platforms and OxC3_formats.
+  - OxC3_types.
+  - No other dependencies, except OS.
+- OxC3_types.
+  - No other dependencies, except OS.

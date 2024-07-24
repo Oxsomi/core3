@@ -40,6 +40,7 @@
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
 #include "spirv_tools/optimizer.hpp"
+#include "SPIRV-Reflect/spirv_reflect.h"
 #include <exception>
 
 const C8 *resources =
@@ -865,7 +866,471 @@ clean:
 	return s_uccess;
 }
 
-U64 compileId = 0;
+Bool SpvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *extension, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
+
+	switch (capability) {
+
+		//Shader types
+
+		case SpvCapabilityTessellation:
+		case SpvCapabilityGeometry:
+
+		case SpvCapabilityRayTracingKHR:
+		case SpvCapabilityMeshShadingEXT:
+			break;
+
+		//RT:
+
+		case SpvCapabilityRayTracingOpacityMicromapEXT:
+			ext = ESHExtension_RayMicromapOpacity;
+			break;
+
+		case SpvCapabilityRayQueryKHR:
+			ext = ESHExtension_RayQuery;
+			break;
+
+		case SpvCapabilityRayTracingMotionBlurNV:
+			ext = ESHExtension_RayMotionBlur;
+			break;
+
+		case SpvCapabilityShaderInvocationReorderNV:
+			ext = ESHExtension_RayReorder;
+			break;
+
+		case SpvCapabilityAtomicFloat32AddEXT:
+		case SpvCapabilityAtomicFloat32MinMaxEXT:
+			ext = ESHExtension_AtomicF32;
+			break;
+
+		case SpvCapabilityAtomicFloat64AddEXT:
+		case SpvCapabilityAtomicFloat64MinMaxEXT:
+			ext = ESHExtension_AtomicF64;
+			break;
+
+		case SpvCapabilityGroupNonUniformArithmetic:
+			ext = ESHExtension_SubgroupArithmetic;
+			break;
+
+		case SpvCapabilityGroupNonUniformShuffle:
+			ext = ESHExtension_SubgroupShuffle;
+			break;
+
+		case SpvCapabilityMultiViewport:
+		case SpvCapabilityShaderLayer:
+		case SpvCapabilityShaderViewportIndex:
+		case SpvCapabilityMultiView:
+			ext = ESHExtension_Multiview;
+			break;
+
+		//Types
+
+		case SpvCapabilityStorageBuffer16BitAccess:
+		case SpvCapabilityStorageUniform16:
+		case SpvCapabilityStoragePushConstant16:
+		case SpvCapabilityStorageInputOutput16:
+
+		case SpvCapabilityInt16:
+		case SpvCapabilityFloat16:
+			ext = ESHExtension_16BitTypes;
+			break;
+
+		case SpvCapabilityFloat64:
+			ext = ESHExtension_F64;
+			break;
+
+		case SpvCapabilityInt64:
+			ext = ESHExtension_I64;
+			break;
+
+		case SpvCapabilityInt64Atomics:
+			ext = (ESHExtension)(ESHExtension_I64 | ESHExtension_AtomicI64);
+			break;
+
+		case SpvCapabilityComputeDerivativeGroupLinearNV:
+			ext = ESHExtension_ComputeDeriv;
+			break;
+
+		//No-op, not important, always supported
+
+		case SpvCapabilityShader:
+		case SpvCapabilityMatrix:
+		case SpvCapabilityAtomicStorage:
+
+		case SpvCapabilityRuntimeDescriptorArray:
+		case SpvCapabilityShaderNonUniform:
+		case SpvCapabilityUniformTexelBufferArrayDynamicIndexing:
+		case SpvCapabilityStorageTexelBufferArrayDynamicIndexing:
+		case SpvCapabilityUniformBufferArrayNonUniformIndexing:
+		case SpvCapabilitySampledImageArrayNonUniformIndexing:
+		case SpvCapabilityStorageBufferArrayNonUniformIndexing:
+		case SpvCapabilityStorageImageArrayNonUniformIndexing:
+		case SpvCapabilityUniformTexelBufferArrayNonUniformIndexing:
+		case SpvCapabilityStorageTexelBufferArrayNonUniformIndexing:
+
+		case SpvCapabilityGroupNonUniform:
+		case SpvCapabilityGroupNonUniformVote:
+		case SpvCapabilityGroupNonUniformBallot:
+		case SpvCapabilitySubgroupVoteKHR:
+		case SpvCapabilitySubgroupBallotKHR:
+
+		case SpvCapabilityAtomicStorageOps:
+
+		case SpvCapabilityStorageImageExtendedFormats:
+		case SpvCapabilityImageQuery:
+		case SpvCapabilityDerivativeControl:
+
+		case SpvCapabilityInputAttachment:
+		case SpvCapabilityMinLod:
+		case SpvCapabilityUniformBufferArrayDynamicIndexing:
+		case SpvCapabilitySampledImageArrayDynamicIndexing:
+		case SpvCapabilityStorageBufferArrayDynamicIndexing:
+		case SpvCapabilityStorageImageArrayDynamicIndexing:
+
+			break;
+
+		//Unsupported
+
+		//Provisional
+
+		case SpvCapabilityRayQueryProvisionalKHR:
+		case SpvCapabilityRayTracingProvisionalKHR:
+
+		//AMD
+
+		case SpvCapabilityGroups:
+					
+		case SpvCapabilityFloat16ImageAMD:
+		case SpvCapabilityImageGatherBiasLodAMD:
+		case SpvCapabilityFragmentMaskAMD:
+		case SpvCapabilityImageReadWriteLodAMD:
+
+		//QCOM
+
+		case SpvCapabilityTextureSampleWeightedQCOM:
+		case SpvCapabilityTextureBoxFilterQCOM:
+		case SpvCapabilityTextureBlockMatchQCOM:
+
+		//NV
+					
+		case SpvCapabilitySampleMaskOverrideCoverageNV:
+		case SpvCapabilityGeometryShaderPassthroughNV:
+		case SpvCapabilityShaderViewportMaskNV:
+		case SpvCapabilityShaderStereoViewNV:
+		case SpvCapabilityPerViewAttributesNV:
+		case SpvCapabilityMeshShadingNV:
+		case SpvCapabilityImageFootprintNV:
+		case SpvCapabilityComputeDerivativeGroupQuadsNV:
+		case SpvCapabilityGroupNonUniformPartitionedNV:
+		case SpvCapabilityRayTracingNV:
+		case SpvCapabilityCooperativeMatrixNV:
+		case SpvCapabilityShaderSMBuiltinsNV:
+		case SpvCapabilityBindlessTextureNV:
+
+		//Intel
+
+		case SpvCapabilitySubgroupShuffleINTEL:
+		case SpvCapabilitySubgroupBufferBlockIOINTEL:
+		case SpvCapabilitySubgroupImageBlockIOINTEL:
+		case SpvCapabilitySubgroupImageMediaBlockIOINTEL:
+		case SpvCapabilityRoundToInfinityINTEL:
+		case SpvCapabilityFloatingPointModeINTEL:
+		case SpvCapabilityIntegerFunctions2INTEL:
+		case SpvCapabilityFunctionPointersINTEL:
+		case SpvCapabilityIndirectReferencesINTEL:
+		case SpvCapabilityAsmINTEL:
+
+		case SpvCapabilityVectorComputeINTEL:
+		case SpvCapabilityVectorAnyINTEL:
+
+		case SpvCapabilitySubgroupAvcMotionEstimationINTEL:
+		case SpvCapabilitySubgroupAvcMotionEstimationIntraINTEL:
+		case SpvCapabilitySubgroupAvcMotionEstimationChromaINTEL:
+		case SpvCapabilityVariableLengthArrayINTEL:
+		case SpvCapabilityFunctionFloatControlINTEL:
+		case SpvCapabilityFPGAMemoryAttributesINTEL:
+		case SpvCapabilityFPFastMathModeINTEL:
+		case SpvCapabilityArbitraryPrecisionIntegersINTEL:
+		case SpvCapabilityArbitraryPrecisionFloatingPointINTEL:
+		case SpvCapabilityUnstructuredLoopControlsINTEL:
+		case SpvCapabilityFPGALoopControlsINTEL:
+		case SpvCapabilityKernelAttributesINTEL:
+		case SpvCapabilityFPGAKernelAttributesINTEL:
+		case SpvCapabilityFPGAMemoryAccessesINTEL:
+		case SpvCapabilityFPGAClusterAttributesINTEL:
+		case SpvCapabilityLoopFuseINTEL:
+		case SpvCapabilityFPGADSPControlINTEL:
+		case SpvCapabilityMemoryAccessAliasingINTEL:
+		case SpvCapabilityFPGAInvocationPipeliningAttributesINTEL:
+		case SpvCapabilityFPGABufferLocationINTEL:
+		case SpvCapabilityArbitraryPrecisionFixedPointINTEL:
+		case SpvCapabilityUSMStorageClassesINTEL:
+		case SpvCapabilityRuntimeAlignedAttributeINTEL:
+		case SpvCapabilityIOPipesINTEL:
+		case SpvCapabilityBlockingPipesINTEL:
+		case SpvCapabilityFPGARegINTEL:
+
+		case SpvCapabilityLongConstantCompositeINTEL:
+		case SpvCapabilityOptNoneINTEL:
+
+		case SpvCapabilityDebugInfoModuleINTEL:
+		case SpvCapabilityBFloat16ConversionINTEL:
+		case SpvCapabilitySplitBarrierINTEL:
+		case SpvCapabilityFPGAKernelAttributesv2INTEL:
+		case SpvCapabilityFPGALatencyControlINTEL:
+		case SpvCapabilityFPGAArgumentInterfacesINTEL:
+
+		//Possible in the future? TODO:
+
+		case SpvCapabilityShaderViewportIndexLayerEXT:
+		case SpvCapabilityFragmentBarycentricKHR:
+		case SpvCapabilityDemoteToHelperInvocation:
+		case SpvCapabilityExpectAssumeKHR:
+		case SpvCapabilityCooperativeMatrixKHR:
+		case SpvCapabilityBitInstructions:
+
+		case SpvCapabilityFragmentShaderSampleInterlockEXT:
+		case SpvCapabilityFragmentShaderShadingRateInterlockEXT:
+		case SpvCapabilityFragmentShaderPixelInterlockEXT:
+
+		case SpvCapabilityRayTraversalPrimitiveCullingKHR:
+		case SpvCapabilityRayTracingPositionFetchKHR:
+		case SpvCapabilityRayQueryPositionFetchKHR:
+		case SpvCapabilityRayCullMaskKHR:
+
+		case SpvCapabilityAtomicFloat16AddEXT:
+		case SpvCapabilityAtomicFloat16MinMaxEXT:
+
+		case SpvCapabilityInputAttachmentArrayDynamicIndexing:
+		case SpvCapabilityInputAttachmentArrayNonUniformIndexing:
+
+		case SpvCapabilityGroupNonUniformShuffleRelative:
+		case SpvCapabilityGroupNonUniformClustered:
+		case SpvCapabilityGroupNonUniformQuad:
+		case SpvCapabilityGroupNonUniformRotateKHR:
+		case SpvCapabilityGroupUniformArithmeticKHR:
+
+		case SpvCapabilityDotProductInputAll:
+		case SpvCapabilityDotProductInput4x8Bit:
+		case SpvCapabilityDotProductInput4x8BitPacked:
+		case SpvCapabilityDotProduct:
+
+		case SpvCapabilityVulkanMemoryModel:
+		case SpvCapabilityVulkanMemoryModelDeviceScope:
+
+		case SpvCapabilityShaderClockKHR:
+		case SpvCapabilityFragmentFullyCoveredEXT:
+		case SpvCapabilityFragmentDensityEXT:
+		case SpvCapabilityPhysicalStorageBufferAddresses:
+
+		case SpvCapabilityDenormPreserve:
+		case SpvCapabilityDenormFlushToZero:
+		case SpvCapabilitySignedZeroInfNanPreserve:
+		case SpvCapabilityRoundingModeRTE:
+		case SpvCapabilityRoundingModeRTZ:
+		case SpvCapabilityStencilExportEXT:
+
+		case SpvCapabilityInt64ImageEXT:
+
+		case SpvCapabilityStorageBuffer8BitAccess:
+		case SpvCapabilityUniformAndStorageBuffer8BitAccess:
+		case SpvCapabilityStoragePushConstant8:
+
+		case SpvCapabilityDeviceGroup:
+		case SpvCapabilityVariablePointersStorageBuffer:
+		case SpvCapabilityVariablePointers:
+		case SpvCapabilitySampleMaskPostDepthCoverage:
+
+		case SpvCapabilityWorkgroupMemoryExplicitLayoutKHR:
+		case SpvCapabilityWorkgroupMemoryExplicitLayout8BitAccessKHR:
+		case SpvCapabilityWorkgroupMemoryExplicitLayout16BitAccessKHR:
+
+		case SpvCapabilityDrawParameters:
+		case SpvCapabilityUniformDecoration:
+
+		case SpvCapabilityCoreBuiltinsARM:
+
+		case SpvCapabilityImageMSArray:
+		case SpvCapabilityInterpolationFunction:
+		case SpvCapabilityTransformFeedback:
+		case SpvCapabilitySampledBuffer:
+		case SpvCapabilityImageBuffer:
+		case SpvCapabilitySampledCubeArray:
+		case SpvCapabilitySampled1D:
+		case SpvCapabilityImage1D:
+
+		case SpvCapabilityTileImageColorReadAccessEXT:
+		case SpvCapabilityTileImageDepthReadAccessEXT:
+		case SpvCapabilityTileImageStencilReadAccessEXT:
+
+		case SpvCapabilityFragmentShadingRateKHR:
+
+		case SpvCapabilityGeometryStreams:
+		case SpvCapabilityStorageImageReadWithoutFormat:
+		case SpvCapabilityStorageImageWriteWithoutFormat:
+
+		case SpvCapabilityImageCubeArray:
+		case SpvCapabilityImageRect:
+		case SpvCapabilitySampledRect:
+		case SpvCapabilityGenericPointer:
+		case SpvCapabilityInt8:
+		case SpvCapabilitySparseResidency:
+		case SpvCapabilitySampleRateShading:
+
+		case SpvCapabilityImageGatherExtended:
+		case SpvCapabilityStorageImageMultisample:
+		case SpvCapabilityClipDistance:
+		case SpvCapabilityCullDistance:
+
+		case SpvCapabilityTessellationPointSize:
+		case SpvCapabilityGeometryPointSize:
+			retError(clean, Error_invalidState(
+				3,
+				"Compiler_compile() SPIRV contained capability that isn't supported in oiSH:\n"
+				"tesselation/geometry pointSize, ray query provisional or vendor specific extensions"
+			))
+
+		//Unsupported, we don't support kernels, only shaders
+
+		case SpvCapabilityAddresses:
+		case SpvCapabilityLinkage:
+
+		case SpvCapabilityKernel:
+		case SpvCapabilityFloat16Buffer:
+		case SpvCapabilityVector16:
+		case SpvCapabilityImageBasic:
+		case SpvCapabilityImageReadWrite:
+		case SpvCapabilityImageMipmap:
+		case SpvCapabilityPipes:
+		case SpvCapabilityDeviceEnqueue:
+		case SpvCapabilityLiteralSampler:
+		case SpvCapabilitySubgroupDispatch:
+		case SpvCapabilityNamedBarrier:
+		case SpvCapabilityPipeStorage:
+
+			retError(clean, Error_invalidState(
+				2, "Compiler_compile() SPIRV contained capability that isn't supported in oiSH"
+			))
+	}
+
+	*extension = ext;
+
+clean:
+	return s_uccess;
+}
+
+Bool SpvReflectFormatToESHType(SpvReflectFormat format, ESHType *type, Error *e_rr) {
+	
+	Bool s_uccess = true;
+
+	switch (format) {
+
+		case SPV_REFLECT_FORMAT_R32_UINT:				*type = ESHType_U32;		break;
+		case SPV_REFLECT_FORMAT_R32_SINT:				*type = ESHType_I32;		break;
+		case SPV_REFLECT_FORMAT_R32_SFLOAT:				*type = ESHType_F32;		break;
+
+		case SPV_REFLECT_FORMAT_R32G32_UINT:			*type = ESHType_U32x2;		break;
+		case SPV_REFLECT_FORMAT_R32G32_SINT:			*type = ESHType_I32x2;		break;
+		case SPV_REFLECT_FORMAT_R32G32_SFLOAT:			*type = ESHType_F32x2;		break;
+
+		case SPV_REFLECT_FORMAT_R32G32B32_UINT:			*type = ESHType_U32x3;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SINT:			*type = ESHType_I32x3;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:		*type = ESHType_F32x3;		break;
+
+		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:		*type = ESHType_U32x4;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:		*type = ESHType_I32x4;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:	*type = ESHType_F32x4;		break;
+
+		default:
+			retError(clean, Error_invalidState(
+				0, "SpvReflectFormatToESHType() couldn't map SPV_REFLECT_FORMAT to ESHType"
+			))
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool SpvCalculateStructLength(const SpvReflectTypeDescription *typeDesc, U64 *result, Error *e_rr) {
+
+	U64 len = 0;
+	Bool s_uccess = true;
+
+	for (U64 i = 0; i < typeDesc->member_count; ++i) {
+
+		SpvReflectTypeDescription typeDesck = typeDesc->members[i];
+
+		SpvReflectTypeFlags disallowed =
+			SPV_REFLECT_TYPE_FLAG_EXTERNAL_MASK | SPV_REFLECT_TYPE_FLAG_REF | SPV_REFLECT_TYPE_FLAG_VOID;
+
+		if(typeDesck.type_flags & disallowed)
+			retError(clean, Error_invalidState(
+				0, "SpvCalculateStructLength() can't be called on a struct that contains external data or a ref or void"
+			))
+
+		U64 currLen = 0;
+
+		//Array specifies stride, so that's easy
+
+		if (typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY) {
+
+			U64 arrayLen = typeDesck.traits.array.stride;
+
+			for (U64 j = 0; j < typeDesck.traits.array.dims_count; ++j) {
+
+				U64 prevArrayLen = arrayLen;
+				arrayLen *= typeDesck.traits.array.dims[j];
+
+				if(arrayLen < prevArrayLen)
+					retError(clean, Error_overflow(
+						0, arrayLen, prevArrayLen, "SpvCalculateStructLength() arrayLen overflow"
+					))
+			}
+
+			currLen = arrayLen;
+		}
+
+		//Struct causes recursion
+
+		else if(typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT)
+			gotoIfError3(clean, SpvCalculateStructLength(typeDesck.struct_type_description, &currLen, e_rr))
+
+		//Otherwise, we can easily calculate it via SpvReflectNumericTraits
+
+		else {
+
+			const SpvReflectNumericTraits *numeric = &typeDesck.traits.numeric;
+
+			currLen = numeric->scalar.width >> 3;
+
+			if(typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_MATRIX)
+				currLen = 
+					!(typeDesck.decoration_flags & SPV_REFLECT_DECORATION_ROW_MAJOR) ?
+					numeric->matrix.stride * numeric->matrix.column_count :
+					numeric->matrix.stride * numeric->matrix.row_count;
+			
+			else if(typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_VECTOR)
+				currLen *= numeric->vector.component_count;
+		}
+
+		U64 prevLen = len;
+		len += currLen;
+
+		if(len < prevLen)
+			retError(clean, Error_overflow(
+				0, len, prevLen, "SpvCalculateStructLength() len overflow"
+			))
+	}
+
+clean:
+
+	if(len)
+		*result = len;
+
+	return s_uccess;
+}
 
 Bool Compiler_compile(
 	Compiler comp,
@@ -886,6 +1351,7 @@ Bool Compiler_compile(
 	CharString tempStr = CharString_createNull();
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
 	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
+	SpvReflectShaderModule spvMod{};
 
 	Compiler_defineStrings;
 
@@ -1126,6 +1592,229 @@ Bool Compiler_compile(
 			)
 				retError(clean, Error_invalidState(2, "Compiler_compile() SPIRV returned is invalid"))
 
+			//Reflect binary information, since our own parser doesn't have the info yet.
+			//TODO: Maybe build in verification between SPIRV file and what the parser expects?
+
+			SpvReflectResult res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
+
+			if(res != SPV_REFLECT_RESULT_SUCCESS)
+				retError(clean, Error_invalidState(2, "Compiler_compile() SPIRV returned couldn't be reflected"))
+
+			//Validate capabilities.
+			//This makes sure that we only output a binary that's supported by oiSH and no unknown extensions are used.
+
+			ESHExtension exts = ESHExtension_None;
+
+			for (U64 i = 0; i < spvMod.capability_count; ++i) {
+
+				ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
+				gotoIfError3(clean, SpvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr))
+
+				//Check if extension was known to oiSH
+
+				if(!(ext >> ESHExtension_Count))
+					exts = (ESHExtension) (exts | ext);
+			}
+
+			if((toCompile.extensions & exts) != exts)
+				retError(clean, Error_invalidState(
+					2, "Compiler_compile() SPIRV contained capability that wasn't enabled by oiSH file (use annotations)"
+				))
+
+			//Check entrypoints
+
+			for(U64 i = 0; i < spvMod.entry_point_count; ++i) {
+			
+				SpvReflectEntryPoint entrypoint = spvMod.entry_points[i];
+				Bool searchPayload = false;
+				Bool searchIntersection = false;
+
+				U8 payloadSize = 0, intersectSize = 0;
+
+				U16 localSize[3] = { 0 };
+
+				ESHPipelineStage stage = ESHPipelineStage_Count;
+
+				switch (entrypoint.spirv_execution_model) {
+
+					case SpvExecutionModelIntersectionKHR:
+						searchIntersection = true;
+						searchPayload = true;
+						stage = ESHPipelineStage_IntersectionExt;
+						break;
+
+					case SpvExecutionModelAnyHitKHR:
+						searchPayload = true;
+						stage = ESHPipelineStage_AnyHitExt;
+						break;
+
+					case SpvExecutionModelClosestHitKHR:
+						searchPayload = true;
+						stage = ESHPipelineStage_ClosestHitExt;
+						break;
+
+					case SpvExecutionModelMissKHR:
+						searchPayload = true;
+						stage = ESHPipelineStage_MissExt;
+						break;
+
+					case SpvExecutionModelCallableKHR:
+						searchPayload = true;
+						stage = ESHPipelineStage_CallableExt;
+						break;
+
+					case SpvExecutionModelGLCompute: {
+
+						stage = ESHPipelineStage_Compute;
+						
+						U64 totalGroup = (U64)entrypoint.local_size.x * entrypoint.local_size.y * entrypoint.local_size.z;
+
+						if(!totalGroup)
+							retError(clean, Error_invalidOperation(2, "Compiler_compile() needs group size for compute"))
+
+						if(totalGroup > 512)
+							retError(clean, Error_invalidOperation(2, "Compiler_compile() group count out of bounds (512)"))
+
+						if(U32_max(entrypoint.local_size.x, entrypoint.local_size.y) > 512)
+							retError(clean, Error_invalidOperation(2, "Compiler_compile() group count x or y out of bounds (512)"))
+
+						if(entrypoint.local_size.z > 64)
+							retError(clean, Error_invalidOperation(2, "Compiler_compile() group count z out of bounds (64)"))
+
+						localSize[0] = (U16) entrypoint.local_size.x;
+						localSize[1] = (U16) entrypoint.local_size.y;
+						localSize[2] = (U16) entrypoint.local_size.z;
+						break;
+					}
+
+					case SpvExecutionModelRayGenerationKHR:			stage = ESHPipelineStage_RaygenExt;		break;
+					case SpvExecutionModelVertex:					stage = ESHPipelineStage_Vertex;		break;
+					case SpvExecutionModelFragment:					stage = ESHPipelineStage_Pixel;			break;
+					case SpvExecutionModelTaskEXT:					stage = ESHPipelineStage_TaskExt;		break;
+					case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;	break;
+					case SpvExecutionModelMeshEXT:					stage = ESHPipelineStage_MeshExt;		break;
+					case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;			break;
+					case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;		break;
+				}
+
+				if (searchPayload || searchIntersection)
+					for (U64 j = 0; j < entrypoint.interface_variable_count; ++j) {
+
+						SpvReflectInterfaceVariable var = entrypoint.interface_variables[j];
+
+						Bool isPayload = var.storage_class == SpvStorageClassIncomingRayPayloadKHR;
+						Bool isIntersection = var.storage_class == SpvStorageClassHitAttributeKHR;
+
+						if(!isPayload && !isIntersection)
+							continue;
+
+						//Get struct size
+
+						if(
+							!var.type_description ||
+							var.type_description->op != SpvOpTypeStruct ||
+							var.type_description->type_flags != (SPV_REFLECT_TYPE_FLAG_STRUCT | SPV_REFLECT_TYPE_FLAG_EXTERNAL_BLOCK)
+						)
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() struct payload or intersection isn't a struct"
+							))
+
+						U64 structSize = 0;
+						gotoIfError3(clean, SpvCalculateStructLength(var.type_description, &structSize, e_rr))
+
+						//Validate payload/intersect size
+
+						if (isPayload) {
+
+							if(structSize > 128)
+								retError(clean, Error_outOfBounds(
+									0, structSize, 128, "Compiler_compile() payload out of bounds"
+								))
+
+							payloadSize = (U8) structSize;
+							continue;
+						}
+
+						if(structSize > 32)
+							retError(clean, Error_outOfBounds(
+								0, structSize, 32, "Compiler_compile() intersection attribute out of bounds"
+							))
+
+						intersectSize = (U8) structSize;
+					}
+
+				//TODO: Verify stage
+
+				if(searchPayload && !payloadSize)
+					retError(clean, Error_invalidState(0, "Compiler_compile() payload wasn't found in SPIRV"))
+
+				if(searchIntersection && !intersectSize)
+					retError(clean, Error_invalidState(0, "Compiler_compile() intersection attribute wasn't found in SPIRV"))
+
+				if(stage == ESHPipelineStage_Count)
+					retError(clean, Error_invalidState(
+						0, "Compiler_compile() SPIRV entrypoint couldn't be mapped to ESHPipelineStage"
+					))
+
+				Bool isGfx =
+					!(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) &&
+					stage != ESHPipelineStage_WorkgraphExt &&
+					stage != ESHPipelineStage_Compute;
+
+				//Reflect inputs & outputs
+
+				ESHType inputs[16] = {};
+				ESHType outputs[16] = {};
+
+				if (isGfx) {
+
+					for (U64 j = 0; j < entrypoint.input_variable_count; ++j) {
+
+						const SpvReflectInterfaceVariable *input = entrypoint.input_variables[j];
+
+						if(input->built_in != -1)		//We don't care about builtins
+							continue;
+
+						if(input->location >= 16)
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() input location out of bounds (allowed up to 16)"
+							))
+
+						if(inputs[input->location])
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() input location is already defined"
+							))
+
+						gotoIfError3(clean, SpvReflectFormatToESHType(input->format, &inputs[input->location], e_rr))
+					}
+
+					for (U64 j = 0; j < entrypoint.output_variable_count; ++j) {
+
+						const SpvReflectInterfaceVariable *output = entrypoint.output_variables[j];
+
+						if(output->built_in != -1)		//We don't care about builtins
+							continue;
+							
+						if(output->location >= 16)
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() output location out of bounds (allowed up to 16)"
+							))
+
+						if(outputs[output->location])
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() output location is already defined"
+							))
+
+						gotoIfError3(clean, SpvReflectFormatToESHType(output->format, &outputs[output->location], e_rr))
+					}
+				}
+
+				//TODO: Finalize entrypoint
+				//TODO: Store payloadSize, intersectionSize, localSize, inputs, outputs
+			}
+
+			//Strip debug and optimize
+
 			if(!settings.debug) {
 
 				optimizer.SetMessageConsumer(
@@ -1185,6 +1874,8 @@ clean:
 
 	if(error)
 		error->Release();
+
+	spvReflectDestroyShaderModule(&spvMod);
 
 	Compiler_freeStrings;
 	CharString_free(&tempStr, alloc);

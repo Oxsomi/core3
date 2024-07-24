@@ -448,11 +448,16 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 		entry->stage == ESHPipelineStage_AnyHitExt ||
 		entry->stage == ESHPipelineStage_IntersectionExt
 	) {
-		//TODO: When it works
-		//if(!entry->payloadSize)
-		//	retError(clean, Error_invalidOperation(
-		//		2, "SHFile_addEntrypoint() payloadSize is required for hit/intersection shaders"
-		//	))
+
+		if(!entry->payloadSize)
+			retError(clean, Error_invalidOperation(
+				2, "SHFile_addEntrypoint() payloadSize is required for hit/intersection shaders"
+			))
+
+		if(entry->payloadSize > 128)
+			retError(clean, Error_outOfBounds(
+				0, entry->payloadSize, 128, "SHFile_addEntrypoint() payloadSize must be <=128"
+			))
 	}
 
 	else if(entry->payloadSize)
@@ -465,6 +470,11 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 		if(entry->stage == ESHPipelineStage_IntersectionExt)
 			retError(clean, Error_invalidOperation(
 				2, "SHFile_addEntrypoint() intersectionSize is required for intersection shader"
+			))
+
+		if(entry->intersectionSize > 32)
+			retError(clean, Error_outOfBounds(
+				0, entry->intersectionSize, 32, "SHFile_addEntrypoint() intersectionSize must be <=32"
 			))
 	}
 

@@ -253,11 +253,82 @@ If this is not the case, then the compiler can decide how to combine entrypoints
 
 All includes must have reproducible hashes (regardless of OS) as noted in the CRC32C section. Timestamps aren't included, as this would not make binaries reproducible. Which might generate issues with source control if someone decided to check these files in. The includes should also be reproducible even from other PCs. This means that the include names include relative paths (relative to the source file) rather than absolute. This way, recompiling the same binary will always give the same result, even with different check out directories and different time. For consistency, the include paths should also be sorted (ascending); this will ensure reproducibility.
 
+## Language spec
+
+The following define the requirements of binaries embedded in oiSH files. 
+
+- All capabilities have to match the extensions known by oiSH, otherwise it is considered to be an incompatible binary and undefined behavior is imminent if produced by a non standard oiSH writer. As an example; if RayReorder is used in a SPIRV shader, it must be present as an extension for that binary too.
+- Payload + intersection size must stay within <=128 and <=32 bytes respectively.
+
+### SPIRV spec
+
+- Main entrypoint should be called "main" unless it's compiled as a lib file (raytracing, workgraphs, etc.).
+- Capabilities:
+  - Always supported:
+    - Shader
+    - Matrix
+    - AtomicStorage
+    - UniformTexelBufferArrayDynamicIndexing
+    - StorageTexelBufferArrayDynamicIndexing
+    - UniformBufferArrayNonUniformIndexing
+    - SampledImageArrayNonUniformIndexing
+    - StorageBufferArrayNonUniformIndexing
+    - StorageImageArrayNonUniformIndexing
+    - UniformTexelBufferArrayNonUniformIndexing
+    - StorageTexelBufferArrayNonUniformIndexing
+    - UniformBufferArrayDynamicIndexing
+    - SampledImageArrayDynamicIndexing
+    - StorageBufferArrayDynamicIndexing
+    - StorageImageArrayDynamicIndexing
+    - InputAttachment
+    - MinLod
+    - ShaderNonUniform
+    - RuntimeDescriptorArray
+    - GroupNonUniform
+    - GroupNonUniformVote or SubgroupVoteKHR
+    - GroupNonUniformBallot or SubgroupBallotKHR
+    - AtomicStorageOps
+    - StorageImageExtendedFormats
+    - ImageQuery
+    - DerivativeControl
+  - Anything to do with kernels (OpenCL) is unsupported.
+  - Int64Atomics as I64 | AtomicI64.
+  - Int64 as I64.
+  - Float64 as F64.
+  - Float16 and Int16 as 16BitTypes.
+    - Also:
+    - StorageBuffer16BitAccess
+    - StorageUniform16
+    - StoragePushConstant16
+    - StorageInputOutput16
+  - Multiview:
+    - MultiViewport
+    - ShaderLayer
+    - ShaderViewportIndex
+    - MultiView
+  - ShaderInvocationReorderNV as RayReorder.
+  - RayTracingMotionBlurNV as RayMotionBlur.
+  - RayQueryKHR as RayQuery.
+  - RayTracingOpacityMicromapEXT as RayMicromapOpacity.
+  - AtomicFloat32AddEXT or AtomicFloat32MinMaxEXT as AtomicF32.
+  - AtomicFloat64AddEXT or AtomicFloat64MinMaxEXT as AtomicF64.
+  - ComputeDerivativeGroupLinearNV as ComputeDeriv.
+  - GroupNonUniformArithmetic as SubgroupArithmetic.
+  - GroupNonUniformShuffle as SubgroupShuffle.
+  - RayTracingKHR required if Raytracing shader stage.
+  - Tessellation required if Hull or Domain shader stage.
+  - Geometry required if Geometry shader stage.
+  - *Other capabilities are unsupported*.
+
+### TODO: DXIL spec
+
+- Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. To be compatible with SPIRV.
+
 ## Changelog
 
 0.1: Old ocore1 specification. Represented multiple shaders and had too much reflection information that is now irrelevant.
 
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
 
-1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking.
+1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets).
 

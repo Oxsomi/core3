@@ -151,8 +151,6 @@ typedef struct DxCommandBufferState {
 
 } DxCommandBufferState;
 
-DxCommandAllocator *VkGraphicsDevice_getCommandAllocator(DxGraphicsDevice *device, U32 queueId, U64 threadId, U8 backBufferId);
-
 Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer);
 
 #ifdef __cplusplus
