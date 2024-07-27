@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2024.07.02"
+	version = "2024.07.26"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -111,6 +111,9 @@ class dxc(ConanFile):
 			copy(self, "*.h", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv_tools")
 			copy(self, "*.hpp", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv_tools")
 
+			copy(self, "*.h", "../../DirectXShaderCompiler/external/DirectX-Headers/include", "../../../p/include")
+			copy(self, "*.hpp", "../../DirectXShaderCompiler/external/DirectX-Headers/include", "../../../p/include")
+
 			# Libs
 
 			copy(self, "*.a", "lib", "../../../p/lib")
@@ -146,6 +149,9 @@ class dxc(ConanFile):
 
 			copy(self, "*.h", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv_tools")
 			copy(self, "*.hpp", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv_tools")
+
+			copy(self, "*.h", "../DirectXShaderCompiler/external/DirectX-Headers/include", "../../p/include")
+			copy(self, "*.hpp", "../DirectXShaderCompiler/external/DirectX-Headers/include", "../../p/include")
 
 	def package_info(self):
 

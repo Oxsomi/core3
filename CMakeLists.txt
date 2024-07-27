@@ -720,8 +720,8 @@ if(EnableShaderCompiler)
 
 	find_package(dxc REQUIRED)
 
-	set(SPIRV_REFLECT_EXECUTABLE OFF)
-	set(SPIRV_REFLECT_STATIC_LIB ON)
+	option(SPIRV_REFLECT_EXECUTABLE     "Build spirv-reflect executable" OFF)
+	option(SPIRV_REFLECT_STATIC_LIB     "Build a SPIRV-Reflect static library" ON)
 	add_subdirectory(external/SPIRV-Reflect)
 
 	# Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.

@@ -41,6 +41,7 @@
 #include "dxcompiler/dxcapi.h"
 #include "spirv_tools/optimizer.hpp"
 #include "SPIRV-Reflect/spirv_reflect.h"
+#include "directx/d3d12shader.h"
 #include <exception>
 
 const C8 *resources =
@@ -1352,6 +1353,8 @@ Bool Compiler_compile(
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
 	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
 	SpvReflectShaderModule spvMod{};
+	ID3D12ShaderReflection *dxilRefl{};
+	ID3D12LibraryReflection1 *dxilReflLib{};
 
 	Compiler_defineStrings;
 
@@ -1556,6 +1559,82 @@ Bool Compiler_compile(
 
 		//Prevent dxil.dll load, sign it ourselves :)
 		if (settings.outputType == ESHBinaryType_DXIL) {
+		
+			resultBlob->Release();
+			resultBlob = NULL;
+			hr = dxcResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&resultBlob), NULL);
+
+			if (FAILED(hr) || !resultBlob)
+				retError(clean, Error_invalidState(0, "Compiler_compile() fetch reflection failed"))
+
+			//Convert to reflection data
+
+			DxcBuffer reflectionData = DxcBuffer{
+				.Ptr = resultBlob->GetBufferPointer(),
+				.Size = resultBlob->GetBufferSize(),
+				.Encoding = 0
+			};
+
+			Bool isLib = !CharString_length(toCompile.entrypoint);
+
+			if(isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilReflLib))))
+				retError(clean, Error_invalidState(0, "Compiler_compile() lib reflection is invalid"))
+
+			else if (!isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilRefl))))
+				retError(clean, Error_invalidState(0, "Compiler_compile() shader reflection is invalid"))
+
+			//TODO: Check capabilities
+
+			//TODO: Get input/output
+
+			//Payload / intersection data reflection
+
+			if (isLib) {
+				
+				D3D12_LIBRARY_DESC lib = D3D12_LIBRARY_DESC{};
+				if(FAILED(dxilReflLib->GetDesc(&lib)))
+					retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get D3D12_LIBRARY_DESC"))
+
+				//TODO: Capabilities in lib.Flags
+
+				for(U64 i = 0; i < lib.FunctionCount; ++i) {
+
+					ID3D12FunctionReflection1 *funcRefl = NULL;
+
+					if (i >> 31 || (funcRefl = dxilReflLib->GetFunctionByIndex1((INT)i)) == NULL)
+						retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get ID3D12FunctionReflection"))
+
+					D3D12_FUNCTION_DESC1 funcDesc = D3D12_FUNCTION_DESC1{};
+					if(FAILED(funcRefl->GetDesc1(&funcDesc)))
+						retError(clean, Error_invalidState(
+								0, "Compiler_compile() couldn't get D3D12_FUNCTION_DESC1"
+						))
+
+					U8 attributeSize = 0;
+					U8 payloadSize = 0;
+
+					if (
+						funcDesc.ShaderType > D3D12_SHVER_RAY_GENERATION_SHADER &&
+						funcDesc.ShaderType <= D3D12_SHVER_CALLABLE_SHADER
+					) {
+						
+						if(funcDesc.RaytracingShader.ParamPayloadSize > 128)
+							retError(clean, Error_outOfBounds(
+								0, funcDesc.RaytracingShader.ParamPayloadSize, 128, "Compiler_compile() payload out of bounds"
+							))
+
+						payloadSize = (U8) funcDesc.RaytracingShader.ParamPayloadSize;
+
+						if(funcDesc.RaytracingShader.AttributeSize > 32)
+							retError(clean, Error_outOfBounds(
+								0, funcDesc.RaytracingShader.AttributeSize, 32,
+								"Compiler_compile() attribute out of bounds"
+							))
+
+						attributeSize = (U8) funcDesc.RaytracingShader.AttributeSize;
+					}
+				}
+			}
 
 			//Ensure we have a valid DXIL file
 
@@ -1874,6 +1953,12 @@ clean:
 
 	if(error)
 		error->Release();
+
+	if(dxilRefl)
+		dxilRefl->Release();
+
+	if(dxilReflLib)
+		dxilReflLib->Release();
 
 	spvReflectDestroyShaderModule(&spvMod);
 
