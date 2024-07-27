@@ -1583,10 +1583,6 @@ Bool Compiler_compile(
 			else if (!isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilRefl))))
 				retError(clean, Error_invalidState(0, "Compiler_compile() shader reflection is invalid"))
 
-			//TODO: Check capabilities
-
-			//TODO: Get input/output
-
 			//Payload / intersection data reflection
 
 			if (isLib) {
@@ -1632,6 +1628,107 @@ Bool Compiler_compile(
 							))
 
 						attributeSize = (U8) funcDesc.RaytracingShader.AttributeSize;
+					}
+				}
+			}
+
+			//Get input/output
+
+			else {
+
+				ESHType inputs[16] = {};
+				ESHType outputs[16] = {};
+				
+				D3D12_SHADER_DESC refl = D3D12_SHADER_DESC{};
+				if(FAILED(dxilRefl->GetDesc(&refl)))
+					retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get D3D12_LIBRARY_DESC"))
+
+				//TODO: Check capabilities
+
+				Bool isPixelShader = toCompile.stageType == ESHPipelineStage_Pixel;
+
+				for(U64 j = 0; j < (U64)refl.OutputParameters + refl.InputParameters; ++j) {
+
+					Bool isOutput = j < refl.OutputParameters;
+
+					D3D12_SIGNATURE_PARAMETER_DESC signature{};
+					if(FAILED(
+						isOutput ?
+						dxilRefl->GetOutputParameterDesc((UINT) j, &signature) :
+						dxilRefl->GetInputParameterDesc((UINT)(j - refl.OutputParameters), &signature)
+					))
+						retError(clean, Error_invalidState(
+							0, "Compiler_compile() couldn't get output D3D12_SIGNATURE_PARAMETER_DESC"
+						))
+
+					if(!isPixelShader && signature.SystemValueType != D3D_NAME_UNDEFINED)
+						continue;
+
+					if(isPixelShader && signature.SystemValueType != D3D_NAME_TARGET)
+						continue;
+
+					if (!isPixelShader && !CharString_equalsStringInsensitive(
+						CharString_createRefCStrConst(signature.SemanticName),
+						CharString_createRefCStrConst("TEXCOORD")
+					))
+						retError(clean, Error_invalidState(
+							0, "Compiler_compile() semantics should all be TEXCOORD for compatibility with oiSH"
+						))
+
+					if(signature.MinPrecision || signature.Stream)
+						retError(clean, Error_invalidState(
+							0, "Compiler_compile() invalid signature parameter; MinPrecision or Stream"
+						))
+
+					if(signature.SemanticIndex >= 16)
+						retError(clean, Error_invalidState(
+							0, "Compiler_compile() input location out of bounds (allowed up to 16)"
+						))
+
+					ESHPrimitive prim = ESHPrimitive_Invalid;
+
+					switch (signature.ComponentType) {
+						case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESHPrimitive_Float;		break;
+						case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESHPrimitive_UInt;		break;
+						case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESHPrimitive_Int;		break;
+						default:
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() invalid component type; expected one of F32, U32 or I32"
+							))
+					}
+
+					ESHVector vec = ESHVector_N1;
+
+					switch (signature.Mask) {
+						case  1:	vec = ESHVector_N1;		break;
+						case  3:	vec = ESHVector_N2;		break;
+						case  7:	vec = ESHVector_N3;		break;
+						case 15:	vec = ESHVector_N4;		break;
+						default:
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() invalid signature mask; expected one of 1,3,7,15"
+							))
+					}
+
+					ESHType type = (ESHType) ESHType_create(prim, vec);
+
+					if (isOutput) {
+
+						if(outputs[signature.SemanticIndex])
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() output location is already defined"
+							))
+
+						outputs[signature.SemanticIndex] = type;
+					}
+					else {
+
+						if(inputs[signature.SemanticIndex])
+							retError(clean, Error_invalidState(
+								0, "Compiler_compile() input location is already defined"
+							))
+
+						inputs[signature.SemanticIndex] = type;
 					}
 				}
 			}
