@@ -85,6 +85,26 @@ const C8 *SHEntry_stageName(SHEntry entry) {
 }
 
 const C8 *ESHType_names[] = {
+
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+
+	"", "", "", "",
+	"F16",
+	"F16x2",
+	"F16x3",
+	"F16x4",
+	"I16",
+	"I16x2",
+	"I16x3",
+	"I16x4",
+	"U16",
+	"U16x2",
+	"U16x3",
+	"U16x4",
+
 	"", "", "", "",
 	"F32",
 	"F32x2",
@@ -97,11 +117,37 @@ const C8 *ESHType_names[] = {
 	"U32",
 	"U32x2",
 	"U32x3",
-	"U32x4"
+	"U32x4",
+
+	"", "", "", "",
+	"F64",
+	"F64x2",
+	"F64x3",
+	"F64x4",
+	"I64",
+	"I64x2",
+	"I64x3",
+	"I64x4",
+	"U64",
+	"U64x2",
+	"U64x3",
+	"U64x4"
 };
 
+ESHVector ESHType_getVector(ESHType type) {
+	return type & 3;
+}
+
+ESHPrimitive ESHType_getPrimitive(ESHType type) {
+	return (type >> 2) & 3;
+}
+
+ESHStride ESHType_getStride(ESHType type) {
+	return (type >> 4) & 3;
+}
+
 const C8 *ESHType_name(ESHType type) {
-	return ESHType_names[type & 0xF];
+	return ESHType_names[type & 0x3F];
 }
 
 const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage) {
@@ -483,20 +529,26 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 			2, "SHFile_addEntrypoint() intersectionSize is only required for intersection shader"
 		))
 
-	if (pipelineType != ESHPipelineType_Graphics && (entry->outputsU64 | entry->inputsU64))
+	if (
+		pipelineType != ESHPipelineType_Graphics &&
+		(entry->outputsU64[0] | entry->outputsU64[1] | entry->inputsU64[0] | entry->inputsU64[1])
+	)
 		retError(clean, Error_invalidOperation(
 			3, "SHFile_addEntrypoint() outputsU64 and inputsU64 are only for graphics shaders"
 		))
 
 	//Check validity of inputs and outputs
 
-	if(entry->outputsU64 | entry->inputsU64)
+	if(entry->outputsU64[0] | entry->outputsU64[1] | entry->inputsU64[0] | entry->inputsU64[1])
 		for (U64 i = 0; i < 16; ++i) {
 
-			U8 vout = (entry->outputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
-			U8 vin = (entry->inputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
+			U8 vout = entry->outputs[i];
+			U8 vin = entry->inputs[i];
 
-			if((vout && vout < ESHType_F32) || (vin && vin < ESHType_F32))
+			if(
+				(vout && (ESHType_getPrimitive(vout) == ESHPrimitive_Invalid || ESHType_getStride(vout) == ESHStride_X8)) ||
+				(vin  && (ESHType_getPrimitive(vin)  == ESHPrimitive_Invalid || ESHType_getStride(vin)  == ESHStride_X8))
+			)
 				retError(clean, Error_invalidOperation(
 					3, "SHFile_addEntrypoint() outputs or inputs contains an invalid parameter"
 				))
@@ -785,11 +837,11 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 				//We align to 2 elements since we store U4s. So we store 4 bits too much, but who cares.
 
-				for(; inputs < 8; ++inputs)
+				for(; inputs < 16; ++inputs)
 					if(!entry.inputs[inputs])
 						break;
 
-				for(; outputs < 8; ++outputs)
+				for(; outputs < 16; ++outputs)
 					if(!entry.outputs[outputs])
 						break;
 
@@ -980,9 +1032,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				U8 *begin = headerIt;
 				headerIt += sizeof(U8) * 2;		//U8 inputsAvail, outputsAvail;
 
-				//We align to 2 elements since we store U4s. So we store 4 bits too much, but who cares.
-
-				for(; inputs < 8; ++inputs) {
+				for(; inputs < 16; ++inputs) {
 
 					U8 input = entry.inputs[inputs];
 
@@ -993,7 +1043,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 					++headerIt;
 				}
 
-				for(; outputs < 8; ++outputs) {
+				for(; outputs < 16; ++outputs) {
 
 					U8 output = entry.outputs[inputs];
 
@@ -1003,19 +1053,6 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 					*headerIt = output;
 					++headerIt;
 				}
-
-				//Find real inputs/outputs
-
-				inputs <<= 1;
-				outputs <<= 1;
-
-				if(inputs < 0x10)
-					inputs  |= entry.inputs [inputs  >> 1] >= 0x10;
-
-				if(outputs < 0x10)
-					outputs |= entry.outputs[outputs >> 1] >= 0x10;
-
-				//Output packed
 
 				begin[0] = inputs;
 				begin[1] = outputs;
@@ -1382,7 +1419,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 			default: {
 
-				//U8 availableValues: U4 inputsAvail, outputsAvail
+				//U8 inputsAvail, outputsAvail
 
 				if(nextMem + 2 > file.ptr + Buffer_length(file))
 					retError(clean, Error_outOfBounds(
@@ -1402,8 +1439,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 				//Unpack U8[inputs], U8[outputs]
 
-				U8 inputBytes = ((inputs + 1) >> 1);
-				U8 outputBytes = ((outputs + 1) >> 1);
+				U8 inputBytes = inputs;
+				U8 outputBytes = outputs;
 
 				nextMemTemp = nextMem;
 				nextMem += inputBytes + outputBytes;
@@ -1418,14 +1455,6 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 				for(U8 j = 0; j < outputBytes; ++j)
 					entry.outputs[j] = nextMemTemp[inputBytes + j];
-
-				//Clear upper bits if misaligned
-
-				if(inputs & 1)
-					entry.inputs[inputs >> 1] &= 0xF;
-
-				if(outputs & 1)
-					entry.outputs[outputs >> 1] &= 0xF;
 
 				break;
 			}
@@ -1685,13 +1714,13 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 
 		default:
 
-			if (shEntry.inputsU64) {
+			if (shEntry.inputsU64[0] || shEntry.inputsU64[1]) {
 
 				Log_debugLn(alloc, "\tInputs:");
 
 				for (U8 i = 0; i < 16; ++i) {
 
-					ESHType type = (ESHType)(shEntry.inputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
+					ESHType type = (ESHType)shEntry.inputs[i];
 
 					if(!type)
 						continue;
@@ -1700,13 +1729,13 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 				}
 			}
 
-			if (shEntry.outputsU64) {
+			if (shEntry.outputsU64[0] | shEntry.outputsU64[1]) {
 
 				Log_debugLn(alloc, "\tOutputs:");
 
 				for (U8 i = 0; i < 16; ++i) {
 
-					ESHType type = (ESHType)(shEntry.outputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
+					ESHType type = (ESHType)shEntry.outputs[i];
 
 					if(!type)
 						continue;

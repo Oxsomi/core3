@@ -145,28 +145,70 @@ typedef enum ESHVector {
 	ESHVector_N4
 } ESHVector;
 
-#define ESHType_create(prim, vec) (((prim) << 2) | (vec))
+typedef enum ESHStride {
+	ESHStride_X8,			//This one is currently unused, but might be available in the future
+	ESHStride_X16,
+	ESHStride_X32,
+	ESHStride_X64
+} ESHStride;
+
+#define ESHType_create(stride, prim, vec) (((stride) << 4) | ((prim) << 2) | (vec))
 
 typedef enum ESHType {
 
-	ESHType_F32		= ESHType_create(ESHPrimitive_Float, ESHVector_N1),
-	ESHType_F32x2	= ESHType_create(ESHPrimitive_Float, ESHVector_N2),
-	ESHType_F32x3	= ESHType_create(ESHPrimitive_Float, ESHVector_N3),
-	ESHType_F32x4	= ESHType_create(ESHPrimitive_Float, ESHVector_N4),
+	ESHType_F16		= ESHType_create(ESHStride_X16, ESHPrimitive_Float, ESHVector_N1),
+	ESHType_F16x2	= ESHType_create(ESHStride_X16, ESHPrimitive_Float, ESHVector_N2),
+	ESHType_F16x3	= ESHType_create(ESHStride_X16, ESHPrimitive_Float, ESHVector_N3),
+	ESHType_F16x4	= ESHType_create(ESHStride_X16, ESHPrimitive_Float, ESHVector_N4),
 
-	ESHType_I32		= ESHType_create(ESHPrimitive_Int, ESHVector_N1),
-	ESHType_I32x2	= ESHType_create(ESHPrimitive_Int, ESHVector_N2),
-	ESHType_I32x3	= ESHType_create(ESHPrimitive_Int, ESHVector_N3),
-	ESHType_I32x4	= ESHType_create(ESHPrimitive_Int, ESHVector_N4),
+	ESHType_I16		= ESHType_create(ESHStride_X16, ESHPrimitive_Int,   ESHVector_N1),
+	ESHType_I16x2	= ESHType_create(ESHStride_X16, ESHPrimitive_Int,   ESHVector_N2),
+	ESHType_I16x3	= ESHType_create(ESHStride_X16, ESHPrimitive_Int,   ESHVector_N3),
+	ESHType_I16x4	= ESHType_create(ESHStride_X16, ESHPrimitive_Int,   ESHVector_N4),
 
-	ESHType_U32		= ESHType_create(ESHPrimitive_UInt, ESHVector_N1),
-	ESHType_U32x2	= ESHType_create(ESHPrimitive_UInt, ESHVector_N2),
-	ESHType_U32x3	= ESHType_create(ESHPrimitive_UInt, ESHVector_N3),
-	ESHType_U32x4	= ESHType_create(ESHPrimitive_UInt, ESHVector_N4)
+	ESHType_U16		= ESHType_create(ESHStride_X16, ESHPrimitive_UInt,  ESHVector_N1),
+	ESHType_U16x2	= ESHType_create(ESHStride_X16, ESHPrimitive_UInt,  ESHVector_N2),
+	ESHType_U16x3	= ESHType_create(ESHStride_X16, ESHPrimitive_UInt,  ESHVector_N3),
+	ESHType_U16x4	= ESHType_create(ESHStride_X16, ESHPrimitive_UInt,  ESHVector_N4),
+
+	ESHType_F32		= ESHType_create(ESHStride_X32, ESHPrimitive_Float, ESHVector_N1),
+	ESHType_F32x2	= ESHType_create(ESHStride_X32, ESHPrimitive_Float, ESHVector_N2),
+	ESHType_F32x3	= ESHType_create(ESHStride_X32, ESHPrimitive_Float, ESHVector_N3),
+	ESHType_F32x4	= ESHType_create(ESHStride_X32, ESHPrimitive_Float, ESHVector_N4),
+
+	ESHType_I32		= ESHType_create(ESHStride_X32, ESHPrimitive_Int,   ESHVector_N1),
+	ESHType_I32x2	= ESHType_create(ESHStride_X32, ESHPrimitive_Int,   ESHVector_N2),
+	ESHType_I32x3	= ESHType_create(ESHStride_X32, ESHPrimitive_Int,   ESHVector_N3),
+	ESHType_I32x4	= ESHType_create(ESHStride_X32, ESHPrimitive_Int,   ESHVector_N4),
+
+	ESHType_U32		= ESHType_create(ESHStride_X32, ESHPrimitive_UInt,  ESHVector_N1),
+	ESHType_U32x2	= ESHType_create(ESHStride_X32, ESHPrimitive_UInt,  ESHVector_N2),
+	ESHType_U32x3	= ESHType_create(ESHStride_X32, ESHPrimitive_UInt,  ESHVector_N3),
+	ESHType_U32x4	= ESHType_create(ESHStride_X32, ESHPrimitive_UInt,  ESHVector_N4),
+
+	ESHType_F64		= ESHType_create(ESHStride_X64, ESHPrimitive_Float, ESHVector_N1),
+	ESHType_F64x2	= ESHType_create(ESHStride_X64, ESHPrimitive_Float, ESHVector_N2),
+	ESHType_F64x3	= ESHType_create(ESHStride_X64, ESHPrimitive_Float, ESHVector_N3),
+	ESHType_F64x4	= ESHType_create(ESHStride_X64, ESHPrimitive_Float, ESHVector_N4),
+
+	ESHType_I64		= ESHType_create(ESHStride_X64, ESHPrimitive_Int,   ESHVector_N1),
+	ESHType_I64x2	= ESHType_create(ESHStride_X64, ESHPrimitive_Int,   ESHVector_N2),
+	ESHType_I64x3	= ESHType_create(ESHStride_X64, ESHPrimitive_Int,   ESHVector_N3),
+	ESHType_I64x4	= ESHType_create(ESHStride_X64, ESHPrimitive_Int,   ESHVector_N4),
+
+	ESHType_U64		= ESHType_create(ESHStride_X64, ESHPrimitive_UInt,  ESHVector_N1),
+	ESHType_U64x2	= ESHType_create(ESHStride_X64, ESHPrimitive_UInt,  ESHVector_N2),
+	ESHType_U64x3	= ESHType_create(ESHStride_X64, ESHPrimitive_UInt,  ESHVector_N3),
+	ESHType_U64x4	= ESHType_create(ESHStride_X64, ESHPrimitive_UInt,  ESHVector_N4)
 
 } ESHType;
 
+ESHStride ESHType_getStride(ESHType type);
+ESHVector ESHType_getVector(ESHType type);
+ESHPrimitive ESHType_getPrimitive(ESHType type);
+
 const C8 *ESHType_name(ESHType type);
+
 const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage);
 
 //Deserialized SHEntry (in oiSH file)
@@ -192,13 +234,13 @@ typedef struct SHEntry {
 	//Verification for linking and PSO compatibility (graphics only)
 
 	union {
-		U8 inputs[8];		//ESHType[2] per U8
-		U64 inputsU64;
+		U8 inputs[16];		//ESHType
+		U64 inputsU64[2];
 	};
 
 	union {
-		U8 outputs[8];		//ESHType[2] per U8
-		U64 outputsU64;
+		U8 outputs[16];		//ESHType
+		U64 outputsU64[2];
 	};
 
 } SHEntry;

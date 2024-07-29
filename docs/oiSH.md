@@ -221,9 +221,9 @@ SHFile {
     
     		U8 inputsAvail, outputsAvail;
     
-		    //Each element: [ ESHPrimitive, ESHVector ]
-    		U4 inputs[inputsAvail align 2];
-    		U4 outputs[outputsAvail align 2];
+		    //Each element: [ ESHStride, ESHPrimitive, ESHVector ]
+    		U8 inputs[inputsAvail];
+    		U8 outputs[outputsAvail];
 
     	else if intersection:
     	    U8 intersectionSize;

@@ -1228,6 +1228,22 @@ Bool SpvReflectFormatToESHType(SpvReflectFormat format, ESHType *type, Error *e_
 
 	switch (format) {
 
+		case SPV_REFLECT_FORMAT_R16_UINT:				*type = ESHType_U16;		break;
+		case SPV_REFLECT_FORMAT_R16_SINT:				*type = ESHType_I16;		break;
+		case SPV_REFLECT_FORMAT_R16_SFLOAT:				*type = ESHType_F16;		break;
+
+		case SPV_REFLECT_FORMAT_R16G16_UINT:			*type = ESHType_U16x2;		break;
+		case SPV_REFLECT_FORMAT_R16G16_SINT:			*type = ESHType_I16x2;		break;
+		case SPV_REFLECT_FORMAT_R16G16_SFLOAT:			*type = ESHType_F16x2;		break;
+
+		case SPV_REFLECT_FORMAT_R16G16B16_UINT:			*type = ESHType_U16x3;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SINT:			*type = ESHType_I16x3;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SFLOAT:		*type = ESHType_F16x3;		break;
+
+		case SPV_REFLECT_FORMAT_R16G16B16A16_UINT:		*type = ESHType_U16x4;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SINT:		*type = ESHType_I16x4;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SFLOAT:	*type = ESHType_F16x4;		break;
+
 		case SPV_REFLECT_FORMAT_R32_UINT:				*type = ESHType_U32;		break;
 		case SPV_REFLECT_FORMAT_R32_SINT:				*type = ESHType_I32;		break;
 		case SPV_REFLECT_FORMAT_R32_SFLOAT:				*type = ESHType_F32;		break;
@@ -1243,6 +1259,22 @@ Bool SpvReflectFormatToESHType(SpvReflectFormat format, ESHType *type, Error *e_
 		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:		*type = ESHType_U32x4;		break;
 		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:		*type = ESHType_I32x4;		break;
 		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:	*type = ESHType_F32x4;		break;
+
+		case SPV_REFLECT_FORMAT_R64_UINT:				*type = ESHType_U64;		break;
+		case SPV_REFLECT_FORMAT_R64_SINT:				*type = ESHType_I64;		break;
+		case SPV_REFLECT_FORMAT_R64_SFLOAT:				*type = ESHType_F64;		break;
+
+		case SPV_REFLECT_FORMAT_R64G64_UINT:			*type = ESHType_U64x2;		break;
+		case SPV_REFLECT_FORMAT_R64G64_SINT:			*type = ESHType_I64x2;		break;
+		case SPV_REFLECT_FORMAT_R64G64_SFLOAT:			*type = ESHType_F64x2;		break;
+
+		case SPV_REFLECT_FORMAT_R64G64B64_UINT:			*type = ESHType_U64x3;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SINT:			*type = ESHType_I64x3;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SFLOAT:		*type = ESHType_F64x3;		break;
+
+		case SPV_REFLECT_FORMAT_R64G64B64A64_UINT:		*type = ESHType_U64x4;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SINT:		*type = ESHType_I64x4;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT:	*type = ESHType_F64x4;		break;
 
 		default:
 			retError(clean, Error_invalidState(
@@ -1686,11 +1718,21 @@ Bool Compiler_compile(
 						))
 
 					ESHPrimitive prim = ESHPrimitive_Invalid;
+					ESHStride stride = ESHStride_X8;
 
 					switch (signature.ComponentType) {
-						case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESHPrimitive_Float;		break;
-						case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESHPrimitive_UInt;		break;
-						case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESHPrimitive_Int;		break;
+
+						case  D3D_REGISTER_COMPONENT_FLOAT16:	prim = ESHPrimitive_Float;	stride = ESHStride_X16;		break;
+						case  D3D_REGISTER_COMPONENT_UINT16:	prim = ESHPrimitive_UInt;	stride = ESHStride_X16;		break;
+						case  D3D_REGISTER_COMPONENT_SINT16:	prim = ESHPrimitive_Int;	stride = ESHStride_X16;		break;
+
+						case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESHPrimitive_Float;	stride = ESHStride_X32;		break;
+						case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESHPrimitive_UInt;	stride = ESHStride_X32;		break;
+						case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESHPrimitive_Int;	stride = ESHStride_X32;		break;
+
+						case  D3D_REGISTER_COMPONENT_FLOAT64:	prim = ESHPrimitive_Float;	stride = ESHStride_X64;		break;
+						case  D3D_REGISTER_COMPONENT_UINT64:	prim = ESHPrimitive_UInt;	stride = ESHStride_X64;		break;
+						case  D3D_REGISTER_COMPONENT_SINT64:	prim = ESHPrimitive_Int;	stride = ESHStride_X64;		break;
 						default:
 							retError(clean, Error_invalidState(
 								0, "Compiler_compile() invalid component type; expected one of F32, U32 or I32"
@@ -1710,7 +1752,7 @@ Bool Compiler_compile(
 							))
 					}
 
-					ESHType type = (ESHType) ESHType_create(prim, vec);
+					ESHType type = (ESHType) ESHType_create(stride, prim, vec);
 
 					if (isOutput) {
 
@@ -1731,6 +1773,11 @@ Bool Compiler_compile(
 						inputs[signature.SemanticIndex] = type;
 					}
 				}
+
+				//TODO: Finalize entrypoint
+				//TODO: Store payloadSize, intersectionSize, localSize, inputs, outputs
+
+				Log_debugLnx("Finished reflecting");
 			}
 
 			//Ensure we have a valid DXIL file
@@ -1984,6 +2031,8 @@ Bool Compiler_compile(
 						gotoIfError3(clean, SpvReflectFormatToESHType(output->format, &outputs[output->location], e_rr))
 					}
 				}
+
+				Log_debugLnx("Finished reflecting");
 
 				//TODO: Finalize entrypoint
 				//TODO: Store payloadSize, intersectionSize, localSize, inputs, outputs
