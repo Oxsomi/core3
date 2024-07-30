@@ -80,7 +80,9 @@ typedef enum ESHExtension {
 
 	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
 
-	ESHExtension_Count						= 16
+	ESHExtension_MeshTaskTexDeriv			= 1 << 16,
+
+	ESHExtension_Count						= 17
 
 } ESHExtension;
 

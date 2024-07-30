@@ -919,9 +919,6 @@ Bool SpvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_SubgroupShuffle;
 			break;
 
-		case SpvCapabilityMultiViewport:
-		case SpvCapabilityShaderLayer:
-		case SpvCapabilityShaderViewportIndex:
 		case SpvCapabilityMultiView:
 			ext = ESHExtension_Multiview;
 			break;
@@ -976,8 +973,6 @@ Bool SpvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityGroupNonUniformBallot:
 		case SpvCapabilitySubgroupVoteKHR:
 		case SpvCapabilitySubgroupBallotKHR:
-
-		case SpvCapabilityAtomicStorageOps:
 
 		case SpvCapabilityStorageImageExtendedFormats:
 		case SpvCapabilityImageQuery:
@@ -1185,13 +1180,10 @@ Bool SpvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityClipDistance:
 		case SpvCapabilityCullDistance:
 
+		case SpvCapabilityAtomicStorageOps:
+
 		case SpvCapabilityTessellationPointSize:
 		case SpvCapabilityGeometryPointSize:
-			retError(clean, Error_invalidState(
-				3,
-				"Compiler_compile() SPIRV contained capability that isn't supported in oiSH:\n"
-				"tesselation/geometry pointSize, ray query provisional or vendor specific extensions"
-			))
 
 		//Unsupported, we don't support kernels, only shaders
 
@@ -1365,6 +1357,61 @@ clean:
 	return s_uccess;
 }
 
+Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	U64 defaultOps =
+		D3D_SHADER_REQUIRES_TYPED_UAV_LOAD_ADDITIONAL_FORMATS |
+		D3D_SHADER_REQUIRES_STENCIL_REF |
+		D3D_SHADER_REQUIRES_EARLY_DEPTH_STENCIL |
+		D3D_SHADER_REQUIRES_UAVS_AT_EVERY_STAGE |
+		D3D_SHADER_REQUIRES_64_UAVS |
+		D3D_SHADER_REQUIRES_LEVEL_9_COMPARISON_FILTERING |
+		D3D_SHADER_REQUIRES_WAVE_OPS;
+
+	U64 extensionMap[] = {
+		D3D_SHADER_REQUIRES_RAYTRACING_TIER_1_1,
+		D3D_SHADER_REQUIRES_NATIVE_16BIT_OPS,
+		D3D_SHADER_REQUIRES_INT64_OPS,
+		D3D_SHADER_REQUIRES_VIEW_ID,
+		D3D_SHADER_REQUIRES_DOUBLES,
+		D3D_SHADER_REQUIRES_11_1_DOUBLE_EXTENSIONS,
+		D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE,
+		D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED,
+		D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS
+	};
+
+	ESHExtension extensions[] = {
+		ESHExtension_RayQuery,
+		ESHExtension_16BitTypes,
+		ESHExtension_I64,
+		ESHExtension_Multiview,
+		ESHExtension_F64,
+		ESHExtension_F64,
+		ESHExtension_AtomicI64,
+		ESHExtension_AtomicI64,
+		ESHExtension_MeshTaskTexDeriv
+	};
+
+	flags &= ~defaultOps;
+
+	for (U64 i = 0; i < sizeof(extensions) / sizeof(extensions[0]); ++i) {
+
+		if(!(flags & extensionMap[i]))
+			continue;
+
+		flags &= ~extensionMap[i];
+		*ext = (ESHExtension)(*ext | extensions[i]);
+	}
+
+	if(flags)
+		retError(clean, Error_unsupportedOperation(0, "DxilMapToESHExtension() contained an unsupported extension"))
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
@@ -1450,6 +1497,77 @@ Bool Compiler_compile(
 
 			if(CharString_length(toCompile.entrypoint))
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-entrypoint-name=main", alloc, e_rr))
+
+			gotoIfError3(clean, Compiler_registerArgCStr(
+				&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
+			))
+
+			if(
+				toCompile.stageType >= ESHPipelineStage_RtStartExt &&
+				toCompile.stageType <= ESHPipelineStage_RtEndExt
+			)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_tracing", alloc, e_rr
+				))
+
+			if(
+				toCompile.stageType == ESHPipelineStage_MeshExt ||
+				toCompile.stageType == ESHPipelineStage_TaskExt
+			)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_EXT_mesh_shader", alloc, e_rr
+				))
+
+			if(toCompile.extensions & ESHExtension_ComputeDeriv)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_NV_compute_shader_derivatives", alloc, e_rr
+				))
+
+			if(toCompile.extensions & ESHExtension_16BitTypes)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_KHR_16bit_storage", alloc, e_rr
+				))
+			
+			if(toCompile.extensions & ESHExtension_Multiview)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
+				))
+			
+			if(toCompile.extensions & ESHExtension_RayReorder)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_NV_shader_invocation_reorder", alloc, e_rr
+				))
+			
+			if(toCompile.extensions & ESHExtension_RayMotionBlur)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_NV_ray_tracing_motion_blur", alloc, e_rr
+				))
+			
+			if(toCompile.extensions & ESHExtension_RayQuery)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
+				))
+			
+			if(toCompile.extensions & ESHExtension_RayMicromapOpacity)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_EXT_opacity_micromap", alloc, e_rr
+				))
+			
+			if(toCompile.extensions & ESHExtension_RayMicromapDisplacement)
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_NV_displacement_micromap", alloc, e_rr
+				))
+			
+			if(toCompile.extensions & (ESHExtension_AtomicF32 | ESHExtension_AtomicF64)) {
+
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_add", alloc, e_rr
+				))
+
+				gotoIfError3(clean, Compiler_registerArgCStr(
+					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_min_max", alloc, e_rr
+				))
+			}
 		}
 
 		else {
@@ -1617,13 +1735,15 @@ Bool Compiler_compile(
 
 			//Payload / intersection data reflection
 
+			ESHExtension exts = ESHExtension_None;
+
 			if (isLib) {
 				
 				D3D12_LIBRARY_DESC lib = D3D12_LIBRARY_DESC{};
 				if(FAILED(dxilReflLib->GetDesc(&lib)))
 					retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get D3D12_LIBRARY_DESC"))
 
-				//TODO: Capabilities in lib.Flags
+				gotoIfError3(clean, DxilMapToESHExtension(lib.Flags, &exts, e_rr))
 
 				for(U64 i = 0; i < lib.FunctionCount; ++i) {
 
@@ -1674,8 +1794,8 @@ Bool Compiler_compile(
 				D3D12_SHADER_DESC refl = D3D12_SHADER_DESC{};
 				if(FAILED(dxilRefl->GetDesc(&refl)))
 					retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get D3D12_LIBRARY_DESC"))
-
-				//TODO: Check capabilities
+					
+				gotoIfError3(clean, DxilMapToESHExtension(refl.Flags, &exts, e_rr))
 
 				Bool isPixelShader = toCompile.stageType == ESHPipelineStage_Pixel;
 
@@ -1779,6 +1899,11 @@ Bool Compiler_compile(
 
 				Log_debugLnx("Finished reflecting");
 			}
+
+			if((toCompile.extensions & exts) != exts)
+				retError(clean, Error_invalidState(
+					2, "Compiler_compile() DXIL contained capability that wasn't enabled by oiSH file (use annotations)"
+				))
 
 			//Ensure we have a valid DXIL file
 

@@ -134,7 +134,9 @@ typedef enum ESHExtension {
 	ESHExtension_Multiview					= 1 << 13,
 	ESHExtension_ComputeDeriv				= 1 << 14,
 
-	ESHExtension_PAQ						= 1 << 15		//Payload access qualifiers
+	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
+    
+    ESHExtension_MeshTaskTexDeriv			= 1 << 16
 
 } ESHExtension;
 
@@ -287,7 +289,6 @@ The following define the requirements of binaries embedded in oiSH files.
     - GroupNonUniform
     - GroupNonUniformVote or SubgroupVoteKHR
     - GroupNonUniformBallot or SubgroupBallotKHR
-    - AtomicStorageOps
     - StorageImageExtendedFormats
     - ImageQuery
     - DerivativeControl
@@ -302,9 +303,6 @@ The following define the requirements of binaries embedded in oiSH files.
     - StoragePushConstant16
     - StorageInputOutput16
   - Multiview:
-    - MultiViewport
-    - ShaderLayer
-    - ShaderViewportIndex
     - MultiView
   - ShaderInvocationReorderNV as RayReorder.
   - RayTracingMotionBlurNV as RayMotionBlur.
@@ -320,9 +318,27 @@ The following define the requirements of binaries embedded in oiSH files.
   - Geometry required if Geometry shader stage.
   - *Other capabilities are unsupported*.
 
-### TODO: DXIL spec
+### DXIL spec
 
-- Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. To be compatible with SPIRV.
+- Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. To be compatible with SPIRV. Though of course SV_TARGET and other SVs are accepted.
+
+- Extensions available by default:
+  - D3D_SHADER_REQUIRES_TYPED_UAV_LOAD_ADDITIONAL_FORMATS
+  - D3D_SHADER_REQUIRES_STENCIL_REF
+  - D3D_SHADER_REQUIRES_EARLY_DEPTH_STENCIL
+  - D3D_SHADER_REQUIRES_UAVS_AT_EVERY_STAGE
+  - D3D_SHADER_REQUIRES_64_UAVS
+  - D3D_SHADER_REQUIRES_LEVEL_9_COMPARISON_FILTERING
+  - D3D_SHADER_REQUIRES_WAVE_OPS
+- Extensions:
+  - D3D_SHADER_REQUIRES_RAYTRACING_TIER_1_1 as RayQuery.
+  - D3D_SHADER_REQUIRES_NATIVE_16BIT_OPS as 16BitTypes.
+  - D3D_SHADER_REQUIRES_INT64_OPS as I64.
+  - D3D_SHADER_REQUIRES_VIEW_ID as Multiview.
+  - D3D_SHADER_REQUIRES_DOUBLES or D3D_SHADER_REQUIRES_11_1_DOUBLE_EXTENSIONS as F64.
+  - D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE or D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED as AtomicI64.
+  - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
+- NV extensions should be properly marked using annotations, or the oiSH is illegal. The validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
 
 ## Changelog
 

@@ -55,7 +55,8 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"RAYREORDER",
 	"MULTIVIEW",
 	"COMPUTEDERIV",
-	"PAQ"
+	"PAQ",
+	"MESHTASKTEXDERIV"
 };
 
 const C8 *SHEntry_stageNames[] = {
