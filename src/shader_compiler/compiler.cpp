@@ -1412,6 +1412,89 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_convertWaveSizeParam(U32 threads, U8 *threadsShort, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	switch (threads) {
+		case 0:			*threadsShort = 0;		break;
+		case 1:			*threadsShort = 1;		break;
+		case 2:			*threadsShort = 2;		break;
+		case 4:			*threadsShort = 3;		break;
+		case 8:			*threadsShort = 4;		break;
+		case 16:		*threadsShort = 5;		break;
+		case 32:		*threadsShort = 6;		break;
+		case 64:		*threadsShort = 7;		break;
+		case 128:		*threadsShort = 8;		break;
+		case 256:		*threadsShort = 9;		break;
+		default:
+			retError(clean, Error_invalidParameter(threads, 0, "Compiler_convertWaveSizeParam()::threads is invalid"))
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_convertWaveSize(
+	U32 waveSizeRecommended,
+	U32 waveSizeMin,
+	U32 waveSizeMax,
+	U16 *waveSizes,
+	Error *e_rr
+) {
+	
+	Bool s_uccess = true;
+	U8 recommend = 0, waveMin = 0, waveMax = 0;
+
+	if(!waveSizeMax)
+		waveSizeMax = 128;
+
+	if(!waveSizeMin)
+		waveSizeMin = 4;
+
+	if(!waveSizeRecommended)
+		waveSizeRecommended = (waveSizeMin + waveSizeMax) / 2;		//Not base2, but don't care
+
+	if(
+		U32_min(waveSizeMin, U32_min(waveSizeMax, waveSizeRecommended)) < 4 ||
+		U32_max(waveSizeMin, U32_max(waveSizeMax, waveSizeRecommended)) > 128
+	)
+		retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get groupSize; out of bounds"))
+
+	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeRecommended, &recommend, e_rr))
+	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMin, &waveMin, e_rr))
+	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMax, &waveMax, e_rr))
+
+	if(waveSizeMin || waveSizeMax)
+		*waveSizes = ((U16)waveSizeMin << 4) | ((U16)waveSizeMax << 8) | ((U16)recommend << 12);
+
+	else *waveSizes = recommend;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
+	
+	Bool s_uccess = true;
+	U64 totalGroup = (U64)threads[0] * threads[1] * threads[2];
+
+	if(!totalGroup)
+		retError(clean, Error_invalidOperation(2, "Compiler_compile() needs group size for compute"))
+
+	if(totalGroup > 512)
+		retError(clean, Error_invalidOperation(2, "Compiler_compile() group count out of bounds (512)"))
+
+	if(U32_max(threads[0], threads[1]) > 512)
+		retError(clean, Error_invalidOperation(2, "Compiler_compile() group count x or y out of bounds (512)"))
+
+	if(threads[2] > 64)
+		retError(clean, Error_invalidOperation(2, "Compiler_compile() group count z out of bounds (64)"))
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
@@ -1432,7 +1515,7 @@ Bool Compiler_compile(
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
 	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
 	SpvReflectShaderModule spvMod{};
-	ID3D12ShaderReflection *dxilRefl{};
+	ID3D12ShaderReflection1 *dxilRefl{};
 	ID3D12LibraryReflection1 *dxilReflLib{};
 
 	Compiler_defineStrings;
@@ -1760,6 +1843,11 @@ Bool Compiler_compile(
 
 					U8 attributeSize = 0;
 					U8 payloadSize = 0;
+					U32 groupSize[3] = { 0 };
+					U16 waveSizes = 0;
+					Bool hasGroupSize = false;
+
+					//Reflect payload size & attribute size
 
 					if (
 						funcDesc.ShaderType > D3D12_SHVER_RAY_GENERATION_SHADER &&
@@ -1781,6 +1869,46 @@ Bool Compiler_compile(
 
 						attributeSize = (U8) funcDesc.RaytracingShader.AttributeSize;
 					}
+
+					//Reflect group size and wave size
+
+					else if (
+						funcDesc.ShaderType == D3D12_SHVER_COMPUTE_SHADER ||
+						funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER
+					) {
+						D3D12_COMPUTE_SHADER_DESC computeShader = 
+							funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER ? funcDesc.NodeShader.ComputeDesc :
+							funcDesc.ComputeShader;
+
+						for(U8 j = 0; j < 3; ++j)
+							groupSize[j] = computeShader.NumThreads[j];
+
+						hasGroupSize = true;
+
+						gotoIfError3(clean, Compiler_convertWaveSize(
+							computeShader.WaveSizePreferred, computeShader.WaveSizeMin, computeShader.WaveSizeMax,
+							&waveSizes, e_rr
+						))
+					}
+
+					else if (funcDesc.ShaderType == D3D12_SHVER_MESH_SHADER) {
+
+						hasGroupSize = true;
+
+						for(U8 j = 0; j < 3; ++j)
+							groupSize[j] = funcDesc.MeshShader.NumThreads[j];
+					}
+
+					else if (funcDesc.ShaderType == D3D12_SHVER_AMPLIFICATION_SHADER) {
+
+						hasGroupSize = true;
+
+						for(U8 j = 0; j < 3; ++j)
+							groupSize[j] = funcDesc.AmplificationShader.NumThreads[j];
+					}
+
+					if(hasGroupSize)
+						gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
 				}
 			}
 
@@ -1790,6 +1918,9 @@ Bool Compiler_compile(
 
 				ESHType inputs[16] = {};
 				ESHType outputs[16] = {};
+
+				U32 groupSize[3] = { 0 };
+				U16 waveSizes = 0;
 				
 				D3D12_SHADER_DESC refl = D3D12_SHADER_DESC{};
 				if(FAILED(dxilRefl->GetDesc(&refl)))
@@ -1798,6 +1929,25 @@ Bool Compiler_compile(
 				gotoIfError3(clean, DxilMapToESHExtension(refl.Flags, &exts, e_rr))
 
 				Bool isPixelShader = toCompile.stageType == ESHPipelineStage_Pixel;
+
+				if (
+					toCompile.stageType == ESHPipelineStage_Compute ||
+					toCompile.stageType == ESHPipelineStage_MeshExt ||
+					toCompile.stageType == ESHPipelineStage_TaskExt
+				) {
+					dxilRefl->GetThreadGroupSize(&groupSize[0], &groupSize[1], &groupSize[2]);
+					gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
+				}
+
+				if (toCompile.stageType == ESHPipelineStage_Compute) {
+
+					U32 waveSizeRecommended, waveSizeMin, waveSizeMax;
+					dxilRefl->GetWaveSize(&waveSizeRecommended, &waveSizeMin, &waveSizeMax);
+
+					gotoIfError3(clean, Compiler_convertWaveSize(
+						waveSizeRecommended, waveSizeMin, waveSizeMax, &waveSizes, e_rr
+					))
+				}
 
 				for(U64 j = 0; j < (U64)refl.OutputParameters + refl.InputParameters; ++j) {
 
@@ -1941,7 +2091,6 @@ Bool Compiler_compile(
 				retError(clean, Error_invalidState(2, "Compiler_compile() SPIRV returned is invalid"))
 
 			//Reflect binary information, since our own parser doesn't have the info yet.
-			//TODO: Maybe build in verification between SPIRV file and what the parser expects?
 
 			SpvReflectResult res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
 
@@ -1979,7 +2128,7 @@ Bool Compiler_compile(
 
 				U8 payloadSize = 0, intersectSize = 0;
 
-				U16 localSize[3] = { 0 };
+				U32 localSize[3] = { 0 };
 
 				ESHPipelineStage stage = ESHPipelineStage_Count;
 
@@ -2011,36 +2160,28 @@ Bool Compiler_compile(
 						stage = ESHPipelineStage_CallableExt;
 						break;
 
+					case SpvExecutionModelMeshEXT:
+					case SpvExecutionModelTaskEXT:
 					case SpvExecutionModelGLCompute: {
 
-						stage = ESHPipelineStage_Compute;
+						switch (entrypoint.spirv_execution_model) {
+							case SpvExecutionModelMeshEXT:	stage = ESHPipelineStage_MeshExt;	break;
+							case SpvExecutionModelTaskEXT:	stage = ESHPipelineStage_TaskExt;	break;
+							default:						stage = ESHPipelineStage_Compute;	break;
+
+						}
 						
-						U64 totalGroup = (U64)entrypoint.local_size.x * entrypoint.local_size.y * entrypoint.local_size.z;
-
-						if(!totalGroup)
-							retError(clean, Error_invalidOperation(2, "Compiler_compile() needs group size for compute"))
-
-						if(totalGroup > 512)
-							retError(clean, Error_invalidOperation(2, "Compiler_compile() group count out of bounds (512)"))
-
-						if(U32_max(entrypoint.local_size.x, entrypoint.local_size.y) > 512)
-							retError(clean, Error_invalidOperation(2, "Compiler_compile() group count x or y out of bounds (512)"))
-
-						if(entrypoint.local_size.z > 64)
-							retError(clean, Error_invalidOperation(2, "Compiler_compile() group count z out of bounds (64)"))
-
-						localSize[0] = (U16) entrypoint.local_size.x;
-						localSize[1] = (U16) entrypoint.local_size.y;
-						localSize[2] = (U16) entrypoint.local_size.z;
+						localSize[0] = entrypoint.local_size.x;
+						localSize[1] = entrypoint.local_size.y;
+						localSize[2] = entrypoint.local_size.z;
+						gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr))
 						break;
 					}
 
 					case SpvExecutionModelRayGenerationKHR:			stage = ESHPipelineStage_RaygenExt;		break;
 					case SpvExecutionModelVertex:					stage = ESHPipelineStage_Vertex;		break;
 					case SpvExecutionModelFragment:					stage = ESHPipelineStage_Pixel;			break;
-					case SpvExecutionModelTaskEXT:					stage = ESHPipelineStage_TaskExt;		break;
 					case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;	break;
-					case SpvExecutionModelMeshEXT:					stage = ESHPipelineStage_MeshExt;		break;
 					case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;			break;
 					case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;		break;
 				}
@@ -2090,8 +2231,6 @@ Bool Compiler_compile(
 
 						intersectSize = (U8) structSize;
 					}
-
-				//TODO: Verify stage
 
 				if(searchPayload && !payloadSize)
 					retError(clean, Error_invalidState(0, "Compiler_compile() payload wasn't found in SPIRV"))

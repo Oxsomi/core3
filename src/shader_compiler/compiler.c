@@ -1051,17 +1051,17 @@ clean:
 	return s_uccess;
 }
 
-U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize) {
+U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
 
 	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
 	if(stage == ESHPipelineStage_WorkgraphExt)
 		minVersion = OISH_SHADER_MODEL(6, 8);
 
-	if(waveSize & 0xF)
+	if(waveSizeType == 1)
 		minVersion = OISH_SHADER_MODEL(6, 6);
 
-	if(waveSize >> 4)
+	if(waveSizeType == 2)
 		minVersion = OISH_SHADER_MODEL(6, 8);
 
 	return minVersion;
@@ -1259,140 +1259,6 @@ Bool Compiler_parse(
 								);
 
 								runtimeEntry.entry.name = name;
-							}
-
-							break;
-
-						case C8x4('n', 'u', 'm', 't'):		//numthreads(X, Y, Z)
-
-							//[numthreads(X, Y, Z)]
-							// ^
-							if (
-								tokLen == 10 &&
-								*(const U64*)&tokStr.ptr[2] == C8x8('m', 't', 'h', 'r', 'e', 'a', 'd', 's')
-							) {
-							
-								if(symj.tokenCount + 1 != 8)
-									retError(clean, Error_invalidParameter(
-										0, 0,
-										"Compiler_parse() numthreads annotation expected numthreads(uint16, uint16, uint16)"
-									))
-
-								//[numthreads(X, Y, Z)]
-								// ^
-
-								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_Integer  ||
-									parser.tokens.ptr[symj.tokenId + 3].tokenType != ETokenType_Comma    ||
-									parser.tokens.ptr[symj.tokenId + 4].tokenType != ETokenType_Integer  ||
-									parser.tokens.ptr[symj.tokenId + 5].tokenType != ETokenType_Comma    ||
-									parser.tokens.ptr[symj.tokenId + 6].tokenType != ETokenType_Integer  ||
-									parser.tokens.ptr[symj.tokenId + 7].tokenType != ETokenType_RoundParenthesisEnd
-								)
-									retError(clean, Error_invalidParameter(
-										0, 1,
-										"Compiler_parse() numthreads annotation expected numthreads(uint16, uint16, uint16)"
-									))
-
-								for(U8 k = 0; k < 3; ++k)
-									if((parser.tokens.ptr[symj.tokenId + 2 + (k << 1)].valueu >> 16))
-										retError(clean, Error_invalidParameter(
-											0, 1,
-											"Compiler_parse() numthreads annotation expected numthreads(uint16, uint16, uint16)"
-										))
-
-								runtimeEntry.entry.groupX = (U16) parser.tokens.ptr[symj.tokenId + 2].valueu;
-								runtimeEntry.entry.groupY = (U16) parser.tokens.ptr[symj.tokenId + 4].valueu;
-								runtimeEntry.entry.groupZ = (U16) parser.tokens.ptr[symj.tokenId + 6].valueu;
-
-								U16 groupX = runtimeEntry.entry.groupX;
-								U16 groupY = runtimeEntry.entry.groupY;
-								U16 groupZ = runtimeEntry.entry.groupZ;
-
-								U64 totalGroup = (U64)groupX * groupY * groupZ;
-
-								if(!totalGroup || totalGroup > 512)
-									retError(clean, Error_invalidOperation(
-										0, "Compiler_parse() numthreads total group count must be in range [1, 512]"
-									))
-
-								if(U16_max(groupX, groupY) > 512)
-									retError(clean, Error_invalidOperation(
-										1, "Compiler_parse() numthreads x or y dimension can't exceed 512"
-									))
-
-								if(groupZ > 64)
-									retError(clean, Error_invalidOperation(
-										2, "Compiler_parse() numthreads z dimension can't exceed 64"
-									))
-
-							}
-
-							break;
-
-						case C8x4('W', 'a', 'v', 'e'):		//WaveSize(forced), WaveSize(min, max) or WaveSize(min, max, recom)
-
-							//[WaveSize(...)]
-							// ^
-							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('S', 'i', 'z', 'e')) {
-							
-								if(symj.tokenCount + 1 != 4 && symj.tokenCount + 1 != 6 && symj.tokenCount + 1 != 8)
-									retError(clean, Error_invalidParameter(
-										0, 0,
-										"Compiler_parse() WaveSize annotation expected WaveSize(forced), WaveSize(min, max) "
-										" or WaveSize(min, max, recommended)"
-									))
-
-								//[WaveSize(X, Y, Z)]
-								// ^
-
-								U64 end = symj.tokenId + symj.tokenCount;
-
-								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_Integer  ||
-									parser.tokens.ptr[end].tokenType != ETokenType_RoundParenthesisEnd
-								)
-									retError(clean, Error_invalidParameter(
-										0, 1,
-										"Compiler_parse() WaveSize annotation expected WaveSize(uint8)"
-									))
-
-								//4-128
-
-								for (U8 k = 0; k < symj.tokenCount >> 1; ++k) {
-
-									Token intToken = parser.tokens.ptr[symj.tokenId + (k << 1) + 2];
-
-									if (k && (
-										parser.tokens.ptr[symj.tokenId + (k << 1) + 1].tokenType != ETokenType_Comma ||
-										intToken.tokenType != ETokenType_Integer
-									))
-										retError(clean, Error_invalidParameter(
-											0, 1,
-											"Compiler_parse() WaveSize annotation expected WaveSize(uint8, ...)"
-										))
-
-									if(intToken.valueu < 4 || intToken.valueu > 128)
-										retError(clean, Error_invalidParameter(
-											0, 1,
-											"Compiler_parse() WaveSize annotation expected int in range [4, 128]"
-										))
-
-									F32 v = F32_log2((F32)intToken.valueu);
-
-									if(v != (I32)v)
-										retError(clean, Error_invalidParameter(
-											0, 1,
-											"Compiler_parse() WaveSize annotation expected base2 int in range [4, 128]"
-										))
-
-									if(symj.tokenCount + 1 == 4)
-										runtimeEntry.entry.waveSize = (U8)v + 1;
-
-									else runtimeEntry.entry.waveSize |= ((U16)v + 1) << ((k + 1) << 2);
-								}
 							}
 
 							break;
@@ -1649,7 +1515,7 @@ Bool Compiler_parse(
 
 			else {
 
-				U16 minVersion = Compiler_minFeatureSetStage(runtimeEntry.entry.stage, runtimeEntry.entry.waveSize);
+				U16 minVersion = Compiler_minFeatureSetStage(runtimeEntry.entry.stage, runtimeEntry.entry.waveSizeType);
 
 				//Ensure all shader versions are compatible with minimum featureset
 
@@ -1716,24 +1582,6 @@ Bool Compiler_parse(
 				}
 
 				//Validate groups with stage
-
-				Bool hasGroup   = runtimeEntry.entry.groupX | runtimeEntry.entry.groupY | runtimeEntry.entry.groupZ;
-				Bool hasntGroup = !runtimeEntry.entry.groupX || !runtimeEntry.entry.groupY || !runtimeEntry.entry.groupZ;
-
-				Bool isCompute =
-					runtimeEntry.entry.stage == ESHPipelineStage_Compute ||
-					runtimeEntry.entry.stage == ESHPipelineStage_WorkgraphExt;
-
-				if(hasntGroup && isCompute)
-					retError(clean, Error_invalidState(
-						0,
-						"Compiler_parse() found a compute/workgraph entrypoint without numthreads annotation or thread count 0"
-					))
-
-				if(hasGroup && !isCompute)
-					retError(clean, Error_invalidState(
-						0, "Compiler_parse() found a non compute/workgraph entrypoint with a numthreads annotation"
-					))
 
 				if(!runtimeEntry.vendorMask)
 					runtimeEntry.vendorMask = U16_MAX;

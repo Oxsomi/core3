@@ -411,12 +411,6 @@ clean:
 	return s_uccess;
 }
 
-typedef enum ESHPipelineType {
-	ESHPipelineType_Compute,
-	ESHPipelineType_Graphics,
-	ESHPipelineType_Raytracing
-} ESHPipelineType;
-
 Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -454,31 +448,43 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 			0, entry->binaryIds.length, U8_MAX, "SHFile_addEntrypoint() binaryIds.length out of bounds"
 		))
 
-	for(U8 i = 0; i < 3; ++i)
+	for(U8 i = 0; i < 4; ++i)
 		if(((entry->waveSize >> (i << 2)) & 0xF) > 9)
 			retError(clean, Error_outOfBounds(
 				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
 			))
 			
-	if(entry->waveSize >> 12)
-		retError(clean, Error_outOfBounds(
-			0, entry->waveSize, 1 << 12, "SHFile_addEntrypoint() waveSize[3] should be empty"
-		))
+	U8 guessed = entry->waveSize >> 4 ? 2 : (entry->waveSize ? 1 : 0);
 
-	Bool isRt = entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt;
+	if(entry->waveSizeType != guessed)
+		retError(clean, Error_invalidOperation(0, "SHFile_addEntrypoint() has mismatching waveSize & waveSizeType"))
 
-	ESHPipelineType pipelineType =
-		entry->stage == ESHPipelineStage_Compute ? ESHPipelineType_Compute : (isRt ? ESHPipelineType_Raytracing : (
-			entry->stage == ESHPipelineStage_WorkgraphExt ? ESHPipelineType_Compute : ESHPipelineType_Graphics
-		));
+	if(entry->waveSize && entry->stage != ESHPipelineStage_Compute && entry->stage != ESHPipelineStage_WorkgraphExt)
+		retError(clean, Error_invalidOperation(0, "SHFile_addEntrypoint() defined WaveSize, but wasn't a workgraph or compute"))
+
+	Bool hasCompute = false;
+	Bool hasGraphics = false;
+
+	switch (entry->stage) {
+
+		case ESHPipelineStage_MeshExt:
+		case ESHPipelineStage_TaskExt:
+			hasGraphics = true;
+			// fallthrough
+
+		case ESHPipelineStage_WorkgraphExt:
+		case ESHPipelineStage_Compute:
+			hasCompute = true;
+			break;
+	}
 
 	U16 groupXYZ = entry->groupX | entry->groupY | entry->groupZ;
 	U64 totalGroup = (U64)entry->groupX * entry->groupY * entry->groupZ;
 
-	if(pipelineType != ESHPipelineType_Compute && groupXYZ)
+	if(!hasCompute && groupXYZ)
 		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() can't have group size for non compute"))
 
-	if(pipelineType == ESHPipelineType_Compute && !totalGroup)
+	if(hasCompute && !totalGroup)
 		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() needs group size for compute"))
 
 	if(totalGroup > 512)
@@ -531,7 +537,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 		))
 
 	if (
-		pipelineType != ESHPipelineType_Graphics &&
+		!hasGraphics &&
 		(entry->outputsU64[0] | entry->outputsU64[1] | entry->inputsU64[0] | entry->inputsU64[1])
 	)
 		retError(clean, Error_invalidOperation(
@@ -847,7 +853,13 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 						break;
 
 				headerSize += inputs + outputs;
-				break;
+
+				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
+					break;
+
+				else {
+					// fallthrough
+				}
 			}
 
 			case ESHPipelineStage_Compute:
@@ -1057,7 +1069,13 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 				begin[0] = inputs;
 				begin[1] = outputs;
-				break;
+
+				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
+					break;
+
+				else {
+					// fallthrough
+				}
 			}
 
 			case ESHPipelineStage_Compute:
@@ -1359,6 +1377,53 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 		switch (entry.stage) {
 
+			default: {
+
+				//U8 inputsAvail, outputsAvail
+
+				if(nextMem + 2 > file.ptr + Buffer_length(file))
+					retError(clean, Error_outOfBounds(
+						0, nextMem - file.ptr, Buffer_length(file),
+						"SHFile_read() couldn't parse raytracing stage, out of bounds"
+					))
+
+				U8 inputs = nextMem[0];
+				U8 outputs = nextMem[1];
+
+				if(inputs > 0x10 || outputs > 0x10)
+					retError(clean, Error_invalidParameter(
+						0, 0, "SHFile_read() stage[i].inputs or outputs out of bounds"
+					))
+
+				nextMem += sizeof(U8) * 2;		//U8 inputsAvail, outputsAvail;
+
+				//Unpack U8[inputs], U8[outputs]
+
+				U8 inputBytes = inputs;
+				U8 outputBytes = outputs;
+
+				nextMemTemp = nextMem;
+				nextMem += inputBytes + outputBytes;
+
+				if(nextMem > file.ptr + Buffer_length(file))
+					retError(clean, Error_outOfBounds(
+						0, nextMem - file.ptr, Buffer_length(file), "SHFile_read() couldn't parse graphics stage, out of bounds"
+					))
+
+				for(U8 j = 0; j < inputBytes; ++j)
+					entry.inputs[j] = nextMemTemp[j];
+
+				for(U8 j = 0; j < outputBytes; ++j)
+					entry.outputs[j] = nextMemTemp[inputBytes + j];
+					
+				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
+					break;
+
+				else {
+					// fallthrough
+				}
+			}
+
 			case ESHPipelineStage_WorkgraphExt:
 			case ESHPipelineStage_Compute: {
 
@@ -1375,6 +1440,11 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				entry.groupY   = groups[1];
 				entry.groupZ   = groups[2];
 				entry.waveSize = groups[3];
+
+				if(entry.waveSize && (entry.stage == ESHPipelineStage_MeshExt || entry.stage == ESHPipelineStage_TaskExt))
+					retError(clean, Error_invalidParameter(
+						0, 0, "SHFile_read() entry.waveSize isn't supported by mesh or task shader"
+					))
 
 				for (U8 j = 0; j < 4; ++j) {
 
@@ -1417,48 +1487,6 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				entry.payloadSize = *nextMem;
 				++nextMem;
 				break;
-
-			default: {
-
-				//U8 inputsAvail, outputsAvail
-
-				if(nextMem + 2 > file.ptr + Buffer_length(file))
-					retError(clean, Error_outOfBounds(
-						0, nextMem - file.ptr, Buffer_length(file),
-						"SHFile_read() couldn't parse raytracing stage, out of bounds"
-					))
-
-				U8 inputs = nextMem[0];
-				U8 outputs = nextMem[1];
-
-				if(inputs > 0x10 || outputs > 0x10)
-					retError(clean, Error_invalidParameter(
-						0, 0, "SHFile_read() stage[i].inputs or outputs out of bounds"
-					))
-
-				nextMem += sizeof(U8) * 2;		//U8 inputsAvail, outputsAvail;
-
-				//Unpack U8[inputs], U8[outputs]
-
-				U8 inputBytes = inputs;
-				U8 outputBytes = outputs;
-
-				nextMemTemp = nextMem;
-				nextMem += inputBytes + outputBytes;
-
-				if(nextMem > file.ptr + Buffer_length(file))
-					retError(clean, Error_outOfBounds(
-						0, nextMem - file.ptr, Buffer_length(file), "SHFile_read() couldn't parse graphics stage, out of bounds"
-					))
-
-				for(U8 j = 0; j < inputBytes; ++j)
-					entry.inputs[j] = nextMemTemp[j];
-
-				for(U8 j = 0; j < outputBytes; ++j)
-					entry.outputs[j] = nextMemTemp[inputBytes + j];
-
-				break;
-			}
 		}
 
 		if(nextMem + sizeof(U16) * binaryCount > file.ptr + Buffer_length(file))
@@ -1745,7 +1773,12 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 				}
 			}
 
-			break;
+			if(shEntry.stage != ESHPipelineStage_MeshExt && shEntry.stage != ESHPipelineStage_TaskExt)
+				break;
+
+			else {
+				// fallthrough
+			}
 
 		case ESHPipelineStage_Compute:
 		case ESHPipelineStage_WorkgraphExt:
@@ -2119,14 +2152,15 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 	for (U64 i = 0; i < a.entries.length; ++i) {
 
-		SHEntry entry = a.entries.ptr[i];
+		SHEntry entry = a.entries.ptr[i], entryi = entry;
+
 		entry.name = CharString_createRefStrConst(entry.name);
 		entry.binaryIds = (ListU16) { 0 };
 		
 		U64 j = 0;
 
 		for (; j < b.entries.length; ++j)
-			if(CharString_equalsStringSensitive(a.entries.ptr[i].name, b.entries.ptr[j].name))
+			if(CharString_equalsStringSensitive(entryi.name, b.entries.ptr[j].name))
 				break;
 
 		//No duplicate, we can accept a
@@ -2137,27 +2171,34 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			continue;
 		}
 
+		SHEntry entryj = a.entries.ptr[j];
+
 		//Make sure the two have identical data
 
-		const void *cmpA = &a.entries.ptr[i].stage;
-		const void *cmpB = &b.entries.ptr[j].stage;
+		const void *cmpA = &entryi.groupX;
+		const void *cmpB = &entryj.groupX;
 
-		const U32 *cmpA2 = (const U32*)cmpA;
-		const U32 *cmpB2 = (const U32*)cmpB;
-
-		if(*cmpA2 != *cmpB2)
+		if(entryi.stage != entryj.stage)
 			retError(clean, Error_invalidState(
 				(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
 			))
 
-		cmpA = ++cmpA2;
-		cmpB = ++cmpB2;
-
-		for(U64 k = 0; k < 3; ++k)
+		for(U64 k = 0; k < 5; ++k)
 			if(((const U64*)cmpA)[k] != ((const U64*)cmpB)[k])
 				retError(clean, Error_invalidState(
 					(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
 				))
+
+		if(
+			(entryi.waveSize && entryj.waveSize && entryi.waveSize != entryj.waveSize) ||
+			(entryi.waveSizeType && entryj.waveSizeType && entryi.waveSizeType != entryj.waveSizeType)
+		)
+			retError(clean, Error_invalidState(
+				(U32) i, "SHFile_combine()::a and b have mismatching waveSize"
+			))
+
+		entry.waveSize = U16_max(entryi.waveSize, entryj.waveSize);
+		entry.waveSizeType = U8_max(entryi.waveSizeType, entryj.waveSizeType);
 
 		//Combine the binaryIds.
 		//a stays unmodified, but b needs to be remapped first

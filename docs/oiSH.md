@@ -214,12 +214,7 @@ SHFile {
     
     for pipelineStages[i]	//Entrypoint name is stored at [strings.len - stageCount]
 
-	    if compute or workgraph:
-		    U16x4 groups;
-               	groups.w = waveSize: U4[4] required, min, max, recommended
-                    Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
-
-	    else if is graphics:
+	    if is graphics:
     
     		U8 inputsAvail, outputsAvail;
     
@@ -227,7 +222,13 @@ SHFile {
     		U8 inputs[inputsAvail];
     		U8 outputs[outputsAvail];
 
-    	else if intersection:
+	    if compute, mesh, task or workgraph:
+		    U16x4 groups;
+               	groups.w = waveSize: U4[4] required, min, max, recommended
+                    Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
+                    groups.w should be 0 for mesh or task shader
+
+    	if intersection:
     	    U8 intersectionSize;
     
 	    if miss,closestHit,anyHit or intersection

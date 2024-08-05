@@ -225,8 +225,8 @@ typedef struct SHEntry {
 	//Don't change order, compares use this (U32, U64[3])
 
 	U8 stage;				//ESHPipelineStage
-	U8 padding;
-	U16 waveSize;			//U4[3] recommendedSize, minSize, maxSize: each U4 is in range [0, 9]. 0 = 0, 1 = 1, 3 = 8, etc.
+	U8 waveSizeType;		//0 = none, 1 = basic, 2 = advanced. Can be 0 if non DXIL.
+	U16 waveSize;			//U4[4] requiredSize, minSize, maxSize, preferSize: each U4 is in range [0, 9]. 0 = 0, 3 = 8, etc.
 
 	U16 groupX, groupY;
 

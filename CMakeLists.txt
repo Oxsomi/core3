@@ -724,6 +724,8 @@ if(EnableShaderCompiler)
 	option(SPIRV_REFLECT_STATIC_LIB     "Build a SPIRV-Reflect static library" ON)
 	add_subdirectory(external/SPIRV-Reflect)
 
+	set_target_properties(spirv-reflect-static PROPERTIES FOLDER External)
+
 	# Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.
 
 	file(GLOB_RECURSE compilerHeaders "inc/shader_compiler/*.h")
