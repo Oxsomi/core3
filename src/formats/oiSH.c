@@ -454,14 +454,10 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
 			))
 			
-	U8 guessed = entry->waveSize >> 4 ? 2 : (entry->waveSize ? 1 : 0);
-
-	if(entry->waveSizeType != guessed)
-		retError(clean, Error_invalidOperation(0, "SHFile_addEntrypoint() has mismatching waveSize & waveSizeType"))
-
 	if(entry->waveSize && entry->stage != ESHPipelineStage_Compute && entry->stage != ESHPipelineStage_WorkgraphExt)
 		retError(clean, Error_invalidOperation(0, "SHFile_addEntrypoint() defined WaveSize, but wasn't a workgraph or compute"))
 
+	Bool hasRt = entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt;
 	Bool hasCompute = false;
 	Bool hasGraphics = false;
 
@@ -477,6 +473,8 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 			hasCompute = true;
 			break;
 	}
+
+	hasGraphics |= !hasCompute && !hasRt;
 
 	U16 groupXYZ = entry->groupX | entry->groupY | entry->groupZ;
 	U64 totalGroup = (U64)entry->groupX * entry->groupY * entry->groupZ;
@@ -499,12 +497,13 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 	if(
 		entry->stage == ESHPipelineStage_ClosestHitExt ||
 		entry->stage == ESHPipelineStage_AnyHitExt ||
-		entry->stage == ESHPipelineStage_IntersectionExt
+		entry->stage == ESHPipelineStage_IntersectionExt ||
+		entry->stage == ESHPipelineStage_MissExt
 	) {
 
 		if(!entry->payloadSize)
 			retError(clean, Error_invalidOperation(
-				2, "SHFile_addEntrypoint() payloadSize is required for hit/intersection shaders"
+				2, "SHFile_addEntrypoint() payloadSize is required for hit/intersection/miss shaders"
 			))
 
 		if(entry->payloadSize > 128)
@@ -515,14 +514,18 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 
 	else if(entry->payloadSize)
 		retError(clean, Error_invalidOperation(
-			2, "SHFile_addEntrypoint() payloadSize is only required for hit/intersection shaders"
+			2, "SHFile_addEntrypoint() payloadSize is only required for hit/intersection/miss shaders"
 		))
 
 	if(!entry->intersectionSize) {
 
-		if(entry->stage == ESHPipelineStage_IntersectionExt)
+		if(
+			entry->stage == ESHPipelineStage_IntersectionExt ||
+			entry->stage == ESHPipelineStage_ClosestHitExt ||
+			entry->stage == ESHPipelineStage_AnyHitExt
+		)
 			retError(clean, Error_invalidOperation(
-				2, "SHFile_addEntrypoint() intersectionSize is required for intersection shader"
+				2, "SHFile_addEntrypoint() intersectionSize is required for intersection/hit shaders"
 			))
 
 		if(entry->intersectionSize > 32)
@@ -531,9 +534,13 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 			))
 	}
 
-	else if(entry->stage != ESHPipelineStage_IntersectionExt)
+	else if(
+		entry->stage != ESHPipelineStage_IntersectionExt &&
+		entry->stage != ESHPipelineStage_ClosestHitExt &&
+		entry->stage != ESHPipelineStage_AnyHitExt
+	)
 		retError(clean, Error_invalidOperation(
-			2, "SHFile_addEntrypoint() intersectionSize is only required for intersection shader"
+			2, "SHFile_addEntrypoint() intersectionSize is only required for intersection/hit shaders"
 		))
 
 	if (
@@ -871,13 +878,13 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			case ESHPipelineStage_CallableExt:
 				break;
 
+			case ESHPipelineStage_ClosestHitExt:
+			case ESHPipelineStage_AnyHitExt:
 			case ESHPipelineStage_IntersectionExt:
 				headerSize += sizeof(U8);				//intersectionSize
 				//fallthrough
 
 			case ESHPipelineStage_MissExt:
-			case ESHPipelineStage_ClosestHitExt:
-			case ESHPipelineStage_AnyHitExt:
 				headerSize += sizeof(U8);				//payloadSize
 				break;
 		}
@@ -1058,7 +1065,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 				for(; outputs < 16; ++outputs) {
 
-					U8 output = entry.outputs[inputs];
+					U8 output = entry.outputs[outputs];
 
 					if(!output)
 						break;
@@ -1096,14 +1103,14 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			case ESHPipelineStage_CallableExt:
 				break;
 
+			case ESHPipelineStage_ClosestHitExt:
+			case ESHPipelineStage_AnyHitExt:
 			case ESHPipelineStage_IntersectionExt:
 				*headerIt = entry.intersectionSize;
 				headerIt += sizeof(U8);				//intersectionSize
 				//fallthrough
 
 			case ESHPipelineStage_MissExt:
-			case ESHPipelineStage_ClosestHitExt:
-			case ESHPipelineStage_AnyHitExt:
 				*headerIt = entry.payloadSize;
 				headerIt += sizeof(U8);				//payloadSize
 				break;
@@ -1461,6 +1468,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 			case ESHPipelineStage_CallableExt:
 				break;
 
+			case ESHPipelineStage_ClosestHitExt:
+			case ESHPipelineStage_AnyHitExt:
 			case ESHPipelineStage_IntersectionExt:
 
 				if(nextMem + 1 > file.ptr + Buffer_length(file))
@@ -1475,8 +1484,6 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
   				// fall through
 				
 			case ESHPipelineStage_MissExt:
-			case ESHPipelineStage_ClosestHitExt:
-			case ESHPipelineStage_AnyHitExt:
 
 				if(nextMem + 1 > file.ptr + Buffer_length(file))
 					retError(clean, Error_outOfBounds(
@@ -1810,13 +1817,13 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 		case ESHPipelineStage_CallableExt:
 			break;
 
+		case ESHPipelineStage_ClosestHitExt:
+		case ESHPipelineStage_AnyHitExt:
 		case ESHPipelineStage_IntersectionExt:
 			Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry.intersectionSize);
   			// fall through
 
 		case ESHPipelineStage_MissExt:
-		case ESHPipelineStage_ClosestHitExt:
-		case ESHPipelineStage_AnyHitExt:
 			Log_debugLn(alloc, "\tPayload size: %"PRIu8, shEntry.payloadSize);
 			break;
 	}
@@ -2189,16 +2196,18 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 					(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
 				))
 
+		U8 waveSizeTypei = entryi.waveSize >> 4 ? 2 : (entryi.waveSize ? 1 : 0);
+		U8 waveSizeTypej = entryj.waveSize >> 4 ? 2 : (entryj.waveSize ? 1 : 0);
+
 		if(
 			(entryi.waveSize && entryj.waveSize && entryi.waveSize != entryj.waveSize) ||
-			(entryi.waveSizeType && entryj.waveSizeType && entryi.waveSizeType != entryj.waveSizeType)
+			(waveSizeTypei && waveSizeTypej && waveSizeTypei != waveSizeTypej)
 		)
 			retError(clean, Error_invalidState(
 				(U32) i, "SHFile_combine()::a and b have mismatching waveSize"
 			))
 
 		entry.waveSize = U16_max(entryi.waveSize, entryj.waveSize);
-		entry.waveSizeType = U8_max(entryi.waveSizeType, entryj.waveSizeType);
 
 		//Combine the binaryIds.
 		//a stays unmodified, but b needs to be remapped first

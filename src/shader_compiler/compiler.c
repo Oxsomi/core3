@@ -291,10 +291,12 @@ Bool Compiler_compilex(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
+	SpinLock *lock,
+	ListSHEntryRuntime entries,
 	CompileResult *result,
 	Error *e_rr
 ) {
-	return Compiler_compile(comp, settings, toCompile, Platform_instance.alloc, result, e_rr);
+	return Compiler_compile(comp, settings, toCompile, lock, entries, Platform_instance.alloc, result, e_rr);
 }
 
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr) {
@@ -1515,7 +1517,8 @@ Bool Compiler_parse(
 
 			else {
 
-				U16 minVersion = Compiler_minFeatureSetStage(runtimeEntry.entry.stage, runtimeEntry.entry.waveSizeType);
+				U8 waveSizeType = runtimeEntry.entry.waveSize >> 4 ? 2 : (runtimeEntry.entry.waveSize ? 1 : 0);
+				U16 minVersion = Compiler_minFeatureSetStage(runtimeEntry.entry.stage, waveSizeType);
 
 				//Ensure all shader versions are compatible with minimum featureset
 

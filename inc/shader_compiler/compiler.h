@@ -28,6 +28,7 @@
 TList(SHFile);
 
 typedef struct CharString CharString;
+typedef struct SpinLock SpinLock;
 
 typedef enum ECompilerFormat {
 	ECompilerFormat_HLSL,
@@ -210,6 +211,8 @@ Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
+	SpinLock *lock,					//Locked when entries are changed
+	ListSHEntryRuntime entries,		//Writes into to update reflected properties
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -247,6 +250,8 @@ Bool Compiler_compilex(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
+	SpinLock *lock,					//Locked when entries are changed
+	ListSHEntryRuntime entries,		//Writes into to update reflected properties
 	CompileResult *result,
 	Error *e_rr
 );

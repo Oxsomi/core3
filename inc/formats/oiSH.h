@@ -225,10 +225,10 @@ typedef struct SHEntry {
 	//Don't change order, compares use this (U32, U64[3])
 
 	U8 stage;				//ESHPipelineStage
-	U8 waveSizeType;		//0 = none, 1 = basic, 2 = advanced. Can be 0 if non DXIL.
+	U8 padding;
 	U16 waveSize;			//U4[4] requiredSize, minSize, maxSize, preferSize: each U4 is in range [0, 9]. 0 = 0, 3 = 8, etc.
 
-	U16 groupX, groupY;
+	U16 groupX, groupY;		//Present for compute, workgraph, task and mesh shaders
 
 	U16 groupZ;
 	U8 intersectionSize, payloadSize;		//Raytracing payload sizes
@@ -257,7 +257,9 @@ typedef struct SHEntryRuntime {
 
 	U16 vendorMask;
 	Bool isShaderAnnotation;			//Switches [shader("string")] and [stage("string")], the first indicates StateObject
-	U8 padding[5];
+	Bool isInitialized;
+
+	U32 padding;
 
 	ListU32 extensions;					//Explicitly enabled extensions (ESHExtension[])
 

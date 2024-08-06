@@ -1445,19 +1445,23 @@ Bool Compiler_convertWaveSize(
 	
 	Bool s_uccess = true;
 	U8 recommend = 0, waveMin = 0, waveMax = 0;
+	
+	U32 waveSizeRecommendedTmp = waveSizeRecommended;
+	U32 waveSizeMinTmp = waveSizeMin;
+	U32 waveSizeMaxTmp = waveSizeMax;
+	
+	if(!waveSizeMaxTmp)
+		waveSizeMaxTmp = 128;
 
-	if(!waveSizeMax)
-		waveSizeMax = 128;
+	if(!waveSizeMinTmp)
+		waveSizeMinTmp = 4;
 
-	if(!waveSizeMin)
-		waveSizeMin = 4;
-
-	if(!waveSizeRecommended)
-		waveSizeRecommended = (waveSizeMin + waveSizeMax) / 2;		//Not base2, but don't care
+	if(!waveSizeRecommendedTmp)
+		waveSizeRecommendedTmp = (waveSizeMinTmp + waveSizeMaxTmp) / 2;		//Not base2, but don't care
 
 	if(
-		U32_min(waveSizeMin, U32_min(waveSizeMax, waveSizeRecommended)) < 4 ||
-		U32_max(waveSizeMin, U32_max(waveSizeMax, waveSizeRecommended)) > 128
+		U32_min(waveSizeMinTmp, U32_min(waveSizeMaxTmp, waveSizeRecommendedTmp)) < 4 ||
+		U32_max(waveSizeMinTmp, U32_max(waveSizeMaxTmp, waveSizeRecommendedTmp)) > 128
 	)
 		retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get groupSize; out of bounds"))
 
@@ -1495,10 +1499,112 @@ clean:
 	return s_uccess;
 }
 
+typedef union TempInOutput {
+	U8 a[16];
+	U64 aU64[2];
+} TempInOutput;
+
+Bool Compiler_findEntry(ListSHEntryRuntime entry, CharString name, SHEntryRuntime **ptr, Error *e_rr) {
+
+	for(U64 i = 0; i < entry.length; ++i)
+		if (CharString_equalsStringSensitive(entry.ptr[i].entry.name, name)) {
+			*ptr = entry.ptrNonConst + i;
+			return true;
+		}
+
+	if(e_rr)
+		*e_rr = Error_notFound(0, 1, "Compiler_findEntry()::name not found");
+
+	return false;
+}
+
+Bool Compiler_finalizeEntrypoint(
+	U32 localSize[3],
+	U8 payloadSize,
+	U8 intersectSize,
+	U16 waveSize,
+	ESHType inputs[16],
+	ESHType outputs[16],
+	CharString entryName,
+	SpinLock *lock,
+	ListSHEntryRuntime entries,
+	Error *e_rr
+) {
+	
+	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	SHEntryRuntime *entry = NULL;
+
+	TempInOutput input, output;
+
+	for(U8 i = 0; i < 16; ++i)
+		input.a[i] = (U8) inputs[i];
+
+	for(U8 i = 0; i < 16; ++i)
+		output.a[i] = (U8) outputs[i];
+
+	gotoIfError3(clean, Compiler_findEntry(entries, entryName, &entry, e_rr))
+
+	if(lock) {
+		acq = SpinLock_lock(lock, 1 * SECOND);
+		if(acq < ELockAcquire_Success)
+			retError(clean, Error_invalidState(0, "Compiler_compile() couldn't acquire spin lock"))
+	}
+
+	if (!entry->isInitialized) {
+
+		//Store payloadSize, intersectionSize, localSize, inputs, outputs
+
+		entry->entry.groupX = (U16) localSize[0];
+		entry->entry.groupY = (U16) localSize[1];
+		entry->entry.groupZ = (U16) localSize[2];
+
+		entry->entry.payloadSize = payloadSize;
+		entry->entry.intersectionSize = intersectSize;
+		entry->entry.waveSize = waveSize;
+
+		entry->entry.inputsU64[0] = input.aU64[0];
+		entry->entry.inputsU64[1] = input.aU64[1];
+
+		entry->entry.outputsU64[0] = output.aU64[0];
+		entry->entry.outputsU64[1] = output.aU64[1];
+
+		entry->isInitialized = true;
+	}
+
+	//Compare to ensure we have the exact same properties
+
+	else if(
+		entry->entry.groupX != localSize[0] ||
+		entry->entry.groupY != localSize[1] ||
+		entry->entry.groupZ != localSize[2] ||
+		entry->entry.payloadSize != payloadSize ||
+		entry->entry.intersectionSize != intersectSize ||
+		entry->entry.waveSize != waveSize ||
+		entry->entry.inputsU64[0] != input.aU64[0] ||
+		entry->entry.inputsU64[1] != input.aU64[1] ||
+		entry->entry.outputsU64[0] != output.aU64[0] ||
+		entry->entry.outputsU64[1] != output.aU64[1]
+	)
+		retError(clean, Error_invalidState(
+			0,
+			"Compiler_finalizeEntrypoint() had two mismatching inputs from reflection:\n"
+			"numthreads, payloadSize, intersectSize, waveSize, inputs or outputs"
+		))
+
+clean:
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(lock);
+
+	return s_uccess;
+}
+
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
+	SpinLock *lock,
+	ListSHEntryRuntime entries,
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -1835,8 +1941,9 @@ Bool Compiler_compile(
 					if (i >> 31 || (funcRefl = dxilReflLib->GetFunctionByIndex1((INT)i)) == NULL)
 						retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get ID3D12FunctionReflection"))
 
+					D3D12_FUNCTION_DESC funcDesc0 = D3D12_FUNCTION_DESC{};
 					D3D12_FUNCTION_DESC1 funcDesc = D3D12_FUNCTION_DESC1{};
-					if(FAILED(funcRefl->GetDesc1(&funcDesc)))
+					if(FAILED(funcRefl->GetDesc(&funcDesc0)) || FAILED(funcRefl->GetDesc1(&funcDesc)))
 						retError(clean, Error_invalidState(
 								0, "Compiler_compile() couldn't get D3D12_FUNCTION_DESC1"
 						))
@@ -1909,6 +2016,29 @@ Bool Compiler_compile(
 
 					if(hasGroupSize)
 						gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
+						
+					ESHType inputs[16] = {};		//TODO:
+					ESHType outputs[16] = {};
+
+					if(!funcDesc0.Name)
+						retError(clean, Error_invalidState(0, "Compiler_compile() DXIL contained no library name"))
+
+					CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
+
+					if (funcDesc0.Name[0] == '\x1') {	//Mangled
+
+						U64 firstAt = CharString_findFirstSensitive(demangled, '@', 2, 0);
+
+						if(funcDesc0.Name[1] != '?' || firstAt == U64_MAX)
+							retError(clean, Error_invalidState(0, "Compiler_compile() DXIL had invalid name mangling"))
+
+						demangled = CharString_createRefSizedConst(demangled.ptr + 2, firstAt - 2, false);
+					}
+
+					gotoIfError3(clean, Compiler_finalizeEntrypoint(
+						groupSize, payloadSize, attributeSize, waveSizes, inputs, outputs,
+						demangled, lock, entries, e_rr
+					))
 				}
 			}
 
@@ -2044,10 +2174,10 @@ Bool Compiler_compile(
 					}
 				}
 
-				//TODO: Finalize entrypoint
-				//TODO: Store payloadSize, intersectionSize, localSize, inputs, outputs
-
-				Log_debugLnx("Finished reflecting");
+				gotoIfError3(clean, Compiler_finalizeEntrypoint(
+					groupSize, 0, 0, waveSizes, inputs, outputs,
+					toCompile.entrypoint, lock, entries, e_rr
+				))
 			}
 
 			if((toCompile.extensions & exts) != exts)
@@ -2296,10 +2426,12 @@ Bool Compiler_compile(
 					}
 				}
 
-				Log_debugLnx("Finished reflecting");
-
-				//TODO: Finalize entrypoint
-				//TODO: Store payloadSize, intersectionSize, localSize, inputs, outputs
+				gotoIfError3(clean, Compiler_finalizeEntrypoint(
+					localSize, payloadSize, intersectSize, 0, inputs, outputs,
+					CharString_length(toCompile.entrypoint) ? toCompile.entrypoint :
+					CharString_createRefCStrConst(entrypoint.name),
+					lock, entries, e_rr
+				))
 			}
 
 			//Strip debug and optimize

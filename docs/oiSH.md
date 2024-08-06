@@ -228,7 +228,7 @@ SHFile {
                     Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
                     groups.w should be 0 for mesh or task shader
 
-    	if intersection:
+    	if closestHit, anyHit or intersection:
     	    U8 intersectionSize;
     
 	    if miss,closestHit,anyHit or intersection

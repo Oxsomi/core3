@@ -396,7 +396,8 @@
 		CharString inputPath,
 		CharString input,
 		CompileResult *dest,
-		SHEntryRuntime runtimeEntry,
+		SpinLock *lock,						//When modifying/reading entry
+		ListSHEntryRuntime runtimeEntries,
 		U16 runtimeEntryId,
 		U16 combinationId,
 		CharString includeDir
@@ -422,10 +423,12 @@
 		};
 
 		//First we need to go from text with includes and defines to easy to parse text
+		//Accessing SHEntryRuntime here without locking is safe, since we don't access these properties from asBinaryIdentifier
 
+		SHEntryRuntime entry = runtimeEntries.ptrNonConst[runtimeEntryId];
 		SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-		gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtimeEntry, combinationId, &binaryIdentifier, e_rr))
-		gotoIfError3(clean, Compiler_compilex(compiler, settings, binaryIdentifier, dest, e_rr))
+		gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(entry, combinationId, &binaryIdentifier, e_rr))
+		gotoIfError3(clean, Compiler_compilex(compiler, settings, binaryIdentifier, lock, runtimeEntries, dest, e_rr))
 
 		for(U64 i = 0; i < dest->compileErrors.length; ++i) {
 
@@ -699,7 +702,6 @@
 				U16 runtimeEntryId = (U16)(ourNext >> 16);
 				U16 combinationId = (U16) ourNext;
 
-				SHEntryRuntime runtimeEntry = entries.ptr[runtimeEntryId];
 				CharString input = job->inputPaths.ptr[ourOldJobId];
 
 				lastJobId = ourJobId;
@@ -711,7 +713,8 @@
 					input,
 					job->inputData.ptr[ourOldJobId],
 					&tmp,
-					runtimeEntry,
+					job->lock,
+					entries,
 					runtimeEntryId,
 					combinationId,
 					job->includeDir
@@ -1396,7 +1399,8 @@
 							compiler, allCompileModes.ptr[i], args,
 							allFiles.ptr[i], allShaderText.ptr[i],
 							&tempResult,
-							runtimeEntry,
+							NULL,
+							runtimeEntries,
 							runtimeEntryId,
 							combinationId,
 							includeDir
