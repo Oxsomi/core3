@@ -212,6 +212,7 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 	for(U64 i = 0; i < shFile->entries.length; ++i) {
 		SHEntry *entry = &shFile->entries.ptrNonConst[i];
 		CharString_free(&entry->name, alloc);
+		ListCharString_freeUnderlying(&entry->semanticNames, alloc);
 		ListU16_free(&entry->binaryIds, alloc);
 	}
 
@@ -226,7 +227,7 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 			Buffer_free(&binary->binaries[i], alloc);
 	}
 
-	ListSHEntry_free(&shFile->entries, alloc);
+	ListSHEntry_freeUnderlying(&shFile->entries, alloc);
 	ListSHBinaryInfo_free(&shFile->binaries, alloc);
 	ListSHInclude_freeUnderlying(&shFile->includes, alloc);
 
@@ -418,6 +419,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 	CharString copy = CharString_createNull();
 	CharString oldName = copy;
 
+	ListCharString oldSemantics = (ListCharString) { 0 };
+	ListCharString copySemantics = (ListCharString) { 0 };
+
 	ListU16 copyBinaryIds = (ListU16) { 0 };
 	ListU16 oldBinaryIds = copyBinaryIds;
 
@@ -553,11 +557,19 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 
 	//Check validity of inputs and outputs
 
+	U8 inputs = 0, outputs = 0;
+
 	if(entry->outputsU64[0] | entry->outputsU64[1] | entry->inputsU64[0] | entry->inputsU64[1])
-		for (U64 i = 0; i < 16; ++i) {
+		for (U8 i = 0; i < 16; ++i) {
 
 			U8 vout = entry->outputs[i];
 			U8 vin = entry->inputs[i];
+
+			if(vout)
+				outputs = i + 1;
+
+			if(vin)
+				inputs = i + 1;
 
 			if(
 				(vout && (ESHType_getPrimitive(vout) == ESHPrimitive_Invalid || ESHType_getStride(vout) == ESHStride_X8)) ||
@@ -567,6 +579,102 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 					3, "SHFile_addEntrypoint() outputs or inputs contains an invalid parameter"
 				))
 		}
+
+	//Detect semantic duplicates and verify if the strings exist
+
+	if(entry->uniqueInputSemantics >= 16)
+		retError(clean, Error_invalidOperation(
+			0, "SHFile_addEntrypoint() inputs semantics out of bounds"
+		))
+
+	if(entry->semanticNames.length < entry->uniqueInputSemantics)
+		retError(clean, Error_invalidOperation(
+			0, "SHFile_addEntrypoint() inputs semantic name out of bounds"
+		))
+
+	U64 uniqueOutputSemantics = entry->semanticNames.length - entry->uniqueInputSemantics;
+
+	if(uniqueOutputSemantics >= 16)
+		retError(clean, Error_invalidOperation(
+			0, "SHFile_addEntrypoint() output semantics out of bounds"
+		))
+
+	for(U64 i = 0; i < entry->uniqueInputSemantics; ++i)
+		for(U64 j = 0; j < i; ++j)
+			if(CharString_equalsStringInsensitive(entry->semanticNames.ptr[i], entry->semanticNames.ptr[j]))
+				retError(clean, Error_invalidOperation(
+					0, "SHFile_addEntrypoint() found duplicate in input unique semantic names"
+				))
+
+	for(U64 i = entry->uniqueInputSemantics; i < entry->semanticNames.length; ++i)
+		for(U64 j = entry->uniqueInputSemantics; j < i; ++j)
+			if(CharString_equalsStringInsensitive(entry->semanticNames.ptr[i], entry->semanticNames.ptr[j]))
+				retError(clean, Error_invalidOperation(
+					0, "SHFile_addEntrypoint() found duplicate in output unique semantic names"
+				))
+
+	U32 presentMask[16] = { 0 };
+
+	for (U8 i = 0; i < inputs; ++i) {
+
+		U8 input = entry->inputSemanticNames[i];
+
+		if(input && !entry->inputs[i])
+			retError(clean, Error_invalidState(
+				0, "SHFile_addEntrypoint() semantic defined, but input at slot was empty"
+			))
+
+		if((input >> 4) > entry->uniqueInputSemantics)
+			retError(clean, Error_outOfBounds(
+				0, input >> 4, entry->uniqueInputSemantics, "SHFile_addEntrypoint() semantic name out of bounds"
+			))
+
+		if((presentMask[input >> 4] >> (input & 0xF)) & 1)
+			retError(clean, Error_invalidState(
+				0, "SHFile_addEntrypoint() semantic was already present"
+			))
+
+		presentMask[input >> 4] |= 1 << (input & 0xF);
+	}
+
+	for(U8 i = inputs; i < 16; ++i)
+		if(entry->inputSemanticNames[i])
+			retError(clean, Error_invalidState(
+				0, "SHFile_addEntrypoint() input semantic defined but not present"
+			))
+
+	for (U8 i = 0; i < outputs; ++i) {
+
+		U8 output = entry->outputSemanticNames[i];
+
+		if(output && !entry->outputs[i])
+			retError(clean, Error_invalidState(
+				0, "SHFile_addEntrypoint() semantic defined, but output at slot was empty"
+			))
+
+		if((output >> 4) > uniqueOutputSemantics)
+			retError(clean, Error_outOfBounds(
+				1, output >> 4, uniqueOutputSemantics, "SHFile_addEntrypoint() semantic name out of bounds"
+			))
+
+		if((presentMask[output >> 4] >> (16 + (output & 0xF))) & 1)
+			retError(clean, Error_invalidState(
+				1, "SHFile_addEntrypoint() semantic was already present"
+			))
+
+		presentMask[output >> 4] |= 1 << (16 + (output & 0xF));
+	}
+
+	for(U8 i = outputs; i < 16; ++i)
+		if(entry->outputSemanticNames[i])
+			retError(clean, Error_invalidState(
+				0, "SHFile_addEntrypoint() output semantic defined but not present"
+			))
+
+	oldSemantics = entry->semanticNames;
+	entry->semanticNames = (ListCharString) { 0 };
+
+	gotoIfError3(clean, ListCharString_move(&oldSemantics, alloc, &entry->semanticNames, e_rr))
 
 	oldName = entry->name;
 
@@ -590,6 +698,11 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 	*entry = (SHEntry) { 0 };
 
 clean:
+
+	if (!s_uccess && oldSemantics.ptr) {
+		ListCharString_freeUnderlying(&copySemantics, alloc);
+		entry->semanticNames = oldSemantics;
+	}
 
 	if(!s_uccess && copy.ptr) {
 		CharString_free(&copy, alloc);
@@ -861,6 +974,11 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 				headerSize += inputs + outputs;
 
+				//Entries need extra allocations for semantics if supported
+
+				if (entry.semanticNames.length)
+					headerSize += 1 + inputs + outputs;
+
 				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
 					break;
 
@@ -890,6 +1008,33 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		}
 
 		headerSize += entry.binaryIds.length * sizeof(U16);
+	}
+
+	U64 uniqueSemantics = 0;
+
+	for (U64 i = 0; i < shFile.entries.length; ++i) {
+
+		SHEntry entry = shFile.entries.ptr[i];
+
+		for (U64 j = 0; j < entry.semanticNames.length; ++j) {
+
+			CharString semantic = entry.semanticNames.ptr[j];
+
+			if(isUTF8)
+				gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(semantic), alloc, e_rr))
+
+			else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(semantic), alloc, e_rr))
+		}
+
+		uniqueSemantics += entry.semanticNames.length;
+
+		if(uniqueSemantics >= U16_MAX)
+			retError(clean, Error_outOfBounds(0, uniqueSemantics, U16_MAX, "SHFile_write() exceeded max semantic name count"))
+
+		if(entry.uniqueInputSemantics >= 16)
+			retError(clean, Error_outOfBounds(
+				0, entry.uniqueInputSemantics, 16, "SHFile_write() exceeded unique input semantic count"
+			))
 	}
 
 	gotoIfError3(clean, DLFile_write(dlFile, alloc, &dlFileBuf, e_rr))
@@ -931,7 +1076,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		.binaryCount = (U16) shFile.binaries.length,
 		.stageCount = (U16) shFile.entries.length,
 		.uniqueUniforms = (U16) uniValStart,
-		.includeFileCount = (U16) shFile.includes.length
+		.includeFileCount = (U16) shFile.includes.length,
+		.semanticCount = (U16) uniqueSemantics
 	};
 
 	headerIt += sizeof(SHHeader);
@@ -966,8 +1112,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			if(Buffer_length(binary.binaries[j]))
 				binaryFlags |= 1 << j;
 
-		U64 entryStart = dlFile.entryBuffers.length - entries;
-		U64 includeStart = entryStart - shFile.includes.length;
+		U64 entryStart = dlFile.entryBuffers.length - uniqueSemantics - entries;
+		U64 includeStart = entryStart - uniqueSemantics - shFile.includes.length;
 		U64 entrypoint = entryStart + U16_MAX;		//Indicate no entry
 
 		if(!binary.hasShaderAnnotation) {
@@ -1074,9 +1220,28 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 					++headerIt;
 				}
 
-				begin[0] = inputs;
+				Bool hasSemantics =
+					entry.inputSemanticNamesU64[0]  | entry.inputSemanticNamesU64[1] | 
+					entry.outputSemanticNamesU64[0] | entry.outputSemanticNamesU64[1];
+
+				begin[0] = inputs | (hasSemantics ? 0x80 : 0);
 				begin[1] = outputs;
 
+				if(hasSemantics) {
+
+					headerIt[0] = 
+						((U8) entry.uniqueInputSemantics) |
+						((U8) (entry.semanticNames.length - entry.uniqueInputSemantics) << 4);
+
+					for (U8 j = 0; j < inputs; ++j)
+						headerIt[1 + j] = entry.inputSemanticNames[j];
+
+					for (U8 j = 0; j < outputs; ++j)
+						headerIt[1 + inputs + j] = entry.outputSemanticNames[j];
+
+					headerIt += 1 + inputs + outputs;
+				}
+				
 				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
 					break;
 
@@ -1203,6 +1368,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	U64 minEntryBuffers =
 		(U64)header.stageCount + 
 		header.includeFileCount + 
+		header.semanticCount +
 		header.uniqueUniforms +				//Names have to be unique
 		(header.uniqueUniforms ? 1 : 0);	//Values can be shared
 
@@ -1271,7 +1437,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				))
 
 			CharString name = DLFile_stringAt(
-				dlFile, dlFile.entryBuffers.length - header.stageCount + binary.entrypoint, NULL
+				dlFile, dlFile.entryBuffers.length - header.semanticCount - header.stageCount + binary.entrypoint, NULL
 			);
 
 			gotoIfError2(clean, CharString_createCopy(name, alloc, &binaryInfo.identifier.entrypoint))
@@ -1309,7 +1475,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 			//Since uniform values can be shared, we need to ensure we're not indexing out of bounds
 
 			U64 uniformNameId = (U64) uniformValues[i] + header.uniqueUniforms;
-			U64 endIndex = dlFile.entryBuffers.length - header.stageCount - header.includeFileCount;
+			U64 endIndex = dlFile.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount;
 
 			if(uniformNameId >= endIndex)
 				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
@@ -1358,6 +1524,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 	const U8 *nextMemPrev = file.ptr;
 	const U8 *nextMem = file.ptr, *nextMemTemp = nextMem;
+	U64 semanticCounter = 0;
 
 	for (U64 i = 0; i < header.stageCount; ++i) {
 
@@ -1373,7 +1540,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		if(!binaryCount)
 			retError(clean, Error_invalidParameter(0, 0, "SHFile_read() stage[i].binaryCount must be >0"))
 
-		U64 start = dlFile.entryBuffers.length - header.stageCount;
+		U64 start = dlFile.entryBuffers.length - header.semanticCount - header.stageCount;
 
 		CharString str = DLFile_stringAt(dlFile, start + i, NULL);		//Already safety checked
 
@@ -1395,6 +1562,10 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 					))
 
 				U8 inputs = nextMem[0];
+
+				Bool hasSemantics = inputs & 0x80;
+				inputs &= 0x7F;
+
 				U8 outputs = nextMem[1];
 
 				if(inputs > 0x10 || outputs > 0x10)
@@ -1422,6 +1593,55 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 				for(U8 j = 0; j < outputBytes; ++j)
 					entry.outputs[j] = nextMemTemp[inputBytes + j];
+
+				nextMemTemp = nextMem;
+
+				//Semantics
+
+				if (hasSemantics) {
+
+					//Get strings
+
+					nextMem += 1 + inputs + outputs;
+					U8 uniqueInputSemantics = nextMemTemp[0] & 0xF;
+					U8 uniqueOutputSemantics = nextMemTemp[0] >> 4;
+
+					entry.uniqueInputSemantics = uniqueInputSemantics;
+
+					U64 startCounter = semanticCounter;
+					semanticCounter += uniqueInputSemantics + uniqueOutputSemantics;
+
+					if(semanticCounter > header.semanticCount)
+						retError(clean, Error_outOfBounds(
+							0, semanticCounter, header.semanticCount, "SHFile_read() semantic out of bounds"
+						))
+
+					startCounter += dlFile.entryBuffers.length - header.semanticCount;
+
+					for (U64 j = startCounter; j < startCounter + uniqueInputSemantics + uniqueOutputSemantics; ++j) {
+
+						CharString ref;
+
+						if(dlFile.settings.dataType == EDLDataType_UTF8) {
+							Buffer buf = dlFile.entryBuffers.ptr[j];
+							ref = CharString_createRefSizedConst((const C8*)buf.ptr, Buffer_length(buf), false);
+						}
+
+						else ref = CharString_createRefStrConst(dlFile.entryStrings.ptr[j]);
+
+						gotoIfError2(clean, ListCharString_pushBack(&entry.semanticNames, ref, alloc))
+					}
+
+					for (U8 j = 0; j < inputs; ++j) {
+						U8 input = nextMemTemp[1 + j];
+						entry.inputSemanticNames[j] = input;
+					}
+
+					for (U8 j = 0; j < outputs; ++j) {
+						U8 output = nextMemTemp[1 + inputs + j];
+						entry.outputSemanticNames[j] = output;
+					}
+				}
 					
 				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
 					break;
@@ -1535,7 +1755,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 		CharString relativePath = DLFile_stringAt(
 			dlFile,
-			dlFile.entryBuffers.length - header.stageCount - header.includeFileCount + i,
+			dlFile.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount + i,
 			NULL
 		);
 
@@ -1748,37 +1968,49 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 
 	switch(shEntry.stage) {
 
-		default:
+		default: {
 
-			if (shEntry.inputsU64[0] || shEntry.inputsU64[1]) {
+			Bool hasSemantics =
+				shEntry.inputSemanticNamesU64[0] || shEntry.inputSemanticNamesU64[1] |
+				shEntry.outputSemanticNamesU64[0] || shEntry.outputSemanticNamesU64[1];
 
-				Log_debugLn(alloc, "\tInputs:");
+			Bool hasInputs = shEntry.inputsU64[0] || shEntry.inputsU64[1];
+			Bool hasOutputs = shEntry.outputsU64[0] | shEntry.outputsU64[1];
+			U8 value = (hasInputs ? 1 : 0) | (hasOutputs ? 2 : 0);
 
-				for (U8 i = 0; i < 16; ++i) {
+			for(U64 j = 0; j < 2; ++j)
+				if ((value >> j) & 1) {
 
-					ESHType type = (ESHType)shEntry.inputs[i];
+					Log_debugLn(alloc, j ? "\tOutputs:" : "\tInputs:");
 
-					if(!type)
-						continue;
+					for (U8 i = 0; i < 16; ++i) {
 
-					Log_debugLn(alloc, "\t\t%"PRIu8" %s", i, ESHType_name(type));
+						ESHType type = (ESHType)(j ? shEntry.outputs[i] : shEntry.inputs[i]);
+
+						if(!type)
+							continue;
+
+						U8 semanticValue = j ? shEntry.outputSemanticNames[i] : shEntry.inputSemanticNames[i];
+						U64 semanticNameId = semanticValue >> 4;
+						U64 semanticOff = j ? shEntry.uniqueInputSemantics : 0;
+
+						CharString semantic =
+							semanticNameId ? shEntry.semanticNames.ptr[semanticNameId - 1 + semanticOff] : (
+								j && shEntry.stage == ESHPipelineStage_Pixel ? CharString_createRefCStrConst("SV_TARGET") :
+								CharString_createRefCStrConst("TEXCOORD")
+							);
+
+						Log_debugLn(
+							alloc,
+							"\t\t%"PRIu8" %s : %.*s%"PRIu8,
+							i,
+							ESHType_name(type),
+							(int) CharString_length(semantic),
+							semantic.ptr,
+							hasSemantics ? (U8) (semanticValue & 0xF) : i
+						);
+					}
 				}
-			}
-
-			if (shEntry.outputsU64[0] | shEntry.outputsU64[1]) {
-
-				Log_debugLn(alloc, "\tOutputs:");
-
-				for (U8 i = 0; i < 16; ++i) {
-
-					ESHType type = (ESHType)shEntry.outputs[i];
-
-					if(!type)
-						continue;
-
-					Log_debugLn(alloc, "\t\t%"PRIu8" %s", i, ESHType_name(type));
-				}
-			}
 
 			if(shEntry.stage != ESHPipelineStage_MeshExt && shEntry.stage != ESHPipelineStage_TaskExt)
 				break;
@@ -1786,6 +2018,7 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 			else {
 				// fallthrough
 			}
+		}
 
 		case ESHPipelineStage_Compute:
 		case ESHPipelineStage_WorkgraphExt:
@@ -2182,15 +2415,17 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		//Make sure the two have identical data
 
+		const void *cmpA0 = &entryi.stage;
+		const void *cmpB0 = &entryj.stage;
 		const void *cmpA = &entryi.groupX;
 		const void *cmpB = &entryj.groupX;
 
-		if(entryi.stage != entryj.stage)
+		if(*(const U16*)cmpA0 != *(const U16*)cmpB0)
 			retError(clean, Error_invalidState(
-				(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
+				(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching entry or semantics"
 			))
 
-		for(U64 k = 0; k < 5; ++k)
+		for(U64 k = 0; k < 9; ++k)
 			if(((const U64*)cmpA)[k] != ((const U64*)cmpB)[k])
 				retError(clean, Error_invalidState(
 					(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
@@ -2225,6 +2460,18 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			gotoIfError2(clean, ListU16_pushBack(&tmpBins, binaryId, alloc))
 		}
 
+		if(entry.semanticNames.length != entryi.semanticNames.length)
+			retError(clean, Error_invalidState(
+				(U32) i, "SHFile_combine()::a and b have mismatching semanticNames"
+			))
+
+		for(U64 k = 0; k < entry.semanticNames.length; ++k)
+			if(!CharString_equalsStringInsensitive(entry.semanticNames.ptr[k], entryj.semanticNames.ptr[k]))
+				retError(clean, Error_invalidState(
+					(U32) i, "SHFile_combine()::a and b have mismatching semanticNames[k]"
+				))
+
+		entry.semanticNames = ListCharString_createRefFromList(entry.semanticNames);
 		entry.binaryIds = tmpBins;
 		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
 		tmpBins = (ListU16) { 0 };
@@ -2297,6 +2544,7 @@ void SHEntry_free(SHEntry *entry, Allocator alloc) {
 		return;
 
 	CharString_free(&entry->name, alloc);
+	ListCharString_freeUnderlying(&entry->semanticNames, alloc);
 }
 
 void SHInclude_free(SHInclude *include, Allocator alloc) {
@@ -2317,6 +2565,17 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 	ListU32_free(&entry->extensions, alloc);
 	ListU8_free(&entry->uniformsPerCompilation, alloc);
 	ListCharString_freeUnderlying(&entry->uniformNameValues, alloc);
+}
+
+void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc) {
+
+	if(!entry)
+		return;
+
+	for(U64 i = 0; i < entry->length; ++i)
+		SHEntry_free(&entry->ptrNonConst[i], alloc);
+
+	ListSHEntry_free(entry, alloc);
 }
 
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc) {

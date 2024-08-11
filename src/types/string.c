@@ -2791,6 +2791,62 @@ Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc
 	return Error_none();
 }
 
+Bool ListCharString_move(ListCharString *src, Allocator alloc, ListCharString *dst, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool allocated = false;
+
+	if(!src || !dst)
+		retError(clean, Error_nullPointer(!src ? 0 : 2, "ListCharString_move()::src and dst are required"))
+
+	if(dst->ptr)
+		retError(clean, Error_invalidParameter(2, 0, "ListCharString_move()::dst contained data, might indicate memleak"))
+
+	allocated = true;
+	Bool isListRef = ListCharString_isRef(*src);
+	Bool anyRef = isListRef;
+
+	if(!anyRef)
+		for(U64 i = 0; i < src->length; ++i)
+			if (CharString_isRef(src->ptr[i])) {
+				anyRef = true;
+				break;
+			}
+
+	if(!anyRef)
+		*dst = *src;
+
+	else {
+
+		gotoIfError2(clean, ListCharString_resize(dst, src->length, alloc))
+
+		for(U64 i = 0; i < src->length; ++i) {
+
+			if(isListRef || CharString_isRef(src->ptr[i]))
+				gotoIfError2(clean, CharString_createCopy(
+					src->ptr[i], alloc, &dst->ptrNonConst[i]
+				))
+
+			else {
+				dst->ptrNonConst[i] = src->ptr[i];
+				src->ptrNonConst[i] = CharString_createNull();
+			}
+		}
+
+		if(!ListCharString_isRef(*src))
+			ListCharString_freeUnderlying(src, alloc);
+	}
+
+	*src = (ListCharString){ 0 };
+
+clean:
+
+	if(allocated && !s_uccess)
+		ListCharString_freeUnderlying(dst, alloc);
+
+	return s_uccess;
+}
+
 U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
 
 	U64 i = 0;

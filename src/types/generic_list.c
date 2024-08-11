@@ -850,7 +850,7 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 	if(!list)
 		return Error_nullPointer(0, "GenericList_insert()::list out of bounds");
 
-	if(GenericList_isRef(*list))
+	if(GenericList_isRef(*list) && list->length)
 		return Error_invalidParameter(0, 0, "GenericList_insert()::list must be managed memory");
 
 	if(list->stride != Buffer_length(buf))

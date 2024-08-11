@@ -632,6 +632,10 @@ Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc);
 
 Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr);
 
+//Move data for strings + array wherever possible.
+//Otherwise, allocate.
+Bool ListCharString_move(ListCharString *src, Allocator alloc, ListCharString *dst, Error *e_rr);
+
 //Combining all strings into one
 
 Error ListCharString_combine(ListCharString arr, Allocator alloc, CharString *result);

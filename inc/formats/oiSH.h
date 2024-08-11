@@ -220,30 +220,42 @@ typedef struct SHEntry {
 
 	CharString name;
 
-	ListU16 binaryIds;		//Reference SHBinaryInfo
+	ListU16 binaryIds;					//Reference SHBinaryInfo
 
-	//Don't change order, compares use this (U32, U64[3])
+	//Don't change order
 
-	U8 stage;				//ESHPipelineStage
-	U8 padding;
-	U16 waveSize;			//U4[4] requiredSize, minSize, maxSize, preferSize: each U4 is in range [0, 9]. 0 = 0, 3 = 8, etc.
+	U8 stage;							//ESHPipelineStage
+	U8 uniqueInputSemantics;
+	U16 waveSize;						//U4[4] req, min, max, preferSize: each U4 is in range [0, 9]. 0 = 0, 3 = 8, etc.
 
-	U16 groupX, groupY;		//Present for compute, workgraph, task and mesh shaders
+	U16 groupX, groupY;					//Present for compute, workgraph, task and mesh shaders
 
 	U16 groupZ;
-	U8 intersectionSize, payloadSize;		//Raytracing payload sizes
+	U8 intersectionSize, payloadSize;	//Raytracing payload sizes
 
 	//Verification for linking and PSO compatibility (graphics only)
 
 	union {
-		U8 inputs[16];		//ESHType
+		U8 inputs[16];					//ESHType
 		U64 inputsU64[2];
 	};
 
 	union {
-		U8 outputs[16];		//ESHType
+		U8 outputs[16];					//ESHType
 		U64 outputsU64[2];
 	};
+	
+	union {
+		U8 inputSemanticNames[16];		//(U4 semanticId, semanticName)[]
+		U64 inputSemanticNamesU64[2];
+	};
+	
+	union {
+		U8 outputSemanticNames[16];		//(U4 semanticId, semanticName)[]
+		U64 outputSemanticNamesU64[2];
+	};
+
+	ListCharString semanticNames;		//Unique semantics; outputs start at [uniqueInputSemantics], inputs at 0
 
 } SHEntry;
 
@@ -340,6 +352,7 @@ void SHEntry_free(SHEntry *entry, Allocator alloc);
 void SHInclude_free(SHInclude *include, Allocator alloc);
 
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
+void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
 void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc);
 
@@ -407,7 +420,7 @@ typedef struct SHHeader {
 	U16 stageCount;				//How many stages reference into the binaries
 
 	U16 includeFileCount;		//Number of (recursive) include files
-	U16 padding;
+	U16 semanticCount;
 
 } SHHeader;
 

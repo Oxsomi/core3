@@ -44,7 +44,7 @@ typedef struct SHHeader {
     U16 stageCount;				//How many stages reference into the binaries
     
     U16 includeFileCount;
-    U16 padding;
+    U16 semanticCount;
 
 } SHHeader;
 
@@ -189,9 +189,10 @@ SHFile {
     SHHeader header;
 
     //No header, no encryption/compression/SHA256 (see oiDL.md)
-    //strings[len - stageCount, len] contains entrypoint names.
-    //strings[^ - includeFileCount, len - includeCount] contains (relative) include names.
-    //strings[0, len - stageCount - includeFileCount] contains uniform values and names.
+    //strings[len - semanticCount,  len] contains semantics for inputs/outputs.
+    //strings[^ - stageCount,       ^ - semanticCount] contains entrypoint names.
+    //strings[^ - includeFileCount, ^ - stageCount] contains (relative) include names.
+    //strings[0,                    ^ - includeFileCount] contains uniform values and names.
     DLFile strings;
 
     BinaryInfoFixedSize binaryInfos[binaryCount];
@@ -216,11 +217,22 @@ SHFile {
 
 	    if is graphics:
     
-    		U8 inputsAvail, outputsAvail;
+    		U8 inputsAvailAndHasSemantics;		//Upper bit: has semantics
+    		U8 outputsAvail;
     
 		    //Each element: [ ESHStride, ESHPrimitive, ESHVector ]
     		U8 inputs[inputsAvail];
     		U8 outputs[outputsAvail];
+    
+    		//If shader source supports it, stores the index of the semantic in strings[].
+    		//But only for valid inputs/outputs (gaps not stored).
+    		//U4 semanticId, U4 semanticName.
+    		//semanticName of 0 is reserved as TEXCOORD or SV_TARGET (pixel shader output only).
+    		//This leaves up to 15 unique semantics (input has a unique one and output too).
+    		if(hasSemantics)
+                U8 semanticCounts;						//U4 input, output: Unique semantic counts
+     			U8 inputSemantics[validInputs];			//Starting at: semantics[0]
+     			U8 outputSemantics[validOutputs];		//Starting at: semantics[uniqueInputSemantics]
 
 	    if compute, mesh, task or workgraph:
 		    U16x4 groups;

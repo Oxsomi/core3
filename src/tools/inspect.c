@@ -169,10 +169,12 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			Log_debugLnx("Hashes: Source: %08"PRIX64", Contents: %08"PRIX64, shHeader.sourceHash, shHeader.hash);
 
 			Log_debugLnx(
-				"With %"PRIu16" binaries, %"PRIu16" stages, %"PRIu16" uniforms and %"PRIu16" includes",
+				"With %"PRIu16" binaries, %"PRIu16" stages, %"PRIu16" uniforms, "
+				"%"PRIu16" stored semantics and %"PRIu16" includes",
 				shHeader.binaryCount,
 				shHeader.stageCount,
 				shHeader.uniqueUniforms,
+				shHeader.semanticCount,
 				shHeader.includeFileCount
 			);
 

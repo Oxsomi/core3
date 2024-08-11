@@ -97,6 +97,7 @@ Error CharString_findAllStringInsensitivex(CharString s, CharString other, U64 o
 
 Bool ListCharString_freeUnderlyingx(ListCharString *arr);
 Error ListCharString_createCopyUnderlyingx(ListCharString toCopy, ListCharString *arr);
+Bool ListCharString_movex(ListCharString *src, ListCharString *dst, Error *e_rr);
 
 Error ListCharString_combinex(ListCharString arr, CharString *result);
 

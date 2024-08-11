@@ -673,6 +673,10 @@ Error ListCharString_createCopyUnderlyingx(ListCharString toCopy, ListCharString
 	return ListCharString_createCopyUnderlying(toCopy, Platform_instance.alloc, arr);
 }
 
+Bool ListCharString_movex(ListCharString *src, ListCharString *dst, Error *e_rr) {
+	return ListCharString_move(src, Platform_instance.alloc, dst, e_rr);
+}
+
 Error ListCharString_combinex(ListCharString arr, CharString *result) {
 	return ListCharString_combine(arr, Platform_instance.alloc, result);
 }

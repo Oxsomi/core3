@@ -265,7 +265,7 @@ The following defines are set by OxC3 during compilation:
 Semantics for input(s) and output(s) for shaders get parsed and have the following restrictions:
 
 - SV_ is reserved for HLSL semantic values.
-- Other semantic values must follow TEXCOORD[n], seeing as SPIRV has no concept of semantics. These can be bound through Vulkan as binding n or in D3D12 as TEXCOORD with id n. Allowing semantics would cause shaders that can't be compiled for SPIRV or any languages enabled by SPIRV (such as MSL or WGSL). As such, semantics for input/output layouts are completely incompatible with the OxC3 shader compiler.
+- Other semantic values should follow TEXCOORD[n], for optimal compatibility and storage. These can be bound through Vulkan as binding n or in D3D12 as TEXCOORD with id n. Semantics for input/output layouts are compatible with the OxC3 shader compiler, but are stored less efficiently and could experience less compatibility for non DirectX pipelines.
 
 #### Entrypoint annotations
 

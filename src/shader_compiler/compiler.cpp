@@ -1204,7 +1204,7 @@ Bool SpvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityPipeStorage:
 
 			retError(clean, Error_invalidState(
-				2, "Compiler_compile() SPIRV contained capability that isn't supported in oiSH"
+				2, "SpvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"
 			))
 	}
 
@@ -1463,7 +1463,7 @@ Bool Compiler_convertWaveSize(
 		U32_min(waveSizeMinTmp, U32_min(waveSizeMaxTmp, waveSizeRecommendedTmp)) < 4 ||
 		U32_max(waveSizeMinTmp, U32_max(waveSizeMaxTmp, waveSizeRecommendedTmp)) > 128
 	)
-		retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get groupSize; out of bounds"))
+		retError(clean, Error_invalidState(0, "Compiler_convertWaveSize() couldn't get groupSize; out of bounds"))
 
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeRecommended, &recommend, e_rr))
 	gotoIfError3(clean, Compiler_convertWaveSizeParam(waveSizeMin, &waveMin, e_rr))
@@ -1484,16 +1484,16 @@ Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
 	U64 totalGroup = (U64)threads[0] * threads[1] * threads[2];
 
 	if(!totalGroup)
-		retError(clean, Error_invalidOperation(2, "Compiler_compile() needs group size for compute"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() needs group size for compute"))
 
 	if(totalGroup > 512)
-		retError(clean, Error_invalidOperation(2, "Compiler_compile() group count out of bounds (512)"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count out of bounds (512)"))
 
 	if(U32_max(threads[0], threads[1]) > 512)
-		retError(clean, Error_invalidOperation(2, "Compiler_compile() group count x or y out of bounds (512)"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count x or y out of bounds (512)"))
 
 	if(threads[2] > 64)
-		retError(clean, Error_invalidOperation(2, "Compiler_compile() group count z out of bounds (64)"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count z out of bounds (64)"))
 
 clean:
 	return s_uccess;
@@ -1525,31 +1525,41 @@ Bool Compiler_finalizeEntrypoint(
 	U16 waveSize,
 	ESHType inputs[16],
 	ESHType outputs[16],
+	U8 uniqueInputSemantics,
+	ListCharString *uniqueSemantics,
+	U8 inputSemantics[16],
+	U8 outputSemantics[16],
 	CharString entryName,
 	SpinLock *lock,
 	ListSHEntryRuntime entries,
+	Allocator alloc,
 	Error *e_rr
 ) {
 	
 	Bool s_uccess = true;
 	ELockAcquire acq = ELockAcquire_Invalid;
 	SHEntryRuntime *entry = NULL;
+	Bool didInit = false;
 
 	TempInOutput input, output;
+	TempInOutput inputSemantic, outputSemantic;
 
-	for(U8 i = 0; i < 16; ++i)
+	for(U8 i = 0; i < 16; ++i) {
 		input.a[i] = (U8) inputs[i];
-
-	for(U8 i = 0; i < 16; ++i)
 		output.a[i] = (U8) outputs[i];
+		inputSemantic.a[i] = (U8) inputSemantics[i];
+		outputSemantic.a[i] = (U8) outputSemantics[i];
+	}
 
 	gotoIfError3(clean, Compiler_findEntry(entries, entryName, &entry, e_rr))
 
 	if(lock) {
 		acq = SpinLock_lock(lock, 1 * SECOND);
 		if(acq < ELockAcquire_Success)
-			retError(clean, Error_invalidState(0, "Compiler_compile() couldn't acquire spin lock"))
+			retError(clean, Error_invalidState(0, "Compiler_finalizeEntrypoint() couldn't acquire spin lock"))
 	}
+
+	didInit = !entry->isInitialized;
 
 	if (!entry->isInitialized) {
 
@@ -1569,6 +1579,16 @@ Bool Compiler_finalizeEntrypoint(
 		entry->entry.outputsU64[0] = output.aU64[0];
 		entry->entry.outputsU64[1] = output.aU64[1];
 
+		entry->entry.uniqueInputSemantics = uniqueInputSemantics;
+
+		entry->entry.inputSemanticNamesU64[0] = inputSemantic.aU64[0];
+		entry->entry.inputSemanticNamesU64[1] = inputSemantic.aU64[1];
+
+		entry->entry.outputSemanticNamesU64[0] = outputSemantic.aU64[0];
+		entry->entry.outputSemanticNamesU64[1] = outputSemantic.aU64[1];
+
+		gotoIfError3(clean, ListCharString_move(uniqueSemantics, alloc, &entry->entry.semanticNames, e_rr))
+
 		entry->isInitialized = true;
 	}
 
@@ -1584,7 +1604,13 @@ Bool Compiler_finalizeEntrypoint(
 		entry->entry.inputsU64[0] != input.aU64[0] ||
 		entry->entry.inputsU64[1] != input.aU64[1] ||
 		entry->entry.outputsU64[0] != output.aU64[0] ||
-		entry->entry.outputsU64[1] != output.aU64[1]
+		entry->entry.outputsU64[1] != output.aU64[1] ||
+		entry->entry.uniqueInputSemantics != uniqueInputSemantics ||
+		entry->entry.inputSemanticNamesU64[0] != inputSemantic.aU64[0] ||
+		entry->entry.inputSemanticNamesU64[1] != inputSemantic.aU64[1] ||
+		entry->entry.outputSemanticNamesU64[0] != outputSemantic.aU64[0] ||
+		entry->entry.outputSemanticNamesU64[1] != outputSemantic.aU64[1] ||
+		entry->entry.semanticNames.length != uniqueSemantics->length
 	)
 		retError(clean, Error_invalidState(
 			0,
@@ -1592,10 +1618,753 @@ Bool Compiler_finalizeEntrypoint(
 			"numthreads, payloadSize, intersectSize, waveSize, inputs or outputs"
 		))
 
+	//More thorough compare with semantics
+
+	else {
+
+		//TODO: Semantics could be ordered differently, might still be okay to merge?
+
+		for(U64 i = 0; i < entry->entry.semanticNames.length; ++i)
+			if(!CharString_equalsStringSensitive(entry->entry.semanticNames.ptr[i], uniqueSemantics->ptr[i]))
+				retError(clean, Error_invalidState(
+					0,
+					"Compiler_finalizeEntrypoint() had two mismatching semantic names"
+				))
+	}
+
+
 clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
 
+	if(!didInit && s_uccess)		//Avoid memleak
+		ListCharString_freeUnderlying(uniqueSemantics, alloc);
+
+	return s_uccess;
+}
+
+Bool Compiler_processDXIL(
+	Buffer *result,
+	DxcBuffer reflectionData,
+	CompilerInterfaces *interfaces,
+	SHBinaryIdentifier toCompile,
+	SpinLock *lock,
+	ListSHEntryRuntime entries,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ID3D12ShaderReflection1 *dxilRefl{};
+	ID3D12LibraryReflection1 *dxilReflLib{};
+
+	const void *resultPtr = result->ptr;
+	Bool isLib = !CharString_length(toCompile.entrypoint);
+	ESHExtension exts = ESHExtension_None;
+	ListCharString strings = ListCharString{};
+	U8 inputSemanticCount = 0;
+	Buffer tmp;
+	I32x4 hash;
+
+	//Prevent dxil.dll load, sign it ourselves :)
+
+	if(isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilReflLib))))
+		retError(clean, Error_invalidState(0, "Compiler_processDXIL() lib reflection is invalid"))
+
+	else if (!isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilRefl))))
+		retError(clean, Error_invalidState(0, "Compiler_processDXIL() shader reflection is invalid"))
+
+	//Payload / intersection data reflection
+
+	if (isLib) {
+				
+		D3D12_LIBRARY_DESC lib = D3D12_LIBRARY_DESC{};
+		if(FAILED(dxilReflLib->GetDesc(&lib)))
+			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"))
+
+		gotoIfError3(clean, DxilMapToESHExtension(lib.Flags, &exts, e_rr))
+
+		for(U64 i = 0; i < lib.FunctionCount; ++i) {
+
+			ID3D12FunctionReflection1 *funcRefl = NULL;
+
+			if ((i >> 31) || (funcRefl = dxilReflLib->GetFunctionByIndex1((INT)i)) == NULL)
+				retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get ID3D12FunctionReflection"))
+
+			D3D12_FUNCTION_DESC funcDesc0 = D3D12_FUNCTION_DESC{};
+			D3D12_FUNCTION_DESC1 funcDesc = D3D12_FUNCTION_DESC1{};
+			if(FAILED(funcRefl->GetDesc(&funcDesc0)) || FAILED(funcRefl->GetDesc1(&funcDesc)))
+				retError(clean, Error_invalidState(
+						0, "Compiler_processDXIL() couldn't get D3D12_FUNCTION_DESC1"
+				))
+
+			U8 attributeSize = 0;
+			U8 payloadSize = 0;
+			U32 groupSize[3] = { 0 };
+			U16 waveSizes = 0;
+			Bool hasGroupSize = false;
+
+			//Reflect payload size & attribute size
+
+			if (
+				funcDesc.ShaderType > D3D12_SHVER_RAY_GENERATION_SHADER &&
+				funcDesc.ShaderType <= D3D12_SHVER_CALLABLE_SHADER
+			) {
+						
+				if(funcDesc.RaytracingShader.ParamPayloadSize > 128)
+					retError(clean, Error_outOfBounds(
+						0, funcDesc.RaytracingShader.ParamPayloadSize, 128, "Compiler_processDXIL() payload out of bounds"
+					))
+
+				payloadSize = (U8) funcDesc.RaytracingShader.ParamPayloadSize;
+
+				if(funcDesc.RaytracingShader.AttributeSize > 32)
+					retError(clean, Error_outOfBounds(
+						0, funcDesc.RaytracingShader.AttributeSize, 32,
+						"Compiler_processDXIL() attribute out of bounds"
+					))
+
+				attributeSize = (U8) funcDesc.RaytracingShader.AttributeSize;
+			}
+
+			//Reflect group size and wave size
+
+			else if (
+				funcDesc.ShaderType == D3D12_SHVER_COMPUTE_SHADER ||
+				funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER
+			) {
+				D3D12_COMPUTE_SHADER_DESC computeShader = 
+					funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER ? funcDesc.NodeShader.ComputeDesc :
+					funcDesc.ComputeShader;
+
+				for(U8 j = 0; j < 3; ++j)
+					groupSize[j] = computeShader.NumThreads[j];
+
+				hasGroupSize = true;
+
+				gotoIfError3(clean, Compiler_convertWaveSize(
+					computeShader.WaveSizePreferred, computeShader.WaveSizeMin, computeShader.WaveSizeMax,
+					&waveSizes, e_rr
+				))
+			}
+
+			else if (funcDesc.ShaderType == D3D12_SHVER_MESH_SHADER) {
+
+				hasGroupSize = true;
+
+				for(U8 j = 0; j < 3; ++j)
+					groupSize[j] = funcDesc.MeshShader.NumThreads[j];
+			}
+
+			else if (funcDesc.ShaderType == D3D12_SHVER_AMPLIFICATION_SHADER) {
+
+				hasGroupSize = true;
+
+				for(U8 j = 0; j < 3; ++j)
+					groupSize[j] = funcDesc.AmplificationShader.NumThreads[j];
+			}
+
+			if(hasGroupSize)
+				gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
+						
+			ESHType inputs[16] = {};		//TODO:
+			ESHType outputs[16] = {};
+			U8 uniqueInputSemantics = 0;
+			ListCharString uniqueSemantics = ListCharString{};
+			U8 inputSemantics[16] = {};
+			U8 outputSemantics[16] = {};
+
+			if(!funcDesc0.Name)
+				retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained no library name"))
+
+			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
+
+			if (funcDesc0.Name[0] == '\x1') {	//Mangled
+
+				U64 firstAt = CharString_findFirstSensitive(demangled, '@', 2, 0);
+
+				if(funcDesc0.Name[1] != '?' || firstAt == U64_MAX)
+					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL had invalid name mangling"))
+
+				demangled = CharString_createRefSizedConst(demangled.ptr + 2, firstAt - 2, false);
+			}
+
+			gotoIfError3(clean, Compiler_finalizeEntrypoint(
+				groupSize, payloadSize, attributeSize, waveSizes,
+				inputs, outputs,
+				uniqueInputSemantics, &uniqueSemantics, inputSemantics, outputSemantics,
+				demangled, lock, entries,
+				alloc, e_rr
+			))
+		}
+	}
+
+	//Get input/output
+
+	else {
+
+		ESHType inputs[16] = {};
+		ESHType outputs[16] = {};
+		U8 inputSemantics[16] = {};
+		U8 outputSemantics[16] = {};
+
+		U32 groupSize[3] = { 0 };
+		U16 waveSizes = 0;
+				
+		D3D12_SHADER_DESC refl = D3D12_SHADER_DESC{};
+		if(FAILED(dxilRefl->GetDesc(&refl)))
+			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"))
+					
+		gotoIfError3(clean, DxilMapToESHExtension(refl.Flags, &exts, e_rr))
+
+		Bool isPixelShader = toCompile.stageType == ESHPipelineStage_Pixel;
+
+		if (
+			toCompile.stageType == ESHPipelineStage_Compute ||
+			toCompile.stageType == ESHPipelineStage_MeshExt ||
+			toCompile.stageType == ESHPipelineStage_TaskExt
+		) {
+			dxilRefl->GetThreadGroupSize(&groupSize[0], &groupSize[1], &groupSize[2]);
+			gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
+		}
+
+		if (toCompile.stageType == ESHPipelineStage_Compute) {
+
+			U32 waveSizeRecommended, waveSizeMin, waveSizeMax;
+			dxilRefl->GetWaveSize(&waveSizeRecommended, &waveSizeMin, &waveSizeMax);
+
+			gotoIfError3(clean, Compiler_convertWaveSize(
+				waveSizeRecommended, waveSizeMin, waveSizeMax, &waveSizes, e_rr
+			))
+		}
+
+		for(U64 j = 0, outputC = 0, inputC = 0; j < (U64)refl.OutputParameters + refl.InputParameters; ++j) {
+
+			Bool isOutput = j < refl.OutputParameters;
+			ESHType *inputTypes = isOutput ? outputs : inputs;
+			U8 *semantics = isOutput ? outputSemantics : inputSemantics;
+
+			D3D12_SIGNATURE_PARAMETER_DESC signature{};
+			if(FAILED(
+				isOutput ?
+				dxilRefl->GetOutputParameterDesc((UINT) j, &signature) :
+				dxilRefl->GetInputParameterDesc((UINT)(j - refl.OutputParameters), &signature)
+			))
+				retError(clean, Error_invalidState(
+					0, "Compiler_processDXIL() couldn't get output D3D12_SIGNATURE_PARAMETER_DESC"
+				))
+
+			if(!isPixelShader && signature.SystemValueType != D3D_NAME_UNDEFINED)
+				continue;
+
+			if(isPixelShader && signature.SystemValueType != D3D_NAME_TARGET)
+				continue;
+
+			if(signature.SemanticIndex >= 16)
+				retError(clean, Error_invalidState(
+					0, "Compiler_processDXIL() input location out of bounds (allowed up to 16)"
+				))
+
+			U8 semanticValue = 0;
+
+			if (!isPixelShader && !CharString_equalsStringInsensitive(
+				CharString_createRefCStrConst(signature.SemanticName),
+				CharString_createRefCStrConst("TEXCOORD")
+			)) {
+
+				U64 start = isOutput ? inputSemanticCount : 0;
+				U64 end = isOutput ? strings.length : inputSemanticCount;
+				U64 k = start;
+
+				for(; k < end; ++k)
+					if(CharString_equalsStringInsensitive(
+						strings.ptr[k], CharString_createRefCStrConst(signature.SemanticName)
+					))
+						break;
+
+				U64 semanticName = (k - start) + 1;
+
+				if(semanticName >= 16)
+					retError(clean, Error_invalidState(
+						0, "Compiler_processDXIL() unique semantic name out of bounds"
+					))
+
+				if(k == end) {	//Not found, so insert
+
+					gotoIfError2(clean, ListCharString_insert(
+						&strings, k, CharString_createRefCStrConst(signature.SemanticName), alloc
+					))
+
+					if(!isOutput)
+						++inputSemanticCount;
+				}
+
+				semanticValue = (U8)((semanticName << 4) | signature.SemanticIndex);
+			}
+
+			if(signature.MinPrecision || signature.Stream)
+				retError(clean, Error_invalidState(
+					0, "Compiler_processDXIL() invalid signature parameter; MinPrecision or Stream"
+				))
+
+			ESHPrimitive prim = ESHPrimitive_Invalid;
+			ESHStride stride = ESHStride_X8;
+
+			switch (signature.ComponentType) {
+
+				case  D3D_REGISTER_COMPONENT_FLOAT16:	prim = ESHPrimitive_Float;	stride = ESHStride_X16;		break;
+				case  D3D_REGISTER_COMPONENT_UINT16:	prim = ESHPrimitive_UInt;	stride = ESHStride_X16;		break;
+				case  D3D_REGISTER_COMPONENT_SINT16:	prim = ESHPrimitive_Int;	stride = ESHStride_X16;		break;
+
+				case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESHPrimitive_Float;	stride = ESHStride_X32;		break;
+				case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESHPrimitive_UInt;	stride = ESHStride_X32;		break;
+				case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESHPrimitive_Int;	stride = ESHStride_X32;		break;
+
+				case  D3D_REGISTER_COMPONENT_FLOAT64:	prim = ESHPrimitive_Float;	stride = ESHStride_X64;		break;
+				case  D3D_REGISTER_COMPONENT_UINT64:	prim = ESHPrimitive_UInt;	stride = ESHStride_X64;		break;
+				case  D3D_REGISTER_COMPONENT_SINT64:	prim = ESHPrimitive_Int;	stride = ESHStride_X64;		break;
+				default:
+					retError(clean, Error_invalidState(
+						0, "Compiler_processDXIL() invalid component type; expected one of F32, U32 or I32"
+					))
+			}
+
+			ESHVector vec = ESHVector_N1;
+
+			switch (signature.Mask) {
+				case  1:	vec = ESHVector_N1;		break;
+				case  3:	vec = ESHVector_N2;		break;
+				case  7:	vec = ESHVector_N3;		break;
+				case 15:	vec = ESHVector_N4;		break;
+				default:
+					retError(clean, Error_invalidState(
+						0, "Compiler_processDXIL() invalid signature mask; expected one of 1,3,7,15"
+					))
+			}
+
+			ESHType type = (ESHType) ESHType_create(stride, prim, vec);
+			U64 *counter = isOutput ? &outputC : &inputC;
+
+			if(inputTypes[*counter] || *counter >= 16)
+				retError(clean, Error_invalidState(
+					0, "Compiler_processDXIL() output/input location is already defined or out of bounds"
+				))
+
+			semantics[*counter] = semanticValue;
+			inputTypes[(*counter)++] = type;
+		}
+
+		gotoIfError3(clean, Compiler_finalizeEntrypoint(
+			groupSize, 0, 0, waveSizes,
+			inputs, outputs,
+			inputSemanticCount, &strings, inputSemantics, outputSemantics,
+			toCompile.entrypoint, lock, entries,
+			alloc, e_rr
+		))
+	}
+
+	if((toCompile.extensions & exts) != exts)
+		retError(clean, Error_invalidState(
+			2, "Compiler_processDXIL() DXIL contained capability that wasn't enabled by oiSH file (use annotations)"
+		))
+
+	//Ensure we have a valid DXIL file
+
+	if(
+		Buffer_length(*result) <= 0x14 ||
+		*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C')
+	)
+		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"))
+			
+	//Offset to beyond hash is used to create messed up MD5
+
+	tmp = Buffer_createRefFromBuffer(*result, true);
+	Buffer_offset(&tmp, 0x14);
+
+	hash = Buffer_md5dxc(tmp);
+
+	//Copy into file, it is now signed :)
+
+	Buffer_copy(
+		Buffer_createRef((U8*)result->ptr + sizeof(U32), sizeof(hash)),
+		Buffer_createRefConst(&hash, sizeof(hash))
+	);
+
+clean:
+
+	ListCharString_freeUnderlying(&strings, alloc);
+
+	if(dxilRefl)
+		dxilRefl->Release();
+
+	if(dxilReflLib)
+		dxilReflLib->Release();
+
+	return s_uccess;
+}
+
+Bool Compiler_processSPIRV(
+	Buffer *result,
+	CompilerSettings settings,
+	SHBinaryIdentifier toCompile,
+	SpinLock *lock,
+	ListSHEntryRuntime entries,
+	Allocator alloc,
+	Error *e_rr
+) {
+		
+	//Ensure we have a valid SPIRV file
+
+	const void *resultPtr = result->ptr;
+	U64 binLen = Buffer_length(*result);
+
+	Bool s_uccess = true;
+	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
+	ESHExtension exts = ESHExtension_None;
+	SpvReflectShaderModule spvMod{};
+	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
+
+	ListCharString strings = ListCharString{};
+	U8 inputSemanticCount = 0;
+
+	if(
+		binLen < 0x8 ||
+		(binLen & 3) ||
+		*(const U32*)resultPtr != 0x07230203
+	)
+		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned is invalid"))
+
+	//Reflect binary information, since our own parser doesn't have the info yet.
+
+	res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
+
+	if(res != SPV_REFLECT_RESULT_SUCCESS)
+		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned couldn't be reflected"))
+
+	//Validate capabilities.
+	//This makes sure that we only output a binary that's supported by oiSH and no unknown extensions are used.
+
+	for (U64 i = 0; i < spvMod.capability_count; ++i) {
+
+		ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
+		gotoIfError3(clean, SpvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr))
+
+		//Check if extension was known to oiSH
+
+		if(!(ext >> ESHExtension_Count))
+			exts = (ESHExtension) (exts | ext);
+	}
+
+	if((toCompile.extensions & exts) != exts)
+		retError(clean, Error_invalidState(
+			2, "Compiler_processSPIRV() SPIRV contained capability that wasn't enabled by oiSH file (use annotations)"
+		))
+
+	//Check entrypoints
+
+	for(U64 i = 0; i < spvMod.entry_point_count; ++i) {
+			
+		SpvReflectEntryPoint entrypoint = spvMod.entry_points[i];
+		Bool searchPayload = false;
+		Bool searchIntersection = false;
+
+		U8 payloadSize = 0, intersectSize = 0;
+
+		U32 localSize[3] = { 0 };
+
+		ESHPipelineStage stage = ESHPipelineStage_Count;
+
+		switch (entrypoint.spirv_execution_model) {
+
+			case SpvExecutionModelIntersectionKHR:
+				searchIntersection = true;
+				searchPayload = true;
+				stage = ESHPipelineStage_IntersectionExt;
+				break;
+
+			case SpvExecutionModelAnyHitKHR:
+				searchPayload = true;
+				stage = ESHPipelineStage_AnyHitExt;
+				break;
+
+			case SpvExecutionModelClosestHitKHR:
+				searchPayload = true;
+				stage = ESHPipelineStage_ClosestHitExt;
+				break;
+
+			case SpvExecutionModelMissKHR:
+				searchPayload = true;
+				stage = ESHPipelineStage_MissExt;
+				break;
+
+			case SpvExecutionModelCallableKHR:
+				searchPayload = true;
+				stage = ESHPipelineStage_CallableExt;
+				break;
+
+			case SpvExecutionModelMeshEXT:
+			case SpvExecutionModelTaskEXT:
+			case SpvExecutionModelGLCompute: {
+
+				switch (entrypoint.spirv_execution_model) {
+					case SpvExecutionModelMeshEXT:	stage = ESHPipelineStage_MeshExt;	break;
+					case SpvExecutionModelTaskEXT:	stage = ESHPipelineStage_TaskExt;	break;
+					default:						stage = ESHPipelineStage_Compute;	break;
+
+				}
+						
+				localSize[0] = entrypoint.local_size.x;
+				localSize[1] = entrypoint.local_size.y;
+				localSize[2] = entrypoint.local_size.z;
+				gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr))
+				break;
+			}
+
+			case SpvExecutionModelRayGenerationKHR:			stage = ESHPipelineStage_RaygenExt;		break;
+			case SpvExecutionModelVertex:					stage = ESHPipelineStage_Vertex;		break;
+			case SpvExecutionModelFragment:					stage = ESHPipelineStage_Pixel;			break;
+			case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;	break;
+			case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;			break;
+			case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;		break;
+		}
+
+		if (searchPayload || searchIntersection)
+			for (U64 j = 0; j < entrypoint.interface_variable_count; ++j) {
+
+				SpvReflectInterfaceVariable var = entrypoint.interface_variables[j];
+
+				Bool isPayload = var.storage_class == SpvStorageClassIncomingRayPayloadKHR;
+				Bool isIntersection = var.storage_class == SpvStorageClassHitAttributeKHR;
+
+				if(!isPayload && !isIntersection)
+					continue;
+
+				//Get struct size
+
+				if(
+					!var.type_description ||
+					var.type_description->op != SpvOpTypeStruct ||
+					var.type_description->type_flags != (SPV_REFLECT_TYPE_FLAG_STRUCT | SPV_REFLECT_TYPE_FLAG_EXTERNAL_BLOCK)
+				)
+					retError(clean, Error_invalidState(
+						0, "Compiler_processSPIRV() struct payload or intersection isn't a struct"
+					))
+
+				U64 structSize = 0;
+				gotoIfError3(clean, SpvCalculateStructLength(var.type_description, &structSize, e_rr))
+
+				//Validate payload/intersect size
+
+				if (isPayload) {
+
+					if(structSize > 128)
+						retError(clean, Error_outOfBounds(
+							0, structSize, 128, "Compiler_processSPIRV() payload out of bounds"
+						))
+
+					payloadSize = (U8) structSize;
+					continue;
+				}
+
+				if(structSize > 32)
+					retError(clean, Error_outOfBounds(
+						0, structSize, 32, "Compiler_processSPIRV() intersection attribute out of bounds"
+					))
+
+				intersectSize = (U8) structSize;
+			}
+
+		if(searchPayload && !payloadSize)
+			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() payload wasn't found in SPIRV"))
+
+		if(searchIntersection && !intersectSize)
+			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() intersection attribute wasn't found in SPIRV"))
+
+		if(stage == ESHPipelineStage_Count)
+			retError(clean, Error_invalidState(
+				0, "Compiler_processSPIRV() SPIRV entrypoint couldn't be mapped to ESHPipelineStage"
+			))
+
+		Bool isGfx =
+			!(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) &&
+			stage != ESHPipelineStage_WorkgraphExt &&
+			stage != ESHPipelineStage_Compute;
+
+		//Reflect inputs & outputs
+
+		ESHType inputs[16] = {};
+		ESHType outputs[16] = {};
+		U8 inputSemantics[16] = {};
+		U8 outputSemantics[16] = {};
+
+		if (isGfx) {
+
+			for (U64 j = 0; j < (U64)entrypoint.input_variable_count + entrypoint.output_variable_count; ++j) {
+
+				Bool isOutput = j >= entrypoint.input_variable_count;
+
+				const SpvReflectInterfaceVariable *input =
+					isOutput ? entrypoint.output_variables[j - entrypoint.input_variable_count] :
+					entrypoint.input_variables[j];
+
+				if(input->built_in != -1)		//We don't care about builtins
+					continue;
+
+				ESHType *inputType = isOutput ? outputs : inputs;
+				U8 *inputSemantic = isOutput ? outputSemantics : inputSemantics;
+
+				if(input->location >= 16)
+					retError(clean, Error_invalidState(
+						0, "Compiler_processSPIRV() input/output location out of bounds (allowed up to 16)"
+					))
+
+				if(inputType[input->location])
+					retError(clean, Error_invalidState(
+						0, "Compiler_processSPIRV() input/output location is already defined"
+					))
+
+				gotoIfError3(clean, SpvReflectFormatToESHType(input->format, &inputType[input->location], e_rr))
+
+				//Grab and parse semantic
+
+				if(!input->name || !input->name[0])
+					continue;
+
+				CharString semantic = CharString_createRefCStrConst(input->name);
+				CharString inVar = CharString_createRefCStrConst("in.var.");
+				CharString outVar = CharString_createRefCStrConst("out.var.");
+
+				Bool isInVar = CharString_startsWithStringSensitive(semantic, inVar, 0);
+				Bool isOutVar = CharString_startsWithStringSensitive(semantic, outVar, 0);
+
+				if(!isInVar && !isOutVar)
+					continue;
+
+				U64 offset = isInVar ? CharString_length(inVar) : CharString_length(outVar);
+				semantic.ptr += offset;
+				semantic.lenAndNullTerminated -= offset;
+
+				U64 semanticValue = 0;
+
+				U64 semanticl = CharString_length(semantic);
+				U64 firstSemanticId = semanticl;
+
+				while(firstSemanticId && C8_isDec(CharString_getAt(semantic, firstSemanticId - 1))) {
+					--firstSemanticId;
+				}
+
+				if(!firstSemanticId)
+					retError(clean, Error_invalidState(
+						0, "Compiler_processSPIRV() bitfield accidentally detected as semantic"
+					))
+
+				CharString semanticValueStr = CharString_createRefSizedConst(
+					semantic.ptr + firstSemanticId, semanticl - firstSemanticId, true
+				);
+
+				CharString realSemanticName = CharString_createRefSizedConst(
+					semantic.ptr, firstSemanticId, firstSemanticId == semanticl
+				);
+
+				if (firstSemanticId != semanticl && !CharString_parseDec(semanticValueStr, &semanticValue))
+					retError(clean, Error_invalidState(
+						0, "Compiler_processSPIRV() couldn't parse semantic value"
+					))
+
+				U64 semanticName = 0;
+
+				if(
+					!CharString_equalsStringInsensitive(realSemanticName, CharString_createRefCStrConst("SV_TARGET")) &&
+					!CharString_equalsStringInsensitive(realSemanticName, CharString_createRefCStrConst("TEXCOORD"))
+				) {
+					U64 start = isOutput ? inputSemanticCount : 0;
+					U64 end = isOutput ? strings.length : inputSemanticCount;
+					U64 k = start;
+
+					for(; k < end; ++k)
+						if(CharString_equalsStringInsensitive(strings.ptr[k], realSemanticName))
+							break;
+
+					if(k == end)
+						gotoIfError2(clean, ListCharString_pushBack(&strings, realSemanticName, alloc))
+
+					if(!isOutput && k == end)
+						++inputSemanticCount;
+
+					semanticName = (k - start) + 1;
+				}
+
+				if(semanticName >= 16)
+					retError(clean, Error_invalidState(
+						1, "Compiler_processSPIRV() unique semantic name out of bounds"
+					))
+
+				if(semanticValue >= 15)
+					retError(clean, Error_invalidState(
+						1, "Compiler_processSPIRV() unique semantic id out of bounds"
+					))
+
+				semanticValue |= (U8)(semanticName << 4);
+				inputSemantic[input->location] = !semanticName ? 0 : (U8) semanticValue;
+			}
+		}
+
+		gotoIfError3(clean, Compiler_finalizeEntrypoint(
+			localSize, payloadSize, intersectSize, 0,
+			inputs, outputs,
+			inputSemanticCount, &strings, inputSemantics, outputSemantics,
+			CharString_length(toCompile.entrypoint) ? toCompile.entrypoint :
+			CharString_createRefCStrConst(entrypoint.name),
+			lock, entries,
+			alloc, e_rr
+		))
+	}
+
+	//Strip debug and optimize
+
+	if(!settings.debug) {
+
+		optimizer.SetMessageConsumer(
+			[alloc](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
+				
+				const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
+
+				switch(level) {
+
+					case SPV_MSG_FATAL:
+					case SPV_MSG_INTERNAL_ERROR:
+					case SPV_MSG_ERROR:
+						Log_errorLn(alloc, format, source, position.line, position.column, position.index, msg);
+						break;
+
+					case SPV_MSG_WARNING:
+						Log_warnLn(alloc, format, source, position.line, position.column, position.index, msg);
+						break;
+
+					default:
+						Log_debugLn(alloc, format, source, position.line, position.column, position.index, msg);
+						break;
+				}
+			}
+		);
+
+		optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
+		optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
+
+		std::vector<U32> tmp;
+
+		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
+			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"))
+
+		Buffer_free(result, alloc);
+		gotoIfError2(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result))
+	}
+
+clean:
+
+	ListCharString_freeUnderlying(&strings, alloc);
+
+	spvReflectDestroyShaderModule(&spvMod);
 	return s_uccess;
 }
 
@@ -1619,10 +2388,6 @@ Bool Compiler_compile(
 	Bool hasErrors = false;
 	CharString tempStr = CharString_createNull();
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
-	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
-	SpvReflectShaderModule spvMod{};
-	ID3D12ShaderReflection1 *dxilRefl{};
-	ID3D12LibraryReflection1 *dxilReflLib{};
 
 	Compiler_defineStrings;
 
@@ -1677,7 +2442,8 @@ Bool Compiler_compile(
 			if(
 				toCompile.stageType == ESHPipelineStage_Vertex ||
 				toCompile.stageType == ESHPipelineStage_Domain ||
-				toCompile.stageType == ESHPipelineStage_GeometryExt
+				toCompile.stageType == ESHPipelineStage_GeometryExt ||
+				toCompile.stageType == ESHPipelineStage_MeshExt
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr))
 
@@ -1894,9 +2660,6 @@ Bool Compiler_compile(
 			&result->binary
 		))
 
-		const void *resultPtr = result->binary.ptr;
-
-		//Prevent dxil.dll load, sign it ourselves :)
 		if (settings.outputType == ESHBinaryType_DXIL) {
 		
 			resultBlob->Release();
@@ -1904,7 +2667,7 @@ Bool Compiler_compile(
 			hr = dxcResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&resultBlob), NULL);
 
 			if (FAILED(hr) || !resultBlob)
-				retError(clean, Error_invalidState(0, "Compiler_compile() fetch reflection failed"))
+				retError(clean, Error_invalidState(0, "Compiler_processDXIL() fetch reflection failed"))
 
 			//Convert to reflection data
 
@@ -1914,566 +2677,15 @@ Bool Compiler_compile(
 				.Encoding = 0
 			};
 
-			Bool isLib = !CharString_length(toCompile.entrypoint);
-
-			if(isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilReflLib))))
-				retError(clean, Error_invalidState(0, "Compiler_compile() lib reflection is invalid"))
-
-			else if (!isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilRefl))))
-				retError(clean, Error_invalidState(0, "Compiler_compile() shader reflection is invalid"))
-
-			//Payload / intersection data reflection
-
-			ESHExtension exts = ESHExtension_None;
-
-			if (isLib) {
-				
-				D3D12_LIBRARY_DESC lib = D3D12_LIBRARY_DESC{};
-				if(FAILED(dxilReflLib->GetDesc(&lib)))
-					retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get D3D12_LIBRARY_DESC"))
-
-				gotoIfError3(clean, DxilMapToESHExtension(lib.Flags, &exts, e_rr))
-
-				for(U64 i = 0; i < lib.FunctionCount; ++i) {
-
-					ID3D12FunctionReflection1 *funcRefl = NULL;
-
-					if (i >> 31 || (funcRefl = dxilReflLib->GetFunctionByIndex1((INT)i)) == NULL)
-						retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get ID3D12FunctionReflection"))
-
-					D3D12_FUNCTION_DESC funcDesc0 = D3D12_FUNCTION_DESC{};
-					D3D12_FUNCTION_DESC1 funcDesc = D3D12_FUNCTION_DESC1{};
-					if(FAILED(funcRefl->GetDesc(&funcDesc0)) || FAILED(funcRefl->GetDesc1(&funcDesc)))
-						retError(clean, Error_invalidState(
-								0, "Compiler_compile() couldn't get D3D12_FUNCTION_DESC1"
-						))
-
-					U8 attributeSize = 0;
-					U8 payloadSize = 0;
-					U32 groupSize[3] = { 0 };
-					U16 waveSizes = 0;
-					Bool hasGroupSize = false;
-
-					//Reflect payload size & attribute size
-
-					if (
-						funcDesc.ShaderType > D3D12_SHVER_RAY_GENERATION_SHADER &&
-						funcDesc.ShaderType <= D3D12_SHVER_CALLABLE_SHADER
-					) {
-						
-						if(funcDesc.RaytracingShader.ParamPayloadSize > 128)
-							retError(clean, Error_outOfBounds(
-								0, funcDesc.RaytracingShader.ParamPayloadSize, 128, "Compiler_compile() payload out of bounds"
-							))
-
-						payloadSize = (U8) funcDesc.RaytracingShader.ParamPayloadSize;
-
-						if(funcDesc.RaytracingShader.AttributeSize > 32)
-							retError(clean, Error_outOfBounds(
-								0, funcDesc.RaytracingShader.AttributeSize, 32,
-								"Compiler_compile() attribute out of bounds"
-							))
-
-						attributeSize = (U8) funcDesc.RaytracingShader.AttributeSize;
-					}
-
-					//Reflect group size and wave size
-
-					else if (
-						funcDesc.ShaderType == D3D12_SHVER_COMPUTE_SHADER ||
-						funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER
-					) {
-						D3D12_COMPUTE_SHADER_DESC computeShader = 
-							funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER ? funcDesc.NodeShader.ComputeDesc :
-							funcDesc.ComputeShader;
-
-						for(U8 j = 0; j < 3; ++j)
-							groupSize[j] = computeShader.NumThreads[j];
-
-						hasGroupSize = true;
-
-						gotoIfError3(clean, Compiler_convertWaveSize(
-							computeShader.WaveSizePreferred, computeShader.WaveSizeMin, computeShader.WaveSizeMax,
-							&waveSizes, e_rr
-						))
-					}
-
-					else if (funcDesc.ShaderType == D3D12_SHVER_MESH_SHADER) {
-
-						hasGroupSize = true;
-
-						for(U8 j = 0; j < 3; ++j)
-							groupSize[j] = funcDesc.MeshShader.NumThreads[j];
-					}
-
-					else if (funcDesc.ShaderType == D3D12_SHVER_AMPLIFICATION_SHADER) {
-
-						hasGroupSize = true;
-
-						for(U8 j = 0; j < 3; ++j)
-							groupSize[j] = funcDesc.AmplificationShader.NumThreads[j];
-					}
-
-					if(hasGroupSize)
-						gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
-						
-					ESHType inputs[16] = {};		//TODO:
-					ESHType outputs[16] = {};
-
-					if(!funcDesc0.Name)
-						retError(clean, Error_invalidState(0, "Compiler_compile() DXIL contained no library name"))
-
-					CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
-
-					if (funcDesc0.Name[0] == '\x1') {	//Mangled
-
-						U64 firstAt = CharString_findFirstSensitive(demangled, '@', 2, 0);
-
-						if(funcDesc0.Name[1] != '?' || firstAt == U64_MAX)
-							retError(clean, Error_invalidState(0, "Compiler_compile() DXIL had invalid name mangling"))
-
-						demangled = CharString_createRefSizedConst(demangled.ptr + 2, firstAt - 2, false);
-					}
-
-					gotoIfError3(clean, Compiler_finalizeEntrypoint(
-						groupSize, payloadSize, attributeSize, waveSizes, inputs, outputs,
-						demangled, lock, entries, e_rr
-					))
-				}
-			}
-
-			//Get input/output
-
-			else {
-
-				ESHType inputs[16] = {};
-				ESHType outputs[16] = {};
-
-				U32 groupSize[3] = { 0 };
-				U16 waveSizes = 0;
-				
-				D3D12_SHADER_DESC refl = D3D12_SHADER_DESC{};
-				if(FAILED(dxilRefl->GetDesc(&refl)))
-					retError(clean, Error_invalidState(0, "Compiler_compile() couldn't get D3D12_LIBRARY_DESC"))
-					
-				gotoIfError3(clean, DxilMapToESHExtension(refl.Flags, &exts, e_rr))
-
-				Bool isPixelShader = toCompile.stageType == ESHPipelineStage_Pixel;
-
-				if (
-					toCompile.stageType == ESHPipelineStage_Compute ||
-					toCompile.stageType == ESHPipelineStage_MeshExt ||
-					toCompile.stageType == ESHPipelineStage_TaskExt
-				) {
-					dxilRefl->GetThreadGroupSize(&groupSize[0], &groupSize[1], &groupSize[2]);
-					gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
-				}
-
-				if (toCompile.stageType == ESHPipelineStage_Compute) {
-
-					U32 waveSizeRecommended, waveSizeMin, waveSizeMax;
-					dxilRefl->GetWaveSize(&waveSizeRecommended, &waveSizeMin, &waveSizeMax);
-
-					gotoIfError3(clean, Compiler_convertWaveSize(
-						waveSizeRecommended, waveSizeMin, waveSizeMax, &waveSizes, e_rr
-					))
-				}
-
-				for(U64 j = 0; j < (U64)refl.OutputParameters + refl.InputParameters; ++j) {
-
-					Bool isOutput = j < refl.OutputParameters;
-
-					D3D12_SIGNATURE_PARAMETER_DESC signature{};
-					if(FAILED(
-						isOutput ?
-						dxilRefl->GetOutputParameterDesc((UINT) j, &signature) :
-						dxilRefl->GetInputParameterDesc((UINT)(j - refl.OutputParameters), &signature)
-					))
-						retError(clean, Error_invalidState(
-							0, "Compiler_compile() couldn't get output D3D12_SIGNATURE_PARAMETER_DESC"
-						))
-
-					if(!isPixelShader && signature.SystemValueType != D3D_NAME_UNDEFINED)
-						continue;
-
-					if(isPixelShader && signature.SystemValueType != D3D_NAME_TARGET)
-						continue;
-
-					if (!isPixelShader && !CharString_equalsStringInsensitive(
-						CharString_createRefCStrConst(signature.SemanticName),
-						CharString_createRefCStrConst("TEXCOORD")
-					))
-						retError(clean, Error_invalidState(
-							0, "Compiler_compile() semantics should all be TEXCOORD for compatibility with oiSH"
-						))
-
-					if(signature.MinPrecision || signature.Stream)
-						retError(clean, Error_invalidState(
-							0, "Compiler_compile() invalid signature parameter; MinPrecision or Stream"
-						))
-
-					if(signature.SemanticIndex >= 16)
-						retError(clean, Error_invalidState(
-							0, "Compiler_compile() input location out of bounds (allowed up to 16)"
-						))
-
-					ESHPrimitive prim = ESHPrimitive_Invalid;
-					ESHStride stride = ESHStride_X8;
-
-					switch (signature.ComponentType) {
-
-						case  D3D_REGISTER_COMPONENT_FLOAT16:	prim = ESHPrimitive_Float;	stride = ESHStride_X16;		break;
-						case  D3D_REGISTER_COMPONENT_UINT16:	prim = ESHPrimitive_UInt;	stride = ESHStride_X16;		break;
-						case  D3D_REGISTER_COMPONENT_SINT16:	prim = ESHPrimitive_Int;	stride = ESHStride_X16;		break;
-
-						case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESHPrimitive_Float;	stride = ESHStride_X32;		break;
-						case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESHPrimitive_UInt;	stride = ESHStride_X32;		break;
-						case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESHPrimitive_Int;	stride = ESHStride_X32;		break;
-
-						case  D3D_REGISTER_COMPONENT_FLOAT64:	prim = ESHPrimitive_Float;	stride = ESHStride_X64;		break;
-						case  D3D_REGISTER_COMPONENT_UINT64:	prim = ESHPrimitive_UInt;	stride = ESHStride_X64;		break;
-						case  D3D_REGISTER_COMPONENT_SINT64:	prim = ESHPrimitive_Int;	stride = ESHStride_X64;		break;
-						default:
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() invalid component type; expected one of F32, U32 or I32"
-							))
-					}
-
-					ESHVector vec = ESHVector_N1;
-
-					switch (signature.Mask) {
-						case  1:	vec = ESHVector_N1;		break;
-						case  3:	vec = ESHVector_N2;		break;
-						case  7:	vec = ESHVector_N3;		break;
-						case 15:	vec = ESHVector_N4;		break;
-						default:
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() invalid signature mask; expected one of 1,3,7,15"
-							))
-					}
-
-					ESHType type = (ESHType) ESHType_create(stride, prim, vec);
-
-					if (isOutput) {
-
-						if(outputs[signature.SemanticIndex])
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() output location is already defined"
-							))
-
-						outputs[signature.SemanticIndex] = type;
-					}
-					else {
-
-						if(inputs[signature.SemanticIndex])
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() input location is already defined"
-							))
-
-						inputs[signature.SemanticIndex] = type;
-					}
-				}
-
-				gotoIfError3(clean, Compiler_finalizeEntrypoint(
-					groupSize, 0, 0, waveSizes, inputs, outputs,
-					toCompile.entrypoint, lock, entries, e_rr
-				))
-			}
-
-			if((toCompile.extensions & exts) != exts)
-				retError(clean, Error_invalidState(
-					2, "Compiler_compile() DXIL contained capability that wasn't enabled by oiSH file (use annotations)"
-				))
-
-			//Ensure we have a valid DXIL file
-
-			if(
-				Buffer_length(result->binary) <= 0x14 ||
-				*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C')
-			)
-				retError(clean, Error_invalidState(2, "Compiler_compile() DXIL returned is invalid"))
-			
-			//Offset to beyond hash is used to create messed up MD5
-
-			Buffer tmp = Buffer_createRefFromBuffer(result->binary, true);
-			Buffer_offset(&tmp, 0x14);
-			I32x4 hash = Buffer_md5dxc(tmp);
-
-			//Copy into file, it is now signed :)
-
-			Buffer_copy(
-				Buffer_createRef((U8*)result->binary.ptr + sizeof(U32), sizeof(hash)),
-				Buffer_createRefConst(&hash, sizeof(hash))
-			);
+			gotoIfError3(clean, Compiler_processDXIL(
+				&result->binary, reflectionData, interfaces, toCompile, lock, entries, alloc, e_rr
+			))
 		}
 
-		else if (settings.outputType == ESHBinaryType_SPIRV) {
-		
-			//Ensure we have a valid SPIRV file
+		else if (settings.outputType == ESHBinaryType_SPIRV)
+			gotoIfError3(clean, Compiler_processSPIRV(&result->binary, settings, toCompile, lock, entries, alloc, e_rr))
 
-			U64 binLen = Buffer_length(result->binary);
-
-			if(
-				binLen < 0x8 ||
-				(binLen & 3) ||
-				*(const U32*)resultPtr != 0x07230203
-			)
-				retError(clean, Error_invalidState(2, "Compiler_compile() SPIRV returned is invalid"))
-
-			//Reflect binary information, since our own parser doesn't have the info yet.
-
-			SpvReflectResult res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
-
-			if(res != SPV_REFLECT_RESULT_SUCCESS)
-				retError(clean, Error_invalidState(2, "Compiler_compile() SPIRV returned couldn't be reflected"))
-
-			//Validate capabilities.
-			//This makes sure that we only output a binary that's supported by oiSH and no unknown extensions are used.
-
-			ESHExtension exts = ESHExtension_None;
-
-			for (U64 i = 0; i < spvMod.capability_count; ++i) {
-
-				ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
-				gotoIfError3(clean, SpvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr))
-
-				//Check if extension was known to oiSH
-
-				if(!(ext >> ESHExtension_Count))
-					exts = (ESHExtension) (exts | ext);
-			}
-
-			if((toCompile.extensions & exts) != exts)
-				retError(clean, Error_invalidState(
-					2, "Compiler_compile() SPIRV contained capability that wasn't enabled by oiSH file (use annotations)"
-				))
-
-			//Check entrypoints
-
-			for(U64 i = 0; i < spvMod.entry_point_count; ++i) {
-			
-				SpvReflectEntryPoint entrypoint = spvMod.entry_points[i];
-				Bool searchPayload = false;
-				Bool searchIntersection = false;
-
-				U8 payloadSize = 0, intersectSize = 0;
-
-				U32 localSize[3] = { 0 };
-
-				ESHPipelineStage stage = ESHPipelineStage_Count;
-
-				switch (entrypoint.spirv_execution_model) {
-
-					case SpvExecutionModelIntersectionKHR:
-						searchIntersection = true;
-						searchPayload = true;
-						stage = ESHPipelineStage_IntersectionExt;
-						break;
-
-					case SpvExecutionModelAnyHitKHR:
-						searchPayload = true;
-						stage = ESHPipelineStage_AnyHitExt;
-						break;
-
-					case SpvExecutionModelClosestHitKHR:
-						searchPayload = true;
-						stage = ESHPipelineStage_ClosestHitExt;
-						break;
-
-					case SpvExecutionModelMissKHR:
-						searchPayload = true;
-						stage = ESHPipelineStage_MissExt;
-						break;
-
-					case SpvExecutionModelCallableKHR:
-						searchPayload = true;
-						stage = ESHPipelineStage_CallableExt;
-						break;
-
-					case SpvExecutionModelMeshEXT:
-					case SpvExecutionModelTaskEXT:
-					case SpvExecutionModelGLCompute: {
-
-						switch (entrypoint.spirv_execution_model) {
-							case SpvExecutionModelMeshEXT:	stage = ESHPipelineStage_MeshExt;	break;
-							case SpvExecutionModelTaskEXT:	stage = ESHPipelineStage_TaskExt;	break;
-							default:						stage = ESHPipelineStage_Compute;	break;
-
-						}
-						
-						localSize[0] = entrypoint.local_size.x;
-						localSize[1] = entrypoint.local_size.y;
-						localSize[2] = entrypoint.local_size.z;
-						gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr))
-						break;
-					}
-
-					case SpvExecutionModelRayGenerationKHR:			stage = ESHPipelineStage_RaygenExt;		break;
-					case SpvExecutionModelVertex:					stage = ESHPipelineStage_Vertex;		break;
-					case SpvExecutionModelFragment:					stage = ESHPipelineStage_Pixel;			break;
-					case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;	break;
-					case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;			break;
-					case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;		break;
-				}
-
-				if (searchPayload || searchIntersection)
-					for (U64 j = 0; j < entrypoint.interface_variable_count; ++j) {
-
-						SpvReflectInterfaceVariable var = entrypoint.interface_variables[j];
-
-						Bool isPayload = var.storage_class == SpvStorageClassIncomingRayPayloadKHR;
-						Bool isIntersection = var.storage_class == SpvStorageClassHitAttributeKHR;
-
-						if(!isPayload && !isIntersection)
-							continue;
-
-						//Get struct size
-
-						if(
-							!var.type_description ||
-							var.type_description->op != SpvOpTypeStruct ||
-							var.type_description->type_flags != (SPV_REFLECT_TYPE_FLAG_STRUCT | SPV_REFLECT_TYPE_FLAG_EXTERNAL_BLOCK)
-						)
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() struct payload or intersection isn't a struct"
-							))
-
-						U64 structSize = 0;
-						gotoIfError3(clean, SpvCalculateStructLength(var.type_description, &structSize, e_rr))
-
-						//Validate payload/intersect size
-
-						if (isPayload) {
-
-							if(structSize > 128)
-								retError(clean, Error_outOfBounds(
-									0, structSize, 128, "Compiler_compile() payload out of bounds"
-								))
-
-							payloadSize = (U8) structSize;
-							continue;
-						}
-
-						if(structSize > 32)
-							retError(clean, Error_outOfBounds(
-								0, structSize, 32, "Compiler_compile() intersection attribute out of bounds"
-							))
-
-						intersectSize = (U8) structSize;
-					}
-
-				if(searchPayload && !payloadSize)
-					retError(clean, Error_invalidState(0, "Compiler_compile() payload wasn't found in SPIRV"))
-
-				if(searchIntersection && !intersectSize)
-					retError(clean, Error_invalidState(0, "Compiler_compile() intersection attribute wasn't found in SPIRV"))
-
-				if(stage == ESHPipelineStage_Count)
-					retError(clean, Error_invalidState(
-						0, "Compiler_compile() SPIRV entrypoint couldn't be mapped to ESHPipelineStage"
-					))
-
-				Bool isGfx =
-					!(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) &&
-					stage != ESHPipelineStage_WorkgraphExt &&
-					stage != ESHPipelineStage_Compute;
-
-				//Reflect inputs & outputs
-
-				ESHType inputs[16] = {};
-				ESHType outputs[16] = {};
-
-				if (isGfx) {
-
-					for (U64 j = 0; j < entrypoint.input_variable_count; ++j) {
-
-						const SpvReflectInterfaceVariable *input = entrypoint.input_variables[j];
-
-						if(input->built_in != -1)		//We don't care about builtins
-							continue;
-
-						if(input->location >= 16)
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() input location out of bounds (allowed up to 16)"
-							))
-
-						if(inputs[input->location])
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() input location is already defined"
-							))
-
-						gotoIfError3(clean, SpvReflectFormatToESHType(input->format, &inputs[input->location], e_rr))
-					}
-
-					for (U64 j = 0; j < entrypoint.output_variable_count; ++j) {
-
-						const SpvReflectInterfaceVariable *output = entrypoint.output_variables[j];
-
-						if(output->built_in != -1)		//We don't care about builtins
-							continue;
-							
-						if(output->location >= 16)
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() output location out of bounds (allowed up to 16)"
-							))
-
-						if(outputs[output->location])
-							retError(clean, Error_invalidState(
-								0, "Compiler_compile() output location is already defined"
-							))
-
-						gotoIfError3(clean, SpvReflectFormatToESHType(output->format, &outputs[output->location], e_rr))
-					}
-				}
-
-				gotoIfError3(clean, Compiler_finalizeEntrypoint(
-					localSize, payloadSize, intersectSize, 0, inputs, outputs,
-					CharString_length(toCompile.entrypoint) ? toCompile.entrypoint :
-					CharString_createRefCStrConst(entrypoint.name),
-					lock, entries, e_rr
-				))
-			}
-
-			//Strip debug and optimize
-
-			if(!settings.debug) {
-
-				optimizer.SetMessageConsumer(
-					[](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
-				
-						const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
-
-						switch(level) {
-
-							case SPV_MSG_FATAL:
-							case SPV_MSG_INTERNAL_ERROR:
-							case SPV_MSG_ERROR:
-								Log_errorLnx(format, source, position.line, position.column, position.index, msg);
-								break;
-
-							case SPV_MSG_WARNING:
-								Log_warnLnx(format, source, position.line, position.column, position.index, msg);
-								break;
-
-							default:
-								Log_debugLnx(format, source, position.line, position.column, position.index, msg);
-								break;
-						}
-					}
-				);
-
-				optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
-				optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
-
-				std::vector<U32> tmp;
-
-				if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
-					retError(clean, Error_invalidState(0, "Compiler_compile() stripping spirv failed"))
-
-				Buffer_free(&result->binary, alloc);
-				gotoIfError2(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, &result->binary))
-			}
-		}
+		else retError(clean, Error_invalidState(2, "Compiler_compile() unsupported type. Only supporting DXIL and SPIRV"))
 
 		if (settings.infoAboutIncludes)
 			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))
@@ -2495,14 +2707,6 @@ clean:
 
 	if(error)
 		error->Release();
-
-	if(dxilRefl)
-		dxilRefl->Release();
-
-	if(dxilReflLib)
-		dxilReflLib->Release();
-
-	spvReflectDestroyShaderModule(&spvMod);
 
 	Compiler_freeStrings;
 	CharString_free(&tempStr, alloc);
