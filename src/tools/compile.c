@@ -1162,7 +1162,6 @@
 			(threadCount > 1 && !defaultThreadCount) || forceThreading
 		) {
 
-			SpinLock_create(&lock);
 			U64 counter = 0, threadCounter = 0, completedCounter = 0, counterCompiledBinaries = 0;
 
 			gotoIfError2(clean, ListThread_resizex(&threads, threadCount))

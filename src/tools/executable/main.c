@@ -20,6 +20,7 @@
 
 #include "platforms/platform.h"
 #include "graphics/generic/application.h"
+#include "platforms/log.h"
 #include "cli.h"
 
 const Bool Platform_useWorkingDirectory = true;
@@ -27,6 +28,8 @@ const Bool Platform_useWorkingDirectory = true;
 I32 Program_run() {
 
 	CLI_init();
+
+	Log_debugLnx("月");
 
 	if(!CLI_execute(Platform_instance.args))
 		return -1;

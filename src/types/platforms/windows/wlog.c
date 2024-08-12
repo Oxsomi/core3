@@ -21,8 +21,10 @@
 #include "types/log.h"
 #include "types/thread.h"
 #include "types/time.h"
+#include "types/buffer.h"
 #include "types/error.h"
 #include "types/allocator.h"
+#include "types/lock.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
@@ -78,9 +80,6 @@ void Log_printCapturedStackTraceCustom(
 	if(lvl >= ELogLevel_Count)
 		return;
 
-	const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, COLORS[lvl]);
-
 	CapturedStackTrace captured[STACKTRACE_SIZE] = { 0 };
 
 	U64 stackCount = 0;
@@ -88,6 +87,7 @@ void Log_printCapturedStackTraceCustom(
 	//Obtain process
 
 	const HANDLE process = GetCurrentProcess();
+	CharString tmp = CharString_createNull();
 
 	const Bool hasSymbols = SymInitialize(process, NULL, TRUE);
 	Bool anySymbol = false;
@@ -106,8 +106,8 @@ void Log_printCapturedStackTraceCustom(
 
 			const U64 moduleBase = SymGetModuleBase(process, addr);
 
-			wchar_t modulePath[MAX_PATH + 1] = { 0 };
-			if (!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_PATH))
+			C8 modulePath[MAX_PATH + 1] = { 0 };
+			if (!moduleBase || !GetModuleFileNameA((HINSTANCE)moduleBase, modulePath, MAX_PATH))
 				continue;
 
 			anySymbol = true;
@@ -145,18 +145,20 @@ void Log_printCapturedStackTraceCustom(
 			Error err;
 
 			if(modulePath[0])
-				gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod))
+				gotoIfError(cleanup, CharString_createCopy(
+					CharString_createRefAutoConst(modulePath, MAX_PATH), alloc, &capture->mod
+				))
 
 			if(CharString_length(capture->sym)) {
-				CharString tmp = CharString_createNull();
 				gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp))
 				capture->sym = tmp;
+				tmp = CharString_createNull();
 			}
 
 			if(CharString_length(capture->fil)) {
-				CharString tmp = CharString_createNull();
 				gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp))
 				capture->fil = tmp;
+				tmp = CharString_createNull();
 			}
 
 			capture->lin = line.LineNumber;
@@ -176,34 +178,41 @@ void Log_printCapturedStackTraceCustom(
 			return;
 		}
 
-	if(hasSymbols && anySymbol)
-		printf("Stacktrace:\n");
+	opt |= ELogOptions_NoBreak | ELogOptions_NewLine;
 
-	else printf("Stacktrace: (No symbols)\n");
+	if(hasSymbols && anySymbol)
+		Log_log(alloc, lvl, opt, CharString_createRefCStrConst("Stacktrace:"));
+
+	else Log_log(alloc, lvl, opt, CharString_createRefCStrConst("Stacktrace: (No symbols)"));
+
+	Bool panic = false;
 
 	for (U64 i = 0; i < stackCount; ++i) {
 
 		CapturedStackTrace capture = captured[i];
 
 		if(!CharString_length(capture.sym))
-			printf("%p\n", stackTrace[i]);
+			panic |= CharString_format(alloc, &tmp, "%p\n", stackTrace[i]).genericError;
 
 		else if(capture.lin)
-			printf(
+			panic |= CharString_format(alloc, &tmp, 
 				"%p: %.*s!%.*s (%.*s, Line %"PRIu32")\n",
 				stackTrace[i],
 				(int) CharString_length(capture.mod), capture.mod.ptr,
 				(int) CharString_length(capture.sym), capture.sym.ptr,
 				(int) CharString_length(capture.fil), capture.fil.ptr,
 				capture.lin
-			);
+			).genericError;
 
-		else printf(
+		else panic |= CharString_format(alloc, &tmp,
 			"%p: %.*s!%.*s\n",
 			stackTrace[i],
 			(int) CharString_length(capture.mod), capture.mod.ptr,
 			(int) CharString_length(capture.sym), capture.sym.ptr
-		);
+		).genericError;
+
+		Log_log(alloc, lvl, opt, tmp);
+		CharString_free(&tmp, alloc);
 
 		//We now don't need the strings anymore
 
@@ -212,17 +221,119 @@ void Log_printCapturedStackTraceCustom(
 		CharString_free(&capture.mod, alloc);
 	}
 
+	if(panic)
+		Log_log(alloc, lvl, opt, CharString_createRefCStrConst("PANIC: Failed to format one of the stacktraces"));
+
 	SymCleanup(process);
 }
 
-void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
+SpinLock lock;
 
-	const Ns t = Time_now();
+void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
 
 	if(lvl >= ELogLevel_Count)
 		return;
 
+	const Ns t = Time_now();
 	const U64 thread = Thread_getId();
+
+	TimeFormat tf;
+
+	if (options & ELogOptions_Timestamp)
+		Time_format(t, tf, true);
+
+	const Bool debugger = IsDebuggerPresent();
+
+	CharString copy = (CharString) { 0 };
+	ListU16 tmp = (ListU16) { 0 };
+
+	Bool panic = false;
+
+	switch (options & (ELogOptions_Timestamp | ELogOptions_Thread | ELogOptions_NewLine)) {
+
+		case ELogOptions_None:
+		case ELogOptions_NewLine:
+
+			panic = CharString_createCopy(arg, alloc, &copy).genericError;
+
+			if((options & ELogOptions_NewLine) && !panic)
+				panic |= CharString_append(&copy, '\n', alloc).genericError;
+
+			break;
+
+		case ELogOptions_Thread:
+		case ELogOptions_Thread | ELogOptions_NewLine:
+
+			panic = CharString_format(
+				alloc, &copy,
+				"[%"PRIu64"]: %.*s%s",
+				thread,
+				(int) CharString_length(arg), arg.ptr,
+				options & ELogOptions_NewLine ? "\n" : ""
+			).genericError;
+
+			break;
+
+		case ELogOptions_Timestamp:
+		case ELogOptions_Timestamp | ELogOptions_NewLine:
+
+			panic = CharString_format(
+				alloc, &copy,
+				"[%s]: %.*s%s",
+				tf,
+				(int) CharString_length(arg), arg.ptr,
+				options & ELogOptions_NewLine ? "\n" : ""
+			).genericError;
+
+			break;
+
+		case ELogOptions_Timestamp | ELogOptions_Thread:
+		case ELogOptions_Timestamp | ELogOptions_Thread| ELogOptions_NewLine:
+
+			panic = CharString_format(
+				alloc, &copy,
+				"[%"PRIu64"%s]: %.*s%s",
+				thread, tf,
+				(int) CharString_length(arg), arg.ptr,
+				options & ELogOptions_NewLine ? "\n" : ""
+			).genericError;
+
+			break;
+	}
+
+	if(debugger) {
+
+		//Doesn't play nicely with UTF8 yet
+
+		if(Buffer_isAscii(CharString_bufferConst(copy)))
+			OutputDebugStringA(copy.ptr);
+
+		else {
+			panic |= CharString_toUTF16(copy, alloc, &tmp).genericError;
+			OutputDebugStringW(tmp.ptr);
+			ListU16_free(&tmp, alloc);
+		}
+
+		if(panic)
+			OutputDebugStringA(
+				"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+				"This is normally okay, as long as a new string can be allocated.\n"
+				"In this case, allocation failed, which suggests corruption or out of memory.\n"
+			);
+	}
+
+	//We have to lock to ensure that the console text is the right color.
+	//Otherwise if #1 logs green, #2 logs red, it might change color in-between.
+
+	ELockAcquire acq = SpinLock_lock(&lock, 1 * SECOND);
+
+	if(acq < ELockAcquire_Success) {
+
+		if(debugger)
+			OutputDebugStringA("Log_print: Couldn't acquire lock. It might be stuck?\n");
+
+		goto skipConsole;
+	}
 
 	//Remember old to ensure we can reset
 
@@ -235,62 +346,19 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
-	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
-
-	const Bool hasTimestamp = options & ELogOptions_Timestamp;
-	const Bool hasThread = options & ELogOptions_Thread;
-	const Bool hasNewLine = options & ELogOptions_NewLine;
-	const Bool hasPrepend = hasTimestamp || hasThread;
-
-	if (hasPrepend)
-		printf("[");
-
-	if (hasThread)
-		printf("%"PRIu64, thread);
-
-	if (hasTimestamp) {
-
-		TimeFormat tf;
-		Time_format(t, tf, true);
-
-		printf("%s%s", hasThread ? " " : "", tf);
-	}
-
-	if (hasPrepend)
-		printf("]: ");
-
-	const Bool debugger = IsDebuggerPresent();
-
-	ListU16 copy = (ListU16) { 0 };
-	Bool panic = false;
-
-	if (
-		CharString_toUTF16(arg, alloc, &copy).genericError ||
-		(hasNewLine && ListU16_insert(&copy, copy.length - 1, (U16) L'\n', alloc).genericError)
-	) {
-
-		if(debugger)
-			OutputDebugStringW(
-				L"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-				L"This is normally okay, as long as a new string can be allocated.\n"
-				L"In this case, allocation failed, which suggests corruption or out of memory."
-			);
-
-		panic = true;
-	}
-
-	if (!panic) {
-
-		if(debugger)
-			OutputDebugStringW((const wchar_t*)copy.ptr);
-
-		WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), copy.ptr, (int)copy.length, NULL, NULL);
-	}
-
-	ListU16_free(&copy, alloc);
+	if (!panic)
+		WriteConsoleA(GetStdHandle(STD_OUTPUT_HANDLE), copy.ptr, (int) CharString_length(copy), NULL, NULL);
 
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 
-	if (debugger && lvl >= ELogLevel_Error)
+skipConsole:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&lock);
+
+	CharString_free(&copy, alloc);
+	ListU16_free(&tmp, alloc);
+
+	if (debugger && lvl >= ELogLevel_Error && !(options & ELogOptions_NoBreak))
 		DebugBreak();
 }

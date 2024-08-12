@@ -692,7 +692,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	if (deviceExt->fenceId > 3) {
 
-		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
+		eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
 			deviceExt->commitSemaphore, deviceExt->fenceId - 3, eventHandle
@@ -1011,7 +1011,7 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState 
 
 	if(deviceExt->fenceId) {		//Ensure GPU is complete, so we don't override anything
 
-		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
+		eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
 			deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle

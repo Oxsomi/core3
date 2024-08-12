@@ -23,7 +23,6 @@
 #include "platforms/ext/bufferx.h"
 #include "types/error.h"
 
-#define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
@@ -33,31 +32,31 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	Bool s_uccess = true;
-	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(WNDCLASSEXW), &w->platformData))
+	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(WNDCLASSEXA), &w->platformData))
 
-	WNDCLASSEXW *wc = (WNDCLASSEXW*) w->platformData.ptr;
+	WNDCLASSEXA *wc = (WNDCLASSEXA*) w->platformData.ptr;
 
 	const HINSTANCE mainModule = Platform_instance.data;
 
-	*wc = (WNDCLASSEXW) {
+	*wc = (WNDCLASSEXA) {
 
 		.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
 		.lpfnWndProc = WWindow_onCallback,
 		.hInstance = mainModule,
 
-		.hIcon = (HICON)LoadImageW(mainModule, L"LOGO", IMAGE_ICON, 32, 32, 0),
-		.hIconSm = (HICON)LoadImageW(mainModule, L"LOGO", IMAGE_ICON, 16, 16, 0),
+		.hIcon = (HICON)LoadImageA(mainModule, "LOGO", IMAGE_ICON, 32, 32, 0),
+		.hIconSm = (HICON)LoadImageA(mainModule, "LOGO", IMAGE_ICON, 16, 16, 0),
 
-		.hCursor = LoadCursorW(NULL, IDC_ARROW),
+		.hCursor = LoadCursorA(NULL, IDC_ARROW),
 
 		.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH),
 
-		.lpszClassName = L"OxC3: Oxsomi core 3",
+		.lpszClassName = "OxC3: Oxsomi core 3",
 		.cbSize = sizeof(*wc),
 		.cbWndExtra = sizeof(void*),
 	};
 
-	if (!RegisterClassExW(wc))
+	if (!RegisterClassExA(wc))
 		retError(clean, Error_platformError(
 			0, GetLastError(), "WindowManager_createNative() RegisterClassEx failed"
 		))
@@ -67,8 +66,8 @@ clean:
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
-	const WNDCLASSEXW* wc = (const WNDCLASSEXW*)w->platformData.ptr;
-	UnregisterClassW(wc->lpszClassName, wc->hInstance);
+	const WNDCLASSEXA* wc = (const WNDCLASSEXA*)w->platformData.ptr;
+	UnregisterClassA(wc->lpszClassName, wc->hInstance);
 	return true;
 }
 
@@ -77,7 +76,7 @@ void WindowManager_updateExt() {
 	MSG msg = (MSG) { 0 };
 	Bool didPaint = false;
 
-	while(PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
+	while(PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
 
 		if (msg.message == WM_PAINT) {
 
@@ -88,7 +87,7 @@ void WindowManager_updateExt() {
 				//We do this by checking if the next message is also paint. If not, we continue
 
 				MSG msgCheck = (MSG) { 0 };
-				PeekMessageW(&msgCheck, NULL, 0, 0, PM_NOREMOVE);
+				PeekMessageA(&msgCheck, NULL, 0, 0, PM_NOREMOVE);
 
 				if (msgCheck.message == msg.message)
 					break;
@@ -98,6 +97,6 @@ void WindowManager_updateExt() {
 		}
 
 		TranslateMessage(&msg);
-		DispatchMessageW(&msg);
+		DispatchMessageA(&msg);
 	}
 }

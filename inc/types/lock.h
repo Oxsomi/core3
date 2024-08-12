@@ -26,18 +26,10 @@
 #endif
 
 typedef struct SpinLock {
-
 	AtomicI64 lockedThreadId;
-
-	Bool active;
-	U8 pad[7];
-
 } SpinLock;
 
 typedef struct Error Error;
-
-Bool SpinLock_create(SpinLock *res);
-Bool SpinLock_free(SpinLock *res);
 
 //Even though maxTime is in Ns it may be interpreted
 //As a different unit by the runtime.

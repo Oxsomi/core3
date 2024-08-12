@@ -37,6 +37,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+set(CMAKE_OXC3_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
+
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 	message(FATAL_ERROR "32-bit builds are disabled by core3 because it's legacy and could cause unintended behavior if built anyways.")
 endif()
@@ -687,11 +689,20 @@ function(configure_virtual_files target)
 	endif()
 
 	if(WIN32)
+
 		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
 		if(NOT "${res}" STREQUAL "")
 			file(WRITE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc" ${res})
 			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
 		endif()
+
+		configure_file(${CMAKE_OXC3_ROOT}/src/platforms/windows/manifest.xml "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}_manifest.xml")
+		add_custom_command(
+			TARGET ${target}
+			POST_BUILD DEPENDS
+			COMMAND mt.exe -manifest "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}_manifest.xml" -inputresource:"$<TARGET_FILE:${target}>"\;\#1 -updateresource:"$<TARGET_FILE:${target}>"\;\#1
+		)
+
 	endif()
 
 endfunction()

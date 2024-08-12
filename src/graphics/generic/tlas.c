@@ -113,7 +113,7 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 
 	(void)allocator;
 
-	SpinLock_free(&tlas->base.lock);
+	SpinLock_lock(&tlas->base.lock, U64_MAX);
 
 	Bool success = TLAS_freeExt(tlas);
 	success &= CharString_freex(&tlas->base.name);
@@ -291,7 +291,6 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		gotoIfError(clean, TLASRef_inc(tlas.base.parent))
 
 	*tlasPtr = tlas;
-	SpinLock_create(&tlasPtr->base.lock);
 	tlasPtr->base.name = CharString_createNull();
 
 	if (tlas.base.asConstructionType == ETLASConstructionType_Serialized) {

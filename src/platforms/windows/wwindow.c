@@ -34,7 +34,6 @@
 
 #include <stdlib.h>
 
-#define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
@@ -102,7 +101,7 @@ clean:
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
-	Window *w = (Window*) GetWindowLongPtrW(hwnd, 0);
+	Window *w = (Window*) GetWindowLongPtrA(hwnd, 0);
 
 	if(!w)
 		return DefWindowProc(hwnd, message, wParam, lParam);
@@ -194,49 +193,24 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		case WM_CHAR: {
 
-			Buffer buf = Buffer_createRef(w->buffer, sizeof(w->buffer));
-			UnicodeCodePoint typed = 0;
-			Bool clearBuffer = true;
+			Bool isFinished = false;
+			U8 *ptr = w->buffer;
+			Bool clearBuffer = ptr[0] >= 4;		//Too much data
 
-			//Single char
-
-			if (wParam <= 0xD7FF)
-				typed = (UnicodeCodePoint) wParam;
-
-			//First char
-
-			else if (wParam < 0xDC00) {				//Cache for final char
-				((U16*)buf.ptr)[0] = (U16)wParam;
-				clearBuffer = false;
+			if (!clearBuffer) {
+				++ptr[0];
+				ptr[ptr[0]] = (U8) wParam;
+				isFinished = Buffer_isUTF8(Buffer_createRefConst(ptr + 1, ptr[0]), 1);
 			}
 
-			//Second char
-
-			else if(wParam < 0xE000 && buf.ptr[0]) {
-
-				((U16*)buf.ptr)[1] = (U16)wParam;
-
-				//Now it's time to translate this from UTF16
-
-				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
-				if (!Buffer_readAsUTF16(buf, 0, &codepoint).genericError)
-					typed = codepoint.index;
-			}
-
-			if(typed && w->callbacks.onTypeChar) {
-
-				//Translate to UTF8
-
-				U8 bytes = 0;
-				Error err = Buffer_writeAsUTF8(buf, 0, typed, &bytes);
-				((C8*)buf.ptr)[bytes] = '\0';
-
-				if(!err.genericError)
-					w->callbacks.onTypeChar(w, CharString_createRefSizedConst((const C8*)buf.ptr, bytes, true));
+			if(isFinished) {
+				((C8*)ptr)[ptr[0] + 1] = '\0';
+				w->callbacks.onTypeChar(w, CharString_createRefSizedConst((const C8*)(ptr + 1), ptr[0], true));
+				clearBuffer = true;
 			}
 
 			if(clearBuffer)
-				((C8*)buf.ptr)[0] = '\0';		//Clear buffer
+				ptr[0] = 0;		//Clear buffer
 
 			break;
 		}
@@ -547,7 +521,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			U32 size = sizeof(deviceInfo);
 			deviceInfo.cbSize = size;
 
-			if (!GetRawInputDeviceInfoW((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
+			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
 
 				Error_printx(
 					Error_platformError(
@@ -818,7 +792,7 @@ Bool WindowManager_freePhysical(Window *w) {
 
 	const HINSTANCE mainModule = Platform_instance.data;
 
-	UnregisterClassW(L"OxC3: Oxsomi core 3", mainModule);
+	UnregisterClassA("OxC3: Oxsomi core 3", mainModule);
 
 	if(w->nativeHandle)
 		DestroyWindow(w->nativeHandle);
@@ -829,7 +803,7 @@ Bool WindowManager_freePhysical(Window *w) {
 Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
 
 	Bool s_uccess = true;
-	ListU16 name = (ListU16) { 0 };
+	CharString name = CharString_createNull();
 	const U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
@@ -842,13 +816,13 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 			1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters"
 		))
 
-	gotoIfError2(clean, CharString_toUTF16x(title, &name))
+	gotoIfError2(clean, CharString_createCopyx(title, &name))
 
-	if(!SetWindowTextW(w->nativeHandle, (const wchar_t*) name.ptr))
+	if(!SetWindowTextA(w->nativeHandle, name.ptr))
 		retError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"))
 
 clean:
-	ListU16_freex(&name);
+	CharString_freex(&name);
 	return s_uccess;
 }
 
@@ -892,7 +866,7 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 		GetSystemMetrics(SM_CYSCREEN)
 	);
 
-	SetWindowLongPtrW(w->nativeHandle, GWL_STYLE, style);
+	SetWindowLongPtrA(w->nativeHandle, GWL_STYLE, style);
 
 	if(!isFullScreen)
 		newSize = w->prevSize;
@@ -972,7 +946,7 @@ impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Create native window
 
-	const WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
+	const WNDCLASSEXA wc = *(const WNDCLASSEXA*) w->owner->platformData.ptr;
 	const HINSTANCE mainModule = Platform_instance.data;
 	Bool s_uccess = true;
 
@@ -1001,11 +975,8 @@ impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Our strings are UTF8, but windows wants UTF16
 
-	ListU16 tmp = (ListU16) { 0 };
-	gotoIfError2(clean, CharString_toUTF16x(w->title, &tmp))
-
-	const HWND nativeWindow = CreateWindowExW(
-		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
+	const HWND nativeWindow = CreateWindowExA(
+		WS_EX_APPWINDOW, wc.lpszClassName, w->title.ptr, style,
 		I32x2_x(position), I32x2_y(position),
 		I32x2_x(size), I32x2_y(size),
 		NULL, NULL, mainModule, NULL
@@ -1038,7 +1009,7 @@ impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Bind our window
 
-	SetWindowLongPtrW(nativeWindow, 0, (LONG_PTR) w);
+	SetWindowLongPtrA(nativeWindow, 0, (LONG_PTR) w);
 
 	if(w->hint & EWindowHint_ForceFullscreen)
 		w->flags |= EWindowFlags_IsFullscreen;
@@ -1066,6 +1037,5 @@ impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 		retError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"))
 
 clean:
-	ListU16_freex(&tmp);
 	return s_uccess;
 }

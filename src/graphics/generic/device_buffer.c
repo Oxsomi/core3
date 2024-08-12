@@ -175,7 +175,7 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
-	SpinLock_free(&buffer->lock);
+	SpinLock_lock(&buffer->lock, U64_MAX);
 
 	if (buffer->resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
@@ -303,8 +303,6 @@ Error GraphicsDeviceRef_createBufferIntern(
 	}
 
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
-
-	SpinLock_create(&buf->lock);
 
 	if(allocate) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))		//Temporary if not CPUBacked

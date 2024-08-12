@@ -193,8 +193,6 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 	if(err.genericError == EGenericError_Stderr)
 		platformErr = CharString_createRefCStrConst(strerror((int)err.paramValue0));
 
-	Log_printCapturedStackTraceCustom(alloc, (const void**)err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
-
 	if(
 		!CharString_format(
 
@@ -214,7 +212,9 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 
 		).genericError
 	)
-		Log_log(alloc, logLevel, options, result);
+		Log_log(alloc, logLevel, options | ELogOptions_NoBreak, result);
+
+	Log_printCapturedStackTraceCustom(alloc, (const void**)err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
 
 	CharString_free(&result, alloc);
 	CharString_free(&platformErr, alloc);

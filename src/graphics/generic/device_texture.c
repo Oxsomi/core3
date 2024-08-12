@@ -240,7 +240,7 @@ Bool DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)texture - sizeof(RefPtr));
 
-	SpinLock_free(&texture->lock);
+	SpinLock_lock(&texture->lock, U64_MAX);
 
 	Bool success = UnifiedTexture_free(refPtr);
 	success &= Buffer_freex(&texture->cpuData);
@@ -328,8 +328,6 @@ Error GraphicsDeviceRef_createTexture(
 	gotoIfError(clean, ListDevicePendingRange_reservex(
 		&texture->pendingChanges, flag & EGraphicsResourceFlag_CPUBacked ? 16 : 1
 	))
-
-	SpinLock_create(&texture->lock);
 
 	gotoIfError(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0))
 

@@ -2264,7 +2264,7 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	(void)alloc;
 
-	SpinLock_free(&cmd->lock);
+	SpinLock_lock(&cmd->lock, U64_MAX);
 
 	for (U64 i = 0; i < cmd->resources.length; ++i) {
 
@@ -2315,7 +2315,6 @@ Error GraphicsDeviceRef_createCommandList(
 	gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32))
-	SpinLock_create(&commandList->lock);
 
 	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;

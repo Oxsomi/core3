@@ -76,8 +76,8 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	DeviceBufferRef_dec(&device->frameData);
 	DeviceBufferRef_dec(&device->staging);
 
-	SpinLock_free(&device->lock);
-	SpinLock_free(&device->allocator.lock);
+	SpinLock_lock(&device->lock, U64_MAX);
+	SpinLock_lock(&device->allocator.lock, U64_MAX);
 	ListWeakRefPtr_freex(&device->pendingResources);
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
@@ -120,7 +120,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
 		Buffer_freex(&device->freeList[i]);
 
-	SpinLock_free(&device->descriptorLock);
+	SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
@@ -224,17 +224,12 @@ Error GraphicsDeviceRef_create(
 	device->allocator = (DeviceMemoryAllocator) { .device = device };
 	gotoIfError(clean, ListDeviceMemoryBlock_reservex(&device->allocator.blocks, 16))
 
-	SpinLock_create(&device->allocator.lock);
-	SpinLock_create(&device->lock);
-
 	//Create in flight resource refs
 
 	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i)
 		gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64))
 
 	//Create descriptor type free list
-
-	SpinLock_create(&device->descriptorLock);
 
 	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
 		gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &device->freeList[i]))

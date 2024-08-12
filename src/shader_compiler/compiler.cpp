@@ -401,7 +401,7 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-SpinLock lockThread = SpinLock{ .lockedThreadId = { 0 }, .active = true, .pad = { 0 } };
+SpinLock lockThread;
 Bool hasInitialized;
 
 Bool Compiler_setup(Error *e_rr) {

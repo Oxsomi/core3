@@ -44,6 +44,7 @@ typedef enum ELogOptions {
 	ELogOptions_Timestamp	= 1 << 0,
 	ELogOptions_NewLine		= 1 << 1,
 	ELogOptions_Thread		= 1 << 2,
+	ELogOptions_NoBreak		= 1 << 3,		//No debug break
 
 	ELogOptions_Default		= ELogOptions_Timestamp | ELogOptions_NewLine | ELogOptions_Thread
 

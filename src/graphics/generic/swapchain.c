@@ -113,7 +113,7 @@ clean:
 }
 
 Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
-	Bool success = SpinLock_free(&swapchain->lock);
+	Bool success = SpinLock_lock(&swapchain->lock, U64_MAX);
 	success &= GraphicsDevice_freeSwapchainExt(swapchain, alloc);
 	success &= UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
 	return success;
@@ -183,7 +183,6 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 
 	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef))
 	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title))
-	SpinLock_create(&swapchain->lock);
 
 clean:
 
