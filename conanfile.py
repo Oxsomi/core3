@@ -67,15 +67,25 @@ class oxc3(ConanFile):
 		tc.generate()
 
 	def source(self):
-		if os.path.isdir("core3"):
+
+		# If it's already cloned then we're in the root of the folder
+		if os.path.isdir("docs"):
 			git = Git(self)
+			git.run("submodule update --init --recursive")
+
+		# Otherwise, we need to do a fresh checkout
+		else:
+			git = Git(self)
+			git.clone(url=self.conan_data["sources"][self.version]["url"])
+			git.folder = os.path.join(self.source_folder, "core3")
+			git.checkout(self.conan_data["sources"][self.version]["checkout"])
 			git.run("submodule update --init --recursive")
 
 	def build(self):
 
 		cmake = CMake(self)
 
-		if os.path.isdir("core3"):
+		if os.path.isdir("../core3"):
 			cmake.configure(build_script_folder="core3")
 		else:
 			cmake.configure()
