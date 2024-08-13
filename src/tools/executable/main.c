@@ -29,8 +29,6 @@ I32 Program_run() {
 
 	CLI_init();
 
-	Log_debugLnx("月");
-
 	if(!CLI_execute(Platform_instance.args))
 		return -1;
 

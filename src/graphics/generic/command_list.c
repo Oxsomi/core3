@@ -985,7 +985,7 @@ Error CommandListRef_startScope(
 
 					gotoIfError(clean, CommandListRef_transitionRTAS(
 						commandList, dat.blasCpu,
-						transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead, transition.stage
+						ETransitionType_ShaderRead, transition.stage
 					))
 				}
 

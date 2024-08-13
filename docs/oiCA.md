@@ -173,6 +173,8 @@ The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed 
 
 *Note: oiCA supports the ability to choose between 10MiB, 100MiB and 500MiB blocks for speeding up AES by multi threading.*
 
+*Note2: When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok.* 
+
 ## Changelog
 
 1.0: Basic format specification.
