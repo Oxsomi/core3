@@ -153,7 +153,8 @@ class oxc3(ConanFile):
 
 	def package_info(self):
 		self.cpp_info.components["oxc3"].libs = ["OxC3"]
-		self.cpp_info.set_property("cmake_file_name", "OxC3")
-		self.cpp_info.set_property("cmake_target_name", "OxC3")
-		self.cpp_info.set_property("pkg_config_name", "OxC3")
+		self.cpp_info.set_property("cmake_file_name", "oxc3")
+		self.cpp_info.set_property("cmake_target_name", "oxc3::oxc3")
+		self.cpp_info.set_property("pkg_config_name", "oxc3")
+		self.cpp_info.set_property("cmake_build_modules", [os.path.join("cmake", "oxc3.cmake")])
 		self.cpp_info.libs = collect_libs(self)

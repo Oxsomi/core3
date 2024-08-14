@@ -25,6 +25,7 @@
 #include "types/string.h"
 #include "platforms/ext/stringx.h"
 
+#define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
@@ -39,9 +40,9 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 	if(!FAILED(err.paramValue0))
 		return CharString_createNull();
 
-	C8 *lpBuffer = NULL;
+	wchar_t *lpBuffer = NULL;
 
-	const DWORD f = FormatMessageA(
+	const DWORD f = FormatMessageW(
 
 		FORMAT_MESSAGE_ALLOCATE_BUFFER |
 		FORMAT_MESSAGE_FROM_SYSTEM,
@@ -51,7 +52,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
 
-		(LPSTR) &lpBuffer,
+		(LPWSTR) &lpBuffer,
 		0,
 
 		NULL
@@ -63,7 +64,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 		return CharString_createNull();
 
 	CharString res;
-	if((err = CharString_createCopy(CharString_createRefCStrConst(lpBuffer), alloc, &res)).genericError) {
+	if((err = CharString_createFromUTF16((const U16*)lpBuffer, U64_MAX, alloc, &res)).genericError) {
 		LocalFree(lpBuffer);
 		return CharString_createNull();
 	}
@@ -77,10 +78,7 @@ void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (
 
 I32 main(I32 argc, const C8 *argv[]) {
 
-	SetConsoleCP(CP_UTF8);
-	SetConsoleOutputCP(CP_UTF8);
-
-	const Error err = Platform_create(argc, argv, GetModuleHandleA(NULL), NULL);
+	const Error err = Platform_create(argc, argv, GetModuleHandleW(NULL), NULL);
 
 	if(err.genericError)
 		return -1;
@@ -99,13 +97,13 @@ typedef struct EnumerateFiles {
 	Bool b;
 } EnumerateFiles;
 
-BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPCSTR name, EnumerateFiles *sections) {
+BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sections) {
 
 	mod; unused;
 
 	CharString str = CharString_createNull();
 	Error err = Error_none();
-	gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(name), &str))
+	gotoIfError(clean, CharString_createFromUTF16x((const U16*)name, U64_MAX, &str))
 
 	if(CharString_countAllSensitive(str, '/', 0) != 1)
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
@@ -139,8 +137,8 @@ Error Platform_initExt() {
 
 		//Init working dir
 
-		C8 buff[MAX_PATH + 1];
-		const DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
+		wchar_t buff[MAX_PATH + 1];
+		const DWORD chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
 
 		if(!chars || chars >= MAX_PATH)
 			gotoIfError(clean, Error_platformError(
@@ -149,9 +147,7 @@ Error Platform_initExt() {
 
 		buff[chars] = 0;
 
-		gotoIfError(clean, CharString_createCopyx(
-			CharString_createRefSizedConst(buff, chars, true), &Platform_instance.workingDirectory
-		))
+		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory))
 
 		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/', 0, 0);
 
@@ -162,9 +158,9 @@ Error Platform_initExt() {
 
 	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance.virtualSections };
 
-	if (!EnumResourceNamesA(
+	if (!EnumResourceNamesW(
 		NULL, RT_RCDATA,
-		(ENUMRESNAMEPROCA)enumerateFiles,
+		(ENUMRESNAMEPROCW)enumerateFiles,
 		(LONG_PTR)&files
 	)) {
 
@@ -344,7 +340,7 @@ CharString Keyboard_remap(EKey key) {
 		return CharString_createRefCStrConst(raw);
 
 	if(!scanCode && vkey)
-		scanCode = MapVirtualKeyExA(vkey, MAPVK_VK_TO_VSC_EX, 0);
+		scanCode = MapVirtualKeyExW(vkey, MAPVK_VK_TO_VSC_EX, 0);
 
 	//Special keys that need some hackery with the scan codes
 	//https://www.setnode.com/blog/mapvirtualkey-getkeynametext-and-a-story-of-how-to/
@@ -366,13 +362,13 @@ CharString Keyboard_remap(EKey key) {
 	if(!scanCode)
 		return CharString_createNull();
 
-	C8 name[32];
-	I32 res = GetKeyNameTextA(scanCode << 16, name, sizeof(name));
+	wchar_t name[32];
+	I32 res = GetKeyNameTextW(scanCode << 16, name, sizeof(name));
 
 	if(res > 0) {
 
 		CharString tmp = CharString_createNull();
-		Error err = CharString_createCopyx(CharString_createRefAutoConst(name, (U32)res), &tmp);
+		Error err = CharString_createFromUTF16x((const U16*)name, res, &tmp);
 
 		if(!err.genericError)
 			return tmp;

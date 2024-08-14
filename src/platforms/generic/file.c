@@ -62,6 +62,7 @@
 
 #else
 
+	#define UNICODE
 	#define WIN32_LEAN_AND_MEAN
 	#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 	#include <Windows.h>
@@ -72,8 +73,17 @@
 	#define S_ISREG(x) (x & _S_IFREG)
 	#define S_ISDIR(x) (x & _S_IFDIR)
 
+	//Can't rely on manifest.xml being present that allows use of RemoveDirectoryA with UTF8.
 	I32 removeFolder(CharString str) {
-		return RemoveDirectoryA(str.ptr) ? 0 : -1;		//UTF8 supported with right manifest file
+
+		ListU16 utf8 = (ListU16) { 0 };
+
+		if (CharString_toUTF16x(str, &utf8).genericError)
+			return -1;
+
+		const I32 res = RemoveDirectoryW((const wchar_t*)utf8.ptr) ? 0 : -1;
+		ListU16_freex(&utf8);
+		return res;
 	}
 
 #endif

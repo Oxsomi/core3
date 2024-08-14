@@ -106,13 +106,13 @@ void Log_printCapturedStackTraceCustom(
 
 			const U64 moduleBase = SymGetModuleBase(process, addr);
 
-			C8 modulePath[MAX_PATH + 1] = { 0 };
-			if (!moduleBase || !GetModuleFileNameA((HINSTANCE)moduleBase, modulePath, MAX_PATH))
+			wchar_t modulePath[MAX_PATH + 1] = { 0 };
+			if (!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_PATH))
 				continue;
 
 			anySymbol = true;
 
-			C8 symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
+			wchar_t symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
 
 			PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolData;
 			symbol->SizeOfStruct = sizeof(symbolData);
@@ -145,9 +145,7 @@ void Log_printCapturedStackTraceCustom(
 			Error err;
 
 			if(modulePath[0])
-				gotoIfError(cleanup, CharString_createCopy(
-					CharString_createRefAutoConst(modulePath, MAX_PATH), alloc, &capture->mod
-				))
+				gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod))
 
 			if(CharString_length(capture->sym)) {
 				gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp))
@@ -300,25 +298,18 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 			break;
 	}
+	
+	panic |= CharString_toUTF16(copy, alloc, &tmp).genericError;
 
 	if(debugger) {
 
-		//Doesn't play nicely with UTF8 yet
-
-		if(Buffer_isAscii(CharString_bufferConst(copy)))
-			OutputDebugStringA(copy.ptr);
-
-		else {
-			panic |= CharString_toUTF16(copy, alloc, &tmp).genericError;
-			OutputDebugStringW(tmp.ptr);
-			ListU16_free(&tmp, alloc);
-		}
+		OutputDebugStringW(tmp.ptr);
 
 		if(panic)
-			OutputDebugStringA(
-				"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-				"This is normally okay, as long as a new string can be allocated.\n"
-				"In this case, allocation failed, which suggests corruption or out of memory.\n"
+			OutputDebugStringW(
+				L"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+				L"This is normally okay, as long as a new string can be allocated.\n"
+				L"In this case, allocation failed, which suggests corruption or out of memory.\n"
 			);
 	}
 
@@ -330,7 +321,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	if(acq < ELockAcquire_Success) {
 
 		if(debugger)
-			OutputDebugStringA("Log_print: Couldn't acquire lock. It might be stuck?\n");
+			OutputDebugStringW(L"Log_print: Couldn't acquire lock. It might be stuck?\n");
 
 		goto skipConsole;
 	}
@@ -347,7 +338,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
 	if (!panic)
-		WriteConsoleA(GetStdHandle(STD_OUTPUT_HANDLE), copy.ptr, (int) CharString_length(copy), NULL, NULL);
+		WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), (const wchar_t*) tmp.ptr, (int) tmp.length, NULL, NULL);
 
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 
