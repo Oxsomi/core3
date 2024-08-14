@@ -41,7 +41,7 @@ class oxc3(ConanFile):
 		"cliGraphics": True
 	}
 
-	exports_sources = "inc/*"
+	exports_sources = [ "inc/*", "cmake/*" ]
 
 	def layout(self):
 		cmake_layout(self)
@@ -67,22 +67,14 @@ class oxc3(ConanFile):
 		tc.generate()
 
 	def source(self):
-
-		# If it's already cloned then we're in the root of the folder
-		if os.path.isdir("docs"):
-			git = Git(self)
-			git.run("submodule update --init --recursive")
-
-		# Otherwise, we need to do a fresh checkout
-		else:
-			git = Git(self)
-			git.clone(url=self.conan_data["sources"][self.version]["url"])
-			git.folder = os.path.join(self.source_folder, "core3")
-			git.checkout(self.conan_data["sources"][self.version]["checkout"])
-			git.run("submodule update --init --recursive")
+		git = Git(self)
+		git.clone(url=self.conan_data["sources"][self.version]["url"])
+		git.folder = os.path.join(self.source_folder, "core3")
+		git.checkout(self.conan_data["sources"][self.version]["checkout"])
+		git.run("submodule update --init --recursive")
 
 	def build(self):
-
+		
 		cmake = CMake(self)
 
 		if os.path.isdir("../core3"):
@@ -98,16 +90,28 @@ class oxc3(ConanFile):
 	def package(self):
 		cmake = CMake(self)
 		cmake.build(target="OxC3")
-		copy(self, "*.cmake", "cmake", "../../p/cmake")
-		copy(self, "*.lib", "lib", "../../p/lib")
-		copy(self, "*.a", "lib", "../../p/lib")
-		copy(self, "*.lib", "lib/Release", "../../p/lib")
-		copy(self, "*.lib", "lib/Debug", "../../p/lib")
-		copy(self, "*.a", "lib/Release", "../../p/lib")
-		copy(self, "*.a", "lib/Debug", "../../p/lib")
-		copy(self, "", "bin", "../../p/bin")
-		copy(self, "", "bin/Release", "../../p/bin")
-		copy(self, "", "bin/Debug", "../../p/bin")
+
+		copy(self, "*.lib", os.path.join(self.build_folder, "lib/Release"), os.path.join(self.package_folder, "lib/Release"))
+		copy(self, "*.lib", os.path.join(self.build_folder, "lib/Debug"), os.path.join(self.package_folder, "lib/Debug"))
+		copy(self, "*.a", os.path.join(self.build_folder, "lib"), os.path.join(self.package_folder, "lib"))
+		copy(self, "*.pdb", os.path.join(self.build_folder, "lib/Release"), os.path.join(self.package_folder, "lib/Release"))
+		copy(self, "*.pdb", os.path.join(self.build_folder, "lib/Debug"), os.path.join(self.package_folder, "lib/Debug"))
+		copy(self, "*.exp", os.path.join(self.build_folder, "lib/Release"), os.path.join(self.package_folder, "lib/Release"))
+
+		copy(self, "*.exp", os.path.join(self.build_folder, "lib/Debug"), os.path.join(self.package_folder, "lib/Debug"))
+		copy(self, "*.exp", os.path.join(self.build_folder, "bin/Release"), os.path.join(self.package_folder, "bin/Release"))
+		copy(self, "*.exe", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
+		copy(self, "*.exe", os.path.join(self.build_folder, "bin/Release"), os.path.join(self.package_folder, "bin/Release"))
+		copy(self, "*.dll", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
+		copy(self, "*.dll", os.path.join(self.build_folder, "bin/Release"), os.path.join(self.package_folder, "bin/Release"))
+		copy(self, "*.pdb", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
+		copy(self, "*.pdb", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
+
+		copy(self, "^([^.]+)$", os.path.join(self.build_folder, "bin"), os.path.join(self.package_folder, "bin"))	# Executable for Unix has no extension
+
+		copy(self, "*.cmake", os.path.join(self.source_folder, "cmake"), os.path.join(self.package_folder, "cmake"))
+		copy(self, "*.h", os.path.join(self.source_folder, "inc"), os.path.join(self.package_folder, "inc"))
+		copy(self, "*.hpp", os.path.join(self.source_folder, "inc"), os.path.join(self.package_folder, "inc"))
 
 	def package_info(self):
 		self.cpp_info.components["oxc3"].libs = ["OxC3"]
