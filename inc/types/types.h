@@ -22,22 +22,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
+#include "platform_types.h"
 
 //Null is apparently non-standard
 
 #ifndef NULL
 	#define NULL (void*)0
 #endif
-
-//Platform and arch stuff
-
-#define SIMD_NONE 0
-#define SIMD_SSE 1
-#define SIMD_NEON 2
-
-#define ARCH_NONE 0
-#define ARCH_X64 1
-#define ARCH_ARM 2
 
 //A hint to show that something is implementation dependent
 //For ease of implementing a new implementation
@@ -67,12 +58,6 @@ typedef uint64_t U64;
 
 typedef float F32;
 typedef double F64;
-
-#if !_RELAX_FLOAT
-	#if FLT_EVAL_METHOD != 0
-		#error Flt eval method should be 0 to indicate consistent behavior
-	#endif
-#endif
 
 typedef U64 Ns;		/// Time since Unix epoch in Ns
 typedef I64 DNs;	/// Delta Ns

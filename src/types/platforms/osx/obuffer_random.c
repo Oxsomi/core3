@@ -20,7 +20,6 @@
 
 #include "types/buffer.h"
 #include "types/time.h"
-#include "types/platform_types.h"
 
 #include <Security/SecRandom.h>
 

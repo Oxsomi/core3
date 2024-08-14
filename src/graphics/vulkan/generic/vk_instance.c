@@ -26,7 +26,6 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "types/platform_types.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/math.h"

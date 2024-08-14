@@ -23,7 +23,6 @@
 #include "types/buffer.h"
 #include "types/math.h"
 #include "types/vec.h"
-#include "types/platform_types.h"
 
 void Buffer_sha256Internal(Buffer buf, U32 *output);
 

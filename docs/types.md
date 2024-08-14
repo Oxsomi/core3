@@ -5,24 +5,24 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
 ## Basic defines
 
 - **_SIMD** is what type of SIMD is used
-  - *types/types.h* defines these, while _SIMD is a compile define.
+  - *types/platform_types.h* defines these.
+  - **_ENABLE_SIMD**: If the user has explicitly disabled SIMD using _ENABLE_SIMD == false or the SIMD toggle in OxC3 cmake, then everything that links to the lib should too.
   - **SIMD_NONE**: Indicates a fallback mode only, useful for validation, debugging and adding new platforms with a lot less effort (if they use a different SIMD setting that isn't supported yet).
   - **SIMD_SSE**: Indicates the usage of SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND and the possible usage of SHA instructions. This allows quicker and/or safer encryption/hashing & computation.
   - (**unsupported**): SIMD_NEON: Indicates the usage of ARM NEON intrinsics.
 - **_ARCH** is what type of architecture is used
-  - *types/types.h* defines these, while _ARCH is a compile define.
+  - *types/platform_types.h* defines these.
   - **ARCH_NONE**: Unknown architecture; likely abstracted away from regular assembly level.
-  - **ARCH_X64**: X86_64 architecture.
-  - (**unsupported**): ARCH_ARM.
+  - **ARCH_X86_64**: X86_64 architecture.
+  - (**unsupported**): ARCH_ARM64.
 - **_PLATFORM_TYPE** is what kind of platform is running
-  - *types/platform_types.h* defines these, while _PLATFORM_TYPE is a compile define.
+  - *types/platform_types.h* defines these.
   - **PLATFORM_WINDOWS**.
   - **PLATFORM_LINUX**.
   - **PLATFORM_ANDROID**.
   - **PLATFORM_WEB**.
   - **PLATFORM_IOS**.
   - **PLATFORM_OSX**.
-- **_RELAX_FLOAT**: Indicates that the floating point operations aren't necessarily accurate, but are faster.
 - **_FORCE_FLOAT_FALLBACK**: All explicit float cast operations (e.g. F32_castF64) are software simulated.
 - **impl** indicates that one of the other source files will define this; mostly a platform or API dependent version. For example impl is regularly used to indicate a function that is implemented by the Vulkan or Windows backends rather than one that is generic and used across other platforms & APIs.
 - **user_impl** indicates that the user is meant to define the function themselves when using the framework. This is used by OxC3 platforms to take control of the main function but provide the Program_run & Program_exit function for the user.

@@ -20,7 +20,6 @@
 
 #include "types/flp.h"
 #include "types/vec.h"
-#include "types/platform_types.h"
 
 U8 EFloatType_bytes(EFloatType type) {
 	return (U8)(type >> 16);

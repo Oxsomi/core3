@@ -20,7 +20,6 @@
 
 #pragma once
 #include "types/vec.h"
-#include "types/platform_types.h"
 
 #ifdef __cplusplus
 	extern "C" {

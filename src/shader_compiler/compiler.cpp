@@ -28,7 +28,6 @@
 #include "types/allocator.h"
 #include "types/file.h"
 #include "types/math.h"
-#include "types/platform_types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE

@@ -22,7 +22,6 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/vec.h"
-#include "types/platform_types.h"
 #include "types/type_cast.h"
 
 //SHA state

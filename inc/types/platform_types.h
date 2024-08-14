@@ -19,7 +19,10 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include <stdint.h>
+#include <assert.h>
+
+typedef uint32_t U32;
 
 //Defines instead of enums to allow #if
 
@@ -30,6 +33,58 @@
 #define PLATFORM_WEB 4
 #define PLATFORM_IOS 5
 #define PLATFORM_OSX 6
+
+//Platform and arch stuff
+
+#define SIMD_NONE 0
+#define SIMD_SSE 1
+#define SIMD_NEON 2
+
+#define ARCH_NONE 0
+#define ARCH_X86_64 1
+#define ARCH_ARM64 2
+
+static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
+
+//Moved from CMake to header to allow better compilation as a lib
+//https://stackoverflow.com/questions/5919996/how-to-detect-reliably-mac-os-x-ios-linux-windows-in-c-preprocessor
+
+#ifdef _WIN32
+	#define _PLATFORM_TYPE PLATFORM_WINDOWS
+#elif __wasm__
+	#define _PLATFORM_TYPE PLATFORM_WEB
+#elif __APPLE__
+	#if defined(TARGET_OS_IPHONE)
+		#define _PLATFORM_TYPE PLATFORM_IOS
+	#elif defined(TARGET_OS_MAC)
+		#define _PLATFORM_TYPE PLATFORM_OSX
+	#else
+		#error "Undetected apple platform type"
+	#endif
+#elif __ANDROID__
+	#define _PLATFORM_TYPE PLATFORM_ANDROID
+#elif __linux__
+	#define _PLATFORM_TYPE PLATFORM_LINUX
+#else
+	#error "Undetected platform type"
+#endif
+
+#if defined(_M_ARM64) || defined(__aarch64__)
+	#define _ARCH ARCH_ARM64
+#elif defined(_WIN64) || defined(__x86_64__)
+	#define _ARCH ARCH_X86_64
+#else
+	#error "Undetected architecture type"
+#endif
+
+#if (defined(_ENABLE_SIMD) && !_ENABLE_SIMD) || (_PLATFORM_TYPE != PLATFORM_WINDOWS)		//TODO: Fix SIMD on non windows
+	#define _SIMD SIMD_NONE
+#elif _ARCH == ARCH_ARM64
+	#define _SIMD SIMD_NONE																	//TODO: SIMD_NEON
+	#warning "-- ARM NEON isn't natively supported. Falling back to non SIMD for testing purposes, PLEASE don't ship like this"
+#else
+	#define _SIMD SIMD_SSE
+#endif
 
 #ifdef __cplusplus
 	extern "C" {

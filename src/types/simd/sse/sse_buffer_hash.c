@@ -22,7 +22,6 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/vec.h"
-#include "types/platform_types.h"
 #include <nmmintrin.h>
 
 #include "types/math.h"

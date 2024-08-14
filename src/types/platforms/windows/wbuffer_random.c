@@ -20,7 +20,6 @@
 
 #include "types/buffer.h"
 #include "types/time.h"
-#include "types/platform_types.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN

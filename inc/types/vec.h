@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/platform_types.h"
+#include "types/types.h"
 #include <stdalign.h>
 
 //Helper function to insert a simple non SIMD operation

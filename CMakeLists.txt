@@ -42,7 +42,6 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif()
 
 set(EnableSIMD ON CACHE BOOL "Enables SIMD")
-set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
 set(CLIGraphics ON CACHE BOOL "Turn off/on OxC3 graphics CLI (might be unsupported on device)")
 set(EnableShaderCompiler OFF CACHE BOOL "Turn off/on shader compiler + OxC3 compile shaders CLI (increases compile time)")
 
@@ -51,60 +50,43 @@ set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
 
 # Set general compile options
 
-# Even though EnableSIMD can be turned off, it won't be truly off
-# This is because we want to maintain proper IEEE754 compliance, which we can't do without SSE
-
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
-	set(_ARCH "ARCH_ARM")
 	message("-- Enabling ARM specific optimizations")
-	message(WARNING "-- ARM NEON isn't natively supported. Falling back to non SIMD for testing purposes, PLEASE don't ship like this")
-	set(EnableSIMD OFF)
 	set(ARM ON)
 else()
 	message("-- Enabling x64 specific optimizations")
-	set(_ARCH "ARCH_X64")
 	set(ARM OFF)
 endif()
 
 if(MSVC)
 
-	add_compile_options(/MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
+	add_compile_options(/MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy /W4 /WX)
 
 	if(EnableSIMD)
-		if("${_ARCH}" STREQUAL "ARCH_ARM")
+		if(ARM)
 			add_compile_options(/arch:ARMv7VE)		# Enable ARM arch
 		else()
 			add_compile_options(/d2archSSE42)		# Require SSE4.2
 		endif()
 	endif()
 
-	if(RelaxFloat)
-		add_compile_options(/fp:fast)
-	else()
-		add_compile_options(/fp:strict)
-	endif()
+	add_compile_options(/fp:strict)
 
 else()
 
-	if("${_ARCH}" STREQUAL "ARCH_X64")
+	if(ARM)
+		add_compile_options(-mfpu=neon -march=armv8-a+crc+simd+crypto)		# We enable neon, but we don't use it in vectors yet
+	else()
 		if(EnableSIMD)
 			add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
-		elseif(NOT RelaxFloat)
-			add_compile_options(-mfpmath=sse -msse)
+		else()
+			add_compile_options(-mfpmath=sse -msse)		# Consistent float behavior
 		endif()
-	else()
-		add_compile_options(-mfpu=neon -march=armv8-a+crc+simd+crypto)		# We enable neon, but we don't use it in vectors yet
 	endif()
 
-	if(RelaxFloat)
-		add_compile_options(-ffast-math)
-	else()
-		add_compile_options(-fno-unsafe-math-optimizations)
-	endif()
-
-	add_compile_options(-fms-extensions)	# Needed by DXC for uuids
-
-	add_compile_options(-flto)
+	add_compile_options(-fno-unsafe-math-optimizations)
+	add_compile_options(-fms-extensions)
+	add_compile_options(-flto -Wall -Wextra -Werror)
 	
 	if(NOT CMAKE_${lang}_COMPILER_VERSION VERSION_LESS 4.7)
 		add_compile_options(-fno-fat-lto-objects)
@@ -140,20 +122,12 @@ endif()
 
 if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
-	set(_SIMD "SIMD_SSE")
 	set(simd sse)
+	set(SIMD 1)
 else()
 	message("-- Disabling SIMD (-DEnableSIMD=OFF)")
-	set(_SIMD "SIMD_NONE")
 	set(simd none)
-endif()
-
-if(RelaxFloat)
-	message("-- Enabling relaxed float (better perf, but less consistency) (-DRelaxFloat=ON)")
-	set(_RELAX_FLOAT "1")
-else()
-	message("-- Disabling relaxed floats (worse perf, but more consistency) (-DRelaxFloat=OFF)")
-	set(_RELAX_FLOAT "0")
+	set(SIMD 0)
 endif()
 
 if(ForceFloatFallback)
@@ -167,23 +141,18 @@ endif()
 if(WIN32)
 	message("-- Enabling Windows support...")
 	set(platform windows)
-	set(_PLATFORM_TYPE PLATFORM_WINDOWS)
 elseif(IOS)
 	message("-- Enabling iOS support...")
 	set(platform ios)
-	set(_PLATFORM_TYPE PLATFORM_IOS)
 elseif(APPLE)
 	message("-- Enabling OS X support...")
 	set(platform osx)
-	set(_PLATFORM_TYPE PLATFORM_OSX)
 elseif(ANDROID)
 	message("-- Enabling Android support...")
 	set(platform android)
-	set(_PLATFORM_TYPE PLATFORM_ANDROID)
 else()
 	message("-- Enabling Linux support...")
 	set(platform linux)
-	set(_PLATFORM_TYPE PLATFORM_LINUX)
 endif()
 
 # Enable symbols
@@ -192,22 +161,6 @@ if("${platform}" STREQUAL "linux")
 	if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
 		set(CMAKE_ENABLE_EXPORTS ON)
 	endif()
-endif()
-
-# Use ${HideConsole} to add_executable to hide the console window
-
-if(MSVC)
-	set(HideConsole "WIN32")
-else()
-	set(HideConsole "")
-endif()
-
-# Errors as warnings and maximum warnings should only be used for OxC3 stuff, as DXC won't be able to handle it
-
-if(MSVC)
-	add_compile_options(/W4 /WX)
-else()
-	add_compile_options(-Wall -Wextra -Werror)
 endif()
 
 set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
@@ -243,7 +196,7 @@ source_group("Source Files (simd: ${simd})" FILES ${typesSIMDSources})
 
 set_target_properties(OxC3_types PROPERTIES FOLDER Oxsomi)
 
-target_compile_definitions(OxC3_types PUBLIC -D_SIMD=${_SIMD} -D_RELAX_FLOAT=${_RELAX_FLOAT} -D_ARCH=${_ARCH} -D_PLATFORM_TYPE=${_PLATFORM_TYPE} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
+target_compile_definitions(OxC3_types PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
 
 target_include_directories(OxC3_types PUBLIC inc)
 
@@ -385,6 +338,7 @@ if("${graphicsApi}" STREQUAL "vulkan")
 		endif()
 
 		target_link_libraries(OxC3_graphics PUBLIC vulkan)
+
 	else()
 		target_link_libraries(OxC3_graphics PUBLIC vulkan)
 	endif()

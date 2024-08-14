@@ -22,7 +22,6 @@
 #include "types/string.h"
 #include "types/allocator.h"
 #include "types/archive.h"
-#include "types/platform_types.h"
 #include "types/lock.h"
 
 #ifdef __cplusplus

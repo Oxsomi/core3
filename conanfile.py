@@ -85,7 +85,8 @@ class oxc3(ConanFile):
 		cmake.build()
 
 	def requirements(self):
-		self.requires("dxc/2024.08.14")
+		if self.options.enableShaderCompiler:
+			self.requires("dxc/2024.08.14")
 
 	def package(self):
 
@@ -95,7 +96,7 @@ class oxc3(ConanFile):
 		copy(self, "*.cmake", os.path.join(self.source_folder, "cmake"), os.path.join(self.package_folder, "cmake"))
 
 		inc_src = os.path.join(self.source_folder, "inc")
-		inc_dst = os.path.join(self.package_folder, "inc")
+		inc_dst = os.path.join(self.package_folder, "include")
 		copy(self, "*.h", inc_src, inc_dst)
 		copy(self, "*.hpp", inc_src, inc_dst)
 
@@ -139,8 +140,8 @@ class oxc3(ConanFile):
 
 			# Copy release libs
 
-			rel_lib_src = os.path.join(self.build_folder, "Release/lib")
-			rel_bin_src = os.path.join(self.build_folder, "Release/bin")
+			rel_lib_src = os.path.join(self.build_folder, "lib/Release")
+			rel_bin_src = os.path.join(self.build_folder, "bin/Release")
 
 			copy(self, "*.lib", rel_lib_src, lib_dst)
 			copy(self, "*.pdb", rel_lib_src, lib_dst)

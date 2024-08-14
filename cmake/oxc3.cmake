@@ -93,6 +93,8 @@ macro(add_virtual_files)
         # When adding from external package manager, it's already been installed
         if(TARGET OxC3)
 		    add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
+		else()
+			add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
         endif()
 
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
