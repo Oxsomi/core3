@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2024.08.05"
+	version = "2024.08.14"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -21,7 +21,7 @@ class dxc(ConanFile):
 	# Binary configuration
 	settings = "os", "compiler", "build_type", "arch"
 
-	exports_sources = "include/dxc/*"
+	exports_sources = [ "include/dxc/*", "external/SPIRV-Tools/include/*", "external/DirectX-Headers/include/*" ]
 
 	def layout(self):
 		cmake_layout(self)
@@ -78,15 +78,20 @@ class dxc(ConanFile):
 
 	def source(self):
 		git = Git(self)
-		print(self.conan_data)
 		git.clone(url=self.conan_data["sources"][self.version]["url"])
 		git.folder = os.path.join(self.source_folder, "DirectXShaderCompiler")
 		git.checkout(self.conan_data["sources"][self.version]["checkout"])
 		git.run("submodule update --init --recursive")
 
 	def build(self):
+
 		cmake = CMake(self)
-		cmake.configure(build_script_folder="DirectXShaderCompiler")
+		
+		if os.path.isdir("../DirectXShaderCompiler"):
+			cmake.configure(build_script_folder="DirectXShaderCompiler")
+		else:
+			cmake.configure()
+
 		cmake.build()
 
 	def package(self):
@@ -100,58 +105,96 @@ class dxc(ConanFile):
 		
 		cwd = os.getcwd()
 		
+		# Headers: We use include/dxcompiler and include/spirv_tools to avoid vulkan sdk interfering
+
+		dxc_src = os.path.join(self.source_folder, "DirectXShaderCompiler/include/dxc")
+		dxc_dst = os.path.join(self.package_folder, "include/dxcompiler")
+		copy(self, "*.h", dxc_src, dxc_dst)
+		copy(self, "*.hpp", dxc_src, dxc_dst)
+
+		spirv_tools_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools")
+		spirv_tools_dst = os.path.join(self.package_folder, "include/spirv_tools")
+		copy(self, "*.h", spirv_tools_src, spirv_tools_dst)
+		copy(self, "*.hpp", spirv_tools_src, spirv_tools_dst)
+
+		dx_headers_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include")
+		dx_headers_dst = os.path.join(self.package_folder, "include")
+		copy(self, "*.h", dx_headers_src, dx_headers_dst)
+		copy(self, "*.hpp", dx_headers_src, dx_headers_dst)
+
+		lib_src = os.path.join(self.build_folder, "lib")
+		lib_dst = os.path.join(self.package_folder, "lib")
+		bin_src = os.path.join(self.build_folder, "bin")
+		bin_dst = os.path.join(self.package_folder, "bin")
+		
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if cwd.endswith("Debug") or cwd.endswith("Release"):
-			
-			# Headers
-
-			copy(self, "*.h", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxcompiler")
-			copy(self, "*.hpp", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxcompiler")
-
-			copy(self, "*.h", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv_tools")
-			copy(self, "*.hpp", "../../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../../p/include/spirv_tools")
-
-			copy(self, "*.h", "../../DirectXShaderCompiler/external/DirectX-Headers/include", "../../../p/include")
-			copy(self, "*.hpp", "../../DirectXShaderCompiler/external/DirectX-Headers/include", "../../../p/include")
-
-			# Libs
-
-			copy(self, "*.a", "lib", "../../../p/lib")
+			copy(self, "*.a", lib_src, lib_dst)
+			copy(self, "^([^.]+)$", bin_src, bin_dst)
 		
-		# Windows uses .lib files and runs it from the build directory
+		# Windows uses more complicated setups
 		else:
 			
-			copy(self, "*.lib", "lib/Debug", "../../p/lib")
-			copy(self, "*.lib", "Debug/lib", "../../p/lib")
-			copy(self, "*.pdb", "lib/Debug", "../../p/lib")
-			copy(self, "*.pdb", "Debug/lib", "../../p/lib")
-			
-			directory = "../../p/lib"
+			lib_dbg_src = os.path.join(self.build_folder, "lib/Debug")
+			dbg_lib_src = os.path.join(self.build_folder, "Debug/lib")
+			bin_dbg_src = os.path.join(self.build_folder, "bin/Debug")
+			dbg_bin_src = os.path.join(self.build_folder, "Debug/bin")
 
-			if os.path.isfile(directory):
-				for filename in os.listdir(directory):
-					f = os.path.join(directory, filename)
+			copy(self, "*.lib", lib_dbg_src, lib_dst)
+			copy(self, "*.lib", dbg_lib_src, lib_dst)
+			copy(self, "*.pdb", lib_dbg_src, lib_dst)
+			copy(self, "*.pdb", dbg_lib_src, lib_dst)
+			copy(self, "*.exp", lib_dbg_src, lib_dst)
+			copy(self, "*.exp", dbg_lib_src, lib_dst)
+
+			copy(self, "*.exp", bin_dbg_src, bin_dst)
+			copy(self, "*.exp", dbg_bin_src, bin_dst)
+			copy(self, "*.exe", bin_dbg_src, bin_dst)
+			copy(self, "*.exe", dbg_bin_src, bin_dst)
+			copy(self, "*.dll", bin_dbg_src, bin_dst)
+			copy(self, "*.dll", dbg_bin_src, bin_dst)
+			copy(self, "*.pdb", bin_dbg_src, bin_dst)
+			copy(self, "*.pdb", dbg_bin_src, bin_dst)
+
+			if os.path.isfile(lib_dst):
+				for filename in os.listdir(lib_dst):
+					f = os.path.join(lib_dst, filename)
+					if os.path.isfile(f):
+						offset = f.rfind(".")
+						rename(self, f, f[:offset] + "d." + f[offset+1:])
+
+			if os.path.isfile(bin_dst):
+				for filename in os.listdir(bin_dst):
+					f = os.path.join(bin_dst, filename)
 					if os.path.isfile(f):
 						offset = f.rfind(".")
 						rename(self, f, f[:offset] + "d." + f[offset+1:])
 
 			# Copy release libs
+			
+			lib_rel_src = os.path.join(self.build_folder, "lib/Release")
+			rel_lib_src = os.path.join(self.build_folder, "Release/lib")
+			bin_rel_src = os.path.join(self.build_folder, "bin/Release")
+			rel_bin_src = os.path.join(self.build_folder, "Release/bin")
 
-			copy(self, "*.lib", "lib/Release", "../../p/lib")
-			copy(self, "*.lib", "Release/lib", "../../p/lib")
-			copy(self, "*.pdb", "lib/Release", "../../p/lib")
-			copy(self, "*.pdb", "Release/lib", "../../p/lib")
+			copy(self, "*.lib", lib_rel_src, lib_dst)
+			copy(self, "*.lib", rel_lib_src, lib_dst)
+			copy(self, "*.pdb", lib_rel_src, lib_dst)
+			copy(self, "*.pdb", rel_lib_src, lib_dst)
+			copy(self, "*.exp", lib_rel_src, lib_dst)
+			copy(self, "*.exp", rel_lib_src, lib_dst)
+			
+			# Copy executables if applicable
 
-			# Headers: We use include/dxcompiler to avoid vulkan sdk interfering
+			copy(self, "*.exp", bin_rel_src, bin_dst)
+			copy(self, "*.exe", bin_rel_src, bin_dst)
+			copy(self, "*.dll", bin_rel_src, bin_dst)
+			copy(self, "*.pdb", bin_rel_src, bin_dst)
 
-			copy(self, "*.h", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxcompiler")
-			copy(self, "*.hpp", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxcompiler")
-
-			copy(self, "*.h", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv_tools")
-			copy(self, "*.hpp", "../DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools", "../../p/include/spirv_tools")
-
-			copy(self, "*.h", "../DirectXShaderCompiler/external/DirectX-Headers/include", "../../p/include")
-			copy(self, "*.hpp", "../DirectXShaderCompiler/external/DirectX-Headers/include", "../../p/include")
+			copy(self, "*.exp", rel_bin_src, bin_dst)
+			copy(self, "*.exe", rel_bin_src, bin_dst)
+			copy(self, "*.dll", rel_bin_src, bin_dst)
+			copy(self, "*.pdb", rel_bin_src, bin_dst)
 
 	def package_info(self):
 

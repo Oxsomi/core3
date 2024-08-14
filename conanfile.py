@@ -74,7 +74,7 @@ class oxc3(ConanFile):
 		git.run("submodule update --init --recursive")
 
 	def build(self):
-		
+
 		cmake = CMake(self)
 
 		if os.path.isdir("../core3"):
@@ -85,33 +85,71 @@ class oxc3(ConanFile):
 		cmake.build()
 
 	def requirements(self):
-		self.requires("dxc/2024.08.05")
+		self.requires("dxc/2024.08.14")
 
 	def package(self):
+
 		cmake = CMake(self)
 		cmake.build(target="OxC3")
 
-		copy(self, "*.lib", os.path.join(self.build_folder, "lib/Release"), os.path.join(self.package_folder, "lib/Release"))
-		copy(self, "*.lib", os.path.join(self.build_folder, "lib/Debug"), os.path.join(self.package_folder, "lib/Debug"))
-		copy(self, "*.a", os.path.join(self.build_folder, "lib"), os.path.join(self.package_folder, "lib"))
-		copy(self, "*.pdb", os.path.join(self.build_folder, "lib/Release"), os.path.join(self.package_folder, "lib/Release"))
-		copy(self, "*.pdb", os.path.join(self.build_folder, "lib/Debug"), os.path.join(self.package_folder, "lib/Debug"))
-		copy(self, "*.exp", os.path.join(self.build_folder, "lib/Release"), os.path.join(self.package_folder, "lib/Release"))
-
-		copy(self, "*.exp", os.path.join(self.build_folder, "lib/Debug"), os.path.join(self.package_folder, "lib/Debug"))
-		copy(self, "*.exp", os.path.join(self.build_folder, "bin/Release"), os.path.join(self.package_folder, "bin/Release"))
-		copy(self, "*.exe", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
-		copy(self, "*.exe", os.path.join(self.build_folder, "bin/Release"), os.path.join(self.package_folder, "bin/Release"))
-		copy(self, "*.dll", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
-		copy(self, "*.dll", os.path.join(self.build_folder, "bin/Release"), os.path.join(self.package_folder, "bin/Release"))
-		copy(self, "*.pdb", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
-		copy(self, "*.pdb", os.path.join(self.build_folder, "bin/Debug"), os.path.join(self.package_folder, "bin/Debug"))
-
-		copy(self, "^([^.]+)$", os.path.join(self.build_folder, "bin"), os.path.join(self.package_folder, "bin"))	# Executable for Unix has no extension
-
 		copy(self, "*.cmake", os.path.join(self.source_folder, "cmake"), os.path.join(self.package_folder, "cmake"))
-		copy(self, "*.h", os.path.join(self.source_folder, "inc"), os.path.join(self.package_folder, "inc"))
-		copy(self, "*.hpp", os.path.join(self.source_folder, "inc"), os.path.join(self.package_folder, "inc"))
+
+		inc_src = os.path.join(self.source_folder, "inc")
+		inc_dst = os.path.join(self.package_folder, "inc")
+		copy(self, "*.h", inc_src, inc_dst)
+		copy(self, "*.hpp", inc_src, inc_dst)
+
+		cwd = os.getcwd()
+
+		lib_dst = os.path.join(self.package_folder, "lib")
+		bin_dst = os.path.join(self.package_folder, "bin")
+
+		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
+		if cwd.endswith("Debug") or cwd.endswith("Release"):
+			copy(self, "*.a", os.path.join(self.build_folder, "lib"), os.path.join(self.package_folder, "lib"))
+			copy(self, "^([^.]+)$", os.path.join(self.build_folder, "bin"), os.path.join(self.package_folder, "bin"))
+
+		# Windows uses more complicated setups
+		else:
+			dbg_lib_src = os.path.join(self.build_folder, "lib/Debug")
+			dbg_bin_src = os.path.join(self.build_folder, "bin/Debug")
+
+			copy(self, "*.lib", dbg_lib_src, lib_dst)
+			copy(self, "*.pdb", dbg_lib_src, lib_dst)
+			copy(self, "*.exp", dbg_lib_src, lib_dst)
+
+			copy(self, "*.exp", dbg_bin_src, bin_dst)
+			copy(self, "*.exe", dbg_bin_src, bin_dst)
+			copy(self, "*.dll", dbg_bin_src, bin_dst)
+			copy(self, "*.pdb", dbg_bin_src, bin_dst)
+
+			if os.path.isfile(lib_dst):
+				for filename in os.listdir(lib_dst):
+					f = os.path.join(lib_dst, filename)
+					if os.path.isfile(f):
+						offset = f.rfind(".")
+						rename(self, f, f[:offset] + "d." + f[offset+1:])
+
+			if os.path.isfile(bin_dst):
+				for filename in os.listdir(bin_dst):
+					f = os.path.join(bin_dst, filename)
+					if os.path.isfile(f):
+						offset = f.rfind(".")
+						rename(self, f, f[:offset] + "d." + f[offset+1:])
+
+			# Copy release libs
+
+			rel_lib_src = os.path.join(self.build_folder, "Release/lib")
+			rel_bin_src = os.path.join(self.build_folder, "Release/bin")
+
+			copy(self, "*.lib", rel_lib_src, lib_dst)
+			copy(self, "*.pdb", rel_lib_src, lib_dst)
+			copy(self, "*.exp", rel_lib_src, lib_dst)
+
+			copy(self, "*.exp", rel_bin_src, bin_dst)
+			copy(self, "*.exe", rel_bin_src, bin_dst)
+			copy(self, "*.dll", rel_bin_src, bin_dst)
+			copy(self, "*.pdb", rel_bin_src, bin_dst)
 
 	def package_info(self):
 		self.cpp_info.components["oxc3"].libs = ["OxC3"]
