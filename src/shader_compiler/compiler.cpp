@@ -1642,6 +1642,111 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_convertCBufferDXIL(
+	ID3D12FunctionReflection1 *funcRefl,
+	ID3D12ShaderReflection1 *shaderRefl,
+	ID3D12ShaderReflectionConstantBuffer *constantBuffer,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+	D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
+	D3D12_SHADER_INPUT_BIND_DESC resourceDesc{};
+
+	if(FAILED(constantBuffer->GetDesc(&constantBufferDesc)))
+		retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer but no desc"))
+
+	if(funcRefl && FAILED(funcRefl->GetResourceBindingDescByName(constantBufferDesc.Name, &resourceDesc)))
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertCBufferDXIL() DXIL didn't contain resource binding for constant buffer"
+		))
+
+	if(shaderRefl && FAILED(shaderRefl->GetResourceBindingDescByName(constantBufferDesc.Name, &resourceDesc)))
+		retError(clean, Error_invalidState(
+			1, "Compiler_convertCBufferDXIL() DXIL didn't contain resource binding for constant buffer"
+		))
+
+	if(!shaderRefl && !funcRefl)
+		retError(clean, Error_nullPointer(
+			0, "Compiler_convertCBufferDXIL()::shaderRefl or funcRefl is required"
+		))
+
+	if (
+		resourceDesc.Type != D3D_SIT_CBUFFER ||
+		resourceDesc.BindCount != 1 ||
+		resourceDesc.Dimension ||
+		resourceDesc.NumSamples ||
+		resourceDesc.uFlags != D3D_SIF_USERPACKED ||
+		resourceDesc.ReturnType
+	)
+		retError(clean, Error_invalidState(
+			1, "Compiler_convertCBufferDXIL() DXIL contained invalid constant buffer resource binding"
+		))
+
+	if(
+		constantBufferDesc.Type != D3D_CT_CBUFFER ||
+		constantBufferDesc.uFlags ||
+		!constantBufferDesc.Size ||
+		!constantBufferDesc.Variables
+	)
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertCBufferDXIL() DXIL contained shader with unsupported buffer type or flags"
+		))
+
+	Log_debugLnx(
+		"%s, %" PRIu32 ": register(b%" PRIu32 ", space%" PRIu32 ") (used)",
+		constantBufferDesc.Name, constantBufferDesc.Size,
+		resourceDesc.BindPoint, resourceDesc.Space
+	);
+
+	for (U32 k = 0; k < constantBufferDesc.Variables; ++k) {
+
+		ID3D12ShaderReflectionVariable *variable = constantBuffer->GetVariableByIndex(k);
+		D3D12_SHADER_VARIABLE_DESC variableDesc{};
+
+		if(FAILED(variable->GetDesc(&variableDesc)))
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer variable with no desc"
+			))
+
+		const void *startTextureU64 = &variableDesc.StartTexture;
+		const void *startSamplerU64 = &variableDesc.StartSampler;
+
+		if(
+			variableDesc.DefaultValue ||
+			(variableDesc.uFlags && variableDesc.uFlags != D3D_SVF_USED) ||
+			*(const U64*)startTextureU64 ||
+			*(const U64*)startSamplerU64
+		)
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferDXIL() DXIL contained illegal constant buffer variable"
+			))
+
+		const C8 *variableName = variableDesc.Name;
+		U32 offset = variableDesc.StartOffset;
+		U32 size = variableDesc.Size;
+		Bool isUnused = !(variableDesc.uFlags & D3D_SVF_USED);
+
+		ID3D12ShaderReflectionType *type = variable->GetType();
+		D3D12_SHADER_TYPE_DESC typeDesc{};
+
+		if(FAILED(type->GetDesc(&typeDesc)))
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer variable type with no desc"
+			))
+
+		//TODO: If struct, then iterate.
+		//		Else, fetch raw type.
+
+		Log_debugLnx(
+			"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s)",
+			variableName, offset, size, isUnused ? "unused" : "used"
+		);
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_processDXIL(
 	Buffer *result,
 	DxcBuffer reflectionData,
@@ -1775,6 +1880,9 @@ Bool Compiler_processDXIL(
 
 			if(!funcDesc0.Name)
 				retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained no library name"))
+
+			for (U32 j = 0; j < funcDesc0.ConstantBuffers; ++j)
+				gotoIfError3(clean, Compiler_convertCBufferDXIL(funcRefl, NULL, funcRefl->GetConstantBufferByIndex(j), e_rr))
 
 			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
 
@@ -1952,6 +2060,9 @@ Bool Compiler_processDXIL(
 			semantics[*counter] = semanticValue;
 			inputTypes[(*counter)++] = type;
 		}
+
+		for (U32 j = 0; j < refl.ConstantBuffers; ++j)
+			gotoIfError3(clean, Compiler_convertCBufferDXIL(NULL, dxilRefl, dxilRefl->GetConstantBufferByIndex(j), e_rr))
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
 			groupSize, 0, 0, waveSizes,
@@ -2305,6 +2416,124 @@ Bool Compiler_processSPIRV(
 
 				semanticValue |= (U8)(semanticName << 4);
 				inputSemantic[input->location] = !semanticName ? 0 : (U8) semanticValue;
+			}
+		}
+
+		//Grab constant buffers
+
+		for (U64 j = 0; j < entrypoint.descriptor_set_count; ++j) {
+
+			SpvReflectDescriptorSet descriptorSet = entrypoint.descriptor_sets[j];
+
+			for (U64 k = 0; k < descriptorSet.binding_count; ++k) {
+
+				SpvReflectDescriptorBinding *binding = descriptorSet.bindings[k];
+
+				if(!binding)
+					continue;
+
+				Bool isCBV = binding->resource_type == SPV_REFLECT_RESOURCE_FLAG_CBV;
+				Bool isUBO = binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+				if(isCBV != isUBO || binding->set != descriptorSet.set)
+					retError(clean, Error_invalidState(
+						1, "Compiler_processSPIRV() mismatching resource type for constant buffer"
+					))
+
+				if(!isCBV)		//TODO: Reflect other properties
+					continue;
+
+				const void *imagePtr = &binding->image;
+				const U64 *imagePtrU64 = (const U64*) imagePtr;
+
+				static_assert(
+					sizeof(binding->image) == sizeof(U64) * 3,
+					"Compiler_processSPIRV() does compares in U64[3] of binding->image, but size changed"
+				);
+
+				const void *arrayDims = &binding->array.dims;
+				const U64 *arrayDimsU64 = (const U64*) arrayDims;
+
+				static_assert(
+					sizeof(binding->array.dims) == sizeof(U64) * (SPV_REFLECT_MAX_ARRAY_DIMS / 2),
+					"Compiler_processSPIRV() does compares in U64[N] of binding->array.dims, but size changed"
+				);
+
+				const void *arrayTraits = &binding->block.array;
+				const U64 *arrayTraitsU64 = (const U64*) arrayTraits;
+
+				static_assert(
+					sizeof(binding->block.array) == sizeof(U64) * (SPV_REFLECT_MAX_ARRAY_DIMS / 2 * 2 + 1),
+					"Compiler_processSPIRV() does compares in U64[33] of binding->block.array, but size changed"
+				);
+
+				const void *numericTraits = &binding->block.numeric;
+				const U64 *numericTraitsU64 = (const U64*) numericTraits;
+
+				static_assert(
+					sizeof(binding->block.numeric) == sizeof(U64) * 3,
+					"Compiler_processSPIRV() does compares in U64[3] of binding->block.numeric, but size changed"
+				);
+
+				if(
+					!binding->block.size ||
+					!binding->block.padded_size ||
+					!binding->block.member_count ||
+					binding->block.decoration_flags ||
+					(binding->block.flags && binding->block.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED) ||
+					numericTraitsU64[0] ||
+					numericTraitsU64[1] ||
+					numericTraitsU64[2] ||
+					binding->input_attachment_index ||
+					imagePtrU64[0] ||
+					imagePtrU64[1] ||
+					imagePtrU64[2] ||
+					binding->array.dims_count ||
+					binding->count != 1 ||
+					!binding->block.members ||
+					binding->uav_counter_id != U32_MAX ||
+					binding->uav_counter_binding ||
+					binding->byte_address_buffer_offset_count ||
+					binding->byte_address_buffer_offsets ||
+					binding->decoration_flags
+				)
+					retError(clean, Error_invalidState(
+						0, "Compiler_processSPIRV() invalid constant buffer data"
+					))
+
+				for(U64 l = 0; l < SPV_REFLECT_MAX_ARRAY_DIMS / 2; ++l)
+					if(arrayDimsU64[l])
+						retError(clean, Error_invalidState(
+							0, "Compiler_processSPIRV() invalid constant buffer data (array)"
+						))
+
+				for(U64 l = 0; l < SPV_REFLECT_MAX_ARRAY_DIMS / 2 * 2 + 1; ++l)
+					if(arrayTraitsU64[l])
+						retError(clean, Error_invalidState(
+							0, "Compiler_processSPIRV() invalid constant buffer data (arrayTraits)"
+						))
+
+				Bool isUnused = !binding->accessed;
+
+				Log_debugLn(
+					alloc, "[[vk::binding(%" PRIu32 ", %" PRIu32")]] %s, %" PRIu32" (%s)",
+					binding->set, binding->binding,
+					binding->name, binding->block.padded_size,
+					isUnused ? "unused" : "used"
+				);
+
+				for (U64 l = 0; l < binding->block.member_count; ++l) {
+
+					SpvReflectBlockVariable var = binding->block.members[l];
+
+					//TODO: If struct, then iterate.
+					//		Else, fetch raw type.
+
+					Log_debugLnx(
+						"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s)",
+						var.name, var.offset, var.size, var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? "unused" : "used"
+					);
+				}
 			}
 		}
 

@@ -91,7 +91,7 @@ class oxc3(ConanFile):
 	def package(self):
 
 		cmake = CMake(self)
-		cmake.build(target="OxC3")
+		cmake.build()
 
 		copy(self, "*.cmake", os.path.join(self.source_folder, "cmake"), os.path.join(self.package_folder, "cmake"))
 
