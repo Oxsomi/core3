@@ -866,7 +866,108 @@ clean:
 	return s_uccess;
 }
 
-Bool SpvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *extension, Error *e_rr) {
+Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_rr) {
+
+	Bool s_uccess = true;
+	SpvReflectNumericTraits numeric = desc->traits.numeric;
+
+	ESHPrimitive prim = ESHPrimitive_Invalid;
+	ESHStride stride = ESHStride_X8;
+	ESHVector vector = ESHVector_N1;
+
+	if(!desc || !type)
+		retError(clean, Error_nullPointer(!desc ? 0 : 1, "spvTypeToESHType()::desc and type are required"))
+
+	switch (desc->type_flags) {
+
+		case SPV_REFLECT_TYPE_FLAG_BOOL:
+		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_VECTOR:
+		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_MATRIX:
+		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
+
+			if(numeric.scalar.signedness || numeric.scalar.width != 32)
+				retError(clean, Error_unsupportedOperation(
+					0, "spvTypeToESHType()::desc has an unrecognized type (signed bool or size != 32)"
+				))
+
+			prim = ESHPrimitive_UInt;
+			break;
+
+		case SPV_REFLECT_TYPE_FLAG_INT:
+		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR:
+		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_MATRIX:
+		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
+			prim = numeric.scalar.signedness ? ESHPrimitive_Int : ESHPrimitive_UInt;
+			break;
+
+		case SPV_REFLECT_TYPE_FLAG_FLOAT:
+		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR:
+		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_MATRIX:
+		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
+
+			prim = ESHPrimitive_Float;
+
+			if(numeric.scalar.signedness || (
+				numeric.scalar.width != 16 && 
+				numeric.scalar.width != 32 && 
+				numeric.scalar.width != 64
+			))
+				retError(clean, Error_unsupportedOperation(
+					0, "spvTypeToESHType()::desc has an unrecognized type (signed floatXX or size != [16, 32, 64])"
+				))
+
+			break;
+
+		default:
+			retError(clean, Error_unsupportedOperation(0, "spvTypeToESHType()::desc has an unrecognized type"))
+	}
+
+	switch(numeric.scalar.width) {
+
+		case  8:	stride = ESHStride_X8;		break;
+		case 16:	stride = ESHStride_X16;		break;
+		case 32:	stride = ESHStride_X32;		break;
+		case 64:	stride = ESHStride_X64;		break;
+
+		default:
+			retError(clean, Error_unsupportedOperation(
+				0, "spvTypeToESHType()::desc has an unrecognized type (8, 16, 32, 64)"
+			))
+	}
+
+	switch(numeric.vector.component_count) {
+
+		case 0:
+		case 1:		vector = ESHVector_N1;		break;
+
+		case 2:		vector = ESHVector_N2;		break;
+		case 3:		vector = ESHVector_N3;		break;
+		case 4:		vector = ESHVector_N4;		break;
+
+		default:
+			retError(clean, Error_unsupportedOperation(
+				0, "spvTypeToESHType()::desc has an unrecognized type (floatXX)"
+			))
+	}
+
+	if(numeric.matrix.column_count || numeric.matrix.row_count || numeric.matrix.stride)
+		retError(clean, Error_unsupportedOperation(
+			0, "spvTypeToESHType()::desc doesn't support matrices yet"		//TODO:
+		))
+
+	*type = (ESHType) ESHType_create(stride, prim, vector);
+
+clean:
+	return s_uccess;
+}
+
+Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *extension, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
@@ -1203,7 +1304,7 @@ Bool SpvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityPipeStorage:
 
 			retError(clean, Error_invalidState(
-				2, "SpvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"
+				2, "spvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"
 			))
 	}
 
@@ -1646,6 +1747,7 @@ Bool Compiler_convertCBufferDXIL(
 	ID3D12FunctionReflection1 *funcRefl,
 	ID3D12ShaderReflection1 *shaderRefl,
 	ID3D12ShaderReflectionConstantBuffer *constantBuffer,
+	Allocator alloc,
 	Error *e_rr
 ) {
 	Bool s_uccess = true;
@@ -1734,13 +1836,62 @@ Bool Compiler_convertCBufferDXIL(
 				0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer variable type with no desc"
 			))
 
-		//TODO: If struct, then iterate.
-		//		Else, fetch raw type.
+		ESHPrimitive prim = ESHPrimitive_Invalid;
+		ESHStride stride = ESHStride_X8;
+		ESHVector vector = ESHVector_N1;
 
-		Log_debugLnx(
-			"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s)",
-			variableName, offset, size, isUnused ? "unused" : "used"
+		switch (typeDesc.Type) {
+
+			case D3D_SVT_DOUBLE:	stride = ESHStride_X64;		prim = ESHPrimitive_Float;		break;
+			case D3D_SVT_FLOAT:		stride = ESHStride_X32;		prim = ESHPrimitive_Float;		break;
+			case D3D_SVT_FLOAT16:	stride = ESHStride_X16;		prim = ESHPrimitive_Float;		break;
+
+			case D3D_SVT_UINT8:		stride = ESHStride_X8;		prim = ESHPrimitive_UInt;		break;
+			case D3D_SVT_UINT16:	stride = ESHStride_X16;		prim = ESHPrimitive_UInt;		break;
+
+			case D3D_SVT_BOOL:
+			case D3D_SVT_UINT:		stride = ESHStride_X32;		prim = ESHPrimitive_UInt;		break;
+			case D3D_SVT_UINT64:	stride = ESHStride_X64;		prim = ESHPrimitive_UInt;		break;
+
+			case D3D_SVT_INT16:		stride = ESHStride_X16;		prim = ESHPrimitive_Int;		break;
+			case D3D_SVT_INT:		stride = ESHStride_X32;		prim = ESHPrimitive_Int;		break;
+			case D3D_SVT_INT64:		stride = ESHStride_X64;		prim = ESHPrimitive_Int;		break;
+
+			default:
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertCBufferDXIL() DXIL contained invalid primitive type"		//TODO: Structs
+				))
+		}
+
+		if(typeDesc.Rows > 1)
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferDXIL() DXIL contained matrix, not supported yet"			//TODO: Matrices
+			))
+
+		switch(typeDesc.Columns) {
+
+			case 1:		vector = ESHVector_N1;		break;
+			case 2:		vector = ESHVector_N2;		break;
+			case 3:		vector = ESHVector_N3;		break;
+			case 4:		vector = ESHVector_N4;		break;
+
+			default:
+				retError(clean, Error_unsupportedOperation(
+					0, "Compiler_convertCBufferDXIL()::desc has an unrecognized vector"
+				))
+		}
+
+		ESHType shType = (ESHType) ESHType_create(stride, prim, vector);
+
+		Log_debug(
+			alloc, typeDesc.Elements ? ELogOptions_None : ELogOptions_NewLine,
+			"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s, %s)",
+			variableName, offset, size,
+			ESHType_name(shType), isUnused ? "unused" : "used"
 		);
+
+		if(typeDesc.Elements)
+			Log_debug(alloc, ELogOptions_NewLine, "[%" PRIu32 "]", typeDesc.Elements);
 	}
 
 clean:
@@ -1882,7 +2033,9 @@ Bool Compiler_processDXIL(
 				retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained no library name"))
 
 			for (U32 j = 0; j < funcDesc0.ConstantBuffers; ++j)
-				gotoIfError3(clean, Compiler_convertCBufferDXIL(funcRefl, NULL, funcRefl->GetConstantBufferByIndex(j), e_rr))
+				gotoIfError3(clean, Compiler_convertCBufferDXIL(
+					funcRefl, NULL, funcRefl->GetConstantBufferByIndex(j), alloc, e_rr
+				))
 
 			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
 
@@ -2062,7 +2215,9 @@ Bool Compiler_processDXIL(
 		}
 
 		for (U32 j = 0; j < refl.ConstantBuffers; ++j)
-			gotoIfError3(clean, Compiler_convertCBufferDXIL(NULL, dxilRefl, dxilRefl->GetConstantBufferByIndex(j), e_rr))
+			gotoIfError3(clean, Compiler_convertCBufferDXIL(
+				NULL, dxilRefl, dxilRefl->GetConstantBufferByIndex(j), alloc, e_rr
+			))
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
 			groupSize, 0, 0, waveSizes,
@@ -2157,7 +2312,7 @@ Bool Compiler_processSPIRV(
 	for (U64 i = 0; i < spvMod.capability_count; ++i) {
 
 		ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
-		gotoIfError3(clean, SpvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr))
+		gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr))
 
 		//Check if extension was known to oiSH
 
@@ -2526,13 +2681,49 @@ Bool Compiler_processSPIRV(
 
 					SpvReflectBlockVariable var = binding->block.members[l];
 
-					//TODO: If struct, then iterate.
-					//		Else, fetch raw type.
+					arrayTraits = &var.array;
+					arrayTraitsU64 = (const U64*) arrayTraits;
 
-					Log_debugLnx(
-						"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s)",
-						var.name, var.offset, var.size, var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? "unused" : "used"
+					if(var.array.dims_count > SPV_REFLECT_MAX_ARRAY_DIMS)
+						retError(clean, Error_invalidState(
+							0, "Compiler_processSPIRV() array dimensions out of bounds"
+						))
+
+					//var.array.stride;																	//TODO:
+
+					for(U64 m = 0; m < var.array.dims_count; ++m)
+						if(!var.array.dims[m] || var.array.spec_constant_op_ids[m] != U32_MAX)
+							retError(clean, Error_invalidState(
+								0, "Compiler_processSPIRV() invalid array data (0 or has spec constant op)"
+							))
+
+					if(var.member_count || var.members)
+						retError(clean, Error_invalidState(
+							0, "Compiler_processSPIRV() nested types in cbuffer not supported yet"		//TODO:
+						))
+
+					if(var.flags && var.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED)
+						retError(clean, Error_invalidState(
+							0, "Compiler_processSPIRV() unsupported value in cbuffer member"
+						))
+
+					ESHType shType = (ESHType) 0;
+					gotoIfError3(clean, spvTypeToESHType(var.type_description, &shType, e_rr))
+
+					Log_debug(
+						alloc, var.array.dims_count ? ELogOptions_None : ELogOptions_NewLine,
+						"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s, %s)",
+						var.name, var.offset, var.size,
+						ESHType_name(shType),
+						var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? "unused" : "used"
 					);
+
+					for(U64 m = 0; m < var.array.dims_count; ++m)
+						Log_debug(
+							alloc, m + 1 == var.array.dims_count ? ELogOptions_NewLine : ELogOptions_None,
+							"[%" PRIu32 "]",
+							var.array.dims[m]
+						);
 				}
 			}
 		}
