@@ -874,6 +874,7 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 	ESHPrimitive prim = ESHPrimitive_Invalid;
 	ESHStride stride = ESHStride_X8;
 	ESHVector vector = ESHVector_N1;
+	ESHMatrix matrix = ESHMatrix_N1;
 
 	if(!desc || !type)
 		retError(clean, Error_nullPointer(!desc ? 0 : 1, "spvTypeToESHType()::desc and type are required"))
@@ -882,10 +883,10 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 
 		case SPV_REFLECT_TYPE_FLAG_BOOL:
 		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_VECTOR:
-		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_MATRIX:
+		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX:
 		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_ARRAY:
 		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
-		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_BOOL | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
 
 			if(numeric.scalar.signedness || numeric.scalar.width != 32)
 				retError(clean, Error_unsupportedOperation(
@@ -897,19 +898,19 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 
 		case SPV_REFLECT_TYPE_FLAG_INT:
 		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR:
-		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_MATRIX:
+		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX:
 		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_ARRAY:
 		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
-		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
 			prim = numeric.scalar.signedness ? ESHPrimitive_Int : ESHPrimitive_UInt;
 			break;
 
 		case SPV_REFLECT_TYPE_FLAG_FLOAT:
 		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR:
-		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_MATRIX:
+		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX:
 		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_ARRAY:
 		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
-		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
+		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
 
 			prim = ESHPrimitive_Float;
 
@@ -941,7 +942,7 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 			))
 	}
 
-	switch(numeric.vector.component_count) {
+	switch(U32_max(numeric.vector.component_count, numeric.matrix.row_count)) {
 
 		case 0:
 		case 1:		vector = ESHVector_N1;		break;
@@ -952,16 +953,29 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 
 		default:
 			retError(clean, Error_unsupportedOperation(
-				0, "spvTypeToESHType()::desc has an unrecognized type (floatXX)"
+				0, "spvTypeToESHType()::desc has an unrecognized type (vecN)"
 			))
 	}
 
-	if(numeric.matrix.column_count || numeric.matrix.row_count || numeric.matrix.stride)
-		retError(clean, Error_unsupportedOperation(
-			0, "spvTypeToESHType()::desc doesn't support matrices yet"		//TODO:
-		))
+	switch(numeric.matrix.column_count) {
 
-	*type = (ESHType) ESHType_create(stride, prim, vector);
+		case 0:
+		case 1:		matrix = ESHMatrix_N1;		break;
+
+		case 2:		matrix = ESHMatrix_N2;		break;
+		case 3:		matrix = ESHMatrix_N3;		break;
+		case 4:		matrix = ESHMatrix_N4;		break;
+
+		default:
+			retError(clean, Error_unsupportedOperation(
+				0, "spvTypeToESHType()::desc has an unrecognized type (matWxH)"
+			))
+	}
+
+	if(numeric.matrix.stride && numeric.matrix.stride != 0x10)
+		retError(clean, Error_unsupportedOperation(0, "spvTypeToESHType()::desc has matrix with stride != 16"))
+
+	*type = (ESHType) ESHType_create(stride, prim, vector, matrix);
 
 clean:
 	return s_uccess;
@@ -1839,6 +1853,7 @@ Bool Compiler_convertCBufferDXIL(
 		ESHPrimitive prim = ESHPrimitive_Invalid;
 		ESHStride stride = ESHStride_X8;
 		ESHVector vector = ESHVector_N1;
+		ESHMatrix matrix = ESHMatrix_N1;
 
 		switch (typeDesc.Type) {
 
@@ -1863,11 +1878,6 @@ Bool Compiler_convertCBufferDXIL(
 				))
 		}
 
-		if(typeDesc.Rows > 1)
-			retError(clean, Error_invalidState(
-				0, "Compiler_convertCBufferDXIL() DXIL contained matrix, not supported yet"			//TODO: Matrices
-			))
-
 		switch(typeDesc.Columns) {
 
 			case 1:		vector = ESHVector_N1;		break;
@@ -1881,7 +1891,22 @@ Bool Compiler_convertCBufferDXIL(
 				))
 		}
 
-		ESHType shType = (ESHType) ESHType_create(stride, prim, vector);
+		switch(typeDesc.Rows) {
+
+			case 0:
+			case 1:		matrix = ESHMatrix_N1;		break;
+
+			case 2:		matrix = ESHMatrix_N2;		break;
+			case 3:		matrix = ESHMatrix_N3;		break;
+			case 4:		matrix = ESHMatrix_N4;		break;
+
+			default:
+				retError(clean, Error_unsupportedOperation(
+					0, "Compiler_convertCBufferDXIL()::desc has an unrecognized type (matWxH)"
+				))
+	}
+
+		ESHType shType = (ESHType) ESHType_create(stride, prim, vector, matrix);
 
 		Log_debug(
 			alloc, typeDesc.Elements ? ELogOptions_None : ELogOptions_NewLine,
@@ -2202,7 +2227,7 @@ Bool Compiler_processDXIL(
 					))
 			}
 
-			ESHType type = (ESHType) ESHType_create(stride, prim, vec);
+			ESHType type = (ESHType) ESHType_create(stride, prim, vec, ESHMatrix_N1);
 			U64 *counter = isOutput ? &outputC : &inputC;
 
 			if(inputTypes[*counter] || *counter >= 16)

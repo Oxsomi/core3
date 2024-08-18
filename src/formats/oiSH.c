@@ -132,11 +132,156 @@ const C8 *ESHType_names[] = {
 	"U64",
 	"U64x2",
 	"U64x3",
-	"U64x4"
+	"U64x4",
+
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+
+	"", "", "", "",
+	"F16x1x2",
+	"F16x2x2",
+	"F16x3x2",
+	"F16x4x2",
+	"I16x1x2",
+	"I16x2x2",
+	"I16x3x2",
+	"I16x4x2",
+	"U16x1x2",
+	"U16x2x2",
+	"U16x3x2",
+	"U16x4x2",
+
+	"", "", "", "",
+	"F32x1x2",
+	"F32x2x2",
+	"F32x3x2",
+	"F32x4x2",
+	"I32x1x2",
+	"I32x2x2",
+	"I32x3x2",
+	"I32x4x2",
+	"U32x1x2",
+	"U32x2x2",
+	"U32x3x2",
+	"U32x4x2",
+
+	"", "", "", "",
+	"F64x1x2",
+	"F64x2x2",
+	"F64x3x2",
+	"F64x4x2",
+	"I64x1x2",
+	"I64x2x2",
+	"I64x3x2",
+	"I64x4x2",
+	"U64x1x2",
+	"U64x2x2",
+	"U64x3x2",
+	"U64x4x2",
+
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+
+	"", "", "", "",
+	"F16x1x3",
+	"F16x2x3",
+	"F16x3x3",
+	"F16x4x3",
+	"I16x1x3",
+	"I16x2x3",
+	"I16x3x3",
+	"I16x4x3",
+	"U16x1x3",
+	"U16x2x3",
+	"U16x3x3",
+	"U16x4x3",
+
+	"", "", "", "",
+	"F32x1x3",
+	"F32x2x3",
+	"F32x3x3",
+	"F32x4x3",
+	"I32x1x3",
+	"I32x2x3",
+	"I32x3x3",
+	"I32x4x3",
+	"U32x1x3",
+	"U32x2x3",
+	"U32x3x3",
+	"U32x4x3",
+
+	"", "", "", "",
+	"F64x1x3",
+	"F64x2x3",
+	"F64x3x3",
+	"F64x4x3",
+	"I64x1x3",
+	"I64x2x3",
+	"I64x3x3",
+	"I64x4x3",
+	"U64x1x3",
+	"U64x2x3",
+	"U64x3x3",
+	"U64x4x3",
+
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+	"", "", "", "",
+
+	"", "", "", "",
+	"F16x1x4",
+	"F16x2x4",
+	"F16x3x4",
+	"F16x4x4",
+	"I16x1x4",
+	"I16x2x4",
+	"I16x3x4",
+	"I16x4x4",
+	"U16x1x4",
+	"U16x2x4",
+	"U16x3x4",
+	"U16x4x4",
+
+	"", "", "", "",
+	"F32x1x4",
+	"F32x2x4",
+	"F32x3x4",
+	"F32x4x4",
+	"I32x1x4",
+	"I32x2x4",
+	"I32x3x4",
+	"I32x4x4",
+	"U32x1x4",
+	"U32x2x4",
+	"U32x3x4",
+	"U32x4x4",
+
+	"", "", "", "",
+	"F64x1x4",
+	"F64x2x4",
+	"F64x3x4",
+	"F64x4x4",
+	"I64x1x4",
+	"I64x2x4",
+	"I64x3x4",
+	"I64x4x4",
+	"U64x1x4",
+	"U64x2x4",
+	"U64x3x4",
+	"U64x4x4"
 };
 
 ESHVector ESHType_getVector(ESHType type) {
 	return type & 3;
+}
+
+ESHMatrix ESHType_getMatrix(ESHType type) {
+	return (type >> 6) & 3;
 }
 
 ESHPrimitive ESHType_getPrimitive(ESHType type) {
@@ -148,7 +293,7 @@ ESHStride ESHType_getStride(ESHType type) {
 }
 
 const C8 *ESHType_name(ESHType type) {
-	return ESHType_names[type & 0x3F];
+	return ESHType_names[type];
 }
 
 const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage) {
@@ -572,8 +717,16 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 				inputs = i + 1;
 
 			if(
-				(vout && (ESHType_getPrimitive(vout) == ESHPrimitive_Invalid || ESHType_getStride(vout) == ESHStride_X8)) ||
-				(vin  && (ESHType_getPrimitive(vin)  == ESHPrimitive_Invalid || ESHType_getStride(vin)  == ESHStride_X8))
+				(vout && (
+					ESHType_getPrimitive(vout) == ESHPrimitive_Invalid || 
+					ESHType_getStride(vout) == ESHStride_X8 || 
+					ESHType_getMatrix(vout)
+				)) ||
+				(vin  && (
+					ESHType_getPrimitive(vin)  == ESHPrimitive_Invalid ||
+					ESHType_getStride(vin)  == ESHStride_X8 ||
+					ESHType_getMatrix(vin)
+				))
 			)
 				retError(clean, Error_invalidOperation(
 					3, "SHFile_addEntrypoint() outputs or inputs contains an invalid parameter"
