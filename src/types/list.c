@@ -31,3 +31,52 @@ TListSortImpl(I8);	TListSortImpl(I16); TListSortImpl(I32); TListSortImpl(I64);
 TListSortImpl(F32); TListSortImpl(F64);
 
 TListImpl(Buffer);
+
+TListImpl(ListU8);
+TListImpl(ListU16);
+TListImpl(ListU32);
+TListImpl(ListU64);
+
+void ListListU8_freeUnderlying(ListListU8 *list, Allocator alloc) {
+
+	if(!list)
+		return;
+
+	for(U16 i = 0; i < list->length; ++i)
+		ListU8_free(&list->ptrNonConst[i], alloc);
+
+	ListListU8_free(list, alloc);
+}
+
+void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc) {
+
+	if(!list)
+		return;
+
+	for(U16 i = 0; i < list->length; ++i)
+		ListU16_free(&list->ptrNonConst[i], alloc);
+
+	ListListU16_free(list, alloc);
+}
+
+void ListListU32_freeUnderlying(ListListU32 *list, Allocator alloc) {
+
+	if(!list)
+		return;
+
+	for(U16 i = 0; i < list->length; ++i)
+		ListU32_free(&list->ptrNonConst[i], alloc);
+
+	ListListU32_free(list, alloc);
+}
+
+void ListListU64_freeUnderlying(ListListU64 *list, Allocator alloc) {
+
+	if(!list)
+		return;
+
+	for(U16 i = 0; i < list->length; ++i)
+		ListU64_free(&list->ptrNonConst[i], alloc);
+
+	ListListU64_free(list, alloc);
+}

@@ -30,6 +30,7 @@
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
 #include "formats/oiSH.h"
+#include "formats/oiSB.h"
 #include "types/buffer.h"
 #include "types/allocation_buffer.h"
 #include "types/error.h"
@@ -49,6 +50,27 @@ TListXImpl(U8);		TListXImpl(U16);	TListXImpl(U32);
 TListXImpl(I8);		TListXImpl(I16);	TListXImpl(I32); TListXImpl(I64);
 TListXImpl(F32);	TListXImpl(F64);
 
+TListXImpl(ListU8);
+TListXImpl(ListU16);
+TListXImpl(ListU32);
+TListXImpl(ListU64);
+
+void ListListU8_freeUnderlyingx(ListListU8 *list) {
+	ListListU8_freeUnderlying(list, Platform_instance.alloc);
+}
+
+void ListListU16_freeUnderlyingx(ListListU16 *list) {
+	ListListU16_freeUnderlying(list, Platform_instance.alloc);
+}
+
+void ListListU32_freeUnderlyingx(ListListU32 *list) {
+	ListListU32_freeUnderlying(list, Platform_instance.alloc);
+} 
+
+void ListListU64_freeUnderlyingx(ListListU64 *list) {
+	ListListU64_freeUnderlying(list, Platform_instance.alloc);
+} 
+
 TListXImpl(Buffer);
 
 TListXImpl(CdfValue);
@@ -62,6 +84,9 @@ TListXImpl(SubResourceData);
 
 TListXBaseImpl(ListRefPtr);
 TListXBaseImpl(ListWeakRefPtr);
+
+TListXImpl(SBStruct);
+TListXImpl(SBVar);
 
 TListXImpl(SHEntry);
 TListXImpl(SHEntryRuntime);

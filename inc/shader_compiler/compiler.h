@@ -152,10 +152,7 @@ typedef struct IncludedFile {
 
 TList(IncludedFile);
 
-TList(ListU16);
 TListNamed(const U16*, ListU16PtrConst);
-
-TList(ListU32);
 TListNamed(const U32*, ListU32PtrConst);
 
 void IncludedFile_free(IncludedFile *file, Allocator alloc);
@@ -163,9 +160,6 @@ void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
 
 void CompileResult_free(CompileResult *result, Allocator alloc);
 void ListCompileResult_freeUnderlying(ListCompileResult *result, Allocator alloc);
-
-void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc);
-void ListListU32_freeUnderlying(ListListU32 *list, Allocator alloc);
 
 //A separate Compiler should be created per thread
 
@@ -227,9 +221,6 @@ void ListCompiler_freeUnderlyingx(ListCompiler *compilers);
 
 void CompileError_freex(CompileError *err);
 void ListCompileError_freeUnderlyingx(ListCompileError *compileErrors);
-
-void ListListU16_freeUnderlyingx(ListListU16 *list);
-void ListListU32_freeUnderlyingx(ListListU32 *list);
 
 void IncludeInfo_freex(IncludeInfo *info);
 void ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos);

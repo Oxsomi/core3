@@ -28,6 +28,7 @@
 #include "types/allocator.h"
 #include "types/file.h"
 #include "types/math.h"
+#include "formats/oiSB.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -866,18 +867,18 @@ clean:
 	return s_uccess;
 }
 
-Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_rr) {
+Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_rr) {
 
 	Bool s_uccess = true;
 	SpvReflectNumericTraits numeric = desc->traits.numeric;
 
-	ESHPrimitive prim = ESHPrimitive_Invalid;
-	ESHStride stride = ESHStride_X8;
-	ESHVector vector = ESHVector_N1;
-	ESHMatrix matrix = ESHMatrix_N1;
+	ESBPrimitive prim = ESBPrimitive_Invalid;
+	ESBStride stride = ESBStride_X8;
+	ESBVector vector = ESBVector_N1;
+	ESBMatrix matrix = ESBMatrix_N1;
 
 	if(!desc || !type)
-		retError(clean, Error_nullPointer(!desc ? 0 : 1, "spvTypeToESHType()::desc and type are required"))
+		retError(clean, Error_nullPointer(!desc ? 0 : 1, "spvTypeToESBType()::desc and type are required"))
 
 	switch (desc->type_flags) {
 
@@ -890,10 +891,10 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 
 			if(numeric.scalar.signedness || numeric.scalar.width != 32)
 				retError(clean, Error_unsupportedOperation(
-					0, "spvTypeToESHType()::desc has an unrecognized type (signed bool or size != 32)"
+					0, "spvTypeToESBType()::desc has an unrecognized type (signed bool or size != 32)"
 				))
 
-			prim = ESHPrimitive_UInt;
+			prim = ESBPrimitive_UInt;
 			break;
 
 		case SPV_REFLECT_TYPE_FLAG_INT:
@@ -902,7 +903,7 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_ARRAY:
 		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
 		case SPV_REFLECT_TYPE_FLAG_INT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
-			prim = numeric.scalar.signedness ? ESHPrimitive_Int : ESHPrimitive_UInt;
+			prim = numeric.scalar.signedness ? ESBPrimitive_Int : ESBPrimitive_UInt;
 			break;
 
 		case SPV_REFLECT_TYPE_FLAG_FLOAT:
@@ -912,7 +913,7 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_ARRAY:
 		case SPV_REFLECT_TYPE_FLAG_FLOAT | SPV_REFLECT_TYPE_FLAG_VECTOR | SPV_REFLECT_TYPE_FLAG_MATRIX | SPV_REFLECT_TYPE_FLAG_ARRAY:
 
-			prim = ESHPrimitive_Float;
+			prim = ESBPrimitive_Float;
 
 			if(numeric.scalar.signedness || (
 				numeric.scalar.width != 16 && 
@@ -920,62 +921,62 @@ Bool spvTypeToESHType(SpvReflectTypeDescription *desc, ESHType *type, Error *e_r
 				numeric.scalar.width != 64
 			))
 				retError(clean, Error_unsupportedOperation(
-					0, "spvTypeToESHType()::desc has an unrecognized type (signed floatXX or size != [16, 32, 64])"
+					0, "spvTypeToESBType()::desc has an unrecognized type (signed floatXX or size != [16, 32, 64])"
 				))
 
 			break;
 
 		default:
-			retError(clean, Error_unsupportedOperation(0, "spvTypeToESHType()::desc has an unrecognized type"))
+			retError(clean, Error_unsupportedOperation(0, "spvTypeToESBType()::desc has an unrecognized type"))
 	}
 
 	switch(numeric.scalar.width) {
 
-		case  8:	stride = ESHStride_X8;		break;
-		case 16:	stride = ESHStride_X16;		break;
-		case 32:	stride = ESHStride_X32;		break;
-		case 64:	stride = ESHStride_X64;		break;
+		case  8:	stride = ESBStride_X8;		break;
+		case 16:	stride = ESBStride_X16;		break;
+		case 32:	stride = ESBStride_X32;		break;
+		case 64:	stride = ESBStride_X64;		break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
-				0, "spvTypeToESHType()::desc has an unrecognized type (8, 16, 32, 64)"
+				0, "spvTypeToESBType()::desc has an unrecognized type (8, 16, 32, 64)"
 			))
 	}
 
 	switch(U32_max(numeric.vector.component_count, numeric.matrix.row_count)) {
 
 		case 0:
-		case 1:		vector = ESHVector_N1;		break;
+		case 1:		vector = ESBVector_N1;		break;
 
-		case 2:		vector = ESHVector_N2;		break;
-		case 3:		vector = ESHVector_N3;		break;
-		case 4:		vector = ESHVector_N4;		break;
+		case 2:		vector = ESBVector_N2;		break;
+		case 3:		vector = ESBVector_N3;		break;
+		case 4:		vector = ESBVector_N4;		break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
-				0, "spvTypeToESHType()::desc has an unrecognized type (vecN)"
+				0, "spvTypeToESBType()::desc has an unrecognized type (vecN)"
 			))
 	}
 
 	switch(numeric.matrix.column_count) {
 
 		case 0:
-		case 1:		matrix = ESHMatrix_N1;		break;
+		case 1:		matrix = ESBMatrix_N1;		break;
 
-		case 2:		matrix = ESHMatrix_N2;		break;
-		case 3:		matrix = ESHMatrix_N3;		break;
-		case 4:		matrix = ESHMatrix_N4;		break;
+		case 2:		matrix = ESBMatrix_N2;		break;
+		case 3:		matrix = ESBMatrix_N3;		break;
+		case 4:		matrix = ESBMatrix_N4;		break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
-				0, "spvTypeToESHType()::desc has an unrecognized type (matWxH)"
+				0, "spvTypeToESBType()::desc has an unrecognized type (matWxH)"
 			))
 	}
 
 	if(numeric.matrix.stride && numeric.matrix.stride != 0x10)
-		retError(clean, Error_unsupportedOperation(0, "spvTypeToESHType()::desc has matrix with stride != 16"))
+		retError(clean, Error_unsupportedOperation(0, "spvTypeToESBType()::desc has matrix with stride != 16"))
 
-	*type = (ESHType) ESHType_create(stride, prim, vector, matrix);
+	*type = (ESBType) ESBType_create(stride, prim, vector, matrix);
 
 clean:
 	return s_uccess;
@@ -1328,63 +1329,63 @@ clean:
 	return s_uccess;
 }
 
-Bool SpvReflectFormatToESHType(SpvReflectFormat format, ESHType *type, Error *e_rr) {
+Bool SpvReflectFormatToESBType(SpvReflectFormat format, ESBType *type, Error *e_rr) {
 	
 	Bool s_uccess = true;
 
 	switch (format) {
 
-		case SPV_REFLECT_FORMAT_R16_UINT:				*type = ESHType_U16;		break;
-		case SPV_REFLECT_FORMAT_R16_SINT:				*type = ESHType_I16;		break;
-		case SPV_REFLECT_FORMAT_R16_SFLOAT:				*type = ESHType_F16;		break;
+		case SPV_REFLECT_FORMAT_R16_UINT:				*type = ESBType_U16;		break;
+		case SPV_REFLECT_FORMAT_R16_SINT:				*type = ESBType_I16;		break;
+		case SPV_REFLECT_FORMAT_R16_SFLOAT:				*type = ESBType_F16;		break;
 
-		case SPV_REFLECT_FORMAT_R16G16_UINT:			*type = ESHType_U16x2;		break;
-		case SPV_REFLECT_FORMAT_R16G16_SINT:			*type = ESHType_I16x2;		break;
-		case SPV_REFLECT_FORMAT_R16G16_SFLOAT:			*type = ESHType_F16x2;		break;
+		case SPV_REFLECT_FORMAT_R16G16_UINT:			*type = ESBType_U16x2;		break;
+		case SPV_REFLECT_FORMAT_R16G16_SINT:			*type = ESBType_I16x2;		break;
+		case SPV_REFLECT_FORMAT_R16G16_SFLOAT:			*type = ESBType_F16x2;		break;
 
-		case SPV_REFLECT_FORMAT_R16G16B16_UINT:			*type = ESHType_U16x3;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16_SINT:			*type = ESHType_I16x3;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16_SFLOAT:		*type = ESHType_F16x3;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16_UINT:			*type = ESBType_U16x3;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SINT:			*type = ESBType_I16x3;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SFLOAT:		*type = ESBType_F16x3;		break;
 
-		case SPV_REFLECT_FORMAT_R16G16B16A16_UINT:		*type = ESHType_U16x4;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16A16_SINT:		*type = ESHType_I16x4;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16A16_SFLOAT:	*type = ESHType_F16x4;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_UINT:		*type = ESBType_U16x4;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SINT:		*type = ESBType_I16x4;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SFLOAT:	*type = ESBType_F16x4;		break;
 
-		case SPV_REFLECT_FORMAT_R32_UINT:				*type = ESHType_U32;		break;
-		case SPV_REFLECT_FORMAT_R32_SINT:				*type = ESHType_I32;		break;
-		case SPV_REFLECT_FORMAT_R32_SFLOAT:				*type = ESHType_F32;		break;
+		case SPV_REFLECT_FORMAT_R32_UINT:				*type = ESBType_U32;		break;
+		case SPV_REFLECT_FORMAT_R32_SINT:				*type = ESBType_I32;		break;
+		case SPV_REFLECT_FORMAT_R32_SFLOAT:				*type = ESBType_F32;		break;
 
-		case SPV_REFLECT_FORMAT_R32G32_UINT:			*type = ESHType_U32x2;		break;
-		case SPV_REFLECT_FORMAT_R32G32_SINT:			*type = ESHType_I32x2;		break;
-		case SPV_REFLECT_FORMAT_R32G32_SFLOAT:			*type = ESHType_F32x2;		break;
+		case SPV_REFLECT_FORMAT_R32G32_UINT:			*type = ESBType_U32x2;		break;
+		case SPV_REFLECT_FORMAT_R32G32_SINT:			*type = ESBType_I32x2;		break;
+		case SPV_REFLECT_FORMAT_R32G32_SFLOAT:			*type = ESBType_F32x2;		break;
 
-		case SPV_REFLECT_FORMAT_R32G32B32_UINT:			*type = ESHType_U32x3;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32_SINT:			*type = ESHType_I32x3;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:		*type = ESHType_F32x3;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32_UINT:			*type = ESBType_U32x3;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SINT:			*type = ESBType_I32x3;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:		*type = ESBType_F32x3;		break;
 
-		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:		*type = ESHType_U32x4;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:		*type = ESHType_I32x4;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:	*type = ESHType_F32x4;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:		*type = ESBType_U32x4;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:		*type = ESBType_I32x4;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:	*type = ESBType_F32x4;		break;
 
-		case SPV_REFLECT_FORMAT_R64_UINT:				*type = ESHType_U64;		break;
-		case SPV_REFLECT_FORMAT_R64_SINT:				*type = ESHType_I64;		break;
-		case SPV_REFLECT_FORMAT_R64_SFLOAT:				*type = ESHType_F64;		break;
+		case SPV_REFLECT_FORMAT_R64_UINT:				*type = ESBType_U64;		break;
+		case SPV_REFLECT_FORMAT_R64_SINT:				*type = ESBType_I64;		break;
+		case SPV_REFLECT_FORMAT_R64_SFLOAT:				*type = ESBType_F64;		break;
 
-		case SPV_REFLECT_FORMAT_R64G64_UINT:			*type = ESHType_U64x2;		break;
-		case SPV_REFLECT_FORMAT_R64G64_SINT:			*type = ESHType_I64x2;		break;
-		case SPV_REFLECT_FORMAT_R64G64_SFLOAT:			*type = ESHType_F64x2;		break;
+		case SPV_REFLECT_FORMAT_R64G64_UINT:			*type = ESBType_U64x2;		break;
+		case SPV_REFLECT_FORMAT_R64G64_SINT:			*type = ESBType_I64x2;		break;
+		case SPV_REFLECT_FORMAT_R64G64_SFLOAT:			*type = ESBType_F64x2;		break;
 
-		case SPV_REFLECT_FORMAT_R64G64B64_UINT:			*type = ESHType_U64x3;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64_SINT:			*type = ESHType_I64x3;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64_SFLOAT:		*type = ESHType_F64x3;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64_UINT:			*type = ESBType_U64x3;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SINT:			*type = ESBType_I64x3;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SFLOAT:		*type = ESBType_F64x3;		break;
 
-		case SPV_REFLECT_FORMAT_R64G64B64A64_UINT:		*type = ESHType_U64x4;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64A64_SINT:		*type = ESHType_I64x4;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT:	*type = ESHType_F64x4;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_UINT:		*type = ESBType_U64x4;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SINT:		*type = ESBType_I64x4;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT:	*type = ESBType_F64x4;		break;
 
 		default:
 			retError(clean, Error_invalidState(
-				0, "SpvReflectFormatToESHType() couldn't map SPV_REFLECT_FORMAT to ESHType"
+				0, "SpvReflectFormatToESBType() couldn't map SPV_REFLECT_FORMAT to ESBType"
 			))
 	}
 
@@ -1637,8 +1638,8 @@ Bool Compiler_finalizeEntrypoint(
 	U8 payloadSize,
 	U8 intersectSize,
 	U16 waveSize,
-	ESHType inputs[16],
-	ESHType outputs[16],
+	ESBType inputs[16],
+	ESBType outputs[16],
 	U8 uniqueInputSemantics,
 	ListCharString *uniqueSemantics,
 	U8 inputSemantics[16],
@@ -1850,27 +1851,27 @@ Bool Compiler_convertCBufferDXIL(
 				0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer variable type with no desc"
 			))
 
-		ESHPrimitive prim = ESHPrimitive_Invalid;
-		ESHStride stride = ESHStride_X8;
-		ESHVector vector = ESHVector_N1;
-		ESHMatrix matrix = ESHMatrix_N1;
+		ESBPrimitive prim = ESBPrimitive_Invalid;
+		ESBStride stride = ESBStride_X8;
+		ESBVector vector = ESBVector_N1;
+		ESBMatrix matrix = ESBMatrix_N1;
 
 		switch (typeDesc.Type) {
 
-			case D3D_SVT_DOUBLE:	stride = ESHStride_X64;		prim = ESHPrimitive_Float;		break;
-			case D3D_SVT_FLOAT:		stride = ESHStride_X32;		prim = ESHPrimitive_Float;		break;
-			case D3D_SVT_FLOAT16:	stride = ESHStride_X16;		prim = ESHPrimitive_Float;		break;
+			case D3D_SVT_DOUBLE:	stride = ESBStride_X64;		prim = ESBPrimitive_Float;		break;
+			case D3D_SVT_FLOAT:		stride = ESBStride_X32;		prim = ESBPrimitive_Float;		break;
+			case D3D_SVT_FLOAT16:	stride = ESBStride_X16;		prim = ESBPrimitive_Float;		break;
 
-			case D3D_SVT_UINT8:		stride = ESHStride_X8;		prim = ESHPrimitive_UInt;		break;
-			case D3D_SVT_UINT16:	stride = ESHStride_X16;		prim = ESHPrimitive_UInt;		break;
+			case D3D_SVT_UINT8:		stride = ESBStride_X8;		prim = ESBPrimitive_UInt;		break;
+			case D3D_SVT_UINT16:	stride = ESBStride_X16;		prim = ESBPrimitive_UInt;		break;
 
 			case D3D_SVT_BOOL:
-			case D3D_SVT_UINT:		stride = ESHStride_X32;		prim = ESHPrimitive_UInt;		break;
-			case D3D_SVT_UINT64:	stride = ESHStride_X64;		prim = ESHPrimitive_UInt;		break;
+			case D3D_SVT_UINT:		stride = ESBStride_X32;		prim = ESBPrimitive_UInt;		break;
+			case D3D_SVT_UINT64:	stride = ESBStride_X64;		prim = ESBPrimitive_UInt;		break;
 
-			case D3D_SVT_INT16:		stride = ESHStride_X16;		prim = ESHPrimitive_Int;		break;
-			case D3D_SVT_INT:		stride = ESHStride_X32;		prim = ESHPrimitive_Int;		break;
-			case D3D_SVT_INT64:		stride = ESHStride_X64;		prim = ESHPrimitive_Int;		break;
+			case D3D_SVT_INT16:		stride = ESBStride_X16;		prim = ESBPrimitive_Int;		break;
+			case D3D_SVT_INT:		stride = ESBStride_X32;		prim = ESBPrimitive_Int;		break;
+			case D3D_SVT_INT64:		stride = ESBStride_X64;		prim = ESBPrimitive_Int;		break;
 
 			default:
 				retError(clean, Error_invalidState(
@@ -1880,10 +1881,10 @@ Bool Compiler_convertCBufferDXIL(
 
 		switch(typeDesc.Columns) {
 
-			case 1:		vector = ESHVector_N1;		break;
-			case 2:		vector = ESHVector_N2;		break;
-			case 3:		vector = ESHVector_N3;		break;
-			case 4:		vector = ESHVector_N4;		break;
+			case 1:		vector = ESBVector_N1;		break;
+			case 2:		vector = ESBVector_N2;		break;
+			case 3:		vector = ESBVector_N3;		break;
+			case 4:		vector = ESBVector_N4;		break;
 
 			default:
 				retError(clean, Error_unsupportedOperation(
@@ -1894,11 +1895,11 @@ Bool Compiler_convertCBufferDXIL(
 		switch(typeDesc.Rows) {
 
 			case 0:
-			case 1:		matrix = ESHMatrix_N1;		break;
+			case 1:		matrix = ESBMatrix_N1;		break;
 
-			case 2:		matrix = ESHMatrix_N2;		break;
-			case 3:		matrix = ESHMatrix_N3;		break;
-			case 4:		matrix = ESHMatrix_N4;		break;
+			case 2:		matrix = ESBMatrix_N2;		break;
+			case 3:		matrix = ESBMatrix_N3;		break;
+			case 4:		matrix = ESBMatrix_N4;		break;
 
 			default:
 				retError(clean, Error_unsupportedOperation(
@@ -1906,13 +1907,13 @@ Bool Compiler_convertCBufferDXIL(
 				))
 	}
 
-		ESHType shType = (ESHType) ESHType_create(stride, prim, vector, matrix);
+		ESBType shType = (ESBType) ESBType_create(stride, prim, vector, matrix);
 
 		Log_debug(
 			alloc, typeDesc.Elements ? ELogOptions_None : ELogOptions_NewLine,
 			"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s, %s)",
 			variableName, offset, size,
-			ESHType_name(shType), isUnused ? "unused" : "used"
+			ESBType_name(shType), isUnused ? "unused" : "used"
 		);
 
 		if(typeDesc.Elements)
@@ -2047,8 +2048,8 @@ Bool Compiler_processDXIL(
 			if(hasGroupSize)
 				gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
 						
-			ESHType inputs[16] = {};		//TODO:
-			ESHType outputs[16] = {};
+			ESBType inputs[16] = {};		//TODO:
+			ESBType outputs[16] = {};
 			U8 uniqueInputSemantics = 0;
 			ListCharString uniqueSemantics = ListCharString{};
 			U8 inputSemantics[16] = {};
@@ -2088,8 +2089,8 @@ Bool Compiler_processDXIL(
 
 	else {
 
-		ESHType inputs[16] = {};
-		ESHType outputs[16] = {};
+		ESBType inputs[16] = {};
+		ESBType outputs[16] = {};
 		U8 inputSemantics[16] = {};
 		U8 outputSemantics[16] = {};
 
@@ -2126,7 +2127,7 @@ Bool Compiler_processDXIL(
 		for(U64 j = 0, outputC = 0, inputC = 0; j < (U64)refl.OutputParameters + refl.InputParameters; ++j) {
 
 			Bool isOutput = j < refl.OutputParameters;
-			ESHType *inputTypes = isOutput ? outputs : inputs;
+			ESBType *inputTypes = isOutput ? outputs : inputs;
 			U8 *semantics = isOutput ? outputSemantics : inputSemantics;
 
 			D3D12_SIGNATURE_PARAMETER_DESC signature{};
@@ -2192,42 +2193,42 @@ Bool Compiler_processDXIL(
 					0, "Compiler_processDXIL() invalid signature parameter; MinPrecision or Stream"
 				))
 
-			ESHPrimitive prim = ESHPrimitive_Invalid;
-			ESHStride stride = ESHStride_X8;
+			ESBPrimitive prim = ESBPrimitive_Invalid;
+			ESBStride stride = ESBStride_X8;
 
 			switch (signature.ComponentType) {
 
-				case  D3D_REGISTER_COMPONENT_FLOAT16:	prim = ESHPrimitive_Float;	stride = ESHStride_X16;		break;
-				case  D3D_REGISTER_COMPONENT_UINT16:	prim = ESHPrimitive_UInt;	stride = ESHStride_X16;		break;
-				case  D3D_REGISTER_COMPONENT_SINT16:	prim = ESHPrimitive_Int;	stride = ESHStride_X16;		break;
+				case  D3D_REGISTER_COMPONENT_FLOAT16:	prim = ESBPrimitive_Float;	stride = ESBStride_X16;		break;
+				case  D3D_REGISTER_COMPONENT_UINT16:	prim = ESBPrimitive_UInt;	stride = ESBStride_X16;		break;
+				case  D3D_REGISTER_COMPONENT_SINT16:	prim = ESBPrimitive_Int;	stride = ESBStride_X16;		break;
 
-				case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESHPrimitive_Float;	stride = ESHStride_X32;		break;
-				case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESHPrimitive_UInt;	stride = ESHStride_X32;		break;
-				case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESHPrimitive_Int;	stride = ESHStride_X32;		break;
+				case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESBPrimitive_Float;	stride = ESBStride_X32;		break;
+				case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESBPrimitive_UInt;	stride = ESBStride_X32;		break;
+				case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESBPrimitive_Int;	stride = ESBStride_X32;		break;
 
-				case  D3D_REGISTER_COMPONENT_FLOAT64:	prim = ESHPrimitive_Float;	stride = ESHStride_X64;		break;
-				case  D3D_REGISTER_COMPONENT_UINT64:	prim = ESHPrimitive_UInt;	stride = ESHStride_X64;		break;
-				case  D3D_REGISTER_COMPONENT_SINT64:	prim = ESHPrimitive_Int;	stride = ESHStride_X64;		break;
+				case  D3D_REGISTER_COMPONENT_FLOAT64:	prim = ESBPrimitive_Float;	stride = ESBStride_X64;		break;
+				case  D3D_REGISTER_COMPONENT_UINT64:	prim = ESBPrimitive_UInt;	stride = ESBStride_X64;		break;
+				case  D3D_REGISTER_COMPONENT_SINT64:	prim = ESBPrimitive_Int;	stride = ESBStride_X64;		break;
 				default:
 					retError(clean, Error_invalidState(
 						0, "Compiler_processDXIL() invalid component type; expected one of F32, U32 or I32"
 					))
 			}
 
-			ESHVector vec = ESHVector_N1;
+			ESBVector vec = ESBVector_N1;
 
 			switch (signature.Mask) {
-				case  1:	vec = ESHVector_N1;		break;
-				case  3:	vec = ESHVector_N2;		break;
-				case  7:	vec = ESHVector_N3;		break;
-				case 15:	vec = ESHVector_N4;		break;
+				case  1:	vec = ESBVector_N1;		break;
+				case  3:	vec = ESBVector_N2;		break;
+				case  7:	vec = ESBVector_N3;		break;
+				case 15:	vec = ESBVector_N4;		break;
 				default:
 					retError(clean, Error_invalidState(
 						0, "Compiler_processDXIL() invalid signature mask; expected one of 1,3,7,15"
 					))
 			}
 
-			ESHType type = (ESHType) ESHType_create(stride, prim, vec, ESHMatrix_N1);
+			ESBType type = (ESBType) ESBType_create(stride, prim, vec, ESBMatrix_N1);
 			U64 *counter = isOutput ? &outputC : &inputC;
 
 			if(inputTypes[*counter] || *counter >= 16)
@@ -2482,8 +2483,8 @@ Bool Compiler_processSPIRV(
 
 		//Reflect inputs & outputs
 
-		ESHType inputs[16] = {};
-		ESHType outputs[16] = {};
+		ESBType inputs[16] = {};
+		ESBType outputs[16] = {};
 		U8 inputSemantics[16] = {};
 		U8 outputSemantics[16] = {};
 
@@ -2500,7 +2501,7 @@ Bool Compiler_processSPIRV(
 				if(input->built_in != -1)		//We don't care about builtins
 					continue;
 
-				ESHType *inputType = isOutput ? outputs : inputs;
+				ESBType *inputType = isOutput ? outputs : inputs;
 				U8 *inputSemantic = isOutput ? outputSemantics : inputSemantics;
 
 				if(input->location >= 16)
@@ -2513,7 +2514,7 @@ Bool Compiler_processSPIRV(
 						0, "Compiler_processSPIRV() input/output location is already defined"
 					))
 
-				gotoIfError3(clean, SpvReflectFormatToESHType(input->format, &inputType[input->location], e_rr))
+				gotoIfError3(clean, SpvReflectFormatToESBType(input->format, &inputType[input->location], e_rr))
 
 				//Grab and parse semantic
 
@@ -2732,14 +2733,14 @@ Bool Compiler_processSPIRV(
 							0, "Compiler_processSPIRV() unsupported value in cbuffer member"
 						))
 
-					ESHType shType = (ESHType) 0;
-					gotoIfError3(clean, spvTypeToESHType(var.type_description, &shType, e_rr))
+					ESBType shType = (ESBType) 0;
+					gotoIfError3(clean, spvTypeToESBType(var.type_description, &shType, e_rr))
 
 					Log_debug(
 						alloc, var.array.dims_count ? ELogOptions_None : ELogOptions_NewLine,
 						"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s, %s)",
 						var.name, var.offset, var.size,
-						ESHType_name(shType),
+						ESBType_name(shType),
 						var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? "unused" : "used"
 					);
 

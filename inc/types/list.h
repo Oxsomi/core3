@@ -136,6 +136,16 @@ TListSort(U8); TListSort(U16); TListSort(U32);
 TListSort(I8); TListSort(I16); TListSort(I32); TListSort(I64);
 TListSort(F32); TListSort(F64);
 
+TList(ListU8);
+TList(ListU16);
+TList(ListU32);
+TList(ListU64);
+
+void ListListU8_freeUnderlying (ListListU8  *list, Allocator alloc);
+void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc);
+void ListListU32_freeUnderlying(ListListU32 *list, Allocator alloc);
+void ListListU64_freeUnderlying(ListListU64 *list, Allocator alloc);
+
 TList(Buffer);
 
 #ifdef __cplusplus

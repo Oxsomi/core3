@@ -2,7 +2,7 @@
 
 *The oiSH format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness (though enc/comp is not supported, since oiSH is most often packaged inside of an oiCA/oiDL file).*
 
-**NOTE: oiSH (1.2) is the successor of the original oiSH (0.1) from ocore. This isn't the same format anymore. oiSH (0.1) lacked a lot of important features and is deprecated.**
+**NOTE: oiSH (1.2) is the successor of the original oiSH (0.1) from OxC1. This isn't the same format anymore. oiSH (0.1) lacked a lot of important features and is deprecated.**
 
 oSH is a single shader represented in a single or multiple binary/text format(s). The only definition is that the shader type must match one (or multiple) of the following:
 
@@ -166,20 +166,6 @@ typedef struct BinaryInfoFixedSize {
     
 } BinaryInfoFixedSize;
 
-typedef enum ESHPrimitive {
-  	ESHPrimitive_Invalid,
-    ESHPrimitive_Float,		//Float, unorm, snorm
-  	ESHPrimitive_Int,
-  	ESHPrimitive_UInt
-} ESHPrimitive;
-
-typedef enum ESHVector {
-    ESHVector_N1,
-    ESHVector_N2,
-    ESHVector_N3,
-    ESHVector_N4
-} ESHVector;
-
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
 //Verify if SHFile includes any invalid data.
@@ -188,12 +174,17 @@ SHFile {
 
     SHHeader header;
 
-    //No header, no encryption/compression/SHA256 (see oiDL.md)
+    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
     //strings[len - semanticCount,  len] contains semantics for inputs/outputs.
     //strings[^ - stageCount,       ^ - semanticCount] contains entrypoint names.
     //strings[^ - includeFileCount, ^ - stageCount] contains (relative) include names.
     //strings[0,                    ^ - includeFileCount] contains uniform values and names.
     DLFile strings;
+    
+    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
+    //Each entry includes a oiSB file (see oiSB.md) that describes the shader buffer.
+    //Each shader buffer has to be referenced by a register.
+    DLFile shaderBuffers;
 
     BinaryInfoFixedSize binaryInfos[binaryCount];
     EntryInfoFixedSize pipelineStages[stageCount];
@@ -220,7 +211,7 @@ SHFile {
     		U8 inputsAvailAndHasSemantics;		//Upper bit: has semantics
     		U8 outputsAvail;
     
-		    //Each element: [ ESHStride, ESHPrimitive, ESHVector ]
+		    //Each element: [ ESBStride as U2, ESBPrimitive as U2, ESBVector as U2 ]
     		U8 inputs[inputsAvail];
     		U8 outputs[outputsAvail];
     
@@ -252,7 +243,7 @@ SHFile {
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer.
 
-The magic number in the header can only be absent if embedded in another file. An example is the file name table in an oiCA file.
+The magic number in the header can only be absent if embedded in another file. An example is when embedded in an oiSC file.
 
 ## CRC32C
 

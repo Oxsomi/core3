@@ -20,6 +20,7 @@
 
 #include "types/list_impl.h"
 #include "formats/oiSH.h"
+#include "formats/oiSB.h"
 #include "formats/oiDL.h"
 #include "types/math.h"
 #include "types/time.h"
@@ -83,217 +84,6 @@ const C8 *SHEntry_stageNames[] = {
 
 const C8 *SHEntry_stageName(SHEntry entry) {
 	return SHEntry_stageNames[entry.stage];
-}
-
-const C8 *ESHType_names[] = {
-
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-
-	"", "", "", "",
-	"F16",
-	"F16x2",
-	"F16x3",
-	"F16x4",
-	"I16",
-	"I16x2",
-	"I16x3",
-	"I16x4",
-	"U16",
-	"U16x2",
-	"U16x3",
-	"U16x4",
-
-	"", "", "", "",
-	"F32",
-	"F32x2",
-	"F32x3",
-	"F32x4",
-	"I32",
-	"I32x2",
-	"I32x3",
-	"I32x4",
-	"U32",
-	"U32x2",
-	"U32x3",
-	"U32x4",
-
-	"", "", "", "",
-	"F64",
-	"F64x2",
-	"F64x3",
-	"F64x4",
-	"I64",
-	"I64x2",
-	"I64x3",
-	"I64x4",
-	"U64",
-	"U64x2",
-	"U64x3",
-	"U64x4",
-
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-
-	"", "", "", "",
-	"F16x1x2",
-	"F16x2x2",
-	"F16x3x2",
-	"F16x4x2",
-	"I16x1x2",
-	"I16x2x2",
-	"I16x3x2",
-	"I16x4x2",
-	"U16x1x2",
-	"U16x2x2",
-	"U16x3x2",
-	"U16x4x2",
-
-	"", "", "", "",
-	"F32x1x2",
-	"F32x2x2",
-	"F32x3x2",
-	"F32x4x2",
-	"I32x1x2",
-	"I32x2x2",
-	"I32x3x2",
-	"I32x4x2",
-	"U32x1x2",
-	"U32x2x2",
-	"U32x3x2",
-	"U32x4x2",
-
-	"", "", "", "",
-	"F64x1x2",
-	"F64x2x2",
-	"F64x3x2",
-	"F64x4x2",
-	"I64x1x2",
-	"I64x2x2",
-	"I64x3x2",
-	"I64x4x2",
-	"U64x1x2",
-	"U64x2x2",
-	"U64x3x2",
-	"U64x4x2",
-
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-
-	"", "", "", "",
-	"F16x1x3",
-	"F16x2x3",
-	"F16x3x3",
-	"F16x4x3",
-	"I16x1x3",
-	"I16x2x3",
-	"I16x3x3",
-	"I16x4x3",
-	"U16x1x3",
-	"U16x2x3",
-	"U16x3x3",
-	"U16x4x3",
-
-	"", "", "", "",
-	"F32x1x3",
-	"F32x2x3",
-	"F32x3x3",
-	"F32x4x3",
-	"I32x1x3",
-	"I32x2x3",
-	"I32x3x3",
-	"I32x4x3",
-	"U32x1x3",
-	"U32x2x3",
-	"U32x3x3",
-	"U32x4x3",
-
-	"", "", "", "",
-	"F64x1x3",
-	"F64x2x3",
-	"F64x3x3",
-	"F64x4x3",
-	"I64x1x3",
-	"I64x2x3",
-	"I64x3x3",
-	"I64x4x3",
-	"U64x1x3",
-	"U64x2x3",
-	"U64x3x3",
-	"U64x4x3",
-
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-	"", "", "", "",
-
-	"", "", "", "",
-	"F16x1x4",
-	"F16x2x4",
-	"F16x3x4",
-	"F16x4x4",
-	"I16x1x4",
-	"I16x2x4",
-	"I16x3x4",
-	"I16x4x4",
-	"U16x1x4",
-	"U16x2x4",
-	"U16x3x4",
-	"U16x4x4",
-
-	"", "", "", "",
-	"F32x1x4",
-	"F32x2x4",
-	"F32x3x4",
-	"F32x4x4",
-	"I32x1x4",
-	"I32x2x4",
-	"I32x3x4",
-	"I32x4x4",
-	"U32x1x4",
-	"U32x2x4",
-	"U32x3x4",
-	"U32x4x4",
-
-	"", "", "", "",
-	"F64x1x4",
-	"F64x2x4",
-	"F64x3x4",
-	"F64x4x4",
-	"I64x1x4",
-	"I64x2x4",
-	"I64x3x4",
-	"I64x4x4",
-	"U64x1x4",
-	"U64x2x4",
-	"U64x3x4",
-	"U64x4x4"
-};
-
-ESHVector ESHType_getVector(ESHType type) {
-	return type & 3;
-}
-
-ESHMatrix ESHType_getMatrix(ESHType type) {
-	return (type >> 6) & 3;
-}
-
-ESHPrimitive ESHType_getPrimitive(ESHType type) {
-	return (type >> 2) & 3;
-}
-
-ESHStride ESHType_getStride(ESHType type) {
-	return (type >> 4) & 3;
-}
-
-const C8 *ESHType_name(ESHType type) {
-	return ESHType_names[type];
 }
 
 const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage) {
@@ -718,14 +508,14 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 
 			if(
 				(vout && (
-					ESHType_getPrimitive(vout) == ESHPrimitive_Invalid || 
-					ESHType_getStride(vout) == ESHStride_X8 || 
-					ESHType_getMatrix(vout)
+					ESBType_getPrimitive(vout) == ESBPrimitive_Invalid || 
+					ESBType_getStride(vout) == ESBStride_X8 || 
+					ESBType_getMatrix(vout)
 				)) ||
 				(vin  && (
-					ESHType_getPrimitive(vin)  == ESHPrimitive_Invalid ||
-					ESHType_getStride(vin)  == ESHStride_X8 ||
-					ESHType_getMatrix(vin)
+					ESBType_getPrimitive(vin)  == ESBPrimitive_Invalid ||
+					ESBType_getStride(vin)  == ESBStride_X8 ||
+					ESBType_getMatrix(vin)
 				))
 			)
 				retError(clean, Error_invalidOperation(
@@ -2138,7 +1928,7 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 
 					for (U8 i = 0; i < 16; ++i) {
 
-						ESHType type = (ESHType)(j ? shEntry.outputs[i] : shEntry.inputs[i]);
+						ESBType type = (ESBType)(j ? shEntry.outputs[i] : shEntry.inputs[i]);
 
 						if(!type)
 							continue;
@@ -2157,7 +1947,7 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 							alloc,
 							"\t\t%"PRIu8" %s : %.*s%"PRIu8,
 							i,
-							ESHType_name(type),
+							ESBType_name(type),
 							(int) CharString_length(semantic),
 							semantic.ptr,
 							hasSemantics ? (U8) (semanticValue & 0xF) : i

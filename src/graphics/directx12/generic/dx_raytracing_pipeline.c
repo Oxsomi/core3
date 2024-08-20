@@ -34,14 +34,12 @@ TList(D3D12_STATE_SUBOBJECT);
 TList(D3D12_DXIL_LIBRARY_DESC);
 TList(D3D12_EXPORT_DESC);
 TList(D3D12_HIT_GROUP_DESC);
-TList(ListU16);
 TListNamed(wchar_t*, ListWCSTR);
 
 TListImpl(D3D12_STATE_SUBOBJECT);
 TListImpl(D3D12_DXIL_LIBRARY_DESC);
 TListImpl(D3D12_EXPORT_DESC);
 TListImpl(D3D12_HIT_GROUP_DESC);
-TListImpl(ListU16);
 TListNamedImpl(ListWCSTR);
 
 Error GraphicsDevice_createPipelinesRaytracingInternalExt(
@@ -366,10 +364,7 @@ clean:
 
 	Buffer_freex(&shaderTable);
 
-	for(U64 i = 0; i < nameArr.length; ++i)
-		ListU16_freex(&nameArr.ptrNonConst[i]);
-
-	ListListU16_freex(&nameArr);
+	ListListU16_freeUnderlyingx(&nameArr);
 	ListU32_freex(&binaryOffset);
 	ListU16_freex(&tmp16);
 	CharString_freex(&tmp);
