@@ -311,7 +311,7 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Alloc
 			2, 0, "SBFile_addStruct()::sbStruct.stride and length are required (stride >= length && length)"
 		))
 
-	if(sbFile->structs.length >= U16_MAX - 1)
+	if(sbFile->structs.length >= (U16)(U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->structs.length, U16_MAX, "SBFile_addStruct()::sbFile->structs.length limited to 65535"
 		))
@@ -371,12 +371,12 @@ Bool SBFile_addVariableAsType(
 	))
 		retError(clean, Error_invalidParameter(4, 0, "SBFile_addVariableAsType()::type is invalid"))
 
-	if(sbFile->vars.length >= U16_MAX - 1)
+	if(sbFile->vars.length >= (U16)(U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->vars.length, U16_MAX, "SBFile_addVariableAsType()::sbFile->vars.length limited to 65535"
 		))
 
-	if(arrays && sbFile->arrays.length >= U16_MAX - 1)
+	if(arrays && sbFile->arrays.length >= (U16)(U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->arrays.length, U16_MAX, "SBFile_addVariableAsType()::sbFile->arrays.length limited to 65535"
 		))
@@ -413,7 +413,7 @@ Bool SBFile_addVariableAsType(
 	}
 
 	if(!isTightlyPacked)
-		totalSizeBytes -= 15 - size & 15;
+		totalSizeBytes -= 15 - (size & 15);
 
 	//Validate parent
 
@@ -540,12 +540,12 @@ Bool SBFile_addVariableAsStruct(
 			0, structId, sbFile->structs.length, "SBFile_addVariableAsStruct()::structId out of bounds"
 		))
 
-	if(sbFile->vars.length >= U16_MAX - 1)
+	if(sbFile->vars.length >= (U16)(U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->vars.length, U16_MAX, "SBFile_addVariableAsStruct()::vars.length limited to 65535"
 		))
 
-	if(arrays && sbFile->arrays.length >= U16_MAX - 1)
+	if(arrays && sbFile->arrays.length >= (U16)(U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->arrays.length, U16_MAX, "SBFile_addVariableAsStruct()::arrays.length limited to 65535"
 		))
@@ -771,8 +771,8 @@ Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		arrayDimCount[i] = (U8)sbFile.arrays.ptr[i].length;
 
-		for(U64 k = 0; k < arrayDimCount[i]; ++k)
-			arrayDims[j++] = sbFile.arrays.ptr[i].ptr[j];
+		for(U64 k = 0; k < arrayDimCount[i]; ++k, ++j)
+			arrayDims[j] = sbFile.arrays.ptr[i].ptr[j];
 	}
 
 clean:

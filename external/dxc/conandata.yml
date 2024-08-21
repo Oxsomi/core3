@@ -1,4 +1,4 @@
 sources:
-  "2024.08.14":
+  "2024.08.21":
     url: "https://github.com/Oxsomi/DirectXShaderCompiler.git"
     checkout: "feat_query_all_function_properties"

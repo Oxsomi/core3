@@ -86,7 +86,7 @@ class oxc3(ConanFile):
 
 	def requirements(self):
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2024.08.14")
+			self.requires("dxc/2024.08.21")
 
 	def package(self):
 

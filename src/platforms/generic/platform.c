@@ -344,7 +344,6 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 	#ifndef _NO_SIGNAL_HANDLING
 		signal(SIGABRT, sigFunc);
-		signal(SIGBREAK, sigFunc);
 		signal(SIGFPE,	sigFunc);
 		signal(SIGILL,	sigFunc);
 		signal(SIGINT,	sigFunc);

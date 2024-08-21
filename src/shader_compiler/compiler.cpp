@@ -1202,6 +1202,10 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityCooperativeMatrixKHR:
 		case SpvCapabilityBitInstructions:
 
+		case SpvCapabilityMultiViewport:
+		case SpvCapabilityShaderLayer:
+		case SpvCapabilityShaderViewportIndex:
+
 		case SpvCapabilityFragmentShaderSampleInterlockEXT:
 		case SpvCapabilityFragmentShaderShadingRateInterlockEXT:
 		case SpvCapabilityFragmentShaderPixelInterlockEXT:
@@ -1321,7 +1325,20 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			retError(clean, Error_invalidState(
 				2, "spvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"
 			))
+
+		case SpvCapabilityMax:
+			retError(clean, Error_invalidState(
+				2, "spvMapCapabilityToESHExtension() SPIRV contained invalid capability that isn't supported in SPIRV-Headers"
+			))
 	}
+
+	//Handled separately to ensure there's no default case in the switch,
+	//so that new capabilities are reported when SPIRV-Header update on some compilers.
+
+	if(capability > SpvCapabilityMax)
+		retError(clean, Error_invalidState(
+			2, "spvMapCapabilityToESHExtension() SPIRV contained invalid capability that isn't supported in SPIRV-Headers"
+		))
 
 	*extension = ext;
 
@@ -2417,6 +2434,11 @@ Bool Compiler_processSPIRV(
 			case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;	break;
 			case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;			break;
 			case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;		break;
+
+			default:
+				retError(clean, Error_invalidState(
+					2, "Compiler_processSPIRV() SPIRV contained unsupported execution model"
+				))
 		}
 
 		if (searchPayload || searchIntersection)

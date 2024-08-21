@@ -930,6 +930,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				}
 			}
 
+			// fallthrough
+
 			case ESHPipelineStage_Compute:
 			case ESHPipelineStage_WorkgraphExt:
 				headerSize += sizeof(U16) * 4;			//group x, y, z, waveSize
@@ -1192,6 +1194,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 					// fallthrough
 				}
 			}
+
+			// fallthrough
 
 			case ESHPipelineStage_Compute:
 			case ESHPipelineStage_WorkgraphExt: {
@@ -1594,6 +1598,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				}
 			}
 
+			// fallthrough
+
 			case ESHPipelineStage_WorkgraphExt:
 			case ESHPipelineStage_Compute: {
 
@@ -1962,6 +1968,8 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 				// fallthrough
 			}
 		}
+		
+		// fallthrough
 
 		case ESHPipelineStage_Compute:
 		case ESHPipelineStage_WorkgraphExt:

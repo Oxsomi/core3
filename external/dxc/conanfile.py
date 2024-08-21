@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2024.08.14"
+	version = "2024.08.21"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -86,8 +86,10 @@ class dxc(ConanFile):
 	def build(self):
 
 		cmake = CMake(self)
+
+		print(os.getcwd())
 		
-		if os.path.isdir("../DirectXShaderCompiler"):
+		if os.path.isdir("../DirectXShaderCompiler") or os.path.isdir("../../DirectXShaderCompiler"):
 			cmake.configure(build_script_folder="DirectXShaderCompiler")
 		else:
 			cmake.configure()
@@ -118,9 +120,16 @@ class dxc(ConanFile):
 		copy(self, "*.hpp", spirv_tools_src, spirv_tools_dst)
 
 		dx_headers_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include")
-		dx_headers_dst = os.path.join(self.package_folder, "include")
-		copy(self, "*.h", dx_headers_src, dx_headers_dst)
-		copy(self, "*.hpp", dx_headers_src, dx_headers_dst)
+		include_dir = os.path.join(self.package_folder, "include")
+		copy(self, "*.h", dx_headers_src, include_dir)
+		copy(self, "*.hpp", dx_headers_src, include_dir)
+
+		wsl_winadapter_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl")
+		wsl_winadapter_dst = os.path.join(self.package_folder, "")	# So that ../winadapter.h works (include/../windapter.h)
+		copy(self, "winadapter.h", wsl_winadapter_src, wsl_winadapter_dst)
+
+		wsl_stubs_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl/stubs")
+		copy(self, "*.h", wsl_stubs_src, include_dir)
 
 		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
@@ -202,7 +211,7 @@ class dxc(ConanFile):
 		self.cpp_info.set_property("cmake_target_name", "dxc::dxc")
 		self.cpp_info.set_property("pkg_config_name", "dxc")
 		
-		self.cpp_info.libs = [ "dxcompiler" ]
+		self.cpp_info.libs = [ "dxcompiler", "dxcvalidator" ]
 		
 		if self.settings.compiler == "msvc":
 			self.cpp_info.libs += [ "libclang" ]

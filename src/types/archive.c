@@ -237,6 +237,11 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 		if (conflict)
 			switch (settings.mode) {
 
+				default:
+					retError(clean, Error_invalidState(
+						0, "Archive_combine()::settings.mode is invalid"
+					))
+
 				case EArchiveCombineMode_AcceptA:		//No-op
 					break;
 
