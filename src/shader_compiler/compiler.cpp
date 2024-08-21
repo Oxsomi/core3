@@ -2520,7 +2520,7 @@ Bool Compiler_processSPIRV(
 					isOutput ? entrypoint.output_variables[j - entrypoint.input_variable_count] :
 					entrypoint.input_variables[j];
 
-				if(input->built_in != -1)		//We don't care about builtins
+				if(input->built_in != (SpvBuiltIn)-1)		//We don't care about builtins
 					continue;
 
 				ESBType *inputType = isOutput ? outputs : inputs;
