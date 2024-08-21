@@ -54,9 +54,13 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 #elif __wasm__
 	#define _PLATFORM_TYPE PLATFORM_WEB
 #elif __APPLE__
-	#if TARGET_OS_IPHONE
+	#include <TargetConditionals.h>
+	#if																	\
+	(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) ||					\
+	(defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR) ||	\
+	(defined(TARGET_OS_EMBEDDED) && TARGET_OS_EMBEDDED)
 		#define _PLATFORM_TYPE PLATFORM_IOS
-	#elif TARGET_OS_MAC
+	#elif defined(TARGET_OS_MAC) && TARGET_OS_MAC
 		#define _PLATFORM_TYPE PLATFORM_OSX
 	#else
 		#error "Undetected apple platform type"

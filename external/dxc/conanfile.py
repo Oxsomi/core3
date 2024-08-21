@@ -107,7 +107,7 @@ class dxc(ConanFile):
 		
 		cwd = os.getcwd()
 		
-		# Headers: We use include/dxcompiler and include/spirv_tools to avoid vulkan sdk interfering
+		# Headers: We use include/dxcompiler to avoid vulkan sdk interfering
 
 		dxc_src = os.path.join(self.source_folder, "DirectXShaderCompiler/include/dxc")
 		dxc_dst = os.path.join(self.package_folder, "include/dxcompiler")
@@ -115,7 +115,7 @@ class dxc(ConanFile):
 		copy(self, "*.hpp", dxc_src, dxc_dst)
 
 		spirv_tools_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/SPIRV-Tools/include/spirv-tools")
-		spirv_tools_dst = os.path.join(self.package_folder, "include/spirv_tools")
+		spirv_tools_dst = os.path.join(self.package_folder, "include/spirv-tools")
 		copy(self, "*.h", spirv_tools_src, spirv_tools_dst)
 		copy(self, "*.hpp", spirv_tools_src, spirv_tools_dst)
 
