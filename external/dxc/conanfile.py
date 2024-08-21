@@ -124,12 +124,15 @@ class dxc(ConanFile):
 		copy(self, "*.h", dx_headers_src, include_dir)
 		copy(self, "*.hpp", dx_headers_src, include_dir)
 
-		wsl_winadapter_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl")
-		wsl_winadapter_dst = os.path.join(self.package_folder, "")	# So that ../winadapter.h works (include/../windapter.h)
-		copy(self, "winadapter.h", wsl_winadapter_src, wsl_winadapter_dst)
+		# WSL is only needed for linux
+		if cwd.endswith("Debug") or cwd.endswith("Release"):
 
-		wsl_stubs_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl/stubs")
-		copy(self, "*.h", wsl_stubs_src, include_dir)
+			wsl_winadapter_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl")
+			wsl_winadapter_dst = os.path.join(self.package_folder, "")	# So that ../winadapter.h works (include/../windapter.h)
+			copy(self, "winadapter.h", wsl_winadapter_src, wsl_winadapter_dst)
+
+			wsl_stubs_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl/stubs")
+			copy(self, "*.h", wsl_stubs_src, include_dir)
 
 		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
