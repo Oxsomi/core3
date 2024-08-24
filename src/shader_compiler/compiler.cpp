@@ -943,7 +943,7 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 			))
 	}
 
-	switch(U32_max(numeric.vector.component_count, numeric.matrix.row_count)) {
+	switch(numeric.matrix.column_count ? numeric.matrix.column_count : numeric.vector.component_count) {
 
 		case 0:
 		case 1:		vector = ESBVector_N1;		break;
@@ -958,7 +958,7 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 			))
 	}
 
-	switch(numeric.matrix.column_count) {
+	switch(numeric.matrix.row_count) {
 
 		case 0:
 		case 1:		matrix = ESBMatrix_N1;		break;
@@ -1785,6 +1785,7 @@ Bool Compiler_convertCBufferDXIL(
 	Bool s_uccess = true;
 	D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
 	D3D12_SHADER_INPUT_BIND_DESC resourceDesc{};
+	SBFile sbFile{};
 
 	if(FAILED(constantBuffer->GetDesc(&constantBufferDesc)))
 		retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer but no desc"))
@@ -1831,6 +1832,10 @@ Bool Compiler_convertCBufferDXIL(
 		constantBufferDesc.Name, constantBufferDesc.Size,
 		resourceDesc.BindPoint, resourceDesc.Space
 	);
+
+	//TODO: Put into register
+
+	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, constantBufferDesc.Size, alloc, &sbFile, e_rr))
 
 	for (U32 k = 0; k < constantBufferDesc.Variables; ++k) {
 
@@ -1896,6 +1901,12 @@ Bool Compiler_convertCBufferDXIL(
 				))
 		}
 
+		if (typeDesc.Class == D3D_SVC_MATRIX_COLUMNS) {
+			U32 cols = typeDesc.Rows;
+			typeDesc.Rows = typeDesc.Columns;
+			typeDesc.Columns = cols;
+		}
+
 		switch(typeDesc.Columns) {
 
 			case 1:		vector = ESBVector_N1;		break;
@@ -1926,18 +1937,31 @@ Bool Compiler_convertCBufferDXIL(
 
 		ESBType shType = (ESBType) ESBType_create(stride, prim, vector, matrix);
 
-		Log_debug(
-			alloc, typeDesc.Elements ? ELogOptions_None : ELogOptions_NewLine,
-			"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s, %s)",
-			variableName, offset, size,
-			ESBType_name(shType), isUnused ? "unused" : "used"
-		);
+		U64 perElementStride = ESBType_getSize(shType, false);
+		U64 expectedSize = perElementStride * U64_max(typeDesc.Elements, 1);
 
+		if(size != expectedSize)
+			retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL()::shType had mismatching size"))
+
+		CharString str = CharString_createRefCStrConst(variableName);
+		ListU32 arrays = ListU32{};
 		if(typeDesc.Elements)
-			Log_debug(alloc, ELogOptions_NewLine, "[%" PRIu32 "]", typeDesc.Elements);
+			gotoIfError2(clean, ListU32_createRefConst(&typeDesc.Elements, 1, &arrays))
+
+		gotoIfError3(clean, SBFile_addVariableAsType(
+			&sbFile,
+			&str,
+			offset, U16_MAX, shType,
+			isUnused ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
+			arrays.length ? &arrays : NULL,
+			alloc, e_rr
+		))
 	}
 
+	//TODO: Use SBFile
+
 clean:
+	SBFile_free(&sbFile, alloc);
 	return s_uccess;
 }
 
@@ -1961,8 +1985,6 @@ Bool Compiler_processDXIL(
 	ESHExtension exts = ESHExtension_None;
 	ListCharString strings = ListCharString{};
 	U8 inputSemanticCount = 0;
-	Buffer tmp;
-	I32x4 hash;
 
 	//Prevent dxil.dll load, sign it ourselves :)
 
@@ -2280,23 +2302,10 @@ Bool Compiler_processDXIL(
 
 	if(
 		Buffer_length(*result) <= 0x14 ||
-		*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C')
+		*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C') ||
+		I32x4_eq4(I32x4_load4((const I32*)((const U8*)resultPtr + sizeof(U32))), I32x4_zero())		//Unsigned
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"))
-			
-	//Offset to beyond hash is used to create messed up MD5
-
-	tmp = Buffer_createRefFromBuffer(*result, true);
-	Buffer_offset(&tmp, 0x14);
-
-	hash = Buffer_md5dxc(tmp);
-
-	//Copy into file, it is now signed :)
-
-	Buffer_copy(
-		Buffer_createRef((U8*)result->ptr + sizeof(U32), sizeof(hash)),
-		Buffer_createRefConst(&hash, sizeof(hash))
-	);
 
 clean:
 
@@ -2332,7 +2341,8 @@ Bool Compiler_processSPIRV(
 	SpvReflectShaderModule spvMod{};
 	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
 
-	ListCharString strings = ListCharString{};
+	ListCharString strings{};
+	SBFile sbFile{};
 	U8 inputSemanticCount = 0;
 
 	if(
@@ -2725,6 +2735,10 @@ Bool Compiler_processSPIRV(
 					isUnused ? "unused" : "used"
 				);
 
+				gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, binding->block.padded_size, alloc, &sbFile, e_rr))
+
+				//TODO: Add to register
+
 				for (U64 l = 0; l < binding->block.member_count; ++l) {
 
 					SpvReflectBlockVariable var = binding->block.members[l];
@@ -2757,22 +2771,33 @@ Bool Compiler_processSPIRV(
 
 					ESBType shType = (ESBType) 0;
 					gotoIfError3(clean, spvTypeToESBType(var.type_description, &shType, e_rr))
-
-					Log_debug(
-						alloc, var.array.dims_count ? ELogOptions_None : ELogOptions_NewLine,
-						"\t%s: off: % " PRIu32 ", size: %" PRIu32 " (%s, %s)",
-						var.name, var.offset, var.size,
-						ESBType_name(shType),
-						var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? "unused" : "used"
-					);
+					
+					U64 perElementStride = ESBType_getSize(shType, false);
+					U64 expectedSize = perElementStride;
 
 					for(U64 m = 0; m < var.array.dims_count; ++m)
-						Log_debug(
-							alloc, m + 1 == var.array.dims_count ? ELogOptions_NewLine : ELogOptions_None,
-							"[%" PRIu32 "]",
-							var.array.dims[m]
-						);
+						expectedSize *= var.array.dims[m];
+
+					if(var.padded_size != expectedSize)
+						retError(clean, Error_invalidState(0, "Compiler_processSPIRV()::shType had mismatching size"))
+
+					CharString str = CharString_createRefCStrConst(var.name);
+					ListU32 arrays = ListU32{};
+					if(var.array.dims_count)
+						gotoIfError2(clean, ListU32_createRefConst(var.array.dims, var.array.dims_count, &arrays))
+
+					gotoIfError3(clean, SBFile_addVariableAsType(
+						&sbFile,
+						&str,
+						var.absolute_offset, U16_MAX, shType,
+						var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
+						arrays.length ? &arrays : NULL,
+						alloc, e_rr
+					))
 				}
+
+				//TODO: Use sbFile
+				SBFile_free(&sbFile, alloc);
 			}
 		}
 
@@ -2829,6 +2854,7 @@ Bool Compiler_processSPIRV(
 
 clean:
 
+	SBFile_free(&sbFile, alloc);
 	ListCharString_freeUnderlying(&strings, alloc);
 
 	spvReflectDestroyShaderModule(&spvMod);

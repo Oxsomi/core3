@@ -170,7 +170,6 @@ Bool Buffer_isAscii(Buffer buf);
 
 U32 Buffer_crc32c(Buffer buf);
 I32x4 Buffer_md5(Buffer buf);
-I32x4 Buffer_md5dxc(Buffer buf);					//Modified md5 by DXC
 void Buffer_sha256(Buffer buf, U32 output[8]);
 
 //Encryption

@@ -301,6 +301,8 @@ typedef struct SBFile {
 
 } SBFile;
 
+TList(SBFile);
+
 Bool SBFile_create(
 	ESBSettingsFlags flags,
 	U32 bufferSize,
@@ -340,16 +342,24 @@ Bool SBFile_addVariableAsStruct(
 Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr);
 Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *sbFile, Error *e_rr);
 
-Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);
+//Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
+
+void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc);
 
 //File headers
 
 //File spec (docs/oiSB.md)
 
+typedef enum ESBFlag {
+	ESBFlag_None				= 0,
+	ESBFlag_IsTightlyPacked		= 1 << 0,
+	ESBFlag_Unsupported			= 0xFFFFFFFF << 1
+} ESBFlag;
+
 typedef struct SBHeader {
 
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-	U8 flags;					//Reserved
+	U8 flags;					//ESBFlag
 	U16 arrays;
 
 	U16 structs;

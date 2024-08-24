@@ -236,20 +236,21 @@ U8 ESBType_getSize(ESBType type, Bool isPacked) {
 
 	U8 primitiveSize = 1 << ESBType_getStride(type);
 	U8 w = (U8) ESBType_getVector(type) + 1;
-	U8 h = (U8) ESBType_getVector(type) + 1;
+	U8 h = (U8) ESBType_getMatrix(type) + 1;
 
 	if(isPacked)
-		return primitiveSize *  w * h;
+		return primitiveSize * w * h;
 
-	if(h == 1)
-		return primitiveSize * w;
-
-	return 4 * primitiveSize * h;
+	U8 realStride = w * primitiveSize;
+	U8 stride = (realStride + 15) &~ 15;
+	return stride * (h - 1) + realStride;
 }
 
 const C8 *ESBType_name(ESBType type) {
 	return ESBType_names[type];
 }
+
+TListImpl(SBFile);
 
 Bool SBFile_create(
 	ESBSettingsFlags flags,
@@ -322,6 +323,9 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Alloc
 	if(CharString_isRef(*name))
 		gotoIfError2(clean, CharString_createCopy(*name, alloc, &tmp))
 
+	if(!Buffer_isAscii(CharString_bufferConst(*name)))
+		sbFile->flags |= ESBSettingsFlags_IsUTF8;
+
 	gotoIfError2(clean, ListCharString_pushBack(&sbFile->structNames, tmp.ptr ? tmp : *name, alloc))
 	pushedStruct = false;
 	*name = tmp = CharString_createNull();
@@ -385,7 +389,7 @@ Bool SBFile_addVariableAsType(
 	//The last element doesn't have padding
 	
 	Bool isTightlyPacked = sbFile->flags & ESBSettingsFlags_IsTightlyPacked;
-	U8 size = ESBType_getSize(type, isTightlyPacked);
+	U32 size = ESBType_getSize(type, isTightlyPacked);
 	U8 typeSize = 1 << ESBType_getStride(type);
 
 	if(!isTightlyPacked && ((offset + size - 1) >> 4) != (offset >> 4) && (offset & 15))
@@ -412,8 +416,10 @@ Bool SBFile_addVariableAsType(
 			))
 	}
 
-	if(!isTightlyPacked)
-		totalSizeBytes -= 15 - (size & 15);
+	if(!isTightlyPacked && (size & 15))
+		totalSizeBytes -= 16 - (size & 15);
+
+	size = (U32) totalSizeBytes;
 
 	//Validate parent
 
@@ -475,6 +481,9 @@ Bool SBFile_addVariableAsType(
 
 	if(CharString_isRef(*name))
 		gotoIfError2(clean, CharString_createCopy(*name, alloc, &tmp))
+
+	if(!Buffer_isAscii(CharString_bufferConst(*name)))
+		sbFile->flags |= ESBSettingsFlags_IsUTF8;
 		
 	gotoIfError2(clean, ListCharString_pushBack(&sbFile->varNames, tmp.ptr ? tmp : *name, alloc))
 	*name = tmp = CharString_createNull();
@@ -638,6 +647,9 @@ Bool SBFile_addVariableAsStruct(
 	if(CharString_isRef(*name))
 		gotoIfError2(clean, CharString_createCopy(*name, alloc, &tmp))
 		
+	if(!Buffer_isAscii(CharString_bufferConst(*name)))
+		sbFile->flags |= ESBSettingsFlags_IsUTF8;
+
 	gotoIfError2(clean, ListCharString_pushBack(&sbFile->varNames, tmp.ptr ? tmp : *name, alloc))
 	*name = tmp = CharString_createNull();
 	pushedVar = true;
@@ -712,7 +724,9 @@ Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		if(isUTF8)
 			gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(sbFile.structNames.ptr[i]), alloc, e_rr))
 
-		else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, sbFile.structNames.ptr[i], alloc, e_rr))
+		else gotoIfError3(clean, DLFile_addEntryAscii(
+			&dlFile, CharString_createRefStrConst(sbFile.structNames.ptr[i]), alloc, e_rr
+		))
 	}
 
 	for (U64 i = 0; i < sbFile.varNames.length; ++i) {
@@ -720,7 +734,9 @@ Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		if(isUTF8)
 			gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(sbFile.varNames.ptr[i]), alloc, e_rr))
 
-		else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, sbFile.varNames.ptr[i], alloc, e_rr))
+		else gotoIfError3(clean, DLFile_addEntryAscii(
+			&dlFile, CharString_createRefStrConst(sbFile.varNames.ptr[i]), alloc, e_rr
+		))
 	}
 
 	gotoIfError3(clean, DLFile_write(dlFile, alloc, &dlFileBuf, e_rr))
@@ -745,6 +761,7 @@ Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	*sbHeader = (SBHeader) {
 
 		.version = SBHeader_V1_2,
+		.flags = sbFile.flags & ESBSettingsFlags_IsTightlyPacked ? ESBFlag_IsTightlyPacked : ESBFlag_None,
 		.arrays = (U16) sbFile.arrays.length,
 
 		.structs = (U16) sbFile.structs.length,
@@ -772,7 +789,7 @@ Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		arrayDimCount[i] = (U8)sbFile.arrays.ptr[i].length;
 
 		for(U64 k = 0; k < arrayDimCount[i]; ++k, ++j)
-			arrayDims[j] = sbFile.arrays.ptr[i].ptr[j];
+			arrayDims[j] = sbFile.arrays.ptr[i].ptr[k];
 	}
 
 clean:
@@ -781,6 +798,181 @@ clean:
 	return s_uccess;
 }
 
-Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *sbFile, Error *e_rr);
+Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, Error *e_rr) {
+	
+	Bool s_uccess = true;
+	Bool didAllocate = false;
+	DLFile strings = (DLFile) { 0 };
 
-Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);
+	if(!result)
+		retError(clean, Error_nullPointer(0, "SBFile_read()::result is required"))
+
+	if(result->vars.ptr)
+		retError(clean, Error_invalidParameter(4, 0, "SBFile_read()::result is already present, possible memleak"))
+
+	Buffer tmpFile = Buffer_createRefFromBuffer(file, true);
+
+	if(!isSubFile) {
+
+		U32 magic = 0;
+		gotoIfError2(clean, Buffer_consumeU32(&tmpFile, &magic))
+
+		if(magic != SBHeader_MAGIC)
+			retError(clean, Error_invalidState(0, "SBFile_read()::file didn't start with oiSB"))
+	}
+
+	SBHeader header;
+	gotoIfError2(clean, Buffer_consume(&tmpFile, &header, sizeof(header)))
+
+	if(header.version != SBHeader_V1_2 || (header.flags & ESBFlag_Unsupported) || !header.vars)
+		retError(clean, Error_invalidState(0, "SBFile_read()::file didn't have right version, flags or was empty"))
+
+	ESBSettingsFlags flags = 
+		(isSubFile ? ESBSettingsFlags_HideMagicNumber : ESBSettingsFlags_None) |
+		((header.flags & ESBFlag_IsTightlyPacked) ? ESBSettingsFlags_IsTightlyPacked : ESBSettingsFlags_None);
+
+	gotoIfError3(clean, SBFile_create(flags, header.bufferSize, alloc, result, e_rr))
+	didAllocate = true;
+
+	gotoIfError3(clean, DLFile_read(tmpFile, NULL, true, alloc, &strings, e_rr))
+	
+	U64 stringCount = (U64)header.structs + header.vars;
+
+	if(
+		strings.entryBuffers.length != stringCount ||
+		strings.settings.flags & EDLSettingsFlags_UseSHA256 ||
+		strings.settings.dataType == EDLDataType_Data ||
+		strings.settings.encryptionType ||
+		strings.settings.compressionType
+	)
+		retError(clean, Error_invalidParameter(0, 1, "SBFile_read() dlFile didn't match expectations"))
+
+	gotoIfError2(clean, Buffer_offset(&tmpFile, strings.readLength))
+
+	const SBStruct *structs = (const SBStruct*) tmpFile.ptr;
+	gotoIfError2(clean, Buffer_offset(&tmpFile, sizeof(SBStruct) * header.structs))
+
+	for(U64 i = 0; i < header.structs; ++i) {
+
+		CharString tmpName = CharString_createNull();
+		CharString *name = &tmpName;
+
+		if(strings.settings.dataType == EDLDataType_Ascii)
+			name = &strings.entryStrings.ptrNonConst[i];
+
+		else {
+			Buffer buf = strings.entryBuffers.ptr[i];
+			tmpName = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false);
+		}
+
+		gotoIfError3(clean, SBFile_addStruct(result, name, structs[i], alloc, e_rr))
+	}
+
+	const SBVar *vars = (const SBVar*) tmpFile.ptr;
+	gotoIfError2(clean, Buffer_offset(&tmpFile, sizeof(SBVar) * header.vars))
+	
+	const U8 *arraySizeCount = tmpFile.ptr;
+	gotoIfError2(clean, Buffer_offset(&tmpFile, header.arrays))
+
+	U64 arrayCounters = 0;
+	for(U64 i = 0; i < header.arrays; ++i)
+		arrayCounters += arraySizeCount[i];
+
+	const U32 *arraySizes = (const U32*) tmpFile.ptr;
+	gotoIfError2(clean, Buffer_offset(&tmpFile, arrayCounters * sizeof(U32)))
+
+	for(U64 i = 0; i < header.vars; ++i) {
+
+		SBVar vari = vars[i];
+
+		if(vari.arrayIndex != U16_MAX && vari.arrayIndex >= header.arrays)
+			retError(clean, Error_outOfBounds(
+				0, vari.arrayIndex, header.arrays, "SBFile_read() arrayIndex out of bounds"
+			))
+
+		U8 arrayCount = 0;
+		U32 tmp[32];	//Worst case array
+
+		if(vari.arrayIndex != U16_MAX) {
+
+			U64 off = 0;
+
+			for(U64 j = 0; j < vari.arrayIndex; ++j)
+				off += arraySizeCount[j];
+
+			arrayCount = arraySizeCount[vari.arrayIndex];
+
+			if(!arrayCount || arrayCount > 32)
+				retError(clean, Error_outOfBounds(
+					0, arrayCount, 32, "SBFile_read() arrayCount out of bounds [1, 32]"
+				))
+
+			for(U8 j = 0; j < arrayCount; ++j)
+				tmp[j] = arraySizes[off + j];
+		}
+
+		ListU32 listArray = (ListU32) { 0 };
+
+		if(arrayCount)
+			gotoIfError2(clean, ListU32_createRefConst(tmp, arrayCount, &listArray))
+
+		if(vari.type && vari.structId != U16_MAX)
+			retError(clean, Error_invalidState(0, "SBFile_read()::file had a variable with both a type and a structId"))
+
+		if(!vari.type && vari.structId == U16_MAX)
+			retError(clean, Error_invalidState(0, "SBFile_read()::file had a variable with neither a type and a structId"))
+
+		CharString tmpName = CharString_createNull();
+		CharString *name = &tmpName;
+
+		if(strings.settings.dataType == EDLDataType_Ascii)
+			name = &strings.entryStrings.ptrNonConst[i - header.structs];
+
+		else {
+			Buffer buf = strings.entryBuffers.ptr[i - header.structs];
+			tmpName = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false);
+		}
+
+		if(vari.type)
+			gotoIfError3(clean, SBFile_addVariableAsType(
+				result,
+				name,
+				vari.offset, vari.parentId, vari.type, vari.flags,
+				arrayCount ? &listArray : NULL,
+				alloc, e_rr
+			))
+
+		else gotoIfError3(clean, SBFile_addVariableAsStruct(
+			result,
+			name,
+			vari.offset, vari.parentId, vari.structId, vari.flags,
+			arrayCount ? &listArray : NULL,
+			alloc, e_rr
+		))
+	}
+
+	if(!isSubFile && Buffer_length(tmpFile))
+		retError(clean, Error_invalidState(0, "SBFile_read() file had unrecognized data at the end"))
+
+clean:
+
+	DLFile_free(&strings, alloc);
+
+	if(didAllocate && !s_uccess)
+		SBFile_free(result, alloc);
+
+	return s_uccess;
+}
+
+//Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);	TODO:
+
+void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc) {
+
+	if(!files)
+		return;
+
+	for(U64 i = 0; i < files->length; ++i)
+		SBFile_free(&files->ptrNonConst[i], alloc);
+
+	ListSBFile_free(files, alloc);
+}

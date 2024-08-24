@@ -45,9 +45,16 @@ typedef struct SHEntryRuntime SHEntryRuntime;
 typedef struct SHInclude SHInclude;
 typedef struct SHFile SHFile;
 
+typedef struct SBFile SBFile;
+typedef struct SBStruct SBStruct;
+typedef enum ESBSettingsFlags ESBSettingsFlags;
+typedef enum ESBType ESBType;
+typedef enum ESBVarFlag ESBVarFlag;
+
 typedef struct ListCharString ListCharString;
 typedef struct ListSHEntryRuntime ListSHEntryRuntime;
 typedef struct ListSHInclude ListSHInclude;
+typedef struct ListSBFile ListSBFile;
 
 //oiCA
 
@@ -101,6 +108,48 @@ void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);
 
 void ListSHInclude_freeUnderlyingx(ListSHInclude *includes);
 void SHInclude_freex(SHInclude *include);
+
+//oiSB
+
+Bool SBFile_createx(
+	ESBSettingsFlags flags,
+	U32 bufferSize,
+	SBFile *sbFile,
+	Error *e_rr
+);
+
+void SBFile_freex(SBFile *shFile);
+
+Bool SBFile_addStructx(SBFile *sbFile, CharString *name, SBStruct sbStruct, Error *e_rr);
+
+Bool SBFile_addVariableAsTypex(
+	SBFile *sbFile,
+	CharString *name,
+	U32 offset,
+	U16 parentId,		//root = U16_MAX
+	ESBType type,
+	ESBVarFlag flags,
+	ListU32 *arrays,
+	Error *e_rr
+);
+
+Bool SBFile_addVariableAsStructx(
+	SBFile *sbFile,
+	CharString *name,
+	U32 offset,
+	U16 parentId,		//root = U16_MAX
+	U16 structId,
+	ESBVarFlag flags,
+	ListU32 *arrays,
+	Error *e_rr
+);
+
+Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr);
+Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr);
+
+void ListSBFile_freeUnderlyingx(ListSBFile *files);
+
+//Bool SBFile_combinex(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
 
 #ifdef __cplusplus
 	}

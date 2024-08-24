@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "oiXX.h"
+#include "oiSB.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -285,6 +285,7 @@ typedef struct SHFile {
 	ListSHBinaryInfo binaries;
 	ListSHEntry entries;
 	ListSHInclude includes;
+	ListSBFile shaderBuffers;
 
 	U64 readLength;				//How many bytes were read for this file
 

@@ -484,6 +484,9 @@ Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *resul
 
 Error Buffer_offset(Buffer *buf, U64 length) {
 
+	if(!length)
+		return Error_none();
+
 	if(!buf || !buf->ptr)
 		return Error_nullPointer(0, "Buffer_offset()::buf and buf->ptr are required");
 

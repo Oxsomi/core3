@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2024.08.21"
+	version = "2024.08.24"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -214,7 +214,7 @@ class dxc(ConanFile):
 		self.cpp_info.set_property("cmake_target_name", "dxc::dxc")
 		self.cpp_info.set_property("pkg_config_name", "dxc")
 		
-		self.cpp_info.libs = [ "dxcompiler", "dxcvalidator" ]
+		self.cpp_info.libs = [ "dxcompiler", "dxcvalidator", "LLVMDxilHash", "LLVMDxilValidation" ]
 		
 		if self.settings.compiler == "msvc":
 			self.cpp_info.libs += [ "libclang" ]

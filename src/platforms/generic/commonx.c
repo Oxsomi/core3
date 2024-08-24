@@ -87,6 +87,7 @@ TListXBaseImpl(ListWeakRefPtr);
 
 TListXImpl(SBStruct);
 TListXImpl(SBVar);
+TListXImpl(SBFile);
 
 TListXImpl(SHEntry);
 TListXImpl(SHEntryRuntime);
@@ -333,6 +334,85 @@ void ListSHInclude_freeUnderlyingx(ListSHInclude *includes) {
 void SHInclude_freex(SHInclude *include) {
 	SHInclude_free(include, Platform_instance.alloc);
 }
+
+//oiSB
+
+Bool SBFile_createx(
+	ESBSettingsFlags flags,
+	U32 bufferSize,
+	SBFile *sbFile,
+	Error *e_rr
+) {
+	return SBFile_create(flags, bufferSize, Platform_instance.alloc, sbFile, e_rr);
+}
+
+void SBFile_freex(SBFile *shFile) {
+	SBFile_free(shFile, Platform_instance.alloc);
+}
+
+Bool SBFile_addStructx(SBFile *sbFile, CharString *name, SBStruct sbStruct, Error *e_rr) {
+	return SBFile_addStruct(sbFile, name, sbStruct, Platform_instance.alloc, e_rr);
+}
+
+Bool SBFile_addVariableAsTypex(
+	SBFile *sbFile,
+	CharString *name,
+	U32 offset,
+	U16 parentId,		//root = U16_MAX
+	ESBType type,
+	ESBVarFlag flags,
+	ListU32 *arrays,
+	Error *e_rr
+) {
+	return SBFile_addVariableAsType(
+		sbFile,
+		name,
+		offset,
+		parentId,
+		type,
+		flags,
+		arrays,
+		Platform_instance.alloc,
+		e_rr
+	);
+}
+
+Bool SBFile_addVariableAsStructx(
+	SBFile *sbFile,
+	CharString *name,
+	U32 offset,
+	U16 parentId,		//root = U16_MAX
+	U16 structId,
+	ESBVarFlag flags,
+	ListU32 *arrays,
+	Error *e_rr
+) {
+	return SBFile_addVariableAsStruct(
+		sbFile,
+		name,
+		offset,
+		parentId,
+		structId,
+		flags,
+		arrays,
+		Platform_instance.alloc,
+		e_rr
+	);
+}
+
+Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr) {
+	return SBFile_write(sbFile, Platform_instance.alloc, result, e_rr);
+}
+
+Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr) {
+	return SBFile_read(file, isSubFile, Platform_instance.alloc, sbFile, e_rr);
+}
+
+void ListSBFile_freeUnderlyingx(ListSBFile *files) {
+	ListSBFile_freeUnderlying(files, Platform_instance.alloc);
+}
+
+//Bool SBFile_combinex(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
 
 //List
 

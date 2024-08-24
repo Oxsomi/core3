@@ -127,9 +127,10 @@ Bool SHFile_create(
 	if(flags & ESHSettingsFlags_Invalid)
 		retError(clean, Error_invalidParameter(0, 3, "SHFile_create()::flags contained unsupported flag"))
 
-	gotoIfError2(clean, ListSHEntry_reserve(&shFile->entries, 16, alloc))
-	gotoIfError2(clean, ListSHBinaryInfo_reserve(&shFile->binaries, 16, alloc))
+	gotoIfError2(clean, ListSHEntry_reserve(&shFile->entries, 8, alloc))
+	gotoIfError2(clean, ListSHBinaryInfo_reserve(&shFile->binaries, 4, alloc))
 	gotoIfError2(clean, ListSHInclude_reserve(&shFile->includes, 16, alloc))
+	gotoIfError2(clean, ListSBFile_reserve(&shFile->shaderBuffers, 4, alloc))
 
 	shFile->flags = flags;
 	shFile->compilerVersion = compilerVersion;
@@ -165,6 +166,7 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 	ListSHEntry_freeUnderlying(&shFile->entries, alloc);
 	ListSHBinaryInfo_free(&shFile->binaries, alloc);
 	ListSHInclude_freeUnderlying(&shFile->includes, alloc);
+	ListSBFile_freeUnderlying(&shFile->shaderBuffers, alloc);
 
 	*shFile = (SHFile) { 0 };
 }
@@ -790,9 +792,20 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		.flags = EDLSettingsFlags_HideMagicNumber
 	};
 
-	DLFile dlFile = (DLFile) { 0 };
-	Buffer dlFileBuf = Buffer_createNull();
-	gotoIfError3(clean, DLFile_create(settings, alloc, &dlFile, e_rr))
+	DLFile strings = (DLFile) { 0 };
+	Buffer stringsDlFile = Buffer_createNull();
+
+	gotoIfError3(clean, DLFile_create(settings, alloc, &strings, e_rr))
+
+	DLFile shaderBuffers = (DLFile) { 0 };
+	Buffer shaderBuffersDlFile = Buffer_createNull();
+
+	settings = (DLSettings) {
+		.dataType = EDLDataType_Data,
+		.flags = EDLSettingsFlags_HideMagicNumber
+	};
+
+	gotoIfError3(clean, DLFile_create(settings, alloc, &shaderBuffers, e_rr))
 
 	//Calculate easy sizes and add uniform names
 
@@ -811,15 +824,15 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			CharString str = binary.identifier.uniforms.ptr[j];
 
-			if(DLFile_find(dlFile, 0, U64_MAX, str) != U64_MAX)
+			if(DLFile_find(strings, 0, U64_MAX, str) != U64_MAX)
 				continue;
 
 			if(isUTF8)
-				gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc, e_rr))
+				gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(str), alloc, e_rr))
 
-			else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc, e_rr))
+			else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(str), alloc, e_rr))
 
-			if(dlFile.entryBuffers.length - shFile.entries.length >= (U16)(U16_MAX - 1))
+			if(strings.entryBuffers.length - shFile.entries.length >= (U16)(U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
 		}
 
@@ -843,7 +856,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	//Add uniform values
 
 	U64 uniNamesStart = 0;
-	U64 uniValStart = dlFile.entryBuffers.length;
+	U64 uniValStart = strings.entryBuffers.length;
 
 	if(uniValStart >> 16)
 		retError(clean, Error_invalidState(0, "SHFile_write() exceeded max uniform count"))
@@ -860,16 +873,16 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			CharString str = binary.identifier.uniforms.ptr[j];
 
-			if(DLFile_find(dlFile, uniValStart, dlFile.entryBuffers.length, str) != U64_MAX)
+			if(DLFile_find(strings, uniValStart, strings.entryBuffers.length, str) != U64_MAX)
 				continue;
 
-			if(dlFile.entryBuffers.length - uniValStart >= (U16)(U16_MAX - 1))
+			if(strings.entryBuffers.length - uniValStart >= (U16)(U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform values"))
 
 			if(isUTF8)
-				gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc, e_rr))
+				gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(str), alloc, e_rr))
 
-			else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc, e_rr))
+			else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(str), alloc, e_rr))
 		}
 	}
 
@@ -880,9 +893,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		CharString includeName = shFile.includes.ptr[i].relativePath;
 
 		if(isUTF8)
-			gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(includeName), alloc, e_rr))
+			gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(includeName), alloc, e_rr))
 
-		else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(includeName), alloc, e_rr))
+		else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(includeName), alloc, e_rr))
 	}
 
 	//Add entries
@@ -893,9 +906,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		CharString entryName = entry.name;
 
 		if(isUTF8)
-			gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(entryName), alloc, e_rr))
+			gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(entryName), alloc, e_rr))
 
-		else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(entryName), alloc, e_rr))
+		else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(entryName), alloc, e_rr))
 
 		switch(entry.stage) {
 
@@ -966,9 +979,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			CharString semantic = entry.semanticNames.ptr[j];
 
 			if(isUTF8)
-				gotoIfError3(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(semantic), alloc, e_rr))
+				gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(semantic), alloc, e_rr))
 
-			else gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(semantic), alloc, e_rr))
+			else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(semantic), alloc, e_rr))
 		}
 
 		uniqueSemantics += entry.semanticNames.length;
@@ -982,11 +995,23 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			))
 	}
 
-	gotoIfError3(clean, DLFile_write(dlFile, alloc, &dlFileBuf, e_rr))
+	//Create shader buffers and move to DLFile
+
+	for (U64 i = 0; i < shFile.shaderBuffers.length; ++i) {
+		gotoIfError3(clean, SBFile_write(shFile.shaderBuffers.ptr[i], alloc, &shaderBuffersDlFile, e_rr))
+		gotoIfError3(clean, DLFile_addEntry(&shaderBuffers, shaderBuffersDlFile, alloc, e_rr))
+		shaderBuffersDlFile = Buffer_createNull();
+	}
+
+	//Create DLFiles and calculate length
+
+	gotoIfError3(clean, DLFile_write(strings, alloc, &stringsDlFile, e_rr))
+	gotoIfError3(clean, DLFile_write(shaderBuffers, alloc, &shaderBuffersDlFile, e_rr))
 
 	U64 len = 
 		headerSize +
-		Buffer_length(dlFileBuf) +
+		Buffer_length(stringsDlFile) +
+		Buffer_length(shaderBuffersDlFile) +
 		shFile.entries.length * sizeof(EntryInfoFixedSize) +
 		shFile.binaries.length * sizeof(BinaryInfoFixedSize) +
 		shFile.includes.length * sizeof(U32);
@@ -1027,8 +1052,11 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	headerIt += sizeof(SHHeader);
 
-	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(dlFileBuf)), dlFileBuf);
-	headerIt += Buffer_length(dlFileBuf);
+	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(stringsDlFile)), stringsDlFile);
+	headerIt += Buffer_length(stringsDlFile);
+
+	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(shaderBuffersDlFile)), shaderBuffersDlFile);
+	headerIt += Buffer_length(shaderBuffersDlFile);
 
 	//Find offsets
 
@@ -1057,14 +1085,14 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			if(Buffer_length(binary.binaries[j]))
 				binaryFlags |= 1 << j;
 
-		U64 entryStart = dlFile.entryBuffers.length - uniqueSemantics - entries;
+		U64 entryStart = strings.entryBuffers.length - uniqueSemantics - entries;
 		U64 includeStart = entryStart - uniqueSemantics - shFile.includes.length;
 		U64 entrypoint = entryStart + U16_MAX;		//Indicate no entry
 
 		if(!binary.hasShaderAnnotation) {
 
 			entrypoint = DLFile_find(
-				dlFile, entryStart, dlFile.entryBuffers.length, binary.identifier.entrypoint
+				strings, entryStart, strings.entryBuffers.length, binary.identifier.entrypoint
 			);
 
 			if(entrypoint == U64_MAX)
@@ -1096,8 +1124,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		for(U64 j = 0; j < uniformCount; ++j) {
 			ListCharString uniforms = binary.identifier.uniforms;
-			uniformNames[j] = (U16) (DLFile_find(dlFile, uniNamesStart, uniValStart, uniforms.ptr[j << 1]) - uniNamesStart);
-			uniValues[j] = (U16) (DLFile_find(dlFile, uniValStart, includeStart, uniforms.ptr[(j << 1) | 1]) - uniValStart);
+			uniformNames[j] = (U16) (DLFile_find(strings, uniNamesStart, uniValStart, uniforms.ptr[j << 1]) - uniNamesStart);
+			uniValues[j] = (U16) (DLFile_find(strings, uniValStart, includeStart, uniforms.ptr[(j << 1) | 1]) - uniValStart);
 		}
 
 		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
@@ -1252,8 +1280,10 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	shHeader->sourceHash = shFile.sourceHash;
 
 clean:
-	Buffer_free(&dlFileBuf, alloc);
-	DLFile_free(&dlFile, alloc);
+	Buffer_free(&shaderBuffersDlFile, alloc);
+	DLFile_free(&shaderBuffers, alloc);
+	Buffer_free(&stringsDlFile, alloc);
+	DLFile_free(&strings, alloc);
 	return s_uccess;
 }
 
@@ -1262,7 +1292,9 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	Bool s_uccess = true;
 	Bool allocate = false;
 
-	DLFile dlFile = (DLFile) { 0 };
+	DLFile strings = (DLFile) { 0 };
+	DLFile shaderBuffers = (DLFile) { 0 };
+	ListSBFile parsedShaderBuffers = (ListSBFile) { 0 };
 	SHEntry entry = (SHEntry) { 0 };
 	SHBinaryInfo binaryInfo = (SHBinaryInfo) { 0 };
 	SHInclude include = (SHInclude) { 0 };
@@ -1307,10 +1339,9 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	if(Buffer_crc32c(hash) != header.hash)
 		retError(clean, Error_unauthorized(0, "SHFile_read() mismatching CRC32C"))
 
-	//Read DLFile
+	//Read DLFile (strings)
 
-	gotoIfError3(clean, DLFile_read(file, NULL, true, alloc, &dlFile, e_rr))
-	gotoIfError2(clean, Buffer_offset(&file, dlFile.readLength))
+	gotoIfError3(clean, DLFile_read(file, NULL, true, alloc, &strings, e_rr))
 
 	U64 minEntryBuffers =
 		(U64)header.stageCount + 
@@ -1320,13 +1351,36 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		(header.uniqueUniforms ? 1 : 0);	//Values can be shared
 
 	if(
-		dlFile.entryBuffers.length < minEntryBuffers ||
-		dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ||
-		dlFile.settings.dataType == EDLDataType_Data ||
-		dlFile.settings.encryptionType ||
-		dlFile.settings.compressionType
+		strings.entryBuffers.length < minEntryBuffers ||
+		strings.settings.flags & EDLSettingsFlags_UseSHA256 ||
+		strings.settings.dataType == EDLDataType_Data ||
+		strings.settings.encryptionType ||
+		strings.settings.compressionType
 	)
-		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() dlFile didn't match expectations"))
+		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() strings didn't match expectations"))
+
+	gotoIfError2(clean, Buffer_offset(&file, strings.readLength))
+	
+	//Read DLFile (shader buffers)
+
+	gotoIfError3(clean, DLFile_read(file, NULL, true, alloc, &shaderBuffers, e_rr))
+
+	if(
+		shaderBuffers.settings.flags & EDLSettingsFlags_UseSHA256 ||
+		shaderBuffers.settings.dataType != EDLDataType_Data ||
+		shaderBuffers.settings.encryptionType ||
+		shaderBuffers.settings.compressionType
+	)
+		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() shaderBuffers didn't match expectations"))
+
+	gotoIfError2(clean, Buffer_offset(&file, shaderBuffers.readLength))
+
+	gotoIfError2(clean, ListSBFile_resize(&parsedShaderBuffers, shaderBuffers.entryBuffers.length, alloc))
+
+	for(U64 i = 0; i < shaderBuffers.entryBuffers.length; ++i)
+		gotoIfError3(clean, SBFile_read(
+			shaderBuffers.entryBuffers.ptr[i], true, alloc, &parsedShaderBuffers.ptrNonConst[i], e_rr
+		))
 
 	//Check if the buffer can at least contain the static sized data
 
@@ -1340,7 +1394,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 	ESHSettingsFlags flags = isSubFile ? ESHSettingsFlags_HideMagicNumber : 0;
 
-	if(dlFile.settings.dataType == EDLDataType_UTF8)
+	if(strings.settings.dataType == EDLDataType_UTF8)
 		flags |= ESHSettingsFlags_IsUTF8;
 
 	gotoIfError3(clean, SHFile_create(flags, header.compilerVersion, header.sourceHash, alloc, shFile, e_rr))
@@ -1384,7 +1438,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				))
 
 			CharString name = DLFile_stringAt(
-				dlFile, dlFile.entryBuffers.length - header.semanticCount - header.stageCount + binary.entrypoint, NULL
+				strings, strings.entryBuffers.length - header.semanticCount - header.stageCount + binary.entrypoint, NULL
 			);
 
 			gotoIfError2(clean, CharString_createCopy(name, alloc, &binaryInfo.identifier.entrypoint))
@@ -1417,17 +1471,17 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 			if(uniformNames[i] >= header.uniqueUniforms)
 				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
 
-			CharString uniformName = DLFile_stringAt(dlFile, (U64) uniformNames[i], NULL);
+			CharString uniformName = DLFile_stringAt(strings, (U64) uniformNames[i], NULL);
 
 			//Since uniform values can be shared, we need to ensure we're not indexing out of bounds
 
 			U64 uniformNameId = (U64) uniformValues[i] + header.uniqueUniforms;
-			U64 endIndex = dlFile.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount;
+			U64 endIndex = strings.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount;
 
 			if(uniformNameId >= endIndex)
 				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
 				
-			CharString uniformValue = DLFile_stringAt(dlFile, uniformNameId, NULL);
+			CharString uniformValue = DLFile_stringAt(strings, uniformNameId, NULL);
 
 			//Check for duplicate uniform names
 
@@ -1487,12 +1541,12 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		if(!binaryCount)
 			retError(clean, Error_invalidParameter(0, 0, "SHFile_read() stage[i].binaryCount must be >0"))
 
-		U64 start = dlFile.entryBuffers.length - header.semanticCount - header.stageCount;
+		U64 start = strings.entryBuffers.length - header.semanticCount - header.stageCount;
 
-		CharString str = DLFile_stringAt(dlFile, start + i, NULL);		//Already safety checked
+		CharString str = DLFile_stringAt(strings, start + i, NULL);		//Already safety checked
 
-		if(DLFile_find(dlFile, start, start + i, str) != U64_MAX)
-			retError(clean, Error_alreadyDefined(0, "SHFile_read() dlFile included duplicate entrypoint name"))
+		if(DLFile_find(strings, start, start + i, str) != U64_MAX)
+			retError(clean, Error_alreadyDefined(0, "SHFile_read() strings included duplicate entrypoint name"))
 
 		gotoIfError2(clean, CharString_createCopy(str, alloc, &entry.name))
 
@@ -1563,18 +1617,18 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 							0, semanticCounter, header.semanticCount, "SHFile_read() semantic out of bounds"
 						))
 
-					startCounter += dlFile.entryBuffers.length - header.semanticCount;
+					startCounter += strings.entryBuffers.length - header.semanticCount;
 
 					for (U64 j = startCounter; j < startCounter + uniqueInputSemantics + uniqueOutputSemantics; ++j) {
 
 						CharString ref;
 
-						if(dlFile.settings.dataType == EDLDataType_UTF8) {
-							Buffer buf = dlFile.entryBuffers.ptr[j];
+						if(strings.settings.dataType == EDLDataType_UTF8) {
+							Buffer buf = strings.entryBuffers.ptr[j];
 							ref = CharString_createRefSizedConst((const C8*)buf.ptr, Buffer_length(buf), false);
 						}
 
-						else ref = CharString_createRefStrConst(dlFile.entryStrings.ptr[j]);
+						else ref = CharString_createRefStrConst(strings.entryStrings.ptr[j]);
 
 						gotoIfError2(clean, ListCharString_pushBack(&entry.semanticNames, ref, alloc))
 					}
@@ -1703,8 +1757,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	for(U64 i = 0; i < header.includeFileCount; ++i) {
 
 		CharString relativePath = DLFile_stringAt(
-			dlFile,
-			dlFile.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount + i,
+			strings,
+			strings.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount + i,
 			NULL
 		);
 
@@ -1780,7 +1834,9 @@ clean:
 	SHInclude_free(&include, alloc);
 	SHBinaryInfo_free(&binaryInfo, alloc);
 	SHEntry_free(&entry, alloc);
-	DLFile_free(&dlFile, alloc);
+	DLFile_free(&strings, alloc);
+	ListSBFile_freeUnderlying(&parsedShaderBuffers, alloc);
+	DLFile_free(&shaderBuffers, alloc);
 	return s_uccess;
 }
 

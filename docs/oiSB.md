@@ -20,11 +20,11 @@ typedef struct SBHeader {
 	U32 magicNumber;			//oiSB (0x4253696F); optional if it's part of an oiSH.
     
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-    U8 flags;					//& 1 = isTightlyPacke
+    U8 flags;					//& 1 = isTightlyPacked
     U16 arrays;
 
     U16 structs;
-    U16 vars;
+    U16 vars;					//Should always contain at least 1
     
     U32 bufferSize;
 

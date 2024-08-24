@@ -184,6 +184,7 @@ SHFile {
     //No magic number, no encryption/compression/SHA256 (see oiDL.md).
     //Each entry includes a oiSB file (see oiSB.md) that describes the shader buffer.
     //Each shader buffer has to be referenced by a register.
+    //Each oiSB is a subfile, so doesn't preserve oiSB magic number.
     DLFile shaderBuffers;
 
     BinaryInfoFixedSize binaryInfos[binaryCount];

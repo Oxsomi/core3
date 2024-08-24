@@ -25,6 +25,7 @@
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
 #include "formats/oiSH.h"
+#include "formats/oiSB.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -127,6 +128,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		case CAHeader_MAGIC:	reqLen = sizeof(CAHeader);					break;
 		case DLHeader_MAGIC:	reqLen = sizeof(DLHeader) + sizeof(U32);	break;
 		case SHHeader_MAGIC:	reqLen = sizeof(SHHeader) + sizeof(U32);	break;
+		case SBHeader_MAGIC:	reqLen = sizeof(SBHeader) + sizeof(U32);	break;
 		default:
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;
@@ -178,6 +180,30 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				shHeader.includeFileCount
 			);
 
+			break;
+		}
+
+		//oiSB header
+
+		case SBHeader_MAGIC: {
+
+			const SBHeader sbHeader = *(const SBHeader*)(buf.ptr + sizeof(U32));
+
+			Log_debugLnx("Detected oiSB file with following info:");
+
+			XXFile_printVersion(sbHeader.version);
+
+			if(sbHeader.flags & ESBFlag_IsTightlyPacked)
+				Log_debugLnx("\tFlag: Is tightly packed");
+
+			Log_debugLnx(
+				"With %"PRIu16" arrays, %"PRIu16" structs, %"PRIu16" vars and %"PRIu32" bufferSize",
+				sbHeader.arrays,
+				sbHeader.structs,
+				sbHeader.vars,
+				sbHeader.bufferSize
+			);
+		
 			break;
 		}
 
@@ -1208,6 +1234,69 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			SHFile_freex(&file);
 			Compiler_freex(&comp);
+
+			if(!s_uccess)
+				goto clean;
+
+			break;
+		}
+
+		//oiSB file
+
+		case SBHeader_MAGIC: {
+
+			if(encryptionKey)
+				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSH doesn't have aes support!"))
+
+			SBFile file = (SBFile) { 0 };
+			gotoIfError3(cleanSb, SBFile_readx(buf, false, &file, e_rr))
+
+			U16 parent = U16_MAX;
+
+			Log_debugLnx(file.flags & ESBFlag_IsTightlyPacked ? "SBO" : "CBO");
+
+			for (U64 i = 0; i < file.vars.length; ++i) {
+
+				SBVar var = file.vars.ptr[i];
+
+				if(var.parentId != parent)
+					continue;
+
+				CharString varName = file.varNames.ptr[i];
+				Bool isArray = var.arrayIndex != U16_MAX;
+
+				CharString typeName = 
+					var.structId == U16_MAX ? CharString_createRefCStrConst(ESBType_name((ESBType)var.type)) :
+					file.structNames.ptr[var.structId];
+
+				Log_debug(
+					Platform_instance.alloc,
+					!isArray ? ELogOptions_NewLine : ELogOptions_None,
+					"0x%08"PRIx32": %.*s (%s): %.*s",
+					var.offset,
+					(int) CharString_length(varName),
+					varName.ptr,
+					(var.flags & ESBVarFlag_IsUsedVar) ? "Used" : "Unused",
+					(int) CharString_length(typeName),
+					typeName.ptr
+				);
+
+				if (isArray) {
+
+					ListU32 array = file.arrays.ptr[var.arrayIndex];
+
+					for(U64 j = 0; j < array.length; ++j)
+						Log_debug(
+							Platform_instance.alloc,
+							j + 1 == array.length ? ELogOptions_NewLine : ELogOptions_None,
+							"[%"PRIu32"]", array.ptr[j]
+						);
+				}
+			}
+
+		cleanSb:
+
+			SBFile_freex(&file);
 
 			if(!s_uccess)
 				goto clean;
