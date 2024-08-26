@@ -128,8 +128,8 @@ These are left out by default, because often, file timestamps aren't very import
 This is only supported if it can logically be merged:
 
 - For oiSH, this means that it has to be compiled from the same source(s), so matching relative includes should have the same hash, the source hash needs to be the same and the compiler settings. This allows combining two lean files into a single one.
-- **TODO**: For oiCA, this would mean combining two archives into one. This can only succeed if the two have similar settings and if the archive files don't overlap (archiveA/a.txt and archiveB/a.txt would conflict, unless the crc is the same).
-- **TODO**: For oiDL, this simply means the second entries are appended to the other, provided the two oiDL settings are the same (UTF8, ascii, data).
+- For oiCA, this would mean combining two archives into one. This can only succeed if the two have similar settings and if the archive files don't overlap (archiveA/a.txt and archiveB/a.txt would conflict, unless the crc is the same). This can be prevented by using a setting to change archiveB's a.txt to a-1.txt.
+- For oiDL, this simply means the second entries are appended to the other, provided the two oiDL settings are the same (UTF8, ascii, data).
 
 ### TODO: Split
 
@@ -315,6 +315,30 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
 - `--error-empty-files` is used to error when no entrypoints are found to compile. This is useful to enforce that the destination directory shouldn't contain includes alongside source files (rather than using -include-dir with a separate includes directory).
 - `--split` is used to split up every oiSH file into its own file. This is very useful when building for 1 dedicated target. By default this is turned off, to make sure every shader can be ran with every backend.
 
+#### View device specific assembly
+
+Example: `file data -input myTest.oiSH --bin -entry 0 -compile-output spv -compile-device gfx1100`.
+
+Some vendors allow viewing the intermediate shaders as device-dependent assembly. This can help view bottlenecks that might not be easy to figure out otherwise, as DXIL/SPIRV might hide these device dependent bottlenecks.
+
+The following will be implemented to view device disassembly:
+
+- (spv or dxil) + AMD: [Radeon GPU analyzer](https://github.com/GPUOpen-Tools/radeon_gpu_analyzer).
+  - All GPUs can be listed by specifying ? (or anything unrecognized) as the compile-device. The example above 'gfx1100' is AMD RDNA3 (specifically, 7900 XT/XTX).
+
+The following vendors provide tools that cannot be integrated easily due to missing git repos:
+
+- spv + Qualcomm: [Qualcomm adreno GPU offline compiler](https://qpm.qualcomm.com/#/main/tools/details/Adreno_GPU_Offline_Compiler).
+- spv + Mali: [Mali offline compiler](https://developer.arm.com/documentation/101863/0804/Using-Mali-Offline-Compiler/Compiling-Vulkan-shaders).
+
+The following vendors support is outdated and not included:
+
+- Intel's shader compiler: doesn't support SM6+, so not supported.
+
+The following vendors don't have (publicly available) support for this as far as is known to me:
+
+- Nvidia, ImgTec.
+
 ## Show GPU/graphics device info
 
 
@@ -340,7 +364,7 @@ With `-entry <offset or path>` a specific entry can be viewed. If an entry is sp
 
 `file data` also allows the `-length` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-start` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -input our.oiCA -start 96 -length 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-output` is used, it will binary dump the entire remainder of the file if `-length` is not specified (the remainder is the entire file size if `-start` is not specified).
 
-For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --binary will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
+For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --binary will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file. `-compile-device` can be used to set a specific GPU device that will then be used with Radeon GPU Analyzer (see Compiling shaders/View device specific assembly) to turn the DXIL or SPIRV into AMD specific instructions.
 
 ## Encrypt
 

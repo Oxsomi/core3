@@ -22,6 +22,7 @@ if NOT "%3" == "True" (
 for /f "tokens=3,* delims= " %%a in ("%*") do set remainder=%%b
 
 conan create external/dxc -s build_type=%1 --build=missing
+conan create external/rga -s build_type=%1 --build=missing
 conan build . -s build_type=%1 -o enableSIMD=%2 -o enableTests=%3 !remainder!
 
 REM Run tests

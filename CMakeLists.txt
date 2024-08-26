@@ -507,6 +507,7 @@ endif()
 if(EnableShaderCompiler)
 
 	find_package(dxc REQUIRED)
+	find_package(rga REQUIRED)
 
 	option(SPIRV_REFLECT_EXECUTABLE     "Build spirv-reflect executable" OFF)
 	option(SPIRV_REFLECT_STATIC_LIB     "Build a SPIRV-Reflect static library" ON)
@@ -514,7 +515,7 @@ if(EnableShaderCompiler)
 
 	set_target_properties(spirv-reflect-static PROPERTIES FOLDER External)
 
-	# Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.
+	# Our parser & calling DXC, spirv-opt, spirv-reflect, DXIL reflect, rga, etc.
 
 	file(GLOB_RECURSE compilerHeaders "inc/shader_compiler/*.h")
 	file(GLOB_RECURSE compilerSources "src/shader_compiler/*.c" "src/shader_compiler/*.cpp")	# Some CPP to interface with DXC
@@ -528,7 +529,7 @@ if(EnableShaderCompiler)
 	)
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
-	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxc::dxc spirv-reflect-static)
+	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxc::dxc rga::rga spirv-reflect-static)
 
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external")

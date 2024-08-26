@@ -17,6 +17,11 @@ if ! conan create external/dxc -s build_type=$1 --build=missing; then
 	exit 1
 fi
 
+if ! conan create external/rga -s build_type=$1 --build=missing; then
+	printf "${RED}-- Conan create RGA failed${NC}\n"
+	exit 1
+fi
+
 if ! conan build . -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 ${@:4}; then
 	printf "${RED}-- Conan build failed${NC}\n"
 	exit 1

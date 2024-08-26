@@ -74,7 +74,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-threads",
 	"-compile-type",
 	"-include-dir",
-	"-input2"
+	"-input2",
+	"-compile-device"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -93,7 +94,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)",
 	"Shader compile mode (preprocess, includes, reflect, compile)",
 	"Set extra include path",
-	"Input file to merge with"
+	"Input file to merge with",
+	"Device to simulate a compile on (? = show all available devices)"
 };
 
 //Flags
@@ -296,7 +298,7 @@ void Operations_init() {
 		.optionalParameters =
 			EOperationHasParameter_AES | EOperationHasParameter_Output |
 			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length |
-			EOperationHasParameter_ShaderOutputMode
+			EOperationHasParameter_ShaderOutputMode | EOperationHasParameter_CompileDevice
 	};
 
 	//Hash category

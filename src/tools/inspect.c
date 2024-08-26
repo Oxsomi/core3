@@ -763,14 +763,16 @@ Bool CLI_inspectData(ParsedArgs args) {
 			!CharString_isHex(key)
 		) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
+			s_uccess = false;
+			goto clean;
 		}
 
 		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
+			s_uccess = false;
+			goto clean;
 		}
 
 		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
@@ -789,7 +791,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	if(args.flags & (EOperationFlags_Bin | EOperationFlags_Includes) && magic != SHHeader_MAGIC) {
 		Log_errorLnx("--bin and --includes flag can only be used with an oiSH file");
-		return false;
+		s_uccess = false;
+		goto clean;
 	}
 
 	ESHBinaryType binaryType = ESHBinaryType_Count;
@@ -798,12 +801,14 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 		if(magic != SHHeader_MAGIC) {
 			Log_errorLnx("-compile-output argument can only be used with an oiSH file");
-			return false;
+			s_uccess = false;
+			goto clean;
 		}
 
 		CharString shaderOutputMode = CharString_createNull();
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &shaderOutputMode)).genericError) {
 			Log_errorLnx("Missing argument -compile-output");
+			s_uccess = false;
 			goto clean;
 		}
 
@@ -815,6 +820,80 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 		else {
 			Log_errorLnx("Invalid argument. Expected: -compile-output <spv/dxil>.");
+			s_uccess = false;
+			goto clean;
+		}
+	}
+
+	if (args.parameters & EOperationHasParameter_CompileDevice) {
+	
+		if(magic != SHHeader_MAGIC) {
+			Log_errorLnx("-compile-device argument can only be used with an oiSH file");
+			s_uccess = false;
+			goto clean;
+		}
+
+		CharString compileDevice = CharString_createNull();
+
+		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_CompileDeviceShift, &compileDevice)).genericError) {
+			Log_errorLnx("Missing argument -compile-device");
+			goto clean;
+		}
+
+		//Find proper ASIC
+
+		#ifdef CLI_SHADER_COMPILER
+
+			ListCharString targets = (ListCharString) { 0 };
+			ListCharString devices = (ListCharString) { 0 };
+			ListCharString descriptions = (ListCharString) { 0 };
+
+			gotoIfError3(clean, Compiler_getOfflineCompileDevicesx(&targets, &devices, e_rr))
+
+			if(true) { //!Compiler_findOfflineCompileDevice(targets, devices, compileDevice)) {		TODO:
+				
+				Log_debugLnx("-compile-device not found, listing all available devices:");
+
+				const C8 *last = NULL;
+
+				for(U64 i = 0; i < devices.length; ++i) {
+
+					if(last != targets.ptr[i].ptr)
+						Log_debugLnx("Target %.*s", (int) CharString_length(targets.ptr[i]), (last = targets.ptr[i].ptr));
+
+					Log_debugLnx(
+						"%.*s: %.*s",
+						(int) CharString_length(devices.ptr[i]), devices.ptr[i].ptr,
+						(int) CharString_length(descriptions.ptr[i]), descriptions.ptr[i].ptr
+					);
+				}
+
+				ListCharString_freeUnderlyingx(&targets);
+				ListCharString_freeUnderlyingx(&devices);
+				ListCharString_freeUnderlyingx(&descriptions);
+				goto clean;
+			}
+
+			ListCharString_freeUnderlyingx(&targets);
+			ListCharString_freeUnderlyingx(&devices);
+			ListCharString_freeUnderlyingx(&descriptions);
+
+		#else
+			Log_errorLnx("-compile-device argument can only be used if OxC3 is built with shader compiler enabled");
+			s_uccess = false;
+			goto clean;
+		#endif
+
+		//If binaryType is not selected, then we can't call any device specific disassembler
+
+		if(binaryType == ESHBinaryType_Count) {
+
+			Log_errorLnx(
+				"-compile-device can only be used with valid -compile-output and -entry args and with --bin flag "
+				"(unless -compile-device ?)"
+			);
+
+			s_uccess = false;
 			goto clean;
 		}
 	}

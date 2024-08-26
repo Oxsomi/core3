@@ -1,0 +1,4 @@
+sources:
+  "2024.08.26":
+    url: "https://github.com/Oxsomi/radeon_gpu_analyzer.git"
+    checkout: "master" 

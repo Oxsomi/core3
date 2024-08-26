@@ -42,6 +42,7 @@
 #include "spirv-tools/optimizer.hpp"
 #include "SPIRV-Reflect/spirv_reflect.h"
 #include "directx/d3d12shader.h"
+#include "radeon_gpu_analyzer_backend/be_utils.h"
 #include <exception>
 
 const C8 *resources =
@@ -3294,6 +3295,69 @@ clean:
 
 	if(blobUtf8)
 		blobUtf8->Release();
+
+	return s_uccess;
+}
+
+Bool Compiler_getOfflineCompileDevices(ListCharString *targets, ListCharString *devices, Allocator alloc, Error *e_rr) {
+
+	std::map<std::string, std::set<std::string>> deviceMap;
+	CharString tmp = CharString_createNull();
+	Bool s_uccess = true;
+	Bool allocate[2]{};
+	U64 total = 0;
+
+	if(!BeUtils::GetMarketingNameToCodenameMapping(deviceMap))
+		retError(clean, Error_invalidState(0, "Compiler_getOfflineCompileDevices() couldn't call RGA to query for devices"))
+
+	for(const auto& elem : deviceMap)
+		total += elem.second.size();
+
+	gotoIfError2(clean, ListCharString_reserve(targets, total, alloc))
+	allocate[0] = true;
+
+	gotoIfError2(clean, ListCharString_reserve(devices, total, alloc))
+	allocate[1] = true;
+
+	for(const auto& elem : deviceMap) {
+
+		//Push target as string copy
+
+		CharString elemRef = CharString_createRefSizedConst(elem.first.c_str(), elem.first.size(), true);
+		gotoIfError2(clean, CharString_createCopy(elemRef, alloc, &tmp))
+		gotoIfError2(clean, ListCharString_pushBackx(targets, tmp))
+		CharString ref = CharString_createRefStrConst(tmp);
+		tmp = CharString_createNull();
+		
+		Bool isFirst = true;
+
+		for(const auto& elem1 : elem.second) {
+
+			//Already pushed if it's the first, otherwise we have to push the reference
+
+			if(isFirst)
+				isFirst = false;
+
+			else gotoIfError2(clean, ListCharString_pushBackx(targets, ref))
+
+			//Push
+			
+			CharString elem1Ref = CharString_createRefSizedConst(elem1.c_str(), elem1.size(), true);
+			gotoIfError2(clean, CharString_createCopy(elem1Ref, alloc, &tmp))
+			gotoIfError2(clean, ListCharString_pushBackx(devices, tmp))
+			tmp = CharString_createNull();
+		}
+	}
+
+clean:
+
+	CharString_free(&tmp, alloc);
+
+	if(allocate[0])
+		ListCharString_freeUnderlying(targets, alloc);
+
+	if(allocate[1])
+		ListCharString_freeUnderlying(devices, alloc);
 
 	return s_uccess;
 }

@@ -54,6 +54,8 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_Input2Shift,				//If two inputs are specified, this specifies input2
 
+	EOperationHasParameter_CompileDeviceShift,
+
 	EOperationHasParameter_CountEnum,			//How many enums there are
 
 	EOperationHasParameter_Start				= EOperationHasParameter_FileFormatShift,
@@ -84,6 +86,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_IncludeDir			= 1 << EOperationHasParameter_IncludeDirShift,
 
 	EOperationHasParameter_Input2				= 1 << EOperationHasParameter_Input2Shift,
+
+	EOperationHasParameter_CompileDevice		= 1 << EOperationHasParameter_CompileDeviceShift
 
 } EOperationHasParameter;
 

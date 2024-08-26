@@ -279,6 +279,10 @@ Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, 
 	return Compiler_createDisassembly(comp, type, buf, Platform_instance.alloc, result, e_rr);
 }
 
+Bool Compiler_getOfflineCompileDevicesx(ListCharString *targets, ListCharString *devices, Error *e_rr) {
+	return Compiler_getOfflineCompileDevices(targets, devices, Platform_instance.alloc, e_rr);
+}
+
 Bool Compiler_filterWarning(CharString str) {
 	return 
 		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0) ||

@@ -173,6 +173,9 @@ void Compiler_shutdown();
 //Generate disassembly from buffer
 Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
 
+//Get devices available for offline shader compilation (useful for viewing info about the final binary)
+Bool Compiler_getOfflineCompileDevices(ListCharString *targets, ListCharString *devices, Allocator alloc, Error *e_rr);
+
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.
 
@@ -236,6 +239,7 @@ Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResul
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr);
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
 Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr);
+Bool Compiler_getOfflineCompileDevicesx(ListCharString *targets, ListCharString *devices, Error *e_rr);
 
 Bool Compiler_compilex(
 	Compiler comp,
