@@ -27,6 +27,8 @@
 
 #include <stddef.h>
 
+TListImpl(SHRegister);
+TListImpl(SHRegisterRuntime);
 TListImpl(SHEntry);
 TListImpl(SHEntryRuntime);
 TListImpl(SHBinaryInfo);
@@ -130,7 +132,6 @@ Bool SHFile_create(
 	gotoIfError2(clean, ListSHEntry_reserve(&shFile->entries, 8, alloc))
 	gotoIfError2(clean, ListSHBinaryInfo_reserve(&shFile->binaries, 4, alloc))
 	gotoIfError2(clean, ListSHInclude_reserve(&shFile->includes, 16, alloc))
-	gotoIfError2(clean, ListSBFile_reserve(&shFile->shaderBuffers, 4, alloc))
 
 	shFile->flags = flags;
 	shFile->compilerVersion = compilerVersion;
@@ -166,7 +167,6 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 	ListSHEntry_freeUnderlying(&shFile->entries, alloc);
 	ListSHBinaryInfo_free(&shFile->binaries, alloc);
 	ListSHInclude_freeUnderlying(&shFile->includes, alloc);
-	ListSBFile_freeUnderlying(&shFile->shaderBuffers, alloc);
 
 	*shFile = (SHFile) { 0 };
 }
@@ -722,6 +722,622 @@ clean:
 	return s_uccess;
 }
 
+Bool SHFile_detectDuplicate(
+	const ListSHRegisterRuntime *info,
+	CharString name,
+	SHBindings bindings,
+	ESHRegisterType type,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool anyBinding = false;
+
+	Bool anyDxilBinding = false;
+
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		if(bindings.arr[i].space != U32_MAX || bindings.arr[i].binding != U32_MAX) {
+
+			anyBinding = true;
+
+			if(i == ESHBinaryType_DXIL)
+				anyDxilBinding = true;
+		}
+
+	if(!anyBinding)
+		retError(clean, Error_invalidState(0, "SHFile_detectDuplicate()::bindings contained no valid bindings"))
+
+	if(!CharString_length(name))
+		retError(clean, Error_invalidParameter(1, 0, "SHFile_detectDuplicate()::name is required"))
+
+	//u, s, b, t registers in DXIL
+
+	U8 registerBindingType = 0;
+
+	switch (type & ESHRegisterType_TypeMask) {
+
+		case ESHRegisterType_Sampler:
+		case ESHRegisterType_SamplerComparisonState:
+			registerBindingType = 2;
+			break;
+
+		case ESHRegisterType_ConstantBuffer:
+			registerBindingType = 3;
+			break;
+
+		default:
+			registerBindingType = type & ESHRegisterType_IsWrite ? 1 : 0;
+			break;
+	}
+
+	for(U64 i = 0; i < info->length; ++i) {
+
+		SHRegisterRuntime reg = info->ptr[i];
+
+		if(CharString_equalsStringSensitive(reg.name, name))
+			retError(clean, Error_invalidState(0, "SHFile_detectDuplicate()::name was already found in SHFile"))
+
+		else if (anyDxilBinding) {
+
+			SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_DXIL];
+			SHBinding srcBinding = bindings.arr[ESHBinaryType_DXIL];
+
+			U8 registerBindingTypei = 0;
+
+			switch (reg.reg.registerType & ESHRegisterType_TypeMask) {
+
+				case ESHRegisterType_Sampler:
+				case ESHRegisterType_SamplerComparisonState:
+					registerBindingType = 2;
+					break;
+
+				case ESHRegisterType_ConstantBuffer:
+					registerBindingType = 3;
+					break;
+
+				default:
+					registerBindingType = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
+					break;
+			}
+
+			if(
+				registerBindingType == registerBindingTypei &&
+				dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space
+			)
+				retError(clean, Error_invalidState(
+					0, "SHFile_detectDuplicate() DXIL space & binding combo was already found in SHFile"
+				))
+		}
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool SHFile_validateRegister(
+	const ListSHRegisterRuntime *info,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	ESHRegisterType type,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!name || !CharString_length(*name))
+		retError(clean, Error_nullPointer(0, "ListSHRegisterRuntime_addSampler()::name is required"))
+
+	if(arrays && (!arrays->length || arrays->length > 32))
+		retError(clean, Error_outOfBounds(1, arrays->length, 32, "ListSHRegisterRuntime_addSampler()::arrays.length should be [1, 32]"))
+
+	gotoIfError3(clean, SHFile_detectDuplicate(info, *name, bindings, type, e_rr))
+
+clean:
+	return s_uccess;
+}
+
+Bool SHBinaryInfo_addRegisterBase(
+	ListSHRegisterRuntime *registers,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	SHRegister registr,
+	SBFile *sbFile,
+	Allocator alloc,
+	Error *e_rr
+) {
+	
+	Bool s_uccess = true;
+	SHRegisterRuntime reg = (SHRegisterRuntime) { 0 };
+
+	if(!registers)
+		retError(clean, Error_nullPointer(0, "SHBinaryInfo_addRegisterBase()::registers is required"))
+
+	gotoIfError3(clean, SHFile_validateRegister(registers, name, arrays, bindings, registr.registerType, e_rr))
+
+	reg.reg = registr;
+
+	if(CharString_isRef(*name))
+		gotoIfError2(clean, CharString_createCopy(*name, alloc, &reg.name))
+
+	if(arrays && ListU32_isRef(*arrays))
+		gotoIfError2(clean, ListU32_createCopy(*arrays, alloc, &reg.arrays))
+		
+	if(registers->length >= U16_MAX)
+		retError(clean, Error_outOfBounds(
+			0, registers->length, U16_MAX, "SHBinaryInfo_addRegisterBase() registers out of bounds"
+		))
+
+	SHRegisterRuntime tmp = reg;
+
+	if(!CharString_isRef(*name))
+		tmp.name = *name;
+
+	if(arrays && !ListU32_isRef(*arrays))
+		tmp.arrays = *arrays;
+
+	if(sbFile)
+		tmp.shaderBuffer = *sbFile;
+
+	gotoIfError2(clean, ListSHRegisterRuntime_pushBack(registers, tmp, alloc))
+
+	*name = CharString_createNull();
+
+	if(arrays)
+		*arrays = (ListU32) { 0 };
+
+	if(sbFile)
+		*sbFile = (SBFile) { 0 };
+
+clean:
+	if (!s_uccess)
+		SHRegisterRuntime_free(&reg, alloc);
+
+	return s_uccess;
+}
+
+Bool ListSHRegisterRuntime_addSampler(
+	ListSHRegisterRuntime *registers,
+	Bool isUsed,
+	Bool isSamplerComparisonState,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+) {
+	return SHBinaryInfo_addRegisterBase(
+		registers,
+		name,
+		arrays,
+		bindings,
+		(SHRegister) {
+			.bindings = bindings,
+			.registerType = (U8)(
+				ESHRegisterType_Sampler |
+				(isUsed ? ESHRegisterType_IsUsed : 0) |
+				(isSamplerComparisonState ? ESHRegisterType_SamplerComparisonState : 0)
+			)
+		},
+		NULL,
+		alloc,
+		e_rr
+	);
+}
+
+Bool ListSHRegisterRuntime_addBuffer(
+	ListSHRegisterRuntime *registers,
+	ESHBufferType registerType,
+	Bool isWrite,
+	Bool isUsed,
+	CharString *name,
+	ListU32 *arrays,
+	SBFile *sbFile,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool isCBV = registerType == ESHBufferType_ConstantBuffer;
+
+	if(registerType >= ESHBufferType_Count)
+		retError(clean, Error_outOfBounds(
+			1, registerType, ESHBufferType_Count, "ListSHRegisterRuntime_addBuffer()::registerType was invalid"
+		))
+
+	if(registerType == ESHBufferType_AccelerationStructure) {
+		if(sbFile)
+			retError(clean, Error_invalidState(
+				0, "ListSHRegisterRuntime_addBuffer()::sbFile should be NULL if the type is acceleration structure"
+			))
+	}
+
+	else {
+
+		if(!sbFile || !sbFile->bufferSize)
+			retError(clean, Error_invalidState(
+				0, "ListSHRegisterRuntime_addBuffer()::sbFile is required"
+			))
+
+		if(!(sbFile->flags & ESBSettingsFlags_IsTightlyPacked) != isCBV)
+			retError(clean, Error_invalidState(
+				0, "ListSHRegisterRuntime_addBuffer()::sbFile needs to be tightly packed for non CBV and loosely packed for CBV"
+			))
+
+		if(isCBV && sbFile->bufferSize >= 64 * KIBI)
+			retError(clean, Error_invalidState(
+				0, "ListSHRegisterRuntime_addBuffer()::sbFile is limited to 64KiB if it's a constant buffer"
+			))
+	}
+
+	switch (registerType) {
+
+		case ESHBufferType_StructuredBufferAtomic:
+
+			if(!isWrite)
+				retError(clean, Error_invalidState(
+					0, "ListSHRegisterRuntime_addBuffer()::registerType needs write flag to always be enabled"
+				))
+
+			break;
+
+		case ESHBufferType_ConstantBuffer:
+		case ESHBufferType_AccelerationStructure:
+
+			if(isWrite)
+				retError(clean, Error_invalidState(
+					0, "ListSHRegisterRuntime_addBuffer()::registerType was incompatible with write flag"
+				))
+
+			break;
+	}
+
+	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
+		registers,
+		name,
+		arrays,
+		bindings,
+		(SHRegister) {
+			.bindings = bindings,
+			.registerType = (U8)(
+				(ESHRegisterType_BufferStart + registerType) | 
+				(isUsed ? ESHRegisterType_IsUsed : 0) |
+				(isWrite ? ESHRegisterType_IsWrite : 0)
+			)
+		},
+		sbFile,
+		alloc,
+		e_rr
+	))
+
+clean:
+	return s_uccess;
+}
+
+Bool ListSHRegisterRuntime_addTexture(
+	ListSHRegisterRuntime *registers,
+	ESHTextureType registerType,
+	Bool isLayeredTexture,
+	Bool isCombinedSampler,
+	Bool isUsed,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	if(registerType >= ESHTextureType_Count)
+		retError(clean, Error_outOfBounds(
+			1, registerType, ESHTextureType_Count, "ListSHRegisterRuntime_addTexture()::registerType was invalid"
+		))
+
+	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
+		registers,
+		name,
+		arrays,
+		bindings,
+		(SHRegister) {
+			.bindings = bindings,
+			.registerType = (U8)(
+				(ESHRegisterType_TextureStart + registerType) | 
+				(isUsed ? ESHRegisterType_IsUsed : 0) |
+				(isCombinedSampler ? ESHRegisterType_IsCombinedSampler : 0) |
+				(isLayeredTexture ? ESHRegisterType_IsArray : 0)
+			)
+		},
+		NULL,
+		alloc,
+		e_rr
+	))
+
+clean:
+	return s_uccess;
+}
+
+Bool ListSHRegisterRuntime_addRWTexture(
+	ListSHRegisterRuntime *registers,
+	ESHTextureType registerType,
+	Bool isLayeredTexture,
+	Bool isUsed,
+	ESHTexturePrimitive textureFormatPrimitive,
+	ETextureFormatId textureFormatId,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	if(registerType >= ESHTextureType_Count)
+		retError(clean, Error_outOfBounds(
+			1, registerType, ESHTextureType_Count, "ListSHRegisterRuntime_addRWTexture()::registerType was invalid"
+		))
+
+	if(textureFormatId >= ETextureFormatId_Count)
+		retError(clean, Error_outOfBounds(
+			5, textureFormatId, ETextureFormatId_Count, "ListSHRegisterRuntime_addRWTexture()::textureFormatId out of bounds"
+		))
+
+	if(textureFormatPrimitive > ESHTexturePrimitive_Count)
+		retError(clean, Error_outOfBounds(
+			5, textureFormatPrimitive, ESHTexturePrimitive_Count,
+			"ListSHRegisterRuntime_addRWTexture()::textureFormatPrimitive out of bounds"
+		))
+
+	if(textureFormatPrimitive == ESHTexturePrimitive_Count && !textureFormatId)
+		retError(clean, Error_invalidState(
+			0, "ListSHRegisterRuntime_addRWTexture() either texture format primitive or texture format id has to be set"
+		))
+
+	ETextureFormat format = ETextureFormatId_unpack[textureFormatId];
+	ETexturePrimitive texPrim = ETextureFormat_getPrimitive(format);
+	ESHTexturePrimitive primitive = ESHTexturePrimitive_Count;
+
+	if(textureFormatId)
+		switch (texPrim) {
+
+			case ETexturePrimitive_Undefined:
+			case ETexturePrimitive_Compressed:
+			case ETexturePrimitive_UNormBGR:
+				retError(clean, Error_invalidState(
+					0, "ListSHRegisterRuntime_addRWTexture() texture format is incompatible"
+				))
+
+			case ETexturePrimitive_UInt:	primitive = ESHTexturePrimitive_UInt;		break;
+			case ETexturePrimitive_SInt:	primitive = ESHTexturePrimitive_SInt;		break;
+			case ETexturePrimitive_UNorm:	primitive = ESHTexturePrimitive_UNorm;		break;
+			case ETexturePrimitive_SNorm:	primitive = ESHTexturePrimitive_SNorm;		break;
+
+			case ETexturePrimitive_Float:
+				primitive = ESHTexturePrimitive_Float;
+				//TODO: 64 bit texture formats
+				//primitive = ETextureFormat_getRedBits(format) == 64 ? ESHTexturePrimitive_Double : ESHTexturePrimitive_Float;
+				break;
+		}
+
+	else primitive = textureFormatPrimitive;
+
+	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
+		registers,
+		name,
+		arrays,
+		bindings,
+		(SHRegister) {
+			.bindings = bindings,
+			.registerType = (U8)(
+				(ESHRegisterType_TextureStart + registerType) | 
+				(isUsed ? ESHRegisterType_IsUsed : 0) |
+				ESHRegisterType_IsWrite |
+				(isLayeredTexture ? ESHRegisterType_IsArray : 0)
+			),
+			.image = (SHImageFormat) {
+				.formatId = textureFormatId,
+				.primitive = primitive
+			}
+		},
+		NULL,
+		alloc,
+		e_rr
+	))
+
+clean:
+	return s_uccess;
+}
+
+Bool ListSHRegisterRuntime_addSubpassInput(
+	ListSHRegisterRuntime *registers,
+	Bool isUsed,
+	CharString *name,
+	SHBindings bindings,
+	U16 inputAttachmentId,
+	Allocator alloc,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	if(inputAttachmentId >= 7)
+		retError(clean, Error_outOfBounds(
+			4, inputAttachmentId, 7, "ListSHRegisterRuntime_addSubpassInput()::inputAttachmentId out of bounds"
+		))
+
+	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
+		registers,
+		name,
+		NULL,
+		bindings,
+		(SHRegister) {
+			.bindings = bindings,
+			.inputAttachmentId = inputAttachmentId,
+			.registerType = (U8)(ESHRegisterType_SubpassInput | (isUsed ? ESHRegisterType_IsUsed : 0))
+		},
+		NULL,
+		alloc,
+		e_rr
+	))
+
+clean:
+	return s_uccess;
+}
+
+Bool ListSHRegisterRuntime_addRegister(
+	ListSHRegisterRuntime *registers,
+	CharString *name,
+	ListU32 *arrays,
+	SHRegister reg,
+	SBFile *sbFile,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	U32 baseRegType = reg.registerType & ESHRegisterType_TypeMask;
+
+	switch (baseRegType) {
+
+		case ESHRegisterType_ConstantBuffer:
+		case ESHRegisterType_ByteAddressBuffer:
+		case ESHRegisterType_StructuredBuffer:
+		case ESHRegisterType_StructuredBufferAtomic:
+		case ESHRegisterType_AccelerationStructure:
+			
+			if(reg.registerType & (ESHRegisterType_Masks &~ ESHRegisterType_IsWrite))
+				retError(clean, Error_invalidParameter(
+					2, 4,
+					"ListSHRegisterRuntime_addRegister()::registerType buffer needs to be R/W only (not array or combined sampler)"
+				))
+				
+			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+				registers,
+				(ESHBufferType)(baseRegType - ESHRegisterType_BufferStart),
+				reg.registerType & ESHRegisterType_IsWrite,
+				reg.registerType & ESHRegisterType_IsUsed,
+				name,
+				arrays,
+				sbFile,
+				reg.bindings,
+				alloc,
+				e_rr
+			))
+
+			break;
+	
+		case ESHRegisterType_Sampler: {
+
+			U32 regType = reg.registerType &~ ESHRegisterType_IsUsed;
+			Bool isComparisonState = regType != ESHRegisterType_SamplerComparisonState;
+			
+			if(regType != ESHRegisterType_Sampler && isComparisonState)
+				retError(clean, Error_invalidParameter(2, 4, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
+
+			if(reg.padding)
+				retError(clean, Error_invalidParameter(
+					2, 5, "ListSHRegisterRuntime_addRegister()::padding is invalid (non zero)"
+				))
+
+			if(sbFile)
+				retError(clean, Error_invalidParameter(2, 7, "ListSHRegisterRuntime_addRegister()::sbFile on subpassInput not allowed"))
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
+				registers,
+				reg.registerType & ESHRegisterType_IsUsed,
+				isComparisonState,
+				name,
+				arrays,
+				reg.bindings,
+				alloc,
+				e_rr
+			))
+
+			break;
+		}
+
+		case ESHRegisterType_SubpassInput:
+			
+			if((reg.registerType &~ ESHRegisterType_IsUsed) != ESHRegisterType_SubpassInput)
+				retError(clean, Error_invalidParameter(2, 0, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
+
+			if(arrays)
+				retError(clean, Error_invalidParameter(2, 2, "ListSHRegisterRuntime_addRegister()::arrays on subpassInput not allowed"))
+
+			if(sbFile)
+				retError(clean, Error_invalidParameter(2, 3, "ListSHRegisterRuntime_addRegister()::sbFile on subpassInput not allowed"))
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
+				registers,
+				reg.registerType & ESHRegisterType_IsUsed,
+				name,
+				reg.bindings,
+				reg.inputAttachmentId,
+				alloc,
+				e_rr
+			))
+
+			break;
+
+		default:
+
+			if(baseRegType < ESHRegisterType_TextureStart || baseRegType >= ESHRegisterType_TextureEnd)
+				retError(clean, Error_invalidParameter(2, 0, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
+
+			if(sbFile)
+				retError(clean, Error_invalidParameter(2, 3, "ListSHRegisterRuntime_addRegister()::sbFile on subpassInput not allowed"))
+
+			if (reg.registerType & ESHRegisterType_IsWrite) {
+
+				if(reg.registerType & ESHRegisterType_IsCombinedSampler)
+					retError(clean, Error_invalidParameter(
+						2, 0, "ListSHRegisterRuntime_addRegister() RWTexture can't contain combined sampler"
+					))
+
+				gotoIfError3(clean, ListSHRegisterRuntime_addRWTexture(
+					registers,
+					(ESHTextureType)(baseRegType - ESHRegisterType_TextureStart),
+					reg.registerType & ESHRegisterType_IsArray,
+					reg.registerType & ESHRegisterType_IsUsed,
+					(ESHTexturePrimitive) reg.image.primitive,
+					(ETextureFormatId) reg.image.formatId,
+					name,
+					arrays,
+					reg.bindings,
+					alloc,
+					e_rr
+				))
+			}
+
+			else {
+
+				if(reg.padding)
+					retError(clean, Error_invalidParameter(
+						2, 5, "ListSHRegisterRuntime_addRegister()::padding is invalid (non zero)"
+					))
+
+				gotoIfError3(clean, ListSHRegisterRuntime_addTexture(
+					registers,
+					(ESHTextureType)(baseRegType - ESHRegisterType_TextureStart),
+					reg.registerType & ESHRegisterType_IsArray,
+					reg.registerType & ESHRegisterType_IsCombinedSampler,
+					reg.registerType & ESHRegisterType_IsUsed,
+					name,
+					arrays,
+					reg.bindings,
+					alloc,
+					e_rr
+				))
+			}
+
+			break;
+	}
+
+clean:
+	return s_uccess;
+}
+
 typedef enum ESHBinaryFlags {
 
 	ESHBinaryFlags_None 					= 0,
@@ -755,6 +1371,9 @@ typedef struct BinaryInfoFixedSize {
 	U8 binaryFlags;				//ESHBinaryFlags
 
 	ESHExtension extensions;
+
+	U16 registerCount;
+	U16 padding;
 
 } BinaryInfoFixedSize;
 
@@ -838,7 +1457,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		//Add size
 
-		headerSize += binary.identifier.uniforms.length * sizeof(U16);
+		headerSize +=
+			binary.identifier.uniforms.length * sizeof(U16) +
+			binary.registers.length * sizeof(SHRegister);
 
 		for(U8 j = 0; j < ESHBinaryType_Count; ++j) {
 
@@ -997,11 +1618,12 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Create shader buffers and move to DLFile
 
-	for (U64 i = 0; i < shFile.shaderBuffers.length; ++i) {
-		gotoIfError3(clean, SBFile_write(shFile.shaderBuffers.ptr[i], alloc, &shaderBuffersDlFile, e_rr))
-		gotoIfError3(clean, DLFile_addEntry(&shaderBuffers, shaderBuffersDlFile, alloc, e_rr))
-		shaderBuffersDlFile = Buffer_createNull();
-	}
+	//TODO: Add register's shader buffers
+	//for (U64 i = 0; i < shFile.shaderBuffers.length; ++i) {
+	//	gotoIfError3(clean, SBFile_write(shFile.shaderBuffers.ptr[i], alloc, &shaderBuffersDlFile, e_rr))
+	//	gotoIfError3(clean, DLFile_addEntry(&shaderBuffers, shaderBuffersDlFile, alloc, e_rr))
+	//	shaderBuffersDlFile = Buffer_createNull();
+	//}
 
 	//Create DLFiles and calculate length
 
@@ -1127,6 +1749,19 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			uniformNames[j] = (U16) (DLFile_find(strings, uniNamesStart, uniValStart, uniforms.ptr[j << 1]) - uniNamesStart);
 			uniValues[j] = (U16) (DLFile_find(strings, uniValStart, includeStart, uniforms.ptr[(j << 1) | 1]) - uniValStart);
 		}
+
+		SHRegister *regs = (SHRegister*) headerIt;
+
+		for (U64 j = 0; j < binary.registers.length; ++j) {
+
+			SHRegisterRuntime reg = binary.registers.ptr[j];
+			//reg.reg.arrayId = ...;		TODO:
+			//TODO: name = ...;
+
+			regs[j] = reg.reg;
+		}
+
+		headerIt += sizeof(SHRegister) * binary.registers.length;
 
 		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
 
@@ -2540,6 +3175,7 @@ void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc) {
 		return;
 
 	SHBinaryIdentifier_free(&info->identifier, alloc);
+	ListSHRegisterRuntime_freeUnderlying(&info->registers, alloc);
 	
 	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
 		Buffer_free(&info->binaries[i], alloc);
@@ -2560,6 +3196,16 @@ void SHInclude_free(SHInclude *include, Allocator alloc) {
 		return;
 		
 	CharString_free(&include->relativePath, alloc);
+}
+
+void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc) {
+
+	if(!reg)
+		return;
+
+	CharString_free(&reg->name, alloc);
+	ListU32_free(&reg->arrays, alloc);
+	SBFile_free(&reg->shaderBuffer, alloc);
 }
 
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
@@ -2605,4 +3251,15 @@ void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc) {
 		SHInclude_free(&includes->ptrNonConst[i], alloc);
 
 	ListSHInclude_free(includes, alloc);
+}
+
+void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, Allocator alloc) {
+
+	if(!reg)
+		return;
+		
+	for(U64 i = 0; i < reg->length; ++i)
+		SHRegisterRuntime_free(&reg->ptrNonConst[i], alloc);
+
+	ListSHRegisterRuntime_free(reg, alloc);
 }

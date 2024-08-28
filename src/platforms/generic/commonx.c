@@ -89,6 +89,8 @@ TListXImpl(SBStruct);
 TListXImpl(SBVar);
 TListXImpl(SBFile);
 
+TListXImpl(SHRegister);
+TListXImpl(SHRegisterRuntime);
 TListXImpl(SHEntry);
 TListXImpl(SHEntryRuntime);
 TListXImpl(SHBinaryInfo);

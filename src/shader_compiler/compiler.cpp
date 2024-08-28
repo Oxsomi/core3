@@ -1657,6 +1657,7 @@ Bool Compiler_finalizeEntrypoint(
 	U16 waveSize,
 	ESBType inputs[16],
 	ESBType outputs[16],
+	ListSHRegisterRuntime *registers,
 	U8 uniqueInputSemantics,
 	ListCharString *uniqueSemantics,
 	U8 inputSemantics[16],
@@ -1769,6 +1770,8 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
 
+	ListSHRegisterRuntime_freeUnderlying(registers, alloc);
+
 	if(!didInit && s_uccess)		//Avoid memleak
 		ListCharString_freeUnderlying(uniqueSemantics, alloc);
 
@@ -1776,6 +1779,7 @@ clean:
 }
 
 Bool Compiler_convertCBufferDXIL(
+	ListSHRegisterRuntime *entries,
 	ID3D12FunctionReflection1 *funcRefl,
 	ID3D12ShaderReflection1 *shaderRefl,
 	ID3D12ShaderReflectionConstantBuffer *constantBuffer,
@@ -1786,6 +1790,13 @@ Bool Compiler_convertCBufferDXIL(
 	D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
 	D3D12_SHADER_INPUT_BIND_DESC resourceDesc{};
 	SBFile sbFile{};
+
+	CharString name = CharString_createNull();
+
+	SHBindings bindings;
+
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		bindings.arr[i] = SHBinding{ .space = U32_MAX, .binding = U32_MAX };
 
 	if(FAILED(constantBuffer->GetDesc(&constantBufferDesc)))
 		retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer but no desc"))
@@ -1804,6 +1815,22 @@ Bool Compiler_convertCBufferDXIL(
 		retError(clean, Error_nullPointer(
 			0, "Compiler_convertCBufferDXIL()::shaderRefl or funcRefl is required"
 		))
+
+	//Apparently, append and structured buffers are seen as constant buffers?
+	//According to Maraneshi also other stuff ends up here like structured buffers.
+	//For safety we just ignore all normal buffer types that end up being falsely detected.
+	
+	switch (resourceDesc.Type) {
+		
+		case D3D_SIT_STRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED:
+		case D3D_SIT_BYTEADDRESS:
+		case D3D_SIT_UAV_RWBYTEADDRESS:
+		case D3D_SIT_UAV_APPEND_STRUCTURED:
+		case D3D_SIT_UAV_CONSUME_STRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+			goto clean;
+	}
 
 	if (
 		resourceDesc.Type != D3D_SIT_CBUFFER ||
@@ -1826,14 +1853,6 @@ Bool Compiler_convertCBufferDXIL(
 		retError(clean, Error_invalidState(
 			0, "Compiler_convertCBufferDXIL() DXIL contained shader with unsupported buffer type or flags"
 		))
-
-	Log_debugLnx(
-		"%s, %" PRIu32 ": register(b%" PRIu32 ", space%" PRIu32 ") (used)",
-		constantBufferDesc.Name, constantBufferDesc.Size,
-		resourceDesc.BindPoint, resourceDesc.Space
-	);
-
-	//TODO: Put into register
 
 	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, constantBufferDesc.Size, alloc, &sbFile, e_rr))
 
@@ -1958,10 +1977,156 @@ Bool Compiler_convertCBufferDXIL(
 		))
 	}
 
-	//TODO: Use SBFile
+	if(resourceDesc.BindCount > 1)
+		retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL()::BindCount is only allowed as 1 with CBuffers"))
+
+	name = CharString_createRefCStrConst(constantBufferDesc.Name);
+	bindings.arr[ESHBinaryType_DXIL] = SHBinding{ .space = resourceDesc.Space, .binding = resourceDesc.BindPoint };
+
+	gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+		entries,
+		ESHBufferType_ConstantBuffer,
+		false,
+		true,
+		&name,
+		NULL,
+		&sbFile,
+		bindings,
+		alloc,
+		e_rr
+	))
 
 clean:
 	SBFile_free(&sbFile, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_convertRegisterDXIL(
+	ListSHRegisterRuntime *registers,
+	const D3D12_SHADER_INPUT_BIND_DESC *input,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CharString name = CharString_createRefCStrConst(input->Name);
+
+	SHBindings bindings;
+
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		bindings.arr[i] = SHBinding{ .space = U32_MAX, .binding = U32_MAX };
+
+	bindings.arr[ESHBinaryType_DXIL] = SHBinding{ .space = input->Space, .binding = input->BindPoint };
+
+	ListU32 arrays{};
+
+	U32 texFlags = D3D_SIF_TEXTURE_COMPONENT_0 | D3D_SIF_TEXTURE_COMPONENT_1;
+	U32 unknownFlags = D3D_SIF_FORCE_DWORD &~ (D3D_SIF_COMPARISON_SAMPLER | texFlags);
+
+	Bool isReadTexture = input->Type == D3D_SIT_TEXTURE;
+
+	Bool isWriteTexture =
+		input->Type == D3D_SIT_UAV_RWTYPED &&
+		input->Dimension >= D3D_SRV_DIMENSION_TEXTURE1D &&
+		input->Dimension <= D3D_SRV_DIMENSION_TEXTURECUBEARRAY;
+
+	if(input->BindCount > 1)
+		gotoIfError2(clean, ListU32_createRefConst(&input->BindCount, 1, &arrays))
+
+	if(input->uFlags & unknownFlags)
+		retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL()::input uFlags can't be set"))
+
+	if((input->uFlags & D3D_SIF_COMPARISON_SAMPLER) && input->Type != D3D_SIT_SAMPLER)
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertRegisterDXIL()::input uFlags can't be comparison sampler without being a sampler itself"
+		))
+
+	if((input->uFlags & texFlags) && !isReadTexture && !isWriteTexture)
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertRegisterDXIL()::input uFlags texture component 0 and 1 can't be set on a non texture"
+		))
+
+	switch (input->Type) {
+
+		case D3D_SIT_TEXTURE:		//TODO:
+			break;
+
+		case D3D_SIT_SAMPLER:
+
+			if(input->ReturnType || input->NumSamples || input->Dimension != D3D_SRV_DIMENSION_UNKNOWN)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL() sampler had invalid return type, sampleCount or dimension"
+				))
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
+				registers,
+				true,
+				input->uFlags & D3D_SIF_COMPARISON_SAMPLER,
+				&name,
+				&arrays,
+				bindings,
+				alloc,
+				e_rr
+			))
+
+			break;
+
+		case D3D_SIT_UAV_RWTYPED:				//TODO:
+			break;
+
+		case D3D_SIT_STRUCTURED:				//TODO:
+			break;
+
+		case D3D_SIT_UAV_RWSTRUCTURED:			//TODO:
+			break;
+
+		case D3D_SIT_BYTEADDRESS:				//TODO:
+			break;
+
+		case D3D_SIT_UAV_RWBYTEADDRESS:			//TODO:
+			break;
+
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+			break;
+
+		case D3D_SIT_RTACCELERATIONSTRUCTURE:
+
+			if(
+				input->ReturnType != D3D_RETURN_TYPE_SINT ||
+				input->NumSamples != U32_MAX ||
+				input->Dimension != D3D_SRV_DIMENSION_UNKNOWN
+			)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL() RTAS had invalid return type, sampleCount or dimension"
+				))
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+				registers,
+				ESHBufferType_AccelerationStructure,
+				false,
+				true,
+				&name,
+				&arrays,
+				NULL,
+				bindings,
+				alloc,
+				e_rr
+			))
+
+			break;
+			
+		case D3D_SIT_UAV_APPEND_STRUCTURED:		//Append and consume are always reported as SBuffer with atomic counter
+		case D3D_SIT_UAV_CONSUME_STRUCTURED:
+
+		case D3D_SIT_TBUFFER:
+		case D3D_SIT_UAV_FEEDBACKTEXTURE:
+			retError(clean, Error_unsupportedOperation(0, "Compiler_convertRegisterDXIL() unsupported input type"))		//TODO:
+	
+		default:
+			retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL() unknown input type"))
+	}
+
+clean:
 	return s_uccess;
 }
 
@@ -1983,7 +2148,8 @@ Bool Compiler_processDXIL(
 	const void *resultPtr = result->ptr;
 	Bool isLib = !CharString_length(toCompile.entrypoint);
 	ESHExtension exts = ESHExtension_None;
-	ListCharString strings = ListCharString{};
+	ListCharString strings{};
+	ListSHRegisterRuntime registers{};
 	U8 inputSemanticCount = 0;
 
 	//Prevent dxil.dll load, sign it ourselves :)
@@ -2099,8 +2265,25 @@ Bool Compiler_processDXIL(
 
 			for (U32 j = 0; j < funcDesc0.ConstantBuffers; ++j)
 				gotoIfError3(clean, Compiler_convertCBufferDXIL(
-					funcRefl, NULL, funcRefl->GetConstantBufferByIndex(j), alloc, e_rr
+					&registers, funcRefl, NULL, funcRefl->GetConstantBufferByIndex(j), alloc, e_rr
 				))
+
+			for (U32 j = 0; j < funcDesc0.BoundResources; ++j) {
+			
+				D3D12_SHADER_INPUT_BIND_DESC input{};
+				if(FAILED(funcRefl->GetResourceBindingDesc(j, &input)))
+					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained invalid resource"))
+
+				if(input.Type == D3D_SIT_CBUFFER) {
+
+					if(!funcRefl->GetConstantBufferByName(input.Name))
+						retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained cbuffer with missing definition"))
+
+					continue;
+				}
+
+				gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, alloc, e_rr))
+			}
 
 			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
 
@@ -2117,6 +2300,7 @@ Bool Compiler_processDXIL(
 			gotoIfError3(clean, Compiler_finalizeEntrypoint(
 				groupSize, payloadSize, attributeSize, waveSizes,
 				inputs, outputs,
+				&registers,
 				uniqueInputSemantics, &uniqueSemantics, inputSemantics, outputSemantics,
 				demangled, lock, entries,
 				alloc, e_rr
@@ -2281,12 +2465,30 @@ Bool Compiler_processDXIL(
 
 		for (U32 j = 0; j < refl.ConstantBuffers; ++j)
 			gotoIfError3(clean, Compiler_convertCBufferDXIL(
-				NULL, dxilRefl, dxilRefl->GetConstantBufferByIndex(j), alloc, e_rr
+				&registers, NULL, dxilRefl, dxilRefl->GetConstantBufferByIndex(j), alloc, e_rr
 			))
+
+		for (U32 j = 0; j < refl.BoundResources; ++j) {
+			
+			D3D12_SHADER_INPUT_BIND_DESC input{};
+			if(FAILED(dxilRefl->GetResourceBindingDesc(j, &input)))
+				retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained invalid resource"))
+				
+				if(input.Type == D3D_SIT_CBUFFER) {
+
+					if(!dxilRefl->GetConstantBufferByName(input.Name))
+						retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained cbuffer with missing definition"))
+
+					continue;
+				}
+
+			gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, alloc, e_rr))
+		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
 			groupSize, 0, 0, waveSizes,
 			inputs, outputs,
+			&registers,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
 			toCompile.entrypoint, lock, entries,
 			alloc, e_rr
@@ -2309,6 +2511,7 @@ Bool Compiler_processDXIL(
 
 clean:
 
+	ListSHRegisterRuntime_freeUnderlying(&registers, alloc),
 	ListCharString_freeUnderlying(&strings, alloc);
 
 	if(dxilRefl)
@@ -2317,6 +2520,250 @@ clean:
 	if(dxilReflLib)
 		dxilReflLib->Release();
 
+	return s_uccess;
+}
+
+Bool Compiler_convertCBufferSPIRV(
+	ListSHRegisterRuntime *registers,
+	SpvReflectDescriptorBinding *binding,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+	SBFile sbFile{};
+
+	Bool isCBV = binding->resource_type == SPV_REFLECT_RESOURCE_FLAG_CBV;
+	Bool isUBO = binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+	Bool isUnused = !binding->accessed;
+	CharString name = CharString_createRefCStrConst(binding->name);
+
+	const void *imagePtr = &binding->image;
+	const U64 *imagePtrU64 = (const U64*) imagePtr;
+
+	const void *arrayDims = &binding->array.dims;
+	const U64 *arrayDimsU64 = (const U64*) arrayDims;
+
+	const void *arrayTraits = &binding->block.array;
+	const U64 *arrayTraitsU64 = (const U64*) arrayTraits;
+
+	const void *numericTraits = &binding->block.numeric;
+	const U64 *numericTraitsU64 = (const U64*) numericTraits;
+
+	if(isCBV != isUBO)
+		retError(clean, Error_invalidState(
+			1, "Compiler_convertCBufferSPIRV() mismatching resource type for constant buffer"
+		))
+
+	static_assert(
+		sizeof(binding->image) == sizeof(U64) * 3,
+		"Compiler_convertCBufferSPIRV() does compares in U64[3] of binding->image, but size changed"
+	);
+
+	static_assert(
+		sizeof(binding->array.dims) == sizeof(U64) * (SPV_REFLECT_MAX_ARRAY_DIMS / 2),
+		"Compiler_convertCBufferSPIRV() does compares in U64[N] of binding->array.dims, but size changed"
+	);
+
+	static_assert(
+		sizeof(binding->block.array) == sizeof(U64) * (SPV_REFLECT_MAX_ARRAY_DIMS / 2 * 2 + 1),
+		"Compiler_convertCBufferSPIRV() does compares in U64[33] of binding->block.array, but size changed"
+	);
+
+	static_assert(
+		sizeof(binding->block.numeric) == sizeof(U64) * 3,
+		"Compiler_convertCBufferSPIRV() does compares in U64[3] of binding->block.numeric, but size changed"
+	);
+
+	if(
+		!binding->block.size ||
+		!binding->block.padded_size ||
+		!binding->block.member_count ||
+		binding->block.decoration_flags ||
+		(binding->block.flags && binding->block.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED) ||
+		numericTraitsU64[0] ||
+		numericTraitsU64[1] ||
+		numericTraitsU64[2] ||
+		binding->input_attachment_index ||
+		imagePtrU64[0] ||
+		imagePtrU64[1] ||
+		imagePtrU64[2] ||
+		binding->array.dims_count ||
+		binding->count != 1 ||
+		!binding->block.members ||
+		binding->uav_counter_id != U32_MAX ||
+		binding->uav_counter_binding ||
+		binding->byte_address_buffer_offset_count ||
+		binding->byte_address_buffer_offsets ||
+		binding->decoration_flags
+	)
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertCBufferSPIRV() invalid constant buffer data"
+		))
+
+	for(U64 l = 0; l < SPV_REFLECT_MAX_ARRAY_DIMS / 2; ++l)
+		if(arrayDimsU64[l])
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferSPIRV() invalid constant buffer data (array)"
+			))
+
+	for(U64 l = 0; l < SPV_REFLECT_MAX_ARRAY_DIMS / 2 * 2 + 1; ++l)
+		if(arrayTraitsU64[l])
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferSPIRV() invalid constant buffer data (arrayTraits)"
+			))
+
+	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, binding->block.padded_size, alloc, &sbFile, e_rr))
+
+	for (U64 l = 0; l < binding->block.member_count; ++l) {
+
+		SpvReflectBlockVariable var = binding->block.members[l];
+
+		arrayTraits = &var.array;
+		arrayTraitsU64 = (const U64*) arrayTraits;
+
+		if(var.array.dims_count > SPV_REFLECT_MAX_ARRAY_DIMS)
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferSPIRV() array dimensions out of bounds"
+			))
+
+		//var.array.stride;																	//TODO:
+
+		for(U64 m = 0; m < var.array.dims_count; ++m)
+			if(!var.array.dims[m] || var.array.spec_constant_op_ids[m] != U32_MAX)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertCBufferSPIRV() invalid array data (0 or has spec constant op)"
+				))
+
+		if(var.member_count || var.members)
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferSPIRV() nested types in cbuffer not supported yet"		//TODO:
+			))
+
+		if(var.flags && var.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED)
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertCBufferSPIRV() unsupported value in cbuffer member"
+			))
+
+		ESBType shType = (ESBType) 0;
+		gotoIfError3(clean, spvTypeToESBType(var.type_description, &shType, e_rr))
+					
+		U64 perElementStride = ESBType_getSize(shType, false);
+		U64 expectedSize = perElementStride;
+
+		for(U64 m = 0; m < var.array.dims_count; ++m)
+			expectedSize *= var.array.dims[m];
+
+		if(var.padded_size != expectedSize)
+			retError(clean, Error_invalidState(0, "Compiler_convertCBufferSPIRV()::shType had mismatching size"))
+
+		CharString str = CharString_createRefCStrConst(var.name);
+		ListU32 arrays = ListU32{};
+		if(var.array.dims_count)
+			gotoIfError2(clean, ListU32_createRefConst(var.array.dims, var.array.dims_count, &arrays))
+
+		gotoIfError3(clean, SBFile_addVariableAsType(
+			&sbFile,
+			&str,
+			var.absolute_offset, U16_MAX, shType,
+			var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
+			arrays.length ? &arrays : NULL,
+			alloc, e_rr
+		))
+	}
+
+	if(binding->array.dims_count > 1)
+		retError(clean, Error_invalidState(0, "Compiler_convertCBufferSPIRV()::dims_count is only allowed as 1 with CBuffers"))
+
+	gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+		registers,
+		ESHBufferType_ConstantBuffer,
+		false,
+		!isUnused,
+		&name,
+		NULL,
+		&sbFile,
+		bindings,
+		alloc,
+		e_rr
+	))
+
+clean:
+	SBFile_free(&sbFile, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_convertRegisterSPIRV(
+	ListSHRegisterRuntime *registers,
+	SpvReflectDescriptorBinding *binding,
+	U32 expectedSet,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	Bool isCBV = binding->resource_type == SPV_REFLECT_RESOURCE_FLAG_CBV;
+	Bool isUBO = binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+	Bool isSV = binding->resource_type == SPV_REFLECT_RESOURCE_FLAG_SAMPLER;
+	Bool isS = binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER;
+
+	Bool isUnused = !binding->accessed;
+	CharString name = CharString_createRefCStrConst(binding->name);
+
+	ListU32 arrays = ListU32{};
+
+	SHBindings bindings;
+
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		bindings.arr[i] = SHBinding{ .space = U32_MAX, .binding = U32_MAX };
+
+	bindings.arr[ESHBinaryType_SPIRV] = SHBinding{ .space = binding->set, .binding = binding->binding };
+
+	if(expectedSet != binding->set)
+		retError(clean, Error_invalidState(
+			1, "Compiler_convertRegisterSPIRV() binding->set != parent->set"
+		))
+
+	if(binding->binding == U32_MAX && binding->set == U32_MAX)
+		retError(clean, Error_invalidState(
+			1, "Compiler_convertRegisterSPIRV() binding = U32_MAX, set = U32_MAX is reserved"
+		))
+
+	if (isCBV || isUBO) {
+		gotoIfError3(clean, Compiler_convertCBufferSPIRV(registers, binding, bindings, alloc, e_rr))
+		goto clean;
+	}
+
+	if(binding->array.dims_count)
+		gotoIfError2(clean, ListU32_createRefConst(binding->array.dims, binding->array.dims_count, &arrays))
+
+	if (isS || isSV) {
+
+		if(isS != isSV)
+			retError(clean, Error_invalidState(
+				1, "Compiler_convertRegisterSPIRV() mismatching resource type for constant buffer"
+			))
+
+		//TODO: Write validation
+
+		gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
+			registers,
+			!isUnused,
+			false,
+			&name,
+			&arrays,
+			bindings,
+			alloc,
+			e_rr
+		))
+
+		goto clean;
+	}
+
+clean:
 	return s_uccess;
 }
 
@@ -2342,7 +2789,7 @@ Bool Compiler_processSPIRV(
 	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
 
 	ListCharString strings{};
-	SBFile sbFile{};
+	ListSHRegisterRuntime registers{};
 	U8 inputSemanticCount = 0;
 
 	if(
@@ -2645,165 +3092,14 @@ Bool Compiler_processSPIRV(
 				if(!binding)
 					continue;
 
-				Bool isCBV = binding->resource_type == SPV_REFLECT_RESOURCE_FLAG_CBV;
-				Bool isUBO = binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-
-				if(isCBV != isUBO || binding->set != descriptorSet.set)
-					retError(clean, Error_invalidState(
-						1, "Compiler_processSPIRV() mismatching resource type for constant buffer"
-					))
-
-				if(!isCBV)		//TODO: Reflect other properties
-					continue;
-
-				const void *imagePtr = &binding->image;
-				const U64 *imagePtrU64 = (const U64*) imagePtr;
-
-				static_assert(
-					sizeof(binding->image) == sizeof(U64) * 3,
-					"Compiler_processSPIRV() does compares in U64[3] of binding->image, but size changed"
-				);
-
-				const void *arrayDims = &binding->array.dims;
-				const U64 *arrayDimsU64 = (const U64*) arrayDims;
-
-				static_assert(
-					sizeof(binding->array.dims) == sizeof(U64) * (SPV_REFLECT_MAX_ARRAY_DIMS / 2),
-					"Compiler_processSPIRV() does compares in U64[N] of binding->array.dims, but size changed"
-				);
-
-				const void *arrayTraits = &binding->block.array;
-				const U64 *arrayTraitsU64 = (const U64*) arrayTraits;
-
-				static_assert(
-					sizeof(binding->block.array) == sizeof(U64) * (SPV_REFLECT_MAX_ARRAY_DIMS / 2 * 2 + 1),
-					"Compiler_processSPIRV() does compares in U64[33] of binding->block.array, but size changed"
-				);
-
-				const void *numericTraits = &binding->block.numeric;
-				const U64 *numericTraitsU64 = (const U64*) numericTraits;
-
-				static_assert(
-					sizeof(binding->block.numeric) == sizeof(U64) * 3,
-					"Compiler_processSPIRV() does compares in U64[3] of binding->block.numeric, but size changed"
-				);
-
-				if(
-					!binding->block.size ||
-					!binding->block.padded_size ||
-					!binding->block.member_count ||
-					binding->block.decoration_flags ||
-					(binding->block.flags && binding->block.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED) ||
-					numericTraitsU64[0] ||
-					numericTraitsU64[1] ||
-					numericTraitsU64[2] ||
-					binding->input_attachment_index ||
-					imagePtrU64[0] ||
-					imagePtrU64[1] ||
-					imagePtrU64[2] ||
-					binding->array.dims_count ||
-					binding->count != 1 ||
-					!binding->block.members ||
-					binding->uav_counter_id != U32_MAX ||
-					binding->uav_counter_binding ||
-					binding->byte_address_buffer_offset_count ||
-					binding->byte_address_buffer_offsets ||
-					binding->decoration_flags
-				)
-					retError(clean, Error_invalidState(
-						0, "Compiler_processSPIRV() invalid constant buffer data"
-					))
-
-				for(U64 l = 0; l < SPV_REFLECT_MAX_ARRAY_DIMS / 2; ++l)
-					if(arrayDimsU64[l])
-						retError(clean, Error_invalidState(
-							0, "Compiler_processSPIRV() invalid constant buffer data (array)"
-						))
-
-				for(U64 l = 0; l < SPV_REFLECT_MAX_ARRAY_DIMS / 2 * 2 + 1; ++l)
-					if(arrayTraitsU64[l])
-						retError(clean, Error_invalidState(
-							0, "Compiler_processSPIRV() invalid constant buffer data (arrayTraits)"
-						))
-
-				Bool isUnused = !binding->accessed;
-
-				Log_debugLn(
-					alloc, "[[vk::binding(%" PRIu32 ", %" PRIu32")]] %s, %" PRIu32" (%s)",
-					binding->set, binding->binding,
-					binding->name, binding->block.padded_size,
-					isUnused ? "unused" : "used"
-				);
-
-				gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, binding->block.padded_size, alloc, &sbFile, e_rr))
-
-				//TODO: Add to register
-
-				for (U64 l = 0; l < binding->block.member_count; ++l) {
-
-					SpvReflectBlockVariable var = binding->block.members[l];
-
-					arrayTraits = &var.array;
-					arrayTraitsU64 = (const U64*) arrayTraits;
-
-					if(var.array.dims_count > SPV_REFLECT_MAX_ARRAY_DIMS)
-						retError(clean, Error_invalidState(
-							0, "Compiler_processSPIRV() array dimensions out of bounds"
-						))
-
-					//var.array.stride;																	//TODO:
-
-					for(U64 m = 0; m < var.array.dims_count; ++m)
-						if(!var.array.dims[m] || var.array.spec_constant_op_ids[m] != U32_MAX)
-							retError(clean, Error_invalidState(
-								0, "Compiler_processSPIRV() invalid array data (0 or has spec constant op)"
-							))
-
-					if(var.member_count || var.members)
-						retError(clean, Error_invalidState(
-							0, "Compiler_processSPIRV() nested types in cbuffer not supported yet"		//TODO:
-						))
-
-					if(var.flags && var.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED)
-						retError(clean, Error_invalidState(
-							0, "Compiler_processSPIRV() unsupported value in cbuffer member"
-						))
-
-					ESBType shType = (ESBType) 0;
-					gotoIfError3(clean, spvTypeToESBType(var.type_description, &shType, e_rr))
-					
-					U64 perElementStride = ESBType_getSize(shType, false);
-					U64 expectedSize = perElementStride;
-
-					for(U64 m = 0; m < var.array.dims_count; ++m)
-						expectedSize *= var.array.dims[m];
-
-					if(var.padded_size != expectedSize)
-						retError(clean, Error_invalidState(0, "Compiler_processSPIRV()::shType had mismatching size"))
-
-					CharString str = CharString_createRefCStrConst(var.name);
-					ListU32 arrays = ListU32{};
-					if(var.array.dims_count)
-						gotoIfError2(clean, ListU32_createRefConst(var.array.dims, var.array.dims_count, &arrays))
-
-					gotoIfError3(clean, SBFile_addVariableAsType(
-						&sbFile,
-						&str,
-						var.absolute_offset, U16_MAX, shType,
-						var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
-						arrays.length ? &arrays : NULL,
-						alloc, e_rr
-					))
-				}
-
-				//TODO: Use sbFile
-				SBFile_free(&sbFile, alloc);
+				gotoIfError3(clean, Compiler_convertRegisterSPIRV(&registers, binding, descriptorSet.set, alloc, e_rr))
 			}
 		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
 			localSize, payloadSize, intersectSize, 0,
 			inputs, outputs,
+			&registers,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
 			CharString_length(toCompile.entrypoint) ? toCompile.entrypoint :
 			CharString_createRefCStrConst(entrypoint.name),
@@ -2854,7 +3150,8 @@ Bool Compiler_processSPIRV(
 
 clean:
 
-	SBFile_free(&sbFile, alloc);
+	ListSHRegisterRuntime_freeUnderlying(&registers, alloc);
+
 	ListCharString_freeUnderlying(&strings, alloc);
 
 	spvReflectDestroyShaderModule(&spvMod);

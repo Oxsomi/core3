@@ -20,6 +20,7 @@
 
 #pragma once
 #include "oiSB.h"
+#include "formats/texture.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -181,6 +182,120 @@ typedef struct SHEntry {
 
 } SHEntry;
 
+typedef enum ESHBufferType {
+	ESHBufferType_ConstantBuffer,					//UBO or CBuffer
+	ESHBufferType_ByteAddressBuffer,
+	ESHBufferType_StructuredBuffer,
+	ESHBufferType_StructuredBufferAtomic,			//SBuffer + atomic counter
+	ESHBufferType_AccelerationStructure,
+	ESHBufferType_Count
+} ESHBufferType;
+
+typedef enum ESHTextureType {
+	ESHTextureType_Texture1D,
+	ESHTextureType_Texture2D,
+	ESHTextureType_Texture3D,
+	ESHTextureType_TextureCube,
+	ESHTextureType_Texture2DMS,
+	ESHTextureType_Count
+} ESHTextureType;
+
+typedef enum ESHRegisterType {
+
+	ESHRegisterType_Sampler,
+	ESHRegisterType_SamplerComparisonState,
+
+	ESHRegisterType_ConstantBuffer,					//UBO or CBuffer
+	ESHRegisterType_ByteAddressBuffer,
+	ESHRegisterType_StructuredBuffer,
+	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter
+	ESHRegisterType_AccelerationStructure,
+
+	ESHRegisterType_Texture1D,
+	ESHRegisterType_Texture2D,
+	ESHRegisterType_Texture3D,
+	ESHRegisterType_TextureCube,
+	ESHRegisterType_Texture2DMS,
+	ESHRegisterType_SubpassInput,
+
+	ESHRegisterType_Count,
+
+	ESHRegisterType_BufferStart			= ESHRegisterType_ConstantBuffer,
+	ESHRegisterType_BufferEnd			= ESHRegisterType_AccelerationStructure,
+
+	ESHRegisterType_TextureStart		= ESHRegisterType_Texture1D,
+	ESHRegisterType_TextureEnd			= ESHRegisterType_SubpassInput,		//>= to see if real texture, > means 'texture'-like
+
+	ESHRegisterType_TypeMask			= 0xF,
+	ESHRegisterType_IsArray				= 1 << 4,	//Only valid on textures
+	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//^
+
+	//Invalid on samplers, AS and CBuffer
+	//Required on append/consume buffer
+	//Valid on everything else (textures and various buffers)
+	ESHRegisterType_IsWrite				= 1 << 6,
+
+	ESHRegisterType_IsUsed				= 1 << 7,
+
+	ESHRegisterType_Masks				=
+		ESHRegisterType_IsArray | ESHRegisterType_IsCombinedSampler | ESHRegisterType_IsWrite
+
+} ESHRegisterType;
+
+typedef enum ESHTexturePrimitive {
+	ESHTexturePrimitive_UInt,
+	ESHTexturePrimitive_SInt,
+	ESHTexturePrimitive_UNorm,
+	ESHTexturePrimitive_SNorm,
+	ESHTexturePrimitive_Float,
+	ESHTexturePrimitive_Double,
+	ESHTexturePrimitive_Count
+} ESHTexturePrimitive;
+
+typedef struct SHBinding {
+	U32 space;						//Space or set, depending on binary type
+	U32 binding;
+} SHBinding;
+
+//U32_MAX for both space and binding indicates 'not present'
+typedef struct SHBindings {
+	SHBinding arr[ESHBinaryType_Count];
+} SHBindings;
+
+typedef struct SHImageFormat {
+	U8 primitive;					//Texture registers only: ESHTexturePrimitive must match format approximately
+	U8 formatId;					//Texture registers only: ETextureFormatId Must match formatPrimitive and uncompressed
+} SHImageFormat;
+
+typedef struct SHRegister {
+
+	SHBindings bindings;
+
+	U8 registerType;				//ESHRegisterType
+	U8 padding1;
+
+	union {
+		U16 padding;				//Used for samplers or read textures (should be 0)
+		U16 shaderBufferId;			//Used only at serialization (Buffer registers only)
+		U16 inputAttachmentId;		//U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
+		SHImageFormat image;
+	};
+
+	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
+	U16 padding2;
+
+} SHRegister;
+
+typedef struct SHRegisterRuntime {
+	SHRegister reg;
+	CharString name;
+	ListU32 arrays;
+	SBFile shaderBuffer;
+} SHRegisterRuntime;
+
+TList(SHRegister);
+TList(SHRegisterRuntime);
+
 //Runtime SHEntry with some extra information that is used to decide how to compile
 //This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.
 //Then the SHEntry will point to the binaries instead to save space.
@@ -239,6 +354,8 @@ typedef struct SHBinaryInfo {
 
 	SHBinaryIdentifier identifier;
 
+	ListSHRegisterRuntime registers;
+
 	U16 vendorMask;
 	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [stage("")]
 	U8 padding[5];
@@ -246,6 +363,78 @@ typedef struct SHBinaryInfo {
 	Buffer binaries[ESHBinaryType_Count];
 
 } SHBinaryInfo;
+
+
+Bool ListSHRegisterRuntime_addBuffer(
+	ListSHRegisterRuntime *registers,
+	ESHBufferType registerType,
+	Bool isWrite,
+	Bool isUsed,
+	CharString *name,
+	ListU32 *arrays,
+	SBFile *sbFile,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addTexture(
+	ListSHRegisterRuntime *registers,
+	ESHTextureType registerType,
+	Bool isLayeredTexture,
+	Bool isCombinedSampler,
+	Bool isUsed,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addRWTexture(
+	ListSHRegisterRuntime *registers,
+	ESHTextureType registerType,
+	Bool isLayeredTexture,
+	Bool isUsed,
+	ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = auto detect from formatId
+	ETextureFormatId textureFormatId,				//!textureFormatId = only allowed if primitive is set
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addSubpassInput(
+	ListSHRegisterRuntime *registers,
+	Bool isUsed,
+	CharString *name,
+	SHBindings bindings,
+	U16 attachmentId,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addSampler(
+	ListSHRegisterRuntime *registers,
+	Bool isUsed,
+	Bool isSamplerComparisonState,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addRegister(
+	ListSHRegisterRuntime *registers,
+	CharString *name,
+	ListU32 *arrays,
+	SHRegister reg,
+	SBFile *sbFile,
+	Allocator alloc,
+	Error *e_rr
+);
 
 typedef struct SHInclude {
 
@@ -258,6 +447,7 @@ typedef struct SHInclude {
 
 TList(SHEntry);
 TList(SHEntryRuntime);
+
 TList(SHBinaryIdentifier);
 TList(SHBinaryInfo);
 TList(SHInclude);
@@ -272,11 +462,13 @@ void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
 void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);
 void SHEntry_free(SHEntry *entry, Allocator alloc);
 void SHInclude_free(SHInclude *include, Allocator alloc);
+void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc);
 
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
 void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
 void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc);
+void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, Allocator alloc);
 
 const C8 *SHEntry_stageName(SHEntry entry);
 
@@ -285,7 +477,6 @@ typedef struct SHFile {
 	ListSHBinaryInfo binaries;
 	ListSHEntry entries;
 	ListSHInclude includes;
-	ListSBFile shaderBuffers;
 
 	U64 readLength;				//How many bytes were read for this file
 

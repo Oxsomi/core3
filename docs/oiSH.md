@@ -163,8 +163,81 @@ typedef struct BinaryInfoFixedSize {
 	U8 binaryFlags;				//ESHBinaryFlags
     
     ESHExtension extensions;
+
+	U16 registerCount;
+	U16 padding;
     
 } BinaryInfoFixedSize;
+
+typedef enum ESHRegisterType {
+
+	ESHRegisterType_Sampler,
+
+	ESHRegisterType_ConstantBuffer,					//UBO or CBuffer
+	ESHRegisterType_ByteAddressBuffer,
+	ESHRegisterType_StructuredBuffer,
+	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter
+	ESHRegisterType_AccelerationStructure,
+
+	ESHRegisterType_Texture1D,
+	ESHRegisterType_Texture2D,
+	ESHRegisterType_Texture3D,
+	ESHRegisterType_TextureCube,
+	ESHRegisterType_Texture2DMS,
+	ESHRegisterType_SubpassInput,
+
+	ESHRegisterType_Count,
+
+	ESHRegisterType_TypeMask			= 0xF,
+	ESHRegisterType_IsArray				= 1 << 4,	//Only valid on textures
+	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//^
+
+	//Invalid on samplers, AS and CBuffer
+	//Required on append/consume buffer
+	//Valid on everything else (textures and various buffers)
+	ESHRegisterType_IsWrite				= 1 << 6,
+
+	ESHRegisterType_IsUsed				= 1 << 7
+
+} ESHRegisterType;
+
+typedef enum ESHTexturePrimitive {
+	ESHTexturePrimitive_UInt,
+	ESHTexturePrimitive_SInt,
+	ESHTexturePrimitive_UNorm,
+	ESHTexturePrimitive_SNorm,
+	ESHTexturePrimitive_Float,
+	ESHTexturePrimitive_Double,
+	ESHTexturePrimitive_Count
+} ESHTexturePrimitive;
+
+typedef struct SHBinding {
+	U32 space, binding;
+} SHBinding;
+
+//U32_MAX for both space and binding indicates 'not present'
+typedef struct SHBindings {
+	SHBinding arr[ESHBinaryType_Count];
+} SHBindings;
+
+typedef struct SHRegister {
+
+	SHBindings bindings;
+
+	U8 registerType;				//ESHRegisterType
+	U8 padding1;
+
+	union {
+		U16 padding;				//Used for samplers, AS or read textures (should be 0)
+		U16 shaderBufferId;			//Used only at serialization (Buffer registers only)
+		U16 inputAttachmentId;		//U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
+		SHImageFormat image;
+	};
+
+	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
+	U16 padding2;
+
+} SHRegister;
 
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
@@ -195,6 +268,8 @@ SHFile {
     
     	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[0]
     	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [uniformCount]
+    
+    	SHRegister registers[binaryInfos[i].registerCount];
     
         if binary[i] has SPIRV:
             EXXDataSizeType<spirvType> spirvLength;

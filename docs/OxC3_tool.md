@@ -342,6 +342,22 @@ With `-entry <offset or path>` a specific entry can be viewed. If an entry is sp
 
 For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --binary will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
 
+#### View device specific assembly
+
+Some vendors allow viewing the intermediate shaders as device-dependent assembly. This can help view bottlenecks that might not be easy to figure out otherwise, as DXIL/SPIRV might hide these device dependent bottlenecks.
+
+The following can be compiled through special offline compiler tools:
+
+- (spv or DXIL) + AMD: [Radeon GPU analyzer](https://github.com/GPUOpen-Tools/radeon_gpu_analyzer).
+- (spv or DXIL) + Qualcomm: [Qualcomm adreno GPU offline compiler](https://qpm.qualcomm.com/#/main/tools/details/Adreno_GPU_Offline_Compiler).
+- spv + Mali: [Mali offline compiler](https://developer.arm.com/documentation/101863/0804/Using-Mali-Offline-Compiler/Compiling-Vulkan-shaders).
+
+- Intel's shader compiler: doesn't support SM6+, so not supported. However, the Intel profiler itself does have a view for the new assembly.
+
+The following vendors don't have (publicly available) support for this as far as is known to me:
+
+- Nvidia, ImgTec.
+
 ## Encrypt
 
 `OxC3 file encr -format <encryptionType> -input <file> -aes <key in hex> (optional: -output output)`
