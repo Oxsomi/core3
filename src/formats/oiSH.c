@@ -788,15 +788,15 @@ Bool SHFile_detectDuplicate(
 
 				case ESHRegisterType_Sampler:
 				case ESHRegisterType_SamplerComparisonState:
-					registerBindingType = 2;
+					registerBindingTypei = 2;
 					break;
 
 				case ESHRegisterType_ConstantBuffer:
-					registerBindingType = 3;
+					registerBindingTypei = 3;
 					break;
 
 				default:
-					registerBindingType = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
+					registerBindingTypei = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
 					break;
 			}
 
@@ -992,6 +992,9 @@ Bool ListSHRegisterRuntime_addBuffer(
 				))
 
 			break;
+
+		default:
+			break;
 	}
 
 	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
@@ -1016,24 +1019,96 @@ clean:
 	return s_uccess;
 }
 
-Bool ListSHRegisterRuntime_addTexture(
+Bool ListSHRegisterRuntime_addTextureBase(
 	ListSHRegisterRuntime *registers,
 	ESHTextureType registerType,
 	Bool isLayeredTexture,
 	Bool isCombinedSampler,
+	Bool isWrite,
 	Bool isUsed,
+	ESHTexturePrimitive textureFormatPrimitive,
+	ETextureFormatId textureFormatId,
 	CharString *name,
 	ListU32 *arrays,
 	SHBindings bindings,
 	Allocator alloc,
 	Error *e_rr
 ) {
+	
 	Bool s_uccess = true;
 
 	if(registerType >= ESHTextureType_Count)
 		retError(clean, Error_outOfBounds(
-			1, registerType, ESHTextureType_Count, "ListSHRegisterRuntime_addTexture()::registerType was invalid"
+			1, registerType, ESHTextureType_Count, "ListSHRegisterRuntime_addRWTexture()::registerType was invalid"
 		))
+
+	if(textureFormatId >= ETextureFormatId_Count)
+		retError(clean, Error_outOfBounds(
+			5, textureFormatId, ETextureFormatId_Count, "ListSHRegisterRuntime_addRWTexture()::textureFormatId out of bounds"
+		))
+
+	if(
+		(textureFormatPrimitive & ESHTexturePrimitive_TypeMask) > ESHTexturePrimitive_Count ||
+		(textureFormatPrimitive & ESHTexturePrimitive_Unused)
+	)
+		retError(clean, Error_outOfBounds(
+			5, textureFormatPrimitive, ESHTexturePrimitive_Count,
+			"ListSHRegisterRuntime_addRWTexture()::textureFormatPrimitive out of bounds"
+		))
+
+	if(textureFormatPrimitive == ESHTexturePrimitive_Count && !textureFormatId)
+		retError(clean, Error_invalidState(
+			0, "ListSHRegisterRuntime_addRWTexture() either texture format primitive or texture format id has to be set"
+		))
+
+	ETextureFormat format = ETextureFormatId_unpack[textureFormatId];
+	ESHTexturePrimitive primitive = ESHTexturePrimitive_Count;
+
+	if(textureFormatId) {
+
+		ETexturePrimitive texPrim = ETextureFormat_getPrimitive(format);
+		U8 channels = ETextureFormat_getChannels(format);
+
+		switch (texPrim) {
+
+			case ETexturePrimitive_UInt:	primitive = ESHTexturePrimitive_UInt;		break;
+			case ETexturePrimitive_SInt:	primitive = ESHTexturePrimitive_SInt;		break;
+			case ETexturePrimitive_UNorm:	primitive = ESHTexturePrimitive_UNorm;		break;
+			case ETexturePrimitive_SNorm:	primitive = ESHTexturePrimitive_SNorm;		break;
+
+			case ETexturePrimitive_Float:
+				primitive = ESHTexturePrimitive_Float;
+				//TODO: 64 bit texture formats
+				//primitive = ETextureFormat_getRedBits(format) == 64 ? ESHTexturePrimitive_Double : ESHTexturePrimitive_Float;
+				break;
+
+			default:
+				retError(clean, Error_invalidState(
+					0, "ListSHRegisterRuntime_addRWTexture() texture format is incompatible"
+				))
+		}
+
+		switch (channels) {
+			case 1:		primitive |= ESHTexturePrimitive_Component1;	break;
+			case 2:		primitive |= ESHTexturePrimitive_Component2;	break;
+			case 3:		primitive |= ESHTexturePrimitive_Component3;	break;
+			case 4:		primitive |= ESHTexturePrimitive_Component4;	break;
+			default:
+				retError(clean, Error_invalidState(
+					0, "ListSHRegisterRuntime_addRWTexture() texture format is incompatible"
+				))
+		}
+
+		if(
+			textureFormatPrimitive != primitive && 
+			(textureFormatPrimitive & ESHTexturePrimitive_TypeMask) != ESHTexturePrimitive_Count
+		)
+			retError(clean, Error_invalidState(
+				0, "ListSHRegisterRuntime_addRWTexture() texture primitive is incompatible"
+			))
+	}
+
+	else primitive = textureFormatPrimitive;
 
 	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
 		registers,
@@ -1045,9 +1120,14 @@ Bool ListSHRegisterRuntime_addTexture(
 			.registerType = (U8)(
 				(ESHRegisterType_TextureStart + registerType) | 
 				(isUsed ? ESHRegisterType_IsUsed : 0) |
+				(isWrite ? ESHRegisterType_IsWrite : 0) |
 				(isCombinedSampler ? ESHRegisterType_IsCombinedSampler : 0) |
 				(isLayeredTexture ? ESHRegisterType_IsArray : 0)
-			)
+			),
+			.texture = (SHTextureFormat) {
+				.formatId = textureFormatId,
+				.primitive = primitive
+			}
 		},
 		NULL,
 		alloc,
@@ -1056,6 +1136,37 @@ Bool ListSHRegisterRuntime_addTexture(
 
 clean:
 	return s_uccess;
+}
+
+Bool ListSHRegisterRuntime_addTexture(
+	ListSHRegisterRuntime *registers,
+	ESHTextureType registerType,
+	Bool isLayeredTexture,
+	Bool isCombinedSampler,
+	Bool isUsed,
+	ESHTexturePrimitive textureFormatPrimitive,
+	ETextureFormatId textureFormatId,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Allocator alloc,
+	Error *e_rr
+) {
+	return ListSHRegisterRuntime_addTextureBase(
+		registers,
+		registerType,
+		isLayeredTexture,
+		isCombinedSampler,
+		false,
+		isUsed,
+		textureFormatPrimitive,
+		textureFormatId,
+		name,
+		arrays,
+		bindings,
+		alloc,
+		e_rr
+	);
 }
 
 Bool ListSHRegisterRuntime_addRWTexture(
@@ -1071,82 +1182,21 @@ Bool ListSHRegisterRuntime_addRWTexture(
 	Allocator alloc,
 	Error *e_rr
 ) {
-	Bool s_uccess = true;
-
-	if(registerType >= ESHTextureType_Count)
-		retError(clean, Error_outOfBounds(
-			1, registerType, ESHTextureType_Count, "ListSHRegisterRuntime_addRWTexture()::registerType was invalid"
-		))
-
-	if(textureFormatId >= ETextureFormatId_Count)
-		retError(clean, Error_outOfBounds(
-			5, textureFormatId, ETextureFormatId_Count, "ListSHRegisterRuntime_addRWTexture()::textureFormatId out of bounds"
-		))
-
-	if(textureFormatPrimitive > ESHTexturePrimitive_Count)
-		retError(clean, Error_outOfBounds(
-			5, textureFormatPrimitive, ESHTexturePrimitive_Count,
-			"ListSHRegisterRuntime_addRWTexture()::textureFormatPrimitive out of bounds"
-		))
-
-	if(textureFormatPrimitive == ESHTexturePrimitive_Count && !textureFormatId)
-		retError(clean, Error_invalidState(
-			0, "ListSHRegisterRuntime_addRWTexture() either texture format primitive or texture format id has to be set"
-		))
-
-	ETextureFormat format = ETextureFormatId_unpack[textureFormatId];
-	ETexturePrimitive texPrim = ETextureFormat_getPrimitive(format);
-	ESHTexturePrimitive primitive = ESHTexturePrimitive_Count;
-
-	if(textureFormatId)
-		switch (texPrim) {
-
-			case ETexturePrimitive_Undefined:
-			case ETexturePrimitive_Compressed:
-			case ETexturePrimitive_UNormBGR:
-				retError(clean, Error_invalidState(
-					0, "ListSHRegisterRuntime_addRWTexture() texture format is incompatible"
-				))
-
-			case ETexturePrimitive_UInt:	primitive = ESHTexturePrimitive_UInt;		break;
-			case ETexturePrimitive_SInt:	primitive = ESHTexturePrimitive_SInt;		break;
-			case ETexturePrimitive_UNorm:	primitive = ESHTexturePrimitive_UNorm;		break;
-			case ETexturePrimitive_SNorm:	primitive = ESHTexturePrimitive_SNorm;		break;
-
-			case ETexturePrimitive_Float:
-				primitive = ESHTexturePrimitive_Float;
-				//TODO: 64 bit texture formats
-				//primitive = ETextureFormat_getRedBits(format) == 64 ? ESHTexturePrimitive_Double : ESHTexturePrimitive_Float;
-				break;
-		}
-
-	else primitive = textureFormatPrimitive;
-
-	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
+	return ListSHRegisterRuntime_addTextureBase(
 		registers,
+		registerType,
+		isLayeredTexture,
+		false,
+		true,
+		isUsed,
+		textureFormatPrimitive,
+		textureFormatId,
 		name,
 		arrays,
 		bindings,
-		(SHRegister) {
-			.bindings = bindings,
-			.registerType = (U8)(
-				(ESHRegisterType_TextureStart + registerType) | 
-				(isUsed ? ESHRegisterType_IsUsed : 0) |
-				ESHRegisterType_IsWrite |
-				(isLayeredTexture ? ESHRegisterType_IsArray : 0)
-			),
-			.image = (SHImageFormat) {
-				.formatId = textureFormatId,
-				.primitive = primitive
-			}
-		},
-		NULL,
 		alloc,
 		e_rr
-	))
-
-clean:
-	return s_uccess;
+	);
 }
 
 Bool ListSHRegisterRuntime_addSubpassInput(
@@ -1300,8 +1350,8 @@ Bool ListSHRegisterRuntime_addRegister(
 					(ESHTextureType)(baseRegType - ESHRegisterType_TextureStart),
 					reg.registerType & ESHRegisterType_IsArray,
 					reg.registerType & ESHRegisterType_IsUsed,
-					(ESHTexturePrimitive) reg.image.primitive,
-					(ETextureFormatId) reg.image.formatId,
+					(ESHTexturePrimitive) reg.texture.primitive,
+					(ETextureFormatId) reg.texture.formatId,
 					name,
 					arrays,
 					reg.bindings,
@@ -1323,6 +1373,8 @@ Bool ListSHRegisterRuntime_addRegister(
 					reg.registerType & ESHRegisterType_IsArray,
 					reg.registerType & ESHRegisterType_IsCombinedSampler,
 					reg.registerType & ESHRegisterType_IsUsed,
+					(ESHTexturePrimitive) reg.texture.primitive,
+					(ETextureFormatId) reg.texture.formatId,
 					name,
 					arrays,
 					reg.bindings,

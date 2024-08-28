@@ -2030,6 +2030,10 @@ Bool Compiler_convertRegisterDXIL(
 		input->Dimension >= D3D_SRV_DIMENSION_TEXTURE1D &&
 		input->Dimension <= D3D_SRV_DIMENSION_TEXTURECUBEARRAY;
 
+	ESHTexturePrimitive prim = ESHTexturePrimitive_Count;
+	ESHTextureType registerType = ESHTextureType_Count;
+	Bool isArray = false;
+
 	if(input->BindCount > 1)
 		gotoIfError2(clean, ListU32_createRefConst(&input->BindCount, 1, &arrays))
 
@@ -2046,9 +2050,98 @@ Bool Compiler_convertRegisterDXIL(
 			0, "Compiler_convertRegisterDXIL()::input uFlags texture component 0 and 1 can't be set on a non texture"
 		))
 
+	if(isReadTexture || isWriteTexture) {
+
+		switch (input->ReturnType) {
+
+			case D3D_RETURN_TYPE_UNORM:		prim = ESHTexturePrimitive_UNorm;	break;
+			case D3D_RETURN_TYPE_SNORM:		prim = ESHTexturePrimitive_SNorm;	break;
+			case D3D_RETURN_TYPE_UINT:		prim = ESHTexturePrimitive_UInt;	break;
+			case D3D_RETURN_TYPE_SINT:		prim = ESHTexturePrimitive_SInt;	break;
+			case D3D_RETURN_TYPE_FLOAT:		prim = ESHTexturePrimitive_Float;	break;
+
+			default:
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL()::input returnType unsupported"
+				))
+		}
+
+		prim = (ESHTexturePrimitive)(prim | (((input->uFlags >> 2) & 3) << 4));
+			
+		if(input->NumSamples && input->NumSamples != U32_MAX)
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertRegisterDXIL() num samples must be U32_MAX or 0"
+			))
+
+		switch (input->Dimension) {
+			
+			case D3D_SRV_DIMENSION_TEXTURE1DARRAY:
+				isArray = true;
+				// fallthrough
+
+			case D3D_SRV_DIMENSION_TEXTURE1D:
+				registerType = ESHTextureType_Texture1D;
+				break;
+
+			case D3D_SRV_DIMENSION_TEXTURE2DARRAY:
+				isArray = true;
+				// fallthrough
+
+			case D3D_SRV_DIMENSION_TEXTURE2D:
+				registerType = ESHTextureType_Texture2D;
+				break;
+
+			case D3D_SRV_DIMENSION_TEXTURE2DMSARRAY:
+				isArray = true;
+				// fallthrough
+
+			case D3D_SRV_DIMENSION_TEXTURE2DMS:
+				registerType = ESHTextureType_Texture2DMS;
+				break;
+
+			case D3D_SRV_DIMENSION_TEXTURE3D:
+				registerType = ESHTextureType_Texture3D;
+				break;
+
+			case D3D_SRV_DIMENSION_TEXTURECUBEARRAY:
+				isArray = true;
+				// fallthrough
+
+			case D3D_SRV_DIMENSION_TEXTURECUBE:
+				registerType = ESHTextureType_TextureCube;
+				break;
+
+			default:
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL() unknown texture register type"
+				))
+		}
+
+		if((input->NumSamples != U32_MAX) != (registerType == ESHTextureType_Texture2DMS))
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertRegisterDXIL() num samples not matching expectation"
+			))
+	}
+
 	switch (input->Type) {
 
-		case D3D_SIT_TEXTURE:		//TODO:
+		case D3D_SIT_TEXTURE:
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addTexture(
+				registers,
+				registerType,
+				isArray,
+				false,
+				true,
+				prim,
+				ETextureFormatId_Undefined,
+				&name,
+				arrays.length ? &arrays : NULL,
+				bindings,
+				alloc,
+				e_rr
+			))
+
 			break;
 
 		case D3D_SIT_SAMPLER:
@@ -2063,7 +2156,7 @@ Bool Compiler_convertRegisterDXIL(
 				true,
 				input->uFlags & D3D_SIF_COMPARISON_SAMPLER,
 				&name,
-				&arrays,
+				arrays.length ? &arrays : NULL,
 				bindings,
 				alloc,
 				e_rr
@@ -2071,7 +2164,39 @@ Bool Compiler_convertRegisterDXIL(
 
 			break;
 
-		case D3D_SIT_UAV_RWTYPED:				//TODO:
+		case D3D_SIT_UAV_RWTYPED:
+
+			if(!isWriteTexture)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL() RWBuffer is unsupported"		//TODO:?
+				))
+
+			switch(registerType) {
+
+				case ESHTextureType_Texture3D:
+				case ESHTextureType_TextureCube:
+					retError(clean, Error_invalidState(
+						0, "Compiler_convertRegisterDXIL() RWTexture3D and RWTextureCube don't exist"
+					))
+
+				default:
+					break;
+			}
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addRWTexture(
+				registers,
+				registerType,
+				isArray,
+				true,
+				prim,
+				ETextureFormatId_Undefined,
+				&name,
+				arrays.length ? &arrays : NULL,
+				bindings,
+				alloc,
+				e_rr
+			))
+
 			break;
 
 		case D3D_SIT_STRUCTURED:				//TODO:
@@ -2106,7 +2231,7 @@ Bool Compiler_convertRegisterDXIL(
 				false,
 				true,
 				&name,
-				&arrays,
+				arrays.length ? &arrays : NULL,
 				NULL,
 				bindings,
 				alloc,

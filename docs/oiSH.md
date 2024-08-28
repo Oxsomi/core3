@@ -201,14 +201,26 @@ typedef enum ESHRegisterType {
 
 } ESHRegisterType;
 
+//Consists of primitive type (lower 4-bit) and component count (higher 2-bit)
 typedef enum ESHTexturePrimitive {
+    
 	ESHTexturePrimitive_UInt,
 	ESHTexturePrimitive_SInt,
 	ESHTexturePrimitive_UNorm,
 	ESHTexturePrimitive_SNorm,
 	ESHTexturePrimitive_Float,
 	ESHTexturePrimitive_Double,
-	ESHTexturePrimitive_Count
+	ESHTexturePrimitive_Count,
+
+	ESHTexturePrimitive_TypeMask	= 0x0F,
+
+	ESHTexturePrimitive_Component1	= 0x00,		//R
+	ESHTexturePrimitive_Component2	= 0x10,		//RG
+	ESHTexturePrimitive_Component3	= 0x20,		//RGB
+	ESHTexturePrimitive_Component4	= 0x30,		//RGBA
+
+	ESHTexturePrimitive_Unused		= 0xC0
+        
 } ESHTexturePrimitive;
 
 typedef struct SHBinding {
@@ -220,6 +232,11 @@ typedef struct SHBindings {
 	SHBinding arr[ESHBinaryType_Count];
 } SHBindings;
 
+typedef struct SHTextureFormat {
+	U8 primitive;					//Texture registers only: ESHTexturePrimitive must match format approximately
+	U8 formatId;					//Texture registers only: ETextureFormatId Must match formatPrimitive and uncompressed
+} SHTextureFormat;
+
 typedef struct SHRegister {
 
 	SHBindings bindings;
@@ -228,10 +245,10 @@ typedef struct SHRegister {
 	U8 padding1;
 
 	union {
-		U16 padding;				//Used for samplers, AS or read textures (should be 0)
+		U16 padding;				//Used for samplers (should be 0)
 		U16 shaderBufferId;			//Used only at serialization (Buffer registers only)
 		U16 inputAttachmentId;		//U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
-		SHImageFormat image;
+		SHTextureFormat texture;	//Read/write textures
 	};
 
 	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
