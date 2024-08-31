@@ -252,16 +252,22 @@ typedef enum ESHTexturePrimitive {
 	ESHTexturePrimitive_Double,
 	ESHTexturePrimitive_Count,
 
-	ESHTexturePrimitive_TypeMask	= 0x0F,
+	ESHTexturePrimitive_TypeMask		= 0x0F,
 
-	ESHTexturePrimitive_Component1	= 0x00,		//R
-	ESHTexturePrimitive_Component2	= 0x10,		//RG
-	ESHTexturePrimitive_Component3	= 0x20,		//RGB
-	ESHTexturePrimitive_Component4	= 0x30,		//RGBA
+	ESHTexturePrimitive_ComponentShift	= 4,
 
-	ESHTexturePrimitive_Unused		= 0xC0
+	ESHTexturePrimitive_Component1		= 0x00,		//R
+	ESHTexturePrimitive_Component2		= 0x10,		//RG
+	ESHTexturePrimitive_Component3		= 0x20,		//RGB
+	ESHTexturePrimitive_Component4		= 0x30,		//RGBA
+
+	ESHTexturePrimitive_CountAll		= 0x40,
+
+	ESHTexturePrimitive_Unused			= 0xC0
 
 } ESHTexturePrimitive;
+
+static const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll];
 
 typedef struct SHBinding {
 	U32 space;						//Space or set, depending on binary type
@@ -286,7 +292,7 @@ typedef struct SHRegister {
 	U8 padding1;
 
 	union {
-		U16 padding;				//Used for samplers (should be 0)
+		U16 padding;				//Used for samplers, (RW)BAB or AS (should be 0)
 		U16 shaderBufferId;			//Used only at serialization (Buffer registers only)
 		U16 inputAttachmentId;		//U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
 		SHTextureFormat texture;	//Read/write textures
@@ -470,6 +476,9 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b);
 void SHEntry_print(SHEntry entry, Allocator alloc);
 void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc);
 void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc);
+void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc);
+void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator alloc);
+void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Allocator alloc);
 
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
 void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);

@@ -342,6 +342,8 @@ Bool SBFile_addVariableAsStruct(
 Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr);
 Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *sbFile, Error *e_rr);
 
+void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Allocator alloc);
+
 //Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
 
 void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc);

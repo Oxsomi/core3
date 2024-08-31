@@ -976,3 +976,60 @@ void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc) {
 
 	ListSBFile_free(files, alloc);
 }
+
+void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Allocator alloc) {
+
+	if(indenting >= SHORTSTRING_LEN) {
+		Log_debugLn(alloc, "SBFile_print() short string out of bounds");
+		return;
+	}
+
+	if (parent != U16_MAX) {
+		Log_debugLn(alloc, "SBFile_print()::parent isn't implemented yet");		//TODO:
+		return;
+	}
+
+	ShortString indent;
+	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
+	indent[indenting] = '\0';
+	
+	for (U64 i = 0; i < sbFile.vars.length; ++i) {
+
+		SBVar var = sbFile.vars.ptr[i];
+
+		if(var.parentId != parent)
+			continue;
+
+		CharString varName = sbFile.varNames.ptr[i];
+		Bool isArray = var.arrayIndex != U16_MAX;
+
+		CharString typeName = 
+			var.structId == U16_MAX ? CharString_createRefCStrConst(ESBType_name((ESBType)var.type)) :
+			sbFile.structNames.ptr[var.structId];
+
+		Log_debug(
+			alloc,
+			!isArray ? ELogOptions_NewLine : ELogOptions_None,
+			"%s0x%08"PRIx32": %.*s (%s): %.*s",
+			indent,
+			var.offset,
+			(int) CharString_length(varName),
+			varName.ptr,
+			(var.flags & ESBVarFlag_IsUsedVar) ? "Used" : "Unused",
+			(int) CharString_length(typeName),
+			typeName.ptr
+		);
+
+		if (isArray) {
+
+			ListU32 array = sbFile.arrays.ptr[var.arrayIndex];
+
+			for(U64 j = 0; j < array.length; ++j)
+				Log_debug(
+					alloc,
+					j + 1 == array.length ? ELogOptions_NewLine : ELogOptions_None,
+					"[%"PRIu32"]", array.ptr[j]
+				);
+		}
+	}
+}

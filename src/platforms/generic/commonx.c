@@ -309,6 +309,16 @@ void SHEntry_printx(SHEntry entry) { SHEntry_print(entry, Platform_instance.allo
 void SHEntryRuntime_printx(SHEntryRuntime entry) { SHEntryRuntime_print(entry, Platform_instance.alloc); }
 void SHBinaryInfo_printx(SHBinaryInfo binary) { SHBinaryInfo_print(binary, Platform_instance.alloc); }
 
+void SHRegister_printx(SHRegister reg, U64 indenting) { SHRegister_print(reg, indenting, Platform_instance.alloc); }
+
+void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting) {
+	SHRegisterRuntime_print(reg, indenting, Platform_instance.alloc);
+}
+
+void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting) {
+	ListSHRegisterRuntime_print(reg, indenting, Platform_instance.alloc);
+}
+
 void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier) {
 	SHBinaryIdentifier_free(identifier, Platform_instance.alloc);
 }
@@ -408,6 +418,10 @@ Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr) {
 
 Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr) {
 	return SBFile_read(file, isSubFile, Platform_instance.alloc, sbFile, e_rr);
+}
+
+void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent) {
+	SBFile_print(sbFile, indenting, parent, Platform_instance.alloc);
 }
 
 void ListSBFile_freeUnderlyingx(ListSBFile *files) {

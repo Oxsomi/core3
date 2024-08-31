@@ -256,9 +256,6 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 						0, "Archive_combine()::a and b had matching file paths, but mismatching contents"
 					))
 
-				//TODO: Insert -1, -2, -3, -4 before the extension and try until it works
-				//		If ends with - number, try to increment the number.
-
 				case EArchiveCombineMode_Rename: {
 
 					//-N with potentially .extension (e.g. -1.oiSH, -2.oiSH)

@@ -45,6 +45,10 @@ typedef struct SHEntryRuntime SHEntryRuntime;
 typedef struct SHInclude SHInclude;
 typedef struct SHFile SHFile;
 
+typedef struct SHRegister SHRegister;
+typedef struct SHRegisterRuntime SHRegisterRuntime;
+typedef struct ListSHRegisterRuntime ListSHRegisterRuntime;
+
 typedef struct SBFile SBFile;
 typedef struct SBStruct SBStruct;
 typedef enum ESBSettingsFlags ESBSettingsFlags;
@@ -98,6 +102,9 @@ Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr);
 void SHEntry_printx(SHEntry entry);
 void SHEntryRuntime_printx(SHEntryRuntime entry);
 void SHBinaryInfo_printx(SHBinaryInfo binary);
+void SHRegister_printx(SHRegister reg, U64 indenting);
+void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting);
+void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting);
 
 void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
 void SHBinaryInfo_freex(SHBinaryInfo *info);
@@ -146,6 +153,7 @@ Bool SBFile_addVariableAsStructx(
 
 Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr);
 Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr);
+void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent);
 
 void ListSBFile_freeUnderlyingx(ListSBFile *files);
 

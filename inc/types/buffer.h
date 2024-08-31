@@ -167,8 +167,8 @@ Bool Buffer_isAscii(Buffer buf);
 //	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
 
 //CRC32 Castagnoli / iSCSI polynomial (0x82f63b78) not for ethernet/zip (0xedb88320)!
-
 U32 Buffer_crc32c(Buffer buf);
+
 I32x4 Buffer_md5(Buffer buf);
 void Buffer_sha256(Buffer buf, U32 output[8]);
 

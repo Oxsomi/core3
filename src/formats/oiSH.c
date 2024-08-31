@@ -947,7 +947,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 			1, registerType, ESHBufferType_Count, "ListSHRegisterRuntime_addBuffer()::registerType was invalid"
 		))
 
-	if(registerType == ESHBufferType_AccelerationStructure) {
+	if(registerType == ESHBufferType_AccelerationStructure || registerType == ESHBufferType_ByteAddressBuffer) {
 		if(sbFile)
 			retError(clean, Error_invalidState(
 				0, "ListSHRegisterRuntime_addBuffer()::sbFile should be NULL if the type is acceleration structure"
@@ -2933,6 +2933,165 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
 		if(Buffer_length(binary.binaries[i]))
 			Log_debugLn(alloc, "\t\t%s: %"PRIu64, ESHBinaryType_names[i], Buffer_length(binary.binaries[i]));
+
+	ListSHRegisterRuntime_print(binary.registers, 1, alloc);
+}
+
+const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll] = {
+	"uint",  "int",  "unorm float",  "snorm float",  "float",  "double",  "", "", "", "", "", "", "", "", "", "",
+	"uint2", "int2", "unorm float2", "snorm float2", "float2", "double2", "", "", "", "", "", "", "", "", "", "",
+	"uint3", "int3", "unorm float3", "snorm float3", "float3", "double3", "", "", "", "", "", "", "", "", "", "",
+	"uint4", "int4", "unorm float4", "snorm float4", "float4", "double4", "", "", "", "", "", "", "", "", "", ""
+};
+
+void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
+
+	if(indenting >= SHORTSTRING_LEN) {
+		Log_debugLn(alloc, "SHRegister_print() short string out of bounds");
+		return;
+	}
+
+	ShortString indent;
+	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
+	indent[indenting] = '\0';
+
+	SHBinding spirvBinding = reg.bindings.arr[ESHBinaryType_SPIRV];
+
+	switch (reg.registerType & ESHRegisterType_TypeMask) {
+
+		case ESHRegisterType_SubpassInput:
+			Log_debugLn(alloc, "%sinput_attachment_index = %"PRIu8, indent, reg.inputAttachmentId);
+			break;
+
+		case ESHRegisterType_Sampler:					Log_debugLn(alloc, "%sSamplerState", indent);					 break;
+		case ESHRegisterType_SamplerComparisonState:	Log_debugLn(alloc, "%sSamplerComparisonState", indent);			 break;
+		case ESHRegisterType_ConstantBuffer:			Log_debugLn(alloc, "%sConstantBuffer", indent);					 break;
+		case ESHRegisterType_AccelerationStructure:		Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
+
+		case ESHRegisterType_ByteAddressBuffer:
+			Log_debugLn(alloc, "%s%sByteAddressBuffer", indent, reg.registerType & ESHRegisterType_IsWrite ? "RW" : "");
+			break;
+
+		case ESHRegisterType_StructuredBuffer:
+			Log_debugLn(alloc, "%s%sStructuredBuffer", indent, reg.registerType & ESHRegisterType_IsWrite ? "RW" : "");
+			break;
+
+		case ESHRegisterType_StructuredBufferAtomic:
+			Log_debugLn(alloc, "%sAppend/ConsumeBuffer", indent);
+			break;
+
+		default: {
+
+			const C8 *dim = "2D";
+
+			switch(reg.registerType & ESHRegisterType_TypeMask) {
+
+				case ESHRegisterType_Texture2D:						break;
+				case ESHRegisterType_Texture1D:		dim = "1D";		break;
+				case ESHRegisterType_Texture3D:		dim = "3D";		break;
+				case ESHRegisterType_TextureCube:	dim = "Cube";	break;
+				case ESHRegisterType_Texture2DMS:	dim = "2DMS";	break;
+			}
+
+			Log_debugLn(
+				alloc, "%s%s%s%s%s",
+				indent,
+				reg.registerType & ESHRegisterType_IsWrite ? "RW" : "",
+				reg.registerType & ESHRegisterType_IsCombinedSampler ? "sampler" : "Texture",
+				dim,
+				reg.registerType & ESHRegisterType_IsArray ? "Array" : ""
+			);
+
+			if(reg.texture.formatId)
+				Log_debugLn(alloc, "%s%s", indent, ETextureFormatId_name[reg.texture.formatId]);
+
+			if(reg.texture.primitive != ESHTexturePrimitive_Count)
+				Log_debugLn(alloc, "%s%s", indent, ESHTexturePrimitive_name[reg.texture.primitive]);
+
+			break;
+		}
+	}
+
+	if(spirvBinding.space != U32_MAX || spirvBinding.binding != U32_MAX)
+		Log_debugLn(
+			alloc,
+			"%s[[vk::binding(%"PRIu32", %"PRIu32")]]",
+			indent,
+			spirvBinding.binding,
+			spirvBinding.space
+		);
+
+	SHBinding dxilBinding = reg.bindings.arr[ESHBinaryType_DXIL];
+
+	if(dxilBinding.space != U32_MAX || dxilBinding.binding != U32_MAX) {
+
+		C8 letter = reg.registerType == ESHRegisterType_ConstantBuffer ? 'b' : (
+			reg.registerType == ESHRegisterType_Sampler ? 's' : (
+				reg.registerType & ESHRegisterType_IsWrite ? 'u' : 't'
+			)
+		);
+
+		Log_debugLn(
+			alloc,
+			"%s: register(%c%"PRIu32", space%"PRIu32")",
+			indent,
+			letter,
+			dxilBinding.binding,
+			dxilBinding.space
+		);
+	}
+}
+
+void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator alloc) {
+
+	if(indenting >= SHORTSTRING_LEN) {
+		Log_debugLn(alloc, "SHRegisterRuntime_print() short string out of bounds");
+		return;
+	}
+
+	ShortString indent;
+	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
+	indent[indenting] = '\0';
+
+	Log_debug(
+		alloc,
+		ELogOptions_None,
+		"%s%.*s",
+		indent,
+		(int)CharString_length(reg.name), reg.name.ptr
+	);
+
+	for(U64 i = 0; i < reg.arrays.length; ++i)
+		Log_debug(
+			alloc,
+			ELogOptions_None,
+			"[%"PRIu32"]",
+			reg.arrays.ptr[i]
+		);
+
+	Log_debugLn(alloc, reg.reg.registerType & ESHRegisterType_IsUsed ? " (Used)" : " (Unused)");
+
+	SHRegister_print(reg.reg, indenting + 1, alloc);
+
+	if(reg.shaderBuffer.vars.ptr)
+		SBFile_print(reg.shaderBuffer, indenting + 1, U16_MAX, alloc);
+}
+
+void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Allocator alloc) {
+
+	if(indenting >= SHORTSTRING_LEN) {
+		Log_debugLn(alloc, "ListSHRegisterRuntime_print() short string out of bounds");
+		return;
+	}
+
+	ShortString indent;
+	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
+	indent[indenting] = '\0';
+
+	Log_debugLn(alloc, "%sRegisters:", indent);
+
+	for(U64 i = 0; i < reg.length; ++i)
+		SHRegisterRuntime_print(reg.ptr[i], indenting + 1, alloc);
 }
 
 //Combining multiple oiSH files into one

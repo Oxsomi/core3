@@ -105,6 +105,51 @@ U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h, U32 l) {
 	return ((((U64)w * h * ETextureFormat_getBits(f)) + 7) >> 3) * l;
 }
 
+const C8 *ETextureFormatId_name[ETextureFormatId_Count] = {
+
+	"Undefined",
+
+	"R8",			"RG8",		"RGBA8",		"BGRA8",
+	"R8s",			"RG8s",		"RGBA8s",
+	"R8u",			"RG8u",		"RGBA8u",
+	"R8i",			"RG8i",		"RGBA8i",
+
+	"R16",			"RG16",		"RGBA16",
+	"R16s",			"RG16s",	"RGBA16s",
+	"R16u",			"RG16u",	"RGBA16u",
+	"R16i",			"RG16i",	"RGBA16i",
+	"R16f",			"RG16f",	"RGBA16f",
+
+	"R32u",			"RG32u",	"RGB32u",	"RGBA32u",
+	"R32i",			"RG32i",	"RGB32i",	"RGBA32i",
+	"R32f",			"RG32f",	"RGB32f",	"RGBA32f",
+
+	"BGR10A2",
+
+	"BC4",			"BC5",		"BC6H",		"BC7",
+	"BC4s",			"BC5s",					"BC7 sRGB",
+
+	"ASTC 4x4",		"ASTC 4x4 sRGB",
+
+	"ASTC 5x4",		"ASTC 5x4 sRGB",
+	"ASTC 5x5",		"ASTC 5x5 sRGB",
+
+	"ASTC 6x5",		"ASTC 6x5 sRGB",
+	"ASTC 6x6",		"ASTC 6x6 sRGB",
+
+	"ASTC 8x5",		"ASTC 8x5 sRGB",
+	"ASTC 8x6",		"ASTC 8x6 sRGB",
+	"ASTC 8x8",		"ASTC 8x8 sRGB",
+
+	"ASTC 10x5",	"ASTC 10x5 sRGB",
+	"ASTC 10x6",	"ASTC 10x6 sRGB",
+	"ASTC 10x8",	"ASTC 10x8 sRGB",
+	"ASTC 10x10",	"ASTC 10x10 sRGB",
+
+	"ASTC 12x10",	"ASTC 12x10 sRGB",
+	"ASTC 12x12",	"ASTC 12x12 sRGB"
+};
+
 DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format) {
 
 	switch (format) {

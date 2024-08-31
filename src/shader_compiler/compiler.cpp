@@ -1686,6 +1686,8 @@ Bool Compiler_finalizeEntrypoint(
 
 	gotoIfError3(clean, Compiler_findEntry(entries, entryName, &entry, e_rr))
 
+	ListSHRegisterRuntime_print(*registers, 0, alloc);
+
 	if(lock) {
 		acq = SpinLock_lock(lock, 1 * SECOND);
 		if(acq < ELockAcquire_Success)
@@ -1778,83 +1780,80 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_convertCBufferDXIL(
-	ListSHRegisterRuntime *entries,
+Bool Compiler_convertShaderBufferDXIL(
+	const C8 *nameCStr,
 	ID3D12FunctionReflection1 *funcRefl,
 	ID3D12ShaderReflection1 *shaderRefl,
-	ID3D12ShaderReflectionConstantBuffer *constantBuffer,
 	Allocator alloc,
+	SBFile *sbFile,
 	Error *e_rr
 ) {
 	Bool s_uccess = true;
 	D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
 	D3D12_SHADER_INPUT_BIND_DESC resourceDesc{};
-	SBFile sbFile{};
-
+	ID3D12ShaderReflectionConstantBuffer *constantBuffer = NULL;
+	ESBSettingsFlags flags = ESBSettingsFlags_None;
 	CharString name = CharString_createNull();
-
-	SHBindings bindings;
-
-	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
-		bindings.arr[i] = SHBinding{ .space = U32_MAX, .binding = U32_MAX };
-
-	if(FAILED(constantBuffer->GetDesc(&constantBufferDesc)))
-		retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer but no desc"))
-
-	if(funcRefl && FAILED(funcRefl->GetResourceBindingDescByName(constantBufferDesc.Name, &resourceDesc)))
-		retError(clean, Error_invalidState(
-			0, "Compiler_convertCBufferDXIL() DXIL didn't contain resource binding for constant buffer"
-		))
-
-	if(shaderRefl && FAILED(shaderRefl->GetResourceBindingDescByName(constantBufferDesc.Name, &resourceDesc)))
-		retError(clean, Error_invalidState(
-			1, "Compiler_convertCBufferDXIL() DXIL didn't contain resource binding for constant buffer"
-		))
+	D3D_CBUFFER_TYPE cbufferType = D3D_CT_CBUFFER;
 
 	if(!shaderRefl && !funcRefl)
 		retError(clean, Error_nullPointer(
-			0, "Compiler_convertCBufferDXIL()::shaderRefl or funcRefl is required"
+			0, "Compiler_convertShaderBufferDXIL()::shaderRefl or funcRefl is required"
+		))
+		
+	name = CharString_createRefCStrConst(nameCStr);
+	constantBuffer = shaderRefl ? shaderRefl->GetConstantBufferByName(nameCStr) : funcRefl->GetConstantBufferByName(nameCStr);
+
+	if(!constantBuffer || FAILED(constantBuffer->GetDesc(&constantBufferDesc)))
+		retError(clean, Error_invalidState(1, "Compiler_convertShaderBufferDXIL() DXIL contained constant buffer but no desc"))
+
+	if(!CharString_equalsStringSensitive(name, CharString_createRefCStrConst(constantBufferDesc.Name)))
+		retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() DXIL contained mismatching names"))
+
+	if(shaderRefl && FAILED(shaderRefl->GetResourceBindingDescByName(nameCStr, &resourceDesc)))
+		retError(clean, Error_invalidState(
+			1, "Compiler_convertShaderBufferDXIL() DXIL didn't contain resource binding for constant buffer"
 		))
 
-	//Apparently, append and structured buffers are seen as constant buffers?
-	//According to Maraneshi also other stuff ends up here like structured buffers.
-	//For safety we just ignore all normal buffer types that end up being falsely detected.
-	
+	if(funcRefl && FAILED(funcRefl->GetResourceBindingDescByName(nameCStr, &resourceDesc)))
+		retError(clean, Error_invalidState(
+			1, "Compiler_convertShaderBufferDXIL() DXIL didn't contain resource binding for constant buffer"
+		))
+
+	if(!CharString_equalsStringSensitive(name, CharString_createRefCStrConst(resourceDesc.Name)))
+		retError(clean, Error_invalidState(1, "Compiler_convertShaderBufferDXIL() DXIL contained mismatching names"))
+
 	switch (resourceDesc.Type) {
 		
+		case D3D_SIT_CBUFFER:
 		case D3D_SIT_STRUCTURED:
 		case D3D_SIT_UAV_RWSTRUCTURED:
-		case D3D_SIT_BYTEADDRESS:
-		case D3D_SIT_UAV_RWBYTEADDRESS:
-		case D3D_SIT_UAV_APPEND_STRUCTURED:
-		case D3D_SIT_UAV_CONSUME_STRUCTURED:
 		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
-			goto clean;
+			break;
+
+		default:
+			retError(clean, Error_invalidState(
+				1, "Compiler_convertShaderBufferDXIL() register type isn't allowed to have a buffer description"
+			))
 	}
 
-	if (
-		resourceDesc.Type != D3D_SIT_CBUFFER ||
-		resourceDesc.BindCount != 1 ||
-		resourceDesc.Dimension ||
-		resourceDesc.NumSamples ||
-		resourceDesc.uFlags != D3D_SIF_USERPACKED ||
-		resourceDesc.ReturnType
-	)
-		retError(clean, Error_invalidState(
-			1, "Compiler_convertCBufferDXIL() DXIL contained invalid constant buffer resource binding"
-		))
+
+	if(resourceDesc.Type != D3D_SIT_CBUFFER) {
+		flags = ESBSettingsFlags_IsTightlyPacked;
+		cbufferType = D3D_CT_RESOURCE_BIND_INFO;
+	}
 
 	if(
-		constantBufferDesc.Type != D3D_CT_CBUFFER ||
+		constantBufferDesc.Type != cbufferType ||
 		constantBufferDesc.uFlags ||
 		!constantBufferDesc.Size ||
 		!constantBufferDesc.Variables
 	)
 		retError(clean, Error_invalidState(
-			0, "Compiler_convertCBufferDXIL() DXIL contained shader with unsupported buffer type or flags"
+			0, "Compiler_convertShaderBufferDXIL() DXIL contained shader with unsupported buffer type or flags"
 		))
 
-	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, constantBufferDesc.Size, alloc, &sbFile, e_rr))
+	gotoIfError3(clean, SBFile_create(flags, constantBufferDesc.Size, alloc, sbFile, e_rr))
 
 	for (U32 k = 0; k < constantBufferDesc.Variables; ++k) {
 
@@ -1863,7 +1862,7 @@ Bool Compiler_convertCBufferDXIL(
 
 		if(FAILED(variable->GetDesc(&variableDesc)))
 			retError(clean, Error_invalidState(
-				0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer variable with no desc"
+				0, "Compiler_convertShaderBufferDXIL() DXIL contained constant buffer variable with no desc"
 			))
 
 		const void *startTextureU64 = &variableDesc.StartTexture;
@@ -1872,11 +1871,11 @@ Bool Compiler_convertCBufferDXIL(
 		if(
 			variableDesc.DefaultValue ||
 			(variableDesc.uFlags && variableDesc.uFlags != D3D_SVF_USED) ||
-			*(const U64*)startTextureU64 ||
-			*(const U64*)startSamplerU64
+			(*(const U64*)startTextureU64 && *(const U64*)startTextureU64 != U32_MAX) ||
+			(*(const U64*)startSamplerU64 && *(const U64*)startSamplerU64 != U32_MAX)
 		)
 			retError(clean, Error_invalidState(
-				0, "Compiler_convertCBufferDXIL() DXIL contained illegal constant buffer variable"
+				0, "Compiler_convertShaderBufferDXIL() DXIL contained illegal constant buffer variable"
 			))
 
 		const C8 *variableName = variableDesc.Name;
@@ -1889,7 +1888,7 @@ Bool Compiler_convertCBufferDXIL(
 
 		if(FAILED(type->GetDesc(&typeDesc)))
 			retError(clean, Error_invalidState(
-				0, "Compiler_convertCBufferDXIL() DXIL contained constant buffer variable type with no desc"
+				0, "Compiler_convertShaderBufferDXIL() DXIL contained constant buffer variable type with no desc"
 			))
 
 		ESBPrimitive prim = ESBPrimitive_Invalid;
@@ -1916,7 +1915,7 @@ Bool Compiler_convertCBufferDXIL(
 
 			default:
 				retError(clean, Error_invalidState(
-					0, "Compiler_convertCBufferDXIL() DXIL contained invalid primitive type"		//TODO: Structs
+					0, "Compiler_convertShaderBufferDXIL() DXIL contained invalid primitive type"		//TODO: Structs
 				))
 		}
 
@@ -1935,7 +1934,7 @@ Bool Compiler_convertCBufferDXIL(
 
 			default:
 				retError(clean, Error_unsupportedOperation(
-					0, "Compiler_convertCBufferDXIL()::desc has an unrecognized vector"
+					0, "Compiler_convertShaderBufferDXIL()::desc has an unrecognized vector"
 				))
 		}
 
@@ -1950,17 +1949,17 @@ Bool Compiler_convertCBufferDXIL(
 
 			default:
 				retError(clean, Error_unsupportedOperation(
-					0, "Compiler_convertCBufferDXIL()::desc has an unrecognized type (matWxH)"
+					0, "Compiler_convertShaderBufferDXIL()::desc has an unrecognized type (matWxH)"
 				))
 	}
 
 		ESBType shType = (ESBType) ESBType_create(stride, prim, vector, matrix);
 
-		U64 perElementStride = ESBType_getSize(shType, false);
+		U64 perElementStride = ESBType_getSize(shType, !!(flags & ESBSettingsFlags_IsTightlyPacked));
 		U64 expectedSize = perElementStride * U64_max(typeDesc.Elements, 1);
 
 		if(size != expectedSize)
-			retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL()::shType had mismatching size"))
+			retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL()::shType had mismatching size"))
 
 		CharString str = CharString_createRefCStrConst(variableName);
 		ListU32 arrays = ListU32{};
@@ -1968,7 +1967,7 @@ Bool Compiler_convertCBufferDXIL(
 			gotoIfError2(clean, ListU32_createRefConst(&typeDesc.Elements, 1, &arrays))
 
 		gotoIfError3(clean, SBFile_addVariableAsType(
-			&sbFile,
+			sbFile,
 			&str,
 			offset, U16_MAX, shType,
 			isUnused ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
@@ -1978,32 +1977,23 @@ Bool Compiler_convertCBufferDXIL(
 	}
 
 	if(resourceDesc.BindCount > 1)
-		retError(clean, Error_invalidState(0, "Compiler_convertCBufferDXIL()::BindCount is only allowed as 1 with CBuffers"))
-
-	name = CharString_createRefCStrConst(constantBufferDesc.Name);
-	bindings.arr[ESHBinaryType_DXIL] = SHBinding{ .space = resourceDesc.Space, .binding = resourceDesc.BindPoint };
-
-	gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
-		entries,
-		ESHBufferType_ConstantBuffer,
-		false,
-		true,
-		&name,
-		NULL,
-		&sbFile,
-		bindings,
-		alloc,
-		e_rr
-	))
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertShaderBufferDXIL()::BindCount is only allowed as 1 with CBuffers"
+		))
 
 clean:
-	SBFile_free(&sbFile, alloc);
+
+	if(!s_uccess && sbFile)
+		SBFile_free(sbFile, alloc);
+
 	return s_uccess;
 }
 
 Bool Compiler_convertRegisterDXIL(
 	ListSHRegisterRuntime *registers,
 	const D3D12_SHADER_INPUT_BIND_DESC *input,
+	ID3D12FunctionReflection1 *funcRefl,
+	ID3D12ShaderReflection1 *shaderRefl,
 	Allocator alloc,
 	Error *e_rr
 ) {
@@ -2033,6 +2023,15 @@ Bool Compiler_convertRegisterDXIL(
 	ESHTexturePrimitive prim = ESHTexturePrimitive_Count;
 	ESHTextureType registerType = ESHTextureType_Count;
 	Bool isArray = false;
+	SBFile sbFile = SBFile{};
+
+	if(input->Type == D3D_SIT_CBUFFER) {
+
+		if(!(input->uFlags & D3D_SIF_USERPACKED))
+			retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL()::input uFlags need USERPACKED for CBuffer"))
+
+		unknownFlags &=~ D3D_SIF_USERPACKED;
+	}
 
 	if(input->BindCount > 1)
 		gotoIfError2(clean, ListU32_createRefConst(&input->BindCount, 1, &arrays))
@@ -2124,6 +2123,29 @@ Bool Compiler_convertRegisterDXIL(
 	}
 
 	switch (input->Type) {
+	
+		case D3D_SIT_CBUFFER:
+		case D3D_SIT_STRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+
+			gotoIfError3(clean, Compiler_convertShaderBufferDXIL(
+				input->Name,
+				funcRefl,
+				shaderRefl,
+				alloc,
+				&sbFile,
+				e_rr
+			))
+
+			if(input->Type != D3D_SIT_CBUFFER && input->NumSamples != sbFile.bufferSize)
+				retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL() NumSamples doesn't match buffer size"))
+
+		default:
+			break;
+	}
+
+	switch (input->Type) {
 
 		case D3D_SIT_TEXTURE:
 
@@ -2199,20 +2221,94 @@ Bool Compiler_convertRegisterDXIL(
 
 			break;
 
-		case D3D_SIT_STRUCTURED:				//TODO:
+		case D3D_SIT_UAV_RWBYTEADDRESS:
+		case D3D_SIT_BYTEADDRESS:
+
+			if(
+				input->ReturnType != D3D_RETURN_TYPE_MIXED ||
+				input->NumSamples ||
+				input->Dimension != D3D_SRV_DIMENSION_BUFFER
+			)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL() sampler had invalid return type, sampleCount or dimension"
+				))
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+				registers,
+				ESHBufferType_ByteAddressBuffer,
+				input->Type == D3D_SIT_UAV_RWBYTEADDRESS,
+				true,
+				&name,
+				arrays.length ? &arrays : NULL,
+				NULL,
+				bindings,
+				alloc,
+				e_rr
+			))
+
 			break;
 
-		case D3D_SIT_UAV_RWSTRUCTURED:			//TODO:
+		case D3D_SIT_CBUFFER:
+
+			if(
+				input->BindCount != 1 ||
+				input->Dimension ||
+				input->NumSamples ||
+				input->ReturnType
+			)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL() cbuffer had invalid return type, sampleCount, bindCount or dimension"
+				))
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+				registers,
+				ESHBufferType_ConstantBuffer,
+				false,
+				true,
+				&name,
+				NULL,
+				&sbFile,
+				bindings,
+				alloc,
+				e_rr
+			))
+
 			break;
 
-		case D3D_SIT_BYTEADDRESS:				//TODO:
-			break;
+		case D3D_SIT_STRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED:
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER: {
 
-		case D3D_SIT_UAV_RWBYTEADDRESS:			//TODO:
-			break;
+			U32 stride = input->NumSamples;
 
-		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+			if(
+				input->ReturnType != D3D_RETURN_TYPE_MIXED ||
+				!stride ||
+				input->Dimension != D3D_SRV_DIMENSION_BUFFER
+			)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterDXIL() buffer had invalid return type, sampleCount (stride) or dimension"
+				))
+
+			ESHBufferType type =
+				input->Type == D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER ? ESHBufferType_StructuredBufferAtomic :
+				ESHBufferType_StructuredBuffer;
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+				registers,
+				type,
+				input->Type != D3D_SIT_STRUCTURED,
+				true,
+				&name,
+				arrays.length ? &arrays : NULL,
+				&sbFile,
+				bindings,
+				alloc,
+				e_rr
+			))
+
 			break;
+		}
 
 		case D3D_SIT_RTACCELERATIONSTRUCTURE:
 
@@ -2252,6 +2348,7 @@ Bool Compiler_convertRegisterDXIL(
 	}
 
 clean:
+	SBFile_free(&sbFile, alloc);
 	return s_uccess;
 }
 
@@ -2388,10 +2485,34 @@ Bool Compiler_processDXIL(
 			if(!funcDesc0.Name)
 				retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained no library name"))
 
-			for (U32 j = 0; j < funcDesc0.ConstantBuffers; ++j)
-				gotoIfError3(clean, Compiler_convertCBufferDXIL(
-					&registers, funcRefl, NULL, funcRefl->GetConstantBufferByIndex(j), alloc, e_rr
-				))
+			for (U32 j = 0; j < funcDesc0.ConstantBuffers; ++j) {		//Validate buffers
+
+				ID3D12ShaderReflectionConstantBuffer *constantBuffer = funcRefl->GetConstantBufferByIndex(j);
+				D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
+				D3D12_SHADER_INPUT_BIND_DESC resourceDesc{};
+
+				if(FAILED(constantBuffer->GetDesc(&constantBufferDesc)))
+					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained constant buffer but no desc"))
+
+				if(funcRefl && FAILED(funcRefl->GetResourceBindingDescByName(constantBufferDesc.Name, &resourceDesc)))
+					retError(clean, Error_invalidState(
+						0, "Compiler_processDXIL() DXIL didn't contain resource binding for constant buffer"
+					))
+			
+				switch (resourceDesc.Type) {
+		
+					case D3D_SIT_CBUFFER:
+					case D3D_SIT_STRUCTURED:
+					case D3D_SIT_UAV_RWSTRUCTURED:
+					case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+						break;
+
+					default:
+						retError(clean, Error_invalidState(
+							1, "Compiler_processDXIL() DXIL contained buffer description not bound to a valid resource type"
+						))
+				}
+			}
 
 			for (U32 j = 0; j < funcDesc0.BoundResources; ++j) {
 			
@@ -2399,15 +2520,7 @@ Bool Compiler_processDXIL(
 				if(FAILED(funcRefl->GetResourceBindingDesc(j, &input)))
 					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained invalid resource"))
 
-				if(input.Type == D3D_SIT_CBUFFER) {
-
-					if(!funcRefl->GetConstantBufferByName(input.Name))
-						retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained cbuffer with missing definition"))
-
-					continue;
-				}
-
-				gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, alloc, e_rr))
+				gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, funcRefl, NULL, alloc, e_rr))
 			}
 
 			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
@@ -2588,10 +2701,34 @@ Bool Compiler_processDXIL(
 			inputTypes[(*counter)++] = type;
 		}
 
-		for (U32 j = 0; j < refl.ConstantBuffers; ++j)
-			gotoIfError3(clean, Compiler_convertCBufferDXIL(
-				&registers, NULL, dxilRefl, dxilRefl->GetConstantBufferByIndex(j), alloc, e_rr
-			))
+		for (U32 j = 0; j < refl.ConstantBuffers; ++j) {		//Validate buffers
+
+			ID3D12ShaderReflectionConstantBuffer *constantBuffer = dxilRefl->GetConstantBufferByIndex(j);
+			D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
+			D3D12_SHADER_INPUT_BIND_DESC resourceDesc{};
+
+			if(FAILED(constantBuffer->GetDesc(&constantBufferDesc)))
+				retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained constant buffer but no desc"))
+
+			if(dxilRefl && FAILED(dxilRefl->GetResourceBindingDescByName(constantBufferDesc.Name, &resourceDesc)))
+				retError(clean, Error_invalidState(
+					1, "Compiler_processDXIL() DXIL didn't contain resource binding for constant buffer"
+				))
+			
+			switch (resourceDesc.Type) {
+		
+				case D3D_SIT_CBUFFER:
+				case D3D_SIT_STRUCTURED:
+				case D3D_SIT_UAV_RWSTRUCTURED:
+				case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER:
+					break;
+
+				default:
+					retError(clean, Error_invalidState(
+						1, "Compiler_processDXIL() DXIL contained buffer description not bound to a valid resource type"
+					))
+			}
+		}
 
 		for (U32 j = 0; j < refl.BoundResources; ++j) {
 			
@@ -2599,15 +2736,7 @@ Bool Compiler_processDXIL(
 			if(FAILED(dxilRefl->GetResourceBindingDesc(j, &input)))
 				retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained invalid resource"))
 				
-				if(input.Type == D3D_SIT_CBUFFER) {
-
-					if(!dxilRefl->GetConstantBufferByName(input.Name))
-						retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained cbuffer with missing definition"))
-
-					continue;
-				}
-
-			gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, alloc, e_rr))
+			gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, NULL, dxilRefl, alloc, e_rr))
 		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(

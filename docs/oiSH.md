@@ -136,7 +136,9 @@ typedef enum ESHExtension {
 
 	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
     
-    ESHExtension_MeshTaskTexDeriv			= 1 << 16
+    ESHExtension_MeshTaskTexDeriv			= 1 << 16,
+    
+    ESHExtension_Bindless					= 1 << 17
 
 } ESHExtension;
 
@@ -245,8 +247,8 @@ typedef struct SHRegister {
 	U8 padding1;
 
 	union {
-		U16 padding;				//Used for samplers (should be 0)
-		U16 shaderBufferId;			//Used only at serialization (Buffer registers only)
+		U16 padding;				//Used for samplers, (RW)BAB or AS (should be 0)
+		U16 shaderBufferId;			//Used only at serialization (Buffer registers only, ex )
 		U16 inputAttachmentId;		//U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
 		SHTextureFormat texture;	//Read/write textures
 	};
@@ -418,7 +420,6 @@ The following define the requirements of binaries embedded in oiSH files.
 ### DXIL spec
 
 - Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. To be compatible with SPIRV. Though of course SV_TARGET and other SVs are accepted.
-
 - Extensions available by default:
   - D3D_SHADER_REQUIRES_TYPED_UAV_LOAD_ADDITIONAL_FORMATS
   - D3D_SHADER_REQUIRES_STENCIL_REF
@@ -436,6 +437,20 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE or D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED as AtomicI64.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
 - NV extensions should be properly marked using annotations, or the oiSH is illegal. The validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
+
+## TODO: ESHExtension_Bindless
+
+"Bindless" extension is present when more than the maximum bindful registers are detected. This extension is generally well supported across modern hardware (everywhere on PC) but not always properly supported on mobile / web. For that reason, this has become a dedicated extension. This extension is just a hint based on reasonable device limits in the wild right now.
+
+### TODO: Binding limits (tier 0)
+
+Tier 0 (without bindless) has the following limits:
+
+### TODO: Binding limits (tier 1)
+
+Tier 1 (with bindless) has the following limits:
+
+- Acceleration structures: 16 per binary. Due to Intel not supporting more.
 
 ## Changelog
 

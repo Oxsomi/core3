@@ -1251,48 +1251,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			SBFile file = (SBFile) { 0 };
 			gotoIfError3(cleanSb, SBFile_readx(buf, false, &file, e_rr))
 
-			U16 parent = U16_MAX;
-
-			Log_debugLnx(file.flags & ESBFlag_IsTightlyPacked ? "SBO" : "CBO");
-
-			for (U64 i = 0; i < file.vars.length; ++i) {
-
-				SBVar var = file.vars.ptr[i];
-
-				if(var.parentId != parent)
-					continue;
-
-				CharString varName = file.varNames.ptr[i];
-				Bool isArray = var.arrayIndex != U16_MAX;
-
-				CharString typeName = 
-					var.structId == U16_MAX ? CharString_createRefCStrConst(ESBType_name((ESBType)var.type)) :
-					file.structNames.ptr[var.structId];
-
-				Log_debug(
-					Platform_instance.alloc,
-					!isArray ? ELogOptions_NewLine : ELogOptions_None,
-					"0x%08"PRIx32": %.*s (%s): %.*s",
-					var.offset,
-					(int) CharString_length(varName),
-					varName.ptr,
-					(var.flags & ESBVarFlag_IsUsedVar) ? "Used" : "Unused",
-					(int) CharString_length(typeName),
-					typeName.ptr
-				);
-
-				if (isArray) {
-
-					ListU32 array = file.arrays.ptr[var.arrayIndex];
-
-					for(U64 j = 0; j < array.length; ++j)
-						Log_debug(
-							Platform_instance.alloc,
-							j + 1 == array.length ? ELogOptions_NewLine : ELogOptions_None,
-							"[%"PRIu32"]", array.ptr[j]
-						);
-				}
-			}
+			SBFile_printx(file, 0, U16_MAX /* parent */);
 
 		cleanSb:
 
