@@ -1780,6 +1780,213 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_convertMemberDXIL(
+	SBFile *sbFile,
+	ID3D12ShaderReflectionType *type,
+	CharString *name,
+	U16 parent,
+	U32 globalOffset,
+	Bool isPacked,
+	Bool isUnused,
+	U32 size,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	D3D12_SHADER_TYPE_DESC typeDesc{};
+
+	ESBType shType{};
+
+	U64 perElementStride{};
+	U64 expectedSize{};
+	ListU32 arrays{};
+	U16 structId = U16_MAX;
+	U32 elementSize = 1;
+
+	if(!type || FAILED(type->GetDesc(&typeDesc)))
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertMemberDXIL() DXIL contained constant buffer variable type with no desc"
+		))
+
+	if(typeDesc.Elements)
+		elementSize = typeDesc.Elements;
+
+	if(typeDesc.Class != D3D_SVC_STRUCT) {
+
+		ESBPrimitive prim{};
+		ESBStride stride{};
+		ESBVector vector{};
+		ESBMatrix matrix{};
+
+		switch (typeDesc.Type) {
+
+			case D3D_SVT_DOUBLE:	stride = ESBStride_X64;		prim = ESBPrimitive_Float;		break;
+			case D3D_SVT_FLOAT:		stride = ESBStride_X32;		prim = ESBPrimitive_Float;		break;
+			case D3D_SVT_FLOAT16:	stride = ESBStride_X16;		prim = ESBPrimitive_Float;		break;
+
+			case D3D_SVT_UINT8:		stride = ESBStride_X8;		prim = ESBPrimitive_UInt;		break;
+			case D3D_SVT_UINT16:	stride = ESBStride_X16;		prim = ESBPrimitive_UInt;		break;
+
+			case D3D_SVT_BOOL:
+			case D3D_SVT_UINT:		stride = ESBStride_X32;		prim = ESBPrimitive_UInt;		break;
+			case D3D_SVT_UINT64:	stride = ESBStride_X64;		prim = ESBPrimitive_UInt;		break;
+
+			case D3D_SVT_INT16:		stride = ESBStride_X16;		prim = ESBPrimitive_Int;		break;
+			case D3D_SVT_INT:		stride = ESBStride_X32;		prim = ESBPrimitive_Int;		break;
+			case D3D_SVT_INT64:		stride = ESBStride_X64;		prim = ESBPrimitive_Int;		break;
+
+			default:
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertMemberDXIL() DXIL contained invalid primitive type"
+				))
+		}
+
+		if (typeDesc.Class == D3D_SVC_MATRIX_COLUMNS) {
+			U32 cols = typeDesc.Rows;
+			typeDesc.Rows = typeDesc.Columns;
+			typeDesc.Columns = cols;
+		}
+
+		switch(typeDesc.Columns) {
+
+			case 1:		vector = ESBVector_N1;		break;
+			case 2:		vector = ESBVector_N2;		break;
+			case 3:		vector = ESBVector_N3;		break;
+			case 4:		vector = ESBVector_N4;		break;
+
+			default:
+				retError(clean, Error_unsupportedOperation(
+					0, "Compiler_convertShaderBufferDXIL()::desc has an unrecognized vector"
+				))
+		}
+
+		switch(typeDesc.Rows) {
+
+			case 0:
+			case 1:		matrix = ESBMatrix_N1;		break;
+
+			case 2:		matrix = ESBMatrix_N2;		break;
+			case 3:		matrix = ESBMatrix_N3;		break;
+			case 4:		matrix = ESBMatrix_N4;		break;
+
+			default:
+				retError(clean, Error_unsupportedOperation(
+					0, "Compiler_convertShaderBufferDXIL()::desc has an unrecognized type (matWxH)"
+				))
+		}
+
+		shType = (ESBType) ESBType_create(stride, prim, vector, matrix);
+
+		perElementStride = ESBType_getSize(shType, isPacked);
+		expectedSize = perElementStride * elementSize;
+	}
+
+	else {
+
+		expectedSize = size;
+		perElementStride = size / elementSize;
+		//U32 length = (U32) perElementStride;
+
+		if(!isPacked && elementSize > 1) {
+			perElementStride = (perElementStride + 15) &~ 15;
+			//length = (U32)(size % perElementStride);
+		}
+
+		CharString structName = CharString_createRefCStrConst(typeDesc.Name);
+
+		U64 j = 0;
+
+		for (; j < sbFile->structs.length; ++j) {
+
+			SBStruct strct = sbFile->structs.ptr[j];
+			CharString structNamej = sbFile->structNames.ptr[j];
+
+			if(CharString_equalsStringSensitive(structName, structNamej) && strct.stride == perElementStride)
+				break;
+		}
+
+		//Insert type
+
+		if (j == sbFile->structs.length)
+			gotoIfError3(clean, SBFile_addStruct(
+				sbFile, &structName, SBStruct{ .stride = (U32) perElementStride }, alloc, e_rr
+			))
+
+		structId = (U16) j;
+	}
+
+	if(size < expectedSize)
+		retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL()::shType had mismatching size"))
+
+	if(typeDesc.Elements)
+		gotoIfError2(clean, ListU32_createRefConst(&typeDesc.Elements, 1, &arrays))
+
+	if(typeDesc.Class != D3D_SVC_STRUCT)
+		gotoIfError3(clean, SBFile_addVariableAsType(
+			sbFile,
+			name,
+			globalOffset, parent, shType,
+			isUnused ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
+			arrays.length ? &arrays : NULL,
+			alloc, e_rr
+		))
+
+	else {
+
+		U16 newParent = (U16) sbFile->vars.length;
+
+		gotoIfError3(clean, SBFile_addVariableAsStruct(
+			sbFile,
+			name,
+			globalOffset, parent, structId,
+			isUnused ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
+			arrays.length ? &arrays : NULL,
+			alloc, e_rr
+		))
+
+		if(!typeDesc.Members)
+			retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing Members"))
+
+		for (U64 j = 0; j < typeDesc.Members; ++j) {
+
+			ID3D12ShaderReflectionType *member = type->GetMemberTypeByIndex((U32) j);
+			const C8 *memberName = type->GetMemberTypeName((U32) j);
+
+			if(!memberName)
+				retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing member or member name"))
+
+			D3D12_SHADER_TYPE_DESC memberDesc{};
+			if(FAILED(member->GetDesc(&memberDesc)))
+				retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing member desc"))
+
+			U32 memberSize = 0;
+
+			if(j + 1 == typeDesc.Members)
+				memberSize = (U32)perElementStride - memberDesc.Offset;
+
+			else {
+
+				D3D12_SHADER_TYPE_DESC neighborDesc{};
+				ID3D12ShaderReflectionType *neighbor = type->GetMemberTypeByIndex((U32) (j + 1));
+				if(!neighbor || FAILED(neighbor->GetDesc(&neighborDesc)))
+					retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing neighbor member desc"))
+
+				memberSize = neighborDesc.Offset - memberDesc.Offset;
+			}
+
+			CharString varName = CharString_createRefCStrConst(memberName);
+			gotoIfError3(clean, Compiler_convertMemberDXIL(
+				sbFile, member, &varName, newParent, globalOffset + memberDesc.Offset, isPacked, isUnused, memberSize, alloc, e_rr
+			))
+		}
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_convertShaderBufferDXIL(
 	const C8 *nameCStr,
 	ID3D12FunctionReflection1 *funcRefl,
@@ -1837,7 +2044,6 @@ Bool Compiler_convertShaderBufferDXIL(
 			))
 	}
 
-
 	if(resourceDesc.Type != D3D_SIT_CBUFFER) {
 		flags = ESBSettingsFlags_IsTightlyPacked;
 		cbufferType = D3D_CT_RESOURCE_BIND_INFO;
@@ -1858,120 +2064,60 @@ Bool Compiler_convertShaderBufferDXIL(
 	for (U32 k = 0; k < constantBufferDesc.Variables; ++k) {
 
 		ID3D12ShaderReflectionVariable *variable = constantBuffer->GetVariableByIndex(k);
-		D3D12_SHADER_VARIABLE_DESC variableDesc{};
 
-		if(FAILED(variable->GetDesc(&variableDesc)))
-			retError(clean, Error_invalidState(
-				0, "Compiler_convertShaderBufferDXIL() DXIL contained constant buffer variable with no desc"
-			))
+		D3D12_SHADER_VARIABLE_DESC variableDesc{};
 
 		const void *startTextureU64 = &variableDesc.StartTexture;
 		const void *startSamplerU64 = &variableDesc.StartSampler;
 
+		if(!variable || !variable->GetType() || FAILED(variable->GetDesc(&variableDesc)))
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertShaderBufferDXIL() DXIL contained buffer variable with no desc or type"
+			))
+
+		ID3D12ShaderReflectionType *type = variable->GetType();
+
 		if(
 			variableDesc.DefaultValue ||
+			!variableDesc.Name ||
 			(variableDesc.uFlags && variableDesc.uFlags != D3D_SVF_USED) ||
 			(*(const U64*)startTextureU64 && *(const U64*)startTextureU64 != U32_MAX) ||
 			(*(const U64*)startSamplerU64 && *(const U64*)startSamplerU64 != U32_MAX)
 		)
 			retError(clean, Error_invalidState(
-				0, "Compiler_convertShaderBufferDXIL() DXIL contained illegal constant buffer variable"
+				0, "Compiler_convertShaderBufferDXIL() DXIL contained illegal buffer variable"
 			))
 
 		const C8 *variableName = variableDesc.Name;
-		U32 offset = variableDesc.StartOffset;
-		U32 size = variableDesc.Size;
-		Bool isUnused = !(variableDesc.uFlags & D3D_SVF_USED);
+		CharString varName = CharString_createRefCStrConst(variableName);
 
-		ID3D12ShaderReflectionType *type = variable->GetType();
-		D3D12_SHADER_TYPE_DESC typeDesc{};
+		U32 varSize = 0;
 
-		if(FAILED(type->GetDesc(&typeDesc)))
-			retError(clean, Error_invalidState(
-				0, "Compiler_convertShaderBufferDXIL() DXIL contained constant buffer variable type with no desc"
-			))
+		if(k + 1 == constantBufferDesc.Variables)
+			varSize = constantBufferDesc.Size - variableDesc.StartOffset;
 
-		ESBPrimitive prim = ESBPrimitive_Invalid;
-		ESBStride stride = ESBStride_X8;
-		ESBVector vector = ESBVector_N1;
-		ESBMatrix matrix = ESBMatrix_N1;
+		else {
 
-		switch (typeDesc.Type) {
+			ID3D12ShaderReflectionVariable *neighbor = constantBuffer->GetVariableByIndex(k + 1);
+			D3D12_SHADER_VARIABLE_DESC neighborDesc{};
 
-			case D3D_SVT_DOUBLE:	stride = ESBStride_X64;		prim = ESBPrimitive_Float;		break;
-			case D3D_SVT_FLOAT:		stride = ESBStride_X32;		prim = ESBPrimitive_Float;		break;
-			case D3D_SVT_FLOAT16:	stride = ESBStride_X16;		prim = ESBPrimitive_Float;		break;
-
-			case D3D_SVT_UINT8:		stride = ESBStride_X8;		prim = ESBPrimitive_UInt;		break;
-			case D3D_SVT_UINT16:	stride = ESBStride_X16;		prim = ESBPrimitive_UInt;		break;
-
-			case D3D_SVT_BOOL:
-			case D3D_SVT_UINT:		stride = ESBStride_X32;		prim = ESBPrimitive_UInt;		break;
-			case D3D_SVT_UINT64:	stride = ESBStride_X64;		prim = ESBPrimitive_UInt;		break;
-
-			case D3D_SVT_INT16:		stride = ESBStride_X16;		prim = ESBPrimitive_Int;		break;
-			case D3D_SVT_INT:		stride = ESBStride_X32;		prim = ESBPrimitive_Int;		break;
-			case D3D_SVT_INT64:		stride = ESBStride_X64;		prim = ESBPrimitive_Int;		break;
-
-			default:
+			if(!neighbor || FAILED(neighbor->GetDesc(&neighborDesc)))
 				retError(clean, Error_invalidState(
-					0, "Compiler_convertShaderBufferDXIL() DXIL contained invalid primitive type"		//TODO: Structs
+					0, "Compiler_convertShaderBufferDXIL() DXIL contained buffer variable with no neighbor"
 				))
+
+			varSize = neighborDesc.StartOffset - variableDesc.StartOffset;
 		}
 
-		if (typeDesc.Class == D3D_SVC_MATRIX_COLUMNS) {
-			U32 cols = typeDesc.Rows;
-			typeDesc.Rows = typeDesc.Columns;
-			typeDesc.Columns = cols;
-		}
-
-		switch(typeDesc.Columns) {
-
-			case 1:		vector = ESBVector_N1;		break;
-			case 2:		vector = ESBVector_N2;		break;
-			case 3:		vector = ESBVector_N3;		break;
-			case 4:		vector = ESBVector_N4;		break;
-
-			default:
-				retError(clean, Error_unsupportedOperation(
-					0, "Compiler_convertShaderBufferDXIL()::desc has an unrecognized vector"
-				))
-		}
-
-		switch(typeDesc.Rows) {
-
-			case 0:
-			case 1:		matrix = ESBMatrix_N1;		break;
-
-			case 2:		matrix = ESBMatrix_N2;		break;
-			case 3:		matrix = ESBMatrix_N3;		break;
-			case 4:		matrix = ESBMatrix_N4;		break;
-
-			default:
-				retError(clean, Error_unsupportedOperation(
-					0, "Compiler_convertShaderBufferDXIL()::desc has an unrecognized type (matWxH)"
-				))
-	}
-
-		ESBType shType = (ESBType) ESBType_create(stride, prim, vector, matrix);
-
-		U64 perElementStride = ESBType_getSize(shType, !!(flags & ESBSettingsFlags_IsTightlyPacked));
-		U64 expectedSize = perElementStride * U64_max(typeDesc.Elements, 1);
-
-		if(size != expectedSize)
-			retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL()::shType had mismatching size"))
-
-		CharString str = CharString_createRefCStrConst(variableName);
-		ListU32 arrays = ListU32{};
-		if(typeDesc.Elements)
-			gotoIfError2(clean, ListU32_createRefConst(&typeDesc.Elements, 1, &arrays))
-
-		gotoIfError3(clean, SBFile_addVariableAsType(
+		gotoIfError3(clean, Compiler_convertMemberDXIL(
 			sbFile,
-			&str,
-			offset, U16_MAX, shType,
-			isUnused ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
-			arrays.length ? &arrays : NULL,
+			type,
+			&varName,
+			U16_MAX,
+			variableDesc.StartOffset,
+			!!(flags & ESBSettingsFlags_IsTightlyPacked),
+			!(variableDesc.uFlags & D3D_SVF_USED),
+			varSize,
 			alloc, e_rr
 		))
 	}
@@ -2777,6 +2923,126 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_convertMemberSPIRV(
+	SBFile *sbFile,
+	const SpvReflectBlockVariable *var,
+	U16 parent,
+	U32 offset,
+	Bool isPacked,
+	Allocator alloc,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	ESBType shType = (ESBType) 0;
+	U64 perElementStride = 0;
+	U16 structId = U16_MAX;
+	U64 expectedSize = perElementStride;
+	CharString str = CharString_createRefCStrConst(var->name);
+	ListU32 arrays = ListU32{};
+
+	if(var->array.dims_count > SPV_REFLECT_MAX_ARRAY_DIMS)
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertMemberSPIRV() array dimensions out of bounds"
+		))
+
+	if(var->array.dims_count && !var->array.stride)
+		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() array stride unset"))
+
+	for(U64 m = 0; m < var->array.dims_count; ++m)
+		if(!var->array.dims[m] || var->array.spec_constant_op_ids[m] != U32_MAX)
+			retError(clean, Error_invalidState(
+				0, "Compiler_convertMemberSPIRV() invalid array data (0 or has spec constant op)"
+			))
+
+	if(var->flags && var->flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED)
+		retError(clean, Error_invalidState(
+			0, "Compiler_convertMemberSPIRV() unsupported value in cbuffer member"
+		))
+
+	if(!(var->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT)) {
+		gotoIfError3(clean, spvTypeToESBType(var->type_description, &shType, e_rr))
+		perElementStride = ESBType_getSize(shType, isPacked);
+	}
+
+	else {
+
+		perElementStride = var->array.dims_count ? var->array.stride : var->size;
+
+		U32 stride = var->array.dims_count ? var->array.stride : var->size;
+
+		CharString structName = CharString_createRefCStrConst(var->type_description->type_name);
+
+		U64 j = 0;
+
+		for (; j < sbFile->structs.length; ++j) {
+
+			SBStruct strct = sbFile->structs.ptr[j];
+			CharString structNamej = sbFile->structNames.ptr[j];
+
+			if(
+				CharString_equalsStringSensitive(structName, structNamej) && strct.stride == stride
+			)
+				break;
+		}
+
+		//Insert type
+
+		if (j == sbFile->structs.length)
+			gotoIfError3(clean, SBFile_addStruct(
+				sbFile, &structName, SBStruct{ .stride = stride }, alloc, e_rr
+			))
+
+		structId = (U16) j;
+	}
+					
+	expectedSize = perElementStride;
+
+	for(U64 m = 0; m < var->array.dims_count; ++m)
+		expectedSize *= var->array.dims[m];
+
+	if(var->size > expectedSize)
+		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() var had mismatching size"))
+
+	if(var->array.dims_count)
+		gotoIfError2(clean, ListU32_createRefConst(var->array.dims, var->array.dims_count, &arrays))
+
+	if(shType != (ESBType) 0)
+		gotoIfError3(clean, SBFile_addVariableAsType(
+			sbFile,
+			&str,
+			offset + var->offset, parent, shType,
+			var->flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
+			arrays.length ? &arrays : NULL,
+			alloc, e_rr
+		))
+
+	else {
+
+		U16 newParent = (U16) sbFile->vars.length;
+
+		gotoIfError3(clean, SBFile_addVariableAsStruct(
+			sbFile,
+			&str,
+			offset + var->offset, parent, structId,
+			var->flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
+			arrays.length ? &arrays : NULL,
+			alloc, e_rr
+		))
+
+		if(!var->member_count || !var->members)
+			retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() missing member_count or members"))
+
+		for (U64 j = 0; j < var->member_count; ++j)
+			gotoIfError3(clean, Compiler_convertMemberSPIRV(
+				sbFile, &var->members[j], newParent, offset + var->offset, isPacked, alloc, e_rr
+			))
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_convertCBufferSPIRV(
 	ListSHRegisterRuntime *registers,
 	SpvReflectDescriptorBinding *binding,
@@ -2871,60 +3137,8 @@ Bool Compiler_convertCBufferSPIRV(
 	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, binding->block.padded_size, alloc, &sbFile, e_rr))
 
 	for (U64 l = 0; l < binding->block.member_count; ++l) {
-
 		SpvReflectBlockVariable var = binding->block.members[l];
-
-		arrayTraits = &var.array;
-		arrayTraitsU64 = (const U64*) arrayTraits;
-
-		if(var.array.dims_count > SPV_REFLECT_MAX_ARRAY_DIMS)
-			retError(clean, Error_invalidState(
-				0, "Compiler_convertCBufferSPIRV() array dimensions out of bounds"
-			))
-
-		//var.array.stride;																	//TODO:
-
-		for(U64 m = 0; m < var.array.dims_count; ++m)
-			if(!var.array.dims[m] || var.array.spec_constant_op_ids[m] != U32_MAX)
-				retError(clean, Error_invalidState(
-					0, "Compiler_convertCBufferSPIRV() invalid array data (0 or has spec constant op)"
-				))
-
-		if(var.member_count || var.members)
-			retError(clean, Error_invalidState(
-				0, "Compiler_convertCBufferSPIRV() nested types in cbuffer not supported yet"		//TODO:
-			))
-
-		if(var.flags && var.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED)
-			retError(clean, Error_invalidState(
-				0, "Compiler_convertCBufferSPIRV() unsupported value in cbuffer member"
-			))
-
-		ESBType shType = (ESBType) 0;
-		gotoIfError3(clean, spvTypeToESBType(var.type_description, &shType, e_rr))
-					
-		U64 perElementStride = ESBType_getSize(shType, false);
-		U64 expectedSize = perElementStride;
-
-		for(U64 m = 0; m < var.array.dims_count; ++m)
-			expectedSize *= var.array.dims[m];
-
-		if(var.padded_size != expectedSize)
-			retError(clean, Error_invalidState(0, "Compiler_convertCBufferSPIRV()::shType had mismatching size"))
-
-		CharString str = CharString_createRefCStrConst(var.name);
-		ListU32 arrays = ListU32{};
-		if(var.array.dims_count)
-			gotoIfError2(clean, ListU32_createRefConst(var.array.dims, var.array.dims_count, &arrays))
-
-		gotoIfError3(clean, SBFile_addVariableAsType(
-			&sbFile,
-			&str,
-			var.absolute_offset, U16_MAX, shType,
-			var.flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVar,
-			arrays.length ? &arrays : NULL,
-			alloc, e_rr
-		))
+		gotoIfError3(clean, Compiler_convertMemberSPIRV(&sbFile, &var, U16_MAX, 0, !isCBV, alloc, e_rr))
 	}
 
 	if(binding->array.dims_count > 1)
@@ -3040,7 +3254,7 @@ Bool Compiler_processSPIRV(
 	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
 	ESHExtension exts = ESHExtension_None;
 	SpvReflectShaderModule spvMod{};
-	spvtools::Optimizer optimizer{ SPV_ENV_VULKAN_1_2 };
+	spvtools::Optimizer optimizer{ SPV_ENV_UNIVERSAL_1_5 };
 
 	ListCharString strings{};
 	ListSHRegisterRuntime registers{};

@@ -1447,7 +1447,7 @@ Bool Compiler_parse(
 								//[extension("16BitTypes", "RayQuery")]
 								//                       ^
 
-								for (U32 k = symj.tokenId + 3; k < tokenEnd; ++k) {
+								for (U32 k = symj.tokenId + 3; k < tokenEnd; k += 2) {
 								
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(

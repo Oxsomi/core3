@@ -267,7 +267,7 @@ typedef enum ESHTexturePrimitive {
 
 } ESHTexturePrimitive;
 
-static const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll];
+extern const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll];
 
 typedef struct SHBinding {
 	U32 space;						//Space or set, depending on binary type

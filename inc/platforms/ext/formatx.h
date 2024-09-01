@@ -153,7 +153,7 @@ Bool SBFile_addVariableAsStructx(
 
 Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr);
 Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr);
-void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent);
+void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive);
 
 void ListSBFile_freeUnderlyingx(ListSBFile *files);
 

@@ -463,7 +463,7 @@ typedef enum ETextureFormatId {
 
 } ETextureFormatId;
 
-static const C8 *ETextureFormatId_name[ETextureFormatId_Count];
+extern const C8 *ETextureFormatId_name[ETextureFormatId_Count];
 
 static const ETextureFormat ETextureFormatId_unpack[] = {
 

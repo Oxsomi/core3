@@ -420,8 +420,8 @@ Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr) {
 	return SBFile_read(file, isSubFile, Platform_instance.alloc, sbFile, e_rr);
 }
 
-void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent) {
-	SBFile_print(sbFile, indenting, parent, Platform_instance.alloc);
+void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive) {
+	SBFile_print(sbFile, indenting, parent, isRecursive, Platform_instance.alloc);
 }
 
 void ListSBFile_freeUnderlyingx(ListSBFile *files) {

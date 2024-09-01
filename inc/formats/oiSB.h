@@ -260,7 +260,7 @@ U8 ESBType_getSize(ESBType type, Bool isPacked);
 const C8 *ESBType_name(ESBType type);
 
 typedef struct SBStruct {
-	U32 length, stride;
+	U32 stride;
 } SBStruct;
 
 typedef enum ESBVarFlag {
@@ -342,7 +342,7 @@ Bool SBFile_addVariableAsStruct(
 Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr);
 Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *sbFile, Error *e_rr);
 
-void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Allocator alloc);
+void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Allocator alloc);
 
 //Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
 

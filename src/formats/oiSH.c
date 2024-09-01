@@ -3074,7 +3074,7 @@ void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator all
 	SHRegister_print(reg.reg, indenting + 1, alloc);
 
 	if(reg.shaderBuffer.vars.ptr)
-		SBFile_print(reg.shaderBuffer, indenting + 1, U16_MAX, alloc);
+		SBFile_print(reg.shaderBuffer, indenting + 1, U16_MAX, true, alloc);
 }
 
 void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Allocator alloc) {

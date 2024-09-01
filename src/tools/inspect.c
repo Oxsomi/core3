@@ -1251,7 +1251,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			SBFile file = (SBFile) { 0 };
 			gotoIfError3(cleanSb, SBFile_readx(buf, false, &file, e_rr))
 
-			SBFile_printx(file, 0, U16_MAX /* parent */);
+			SBFile_printx(file, 0, U16_MAX, true);		//TODO: parent
 
 		cleanSb:
 

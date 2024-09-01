@@ -64,7 +64,7 @@ typedef enum ESBMatrix {
 define ESBType as U8: [ U2 from ESBStride, U2 from ESBPrimitive, U2 from ESBVector, U2 from ESBMatrix ]
 
 typedef struct SBStruct {
-    U32 length, stride;			//stride >= length and length != 0
+    U32 stride;			//stride to next element (e.g. next neighbor or next array entry)
 } SBStruct;
 
 typedef enum ESBVarFlag {

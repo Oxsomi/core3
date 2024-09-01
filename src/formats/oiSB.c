@@ -307,9 +307,9 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Alloc
 	if(!sbFile || !name)
 		retError(clean, Error_nullPointer(!sbFile ? 0 : 1, "SBFile_addStruct()::sbFile and name are required"))
 
-	if(sbStruct.stride < sbStruct.length || !sbStruct.length)
+	if(!sbStruct.stride)
 		retError(clean, Error_invalidParameter(
-			2, 0, "SBFile_addStruct()::sbStruct.stride and length are required (stride >= length && length)"
+			2, 0, "SBFile_addStruct()::sbStruct.stride is required"
 		))
 
 	if(sbFile->structs.length >= (U16)(U16_MAX - 1))
@@ -443,12 +443,6 @@ Bool SBFile_addVariableAsType(
 			retError(clean, Error_invalidState(0, "SBFile_addVariableAsType()::sbFile->vars.ptr[parentId] isn't a struct"))
 
 		SBStruct strc = sbFile->structs.ptr[var.structId];
-		U64 assumedLength = strc.length;
-
-		if(offset < var.offset || offset + size > var.offset + assumedLength)
-			retError(clean, Error_outOfBounds(
-				0, offset + size, var.offset + assumedLength, "SBFile_addVariableAsType()::offset isn't in bounds of struct"
-			))
 
 		if(isTightlyPacked && (var.offset & (typeSize - 1)) && ((var.offset + strc.stride) & (typeSize - 1)))
 			retError(clean, Error_invalidState(0, "SBFile_addVariableAsType() parent struct doesn't respect alignment"))
@@ -586,10 +580,6 @@ Bool SBFile_addVariableAsStruct(
 			))
 	}
 
-	//Last element doesn't necessarily have padding in-between
-
-	size -= strc.stride - strc.length;
-
 	//Validate parent
 
 	if (parentId == U16_MAX) {
@@ -610,13 +600,6 @@ Bool SBFile_addVariableAsStruct(
 
 		if(var.type)
 			retError(clean, Error_invalidState(0, "SBFile_addVariableAsStruct()::sbFile->vars.ptr[parentId] isn't a struct"))
-
-		U64 assumedLength = sbFile->structs.ptr[var.structId].length;
-
-		if(offset < var.offset || offset + size > var.offset + assumedLength)
-			retError(clean, Error_outOfBounds(
-				0, offset + size, var.offset + assumedLength, "SBFile_addVariableAsStruct()::offset isn't in bounds of struct"
-			))
 	}
 
 	for(U64 i = 0; i < sbFile->vars.length; ++i) {
@@ -977,15 +960,10 @@ void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc) {
 	ListSBFile_free(files, alloc);
 }
 
-void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Allocator alloc) {
+void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Allocator alloc) {
 
 	if(indenting >= SHORTSTRING_LEN) {
 		Log_debugLn(alloc, "SBFile_print() short string out of bounds");
-		return;
-	}
-
-	if (parent != U16_MAX) {
-		Log_debugLn(alloc, "SBFile_print()::parent isn't implemented yet");		//TODO:
 		return;
 	}
 
@@ -1007,17 +985,23 @@ void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Allocator alloc) {
 			var.structId == U16_MAX ? CharString_createRefCStrConst(ESBType_name((ESBType)var.type)) :
 			sbFile.structNames.ptr[var.structId];
 
+		SBStruct strct = (SBStruct) { 0 };
+
+		if(var.structId != U16_MAX)
+			strct = sbFile.structs.ptr[var.structId];
+
 		Log_debug(
 			alloc,
 			!isArray ? ELogOptions_NewLine : ELogOptions_None,
-			"%s0x%08"PRIx32": %.*s (%s): %.*s",
+			!strct.stride ? "%s0x%08"PRIx32": %.*s (%s): %.*s" : "%s0x%08"PRIx32": %.*s (%s): %.*s (Stride: %"PRIu32")",
 			indent,
 			var.offset,
 			(int) CharString_length(varName),
 			varName.ptr,
 			(var.flags & ESBVarFlag_IsUsedVar) ? "Used" : "Unused",
 			(int) CharString_length(typeName),
-			typeName.ptr
+			typeName.ptr,
+			strct.stride
 		);
 
 		if (isArray) {
@@ -1031,5 +1015,8 @@ void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Allocator alloc) {
 					"[%"PRIu32"]", array.ptr[j]
 				);
 		}
+
+		if(isRecursive && strct.stride)
+			SBFile_print(sbFile, indenting + 1, (U16) i, true, alloc);
 	}
 }
