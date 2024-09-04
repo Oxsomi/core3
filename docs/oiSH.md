@@ -179,6 +179,8 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_ByteAddressBuffer,
 	ESHRegisterType_StructuredBuffer,
 	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter
+	ESHRegisterType_StorageBuffer,
+	ESHRegisterType_StorageBufferAtomic,
 	ESHRegisterType_AccelerationStructure,
 
 	ESHRegisterType_Texture1D,
@@ -197,9 +199,7 @@ typedef enum ESHRegisterType {
 	//Invalid on samplers, AS and CBuffer
 	//Required on append/consume buffer
 	//Valid on everything else (textures and various buffers)
-	ESHRegisterType_IsWrite				= 1 << 6,
-
-	ESHRegisterType_IsUsed				= 1 << 7
+	ESHRegisterType_IsWrite				= 1 << 6
 
 } ESHRegisterType;
 
@@ -234,9 +234,9 @@ typedef struct SHBindings {
 	SHBinding arr[ESHBinaryType_Count];
 } SHBindings;
 
-typedef struct SHTextureFormat {
-	U8 primitive;					//Texture registers only: ESHTexturePrimitive must match format approximately
-	U8 formatId;					//Texture registers only: ETextureFormatId Must match formatPrimitive and uncompressed
+typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
+	U8 primitive;					//Optional for readonly registers: ESHTexturePrimitive must match format approximately
+	U8 formatId;					//Optional for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
 } SHTextureFormat;
 
 typedef struct SHRegister {
@@ -244,7 +244,7 @@ typedef struct SHRegister {
 	SHBindings bindings;
 
 	U8 registerType;				//ESHRegisterType
-	U8 padding1;
+	U8 isUsedFlags;					//Per ESHBinaryType if the register is used
 
 	union {
 		U16 padding;				//Used for samplers, (RW)BAB or AS (should be 0)
@@ -391,6 +391,10 @@ The following define the requirements of binaries embedded in oiSH files.
     - StorageImageExtendedFormats
     - ImageQuery
     - DerivativeControl
+    - SampledCubeArray
+    - Sampled1D
+    - Image1D
+    - ImageCubeArray
   - Anything to do with kernels (OpenCL) is unsupported.
   - Int64Atomics as I64 | AtomicI64.
   - Int64 as I64.
@@ -412,6 +416,7 @@ The following define the requirements of binaries embedded in oiSH files.
   - ComputeDerivativeGroupLinearNV as ComputeDeriv.
   - GroupNonUniformArithmetic as SubgroupArithmetic.
   - GroupNonUniformShuffle as SubgroupShuffle.
+  - ImageMSArray as WriteMSTexture.
   - RayTracingKHR required if Raytracing shader stage.
   - Tessellation required if Hull or Domain shader stage.
   - Geometry required if Geometry shader stage.

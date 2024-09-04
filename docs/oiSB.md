@@ -69,7 +69,8 @@ typedef struct SBStruct {
 
 typedef enum ESBVarFlag {
     ESBVarFlag_None				= 0,
-    ESBVarFlag_IsUsedVar		= 1 << 0		//Variable is used by shader
+    ESBVarFlag_IsUsedVarSPIRV	= 1 << 0,		//Variable is used by shader (SPIRV)
+    ESBVarFlag_IsUsedVarDXIL	= 1 << 1		//Variable is used by shader (DXIL)
 } ESBVarFlag;
 
 typedef struct SBVar {
@@ -122,6 +123,10 @@ With the tightly packing flag, HLSL/DX-like StructuredBuffer packing is used. Th
 Overlapping memory is allowed, to allow (future) support for unions.
 
 The SBFile's ListSBVar and ListSBStruct can have duplicate names (which is fine), but a single struct (or the shader buffer itself) can't have duplicate names in its members (so `F32 a, a;` would be disallowed). However, duplicate struct names (even in current scope) is allowed.
+
+## Quirk(s) between DXIL/SPIRV
+
+The biggest quirk between DXIL and SPIRV is that DXIL doesn't have anything beyond flattened arrays, though SPIRV does. To support this, oiSB will flatten arrays too when DXIL is used and unflatten if SPIRV is used. If DXIL and SPIRV oiSB files are merged through SBFile_combine it is safe to merge one way (so from flattened to unflattened). For example: `[16]` could be recast to `[4][4]` or `[8][2]`. But once it has been unflattened, it can never be flattened again and can't merge with incompatible multi dimensional arrays (or ones with a mismatching flattened count). So merging DXIL and SPIRV will always result in the array info that SPIRV has. Other than that, it forces SPIRV to use DX-like alignment rules for structured/storage buffers and constant buffers.
 
 ## Changelog
 

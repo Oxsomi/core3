@@ -265,8 +265,9 @@ typedef struct SBStruct {
 
 typedef enum ESBVarFlag {
 	ESBVarFlag_None				= 0,
-	ESBVarFlag_IsUsedVar		= 1 << 0,		//Variable is used by shader
-	ESBVarFlag_Invalid			= 0xFFFFFFFF << 1
+	ESBVarFlag_IsUsedVarSPIRV	= 1 << 0,		//Variable is used by shader (SPIRV)
+	ESBVarFlag_IsUsedVarDXIL	= 1 << 1,		//Variable is used by shader (DXIL)
+	ESBVarFlag_Invalid			= 0xFFFFFFFF << 2
 } ESBVarFlag;
 
 typedef struct SBVar {
@@ -344,7 +345,8 @@ Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *sbFile, E
 
 void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Allocator alloc);
 
-//Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
+//Doesn't work on layouts that mismatch (only order of structs/variables or some flags may vary)
+Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);
 
 void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc);
 

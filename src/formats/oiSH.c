@@ -59,7 +59,8 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"MULTIVIEW",
 	"COMPUTEDERIV",
 	"PAQ",
-	"MESHTASKTEXDERIV"
+	"MESHTASKTEXDERIV",
+	"WRITEMSTEXTURE"
 };
 
 const C8 *SHEntry_stageNames[] = {
@@ -899,7 +900,7 @@ clean:
 
 Bool ListSHRegisterRuntime_addSampler(
 	ListSHRegisterRuntime *registers,
-	Bool isUsed,
+	U8 isUsedFlag,
 	Bool isSamplerComparisonState,
 	CharString *name,
 	ListU32 *arrays,
@@ -916,9 +917,9 @@ Bool ListSHRegisterRuntime_addSampler(
 			.bindings = bindings,
 			.registerType = (U8)(
 				ESHRegisterType_Sampler |
-				(isUsed ? ESHRegisterType_IsUsed : 0) |
 				(isSamplerComparisonState ? ESHRegisterType_SamplerComparisonState : 0)
-			)
+			),
+			.isUsedFlag = isUsedFlag
 		},
 		NULL,
 		alloc,
@@ -930,7 +931,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 	ListSHRegisterRuntime *registers,
 	ESHBufferType registerType,
 	Bool isWrite,
-	Bool isUsed,
+	U8 isUsedFlag,
 	CharString *name,
 	ListU32 *arrays,
 	SBFile *sbFile,
@@ -975,6 +976,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 	switch (registerType) {
 
 		case ESHBufferType_StructuredBufferAtomic:
+		case ESHBufferType_StorageBufferAtomic:
 
 			if(!isWrite)
 				retError(clean, Error_invalidState(
@@ -1006,9 +1008,9 @@ Bool ListSHRegisterRuntime_addBuffer(
 			.bindings = bindings,
 			.registerType = (U8)(
 				(ESHRegisterType_BufferStart + registerType) | 
-				(isUsed ? ESHRegisterType_IsUsed : 0) |
 				(isWrite ? ESHRegisterType_IsWrite : 0)
-			)
+			),
+			.isUsedFlag = isUsedFlag
 		},
 		sbFile,
 		alloc,
@@ -1025,7 +1027,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 	Bool isLayeredTexture,
 	Bool isCombinedSampler,
 	Bool isWrite,
-	Bool isUsed,
+	U8 isUsedFlag,
 	ESHTexturePrimitive textureFormatPrimitive,
 	ETextureFormatId textureFormatId,
 	CharString *name,
@@ -1056,9 +1058,9 @@ Bool ListSHRegisterRuntime_addTextureBase(
 			"ListSHRegisterRuntime_addRWTexture()::textureFormatPrimitive out of bounds"
 		))
 
-	if(textureFormatPrimitive == ESHTexturePrimitive_Count && !textureFormatId)
+	if(textureFormatPrimitive == ESHTexturePrimitive_Count && !textureFormatId && isWrite)
 		retError(clean, Error_invalidState(
-			0, "ListSHRegisterRuntime_addRWTexture() either texture format primitive or texture format id has to be set"
+			0, "ListSHRegisterRuntime_addRWTexture() either texture format primitive or texture format id has to be set for RW"
 		))
 
 	ETextureFormat format = ETextureFormatId_unpack[textureFormatId];
@@ -1118,8 +1120,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		(SHRegister) {
 			.bindings = bindings,
 			.registerType = (U8)(
-				(ESHRegisterType_TextureStart + registerType) | 
-				(isUsed ? ESHRegisterType_IsUsed : 0) |
+				(ESHRegisterType_TextureStart + registerType) |
 				(isWrite ? ESHRegisterType_IsWrite : 0) |
 				(isCombinedSampler ? ESHRegisterType_IsCombinedSampler : 0) |
 				(isLayeredTexture ? ESHRegisterType_IsArray : 0)
@@ -1127,7 +1128,8 @@ Bool ListSHRegisterRuntime_addTextureBase(
 			.texture = (SHTextureFormat) {
 				.formatId = textureFormatId,
 				.primitive = primitive
-			}
+			},
+			.isUsedFlag = isUsedFlag
 		},
 		NULL,
 		alloc,
@@ -1143,9 +1145,8 @@ Bool ListSHRegisterRuntime_addTexture(
 	ESHTextureType registerType,
 	Bool isLayeredTexture,
 	Bool isCombinedSampler,
-	Bool isUsed,
+	U8 isUsedFlag,
 	ESHTexturePrimitive textureFormatPrimitive,
-	ETextureFormatId textureFormatId,
 	CharString *name,
 	ListU32 *arrays,
 	SHBindings bindings,
@@ -1158,9 +1159,9 @@ Bool ListSHRegisterRuntime_addTexture(
 		isLayeredTexture,
 		isCombinedSampler,
 		false,
-		isUsed,
+		isUsedFlag,
 		textureFormatPrimitive,
-		textureFormatId,
+		ETextureFormatId_Undefined,
 		name,
 		arrays,
 		bindings,
@@ -1173,7 +1174,7 @@ Bool ListSHRegisterRuntime_addRWTexture(
 	ListSHRegisterRuntime *registers,
 	ESHTextureType registerType,
 	Bool isLayeredTexture,
-	Bool isUsed,
+	U8 isUsedFlag,
 	ESHTexturePrimitive textureFormatPrimitive,
 	ETextureFormatId textureFormatId,
 	CharString *name,
@@ -1188,7 +1189,7 @@ Bool ListSHRegisterRuntime_addRWTexture(
 		isLayeredTexture,
 		false,
 		true,
-		isUsed,
+		isUsedFlag,
 		textureFormatPrimitive,
 		textureFormatId,
 		name,
@@ -1201,7 +1202,7 @@ Bool ListSHRegisterRuntime_addRWTexture(
 
 Bool ListSHRegisterRuntime_addSubpassInput(
 	ListSHRegisterRuntime *registers,
-	Bool isUsed,
+	U8 isUsedFlag,
 	CharString *name,
 	SHBindings bindings,
 	U16 inputAttachmentId,
@@ -1223,7 +1224,8 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 		(SHRegister) {
 			.bindings = bindings,
 			.inputAttachmentId = inputAttachmentId,
-			.registerType = (U8)(ESHRegisterType_SubpassInput | (isUsed ? ESHRegisterType_IsUsed : 0))
+			.registerType = (U8)ESHRegisterType_SubpassInput,
+			.isUsedFlag = isUsedFlag
 		},
 		NULL,
 		alloc,
@@ -1254,6 +1256,8 @@ Bool ListSHRegisterRuntime_addRegister(
 		case ESHRegisterType_ByteAddressBuffer:
 		case ESHRegisterType_StructuredBuffer:
 		case ESHRegisterType_StructuredBufferAtomic:
+		case ESHRegisterType_StorageBuffer:
+		case ESHRegisterType_StorageBufferAtomic:
 		case ESHRegisterType_AccelerationStructure:
 			
 			if(reg.registerType & (ESHRegisterType_Masks &~ ESHRegisterType_IsWrite))
@@ -1266,7 +1270,7 @@ Bool ListSHRegisterRuntime_addRegister(
 				registers,
 				(ESHBufferType)(baseRegType - ESHRegisterType_BufferStart),
 				reg.registerType & ESHRegisterType_IsWrite,
-				reg.registerType & ESHRegisterType_IsUsed,
+				reg.isUsedFlag,
 				name,
 				arrays,
 				sbFile,
@@ -1279,7 +1283,7 @@ Bool ListSHRegisterRuntime_addRegister(
 	
 		case ESHRegisterType_Sampler: {
 
-			U32 regType = reg.registerType &~ ESHRegisterType_IsUsed;
+			U32 regType = reg.registerType;
 			Bool isComparisonState = regType != ESHRegisterType_SamplerComparisonState;
 			
 			if(regType != ESHRegisterType_Sampler && isComparisonState)
@@ -1295,7 +1299,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
-				reg.registerType & ESHRegisterType_IsUsed,
+				reg.isUsedFlag,
 				isComparisonState,
 				name,
 				arrays,
@@ -1309,7 +1313,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 		case ESHRegisterType_SubpassInput:
 			
-			if((reg.registerType &~ ESHRegisterType_IsUsed) != ESHRegisterType_SubpassInput)
+			if(reg.registerType != ESHRegisterType_SubpassInput)
 				retError(clean, Error_invalidParameter(2, 0, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
 
 			if(arrays)
@@ -1320,7 +1324,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
 				registers,
-				reg.registerType & ESHRegisterType_IsUsed,
+				reg.isUsedFlag,
 				name,
 				reg.bindings,
 				reg.inputAttachmentId,
@@ -1349,7 +1353,7 @@ Bool ListSHRegisterRuntime_addRegister(
 					registers,
 					(ESHTextureType)(baseRegType - ESHRegisterType_TextureStart),
 					reg.registerType & ESHRegisterType_IsArray,
-					reg.registerType & ESHRegisterType_IsUsed,
+					reg.isUsedFlag,
 					(ESHTexturePrimitive) reg.texture.primitive,
 					(ETextureFormatId) reg.texture.formatId,
 					name,
@@ -1367,14 +1371,18 @@ Bool ListSHRegisterRuntime_addRegister(
 						2, 5, "ListSHRegisterRuntime_addRegister()::padding is invalid (non zero)"
 					))
 
+				if(reg.texture.formatId)
+					retError(clean, Error_invalidParameter(
+						3, 5, "ListSHRegisterRuntime_addRegister()::texture.formatId isn't allowed only readonly texture"
+					))
+
 				gotoIfError3(clean, ListSHRegisterRuntime_addTexture(
 					registers,
 					(ESHTextureType)(baseRegType - ESHRegisterType_TextureStart),
 					reg.registerType & ESHRegisterType_IsArray,
 					reg.registerType & ESHRegisterType_IsCombinedSampler,
-					reg.registerType & ESHRegisterType_IsUsed,
+					reg.isUsedFlag,
 					(ESHTexturePrimitive) reg.texture.primitive,
-					(ETextureFormatId) reg.texture.formatId,
 					name,
 					arrays,
 					reg.bindings,
@@ -2976,6 +2984,14 @@ void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
 			Log_debugLn(alloc, "%s%sStructuredBuffer", indent, reg.registerType & ESHRegisterType_IsWrite ? "RW" : "");
 			break;
 
+		case ESHRegisterType_StorageBuffer:
+			Log_debugLn(alloc, "%s%sStorageBuffer", indent, reg.registerType & ESHRegisterType_IsWrite ? "RW" : "");
+			break;
+
+		case ESHRegisterType_StorageBufferAtomic:
+			Log_debugLn(alloc, "%s%sStorageBufferAtomic", indent, reg.registerType & ESHRegisterType_IsWrite ? "RW" : "");
+			break;
+
 		case ESHRegisterType_StructuredBufferAtomic:
 			Log_debugLn(alloc, "%sAppend/ConsumeBuffer", indent);
 			break;
@@ -3069,7 +3085,19 @@ void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator all
 			reg.arrays.ptr[i]
 		);
 
-	Log_debugLn(alloc, reg.reg.registerType & ESHRegisterType_IsUsed ? " (Used)" : " (Unused)");
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
+
+		if(reg.reg.bindings.arr[i].space == U32_MAX && reg.reg.bindings.arr[i].binding == U32_MAX)
+			continue;
+
+		Log_debug(
+			alloc, ELogOptions_None,
+			(reg.reg.isUsedFlag >> i) & 1 ? " (%s: Used)" : " (%s: Unused)",
+			ESHBinaryType_names[i]
+		);
+	}
+
+	Log_debugLn(alloc, "");
 
 	SHRegister_print(reg.reg, indenting + 1, alloc);
 

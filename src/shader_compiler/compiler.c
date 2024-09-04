@@ -764,6 +764,29 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
+		case C8x2('W', 'r'):
+
+			if (
+				stageNameLen == 14 &&
+				*(const U64*)&extensionName.ptr[ 2] == C8x8('i', 't', 'e', 'M', 'S', 'T', 'e', 'x') &&
+				*(const U32*)&extensionName.ptr[10] == C8x4('t', 'u', 'r', 'e')
+			)
+				return ESHExtension_WriteMSTexture;
+
+			break;
+
+		case C8x2('M', 'e'):
+
+			if (
+				stageNameLen == 16 &&
+				*(const U64*)&extensionName.ptr[ 2] == C8x8('s', 'h', 'T', 'a', 's', 'k', 'T', 'e') &&
+				*(const U32*)&extensionName.ptr[10] == C8x4('x', 'D', 'e', 'r') &&
+				*(const U16*)&extensionName.ptr[14] == C8x2('i', 'v')
+			)
+				return ESHExtension_MeshTaskTexDeriv;
+
+			break;
+
 		case C8x2('A', 't'):	//AtomicI64, AtomicF32, AtomicF64
 
 			if(stageNameLen == 9)
@@ -1049,6 +1072,9 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 
 	if(ext & ESHExtension_PAQ)
 		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
+
+	if(ext & ESHExtension_WriteMSTexture)
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 7), minVersion);
 
 	return minVersion;
 }
