@@ -1020,16 +1020,23 @@ void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Al
 		if(var.structId != U16_MAX)
 			strct = sbFile.structs.ptr[var.structId];
 
+		Bool usedSPIRV = var.flags & ESBVarFlag_IsUsedVarSPIRV;
+		Bool usedDXIL = var.flags & ESBVarFlag_IsUsedVarDXIL;
+
+		const C8 *used = usedSPIRV && usedDXIL ? "SPIRV & DXIL: Used" : (
+			usedSPIRV ? "SPIRV: Used" : (usedDXIL ? "DXIL: Used" : "SPIRV & DXIL: Unused")
+		);
+
 		Log_debug(
 			alloc,
 			!isArray ? ELogOptions_NewLine : ELogOptions_None,
-			!strct.stride ? "%s0x%08"PRIx32": %.*s (%s): %.*s" : "%s0x%08"PRIx32": %.*s (%s, %s): %.*s (Stride: %"PRIu32")",
+			!strct.stride ? "%s0x%08"PRIx32": %.*s (%s): %.*s" :
+			"%s0x%08"PRIx32": %.*s (%s): %.*s (Stride: %"PRIu32")",
 			indent,
 			var.offset,
 			(int) CharString_length(varName),
 			varName.ptr,
-			(var.flags & ESBVarFlag_IsUsedVarSPIRV) ? "SPIRV: Used" : "SPIRV: Unused",
-			(var.flags & ESBVarFlag_IsUsedVarDXIL) ? "DXIL: Used" : "DXIL: Unused",
+			used,
 			(int) CharString_length(typeName),
 			typeName.ptr,
 			strct.stride

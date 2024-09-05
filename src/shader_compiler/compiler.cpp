@@ -2966,7 +2966,7 @@ Bool Compiler_convertMemberSPIRV(
 
 	if(!(var->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT)) {
 		gotoIfError3(clean, spvTypeToESBType(var->type_description, &shType, e_rr))
-		perElementStride = ESBType_getSize(shType, isPacked);
+		perElementStride = var->array.dims_count ? var->array.stride : ESBType_getSize(shType, isPacked);
 	}
 
 	else {
@@ -3071,10 +3071,39 @@ Bool Compiler_convertShaderBufferSPIRV(
 
 		SpvReflectBlockVariable *innerStruct = binding->block.members;
 
-		if(!innerStruct->member_count || !innerStruct->members || !innerStruct->padded_size)
-			retError(clean, Error_invalidState(
-				0, "Compiler_convertShaderBufferSPIRV() inner struct is missing member count, size or members"
+		if(!innerStruct->member_count || !innerStruct->members || !innerStruct->padded_size) {
+
+			ESBType type{};
+			gotoIfError3(clean, spvTypeToESBType(innerStruct->type_description, &type, e_rr))
+
+			if(type && (innerStruct->members || innerStruct->member_count || innerStruct->padded_size))
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertShaderBufferSPIRV() inner struct is assumed to be a type, but has invalid members"
+				))
+			
+			U32 paddedSize = ESBType_getSize(type, isPacked);
+
+			if(!isPacked)
+				paddedSize = (paddedSize + 15) &~ 15;
+
+			gotoIfError3(clean, SBFile_create(packedFlags, paddedSize, alloc, sbFile, e_rr))
+			CharString elementName = CharString_createRefCStrConst("$Element");
+			ListU32 arrays{};
+
+			if(innerStruct->array.dims_count)
+				gotoIfError2(clean, ListU32_createRefConst(innerStruct->array.dims, innerStruct->array.dims_count, &arrays))
+			
+			gotoIfError3(clean, SBFile_addVariableAsType(
+				sbFile,
+				&elementName,
+				0, U16_MAX, type,
+				binding->block.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
+				arrays.length ? &arrays : NULL,
+				alloc, e_rr
 			))
+
+			goto clean;
+		}
 
 		gotoIfError3(clean, SBFile_create(packedFlags, innerStruct->padded_size, alloc, sbFile, e_rr))
 
@@ -3457,8 +3486,10 @@ Bool Compiler_convertRegisterSPIRV(
 			Bool isArray = binding->image.arrayed;
 			U8 reqDepth = 0;
 
-			if(binding->image.ms)
+			if(binding->image.ms) {
 				type = ESHTextureType_Texture2DMS;
+				reqDepth = 2;
+			}
 
 			else switch(binding->image.dim) {
 				
@@ -3490,7 +3521,7 @@ Bool Compiler_convertRegisterSPIRV(
 					(U8)((!isUnused) << ESHBinaryType_SPIRV),
 					ESHTexturePrimitive_Count,
 					&name,
-					&arrays,
+					arrays.length ? &arrays : NULL,
 					bindings,
 					alloc,
 					e_rr
