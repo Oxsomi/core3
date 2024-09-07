@@ -287,7 +287,7 @@ file(GLOB_RECURSE graphicsApiSources "src/graphics/${graphicsApi}/generic/*.c")
 file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/${graphicsApi}/${platform}/*.c")
 
 file(GLOB_RECURSE graphicsSources "src/graphics/generic/*.c")
-# file(GLOB_RECURSE shaders "src/*.hlsl")
+# file(GLOB_RECURSE shaders "src/*.hlsli")
 
 add_library(
 	OxC3_graphics

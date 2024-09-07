@@ -283,6 +283,8 @@ typedef struct SHBindings {
 	SHBinding arr[ESHBinaryType_Count];
 } SHBindings;
 
+SHBindings SHBindings_dummy();
+
 typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
 	U8 primitive;					//Optional for readonly registers: ESHTexturePrimitive must match format approximately
 	U8 formatId;					//Optional for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
@@ -326,7 +328,7 @@ typedef struct SHEntryRuntime {
 	SHEntry entry;
 
 	U16 vendorMask;
-	Bool isShaderAnnotation;			//Switches [shader("string")] and [stage("string")], the first indicates StateObject
+	Bool isShaderAnnotation;			//Switches [shader("string")] and [[oxc::stage("string")]], shader = StateObject
 	Bool isInitialized;
 
 	U32 padding;
@@ -378,7 +380,7 @@ typedef struct SHBinaryInfo {
 	ListSHRegisterRuntime registers;
 
 	U16 vendorMask;
-	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [stage("")]
+	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [[oxc::stage("")]]
 	U8 padding[5];
 
 	Buffer binaries[ESHBinaryType_Count];
@@ -460,7 +462,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 typedef struct SHInclude {
 
-	CharString relativePath;	//Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsl)
+	CharString relativePath;	//Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsli)
 
 	U32 crc32c;					//Content CRC32C. However, if it contains \\r it's removed first!
 	U32 padding;

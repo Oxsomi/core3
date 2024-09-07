@@ -244,7 +244,7 @@ typedef struct SHRegister {
 	SHBindings bindings;
 
 	U8 registerType;				//ESHRegisterType
-	U8 isUsedFlags;					//Per ESHBinaryType if the register is used
+	U8 isUsedFlag;					//Per ESHBinaryType if the register is used
 
 	union {
 		U16 padding;				//Used for samplers, (RW)BAB or AS (should be 0)
@@ -420,7 +420,8 @@ The following define the requirements of binaries embedded in oiSH files.
   - RayTracingKHR required if Raytracing shader stage.
   - Tessellation required if Hull or Domain shader stage.
   - Geometry required if Geometry shader stage.
-  - *Other capabilities are unsupported*.
+  - Registers of type STORAGE_TEXEL_BUFFER, UNIFORM_TEXEL_BUFFER, UNIFORM_BUFFER_DYNAMIC or STORAGE_BUFFER_DYNAMIC *are unsupported*.
+  - Other capabilities *are unsupported*.
 
 ### DXIL spec
 
@@ -441,11 +442,13 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_DOUBLES or D3D_SHADER_REQUIRES_11_1_DOUBLE_EXTENSIONS as F64.
   - D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE or D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED as AtomicI64.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
-- NV extensions should be properly marked using annotations, or the oiSH is illegal. The validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
+- NV extensions should be properly marked using annotations, or the oiSH is illegal. The OxC3 validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
 
-## TODO: ESHExtension_Bindless
+## TODO: ESHExtension_Bindless / ESHExtension_UnboundArraySize
 
 "Bindless" extension is present when more than the maximum bindful registers are detected. This extension is generally well supported across modern hardware (everywhere on PC) but not always properly supported on mobile / web. For that reason, this has become a dedicated extension. This extension is just a hint based on reasonable device limits in the wild right now.
+
+This can be coupled with `ESHExtension_UnboundArraySize` which indicates that the register size can be determined by the engine/framework running it (such as allowing more registers based on the binding limits). 
 
 ### TODO: Binding limits (tier 0)
 
@@ -457,11 +460,19 @@ Tier 1 (with bindless) has the following limits:
 
 - Acceleration structures: 16 per binary. Due to Intel not supporting more.
 
+## Quirks between DXIL and SPIRV
+
+When combining DXIL and SPIRV binaries and/or switching binary type, there are a few quirks that are important to know:
+
+- In DXIL, registers and elements in buffers all get flattened to a 1D array, even if they were from a 2D array. The array is effectively flattened. Combining a SPIRV input with a DXIL input will unflatten this array (since SPIRV maintains this info).
+- In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: ESHRegisterType_IsCombinedSampler.
+- SPIRV has the concept of subpass inputs, but DXIL doesn't. This means the bindings of input attachments should only be valid for SPIRV.
+
 ## Changelog
 
 0.1: Old ocore1 specification. Represented multiple shaders and had too much reflection information that is now irrelevant.
 
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
 
-1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets).
+1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets). Various extensions and abilities to use HLSL or GLSL specific features for all backends.
 

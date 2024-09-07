@@ -279,12 +279,43 @@ Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, 
 	return Compiler_createDisassembly(comp, type, buf, Platform_instance.alloc, result, e_rr);
 }
 
+const C8 *ignoredWarnings[] = {
+
+	//Can't be parsed properly:
+
+	"validation errors",
+
+	//Our compiler oxc:: annotations
+
+	"unknown attribute '",		//Starts with
+
+	"unknown attribute 'stage' ignored [-Wunknown-attributes]",		//Equals
+	"unknown attribute 'model' ignored [-Wunknown-attributes]",
+	"unknown attribute 'uniforms' ignored [-Wunknown-attributes]",
+	"unknown attribute 'extension' ignored [-Wunknown-attributes]",
+	"unknown attribute 'vendor' ignored [-Wunknown-attributes]",
+
+	//Vulkan attributes:
+
+	"'binding' attribute ignored [-Wignored-attributes]",
+	"'combinedImageSampler' attribute ignored [-Wignored-attributes]"
+};
+
 Bool Compiler_filterWarning(CharString str) {
-	return 
-		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0) ||
-		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("validation errors"), 0) ||
-		CharString_containsStringSensitive(str, CharString_createRefCStrConst("dxil.dll"), 0, 0) ||
-		CharString_containsStringSensitive(str, CharString_createRefCStrConst("-Wunknown-attributes"), 0, 0);
+
+	if (CharString_startsWithStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[1]), 0)) {
+		return
+			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[2])) ||
+			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[3])) ||
+			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[4])) ||
+			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[5])) ||
+			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[6]));
+	}
+
+	return
+		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[0]), 0) ||
+		CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[7])) ||
+		CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[8]));
 }
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
@@ -330,22 +361,23 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 	//Error types
 
-	CharString warning = CharString_createRefCStrConst(" warning: ");
-	CharString note = CharString_createRefCStrConst(" note: ");
-	CharString errStr = CharString_createRefCStrConst(" error: ");
-	CharString fatalErrStr = CharString_createRefCStrConst(" fatal error: ");
-
-	CharString warningOnly = CharString_createRefCStrConst("warning");
-	CharString noteOnly = CharString_createRefCStrConst("note");
-	CharString errStrOnly = CharString_createRefCStrConst("error");
-	CharString fatalErrStrOnly = CharString_createRefCStrConst("fatal error");
+	CharString warning = CharString_createRefCStrConst("warning: ");
+	CharString note = CharString_createRefCStrConst("note: ");
+	CharString errStr = CharString_createRefCStrConst("error: ");
+	CharString fatalOnly = CharString_createRefCStrConst("fatal ");
 
 	U64 prevOff = U64_MAX;
 
 	CharString file = CharString_createNull();
+	CharString errorStart = CharString_createNull();		//First line of the error
 	U64 lineId = 0;
 	U64 lineOff = 0;
-	Bool isError = false;
+	Bool ignoreNextWarning = false;
+
+	CharString prevFile = file;
+	U64 prevLineId = lineId;
+	U64 prevLineOff = lineOff;
+	U8 prevProblemType = U8_MAX;
 
 	//Internal compiler error can't be parsed the same way
 	//If this happens, bad stuff is happening
@@ -353,220 +385,247 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	CharString internalCompileErrorRef = CharString_createRefCStrConst("Internal Compiler error: ");
 
 	if (CharString_equalsStringSensitive(errs, internalCompileErrorRef)) {
-		CompileError cerr = (CompileError) { .error = internalCompileErrorRef };
+		CompileError cerr = (CompileError) { .error = errs };
 		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
 		goto clean;
 	}
 
 	//Regular parsing
 
+	U64 nextWarning = CharString_findFirstStringSensitive(errs, warning, off, 0);
+	U64 nextError = CharString_findFirstStringSensitive(errs, errStr, off, 0);
+	U64 nextNote = CharString_findFirstStringSensitive(errs, note, off, 0);
+	U64 nextProblem = U64_min(U64_min(nextWarning, nextError), nextNote);
+	U8 nextProblemType = nextProblem == nextWarning ? 0 : (nextProblem == nextNote ? 1 : 2);
+
 	while(off < CharString_length(errs)) {
 
-		//Find start of next error
+		if(nextProblem == U64_MAX)
+			break;
 
-		U64 firstColon = CharString_findFirstSensitive(errs, ':', off, 0);
-		U64 errorEnd = firstColon;
+		//" error: " can start with "fatal "
 
-		//On Windows, D:/test.hlsl:10:10: warning: x is valid ofc, so we should skip that
+		if (nextProblemType == 2) {
 
-		if((!off && firstColon == 1) || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
-			errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
+			off = nextProblem + CharString_length(errStr);
 
-		//Skip colons that are on the same line. They are part of an error.
-
-		if(off)
-			while(firstColon != U64_MAX && !CharString_containsSensitive(errs, '\n', off, firstColon - off)) {
-
-				firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
-
-				if((!off && firstColon == 1) || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
-					errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
+			if(
+				nextError >= CharString_length(fatalOnly) &&
+				CharString_startsWithStringSensitive(errs, fatalOnly, nextError - CharString_length(fatalOnly))
+			) {
+				nextError -= CharString_length(fatalOnly);
+				nextProblem = nextError;
+				nextProblemType = 3;
 			}
+		}
 
-		if(firstColon == U64_MAX)
-			break;
+		else if(nextProblemType == 1)
+			off = nextProblem + CharString_length(note);
 
-		//We ended with no more errors
+		else off = nextProblem + CharString_length(warning);
 
-		if(firstColon >= CharString_length(errs))
-			break;
+		//Lineless errors shouldn't try to parse x:(y:(z:)) w: where x = file, y = line, z = col, w = warning type.
 
-		//In case we are still parsing an error, we have to traverse our : to the first whitespace character.
-		//As the start of the file name is the end of our error.
-		//We can then finalize the error and push it.
+		Bool isLinelessError = nextProblem == 0 || C8_isNewLine(errs.ptr[nextProblem - 1]);
+		U64 ourErrorLineStart = nextProblem;
 
-		if (prevOff != U64_MAX) {
+		if (!isLinelessError) {
 
-			U64 i = errorEnd;
+			//We skip unrecognized errors, to prevent accidentally parsing code that contains the words "error:"
+			//a:5: error:
+			//     ^
 
-			for(; i != U64_MAX; --i)
-				if(C8_isWhitespace(errs.ptr[i]))
+			if(
+				nextProblem < 5 ||
+				errs.ptr[nextProblem - 1] != ' ' ||
+				errs.ptr[nextProblem - 2] != ':' ||
+				!C8_isDec(errs.ptr[nextProblem - 3])
+			)
+				goto next;
+
+			//a:21: error:
+			//   ^
+
+			U64 it = nextProblem - 4;
+			U64 multiplier = 10;
+			U64 num = C8_dec(errs.ptr[nextProblem - 3]);
+
+			for (; it != U64_MAX; --it) {
+
+				C8 c = errs.ptr[it];
+				U8 dec = C8_dec(c);
+
+				if(dec == U8_MAX && c != ':')
+					goto next;
+				
+				if(c == ':') {
+					--it;
 					break;
+				}
 
-			if(i == U64_MAX)
-				retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse error"))
+				num += dec * multiplier;
+				multiplier *= 10;
 
-			CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, i - prevOff, false);
-
-			if(!Compiler_filterWarning(errorStr)) {
-
-				gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
-				gotoIfError2(clean, CharString_createCopy(file, alloc, &tempStr2))
-
-				CompileError cerr = (CompileError) {
-					.lineId = (U16) lineId,
-					.typeLineId = (U8) ((lineId >> 16) | ((U8)isError << 7)),
-					.lineOffset = (U8) lineOff,
-					.error = tempStr,
-					.file = tempStr2
-				};
-
-				gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
-
-				tempStr = CharString_createNull();
-				tempStr2 = CharString_createNull();
+				if(num >> 32)		//Out of bounds
+					retError(clean, Error_invalidState(0, "Compiler_parseErrors() num is limited to U32"))
 			}
 
+			if(it == U64_MAX || it == 0)	//Invalid, skip
+				goto next;
+			
+			U64 secondNum = num;
+
+			//a:20:21: error:
+			//   ^
+			//May also be:
+			//a20:21 (where a20 = file)
+			//  ^
+
+			num = C8_dec(errs.ptr[it--]);
+			multiplier = 10;
+
+			Bool hasSecondNum = num != U8_MAX;
+
+			if (hasSecondNum) {
+
+				for (; it != U64_MAX; --it) {
+
+					C8 c = errs.ptr[it];
+					U8 dec = C8_dec(c);
+
+					if (dec == U8_MAX && c != ':') {
+						hasSecondNum = false;
+						break;
+					}
+				
+					if(c == ':') {
+						--it;
+						break;
+					}
+
+					num += dec * multiplier;
+					multiplier *= 10;
+
+					if(num >> 32)		//Out of bounds
+						retError(clean, Error_invalidState(1, "Compiler_parseErrors() num is limited to U32"))
+				}
+			}
+
+			//:lineId:offset: error:
+			//:lineId: error:
+
+			if (hasSecondNum) {
+
+				if(secondNum >> 16)		//Out of U16
+					retError(clean, Error_invalidState(1, "Compiler_parseErrors() charId is limited to U16"))
+
+				lineId = (U32) num;
+				lineOff = (U16) secondNum;
+			}
+
+			else lineId = (U32) num;
+
+			//Prefixed by file (D:\test.hlsl:24:3: error: Whoopsie)
+
+			U64 fileEnd = it;
+
+			while(it && !C8_isNewLine(errs.ptr[it]))
+				--it;
+
+			U64 fileStart = it;
+
+			file = CharString_createRefSizedConst(errs.ptr + fileStart, fileEnd - fileStart + 1, false);
+			ourErrorLineStart = fileStart;
+		}
+
+		else {
+			lineOff = 0;
+			lineId = 0;
 			file = CharString_createNull();
 		}
 
-		//Parse file
+		//Grab first line until eof or newline
 
-		if(firstColon == U64_MAX || !CharString_cut(errs, off, firstColon - off, &file))
-			retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file from error"))
+		U64 lineStart = off;
 
-		//If there's a preceeding \n, then we need to make sure to cut it off
-
-		U64 fileStart = CharString_findLastSensitive(file, '\n', 0, 0);
-
-		if (fileStart != U64_MAX) {
-
-			CharString tmp0 = CharString_createNull();
-
-			if(!CharString_cut(file, fileStart + 1, 0, &tmp0))
-				retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file properly"))
-
-			file = tmp0;		//It's a reference so it's safe
-		}
-
-		//It's possible that there's no file, in that case we have to clear the file
-
-		{
-			Bool isFatalError = CharString_startsWithStringInsensitive(file, fatalErrStrOnly, 0);
-			Bool consumed = false;
-
-			if(CharString_startsWithStringInsensitive(file, errStrOnly, 0) || isFatalError) {
-				isError = true;
-				*hasErrors = true;
-				off += isFatalError ? CharString_length(fatalErrStrOnly) : CharString_length(errStrOnly);
-				consumed = true;
+		for(; off < CharString_length(errs); ++off)
+			if (C8_isNewLine(errs.ptr[off])) {
+				++off;
+				break;
 			}
 
-			else if(CharString_startsWithStringInsensitive(file, warningOnly, 0)) {
-				isError = false;
-				off += CharString_length(warningOnly);
-				consumed = true;
-			}
+		U64 lineEnd = off - 1;
+		errorStart = CharString_createRefSizedConst(errs.ptr + lineStart, lineEnd - lineStart, false);
 
-			else if(CharString_startsWithStringInsensitive(file, noteOnly, 0)) {
-				isError = false;
-				off += CharString_length(noteOnly);
-				consumed = true;
-			}
+		//Now that we know we have an error, we have to register the previous one
 
-			if(consumed) {
-				off += 2 + fileStart + 1;
-				prevOff = off;
-				lineId = lineOff = 0;
-				file = CharString_createNull();
-				continue;
-			}
-		}
+		if (prevOff != U64_MAX && !ignoreNextWarning) {
 
-		//Parse line
-
-		U64 nextColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
-
-		CharString tmp = CharString_createNull();
-
-		if(nextColon == U64_MAX || !CharString_cut(errs, firstColon + 1, nextColon - (firstColon + 1), &tmp))
-			retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineId from error"))
-
-		if(!CharString_parseDec(tmp, &lineId) || (lineId >> (16 + 7)))
-			retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U23 lineId from error"))
-
-		//Parse line offset
-
-		tmp = CharString_createNull();
-		off = nextColon + 1;
-		nextColon = CharString_findFirstSensitive(errs, ':', off, 0);
-
-		if(nextColon == U64_MAX || !CharString_cut(errs, off, nextColon - off, &tmp))
-			retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineOff from error"))
-
-		//Validation errors don't have line offsets like that, they only have lines
-
-		if(!CharString_startsWithSensitive(tmp, ' ', 0)) {
-
-			if(!CharString_parseDec(tmp, &lineOff) || lineOff >> 8)
-				retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U8 lineOff from error"))
-
-			off = nextColon + 1;
-		}
-
-		else lineOff = 0;
-
-		//Parse warning type
-
-		Bool isFatalError = CharString_startsWithStringInsensitive(errs, fatalErrStr, off);
-
-		if(CharString_startsWithStringInsensitive(errs, errStr, off) || isFatalError) {
-			isError = true;
-			*hasErrors = true;
-			off += isFatalError ? CharString_length(fatalErrStr) : CharString_length(errStr);
-		}
-
-		else if(CharString_startsWithStringInsensitive(errs, warning, off)) {
-			isError = false;
-			off += CharString_length(warning);
-		}
-
-		else if(CharString_startsWithStringInsensitive(errs, note, off)) {
-			isError = false;
-			off += CharString_length(note);
-		}
-
-		else retError(clean, Error_invalidState(4, "Compiler_preprocess() couldn't parse error type from error"))
-
-		prevOff = off;
-	}
-
-	if (prevOff != U64_MAX) {
-
-		CharString errorStr = CharString_createRefSizedConst(
-			errs.ptr + prevOff, CharString_length(errs) - prevOff, false
-		);
-
-		if(!Compiler_filterWarning(errorStr)) {
-
+			CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, ourErrorLineStart - prevOff, false);
 			gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
-			gotoIfError2(clean, CharString_createCopy(file, alloc, &tempStr2))
+			gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2))
 
 			CompileError cerr = (CompileError) {
-				.lineId = (U16) lineId,
-				.typeLineId = (U8) ((lineId >> 16) | ((U8)isError << 7)),
-				.lineOffset = (U8) lineOff,
+				.lineId = (U16) prevLineId,
+				.typeLineId = (U8) ((prevLineId >> 16) | ((U8)(prevProblemType >= 2) << 7)),
+				.lineOffset = (U8) prevLineOff,
 				.error = tempStr,
 				.file = tempStr2
 			};
 
 			gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
-
-			tempStr = CharString_createNull();
-			tempStr2 = CharString_createNull();
+			tempStr = tempStr2 = CharString_createNull();
 		}
 
-		file = CharString_createNull();
+		if(nextProblemType >= 2)
+			if(hasErrors) *hasErrors = true;
+
+		//Update for next
+
+		if(Compiler_filterWarning(errorStart) || (nextProblemType == 1))
+			ignoreNextWarning = true;
+
+		else ignoreNextWarning = false;
+
+		prevOff = lineStart;
+		prevProblemType = nextProblemType;
+		prevLineId = lineId;
+		prevLineOff = lineOff;
+
+	next:
+
+		//Search again to ensure we didn't accidentally skip anything
+
+		if (nextProblemType == 0)
+			nextWarning = CharString_findFirstStringSensitive(errs, warning, off, 0);
+
+		else if(nextProblemType == 1)
+			nextNote = CharString_findFirstStringSensitive(errs, note, off, 0);
+
+		else nextError = CharString_findFirstStringSensitive(errs, errStr, off, 0);
+
+		nextProblem = U64_min(U64_min(nextWarning, nextError), nextNote);
+		nextProblemType = nextProblem == nextWarning ? 0 : (nextProblem == nextNote ? 1 : 2);
+	}
+
+	//Register last error
+
+	if (prevOff != U64_MAX && !ignoreNextWarning) {
+	
+		CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, CharString_length(errs) - prevOff + 1, false);
+		gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
+		gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2))
+
+		CompileError cerr = (CompileError) {
+			.lineId = (U16) prevLineId,
+			.typeLineId = (U8) ((prevLineId >> 16) | ((U8)(prevProblemType >= 2) << 7)),
+			.lineOffset = (U8) prevLineOff,
+			.error = tempStr,
+			.file = tempStr2
+		};
+
+		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+		tempStr = tempStr2 = CharString_createNull();
 	}
 
 clean:
@@ -1121,7 +1180,7 @@ Bool Compiler_parse(
 	gotoIfError2(clean, ListSHEntryRuntime_reserve(&result->shEntriesRuntime, parser.rootSymbols, alloc))
 
 	//Now we can find all entrypoints and return it into a ListSHEntryRuntime.
-	//An entrypoint is defined as a stage with an annotation being shader("shaderType") or stage("stageType").
+	//An entrypoint is defined as a stage with an annotation being shader("shaderType") or oxc::stage("stageType").
 
 	for (U32 i = 0; i < parser.rootSymbols; ) {
 
@@ -1140,18 +1199,45 @@ Bool Compiler_parse(
 				Symbol symj = parser.symbols.ptr[j];
 				Token tok = parser.tokens.ptr[symj.tokenId];
 
-				//[uniforms()]
-				//[extension()]
-				//[vendor()]
-				//[model()]
-				//[stage()]
-				//[shader()]
-				// ^
+				//[[oxc::uniforms()]]
+				//[[oxc::extension()]]
+				//[[oxc::vendor()]]
+				//[[oxc::model()]]
+				//[[oxc::stage()]]
+				//[[oxc::shader()]]
+				//      ^
 
 				if (tok.tokenType == ETokenType_Identifier) {
 
 					CharString tokStr = Token_asString(tok, &parser);
 					U64 tokLen = CharString_length(tokStr);
+
+					//oxc::X
+					//^
+
+					if(
+						symj.tokenCount + 1 < 3 ||
+						tokLen != 3 ||
+						*(const U16*)tokStr.ptr != C8x2('o', 'x') ||
+						tokStr.ptr[2] != 'c'
+					)
+						continue;
+
+					//oxc::X
+					//   ^
+
+					if(
+						parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_Colon2 ||
+						parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_Identifier
+					)
+						continue;
+
+					//Continue parsing oxc dependent annotation
+
+					U32 tokenStart = symj.tokenId + 3;
+					tok = parser.tokens.ptr[symj.tokenId + 2];
+					tokStr = Token_asString(tok, &parser);
+					tokLen = CharString_length(tokStr);
 
 					U32 c8x4 = tokLen < 4 ? 0 : *(const U32*)tokStr.ptr;
 
@@ -1159,10 +1245,10 @@ Bool Compiler_parse(
 
 						//Identify if we're parsing a real entrypoint
 
-						case C8x4('s', 't', 'a', 'g'):		//stage()
+						case C8x4('s', 't', 'a', 'g'):		//oxc::stage()
 
-							//[stage("vertex")]
-							// ^
+							//[[oxc::stage("vertex")]]
+							//       ^
 							if (tokLen == 5 && tokStr.ptr[4] == 'e') {
 
 								if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
@@ -1170,25 +1256,25 @@ Bool Compiler_parse(
 										0, 0, "Compiler_parse() stage already had shader or stage annotation"
 									))
 
-								if(symj.tokenCount + 1 != 4)
+								if(symj.tokenCount + 1 != 6)
 									retError(clean, Error_invalidParameter(
-										0, 0, "Compiler_parse() stage annotation expected stage(string)"
+										0, 0, "Compiler_parse() stage annotation expected oxc::stage(string)"
 									))
 
-								//[stage("vertex")]
-								// ^
+								//[[oxc::stage("vertex")]]
+								//       ^
 
 								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_String ||
-									parser.tokens.ptr[symj.tokenId + 3].tokenType != ETokenType_RoundParenthesisEnd
+									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_String ||
+									parser.tokens.ptr[tokenStart + 2].tokenType != ETokenType_RoundParenthesisEnd
 								)
 									retError(clean, Error_invalidParameter(
 										0, 1,
-										"Compiler_parse() stage annotation expected stage(string)"
+										"Compiler_parse() stage annotation expected oxc::stage(string)"
 									))
 
-								CharString stageName = Token_asString(parser.tokens.ptr[symj.tokenId + 2], &parser);
+								CharString stageName = Token_asString(parser.tokens.ptr[tokenStart + 1], &parser);
 								ESHPipelineStage stage = Compiler_parseStage(stageName);
 								
 								if(
@@ -1210,10 +1296,10 @@ Bool Compiler_parse(
 
 							break;
 
-						case C8x4('s', 'h', 'a', 'd'):		//shader()
+						case C8x4('s', 'h', 'a', 'd'):		//oxc::shader()
 
-							//[shader("vertex")]
-							// ^
+							//[[oxc::shader("vertex")]]
+							//       ^
 							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('e', 'r')) {
 
 								if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
@@ -1221,24 +1307,24 @@ Bool Compiler_parse(
 										0, 0, "Compiler_parse() shader already had shader or stage annotation"
 									))
 									
-								if(symj.tokenCount + 1 != 4)
+								if(symj.tokenCount + 1 != 6)
 									retError(clean, Error_invalidParameter(
 										0, 0, "Compiler_parse() shader annotation expected shader(string)"
 									))
 
-								//[shader("vertex")]
-								// ^
+								//[[oxc::shader("vertex")]]
+								//             ^
 
 								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_String ||
-									parser.tokens.ptr[symj.tokenId + 3].tokenType != ETokenType_RoundParenthesisEnd
+									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_String ||
+									parser.tokens.ptr[tokenStart + 2].tokenType != ETokenType_RoundParenthesisEnd
 								)
 									retError(clean, Error_invalidParameter(
 										0, 1, "Compiler_parse() shader annotation expected shader(string)"
 									))
 
-								CharString stageName = Token_asString(parser.tokens.ptr[symj.tokenId + 2], &parser);
+								CharString stageName = Token_asString(parser.tokens.ptr[tokenStart + 1], &parser);
 								ESHPipelineStage stage = Compiler_parseStage(stageName);
 								
 								if(stage == ESHPipelineStage_Count)
@@ -1259,47 +1345,47 @@ Bool Compiler_parse(
 
 							break;
 
-						case C8x4('m', 'o', 'd', 'e'):		//model()
+						case C8x4('m', 'o', 'd', 'e'):		//oxc::model()
 
-							//[model(6.8)]
-							// ^
+							//[[oxc::model(6.8)]]
+							//       ^
 							if (tokLen == 5 && tokStr.ptr[4] == 'l') {
 							
-								if(symj.tokenCount + 1 != 4)
+								if(symj.tokenCount + 1 != 6)
 									retError(clean, Error_invalidParameter(
 										0, 0,
-										"Compiler_parse() model annotation expected model(double)"
+										"Compiler_parse() model annotation expected oxc::model(double)"
 									))
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
-								//[model(6.8)]
-								//      ^
+								//[[oxc::model(6.8)]]
+								//            ^
 
 								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_Double  ||
+									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_Double  ||
 									parser.tokens.ptr[tokenEnd].tokenType != ETokenType_RoundParenthesisEnd
 								)
 									retError(clean, Error_invalidParameter(
 										0, 1,
-										"Compiler_parse() model annotation expected model(double, ...)"
+										"Compiler_parse() model annotation expected oxc::model(double)"
 									))
 
 								gotoIfError3(clean, Compiler_registerModel(
-									&runtimeEntry.shaderVersions, symj.tokenId + 2, parser, alloc, e_rr
+									&runtimeEntry.shaderVersions, tokenStart + 1, parser, alloc, e_rr
 								))
 							}
 
 							break;
 
-						case C8x4('v', 'e', 'n', 'd'):		//vendor()
+						case C8x4('v', 'e', 'n', 'd'):		//oxc::vendor()
 
-							//[vendor("NV", "AMD")]
-							// ^
+							//[[oxc::vendor("NV", "AMD")]]
+							//       ^
 							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('o', 'r')) {
 							
-								if(symj.tokenCount + 1 < 4)
+								if(symj.tokenCount + 1 < 6)
 									retError(clean, Error_invalidParameter(
 										0, 0,
 										"Compiler_parse() vendor annotation expected vendor(string, ...)"
@@ -1313,12 +1399,12 @@ Bool Compiler_parse(
 										"Compiler_parse() vendor annotation can only be present once"
 									))
 
-								//[vendor("NV")]
-								//       ^
+								//[[oxc::vendor("NV")]]
+								//             ^
 
 								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_String ||
+									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_String ||
 									parser.tokens.ptr[tokenEnd].tokenType != ETokenType_RoundParenthesisEnd
 								)
 									retError(clean, Error_invalidParameter(
@@ -1327,24 +1413,24 @@ Bool Compiler_parse(
 									))
 
 								gotoIfError3(clean, Compiler_registerVendor(
-									&runtimeEntry.vendorMask, symj.tokenId + 2, parser, e_rr
+									&runtimeEntry.vendorMask, tokenStart + 1, parser, e_rr
 								))
 
-								//[vendor("AMD", "NV")]
-								//             ^
+								//[[oxc::vendor("AMD", "NV")]]
+								//                   ^
 
-								for (U32 k = symj.tokenId + 3; k < tokenEnd; ++k) {
+								for (U32 k = tokenStart + 2; k < tokenEnd; ++k) {
 								
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
 											0, 3,
-											"Compiler_parse() vendor annotation expected comma in vendor(string, ...)"
+											"Compiler_parse() vendor annotation expected comma in oxc::vendor(string, ...)"
 										))
 								
 									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_String)
 										retError(clean, Error_invalidParameter(
 											0, 4,
-											"Compiler_parse() vendor annotation expected string in vendor(string, ...)"
+											"Compiler_parse() vendor annotation expected string in oxc::vendor(string, ...)"
 										))
 
 									gotoIfError3(clean, Compiler_registerVendor(
@@ -1355,14 +1441,14 @@ Bool Compiler_parse(
 
 							break;
 
-						case C8x4('u', 'n', 'i', 'f'):		//uniforms()
+						case C8x4('u', 'n', 'i', 'f'):		//oxc::uniforms()
 
-							//[uniforms("X", "Y", "Z")]
-							//[uniforms("X" = "123", "Y" = "ABC")]
-							// ^
+							//[[oxc::uniforms("X", "Y", "Z")]]
+							//[[oxc::uniforms("X" = "123", "Y" = "ABC")]]
+							//           ^
 							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('o', 'r', 'm', 's')) {
 
-								if(symj.tokenCount + 1 < 4)
+								if(symj.tokenCount + 1 < 6)
 									retError(clean, Error_invalidParameter(
 										0, 0,
 										"Compiler_parse() uniform annotation expected uniform(string, string = string, ...)"
@@ -1370,40 +1456,40 @@ Bool Compiler_parse(
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
-								//[uniforms("X")]
-								//         ^
+								//[[oxc::uniforms("X")]]
+								//               ^
 
 								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_String ||
+									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_String ||
 									parser.tokens.ptr[tokenEnd].tokenType != ETokenType_RoundParenthesisEnd
 								)
 									retError(clean, Error_invalidParameter(
 										0, 1,
-										"Compiler_parse() uniform annotation expected uniform(string, ...)"
+										"Compiler_parse() uniform annotation expected oxc::uniform(string, ...)"
 									))
 
-								U32 tokenCounter = symj.tokenId + 2;
+								U32 tokenCounter = tokenStart + 1;
 
 								gotoIfError3(clean, Compiler_registerUniform(
 									&runtimeEntry, &tokenCounter, tokenEnd, true, parser, alloc, e_rr
 								))
 
-								//[uniforms("X", "Y")]
-								//             ^
+								//[[oxc::uniforms("X", "Y")]]
+								//                     ^
 
 								for (U32 k = tokenCounter; k < tokenEnd; ) {
 								
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
 											0, 3,
-											"Compiler_parse() uniform annotation expected comma in uniform(string, ...)"
+											"Compiler_parse() uniform annotation expected comma in oxc::uniform(string, ...)"
 										))
 								
 									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_String)
 										retError(clean, Error_invalidParameter(
 											0, 4,
-											"Compiler_parse() uniform annotation expected string in uniform(string, ...)"
+											"Compiler_parse() uniform annotation expected string in oxc::uniform(string, ...)"
 										))
 
 									++k;
@@ -1415,34 +1501,35 @@ Bool Compiler_parse(
 
 							break;
 
-						case C8x4('e', 'x', 't', 'e'):		//extension()
+						case C8x4('e', 'x', 't', 'e'):		//oxc::extension()
 
-							//[extension()]
-							// ^
+							//[[oxc::extension()]]
+							//       ^
 							if (
 								tokLen == 9 && 
 								*(const U64*)&tokStr.ptr[1] == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
 							) {
 
-								if(symj.tokenCount + 1 < 3)
+								if(symj.tokenCount + 1 < 5)
 									retError(clean, Error_invalidParameter(
 										0, 0,
-										"Compiler_parse() extension annotation expected extension() or extension(string, ...)"
+										"Compiler_parse() extension annotation expected "
+										"oxc::extension() or oxc::extension(string, ...)"
 									))
 
-								//[extension()]
-								// ^
+								//[[oxc::extension()]]
+								//       ^
 								//Indicates an entrypoint without extensions
 
-								if (symj.tokenCount + 1 == 3) {
+								if (symj.tokenCount + 1 == 5) {
 
 									if(
-										parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-										parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_RoundParenthesisEnd
+										parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+										parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_RoundParenthesisEnd
 									)
 										retError(clean, Error_invalidParameter(
 											0, 1,
-											"Compiler_parse() extension annotation expected extension()"
+											"Compiler_parse() extension annotation expected oxc::extension()"
 										))
 
 									gotoIfError3(clean, Compiler_registerExtensions(&runtimeEntry.extensions, 0, alloc, e_rr))
@@ -1451,40 +1538,42 @@ Bool Compiler_parse(
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
-								//[extension("16BitTypes")]
-								//           ^
+								//[[oxc::extension("16BitTypes")]]
+								//                ^
 
 								if(
-									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_String ||
+									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_String ||
 									parser.tokens.ptr[tokenEnd].tokenType != ETokenType_RoundParenthesisEnd
 								)
 									retError(clean, Error_invalidParameter(
 										0, 1,
-										"Compiler_parse() extension annotation expected extension(string, ...)"
+										"Compiler_parse() extension annotation expected oxc::extension(string, ...)"
 									))
 
 								U32 extensions = 0;
 
 								gotoIfError3(clean, Compiler_registerExtension(
-									&extensions, symj.tokenId + 2, parser, e_rr
+									&extensions, tokenStart + 1, parser, e_rr
 								))
 
-								//[extension("16BitTypes", "RayQuery")]
-								//                       ^
+								//[[oxc::extension("16BitTypes", "RayQuery")]]
+								//                             ^
 
-								for (U32 k = symj.tokenId + 3; k < tokenEnd; k += 2) {
+								for (U32 k = tokenStart + 2; k < tokenEnd; k += 2) {
 								
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
 											0, 3,
-											"Compiler_parse() extension annotation expected comma in extension(string, ...)"
+											"Compiler_parse() extension annotation expected comma in "
+											"oxc::extension(string, ...)"
 										))
 								
 									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_String)
 										retError(clean, Error_invalidParameter(
 											0, 4,
-											"Compiler_parse() extension annotation expected string in extension(string, ...)"
+											"Compiler_parse() extension annotation expected string in "
+											"oxc::extension(string, ...)"
 										))
 
 									gotoIfError3(clean, Compiler_registerExtension(

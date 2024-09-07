@@ -224,12 +224,13 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 
 	if(binaries->hasShaderAnnotation && CharString_length(binaries->identifier.entrypoint))
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.stageType or entrypoint is only available to [stage()] annotation"
+			2, 0,
+			"SHFile_addBinary()::binaries->identifier.stageType or entrypoint is only available to [[oxc::stage()]] annotation"
 		))
 
 	if(!binaries->hasShaderAnnotation && !CharString_length(binaries->identifier.entrypoint))
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.entrypoint is required for [stage()] annotation"
+			2, 0, "SHFile_addBinary()::binaries->identifier.entrypoint is required for [[oxc::stage()]] annotation"
 		))
 
 	if(
@@ -898,6 +899,16 @@ clean:
 	return s_uccess;
 }
 
+SHBindings SHBindings_dummy() {
+
+	SHBindings bindings = (SHBindings) { 0 };
+
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		bindings.arr[i] = (SHBinding) { .binding = U32_MAX, .space = U32_MAX };
+
+	return bindings;
+}
+
 Bool ListSHRegisterRuntime_addSampler(
 	ListSHRegisterRuntime *registers,
 	U8 isUsedFlag,
@@ -916,8 +927,7 @@ Bool ListSHRegisterRuntime_addSampler(
 		(SHRegister) {
 			.bindings = bindings,
 			.registerType = (U8)(
-				ESHRegisterType_Sampler |
-				(isSamplerComparisonState ? ESHRegisterType_SamplerComparisonState : 0)
+				isSamplerComparisonState ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler
 			),
 			.isUsedFlag = isUsedFlag
 		},
@@ -973,6 +983,8 @@ Bool ListSHRegisterRuntime_addBuffer(
 			))
 	}
 
+	Bool isAtomic = false;
+
 	switch (registerType) {
 
 		case ESHBufferType_StructuredBufferAtomic:
@@ -983,6 +995,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 					0, "ListSHRegisterRuntime_addBuffer()::registerType needs write flag to always be enabled"
 				))
 
+			isAtomic = true;
 			break;
 
 		case ESHBufferType_ConstantBuffer:
@@ -1153,7 +1166,10 @@ Bool ListSHRegisterRuntime_addTexture(
 	Allocator alloc,
 	Error *e_rr
 ) {
-	return ListSHRegisterRuntime_addTextureBase(
+
+	Bool s_uccess = true;
+
+	gotoIfError3(clean, ListSHRegisterRuntime_addTextureBase(
 		registers,
 		registerType,
 		isLayeredTexture,
@@ -1167,7 +1183,10 @@ Bool ListSHRegisterRuntime_addTexture(
 		bindings,
 		alloc,
 		e_rr
-	);
+	))
+
+clean:
+	return s_uccess;
 }
 
 Bool ListSHRegisterRuntime_addRWTexture(
@@ -1215,6 +1234,12 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 		retError(clean, Error_outOfBounds(
 			4, inputAttachmentId, 7, "ListSHRegisterRuntime_addSubpassInput()::inputAttachmentId out of bounds"
 		))
+
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		if(i != ESHBinaryType_SPIRV && (bindings.arr[i].space != U32_MAX || bindings.arr[i].binding != U32_MAX))
+			retError(clean, Error_invalidState(
+				0, "ListSHRegisterRuntime_addSubpassInput() can only have bindings for SPIRV"
+			))
 
 	gotoIfError3(clean, SHBinaryInfo_addRegisterBase(
 		registers,
@@ -1280,7 +1305,8 @@ Bool ListSHRegisterRuntime_addRegister(
 			))
 
 			break;
-	
+
+		case ESHRegisterType_SamplerComparisonState:
 		case ESHRegisterType_Sampler: {
 
 			U32 regType = reg.registerType;
@@ -1296,7 +1322,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 			if(sbFile)
 				retError(clean, Error_invalidParameter(2, 7, "ListSHRegisterRuntime_addRegister()::sbFile on subpassInput not allowed"))
-
+				
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
 				reg.isUsedFlag,
@@ -1317,10 +1343,14 @@ Bool ListSHRegisterRuntime_addRegister(
 				retError(clean, Error_invalidParameter(2, 0, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
 
 			if(arrays)
-				retError(clean, Error_invalidParameter(2, 2, "ListSHRegisterRuntime_addRegister()::arrays on subpassInput not allowed"))
+				retError(clean, Error_invalidParameter(
+					2, 2, "ListSHRegisterRuntime_addRegister()::arrays on subpassInput not allowed"
+				))
 
 			if(sbFile)
-				retError(clean, Error_invalidParameter(2, 3, "ListSHRegisterRuntime_addRegister()::sbFile on subpassInput not allowed"))
+				retError(clean, Error_invalidParameter(
+					2, 3, "ListSHRegisterRuntime_addRegister()::sbFile on subpassInput not allowed"
+				))
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
 				registers,
@@ -2789,7 +2819,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 	for(U64 i = 0; i < entry.shaderVersions.length; ++i) {
 		U16 shaderVersion = entry.shaderVersions.ptr[i];
-		Log_debugLn(alloc, "\t[model(%"PRIu8".%"PRIu8")]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+		Log_debugLn(alloc, "\t[[oxc::model(%"PRIu8".%"PRIu8")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 	}
 
 	for (U64 i = 0; i < entry.extensions.length; ++i) {
@@ -2797,11 +2827,11 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 		ESHExtension exts = entry.extensions.ptr[i];
 
 		if(!exts) {
-			Log_debugLn(alloc, "\t[extension()]");
+			Log_debugLn(alloc, "\t[[oxc::extension()]]");
 			continue;
 		}
 
-		Log_debug(alloc, ELogOptions_None, "\t[extension(");
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
 
 		Bool prev = false;
 
@@ -2811,7 +2841,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 				prev = true;
 			}
 
-		Log_debug(alloc, ELogOptions_NewLine, ")]");
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
 	for (U64 i = 0, k = 0; i < entry.uniformsPerCompilation.length; ++i) {
@@ -2819,11 +2849,11 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 		U8 uniforms = entry.uniformsPerCompilation.ptr[i];
 
 		if(!uniforms) {
-			Log_debugLn(alloc, "\t[uniforms()]");
+			Log_debugLn(alloc, "\t[[oxc::uniforms()]]");
 			continue;
 		}
 
-		Log_debug(alloc, ELogOptions_None, "\t[uniforms(");
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::uniforms(");
 
 		Bool prev = false;
 
@@ -2843,20 +2873,20 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 			prev = true;
 		}
 
-		Log_debug(alloc, ELogOptions_NewLine, ")]");
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 
 		k += uniforms;
 	}
 	
 	if(entry.vendorMask == U16_MAX)
-		Log_debugLn(alloc, "\t[vendor()] //(any vendor)");
+		Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
 
 	else for(U64 i = 0; i < ESHVendor_Count; ++i)
 		if((entry.vendorMask >> i) & 1)
-			Log_debugLn(alloc, "\t[vendor(\"%s\")]", vendors[i]);
+			Log_debugLn(alloc, "\t[[oxc::vendor(\"%s\")]]", vendors[i]);
 
 	const C8 *name = SHEntry_stageName(entry.entry);
-	Log_debugLn(alloc, entry.isShaderAnnotation ? "\t[shader(\"%s\")]" : "\t[stage(\"%s\")]", name);
+	Log_debugLn(alloc, entry.isShaderAnnotation ? "\t[shader(\"%s\")]" : "\t[[oxc::stage(\"%s\")]]", name);
 }
 
 void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
@@ -2875,16 +2905,16 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 	}
 
 	U16 shaderVersion = binary.identifier.shaderVersion;
-	Log_debugLn(alloc, "\t[model(%"PRIu8".%"PRIu8")]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+	Log_debugLn(alloc, "\t[[oxc::model(%"PRIu8".%"PRIu8")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 
 	ESHExtension exts = binary.identifier.extensions;
 
 	if(!exts)
-		Log_debugLn(alloc, "\t[extension()]");
+		Log_debugLn(alloc, "\t[[oxc::extension()]]");
 
 	else {
 
-		Log_debug(alloc, ELogOptions_None, "\t[extension(");
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
 
 		Bool prev = false;
 
@@ -2894,17 +2924,17 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 				prev = true;
 			}
 
-		Log_debug(alloc, ELogOptions_NewLine, ")]");
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
 	ListCharString uniforms = binary.identifier.uniforms;
 
 	if(!(uniforms.length / 2))
-		Log_debugLn(alloc, "\t[uniforms()]");
+		Log_debugLn(alloc, "\t[[oxc::uniforms()]");
 
 	else {
 
-		Log_debug(alloc, ELogOptions_None, "\t[uniforms(");
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::uniforms(");
 
 		Bool prev = false;
 
@@ -2924,17 +2954,17 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 			prev = true;
 		}
 
-		Log_debug(alloc, ELogOptions_NewLine, ")]");
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
 	U16 mask = (1 << ESHVendor_Count) - 1;
 	
 	if((binary.vendorMask & mask) == mask)
-		Log_debugLn(alloc, "\t[vendor()] //(any vendor)");
+		Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
 
 	else for(U64 i = 0; i < ESHVendor_Count; ++i)
 		if((binary.vendorMask >> i) & 1)
-			Log_debugLn(alloc, "\t[vendor(\"%s\")]", vendors[i]);
+			Log_debugLn(alloc, "\t[[oxc::vendor(\"%s\")]]", vendors[i]);
 
 	Log_debugLn(alloc, "\tBinaries:");
 
@@ -2952,6 +2982,41 @@ const C8 *ESHTexturePrimitive_name[ESHTexturePrimitive_CountAll] = {
 	"uint4", "int4", "unorm float4", "snorm float4", "float4", "double4", "", "", "", "", "", "", "", "", "", ""
 };
 
+void SHRegister_printBindings(ESHRegisterType type, SHBindings bindings, Allocator alloc, const C8 *prefix, const C8 *indent) {
+
+	SHBinding spirvBinding = bindings.arr[ESHBinaryType_SPIRV];
+
+	if(spirvBinding.space != U32_MAX || spirvBinding.binding != U32_MAX)
+		Log_debugLn(
+			alloc,
+			"%s%s[[vk::binding(%"PRIu32", %"PRIu32")]]",
+			indent,
+			prefix,
+			spirvBinding.binding,
+			spirvBinding.space
+		);
+
+	SHBinding dxilBinding = bindings.arr[ESHBinaryType_DXIL];
+
+	if(dxilBinding.space != U32_MAX || dxilBinding.binding != U32_MAX) {
+
+		C8 letter = type == ESHRegisterType_ConstantBuffer ? 'b' : (
+			type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState ? 's' : (
+				type & ESHRegisterType_IsWrite ? 'u' : 't'
+			)
+		);
+
+		Log_debugLn(
+			alloc,
+			"%s: register(%c%"PRIu32", space%"PRIu32")",
+			indent,
+			letter,
+			dxilBinding.binding,
+			dxilBinding.space
+		);
+	}
+}
+
 void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
 
 	if(indenting >= SHORTSTRING_LEN) {
@@ -2962,8 +3027,6 @@ void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
 	ShortString indent;
 	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
 	indent[indenting] = '\0';
-
-	SHBinding spirvBinding = reg.bindings.arr[ESHBinaryType_SPIRV];
 
 	switch (reg.registerType & ESHRegisterType_TypeMask) {
 
@@ -3028,34 +3091,7 @@ void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
 		}
 	}
 
-	if(spirvBinding.space != U32_MAX || spirvBinding.binding != U32_MAX)
-		Log_debugLn(
-			alloc,
-			"%s[[vk::binding(%"PRIu32", %"PRIu32")]]",
-			indent,
-			spirvBinding.binding,
-			spirvBinding.space
-		);
-
-	SHBinding dxilBinding = reg.bindings.arr[ESHBinaryType_DXIL];
-
-	if(dxilBinding.space != U32_MAX || dxilBinding.binding != U32_MAX) {
-
-		C8 letter = reg.registerType == ESHRegisterType_ConstantBuffer ? 'b' : (
-			reg.registerType == ESHRegisterType_Sampler ? 's' : (
-				reg.registerType & ESHRegisterType_IsWrite ? 'u' : 't'
-			)
-		);
-
-		Log_debugLn(
-			alloc,
-			"%s: register(%c%"PRIu32", space%"PRIu32")",
-			indent,
-			letter,
-			dxilBinding.binding,
-			dxilBinding.space
-		);
-	}
+	SHRegister_printBindings(reg.registerType, reg.bindings, alloc, "", indent);
 }
 
 void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator alloc) {

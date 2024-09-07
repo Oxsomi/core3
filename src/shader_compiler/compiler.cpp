@@ -45,11 +45,11 @@
 #include <exception>
 
 const C8 *resources =
-	#include "shader_compiler/shaders/resources.hlsl"
+	#include "shader_compiler/shaders/resources.hlsli"
 	;
 
 const C8 *types =
-	#include "shader_compiler/shaders/types.hlsl"
+	#include "shader_compiler/shaders/types.hlsli"
 	;
 
 const C8 *nvHLSLExtns =
@@ -142,7 +142,7 @@ public:
 			gotoIfError2(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, alloc, &fileName))
 		#endif
 
-		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsl
+		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsli
 
 		lastAt = CharString_findLastStringSensitive(fileName, CharString_createRefCStrConst("@"), 0, 0);
 		isBuiltin = lastAt != U64_MAX;
@@ -309,10 +309,10 @@ public:
 
 				CharString tmpTmp = CharString_createNull();
 
-				if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@resources.hlsl")))
+				if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@resources.hlsli")))
 					tmpTmp = CharString_createRefCStrConst(resources);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@types.hlsl")))
+				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@types.hlsli")))
 					tmpTmp = CharString_createRefCStrConst(types);
 
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvShaderExtnEnums.h")))
@@ -3056,8 +3056,6 @@ Bool Compiler_convertShaderBufferSPIRV(
 ) {
 	Bool s_uccess = true;
 
-	CharString name = CharString_createRefCStrConst(binding->name);
-
 	//StructuredBuffer; the inner element represents the whole buffer
 
 	ESBSettingsFlags packedFlags = isPacked ? ESBSettingsFlags_IsTightlyPacked : (ESBSettingsFlags) 0;
@@ -3431,7 +3429,7 @@ Bool Compiler_convertRegisterSPIRV(
 				(U8)((!isUnused) << ESHBinaryType_SPIRV),
 				false,
 				&name,
-				&arrays,
+				arrays.length ? &arrays : NULL,
 				bindings,
 				alloc,
 				e_rr
@@ -3658,7 +3656,7 @@ Bool Compiler_convertRegisterSPIRV(
 				false,
 				(U8)((!isUnused) << ESHBinaryType_SPIRV),
 				&name,
-				&arrays,
+				arrays.length ? &arrays : NULL,
 				NULL,
 				bindings,
 				alloc,
@@ -3669,7 +3667,32 @@ Bool Compiler_convertRegisterSPIRV(
 		}
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-			Log_debugLn(alloc, "Input attachment");		//TODO:
+
+			if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SRV)
+				retError(clean, Error_invalidState(
+					2, "Compiler_convertRegisterSPIRV() mismatching resource_type (not SRV)"
+				))
+
+			if(imagePtrU64[0] || imagePtrU64[1] || imagePtrU64[2])
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterSPIRV() invalid input attachment register"
+				))
+
+			if(binding->input_attachment_index >> 16)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertRegisterSPIRV() input attachment register out of bounds"
+				))
+				
+			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
+				registers,
+				(U8)((!isUnused) << ESHBinaryType_SPIRV),
+				&name,
+				bindings,
+				(U16) binding->input_attachment_index,
+				alloc,
+				e_rr
+			))
+
 			break;
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
@@ -4128,6 +4151,9 @@ Bool Compiler_compile(
 		for(U32 i = 0; i < ESHExtension_Count; ++i)
 			if ((toCompile.extensions >> i) & 1)
 				lastExtension = i + 1;
+
+		if(toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt)
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3_EXT_RAYTRACING", alloc, e_rr))
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))

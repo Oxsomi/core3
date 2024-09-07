@@ -1921,8 +1921,9 @@ U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseS
 	for (; i < strl; ++i) {
 
 		Bool match = true;
+		U64 k = 0;
 
-		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
+		for (U64 j = i; j < strl && k < otherl; ++j, ++k)
 			if (
 				C8_transform(s.ptr[j], (EStringTransform)caseSensitive) !=
 				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
@@ -1931,7 +1932,7 @@ U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseS
 				break;
 			}
 
-		if (match)
+		if (match && k == otherl)
 			break;
 	}
 
