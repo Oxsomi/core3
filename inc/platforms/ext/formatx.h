@@ -48,6 +48,11 @@ typedef struct SHFile SHFile;
 typedef struct SHRegister SHRegister;
 typedef struct SHRegisterRuntime SHRegisterRuntime;
 typedef struct ListSHRegisterRuntime ListSHRegisterRuntime;
+typedef struct SHBindings SHBindings;
+typedef enum ESHTextureType ESHTextureType;
+typedef enum ESHTexturePrimitive ESHTexturePrimitive;
+typedef enum ESHBufferType ESHBufferType;
+typedef enum ETextureFormatId ETextureFormatId;
 
 typedef struct SBFile SBFile;
 typedef struct SBStruct SBStruct;
@@ -106,6 +111,74 @@ void SHRegister_printx(SHRegister reg, U64 indenting);
 void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting);
 void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting);
 
+Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr);
+
+Bool ListSHRegisterRuntime_addBufferx(
+	ListSHRegisterRuntime *registers,
+	ESHBufferType registerType,
+	Bool isWrite,
+	U8 isUsedFlag,
+	CharString *name,
+	ListU32 *arrays,
+	SBFile *sbFile,
+	SHBindings bindings,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addTexturex(
+	ListSHRegisterRuntime *registers,
+	ESHTextureType registerType,
+	Bool isLayeredTexture,
+	Bool isCombinedSampler,
+	U8 isUsedFlag,
+	ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = none
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addRWTexturex(
+	ListSHRegisterRuntime *registers,
+	ESHTextureType registerType,
+	Bool isLayeredTexture,
+	U8 isUsedFlag,
+	ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = auto detect from formatId
+	ETextureFormatId textureFormatId,				//!textureFormatId = only allowed if primitive is set
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addSubpassInputx(
+	ListSHRegisterRuntime *registers,
+	U8 isUsedFlag,
+	CharString *name,
+	SHBindings bindings,
+	U16 attachmentId,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addSamplerx(
+	ListSHRegisterRuntime *registers,
+	U8 isUsedFlag,
+	Bool isSamplerComparisonState,
+	CharString *name,
+	ListU32 *arrays,
+	SHBindings bindings,
+	Error *e_rr
+);
+
+Bool ListSHRegisterRuntime_addRegisterx(
+	ListSHRegisterRuntime *registers,
+	CharString *name,
+	ListU32 *arrays,
+	SHRegister reg,
+	SBFile *sbFile,
+	Error *e_rr
+);
+
 void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
 void SHBinaryInfo_freex(SHBinaryInfo *info);
 void SHEntry_freex(SHEntry *entry);
@@ -124,6 +197,8 @@ Bool SBFile_createx(
 	SBFile *sbFile,
 	Error *e_rr
 );
+
+Bool SBFile_createCopyx(SBFile src, SBFile *dst, Error *e_rr);
 
 void SBFile_freex(SBFile *shFile);
 

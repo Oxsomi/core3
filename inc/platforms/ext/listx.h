@@ -83,10 +83,15 @@ typedef struct ListListU16 ListListU16;
 typedef struct ListListU32 ListListU32;
 typedef struct ListListU64 ListListU64;
 
-void ListListU8_freeUnderlyingx(ListListU8 *list);
+void ListListU8_freeUnderlyingx (ListListU8 *list);
 void ListListU16_freeUnderlyingx(ListListU16 *list);
 void ListListU32_freeUnderlyingx(ListListU32 *list);
 void ListListU64_freeUnderlyingx(ListListU64 *list);
+
+Bool ListListU8_createCopyUnderlyingx (ListListU8 src, ListListU8 *dst, Error *e_rr);
+Bool ListListU16_createCopyUnderlyingx(ListListU16 src, ListListU16 *dst, Error *e_rr);
+Bool ListListU32_createCopyUnderlyingx(ListListU32 src, ListListU32 *dst, Error *e_rr);
+Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error *e_rr);
 
 #ifdef __cplusplus
 	}

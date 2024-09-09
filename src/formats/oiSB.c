@@ -286,6 +286,37 @@ clean:
 	return s_uccess;
 }
 
+Bool SBFile_createCopy(
+	SBFile src,
+	Allocator alloc,
+	SBFile *sbFile,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool allocated = false;
+
+	if(!sbFile)
+		retError(clean, Error_nullPointer(2, "SBFile_createCopy()::sbFile is required"))
+
+	if(sbFile->vars.ptr)
+		retError(clean, Error_invalidParameter(2, 0, "SBFile_createCopy()::sbFile is filled, indicates memleak"))
+		
+	allocated = true;
+	gotoIfError2(clean, ListSBStruct_createCopy(src.structs, alloc, &sbFile->structs))
+	gotoIfError2(clean, ListSBVar_createCopy(src.vars, alloc, &sbFile->vars))
+	gotoIfError2(clean, ListCharString_createCopyUnderlying(src.structNames, alloc, &sbFile->structNames))
+	gotoIfError2(clean, ListCharString_createCopyUnderlying(src.varNames, alloc, &sbFile->varNames))
+	gotoIfError3(clean, ListListU32_createCopyUnderlying(src.arrays, alloc, &sbFile->arrays, e_rr))
+
+clean:
+
+	if(allocated && !s_uccess)
+		SBFile_free(sbFile, alloc);
+
+	return s_uccess;
+}
+
 void SBFile_free(SBFile *sbFile, Allocator alloc) {
 
 	if(!sbFile)

@@ -1662,7 +1662,6 @@ Bool Compiler_finalizeEntrypoint(
 	U16 waveSize,
 	ESBType inputs[16],
 	ESBType outputs[16],
-	ListSHRegisterRuntime *registers,
 	U8 uniqueInputSemantics,
 	ListCharString *uniqueSemantics,
 	U8 inputSemantics[16],
@@ -1690,8 +1689,6 @@ Bool Compiler_finalizeEntrypoint(
 	}
 
 	gotoIfError3(clean, Compiler_findEntry(entries, entryName, &entry, e_rr))
-
-	ListSHRegisterRuntime_print(*registers, 0, alloc);
 
 	if(lock) {
 		acq = SpinLock_lock(lock, 1 * SECOND);
@@ -1776,8 +1773,6 @@ Bool Compiler_finalizeEntrypoint(
 clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
-
-	ListSHRegisterRuntime_freeUnderlying(registers, alloc);
 
 	if(!didInit && s_uccess)		//Avoid memleak
 		ListCharString_freeUnderlying(uniqueSemantics, alloc);
@@ -2504,6 +2499,7 @@ clean:
 
 Bool Compiler_processDXIL(
 	Buffer *result,
+	ListSHRegisterRuntime *registers,
 	DxcBuffer reflectionData,
 	CompilerInterfaces *interfaces,
 	SHBinaryIdentifier toCompile,
@@ -2521,7 +2517,6 @@ Bool Compiler_processDXIL(
 	Bool isLib = !CharString_length(toCompile.entrypoint);
 	ESHExtension exts = ESHExtension_None;
 	ListCharString strings{};
-	ListSHRegisterRuntime registers{};
 	U8 inputSemanticCount = 0;
 
 	//Prevent dxil.dll load, sign it ourselves :)
@@ -2670,7 +2665,7 @@ Bool Compiler_processDXIL(
 				if(FAILED(funcRefl->GetResourceBindingDesc(j, &input)))
 					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained invalid resource"))
 
-				gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, funcRefl, NULL, alloc, e_rr))
+				gotoIfError3(clean, Compiler_convertRegisterDXIL(registers, &input, funcRefl, NULL, alloc, e_rr))
 			}
 
 			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
@@ -2688,7 +2683,6 @@ Bool Compiler_processDXIL(
 			gotoIfError3(clean, Compiler_finalizeEntrypoint(
 				groupSize, payloadSize, attributeSize, waveSizes,
 				inputs, outputs,
-				&registers,
 				uniqueInputSemantics, &uniqueSemantics, inputSemantics, outputSemantics,
 				demangled, lock, entries,
 				alloc, e_rr
@@ -2886,13 +2880,12 @@ Bool Compiler_processDXIL(
 			if(FAILED(dxilRefl->GetResourceBindingDesc(j, &input)))
 				retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained invalid resource"))
 				
-			gotoIfError3(clean, Compiler_convertRegisterDXIL(&registers, &input, NULL, dxilRefl, alloc, e_rr))
+			gotoIfError3(clean, Compiler_convertRegisterDXIL(registers, &input, NULL, dxilRefl, alloc, e_rr))
 		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
 			groupSize, 0, 0, waveSizes,
 			inputs, outputs,
-			&registers,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
 			toCompile.entrypoint, lock, entries,
 			alloc, e_rr
@@ -2915,7 +2908,6 @@ Bool Compiler_processDXIL(
 
 clean:
 
-	ListSHRegisterRuntime_freeUnderlying(&registers, alloc),
 	ListCharString_freeUnderlying(&strings, alloc);
 
 	if(dxilRefl)
@@ -3714,6 +3706,7 @@ clean:
 
 Bool Compiler_processSPIRV(
 	Buffer *result,
+	ListSHRegisterRuntime *registers,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,
@@ -3734,7 +3727,6 @@ Bool Compiler_processSPIRV(
 	spvtools::Optimizer optimizer{ SPV_ENV_UNIVERSAL_1_5 };
 
 	ListCharString strings{};
-	ListSHRegisterRuntime registers{};
 	U8 inputSemanticCount = 0;
 
 	if(
@@ -4037,14 +4029,13 @@ Bool Compiler_processSPIRV(
 				if(!binding)
 					continue;
 
-				gotoIfError3(clean, Compiler_convertRegisterSPIRV(&registers, binding, descriptorSet.set, alloc, e_rr))
+				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, descriptorSet.set, alloc, e_rr))
 			}
 		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
 			localSize, payloadSize, intersectSize, 0,
 			inputs, outputs,
-			&registers,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
 			CharString_length(toCompile.entrypoint) ? toCompile.entrypoint :
 			CharString_createRefCStrConst(entrypoint.name),
@@ -4094,8 +4085,6 @@ Bool Compiler_processSPIRV(
 	}
 
 clean:
-
-	ListSHRegisterRuntime_freeUnderlying(&registers, alloc);
 
 	ListCharString_freeUnderlying(&strings, alloc);
 
@@ -4416,12 +4405,14 @@ Bool Compiler_compile(
 			};
 
 			gotoIfError3(clean, Compiler_processDXIL(
-				&result->binary, reflectionData, interfaces, toCompile, lock, entries, alloc, e_rr
+				&result->binary, &result->registers, reflectionData, interfaces, toCompile, lock, entries, alloc, e_rr
 			))
 		}
 
 		else if (settings.outputType == ESHBinaryType_SPIRV)
-			gotoIfError3(clean, Compiler_processSPIRV(&result->binary, settings, toCompile, lock, entries, alloc, e_rr))
+			gotoIfError3(clean, Compiler_processSPIRV(
+				&result->binary, &result->registers, settings, toCompile, lock, entries, alloc, e_rr
+			))
 
 		else retError(clean, Error_invalidState(2, "Compiler_compile() unsupported type. Only supporting DXIL and SPIRV"))
 

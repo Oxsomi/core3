@@ -312,6 +312,13 @@ Bool SBFile_create(
 	Error *e_rr
 );
 
+Bool SBFile_createCopy(
+	SBFile src,
+	Allocator alloc,
+	SBFile *sbFile,
+	Error *e_rr
+);
+
 void SBFile_free(SBFile *shFile, Allocator alloc);
 
 Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Allocator alloc, Error *e_rr);

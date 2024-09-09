@@ -130,11 +130,13 @@ typedef struct CompileResult {
 
 	union {
 		CharString text;
-		Buffer binary;
 		ListSHEntryRuntime shEntriesRuntime;
+		Buffer binary;
 	};
 
 	ListIncludeInfo includeInfo;
+
+	ListSHRegisterRuntime registers;
 
 } CompileResult;
 

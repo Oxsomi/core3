@@ -335,6 +335,21 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 		}
 	}
 
+	//Copy registers
+	
+	if(binaries->registers.length) {
+
+		if(ListSHRegisterRuntime_isRef(binaries->registers))
+			gotoIfError3(clean, ListSHRegisterRuntime_createCopyUnderlying(
+				binaries->registers, alloc, &info.registers, e_rr
+			))
+
+		else {
+			info.registers = binaries->registers;
+			binaries->registers = (ListSHRegisterRuntime) { 0 };
+		}
+	}
+
 	//Finalize
 
 	if(isUTF8)
@@ -909,6 +924,47 @@ SHBindings SHBindings_dummy() {
 	return bindings;
 }
 
+Bool ListSHRegisterRuntime_createCopyUnderlying(
+	ListSHRegisterRuntime orig,
+	Allocator alloc,
+	ListSHRegisterRuntime *dst,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool didAlloc = false;
+
+	if(!dst)
+		retError(clean, Error_nullPointer(1, "ListSHRegisterRuntime_createCopyUnderlying()::dst is required"))
+
+	if(dst->ptr)
+		retError(clean, Error_invalidParameter(
+			1, 0, "ListSHRegisterRuntime_createCopyUnderlying()::dst is non zero, could indicate memleak"
+		))
+
+	gotoIfError2(clean, ListSHRegisterRuntime_createCopy(orig, alloc, dst))
+	didAlloc = true;
+
+	for(U64 i = 0; i < orig.length; ++i) {			//Ensure we don't accidentally free something we shouldn't
+		dst->ptrNonConst[i].arrays = (ListU32) { 0 };
+		dst->ptrNonConst[i].name = CharString_createNull();
+		dst->ptrNonConst[i].shaderBuffer = (SBFile) { 0 };
+	}
+
+	for(U64 i = 0; i < orig.length; ++i) {			//Copy
+		gotoIfError2(clean, ListU32_createCopy(orig.ptr[i].arrays, alloc, &dst->ptrNonConst[i].arrays))
+		gotoIfError2(clean, CharString_createCopy(orig.ptr[i].name, alloc, &dst->ptrNonConst[i].name))
+		gotoIfError3(clean, SBFile_createCopy(orig.ptr[i].shaderBuffer, alloc, &dst->ptrNonConst[i].shaderBuffer, e_rr))
+	}
+
+clean:
+
+	if(didAlloc && !s_uccess)
+		ListSHRegisterRuntime_freeUnderlying(dst, alloc);
+
+	return s_uccess;
+}
+
 Bool ListSHRegisterRuntime_addSampler(
 	ListSHRegisterRuntime *registers,
 	U8 isUsedFlag,
@@ -983,8 +1039,6 @@ Bool ListSHRegisterRuntime_addBuffer(
 			))
 	}
 
-	Bool isAtomic = false;
-
 	switch (registerType) {
 
 		case ESHBufferType_StructuredBufferAtomic:
@@ -995,7 +1049,6 @@ Bool ListSHRegisterRuntime_addBuffer(
 					0, "ListSHRegisterRuntime_addBuffer()::registerType needs write flag to always be enabled"
 				))
 
-			isAtomic = true;
 			break;
 
 		case ESHBufferType_ConstantBuffer:
@@ -3168,6 +3221,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 	Bool isUTF8 = (a.flags & ESHSettingsFlags_IsUTF8) || (b.flags & ESHSettingsFlags_IsUTF8);
 	ListU16 remappedBinaries = (ListU16) { 0 };
 	ListU16 tmpBins = (ListU16) { 0 };
+	ListSHRegisterRuntime registers = (ListSHRegisterRuntime) { 0 };
 
 	if((a.flags & ESHSettingsFlags_HideMagicNumber) != (b.flags & ESHSettingsFlags_HideMagicNumber))
 		retError(clean, Error_invalidState(0, "SHFile_combine()::a and b have different flags: HideMagicNumber"))
@@ -3295,6 +3349,10 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			.vendorMask = bi.vendorMask,
 			.hasShaderAnnotation = bi.hasShaderAnnotation
 		};
+
+		//TODO: reserve registers
+		//TODO: push ref to ai and bi
+		//		But merge the data correctly
 
 		const void *extPtrSrc = &bi.identifier.extensions;
 		void *extPtrDst = &c.identifier.extensions;
@@ -3424,6 +3482,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 clean:
 
+	ListSHRegisterRuntime_free(&registers, alloc);
 	ListU16_free(&remappedBinaries, alloc);
 	ListU16_free(&tmpBins, alloc);
 

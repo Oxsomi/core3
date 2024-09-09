@@ -211,6 +211,7 @@ void CompileResult_free(CompileResult *result, Allocator alloc) {
 	if(!result)
 		return;
 
+	ListSHRegisterRuntime_freeUnderlying(&result->registers, alloc);
 	ListCompileError_freeUnderlying(&result->compileErrors, alloc);
 	ListIncludeInfo_freeUnderlying(&result->includeInfo, alloc);
 

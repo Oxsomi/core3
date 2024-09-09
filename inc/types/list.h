@@ -146,6 +146,11 @@ void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc);
 void ListListU32_freeUnderlying(ListListU32 *list, Allocator alloc);
 void ListListU64_freeUnderlying(ListListU64 *list, Allocator alloc);
 
+Bool ListListU8_createCopyUnderlying (ListListU8  src, Allocator alloc, ListListU8  *dst, Error *e_rr);
+Bool ListListU16_createCopyUnderlying(ListListU16 src, Allocator alloc, ListListU16 *dst, Error *e_rr);
+Bool ListListU32_createCopyUnderlying(ListListU32 src, Allocator alloc, ListListU32 *dst, Error *e_rr);
+Bool ListListU64_createCopyUnderlying(ListListU64 src, Allocator alloc, ListListU64 *dst, Error *e_rr);
+
 TList(Buffer);
 
 #ifdef __cplusplus

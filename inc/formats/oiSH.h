@@ -387,6 +387,12 @@ typedef struct SHBinaryInfo {
 
 } SHBinaryInfo;
 
+Bool ListSHRegisterRuntime_createCopyUnderlying(
+	ListSHRegisterRuntime orig,
+	Allocator alloc,
+	ListSHRegisterRuntime *dst,
+	Error *e_rr
+);
 
 Bool ListSHRegisterRuntime_addBuffer(
 	ListSHRegisterRuntime *registers,

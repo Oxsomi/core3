@@ -788,9 +788,11 @@
 
 		//Move binary there to avoid copying mem if possible
 
+		binaryInfo.registers = tempResult->registers;
 		binaryInfo.binaries[compileMode] = tempResult->binary;
 		gotoIfError3(clean, SHFile_addBinaryx(shFile, &binaryInfo, e_rr))
 		tempResult->binary = Buffer_createNull();
+		tempResult->registers = (ListSHRegisterRuntime) { 0 };
 
 		CompileResult_freex(tempResult);
 
