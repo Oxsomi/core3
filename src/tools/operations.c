@@ -321,6 +321,16 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_Hash }
 	};
 
+	Format_values[EFormat_FNV1A64] = (Format) {
+		.name = "FNV1A64",
+		.desc = "Fowler-Noll-Vo-1A 64-bit hash",
+		.operationFlags = EOperationFlags_None,
+		.optionalParameters = EOperationHasParameter_None,
+		.requiredParameters = EOperationHasParameter_Input,
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders | EFormatFlags_SupportAsString,
+		.supportedCategories = { EOperationCategory_Hash }
+	};
+
 	Format_values[EFormat_SHA256] = (Format) {
 		.name = "SHA256",
 		.desc = "SHA256 (256-bit hash)",
@@ -540,6 +550,18 @@ void Operations_init() {
 		.desc = "Profiles hashing random data using crc32c.",
 
 		.func = &CLI_profileCRC32C,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileFNV1A64] = (Operation) {
+
+		.category = EOperationCategory_Profile,
+
+		.name = "fnv1a64",
+		.desc = "Profiles hashing random data using fnv1a64.",
+
+		.func = &CLI_profileFNV1A64,
 
 		.isFormatLess = true
 	};

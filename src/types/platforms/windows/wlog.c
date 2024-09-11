@@ -209,7 +209,7 @@ void Log_printCapturedStackTraceCustom(
 			(int) CharString_length(capture.sym), capture.sym.ptr
 		).genericError;
 
-		Log_log(alloc, lvl, opt, tmp);
+		Log_log(alloc, lvl, opt &~ ELogOptions_Default, tmp);
 		CharString_free(&tmp, alloc);
 
 		//We now don't need the strings anymore

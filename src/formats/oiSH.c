@@ -158,6 +158,7 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 
 		SHBinaryInfo *binary = &shFile->binaries.ptrNonConst[j];
 
+		ListSHRegisterRuntime_freeUnderlying(&binary->registers, alloc);
 		CharString_free(&binary->identifier.entrypoint, alloc);
 		ListCharString_freeUnderlying(&binary->identifier.uniforms, alloc);
 
@@ -1363,7 +1364,7 @@ Bool ListSHRegisterRuntime_addRegister(
 		case ESHRegisterType_Sampler: {
 
 			U32 regType = reg.registerType;
-			Bool isComparisonState = regType != ESHRegisterType_SamplerComparisonState;
+			Bool isComparisonState = regType == ESHRegisterType_SamplerComparisonState;
 			
 			if(regType != ESHRegisterType_Sampler && isComparisonState)
 				retError(clean, Error_invalidParameter(2, 4, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
@@ -1448,11 +1449,6 @@ Bool ListSHRegisterRuntime_addRegister(
 			}
 
 			else {
-
-				if(reg.padding)
-					retError(clean, Error_invalidParameter(
-						2, 5, "ListSHRegisterRuntime_addRegister()::padding is invalid (non zero)"
-					))
 
 				if(reg.texture.formatId)
 					retError(clean, Error_invalidParameter(
@@ -1561,6 +1557,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	DLFile shaderBuffers = (DLFile) { 0 };
 	Buffer shaderBuffersDlFile = Buffer_createNull();
+	ListListU32 arrays = (ListListU32) { 0 };			//Only contains references
+	ListSBFile shaderBufferList = (ListSBFile) { 0 };	//Only contains references
 
 	settings = (DLSettings) {
 		.dataType = EDLDataType_Data,
@@ -1641,7 +1639,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				continue;
 
 			if(strings.entryBuffers.length - uniValStart >= (U16)(U16_MAX - 1))
-				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform values"))
+				retError(clean, Error_invalidState(0, "SHFile_write() DLFile didn't have space for uniform values"))
 
 			if(isUTF8)
 				gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(str), alloc, e_rr))
@@ -1650,7 +1648,80 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		}
 	}
 
+	U64 regNameStart = strings.entryBuffers.length;
+
+	//Add register names, arrays and shader buffers
+
+	for (U64 i = 0; i < shFile.binaries.length; ++i) {
+
+		SHBinaryInfo binary = shFile.binaries.ptr[i];
+
+		for (U64 j = 0; j < binary.registers.length; ++j) {
+
+			SHRegisterRuntime reg = binary.registers.ptr[j];
+
+			//Add name if it's new
+		
+			CharString str = reg.name;
+
+			if(DLFile_find(strings, regNameStart, strings.entryBuffers.length, str) == U64_MAX) {
+
+				if(strings.entryBuffers.length - regNameStart >= (U16)(U16_MAX - 1))
+					retError(clean, Error_invalidState(0, "SHFile_write() DLFile didn't have space for register names"))
+
+				if(isUTF8)
+					gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(str), alloc, e_rr))
+
+				else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(str), alloc, e_rr))
+			}
+
+			//Add array if it's new
+
+			if(reg.arrays.length) {
+
+				U16 arrayId = 0;
+
+				for(; arrayId < arrays.length; ++arrayId)
+					if(ListU32_eq(arrays.ptr[arrayId], reg.arrays))
+						break;
+
+				if(arrayId >= (U16)(U16_MAX - 1))
+					retError(clean, Error_invalidState(0, "SHFile_write() No more space for arrays"))
+
+				if(arrayId == arrays.length)
+					gotoIfError2(clean, ListListU32_pushBack(&arrays, ListU32_createRefFromList(reg.arrays), alloc))
+			}
+
+			//Add shader buffer if it's new
+
+			if (reg.shaderBuffer.vars.ptr) {
+				
+				U64 shaderBufferId = 0;
+
+				for (; shaderBufferId < shaderBufferList.length; ++shaderBufferId)
+					if(shaderBufferList.ptr[shaderBufferId].hash == reg.shaderBuffer.hash)
+						break;
+
+				if(shaderBufferId >= (U16)(U16_MAX - 1))
+					retError(clean, Error_invalidState(0, "SHFile_write() No more space for shader buffers"))
+
+				if(shaderBufferId == shaderBufferList.length) {
+					SBFile buffer = reg.shaderBuffer;
+					buffer.flags |= ESBSettingsFlags_HideMagicNumber;
+					gotoIfError2(clean, ListSBFile_pushBack(&shaderBufferList, buffer, alloc))
+				}
+			}
+		}
+	}
+
+	//Arrays are U8 N + U32 count[N]
+
+	for(U64 i = 0; i < arrays.length; ++i)
+		headerSize += arrays.ptr[i].length * sizeof(U32);
+
 	//Add includes
+
+	U64 includeStart = strings.entryBuffers.length;
 
 	for (U64 i = 0; i < shFile.includes.length; ++i) {
 
@@ -1722,7 +1793,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			case ESHPipelineStage_AnyHitExt:
 			case ESHPipelineStage_IntersectionExt:
 				headerSize += sizeof(U8);				//intersectionSize
-				//fallthrough
+				// fallthrough
 
 			case ESHPipelineStage_MissExt:
 				headerSize += sizeof(U8);				//payloadSize
@@ -1761,12 +1832,11 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Create shader buffers and move to DLFile
 
-	//TODO: Add register's shader buffers
-	//for (U64 i = 0; i < shFile.shaderBuffers.length; ++i) {
-	//	gotoIfError3(clean, SBFile_write(shFile.shaderBuffers.ptr[i], alloc, &shaderBuffersDlFile, e_rr))
-	//	gotoIfError3(clean, DLFile_addEntry(&shaderBuffers, shaderBuffersDlFile, alloc, e_rr))
-	//	shaderBuffersDlFile = Buffer_createNull();
-	//}
+	for (U64 i = 0; i < shaderBufferList.length; ++i) {
+		gotoIfError3(clean, SBFile_write(shaderBufferList.ptr[i], alloc, &shaderBuffersDlFile, e_rr))
+		gotoIfError3(clean, DLFile_addEntry(&shaderBuffers, shaderBuffersDlFile, alloc, e_rr))
+		shaderBuffersDlFile = Buffer_createNull();
+	}
 
 	//Create DLFiles and calculate length
 
@@ -1779,7 +1849,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		Buffer_length(shaderBuffersDlFile) +
 		shFile.entries.length * sizeof(EntryInfoFixedSize) +
 		shFile.binaries.length * sizeof(BinaryInfoFixedSize) +
-		shFile.includes.length * sizeof(U32);
+		shFile.includes.length * sizeof(U32) +
+		arrays.length * sizeof(U8);
 
 	//Create sizes and calculate binary size buffer size
 
@@ -1812,7 +1883,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		.stageCount = (U16) shFile.entries.length,
 		.uniqueUniforms = (U16) uniValStart,
 		.includeFileCount = (U16) shFile.includes.length,
-		.semanticCount = (U16) uniqueSemantics
+		.semanticCount = (U16) uniqueSemantics,
+		.arrayDimCount = (U16) arrays.length,
+		.registerNameCount = (U16) (includeStart - regNameStart)
 	};
 
 	headerIt += sizeof(SHHeader);
@@ -1828,8 +1901,16 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	BinaryInfoFixedSize *binaryStaticStart = (BinaryInfoFixedSize*) headerIt;
 	EntryInfoFixedSize *stagesStaticStart = (EntryInfoFixedSize*) (binaryStaticStart + shFile.binaries.length);
 	U32 *crc32c = (U32*) (stagesStaticStart + shFile.entries.length);
-	U8 *pipelineStagesStart = (U8*)(crc32c + shFile.includes.length);
-	headerIt = pipelineStagesStart;	
+	U8 *arrayDims = (U8*) (crc32c + shFile.includes.length);
+	U32 *arrayCount = (U32*) (arrayDims + arrays.length);
+
+	for (U64 i = 0; i < arrays.length; ++i) {
+		arrayDims[i] = (U8) arrays.ptr[i].length;
+		Buffer_copy(Buffer_createRef(arrayCount, ListU32_bytes(arrays.ptr[i])), ListU32_bufferConst(arrays.ptr[i]));
+		arrayCount += arrayDims[i];
+	}
+
+	headerIt = (U8*) arrayCount;
 	
 	//Fill binaries
 
@@ -1851,7 +1932,6 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				binaryFlags |= 1 << j;
 
 		U64 entryStart = strings.entryBuffers.length - uniqueSemantics - entries;
-		U64 includeStart = entryStart - uniqueSemantics - shFile.includes.length;
 		U64 entrypoint = entryStart + U16_MAX;		//Indicate no entry
 
 		if(!binary.hasShaderAnnotation) {
@@ -1876,7 +1956,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			.uniformCount = uniformCount,
 			.binaryFlags = binaryFlags,
 
-			.extensions = binary.identifier.extensions
+			.extensions = binary.identifier.extensions,
+			.registerCount = (U16) binary.registers.length
 		};
 
 		//Dynamic part
@@ -1898,8 +1979,31 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		for (U64 j = 0; j < binary.registers.length; ++j) {
 
 			SHRegisterRuntime reg = binary.registers.ptr[j];
-			//reg.reg.arrayId = ...;		TODO:
-			//TODO: name = ...;
+			
+			reg.reg.nameId = (U16) DLFile_find(strings, regNameStart, includeStart, reg.name);
+
+			if(!reg.arrays.length)
+				reg.reg.arrayId = U16_MAX;
+				
+			else for(U64 arrayId = 0; arrayId < arrays.length; ++arrayId)
+				if(ListU32_eq(arrays.ptr[arrayId], reg.arrays)) {
+					reg.reg.arrayId = (U16) arrayId;
+					break;
+				}
+
+			if(reg.reg.registerType >= ESHRegisterType_BufferStart && reg.reg.registerType <= ESHRegisterType_BufferEnd)
+				reg.reg.shaderBufferId = U16_MAX;
+
+			if(reg.shaderBuffer.vars.ptr) {
+
+				U64 k = 0;
+
+				for (; k < shaderBufferList.length; ++k)
+					if(shaderBufferList.ptr[k].hash == reg.shaderBuffer.hash)
+						break;
+
+				reg.reg.shaderBufferId = (U16) k;
+			}
 
 			regs[j] = reg.reg;
 		}
@@ -2058,6 +2162,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	shHeader->sourceHash = shFile.sourceHash;
 
 clean:
+	ListSBFile_free(&shaderBufferList, alloc);
+	ListListU32_free(&arrays, alloc);			//Doesn't need freeUnderlying, it's all references
 	Buffer_free(&shaderBuffersDlFile, alloc);
 	DLFile_free(&shaderBuffers, alloc);
 	Buffer_free(&stringsDlFile, alloc);
@@ -2076,6 +2182,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	SHEntry entry = (SHEntry) { 0 };
 	SHBinaryInfo binaryInfo = (SHBinaryInfo) { 0 };
 	SHInclude include = (SHInclude) { 0 };
+	ListListU32 arrays = (ListListU32) { 0 };		//All references
+	SBFile copySB = (SBFile) { 0 };
 
 	if(!shFile)
 		retError(clean, Error_nullPointer(2, "SHFile_read()::shFile is required"))
@@ -2125,6 +2233,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		(U64)header.stageCount + 
 		header.includeFileCount + 
 		header.semanticCount +
+		header.registerNameCount +
 		header.uniqueUniforms +				//Names have to be unique
 		(header.uniqueUniforms ? 1 : 0);	//Values can be shared
 
@@ -2165,8 +2274,27 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	const BinaryInfoFixedSize *fixedBinaryInfo = (const BinaryInfoFixedSize*) file.ptr;
 	const EntryInfoFixedSize *fixedEntryInfo = (const EntryInfoFixedSize*) (fixedBinaryInfo + header.binaryCount);
 	const U32 *includeFileCrc32c = (const U32*) (fixedEntryInfo + header.stageCount);
+	const U8 *arrayDims = (const U8*) (includeFileCrc32c + header.includeFileCount);
+	const U32 *arrayCount = (const U32*) (arrayDims + header.arrayDimCount);
 
-	gotoIfError2(clean, Buffer_offset(&file, (const U8*)(includeFileCrc32c + header.includeFileCount) - file.ptr));
+	gotoIfError2(clean, Buffer_offset(&file, (const U8*)arrayCount - file.ptr));
+	gotoIfError2(clean, ListListU32_resize(&arrays, header.arrayDimCount, alloc))
+
+	U64 totalArrayElements = 0;
+
+	for (U8 i = 0; i < header.arrayDimCount; ++i) {
+
+		U8 arrayDim = arrayDims[i];
+
+		if(arrayDim > 32 || !arrayDim)
+			retError(clean, Error_invalidState(0, "SHFile_read() array must be of size [1, 32]"))
+
+		gotoIfError2(clean, ListU32_createRefConst(arrayCount, arrayDim, &arrays.ptrNonConst[i]))
+		totalArrayElements += arrayDim;
+		arrayCount += arrayDim;
+	}
+
+	gotoIfError2(clean, Buffer_offset(&file, totalArrayElements * sizeof(U32)));
 
 	//Create SHFile container
 
@@ -2179,6 +2307,10 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	allocate = true;
 
 	//Parse binaries
+
+	U64 entrypointNameStart = strings.entryBuffers.length - header.semanticCount - header.stageCount;
+	U64 includeNameStart = entrypointNameStart - header.includeFileCount;
+	U64 registerNameStart = includeNameStart - header.registerNameCount;
 
 	for(U64 j = 0; j < header.binaryCount; ++j) {
 
@@ -2215,9 +2347,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 					0, binary.entrypoint, header.stageCount, "SHFile_read() one of the entrypoint ids it out of bounds"
 				))
 
-			CharString name = DLFile_stringAt(
-				strings, strings.entryBuffers.length - header.semanticCount - header.stageCount + binary.entrypoint, NULL
-			);
+			CharString name = DLFile_stringAt(strings, entrypointNameStart + binary.entrypoint, NULL);
 
 			gotoIfError2(clean, CharString_createCopy(name, alloc, &binaryInfo.identifier.entrypoint))
 		}
@@ -2233,9 +2363,13 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 		const U16 *uniformNames = (const U16*) file.ptr;
 		const U16 *uniformValues = uniformNames + binary.uniformCount;
-		const U16 *uniformsEnd = uniformValues + binary.uniformCount;
 
-		gotoIfError2(clean, Buffer_offset(&file, (const U8*) uniformsEnd - file.ptr))
+		//Grab registers
+
+		const SHRegister *regs = (const SHRegister*) (uniformValues + binary.uniformCount);
+		const SHRegister *regEnd = (const SHRegister*) (regs + binary.registerCount);
+
+		gotoIfError2(clean, Buffer_offset(&file, (const U8*) regEnd - file.ptr))
 
 		//Parse uniforms (names must be unique)
 
@@ -2254,9 +2388,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 			//Since uniform values can be shared, we need to ensure we're not indexing out of bounds
 
 			U64 uniformNameId = (U64) uniformValues[i] + header.uniqueUniforms;
-			U64 endIndex = strings.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount;
 
-			if(uniformNameId >= endIndex)
+			if(uniformNameId >= registerNameStart)
 				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
 				
 			CharString uniformValue = DLFile_stringAt(strings, uniformNameId, NULL);
@@ -2271,6 +2404,41 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 			gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &uniformStrs->ptrNonConst[i << 1]));
 			gotoIfError2(clean, CharString_createCopy(uniformValue, alloc, &uniformStrs->ptrNonConst[(i << 1) | 1]));
+		}
+
+		//Parse registers
+
+		for (U64 i = 0; i < binary.registerCount; ++i) {
+
+			SHRegister reg = regs[i];
+
+			if(reg.nameId >= header.registerNameCount)
+				retError(clean, Error_invalidState(1, "SHFile_read() nameId out of bounds"))
+				
+			CharString name = DLFile_stringAt(strings, reg.nameId + registerNameStart, NULL);
+			name = CharString_createRefStrConst(name);
+
+			if(reg.arrayId != U16_MAX && reg.arrayId >= header.arrayDimCount)
+				retError(clean, Error_invalidState(1, "SHFile_read() arrayId out of bounds"))
+
+			ListU32 arr = reg.arrayId != U16_MAX ? arrays.ptr[reg.arrayId] : (ListU32) { 0 };
+			SBFile *sbFile = NULL;
+
+			if (
+				reg.registerType >= ESHRegisterType_BufferStart && reg.registerType < ESHRegisterType_BufferEnd &&
+				reg.shaderBufferId != U16_MAX
+			) {
+
+				if(reg.shaderBufferId >= parsedShaderBuffers.length)
+					retError(clean, Error_invalidState(1, "SHFile_read() shaderBufferId out of bounds"))
+
+				sbFile = &copySB;
+				gotoIfError3(clean, SBFile_createCopy(parsedShaderBuffers.ptr[reg.shaderBufferId], alloc, &copySB, e_rr))
+			}
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addRegister(
+				&binaryInfo.registers, &name, arr.length ? &arr : NULL, reg, sbFile, alloc, e_rr
+			))
 		}
 
 		//Get binarySizes
@@ -2319,8 +2487,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		if(!binaryCount)
 			retError(clean, Error_invalidParameter(0, 0, "SHFile_read() stage[i].binaryCount must be >0"))
 
-		U64 start = strings.entryBuffers.length - header.semanticCount - header.stageCount;
-
+		U64 start = entrypointNameStart;
 		CharString str = DLFile_stringAt(strings, start + i, NULL);		//Already safety checked
 
 		if(DLFile_find(strings, start, start + i, str) != U64_MAX)
@@ -2533,13 +2700,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	//Get includes
 
 	for(U64 i = 0; i < header.includeFileCount; ++i) {
-
-		CharString relativePath = DLFile_stringAt(
-			strings,
-			strings.entryBuffers.length - header.semanticCount - header.stageCount - header.includeFileCount + i,
-			NULL
-		);
-
+		CharString relativePath = DLFile_stringAt(strings, includeNameStart + i, NULL);
 		gotoIfError2(clean, CharString_createCopy(relativePath, alloc, &include.relativePath))
 		include.crc32c = includeFileCrc32c[i];
 		gotoIfError3(clean, SHFile_addInclude(shFile, &include, alloc, e_rr))
@@ -2609,6 +2770,8 @@ clean:
 	if(!s_uccess && allocate)
 		SHFile_free(shFile, alloc);
 
+	SBFile_free(&copySB, alloc);
+	ListListU32_free(&arrays, alloc);
 	SHInclude_free(&include, alloc);
 	SHBinaryInfo_free(&binaryInfo, alloc);
 	SHEntry_free(&entry, alloc);

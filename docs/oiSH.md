@@ -45,6 +45,9 @@ typedef struct SHHeader {
     
     U16 includeFileCount;
     U16 semanticCount;
+    
+    U16 arrayDimCount;
+    U16 registerNameCount;
 
 } SHHeader;
 
@@ -254,7 +257,7 @@ typedef struct SHRegister {
 	};
 
 	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
-	U16 padding2;
+	U16 nameId;
 
 } SHRegister;
 
@@ -270,7 +273,8 @@ SHFile {
     //strings[len - semanticCount,  len] contains semantics for inputs/outputs.
     //strings[^ - stageCount,       ^ - semanticCount] contains entrypoint names.
     //strings[^ - includeFileCount, ^ - stageCount] contains (relative) include names.
-    //strings[0,                    ^ - includeFileCount] contains uniform values and names.
+    //strings[^ - stageCount, 		^ - includeFileCount] contains unique register names.
+    //strings[0,                    ^ - registerNameCount] contains uniform values & names and register names.
     DLFile strings;
     
     //No magic number, no encryption/compression/SHA256 (see oiDL.md).
@@ -282,13 +286,17 @@ SHFile {
     BinaryInfoFixedSize binaryInfos[binaryCount];
     EntryInfoFixedSize pipelineStages[stageCount];
     U32 includeFileHashes[includeFileCount];
+    U8 arrayDims[arrayDimCount];		//Max of 32 per array dim
+    
+    for i < arrayDimCount:
+	    U32 arraySizes[arrayDims[i]];
 
     for i < binaryCount:
     
     	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[0]
     	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [uniformCount]
     
-    	SHRegister registers[binaryInfos[i].registerCount];
+    	SHRegister registers[binaryInfos[i].registerCount];	//Name starts after all uniform names & values
     
         if binary[i] has SPIRV:
             EXXDataSizeType<spirvType> spirvLength;

@@ -22,7 +22,7 @@ A hash can be calculated as following:
 
 `OxC3 hash file -format SHA256 -input myDialog.txt`
 
-Where the format can either be `CRC32C` or `SHA256`.
+Where the format can either be `CRC32C`, `MD5`, `FNV1A64` or `SHA256`.
 
 A hash from a string can be calculated like so:
 
@@ -383,8 +383,10 @@ Profiles the speed of important operations that might be happening a lot or oper
 
 - `OxC3 profile cast`: profiles how long casts take between F64, F32, F16 and a smaller or bigger float type. This doesn't include any additional floating point formats (only half, float and double). It does tests with normal numbers, denormalized numbers, NaNs and Infs.
 - `OxC3 profile rng`: profiles how expensive Buffer_CSPRNG is (cryptographically secure random).
-- `OxC3 profile crc32c`: profiles how much time a Buffer CRC32C takes up if the buffer isn't small.
-- `OxC3 profile sha256`: profiles how fast a Buffer SHA256 is if the buffer isn't small.
+- `OxC3 profile crc32c`: profiles how much time a Buffer CRC32C is.
+- `OxC3 profile md5`: profiles how much time a Buffer MD5 is.
+- `OxC3 profile fnv1a64`: profiles how much time a Buffer FNV1A64 is.
+- `OxC3 profile sha256`: profiles how fast a Buffer SHA256 is.
 - `OxC3 profile aes256/aes128`: how fast AES encryption is. AES256 should be preferred though for legacy reasons the other might be used (It's about the same speed). The encryption mode is always GCM.
 
 ## Helper functions

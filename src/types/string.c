@@ -2771,8 +2771,19 @@ Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc) {
 
 Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr) {
 
-	if(!toCopy.length)
-		return Error_nullPointer(0, "ListCharString_createCopyUnderlying()::toCopy.length can't be 0");
+	if(!toCopy.length) {
+
+		if(!arr)
+			return Error_nullPointer(3, "ListCharString_createCopyUnderlying()::arr is required");
+
+		if (arr->ptr)
+			return Error_invalidOperation(
+				0, "ListCharString_createCopyUnderlying()::arr wasn't empty, which might indicate memleak"
+			);
+
+		*arr = (ListCharString) { 0 };
+		return Error_none();
+	}
 
 	Error err = ListCharString_create(toCopy.length, alloc, arr);
 

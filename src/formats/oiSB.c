@@ -282,6 +282,9 @@ Bool SBFile_create(
 	sbFile->flags = flags;
 	sbFile->bufferSize = bufferSize;
 
+	const void *flagsPtr = &sbFile->flags;
+	sbFile->hash = Buffer_fnv1a64Single(*(const U64*)flagsPtr, Buffer_fnv1a64Offset);
+
 clean:
 	return s_uccess;
 }
@@ -308,6 +311,10 @@ Bool SBFile_createCopy(
 	gotoIfError2(clean, ListCharString_createCopyUnderlying(src.structNames, alloc, &sbFile->structNames))
 	gotoIfError2(clean, ListCharString_createCopyUnderlying(src.varNames, alloc, &sbFile->varNames))
 	gotoIfError3(clean, ListListU32_createCopyUnderlying(src.arrays, alloc, &sbFile->arrays, e_rr))
+
+	sbFile->bufferSize = src.bufferSize;
+	sbFile->flags = src.flags;
+	sbFile->hash = src.hash;
 
 clean:
 
@@ -343,10 +350,17 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Alloc
 			2, 0, "SBFile_addStruct()::sbStruct.stride is required"
 		))
 
+	if(CharString_length(*name) >= U32_MAX)
+		retError(clean, Error_invalidParameter(1, 0, "SBFile_addStruct()::*name must be less than 4Gi of string"))
+
 	if(sbFile->structs.length >= (U16)(U16_MAX - 1))
 		retError(clean, Error_outOfBounds(
 			0, sbFile->structs.length, U16_MAX, "SBFile_addStruct()::sbFile->structs.length limited to 65535"
 		))
+	
+	U64 hash = sbFile->hash;
+	hash = Buffer_fnv1a64Single(sbStruct.stride | ((U64)CharString_length(*name) << 32), hash);
+	sbFile->hash = Buffer_fnv1a64(CharString_bufferConst(*name), hash);
 
 	gotoIfError2(clean, ListSBStruct_pushBack(&sbFile->structs, sbStruct, alloc))
 	pushedStruct = true;
@@ -369,6 +383,34 @@ clean:
 		ListSBStruct_popBack(&sbFile->structs, NULL);
 
 	return s_uccess;
+}
+
+void SBVar_applyHash(U64 *hashRes, SBVar var, CharString name) {
+	
+	const void *structId = &var.structId;				//Interpreted as a U64 and U32
+	const U64 *structIdU64 = (const U64*) structId;		//[0] = structId, arrayIndex, offset
+	const U32 *structIdU32 = (const U32*) structId;		//[2] = type, flags, parentId
+
+	U64 hash = *hashRes;
+	hash = Buffer_fnv1a64Single(structIdU64[0], hash);
+	hash = Buffer_fnv1a64Single(structIdU32[2] | ((U64)CharString_length(name) << 32), hash);
+	*hashRes = Buffer_fnv1a64(CharString_bufferConst(name), hash);
+}
+
+void ListU32_applyHash(U64 *hashRes, ListU32 array) {
+
+	U64 hash = Buffer_fnv1a64Single(array.length, *hashRes);
+
+	const void *arrayPtr = array.ptr;
+	const U64 *arrayU64 = (const U64*) arrayPtr;
+
+	for(U64 i = 0, j = array.length >> 1; i < j; ++i)
+		hash = Buffer_fnv1a64Single(arrayU64[j], hash);
+
+	if (array.length & 1)
+		hash = Buffer_fnv1a64Single(array.ptr[array.length - 1], hash);
+
+	*hashRes = hash;
 }
 
 Bool SBFile_addVariableAsType(
@@ -415,6 +457,9 @@ Bool SBFile_addVariableAsType(
 		retError(clean, Error_outOfBounds(
 			0, sbFile->arrays.length, U16_MAX, "SBFile_addVariableAsType()::sbFile->arrays.length limited to 65535"
 		))
+
+	if(CharString_length(*name) >= U32_MAX)
+		retError(clean, Error_invalidParameter(1, 0, "SBFile_addVariableAsType()::*name must be less than 4Gi of string"))
 
 	//Padding happens each element of an array that isn't 16-byte aligned.
 	//The last element doesn't have padding
@@ -513,6 +558,8 @@ Bool SBFile_addVariableAsType(
 		.parentId = parentId
 	};
 
+	SBVar_applyHash(&sbFile->hash, var, *name);
+
 	gotoIfError2(clean, ListSBVar_pushBack(&sbFile->vars, var, alloc))
 	pushedVar = true;
 
@@ -532,6 +579,7 @@ Bool SBFile_addVariableAsType(
 			gotoIfError2(clean, ListU32_createCopy(*arrays, alloc, &tmpArray))
 
 		if (arrays) {
+			ListU32_applyHash(&sbFile->hash, tmpArray.ptr ? tmpArray : *arrays);
 			gotoIfError2(clean, ListListU32_pushBack(&sbFile->arrays, tmpArray.ptr ? tmpArray : *arrays, alloc))
 			*arrays = tmpArray = (ListU32) { 0 };
 		}
@@ -598,6 +646,9 @@ Bool SBFile_addVariableAsStruct(
 		retError(clean, Error_outOfBounds(
 			0, sbFile->arrays.length, U16_MAX, "SBFile_addVariableAsStruct()::arrays.length limited to 65535"
 		))
+
+	if(CharString_length(*name) >= U32_MAX)
+		retError(clean, Error_invalidParameter(1, 0, "SBFile_addVariableAsStruct()::*name must be less than 4Gi of string"))
 
 	//Alignment: starts at 16 byte boundary if CBuffer
 	
@@ -682,6 +733,8 @@ Bool SBFile_addVariableAsStruct(
 		.parentId = parentId
 	};
 
+	SBVar_applyHash(&sbFile->hash, var, *name);
+
 	gotoIfError2(clean, ListSBVar_pushBack(&sbFile->vars, var, alloc))
 	pushedVar = true;
 
@@ -701,6 +754,7 @@ Bool SBFile_addVariableAsStruct(
 			gotoIfError2(clean, ListU32_createCopy(*arrays, alloc, &tmpArray))
 
 		if (arrays) {
+			ListU32_applyHash(&sbFile->hash, tmpArray.ptr ? tmpArray : *arrays);
 			gotoIfError2(clean, ListListU32_pushBack(&sbFile->arrays, tmpArray.ptr ? tmpArray : *arrays, alloc))
 			*arrays = tmpArray = (ListU32) { 0 };
 		}

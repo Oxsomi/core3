@@ -245,6 +245,30 @@ Bool CLI_profileCRC32C(ParsedArgs args) {
 	return CLI_profileData(args, CLI_profileCRC32CImpl);
 }
 
+Error CLI_profileFNV1A64Impl(ParsedArgs args, Buffer buf) {
+
+	(void)args;
+
+	const Ns then = Time_now();
+	const U32 hash = Buffer_crc32c(buf);
+	const Ns now = Time_now();
+
+	Log_debugLnx(
+		"Profile FNV1a64: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
+		Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64)(now - then) / Buffer_length(buf),
+		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		hash
+	);
+
+	return Error_none();
+}
+
+Bool CLI_profileFNV1A64(ParsedArgs args) {
+	return CLI_profileData(args, CLI_profileFNV1A64Impl);
+}
+
 Error CLI_profileSHA256Impl(ParsedArgs args, Buffer buf) {
 
 	(void)args;

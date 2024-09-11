@@ -65,6 +65,13 @@ Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 			break;
 		}
 
+		case EFormat_FNV1A64: {
+			const U64 output = Buffer_fnv1a64(buf, Buffer_fnv1a64Offset);
+			gotoIfError2(clean, CharString_createHexx(output, 16, &tmp))
+			gotoIfError2(clean, CharString_popFrontCount(&tmp, 2))
+			break;
+		}
+
 		case EFormat_MD5: {
 
 			const I32x4 output = Buffer_md5(buf);

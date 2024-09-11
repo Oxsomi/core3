@@ -270,7 +270,7 @@ typedef enum ESBVarFlag {
 	ESBVarFlag_Invalid			= 0xFFFFFFFF << 2
 } ESBVarFlag;
 
-typedef struct SBVar {
+typedef struct SBVar {	//Is seen as a U64 and U32 for hashing
 
 	U16 structId;		//If not U16_MAX, ESBType needs to be 0 and this should be a valid struct
 	U16 arrayIndex;		//U16_MAX identifies "none"
@@ -297,8 +297,10 @@ typedef struct SBFile {
 
 	U64 readLength;				//How many bytes were read for this file
 
-	ESBSettingsFlags flags;
+	ESBSettingsFlags flags;		//flags and bufferSize are assumed to be a single U64 combined
 	U32 bufferSize;
+
+	U64 hash;					//Appending to the SBFile will automatically refresh this
 
 } SBFile;
 

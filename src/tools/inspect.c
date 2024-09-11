@@ -172,12 +172,14 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			Log_debugLnx(
 				"With %"PRIu16" binaries, %"PRIu16" stages, %"PRIu16" uniforms, "
-				"%"PRIu16" stored semantics and %"PRIu16" includes",
+				"%"PRIu16" stored semantics, %"PRIu16" includes, %"PRIu16" arrayDimCount and %"PRIu16" registerNameCount",
 				shHeader.binaryCount,
 				shHeader.stageCount,
 				shHeader.uniqueUniforms,
 				shHeader.semanticCount,
-				shHeader.includeFileCount
+				shHeader.includeFileCount,
+				shHeader.arrayDimCount,
+				shHeader.registerNameCount
 			);
 
 			break;
@@ -1141,7 +1143,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 						Buffer binary = file.binaries.ptr[entryI].binaries[binaryType];
 
-						if(!Buffer_length(binary)){
+						if (!Buffer_length(binary)) {
 							Log_errorLnx("%s binary is missing at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
 							goto cleanSh;
 						}

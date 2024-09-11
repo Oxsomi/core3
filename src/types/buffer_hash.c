@@ -394,28 +394,34 @@ I32x4 Buffer_md5(Buffer buf) {
 	return I32x4_load4((const I32*) v);
 }
 
-//Fill buffer and flush, assumes bufTmp.length <= 64 and tmp.length == 64
-void MD5DXC_fillBuffer(MD5State *state, U8 *tmp, U64 *offPtr, Buffer bufTmp) {
+U64 Buffer_fnv1a64Single(U64 a, U64 hash) {
+	return (a ^ hash) * Buffer_fnv1a64Prime;
+}
 
-	if(!Buffer_length(bufTmp))
-		return;
+U64 Buffer_fnv1a64(Buffer buf, U64 hash) {
 
-	//Fill remainder
+	const U64 *ptrU64 = (const U64*) buf.ptr;
 
-	U64 off = *offPtr;
-	Buffer_copy(Buffer_createRef(tmp + off, 64 - off), bufTmp);
+	U64 len = Buffer_length(buf);
+	U64 off = len >> 3 << 3;
 
-	//Flush previous buffer
+	for(U64 i = 0, j = len >> 3; i < j; ++i)
+		hash = Buffer_fnv1a64Single(ptrU64[i], hash);
 
-	U64 offNew = (off + Buffer_length(bufTmp)) & 63;
+	const U8 *ptr = buf.ptr + off;
 
-	if(offNew < off) {
-
-		MD5State_update(state, Buffer_createRefConst(tmp, 64));
-
-		Buffer_copy(Buffer_createRef((U8*)tmp, 64), Buffer_createRefConst(bufTmp.ptr + off, offNew));
-		Buffer_unsetAllBits(Buffer_createRef(((U8*)tmp) + offNew, 64 - offNew));
+	if (len & 4) {
+		hash = Buffer_fnv1a64Single(*(const U32*)ptr, hash);
+		ptr += 4;
 	}
 
-	*offPtr = offNew;
+	if (len & 2) {
+		hash = Buffer_fnv1a64Single(*(const U16*)ptr, hash);
+		ptr += 2;
+	}
+
+	if (len & 1)
+		hash = Buffer_fnv1a64Single(*ptr, hash);
+
+	return hash;
 }

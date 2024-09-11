@@ -63,6 +63,7 @@ Bool CLI_randNum(ParsedArgs args);
 Bool CLI_profileCast(ParsedArgs args);
 Bool CLI_profileRNG(ParsedArgs args);
 Bool CLI_profileCRC32C(ParsedArgs args);
+Bool CLI_profileFNV1A64(ParsedArgs args);
 Bool CLI_profileSHA256(ParsedArgs args);
 Bool CLI_profileMD5(ParsedArgs args);
 Bool CLI_profileAES256(ParsedArgs args);

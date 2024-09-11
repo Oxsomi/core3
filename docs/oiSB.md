@@ -124,6 +124,23 @@ Overlapping memory is allowed, to allow (future) support for unions.
 
 The SBFile's ListSBVar and ListSBStruct can have duplicate names (which is fine), but a single struct (or the shader buffer itself) can't have duplicate names in its members (so `F32 a, a;` would be disallowed). However, duplicate struct names (even in current scope) is allowed.
 
+## Hashing & comparing
+
+Variables, structs and arrays should be appended in the order they're first seen. This means that without unions, every member would be located beyond the next, none would have an offset that's lower than the last. With unions, it's possible that memory offset decreases, but that's only allowed to be in the union itself and the structs in the union should still increase the same way. This allows simpler behavior with comparing and other operations such as hashing. This also means that threading SBFile generation is off limits.
+
+Hashes are generated like following:
+
+- FNV-1a64 is used (64-bit FNV-1a).
+- On create, ESBSettingsFlags and U32 are treated as a U64 and FNVed.
+- Every time a struct is appended:
+  - The struct | (nameLength << 32) is FNVed.
+- Every time a SBVar is appended:
+  - The SBVar is treated as a U64, U32 and the U32 is cast to an U64 and (nameLength << 32) is ored into it. These two U64s are FNVed.
+  - Every time a unique array is appended:
+    - The array length is FNVed and every 2 U32 array count are treated as a single U64 and FNVed, while the last element (if odd) is treated as a single U32 and FNVed.
+
+This hash can be used for quick comparison and is only available at runtime.
+
 ## Quirk(s) between DXIL/SPIRV
 
 The biggest quirk between DXIL and SPIRV is that DXIL doesn't have anything beyond flattened arrays, though SPIRV does. To support this, oiSB will flatten arrays too when DXIL is used and unflatten if SPIRV is used. If DXIL and SPIRV oiSB files are merged through SBFile_combine it is safe to merge one way (so from flattened to unflattened). For example: `[16]` could be recast to `[4][4]` or `[8][2]`. But once it has been unflattened, it can never be flattened again and can't merge with incompatible multi dimensional arrays (or ones with a mismatching flattened count). So merging DXIL and SPIRV will always result in the array info that SPIRV has. Other than that, it forces SPIRV to use DX-like alignment rules for structured/storage buffers and constant buffers.

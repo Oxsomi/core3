@@ -305,7 +305,7 @@ typedef struct SHRegister {
 	};
 
 	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
-	U16 padding2;
+	U16 nameId;
 
 } SHRegister;
 
@@ -568,6 +568,9 @@ typedef struct SHHeader {
 
 	U16 includeFileCount;		//Number of (recursive) include files
 	U16 semanticCount;
+
+	U16 arrayDimCount;
+	U16 registerNameCount;
 
 } SHHeader;
 

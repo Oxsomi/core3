@@ -169,7 +169,20 @@ Bool Buffer_isAscii(Buffer buf);
 //CRC32 Castagnoli / iSCSI polynomial (0x82f63b78) not for ethernet/zip (0xedb88320)!
 U32 Buffer_crc32c(Buffer buf);
 
+//Fowler-Noll-Vo-1A 64-bit (fast non HW accelerated hashes)
+
+static const U64 Buffer_fnv1a64Offset = 0xCBF29CE484222325;
+static const U64 Buffer_fnv1a64Prime = 0x00000100000001B3;
+
+U64 Buffer_fnv1a64Single(U64 a, U64 hash);
+U64 Buffer_fnv1a64(Buffer buf, U64 hash);		//Put hash as Buffer_fnv1a64Offset if none
+
+//MD5
+
 I32x4 Buffer_md5(Buffer buf);
+
+//SHA256
+
 void Buffer_sha256(Buffer buf, U32 output[8]);
 
 //Encryption
