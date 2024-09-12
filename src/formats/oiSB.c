@@ -1024,10 +1024,10 @@ Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, E
 		CharString *name = &tmpName;
 
 		if(strings.settings.dataType == EDLDataType_Ascii)
-			name = &strings.entryStrings.ptrNonConst[i - header.structs];
+			name = &strings.entryStrings.ptrNonConst[i + header.structs];
 
 		else {
-			Buffer buf = strings.entryBuffers.ptr[i - header.structs];
+			Buffer buf = strings.entryBuffers.ptr[i + header.structs];
 			tmpName = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false);
 		}
 

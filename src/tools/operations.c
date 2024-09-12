@@ -117,7 +117,7 @@ const C8 *EOperationFlags_names[] = {
 	"--bin",
 	"--oct",
 	"--debug",
-	"--error-empty-files",
+	"--ignore-empty-files",
 	"--includes",
 	"--split"
 };
@@ -141,7 +141,7 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Binary mode.",
 	"Encode using octadecimal (0-7).",
 	"Include more debug information.",
-	"Error when an empty source file is encountered.",
+	"Ignore error when an empty source file is encountered.",
 	"Display includes.",
 	"Split up every binary target into its own oiSH file (.dxil.oiSH, .spv.oiSH, etc.)."
 };
@@ -448,7 +448,7 @@ void Operations_init() {
 			.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
 
 			.operationFlags = 
-				EOperationFlags_Debug | EOperationFlags_ErrorEmptyFiles | EOperationFlags_Split,
+				EOperationFlags_Debug | EOperationFlags_IgnoreEmptyFiles | EOperationFlags_Split,
 
 			.requiredParameters =
 				EOperationHasParameter_Input | EOperationHasParameter_Output,

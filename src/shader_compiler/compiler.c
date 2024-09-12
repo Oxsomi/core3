@@ -1205,8 +1205,10 @@ Bool Compiler_parse(
 				//[[oxc::vendor()]]
 				//[[oxc::model()]]
 				//[[oxc::stage()]]
-				//[[oxc::shader()]]
 				//      ^
+				
+				//[shader()]
+				// ^
 
 				if (tok.tokenType == ETokenType_Identifier) {
 
@@ -1221,8 +1223,63 @@ Bool Compiler_parse(
 						tokLen != 3 ||
 						*(const U16*)tokStr.ptr != C8x2('o', 'x') ||
 						tokStr.ptr[2] != 'c'
-					)
+					) {
+
+						U32 c8x4 = tokLen < 4 ? 0 : *(const U32*)tokStr.ptr;
+
+						//[shader("vertex")]
+						//  ^
+
+						if(
+							c8x4 == C8x4('s', 'h', 'a', 'd') && tokLen == 6 &&
+							*(const U16*)&tokStr.ptr[4] == C8x2('e', 'r')
+						) {
+
+							if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
+								retError(clean, Error_invalidParameter(
+									0, 0, "Compiler_parse() shader already had shader or stage annotation"
+								))
+
+							U32 tokenStart = symj.tokenId + 1;
+									
+							if(symj.tokenCount + 1 != 4)
+								retError(clean, Error_invalidParameter(
+									0, 0, "Compiler_parse() shader annotation expected shader(string)"
+								))
+
+							//[shader("vertex")]
+							// ^
+
+							if(
+								parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+								parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_String ||
+								parser.tokens.ptr[tokenStart + 2].tokenType != ETokenType_RoundParenthesisEnd
+							)
+								retError(clean, Error_invalidParameter(
+									0, 1, "Compiler_parse() shader annotation expected shader(string)"
+								))
+
+							CharString stageName = Token_asString(parser.tokens.ptr[tokenStart + 1], &parser);
+							ESHPipelineStage stage = Compiler_parseStage(stageName);
+								
+							if(stage == ESHPipelineStage_Count)
+								retError(clean, Error_invalidParameter(
+									0, 1, "Compiler_parse() unrecognized stage in shader annotation"
+								))
+
+							runtimeEntry.entry.stage = stage;
+							runtimeEntry.isShaderAnnotation = true;
+
+							CharString name = parser.symbolNames.ptr[sym.name];
+							name = CharString_createRefSizedConst(
+								name.ptr, CharString_length(name), CharString_isNullTerminated(name)
+							);
+
+							runtimeEntry.entry.name = name;
+						}
+
 						continue;
+					}
 
 					//oxc::X
 					//   ^
@@ -1292,55 +1349,6 @@ Bool Compiler_parse(
 								runtimeEntry.entry.stage = stage;
 
 								CharString name = CharString_createRefStrConst(parser.symbolNames.ptr[sym.name]);
-								runtimeEntry.entry.name = name;
-							}
-
-							break;
-
-						case C8x4('s', 'h', 'a', 'd'):		//oxc::shader()
-
-							//[[oxc::shader("vertex")]]
-							//       ^
-							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('e', 'r')) {
-
-								if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
-									retError(clean, Error_invalidParameter(
-										0, 0, "Compiler_parse() shader already had shader or stage annotation"
-									))
-									
-								if(symj.tokenCount + 1 != 6)
-									retError(clean, Error_invalidParameter(
-										0, 0, "Compiler_parse() shader annotation expected shader(string)"
-									))
-
-								//[[oxc::shader("vertex")]]
-								//             ^
-
-								if(
-									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
-									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_String ||
-									parser.tokens.ptr[tokenStart + 2].tokenType != ETokenType_RoundParenthesisEnd
-								)
-									retError(clean, Error_invalidParameter(
-										0, 1, "Compiler_parse() shader annotation expected shader(string)"
-									))
-
-								CharString stageName = Token_asString(parser.tokens.ptr[tokenStart + 1], &parser);
-								ESHPipelineStage stage = Compiler_parseStage(stageName);
-								
-								if(stage == ESHPipelineStage_Count)
-									retError(clean, Error_invalidParameter(
-										0, 1, "Compiler_parse() unrecognized stage in shader annotation"
-									))
-
-								runtimeEntry.entry.stage = stage;
-								runtimeEntry.isShaderAnnotation = true;
-
-								CharString name = parser.symbolNames.ptr[sym.name];
-								name = CharString_createRefSizedConst(
-									name.ptr, CharString_length(name), CharString_isNullTerminated(name)
-								);
-
 								runtimeEntry.entry.name = name;
 							}
 

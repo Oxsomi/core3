@@ -290,9 +290,9 @@ typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId
 	U8 formatId;					//Optional for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
 } SHTextureFormat;
 
-typedef struct SHRegister {
+typedef struct SHRegister {			//Treated as U64[N + 1]
 
-	SHBindings bindings;
+	SHBindings bindings;			//Treated as U64[N]
 
 	U8 registerType;				//ESHRegisterType
 	U8 isUsedFlag;					//Per ESHBinaryType if the register is used
@@ -314,6 +314,7 @@ typedef struct SHRegisterRuntime {
 	CharString name;
 	ListU32 arrays;
 	SBFile shaderBuffer;
+	U64 hash;						//Only for identical, not for compatible!
 } SHRegisterRuntime;
 
 TList(SHRegister);

@@ -577,7 +577,7 @@
 						}
 					}
 
-					else if(job->args.flags & EOperationFlags_ErrorEmptyFiles) {
+					else if(!(job->args.flags & EOperationFlags_IgnoreEmptyFiles)) {
 
 						Log_errorLnx(
 							"Precompile couldn't find entrypoints for file \"%.*s\"",
@@ -1357,7 +1357,7 @@
 
 					if (!runtimeEntries.length) {
 
-						if(args.flags & EOperationFlags_ErrorEmptyFiles) {
+						if(!(args.flags & EOperationFlags_IgnoreEmptyFiles)) {
 
 							Log_errorLnx(
 								"Precompile couldn't find entrypoints for file \"%.*s\"",

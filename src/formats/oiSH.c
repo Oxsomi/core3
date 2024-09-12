@@ -869,8 +869,52 @@ Bool SHBinaryInfo_addRegisterBase(
 	Bool s_uccess = true;
 	SHRegisterRuntime reg = (SHRegisterRuntime) { 0 };
 
-	if(!registers)
-		retError(clean, Error_nullPointer(0, "SHBinaryInfo_addRegisterBase()::registers is required"))
+	if(!registers || !name)
+		retError(clean, Error_nullPointer(
+			!registers ? 0 : 1, "SHBinaryInfo_addRegisterBase()::registers and name are required"
+		))
+
+	if(CharString_length(*name) > U32_MAX)
+		retError(clean, Error_outOfBounds(
+			0, CharString_length(*name), U32_MAX, "SHBinaryInfo_addRegisterBase() name->length out of bounds"
+		))
+
+	if(arrays && arrays->length > U32_MAX)
+		retError(clean, Error_outOfBounds(
+			0, CharString_length(*name), U32_MAX, "SHBinaryInfo_addRegisterBase() arrays->length out of bounds"
+		))
+
+	//Compute hash to find register
+
+	static_assert(sizeof(SHRegister) == sizeof(U64) * (ESHBinaryType_Count + 1), "Expected SHRegister as U64[N + 1]");
+
+	U64 hash = sbFile ? sbFile->hash : Buffer_fnv1a64Offset;
+	const U64 *regU64 = (const U64*) &registr;
+
+	for(U64 i = 0; i < ESHBinaryType_Count + 1; ++i)
+		hash = Buffer_fnv1a64Single(regU64[i], hash);
+
+	hash = Buffer_fnv1a64Single(CharString_length(*name) | ((arrays ? arrays->length : 0) << 32), hash);
+	hash = Buffer_fnv1a64(CharString_bufferConst(*name), hash);
+
+	if (arrays) {
+
+		const U64 *arraysU64 = (const U64*) &arrays->ptr;
+
+		for(U64 i = 0; i < arrays->length >> 1; ++i)
+			hash = Buffer_fnv1a64Single(arraysU64[i], hash);
+
+		if(arrays->length & 1)
+			hash = Buffer_fnv1a64Single(arrays->ptr[arrays->length - 1], hash);
+	}
+
+	//Find duplicate register (that is legal to add, though duplicates aren't)
+
+	for(U64 i = 0; i < registers->length; ++i)
+		if(registers->ptr[i].hash == hash)
+			goto clean;
+
+	//Ensure there's no registers with duplicate name or binding
 
 	gotoIfError3(clean, SHFile_validateRegister(registers, name, arrays, bindings, registr.registerType, e_rr))
 
@@ -897,6 +941,8 @@ Bool SHBinaryInfo_addRegisterBase(
 
 	if(sbFile)
 		tmp.shaderBuffer = *sbFile;
+
+	tmp.hash = hash;
 
 	gotoIfError2(clean, ListSHRegisterRuntime_pushBack(registers, tmp, alloc))
 
@@ -1980,7 +2026,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			SHRegisterRuntime reg = binary.registers.ptr[j];
 			
-			reg.reg.nameId = (U16) DLFile_find(strings, regNameStart, includeStart, reg.name);
+			reg.reg.nameId = (U16) (DLFile_find(strings, regNameStart, includeStart, reg.name) - regNameStart);
 
 			if(!reg.arrays.length)
 				reg.reg.arrayId = U16_MAX;
@@ -2423,9 +2469,10 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 			ListU32 arr = reg.arrayId != U16_MAX ? arrays.ptr[reg.arrayId] : (ListU32) { 0 };
 			SBFile *sbFile = NULL;
+			U8 regType = reg.registerType & ESHRegisterType_TypeMask;
 
 			if (
-				reg.registerType >= ESHRegisterType_BufferStart && reg.registerType < ESHRegisterType_BufferEnd &&
+				regType >= ESHRegisterType_BufferStart && regType < ESHRegisterType_BufferEnd &&
 				reg.shaderBufferId != U16_MAX
 			) {
 
