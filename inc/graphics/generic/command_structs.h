@@ -102,7 +102,7 @@ typedef struct CommandOpInfo {
 
 typedef enum ETransitionType {
 	ETransitionType_Clear,
-	ETransitionType_Vertex,
+	ETransitionType_Vertex,			//TODO: Generic read?
 	ETransitionType_Index,
 	ETransitionType_Indirect,
 	ETransitionType_ShaderRead,
@@ -112,9 +112,7 @@ typedef enum ETransitionType {
 	ETransitionType_ResolveTargetWrite,
 	ETransitionType_CopyRead,
 	ETransitionType_CopyWrite,
-	ETransitionType_KeepAlive,			//If the only reason of this transition is to keep a resource alive
-	ETransitionType_UpdateRTAS,
-	ETransitionType_ReadRTAS			//Read from RTAS
+	ETransitionType_KeepAlive					//If the only reason of this transition is to keep a resource alive
 } ETransitionType;
 
 typedef struct TransitionInternal {		//Transitions issued by a scope.

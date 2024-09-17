@@ -214,6 +214,17 @@ Bool Compiler_compile(
 	Error *e_rr
 );
 
+//Extra warnings useful for debugging purposes and optimization.
+
+typedef enum ECompilerWarning {
+	ECompilerWarning_None				= 0,
+	ECompilerWarning_UnusedRegisters	= 1 << 0,
+	ECompilerWarning_UnusedConstants	= 1 << 1,
+	ECompilerWarning_BufferPadding		= 1 << 2
+} ECompilerWarning;
+
+Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocator alloc, Error *e_rr);
+
 //Extended functions for basic allocators
 
 void CompileResult_freex(CompileResult *result);
@@ -248,6 +259,8 @@ Bool Compiler_compilex(
 	CompileResult *result,
 	Error *e_rr
 );
+
+Bool Compiler_handleExtraWarningsx(SHFile file, ECompilerWarning warning, Error *e_rr);
 
 #ifdef __cplusplus
 	}

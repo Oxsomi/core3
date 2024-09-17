@@ -313,8 +313,11 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
 #### Special flags
 
 - `--debug` is used to toggle debug info in the binary.
-- `--error-empty-files` is used to error when no entrypoints are found to compile. This is useful to enforce that the destination directory shouldn't contain includes alongside source files (rather than using -include-dir with a separate includes directory).
+- `--ignore-empty-files` is used to hide the error when no entrypoints are found to compile. This is off by default because include files should be named as .hlsli, but to support both use cases, this can be used to silence the error.
 - `--split` is used to split up every oiSH file into its own file. This is very useful when building for 1 dedicated target. By default this is turned off, to make sure every shader can be ran with every backend.
+- `--warn-unused-registers` registers that were unused spawn a compile warning. Off by default because techniques like bindless might expose lots of registers that are unused.
+- `--warn-unused-constants` variables that are unused in a constant buffer cause a compile warning. Off by default because constant buffers might be re-used and might require a specific buffer layout to be compatible. Only goes 1 level deep (doesn't go inside of structs, unless it's a structured buffer).
+- `--warn-buffer-padding`  warns about padding being introduced between variables that the user might not be expecting. Useful when debugging mismatching buffer layouts between C/C++ and HLSL or other languages.
 
 ## Show GPU/graphics device info
 

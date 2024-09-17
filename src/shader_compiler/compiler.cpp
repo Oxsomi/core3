@@ -3095,11 +3095,27 @@ Bool Compiler_convertShaderBufferSPIRV(
 			goto clean;
 		}
 
+		const C8 *structNameC = innerStruct->type_description->type_name;
+		CharString structName = CharString_createRefCStrConst(structNameC);
+
 		gotoIfError3(clean, SBFile_create(packedFlags, innerStruct->padded_size, alloc, sbFile, e_rr))
+		gotoIfError3(clean, SBFile_addStruct(sbFile, &structName, SBStruct{ .stride = innerStruct->padded_size }, alloc, e_rr))
+
+		CharString element = CharString_createRefCStrConst("$Element");
+
+		gotoIfError3(clean, SBFile_addVariableAsStruct(
+			sbFile,
+			&element,
+			0, U16_MAX, 0,
+			innerStruct->flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
+			NULL,
+			alloc,
+			e_rr
+		))
 
 		for (U64 l = 0; l < innerStruct->member_count; ++l) {
 			SpvReflectBlockVariable var = innerStruct->members[l];
-			gotoIfError3(clean, Compiler_convertMemberSPIRV(sbFile, &var, U16_MAX, 0, isPacked, alloc, e_rr))
+			gotoIfError3(clean, Compiler_convertMemberSPIRV(sbFile, &var, 0, 0, isPacked, alloc, e_rr))
 		}
 
 		goto clean;

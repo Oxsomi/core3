@@ -48,7 +48,7 @@ typedef struct SHFile SHFile;
 typedef struct SHRegister SHRegister;
 typedef struct SHRegisterRuntime SHRegisterRuntime;
 typedef struct ListSHRegisterRuntime ListSHRegisterRuntime;
-typedef struct SHBindings SHBindings;
+typedef union SHBindings SHBindings;
 typedef enum ESHTextureType ESHTextureType;
 typedef enum ESHTexturePrimitive ESHTexturePrimitive;
 typedef enum ESHBufferType ESHBufferType;

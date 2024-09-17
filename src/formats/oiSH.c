@@ -60,7 +60,9 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"COMPUTEDERIV",
 	"PAQ",
 	"MESHTASKTEXDERIV",
-	"WRITEMSTEXTURE"
+	"WRITEMSTEXTURE",
+	"BINDLESS",				//Unused, bindless is automatically turned on when it's detected
+	"UNBOUNDARRAYSIZE"
 };
 
 const C8 *SHEntry_stageNames[] = {
@@ -244,6 +246,169 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 
 	if(Buffer_length(binaries->binaries[ESHBinaryType_SPIRV]) & 3)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->binaries[SPIRV] needs to be a U32[]"))
+
+	//Ensure bindless extension is correctly identified
+
+	enum Counter {
+		Counter_SamplerSPIRV,
+		Counter_SamplerDXIL,
+		Counter_CBV,
+		Counter_UBO,
+		Counter_UAV,
+		Counter_SRV,
+		Counter_RTASSPIRV,
+		Counter_RTASDXIL,
+		Counter_Image,
+		Counter_Texture,
+		Counter_SSBO,
+		Counter_SubpassInput,
+		Counter_Count
+	};
+
+	U64 counters[Counter_Count] = { 0 };
+	U32 sets[4] = { 0 };
+	U8 setCounters = 0;
+	Bool unboundArraySize = false;
+
+	for (U64 i = 0; i < binaries->registers.length; ++i) {
+
+		SHRegisterRuntime reg = binaries->registers.ptr[i];
+
+		if(reg.arrays.length == 1 && !reg.arrays.ptr[0])
+			unboundArraySize = true;
+
+		U64 regs = 1;
+
+		for(U64 j = 0; j < reg.arrays.length; ++j)
+			regs *= reg.arrays.ptr[j];
+
+		//Keep track of current sets
+
+		Bool hasSPIRV = reg.reg.bindings.arrU64[ESHBinaryType_SPIRV] != U64_MAX;
+		Bool hasDXIL = reg.reg.bindings.arrU64[ESHBinaryType_DXIL] != U64_MAX;
+
+		if (hasSPIRV) {
+
+			U8 j = 0;
+
+			for(; j < setCounters; ++j)
+				if(sets[j] == reg.reg.bindings.arr[ESHBinaryType_SPIRV].space)
+					break;
+
+			//Insert new
+
+			if (j == setCounters) {
+
+				if(setCounters == 4)
+					retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 4 descriptor sets"))
+
+				sets[setCounters++] = reg.reg.bindings.arr[ESHBinaryType_SPIRV].space;
+			}
+		}
+
+		//Keep track of counts
+
+		U8 regType = reg.reg.registerType;
+
+		switch (regType & ESHRegisterType_TypeMask) {
+
+			case ESHRegisterType_Sampler:
+			case ESHRegisterType_SamplerComparisonState:
+				if(hasSPIRV) counters[Counter_SamplerSPIRV] += regs;
+				if(hasDXIL)  counters[Counter_SamplerDXIL]  += regs;
+				break;
+
+			case ESHRegisterType_SubpassInput:
+				counters[Counter_SubpassInput] += regs;
+				break;
+
+			case ESHRegisterType_AccelerationStructure:
+
+				if(hasSPIRV) counters[Counter_RTASSPIRV] += regs;
+
+				if(hasDXIL) {
+					counters[Counter_RTASDXIL] += regs;
+					counters[Counter_SRV] += regs;
+				}
+
+				break;
+
+			case ESHRegisterType_ConstantBuffer:
+				if(hasSPIRV) counters[Counter_UBO] += regs;
+				if(hasDXIL)  counters[Counter_CBV] += regs;
+				break;
+				
+			case ESHRegisterType_ByteAddressBuffer:
+			case ESHRegisterType_StructuredBuffer:
+			case ESHRegisterType_StructuredBufferAtomic:
+			case ESHRegisterType_StorageBuffer:
+			case ESHRegisterType_StorageBufferAtomic:
+				if(hasSPIRV) counters[Counter_SSBO] += regs;
+				if(hasDXIL)  counters[regType & ESHRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
+				break;
+
+				
+			case ESHRegisterType_Texture1D:
+			case ESHRegisterType_Texture2D:
+			case ESHRegisterType_Texture3D:
+			case ESHRegisterType_TextureCube:
+			case ESHRegisterType_Texture2DMS:
+				if(hasSPIRV) counters[regType & ESHRegisterType_IsWrite ? Counter_Image : Counter_Texture] += regs;
+				if(hasDXIL)  counters[regType & ESHRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
+				break;
+		}
+	}
+
+	U64 totalSPIRV = 
+		counters[Counter_SamplerSPIRV] +
+		counters[Counter_UBO] +
+		counters[Counter_RTASSPIRV] +
+		counters[Counter_Image] +
+		counters[Counter_Texture] +
+		counters[Counter_SSBO] +
+		counters[Counter_SubpassInput];
+
+	if(
+		U64_max(counters[Counter_RTASSPIRV], counters[Counter_RTASDXIL]) > 16 ||
+		counters[Counter_SubpassInput] > 8
+	)
+		retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 8 SubpassInputs or 16 RTASes"))
+
+	//Ensure we don't surpass the limits
+
+	U64 countSampler = U64_max(counters[Counter_SamplerSPIRV], counters[Counter_SamplerDXIL]);
+	U64 countCBV = U64_max(counters[Counter_CBV], counters[Counter_UBO]);
+
+	Bool bindless = 
+		countSampler > 16 ||
+		countCBV > 12 ||
+		counters[Counter_SSBO] > 8 ||
+		counters[Counter_Texture] > 16 ||
+		counters[Counter_Image] > 4 ||
+		counters[Counter_SRV] > 128 ||
+		counters[Counter_UAV] > 64 ||
+		totalSPIRV > 44;
+
+	if (bindless || unboundArraySize) {
+
+		binaries->identifier.extensions |= ESHExtension_Bindless;
+
+		if(unboundArraySize)
+			binaries->identifier.extensions |= ESHExtension_UnboundArraySize;
+
+		if (
+			countSampler > 2048 ||
+			countCBV > 12 ||
+			counters[Counter_SSBO] > 500000 ||
+			counters[Counter_Texture] > 250000 ||
+			counters[Counter_Image] > 250000 ||
+			counters[Counter_SRV] + counters[Counter_UAV] + counters[Counter_CBV] > 1000000 ||
+			totalSPIRV > 1000000
+		)
+			retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more resources than allowed by the oiSH spec"))
+	}
+
+	//Find binary
 
 	for(U64 i = 0; i < shFile->binaries.length; ++i)
 		if(SHBinaryIdentifier_equals(shFile->binaries.ptr[i].identifier, binaries->identifier))
@@ -855,6 +1020,72 @@ clean:
 	return s_uccess;
 }
 
+Bool SHRegisterRuntime_hash(SHRegister registr, CharString name, ListU32 *arrays, SBFile *sbFile, U64 *res, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(CharString_length(name) > U32_MAX)
+		retError(clean, Error_outOfBounds(
+			0, CharString_length(name), U32_MAX, "SHRegisterRuntime_hash() name->length out of bounds"
+		))
+
+	if(arrays && arrays->length > U32_MAX)
+		retError(clean, Error_outOfBounds(
+			0, CharString_length(name), U32_MAX, "SHRegisterRuntime_hash() arrays->length out of bounds"
+		))
+
+	if(!res)
+		retError(clean, Error_nullPointer(4, "SHRegisterRuntime_hash()::res is required"))
+
+	//Compute hash to find register
+
+	static_assert(sizeof(SHRegister) == sizeof(U64) * (ESHBinaryType_Count + 1), "Expected SHRegister as U64[N + 1]");
+
+	U64 hash = sbFile ? sbFile->hash : Buffer_fnv1a64Offset;
+	const U64 *regU64 = (const U64*) &registr;
+
+	for(U64 i = 0; i < ESHBinaryType_Count + 1; ++i)
+		hash = Buffer_fnv1a64Single(regU64[i], hash);
+
+	hash = Buffer_fnv1a64Single(CharString_length(name) | ((arrays ? arrays->length : 0) << 32), hash);
+	hash = Buffer_fnv1a64(CharString_bufferConst(name), hash);
+
+	if (arrays) {
+
+		const U64 *arraysU64 = (const U64*) &arrays->ptr;
+
+		for(U64 i = 0; i < arrays->length >> 1; ++i)
+			hash = Buffer_fnv1a64Single(arraysU64[i], hash);
+
+		if(arrays->length & 1)
+			hash = Buffer_fnv1a64Single(arrays->ptr[arrays->length - 1], hash);
+	}
+
+	*res = hash;
+
+clean:
+	return s_uccess;
+}
+
+Bool SHRegisterRuntime_createCopy(SHRegisterRuntime reg, Allocator alloc, SHRegisterRuntime *res, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!res)
+		retError(clean, Error_nullPointer(2, "SHRegisterRuntime_createCopy()::res is required"))
+
+	if(res->name.ptr)
+		retError(clean, Error_nullPointer(2, "SHRegisterRuntime_createCopy()::res already defined, could indicate memleak"))
+
+	res->reg = reg.reg;
+	gotoIfError2(clean, CharString_createCopy(reg.name, alloc, &res->name))
+	gotoIfError2(clean, ListU32_createCopy(reg.arrays, alloc, &res->arrays))
+	gotoIfError3(clean, SBFile_createCopy(reg.shaderBuffer, alloc, &res->shaderBuffer, e_rr))
+
+clean:
+	return s_uccess;
+}
+
 Bool SHBinaryInfo_addRegisterBase(
 	ListSHRegisterRuntime *registers,
 	CharString *name,
@@ -874,39 +1105,8 @@ Bool SHBinaryInfo_addRegisterBase(
 			!registers ? 0 : 1, "SHBinaryInfo_addRegisterBase()::registers and name are required"
 		))
 
-	if(CharString_length(*name) > U32_MAX)
-		retError(clean, Error_outOfBounds(
-			0, CharString_length(*name), U32_MAX, "SHBinaryInfo_addRegisterBase() name->length out of bounds"
-		))
-
-	if(arrays && arrays->length > U32_MAX)
-		retError(clean, Error_outOfBounds(
-			0, CharString_length(*name), U32_MAX, "SHBinaryInfo_addRegisterBase() arrays->length out of bounds"
-		))
-
-	//Compute hash to find register
-
-	static_assert(sizeof(SHRegister) == sizeof(U64) * (ESHBinaryType_Count + 1), "Expected SHRegister as U64[N + 1]");
-
-	U64 hash = sbFile ? sbFile->hash : Buffer_fnv1a64Offset;
-	const U64 *regU64 = (const U64*) &registr;
-
-	for(U64 i = 0; i < ESHBinaryType_Count + 1; ++i)
-		hash = Buffer_fnv1a64Single(regU64[i], hash);
-
-	hash = Buffer_fnv1a64Single(CharString_length(*name) | ((arrays ? arrays->length : 0) << 32), hash);
-	hash = Buffer_fnv1a64(CharString_bufferConst(*name), hash);
-
-	if (arrays) {
-
-		const U64 *arraysU64 = (const U64*) &arrays->ptr;
-
-		for(U64 i = 0; i < arrays->length >> 1; ++i)
-			hash = Buffer_fnv1a64Single(arraysU64[i], hash);
-
-		if(arrays->length & 1)
-			hash = Buffer_fnv1a64Single(arrays->ptr[arrays->length - 1], hash);
-	}
+	U64 hash = 0;
+	gotoIfError3(clean, SHRegisterRuntime_hash(registr, *name, arrays, sbFile, &hash, e_rr))
 
 	//Find duplicate register (that is legal to add, though duplicates aren't)
 
@@ -1064,7 +1264,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 	if(registerType == ESHBufferType_AccelerationStructure || registerType == ESHBufferType_ByteAddressBuffer) {
 		if(sbFile)
 			retError(clean, Error_invalidState(
-				0, "ListSHRegisterRuntime_addBuffer()::sbFile should be NULL if the type is acceleration structure"
+				0, "ListSHRegisterRuntime_addBuffer()::sbFile should be NULL if the type is acceleration structure or BAB"
 			))
 	}
 
@@ -1240,7 +1440,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 			),
 			.texture = (SHTextureFormat) {
 				.formatId = textureFormatId,
-				.primitive = primitive
+				.primitive = textureFormatPrimitive
 			},
 			.isUsedFlag = isUsedFlag
 		},
@@ -2037,7 +2237,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 					break;
 				}
 
-			if(reg.reg.registerType >= ESHRegisterType_BufferStart && reg.reg.registerType <= ESHRegisterType_BufferEnd)
+			U8 realReg = reg.reg.registerType & ESHRegisterType_TypeMask;
+
+			if(realReg >= ESHRegisterType_BufferStart && realReg <= ESHRegisterType_BufferEnd)
 				reg.reg.shaderBufferId = U16_MAX;
 
 			if(reg.shaderBuffer.vars.ptr) {
@@ -3057,7 +3259,7 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 	}
 }
 
-static const C8 *extensions[] = {
+const C8 *ESHExtension_names[] = {
 	"F64",
 	"I64",
 	"16BitTypes",
@@ -3073,7 +3275,11 @@ static const C8 *extensions[] = {
 	"RayReorder",
 	"Multiview",
 	"ComputeDeriv",
-	"PAQ"
+	"PAQ",
+	"MeshTaskTexDeriv",
+	"WriteMSTexture",
+	"Bindless",
+	"UnboundArraySize"
 };
 
 void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
@@ -3100,7 +3306,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 		for(U64 j = 0; j < ESHExtension_Count; ++j)
 			if((exts >> j) & 1) {
-				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", extensions[j]);
+				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
 				prev = true;
 			}
 
@@ -3183,7 +3389,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 
 		for(U64 j = 0; j < ESHExtension_Count; ++j)
 			if((exts >> j) & 1) {
-				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", extensions[j]);
+				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
 				prev = true;
 			}
 
@@ -3431,6 +3637,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 	Bool isUTF8 = (a.flags & ESHSettingsFlags_IsUTF8) || (b.flags & ESHSettingsFlags_IsUTF8);
 	ListU16 remappedBinaries = (ListU16) { 0 };
 	ListU16 tmpBins = (ListU16) { 0 };
+	SHRegisterRuntime tmpReg = (SHRegisterRuntime) { 0 };
 	ListSHRegisterRuntime registers = (ListSHRegisterRuntime) { 0 };
 
 	if((a.flags & ESHSettingsFlags_HideMagicNumber) != (b.flags & ESHSettingsFlags_HideMagicNumber))
@@ -3485,6 +3692,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				.uniforms = ListCharString_createRefFromList(ai.identifier.uniforms),
 				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint)
 			},
+			.registers = ListSHRegisterRuntime_createRefFromList(ai.registers),
 			.vendorMask = ai.vendorMask,
 			.hasShaderAnnotation = ai.hasShaderAnnotation
 		};
@@ -3531,9 +3739,241 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			//Ensure the binary can still easily be found
 
 			remappedBinaries.ptrNonConst[j] = (U16) i;
+
+			//Combine registers
+
+			gotoIfError2(clean, ListSHRegisterRuntime_reserve(&registers, bi.registers.length + ai.registers.length, alloc))
+
+			//Match registers that were already found
+
+			for (U64 k = 0; k < c.registers.length; ++k) {
+				
+				SHRegisterRuntime rega = c.registers.ptr[k];
+
+				U64 l = 0;
+				for(; l < bi.registers.length; ++l)
+					if(CharString_equalsStringSensitive(bi.registers.ptr[l].name, rega.name))
+						break;
+
+				//Not found
+
+				if (l == bi.registers.length || rega.hash == bi.registers.ptr[l].hash) {
+					gotoIfError3(clean, SHRegisterRuntime_createCopy(c.registers.ptr[k], alloc, &tmpReg, e_rr))
+					gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+					tmpReg = (SHRegisterRuntime) { 0 };
+					continue;
+				}
+
+				//Merge shader buffer
+
+				SHRegisterRuntime regb = bi.registers.ptr[l];
+
+				if((!!rega.shaderBuffer.vars.ptr) != (!!regb.shaderBuffer.vars.ptr))
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching shader buffers"))
+
+				if(rega.shaderBuffer.vars.ptr)
+					gotoIfError3(clean, SBFile_combine(
+						rega.shaderBuffer, regb.shaderBuffer, alloc, &tmpReg.shaderBuffer, e_rr
+					))
+
+				//Copy name
+
+				gotoIfError2(clean, CharString_createCopy(rega.name, alloc, &tmpReg.name))
+
+				//Merge array
+
+				ListU32 arrayA = rega.arrays;
+				ListU32 arrayB = regb.arrays;
+
+				//One of them might be flat and the other one might be dynamic
+
+				if (arrayA.length == 1 || arrayB.length == 1) {
+
+					U64 dimsA = arrayA.length ? arrayA.ptr[0] : 0;
+					U64 dimsB = arrayB.length ? arrayB.ptr[0] : 0;
+
+					for(U64 m = 1; m < arrayA.length; ++m)
+						dimsA *= arrayA.ptr[m];
+
+					for(U64 m = 1; m < arrayB.length; ++m)
+						dimsB *= arrayB.ptr[m];
+
+					if(dimsA != dimsB)
+						retError(clean, Error_invalidState(
+							0, "SHFile_combine() register has mismatching array flattened size"
+						))
+
+					//In this case, we have to point arrayId to B's array.
+					//This is called unflattening ([9] -> [3][3] for example).
+
+					if (arrayB.length != 1)
+						gotoIfError2(clean, ListU32_createCopy(arrayB, alloc, &tmpReg.arrays))
+
+					else gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
+				}
+
+				//Ensure they're the same size
+
+				else {
+
+					if(arrayA.length != arrayB.length)
+						retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array dimensions"))
+
+					for(U64 m = 0; m < arrayA.length; ++m)
+						if(arrayA.ptr[m] != arrayB.ptr[m])
+							retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array count"))
+
+					gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
+				}
+
+				//Merge register
+
+				SHRegister merged = rega.reg;
+				merged.isUsedFlag |= regb.reg.isUsedFlag;
+
+				//Register type is mostly the same with two exceptions:
+				//SamplerComparisonState DXIL = Sampler SPIRV
+				//CombinedSampler SPIRV = (no flag) DXIL
+				//So we need to promote these two to eachother to unify them.
+
+				Bool isCmpSamplerA = rega.reg.registerType == ESHRegisterType_SamplerComparisonState;
+				Bool isSamplerA = rega.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerA;
+
+				Bool isCmpSamplerB = regb.reg.registerType == ESHRegisterType_SamplerComparisonState;
+				Bool isSamplerB = regb.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerB;
+
+				if(
+					(isSamplerA != isSamplerB) &&
+					(rega.reg.registerType &~ ESHRegisterType_IsCombinedSampler) !=
+					(regb.reg.registerType &~ ESHRegisterType_IsCombinedSampler)
+				)
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"))
+
+				if(isCmpSamplerB)
+					merged.registerType = ESHRegisterType_SamplerComparisonState;
+
+				else merged.registerType = rega.reg.registerType | (regb.reg.registerType & ESHRegisterType_IsCombinedSampler);
+
+				//Merge bindings
+
+				for (U8 m = 0; m < ESHBinaryType_Count; ++m) {
+
+					U64 bindingA = rega.reg.bindings.arrU64[m];
+					U64 bindingB = regb.reg.bindings.arrU64[m];
+
+					if (bindingA != U64_MAX && bindingB != U64_MAX) {
+
+						if(bindingA != bindingB)
+							retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register bindings"))
+
+						continue;
+					}
+
+					if(bindingA != U64_MAX)
+						continue;
+
+					merged.bindings.arrU64[m] = bindingB;
+				}
+
+				//Merge input attachment
+
+				if(
+					rega.reg.registerType == ESHRegisterType_SubpassInput &&
+					rega.reg.inputAttachmentId != regb.reg.inputAttachmentId
+				)
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching input attachment id"))
+
+				//Merge texture info
+
+				U8 typeOnly = rega.reg.registerType & ESHRegisterType_TypeMask;
+
+				if (typeOnly >= ESHRegisterType_TextureStart && typeOnly < ESHRegisterType_TextureEnd) {
+
+					Bool hasTexturePrimitiveA = rega.reg.texture.primitive != ESHTexturePrimitive_Count;
+					Bool hasTexturePrimitiveB = regb.reg.texture.primitive != ESHTexturePrimitive_Count;
+
+					//Ensure both primitives are the same
+
+					if (hasTexturePrimitiveA && hasTexturePrimitiveB) {
+
+						if(rega.reg.texture.primitive != regb.reg.texture.primitive)
+							retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"))
+
+						if(rega.reg.texture.formatId && rega.reg.texture.formatId != regb.reg.texture.formatId)
+							retError(clean, Error_invalidState(0, "SHFile_combine() texture format ids are incompatible"))
+					}
+
+					//One of the two has texture format, make sure they're compatible
+
+					else {
+
+						//Both have format, so needs to be fully compatible
+
+						if (!hasTexturePrimitiveA && !hasTexturePrimitiveB) {
+
+							if(rega.reg.texture.primitive != regb.reg.texture.primitive)
+								retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"))
+
+							if(rega.reg.texture.formatId != regb.reg.texture.formatId)
+								retError(clean, Error_invalidState(0, "SHFile_combine() texture formatId are incompatible"))
+
+						}
+
+						else {
+
+							tmpReg.reg.texture.primitive =
+								hasTexturePrimitiveA ? rega.reg.texture.primitive : regb.reg.texture.primitive;
+
+							tmpReg.reg.texture.formatId =
+								!hasTexturePrimitiveA ? rega.reg.texture.formatId : regb.reg.texture.formatId;
+						}
+					}
+				}
+
+				//Finalize hash and push
+
+				tmpReg.reg = merged;
+
+				gotoIfError3(clean, SHRegisterRuntime_hash(
+					tmpReg.reg,
+					tmpReg.name,
+					tmpReg.arrays.length ? &tmpReg.arrays : NULL,
+					tmpReg.shaderBuffer.vars.ptr ? &tmpReg.shaderBuffer : NULL,
+					&tmpReg.hash,
+					e_rr
+				))
+
+				gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+				tmpReg = (SHRegisterRuntime) { 0 };
+			}
+			
+			//Registers that weren't matched are new in the second source
+
+			for (U64 k = 0; k < bi.registers.length; ++k) {
+				
+				SHRegisterRuntime regb = bi.registers.ptr[k];
+
+				U64 l = 0;
+				for(; l < ai.registers.length; ++l)
+					if(CharString_equalsStringSensitive(ai.registers.ptr[l].name, regb.name))
+						break;
+
+				//Not found
+
+				if (l == ai.registers.length) {
+					gotoIfError3(clean, SHRegisterRuntime_createCopy(regb, alloc, &tmpReg, e_rr))
+					gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+					tmpReg = (SHRegisterRuntime) { 0 };
+					continue;
+				}
+			}
 		}
 
+		if(registers.length)
+			c.registers = registers;
+
 		gotoIfError3(clean, SHFile_addBinaries(combined, &c, alloc, e_rr))
+		registers = (ListSHRegisterRuntime) { 0 };
 	}
 
 	//Insert binaries from b that weren't found in a
@@ -3556,13 +3996,10 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				.uniforms = ListCharString_createRefFromList(bi.identifier.uniforms),
 				.entrypoint = CharString_createRefStrConst(bi.identifier.entrypoint)
 			},
+			.registers = ListSHRegisterRuntime_createRefFromList(bi.registers),
 			.vendorMask = bi.vendorMask,
 			.hasShaderAnnotation = bi.hasShaderAnnotation
 		};
-
-		//TODO: reserve registers
-		//TODO: push ref to ai and bi
-		//		But merge the data correctly
 
 		const void *extPtrSrc = &bi.identifier.extensions;
 		void *extPtrDst = &c.identifier.extensions;
@@ -3692,6 +4129,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 clean:
 
+	SHRegisterRuntime_free(&tmpReg, alloc);
 	ListSHRegisterRuntime_free(&registers, alloc);
 	ListU16_free(&remappedBinaries, alloc);
 	ListU16_free(&tmpBins, alloc);

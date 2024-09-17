@@ -140,8 +140,11 @@ typedef enum ESHExtension {
 	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
     
     ESHExtension_MeshTaskTexDeriv			= 1 << 16,
-    
-    ESHExtension_Bindless					= 1 << 17
+
+	ESHExtension_WriteMSTexture				= 1 << 17,
+
+	ESHExtension_Bindless					= 1 << 18,
+	ESHExtension_UnboundArraySize			= 1 << 19
 
 } ESHExtension;
 
@@ -452,29 +455,53 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
 - NV extensions should be properly marked using annotations, or the oiSH is illegal. The OxC3 validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
 
-## TODO: ESHExtension_Bindless / ESHExtension_UnboundArraySize
+## ESHExtension_Bindless / ESHExtension_UnboundArraySize
 
-"Bindless" extension is present when more than the maximum bindful registers are detected. This extension is generally well supported across modern hardware (everywhere on PC) but not always properly supported on mobile / web. For that reason, this has become a dedicated extension. This extension is just a hint based on reasonable device limits in the wild right now.
+"Bindless" extension is present when more than the maximum bindful registers are detected. This extension is generally well supported across modern hardware (basically everywhere on PC) but not always properly supported on mobile / web. For that reason, this has become a dedicated extension. This extension is just a hint based on reasonable device limits in the wild right now.
 
-This can be coupled with `ESHExtension_UnboundArraySize` which indicates that the register size can be determined by the engine/framework running it (such as allowing more registers based on the binding limits). 
+These extensions are special in that the user doesn't have to enable them, they are automatically enabled if the bindful limit is exceeded. This is to simplify the shader creation process.
 
-### TODO: Binding limits (tier 0)
+This can be coupled with `ESHExtension_UnboundArraySize` which indicates that the register size can be determined by the engine/framework running it (such as allowing more registers based on the binding limits). This has syntax such as `Texture2D textures[]` in HLSL.
+
+### Binding limits (tier 0)
 
 Tier 0 (without bindless) has the following limits:
 
-### TODO: Binding limits (tier 1)
+- maxBoundDescriptorSets of 4.
+- maxPerStageDescriptorSamplers of 16.
+- maxPerStageDescriptorUniformBuffers/CBVs of 12.
+- maxPerStageDescriptorStorageBuffers of 8.
+- maxPerStageDescriptorSampledImages of 16.
+- maxPerStageDescriptorStorageImages of 4.
+- maxPerStageResources of 44.
+- maximum UAVs of 64.
+- maximum SRVs of 128.
+- Acceleration structures: 16 per binary if RT is supported. Due to Intel not supporting more.
+
+### Binding limits (tier 1)
 
 Tier 1 (with bindless) has the following limits:
 
-- Acceleration structures: 16 per binary. Due to Intel not supporting more.
+- maxBoundDescriptorSets of 4.
+- maxPerStageDescriptorSamplers of 2048.
+- maxPerStageDescriptorUniformBuffers of 12.
+- maxPerStageDescriptorStorageBuffers of 500k.
+- maxPerStageDescriptorSampledImages of 250k.
+- maxPerStageDescriptorStorageImages of 250k.
+- maxPerStageResources of 1M.
+- maximum UAV+SRV+CBV of 1M.
+- Acceleration structures: 16 per binary if RT is supported. Due to Intel not supporting more.
 
 ## Quirks between DXIL and SPIRV
 
 When combining DXIL and SPIRV binaries and/or switching binary type, there are a few quirks that are important to know:
 
 - In DXIL, registers and elements in buffers all get flattened to a 1D array, even if they were from a 2D array. The array is effectively flattened. Combining a SPIRV input with a DXIL input will unflatten this array (since SPIRV maintains this info).
-- In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: ESHRegisterType_IsCombinedSampler.
+- In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the separate sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: ESHRegisterType_IsCombinedSampler and the separate sampler will only be available with DXIL bindings.
 - SPIRV has the concept of subpass inputs, but DXIL doesn't. This means the bindings of input attachments should only be valid for SPIRV.
+- DXIL has the concept of sampler comparison states, but SPIRV just sees them as samplers. If DXIL and SPIRV binaries are merged it will promote sampler register type to sampler comparison register type.
+- DXIL has more info about the texture primitive than SPIRV, though SPIRV has a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL. 
+- When stripping SPIRV info from one that has both DXIL and SPIRV, it will keep the reflection data it gained from merging the two. This is intentional, as this would allow you to re-gain some reflection info that is missing from DXIL and keeps the reflection data consistent across two different splits.
 
 ## Changelog
 

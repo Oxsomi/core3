@@ -268,6 +268,10 @@ Bool Compiler_compilex(
 	return Compiler_compile(comp, settings, toCompile, lock, entries, Platform_instance.alloc, result, e_rr);
 }
 
+Bool Compiler_handleExtraWarningsx(SHFile file, ECompilerWarning warning, Error *e_rr) {
+	return Compiler_handleExtraWarnings(file, warning, Platform_instance.alloc, e_rr);
+}
+
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr) {
 	return Compiler_parse(comp, settings, symbolsOnly, Platform_instance.alloc, result, e_rr);
 }
@@ -1724,5 +1728,223 @@ clean:
 	Parser_free(&parser, alloc);
 	Lexer_free(&lexer, alloc);
 	CharString_free(&tmp, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_paddingCheck(
+	SBFile sb,
+	U64 binaryId,
+	U8 binaryType,
+	U16 parentId,
+	U32 offset,
+	U32 expectedSize,
+	SHRegisterRuntime reg,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	Bool isPacked = sb.flags & ESBSettingsFlags_IsTightlyPacked;
+
+	U32 startOffset = offset;
+	U32 unpaddedOffset = offset;
+
+	CharString parentName = parentId == U16_MAX ? reg.name : sb.varNames.ptr[parentId];
+
+	for (U16 i = 0; i < (U16) sb.vars.length; ++i) {
+
+		SBVar var = sb.vars.ptr[i];
+
+		if(var.parentId != parentId)
+			continue;
+
+		CharString varName = sb.varNames.ptr[i];
+		U32 var1D = 1;
+
+		if(var.arrayIndex != U16_MAX) {
+			
+			ListU32 array = sb.arrays.ptr[var.arrayIndex];
+
+			for(U64 j = 0; j < array.length; ++j)
+				var1D *= array.ptr[j];
+		}
+
+		if (var.offset != unpaddedOffset) {
+
+			if(var.offset > unpaddedOffset)
+				Log_warnLn(
+					alloc,
+					"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs "
+					"%"PRIu32" bytes of padding in front of it. Might be inefficient and/or unexpected",
+					binaryId,
+					(int) CharString_length(parentName), parentName.ptr,
+					(int) CharString_length(varName), varName.ptr,
+					(int) CharString_length(reg.name), reg.name.ptr,
+					var.offset - unpaddedOffset
+				);
+
+			unpaddedOffset = var.offset;
+		}
+
+		//If a type isn't properly packed, it will give a warning too
+
+		if (var.structId == U16_MAX) {
+
+			U32 siz = ESBType_getSize(var.type, isPacked);
+
+			if (!isPacked) {
+
+				U32 packedSize = ESBType_getSize(var.type, true);
+
+				if(packedSize != siz)
+					Log_warnLn(
+						alloc,
+						"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding. "
+						"Might be inefficient and/or unexpected",
+						binaryId,
+						(int) CharString_length(parentName), parentName.ptr,
+						(int) CharString_length(varName), varName.ptr,
+						(int) CharString_length(reg.name), reg.name.ptr,
+						(siz - packedSize) * var1D
+					);
+
+				if(var1D > 1 && (siz & 15))
+					Log_warnLn(
+						alloc,
+						"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding per array index. "
+						"Might be inefficient and/or unexpected (total of %"PRIu32" bytes)",
+						binaryId,
+						(int) CharString_length(parentName), parentName.ptr,
+						(int) CharString_length(varName), varName.ptr,
+						(int) CharString_length(reg.name), reg.name.ptr,
+						16 - (siz & 15),
+						(16 - (siz & 15)) * (var1D - 1)
+					);
+			}
+
+			//Remember size so struct size can also be checked for padding
+
+			unpaddedOffset += ((siz + 15) &~ 15) * (var1D - 1) + siz;
+			continue;
+		}
+
+		//Struct, so recursive
+
+		U32 stride = sb.structs.ptr[var.structId].stride;
+
+		gotoIfError3(clean, Compiler_paddingCheck(
+			sb, binaryId, binaryType, i, unpaddedOffset, stride, reg, alloc, e_rr
+		))
+
+		if(!isPacked && var1D > 1 && (stride & 15))
+			Log_warnLn(
+				alloc,
+				"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding per array index. "
+				"Might be inefficient and/or unexpected (total of %"PRIu32" bytes)",
+				binaryId,
+				(int) CharString_length(parentName), parentName.ptr,
+				(int) CharString_length(varName), varName.ptr,
+				(int) CharString_length(reg.name), reg.name.ptr,
+				16 - (stride & 15),
+				(16 - (stride & 15)) * (var1D - 1)
+			);
+
+		unpaddedOffset += ((stride + 15) &~ 15) * (var1D - 1) + stride;
+	}
+
+	//Padding occurred in struct
+
+	if (unpaddedOffset - startOffset < expectedSize)
+		Log_warnLn(
+			alloc,
+			"Binary %"PRIu64" has variable \"%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding at the end. "
+			"Might be inefficient and/or unexpected",
+			binaryId,
+			(int) CharString_length(parentName), parentName.ptr,
+			(int) CharString_length(reg.name), reg.name.ptr,
+			expectedSize - (unpaddedOffset - startOffset)
+		);
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!warning)
+		goto clean;
+
+	for (U64 i = 0; i < file.binaries.length; ++i)
+		for (U64 j = 0; j < file.binaries.ptr[i].registers.length; ++j) {
+
+			SHRegisterRuntime reg = file.binaries.ptr[i].registers.ptr[j];
+			Bool hadFirstPaddingScan = false;
+
+			for (U8 k = 0; k < ESHBinaryType_Count; ++k) {
+
+				//Unused register
+
+				if (
+					(warning & ECompilerWarning_UnusedRegisters) &&
+					reg.reg.bindings.arrU64[k] != U64_MAX && !((reg.reg.isUsedFlag >> k) & 1)
+				)
+					Log_warnLn(
+						alloc, "Binary %"PRIu64":%s has unused register \"%.*s\"",
+						i,
+						ESHBinaryType_names[k],
+						(int) CharString_length(reg.name), reg.name.ptr
+					);
+
+				//Unused constant or buffer padding
+				
+				if (
+					(warning & (ECompilerWarning_UnusedConstants | ECompilerWarning_BufferPadding)) &&
+					reg.reg.bindings.arrU64[k] != U64_MAX && reg.shaderBuffer.vars.ptr
+				) {
+
+					SBFile sb = reg.shaderBuffer;
+					U16 parent = U16_MAX;
+
+					//Unused constant checking
+
+					if(warning & ECompilerWarning_UnusedConstants)
+						for (U64 l = 0; l < sb.vars.length; ++l) {
+
+							SBVar var = sb.vars.ptr[l];
+							CharString varName = sb.varNames.ptr[l];
+
+							if(var.parentId != parent || ((var.flags >> k) & 1))
+								continue;
+
+							Log_warnLn(
+								alloc, "Binary %"PRIu64":%s has unused constant \"%.*s.%.*s\"",
+								i,
+								ESHBinaryType_names[k],
+								(int) CharString_length(reg.name), reg.name.ptr,
+								(int) CharString_length(varName), varName.ptr
+							);
+						}
+
+					//Padding in buffer
+
+					if (warning & ECompilerWarning_BufferPadding) {
+
+						if(!hadFirstPaddingScan)
+							gotoIfError3(clean, Compiler_paddingCheck(
+								sb, i, k, U16_MAX, 0, reg.shaderBuffer.bufferSize, reg, alloc, e_rr
+							))
+
+						hadFirstPaddingScan = true;
+					}
+				}
+
+			}
+
+		}
+
+clean:
 	return s_uccess;
 }

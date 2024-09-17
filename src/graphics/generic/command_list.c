@@ -411,7 +411,8 @@ Error CommandListRef_transitionRTAS(
 
 	if(rtas.tempScratchBuffer)
 		gotoIfError(clean, CommandListRef_transitionBuffer(
-			commandList, rtas.tempScratchBuffer, (BufferRange) { 0 }, ETransitionType_ReadRTAS, EPipelineStage_Count
+			commandList, rtas.tempScratchBuffer, (BufferRange) { 0 },
+			ETransitionType_ShaderWrite, EPipelineStage_RTASBuild
 		))
 
 	if(isTLAS) {
@@ -421,7 +422,7 @@ Error CommandListRef_transitionRTAS(
 		if(!tlas->useDeviceMemory)
 			gotoIfError(clean, CommandListRef_transitionBuffer(
 				commandList, tlas->tempInstanceBuffer, (BufferRange) { 0 },
-				ETransitionType_ReadRTAS, EPipelineStage_Count
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
 			))
 
 		else gotoIfError(clean, CommandListRef_transitionBuffer(
@@ -431,7 +432,7 @@ Error CommandListRef_transitionRTAS(
 				.startRange = tlas->deviceData.offset,
 				.endRange = tlas->deviceData.offset + tlas->deviceData.len
 			},
-			ETransitionType_ReadRTAS, EPipelineStage_Count
+			ETransitionType_ShaderRead, EPipelineStage_RTASBuild
 		))
 	}
 
@@ -447,7 +448,7 @@ Error CommandListRef_transitionRTAS(
 					.startRange = blas->aabbBuffer.offset + blas->aabbOffset,
 					.endRange = blas->aabbBuffer.offset + blas->aabbBuffer.len
 				},
-				ETransitionType_ReadRTAS, EPipelineStage_Count
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
 			))
 
 		else {
@@ -459,7 +460,7 @@ Error CommandListRef_transitionRTAS(
 					.startRange = blas->indexBuffer.offset,
 					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
 				},
-				ETransitionType_ReadRTAS, EPipelineStage_Count
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
 			))
 
 			gotoIfError(clean, CommandListRef_transitionBuffer(
@@ -469,7 +470,7 @@ Error CommandListRef_transitionRTAS(
 					.startRange = blas->positionBuffer.offset + blas->positionOffset,
 					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
 				},
-				ETransitionType_ReadRTAS, EPipelineStage_Count
+				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
 			))
 		}
 	}
@@ -1701,10 +1702,7 @@ Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas
 	if(!rtas || rtas->typeId != (ETypeId)(isBLAS ? EGraphicsTypeId_BLASExt : EGraphicsTypeId_TLASExt))
 		gotoIfError(clean, Error_unsupportedOperation(0, "CommandListRef_updateRTASExt() requires BLAS or TLAS"))
 
-	gotoIfError(clean, CommandListRef_transitionRTAS(
-		commandList, rtas,
-		ETransitionType_UpdateRTAS, EPipelineStage_Count
-	))
+	gotoIfError(clean, CommandListRef_transitionRTAS(commandList, rtas, ETransitionType_ShaderWrite, EPipelineStage_RTASBuild))
 
 	if (!isBLAS) {
 
@@ -1721,7 +1719,7 @@ Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas
 
 				gotoIfError(clean, CommandListRef_transitionRTAS(
 					commandList, dat.blasCpu,
-					ETransitionType_ReadRTAS, EPipelineStage_Count
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild
 				))
 			}
 	}

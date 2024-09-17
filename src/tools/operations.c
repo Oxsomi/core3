@@ -98,7 +98,7 @@ const C8 *EOperationHasParameter_descriptions[] = {
 
 //Flags
 
-const C8 *EOperationFlags_names[] = {
+const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--sha256",
 	"--uncompressed",
 	"--ascii",
@@ -119,10 +119,13 @@ const C8 *EOperationFlags_names[] = {
 	"--debug",
 	"--ignore-empty-files",
 	"--includes",
-	"--split"
+	"--split",
+	"--warn-unused-registers",
+	"--warn-unused-constants",
+	"--warn-buffer-padding"
 };
 
-const C8 *EOperationFlags_descriptions[] = {
+const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Includes 256-bit hashes instead of 32-bit ones into file if applicable.",
 	"Keep the data uncompressed (default is compressed).",
 	"Indicates the input files should be treated as ASCII. If 1 file; splits by enter, otherwise 1 entry/file.",
@@ -143,7 +146,10 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Include more debug information.",
 	"Ignore error when an empty source file is encountered.",
 	"Display includes.",
-	"Split up every binary target into its own oiSH file (.dxil.oiSH, .spv.oiSH, etc.)."
+	"Split up every binary target into its own oiSH file (.dxil.oiSH, .spv.oiSH, etc.).",
+	"Warn when unused registers are present in the final binary.",
+	"Warn when unused constants are present in the final binary.",
+	"Warn when buffer padding is present in the final binary."
 };
 
 //Operations
@@ -448,7 +454,8 @@ void Operations_init() {
 			.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
 
 			.operationFlags = 
-				EOperationFlags_Debug | EOperationFlags_IgnoreEmptyFiles | EOperationFlags_Split,
+				EOperationFlags_Debug | EOperationFlags_Split |
+				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles,
 
 			.requiredParameters =
 				EOperationHasParameter_Input | EOperationHasParameter_Output,

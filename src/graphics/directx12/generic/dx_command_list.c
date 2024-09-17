@@ -909,10 +909,11 @@ void CommandList_process(
 					case EPipelineStage_AnyHitExt:
 						pipelineStage = D3D12_BARRIER_SYNC_RAYTRACING;
 						break;
-				}
 
-				if(transition.type == ETransitionType_ReadRTAS || transition.type == ETransitionType_UpdateRTAS)
-					pipelineStage = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
+					case EPipelineStage_RTASBuild:
+						pipelineStage = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
+						break;
+				}
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
@@ -928,8 +929,9 @@ void CommandList_process(
 
 						pipelineStage,
 
-						transition.type == ETransitionType_UpdateRTAS ?
-							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE :
+						transition.type == ETransitionType_ShaderWrite ?
+							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE | 
+							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ :
 							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 
 						&deviceExt->bufferTransitions,
@@ -949,9 +951,6 @@ void CommandList_process(
 				D3D12_BARRIER_ACCESS access = 0;
 
 				access = isShaderRead ? D3D12_BARRIER_ACCESS_SHADER_RESOURCE : D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
-
-				if(transition.type == ETransitionType_ReadRTAS)
-					access = D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ;
 
 				if(isImage)
 					layout = isShaderRead ? D3D12_BARRIER_LAYOUT_SHADER_RESOURCE : D3D12_BARRIER_LAYOUT_UNORDERED_ACCESS;

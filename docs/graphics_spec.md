@@ -109,18 +109,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxVertexOutputComponents of 124 or higher.
 - maxComputeWorkGroupSize[0,1] of 512 or higher. and maxComputeWorkGroupSize[2] of 64 or higher.
 - maxMemoryAllocationCount of 4096 or higher.
-- maxBoundDescriptorSets of 4 or higher.
-- maxPerStageDescriptorSamplers of 2Ki or higher.
-- maxPerStageDescriptorUniformBuffers of 1 or higher.
-- maxPerStageDescriptorStorageBuffers of 499999 or higher.
-- maxPerStageDescriptorSampledImages of 250k or higher.
-- maxPerStageDescriptorStorageImages of 250k or higher.
-- maxPerStageResources of 1M or higher.
-- maxDescriptorSetSamplers of 2Ki or higher.
-- maxDescriptorSetUniformBuffers of 1 or higher.
-- maxDescriptorSetStorageBuffers of 499999 or higher.
-- maxDescriptorSetSampledImages of 250k or higher.
-- maxDescriptorSetStorageImages of 250k or higher.
 - viewportBoundsRange[0] <= -32768.
 - viewportBoundsRange[1] >= 32767.
 - nonCoherentAtomSize of 0 -> 256 and has to be base2.
@@ -133,6 +121,46 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - maxTessellationPatchSize of 32 or higher.
 
 ### Extensions
+
+#### Bindless
+
+Bindless is defined as having a large amount of descriptors bound that reduce the need to switch states (such as bindings or descriptor tables). There are generally three ways of bindless; statically sized arrays with a predefined size (placed at either different offsets or at the same position), dynamically sized arrays that get their size set by the engine or full bindless (a full buffer of descriptors exposed that can get cast to whatever descriptor). The first two will be supported, the third won't be due to portability concerns on other platforms (mainly mobile) as well as limitations with validation layers and debugging. 
+
+The shader side will expose these two versions of bindless as two different extensions; `Bindless` and `UnboundArraySize`.
+
+From the graphics side, Bindless and UnboundArraySize are the same extension and so only Bindless will be exposed as a feature. The most important factor is device support; all modern PC hardware supports bindless, but older/cheaper phones don't or have performance issues with it.
+
+Bindless is supported when the GPU has the following capabilities:
+
+- maxBoundDescriptorSets of 4 or higher.
+- maxPerStageDescriptorSamplers of 2048 or higher.
+- maxPerStageDescriptorUniformBuffers of 12 or higher.
+- maxPerStageDescriptorStorageBuffers of 500k or higher.
+- maxPerStageDescriptorSampledImages of 250k or higher.
+- maxPerStageDescriptorStorageImages of 250k or higher.
+- maxPerStageResources of 1M or higher.
+- maxDescriptorSetSamplers of 2048 or higher.
+- maxDescriptorSetUniformBuffers of 12 or higher.
+- maxDescriptorSetStorageBuffers of 500k or higher.
+- maxDescriptorSetSampledImages of 250k or higher.
+- maxDescriptorSetStorageImages of 250k or higher.
+- 16 acceleration structures if RT is supported.
+
+Without bindless, it should be guaranteed that at least the following are available (any higher would indicate bindless):
+
+- maxBoundDescriptorSets of 4 or higher.
+- maxPerStageDescriptorSamplers of 16 or higher.
+- maxPerStageDescriptorUniformBuffers of 12 or higher.
+- maxPerStageDescriptorStorageBuffers of 8 or higher.
+- maxPerStageDescriptorSampledImages of 16 or higher.
+- maxPerStageDescriptorStorageImages of 4 or higher.
+- maxPerStageResources of 44 or higher.
+- maxDescriptorSetSamplers of 80 or higher.
+- maxDescriptorSetUniformBuffers of 72 or higher.
+- maxDescriptorSetStorageBuffers of 24 or higher.
+- maxDescriptorSetSampledImages of 96 or higher.
+- maxDescriptorSetStorageImages of 24 or higher.
+- 16 acceleration structures if RT is supported.
 
 #### Multi draw indirect count
 
@@ -312,6 +340,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 #### Extensions in DirectX and NVAPI
 
+- Bindless is almost always supported, but if it's not then it's required to use resource binding tier 1 (11.1+ of 64 UAVs, 128 SRVs).
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP as EGraphicsFeatures_RayMicromapOpacity.
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP as EGraphicsFeatures_RayMicromapDisplacement.
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING as EGraphicsFeatures_RayReorder.
@@ -319,7 +348,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - MeshShaderTier as EGraphicsFeatures_MeshShader.
 - VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
 - RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
-- RaytracingTier>1_1 as EGraphicsFeatures_RayQuery.
+- RaytracingTier>1_1 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline + EGraphicsFeatures_RayQuery.
 - Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally).

@@ -85,11 +85,15 @@ typedef enum ESHExtension {
 
 	ESHExtension_WriteMSTexture				= 1 << 17,
 
-	ESHExtension_Count						= 18
+	ESHExtension_Bindless					= 1 << 18,
+	ESHExtension_UnboundArraySize			= 1 << 19,
+
+	ESHExtension_Count						= 20
 
 } ESHExtension;
 
 extern const C8 *ESHExtension_defines[ESHExtension_Count];
+extern const C8 *ESHExtension_names[ESHExtension_Count];
 
 typedef enum ESHVendor {
 	ESHVendor_NV,
@@ -279,8 +283,9 @@ typedef struct SHBinding {
 } SHBinding;
 
 //U32_MAX for both space and binding indicates 'not present'
-typedef struct SHBindings {
+typedef union SHBindings {
 	SHBinding arr[ESHBinaryType_Count];
+	U64 arrU64[ESHBinaryType_Count];
 } SHBindings;
 
 SHBindings SHBindings_dummy();
@@ -319,6 +324,9 @@ typedef struct SHRegisterRuntime {
 
 TList(SHRegister);
 TList(SHRegisterRuntime);
+
+Bool SHRegisterRuntime_hash(SHRegister reg, CharString name, ListU32 *arrays, SBFile *shaderBuffer, U64 *res, Error *e_rr);
+Bool SHRegisterRuntime_createCopy(SHRegisterRuntime reg, Allocator alloc, SHRegisterRuntime *res, Error *e_rr);
 
 //Runtime SHEntry with some extra information that is used to decide how to compile
 //This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.

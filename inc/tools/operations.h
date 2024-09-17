@@ -148,12 +148,18 @@ typedef enum EOperationFlags {
 	EOperationFlags_Includes			= 1 << 19,		//Used to signal to OxC3 file data that includes should be requested
 	EOperationFlags_Split				= 1 << 20,		//Split multiple binary types (SPV, DXIL, etc.) into one per file
 
-	EOperationFlags_Count				= 21
+	EOperationFlags_WarnUnusedRegisters	= 1 << 21,
+	EOperationFlags_WarnUnusedConstants	= 1 << 22,
+	EOperationFlags_WarnBufferPadding	= 1 << 23,
+
+	EOperationFlags_CompilerWarnings	= 7 << 21,
+
+	EOperationFlags_Count				= 24
 
 } EOperationFlags;
 
-extern const C8 *EOperationFlags_names[];
-extern const C8 *EOperationFlags_descriptions[];
+extern const C8 *EOperationFlags_names[EOperationFlags_Count];
+extern const C8 *EOperationFlags_descriptions[EOperationFlags_Count];
 
 //Operations
 

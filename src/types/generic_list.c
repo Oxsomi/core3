@@ -479,7 +479,11 @@ U64 GenericList_count(GenericList list, Buffer buf, EqualsFunction eq) {
 
 Error GenericList_copy(GenericList src, U64 srcOffset, GenericList dst, U64 dstOffset, U64 count) {
 
-	Error err = GenericList_createSubset(src, srcOffset, count, &src);
+	if(!src.length && !dst.length)
+		return Error_none();
+
+	GenericList srcOffsetted = (GenericList) { 0 };
+	Error err = GenericList_createSubset(src, srcOffset, count, &srcOffsetted);
 
 	if(err.genericError)
 		return err;
@@ -487,10 +491,11 @@ Error GenericList_copy(GenericList src, U64 srcOffset, GenericList dst, U64 dstO
 	if(GenericList_isConstRef(dst))
 		return Error_constData(2, 0, "GenericList_copy()::dst should be writable");
 
-	if((err = GenericList_createSubset(dst, dstOffset, count, &dst)).genericError)
+	GenericList dstOffsetted = (GenericList) { 0 };
+	if((err = GenericList_createSubset(dst, dstOffset, count, &dstOffsetted)).genericError)
 		return err;
 
-	Buffer_copy(GenericList_buffer(dst), GenericList_bufferConst(src));
+	Buffer_copy(GenericList_buffer(dstOffsetted), GenericList_bufferConst(srcOffsetted));
 	return Error_none();
 }
 

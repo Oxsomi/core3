@@ -55,7 +55,9 @@ typedef enum EPipelineStage {
 	EPipelineStage_RtHitStart = EPipelineStage_ClosestHitExt,
 	EPipelineStage_RtHitEnd = EPipelineStage_IntersectionExt,
 
-	EPipelineStage_Count
+	EPipelineStage_Count,
+
+	EPipelineStage_RTASBuild = 0x100		//Only for use in transitions at RTAS build stage
 
 } EPipelineStage;
 

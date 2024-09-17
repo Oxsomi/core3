@@ -1154,6 +1154,22 @@
 			prevStr = allFiles.ptr[i];
 		}
 
+		//Grab info about extra detailed compiler warnings
+
+		ECompilerWarning extraWarnings = ECompilerWarning_None;
+
+		if(args.flags & EOperationFlags_CompilerWarnings) {
+
+			if(args.flags & EOperationFlags_WarnUnusedRegisters)
+				extraWarnings |= ECompilerWarning_UnusedRegisters;
+
+			if(args.flags & EOperationFlags_WarnUnusedConstants)
+				extraWarnings |= ECompilerWarning_UnusedConstants;
+
+			if(args.flags & EOperationFlags_WarnBufferPadding)
+				extraWarnings |= ECompilerWarning_BufferPadding;
+		}
+
 		//Spin up threads if it's worth it
 
 		if (
@@ -1251,6 +1267,11 @@
 							Log_warnLnx("One of the previous oiSH compilations failed, not producing a binary");
 
 						else {
+
+							if(extraWarnings)
+								gotoIfError3(clean, Compiler_handleExtraWarningsx(
+									previous.entries.length ? previous : shFile, extraWarnings, e_rr
+								))
 							
 							if(previous.entries.length)
 								gotoIfError3(clean, SHFile_writex(previous, &temp, e_rr))
@@ -1456,6 +1477,11 @@
 								Log_warnLnx("One of the previous oiSH compilations failed, not producing a binary");
 
 							else {
+
+								if(extraWarnings)
+									gotoIfError3(clean, Compiler_handleExtraWarningsx(
+										previous.entries.length ? previous : shFile, extraWarnings, e_rr
+									))
 							
 								if(previous.entries.length)
 									gotoIfError3(clean, SHFile_writex(previous, &temp, e_rr))

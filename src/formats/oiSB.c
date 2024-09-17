@@ -1151,8 +1151,11 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 	ListU16 remapVars = (ListU16) { 0 };
 	ListU32 tmp = (ListU32) { 0 };
 
-	if(a.bufferSize != b.bufferSize || (a.flags &~ ESBSettingsFlags_IsUTF8) != (b.flags &~ ESBSettingsFlags_IsUTF8))
+	if(a.bufferSize != b.bufferSize || (a.flags &~ ESBSettingsFlags_IsUTF8) != (b.flags &~ ESBSettingsFlags_IsUTF8)) {
+		SBFile_print(a, 0, U16_MAX, true, alloc);
+		SBFile_print(b, 0, U16_MAX, true, alloc);
 		retError(clean, Error_invalidState(0, "SBFile_combine()::bufferSize or flags mismatch"))
+	}
 
 	if(!combined)
 		retError(clean, Error_nullPointer(0, "SBFile_combine()::combined is required"))
@@ -1160,7 +1163,7 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 	if(combined->vars.ptr)
 		retError(clean, Error_invalidState(0, "SBFile_combine()::combined must be empty, otherwise indicated memleak"))
 
-	if(a.vars.length != b.vars.length || a.arrays.length != b.arrays.length || a.structs.length != b.structs.length)
+	if(a.vars.length != b.vars.length || a.structs.length != b.structs.length)
 		retError(clean, Error_invalidState(0, "SBFile_combine() unrelated buffer layouts can't be merged"))
 
 	gotoIfError3(clean, SBFile_create(a.flags | b.flags, a.bufferSize, alloc, combined, e_rr))
@@ -1174,8 +1177,17 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 	gotoIfError2(clean, ListSBStruct_copy(a.structs, 0, combined->structs, 0, a.structs.length))
 	gotoIfError2(clean, ListSBVar_copy(a.vars, 0, combined->vars, 0, a.vars.length))
 
+	gotoIfError2(clean, ListCharString_resize(&combined->varNames, a.vars.length, alloc))
+	gotoIfError2(clean, ListCharString_resize(&combined->structNames, a.structs.length, alloc))
+
 	for(U64 i = 0; i < a.arrays.length; ++i)
 		gotoIfError2(clean, ListU32_createCopy(a.arrays.ptr[i], alloc, &combined->arrays.ptrNonConst[i]))
+		
+	for(U64 i = 0; i < a.vars.length; ++i)
+		gotoIfError2(clean, CharString_createCopy(a.varNames.ptr[i], alloc, &combined->varNames.ptrNonConst[i]))
+		
+	for(U64 i = 0; i < a.structs.length; ++i)
+		gotoIfError2(clean, CharString_createCopy(a.structNames.ptr[i], alloc, &combined->structNames.ptrNonConst[i]))
 
 	//Detect structs not found
 
@@ -1198,7 +1210,7 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 	
 	gotoIfError2(clean, ListU16_resize(&remapVars, b.vars.length, alloc))
 
-	for (U64 i = 0; b.vars.length; ++i) {
+	for (U64 i = 0; i < b.vars.length; ++i) {
 
 		//Remap parent id and ensure it's basically the same in the parent
 
@@ -1267,8 +1279,8 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 
 			if (arrayA.length == 1 || arrayB.length == 1) {
 
-				U64 dimsA = arrayA.ptr[0];
-				U64 dimsB = arrayB.ptr[0];
+				U64 dimsA = arrayA.length ? arrayA.ptr[0] : 0;
+				U64 dimsB = arrayB.length ? arrayB.ptr[0] : 0;
 
 				for(U64 j = 1; j < arrayA.length; ++j)
 					dimsA *= arrayA.ptr[j];
