@@ -768,6 +768,10 @@ void CommandList_process(
 					case EPipelineStage_AnyHitExt:
 						pipelineStage = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
 						break;
+
+					case EPipelineStage_RTASBuild:
+						pipelineStage = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+						break;
 				}
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
@@ -786,7 +790,7 @@ void CommandList_process(
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Vk),
 						pipelineStage,
 
-						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR :
+						transition.type == ETransitionType_ShaderWrite ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR :
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
 
 						graphicsQueueId,

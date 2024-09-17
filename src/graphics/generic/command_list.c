@@ -409,69 +409,95 @@ Error CommandListRef_transitionRTAS(
 	RTAS rtas = isTLAS ? TLASRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base;
 	Error err = Error_none();
 
-	if(rtas.tempScratchBuffer)
-		gotoIfError(clean, CommandListRef_transitionBuffer(
-			commandList, rtas.tempScratchBuffer, (BufferRange) { 0 },
-			ETransitionType_ShaderWrite, EPipelineStage_RTASBuild
-		))
+	if(stage == EPipelineStage_RTASBuild) {
 
-	if(isTLAS) {
-
-		TLAS *tlas = TLASRef_ptr(rtasPtr);
-
-		if(!tlas->useDeviceMemory)
+		if(rtas.tempScratchBuffer)
 			gotoIfError(clean, CommandListRef_transitionBuffer(
-				commandList, tlas->tempInstanceBuffer, (BufferRange) { 0 },
-				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
+				commandList, rtas.tempScratchBuffer, (BufferRange) { 0 },
+				ETransitionType_ShaderWrite, EPipelineStage_RTASBuild
 			))
 
-		else gotoIfError(clean, CommandListRef_transitionBuffer(
-			commandList,
-			tlas->deviceData.buffer,
-			(BufferRange) {
-				.startRange = tlas->deviceData.offset,
-				.endRange = tlas->deviceData.offset + tlas->deviceData.len
-			},
-			ETransitionType_ShaderRead, EPipelineStage_RTASBuild
-		))
-	}
+		if (rtas.parent) {
 
-	else {
+			TransitionInternal *oldState = NULL;
+			if(CommandListRef_isBound(commandList, rtas.parent, (ResourceRange) { 0 }, &oldState)) {
 
-		BLAS *blas = BLASRef_ptr(rtasPtr);
+				if(oldState->type != type)
+					return Error_invalidOperation(
+						4, "CommandListRef_transitionRTAS()::rtas.parent was already transitioned in scope!"
+					);
 
-		if(blas->base.asConstructionType == EBLASConstructionType_Procedural)
-			gotoIfError(clean, CommandListRef_transitionBuffer(
+				oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+			}
+
+			else {
+
+				const TransitionInternal transition = (TransitionInternal) {
+					.resource = rtas.parent, .stage = stage, .type = type
+				};
+
+				gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
+			}
+		}
+
+		if(isTLAS) {
+
+			TLAS *tlas = TLASRef_ptr(rtasPtr);
+
+			if(!tlas->useDeviceMemory)
+				gotoIfError(clean, CommandListRef_transitionBuffer(
+					commandList, tlas->tempInstanceBuffer, (BufferRange) { 0 },
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild
+				))
+
+			else gotoIfError(clean, CommandListRef_transitionBuffer(
 				commandList,
-				blas->aabbBuffer.buffer,
+				tlas->deviceData.buffer,
 				(BufferRange) {
-					.startRange = blas->aabbBuffer.offset + blas->aabbOffset,
-					.endRange = blas->aabbBuffer.offset + blas->aabbBuffer.len
+					.startRange = tlas->deviceData.offset,
+					.endRange = tlas->deviceData.offset + tlas->deviceData.len
 				},
 				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
 			))
+		}
 
 		else {
 
-			gotoIfError(clean, CommandListRef_transitionBuffer(
-				commandList,
-				blas->indexBuffer.buffer,
-				(BufferRange) {
-					.startRange = blas->indexBuffer.offset,
-					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
-				},
-				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
-			))
+			BLAS *blas = BLASRef_ptr(rtasPtr);
 
-			gotoIfError(clean, CommandListRef_transitionBuffer(
-				commandList,
-				blas->positionBuffer.buffer,
-				(BufferRange) {
-					.startRange = blas->positionBuffer.offset + blas->positionOffset,
-					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
-				},
-				ETransitionType_ShaderRead, EPipelineStage_RTASBuild
-			))
+			if(blas->base.asConstructionType == EBLASConstructionType_Procedural)
+				gotoIfError(clean, CommandListRef_transitionBuffer(
+					commandList,
+					blas->aabbBuffer.buffer,
+					(BufferRange) {
+						.startRange = blas->aabbBuffer.offset + blas->aabbOffset,
+						.endRange = blas->aabbBuffer.offset + blas->aabbBuffer.len
+					},
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild
+				))
+
+			else {
+
+				gotoIfError(clean, CommandListRef_transitionBuffer(
+					commandList,
+					blas->indexBuffer.buffer,
+					(BufferRange) {
+						.startRange = blas->indexBuffer.offset,
+						.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+					},
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild
+				))
+
+				gotoIfError(clean, CommandListRef_transitionBuffer(
+					commandList,
+					blas->positionBuffer.buffer,
+					(BufferRange) {
+						.startRange = blas->positionBuffer.offset + blas->positionOffset,
+						.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+					},
+					ETransitionType_ShaderRead, EPipelineStage_RTASBuild
+				))
+			}
 		}
 	}
 
