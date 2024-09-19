@@ -155,7 +155,7 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-compile-output` is the outputs that are enabled. If this mode is multiple and --split is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
 
-`-compile-type` is the compile type. Can be one of the following: `preprocess`, `includes`, `reflect` and `compile`. Each compile mode has their own info section. By default (if the argument isn't present) the mode is `compile`.
+`-compile-type` is the compile type. Can be one of the following: `preprocess`, `includes` and `compile`. Each compile mode has their own info section. By default (if the argument isn't present) the mode is `compile`.
 
 `-include-dir` can be used to add only a single include directory to search for includes (aside from relative includes).
 
@@ -222,11 +222,9 @@ bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
 Includes use OxC3 file paths, as such, escaping out of the working directory is prohibited. Any resolved file path that doesn't start with the working directory is illegal. And any tool that may read these includes (such as a file watcher) should have a similar protection mechanism.
 This gives a logical limit to how far back an include can go. Such a limit is also very useful to prevent any tooling from reading into files that weren't intentional or don't exist within the scope of the program (such as embedding a fictional include file which could read any file the program has access to). It will also enforce relative files, rather than allowing absolute files in the includes for some reason.
 
-### TODO: Reflect
-
 ### Symbols
 
-The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser.
+The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser. This mode is and likely will always be experimental, since DXC can't output this info and the parser likely will never be able to handle more complex syntax. 
 
 `OxC3 compile shaders -format HLSL -compile-output dxil -compile-type symbols -input a.hlsl -output a.symbols.hlsl`
 
@@ -245,8 +243,6 @@ Struct Camera at L#26:1
 		Parameter dims at L#31:27
 ```
 
-Note: The difference between reflect and symbols is that reflect maintains the data as a binary which can be easily queried, shipped and used in production code. Reflect is a more advanced version of symbols, which exists more for advanced usages.
-
 ### Compile
 
 Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the uniforms, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
@@ -255,11 +251,11 @@ Compile mode (default) will turn the text into shaders ready for consumption by 
 
 The following defines are set by OxC3 during compilation:
 
-- `__OXC3` to indicate that OxC3 is compiling or parsing the shader.
-- `__OXC3_MAJOR`, `__OXC3_MINOR` and `__OXC3_PATCH` to indicate OxC3 version. For 0.2.0 these would be 0, 2 and 0 respectively.
-- `__OXC3_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
-- `__OXC3_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC3_EXT_F16`, `__OXC3_EXT_F64`, `__OXC3_EXT_RAYQUERY`, etc.
-  - `__OXC3_EXT_RAYTRACING` is set when raytracing shaders are used.
+- `__OXC` to indicate that OxC3 is compiling or parsing the shader.
+- `__OXC_MAJOR`, `__OXC_MINOR` and `__OXC_PATCH` to indicate OxC3 version. For 0.2.0 these would be 0, 2 and 0 respectively.
+- `__OXC_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
+- `__OXC_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC_EXT_F16`, `__OXC_EXT_F64`, `__OXC_EXT_RAYQUERY`, etc.
+  - `__OXC_EXT_RAYTRACING` is set when raytracing shaders are used.
 
 #### Semantics
 

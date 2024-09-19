@@ -80,6 +80,12 @@ macro(add_virtual_files)
 
 	if(WIN32)
 
+		if(NOT TARGET OxC3)
+			message("-- Finding OxC3....")
+			find_program(OxC3 OxC3 REQUIRED)
+			message("-- Done?")
+		endif()
+
 		add_custom_target(
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
 			COMMAND OxC3 file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"

@@ -26,8 +26,8 @@ R"(
 //This saves us from parsing, preprocessing and compiling useless stuff.
 
 #if !defined(__spirv__) && (																	\
-	defined(__OXC3_EXT_RAYMICROMAPOPACITY)	|| defined(__OXC3_EXT_RAYMICROMAPDISPLACEMENT) ||	\
-	defined(__OXC3_EXT_RAYMOTIONBLUR)		|| defined(__OXC3_EXT_RAYREORDER)					\
+	defined(__OXC_EXT_RAYMICROMAPOPACITY)	|| defined(__OXC_EXT_RAYMICROMAPDISPLACEMENT) ||	\
+	defined(__OXC_EXT_RAYMOTIONBLUR)		|| defined(__OXC_EXT_RAYREORDER)					\
 )
 
 	#define NV_SHADER_EXTN_SLOT u99999
@@ -69,7 +69,7 @@ _binding(12, 1, RWTexture2D<F32x4> _rwTextures2Df[65536]);
 _binding(13, 1, RWTexture2D<I32x4> _rwTextures2Di[16384]);
 _binding(14, 1, RWTexture2D<U32x4> _rwTextures2Du[16384]);
 
-#if defined(__OXC3_EXT_RAYQUERY) || defined(__OXC3_EXT_RAYTRACING)
+#if defined(__OXC_EXT_RAYQUERY) || defined(__OXC_EXT_RAYTRACING)
 	_binding(15, 1, RaytracingAccelerationStructure _tlasExt[16]);
 #endif
 

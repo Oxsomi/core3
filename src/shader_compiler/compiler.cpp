@@ -761,7 +761,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 		result->isSuccess = false;
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-P", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
 
@@ -771,10 +771,10 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 		//Format major, minor, patch and version
 
 		const C8 *formats[] = {
-			"-D__OXC3_MAJOR=%" PRIu64,
-			"-D__OXC3_MINOR=%" PRIu64,
-			"-D__OXC3_PATCH=%" PRIu64,
-			"-D__OXC3_VERSION=%" PRIu64,
+			"-D__OXC_MAJOR=%" PRIu64,
+			"-D__OXC_MINOR=%" PRIu64,
+			"-D__OXC_PATCH=%" PRIu64,
+			"-D__OXC_VERSION=%" PRIu64,
 		};
 
 		const U64 formatInts[] = {
@@ -4158,9 +4158,9 @@ Bool Compiler_compile(
 				lastExtension = i + 1;
 
 		if(toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt)
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3_EXT_RAYTRACING", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr))
 
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, settings.debug ? "-Od" : "-O3", alloc, e_rr))
 
@@ -4323,11 +4323,11 @@ Bool Compiler_compile(
 			tempStr = CharString_createNull();
 		}
 
-		//__OXC3_EXT_<X> foreach extension
+		//__OXC_EXT_<X> foreach extension
 
 		for(U32 i = 0; i < lastExtension; ++i)
 			if ((toCompile.extensions >> i) & 1) {
-				gotoIfError2(clean, CharString_format(alloc, &tempStr, "-D__OXC3_EXT_%s", ESHExtension_defines[i]))
+				gotoIfError2(clean, CharString_format(alloc, &tempStr, "-D__OXC_EXT_%s", ESHExtension_defines[i]))
 				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
 				tempStr = CharString_createNull();
 			}
@@ -4335,10 +4335,10 @@ Bool Compiler_compile(
 		//Format major, minor, patch and version
 
 		const C8 *formats[] = {
-			"-D__OXC3_MAJOR=%" PRIu64,
-			"-D__OXC3_MINOR=%" PRIu64,
-			"-D__OXC3_PATCH=%" PRIu64,
-			"-D__OXC3_VERSION=%" PRIu64,
+			"-D__OXC_MAJOR=%" PRIu64,
+			"-D__OXC_MINOR=%" PRIu64,
+			"-D__OXC_PATCH=%" PRIu64,
+			"-D__OXC_VERSION=%" PRIu64,
 		};
 
 		const U64 formatInts[] = {
