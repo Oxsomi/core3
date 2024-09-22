@@ -86,6 +86,8 @@ macro(add_virtual_files)
 			set(OXC3 OxC3)
 		endif()
 
+		message("-- Found OxC3 at: ${OXC3}")
+
 		add_custom_target(
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
 			COMMAND ${OXC3} file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"

@@ -22,6 +22,11 @@ if ! conan create packages/spirv_reflect -s build_type=$1 --build=missing; then
 	exit 1
 fi
 
+if ! conan create packages/nvapi -s build_type=$1 --build=missing; then
+	printf "${RED}-- Conan create nvapi failed${NC}\n"
+	exit 1
+fi
+
 if ! conan build . -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 ${@:4}; then
 	printf "${RED}-- Conan build failed${NC}\n"
 	exit 1
