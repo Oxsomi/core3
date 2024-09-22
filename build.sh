@@ -12,12 +12,12 @@ if [ "$3" != True ] && [ "$3" != False ]; then usage; fi
 RED='\033[0;31m'
 NC='\033[0m'
 
-if ! conan create external/dxc -s build_type=$1 --build=missing; then
+if ! conan create packages/dxc -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create DXC failed${NC}\n"
 	exit 1
 fi
 
-if ! conan create external/spirv_reflect -s build_type=$1 --build=missing; then
+if ! conan create packages/spirv_reflect -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create spirv_reflect failed${NC}\n"
 	exit 1
 fi

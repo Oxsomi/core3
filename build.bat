@@ -21,11 +21,11 @@ if NOT "%3" == "True" (
 
 for /f "tokens=3,* delims= " %%a in ("%*") do set remainder=%%b
 
-conan create external/agility_sdk -s build_type=%1 --build=missing
-conan create external/amd_ags -s build_type=%1 --build=missing
-conan create external/nvapi -s build_type=%1 --build=missing
-conan create external/spirv_reflect -s build_type=%1 --build=missing
-conan create external/dxc -s build_type=%1 --build=missing
+conan create packages/agility_sdk -s build_type=%1 --build=missing
+conan create packages/amd_ags -s build_type=%1 --build=missing
+conan create packages/nvapi -s build_type=%1 --build=missing
+conan create packages/spirv_reflect -s build_type=%1 --build=missing
+conan create packages/dxc -s build_type=%1 --build=missing
 conan build . -s build_type=%1 -o enableSIMD=%2 -o enableTests=%3 !remainder!
 
 REM Run tests
