@@ -33,15 +33,15 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 	Log_debugLnx(
 		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
 		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\r\t"
-		"%s %"PRIu32"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64,
+		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64,
 		api == EGraphicsApi_DirectX12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
 		deviceInfo->capabilities.sharedMemory,
 		deviceInfo->capabilities.dedicatedMemory,
+		deviceInfo->type != EGraphicsDeviceType_Dedicated ? "total" : "dedicated",
 		deviceInfo->capabilities.maxBufferSize,
 		deviceInfo->capabilities.maxAllocationSize,
-		deviceInfo->type != EGraphicsDeviceType_Dedicated ? "total" : "dedicated",
 		(deviceInfo->type == EGraphicsDeviceType_CPU ? "CPU" : (
 			deviceInfo->type == EGraphicsDeviceType_Dedicated ? "dGPU" : (
 				deviceInfo->type == EGraphicsDeviceType_Integrated ? "iGPU" : "Simulated GPU"

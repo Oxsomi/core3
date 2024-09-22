@@ -177,14 +177,29 @@ class oxc3(ConanFile):
 		else:
 			self.cpp_info.system_libs = [ "m" ]
 
+		vulkan = False
+
 		if self.settings.os != "Windows":
-			self.cpp_info.system_libs += [ "vulkan" ]
+			self.cpp_info.libs += [ "vulkan" ]
+			vulkan = True
 
 		elif self.options.forceVulkan:
-			self.cpp_info.system_libs += [ "vulkan-1" ]
+			self.cpp_info.libs += [ "vulkan-1" ]
+			vulkan = True
+
+		vulkanMacos = os.path.join(os.environ['VULKAN_SDK'], "macOS")
+
+		if os.path.isdir(vulkanMacos):
+			self.cpp_info.libdirs += [ os.path.join(vulkanMacos, "lib") ]
+			self.cpp_info.includedirs += [ os.path.join(vulkanMacos, "include") ]
+
+		else:
+			self.cpp_info.libdirs += [ os.path.join(os.environ['VULKAN_SDK'], "lib") ]
+			self.cpp_info.includedirs += [ os.path.join(os.environ['VULKAN_SDK'], "include") ]
 
 		self.cpp_info.set_property("cmake_file_name", "oxc3")
 		self.cpp_info.set_property("cmake_target_name", "oxc3::oxc3")
 		self.cpp_info.set_property("pkg_config_name", "oxc3")
 		self.cpp_info.set_property("cmake_build_modules", [os.path.join("cmake", "oxc3.cmake")])
-		self.cpp_info.libs = collect_libs(self)
+		
+		self.cpp_info.libs += collect_libs(self)
