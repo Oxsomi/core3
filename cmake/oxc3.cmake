@@ -81,16 +81,18 @@ macro(add_virtual_files)
 	if(WIN32)
 
 		if(NOT TARGET OxC3)
-			find_program(OxC3 OxC3 REQUIRED)
+			find_program(OXC3 OxC3 REQUIRED)
+		else()
+			set(OXC3 OxC3)
 		endif()
 
 		add_custom_target(
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
-			COMMAND OxC3 file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
+			COMMAND ${OXC3} file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
 			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
 
-		# message("-- ${_ARGS_TARGET}_package_${_ARGS_NAME}: OxC3 file package -i \"${_ARGS_ROOT}\" -o \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" @ work dir ${_ARGS_SELF}")
+		# message("-- ${_ARGS_TARGET}_package_${_ARGS_NAME}: ${OXC3} file package -i \"${_ARGS_ROOT}\" -o \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" @ work dir ${_ARGS_SELF}")
 
 		set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 
