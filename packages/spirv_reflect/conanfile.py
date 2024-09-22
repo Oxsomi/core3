@@ -69,18 +69,14 @@ class spirv_reflect(ConanFile):
 		lib_dst = os.path.join(self.package_folder, "lib")
 		lib_deb_src = os.path.join(self.build_folder, "Debug")
 		lib_rel_src = os.path.join(self.build_folder, "Release")
-
-		copy(self, "*.lib", lib_src, lib_dst)
-		copy(self, "*.pdb", lib_src, lib_dst)
-		copy(self, "*.a", lib_src, lib_dst)
+		
+		copy(self, "*.a", self.build_folder, lib_dst)
 		
 		copy(self, "*.lib", lib_deb_src, lib_dst)
 		copy(self, "*.pdb", lib_deb_src, lib_dst)
-		copy(self, "*.a", lib_deb_src, lib_dst)
 
 		copy(self, "*.lib", lib_rel_src, lib_dst)
 		copy(self, "*.pdb", lib_rel_src, lib_dst)
-		copy(self, "*.a", lib_rel_src, lib_dst)
 
 	def package_info(self):
 		self.cpp_info.set_property("cmake_file_name", "spirv_reflect")
