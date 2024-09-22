@@ -87,8 +87,6 @@ class dxc(ConanFile):
 
 		cmake = CMake(self)
 
-		print(os.getcwd())
-		
 		if os.path.isdir("../DirectXShaderCompiler") or os.path.isdir("../../DirectXShaderCompiler"):
 			cmake.configure(build_script_folder="DirectXShaderCompiler")
 		else:
@@ -125,7 +123,7 @@ class dxc(ConanFile):
 		copy(self, "*.hpp", dx_headers_src, include_dir)
 
 		# WSL is only needed for linux
-		if cwd.endswith("Debug") or cwd.endswith("Release"):
+		if not self.settings.os == "Windows":
 
 			wsl_winadapter_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl")
 			wsl_winadapter_dst = os.path.join(self.package_folder, "")	# So that ../winadapter.h works (include/../windapter.h)
@@ -140,7 +138,7 @@ class dxc(ConanFile):
 		bin_dst = os.path.join(self.package_folder, "bin")
 		
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
-		if cwd.endswith("Debug") or cwd.endswith("Release"):
+		if not self.settings.os == "Windows":
 			copy(self, "*.a", lib_src, lib_dst)
 			copy(self, "^([^.]+)$", bin_src, bin_dst)
 		

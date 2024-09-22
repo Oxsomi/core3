@@ -152,7 +152,6 @@ For a full OxC3 build (including all projects), a build typically contains the f
 D3D12:
 	D3D12/D3D12Core.dll
 	D3D12/d3d12SDKLayers.dll
-	amd_ags_x64.dll
 	(debug only) d3d10warp.dll
 	(optional) OxC3.exe
 	yourExecutable.exe
@@ -162,7 +161,7 @@ Vulkan:
 	yourExecutable(,.exe,.apk,.ipa,etc.)
 ```
 
-To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (cliGraphics=True and forceVulkan=False).
+To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. D3D12/*.dll is required when OxC3 graphics is used with DirectX12 (cliGraphics=True and forceVulkan=False and on Windows).
 
 OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
 

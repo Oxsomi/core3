@@ -361,72 +361,29 @@ if("${graphicsApi}" STREQUAL "vulkan")
 
 elseif("${graphicsApi}" STREQUAL "directx12")
 
-	# Download warp, so more extensive GPUBV is available
-
-	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/warp/"))
-
-		message("-- Downloading and unzipping Microsoft.Direct3D.WARP")
-
-		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/warp/")
-		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/" "${CMAKE_BINARY_DIR}/external/warp.zip")
-		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/warp/)
-
-		execute_process(
-			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/warp.zip
-			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/warp/
-		)
-
-		file(REMOVE "${CMAKE_BINARY_DIR}/external/warp.zip")
-
-	endif()
-
-	# Download the agility SDK so newer features are always available if the driver supports them
-
-	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/agility/"))
-
-		message("-- Downloading and unzipping Microsoft.Direct3D.D3D12")
-
-		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/agility/")
-		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/" "${CMAKE_BINARY_DIR}/external/agility.zip")
-		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/)
-
-		execute_process(
-			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/agility.zip
-			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/
-		)
-
-		file(REMOVE "${CMAKE_BINARY_DIR}/external/agility.zip")
-
-		write_file(
-			"${CMAKE_BINARY_DIR}/external/agility/version.c"
-			"#include <stdint.h>\n"
-			"#include \"d3d12.h\"\n"
-			"__declspec(dllexport) extern const uint32_t D3D12SDKVersion = D3D12_SDK_VERSION;\n"
-			"__declspec(dllexport) extern const char *D3D12SDKPath = \"./D3D12/\";"
-		)
-
-	endif()
-
-	# Add agility source files and includes as static lib
-
-	file(GLOB_RECURSE agilityInclude "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
-	file(GLOB_RECURSE agilitySrc "${CMAKE_BINARY_DIR}/external/agility/build/native/src")
+	write_file(
+		"${CMAKE_BINARY_DIR}/external/agility/version.c"
+		"#include <stdint.h>\n"
+		"#include \"d3d12.h\"\n"
+		"__declspec(dllexport) extern const uint32_t D3D12SDKVersion = D3D12_SDK_VERSION;\n"
+		"__declspec(dllexport) extern const char *D3D12SDKPath = \"./D3D12/\";"
+	)
 
 	add_library(
 		DirectX12
 		STATIC
-		${agilityInclude}
 		"${CMAKE_BINARY_DIR}/external/agility/version.c"
 		CMakeLists.txt
 	)
 
-	target_link_libraries(DirectX12 PUBLIC dxgi d3d12)
+	find_package(agility_sdk REQUIRED)
+
+	target_link_libraries(DirectX12 PUBLIC agility_sdk::agility_sdk)
+
 	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
 	target_include_directories(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 
 	set_target_properties(DirectX12 PROPERTIES FOLDER External/D3D12)
-
-	# Add an interface to link to that copies to target directory
 
 	if(NOT ${ARM})
 
@@ -435,44 +392,10 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 		# NVAPI, used for NV extensions and getting driver version
 
-		target_link_libraries(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi/amd64/nvapi64.lib")
-		target_include_directories(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
+		find_package(ags REQUIRED)
+		find_package(nvapi REQUIRED)
 
-		# AMD AGS, used to get driver version
-
-		target_link_libraries(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.lib")
-		target_include_directories(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/inc")
-
-		add_custom_command(TARGET DirectX12 POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_BINARY_DIR}/external/warp/build/native/bin/x64/d3d10warp.dll"
-			"${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.dll"
-			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/x64/D3D12Core.dll"
-			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/x64/d3d12SDKLayers.dll"
-			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
-		)
-
-	else()
-
-		message(ERROR "-- ARM doesn't support NVAPI or AMDAGS until the NVAPI/AMD AGS GitHub repo does")
-
-		add_custom_command(TARGET DirectX12 POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_BINARY_DIR}/external/warp/build/native/bin/arm64/d3d10warp.dll"
-			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/D3D12Core.dll"
-			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/d3d12SDKLayers.dll"
-			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
-		)
+		target_link_libraries(DirectX12 PUBLIC ags::ags nvapi::nvapi)
 
 	endif()
 
@@ -507,12 +430,8 @@ endif()
 if(EnableShaderCompiler)
 
 	find_package(dxc REQUIRED)
-
-	option(SPIRV_REFLECT_EXECUTABLE     "Build spirv-reflect executable" OFF)
-	option(SPIRV_REFLECT_STATIC_LIB     "Build a SPIRV-Reflect static library" ON)
-	add_subdirectory(external/SPIRV-Reflect)
-
-	set_target_properties(spirv-reflect-static PROPERTIES FOLDER External)
+	find_package(nvapi REQUIRED)
+	find_package(spirv_reflect REQUIRED)
 
 	# Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.
 
@@ -528,7 +447,7 @@ if(EnableShaderCompiler)
 	)
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
-	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxc::dxc spirv-reflect-static)
+	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
 
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external")

@@ -81,9 +81,7 @@ macro(add_virtual_files)
 	if(WIN32)
 
 		if(NOT TARGET OxC3)
-			message("-- Finding OxC3....")
 			find_program(OxC3 OxC3 REQUIRED)
-			message("-- Done?")
 		endif()
 
 		add_custom_target(

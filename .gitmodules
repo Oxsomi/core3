@@ -1,9 +1,0 @@
-[submodule "external/nvapi"]
-	path = external/nvapi
-	url = https://github.com/Oxsomi/nvapi
-[submodule "external/AGS_SDK"]
-	path = external/AGS_SDK
-	url = https://github.com/Oxsomi/AGS_SDK
-[submodule "external/SPIRV-Reflect"]
-	path = external/SPIRV-Reflect
-	url = https://github.com/Oxsomi/SPIRV-Reflect

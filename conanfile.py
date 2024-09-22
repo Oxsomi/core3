@@ -3,6 +3,7 @@ from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.scm import Git
 from conan.tools.files import collect_libs, copy
 import os
+import shutil
 
 required_conan_version = ">=2.0"
 
@@ -85,8 +86,21 @@ class oxc3(ConanFile):
 		cmake.build()
 
 	def requirements(self):
+		
+		isDX12 = not self.options.forceVulkan and self.settings.os == "Windows"
+
+		if self.options.enableShaderCompiler or isDX12:
+			self.requires("nvapi/2024.09.21")
+
+		if isDX12:
+			self.requires("agility_sdk/2024.09.22")
+		
 		if self.options.enableShaderCompiler:
 			self.requires("dxc/2024.09.12")
+			self.requires("spirv_reflect/2024.09.22")
+
+		if not self.options.forceVulkan and self.settings.os == "Windows":
+			self.requires("ags/2024.09.21")
 
 	def package(self):
 
@@ -153,8 +167,26 @@ class oxc3(ConanFile):
 			copy(self, "*.pdb", rel_bin_src, bin_dst)
 
 	def package_info(self):
+
+		self.cpp_info.libs = []
+
+		if self.settings.os == "Windows":
+			self.cpp_info.system_libs = [ "Bcrypt" ]
+
+		elif self.settings.os == "Macos" or self.settings.os == "iOS" or self.settings.os == "watchOS":
+			self.cpp_info.frameworks = [ "Security", "CoreFoundation", "ApplicationServices", "AppKit" ]
+
+		else:
+			self.cpp_info.system_libs = [ "m" ]
+
+		if self.settings.os != "Windows":
+			self.cpp_info.system_libs += [ "vulkan" ]
+
+		elif self.options.forceVulkan:
+			self.cpp_info.system_libs += [ "vulkan-1" ]
+
 		self.cpp_info.set_property("cmake_file_name", "oxc3")
 		self.cpp_info.set_property("cmake_target_name", "oxc3::oxc3")
 		self.cpp_info.set_property("pkg_config_name", "oxc3")
 		self.cpp_info.set_property("cmake_build_modules", [os.path.join("cmake", "oxc3.cmake")])
-		self.cpp_info.libs = collect_libs(self)
+		self.cpp_info.libs += collect_libs(self)
