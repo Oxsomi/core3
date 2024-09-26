@@ -28,6 +28,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
+#include "formats/oiSH.h"
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
@@ -44,90 +45,79 @@ Error createShaderModule(
 TList(VkComputePipelineCreateInfo);
 TListImpl(VkComputePipelineCreateInfo);
 
-Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines) {
+Bool GraphicsDevice_createPipelineComputeExt(
+	GraphicsDevice *device,
+	CharString name,
+	Pipeline *pipeline,
+	SHBinaryInfo buf,
+	Error *e_rr
+) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	ListVkComputePipelineCreateInfo pipelineInfos = (ListVkComputePipelineCreateInfo) { 0 };
-	ListVkPipeline pipelineHandles = (ListVkPipeline) { 0 };
-
-	Error err;
-	gotoIfError(clean, ListVkComputePipelineCreateInfo_resizex(&pipelineInfos, pipelines->length))
-	gotoIfError(clean, ListVkPipeline_resizex(&pipelineHandles, pipelines->length))
+	Bool s_uccess = true;
+	VkPipeline pipelineHandle = NULL;
+	CharString temp = CharString_createNull();
 
 	//TODO: Push constants
 
-	for(U64 i = 0; i < pipelines->length; ++i) {
+	VkComputePipelineCreateInfo pipelineInfo = (VkComputePipelineCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage = (VkPipelineShaderStageCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.pName = "main"
+		},
+		.layout = deviceExt->defaultLayout
+	};
 
-		pipelineInfos.ptrNonConst[i] = (VkComputePipelineCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = (VkPipelineShaderStageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.pName = "main"
-			},
-			.layout = deviceExt->defaultLayout
-		};
+	gotoIfError2(clean, createShaderModule(
+		buf.binaries[ESHBinaryType_SPIRV],
+		&pipelineInfo.stage.module,
+		deviceExt,
+		instanceExt,
+		name,
+		EPipelineStage_Compute
+	))
 
-		const Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
-
-		gotoIfError(clean, createShaderModule(
-			pipeline->stages.ptr[0].binary,
-			&pipelineInfos.ptrNonConst[i].stage.module,
-			deviceExt,
-			instanceExt,
-			!names.length ? CharString_createNull() : names.ptr[i],
-			EPipelineStage_Compute
-		))
-	}
-
-	gotoIfError(clean, vkCheck(vkCreateComputePipelines(
+	gotoIfError2(clean, vkCheck(vkCreateComputePipelines(
 		deviceExt->device,
 		NULL,
-		(U32) pipelineInfos.length,
-		pipelineInfos.ptr,
+		1, &pipelineInfo,
 		NULL,
-		pipelineHandles.ptrNonConst
+		&pipelineHandle
 	)))
 
-	for (U64 i = 0; i < pipelines->length; ++i) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && CharString_length(name)) {
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && names.length) {
+		if(!CharString_isNullTerminated(name))
+			gotoIfError2(clean, CharString_createCopyx(name, &temp))
 
-			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_PIPELINE,
-				.objectHandle = (U64) pipelineHandles.ptr[i],
-				.pObjectName = names.ptr[i].ptr
-			};
+		VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_PIPELINE,
+			.objectHandle = (U64) pipelineHandle,
+			.pObjectName = temp.ptr ? temp.ptr : name.ptr
+		};
 
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-		}
-
-		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
-		*Pipeline_ext(pipeline, Vk) = pipelineHandles.ptr[i];
-		pipelineHandles.ptrNonConst[i] = NULL;
+		gotoIfError2(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		CharString_freex(&temp);
 	}
 
-	ListVkPipeline_freex(&pipelineHandles);
+	*Pipeline_ext(pipeline, Vk) = pipelineHandle;
+	pipelineHandle = NULL;
 
 clean:
 
-	for(U64 i = 0; i < pipelineHandles.length; ++i)
-		if(pipelineHandles.ptr[i])
-			vkDestroyPipeline(deviceExt->device, pipelineHandles.ptr[i], NULL);
+	if(pipelineHandle)
+		vkDestroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
-	ListVkPipeline_freex(&pipelineHandles);
+	const VkShaderModule mod = pipelineInfo.stage.module;
 
-	for (U64 i = 0; i < pipelineInfos.length; ++i) {
+	if(mod)
+		vkDestroyShaderModule(deviceExt->device, mod, NULL);
 
-		const VkShaderModule mod = pipelineInfos.ptr[i].stage.module;
-
-		if(mod)
-			vkDestroyShaderModule(deviceExt->device, mod, NULL);
-	}
-
-	ListVkComputePipelineCreateInfo_freex(&pipelineInfos);
-	return err;
+	CharString_freex(&temp);
+	return s_uccess;
 }

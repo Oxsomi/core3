@@ -114,6 +114,9 @@ typedef struct GraphicsDevice {
 
 typedef RefPtr GraphicsDeviceRef;
 
+typedef struct SHBinaryInfo SHBinaryInfo;
+typedef struct SHEntry SHEntry;
+
 #define GraphicsDevice_ext(ptr, T) (!ptr ? NULL : (T##GraphicsDevice*)(ptr + 1))		//impl
 #define GraphicsDeviceRef_ptr(ptr) RefPtr_data(ptr, GraphicsDevice)
 
@@ -126,6 +129,8 @@ Error GraphicsDeviceRef_create(
 	EGraphicsDeviceFlags flags,
 	GraphicsDeviceRef **device
 );
+
+Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *device, SHBinaryInfo info, SHEntry entry, Error *e_rr);
 
 //Ensure there are no pending changes from non-existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);

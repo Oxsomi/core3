@@ -25,8 +25,6 @@
 	extern "C" {
 #endif
 
-TList(SHFile);
-
 typedef struct CharString CharString;
 typedef struct SpinLock SpinLock;
 

@@ -792,10 +792,8 @@ void CommandList_process(
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 
 			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE hit = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
-				.StartAddress = getDxDeviceAddress((DeviceData) {
-					.buffer = info.shaderBindingTable, .offset = info.sbtOffset
-				}),
-				.SizeInBytes = (U64)raytracingShaderAlignment * info.groupCount,
+				.StartAddress = getDxDeviceAddress((DeviceData) { .buffer = info.shaderBindingTable }),
+				.SizeInBytes = (U64)raytracingShaderAlignment * info.groups.length,
 				.StrideInBytes = raytracingShaderAlignment
 			};
 
@@ -816,7 +814,7 @@ void CommandList_process(
 				.StrideInBytes = raytracingShaderAlignment
 			};
 
-			if(!info.groupCount)
+			if(!info.groups.length)
 				hit = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) { 0 };
 
 			if(!info.missCount)

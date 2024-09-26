@@ -30,6 +30,7 @@
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
+#include "formats/oiSH.h"
 
 Error createShaderModule(
 	Buffer buf,
@@ -47,329 +48,291 @@ TList(VkRayTracingShaderGroupCreateInfoKHR);
 
 TListImpl(VkRayTracingPipelineCreateInfoKHR);
 TListImpl(VkShaderModule);
-TListImpl(VkPipelineShaderStageCreateInfo);
 TListImpl(VkRayTracingShaderGroupCreateInfoKHR);
 
-Error GraphicsDevice_createPipelinesRaytracingInternalExt(
+Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 	GraphicsDeviceRef *deviceRef,
-	ListCharString names,
-	ListPipelineRef *pipelines,
-	U64 stageCounter,
-	U64 binaryCounter,
-	U64 groupCounter
+	ListSHFile binaries,
+	CharString name,
+	U8 maxPayloadSize,
+	U8 maxAttributeSize,
+	ListU32 binaryIndices,
+	Pipeline *pipeline,
+	Error *e_rr
 ) {
+
+	(void) maxPayloadSize;
+	(void) maxAttributeSize;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	Error err = Error_none();
-	ListVkRayTracingPipelineCreateInfoKHR createInfos = (ListVkRayTracingPipelineCreateInfoKHR) { 0 };
-	ListVkPipeline pipelinesExt = (ListVkPipeline) { 0 };
+	PipelineRaytracingInfo *rtPipeline = Pipeline_info(pipeline, PipelineRaytracingInfo);
+
+	U64 stageCount = pipeline->stages.length;
+	U64 hitGroupCount = rtPipeline->groups.length;
+	U64 binaryCount = binaryIndices.length;
+
+	Bool s_uccess = true;
+	VkPipeline pipelineHandle = NULL;
 	ListVkShaderModule modules = (ListVkShaderModule) { 0 };
 	ListVkPipelineShaderStageCreateInfo stages = (ListVkPipelineShaderStageCreateInfo) { 0 };
 	ListVkRayTracingShaderGroupCreateInfoKHR groups = (ListVkRayTracingShaderGroupCreateInfoKHR) { 0 };
 	GenericList shaderHandles = (GenericList) { .stride = raytracingShaderIdSize };
 	Buffer shaderBindings = Buffer_createNull();
-	DeviceBufferRef *sbt = NULL;
 	CharString temp = CharString_createNull();
-	CharString temp1 = CharString_createNull();
 
-	//Reserve mem
+	gotoIfError2(clean, ListVkShaderModule_resizex(&modules, binaryCount))
+	gotoIfError2(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, stageCount))
+	gotoIfError2(clean, GenericList_resizex(&shaderHandles, stageCount))
+	gotoIfError2(clean, Buffer_createEmptyBytesx(stageCount * raytracingShaderAlignment, &shaderBindings))
+	gotoIfError2(clean, ListVkRayTracingShaderGroupCreateInfoKHR_resizex(&groups, hitGroupCount + stageCount))
 
-	gotoIfError(clean, ListVkRayTracingPipelineCreateInfoKHR_resizex(&createInfos, pipelines->length))
-	gotoIfError(clean, ListVkPipeline_resizex(&pipelinesExt, pipelines->length))
-	gotoIfError(clean, ListVkShaderModule_resizex(&modules, binaryCounter))
-	gotoIfError(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, stageCounter))
-	gotoIfError(clean, GenericList_resizex(&shaderHandles, stageCounter))
-	gotoIfError(clean, Buffer_createEmptyBytesx(stageCounter * raytracingShaderAlignment, &shaderBindings))
-	gotoIfError(clean, ListVkRayTracingShaderGroupCreateInfoKHR_resizex(&groups, groupCounter + stageCounter))
+	//Create binaries
 
-	//Convert
+	for(U64 j = 0; j < binaryCount; ++j) {
 
-	binaryCounter = stageCounter = groupCounter = 0;
+		if(CharString_length(name))
+			gotoIfError2(clean, CharString_formatx(&temp, "%.*s binary %"PRIu64, (int) CharString_length(name), name.ptr, j))
 
-	for(U64 i = 0; i < pipelines->length; ++i) {
+		U32 binId = binaryIndices.ptr[j];
+		U16 realBinaryId = (U16) binId;
+		U16 shFileId = (U16)(binId >> 16);
 
-		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
-		PipelineRaytracingInfo *rtPipeline = Pipeline_info(pipeline, PipelineRaytracingInfo);
+		SHBinaryInfo info = binaries.ptr[shFileId].binaries.ptr[realBinaryId];
 
-		CharString name = CharString_createNull();
+		gotoIfError2(clean, createShaderModule(
+			info.binaries[ESHBinaryType_SPIRV], &modules.ptrNonConst[j],
+			deviceExt, instanceExt, temp, EPipelineStage_RtStart
+		))
 
-		if (names.length) {
+		CharString_freex(&temp);
+	}
 
-			if(!CharString_isNullTerminated(names.ptr[i])) {
-				gotoIfError(clean, CharString_createCopyx(names.ptr[i], &temp1))
-				name = temp1;
-			}
+	//Create groups
 
-			else name = names.ptr[i];
+	for (U64 j = 0; j < hitGroupCount; ++j) {
+
+		PipelineRaytracingGroup group = rtPipeline->groups.ptr[j];
+
+		groups.ptrNonConst[j] = (VkRayTracingShaderGroupCreateInfoKHR) {
+
+			.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
+
+			.type =
+				group.intersection == U32_MAX ? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR :
+				VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR,
+
+			.closestHitShader = group.closestHit,
+			.anyHitShader = group.anyHit,
+			.intersectionShader = group.intersection
+		};
+	}
+
+	U32 groupCounter = (U32) hitGroupCount;
+	U32 stageCounter = 0;
+
+	for (U64 j = 0; j < stageCount; ++j) {
+
+		PipelineStage *stage = &pipeline->stages.ptrNonConst[j];
+
+		VkShaderStageFlagBits shaderStage = 0;
+
+		switch (stage->stageType) {
+
+			default:								shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;			break;
+			case EPipelineStage_ClosestHitExt:		shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;		break;
+			case EPipelineStage_IntersectionExt:	shaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;		break;
+
+			case EPipelineStage_MissExt:
+				shaderStage = VK_SHADER_STAGE_MISS_BIT_KHR;
+				stage->localShaderId = rtPipeline->missCount++;
+				stage->groupId = (U32) groupCounter;
+				break;
+
+			case EPipelineStage_RaygenExt:
+				shaderStage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+				stage->localShaderId = rtPipeline->raygenCount++;
+				stage->groupId = (U32) groupCounter;
+				break;
+
+			case EPipelineStage_CallableExt:
+				shaderStage = VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+				stage->localShaderId = rtPipeline->callableCount++;
+				stage->groupId = (U32) groupCounter;
+				break;
 		}
 
-		//Create binaries
+		//Generic shader
 
-		for(U64 j = 0; j < rtPipeline->binaryCount; ++j) {
-
-			if(names.length)
-				gotoIfError(clean, CharString_formatx(&temp, "%s binary %"PRIu64, name.ptr, j))
-
-			gotoIfError(clean, createShaderModule(
-				rtPipeline->binaries.ptr[j], &modules.ptrNonConst[binaryCounter + j],
-				deviceExt, instanceExt, name, EPipelineStage_RtStart
-			))
-
-			CharString_freex(&temp);
-		}
-
-		//Create stages
-
-		U64 startGroupCounter = groupCounter;
-
-		//Create groups
-
-		for (U64 j = 0; j < rtPipeline->groupCount; ++j) {
-
-			PipelineRaytracingGroup group = rtPipeline->groups.ptr[j];
-
-			groups.ptrNonConst[groupCounter + j] = (VkRayTracingShaderGroupCreateInfoKHR) {
-
+		if (!(stage->stageType >= EPipelineStage_RtHitStart && stage->stageType <= EPipelineStage_RtHitEnd))
+			groups.ptrNonConst[groupCounter++] = (VkRayTracingShaderGroupCreateInfoKHR) {
 				.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
-
-				.type =
-					group.intersection == U32_MAX ? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR :
-					VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR,
-
-				.closestHitShader = group.closestHit,
-				.anyHitShader = group.anyHit,
-				.intersectionShader = group.intersection
+				.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR,
+				.generalShader = stage->binaryId == U32_MAX ? VK_SHADER_UNUSED_KHR : (U32) stageCounter,
+				.closestHitShader = VK_SHADER_UNUSED_KHR,
+				.anyHitShader = VK_SHADER_UNUSED_KHR,
+				.intersectionShader = VK_SHADER_UNUSED_KHR
 			};
-		}
 
-		groupCounter += rtPipeline->groupCount;
+		if(stage->binaryId == U32_MAX)		//Invalid shaders get skipped
+			continue;
 
-		U64 stageStart = stageCounter;
+		U16 entrypointId = (U16) stage->binaryId;
+		U16 binaryId = (U16) (stage->binaryId >> 16);
 
-		for (U64 j = 0; j < rtPipeline->stageCount; ++j) {
+		SHEntry entry = binaries.ptr[stage->shFileId].entries.ptr[entrypointId];
+		U16 realBinId = entry.binaryIds.ptr[binaryId];
+		U32 binId = ((U32)stage->shFileId << 16) | realBinId;
 
-			PipelineStage *stage = &pipeline->stages.ptrNonConst[j];
+		U64 libId = ListU32_findFirst(binaryIndices, binId, 0, NULL);
 
-			VkShaderStageFlagBits shaderStage = 0;
+		if(!CharString_isNullTerminated(entry.name))
+			gotoIfError2(clean, CharString_createCopyx(entry.name, &temp))
 
-			switch (stage->stageType) {
-
-				default:								shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;			break;
-				case EPipelineStage_ClosestHitExt:		shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;		break;
-				case EPipelineStage_IntersectionExt:	shaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;		break;
-
-				case EPipelineStage_MissExt:
-					shaderStage = VK_SHADER_STAGE_MISS_BIT_KHR;
-					stage->localShaderId = rtPipeline->missCount;
-					stage->groupId = (U32)(groupCounter - startGroupCounter);
-					++rtPipeline->missCount;
-					break;
-
-				case EPipelineStage_RaygenExt:
-					shaderStage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-					stage->localShaderId = rtPipeline->raygenCount;
-					stage->groupId = (U32)(groupCounter - startGroupCounter);
-					++rtPipeline->raygenCount;
-					break;
-
-				case EPipelineStage_CallableExt:
-					shaderStage = VK_SHADER_STAGE_CALLABLE_BIT_KHR;
-					stage->localShaderId = rtPipeline->callableCount;
-					stage->groupId = (U32)(groupCounter - startGroupCounter);
-					++rtPipeline->callableCount;
-					break;
-			}
-
-			//Generic shader
-
-			if (!(stage->stageType >= EPipelineStage_RtHitStart && stage->stageType <= EPipelineStage_RtHitEnd))
-				groups.ptrNonConst[groupCounter++] = (VkRayTracingShaderGroupCreateInfoKHR) {
-					.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
-					.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR,
-					.generalShader = stage->binaryId == U32_MAX ? VK_SHADER_UNUSED_KHR : (U32) (stageCounter - stageStart),
-					.closestHitShader = VK_SHADER_UNUSED_KHR,
-					.anyHitShader = VK_SHADER_UNUSED_KHR,
-					.intersectionShader = VK_SHADER_UNUSED_KHR
-				};
-
-			if(stage->binaryId == U32_MAX)		//Invalid shaders get skipped
-				continue;
-
-			CharString entrypoint = !rtPipeline->entrypoints.ptr ? CharString_createNull() : rtPipeline->entrypoints.ptr[j];
-
-			stages.ptrNonConst[stageCounter++] = (VkPipelineShaderStageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = shaderStage,
-				.module = modules.ptrNonConst[binaryCounter + stage->binaryId],
-				.pName = entrypoint.ptr ? entrypoint.ptr : "main"
-			};
-		}
-
-		//Init create info
-
-		VkPipelineCreateFlags flags = 0;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_SkipAABBs)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_AABBS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_SkipTriangles)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_TRIANGLES_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_AllowMotionBlurExt)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_ALLOW_MOTION_BIT_NV;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullAnyHit)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_ANY_HIT_SHADERS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullClosestHit)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullMiss)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_MISS_SHADERS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullIntersection)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_INTERSECTION_SHADERS_BIT_KHR;
-
-		createInfos.ptrNonConst[i] = (VkRayTracingPipelineCreateInfoKHR) {
-			.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR,
-			.flags = flags,
-			.stageCount = rtPipeline->stageCount,
-			.pStages = stages.ptr + stageStart,
-			.groupCount = (U32)(groupCounter - startGroupCounter),
-			.pGroups = groups.ptr + startGroupCounter,
-			.maxPipelineRayRecursionDepth = rtPipeline->maxRecursionDepth,
-			.layout = deviceExt->defaultLayout
+		stages.ptrNonConst[stageCounter++] = (VkPipelineShaderStageCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = shaderStage,
+			.module = modules.ptrNonConst[libId],
+			.pName = temp.ptr ? temp.ptr : entry.name.ptr
 		};
 
-		//Continue
-
-		CharString_freex(&temp1);
-
-		binaryCounter += rtPipeline->binaryCount;
+		CharString_freex(&temp);
 	}
+
+	//Init create info
+
+	VkPipelineCreateFlags flags = 0;
+
+	if(rtPipeline->flags & EPipelineRaytracingFlags_SkipAABBs)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_AABBS_BIT_KHR;
+
+	if(rtPipeline->flags & EPipelineRaytracingFlags_SkipTriangles)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_TRIANGLES_BIT_KHR;
+
+	if(rtPipeline->flags & EPipelineRaytracingFlags_AllowMotionBlurExt)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_ALLOW_MOTION_BIT_NV;
+
+	if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullAnyHit)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_ANY_HIT_SHADERS_BIT_KHR;
+
+	if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullClosestHit)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS_BIT_KHR;
+
+	if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullMiss)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_MISS_SHADERS_BIT_KHR;
+
+	if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullIntersection)
+		flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_INTERSECTION_SHADERS_BIT_KHR;
+
+	VkRayTracingPipelineCreateInfoKHR info = (VkRayTracingPipelineCreateInfoKHR) {
+		.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR,
+		.flags = flags,
+		.stageCount = (U32) stageCount,
+		.pStages = stages.ptr,
+		.groupCount = (U32) hitGroupCount,
+		.pGroups = groups.ptr,
+		.maxPipelineRayRecursionDepth = rtPipeline->maxRecursionDepth,
+		.layout = deviceExt->defaultLayout
+	};
 
 	//Create vulkan pipelines
 
-	gotoIfError(clean, vkCheck(instanceExt->createRaytracingPipelines(
+	gotoIfError2(clean, vkCheck(instanceExt->createRaytracingPipelines(
 		deviceExt->device,
-		NULL,						//deferredOperation
-		NULL,						//pipelineCache
-		(U32) pipelines->length,
-		createInfos.ptr,
-		NULL,						//allocator
-		pipelinesExt.ptrNonConst
+		NULL,
+		NULL,
+		1, &info,
+		NULL,
+		&pipelineHandle
 	)))
 
 	//Create RefPtrs for OxC3 usage.
 
-	groupCounter = 0;
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && CharString_length(name)) {
 
-	for (U64 i = 0; i < pipelines->length; ++i) {
+		if(!CharString_isNullTerminated(name))
+			gotoIfError2(clean, CharString_createCopyx(name, &temp))
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && names.length) {
+		VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_PIPELINE,
+			.objectHandle = (U64) pipelineHandle,
+			.pObjectName = temp.ptr ? temp.ptr : name.ptr
+		};
 
-			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_PIPELINE,
-				.objectHandle = (U64) pipelinesExt.ptr[i],
-				.pObjectName = names.ptr[i].ptr
-			};
+		gotoIfError2(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		CharString_freex(&temp);
+	}
 
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-		}
+	*Pipeline_ext(pipeline, Vk) = pipelineHandle;
+	pipelineHandle = NULL;
 
-		VkPipeline vkPipeline = pipelinesExt.ptrNonConst[i];
-		*Pipeline_ext(PipelineRef_ptr(pipelines->ptr[i]), Vk) = vkPipeline;
-		pipelinesExt.ptrNonConst[i] = NULL;
+	//Fetch all shader handles
 
-		//Fetch all shader handles
+	U32 groupCount =
+		(U32)(rtPipeline->missCount + rtPipeline->raygenCount + rtPipeline->callableCount + rtPipeline->groups.length);
 
-		PipelineRaytracingInfo *rtPipeline = Pipeline_info(PipelineRef_ptr(pipelines->ptr[i]), PipelineRaytracingInfo);
+	gotoIfError2(clean, vkCheck(instanceExt->getRayTracingShaderGroupHandles(
+		deviceExt->device,
+		pipelineHandle,
+		0,
+		groupCount,
+		raytracingShaderIdSize * groupCount,
+		shaderHandles.ptrNonConst
+	)))
 
-		U32 groupCount = rtPipeline->missCount + rtPipeline->raygenCount + rtPipeline->callableCount + rtPipeline->groupCount;
+	//Fix SBT alignment
 
-		gotoIfError(clean, vkCheck(instanceExt->getRayTracingShaderGroupHandles(
-			deviceExt->device,
-			vkPipeline,
-			0,
-			groupCount,
-			raytracingShaderIdSize * groupCount,
-			shaderHandles.ptrNonConst
-		)))
+	for(U64 j = 0; j < groupCount; ++j) {
 
-		//Fix SBT alignment
+		//Remap raygen, miss and callable shaders to be next to eachother
 
-		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
+		U64 groupId = j;
 
-		for(U64 j = 0; j < groupCount; ++j) {
+		if (j >= groupCount)
+			for (U64 k = 0; k < stageCounter; ++k) {
 
-			//Remap raygen, miss and callable shaders to be next to eachother
+				PipelineStage stage = pipeline->stages.ptr[k];
 
-			U64 groupId = j;
+				if (stage.groupId != groupId)		//TODO: Better search
+					continue;
 
-			if (j >= rtPipeline->groupCount)
-				for (U64 k = 0; k < rtPipeline->stageCount; ++k) {
+				groupId = groupCount;
 
-					PipelineStage stage = pipeline->stages.ptr[k];
+				if (stage.stageType != EPipelineStage_MissExt) {
 
-					if (stage.groupId != groupId)		//TODO: Better search
-						continue;
+					groupId += rtPipeline->missCount;
 
-					groupId = rtPipeline->groupCount;
-
-					if (stage.stageType != EPipelineStage_MissExt) {
-
-						groupId += rtPipeline->missCount;
-
-						if (stage.stageType != EPipelineStage_RaygenExt)
-							groupId += rtPipeline->raygenCount;
-					}
-
-					groupId += stage.localShaderId;
-					break;
+					if (stage.stageType != EPipelineStage_RaygenExt)
+						groupId += rtPipeline->raygenCount;
 				}
 
-			Buffer_copy(
-				Buffer_createRef(
-					(U8*)shaderBindings.ptr + raytracingShaderAlignment * (groupCounter + groupId), raytracingShaderIdSize
-				),
-				Buffer_createRefConst((const U8*)shaderHandles.ptr + raytracingShaderIdSize * j, raytracingShaderIdSize)
-			);
-		}
+				groupId += stage.localShaderId;
+				break;
+			}
 
-		rtPipeline->sbtOffset = groupCounter * raytracingShaderAlignment;
-		groupCounter += groupCount;
+		Buffer_copy(
+			Buffer_createRef((U8*)shaderBindings.ptr + raytracingShaderAlignment * groupId,  raytracingShaderIdSize),
+			Buffer_createRefConst((const U8*)shaderHandles.ptr + raytracingShaderIdSize * j, raytracingShaderIdSize)
+		);
 	}
 
-	ListVkPipeline_freex(&pipelinesExt);
-
-	//Create one big SBT with all handles in it.
-	//The SBT has a stride of 64 as well (since that's expected).
-	//Then we link the SBT per pipeline.
-
-	gotoIfError(clean, GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None,
+	gotoIfError2(clean, GraphicsDeviceRef_createBufferData(
+		deviceRef,
+		EDeviceBufferUsage_SBTExt,
+		EGraphicsResourceFlag_None,
 		CharString_createRefCStrConst("Shader binding table"),
 		&shaderBindings,
-		&sbt
+		&Pipeline_info(pipeline, PipelineRaytracingInfo)->shaderBindingTable
 	))
-
-	for (U64 i = 0; i < pipelines->length; ++i) {
-		gotoIfError(clean, DeviceBufferRef_inc(sbt))
-		Pipeline_info(PipelineRef_ptr(pipelines->ptr[i]), PipelineRaytracingInfo)->shaderBindingTable = sbt;
-	}
 
 clean:
 
-	for(U64 i = 0; i < pipelinesExt.length; ++i)
-		if(pipelinesExt.ptr[i])
-			vkDestroyPipeline(deviceExt->device, pipelinesExt.ptr[i], NULL);
+	if(pipelineHandle)
+		vkDestroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
-	ListVkRayTracingPipelineCreateInfoKHR_freex(&createInfos);
-	ListVkPipeline_freex(&pipelinesExt);
 	ListVkPipelineShaderStageCreateInfo_freex(&stages);
 	ListVkRayTracingShaderGroupCreateInfoKHR_freex(&groups);
 
@@ -378,10 +341,8 @@ clean:
 
 	ListVkShaderModule_freex(&modules);
 	CharString_freex(&temp);
-	CharString_freex(&temp1);
 	GenericList_freex(&shaderHandles);
 	Buffer_freex(&shaderBindings);
-	DeviceBufferRef_dec(&sbt);
 
-	return err;
+	return s_uccess;
 }

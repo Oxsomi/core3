@@ -217,13 +217,14 @@ typedef enum ETopologyMode {
 
 typedef struct PipelineStage {
 
-	EPipelineStage stageType;
-	U32 binaryId;				//For raytracing shaders, indicates the shader offset in the shader stages
+	EPipelineStage stageType;	//Runtime only
+	U32 binaryId;				//For non compute indicates offset in SHFile (contains both binaryId and entryId)
 
-	Buffer binary;				//Binary for non raytracing shaders
+	U32 localShaderId;			//RT only at runtime
+	U32 groupId;				//RT only at runtime
 
-	U32 localShaderId;			//RT only, for example; raygen index, miss index or callable index
-	U32 groupId;				//RT only (for raygen, miss or callable); the group id that's represented
+	U16 shFileId;				//For non compute, indicates SHFile id
+	U16 padding;
 
 } PipelineStage;
 

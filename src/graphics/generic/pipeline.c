@@ -25,6 +25,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "formats/oiSH.h"
 
 const C8 *EPipelineStage_names[] = {
 	"vertex",
@@ -42,7 +43,6 @@ const C8 *EPipelineStage_names[] = {
 };
 
 TListImpl(PipelineStage);
-TListNamedImpl(ListPipelineRef);
 
 Error PipelineRef_dec(PipelineRef **pipeline) {
 	return !RefPtr_dec(pipeline) ?
@@ -54,20 +54,6 @@ Error PipelineRef_inc(PipelineRef *pipeline) {
 		Error_invalidOperation(0, "PipelineRef_inc()::pipeline invalid") : Error_none();
 }
 
-Bool PipelineRef_decAll(ListPipelineRef *list) {
-
-	if(!list)
-		return true;
-
-	Bool success = true;
-
-	for(U64 i = 0; i < list->length; ++i)
-		success &= !PipelineRef_dec(&list->ptrNonConst[i]).genericError;
-
-	ListPipelineRef_freex(list);
-	return success;
-}
-
 impl Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc);
 
 Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
@@ -75,28 +61,82 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 	Pipeline_freeExt(pipeline, alloc);
 
 	if (pipeline->type == EPipelineType_RaytracingExt) {
-
 		PipelineRaytracingInfo *info = Pipeline_info(pipeline, PipelineRaytracingInfo);
-
-		for (U64 i = 0; i < info->binaries.length; ++i)
-			Buffer_freex(&info->binaries.ptrNonConst[i]);
-
-		ListBuffer_freex(&info->binaries);
-
-		for (U64 i = 0; i < info->entrypoints.length; ++i)
-			CharString_freex(&info->entrypoints.ptrNonConst[i]);
-
-		ListCharString_freex(&info->entrypoints);
-
 		ListPipelineRaytracingGroup_freex(&info->groups);
-
 		DeviceBufferRef_dec(&info->shaderBindingTable);
 	}
-
-	for (U64 i = 0; i < pipeline->stages.length; ++i)
-		Buffer_freex(&pipeline->stages.ptrNonConst[i].binary);
 
 	ListPipelineStage_freex(&pipeline->stages);
 	GraphicsDeviceRef_dec(&pipeline->device);
 	return true;
+}
+
+U32 GraphicsDeviceRef_getFirstShaderEntry(
+	GraphicsDeviceRef *deviceRef,
+	SHFile shaderBinary,
+	CharString entrypointName,
+	ListCharString uniforms
+) {
+
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		return U32_MAX;
+
+	for (U64 i = 0; i < shaderBinary.entries.length; ++i) {
+
+		SHEntry entry = shaderBinary.entries.ptr[i];
+
+		if(!CharString_equalsStringSensitive(entry.name, entrypointName))
+			continue;
+
+		for (U64 j = 0; j < entry.binaryIds.length; ++j) {
+
+			U16 binj = entry.binaryIds.ptr[j];
+			SHBinaryInfo binInfo = shaderBinary.binaries.ptr[binj];
+
+			ListCharString uniforms2 = binInfo.identifier.uniforms;
+
+			//Find all uniforms
+
+			if (uniforms2.length != uniforms.length)
+				continue;
+
+			Bool missing = false;
+
+			for (U64 k = 0; k < uniforms.length / 2; ++k) {
+				
+				Bool contains = false;
+
+				for (U64 l = 0; l < uniforms2.length / 2; ++l) {
+
+					if (
+						!CharString_equalsStringSensitive(uniforms.ptr[l << 1], uniforms2.ptr[l << 1]) ||
+						!CharString_equalsStringSensitive(uniforms.ptr[(l << 1) | 1], uniforms2.ptr[(l << 1) | 1])
+					)
+						continue;
+
+					contains = true;
+					break;
+				}
+
+				if (!contains) {
+					missing = true;
+					break;
+				}
+			}
+
+			if(missing)
+				continue;
+
+			//Ensure it's compatible
+
+			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, NULL))
+				continue;
+
+			return (U16)i | ((U16)j << 16);
+		}
+
+		return U32_MAX;
+	}
+
+	return U32_MAX;
 }

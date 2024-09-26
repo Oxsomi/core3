@@ -46,11 +46,8 @@ typedef struct PipelineGraphicsInfo {
 	EMSAASamples msaa;
 	ETopologyMode topologyMode;
 
-	U32 patchControlPoints;				//Only if TessellationShader feature is enabled.
-	U32 stageCount;							//Non zero used to determine where stages start/end.
-
+	U32 patchControlPoints;					//Only if TessellationShader feature is enabled.
 	F32 msaaMinSampleShading;				//MSAA quality improvement (but extra perf overhead), set to > 0 to enable
-	U32 padding;
 
 	//One of these can be used but not together.
 
@@ -90,7 +87,10 @@ typedef enum EPipelineRaytracingFlags {
 
 	EPipelineRaytracingFlags_Count					= 7,
 
-	EPipelineRaytracingFlags_Default				= EPipelineRaytracingFlags_SkipAABBs
+	EPipelineRaytracingFlags_Default				= EPipelineRaytracingFlags_SkipAABBs,
+
+	EPipelineRaytracingFlags_DefaultStrict			=
+		EPipelineRaytracingFlags_SkipAABBs | EPipelineRaytracingFlags_NoNullClosestHit | EPipelineRaytracingFlags_NoNullMiss
 
 } EPipelineRaytracingFlags;
 
@@ -109,30 +109,19 @@ TList(PipelineRaytracingGroup);
 typedef struct PipelineRaytracingInfo {
 
 	U8 flags;								//EPipelineRaytracingFlags
-	U8 maxPayloadSize;						//In bytes; has to be 4-byte aligned and <32.
-	U8 maxAttributeSize;					//In bytes (>=8); has to be 4-byte aligned and <32.
 	U8 maxRecursionDepth;					//1 or 2. For multiple bounces, use for loop in raygen shader.
-
-	U32 stageCount;							//Non zero used to determine where stages start/end.
-
-	U32 binaryCount;						//Binaries that can be linked to by stages.
-
-	U32 groupCount;							//Makes hit group indices from stages.
+	U16 padding0;
 
 	//Only valid after construction
 
-	ListBuffer binaries;
 	ListPipelineRaytracingGroup groups;
-	ListCharString entrypoints;
 
 	DeviceBufferRef *shaderBindingTable;	//Auto generated SBT
-
-	U64 sbtOffset;							//Offset in global SBT
 
 	//Layout: [ hits (groupCount), misses (missCount), raygens (raygenCount), callables (callableCount) ]
 
 	U32 raygenCount, missCount;
-	U32 callableCount, padding;
+	U32 callableCount, padding1;
 
 } PipelineRaytracingInfo;
 
@@ -163,39 +152,50 @@ impl extern const U64 PipelineExt_size;
 Error PipelineRef_dec(PipelineRef **pipeline);
 Error PipelineRef_inc(PipelineRef *pipeline);
 
-TListNamed(PipelineRef*, ListPipelineRef);
-
-Bool PipelineRef_decAll(ListPipelineRef *list);					//Decrements all refs and frees list
-
 Bool Pipeline_free(Pipeline *pipeline, Allocator alloc);
 
-//shaderBinaries's Buffer will be moved (shaderBinaries will be cleared if moved)
-Error GraphicsDeviceRef_createPipelinesCompute(
+typedef struct SHFile SHFile;
+typedef struct ListSHFile ListSHFile;
+
+//Get the first shader entry that's compatible with the current capabilities (extensions, shader model).
+//And that has the same entrypointName and uniforms.
+//Returns (U16 entryId, U16 binaryId) or U32_MAX if invalid
+U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
-	ListBuffer *shaderBinaries,
-	ListCharString names,					//Temporary names for debugging. Can be empty, else match shaderBinaries->length
-	ListPipelineRef *pipelines
+	SHFile shaderBinary,
+	CharString entrypointName,
+	ListCharString uniforms		//[ key, value ][]
 );
 
-//stages and info will be freed and binaries of stages will be moved.
-Error GraphicsDeviceRef_createPipelinesGraphics(
+Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
-	ListPipelineStage *stages,
-	ListPipelineGraphicsInfo *infos,
-	ListCharString names,					//Temporary names for debugging. Can be empty, else match infos->length
-	ListPipelineRef *pipelines
+	SHFile shaderBinary,
+	CharString name,						//Temporary name for debugging
+	U32 entryId,							//Identifier from getFirstShaderEntry
+	PipelineRef **pipeline,
+	Error *e_rr
 );
 
-//stages, binaries, libraries and info will be freed and stages[i].binary be NULL.
-Error GraphicsDeviceRef_createPipelineRaytracingExt(
+Bool GraphicsDeviceRef_createPipelineGraphics(
 	GraphicsDeviceRef *deviceRef,
-	ListPipelineStage stages,
-	ListBuffer *binaries,
-	ListPipelineRaytracingGroup groups,
-	ListPipelineRaytracingInfo infos,
-	ListCharString *entrypoints,
-	ListCharString names,					//Temporary names for debugging. Can be empty, else match infos->length
-	ListPipelineRef *pipelines
+	ListSHFile shaderBinary,
+	ListPipelineStage *stages,				//Will be moved
+	PipelineGraphicsInfo info,
+	CharString name,						//Temporary name for debugging
+	PipelineRef **pipelines,
+	Error *e_rr
+);
+
+//stages, groups will be freed
+Bool GraphicsDeviceRef_createPipelineRaytracingExt(
+	GraphicsDeviceRef *deviceRef,
+	ListPipelineStage *stages,				//Will be moved
+	ListSHFile binaries,
+	ListPipelineRaytracingGroup *groups,	//Will be moved
+	PipelineRaytracingInfo info,
+	CharString name,						//Temporary name for debugging
+	PipelineRef **pipeline,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

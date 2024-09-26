@@ -530,6 +530,8 @@ typedef struct SHFile {
 
 } SHFile;
 
+TList(SHFile);
+
 Bool SHFile_create(
 	ESHSettingsFlags flags,
 	U32 compilerVersion,

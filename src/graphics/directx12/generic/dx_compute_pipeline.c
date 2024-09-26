@@ -27,44 +27,46 @@
 #include "platforms/ext/stringx.h"
 #include "types/string.h"
 #include "types/error.h"
+#include "formats/oiSH.h"
 
-Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines) {
+Bool GraphicsDevice_createPipelineComputeExt(
+	GraphicsDevice *device,
+	CharString name,
+	Pipeline *pipeline,
+	SHBinaryInfo binary,
+	Error *e_rr
+) {
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
-	Error err = Error_none();
+	Bool s_uccess = true;
 	ListU16 tmp = (ListU16) { 0 };
+	Buffer dxil = binary.binaries[ESHBinaryType_DXIL];
 
 	//TODO: Push constants
 
-	for(U64 i = 0; i < pipelines->length; ++i) {
-
-		const Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
-
-		D3D12_COMPUTE_PIPELINE_STATE_DESC compute = (D3D12_COMPUTE_PIPELINE_STATE_DESC) {
-			.pRootSignature = deviceExt->defaultLayout,
-			.CS = (D3D12_SHADER_BYTECODE) {
-				.pShaderBytecode = pipeline->stages.ptr[0].binary.ptr,
-				.BytecodeLength = Buffer_length(pipeline->stages.ptr[0].binary),
-			}
-		};
-
-		ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
-
-		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateComputePipelineState(
-			deviceExt->device,
-			&compute,
-			&IID_ID3D12PipelineState,
-			(void**) pipelinei
-		)))
-
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && names.length && CharString_length(names.ptr[i])) {
-			gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp))
-			gotoIfError(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
-			ListU16_freex(&tmp);
+	D3D12_COMPUTE_PIPELINE_STATE_DESC compute = (D3D12_COMPUTE_PIPELINE_STATE_DESC) {
+		.pRootSignature = deviceExt->defaultLayout,
+		.CS = (D3D12_SHADER_BYTECODE) {
+			.pShaderBytecode = dxil.ptr,
+			.BytecodeLength = Buffer_length(dxil)
 		}
+	};
+
+	ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
+
+	gotoIfError2(clean, dxCheck(deviceExt->device->lpVtbl->CreateComputePipelineState(
+		deviceExt->device,
+		&compute,
+		&IID_ID3D12PipelineState,
+		(void**) pipelinei
+	)))
+
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
+		gotoIfError2(clean, CharString_toUTF16x(name, &tmp))
+		gotoIfError2(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
 	}
 
 clean:
 	ListU16_freex(&tmp);
-	return err;
+	return s_uccess;
 }

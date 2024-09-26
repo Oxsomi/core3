@@ -70,13 +70,13 @@ U128 U128_rsh(U128 a, U8 x) { return I32x4_rsh128(a, x); }
 U8 U128_bitScan(U128 a) {
 
 	unsigned long index = 0;
-	const Bool hasFirstBit = _BitScanReverse64(&index, ((const U64*)&a)[1]);
+	const Bool hasFirstBit = _BitScanReverse64(&index, ((const U64*)&a)[0]);
 
 	if (hasFirstBit)
-		return (U8)index + 64;
+		return (U8)index;
 
-	const Bool hasLastBit = _BitScanReverse64(&index, ((const U64*)&a)[0]);
-	return hasLastBit ? (U8) index : U8_MAX;
+	const Bool hasLastBit = _BitScanReverse64(&index, ((const U64*)&a)[1]);
+	return hasLastBit ? (U8) index + 64 : U8_MAX;
 }
 
 ECompareResult U128_cmp(U128 a, U128 b) {

@@ -70,12 +70,21 @@ static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so t
 //If api type is DirectX12
 
 typedef enum EDxGraphicsFeatures {
+
+	EDxGraphicsFeatures_None					= 0,
+
 	EDxGraphicsFeatures_WriteBufferImmediate	= 1 << 0,
 	EDxGraphicsFeatures_ReBAR					= 1 << 1,
 	EDxGraphicsFeatures_HardwareCopyQueue		= 1 << 2,
 	EDxGraphicsFeatures_WaveSize				= 1 << 3,
 	EDxGraphicsFeatures_WaveSizeMinMax			= 1 << 4,
-	EDxGraphicsFeatures_PAQ						= 1 << 5
+	EDxGraphicsFeatures_PAQ						= 1 << 5,
+
+	EDxGraphicsFeatures_SM6_6					= 1 << 16,		//Last bits are for shader model
+	EDxGraphicsFeatures_SM6_7					= 1 << 17,
+	EDxGraphicsFeatures_SM6_8					= 1 << 18,
+	EDxGraphicsFeatures_SM6_9					= 1 << 19
+
 } EDxGraphicsFeatures;
 
 //If api type is Vulkan
@@ -138,7 +147,10 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_SwapchainCompute			= 1 << 22,		//isComputeExt in createSwapchain is supported
 
 	EGraphicsFeatures_ComputeDeriv				= 1 << 23,		//Compute derivatives (ddx/ddy)
-	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 24		//Compute derivatives in mesh/task shaders
+	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 24,		//Compute derivatives in mesh/task shaders
+
+	EGraphicsFeatures_WriteMSTexture			= 1 << 25,		//image2DMS or RWTexture2DMS
+	EGraphicsFeatures_Bindless					= 1 << 26
 
 } EGraphicsFeatures;
 
@@ -147,6 +159,8 @@ typedef enum EGraphicsFeatures2 {
 } EGraphicsFeatures2;
 
 typedef enum EGraphicsDataTypes {
+
+	EGraphicsDataTypes_None						= 0,
 
 	//What operations are available on native data types
 

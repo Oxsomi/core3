@@ -29,6 +29,9 @@
 #include "types/string.h"
 #include "types/error.h"
 
+TList(VkPipelineShaderStageCreateInfo);
+TListImpl(VkPipelineShaderStageCreateInfo);
+
 Error createShaderModule(
 	Buffer buf,
 	VkShaderModule *mod,

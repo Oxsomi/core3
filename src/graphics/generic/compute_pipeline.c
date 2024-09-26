@@ -24,94 +24,90 @@
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "formats/oiSH.h"
 
-impl Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines);
+impl Bool GraphicsDevice_createPipelineComputeExt(
+	GraphicsDevice *device,
+	CharString name,
+	Pipeline *pipeline,
+	SHBinaryInfo buf,
+	Error *e_rr
+);
 
-Error GraphicsDeviceRef_createPipelinesCompute(
+Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
-	ListBuffer *shaderBinaries,
-	ListCharString names,			//Temporary names for debugging. Can be empty too, else match shaderBinaries->length
-	ListPipelineRef *pipelines
+	SHFile shaderBinary,
+	CharString name,			//Temporary name for debugging
+	U32 entryId,
+	PipelineRef **pipeline,
+	Error *e_rr
 ) {
 
-	if(!deviceRef || !shaderBinaries || !pipelines)
-		return Error_nullPointer(
-			!deviceRef ? 0 : (!shaderBinaries ? 1 : 2),
-			"GraphicsDeviceRef_createPipelinesCompute()::deviceRef, shaderBinaries and pipelines are required"
-		);
+	Bool s_uccess = true;
+	U16 entrypointId = (U16) entryId;
+	U16 binaryId = (U16) (entryId >> 16);
+
+	if(!deviceRef || entrypointId >= shaderBinary.entries.length || !pipeline)
+		retError(clean, Error_nullPointer(
+			!deviceRef ? 0 : (!pipeline ? 2 : 1),
+			"GraphicsDeviceRef_createPipelineCompute()::deviceRef, shaderBinary and pipeline are required"
+		))
 
 	if(deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		return Error_invalidParameter(
-			0, 0, "GraphicsDeviceRef_createPipelinesCompute()::deviceRef is an invalid type"
-		);
+		retError(clean, Error_invalidParameter(
+			0, 0, "GraphicsDeviceRef_createPipelineCompute()::deviceRef is an invalid type"
+		))
 
-	if(!shaderBinaries->length)
-		return Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries should be of length > 0"
-		);
-
-	if(names.length && names.length != shaderBinaries->length)
-		return Error_invalidParameter(
-			2, 0,
-			"GraphicsDeviceRef_createPipelinesCompute()::names should have the same length as shaderBinaries"
-		);
-
-	if(shaderBinaries->length >> 32)
-		return Error_outOfBounds(
-			1, shaderBinaries->length, U32_MAX,
-			"GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries.length should be less than U32_MAX"
-		);
-
-	if(pipelines->ptr)
-		return Error_invalidParameter(
+	if(*pipeline)
+		retError(clean, Error_invalidParameter(
 			3, 0,
-			"GraphicsDeviceRef_createPipelinesCompute()::pipelines->ptr is non zero, indicating a possible memleak"
-		);
+			"GraphicsDeviceRef_createPipelineCompute()::*pipeline is non NULL, indicating a possible memleak"
+		))
 
-	Error err = Error_none();
-	gotoIfError(clean, ListPipelineRef_resizex(pipelines, shaderBinaries->length))
+	SHEntry entry = shaderBinary.entries.ptr[entrypointId];
+
+	if(entry.stage != ESHPipelineStage_Compute)
+		retError(clean, Error_invalidParameter(
+			3, 0,
+			"GraphicsDeviceRef_createPipelineCompute() entry is not a compute shader"
+		))
+
+	if(binaryId >= entry.binaryIds.length)
+		retError(clean, Error_invalidParameter(
+			3, 0,
+			"GraphicsDeviceRef_createPipelineCompute() entry binaryId out of bounds"
+		))
+
+	U32 finalBinaryId = entry.binaryIds.ptr[binaryId];
+	SHBinaryInfo binary = shaderBinary.binaries.ptr[finalBinaryId];
+
+	gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, binary, entry, e_rr))
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	for (U64 i = 0; i < pipelines->length; ++i) {
+	gotoIfError2(clean, RefPtr_createx(
+		(U32)(sizeof(Pipeline) + PipelineExt_size),
+		(ObjectFreeFunc) Pipeline_free,
+		(ETypeId) EGraphicsTypeId_Pipeline,
+		pipeline
+	))
 
-		RefPtr **refPtr = &pipelines->ptrNonConst[i];
+	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);
 
-		gotoIfError(clean, RefPtr_createx(
-			(U32)(sizeof(Pipeline) + PipelineExt_size),
-			(ObjectFreeFunc) Pipeline_free,
-			(ETypeId) EGraphicsTypeId_Pipeline,
-			refPtr
-		))
+	GraphicsDeviceRef_inc(deviceRef);
 
-		Pipeline *pipeline = PipelineRef_ptr(*refPtr);
+	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
 
-		GraphicsDeviceRef_inc(deviceRef);
+	gotoIfError2(clean, ListPipelineStage_resizex(&pipelinePtr->stages, 1))
+	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute };
 
-		*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
-		gotoIfError(clean, ListPipelineStage_resizex(&pipeline->stages, 1))
-
-		pipeline->stages.ptrNonConst[0] = (PipelineStage) {
-			.stageType = EPipelineStage_Compute,
-			.binary = shaderBinaries->ptr[i]
-		};
-
-		shaderBinaries->ptrNonConst[i] = Buffer_createNull();		//Moved
-	}
-
-	ListBuffer_freex(shaderBinaries);
-
-	gotoIfError(clean, GraphicsDevice_createPipelinesComputeExt(device, names, pipelines))
+	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, pipelinePtr, binary, e_rr))
 
 	goto success;
 
 clean:
-
-	for (U64 i = 0; i < pipelines->length; ++i)
-		RefPtr_dec((RefPtr**)&pipelines->ptr[i]);
-
-	ListPipelineRef_freex(pipelines);
+	RefPtr_dec(pipeline);
 
 success:
-	return err;
+	return s_uccess;
 }

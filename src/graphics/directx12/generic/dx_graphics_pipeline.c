@@ -26,6 +26,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
+#include "formats/oiSH.h"
 #include "types/string.h"
 #include "types/error.h"
 
@@ -79,227 +80,236 @@ D3D12_BLEND mapDxBlend(EBlend op) {
 	}
 }
 
-Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines) {
+Bool GraphicsDevice_createPipelineGraphicsExt(
+	GraphicsDevice *device,
+	ListSHFile binaries,
+	CharString name,
+	Pipeline *pipeline,
+	Error *e_rr
+) {
+	
+	Bool s_uccess = true;
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ListU16 tmp = (ListU16) { 0 };
-	Error err = Error_none();
 
 	//TODO: Push constants
 
-	for(U64 i = 0; i < pipelines->length; ++i) {
+	D3D12_INPUT_ELEMENT_DESC elements[8];
 
-		D3D12_INPUT_ELEMENT_DESC elements[8];
+	const PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
 
-		const Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
-		const PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics = (D3D12_GRAPHICS_PIPELINE_STATE_DESC) {
 
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics = (D3D12_GRAPHICS_PIPELINE_STATE_DESC) {
+		.pRootSignature = deviceExt->defaultLayout,
 
-			.pRootSignature = deviceExt->defaultLayout,
+		.BlendState = (D3D12_BLEND_DESC) { .IndependentBlendEnable = info->blendState.allowIndependentBlend },
 
-			.BlendState = (D3D12_BLEND_DESC) { .IndependentBlendEnable = info->blendState.allowIndependentBlend },
+		.RasterizerState = (D3D12_RASTERIZER_DESC) {
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_BACK,
+			.FrontCounterClockwise = !(info->rasterizer.flags & ERasterizerFlags_IsClockWise),
+			.MultisampleEnable = (Bool) info->msaa
+		},
 
-			.RasterizerState = (D3D12_RASTERIZER_DESC) {
-				.FillMode = D3D12_FILL_MODE_SOLID,
-				.CullMode = D3D12_CULL_MODE_BACK,
-				.FrontCounterClockwise = !(info->rasterizer.flags & ERasterizerFlags_IsClockWise),
-				.MultisampleEnable = (Bool) info->msaa
-			},
+		.DepthStencilState = (D3D12_DEPTH_STENCIL_DESC) {
+			.DepthEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
+			.DepthWriteMask = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
+			.DepthFunc = mapDxCompareOp(info->depthStencil.depthCompare),
+			.StencilEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
+			.StencilReadMask = info->depthStencil.stencilReadMask,
+			.StencilReadMask = info->depthStencil.stencilWriteMask
+		},
 
-			.DepthStencilState = (D3D12_DEPTH_STENCIL_DESC) {
-				.DepthEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
-				.DepthWriteMask = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
-				.DepthFunc = mapDxCompareOp(info->depthStencil.depthCompare),
-				.StencilEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
-				.StencilReadMask = info->depthStencil.stencilReadMask,
-				.StencilReadMask = info->depthStencil.stencilWriteMask
-			},
+		.InputLayout = (D3D12_INPUT_LAYOUT_DESC ) { .pInputElementDescs = elements },
 
-			.InputLayout = (D3D12_INPUT_LAYOUT_DESC ) { .pInputElementDescs = elements },
+		.SampleMask = U32_MAX,
 
-			.SampleMask = U32_MAX,
+		.NumRenderTargets = info->attachmentCountExt,
+		.DSVFormat = EDepthStencilFormat_toDXFormat(info->depthFormatExt),
 
-			.NumRenderTargets = info->attachmentCountExt,
-			.DSVFormat = EDepthStencilFormat_toDXFormat(info->depthFormatExt),
+		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 }
+	};
 
-			.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 }
+	//Rasterizer
+
+	if(info->rasterizer.flags & ERasterizerFlags_IsWireframeExt)
+		graphics.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+
+	if(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias) {
+		graphics.RasterizerState.DepthBias = info->rasterizer.depthBiasConstantFactor;
+		graphics.RasterizerState.SlopeScaledDepthBias = info->rasterizer.depthBiasSlopeFactor;
+	}
+
+	if(info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp)
+		graphics.RasterizerState.DepthBiasClamp = info->rasterizer.depthBiasClamp;
+
+	switch(info->rasterizer.cullMode) {
+		default:																			break;
+		case ECullMode_None:	graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;	break;
+		case ECullMode_Front:	graphics.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;	break;
+	}
+
+	//Depth stencil
+
+	graphics.DepthStencilState.BackFace = (D3D12_DEPTH_STENCILOP_DESC) {
+		.StencilFailOp = mapDxStencilOp(info->depthStencil.stencilFail),
+		.StencilDepthFailOp = mapDxStencilOp(info->depthStencil.stencilDepthFail),
+		.StencilPassOp = mapDxStencilOp(info->depthStencil.stencilPass),
+		.StencilFunc = mapDxCompareOp(info->depthStencil.stencilCompare)
+	};
+
+	graphics.DepthStencilState.FrontFace = graphics.DepthStencilState.BackFace;
+
+	//Blend state
+
+	for(U8 j = 0; j < 8; ++j) {
+
+		U8 realJ =  info->blendState.allowIndependentBlend ? j : 0;
+		D3D12_RENDER_TARGET_BLEND_DESC *dst = &graphics.BlendState.RenderTarget[j];
+		BlendStateAttachment src = info->blendState.attachments[realJ];
+
+		if(!info->blendState.enable) {
+			*dst = (D3D12_RENDER_TARGET_BLEND_DESC) { .RenderTargetWriteMask = EWriteMask_All };
+			continue;
+		}
+
+		*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
+
+			.BlendEnable			= (info->blendState.renderTargetMask >> realJ) & 1,
+			.LogicOpEnable			= (Bool)info->blendState.logicOpExt,
+			.RenderTargetWriteMask	= info->blendState.writeMask[realJ],
+
+			.BlendOp				= mapDxBlendOp(src.blendOp),
+			.SrcBlend				= mapDxBlend(src.srcBlend),
+			.DestBlend				= mapDxBlend(src.dstBlend),
+
+			.BlendOpAlpha			= mapDxBlendOp(src.blendOpAlpha),
+			.SrcBlendAlpha			= mapDxBlend(src.srcBlendAlpha),
+			.DestBlendAlpha			= mapDxBlend(src.dstBlendAlpha)
 		};
 
-		//Rasterizer
-
-		if(info->rasterizer.flags & ERasterizerFlags_IsWireframeExt)
-			graphics.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
-
-		if(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias) {
-			graphics.RasterizerState.DepthBias = info->rasterizer.depthBiasConstantFactor;
-			graphics.RasterizerState.SlopeScaledDepthBias = info->rasterizer.depthBiasSlopeFactor;
+		switch(info->blendState.logicOpExt) {
+			case ELogicOpExt_Clear:			dst->LogicOp = D3D12_LOGIC_OP_CLEAR;			break;
+			case ELogicOpExt_Set:			dst->LogicOp = D3D12_LOGIC_OP_SET;				break;
+			case ELogicOpExt_Copy:			dst->LogicOp = D3D12_LOGIC_OP_COPY;				break;
+			case ELogicOpExt_CopyInvert:	dst->LogicOp = D3D12_LOGIC_OP_COPY_INVERTED;	break;
+			case ELogicOpExt_None:			dst->LogicOp = D3D12_LOGIC_OP_NOOP;				break;
+			case ELogicOpExt_Invert:		dst->LogicOp = D3D12_LOGIC_OP_INVERT;			break;
+			case ELogicOpExt_And:			dst->LogicOp = D3D12_LOGIC_OP_AND;				break;
+			case ELogicOpExt_Nand:			dst->LogicOp = D3D12_LOGIC_OP_NAND;				break;
+			case ELogicOpExt_Or:			dst->LogicOp = D3D12_LOGIC_OP_OR;				break;
+			case ELogicOpExt_Nor:			dst->LogicOp = D3D12_LOGIC_OP_NOR;				break;
+			case ELogicOpExt_Xor:			dst->LogicOp = D3D12_LOGIC_OP_XOR;				break;
+			case ELogicOpExt_Equiv:			dst->LogicOp = D3D12_LOGIC_OP_EQUIV;			break;
+			case ELogicOpExt_AndReverse:	dst->LogicOp = D3D12_LOGIC_OP_AND_REVERSE;		break;
+			case ELogicOpExt_AndInvert:		dst->LogicOp = D3D12_LOGIC_OP_AND_INVERTED;		break;
+			case ELogicOpExt_OrReverse:		dst->LogicOp = D3D12_LOGIC_OP_OR_REVERSE;		break;
+			case ELogicOpExt_OrInvert:		dst->LogicOp = D3D12_LOGIC_OP_OR_INVERTED;		break;
+			default:																		break;
 		}
+	}
 
-		if(info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp)
-			graphics.RasterizerState.DepthBiasClamp = info->rasterizer.depthBiasClamp;
+	//Init vertex + instance buffers
 
-		switch(info->rasterizer.cullMode) {
-			default:																							break;
-			case ECullMode_None:				graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;		break;
-			case ECullMode_Front:				graphics.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;		break;
-		}
+	for(U8 j = 0; j < 16; ++j) {
 
-		//Depth stencil
+		VertexAttribute attrib = info->vertexLayout.attributes[j];
 
-		graphics.DepthStencilState.BackFace = (D3D12_DEPTH_STENCILOP_DESC) {
-			.StencilFailOp = mapDxStencilOp(info->depthStencil.stencilFail),
-			.StencilDepthFailOp = mapDxStencilOp(info->depthStencil.stencilDepthFail),
-			.StencilPassOp = mapDxStencilOp(info->depthStencil.stencilPass),
-			.StencilFunc = mapDxCompareOp(info->depthStencil.stencilCompare)
+		if(!attrib.format)
+			continue;
+
+		U32 k = graphics.InputLayout.NumElements++;
+		D3D12_INPUT_ELEMENT_DESC *desc = (D3D12_INPUT_ELEMENT_DESC*) &graphics.InputLayout.pInputElementDescs[k];
+		*desc = (D3D12_INPUT_ELEMENT_DESC) {
+			.SemanticName = "TEXCOORD",		//Everything is a texcoord		TODO:
+			.SemanticIndex = j,
+			.Format = ETextureFormatId_toDXFormat(attrib.format),
+			.InputSlot = attrib.bufferId4 & 0xF,
+			.AlignedByteOffset = attrib.offset11 & 2047
 		};
 
-		graphics.DepthStencilState.FrontFace = graphics.DepthStencilState.BackFace;
-
-		//Blend state
-
-		for(U8 j = 0; j < 8; ++j) {
-
-			U8 realJ =  info->blendState.allowIndependentBlend ? j : 0;
-			D3D12_RENDER_TARGET_BLEND_DESC *dst = &graphics.BlendState.RenderTarget[j];
-			BlendStateAttachment src = info->blendState.attachments[realJ];
-
-			if(!info->blendState.enable) {
-				*dst = (D3D12_RENDER_TARGET_BLEND_DESC) { .RenderTargetWriteMask = EWriteMask_All };
-				continue;
-			}
-
-			*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
-
-				.BlendEnable			= (info->blendState.renderTargetMask >> realJ) & 1,
-				.LogicOpEnable			= (Bool)info->blendState.logicOpExt,
-				.RenderTargetWriteMask	= info->blendState.writeMask[realJ],
-
-				.BlendOp				= mapDxBlendOp(src.blendOp),
-				.SrcBlend				= mapDxBlend(src.srcBlend),
-				.DestBlend				= mapDxBlend(src.dstBlend),
-
-				.BlendOpAlpha			= mapDxBlendOp(src.blendOpAlpha),
-				.SrcBlendAlpha			= mapDxBlend(src.srcBlendAlpha),
-				.DestBlendAlpha			= mapDxBlend(src.dstBlendAlpha)
-			};
-
-			switch(info->blendState.logicOpExt) {
-				case ELogicOpExt_Clear:			dst->LogicOp = D3D12_LOGIC_OP_CLEAR;			break;
-				case ELogicOpExt_Set:			dst->LogicOp = D3D12_LOGIC_OP_SET;				break;
-				case ELogicOpExt_Copy:			dst->LogicOp = D3D12_LOGIC_OP_COPY;				break;
-				case ELogicOpExt_CopyInvert:	dst->LogicOp = D3D12_LOGIC_OP_COPY_INVERTED;	break;
-				case ELogicOpExt_None:			dst->LogicOp = D3D12_LOGIC_OP_NOOP;				break;
-				case ELogicOpExt_Invert:		dst->LogicOp = D3D12_LOGIC_OP_INVERT;			break;
-				case ELogicOpExt_And:			dst->LogicOp = D3D12_LOGIC_OP_AND;				break;
-				case ELogicOpExt_Nand:			dst->LogicOp = D3D12_LOGIC_OP_NAND;				break;
-				case ELogicOpExt_Or:			dst->LogicOp = D3D12_LOGIC_OP_OR;				break;
-				case ELogicOpExt_Nor:			dst->LogicOp = D3D12_LOGIC_OP_NOR;				break;
-				case ELogicOpExt_Xor:			dst->LogicOp = D3D12_LOGIC_OP_XOR;				break;
-				case ELogicOpExt_Equiv:			dst->LogicOp = D3D12_LOGIC_OP_EQUIV;			break;
-				case ELogicOpExt_AndReverse:	dst->LogicOp = D3D12_LOGIC_OP_AND_REVERSE;		break;
-				case ELogicOpExt_AndInvert:		dst->LogicOp = D3D12_LOGIC_OP_AND_INVERTED;		break;
-				case ELogicOpExt_OrReverse:		dst->LogicOp = D3D12_LOGIC_OP_OR_REVERSE;		break;
-				case ELogicOpExt_OrInvert:		dst->LogicOp = D3D12_LOGIC_OP_OR_INVERTED;		break;
-				default:																		break;
-			}
+		if(info->vertexLayout.bufferStrides12_isInstance1[desc->InputSlot] & (1 << 12)) {
+			desc->InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
+			desc->InstanceDataStepRate = 1;
 		}
+	}
 
-		//Init vertex + instance buffers
+	//Init topology
 
-		for(U8 j = 0; j < 16; ++j) {
+	switch(info->topologyMode) {
 
-			VertexAttribute attrib = info->vertexLayout.attributes[j];
+		case ETopologyMode_TriangleListAdj:
+		case ETopologyMode_TriangleStripAdj:
+		case ETopologyMode_TriangleStrip:
+		default:
+			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+			break;
 
-			if(!attrib.format)
-				continue;
+		case ETopologyMode_LineListAdj:
+		case ETopologyMode_LineStripAdj:
+		case ETopologyMode_LineStrip:
+		case ETopologyMode_LineList:
+			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+			break;
 
-			U32 k = graphics.InputLayout.NumElements++;
-			D3D12_INPUT_ELEMENT_DESC *desc = (D3D12_INPUT_ELEMENT_DESC*) &graphics.InputLayout.pInputElementDescs[k];
-			*desc = (D3D12_INPUT_ELEMENT_DESC) {
-				.SemanticName = "TEXCOORD",		//Everything is a texcoord
-				.SemanticIndex = j,
-				.Format = ETextureFormatId_toDXFormat(attrib.format),
-				.InputSlot = attrib.bufferId4 & 0xF,
-				.AlignedByteOffset = attrib.offset11 & 2047
-			};
+		case ETopologyMode_PointList:
+			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+			break;
+	}
 
-			if(info->vertexLayout.bufferStrides12_isInstance1[desc->InputSlot] & (1 << 12)) {
-				desc->InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
-				desc->InstanceDataStepRate = 1;
-			}
+	if(info->patchControlPoints)
+		graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+
+	//Init render targets
+
+	for(U64 j = 0; j < info->attachmentCountExt; ++j)
+		graphics.RTVFormats[j] = ETextureFormatId_toDXFormat(info->attachmentFormatsExt[j]);
+
+	//Init pipeline stages
+
+	for(U64 j = 0; j < pipeline->stages.length; ++j) {
+
+		PipelineStage stage = pipeline->stages.ptr[j];
+
+		U16 entrypointId = (U16) stage.binaryId;
+		U16 binaryId = (U16) (stage.binaryId >> 16);
+
+		SHFile binary = binaries.ptr[stage.shFileId];
+		SHBinaryInfo binj = binary.binaries.ptr[binary.entries.ptr[entrypointId].binaryIds.ptr[binaryId]];
+		Buffer bin = binj.binaries[ESHBinaryType_DXIL];
+
+		D3D12_SHADER_BYTECODE bytecode = (D3D12_SHADER_BYTECODE) {
+			.pShaderBytecode = bin.ptr,
+			.BytecodeLength = Buffer_length(bin)
+		};
+
+		switch(stage.stageType) {
+			default:							graphics.PS = bytecode;		break;
+			case EPipelineStage_Vertex:			graphics.VS = bytecode;		break;
+			case EPipelineStage_Domain:			graphics.DS = bytecode;		break;
+			case EPipelineStage_Hull:			graphics.HS = bytecode;		break;
+			case EPipelineStage_GeometryExt:	graphics.GS = bytecode;		break;
 		}
+	}
 
-		//Init topology
+	//Create
 
-		switch(info->topologyMode) {
+	ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
 
-			case ETopologyMode_TriangleListAdj:
-			case ETopologyMode_TriangleStripAdj:
-			case ETopologyMode_TriangleStrip:
-			default:
-				graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-				break;
+	gotoIfError2(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
+		deviceExt->device,
+		&graphics,
+		&IID_ID3D12PipelineState,
+		(void**) pipelinei
+	)))
 
-			case ETopologyMode_LineListAdj:
-			case ETopologyMode_LineStripAdj:
-			case ETopologyMode_LineStrip:
-			case ETopologyMode_LineList:
-				graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-				break;
-
-			case ETopologyMode_PointList:
-				graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-				break;
-		}
-
-		if(info->patchControlPoints)
-			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
-
-		//Init render targets
-
-		for(U64 j = 0; j < info->attachmentCountExt; ++j)
-			graphics.RTVFormats[j] = ETextureFormatId_toDXFormat(info->attachmentFormatsExt[j]);
-
-		//Init pipeline stages
-
-		for(U64 j = 0; j < pipeline->stages.length; ++j) {
-
-			PipelineStage stage = pipeline->stages.ptr[j];
-
-			D3D12_SHADER_BYTECODE bytecode = (D3D12_SHADER_BYTECODE) {
-				.pShaderBytecode = stage.binary.ptr,
-				.BytecodeLength = Buffer_length(stage.binary),
-			};
-
-			switch(stage.stageType) {
-				default:							graphics.PS = bytecode;		break;
-				case EPipelineStage_Vertex:			graphics.VS = bytecode;		break;
-				case EPipelineStage_Domain:			graphics.DS = bytecode;		break;
-				case EPipelineStage_Hull:			graphics.HS = bytecode;		break;
-				case EPipelineStage_GeometryExt:	graphics.GS = bytecode;		break;
-			}
-		}
-
-		//Create
-
-		ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
-
-		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
-			deviceExt->device,
-			&graphics,
-			&IID_ID3D12PipelineState,
-			(void**) pipelinei
-		)))
-
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && names.length && CharString_length(names.ptr[i])) {
-			gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp))
-			gotoIfError(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
-			ListU16_freex(&tmp);
-		}
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
+		gotoIfError2(clean, CharString_toUTF16x(name, &tmp))
+		gotoIfError2(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
 	}
 
 clean:
 	ListU16_freex(&tmp);
-	return err;
+	return s_uccess;
 }

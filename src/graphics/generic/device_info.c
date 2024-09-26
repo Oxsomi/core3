@@ -135,6 +135,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_MeshTaskTexDeriv)
 			Log_debugLnx("\t\tMesh/task shader texture derivatives");
 
+		if(feat & EGraphicsFeatures_WriteMSTexture)
+			Log_debugLnx("\t\tWrite MS texture");
+
+		if(feat & EGraphicsFeatures_Bindless)
+			Log_debugLnx("\t\tBindless");
+
 		//Data types
 
 		const U32 dat = cap.dataTypes;
@@ -193,29 +199,45 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(api == EGraphicsApi_DirectX12) {
 
+			Log_debugLnx("\tD3D12 Extensions:");
+
 			if(cap.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate)
-				Log_debugLnx("\t\tD3D12 WriteBufferImmediate");
+				Log_debugLnx("\t\tWriteBufferImmediate");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_ReBAR)
-				Log_debugLnx("\t\tD3D12 ReBAR");
+				Log_debugLnx("\t\tReBAR");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_HardwareCopyQueue)
-				Log_debugLnx("\t\tD3D12 Hardware copy queue");
+				Log_debugLnx("\t\tHardware copy queue");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_WaveSize)
-				Log_debugLnx("\t\tD3D12 WaveSize");
+				Log_debugLnx("\t\tWaveSize");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_WaveSizeMinMax)
-				Log_debugLnx("\t\tD3D12 WaveSize (min/max)");
+				Log_debugLnx("\t\tWaveSize (min/max)");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_PAQ)
-				Log_debugLnx("\t\tD3D12 PAQ (Payload Access Qualifiers)");
+				Log_debugLnx("\t\tPAQ (Payload Access Qualifiers)");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_SM6_6)
+				Log_debugLnx("\t\tShader model 6.6");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_SM6_7)
+				Log_debugLnx("\t\tShader model 6.7");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_SM6_8)
+				Log_debugLnx("\t\tShader model 6.8");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_SM6_9)
+				Log_debugLnx("\t\tShader model 6.9");
 		}
 
 		else if(api == EGraphicsApi_Vulkan) {
 
+			Log_debugLnx("\tVulkan extensions:");
+
 			if(cap.featuresExt & EVkGraphicsFeatures_PerfQuery)
-				Log_debugLnx("\t\tVulkan performance query");
+				Log_debugLnx("\t\tPerformance query");
 		}
 	}
 }

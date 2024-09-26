@@ -219,9 +219,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		HRESULT lastError = 0;
 
 		if(FAILED(lastError = D3D12CreateDevice(
-			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_12_1, &IID_ID3D12Device10, (void**) &device)
+			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_1, &IID_ID3D12Device10, (void**) &device)
 		)) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 12.1", i);
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 11.1", i);
 			goto next;
 		}
 
@@ -235,8 +235,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend | EGraphicsFeatures_Multiview;
 
 		caps.dataTypes |=
-			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
-			EGraphicsDataTypes_BCn;
+			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x;
 
 		if(vendorId != EGraphicsVendorId_AMD)
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
@@ -257,6 +256,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		D3D12_FEATURE_DATA_D3D12_OPTIONS8 opt8 = (D3D12_FEATURE_DATA_D3D12_OPTIONS8) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS9 opt9 = (D3D12_FEATURE_DATA_D3D12_OPTIONS9) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS12 opt12 = (D3D12_FEATURE_DATA_D3D12_OPTIONS12) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS14 opt14 = (D3D12_FEATURE_DATA_D3D12_OPTIONS14) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS16 opt16 = (D3D12_FEATURE_DATA_D3D12_OPTIONS16) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS21 opt21 = (D3D12_FEATURE_DATA_D3D12_OPTIONS21) { 0 };
 
@@ -266,7 +266,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &opt0, sizeof(opt0))) ||
-			opt0.TiledResourcesTier < D3D12_TILED_RESOURCES_TIER_3 ||
 			!opt0.TypedUAVLoadAdditionalFormats ||
 			!opt0.OutputMergerLogicOp ||
 			!opt0.ROVsSupported ||
@@ -275,6 +274,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS", i);
 			goto next;
 		}
+
+		if(opt0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3)
+			caps.features |= EGraphicsFeatures_Bindless;
 
 		if(opt0.DoublePrecisionFloatShaderOps)
 			caps.dataTypes |= EGraphicsDataTypes_F64;
@@ -288,7 +290,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		}
 
 		if(opt1.WaveLaneCountMin < 4 || opt1.WaveLaneCountMax > 128) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", subgroup size is not in range 16-128!", i);
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", subgroup size is not in range 4-128!", i);
 			goto next;
 		}
 
@@ -352,16 +354,22 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		}
 
 		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS21, &opt21, sizeof(opt21))) &&
-			opt21.WorkGraphsTier >= D3D12_WORK_GRAPHS_TIER_1_0
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS14, &opt14, sizeof(opt14))) &&
+			opt14.WriteableMSAATexturesSupported
 		)
-			caps.features |= EGraphicsFeatures_Workgraphs;
+			caps.features |= EGraphicsFeatures_WriteMSTexture;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS16, &opt16, sizeof(opt16))) &&
 			opt16.GPUUploadHeapSupported
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_ReBAR;
+
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS21, &opt21, sizeof(opt21))) &&
+			opt21.WorkGraphsTier >= D3D12_WORK_GRAPHS_TIER_1_0
+		)
+			caps.features |= EGraphicsFeatures_Workgraphs;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_HARDWARE_COPY, &hwCopy, sizeof(hwCopy))) &&
@@ -377,13 +385,21 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_6;
 		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
-			caps.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ;
+			caps.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ | EDxGraphicsFeatures_SM6_6;
 			caps.features |= EGraphicsFeatures_ComputeDeriv;
 		}
 
+		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_7;
+		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+			caps.featuresExt |= EDxGraphicsFeatures_SM6_7;
+
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_8;
 		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
-			caps.featuresExt |= EDxGraphicsFeatures_WaveSizeMinMax;
+			caps.featuresExt |= EDxGraphicsFeatures_WaveSizeMinMax | EDxGraphicsFeatures_SM6_8;
+
+		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_9;
+		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+			caps.featuresExt |= EDxGraphicsFeatures_SM6_9;
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);

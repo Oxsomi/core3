@@ -1026,10 +1026,9 @@ tempBuffers[0] = tempBuffers[1] = tempBuffers[2] = Buffer_createNull();
 
 ## Shader binary types
 
-In OxC3 graphics, either the application or the OxC3 baker is responsible for compiling and providing binaries in the right formats. According to OxC3 graphics, the shaders are just a buffer, so they can contain anything (text or binary). Down here is a list of the expected inputs for each graphics API if the developer wishes to sidestep the baking process:
+In OxC3 graphics, either the application or the OxC3 baker (or the OxC3 compiler) is responsible for compiling and providing binaries in the right formats. According to OxC3 graphics, the shaders are just a Buffer that contain an oiSH file. This oiSH file should include one of the following compile types:
 
 - DirectX12: DXIL (binary).
-  - HLSL Semantics can only be TEXCOORDi where i < 16. This maps directly to the binding.
 - Vulkan: SPIR-V (binary).
   - HLSL Entrypoint needs to be remapped to main, except for raytracing shaders.
 - Metal: MSL (UTF8 text).
@@ -1037,10 +1036,10 @@ In OxC3 graphics, either the application or the OxC3 baker is responsible for co
 
 With the following limitations:
 
-- The resources require bindless to function, so shaders should use this as well. When using resources, resources.hlsl has to be included (the compiler automatically includes it). This file can be found in src/graphics/shaders.
+- The resources require bindless to function, so shaders should use this as well. When using resources, resources.hlsl has to be included (the compiler automatically includes it). This file can be found in inc/shader_compiler/shaders.
   - types.hlsl also defines all HLSL types as OxC3 types, to ensure it could be cross compiled to GLSL in the future (since GLSL has some features that HLSL might not support, such as HW RT motion blur). Using these predefined types are fully optional if HLSL is the final target (Vulkan + D3D12), though it is recommended to use them to avoid getting stuck to one shading language.
 
-The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiCS Oxsomi Compiled Shader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
+The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiSH Oxsomi SHader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
 
 When using the baker, the binaries can simply be loaded using the oiCS helper functions and passed to the pipeline creation, as they will only contain one binary.
 

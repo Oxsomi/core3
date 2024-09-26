@@ -308,11 +308,11 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 ## List of DirectX12 requirements
 
-- DirectX12 Feature level 12_1.
+- DirectX12 Feature level 11_1.
   - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
   - DXGI feature PRESENT_ALLOW_TEARING.
 - The following features:
-  - Tiled resource tier 3.
+  - Tiled resource tier 1 (Bindful) or 3 (Bindless).
   - Conservative rasterization tier 2.
   - Rasterizer-ordered views.
   - waveSize of 4 to 128.
@@ -340,7 +340,8 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 #### Extensions in DirectX and NVAPI
 
-- Bindless is almost always supported, but if it's not then it's required to use resource binding tier 1 (11.1+ of 64 UAVs, 128 SRVs).
+- Bindless is almost always supported (Resource binding tier 3), but if it's not then it's required to use resource binding tier 1 (11.1+ of 64 UAVs, 128 SRVs).
+- Writeable MSAA textures as EGraphicsFeatures_WriteMSTexture.
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP as EGraphicsFeatures_RayMicromapOpacity.
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP as EGraphicsFeatures_RayMicromapDisplacement.
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING as EGraphicsFeatures_RayReorder.
@@ -355,20 +356,23 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - For format RGB32(u/i) to be enabled, it has to support render target.
 - For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
 - AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
-- ShaderModel 6.6 support as WaveSize, PAQ and ComputeDeriv.
-- ShaderModel 6.8 support as WaveSizeMinMax.
 - DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
+- ShaderModel 6.6 support as ComputeDeriv.
 
 #### DirectX12 specific extensions
 
 There are specific extensions that are not relevant to other extensions, hence they've not been added to the standard extensions and have instead become API specific extensions.
 
 - GPUUploadHeapSupported as ReBAR.
-- D3D12_FEATURE_DATA_HARDWARE_COPY.Supported as CopyQueue.
+- WriteBufferImmediateSupportFlags as WriteBufferIntermediate.
+- D3D12_FEATURE_DATA_HARDWARE_COPY.Supported as HardwareCopyQueue.
+- ShaderModel 6.6 support as WaveSize and PAQ.
+- ShaderModel 6.8 support as WaveSizeMinMax.
+- ShaderModel 6.6 to 6.9 as SM6_6 and SM6_9 respectively. To distance features and shader models a bit.
 
 ## List of Metal requirements
 
-- Metal 3 (Apple7 tier). Argument buffers tier 2.
+- Metal 3 (Apple7 tier). Argument buffers tier 2 (Bindless), otherwise no such requirement.
 - Phone:
   - Apple iPhone 12 (A14, Apple7).
 - Laptop:

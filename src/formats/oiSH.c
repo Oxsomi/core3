@@ -34,6 +34,7 @@ TListImpl(SHEntryRuntime);
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
 TListImpl(SHInclude);
+TListImpl(SHFile);
 
 static const U8 SHHeader_V1_2 = 2;
 

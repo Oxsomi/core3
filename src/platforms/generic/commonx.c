@@ -112,6 +112,7 @@ TListXImpl(SHEntry);
 TListXImpl(SHEntryRuntime);
 TListXImpl(SHBinaryInfo);
 TListXImpl(SHBinaryIdentifier);
+TListXImpl(SHFile);
 
 TListXBaseImpl(ListThread);
 

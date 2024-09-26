@@ -139,7 +139,7 @@ Error GraphicsDevice_initExt(
 	)))
 
 	gotoIfError(clean, dxCheck(D3D12CreateDevice(
-		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_12_1,
+		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_1,
 		&IID_ID3D12Device10, (void**) &deviceExt->device
 	)))
 

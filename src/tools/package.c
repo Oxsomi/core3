@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx.h"
 #include "types/buffer.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
@@ -32,6 +33,7 @@
 typedef struct CAFileRecursion {
 	Archive *archive;
 	CharString root;
+	ListCharString shaders;
 } CAFileRecursion;
 
 Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
@@ -51,6 +53,11 @@ Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 		gotoIfError3(clean, File_read(file.path, 1 * SECOND, &entry.data, e_rr))
 
 	if (file.type == EFileType_File) {
+
+		if (CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsl"), 0)) {
+			gotoIfError2(clean, ListCharString_pushBackx(&caFile->shaders, entry.path))
+			goto clean;
+		}
 
 		//We have to detect file type and process it here to a custom type.
 		//We don't have a custom file yet, so for now
@@ -155,6 +162,8 @@ Bool CLI_package(ParsedArgs args) {
 		true,
 		e_rr
 	))
+
+	//Convert shaders
 
 	//Convert to CAFile and write to file
 

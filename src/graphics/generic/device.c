@@ -30,6 +30,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "formats/oiSH.h"
 #include "types/time.h"
 
 TListNamedImpl(ListSpinLockPtr);
@@ -280,6 +281,91 @@ clean:
 		GraphicsDeviceRef_dec(deviceRef);
 
 	return err;
+}
+
+Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinaryInfo bin, SHEntry entry, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_checkShaderFeatures()::deviceRef is required"))
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	ESHExtension extensions = bin.identifier.extensions;
+
+	EGraphicsFeatures features = EGraphicsFeatures_None;
+	EDxGraphicsFeatures featuresDx = EDxGraphicsFeatures_None;
+	EGraphicsDataTypes dataTypes = EGraphicsDataTypes_None;
+
+	if(extensions & ESHExtension_SubgroupArithmetic)		features |= EGraphicsFeatures_SubgroupArithmetic;
+	if(extensions & ESHExtension_SubgroupShuffle)			features |= EGraphicsFeatures_SubgroupShuffle;
+
+	if(extensions & ESHExtension_Multiview)					features |= EGraphicsFeatures_Multiview;
+
+	if(extensions & ESHExtension_RayQuery)					features |= EGraphicsFeatures_RayQuery;
+	if(extensions & ESHExtension_RayMicromapOpacity)		features |= EGraphicsFeatures_RayMicromapOpacity;
+	if(extensions & ESHExtension_RayMicromapDisplacement)	features |= EGraphicsFeatures_RayMicromapDisplacement;
+	if(extensions & ESHExtension_RayMotionBlur)				features |= EGraphicsFeatures_RayMotionBlur;
+	if(extensions & ESHExtension_RayReorder)				features |= EGraphicsFeatures_RayReorder;
+
+	if(extensions & ESHExtension_ComputeDeriv)				features |= EGraphicsFeatures_ComputeDeriv;
+	if(extensions & ESHExtension_MeshTaskTexDeriv)			features |= EGraphicsFeatures_MeshTaskTexDeriv;
+
+	if(extensions & ESHExtension_WriteMSTexture)			features |= EGraphicsFeatures_WriteMSTexture;
+
+	if(extensions & ESHExtension_Bindless)					features |= EGraphicsFeatures_Bindless;
+
+	if(extensions & ESHExtension_F64)						dataTypes |= EGraphicsDataTypes_F64;
+	if(extensions & ESHExtension_I64)						dataTypes |= EGraphicsDataTypes_I64;
+
+	if(extensions & ESHExtension_16BitTypes)				dataTypes |= EGraphicsDataTypes_I16 | EGraphicsDataTypes_F16;
+
+	if(extensions & ESHExtension_AtomicI64)					dataTypes |= EGraphicsDataTypes_AtomicI64;
+	if(extensions & ESHExtension_AtomicF32)					dataTypes |= EGraphicsDataTypes_AtomicF32;
+	if(extensions & ESHExtension_AtomicF64)					dataTypes |= EGraphicsDataTypes_AtomicF64;
+
+	if(extensions & ESHExtension_PAQ)						featuresDx |= EDxGraphicsFeatures_PAQ;
+
+	if ((bin.identifier.shaderVersion >> 8) == 6)			//Check shader model compatibility
+		switch ((U8) bin.identifier.shaderVersion) {
+			case 6:											featuresDx |= EDxGraphicsFeatures_SM6_6;	break;
+			case 7:											featuresDx |= EDxGraphicsFeatures_SM6_7;	break;
+			case 8:											featuresDx |= EDxGraphicsFeatures_SM6_8;	break;
+			case 9:											featuresDx |= EDxGraphicsFeatures_SM6_9;	break;
+			default:																					break;
+		}
+
+	if(entry.waveSize >> 4)									featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
+	else if(entry.waveSize)									featuresDx |= EDxGraphicsFeatures_WaveSize;
+
+	if((device->info.capabilities.features & features) != features)
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"))
+
+	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"))
+
+	if(!((bin.vendorMask >> device->info.vendor) & 1))
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"))
+
+	//Check for DX12 features, shader models and DXIL
+
+	if(GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_DirectX12) {
+
+		if((device->info.capabilities.featuresExt & (U32)featuresDx) != (U32)featuresDx)
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the featuresDx is missing"))
+
+		if(!Buffer_length(bin.binaries[ESHBinaryType_DXIL]))
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() DXIL binary is missing"))
+	}
+
+	//Check for SPIRV
+
+	else if(!Buffer_length(bin.binaries[ESHBinaryType_SPIRV]))
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() SPIRV binary is missing"))
+
+clean:
+	return s_uccess;
 }
 
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource) {
