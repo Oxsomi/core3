@@ -109,7 +109,8 @@ Error GraphicsDevice_initExt(
 
 		.fillModeNonSolid = (Bool)(feat & EGraphicsFeatures_Wireframe),
 		.logicOp = (Bool)(feat & EGraphicsFeatures_LogicOp),
-		.dualSrcBlend = (Bool)(feat & EGraphicsFeatures_DualSrcBlend)
+		.dualSrcBlend = (Bool)(feat & EGraphicsFeatures_DualSrcBlend),
+		.shaderStorageImageMultisample = (Bool)(feat & EGraphicsFeatures_WriteMSTexture)
 	};
 
 	VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {

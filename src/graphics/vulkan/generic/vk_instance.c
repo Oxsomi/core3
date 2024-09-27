@@ -910,6 +910,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		if(features.dualSrcBlend)
 			capabilities.features |= EGraphicsFeatures_DualSrcBlend;
 
+		if(features.shaderStorageImageMultisample)
+			capabilities.features |= EGraphicsFeatures_WriteMSTexture;
+
 		if(features.fillModeNonSolid)
 			capabilities.features |= EGraphicsFeatures_Wireframe;
 
@@ -1233,24 +1236,41 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		if(allMSAA & VK_SAMPLE_COUNT_8_BIT)
 			capabilities.dataTypes |= EGraphicsDataTypes_MSAA8x;
 
-		//Enforce support for bindless
+		//Enforce support for the least descriptors
 
 		if(
-			limits.maxPerStageDescriptorSamplers < 2 * KIBI ||
-			limits.maxPerStageDescriptorUniformBuffers < 1 ||
-			limits.maxPerStageDescriptorStorageBuffers < 500 * KIBI - 1 ||
-			limits.maxPerStageDescriptorSampledImages < 250 * KIBI ||
-			limits.maxPerStageDescriptorStorageImages < 250 * KIBI ||
-			limits.maxPerStageResources < MEGA ||
-			limits.maxDescriptorSetSamplers < 2 * KIBI ||
-			limits.maxDescriptorSetUniformBuffers < 1 ||
-			limits.maxDescriptorSetStorageBuffers < 500 * KIBI - 1 ||
-			limits.maxDescriptorSetSampledImages < 250 * KIBI ||
-			limits.maxDescriptorSetStorageImages < 250 * KIBI
+			limits.maxPerStageDescriptorSamplers < 16 ||
+			limits.maxPerStageDescriptorUniformBuffers < 12 ||
+			limits.maxPerStageDescriptorStorageBuffers < 8 ||
+			limits.maxPerStageDescriptorSampledImages < 16 ||
+			limits.maxPerStageDescriptorStorageImages < 4 ||
+			limits.maxPerStageResources < 44 ||
+			limits.maxDescriptorSetSamplers < 80 ||
+			limits.maxDescriptorSetUniformBuffers < 72 ||
+			limits.maxDescriptorSetStorageBuffers < 24 ||
+			limits.maxDescriptorSetSampledImages < 96 ||
+			limits.maxDescriptorSetStorageImages < 24
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", graphics binding tier not supported!", i);
 			continue;
 		}
+
+		//Hopefully enable bindless
+
+		if(
+			limits.maxPerStageDescriptorSamplers >= 2 * KIBI &&
+			limits.maxPerStageDescriptorUniformBuffers >= 12 &&
+			limits.maxPerStageDescriptorStorageBuffers >= 500 * KIBI &&
+			limits.maxPerStageDescriptorSampledImages >= 250 * KIBI &&
+			limits.maxPerStageDescriptorStorageImages >= 250 * KIBI &&
+			limits.maxPerStageResources >= MEGA &&
+			limits.maxDescriptorSetSamplers >= 2 * KIBI &&
+			limits.maxDescriptorSetUniformBuffers >= 12 &&
+			limits.maxDescriptorSetStorageBuffers >= 500 * KIBI &&
+			limits.maxDescriptorSetSampledImages >= 250 * KIBI &&
+			limits.maxDescriptorSetStorageImages >= 250 * KIBI
+		)
+			capabilities.features |= EGraphicsFeatures_Bindless;
 
 		//Enforce format support
 		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.

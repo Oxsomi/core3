@@ -1067,6 +1067,7 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			break;
 
 		case SpvCapabilityImageMSArray:
+		case SpvCapabilityStorageImageMultisample:
 			ext = ESHExtension_WriteMSTexture;
 			break;
 
@@ -1298,7 +1299,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilitySampleRateShading:
 
 		case SpvCapabilityImageGatherExtended:
-		case SpvCapabilityStorageImageMultisample:
 		case SpvCapabilityClipDistance:
 		case SpvCapabilityCullDistance:
 

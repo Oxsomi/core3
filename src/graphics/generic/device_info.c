@@ -61,7 +61,8 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		const U32 feat = cap.features;
 
-		Log_debugLnx("\tFeatures:");
+		if(feat)
+			Log_debugLnx("\tFeatures:");
 
 		if(feat & EGraphicsFeatures_DirectRendering)
 			Log_debugLnx("\t\tDirect rendering");
@@ -145,7 +146,8 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		const U32 dat = cap.dataTypes;
 
-		Log_debugLnx("\tData types:");
+		if(dat)
+			Log_debugLnx("\tData types:");
 
 		if(dat & EGraphicsDataTypes_F64)
 			Log_debugLnx("\t\t64-bit floats");
@@ -199,7 +201,8 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(api == EGraphicsApi_DirectX12) {
 
-			Log_debugLnx("\tD3D12 Extensions:");
+			if(cap.featuresExt)
+				Log_debugLnx("\tD3D12 Extensions:");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_WriteBufferImmediate)
 				Log_debugLnx("\t\tWriteBufferImmediate");
@@ -234,7 +237,8 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		else if(api == EGraphicsApi_Vulkan) {
 
-			Log_debugLnx("\tVulkan extensions:");
+			if(cap.featuresExt)
+				Log_debugLnx("\tVulkan extensions:");
 
 			if(cap.featuresExt & EVkGraphicsFeatures_PerfQuery)
 				Log_debugLnx("\t\tPerformance query");
