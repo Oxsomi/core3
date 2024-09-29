@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.001"
+	version = "0.2.003"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -178,6 +178,8 @@ class oxc3(ConanFile):
 			self.cpp_info.system_libs = [ "m" ]
 
 		vulkan = False
+		
+		self.cpp_info.libs = collect_libs(self)
 
 		if self.settings.os != "Windows":
 			self.cpp_info.libs += [ "vulkan" ]
@@ -201,5 +203,3 @@ class oxc3(ConanFile):
 		self.cpp_info.set_property("cmake_target_name", "oxc3::oxc3")
 		self.cpp_info.set_property("pkg_config_name", "oxc3")
 		self.cpp_info.set_property("cmake_build_modules", [os.path.join("cmake", "oxc3.cmake")])
-		
-		self.cpp_info.libs += collect_libs(self)

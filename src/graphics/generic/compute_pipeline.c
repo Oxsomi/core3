@@ -99,7 +99,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
 
 	gotoIfError2(clean, ListPipelineStage_resizex(&pipelinePtr->stages, 1))
-	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute };
+	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute, .binaryId = entryId };
 
 	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, pipelinePtr, binary, e_rr))
 

@@ -31,6 +31,10 @@
 #include "formats/oiCA.h"
 #include "cli.h"
 
+#ifdef CLI_SHADER_COMPILER
+	#include "shader_compiler/compiler.h"
+#endif
+
 typedef struct CAFileRecursion {
 	Archive *archive;
 	CharString root;
@@ -73,8 +77,6 @@ clean:
 	Buffer_freex(&entry.data);
 	return s_uccess;
 }
-
-typedef enum ECompilerWarning ECompilerWarning;
 
 Bool CLI_package(ParsedArgs args) {
 

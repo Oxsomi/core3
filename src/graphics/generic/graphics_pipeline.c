@@ -448,7 +448,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	*stages = (ListPipelineStage) { 0 };
 
-	for (U64 i = 0; i < stages->length; ++i) {
+	for (U64 i = 0; i < pipelinePtr->stages.length; ++i) {
 
 		PipelineStage *stage = &pipelinePtr->stages.ptrNonConst[i];
 		SHFile binary = binaries.ptr[stage->shFileId];
