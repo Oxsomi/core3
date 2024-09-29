@@ -226,14 +226,12 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 	if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullIntersection)
 		flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_INTERSECTION_SHADERS_BIT_KHR;
 
-	U32 groupCount = (U32) groups.length;
-
 	VkRayTracingPipelineCreateInfoKHR info = (VkRayTracingPipelineCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR,
 		.flags = flags,
 		.stageCount = (U32) stageCount,
 		.pStages = stages.ptr,
-		.groupCount = (U32) groupCount,
+		.groupCount = (U32) groupCounter,
 		.pGroups = groups.ptr,
 		.maxPipelineRayRecursionDepth = rtPipeline->maxRecursionDepth,
 		.layout = deviceExt->defaultLayout
@@ -277,20 +275,20 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 		deviceExt->device,
 		*Pipeline_ext(pipeline, Vk),
 		0,
-		groupCount,
-		raytracingShaderIdSize * groupCount,
+		groupCounter,
+		raytracingShaderIdSize * groupCounter,
 		shaderHandles.ptrNonConst
 	)))
 
 	//Fix SBT alignment
 
-	for(U64 j = 0; j < groupCount; ++j) {
+	for(U64 j = 0; j < groupCounter; ++j) {
 
 		//Remap raygen, miss and callable shaders to be next to eachother
 
 		U64 groupId = j;
 
-		if (j >= groupCount)
+		if (j >= hitGroupCount)
 			for (U64 k = 0; k < stageCounter; ++k) {
 
 				PipelineStage stage = pipeline->stages.ptr[k];
@@ -298,7 +296,7 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 				if (stage.groupId != groupId)		//TODO: Better search
 					continue;
 
-				groupId = groupCount;
+				groupId = hitGroupCount;
 
 				if (stage.stageType != EPipelineStage_MissExt) {
 
