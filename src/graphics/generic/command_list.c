@@ -409,7 +409,7 @@ Error CommandListRef_transitionRTAS(
 	RTAS rtas = isTLAS ? TLASRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base;
 	Error err = Error_none();
 
-	if(stage == EPipelineStage_RTASBuild) {
+	if(stage == EPipelineStage_RTASBuild && type == ETransitionType_ShaderWrite) {
 
 		if(rtas.tempScratchBuffer)
 			gotoIfError(clean, CommandListRef_transitionBuffer(
