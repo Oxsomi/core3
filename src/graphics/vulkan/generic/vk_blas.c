@@ -154,10 +154,6 @@ Error BLAS_initExt(BLAS *blas) {
 	if(blas->base.parent)
 		blasExt->geometries.srcAccelerationStructure = BLAS_ext(BLASRef_ptr(blas->base.parent), Vk)->as;
 
-	blasExt->geometries.scratchData = (VkDeviceOrHostAddressKHR) {
-		.deviceAddress = DeviceBufferRef_ptr(blas->base.tempScratchBuffer)->resource.deviceAddress
-	};
-
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
 		blasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
 
@@ -209,6 +205,10 @@ Error BLAS_initExt(BLAS *blas) {
 
 	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &blasExt->as)))
 	blasExt->geometries.dstAccelerationStructure = blasExt->as;
+
+	blasExt->geometries.scratchData = (VkDeviceOrHostAddressKHR) {
+		.deviceAddress = DeviceBufferRef_ptr(blas->base.tempScratchBuffer)->resource.deviceAddress
+	};
 
 clean:
 	return err;
