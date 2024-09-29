@@ -264,21 +264,21 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 		//Validate pipeline type
 
-		if(group.anyHit != U32_MAX && tmpStages.ptr[group.anyHit + i].stageType != EPipelineStage_AnyHitExt)
+		if(group.anyHit != U32_MAX && tmpStages.ptr[group.anyHit].stageType != EPipelineStage_AnyHitExt)
 			retError(clean, Error_invalidParameter(
 				1, 0,
 				"GraphicsDeviceRef_createPipelineRaytracing()::groups[i].anyHit pointed to "
 				"the wrong pipeline stage"
 			))
 
-		if(group.closestHit != U32_MAX && tmpStages.ptr[group.closestHit + i].stageType != EPipelineStage_ClosestHitExt)
+		if(group.closestHit != U32_MAX && tmpStages.ptr[group.closestHit].stageType != EPipelineStage_ClosestHitExt)
 			retError(clean, Error_invalidParameter(
 				1, 0,
 				"GraphicsDeviceRef_createPipelineRaytracing()::groups[i].closestHit pointed to "
 				"the wrong pipeline stage"
 			))
 
-		if(group.intersection != U32_MAX && tmpStages.ptr[group.intersection + i].stageType != EPipelineStage_IntersectionExt)
+		if(group.intersection != U32_MAX && tmpStages.ptr[group.intersection].stageType != EPipelineStage_IntersectionExt)
 			retError(clean, Error_invalidParameter(
 				1, 0,
 				"GraphicsDeviceRef_createPipelineRaytracing()::groups[i].intersection pointed to "

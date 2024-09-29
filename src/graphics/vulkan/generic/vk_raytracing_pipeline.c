@@ -276,7 +276,7 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 
 	gotoIfError2(clean, vkCheck(instanceExt->getRayTracingShaderGroupHandles(
 		deviceExt->device,
-		pipelineHandle,
+		*Pipeline_ext(pipeline, Vk),
 		0,
 		groupCount,
 		raytracingShaderIdSize * groupCount,
