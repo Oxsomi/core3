@@ -934,9 +934,9 @@
 		return compileModeU64 != U64_MAX;
 	}
 
-	ECompileWarning CLI_getExtraWarnings(ParsedArgs args) {
+	ECompilerWarning CLI_getExtraWarnings(ParsedArgs args) {
 
-		ECompileWarning extraWarnings = ECompilerWarning_None;
+		ECompilerWarning extraWarnings = ECompilerWarning_None;
 
 		if(args.flags & EOperationFlags_CompilerWarnings) {
 
@@ -1117,7 +1117,7 @@
 		ListU8 allCompileOutputs,
 		U32 threadCount,
 		Bool isDebug,
-		ECompileWarning extraWarnings,
+		ECompilerWarning extraWarnings,
 		Bool ignoreEmptyFiles,
 		ECompileType compileType,
 		CharString includeDir,

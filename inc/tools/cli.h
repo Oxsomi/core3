@@ -91,7 +91,7 @@ typedef enum ECompileType {
 
 	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes);
 	Bool CLI_parseThreads(ParsedArgs args, U32 *threadCount, U32 defaultThreadCount);
-	ECompileWarning CLI_getExtraWarnings(ParsedArgs args);
+	ECompilerWarning CLI_getExtraWarnings(ParsedArgs args);
 	Bool CLI_getCompileTargetsFromFile(
 		CharString input,
 		ECompileType compileType,
@@ -113,7 +113,7 @@ typedef enum ECompileType {
 		ListU8 allCompileOutputs,
 		U32 threadCount,
 		Bool isDebug,
-		ECompileWarning extraWarnings,
+		ECompilerWarning extraWarnings,
 		Bool ignoreEmptyFiles,
 		ECompileType type,
 		CharString includeDir,			//Optional
