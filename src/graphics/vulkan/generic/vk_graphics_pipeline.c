@@ -521,6 +521,7 @@ Bool GraphicsDevice_createPipelineGraphicsExt(
 	currentInfo = (VkGraphicsPipelineCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = dynamicRendering.sType ? &dynamicRendering : NULL,
+		.stageCount = (U32) stages.length,
 		.pStages = stages.ptr,
 		.pVertexInputState = &vertexInput,
 		.pInputAssemblyState = &assembly,

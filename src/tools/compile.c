@@ -1036,7 +1036,7 @@
 				output ? (int)U64_min(
 					CharString_length(*output),
 					CharString_findLastStringInsensitive(*output, CharString_createRefCStrConst(".hlsl"), 0, 0)
-				) : (sizeof("output") - 1),
+				) : (int)(sizeof("output") - 1),
 				output ? output->ptr : "output",
 				compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
 					compileType == ECompileType_Includes || compileType == ECompileType_Symbols ? txtSuffix :

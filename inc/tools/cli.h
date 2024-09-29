@@ -21,6 +21,10 @@
 #pragma once
 #include "operations.h"
 
+#ifdef CLI_SHADER_COMPILER
+	#include "shader_compiler/compiler.h"
+#endif
+
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -75,8 +79,6 @@ Bool CLI_inspectHeader(ParsedArgs args);
 Bool CLI_inspectData(ParsedArgs args);
 
 Bool CLI_package(ParsedArgs args);
-
-typedef enum ECompileWarning ECompileWarning;
 
 typedef enum ECompileType {
 	ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
