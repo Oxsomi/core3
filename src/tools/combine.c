@@ -55,13 +55,12 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	//Get inputs and output
 
-	U64 offset = 0;
-	gotoIfError2(clean, ListCharString_get(args.args, offset++, &inputArg))
+	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg))
 	
 	CharString outputArg = CharString_createNull();
 	CharString inputArg2 = CharString_createNull();
 
-	gotoIfError2(clean, ListCharString_get(args.args, offset++, &outputArg))
+	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputArg))
 	
 	//Parse encryption key
 
@@ -101,7 +100,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	//Parse input2
 
-	gotoIfError2(clean, ListCharString_get(args.args, offset++, &inputArg2))
+	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_Input2Shift, &inputArg2))
 
 	//Read input buffers
 

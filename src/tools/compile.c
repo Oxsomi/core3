@@ -30,18 +30,11 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/threadx.h"
 #include "platforms/ext/formatx.h"
+#include "platforms/ext/errorx.h"
 #include "shader_compiler/compiler.h"
 #include "cli.h"
 
 #ifdef CLI_SHADER_COMPILER
-
-	typedef enum ECompileType {
-		ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
-		ECompileType_Includes,			//Turns shader with includes into a list of their dependencies (direct + indirect)
-		ECompileType_Reflect,			//Reflects all shader info (//TODO:)
-		ECompileType_Compile,			//Compile all shaders into an oiSH file for consumption
-		ECompileType_Symbols			//List all symbols located in the shader or include as a text file
-	} ECompileType;
 
 	typedef struct ShaderFileRecursion {
 
@@ -180,7 +173,7 @@
 	Bool CLI_precompileShaderSingle(
 		Compiler compiler,
 		ESHBinaryType binaryType,
-		ParsedArgs args,
+		Bool isDebug,
 		CharString inputPath,
 		CharString input,
 		CharString outputPath,
@@ -190,8 +183,6 @@
 	) {
 
 		Bool isPreprocess = compileType == ECompileType_Preprocess || compileType == ECompileType_Includes;
-
-		Bool isDebug = args.flags & EOperationFlags_Debug;
 
 		CompilerSettings settings = (CompilerSettings) {
 			.string = input,
@@ -392,7 +383,7 @@
 	Bool CLI_compileShaderSingle(
 		Compiler compiler,
 		ESHBinaryType binaryType,
-		ParsedArgs args,
+		Bool isDebug,
 		CharString inputPath,
 		CharString input,
 		CompileResult *dest,
@@ -415,7 +406,7 @@
 		CompilerSettings settings = (CompilerSettings) {
 			.string = input,
 			.path = inputPath,
-			.debug = (Bool) (args.flags & EOperationFlags_Debug),
+			.debug = isDebug,
 			.format = ECompilerFormat_HLSL,
 			.outputType = binaryType,
 			.infoAboutIncludes = true,		//Required to supply oiSH info about includes
@@ -488,8 +479,6 @@
 
 	typedef struct CompilerJobScheduler {
 
-		ParsedArgs args;
-
 		ListCharString inputPaths;
 		ListCharString inputData;
 		ListCharString outputPaths;
@@ -508,6 +497,10 @@
 		Bool *success;
 
 		ECompileType compileType;
+		Bool isDebug;
+		Bool ignoreEmptyFiles;
+		U8 padding[2];
+
 		CharString includeDir;
 
 	} CompilerJobScheduler;
@@ -577,7 +570,7 @@
 						}
 					}
 
-					else if(!(job->args.flags & EOperationFlags_IgnoreEmptyFiles)) {
+					else if(!job->ignoreEmptyFiles) {
 
 						Log_errorLnx(
 							"Precompile couldn't find entrypoints for file \"%.*s\"",
@@ -622,7 +615,7 @@
 			if(!CLI_precompileShaderSingle(
 				job->compilers.ptr[threadCounter],
 				job->compileModes.ptr[ourJobId],
-				job->args,
+				job->isDebug,
 				input,
 				job->inputData.ptr[ourJobId],
 				job->outputPaths.ptr[ourJobId],
@@ -709,7 +702,7 @@
 				if(!CLI_compileShaderSingle(
 					job->compilers.ptr[threadCounter],
 					job->compileModes.ptr[ourOldJobId],
-					job->args,
+					job->isDebug,
 					input,
 					job->inputData.ptr[ourOldJobId],
 					&tmp,
@@ -837,326 +830,113 @@
 		return s_uccess;
 	}
 
-	Bool CLI_compileShader(ParsedArgs args) {
+	Bool CLI_parseThreads(ParsedArgs args, U32 *threadCount, U32 defaultThreadCount) {
 
-		ECompileType compileType = ECompileType_Compile;
+		if(!threadCount)
+			return false;
 
-		//Get input
+		U32 maxThreads = Platform_instance.threads;
 
-		U64 offset = 0;
+		if(!(args.parameters & EOperationHasParameter_ThreadCount)) {
+			*threadCount = !defaultThreadCount ? maxThreads : defaultThreadCount;
+			return true;
+		}
 
-		CharString input = (CharString) { 0 };
-		CharString output = (CharString) { 0 };
+		CharString str = (CharString) { 0 };
+		if(ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &str).genericError)
+			return false;
+		
+		if(CharString_endsWithSensitive(str, '%', 0)) {					//-threads 50%
 
-		U64 compileModeU64 = 0;
-		CharString compileMode = (CharString) { 0 };
+			CharString number = CharString_createRefSizedConst(str.ptr, CharString_length(str) - 1, false);
+			F64 num = 0;
+
+			if (!CharString_parseDouble(number, &num) || num < 0 || num > 100) {
+				Log_errorLnx("Couldn't parse -threads x%, x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1");
+				return false;
+			}
+
+			*threadCount = (U32) F64_max(1, maxThreads * num / 100);
+			return true;
+		}
+
+		//-threads x
+
+		U64 num = 0;
+		if (!CharString_parseU64(str, &num) || num > maxThreads) {
+			Log_errorLnx("Couldn't parse -threads x, where x is expected to be a F64 of (0-100)% or 0 -> threadCount - 1");
+			return false;
+		}
+
+		*threadCount = (U32)num == 0 ? maxThreads : (U32)num;
+		return true;
+	}
+
+	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes) {
+
+		if(!maskBinaryType || !multipleModes)
+			return false;
+
+		if(!(args.parameters & EOperationHasParameter_ShaderOutputMode)) {
+			*multipleModes = true;
+			*maskBinaryType = (1 << ESHBinaryType_Count) - 1; 
+			return true;
+		}
+
+		CharString compileMode = CharString_createNull();
+		if(ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &compileMode).genericError)
+			return false;
 
 		ListCharString splits = (ListCharString) { 0 };
+		
+		if(CharString_splitSensitivex(compileMode, ',', &splits).genericError)
+			return false;
 
-		ListCharString allFiles = (ListCharString) { 0 };
-		ListCharString allShaderText = (ListCharString) { 0 };
-		ListCharString allOutputs = (ListCharString) { 0 };
-		ListU8 allCompileModes = (ListU8) { 0 };
-		ListThread threads = (ListThread) { 0 };
-		ListCompiler compilers = (ListCompiler) { 0 };
-		Compiler compiler = (Compiler) { 0 };
-		ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
-		CharString resolved = CharString_createNull();
-		CharString resolved2 = CharString_createNull();
-		CharString tempStr = CharString_createNull();
-		CharString tempStr2 = CharString_createNull();
-		CharString tempStr3 = CharString_createNull();
-		ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
-		SHFile shFile = (SHFile) { 0 };
-		SHFile previous = (SHFile) { 0 };
-		Bool errorInPrevious = false;
-		ListU32 compileCombinations = (ListU32) { 0 };
-		ListU16 binaryIndices = (ListU16) { 0 };
-		SHEntry shEntry = (SHEntry) { 0 };
-		Buffer temp = Buffer_createNull();
-		Bool isFolder = false;
-		SpinLock lock = (SpinLock) { 0 };
+		CharString modes[] = {
+			CharString_createRefCStrConst("spv"),
+			CharString_createRefCStrConst("dxil"),
+			CharString_createRefCStrConst("all")
+		};
 
-		ListListSHEntryRuntime shEntries = (ListListSHEntryRuntime) { 0 };
-		ListU64 shEntryIds = (ListU64) { 0 };
-		ListU64 shEntryIdsSorted = (ListU64) { 0 };
-		ListCompileResult compileResults = (ListCompileResult) { 0 };
-		CompileResult tempResult = (CompileResult) { 0 };
+		static const U64 modeCount = sizeof(modes) / sizeof(modes[0]);
+		*multipleModes = splits.length > 1;
+		U64 compileModeU64 = 0;
 
-		Ns start = Time_now();
+		for (U64 i = 0; i < splits.length; ++i) {
 
-		Error errTemp = Error_none(), *e_rr = &errTemp;
-		Bool s_uccess = true;
+			Bool match = false;
 
-		gotoIfError2(clean, ListCharString_get(args.args, offset++, &input))
-		gotoIfError2(clean, ListCharString_get(args.args, offset++, &output))
+			for(U64 j = 0; j < modeCount; ++j)
+				if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
 
-		Bool multipleModes = true;		//Default to 'all' if no argument is provided
-		compileModeU64 = U64_MAX;
-
-		if(args.parameters & EOperationHasParameter_ShaderOutputMode) {
-
-			gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileMode))
-
-			//Grab modes
-
-			gotoIfError2(clean, CharString_splitSensitivex(compileMode, ',', &splits));
-
-			CharString modes[] = {
-				CharString_createRefCStrConst("spv"),
-				CharString_createRefCStrConst("dxil"),
-				CharString_createRefCStrConst("all")
-			};
-
-			static const U64 modeCount = sizeof(modes) / sizeof(modes[0]);
-			multipleModes = splits.length > 1;
-			compileModeU64 = 0;
-
-			for (U64 i = 0; i < splits.length; ++i) {
-
-				Bool match = false;
-
-				for(U64 j = 0; j < modeCount; ++j)
-					if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
-
-						if(j == modeCount - 1) {
-							compileModeU64 = U64_MAX;
-							multipleModes = true;
-						}
-
-						else compileModeU64 |= (U64)1 << j;
-
-						match = true;
-						break;
+					if(j == modeCount - 1) {
+						compileModeU64 = (1 << ESHBinaryType_Count) - 1;
+						*multipleModes = true;
 					}
 
-				if(!match) {
-					Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
-					s_uccess = false;
-					goto clean;
-				}
-			}
+					else compileModeU64 |= (U64)1 << j;
 
-			ListCharString_freex(&splits);
-		}
-
-		//Check thread count
-
-		U32 threadCount = Platform_instance.threads;
-		Bool defaultThreadCount = true;
-		Bool forceThreading = false;					//Example: 0.00001% can trigger this. This is useful for testing threading with only 1 thread
-
-		if(args.parameters & EOperationHasParameter_ThreadCount) {
-
-			CharString thread = (CharString) { 0 };
-
-			gotoIfError2(clean, ListCharString_get(args.args, offset++, &thread))
-
-			if(CharString_endsWithSensitive(thread, '%', 0)) {					//-threads 50%
-
-				CharString number = CharString_createRefSizedConst(thread.ptr, CharString_length(thread) - 1, false);
-				F64 num = 0;
-
-				if (!CharString_parseDouble(number, &num) || num < 0 || num > 100) {
-
-					Log_errorLnx(
-						"Couldn't parse -threads x%, x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1"
-					);
-
-					s_uccess = false;
-					goto clean;
+					match = true;
+					break;
 				}
 
-				threadCount = (U32) F64_max(1, threadCount * num / 100);
-				defaultThreadCount = num == 0;
-				forceThreading = threadCount == 1 && !defaultThreadCount;
-			}
-
-			else {			//-threads x
-
-				U64 num = 0;
-				if (!CharString_parseU64(thread, &num) || num > threadCount) {
-
-					Log_errorLnx(
-						"Couldn't parse -threads x, where x is expected to be a F64 of (0-100)% or 0 -> threadCount - 1"
-					);
-
-					s_uccess = false;
-					goto clean;
-				}
-
-				threadCount = (U32)num == 0 ? threadCount : (U32)num;
-				defaultThreadCount = num == 0;
-			}
-		}
-
-		//Compile type
-
-		CharString compileTypeStr = (CharString) { 0 };
-
-		if(args.parameters & EOperationHasParameter_ShaderCompileMode) {
-
-			gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileTypeStr));
-
-			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
-				compileType = ECompileType_Preprocess;
-
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
-				compileType = ECompileType_Includes;
-
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
-				compileType = ECompileType_Symbols;
-
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect"))) {
-				Log_errorLnx("Shader compiler \"reflect\" mode isn't supported yet");
-				s_uccess = false;
-				goto clean;
-			}
-
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
-				compileType = ECompileType_Compile;
-
-			else {
-				Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
-				s_uccess = false;
+			if(!match) {
+				compileModeU64 = U64_MAX;
+				Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
 				goto clean;
 			}
 		}
 
-		//Additional includeDir
+		*maskBinaryType = compileModeU64;
 
-		CharString includeDir = (CharString) { 0 };
+	clean:
+		ListCharString_freex(&splits);
+		return compileModeU64 != U64_MAX;
+	}
 
-		if (args.parameters & EOperationHasParameter_IncludeDir)
-			gotoIfError2(clean, ListCharString_get(args.args, offset++, &includeDir));
+	ECompileWarning CLI_getExtraWarnings(ParsedArgs args) {
 
-		//Get all shaders
-
-		if (File_hasFolder(input)) {
-
-			Bool isVirtual;
-			gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
-			gotoIfError2(clean, CharString_appendx(&resolved, '/'))
-
-			gotoIfError3(clean, File_resolvex(output, &isVirtual, 0, &resolved2, e_rr))
-			gotoIfError2(clean, CharString_appendx(&resolved2, '/'))
-
-			ShaderFileRecursion shaderFileRecursion = (ShaderFileRecursion) {
-				.allShaders = &allFiles,
-				.allOutputs = &allOutputs,
-				.allModes = &allCompileModes,
-				.base = resolved,
-				.output = resolved2,
-				.compileModeU64 = compileModeU64,
-				.hasMultipleModes = multipleModes,
-				.hasCombineFlag = !(args.flags & EOperationFlags_Split),
-				.compileType = compileType
-			};
-
-			gotoIfError3(clean, File_foreach(
-				input,
-				(FileCallback) registerFile,
-				&shaderFileRecursion,
-				true,
-				e_rr
-			))
-
-			//Make sure we can have a folder at output
-
-			gotoIfError3(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND, false, e_rr))
-			isFolder = true;
-		}
-
-		//We need to add multiple compile modes
-
-		else for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
-
-			if(!((compileModeU64 >> i) & 1))
-				continue;
-
-			//Replace output's .hlsl by .spv.hlsl or .dxil.hlsl
-
-			if (multipleModes || compileType != ECompileType_Preprocess)
-				gotoIfError2(clean, CharString_formatx(
-					&tempStr, "%.*s%s",
-					(int)U64_min(
-						CharString_length(output),
-						CharString_findLastStringInsensitive(output, CharString_createRefCStrConst(".hlsl"), 0, 0)
-					),
-					output.ptr,
-					compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
-						compileType == ECompileType_Includes || compileType == ECompileType_Symbols ? txtSuffix :
-						oiSHSuffixes[i]
-					)
-				))
-
-			//Otherwise we can safely reuse output, since it's just a ref
-
-			else tempStr = output;
-
-			//Register mode and input/output name
-
-			gotoIfError2(clean, ListCharString_pushBackx(&allFiles, input))
-
-			gotoIfError2(clean, ListCharString_pushBackx(&allOutputs, tempStr))		//Moved here
-			tempStr = CharString_createNull();
-
-			gotoIfError2(clean, ListU8_pushBackx(&allCompileModes, i))
-		}
-
-		//Only continue if there are any files and then fetch all files
-
-		if (!allFiles.length) {
-			Log_debugLnx("No files to process");
-			goto clean;
-		}
-
-		U64 totalLen = 0;
-		CharString prevStr = CharString_createNull();
-
-		for (U64 i = 0; i < allFiles.length; ++i) {
-
-			//Grab from cache if we're re-compiling the same file with a different mode
-
-			if (CharString_equalsStringSensitive(prevStr, allFiles.ptr[i])) {
-
-				CharString shader = *ListCharString_last(allShaderText);
-				shader = CharString_createRefStrConst(shader);
-
-				gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, shader))
-				totalLen += CharString_length(shader);
-
-				continue;
-			}
-
-			//Otherwise grab from file
-
-			gotoIfError3(clean, File_read(allFiles.ptr[i], 10 * MS, &temp, e_rr))
-
-			if(!Buffer_length(temp)) {
-				gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, CharString_createNull()))
-				continue;
-			}
-
-			gotoIfError2(clean, CharString_createCopyx(
-				CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), &tempStr
-			))
-
-			if(!CharString_eraseAllSensitive(&tempStr, '\r', 0, 0))
-				retError(clean, Error_invalidState(1, "CLI_compileShader couldn't erase \\rs"))
-
-			gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, tempStr))
-			tempStr = CharString_createNull();
-
-			totalLen += Buffer_length(temp);
-			Buffer_freex(&temp);
-
-			prevStr = allFiles.ptr[i];
-		}
-
-		//Grab info about extra detailed compiler warnings
-
-		ECompilerWarning extraWarnings = ECompilerWarning_None;
+		ECompileWarning extraWarnings = ECompilerWarning_None;
 
 		if(args.flags & EOperationFlags_CompilerWarnings) {
 
@@ -1170,15 +950,217 @@
 				extraWarnings |= ECompilerWarning_BufferPadding;
 		}
 
-		//Spin up threads if it's worth it
+		return extraWarnings;
+	}
 
-		if (
-			//Default thread count behavior; 64KiB or more (with 8+ files) or 16+ files
-			(((totalLen >= 64 * KIBI && allFiles.length >= 8) || allFiles.length >= 16) && defaultThreadCount) ||
+	Bool CLI_getCompileTargetsFromFile(
+		CharString input,
+		ECompileType compileType,
+		U64 compileModeU64,
+		Bool multipleModes,
+		Bool combineFlag,
+		Bool *isFolder,
+		CharString *output,
+		ListCharString *allFiles,
+		ListCharString *allShaderText,
+		ListCharString *allOutputs,
+		ListU8 *allCompileModes
+	) {
 
-			//Or if thread count is forced
-			(threadCount > 1 && !defaultThreadCount) || forceThreading
-		) {
+		Bool s_uccess = true;
+
+		if (!allCompileModes || !allFiles || !allShaderText || !allOutputs) {
+			Log_debugLnx("CLI_getCompileTargetsFromFile one of outputs is missing");
+			return false;
+		}
+
+		CharString resolved = CharString_createNull();
+		CharString resolved2 = CharString_createNull();
+		CharString tempStr = CharString_createNull();
+		Buffer temp = Buffer_createNull();
+
+		Error errTmp = Error_none(), *e_rr = &errTmp;
+
+		//Get all shaders
+
+		if (File_hasFolder(input)) {
+
+			Bool isVirtual;
+			gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
+			gotoIfError2(clean, CharString_appendx(&resolved, '/'))
+
+			if(output) {
+				gotoIfError3(clean, File_resolvex(*output, &isVirtual, 0, &resolved2, e_rr))
+				gotoIfError2(clean, CharString_appendx(&resolved2, '/'))
+			}
+
+			ShaderFileRecursion shaderFileRecursion = (ShaderFileRecursion) {
+				.allShaders = allFiles,
+				.allOutputs = allOutputs,
+				.allModes = allCompileModes,
+				.base = resolved,
+				.output = resolved2,
+				.compileModeU64 = compileModeU64,
+				.hasMultipleModes = multipleModes,
+				.hasCombineFlag = combineFlag,
+				.compileType = compileType
+			};
+
+			gotoIfError3(clean, File_foreach(
+				input,
+				(FileCallback) registerFile,
+				&shaderFileRecursion,
+				true,
+				e_rr
+			))
+
+			//Make sure we can have a folder at output
+
+			if(output)
+				gotoIfError3(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND, false, e_rr))
+
+			if(isFolder) *isFolder = true;
+		}
+
+		//We need to add multiple compile modes
+
+		else for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
+
+			if(!((compileModeU64 >> i) & 1))
+				continue;
+
+			//Replace output's .hlsl by .spv.hlsl or .dxil.hlsl
+
+			gotoIfError2(clean, CharString_formatx(
+				&tempStr, "%.*s%s",
+				output ? (int)U64_min(
+					CharString_length(*output),
+					CharString_findLastStringInsensitive(*output, CharString_createRefCStrConst(".hlsl"), 0, 0)
+				) : (sizeof("output") - 1),
+				output ? output->ptr : "output",
+				compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
+					compileType == ECompileType_Includes || compileType == ECompileType_Symbols ? txtSuffix :
+					oiSHSuffixes[i]
+				)
+			))
+
+			//Register mode and input/output name
+
+			gotoIfError2(clean, ListCharString_pushBackx(allFiles, input))
+
+			gotoIfError2(clean, ListCharString_pushBackx(allOutputs, tempStr))		//Moved here
+			tempStr = CharString_createNull();
+
+			gotoIfError2(clean, ListU8_pushBackx(allCompileModes, i))
+		}
+
+		//Only continue if there are any files and then fetch all files
+
+		if (!allFiles->length) {
+			Log_debugLnx("No files to process");
+			goto clean;
+		}
+
+		CharString prevStr = CharString_createNull();
+
+		for (U64 i = 0; i < allFiles->length; ++i) {
+
+			//Grab from cache if we're re-compiling the same file with a different mode
+
+			if (CharString_equalsStringSensitive(prevStr, allFiles->ptr[i])) {
+
+				CharString shader = *ListCharString_last(*allShaderText);
+				shader = CharString_createRefStrConst(shader);
+
+				gotoIfError2(clean, ListCharString_pushBackx(allShaderText, shader))
+
+				continue;
+			}
+
+			//Otherwise grab from file
+
+			gotoIfError3(clean, File_read(allFiles->ptr[i], 10 * MS, &temp, e_rr))
+
+			if(!Buffer_length(temp)) {
+				gotoIfError2(clean, ListCharString_pushBackx(allShaderText, CharString_createNull()))
+				continue;
+			}
+
+			gotoIfError2(clean, CharString_createCopyx(
+				CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), &tempStr
+			))
+
+			if(!CharString_eraseAllSensitive(&tempStr, '\r', 0, 0))
+				retError(clean, Error_invalidState(1, "CLI_compileShader couldn't erase \\rs"))
+
+			gotoIfError2(clean, ListCharString_pushBackx(allShaderText, tempStr))
+			tempStr = CharString_createNull();
+
+			Buffer_freex(&temp);
+
+			prevStr = allFiles->ptr[i];
+		}
+
+	clean:
+		Error_printx(errTmp, ELogLevel_Error, ELogOptions_Default);
+		CharString_freex(&resolved);
+		CharString_freex(&resolved2);
+		Buffer_freex(&temp);
+		CharString_freex(&tempStr);
+		return s_uccess;
+	}
+	
+	Bool CLI_compileShaders(
+		ListCharString allFiles,
+		ListCharString allShaderText,
+		ListCharString allOutputs,
+		ListU8 allCompileOutputs,
+		U32 threadCount,
+		Bool isDebug,
+		ECompileWarning extraWarnings,
+		Bool ignoreEmptyFiles,
+		ECompileType compileType,
+		CharString includeDir,
+		CharString outputDir,
+		ListBuffer *allBuffers,
+		Error *e_rr
+	) {
+		ListThread threads = (ListThread) { 0 };
+		ListCompiler compilers = (ListCompiler) { 0 };
+		ListListSHEntryRuntime shEntries = (ListListSHEntryRuntime) { 0 };
+
+		ListU64 shEntryIds = (ListU64) { 0 };
+		ListU64 shEntryIdsSorted = (ListU64) { 0 };
+		ListCompileResult compileResults = (ListCompileResult) { 0 };
+		CompileResult tempResult = (CompileResult) { 0 };
+
+		Compiler compiler = (Compiler) { 0 };
+		ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
+		ListU32 compileCombinations = (ListU32) { 0 };
+		ListU16 binaryIndices = (ListU16) { 0 };
+		SHEntry shEntry = (SHEntry) { 0 };
+
+		SHFile shFile = (SHFile) { 0 };
+		SHFile previous = (SHFile) { 0 };
+		Bool errorInPrevious = false;
+
+		Buffer temp = Buffer_createNull();
+		SpinLock lock = (SpinLock) { 0 };
+
+		ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
+
+		CharString tempStr = CharString_createNull();
+		CharString tempStr2 = CharString_createNull();
+		CharString tempStr3 = CharString_createNull();
+
+		Bool s_uccess = true;
+
+		if(allBuffers)
+			gotoIfError2(clean, ListBuffer_resizex(allBuffers, allOutputs.length))
+	
+		//Spin up threads
+
+		if (threadCount > 1) {
 
 			U64 counter = 0, threadCounter = 0, completedCounter = 0, counterCompiledBinaries = 0;
 
@@ -1188,11 +1170,12 @@
 
 			CompilerJobScheduler jobScheduler = (CompilerJobScheduler) {
 
-				.args = args,
+				.isDebug = isDebug,
+				.ignoreEmptyFiles = ignoreEmptyFiles,
 				.inputPaths = allFiles,
 				.inputData = allShaderText,
 				.outputPaths = allOutputs,
-				.compileModes = allCompileModes,
+				.compileModes = allCompileOutputs,
 				.compilers = compilers,
 
 				.shEntries = &shEntries,
@@ -1278,8 +1261,15 @@
 
 							else gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
 
-							gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS, e_rr))
-							Buffer_freex(&temp);
+							if(allBuffers) {
+								allBuffers->ptrNonConst[lastJobId] = temp;
+								temp = Buffer_createNull();		//Moved
+							}
+							
+							else {
+								gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS, e_rr))
+								Buffer_freex(&temp);
+							}
 						}
 					}
 
@@ -1338,7 +1328,7 @@
 				gotoIfError3(clean, CLI_registerShaderBinary(
 					&shFile,
 					compileResult,
-					allCompileModes.ptr[jobId],
+					allCompileOutputs.ptr[jobId],
 					allFiles.ptr[jobId],
 					shEntries.ptr[jobId].ptr[runtimeEntryId],
 					combinationId,
@@ -1359,7 +1349,8 @@
 				//Though this is generally enough info for includes, (most) reflection and preprocessing
 
 				if(!CLI_precompileShaderSingle(
-					compiler, allCompileModes.ptr[i], args,
+					compiler, allCompileOutputs.ptr[i],
+					isDebug,
 					allFiles.ptr[i], allShaderText.ptr[i], allOutputs.ptr[i],
 					compileType,
 					&runtimeEntries,
@@ -1378,7 +1369,7 @@
 
 					if (!runtimeEntries.length) {
 
-						if(!(args.flags & EOperationFlags_IgnoreEmptyFiles)) {
+						if(!ignoreEmptyFiles) {
 
 							Log_errorLnx(
 								"Precompile couldn't find entrypoints for file \"%.*s\"",
@@ -1418,7 +1409,8 @@
 						//Compile and return error if failed
 
 						if(!CLI_compileShaderSingle(
-							compiler, allCompileModes.ptr[i], args,
+							compiler, allCompileOutputs.ptr[i],
+							isDebug,
 							allFiles.ptr[i], allShaderText.ptr[i],
 							&tempResult,
 							NULL,
@@ -1441,7 +1433,7 @@
 						//Add binary to SHFile
 
 						else gotoIfError3(clean, CLI_registerShaderBinary(
-							&shFile, &tempResult, allCompileModes.ptr[i], allFiles.ptr[i], runtimeEntry, combinationId, e_rr
+							&shFile, &tempResult, allCompileOutputs.ptr[i], allFiles.ptr[i], runtimeEntry, combinationId, e_rr
 						))
 					}
 
@@ -1487,9 +1479,16 @@
 									gotoIfError3(clean, SHFile_writex(previous, &temp, e_rr))
 
 								else gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
-
-								gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 100 * MS, e_rr))
-								Buffer_freex(&temp);
+								
+								if(allBuffers) {
+									allBuffers->ptrNonConst[i] = temp;
+									temp = Buffer_createNull();		//Moved
+								}
+							
+								else {
+									gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 100 * MS, e_rr))
+									Buffer_freex(&temp);
+								}
 							}
 						}
 
@@ -1516,7 +1515,7 @@
 
 		//Merge all include info into a root.txt file.
 
-		if (compileType == ECompileType_Includes && isFolder) {
+		if (compileType == ECompileType_Includes && CharString_length(outputDir) && !allBuffers) {
 
 			if(compiler.interfaces[0])
 				gotoIfError3(clean, Compiler_mergeIncludeInfox(&compiler, &includeInfo, e_rr))
@@ -1530,9 +1529,9 @@
 
 			//We won't be needing resolved, so we can safely apppend root.txt after it
 
-			gotoIfError2(clean, CharString_createCopyx(output, &tempStr3))
+			gotoIfError2(clean, CharString_createCopyx(outputDir, &tempStr3))
 
-			if(!CharString_endsWithSensitive(output, '/', 0) && !CharString_endsWithSensitive(output, '\\', 0))
+			if(!CharString_endsWithSensitive(outputDir, '/', 0) && !CharString_endsWithSensitive(outputDir, '\\', 0))
 				gotoIfError2(clean, CharString_appendx(&tempStr3, '/'))
 
 			gotoIfError2(clean, CharString_appendStringx(&tempStr3, CharString_createRefCStrConst("root.txt")))
@@ -1553,7 +1552,8 @@
 				gotoIfError2(clean, CharString_formatx(
 					&tempStr2,
 					"%08"PRIx32" %05"PRIu32" %s\n",
-					Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[i])), (U32)CharString_length(allShaderText.ptr[i]),
+					Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[i])),
+					(U32)CharString_length(allShaderText.ptr[i]),
 					allFiles.ptr[i].ptr
 				))
 
@@ -1566,15 +1566,6 @@
 
 	clean:
 
-		F64 dt = (F64)(Time_now() - start) / SECOND;
-
-		if(s_uccess)
-			Log_debugLnx("-- Compile %.*s success in %fs", (int)CharString_length(input), input.ptr, dt);
-
-		else Log_errorLnx("-- Compile %.*s failed in %fs!", (int)CharString_length(input), input.ptr, dt);
-
-		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
-
 		for(U64 i = 0; i < threads.length; ++i)
 			Thread_waitAndCleanupx(&threads.ptrNonConst[i]);
 
@@ -1584,15 +1575,6 @@
 		ListIncludeInfo_freeUnderlyingx(&includeInfo);
 		SpinLock_unlock(&lock);
 		Buffer_freex(&temp);
-		CharString_freex(&resolved);
-		CharString_freex(&resolved2);
-		CharString_freex(&tempStr);
-		CharString_freex(&tempStr2);
-		CharString_freex(&tempStr3);
-		ListCharString_freeUnderlyingx(&allFiles);
-		ListCharString_freeUnderlyingx(&allShaderText);
-		ListCharString_freeUnderlyingx(&allOutputs);
-		ListU8_freex(&allCompileModes);
 
 		ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
 		SHFile_freex(&shFile);
@@ -1606,6 +1588,131 @@
 		ListU64_freex(&shEntryIdsSorted);
 		ListCompileResult_freeUnderlyingx(&compileResults);
 		CompileResult_freex(&tempResult);
+
+		CharString_freex(&tempStr);
+		CharString_freex(&tempStr2);
+		CharString_freex(&tempStr3);
+
+		return s_uccess;
+	}
+
+	Bool CLI_compileShader(ParsedArgs args) {
+
+		//Get input
+
+		ListCharString allFiles = (ListCharString) { 0 };
+		ListCharString allShaderText = (ListCharString) { 0 };
+		ListCharString allOutputs = (ListCharString) { 0 };
+		ListU8 allCompileModes = (ListU8) { 0 };
+
+		Error errTemp = Error_none(), *e_rr = &errTemp;
+		Bool s_uccess = true;
+
+		Ns start = Time_now();
+
+		CharString input = (CharString) { 0 };
+		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
+
+		CharString output = (CharString) { 0 };
+		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
+
+		//Get compile types
+
+		Bool multipleModes = false;
+		U64 compileModeU64 = 0;
+		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes))
+
+		//Check thread count
+
+		U32 threadCount = 0;
+		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 0))
+
+		//Compile type
+
+		CharString compileTypeStr = (CharString) { 0 };
+		ECompileType compileType = ECompileType_Compile;
+
+		if(args.parameters & EOperationHasParameter_ShaderCompileMode) {
+
+			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr))
+
+			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
+				compileType = ECompileType_Preprocess;
+
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
+				compileType = ECompileType_Includes;
+
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
+				compileType = ECompileType_Symbols;
+
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
+				compileType = ECompileType_Compile;
+
+			else {
+				Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
+				s_uccess = false;
+				goto clean;
+			}
+		}
+
+		//Additional includeDir
+
+		CharString includeDir = (CharString) { 0 };
+
+		if (args.parameters & EOperationHasParameter_IncludeDir)
+			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
+
+		//Grab all files that need compilation
+
+		Bool isFolder = false;
+		gotoIfError3(clean, CLI_getCompileTargetsFromFile(
+			input,
+			compileType,
+			compileModeU64,
+			multipleModes,
+			!(args.flags & EOperationFlags_Split),
+			&isFolder,
+			&output,
+			&allFiles,
+			&allShaderText,
+			&allOutputs,
+			&allCompileModes
+		))
+
+		//Grab info about extra detailed compiler warnings
+
+		ECompilerWarning extraWarnings = CLI_getExtraWarnings(args);
+
+		//Compile
+
+		gotoIfError3(clean, CLI_compileShaders(
+			allFiles, allShaderText, allOutputs, allCompileModes,
+			threadCount,
+			args.flags & EOperationFlags_Debug,
+			extraWarnings,
+			args.flags & EOperationFlags_IgnoreEmptyFiles,
+			ECompileType_Compile,
+			includeDir,
+			isFolder ? output : CharString_createNull(),
+			NULL,
+			e_rr
+		))
+
+	clean:
+
+		F64 dt = (F64)(Time_now() - start) / SECOND;
+
+		if(s_uccess)
+			Log_debugLnx("-- Compile %.*s success in %fs", (int)CharString_length(input), input.ptr, dt);
+
+		else Log_errorLnx("-- Compile %.*s failed in %fs!", (int)CharString_length(input), input.ptr, dt);
+
+		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+
+		ListCharString_freeUnderlyingx(&allFiles);
+		ListCharString_freeUnderlyingx(&allShaderText);
+		ListCharString_freeUnderlyingx(&allOutputs);
+		ListU8_freex(&allCompileModes);
 
 		return s_uccess;
 	}

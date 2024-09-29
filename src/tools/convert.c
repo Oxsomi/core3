@@ -33,20 +33,17 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 	//Prepare for convert to/from
 
 	Format f = Format_values[args.format];
-	U64 offset = 0;
 
 	CharString inputArg = CharString_createNull();
 	FileInfo info = (FileInfo) { 0 };
 
-	//Error err;
 	Error err = Error_none(), *e_rr = &err;
-	gotoIfError2(clean, ListCharString_get(args.args, offset++, &inputArg))
+	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg))
 
 	//Check if output is valid
 
 	CharString outputArg = CharString_createNull();
-
-	gotoIfError2(clean, ListCharString_get(args.args, offset++, &outputArg))
+	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputArg))
 
 	//TODO: Support multiple files
 

@@ -441,7 +441,13 @@ void Operations_init() {
 		.isFormatLess = true,
 
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
-		.optionalParameters = EOperationHasParameter_AES
+		.optionalParameters =
+			EOperationHasParameter_AES | EOperationHasParameter_ThreadCount |
+			EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
+
+		.operationFlags = 
+			EOperationFlags_Debug | EOperationFlags_Split |
+			EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 	};
 
 	//Compile shaders

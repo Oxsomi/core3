@@ -55,6 +55,10 @@ TListXImpl(ListU16);
 TListXImpl(ListU32);
 TListXImpl(ListU64);
 
+void ListBuffer_freeUnderlyingx(ListBuffer *list) {
+	ListBuffer_freeUnderlying(list, Platform_instance.alloc);
+}
+
 void ListListU8_freeUnderlyingx(ListListU8 *list) {
 	ListListU8_freeUnderlying(list, Platform_instance.alloc);
 }

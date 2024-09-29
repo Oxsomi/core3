@@ -153,6 +153,8 @@ Bool ListListU64_createCopyUnderlying(ListListU64 src, Allocator alloc, ListList
 
 TList(Buffer);
 
+void ListBuffer_freeUnderlying(ListBuffer *list, Allocator alloc);
+
 #ifdef __cplusplus
 	}
 #endif

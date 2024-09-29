@@ -270,17 +270,12 @@ write:
 
 clean:
 
-	for(U64 i = 0; i < buffers.length; ++i) {
-		Buffer bufi = buffers.ptr[i];
-		Buffer_freex(&bufi);
-	}
-
 	DLFile_freex(&file);
 	ListCharString_freex(&split);
 	Buffer_freex(&res);
 	Buffer_freex(&buf);
 	Buffer_freex(&fileBuf);
-	ListBuffer_freex(&buffers);
+	ListBuffer_freeUnderlyingx(&buffers);
 	ListCharString_freeUnderlyingx(&paths);
 	ListCharString_freex(&sortedPaths);
 

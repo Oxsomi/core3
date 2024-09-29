@@ -37,6 +37,17 @@ TListImpl(ListU16);
 TListImpl(ListU32);
 TListImpl(ListU64);
 
+void ListBuffer_freeUnderlying(ListBuffer *list, Allocator alloc) {
+
+	if(!list)
+		return;
+
+	for(U16 i = 0; i < list->length; ++i)
+		Buffer_free(&list->ptrNonConst[i], alloc);
+
+	ListBuffer_free(list, alloc);
+}
+
 void ListListU8_freeUnderlying(ListListU8 *list, Allocator alloc) {
 
 	if(!list)

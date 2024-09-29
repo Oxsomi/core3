@@ -139,11 +139,17 @@ This is only supported if it can logically be merged:
 - oiDL allows specifying `entry` and `offset` to remove everything except a section.
 - oiCA allows specifying a folder to extract.
 
-## TODO: Packaging a project
+## Packaging a project
 
 `OxC3 package -input myFolder -output myFolder.oiCA` is used to package a folder into Oxsomi formats. This means that it will standardize all files it detects and converts them to our standard file. For example a .fbx file could be automatically converted to a scene and/or model file, a texture could be converted to a standardized image file, etc. This is basically a baking process to ensure all shaders, textures, models and other resources are the correct format for target architectures. -aes argument is allowed to encrypt the modules.
 
 These are generally attached to the exe, apk or other executable file to ensure these resources can be found and aren't as easily accidentally modified on disk, as well as making them more portable. See the README.
+
+The current file types that will be preprocessed include the following:
+
+- .hlsl -> .oiSH by using the system from "Compiling shaders". By default it will package to all binary types, but this can be overridden by `-compile-output dxil` to build for dxil only for example. It also combines the oiSH files, which can be turned off by using `--split` (generating x.dxil.oiSH and x.spv.oiSH in this case). The include dir can also be modified by using `-include-dir`. `-compile-type` is automatically set to `compile` in this case.
+
+`-threads` can be overriden to change how many threads are spun up during baking process (default is 1 to avoid interfering with other build processes). Other extra warnings (using commandline arguments) regarding shader compilation are also accessible through OxC3 file package.
 
 ## Compiling shaders
 
@@ -151,7 +157,7 @@ These are generally attached to the exe, apk or other executable file to ensure 
 
 When operating on a folder, it will attempt to find `.hlsl` files and then processes them in parallel into the output folder.
 
-`-threads` can be used to limit thread count. Such as `-threads 0` = default , `-threads 50%` = 50% of all threads, `-threads 4` = 4 threads. Default behavior is: If total input length >=64KiB with at least 8 files or if at least 16 files are present, then all cores will be used for threading.
+`-threads` can be used to limit thread count. Such as `-threads 0` = default , `-threads 50%` = 50% of all threads, `-threads 4` = 4 threads. Default behavior is that all cores will be used for threading.
 
 `-compile-output` is the outputs that are enabled. If this mode is multiple and --split is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
 

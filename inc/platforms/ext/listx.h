@@ -82,6 +82,9 @@ typedef struct ListListU8 ListListU8;
 typedef struct ListListU16 ListListU16;
 typedef struct ListListU32 ListListU32;
 typedef struct ListListU64 ListListU64;
+typedef struct ListBuffer ListBuffer;
+
+void ListBuffer_freeUnderlyingx (ListBuffer *list);
 
 void ListListU8_freeUnderlyingx (ListListU8 *list);
 void ListListU16_freeUnderlyingx(ListListU16 *list);

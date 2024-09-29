@@ -50,11 +50,11 @@
 		if (args.parameters & (EOperationHasParameter_CountArg | EOperationHasParameter_Entry)) {
 
 			U64 count = 0;
-			U64 offset = 0;
 
 			if (args.parameters & EOperationHasParameter_CountArg) {
 
-				CharString arg = args.args.ptr[offset++];
+				CharString arg = CharString_createNull();
+				gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
 
 				if(!CharString_parseU64(arg, &count))
 					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"))
@@ -64,7 +64,8 @@
 
 			if (args.parameters & EOperationHasParameter_Entry) {
 
-				CharString arg = args.args.ptr[offset++];
+				CharString arg = CharString_createNull();
+				gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
 
 				if(!CharString_parseU64(arg, &entry))
 					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))

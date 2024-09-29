@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx.h"
 #include "types/buffer.h"
+#include "types/time.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/archivex.h"
@@ -33,7 +34,6 @@
 typedef struct CAFileRecursion {
 	Archive *archive;
 	CharString root;
-	ListCharString shaders;
 } CAFileRecursion;
 
 Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
@@ -54,10 +54,11 @@ Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 
 	if (file.type == EFileType_File) {
 
-		if (CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsl"), 0)) {
-			gotoIfError2(clean, ListCharString_pushBackx(&caFile->shaders, entry.path))
+		if (
+			CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsl"), 0) ||
+			CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsli"), 0)
+		)
 			goto clean;
-		}
 
 		//We have to detect file type and process it here to a custom type.
 		//We don't have a custom file yet, so for now
@@ -73,6 +74,8 @@ clean:
 	return s_uccess;
 }
 
+typedef enum ECompilerWarning ECompilerWarning;
+
 Bool CLI_package(ParsedArgs args) {
 
 	//Parse encryption key
@@ -87,6 +90,14 @@ Bool CLI_package(ParsedArgs args) {
 	CAFile file = (CAFile) { 0 };
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
+
+	ListCharString allFiles = (ListCharString) { 0 };
+	ListCharString allShaderText = (ListCharString) { 0 };
+	ListCharString allOutputs = (ListCharString) { 0 };
+	ListU8 allCompileOutputs = (ListU8) { 0 };
+	ListBuffer allBuffers = (ListBuffer) { 0 };
+
+	Ns start = Time_now();
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
@@ -134,14 +145,57 @@ Bool CLI_package(ParsedArgs args) {
 
 	//Get input
 
-	U64 offset = 0;
 	CharString input = (CharString) { 0 };
-	gotoIfError2(clean, ListCharString_get(args.args, offset++, &input))
+	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
 
 	//Check if output is valid
 
 	CharString output = (CharString) { 0 };
-	gotoIfError2(clean, ListCharString_get(args.args, offset++, &output));
+	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
+
+	//Get compile settings
+
+	#ifdef CLI_SHADER_COMPILER
+
+		//Get compile types
+
+		Bool multipleModes = false;
+		U64 compileModeU64 = 0;
+		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes))
+
+		//Check thread count
+
+		U32 threadCount = 0;
+		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 1))
+
+		//Additional includeDir
+
+		CharString includeDir = (CharString) { 0 };
+
+		if (args.parameters & EOperationHasParameter_IncludeDir)
+			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
+
+		//Grab all files that need compilation
+
+		gotoIfError3(clean, CLI_getCompileTargetsFromFile(
+			input,
+			ECompileType_Compile,
+			compileModeU64,
+			multipleModes,
+			!(args.flags & EOperationFlags_Split),
+			NULL,
+			NULL,		//Don't write to output, write to Buffer[] instead
+			&allFiles,
+			&allShaderText,
+			&allOutputs,
+			&allCompileOutputs
+		))
+	
+		//Grab info about extra detailed compiler warnings
+
+		ECompilerWarning extraWarnings = CLI_getExtraWarnings(args);
+
+	#endif
 
 	//Make archive
 
@@ -165,6 +219,28 @@ Bool CLI_package(ParsedArgs args) {
 
 	//Convert shaders
 
+	#ifdef CLI_SHADER_COMPILER
+
+		if(allFiles.length)
+			gotoIfError3(clean, CLI_compileShaders(
+				allFiles, allShaderText, allOutputs, allCompileOutputs,
+				threadCount,
+				args.flags & EOperationFlags_Debug,
+				extraWarnings,
+				args.flags & EOperationFlags_IgnoreEmptyFiles,
+				ECompileType_Compile,
+				includeDir,
+				CharString_createNull(),
+				&allBuffers,
+				e_rr
+			))
+
+		for(U64 i = 0; i < allOutputs.length; ++i)
+			if(Buffer_length(allBuffers.ptrNonConst[i]))
+				gotoIfError3(clean, Archive_addFilex(&archive, allOutputs.ptr[i], &allBuffers.ptrNonConst[i], 0, e_rr))
+
+	#endif
+
 	//Convert to CAFile and write to file
 
 	gotoIfError3(clean, CAFile_create(settings, &archive, &file, e_rr))
@@ -175,12 +251,20 @@ Bool CLI_package(ParsedArgs args) {
 
 clean:
 
-	if(s_uccess)
-		Log_debugLnx("-- Packaging %s success!", resolved.ptr);
+	F64 dt = (F64)(Time_now() - start) / SECOND;
 
-	else Log_errorLnx("-- Packaging %s failed!!", resolved.ptr);
+	if(s_uccess)
+		Log_debugLnx("-- Packaging %s success in %fs!", resolved.ptr, dt);
+
+	else Log_errorLnx("-- Packaging %s failed in %fs!!", resolved.ptr, dt);
 
 	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+
+	ListBuffer_freeUnderlyingx(&allBuffers);
+	ListCharString_freeUnderlyingx(&allFiles);
+	ListCharString_freeUnderlyingx(&allShaderText);
+	ListCharString_freeUnderlyingx(&allOutputs);
+	ListU8_freex(&allCompileOutputs);
 
 	Buffer_freex(&res);
 	CAFile_freex(&file);

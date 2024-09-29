@@ -86,13 +86,8 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 	if(!dlFile || !DLFile_isAllocated(*dlFile))
 		return true;
 
-	if (dlFile->settings.dataType != EDLDataType_Ascii) {
-
-		for (U64 i = 0; i < DLFile_entryCount(*dlFile); ++i)
-			Buffer_free(&dlFile->entryBuffers.ptrNonConst[i], alloc);
-
-		ListBuffer_free(&dlFile->entryBuffers, alloc);
-	}
+	if (dlFile->settings.dataType != EDLDataType_Ascii)
+		ListBuffer_freeUnderlying(&dlFile->entryBuffers, alloc);
 
 	else ListCharString_freeUnderlying(&dlFile->entryStrings, alloc);
 

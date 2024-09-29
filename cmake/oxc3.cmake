@@ -26,6 +26,8 @@ endfunction()
 #		${CMAKE_CURRENT_SOURCE_DIR}/res/test_shaders
 #	SELF
 #		${CMAKE_CURRENT_SOURCE_DIR}
+#	ARGS
+#		-threads "100%%" -compile-type dxil	# Compile shaders using all available threads and only output DXIL, %% = escape %
 # )
 # This would add myTarget/shaders as a virtual directory.
 # myTarget/shaders has to be loaded manually by the app to process it.
@@ -36,7 +38,7 @@ macro(add_virtual_files)
 
 	set(_OPTIONS)
 	set(_ONE_VALUE TARGET ROOT NAME SELF)
-	set(_MULTI_VALUE)
+	set(_MULTI_VALUE ARGS)
 
 	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
 
@@ -88,7 +90,7 @@ macro(add_virtual_files)
 
 		add_custom_target(
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
-			COMMAND ${OXC3} file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
+			COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
 			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
 
