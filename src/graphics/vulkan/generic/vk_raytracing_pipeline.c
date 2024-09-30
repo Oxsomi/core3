@@ -86,7 +86,7 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 	gotoIfError2(clean, ListVkShaderModule_resizex(&modules, binaryCount))
 	gotoIfError2(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, stageCount))
 	gotoIfError2(clean, GenericList_resizex(&shaderHandles, stageCount))
-	gotoIfError2(clean, Buffer_createEmptyBytesx(stageCount * raytracingShaderAlignment, &shaderBindings))
+	gotoIfError2(clean, Buffer_createEmptyBytesx((hitGroupCount + stageCount) * raytracingShaderAlignment, &shaderBindings))
 	gotoIfError2(clean, ListVkRayTracingShaderGroupCreateInfoKHR_resizex(&groups, hitGroupCount + stageCount))
 
 	//Create binaries

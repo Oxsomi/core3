@@ -354,6 +354,11 @@ Error GraphicsDeviceRef_createBufferData(
 	if(err.genericError)
 		return err;
 
+	if ((err = DeviceBufferRef_markDirty(*buf, 0, 0)).genericError) {
+		DeviceBufferRef_dec(buf);
+		return err;
+	}
+
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
 	if(Buffer_isRef(*dat))
