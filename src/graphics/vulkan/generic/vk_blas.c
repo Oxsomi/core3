@@ -84,6 +84,8 @@ Error BLAS_initExt(BLAS *blas) {
 			0, primitives, U32_MAX, "BLASRef_flush() only primitive count of <U32_MAX is supported"
 		))
 
+	blasExt->primitives = (U32) primitives;
+
 	//Convert to Vulkan dependent version
 
 	VkAccelerationStructureGeometryKHR geometry = (VkAccelerationStructureGeometryKHR) {
