@@ -819,6 +819,9 @@ void CommandList_process(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
+				if(transition.stage == EPipelineStage_RTASBuild && !isShaderRead)	//Scratch buffer is AS write
+					access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+
 				if(!pipelineStage)
 					switch ((ETransitionType) transition.type) {
 
