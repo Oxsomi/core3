@@ -2205,11 +2205,6 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 	Buffer buf = Buffer_createNull();
 	CommandListRef_validateScope(commandListRef, clean)
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
-
-	if(!(device->info.capabilities.features & EGraphicsFeatures_DebugMarkers))		//NO-OP
-		return Error_none();
-
 	gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(color) + CharString_length(name) + 1, &buf))
 
 	Buffer_copy(buf, Buffer_createRefConst(&color, sizeof(color)));
@@ -2261,11 +2256,6 @@ clean:
 Error CommandListRef_endRegionDebugExt(CommandListRef *commandListRef) {
 
 	CommandListRef_validateScope(commandListRef, clean)
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
-
-	if(!(device->info.capabilities.features & EGraphicsFeatures_DebugMarkers))		//NO-OP
-		return Error_none();
 
 	if (!commandList->debugRegionStack)
 		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_endRegionDebugExt() requires startRegion first."))

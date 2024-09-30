@@ -26,7 +26,6 @@ extern U64 reqExtensionsNameCount;
 
 typedef enum EOptExtensions {
 
-	EOptExtensions_DebugMarker,
 	EOptExtensions_PerfQuery,
 	EOptExtensions_RayPipeline,
 	EOptExtensions_RayQuery,

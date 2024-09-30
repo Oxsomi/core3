@@ -47,7 +47,7 @@ Error BLAS_initExt(BLAS *blas) {
 		return Error_none();
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "BLASRef_flush()::serialized not supported yet");		//TODO:
+		return Error_unsupportedOperation(0, "BLAS_initExt()::serialized not supported yet");		//TODO:
 
 	Error err = Error_none();
 	U64 primitives = 0;
@@ -81,7 +81,7 @@ Error BLAS_initExt(BLAS *blas) {
 
 	if(primitives >> 32)
 		gotoIfError(clean, Error_outOfBounds(
-			0, primitives, U32_MAX, "BLASRef_flush() only primitive count of <U32_MAX is supported"
+			0, primitives, U32_MAX, "BLAS_initExt() only primitive count of <U32_MAX is supported"
 		))
 
 	blasExt->primitives = (U32) primitives;

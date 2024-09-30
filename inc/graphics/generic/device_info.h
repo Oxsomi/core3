@@ -133,24 +133,20 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_LUID						= 1 << 16,
 
-	//Debug features
-
-	EGraphicsFeatures_DebugMarkers				= 1 << 17,
-
 	//Other features
 
-	EGraphicsFeatures_Wireframe					= 1 << 18,
-	EGraphicsFeatures_LogicOp					= 1 << 19,
-	EGraphicsFeatures_DualSrcBlend				= 1 << 20,
+	EGraphicsFeatures_Wireframe					= 1 << 17,
+	EGraphicsFeatures_LogicOp					= 1 << 18,
+	EGraphicsFeatures_DualSrcBlend				= 1 << 19,
 
-	EGraphicsFeatures_Workgraphs				= 1 << 21,
-	EGraphicsFeatures_SwapchainCompute			= 1 << 22,		//isComputeExt in createSwapchain is supported
+	EGraphicsFeatures_Workgraphs				= 1 << 20,
+	EGraphicsFeatures_SwapchainCompute			= 1 << 21,		//isComputeExt in createSwapchain is supported
 
-	EGraphicsFeatures_ComputeDeriv				= 1 << 23,		//Compute derivatives (ddx/ddy)
-	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 24,		//Compute derivatives in mesh/task shaders
+	EGraphicsFeatures_ComputeDeriv				= 1 << 22,		//Compute derivatives (ddx/ddy)
+	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 23,		//Compute derivatives in mesh/task shaders
 
-	EGraphicsFeatures_WriteMSTexture			= 1 << 25,		//image2DMS or RWTexture2DMS
-	EGraphicsFeatures_Bindless					= 1 << 26
+	EGraphicsFeatures_WriteMSTexture			= 1 << 24,		//image2DMS or RWTexture2DMS
+	EGraphicsFeatures_Bindless					= 1 << 25
 
 } EGraphicsFeatures;
 

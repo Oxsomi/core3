@@ -338,7 +338,6 @@ Error GraphicsDevice_initExt(
 
 		switch (i) {
 
-			case EOptExtensions_DebugMarker:				on = feat & EGraphicsFeatures_DebugMarkers;				break;
 			case EOptExtensions_PerfQuery:					on = featEx & EVkGraphicsFeatures_PerfQuery;			break;
 			case EOptExtensions_RayPipeline:				on = feat & EGraphicsFeatures_RayPipeline;				break;
 			case EOptExtensions_RayQuery:					on = feat & EGraphicsFeatures_RayQuery;					break;

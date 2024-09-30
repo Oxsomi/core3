@@ -49,7 +49,7 @@ Error TLAS_initExt(TLAS *tlas) {
 	CharString tmp = CharString_createNull();
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "TLASRef_flush()::serialized not supported yet");		//TODO:
+		return Error_unsupportedOperation(0, "TLAS_initExt()::serialized not supported yet");		//TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
@@ -61,7 +61,7 @@ Error TLAS_initExt(TLAS *tlas) {
 
 	if(instancesU64 >> 24)
 		gotoIfError(clean, Error_outOfBounds(
-			0, instancesU64, 1 << 24, "TLASRef_flush() only instance count of <U24_MAX is supported"
+			0, instancesU64, 1 << 24, "TLAS_initExt() only instance count of <U24_MAX is supported"
 		))
 
 	//Convert to Vulkan dependent version

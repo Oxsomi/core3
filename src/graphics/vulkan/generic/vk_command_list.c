@@ -967,7 +967,10 @@ void CommandList_process(
 		//Debug markers
 
 		case ECommandOp_EndRegionDebugExt:
-			instanceExt->cmdDebugMarkerEnd(buffer);
+
+			if(instanceExt->cmdDebugMarkerEnd)
+				instanceExt->cmdDebugMarkerEnd(buffer);
+
 			break;
 
 		case ECommandOp_AddMarkerDebugExt:
@@ -982,6 +985,9 @@ void CommandList_process(
 				Buffer_createRef(&markerInfo.color, sizeof(F32x4)),
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
+
+			if(!instanceExt->cmdDebugMarkerInsert)		//No debug markers
+				break;
 
 			if(op == ECommandOp_AddMarkerDebugExt)
 				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);

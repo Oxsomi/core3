@@ -213,10 +213,7 @@ Error GraphicsDeviceRef_create(
 	#endif
 
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
-		device->info.capabilities.features &=~ (
-			EGraphicsFeatures_DebugMarkers |
-			EGraphicsFeatures_RayValidation
-		);
+		device->info.capabilities.features &=~ (EGraphicsFeatures_RayValidation);
 
 	gotoIfError(clean, GraphicsInstanceRef_inc(instanceRef))
 	device->instance = instanceRef;

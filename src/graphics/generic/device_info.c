@@ -112,9 +112,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayValidation)
 			Log_debugLnx("\t\tRay validation");
 
-		if(feat & EGraphicsFeatures_DebugMarkers)
-			Log_debugLnx("\t\tDebug markers");
-
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 

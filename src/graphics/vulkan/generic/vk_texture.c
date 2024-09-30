@@ -260,14 +260,7 @@ Error VkUnifiedTexture_transition(
 	//Barriers for write->write, which always need to be inserted in-between two calls.
 	//Otherwise, it's not synchronized correctly.
 
-	if(
-		imageExt->lastStage == stage && imageExt->lastAccess == access &&
-		access != VK_ACCESS_2_SHADER_WRITE_BIT &&
-		access != VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT &&
-		access != VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT &&
-		access != VK_ACCESS_2_TRANSFER_WRITE_BIT &&
-		access != VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
-	)
+	if(imageExt->lastStage == stage && imageExt->lastAccess == access && !(access & VkAccessFlagBits2_WRITE))
 		return Error_none();
 
 	//Handle image barrier

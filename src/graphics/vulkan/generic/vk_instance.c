@@ -353,7 +353,6 @@ const C8 *reqExtensionsName[] = {
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
 
 const C8 *optExtensionsName[] = {
-	"VK_EXT_debug_marker",
 	"VK_KHR_performance_query",
 	"VK_KHR_ray_tracing_pipeline",
 	"VK_KHR_ray_query",
@@ -1446,9 +1445,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			capabilities.features |= EGraphicsFeatures_LUID;
 
 		//API dependent stuff for the runtime
-
-		if(optExtensions[EOptExtensions_DebugMarker])
-			capabilities.features |= EGraphicsFeatures_DebugMarkers;
 
 		if(perfQuery.performanceCounterQueryPools)
 			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;

@@ -46,13 +46,7 @@ Error VkDeviceBuffer_transition(
 	//Barriers for write->write, which always need to be inserted in-between two calls.
 	//Otherwise, it's not synchronized correctly.
 
-	if(
-		buffer->lastStage == stage && buffer->lastAccess == access &&
-		access != VK_ACCESS_2_SHADER_WRITE_BIT &&
-		access != VK_ACCESS_2_TRANSFER_WRITE_BIT &&
-		access != VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT &&
-		access != VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR
-	)
+	if(buffer->lastStage == stage && buffer->lastAccess == access && !(access & VkAccessFlagBits2_WRITE))
 		return Error_none();
 
 	//Handle buffer barrier
