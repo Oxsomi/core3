@@ -216,12 +216,12 @@ Bool WindowManager_createWindow(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess) {
 		Buffer_freex(&tmpWindow);
-
-	Buffer_freex(&extendedData);
-	Buffer_freex(&cpuVisibleBuffer);
-	CharString_freex(&titleCopy);
+		Buffer_freex(&extendedData);
+		Buffer_freex(&cpuVisibleBuffer);
+		CharString_freex(&titleCopy);
+	}
 
 	return s_uccess;
 }
