@@ -41,7 +41,7 @@ Error BLAS_initExt(BLAS *blas) {
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
 	CharString tmp = CharString_createNull();
-	VkBLAS *blasExt = BLAS_ext(BLASRef_ptr(blas), Vk);
+	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
 	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
 		return Error_none();
