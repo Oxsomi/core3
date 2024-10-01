@@ -845,38 +845,30 @@ void GraphicsDevice_postInit(GraphicsDevice *device) {
 
 	//Fill last 3 descriptor sets with UBO[i] to ensure we only modify things in flight.
 
-	VkDescriptorBufferInfo uboBufferInfo[3] = {
-		(VkDescriptorBufferInfo) {
-			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk)->buffer,
+	#define NBuffering (sizeof(device->frameData) / sizeof(device->frameData[0]))
+
+	VkDescriptorBufferInfo uboBufferInfo[NBuffering];
+	VkWriteDescriptorSet uboDescriptor[NBuffering];
+
+	for(U64 i = 0; i < NBuffering; ++i) {
+
+		uboBufferInfo[i] = (VkDescriptorBufferInfo) {
+			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[i]), Vk)->buffer,
 			.range = sizeof(CBufferData)
-		}
-	};
+		};
 
-	uboBufferInfo[1] = uboBufferInfo[0];
-	uboBufferInfo[2] = uboBufferInfo[0];
-
-	uboBufferInfo[1].offset = uboBufferInfo[0].range * 1;
-	uboBufferInfo[2].offset = uboBufferInfo[0].range * 2;
-
-	VkWriteDescriptorSet uboDescriptor[3] = {
-		(VkWriteDescriptorSet) {
+		uboDescriptor[i] = (VkWriteDescriptorSet) {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = deviceExt->sets[EDescriptorSetType_CBuffer0],
+			.dstSet = deviceExt->sets[EDescriptorSetType_CBuffer0 + i],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &uboBufferInfo[0]
-		}
-	};
+			.pBufferInfo = &uboBufferInfo[i]
+		};
+	}
 
-	uboDescriptor[1] = uboDescriptor[0];
-	uboDescriptor[2] = uboDescriptor[0];
-
-	uboDescriptor[1].pBufferInfo = &uboBufferInfo[1];
-	uboDescriptor[1].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer1];
-	uboDescriptor[2].pBufferInfo = &uboBufferInfo[2];
-	uboDescriptor[2].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer2];
+	#undef NBuffering
 
 	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
 }
@@ -976,7 +968,8 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 Error GraphicsDevice_submitCommandsImpl(
 	GraphicsDeviceRef *deviceRef,
 	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains
+	ListSwapchainRef swapchains,
+	CBufferData cbufferData
 ) {
 
 	//Unpack ext
@@ -1062,10 +1055,9 @@ Error GraphicsDevice_submitCommandsImpl(
 	//Prepare per frame cbuffer
 
 	{
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + ((device->submitId - 1) % 3);
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
 
-		for (U32 i = 0; i < data->swapchainCount; ++i) {
+		for (U32 i = 0; i < swapchains.length; ++i) {
 
 			SwapchainRef *swapchainRef = swapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
@@ -1074,9 +1066,11 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
-			data->swapchains[i * 2 + 0] = managedImage.readHandle;
-			data->swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+			cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
+			cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
 		}
+
+		*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
 
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -1086,7 +1080,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			VkMappedMemoryRange range = (VkMappedMemoryRange){
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 				.memory = (VkDeviceMemory)block.ext,
-				.offset = frameData->resource.blockOffset + ((device->submitId - 1) % 3) * sizeof(CBufferData),
+				.offset = frameData->resource.blockOffset,
 				.size = sizeof(CBufferData)
 			};
 

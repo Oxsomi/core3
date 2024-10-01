@@ -248,7 +248,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	Error err = Error_none();
 
-	VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;
+	const VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;
 
 	instanceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,

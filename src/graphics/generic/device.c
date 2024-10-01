@@ -68,7 +68,9 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	if(!device)
 		return true;
 
-	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
+	U64 NBuffering = sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]);
+
+	for(U64 i = 0; i < NBuffering; ++i) {
 
 		for(U64 j = 0; j < device->resourcesInFlight[i].length; ++j)
 			RefPtr_dec(device->resourcesInFlight[i].ptrNonConst + j);
@@ -76,7 +78,9 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		ListRefPtr_freex(&device->resourcesInFlight[i]);
 	}
 
-	DeviceBufferRef_dec(&device->frameData);
+	for(U64 i = 0; i < NBuffering; ++i)
+		DeviceBufferRef_dec(&device->frameData[i]);
+
 	DeviceBufferRef_dec(&device->staging);
 
 	SpinLock_lock(&device->lock, U64_MAX);
@@ -264,13 +268,14 @@ Error GraphicsDeviceRef_create(
 
 	//Allocate UBO
 
-	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		*deviceRef,
-		EDeviceBufferUsage_None,
-		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
-		CharString_createRefCStrConst("Per frame data"),
-		sizeof(CBufferData) * 3, &device->frameData
-	))
+	for(U64 i = 0; i < sizeof(device->frameData) / sizeof(device->frameData[0]); ++i)
+		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+			*deviceRef,
+			EDeviceBufferUsage_None,
+			EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+			CharString_createRefCStrConst("Per frame data"),
+			sizeof(CBufferData), &device->frameData[i]
+		))
 
 	GraphicsDevice_postInit(device);
 
@@ -427,7 +432,10 @@ clean:
 impl Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);
 
 impl Error GraphicsDevice_submitCommandsImpl(
-	GraphicsDeviceRef *deviceRef, ListCommandListRef commandLists, ListSwapchainRef swapchains
+	GraphicsDeviceRef *deviceRef,
+	ListCommandListRef commandLists,
+	ListSwapchainRef swapchains,
+	CBufferData data
 );
 
 impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
@@ -719,11 +727,9 @@ Error GraphicsDeviceRef_submitCommands(
 
 	//Set app data
 
-	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-	CBufferData *data = (CBufferData*) frameData->resource.mappedMemoryExt + ((device->submitId - 1) % 3);
 	Ns now = Time_now();
 
-	*data = (CBufferData) {
+	CBufferData data = (CBufferData) {
 		.frameId = (U32) device->submitId,
 		.time = device->firstSubmit ? (F32)((F64)(now - device->firstSubmit) / SECOND) : 0,
 		.deltaTime = device->firstSubmit ? (F32)((F64)(now - device->lastSubmit) / SECOND) : 0,
@@ -731,16 +737,16 @@ Error GraphicsDeviceRef_submitCommands(
 	};
 
 	if (deltaTime >= 0) {
-		data->deltaTime = deltaTime;
-		data->time = time;
+		data.deltaTime = deltaTime;
+		data.time = time;
 	}
 
-	Buffer_copy(Buffer_createRef((U8*)data->appData, sizeof(data->appData)), appData);
+	Buffer_copy(Buffer_createRef((U8*)data.appData, sizeof(data.appData)), appData);
 
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.
 
-	gotoIfError(clean, GraphicsDevice_submitCommandsImpl(deviceRef, commandLists, swapchains))
+	gotoIfError(clean, GraphicsDevice_submitCommandsImpl(deviceRef, commandLists, swapchains, data))
 
 	//Add resources from command lists to resources in flight
 

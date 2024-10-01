@@ -91,7 +91,7 @@ typedef struct GraphicsDevice {
 
 	//Graphics constants (globals) accessible by all shaders
 
-	DeviceBufferRef *frameData;
+	DeviceBufferRef *frameData[3];
 
 	//Temporary for processing command list and to avoid allocations
 

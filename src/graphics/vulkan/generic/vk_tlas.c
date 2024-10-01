@@ -300,7 +300,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
 		return Error_none();
 
-	VkAccelerationStructureBuildRangeInfoKHR *range = &tlasExt->range;
+	const VkAccelerationStructureBuildRangeInfoKHR *range = &tlasExt->range;
 
 	instanceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
