@@ -499,7 +499,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 	Error err;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	newSize = (((newSize + 2) / 3 + 511) &~ 511) * 3;			//Align to ensure we never get incompatible staging buffers
+	newSize = (((newSize + 2) / 3 + 4095) &~ 4095) * 3;			//Align to ensure we never get incompatible staging buffers
 
 	if (device->staging) {
 
