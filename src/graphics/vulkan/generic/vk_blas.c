@@ -84,7 +84,7 @@ Error BLAS_initExt(BLAS *blas) {
 			0, primitives, U32_MAX, "BLAS_initExt() only primitive count of <U32_MAX is supported"
 		))
 
-	blasExt->primitives = (U32) primitives;
+	blasExt->range = (VkAccelerationStructureBuildRangeInfoKHR) { .primitiveCount = (U32) primitives };
 
 	//Convert to Vulkan dependent version
 
@@ -248,22 +248,18 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	Error err = Error_none();
 
-	VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = (VkAccelerationStructureBuildRangeInfoKHR) {
-		.primitiveCount = (U32) blasExt->primitives
-	};
-
-	const VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
+	VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;
 
 	instanceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
 		1,
 		&blasExt->geometries,
-		&buildRangeInfoPtr
+		&range
 	);
 	
 	//Add as flight and ensure flushes are done if too many ASes are queued this frame
 
-	device->pendingPrimitives += blasExt->primitives;
+	device->pendingPrimitives += blasExt->range.primitiveCount;
 
 	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 	RefPtr_inc(pending);

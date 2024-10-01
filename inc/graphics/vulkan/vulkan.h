@@ -54,14 +54,14 @@ typedef enum ECompareOp ECompareOp;
 typedef struct VkBLAS {
 	VkAccelerationStructureGeometryKHR geometry;
 	VkAccelerationStructureBuildGeometryInfoKHR geometries;
-	U64 primitives;
+	VkAccelerationStructureBuildRangeInfoKHR range;
 	VkAccelerationStructureKHR as;
 } VkBLAS;
 
 typedef struct VkTLAS {
 	VkAccelerationStructureGeometryKHR geometry;
 	VkAccelerationStructureBuildGeometryInfoKHR geometries;
-	U64 primitives;
+	VkAccelerationStructureBuildRangeInfoKHR range;
 	VkAccelerationStructureKHR as;
 } VkTLAS;
 

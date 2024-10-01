@@ -184,7 +184,7 @@ Error TLAS_initExt(TLAS *tlas) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
 	};
 
-	tlasExt->primitives = instancesU32;
+	tlasExt->range = (VkAccelerationStructureBuildRangeInfoKHR) { .primitiveCount = instancesU32 };
 
 	instanceExt->getAccelerationStructureBuildSizes(
 		deviceExt->device,
@@ -300,17 +300,13 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
 		return Error_none();
 
-	VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = (VkAccelerationStructureBuildRangeInfoKHR) {
-		.primitiveCount = (U32) tlasExt->primitives
-	};
-
-	const VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
+	VkAccelerationStructureBuildRangeInfoKHR *range = &tlasExt->range;
 
 	instanceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
 		1,
 		&tlasExt->geometries,
-		&buildRangeInfoPtr
+		&range
 	);
 
 	//Add as flight (keep alive extra)
