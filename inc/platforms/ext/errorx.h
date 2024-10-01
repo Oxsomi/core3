@@ -30,6 +30,7 @@ typedef enum ELogOptions ELogOptions;
 typedef struct Error Error;
 
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options);
+void Error_printLnx(Error err);
 
 #ifdef __cplusplus
 	}

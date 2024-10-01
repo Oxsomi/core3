@@ -26,6 +26,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/log.h"
 #include "types/string.h"
 #include "types/error.h"
 

@@ -244,9 +244,10 @@ Available functions:
 - **create**(WindowManagerCallbacks, U64 extendedDataSize, WindowManager*) creates a WindowManager with the following callback functions (WindowManagerCallbacks):
   - void **onCreate**(WindowManager*) called after the native window manager has been initialized.
   - void **onDestroy**(WindowManager*) called before the window manager is freed.
-  - void **onDraw**(WindowManager*) called after drawing and updating all windows and after manager update.
+  - void **onDraw**(WindowManager*) called after drawing and updating all windows and after manager update. With 
   - void **onUpdate**(WindowManager*, F64) called before onDraw (manager) and after updating/drawing all windows.
   - After use, call free() on it.
+    - **onUpdate**(), **onDraw**() are generally called when **wait**() is called. However, sometimes events bypass the polling system, in which case it has to call these functions internally. This is the case with Windows resizing/moving, in those cases, WM_PAINT is dispatched only to the window and not to the poll loop. That behavior induces a full window manager update and will cause all windows to receive updates (virtual windows also receive those), but they won't receive paint notifications themselves.
 - **isAccessible**() if the WindowManager is accessible by the current calling thread.
 - Bool **supportsFormat**(EWindowFormat format) where EWindowFormat is one of BGRA8 (always supported), BGR10A2, RGBA16f, RGBA32f (rarely supported).
 - Error **wait**() wait for all current windows to exit. If they are physical windows, this means the user (or program) has to close them. If they are virtual windows then the program has to close them explicitly (for example after finishing the renders).
@@ -302,6 +303,7 @@ A window has to be managed on the same thread as a WindowManager, through the fo
 When a Window is created, it can be accessed through the following functions:
 
 - **isMinimized**(), **isFocussed**(), **isFullScreen**(), **doesAllowFullScreen**() as a simple helper around checking the window hint & flags.
+  - isMinimized on Windows also happens when the window is resizing.
 - **terminate**() the window is ready for destruction next update.
 - Error **toggleFullScreen**() toggle full screen on or off. If it's not supported it will error.
 - Error **updatePhysicalTitle**(CharString title) update the title of a physical window. Up to 260 C8s.

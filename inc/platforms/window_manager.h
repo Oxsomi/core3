@@ -70,6 +70,7 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedData, Wi
 Bool WindowManager_isAccessible(const WindowManager *manager);
 Bool WindowManager_free(WindowManager *manager);
 
+Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate);		//If forcingUpdate window is set, won't update that
 Bool WindowManager_wait(WindowManager *manager, Error *e_rr);
 
 impl Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format);

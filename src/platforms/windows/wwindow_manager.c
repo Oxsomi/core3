@@ -18,9 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/window_manager.h"
+#include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/errorx.h"
+#include "platforms/log.h"
 #include "types/error.h"
 
 #define UNICODE
@@ -41,7 +45,7 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	*wc = (WNDCLASSEXW) {
 
-		.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
+		.style = CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = WWindow_onCallback,
 		.hInstance = mainModule,
 
@@ -72,32 +76,51 @@ Bool WindowManager_freeNative(WindowManager *w) {
 	return true;
 }
 
-void WindowManager_updateExt() {
+void WindowManager_updateExt(WindowManager *manager) {
 
 	MSG msg = (MSG) { 0 };
-	Bool didPaint = false;
+	U64 seenWindows[4] = { 0 };
+	ListU64 seenWindowsLarge = (ListU64) { 0 };
+	Error err = Error_none();
+
+	if(manager->windows.length > 256)
+		gotoIfError(clean, ListU64_resizex(&seenWindowsLarge, (manager->windows.length + 63) >> 6))
+
+	else gotoIfError(clean, ListU64_createRefConst(seenWindows, 4, &seenWindowsLarge))
 
 	while(PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
 
 		if (msg.message == WM_PAINT) {
 
-			if (didPaint) {
+			//Find physical window
 
-				//Paint is dispatched if there's no more messages left,
-				//so after this, we need to return to the main thread so we can process other windows
-				//We do this by checking if the next message is also paint. If not, we continue
+			Bool duplicatePaint = false;
 
-				MSG msgCheck = (MSG) { 0 };
-				PeekMessageW(&msgCheck, NULL, 0, 0, PM_NOREMOVE);
+			for(U64 i = 0; i < manager->windows.length; ++i) {
 
-				if (msgCheck.message == msg.message)
+				Window *w = manager->windows.ptr[i];
+
+				if (msg.hwnd == w->nativeHandle && w->type == EWindowType_Physical) {
+
+					if ((seenWindowsLarge.ptrNonConst[i >> 6] >> (i & 63)) & 1) {
+						duplicatePaint = true;
+						break;
+					}
+
+					seenWindowsLarge.ptrNonConst[i >> 6] |= (U64)1 << (i & 63);
 					break;
+				}
 			}
 
-			didPaint = true;
+			if(duplicatePaint)		//Ensure our manager draw/update happens too for next frame
+				break;
 		}
 
 		TranslateMessage(&msg);
 		DispatchMessageW(&msg);
 	}
+
+clean:
+	ListU64_freex(&seenWindowsLarge);
+	Error_printLnx(err);
 }

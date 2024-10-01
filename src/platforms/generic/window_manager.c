@@ -226,7 +226,61 @@ clean:
 	return s_uccess;
 }
 
-impl void WindowManager_updateExt();
+impl void WindowManager_updateExt(WindowManager *manager);
+
+Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
+	
+	if(!manager)
+		return false;
+
+	//Update all windows first
+
+	for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
+
+		Window *w = ListWindowPtr_at(manager->windows, i);
+
+		if(w == forcingUpdate)	//Has already been processed
+			continue;
+
+		//Update interface
+
+		const Ns now = Time_now();
+
+		if (w->callbacks.onUpdate) {
+			const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+			w->callbacks.onUpdate(w, dt);
+		}
+
+		w->lastUpdate = now;
+
+		if(w->type != EWindowType_Physical && w->callbacks.onDraw)		//Virtual
+			w->callbacks.onDraw(w);
+
+		if (w->flags & EWindowFlags_ShouldTerminate)					//Just in case the window closed now
+			WindowManager_freeWindow(manager, &w);
+	}
+
+	//Then run window manager update; this polls all events (only used if it's not called by WM_PAINT)
+
+	if(!forcingUpdate)
+		WindowManager_updateExt(manager);
+
+	//Finally, we can notify manager that we're ready for draws/updates
+
+	const Ns now = Time_now();
+
+	if(manager->callbacks.onUpdate) {
+		const F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
+		manager->callbacks.onUpdate(manager, dt);
+	}
+
+	if(manager->callbacks.onDraw)
+		manager->callbacks.onDraw(manager);
+
+	manager->lastUpdate = now;
+
+	return true;
+}
 
 Bool WindowManager_wait(WindowManager *manager, Error *e_rr) {
 
@@ -237,50 +291,8 @@ Bool WindowManager_wait(WindowManager *manager, Error *e_rr) {
 			0, "WindowManager_wait() manager is NULL or inaccessible to current thread"
 		))
 
-	while(manager->windows.length) {
-
-		//Update all windows first
-
-		for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
-
-			Window *w = ListWindowPtr_at(manager->windows, i);
-
-			//Update interface
-
-			const Ns now = Time_now();
-
-			if (w->callbacks.onUpdate) {
-				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
-				w->callbacks.onUpdate(w, dt);
-			}
-
-			w->lastUpdate = now;
-
-			if(w->type != EWindowType_Physical && w->callbacks.onDraw)		//Virtual
-				w->callbacks.onDraw(w);
-
-			if (w->flags & EWindowFlags_ShouldTerminate)					//Just in case the window closed now
-				WindowManager_freeWindow(manager, &w);
-		}
-
-		//Then run window manager update; this polls all events.
-
-		WindowManager_updateExt();
-
-		//Finally, we can notify manager that we're ready for draws/updates
-
-		const Ns now = Time_now();
-
-		if(manager->callbacks.onUpdate) {
-			const F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
-			manager->callbacks.onUpdate(manager, dt);
-		}
-
-		if(manager->callbacks.onDraw)
-			manager->callbacks.onDraw(manager);
-
-		manager->lastUpdate = now;
-	}
+	while(manager->windows.length)
+		WindowManager_step(manager, NULL);
 
 clean:
 	return s_uccess;

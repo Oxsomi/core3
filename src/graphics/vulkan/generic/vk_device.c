@@ -1387,6 +1387,8 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
+	Log_performanceLnx("VkGraphicsDevice_flush called!");
+
 	//End current command list
 
 	Error err;
@@ -1437,6 +1439,28 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	};
 
 	gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer->buffer, &beginInfo)))
+
+	//Re-bind descriptors
+	
+	VkDescriptorSet sets[EDescriptorSetType_UniqueLayouts];
+
+	for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
+		sets[i] =
+			i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
+			deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % 3)];
+
+	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
+
+	for(U64 i = 0; i < bindingCount; ++i)
+		vkCmdBindDescriptorSets(
+			commandBuffer->buffer,
+			i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
+				i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+			),
+			deviceExt->defaultLayout,
+			0, EDescriptorSetType_UniqueLayouts, sets,
+			0, NULL
+		);
 
 	//Reset temporary variables to avoid invalid caching behavior
 

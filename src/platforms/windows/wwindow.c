@@ -704,21 +704,14 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		case WM_PAINT: {
 
-			if(!(w->hint & EWindowHint_AllowBackgroundUpdates) && (w->flags & EWindowFlags_IsMinimized))
+			if(
+				!(w->hint & EWindowHint_AllowBackgroundUpdates) &&
+				(w->flags & EWindowFlags_IsMinimized) &&
+				!(w->flags & EWindowFlags_IsMoving)
+			)
 				return 0;
 
 			//Update interface
-
-			Ns now = Time_now();
-
-			if (w->callbacks.onUpdate) {
-				F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
-				w->callbacks.onUpdate(w, dt);
-			}
-
-			w->lastUpdate = now;
-
-			//Update input
 
 			InputDevice *dit = ListInputDevice_begin(w->devices);
 			InputDevice *dend = ListInputDevice_end(w->devices);
@@ -726,13 +719,33 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			for(; dit != dend; ++dit)
 				InputDevice_markUpdate(*dit);
 
-			//Render (if not minimized)
+			const Ns now = Time_now();
 
-			if(w->callbacks.onDraw && !(w->flags & EWindowFlags_IsMinimized))
+			if (w->callbacks.onUpdate) {
+				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+				w->callbacks.onUpdate(w, dt);
+			}
+
+			w->lastUpdate = now;
+
+			if(w->callbacks.onDraw)
 				w->callbacks.onDraw(w);
+
+			//Call update on all other windows and window manager
+
+			if (w->flags & EWindowFlags_IsMoving)
+				WindowManager_step(w->owner, w);
 
 			return 0;
 		}
+
+		case WM_ENTERSIZEMOVE:
+			w->flags |= EWindowFlags_IsMoving;
+			break;
+
+		case WM_EXITSIZEMOVE:
+			w->flags &=~ EWindowFlags_IsMoving;
+			return 0;
 
 		case WM_GETMINMAXINFO: {
 
