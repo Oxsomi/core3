@@ -230,7 +230,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		GraphicsDeviceCapabilities caps = (GraphicsDeviceCapabilities) { 0 };
 
 		caps.features |=
-			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount | EGraphicsFeatures_DebugMarkers |
+			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount |
 			EGraphicsFeatures_GeometryShader | EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupShuffle |
 			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend | EGraphicsFeatures_Multiview;
 

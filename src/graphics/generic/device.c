@@ -33,6 +33,8 @@
 #include "formats/oiSH.h"
 #include "types/time.h"
 
+#include <stddef.h>
+
 TListNamedImpl(ListSpinLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
@@ -733,7 +735,7 @@ Error GraphicsDeviceRef_submitCommands(
 		data->time = time;
 	}
 
-	Buffer_copy(Buffer_createRef((U8*)data->appData, sizeof(*data)), appData);
+	Buffer_copy(Buffer_createRef((U8*)data->appData, sizeof(data->appData)), appData);
 
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.
