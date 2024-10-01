@@ -1211,15 +1211,15 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
-		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk);
+		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]), Vk);
 
 		gotoIfError(clean, VkDeviceBuffer_transition(
 			uboExt,
 			VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
 			VK_ACCESS_2_UNIFORM_READ_BIT,
 			graphicsQueueId,
-			((device->submitId - 1) % 3) * sizeof(CBufferData),
-			sizeof(CBufferData),
+			0,
+			0,
 			&deviceExt->bufferTransitions,
 			&dependency
 		))
