@@ -780,7 +780,10 @@ void CommandList_process(
 
 					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
 
-					if (!rtas.isCompleted)
+					//Read to RTAS is illegal if it's not initialized yet.
+					//However, if ShaderWrite is used on an RTAS then it will be written in the current scope.
+					//In that case, we want to transition to write of course.
+					if (!rtas.isCompleted && transition.type != ETransitionType_ShaderWrite)
 						continue;
 
 					gotoIfError(nextTransition, VkDeviceBuffer_transition(
