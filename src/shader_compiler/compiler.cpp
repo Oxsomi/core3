@@ -39,7 +39,7 @@
 
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
-#include "dxcompiler/../spirv-tools/optimizer.hpp"		//For some reason, it refuses to find it otherwise...
+#include "optimizer.hpp"
 #include "SPIRV-Reflect/spirv_reflect.h"
 #include "directx/d3d12shader.h"
 #include <exception>

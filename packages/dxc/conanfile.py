@@ -218,6 +218,8 @@ class dxc(ConanFile):
 			self.cpp_info.libs += [ "libclang" ]
 		else:
 			self.cpp_info.libs += [ "clang" ]
+
+		self.cpp_info.includedirs = [ "include", "include/spirv-tools" ]
 		
 		# Important note. This is built by using the cmake dependency graph
 		# We have to order from most dependent to least dependent
