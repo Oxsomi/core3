@@ -43,9 +43,6 @@ Error BLAS_initExt(BLAS *blas) {
 	CharString tmp = CharString_createNull();
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
-	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
-		return Error_none();
-
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
 		return Error_unsupportedOperation(0, "BLAS_initExt()::serialized not supported yet");		//TODO:
 

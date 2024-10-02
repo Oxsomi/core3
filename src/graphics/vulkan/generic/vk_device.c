@@ -1052,42 +1052,6 @@ Error GraphicsDevice_submitCommandsImpl(
 		gotoIfError(clean, ListVkPipelineStageFlags_pushBackx(&deviceExt->waitStages, pipelineStage))
 	}
 
-	//Prepare per frame cbuffer
-
-	{
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
-
-		for (U32 i = 0; i < swapchains.length; ++i) {
-
-			SwapchainRef *swapchainRef = swapchains.ptr[i];
-			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
-
-			Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
-
-			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
-
-			cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
-			cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
-		}
-
-		*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
-
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
-		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		if (incoherent) {
-
-			VkMappedMemoryRange range = (VkMappedMemoryRange){
-				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-				.memory = (VkDeviceMemory)block.ext,
-				.offset = frameData->resource.blockOffset,
-				.size = sizeof(CBufferData)
-			};
-
-			gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &range)))
-		}
-	}
-
 	//Record command list
 
 	VkCommandBuffer commandBuffer = NULL;
@@ -1202,6 +1166,62 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)))
 
+		//Make sure we tell VK that we're going to start updating the UBO from CPU
+
+		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]), Vk);
+
+		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+		gotoIfError(clean, VkDeviceBuffer_transition(
+			uboExt,
+			VK_PIPELINE_STAGE_2_HOST_BIT,
+			VK_ACCESS_2_HOST_WRITE_BIT,
+			graphicsQueueId,
+			0,
+			0,
+			&deviceExt->bufferTransitions,
+			&dependency
+		))
+
+		if(dependency.bufferMemoryBarrierCount)
+			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+
+		//Prepare per frame cbuffer
+
+		{
+			DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
+
+			for (U32 i = 0; i < swapchains.length; ++i) {
+
+				SwapchainRef *swapchainRef = swapchains.ptr[i];
+				Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
+
+				Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
+
+				UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
+
+				cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
+				cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+			}
+
+			*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
+
+			DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
+			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+			if (incoherent) {
+
+				VkMappedMemoryRange range = (VkMappedMemoryRange){
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory)block.ext,
+					.offset = frameData->resource.blockOffset,
+					.size = sizeof(CBufferData)
+				};
+
+				gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &range)))
+			}
+		}
+
 		//Start copies
 
 		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
@@ -1209,9 +1229,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		//Ensure ubo and staging buffer are the correct states
 
-		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-
-		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]), Vk);
+		dependency.bufferMemoryBarrierCount = 0;
 
 		gotoIfError(clean, VkDeviceBuffer_transition(
 			uboExt,
