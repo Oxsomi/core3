@@ -213,6 +213,7 @@ Error BLAS_initExt(BLAS *blas) {
 	};
 
 clean:
+	CharString_freex(&tmp);
 	return err;
 }
 
@@ -247,6 +248,9 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 
 	Error err = Error_none();
+
+	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
+		return Error_none();
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;
 
