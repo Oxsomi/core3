@@ -239,6 +239,15 @@ Error GraphicsDevice_initExt(
 	)
 
 	vkBindNext(
+		VkPhysicalDeviceRayTracingValidationFeaturesNV,
+		feat & EGraphicsFeatures_RayValidation,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV,
+			.rayTracingValidation = true
+		}
+	)
+
+	vkBindNext(
 		VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
 		feat & EGraphicsFeatures_RayPipeline,
 		{
