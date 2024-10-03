@@ -772,6 +772,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 				0, "SHFile_addEntrypoint() input semantic defined but not present"
 			))
 
+	for(U8 i = 0; i < 16; ++i)		//Avoid overlap between input and output semantics
+		presentMask[i] = 0;
+
 	for (U8 i = 0; i < outputs; ++i) {
 
 		U8 output = entry->outputSemanticNames[i];
