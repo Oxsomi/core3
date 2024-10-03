@@ -673,7 +673,8 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 Error GraphicsDevice_submitCommandsImpl(
 	GraphicsDeviceRef *deviceRef,
 	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains
+	ListSwapchainRef swapchains,
+	CBufferData cbufferData
 ) {
 
 	//Unpack ext
@@ -714,10 +715,9 @@ Error GraphicsDevice_submitCommandsImpl(
 	//Prepare per frame cbuffer
 
 	{
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + (device->submitId - 1) % 3;
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
 
-		for (U32 i = 0; i < data->swapchainCount; ++i) {
+		for (U32 i = 0; i < swapchains.length; ++i) {
 
 			SwapchainRef *swapchainRef = swapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
@@ -726,9 +726,11 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
-			data->swapchains[i * 2 + 0] = managedImage.readHandle;
-			data->swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+			cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
+			cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
 		}
+
+		*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
 	}
 
 	//Record command list
