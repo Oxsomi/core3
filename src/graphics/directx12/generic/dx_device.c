@@ -841,7 +841,8 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
-		DxDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Dx);
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
+		DxDeviceBuffer *uboExt = DeviceBuffer_ext(frameData, Dx);
 
 		gotoIfError(clean, DxDeviceBuffer_transition(
 			uboExt,
@@ -879,9 +880,8 @@ Error GraphicsDevice_submitCommandsImpl(
 			commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
 		}
 
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc =
-			frameData->resource.deviceAddress + ((device->submitId - 1) % 3) * sizeof(CBufferData);
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
+		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
 
 		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
 		commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
