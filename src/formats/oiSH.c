@@ -744,6 +744,8 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 
 	U32 presentMask[16] = { 0 };
 
+	Bool anyInputSemanticName = entry->inputSemanticNamesU64[0] || entry->inputSemanticNamesU64[1];
+
 	for (U8 i = 0; i < inputs; ++i) {
 
 		U8 input = entry->inputSemanticNames[i];
@@ -758,7 +760,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 				0, input >> 4, entry->uniqueInputSemantics, "SHFile_addEntrypoint() semantic name out of bounds"
 			))
 
-		if((presentMask[input >> 4] >> (input & 0xF)) & 1)
+		if(anyInputSemanticName && (presentMask[input >> 4] >> (input & 0xF)) & 1)
 			retError(clean, Error_invalidState(
 				0, "SHFile_addEntrypoint() semantic was already present"
 			))
@@ -775,6 +777,8 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 	for(U8 i = 0; i < 16; ++i)		//Avoid overlap between input and output semantics
 		presentMask[i] = 0;
 
+	Bool anyOutputSemanticName = entry->outputSemanticNamesU64[0] || entry->outputSemanticNamesU64[1];
+
 	for (U8 i = 0; i < outputs; ++i) {
 
 		U8 output = entry->outputSemanticNames[i];
@@ -789,7 +793,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 				1, output >> 4, uniqueOutputSemantics, "SHFile_addEntrypoint() semantic name out of bounds"
 			))
 
-		if((presentMask[output >> 4] >> (16 + (output & 0xF))) & 1)
+		if(anyOutputSemanticName && (presentMask[output >> 4] >> (16 + (output & 0xF))) & 1)
 			retError(clean, Error_invalidState(
 				1, "SHFile_addEntrypoint() semantic was already present"
 			))
@@ -2017,7 +2021,10 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 				//Entries need extra allocations for semantics if supported
 
-				if (entry.semanticNames.length)
+				if (
+					entry.inputSemanticNamesU64[0] | entry.inputSemanticNamesU64[1] |
+					entry.outputSemanticNamesU64[0] | entry.outputSemanticNamesU64[1]
+				)
 					headerSize += 1 + inputs + outputs;
 
 				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
@@ -2757,7 +2764,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				if(nextMem + 2 > file.ptr + Buffer_length(file))
 					retError(clean, Error_outOfBounds(
 						0, nextMem - file.ptr, Buffer_length(file),
-						"SHFile_read() couldn't parse raytracing stage, out of bounds"
+						"SHFile_read() couldn't parse graphics stage, out of bounds"
 					))
 
 				U8 inputs = nextMem[0];

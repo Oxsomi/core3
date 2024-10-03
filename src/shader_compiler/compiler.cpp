@@ -2793,6 +2793,8 @@ Bool Compiler_processDXIL(
 				semanticValue = (U8)((semanticName << 4) | signature.SemanticIndex);
 			}
 
+			else semanticValue = (U8) signature.SemanticIndex;
+
 			if(signature.MinPrecision || signature.Stream)
 				retError(clean, Error_invalidState(
 					0, "Compiler_processDXIL() invalid signature parameter; MinPrecision or Stream"
