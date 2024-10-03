@@ -714,8 +714,9 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	//Prepare per frame cbuffer
 
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
+
 	{
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
 
 		for (U32 i = 0; i < swapchains.length; ++i) {
 
@@ -841,7 +842,6 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
 		DxDeviceBuffer *uboExt = DeviceBuffer_ext(frameData, Dx);
 
 		gotoIfError(clean, DxDeviceBuffer_transition(
@@ -880,7 +880,6 @@ Error GraphicsDevice_submitCommandsImpl(
 			commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
 		}
 
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
 		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
 
 		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
