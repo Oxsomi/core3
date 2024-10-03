@@ -164,7 +164,7 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 		U16 entrypointId = (U16) binId;
 		U16 binaryId = (U16) (binId >> 16);
 
-		SHFile bin = binaries.ptr[binId];
+		SHFile bin = binaries.ptr[shaderId];
 		SHEntry entry = bin.entries.ptr[entrypointId];
 		U32 resolvedId = entry.binaryIds.ptr[binaryId] | ((U32) shaderId << 16);
 
@@ -218,7 +218,7 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 		U16 entrypointId = (U16) binId;
 		U16 binaryId = (U16) (binId >> 16);
 
-		SHFile bin = binaries.ptr[binId];
+		SHFile bin = binaries.ptr[shaderId];
 		SHEntry entry = bin.entries.ptr[entrypointId];
 		U32 resolvedId = entry.binaryIds.ptr[binaryId] | ((U32) shaderId << 16);
 		U64 libId = ListU32_findFirst(binaryIndices, resolvedId, 0, NULL);
