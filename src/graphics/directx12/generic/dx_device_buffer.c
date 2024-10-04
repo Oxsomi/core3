@@ -116,9 +116,10 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	if(!(buf->resource.flags & EGraphicsResourceFlag_ShaderRead))
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
-	U64 rtFlag = EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ASReadExt | EDeviceBufferUsage_ScratchExt;
+	if(buf->usage & EDeviceBufferUsage_ScratchExt)
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	if(buf->usage & rtFlag)
+	if(buf->usage & EDeviceBufferUsage_ASExt)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 
 	D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
