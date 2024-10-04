@@ -68,9 +68,6 @@ Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
 	if(instanceExt->deviceFactory)
 		instanceExt->deviceFactory->lpVtbl->Release(instanceExt->deviceFactory);
 
-	if(instanceExt->deviceConfig)
-		instanceExt->deviceConfig->lpVtbl->Release(instanceExt->deviceConfig);
-
 	if(instanceExt->debug1)
 		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
 
@@ -105,10 +102,6 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactory
 	)))
 
-	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
-		gotoIfError(clean, dxCheck(D3D12GetDebugInterface(&IID_ID3D12Debug1, (void**) &instanceExt->debug1)))
-	}
-
 	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->SetFlags(
 		instanceExt->deviceFactory, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
 	)))
@@ -123,10 +116,6 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 		instanceExt->debug1->lpVtbl->EnableDebugLayer(instanceExt->debug1);
 		instanceExt->debug1->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1, true);
 	}
-
-	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->QueryInterface(
-		instanceExt->deviceFactory, &IID_ID3D12DeviceConfiguration1, (void**) &instanceExt->deviceConfig
-	)))
 
 	//Check for NVApi
 

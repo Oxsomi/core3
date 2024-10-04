@@ -103,6 +103,8 @@ typedef struct DxGraphicsDevice {
 	ID3D12InfoQueue1 *infoQueue1;
 	ID3D12InfoQueue1 *infoQueue0;
 
+	ID3D12DeviceConfiguration1 *deviceConfig;
+
 	DxCommandQueue queues[EDxCommandQueue_Count];		//Don't have to be unique queues! Indexed by EVkCommandQueue
 
 	//3D as 1D flat List: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues

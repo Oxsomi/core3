@@ -58,8 +58,6 @@ typedef struct DxGraphicsInstance {
 
 	ID3D12DeviceFactory *deviceFactory;
 
-	ID3D12DeviceConfiguration1 *deviceConfig;
-
 	AGSContext *agsContext;
 
 	CharString nvDriverVersion;

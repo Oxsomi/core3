@@ -144,6 +144,10 @@ Error GraphicsDevice_initExt(
 		&IID_ID3D12Device10, (void**) &deviceExt->device
 	)))
 
+	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->QueryInterface(
+		instanceExt->deviceFactory, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
+	)))
+
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
@@ -370,8 +374,8 @@ Error GraphicsDevice_initExt(
 		}
 	};
 
-	err = dxCheck(instanceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(
-		instanceExt->deviceConfig, &rootSig, &rootSigBlob, &errBlob
+	err = dxCheck(deviceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(
+		deviceExt->deviceConfig, &rootSig, &rootSigBlob, &errBlob
 	));
 
 	if(err.genericError) {
@@ -606,6 +610,9 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 	if(deviceExt->infoQueue1)
 		deviceExt->infoQueue1->lpVtbl->Release(deviceExt->infoQueue1);
+
+	if(deviceExt->deviceConfig)
+		deviceExt->deviceConfig->lpVtbl->Release(deviceExt->deviceConfig);
 
 	if(deviceExt->debugDevice) {
 
