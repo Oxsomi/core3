@@ -387,7 +387,7 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 	endif()
 
-	target_link_libraries(OxC3_graphics INTERFACE DirectX12)
+	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
 
 elseif("${graphicsApi}" STREQUAL "metal")
 	message(FATAL_ERROR "Graphics api not supported yet: Metal")
