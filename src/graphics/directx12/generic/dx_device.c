@@ -144,8 +144,8 @@ Error GraphicsDevice_initExt(
 		&IID_ID3D12Device10, (void**) &deviceExt->device
 	)))
 
-	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->QueryInterface(
-		instanceExt->deviceFactory, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
+		deviceExt->device, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
 	)))
 
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
