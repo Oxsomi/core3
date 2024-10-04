@@ -19,7 +19,6 @@
 */
 
 #include "platforms/platform.h"
-#include "graphics/generic/application.h"
 #include "platforms/log.h"
 #include "cli.h"
 

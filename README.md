@@ -129,8 +129,6 @@ The graphics API is built around modern APIs. So it won't be supporting OpenGL, 
 
 For the graphics minimum spec check the [minimum spec](graphics_spec.md). When unsure if a device is capable, please run `OxC3 graphics devices` to see if your device is supported.
 
-To use the graphics API, make sure that all entrypoints that use it link to it properly by including it: `#include "graphics/generic/application.h"`. This must be done in the real executable and not the DLL or lib/so file, or else not all graphics features might be activated (required for proper D3D12 support: Agility SDK).
-
 ## Contributions
 
 To contribute to this repository, you agree to the [contribution guidelines](FOR_CONTRIBUTORS.md). Before merging a PR as an external party, you have to sign a contributor license agreement.
@@ -176,7 +174,7 @@ OxC3 is optional and doesn't have to be distributed with the application, though
   - *DXC* (and by extension LLVM, clang, DirectX-Headers, SPIRV-Headers, SPIRV-Tools): Compiling HLSL to DXIL and SPIRV.
   - *SPIRV-Tools*: Stripping, optimizing and disassembling spirv binaries.
   - *SPIRV-Reflect*: Reflecting SPIRV.
-  - (**TODO**): *DirectX-Headers*: Reflecting DXIL.
+  - *DirectX-Headers*: Reflecting DXIL.
   - (**TODO**): *SPIRV-Cross*: Cross compiling SPIRV to MSL (and WGSL?).
 - OxC3_graphics.
   - *Vulkan*.

@@ -138,7 +138,8 @@ Error GraphicsDevice_initExt(
 		&IID_IDXGIAdapter4, (void**)&deviceExt->adapter4
 	)))
 
-	gotoIfError(clean, dxCheck(D3D12CreateDevice(
+	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->CreateDevice(
+		instanceExt->deviceFactory,
 		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_1,
 		&IID_ID3D12Device10, (void**) &deviceExt->device
 	)))
@@ -369,7 +370,9 @@ Error GraphicsDevice_initExt(
 		}
 	};
 
-	err = dxCheck(D3D12SerializeVersionedRootSignature(&rootSig, &rootSigBlob, &errBlob));
+	err = dxCheck(instanceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(
+		instanceExt->deviceConfig, &rootSig, &rootSigBlob, &errBlob
+	));
 
 	if(err.genericError) {
 

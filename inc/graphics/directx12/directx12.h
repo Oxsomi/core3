@@ -52,7 +52,13 @@ typedef struct DxGraphicsInstance {
 
 	IDXGIFactory6 *factory;
 
+	ID3D12SDKConfiguration1 *config;
+
 	ID3D12Debug1 *debug1;
+
+	ID3D12DeviceFactory *deviceFactory;
+
+	ID3D12DeviceConfiguration1 *deviceConfig;
 
 	AGSContext *agsContext;
 

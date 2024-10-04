@@ -144,8 +144,6 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFla
 
 	gotoIfError(clean, GraphicsInstance_createExt(info, instanceRef));
 
-	instance->verificationVersion = GraphicsInstance_verificationVersion;
-
 clean:
 
 	if(err.genericError)

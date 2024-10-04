@@ -43,8 +43,6 @@ typedef enum EGraphicsApi {
 	EGraphicsApi_Count
 } EGraphicsApi;
 
-user_impl extern const U32 GraphicsInstance_verificationVersion;		//Set by "graphics/generic/application.h"
-
 typedef enum EGraphicsInstanceFlags {
 	EGraphicsInstanceFlags_None				= 0,
 	EGraphicsInstanceFlags_IsDebug			= 1 << 0,
@@ -60,7 +58,7 @@ typedef struct GraphicsInstance {
 	U32 apiVersion;
 
 	EGraphicsInstanceFlags flags;
-	U32 verificationVersion;
+	U32 padding;
 
 } GraphicsInstance;
 

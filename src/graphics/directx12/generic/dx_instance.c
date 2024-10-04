@@ -62,6 +62,18 @@ Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
 	if(instanceExt->factory)
 		instanceExt->factory->lpVtbl->Release(instanceExt->factory);
 
+	if(instanceExt->config)
+		instanceExt->config->lpVtbl->Release(instanceExt->config);
+
+	if(instanceExt->deviceFactory)
+		instanceExt->deviceFactory->lpVtbl->Release(instanceExt->deviceFactory);
+
+	if(instanceExt->deviceConfig)
+		instanceExt->deviceConfig->lpVtbl->Release(instanceExt->deviceConfig);
+
+	if(instanceExt->debug1)
+		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
+
 	return true;
 }
 
@@ -83,11 +95,38 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 	if(err.genericError)
 		return err;
 
+	gotoIfError(clean, dxCheck(D3D12GetInterface(
+		&CLSID_D3D12SDKConfiguration, &IID_ID3D12SDKConfiguration1, (void**) &instanceExt->config
+	)))
+
+	gotoIfError(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
+		instanceExt->config,
+		D3D12_SDK_VERSION, "./D3D12/",
+		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactory
+	)))
+
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 		gotoIfError(clean, dxCheck(D3D12GetDebugInterface(&IID_ID3D12Debug1, (void**) &instanceExt->debug1)))
+	}
+
+	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->SetFlags(
+		instanceExt->deviceFactory, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
+	)))
+
+	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
+
+		gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->GetConfigurationInterface(
+			instanceExt->deviceFactory, &CLSID_D3D12Debug, 
+			&IID_ID3D12Debug1, (void**) &instanceExt->debug1
+		)))
+
 		instanceExt->debug1->lpVtbl->EnableDebugLayer(instanceExt->debug1);
 		instanceExt->debug1->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1, true);
 	}
+
+	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->QueryInterface(
+		instanceExt->deviceFactory, &IID_ID3D12DeviceConfiguration1, (void**) &instanceExt->deviceConfig
+	)))
 
 	//Check for NVApi
 
@@ -218,9 +257,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		HRESULT lastError = 0;
 
-		if(FAILED(lastError = D3D12CreateDevice(
-			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_1, &IID_ID3D12Device10, (void**) &device)
-		)) {
+		if(FAILED(lastError = instanceExt->deviceFactory->lpVtbl->CreateDevice(
+			instanceExt->deviceFactory,
+			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_1, &IID_ID3D12Device10, (void**) &device
+		))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 11.1", i);
 			goto next;
 		}

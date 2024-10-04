@@ -361,29 +361,17 @@ if("${graphicsApi}" STREQUAL "vulkan")
 
 elseif("${graphicsApi}" STREQUAL "directx12")
 
-	write_file(
-		"${CMAKE_BINARY_DIR}/external/agility/version.c"
-		"#include <stdint.h>\n"
-		"#include \"d3d12.h\"\n"
-		"__declspec(dllexport) extern const uint32_t D3D12SDKVersion = D3D12_SDK_VERSION;\n"
-		"__declspec(dllexport) extern const char *D3D12SDKPath = \"./D3D12/\";"
-	)
-
 	add_library(
 		DirectX12
-		STATIC
-		"${CMAKE_BINARY_DIR}/external/agility/version.c"
+		INTERFACE
 		CMakeLists.txt
 	)
 
 	find_package(agility_sdk REQUIRED)
 
-	target_link_libraries(DirectX12 PUBLIC agility_sdk::agility_sdk)
+	target_link_libraries(DirectX12 INTERFACE agility_sdk::agility_sdk)
 
-	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
-	target_include_directories(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
-
-	set_target_properties(DirectX12 PROPERTIES FOLDER External/D3D12)
+	target_include_directories(DirectX12 INTERFACE "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 
 	if(NOT ${ARM})
 
@@ -395,9 +383,11 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		find_package(ags REQUIRED)
 		find_package(nvapi REQUIRED)
 
-		target_link_libraries(DirectX12 PUBLIC ags::ags nvapi::nvapi)
+		target_link_libraries(DirectX12 INTERFACE ags::ags nvapi::nvapi)
 
 	endif()
+
+	target_link_libraries(OxC3_graphics INTERFACE DirectX12)
 
 elseif("${graphicsApi}" STREQUAL "metal")
 	message(FATAL_ERROR "Graphics api not supported yet: Metal")
