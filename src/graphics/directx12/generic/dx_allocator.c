@@ -55,7 +55,7 @@ Error DeviceMemoryAllocator_allocate(
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
 	Bool forceCpuSided = cpuSided;
 
-	if(!isGpu)				//Force shared allocations if not dedicated
+	if(!isGpu || hasReBAR)			//Force shared allocations if not dedicated or if ReBAR is available
 		cpuSided = true;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
@@ -112,16 +112,15 @@ Error DeviceMemoryAllocator_allocate(
 	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
 		.SizeInBytes = realBlockSize,
 		.Properties = (D3D12_HEAP_PROPERTIES) {
-			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT)
+			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT),
+			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
+			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
-		.Alignment = req.alignment,
+		.Alignment = req.alignment
 	};
 
-	if (!isGpu) {
+	if (!isGpu || hasReBAR)
 		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
-		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
-		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
-	}
 
 	switch(resourceType) {
 
@@ -135,8 +134,9 @@ Error DeviceMemoryAllocator_allocate(
 
 	case EResourceType_DeviceBuffer:
 
-			heapDesc.Flags |=
-				D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (!cpuSided || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0);
+			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (
+				!cpuSided || hasReBAR || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0
+			);
 
 			break;
 	}
