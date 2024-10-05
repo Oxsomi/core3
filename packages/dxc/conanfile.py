@@ -134,13 +134,10 @@ class dxc(ConanFile):
 
 		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
-		bin_src = os.path.join(self.build_folder, "bin")
-		bin_dst = os.path.join(self.package_folder, "bin")
 		
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if not self.settings.os == "Windows":
 			copy(self, "*.a", lib_src, lib_dst)
-			copy(self, "^([^.]+)$", bin_src, bin_dst)
 		
 		# Windows uses more complicated setups
 		else:
@@ -148,7 +145,6 @@ class dxc(ConanFile):
 			lib_dbg_src = os.path.join(self.build_folder, "lib/Debug")
 			dbg_lib_src = os.path.join(self.build_folder, "Debug/lib")
 			bin_dbg_src = os.path.join(self.build_folder, "bin/Debug")
-			dbg_bin_src = os.path.join(self.build_folder, "Debug/bin")
 
 			copy(self, "*.lib", lib_dbg_src, lib_dst)
 			copy(self, "*.lib", dbg_lib_src, lib_dst)
@@ -157,25 +153,9 @@ class dxc(ConanFile):
 			copy(self, "*.exp", lib_dbg_src, lib_dst)
 			copy(self, "*.exp", dbg_lib_src, lib_dst)
 
-			copy(self, "*.exp", bin_dbg_src, bin_dst)
-			copy(self, "*.exp", dbg_bin_src, bin_dst)
-			copy(self, "*.exe", bin_dbg_src, bin_dst)
-			copy(self, "*.exe", dbg_bin_src, bin_dst)
-			copy(self, "*.dll", bin_dbg_src, bin_dst)
-			copy(self, "*.dll", dbg_bin_src, bin_dst)
-			copy(self, "*.pdb", bin_dbg_src, bin_dst)
-			copy(self, "*.pdb", dbg_bin_src, bin_dst)
-
 			if os.path.isfile(lib_dst):
 				for filename in os.listdir(lib_dst):
 					f = os.path.join(lib_dst, filename)
-					if os.path.isfile(f):
-						offset = f.rfind(".")
-						rename(self, f, f[:offset] + "d." + f[offset+1:])
-
-			if os.path.isfile(bin_dst):
-				for filename in os.listdir(bin_dst):
-					f = os.path.join(bin_dst, filename)
 					if os.path.isfile(f):
 						offset = f.rfind(".")
 						rename(self, f, f[:offset] + "d." + f[offset+1:])
@@ -185,7 +165,6 @@ class dxc(ConanFile):
 			lib_rel_src = os.path.join(self.build_folder, "lib/Release")
 			rel_lib_src = os.path.join(self.build_folder, "Release/lib")
 			bin_rel_src = os.path.join(self.build_folder, "bin/Release")
-			rel_bin_src = os.path.join(self.build_folder, "Release/bin")
 
 			copy(self, "*.lib", lib_rel_src, lib_dst)
 			copy(self, "*.lib", rel_lib_src, lib_dst)
@@ -193,18 +172,6 @@ class dxc(ConanFile):
 			copy(self, "*.pdb", rel_lib_src, lib_dst)
 			copy(self, "*.exp", lib_rel_src, lib_dst)
 			copy(self, "*.exp", rel_lib_src, lib_dst)
-			
-			# Copy executables if applicable
-
-			copy(self, "*.exp", bin_rel_src, bin_dst)
-			copy(self, "*.exe", bin_rel_src, bin_dst)
-			copy(self, "*.dll", bin_rel_src, bin_dst)
-			copy(self, "*.pdb", bin_rel_src, bin_dst)
-
-			copy(self, "*.exp", rel_bin_src, bin_dst)
-			copy(self, "*.exe", rel_bin_src, bin_dst)
-			copy(self, "*.dll", rel_bin_src, bin_dst)
-			copy(self, "*.pdb", rel_bin_src, bin_dst)
 
 	def package_info(self):
 

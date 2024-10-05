@@ -15,6 +15,37 @@ function(configure_icon target icon)
 
 endfunction()
 
+function(apply_dependencies target)
+
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR "apply_dependencies: target ${target} not present.")
+	endif()
+
+	install(RUNTIME_DEPENDENCY_SET ${target}
+		PRE_EXCLUDE_REGEXES
+			[[api-ms-win-.*]]
+			[[ext-ms-.*]]
+			[[kernel32\.dll]]
+			[[libc\.so\..*]] [[libgcc_s\.so\..*]] [[libm\.so\..*]] [[libstdc\+\+\.so\..*]]
+		POST_EXCLUDE_REGEXES
+			[[.*/system32/.*\.dll]]
+			[[^/lib.*]]
+			[[^/usr/lib.*]]
+		DIRECTORIES ${CONAN_RUNTIME_LIB_DIRS}
+	)
+	
+	if(CMAKE_IMPORT_LIBRARY_SUFFIX)
+		add_custom_command(
+			TARGET ${target} POST_BUILD
+			COMMAND ${CMAKE_COMMAND}
+				-D "LIBDIRS=${CONAN_RUNTIME_LIB_DIRS}"
+				-D DESTDIR=$<TARGET_FILE_DIR:${target}>
+				-P ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/copy_dlls.cmake
+		)
+	endif()
+
+endfunction()
+
 # Add virtual directory as a loadable section.
 # Example:
 # add_virtual_files(

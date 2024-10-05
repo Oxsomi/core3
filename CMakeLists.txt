@@ -386,7 +386,7 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		target_link_libraries(DirectX12 INTERFACE ags::ags nvapi::nvapi)
 
 	endif()
-
+	
 	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
 
 elseif("${graphicsApi}" STREQUAL "metal")
@@ -490,5 +490,6 @@ if(EnableOxC3CLI)
 	include(cmake/oxc3.cmake)
 	configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 	configure_virtual_files(OxC3)
+	apply_dependencies(OxC3)
 
 endif()

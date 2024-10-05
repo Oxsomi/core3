@@ -1,4 +1,4 @@
 sources:
-  "0.2.043":
+  "0.2.044":
     url: "https://github.com/Oxsomi/core3"
     checkout: "vulkan"
