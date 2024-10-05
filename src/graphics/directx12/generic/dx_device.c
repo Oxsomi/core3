@@ -726,23 +726,20 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
 
-	{
+	for (U32 i = 0; i < swapchains.length; ++i) {
 
-		for (U32 i = 0; i < swapchains.length; ++i) {
+		SwapchainRef *swapchainRef = swapchains.ptr[i];
+		Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
-			SwapchainRef *swapchainRef = swapchains.ptr[i];
-			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
+		Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
-			Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
+		UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
-			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
-
-			cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
-			cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
-		}
-
-		*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
+		cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
+		cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
 	}
+
+	*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
 
 	//Record command list
 
@@ -838,8 +835,10 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		commandBuffer = allocator->cmd;
 
-		if(!isNew)
+		if(!isNew) {
+			gotoIfError(clean, dxCheck(allocator->pool->lpVtbl->Reset(allocator->pool)))
 			gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL)))
+		}
 
 		//Start copies
 

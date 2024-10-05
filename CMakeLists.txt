@@ -361,11 +361,7 @@ if("${graphicsApi}" STREQUAL "vulkan")
 
 elseif("${graphicsApi}" STREQUAL "directx12")
 
-	add_library(
-		DirectX12
-		INTERFACE
-		CMakeLists.txt
-	)
+	add_library(DirectX12 INTERFACE)
 
 	find_package(agility_sdk REQUIRED)
 
