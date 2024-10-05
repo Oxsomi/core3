@@ -287,6 +287,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		D3D12_FEATURE_DATA_D3D12_OPTIONS12 opt12 = (D3D12_FEATURE_DATA_D3D12_OPTIONS12) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS14 opt14 = (D3D12_FEATURE_DATA_D3D12_OPTIONS14) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS16 opt16 = (D3D12_FEATURE_DATA_D3D12_OPTIONS16) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS17 opt17 = (D3D12_FEATURE_DATA_D3D12_OPTIONS17) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS21 opt21 = (D3D12_FEATURE_DATA_D3D12_OPTIONS21) { 0 };
 
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
@@ -393,6 +394,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			opt16.GPUUploadHeapSupported
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_ReBAR;
+
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS17, &opt17, sizeof(opt17))) &&
+			opt17.ManualWriteTrackingResourceSupported
+		)
+			caps.featuresExt |= EDxGraphicsFeatures_ReportReBARWrites;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS21, &opt21, sizeof(opt21))) &&

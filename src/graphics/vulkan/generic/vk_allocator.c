@@ -331,7 +331,9 @@ clean:
 	return err;
 }
 
-Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
+Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext, void *extDbg) {
+
+	(void) extDbg;
 
 	if(!device || !ext)
 		return false;

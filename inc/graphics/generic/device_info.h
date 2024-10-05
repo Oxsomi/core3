@@ -79,6 +79,7 @@ typedef enum EDxGraphicsFeatures {
 	EDxGraphicsFeatures_WaveSize				= 1 << 3,
 	EDxGraphicsFeatures_WaveSizeMinMax			= 1 << 4,
 	EDxGraphicsFeatures_PAQ						= 1 << 5,
+	EDxGraphicsFeatures_ReportReBARWrites		= 1 << 6,		//A tool is attached and requires marking updates to ReBAR
 
 	EDxGraphicsFeatures_SM6_6					= 1 << 16,		//Last bits are for shader model
 	EDxGraphicsFeatures_SM6_7					= 1 << 17,

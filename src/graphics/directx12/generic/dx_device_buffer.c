@@ -285,8 +285,13 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			break;
 	}
 
-	if(!isInFlight && buffer->resource.mappedMemoryExt)
-		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+	if (!isInFlight && buffer->resource.mappedMemoryExt) {
+
+		DeviceMemoryBlock block = device->allocator.blocks.ptr[buffer->resource.blockId];
+		ID3D12ManualWriteTrackingResource *tracking = (ID3D12ManualWriteTrackingResource*)block.extDbg;
+		U64 offset = buffer->resource.blockOffset;
+
+		for (U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
 			DevicePendingRange range = buffer->pendingChanges.ptr[j];
 
@@ -297,7 +302,13 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			Buffer src = Buffer_createRefConst(buffer->cpuData.ptr + start, len);
 
 			Buffer_copy(dst, src);
+
+			if (tracking) {
+				D3D12_RANGE rangeD3D12 = (D3D12_RANGE){ .Begin = start + offset, .End = range.buffer.endRange + offset };
+				tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);
+			}
 		}
+	}
 
 	else {
 
@@ -327,6 +338,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			DxDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Dx);
 			U8 *location = stagingResource->resource.mappedMemoryExt;
 
+			DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
+			ID3D12ManualWriteTrackingResource* tracking = (ID3D12ManualWriteTrackingResource*)block.extDbg;
+			U64 offset = stagingResource->resource.blockOffset;
+
 			//Copy into our buffer
 
 			allocRange = 0;
@@ -340,6 +355,11 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
+				
+				if (tracking) {
+					D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = allocRange + offset, .End = allocRange + offset + len };
+					tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);
+				}
 
 				gotoIfError(clean, DxDeviceBuffer_transition(
 					stagingResourceExt,
@@ -388,6 +408,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 			DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 
+			DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
+			ID3D12ManualWriteTrackingResource* tracking = (ID3D12ManualWriteTrackingResource*)block.extDbg;
+			U64 offset = staging->resource.blockOffset;
+
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
 
@@ -423,6 +447,11 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
+
+				if (tracking) {
+					D3D12_RANGE rangeD3D12 = (D3D12_RANGE){ .Begin = allocRange + offset, .End = allocRange + offset + len };
+					tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);
+				}
 
 				gotoIfError(clean, DxDeviceBuffer_transition(
 					bufferExt,

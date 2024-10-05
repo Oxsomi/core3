@@ -52,6 +52,7 @@ Error DeviceMemoryAllocator_allocate(
 
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
+	Bool reqReBARNotif = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReportReBARWrites;
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
 	Bool forceCpuSided = cpuSided;
 
@@ -141,13 +142,22 @@ Error DeviceMemoryAllocator_allocate(
 			break;
 	}
 
+	if (reqReBARNotif)
+		heapDesc.Flags |= D3D12_HEAP_FLAG_TOOLS_USE_MANUAL_WRITE_TRACKING;
+
 	ID3D12Heap *heap = NULL;
+	ID3D12ManualWriteTrackingResource *tracking = NULL;
 	Error err = dxCheck(deviceExt->device->lpVtbl->CreateHeap(
 		deviceExt->device, &heapDesc, &IID_ID3D12Heap, (void**) &heap
 	));
 
 	if(err.genericError)
 		return err;
+
+	if(reqReBARNotif)
+		gotoIfError(clean, dxCheck(heap->lpVtbl->QueryInterface(
+			heap, &IID_ID3D12ManualWriteTrackingResource, (void**) &tracking
+		)))
 
 	//Initialize block
 
@@ -156,6 +166,7 @@ Error DeviceMemoryAllocator_allocate(
 		.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
 		.isDedicated = isDedicated,
 		.ext = heap,
+		.extDbg = tracking,
 		.resourceType = (U8) resourceType
 	};
 
@@ -212,18 +223,26 @@ clean:
 
 	if(err.genericError) {
 		AllocationBuffer_freex(&block.allocations);
-		heap->lpVtbl->Release(heap);
+
+		if(tracking)
+			tracking->lpVtbl->Release(tracking);
+
+		if(heap)
+			heap->lpVtbl->Release(heap);
 	}
 
 	return err;
 }
 
-Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
+Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext, void *extDbg) {
 
 	(void)device;
 
 	if(!ext)
 		return false;
+
+	if(extDbg)
+		((ID3D12ManualWriteTrackingResource*)extDbg)->lpVtbl->Release((ID3D12ManualWriteTrackingResource*)extDbg);
 
 	((ID3D12Heap*)ext)->lpVtbl->Release((ID3D12Heap*)ext);
 	return true;
