@@ -235,8 +235,11 @@ Error GraphicsDevice_initExt(
 	//Enable NV extensions
 
 	static const U32 nvExtSlot = 99999;		//space and u slot
+	EGraphicsFeatures nvExt =
+		EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayMicromapDisplacement |
+		EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation;
 
-	if(isNv) {
+	if(isNv && (device->info.capabilities.features & nvExt)) {
 
 		NvAPI_Status status = NvAPI_D3D12_SetNvShaderExtnSlotSpace((IUnknown*)deviceExt->device, nvExtSlot, nvExtSlot);
 
