@@ -45,7 +45,6 @@ typedef struct DeviceMemoryBlock {
 	U8 *mappedMemoryExt;			//Not always available, can be done on a resource basis
 
 	void *ext;						//Extended data
-	void *extDbg;					//Extended data for debugging only
 
 	void *stackTrace[16];			//Tracking memleaks if Debug flag is on
 

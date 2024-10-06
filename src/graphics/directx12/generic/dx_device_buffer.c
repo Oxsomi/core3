@@ -80,10 +80,13 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
 	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Dx);
 
-	if(bufferExt->buffer) {
+	if(buffer->resource.debugExt)
+		((ID3D12ManualWriteTrackingResource*)buffer->resource.debugExt)->lpVtbl->Release(
+			(ID3D12ManualWriteTrackingResource*)buffer->resource.debugExt
+		);
+
+	if(bufferExt->buffer)
 		bufferExt->buffer->lpVtbl->Release(bufferExt->buffer);
-		bufferExt->buffer = NULL;
-	}
 
 	return true;
 }
@@ -183,6 +186,11 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if(!buf->resource.deviceAddress)
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"))
+
+	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReportReBARWrites)
+		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->QueryInterface(
+			bufExt->buffer, &IID_ID3D12ManualWriteTrackingResource, (void**) &buf->resource.debugExt
+		)))
 
 	//Fill relevant descriptor sets if shader accessible
 
@@ -287,9 +295,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 	if (!isInFlight && buffer->resource.mappedMemoryExt) {
 
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[buffer->resource.blockId];
-		ID3D12ManualWriteTrackingResource *tracking = (ID3D12ManualWriteTrackingResource*)block.extDbg;
-		U64 offset = buffer->resource.blockOffset;
+		ID3D12ManualWriteTrackingResource *tracking = (ID3D12ManualWriteTrackingResource*) buffer->resource.debugExt;
 
 		for (U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
@@ -304,7 +310,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			Buffer_copy(dst, src);
 
 			if (tracking) {
-				D3D12_RANGE rangeD3D12 = (D3D12_RANGE){ .Begin = start + offset, .End = range.buffer.endRange + offset };
+				D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = start, .End = start + len };
 				tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);
 			}
 		}
@@ -338,9 +344,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			DxDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Dx);
 			U8 *location = stagingResource->resource.mappedMemoryExt;
 
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
-			ID3D12ManualWriteTrackingResource* tracking = (ID3D12ManualWriteTrackingResource*)block.extDbg;
-			U64 offset = stagingResource->resource.blockOffset;
+			ID3D12ManualWriteTrackingResource *tracking = (ID3D12ManualWriteTrackingResource*) stagingResource->resource.debugExt;
 
 			//Copy into our buffer
 
@@ -357,7 +361,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				);
 				
 				if (tracking) {
-					D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = allocRange + offset, .End = allocRange + offset + len };
+					D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = allocRange, .End = allocRange + len };
 					tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);
 				}
 
@@ -408,9 +412,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 			DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
-			ID3D12ManualWriteTrackingResource* tracking = (ID3D12ManualWriteTrackingResource*)block.extDbg;
-			U64 offset = staging->resource.blockOffset;
+			ID3D12ManualWriteTrackingResource *tracking = (ID3D12ManualWriteTrackingResource*) staging->resource.debugExt;
 
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
@@ -449,7 +451,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				);
 
 				if (tracking) {
-					D3D12_RANGE rangeD3D12 = (D3D12_RANGE){ .Begin = allocRange + offset, .End = allocRange + offset + len };
+					D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = allocRange, .End = allocRange + len };
 					tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);
 				}
 

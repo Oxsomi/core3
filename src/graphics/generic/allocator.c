@@ -26,7 +26,7 @@
 
 TListImpl(DeviceMemoryBlock);
 
-impl Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext, void *extDbg);
+impl Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
 
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset) {
 
@@ -43,9 +43,8 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 
 	if (!block->allocations.allocations.length) {
 		AllocationBuffer_freex(&block->allocations);
-		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext, block->extDbg);
+		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext);
 		block->ext = NULL;
-		block->extDbg = NULL;
 		block->mappedMemoryExt = NULL;
 	}
 

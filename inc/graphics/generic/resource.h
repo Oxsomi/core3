@@ -124,6 +124,8 @@ typedef struct GraphicsResource {
 
 	void *mappedMemoryExt;					//API specific memory range. Don't write/read from this address
 
+	void *debugExt;							//Debug information
+
 	U64 deviceAddress;						//Contains the memory address on the device (otherwise 0)
 
 } GraphicsResource;
