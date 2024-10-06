@@ -140,7 +140,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 	return Error_none();
 }
 
-Error DeviceMemoryAllocator_allocate(
+Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryAllocator *allocator,
 	void *requirementsExt,
 	Bool cpuSided,
@@ -155,7 +155,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
 			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
-			"DeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
+			"VkDeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
 		);
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(allocator->device, Vk);
@@ -171,7 +171,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(memReq.size > maxAllocationSize)
 		return Error_outOfBounds(
 			2, memReq.size, maxAllocationSize,
-			"DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
+			"VkDeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
 		);
 
 	//When block count hits 1999 that means there were at least 2000 memory objects (+1 UBO)
@@ -282,7 +282,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(i == allocator->blocks.length) {
 
 		if(i == U32_MAX)
-			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"))
+			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "VkDeviceMemoryAllocator_allocate() block out of bounds"))
 
 		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
 	}
@@ -331,7 +331,7 @@ clean:
 	return err;
 }
 
-Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
+Bool VK_WRAP_FUNC(DeviceMemoryAllocator_freeAllocation)(GraphicsDevice *device, void *ext) {
 
 	if(!device || !ext)
 		return false;

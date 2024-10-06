@@ -77,15 +77,15 @@ void IncludeInfo_free(IncludeInfo *info, Allocator alloc) {
 }
 
 void CompileResult_freex(CompileResult *result) {
-	CompileResult_free(result, Platform_instance.alloc);
+	CompileResult_free(result, Platform_instance->alloc);
 }
 
 void ListCompileResult_freeUnderlyingx(ListCompileResult* result) {
-	ListCompileResult_freeUnderlying(result, Platform_instance.alloc);
+	ListCompileResult_freeUnderlying(result, Platform_instance->alloc);
 }
 
 void ListCompiler_freeUnderlyingx(ListCompiler *compilers) {
-	ListCompiler_freeUnderlying(compilers, Platform_instance.alloc);
+	ListCompiler_freeUnderlying(compilers, Platform_instance->alloc);
 }
 
 void ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc) {
@@ -111,31 +111,31 @@ void ListIncludeInfo_freeUnderlying(ListIncludeInfo *includeInfos, Allocator all
 }
 
 void CompileError_freex(CompileError *err) {
-	CompileError_free(err, Platform_instance.alloc);
+	CompileError_free(err, Platform_instance->alloc);
 }
 
 void ListCompileError_freeUnderlyingx(ListCompileError *compileErrors) {
-	ListCompileError_freeUnderlying(compileErrors, Platform_instance.alloc);
+	ListCompileError_freeUnderlying(compileErrors, Platform_instance->alloc);
 }
 
 void IncludeInfo_freex(IncludeInfo *info) {
-	IncludeInfo_free(info, Platform_instance.alloc);
+	IncludeInfo_free(info, Platform_instance->alloc);
 }
 
 void ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos) {
-	ListIncludeInfo_freeUnderlying(infos, Platform_instance.alloc);
+	ListIncludeInfo_freeUnderlying(infos, Platform_instance->alloc);
 }
 
 Bool ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr, Error *e_rr) {
-	return ListIncludeInfo_stringify(files, Platform_instance.alloc, tempStr, e_rr);
+	return ListIncludeInfo_stringify(files, Platform_instance->alloc, tempStr, e_rr);
 }
 
 void IncludedFile_freex(IncludedFile *file) {
-	IncludedFile_free(file, Platform_instance.alloc);
+	IncludedFile_free(file, Platform_instance->alloc);
 }
 
 void ListIncludedFile_freeUnderlyingx(ListIncludedFile *file) {
-	ListIncludedFile_freeUnderlying(file, Platform_instance.alloc);
+	ListIncludedFile_freeUnderlying(file, Platform_instance->alloc);
 }
 
 void IncludedFile_free(IncludedFile *file, Allocator alloc) {
@@ -245,15 +245,15 @@ void ListCompileResult_freeUnderlying(ListCompileResult *result, Allocator alloc
 }
 
 Bool Compiler_createx(Compiler *comp, Error *e_rr) {
-	return Compiler_create(Platform_instance.alloc, comp, e_rr);
+	return Compiler_create(Platform_instance->alloc, comp, e_rr);
 }
 
 void Compiler_freex(Compiler *comp) {
-	Compiler_free(comp, Platform_instance.alloc);
+	Compiler_free(comp, Platform_instance->alloc);
 }
 
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
-	return Compiler_preprocess(comp, settings, Platform_instance.alloc, result, e_rr);
+	return Compiler_preprocess(comp, settings, Platform_instance->alloc, result, e_rr);
 }
 
 Bool Compiler_compilex(
@@ -265,23 +265,23 @@ Bool Compiler_compilex(
 	CompileResult *result,
 	Error *e_rr
 ) {
-	return Compiler_compile(comp, settings, toCompile, lock, entries, Platform_instance.alloc, result, e_rr);
+	return Compiler_compile(comp, settings, toCompile, lock, entries, Platform_instance->alloc, result, e_rr);
 }
 
 Bool Compiler_handleExtraWarningsx(SHFile file, ECompilerWarning warning, Error *e_rr) {
-	return Compiler_handleExtraWarnings(file, warning, Platform_instance.alloc, e_rr);
+	return Compiler_handleExtraWarnings(file, warning, Platform_instance->alloc, e_rr);
 }
 
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr) {
-	return Compiler_parse(comp, settings, symbolsOnly, Platform_instance.alloc, result, e_rr);
+	return Compiler_parse(comp, settings, symbolsOnly, Platform_instance->alloc, result, e_rr);
 }
 
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr) {
-	return Compiler_mergeIncludeInfo(comp, Platform_instance.alloc, infos, e_rr);
+	return Compiler_mergeIncludeInfo(comp, Platform_instance->alloc, infos, e_rr);
 }
 
 Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr) {
-	return Compiler_createDisassembly(comp, type, buf, Platform_instance.alloc, result, e_rr);
+	return Compiler_createDisassembly(comp, type, buf, Platform_instance->alloc, result, e_rr);
 }
 
 const C8 *ignoredWarnings[] = {

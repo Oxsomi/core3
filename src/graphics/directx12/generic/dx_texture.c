@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx.h"
+#include "graphics/generic/interface.h"
 #include "graphics/directx12/dx_device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
@@ -26,9 +27,7 @@
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
 
-const U32 UnifiedTextureImageExt_size = sizeof(DxUnifiedTexture);
-
-Bool UnifiedTexture_freeExt(TextureRef *textureRef) {
+Bool DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(textureRef, NULL);
 
@@ -45,7 +44,7 @@ Bool UnifiedTexture_freeExt(TextureRef *textureRef) {
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
+Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name) {
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 
@@ -107,7 +106,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 		);
 
 		if(!res)
-			gotoIfError(clean, Error_invalidState(0, "UnifiedTexture_createExt() couldn't query allocInfo"))
+			gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't query allocInfo"))
 
 		DxBlockRequirements req = (DxBlockRequirements) {
 			.flags = !isDeviceTexture ? EDxBlockFlags_IsDedicated : EDxBlockFlags_None,
@@ -115,7 +114,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 			.length = allocInfo.SizeInBytes
 		};
 
-		gotoIfError(clean, DeviceMemoryAllocator_allocate(
+		gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
 			&device->allocator,
 			&req,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,

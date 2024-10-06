@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "graphics/generic/interface.h"
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/ref_ptrx.h"
@@ -52,7 +53,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 ) {
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(DepthStencil) + UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)),
+		(U32)(sizeof(DepthStencil) + GraphicsDeviceRef_getObjectSizes(deviceRef)->image + sizeof(UnifiedTextureImage)),
 		(ObjectFreeFunc) GraphicsDevice_freeDepthStencil,
 		(ETypeId) EGraphicsTypeId_DepthStencil,
 		depthStencilRef

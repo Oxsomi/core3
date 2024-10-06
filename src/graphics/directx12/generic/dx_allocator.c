@@ -30,7 +30,7 @@
 #include "types/math.h"
 #include "types/string.h"
 
-Error DeviceMemoryAllocator_allocate(
+Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryAllocator *allocator,
 	void *requirementsExt,
 	Bool cpuSided,
@@ -45,7 +45,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
 			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
-			"DeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
+			"D3D12DeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
 		);
 
 	GraphicsDevice *device = allocator->device;
@@ -64,7 +64,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(req.length > maxAllocationSize)
 		return Error_outOfBounds(
 			2, req.length, maxAllocationSize,
-			"DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
+			"D3D12DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
 		);
 
 	Bool isDedicated = req.flags & EDxBlockFlags_IsDedicated;
@@ -181,7 +181,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(i == allocator->blocks.length) {
 
 		if(i == U32_MAX)
-			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"))
+			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "D3D12DeviceMemoryAllocator_allocate() block out of bounds"))
 
 		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
 	}
@@ -224,7 +224,7 @@ clean:
 	return err;
 }
 
-Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
+Bool DX_WRAP_FUNC(DeviceMemoryAllocator_freeAllocation)(GraphicsDevice *device, void *ext) {
 
 	(void)device;
 

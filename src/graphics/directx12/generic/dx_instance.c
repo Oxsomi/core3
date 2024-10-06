@@ -19,12 +19,18 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
+#include "graphics/directx12/dx_interface.h"
 #include "graphics/directx12/dx_device.h"
+#include "graphics/directx12/dx_buffer.h"
+#include "graphics/directx12/dx_swapchain.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
+#include "platforms/dynamic_library.h"
+#include "types/platform_types.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/math.h"
@@ -38,7 +44,76 @@
 TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
 TListNamedImpl(ListIDXGIAdapter4)
 
-Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
+GraphicsObjectSizes DxGraphicsObjectSizes = {
+	.blas = sizeof(DxBLAS),
+	.tlas = sizeof(DxTLAS),
+	.pipeline = sizeof(DxPipeline),
+	.sampler = 1,		//Doesn't exist
+	.buffer = sizeof(DxDeviceBuffer),
+	.image = sizeof(DxUnifiedTexture),
+	.swapchain = sizeof(DxSwapchain),
+	.device = sizeof(DxGraphicsDevice),
+	.instance = sizeof(DxGraphicsInstance)
+};
+
+#ifndef GRAPHICS_API_DYNAMIC
+	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
+		(void) api;
+		return &DxGraphicsObjectSizes;
+	}
+#else
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance) {
+		Platform_instance = instance;
+		return (GraphicsInterfaceTable) {
+
+			.api = EGraphicsApi_DirectX12,
+			.objectSizes = DxGraphicsObjectSizes,
+
+			.blasInit = D3D12BLAS_init,
+			.blasFlush = D3D12BLASRef_flush,
+			.blasFree = D3D12BLAS_free,
+
+			.tlasInit = D3D12TLAS_init,
+			.tlasFlush = D3D12TLASRef_flush,
+			.tlasFree = D3D12TLAS_free,
+
+			.pipelineCreateGraphics = D3D12GraphicsDevice_createPipelineGraphics,
+			.pipelineCreateCompute = D3D12GraphicsDevice_createPipelineCompute,
+			.pipelineCreateRt = D3D12GraphicsDevice_createPipelineRaytracingInternal,
+			.pipelineFree = D3D12Pipeline_free,
+
+			.samplerCreate = D3D12GraphicsDeviceRef_createSampler,
+			.samplerFree = D3D12Sampler_free,
+
+			.bufferCreate = D3D12GraphicsDeviceRef_createBuffer,
+			.bufferFlush = D3D12DeviceBufferRef_flush,
+			.bufferFree = D3D12DeviceBuffer_free,
+
+			.textureCreate = D3D12UnifiedTexture_create,
+			.textureFlush = D3D12DeviceTextureRef_flush,
+			.textureFree = D3D12UnifiedTexture_free,
+
+			.swapchainCreate = D3D12GraphicsDeviceRef_createSwapchain,
+			.swapchainFree = D3D12Swapchain_free,
+
+			.memoryAllocate = D3D12DeviceMemoryAllocator_allocate,
+			.memoryFree = D3D12DeviceMemoryAllocator_freeAllocation,
+
+			.deviceInit = D3D12GraphicsDevice_init,
+			.devicePostInit = D3D12GraphicsDevice_postInit,
+			.deviceWait = D3D12GraphicsDeviceRef_wait,
+			.deviceFree = D3D12GraphicsDevice_free,
+			.deviceSubmitCommands = D3D12GraphicsDevice_submitCommands,
+			.commandListProcess = D3D12CommandList_process,
+
+			.instanceCreate = D3D12GraphicsInstance_create,
+			.instanceFree = D3D12GraphicsInstance_free,
+			.instanceGetDevices = D3D12GraphicsInstance_getDeviceInfos
+		};
+	}
+#endif
+
+Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc) {
 
 	(void)alloc;
 
@@ -74,9 +149,7 @@ Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
 	return true;
 }
 
-const U64 GraphicsInstanceExt_size = sizeof(DxGraphicsInstance);
-
-Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
+Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
 
 	(void)info;
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
@@ -119,44 +192,48 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 
 	//Check for NVApi
 
-	const NvAPI_Status status = NvAPI_Initialize();
+	#if _ARCH == ARCH_X86_64
 
-	if(status == NVAPI_OK) {
+		const NvAPI_Status status = NvAPI_Initialize();
 
-		instanceExt->flags |= EDxGraphicsInstanceFlags_HasNVApi;
+		if(status == NVAPI_OK) {
 
-		U32 driverVersion = 0;
-		NvAPI_ShortString shortString = { 0 };
+			instanceExt->flags |= EDxGraphicsInstanceFlags_HasNVApi;
 
-		if(NvAPI_SYS_GetDriverAndBranchVersion((NvU32*)&driverVersion, shortString) != NVAPI_OK) {
-			NvAPI_Unload();
-			instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
+			U32 driverVersion = 0;
+			NvAPI_ShortString shortString = { 0 };
+
+			if(NvAPI_SYS_GetDriverAndBranchVersion((NvU32*)&driverVersion, shortString) != NVAPI_OK) {
+				NvAPI_Unload();
+				instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
+			}
+
+			else gotoIfError(clean, CharString_formatx(
+				&instanceExt->nvDriverVersion, "%"PRIu32".%"PRIu32, driverVersion / 100, driverVersion % 100
+			))
 		}
 
-		else gotoIfError(clean, CharString_formatx(
-			&instanceExt->nvDriverVersion, "%"PRIu32".%"PRIu32, driverVersion / 100, driverVersion % 100
-		))
-	}
+		//Check for AMDAgs
 
-	//Check for AMDAgs
+		const AGSConfiguration config = (AGSConfiguration) { 0 };
 
-	const AGSConfiguration config = (AGSConfiguration) { 0 };
+		AGSGPUInfo gpuInfo;
+		if(agsInitialize(AGS_CURRENT_VERSION, &config, &instanceExt->agsContext, &gpuInfo) == AGS_SUCCESS) {
 
-	AGSGPUInfo gpuInfo;
-	if(agsInitialize(AGS_CURRENT_VERSION, &config, &instanceExt->agsContext, &gpuInfo) == AGS_SUCCESS) {
+			instanceExt->flags |= EDxGraphicsInstanceFlags_HasAMDAgs;
 
-		instanceExt->flags |= EDxGraphicsInstanceFlags_HasAMDAgs;
+			gotoIfError(clean, CharString_createCopyx(
+				CharString_createRefCStrConst(gpuInfo.radeonSoftwareVersion), &instanceExt->amdDriverVersion
+			))
 
-		gotoIfError(clean, CharString_createCopyx(
-			CharString_createRefCStrConst(gpuInfo.radeonSoftwareVersion), &instanceExt->amdDriverVersion
-		))
-
-		if(CharString_length(instanceExt->amdDriverVersion) >= 256) {
-			Log_warnLnx("GraphicsInstance_createExt() AMD AGS initialize failed, version string is too long");
-			agsDeInitialize(instanceExt->agsContext);
-			instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
+			if(CharString_length(instanceExt->amdDriverVersion) >= 256) {
+				Log_warnLnx("D3D12GraphicsInstance_create() AMD AGS initialize failed, version string is too long");
+				agsDeInitialize(instanceExt->agsContext);
+				instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
+			}
 		}
-	}
+
+	#endif
 
 	instance->api = EGraphicsApi_DirectX12;
 	instance->apiVersion = D3D12_SDK_VERSION;
@@ -165,14 +242,14 @@ clean:
 	return err;
 }
 
-Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
+Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
 
 	if(!inst || !result)
-		return Error_nullPointer(!inst ? 0 : 2, "GraphicsInstance_getDeviceInfos()::inst and result are required");
+		return Error_nullPointer(!inst ? 0 : 2, "D3D12GraphicsInstance_getDeviceInfos()::inst and result are required");
 
 	if(result->ptr)
 		return Error_invalidParameter(
-			1, 0, "GraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
+			1, 0, "D3D12GraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
 		);
 
 	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Dx);
@@ -694,7 +771,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 	}
 
 	if(!tempInfos.length)
-		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
+		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12GraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
 
 	*result = tempInfos;
 

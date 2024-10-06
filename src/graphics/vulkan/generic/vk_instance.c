@@ -19,16 +19,90 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
+#include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_buffer.h"
+#include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
+#include "platforms/dynamic_library.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/math.h"
+
+GraphicsObjectSizes VkGraphicsObjectSizes = {
+	.blas = sizeof(VkBLAS),
+	.tlas = sizeof(VkTLAS),
+	.pipeline = sizeof(VkPipeline),
+	.sampler = sizeof(VkSampler),
+	.buffer = sizeof(VkDeviceBuffer),
+	.image = sizeof(VkUnifiedTexture),
+	.swapchain = sizeof(VkSwapchain),
+	.device = sizeof(VkGraphicsDevice),
+	.instance = sizeof(VkGraphicsInstance)
+};
+
+#ifndef GRAPHICS_API_DYNAMIC
+	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
+		(void) api;
+		return &VkGraphicsObjectSizes;
+	}
+#else
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance) {
+		Platform_instance = instance;
+		return (GraphicsInterfaceTable) {
+
+			.api = EGraphicsApi_Vulkan,
+			.objectSizes = VkGraphicsObjectSizes,
+
+			.blasInit = VkBLAS_init,
+			.blasFlush = VkBLASRef_flush,
+			.blasFree = VkBLAS_free,
+
+			.tlasInit = VkTLAS_init,
+			.tlasFlush = VkTLASRef_flush,
+			.tlasFree = VkTLAS_free,
+
+			.pipelineCreateGraphics = VkGraphicsDevice_createPipelineGraphics,
+			.pipelineCreateCompute = VkGraphicsDevice_createPipelineCompute,
+			.pipelineCreateRt = VkGraphicsDevice_createPipelineRaytracingInternal,
+			.pipelineFree = VkPipeline_free,
+
+			.samplerCreate = VkGraphicsDeviceRef_createSampler,
+			.samplerFree = VkSampler_free,
+
+			.bufferCreate = VkGraphicsDeviceRef_createBuffer,
+			.bufferFlush = VkDeviceBufferRef_flush,
+			.bufferFree = VkDeviceBuffer_free,
+
+			.textureCreate = VkUnifiedTexture_create,
+			.textureFlush = VkDeviceTextureRef_flush,
+			.textureFree = VkUnifiedTexture_free,
+
+			.swapchainCreate = VkGraphicsDeviceRef_createSwapchain,
+			.swapchainFree = VkSwapchain_free,
+
+			.memoryAllocate = VkDeviceMemoryAllocator_allocate,
+			.memoryFree = VkDeviceMemoryAllocator_freeAllocation,
+
+			.deviceInit = VkGraphicsDevice_init,
+			.devicePostInit = VkGraphicsDevice_postInit,
+			.deviceWait = VkGraphicsDeviceRef_wait,
+			.deviceFree = VkGraphicsDevice_free,
+			.deviceSubmitCommands = VkGraphicsDevice_submitCommands,
+			.commandListProcess = VkCommandList_process,
+
+			.instanceCreate = VkGraphicsInstance_create,
+			.instanceFree = VkGraphicsInstance_free,
+			.instanceGetDevices = VkGraphicsInstance_getDeviceInfos
+		};
+	}
+#endif
 
 VkBool32 onDebugReport(
 	VkDebugReportFlagsEXT flags,
@@ -76,16 +150,12 @@ VkBool32 onDebugReport(
 	*(void**)&result = (void*) v;																\
 }
 
-Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc);
-
-const U64 GraphicsInstanceExt_size = sizeof(VkGraphicsInstance);
-
 TList(VkExtensionProperties);
 TList(VkLayerProperties);
 TListImpl(VkExtensionProperties);
 TListImpl(VkLayerProperties);
 
-Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
+Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
 
 	U32 layerCount = 0, extensionCount = 0;
 	CharString title = (CharString) { 0 };
@@ -329,7 +399,7 @@ clean:
 	return err;
 }
 
-Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc) {
+Bool VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc) {
 
 	(void)alloc;
 
@@ -389,15 +459,13 @@ U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsNam
 TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
 
-Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
+Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
 
 	if(!inst || !result)
-		return Error_nullPointer(!inst ? 0 : 2, "GraphicsInstance_getDeviceInfos()::inst and result are required");
+		return Error_nullPointer(!inst ? 0 : 2, "VkGraphicsInstance_getDeviceInfos()::inst and result are required");
 
 	if(result->ptr)
-		return Error_invalidParameter(
-			1, 0, "GraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
-		);
+		return Error_invalidParameter(1, 0, "VkGraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak");
 
 	VkGraphicsInstance *graphicsExt = GraphicsInstance_ext(inst, Vk);
 
@@ -1484,7 +1552,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 	}
 
 	if(!temp2.length)
-		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
+		gotoIfError(clean, Error_unsupportedOperation(0, "VkGraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
 
 	*result = temp2;
 

@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
@@ -43,7 +44,7 @@ TListImpl(D3D12_EXPORT_DESC);
 TListImpl(D3D12_HIT_GROUP_DESC);
 TListNamedImpl(ListWCSTR);
 
-Bool GraphicsDevice_createPipelineRaytracingInternalExt(
+Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	GraphicsDeviceRef *deviceRef,
 	ListSHFile binaries,
 	CharString name,

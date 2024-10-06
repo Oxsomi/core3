@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
@@ -47,14 +48,6 @@ Bool validateBlend(EBlend blend, Bool hasDualSrcBlend, Error *e_rr) {
 clean:
 	return s_uccess;
 }
-
-impl Bool GraphicsDevice_createPipelineGraphicsExt(
-	GraphicsDevice *dev,
-	ListSHFile binaries,
-	CharString name,
-	Pipeline *pipeline,
-	Error *e_rr
-);
 
 Bool GraphicsDeviceRef_createPipelineGraphics(
 	GraphicsDeviceRef *deviceRef,
@@ -427,7 +420,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	//Create ref ptrs
 
 	gotoIfError2(clean, RefPtr_createx(
-		(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineGraphicsInfo)),
+		(U32)(sizeof(Pipeline) + GraphicsDeviceRef_getObjectSizes(deviceRef)->pipeline + sizeof(PipelineGraphicsInfo)),
 		(ObjectFreeFunc) Pipeline_free,
 		(ETypeId) EGraphicsTypeId_Pipeline,
 		pipeline

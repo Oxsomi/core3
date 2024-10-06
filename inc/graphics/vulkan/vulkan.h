@@ -24,6 +24,12 @@
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 
+#ifndef GRAPHICS_API_DYNAMIC
+	#define VK_WRAP_FUNC(name) name##Ext
+#else
+	#define VK_WRAP_FUNC(name) Vk##name
+#endif
+
 #define VkAccessFlagBits2_WRITE (							\
 	VK_ACCESS_2_SHADER_WRITE_BIT |							\
 	VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |				\

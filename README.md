@@ -39,6 +39,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - For more info check the [documentation](docs/platforms.md).
 - OxC3_graphics
   - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Currently, only Vulkan and D3D12 are supported.
+  - Ability to create both D3D12 and Vulkan context side-by-side to allow switching API at runtime and/or better support for existing applications which might determine that at runtime.
   - For more info check the [documentation](docs/graphics_api.md).
 - OxC3_shader_compiler
   - Abstraction layer around DXC to make it possible to statically link, execute on other platforms and sign DXIL even on non Windows PCs. This also allows being able to find symbols in shaders, preprocess files (transform to without includes + defines) and output include info. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
@@ -89,7 +90,7 @@ The build command has the following syntax:
   - EnableSIMD: If SIMD extensions should be used to accelerate vector operations or things like encryption/hashing/etc. Recommended to always keep this on, unless not possible. On for Windows, off on other platforms (not supported yet).
   - EnableTests: Enable the unit tests that run afterwards.
 - Extra flags can be controlled via `-o flag=Bool` such as:
-  - forceVulkan: If there's a native API available on the target machine, it will attempt to use that by default. If instead it should try to use Vulkan, this flag should be set. An example is on Windows you have D3D12 or Vulkan; D3D12 is the default, but Vulkan can be turned on like this. Off by default.
+  - forceVulkan: If there's a native API available on the target machine, it will attempt to use that by default. If instead it should try to use Vulkan, this flag should be set. An example is on Windows you have D3D12 and/or Vulkan; D3D12 is the default, but Vulkan can be turned on like this. Off by default.
   - enableOxC3CLI: Enable the OxC3CLI project along with the OxC3 executable. On by default.
   - forceFloatFallback: Forces half -> float casts to use software rather than hardware. Off by default.
   - enableShaderCompiler: If the shader compiler should be included. This will take longer to build, but is useful for tools or applications that need realtime shader compilation. On by default.
@@ -148,8 +149,8 @@ For a full OxC3 build (including all projects), a build typically contains the f
 
 ```
 D3D12:
-	D3D12/D3D12Core.dll
-	D3D12/d3d12SDKLayers.dll
+	D3D12/*.dll
+	D3D12/*.pdb
 	(debug only) d3d10warp.dll
 	(optional) OxC3.exe
 	yourExecutable.exe
@@ -157,11 +158,23 @@ D3D12:
 Vulkan:
 	(optional) OxC3.exe or OxC3
 	yourExecutable(,.exe,.apk,.ipa,etc.)
+	
+Dynamic linking:
+	Windows only:
+		D3D12/*.dll
+		D3D12/*.pdb
+		OxC3_graphics_d3d12.dll
+		(debug only) d3d10warp.dll
+	OxC3_graphics_vk (Almost everywhere else, .so, .dll, etc)
+	(optional) OxC3.exe or OxC3
+	yourExecutable
 ```
 
 To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. D3D12/*.dll is required when OxC3 graphics is used with DirectX12 (cliGraphics=True and forceVulkan=False and on Windows).
 
 OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
+
+The "renderer" directory is present if dynamic linking is used. In this case, there may be 1 or more graphics APIs that are compatible and this can be useful for switching at runtime or using multiple backends at once. For example, some extensions might only be supported via Vulkan or DirectX on desktop and using both might be the only way to use them. Or one of the backends is more stable for your application but the other provides more features. It also allows more easily updating by simply updating a single dll (if the interface didn't change) or adding a new graphics API. Static linking provides benefits such as easier distribution and less overhead for API calls.
 
 ## Dependencies
 
@@ -178,7 +191,7 @@ OxC3 is optional and doesn't have to be distributed with the application, though
   - (**TODO**): *SPIRV-Cross*: Cross compiling SPIRV to MSL (and WGSL?).
 - OxC3_graphics.
   - *Vulkan*.
-  - or *D3D12*.
+  - and/or *D3D12*.
     - *NVAPI*.
     - *AMD_AGS*.
     - *AgilitySDK*.

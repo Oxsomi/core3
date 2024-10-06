@@ -90,7 +90,7 @@ typedef enum ECompileType {
 #ifdef CLI_SHADER_COMPILER
 
 	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes);
-	Bool CLI_parseThreads(ParsedArgs args, U32 *threadCount, U32 defaultThreadCount);
+	Bool CLI_parseThreads(ParsedArgs args, U64 *threadCount, U64 defaultThreadCount);
 	ECompilerWarning CLI_getExtraWarnings(ParsedArgs args);
 	Bool CLI_getCompileTargetsFromFile(
 		CharString input,
@@ -111,7 +111,7 @@ typedef enum ECompileType {
 		ListCharString allShaderText,
 		ListCharString allOutputs,
 		ListU8 allCompileOutputs,
-		U32 threadCount,
+		U64 threadCount,
 		Bool isDebug,
 		ECompilerWarning extraWarnings,
 		Bool ignoreEmptyFiles,

@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
@@ -35,10 +36,6 @@ Error SamplerRef_inc(SamplerRef *sampler) {
 	return !RefPtr_inc(sampler) ?
 		Error_invalidOperation(0, "SamplerRef_inc()::sampler is required") : Error_none();
 }
-
-impl extern const U64 SamplerExt_size;
-impl Bool Sampler_freeExt(Sampler *sampler);
-impl Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
 
 Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 
@@ -112,7 +109,7 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 		info.maxLod = F32_castF16(65504.f);		//Set to F16 max
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(Sampler) + SamplerExt_size),
+		(U32)(sizeof(Sampler) + GraphicsDeviceRef_getObjectSizes(dev)->sampler),
 		(ObjectFreeFunc) Sampler_free,
 		(ETypeId) EGraphicsTypeId_Sampler,
 		sampler

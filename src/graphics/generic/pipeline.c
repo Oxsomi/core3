@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
@@ -44,6 +45,14 @@ const C8 *EPipelineStage_names[] = {
 
 TListImpl(PipelineStage);
 
+void *Pipeline_infoOffset(Pipeline *pipeline) {
+
+	if(!pipeline || !pipeline->device)
+		return NULL;
+
+	return (U8*)(pipeline + 1) + GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline;
+}
+
 Error PipelineRef_dec(PipelineRef **pipeline) {
 	return !RefPtr_dec(pipeline) ?
 		Error_invalidOperation(0, "PipelineRef_dec():: pipeline invalid") : Error_none();
@@ -53,8 +62,6 @@ Error PipelineRef_inc(PipelineRef *pipeline) {
 	return !RefPtr_inc(pipeline) ?
 		Error_invalidOperation(0, "PipelineRef_inc()::pipeline invalid") : Error_none();
 }
-
-impl Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc);
 
 Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 

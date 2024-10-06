@@ -19,14 +19,20 @@ if NOT "%3" == "True" (
 	)	
 )
 
-for /f "tokens=3,* delims= " %%a in ("%*") do set remainder=%%b
+if NOT "%4" == "True" (
+	if NOT "%4" == "False" (
+		goto usage
+	)	
+)
+
+for /f "tokens=4,* delims= " %%a in ("%*") do set remainder=%%b
 
 conan create packages/agility_sdk -s build_type=%1 --build=missing
 conan create packages/amd_ags -s build_type=%1 --build=missing
 conan create packages/nvapi -s build_type=%1 --build=missing
 conan create packages/spirv_reflect -s build_type=%1 --build=missing
 conan create packages/dxc -s build_type=%1 --build=missing
-conan build . -s build_type=%1 -o enableSIMD=%2 -o enableTests=%3 !remainder!
+conan build . -s build_type=%1 -o enableSIMD=%2 -o enableTests=%3 -o dynamicLinkingGraphics=%4 !remainder!
 
 REM Run tests
 
@@ -40,4 +46,4 @@ cd ../../..
 goto :eof
 
 :usage
-	echo Usage: build [Build type: Debug/Release] [Enable SIMD: True/False] [Enable Tests: True/False]
+	echo Usage: build [Build type: Debug/Release] [Enable SIMD: True/False] [Enable Tests: True/False] [Dynamic linking: True/False]

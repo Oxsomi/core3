@@ -30,6 +30,7 @@
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define NOMINMAX
 #include <Windows.h>
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -41,7 +42,7 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	WNDCLASSEXW *wc = (WNDCLASSEXW*) w->platformData.ptr;
 
-	const HINSTANCE mainModule = Platform_instance.data;
+	const HINSTANCE mainModule = Platform_instance->data;
 
 	*wc = (WNDCLASSEXW) {
 

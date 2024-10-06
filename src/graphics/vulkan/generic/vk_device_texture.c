@@ -31,7 +31,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 
-Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
+Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
 
 	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 

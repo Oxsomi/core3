@@ -30,6 +30,7 @@
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define NOMINMAX
 #include <Windows.h>
 
 Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
@@ -182,16 +183,16 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 	if(CharString_length(isChild))
 		gotoIfError2(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
 
-	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "File_loadVirtualInternal1() couldn't lock virtualSectionsLock"))
 
 	Bool foundAny = false;
 
-	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 
-		VirtualSection *section = Platform_instance.virtualSections.ptrNonConst + i;
+		VirtualSection *section = Platform_instance->virtualSections.ptrNonConst + i;
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&
@@ -260,7 +261,7 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
 	CharString_freex(&isChild);
 	return s_uccess;

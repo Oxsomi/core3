@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/commands.h"
 #include "graphics/generic/device.h"

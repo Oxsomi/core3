@@ -33,6 +33,7 @@
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
 	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
 	#include <Windows.h>
 	#include <Unknwn.h>
 #endif
@@ -158,7 +159,7 @@ public:
 		}
 
 		else gotoIfError3(clean, File_resolve(
-			fileName, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &resolved, e_rr
+			fileName, &isVirtual, 256, Platform_instance->workingDirectory, alloc, &resolved, e_rr
 		))
 
 		for (; i < includedFiles.length; ++i)
@@ -652,7 +653,7 @@ Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, 
 	if(CharString_length(settings.includeDir)) {
 
 		gotoIfError3(clean, File_resolve(
-			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr, e_rr
+			settings.includeDir, &isVirtual, 256, Platform_instance->workingDirectory, alloc, &tempStr, e_rr
 		))
 
 		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
@@ -665,7 +666,7 @@ Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, 
 	if(CharString_length(settings.path)) {
 
 		gotoIfError3(clean, File_resolve(
-			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr, e_rr
+			settings.path, &isVirtual, 256, Platform_instance->workingDirectory, alloc, &tempStr, e_rr
 		))
 
 		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))

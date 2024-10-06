@@ -29,7 +29,8 @@ class oxc3(ConanFile):
 		"enableOxC3CLI": [ True, False ],
 		"forceFloatFallback": [ True, False ],
 		"enableShaderCompiler": [ True, False ],
-		"cliGraphics": [ True, False ]
+		"cliGraphics": [ True, False ],
+		"dynamicLinkingGraphics": [ True, False ]
 	}
 
 	default_options = {
@@ -39,7 +40,8 @@ class oxc3(ConanFile):
 		"enableOxC3CLI": True,
 		"forceFloatFallback": False,
 		"enableShaderCompiler": True,
-		"cliGraphics": True
+		"cliGraphics": True,
+		"dynamicLinkingGraphics": False
 	}
 
 	exports_sources = [ "inc/*", "cmake/*" ]
@@ -64,6 +66,7 @@ class oxc3(ConanFile):
 		tc.cache_variables["ForceVulkan"] = self.options.forceVulkan
 		tc.cache_variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
 		tc.cache_variables["CLIGraphics"] = self.options.cliGraphics
+		tc.cache_variables["DynamicLinkingGraphics"] = self.options.dynamicLinkingGraphics
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 		tc.generate()
 
@@ -87,12 +90,15 @@ class oxc3(ConanFile):
 
 	def requirements(self):
 		
-		isDX12 = not self.options.forceVulkan and self.settings.os == "Windows"
+		hasDX12 = not self.options.forceVulkan and self.settings.os == "Windows"
 
-		if self.options.enableShaderCompiler or isDX12:
+		if self.options.dynamicLinkingGraphics and self.settings.os == "Windows":
+			hasDX12 = True
+
+		if self.options.enableShaderCompiler or hasDX12:
 			self.requires("nvapi/2024.09.21")
 
-		if isDX12:
+		if hasDX12:
 			self.requires("agility_sdk/2024.09.22")
 		
 		if self.options.enableShaderCompiler:
@@ -185,7 +191,7 @@ class oxc3(ConanFile):
 			self.cpp_info.libs += [ "vulkan" ]
 			vulkan = True
 
-		elif self.options.forceVulkan:
+		elif self.options.forceVulkan or self.options.dynamicLinkingGraphics:
 			self.cpp_info.libs += [ "vulkan-1" ]
 			vulkan = True
 
@@ -195,7 +201,7 @@ class oxc3(ConanFile):
 			self.cpp_info.libdirs += [ os.path.join(vulkanMacos, "lib") ]
 			self.cpp_info.includedirs += [ os.path.join(vulkanMacos, "include") ]
 
-		else:
+		elif vulkan:
 			self.cpp_info.libdirs += [ os.path.join(os.environ['VULKAN_SDK'], "lib") ]
 			self.cpp_info.includedirs += [ os.path.join(os.environ['VULKAN_SDK'], "include") ]
 

@@ -26,19 +26,19 @@
 #include <stdlib.h>
 
 void Log_captureStackTracex(void **stackTrace, U64 stackSize, U8 skip) {
-	Log_captureStackTrace(Platform_instance.alloc, stackTrace, stackSize, skip == U8_MAX ? U8_MAX : skip + 1);
+	Log_captureStackTrace(Platform_instance->alloc, stackTrace, stackSize, skip == U8_MAX ? U8_MAX : skip + 1);
 }
 
 void Log_printStackTracex(U8 skip, ELogLevel lvl, ELogOptions options) {
-	Log_printStackTrace(Platform_instance.alloc, skip + 1 == 0 ? U8_MAX : skip + 1, lvl, options);
+	Log_printStackTrace(Platform_instance->alloc, skip + 1 == 0 ? U8_MAX : skip + 1, lvl, options);
 }
 
 void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTraceCustom(Platform_instance.alloc, stackTrace, stackSize, lvl, options);
+	Log_printCapturedStackTraceCustom(Platform_instance->alloc, stackTrace, stackSize, lvl, options);
 }
 
 void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
-	Log_log(Platform_instance.alloc, lvl, options, arg);
+	Log_log(Platform_instance->alloc, lvl, options, arg);
 }
 
 #define Log_level(lvl) 													\
@@ -61,21 +61,21 @@ void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
 //Default allocator. Sometimes they can't be safely used
 
 void Log_debugx(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Debug);
 }
 
 void Log_performancex(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Performance);
 }
 
 void Log_warnx(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Warn);
 }
 
 void Log_errorx(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Error);
 }

@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx.h"
+#include "graphics/generic/interface.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -28,9 +29,7 @@
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
 
-const U32 UnifiedTextureImageExt_size = sizeof(VkUnifiedTexture);
-
-Bool UnifiedTexture_freeExt(TextureRef *textureRef) {
+Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(textureRef, NULL);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(utex.resource.device), Vk);
@@ -51,7 +50,7 @@ Bool UnifiedTexture_freeExt(TextureRef *textureRef) {
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
+Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name) {
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 
@@ -121,7 +120,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 		instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
 
-		gotoIfError(clean, DeviceMemoryAllocator_allocate(
+		gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
 			&device->allocator,
 			&requirements,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,

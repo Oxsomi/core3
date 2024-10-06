@@ -45,7 +45,7 @@ Error createShaderModule(
 TList(VkComputePipelineCreateInfo);
 TListImpl(VkComputePipelineCreateInfo);
 
-Bool GraphicsDevice_createPipelineComputeExt(
+Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,
 	CharString name,
 	Pipeline *pipeline,

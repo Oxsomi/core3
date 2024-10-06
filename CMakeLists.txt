@@ -47,6 +47,7 @@ set(EnableShaderCompiler OFF CACHE BOOL "Turn off/on shader compiler + OxC3 comp
 
 set(EnableTests ON CACHE BOOL "Turn off/on OxC3 tests")
 set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
+set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic linking")
 
 # Set general compile options
 
@@ -120,6 +121,12 @@ else()
 	message("-- Disabling OxC3 compile shaders (-DEnableShaderCompiler=Off)")
 endif()
 
+if(DynamicLinkingGraphics)
+	message("-- Enabling OxC3 graphics dynamic linking (-DDynamicLinkingGraphics=On)")
+else()
+	message("-- Disabling OxC3 graphics dynamic linking (-DDynamicLinkingGraphics=Off)")
+endif()
+
 if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
 	set(simd sse)
@@ -164,7 +171,7 @@ if("${platform}" STREQUAL "linux")
 endif()
 
 set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
-set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if available)")
+set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if static linking)")
 
 # Types
 
@@ -188,6 +195,10 @@ add_library(
 	${typesSIMDSources}
 	${typesPlatformHeaders}
 	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
 )
 
 source_group("Source Files (${platform})" FILES ${typesPlatformSources})
@@ -219,6 +230,10 @@ add_library(
 	${formatsHeaders}
 	${formatsSources}
 	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
 )
 
 set_target_properties(OxC3_formats PROPERTIES FOLDER Oxsomi)
@@ -250,6 +265,10 @@ add_library(
 	${platformsSources}
 	${platformsSIMDSources}
 	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
 )
 
 source_group("Source Files (${platform})" FILES ${platformsPlatformSources})
@@ -266,108 +285,201 @@ endif()
 
 # Graphics layer
 
-if(WIN32 AND NOT ${ForceVulkan})
-	message("-- Enabling DirectX12 support...")
-	set(graphicsApi directx12)
-	set(_GRAPHICS_API GRAPHICS_API_D3D12)
-else()
-	message("-- Enabling Vulkan support...")
-	set(graphicsApi vulkan)
-	set(_GRAPHICS_API GRAPHICS_API_VULKAN)
+set(graphicsAllowDX12 OFF)
+set(graphicsAllowVk OFF)
+
+if(WIN32)
+	if(DynamicLinkingGraphics)
+		set(graphicsAllowDX12 ON)
+		if(DEFINED ENV{VULKAN_SDK})
+			set(graphicsAllowVk ON)
+		endif()
+	elseif(NOT ForceVulkan)
+		set(graphicsAllowDX12 ON)
+	elseif(DEFINED ENV{VULKAN_SDK})
+		set(graphicsAllowVk ON)
+	endif()
+elseif(DEFINED ENV{VULKAN_SDK})
+	set(graphicsAllowVk ON)
 endif()
 
-set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
-
-message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
+if(NOT graphicsAllowVk AND NOT graphicsAllowDX12)
+	message(FATAL_ERROR "-- No valid graphics API found, aborting...")
+endif()
 
 file(GLOB_RECURSE graphicsHeaders "inc/graphics/generic/*.h")
-file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/${graphicsApi}/*.h")
-
-file(GLOB_RECURSE graphicsApiSources "src/graphics/${graphicsApi}/generic/*.c")
-file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/${graphicsApi}/${platform}/*.c")
-
 file(GLOB_RECURSE graphicsSources "src/graphics/generic/*.c")
-# file(GLOB_RECURSE shaders "src/*.hlsli")
+file(GLOB_RECURSE shaders "src/*.hlsli")
 
 add_library(
 	OxC3_graphics
 	STATIC
 	${graphicsHeaders}
-	${graphicsApiHeaders}
-	${graphicsApiSources}
-	${graphicsApiPlatformSources}
 	${graphicsSources}
-	# ${shaders}
+	${shaders}
 	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
 )
 
-source_group("Header Files (${graphicsApi})" FILES ${graphicsApiHeaders})
-source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
-source_group("Source Files (${graphicsApi})/${platform}" FILES ${graphicsApiPlatformSources})
-# source_group("Shaders" FILES ${shaders})
-
-target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=${_GRAPHICS_API})
+if(DynamicLinkingGraphics)
+	target_compile_definitions(OxC3_graphics PUBLIC -DGRAPHICS_API_DYNAMIC)
+endif()
 
 set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
-
 target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
+
+source_group("Shaders" FILES ${shaders})
+
+add_library(OxC3_graphics_target INTERFACE)
 
 # Vulkan setup
 
-if("${graphicsApi}" STREQUAL "vulkan")
+if(graphicsAllowVk)
 
-	if(NOT DEFINED ENV{VULKAN_SDK})
-		message(FATAL_ERROR "VULKAN_SDK directory should be set!")
-	endif()
+	message("-- Enabling Vulkan support...")
 
-	if(NOT "${platform}" STREQUAL "osx")
-		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
-		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
-	endif()
+	file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/vulkan/*.h")
+	file(GLOB_RECURSE graphicsApiSources "src/graphics/vulkan/generic/*.c")
+	file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/vulkan/${platform}/*.c")
+	
+	if(NOT DynamicLinkingGraphics)
 
-	if(WIN32)
-		target_link_libraries(OxC3_graphics PUBLIC vulkan-1)
-	elseif("${platform}" STREQUAL "osx")
+		message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
-		if(EXISTS "$ENV{VULKAN_SDK}/macOS/include")
-			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/include)
-			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/lib)
-		else()
-			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
-			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
-		endif()
-
-		target_link_libraries(OxC3_graphics PUBLIC vulkan)
+		target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_VULKAN)
+		
+		add_library(
+			OxC3_graphics_vk
+			STATIC
+			${graphicsApiHeaders}
+			${graphicsApiSources}
+			${graphicsApiPlatformSources}
+			CMakeLists.txt
+			conanfile.py
+			conandata.yml
+			build.bat
+			build.sh
+		)
 
 	else()
-		target_link_libraries(OxC3_graphics PUBLIC vulkan)
+		add_library(
+			OxC3_graphics_vk
+			SHARED
+			${graphicsApiHeaders}
+			${graphicsApiSources}
+			${graphicsApiPlatformSources}
+			CMakeLists.txt
+			conanfile.py
+			conandata.yml
+			build.bat
+			build.sh
+		)
 	endif()
 
+	target_link_libraries(OxC3_graphics_vk PUBLIC OxC3_graphics)
+
 	if("${platform}" STREQUAL "windows")
-		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_win32_surface")
+		target_compile_definitions(OxC3_graphics_vk PRIVATE -D_VK_SURFACE_EXT="VK_KHR_win32_surface")
 	elseif("${platform}" STREQUAL "android")
-		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_android_surface")
+		target_compile_definitions(OxC3_graphics_vk PRIVATE -D_VK_SURFACE_EXT="VK_KHR_android_surface")
 	elseif("${platform}" STREQUAL "osx")
-		add_definitions(-D_VK_SURFACE_EXT="VK_MVK_macos_surface")
+		target_compile_definitions(OxC3_graphics_vk PRIVATE -D_VK_SURFACE_EXT="VK_MVK_macos_surface")
 	elseif("${platform}" STREQUAL "ios")
-		add_definitions(-D_VK_SURFACE_EXT="VK_MVK_ios_surface")
+		target_compile_definitions(OxC3_graphics_vk PRIVATE -D_VK_SURFACE_EXT="VK_MVK_ios_surface")
 	elseif("${platform}" STREQUAL "linux")
-		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_wayland_surface")
+		target_compile_definitions(OxC3_graphics_vk PRIVATE -D_VK_SURFACE_EXT="VK_KHR_wayland_surface")
 	else()
 		message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
 	endif()
 
+	set_target_properties(OxC3_graphics_vk PROPERTIES FOLDER Oxsomi)
+
+	source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
+
+	if(NOT "${platform}" STREQUAL "osx")
+		include_directories(OxC3_graphics_vk PUBLIC $ENV{VULKAN_SDK}/include)
+		target_link_directories(OxC3_graphics_vk PUBLIC $ENV{VULKAN_SDK}/lib)
+	endif()
+
+	if(WIN32)
+		target_link_libraries(OxC3_graphics_vk PUBLIC vulkan-1)
+	elseif("${platform}" STREQUAL "osx")
+
+		if(EXISTS "$ENV{VULKAN_SDK}/macOS/include")
+			include_directories(OxC3_graphics_vk PUBLIC $ENV{VULKAN_SDK}/macOS/include)
+			target_link_directories(OxC3_graphics_vk PUBLIC $ENV{VULKAN_SDK}/macOS/lib)
+		else()
+			include_directories(OxC3_graphics_vk PUBLIC $ENV{VULKAN_SDK}/include)
+			target_link_directories(OxC3_graphics_vk PUBLIC $ENV{VULKAN_SDK}/lib)
+		endif()
+
+		target_link_libraries(OxC3_graphics_vk PUBLIC vulkan)
+
+	else()
+		target_link_libraries(OxC3_graphics_vk PUBLIC vulkan)
+	endif()
+
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics_vk)
+
+endif()
+
 # DirectX setup
 
-elseif("${graphicsApi}" STREQUAL "directx12")
+if(graphicsAllowDX12)
 
-	add_library(DirectX12 INTERFACE)
+	message("-- Enabling DirectX12 support...")
+
+	file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/directx12/*.h")
+	file(GLOB_RECURSE graphicsApiSources "src/graphics/directx12/generic/*.c")
+	file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/directx12/${platform}/*.c")
+	
+	if(NOT DynamicLinkingGraphics)
+
+		message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
+
+		target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_D3D12)
+		
+		add_library(
+			OxC3_graphics_d3d12
+			STATIC
+			${graphicsApiHeaders}
+			${graphicsApiSources}
+			${graphicsApiPlatformSources}
+			CMakeLists.txt
+			conanfile.py
+			conandata.yml
+			build.bat
+			build.sh
+		)
+
+	else()
+		add_library(
+			OxC3_graphics_d3d12
+			SHARED
+			${graphicsApiHeaders}
+			${graphicsApiSources}
+			${graphicsApiPlatformSources}
+			CMakeLists.txt
+			conanfile.py
+			conandata.yml
+			build.bat
+			build.sh
+		)
+	endif()
+
+	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
+
+	set_target_properties(OxC3_graphics_d3d12 PROPERTIES FOLDER Oxsomi)
+
+	source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
 
 	find_package(agility_sdk REQUIRED)
 
-	target_link_libraries(DirectX12 INTERFACE agility_sdk::agility_sdk)
-
-	target_include_directories(DirectX12 INTERFACE "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
+	target_link_libraries(OxC3_graphics_d3d12 PUBLIC agility_sdk::agility_sdk)
+	target_include_directories(OxC3_graphics_d3d12 PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 
 	if(NOT ${ARM})
 
@@ -379,18 +491,12 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		find_package(ags REQUIRED)
 		find_package(nvapi REQUIRED)
 
-		target_link_libraries(DirectX12 INTERFACE ags::ags nvapi::nvapi)
+		target_link_libraries(OxC3_graphics_d3d12 PUBLIC ags::ags nvapi::nvapi)
 
 	endif()
-	
-	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
 
-elseif("${graphicsApi}" STREQUAL "metal")
-	message(FATAL_ERROR "Graphics api not supported yet: Metal")
-elseif("${graphicsApi}" STREQUAL "webgpu")
-	message(FATAL_ERROR "Graphics api not supported yet: WebGPU")
-else()
-	message(FATAL_ERROR "Graphics api not supported: ${graphicsApi}")
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics_d3d12)
+
 endif()
 
 # Tests
@@ -403,6 +509,10 @@ if(EnableTests)
 		OxC3_test
 		${tests}
 		CMakeLists.txt
+		conanfile.py
+		conandata.yml
+		build.bat
+		build.sh
 	)
 
 	target_link_libraries(OxC3_test PUBLIC OxC3_platforms)
@@ -430,6 +540,10 @@ if(EnableShaderCompiler)
 		${compilerHeaders}
 		${compilerSources}
 		CMakeLists.txt
+		conanfile.py
+		conandata.yml
+		build.bat
+		build.sh
 	)
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
@@ -454,12 +568,16 @@ if(EnableOxC3CLI)
 		${headers}
 		${sources}
 		CMakeLists.txt
+		conanfile.py
+		conandata.yml
+		build.bat
+		build.sh
 	)
 
 	set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi)
 
 	if(CLIGraphics)
-		target_link_libraries(OxC3CLI PUBLIC OxC3_graphics)
+		target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)
 		target_compile_definitions(OxC3CLI PUBLIC -DCLI_GRAPHICS)
 	endif()
 
@@ -478,6 +596,10 @@ if(EnableOxC3CLI)
 		OxC3
 		${sources}
 		CMakeLists.txt
+		conanfile.py
+		conandata.yml
+		build.bat
+		build.sh
 	)
 
 	set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
@@ -487,5 +609,7 @@ if(EnableOxC3CLI)
 	configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 	configure_virtual_files(OxC3)
 	apply_dependencies(OxC3)
+	
+	target_compile_definitions(OxC3 PRIVATE -DPLATFORM_INSTANCE_EXPORT)
 
 endif()

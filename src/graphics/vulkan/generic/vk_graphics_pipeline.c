@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -106,7 +107,7 @@ VkBlendFactor mapVkBlend(EBlend op) {
 	}
 }
 
-Bool GraphicsDevice_createPipelineGraphicsExt(
+Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	GraphicsDevice *device,
 	ListSHFile binaries,
 	CharString name,

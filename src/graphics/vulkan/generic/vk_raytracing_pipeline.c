@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -50,7 +51,7 @@ TListImpl(VkRayTracingPipelineCreateInfoKHR);
 TListImpl(VkShaderModule);
 TListImpl(VkRayTracingShaderGroupCreateInfoKHR);
 
-Bool GraphicsDevice_createPipelineRaytracingInternalExt(
+Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	GraphicsDeviceRef *deviceRef,
 	ListSHFile binaries,
 	CharString name,

@@ -39,7 +39,7 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 	const VkWin32SurfaceCreateInfoKHR surfaceInfo = (VkWin32SurfaceCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
 		.hwnd = window->nativeHandle,
-		.hinstance = Platform_instance.data
+		.hinstance = Platform_instance->data
 	};
 
 	if (!instanceExt->createSurfaceExt)

@@ -37,6 +37,7 @@
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define NOMINMAX
 #include <Windows.h>
 
 void WWindow_updateMonitors(Window *w) {
@@ -829,7 +830,7 @@ Bool WindowManager_freePhysical(Window *w) {
 	if(w->nativeData)
 		DeleteObject((HGDIOBJ) w->nativeData);
 
-	const HINSTANCE mainModule = Platform_instance.data;
+	const HINSTANCE mainModule = Platform_instance->data;
 
 	UnregisterClassW(L"OxC3: Oxsomi core 3", mainModule);
 
@@ -986,7 +987,7 @@ impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	//Create native window
 
 	const WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
-	const HINSTANCE mainModule = Platform_instance.data;
+	const HINSTANCE mainModule = Platform_instance->data;
 	Bool s_uccess = true;
 
 	DWORD style = WS_VISIBLE;

@@ -92,8 +92,6 @@ void *TextureRef_getImgExt(TextureRef *ref, U32 subResource, U8 imageId);
 #define TextureRef_getImgExtT(t, prefix, subResource, imageId) \
 	((prefix##UnifiedTexture*) TextureRef_getImgExt(t, subResource, imageId))
 
-impl extern const U32 UnifiedTextureImageExt_size;
-
 void *TextureRef_getCurrImgExt(TextureRef *ref, U32 subResource);
 #define TextureRef_getCurrImgExtT(t, prefix, subResource) \
 	((prefix##UnifiedTexture*) TextureRef_getCurrImgExt(t, subResource))

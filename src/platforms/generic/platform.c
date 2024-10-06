@@ -314,9 +314,9 @@ TListImpl(VirtualSection);
 
 //Platform creation
 
-Platform Platform_instance = { 0 };
+Platform *Platform_instance = 0, platformInstance = { 0 };
 
-Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator) {
+Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir) {
 
 	U16 v = 1;
 
@@ -334,7 +334,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 			"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
 		);
 
-	if(Platform_instance.platformType != PLATFORM_UNINITIALIZED)
+	if(Platform_instance)
 		return Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
 
 	if(!cmdArgc || !cmdArgs)
@@ -367,7 +367,8 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		}
 	#endif
 
-	Platform_instance =	(Platform) {
+	Platform_instance = &platformInstance;
+	*Platform_instance = (Platform) {
 		.platformType = _PLATFORM_TYPE,
 		.data = data,
 		.alloc = (Allocator) {
@@ -393,9 +394,10 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 			sl.ptrNonConst[i - 1] = CharString_createRefCStrConst(cmdArgs[i]);
 	}
 
-	Platform_instance.args = sl;
+	Platform_instance->args = sl;
+	Platform_instance->useWorkingDir = useWorkingDir;
 
-	if(!Platform_useWorkingDirectory) {
+	if(!useWorkingDir) {
 
 		//Grab app directory of where the exe is installed
 
@@ -411,10 +413,10 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 		else CharString_cut(appDir, 0, loc + 1, &basePath);
 
-		gotoIfError(clean, CharString_createCopyx(basePath, &Platform_instance.workingDirectory));
+		gotoIfError(clean, CharString_createCopyx(basePath, &Platform_instance->workingDirectory));
 
 		if(!CharString_endsWithSensitive(basePath, '/', 0))
-			gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
+			gotoIfError(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'));
 	}
 
 	gotoIfError(clean, Platform_initExt());
@@ -431,23 +433,23 @@ clean:
 
 void Platform_cleanup() {
 
-	if(Platform_instance.platformType == PLATFORM_UNINITIALIZED)
+	if(!Platform_instance)
 		return;
 
-	CharString_freex(&Platform_instance.workingDirectory);
-	ListCharString_freex(&Platform_instance.args);
+	CharString_freex(&Platform_instance->workingDirectory);
+	ListCharString_freex(&Platform_instance->args);
 
 	//Properly clean virtual files
 
-	SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
-	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
-		VirtualSection *sect = &Platform_instance.virtualSections.ptrNonConst[i];
+	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
+		VirtualSection *sect = &Platform_instance->virtualSections.ptrNonConst[i];
 		CharString_freex(&sect->path);
 		Archive_freex(&sect->loadedData);
 	}
 
-	ListVirtualSection_freex(&Platform_instance.virtualSections);
+	ListVirtualSection_freex(&Platform_instance->virtualSections);
 
 	//Reset console text color
 
@@ -457,7 +459,8 @@ void Platform_cleanup() {
 
 	Platform_cleanupExt();
 
-	Platform_instance =	(Platform) { 0 };
+	*Platform_instance = (Platform) { 0 };
+	Platform_instance = NULL;
 }
 
 Bool SpinLock_isLockedForThread(SpinLock *l) {
@@ -465,5 +468,5 @@ Bool SpinLock_isLockedForThread(SpinLock *l) {
 }
 
 void Log_printCapturedStackTracex(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTrace(Platform_instance.alloc, stackTrace, lvl, options);
+	Log_printCapturedStackTrace(Platform_instance->alloc, stackTrace, lvl, options);
 }

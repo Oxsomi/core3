@@ -18,30 +18,20 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/platform.h"
-#include "platforms/log.h"
-#include "platforms/ext/errorx.h"
-#include "cli.h"
+#pragma once
+#include "types/types.h"
 
-Platform_defineEntrypoint() {
+typedef void *DynamicLibrary;
 
-	int status = 0;
-	const Error err = Platform_create(argc, argv, Platform_getData(), NULL, true);
+impl Bool DynamicLibrary_isValidPath(CharString str);
+impl Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr);
+impl Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr);
+impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
 
-	if(err.genericError) {
-		Error_printLnx(err);
-		return -2;
-	}
-
-	CLI_init();
-
-	if (!CLI_execute(Platform_instance->args)) {
-		status = -1;
-		goto clean;
-	}
-
-clean:
-	CLI_shutdown();
-	Platform_cleanup();
-	return status;
-}
+#ifdef _MSVC_TRADITIONAL
+	#define EXPORT_SYMBOL __declspec(dllexport)
+	#define IMPORT_SYMBOL __declspec(dllimport)
+#else
+	#define EXPORT_SYMBOL __attribute__((visibility(default))
+	#define IMPORT_SYMBOL
+#endif

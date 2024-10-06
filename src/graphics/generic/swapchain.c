@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "graphics/generic/interface.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "platforms/window.h"
@@ -33,12 +34,6 @@ Error SwapchainRef_inc(SwapchainRef *swapchain) {
 	return !RefPtr_inc(swapchain) ?
 		Error_invalidOperation(0, "SwapchainRef_inc()::swapchain is invalid") : Error_none();
 }
-
-impl Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
-impl Bool GraphicsDevice_freeSwapchainExt(Swapchain *data, Allocator alloc);
-impl extern const U64 SwapchainExt_size;
-
-impl Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name);		//We need to be able to re-create views
 
 Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
@@ -112,9 +107,9 @@ clean:
 	return err;
 }
 
-Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
+Bool Swapchain_free(Swapchain *swapchain, Allocator alloc) {
 	Bool success = SpinLock_lock(&swapchain->lock, U64_MAX);
-	success &= GraphicsDevice_freeSwapchainExt(swapchain, alloc);
+	success &= Swapchain_freeExt(swapchain, alloc);
 	success &= UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
 	return success;
 }
@@ -127,8 +122,12 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		);
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(Swapchain) + (UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)) * 3 + SwapchainExt_size),
-		(ObjectFreeFunc) GraphicsDevice_freeSwapchain,
+		(U32)(
+			sizeof(Swapchain) + 
+			(GraphicsDeviceRef_getObjectSizes(dev)->image + sizeof(UnifiedTextureImage)) * 3 +
+			GraphicsDeviceRef_getObjectSizes(dev)->swapchain
+		),
+		(ObjectFreeFunc) Swapchain_free,
 		(ETypeId) EGraphicsTypeId_Swapchain,
 		scRef
 	);

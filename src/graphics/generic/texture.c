@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "graphics/generic/interface.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/render_texture.h"
@@ -97,7 +98,9 @@ void *TextureRef_getImplExt(TextureRef *ref) {
 
 	//TODO: subResource
 	return (UnifiedTextureImage*)(
-		(U8*)tex + sizeof(*tex) + (sizeof(UnifiedTextureImage) + UnifiedTextureImageExt_size) * tex->images
+		(U8*)tex +
+		sizeof(*tex) +
+		(sizeof(UnifiedTextureImage) + GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image) * tex->images
 	);
 }
 
@@ -137,7 +140,10 @@ void *TextureRef_getImgExt(TextureRef *ref, U32 subResource, U8 imageId) {
 		return NULL;
 
 	return (UnifiedTextureImage*)(
-		(U8*)tex + sizeof(*tex) + sizeof(UnifiedTextureImage) * tex->images + UnifiedTextureImageExt_size * imageId
+		(U8*)tex +
+		sizeof(*tex) +
+		sizeof(UnifiedTextureImage) * tex->images +
+		GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image * imageId
 	);
 }
 
@@ -191,9 +197,6 @@ Bool TextureRef_isDepthStencil(TextureRef *tex) { return tex && tex->typeId == (
 Bool TextureRef_isRenderTargetWritable(TextureRef *tex) {
 	return tex && (tex->typeId == (ETypeId) EGraphicsTypeId_RenderTexture || tex->typeId == (ETypeId) EGraphicsTypeId_Swapchain);
 }
-
-impl Bool UnifiedTexture_freeExt(TextureRef *textureRef);
-impl Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name);
 
 Bool UnifiedTexture_free(TextureRef *textureRef) {
 

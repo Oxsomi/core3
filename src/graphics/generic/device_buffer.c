@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
@@ -165,10 +166,6 @@ clean:
 	return err;
 }
 
-impl extern const U64 DeviceBufferExt_size;
-impl Bool DeviceBuffer_freeExt(DeviceBuffer *buffer);
-impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
-
 Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	(void)allocator;
@@ -211,7 +208,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 	DeviceBufferRef **ref
 ) {
 	Error err = RefPtr_createx(
-		(U32)(sizeof(DeviceBuffer) + DeviceBufferExt_size),
+		(U32)(sizeof(DeviceBuffer) + GraphicsDeviceRef_getObjectSizes(dev)->buffer),
 		(ObjectFreeFunc) DeviceBuffer_free,
 		(ETypeId) EGraphicsTypeId_DeviceBuffer,
 		ref

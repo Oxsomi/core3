@@ -167,7 +167,7 @@ Bool CLI_package(ParsedArgs args) {
 
 		//Check thread count
 
-		U32 threadCount = 0;
+		U64 threadCount = 0;
 		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 1))
 
 		//Additional includeDir

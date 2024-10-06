@@ -24,9 +24,7 @@
 #include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 
-const U64 PipelineExt_size = sizeof(DxPipeline);
-
-Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
+Bool DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 
 	(void)allocator;
 

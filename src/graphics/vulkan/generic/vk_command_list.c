@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -38,9 +39,6 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
-impl Error BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
-impl Error TLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
-
 void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 
 	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
@@ -55,7 +53,7 @@ void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInf
 	result->resolveImageLayout = imageExt->lastLayout;
 }
 
-void CommandList_process(
+void VK_WRAP_FUNC(CommandList_process)(
 	CommandList *commandList,
 	GraphicsDeviceRef *deviceRef,
 	ECommandOp op,
@@ -639,11 +637,11 @@ void CommandList_process(
 		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
 
 		case ECommandOp_UpdateBLASExt:
-			BLASRef_flush(temp, deviceRef, *(BLASRef**)data);
+			BLASRef_flushExt(temp, deviceRef, *(BLASRef**)data);
 			break;
 
 		case ECommandOp_UpdateTLASExt:
-			TLASRef_flush(temp, deviceRef, *(TLASRef**)data);
+			TLASRef_flushExt(temp, deviceRef, *(TLASRef**)data);
 			break;
 
 		//case ECommandOp_DispatchRaysIndirect:

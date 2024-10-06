@@ -28,11 +28,9 @@
 #include "graphics/directx12/dx_buffer.h"
 #include "graphics/directx12/directx12.h"
 
-const U64 BLASExt_size = sizeof(DxBLAS);
+Bool DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; return true; }		//No-op
 
-Bool BLAS_freeExt(BLAS *blas) { (void) blas; return true; }		//No-op
-
-Error BLAS_initExt(BLAS *blas) {
+Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -43,7 +41,7 @@ Error BLAS_initExt(BLAS *blas) {
 	CharString tmp = CharString_createNull();
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		gotoIfError(clean, Error_unsupportedOperation(0, "BLASRef_flush()::serialized not supported yet"))		//TODO:
+		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12BLAS_init()::serialized not supported yet"))		//TODO:
 
 	U64 primitives = 0;
 	EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
@@ -72,7 +70,7 @@ Error BLAS_initExt(BLAS *blas) {
 
 	if(primitives >> 32)
 		gotoIfError(clean, Error_outOfBounds(
-			0, primitives, U32_MAX, "BLASRef_flush() only primitive count of <U32_MAX is supported"
+			0, primitives, U32_MAX, "D3D12BLAS_init() only primitive count of <U32_MAX is supported"
 		))
 
 	blasExt->primitives = (U32) primitives;
@@ -186,7 +184,7 @@ clean:
 	return err;
 }
 
-Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
+Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
 
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 

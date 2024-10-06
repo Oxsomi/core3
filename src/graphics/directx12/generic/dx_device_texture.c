@@ -29,7 +29,7 @@
 #include "types/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 
-Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
+Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
 
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 

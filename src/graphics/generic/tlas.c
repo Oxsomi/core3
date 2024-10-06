@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
@@ -104,10 +105,6 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 	*result = *data;
 	return true;
 }
-
-impl extern const U64 TLASExt_size;
-impl Bool TLAS_freeExt(TLAS *tlas);
-impl Error TLAS_initExt(TLAS *tlas);
 
 Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 
@@ -277,7 +274,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	//Allocate refPtr
 
 	gotoIfError(clean, RefPtr_createx(
-		(U32) (sizeof(TLAS) + TLASExt_size),
+		(U32) (sizeof(TLAS) + GraphicsDeviceRef_getObjectSizes(dev)->tlas),
 		(ObjectFreeFunc) TLAS_free,
 		(ETypeId) EGraphicsTypeId_TLASExt,
 		tlasRef

@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "graphics/generic/interface.h"
 #include "graphics/generic/render_texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
@@ -55,7 +56,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 ) {
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(RenderTexture) + UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)),
+		(U32)(sizeof(RenderTexture) + GraphicsDeviceRef_getObjectSizes(deviceRef)->image + sizeof(UnifiedTextureImage)),
 		(ObjectFreeFunc) GraphicsDevice_freeRenderTexture,
 		(ETypeId) EGraphicsTypeId_RenderTexture,
 		renderTextureRef

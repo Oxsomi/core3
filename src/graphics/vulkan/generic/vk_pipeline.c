@@ -100,9 +100,7 @@ clean:
 	return err;
 }
 
-const U64 PipelineExt_size = sizeof(VkPipeline);
-
-Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
+Bool VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 
 	(void)allocator;
 

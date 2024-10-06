@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/bufferx.h"
@@ -26,6 +27,11 @@
 #include "types/error.h"
 
 TListImpl(GraphicsDeviceInfo);
+
+const C8 *EGraphicsApi_name[EGraphicsApi_Count] = {
+	"Vulkan",
+	"D3D12"
+};
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
 	return !RefPtr_dec(inst) ?
@@ -54,7 +60,7 @@ Error GraphicsInstance_getPreferredDevice(
 		);
 
 	ListGraphicsDeviceInfo tmp = (ListGraphicsDeviceInfo) { 0 };
-	Error err = GraphicsInstance_getDeviceInfos(inst, &tmp);
+	Error err = GraphicsInstance_getDeviceInfosExt(inst, &tmp);
 
 	if(err.genericError)
 		return err;
@@ -117,25 +123,47 @@ clean:
 	return err;
 }
 
-impl Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
-impl Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
-impl extern const U64 GraphicsInstanceExt_size;
+Bool GraphicsInterface_prepare(Error *e_rr) {
+	return GraphicsInterface_init(e_rr);
+}
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFlags flags, GraphicsInstanceRef **instanceRef) {
+Bool GraphicsInterface_supportsApi(EGraphicsApi api) {
+	return GraphicsInterface_supports(api);
+}
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(GraphicsInstance) + GraphicsInstanceExt_size),
-		(ObjectFreeFunc) GraphicsInstance_free,
+Error GraphicsInstance_create(
+	GraphicsApplicationInfo info,
+	EGraphicsApi api,
+	EGraphicsInstanceFlags flags,
+	GraphicsInstanceRef **instanceRef
+) {
+
+	Error err = Error_none();
+	Bool initRefPtr = false;
+
+	if(!GraphicsInterface_init(&err))
+		return err;
+
+	if (api >= EGraphicsApi_Count) {
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			api = GraphicsInterface_supports(EGraphicsApi_DirectX12) ? EGraphicsApi_DirectX12 : EGraphicsApi_Vulkan;
+		#else
+			api = EGraphicsApi_Vulkan;
+		#endif
+	}
+
+	gotoIfError(clean, RefPtr_createx(
+		(U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance),
+		(ObjectFreeFunc) GraphicsInstance_freeExt,
 		(ETypeId) EGraphicsTypeId_GraphicsInstance,
 		instanceRef
-	);
+	))
 
-	if(err.genericError)
-		return err;
+	initRefPtr = true;
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 
-	*instance = (GraphicsInstance) { .application = info, .flags = flags };
+	*instance = (GraphicsInstance) { .application = info, .api = api, .flags = flags };
 
 	#ifndef NDEBUG
 		if(!(flags & EGraphicsInstanceFlags_DisableDebug))
@@ -146,8 +174,12 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFla
 
 clean:
 
-	if(err.genericError)
+	if(err.genericError && initRefPtr)
 		GraphicsInstanceRef_dec(instanceRef);
 
 	return err;
+}
+
+Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos) {
+	return GraphicsInstance_getDeviceInfosExt(inst, infos);
 }

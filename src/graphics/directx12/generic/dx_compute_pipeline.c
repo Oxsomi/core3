@@ -29,7 +29,7 @@
 #include "types/error.h"
 #include "formats/oiSH.h"
 
-Bool GraphicsDevice_createPipelineComputeExt(
+Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,
 	CharString name,
 	Pipeline *pipeline,

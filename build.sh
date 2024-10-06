@@ -1,13 +1,14 @@
 #!/bin/bash
 
 usage() {
-	echo Usage: build [Build type: Debug/Release] [Enable SIMD: True/False] [Enable Tests: True/False]
+	echo Usage: build [Build type: Debug/Release] [Enable SIMD: True/False] [Enable Tests: True/False] [Dynamic linking: True/False]
 	exit 1
 }
 
 if [ "$1" != Release ] && [ "$1" != Debug ]; then usage; fi
 if [ "$2" != True ] && [ "$2" != False ]; then usage; fi
 if [ "$3" != True ] && [ "$3" != False ]; then usage; fi
+if [ "$4" != True ] && [ "$4" != False ]; then usage; fi
 
 RED='\033[0;31m'
 NC='\033[0m'
@@ -27,7 +28,7 @@ if ! conan create packages/nvapi -s build_type=$1 --build=missing; then
 	exit 1
 fi
 
-if ! conan build . -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 ${@:4}; then
+if ! conan build . -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 -o dynamicLinkingGraphics=$4 ${@:5}; then
 	printf "${RED}-- Conan build failed${NC}\n"
 	exit 1
 fi

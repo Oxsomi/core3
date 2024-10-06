@@ -19,14 +19,13 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/allocator.h"
 #include "platforms/ext/bufferx.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
 TListImpl(DeviceMemoryBlock);
-
-impl Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
 
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset) {
 

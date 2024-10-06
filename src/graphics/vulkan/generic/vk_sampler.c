@@ -25,9 +25,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/string.h"
 
-const U64 SamplerExt_size = sizeof(VkSampler);
-
-Bool Sampler_freeExt(Sampler *sampler) {
+Bool VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(sampler->device), Vk);
 	const VkSampler *samplerExt = Sampler_ext(sampler, Vk);
@@ -57,7 +55,7 @@ VkBorderColor mapVkBorderColor(ESamplerBorderColor borderColor) {
 	}
 }
 
-Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
+Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
 
 	Error err = Error_none();
 

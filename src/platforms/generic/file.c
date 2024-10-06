@@ -62,9 +62,10 @@
 
 #else
 
-	#define UNICODE
-	#define WIN32_LEAN_AND_MEAN
-	#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define UNICODE
+#define WIN32_LEAN_AND_MEAN
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define NOMINMAX
 	#include <Windows.h>
 	#include <direct.h>
 	#include <fileapi.h>
@@ -156,23 +157,23 @@ int removeFileOrFolder(CharString str) {
 //
 
 Bool FileInfo_freex(FileInfo *fileInfo) {
-	return FileInfo_free(fileInfo, Platform_instance.alloc);
+	return FileInfo_free(fileInfo, Platform_instance->alloc);
 }
 
 Bool File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
 	return File_resolve(
 		loc, isVirtual,
 		maxFilePathLimit,
-		Platform_instance.workingDirectory, Platform_instance.alloc,
+		Platform_instance->workingDirectory, Platform_instance->alloc,
 		result,
 		e_rr
 	);
 }
 Bool File_makeRelativex(CharString base, CharString subFile, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
 	return File_makeRelative(
-		Platform_instance.workingDirectory, base, subFile,
+		Platform_instance->workingDirectory, base, subFile,
 		maxFilePathLimit,
-		Platform_instance.alloc,
+		Platform_instance->alloc,
 		result,
 		e_rr
 	);
@@ -199,7 +200,7 @@ Bool File_getInfo(CharString loc, FileInfo *info, Allocator alloc, Error *e_rr) 
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance.workingDirectory, alloc, &resolved, e_rr))
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->workingDirectory, alloc, &resolved, e_rr))
 
 	struct stat inf = (struct stat) { 0 };
 
@@ -236,7 +237,7 @@ clean:
 }
 
 Bool File_getInfox(CharString loc, FileInfo *info, Error *e_rr) {
-	return File_getInfo(loc, info, Platform_instance.alloc, e_rr);
+	return File_getInfo(loc, info, Platform_instance->alloc, e_rr);
 }
 
 Bool File_hasFile(CharString loc) { return File_hasType(loc, EFileType_File); }
@@ -375,7 +376,7 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 
 	if(CharString_containsSensitive(resolved, '/', 0, 0)) {
 
-		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance.workingDirectory, 0, 0))
+		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance->workingDirectory, 0, 0))
 			retError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."))
 
 		gotoIfError2(clean, CharString_splitSensitivex(resolved, '/', &str))
@@ -835,14 +836,14 @@ Bool File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSecti
 
 	else goto clean;
 
-	if(!SpinLock_isLockedForThread(&Platform_instance.virtualSectionsLock))
+	if(!SpinLock_isLockedForThread(&Platform_instance->virtualSectionsLock))
 		retError(clean, Error_invalidState(0, "File_resolveVirtual() requires virtualSectionsLock"))
 
 	//Check sections
 
-	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 
-		const VirtualSection *sectioni = Platform_instance.virtualSections.ptr + i;
+		const VirtualSection *sectioni = Platform_instance->virtualSections.ptr + i;
 
 		//If folder is the same, we found a section.
 		//This section won't return any subPath or section,
@@ -892,7 +893,7 @@ Bool File_readVirtualInternal(Buffer *output, CharString loc, Error *e_rr) {
 	CharString subPath = CharString_createNull();
 	const VirtualSection *section = NULL;
 	Buffer tmp = Buffer_createNull();
-	const ELockAcquire acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "File_readVirtualInternal() couldn't lock virtualSectionsLock"))
@@ -911,7 +912,7 @@ Bool File_readVirtualInternal(Buffer *output, CharString loc, Error *e_rr) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
 	Buffer_freex(&tmp);
 	CharString_freex(&subPath);
@@ -939,7 +940,7 @@ Bool File_getInfoVirtualInternal(FileInfo *info, CharString loc, Error *e_rr) {
 	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
 	const VirtualSection *section = NULL;
-	const ELockAcquire acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "File_getInfoVirtualInternal() couldn't lock virtualSectionsLock"))
@@ -976,7 +977,7 @@ Bool File_getInfoVirtualInternal(FileInfo *info, CharString loc, Error *e_rr) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
 	if(!s_uccess)
 		FileInfo_freex(info);
@@ -1049,16 +1050,16 @@ Bool File_foreachVirtualInternal(ForeachFile *userData, CharString resolved, Err
 	if(CharString_length(copy))
 		gotoIfError2(clean, CharString_appendx(&copy, '/'))		//Don't append to root
 
-	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
 
 	U64 baseCount = CharString_countAllSensitive(copy, '/', 0);
 
-	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 
-		const VirtualSection *section = Platform_instance.virtualSections.ptr + i;
+		const VirtualSection *section = Platform_instance->virtualSections.ptr + i;
 
 		CharString_freex(&copy1);
 		CharString_freex(&copy2);
@@ -1165,7 +1166,7 @@ Bool File_foreachVirtualInternal(ForeachFile *userData, CharString resolved, Err
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
 	ListCharString_freex(&visited);
 	CharString_freex(&copy);
@@ -1261,14 +1262,14 @@ Bool File_unloadVirtualInternal(void *userData, CharString loc, Error *e_rr) {
 	if(CharString_length(isChild))
 		gotoIfError2(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
 
-	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
 
-	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 
-		VirtualSection *section = Platform_instance.virtualSections.ptrNonConst + i;
+		VirtualSection *section = Platform_instance->virtualSections.ptrNonConst + i;
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&
@@ -1283,7 +1284,7 @@ Bool File_unloadVirtualInternal(void *userData, CharString loc, Error *e_rr) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
 	CharString_freex(&isChild);
 	return s_uccess;

@@ -43,6 +43,8 @@ typedef enum EGraphicsApi {
 	EGraphicsApi_Count
 } EGraphicsApi;
 
+extern const C8 *EGraphicsApi_name[EGraphicsApi_Count];
+
 typedef enum EGraphicsInstanceFlags {
 	EGraphicsInstanceFlags_None				= 0,
 	EGraphicsInstanceFlags_IsDebug			= 1 << 0,
@@ -63,6 +65,7 @@ typedef struct GraphicsInstance {
 } GraphicsInstance;
 
 typedef RefPtr GraphicsInstanceRef;
+typedef struct ListGraphicsDeviceInfo ListGraphicsDeviceInfo;
 
 #define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))		//impl
 #define GraphicsInstanceRef_ptr(ptr) RefPtr_data(ptr, GraphicsInstance)
@@ -70,11 +73,19 @@ typedef RefPtr GraphicsInstanceRef;
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFlags flags, GraphicsInstanceRef **inst);
+Bool GraphicsInterface_prepare(Error *e_rr);	//Prepare interface to query info about supported APIs
+Bool GraphicsInterface_supportsApi(EGraphicsApi api);
+
+Error GraphicsInstance_create(
+	GraphicsApplicationInfo info,
+	EGraphicsApi api,				//EGraphicsApi_Count = Default
+	EGraphicsInstanceFlags flags,
+	GraphicsInstanceRef **inst
+);
+
+Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
 
 TList(GraphicsDeviceInfo);
-
-impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
 
 static const U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
 static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;

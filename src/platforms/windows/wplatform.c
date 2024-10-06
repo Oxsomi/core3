@@ -28,9 +28,18 @@
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define NOMINMAX
 #include <Windows.h>
 
 #include <stdlib.h>
+
+U64 threadCount = 0;
+
+U64 Platform_getThreads() {
+	SYSTEM_INFO systemInfo;
+	GetSystemInfo(&systemInfo);
+	return systemInfo.dwNumberOfProcessors;
+}
 
 CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
@@ -76,20 +85,6 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
-I32 main(I32 argc, const C8 *argv[]) {
-
-	const Error err = Platform_create(argc, argv, GetModuleHandleW(NULL), NULL);
-
-	if(err.genericError)
-		return -1;
-
-	const I32 res = Program_run();
-	Program_exit();
-	Platform_cleanup();
-
-	return res;
-}
-
 void Platform_cleanupExt() { }
 
 typedef struct EnumerateFiles {
@@ -123,17 +118,22 @@ clean:
 	return !err.genericError;
 }
 
+void *Platform_getDataImpl(void *ptr) {
+	(void) ptr;
+	return GetModuleHandleW(NULL);
+}
+
 Error Platform_initExt() {
 
 	Error err = Error_none();
 
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
-	Platform_instance.threads = systemInfo.dwNumberOfProcessors;
+	Platform_instance->threads = systemInfo.dwNumberOfProcessors;
 
-	if(Platform_useWorkingDirectory) {
+	if(Platform_instance->useWorkingDir) {
 
-		CharString_freex(&Platform_instance.workingDirectory);
+		CharString_freex(&Platform_instance->workingDirectory);
 
 		//Init working dir
 
@@ -147,16 +147,16 @@ Error Platform_initExt() {
 
 		buff[chars] = 0;
 
-		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory))
+		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workingDirectory))
 
-		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/', 0, 0);
+		CharString_replaceAllSensitive(&Platform_instance->workingDirectory, '\\', '/', 0, 0);
 
-		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'))
+		gotoIfError(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
 	}
 
 	//Init virtual files
 
-	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance.virtualSections };
+	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance->virtualSections };
 
 	if (!EnumResourceNamesW(
 		NULL, RT_RCDATA,

@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
@@ -49,23 +50,12 @@ TListImpl(VkWriteDescriptorSet);
 		currPNext = &tmp##T.pNext;		\
 	}
 
-const U64 GraphicsDeviceExt_size = sizeof(VkGraphicsDevice);
-
-//Convert command into API dependent instructions
-impl void CommandList_process(
-	CommandList *commandList,
-	GraphicsDeviceRef *deviceRef,
-	ECommandOp op,
-	const U8 *data,
-	void *commandListExt
-);
-
 TList(VkDeviceQueueCreateInfo);
 TList(VkQueueFamilyProperties);
 TListImpl(VkDeviceQueueCreateInfo);
 TListImpl(VkQueueFamilyProperties);
 
-Error GraphicsDevice_initExt(
+Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	const GraphicsInstance *instance,
 	const GraphicsDeviceInfo *physicalDevice,
 	GraphicsDeviceRef **deviceRef
@@ -382,7 +372,7 @@ Error GraphicsDevice_initExt(
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, NULL);
 
 	if(!familyCount)
-		gotoIfError(clean, Error_invalidOperation(0, "GraphicsDevice_initExt() no supported queues"))
+		gotoIfError(clean, Error_invalidOperation(0, "VkGraphicsDevice_init() no supported queues"))
 
 	gotoIfError(clean, ListVkQueueFamilyProperties_resizex(&queueFamilies, familyCount))
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, queueFamilies.ptrNonConst);
@@ -443,7 +433,7 @@ Error GraphicsDevice_initExt(
 	//Ensure we have all queues. Should be impossible, but still.
 
 	if(copyQueueId == U32_MAX || computeQueueId == U32_MAX || graphicsQueueId == U32_MAX)
-		gotoIfError(clean, Error_invalidOperation(1, "GraphicsDevice_initExt() doesn't have copy, comp or gfx queue"))
+		gotoIfError(clean, Error_invalidOperation(1, "VkGraphicsDevice_init() doesn't have copy, comp or gfx queue"))
 
 	//Assign queues to queues (deviceInfo)
 
@@ -582,7 +572,7 @@ Error GraphicsDevice_initExt(
 	//We only allow triple buffering, so allocate for triple buffers.
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
-	U64 threads = Platform_instance.threads;
+	U64 threads = Platform_getThreads();
 	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * resolvedId))
 
 	//Semaphores
@@ -848,7 +838,7 @@ clean:
 	return err;
 }
 
-void GraphicsDevice_postInit(GraphicsDevice *device) {
+void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
@@ -882,7 +872,7 @@ void GraphicsDevice_postInit(GraphicsDevice *device) {
 	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
 }
 
-Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
+Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)
 		return instance;
@@ -954,7 +944,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 //Executing commands
 
-Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
+Error VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef) {
 	return vkCheck(vkDeviceWaitIdle(GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Vk)->device));
 }
 
@@ -962,7 +952,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device, U32 resolvedQueueId, U64 threadId, U8 backBufferId
 ) {
 
-	const U64 threadCount = Platform_instance.threads;
+	const U64 threadCount = Platform_getThreads();
 
 	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || backBufferId >= 3)
 		return NULL;
@@ -974,7 +964,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error GraphicsDevice_submitCommandsImpl(
+Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
 	ListCommandListRef commandLists,
 	ListSwapchainRef swapchains,
@@ -1115,7 +1105,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		);
 
 		if(!allocator)
-			gotoIfError(clean, Error_nullPointer(0, "GraphicsDevice_submitCommandsImpl() command allocator is NULL"))
+			gotoIfError(clean, Error_nullPointer(0, "VkGraphicsDevice_submitCommands() command allocator is NULL"))
 
 		//We create command pools only the first 3 frames, after that they're cached.
 		//This is because we have space for [queues][threads][3] command pools.
@@ -1271,7 +1261,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-				CommandList_process(commandList, deviceRef, info.op, ptr, &state);
+				CommandList_processExt(commandList, deviceRef, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
 		}

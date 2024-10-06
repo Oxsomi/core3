@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/pipeline_structs.h"
@@ -279,7 +280,7 @@ Error GraphicsDeviceRef_createTexture(
 		);
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(DeviceTexture) + UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)),
+		(U32)(sizeof(DeviceTexture) + GraphicsDeviceRef_getObjectSizes(dev)->image + sizeof(UnifiedTextureImage)),
 		(ObjectFreeFunc) DeviceTexture_free,
 		(ETypeId) EGraphicsTypeId_DeviceTexture,
 		tex

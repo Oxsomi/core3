@@ -29,9 +29,7 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
 
-const U64 BLASExt_size = sizeof(VkBLAS);
-
-Error BLAS_initExt(BLAS *blas) {
+Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 
 	GraphicsDeviceRef *deviceRef = blas->base.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -44,7 +42,7 @@ Error BLAS_initExt(BLAS *blas) {
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "BLAS_initExt()::serialized not supported yet");		//TODO:
+		return Error_unsupportedOperation(0, "VkBLAS_init()::serialized not supported yet");		//TODO:
 
 	Error err = Error_none();
 	U64 primitives = 0;
@@ -78,7 +76,7 @@ Error BLAS_initExt(BLAS *blas) {
 
 	if(primitives >> 32)
 		gotoIfError(clean, Error_outOfBounds(
-			0, primitives, U32_MAX, "BLAS_initExt() only primitive count of <U32_MAX is supported"
+			0, primitives, U32_MAX, "VkBLAS_init() only primitive count of <U32_MAX is supported"
 		))
 
 	blasExt->range = (VkAccelerationStructureBuildRangeInfoKHR) { .primitiveCount = (U32) primitives };
@@ -214,7 +212,7 @@ clean:
 	return err;
 }
 
-Bool BLAS_freeExt(BLAS *blas) {
+Bool VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -230,7 +228,7 @@ Bool BLAS_freeExt(BLAS *blas) {
 	return true;
 }
 
-Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
+Error VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
 
 	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 

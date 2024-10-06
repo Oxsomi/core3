@@ -21,6 +21,7 @@
 #define INITGUID
 #include <guiddef.h>
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/directx12/directx12.h"
 #include "graphics/directx12/dx_device.h"
 #include "graphics/directx12/dx_swapchain.h"
@@ -107,18 +108,7 @@ void onDebugReportNv(
 TListImpl(DxCommandAllocator);
 TListNamedImpl(ListID3D12Fence);
 
-//Convert command into API dependent instructions
-impl void CommandList_process(
-	CommandList *commandList,
-	GraphicsDeviceRef *deviceRef,
-	ECommandOp op,
-	const U8 *data,
-	void *commandListExt
-);
-
-const U64 GraphicsDeviceExt_size = sizeof(DxGraphicsDevice);
-
-Error GraphicsDevice_initExt(
+Error DX_WRAP_FUNC(GraphicsDevice_init)(
 	const GraphicsInstance *instance,
 	const GraphicsDeviceInfo *physicalDevice,
 	GraphicsDeviceRef **deviceRef
@@ -294,7 +284,7 @@ Error GraphicsDevice_initExt(
 	//We only allow triple buffering, so allocate for triple buffers.
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
-	U64 threads = Platform_instance.threads;
+	U64 threads = Platform_getThreads();
 	gotoIfError(clean, ListDxCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * 3))
 
 	//Create fence
@@ -560,11 +550,11 @@ clean:
 	return err;
 }
 
-void GraphicsDevice_postInit(GraphicsDevice *device) {		//No-op in DX12, CBV can be made/bound at runtime :)
+void DX_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {		//No-op in DX12, CBV can be made/bound at runtime :)
 	(void)device;
 }
 
-Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
+Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)
 		return instance;
@@ -640,7 +630,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 //Executing commands
 
-Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
+Error DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -671,7 +661,7 @@ DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
 	const U8 backBufferId
 ) {
 
-	const U64 threadCount = Platform_instance.threads;
+	const U64 threadCount = Platform_getThreads();
 
 	if(!device || resolvedQueueId >= 3 || threadId >= threadCount || backBufferId >= 3)
 		return NULL;
@@ -683,7 +673,7 @@ DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error GraphicsDevice_submitCommandsImpl(
+Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
 	ListCommandListRef commandLists,
 	ListSwapchainRef swapchains,
@@ -761,7 +751,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		);
 
 		if(!allocator)
-			gotoIfError(clean, Error_nullPointer(0, "GraphicsDevice_submitCommandsImpl() command allocator is NULL"))
+			gotoIfError(clean, Error_nullPointer(0, "D3D12GraphicsDevice_submitCommands() command allocator is NULL"))
 
 		//We create command pools only the first 3 frames, after that they're cached.
 		//This is because we have space for [queues][threads][3] command pools.
@@ -907,7 +897,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-				CommandList_process(commandList, deviceRef, info.op, ptr, &state);
+				CommandList_processExt(commandList, deviceRef, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
 		}
@@ -993,7 +983,7 @@ clean:
 		NvAPI_Status status = NvAPI_D3D12_FlushRaytracingValidationMessages((ID3D12Device5*)deviceExt->device);
 
 		if(status != NVAPI_OK)
-			gotoIfError(clean, Error_invalidState(0, "GraphicsDevice_submitCommandsImpl() flush RT val msgs failed"));
+			gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDevice_submitCommands() flush RT val msgs failed"));
 	}
 
 	if(eventHandle)

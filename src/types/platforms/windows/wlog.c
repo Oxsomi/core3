@@ -32,6 +32,7 @@
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define NOMINMAX
 #include <Windows.h>
 #include <signal.h>
 #include <DbgHelp.h>

@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -27,8 +28,6 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
-
-U64 DeviceBufferExt_size = sizeof(DxDeviceBuffer);
 
 Error DxDeviceBuffer_transition(
 	DxDeviceBuffer *buffer,
@@ -76,7 +75,7 @@ Error DxDeviceBuffer_transition(
 	return Error_none();
 }
 
-Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
+Bool DX_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 
 	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Dx);
 
@@ -91,7 +90,7 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 	return true;
 }
 
-Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
+Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -134,10 +133,10 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	Error err;
 
 	if(!res)
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() couldn't query allocInfo"))
+		gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"))
 
 	if(buf->resource.size / 4 != (U32)(buf->resource.size / 4))
-		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferExt() out of bounds"))
+		gotoIfError(clean, Error_invalidState(1, "D3D12GraphicsDeviceRef_createBuffer() out of bounds"))
 
 	//Allocate memory
 
@@ -147,7 +146,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		.length = allocInfo.SizeInBytes
 	};
 
-	gotoIfError(clean, DeviceMemoryAllocator_allocate(
+	gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
 		&device->allocator,
 		&req,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
@@ -185,7 +184,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	buf->resource.deviceAddress = bufExt->buffer->lpVtbl->GetGPUVirtualAddress(bufExt->buffer);
 
 	if(!buf->resource.deviceAddress)
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"))
+		gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
 
 	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReportReBARWrites)
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->QueryInterface(
@@ -261,7 +260,7 @@ clean:
 	return err;
 }
 
-Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
 
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 

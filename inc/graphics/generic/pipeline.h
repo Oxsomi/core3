@@ -145,9 +145,8 @@ typedef RefPtr PipelineRef;
 #define Pipeline_ext(ptr, T) (!(ptr) ? NULL : (T##Pipeline*)(ptr + 1))		//impl
 #define PipelineRef_ptr(ptr) RefPtr_data(ptr, Pipeline)
 
-impl extern const U64 PipelineExt_size;
-
-#define Pipeline_info(ptr, T) ((T*)(!(ptr) ? NULL : ((const U8*)((const Pipeline*)(ptr) + 1) + PipelineExt_size)))
+void *Pipeline_infoOffset(Pipeline *ref);
+#define Pipeline_info(ptr, T) ((T*)Pipeline_infoOffset(ptr))
 
 Error PipelineRef_dec(PipelineRef **pipeline);
 Error PipelineRef_inc(PipelineRef *pipeline);

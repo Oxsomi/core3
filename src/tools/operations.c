@@ -74,7 +74,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-threads",
 	"-compile-type",
 	"-include-dir",
-	"-input2"
+	"-input2",
+	"-graphics-api"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -93,7 +94,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)",
 	"Shader compile mode (preprocess, includes, reflect, compile)",
 	"Set extra include path",
-	"Input file to merge with"
+	"Input file to merge with",
+	"Graphics api to use. Default is either all or the native one depending on command."
 };
 
 //Flags
@@ -122,7 +124,8 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--split",
 	"--warn-unused-registers",
 	"--warn-unused-constants",
-	"--warn-buffer-padding"
+	"--warn-buffer-padding",
+	"--verbose"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
@@ -149,7 +152,8 @@ const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
 	"Split up every binary target into its own oiSH file (.dxil.oiSH, .spv.oiSH, etc.).",
 	"Warn when unused registers are present in the final binary.",
 	"Warn when unused constants are present in the final binary.",
-	"Warn when buffer padding is present in the final binary."
+	"Warn when buffer padding is present in the final binary.",
+	"Print full information to the console."
 };
 
 //Operations
@@ -498,7 +502,8 @@ void Operations_init() {
 
 			.isFormatLess = true,
 
-			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg
+			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi,
+			.operationFlags = EOperation_Verbose
 		};
 
 	#endif

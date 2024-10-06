@@ -23,9 +23,7 @@
 #include "graphics/directx12/dx_device.h"
 #include "types/string.h"
 
-const U64 SamplerExt_size = 1;		//No real info needed, it's just a descriptor :)
-
-Bool Sampler_freeExt(Sampler *sampler) { (void)sampler; return true; }
+Bool DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void)sampler; return true; }
 
 D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
 	switch (addressMode) {
@@ -36,7 +34,7 @@ D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
 	}
 }
 
-Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
+Error DX_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
 
 	(void)name;
 

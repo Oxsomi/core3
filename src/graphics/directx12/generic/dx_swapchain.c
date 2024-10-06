@@ -29,9 +29,7 @@
 #include "types/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 
-const U64 SwapchainExt_size = sizeof(DxSwapchain);
-
-Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
+Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
 
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	SwapchainInfo *info = &swapchain->info;
@@ -66,12 +64,12 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	if(!containsValid)
 		gotoIfError(clean, Error_unsupportedOperation(
-			0, "GraphicsDeviceRef_createSwapchainExt() only fifo and immediate are supported in D3D12"
+			0, "D3D12GraphicsDeviceRef_createSwapchain() only fifo and immediate are supported in D3D12"
 		))
 
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
 		gotoIfError(clean, Error_unsupportedOperation(
-			1, "GraphicsDeviceRef_createSwapchainExt() D3D12 doesn't support writable swapchains"
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"
 		))
 
 	DXGI_SWAP_CHAIN_FLAG flags = !isFifo ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
@@ -90,7 +88,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 			case EWindowFormat_RGBA32f:
 				gotoIfError(clean, Error_unsupportedOperation(
-					1, "GraphicsDeviceRef_createSwapchainExt() RGBA32f isn't supported"
+					1, "D3D12GraphicsDeviceRef_createSwapchain() RGBA32f isn't supported"
 				))
 		}
 
@@ -154,7 +152,7 @@ clean:
 	return err;
 }
 
-Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
+Bool DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 
 	(void)alloc;
 

@@ -19,20 +19,13 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "formats/oiSH.h"
-
-impl Bool GraphicsDevice_createPipelineComputeExt(
-	GraphicsDevice *device,
-	CharString name,
-	Pipeline *pipeline,
-	SHBinaryInfo buf,
-	Error *e_rr
-);
 
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
@@ -86,7 +79,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	gotoIfError2(clean, RefPtr_createx(
-		(U32)(sizeof(Pipeline) + PipelineExt_size),
+		(U32)(sizeof(Pipeline) + GraphicsDeviceRef_getObjectSizes(deviceRef)->pipeline),
 		(ObjectFreeFunc) Pipeline_free,
 		(ETypeId) EGraphicsTypeId_Pipeline,
 		pipeline

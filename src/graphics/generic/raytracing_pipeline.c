@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
@@ -30,17 +31,6 @@
 
 TListImpl(PipelineRaytracingGroup);
 TListImpl(PipelineRaytracingInfo);
-
-impl Bool GraphicsDevice_createPipelineRaytracingInternalExt(
-	GraphicsDeviceRef *deviceRef,
-	ListSHFile binaries,
-	CharString name,
-	U8 maxPayloadSize,
-	U8 maxAttributeSize,
-	ListU32 binaryIndices,
-	Pipeline *pipeline,
-	Error *e_rr
-);
 
 Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	GraphicsDeviceRef *deviceRef,
@@ -303,7 +293,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		))
 
 	gotoIfError2(clean, RefPtr_createx(
-		(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineRaytracingInfo)),
+		(U32)(sizeof(Pipeline) + GraphicsDeviceRef_getObjectSizes(deviceRef)->pipeline + sizeof(PipelineRaytracingInfo)),
 		(ObjectFreeFunc) Pipeline_free,
 		(ETypeId) EGraphicsTypeId_Pipeline,
 		pipelineRef

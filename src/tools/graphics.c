@@ -22,6 +22,7 @@
 #include "cli.h"
 #include "types/error.h"
 #include "platforms/ext/errorx.h"
+#include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
@@ -30,70 +31,142 @@
 
 	Bool CLI_graphicsDevices(ParsedArgs args) {
 
-		Error err = Error_none();
+		Bool s_uccess = true;
+		Error err = Error_none(), *e_rr = &err;
 		GraphicsInstanceRef *instanceRef = NULL;
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
+		ListCharString strings = (ListCharString) { 0 };
 
-		gotoIfError(clean, GraphicsInstance_create(
-			(GraphicsApplicationInfo) {
-				.name = CharString_createRefCStrConst("OxC3 CLI"),
-				.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
-			},
-			EGraphicsInstanceFlags_None,
-			&instanceRef
-		))
+		gotoIfError3(clean, GraphicsInterface_prepare(e_rr))
 
-		gotoIfError(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos))
+		U64 queried = 0;
 
-		//If entry or length is there, we will print full info
+		if(args.parameters & EOperationHasParameter_GraphicsApi) {
 
-		if (args.parameters & (EOperationHasParameter_CountArg | EOperationHasParameter_Entry)) {
+			CharString arg = CharString_createNull();
+			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_GraphicsApiShift, &arg))
 
-			U64 count = 0;
+			gotoIfError2(clean, CharString_splitSensitivex(arg, ',', &strings))
 
-			if (args.parameters & EOperationHasParameter_CountArg) {
+			U64 nativeBit = (U64)1 << (
+				Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_DirectX12 : EGraphicsApi_Vulkan
+			);
 
-				CharString arg = CharString_createNull();
-				gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
+			CharString d3d12 = CharString_createRefCStrConst("d3d12");
+			CharString direct3d12 = CharString_createRefCStrConst("direct3d12");
+			CharString directx12 = CharString_createRefCStrConst("directx12");
 
-				if(!CharString_parseU64(arg, &count))
-					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"))
+			CharString vulkan = CharString_createRefCStrConst("vulkan");
+			CharString vk = CharString_createRefCStrConst("vk");
+
+			CharString native = CharString_createRefCStrConst("native");
+			CharString def = CharString_createRefCStrConst("default");
+			CharString all = CharString_createRefCStrConst("all");
+
+			for(U64 i = 0; i < strings.length; ++i) {
+
+				CharString str = strings.ptr[i];
+
+				if(
+					CharString_equalsStringInsensitive(str, d3d12) ||
+					CharString_equalsStringInsensitive(str, directx12) ||
+					CharString_equalsStringInsensitive(str, direct3d12)
+				)
+					queried |= (U64)1 << EGraphicsApi_DirectX12;
+
+				else if(
+					CharString_equalsStringInsensitive(str, vulkan) ||
+					CharString_equalsStringInsensitive(str, vk)
+				)
+					queried |= (U64)1 << EGraphicsApi_Vulkan;
+
+				else if(CharString_equalsStringInsensitive(str, all))
+					queried = U64_MAX;
+
+				else if(CharString_equalsStringInsensitive(str, native) || CharString_equalsStringInsensitive(str, def))
+					queried |= nativeBit;
+
+				else Log_debugLnx(
+					"CLI_graphicsDevices() -graphics-api must be one of: vulkan/vk, d3d12/directx12/direct3d12, native or all"
+				);
 			}
-
-			U64 entry = 0;
-
-			if (args.parameters & EOperationHasParameter_Entry) {
-
-				CharString arg = CharString_createNull();
-				gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
-
-				if(!CharString_parseU64(arg, &entry))
-					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
-
-				if (!(args.parameters & EOperationHasParameter_CountArg))
-					count = 1;
-			}
-
-			if(!count && entry < infos.length)
-				count = infos.length - entry;
-
-			Log_debugLnx("Graphics device matching ranges [ %"PRIu64", %"PRIu64" >", entry, entry + count);
-
-			for(U64 i = entry; i < infos.length && i < entry + count; ++i)
-				GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], true);
 		}
 
-		//Otherwise, we will simply list the basic information of the devices
+		else queried = U64_MAX;
 
-		else {
+		for(U64 j = 0; j < EGraphicsApi_Count; ++j) {
 
-			Log_debugLnx("%"PRIu64" graphics devices:", infos.length);
+			EGraphicsApi api = (EGraphicsApi) j;
 
-			for(U64 i = 0; i < infos.length; ++i)
-				GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], false);
+			if(!GraphicsInterface_supportsApi(api) || !((queried >> j) & 1))
+				continue;
+
+			gotoIfError2(clean, GraphicsInstance_create(
+				(GraphicsApplicationInfo) {
+					.name = CharString_createRefCStrConst("OxC3 CLI"),
+					.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
+				},
+				api,
+				EGraphicsInstanceFlags_None,
+				&instanceRef
+			))
+
+			gotoIfError2(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos))
+
+			//If entry or length is there, we will print full info
+
+			if (args.parameters & (EOperationHasParameter_CountArg | EOperationHasParameter_Entry)) {
+
+				U64 count = 0;
+
+				if (args.parameters & EOperationHasParameter_CountArg) {
+
+					CharString arg = CharString_createNull();
+					gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
+
+					if(!CharString_parseU64(arg, &count))
+						gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"))
+				}
+
+				U64 entry = 0;
+
+				if (args.parameters & EOperationHasParameter_Entry) {
+
+					CharString arg = CharString_createNull();
+					gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
+
+					if(!CharString_parseU64(arg, &entry))
+						gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
+
+					if (!(args.parameters & EOperationHasParameter_CountArg))
+						count = 1;
+				}
+
+				if(!count && entry < infos.length)
+					count = infos.length - entry;
+
+				Log_debugLnx("Graphics device matching ranges [ %"PRIu64", %"PRIu64" >", entry, entry + count);
+
+				for(U64 i = entry; i < infos.length && i < entry + count; ++i)
+					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], true);
+			}
+
+			//Otherwise, we will simply list the basic information of the devices
+
+			else {
+
+				Log_debugLnx("%s: %"PRIu64" graphics devices:", EGraphicsApi_name[api], infos.length);
+
+				for(U64 i = 0; i < infos.length; ++i)
+					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], args.flags & EOperation_Verbose);
+			}
+
+			ListGraphicsDeviceInfo_freex(&infos);
+			GraphicsInstanceRef_dec(&instanceRef);
 		}
 		
 	clean:
+		ListCharString_freex(&strings);
 		ListGraphicsDeviceInfo_freex(&infos);
 		GraphicsInstanceRef_dec(&instanceRef);
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);

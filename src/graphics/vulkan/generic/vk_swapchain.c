@@ -32,15 +32,13 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 
-const U64 SwapchainExt_size = sizeof(VkSwapchain);
-
 TList(VkSurfaceFormatKHR);
 TList(VkPresentModeKHR);
 
 TListImpl(VkSurfaceFormatKHR);
 TListImpl(VkPresentModeKHR);
 
-Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
+Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
 
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	SwapchainInfo *info = &swapchain->info;
@@ -73,7 +71,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	)))
 
 	if(!support)
-		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() has no queue support"))
+		gotoIfError(clean, Error_unsupportedOperation(0, "VkGraphicsDeviceRef_createSwapchain() has no queue support"))
 
 	//It's possible that format has changed when calling Swapchain_resize.
 	//So we can't skip this.
@@ -85,7 +83,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	)))
 
 	if(!formatCount)
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createSwapchainExt() format isn't supported"))
+		gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createSwapchain() format isn't supported"))
 
 	gotoIfError(clean, ListVkSurfaceFormatKHR_resizex(&surfaceFormats, formatCount))
 
@@ -151,7 +149,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	}
 
 	if(swapchainExt->format.format == VK_FORMAT_UNDEFINED)
-		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() invalid format"))
+		gotoIfError(clean, Error_unsupportedOperation(0, "VkGraphicsDeviceRef_createSwapchain() invalid format"))
 
 	VkSurfaceCapabilitiesKHR capabilities = (VkSurfaceCapabilitiesKHR) { 0 };
 
@@ -164,10 +162,10 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	//Validate if it's compatible with the OxC3_platforms window
 
 	if(I32x2_neq2(window->size, size) || !capabilities.maxImageArrayLayers)
-		gotoIfError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_createSwapchainExt() incompatible window size"))
+		gotoIfError(clean, Error_invalidOperation(0, "VkGraphicsDeviceRef_createSwapchain() incompatible window size"))
 
 	if(!(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR))
-		gotoIfError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createSwapchainExt() requires alpha opaque"))
+		gotoIfError(clean, Error_invalidOperation(1, "VkGraphicsDeviceRef_createSwapchain() requires alpha opaque"))
 
 	Bool isWritable = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
@@ -179,16 +177,16 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	if((capabilities.supportedUsageFlags & requiredUsageFlags) != requiredUsageFlags)
-		gotoIfError(clean, Error_invalidOperation(2, "GraphicsDeviceRef_createSwapchainExt() doesn't have required flags"))
+		gotoIfError(clean, Error_invalidOperation(2, "VkGraphicsDeviceRef_createSwapchain() doesn't have required flags"))
 
 	if(!(capabilities.supportedCompositeAlpha & (VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)))
 		gotoIfError(clean, Error_invalidOperation(
-			3, "GraphicsDeviceRef_createSwapchainExt() doesn't have required composite alpha"
+			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
 
 	if(capabilities.minImageCount > 2 || capabilities.maxImageCount < 3)
 		gotoIfError(clean, Error_invalidOperation(
-			4, "GraphicsDeviceRef_createSwapchainExt() requires support for 2 and 3 images"
+			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 2 and 3 images"
 		))
 
 	VkFlags anyRotate =
@@ -202,7 +200,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		if(window->monitors.length > 1)
 			gotoIfError(clean, Error_invalidOperation(
-				5, "GraphicsDeviceRef_createSwapchainExt() requiresManualComposite only allowed with 1 monitor"
+				5, "VkGraphicsDeviceRef_createSwapchain() requiresManualComposite only allowed with 1 monitor"
 			))
 
 		MonitorOrientation current = EMonitorOrientation_Landscape;
@@ -217,7 +215,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		MonitorOrientation target = window->monitors.ptr->orientation;
 
 		if(current != target)
-			gotoIfError(clean, Error_invalidOperation(6, "GraphicsDeviceRef_createSwapchainExt() invalid orientation"))
+			gotoIfError(clean, Error_invalidOperation(6, "VkGraphicsDeviceRef_createSwapchain() invalid orientation"))
 	}
 
 	//Get present mode
@@ -284,7 +282,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	}
 
 	if(presentMode == (VkPresentModeKHR) -1)
-		gotoIfError(clean, Error_invalidOperation(7, "GraphicsDeviceRef_createSwapchainExt() unsupported present mode"))
+		gotoIfError(clean, Error_invalidOperation(7, "VkGraphicsDeviceRef_createSwapchain() unsupported present mode"))
 
 	//Turn it into a swapchain
 
@@ -324,7 +322,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	gotoIfError(clean, vkCheck(instance->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)))
 
 	if(imageCount != swapchain->base.images)
-		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createSwapchainExt() imageCount doesn't match"))
+		gotoIfError(clean, Error_invalidState(1, "VkGraphicsDeviceRef_createSwapchain() imageCount doesn't match"))
 
 	//Only recreate semaphores if needed.
 
@@ -434,7 +432,7 @@ clean:
 	return err;
 }
 
-Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
+Bool VK_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 
 	(void)alloc;
 

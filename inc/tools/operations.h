@@ -54,7 +54,9 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_Input2Shift,				//If two inputs are specified, this specifies input2
 
-	EOperationHasParameter_CountEnum,			//How many enums there are
+	EOperationHasParameter_GraphicsApiShift,
+
+	EOperationHasParameter_CountEnum,				//How many enums there are
 
 	EOperationHasParameter_Start				= EOperationHasParameter_FileFormatShift,
 
@@ -84,6 +86,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_IncludeDir			= 1 << EOperationHasParameter_IncludeDirShift,
 
 	EOperationHasParameter_Input2				= 1 << EOperationHasParameter_Input2Shift,
+
+	EOperationHasParameter_GraphicsApi			= 1 << EOperationHasParameter_GraphicsApiShift
 
 } EOperationHasParameter;
 
@@ -154,7 +158,9 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_CompilerWarnings	= 7 << 21,
 
-	EOperationFlags_Count				= 24
+	EOperation_Verbose					= 1 << 24,
+
+	EOperationFlags_Count				= 25
 
 } EOperationFlags;
 

@@ -23,6 +23,7 @@
 #include "types/allocator.h"
 #include "types/archive.h"
 #include "types/lock.h"
+#include "platforms/dynamic_library.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -54,24 +55,29 @@ typedef struct Platform {
 	void *data;
 
 	U32 threads;
-	U32 padding;
+
+	Bool useWorkingDir;		//TODO: Find a better solution for this for dlls
+	U8 padding[3];
 
 } Platform;
 
-extern Platform Platform_instance;
-user_impl extern const Bool Platform_useWorkingDirectory;			//If false, the app directory will be used instead.
+extern Platform *Platform_instance;
 
-Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator);
+Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir);
 
 impl void Platform_cleanupExt();
 impl Error Platform_initExt();
 
 impl Bool Platform_checkCPUSupport();								//SIMD dependent: SSE, None, NEON
+impl U64 Platform_getThreads();
 
-void Platform_cleanup();
+void Platform_cleanup();			//Call on exit
 
-user_impl extern I32 Program_run();
-user_impl extern void Program_exit();
+#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
+
+impl void *Platform_getDataImpl(void *ptr);
+
+#define Platform_getData() Platform_getDataImpl(NULL)
 
 //Call this on allocate to make sure the platform's allocator tracks allocations
 

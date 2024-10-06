@@ -30,11 +30,9 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
 
-const U64 TLASExt_size = sizeof(VkTLAS);
-
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
-Error TLAS_initExt(TLAS *tlas) {
+Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 	GraphicsDeviceRef *deviceRef = tlas->base.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -49,7 +47,7 @@ Error TLAS_initExt(TLAS *tlas) {
 	CharString tmp = CharString_createNull();
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "TLAS_initExt()::serialized not supported yet");		//TODO:
+		return Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet");		//TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
@@ -61,7 +59,7 @@ Error TLAS_initExt(TLAS *tlas) {
 
 	if(instancesU64 >> 24)
 		gotoIfError(clean, Error_outOfBounds(
-			0, instancesU64, 1 << 24, "TLAS_initExt() only instance count of <U24_MAX is supported"
+			0, instancesU64, 1 << 24, "VkTLAS_init() only instance count of <U24_MAX is supported"
 		))
 
 	//Convert to Vulkan dependent version
@@ -267,7 +265,7 @@ clean:
 	return err;
 }
 
-Bool TLAS_freeExt(TLAS *tlas) {
+Bool VK_WRAP_FUNC(TLAS_free)(TLAS *tlas) {
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -283,7 +281,7 @@ Bool TLAS_freeExt(TLAS *tlas) {
 	return true;
 }
 
-Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
+Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
 
 	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 

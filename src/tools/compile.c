@@ -830,12 +830,12 @@
 		return s_uccess;
 	}
 
-	Bool CLI_parseThreads(ParsedArgs args, U32 *threadCount, U32 defaultThreadCount) {
+	Bool CLI_parseThreads(ParsedArgs args, U64 *threadCount, U64 defaultThreadCount) {
 
 		if(!threadCount)
 			return false;
 
-		U32 maxThreads = Platform_instance.threads;
+		U64 maxThreads = Platform_getThreads();
 
 		if(!(args.parameters & EOperationHasParameter_ThreadCount)) {
 			*threadCount = !defaultThreadCount ? maxThreads : defaultThreadCount;
@@ -1115,7 +1115,7 @@
 		ListCharString allShaderText,
 		ListCharString allOutputs,
 		ListU8 allCompileOutputs,
-		U32 threadCount,
+		U64 threadCount,
 		Bool isDebug,
 		ECompilerWarning extraWarnings,
 		Bool ignoreEmptyFiles,
@@ -1624,7 +1624,7 @@
 
 		//Check thread count
 
-		U32 threadCount = 0;
+		U64 threadCount = 0;
 		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 0))
 
 		//Compile type

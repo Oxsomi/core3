@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx.h"
+#include "graphics/generic/interface.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
@@ -33,10 +34,6 @@ Error BLASRef_dec(BLASRef **blas) {
 Error BLASRef_inc(BLASRef *blas) {
 	return !RefPtr_inc(blas) ? Error_invalidOperation(0, "BLASRef_inc()::blas is required") : Error_none();
 }
-
-impl extern const U64 BLASExt_size;
-impl Bool BLAS_freeExt(BLAS *blas);
-impl Error BLAS_initExt(BLAS *blas);
 
 Bool BLAS_free(BLAS *blas, Allocator allocator) {
 
@@ -249,7 +246,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 	//Allocate refPtr
 
 	gotoIfError(clean, RefPtr_createx(
-		(U32) (sizeof(BLAS) + BLASExt_size),
+		(U32) (sizeof(BLAS) + GraphicsDeviceRef_getObjectSizes(dev)->blas),
 		(ObjectFreeFunc) BLAS_free,
 		(ETypeId) EGraphicsTypeId_BLASExt,
 		blasRef

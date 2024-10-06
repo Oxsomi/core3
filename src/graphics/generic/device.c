@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_buffer.h"
@@ -49,17 +50,6 @@ Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device) {
 	return !RefPtr_inc(device) ?
 		Error_invalidOperation(0, "GraphicsDeviceRef_inc()::device is invalid") : Error_none();
 }
-
-impl extern const U64 GraphicsDeviceExt_size;
-
-impl Error GraphicsDevice_initExt(
-	const GraphicsInstance *instance,
-	const GraphicsDeviceInfo *deviceInfo,
-	GraphicsDeviceRef **deviceRef
-);
-
-impl void GraphicsDevice_postInit(GraphicsDevice *device);
-impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
 Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
@@ -186,9 +176,11 @@ Error GraphicsDeviceRef_create(
 
 	//Create RefPtr
 
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(instanceRef);
+
 	Error err = Error_none();
 	gotoIfError(clean, RefPtr_createx(
-		(U32)(sizeof(GraphicsDevice) + GraphicsDeviceExt_size),
+		(U32)(sizeof(GraphicsDevice) + GraphicsInterface_getObjectSizes(instance->api)->device),
 		(ObjectFreeFunc) GraphicsDevice_free,
 		(ETypeId) EGraphicsTypeId_GraphicsDevice,
 		deviceRef
@@ -253,7 +245,7 @@ Error GraphicsDeviceRef_create(
 
 	//Create extended device
 
-	gotoIfError(clean, GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, deviceRef))
+	gotoIfError(clean, GraphicsDevice_initExt(instance, info, deviceRef))
 
 	//Create constant buffer and staging buffer / allocators
 
@@ -277,7 +269,7 @@ Error GraphicsDeviceRef_create(
 			sizeof(CBufferData), &device->frameData[i]
 		))
 
-	GraphicsDevice_postInit(device);
+	GraphicsDevice_postInitExt(device);
 
 clean:
 
@@ -429,18 +421,6 @@ clean:
 	return success;
 }
 
-impl Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);
-
-impl Error GraphicsDevice_submitCommandsImpl(
-	GraphicsDeviceRef *deviceRef,
-	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains,
-	CBufferData data
-);
-
-impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
-impl Error DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
-
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer) {
 
 	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
@@ -481,11 +461,11 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 		switch(type) {
 
 			case EGraphicsTypeId_DeviceBuffer:
-				gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending))
+				gotoIfError(clean, DeviceBufferRef_flushExt(commandBuffer, deviceRef, pending))
 				break;
 
 			case EGraphicsTypeId_DeviceTexture:
-				gotoIfError(clean, DeviceTextureRef_flush(commandBuffer, deviceRef, pending))
+				gotoIfError(clean, DeviceTextureRef_flushExt(commandBuffer, deviceRef, pending))
 				break;
 
 			default:
@@ -746,7 +726,7 @@ Error GraphicsDeviceRef_submitCommands(
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.
 
-	gotoIfError(clean, GraphicsDevice_submitCommandsImpl(deviceRef, commandLists, swapchains, data))
+	gotoIfError(clean, GraphicsDevice_submitCommandsExt(deviceRef, commandLists, swapchains, data))
 
 	//Add resources from command lists to resources in flight
 

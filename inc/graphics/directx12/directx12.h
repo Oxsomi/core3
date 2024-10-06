@@ -26,6 +26,12 @@
 #include "graphics/generic/device_buffer.h"
 #include "d3d12.h"
 
+#ifndef GRAPHICS_API_DYNAMIC
+	#define DX_WRAP_FUNC(name) name##Ext
+#else
+	#define DX_WRAP_FUNC(name) D3D12##name
+#endif
+
 #ifdef __cplusplus
 	extern "C" {
 #endif

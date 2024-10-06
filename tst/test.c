@@ -67,8 +67,6 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 	return CharString_createNull();
 }
 
-const Bool Platform_useWorkingDirectory = false;
-
 //#define STRICT_VALIDATION
 
 #ifdef STRICT_VALIDATION

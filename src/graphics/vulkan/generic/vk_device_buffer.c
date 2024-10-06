@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -28,8 +29,6 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
-
-U64 DeviceBufferExt_size = sizeof(VkDeviceBuffer);
 
 Error VkDeviceBuffer_transition(
 	VkDeviceBuffer *buffer,
@@ -84,7 +83,7 @@ Error VkDeviceBuffer_transition(
 }
 
 
-Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
+Bool VK_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(buffer->resource.device), Vk);
 	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
@@ -97,7 +96,7 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 	return true;
 }
 
-Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
+Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
 
 	(void)name;
 
@@ -165,7 +164,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	instanceExt->getDeviceBufferMemoryRequirements(deviceExt->device, &bufferReq, &requirements);
 
-	gotoIfError(clean, DeviceMemoryAllocator_allocate(
+	gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
 		&device->allocator,
 		&requirements,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
@@ -199,7 +198,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
 
 	if(!buf->resource.deviceAddress)
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"))
+		gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
 
 	//Fill relevant descriptor sets if shader accessible
 
@@ -257,7 +256,7 @@ clean:
 	return err;
 }
 
-Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
 
 	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 

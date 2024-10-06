@@ -29,12 +29,10 @@
 #include "graphics/directx12/dx_buffer.h"
 #include "graphics/directx12/directx12.h"
 
-const U64 TLASExt_size = sizeof(DxTLAS);
-
-Bool TLAS_freeExt(TLAS *tlas) { (void)tlas; return true; }		//No-op
+Bool DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; return true; }		//No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
-Error TLAS_initExt(TLAS *tlas) {
+Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -45,7 +43,7 @@ Error TLAS_initExt(TLAS *tlas) {
 	CharString tmp = CharString_createNull();
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		gotoIfError(clean, Error_unsupportedOperation(0, "TLASRef_flush()::serialized not supported yet"))		//TODO:
+		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12TLAS_init()::serialized not supported yet"))		//TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = sizeof(TLASInstanceStatic);
@@ -57,7 +55,7 @@ Error TLAS_initExt(TLAS *tlas) {
 
 	if(instancesU64 >> 24)
 		gotoIfError(clean, Error_outOfBounds(
-			0, instancesU64, 1 << 24, "TLASRef_flush() only instance count of <U24_MAX is supported"
+			0, instancesU64, 1 << 24, "D3D12TLAS_init() only instance count of <U24_MAX is supported"
 		))
 
 	//Convert to DXR dependent version
@@ -205,7 +203,7 @@ clean:
 	return err;
 }
 
-Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
+Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
 
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
