@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx.h"
 #include "graphics/generic/interface.h"
+#include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"

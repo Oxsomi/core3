@@ -381,6 +381,10 @@ if(graphicsAllowVk)
 
 	target_link_libraries(OxC3_graphics_vk PUBLIC OxC3_graphics)
 
+	if(DynamicLinkingGraphics)
+		target_compile_definitions(OxC3_graphics_vk PUBLIC -DGRAPHICS_API_DYNAMIC)
+	endif()
+
 	if("${platform}" STREQUAL "windows")
 		target_compile_definitions(OxC3_graphics_vk PRIVATE -D_VK_SURFACE_EXT="VK_KHR_win32_surface")
 	elseif("${platform}" STREQUAL "android")

@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
+#include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
@@ -1261,7 +1262,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-				VK_WRAP_FUNC(CommandList_process)(commandList, deviceRef, info.op, ptr, &state);
+				(VK_WRAP_FUNC(CommandList_process))(commandList, deviceRef, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
 		}

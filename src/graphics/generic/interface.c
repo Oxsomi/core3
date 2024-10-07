@@ -38,6 +38,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	#include "graphics/generic/pipeline.h"
 	#include "graphics/generic/sampler.h"
 	#include "graphics/generic/swapchain.h"
+	#include "graphics/generic/command_list.h"
 	#include "platforms/file.h"
 	#include "platforms/log.h"
 	#include "platforms/dynamic_library.h"

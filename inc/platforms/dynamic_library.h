@@ -32,6 +32,6 @@ impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
 	#define EXPORT_SYMBOL __declspec(dllexport)
 	#define IMPORT_SYMBOL __declspec(dllimport)
 #else
-	#define EXPORT_SYMBOL __attribute__((visibility(default))
+	#define EXPORT_SYMBOL __attribute__((visibility("default")))
 	#define IMPORT_SYMBOL
 #endif
