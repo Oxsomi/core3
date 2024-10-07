@@ -37,7 +37,7 @@
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 		ListCharString strings = (ListCharString) { 0 };
 
-		gotoIfError3(clean, GraphicsInterface_prepare(e_rr))
+		gotoIfError3(clean, GraphicsInterface_create(e_rr))
 
 		U64 queried = 0;
 

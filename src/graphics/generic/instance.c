@@ -123,7 +123,7 @@ clean:
 	return err;
 }
 
-Bool GraphicsInterface_prepare(Error *e_rr) {
+Bool GraphicsInterface_create(Error *e_rr) {
 	return GraphicsInterface_init(e_rr);
 }
 
@@ -140,9 +140,6 @@ Error GraphicsInstance_create(
 
 	Error err = Error_none();
 	Bool initRefPtr = false;
-
-	if(!GraphicsInterface_init(&err))
-		return err;
 
 	if (api >= EGraphicsApi_Count) {
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS

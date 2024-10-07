@@ -50,6 +50,8 @@ gotoIfError(clean, GraphicsInstance_create(
 
 Once this instance is acquired, it can be used to query devices and to detect what API the runtime supports.
 
+*Note: Before creating a GraphicsInstance with shared linking, make sure to initialize the GraphicsInterface using GraphicsInterface_init. For dynamic libraries it is important to set GraphicsInterface_instance and Platform_instance correctly to the final exe/dll's instance to ensure the same exact settings and memory allocation is handled by the same instance.*
+
 ### Properties
 
 - application: The name and version of the application.

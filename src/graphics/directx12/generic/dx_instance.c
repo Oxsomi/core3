@@ -41,6 +41,8 @@
 #include <d3d11.h>			//AMD AGS needs it...
 #include <amd_ags.h>
 
+#undef interface
+
 TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
 TListNamedImpl(ListIDXGIAdapter4)
 
@@ -62,8 +64,11 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 		return &DxGraphicsObjectSizes;
 	}
 #else
-	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance) {
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interface) {
+
 		Platform_instance = instance;
+		GraphicsInterface_instance = interface;
+
 		return (GraphicsInterfaceTable) {
 
 			.api = EGraphicsApi_DirectX12,

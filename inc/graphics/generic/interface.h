@@ -351,20 +351,15 @@ typedef struct GraphicsObjectSizes {
 	} GraphicsInterfaceTable;
 
 	typedef struct Platform Platform;
+	typedef struct GraphicsInterface GraphicsInterface;
 
-	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance);
+	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance, GraphicsInterface *interface);
 
 	typedef struct GraphicsInterface {
-
 		GraphicsInterfaceTable tables[EGraphicsApi_Count];
-
-		SpinLock lock;		//Initialization
-
-		U64 init;
-
 	} GraphicsInterface;
 
-	extern GraphicsInterface GraphicsInterface_instance;
+	extern GraphicsInterface *GraphicsInterface_instance;
 
 	Bool GraphicsInterface_init(Error *e_rr);
 	Bool GraphicsInterface_supports(EGraphicsApi api);

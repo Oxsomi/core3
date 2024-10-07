@@ -44,7 +44,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	#include "platforms/platform.h"
 	#include "formats/oiSH.h"
 
-	GraphicsInterface GraphicsInterface_instance = { 0 };
+	GraphicsInterface *GraphicsInterface_instance = 0, graphicsInterfaceInstance = { 0 };
 
 	Bool GraphicsInterface_register(FileInfo info, void *dat, Error *e_rr) {
 
@@ -64,17 +64,17 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		if(!DynamicLibrary_loadSymbol(library, CharString_createRefCStrConst("GraphicsInterface_getTable"), &tableFunc, NULL))
 			goto clean;
 
-		GraphicsInterfaceTable table = ((GraphicsInterface_getTableImpl)tableFunc)(Platform_instance);
+		GraphicsInterfaceTable table = ((GraphicsInterface_getTableImpl)tableFunc)(Platform_instance, GraphicsInterface_instance);
 
 		if (table.api >= EGraphicsApi_Count) {
 			Log_warnLnx("GraphicsInterface_register() found \"%s\" but was unable to initialize it", info.path.ptr);
 			goto clean;
 		}
 
-		if(GraphicsInterface_instance.tables[table.api].instanceCreate)
+		if(GraphicsInterface_instance->tables[table.api].instanceCreate)
 			retError(clean, Error_invalidState(0, "GraphicsInterface_register() dynamic library was already initialized"))
 
-		GraphicsInterface_instance.tables[table.api] = table;
+		GraphicsInterface_instance->tables[table.api] = table;
 		Log_debugLnx("-- Dynamically loaded %s", info.path.ptr);
 
 	clean:
@@ -86,36 +86,29 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool GraphicsInterface_init(Error *e_rr) {
 
-		ELockAcquire acq = SpinLock_lock(&GraphicsInterface_instance.lock, U64_MAX);
 		Bool s_uccess = true;
 
-		if(acq < ELockAcquire_Success)
-			retError(clean, Error_invalidState(0, "GraphicsInterface_init() couldn't acquire lock"))
-
-		if(GraphicsInterface_instance.init)		//Already initialized
+		if(GraphicsInterface_instance)		//Already initialized
 			goto clean;
+
+		GraphicsInterface_instance = &graphicsInterfaceInstance;
 
 		gotoIfError3(clean, File_foreach(
 			CharString_createRefCStrConst("."), GraphicsInterface_register, NULL, false, e_rr
 		))
 
-		GraphicsInterface_instance.init = 1;
-
 	clean:
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&GraphicsInterface_instance.lock);
-
 		return s_uccess;
 	}
 
 	Bool GraphicsInterface_supports(EGraphicsApi api) {
-		return api <= EGraphicsApi_Count && GraphicsInterface_instance.tables[api].instanceCreate;
+		return api <= EGraphicsApi_Count && GraphicsInterface_instance && GraphicsInterface_instance->tables[api].instanceCreate;
 	}
 
 	//These are kept for ease of use, these are just a wrapper for the interface
 
 	#define WrapperFunction(device, func) \
-	((GraphicsInterface_instance.tables[GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(device)->instance)->api]).func)
+		((GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(device)->instance)->api]).func)
 
 	//RTAS
 
@@ -232,13 +225,13 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		CharString objectName
 	) {
 		GraphicsDevice *dev = GraphicsDeviceRef_ptr(allocator->device);
-		return GraphicsInterface_instance.tables[GraphicsInstanceRef_ptr(dev->instance)->api].memoryAllocate(
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(dev->instance)->api].memoryAllocate(
 			allocator, requirementsExt, cpuSided, blockId, blockOffset, resourceType, objectName
 		);
 	}
 
 	Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
-		return GraphicsInterface_instance.tables[GraphicsInstanceRef_ptr(device->instance)->api].memoryFree(device, ext);
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].memoryFree(device, ext);
 	}
 
 	//Device
@@ -248,15 +241,15 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		const GraphicsDeviceInfo *deviceInfo,
 		GraphicsDeviceRef **deviceRef
 	) {
-		return GraphicsInterface_instance.tables[instance->api].deviceInit(instance, deviceInfo, deviceRef);
+		return GraphicsInterface_instance->tables[instance->api].deviceInit(instance, deviceInfo, deviceRef);
 	}
 
 	void GraphicsDevice_postInitExt(GraphicsDevice *device) {
-		GraphicsInterface_instance.tables[GraphicsInstanceRef_ptr(device->instance)->api].devicePostInit(device);
+		GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].devicePostInit(device);
 	}
 
 	Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
-		return GraphicsInterface_instance.tables[instance->api].deviceFree(instance, ext);
+		return GraphicsInterface_instance->tables[instance->api].deviceFree(instance, ext);
 	}
 
 	Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
@@ -285,19 +278,19 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	//Instance
 
 	Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
-		return GraphicsInterface_instance.tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef);
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef);
 	}
 	
 	Bool GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc) {
-		return GraphicsInterface_instance.tables[inst->api].instanceFree(inst, alloc);
+		return GraphicsInterface_instance->tables[inst->api].instanceFree(inst, alloc);
 	}
 
 	Error GraphicsInstance_getDeviceInfosExt(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos) {
-		return GraphicsInterface_instance.tables[inst->api].instanceGetDevices(inst, infos);
+		return GraphicsInterface_instance->tables[inst->api].instanceGetDevices(inst, infos);
 	}
 
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {
-		return api >= EGraphicsApi_Count ? NULL : &GraphicsInterface_instance.tables[api].objectSizes;
+		return api >= EGraphicsApi_Count ? NULL : &GraphicsInterface_instance->tables[api].objectSizes;
 	}
 
 #endif

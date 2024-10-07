@@ -73,7 +73,7 @@ typedef struct ListGraphicsDeviceInfo ListGraphicsDeviceInfo;
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
-Bool GraphicsInterface_prepare(Error *e_rr);	//Prepare interface to query info about supported APIs
+Bool GraphicsInterface_create(Error *e_rr);	//Prepare interface to query info about supported APIs
 Bool GraphicsInterface_supportsApi(EGraphicsApi api);
 
 Error GraphicsInstance_create(
