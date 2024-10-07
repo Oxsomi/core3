@@ -224,8 +224,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		EResourceType resourceType,
 		CharString objectName
 	) {
-		GraphicsDevice *dev = GraphicsDeviceRef_ptr(allocator->device);
-		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(dev->instance)->api].memoryAllocate(
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(allocator->device->instance)->api].memoryAllocate(
 			allocator, requirementsExt, cpuSided, blockId, blockOffset, resourceType, objectName
 		);
 	}
