@@ -120,7 +120,7 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 		instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
 
-		gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
+		gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			&device->allocator,
 			&requirements,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,

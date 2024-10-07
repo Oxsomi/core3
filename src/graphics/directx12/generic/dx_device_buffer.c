@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
+#include "graphics/directx12/dx_interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -146,7 +147,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.length = allocInfo.SizeInBytes
 	};
 
-	gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
+	gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
 		&req,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,

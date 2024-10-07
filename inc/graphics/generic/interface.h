@@ -353,7 +353,7 @@ typedef struct GraphicsObjectSizes {
 	typedef struct Platform Platform;
 	typedef struct GraphicsInterface GraphicsInterface;
 
-	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance, GraphicsInterface *interface);
+	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance);
 
 	typedef struct GraphicsInterface {
 		GraphicsInterfaceTable tables[EGraphicsApi_Count];
@@ -365,6 +365,7 @@ typedef struct GraphicsObjectSizes {
 	Bool GraphicsInterface_supports(EGraphicsApi api);
 
 	//These are kept for ease of use, these are just a wrapper for the interface
+	//As such, calling them from GraphicsInterface implementation is illegal!
 
 	//RTAS
 

@@ -637,11 +637,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
 
 		case ECommandOp_UpdateBLASExt:
-			BLASRef_flushExt(temp, deviceRef, *(BLASRef**)data);
+			VK_WRAP_FUNC(BLASRef_flush)(temp, deviceRef, *(BLASRef**)data);
 			break;
 
 		case ECommandOp_UpdateTLASExt:
-			TLASRef_flushExt(temp, deviceRef, *(TLASRef**)data);
+			VK_WRAP_FUNC(TLASRef_flush)(temp, deviceRef, *(TLASRef**)data);
 			break;
 
 		//case ECommandOp_DispatchRaysIndirect:

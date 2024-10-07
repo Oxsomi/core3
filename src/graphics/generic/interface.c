@@ -64,7 +64,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		if(!DynamicLibrary_loadSymbol(library, CharString_createRefCStrConst("GraphicsInterface_getTable"), &tableFunc, NULL))
 			goto clean;
 
-		GraphicsInterfaceTable table = ((GraphicsInterface_getTableImpl)tableFunc)(Platform_instance, GraphicsInterface_instance);
+		GraphicsInterfaceTable table = ((GraphicsInterface_getTableImpl)tableFunc)(Platform_instance);
 
 		if (table.api >= EGraphicsApi_Count) {
 			Log_warnLnx("GraphicsInterface_register() found \"%s\" but was unable to initialize it", info.path.ptr);

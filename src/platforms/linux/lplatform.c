@@ -28,17 +28,3 @@ Error Platform_initUnixExt() {
 }
 
 void Platform_cleanupUnixExt() { }
-
-I32 main(I32 argc, const C8 *argv[]) {
-
-	Error err = Platform_create(argc, argv, NULL, NULL);
-
-	if(err.genericError)
-		return -1;
-
-	I32 res = Program_run();
-	Program_exit();
-	Platform_cleanup();
-
-	return res;
-}

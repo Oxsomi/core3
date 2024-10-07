@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
+#include "graphics/directx12/dx_interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -765,11 +766,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
 
 		case ECommandOp_UpdateBLASExt:
-			BLASRef_flushExt(temp, deviceRef, *(BLASRef**)data);
+			DX_WRAP_FUNC(BLASRef_flush)(temp, deviceRef, *(BLASRef**)data);
 			break;
 
 		case ECommandOp_UpdateTLASExt:
-			TLASRef_flushExt(temp, deviceRef, *(TLASRef**)data);
+			DX_WRAP_FUNC(TLASRef_flush)(temp, deviceRef, *(TLASRef**)data);
 			break;
 
 		//case ECommandOp_DispatchRaysIndirect:

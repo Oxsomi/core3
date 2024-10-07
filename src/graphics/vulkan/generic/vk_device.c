@@ -1261,7 +1261,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-				CommandList_processExt(commandList, deviceRef, info.op, ptr, &state);
+				VK_WRAP_FUNC(CommandList_process)(commandList, deviceRef, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
 		}

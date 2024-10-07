@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx.h"
 #include "graphics/generic/interface.h"
+#include "graphics/directx12/dx_interface.h"
 #include "graphics/directx12/dx_device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
@@ -114,7 +115,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			.length = allocInfo.SizeInBytes
 		};
 
-		gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
+		gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			&device->allocator,
 			&req,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,

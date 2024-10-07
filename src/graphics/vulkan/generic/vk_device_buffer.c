@@ -164,7 +164,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 	instanceExt->getDeviceBufferMemoryRequirements(deviceExt->device, &bufferReq, &requirements);
 
-	gotoIfError(clean, DeviceMemoryAllocator_allocateExt(
+	gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
 		&requirements,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
