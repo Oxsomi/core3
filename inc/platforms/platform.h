@@ -54,8 +54,6 @@ typedef struct Platform {
 
 	void *data;
 
-	U32 threads;
-
 	Bool useWorkingDir;		//TODO: Find a better solution for this for dlls
 	U8 padding[3];
 

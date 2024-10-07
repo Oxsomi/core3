@@ -819,7 +819,7 @@ Bool WindowManager_freePhysical(Window *w) {
 	if(w->nativeData)
 		DeleteObject((HGDIOBJ) w->nativeData);
 
-	HINSTANCE mainModule = Platform_instance.data;
+	HINSTANCE mainModule = Platform_instance->data;
 
 	UnregisterClassW(L"OxC3: Oxsomi core 3", mainModule);
 

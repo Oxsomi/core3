@@ -45,7 +45,7 @@ Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr
 		gotoIfError2(clean, CharString_createCopyx(str, &tmp))
 
 	if(!(*dynamicLib = dlopen(tmp.ptr ? tmp.ptr : str.ptr, RTLD_LAZY)))
-		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() dlopen failed"))
+		retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"))
 
 clean:
 	CharString_freex(&tmp);
@@ -64,7 +64,7 @@ Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void *
 		gotoIfError2(clean, CharString_createCopyx(str, &tmp))
 
 	if(!(*ptr = dlsym(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr)))
-		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() dlsym failed"))
+		retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"))
 
 clean:
 	CharString_freex(&tmp);

@@ -170,7 +170,7 @@
 		ListGraphicsDeviceInfo_freex(&infos);
 		GraphicsInstanceRef_dec(&instanceRef);
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return !err.genericError;
+		return s_uccess;
 	}
 
 #else

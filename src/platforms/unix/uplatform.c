@@ -42,23 +42,25 @@ void Platform_cleanupExt() {
 	Platform_cleanupUnixExt();
 }
 
+void *Platform_getDataImpl(void *ptr) { (void) ptr; return NULL; }
+
+U64 Platform_getThreads() { return sysconf(_SC_NPROCESSORS_ONLN); }
+
 Error Platform_initExt() {
 
 	Error err = Error_none();
 
-	Platform_instance.threads = sysconf(_SC_NPROCESSORS_ONLN);		//TODO: Technically, could change during the app
+	if(Platform_instance->useWorkingDir) {
 
-	if(Platform_useWorkingDirectory) {
-
-		CharString_freex(&Platform_instance.workingDirectory);
+		CharString_freex(&Platform_instance->workingDirectory);
 
 		#define PATH_MAX 256
 		C8 cwd[PATH_MAX + 1];
 		if (!getcwd(cwd, sizeof(cwd)))
 			gotoIfError(clean, Error_stderr(errno, "Platform_initExt() getcwd failed"))
 
-		gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance.workingDirectory))
-		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'))
+		gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workingDirectory))
+		gotoIfError(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
 	}
 
 	gotoIfError(clean, Platform_initUnixExt())
