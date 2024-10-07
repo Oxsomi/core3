@@ -255,7 +255,7 @@ Error VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 		&blasExt->geometries,
 		&range
 	);
-	
+
 	//Add as flight and ensure flushes are done if too many ASes are queued this frame
 
 	device->pendingPrimitives += blasExt->range.primitiveCount;

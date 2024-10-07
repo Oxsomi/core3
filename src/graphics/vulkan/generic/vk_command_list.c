@@ -291,7 +291,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 								attachmentsj->color.colorf[2],
 								attachmentsj->color.colorf[3]
 							}
-						}	
+						}
 					}
 				};
 

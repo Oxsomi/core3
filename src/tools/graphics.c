@@ -164,7 +164,7 @@
 			ListGraphicsDeviceInfo_freex(&infos);
 			GraphicsInstanceRef_dec(&instanceRef);
 		}
-		
+
 	clean:
 		ListCharString_freex(&strings);
 		ListGraphicsDeviceInfo_freex(&infos);

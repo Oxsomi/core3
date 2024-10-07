@@ -145,7 +145,7 @@
 							),
 							copy.ptr,
 							isPreprocess ? fileSuffixes[i] : (
-								shaderFiles->compileType == ECompileType_Includes || 
+								shaderFiles->compileType == ECompileType_Includes ||
 								shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : (
 									shaderFiles->hasCombineFlag ? oiSHCombineSuffix : oiSHSuffixes[i]
 								)
@@ -234,7 +234,7 @@
 			//Tell oiSH entries to caller
 
 			if (
-				compileResult.type == ECompileResultType_SHEntryRuntime && 
+				compileResult.type == ECompileResultType_SHEntryRuntime &&
 				shEntriesRuntime &&
 				compileResult.shEntriesRuntime.length
 			) {
@@ -355,7 +355,7 @@
 				for(; k < identifiers.length; ++k)
 					if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))
 						break;
-				
+
 				//When it's new, we gotta remember the binary identifier for reuse.
 				//Other than that, we need to tell the compiler which runtime id and combination id we need
 
@@ -452,7 +452,7 @@
 				binType, runtimeEntryId, combinationId
 			);
 
-		else 
+		else
 			Log_errorLnx(
 				"Compile failed: %.*s (%s, %"PRIu32":%"PRIu32")",
 				(int) CharString_length(inputPath), inputPath.ptr,
@@ -558,7 +558,7 @@
 							Log_errorLnx("Compiler_getUniqueCompiles() failed (ListCompileResult_resizex)");
 
 						else for (U64 i = 0; i < compileCombinations.length; ++i) {
-						
+
 							U32 compileCombination = compileCombinations.ptr[i];
 
 							if (ListU64_pushBack(
@@ -630,7 +630,7 @@
 
 		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(job->lock);
-		
+
 		acq = ELockAcquire_Invalid;
 
 		//Compile requires another stage where we go over unique binaries that we have to compile
@@ -723,7 +723,7 @@
 
 		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(job->lock);
-		
+
 		acq = ELockAcquire_Invalid;
 	}
 
@@ -741,7 +741,7 @@
 		CharString tempStr = CharString_createNull();
 		SHInclude shInclude = (SHInclude) { 0 };
 		SHBinaryInfo binaryInfo = (SHBinaryInfo){ 0 };
-		
+
 		if(tempResult->type != ECompileResultType_Binary)
 			retError(clean, Error_invalidState(0, "CLI_compileShaderSingle() should return binary"))
 
@@ -845,7 +845,7 @@
 		CharString str = (CharString) { 0 };
 		if(ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &str).genericError)
 			return false;
-		
+
 		if(CharString_endsWithSensitive(str, '%', 0)) {					//-threads 50%
 
 			CharString number = CharString_createRefSizedConst(str.ptr, CharString_length(str) - 1, false);
@@ -879,7 +879,7 @@
 
 		if(!(args.parameters & EOperationHasParameter_ShaderOutputMode)) {
 			*multipleModes = true;
-			*maskBinaryType = (1 << ESHBinaryType_Count) - 1; 
+			*maskBinaryType = (1 << ESHBinaryType_Count) - 1;
 			return true;
 		}
 
@@ -888,7 +888,7 @@
 			return false;
 
 		ListCharString splits = (ListCharString) { 0 };
-		
+
 		if(CharString_splitSensitivex(compileMode, ',', &splits).genericError)
 			return false;
 
@@ -1109,7 +1109,7 @@
 		CharString_freex(&tempStr);
 		return s_uccess;
 	}
-	
+
 	Bool CLI_compileShaders(
 		ListCharString allFiles,
 		ListCharString allShaderText,
@@ -1157,7 +1157,7 @@
 
 		if(allBuffers)
 			gotoIfError2(clean, ListBuffer_resizex(allBuffers, allOutputs.length))
-	
+
 		//Spin up threads
 
 		if (threadCount > 1) {
@@ -1240,7 +1240,7 @@
 					}
 
 					else errorInPrevious = false;		//Reset error report
-					
+
 					if(
 						lastJobId + 1 == allOutputs.length ||
 						!CharString_equalsStringSensitive(allOutputs.ptr[lastJobId + 1], allOutputs.ptr[lastJobId])
@@ -1255,7 +1255,7 @@
 								gotoIfError3(clean, Compiler_handleExtraWarningsx(
 									previous.entries.length ? previous : shFile, extraWarnings, e_rr
 								))
-							
+
 							if(previous.entries.length)
 								gotoIfError3(clean, SHFile_writex(previous, &temp, e_rr))
 
@@ -1265,7 +1265,7 @@
 								allBuffers->ptrNonConst[lastJobId] = temp;
 								temp = Buffer_createNull();		//Moved
 							}
-							
+
 							else {
 								gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS, e_rr))
 								Buffer_freex(&temp);
@@ -1301,7 +1301,7 @@
 				//Start new SHFile
 
 				if (jobId != lastJobId) {
-					
+
 					U32 crc32c = Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[jobId]));
 
 					gotoIfError3(clean, SHFile_createx(
@@ -1398,7 +1398,7 @@
 					//Only for non lib entries, and then once per lib entry
 
 					Bool didSucceed = true;
-					
+
 					for(U64 j = 0; j < compileCombinations.length; ++j) {
 
 						U16 runtimeEntryId = (U16) (compileCombinations.ptr[j] >> 16);
@@ -1474,17 +1474,17 @@
 									gotoIfError3(clean, Compiler_handleExtraWarningsx(
 										previous.entries.length ? previous : shFile, extraWarnings, e_rr
 									))
-							
+
 								if(previous.entries.length)
 									gotoIfError3(clean, SHFile_writex(previous, &temp, e_rr))
 
 								else gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
-								
+
 								if(allBuffers) {
 									allBuffers->ptrNonConst[i] = temp;
 									temp = Buffer_createNull();		//Moved
 								}
-							
+
 								else {
 									gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 100 * MS, e_rr))
 									Buffer_freex(&temp);

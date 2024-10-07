@@ -158,7 +158,7 @@ D3D12:
 Vulkan:
 	(optional) OxC3.exe or OxC3
 	yourExecutable(,.exe,.apk,.ipa,etc.)
-	
+
 Dynamic linking:
 	Windows only:
 		D3D12/*.dll

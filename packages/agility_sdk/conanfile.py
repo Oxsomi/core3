@@ -38,7 +38,7 @@ class agility_sdk(ConanFile):
 
 		copy(self, "LICENSE.txt", os.path.join(self.source_folder, "warp"), self.package_folder)
 		rename(self, os.path.join(self.package_folder, "LICENSE.txt"), os.path.join(self.package_folder, "LICENSE-WARP.txt"))
-		
+
 		if self.settings.arch == "x86_64":
 			copy(self, "*.dll", os.path.join(self.source_folder, "warp/build/native/bin/x64"), os.path.join(self.package_folder, "bin"))
 			copy(self, "*.pdb", os.path.join(self.source_folder, "warp/build/native/bin/x64"), os.path.join(self.package_folder, "bin"))

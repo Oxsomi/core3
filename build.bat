@@ -4,25 +4,25 @@ setlocal enabledelayedexpansion
 if NOT "%1" == "Debug" (
 	if NOT "%1" == "Release" (
 		goto usage
-	)	
+	)
 )
 
 if NOT "%2" == "True" (
 	if NOT "%2" == "False" (
 		goto usage
-	)	
+	)
 )
 
 if NOT "%3" == "True" (
 	if NOT "%3" == "False" (
 		goto usage
-	)	
+	)
 )
 
 if NOT "%4" == "True" (
 	if NOT "%4" == "False" (
 		goto usage
-	)	
+	)
 )
 
 for /f "tokens=4,* delims= " %%a in ("%*") do set remainder=%%b

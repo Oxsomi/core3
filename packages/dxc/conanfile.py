@@ -102,9 +102,9 @@ class dxc(ConanFile):
 		# First do a copy for all debug libs
 		# So that we can rename them all at once to suffixed by D
 		# Apparently it looks for dxcompilerD.lib/.a rather than dxcompiler.lib/.a
-		
+
 		cwd = os.getcwd()
-		
+
 		# Headers: We use include/dxcompiler to avoid vulkan sdk interfering
 
 		dxc_src = os.path.join(self.source_folder, "DirectXShaderCompiler/include/dxc")
@@ -134,14 +134,14 @@ class dxc(ConanFile):
 
 		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
-		
+
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if not self.settings.os == "Windows":
 			copy(self, "*.a", lib_src, lib_dst)
-		
+
 		# Windows uses more complicated setups
 		else:
-			
+
 			lib_dbg_src = os.path.join(self.build_folder, "lib/Debug")
 			dbg_lib_src = os.path.join(self.build_folder, "Debug/lib")
 			bin_dbg_src = os.path.join(self.build_folder, "bin/Debug")
@@ -161,7 +161,7 @@ class dxc(ConanFile):
 						rename(self, f, f[:offset] + "d." + f[offset+1:])
 
 			# Copy release libs
-			
+
 			lib_rel_src = os.path.join(self.build_folder, "lib/Release")
 			rel_lib_src = os.path.join(self.build_folder, "Release/lib")
 			bin_rel_src = os.path.join(self.build_folder, "bin/Release")
@@ -178,31 +178,31 @@ class dxc(ConanFile):
 		self.cpp_info.set_property("cmake_file_name", "dxc")
 		self.cpp_info.set_property("cmake_target_name", "dxc::dxc")
 		self.cpp_info.set_property("pkg_config_name", "dxc")
-		
+
 		self.cpp_info.libs = [ "dxcompiler", "dxcvalidator", "LLVMDxilHash", "LLVMDxilValidation" ]
-		
+
 		if self.settings.compiler == "msvc":
 			self.cpp_info.libs += [ "libclang" ]
 		else:
 			self.cpp_info.libs += [ "clang" ]
 
 		self.cpp_info.includedirs = [ "include", "include/spirv-tools" ]
-		
+
 		# Important note. This is built by using the cmake dependency graph
 		# We have to order from most dependent to least dependent
 		# Since apparently only MSVC is ok with linking in an "invalid" order
-		
+
 		self.cpp_info.libs += [
-			
+
 			"LLVMDxrFallback",
-			
+
 			"clangFrontendTool",
 			"clangCodeGen",
 			"LLVMTarget",
-			
+
 			"LLVMScalarOpts",
 			"LLVMPassPrinters",
-			
+
 			"LLVMProfileData",
 			"LLVMDxilCompression",
 			"LLVMOption",
@@ -213,30 +213,30 @@ class dxc(ConanFile):
 			"LLVMInstCombine",
 			"LLVMDxilPIXPasses",
 			"LLVMVectorize",
-			
+
 			"clangRewriteFrontend",
 			"clangTooling",
 			"clangSPIRV",
 
 			"SPIRV-Tools-opt",
 			"SPIRV-Tools",
-			
+
 			"clangFrontend",
 			"clangDriver",
 			"clangParse",
 			"clangASTMatchers",
 			"clangIndex",
-			
+
 			"clangFormat",
 			"clangToolingCore",
 			"clangRewrite",
-			
+
 			"clangSema",
 			"clangAST",
 			"clangEdit",
 			"clangLex",
 			"clangBasic",
-			
+
 			"LLVMLinker",
 			"LLVMDxilContainer",
 			"LLVMTransformUtils",

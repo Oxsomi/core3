@@ -137,7 +137,7 @@ typedef struct GraphicsObjectSizes {
 	impl Bool Swapchain_freeExt(Swapchain *data, Allocator alloc);
 
 	//Allocator
-	
+
 	//Needs explicit lock, because allocator is accessed after.
 	impl Error DeviceMemoryAllocator_allocateExt(
 		DeviceMemoryAllocator *allocator,
@@ -188,7 +188,7 @@ typedef struct GraphicsObjectSizes {
 #else
 
 	//RTAS
-	
+
 	typedef Bool (*BLAS_freeImpl)(BLAS *blas);
 	typedef Error (*BLAS_initImpl)(BLAS *blas);
 	typedef Error (*BLASRef_flushImpl)(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
@@ -431,7 +431,7 @@ typedef struct GraphicsObjectSizes {
 	Bool Swapchain_freeExt(Swapchain *data, Allocator alloc);
 
 	//Allocator
-	
+
 	//Needs explicit lock, because allocator is accessed after.
 	Error DeviceMemoryAllocator_allocateExt(
 		DeviceMemoryAllocator *allocator,

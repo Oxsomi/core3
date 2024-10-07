@@ -46,7 +46,7 @@ R"(
 	typedef int16_t2 I16x2;
 	typedef int16_t3 I16x3;
 	typedef int16_t4 I16x4;
-	
+
 	typedef uint16_t U16;
 	typedef uint16_t2 U16x2;
 	typedef uint16_t3 U16x3;

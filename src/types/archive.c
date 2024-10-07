@@ -60,7 +60,7 @@ Bool Archive_free(Archive *archive, Allocator alloc) {
 }
 
 Bool Archive_createCopy(Archive a, Allocator alloc, Archive *archive, Error *e_rr) {
-	
+
 	Bool s_uccess = true;
 	Bool allocate = false;
 
@@ -88,7 +88,7 @@ Bool Archive_createCopy(Archive a, Allocator alloc, Archive *archive, Error *e_r
 	}
 
 clean:
-	
+
 	if(allocate && !s_uccess)
 		Archive_free(archive, alloc);
 
@@ -184,7 +184,7 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 		Bool conflict = false;
 
 		//Depending on mode, timestamp could indicate a conflict
-			
+
 		if (ai.timestamp != bi.timestamp) {
 
 			//Folders can safely be merged
@@ -367,17 +367,17 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 			entryLast->path = renamed;
 			renamed = CharString_createNull();
 		}
-		
+
 		else gotoIfError2(clean, CharString_createCopy(bi.path, alloc, &entryLast->path))
 
 		gotoIfError2(clean, Buffer_createCopy(bi.data, alloc, &entryLast->data))
-		
+
 		if(settings.mode == EArchiveCombineMode_Rename)
 			movedBEntries.ptrNonConst[i] = combined->entries.length - 1;
 	}
 
 clean:
-	
+
 	if(allocate && !s_uccess)
 		Archive_free(combined, alloc);
 

@@ -169,7 +169,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 			count = next == '[' ? 2 : 1;
 			tokenType = count == 2 ? ETokenType_SquareBracketStart2 : ETokenType_SquareBracketStart;
 			break;
-		
+
 		case ']':
 			count = next == ']' ? 2 : 1;
 			tokenType = count == 2 ? ETokenType_SquareBracketEnd2 : ETokenType_SquareBracketEnd;
@@ -540,7 +540,7 @@ Bool Parser_printSymbol(
 	CharString outputSymbolFile,
 	Error *e_rr
 ) {
-	
+
 	Bool s_uccess = true;
 	const C8 *symbolType = ESymbolType_names[sym.symbolType];
 
@@ -606,7 +606,7 @@ Bool Parser_printSymbol(
 
 	//Handle flags
 
-	U32 flagsToQuery = 
+	U32 flagsToQuery =
 		ESymbolFlagEnum_IsClass |
 		ESymbolFlagFuncVar_IsConst |
 		ESymbolFlagFuncVar_IsConstexpr |
@@ -707,7 +707,7 @@ Bool Parser_printSymbol(
 	}
 
 	//If there's no output, output to log, otherwise output
-	
+
 	if(!output)
 		Log_log(alloc, ELogLevel_Error, ELogOptions_None, tmp2);
 
@@ -1005,7 +1005,7 @@ clean:
 }
 
 Bool Parser_setSymbolName(Parser *parser, U32 symbolId, CharString *name, Allocator alloc, Error *e_rr) {
-	
+
 	Bool s_uccess = true, push = false;
 
 	if(!parser)

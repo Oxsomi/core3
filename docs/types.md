@@ -502,7 +502,7 @@ stderr
 
 Since Error is more than just a single value, we want to avoid returning this for every function, as an Error might be quite large on debug mode (it includes stacktrace). As such, the new way of handling errors is just returning a Bool success and having an optional Error*. The error might be allocated somewhere completely different to avoid duplicate allocation from multiple functions.
 
- `retError(label, constructError)` can be used to exit the function & clean up correctly as well as set the error if available. For example: `retError(clean, Error_nullPointer(9, "Symbol_create()::symbol is required"))`. 
+ `retError(label, constructError)` can be used to exit the function & clean up correctly as well as set the error if available. For example: `retError(clean, Error_nullPointer(9, "Symbol_create()::symbol is required"))`.
 
 ```c
 Error oldFunction();			//Call with gotoIfError2 or gotoIfError
@@ -511,7 +511,7 @@ Bool newFunction(Error *err);	//Call with gotoIfError3
 
 For the oldFunction, gotoIfError should be used only when you're in an old function as well (one that only returns an Error and not success and optional error).
 
-Errors have been made optional since a long time can be spent in moving them around, filling them up and other stuff that might not be relevant in Release mode, though it is very useful to have these available at debug time. 
+Errors have been made optional since a long time can be spent in moving them around, filling them up and other stuff that might not be relevant in Release mode, though it is very useful to have these available at debug time.
 
 In the file that uses the new errors (gotoIfError2, gotoIfError3 and retError) there has to be an Error* called e_rr and a Bool called s_uccess defaulted to true. These are named weirdly to avoid name collisions.
 
@@ -620,7 +620,7 @@ The following functions exist for crytography or hashing purposes:
     - Secret key is a `U32[4]` for AES128GCM and `U32[8]` for AES256GCM.
     - Secret key, iv and tag are required to be valid pointers. Key will be filled if GenerateKey is true, iv will be filled if GenerateIv is true. Tag will be filled as a checksum and as mentioned before, the tag can't be reduced too many bytes (otherwise it'll be easy to generate collisions).
     - There's a limit enforced for 4Gi - 3 AES blocks (16 bytes each or about 63 GiB). This is to ensure the IV doesn't run out of options, which would cause degradation of the encryption quality. As a fix, multiple keys can be generated for different regions of the file and decrypted separately. Very important: All different regions need their tag and iv to be authenticated one more time, otherwise a region could be replaced by an attacker.
-    - When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok. 
+    - When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok.
   - Error **decrypt**(Buffer additionalData, EBufferEncryptionType, const U32 *key, I32x4 tag, I32x4 iv)
     - The iv, key and tag should be passed to match the ones from the encrypt function.
     - The key is the same size as mentioned in 'encrypt' and the best practices from it still apply too.
@@ -880,7 +880,7 @@ Basic file util (types/file.h) for resolving file paths and handling FileInfo fr
   - isVirtual pointer is required, even if unused and returns if the file path is a virtual file path.
   - A new CharString is allocated in result.
 - Bool **File_makeRelative**(CharString absoluteDir, CharString base, CharString subFile, U64 maxFilePathLimit, Allocator alloc, CharString *result, Error *e_rr)
-  - Similar story to File_resolve, except base and subFile are first resolved to absoluteDir. Then, subFile is checked relative to base. For example if base is `test/text.txt` relative to the absolute directory and the other file is `test/test2/test.txt` then it's resolved to `test2/test.txt` but for example (from absoluteDir) `test2/test.txt` is resolved to `../test2/test.txt`. 
+  - Similar story to File_resolve, except base and subFile are first resolved to absoluteDir. Then, subFile is checked relative to base. For example if base is `test/text.txt` relative to the absolute directory and the other file is `test/test2/test.txt` then it's resolved to `test2/test.txt` but for example (from absoluteDir) `test2/test.txt` is resolved to `../test2/test.txt`.
   - Subfile and base are both files in a folder that have a parent. They're not a directory itself.
   - maxFilePathLimit is regarding the resolved path using absoluteDir, so not just the relative path.
   - base and subFile can't escape absoluteDir to avoid linking absolute files on disk.

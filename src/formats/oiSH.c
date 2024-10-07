@@ -93,7 +93,7 @@ const C8 *SHEntry_stageName(SHEntry entry) {
 }
 
 const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage) {
-	
+
 	const C8 *targetPrefix = "lib";
 
 	switch (stage) {
@@ -338,7 +338,7 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 				if(hasSPIRV) counters[Counter_UBO] += regs;
 				if(hasDXIL)  counters[Counter_CBV] += regs;
 				break;
-				
+
 			case ESHRegisterType_ByteAddressBuffer:
 			case ESHRegisterType_StructuredBuffer:
 			case ESHRegisterType_StructuredBufferAtomic:
@@ -348,7 +348,7 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 				if(hasDXIL)  counters[regType & ESHRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
 				break;
 
-				
+
 			case ESHRegisterType_Texture1D:
 			case ESHRegisterType_Texture2D:
 			case ESHRegisterType_Texture3D:
@@ -360,7 +360,7 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 		}
 	}
 
-	U64 totalSPIRV = 
+	U64 totalSPIRV =
 		counters[Counter_SamplerSPIRV] +
 		counters[Counter_UBO] +
 		counters[Counter_RTASSPIRV] +
@@ -380,7 +380,7 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 	U64 countSampler = U64_max(counters[Counter_SamplerSPIRV], counters[Counter_SamplerDXIL]);
 	U64 countCBV = U64_max(counters[Counter_CBV], counters[Counter_UBO]);
 
-	Bool bindless = 
+	Bool bindless =
 		countSampler > 16 ||
 		countCBV > 12 ||
 		counters[Counter_SSBO] > 8 ||
@@ -503,7 +503,7 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 	}
 
 	//Copy registers
-	
+
 	if(binaries->registers.length) {
 
 		if(ListSHRegisterRuntime_isRef(binaries->registers))
@@ -578,7 +578,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 			retError(clean, Error_outOfBounds(
 				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
 			))
-			
+
 	if(entry->waveSize && entry->stage != ESHPipelineStage_Compute && entry->stage != ESHPipelineStage_WorkgraphExt)
 		retError(clean, Error_invalidOperation(0, "SHFile_addEntrypoint() defined WaveSize, but wasn't a workgraph or compute"))
 
@@ -694,8 +694,8 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error
 
 			if(
 				(vout && (
-					ESBType_getPrimitive(vout) == ESBPrimitive_Invalid || 
-					ESBType_getStride(vout) == ESBStride_X8 || 
+					ESBType_getPrimitive(vout) == ESBPrimitive_Invalid ||
+					ESBType_getStride(vout) == ESBStride_X8 ||
 					ESBType_getMatrix(vout)
 				)) ||
 				(vin  && (
@@ -862,7 +862,7 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 
 	if(!shFile || !include)
 		retError(clean, Error_nullPointer(!shFile ? 0 : 1, "SHFile_addInclude()::shFile and include are required"))
-	
+
 	if(!CharString_length(include->relativePath) || !include->crc32c)
 		retError(clean, Error_nullPointer(1, "SHFile_addInclude()::include->relativePath and crc32c are required"))
 
@@ -871,7 +871,7 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 
 	for(U64 i = 0; i < shFile->includes.length; ++i)
 		if(CharString_equalsStringSensitive(include->relativePath, shFile->includes.ptr[i].relativePath)) {
-			
+
 			if(include->crc32c != shFile->includes.ptr[i].crc32c)
 				retError(clean, Error_alreadyDefined(
 					0, "SHFile_addInclude()::include was already defined, but with different CRC32C"
@@ -1104,7 +1104,7 @@ Bool SHBinaryInfo_addRegisterBase(
 	Allocator alloc,
 	Error *e_rr
 ) {
-	
+
 	Bool s_uccess = true;
 	SHRegisterRuntime reg = (SHRegisterRuntime) { 0 };
 
@@ -1133,7 +1133,7 @@ Bool SHBinaryInfo_addRegisterBase(
 
 	if(arrays && ListU32_isRef(*arrays))
 		gotoIfError2(clean, ListU32_createCopy(*arrays, alloc, &reg.arrays))
-		
+
 	if(registers->length >= U16_MAX)
 		retError(clean, Error_outOfBounds(
 			0, registers->length, U16_MAX, "SHBinaryInfo_addRegisterBase() registers out of bounds"
@@ -1328,7 +1328,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 		(SHRegister) {
 			.bindings = bindings,
 			.registerType = (U8)(
-				(ESHRegisterType_BufferStart + registerType) | 
+				(ESHRegisterType_BufferStart + registerType) |
 				(isWrite ? ESHRegisterType_IsWrite : 0)
 			),
 			.isUsedFlag = isUsedFlag
@@ -1357,7 +1357,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 	Allocator alloc,
 	Error *e_rr
 ) {
-	
+
 	Bool s_uccess = true;
 
 	if(registerType >= ESHTextureType_Count)
@@ -1423,7 +1423,7 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		}
 
 		if(
-			textureFormatPrimitive != primitive && 
+			textureFormatPrimitive != primitive &&
 			(textureFormatPrimitive & ESHTexturePrimitive_TypeMask) != ESHTexturePrimitive_Count
 		)
 			retError(clean, Error_invalidState(
@@ -1592,13 +1592,13 @@ Bool ListSHRegisterRuntime_addRegister(
 		case ESHRegisterType_StorageBuffer:
 		case ESHRegisterType_StorageBufferAtomic:
 		case ESHRegisterType_AccelerationStructure:
-			
+
 			if(reg.registerType & (ESHRegisterType_Masks &~ ESHRegisterType_IsWrite))
 				retError(clean, Error_invalidParameter(
 					2, 4,
 					"ListSHRegisterRuntime_addRegister()::registerType buffer needs to be R/W only (not array or combined sampler)"
 				))
-				
+
 			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
 				registers,
 				(ESHBufferType)(baseRegType - ESHRegisterType_BufferStart),
@@ -1619,7 +1619,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 			U32 regType = reg.registerType;
 			Bool isComparisonState = regType == ESHRegisterType_SamplerComparisonState;
-			
+
 			if(regType != ESHRegisterType_Sampler && isComparisonState)
 				retError(clean, Error_invalidParameter(2, 4, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
 
@@ -1630,7 +1630,7 @@ Bool ListSHRegisterRuntime_addRegister(
 
 			if(sbFile)
 				retError(clean, Error_invalidParameter(2, 7, "ListSHRegisterRuntime_addRegister()::sbFile on subpassInput not allowed"))
-				
+
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
 				reg.isUsedFlag,
@@ -1646,7 +1646,7 @@ Bool ListSHRegisterRuntime_addRegister(
 		}
 
 		case ESHRegisterType_SubpassInput:
-			
+
 			if(reg.registerType != ESHRegisterType_SubpassInput)
 				retError(clean, Error_invalidParameter(2, 0, "ListSHRegisterRuntime_addRegister()::registerType is invalid"))
 
@@ -1915,7 +1915,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			SHRegisterRuntime reg = binary.registers.ptr[j];
 
 			//Add name if it's new
-		
+
 			CharString str = reg.name;
 
 			if(DLFile_find(strings, regNameStart, strings.entryBuffers.length, str) == U64_MAX) {
@@ -1949,7 +1949,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			//Add shader buffer if it's new
 
 			if (reg.shaderBuffer.vars.ptr) {
-				
+
 				U64 shaderBufferId = 0;
 
 				for (; shaderBufferId < shaderBufferList.length; ++shaderBufferId)
@@ -2100,7 +2100,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	gotoIfError3(clean, DLFile_write(strings, alloc, &stringsDlFile, e_rr))
 	gotoIfError3(clean, DLFile_write(shaderBuffers, alloc, &shaderBuffersDlFile, e_rr))
 
-	U64 len = 
+	U64 len =
 		headerSize +
 		Buffer_length(stringsDlFile) +
 		Buffer_length(shaderBuffersDlFile) +
@@ -2168,7 +2168,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	}
 
 	headerIt = (U8*) arrayCount;
-	
+
 	//Fill binaries
 
 	U64 entries = shFile.entries.length;
@@ -2236,12 +2236,12 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		for (U64 j = 0; j < binary.registers.length; ++j) {
 
 			SHRegisterRuntime reg = binary.registers.ptr[j];
-			
+
 			reg.reg.nameId = (U16) (DLFile_find(strings, regNameStart, includeStart, reg.name) - regNameStart);
 
 			if(!reg.arrays.length)
 				reg.reg.arrayId = U16_MAX;
-				
+
 			else for(U64 arrayId = 0; arrayId < arrays.length; ++arrayId)
 				if(ListU32_eq(arrays.ptr[arrayId], reg.arrays)) {
 					reg.reg.arrayId = (U16) arrayId;
@@ -2304,7 +2304,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		//Dynamic part
 
 		switch(entry.stage) {
-		
+
 			default: {
 
 				U8 inputs = 0, outputs = 0;
@@ -2335,7 +2335,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				}
 
 				Bool hasSemantics =
-					entry.inputSemanticNamesU64[0]  | entry.inputSemanticNamesU64[1] | 
+					entry.inputSemanticNamesU64[0]  | entry.inputSemanticNamesU64[1] |
 					entry.outputSemanticNamesU64[0] | entry.outputSemanticNamesU64[1];
 
 				begin[0] = inputs | (hasSemantics ? 0x80 : 0);
@@ -2343,7 +2343,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 				if(hasSemantics) {
 
-					headerIt[0] = 
+					headerIt[0] =
 						((U8) entry.uniqueInputSemantics) |
 						((U8) (entry.semanticNames.length - entry.uniqueInputSemantics) << 4);
 
@@ -2355,7 +2355,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 					headerIt += 1 + inputs + outputs;
 				}
-				
+
 				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
 					break;
 
@@ -2375,7 +2375,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				groups[1] = entry.groupY;
 				groups[2] = entry.groupZ;
 				groups[3] = entry.waveSize;
-				
+
 				headerIt += sizeof(U16) * 4;
 				break;
 			}
@@ -2478,7 +2478,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() header.stageCount is invalid"))
 
 	//Validate hash
-	
+
 	Buffer_offset(&hash, offsetof(SHHeader, uniqueUniforms));
 
 	if(Buffer_crc32c(hash) != header.hash)
@@ -2489,8 +2489,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	gotoIfError3(clean, DLFile_read(file, NULL, true, alloc, &strings, e_rr))
 
 	U64 minEntryBuffers =
-		(U64)header.stageCount + 
-		header.includeFileCount + 
+		(U64)header.stageCount +
+		header.includeFileCount +
 		header.semanticCount +
 		header.registerNameCount +
 		header.uniqueUniforms +				//Names have to be unique
@@ -2506,7 +2506,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() strings didn't match expectations"))
 
 	gotoIfError2(clean, Buffer_offset(&file, strings.readLength))
-	
+
 	//Read DLFile (shader buffers)
 
 	gotoIfError3(clean, DLFile_read(file, NULL, true, alloc, &shaderBuffers, e_rr))
@@ -2650,7 +2650,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 			if(uniformNameId >= registerNameStart)
 				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
-				
+
 			CharString uniformValue = DLFile_stringAt(strings, uniformNameId, NULL);
 
 			//Check for duplicate uniform names
@@ -2673,7 +2673,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 			if(reg.nameId >= header.registerNameCount)
 				retError(clean, Error_invalidState(1, "SHFile_read() nameId out of bounds"))
-				
+
 			CharString name = DLFile_stringAt(strings, reg.nameId + registerNameStart, NULL);
 			name = CharString_createRefStrConst(name);
 
@@ -2726,7 +2726,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 		gotoIfError3(clean, SHFile_addBinaries(shFile, &binaryInfo, alloc, e_rr))
 	}
-	
+
 	//Parse stages
 
 	const U8 *nextMemPrev = file.ptr;
@@ -2848,7 +2848,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 						entry.outputSemanticNames[j] = output;
 					}
 				}
-					
+
 				if(entry.stage != ESHPipelineStage_MeshExt && entry.stage != ESHPipelineStage_TaskExt)
 					break;
 
@@ -2908,9 +2908,9 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 				entry.intersectionSize = *nextMem;
 				++nextMem;
-				
+
   				// fall through
-				
+
 			case ESHPipelineStage_MissExt:
 
 				if(nextMem + 1 > file.ptr + Buffer_length(file))
@@ -2973,7 +2973,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		SHBinaryInfo info = shFile->binaries.ptr[j];
 
 		if (info.hasShaderAnnotation) {
-		
+
 			Bool contains = false;
 
 			for(U64 i = 0; i < shFile->entries.length; ++i) {
@@ -3095,7 +3095,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 	//Combine raytracing shaders, since they don't have different configs
 	if(
-		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt && 
+		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
 		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt
 	)
 		binaryIdentifier->stageType = ESHPipelineStage_RtStartExt;
@@ -3225,7 +3225,7 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 				// fallthrough
 			}
 		}
-		
+
 		// fallthrough
 
 		case ESHPipelineStage_Compute:
@@ -3343,7 +3343,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 			CharString value = entry.uniformNameValues.ptr[((j + k) << 1) | 1];
 
 			Log_debug(
-				alloc, ELogOptions_None, 
+				alloc, ELogOptions_None,
 				CharString_length(value) ? "%s\"%.*s\" = \"%.*s\"" : "%s\"%.*s\"",
 				prev ? ", " : "",
 				(int)CharString_length(name), name.ptr,
@@ -3357,7 +3357,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 		k += uniforms;
 	}
-	
+
 	if(entry.vendorMask == U16_MAX)
 		Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
 
@@ -3424,7 +3424,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 			CharString value = uniforms.ptr[(j << 1) | 1];
 
 			Log_debug(
-				alloc, ELogOptions_None, 
+				alloc, ELogOptions_None,
 				CharString_length(value) ? "%s\"%.*s\" = \"%.*s\"" : "%s\"%.*s\"",
 				prev ? ", " : "",
 				(int)CharString_length(name), name.ptr,
@@ -3438,7 +3438,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 	}
 
 	U16 mask = (1 << ESHVendor_Count) - 1;
-	
+
 	if((binary.vendorMask & mask) == mask)
 		Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
 
@@ -3723,7 +3723,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		//Otherwise validate and merge binaries
 
 		else {
-		
+
 			SHBinaryInfo bi = b.binaries.ptr[j];
 
 			if(ai.vendorMask != bi.vendorMask || ai.hasShaderAnnotation != bi.hasShaderAnnotation)
@@ -3758,7 +3758,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			//Match registers that were already found
 
 			for (U64 k = 0; k < c.registers.length; ++k) {
-				
+
 				SHRegisterRuntime rega = c.registers.ptr[k];
 
 				U64 l = 0;
@@ -3957,11 +3957,11 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
 				tmpReg = (SHRegisterRuntime) { 0 };
 			}
-			
+
 			//Registers that weren't matched are new in the second source
 
 			for (U64 k = 0; k < bi.registers.length; ++k) {
-				
+
 				SHRegisterRuntime regb = bi.registers.ptr[k];
 
 				U64 l = 0;
@@ -3999,7 +3999,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		if(j != a.binaries.length)
 			continue;
-			
+
 		SHBinaryInfo bi = b.binaries.ptr[i];
 
 		SHBinaryInfo c = (SHBinaryInfo) {
@@ -4029,7 +4029,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		entry.name = CharString_createRefStrConst(entry.name);
 		entry.binaryIds = (ListU16) { 0 };
-		
+
 		U64 j = 0;
 
 		for (; j < b.entries.length; ++j)
@@ -4169,7 +4169,7 @@ void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc) {
 
 	SHBinaryIdentifier_free(&info->identifier, alloc);
 	ListSHRegisterRuntime_freeUnderlying(&info->registers, alloc);
-	
+
 	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
 		Buffer_free(&info->binaries[i], alloc);
 }
@@ -4187,7 +4187,7 @@ void SHInclude_free(SHInclude *include, Allocator alloc) {
 
 	if(!include)
 		return;
-		
+
 	CharString_free(&include->relativePath, alloc);
 }
 
@@ -4202,7 +4202,7 @@ void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc) {
 }
 
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
-	
+
 	if(!entry)
 		return;
 
@@ -4239,7 +4239,7 @@ void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc) {
 
 	if(!includes)
 		return;
-		
+
 	for(U64 i = 0; i < includes->length; ++i)
 		SHInclude_free(&includes->ptrNonConst[i], alloc);
 
@@ -4250,7 +4250,7 @@ void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, Allocator 
 
 	if(!reg)
 		return;
-		
+
 	for(U64 i = 0; i < reg->length; ++i)
 		SHRegisterRuntime_free(&reg->ptrNonConst[i], alloc);
 

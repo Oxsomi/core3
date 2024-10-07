@@ -433,7 +433,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Graphics };
 
 	*Pipeline_info(pipelinePtr, PipelineGraphicsInfo) = info;
-	
+
 	if(ListPipelineStage_isRef(*stages))
 		gotoIfError2(clean, ListPipelineStage_createCopyx(*stages, &pipelinePtr->stages))
 
@@ -460,7 +460,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 			case ESHPipelineStage_Domain:		stage->stageType = EPipelineStage_Domain;			break;
 
 			//TODO: Mesh and task shaders
-		
+
 			default:
 				retError(clean, Error_invalidParameter(
 					0, 0, "GraphicsDeviceRef_createPipelineGraphics()::stages[i] stageType isn't supported (yet)"

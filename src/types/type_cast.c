@@ -28,7 +28,7 @@ U64 F32_fromBits(F32 v) {
 	return u;
 }
 
-U64 F64_fromBits(F64 v) { 
+U64 F64_fromBits(F64 v) {
 	const void *vptr = &v;
 	return *(const U64*) vptr;
 }

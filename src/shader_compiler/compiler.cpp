@@ -917,8 +917,8 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 			prim = ESBPrimitive_Float;
 
 			if(numeric.scalar.signedness || (
-				numeric.scalar.width != 16 && 
-				numeric.scalar.width != 32 && 
+				numeric.scalar.width != 16 &&
+				numeric.scalar.width != 32 &&
 				numeric.scalar.width != 64
 			))
 				retError(clean, Error_unsupportedOperation(
@@ -1122,7 +1122,7 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		//AMD
 
 		case SpvCapabilityGroups:
-					
+
 		case SpvCapabilityFloat16ImageAMD:
 		case SpvCapabilityImageGatherBiasLodAMD:
 		case SpvCapabilityFragmentMaskAMD:
@@ -1135,7 +1135,7 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityTextureBlockMatchQCOM:
 
 		//NV
-					
+
 		case SpvCapabilitySampleMaskOverrideCoverageNV:
 		case SpvCapabilityGeometryShaderPassthroughNV:
 		case SpvCapabilityShaderViewportMaskNV:
@@ -1351,7 +1351,7 @@ clean:
 }
 
 Bool SpvReflectFormatToESBType(SpvReflectFormat format, ESBType *type, Error *e_rr) {
-	
+
 	Bool s_uccess = true;
 
 	switch (format) {
@@ -1467,11 +1467,11 @@ Bool SpvCalculateStructLength(const SpvReflectTypeDescription *typeDesc, U64 *re
 			currLen = numeric->scalar.width >> 3;
 
 			if(typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_MATRIX)
-				currLen = 
+				currLen =
 					!(typeDesck.decoration_flags & SPV_REFLECT_DECORATION_ROW_MAJOR) ?
 					numeric->matrix.stride * numeric->matrix.column_count :
 					numeric->matrix.stride * numeric->matrix.row_count;
-			
+
 			else if(typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_VECTOR)
 				currLen *= numeric->vector.component_count;
 		}
@@ -1580,14 +1580,14 @@ Bool Compiler_convertWaveSize(
 	U16 *waveSizes,
 	Error *e_rr
 ) {
-	
+
 	Bool s_uccess = true;
 	U8 recommend = 0, waveMin = 0, waveMax = 0;
-	
+
 	U32 waveSizeRecommendedTmp = waveSizeRecommended;
 	U32 waveSizeMinTmp = waveSizeMin;
 	U32 waveSizeMaxTmp = waveSizeMax;
-	
+
 	if(!waveSizeMaxTmp)
 		waveSizeMaxTmp = 128;
 
@@ -1617,7 +1617,7 @@ clean:
 }
 
 Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
-	
+
 	Bool s_uccess = true;
 	U64 totalGroup = (U64)threads[0] * threads[1] * threads[2];
 
@@ -1673,7 +1673,7 @@ Bool Compiler_finalizeEntrypoint(
 	Allocator alloc,
 	Error *e_rr
 ) {
-	
+
 	Bool s_uccess = true;
 	ELockAcquire acq = ELockAcquire_Invalid;
 	SHEntryRuntime *entry = NULL;
@@ -2008,7 +2008,7 @@ Bool Compiler_convertShaderBufferDXIL(
 		retError(clean, Error_nullPointer(
 			0, "Compiler_convertShaderBufferDXIL()::shaderRefl or funcRefl is required"
 		))
-		
+
 	name = CharString_createRefCStrConst(nameCStr);
 	constantBuffer = shaderRefl ? shaderRefl->GetConstantBufferByName(nameCStr) : funcRefl->GetConstantBufferByName(nameCStr);
 
@@ -2032,7 +2032,7 @@ Bool Compiler_convertShaderBufferDXIL(
 		retError(clean, Error_invalidState(1, "Compiler_convertShaderBufferDXIL() DXIL contained mismatching names"))
 
 	switch (resourceDesc.Type) {
-		
+
 		case D3D_SIT_CBUFFER:
 		case D3D_SIT_STRUCTURED:
 		case D3D_SIT_UAV_RWSTRUCTURED:
@@ -2213,14 +2213,14 @@ Bool Compiler_convertRegisterDXIL(
 		}
 
 		prim = (ESHTexturePrimitive)(prim | (((input->uFlags >> 2) & 3) << 4));
-			
+
 		if(input->NumSamples && input->NumSamples != U32_MAX)
 			retError(clean, Error_invalidState(
 				0, "Compiler_convertRegisterDXIL() num samples must be U32_MAX or 0"
 			))
 
 		switch (input->Dimension) {
-			
+
 			case D3D_SRV_DIMENSION_TEXTURE1DARRAY:
 				isArray = true;
 				// fallthrough
@@ -2270,7 +2270,7 @@ Bool Compiler_convertRegisterDXIL(
 	}
 
 	switch (input->Type) {
-	
+
 		case D3D_SIT_CBUFFER:
 		case D3D_SIT_STRUCTURED:
 		case D3D_SIT_UAV_RWSTRUCTURED:
@@ -2481,14 +2481,14 @@ Bool Compiler_convertRegisterDXIL(
 			))
 
 			break;
-			
+
 		case D3D_SIT_UAV_APPEND_STRUCTURED:		//Append and consume are always reported as SBuffer with atomic counter
 		case D3D_SIT_UAV_CONSUME_STRUCTURED:
 
 		case D3D_SIT_TBUFFER:
 		case D3D_SIT_UAV_FEEDBACKTEXTURE:
 			retError(clean, Error_unsupportedOperation(0, "Compiler_convertRegisterDXIL() unsupported input type"))		//TODO:
-	
+
 		default:
 			retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL() unknown input type"))
 	}
@@ -2531,7 +2531,7 @@ Bool Compiler_processDXIL(
 	//Payload / intersection data reflection
 
 	if (isLib) {
-				
+
 		D3D12_LIBRARY_DESC lib = D3D12_LIBRARY_DESC{};
 		if(FAILED(dxilReflLib->GetDesc(&lib)))
 			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"))
@@ -2564,7 +2564,7 @@ Bool Compiler_processDXIL(
 				funcDesc.ShaderType > D3D12_SHVER_RAY_GENERATION_SHADER &&
 				funcDesc.ShaderType <= D3D12_SHVER_CALLABLE_SHADER
 			) {
-						
+
 				if(funcDesc.RaytracingShader.ParamPayloadSize > 128)
 					retError(clean, Error_outOfBounds(
 						0, funcDesc.RaytracingShader.ParamPayloadSize, 128, "Compiler_processDXIL() payload out of bounds"
@@ -2587,7 +2587,7 @@ Bool Compiler_processDXIL(
 				funcDesc.ShaderType == D3D12_SHVER_COMPUTE_SHADER ||
 				funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER
 			) {
-				D3D12_COMPUTE_SHADER_DESC computeShader = 
+				D3D12_COMPUTE_SHADER_DESC computeShader =
 					funcDesc.ShaderType == D3D12_SHVER_NODE_SHADER ? funcDesc.NodeShader.ComputeDesc :
 					funcDesc.ComputeShader;
 
@@ -2620,7 +2620,7 @@ Bool Compiler_processDXIL(
 
 			if(hasGroupSize)
 				gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
-						
+
 			ESBType inputs[16] = {};		//TODO:
 			ESBType outputs[16] = {};
 			U8 uniqueInputSemantics = 0;
@@ -2644,9 +2644,9 @@ Bool Compiler_processDXIL(
 					retError(clean, Error_invalidState(
 						0, "Compiler_processDXIL() DXIL didn't contain resource binding for constant buffer"
 					))
-			
+
 				switch (resourceDesc.Type) {
-		
+
 					case D3D_SIT_CBUFFER:
 					case D3D_SIT_STRUCTURED:
 					case D3D_SIT_UAV_RWSTRUCTURED:
@@ -2661,7 +2661,7 @@ Bool Compiler_processDXIL(
 			}
 
 			for (U32 j = 0; j < funcDesc0.BoundResources; ++j) {
-			
+
 				D3D12_SHADER_INPUT_BIND_DESC input{};
 				if(FAILED(funcRefl->GetResourceBindingDesc(j, &input)))
 					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained invalid resource"))
@@ -2702,11 +2702,11 @@ Bool Compiler_processDXIL(
 
 		U32 groupSize[3] = { 0 };
 		U16 waveSizes = 0;
-				
+
 		D3D12_SHADER_DESC refl = D3D12_SHADER_DESC{};
 		if(FAILED(dxilRefl->GetDesc(&refl)))
 			retError(clean, Error_invalidState(0, "Compiler_processDXIL() couldn't get D3D12_LIBRARY_DESC"))
-					
+
 		gotoIfError3(clean, DxilMapToESHExtension(refl.Flags, &exts, e_rr))
 
 		Bool isPixelShader = toCompile.stageType == ESHPipelineStage_Pixel;
@@ -2861,9 +2861,9 @@ Bool Compiler_processDXIL(
 				retError(clean, Error_invalidState(
 					1, "Compiler_processDXIL() DXIL didn't contain resource binding for constant buffer"
 				))
-			
+
 			switch (resourceDesc.Type) {
-		
+
 				case D3D_SIT_CBUFFER:
 				case D3D_SIT_STRUCTURED:
 				case D3D_SIT_UAV_RWSTRUCTURED:
@@ -2878,11 +2878,11 @@ Bool Compiler_processDXIL(
 		}
 
 		for (U32 j = 0; j < refl.BoundResources; ++j) {
-			
+
 			D3D12_SHADER_INPUT_BIND_DESC input{};
 			if(FAILED(dxilRefl->GetResourceBindingDesc(j, &input)))
 				retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained invalid resource"))
-				
+
 			gotoIfError3(clean, Compiler_convertRegisterDXIL(registers, &input, NULL, dxilRefl, alloc, e_rr))
 		}
 
@@ -2994,7 +2994,7 @@ Bool Compiler_convertMemberSPIRV(
 
 		structId = (U16) j;
 	}
-					
+
 	expectedSize = perElementStride;
 
 	for(U64 m = 0; m < var->array.dims_count; ++m)
@@ -3073,7 +3073,7 @@ Bool Compiler_convertShaderBufferSPIRV(
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertShaderBufferSPIRV() inner struct is assumed to be a type, but has invalid members"
 				))
-			
+
 			U32 paddedSize = ESBType_getSize(type, isPacked);
 
 			if(!isPacked)
@@ -3085,7 +3085,7 @@ Bool Compiler_convertShaderBufferSPIRV(
 
 			if(innerStruct->array.dims_count)
 				gotoIfError2(clean, ListU32_createRefConst(innerStruct->array.dims, innerStruct->array.dims_count, &arrays))
-			
+
 			gotoIfError3(clean, SBFile_addVariableAsType(
 				sbFile,
 				&elementName,
@@ -3160,10 +3160,10 @@ Bool Compiler_convertRegisterSPIRV(
 
 	ESHBufferType bufferType = ESHBufferType_Count;
 	Bool shouldBeBufferWrite = false;
-	
+
 	const void *imagePtr = &binding->image;
 	const U64 *imagePtrU64 = (const U64*) imagePtr;
-	
+
 	const void *blockPtr = &binding->block.name;
 	const U64 *blockPtrU64 = (const U64*) blockPtr;
 
@@ -3258,7 +3258,7 @@ Bool Compiler_convertRegisterSPIRV(
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertRegisterSPIRV() invalid constant buffer data"
 				))
-				
+
 			CharString typeName = CharString_createRefCStrConst(binding->type_description->type_name);
 			Bool isAtomic = binding->uav_counter_id != U32_MAX || binding->uav_counter_binding;
 
@@ -3324,7 +3324,7 @@ Bool Compiler_convertRegisterSPIRV(
 
 			if(
 				bufferType != ESHBufferType_StorageBufferAtomic &&
-				bufferType != ESHBufferType_StructuredBufferAtomic && 
+				bufferType != ESHBufferType_StructuredBufferAtomic &&
 				isAtomic
 			)
 				retError(clean, Error_invalidState(
@@ -3370,7 +3370,7 @@ Bool Compiler_convertRegisterSPIRV(
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() invalid register had buffer decorations but wasn't one"
 				))
-	
+
 		if(
 			binding->uav_counter_binding ||
 			binding->uav_counter_id != U32_MAX ||
@@ -3387,7 +3387,7 @@ Bool Compiler_convertRegisterSPIRV(
 	switch (binding->descriptor_type) {
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-		
+
 			if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_CBV)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (not cbv)"
@@ -3424,7 +3424,7 @@ Bool Compiler_convertRegisterSPIRV(
 			goto clean;
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER: {
-		
+
 			if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SAMPLER)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (not sampler)"
@@ -3434,7 +3434,7 @@ Bool Compiler_convertRegisterSPIRV(
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() invalid sampler register"
 				))
-				
+
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
 				(U8)((!isUnused) << ESHBinaryType_SPIRV),
@@ -3462,7 +3462,7 @@ Bool Compiler_convertRegisterSPIRV(
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() sampled image didn't have SRV resource flag"
 					))
-					
+
 				if(binding->image.image_format || binding->image.sampled != 1)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() unexpected image data on sampled image"
@@ -3474,7 +3474,7 @@ Bool Compiler_convertRegisterSPIRV(
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() storage image didn't have UAV resource flag"
 					))
-					
+
 				if(!binding->image.image_format || binding->image.sampled != 2)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() unexpected image data on storage image"
@@ -3501,7 +3501,7 @@ Bool Compiler_convertRegisterSPIRV(
 			}
 
 			else switch(binding->image.dim) {
-				
+
 				case SpvDim1D:				reqDepth = 1;	type = ESHTextureType_Texture1D;	break;
 				case SpvDim2D:				reqDepth = 2;	type = ESHTextureType_Texture2D;	break;
 				case SpvDim3D:				reqDepth = 3;	type = ESHTextureType_Texture3D;	break;
@@ -3515,12 +3515,12 @@ Bool Compiler_convertRegisterSPIRV(
 						1, "Compiler_convertRegisterSPIRV() unsupported image type"
 					))
 			}
-			
+
 			if(binding->image.depth != reqDepth)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() Unexpected image depth"
 				))
-				
+
 			if(binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
 				gotoIfError3(clean, ListSHRegisterRuntime_addTexture(
 					registers,
@@ -3588,7 +3588,7 @@ Bool Compiler_convertRegisterSPIRV(
 							1, "Compiler_convertRegisterSPIRV() unsupported image format: rg11fb10f, r64i, r64ui, rgb10a2ui"
 						))
 				}
-			
+
 				gotoIfError3(clean, ListSHRegisterRuntime_addRWTexture(
 					registers,
 					type,
@@ -3608,7 +3608,7 @@ Bool Compiler_convertRegisterSPIRV(
 		}
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER: {
-		
+
 			if(
 				binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SRV &&
 				binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_UAV
@@ -3629,7 +3629,7 @@ Bool Compiler_convertRegisterSPIRV(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (type had RW, but buffer didn't)"
 				))
 
-			Bool hasSBFile = 
+			Bool hasSBFile =
 				bufferType != ESHBufferType_ByteAddressBuffer &&
 				bufferType != ESHBufferType_AccelerationStructure;
 
@@ -3660,7 +3660,7 @@ Bool Compiler_convertRegisterSPIRV(
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() invalid RTAS register"
 				))
-		
+
 			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
 				registers,
 				ESHBufferType_AccelerationStructure,
@@ -3693,7 +3693,7 @@ Bool Compiler_convertRegisterSPIRV(
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertRegisterSPIRV() input attachment register out of bounds"
 				))
-				
+
 			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
 				registers,
 				(U8)((!isUnused) << ESHBinaryType_SPIRV),
@@ -3733,7 +3733,7 @@ Bool Compiler_processSPIRV(
 	Allocator alloc,
 	Error *e_rr
 ) {
-		
+
 	//Ensure we have a valid SPIRV file
 
 	const void *resultPtr = result->ptr;
@@ -3784,7 +3784,7 @@ Bool Compiler_processSPIRV(
 	//Check entrypoints
 
 	for(U64 i = 0; i < spvMod.entry_point_count; ++i) {
-			
+
 		SpvReflectEntryPoint entrypoint = spvMod.entry_points[i];
 		Bool searchPayload = false;
 		Bool searchIntersection = false;
@@ -3833,7 +3833,7 @@ Bool Compiler_processSPIRV(
 					default:						stage = ESHPipelineStage_Compute;	break;
 
 				}
-						
+
 				localSize[0] = entrypoint.local_size.x;
 				localSize[1] = entrypoint.local_size.y;
 				localSize[2] = entrypoint.local_size.z;
@@ -4069,7 +4069,7 @@ Bool Compiler_processSPIRV(
 
 		optimizer.SetMessageConsumer(
 			[alloc](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
-				
+
 				const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
 
 				switch(level) {
@@ -4228,37 +4228,37 @@ Bool Compiler_compile(
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_16bit_storage", alloc, e_rr
 				))
-			
+
 			if(toCompile.extensions & ESHExtension_Multiview)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
 				))
-			
+
 			if(toCompile.extensions & ESHExtension_RayReorder)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_shader_invocation_reorder", alloc, e_rr
 				))
-			
+
 			if(toCompile.extensions & ESHExtension_RayMotionBlur)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_ray_tracing_motion_blur", alloc, e_rr
 				))
-			
+
 			if(toCompile.extensions & ESHExtension_RayQuery)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
 				))
-			
+
 			if(toCompile.extensions & ESHExtension_RayMicromapOpacity)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_opacity_micromap", alloc, e_rr
 				))
-			
+
 			if(toCompile.extensions & ESHExtension_RayMicromapDisplacement)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_displacement_micromap", alloc, e_rr
 				))
-			
+
 			if(toCompile.extensions & (ESHExtension_AtomicF32 | ESHExtension_AtomicF64)) {
 
 				gotoIfError3(clean, Compiler_registerArgCStr(
@@ -4290,7 +4290,7 @@ Bool Compiler_compile(
 		}
 
 		//-T <target>
-		
+
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr))
 
 		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix((ESHPipelineStage) toCompile.stageType);
@@ -4313,7 +4313,7 @@ Bool Compiler_compile(
 
 				alloc, &tempStr,
 
-				!CharString_length(uniformValue) ? "-D$%.*s" : "-D$%.*s=%.*s", 
+				!CharString_length(uniformValue) ? "-D$%.*s" : "-D$%.*s=%.*s",
 
 				(int) CharString_length(uniformName),
 				uniformName.ptr,
@@ -4407,7 +4407,7 @@ Bool Compiler_compile(
 		))
 
 		if (settings.outputType == ESHBinaryType_DXIL) {
-		
+
 			resultBlob->Release();
 			resultBlob = NULL;
 			hr = dxcResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&resultBlob), NULL);
@@ -4506,7 +4506,7 @@ Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, A
 		}
 
 		case ESHBinaryType_DXIL: {
-		
+
 			if(
 				binLen <= 0x14 ||
 				*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C')

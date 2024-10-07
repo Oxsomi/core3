@@ -143,7 +143,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::binaryId is out of bounds"
 			))
-			
+
 		U16 realBinaryId = entry.binaryIds.ptr[binaryId];
 		SHBinaryInfo bin = file.binaries.ptr[realBinaryId];
 

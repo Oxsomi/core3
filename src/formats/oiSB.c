@@ -304,7 +304,7 @@ Bool SBFile_createCopy(
 
 	if(sbFile->vars.ptr)
 		retError(clean, Error_invalidParameter(2, 0, "SBFile_createCopy()::sbFile is filled, indicates memleak"))
-		
+
 	allocated = true;
 	gotoIfError2(clean, ListSBStruct_createCopy(src.structs, alloc, &sbFile->structs))
 	gotoIfError2(clean, ListSBVar_createCopy(src.vars, alloc, &sbFile->vars))
@@ -357,7 +357,7 @@ Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Alloc
 		retError(clean, Error_outOfBounds(
 			0, sbFile->structs.length, U16_MAX, "SBFile_addStruct()::sbFile->structs.length limited to 65535"
 		))
-	
+
 	U64 hash = sbFile->hash;
 	hash = Buffer_fnv1a64Single(sbStruct.stride | ((U64)CharString_length(*name) << 32), hash);
 	sbFile->hash = Buffer_fnv1a64(CharString_bufferConst(*name), hash);
@@ -386,7 +386,7 @@ clean:
 }
 
 void SBVar_applyHash(U64 *hashRes, SBVar var, CharString name) {
-	
+
 	const void *structId = &var.structId;				//Interpreted as a U64 and U32
 	const U64 *structIdU64 = (const U64*) structId;		//[0] = structId, arrayIndex, offset
 	const U32 *structIdU32 = (const U32*) structId;		//[2] = type, flags, parentId
@@ -463,7 +463,7 @@ Bool SBFile_addVariableAsType(
 
 	//Padding happens each element of an array that isn't 16-byte aligned.
 	//The last element doesn't have padding
-	
+
 	Bool isTightlyPacked = sbFile->flags & ESBSettingsFlags_IsTightlyPacked;
 	U32 size = ESBType_getSize(type, isTightlyPacked);
 	U8 typeSize = 1 << ESBType_getStride(type);
@@ -568,7 +568,7 @@ Bool SBFile_addVariableAsType(
 
 	if(!Buffer_isAscii(CharString_bufferConst(*name)))
 		sbFile->flags |= ESBSettingsFlags_IsUTF8;
-		
+
 	gotoIfError2(clean, ListCharString_pushBack(&sbFile->varNames, tmp.ptr ? tmp : *name, alloc))
 	*name = tmp = CharString_createNull();
 	pushedVar = true;
@@ -651,7 +651,7 @@ Bool SBFile_addVariableAsStruct(
 		retError(clean, Error_invalidParameter(1, 0, "SBFile_addVariableAsStruct()::*name must be less than 4Gi of string"))
 
 	//Alignment: starts at 16 byte boundary if CBuffer
-	
+
 	Bool isTightlyPacked = sbFile->flags & ESBSettingsFlags_IsTightlyPacked;
 
 	if(!isTightlyPacked && (offset & 15))
@@ -740,7 +740,7 @@ Bool SBFile_addVariableAsStruct(
 
 	if(CharString_isRef(*name))
 		gotoIfError2(clean, CharString_createCopy(*name, alloc, &tmp))
-		
+
 	if(!Buffer_isAscii(CharString_bufferConst(*name)))
 		sbFile->flags |= ESBSettingsFlags_IsUTF8;
 
@@ -791,7 +791,7 @@ Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	if(result->ptr)
 		retError(clean, Error_invalidOperation(0, "SBFile_write()::result wasn't empty, might indicate memleak"))
-		
+
 	//Get header size
 
 	U64 headerSize = sizeof(SBHeader);
@@ -897,7 +897,7 @@ clean:
 }
 
 Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, Error *e_rr) {
-	
+
 	Bool s_uccess = true;
 	Bool didAllocate = false;
 	DLFile strings = (DLFile) { 0 };
@@ -925,7 +925,7 @@ Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, E
 	if(header.version != SBHeader_V1_2 || (header.flags & ESBFlag_Unsupported) || !header.vars)
 		retError(clean, Error_invalidState(0, "SBFile_read()::file didn't have right version, flags or was empty"))
 
-	ESBSettingsFlags flags = 
+	ESBSettingsFlags flags =
 		(isSubFile ? ESBSettingsFlags_HideMagicNumber : ESBSettingsFlags_None) |
 		((header.flags & ESBFlag_IsTightlyPacked) ? ESBSettingsFlags_IsTightlyPacked : ESBSettingsFlags_None);
 
@@ -933,7 +933,7 @@ Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, E
 	didAllocate = true;
 
 	gotoIfError3(clean, DLFile_read(tmpFile, NULL, true, alloc, &strings, e_rr))
-	
+
 	U64 stringCount = (U64)header.structs + header.vars;
 
 	if(
@@ -968,7 +968,7 @@ Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, E
 
 	const SBVar *vars = (const SBVar*) tmpFile.ptr;
 	gotoIfError2(clean, Buffer_offset(&tmpFile, sizeof(SBVar) * header.vars))
-	
+
 	const U8 *arraySizeCount = tmpFile.ptr;
 	gotoIfError2(clean, Buffer_offset(&tmpFile, header.arrays))
 
@@ -1085,7 +1085,7 @@ void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Al
 	ShortString indent;
 	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
 	indent[indenting] = '\0';
-	
+
 	for (U64 i = 0; i < sbFile.vars.length; ++i) {
 
 		SBVar var = sbFile.vars.ptr[i];
@@ -1096,7 +1096,7 @@ void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Al
 		CharString varName = sbFile.varNames.ptr[i];
 		Bool isArray = var.arrayIndex != U16_MAX;
 
-		CharString typeName = 
+		CharString typeName =
 			var.structId == U16_MAX ? CharString_createRefCStrConst(ESBType_name((ESBType)var.type)) :
 			sbFile.structNames.ptr[var.structId];
 
@@ -1182,10 +1182,10 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 
 	for(U64 i = 0; i < a.arrays.length; ++i)
 		gotoIfError2(clean, ListU32_createCopy(a.arrays.ptr[i], alloc, &combined->arrays.ptrNonConst[i]))
-		
+
 	for(U64 i = 0; i < a.vars.length; ++i)
 		gotoIfError2(clean, CharString_createCopy(a.varNames.ptr[i], alloc, &combined->varNames.ptrNonConst[i]))
-		
+
 	for(U64 i = 0; i < a.structs.length; ++i)
 		gotoIfError2(clean, CharString_createCopy(a.structNames.ptr[i], alloc, &combined->structNames.ptrNonConst[i]))
 
@@ -1207,7 +1207,7 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 	}
 
 	//Merge variables (should contain same variables in every parent, just different use flags)
-	
+
 	gotoIfError2(clean, ListU16_resize(&remapVars, b.vars.length, alloc))
 
 	for (U64 i = 0; i < b.vars.length; ++i) {
@@ -1322,11 +1322,11 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 			}
 		}
 	}
-	
+
 clean:
 	if(allocated && !s_uccess)
 		SBFile_free(combined, alloc);
-		
+
 	ListU16_free(&remapVars, alloc);
 	ListU32_free(&tmp, alloc);
 	return s_uccess;

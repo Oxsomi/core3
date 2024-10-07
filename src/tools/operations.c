@@ -449,7 +449,7 @@ void Operations_init() {
 			EOperationHasParameter_AES | EOperationHasParameter_ThreadCount |
 			EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
 
-		.operationFlags = 
+		.operationFlags =
 			EOperationFlags_Debug | EOperationFlags_Split |
 			EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
 	};
@@ -463,7 +463,7 @@ void Operations_init() {
 			.name = "HLSL",
 			.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
 
-			.operationFlags = 
+			.operationFlags =
 				EOperationFlags_Debug | EOperationFlags_Split |
 				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles,
 

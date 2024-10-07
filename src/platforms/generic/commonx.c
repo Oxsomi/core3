@@ -75,19 +75,19 @@ void ListListU64_freeUnderlyingx(ListListU64 *list) {
 	ListListU64_freeUnderlying(list, Platform_instance->alloc);
 }
 
-Bool ListListU8_createCopyUnderlyingx(ListListU8 src, ListListU8 *dst, Error *e_rr) { 
+Bool ListListU8_createCopyUnderlyingx(ListListU8 src, ListListU8 *dst, Error *e_rr) {
 	return ListListU8_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
 }
 
-Bool ListListU16_createCopyUnderlyingx(ListListU16 src, ListListU16 *dst, Error *e_rr) { 
+Bool ListListU16_createCopyUnderlyingx(ListListU16 src, ListListU16 *dst, Error *e_rr) {
 	return ListListU16_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
 }
 
-Bool ListListU32_createCopyUnderlyingx(ListListU32 src, ListListU32 *dst, Error *e_rr) { 
+Bool ListListU32_createCopyUnderlyingx(ListListU32 src, ListListU32 *dst, Error *e_rr) {
 	return ListListU32_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
 }
 
-Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error *e_rr) { 
+Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error *e_rr) {
 	return ListListU64_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
 }
 

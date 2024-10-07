@@ -33,7 +33,7 @@ function(apply_dependencies target)
 			[[^/usr/lib.*]]
 		DIRECTORIES ${CONAN_RUNTIME_LIB_DIRS}
 	)
-	
+
 	if(CMAKE_IMPORT_LIBRARY_SUFFIX)
 		add_custom_command(
 			TARGET ${target} POST_BUILD

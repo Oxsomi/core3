@@ -56,12 +56,12 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	//Get inputs and output
 
 	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg))
-	
+
 	CharString outputArg = CharString_createNull();
 	CharString inputArg2 = CharString_createNull();
 
 	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputArg))
-	
+
 	//Parse encryption key
 
 	U32 encryptionKeyV[8] = { 0 };

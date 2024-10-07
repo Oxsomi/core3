@@ -29,23 +29,23 @@ Finally, this would become a part of an oiSC file (Oxsomi Shader Cache). Which i
 typedef struct SHHeader {
 
 	U32 magicNumber;			//oiSH (0x4853696F); optional if it's part of an oiSC.
-    
+
     U32 compilerVersion;
 
 	U32 hash;					//CRC32C of contents starting at uniqueUniforms
-    
+
     U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty. See CRC32C section.
-    
+
 	U16 uniqueUniforms;
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
     U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
-    
+
     U16 binaryCount;			//How many unique binaries are stored
     U16 stageCount;				//How many stages reference into the binaries
-    
+
     U16 includeFileCount;
     U16 semanticCount;
-    
+
     U16 arrayDimCount;
     U16 registerNameCount;
 
@@ -70,7 +70,7 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_ClosestHitExt,
 	ESHPipelineStage_AnyHitExt,
 	ESHPipelineStage_IntersectionExt,
-    
+
     //MeshShader extension is required
 
 	ESHPipelineStage_MeshExt,
@@ -138,7 +138,7 @@ typedef enum ESHExtension {
 	ESHExtension_ComputeDeriv				= 1 << 14,
 
 	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
-    
+
     ESHExtension_MeshTaskTexDeriv			= 1 << 16,
 
 	ESHExtension_WriteMSTexture				= 1 << 17,
@@ -161,7 +161,7 @@ typedef enum ESHVendor {
 } ESHVendor;
 
 typedef struct BinaryInfoFixedSize {
-    
+
 	U8 shaderModel;				//U4 major, minor
 	U8 entrypointType;			//See entrypointType section
 	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
@@ -169,12 +169,12 @@ typedef struct BinaryInfoFixedSize {
 	U16 vendorMask;				//Bitset of ESHVendor
 	U8 uniformCount;
 	U8 binaryFlags;				//ESHBinaryFlags
-    
+
     ESHExtension extensions;
 
 	U16 registerCount;
 	U16 padding;
-    
+
 } BinaryInfoFixedSize;
 
 typedef enum ESHRegisterType {
@@ -211,7 +211,7 @@ typedef enum ESHRegisterType {
 
 //Consists of primitive type (lower 4-bit) and component count (higher 2-bit)
 typedef enum ESHTexturePrimitive {
-    
+
 	ESHTexturePrimitive_UInt,
 	ESHTexturePrimitive_SInt,
 	ESHTexturePrimitive_UNorm,
@@ -228,7 +228,7 @@ typedef enum ESHTexturePrimitive {
 	ESHTexturePrimitive_Component4	= 0x30,		//RGBA
 
 	ESHTexturePrimitive_Unused		= 0xC0
-        
+
 } ESHTexturePrimitive;
 
 typedef struct SHBinding {
@@ -279,7 +279,7 @@ SHFile {
     //strings[^ - stageCount, 		^ - includeFileCount] contains unique register names.
     //strings[0,                    ^ - registerNameCount] contains uniform values & names and register names.
     DLFile strings;
-    
+
     //No magic number, no encryption/compression/SHA256 (see oiDL.md).
     //Each entry includes a oiSB file (see oiSB.md) that describes the shader buffer.
     //Each shader buffer has to be referenced by a register.
@@ -290,17 +290,17 @@ SHFile {
     EntryInfoFixedSize pipelineStages[stageCount];
     U32 includeFileHashes[includeFileCount];
     U8 arrayDims[arrayDimCount];		//Max of 32 per array dim
-    
+
     for i < arrayDimCount:
 	    U32 arraySizes[arrayDims[i]];
 
     for i < binaryCount:
-    
+
     	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[0]
     	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [uniformCount]
-    
+
     	SHRegister registers[binaryInfos[i].registerCount];	//Name starts after all uniform names & values
-    
+
         if binary[i] has SPIRV:
             EXXDataSizeType<spirvType> spirvLength;
 
@@ -309,18 +309,18 @@ SHFile {
 
         foreach binary with [ spirvLength, dxilLength ]:
             U8[binary.size] data;
-    
+
     for pipelineStages[i]	//Entrypoint name is stored at [strings.len - stageCount]
 
 	    if is graphics:
-    
+
     		U8 inputsAvailAndHasSemantics;		//Upper bit: has semantics
     		U8 outputsAvail;
-    
+
 		    //Each element: [ ESBStride as U2, ESBPrimitive as U2, ESBVector as U2 ]
     		U8 inputs[inputsAvail];
     		U8 outputs[outputsAvail];
-    
+
     		//If shader source supports it, stores the index of the semantic in strings[].
     		//But only for valid inputs/outputs (gaps not stored).
     		//U4 semanticId, U4 semanticName.
@@ -339,10 +339,10 @@ SHFile {
 
     	if closestHit, anyHit or intersection:
     	    U8 intersectionSize;
-    
+
 	    if miss,closestHit,anyHit or intersection
    	 		U8 payloadSize;
-    
+
     	U16 binaryIds[pipelineStages[i].binaryCount];
 }
 ```
@@ -359,7 +359,7 @@ CRC32C hashes are used for the source and include directories to see if they're 
 
 Entrypoint type clarifies what type of entrypoint was compiled as (ESHPipelineStage). If compiled as a library (e.g. raytracing, workgraphs, etc.), this value should only be looked at from the user perspective if there are duplicates. This is because the entrypointType only has meaning if binary was compiled for a specific target (using [stage("")] for example).
 
-If this is not the case, then the compiler can decide how to combine entrypoints. It will be allowed for raygen, miss and hit shaders to be compiled in a single go, and for the stage type to be raygen for all of them. But if the stage is determined to need a specialized compile, then it can be combined with only the stages it is compatible with (for example; if pixel and vertex shaders have different internal defines or compiler settings, then they can still be separated if need be). 
+If this is not the case, then the compiler can decide how to combine entrypoints. It will be allowed for raygen, miss and hit shaders to be compiled in a single go, and for the stage type to be raygen for all of them. But if the stage is determined to need a specialized compile, then it can be combined with only the stages it is compatible with (for example; if pixel and vertex shaders have different internal defines or compiler settings, then they can still be separated if need be).
 
 ## Includes
 
@@ -367,7 +367,7 @@ All includes must have reproducible hashes (regardless of OS) as noted in the CR
 
 ## Language spec
 
-The following define the requirements of binaries embedded in oiSH files. 
+The following define the requirements of binaries embedded in oiSH files.
 
 - All capabilities have to match the extensions known by oiSH, otherwise it is considered to be an incompatible binary and undefined behavior is imminent if produced by a non standard oiSH writer. As an example; if RayReorder is used in a SPIRV shader, it must be present as an extension for that binary too.
 - Payload + intersection size must stay within <=128 and <=32 bytes respectively.
@@ -500,7 +500,7 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 - In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the separate sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: ESHRegisterType_IsCombinedSampler and the separate sampler will only be available with DXIL bindings.
 - SPIRV has the concept of subpass inputs, but DXIL doesn't. This means the bindings of input attachments should only be valid for SPIRV.
 - DXIL has the concept of sampler comparison states, but SPIRV just sees them as samplers. If DXIL and SPIRV binaries are merged it will promote sampler register type to sampler comparison register type.
-- DXIL has more info about the texture primitive than SPIRV, though SPIRV has a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL. 
+- DXIL has more info about the texture primitive than SPIRV, though SPIRV has a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.
 - When stripping SPIRV info from one that has both DXIL and SPIRV, it will keep the reflection data it gained from merging the two. This is intentional, as this would allow you to re-gain some reflection info that is missing from DXIL and keeps the reflection data consistent across two different splits.
 
 ## Changelog

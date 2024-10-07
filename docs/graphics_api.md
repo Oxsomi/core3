@@ -260,7 +260,7 @@ gotoIfError(clean, GraphicsDeviceRef_create(
   ```
 
   ```
-  
+
 - ```c
   Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
   ```

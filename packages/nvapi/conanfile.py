@@ -30,7 +30,7 @@ class nvapi(ConanFile):
 
 		copy(self, "*.h", os.path.join(self.source_folder, "nvapi"), os.path.join(self.package_folder, "include"))
 		copy(self, "License.txt", os.path.join(self.source_folder, "nvapi"), self.package_folder)
-		
+
 		# We'll only have a link target for windows x64 (D3D12 release),
 		# otherwise it's just shader includes for the shader compiler
 

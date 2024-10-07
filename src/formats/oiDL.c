@@ -796,7 +796,7 @@ Bool DLFile_combine(DLFile a, DLFile b, Allocator alloc, DLFile *combined, Error
 	for(U64 i = 0; i < 6; ++i)
 		if(((const U64*)aSettingsPtr)[i] != ((const U64*)bSettingsPtr)[i])
 			retError(clean, Error_invalidParameter(1, 0, "DLFile_combine()::a is incompatible with b"))
-		
+
 	gotoIfError3(clean, DLFile_create(a.settings, alloc, combined, e_rr))
 
 	if(a.settings.dataType == EDLDataType_Ascii) {
@@ -812,7 +812,7 @@ Bool DLFile_combine(DLFile a, DLFile b, Allocator alloc, DLFile *combined, Error
 	}
 
 	else {
-		
+
 		U64 aj = a.entryBuffers.length;
 		U64 j = aj + b.entryBuffers.length;
 		gotoIfError2(clean, ListBuffer_reserve(&combined->entryBuffers, j, alloc))

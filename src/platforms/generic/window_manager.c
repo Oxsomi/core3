@@ -229,7 +229,7 @@ clean:
 impl void WindowManager_updateExt(WindowManager *manager);
 
 Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
-	
+
 	if(!manager)
 		return false;
 

@@ -39,7 +39,7 @@ if [ "$3" == True ]; then
 
 	cd build/$1/bin
 
-	if ! ./OxC3_test ; then 
+	if ! ./OxC3_test ; then
 		printf "${RED}-- OxC3_test failed${NC}\n"
 		exit 1
 	fi

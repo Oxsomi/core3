@@ -54,7 +54,7 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 	}
 #else
 	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interface) {
-		
+
 		Platform_instance = instance;
 		GraphicsInterface_instance = interface;
 
@@ -1521,7 +1521,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
 
 		capabilities.dataTypes |= EGraphicsDataTypes_I16;
-		
+
 		capabilities.maxBufferSize = maxBufferSize.maxBufferSize;
 		capabilities.maxAllocationSize = memorySizeAndDescriptorSets.maxMemoryAllocationSize ;
 

@@ -47,7 +47,7 @@ Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr
 		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
 
 	gotoIfError2(clean, CharString_toUTF16x(str, &utf16))
-	
+
 	*dynamicLib = (void*)LoadLibraryW(utf16.ptr);
 	if(!*dynamicLib)
 		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() LoadLibrary failed"))

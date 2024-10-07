@@ -244,7 +244,7 @@ Available functions:
 - **create**(WindowManagerCallbacks, U64 extendedDataSize, WindowManager*) creates a WindowManager with the following callback functions (WindowManagerCallbacks):
   - void **onCreate**(WindowManager*) called after the native window manager has been initialized.
   - void **onDestroy**(WindowManager*) called before the window manager is freed.
-  - void **onDraw**(WindowManager*) called after drawing and updating all windows and after manager update. With 
+  - void **onDraw**(WindowManager*) called after drawing and updating all windows and after manager update. With
   - void **onUpdate**(WindowManager*, F64) called before onDraw (manager) and after updating/drawing all windows.
   - After use, call free() on it.
     - **onUpdate**(), **onDraw**() are generally called when **wait**() is called. However, sometimes events bypass the polling system, in which case it has to call these functions internally. This is the case with Windows resizing/moving, in those cases, WM_PAINT is dispatched only to the window and not to the poll loop. That behavior induces a full window manager update and will cause all windows to receive updates (virtual windows also receive those), but they won't receive paint notifications themselves.

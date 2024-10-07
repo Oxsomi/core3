@@ -126,7 +126,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	gotoIfError2(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, pipeline->stages.length))
 
 	const PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
-	
+
 	//TODO: Validate render target count with renderPass
 
 	//Find attachments
@@ -197,7 +197,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	};
 
 	//Topology
-	
+
 	VkPrimitiveTopology topology = 0;
 
 	switch (info->topologyMode) {
@@ -282,7 +282,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.pName = "main"
 		};
 	}
-	
+
 	//Direct rendering
 
 	VkFormat dynamicFormats[8];
@@ -387,7 +387,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.minDepthBounds = 1,
 			.maxDepthBounds = 0
 		};
-		
+
 
 	//Rasterizer
 

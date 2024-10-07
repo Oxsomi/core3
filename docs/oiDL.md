@@ -112,7 +112,7 @@ Entry counts aren't compressed nor encrypted, as the sum is required to know the
 The magic number in the header can only be absent if embedded in another file. An example is the file name table in an oiCA file.
 
 *Note: oiDL supports the ability to choose between 10MiB, 50MiB and 100MiB blocks for speeding up AES by multi threading. Though this is currently not supported in OxC3 (TODO:)*
-*Note2: When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok.* 
+*Note2: When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok.*
 
 ## Valid ASCII/UTF8 characters
 

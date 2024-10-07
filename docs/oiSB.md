@@ -18,14 +18,14 @@ Just like any oiXX file it's made with the following things in mind:
 typedef struct SBHeader {
 
 	U32 magicNumber;			//oiSB (0x4253696F); optional if it's part of an oiSH.
-    
+
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
     U8 flags;					//& 1 = isTightlyPacked
     U16 arrays;
 
     U16 structs;
     U16 vars;					//Should always contain at least 1
-    
+
     U32 bufferSize;
 
 } SBHeader;
@@ -74,16 +74,16 @@ typedef enum ESBVarFlag {
 } ESBVarFlag;
 
 typedef struct SBVar {
-    
+
     U16 structId;		//If not U16_MAX, ESBType needs to be 0 and this should be a valid struct
     U16 arrayIndex;		//U16_MAX identifies "none"
-    
+
     U32 offset;
-    
+
     U8 type;			//ESBType if structId == U16_MAX
     U8 flags;			//ESBStructVarFlag
     U16 parentId;		//root = U16_MAX
-    
+
 } SBVar;
 
 //Final file format; please manually parse the members.
@@ -100,7 +100,7 @@ SBFile {
     //Empty strings are valid, as nameless vars/structs exist.
     //Duplicates are also allowed, as one struct can have multiple layouts.
     DLFile strings;
-    
+
     SBStruct structs[header.structs];
     SBVar vars[header.vars];				//Last variable is the root
     U8 arrayDimCount[header.arrays];		//For example 1 = [], 2 = [][], etc.
@@ -118,7 +118,7 @@ ESBType: F32x1x4 is defined as a F32x1 (single F32) of 4 (F32x1[4]) with an impl
 
 Without the tightly packing flag, HLSL/DX-like CBuffer packing is used. This means that every struct and array needs to start at a 16-byte aligned offset. Matrices also have this, the 2nd+ matrix vector element needs to start at a 16-byte aligned position too. When a type spans a 16-byte boundary, it needs to be aligned to a 16-byte boundary.
 
-With the tightly packing flag, HLSL/DX-like StructuredBuffer packing is used. This means that every struct is aligned to the biggest primitive type (similar to C++) and that the stride for arrays is dependent on that too (so struct of only U8 needs 1-byte alignment, U16 needs 2-byte alignment, U32 needs 4-byte alignment, U64 needs 8-byte alignment). All other types are self aligned, so 8-byte types (U64x2, U64, etc.) need to be 8-byte aligned too. 
+With the tightly packing flag, HLSL/DX-like StructuredBuffer packing is used. This means that every struct is aligned to the biggest primitive type (similar to C++) and that the stride for arrays is dependent on that too (so struct of only U8 needs 1-byte alignment, U16 needs 2-byte alignment, U32 needs 4-byte alignment, U64 needs 8-byte alignment). All other types are self aligned, so 8-byte types (U64x2, U64, etc.) need to be 8-byte aligned too.
 
 Overlapping memory is allowed, to allow (future) support for unions.
 

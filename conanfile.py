@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.052"  
+	version = "0.2.052"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -89,7 +89,7 @@ class oxc3(ConanFile):
 		cmake.build()
 
 	def requirements(self):
-		
+
 		hasD3D12 = not self.options.forceVulkan and self.settings.os == "Windows"
 
 		if self.options.dynamicLinkingGraphics and self.settings.os == "Windows":
@@ -100,7 +100,7 @@ class oxc3(ConanFile):
 
 		if hasD3D12:
 			self.requires("agility_sdk/2024.09.22")
-		
+
 		if self.options.enableShaderCompiler:
 			self.requires("dxc/2024.10.03")
 			self.requires("spirv_reflect/2024.09.22")
@@ -184,7 +184,7 @@ class oxc3(ConanFile):
 			self.cpp_info.system_libs = [ "m" ]
 
 		vulkan = False
-		
+
 		self.cpp_info.libs = collect_libs(self)
 
 		if self.settings.os != "Windows":

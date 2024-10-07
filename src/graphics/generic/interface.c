@@ -215,7 +215,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	}
 
 	//Allocator
-	
+
 	Error DeviceMemoryAllocator_allocateExt(
 		DeviceMemoryAllocator *allocator,
 		void *requirementsExt,
@@ -280,7 +280,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
 		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef);
 	}
-	
+
 	Bool GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc) {
 		return GraphicsInterface_instance->tables[inst->api].instanceFree(inst, alloc);
 	}

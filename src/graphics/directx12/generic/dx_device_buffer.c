@@ -359,7 +359,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
-				
+
 				if (tracking) {
 					D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = allocRange, .End = allocRange + len };
 					tracking->lpVtbl->TrackWrite(tracking, 0, &rangeD3D12);

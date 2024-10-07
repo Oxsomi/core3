@@ -51,7 +51,7 @@ set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic lin
 
 # Set general compile options
 
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
 else()
@@ -88,7 +88,7 @@ else()
 	add_compile_options(-fno-unsafe-math-optimizations)
 	add_compile_options(-fms-extensions)
 	add_compile_options(-flto -Wall -Wextra -Werror)
-	
+
 	if(NOT CMAKE_${lang}_COMPILER_VERSION VERSION_LESS 4.7)
 		add_compile_options(-fno-fat-lto-objects)
 	endif()
@@ -344,13 +344,13 @@ if(graphicsAllowVk)
 	file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/vulkan/*.h")
 	file(GLOB_RECURSE graphicsApiSources "src/graphics/vulkan/generic/*.c")
 	file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/vulkan/${platform}/*.c")
-	
+
 	if(NOT DynamicLinkingGraphics)
 
 		message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
 		target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_VULKAN)
-		
+
 		add_library(
 			OxC3_graphics_vk
 			STATIC
@@ -439,13 +439,13 @@ if(graphicsAllowD3D12)
 	file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/directx12/*.h")
 	file(GLOB_RECURSE graphicsApiSources "src/graphics/directx12/generic/*.c")
 	file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/directx12/${platform}/*.c")
-	
+
 	if(NOT DynamicLinkingGraphics)
 
 		message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
 		target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_D3D12)
-		
+
 		add_library(
 			OxC3_graphics_d3d12
 			STATIC
@@ -613,7 +613,7 @@ if(EnableOxC3CLI)
 	configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 	configure_virtual_files(OxC3)
 	apply_dependencies(OxC3)
-	
+
 	target_compile_definitions(OxC3 PRIVATE -DPLATFORM_INSTANCE_EXPORT)
 
 endif()

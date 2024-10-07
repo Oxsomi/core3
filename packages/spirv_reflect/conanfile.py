@@ -64,14 +64,14 @@ class spirv_reflect(ConanFile):
 		copy(self, "LICENSE", os.path.join(self.source_folder, "SPIRV-Reflect"), self.package_folder)
 
 		copy(self, "*.h", os.path.join(self.source_folder, "SPIRV-Reflect/include"), os.path.join(self.package_folder, "include/include"))
-		
+
 		lib_src = os.path.join(self.build_folder, "lib")
 		lib_dst = os.path.join(self.package_folder, "lib")
 		lib_deb_src = os.path.join(self.build_folder, "Debug")
 		lib_rel_src = os.path.join(self.build_folder, "Release")
-		
+
 		copy(self, "*.a", self.build_folder, lib_dst)
-		
+
 		copy(self, "*.lib", lib_deb_src, lib_dst)
 		copy(self, "*.pdb", lib_deb_src, lib_dst)
 

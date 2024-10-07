@@ -110,7 +110,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 			Bool missing = false;
 
 			for (U64 k = 0; k < uniforms.length / 2; ++k) {
-				
+
 				Bool contains = false;
 
 				for (U64 l = 0; l < uniforms2.length / 2; ++l) {

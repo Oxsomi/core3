@@ -28,7 +28,7 @@ class ags(ConanFile):
 
 		copy(self, "*.h", os.path.join(self.source_folder, "AGS_SDK/ags_lib/inc"), os.path.join(self.package_folder, "include"))
 		copy(self, "LICENSE.txt", os.path.join(self.source_folder, "AGS_SDK/ags_lib"), self.package_folder)
-		
+
 		copy(self, "amd_ags_x64_2022_MT.lib", os.path.join(self.source_folder, "AGS_SDK/ags_lib/lib"), os.path.join(self.package_folder, "lib"))
 
 	def package_info(self):
@@ -36,5 +36,5 @@ class ags(ConanFile):
 		self.cpp_info.set_property("cmake_file_name", "ags")
 		self.cpp_info.set_property("cmake_target_name", "ags::ags")
 		self.cpp_info.set_property("pkg_config_name", "ags")
-		
+
 		self.cpp_info.libs = [ "amd_ags_x64_2022_MT" ]

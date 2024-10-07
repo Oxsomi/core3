@@ -88,7 +88,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	Pipeline *pipeline,
 	Error *e_rr
 ) {
-	
+
 	Bool s_uccess = true;
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);

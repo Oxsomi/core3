@@ -167,7 +167,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	VkMemoryRequirements memReq = req.memoryRequirements;
 	VkMemoryDedicatedRequirements dedicated = *(VkMemoryDedicatedRequirements*) req.pNext;
 	U64 maxAllocationSize = allocator->device->info.capabilities.maxAllocationSize;
-	
+
 	if(memReq.size > maxAllocationSize)
 		return Error_outOfBounds(
 			2, memReq.size, maxAllocationSize,

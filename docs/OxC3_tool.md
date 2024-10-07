@@ -230,7 +230,7 @@ This gives a logical limit to how far back an include can go. Such a limit is al
 
 ### Symbols
 
-The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser. This mode is and likely will always be experimental, since DXC can't output this info and the parser likely will never be able to handle more complex syntax. 
+The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser. This mode is and likely will always be experimental, since DXC can't output this info and the parser likely will never be able to handle more complex syntax.
 
 `OxC3 compile shaders -format HLSL -compile-output dxil -compile-type symbols -input a.hlsl -output a.symbols.hlsl`
 
@@ -280,7 +280,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
   - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type, when this feature becomes available with workgraphs.
   - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
 - `[[oxc::vendor("NV", "AMD", "QCOM")]]` which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
-- `[[oxc::extension("16BitTypes")]]` which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint. 
+- `[[oxc::extension("16BitTypes")]]` which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint.
   - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
   - `__OXC3_EXT_<X>` can be used to see which extension is enabled. For example `__OXC3_EXT_ATOMICI64`.
   - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, Multiview, ComputeDeriv, PAQ.
@@ -290,10 +290,10 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
       - If multiple extensions are available, it will pick from top to bottom if they're all available. So `[[extension("16BitTypes")]]` and `[[extension("RayReorder")]]` would for example only pick the second one if the first one isn't available.
 - `[[oxc::uniforms("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")]]` Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
   - This attribute can be used multiple times to compile the same entrypoint with different defines. It will try to bundle compiles wherever possible (try to keep defines similar).
-  - Only defining the uniform but no assign will just see it as a define that can be checked with #ifdef. 
+  - Only defining the uniform but no assign will just see it as a define that can be checked with #ifdef.
   - Uniform name must not indicate symbols or spaces.
   - The application is in charge of picking the uniform combo for the entire lib or each entrypoint. So it is possible to switch between uniforms based on what the app wants, unlike models and extensions which are handled by the runtime.
-  
+
 - `[[oxc::model(6.8)]]`
   - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
     - Minimum must be 6.5+ since that's the minimum OxC3 supports.
@@ -308,7 +308,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
       - Example: `[[model(6.2)]]` and `[[model(6.0)]]` is possible with `[[extensions("16BitTypes")]]` only if there's another `[[extensions()]]` available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on).
     - If multiple models are available, the runtime will choose from highest shader model to lowest shader model available.
   - If not defined, will use minimum for the detected feature set.
-  - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled. 
+  - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled.
 
 **NOTE**: Since multiple models, uniforms and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of uniforms + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints).
 

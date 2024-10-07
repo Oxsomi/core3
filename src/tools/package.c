@@ -192,7 +192,7 @@ Bool CLI_package(ParsedArgs args) {
 			&allOutputs,
 			&allCompileOutputs
 		))
-	
+
 		//Grab info about extra detailed compiler warnings
 
 		ECompilerWarning extraWarnings = CLI_getExtraWarnings(args);

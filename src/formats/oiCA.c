@@ -891,7 +891,7 @@ Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error
 	//Combine the date flags.
 	//If time is missing from b or a but present in the other it'll just use unix epoch.
 	//If time is compact in the other, it will use extended time for both
-	
+
 	CASettings settings = a.settings;
 	settings.flags |= b.settings.flags & ECASettingsFlags_DateFlags;
 

@@ -186,7 +186,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
 		gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->GetConfigurationInterface(
-			instanceExt->deviceFactory, &CLSID_D3D12Debug, 
+			instanceExt->deviceFactory, &CLSID_D3D12Debug,
 			&IID_ID3D12Debug1, (void**) &instanceExt->debug1
 		)))
 

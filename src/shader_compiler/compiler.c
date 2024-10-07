@@ -328,7 +328,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	CharString validationFailed = CharString_createRefCStrConst("\nValidation failed.");
 
 	errs = CharString_createRefStrConst(errs);
-	
+
 	U64 loc = CharString_findFirstStringSensitive(errs, validationFailed, 0, 0);
 
 	if(loc != U64_MAX)
@@ -346,7 +346,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 	CharString lameString = CharString_createRefCStrConst("In file included from ");
 	if (CharString_containsStringSensitive(errs, lameString, 0, 0)) {
-		
+
 		gotoIfError2(clean, CharString_createCopy(errs, alloc, &tempStr3));
 
 		U64 o = 0;
@@ -462,7 +462,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 				if(dec == U8_MAX && c != ':')
 					goto next;
-				
+
 				if(c == ':') {
 					--it;
 					break;
@@ -477,7 +477,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 			if(it == U64_MAX || it == 0)	//Invalid, skip
 				goto next;
-			
+
 			U64 secondNum = num;
 
 			//a:20:21: error:
@@ -502,7 +502,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 						hasSecondNum = false;
 						break;
 					}
-				
+
 					if(c == ':') {
 						--it;
 						break;
@@ -616,7 +616,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	//Register last error
 
 	if (prevOff != U64_MAX && !ignoreNextWarning) {
-	
+
 		CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, CharString_length(errs) - prevOff + 1, false);
 		gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
 		gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2))
@@ -719,7 +719,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 		case C8x4('c', 'l', 'o', 's'):		//closesthit
 
 			if(
-				stageNameLen == 10 && 
+				stageNameLen == 10 &&
 				*(const U64*)&stageName.ptr[2] == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't')
 			)
 				return ESHPipelineStage_ClosestHitExt;
@@ -729,7 +729,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 		case C8x4('r', 'a', 'y', 'g'):		//raygeneration
 
 			if(
-				stageNameLen == 13 && 
+				stageNameLen == 13 &&
 				*(const U64*)&stageName.ptr[4] == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
 				stageName.ptr[12] == 'n'
 			)
@@ -753,7 +753,7 @@ ESHVendor Compiler_parseVendor(CharString vendor) {
 	U64 len = CharString_length(vendor);
 
 	switch(len) {
-		
+
 		default:
 			return ESHVendor_Count;
 
@@ -887,7 +887,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			if(stageNameLen == 8 && *(const U64*)&extensionName.ptr[0] == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
 				return ESHExtension_RayQuery;
 
-			else if(stageNameLen >= 10) 
+			else if(stageNameLen >= 10)
 				switch (*(const U64*)&extensionName.ptr[2]) {
 
 					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):		//RayMicromapDisplacement & Opacity
@@ -1210,7 +1210,7 @@ Bool Compiler_parse(
 				//[[oxc::model()]]
 				//[[oxc::stage()]]
 				//      ^
-				
+
 				//[shader()]
 				// ^
 
@@ -1245,7 +1245,7 @@ Bool Compiler_parse(
 								))
 
 							U32 tokenStart = symj.tokenId + 1;
-									
+
 							if(symj.tokenCount + 1 != 4)
 								retError(clean, Error_invalidParameter(
 									0, 0, "Compiler_parse() shader annotation expected shader(string)"
@@ -1265,7 +1265,7 @@ Bool Compiler_parse(
 
 							CharString stageName = Token_asString(parser.tokens.ptr[tokenStart + 1], &parser);
 							ESHPipelineStage stage = Compiler_parseStage(stageName);
-								
+
 							if(stage == ESHPipelineStage_Count)
 								retError(clean, Error_invalidParameter(
 									0, 1, "Compiler_parse() unrecognized stage in shader annotation"
@@ -1338,10 +1338,10 @@ Bool Compiler_parse(
 
 								CharString stageName = Token_asString(parser.tokens.ptr[tokenStart + 1], &parser);
 								ESHPipelineStage stage = Compiler_parseStage(stageName);
-								
+
 								if(
-									stage == ESHPipelineStage_Count || 
-									stage == ESHPipelineStage_WorkgraphExt || 
+									stage == ESHPipelineStage_Count ||
+									stage == ESHPipelineStage_WorkgraphExt ||
 									(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
 								)
 									retError(clean, Error_invalidParameter(
@@ -1363,7 +1363,7 @@ Bool Compiler_parse(
 							//[[oxc::model(6.8)]]
 							//       ^
 							if (tokLen == 5 && tokStr.ptr[4] == 'l') {
-							
+
 								if(symj.tokenCount + 1 != 6)
 									retError(clean, Error_invalidParameter(
 										0, 0,
@@ -1397,7 +1397,7 @@ Bool Compiler_parse(
 							//[[oxc::vendor("NV", "AMD")]]
 							//       ^
 							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('o', 'r')) {
-							
+
 								if(symj.tokenCount + 1 < 6)
 									retError(clean, Error_invalidParameter(
 										0, 0,
@@ -1433,13 +1433,13 @@ Bool Compiler_parse(
 								//                   ^
 
 								for (U32 k = tokenStart + 2; k < tokenEnd; ++k) {
-								
+
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
 											0, 3,
 											"Compiler_parse() vendor annotation expected comma in oxc::vendor(string, ...)"
 										))
-								
+
 									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_String)
 										retError(clean, Error_invalidParameter(
 											0, 4,
@@ -1492,13 +1492,13 @@ Bool Compiler_parse(
 								//                     ^
 
 								for (U32 k = tokenCounter; k < tokenEnd; ) {
-								
+
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
 											0, 3,
 											"Compiler_parse() uniform annotation expected comma in oxc::uniform(string, ...)"
 										))
-								
+
 									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_String)
 										retError(clean, Error_invalidParameter(
 											0, 4,
@@ -1519,7 +1519,7 @@ Bool Compiler_parse(
 							//[[oxc::extension()]]
 							//       ^
 							if (
-								tokLen == 9 && 
+								tokLen == 9 &&
 								*(const U64*)&tokStr.ptr[1] == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
 							) {
 
@@ -1574,14 +1574,14 @@ Bool Compiler_parse(
 								//                             ^
 
 								for (U32 k = tokenStart + 2; k < tokenEnd; k += 2) {
-								
+
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
 											0, 3,
 											"Compiler_parse() extension annotation expected comma in "
 											"oxc::extension(string, ...)"
 										))
-								
+
 									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_String)
 										retError(clean, Error_invalidParameter(
 											0, 4,
@@ -1636,7 +1636,7 @@ Bool Compiler_parse(
 				for (U64 j = 0; j < runtimeEntry.extensions.length; ++j) {
 
 					if(
-						runtimeEntry.entry.stage != ESHPipelineStage_RaygenExt && 
+						runtimeEntry.entry.stage != ESHPipelineStage_RaygenExt &&
 						(runtimeEntry.extensions.ptr[j] & ESHExtension_RayReorder)
 					)
 						retError(clean, Error_invalidState(
@@ -1649,7 +1649,7 @@ Bool Compiler_parse(
 							0,
 							"Compiler_parse() one of the non raytracing stages uses PAQ, which isn't supported"
 						))
-						
+
 					if(
 						runtimeEntry.entry.stage != ESHPipelineStage_Compute &&
 						runtimeEntry.entry.stage != ESHPipelineStage_MeshExt &&
@@ -1763,7 +1763,7 @@ Bool Compiler_paddingCheck(
 		U32 var1D = 1;
 
 		if(var.arrayIndex != U16_MAX) {
-			
+
 			ListU32 array = sb.arrays.ptr[var.arrayIndex];
 
 			for(U64 j = 0; j < array.length; ++j)
@@ -1899,7 +1899,7 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 					);
 
 				//Unused constant or buffer padding
-				
+
 				if (
 					(warning & (ECompilerWarning_UnusedConstants | ECompilerWarning_BufferPadding)) &&
 					reg.reg.bindings.arrU64[k] != U64_MAX && reg.shaderBuffer.vars.ptr

@@ -194,7 +194,7 @@ void Log_printCapturedStackTraceCustom(
 			panic |= CharString_format(alloc, &tmp, "%p\n", stackTrace[i]).genericError;
 
 		else if(capture.lin)
-			panic |= CharString_format(alloc, &tmp, 
+			panic |= CharString_format(alloc, &tmp,
 				"%p: %.*s!%.*s (%.*s, Line %"PRIu32")\n",
 				stackTrace[i],
 				(int) CharString_length(capture.mod), capture.mod.ptr,
@@ -299,7 +299,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 			break;
 	}
-	
+
 	panic |= CharString_toUTF16(copy, alloc, &tmp).genericError;
 
 	if(debugger) {

@@ -223,7 +223,7 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 				modifiers |= ESymbolFlagFuncVar_IsConst;
 				break;
 			}
-			
+
 			break;
 
 		case C8x4('u', 'n', 'i', 'o'):		//union
@@ -391,7 +391,7 @@ Bool Parser_classifyClassBase(Parser *parser, U32 *i, U32 parent, Allocator allo
 		++*i;
 		enteredOne = true;
 	}
-	
+
 	//Add as symbol
 
 	Symbol s = (Symbol) { 0 };
@@ -570,7 +570,7 @@ Bool Parser_classifyFunction(Parser *parser, U32 *i, U32 parent, Allocator alloc
 
 		CharString paramStr = Token_asString(parser->tokens.ptr[*i], parser);
 		++*i;
-		
+
 		//Add as symbol
 		//TODO: Find out/in
 
@@ -682,7 +682,7 @@ Bool Parser_classifyFunction(Parser *parser, U32 *i, U32 parent, Allocator alloc
 		U32 semanticNameTokenId = *i;
 		CharString semanticStr = Token_asString(parser->tokens.ptr[semanticNameTokenId], parser);
 		++*i;
-		
+
 		//Insert symbol
 
 		Symbol sem = (Symbol) { 0 };
@@ -1252,7 +1252,7 @@ Bool Parser_classifyEnumBody(Parser *parser, U32 *i, U32 parent, Allocator alloc
 		gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
 		CharString enumName = Token_asString(parser->tokens.ptr[*i], parser);
 		++*i;
-		
+
 		//Insert symbol
 
 		Symbol s = (Symbol) { 0 };
@@ -1407,7 +1407,7 @@ Bool Parser_classifyEnum(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 		enteredOne = true;
 	}
-	
+
 	//Insert symbol
 
 	Symbol s = (Symbol) { 0 };
@@ -1507,7 +1507,7 @@ Bool Parser_classifyUsing(Parser *parser, U32 *i, U32 parent, Allocator alloc, E
 	gotoIfError3(clean, Parser_classifyType(parser, i, parent, alloc, e_rr))
 
 	U32 usingEnd = *i - 1;
-	
+
 	//Resolve token end
 
 	U32 tokenCount = usingEnd - usingStart;
@@ -1570,7 +1570,7 @@ Bool Parser_classifyTypedef(Parser *parser, U32 *i, U32 parent, Allocator alloc,
 		retError(clean, Error_outOfBounds(
 			0, tokenCount, U16_MAX, "Parser_classifyTypedef() symbol token count is limited to 65536"
 		))
-	
+
 	//Add as symbol
 
 	Symbol s = (Symbol) { 0 };
@@ -1628,7 +1628,7 @@ Bool Parser_classifyTemplate(Parser *parser, U32 *i, U32 parent, Allocator alloc
 	gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_Gt, e_rr))
 
 	U32 templateEnd = *i;
-	
+
 	//Resolve token end
 
 	U32 tokenCount = templateEnd - templateStart;
@@ -1787,7 +1787,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 					//            ^
 
 					gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceStart, e_rr))
-					
+
 					//namespace T { }
 					//             ^
 
@@ -1798,7 +1798,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 					U32 symbolEnd = *i;
 					gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceEnd, e_rr))
-					
+
 					//Find token end
 
 					U32 tokenCount = symbolEnd - symbolStart;
@@ -1860,7 +1860,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 			U32 symbolEnd = *i;
 
 			gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_SquareBracketEnd, e_rr))
-			
+
 			//Find token end
 
 			U32 tokenCount = symbolEnd - symbolStart;
@@ -1871,7 +1871,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 				))
 
 			//Add symbol
-			
+
 			Symbol s = (Symbol) { 0 };
 			gotoIfError3(clean, Symbol_create(ESymbolType_Annotation, ESymbolFlag_None, symbolStart, e_rr, &s))
 
@@ -1901,7 +1901,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 			U32 symbolEnd = *i;
 
 			gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_SquareBracketEnd2, e_rr))
-			
+
 			//Find token end
 
 			U32 tokenCount = symbolEnd - symbolStart;
@@ -1912,7 +1912,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 				))
 
 			//Add symbol
-			
+
 			Symbol s = (Symbol) { 0 };
 			gotoIfError3(clean, Symbol_create(
 				ESymbolType_Annotation, ESymbolFlagAnnotation_IsDoubleBracket, symbolStart, e_rr, &s

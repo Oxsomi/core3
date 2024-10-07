@@ -1435,7 +1435,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer->buffer, &beginInfo)))
 
 	//Re-bind descriptors
-	
+
 	VkDescriptorSet sets[EDescriptorSetType_UniqueLayouts];
 
 	for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)

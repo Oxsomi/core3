@@ -173,12 +173,12 @@ typedef struct SHEntry {
 		U8 outputs[16];					//ESBType, but ESBMatrix_N1
 		U64 outputsU64[2];
 	};
-	
+
 	union {
 		U8 inputSemanticNames[16];		//(U4 semanticId, semanticName)[]
 		U64 inputSemanticNamesU64[2];
 	};
-	
+
 	union {
 		U8 outputSemanticNames[16];		//(U4 semanticId, semanticName)[]
 		U64 outputSemanticNamesU64[2];

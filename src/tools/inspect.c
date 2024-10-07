@@ -205,7 +205,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				sbHeader.vars,
 				sbHeader.bufferSize
 			);
-		
+
 			break;
 		}
 

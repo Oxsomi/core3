@@ -89,7 +89,7 @@ typedef struct LexerToken {
 
 	U32 offset;
 
-	U32 charId;	
+	U32 charId;
 
 	U16 fileId;						//Index into sourceLocations representing file location. U16_MAX for none
 	U16 realLineIdAndLineIdExt;		//Line id in the source location, rather than the line id in the preprocessed file

@@ -124,7 +124,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 
 #### Bindless
 
-Bindless is defined as having a large amount of descriptors bound that reduce the need to switch states (such as bindings or descriptor tables). There are generally three ways of bindless; statically sized arrays with a predefined size (placed at either different offsets or at the same position), dynamically sized arrays that get their size set by the engine or full bindless (a full buffer of descriptors exposed that can get cast to whatever descriptor). The first two will be supported, the third won't be due to portability concerns on other platforms (mainly mobile) as well as limitations with validation layers and debugging. 
+Bindless is defined as having a large amount of descriptors bound that reduce the need to switch states (such as bindings or descriptor tables). There are generally three ways of bindless; statically sized arrays with a predefined size (placed at either different offsets or at the same position), dynamically sized arrays that get their size set by the engine or full bindless (a full buffer of descriptors exposed that can get cast to whatever descriptor). The first two will be supported, the third won't be due to portability concerns on other platforms (mainly mobile) as well as limitations with validation layers and debugging.
 
 The shader side will expose these two versions of bindless as two different extensions; `Bindless` and `UnboundArraySize`.
 
