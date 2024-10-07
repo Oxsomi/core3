@@ -324,7 +324,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
 ## Show GPU/graphics device info
 
 
-It can also be used to print GPU info regarding devices that support OxC3 and what their features are. It uses the currently active graphics API if statically linked (be it DirectX12 or Vulkan) or shows all available APIs and their devices when dynamically linked.
+It can also be used to print GPU info regarding devices that support OxC3 and what their features are. It uses the currently active graphics API if statically linked (be it Direct3D12 or Vulkan) or shows all available APIs and their devices when dynamically linked.
 
 `OxC3 graphics devices` will show all OxC3 compatible devices with minimal info (such as VRAM, LUID/UUID).
 

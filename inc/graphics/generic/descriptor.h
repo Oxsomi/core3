@@ -29,7 +29,7 @@
 //The only thing defined is that the resource handle must be accessible on the device
 //	using the allocated handle for the dedicated purpose.
 //For example, device.allocateDescriptor(Texture2D) would do the following across APIs:
-//	In DX12, Texture2D is a specific SRV range into a descriptor heap.
+//	In D3D12, Texture2D is a specific SRV range into a descriptor heap.
 //	In Vulkan, Texture2D is a specific descriptor range into a descriptor set.
 
 typedef enum EDescriptorType {

@@ -143,7 +143,7 @@ Error GraphicsInstance_create(
 
 	if (api >= EGraphicsApi_Count) {
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			api = GraphicsInterface_supports(EGraphicsApi_DirectX12) ? EGraphicsApi_DirectX12 : EGraphicsApi_Vulkan;
+			api = GraphicsInterface_supports(EGraphicsApi_Direct3D12) ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan;
 		#else
 			api = EGraphicsApi_Vulkan;
 		#endif

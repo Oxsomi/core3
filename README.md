@@ -53,7 +53,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Random key, char, data and number generator.
   - Profile tool for testing speed of float casts, csprng, crc32c, sha256, md5 and aes256 (encryption and decryption).
   - Shader preprocessing, viewing includes, viewing symbols, multi threaded compilation to DXIL/SPIRV and reflection (TBD).
-  - Iterating graphics devices (Vulkan or DirectX12).
+  - Iterating graphics devices (Vulkan or Direct3D12).
   - For more info check the [documentation](docs/OxC3_tool.md).
 
 One of the useful things about C is that files are incredibly easy to compile and parse compared to C++; resulting in reduced build times and allowing easy parsing for reflection or even auto generated documentation for things like types, function signatures and errors a function might return.
@@ -126,7 +126,7 @@ Other platforms like Android and iOS are coming in the future.
 
 ## Graphics
 
-The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, DirectX12 and Metal usable, it will keep on bumping the minimum specs every so often in a release.
+The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, Direct3D12 and Metal usable, it will keep on bumping the minimum specs every so often in a release.
 
 For the graphics minimum spec check the [minimum spec](graphics_spec.md). When unsure if a device is capable, please run `OxC3 graphics devices` to see if your device is supported.
 
@@ -170,7 +170,7 @@ Dynamic linking:
 	yourExecutable
 ```
 
-To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. D3D12/*.dll is required when OxC3 graphics is used with DirectX12 (cliGraphics=True and forceVulkan=False and on Windows).
+To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. D3D12/*.dll is required when OxC3 graphics is used with Direct3D12 (cliGraphics=True and forceVulkan=False and on Windows).
 
 OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
 

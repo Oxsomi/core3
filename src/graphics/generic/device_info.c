@@ -34,7 +34,7 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
 		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\r\t"
 		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64,
-		api == EGraphicsApi_DirectX12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
+		api == EGraphicsApi_Direct3D12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
 		deviceInfo->capabilities.sharedMemory,
@@ -196,7 +196,7 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		//API specific features
 
-		if(api == EGraphicsApi_DirectX12) {
+		if(api == EGraphicsApi_Direct3D12) {
 
 			if(cap.featuresExt)
 				Log_debugLnx("\tD3D12 Extensions:");

@@ -67,7 +67,7 @@ static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so t
 	EGraphicsVendorPCIE_MSFT
 };
 
-//If api type is DirectX12
+//If api type is Direct3D12
 
 typedef enum EDxGraphicsFeatures {
 

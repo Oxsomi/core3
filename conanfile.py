@@ -90,15 +90,15 @@ class oxc3(ConanFile):
 
 	def requirements(self):
 		
-		hasDX12 = not self.options.forceVulkan and self.settings.os == "Windows"
+		hasD3D12 = not self.options.forceVulkan and self.settings.os == "Windows"
 
 		if self.options.dynamicLinkingGraphics and self.settings.os == "Windows":
-			hasDX12 = True
+			hasD3D12 = True
 
-		if self.options.enableShaderCompiler or hasDX12:
+		if self.options.enableShaderCompiler or hasD3D12:
 			self.requires("nvapi/2024.09.21")
 
-		if hasDX12:
+		if hasD3D12:
 			self.requires("agility_sdk/2024.09.22")
 		
 		if self.options.enableShaderCompiler:

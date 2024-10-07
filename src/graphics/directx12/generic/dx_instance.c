@@ -70,7 +70,7 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 
 		return (GraphicsInterfaceTable) {
 
-			.api = EGraphicsApi_DirectX12,
+			.api = EGraphicsApi_Direct3D12,
 			.objectSizes = DxGraphicsObjectSizes,
 
 			.blasInit = D3D12BLAS_init,
@@ -239,7 +239,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	#endif
 
-	instance->api = EGraphicsApi_DirectX12;
+	instance->api = EGraphicsApi_Direct3D12;
 	instance->apiVersion = D3D12_SDK_VERSION;
 
 clean:

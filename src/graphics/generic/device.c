@@ -344,9 +344,9 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	if(!((bin.vendorMask >> device->info.vendor) & 1))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"))
 
-	//Check for DX12 features, shader models and DXIL
+	//Check for D3D12 features, shader models and DXIL
 
-	if(GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_DirectX12) {
+	if(GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Direct3D12) {
 
 		if((device->info.capabilities.featuresExt & (U32)featuresDx) != (U32)featuresDx)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the featuresDx is missing"))

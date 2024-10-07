@@ -45,10 +45,10 @@ typedef enum EDxCommandQueue {
 
 } EDxCommandQueue;
 
-typedef struct DX12DispatchRaysIndirect {		//Intermediate, this one is created from a more sparse version
+typedef struct D3D12DispatchRaysIndirect {		//Intermediate, this one is created from a more sparse version
 	D3D12_DISPATCH_RAYS_DESC desc;
 	U32 padding[5];
-} DX12DispatchRaysIndirect;
+} D3D12DispatchRaysIndirect;
 
 typedef struct DxCommandQueue {
 

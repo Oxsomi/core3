@@ -49,7 +49,7 @@
 			gotoIfError2(clean, CharString_splitSensitivex(arg, ',', &strings))
 
 			U64 nativeBit = (U64)1 << (
-				Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_DirectX12 : EGraphicsApi_Vulkan
+				Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan
 			);
 
 			CharString d3d12 = CharString_createRefCStrConst("d3d12");
@@ -72,7 +72,7 @@
 					CharString_equalsStringInsensitive(str, directx12) ||
 					CharString_equalsStringInsensitive(str, direct3d12)
 				)
-					queried |= (U64)1 << EGraphicsApi_DirectX12;
+					queried |= (U64)1 << EGraphicsApi_Direct3D12;
 
 				else if(
 					CharString_equalsStringInsensitive(str, vulkan) ||

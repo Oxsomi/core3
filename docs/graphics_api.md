@@ -2,7 +2,7 @@
 
 The core pillars of the abstraction of this graphics library are the following:
 
-- Support feature sets as close as possible to Vulkan, DirectX12 and Metal3.
+- Support feature sets as close as possible to Vulkan, Direct3D12 and Metal3.
   - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.2 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
 - Simplify usage for these APIs, as they're too verbose.
   - But don't oversimplify them to the point of being useless.
@@ -55,7 +55,7 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 ### Properties
 
 - application: The name and version of the application.
-- api: Which api is ran by the runtime: Vulkan, DirectX12, Metal3 or WebGPU.
+- api: Which api is ran by the runtime: Vulkan, Direct3D12, Metal3 or WebGPU.
 - apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX SDK version, Metal 3, etc.).
 
 ### (Member) Functions
@@ -111,7 +111,7 @@ gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 - vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Microsoft (MSFT) or unknown).
 - id; number in the list of supported devices.
 - luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
-- uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier (luid) will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
+- uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier (luid) will be used here instead. For example Direct3D12 would use the luid here and clear the other U64.
 - ext; extended physical device representation for the current API. Can be NULL if LUID is used to share this.
 - capabilities; what data types, features and api dependent features are enabled. See capabilities section. This also includes dedicated and shared memory.
 
@@ -124,7 +124,7 @@ gotoIfError(clean, GraphicsInstance_getPreferredDevice(
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
   - Vulkan: PerformanceQuery.
-  - DirectX12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use).
+  - Direct3D12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use).
 - maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
 
 ### Functions
@@ -737,7 +737,7 @@ gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
 
 ### Summary
 
-A pipeline is a combination of the states and shader binaries that are required to run the shader. This represents a VkPipeline in Vulkan, an ID3D12PipelineState or ID3D12StateObject in DirectX12 and a `MTL<Render/Compute>PipelineState` in Metal.
+A pipeline is a combination of the states and shader binaries that are required to run the shader. This represents a VkPipeline in Vulkan, an ID3D12PipelineState or ID3D12StateObject in Direct3D12 and a `MTL<Render/Compute>PipelineState` in Metal.
 
 ### Properties
 
@@ -780,7 +780,7 @@ The graphics pipeline has the following properties:
     - The buffer id is the same as the index into the array. So [0] describes vertex buffer bound at id 0.
     - These are tightly packed to avoid having to dynamically allocate the PipelineGraphicsInfo and keeping it POD while still using limited resources. (bufferStride & 4095) | (isInstance << 12).
   - attributes[16]: the vertex attributes that use the buffers defined before.
-    - inferred semanticName: for HLSL/DirectX12, semantic name is quite important. However, it supports semantic name and value, so we just use semantic name TEXCOORD and the binding id. So TEXCOORD1 would be attribute[1]. This is done to save a lot of space in the PipelineGraphicsInfo. Our custom HLSL syntax for this is `_bind(N)`.
+    - inferred semanticName: for HLSL/Direct3D12, semantic name is quite important. However, it supports semantic name and value, so we just use semantic name TEXCOORD and the binding id. So TEXCOORD1 would be attribute[1]. This is done to save a lot of space in the PipelineGraphicsInfo. Our custom HLSL syntax for this is `_bind(N)`.
     - format: ETextureFormatId (8-bit) such as 'RGB32f'.
     - buffer4 (0-15): buffer id the attribute point to. Points to vertexLayout.bufferStrides12_isInstance1.
     - offset11: offset into the buffer.
@@ -1030,7 +1030,7 @@ tempBuffers[0] = tempBuffers[1] = tempBuffers[2] = Buffer_createNull();
 
 In OxC3 graphics, either the application or the OxC3 baker (or the OxC3 compiler) is responsible for compiling and providing binaries in the right formats. According to OxC3 graphics, the shaders are just a Buffer that contain an oiSH file. This oiSH file should include one of the following compile types:
 
-- DirectX12: DXIL (binary).
+- Direct3D12: DXIL (binary).
 - Vulkan: SPIR-V (binary).
   - HLSL Entrypoint needs to be remapped to main, except for raytracing shaders.
 - Metal: MSL (UTF8 text).

@@ -306,9 +306,9 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 - RG32f, RGBA32f, RG16f, RGBA16f, RG16s, RGBA16s
 
-## List of DirectX12 requirements
+## List of Direct3D12 requirements
 
-- DirectX12 Feature level 11_1.
+- Direct3D12 Feature level 11_1.
   - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
   - DXGI feature PRESENT_ALLOW_TEARING.
 - The following features:
@@ -332,7 +332,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
 - EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe, EGraphicsFeatures_Multiview, EGraphicsFeatures_DebugMarkers are enabled by default.
-- EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
+- EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of Direct3D12 Ultimate (Turing, RDNA2, Arc and up).
 - If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
 - EGraphicsFeatures_DirectRendering is most often available, only not on QCOM chips.
 - EDeviceDataTypes_BCn, EGraphicsDataTypes_I64 are always set.
@@ -359,7 +359,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
 - ShaderModel 6.6 support as ComputeDeriv.
 
-#### DirectX12 specific extensions
+#### Direct3D12 specific extensions
 
 There are specific extensions that are not relevant to other extensions, hence they've not been added to the standard extensions and have instead become API specific extensions.
 

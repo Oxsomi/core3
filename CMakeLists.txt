@@ -285,17 +285,17 @@ endif()
 
 # Graphics layer
 
-set(graphicsAllowDX12 OFF)
+set(graphicsAllowD3D12 OFF)
 set(graphicsAllowVk OFF)
 
 if(WIN32)
 	if(DynamicLinkingGraphics)
-		set(graphicsAllowDX12 ON)
+		set(graphicsAllowD3D12 ON)
 		if(DEFINED ENV{VULKAN_SDK})
 			set(graphicsAllowVk ON)
 		endif()
 	elseif(NOT ForceVulkan)
-		set(graphicsAllowDX12 ON)
+		set(graphicsAllowD3D12 ON)
 	elseif(DEFINED ENV{VULKAN_SDK})
 		set(graphicsAllowVk ON)
 	endif()
@@ -303,7 +303,7 @@ elseif(DEFINED ENV{VULKAN_SDK})
 	set(graphicsAllowVk ON)
 endif()
 
-if(NOT graphicsAllowVk AND NOT graphicsAllowDX12)
+if(NOT graphicsAllowVk AND NOT graphicsAllowD3D12)
 	message(FATAL_ERROR "-- No valid graphics API found, aborting...")
 endif()
 
@@ -432,9 +432,9 @@ endif()
 
 # DirectX setup
 
-if(graphicsAllowDX12)
+if(graphicsAllowD3D12)
 
-	message("-- Enabling DirectX12 support...")
+	message("-- Enabling Direct3D12 support...")
 
 	file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/directx12/*.h")
 	file(GLOB_RECURSE graphicsApiSources "src/graphics/directx12/generic/*.c")
@@ -487,7 +487,7 @@ if(graphicsAllowDX12)
 
 	if(NOT ${ARM})
 
-		# AMD AGS and NVAPI are required because DirectX12 was apparently not good enough :/
+		# AMD AGS and NVAPI are required because Direct3D12 was apparently not good enough :/
 		# These are not supported for ARM, so don't include them there
 
 		# NVAPI, used for NV extensions and getting driver version

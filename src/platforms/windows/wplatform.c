@@ -33,8 +33,6 @@
 
 #include <stdlib.h>
 
-U64 threadCount = 0;
-
 U64 Platform_getThreads() {
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
@@ -126,10 +124,6 @@ void *Platform_getDataImpl(void *ptr) {
 Error Platform_initExt() {
 
 	Error err = Error_none();
-
-	SYSTEM_INFO systemInfo;
-	GetSystemInfo(&systemInfo);
-	Platform_instance->threads = systemInfo.dwNumberOfProcessors;
 
 	if(Platform_instance->useWorkingDir) {
 

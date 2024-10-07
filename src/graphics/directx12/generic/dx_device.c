@@ -516,7 +516,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	D3D12_COMMAND_SIGNATURE_DESC signatures[] = {
 		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DispatchIndirectCmd), .pArgumentDescs = &sigDesc[0] },
-		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DX12DispatchRaysIndirect), .pArgumentDescs = &sigDesc[1] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(D3D12DispatchRaysIndirect), .pArgumentDescs = &sigDesc[1] },
 		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallIndexed), .pArgumentDescs = &sigDesc[2] },
 		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallUnindexed), .pArgumentDescs = &sigDesc[3] }
 	};
@@ -550,7 +550,7 @@ clean:
 	return err;
 }
 
-void DX_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {		//No-op in DX12, CBV can be made/bound at runtime :)
+void DX_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {		//No-op in D3D12, CBV can be made/bound at runtime :)
 	(void)device;
 }
 

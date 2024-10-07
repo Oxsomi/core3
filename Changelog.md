@@ -4,7 +4,7 @@
 
 ### OxC3 v0.2 "Graphics"
 
-- Support for graphics APIs such as Vulkan and DirectX12.
+- Support for graphics APIs such as Vulkan and Direct3D12.
 - BufferLayout class for managing data layout such as struct arrays.
 - Minor fixes such as file names that start with spaces.
 - 16-bit float (F16) support for casting from 32-bit or 64-bit float.

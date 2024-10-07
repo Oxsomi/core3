@@ -43,8 +43,8 @@ typedef struct DxUnifiedTexture {
 	D3D12_BARRIER_LAYOUT lastLayout;
 } DxUnifiedTexture;
 
-//Graphics instance doesn't really exist for DirectX12.
-//It's only used for defining SDK version and that we're using DirectX12.
+//Graphics instance doesn't really exist for Direct3D12.
+//It's only used for defining SDK version and that we're using Direct3D12.
 //The closest thing we can map is a DXGI factory that's used to query adapters
 
 typedef enum EDxGraphicsInstanceFlags {
