@@ -27,7 +27,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "formats/texture.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 
 TListImpl(PipelineGraphicsInfo);
 

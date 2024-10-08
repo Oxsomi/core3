@@ -26,7 +26,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 
 const C8 *EPipelineStage_names[] = {
 	"vertex",

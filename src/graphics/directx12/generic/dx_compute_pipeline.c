@@ -27,7 +27,7 @@
 #include "platforms/ext/stringx.h"
 #include "types/string.h"
 #include "types/error.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 
 Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,

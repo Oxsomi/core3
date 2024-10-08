@@ -29,7 +29,7 @@
 #include "formats/dds.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 #include "formats/oiSB.h"
 #include "types/buffer.h"
 #include "types/allocation_buffer.h"

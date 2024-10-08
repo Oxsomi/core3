@@ -221,14 +221,18 @@ endif()
 
 # Formats
 
-file(GLOB_RECURSE formatsHeaders "inc/formats/*.h")
-file(GLOB_RECURSE formatsSources "src/formats/*.c")
+file(GLOB formatsHeaders "inc/formats/*.h")
+file(GLOB formatsSources "src/formats/*.c")
+file(GLOB formatsBCHeaders "inc/formats/oiBC/*.h")
+file(GLOB formatsBCSources "src/formats/oiBC/*.c")
 
 add_library(
 	OxC3_formats
 	STATIC
 	${formatsHeaders}
 	${formatsSources}
+	${formatsBCHeaders}
+	${formatsBCSources}
 	CMakeLists.txt
 	conanfile.py
 	conandata.yml
@@ -236,9 +240,28 @@ add_library(
 	build.sh
 )
 
-set_target_properties(OxC3_formats PROPERTIES FOLDER Oxsomi)
-
+set_target_properties(OxC3_formats PROPERTIES FOLDER Oxsomi/formats)
 target_link_libraries(OxC3_formats PUBLIC OxC3_types)
+
+# Formats
+
+file(GLOB formatsSHHeaders "inc/formats/oiSH/*.h")
+file(GLOB formatsSHSources "src/formats/oiSH/*.c")
+
+add_library(
+	OxC3_formats_oiSH
+	STATIC
+	${formatsSHHeaders}
+	${formatsSHSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+set_target_properties(OxC3_formats_oiSH PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_formats)
 
 # Platforms
 
@@ -328,8 +351,8 @@ if(DynamicLinkingGraphics)
 	target_compile_definitions(OxC3_graphics PUBLIC -DGRAPHICS_API_DYNAMIC)
 endif()
 
-set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
-target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
+set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi/graphics)
+target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms OxC3_formats_oiSH)
 
 source_group("Shaders" FILES ${shaders})
 
@@ -399,7 +422,7 @@ if(graphicsAllowVk)
 		message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
 	endif()
 
-	set_target_properties(OxC3_graphics_vk PROPERTIES FOLDER Oxsomi)
+	set_target_properties(OxC3_graphics_vk PROPERTIES FOLDER Oxsomi/graphics)
 
 	source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
 
@@ -476,7 +499,7 @@ if(graphicsAllowD3D12)
 
 	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
 
-	set_target_properties(OxC3_graphics_d3d12 PROPERTIES FOLDER Oxsomi)
+	set_target_properties(OxC3_graphics_d3d12 PROPERTIES FOLDER Oxsomi/graphics)
 
 	source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
 
@@ -550,8 +573,8 @@ if(EnableShaderCompiler)
 		build.sh
 	)
 
-	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
-	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
+	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
+	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms OxC3_formats_oiSH dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
 
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external")
@@ -578,7 +601,8 @@ if(EnableOxC3CLI)
 		build.sh
 	)
 
-	set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi)
+	set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi/CLI)
+	target_link_libraries(OxC3CLI PUBLIC OxC3_platforms OxC3_formats_oiSH)
 
 	if(CLIGraphics)
 		target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)
@@ -606,7 +630,7 @@ if(EnableOxC3CLI)
 		build.sh
 	)
 
-	set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
+	set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi/CLI)
 	target_link_libraries(OxC3 PUBLIC OxC3CLI)
 
 	include(cmake/oxc3.cmake)

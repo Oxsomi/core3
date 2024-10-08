@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 
 #ifdef __cplusplus
 	extern "C" {

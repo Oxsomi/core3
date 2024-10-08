@@ -26,7 +26,7 @@
 #include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"

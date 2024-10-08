@@ -31,7 +31,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 #include "types/time.h"
 
 #include <stddef.h>

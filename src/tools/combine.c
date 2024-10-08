@@ -25,7 +25,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
 #include "cli.h"

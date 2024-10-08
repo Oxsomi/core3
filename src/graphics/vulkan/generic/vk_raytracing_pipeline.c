@@ -31,7 +31,7 @@
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
-#include "formats/oiSH.h"
+#include "formats/oiSH/sh_file.h"
 
 Error createShaderModule(
 	Buffer buf,

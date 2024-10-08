@@ -43,7 +43,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	#include "platforms/log.h"
 	#include "platforms/dynamic_library.h"
 	#include "platforms/platform.h"
-	#include "formats/oiSH.h"
+	#include "formats/oiSH/sh_file.h"
 
 	GraphicsInterface *GraphicsInterface_instance = 0, graphicsInterfaceInstance = { 0 };
 
