@@ -28,7 +28,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
-#include "formats/oiCA.h"
+#include "formats/oiCA/ca_file.h"
 #include "cli.h"
 
 #ifdef CLI_SHADER_COMPILER

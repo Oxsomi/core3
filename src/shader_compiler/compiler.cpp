@@ -28,7 +28,7 @@
 #include "types/allocator.h"
 #include "types/file.h"
 #include "types/math.h"
-#include "formats/oiSB.h"
+#include "formats/oiSB/sb_file.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE

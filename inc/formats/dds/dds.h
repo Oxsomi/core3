@@ -18,4 +18,41 @@
 *  This is called dual licensing.
 */
 
-#include "formats/json.h"
+#pragma once
+#include "types/types.h"
+#include "types/list.h"
+#include "types/texture_format.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+typedef struct Allocator Allocator;
+typedef struct Error Error;
+typedef enum EDepthStencilFormat EDepthStencilFormat;
+
+typedef struct SubResourceData {
+	U32 mipId, layerId, z, padding;
+	Buffer data;						//Either a ref to the data in the dds or a real buffer
+} SubResourceData;
+
+typedef struct DDSInfo {
+
+	U32 w, h, l;						//Dimensions; these decrease by ~2 for each mip
+	U32 mips, layers;
+
+	ETextureFormatId textureFormatId;
+	ETextureType type;
+
+} DDSInfo;
+
+TList(SubResourceData);
+
+Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buffer *result);		//buf may be reordered
+Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result);
+
+Bool ListSubResourceData_freeAll(ListSubResourceData *buf, Allocator allocator);
+
+#ifdef __cplusplus
+	}
+#endif

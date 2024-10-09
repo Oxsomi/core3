@@ -281,7 +281,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				D3D12_BOX srcBox = (D3D12_BOX) {
 					.left   = image.srcX,
-					.top    = image.srcY,
+					.top	= image.srcY,
 					.front  = image.srcZ,
 					.right  = image.srcX + image.width,
 					.bottom	= image.srcY + image.height,

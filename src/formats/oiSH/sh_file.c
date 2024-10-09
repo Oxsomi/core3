@@ -18,12 +18,60 @@
 *  This is called dual licensing.
 */
 
-#include "types/list_impl.h"
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	#include "platforms/ext/listx_impl.h"
+#else
+	#include "types/list_impl.h"
+#endif
+
 #include "formats/oiSH/sh_file.h"
 
 TListImpl(SHFile);
 
-//Helper functions to create it
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	
+	#include "platforms/platform.h"
+
+	Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr) {
+		return SHFile_create(flags, compilerVersion, sourceHash, Platform_instance->alloc, shFile, e_rr);
+	}
+
+	void SHFile_freex(SHFile *shFile) {
+		SHFile_free(shFile, Platform_instance->alloc);
+	}
+
+	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr) {
+		return SHFile_addBinaries(shFile, binaries, Platform_instance->alloc, e_rr);
+	}
+
+	Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr) {
+		return SHFile_addEntrypoint(shFile, entry, Platform_instance->alloc, e_rr);
+	}
+
+	Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr) {
+		return SHFile_addInclude(shFile, include, Platform_instance->alloc, e_rr);
+	}
+
+	Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr) {
+		return SHFile_write(shFile, Platform_instance->alloc, result, e_rr);
+	}
+
+	Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr) {
+		return SHFile_read(file, isSubFile, Platform_instance->alloc, shFile, e_rr);
+	}
+
+	Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr) {
+		return SHFile_combine(a, b, Platform_instance->alloc, combined, e_rr);
+	}
+
+	void ListSHInclude_freeUnderlyingx(ListSHInclude *includes) {
+		ListSHInclude_freeUnderlying(includes, Platform_instance->alloc);
+	}
+
+	void SHInclude_freex(SHInclude *include) {
+		SHInclude_free(include, Platform_instance->alloc);
+	}
+#endif
 
 Bool SHFile_create(
 	ESHSettingsFlags flags,

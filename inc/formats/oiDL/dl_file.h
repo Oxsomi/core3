@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "oiXX.h"
+#include "formats/oiXX/oiXX.h"
 #include "types/list.h"
 
 #ifdef __cplusplus
@@ -109,6 +109,10 @@ Bool DLFile_combine(DLFile a, DLFile b, Allocator alloc, DLFile *combined, Error
 
 //File spec (docs/oiDL.md)
 
+typedef enum EDLVersion {
+	EDLVersion_V1_0
+} EDLVersion;
+
 typedef enum EDLFlags {
 
 	EDLFlags_None 					= 0,
@@ -118,7 +122,7 @@ typedef enum EDLFlags {
 	EDLFlags_IsString				= 1 << 1,		//If true; must be a valid string (!UTF8 ? Ascii : UTF8)
 	EDLFlags_UTF8					= 1 << 2,		//ASCII (if off), otherwise UTF-8
 
-    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB
+	//Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB
 
 	EDLFlags_UseAESChunksA			= 1 << 3,
 	EDLFlags_UseAESChunksB			= 1 << 4,

@@ -247,7 +247,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 					fileLineOffset = lineIdi;
 
 					//# line 123 "testFile"
-					//           ^
+					//		   ^
 
 					if(tokenCount == 4) {
 

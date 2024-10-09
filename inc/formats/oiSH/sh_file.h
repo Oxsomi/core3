@@ -95,6 +95,24 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr);
 
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+
+	Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr);
+	void SHFile_freex(SHFile *shFile);
+
+	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr);	//Moves entry
+	Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr);		//Moves entry->name
+	Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr);		//Moves include->relativePath
+
+	Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr);
+	Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr);
+	Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr);
+
+	void ListSHInclude_freeUnderlyingx(ListSHInclude *includes);
+	void SHInclude_freex(SHInclude *include);
+
+#endif
+
 #ifdef __cplusplus
 	}
 #endif

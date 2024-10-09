@@ -21,7 +21,7 @@
 #pragma once
 #include "types/list.h"
 #include "types/string.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "types/ref_ptr.h"
 #include "pipeline_structs.h"
 

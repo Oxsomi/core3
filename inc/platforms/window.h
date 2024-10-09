@@ -21,7 +21,7 @@
 #pragma once
 #include "types/list.h"
 #include "types/error.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "platforms/input_device.h"
 #include "platforms/monitor.h"
 

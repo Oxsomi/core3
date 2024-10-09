@@ -26,13 +26,13 @@
 //Useful if there's no SIMD function that's faster than native
 
 #define NONE_OP_SELF_T(T, N, ...) {			\
-                                            \
-	T res = (T) { 0 };                      \
-	                                        \
-	for (U8 i = 0; i < N; ++i)              \
-		T##_set(&res, i, (__VA_ARGS__));    \
-	                                        \
-	return res;                             \
+											\
+	T res = (T) { 0 };					  \
+											\
+	for (U8 i = 0; i < N; ++i)			  \
+		T##_set(&res, i, (__VA_ARGS__));	\
+											\
+	return res;							 \
 }
 
 #define NONE_OP4I(...) NONE_OP_SELF_T(I32x4, 4, __VA_ARGS__)

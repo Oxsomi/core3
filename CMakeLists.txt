@@ -221,16 +221,72 @@ endif()
 
 # Formats
 
-file(GLOB formatsHeaders "inc/formats/*.h")
-file(GLOB formatsSources "src/formats/*.c")
+file(GLOB formatsHeaders "inc/formats/oiXX/*.h")
+file(GLOB formatsSources "src/formats/oiXX/*.c")
+
+add_library(
+	OxC3_formats_oiXX
+	STATIC
+	${formatsHeaders}
+	${formatsSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+set_target_properties(OxC3_formats_oiXX PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiXX PUBLIC OxC3_types)
+
+# Format oiDL
+
+file(GLOB formatsDLHeaders "inc/formats/oiDL/*.h")
+file(GLOB formatsDLSources "src/formats/oiDL/*.c")
+
+add_library(
+	OxC3_formats_oiDL
+	STATIC
+	${formatsDLHeaders}
+	${formatsDLSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+set_target_properties(OxC3_formats_oiDL PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiDL PUBLIC OxC3_formats_oiXX)
+
+# Format oiCA
+
+file(GLOB formatsCAHeaders "inc/formats/oiCA/*.h")
+file(GLOB formatsCASources "src/formats/oiCA/*.c")
+
+add_library(
+	OxC3_formats_oiCA
+	STATIC
+	${formatsCAHeaders}
+	${formatsCASources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+set_target_properties(OxC3_formats_oiCA PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiCA PUBLIC OxC3_formats_oiXX OxC3_formats_oiDL)
+
+# Format oiBC
+
 file(GLOB formatsBCHeaders "inc/formats/oiBC/*.h")
 file(GLOB formatsBCSources "src/formats/oiBC/*.c")
 
 add_library(
-	OxC3_formats
+	OxC3_formats_oiBC
 	STATIC
-	${formatsHeaders}
-	${formatsSources}
 	${formatsBCHeaders}
 	${formatsBCSources}
 	CMakeLists.txt
@@ -240,19 +296,21 @@ add_library(
 	build.sh
 )
 
-set_target_properties(OxC3_formats PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats PUBLIC OxC3_types)
+set_target_properties(OxC3_formats_oiBC PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiBC PUBLIC OxC3_formats_oiXX)
 
-# Formats
+# Format dds
 
-file(GLOB formatsSHHeaders "inc/formats/oiSH/*.h")
-file(GLOB formatsSHSources "src/formats/oiSH/*.c")
+set(AllowOxC3PlatformsDDS ON)
+
+file(GLOB formatsDDSHeaders "inc/formats/dds/*.h")
+file(GLOB formatsDDSSources "src/formats/dds/*.c")
 
 add_library(
-	OxC3_formats_oiSH
+	OxC3_formats_dds
 	STATIC
-	${formatsSHHeaders}
-	${formatsSHSources}
+	${formatsDDSHeaders}
+	${formatsDDSSources}
 	CMakeLists.txt
 	conanfile.py
 	conandata.yml
@@ -260,8 +318,8 @@ add_library(
 	build.sh
 )
 
-set_target_properties(OxC3_formats_oiSH PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_formats)
+set_target_properties(OxC3_formats_dds PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_dds PUBLIC OxC3_formats_oiXX)
 
 # Platforms
 
@@ -300,10 +358,94 @@ source_group("Source Files (simd: ${simd})" FILES ${platformsSIMDSources})
 
 set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 
-target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
+target_link_libraries(
+	OxC3_platforms PUBLIC
+	OxC3_formats_oiXX OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_dds
+)
 
 if(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
+endif()
+
+# Format oiSB
+
+set(AllowOxC3PlatformsSB ON)
+
+file(GLOB formatsSBHeaders "inc/formats/oiSB/*.h")
+file(GLOB formatsSBSources "src/formats/oiSB/*.c")
+
+add_library(
+	OxC3_formats_oiSB
+	STATIC
+	${formatsSBHeaders}
+	${formatsSBSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+set_target_properties(OxC3_formats_oiSB PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_formats_oiXX)
+
+if(AllowOxC3PlatformsSB)
+	target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_platforms)
+	target_compile_definitions(OxC3_formats_oiSB PUBLIC -DALLOW_SB_OXC3_PLATFORMS)
+endif()
+
+# Format oiSH
+
+set(AllowOxC3PlatformsSH ON)
+
+file(GLOB formatsSHHeaders "inc/formats/oiSH/*.h")
+file(GLOB formatsSHSources "src/formats/oiSH/*.c")
+
+add_library(
+	OxC3_formats_oiSH
+	STATIC
+	${formatsSHHeaders}
+	${formatsSHSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+set_target_properties(OxC3_formats_oiSH PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_formats_oiSB)
+
+if(AllowOxC3PlatformsSH)
+	target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_platforms)
+	target_compile_definitions(OxC3_formats_oiSH PUBLIC -DALLOW_SH_OXC3_PLATFORMS)
+endif()
+
+# Format bmp
+
+set(AllowOxC3PlatformsBMP ON)
+
+file(GLOB formatsBMPHeaders "inc/formats/bmp/*.h")
+file(GLOB formatsBMPSources "src/formats/bmp/*.c")
+
+add_library(
+	OxC3_formats_bmp
+	STATIC
+	${formatsBMPHeaders}
+	${formatsBMPSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+set_target_properties(OxC3_formats_bmp PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_formats_oiXX)
+
+if(AllowOxC3PlatformsBMP)
+	target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_platforms)
+	target_compile_definitions(OxC3_formats_bmp PUBLIC -DALLOW_BMP_OXC3_PLATFORMS)
 endif()
 
 # Graphics layer
@@ -542,7 +684,7 @@ if(EnableTests)
 		build.sh
 	)
 
-	target_link_libraries(OxC3_test PUBLIC OxC3_platforms)
+	target_link_libraries(OxC3_test PUBLIC OxC3_platforms OxC3_formats_oiBC)
 
 	set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
 
@@ -574,7 +716,8 @@ if(EnableShaderCompiler)
 	)
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
-	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms OxC3_formats_oiSH dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
+	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms OxC3_formats_oiSH)
+	target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
 
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external")
@@ -602,7 +745,7 @@ if(EnableOxC3CLI)
 	)
 
 	set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi/CLI)
-	target_link_libraries(OxC3CLI PUBLIC OxC3_platforms OxC3_formats_oiSH)
+	target_link_libraries(OxC3CLI PUBLIC OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL)
 
 	if(CLIGraphics)
 		target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)

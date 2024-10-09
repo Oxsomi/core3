@@ -21,7 +21,7 @@
 #include "types/platform_types.h"
 
 #ifndef _MSC_VER
-    #include <cpuid.h>
+	#include <cpuid.h>
 #endif
 
 void Platform_getCPUId(int leaf, U32 result[4]) {

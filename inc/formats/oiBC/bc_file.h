@@ -20,7 +20,7 @@
 
 #pragma once
 #include "types/list.h"
-#include "oiXX.h"
+#include "formats/oiXX/oiXX.h"
 
 #ifdef __cplusplus
 	extern "C" {

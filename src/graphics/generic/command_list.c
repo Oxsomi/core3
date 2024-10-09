@@ -34,7 +34,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "types/string.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "types/math.h"
 
 TListImpl(CommandOpInfo);

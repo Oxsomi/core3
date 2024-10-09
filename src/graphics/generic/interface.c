@@ -18,6 +18,20 @@
 *  This is called dual licensing.
 */
 
+#ifdef GRAPHICS_API_DYNAMIC
+	#include "formats/oiSH/sh_file.h"
+	#include "graphics/generic/blas.h"
+	#include "graphics/generic/tlas.h"
+	#include "graphics/generic/pipeline.h"
+	#include "graphics/generic/sampler.h"
+	#include "graphics/generic/swapchain.h"
+	#include "graphics/generic/command_list.h"
+	#include "platforms/file.h"
+	#include "platforms/log.h"
+	#include "platforms/dynamic_library.h"
+	#include "platforms/platform.h"
+#endif
+
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
 
@@ -32,18 +46,6 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 }
 
 #ifdef GRAPHICS_API_DYNAMIC
-
-	#include "graphics/generic/blas.h"
-	#include "graphics/generic/tlas.h"
-	#include "graphics/generic/pipeline.h"
-	#include "graphics/generic/sampler.h"
-	#include "graphics/generic/swapchain.h"
-	#include "graphics/generic/command_list.h"
-	#include "platforms/file.h"
-	#include "platforms/log.h"
-	#include "platforms/dynamic_library.h"
-	#include "platforms/platform.h"
-	#include "formats/oiSH/sh_file.h"
 
 	GraphicsInterface *GraphicsInterface_instance = 0, graphicsInterfaceInstance = { 0 };
 

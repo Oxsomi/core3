@@ -23,7 +23,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "types/error.h"
 #include "types/string.h"
 

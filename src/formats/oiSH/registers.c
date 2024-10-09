@@ -18,11 +18,128 @@
 *  This is called dual licensing.
 */
 
-#include "types/list_impl.h"
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	#include "platforms/ext/listx_impl.h"
+#else
+	#include "types/list_impl.h"
+#endif
+
 #include "formats/oiSH/sh_file.h"
 
 TListImpl(SHRegister);
 TListImpl(SHRegisterRuntime);
+
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+
+	#include "platforms/platform.h"
+
+	void SHRegister_printx(SHRegister reg, U64 indenting) { SHRegister_print(reg, indenting, Platform_instance->alloc); }
+
+	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting) {
+		SHRegisterRuntime_print(reg, indenting, Platform_instance->alloc);
+	}
+
+	void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting) {
+		ListSHRegisterRuntime_print(reg, indenting, Platform_instance->alloc);
+	}
+
+	Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr) {
+		return ListSHRegisterRuntime_createCopyUnderlying(orig, Platform_instance->alloc, dst, e_rr);
+	}
+
+	Bool ListSHRegisterRuntime_addBufferx(
+		ListSHRegisterRuntime *registers,
+		ESHBufferType registerType,
+		Bool isWrite,
+		U8 isUsedFlag,
+		CharString *name,
+		ListU32 *arrays,
+		SBFile *sbFile,
+		SHBindings bindings,
+		Error *e_rr
+	) {
+		return ListSHRegisterRuntime_addBuffer(
+			registers, registerType, isWrite, isUsedFlag, name, arrays, sbFile, bindings, Platform_instance->alloc, e_rr
+		);
+	}
+
+	Bool ListSHRegisterRuntime_addTexturex(
+		ListSHRegisterRuntime *registers,
+		ESHTextureType registerType,
+		Bool isLayeredTexture,
+		Bool isCombinedSampler,
+		U8 isUsedFlag,
+		ESHTexturePrimitive textureFormatPrimitive,
+		CharString *name,
+		ListU32 *arrays,
+		SHBindings bindings,
+		Error *e_rr
+	) {
+		return ListSHRegisterRuntime_addTexture(
+			registers, registerType, isLayeredTexture, isCombinedSampler, isUsedFlag, textureFormatPrimitive,
+			name, arrays, bindings, Platform_instance->alloc, e_rr
+		);
+	}
+
+	Bool ListSHRegisterRuntime_addRWTexturex(
+		ListSHRegisterRuntime *registers,
+		ESHTextureType registerType,
+		Bool isLayeredTexture,
+		U8 isUsedFlag,
+		ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = auto detect from formatId
+		ETextureFormatId textureFormatId,				//!textureFormatId = only allowed if primitive is set
+		CharString *name,
+		ListU32 *arrays,
+		SHBindings bindings,
+		Error *e_rr
+	) {
+		return ListSHRegisterRuntime_addRWTexture(
+			registers, registerType, isLayeredTexture, isUsedFlag, textureFormatPrimitive, textureFormatId,
+			name, arrays, bindings, Platform_instance->alloc, e_rr
+		);
+	}
+
+	Bool ListSHRegisterRuntime_addSubpassInputx(
+		ListSHRegisterRuntime *registers,
+		U8 isUsedFlag,
+		CharString *name,
+		SHBindings bindings,
+		U16 attachmentId,
+		Error *e_rr
+	) {
+		return ListSHRegisterRuntime_addSubpassInput(
+			registers, isUsedFlag,
+			name, bindings, attachmentId, Platform_instance->alloc, e_rr
+		);
+	}
+
+	Bool ListSHRegisterRuntime_addSamplerx(
+		ListSHRegisterRuntime *registers,
+		U8 isUsedFlag,
+		Bool isSamplerComparisonState,
+		CharString *name,
+		ListU32 *arrays,
+		SHBindings bindings,
+		Error *e_rr
+	) {
+		return ListSHRegisterRuntime_addSampler(
+			registers, isUsedFlag, isSamplerComparisonState,
+			name, arrays, bindings, Platform_instance->alloc, e_rr
+		);
+	}
+
+	Bool ListSHRegisterRuntime_addRegisterx(
+		ListSHRegisterRuntime *registers,
+		CharString *name,
+		ListU32 *arrays,
+		SHRegister reg,
+		SBFile *sbFile,
+		Error *e_rr
+	) {
+		return ListSHRegisterRuntime_addRegister(registers, name, arrays, reg, sbFile, Platform_instance->alloc, e_rr);
+	}
+
+#endif
 
 Bool SHFile_detectDuplicate(
 	const ListSHRegisterRuntime *info,

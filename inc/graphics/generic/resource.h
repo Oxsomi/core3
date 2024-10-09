@@ -22,7 +22,7 @@
 #include "types/types.h"
 #include "types/list.h"
 #include "types/vec.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 
 #ifdef __cplusplus
 	extern "C" {

@@ -19,8 +19,12 @@
 */
 
 #pragma once
-#include "formats/oiSB.h"
-#include "formats/texture.h"
+#include "formats/oiSB/sb_file.h"
+#include "types/texture_format.h"
+
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	#include "platforms/ext/listx.h"
+#endif
 
 #ifdef __cplusplus
 	extern "C" {
@@ -262,6 +266,82 @@ void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator all
 void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Allocator alloc);
 void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc);
 void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, Allocator alloc);
+
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+
+	void SHRegister_printx(SHRegister reg, U64 indenting);
+	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting);
+	void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting);
+
+	Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr);
+
+	Bool ListSHRegisterRuntime_addBufferx(
+		ListSHRegisterRuntime *registers,
+		ESHBufferType registerType,
+		Bool isWrite,
+		U8 isUsedFlag,
+		CharString *name,
+		ListU32 *arrays,
+		SBFile *sbFile,
+		SHBindings bindings,
+		Error *e_rr
+	);
+
+	Bool ListSHRegisterRuntime_addTexturex(
+		ListSHRegisterRuntime *registers,
+		ESHTextureType registerType,
+		Bool isLayeredTexture,
+		Bool isCombinedSampler,
+		U8 isUsedFlag,
+		ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = none
+		CharString *name,
+		ListU32 *arrays,
+		SHBindings bindings,
+		Error *e_rr
+	);
+
+	Bool ListSHRegisterRuntime_addRWTexturex(
+		ListSHRegisterRuntime *registers,
+		ESHTextureType registerType,
+		Bool isLayeredTexture,
+		U8 isUsedFlag,
+		ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = auto detect from formatId
+		ETextureFormatId textureFormatId,				//!textureFormatId = only allowed if primitive is set
+		CharString *name,
+		ListU32 *arrays,
+		SHBindings bindings,
+		Error *e_rr
+	);
+
+	Bool ListSHRegisterRuntime_addSubpassInputx(
+		ListSHRegisterRuntime *registers,
+		U8 isUsedFlag,
+		CharString *name,
+		SHBindings bindings,
+		U16 attachmentId,
+		Error *e_rr
+	);
+
+	Bool ListSHRegisterRuntime_addSamplerx(
+		ListSHRegisterRuntime *registers,
+		U8 isUsedFlag,
+		Bool isSamplerComparisonState,
+		CharString *name,
+		ListU32 *arrays,
+		SHBindings bindings,
+		Error *e_rr
+	);
+
+	Bool ListSHRegisterRuntime_addRegisterx(
+		ListSHRegisterRuntime *registers,
+		CharString *name,
+		ListU32 *arrays,
+		SHRegister reg,
+		SBFile *sbFile,
+		Error *e_rr
+	);
+
+#endif
 
 #ifdef __cplusplus
 	}

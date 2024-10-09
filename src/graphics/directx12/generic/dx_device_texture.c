@@ -25,7 +25,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/directx12/dx_device.h"
 #include "graphics/directx12/dx_buffer.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "types/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 

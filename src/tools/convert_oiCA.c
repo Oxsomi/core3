@@ -19,7 +19,7 @@
 */
 
 #include "cli.h"
-#include "formats/oiCA.h"
+#include "formats/oiCA/ca_file.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "platforms/file.h"

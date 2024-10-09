@@ -141,6 +141,12 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc);
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
 void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);
 
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	void SHBinaryInfo_printx(SHBinaryInfo binary);
+	void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
+	void SHBinaryInfo_freex(SHBinaryInfo *info);
+#endif
+
 #ifdef __cplusplus
 	}
 #endif

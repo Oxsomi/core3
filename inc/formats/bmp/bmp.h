@@ -44,6 +44,36 @@ typedef struct BMPInfo {
 Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result);
 Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result);
 
+#ifdef ALLOW_BMP_OXC3_PLATFORMS
+	Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result);
+	Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result);
+#endif
+
+//File headers
+
+#pragma pack(push, 1)
+
+	typedef struct BMPHeader {
+		U16 fileType;
+		U32 fileSize;
+		U32 reserved;
+		U32 offsetData;
+	} BMPHeader;
+
+	typedef struct BMPInfoHeader {
+		U32 headerSize;
+		I32 width, height;
+		U16 planes, bitCount;
+		U32 compression, compressedSize;
+		I32 xPixPerM, yPixPerM;
+		U32 colorsUsed, colorsImportant;
+	} BMPInfoHeader;
+
+#pragma pack(pop)
+
+static const U16 BMP_MAGIC = 0x4D42;
+static const U32 BMP_reqHeadersSize = (U32) (sizeof(BMPHeader) + sizeof(BMPInfoHeader));
+
 #ifdef __cplusplus
 	}
 #endif

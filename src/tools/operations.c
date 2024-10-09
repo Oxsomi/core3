@@ -18,11 +18,11 @@
 *  This is called dual licensing.
 */
 
+#include "cli.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
 #include "platforms/log.h"
-#include "cli.h"
 
 Bool CLI_info(ParsedArgs args) {
 

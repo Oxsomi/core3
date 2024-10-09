@@ -18,12 +18,38 @@
 *  This is called dual licensing.
 */
 
-#include "types/list_impl.h"
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	#include "platforms/ext/listx_impl.h"
+#else
+	#include "types/list_impl.h"
+#endif
+
 #include "formats/oiSH/sh_file.h"
 #include "types/math.h"
 
 TListImpl(SHEntry);
 TListImpl(SHEntryRuntime);
+
+#if ALLOW_SH_OXC3_PLATFORMS
+
+	#include "platforms/platform.h"
+
+	void SHEntry_printx(SHEntry entry) { SHEntry_print(entry, Platform_instance->alloc); }
+	void SHEntryRuntime_printx(SHEntryRuntime entry) { SHEntryRuntime_print(entry, Platform_instance->alloc); }
+
+	void SHEntry_freex(SHEntry *entry) {
+		SHEntry_free(entry, Platform_instance->alloc);
+	}
+
+	void SHEntryRuntime_freex(SHEntryRuntime *entry) {
+		SHEntryRuntime_free(entry, Platform_instance->alloc);
+	}
+
+	void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry) {
+		ListSHEntryRuntime_freeUnderlying(entry, Platform_instance->alloc);
+	}
+
+#endif
 
 const C8 *SHEntry_stageNames[ESHPipelineStage_Count] = {
 

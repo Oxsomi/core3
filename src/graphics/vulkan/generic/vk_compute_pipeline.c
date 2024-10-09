@@ -27,7 +27,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/buffer.h"
 #include "types/string.h"

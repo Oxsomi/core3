@@ -26,7 +26,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_buffer.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "types/ref_ptr.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"

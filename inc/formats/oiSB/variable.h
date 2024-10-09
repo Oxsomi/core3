@@ -19,20 +19,16 @@
 */
 
 #pragma once
+
+#ifdef ALLOW_SB_OXC3_PLATFORMS
+	#include "platforms/ext/listx.h"
+#endif
+
 #include "types/list.h"
-#include "oiXX.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-typedef enum ESBSettingsFlags {
-	ESBSettingsFlags_None				= 0,
-	ESBSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiSH can be 100% confidently detected otherwise
-	ESBSettingsFlags_IsUTF8				= 1 << 1,
-	ESBSettingsFlags_IsTightlyPacked	= 1 << 2,
-	ESBSettingsFlags_Invalid			= 0xFFFFFFFF << 3
-} ESBSettingsFlags;
 
 //Check docs/oiSB.md for the file spec
 
@@ -285,104 +281,6 @@ typedef struct SBVar {	//Is seen as a U64 and U32 for hashing
 
 TList(SBStruct);
 TList(SBVar);
-
-typedef struct SBFile {
-
-	ListCharString structNames;
-	ListCharString varNames;
-
-	ListSBStruct structs;
-	ListSBVar vars;
-	ListListU32 arrays;
-
-	U64 readLength;				//How many bytes were read for this file
-
-	ESBSettingsFlags flags;		//flags and bufferSize are assumed to be a single U64 combined
-	U32 bufferSize;
-
-	U64 hash;					//Appending to the SBFile will automatically refresh this
-
-} SBFile;
-
-TList(SBFile);
-
-Bool SBFile_create(
-	ESBSettingsFlags flags,
-	U32 bufferSize,
-	Allocator alloc,
-	SBFile *sbFile,
-	Error *e_rr
-);
-
-Bool SBFile_createCopy(
-	SBFile src,
-	Allocator alloc,
-	SBFile *sbFile,
-	Error *e_rr
-);
-
-void SBFile_free(SBFile *shFile, Allocator alloc);
-
-Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Allocator alloc, Error *e_rr);
-
-Bool SBFile_addVariableAsType(
-	SBFile *sbFile,
-	CharString *name,
-	U32 offset,
-	U16 parentId,		//root = U16_MAX
-	ESBType type,
-	ESBVarFlag flags,
-	ListU32 *arrays,
-	Allocator alloc,
-	Error *e_rr
-);
-
-Bool SBFile_addVariableAsStruct(
-	SBFile *sbFile,
-	CharString *name,
-	U32 offset,
-	U16 parentId,		//root = U16_MAX
-	U16 structId,
-	ESBVarFlag flags,
-	ListU32 *arrays,
-	Allocator alloc,
-	Error *e_rr
-);
-
-Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr);
-Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *sbFile, Error *e_rr);
-
-void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Allocator alloc);
-
-//Doesn't work on layouts that mismatch (only order of structs/variables or some flags may vary)
-Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);
-
-void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc);
-
-//File headers
-
-//File spec (docs/oiSB.md)
-
-typedef enum ESBFlag {
-	ESBFlag_None				= 0,
-	ESBFlag_IsTightlyPacked		= 1 << 0,
-	ESBFlag_Unsupported			= 0xFFFFFFFF << 1
-} ESBFlag;
-
-typedef struct SBHeader {
-
-	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-	U8 flags;					//ESBFlag
-	U16 arrays;
-
-	U16 structs;
-	U16 vars;
-
-	U32 bufferSize;
-
-} SBHeader;
-
-#define SBHeader_MAGIC 0x4253696F
 
 #ifdef __cplusplus
 	}

@@ -20,7 +20,7 @@
 
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSH/headers.h"
-#include "formats/oiDL.h"
+#include "formats/oiDL/dl_file.h"
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/buffer.h"

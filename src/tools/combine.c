@@ -18,6 +18,9 @@
 *  This is called dual licensing.
 */
 
+#include "formats/oiSH/sh_file.h"
+#include "formats/oiCA/ca_file.h"
+#include "formats/oiDL/dl_file.h"
 #include "types/buffer.h"
 #include "types/time.h"
 #include "platforms/log.h"
@@ -25,9 +28,6 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
-#include "formats/oiSH/sh_file.h"
-#include "formats/oiCA.h"
-#include "formats/oiDL.h"
 #include "cli.h"
 
 Bool CLI_fileCombine(ParsedArgs args) {

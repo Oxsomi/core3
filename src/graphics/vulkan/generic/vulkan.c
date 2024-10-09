@@ -22,7 +22,7 @@
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/device_buffer.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "types/error.h"
 
 TListImpl(VkMappedMemoryRange);

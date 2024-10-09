@@ -21,7 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "types/error.h"
 #include "types/buffer.h"
-#include "formats/oiCA.h"
+#include "formats/oiCA/ca_file.h"
 #include "platforms/file.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/formatx.h"

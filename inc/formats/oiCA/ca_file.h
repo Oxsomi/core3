@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "oiXX.h"
+#include "formats/oiXX/oiXX.h"
 #include "types/archive.h"
 
 #ifdef __cplusplus
@@ -74,8 +74,8 @@ typedef enum ECAFlags {
 
 	ECAFlags_None 						= 0,
 
-   	//Whether SHA256 (1) or CRC32C (0) is used as hash
-    //(Only if compression is on)
+	//Whether SHA256 (1) or CRC32C (0) is used as hash
+	//(Only if compression is on)
 
 	ECAFlags_UseSHA256					= 1 << 0,
 
@@ -84,23 +84,23 @@ typedef enum ECAFlags {
 	ECAFlags_FilesHaveDate				= 1 << 1,
 	ECAFlags_FilesHaveExtendedDate		= 1 << 2,
 
-    //Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
-    //This indicates the type the biggest file size uses
+	//Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
+	//This indicates the type the biggest file size uses
 
 	ECAFlags_FileSizeType_Shift			= 3,
 	ECAFlags_FileSizeType_Mask			= 3,
 
 	ECAFlags_FileSizeType_MaskShifted	= ECAFlags_FileSizeType_Mask << ECAFlags_FileSizeType_Shift,
 
-    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
+	//Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
 
-    ECAFlags_UseAESChunksA				= 1 << 5,
-    ECAFlags_UseAESChunksB				= 1 << 6,
+	ECAFlags_UseAESChunksA				= 1 << 5,
+	ECAFlags_UseAESChunksB				= 1 << 6,
 
-    ECAFlags_HasExtendedData			= 1 << 7,		//CAExtraInfo
+	ECAFlags_HasExtendedData			= 1 << 7,		//CAExtraInfo
 
-    //Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
-    //This indicates the type the type for compression type if available.
+	//Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
+	//This indicates the type the type for compression type if available.
 
 	ECAFlags_CompressedSizeType_Shift		= 8,
 	ECAFlags_CompressedSizeType_Mask		= 3,
@@ -123,6 +123,10 @@ typedef enum ECAFlags {
 		ECAFlags_FileSizeType_MaskShifted | ECAFlags_AESChunkMask | ECAFlags_CompressedSizeType_MaskShifted
 
 } ECAFlags;
+
+typedef enum ECAVersion {
+	ECAVersion_V1_0				//Current version
+} ECAVersion;
 
 typedef struct CAHeader {
 

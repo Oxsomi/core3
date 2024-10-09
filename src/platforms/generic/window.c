@@ -23,10 +23,10 @@
 #include "platforms/platform.h"
 #include "platforms/file.h"
 #include "types/string.h"
-#include "formats/texture.h"
-#include "formats/dds.h"
-#include "platforms/ext/ddsx.h"
+#include "types/texture_format.h"
+#include "formats/dds/dds.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/formatx.h"
 #include "types/math.h"
 
 TListImpl(InputDevice);

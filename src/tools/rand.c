@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "cli.h"
 #include "types/string.h"
 #include "types/buffer.h"
 #include "types/error.h"
@@ -27,7 +28,6 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
-#include "cli.h"
 
 Bool CLI_rand(ParsedArgs args) {
 

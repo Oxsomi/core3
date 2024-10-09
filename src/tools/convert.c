@@ -18,12 +18,12 @@
 *  This is called dual licensing.
 */
 
+#include "cli.h"
 #include "types/time.h"
 #include "types/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/file.h"
-#include "cli.h"
 
 Bool CLI_convert(ParsedArgs args, Bool isTo) {
 

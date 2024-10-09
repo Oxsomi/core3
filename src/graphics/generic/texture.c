@@ -25,7 +25,7 @@
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/resource.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "types/string.h"
 
 //Specifying DeviceResourceVersion* will force lock the resource to get the texture format, size and version id.

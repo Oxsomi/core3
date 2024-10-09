@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "formats/texture.h"
+#include "types/texture_format.h"
 
 ETexturePrimitive ETextureFormat_getPrimitive(ETextureFormat f) {
 	return (ETexturePrimitive)((f >> 24) & 7);

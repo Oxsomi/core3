@@ -22,7 +22,7 @@
 #include "types/error.h"
 #include "types/list.h"
 #include "types/buffer.h"
-#include "formats/oiDL.h"
+#include "formats/oiDL/dl_file.h"
 #include "platforms/log.h"
 #include "platforms/file.h"
 #include "platforms/ext/stringx.h"

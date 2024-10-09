@@ -21,7 +21,7 @@
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/log.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 #include "graphics/generic/instance.h"
 #include "types/type_cast.h"
 

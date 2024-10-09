@@ -34,36 +34,10 @@ typedef struct ArchiveEntry ArchiveEntry;
 typedef struct DLSettings DLSettings;
 typedef struct DLFile DLFile;
 
-typedef enum ESHSettingsFlags ESHSettingsFlags;
-typedef enum ESHExtension ESHExtension;
-typedef enum ESHBinaryType ESHBinaryType;
-
-typedef struct SHEntry SHEntry;
-typedef struct SHBinaryIdentifier SHBinaryIdentifier;
-typedef struct SHBinaryInfo SHBinaryInfo;
-typedef struct SHEntryRuntime SHEntryRuntime;
-typedef struct SHInclude SHInclude;
-typedef struct SHFile SHFile;
-
-typedef struct SHRegister SHRegister;
-typedef struct SHRegisterRuntime SHRegisterRuntime;
-typedef struct ListSHRegisterRuntime ListSHRegisterRuntime;
-typedef union SHBindings SHBindings;
-typedef enum ESHTextureType ESHTextureType;
-typedef enum ESHTexturePrimitive ESHTexturePrimitive;
-typedef enum ESHBufferType ESHBufferType;
-typedef enum ETextureFormatId ETextureFormatId;
-
-typedef struct SBFile SBFile;
-typedef struct SBStruct SBStruct;
-typedef enum ESBSettingsFlags ESBSettingsFlags;
-typedef enum ESBType ESBType;
-typedef enum ESBVarFlag ESBVarFlag;
+typedef struct DDSInfo DDSInfo;
 
 typedef struct ListCharString ListCharString;
-typedef struct ListSHEntryRuntime ListSHEntryRuntime;
-typedef struct ListSHInclude ListSHInclude;
-typedef struct ListSBFile ListSBFile;
+typedef struct ListSubResourceData ListSubResourceData;
 
 //oiCA
 
@@ -91,148 +65,11 @@ Bool DLFile_writex(DLFile dlFile, Buffer *result, Error *e_rr);
 Bool DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile, Error *e_rr);
 Bool DLFile_combinex(DLFile a, DLFile b, DLFile *combined, Error *e_rr);
 
-//oiSH
+//DDS
 
-Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr);
-void SHFile_freex(SHFile *shFile);
-
-Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr);	//Moves entry
-Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr);		//Moves entry->name
-Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr);		//Moves include->relativePath
-
-Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr);
-Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr);
-Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr);
-
-void SHEntry_printx(SHEntry entry);
-void SHEntryRuntime_printx(SHEntryRuntime entry);
-void SHBinaryInfo_printx(SHBinaryInfo binary);
-void SHRegister_printx(SHRegister reg, U64 indenting);
-void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting);
-void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting);
-
-Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr);
-
-Bool ListSHRegisterRuntime_addBufferx(
-	ListSHRegisterRuntime *registers,
-	ESHBufferType registerType,
-	Bool isWrite,
-	U8 isUsedFlag,
-	CharString *name,
-	ListU32 *arrays,
-	SBFile *sbFile,
-	SHBindings bindings,
-	Error *e_rr
-);
-
-Bool ListSHRegisterRuntime_addTexturex(
-	ListSHRegisterRuntime *registers,
-	ESHTextureType registerType,
-	Bool isLayeredTexture,
-	Bool isCombinedSampler,
-	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = none
-	CharString *name,
-	ListU32 *arrays,
-	SHBindings bindings,
-	Error *e_rr
-);
-
-Bool ListSHRegisterRuntime_addRWTexturex(
-	ListSHRegisterRuntime *registers,
-	ESHTextureType registerType,
-	Bool isLayeredTexture,
-	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = auto detect from formatId
-	ETextureFormatId textureFormatId,				//!textureFormatId = only allowed if primitive is set
-	CharString *name,
-	ListU32 *arrays,
-	SHBindings bindings,
-	Error *e_rr
-);
-
-Bool ListSHRegisterRuntime_addSubpassInputx(
-	ListSHRegisterRuntime *registers,
-	U8 isUsedFlag,
-	CharString *name,
-	SHBindings bindings,
-	U16 attachmentId,
-	Error *e_rr
-);
-
-Bool ListSHRegisterRuntime_addSamplerx(
-	ListSHRegisterRuntime *registers,
-	U8 isUsedFlag,
-	Bool isSamplerComparisonState,
-	CharString *name,
-	ListU32 *arrays,
-	SHBindings bindings,
-	Error *e_rr
-);
-
-Bool ListSHRegisterRuntime_addRegisterx(
-	ListSHRegisterRuntime *registers,
-	CharString *name,
-	ListU32 *arrays,
-	SHRegister reg,
-	SBFile *sbFile,
-	Error *e_rr
-);
-
-void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
-void SHBinaryInfo_freex(SHBinaryInfo *info);
-void SHEntry_freex(SHEntry *entry);
-
-void SHEntryRuntime_freex(SHEntryRuntime *entry);
-void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);
-
-void ListSHInclude_freeUnderlyingx(ListSHInclude *includes);
-void SHInclude_freex(SHInclude *include);
-
-//oiSB
-
-Bool SBFile_createx(
-	ESBSettingsFlags flags,
-	U32 bufferSize,
-	SBFile *sbFile,
-	Error *e_rr
-);
-
-Bool SBFile_createCopyx(SBFile src, SBFile *dst, Error *e_rr);
-
-void SBFile_freex(SBFile *shFile);
-
-Bool SBFile_addStructx(SBFile *sbFile, CharString *name, SBStruct sbStruct, Error *e_rr);
-
-Bool SBFile_addVariableAsTypex(
-	SBFile *sbFile,
-	CharString *name,
-	U32 offset,
-	U16 parentId,		//root = U16_MAX
-	ESBType type,
-	ESBVarFlag flags,
-	ListU32 *arrays,
-	Error *e_rr
-);
-
-Bool SBFile_addVariableAsStructx(
-	SBFile *sbFile,
-	CharString *name,
-	U32 offset,
-	U16 parentId,		//root = U16_MAX
-	U16 structId,
-	ESBVarFlag flags,
-	ListU32 *arrays,
-	Error *e_rr
-);
-
-Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr);
-Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr);
-void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive);
-
-void ListSBFile_freeUnderlyingx(ListSBFile *files);
-
-//Bool SBFile_combinex(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
+Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result);
+Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result);
+Bool ListSubResourceData_freeAllx(ListSubResourceData *buf);
 
 #ifdef __cplusplus
 	}

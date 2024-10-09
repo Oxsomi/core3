@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "cli.h"
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/time.h"
@@ -25,7 +26,6 @@
 #include "platforms/log.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
-#include "cli.h"
 
 typedef Error (*ProfileOperation)(ParsedArgs, Buffer);
 

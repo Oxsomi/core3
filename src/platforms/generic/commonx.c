@@ -20,17 +20,16 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "platforms/ext/bmpx.h"
-#include "platforms/ext/ddsx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/threadx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "formats/bmp.h"
-#include "formats/dds.h"
-#include "formats/oiCA.h"
-#include "formats/oiDL.h"
+#include "formats/bmp/bmp.h"
+#include "formats/dds/dds.h"
+#include "formats/oiCA/ca_file.h"
+#include "formats/oiDL/dl_file.h"
 #include "formats/oiSH/sh_file.h"
-#include "formats/oiSB.h"
+#include "formats/oiSB/sb_file.h"
 #include "types/buffer.h"
 #include "types/allocation_buffer.h"
 #include "types/error.h"
@@ -54,6 +53,31 @@ TListXImpl(ListU8);
 TListXImpl(ListU16);
 TListXImpl(ListU32);
 TListXImpl(ListU64);
+
+TListXImpl(Buffer);
+
+TListXImpl(CdfValue);
+TListXImpl(ArchiveEntry);
+
+TListXImpl(BufferLayoutMemberInfo);
+TListXImpl(BufferLayoutStruct);
+TListXImpl(AllocationBufferBlock);
+
+TListXBaseImpl(ListRefPtr);
+TListXBaseImpl(ListWeakRefPtr);
+
+TListXBaseImpl(ListThread);
+
+//Lexer and parser
+
+TListXImpl(Token);
+TListXImpl(Symbol);
+TListXImpl(LexerToken);
+TListXImpl(LexerExpression);
+
+//DDS
+
+TListXImpl(SubResourceData);
 
 void ListBuffer_freeUnderlyingx(ListBuffer *list) {
 	ListBuffer_freeUnderlying(list, Platform_instance->alloc);
@@ -91,72 +115,12 @@ Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error 
 	return ListListU64_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
 }
 
-
-TListXImpl(Buffer);
-
-TListXImpl(CdfValue);
-TListXImpl(ArchiveEntry);
-
-TListXImpl(BufferLayoutMemberInfo);
-TListXImpl(BufferLayoutStruct);
-TListXImpl(AllocationBufferBlock);
-
-TListXImpl(SubResourceData);
-
-TListXBaseImpl(ListRefPtr);
-TListXBaseImpl(ListWeakRefPtr);
-
-TListXImpl(SBStruct);
-TListXImpl(SBVar);
-TListXImpl(SBFile);
-
-TListXImpl(SHRegister);
-TListXImpl(SHRegisterRuntime);
-TListXImpl(SHEntry);
-TListXImpl(SHEntryRuntime);
-TListXImpl(SHBinaryInfo);
-TListXImpl(SHBinaryIdentifier);
-TListXImpl(SHFile);
-
-TListXBaseImpl(ListThread);
-
-//Lexer and parser
-
-TListXImpl(Token);
-TListXImpl(Symbol);
-TListXImpl(LexerToken);
-TListXImpl(LexerExpression);
-
 //Contains small helper functions that don't require their own .c file
-
-//BMP
-
-Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result) {
-	return BMP_write(buf, info, Platform_instance->alloc, result);
-}
-
-Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result) {
-	return BMP_read(buf, info, Platform_instance->alloc, result);
-}
 
 //RefPtr
 
 Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
 	return RefPtr_create(objectLength, Platform_instance->alloc, free, type, result);
-}
-
-//DDS
-
-Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result) {
-	return DDS_write(buf, info, Platform_instance->alloc, result);
-}
-
-Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result) {
-	return DDS_read(buf, info, Platform_instance->alloc, result);
-}
-
-Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
-	return ListSubResourceData_freeAll(buf, Platform_instance->alloc);
 }
 
 //Lexer and parser
@@ -293,264 +257,19 @@ Bool DLFile_combinex(DLFile a, DLFile b, DLFile *combined, Error *e_rr) {
 	return DLFile_combine(a, b, Platform_instance->alloc, combined, e_rr);
 }
 
-//SHFile
+//DDS
 
-Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr) {
-	return SHFile_create(flags, compilerVersion, sourceHash, Platform_instance->alloc, shFile, e_rr);
+Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result) {
+	return DDS_read(buf, info, Platform_instance->alloc, result);
 }
 
-void SHFile_freex(SHFile *shFile) {
-	SHFile_free(shFile, Platform_instance->alloc);
+Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result) {
+	return DDS_write(buf, info, Platform_instance->alloc, result);
 }
 
-Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr) {
-	return SHFile_addBinaries(shFile, binaries, Platform_instance->alloc, e_rr);
+Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
+	return ListSubResourceData_freeAll(buf, Platform_instance->alloc);
 }
-
-Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr) {
-	return SHFile_addEntrypoint(shFile, entry, Platform_instance->alloc, e_rr);
-}
-
-Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr) {
-	return SHFile_addInclude(shFile, include, Platform_instance->alloc, e_rr);
-}
-
-Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr) {
-	return SHFile_write(shFile, Platform_instance->alloc, result, e_rr);
-}
-
-Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr) {
-	return SHFile_read(file, isSubFile, Platform_instance->alloc, shFile, e_rr);
-}
-
-Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr) {
-	return SHFile_combine(a, b, Platform_instance->alloc, combined, e_rr);
-}
-
-void SHEntry_printx(SHEntry entry) { SHEntry_print(entry, Platform_instance->alloc); }
-void SHEntryRuntime_printx(SHEntryRuntime entry) { SHEntryRuntime_print(entry, Platform_instance->alloc); }
-void SHBinaryInfo_printx(SHBinaryInfo binary) { SHBinaryInfo_print(binary, Platform_instance->alloc); }
-
-void SHRegister_printx(SHRegister reg, U64 indenting) { SHRegister_print(reg, indenting, Platform_instance->alloc); }
-
-void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting) {
-	SHRegisterRuntime_print(reg, indenting, Platform_instance->alloc);
-}
-
-void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting) {
-	ListSHRegisterRuntime_print(reg, indenting, Platform_instance->alloc);
-}
-
-Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr) {
-	return ListSHRegisterRuntime_createCopyUnderlying(orig, Platform_instance->alloc, dst, e_rr);
-}
-
-Bool ListSHRegisterRuntime_addBufferx(
-	ListSHRegisterRuntime *registers,
-	ESHBufferType registerType,
-	Bool isWrite,
-	U8 isUsedFlag,
-	CharString *name,
-	ListU32 *arrays,
-	SBFile *sbFile,
-	SHBindings bindings,
-	Error *e_rr
-) {
-	return ListSHRegisterRuntime_addBuffer(
-		registers, registerType, isWrite, isUsedFlag, name, arrays, sbFile, bindings, Platform_instance->alloc, e_rr
-	);
-}
-
-Bool ListSHRegisterRuntime_addTexturex(
-	ListSHRegisterRuntime *registers,
-	ESHTextureType registerType,
-	Bool isLayeredTexture,
-	Bool isCombinedSampler,
-	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,
-	CharString *name,
-	ListU32 *arrays,
-	SHBindings bindings,
-	Error *e_rr
-) {
-	return ListSHRegisterRuntime_addTexture(
-		registers, registerType, isLayeredTexture, isCombinedSampler, isUsedFlag, textureFormatPrimitive,
-		name, arrays, bindings, Platform_instance->alloc, e_rr
-	);
-}
-
-Bool ListSHRegisterRuntime_addRWTexturex(
-	ListSHRegisterRuntime *registers,
-	ESHTextureType registerType,
-	Bool isLayeredTexture,
-	U8 isUsedFlag,
-	ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = auto detect from formatId
-	ETextureFormatId textureFormatId,				//!textureFormatId = only allowed if primitive is set
-	CharString *name,
-	ListU32 *arrays,
-	SHBindings bindings,
-	Error *e_rr
-) {
-	return ListSHRegisterRuntime_addRWTexture(
-		registers, registerType, isLayeredTexture, isUsedFlag, textureFormatPrimitive, textureFormatId,
-		name, arrays, bindings, Platform_instance->alloc, e_rr
-	);
-}
-
-Bool ListSHRegisterRuntime_addSubpassInputx(
-	ListSHRegisterRuntime *registers,
-	U8 isUsedFlag,
-	CharString *name,
-	SHBindings bindings,
-	U16 attachmentId,
-	Error *e_rr
-) {
-	return ListSHRegisterRuntime_addSubpassInput(
-		registers, isUsedFlag,
-		name, bindings, attachmentId, Platform_instance->alloc, e_rr
-	);
-}
-
-Bool ListSHRegisterRuntime_addSamplerx(
-	ListSHRegisterRuntime *registers,
-	U8 isUsedFlag,
-	Bool isSamplerComparisonState,
-	CharString *name,
-	ListU32 *arrays,
-	SHBindings bindings,
-	Error *e_rr
-) {
-	return ListSHRegisterRuntime_addSampler(
-		registers, isUsedFlag, isSamplerComparisonState,
-		name, arrays, bindings, Platform_instance->alloc, e_rr
-	);
-}
-
-Bool ListSHRegisterRuntime_addRegisterx(
-	ListSHRegisterRuntime *registers,
-	CharString *name,
-	ListU32 *arrays,
-	SHRegister reg,
-	SBFile *sbFile,
-	Error *e_rr
-) {
-	return ListSHRegisterRuntime_addRegister(registers, name, arrays, reg, sbFile, Platform_instance->alloc, e_rr);
-}
-
-void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier) {
-	SHBinaryIdentifier_free(identifier, Platform_instance->alloc);
-}
-
-void SHBinaryInfo_freex(SHBinaryInfo *info) {
-	SHBinaryInfo_free(info, Platform_instance->alloc);
-}
-
-void SHEntry_freex(SHEntry *entry) {
-	SHEntry_free(entry, Platform_instance->alloc);
-}
-
-void SHEntryRuntime_freex(SHEntryRuntime *entry) {
-	SHEntryRuntime_free(entry, Platform_instance->alloc);
-}
-
-void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry) {
-	ListSHEntryRuntime_freeUnderlying(entry, Platform_instance->alloc);
-}
-
-void ListSHInclude_freeUnderlyingx(ListSHInclude *includes) {
-	ListSHInclude_freeUnderlying(includes, Platform_instance->alloc);
-}
-
-void SHInclude_freex(SHInclude *include) {
-	SHInclude_free(include, Platform_instance->alloc);
-}
-
-//oiSB
-
-Bool SBFile_createx(
-	ESBSettingsFlags flags,
-	U32 bufferSize,
-	SBFile *sbFile,
-	Error *e_rr
-) {
-	return SBFile_create(flags, bufferSize, Platform_instance->alloc, sbFile, e_rr);
-}
-
-Bool SBFile_createCopyx(SBFile src, SBFile *dst, Error *e_rr) {
-	return SBFile_createCopy(src, Platform_instance->alloc, dst, e_rr);
-}
-
-void SBFile_freex(SBFile *shFile) {
-	SBFile_free(shFile, Platform_instance->alloc);
-}
-
-Bool SBFile_addStructx(SBFile *sbFile, CharString *name, SBStruct sbStruct, Error *e_rr) {
-	return SBFile_addStruct(sbFile, name, sbStruct, Platform_instance->alloc, e_rr);
-}
-
-Bool SBFile_addVariableAsTypex(
-	SBFile *sbFile,
-	CharString *name,
-	U32 offset,
-	U16 parentId,		//root = U16_MAX
-	ESBType type,
-	ESBVarFlag flags,
-	ListU32 *arrays,
-	Error *e_rr
-) {
-	return SBFile_addVariableAsType(
-		sbFile,
-		name,
-		offset,
-		parentId,
-		type,
-		flags,
-		arrays,
-		Platform_instance->alloc,
-		e_rr
-	);
-}
-
-Bool SBFile_addVariableAsStructx(
-	SBFile *sbFile,
-	CharString *name,
-	U32 offset,
-	U16 parentId,		//root = U16_MAX
-	U16 structId,
-	ESBVarFlag flags,
-	ListU32 *arrays,
-	Error *e_rr
-) {
-	return SBFile_addVariableAsStruct(
-		sbFile,
-		name,
-		offset,
-		parentId,
-		structId,
-		flags,
-		arrays,
-		Platform_instance->alloc,
-		e_rr
-	);
-}
-
-Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr) {
-	return SBFile_write(sbFile, Platform_instance->alloc, result, e_rr);
-}
-
-Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr) {
-	return SBFile_read(file, isSubFile, Platform_instance->alloc, sbFile, e_rr);
-}
-
-void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive) {
-	SBFile_print(sbFile, indenting, parent, isRecursive, Platform_instance->alloc);
-}
-
-void ListSBFile_freeUnderlyingx(ListSBFile *files) {
-	ListSBFile_freeUnderlying(files, Platform_instance->alloc);
-}
-
-//Bool SBFile_combinex(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);		TODO:
 
 //List
 

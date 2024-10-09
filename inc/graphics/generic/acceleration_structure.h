@@ -20,6 +20,7 @@
 
 #pragma once
 #include "device_buffer.h"
+#include "types/string.h"
 
 #ifdef __cplusplus
 	extern "C" {

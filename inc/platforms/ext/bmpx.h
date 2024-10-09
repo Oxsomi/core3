@@ -27,9 +27,6 @@
 
 typedef struct BMPInfo BMPInfo;
 
-Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result);
-Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result);
-
 #ifdef __cplusplus
 	}
 #endif

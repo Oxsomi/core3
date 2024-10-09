@@ -20,7 +20,7 @@
 
 #include "types/error.h"
 #include "types/buffer.h"
-#include "formats/oiXX.h"
+#include "formats/oiXX/oiXX.h"
 
 Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result) {
 

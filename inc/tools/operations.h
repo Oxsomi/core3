@@ -19,6 +19,7 @@
 */
 
 #pragma once
+#include "platforms/ext/listx.h"
 #include "types/string.h"
 
 #ifdef __cplusplus

@@ -21,6 +21,10 @@
 #pragma once
 #include "types/string.h"
 
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	#include "platforms/ext/listx.h"
+#endif
+
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -164,6 +168,14 @@ const C8 *SHEntry_stageName(SHEntry entry);
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
 void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
+
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	void SHEntry_printx(SHEntry entry);
+	void SHEntryRuntime_printx(SHEntryRuntime entry);
+	void SHEntry_freex(SHEntry *entry);
+	void SHEntryRuntime_freex(SHEntryRuntime *entry);
+	void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);
+#endif
 
 #ifdef __cplusplus
 	}

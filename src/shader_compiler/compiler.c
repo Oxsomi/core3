@@ -438,7 +438,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 			//We skip unrecognized errors, to prevent accidentally parsing code that contains the words "error:"
 			//a:5: error:
-			//     ^
+			//	 ^
 
 			if(
 				nextProblem < 5 ||
@@ -1209,7 +1209,7 @@ Bool Compiler_parse(
 				//[[oxc::vendor()]]
 				//[[oxc::model()]]
 				//[[oxc::stage()]]
-				//      ^
+				//	  ^
 
 				//[shader()]
 				// ^
@@ -1310,7 +1310,7 @@ Bool Compiler_parse(
 						case C8x4('s', 't', 'a', 'g'):		//oxc::stage()
 
 							//[[oxc::stage("vertex")]]
-							//       ^
+							//	   ^
 							if (tokLen == 5 && tokStr.ptr[4] == 'e') {
 
 								if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
@@ -1324,7 +1324,7 @@ Bool Compiler_parse(
 									))
 
 								//[[oxc::stage("vertex")]]
-								//       ^
+								//	   ^
 
 								if(
 									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1361,7 +1361,7 @@ Bool Compiler_parse(
 						case C8x4('m', 'o', 'd', 'e'):		//oxc::model()
 
 							//[[oxc::model(6.8)]]
-							//       ^
+							//	   ^
 							if (tokLen == 5 && tokStr.ptr[4] == 'l') {
 
 								if(symj.tokenCount + 1 != 6)
@@ -1373,7 +1373,7 @@ Bool Compiler_parse(
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
 								//[[oxc::model(6.8)]]
-								//            ^
+								//			^
 
 								if(
 									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1395,7 +1395,7 @@ Bool Compiler_parse(
 						case C8x4('v', 'e', 'n', 'd'):		//oxc::vendor()
 
 							//[[oxc::vendor("NV", "AMD")]]
-							//       ^
+							//	   ^
 							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('o', 'r')) {
 
 								if(symj.tokenCount + 1 < 6)
@@ -1413,7 +1413,7 @@ Bool Compiler_parse(
 									))
 
 								//[[oxc::vendor("NV")]]
-								//             ^
+								//			 ^
 
 								if(
 									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1430,7 +1430,7 @@ Bool Compiler_parse(
 								))
 
 								//[[oxc::vendor("AMD", "NV")]]
-								//                   ^
+								//				   ^
 
 								for (U32 k = tokenStart + 2; k < tokenEnd; ++k) {
 
@@ -1458,7 +1458,7 @@ Bool Compiler_parse(
 
 							//[[oxc::uniforms("X", "Y", "Z")]]
 							//[[oxc::uniforms("X" = "123", "Y" = "ABC")]]
-							//           ^
+							//		   ^
 							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('o', 'r', 'm', 's')) {
 
 								if(symj.tokenCount + 1 < 6)
@@ -1470,7 +1470,7 @@ Bool Compiler_parse(
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
 								//[[oxc::uniforms("X")]]
-								//               ^
+								//			   ^
 
 								if(
 									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1489,7 +1489,7 @@ Bool Compiler_parse(
 								))
 
 								//[[oxc::uniforms("X", "Y")]]
-								//                     ^
+								//					 ^
 
 								for (U32 k = tokenCounter; k < tokenEnd; ) {
 
@@ -1517,7 +1517,7 @@ Bool Compiler_parse(
 						case C8x4('e', 'x', 't', 'e'):		//oxc::extension()
 
 							//[[oxc::extension()]]
-							//       ^
+							//	   ^
 							if (
 								tokLen == 9 &&
 								*(const U64*)&tokStr.ptr[1] == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
@@ -1531,7 +1531,7 @@ Bool Compiler_parse(
 									))
 
 								//[[oxc::extension()]]
-								//       ^
+								//	   ^
 								//Indicates an entrypoint without extensions
 
 								if (symj.tokenCount + 1 == 5) {
@@ -1552,7 +1552,7 @@ Bool Compiler_parse(
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
 								//[[oxc::extension("16BitTypes")]]
-								//                ^
+								//				^
 
 								if(
 									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1571,7 +1571,7 @@ Bool Compiler_parse(
 								))
 
 								//[[oxc::extension("16BitTypes", "RayQuery")]]
-								//                             ^
+								//							 ^
 
 								for (U32 k = tokenStart + 2; k < tokenEnd; k += 2) {
 

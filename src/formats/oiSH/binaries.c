@@ -18,12 +18,33 @@
 *  This is called dual licensing.
 */
 
-#include "types/list_impl.h"
+#ifdef ALLOW_SH_OXC3_PLATFORMS
+	#include "platforms/ext/listx_impl.h"
+#else
+	#include "types/list_impl.h"
+#endif
+
 #include "formats/oiSH/sh_file.h"
 #include "types/math.h"
 
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
+
+#if ALLOW_SH_OXC3_PLATFORMS
+
+	#include "platforms/platform.h"
+
+	void SHBinaryInfo_printx(SHBinaryInfo binary) { SHBinaryInfo_print(binary, Platform_instance->alloc); }
+
+	void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier) {
+		SHBinaryIdentifier_free(identifier, Platform_instance->alloc);
+	}
+
+	void SHBinaryInfo_freex(SHBinaryInfo *info) {
+		SHBinaryInfo_free(info, Platform_instance->alloc);
+	}
+
+#endif
 
 const C8 *ESHBinaryType_names[ESHBinaryType_Count] = {
 	"SPV",

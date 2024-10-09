@@ -28,7 +28,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
-#include "formats/texture.h"
+#include "types/texture_format.h"
 
 Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
