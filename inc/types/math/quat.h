@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "vec.h"
+#include "types/math/vec.h"
 
 #ifdef __cplusplus
 	extern "C" {

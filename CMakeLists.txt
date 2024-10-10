@@ -222,8 +222,8 @@ add_library(
 	build.sh
 )
 
-source_group("Source Files (${platform})" FILES ${typesPlatformSources})
-source_group("Source Files (simd: ${simd})" FILES ${typesSIMDSources})
+source_group("Source Files (${platform})" FILES ${typesMathPlatformSources})
+source_group("Source Files (simd: ${simd})" FILES ${typesMathSIMDSources})
 
 set_target_properties(OxC3_types_math PROPERTIES FOLDER Oxsomi/types)
 target_link_libraries(OxC3_types_math PUBLIC OxC3_types_base)
@@ -260,8 +260,8 @@ add_library(
 	build.sh
 )
 
-source_group("Source Files (${platform})" FILES ${typesPlatformSources})
-source_group("Source Files (simd: ${simd})" FILES ${typesSIMDSources})
+source_group("Source Files (${platform})" FILES ${typesContainerPlatformSources})
+source_group("Source Files (simd: ${simd})" FILES ${typesContainerSIMDSources})
 source_group("Source Files (unix)" FILES ${typesContainerUnixSources})
 
 set_target_properties(OxC3_types_container PROPERTIES FOLDER Oxsomi/types)

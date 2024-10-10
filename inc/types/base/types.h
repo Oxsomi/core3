@@ -22,7 +22,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include "platform_types.h"
+#include "types/base/platform_types.h"
 
 //Null is apparently non-standard
 
