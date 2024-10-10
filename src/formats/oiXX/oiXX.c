@@ -18,8 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "types/error.h"
-#include "types/buffer.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
 #include "formats/oiXX/oiXX.h"
 
 Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result) {

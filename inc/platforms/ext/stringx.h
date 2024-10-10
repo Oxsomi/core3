@@ -20,7 +20,7 @@
 
 #pragma once
 #include "platforms/platform.h"
-#include "types/string.h"
+#include "types/container/string.h"
 
 #ifdef __cplusplus
 	extern "C" {

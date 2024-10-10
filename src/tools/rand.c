@@ -19,10 +19,10 @@
 */
 
 #include "cli.h"
-#include "types/string.h"
-#include "types/buffer.h"
-#include "types/error.h"
-#include "types/math.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/base/error.h"
+#include "types/math/math.h"
 #include "platforms/log.h"
 #include "platforms/file.h"
 #include "platforms/ext/stringx.h"

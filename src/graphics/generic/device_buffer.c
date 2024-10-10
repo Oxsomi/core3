@@ -23,8 +23,8 @@
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/math.h"
-#include "types/string.h"
+#include "types/math/math.h"
+#include "types/container/string.h"
 
 TListImpl(DevicePendingRange);
 

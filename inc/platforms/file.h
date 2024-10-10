@@ -19,9 +19,9 @@
 */
 
 #pragma once
-#include "types/types.h"
-#include "types/string.h"
-#include "types/file.h"
+#include "types/base/types.h"
+#include "types/container/string.h"
+#include "types/container/file.h"
 
 #ifdef __cplusplus
 	extern "C" {

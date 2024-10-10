@@ -22,8 +22,8 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/allocator.h"
 #include "platforms/ext/bufferx.h"
-#include "types/buffer.h"
-#include "types/error.h"
+#include "types/container/buffer.h"
+#include "types/base/error.h"
 
 TListImpl(DeviceMemoryBlock);
 

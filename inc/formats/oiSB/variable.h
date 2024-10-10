@@ -24,7 +24,7 @@
 	#include "platforms/ext/listx.h"
 #endif
 
-#include "types/list.h"
+#include "types/container/list.h"
 
 #ifdef __cplusplus
 	extern "C" {

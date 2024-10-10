@@ -21,7 +21,7 @@
 #pragma once
 #include "command_structs.h"
 #include "pipeline_structs.h"
-#include "types/ref_ptr.h"
+#include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus
 	extern "C" {

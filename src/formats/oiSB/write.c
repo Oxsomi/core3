@@ -20,9 +20,9 @@
 
 #include "formats/oiSB/sb_file.h"
 #include "formats/oiDL/dl_file.h"
-#include "types/error.h"
-#include "types/allocator.h"
-#include "types/buffer.h"
+#include "types/base/error.h"
+#include "types/base/allocator.h"
+#include "types/container/buffer.h"
 
 Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 

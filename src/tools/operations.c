@@ -19,9 +19,9 @@
 */
 
 #include "cli.h"
-#include "types/error.h"
-#include "types/buffer.h"
-#include "types/string.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
 #include "platforms/log.h"
 
 Bool CLI_info(ParsedArgs args) {

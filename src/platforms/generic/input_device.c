@@ -18,9 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "types/string.h"
-#include "types/error.h"
-#include "types/buffer.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
 #include "platforms/input_device.h"
 #include "platforms/ext/bufferx.h"
 

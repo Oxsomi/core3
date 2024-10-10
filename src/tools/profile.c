@@ -19,10 +19,10 @@
 */
 
 #include "cli.h"
-#include "types/buffer.h"
-#include "types/string.h"
-#include "types/time.h"
-#include "types/flp.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "types/base/time.h"
+#include "types/math/flp.h"
 #include "platforms/log.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"

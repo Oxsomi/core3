@@ -27,10 +27,10 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/buffer.h"
-#include "types/string.h"
-#include "types/error.h"
-#include "types/math.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
+#include "types/math/math.h"
 
 TList(D3D12_STATE_SUBOBJECT);
 TList(D3D12_DXIL_LIBRARY_DESC);

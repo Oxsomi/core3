@@ -19,8 +19,8 @@
 */
 
 #pragma once
-#include "types/types.h"
-#include "types/lock.h"
+#include "types/base/types.h"
+#include "types/base/lock.h"
 #include "graphics/generic/instance.h"
 
 typedef enum ECommandOp ECommandOp;

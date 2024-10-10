@@ -19,9 +19,9 @@
 */
 
 #pragma once
-#include "types/list.h"
-#include "types/error.h"
-#include "types/texture_format.h"
+#include "types/container/list.h"
+#include "types/base/error.h"
+#include "types/container/texture_format.h"
 #include "platforms/input_device.h"
 #include "platforms/monitor.h"
 

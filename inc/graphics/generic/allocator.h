@@ -19,10 +19,10 @@
 */
 
 #pragma once
-#include "types/list.h"
-#include "types/error.h"
-#include "types/allocation_buffer.h"
-#include "types/lock.h"
+#include "types/container/list.h"
+#include "types/base/error.h"
+#include "types/container/allocation_buffer.h"
+#include "types/base/lock.h"
 
 #ifdef __cplusplus
 	extern "C" {

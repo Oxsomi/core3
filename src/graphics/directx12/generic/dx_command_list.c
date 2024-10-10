@@ -35,10 +35,10 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
-#include "types/buffer.h"
-#include "types/error.h"
+#include "types/container/buffer.h"
+#include "types/base/error.h"
 
-#include "types/math.h"
+#include "types/math/math.h"
 
 //RTVs and DSVs are temporary in DirectX.
 

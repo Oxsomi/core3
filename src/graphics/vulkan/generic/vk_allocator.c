@@ -27,9 +27,9 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "types/error.h"
-#include "types/math.h"
-#include "types/string.h"
+#include "types/base/error.h"
+#include "types/math/math.h"
+#include "types/container/string.h"
 
 static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 static const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;

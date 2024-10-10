@@ -19,8 +19,8 @@
 */
 
 #include "formats/oiBC/chimera.h"
-#include "types/error.h"
-#include "types/math.h"
+#include "types/base/error.h"
+#include "types/math/math.h"
 
 void Chimera_swapF32(F32 *a, F32 *b) {
 	const F32 tmp = *a;

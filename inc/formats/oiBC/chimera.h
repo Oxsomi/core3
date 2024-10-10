@@ -20,8 +20,8 @@
 
 #pragma once
 #include "fidi_a.h"
-#include "types/flp.h"
-#include "types/vec.h"
+#include "types/math/flp.h"
+#include "types/math/vec.h"
 
 #ifdef __cplusplus
 	extern "C" {

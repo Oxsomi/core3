@@ -21,8 +21,8 @@
 #pragma once
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/command_list.h"
-#include "types/list.h"
-#include "types/vec.h"
+#include "types/container/list.h"
+#include "types/math/vec.h"
 
 typedef RefPtr PipelineRef;
 

@@ -20,9 +20,9 @@
 
 #include "formats/oiSB/sb_file.h"
 #include "formats/oiDL/dl_file.h"
-#include "types/allocator.h"
-#include "types/error.h"
-#include "types/buffer.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
 
 Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, Error *e_rr) {
 

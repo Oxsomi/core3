@@ -27,8 +27,8 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "types/string.h"
-#include "types/error.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
 
 TList(VkPipelineShaderStageCreateInfo);
 TListImpl(VkPipelineShaderStageCreateInfo);

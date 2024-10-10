@@ -19,8 +19,8 @@
 */
 
 #pragma once
-#include "types/string.h"
-#include "types/ref_ptr.h"
+#include "types/container/string.h"
+#include "types/container/ref_ptr.h"
 #include "device_info.h"
 
 #ifdef __cplusplus

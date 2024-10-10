@@ -23,10 +23,10 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/ext/formatx.h"
-#include "types/parser.h"
-#include "types/lexer.h"
-#include "types/time.h"
-#include "types/math.h"
+#include "types/container/parser.h"
+#include "types/container/lexer.h"
+#include "types/base/time.h"
+#include "types/math/math.h"
 
 TListImpl(Compiler);
 TListImpl(CompileError);

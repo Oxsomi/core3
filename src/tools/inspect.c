@@ -19,9 +19,9 @@
 */
 
 #include "platforms/ext/listx.h"
-#include "types/buffer.h"
-#include "types/error.h"
-#include "types/string.h"
+#include "types/container/buffer.h"
+#include "types/base/error.h"
+#include "types/container/string.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "formats/oiSH/sh_file.h"
@@ -35,7 +35,7 @@
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "cli.h"
-#include "types/math.h"
+#include "types/math/math.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"

@@ -19,10 +19,10 @@
 */
 
 #pragma once
-#include "types/list.h"
-#include "types/string.h"
-#include "types/texture_format.h"
-#include "types/ref_ptr.h"
+#include "types/container/list.h"
+#include "types/container/string.h"
+#include "types/container/texture_format.h"
+#include "types/container/ref_ptr.h"
 #include "pipeline_structs.h"
 
 #ifdef __cplusplus

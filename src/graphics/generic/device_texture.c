@@ -25,9 +25,9 @@
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/texture_format.h"
-#include "types/math.h"
-#include "types/string.h"
+#include "types/container/texture_format.h"
+#include "types/math/math.h"
+#include "types/container/string.h"
 
 Error DeviceTextureRef_dec(DeviceTextureRef **texture) {
 	return !RefPtr_dec(texture) ?

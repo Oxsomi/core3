@@ -20,7 +20,7 @@
 
 #pragma once
 #include "formats/oiSB/sb_file.h"
-#include "types/texture_format.h"
+#include "types/container/texture_format.h"
 
 #ifdef ALLOW_SH_OXC3_PLATFORMS
 	#include "platforms/ext/listx.h"

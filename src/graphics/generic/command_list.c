@@ -33,9 +33,9 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/string.h"
-#include "types/texture_format.h"
-#include "types/math.h"
+#include "types/container/string.h"
+#include "types/container/texture_format.h"
+#include "types/math/math.h"
 
 TListImpl(CommandOpInfo);
 TListImpl(TransitionInternal);

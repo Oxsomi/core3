@@ -25,8 +25,8 @@
 #include "graphics/generic/instance.h"
 #include "graphics/directx12/dx_device.h"
 #include "graphics/directx12/dx_buffer.h"
-#include "types/texture_format.h"
-#include "types/ref_ptr.h"
+#include "types/container/texture_format.h"
+#include "types/container/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 
 Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {

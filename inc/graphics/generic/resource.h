@@ -19,10 +19,10 @@
 */
 
 #pragma once
-#include "types/types.h"
-#include "types/list.h"
-#include "types/vec.h"
-#include "types/texture_format.h"
+#include "types/base/types.h"
+#include "types/container/list.h"
+#include "types/math/vec.h"
+#include "types/container/texture_format.h"
 
 #ifdef __cplusplus
 	extern "C" {

@@ -25,7 +25,7 @@
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/string.h"
+#include "types/container/string.h"
 
 Error SamplerRef_dec(SamplerRef **sampler) {
 	return !RefPtr_dec(sampler) ?

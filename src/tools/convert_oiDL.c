@@ -19,9 +19,9 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "types/error.h"
-#include "types/list.h"
-#include "types/buffer.h"
+#include "types/base/error.h"
+#include "types/container/list.h"
+#include "types/container/buffer.h"
 #include "formats/oiDL/dl_file.h"
 #include "platforms/log.h"
 #include "platforms/file.h"

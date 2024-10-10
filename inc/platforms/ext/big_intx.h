@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/big_int.h"
+#include "types/container/big_int.h"
 
 #ifdef __cplusplus
 	extern "C" {

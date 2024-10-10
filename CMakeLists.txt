@@ -173,27 +173,48 @@ endif()
 set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
 set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if static linking)")
 
-# Types
+# Types (base)
 
-file(GLOB_RECURSE typesHeaders "inc/types/*.h")
-file(GLOB typesSources "src/types/*.c")
-file(GLOB_RECURSE typesPlatformSources "src/types/platforms/${platform}/*.c")
-file(GLOB_RECURSE typesPlatformHeaders "inc/types/platforms/${platform}/*.h")
-file(GLOB_RECURSE typesSIMDSources "src/types/simd/${simd}/*.c")
+file(GLOB_RECURSE typesBaseHeaders "inc/types/base/*.h")
+file(GLOB typesBaseSources "src/types/base/*.c")
 
-if(UNIX)
-	file(GLOB_RECURSE typesUnixSources "src/types/platforms/unix/*.c")
-	list(APPEND typesPlatformSources ${typesUnixSources})
+if(WIN32)
+	file(GLOB_RECURSE typesBasePlatformSources "src/types/base/platforms/windows/*.c")
+elseif(UNIX)
+	file(GLOB_RECURSE typesBasePlatformSources "src/types/base/platforms/unix/*.c")
 endif()
 
 add_library(
-	OxC3_types
+	OxC3_types_base
 	STATIC
-	${typesHeaders}
-	${typesSources}
-	${typesPlatformSources}
-	${typesSIMDSources}
-	${typesPlatformHeaders}
+	${typesBaseHeaders}
+	${typesBaseSources}
+	${typesBasePlatformSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+source_group("Source Files (${platform})" FILES ${typesBasePlatformSources})
+
+set_target_properties(OxC3_types_base PROPERTIES FOLDER Oxsomi/types)
+target_include_directories(OxC3_types_base PUBLIC inc)
+
+# Types (math)
+
+file(GLOB_RECURSE typesMathHeaders "inc/types/math/*.h")
+file(GLOB typesMathSources "src/types/math/*.c")
+file(GLOB_RECURSE typesMathSIMDSources "src/types/math/simd/${simd}/*.c")
+
+add_library(
+	OxC3_types_math
+	STATIC
+	${typesMathHeaders}
+	${typesMathSources}
+	${typesMathPlatformSources}
+	${typesMathSIMDSources}
 	CMakeLists.txt
 	conanfile.py
 	conandata.yml
@@ -202,21 +223,56 @@ add_library(
 )
 
 source_group("Source Files (${platform})" FILES ${typesPlatformSources})
-source_group("Header Files (${platform})" FILES ${typesPlatformHeaders})
 source_group("Source Files (simd: ${simd})" FILES ${typesSIMDSources})
 
-set_target_properties(OxC3_types PROPERTIES FOLDER Oxsomi)
+set_target_properties(OxC3_types_math PROPERTIES FOLDER Oxsomi/types)
+target_link_libraries(OxC3_types_math PUBLIC OxC3_types_base)
 
-target_compile_definitions(OxC3_types PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
+target_compile_definitions(OxC3_types_math PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
 
-target_include_directories(OxC3_types PUBLIC inc)
+if(UNIX AND NOT APPLE)
+	target_link_libraries(OxC3_types_math PUBLIC m)
+endif()
+
+# Types (container)
+
+file(GLOB_RECURSE typesContainerHeaders "inc/types/container/*.h")
+file(GLOB typesContainerSources "src/types/container/*.c")
+file(GLOB_RECURSE typesContainerPlatformSources "src/types/container/platforms/${platform}/*.c")
+file(GLOB_RECURSE typesContainerSIMDSources "src/types/container/simd/${simd}/*.c")
+
+if(UNIX)
+	file(GLOB_RECURSE typesContainerUnixSources "src/types/container/platforms/unix/*.c")
+endif()
+
+add_library(
+	OxC3_types_container
+	STATIC
+	${typesContainerHeaders}
+	${typesContainerSources}
+	${typesContainerPlatformSources}
+	${typesContainerSIMDSources}
+	${typesContainerUnixSources}
+	CMakeLists.txt
+	conanfile.py
+	conandata.yml
+	build.bat
+	build.sh
+)
+
+source_group("Source Files (${platform})" FILES ${typesPlatformSources})
+source_group("Source Files (simd: ${simd})" FILES ${typesSIMDSources})
+source_group("Source Files (unix)" FILES ${typesContainerUnixSources})
+
+set_target_properties(OxC3_types_container PROPERTIES FOLDER Oxsomi/types)
+target_link_libraries(OxC3_types_container PUBLIC OxC3_types_base OxC3_types_math)
+
+target_compile_definitions(OxC3_types_container PUBLIC -D_ENABLE_SIMD=${SIMD})
 
 if(WIN32)
-	target_link_libraries(OxC3_types PUBLIC Bcrypt.lib)
+	target_link_libraries(OxC3_types_container PUBLIC Bcrypt.lib)
 elseif(APPLE)
-	target_link_libraries(OxC3_types PUBLIC "-framework Security")
-else()
-	target_link_libraries(OxC3_types PUBLIC m)
+	target_link_libraries(OxC3_types_container PUBLIC "-framework Security")
 endif()
 
 # Formats
@@ -237,7 +293,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiXX PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiXX PUBLIC OxC3_types)
+target_link_libraries(OxC3_formats_oiXX PUBLIC OxC3_types_base OxC3_types_container)
 
 # Format oiDL
 
@@ -257,7 +313,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiDL PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiDL PUBLIC OxC3_formats_oiXX)
+target_link_libraries(OxC3_formats_oiDL PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiXX)
 
 # Format oiCA
 
@@ -277,7 +333,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiCA PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiCA PUBLIC OxC3_formats_oiXX OxC3_formats_oiDL)
+target_link_libraries(OxC3_formats_oiCA PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiXX OxC3_formats_oiDL)
 
 # Format oiBC
 
@@ -297,7 +353,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiBC PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiBC PUBLIC OxC3_formats_oiXX)
+target_link_libraries(OxC3_formats_oiBC PUBLIC OxC3_types_base OxC3_types_math OxC3_formats_oiXX)
 
 # Format dds
 
@@ -319,7 +375,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_dds PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_dds PUBLIC OxC3_formats_oiXX)
+target_link_libraries(OxC3_formats_dds PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiXX)
 
 # Platforms
 
@@ -360,6 +416,7 @@ set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(
 	OxC3_platforms PUBLIC
+	OxC3_types_base OxC3_types_math OxC3_types_container
 	OxC3_formats_oiXX OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_dds
 )
 
@@ -387,7 +444,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiSB PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_formats_oiXX)
+target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiXX)
 
 if(AllowOxC3PlatformsSB)
 	target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_platforms)
@@ -414,7 +471,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_oiSH PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_formats_oiSB)
+target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiSB)
 
 if(AllowOxC3PlatformsSH)
 	target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_platforms)
@@ -441,7 +498,7 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_bmp PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_formats_oiXX)
+target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiXX)
 
 if(AllowOxC3PlatformsBMP)
 	target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_platforms)
@@ -494,7 +551,7 @@ if(DynamicLinkingGraphics)
 endif()
 
 set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi/graphics)
-target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms OxC3_formats_oiSH)
+target_link_libraries(OxC3_graphics PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
 
 source_group("Shaders" FILES ${shaders})
 
@@ -544,7 +601,7 @@ if(graphicsAllowVk)
 		)
 	endif()
 
-	target_link_libraries(OxC3_graphics_vk PUBLIC OxC3_graphics)
+	target_link_libraries(OxC3_graphics_vk PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_graphics)
 
 	if(DynamicLinkingGraphics)
 		target_compile_definitions(OxC3_graphics_vk PUBLIC -DGRAPHICS_API_DYNAMIC)
@@ -639,7 +696,7 @@ if(graphicsAllowD3D12)
 		)
 	endif()
 
-	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
+	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_graphics)
 
 	set_target_properties(OxC3_graphics_d3d12 PROPERTIES FOLDER Oxsomi/graphics)
 
@@ -716,7 +773,7 @@ if(EnableShaderCompiler)
 	)
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
-	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms OxC3_formats_oiSH)
+	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
 	target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
 
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
@@ -745,7 +802,7 @@ if(EnableOxC3CLI)
 	)
 
 	set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi/CLI)
-	target_link_libraries(OxC3CLI PUBLIC OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL)
+	target_link_libraries(OxC3CLI PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL)
 
 	if(CLIGraphics)
 		target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)
@@ -774,7 +831,7 @@ if(EnableOxC3CLI)
 	)
 
 	set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi/CLI)
-	target_link_libraries(OxC3 PUBLIC OxC3CLI)
+	target_link_libraries(OxC3 PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3CLI)
 
 	include(cmake/oxc3.cmake)
 	configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")

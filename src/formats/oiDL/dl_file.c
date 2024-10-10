@@ -19,9 +19,9 @@
 */
 
 #include "formats/oiDL/dl_file.h"
-#include "types/error.h"
-#include "types/allocator.h"
-#include "types/buffer.h"
+#include "types/base/error.h"
+#include "types/base/allocator.h"
+#include "types/container/buffer.h"
 
 Bool DLFile_createIntern(DLSettings settings, Allocator alloc, U64 reserve, DLFile *dlFile, Error *e_rr) {
 

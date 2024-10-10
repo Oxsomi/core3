@@ -22,12 +22,12 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/file.h"
-#include "types/string.h"
-#include "types/texture_format.h"
+#include "types/container/string.h"
+#include "types/container/texture_format.h"
 #include "formats/dds/dds.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
-#include "types/math.h"
+#include "types/math/math.h"
 
 TListImpl(InputDevice);
 TListImpl(Monitor);

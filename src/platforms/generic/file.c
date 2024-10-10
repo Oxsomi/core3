@@ -19,20 +19,20 @@
 */
 
 #include "platforms/ext/listx.h"
-#include "types/thread.h"
+#include "types/base/thread.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/archivex.h"
 #include "platforms/file.h"
 #include "formats/oiCA/ca_file.h"
-#include "types/error.h"
-#include "types/buffer.h"
-#include "types/string.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
 
 #include <stdio.h>
 #include <sys/stat.h>
 
-#include "types/math.h"
+#include "types/math/math.h"
 
 //This is fine in file.c instead of wfile.c because unix + windows systems all share very similar ideas about filesystems
 //But windows is a bit stricter in some parts (like the characters you can include) and has some weird quirks

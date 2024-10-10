@@ -22,7 +22,7 @@
 #include "graphics/directx12/directx12.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline_structs.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 EDescriptorTypeOffsets EDescriptorTypeOffsets_values[] = {
 

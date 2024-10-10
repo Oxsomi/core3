@@ -19,8 +19,8 @@
 */
 
 #include "formats/oiDL/dl_file.h"
-#include "types/error.h"
-#include "types/allocator.h"
+#include "types/base/error.h"
+#include "types/base/allocator.h"
 
 Bool DLFile_combine(DLFile a, DLFile b, Allocator alloc, DLFile *combined, Error *e_rr) {
 

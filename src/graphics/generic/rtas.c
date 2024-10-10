@@ -24,7 +24,7 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "graphics/generic/acceleration_structure.h"
 #include "graphics/generic/device_buffer.h"
-#include "types/buffer.h"
+#include "types/container/buffer.h"
 
 Error RTAS_validateDeviceBuffer(DeviceData *bufPtr) {
 

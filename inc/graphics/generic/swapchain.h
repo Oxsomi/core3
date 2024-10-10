@@ -19,9 +19,9 @@
 */
 
 #pragma once
-#include "types/vec.h"
-#include "types/ref_ptr.h"
-#include "types/lock.h"
+#include "types/math/vec.h"
+#include "types/container/ref_ptr.h"
+#include "types/base/lock.h"
 #include "texture.h"
 
 #ifdef __cplusplus

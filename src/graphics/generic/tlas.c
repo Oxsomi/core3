@@ -25,7 +25,7 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
-#include "types/buffer.h"
+#include "types/container/buffer.h"
 
 F32x4 TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing);
 F32x4 TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat);

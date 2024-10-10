@@ -19,10 +19,10 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "types/buffer.h"
-#include "types/thread.h"
-#include "types/math.h"
-#include "types/time.h"
+#include "types/container/buffer.h"
+#include "types/base/thread.h"
+#include "types/math/math.h"
+#include "types/base/time.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"

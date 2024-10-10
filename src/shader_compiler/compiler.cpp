@@ -23,11 +23,11 @@
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
-#include "types/error.h"
-#include "types/buffer.h"
-#include "types/allocator.h"
-#include "types/file.h"
-#include "types/math.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
+#include "types/base/allocator.h"
+#include "types/container/file.h"
+#include "types/math/math.h"
 #include "formats/oiSB/sb_file.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS

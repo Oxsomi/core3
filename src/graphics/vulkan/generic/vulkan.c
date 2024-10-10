@@ -22,8 +22,8 @@
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/device_buffer.h"
-#include "types/texture_format.h"
-#include "types/error.h"
+#include "types/container/texture_format.h"
+#include "types/base/error.h"
 
 TListImpl(VkMappedMemoryRange);
 TListImpl(VkBufferCopy);

@@ -21,9 +21,9 @@
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/log.h"
-#include "types/texture_format.h"
+#include "types/container/texture_format.h"
 #include "graphics/generic/instance.h"
-#include "types/type_cast.h"
+#include "types/math/type_cast.h"
 
 void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
 

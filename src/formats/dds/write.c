@@ -18,10 +18,10 @@
 *  This is called dual licensing.
 */
 
-#include "types/list_impl.h"
+#include "types/container/list_impl.h"
 #include "formats/dds/dds.h"
 #include "formats/dds/headers.h"
-#include "types/math.h"
+#include "types/math/math.h"
 
 TListImpl(SubResourceData);
 

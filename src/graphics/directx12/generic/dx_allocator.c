@@ -26,9 +26,9 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "types/error.h"
-#include "types/math.h"
-#include "types/string.h"
+#include "types/base/error.h"
+#include "types/math/math.h"
+#include "types/container/string.h"
 
 Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryAllocator *allocator,

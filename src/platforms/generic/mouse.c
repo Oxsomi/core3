@@ -20,7 +20,7 @@
 
 #include "platforms/mouse.h"
 #include "platforms/input_device.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 #define BUTTON(name)																					\
 	if ((err = InputDevice_createButton(																\

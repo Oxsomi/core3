@@ -19,7 +19,7 @@
 */
 
 #include "cli.h"
-#include "types/buffer.h"
+#include "types/container/buffer.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"

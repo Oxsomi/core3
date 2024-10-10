@@ -22,8 +22,8 @@
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/allocator.h"
 #include "graphics/generic/descriptor.h"
-#include "types/ref_ptr.h"
-#include "types/list.h"
+#include "types/container/ref_ptr.h"
+#include "types/container/list.h"
 
 #ifdef __cplusplus
 	extern "C" {

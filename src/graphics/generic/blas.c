@@ -25,7 +25,7 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
-#include "types/buffer.h"
+#include "types/container/buffer.h"
 
 Error BLASRef_dec(BLASRef **blas) {
 	return !RefPtr_dec(blas) ? Error_invalidOperation(0, "BLASRef_dec()::blas is required") : Error_none();

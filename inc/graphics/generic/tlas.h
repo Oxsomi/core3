@@ -21,7 +21,7 @@
 #pragma once
 #include "acceleration_structure.h"
 #include "device_buffer.h"
-#include "types/quat.h"
+#include "types/math/quat.h"
 
 #ifdef __cplusplus
 	extern "C" {

@@ -19,10 +19,10 @@
 */
 
 #include "formats/bmp/bmp.h"
-#include "types/texture_format.h"
-#include "types/allocator.h"
-#include "types/buffer.h"
-#include "types/error.h"
+#include "types/container/texture_format.h"
+#include "types/base/allocator.h"
+#include "types/container/buffer.h"
+#include "types/base/error.h"
 
 #ifdef ALLOW_BMP_OXC3_PLATFORMS
 

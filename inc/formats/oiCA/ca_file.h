@@ -20,7 +20,7 @@
 
 #pragma once
 #include "formats/oiXX/oiXX.h"
-#include "types/archive.h"
+#include "types/container/archive.h"
 
 #ifdef __cplusplus
 	extern "C" {

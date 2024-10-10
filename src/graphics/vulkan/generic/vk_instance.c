@@ -31,9 +31,9 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "platforms/dynamic_library.h"
-#include "types/error.h"
-#include "types/buffer.h"
-#include "types/math.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
+#include "types/math/math.h"
 
 GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.blas = sizeof(VkBLAS),

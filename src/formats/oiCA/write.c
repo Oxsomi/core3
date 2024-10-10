@@ -20,11 +20,11 @@
 
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
-#include "types/allocator.h"
-#include "types/error.h"
-#include "types/buffer.h"
-#include "types/time.h"
-#include "types/math.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
+#include "types/base/time.h"
+#include "types/math/math.h"
 
 Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 

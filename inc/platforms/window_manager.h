@@ -19,8 +19,8 @@
 */
 
 #pragma once
-#include "types/list.h"
-#include "types/vec.h"
+#include "types/container/list.h"
+#include "types/math/vec.h"
 
 #ifdef __cplusplus
 	extern "C" {

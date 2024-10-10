@@ -23,9 +23,9 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/texture_format.h"
-#include "types/error.h"
-#include "types/string.h"
+#include "types/container/texture_format.h"
+#include "types/base/error.h"
+#include "types/container/string.h"
 
 Error RenderTextureRef_dec(RenderTextureRef **renderTexture) {
 	return !RefPtr_dec(renderTexture) ?

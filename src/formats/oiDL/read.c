@@ -19,9 +19,9 @@
 */
 
 #include "formats/oiDL/dl_file.h"
-#include "types/allocator.h"
-#include "types/error.h"
-#include "types/buffer.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
 
 Bool DLFile_read(
 	Buffer file,

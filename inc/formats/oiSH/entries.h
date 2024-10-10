@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/string.h"
+#include "types/container/string.h"
 
 #ifdef ALLOW_SH_OXC3_PLATFORMS
 	#include "platforms/ext/listx.h"

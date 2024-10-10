@@ -19,9 +19,9 @@
 */
 
 #pragma once
-#include "types/types.h"
-#include "types/flp.h"
-#include "types/ref_ptr.h"
+#include "types/base/types.h"
+#include "types/math/flp.h"
+#include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus
 	extern "C" {

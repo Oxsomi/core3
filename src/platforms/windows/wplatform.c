@@ -22,7 +22,7 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/keyboard.h"
-#include "types/string.h"
+#include "types/container/string.h"
 #include "platforms/ext/stringx.h"
 
 #define UNICODE
@@ -37,47 +37,6 @@ U64 Platform_getThreads() {
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
 	return systemInfo.dwNumberOfProcessors;
-}
-
-CharString Error_formatPlatformError(Allocator alloc, Error err) {
-
-	if(err.genericError != EGenericError_PlatformError)
-		return CharString_createNull();
-
-	if(!FAILED(err.paramValue0))
-		return CharString_createNull();
-
-	wchar_t *lpBuffer = NULL;
-
-	const DWORD f = FormatMessageW(
-
-		FORMAT_MESSAGE_ALLOCATE_BUFFER |
-		FORMAT_MESSAGE_FROM_SYSTEM,
-
-		NULL,
-		(DWORD) err.paramValue0,
-
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
-
-		(LPWSTR) &lpBuffer,
-		0,
-
-		NULL
-	);
-
-	//Unfortunately we have to copy, because we can't tell CharString to use LocalFree instead of free
-
-	if(!f)
-		return CharString_createNull();
-
-	CharString res;
-	if((err = CharString_createFromUTF16((const U16*)lpBuffer, U64_MAX, alloc, &res)).genericError) {
-		LocalFree(lpBuffer);
-		return CharString_createNull();
-	}
-
-	LocalFree(lpBuffer);
-	return res;
 }
 
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }

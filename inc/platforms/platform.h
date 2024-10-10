@@ -19,10 +19,10 @@
 */
 
 #pragma once
-#include "types/string.h"
-#include "types/allocator.h"
-#include "types/archive.h"
-#include "types/lock.h"
+#include "types/container/string.h"
+#include "types/base/allocator.h"
+#include "types/container/archive.h"
+#include "types/base/lock.h"
 #include "platforms/dynamic_library.h"
 
 #ifdef __cplusplus

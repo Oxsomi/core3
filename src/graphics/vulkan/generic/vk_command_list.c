@@ -37,8 +37,8 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
-#include "types/buffer.h"
-#include "types/error.h"
+#include "types/container/buffer.h"
+#include "types/base/error.h"
 
 void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 

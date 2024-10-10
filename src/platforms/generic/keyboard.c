@@ -20,7 +20,7 @@
 
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 #define KEY(name)																						\
 	if ((err = InputDevice_createButton(*result, EKey_##name, "EKey_" #name, &res)).genericError) {		\

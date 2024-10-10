@@ -22,9 +22,9 @@
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/texture_format.h"
-#include "types/error.h"
-#include "types/string.h"
+#include "types/container/texture_format.h"
+#include "types/base/error.h"
+#include "types/container/string.h"
 
 Error DepthStencilRef_dec(DepthStencilRef **depth) {
 	return !RefPtr_dec(depth) ?

@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/thread.h"
+#include "types/base/thread.h"
 
 #ifdef __cplusplus
 	extern "C" {

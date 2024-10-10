@@ -26,7 +26,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/math.h"
+#include "types/math/math.h"
 #include "formats/oiSH/sh_file.h"
 
 TListImpl(PipelineRaytracingGroup);

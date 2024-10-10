@@ -18,20 +18,21 @@
 *  This is called dual licensing.
 */
 
-#include "types/time.h"
-#include "types/buffer.h"
-#include "types/allocator.h"
-#include "types/error.h"
-#include "types/type_cast.h"
-#include "types/buffer_layout.h"
-#include "types/flp.h"
-#include "types/big_int.h"
+#include "types/base/time.h"
+#include "types/container/buffer.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
+#include "types/math/type_cast.h"
+#include "types/container/buffer_layout.h"
+#include "types/math/flp.h"
+#include "types/container/big_int.h"
 #include "formats/oiBC/chimera.h"
+#include "types/container/log.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-#include "types/quat.h"
+#include "types/math/quat.h"
 
 Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 
@@ -60,11 +61,6 @@ Bool ourFree(void *allocator, Buffer buf) {
 void Error_fillStackTrace(Error *err) {
 	if(err)
 		err->stackTrace[0] = NULL;
-}
-
-CharString Error_formatPlatformError(Allocator alloc, Error err) {
-	(void)alloc; (void)err;
-	return CharString_createNull();
 }
 
 //#define STRICT_VALIDATION

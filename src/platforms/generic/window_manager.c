@@ -22,12 +22,12 @@
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "types/thread.h"
+#include "types/base/thread.h"
 #include "platforms/input_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "types/time.h"
-#include "types/string.h"
+#include "types/base/time.h"
+#include "types/container/string.h"
 
 TListNamedImpl(ListWindowPtr);
 

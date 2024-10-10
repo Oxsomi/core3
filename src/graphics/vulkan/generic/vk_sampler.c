@@ -23,7 +23,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/string.h"
+#include "types/container/string.h"
 
 Bool VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 

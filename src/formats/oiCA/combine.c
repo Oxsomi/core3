@@ -19,8 +19,8 @@
 */
 
 #include "formats/oiCA/ca_file.h"
-#include "types/allocator.h"
-#include "types/error.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
 
 Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error *e_rr) {
 

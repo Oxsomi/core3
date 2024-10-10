@@ -26,7 +26,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
-#include "types/texture_format.h"
+#include "types/container/texture_format.h"
 
 Bool DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 

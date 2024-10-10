@@ -19,10 +19,10 @@
 */
 
 #include "formats/oiDL/dl_file.h"
-#include "types/buffer.h"
-#include "types/allocator.h"
-#include "types/error.h"
-#include "types/math.h"
+#include "types/container/buffer.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
+#include "types/math/math.h"
 
 //We currently don't support compression yet. But once Buffer_compress/decompress is available, it should be easy.
 

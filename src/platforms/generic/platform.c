@@ -22,7 +22,7 @@
 #include "platforms/ext/archivex.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
-#include "types/thread.h"
+#include "types/base/thread.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 

@@ -19,8 +19,8 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "types/string.h"
-#include "types/error.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"

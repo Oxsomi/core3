@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/lock.h"
+#include "types/base/lock.h"
 #include "device_buffer.h"
 #include "texture.h"
 

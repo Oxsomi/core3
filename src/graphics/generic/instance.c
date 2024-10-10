@@ -24,7 +24,7 @@
 #include "graphics/generic/device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 TListImpl(GraphicsDeviceInfo);
 

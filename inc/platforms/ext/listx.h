@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/error.h"
+#include "types/base/error.h"
 
 #ifdef __cplusplus
 	extern "C" {

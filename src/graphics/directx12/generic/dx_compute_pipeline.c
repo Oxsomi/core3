@@ -25,8 +25,8 @@
 #include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "types/string.h"
-#include "types/error.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
 #include "formats/oiSH/sh_file.h"
 
 Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(

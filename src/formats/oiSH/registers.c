@@ -21,9 +21,10 @@
 #ifdef ALLOW_SH_OXC3_PLATFORMS
 	#include "platforms/ext/listx_impl.h"
 #else
-	#include "types/list_impl.h"
+	#include "types/container/list_impl.h"
 #endif
 
+#include "types/container/log.h"
 #include "formats/oiSH/sh_file.h"
 
 TListImpl(SHRegister);

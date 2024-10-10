@@ -34,8 +34,8 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "types/math.h"
-#include "types/thread.h"
+#include "types/math/math.h"
+#include "types/base/thread.h"
 
 #include <nvapi.h>
 

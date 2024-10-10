@@ -19,9 +19,9 @@
 */
 
 #pragma once
-#include "types/error.h"
-#include "types/string.h"
-#include "types/log.h"
+#include "types/base/error.h"
+#include "types/container/string.h"
+#include "types/container/log.h"
 
 #ifdef __cplusplus
 	extern "C" {

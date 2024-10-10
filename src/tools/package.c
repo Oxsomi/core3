@@ -19,8 +19,8 @@
 */
 
 #include "platforms/ext/listx.h"
-#include "types/buffer.h"
-#include "types/time.h"
+#include "types/container/buffer.h"
+#include "types/base/time.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/archivex.h"

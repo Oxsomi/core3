@@ -26,7 +26,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
 

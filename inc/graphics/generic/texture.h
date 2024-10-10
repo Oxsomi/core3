@@ -20,7 +20,7 @@
 
 #pragma once
 #include "resource.h"
-#include "types/vec.h"
+#include "types/math/vec.h"
 
 #ifdef __cplusplus
 	extern "C" {

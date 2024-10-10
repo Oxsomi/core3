@@ -20,8 +20,8 @@
 
 #include "cli.h"
 #include "formats/oiCA/ca_file.h"
-#include "types/error.h"
-#include "types/buffer.h"
+#include "types/base/error.h"
+#include "types/container/buffer.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"

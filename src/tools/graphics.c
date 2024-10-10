@@ -20,7 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "cli.h"
-#include "types/error.h"
+#include "types/base/error.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"

@@ -19,8 +19,8 @@
 */
 
 #include "cli.h"
-#include "types/time.h"
-#include "types/file.h"
+#include "types/base/time.h"
+#include "types/container/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/file.h"

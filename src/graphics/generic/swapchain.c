@@ -23,7 +23,7 @@
 #include "graphics/generic/device.h"
 #include "platforms/window.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 Error SwapchainRef_dec(SwapchainRef **swapchain) {
 	return !RefPtr_dec(swapchain) ?

@@ -21,8 +21,8 @@
 #include "platforms/ext/listx_impl.h"
 #include "platforms/dynamic_library.h"
 #include "platforms/ext/stringx.h"
-#include "types/string.h"
-#include "types/error.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN

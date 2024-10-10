@@ -25,7 +25,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN

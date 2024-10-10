@@ -20,11 +20,11 @@
 
 #pragma once
 #include "listx.h"
-#include "types/generic_list.h"
-#include "types/list.h"
-#include "types/buffer.h"
-#include "types/allocator.h"
-#include "types/error.h"
+#include "types/container/generic_list.h"
+#include "types/container/list.h"
+#include "types/container/buffer.h"
+#include "types/base/allocator.h"
+#include "types/base/error.h"
 
 //Helpers for creating the "template" functions of a TList
 
@@ -121,4 +121,4 @@ Bool Name##_freex(Name *l) {																							\
 
 #define TListXImpl(T) TListXBaseImpl(List##T);
 
-#include "types/list_impl.h"
+#include "types/container/list_impl.h"

@@ -27,11 +27,11 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "types/texture_format.h"
+#include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/buffer.h"
-#include "types/string.h"
-#include "types/error.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "types/base/error.h"
 
 Error createShaderModule(
 	Buffer buf,
