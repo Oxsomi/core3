@@ -20,6 +20,7 @@
 
 #include "types/base/thread.h"
 #include "types/base/error.h"
+#include "types/base/allocator.h"
 
 #include <time.h>
 #include <unistd.h>
