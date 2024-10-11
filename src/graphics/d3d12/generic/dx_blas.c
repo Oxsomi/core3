@@ -24,9 +24,9 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
-#include "graphics/directx12/dx_device.h"
-#include "graphics/directx12/dx_buffer.h"
-#include "graphics/directx12/directx12.h"
+#include "graphics/d3d12/dx_device.h"
+#include "graphics/d3d12/dx_buffer.h"
+#include "graphics/d3d12/direct3d12.h"
 
 Bool DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; return true; }		//No-op
 

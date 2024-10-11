@@ -21,7 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
-#include "types/atomic.h"
+#include "types/base/atomic.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"

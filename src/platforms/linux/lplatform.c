@@ -19,7 +19,7 @@
 */
 
 #include "platforms/platform.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 //Initialize all ObjectiveC classes and functions
 

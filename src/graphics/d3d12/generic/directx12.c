@@ -19,7 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "graphics/directx12/directx12.h"
+#include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "types/base/error.h"

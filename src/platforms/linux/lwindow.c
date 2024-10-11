@@ -19,7 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "types/buffer.h"
+#include "types/container/buffer.h"
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
@@ -31,7 +31,7 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "types/time.h"
+#include "types/base/time.h"
 
 Error LWindow_initSize(Window *w, I32x2 size) { (void) w; (void) size; return Error_none(); }
 

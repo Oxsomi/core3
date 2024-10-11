@@ -34,7 +34,7 @@
 #include "platforms/ext/archivex.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
-#include "cli.h"
+#include "tools/cli.h"
 #include "types/math/math.h"
 
 #ifdef CLI_SHADER_COMPILER

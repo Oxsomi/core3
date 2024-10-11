@@ -18,14 +18,14 @@
 *  This is called dual licensing.
 */
 
-#include "cli.h"
+#include "tools/cli.h"
 #include "types/container/buffer.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
-#include "operations.h"
+#include "tools/operations.h"
 
 Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 

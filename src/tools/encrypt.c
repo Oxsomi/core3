@@ -23,7 +23,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
-#include "cli.h"
+#include "tools/cli.h"
 
 Bool CLI_encryptDo(ParsedArgs args) {
 

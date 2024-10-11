@@ -18,8 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "types/error.h"
-#include "types/string.h"
+#include "types/base/error.h"
+#include "types/container/string.h"
 #include "platforms/file.h"
 
 Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad, Error *e_rr) {

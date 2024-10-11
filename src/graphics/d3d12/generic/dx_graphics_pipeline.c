@@ -23,7 +23,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
-#include "graphics/directx12/dx_device.h"
+#include "graphics/d3d12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "types/container/texture_format.h"

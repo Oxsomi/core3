@@ -28,7 +28,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
-#include "cli.h"
+#include "tools/cli.h"
 
 Bool CLI_fileCombine(ParsedArgs args) {
 

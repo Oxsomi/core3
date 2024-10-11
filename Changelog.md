@@ -2,7 +2,7 @@
 
 ### TODO: OxC3 v0.3 "Performance"
 
-### OxC3 v0.2 "Graphics"
+### WIP: OxC3 v0.2 "Graphics"
 
 - Support for graphics APIs such as Vulkan and Direct3D12.
 - BufferLayout class for managing data layout such as struct arrays.

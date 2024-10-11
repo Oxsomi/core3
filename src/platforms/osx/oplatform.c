@@ -20,9 +20,9 @@
 
 #include "platforms/platform.h"
 #include "platforms/osx/objective_c.h"
-#include "types/error.h"
-#include "types/thread.h"
-#include "types/atomic.h"
+#include "types/base/error.h"
+#include "types/base/thread.h"
+#include "types/base/atomic.h"
 #include "platforms/log.h"
 
 //Port of https://github.com/CodaFi/C-Macs/blob/master/CMacs/AppDelegate.c

@@ -20,8 +20,8 @@
 
 #include "platforms/ext/listx.h"
 #include "graphics/generic/interface.h"
-#include "graphics/directx12/dx_interface.h"
-#include "graphics/directx12/dx_device.h"
+#include "graphics/d3d12/dx_interface.h"
+#include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -254,7 +254,7 @@ Error DxUnifiedTexture_transition(
 ) {
 
 	//Avoid duplicate barriers except in one case:
-	//D3D12 has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
+	//direct3d12.has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
 	//Otherwise, it's not synchronized correctly.
 
 	if(

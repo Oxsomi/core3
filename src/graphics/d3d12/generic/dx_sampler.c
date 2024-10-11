@@ -20,7 +20,7 @@
 
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
-#include "graphics/directx12/dx_device.h"
+#include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
 
 Bool DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void)sampler; return true; }

@@ -19,7 +19,7 @@
 */
 
 #include "platforms/window_manager.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 //There is no need for this, besides managing windows.
 //The windows manage their own loops.

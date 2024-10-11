@@ -20,7 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/allocator.h"
-#include "graphics/directx12/dx_device.h"
+#include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"

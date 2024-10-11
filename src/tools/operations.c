@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "cli.h"
+#include "tools/cli.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"

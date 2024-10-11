@@ -32,7 +32,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/errorx.h"
 #include "shader_compiler/compiler.h"
-#include "cli.h"
+#include "tools/cli.h"
 
 #ifdef CLI_SHADER_COMPILER
 

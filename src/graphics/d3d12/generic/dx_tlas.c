@@ -25,9 +25,9 @@
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
-#include "graphics/directx12/dx_device.h"
-#include "graphics/directx12/dx_buffer.h"
-#include "graphics/directx12/directx12.h"
+#include "graphics/d3d12/dx_device.h"
+#include "graphics/d3d12/dx_buffer.h"
+#include "graphics/d3d12/direct3d12.h"
 
 Bool DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; return true; }		//No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);

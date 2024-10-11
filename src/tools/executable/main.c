@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "cli.h"
+#include "tools/cli.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"

@@ -21,7 +21,7 @@
 #include "platforms/platform.h"
 #include "platforms/osx/objective_c.h"
 #include "platforms/ext/stringx.h"
-#include "types/error.h"
+#include "types/base/error.h"
 
 const C8 *EObjCClass_names[] = {
 	"NSString",

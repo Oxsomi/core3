@@ -20,12 +20,12 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
-#include "graphics/directx12/dx_interface.h"
+#include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/directx12/dx_buffer.h"
-#include "graphics/directx12/dx_device.h"
+#include "graphics/d3d12/dx_buffer.h"
+#include "graphics/d3d12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
@@ -39,7 +39,7 @@ Error DxDeviceBuffer_transition(
 ) {
 
 	//Avoid duplicate barriers except in one case:
-	//D3D12 has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
+	//direct3d12.has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
 	//Otherwise, it's not synchronized correctly.
 
 	if(

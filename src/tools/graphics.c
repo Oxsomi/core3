@@ -19,7 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "cli.h"
+#include "tools/cli.h"
 #include "types/base/error.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
@@ -87,7 +87,7 @@
 					queried |= nativeBit;
 
 				else Log_debugLnx(
-					"CLI_graphicsDevices() -graphics-api must be one of: vulkan/vk, d3d12/directx12/direct3d12, native or all"
+					"CLI_graphicsDevices() -graphics-api must be one of: vulkan/vk, d3d12/d3d12/direct3d12, native or all"
 				);
 			}
 		}

@@ -18,33 +18,27 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "graphics/generic/pipeline.h"
-#include "graphics/generic/texture.h"
-#include "graphics/directx12/dx_device.h"
-#include "platforms/ext/bufferx.h"
+#pragma once
+#include "graphics/d3d12/direct3d12.h"
 
-Bool DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
-	(void)allocator;
+typedef struct DxDeviceBuffer {
+	ID3D12Resource *buffer;
+	D3D12_BARRIER_SYNC lastSync;
+	D3D12_BARRIER_ACCESS lastAccess;
+} DxDeviceBuffer;
 
-	if(!pipeline)
-		return true;
+Error DxDeviceBuffer_transition(
+	DxDeviceBuffer *buffer,
+	D3D12_BARRIER_SYNC sync,
+	D3D12_BARRIER_ACCESS access,
+	ListD3D12_BUFFER_BARRIER *bufferBarriers,
+	D3D12_BARRIER_GROUP *dependency
+);
 
-	const DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
-
-	if(!dxPipeline->pso)
-		return true;
-
-	if(pipeline->type == EPipelineType_RaytracingExt) {
-
-		if(dxPipeline->stateObjectProps)
-			dxPipeline->stateObjectProps->lpVtbl->Release(dxPipeline->stateObjectProps);
-
-		dxPipeline->stateObject->lpVtbl->Release(dxPipeline->stateObject);
+#ifdef __cplusplus
 	}
-
-	else dxPipeline->pso->lpVtbl->Release(dxPipeline->pso);
-
-	return true;
-}
+#endif

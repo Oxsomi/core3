@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "operations.h"
+#include "tools/operations.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"

@@ -27,10 +27,6 @@ jobs:
       run: cmd /C build.bat Release False True False -o cliGraphics=False
     - name: build for debug check
       run: cmd /C build.bat Debug True True False -o cliGraphics=False
-    - name: build for release dynamic
-      run: cmd /C build.bat Release True True True -o cliGraphics=False
-    - name: build for debug dynamic
-      run: cmd /C build.bat Debug True True True -o cliGraphics=False
     - name: Delete non package files for cache
       run: bash -c "rm -rf ~/.conan2/p/b/*/b"
     - name: Cache Build

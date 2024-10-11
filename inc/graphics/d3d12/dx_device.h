@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "graphics/directx12/directx12.h"
+#include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/command_list.h"
 #include "types/container/list.h"
 #include "types/math/vec.h"

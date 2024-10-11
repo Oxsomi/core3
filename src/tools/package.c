@@ -29,7 +29,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
 #include "formats/oiCA/ca_file.h"
-#include "cli.h"
+#include "tools/cli.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"
