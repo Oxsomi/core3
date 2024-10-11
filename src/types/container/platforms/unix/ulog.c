@@ -22,6 +22,7 @@
 #include "types/base/thread.h"
 #include "types/base/time.h"
 #include "types/container/buffer.h"
+#include "types/container/string.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 

@@ -100,13 +100,11 @@ class oxc3(ConanFile):
 
 		if hasD3D12:
 			self.requires("agility_sdk/2024.09.22")
+			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
 			self.requires("dxc/2024.10.03")
 			self.requires("spirv_reflect/2024.09.22")
-
-		if not self.options.forceVulkan and self.settings.os == "Windows":
-			self.requires("ags/2024.09.21")
 
 	def package(self):
 

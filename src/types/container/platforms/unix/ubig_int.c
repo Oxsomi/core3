@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "types/math/big_int.h"
+#include "types/container/big_int.h"
 
 U128 U128_create(const U8 data[16]) {
 	return *(const U128*)data;
