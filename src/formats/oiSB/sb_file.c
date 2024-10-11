@@ -207,8 +207,6 @@ void SBFile_free(SBFile *sbFile, Allocator alloc) {
 	ListListU32_freeUnderlying(&sbFile->arrays, alloc);
 }
 
-static const U8 SBHeader_V1_2 = 2;
-
 void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc) {
 
 	if(!files)

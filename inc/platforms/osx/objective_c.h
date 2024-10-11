@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "types/base/types.h"
 
 //Implementation of https://github.com/CodaFi/C-Macs/blob/master/CMacs/CMacsTypes.h
 
