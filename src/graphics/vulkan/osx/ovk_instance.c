@@ -20,10 +20,10 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/error.h"
-#include "types/list.h"
-#include "types/string.h"
-#include "types/buffer.h"
+#include "types/base/error.h"
+#include "types/container/list.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
 
 const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
