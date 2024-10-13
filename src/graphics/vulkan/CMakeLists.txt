@@ -49,7 +49,7 @@ else()
     )
 endif()
 
-target_link_libraries(OxC3_graphics_vk PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_graphics)
+target_link_libraries(OxC3_graphics_vk PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_graphics)
 
 if(DynamicLinkingGraphics)
     target_compile_definitions(OxC3_graphics_vk PUBLIC -DGRAPHICS_API_DYNAMIC)
