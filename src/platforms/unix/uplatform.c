@@ -30,8 +30,6 @@
 #include <stdlib.h>
 #include <errno.h>
 
-CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc; (void)err; return CharString_createNull(); }
-
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 

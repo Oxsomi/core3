@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc; (void)err; return CharString_createNull(); }
+
 void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skipTmp) {
 
 	U64 skip = (U64) skipTmp + 1;
