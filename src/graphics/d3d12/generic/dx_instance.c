@@ -64,9 +64,10 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 		return &DxGraphicsObjectSizes;
 	}
 #else
-	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance) {
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interface) {
 
 		Platform_instance = instance;
+		GraphicsInterface_instance = interface;
 
 		return (GraphicsInterfaceTable) {
 

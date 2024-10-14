@@ -353,7 +353,7 @@ typedef struct GraphicsObjectSizes {
 	typedef struct Platform Platform;
 	typedef struct GraphicsInterface GraphicsInterface;
 
-	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance);
+	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance, GraphicsInterface *interface);
 
 	typedef struct GraphicsInterface {
 		GraphicsInterfaceTable tables[EGraphicsApi_Count];
