@@ -19,7 +19,6 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "platforms/ext/bmpx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/threadx.h"

@@ -724,7 +724,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			if(status != NVAPI_OK)
 				Log_debugLnx("D3D12: NVAPI: Couldn't query for DMM on device %"PRIu32"", i);
 
-			else if(omm == NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAP_STANDARD)
+			else if(dmm == NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAP_STANDARD)
 				info->capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
 		}
 
