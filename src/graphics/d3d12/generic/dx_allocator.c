@@ -114,10 +114,15 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.Properties = (D3D12_HEAP_PROPERTIES) {
 			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT),
 			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
-			.CPUPageProperty = isGpu && !hasReBAR ? D3D12_CPU_PAGE_PROPERTY_UNKNOWN : D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
+			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
 		.Alignment = req.alignment
 	};
+
+	if (isGpu && !hasReBAR) {
+		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	}
 
 	if (!isGpu || hasReBAR)
 		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
