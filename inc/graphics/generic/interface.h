@@ -65,11 +65,9 @@ typedef struct GraphicsObjectSizes {
 
 #ifndef GRAPHICS_API_DYNAMIC
 
-	inline Bool GraphicsInterface_init(Error *e_rr) { (void) e_rr; return true; }
+	Bool GraphicsInterface_init(Error *e_rr);
 
-	inline Bool GraphicsInterface_supports(EGraphicsApi api) {
-		return api == _GRAPHICS_API || api == EGraphicsApi_Count /* Indicates 'Default' */;
-	}
+	Bool GraphicsInterface_supports(EGraphicsApi api);
 
 	impl const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api);
 

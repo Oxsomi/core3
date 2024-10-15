@@ -297,4 +297,10 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return api >= EGraphicsApi_Count ? NULL : &GraphicsInterface_instance->tables[api].objectSizes;
 	}
 
+#else
+	Bool GraphicsInterface_init(Error *e_rr) { (void) e_rr; return true; }
+
+	Bool GraphicsInterface_supports(EGraphicsApi api) {
+		return api == _GRAPHICS_API || api == EGraphicsApi_Count /* Indicates 'Default' */;
+	}
 #endif
