@@ -20,7 +20,7 @@
 
 #pragma once
 
-#ifdef ALLOW_SB_OXC3_PLATFORMS
+#ifndef DISALLOW_SB_OXC3_PLATFORMS
 	#include "platforms/ext/listx.h"
 #endif
 

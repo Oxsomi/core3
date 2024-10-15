@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#ifdef ALLOW_SH_OXC3_PLATFORMS
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
 	#include "platforms/ext/listx_impl.h"
 #else
 	#include "types/container/list_impl.h"
@@ -28,7 +28,7 @@
 
 TListImpl(SHFile);
 
-#ifdef ALLOW_SH_OXC3_PLATFORMS
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
 	
 	#include "platforms/platform.h"
 

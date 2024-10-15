@@ -44,7 +44,7 @@ typedef struct BMPInfo {
 Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result);
 Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result);
 
-#ifdef ALLOW_BMP_OXC3_PLATFORMS
+#ifndef DISALLOW_BMP_OXC3_PLATFORMS
 	Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result);
 	Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result);
 #endif

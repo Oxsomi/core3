@@ -107,7 +107,7 @@ Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error
 
 void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc);
 
-#ifdef ALLOW_SB_OXC3_PLATFORMS
+#ifndef DISALLOW_SB_OXC3_PLATFORMS
 
 	Bool SBFile_createx(
 		ESBSettingsFlags flags,

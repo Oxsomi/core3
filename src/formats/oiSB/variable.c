@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#ifdef ALLOW_SB_OXC3_PLATFORMS
+#ifndef DISALLOW_SB_OXC3_PLATFORMS
 	#include "platforms/ext/listx_impl.h"
 #else
 	#include "types/container/list_impl.h"

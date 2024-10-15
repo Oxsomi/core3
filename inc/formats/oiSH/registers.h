@@ -22,7 +22,7 @@
 #include "formats/oiSB/sb_file.h"
 #include "types/container/texture_format.h"
 
-#ifdef ALLOW_SH_OXC3_PLATFORMS
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
 	#include "platforms/ext/listx.h"
 #endif
 
@@ -267,7 +267,7 @@ void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Alloc
 void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc);
 void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, Allocator alloc);
 
-#ifdef ALLOW_SH_OXC3_PLATFORMS
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
 
 	void SHRegister_printx(SHRegister reg, U64 indenting);
 	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting);

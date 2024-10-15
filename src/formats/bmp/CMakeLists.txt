@@ -35,5 +35,6 @@ target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_types_base OxC3_types_contain
 
 if(AllowOxC3PlatformsBMP)
 	target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_platforms)
-	target_compile_definitions(OxC3_formats_bmp PUBLIC -DALLOW_BMP_OXC3_PLATFORMS)
+else()
+	target_compile_definitions(OxC3_formats_bmp PUBLIC -DDISALLOW_BMP_OXC3_PLATFORMS)
 endif()

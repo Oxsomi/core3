@@ -24,7 +24,7 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 
-#ifdef ALLOW_BMP_OXC3_PLATFORMS
+#ifndef DISALLOW_BMP_OXC3_PLATFORMS
 
 	#include "platforms/platform.h"
 

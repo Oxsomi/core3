@@ -95,7 +95,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr);
 
-#ifdef ALLOW_SH_OXC3_PLATFORMS
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
 
 	Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr);
 	void SHFile_freex(SHFile *shFile);

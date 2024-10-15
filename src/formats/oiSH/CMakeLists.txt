@@ -35,5 +35,6 @@ target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_types_base OxC3_types_math O
 
 if(AllowOxC3PlatformsSH)
 	target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_platforms)
-	target_compile_definitions(OxC3_formats_oiSH PUBLIC -DALLOW_SH_OXC3_PLATFORMS)
+else()
+	target_compile_definitions(OxC3_formats_oiSH PUBLIC -DDISALLOW_SH_OXC3_PLATFORMS)
 endif()

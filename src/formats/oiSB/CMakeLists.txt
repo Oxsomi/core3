@@ -35,5 +35,6 @@ target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_types_base OxC3_types_contai
 
 if(AllowOxC3PlatformsSB)
 	target_link_libraries(OxC3_formats_oiSB PUBLIC OxC3_platforms)
-	target_compile_definitions(OxC3_formats_oiSB PUBLIC -DALLOW_SB_OXC3_PLATFORMS)
+else()
+	target_compile_definitions(OxC3_formats_oiSB PUBLIC -DDISALLOW_SB_OXC3_PLATFORMS)
 endif()

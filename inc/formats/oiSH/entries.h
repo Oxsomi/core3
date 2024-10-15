@@ -21,7 +21,7 @@
 #pragma once
 #include "types/container/string.h"
 
-#ifdef ALLOW_SH_OXC3_PLATFORMS
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
 	#include "platforms/ext/listx.h"
 #endif
 
@@ -169,7 +169,7 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
 void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
 
-#ifdef ALLOW_SH_OXC3_PLATFORMS
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
 	void SHEntry_printx(SHEntry entry);
 	void SHEntryRuntime_printx(SHEntryRuntime entry);
 	void SHEntry_freex(SHEntry *entry);
