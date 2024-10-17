@@ -249,9 +249,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EVkGraphicsFeatures_PerfQuery)
 				Log_debugLnx("\t\tPerformance query");
 
-			if(cap.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress)
-				Log_debugLnx("\t\tBuffer device address");
-
 			if(cap.featuresExt & EVkGraphicsFeatures_Maintenance4)
 				Log_debugLnx("\t\tMaintenance4");
 		}

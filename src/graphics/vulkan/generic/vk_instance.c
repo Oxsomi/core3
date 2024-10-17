@@ -982,8 +982,10 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(features.fillModeNonSolid)
 			capabilities.features |= EGraphicsFeatures_Wireframe;
 
-		if(deviceAddress.bufferDeviceAddress)
-			capabilities.featuresExt |= EVkGraphicsFeatures_BufferDeviceAddress;
+		if(!deviceAddress.bufferDeviceAddress) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", buffer device address is missing!", i);
+			continue;
+		}
 
 		if(optExtensions[EOptExtensions_Maintenance4])
 			capabilities.featuresExt |= EVkGraphicsFeatures_Maintenance4;
@@ -1189,7 +1191,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 						) >= 16 &&
 						U64_min(rtasProp.maxGeometryCount, rtasProp.maxInstanceCount) >= 16777215 &&
 						rtasProp.maxPrimitiveCount >= GIBI / 2 - 1
-					) || !deviceAddress.bufferDeviceAddress
+					)
 				)
 					rtasFeat.accelerationStructure = false;
 			}
@@ -1522,11 +1524,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
 				capabilities.dataTypes |= optionalFormats[k].optFormat;
-		}
-
-		if(!(capabilities.dataTypes & (EGraphicsDataTypes_D32S8 | EGraphicsDataTypes_D24S8))) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", D24S8 or D32S8 is required.", i);
-			continue;
 		}
 
 		//Grab LUID/UUID

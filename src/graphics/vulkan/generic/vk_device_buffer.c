@@ -197,13 +197,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.buffer = bufExt->buffer
 	};
 
-	if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress) {
+	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
 
-		buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
-
-		if(!buf->resource.deviceAddress)
-			gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
-	}
+	if(!buf->resource.deviceAddress)
+		gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
 
 	//Fill relevant descriptor sets if shader accessible
 

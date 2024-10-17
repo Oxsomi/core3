@@ -676,7 +676,7 @@ gotoIfError(clean, GraphicsDeviceRef_createTexture(
 
 A DepthStencil is an object that holds the depth and stencil buffers as a 2D image which can be used together with a RenderTexture or by itself for 3D rendering (to avoid overdraw) and to handle shadow maps or other tricks such as portals/reflections (stencil buffer).
 
-The depth stencil is quite straight forward; it has up to 3 stencil enabled formats (D24S8Ext, D32S8, S8Ext) that can be used to provide a stencil attachment to startRenderExt and 2 non stencil enabled formats (D16, D32). D24S8Ext is optional, but is important for NV and Intel GPUs since it packs the depth and stencil into 32-bits. D24S8Ext and S8Ext support can be queried through the GraphicsDeviceInfo's capabilities. Whenever possible please use D16 or D32 since it doesn't waste any space for a stencil buffer if it isn't needed. D16 should only be used if depth precision isn't a great priority (performance and memory usage is prioritized). D16 can be used on mobile to save space and time. If allowShaderRead is on, the depth stencil can be accessed through shader logic by passing the resource handle to the GPU.
+The depth stencil is quite straight forward; it has up to 3 stencil enabled formats (D24S8Ext, D32S8Ext, S8Ext) that can be used to provide a stencil attachment to startRenderExt and 2 non stencil enabled formats (D16, D32). D24S8Ext is optional, but is important for NV and Intel GPUs since it packs the depth and stencil into 32-bits. D24S8Ext and S8Ext support can be queried through the GraphicsDeviceInfo's capabilities. Whenever possible please use D16 or D32 since it doesn't waste any space for a stencil buffer if it isn't needed. D16 should only be used if depth precision isn't a great priority (performance and memory usage is prioritized). D16 can be used on mobile to save space and time. If allowShaderRead is on, the depth stencil can be accessed through shader logic by passing the resource handle to the GPU.
 
 ```c
 gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
@@ -829,7 +829,7 @@ The graphics pipeline has the following properties:
   - If DirectRendering is enabled, a simpler way of creating can be used to aid porting and simplify development for desktop.
   - attachmentCountExt: how many render targets should be used.
   - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (BGRA8 doesn't match an RGBA8 pipeline!).
-  - depthFormatExt: depth format of the depth buffer: None, D16, D32, D32S8, D24S8Ext, S8Ext.
+  - depthFormatExt: depth format of the depth buffer: None, D16, D32, D32S8Ext, D24S8Ext, S8Ext.
 - **TODO**: Not using DirectRendering:
   - If DirectRendering is not supported or the developer doesn't want to use it; a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
   - **TODO**: renderPass:

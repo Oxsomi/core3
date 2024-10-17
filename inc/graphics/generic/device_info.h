@@ -92,8 +92,7 @@ typedef enum EDxGraphicsFeatures {
 
 typedef enum EVkGraphicsFeatures {
 	EVkGraphicsFeatures_PerfQuery				= 1 << 0,
-	EVkGraphicsFeatures_BufferDeviceAddress		= 1 << 1,
-	EVkGraphicsFeatures_Maintenance4			= 1 << 2
+	EVkGraphicsFeatures_Maintenance4			= 1 << 1
 } EVkGraphicsFeatures;
 
 //Generic graphics features
