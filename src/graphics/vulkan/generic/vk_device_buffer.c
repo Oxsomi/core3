@@ -149,11 +149,6 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 	Error err = Error_none();
 
-	VkDeviceBufferMemoryRequirementsKHR bufferReq = (VkDeviceBufferMemoryRequirementsKHR) {
-		.sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS_KHR,
-		.pCreateInfo = &bufferInfo
-	};
-
 	VkMemoryDedicatedRequirements dedicatedReq = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
 	};
@@ -163,7 +158,14 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.pNext = &dedicatedReq
 	};
 
-	instanceExt->getDeviceBufferMemoryRequirements(deviceExt->device, &bufferReq, &requirements);
+	gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)))
+
+	VkBufferMemoryRequirementsInfo2 bufferReq = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,
+		.buffer = bufExt->buffer
+	};
+
+	vkGetBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
 
 	gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
@@ -181,7 +183,6 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 	//Bind memory
 
-	gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)))
 	gotoIfError(clean, vkCheck(vkBindBufferMemory(
 		deviceExt->device, bufExt->buffer, (VkDeviceMemory) block.ext, buf->resource.blockOffset
 	)))
@@ -196,10 +197,13 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.buffer = bufExt->buffer
 	};
 
-	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
+	if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress) {
 
-	if(!buf->resource.deviceAddress)
-		gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
+		buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
+
+		if(!buf->resource.deviceAddress)
+			gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
+	}
 
 	//Fill relevant descriptor sets if shader accessible
 

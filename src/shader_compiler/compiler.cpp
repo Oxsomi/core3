@@ -1035,6 +1035,14 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_SubgroupShuffle;
 			break;
 
+		case SpvCapabilityGroupNonUniform:
+		case SpvCapabilityGroupNonUniformVote:
+		case SpvCapabilityGroupNonUniformBallot:
+		case SpvCapabilitySubgroupVoteKHR:
+		case SpvCapabilitySubgroupBallotKHR:
+			ext = ESHExtension_SubgroupOperations;
+			break;
+
 		case SpvCapabilityMultiView:
 			ext = ESHExtension_Multiview;
 			break;
@@ -1088,12 +1096,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityStorageImageArrayNonUniformIndexing:
 		case SpvCapabilityUniformTexelBufferArrayNonUniformIndexing:
 		case SpvCapabilityStorageTexelBufferArrayNonUniformIndexing:
-
-		case SpvCapabilityGroupNonUniform:
-		case SpvCapabilityGroupNonUniformVote:
-		case SpvCapabilityGroupNonUniformBallot:
-		case SpvCapabilitySubgroupVoteKHR:
-		case SpvCapabilitySubgroupBallotKHR:
 
 		case SpvCapabilityStorageImageExtendedFormats:
 		case SpvCapabilityImageQuery:
@@ -1503,8 +1505,7 @@ Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, Error *e_rr) {
 		D3D_SHADER_REQUIRES_EARLY_DEPTH_STENCIL |
 		D3D_SHADER_REQUIRES_UAVS_AT_EVERY_STAGE |
 		D3D_SHADER_REQUIRES_64_UAVS |
-		D3D_SHADER_REQUIRES_LEVEL_9_COMPARISON_FILTERING |
-		D3D_SHADER_REQUIRES_WAVE_OPS;
+		D3D_SHADER_REQUIRES_LEVEL_9_COMPARISON_FILTERING;
 
 	U64 extensionMap[] = {
 		D3D_SHADER_REQUIRES_RAYTRACING_TIER_1_1,
@@ -1516,7 +1517,8 @@ Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, Error *e_rr) {
 		D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE,
 		D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED,
 		D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS,
-		D3D_SHADER_REQUIRES_WRITEABLE_MSAA_TEXTURES
+		D3D_SHADER_REQUIRES_WRITEABLE_MSAA_TEXTURES,
+		D3D_SHADER_REQUIRES_WAVE_OPS
 	};
 
 	ESHExtension extensions[] = {
@@ -1529,7 +1531,8 @@ Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, Error *e_rr) {
 		ESHExtension_AtomicI64,
 		ESHExtension_AtomicI64,
 		ESHExtension_MeshTaskTexDeriv,
-		ESHExtension_WriteMSTexture
+		ESHExtension_WriteMSTexture,
+		ESHExtension_SubgroupOperations
 	};
 
 	flags &= ~defaultOps;

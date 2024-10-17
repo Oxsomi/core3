@@ -31,7 +31,7 @@ typedef enum EDepthStencilFormat {
 	EDepthStencilFormat_D16,		//Prefer this if stencil isn't needed and precision is no concern
 	EDepthStencilFormat_D32,
 	EDepthStencilFormat_D24S8Ext,	//On AMD this is unsupported, use D32S8 instead.
-	EDepthStencilFormat_D32S8,
+	EDepthStencilFormat_D32S8Ext,
 	EDepthStencilFormat_S8Ext,
 
 	EDepthStencilFormat_Count,

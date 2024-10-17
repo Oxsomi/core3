@@ -353,6 +353,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_DeferredHostOperations:		on = feat & EGraphicsFeatures_Raytracing;				break;
 			case EOptExtensions_RaytracingValidation:		on = feat & EGraphicsFeatures_RayValidation;			break;
 			case EOptExtensions_ComputeDeriv:				on = feat & EGraphicsFeatures_ComputeDeriv;				break;
+			case EOptExtensions_Maintenance4:				on = featEx & EVkGraphicsFeatures_Maintenance4;			break;
 
 			default:
 				continue;

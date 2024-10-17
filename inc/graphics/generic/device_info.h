@@ -91,7 +91,9 @@ typedef enum EDxGraphicsFeatures {
 //If api type is Vulkan
 
 typedef enum EVkGraphicsFeatures {
-	EVkGraphicsFeatures_PerfQuery				= 1 << 0
+	EVkGraphicsFeatures_PerfQuery				= 1 << 0,
+	EVkGraphicsFeatures_BufferDeviceAddress		= 1 << 1,
+	EVkGraphicsFeatures_Maintenance4			= 1 << 2
 } EVkGraphicsFeatures;
 
 //Generic graphics features
@@ -147,7 +149,9 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 23,		//Compute derivatives in mesh/task shaders
 
 	EGraphicsFeatures_WriteMSTexture			= 1 << 24,		//image2DMS or RWTexture2DMS
-	EGraphicsFeatures_Bindless					= 1 << 25
+	EGraphicsFeatures_Bindless					= 1 << 25,
+
+	EGraphicsFeatures_SubgroupOperations		= 1 << 26
 
 } EGraphicsFeatures;
 
@@ -190,7 +194,9 @@ typedef enum EGraphicsDataTypes {
 	//Depth stencil
 
 	EGraphicsDataTypes_D24S8					= 1 << 14,
-	EGraphicsDataTypes_S8						= 1 << 15
+	EGraphicsDataTypes_S8						= 1 << 15,
+
+	EGraphicsDataTypes_D32S8					= 1 << 16
 
 } EGraphicsDataTypes;
 

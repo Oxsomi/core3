@@ -72,7 +72,8 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"MESHTASKTEXDERIV",
 	"WRITEMSTEXTURE",
 	"BINDLESS",				//Unused, bindless is automatically turned on when it's detected
-	"UNBOUNDARRAYSIZE"
+	"UNBOUNDARRAYSIZE",
+	"SUBGROUPOPERATIONS"
 };
 
 const C8 *ESHExtension_names[ESHExtension_Count] = {
@@ -95,7 +96,8 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"MeshTaskTexDeriv",
 	"WriteMSTexture",
 	"Bindless",
-	"UnboundArraySize"
+	"UnboundArraySize",
+	"SubgroupOperations"
 };
 
 const C8 *ESHVendor_names[ESHVendor_Count] = {

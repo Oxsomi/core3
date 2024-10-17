@@ -70,7 +70,7 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		case EDepthStencilFormat_D16:		vkFormat = VK_FORMAT_D16_UNORM;					break;
 		case EDepthStencilFormat_D32:		vkFormat = VK_FORMAT_D32_SFLOAT;				break;
 		case EDepthStencilFormat_D24S8Ext:	vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;			break;
-		case EDepthStencilFormat_D32S8:		vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;		break;
+		case EDepthStencilFormat_D32S8Ext:	vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;		break;
 		case EDepthStencilFormat_S8Ext:		vkFormat = VK_FORMAT_S8_UINT;					break;
 	}
 
@@ -105,11 +105,6 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 	if(texture->resource.type != EResourceType_Swapchain) {
 
-		VkDeviceImageMemoryRequirementsKHR imageReq = (VkDeviceImageMemoryRequirementsKHR) {
-			.sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS_KHR,
-			.pCreateInfo = &imageInfo
-		};
-
 		VkMemoryDedicatedRequirements dedicatedReq = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
 		};
@@ -119,7 +114,17 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			.pNext = &dedicatedReq
 		};
 
-		instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
+		//TODO: versioned image
+
+		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, 0);
+		gotoIfError(clean, vkCheck(vkCreateImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)))
+
+		VkImageMemoryRequirementsInfo2 imageReq = (VkImageMemoryRequirementsInfo2) {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+			.image = managedImageExt->image
+		};
+
+		vkGetImageMemoryRequirements2(deviceExt->device, &imageReq, &requirements);
 
 		gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			&device->allocator,
@@ -134,11 +139,6 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		texture->resource.allocated = true;
 
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[texture->resource.blockId];
-
-		//TODO: versioned image
-
-		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, 0);
-		gotoIfError(clean, vkCheck(vkCreateImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)))
 
 		gotoIfError(clean, vkCheck(vkBindImageMemory(
 			deviceExt->device, managedImageExt->image, (VkDeviceMemory) block.ext, texture->resource.blockOffset

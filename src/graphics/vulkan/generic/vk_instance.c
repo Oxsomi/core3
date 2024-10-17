@@ -317,9 +317,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Load functions
 
-	vkExtension(clean, vkGetDeviceBufferMemoryRequirementsKHR, instanceExt->getDeviceBufferMemoryRequirements)
-	vkExtension(clean, vkGetDeviceImageMemoryRequirementsKHR, instanceExt->getDeviceImageMemoryRequirements)
-
 	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2)
 	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2)
 
@@ -419,7 +416,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc
 const C8 *reqExtensionsName[] = {
 	"VK_KHR_push_descriptor",
 	"VK_KHR_synchronization2",
-	"VK_KHR_maintenance4",
 	"VK_KHR_swapchain"
 };
 
@@ -440,7 +436,8 @@ const C8 *optExtensionsName[] = {
 	"VK_EXT_shader_atomic_float",
 	"VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
-	"VK_NV_compute_shader_derivatives"
+	"VK_NV_compute_shader_derivatives",
+	"VK_KHR_maintenance4"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -643,14 +640,18 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 
 		getDeviceProperties(
-			true, VkPhysicalDeviceMaintenance4Properties, maxBufferSize,
+			optExtensions[EOptExtensions_Maintenance4], VkPhysicalDeviceMaintenance4Properties, maxBufferSize,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES
 		)
 
 		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
 
-		if(maxBufferSize.maxBufferSize < GIBI || memorySizeAndDescriptorSets.maxMemoryAllocationSize < GIBI) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 1GiB", i);
+		if(
+			optExtensions[EOptExtensions_Maintenance4] && (
+				maxBufferSize.maxBufferSize < 256 * MIBI || memorySizeAndDescriptorSets.maxMemoryAllocationSize < 256 * MIBI
+			)
+		) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 256MiB", i);
 			continue;
 		}
 
@@ -820,11 +821,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			continue;
 		}
 
-		if(!deviceAddress.bufferDeviceAddress) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", bufferDeviceAddress has to be supported", i);
-			continue;
-		}
-
 		//Ensure device is compatible first
 
 		if(
@@ -885,7 +881,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			limits.maxImageDimension3D < 256 ||
 			limits.maxImageArrayLayers < 256 ||
 			limits.maxPushConstantsSize < 128 ||
-			limits.maxSamplerAllocationCount < 4000 ||
+			limits.maxSamplerAllocationCount < 1024 ||
 			limits.maxSamplerAnisotropy < 16 ||
 			limits.maxStorageBufferRange < 250 * MEGA ||
 			limits.maxSamplerLodBias < 4 ||
@@ -986,6 +982,12 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(features.fillModeNonSolid)
 			capabilities.features |= EGraphicsFeatures_Wireframe;
 
+		if(deviceAddress.bufferDeviceAddress)
+			capabilities.featuresExt |= EVkGraphicsFeatures_BufferDeviceAddress;
+
+		if(optExtensions[EOptExtensions_Maintenance4])
+			capabilities.featuresExt |= EVkGraphicsFeatures_Maintenance4;
+
 		//Force enable synchronization and timeline semaphores
 
 		if (!semaphore.timelineSemaphore) {
@@ -1069,19 +1071,24 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Subgroup operations
 
-		VkSubgroupFeatureFlags requiredSubOp =
-			VK_SUBGROUP_FEATURE_BASIC_BIT |
-			VK_SUBGROUP_FEATURE_VOTE_BIT |
-			VK_SUBGROUP_FEATURE_BALLOT_BIT;
+		if(subgroup.subgroupSize != 1) {
 
-		if((subgroup.supportedOperations & requiredSubOp) != requiredSubOp) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required subgroup operations wasn't supported!", i);
-			continue;
-		}
+			VkSubgroupFeatureFlags requiredSubOp =
+				VK_SUBGROUP_FEATURE_BASIC_BIT |
+				VK_SUBGROUP_FEATURE_VOTE_BIT |
+				VK_SUBGROUP_FEATURE_BALLOT_BIT;
 
-		if(subgroup.subgroupSize < 16 || subgroup.subgroupSize > 128) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 16-128!", i);
-			continue;
+			if((subgroup.supportedOperations & requiredSubOp) != requiredSubOp) {
+				Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required subgroup operations was missing!", i);
+				continue;
+			}
+
+			if(subgroup.subgroupSize < 4 || subgroup.subgroupSize > 128) {
+				Log_debugLnx("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 4-128!", i);
+				continue;
+			}
+
+			capabilities.features |= EGraphicsFeatures_SubgroupOperations;
 		}
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT)
@@ -1168,20 +1175,22 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			if(rtasFeat.accelerationStructure) {
 
-				if(!(
-					U64_min(
+				if(
+					!(
 						U64_min(
 							U64_min(
-								rtasProp.maxPerStageDescriptorAccelerationStructures,
-								rtasProp.maxPerStageDescriptorUpdateAfterBindAccelerationStructures
+								U64_min(
+									rtasProp.maxPerStageDescriptorAccelerationStructures,
+									rtasProp.maxPerStageDescriptorUpdateAfterBindAccelerationStructures
+								),
+								rtasProp.maxDescriptorSetAccelerationStructures
 							),
-							rtasProp.maxDescriptorSetAccelerationStructures
-						),
-						rtasProp.maxDescriptorSetUpdateAfterBindAccelerationStructures
-					) >= 16 &&
-					U64_min(rtasProp.maxGeometryCount, rtasProp.maxInstanceCount) >= 16777215 &&
-					rtasProp.maxPrimitiveCount >= GIBI / 2 - 1
-				))
+							rtasProp.maxDescriptorSetUpdateAfterBindAccelerationStructures
+						) >= 16 &&
+						U64_min(rtasProp.maxGeometryCount, rtasProp.maxInstanceCount) >= 16777215 &&
+						rtasProp.maxPrimitiveCount >= GIBI / 2 - 1
+					) || !deviceAddress.bufferDeviceAddress
+				)
 					rtasFeat.accelerationStructure = false;
 			}
 
@@ -1371,9 +1380,8 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			VK_FORMAT_B8G8R8A8_UNORM,
 
-			//D32S8, D32
+			//D32
 
-			VK_FORMAT_D32_SFLOAT_S8_UINT,
 			VK_FORMAT_D32_SFLOAT
 		};
 
@@ -1407,9 +1415,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
 
-			//D32S8, D32
+			//D32
 
-			depthStencilDef, depthStencilDef,
+			depthStencilDef
 		};
 
 		Bool unsupported = false;
@@ -1495,6 +1503,12 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			},
 
 			(OptionalFormat) {
+				.format = VK_FORMAT_D32_SFLOAT_S8_UINT,
+				.optFormat = EGraphicsDataTypes_D32S8,
+				.flags = depthStencilDef
+			},
+
+			(OptionalFormat) {
 				.format = VK_FORMAT_S8_UINT,
 				.optFormat = EGraphicsDataTypes_S8,
 				.flags = depthStencilDef
@@ -1510,6 +1524,11 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 				capabilities.dataTypes |= optionalFormats[k].optFormat;
 		}
 
+		if(!(capabilities.dataTypes & (EGraphicsDataTypes_D32S8 | EGraphicsDataTypes_D24S8))) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", D24S8 or D32S8 is required.", i);
+			continue;
+		}
+
 		//Grab LUID/UUID
 
 		if(id.deviceLUIDValid)
@@ -1522,7 +1541,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		capabilities.dataTypes |= EGraphicsDataTypes_I16;
 
-		capabilities.maxBufferSize = maxBufferSize.maxBufferSize;
+		capabilities.maxBufferSize = maxBufferSize.maxBufferSize ? maxBufferSize.maxBufferSize : 256 * MIBI;
 		capabilities.maxAllocationSize = memorySizeAndDescriptorSets.maxMemoryAllocationSize ;
 
 		//Fully converted type

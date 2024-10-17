@@ -294,6 +294,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	EDxGraphicsFeatures featuresDx = EDxGraphicsFeatures_None;
 	EGraphicsDataTypes dataTypes = EGraphicsDataTypes_None;
 
+	if(extensions & ESHExtension_SubgroupOperations)		features |= EGraphicsFeatures_SubgroupOperations;
 	if(extensions & ESHExtension_SubgroupArithmetic)		features |= EGraphicsFeatures_SubgroupArithmetic;
 	if(extensions & ESHExtension_SubgroupShuffle)			features |= EGraphicsFeatures_SubgroupShuffle;
 
@@ -311,6 +312,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	if(extensions & ESHExtension_WriteMSTexture)			features |= EGraphicsFeatures_WriteMSTexture;
 
 	if(extensions & ESHExtension_Bindless)					features |= EGraphicsFeatures_Bindless;
+
 
 	if(extensions & ESHExtension_F64)						dataTypes |= EGraphicsDataTypes_F64;
 	if(extensions & ESHExtension_I64)						dataTypes |= EGraphicsDataTypes_I64;

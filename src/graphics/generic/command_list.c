@@ -806,8 +806,8 @@ Error CommandListRef_copyImageRegions(
 			switch (srcFormat) {
 
 				case EDepthStencilFormat_D32:
-				case EDepthStencilFormat_D32S8:
-					compatible = dstFormat == EDepthStencilFormat_D32S8 || dstFormat == EDepthStencilFormat_D32;
+				case EDepthStencilFormat_D32S8Ext:
+					compatible = dstFormat == EDepthStencilFormat_D32S8Ext || dstFormat == EDepthStencilFormat_D32;
 					break;
 
 				default:

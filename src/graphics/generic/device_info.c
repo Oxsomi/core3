@@ -139,6 +139,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_Bindless)
 			Log_debugLnx("\t\tBindless");
 
+		if(feat & EGraphicsFeatures_SubgroupOperations)
+			Log_debugLnx("\t\tSubgroup operations");
+
 		//Data types
 
 		const U32 dat = cap.dataTypes;
@@ -184,6 +187,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(dat & EGraphicsDataTypes_D24S8)
 			Log_debugLnx("\t\tEDepthStencilFormat_D24S8");
+
+		if(dat & EGraphicsDataTypes_D32S8)
+			Log_debugLnx("\t\tEDepthStencilFormat_D32S8");
 
 		if(dat & EGraphicsDataTypes_RGB32f)
 			Log_debugLnx("\t\tETextureFormat_RGBA32f for use in textures (not just vertex input)");
@@ -242,6 +248,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_PerfQuery)
 				Log_debugLnx("\t\tPerformance query");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress)
+				Log_debugLnx("\t\tBuffer device address");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_Maintenance4)
+				Log_debugLnx("\t\tMaintenance4");
 		}
 	}
 }
@@ -284,6 +296,7 @@ Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
 	switch(format) {
 		case EDepthStencilFormat_D24S8Ext:	return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
+		case EDepthStencilFormat_D32S8Ext:	return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
 		case EDepthStencilFormat_S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
 		default:							return true;
 	}

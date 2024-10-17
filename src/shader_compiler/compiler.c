@@ -862,7 +862,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('S', 'u'):	//SubgroupArithmetic, SubgroupShuffle
+		case C8x2('S', 'u'):	//SubgroupArithmetic, SubgroupShuffle, SubgroupOperations
 
 			if(stageNameLen == 15) {			//SubgroupShuffle
 				if(
@@ -872,12 +872,20 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 					return ESHExtension_SubgroupShuffle;
 			}
 
-			else if (stageNameLen == 18) {		//SubgroupArithmetic
+			else if (stageNameLen == 18) {		//SubgroupArithmetic, SubgroupOperations
+
 				if(
 					*(const U64*)&extensionName.ptr[ 2] == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
 					*(const U64*)&extensionName.ptr[10] == C8x8('i', 't', 'h', 'm', 'e', 't', 'i', 'c')
 				)
 					return ESHExtension_SubgroupArithmetic;
+					
+				else if(
+					*(const U64*)&extensionName.ptr[ 2] == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'O', 'p') &&
+					*(const U64*)&extensionName.ptr[10] == C8x8('e', 'r', 'a', 't', 'i', 'o', 'n', 's')
+				)
+					return ESHExtension_SubgroupOperations;
+
 			}
 
 			break;

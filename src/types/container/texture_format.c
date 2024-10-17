@@ -296,7 +296,7 @@ ETextureFormatId DXFormat_toTextureFormatId(DXFormat format) {
 
 EDepthStencilFormat DXFormat_toDepthStencilFormat(DXFormat format) {
 	switch (format) {
-		case 20:							return EDepthStencilFormat_D32S8;
+		case 20:							return EDepthStencilFormat_D32S8Ext;
 		case 40:							return EDepthStencilFormat_D32;
 		case 45:							return EDepthStencilFormat_D24S8Ext;
 		case 55:							return EDepthStencilFormat_D16;
@@ -306,7 +306,7 @@ EDepthStencilFormat DXFormat_toDepthStencilFormat(DXFormat format) {
 
 DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format) {
 	switch (format) {
-		case EDepthStencilFormat_D32S8:		return 20;
+		case EDepthStencilFormat_D32S8Ext:	return 20;
 		case EDepthStencilFormat_D32:		return 40;
 		case EDepthStencilFormat_D24S8Ext:	return 45;
 		case EDepthStencilFormat_D16:		return 55;

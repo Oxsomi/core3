@@ -396,9 +396,6 @@ The following define the requirements of binaries embedded in oiSH files.
     - MinLod
     - ShaderNonUniform
     - RuntimeDescriptorArray
-    - GroupNonUniform
-    - GroupNonUniformVote or SubgroupVoteKHR
-    - GroupNonUniformBallot or SubgroupBallotKHR
     - StorageImageExtendedFormats
     - ImageQuery
     - DerivativeControl
@@ -416,8 +413,11 @@ The following define the requirements of binaries embedded in oiSH files.
     - StorageUniform16
     - StoragePushConstant16
     - StorageInputOutput16
-  - Multiview:
-    - MultiView
+  - Multiview: MultiView
+  - SubgroupOperations: 
+    - GroupNonUniform
+    - GroupNonUniformVote or SubgroupVoteKHR
+    - GroupNonUniformBallot or SubgroupBallotKHR
   - ShaderInvocationReorderNV as RayReorder.
   - RayTracingMotionBlurNV as RayMotionBlur.
   - RayQueryKHR as RayQuery.
@@ -444,7 +444,6 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_UAVS_AT_EVERY_STAGE
   - D3D_SHADER_REQUIRES_64_UAVS
   - D3D_SHADER_REQUIRES_LEVEL_9_COMPARISON_FILTERING
-  - D3D_SHADER_REQUIRES_WAVE_OPS
 - Extensions:
   - D3D_SHADER_REQUIRES_RAYTRACING_TIER_1_1 as RayQuery.
   - D3D_SHADER_REQUIRES_NATIVE_16BIT_OPS as 16BitTypes.
@@ -453,6 +452,7 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_DOUBLES or D3D_SHADER_REQUIRES_11_1_DOUBLE_EXTENSIONS as F64.
   - D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE or D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED as AtomicI64.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
+  - D3D_SHADER_REQUIRES_WAVE_OPS as SubgroupOperations.
 - NV extensions should be properly marked using annotations, or the oiSH is illegal. The OxC3 validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
 
 ## ESHExtension_Bindless / ESHExtension_UnboundArraySize

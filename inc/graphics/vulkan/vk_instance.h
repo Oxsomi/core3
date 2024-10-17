@@ -40,7 +40,8 @@ typedef enum EOptExtensions {
 	EOptExtensions_AtomicF32,
 	EOptExtensions_DeferredHostOperations,
 	EOptExtensions_RaytracingValidation,
-	EOptExtensions_ComputeDeriv
+	EOptExtensions_ComputeDeriv,
+	EOptExtensions_Maintenance4
 
 } EOptExtensions;
 
@@ -51,9 +52,6 @@ typedef struct VkGraphicsInstance {
 
 	VkInstance instance;
 	VkDebugReportCallbackEXT debugReportCallback;
-
-	PFN_vkGetDeviceBufferMemoryRequirementsKHR getDeviceBufferMemoryRequirements;
-	PFN_vkGetDeviceImageMemoryRequirementsKHR getDeviceImageMemoryRequirements;
 
 	PFN_vkGetPhysicalDeviceFeatures2KHR getPhysicalDeviceFeatures2;
 	PFN_vkGetPhysicalDeviceProperties2KHR getPhysicalDeviceProperties2;

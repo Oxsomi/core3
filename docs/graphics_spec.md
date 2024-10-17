@@ -4,7 +4,7 @@ OxC3 is not made for devices older than 3 years. OxC3's spec for newer versions 
 
 *Keep in mind that a minor or major version change can change this spec! It might be that there was an oversight and a device/api was released that disagreed with our minimum spec. If the device/api is important enough, we might change the future spec (but never in patch versions. Only in minor/major). Please check the changelog to verify.*
 
-We're targeting the minimum specs of following systems in OxC3 0.2:
+We're mainly targeting the following systems in OxC3 0.2. Though older systems will work too, but without important features such as Bindless.
 
 - Phones:
   - Apple iPhone 12 (A14); only via Metal3 support.
@@ -45,7 +45,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
   - VK_KHR_push_descriptor
-  - VK_KHR_maintenance4
   - Descriptor indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
     - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
   - VK_KHR_synchronization2
@@ -78,10 +77,10 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_multiview as Multiview.
   - VK_KHR_fragment_shading_rate as VariableRateShading
   - VK_NV_compute_shader_derivatives as ComputeDeriv as long as computeDerivativeGroupLinear is true.
-- subgroupSize of 4 - 128.
+  - VK_KHR_maintenance4 as Vk extension Maintainance4. Without this extension, max buffer size and allocation size is 256 MiB.
 - sampleRateShading of true.
-- maxMemoryAllocationSize and maxBufferSize of a minimum of 1GiB.
-- subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
+- maxMemoryAllocationSize and maxBufferSize of a minimum of 256MiB (ideally should use <=128MiB).
+- SubgroupOperations extension: subgroupSize of 4 - 128. subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.
 - samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp, multiDrawIndirect turned on.
 - Either BCn (textureCompressionBC) or ASTC (textureCompressionASTC_LDR) compression *must* be supported (can be both supported).
@@ -98,7 +97,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxFramebufferWidth, maxFramebufferHeight, maxImageDimension1D,  maxImageDimension2D, maxImageDimensionCube, maxViewportDimensions[i] of 16Ki or higher.
 - maxFramebufferLayers, maxImageDimension3D, maxImageArrayLayers of 256 or higher.
 - maxPushConstantsSize of 128 or higher.
-- maxSamplerAllocationCount of 4000 or higher.
+- maxSamplerAllocationCount of 1024 or higher.
 - maxSamplerAnisotropy of 16 or higher.
 - maxStorageBufferRange of .25GiB or higher.
 - maxSamplerLodBias of 4 or higher.
@@ -270,7 +269,7 @@ The following are required with VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT only:
 
 The following depth stencil formats are required (meaning VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT and VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT are set):
 
-- D16, D32, D32S8.
+- D16, D32, one of D24S8 or D32S8.
 
 Only the following are not always supported properly by the Vulkan implementation (so certain devices might not support them and thus they won't support OxC3). OxC3 will still enforce them to be present. Minimum spec was enforced here and it seems like all targeted systems support them.
 
@@ -296,7 +295,7 @@ The following are optional: If they're not properly supported `GraphicsDeviceInf
 - All BCn formats have to be supported if EGraphicsDataTypes_BCn is on.
 
 - RGB32u, RGB32i, RGB32f if they allow all other required bits (as mentioned at the start) besides VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT.
-- S8, D24S8.
+- S8, D24S8, D32S8.
 
 `GraphicsDeviceInfo_supportsFormatVertexAttribute` returns whether or not a format is applicable as a vertex attribute. The following are explicitly prohibited:
 
@@ -331,7 +330,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
-- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe, EGraphicsFeatures_Multiview, EGraphicsFeatures_DebugMarkers are enabled by default.
+- EGraphicsFeatures_SubgroupOperations, EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe, EGraphicsFeatures_Multiview, EGraphicsFeatures_DebugMarkers are enabled by default.
 - EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of Direct3D12 Ultimate (Turing, RDNA2, Arc and up).
 - If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
 - EGraphicsFeatures_DirectRendering is most often available, only not on QCOM chips.
@@ -352,7 +351,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - RaytracingTier>1_1 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline + EGraphicsFeatures_RayQuery.
 - Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
-- EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally).
+- EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally), D32S8 is always available.
 - For format RGB32(u/i) to be enabled, it has to support render target.
 - For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
 - AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.

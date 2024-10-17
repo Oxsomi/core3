@@ -40,6 +40,7 @@
 		gotoIfError3(clean, GraphicsInterface_create(e_rr))
 
 		U64 queried = 0;
+		Bool wasExplicit = false;
 
 		if(args.parameters & EOperationHasParameter_GraphicsApi) {
 
@@ -71,14 +72,18 @@
 					CharString_equalsStringInsensitive(str, d3d12) ||
 					CharString_equalsStringInsensitive(str, directx12) ||
 					CharString_equalsStringInsensitive(str, direct3d12)
-				)
+				) {
 					queried |= (U64)1 << EGraphicsApi_Direct3D12;
+					wasExplicit = true;
+				}
 
 				else if(
 					CharString_equalsStringInsensitive(str, vulkan) ||
 					CharString_equalsStringInsensitive(str, vk)
-				)
+				) {
 					queried |= (U64)1 << EGraphicsApi_Vulkan;
+					wasExplicit = true;
+				}
 
 				else if(CharString_equalsStringInsensitive(str, all))
 					queried = U64_MAX;
@@ -98,8 +103,16 @@
 
 			EGraphicsApi api = (EGraphicsApi) j;
 
-			if(!GraphicsInterface_supportsApi(api) || !((queried >> j) & 1))
+			if(!((queried >> j) & 1))
 				continue;
+
+			if (!GraphicsInterface_supportsApi(api)) {
+
+				if(wasExplicit)
+					Log_warnLnx("CLI_graphicsDevices() -graphics-api specifically requested API, but wasn't found");
+
+				continue;
+			}
 
 			gotoIfError2(clean, GraphicsInstance_create(
 				(GraphicsApplicationInfo) {

@@ -343,10 +343,12 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		caps.features |=
 			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount |
 			EGraphicsFeatures_GeometryShader | EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupShuffle |
-			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend | EGraphicsFeatures_Multiview;
+			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend |
+			EGraphicsFeatures_Multiview | EGraphicsFeatures_SubgroupOperations;
 
 		caps.dataTypes |=
-			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x;
+			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
+			EGraphicsDataTypes_D32S8;
 
 		if(vendorId != EGraphicsVendorId_AMD)
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;

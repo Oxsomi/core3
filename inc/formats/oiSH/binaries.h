@@ -64,7 +64,9 @@ typedef enum ESHExtension {
 	ESHExtension_Bindless					= 1 << 18,
 	ESHExtension_UnboundArraySize			= 1 << 19,
 
-	ESHExtension_Count						= 20
+	ESHExtension_SubgroupOperations			= 1 << 20,
+
+	ESHExtension_Count						= 21
 
 } ESHExtension;
 

@@ -126,7 +126,7 @@ typedef struct GraphicsResource {
 
 	void *debugExt;							//Debug information
 
-	U64 deviceAddress;						//Contains the memory address on the device (otherwise 0)
+	U64 deviceAddress;						//Contains the memory address on the device if available (otherwise 0)
 
 } GraphicsResource;
 
