@@ -5,3 +5,4 @@ foreach(LIBDIR ${LIBDIRS})
 		file(COPY "${LIBDIR}/./" DESTINATION "${DESTDIR}" FILES_MATCHING PATTERN LICENSE*)
 	endif()
 endforeach()
+

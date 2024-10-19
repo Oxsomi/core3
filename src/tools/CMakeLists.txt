@@ -61,3 +61,15 @@ include(../../cmake/oxc3.cmake)
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 configure_virtual_files(OxC3)
 apply_dependencies(OxC3)
+
+# Done automatically by apply_dependencies in things that use OxC3 as a conan package
+# However, OxC3 itself has to manually copy .so file to avoid this problem
+
+if(UNIX AND TARGET OxC3_graphics_vk)
+
+	add_custom_command(
+		TARGET OxC3 POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:OxC3_graphics_vk> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+	)
+endif()
+

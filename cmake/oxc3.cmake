@@ -210,3 +210,4 @@ function(configure_virtual_files target)
 	endif()
 
 endfunction()
+
