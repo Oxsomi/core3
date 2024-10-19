@@ -44,6 +44,9 @@ function(apply_dependencies target)
 		)
 	endif()
 
+	# Ensure that working directory is set to the same place as the exe to ensure it can find .dll/.so
+	set_target_properties(${target} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")
+
 endfunction()
 
 # Add virtual directory as a loadable section.
