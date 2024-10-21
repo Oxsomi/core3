@@ -34,4 +34,4 @@ Bool WindowManager_freeNative(WindowManager *w) {
 	return true;
 }
 
-void WindowManager_updateExt() { }
+void WindowManager_updateExt(WindowManager *manager) { (void) manager; }

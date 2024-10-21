@@ -32,10 +32,130 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "types/base/time.h"
+#include "platforms/linux/lwindow_structs.h"
 
-Error LWindow_initSize(Window *w, I32x2 size) { (void) w; (void) size; return Error_none(); }
+#include <errno.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
-/*
+//https://wayland-book.com/surfaces/shared-memory.html
+Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
+
+	Bool s_uccess = true;
+	struct wl_shm_pool *backBuffer = NULL;
+
+	if(w->hint & EWindowHint_ProvideCPUBuffer) {
+
+		LWindow *lwin = (LWindow*) w->nativeData;
+
+		struct wl_shm *shm = ((LWindowManager*)w->owner->platformData.ptr)->shm;
+
+		U32 width = (U32) I32x2_x(size);
+		U32 height = (U32) I32x2_y(size);
+		U64 stride = (U64)width * height * 4;
+		U64 nbuffers = sizeof(lwin->buffers) / sizeof(lwin->buffers[0]);
+
+		if((width >> 24) || (height >> 24))
+			retError(clean, Error_invalidState(0, "LWindow_initSize() max window size of 16777215"))
+
+		//Different implementation of https://wayland-book.com/surfaces/shared-memory.html#allocating-a-shared-memory-pool
+
+		//Grab start of random name
+
+		C8 base[] = "/wl_shm";	//sizeof includes null terminator, so no -
+		C8 randomName[] = "/wl_shm-XXXXXXXXXXX";		//64-bit number as Nyto
+		U64 rand = 0;
+
+		if(!Buffer_csprng(Buffer_createRef(&rand, sizeof(rand))))
+			retError(clean, Error_invalidState(0, "LWindow_initSize() can't create file name"))
+
+		U64 randOg = rand;
+		I32 fd = -1;
+
+		//Try to find a file handle that's not occupied.
+		//Though extremely rare that 4 subsequent 64-bit numbers are taken.
+		//Even if 65536 buffers are created, it's still 1/2^48 chance each.
+		//Having 4 is probably about 1/2^50 or something like that.
+
+		for(U64 j = 0; j < 4; ++j) {
+
+			for(U8 i = 0; i < 11; ++i) {
+				randomName[sizeof(base) + i] = C8_createNyto(rand & 0x3F);
+				rand >>= 6;
+			}
+
+			fd = shm_open(randomName, O_RDWR | O_CREAT | O_EXCL, 0600);
+
+			if(fd < 0) {
+
+				if(errno != EEXIST)
+					retError(clean, Error_stderr(errno, "LWindow_initSize() shm_open failed"))
+
+				rand = randOg + j + 1;
+				continue;
+			}
+
+			shm_unlink(randomName);
+		}
+		
+		if(fd < 0)
+			retError(clean, Error_invalidState(0, "LWindow_initSize() couldn't find valid shm file name"))
+
+		//Creating backing memory
+
+		while(ftruncate(fd, nbuffers * stride) < 0) {
+			if(errno != EINTR) {
+				close(fd);
+				retError(clean, Error_invalidState(0, "LWindow_initSize() couldn't open file"))
+			}
+		}
+
+		if(lwin->fileDescriptor)
+			close(lwin->fileDescriptor);
+
+		lwin->fileDescriptor = fd;
+
+		lwin->pixelStride = (U32) (width * 4);
+		lwin->height = (U16) height;
+		lwin->heightHi8 = (U8) (height >> 16);
+
+		backBuffer = wl_shm_create_pool(shm, fd, nbuffers * stride);
+
+		if(!backBuffer)
+			retError(clean, Error_invalidState(0, "LWindow_initSize() wayland create pool failed"))
+
+		if(lwin->backBuffer)
+			wl_shm_pool_destroy(lwin->backBuffer);
+
+		lwin->backBuffer = backBuffer;
+
+		for(U64 i = 0; i < nbuffers; ++i)
+			lwin->buffers[i] = wl_shm_pool_create_buffer(
+				backBuffer, stride * i, width, height, lwin->pixelStride, WL_SHM_FORMAT_XRGB8888
+			);
+
+		//Interestingly, with wayland we don't have to allocate a main buffer.
+		//So the manual present will just swap the address to the next buffer id.
+
+		lwin->mainBufferPtr = mmap(NULL, nbuffers * stride, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+		lwin->backBufferId = 0;
+		w->cpuVisibleBuffer.ptr = lwin->mainBufferPtr;
+		w->cpuVisibleBuffer.lengthAndRefBits = stride | ((U64)1 << 63);
+
+		backBuffer = NULL;	
+	}
+
+clean:
+
+	if(backBuffer)
+		wl_shm_pool_destroy(backBuffer);
+
+	return s_uccess;
+}
+
 void LWindow_updateMonitors(Window *w) {
 
 	//TODO: Query monitors
@@ -44,809 +164,113 @@ void LWindow_updateMonitors(Window *w) {
 		w->callbacks.onMonitorChange(w);
 }
 
-Error WWindow_initSize(Window *w, I32x2 size) {
+//TODO: Update minimized?
+//TODO: Update focus
+//TODO: Adhere to min/max size
+//TODO: Get offset
+//TODO: Char input and key/mouse input
 
-	if(w->nativeData) {
-		DeleteObject((HGDIOBJ) w->nativeData);
-		w->nativeData = NULL;
-	}
+void Window_updateSize(
+	void *data,
+	struct xdg_toplevel *xdg_toplevel,
+	I32 width,
+	I32 height,
+	struct wl_array *states
+) {
+	(void) xdg_toplevel;
+	(void) states;
 
-	HDC screen = NULL;
+	Window *w = (Window*) data;
+
+	I32x2 newSize = I32x2_create2(width, height);
+
+	if (I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize))
+		return;
+
+	w->size = newSize;
 	Error err = Error_none();
 
-	if(w->hint & EWindowHint_ProvideCPUBuffer) {
+	if(!LWindow_initSize(w, w->size, &err))
+		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 
-		screen = GetDC(w->nativeHandle);
+	LWindow_updateMonitors(w);
 
-		if(!screen)
-			gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
-
-		//TODO: Support something other than RGBA8
-
-		BITMAPINFO bmi = (BITMAPINFO) {
-			.bmiHeader = {
-				.biSize = sizeof(BITMAPINFOHEADER),
-				.biWidth = (DWORD) I32x2_x(size),
-				.biHeight = (DWORD) I32x2_y(size),
-				.biPlanes = 1,
-				.biBitCount = 32,
-				.biCompression = BI_RGB
-			}
-		};
-
-		w->nativeData = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, NULL, 0);
-
-		if(!screen)
-			gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
-
-		//Manually set it to be a reference
-		//This makes it so we don't free it, because we don't own the memory
-
-		w->cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 63);
-
-		ReleaseDC(w->nativeHandle, screen);
-		screen = NULL;
-	}
-
-clean:
-
-	if(screen)
-		ReleaseDC(w->nativeHandle, screen);
-
-	return err;
+	if (w->callbacks.onResize)
+		w->callbacks.onResize(w);
 }
 
-LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+void Window_close(void *data, struct xdg_toplevel *xdg_toplevel) {
 
-	Window *w = (Window*) GetWindowLongPtrW(hwnd, 0);
+	Window *w = (Window*) data;
 
-	if(!w)
-		return DefWindowProc(hwnd, message, wParam, lParam);
-
-	switch (message) {
-
-		case WM_QUIT:
-		case WM_CLOSE:
-			w->flags |= EWindowFlags_ShouldTerminate;
-			return 0;
-
-		case WM_CREATE:
-			break;
-
-		//Setting focus
-
-		case WM_SETFOCUS:
-		case WM_KILLFOCUS:
-
-			if(message == WM_SETFOCUS)
-				w->flags |= EWindowFlags_IsFocussed;
-
-			else {
-
-				//Reset keys to avoid them hanging.
-
-				for (U64 i = 0; i < w->devices.length; ++i) {
-
-					InputDevice *dev = &w->devices.ptrNonConst[i];
-
-					//Reset buttons
-
-					for (U16 j = 0; j < dev->buttons; ++j) {
-
-						InputHandle handle = InputDevice_createHandle(*dev, j, EInputType_Button);
-
-						EInputState prevState = InputDevice_getState(*dev, handle);
-
-						if(prevState & EInputState_Curr) {
-
-							InputDevice_setCurrentState(*dev, handle, false);
-							EInputState newState = InputDevice_getState(*dev, handle);
-
-							if(prevState != newState && w->callbacks.onDeviceButton)
-								w->callbacks.onDeviceButton(w, dev, handle, false);
-						}
-					}
-
-					//Reset axes
-
-					for (U16 j = 0; j < dev->axes; ++j) {
-
-						InputAxis axis = *InputDevice_getAxis(*dev, j);
-
-						if(!axis.resetOnInputLoss)
-							continue;
-
-						InputHandle handle = InputDevice_createHandle(*dev, j, EInputType_Axis);
-
-						F32 prevStatef = InputDevice_getCurrentAxis(*dev, handle);
-
-						if (prevStatef) {
-
-							InputDevice_setCurrentAxis(*dev, handle, 0);
-
-							if(w->callbacks.onDeviceAxis)
-								w->callbacks.onDeviceAxis(w, dev, handle, 0);
-						}
-					}
-
-					//Reset flags that might've been set
-
-					dev->flags = 0;
-				}
-
-				w->flags &= ~EWindowFlags_IsFocussed;
-			}
-
-			if(w->callbacks.onUpdateFocus)
-				w->callbacks.onUpdateFocus(w);
-
-			break;
-
-		case WM_DISPLAYCHANGE:
-			WWindow_updateMonitors(w);
-			break;
-
-		//Input handling
-
-		case WM_CHAR: {
-
-			Buffer buf = Buffer_createRef(w->buffer, sizeof(w->buffer));
-			UnicodeCodePoint typed = 0;
-			Bool clearBuffer = true;
-
-			//Single char
-
-			if (wParam <= 0xD7FF)
-				typed = (UnicodeCodePoint) wParam;
-
-			//First char
-
-			else if (wParam < 0xDC00) {				//Cache for final char
-				((U16*)buf.ptr)[0] = (U16)wParam;
-				clearBuffer = false;
-			}
-
-			//Second char
-
-			else if(wParam < 0xE000 && buf.ptr[0]) {
-
-				((U16*)buf.ptr)[1] = (U16)wParam;
-
-				//Now it's time to translate this from UTF16
-
-				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
-				if (!Buffer_readAsUTF16(buf, 0, &codepoint).genericError)
-					typed = codepoint.index;
-			}
-
-			if(typed && w->callbacks.onTypeChar) {
-
-				//Translate to UTF8
-
-				U8 bytes = 0;
-				Error err = Buffer_writeAsUTF8(buf, 0, typed, &bytes);
-				((C8*)buf.ptr)[bytes] = '\0';
-
-				if(!err.genericError)
-					w->callbacks.onTypeChar(w, CharString_createRefSizedConst((const C8*)buf.ptr, bytes, true));
-			}
-
-			if(clearBuffer)
-				((C8*)buf.ptr)[0] = '\0';		//Clear buffer
-
-			break;
-		}
-
-		case WM_INPUT: {
-
-			RAWINPUT raw;
-			U32 rawSiz = (U32) sizeof(raw);
-			if (!GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) &raw, &rawSiz, sizeof(RAWINPUTHEADER))) {
-
-				Error_printx(
-					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"),
-					ELogLevel_Error, ELogOptions_Default
-				);
-
-				Log_errorx(ELogOptions_Default, "Couldn't get raw input");
-				break;
-			}
-
-			RAWINPUT *data = &raw;
-
-			//Grab device from the list
-
-			InputDevice *dev = w->devices.ptrNonConst;
-			InputDevice *end = ListInputDevice_end(w->devices);
-
-			for(; dev != end; ++dev)
-				if(*(HANDLE*) dev->dataExt.ptr == data->header.hDevice)
-					break;
-
-			if(!data->header.hDevice || dev == end)
-				goto cleanup;
-
-			if (dev->type == EInputDeviceType_Keyboard) {
-
-				RAWKEYBOARD keyboardDat = data->data.keyboard;
-
-				Bool isKeyDown = !(keyboardDat.Flags & 1);
-
-				//Ensure the key state is up to date
-				//It's a shame we have to get the state, but we can't rely on our program to know the exact state
-				//Because locks can be toggled from a different program
-
-				U32 flags =
-					((GetKeyState(VK_CAPITAL) & 1) << EKeyboardFlags_Caps) |
-					((GetKeyState(VK_NUMLOCK) & 1) << EKeyboardFlags_NumLock) |
-					((GetKeyState(VK_SCROLL) & 1) << EKeyboardFlags_ScrollLock) |
-					((GetKeyState(VK_SHIFT) & 1) << EKeyboardFlags_Shift) |
-					((GetKeyState(VK_CONTROL) & 1) << EKeyboardFlags_Control) |
-					((GetKeyState(VK_MENU) & 1) << EKeyboardFlags_Alt);
-
-				dev->flags = flags;
-
-				//Translate scan code to our system and set corresponding device flags.
-				//In case of special keys, we don't want to use scan codes.
-				//Only if it's about our main keyboard or numpad
-
-				InputHandle handle = InputDevice_invalidHandle();
-
-				switch (keyboardDat.VKey) {
-
-					case VK_SNAPSHOT:			handle = EKey_PrintScreen;		break;
-					case VK_SCROLL:				handle = EKey_ScrollLock;		break;
-					case VK_NUMLOCK:			handle = EKey_NumLock;			break;
-					case VK_PAUSE:				handle = EKey_Pause;			break;
-					case VK_INSERT:				handle = EKey_Insert;			break;
-					case VK_HOME:				handle = EKey_Home;				break;
-					case VK_PRIOR:				handle = EKey_PageUp;			break;
-					case VK_NEXT:				handle = EKey_PageDown;			break;
-					case VK_DELETE:				handle = EKey_Delete;			break;
-					case VK_END:				handle = EKey_End;				break;
-
-					case VK_UP:					handle = EKey_Up;				break;
-					case VK_LEFT:				handle = EKey_Left;				break;
-					case VK_DOWN:				handle = EKey_Down;				break;
-					case VK_RIGHT:				handle = EKey_Right;			break;
-
-					case VK_SELECT:				handle = EKey_Select;			break;
-					case VK_PRINT:				handle = EKey_Print;			break;
-					case VK_EXECUTE:			handle = EKey_Execute;			break;
-					case VK_BROWSER_BACK:		handle = EKey_Back;				break;
-					case VK_BROWSER_FORWARD:	handle = EKey_Forward;			break;
-					case VK_SLEEP:				handle = EKey_Sleep;			break;
-					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;			break;
-					case VK_BROWSER_STOP:		handle = EKey_Stop;				break;
-					case VK_BROWSER_SEARCH:		handle = EKey_Search;			break;
-					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;		break;
-					case VK_BROWSER_HOME:		handle = EKey_Start;			break;
-					case VK_VOLUME_MUTE:		handle = EKey_Mute;				break;
-					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;		break;
-					case VK_VOLUME_UP:			handle = EKey_VolumeUp;			break;
-					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;				break;
-					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;			break;
-					case VK_CLEAR:				handle = EKey_Clear;			break;
-					case VK_ZOOM:				handle = EKey_Zoom;				break;
-					case VK_RETURN:				handle = EKey_Enter;			break;
-					case VK_HELP:				handle = EKey_Help;				break;
-					case VK_APPS:				handle = EKey_Apps;				break;
-
-					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
-					case VK_ADD:				handle = EKey_NumpadAdd;		break;
-					case VK_DECIMAL:			handle = EKey_NumpadDot;		break;
-					case VK_DIVIDE:				handle = EKey_NumpadDiv;		break;
-					case VK_SUBTRACT:			handle = EKey_NumpadSub;		break;
-
-					default:
-
-						if(keyboardDat.VKey >= VK_NUMPAD0 && keyboardDat.VKey <= VK_NUMPAD9) {
-							handle = EKey_Numpad0 + (keyboardDat.VKey - VK_NUMPAD0);
-							break;
-						}
-
-						switch (keyboardDat.MakeCode) {
-
-							//Row 0
-
-							case 0x01:					handle = EKey_Escape;		break;
-
-							case 0x3B:					handle = EKey_F1;			break;
-							case 0x3C:					handle = EKey_F2;			break;
-							case 0x3D:					handle = EKey_F3;			break;
-							case 0x3E:					handle = EKey_F4;			break;
-							case 0x3F:					handle = EKey_F5;			break;
-							case 0x40:					handle = EKey_F6;			break;
-							case 0x41:					handle = EKey_F7;			break;
-							case 0x42:					handle = EKey_F8;			break;
-							case 0x43:					handle = EKey_F9;			break;
-							case 0x44:					handle = EKey_F10;			break;
-							case 0x57:					handle = EKey_F11;			break;
-							case 0x58:					handle = EKey_F12;			break;
-
-							//Row 1
-
-							case 0x29:					handle = EKey_Backtick;		break;
-
-							case 0x02: case 0x03: case 0x04: case 0x05: case 0x06: case 0x07: case 0x08: case 0x09: case 0x0A:
-								handle = EKey_1 + (keyboardDat.MakeCode - 2);
-								break;
-
-							case 0xB:					handle = EKey_0;			break;
-							case 0xC:					handle = EKey_Minus;		break;
-							case 0xD:					handle = EKey_Equals;		break;
-							case 0xE:					handle = EKey_Backspace;	break;
-
-							//Row 2
-
-							case 0x0F:					handle = EKey_Tab;			break;
-							case 0x10:					handle = EKey_Q;			break;
-							case 0x11:					handle = EKey_W;			break;
-							case 0x12:					handle = EKey_E;			break;
-							case 0x13:					handle = EKey_R;			break;
-							case 0x14:					handle = EKey_T;			break;
-							case 0x15:					handle = EKey_Y;			break;
-							case 0x16:					handle = EKey_U;			break;
-							case 0x17:					handle = EKey_I;			break;
-							case 0x18:					handle = EKey_O;			break;
-							case 0x19:					handle = EKey_P;			break;
-							case 0x1A:					handle = EKey_LBracket;		break;
-							case 0x1B:					handle = EKey_RBracket;		break;
-
-							//Row 3
-
-							case 0x3A:					handle = EKey_Caps;			break;
-							case 0x1E:					handle = EKey_A;			break;
-							case 0x1F:					handle = EKey_S;			break;
-							case 0x20:					handle = EKey_D;			break;
-							case 0x21:					handle = EKey_F;			break;
-							case 0x22:					handle = EKey_G;			break;
-							case 0x23:					handle = EKey_H;			break;
-							case 0x24:					handle = EKey_J;			break;
-							case 0x25:					handle = EKey_K;			break;
-							case 0x26:					handle = EKey_L;			break;
-							case 0x27:					handle = EKey_Semicolon;	break;
-							case 0x28:					handle = EKey_Quote;		break;
-							case 0x2B:					handle = EKey_Backslash;	break;
-
-							//Row 4
-
-							case 0x2A:					handle = EKey_LShift;		break;
-							case 0x56:					handle = EKey_Bar;			break;
-							case 0x2C:					handle = EKey_Z;			break;
-							case 0x2D:					handle = EKey_X;			break;
-							case 0x2E:					handle = EKey_C;			break;
-							case 0x2F:					handle = EKey_V;			break;
-							case 0x30:					handle = EKey_B;			break;
-							case 0x31:					handle = EKey_N;			break;
-							case 0x32:					handle = EKey_M;			break;
-							case 0x33:					handle = EKey_Comma;		break;
-							case 0x34:					handle = EKey_Period;		break;
-							case 0x35:					handle = EKey_Slash;		break;
-							case 0x36:					handle = EKey_RShift;		break;
-
-							//Row 5
-
-							case 0x1D:					handle = EKey_LCtrl;		break;
-							case 0xE05B:				handle = EKey_LMenu;		break;
-							case 0x38:					handle = EKey_LAlt;			break;
-							case 0x39:					handle = EKey_Space;		break;
-							case 0xE038:				handle = EKey_RAlt;			break;
-							case 0xE05C:				handle = EKey_RMenu;		break;
-							case 0xE05D:				handle = EKey_Options;		break;
-							case 0xE01D:				handle = EKey_RCtrl;		break;
-
-							//Unknown key
-
-							default:
-								goto cleanup;
-						}
-
-						break;
-				}
-
-				//Send keys through interface and update input device
-
-				EInputState prevState = InputDevice_getState(*dev, handle);
-
-				InputDevice_setCurrentState(*dev, handle, isKeyDown);
-				EInputState newState = InputDevice_getState(*dev, handle);
-
-				if(prevState != newState && w->callbacks.onDeviceButton)
-					w->callbacks.onDeviceButton(w, dev, handle, isKeyDown);
-
-				return 0;
-
-			} else if (dev->type == EInputDeviceType_Mouse) {
-
-				RAWMOUSE mouseDat = data->data.mouse;
-
-				for (U64 i = 0; i < 5; ++i) {
-
-					Bool isDown = mouseDat.usButtonFlags & (1 << (i << 1));
-					Bool isUp = mouseDat.usButtonFlags & (2 << (i << 1));
-
-					if(!isDown && !isUp)
-						continue;
-
-					InputHandle handle = (InputHandle) (EMouseButton_Left + i);
-					InputDevice_setCurrentState(*dev, handle, isDown);
-
-					if (w->callbacks.onDeviceButton)
-						w->callbacks.onDeviceButton(w, dev, handle, isDown);
-				}
-
-				if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
-
-					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_X, delta);
-
-					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, delta);
-				}
-
-				if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
-
-					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_Y, delta);
-
-					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, delta);
-				}
-
-				F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_X);
-				F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Y);
-
-				F32 nextX, nextY;
-
-				if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
-
-					RECT rect;
-					GetClientRect(hwnd, &rect);
-
-					InputDevice_resetFlag(dev, EMouseFlag_IsRelative);
-
-					nextX = (F32) (mouseDat.lLastX - rect.left);
-					nextY = (F32) (mouseDat.lLastY - rect.top);
-
-				} else {
-					InputDevice_setFlag(dev, EMouseFlag_IsRelative);
-					nextX = prevX + (F32) mouseDat.lLastX;
-					nextY = prevY + (F32) mouseDat.lLastY;
-				}
-
-				if (nextX != prevX) {
-
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_X, nextX);
-
-					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_X, nextX);
-				}
-
-				if (nextY != prevY) {
-
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Y, nextY);
-
-					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_Y, nextY);
-				}
-			}
-
-		cleanup:
-			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
-			return lr;
-		}
-
-		//TODO: Handle capture cursor
-
-		case WM_INPUT_DEVICE_CHANGE: {
-
-			RID_DEVICE_INFO deviceInfo = (RID_DEVICE_INFO) { 0 };
-			U32 size = sizeof(deviceInfo);
-			deviceInfo.cbSize = size;
-
-			if (!GetRawInputDeviceInfoW((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
-
-				Error_printx(
-					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputDeviceInfo failed"),
-					ELogLevel_Error, ELogOptions_Default
-				);
-
-				Log_errorx(ELogOptions_Default, "Invalid data in WM_INPUT_DEVICE_CHANGE");
-				break;
-			}
-
-			if(deviceInfo.dwType == RIM_TYPEHID)		//Irrelevant for us for now
-				break;
-
-			Error err;
-
-			Bool isAdded = wParam == GIDC_ARRIVAL;
-
-			if (isAdded) {
-
-				Bool isKeyboard = deviceInfo.dwType == RIM_TYPEKEYBOARD;
-
-				//Create input device
-
-				InputDevice device = (InputDevice) { 0 };
-
-				if (isKeyboard) {
-
-					if ((err = Keyboard_create((Keyboard*) &device)).genericError) {
-						Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-						break;
-					}
-				}
-
-				else if ((err = Mouse_create((Mouse*) &device)).genericError) {
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-					break;
-				}
-
-				if((err = Buffer_createUninitializedBytesx(sizeof(HANDLE), &device.dataExt)).genericError) {
-					InputDevice_free(&device);
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-					break;
-				}
-
-				RAWINPUTDEVICE rawDevice = (RAWINPUTDEVICE) {
-					0x01,								//Perhaps 0xD for touchscreen at some point			TODO:
-					(U16)(isKeyboard ? 0x06 : 0x02),	//0x4-0x05 for game controllers in the future		TODO:
-					0x0,
-					hwnd
-				};
-
-				//Find free spot in device array
-				//If this happens, we don't need to resize the array
-
-				InputDevice *dev = ListInputDevice_begin(w->devices);
-				InputDevice *end = ListInputDevice_end(w->devices);
-
-				for(; dev != end; ++dev)
-					if(dev->type == EInputDeviceType_Undefined)
-						break;
-
-				//Our list isn't big enough, we need to resize
-
-				Bool pushed = false;
-
-				if(dev == end) {
-
-					//If it fails, we can't create a new device
-
-					err = ListInputDevice_pushBackx(&w->devices, (InputDevice) { 0 });
-					dev = ListInputDevice_last(w->devices);
-					pushed = true;
-
-					if(err.genericError) {
-						Buffer_freex(&device.dataExt);
-						InputDevice_free(&device);
-						Log_errorx(ELogOptions_Default, "Couldn't register device");
-						break;
-					}
-
-					//After this, our dev and end pointers are valid still
-					//Because our list didn't reallocate, it just changed size
-				}
-
-				//Register device
-
-				if (!RegisterRawInputDevices(&rawDevice, 1, sizeof(RAWINPUTDEVICE))) {
-
-					Error_printx(
-						Error_platformError(0, GetLastError(), "WWindow_onCallback() RegisterRawInputDevices failed"),
-						ELogLevel_Error, ELogOptions_Default
-					);
-
-					if(pushed)
-						ListInputDevice_popBack(&w->devices, NULL);
-
-					Buffer_freex(&device.dataExt);
-					InputDevice_free(&device);
-
-					Log_errorx(ELogOptions_Default, "Couldn't create raw input device");
-					break;
-				}
-
-				//Store device and call callback
-
-				*(HANDLE*) device.dataExt.ptr = (HANDLE)lParam;
-				*dev = device;
-
-				if (w->callbacks.onDeviceAdd)
-					w->callbacks.onDeviceAdd(w, dev);
-
-			} else {
-
-				//Find our device
-
-				InputDevice *ours = ListInputDevice_begin(w->devices);
-				InputDevice *end = ListInputDevice_end(w->devices);
-
-				for(; ours != end; ++ours)
-					if(*(HANDLE*) ours->dataExt.ptr == (HANDLE) lParam)
-						break;
-
-				if(ours == end)		//Unrecognized device
-					break;
-
-				//Notify our removal
-
-				if (w->callbacks.onDeviceRemove)
-					w->callbacks.onDeviceRemove(w, ours);
-
-				//Cleanup our device
-
-				InputDevice_free(ours);
-
-				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
-				//This is to keep the list as small as possible because we might be looping over it at some point
-				//We can of course have devices that aren't initialized in between valid ones,
-				//because our list isn't contiguous
-
-				if(ours == end - 1)
-					while(
-						w->devices.length &&
-						ListInputDevice_last(w->devices)->type == EInputDeviceType_Undefined
-					)
-						if((ListInputDevice_popBack(&w->devices, NULL)).genericError)
-							break;
-
-			}
-
-			return 0;
-		}
-
-		//Render
-
-		case WM_PAINT: {
-
-			if(!(w->hint & EWindowHint_AllowBackgroundUpdates) && (w->flags & EWindowFlags_IsMinimized))
-				return 0;
-
-			//Update interface
-
-			Ns now = Time_now();
-
-			if (w->callbacks.onUpdate) {
-				F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
-				w->callbacks.onUpdate(w, dt);
-			}
-
-			w->lastUpdate = now;
-
-			//Update input
-
-			InputDevice *dit = ListInputDevice_begin(w->devices);
-			InputDevice *dend = ListInputDevice_end(w->devices);
-
-			for(; dit != dend; ++dit)
-				InputDevice_markUpdate(*dit);
-
-			//Render (if not minimized)
-
-			if(w->callbacks.onDraw && !(w->flags & EWindowFlags_IsMinimized))
-				w->callbacks.onDraw(w);
-
-			return 0;
-		}
-
-		case WM_GETMINMAXINFO: {
-
-			MINMAXINFO *lpMMI = (MINMAXINFO*) lParam;
-			lpMMI->ptMinTrackSize.x = I32x2_x(w->minSize);
-			lpMMI->ptMinTrackSize.y = I32x2_y(w->minSize);
-
-			lpMMI->ptMaxTrackSize.x = I32x2_x(w->maxSize);
-			lpMMI->ptMaxTrackSize.y = I32x2_y(w->maxSize);
-
-			break;
-		}
-
-		case WM_SIZE: {
-
-			RECT r;
-			GetClientRect(hwnd, &r);
-			I32x2 newSize = I32x2_create2(r.right - r.left, r.bottom - r.top);
-
-			Bool prevState = w->flags & EWindowFlags_IsMinimized;
-
-			if (wParam == SIZE_MINIMIZED)
-				w->flags |= EWindowFlags_IsMinimized;
-
-			else w->flags &= ~EWindowFlags_IsMinimized;
-
-			Bool newState = w->flags & EWindowFlags_IsMinimized;
-
-			if ((I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize)) && prevState == newState)
-				break;
-
-			w->size = newSize;
-			Error err = WWindow_initSize(w, w->size);
-
-			if(err.genericError)
-				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-
-			WWindow_updateMonitors(w);
-
-			if (w->callbacks.onResize)
-				w->callbacks.onResize(w);
-
-			break;
-		}
-
-		case WM_MOVE: {
-
-			RECT r;
-			GetWindowRect(hwnd, &r);
-
-			w->offset = I32x2_create2(r.left, r.top);
-
-			WWindow_updateMonitors(w);
-
-			if (w->callbacks.onWindowMove)
-				w->callbacks.onWindowMove(w);
-
-			break;
-		}
-	}
-
-	return DefWindowProc(hwnd, message, wParam, lParam);
+	(void) xdg_toplevel;
+	w->flags |= EWindowFlags_ShouldTerminate;
 }
 
 Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format) {
-
-	manager;
-
-	//TODO: HDR support; ColorSpace
-	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
-	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1
-
+	(void) manager;
 	return format == EWindowFormat_BGRA8;
 }
 
 Bool WindowManager_freePhysical(Window *w) {
 
-	if(w->nativeData)
-		DeleteObject((HGDIOBJ) w->nativeData);
+	LWindow *lwin = (LWindow*) w->nativeData;
 
-	HINSTANCE mainModule = Platform_instance->data;
+	if(!lwin)
+		return true;
 
-	UnregisterClassW(L"OxC3: Oxsomi core 3", mainModule);
+	if(lwin->topLevel)
+		xdg_toplevel_destroy(lwin->topLevel);
 
-	if(w->nativeHandle)
-		DestroyWindow(w->nativeHandle);
+	if(lwin->surface)
+		xdg_surface_destroy(lwin->surface);
 
+	if(lwin->backBuffer)
+		wl_shm_pool_destroy(lwin->backBuffer);
+
+	if(lwin->fileDescriptor)
+		close(lwin->fileDescriptor);
+
+	Buffer buf = Buffer_createManagedPtr(lwin, sizeof(*lwin));
+	Buffer_freex(&buf);
+
+	w->nativeData = NULL;
 	return true;
 }
 
-Error Window_updatePhysicalTitle(const Window *w, CharString title) {
+Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
 
-	U64 titlel = CharString_length(title);
-
-	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required");
-
+	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
-	id wrapped;
-	Error err = ObjC_wrapString(title, &copy, &wrapped);
-	gotoIfError(clean, err);
 
-	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle()), wrapped);
+	if(!w || !I32x2_any(w->size) || !title.ptr || !CharString_length(title))
+		retError(clean, Error_nullPointer(
+			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
+		))
+
+	if(!CharString_isNullTerminated(title))
+		gotoIfError2(clean, CharString_createCopyx(title, &copy));
+
+	LWindow *lwin = (LWindow*) w->nativeData;
+	struct wl_surface *surface = (struct wl_surface*) w->nativeHandle;
+
+	xdg_toplevel_set_title(lwin->topLevel, copy.ptr ? copy.ptr : title.ptr);
+	wl_surface_commit(surface);
 
 clean:
 	CharString_freex(&copy);
-	return err;
+	return s_uccess;
 }
 
-Error Window_toggleFullScreen(Window *w) {
+Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required");
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		return Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off");
+		retError(clean, Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"))
 
 	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
 
@@ -855,126 +279,108 @@ Error Window_toggleFullScreen(Window *w) {
 
 	else w->flags &= ~EWindowFlags_IsFullscreen;
 
-	ObjC_sendId((id)w->nativeHandle, selToggleFullScreen(), NSApp);
+	//TODO: Implement this
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error Window_presentPhysical(const Window *w) {
+Bool Window_presentPhysical(Window *w, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(0, "Window_presentPhysical()::w is required");
+		retError(clean, Error_nullPointer(0, "Window_presentPhysical()::w is required"))
 
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer");
+		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"))
 
-	PAINTSTRUCT ps;
-	HDC hdcBmp = NULL, oldBmp = NULL;
-	U32 errId = 0;
+	LWindow *lwin = (LWindow*) w->nativeData;
+	struct wl_surface *surface = (struct wl_surface*) w->nativeHandle;
 
-	HDC hdc = BeginPaint(w->nativeHandle, &ps);
+	U32 height = lwin->height | ((U32) lwin->heightHi8 << 16);
+	U64 stride = (U64) lwin->pixelStride * height;
 
-	if(!hdc)
-		return Error_platformError(0, GetLastError(), "Window_presentPhysical() BeginPaint failed");
+	wl_surface_attach(surface, lwin->buffers[lwin->backBufferId], 0, 0);
+	wl_surface_damage_buffer(surface, 0, 0, I32_MAX, I32_MAX);
+	wl_surface_commit(surface);
 
-	hdcBmp = CreateCompatibleDC(hdc);
+	lwin->backBufferId ^= 1;
+	w->cpuVisibleBuffer.ptr = lwin->mainBufferPtr + stride * lwin->backBufferId;
 
-	if(!hdcBmp) {
-		errId = 2;
-		goto cleanup;
-	}
-
-	oldBmp = SelectObject(hdcBmp, w->nativeData);
-
-	if(!oldBmp) {
-		errId = 3;
-		goto cleanup;
-	}
-
-	if(!BitBlt(hdc, 0, 0, I32x2_x(w->size), I32x2_y(w->size), hdcBmp, 0, 0, SRCCOPY)) {
-		errId = 4;
-		goto cleanup;
-	}
-
-cleanup:
-
-	HRESULT res = GetLastError();
-
-	if(oldBmp)
-		SelectObject(hdc, oldBmp);
-
-	if(hdcBmp)
-		DeleteDC(hdcBmp);
-
-	EndPaint(w->nativeHandle, &ps);
-	return errId ? Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call") : Error_none();
+clean:
+	return s_uccess;
 }
 
-Error WindowManager_createWindowPhysical(Window *w) {
+//https://gist.github.com/nikp123/bebe2d2dc9a8287efa9ba0a5b38ffab4
+void LWindow_confirmExists(void *data, struct xdg_surface *surface, uint32_t serial) {
+	(void) data;
+	xdg_surface_ack_configure(surface, serial);
+}
+
+Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Create native window
 
-	Error err = Error_none();
+	Bool s_uccess = true;
 
-	w->minSize
-	w->maxSize
-
-	id window = ObjC_sendId(clsNSWindow(), selAlloc());
-
-	if(!window)
-
-	I32x2 maxSize = I32x2_create2(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-
+	I32x2 defSize = I32x2_create2(1280, 720);
 	I32x2 size = w->size;
-	I32x2 position = w->offset;
 
 	for (U8 i = 0; i < 2; ++i)
-		if (isFullScreen || (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i)))
-			I32x2_set(&size, i, I32x2_get(maxSize, i));
+		if (!I32x2_get(size, i))
+			I32x2_set(&size, i, I32x2_get(defSize, i));
 
-	HWND nativeWindow = CreateWindowExW(
-		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
-		I32x2_x(position), I32x2_y(position),
-		I32x2_x(size), I32x2_y(size),
-		NULL, NULL, mainModule, NULL
-	);
+	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
+	struct wl_compositor *compositor = manager->compositor;
 
-	if(!nativeWindow) {
-		HRESULT hr = GetLastError();
-		gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
-	}
+    struct wl_surface *surface = wl_compositor_create_surface(compositor);
+	w->nativeHandle = surface;
 
-	//Get real size and position
+	if(!surface)
+		retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() wayland create surface failed"))
 
-	RECT r = (RECT) { 0 };
-	GetClientRect(nativeWindow, &r);
-	w->size = I32x2_create2(r.right - r.left, r.bottom - r.top);
+    wl_surface_set_user_data(surface, w);
 
-	GetWindowRect(nativeWindow, &r);
-	w->offset = I32x2_create2(r.left, r.top);
+	Buffer buf = Buffer_createNull();
+	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(LWindow), &buf))
+	w->nativeData = (void*) buf.ptr;		//LWindow
 
-	//Alloc cpu visible buffer if needed
+	LWindow *lwin = (LWindow*) buf.ptr;
+	lwin->surface = xdg_wm_base_get_xdg_surface(manager->xdgWmBase, surface);
 
-	gotoIfError(clean, LWindow_initSize(w, w->size));
+	if(!lwin->surface)
+		retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() xdg get surface failed"));
+
+	lwin->surfaceCallbacks = (struct xdg_surface_listener) {
+		.configure = LWindow_confirmExists
+	};
+
+	xdg_surface_add_listener(lwin->surface, &lwin->surfaceCallbacks, NULL);
+	lwin->topLevel = xdg_surface_get_toplevel(lwin->surface);
+
+	if(!lwin->topLevel)
+		retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() xdg get toplevel failed"))
+
+	lwin->topLevelCallbacks = (struct xdg_toplevel_listener) {
+		.configure = Window_updateSize,
+		.close = Window_close
+	};
+
+	xdg_toplevel_add_listener(lwin->topLevel, &lwin->topLevelCallbacks, w);
 
 	//Reserve monitors and input device(s)
 
-	gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
-	gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
-
-	w->nativeHandle = nativeWindow;
+	gotoIfError2(clean, ListInputDevice_reservex(&w->devices, 16))
+	gotoIfError2(clean, ListMonitor_reservex(&w->monitors, 16))
 
 	//Toggle full screen & set title
 
 	if(w->hint & EWindowHint_ForceFullscreen)
-		gotoIfError(clean, Window_toggleFullScreen(w));
+		gotoIfError3(clean, Window_toggleFullScreen(w, e_rr))
 
-	gotoIfError(clean, Window_updatePhysicalTitle(w, w->title));
-
-	//Bind our window
-
-	SetWindowLongPtrW(nativeWindow, 0, (LONG_PTR) w);
+	gotoIfError3(clean, Window_updatePhysicalTitle(w, w->title, e_rr))
 
 clean:
-	return err;
-}*/
+	return s_uccess;
+}

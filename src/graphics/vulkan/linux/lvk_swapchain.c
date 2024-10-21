@@ -26,6 +26,8 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
+#include "platforms/window_manager.h"
+#include "platforms/linux/lwindow_structs.h"
 #include "types/base/error.h"
 
 Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
@@ -38,8 +40,8 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 
 	const VkWaylandSurfaceCreateInfoKHR surfaceInfo = (VkWaylandSurfaceCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
-		.display = window->nativeHandle,
-		.surface = window->nativeData
+		.display = ((LWindowManager*)window->owner->platformData.ptr)->display,
+		.surface = (struct wl_surface*) window->nativeHandle
 	};
 
 	if (!instanceExt->createSurfaceExt)

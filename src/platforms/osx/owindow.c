@@ -871,7 +871,7 @@ clean:
 }
 
 /*
-Error Window_presentPhysical(const Window *w) {
+Error Window_presentPhysical(Window *w) {
 
 	if(!w || !I32x2_any(w->size))
 		return Error_nullPointer(0, "Window_presentPhysical()::w is required");

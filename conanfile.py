@@ -81,7 +81,7 @@ class oxc3(ConanFile):
 
 		cmake = CMake(self)
 
-		if os.path.isdir("../core3"):
+		if os.path.isdir("../core3") or os.path.isdir("../../core3"):
 			cmake.configure(build_script_folder="core3")
 		else:
 			cmake.configure()
@@ -105,6 +105,9 @@ class oxc3(ConanFile):
 		if self.options.enableShaderCompiler:
 			self.requires("dxc/2024.10.03")
 			self.requires("spirv_reflect/2024.09.22")
+
+		if self.settings.os == "Linux":
+			self.requires("xdg_shell/2024.10.21")
 
 	def package(self):
 
@@ -186,7 +189,7 @@ class oxc3(ConanFile):
 		self.cpp_info.libs = collect_libs(self)
 
 		if self.settings.os != "Windows":
-			self.cpp_info.libs += [ "vulkan" ]
+			self.cpp_info.system_libs += [ "vulkan" ]
 			vulkan = True
 
 		elif self.options.forceVulkan or self.options.dynamicLinkingGraphics:
@@ -199,7 +202,7 @@ class oxc3(ConanFile):
 			self.cpp_info.libdirs += [ os.path.join(vulkanMacos, "lib") ]
 			self.cpp_info.includedirs += [ os.path.join(vulkanMacos, "include") ]
 
-		elif vulkan:
+		elif vulkan and os.path.isdir(os.path.join(os.environ['VULKAN_SDK'], "include")):
 			self.cpp_info.libdirs += [ os.path.join(os.environ['VULKAN_SDK'], "lib") ]
 			self.cpp_info.includedirs += [ os.path.join(os.environ['VULKAN_SDK'], "include") ]
 

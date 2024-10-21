@@ -185,7 +185,7 @@ typedef struct Window {
 
 impl Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr);
 impl Bool Window_toggleFullScreen(Window *w, Error *e_rr);
-impl Bool Window_presentPhysical(const Window *w, Error *e_rr);
+impl Bool Window_presentPhysical(Window *w, Error *e_rr);
 
 //Virtual windows
 
@@ -203,6 +203,9 @@ Bool Window_isFullScreen(const Window *w);
 Bool Window_doesAllowFullScreen(const Window *w);
 
 Bool Window_terminate(Window *w);
+
+//Should be called by implementations only
+Bool Window_onDraw(Window *w);
 
 #ifdef __cplusplus
 	}

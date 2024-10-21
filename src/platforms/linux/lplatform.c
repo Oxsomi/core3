@@ -19,6 +19,7 @@
 */
 
 #include "platforms/platform.h"
+#include "platforms/keyboard.h"
 #include "types/base/error.h"
 
 //Initialize all ObjectiveC classes and functions
@@ -28,3 +29,9 @@ Error Platform_initUnixExt() {
 }
 
 void Platform_cleanupUnixExt() { }
+
+CharString Keyboard_remap(EKey key) {
+	(void) key;
+	return CharString_createNull();			//TODO: 
+}
+

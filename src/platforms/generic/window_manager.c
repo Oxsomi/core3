@@ -244,6 +244,26 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
 
 		//Update interface
 
+		Bool requireDraw = w->type != EWindowType_Physical;
+
+		#if _PLATFORM_TYPE != PLATFORM_WINDOWS
+
+			//This is done manually by WM_PAINT on Windows since WindowManager_step isn't always called.
+			//Sometimes repaints can happen at random moments, so WM_PAINT handles that.
+
+			if(w->type == EWindowType_Physical) {
+
+				InputDevice *dit = ListInputDevice_begin(w->devices);
+				InputDevice *dend = ListInputDevice_end(w->devices);
+
+				for(; dit != dend; ++dit)
+					InputDevice_markUpdate(*dit);
+			}
+
+			requireDraw = true;		//We are in charge of the draw in non Windows systems
+
+		#endif
+
 		const Ns now = Time_now();
 
 		if (w->callbacks.onUpdate) {
@@ -253,7 +273,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
 
 		w->lastUpdate = now;
 
-		if(w->type != EWindowType_Physical && w->callbacks.onDraw)		//Virtual
+		if(requireDraw && w->callbacks.onDraw)		//Virtual
 			w->callbacks.onDraw(w);
 
 		if (w->flags & EWindowFlags_ShouldTerminate)					//Just in case the window closed now

@@ -832,8 +832,6 @@ Bool WindowManager_freePhysical(Window *w) {
 
 	const HINSTANCE mainModule = Platform_instance->data;
 
-	UnregisterClassW(L"OxC3: Oxsomi core 3", mainModule);
-
 	if(w->nativeHandle)
 		DestroyWindow(w->nativeHandle);
 
@@ -924,7 +922,7 @@ clean:
 	return s_uccess;
 }
 
-Bool Window_presentPhysical(const Window *w, Error *e_rr) {
+Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 	PAINTSTRUCT ps;
@@ -982,7 +980,7 @@ clean:
 	return s_uccess;
 }
 
-impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
+Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Create native window
 
