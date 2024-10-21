@@ -88,7 +88,7 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	manager->compositorId = U64_MAX;
 
 	if(!manager->display)
-		retError(clean, Error_invalidState(0, "WindowManager_createNative() couldn't connect to display"))
+		retError(clean, Error_stderr(0, "WindowManager_createNative() couldn't connect to display"))
 
     manager->registry = wl_display_get_registry(manager->display);
 
