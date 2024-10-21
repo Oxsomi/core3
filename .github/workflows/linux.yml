@@ -19,6 +19,8 @@ jobs:
       uses: turtlebrowser/get-conan@main
     - name: Configure conan
       run: conan profile detect
+    - name: Install wayland
+      run: sudo apt-get update; sudo apt-get install --no-install-recommends libwayland-dev
     - name: Restore cached
       id: cache-restore
       uses: actions/cache/restore@v3
