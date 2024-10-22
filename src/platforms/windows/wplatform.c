@@ -80,9 +80,9 @@ void *Platform_getDataImpl(void *ptr) {
 	return GetModuleHandleW(NULL);
 }
 
-Error Platform_initExt() {
+Bool Platform_initExt(Error *e_rr) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	if(Platform_instance->useWorkingDir) {
 
@@ -94,17 +94,17 @@ Error Platform_initExt() {
 		const DWORD chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
 
 		if(!chars || chars >= MAX_PATH)
-			gotoIfError(clean, Error_platformError(
+			retError(clean, Error_platformError(
 				0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
 			))
 
 		buff[chars] = 0;
 
-		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workingDirectory))
+		gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workingDirectory))
 
 		CharString_replaceAllSensitive(&Platform_instance->workingDirectory, '\\', '/', 0, 0);
 
-		gotoIfError(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
+		gotoIfError2(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
 	}
 
 	//Init virtual files
@@ -121,11 +121,11 @@ Error Platform_initExt() {
 		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
 
 		if(files.b)
-			gotoIfError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"))
+			retError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"))
 	}
 
 clean:
-	return err;
+	return s_uccess;
 }
 
 CharString Keyboard_remap(EKey key) {

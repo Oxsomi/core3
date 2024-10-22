@@ -32,9 +32,15 @@
 typedef struct VirtualSection {
 
 	CharString path;
-	void *dataExt;			//Information about how to load the virtual file
+
+	const void *dataExt;	//Information about how to load the virtual file
+
 	Archive loadedData;		//If the data is in memory, this will be used
+
 	Bool loaded;
+	U8 padding[7];
+
+	U64 lenExt;				//Dependent on platform if it contains the length of the section
 
 } VirtualSection;
 
@@ -64,7 +70,7 @@ extern Platform *Platform_instance;
 Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir);
 
 impl void Platform_cleanupExt();
-impl Error Platform_initExt();
+impl Bool Platform_initExt(Error *e_rr);
 
 impl Bool Platform_checkCPUSupport();								//SIMD dependent: SSE, None, NEON
 impl U64 Platform_getThreads();

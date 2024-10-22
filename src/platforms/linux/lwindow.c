@@ -219,6 +219,9 @@ Bool WindowManager_freePhysical(Window *w) {
 	if(!lwin)
 		return true;
 
+	if(lwin->region)
+		wl_region_destroy(lwin->region);
+
 	if(lwin->topLevel)
 		xdg_toplevel_destroy(lwin->topLevel);
 
@@ -255,6 +258,7 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	struct wl_surface *surface = (struct wl_surface*) w->nativeHandle;
 
 	xdg_toplevel_set_title(lwin->topLevel, copy.ptr ? copy.ptr : title.ptr);
+	xdg_toplevel_set_app_id(lwin->topLevel, copy.ptr ? copy.ptr : title.ptr);
 	wl_surface_commit(surface);
 
 clean:
@@ -369,6 +373,16 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	xdg_toplevel_add_listener(lwin->topLevel, &lwin->topLevelCallbacks, w);
 
+	//Add region
+
+	lwin->region = wl_compositor_create_region(manager->compositor);
+
+	if(!lwin->region)
+		retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() create region failed"))
+
+	wl_region_add(lwin->region, 0, 0, I32x2_x(size), I32x2_y(size));
+	wl_surface_set_opaque_region(surface, lwin->region);
+
 	//Reserve monitors and input device(s)
 
 	gotoIfError2(clean, ListInputDevice_reservex(&w->devices, 16))
@@ -380,6 +394,11 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 		gotoIfError3(clean, Window_toggleFullScreen(w, e_rr))
 
 	gotoIfError3(clean, Window_updatePhysicalTitle(w, w->title, e_rr))
+
+	//Call handlers to set right size
+
+    wl_display_roundtrip(manager->display);
+	wl_surface_commit(surface);
 
 clean:
 	return s_uccess;

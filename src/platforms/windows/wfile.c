@@ -210,8 +210,6 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 					retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
 
 				HGLOBAL handle = NULL;
-				CAFile file = (CAFile) { 0 };
-				Buffer copy = Buffer_createNull();
 
 				gotoIfError2(clean0, CharString_toUTF16x(section->path, &tmp))
 				HRSRC data = FindResourceW(NULL, tmp.ptr, RT_RCDATA);
@@ -227,20 +225,16 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 					retError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal1() LoadResource failed"))
 
 				const U8 *dat = (const U8*) LockResource(handle);
-				gotoIfError2(clean0, Buffer_createCopyx(Buffer_createRefConst(dat, size), &copy))
+				Buffer buf = Buffer_createRefConst(dat, size);
 
-				gotoIfError3(clean0, CAFile_readx(copy, userData->encryptionKey, &file, e_rr))
+				CAFile file = (CAFile) { 0 };
+				gotoIfError3(clean0, CAFile_readx(buf, userData->encryptionKey, &file, e_rr))
 
 				section->loadedData = file.archive;
-				file.archive = (Archive) { 0 };
-
 				section->loaded = true;
 				foundAny = true;
 
 			clean0:
-
-				CAFile_freex(&file);
-				Buffer_freex(&copy);
 
 				if (handle) {
 					UnlockResource(handle);

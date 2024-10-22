@@ -33,7 +33,7 @@
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
-impl Error Platform_initUnixExt();
+impl Bool Platform_initUnixExt(Error *e_rr);
 impl void Platform_cleanupUnixExt();
 
 void Platform_cleanupExt() {
@@ -44,9 +44,9 @@ void *Platform_getDataImpl(void *ptr) { (void) ptr; return NULL; }
 
 U64 Platform_getThreads() { return sysconf(_SC_NPROCESSORS_ONLN); }
 
-Error Platform_initExt() {
+Bool Platform_initExt(Error *e_rr) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	if(Platform_instance->useWorkingDir) {
 
@@ -55,14 +55,14 @@ Error Platform_initExt() {
 		#define PATH_MAX 256
 		C8 cwd[PATH_MAX + 1];
 		if (!getcwd(cwd, sizeof(cwd)))
-			gotoIfError(clean, Error_stderr(errno, "Platform_initExt() getcwd failed"))
+			retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"))
 
-		gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workingDirectory))
-		gotoIfError(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
+		gotoIfError2(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workingDirectory))
+		gotoIfError2(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
 	}
 
-	gotoIfError(clean, Platform_initUnixExt())
+	gotoIfError3(clean, Platform_initUnixExt(e_rr))
 
 clean:
-	return err;
+	return s_uccess;
 }

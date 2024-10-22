@@ -129,7 +129,7 @@ class oxc3(ConanFile):
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if cwd.endswith("Debug") or cwd.endswith("Release"):
 			copy(self, "*.a", os.path.join(self.build_folder, "lib"), os.path.join(self.package_folder, "lib"))
-			copy(self, "^([^.]+)$", os.path.join(self.build_folder, "bin"), os.path.join(self.package_folder, "bin"))
+			copy(self, "*", os.path.join(self.build_folder, "bin"), os.path.join(self.package_folder, "bin"))
 
 		# Windows uses more complicated setups
 		else:

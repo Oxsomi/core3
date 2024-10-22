@@ -28,6 +28,7 @@
 #include "platforms/window.h"
 #include "platforms/monitor.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
 #include "types/container/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -160,12 +161,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	I32x2 size = I32x2_create2(capabilities.currentExtent.width, capabilities.currentExtent.height);
 
 	//Validate if it's compatible with the OxC3_platforms window
+	//currentExtent can be -1 but only for Wayland, which means "do whatever you want" and in this case it won't match.
 
-	if(I32x2_neq2(window->size, size) || !capabilities.maxImageArrayLayers)
+	if((I32x2_neq2(size, I32x2_create2(-1, -1)) && I32x2_neq2(window->size, size)) || !capabilities.maxImageArrayLayers)
 		gotoIfError(clean, Error_invalidOperation(0, "VkGraphicsDeviceRef_createSwapchain() incompatible window size"))
-
-	if(!(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR))
-		gotoIfError(clean, Error_invalidOperation(1, "VkGraphicsDeviceRef_createSwapchain() requires alpha opaque"))
 
 	Bool isWritable = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
@@ -184,7 +183,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
 
-	if(capabilities.minImageCount > 2 || capabilities.maxImageCount < 3)
+	if(capabilities.minImageCount > 2 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
 		gotoIfError(clean, Error_invalidOperation(
 			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 2 and 3 images"
 		))
@@ -295,7 +294,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		.minImageCount = swapchain->base.images,
 		.imageFormat = swapchainExt->format.format,
 		.imageColorSpace = swapchainExt->format.colorSpace,
-		.imageExtent = capabilities.currentExtent,
+		.imageExtent = (VkExtent2D) { .width = I32x2_x(window->size), .height = I32x2_y(window->size) },
 		.imageArrayLayers = 1,
 		.imageUsage = requiredUsageFlags,
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,

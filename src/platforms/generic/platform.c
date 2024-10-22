@@ -419,7 +419,8 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 			gotoIfError(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'));
 	}
 
-	gotoIfError(clean, Platform_initExt());
+	if(!Platform_initExt(&err))
+		goto clean;
 
 clean:
 

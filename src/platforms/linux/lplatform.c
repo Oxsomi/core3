@@ -18,17 +18,112 @@
 *  This is called dual licensing.
 */
 
+#define _FILE_OFFSET_BITS 64
+#define _LARGEFILE64_SOURCE
+
+#include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
+#include "platforms/log.h"
+#include "platforms/ext/stringx.h"
+#include "types/base/thread.h"
 #include "types/base/error.h"
 
-//Initialize all ObjectiveC classes and functions
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/mman.h>
+#include <elf.h>
 
-Error Platform_initUnixExt() {
-	return Error_none();
+Bool Platform_initUnixExt(Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString tmpStr = CharString_createNull();
+
+	//Grab exe name first, so we can find all sections that exist
+
+	C8 exeName[1024];
+	I32 fd = -1;
+
+	if(readlink("/proc/self/exe", exeName, sizeof(exeName) - 1) < 0)
+		retError(clean, Error_invalidState(0, "File_loadVirtualInternal() couldn't find out executable name"))
+
+	//Try to open the main executable within 1s, if it fails we can't init
+
+	U64 i = 0;
+
+	for(; i < 1000 && (fd = open(exeName, O_RDONLY)) < 0; ++i) {
+
+		if(errno != EINTR)
+			retError(clean, Error_stderr(0, "File_loadVirtualInternal() open failed on executable"))
+
+		Thread_sleep(MS);
+	}
+
+	if(i == 1000)
+		retError(clean, Error_invalidState(0, "File_loadVirtualInternal() executable couldn't be opened in time"))
+
+	//Grab file data
+
+	U64 fileSize = lseek64(fd, 0, SEEK_END);
+	const U8 *ptr = (const U8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
+
+	if(ptr == (const U8*) MAP_FAILED)
+		retError(clean, Error_invalidState(0, "File_loadVirtualInternal() executable couldn't be mapped"))
+		
+    const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
+	const Elf64_Shdr *shdr = (const Elf64_Shdr*) (ptr + elf->e_shoff);
+	const C8 *strings = (const C8*) (ptr + shdr[elf->e_shstrndx].sh_offset);
+
+	Bool anySection = false;
+
+	for(U64 i = 0; i < elf->e_shnum; ++i) {
+
+		CharString sectionName = CharString_createRefCStrConst(&strings[shdr[i].sh_name]);
+
+		if(!CharString_startsWithStringSensitive(sectionName, CharString_createRefCStrConst("packages/"), 0))
+			continue;
+
+		sectionName.ptr += sizeof("packages");		//sizeof includes null terminator so no need for packages/
+		sectionName.lenAndNullTerminated -= sizeof("packages");
+
+		gotoIfError2(clean, CharString_createCopyx(sectionName, &tmpStr))
+
+		VirtualSection section = (VirtualSection) { .path = tmpStr };
+		section.lenExt = shdr[i].sh_size;
+		section.dataExt = ptr + shdr[i].sh_offset;
+
+		gotoIfError2(clean, ListVirtualSection_pushBackx(&Platform_instance->virtualSections, section))
+
+		tmpStr = CharString_createNull();
+		anySection = true;
+	}
+
+	//Keep file open until end of program.
+	//Unless there's no need (when there's no sections present).
+	//This doesn't keep anything in memory, until we actually load the sections.
+
+	if(anySection) {
+		Platform_instance->data = (void*) (((U32)fd) | ((U64)1 << 32));
+		fd = -1;
+	}
+
+clean:
+
+	if(fd >= 0)
+		close(fd);
+
+	CharString_freex(&tmpStr);
+	return s_uccess;
 }
 
-void Platform_cleanupUnixExt() { }
+void Platform_cleanupUnixExt() {
+
+	U64 fd = (U64) Platform_instance->data;
+
+	if(fd >> 32)
+		close((I32)(U32) fd);
+}
 
 CharString Keyboard_remap(EKey key) {
 	(void) key;

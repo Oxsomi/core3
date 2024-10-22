@@ -119,12 +119,16 @@ macro(add_virtual_files)
 	else()
 		set(OXC3 OxC3)
 	endif()
-
+	
 	add_custom_target(
 		${_ARGS_TARGET}_package_${_ARGS_NAME}
 		COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
 		WORKING_DIRECTORY ${_ARGS_SELF}
 	)
+		
+	# string (REPLACE ";" " " ARGS_STR "${_ARGS_ARGS}")
+	# message("\"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
+	# message("${_ARGS_TARGET}_package_${_ARGS_NAME} @ ${_ARGS_SELF}")
 
 	set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 
@@ -147,17 +151,10 @@ macro(add_virtual_files)
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
 		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
 	elseif(UNIX AND NOT APPLE)
-
-		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
-		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST $<TARGET_FILE_DIR:${TARGET}>\n${res})
-
 		add_custom_command(
 			TARGET ${_ARGS_TARGET} POST_BUILD
-			COMMAND objcopy --add-section "${_ARGS_TARGET}/${_ARGS_NAME}=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_NAME:${target}>" "$<TARGET_FILE_NAME:${target}>"
+			COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
 		)
-
-		message("objcopy --add-section \"${_ARGS_TARGET}/${_ARGS_NAME}=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" \"$<TARGET_FILE_NAME:${target}>\" \"$<TARGET_FILE_NAME:${target}>\"")
-
 	endif()
 
 endmacro()

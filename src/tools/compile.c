@@ -1056,10 +1056,8 @@
 
 		//Only continue if there are any files and then fetch all files
 
-		if (!allFiles->length) {
-			Log_debugLnx("No files to process");
+		if (!allFiles->length)
 			goto clean;
-		}
 
 		CharString prevStr = CharString_createNull();
 
