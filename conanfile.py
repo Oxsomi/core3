@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.062"
+	version = "0.2.063"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -81,7 +81,7 @@ class oxc3(ConanFile):
 
 		cmake = CMake(self)
 
-		if os.path.isdir("../core3") or os.path.isdir("../../core3"):
+		if os.path.isdir("../core3"):
 			cmake.configure(build_script_folder="core3")
 		else:
 			cmake.configure()

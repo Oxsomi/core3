@@ -830,8 +830,6 @@ Bool WindowManager_freePhysical(Window *w) {
 	if(w->nativeData)
 		DeleteObject((HGDIOBJ) w->nativeData);
 
-	const HINSTANCE mainModule = Platform_instance->data;
-
 	if(w->nativeHandle)
 		DestroyWindow(w->nativeHandle);
 
