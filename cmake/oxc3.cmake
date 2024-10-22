@@ -114,33 +114,49 @@ macro(add_virtual_files)
 
 	# Add processed file as a file
 
+	if(NOT TARGET OxC3)
+		find_program(OXC3 OxC3 REQUIRED)
+	else()
+		set(OXC3 OxC3)
+	endif()
+
+	add_custom_target(
+		${_ARGS_TARGET}_package_${_ARGS_NAME}
+		COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
+		WORKING_DIRECTORY ${_ARGS_SELF}
+	)
+
+	set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
+
+	# When adding from external package manager, it's already been installed
+	if(TARGET OxC3)
+		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
+	else()
+		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
+	endif()
+
+	# Differences in packaging:
+	# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
+	# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
+	# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
+	# iOS has IPA which is the same idea as APK.
+	# OS X has llvm-objcopy.
+	# web/emscripten has a virtual filesystem.
+
 	if(WIN32)
-
-		if(NOT TARGET OxC3)
-			find_program(OXC3 OxC3 REQUIRED)
-		else()
-			set(OXC3 OxC3)
-		endif()
-
-		add_custom_target(
-			${_ARGS_TARGET}_package_${_ARGS_NAME}
-			COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
-			WORKING_DIRECTORY ${_ARGS_SELF}
-		)
-
-		# message("-- ${_ARGS_TARGET}_package_${_ARGS_NAME}: ${OXC3} file package -i \"${_ARGS_ROOT}\" -o \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" @ work dir ${_ARGS_SELF}")
-
-		set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
-
-        # When adding from external package manager, it's already been installed
-        if(TARGET OxC3)
-		    add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
-		else()
-			add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
-        endif()
-
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
 		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
+	elseif(UNIX AND NOT APPLE)
+
+		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST $<TARGET_FILE_DIR:${TARGET}>\n${res})
+
+		add_custom_command(
+			TARGET ${_ARGS_TARGET} POST_BUILD
+			COMMAND objcopy --add-section "${_ARGS_TARGET}/${_ARGS_NAME}=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_NAME:${target}>" "$<TARGET_FILE_NAME:${target}>"
+		)
+
+		message("objcopy --add-section \"${_ARGS_TARGET}/${_ARGS_NAME}=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" \"$<TARGET_FILE_NAME:${target}>\" \"$<TARGET_FILE_NAME:${target}>\"")
 
 	endif()
 
