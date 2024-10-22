@@ -378,7 +378,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		}
 	};
 
-	Error err;
+	Error err = Error_none();;
 	CharString appDir = CharString_createNull();
 
 	ListCharString sl = (ListCharString) { 0 };
