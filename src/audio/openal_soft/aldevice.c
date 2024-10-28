@@ -18,34 +18,12 @@
 *  This is called dual licensing.
 */
 
-#include "tools/cli.h"
-#include "platforms/platform.h"
-#include "platforms/log.h"
-#include "platforms/ext/errorx.h"
-
-#include "types/container/ref_ptr.h"
-#include "audio/interface.h"
+#include "audio/openal_soft/openal_soft.h"
 #include "audio/device.h"
+#include "types/base/allocator.h"
 
-Platform_defineEntrypoint() {
+U32 AudioDevice_sizeExt = sizeof(ALAudioDevice);
 
-	int status = 0;
-	Error err = Platform_create(argc, argv, Platform_getData(), NULL, true);
-
-	if(err.genericError) {
-		Error_printLnx(err);
-		return -2;
-	}
-
-	CLI_init();
-
-	if (!CLI_execute(Platform_instance->args)) {
-		status = -1;
-		goto clean;
-	}
-
-clean:
-	CLI_shutdown();
-	Platform_cleanup();
-	return status;
-}
+//TODO:
+Bool AudioDevice_createExt(AudioDevice *dev, Error *e_rr) { (void) dev; (void) e_rr; return true; }
+Bool AudioDevice_freeExt(AudioDevice *dev, Allocator alloc) { (void) dev; (void) alloc; return true;}

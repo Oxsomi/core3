@@ -28,6 +28,11 @@ if ! conan create packages/nvapi -s build_type=$1 --build=missing; then
 	exit 1
 fi
 
+if ! conan create packages/openal_soft -s build_type=$1 --build=missing; then
+	printf "${RED}-- Conan create openal_soft failed${NC}\n"
+	exit 1
+fi
+
 if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 	if ! conan create packages/xdg_shell -s build_type=$1 --build=missing; then
 		printf "${RED}-- Conan create xdg_shell failed${NC}\n"

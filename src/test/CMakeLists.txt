@@ -25,6 +25,6 @@ add_executable(
     CMakeLists.txt
 )
 
-target_link_libraries(OxC3_test PUBLIC OxC3_platforms OxC3_formats_oiBC)
+target_link_libraries(OxC3_test PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiBC)
 
 set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)

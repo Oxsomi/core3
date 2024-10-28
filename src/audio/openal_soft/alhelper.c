@@ -18,34 +18,24 @@
 *  This is called dual licensing.
 */
 
-#include "tools/cli.h"
-#include "platforms/platform.h"
-#include "platforms/log.h"
-#include "platforms/ext/errorx.h"
+#include "audio/openal_soft/openal_soft.h"
+#include "types/base/error.h"
 
-#include "types/container/ref_ptr.h"
-#include "audio/interface.h"
-#include "audio/device.h"
+Bool alProcessError(ALenum error, Error *e_rr) {
 
-Platform_defineEntrypoint() {
+	const C8 *err;
 
-	int status = 0;
-	Error err = Platform_create(argc, argv, Platform_getData(), NULL, true);
-
-	if(err.genericError) {
-		Error_printLnx(err);
-		return -2;
+	switch(error) {
+		case AL_INVALID_NAME:		err = "OpenAL: Invalid name parameter.";		break;
+		case AL_INVALID_ENUM:		err = "OpenAL: Invalid parameter.";				break;
+		case AL_INVALID_VALUE:		err = "OpenAL: Invalid enum parameter value.";	break;
+		case AL_INVALID_OPERATION:	err = "OpenAL: Illegal call.";					break;
+		case AL_OUT_OF_MEMORY:		err = "OpenAL: Unable to allocate memory.";		break;
+		default:					err = NULL;								break;
 	}
 
-	CLI_init();
+	if(err && e_rr)
+		*e_rr = Error_invalidState(0, err);
 
-	if (!CLI_execute(Platform_instance->args)) {
-		status = -1;
-		goto clean;
-	}
-
-clean:
-	CLI_shutdown();
-	Platform_cleanup();
-	return status;
+	return !err;
 }

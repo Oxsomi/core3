@@ -32,6 +32,7 @@ conan create packages/amd_ags -s build_type=%1 --build=missing
 conan create packages/nvapi -s build_type=%1 --build=missing
 conan create packages/spirv_reflect -s build_type=%1 --build=missing
 conan create packages/dxc -s build_type=%1 --build=missing
+conan create packages/openal_soft -s build_type=%1 --build=missing
 conan build . -s build_type=%1 -o enableSIMD=%2 -o enableTests=%3 -o dynamicLinkingGraphics=%4 !remainder!
 
 REM Run tests

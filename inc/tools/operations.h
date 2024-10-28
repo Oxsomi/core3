@@ -199,6 +199,7 @@ typedef enum EOperation {
 	//EOperation_CompileChimera,
 
 	EOperation_GraphicsDevices,
+	EOperation_AudioDevices,
 
 	EOperation_InfoLicense,
 	EOperation_InfoAbout,
@@ -233,6 +234,8 @@ typedef enum EOperationCategory {
 	#ifdef CLI_GRAPHICS
 		EOperationCategory_Graphics,
 	#endif
+
+	EOperationCategory_Audio,
 
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,

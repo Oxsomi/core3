@@ -17,20 +17,27 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-add_subdirectory(types)
-add_subdirectory(formats)
-add_subdirectory(platforms)
-add_subdirectory(graphics)
-add_subdirectory(audio)
+message("-- Targeting audio API: OpenAL")
+find_package(openal_soft REQUIRED)
 
-if(EnableShaderCompiler)
-	add_subdirectory(shader_compiler)
-endif()
+file(GLOB_RECURSE graphicsHeaders "../../inc/audio/*.h")
+file(GLOB graphicsSources "*.c")
 
-if(EnableOxC3CLI)
-	add_subdirectory(tools)
-endif()
+file(GLOB_RECURSE apiPlatformSources "openal_soft/*.c")
+file(GLOB_RECURSE apiPlatformIncludes "../../inc/audio/openal_soft/*.h")
 
-if(EnableTests)
-	add_subdirectory(test)
-endif()
+add_library(
+	OxC3_audio
+	STATIC
+	${graphicsHeaders}
+	${graphicsSources}
+	${apiPlatformSources}
+	${apiPlatformIncludes}
+	CMakeLists.txt
+)
+
+source_group("Source Files (openal_soft)" FILES ${apiPlatformSources})
+source_group("Header Files (openal_soft)" FILES ${apiPlatformIncludes})
+
+set_target_properties(OxC3_audio PROPERTIES FOLDER Oxsomi)
+target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms openal_soft::openal_soft)

@@ -23,23 +23,29 @@ file(GLOB headers "../../inc/tools/*.h")
 file(GLOB sources "*.c")
 
 add_library(
-    OxC3CLI STATIC
-    ${headers}
-    ${sources}
-    CMakeLists.txt
+	OxC3CLI STATIC
+	${headers}
+	${sources}
+	CMakeLists.txt
 )
 
 set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi/CLI)
-target_link_libraries(OxC3CLI PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL)
+target_link_libraries(
+	OxC3CLI PUBLIC
+	OxC3_types_base OxC3_types_math OxC3_types_container
+	OxC3_platforms
+	OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL
+	OxC3_audio
+)
 
 if(CLIGraphics)
-    target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)
-    target_compile_definitions(OxC3CLI PUBLIC -DCLI_GRAPHICS)
+	target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)
+	target_compile_definitions(OxC3CLI PUBLIC -DCLI_GRAPHICS)
 endif()
 
 if(EnableShaderCompiler)
-    target_link_libraries(OxC3CLI PUBLIC OxC3_shader_compiler)
-    target_compile_definitions(OxC3CLI PUBLIC -DCLI_SHADER_COMPILER)
+	target_link_libraries(OxC3CLI PUBLIC OxC3_shader_compiler)
+	target_compile_definitions(OxC3CLI PUBLIC -DCLI_SHADER_COMPILER)
 endif()
 
 target_include_directories(OxC3CLI PUBLIC inc/tools)
@@ -49,9 +55,9 @@ target_include_directories(OxC3CLI PUBLIC inc/tools)
 file(GLOB sources "executable/*.c")
 
 add_executable(
-    OxC3
-    ${sources}
-    CMakeLists.txt
+	OxC3
+	${sources}
+	CMakeLists.txt
 )
 
 set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi/CLI)
@@ -71,5 +77,6 @@ if(UNIX AND TARGET OxC3_graphics_vk)
 		TARGET OxC3 POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:OxC3_graphics_vk> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
 	)
+
 endif()
 

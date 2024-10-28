@@ -18,34 +18,33 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "tools/cli.h"
-#include "platforms/platform.h"
-#include "platforms/log.h"
-#include "platforms/ext/errorx.h"
-
-#include "types/container/ref_ptr.h"
 #include "audio/interface.h"
 #include "audio/device.h"
+#include "types/container/ref_ptr.h"
 
-Platform_defineEntrypoint() {
+Bool CLI_audioDevices(ParsedArgs args) {
 
-	int status = 0;
-	Error err = Platform_create(argc, argv, Platform_getData(), NULL, true);
+	(void) args;
 
-	if(err.genericError) {
-		Error_printLnx(err);
-		return -2;
-	}
+	Bool s_uccess = true;
+	AudioInterfaceRef *ref = NULL;
+	ListAudioDeviceInfo infos = (ListAudioDeviceInfo) { 0 };
+	Error err = Error_none();
 
-	CLI_init();
+	gotoIfError3(clean, AudioInterface_createx(&ref, &err))
+	gotoIfError3(clean, AudioInterface_getDeviceInfosx(AudioInterfaceRef_ptr(ref), &infos, &err))
 
-	if (!CLI_execute(Platform_instance->args)) {
-		status = -1;
-		goto clean;
-	}
+	for(U64 i = 0; i < infos.length; ++i)
+		AudioDeviceInfo_printx(infos.ptr[i]);
 
 clean:
-	CLI_shutdown();
-	Platform_cleanup();
-	return status;
+
+	ListAudioDeviceInfo_freex(&infos);
+
+	if(ref)
+		AudioInterfaceRef_dec(&ref);
+
+	return s_uccess;
 }

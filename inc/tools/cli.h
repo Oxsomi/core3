@@ -127,6 +127,7 @@ typedef enum ECompileType {
 Bool CLI_compileShader(ParsedArgs args);
 
 Bool CLI_graphicsDevices(ParsedArgs args);
+Bool CLI_audioDevices(ParsedArgs args);
 
 Bool CLI_execute(ListCharString argList);
 

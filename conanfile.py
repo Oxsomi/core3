@@ -109,6 +109,8 @@ class oxc3(ConanFile):
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
 
+		self.requires("openal_soft/2024.10.27")
+
 	def package(self):
 
 		cmake = CMake(self)

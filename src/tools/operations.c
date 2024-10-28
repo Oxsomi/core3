@@ -170,6 +170,8 @@ const C8 *EOperationCategory_names[] = {
 		"graphics",
 	#endif
 
+	"audio",
+
 	"hash",
 	"rand",
 	"info",
@@ -188,6 +190,8 @@ const C8 *EOperationCategory_description[] = {
 	#ifdef CLI_GRAPHICS
 		"Graphics operations such as showing devices.",
 	#endif
+
+	"Audio operations such as showing devices.",
 
 	"Converting a file or string to a hash.",
 	"Generating random data.",
@@ -496,7 +500,7 @@ void Operations_init() {
 			.category = EOperationCategory_Graphics,
 
 			.name = "devices",
-			.desc = "Shows graphics devices using the active graphics API.",
+			.desc = "Shows graphics devices using the active graphics API(s).",
 
 			.func = &CLI_graphicsDevices,
 
@@ -507,6 +511,16 @@ void Operations_init() {
 		};
 
 	#endif
+
+	//List audio devices
+	
+	Operation_values[EOperation_AudioDevices] = (Operation) {
+		.category = EOperationCategory_Audio,
+		.name = "devices",
+		.desc = "Shows audio devices using the active audio API.",
+		.func = &CLI_audioDevices,
+		.isFormatLess = true
+	};
 
 	//License for the tool
 

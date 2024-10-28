@@ -18,34 +18,20 @@
 *  This is called dual licensing.
 */
 
-#include "tools/cli.h"
-#include "platforms/platform.h"
-#include "platforms/log.h"
-#include "platforms/ext/errorx.h"
+#pragma once
+#include "types/base/types.h"
+#include <AL/al.h>
+#include <AL/alc.h>
 
-#include "types/container/ref_ptr.h"
-#include "audio/interface.h"
-#include "audio/device.h"
+typedef struct ALAudioInterface {
+	U8 padding;					//Not useful yet, might be for loading functions of DLL for example
+} ALAudioInterface;
 
-Platform_defineEntrypoint() {
+typedef struct ALAudioDevice {
+	ALCdevice *device;
+	ALCcontext *context;		//Unlike OpenGL, context is thread safe, so no need for multiple
+} ALAudioDevice;
 
-	int status = 0;
-	Error err = Platform_create(argc, argv, Platform_getData(), NULL, true);
+Bool alProcessError(ALenum error, Error *e_rr);
 
-	if(err.genericError) {
-		Error_printLnx(err);
-		return -2;
-	}
-
-	CLI_init();
-
-	if (!CLI_execute(Platform_instance->args)) {
-		status = -1;
-		goto clean;
-	}
-
-clean:
-	CLI_shutdown();
-	Platform_cleanup();
-	return status;
-}
+#define AL_PROCESS_ERROR(device, ...) { __VA_ARGS__; gotoIfError3(clean, alProcessError(alcGetError(device), e_rr)) }

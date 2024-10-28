@@ -174,9 +174,3 @@ set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
 set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if static linking)")
 
 add_subdirectory(src)
-
-# OxC3 tool
-
-if(EnableOxC3CLI)
-
-endif()

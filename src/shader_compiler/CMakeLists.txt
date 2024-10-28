@@ -27,11 +27,11 @@ file(GLOB_RECURSE compilerHeaders "../../inc/shader_compiler/*.h")
 file(GLOB_RECURSE compilerSources "*.c" "*.cpp")	# Some CPP to interface with DXC
 
 add_library(
-    OxC3_shader_compiler
-    STATIC
-    ${compilerHeaders}
-    ${compilerSources}
-    CMakeLists.txt
+	OxC3_shader_compiler
+	STATIC
+	${compilerHeaders}
+	${compilerSources}
+	CMakeLists.txt
 )
 
 set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
