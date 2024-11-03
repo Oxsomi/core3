@@ -22,6 +22,7 @@
 #include "types/base/types.h"
 #include <AL/al.h>
 #include <AL/alc.h>
+#include <AL/alext.h>
 
 typedef struct ALAudioInterface {
 	U8 padding;					//Not useful yet, might be for loading functions of DLL for example
@@ -31,6 +32,33 @@ typedef struct ALAudioDevice {
 	ALCdevice *device;
 	ALCcontext *context;		//Unlike OpenGL, context is thread safe, so no need for multiple
 } ALAudioDevice;
+
+#define ALAudioStream_bufferCount (4)
+#define ALAudioStream_bufferSize (65536)
+
+typedef struct ALAudioStream {
+
+	Buffer tmp;		//Buffer with temporary stream data
+	Buffer tmpCvt;	//Buffer with temporary convert data (likely bigger than tmp if fallback format)
+
+	//4 separate streams to ensure we always have one that isn't in use
+	ALuint buffer[ALAudioStream_bufferCount];
+
+	Bool initializedBuffers;	//Since buffer handles of 0 are still valid, unlike OpenGL.
+	Bool filledStream;
+	Bool initializedSource;
+	U8 padding;
+
+	U32 format;
+
+	ALuint source;				//Since otherwise we can't track progress of a stream
+
+} ALAudioStream;
+
+typedef struct ALAudioSource {
+	ALuint source;
+	Bool isInitialized; U8 padding[3];
+} ALAudioSource;
 
 Bool alProcessError(ALenum error, Error *e_rr);
 

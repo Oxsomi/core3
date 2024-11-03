@@ -29,10 +29,8 @@
 typedef enum EAudioTypeId {
 	EAudioTypeId_AudioInterface			= makeObjectId(0x1C34, 0, 0),
 	EAudioTypeId_AudioDevice			= makeObjectId(0x1C34, 1, 0),
-	EAudioTypeId_AudioSource			= makeObjectId(0x1C34, 2, 0),
-	EAudioTypeId_AudioListener			= makeObjectId(0x1C34, 3, 0),
-	EAudioTypeId_AudioBuffer			= makeObjectId(0x1C34, 4, 0),
-	EAudioTypeId_AudioStream			= makeObjectId(0x1C34, 5, 0)
+	EAudioTypeId_AudioStream			= makeObjectId(0x1C34, 2, 0),
+	EAudioTypeId_AudioSource			= makeObjectId(0x1C34, 3, 0)
 } EAudioTypeId;
 
 typedef enum EAudioApi {

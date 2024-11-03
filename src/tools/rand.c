@@ -381,7 +381,7 @@ Bool CLI_rand(ParsedArgs args) {
 		}
 
 		errorString = "Couldn't write to output file";
-		gotoIfError3(clean, File_write(outputFile, outputPath, 1 * SECOND, e_rr))
+		gotoIfError3(clean, File_write(outputFile, outputPath, 0, 0, 1 * SECOND, true, e_rr))
 	}
 
 	else {

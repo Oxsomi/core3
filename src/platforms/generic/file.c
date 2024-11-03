@@ -41,6 +41,7 @@
 #ifndef _WIN32
 
 	#define _ftelli64 ftell
+	#define _fseeki64 fseek
 	#define _mkdir(a) mkdir(a, ALLPERMS)
 
 	I32 removeFolder(CharString str) {
@@ -62,10 +63,10 @@
 
 #else
 
-#define UNICODE
-#define WIN32_LEAN_AND_MEAN
-#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
-#define NOMINMAX
+	#define UNICODE
+	#define WIN32_LEAN_AND_MEAN
+	#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+	#define NOMINMAX
 	#include <Windows.h>
 	#include <direct.h>
 	#include <fileapi.h>
@@ -431,7 +432,7 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 	//Create file
 
 	if(type == EFileType_File && !createParentOnly)
-		gotoIfError3(clean, File_write(Buffer_createNull(), resolved, maxTimeout, e_rr))
+		gotoIfError3(clean, File_write(Buffer_createNull(), resolved, 0, 0, maxTimeout, false, e_rr))
 
 clean:
 	FileInfo_freex(&info);
@@ -616,32 +617,56 @@ clean:
 	return s_uccess;
 }
 
-Bool File_write(Buffer buf, CharString loc, Ns maxTimeout, Error *e_rr) {
+Bool FileHandle_createRef(const FileHandle *input, FileHandle *output, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!input || !input->filePath.ptr || !output)
+		retError(clean, Error_nullPointer(!output ? 1 : 0, "FileHandle_createRef()::input and output are required"))
+
+	if(output->filePath.ptr)
+		retError(clean, Error_invalidParameter(1, 0, "FileHandle_createRef()::output wasn't empty"))
+
+	*output = *input;
+	output->ownsHandle = false;
+
+clean:
+	return s_uccess;
+}
+
+Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 	FILE *f = NULL;
 
 	if(!CharString_isValidFilePath(loc))
-		retError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"))
+		retError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"))
 
-	Bool isVirtual = File_isVirtual(loc);
+	if(!handle)
+		retError(clean, Error_nullPointer(2, "File_read()::handle is required"))
 
-	if(isVirtual) {
-		gotoIfError3(clean, File_writeVirtual(buf, loc, maxTimeout, e_rr))
-		goto clean;
-	}
+	if(handle->filePath.ptr)
+		retError(clean, Error_invalidOperation(0, "File_read()::handle was filled, may indicate memleak"))
 
+	if(File_isVirtual(loc))
+		retError(clean, Error_invalidOperation(0, "File_open() is not permitted on virtual files, only physical"))
+
+	Bool isVirtual = false;
 	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	
+	if(type == EFileOpenType_Write && create)
+		gotoIfError3(clean, File_add(loc, EFileType_File, maxTimeout, true, e_rr))
 
-	f = fopen(resolved.ptr, "wb");
+	const C8 *mode = type == EFileOpenType_Read ? "rb" : "wb";
+	f = fopen(resolved.ptr, mode);
 
-	const Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
+	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
 	while (!f && maxTimeout) {
 
 		Thread_sleep(maxTimeoutTry);
-		f = fopen(resolved.ptr, "wb");
+		f = fopen(resolved.ptr, mode);
 
 		if(maxTimeout <= maxTimeoutTry)
 			break;
@@ -650,12 +675,32 @@ Bool File_write(Buffer buf, CharString loc, Ns maxTimeout, Error *e_rr) {
 	}
 
 	if(!f)
-		retError(clean, Error_stderr(0, "File_write() couldn't open file for write"))
+		retError(clean, Error_stderr(0, "File_open() couldn't open file for read"))
 
-	const U64 bufLen = Buffer_length(buf);
+	U64 fileSize = 0;
 
-	if(bufLen && fwrite(buf.ptr, 1, bufLen, f) != bufLen)
-		retError(clean, Error_stderr(1, "File_write() couldn't write file"))
+	if(type == EFileOpenType_Read) {
+
+		if(fseek(f, 0, SEEK_END))
+			retError(clean, Error_stderr(1, "File_open() couldn't seek end"))
+
+		fileSize = (U64)_ftelli64(f);
+	}
+
+	*handle = (FileHandle) {
+	
+		.ext = f,
+
+		.filePath = resolved,
+
+		.type = (FileOpenType) type,
+		.ownsHandle = true,
+
+		.fileSize = fileSize
+	};
+
+	resolved = CharString_createNull();
+	f = NULL;
 
 clean:
 	if(f) fclose(f);
@@ -663,77 +708,137 @@ clean:
 	return s_uccess;
 }
 
-Bool File_read(CharString loc, Ns maxTimeout, Buffer *output, Error *e_rr) {
+void FileHandle_close(FileHandle *handle) {
+
+	if(!handle)
+		return;
+
+	CharString_freex(&handle->filePath);
+	if(handle->ext && handle->ownsHandle) fclose((FILE*)handle->ext);
+	*handle = (FileHandle) { 0 };
+}
+
+Bool FileHandle_write(const FileHandle *handle, Buffer buf, U64 offset, U64 length, Error *e_rr) {
+	
+	Bool s_uccess = true;
+
+	if(!handle)
+		retError(clean, Error_nullPointer(0, "FileHandle_write()::handle is required"))
+
+	if(_fseeki64((FILE*)handle->ext, offset, SEEK_SET))
+		retError(clean, Error_stderr(2, "FileHandle_write() couldn't seek begin"))
+
+	if(length > Buffer_length(buf))
+		retError(clean, Error_outOfBounds(2, length, Buffer_length(buf), "FileHandle_write() out of bounds"))
+
+	if(!length)
+		length = Buffer_length(buf);
+
+	if(length && fwrite(buf.ptr, 1, length, (FILE*)handle->ext) != length)
+		retError(clean, Error_stderr(1, "FileHandle_write() couldn't write file"))
+
+clean:
+	return s_uccess;
+}
+
+Bool FileHandle_read(const FileHandle *handle, U64 off, U64 len, Buffer output, Error *e_rr) {
+	
+	Bool s_uccess = true;
+
+	if(!handle)
+		retError(clean, Error_nullPointer(0, "FileHandle_read()::handle is required"))
+
+	if(!handle->fileSize && !off && !len)			//Empty files exist too
+		goto clean;
+
+	if(off >= handle->fileSize)
+		retError(clean, Error_invalidOperation(0, "FileHandle_read() offset out of bounds"))
+
+	U64 size = !len ? handle->fileSize - off : len;
+
+	if(off + size > handle->fileSize)
+		retError(clean, Error_invalidOperation(0, "FileHandle_read() offset + length out of bounds"))
+
+	if(Buffer_isConstRef(output))
+		retError(clean, Error_invalidOperation(0, "FileHandle_read() output must be writable"))
+
+	if(_fseeki64((FILE*)handle->ext, off, SEEK_SET))
+		retError(clean, Error_stderr(2, "FileHandle_read() couldn't seek begin"))
+
+	if(size > Buffer_length(output))
+		retError(clean, Error_outOfBounds(2, size, Buffer_length(output), "FileHandle_read() out of bounds"))
+
+	if (fread((U8*)output.ptr, 1, size, (FILE*)handle->ext) != size)
+		retError(clean, Error_stderr(3, "FileHandle_read() couldn't read file"))
+
+clean:
+	return s_uccess;
+}
+
+Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Error *e_rr) {
+
+	Bool s_uccess = true;
+	FileHandle handle = (FileHandle) { 0 };
+
+	if(File_isVirtual(loc)) {
+
+		if(!CharString_isValidFilePath(loc))
+			retError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"))
+
+		gotoIfError3(clean, File_writeVirtual(buf, loc, maxTimeout, e_rr))
+		goto clean;
+	}
+
+	gotoIfError3(clean, File_open(loc, maxTimeout, EFileOpenType_Write, createParent, &handle, e_rr))
+	gotoIfError3(clean, FileHandle_write(&handle, buf, off, len, e_rr))
+
+clean:
+	FileHandle_close(&handle);
+	return s_uccess;
+}
+
+Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Bool allocate = false;
-	CharString resolved = CharString_createNull();
-	FILE *f = NULL;
+	FileHandle handle = (FileHandle) { 0 };
 
-	if(!CharString_isValidFilePath(loc))
-		retError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"))
+	if(File_isVirtual(loc)) {
+	
+		if(!CharString_isValidFilePath(loc))
+			retError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"))
 
-	if(!output)
-		retError(clean, Error_nullPointer(2, "File_read()::output is required"))
+		if(!output)
+			retError(clean, Error_nullPointer(2, "File_read()::output is required"))
 
-	if(output->ptr)
-		retError(clean, Error_invalidOperation(0, "File_read()::output was filled, may indicate memleak"))
+		if(output->ptr)
+			retError(clean, Error_invalidOperation(0, "File_read()::output was filled, may indicate memleak"))
 
-	Bool isVirtual = File_isVirtual(loc);
-
-	if(isVirtual) {
 		gotoIfError3(clean, File_readVirtual(loc, output, maxTimeout, e_rr))
 		allocate = true;
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_open(loc, maxTimeout, EFileOpenType_Read, false, &handle, e_rr))
 
-	f = fopen(resolved.ptr, "rb");
-
-	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
-
-	while (!f && maxTimeout) {
-
-		Thread_sleep(maxTimeoutTry);
-		f = fopen(resolved.ptr, "rb");
-
-		if(maxTimeout <= maxTimeoutTry)
-			break;
-
-		maxTimeout -= maxTimeoutTry;
-	}
-
-	if(!f)
-		retError(clean, Error_stderr(0, "File_read() couldn't open file for read"))
-
-	if(fseek(f, 0, SEEK_END))
-		retError(clean, Error_stderr(1, "File_read() couldn't seek end"))
-
-	U64 size = (U64)_ftelli64(f);
-
-	if(!size)			//Empty files exist too
+	if(!handle.fileSize && !off && !len)			//Empty files exist too
 		goto clean;
 
-	gotoIfError2(clean, Buffer_createUninitializedBytesx(size, output))
+	if(off >= handle.fileSize)
+		retError(clean, Error_invalidOperation(0, "File_read() offset out of bounds"))
+
+	U64 size = !len ? handle.fileSize - off : len;
+	gotoIfError2(clean, Buffer_createUninitializedBytesx(len, output))
 	allocate = true;
 
-	if(fseek(f, 0, SEEK_SET))
-		retError(clean, Error_stderr(2, "File_read() couldn't seek begin"))
-
-	Buffer b = *output;
-	U64 bufLen = Buffer_length(b);
-
-	if (fread((U8*)b.ptr, 1, bufLen, f) != bufLen)
-		retError(clean, Error_stderr(3, "File_read() couldn't read file"))
+	gotoIfError3(clean, FileHandle_read(&handle, off, size, *output, e_rr))
 
 clean:
 
 	if(!s_uccess && allocate)
 		Buffer_freex(output);
 
-	if(f) fclose(f);
-	CharString_freex(&resolved);
+	FileHandle_close(&handle);
 	return s_uccess;
 }
 

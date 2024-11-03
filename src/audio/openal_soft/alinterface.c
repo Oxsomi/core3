@@ -109,6 +109,8 @@ Bool AudioInterface_getDeviceInfos(
 	U64 j = 0;
 
 	CharString debug = CharString_createRefCStrConst("ALC_EXT_debug");
+	CharString f64 = CharString_createRefCStrConst("AL_EXT_double");
+	CharString f32 = CharString_createRefCStrConst("AL_EXT_float32");
 
 	while ((c = ptr[++i]) != '\0' || !prevNull) {
 
@@ -132,20 +134,23 @@ Bool AudioInterface_getDeviceInfos(
 
 			gotoIfError2(clean, CharString_splitSensitive(extensions, ' ', alloc, &strings))
 			
-			Bool containsDebug = false;
-
-			for(U64 k = 0; k < strings.length; ++k)
-				if (CharString_equalsStringSensitive(strings.ptr[k], debug)) {
-					containsDebug = true;
-					break;
-				}
-
-			ListCharString_free(&strings, alloc);
-
 			AudioDeviceInfo info = (AudioDeviceInfo) {
 				.id = j,
-				.flags = (!j ? EAudioDeviceFlags_MainOutput : 0) | (containsDebug ? EAudioDeviceFlags_Debug : 0)
+				.flags = !j ? EAudioDeviceFlags_MainOutput : 0
 			};
+
+			for(U64 k = 0; k < strings.length; ++k)
+
+				if (CharString_equalsStringSensitive(strings.ptr[k], debug))
+					info.flags |= EAudioDeviceFlags_Debug;
+
+				else if (CharString_equalsStringSensitive(strings.ptr[k], f64))
+					info.flags |= EAudioDeviceFlags_HasF64Ext;
+
+				else if (CharString_equalsStringSensitive(strings.ptr[k], f32))
+					info.flags |= EAudioDeviceFlags_HasF32Ext;
+
+			ListCharString_free(&strings, alloc);
 
 			Buffer_copy(Buffer_createRef(info.name, sizeof(info.name)), CharString_bufferConst(str));
 

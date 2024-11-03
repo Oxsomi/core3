@@ -192,7 +192,7 @@ public:
 
 					if (fileInfo.fileSize == prevInclude.fileSize) {
 
-						gotoIfError3(clean, File_read(resolved, 1 * SECOND, &tempBuffer, e_rr))
+						gotoIfError3(clean, File_read(resolved, 100 * MS, 0, 0, &tempBuffer, e_rr))
 
 						gotoIfError2(clean, CharString_createCopy(
 							CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
@@ -262,7 +262,7 @@ public:
 			if(!isBuiltin) {
 
 				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
-				gotoIfError3(clean, File_read(resolved, 1 * SECOND, &tempBuffer, e_rr))
+				gotoIfError3(clean, File_read(resolved, 100 * MS, 0, 0, &tempBuffer, e_rr))
 
 				Ns timestamp = fileInfo.timestamp;
 				FileInfo_free(&fileInfo, alloc);

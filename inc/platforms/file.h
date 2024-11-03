@@ -57,8 +57,38 @@ Bool File_hasType(CharString loc, EFileType type);
 Bool File_hasFile(CharString loc);
 Bool File_hasFolder(CharString loc);
 
-Bool File_write(Buffer buf, CharString loc, Ns maxTimeout, Error *e_rr);			//Write when a file is available
-Bool File_read(CharString loc, Ns maxTimeout, Buffer *output, Error *e_rr);			//Read when a file is available
+typedef enum EFileOpenType {
+	EFileOpenType_Read,				//Read only
+	EFileOpenType_Write				//E.g. ios::ate or wb
+} EFileOpenType;
+
+typedef U8 FileOpenType;
+
+typedef struct FileHandle {
+
+	void *ext;
+
+	CharString filePath;
+
+	FileOpenType type;
+	Bool ownsHandle;				//For if the handle is a copy and shouldn't be affected by File_close
+	U8 padding[6];
+
+	U64 fileSize;					//Only if readonly, indicates file size
+
+} FileHandle;
+
+//Manually ensure that all child FileHandles are disposed before the parent FileHandle is closed.
+Bool FileHandle_createRef(const FileHandle *input, FileHandle *output, Error *e_rr);
+
+Bool File_open(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr);
+void FileHandle_close(FileHandle *handle);
+
+Bool FileHandle_write(const FileHandle *handle, Buffer buf, U64 offset, U64 length, Error *e_rr);
+Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Error *e_rr);
+
+Bool FileHandle_read(const FileHandle *handle, U64 off, U64 len, Buffer output, Error *e_rr);
+Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, Error *e_rr);
 
 typedef struct FileLoadVirtual {
 	Bool doLoad;
@@ -68,6 +98,40 @@ typedef struct FileLoadVirtual {
 Bool File_loadVirtual(CharString loc, const U32 encryptionKey[8], Error *e_rr);		//Load a virtual section
 Bool File_isVirtualLoaded(CharString loc, Error *e_rr);								//Check if a virtual section is loaded
 Bool File_unloadVirtual(CharString loc, Error *e_rr);								//Unload a virtual section
+
+//FileStream for handling bigger files and more efficiently jumping around.
+
+typedef struct Stream Stream;
+typedef Bool (*StreamFunc)(Stream *stream, U64 offset, U64 length, Buffer buf, Allocator alloc, Error *e_rr);
+
+typedef struct Stream {
+
+	union {
+		StreamFunc read;		//Only if isReadonly
+		StreamFunc write;
+	};
+
+	FileHandle handle;			//Only valid if it's a file stream, however fileSize has to be set always
+
+	Buffer cacheData;			//Temporary cache
+
+	U64 lastLocation;
+	U64 lastWriteLocation;		//Because the stream can be bigger than the actual file
+
+	Bool isReadonly;
+	U8 padding[7];
+
+} Stream;
+
+Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create, U64 cache, Stream *output, Error *e_rr);
+Bool FileHandle_openStream(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr);		//Takes over FileHandle
+
+Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr);
+
+//buf.length == 0 && length indicates; load to internal stream only
+Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr);
+
+void Stream_close(Stream *stream);
 
 //TODO: make it more like a DirectStorage-like api
 

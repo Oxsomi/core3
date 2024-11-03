@@ -54,7 +54,7 @@ Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 	};
 
 	if (entry.type == EFileType_File)
-		gotoIfError3(clean, File_read(file.path, 1 * SECOND, &entry.data, e_rr))
+		gotoIfError3(clean, File_read(file.path, 100 * MS, 0, 0, &entry.data, e_rr))
 
 	if (file.type == EFileType_File) {
 
@@ -247,9 +247,7 @@ Bool CLI_package(ParsedArgs args) {
 
 	gotoIfError3(clean, CAFile_create(settings, &archive, &file, e_rr))
 	gotoIfError3(clean, CAFile_writex(file, &res, e_rr))
-
-	gotoIfError3(clean, File_add(output, EFileType_File, 1 * SECOND, true, e_rr))		//Ensure subdirs are created
-	gotoIfError3(clean, File_write(res, output, 1 * SECOND, e_rr))
+	gotoIfError3(clean, File_write(res, output, 0, 0, 1 * SECOND, true, e_rr))
 
 clean:
 

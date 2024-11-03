@@ -17,27 +17,16 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-message("-- Targeting audio API: OpenAL")
-find_package(openal_soft REQUIRED)
-
-file(GLOB_RECURSE graphicsHeaders "../../inc/audio/*.h")
-file(GLOB graphicsSources "*.c")
-
-file(GLOB_RECURSE apiPlatformSources "openal_soft/*.c")
-file(GLOB_RECURSE apiPlatformIncludes "../../inc/audio/openal_soft/*.h")
+file(GLOB formatsWAVHeaders "../../../inc/formats/wav/*.h")
+file(GLOB formatsWAVSources "*.c")
 
 add_library(
-	OxC3_audio
+	OxC3_formats_wav
 	STATIC
-	${graphicsHeaders}
-	${graphicsSources}
-	${apiPlatformSources}
-	${apiPlatformIncludes}
+	${formatsWAVHeaders}
+	${formatsWAVSources}
 	CMakeLists.txt
 )
 
-source_group("Source Files (openal_soft)" FILES ${apiPlatformSources})
-source_group("Header Files (openal_soft)" FILES ${apiPlatformIncludes})
-
-set_target_properties(OxC3_audio PROPERTIES FOLDER Oxsomi)
-target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms openal_soft::openal_soft OxC3_formats_wav)
+set_target_properties(OxC3_formats_wav PROPERTIES FOLDER Oxsomi/formats)
+target_link_libraries(OxC3_formats_wav PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiXX)

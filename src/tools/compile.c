@@ -296,16 +296,18 @@
 				gotoIfError2(clean, CharString_appendStringx(&tempStr, tempStr2))
 				CharString_freex(&tempStr2);
 
-				gotoIfError3(clean, File_write(CharString_bufferConst(tempStr), outputPath, 10 * MS, e_rr))
+				gotoIfError3(clean, File_write(CharString_bufferConst(tempStr), outputPath, 0, 0, 10 * MS, true, e_rr))
 			}
 
 			//Otherwise we can simply output preprocessed blob
 
 			else if(compileResult.type == ECompileResultType_Text)
-				gotoIfError3(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS, e_rr))
+				gotoIfError3(clean, File_write(
+					CharString_bufferConst(compileResult.text), outputPath, 0, 0, 10 * MS, true, e_rr
+				))
 
 			else if(compileResult.type == ECompileResultType_Binary)
-				gotoIfError3(clean, File_write(compileResult.binary, outputPath, 10 * MS, e_rr))
+				gotoIfError3(clean, File_write(compileResult.binary, outputPath, 0, 0, 10 * MS, true, e_rr))
 		}
 
 	clean:
@@ -1077,7 +1079,7 @@
 
 			//Otherwise grab from file
 
-			gotoIfError3(clean, File_read(allFiles->ptr[i], 10 * MS, &temp, e_rr))
+			gotoIfError3(clean, File_read(allFiles->ptr[i], 10 * MS, 0, 0, &temp, e_rr))
 
 			if(!Buffer_length(temp)) {
 				gotoIfError2(clean, ListCharString_pushBackx(allShaderText, CharString_createNull()))
@@ -1265,7 +1267,7 @@
 							}
 
 							else {
-								gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 100 * MS, e_rr))
+								gotoIfError3(clean, File_write(temp, allOutputs.ptr[lastJobId], 0, 0, 100 * MS, true, e_rr))
 								Buffer_freex(&temp);
 							}
 						}
@@ -1484,7 +1486,7 @@
 								}
 
 								else {
-									gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 100 * MS, e_rr))
+									gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 0, 0, 100 * MS, true, e_rr))
 									Buffer_freex(&temp);
 								}
 							}
@@ -1559,7 +1561,7 @@
 				CharString_freex(&tempStr2);
 			}
 
-			gotoIfError3(clean, File_write(CharString_bufferConst(tempStr), tempStr3, 10 * MS, e_rr))
+			gotoIfError3(clean, File_write(CharString_bufferConst(tempStr), tempStr3, 0, 0, 10 * MS, true, e_rr))
 		}
 
 	clean:

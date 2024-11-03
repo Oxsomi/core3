@@ -104,12 +104,12 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	//Read input buffers
 
-	if (!File_read(inputArg, 1 * SECOND, &buf[0], e_rr)) {
+	if (!File_read(inputArg, 100 * MS, 0, 0, &buf[0], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (1)");
 		goto clean;
 	}
 
-	if (!File_read(inputArg2, 1 * SECOND, &buf[1], e_rr)) {
+	if (!File_read(inputArg2, 100 * MS, 0, 0, &buf[1], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (2)");
 		goto clean;
 	}
@@ -214,7 +214,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			goto clean;
 	}
 
-	if (!File_write(buf[2], outputArg, 1 * SECOND, e_rr)) {
+	if (!File_write(buf[2], outputArg, 0, 0, 1 * SECOND, true, e_rr)) {
 		Log_warnLnx("CLI_fileCombine() can't write to output file");
 		goto clean;
 	}

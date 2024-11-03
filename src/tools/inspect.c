@@ -112,7 +112,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		goto clean;
 	}
 
-	if (!File_read(path, 1 * SECOND, &buf, &err)) {
+	if (!File_read(path, 100 * MS, 0, 0, &buf, &err)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
@@ -501,7 +501,7 @@ Bool writeToDisk(FileInfo info, OutputFolderToDisk *output, Error *e_rr) {
 	if (info.type == EFileType_File) {
 		Buffer data = Buffer_createNull();
 		gotoIfError3(clean, Archive_getFileDataConstx(output->sourceArchive, info.path, &data, e_rr))
-		gotoIfError3(clean, File_write(data, tmp, 1 * SECOND, e_rr))
+		gotoIfError3(clean, File_write(data, tmp, 0, 0, 1 * SECOND, true, e_rr))
 	}
 
 	else gotoIfError3(clean, File_add(tmp, EFileType_Folder, 1 * SECOND, false, e_rr))
@@ -547,7 +547,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		}
 
 		Buffer subBuffer = Buffer_createRefConst(b.ptr + start, length);
-		gotoIfError3(clean, File_write(subBuffer, out, 1 * SECOND, e_rr))
+		gotoIfError3(clean, File_write(subBuffer, out, 0, 0, 1 * SECOND, true, e_rr))
 	}
 
 	//More info about a single entry
@@ -702,7 +702,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		goto clean;
 	}
 
-	if (!File_read(path, 1 * SECOND, &buf, e_rr)) {
+	if (!File_read(path, 100 * MS, 0, 0, &buf, e_rr)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}

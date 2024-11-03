@@ -24,8 +24,13 @@
 #include "platforms/ext/errorx.h"
 
 #include "types/container/ref_ptr.h"
+
+/*
 #include "audio/interface.h"
 #include "audio/device.h"
+#include "audio/stream.h"
+#include "audio/source.h"
+*/
 
 Platform_defineEntrypoint() {
 
@@ -36,6 +41,30 @@ Platform_defineEntrypoint() {
 		Error_printLnx(err);
 		return -2;
 	}
+
+	/*
+	AudioInterfaceRef *ref = NULL;
+	AudioInterface_createx(&ref, &err);
+
+	AudioDeviceInfo info = (AudioDeviceInfo) { 0 };
+	AudioInterface_getPreferredDevicex(AudioInterfaceRef_ptr(ref), EAudioDeviceFlags_MainOutput, &info, &err);
+
+	AudioDeviceRef *dev = NULL;
+	AudioDeviceRef_createx(ref, &info, false, &dev, &err);
+
+	AudioStreamRef *stream = NULL;
+	AudioDeviceRef_createFileStreamx(dev, CharString_createRefCStrConst("music.wav"), false, 0, 1, &stream, &err);
+
+	AudioSourceRef *source = NULL;
+	AudioDeviceRef_createSourcex(dev, stream, (AudioModifier) { 0 }, &source, &err);
+
+	AudioStreamRef_playx(stream, &err);
+	AudioDeviceRef_waitx(dev, true, &err);
+
+	AudioSourceRef_dec(&source);
+	AudioStreamRef_dec(&stream);
+	AudioDeviceRef_dec(&dev);
+	AudioInterfaceRef_dec(&ref);*/
 
 	CLI_init();
 

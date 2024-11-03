@@ -20,31 +20,40 @@
 
 #pragma once
 #include "types/container/list.h"
+#include "types/container/ref_ptr.h"
+#include "types/math/vec.h"
+#include "types/base/lock.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
 typedef struct Error Error;
-typedef struct RefPtr RefPtr;
 typedef RefPtr AudioInterfaceRef;
 
 typedef enum EAudioDeviceFlags {
 	EAudioDeviceFlags_None			= 0,
 	EAudioDeviceFlags_MainOutput	= 1 << 0,
-	EAudioDeviceFlags_Debug			= 1 << 1
+	EAudioDeviceFlags_Debug			= 1 << 1,
+	EAudioDeviceFlags_HasF32Ext		= 1 << 2,
+	EAudioDeviceFlags_HasF64Ext		= 1 << 3,
+	EAudioDeviceFlags_HasU24Ext		= 1 << 4
 } EAudioDeviceFlags;
 
 typedef struct AudioDeviceInfo {
 
 	C8 name[256];
 
-	U64 id;
+	F32x4 position;
+	F32x4 forward;
+	F32x4 up;
+	F32x4 velocity;
 
+	U64 id;
 	void *ext;
 
 	EAudioDeviceFlags flags;
-	U32 padding;
+	U32 padding[3];
 
 } AudioDeviceInfo;
 
@@ -56,8 +65,14 @@ typedef struct AudioDevice {
 
 	AudioDeviceInfo info;
 
-	//TODO: SpinLock
-	//TODO: ListAudioStreams
+	U8 pendingDirtyMask;
+	U8 padding[7];
+
+	//Pending updates
+
+	SpinLock pendingUpdateLock;
+	ListWeakRefPtr streams;
+	ListWeakRefPtr pendingSources;
 
 } AudioDevice;
 
@@ -70,10 +85,12 @@ Error AudioDeviceRef_dec(AudioDeviceRef **device);
 Error AudioDeviceRef_inc(AudioDeviceRef *device);
 
 void AudioDeviceInfo_print(AudioDeviceInfo info, Allocator alloc);
+void AudioDeviceInfo_printx(AudioDeviceInfo info);
 
 Bool AudioDeviceRef_create(
 	AudioInterfaceRef *interfRef,
 	const AudioDeviceInfo *info,
+	Bool isDebug,
 	Allocator alloc,
 	AudioDeviceRef **device,
 	Error *e_rr
@@ -82,11 +99,32 @@ Bool AudioDeviceRef_create(
 Bool AudioDeviceRef_createx(
 	AudioInterfaceRef *interfRef,
 	const AudioDeviceInfo *info,
+	Bool isDebug,
 	AudioDeviceRef **device,
 	Error *e_rr
 );
 
-void AudioDeviceInfo_printx(AudioDeviceInfo info);
+Bool AudioDeviceRef_updateListenerTransform(
+	AudioDeviceRef *dev,
+	F32x4 position,
+	F32x4 forward,
+	F32x4 up,
+	F32x4 velocity,
+	U8 dirtyMask,		//[pos, fwd, up, vel], e.g. pos = & 1, all = 15
+	Error *e_rr
+);
+
+Bool AudioDeviceRef_updateListenerPosition(AudioDeviceRef *dev, F32x4 pos, Error *e_rr);
+Bool AudioDeviceRef_updateListenerForward(AudioDeviceRef *dev, F32x4 fwd, Error *e_rr);
+Bool AudioDeviceRef_updateListenerUp(AudioDeviceRef *dev, F32x4 up, Error *e_rr);
+Bool AudioDeviceRef_updateListenerOrientation(AudioDeviceRef *dev, F32x4 fwd, F32x4 up, Error *e_rr);
+Bool AudioDeviceRef_updateListenerVelocity(AudioDeviceRef *dev, F32x4 vel, Error *e_rr);
+
+Bool AudioDeviceRef_update(AudioDeviceRef *dev, Allocator alloc, Error *e_rr);
+Bool AudioDeviceRef_wait(AudioDeviceRef *dev, Bool waitForLoopingStream, Allocator alloc, Error *e_rr);
+
+Bool AudioDeviceRef_updatex(AudioDeviceRef *dev, Error *e_rr);
+Bool AudioDeviceRef_waitx(AudioDeviceRef *dev, Bool waitForLoopingStream, Error *e_rr);
 
 #ifdef __cplusplus
 	}
