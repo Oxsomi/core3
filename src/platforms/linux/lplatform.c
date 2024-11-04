@@ -44,9 +44,12 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 	C8 exeName[1024];
 	I32 fd = -1;
+	I32 exeNameLen = readlink("/proc/self/exe", exeName, sizeof(exeName) - 1);
 
-	if(readlink("/proc/self/exe", exeName, sizeof(exeName) - 1) < 0)
+	if(exeNameLen < 0)
 		retError(clean, Error_invalidState(0, "File_loadVirtualInternal() couldn't find out executable name"))
+
+	exeName[exeNameLen] = '\0';
 
 	//Try to open the main executable within 1s, if it fails we can't init
 

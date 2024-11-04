@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class openal_soft(ConanFile):
 
 	name = "openal_soft"
-	version = "2024.11.04"
+	version = "2024.11.04.01"
 
 	# Optional metadata
 	license = "BSD-3 License"
@@ -56,8 +56,9 @@ class openal_soft(ConanFile):
 		cmake = CMake(self)
 		cmake.build(target="OpenAL")
 
-		headers_src = os.path.join(self.source_folder, "openal-soft/include/al")
-		headers_dst = os.path.join(self.package_folder, "include/al")
+		print(self.source_folder)
+		headers_src = os.path.join(self.source_folder, "openal-soft/include/AL")
+		headers_dst = os.path.join(self.package_folder, "include/AL")
 		copy(self, "*.h", headers_src, headers_dst)
 
 		lib_src = os.path.join(self.build_folder, "lib")
@@ -66,7 +67,8 @@ class openal_soft(ConanFile):
 
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if not self.settings.os == "Windows":
-			copy(self, "*.a", lib_src, lib_dst)
+			copy(self, "*.a", self.build_folder, lib_dst)
+			copy(self, "*.so", self.build_folder, bin_dst)
 
 		# Windows uses more complicated setups
 		else:
@@ -94,6 +96,8 @@ class openal_soft(ConanFile):
 		self.cpp_info.set_property("pkg_config_name", "openal_soft")
 		
 		if not self.settings.os == "Windows":
-			self.cpp_info.libs = [ "libalsoft.excommon", "libOpenAL32", "libalsoft.common" ]
+			self.cpp_info.libs = [ "alsoft.common", "alsoft.excommon" ]
+			self.cpp_info.system_libs = [ "openal" ]
+
 		else:
-			self.cpp_info.libs = [ "alsoft.excommon", "OpenAL32", "alsoft.common" ]
+			self.cpp_info.libs = [ "alsoft.common", "alsoft.excommon", "OpenAL32" ]

@@ -23,7 +23,7 @@
 #include "formats/wav/headers.h"
 #include "types/math/math.h"
 
-static const U8 WAV_write = 0;
+void dummy() { }
 
 /*
 

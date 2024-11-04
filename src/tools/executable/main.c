@@ -25,12 +25,43 @@
 
 #include "types/container/ref_ptr.h"
 
-/*
 #include "audio/interface.h"
 #include "audio/device.h"
 #include "audio/stream.h"
 #include "audio/source.h"
-*/
+
+void playSound() {
+
+	Bool s_uccess = true;
+	Error err = Error_none();
+
+	AudioInterfaceRef *ref = NULL;
+	gotoIfError3(clean, AudioInterface_createx(&ref, &err))
+
+	AudioDeviceInfo info = (AudioDeviceInfo) { 0 };
+	gotoIfError3(clean, AudioInterface_getPreferredDevicex(AudioInterfaceRef_ptr(ref), EAudioDeviceFlags_MainOutput, &info, &err))
+
+	AudioDeviceRef *dev = NULL;
+	gotoIfError3(clean, AudioDeviceRef_createx(ref, &info, false, &dev, &err))
+
+	AudioStreamRef *stream = NULL;
+	gotoIfError3(clean, AudioDeviceRef_createFileStreamx(dev, CharString_createRefCStrConst("music.wav"), false, 0, 1, &stream, &err))
+
+	AudioSourceRef *source = NULL;
+	gotoIfError3(clean, AudioDeviceRef_createSourcex(dev, stream, (AudioModifier) { 0 }, &source, &err))
+
+	gotoIfError3(clean, AudioStreamRef_playx(stream, &err))
+	gotoIfError3(clean, AudioDeviceRef_waitx(dev, true, &err))
+
+	(void) s_uccess;
+
+clean:
+	AudioSourceRef_dec(&source);
+	AudioStreamRef_dec(&stream);
+	AudioDeviceRef_dec(&dev);
+	AudioInterfaceRef_dec(&ref);
+	Error_printLnx(err);
+}
 
 Platform_defineEntrypoint() {
 
@@ -42,29 +73,7 @@ Platform_defineEntrypoint() {
 		return -2;
 	}
 
-	/*
-	AudioInterfaceRef *ref = NULL;
-	AudioInterface_createx(&ref, &err);
-
-	AudioDeviceInfo info = (AudioDeviceInfo) { 0 };
-	AudioInterface_getPreferredDevicex(AudioInterfaceRef_ptr(ref), EAudioDeviceFlags_MainOutput, &info, &err);
-
-	AudioDeviceRef *dev = NULL;
-	AudioDeviceRef_createx(ref, &info, false, &dev, &err);
-
-	AudioStreamRef *stream = NULL;
-	AudioDeviceRef_createFileStreamx(dev, CharString_createRefCStrConst("music.wav"), false, 0, 1, &stream, &err);
-
-	AudioSourceRef *source = NULL;
-	AudioDeviceRef_createSourcex(dev, stream, (AudioModifier) { 0 }, &source, &err);
-
-	AudioStreamRef_playx(stream, &err);
-	AudioDeviceRef_waitx(dev, true, &err);
-
-	AudioSourceRef_dec(&source);
-	AudioStreamRef_dec(&stream);
-	AudioDeviceRef_dec(&dev);
-	AudioInterfaceRef_dec(&ref);*/
+	//playSound();
 
 	CLI_init();
 
