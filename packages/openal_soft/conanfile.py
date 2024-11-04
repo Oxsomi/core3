@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class openal_soft(ConanFile):
 
 	name = "openal_soft"
-	version = "2024.10.27"
+	version = "2024.11.04"
 
 	# Optional metadata
 	license = "BSD-3 License"
@@ -92,5 +92,8 @@ class openal_soft(ConanFile):
 		self.cpp_info.set_property("cmake_file_name", "openal_soft")
 		self.cpp_info.set_property("cmake_target_name", "openal_soft::openal_soft")
 		self.cpp_info.set_property("pkg_config_name", "openal_soft")
-
-		self.cpp_info.libs = [ "alsoft.excommon", "OpenAL32", "alsoft.common" ]
+		
+		if not self.settings.os == "Windows":
+			self.cpp_info.libs = [ "libalsoft.excommon", "libOpenAL32", "libalsoft.common" ]
+		else:
+			self.cpp_info.libs = [ "alsoft.excommon", "OpenAL32", "alsoft.common" ]

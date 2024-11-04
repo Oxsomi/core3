@@ -828,7 +828,7 @@ Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, 
 		retError(clean, Error_invalidOperation(0, "File_read() offset out of bounds"))
 
 	U64 size = !len ? handle.fileSize - off : len;
-	gotoIfError2(clean, Buffer_createUninitializedBytesx(len, output))
+	gotoIfError2(clean, Buffer_createUninitializedBytesx(size, output))
 	allocate = true;
 
 	gotoIfError3(clean, FileHandle_read(&handle, off, size, *output, e_rr))
