@@ -1,8 +1,9 @@
 from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.scm import Git
-from conan.tools.files import collect_libs, copy, rename
+from conan.tools.files import collect_libs, copy, rename, rm
 import os
+import glob
 
 required_conan_version = ">=2.0"
 
@@ -66,12 +67,26 @@ class openal_soft(ConanFile):
 
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if not self.settings.os == "Windows":
+		
+			if self.settings.os == "Linux":
+			
+				rm(self, "*.so", self.build_folder)		# Imposter!
+			
+				soVersion = glob.glob(os.path.join(self.build_folder, "*.so.*.*.*"))
+				
+				if not len(soVersion) == 1:
+					error("Can't find real SO!")
+					
+				rename(self, soVersion[0], soVersion[0].rsplit('.', 3)[0])
+				copy(self, "*.so", self.build_folder, lib_dst)
+				copy(self, "*.so", self.build_folder, bin_dst)
+				
+			else:
+				copy(self, "*.dylib", self.build_folder, lib_dst)
+				copy(self, "*.dylib", self.build_folder, bin_dst)
+			
 			copy(self, "*.a", self.build_folder, lib_dst)
-			copy(self, "*.dylib", self.build_folder, lib_dst)
-			copy(self, "*.so", self.build_folder, lib_dst)
-			copy(self, "*.so", self.build_folder, bin_dst)
-			copy(self, "*.dylib", self.build_folder, bin_dst)
-
+			
 		# Windows uses more complicated setups
 		else:
 

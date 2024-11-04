@@ -21,8 +21,6 @@ jobs:
       run: conan profile detect
     - name: Install wayland
       run: sudo apt-get update; sudo apt-get install --no-install-recommends libwayland-dev
-    - name: Install openal
-      run: sudo apt-get update; sudo apt-get install --no-install-recommends libalut-dev
     - name: Restore cached
       id: cache-restore
       uses: actions/cache/restore@v3

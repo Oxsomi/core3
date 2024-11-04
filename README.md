@@ -120,7 +120,7 @@ bash build.sh Release False
 
 Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
 
-For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y && sudo apt install libalut-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default.
+For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default.
 
 ### Other platforms
 
