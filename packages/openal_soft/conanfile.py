@@ -56,7 +56,6 @@ class openal_soft(ConanFile):
 		cmake = CMake(self)
 		cmake.build(target="OpenAL")
 
-		print(self.source_folder)
 		headers_src = os.path.join(self.source_folder, "openal-soft/include/AL")
 		headers_dst = os.path.join(self.package_folder, "include/AL")
 		copy(self, "*.h", headers_src, headers_dst)
@@ -68,7 +67,10 @@ class openal_soft(ConanFile):
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if not self.settings.os == "Windows":
 			copy(self, "*.a", self.build_folder, lib_dst)
+			copy(self, "*.dylib", self.build_folder, lib_dst)
+			copy(self, "*.so", self.build_folder, lib_dst)
 			copy(self, "*.so", self.build_folder, bin_dst)
+			copy(self, "*.dylib", self.build_folder, bin_dst)
 
 		# Windows uses more complicated setups
 		else:
@@ -96,8 +98,7 @@ class openal_soft(ConanFile):
 		self.cpp_info.set_property("pkg_config_name", "openal_soft")
 		
 		if not self.settings.os == "Windows":
-			self.cpp_info.libs = [ "alsoft.common", "alsoft.excommon" ]
-			self.cpp_info.system_libs = [ "openal" ]
+			self.cpp_info.libs = [ "alsoft.common", "alsoft.excommon", "openal" ]
 
 		else:
 			self.cpp_info.libs = [ "alsoft.common", "alsoft.excommon", "OpenAL32" ]
