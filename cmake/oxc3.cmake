@@ -33,16 +33,14 @@ function(apply_dependencies target)
 			[[^/usr/lib.*]]
 		DIRECTORIES ${CONAN_RUNTIME_LIB_DIRS}
 	)
-
-	if(CMAKE_IMPORT_LIBRARY_SUFFIX)
-		add_custom_command(
-			TARGET ${target} POST_BUILD
-			COMMAND ${CMAKE_COMMAND}
-				-D "LIBDIRS=${CONAN_RUNTIME_LIB_DIRS}"
-				-D DESTDIR=$<TARGET_FILE_DIR:${target}>
-				-P ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/copy_dlls.cmake
-		)
-	endif()
+	
+	add_custom_command(
+		TARGET ${target} POST_BUILD
+		COMMAND ${CMAKE_COMMAND}
+			-D "DESTDIR=$<TARGET_FILE_DIR:${target}>"
+			-D "LIBDIRS=\"${CONAN_RUNTIME_LIB_DIRS}\""
+			-P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/copy_dlls.cmake"
+	)
 
 	# Ensure that working directory is set to the same place as the exe to ensure it can find .dll/.so
 	set_target_properties(${target} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")

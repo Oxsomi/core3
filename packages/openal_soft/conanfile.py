@@ -69,17 +69,12 @@ class openal_soft(ConanFile):
 		if not self.settings.os == "Windows":
 		
 			if self.settings.os == "Linux":
-			
-				rm(self, "*.so", self.build_folder)		# Imposter!
-			
-				soVersion = glob.glob(os.path.join(self.build_folder, "*.so.*.*.*"))
-				
-				if not len(soVersion) == 1:
-					error("Can't find real SO!")
-					
-				rename(self, soVersion[0], soVersion[0].rsplit('.', 3)[0])
 				copy(self, "*.so", self.build_folder, lib_dst)
 				copy(self, "*.so", self.build_folder, bin_dst)
+				copy(self, "*.so.*", self.build_folder, lib_dst)
+				copy(self, "*.so.*", self.build_folder, bin_dst)
+				copy(self, "*.so.*.*.*", self.build_folder, lib_dst)
+				copy(self, "*.so.*.*.*", self.build_folder, bin_dst)
 				
 			else:
 				copy(self, "*.dylib", self.build_folder, lib_dst)
