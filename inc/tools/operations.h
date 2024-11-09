@@ -199,7 +199,9 @@ typedef enum EOperation {
 	//EOperation_CompileChimera,
 
 	EOperation_GraphicsDevices,
+
 	EOperation_AudioDevices,
+	EOperation_AudioConvert,
 
 	EOperation_InfoLicense,
 	EOperation_InfoAbout,
@@ -263,6 +265,8 @@ typedef enum EFormat {
 	EFormat_FNV1A64,
 
 	EFormat_HLSL,
+
+	EFormat_WAV,
 
 	EFormat_Invalid
 

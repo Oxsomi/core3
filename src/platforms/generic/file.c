@@ -341,7 +341,7 @@ clean:
 	return s_uccess;
 }
 
-Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Error *e_rr) {
+Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Allocator alloc, Error *e_rr) {
 
 	CharString resolved = CharString_createNull();
 	ListCharString str = (ListCharString) { 0 };
@@ -358,11 +358,11 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->workingDirectory, alloc, &resolved, e_rr))
 
 	{
 		Error errTmp = Error_none();
-		Bool successTmp = File_getInfox(resolved, &info, &errTmp);
+		Bool successTmp = File_getInfo(resolved, &info, alloc, &errTmp);
 
 		if(!successTmp && errTmp.genericError != EGenericError_NotFound)
 			retError(clean, errTmp)
@@ -370,7 +370,7 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 		if(successTmp)
 			goto clean;
 
-		FileInfo_freex(&info);
+		FileInfo_free(&info, alloc);
 	}
 
 	//Check parent directories until none left
@@ -380,14 +380,14 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance->workingDirectory, 0, 0))
 			retError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."))
 
-		gotoIfError2(clean, CharString_splitSensitivex(resolved, '/', &str))
+		gotoIfError2(clean, CharString_splitSensitive(resolved, '/', alloc, &str))
 
 		for (U64 i = 0; i < str.length - 1; ++i) {
 
 			CharString parent = CharString_createRefSized((C8*)resolved.ptr, CharString_end(str.ptr[i]) - resolved.ptr, false);
 
 			Error errTmp = Error_none();
-			Bool successTmp = File_getInfox(parent, &info, &errTmp);
+			Bool successTmp = File_getInfo(parent, &info, alloc, &errTmp);
 
 			if(!successTmp && errTmp.genericError != EGenericError_NotFound)
 				retError(clean, errTmp)
@@ -395,7 +395,7 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 			if(info.type != EFileType_Folder)
 				retError(clean, Error_invalidOperation(2, "File_add() one of the parents wasn't a folder"))
 
-			FileInfo_freex(&info);
+			FileInfo_free(&info, alloc);
 
 			if(successTmp)		//Already defined, continue to child
 				continue;
@@ -421,7 +421,7 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 				CharString_setAt(resolved, CharString_length(parent) + 1, prev);
 		}
 
-		ListCharString_freex(&str);
+		ListCharString_free(&str, alloc);
 	}
 
 	//Create folder
@@ -432,13 +432,17 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 	//Create file
 
 	if(type == EFileType_File && !createParentOnly)
-		gotoIfError3(clean, File_write(Buffer_createNull(), resolved, 0, 0, maxTimeout, false, e_rr))
+		gotoIfError3(clean, File_write(Buffer_createNull(), resolved, 0, 0, maxTimeout, false, alloc, e_rr))
 
 clean:
-	FileInfo_freex(&info);
-	CharString_freex(&resolved);
-	ListCharString_freex(&str);
+	FileInfo_free(&info, alloc);
+	CharString_free(&resolved, alloc);
+	ListCharString_free(&str, alloc);
 	return s_uccess;
+}
+
+Bool File_addx(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Error *e_rr) {
+	return File_add(loc, type, maxTimeout, createParentOnly, Platform_instance->alloc, e_rr);
 }
 
 Bool File_remove(CharString loc, Ns maxTimeout, Error *e_rr) {
@@ -634,7 +638,7 @@ clean:
 	return s_uccess;
 }
 
-Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr) {
+Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, Allocator alloc, FileHandle *handle, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
@@ -653,10 +657,10 @@ Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, F
 		retError(clean, Error_invalidOperation(0, "File_open() is not permitted on virtual files, only physical"))
 
 	Bool isVirtual = false;
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->workingDirectory, alloc, &resolved, e_rr))
 	
 	if(type == EFileOpenType_Write && create)
-		gotoIfError3(clean, File_add(loc, EFileType_File, maxTimeout, true, e_rr))
+		gotoIfError3(clean, File_add(loc, EFileType_File, maxTimeout, true, alloc, e_rr))
 
 	const C8 *mode = type == EFileOpenType_Read ? "rb" : "wb";
 	f = fopen(resolved.ptr, mode);
@@ -704,18 +708,26 @@ Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, F
 
 clean:
 	if(f) fclose(f);
-	CharString_freex(&resolved);
+	CharString_free(&resolved, alloc);
 	return s_uccess;
 }
 
-void FileHandle_close(FileHandle *handle) {
+Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr) {
+	return File_open(loc, timeout, type, create, Platform_instance->alloc, handle, e_rr);
+}
+
+void FileHandle_close(FileHandle *handle, Allocator alloc) {
 
 	if(!handle)
 		return;
 
-	CharString_freex(&handle->filePath);
+	CharString_free(&handle->filePath, alloc);
 	if(handle->ext && handle->ownsHandle) fclose((FILE*)handle->ext);
 	*handle = (FileHandle) { 0 };
+}
+
+void FileHandle_closex(FileHandle *handle) {
+	FileHandle_close(handle, Platform_instance->alloc);
 }
 
 Bool FileHandle_write(const FileHandle *handle, Buffer buf, U64 offset, U64 length, Error *e_rr) {
@@ -775,7 +787,7 @@ clean:
 	return s_uccess;
 }
 
-Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Error *e_rr) {
+Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	FileHandle handle = (FileHandle) { 0 };
@@ -789,15 +801,19 @@ Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Boo
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_open(loc, maxTimeout, EFileOpenType_Write, createParent, &handle, e_rr))
+	gotoIfError3(clean, File_open(loc, maxTimeout, EFileOpenType_Write, createParent, alloc, &handle, e_rr))
 	gotoIfError3(clean, FileHandle_write(&handle, buf, off, len, e_rr))
 
 clean:
-	FileHandle_close(&handle);
+	FileHandle_close(&handle, alloc);
 	return s_uccess;
 }
 
-Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, Error *e_rr) {
+Bool File_writex(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Error *e_rr) {
+	return File_write(buf, loc, off, len, maxTimeout, createParent, Platform_instance->alloc, e_rr);
+}
+
+Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Allocator alloc, Buffer *output, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Bool allocate = false;
@@ -819,7 +835,7 @@ Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, 
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_open(loc, maxTimeout, EFileOpenType_Read, false, &handle, e_rr))
+	gotoIfError3(clean, File_open(loc, maxTimeout, EFileOpenType_Read, false, alloc, &handle, e_rr))
 
 	if(!handle.fileSize && !off && !len)			//Empty files exist too
 		goto clean;
@@ -828,7 +844,7 @@ Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, 
 		retError(clean, Error_invalidOperation(0, "File_read() offset out of bounds"))
 
 	U64 size = !len ? handle.fileSize - off : len;
-	gotoIfError2(clean, Buffer_createUninitializedBytesx(size, output))
+	gotoIfError2(clean, Buffer_createUninitializedBytes(size, alloc, output))
 	allocate = true;
 
 	gotoIfError3(clean, FileHandle_read(&handle, off, size, *output, e_rr))
@@ -836,10 +852,14 @@ Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, 
 clean:
 
 	if(!s_uccess && allocate)
-		Buffer_freex(output);
+		Buffer_free(output, alloc);
 
-	FileHandle_close(&handle);
+	FileHandle_close(&handle, alloc);
 	return s_uccess;
+}
+
+Bool File_readx(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, Error *e_rr) {
+	return File_read(loc, maxTimeout, off, len, Platform_instance->alloc, output, e_rr);
 }
 
 //Virtual file support

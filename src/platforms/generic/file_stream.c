@@ -57,7 +57,7 @@ clean:
 	return s_uccess;
 }
 
-Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create, U64 cache, Stream *output, Error *e_rr) {
+Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create, U64 cache, Allocator alloc, Stream *output, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Bool allocated = false;
@@ -70,28 +70,42 @@ Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create
 
 	output->lastLocation = output->lastWriteLocation = U64_MAX;
 
-	if(type == EFileOpenType_Read)
+	if(type == EFileOpenType_Read) {
 		output->read = FileStream_read;
+		output->isReadonly = true;
+	}
 
 	else output->write = FileStream_write;
 
-	gotoIfError3(clean, File_open(loc, timeout, type, create, &output->handle, e_rr))
+	gotoIfError3(clean, File_open(loc, timeout, type, create, alloc, &output->handle, e_rr))
 	allocated = true;
 
 	if(!cache)
 		cache = 256 * KIBI;
 
-	gotoIfError2(clean, Buffer_createUninitializedBytesx(cache, &output->cacheData))
+	gotoIfError2(clean, Buffer_createUninitializedBytes(cache, alloc, &output->cacheData))
 
 clean:
 
 	if(!s_uccess & allocated)
-		Stream_close(output);
+		Stream_close(output, alloc);
 
 	return s_uccess;
 }
 
-Bool FileHandle_openStream(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr) {
+Bool File_openStreamx(
+	CharString loc,
+	Ns timeout,
+	EFileOpenType type,
+	Bool create,
+	U64 cache,
+	Stream *output,
+	Error *e_rr
+) {
+	return File_openStream(loc, timeout, type, create, cache, Platform_instance->alloc, output, e_rr);
+}
+
+Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Stream *stream, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -104,7 +118,7 @@ Bool FileHandle_openStream(FileHandle *handle, U64 cache, Stream *stream, Error 
 	if(!cache)
 		cache = 256 * KIBI;
 
-	gotoIfError2(clean, Buffer_createUninitializedBytesx(cache, &stream->cacheData))
+	gotoIfError2(clean, Buffer_createUninitializedBytes(cache, alloc, &stream->cacheData))
 
 	if(stream->handle.type == EFileOpenType_Read)
 		stream->read = FileStream_read;
@@ -119,6 +133,10 @@ clean:
 	return s_uccess;
 }
 
+Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr) {
+	return FileHandle_openStream(handle, cache, Platform_instance->alloc, stream, e_rr);
+}
+
 Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr) {
 	
 	Bool s_uccess = true;
@@ -126,18 +144,14 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 	if(!stream)
 		retError(clean, Error_nullPointer(0, "Stream_write()::stream is required"))
 
-	if(stream->handle.type != EFileOpenType_Read)
+	if(stream->handle.type != EFileOpenType_Write)
 		retError(clean, Error_invalidParameter(0, 0, "Stream_write()::stream must be readonly"))
 
 	if((srcOff >> 48) || (dstOff >> 48) || (length >> 48))
 		retError(clean, Error_invalidParameter(2, 0, "Stream_read()::dst/src off limited to 48b"))
 
-	U64 dstEnd = dstOff + length;
-
-	if(dstEnd > stream->handle.fileSize)
-		retError(clean, Error_outOfBounds(
-			2, dstEnd, stream->handle.fileSize, "Stream_read()::stream out of bounds"
-		))
+	if(!length)
+		length = Buffer_length(buf);
 		
 	U64 srcEnd = srcOff + length;
 
@@ -152,7 +166,7 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 	U64 streamEnd = 0;
 
 	if (stream->lastLocation != U64_MAX)
-		streamEnd = U64_min(stream->lastLocation + streamLen, stream->handle.fileSize);
+		streamEnd = stream->lastLocation + streamLen;
 
 	//If the writing dst is in our stream, we can write it in memory for the remaining bytes.
 	//When the cache is full, we can flush it to disk / output.
@@ -163,15 +177,15 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 		U64 bytesToCopy = U64_min(streamLen - dstRel, length);
 
 		Buffer_copy(
-			Buffer_createRef((U8*)stream->cacheData.ptr + dstOff, bytesToCopy),
+			Buffer_createRef((U8*)stream->cacheData.ptr + dstRel, bytesToCopy),
 			Buffer_createRefConst(buf.ptr + srcOff, bytesToCopy)
 		);
+
+		stream->lastWriteLocation = U64_max(stream->lastWriteLocation, dstOff + bytesToCopy);
 
 		srcOff += bytesToCopy;
 		dstOff += bytesToCopy;
 		length -= bytesToCopy;
-
-		stream->lastWriteLocation = dstOff;
 	}
 
 	if(!length)
@@ -351,7 +365,7 @@ clean:
 	return s_uccess;
 }
 
-void Stream_close(Stream *stream) {
+void Stream_close(Stream *stream, Allocator alloc) {
 
 	if(!stream)
 		return;
@@ -362,10 +376,72 @@ void Stream_close(Stream *stream) {
 			stream->lastLocation,
 			stream->lastWriteLocation - stream->lastLocation,
 			stream->cacheData,
-			Platform_instance->alloc,
+			alloc,
 			NULL
 		);
 
-	Buffer_freex(&stream->cacheData);
-	FileHandle_close(&stream->handle);
+	Buffer_free(&stream->cacheData, alloc);
+	FileHandle_close(&stream->handle, alloc);
+}
+
+void Stream_closex(Stream *stream) {
+	Stream_close(stream, Platform_instance->alloc);
+}
+
+Bool Stream_resize(Stream *stream, U64 newBufferSize, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!stream || !stream->cacheData.ptr)
+		retError(clean, Error_nullPointer(0, "Stream_resize()::stream is required"))
+
+	if(!newBufferSize)
+		retError(clean, Error_nullPointer(1, "Stream_resize()::newBufferSize is required"))
+
+	U64 prevLen = Buffer_length(stream->cacheData);
+
+	if(prevLen == newBufferSize)
+		goto clean;
+
+	//Invalidate cache and make another
+
+	//TODO: Maybe in the future we would want to have an option to keep the cache but resize (readonly) or flush it (writeonly)
+
+	Buffer_free(&stream->cacheData, alloc);
+	gotoIfError2(clean, Buffer_createUninitializedBytesx(newBufferSize, &stream->cacheData))
+	stream->lastLocation = stream->lastWriteLocation = U64_MAX;
+
+clean:
+	return s_uccess;
+}
+
+Bool Stream_resizex(Stream *stream, U64 newBufferSize, Error *e_rr) {
+	return Stream_resize(stream, newBufferSize, Platform_instance->alloc, e_rr);
+}
+
+Bool Stream_writeStream(Stream *stream, Stream *inputStream, U64 srcOff, U64 dstOff, U64 length, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!inputStream)
+		retError(clean, Error_nullPointer(0, "Stream_writeStream()::inputStream is required"))
+
+	U64 streamLen = Buffer_length(inputStream->cacheData);
+
+	for(U64 i = 0; i < (length + streamLen - 1) / streamLen; ++i) {
+
+		//Update cache
+
+		U64 len = U64_min(srcOff + streamLen, inputStream->handle.fileSize) - srcOff;
+		gotoIfError3(clean, Stream_read(inputStream, Buffer_createNull(), srcOff, 0, len, false, e_rr))
+		srcOff += len;
+
+		//Write cache
+
+		gotoIfError3(clean, Stream_write(stream, inputStream->cacheData, 0, dstOff, len, true, e_rr))
+		dstOff += len;
+	}
+
+clean:
+	return s_uccess;
 }

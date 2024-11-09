@@ -28,7 +28,20 @@
 
 typedef struct Stream Stream;
 
-//Only used through read/write, don't cast directly.
+Bool WAV_write(
+	Stream *stream,
+	Stream *inputStream,
+	U64 outputStreamOffset,
+	U64 inputStreamOffset,
+	U64 streamLength,		//0 = remainder of input stream; length of output data
+	Bool isStereo,
+	U32 freq,				//8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz
+	U16 stride,				//8, 16, 24 (PCM), 32, 64 (Float)
+	U64 *dataOutput,		//If NULL, will directly output the data to stream, otherwise points to the offset of the data
+	Error *e_rr
+);
+
+//Only used through read, don't cast directly.
 //To avoid loading the whole WAV, a stream is used to find all these sections.
 typedef struct WAVFile {
 	RIFFFmtHeader fmt;
@@ -36,8 +49,56 @@ typedef struct WAVFile {
 	U64 dataStart;
 } WAVFile;
 
-//Error WAV_write(..., Allocator allocator, Buffer *result);		//TODO:
 Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *result, Error *e_rr);
+Bool WAV_readx(Stream *stream, U64 off, U64 len, WAVFile *result, Error *e_rr);
+
+typedef enum ESplitType {
+	ESplitType_Untouched,
+	ESplitType_Left,
+	ESplitType_Right,
+	ESplitType_Average,
+	ESplitType_Count
+} ESplitType;
+
+typedef U8 SplitType;
+
+typedef enum EAudioFormat {
+	EAudioFormat_WAV
+} EAudioFormat;
+
+typedef U8 AudioFormat;
+
+typedef struct WAVConversionInfo {
+	AudioFormat format;
+	SplitType splitType;		//Only possible if isStereo
+	U8 oldByteCount;			//Upper bit indicates 'isStereo'
+	U8 newByteCount;
+} WAVConversionInfo;
+
+Bool WAVFile_convert(
+	Stream *inputStream,
+	U64 srcOff,
+	U64 srcLen,
+	Stream *outputStream,
+	U64 dstOff,
+	WAVConversionInfo info,
+	U32 freq,				//Must match input
+	Bool writeHeader,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool WAVFile_convertx(
+	Stream *inputStream,
+	U64 srcOff,
+	U64 srcLen,
+	Stream *outputStream,
+	U64 dstOff,
+	WAVConversionInfo info,
+	U32 freq,				//Must match input
+	Bool writeHeader,
+	Error *e_rr
+);
 
 #ifdef __cplusplus
 	}

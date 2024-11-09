@@ -22,6 +22,7 @@
 #include "formats/wav/wav.h"
 #include "formats/wav/headers.h"
 #include "platforms/file.h"
+#include "platforms/platform.h"
 
 Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *result, Error *e_rr) {
 
@@ -75,6 +76,51 @@ Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *re
 
 				Buffer buf =  Buffer_createRef(&result->fmt, sizeof(result->fmt));
 				gotoIfError3(clean, Stream_read(stream, buf, off - sizeof(section), 0, 0, false, e_rr))
+
+				switch (result->fmt.frequency) {
+
+					case   8000:
+					case  11025:
+					case  22050:
+					case  32000:
+					case  44100:
+					case  48000:
+					case  96000:
+					case 192000:
+						break;
+
+					default:
+						retError(clean, Error_invalidParameter(
+							0, 0, "WAV_read() wav file has invalid frequency; must be one of "
+							"8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz"
+						))
+				}
+
+				if(result->fmt.channels < 1 || result->fmt.channels > 2)
+					retError(clean, Error_invalidState(0, "WAV_read() channel count unsupported"))
+				
+				if((U64)result->fmt.frequency * result->fmt.bytesPerBlock != result->fmt.bytesPerSecond)
+					retError(clean, Error_invalidState(0, "WAV_read() bytesPerSecond is invalid"))
+				
+				if(((U64)result->fmt.channels * result->fmt.stride) >> 3 != result->fmt.bytesPerBlock)
+					retError(clean, Error_invalidState(0, "WAV_read() bytesPerBlock is invalid"))
+
+				if(
+					result->fmt.stride != 8 && result->fmt.stride != 16 && result->fmt.stride != 24 &&		//Int
+					result->fmt.stride != 32 && result->fmt.stride != 64									//Float ext
+				)
+					retError(clean, Error_invalidState(0, "WAV_read() bit count unsupported"))
+
+				if(result->fmt.stride >= 32 && result->fmt.format != ERIFFAudioFormat_IEEE754)
+					retError(clean, Error_invalidState(
+						0, "WAV_read() format unsupported for 32 or 64 bit depth"
+					))
+
+				if(result->fmt.stride <= 24 && result->fmt.format != ERIFFAudioFormat_PCM)
+					retError(clean, Error_invalidState(
+						0, "WAV_read() format unsupported for 8 or 16 bit depth"
+					))
+
 				hasFmt = true;
 				break;
 			}
@@ -121,6 +167,15 @@ Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *re
 	if(!hasData || !hasFmt)
 		retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has no fmt or data section"))
 
+	if(result->dataLength % result->fmt.bytesPerBlock)
+		retError(clean, Error_invalidParameter(
+			0, 0, "WAV_write() dataLength didn't match bytes per block"
+		))
+
 clean:
 	return s_uccess;
+}
+
+Bool WAV_readx(Stream *stream, U64 off, U64 len, WAVFile *result, Error *e_rr) {
+	return WAV_read(stream, off, len, Platform_instance->alloc, result, e_rr);
 }

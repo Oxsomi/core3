@@ -253,7 +253,7 @@ Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTim
 	gotoIfError2(clean, ListSubResourceData_createRefConst(&subResource, 1, &buf))
 	gotoIfError2(clean, DDS_writex(buf, info, &file))
 
-	gotoIfError3(clean, File_write(file, filePath, 0, 0, maxTimeout, true, e_rr))
+	gotoIfError3(clean, File_writex(file, filePath, 0, 0, maxTimeout, true, e_rr))
 	Buffer_freex(&file);
 
 clean:

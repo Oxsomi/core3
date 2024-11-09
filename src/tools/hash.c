@@ -37,7 +37,7 @@ Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 	if(!isFile)
 		buf = CharString_bufferConst(str);
 
-	else gotoIfError3(clean, File_read(str, 100 * MS, 0, 0, &buf, e_rr))
+	else gotoIfError3(clean, File_readx(str, 100 * MS, 0, 0, &buf, e_rr))
 
 	switch(format) {
 

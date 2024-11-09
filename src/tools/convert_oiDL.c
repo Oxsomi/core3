@@ -132,7 +132,7 @@ Bool CLI_convertToDL(
 
 	if (inputInfo.type == EFileType_File) {
 
-		gotoIfError3(clean, File_read(input, 100 * MS, 0, 0, &buf, e_rr))
+		gotoIfError3(clean, File_readx(input, 100 * MS, 0, 0, &buf, e_rr))
 
 		//Create oiDL from text file. Splitting by enter or custom string
 
@@ -231,7 +231,7 @@ Bool CLI_convertToDL(
 			for (U64 i = 0; i < paths.length; ++i) {
 
 				CharString stri = paths.ptr[i];
-				gotoIfError3(clean, File_read(stri, 100 * MS, 0, 0, &fileBuf, e_rr))
+				gotoIfError3(clean, File_readx(stri, 100 * MS, 0, 0, &fileBuf, e_rr))
 				gotoIfError2(clean, ListBuffer_pushBackx(&buffers, fileBuf))
 
 				fileBuf = Buffer_createNull();
@@ -244,7 +244,7 @@ Bool CLI_convertToDL(
 		else for (U64 i = 0; i < sortedPaths.length; ++i) {
 
 			CharString stri = sortedPaths.ptr[i];
-			gotoIfError3(clean, File_read(stri, 100 * MS, 0, 0, &fileBuf, e_rr))
+			gotoIfError3(clean, File_readx(stri, 100 * MS, 0, 0, &fileBuf, e_rr))
 			gotoIfError2(clean, ListBuffer_pushBackx(&buffers, fileBuf))
 
 			fileBuf = Buffer_createNull();
@@ -266,7 +266,7 @@ Bool CLI_convertToDL(
 	gotoIfError3(clean, DLFile_writex(file, &res, e_rr))
 
 write:
-	gotoIfError3(clean, File_write(res, output, 0, 0, 1 * SECOND, true, e_rr))
+	gotoIfError3(clean, File_writex(res, output, 0, 0, 1 * SECOND, true, e_rr))
 
 clean:
 
@@ -304,7 +304,7 @@ Bool CLI_convertFromDL(
 
 	//Read file
 
-	gotoIfError3(clean, File_read(input, 100 * MS, 0, 0, &buf, e_rr))
+	gotoIfError3(clean, File_readx(input, 100 * MS, 0, 0, &buf, e_rr))
 	gotoIfError3(clean, DLFile_readx(buf, encryptionKey, false, &file, e_rr))
 
 	//Write file
@@ -347,7 +347,7 @@ Bool CLI_convertFromDL(
 				file.settings.dataType == EDLDataType_Ascii ? CharString_bufferConst(file.entryStrings.ptr[i]) :
 				file.entryBuffers.ptr[i];
 
-			gotoIfError3(clean, File_write(fileDat, filePathi, 0, 0, 1 * SECOND, true, e_rr))
+			gotoIfError3(clean, File_writex(fileDat, filePathi, 0, 0, 1 * SECOND, true, e_rr))
 
 			CharString_freex(&filePathi);
 		}
@@ -381,7 +381,7 @@ Bool CLI_convertFromDL(
 
 		Buffer fileDat = Buffer_createRefConst(concatFile.ptr, CharString_length(concatFile));
 
-		gotoIfError3(clean, File_write(fileDat, output, 0, 0, 1 * SECOND, true, e_rr))
+		gotoIfError3(clean, File_writex(fileDat, output, 0, 0, 1 * SECOND, true, e_rr))
 
 		CharString_freex(&concatFile);
 	}

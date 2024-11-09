@@ -83,7 +83,7 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Input string or path (relative)",
 	"Output path (relative)",
 	"Encryption key (32-byte hex)",
-	"Split by character (defaulted to newline)",
+	"Split by character (defaulted to newline) or split audio source (left/right/combine)",
 	"Number of elements",
 	"Length of each element",
 	"Characters to include",
@@ -512,7 +512,7 @@ void Operations_init() {
 
 	#endif
 
-	//List audio devices
+	//Audio operations
 	
 	Operation_values[EOperation_AudioDevices] = (Operation) {
 		.category = EOperationCategory_Audio,
@@ -520,6 +520,32 @@ void Operations_init() {
 		.desc = "Shows audio devices using the active audio API.",
 		.func = &CLI_audioDevices,
 		.isFormatLess = true
+	};
+
+	Format_values[EFormat_WAV] = (Format) {
+
+		.name = "WAV",
+		.desc = "Waveform Audio Format",
+
+		.operationFlags =
+			EOperationFlags_Debug | EOperationFlags_Split |
+			EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles,
+
+		.requiredParameters =
+			EOperationHasParameter_Input | EOperationHasParameter_Output,
+
+		.optionalParameters = EOperationHasParameter_Bit | EOperationHasParameter_SplitBy,
+
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
+		.supportedCategories = { EOperationCategory_Audio }
+	};
+	
+	Operation_values[EOperation_AudioConvert] = (Operation) {
+		.category = EOperationCategory_Audio,
+		.name = "convert",
+		.desc = "Convert audio to other format.",
+		.func = &CLI_audioConvert,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output
 	};
 
 	//License for the tool

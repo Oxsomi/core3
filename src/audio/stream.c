@@ -172,7 +172,7 @@ Bool AudioStream_free(AudioStream *stream, Allocator alloc) {
 		return true;
 
 	AudioStream_freeExt(stream, alloc);
-	Stream_close(&stream->info.stream);
+	Stream_close(&stream->info.stream, alloc);
 
 	//Ensure stream isn't updated next time
 
@@ -301,7 +301,7 @@ Bool AudioDeviceRef_createFileStream(
 	if(pitch < 0)
 		retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() negative pitch not supported yet"))	//TODO:
 
-	gotoIfError3(clean, File_openStream(path, 1 * MS, EFileOpenType_Read, false, 256 * KIBI, &streamInfo.stream, e_rr))
+	gotoIfError3(clean, File_openStream(path, 1 * MS, EFileOpenType_Read, false, 256 * KIBI, alloc, &streamInfo.stream, e_rr))
 	gotoIfError3(clean, Stream_read(&streamInfo.stream, Buffer_createRef(&magic, sizeof(magic)), 0, 0, 0, false, e_rr))
 
 	streamInfo.pitch = !pitch ? 1 : pitch;
@@ -313,34 +313,6 @@ Bool AudioDeviceRef_createFileStream(
 
 			WAVFile file = (WAVFile) { 0 };
 			gotoIfError3(clean, WAV_read(&streamInfo.stream, 0, 0, alloc, &file, e_rr))
-
-			if(file.fmt.channels < 1 || file.fmt.channels > 2)
-				retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() channel count unsupported"))
-
-			if(!file.fmt.frequency)
-				retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() frequency must not be 0"))
-				
-			if((U64)file.fmt.frequency * file.fmt.bytesPerBlock != file.fmt.bytesPerSecond)
-				retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() bytesPerSecond is invalid"))
-				
-			if(((U64)file.fmt.channels * file.fmt.stride) >> 3 != file.fmt.bytesPerBlock)
-				retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() bytesPerBlock is invalid"))
-
-			if(
-				file.fmt.stride != 8 && file.fmt.stride != 16 && file.fmt.stride != 24 &&		//Int
-				file.fmt.stride != 32 && file.fmt.stride != 64									//Float ext
-			)
-				retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() bit count unsupported"))
-
-			if(file.fmt.stride >= 32 && file.fmt.format != ERIFFAudioFormat_IEEE754)
-				retError(clean, Error_invalidState(
-					0, "AudioDeviceRef_createFileStream() format unsupported for 32 or 64 bit depth"
-				))
-
-			if(file.fmt.stride <= 24 && file.fmt.format != ERIFFAudioFormat_PCM)
-				retError(clean, Error_invalidState(
-					0, "AudioDeviceRef_createFileStream() format unsupported for 8 or 16 bit depth"
-				))
 
 			U64 seconds = file.dataLength / file.fmt.bytesPerSecond;
 			F64 nanos = (F64)(file.dataLength % file.fmt.bytesPerSecond) / ((F64)file.fmt.bytesPerSecond / SECOND);
@@ -372,7 +344,7 @@ Bool AudioDeviceRef_createFileStream(
 clean:
 
 	if(!s_uccess)		//Only keep file open if the audio stream is still alive
-		Stream_close(&streamInfo.stream);
+		Stream_close(&streamInfo.stream, alloc);
 
 	return s_uccess;
 }

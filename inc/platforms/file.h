@@ -37,7 +37,8 @@ Bool FileInfo_freex(FileInfo *fileInfo);
 Bool File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
 Bool File_remove(CharString loc, Ns maxTimeout, Error *e_rr);
-Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Error *e_rr);
+Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Allocator alloc, Error *e_rr);
+Bool File_addx(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Error *e_rr);
 
 Bool File_rename(CharString loc, CharString newFileName, Ns maxTimeout, Error *e_rr);
 Bool File_move(CharString loc, CharString directoryName, Ns maxTimeout, Error *e_rr);
@@ -81,14 +82,19 @@ typedef struct FileHandle {
 //Manually ensure that all child FileHandles are disposed before the parent FileHandle is closed.
 Bool FileHandle_createRef(const FileHandle *input, FileHandle *output, Error *e_rr);
 
-Bool File_open(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr);
-void FileHandle_close(FileHandle *handle);
+Bool File_open(CharString loc, Ns timeout, EFileOpenType type, Bool create, Allocator alloc, FileHandle *handle, Error *e_rr);
+Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr);
+
+void FileHandle_close(FileHandle *handle, Allocator alloc);
+void FileHandle_closex(FileHandle *handle);
 
 Bool FileHandle_write(const FileHandle *handle, Buffer buf, U64 offset, U64 length, Error *e_rr);
-Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Error *e_rr);
+Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Allocator alloc, Error *e_rr);
+Bool File_writex(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Error *e_rr);
 
 Bool FileHandle_read(const FileHandle *handle, U64 off, U64 len, Buffer output, Error *e_rr);
-Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, Error *e_rr);
+Bool File_read(CharString loc, Ns maxTimeout, U64 off, U64 len, Allocator alloc, Buffer *output, Error *e_rr);
+Bool File_readx(CharString loc, Ns maxTimeout, U64 off, U64 len, Buffer *output, Error *e_rr);
 
 typedef struct FileLoadVirtual {
 	Bool doLoad;
@@ -123,15 +129,44 @@ typedef struct Stream {
 
 } Stream;
 
-Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create, U64 cache, Stream *output, Error *e_rr);
-Bool FileHandle_openStream(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr);		//Takes over FileHandle
+Bool File_openStream(
+	CharString loc,
+	Ns timeout,
+	EFileOpenType type,
+	Bool create,
+	U64 cache,
+	Allocator alloc,
+	Stream *output,
+	Error *e_rr
+);
+
+Bool File_openStreamx(
+	CharString loc,
+	Ns timeout,
+	EFileOpenType type,
+	Bool create,
+	U64 cache,
+	Stream *output,
+	Error *e_rr
+);
+
+//Takes over FileHandle
+Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Stream *stream, Error *e_rr);
+Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr);
 
 Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr);
+Bool Stream_writeStream(Stream *stream, Stream *inputStream, U64 srcOff, U64 dstOff, U64 length, Error *e_rr);
 
 //buf.length == 0 && length indicates; load to internal stream only
 Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr);
 
-void Stream_close(Stream *stream);
+void Stream_close(Stream *stream, Allocator alloc);
+void Stream_closex(Stream *stream);
+
+//This will discard previous data, so make sure to finish writing before doing resize
+
+Bool Stream_resize(Stream *stream, U64 newBufferSize, Allocator alloc, Error *e_rr);
+Bool Stream_resizex(Stream *stream, U64 newBufferSize, Error *e_rr);
 
 //TODO: make it more like a DirectStorage-like api
 

@@ -99,22 +99,26 @@ extern const Ns WEEK;
 extern const U8 U8_MIN;
 extern const C8 C8_MIN;
 extern const U16 U16_MIN;
+extern const U32 U24_MIN;
 extern const U32 U32_MIN;
 extern const U64 U64_MIN;
 
 extern const I8  I8_MIN;
 extern const I16 I16_MIN;
+extern const U32 I24_MIN;
 extern const I32 I32_MIN;
 extern const I64 I64_MIN;
 
 extern const U8  U8_MAX;
 extern const C8  C8_MAX;
 extern const U16 U16_MAX;
+extern const U32 U24_MAX;
 extern const U32 U32_MAX;
 extern const U64 U64_MAX;
 
 extern const I8  I8_MAX;
 extern const I16 I16_MAX;
+extern const U32 I24_MAX;
 extern const I32 I32_MAX;
 extern const I64 I64_MAX;
 

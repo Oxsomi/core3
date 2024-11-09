@@ -453,7 +453,7 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 
 Bool Buffer_free(Buffer *buf, Allocator alloc) {
 
-	if(!buf || !buf->ptr)
+	if(!buf || !Buffer_length(*buf))
 		return true;
 
 	//References SHOULD NEVER be freed through the allocator.

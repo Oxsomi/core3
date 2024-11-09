@@ -49,7 +49,7 @@ Bool addFileToCAFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 	};
 
 	if (entry.type == EFileType_File)
-		gotoIfError3(clean, File_read(file.path, 100 * MS, 0, 0, &entry.data, e_rr))
+		gotoIfError3(clean, File_readx(file.path, 100 * MS, 0, 0, &entry.data, e_rr))
 
 	if (file.type == EFileType_File)
 		gotoIfError3(clean, Archive_addFilex(caFile->archive, entry.path, &entry.data, entry.timestamp, e_rr))
@@ -143,7 +143,7 @@ Bool CLI_convertToCA(
 			retError(clean, Error_invalidState(0, "CLI_convertToCA() cutBeforeLast failed"))
 
 		gotoIfError3(clean, File_getInfox(resolved, &fileInfo, e_rr))
-		gotoIfError3(clean, File_read(resolved, 100 * MS, 0, 0, &fileData, e_rr))
+		gotoIfError3(clean, File_readx(resolved, 100 * MS, 0, 0, &fileData, e_rr))
 		gotoIfError3(clean, Archive_addFilex(&archive, subPath, &fileData, fileInfo.timestamp, e_rr))
 	}
 
@@ -165,7 +165,7 @@ Bool CLI_convertToCA(
 
 	gotoIfError3(clean, CAFile_create(settings, &archive, &file, e_rr))
 	gotoIfError3(clean, CAFile_writex(file, &res, e_rr))
-	gotoIfError3(clean, File_write(res, output, 0, 0, 1 * SECOND, true, e_rr))
+	gotoIfError3(clean, File_writex(res, output, 0, 0, 1 * SECOND, true, e_rr))
 
 clean:
 	FileInfo_freex(&fileInfo);
@@ -200,7 +200,7 @@ Bool CLI_convertFromCA(
 
 	//Read file
 
-	gotoIfError3(clean, File_read(input, 100 * MS, 0, 0, &buf, e_rr))
+	gotoIfError3(clean, File_readx(input, 100 * MS, 0, 0, &buf, e_rr))
 	gotoIfError3(clean, CAFile_readx(buf, encryptionKey, &file, e_rr))
 
 	Bool outputAsSingle = file.archive.entries.length == 1;
@@ -209,7 +209,7 @@ Bool CLI_convertFromCA(
 	if (outputAsSingle) {
 
 		if(outputType == EFileType_File)
-			gotoIfError3(clean, File_write(file.archive.entries.ptr->data, output, 0, 0, 1 * SECOND, true, e_rr))
+			gotoIfError3(clean, File_writex(file.archive.entries.ptr->data, output, 0, 0, 1 * SECOND, true, e_rr))
 	}
 
 	else {
@@ -231,12 +231,12 @@ Bool CLI_convertFromCA(
 			gotoIfError2(clean, CharString_appendStringx(&loc, ei.path))
 
 			if (ei.type == EFileType_Folder) {
-				gotoIfError3(clean, File_add(loc, EFileType_Folder, 1 * SECOND, false, e_rr))
+				gotoIfError3(clean, File_addx(loc, EFileType_Folder, 1 * SECOND, false, e_rr))
 				CharString_freex(&loc);
 				continue;
 			}
 
-			gotoIfError3(clean, File_write(ei.data, loc, 0, 0, 1 * SECOND, true, e_rr))
+			gotoIfError3(clean, File_writex(ei.data, loc, 0, 0, 1 * SECOND, true, e_rr))
 			CharString_freex(&loc);
 		}
 	}

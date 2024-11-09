@@ -334,6 +334,26 @@ It can also be used to print GPU info regarding devices that support OxC3 and wh
 
 When dynamically linked, `-graphics-api X` can be used to show only the devices for a certain api, for example `vulkan` or `d3d12`. It can also be combined for example `vulkan,d3d12` or `all`. `native` can also be used to specify the one that's native on the current system (Windows = d3d12, otherwise vulkan).
 
+## Audio
+
+### List devices
+
+`OxC3 audio devices` will list the devices and their capabilities.
+
+### Convert
+
+`OxC3 audio convert -format WAV -input test.wav -output test.wav -bits 16 -split average` can for example be used to convert a IEEE754 float wav file to a 16 bit PCM wav file and convert it from stereo to mono by averaging the two audio channels. This mode is only if the source doesn't make much use of the two different channels and to for example allow spatial audio to work on it.
+
+`-input` can specify a folder; in which case it fetches all *.wav files and outputs them into the folder at `-output`. If it's a file then the output should be a file location too.
+
+`-format` determines the output format, the input format is auto detected from the file contents. It is not detected by file extension to allow writing it to a bin file or some other extension (though you are advised to use the standard file format extension such as .wav for wav files). Currently only `WAV` is supported.
+
+`-split` can use `left/right/average`, to output either the left/right or average of the two channels. If used on a mono source, it will give a warning but will be effectively a no-op. Not specifying this will leave the channels unchanged.
+
+`-bits` has to be 8, 16, 24, 32 or 64. Where 32 and 64 specify an IEEE754 float, while 8-24 specify PCM. As long as the output format supports this. This bit count always has to be less than or equal to the input bit count, because it can't magically generate data that doesn't exist, but it can truncate it. To avoid this from erroring, the user could specify multiple and it will fallback to the first bit count it is compatible with: `16,8` would specify "try to truncate to 16 bit, but try 8 bit if it's an 8 bit source". A more advanced one could be `32,16,8` which means a double/float turns into a 32-bit float and PCM turns into 16 or 8 bit (rather than 24-bit).
+
+`-bits` or `-split` has to be specified unless the format is a different type than the input.
+
 ## File inspect
 
 Two operations constitute as file inspection: `file header` and `file data`.
