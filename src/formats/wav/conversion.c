@@ -124,7 +124,8 @@ U64 WAVFile_avg(U64 a, U64 b, U64 newStride) {
 
 		case 4: {
 			F32 avg = (*(const F32*)av + *(const F32*)bv) / 2;
-			return *(const U32*)&avg;
+			const void *avgv = (const void*)&avg;
+			return *(const U32*)avgv;
 		}
 
 		case 8: {
