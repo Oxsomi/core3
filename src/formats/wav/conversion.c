@@ -65,8 +65,10 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i) {
 					return ((U32)((F64)normalized * U24_MAX) - I24_MAX) & U24_MAX;
 
 				case 4:
-				default:
-					return *(const U32*)(const void*)&clamped;
+				default: {
+					const void *clampedv = (const void*)&clamped;
+					return *(const U32*)clampedv;
+				}
 			}
 		}
 
@@ -88,12 +90,15 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i) {
 
 				case 4: {
 					F32 clampedf = (F32) clamped;
-					return *(const U32*)(const void*)&clampedf;
+					const void *clampedfv = (const void*)&clampedf;
+					return *(const U32*)clampedfv;
 				}
 
 				case 8:
-				default:
-					return *(const U64*)(const void*)&clamped;
+				default: {
+					const void *clampedv = (const void*)&clamped;
+					return *(const U64*)clampedv;
+				}
 			}
 		}
 
@@ -112,16 +117,20 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i) {
 
 U64 WAVFile_avg(U64 a, U64 b, U64 newStride) {
 
+	const void *av = (const void*)&a;
+	const void *bv = (const void*)&b;
+
 	switch (newStride) {
 
 		case 4: {
-			F32 avg = (*(const F32*)(const void*)&a + *(const F32*)(const void*)&b) / 2;
+			F32 avg = (*(const F32*)av + *(const F32*)bv) / 2;
 			return *(const U32*)&avg;
 		}
 
 		case 8: {
-			F64 avg = (*(const F64*)(const void*)&a + *(const F64*)(const void*)&b) / 2;
-			return *(const U64*)(const void*)&avg;
+			F64 avg = (*(const F64*)av + *(const F64*)bv) / 2;
+			const void *avgv = (const void*)&avg;
+			return *(const U64*)avgv;
 		}
 
 		case 3: {
