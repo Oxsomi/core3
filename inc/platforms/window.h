@@ -77,7 +77,8 @@ typedef enum EWindowFlags {
 	EWindowFlags_IsFullscreen			= 1 << 2,
 	EWindowFlags_IsActive				= 1 << 3,
 	EWindowFlags_ShouldTerminate		= 1 << 4,
-	EWindowFlags_IsMoving				= 1 << 5		//Move or resize
+	EWindowFlags_IsMoving				= 1 << 5,		//Move or resize
+	EWindowFlags_IsFinalized			= 1 << 6		//Ready to receive events
 } EWindowFlags;
 
 #define _RESOLUTION(w, h) (w << 16) | h

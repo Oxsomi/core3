@@ -209,6 +209,8 @@ Bool WindowManager_createWindow(
 	if(callbacks.onCreate)
 		callbacks.onCreate(w);
 
+	w->flags |= EWindowFlags_IsFinalized;
+
 	if(callbacks.onResize)
 		callbacks.onResize(w);
 

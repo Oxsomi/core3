@@ -47,7 +47,6 @@ typedef struct LWindow {
 
 	struct xdg_surface *surface;
 	struct xdg_toplevel *topLevel;
-	struct wl_region *region;
 
 	struct wl_shm_pool *backBuffer;
 	struct wl_buffer *buffers[2];	//Double buffering
