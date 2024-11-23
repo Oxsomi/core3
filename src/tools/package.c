@@ -202,7 +202,7 @@ Bool CLI_package(ParsedArgs args) {
 	//Make archive
 
 	gotoIfError3(clean, Archive_createx(&archive, e_rr))
-	gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(input, &isVirtual, false, 0, &resolved, e_rr))
 
 	gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 
@@ -213,6 +213,7 @@ Bool CLI_package(ParsedArgs args) {
 
 	gotoIfError3(clean, File_foreach(
 		caFileRecursion.root,
+		false,
 		(FileCallback) packageFile,
 		&caFileRecursion,
 		true,

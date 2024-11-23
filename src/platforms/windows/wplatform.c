@@ -96,9 +96,29 @@ Bool Platform_initExt(Error *e_rr) {
 
 	buff[chars] = 0;
 
-	SetDllDirectoryW(buff);
+	U64 lastSlash = U64_MAX;
 
-	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->appDirectory))
+	for (U64 i = 0; i < chars; ++i) {
+
+		Bool slash = buff[i] == '\\';
+
+		if (slash)
+			buff[i] = '/';
+
+		else if (buff[i] == '/')
+			slash = true;
+
+		if (slash)
+			lastSlash = i;
+	}
+
+	if(lastSlash == U64_MAX)
+		retError(clean, Error_invalidState(0, "Platform_initExt() couldn't find exe name"))
+
+	buff[lastSlash + 1] = '\0';
+	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, lastSlash + 1, &Platform_instance->appDirectory))
+
+	SetDllDirectoryW(buff);
 
 	//Init working dir
 
@@ -113,13 +133,8 @@ Bool Platform_initExt(Error *e_rr) {
 
 	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workDirectory))
 
-	//Sanitize both paths
-
 	CharString_replaceAllSensitive(&Platform_instance->workDirectory, '\\', '/', 0, 0);
 	gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
-
-	CharString_replaceAllSensitive(&Platform_instance->appDirectory, '\\', '/', 0, 0);
-	gotoIfError2(clean, CharString_appendx(&Platform_instance->appDirectory, '/'))
 
 	//Make default path
 

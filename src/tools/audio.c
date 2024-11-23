@@ -191,13 +191,13 @@ Bool CLI_audioConvert(ParsedArgs args) {
 		CharString resolved1 = CharString_createNull();
 
 		Bool isVirtual = false;
-		if(!File_resolvex(outputStr, &isVirtual, 0, &resolved, NULL)) {
+		if(!File_resolvex(outputStr, &isVirtual, false, 0, &resolved, NULL)) {
 			Log_debugLnx("CLI_audioConvert() invalid -output argument. Couldn't be resolved");
 			success = false;
 			goto clean2;
 		}
 
-		if(!File_resolvex(inputStr, &isVirtual, 0, &resolved1, NULL)) {
+		if(!File_resolvex(inputStr, &isVirtual, false, 0, &resolved1, NULL)) {
 			CharString_freex(&resolved);
 			Log_debugLnx("CLI_audioConvert() invalid -input argument. Couldn't be resolved");
 			success = false;
@@ -219,7 +219,7 @@ Bool CLI_audioConvert(ParsedArgs args) {
 			.inputDir = resolved1
 		};
 
-		if(!File_foreach(inputStr, (FileCallback) CLI_audioConvertFind, &audioForeach, true, NULL)) {
+		if(!File_foreach(inputStr, false, (FileCallback) CLI_audioConvertFind, &audioForeach, true, NULL)) {
 			CharString_freex(&resolved);
 			CharString_freex(&resolved1);
 			Log_debugLnx("CLI_audioConvert() invalid -output argument. Couldn't query all files");

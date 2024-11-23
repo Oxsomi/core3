@@ -36,7 +36,7 @@
 
 Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
-Bool File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
+Bool File_foreach(CharString locloc, Bool inAppDir, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
 
 	CharString resolved = CharString_createNull();
 	CharString resolvedChild = CharString_createNull();
@@ -56,7 +56,7 @@ Bool File_foreach(CharString loc, FileCallback callback, void *userData, Bool is
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr));
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, inAppDir, 0, &resolved, e_rr));
 
 	if(isVirtual)
 		retError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));

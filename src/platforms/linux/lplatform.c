@@ -51,6 +51,19 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 	exeName[exeNameLen] = '\0';
 
+	Bool containedSlash = false;
+
+	for(U64 i = exeNameLen - 1; i != U64_MAX; --i)
+		if(exeName[i] == '/') {
+			containedSlash = true;
+			exeName[i + 1] = '\0';
+			exeNameLen = i + 1;
+			break;
+		}
+
+	if(!containedSlash)
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"))
+
 	gotoIfError2(clean, CharString_createCopyx(
 		CharString_createRefSizedConst(exeName, exeNameLen, true), &Platform_instance->appDirectory
 	))

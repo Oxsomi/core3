@@ -132,7 +132,7 @@ Bool CLI_hashFile(ParsedArgs args) {
 	//Otherwise we just go to the file directly
 
 	if (File_hasFolder(str))
-		return File_foreach(str, (FileCallback) CLI_hashAllTheFiles, &args.format, true, NULL);
+		return File_foreach(str, false, (FileCallback) CLI_hashAllTheFiles, &args.format, true, NULL);
 
 	return CLI_hash(str, true, args.format, NULL);
 }

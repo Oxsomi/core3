@@ -988,11 +988,11 @@
 		if (File_hasFolder(input)) {
 
 			Bool isVirtual;
-			gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
+			gotoIfError3(clean, File_resolvex(input, &isVirtual, false, 0, &resolved, e_rr))
 			gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 
 			if(output) {
-				gotoIfError3(clean, File_resolvex(*output, &isVirtual, 0, &resolved2, e_rr))
+				gotoIfError3(clean, File_resolvex(*output, &isVirtual, false, 0, &resolved2, e_rr))
 				gotoIfError2(clean, CharString_appendx(&resolved2, '/'))
 			}
 
@@ -1010,6 +1010,7 @@
 
 			gotoIfError3(clean, File_foreach(
 				input,
+				false,
 				(FileCallback) registerFile,
 				&shaderFileRecursion,
 				true,

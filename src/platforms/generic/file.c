@@ -144,7 +144,7 @@ int removeFileOrFolder(CharString str) {
 		//Delete every file, because RemoveDirectoryW requires it to be empty
 		//We'll handle recursion ourselves
 
-		if(!File_foreach(str, recurseDelete, NULL, false, NULL))
+		if(!File_foreach(str, false, recurseDelete, NULL, false, NULL))
 			return -1;
 
 		//Now that our folder is empty, we can finally delete it
@@ -161,11 +161,12 @@ Bool FileInfo_freex(FileInfo *fileInfo) {
 	return FileInfo_free(fileInfo, Platform_instance->alloc);
 }
 
-Bool File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
+Bool File_resolvex(CharString loc, Bool *isVirtual, Bool isAppDir, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
 	return File_resolve(
 		loc, isVirtual,
 		maxFilePathLimit,
-		Platform_instance->defaultDir, Platform_instance->alloc,
+		isAppDir ? Platform_instance->appDirectory : Platform_instance->defaultDir,
+		Platform_instance->alloc,
 		result,
 		e_rr
 	);
@@ -294,12 +295,12 @@ Bool File_queryFileObjectCount(CharString loc, EFileType type, Bool isRecursive,
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, false, 0, &resolved, e_rr))
 
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { .type = type, .useType = true };
-	gotoIfError3(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive, e_rr))
+	gotoIfError3(clean, File_foreach(loc, false, (FileCallback) countFileTypeVirtual, &counter, isRecursive, e_rr))
 	*res = counter.counter;
 
 clean:
@@ -328,12 +329,12 @@ Bool File_queryFileObjectCountAll(CharString loc, Bool isRecursive, U64 *res, Er
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, false, 0, &resolved, e_rr))
 
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { 0 };
-	gotoIfError3(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive, e_rr))
+	gotoIfError3(clean, File_foreach(loc, false, (FileCallback) countFileTypeVirtual, &counter, isRecursive, e_rr))
 	*res = counter.counter;
 
 clean:
@@ -460,7 +461,7 @@ Bool File_remove(CharString loc, Ns maxTimeout, Error *e_rr) {
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, false, &isVirtual, 0, &resolved, e_rr))
 
 	const Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -520,7 +521,7 @@ Bool File_rename(CharString loc, CharString newFileName, Ns maxTimeout, Error *e
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, false, &isVirtual, 0, &resolved, e_rr))
 
 	//Check if file exists
 
@@ -572,8 +573,8 @@ Bool File_move(CharString loc, CharString directoryName, Ns maxTimeout, Error *e
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 0, &resolved, e_rr))
-	gotoIfError3(clean, File_resolvex(directoryName, &isVirtual, 0, &resolvedFile, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, false, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(directoryName, &isVirtual, false, 0, &resolvedFile, e_rr))
 
 	if(isVirtual)
 		retError(clean, Error_invalidOperation(0, "File_move() can't resolve to virtual file here?"))
@@ -874,7 +875,7 @@ Bool File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *user
 	Bool isVirtual = false;
 	CharString resolved = CharString_createNull();
 
-	gotoIfError3(clean, File_resolvex(loc, &isVirtual, 128, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, false, 128, &resolved, e_rr))
 
 	if(!isVirtual)
 		retError(clean, Error_unsupportedOperation(0, "File_virtualOp()::loc should resolve to virtual path (//*)"))

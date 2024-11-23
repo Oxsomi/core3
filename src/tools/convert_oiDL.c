@@ -178,7 +178,7 @@ Bool CLI_convertToDL(
 		gotoIfError2(clean, ListBuffer_reservex(&buffers, 256))
 
 		gotoIfError3(clean, File_foreach(
-			input, (FileCallback) addFileToDLFile, &paths,
+			input, false, (FileCallback) addFileToDLFile, &paths,
 			!(args.flags & EOperationFlags_NonRecursive),
 			e_rr
 		))

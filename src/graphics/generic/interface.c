@@ -99,7 +99,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		GraphicsInterface_instance = &graphicsInterfaceInstance;
 
 		gotoIfError3(clean, File_foreach(
-			CharString_createRefCStrConst("."), GraphicsInterface_register, NULL, false, e_rr
+			CharString_createRefCStrConst("."), true, GraphicsInterface_register, NULL, false, e_rr
 		))
 
 	clean:

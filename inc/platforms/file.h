@@ -29,12 +29,12 @@
 
 Bool File_getInfo(CharString loc, FileInfo *info, Allocator alloc, Error *e_rr);
 Bool File_getInfox(CharString loc, FileInfo *info, Error *e_rr);
-Bool File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result, Error *e_rr);
+Bool File_resolvex(CharString loc, Bool *isVirtual, Bool isAppDir, U64 maxFilePathLimit, CharString *result, Error *e_rr);
 Bool File_makeRelativex(CharString base, CharString subFile, U64 maxFilePathLimit, CharString *result, Error *e_rr);
 
 Bool FileInfo_freex(FileInfo *fileInfo);
 
-Bool File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
+Bool File_foreach(CharString loc, Bool inAppDir, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
 Bool File_remove(CharString loc, Ns maxTimeout, Error *e_rr);
 Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly, Allocator alloc, Error *e_rr);

@@ -125,7 +125,7 @@ Bool CLI_convertToCA(
 	//Archive
 
 	gotoIfError3(clean, Archive_createx(&archive, e_rr))
-	gotoIfError3(clean, File_resolvex(input, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(input, &isVirtual, false, 0, &resolved, e_rr))
 
 	if (isVirtual)
 		retError(clean, Error_invalidOperation(0, "CLI_convertToCA() can't be used on virtual file"))
@@ -154,6 +154,7 @@ Bool CLI_convertToCA(
 
 		gotoIfError3(clean, File_foreach(
 			caFileRecursion.root,
+			false,
 			(FileCallback)addFileToCAFile,
 			&caFileRecursion,
 			!(args.flags & EOperationFlags_NonRecursive),
