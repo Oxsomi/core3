@@ -35,10 +35,11 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 	return CharString_endsWithStringInsensitive(str, CharString_createRefCStrConst(".dll"), 0);
 }
 
-Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr) {
+Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ListU16 utf16 = (ListU16) { 0 };
+	CharString loc = CharString_createNull();
 
 	if(!dynamicLib)
 		retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"))
@@ -46,7 +47,18 @@ Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr
 	if(*dynamicLib)
 		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
 
-	gotoIfError2(clean, CharString_toUTF16x(str, &utf16))
+	Bool isVirtual = false;
+
+	if(isAppDir)
+		gotoIfError3(clean, File_resolve(
+			str, &isVirtual, MAX_PATH, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+		))
+
+	else gotoIfError3(clean, File_resolve(
+		str, &isVirtual, MAX_PATH, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
+	))
+
+	gotoIfError2(clean, CharString_toUTF16x(loc, &utf16))
 
 	*dynamicLib = (void*)LoadLibraryW(utf16.ptr);
 	if(!*dynamicLib)
@@ -54,6 +66,7 @@ Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr
 
 clean:
 	ListU16_freex(&utf16);
+	CharString_freex(&loc);
 	return s_uccess;
 }
 

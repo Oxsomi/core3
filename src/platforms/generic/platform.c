@@ -397,28 +397,6 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	Platform_instance->args = sl;
 	Platform_instance->useWorkingDir = useWorkingDir;
 
-	if(!useWorkingDir) {
-
-		//Grab app directory of where the exe is installed
-
-		gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cmdArgs[0]), &appDir));
-
-		CharString_replaceAllSensitive(&appDir, '\\', '/', 0, 0);
-
-		const U64 loc = CharString_findLastSensitive(appDir, '/', 0, 0);
-		CharString basePath = CharString_createNull();
-
-		if (loc == CharString_length(appDir))
-			basePath = CharString_createRefAutoConst(appDir.ptr, CharString_length(appDir));
-
-		else CharString_cut(appDir, 0, loc + 1, &basePath);
-
-		gotoIfError(clean, CharString_createCopyx(basePath, &Platform_instance->workingDirectory));
-
-		if(!CharString_endsWithSensitive(basePath, '/', 0))
-			gotoIfError(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'));
-	}
-
 	if(!Platform_initExt(&err))
 		goto clean;
 
@@ -437,7 +415,8 @@ void Platform_cleanup() {
 	if(!Platform_instance)
 		return;
 
-	CharString_freex(&Platform_instance->workingDirectory);
+	CharString_freex(&Platform_instance->workDirectory);
+	CharString_freex(&Platform_instance->appDirectory);
 	ListCharString_freex(&Platform_instance->args);
 
 	//Properly clean virtual files

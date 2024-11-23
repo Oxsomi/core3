@@ -51,7 +51,9 @@ typedef struct Platform {
 	EPlatform platformType;
 
 	ListCharString args;
-	CharString workingDirectory;		//Contains a trailing slash to make file stuff easier
+	CharString defaultDir;				//Either workDir or appDir based on 'useWorkingDir'
+	CharString workDirectory;			//Contains a trailing slash to make file stuff easier
+	CharString appDirectory;			//Installation location if useWorkingDir, otherwise same as workDirectory
 
 	Allocator alloc;
 

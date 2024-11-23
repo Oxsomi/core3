@@ -47,9 +47,13 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	I32 exeNameLen = readlink("/proc/self/exe", exeName, sizeof(exeName) - 1);
 
 	if(exeNameLen < 0)
-		retError(clean, Error_invalidState(0, "File_loadVirtualInternal() couldn't find out executable name"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find out executable name"))
 
 	exeName[exeNameLen] = '\0';
+
+	gotoIfError2(clean, CharString_createCopyx(
+		CharString_createRefSizedConst(exeName, exeNameLen, true), &Platform_instance->appDirectory
+	))
 
 	//Try to open the main executable within 1s, if it fails we can't init
 
@@ -58,13 +62,13 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	for(; i < 1000 && (fd = open(exeName, O_RDONLY)) < 0; ++i) {
 
 		if(errno != EINTR)
-			retError(clean, Error_stderr(0, "File_loadVirtualInternal() open failed on executable"))
+			retError(clean, Error_stderr(0, "Platform_initUnixExt() open failed on executable"))
 
 		Thread_sleep(MS);
 	}
 
 	if(i == 1000)
-		retError(clean, Error_invalidState(0, "File_loadVirtualInternal() executable couldn't be opened in time"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"))
 
 	//Grab file data
 
@@ -72,7 +76,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	const U8 *ptr = (const U8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
 	if(ptr == (const U8*) MAP_FAILED)
-		retError(clean, Error_invalidState(0, "File_loadVirtualInternal() executable couldn't be mapped"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
 		
     const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
 	const Elf64_Shdr *shdr = (const Elf64_Shdr*) (ptr + elf->e_shoff);

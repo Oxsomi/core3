@@ -50,6 +50,19 @@ SEL EObjCFunc_obj[(int)EObjCFunc_Count];
 Bool Platform_initUnixExt(Error *e_rr) {
 
 	Bool s_uccess = true;
+	C8 exeName[256];
+	U32 exeNameLen = 255;
+
+  	if (_NSGetExecutablePath(exeName, &exeNameLen) != 0)
+		retError(clean2, Error_invalidState(0, "Platform_initUnixExt() exePath exceeds maximum"))
+
+	exeName[exeNameLen] = '\0';
+
+	gotoIfError2(clean2, CharString_createCopyx(
+		CharString_createRefSizedConst(exeName, exeNameLen, true), &Platform_instance->appDirectory
+	))
+
+clean2:
 	return s_uccess;
 
 	//TODO:

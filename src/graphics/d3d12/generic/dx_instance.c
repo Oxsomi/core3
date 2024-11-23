@@ -159,6 +159,8 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	(void)info;
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
+	CharString locationD3D12 = CharString_createNull();
+	Bool isVirtual = false;
 
 	U32 flags = 0;
 
@@ -170,13 +172,24 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	if(err.genericError)
 		return err;
 
+	if (!File_resolve(
+		CharString_createRefCStrConst("./D3D12/"),
+		&isVirtual,
+		MAX_PATH,
+		Platform_instance->appDirectory,
+		Platform_instance->alloc,
+		&locationD3D12,
+		&err
+	))
+		goto clean;
+
 	gotoIfError(clean, dxCheck(D3D12GetInterface(
 		&CLSID_D3D12SDKConfiguration, &IID_ID3D12SDKConfiguration1, (void**) &instanceExt->config
 	)))
 
 	gotoIfError(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
 		instanceExt->config,
-		D3D12_SDK_VERSION, "./D3D12/",
+		D3D12_SDK_VERSION, locationD3D12.ptr,
 		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactory
 	)))
 
@@ -244,6 +257,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	instance->apiVersion = D3D12_SDK_VERSION;
 
 clean:
+	CharString_freex(&locationD3D12);
 	return err;
 }
 

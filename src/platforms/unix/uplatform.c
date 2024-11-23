@@ -48,20 +48,25 @@ Bool Platform_initExt(Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(Platform_instance->useWorkingDir) {
+	//Get work directory
 
-		CharString_freex(&Platform_instance->workingDirectory);
+	#define PATH_MAX 256
+	C8 cwd[PATH_MAX + 1];
+	if (!getcwd(cwd, sizeof(cwd)))
+		retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"))
 
-		#define PATH_MAX 256
-		C8 cwd[PATH_MAX + 1];
-		if (!getcwd(cwd, sizeof(cwd)))
-			retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"))
+	gotoIfError2(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workDirectory))
+	gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
 
-		gotoIfError2(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workingDirectory))
-		gotoIfError2(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
-	}
+	//Initialize Linux/OSX dependent as well as app dir path
 
 	gotoIfError3(clean, Platform_initUnixExt(e_rr))
+	
+	//Make default path
+
+	Platform_instance->defaultDir = CharString_createRefStrConst(
+		Platform_instance->useWorkingDir ? Platform_instance->workDirectory : Platform_instance->appDirectory
+	);
 
 clean:
 	return s_uccess;

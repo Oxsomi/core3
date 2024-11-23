@@ -124,9 +124,9 @@ macro(add_virtual_files)
 		WORKING_DIRECTORY ${_ARGS_SELF}
 	)
 		
-	# string (REPLACE ";" " " ARGS_STR "${_ARGS_ARGS}")
-	# message("\"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
-	# message("${_ARGS_TARGET}_package_${_ARGS_NAME} @ ${_ARGS_SELF}")
+	string (REPLACE ";" " " ARGS_STR "${_ARGS_ARGS}")
+	message("-- Packaging: \"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
+	message("-- Packaging: ${_ARGS_TARGET}_package_${_ARGS_NAME} @ ${_ARGS_SELF}")
 
 	set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 

@@ -24,7 +24,7 @@
 typedef void *DynamicLibrary;
 
 impl Bool DynamicLibrary_isValidPath(CharString str);
-impl Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr);
+impl Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr);
 impl Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr);
 impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
 

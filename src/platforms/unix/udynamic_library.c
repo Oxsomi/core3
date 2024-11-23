@@ -30,10 +30,10 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 	return CharString_endsWithStringInsensitive(str, CharString_createRefCStrConst(".so"), 0);
 }
 
-Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr) {
+Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr) {
 
 	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
+	CharString loc = CharString_createNull();
 
 	if(!dynamicLib)
 		retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"))
@@ -41,14 +41,22 @@ Bool DynamicLibrary_load(CharString str, DynamicLibrary *dynamicLib, Error *e_rr
 	if(*dynamicLib)
 		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
 
-	if(!CharString_isNullTerminated(str))
-		gotoIfError2(clean, CharString_createCopyx(str, &tmp))
+	Bool isVirtual = false;
 
-	if(!(*dynamicLib = dlopen(tmp.ptr ? tmp.ptr : str.ptr, RTLD_LAZY)))
+	if(isAppDir)
+		gotoIfError3(clean, File_resolve(
+			str, &isVirtual, MAX_PATH, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+		))
+
+	else gotoIfError3(clean, File_resolve(
+		str, &isVirtual, MAX_PATH, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
+	))
+
+	if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
 		retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"))
 
 clean:
-	CharString_freex(&tmp);
+	CharString_freex(&loc);
 	return s_uccess;
 }
 

@@ -84,28 +84,48 @@ Bool Platform_initExt(Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(Platform_instance->useWorkingDir) {
+	//Init app dir
 
-		CharString_freex(&Platform_instance->workingDirectory);
+	wchar_t buff[MAX_PATH + 1];
+	U32 chars = GetModuleFileNameW(NULL, buff, MAX_PATH);
 
-		//Init working dir
+	if(!chars || chars >= MAX_PATH)
+		retError(clean, Error_platformError(
+			0, GetLastError(), "Platform_initExt() GetModuleFileName failed"
+		))
 
-		wchar_t buff[MAX_PATH + 1];
-		const DWORD chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
+	buff[chars] = 0;
 
-		if(!chars || chars >= MAX_PATH)
-			retError(clean, Error_platformError(
-				0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
-			))
+	SetDllDirectoryW(buff);
 
-		buff[chars] = 0;
+	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->appDirectory))
 
-		gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workingDirectory))
+	//Init working dir
 
-		CharString_replaceAllSensitive(&Platform_instance->workingDirectory, '\\', '/', 0, 0);
+	chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
 
-		gotoIfError2(clean, CharString_appendx(&Platform_instance->workingDirectory, '/'))
-	}
+	if(!chars || chars >= MAX_PATH)
+		retError(clean, Error_platformError(
+			0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
+		))
+
+	buff[chars] = 0;
+
+	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workDirectory))
+
+	//Sanitize both paths
+
+	CharString_replaceAllSensitive(&Platform_instance->workDirectory, '\\', '/', 0, 0);
+	gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
+
+	CharString_replaceAllSensitive(&Platform_instance->appDirectory, '\\', '/', 0, 0);
+	gotoIfError2(clean, CharString_appendx(&Platform_instance->appDirectory, '/'))
+
+	//Make default path
+
+	Platform_instance->defaultDir = CharString_createRefStrConst(
+		Platform_instance->useWorkingDir ? Platform_instance->workDirectory : Platform_instance->appDirectory
+	);
 
 	//Init virtual files
 

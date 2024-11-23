@@ -165,14 +165,14 @@ Bool File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharSt
 	return File_resolve(
 		loc, isVirtual,
 		maxFilePathLimit,
-		Platform_instance->workingDirectory, Platform_instance->alloc,
+		Platform_instance->defaultDir, Platform_instance->alloc,
 		result,
 		e_rr
 	);
 }
 Bool File_makeRelativex(CharString base, CharString subFile, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
 	return File_makeRelative(
-		Platform_instance->workingDirectory, base, subFile,
+		Platform_instance->defaultDir, base, subFile,
 		maxFilePathLimit,
 		Platform_instance->alloc,
 		result,
@@ -201,7 +201,7 @@ Bool File_getInfo(CharString loc, FileInfo *info, Allocator alloc, Error *e_rr) 
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->workingDirectory, alloc, &resolved, e_rr))
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->defaultDir, alloc, &resolved, e_rr))
 
 	struct stat inf = (struct stat) { 0 };
 
@@ -358,7 +358,7 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->workingDirectory, alloc, &resolved, e_rr))
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->defaultDir, alloc, &resolved, e_rr))
 
 	{
 		Error errTmp = Error_none();
@@ -377,7 +377,7 @@ Bool File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOn
 
 	if(CharString_containsSensitive(resolved, '/', 0, 0)) {
 
-		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance->workingDirectory, 0, 0))
+		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance->defaultDir, 0, 0))
 			retError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."))
 
 		gotoIfError2(clean, CharString_splitSensitive(resolved, '/', alloc, &str))
@@ -657,7 +657,7 @@ Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, A
 		retError(clean, Error_invalidOperation(0, "File_open() is not permitted on virtual files, only physical"))
 
 	Bool isVirtual = false;
-	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->workingDirectory, alloc, &resolved, e_rr))
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, Platform_instance->defaultDir, alloc, &resolved, e_rr))
 	
 	if(type == EFileOpenType_Write && create)
 		gotoIfError3(clean, File_add(loc, EFileType_File, maxTimeout, true, alloc, e_rr))
