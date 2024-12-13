@@ -476,11 +476,12 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 		for(U64 i = 0; i < uniformId; ++i)
 			uniformOffset += runtime.uniformsPerCompilation.ptr[i];
 
-		gotoIfError2(clean, ListCharString_createRefConst(
-			runtime.uniformNameValues.ptr + (uniformOffset << 1),
-			(U64)runtime.uniformsPerCompilation.ptr[uniformId] << 1,
-			&binaryIdentifier->uniforms
-		))
+		if(runtime.uniformsPerCompilation.ptr[uniformId])
+			gotoIfError2(clean, ListCharString_createRefConst(
+				runtime.uniformNameValues.ptr + (uniformOffset << 1),
+				(U64)runtime.uniformsPerCompilation.ptr[uniformId] << 1,
+				&binaryIdentifier->uniforms
+			))
 	}
 
 clean:

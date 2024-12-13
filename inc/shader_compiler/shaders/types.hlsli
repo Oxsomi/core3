@@ -21,7 +21,7 @@ R"(
 
 #pragma once
 
-#ifdef __OXC3_EXT_16BITTYPES
+#ifdef __OXC_EXT_16BITTYPES
 
 	typedef float16_t F16;
 	typedef float16_t2 F16x2;
@@ -82,7 +82,7 @@ R"(
 
 #endif
 
-#ifdef __OXC3_EXT_F64
+#ifdef __OXC_EXT_F64
 
 	typedef double F64;
 	typedef double2 F64x2;
@@ -106,32 +106,20 @@ R"(
 #endif
 
 typedef uint U32;
-typedef uint64_t U64;
-
 typedef float F32;
 typedef int I32;
-typedef int64_t I64;
 
 typedef uint2 U32x2;
-typedef uint64_t2 U64x2;
-
 typedef float2 F32x2;
 typedef int2 I32x2;
-typedef int64_t2 I64x2;
 
 typedef uint3 U32x3;
-typedef uint64_t3 U64x3;
-
 typedef float3 F32x3;
 typedef int3 I32x3;
-typedef int64_t3 I64x3;
 
 typedef uint4 U32x4;
-typedef uint64_t4 U64x4;
-
 typedef float4 F32x4;
 typedef int4 I32x4;
-typedef int64_t4 I64x4;
 
 //Matrices
 
@@ -177,23 +165,55 @@ typedef uint4x2 U32x4x2;
 typedef uint3x2 U32x3x2;
 typedef uint2x2 U32x2x2;
 
-//Uint64 matrices
+#ifdef __OXC_EXT_I64
 
-typedef uint64_t4x4 U64x4x4;
-typedef uint64_t3x4 U64x3x4;
-typedef uint64_t2x4 U64x2x4;
+	typedef uint64_t U64;
+	typedef uint64_t2 U64x2;
+	typedef uint64_t3 U64x3;
+	typedef uint64_t4 U64x4;
 
-typedef uint64_t4x3 U64x4x3;
-typedef uint64_t3x3 U64x3x3;
-typedef uint64_t2x3 U64x2x3;
+	typedef int64_t I64;
+	typedef int64_t2 I64x2;
+	typedef int64_t3 I64x3;
+	typedef int64_t4 I64x4;
 
-typedef uint64_t4x2 U64x4x2;
-typedef uint64_t3x2 U64x3x2;
-typedef uint64_t2x2 U64x2x2;
+	//Uint64 matrices
+
+	typedef uint64_t4x4 U64x4x4;
+	typedef uint64_t3x4 U64x3x4;
+	typedef uint64_t2x4 U64x2x4;
+
+	typedef uint64_t4x3 U64x4x3;
+	typedef uint64_t3x3 U64x3x3;
+	typedef uint64_t2x3 U64x2x3;
+
+	typedef uint64_t4x2 U64x4x2;
+	typedef uint64_t3x2 U64x3x2;
+	typedef uint64_t2x2 U64x2x2;
+
+	//Int64 matrices
+
+	typedef int64_t4x4 I64x4x4;
+	typedef int64_t3x4 I64x3x4;
+	typedef int64_t2x4 I64x2x4;
+
+	typedef int64_t4x3 I64x4x3;
+	typedef int64_t3x3 I64x3x3;
+	typedef int64_t2x3 I64x2x3;
+
+	typedef int64_t4x2 I64x4x2;
+	typedef int64_t3x2 I64x3x2;
+	typedef int64_t2x2 I64x2x2;
+
+#endif
 
 //Bool
 
 typedef bool Bool;
+
+typedef bool2 Boolx2;
+typedef bool3 Boolx3;
+typedef bool4 Boolx4;
 
 //Binding graphics shader outputs (e.g. uv : _bind(0))
 
@@ -367,5 +387,66 @@ F32x4x4 inverseSlow(F32x4x4 m) {
 }
 
 U32 U32_fromF32(F32 f) { return asuint(f); }
+U32x2 U32x2_fromF32x2(F32x2 f) { return asuint(f); }
+U32x3 U32x3_fromF32x3(F32x3 f) { return asuint(f); }
+U32x4 U32x4_fromF32x4(F32x4 f) { return asuint(f); }
+
 F32 F32_fromU32(U32 u) { return asfloat(u); }
+F32x2 F32x2_fromU32x2(U32x2 u) { return asfloat(u); }
+F32x3 F32x3_fromU32x3(U32x3 u) { return asfloat(u); }
+F32x4 F32x4_fromU32x4(U32x4 u) { return asfloat(u); }
+
+//Fixed point math
+
+#ifdef __OXC_EXT_I64
+
+	U64x3 fixedPointUnpack(U32x4 packed) {
+		U32x3 hi = (packed.www >> U32x3(0, 10, 20)) & ((1 << 10) - 1);
+		U64x3 hiShift = (U64x3) hi << 32;
+		return hiShift | packed.xyz;
+	}
+
+	U32x4 fixedPointPack(U64x3 unpacked) {
+	
+		U32x3 lo = (U32x3) unpacked;
+
+		unpacked >>= 32;
+		U32x3 hi = ((U32x3) unpacked) << U32x3(0, 10, 20);
+
+		return U32x4(lo, dot(hi, 1.xxx));
+	}
+
+	U64x3 fixedPointSub(U64x3 a, U64x3 b) { return a - b; }
+	U64x3 fixedPointAdd(U64x3 a, U64x3 b) { return a + b; }
+
+	static const U32 fixedPointFraction = 4;		//1/16th cm
+	static const U32 fixedPointShift = 41;			//42 bits (sign is excluded here)
+
+	static const F32 fixedPointMultiplier = 1.f / (1 << fixedPointFraction);
+	static const U64 fixedPointMask = ((U64)1 << (fixedPointShift + 1)) - 1;
+
+	F32x3 fixedPointToFloat(U64x3 value) {
+
+		Boolx3 sign = (Boolx3)(value >> fixedPointShift);
+		U64x3 correctedForSign = value ^ fixedPointMask.xxx;
+		++correctedForSign;
+
+		value = select(sign, correctedForSign, value);
+		return (F32x3)value * select(sign, -fixedPointMultiplier, fixedPointMultiplier);
+	}
+
+	U64x3 fixedPointFromFloat(F32x3 v) {
+
+		Boolx3 sign = v < 0;
+		v = abs(v);
+
+		v *= (1 << fixedPointFraction).xxx;
+
+		U64x3 res = (U64x3) v;
+		U64x3 correctedForSign = (res - 1) ^ fixedPointMask.xxx;
+		return select(sign, correctedForSign, res);
+	}
+
+#endif
+
 )"

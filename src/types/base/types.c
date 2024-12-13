@@ -21,6 +21,52 @@
 #include "types/base/types.h"
 #include <ctype.h>
 
+#undef FixedPoint
+
+#define FixedPoint(frac, integ)																\
+																							\
+typedef U64 FP##integ##f##frac;																\
+																							\
+FP##integ##f##frac FP##integ##f##frac##_Add(FP##integ##f##frac a, FP##integ##f##frac b) {	\
+	return a + b;																			\
+}																							\
+																							\
+FP##integ##f##frac FP##integ##f##frac##_Sub(FP##integ##f##frac a, FP##integ##f##frac b) {	\
+	return a - b;																			\
+}																							\
+																							\
+FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v) {									\
+																							\
+	Bool sign = v < 0;																		\
+																							\
+	if(sign)																				\
+		v = -v;																				\
+																							\
+	v *= (1 << frac);																		\
+	FP##integ##f##frac res = (FP##integ##f##frac)v;											\
+																							\
+	if(sign) {																				\
+		--res;																				\
+		res ^= ((FP##integ##f##frac)1 << ((frac + integ) + 1)) - 1;							\
+	}																						\
+																							\
+	return res;																				\
+}																							\
+																							\
+F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value) {								\
+																							\
+	if (value >> (frac + integ)) {															\
+		value ^= ((FP##integ##f##frac)1 << ((frac + integ) + 1)) - 1;						\
+		++value;																			\
+		return value * (-1.0 / (1 << frac));												\
+	} 																						\
+																							\
+	return value * (1.0 / (1 << frac)); 													\
+}
+
+FixedPoint(4, 37)
+FixedPoint(6, 46)
+
 U64 Buffer_length(Buffer buf) {
 	return buf.lengthAndRefBits << 2 >> 2;
 }

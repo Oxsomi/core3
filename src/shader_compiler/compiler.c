@@ -1052,7 +1052,7 @@ Bool Compiler_registerUniform(
 	U64 inserted = U64_MAX;
 
 	for(U64 i = 0; i < CharString_length(uniformName); ++i)
-		if(C8_isSymbol(uniformName.ptr[i]) || C8_isWhitespace(uniformName.ptr[i]))
+		if((C8_isSymbol(uniformName.ptr[i]) && uniformName.ptr[i] != '_') || C8_isWhitespace(uniformName.ptr[i]))
 			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() can't contain symbols or whitespace"))
 
 	U16 currentUniforms = 0;
@@ -1466,19 +1466,31 @@ Bool Compiler_parse(
 
 							//[[oxc::uniforms("X", "Y", "Z")]]
 							//[[oxc::uniforms("X" = "123", "Y" = "ABC")]]
-							//		   ^
+							//		     ^
 							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('o', 'r', 'm', 's')) {
+
+								U32 tokenEnd = symj.tokenId + symj.tokenCount;
+
+								//[[oxc::uniforms()]]
+								//Used to declare another entrypoint without uniforms
+
+								if (
+									symj.tokenCount + 1 == 5 &&
+									parser.tokens.ptr[tokenStart].tokenType == ETokenType_RoundParenthesisStart &&
+									parser.tokens.ptr[tokenEnd].tokenType == ETokenType_RoundParenthesisEnd
+								) {
+									gotoIfError2(clean, ListU8_pushBack(&runtimeEntry.uniformsPerCompilation, 0, alloc))
+									break;
+								}
 
 								if(symj.tokenCount + 1 < 6)
 									retError(clean, Error_invalidParameter(
 										0, 0,
-										"Compiler_parse() uniform annotation expected uniform(string, string = string, ...)"
+										"Compiler_parse() uniforms annotation expected oxc::uniforms(string, string = string, ...)"
 									))
 
-								U32 tokenEnd = symj.tokenId + symj.tokenCount;
-
 								//[[oxc::uniforms("X")]]
-								//			   ^
+								//				 ^
 
 								if(
 									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1487,7 +1499,7 @@ Bool Compiler_parse(
 								)
 									retError(clean, Error_invalidParameter(
 										0, 1,
-										"Compiler_parse() uniform annotation expected oxc::uniform(string, ...)"
+										"Compiler_parse() uniforms annotation expected oxc::uniforms(string, ...)"
 									))
 
 								U32 tokenCounter = tokenStart + 1;
@@ -1504,13 +1516,13 @@ Bool Compiler_parse(
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
 											0, 3,
-											"Compiler_parse() uniform annotation expected comma in oxc::uniform(string, ...)"
+											"Compiler_parse() uniforsm annotation expected comma in oxc::uniforms(string, ...)"
 										))
 
 									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_String)
 										retError(clean, Error_invalidParameter(
 											0, 4,
-											"Compiler_parse() uniform annotation expected string in oxc::uniform(string, ...)"
+											"Compiler_parse() uniforms annotation expected string in oxc::uniforms(string, ...)"
 										))
 
 									++k;
