@@ -45,11 +45,11 @@ Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicL
 
 	if(isAppDir)
 		gotoIfError3(clean, File_resolve(
-			str, &isVirtual, MAX_PATH, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+			str, &isVirtual, 260, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
 		))
 
 	else gotoIfError3(clean, File_resolve(
-		str, &isVirtual, MAX_PATH, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
+		str, &isVirtual, 260, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
 	))
 
 	if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
