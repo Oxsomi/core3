@@ -36,7 +36,7 @@
 
 Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
-Bool File_foreach(CharString locloc, Bool inAppDir, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
+Bool File_foreach(CharString loc, Bool inAppDir, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
 
 	CharString resolved = CharString_createNull();
 	CharString resolvedChild = CharString_createNull();
@@ -104,7 +104,7 @@ Bool File_foreach(CharString locloc, Bool inAppDir, FileCallback callback, void 
 			gotoIfError3(clean, callback(info, userData, e_rr));
 
 			if(isRecursive)
-				gotoIfError3(clean, File_foreach(info.path, callback, userData, true, e_rr));
+				gotoIfError3(clean, File_foreach(info.path, inAppDir, callback, userData, true, e_rr));
 
 			CharString_freex(&resolvedChild);
 			continue;
