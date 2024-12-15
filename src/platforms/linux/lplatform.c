@@ -56,7 +56,6 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	for(U64 i = exeNameLen - 1; i != U64_MAX; --i)
 		if(exeName[i] == '/') {
 			containedSlash = true;
-			exeName[i + 1] = '\0';
 			exeNameLen = i + 1;
 			break;
 		}
@@ -85,12 +84,12 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 	//Grab file data
 
-	U64 fileSize = lseek64(fd, 0, SEEK_END);
+	U64 fileSize = lseek(fd, 0, SEEK_END);
 	const U8 *ptr = (const U8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
 	if(ptr == (const U8*) MAP_FAILED)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
-		
+
     const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
 	const Elf64_Shdr *shdr = (const Elf64_Shdr*) (ptr + elf->e_shoff);
 	const C8 *strings = (const C8*) (ptr + shdr[elf->e_shstrndx].sh_offset);

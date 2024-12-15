@@ -68,10 +68,8 @@ Platform_defineEntrypoint() {
 	int status = 0;
 	Error err = Platform_create(argc, argv, Platform_getData(), NULL, true);
 
-	if(err.genericError) {
-		Error_printLnx(err);
+	if(err.genericError)		//Can't print
 		return -2;
-	}
 
 	//playSound();
 
