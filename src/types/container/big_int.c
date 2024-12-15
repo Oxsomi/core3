@@ -25,6 +25,8 @@
 #include "types/base/allocator.h"
 #include "types/base/time.h"
 
+#include "types/container/log.h"
+
 #include "types/math/math.h"
 
 //BigInt
@@ -172,6 +174,22 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 				((U64*)big->data)[k] |= lo;
 
 				if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
+
+					if(k + 1 >= big->length) {
+
+						if(i != prefixChars)
+							gotoIfError(clean, Error_invalidParameter(
+								0, 1, "BigInt_createFromBase2Type()::text contains more data than BigInt can hold"
+							))
+
+						else if((U64)v >> (64 - ((countPerChar * j) & 63)))
+							gotoIfError(clean, Error_invalidParameter(
+								0, 1, "BigInt_createFromBase2Type()::text contains more data than BigInt can hold (overflow)"
+							))
+
+						goto success;
+					}
+
 					const U64 hi = (U64)v >> (64 - ((countPerChar * j) & 63));
 					((U64*)big->data)[++k] |= hi;
 				}
