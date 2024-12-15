@@ -24,6 +24,7 @@
 #include "types/base/thread.h"
 #include "types/base/atomic.h"
 #include "platforms/log.h"
+#include "platforms/ext/stringx.h"
 
 //Port of https://github.com/CodaFi/C-Macs/blob/master/CMacs/AppDelegate.c
 //Platform is the one that holds the NSApp, since there can only be done.

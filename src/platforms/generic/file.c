@@ -461,7 +461,7 @@ Bool File_remove(CharString loc, Ns maxTimeout, Error *e_rr) {
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, false, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, false, 0, &resolved, e_rr))
 
 	const Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -521,7 +521,7 @@ Bool File_rename(CharString loc, CharString newFileName, Ns maxTimeout, Error *e
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolvex(loc, false, &isVirtual, 0, &resolved, e_rr))
+	gotoIfError3(clean, File_resolvex(loc, &isVirtual, false, 0, &resolved, e_rr))
 
 	//Check if file exists
 
