@@ -185,6 +185,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				.stageType = binary.entrypointType
 			},
 
+			.dormantExtensions = binary.dormantExt,
 			.vendorMask = binary.vendorMask,
 			.hasShaderAnnotation = binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation
 		};

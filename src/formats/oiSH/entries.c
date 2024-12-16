@@ -493,6 +493,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 	U16 combinationId,
 	ESHBinaryType binaryType,
 	Buffer buf,
+	ESHExtension dormantExtensions,
 	SHBinaryInfo *binaryInfo,
 	Error *e_rr
 ) {
@@ -509,6 +510,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, combinationId, &binaryInfo->identifier, e_rr))
 
+	binaryInfo->dormantExtensions = dormantExtensions;
 	binaryInfo->vendorMask = runtime.vendorMask;
 	binaryInfo->hasShaderAnnotation = runtime.isShaderAnnotation;
 	binaryInfo->binaries[binaryType] = Buffer_createRefFromBuffer(buf, true);
@@ -630,22 +632,23 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 		ESHExtension exts = entry.extensions.ptr[i];
 
-		if(!exts) {
+		if(!exts)
 			Log_debugLn(alloc, "\t[[oxc::extension()]]");
-			continue;
+		
+		else {
+
+			Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
+
+			Bool prev = false;
+
+			for(U64 j = 0; j < ESHExtension_Count; ++j)
+				if((exts >> j) & 1) {
+					Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
+					prev = true;
+				}
+
+			Log_debug(alloc, ELogOptions_NewLine, ")]]");
 		}
-
-		Log_debug(alloc, ELogOptions_None, "\t[[oxc::extension(");
-
-		Bool prev = false;
-
-		for(U64 j = 0; j < ESHExtension_Count; ++j)
-			if((exts >> j) & 1) {
-				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
-				prev = true;
-			}
-
-		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
 	for (U64 i = 0, k = 0; i < entry.uniformsPerCompilation.length; ++i) {

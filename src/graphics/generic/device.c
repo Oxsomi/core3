@@ -288,7 +288,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ESHExtension extensions = bin.identifier.extensions;
+	ESHExtension extensions = (bin.identifier.extensions &~ bin.dormantExtensions) & ESHExtension_All;
 
 	EGraphicsFeatures features = EGraphicsFeatures_None;
 	EDxGraphicsFeatures featuresDx = EDxGraphicsFeatures_None;
@@ -312,7 +312,6 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	if(extensions & ESHExtension_WriteMSTexture)			features |= EGraphicsFeatures_WriteMSTexture;
 
 	if(extensions & ESHExtension_Bindless)					features |= EGraphicsFeatures_Bindless;
-
 
 	if(extensions & ESHExtension_F64)						dataTypes |= EGraphicsDataTypes_F64;
 	if(extensions & ESHExtension_I64)						dataTypes |= EGraphicsDataTypes_I64;

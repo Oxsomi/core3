@@ -43,7 +43,9 @@ typedef struct BinaryInfoFixedSize {
 	U8 uniformCount;
 	U8 binaryFlags;				//ESHBinaryFlags
 
-	ESHExtension extensions;
+	ESHExtension extensions;	//&~ dormantExt = used extensions, this is what the shader was compiled with
+
+	ESHExtension dormantExt;	//Dormant extensions (not detected in final executable)
 
 	U16 registerCount;
 	U16 padding;

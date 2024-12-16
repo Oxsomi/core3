@@ -170,7 +170,9 @@ typedef struct BinaryInfoFixedSize {
 	U8 uniformCount;
 	U8 binaryFlags;				//ESHBinaryFlags
 
-    ESHExtension extensions;
+	ESHExtension extensions;	//&~ dormantExt = used extensions, this is what the shader was compiled with
+
+	ESHExtension dormantExt;	//Dormant extensions (not detected in final executable)
 
 	U16 registerCount;
 	U16 padding;
@@ -502,6 +504,8 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 - DXIL has the concept of sampler comparison states, but SPIRV just sees them as samplers. If DXIL and SPIRV binaries are merged it will promote sampler register type to sampler comparison register type.
 - DXIL has more info about the texture primitive than SPIRV, though SPIRV has a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.
 - When stripping SPIRV info from one that has both DXIL and SPIRV, it will keep the reflection data it gained from merging the two. This is intentional, as this would allow you to re-gain some reflection info that is missing from DXIL and keeps the reflection data consistent across two different splits.
+- Combining DXIL and SPIRV underestimates dormant extensions, it could be possible a certain extension isn't present in DXIL or SPIRV, however if it can't be queried by the underlying format then it's impossible to tell. In this case, it will assume the extension the shader was compiled with is leading and so remove it from being dormant.
+  - Dormant extensions include all extensions that are supported by the shader mode (DXIL or SPIRV) but that weren't detected. This allows easy merging of dormant extensions by just bitwise ANDing them and getting an underestimated version of dormant extensions.
 
 ## Changelog
 
@@ -510,4 +514,6 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
 
 1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets). Various extensions and abilities to use HLSL or GLSL specific features for all backends.
+
+1.2(.2): No major bump, because no oiSH files exist in the wild yet. Added 'dormant' extension, which is an extension enabled by the shader compiler but isn't used by the final executable. If for example SPIRV and DXIL are merged, then only extensions present by both can be marked as dormant, because for example SER (Shader Execution Reordering) can be present in DXIL but is undetectable without writing custom code processing DXIL due to NVAPI hackery. Due to this it could be possible that for example SER is enabled but isn't present in DXIL or SPIRV but since both are merged it (DXIL can't detect) it can't be certain that this extension is dormant. Same is true for SPIRV only extensions that DXIL doesn't have or vice versa.
 

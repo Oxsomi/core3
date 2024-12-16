@@ -66,7 +66,38 @@ typedef enum ESHExtension {
 
 	ESHExtension_SubgroupOperations			= 1 << 20,
 
-	ESHExtension_Count						= 21
+	ESHExtension_DxilNative =								//Extensions that can be found from DXIL natively
+		ESHExtension_RayQuery |
+		ESHExtension_16BitTypes |
+		ESHExtension_I64 |
+		ESHExtension_Multiview |
+		ESHExtension_F64 |
+		ESHExtension_AtomicI64 |
+		ESHExtension_MeshTaskTexDeriv |
+		ESHExtension_WriteMSTexture |
+		ESHExtension_SubgroupOperations,
+
+	ESHExtension_SpirvNative =								//Extensions that map directly to SPIRV capabilities
+		ESHExtension_RayMicromapOpacity |
+		ESHExtension_RayQuery |
+		ESHExtension_RayMotionBlur |
+		ESHExtension_RayReorder |
+		ESHExtension_AtomicF32 |
+		ESHExtension_AtomicF64 |
+		ESHExtension_SubgroupArithmetic |
+		ESHExtension_SubgroupShuffle |
+		ESHExtension_SubgroupOperations |
+		ESHExtension_Multiview |
+		ESHExtension_16BitTypes |
+		ESHExtension_F64 |
+		ESHExtension_I64 |
+		ESHExtension_AtomicI64 |
+		ESHExtension_ComputeDeriv |
+		ESHExtension_WriteMSTexture,
+
+	ESHExtension_Count						= 21,
+
+	ESHExtension_All						= (1 << ESHExtension_Count) - 1
 
 } ESHExtension;
 
@@ -127,9 +158,10 @@ typedef struct SHBinaryInfo {
 
 	ListSHRegisterRuntime registers;
 
+	ESHExtension dormantExtensions;
 	U16 vendorMask;
 	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [[oxc::stage("")]]
-	U8 padding[5];
+	U8 padding[1];
 
 	Buffer binaries[ESHBinaryType_Count];
 

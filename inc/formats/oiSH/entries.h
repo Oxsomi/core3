@@ -125,8 +125,6 @@ typedef struct SHEntryRuntime {
 	Bool isShaderAnnotation;			//Switches [shader("string")] and [[oxc::stage("string")]], shader = StateObject
 	Bool isInitialized;
 
-	U32 padding;
-
 	ListU32 extensions;					//Explicitly enabled extensions (ESHExtension[])
 
 	ListU16 shaderVersions;				//U16: U8 major, minor;		If not defined will default.
@@ -147,6 +145,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 	U16 combinationId,
 	ESHBinaryType binaryType,
 	Buffer buf,
+	ESHExtension dormantExtensions,
 	SHBinaryInfo *binaryInfo,
 	Error *e_rr
 );

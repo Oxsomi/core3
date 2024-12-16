@@ -463,6 +463,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			.binaryFlags = binaryFlags,
 
 			.extensions = binary.identifier.extensions,
+			.dormantExt = binary.dormantExtensions,
 			.registerCount = (U16) binary.registers.length
 		};
 

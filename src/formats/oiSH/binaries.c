@@ -456,6 +456,7 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 
 	info.vendorMask = binaries->vendorMask;
 	info.hasShaderAnnotation = binaries->hasShaderAnnotation;
+	info.dormantExtensions = binaries->dormantExtensions;
 
 	gotoIfError2(clean, ListSHBinaryInfo_pushBack(&shFile->binaries, info, alloc))
 	*binaries = info = (SHBinaryInfo) { 0 };
@@ -498,6 +499,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 	U16 shaderVersion = binary.identifier.shaderVersion;
 	Log_debugLn(alloc, "\t[[oxc::model(%"PRIu8".%"PRIu8")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 
+	ESHExtension activeExt = (binary.identifier.extensions &~ binary.dormantExtensions) & ESHExtension_All;
 	ESHExtension exts = binary.identifier.extensions;
 
 	if(!exts)
@@ -511,6 +513,24 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 
 		for(U64 j = 0; j < ESHExtension_Count; ++j)
 			if((exts >> j) & 1) {
+				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
+				prev = true;
+			}
+
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
+	}
+
+	if(!activeExt)
+		Log_debugLn(alloc, "\t[[oxc::active_extension()]]");
+
+	else {
+
+		Log_debug(alloc, ELogOptions_None, "\t//[[oxc::active_extension(");
+
+		Bool prev = false;
+
+		for(U64 j = 0; j < ESHExtension_Count; ++j)
+			if((activeExt >> j) & 1) {
 				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", ESHExtension_names[j]);
 				prev = true;
 			}

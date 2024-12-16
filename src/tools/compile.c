@@ -742,13 +742,13 @@
 		Bool s_uccess = true;
 		CharString tempStr = CharString_createNull();
 		SHInclude shInclude = (SHInclude) { 0 };
-		SHBinaryInfo binaryInfo = (SHBinaryInfo){ 0 };
+		SHBinaryInfo binaryInfo = (SHBinaryInfo) { 0 };
 
 		if(tempResult->type != ECompileResultType_Binary)
 			retError(clean, Error_invalidState(0, "CLI_compileShaderSingle() should return binary"))
 
 		gotoIfError3(clean, SHEntryRuntime_asBinaryInfo(
-			runtimeEntry, combinationId, compileMode, tempResult->binary, &binaryInfo, e_rr
+			runtimeEntry, combinationId, compileMode, tempResult->binary, tempResult->demotion, &binaryInfo, e_rr
 		))
 
 		//Add info regarding includes.

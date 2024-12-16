@@ -88,8 +88,9 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint)
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(ai.registers),
+			.dormantExtensions = ai.dormantExtensions,
 			.vendorMask = ai.vendorMask,
-			.hasShaderAnnotation = ai.hasShaderAnnotation
+			.hasShaderAnnotation = ai.hasShaderAnnotation,
 		};
 
 		const void *extPtrSrc = &ai.identifier.extensions;
@@ -109,6 +110,8 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		else {
 
 			SHBinaryInfo bi = b.binaries.ptr[j];
+
+			c.dormantExtensions &= bi.dormantExtensions;
 
 			if(ai.vendorMask != bi.vendorMask || ai.hasShaderAnnotation != bi.hasShaderAnnotation)
 				retError(clean, Error_invalidState(
@@ -139,208 +142,208 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 			gotoIfError2(clean, ListSHRegisterRuntime_reserve(&registers, bi.registers.length + ai.registers.length, alloc))
 
-				//Match registers that were already found
+			//Match registers that were already found
 
-				for (U64 k = 0; k < c.registers.length; ++k) {
+			for (U64 k = 0; k < c.registers.length; ++k) {
 
-					SHRegisterRuntime rega = c.registers.ptr[k];
+				SHRegisterRuntime rega = c.registers.ptr[k];
 
-					U64 l = 0;
-					for(; l < bi.registers.length; ++l)
-						if(CharString_equalsStringSensitive(bi.registers.ptr[l].name, rega.name))
-							break;
+				U64 l = 0;
+				for(; l < bi.registers.length; ++l)
+					if(CharString_equalsStringSensitive(bi.registers.ptr[l].name, rega.name))
+						break;
 
-					//Not found
+				//Not found
 
-					if (l == bi.registers.length || rega.hash == bi.registers.ptr[l].hash) {
-						gotoIfError3(clean, SHRegisterRuntime_createCopy(c.registers.ptr[k], alloc, &tmpReg, e_rr))
-						gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
-						tmpReg = (SHRegisterRuntime) { 0 };
+				if (l == bi.registers.length || rega.hash == bi.registers.ptr[l].hash) {
+					gotoIfError3(clean, SHRegisterRuntime_createCopy(c.registers.ptr[k], alloc, &tmpReg, e_rr))
+					gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+					tmpReg = (SHRegisterRuntime) { 0 };
+					continue;
+				}
+
+				//Merge shader buffer
+
+				SHRegisterRuntime regb = bi.registers.ptr[l];
+
+				if((!!rega.shaderBuffer.vars.ptr) != (!!regb.shaderBuffer.vars.ptr))
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching shader buffers"))
+
+				if(rega.shaderBuffer.vars.ptr)
+					gotoIfError3(clean, SBFile_combine(
+						rega.shaderBuffer, regb.shaderBuffer, alloc, &tmpReg.shaderBuffer, e_rr
+					))
+
+				//Copy name
+
+				gotoIfError2(clean, CharString_createCopy(rega.name, alloc, &tmpReg.name))
+
+				//Merge array
+
+				ListU32 arrayA = rega.arrays;
+				ListU32 arrayB = regb.arrays;
+
+				//One of them might be flat and the other one might be dynamic
+
+				if (arrayA.length == 1 || arrayB.length == 1) {
+
+					U64 dimsA = arrayA.length ? arrayA.ptr[0] : 0;
+					U64 dimsB = arrayB.length ? arrayB.ptr[0] : 0;
+
+					for(U64 m = 1; m < arrayA.length; ++m)
+						dimsA *= arrayA.ptr[m];
+
+					for(U64 m = 1; m < arrayB.length; ++m)
+						dimsB *= arrayB.ptr[m];
+
+					if(dimsA != dimsB)
+						retError(clean, Error_invalidState(
+							0, "SHFile_combine() register has mismatching array flattened size"
+						))
+
+					//In this case, we have to point arrayId to B's array.
+					//This is called unflattening ([9] -> [3][3] for example).
+
+					if (arrayB.length != 1)
+						gotoIfError2(clean, ListU32_createCopy(arrayB, alloc, &tmpReg.arrays))
+
+					else gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
+				}
+
+				//Ensure they're the same size
+
+				else {
+
+					if(arrayA.length != arrayB.length)
+						retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array dimensions"))
+
+					for(U64 m = 0; m < arrayA.length; ++m)
+						if(arrayA.ptr[m] != arrayB.ptr[m])
+							retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array count"))
+
+					gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
+				}
+
+				//Merge register
+
+				SHRegister merged = rega.reg;
+				merged.isUsedFlag |= regb.reg.isUsedFlag;
+
+				//Register type is mostly the same with two exceptions:
+				//SamplerComparisonState DXIL = Sampler SPIRV
+				//CombinedSampler SPIRV = (no flag) DXIL
+				//So we need to promote these two to eachother to unify them.
+
+				Bool isCmpSamplerA = rega.reg.registerType == ESHRegisterType_SamplerComparisonState;
+				Bool isSamplerA = rega.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerA;
+
+				Bool isCmpSamplerB = regb.reg.registerType == ESHRegisterType_SamplerComparisonState;
+				Bool isSamplerB = regb.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerB;
+
+				if(
+					(isSamplerA != isSamplerB) &&
+					(rega.reg.registerType &~ ESHRegisterType_IsCombinedSampler) !=
+					(regb.reg.registerType &~ ESHRegisterType_IsCombinedSampler)
+				)
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"))
+
+				if(isCmpSamplerB)
+					merged.registerType = ESHRegisterType_SamplerComparisonState;
+
+				else merged.registerType = rega.reg.registerType | (regb.reg.registerType & ESHRegisterType_IsCombinedSampler);
+
+				//Merge bindings
+
+				for (U8 m = 0; m < ESHBinaryType_Count; ++m) {
+
+					U64 bindingA = rega.reg.bindings.arrU64[m];
+					U64 bindingB = regb.reg.bindings.arrU64[m];
+
+					if (bindingA != U64_MAX && bindingB != U64_MAX) {
+
+						if(bindingA != bindingB)
+							retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register bindings"))
+
 						continue;
 					}
 
-					//Merge shader buffer
+					if(bindingA != U64_MAX)
+						continue;
 
-					SHRegisterRuntime regb = bi.registers.ptr[l];
+					merged.bindings.arrU64[m] = bindingB;
+				}
 
-					if((!!rega.shaderBuffer.vars.ptr) != (!!regb.shaderBuffer.vars.ptr))
-						retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching shader buffers"))
+				//Merge input attachment
 
-					if(rega.shaderBuffer.vars.ptr)
-						gotoIfError3(clean, SBFile_combine(
-							rega.shaderBuffer, regb.shaderBuffer, alloc, &tmpReg.shaderBuffer, e_rr
-						))
+				if(
+					rega.reg.registerType == ESHRegisterType_SubpassInput &&
+					rega.reg.inputAttachmentId != regb.reg.inputAttachmentId
+				)
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching input attachment id"))
 
-					//Copy name
+				//Merge texture info
 
-					gotoIfError2(clean, CharString_createCopy(rega.name, alloc, &tmpReg.name))
+				U8 typeOnly = rega.reg.registerType & ESHRegisterType_TypeMask;
 
-					//Merge array
+				if (typeOnly >= ESHRegisterType_TextureStart && typeOnly < ESHRegisterType_TextureEnd) {
 
-					ListU32 arrayA = rega.arrays;
-					ListU32 arrayB = regb.arrays;
+					Bool hasTexturePrimitiveA = rega.reg.texture.primitive != ESHTexturePrimitive_Count;
+					Bool hasTexturePrimitiveB = regb.reg.texture.primitive != ESHTexturePrimitive_Count;
 
-					//One of them might be flat and the other one might be dynamic
+					//Ensure both primitives are the same
 
-					if (arrayA.length == 1 || arrayB.length == 1) {
+					if (hasTexturePrimitiveA && hasTexturePrimitiveB) {
 
-						U64 dimsA = arrayA.length ? arrayA.ptr[0] : 0;
-						U64 dimsB = arrayB.length ? arrayB.ptr[0] : 0;
+						if(rega.reg.texture.primitive != regb.reg.texture.primitive)
+							retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"))
 
-						for(U64 m = 1; m < arrayA.length; ++m)
-							dimsA *= arrayA.ptr[m];
-
-						for(U64 m = 1; m < arrayB.length; ++m)
-							dimsB *= arrayB.ptr[m];
-
-						if(dimsA != dimsB)
-							retError(clean, Error_invalidState(
-								0, "SHFile_combine() register has mismatching array flattened size"
-							))
-
-						//In this case, we have to point arrayId to B's array.
-						//This is called unflattening ([9] -> [3][3] for example).
-
-						if (arrayB.length != 1)
-							gotoIfError2(clean, ListU32_createCopy(arrayB, alloc, &tmpReg.arrays))
-
-						else gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
+						if(rega.reg.texture.formatId && rega.reg.texture.formatId != regb.reg.texture.formatId)
+							retError(clean, Error_invalidState(0, "SHFile_combine() texture format ids are incompatible"))
 					}
 
-					//Ensure they're the same size
+					//One of the two has texture format, make sure they're compatible
 
 					else {
 
-						if(arrayA.length != arrayB.length)
-							retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array dimensions"))
+						//Both have format, so needs to be fully compatible
 
-						for(U64 m = 0; m < arrayA.length; ++m)
-							if(arrayA.ptr[m] != arrayB.ptr[m])
-								retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array count"))
-
-						gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
-					}
-
-					//Merge register
-
-					SHRegister merged = rega.reg;
-					merged.isUsedFlag |= regb.reg.isUsedFlag;
-
-					//Register type is mostly the same with two exceptions:
-					//SamplerComparisonState DXIL = Sampler SPIRV
-					//CombinedSampler SPIRV = (no flag) DXIL
-					//So we need to promote these two to eachother to unify them.
-
-					Bool isCmpSamplerA = rega.reg.registerType == ESHRegisterType_SamplerComparisonState;
-					Bool isSamplerA = rega.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerA;
-
-					Bool isCmpSamplerB = regb.reg.registerType == ESHRegisterType_SamplerComparisonState;
-					Bool isSamplerB = regb.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerB;
-
-					if(
-						(isSamplerA != isSamplerB) &&
-						(rega.reg.registerType &~ ESHRegisterType_IsCombinedSampler) !=
-						(regb.reg.registerType &~ ESHRegisterType_IsCombinedSampler)
-					)
-						retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"))
-
-					if(isCmpSamplerB)
-						merged.registerType = ESHRegisterType_SamplerComparisonState;
-
-					else merged.registerType = rega.reg.registerType | (regb.reg.registerType & ESHRegisterType_IsCombinedSampler);
-
-					//Merge bindings
-
-					for (U8 m = 0; m < ESHBinaryType_Count; ++m) {
-
-						U64 bindingA = rega.reg.bindings.arrU64[m];
-						U64 bindingB = regb.reg.bindings.arrU64[m];
-
-						if (bindingA != U64_MAX && bindingB != U64_MAX) {
-
-							if(bindingA != bindingB)
-								retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register bindings"))
-
-							continue;
-						}
-
-						if(bindingA != U64_MAX)
-							continue;
-
-						merged.bindings.arrU64[m] = bindingB;
-					}
-
-					//Merge input attachment
-
-					if(
-						rega.reg.registerType == ESHRegisterType_SubpassInput &&
-						rega.reg.inputAttachmentId != regb.reg.inputAttachmentId
-					)
-						retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching input attachment id"))
-
-					//Merge texture info
-
-					U8 typeOnly = rega.reg.registerType & ESHRegisterType_TypeMask;
-
-					if (typeOnly >= ESHRegisterType_TextureStart && typeOnly < ESHRegisterType_TextureEnd) {
-
-						Bool hasTexturePrimitiveA = rega.reg.texture.primitive != ESHTexturePrimitive_Count;
-						Bool hasTexturePrimitiveB = regb.reg.texture.primitive != ESHTexturePrimitive_Count;
-
-						//Ensure both primitives are the same
-
-						if (hasTexturePrimitiveA && hasTexturePrimitiveB) {
+						if (!hasTexturePrimitiveA && !hasTexturePrimitiveB) {
 
 							if(rega.reg.texture.primitive != regb.reg.texture.primitive)
 								retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"))
 
-							if(rega.reg.texture.formatId && rega.reg.texture.formatId != regb.reg.texture.formatId)
-								retError(clean, Error_invalidState(0, "SHFile_combine() texture format ids are incompatible"))
-						}
+							if(rega.reg.texture.formatId != regb.reg.texture.formatId)
+								retError(clean, Error_invalidState(0, "SHFile_combine() texture formatId are incompatible"))
 
-						//One of the two has texture format, make sure they're compatible
+						}
 
 						else {
 
-							//Both have format, so needs to be fully compatible
+							tmpReg.reg.texture.primitive =
+								hasTexturePrimitiveA ? rega.reg.texture.primitive : regb.reg.texture.primitive;
 
-							if (!hasTexturePrimitiveA && !hasTexturePrimitiveB) {
-
-								if(rega.reg.texture.primitive != regb.reg.texture.primitive)
-									retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"))
-
-								if(rega.reg.texture.formatId != regb.reg.texture.formatId)
-									retError(clean, Error_invalidState(0, "SHFile_combine() texture formatId are incompatible"))
-
-							}
-
-							else {
-
-								tmpReg.reg.texture.primitive =
-									hasTexturePrimitiveA ? rega.reg.texture.primitive : regb.reg.texture.primitive;
-
-								tmpReg.reg.texture.formatId =
-									!hasTexturePrimitiveA ? rega.reg.texture.formatId : regb.reg.texture.formatId;
-							}
+							tmpReg.reg.texture.formatId =
+								!hasTexturePrimitiveA ? rega.reg.texture.formatId : regb.reg.texture.formatId;
 						}
 					}
-
-					//Finalize hash and push
-
-					tmpReg.reg = merged;
-
-					gotoIfError3(clean, SHRegisterRuntime_hash(
-						tmpReg.reg,
-						tmpReg.name,
-						tmpReg.arrays.length ? &tmpReg.arrays : NULL,
-						tmpReg.shaderBuffer.vars.ptr ? &tmpReg.shaderBuffer : NULL,
-						&tmpReg.hash,
-						e_rr
-					))
-
-					gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
-					tmpReg = (SHRegisterRuntime) { 0 };
 				}
+
+				//Finalize hash and push
+
+				tmpReg.reg = merged;
+
+				gotoIfError3(clean, SHRegisterRuntime_hash(
+					tmpReg.reg,
+					tmpReg.name,
+					tmpReg.arrays.length ? &tmpReg.arrays : NULL,
+					tmpReg.shaderBuffer.vars.ptr ? &tmpReg.shaderBuffer : NULL,
+					&tmpReg.hash,
+					e_rr
+				))
+
+				gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+				tmpReg = (SHRegisterRuntime) { 0 };
+			}
 
 			//Registers that weren't matched are new in the second source
 
@@ -392,6 +395,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				.entrypoint = CharString_createRefStrConst(bi.identifier.entrypoint)
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(bi.registers),
+			.dormantExtensions = bi.dormantExtensions,
 			.vendorMask = bi.vendorMask,
 			.hasShaderAnnotation = bi.hasShaderAnnotation
 		};

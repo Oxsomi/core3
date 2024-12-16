@@ -120,11 +120,12 @@ typedef struct CompileResult {
 
 	ListCompileError compileErrors;
 
-	ECompileResultType type;
+	ESHExtension demotion;		//Compile result can signal "extension not found" to demote final binary
 
 	Bool isSuccess;
 	Bool infoAboutIncludes;
-	U8 padding[2];
+	U8 type;					//ECompileResultType
+	U8 padding[1];
 
 	union {
 		CharString text;
