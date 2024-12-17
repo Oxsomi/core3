@@ -82,7 +82,9 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
 	CharString entrypointName,
-	ListCharString uniforms
+	ListCharString uniforms,
+	ESHExtension disallow,
+	ESHExtension require
 ) {
 
 	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
@@ -136,7 +138,11 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			//Ensure it's compatible
 
-			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, NULL))
+			if(
+				!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, NULL) ||
+				(binInfo.identifier.extensions & disallow) ||
+				(binInfo.identifier.extensions & require) != require
+			)
 				continue;
 
 			return (U16)i | ((U16)j << 16);

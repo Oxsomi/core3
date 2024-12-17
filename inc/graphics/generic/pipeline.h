@@ -156,6 +156,8 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc);
 typedef struct SHFile SHFile;
 typedef struct ListSHFile ListSHFile;
 
+typedef enum ESHExtension ESHExtension;
+
 //Get the first shader entry that's compatible with the current capabilities (extensions, shader model).
 //And that has the same entrypointName and uniforms.
 //Returns (U16 entryId, U16 binaryId) or U32_MAX if invalid
@@ -163,7 +165,9 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
 	CharString entrypointName,
-	ListCharString uniforms		//[ key, value ][]
+	ListCharString uniforms,				//[ key, value ][]
+	ESHExtension disallow,					//Extensions that should be disallowed (only find with extension disabled)
+	ESHExtension require					//Extensions that should be required (only find with extension enabled)
 );
 
 Bool GraphicsDeviceRef_createPipelineCompute(
