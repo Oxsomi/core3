@@ -146,7 +146,10 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			break;
 	}
 
-	if (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReportReBARWrites)
+	if (
+		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
+		EDxGraphicsFeatures_ReallyReportReBARWrites
+	)
 		heapDesc.Flags |= D3D12_HEAP_FLAG_TOOLS_USE_MANUAL_WRITE_TRACKING;
 
 	ID3D12Heap *heap = NULL;

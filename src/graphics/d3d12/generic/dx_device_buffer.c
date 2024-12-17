@@ -187,7 +187,10 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	if(!buf->resource.deviceAddress)
 		gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
 
-	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReportReBARWrites)
+	if(
+		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
+		EDxGraphicsFeatures_ReallyReportReBARWrites
+	)
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->QueryInterface(
 			bufExt->buffer, &IID_ID3D12ManualWriteTrackingResource, (void**) &buf->resource.debugExt
 		)))

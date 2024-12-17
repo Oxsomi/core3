@@ -81,6 +81,8 @@ typedef enum EDxGraphicsFeatures {
 	EDxGraphicsFeatures_PAQ						= 1 << 5,
 	EDxGraphicsFeatures_ReportReBARWrites		= 1 << 6,		//A tool is attached and requires marking updates to ReBAR
 
+	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
+
 	EDxGraphicsFeatures_SM6_6					= 1 << 16,		//Last bits are for shader model
 	EDxGraphicsFeatures_SM6_7					= 1 << 17,
 	EDxGraphicsFeatures_SM6_8					= 1 << 18,

@@ -213,7 +213,7 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_ReBAR)
 				Log_debugLnx("\t\tReBAR");
 
-			if(cap.featuresExt & EDxGraphicsFeatures_ReportReBARWrites)
+			if((cap.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) == EDxGraphicsFeatures_ReallyReportReBARWrites)
 				Log_debugLnx("\t\tReport ReBAR writes to tool");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_HardwareCopyQueue)
