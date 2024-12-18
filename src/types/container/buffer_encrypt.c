@@ -303,6 +303,12 @@ void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32
 	AESEncryptionContext_updateTag(ctx, AESEncryptionContext_fetchBlock(data, leftOver));
 }
 
+//This ensures no expanded key, iv or anything else is leaked on the stack,
+//which might be possible to obtain after execution through for example a buffer overflow.
+void AESEncryptionContext_clear(AESEncryptionContext *ctx) {
+	Buffer_unsetAllBits(Buffer_createRef(ctx, sizeof(*ctx)));
+}
+
 U64 EBufferEncryptionType_getAdditionalData(const EBufferEncryptionType type) {
 	switch (type) {
 		case EBufferEncryptionType_AES128GCM:
@@ -375,6 +381,8 @@ Error AESEncryptionContext_encrypt(
 
 	AESEncryptionContext_finish(&ctx, additionalData, target);
 	*tag = ctx.tag;
+
+	AESEncryptionContext_clear(&ctx);
 
 	return Error_none();
 }
@@ -454,8 +462,10 @@ Error AESEncryptionContext_decrypt(
 
 	AESEncryptionContext_finish(&ctx, additionalData, target);
 
-	if(I32x4_any(I32x4_neq(ctx.tag, tag)))
+	if(I32x4_any(I32x4_neq(ctx.tag, tag))) {
+		AESEncryptionContext_clear(&ctx);
 		return Error_invalidState(0, "AESEncryptionContext_decrypt() GMAC tag is invalid");
+	}
 
 	//Decrypt blocks
 	//TODO: We might wanna multi-thread this if we ever get big enough data
@@ -471,6 +481,7 @@ Error AESEncryptionContext_decrypt(
 			false
 		);
 
+	AESEncryptionContext_clear(&ctx);
 	return Error_none();
 }
 
