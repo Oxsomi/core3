@@ -139,11 +139,15 @@ Bool CLI_package(ParsedArgs args) {
 
 	//Copying encryption key
 
-	if(settings.encryptionType)
+	if(settings.encryptionType) {
+
 		Buffer_copy(
 			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
 			Buffer_createRef(encryptionKey, sizeof(settings.encryptionKey))
 		);
+
+		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+	}
 
 	//Get input
 
@@ -251,6 +255,9 @@ Bool CLI_package(ParsedArgs args) {
 	gotoIfError3(clean, File_writex(res, output, 0, 0, 1 * SECOND, true, e_rr))
 
 clean:
+
+	if(settings.encryptionType)
+		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
 
 	F64 dt = (F64)(Time_now() - start) / SECOND;
 

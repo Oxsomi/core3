@@ -837,6 +837,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			gotoIfError3(cleanCa, CAFile_readx(buf, encryptionKey, &file, e_rr))
 
+			if(encryptionKey)
+				Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+
 			//Specific entry was requested
 
 			if (args.parameters & EOperationHasParameter_Entry) {
@@ -1003,6 +1006,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			DLFile file = (DLFile) { 0 };
 			gotoIfError3(cleanDl, DLFile_readx(buf, encryptionKey, false, &file, e_rr))
+
+			if(encryptionKey)
+				Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 			U64 end = 0;
 

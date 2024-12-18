@@ -54,6 +54,7 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	DLFile fileNames = (DLFile) { 0 };
 	Archive archive = (Archive) { 0 };
 	CharString tmpPath = CharString_createNull();
+	I32x4 iv = I32x4_zero(), tag = I32x4_zero();
 
 	gotoIfError3(clean, Archive_create(alloc, &archive, e_rr))
 
@@ -113,8 +114,6 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 
 	//Check for encryption
 
-	I32x4 iv = I32x4_zero(), tag = I32x4_zero();
-
 	if ((header.type & 0xF) == EXXEncryptionType_AES256GCM) {
 
 		U64 headerLen = filePtr.ptr - file.ptr;
@@ -130,6 +129,9 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 			tag,
 			iv
 		))
+
+		iv = I32x4_zero();
+		tag = I32x4_zero();
 	}
 
 	gotoIfError3(clean, DLFile_read(filePtr, NULL, true, alloc, &fileNames, e_rr))
@@ -303,6 +305,9 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	//And you already have it.
 
 clean:
+
+	iv = I32x4_zero();
+	tag = I32x4_zero();
 
 	if(!s_uccess && allocate)
 		CAFile_free(caFile, alloc);

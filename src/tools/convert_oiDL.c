@@ -270,6 +270,9 @@ write:
 
 clean:
 
+	if(settings.encryptionType)
+		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
+
 	DLFile_freex(&file);
 	ListCharString_freex(&split);
 	Buffer_freex(&res);

@@ -35,6 +35,9 @@ Bool DLFile_read(
 	Bool s_uccess = true;
 	Bool allocate = false;
 
+	I32x4 iv = I32x4_zero();
+	I32x4 tag = I32x4_zero();
+
 	if(!dlFile)
 		retError(clean, Error_nullPointer(2, "DLFile_read()::dlFile is required"))
 
@@ -160,10 +163,7 @@ Bool DLFile_read(
 
 		Buffer headerExEnc = file;
 
-		I32x4 iv = I32x4_zero();
 		gotoIfError2(clean, Buffer_consume(&file, &iv, 12))
-
-		I32x4 tag;
 		gotoIfError2(clean, Buffer_consume(&file, &tag, sizeof(I32x4)))
 
 		//Validate remainder
@@ -191,6 +191,9 @@ Bool DLFile_read(
 			tag,
 			iv
 		))
+
+		iv = I32x4_zero();
+		tag = I32x4_zero();
 	}
 
 	//Allocate DLFile
@@ -252,6 +255,9 @@ Bool DLFile_read(
 	else dlFile->readLength = Buffer_length(entireFile);
 
 clean:
+
+	iv = I32x4_zero();
+	tag = I32x4_zero();
 
 	if(!s_uccess && allocate)
 		DLFile_free(dlFile, alloc);

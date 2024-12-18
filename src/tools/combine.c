@@ -38,6 +38,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	Error err = Error_none(), *e_rr = &err;
 	CharString inputArg = CharString_createNull();
 	Buffer buf[3] = { 0 };
+	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
 
 	if (args.parameters & EOperationHasParameter_SplitBy) {
 		Log_debugLnx("CLI_fileCombine() failed, -split can't be used");
@@ -65,7 +66,6 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	//Parse encryption key
 
 	U32 encryptionKeyV[8] = { 0 };
-	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
@@ -160,10 +160,23 @@ Bool CLI_fileCombine(ParsedArgs args) {
 				goto cleanCA;
 			}
 
+			if(encryptionKey)
+				Buffer_copy(
+					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)),
+					Buffer_createRefConst(encryptionKey, sizeof(encryptionKeyV))
+				);
+
 			if (!CAFile_writex(tmp[2], &buf[2], e_rr)) {
+
+				if(encryptionKey)
+					Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
+
 				Log_warnLnx("CLI_fileCombine() CAFile can't be serialized");
 				goto cleanCA;
 			}
+
+			if(encryptionKey)
+				Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
 
 		cleanCA:
 
@@ -193,10 +206,23 @@ Bool CLI_fileCombine(ParsedArgs args) {
 				goto cleanDL;
 			}
 
+			if(encryptionKey)
+				Buffer_copy(
+					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)),
+					Buffer_createRefConst(encryptionKey, sizeof(encryptionKeyV))
+				);
+
 			if (!DLFile_writex(tmp[2], &buf[2], e_rr)) {
+
+				if(encryptionKey)
+					Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
+
 				Log_warnLnx("CLI_fileCombine() DLFile can't be serialized");
 				goto cleanDL;
 			}
+
+			if(encryptionKey)
+				Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
 
 		cleanDL:
 
@@ -222,6 +248,9 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	Log_debugLnx("Combined oiXX files in %"PRIu64"ms", (Time_now() - start + MS - 1) / MS);
 
 clean:
+
+	if(encryptionKey)
+		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 	for(U8 i = 0; i < sizeof(buf) / sizeof(buf[0]); ++i)
 		Buffer_freex(&buf[i]);

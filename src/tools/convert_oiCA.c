@@ -169,6 +169,9 @@ Bool CLI_convertToCA(
 	gotoIfError3(clean, File_writex(res, output, 0, 0, 1 * SECOND, true, e_rr))
 
 clean:
+	if(settings.encryptionType)
+		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
+
 	FileInfo_freex(&fileInfo);
 	CAFile_freex(&file);
 	Archive_freex(&archive);

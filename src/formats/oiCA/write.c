@@ -516,6 +516,9 @@ Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		for(U64 i = 0; i < 4; ++i)
 			((I32*)headerIt)[3 + i] = ((const I32*)&tag)[i];
+
+		iv = I32x4_zero();
+		tag = I32x4_zero();
 	}
 
 	//Prepend header and hash

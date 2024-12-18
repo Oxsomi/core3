@@ -21,6 +21,7 @@
 #include "tools/cli.h"
 #include "types/base/time.h"
 #include "types/container/file.h"
+#include "types/container/buffer.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/file.h"
@@ -36,6 +37,8 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	CharString inputArg = CharString_createNull();
 	FileInfo info = (FileInfo) { 0 };
+
+	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
 
 	Error err = Error_none(), *e_rr = &err;
 	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg))
@@ -65,7 +68,6 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 	//Parse encryption key
 
 	U32 encryptionKeyV[8] = { 0 };
-	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
@@ -129,6 +131,9 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 	Log_debugLnx("Converted file oiXX format in %"PRIu64"ms", (Time_now() - start + MS - 1) / MS);
 
 clean:
+
+	if(encryptionKey)
+		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 	if (!s_uccess)
 		Log_errorLnx("File conversion failed!");
