@@ -2466,7 +2466,7 @@ Bool Compiler_convertRegisterDXIL(
 		case D3D_SIT_RTACCELERATIONSTRUCTURE:
 
 			if(
-				input->ReturnType != D3D_RETURN_TYPE_SINT ||
+				(input->ReturnType != D3D_RETURN_TYPE_SINT && input->ReturnType != D3D_RETURN_TYPE_UINT) ||
 				input->NumSamples != U32_MAX ||
 				input->Dimension != D3D_SRV_DIMENSION_UNKNOWN
 			)
@@ -4417,6 +4417,7 @@ Bool Compiler_compile(
 
 		if(error && error->GetStringLength()) {
 			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
+			//Log_debugLnx("%.*s", (int)CharString_length(errs), errs.ptr);
 			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
 		}
 
