@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -19,8 +19,12 @@
 */
 
 #pragma once
-#include "types/types.h"
-#include "types/string.h"
+#include "types/base/types.h"
+#include "types/container/string.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef enum EInputState {
 
@@ -42,13 +46,14 @@ typedef enum EInputType {
 typedef U32 InputHandle;		//Don't serialize this, because input devices can change it. Use the name instead.
 
 typedef struct InputButton {
-	LongString name;
+	const C8 *name;
 } InputButton;
 
 typedef struct InputAxis {
-	LongString name;
+	const C8 *name;
 	F32 deadZone;
 	Bool resetOnInputLoss;
+	U8 padding[3];
 } InputAxis;
 
 typedef enum EInputDeviceType {
@@ -90,17 +95,17 @@ typedef struct InputDevice {
 Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result);
 
 Error InputDevice_createButton(
-	InputDevice dev, 
-	U16 localHandle, 
-	CharString keyName,			//The alphaNumeric name (e.g. EKey_1)
+	InputDevice dev,
+	U16 localHandle,
+	const C8 *keyName,			//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
 	InputHandle *result
 );
 
 Error InputDevice_createAxis(
-	InputDevice dev, 
-	U16 localHandle, 
-	CharString keyName, 
-	F32 deadZone, 
+	InputDevice dev,
+	U16 localHandle,
+	const C8 *axisName,		//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
+	F32 deadZone,
 	Bool resetOnInputLoss,
 	InputHandle *result
 );
@@ -125,13 +130,9 @@ U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle);
 
 //Getting previous/current states
 
-EInputState InputDevice_getState(InputDevice d, InputHandle handle);
-
 Bool InputDevice_hasFlag(InputDevice d, U8 flag);
-Bool InputDevice_setFlag(InputDevice *d, U8 flag);
-Bool InputDevice_resetFlag(InputDevice *d, U8 flag);
 
-Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value);
+EInputState InputDevice_getState(InputDevice d, InputHandle handle);
 
 Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle);
 Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle);
@@ -160,3 +161,12 @@ Bool InputDevice_setCurrentState(InputDevice d, InputHandle handle, Bool v);
 Bool InputDevice_setCurrentAxis(InputDevice d, InputHandle handle, F32 v);
 
 void InputDevice_markUpdate(InputDevice d);
+
+Bool InputDevice_setFlag(InputDevice *d, U8 flag);
+Bool InputDevice_resetFlag(InputDevice *d, U8 flag);
+
+Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value);
+
+#ifdef __cplusplus
+	}
+#endif

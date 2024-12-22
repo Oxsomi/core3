@@ -1,45 +1,50 @@
 @echo off
+setlocal enabledelayedexpansion
 
-if [%2]==[] (
-	goto :usage
-)
-
-if NOT "%1"=="Release" (
-	if NOT "%1"=="Debug" (
-		goto :usage
+if NOT "%1" == "Debug" (
+	if NOT "%1" == "Release" (
+		goto usage
 	)
 )
 
-if NOT "%2"=="On" (
-	if NOT "%2"=="Off" (
-		goto :usage
+if NOT "%2" == "True" (
+	if NOT "%2" == "False" (
+		goto usage
 	)
 )
 
-if NOT "%3"=="On" (
-	if NOT "%3"=="Off" (
-		goto :usage
+if NOT "%3" == "True" (
+	if NOT "%3" == "False" (
+		goto usage
 	)
 )
 
-goto :success
+if NOT "%4" == "True" (
+	if NOT "%4" == "False" (
+		goto usage
+	)
+)
+
+for /f "tokens=4,* delims= " %%a in ("%*") do set remainder=%%b
+
+conan create packages/agility_sdk -s build_type=%1 --build=missing
+conan create packages/amd_ags -s build_type=%1 --build=missing
+conan create packages/nvapi -s build_type=%1 --build=missing
+conan create packages/spirv_reflect -s build_type=%1 --build=missing
+conan create packages/dxc -s build_type=%1 --build=missing
+conan create packages/openal_soft -s build_type=%1 --build=missing
+conan build . -s build_type=%1 -o enableSIMD=%2 -o enableTests=%3 -o dynamicLinkingGraphics=%4 !remainder!
+
+REM Run tests
+
+if "%3" == "False" goto :eof
+
+cd build/bin/%1
+OxC3_test.exe
+..\..\..\tools\test.bat
+
+cd ../../..
+goto :eof
 
 :usage
-	echo Usage: build [Build type: Debug/Release] [Enable SIMD: On/Off] [Force float fallback: On/Off]
-	goto :eof
-	
-:success
-
-rem Build normal exes
-
-echo -- Building tests...
-
-mkdir builds 2>nul
-cd builds
-cmake -DCMAKE_BUILD_TYPE=%1 .. -G "Visual Studio 17 2022" -DEnableSIMD=%2 -DForceFloatFallback=%3
-cmake --build . -j 8 --config %1
-cd ../
-
-rem Run unit test
-
-builds\bin\%1\OxC3_test.exe
+	echo Usage: build [Build type: Debug/Release] [Enable SIMD: True/False] [Enable Tests: True/False] [Dynamic linking: True/False]

@@ -1,0 +1,4 @@
+sources:
+  "2024.11.04.01":
+    url: "https://github.com/Oxsomi/openal-soft.git"
+    checkout: "master"

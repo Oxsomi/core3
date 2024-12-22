@@ -1,0 +1,49 @@
+name: C/C++ CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Windows build
+    runs-on: windows-2022
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
+    - name: Configure conan
+      run: conan profile detect
+    - name: Restore cached
+      id: cache-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.conan2/p
+        key: ${{ runner.os }}-${{ hashFiles('**/external/dxc') }}
+    - name: build for fast check
+      run: cmd /C build.bat Release True True False -o cliGraphics=False
+    - name: build for SIMD fallback check
+      run: cmd /C build.bat Release False True False -o cliGraphics=False
+    - name: build for debug check
+      run: cmd /C build.bat Debug True True False -o cliGraphics=False
+    - name: Delete non package files for cache
+      run: bash -c "rm -rf ~/.conan2/p/b/*/b"
+    - name: Cache Build
+      id: cache-build
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.conan2/p
+        key: ${{ runner.os }}-${{ hashFiles('**/external/dxc') }}
+    - uses: actions/setup-ruby@v1
+    - name: Send Webhook Notification
+      if: always()
+      env:
+        JOB_STATUS: ${{ job.status }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        HOOK_OS_NAME: ${{ runner.os }}
+        WORKFLOW_NAME: ${{ github.workflow }}
+      run: |
+        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
+        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+      shell: bash

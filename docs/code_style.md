@@ -42,7 +42,7 @@ _malloc_ and _free_ shouldn't be used if the goal is a cross platform applicatio
 
 No inline should be used, headers are only for documentation, types and function declarations. This is useful to provide a clean overview of the functionality. Since we use link time code generation, it should properly inline anyways. This also makes the file significantly easier to be parsed.
 
-"Member functions" should be using ClassName_functionName. This makes it clear that it's either a helper function or a member function. Using direct structs `T t` instead of `const T *t` is recommended only if the struct isn't too big (~64+ bytes) to be copied, though the compiler might inline. Data passed that is const should be marked as such. 
+"Member functions" should be using ClassName_functionName. This makes it clear that it's either a helper function or a member function. Using direct structs `T t` instead of `const T *t` is recommended only if the struct isn't too big (~64+ bytes) to be copied, though the compiler might inline. Data passed that is const should be marked as such.
 
 If a function has more than 4 parameters, consider if it should have a struct as initializer. If not, make sure to reserve a newline per parameter to make the function easier to read:
 
@@ -71,7 +71,7 @@ Error myFunction(								//Correct, easily readable.
 
 If a function allocates; it should be a) suffixed with an x or b) include an allocator and a pointer to the result at the end of the parameters. An x suffix indicates that it uses the Platform_instance's allocator will be used to allocate. If a function can return an error, it should return it and output the output in the last argument(s).
 
-Don't expose internal helper functions in the header file. Only use them in the source file. If this helper function is needed by multiple dependencies, document who is allowed to use it. 
+Don't expose internal helper functions in the header file. Only use them in the source file. If this helper function is needed by multiple dependencies, document who is allowed to use it.
 
 Early returns should be preferred over nested ifs. Functions should use the checks & execution patterns; validate first and then execute.
 
@@ -92,15 +92,15 @@ To handle cleanup code, use the following:
 ```c
 	... //Init default structs and pointers to NULL or empty struct. Init Error err = Error_none()
 
-	_gotoIfError(fail, myFunctionThatReturnsError(x, &myResult));
+	gotoIfError(fail, myFunctionThatReturnsError(x, &myResult));
 
 	... //Other code
-   
+
 	... //We are a the end of our function
-	
-    
+
+
     goto clean;
-    
+
 fail:
 	MyResult_freex(&myResult);
 clean:
@@ -116,13 +116,13 @@ If an error isn't returned but a function will fail, document clearly what value
 
 ## Formatting
 
-Lines should be a maximum of 128. 
+Lines should be a maximum of 128.
 
 Curly braces align to the end of a line.
 
-Pointers align to the right (unfortunately C declares they belong to the variable to the right, not the type itself). The only exception being casts, where it does belong to the type. 
+Pointers align to the right (unfortunately C declares they belong to the variable to the right, not the type itself). The only exception being casts, where it does belong to the type.
 
-There should be spaces between operators. E.g. `x + y` and not `x+y`. 
+There should be spaces between operators. E.g. `x + y` and not `x+y`.
 
 Use brackets around operators that aren't in PEMDAS such as bitwise operators.
 
@@ -190,7 +190,7 @@ Error File_remove(String loc, Ns maxTimeout);
 
 @error indicates what errors are returned by this function. If it calls other functions that can return errors, it should use `...` to indicate more error types.
 
-@access indicates who is allowed to access this function. There's nothing to enforce this in C, but it's a useful to indicate to the programmer. Keyword "Platform" could mean that only the Windows/Linux runtime is allowed to access this function. If this is absent or uses "Any" then it'll assume anybody can use it for any purpose (and it'll be missing from the documentation). 
+@access indicates who is allowed to access this function. There's nothing to enforce this in C, but it's a useful to indicate to the programmer. Keyword "Platform" could mean that only the Windows/Linux runtime is allowed to access this function. If this is absent or uses "Any" then it'll assume anybody can use it for any purpose (and it'll be missing from the documentation).
 
 `{}` indicates a link to a documentation section, while `[]` links to a type. Keep in mind that sections can contain spaces and types/functions can't. E.g. `[File]` links to the File class, while `{File}` would link to an article named File (if it exists).
 
@@ -222,6 +222,6 @@ Access here is extended from *Function's annotation types* and contains `Private
 
 ### Enums
 
-Enum fields use the same as struct members. An enum can be marked as a flag by using @usage: Flag. 
+Enum fields use the same as struct members. An enum can be marked as a flag by using @usage: Flag.
 
-Enums don't need comments per enum value, but could if the enum value isn't self explanatory. 
+Enums don't need comments per enum value, but could if the enum value isn't self explanatory.

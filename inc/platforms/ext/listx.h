@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -19,29 +19,83 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "types/base/error.h"
 
-typedef struct Error Error;
-typedef struct List List;
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
-Error List_createx(U64 length, U64 stride, List *result);
-Error List_createRepeatedx(U64 length, U64 stride, Buffer data, List *result);
-Error List_createCopyx(List list, List *result);
+//Include this file before including list.h so the x functions can be found
 
-Error List_createSubsetReversex(List list, U64 index, U64 length, List *result);
-Error List_createReversex(List list, List *result);
+typedef struct GenericList GenericList;
+typedef struct ListU64 ListU64;
 
-Error List_findx(List list, Buffer buf, List *result);
+Error GenericList_createx(U64 length, U64 stride, GenericList *result);
+Error GenericList_createRepeatedx(U64 length, U64 stride, Buffer data, GenericList *result);
+Error GenericList_createCopyx(GenericList list, GenericList *result);
+Error GenericList_createCopySubsetx(GenericList list, U64 offset, U64 len, GenericList *result);
 
-Error List_eraseAllx(List *list, Buffer buf);
-Error List_insertx(List *list, U64 index, Buffer buf);
-Error List_pushAllx(List *list, List other);
-Error List_insertAllx(List *list, List other, U64 offset);
+Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result);
+Error GenericList_createReversex(GenericList list, GenericList *result);
 
-Error List_reservex(List *list, U64 capacity);
-Error List_resizex(List *list, U64 size);
-Error List_shrinkToFitx(List *list);
+Error GenericList_findx(GenericList list, Buffer buf, EqualsFunction eq, ListU64 *result);
 
-Error List_pushBackx(List *list, Buffer buf);
+Error GenericList_eraseAllx(GenericList *list, Buffer buf, EqualsFunction eq);
+Error GenericList_insertx(GenericList *list, U64 index, Buffer buf);
+Error GenericList_pushAllx(GenericList *list, GenericList other);
+Error GenericList_insertAllx(GenericList *list, GenericList other, U64 offset);
 
-Bool List_freex(List *result);
+Error GenericList_reservex(GenericList *list, U64 capacity);
+Error GenericList_resizex(GenericList *list, U64 size);
+Error GenericList_shrinkToFitx(GenericList *list);
+
+Error GenericList_pushBackx(GenericList *list, Buffer buf);
+Error GenericList_pushFrontx(GenericList *list, Buffer buf);
+
+Bool GenericList_freex(GenericList *result);
+
+#define TListX(Name)																	\
+Error Name##_createx(U64 length, Name *result);											\
+Error Name##_createRepeatedx(U64 length, Name##_Type t, Name *result);					\
+Error Name##_createCopyx(Name l, Name *result);											\
+Error Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result);					\
+Error Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result);			\
+Error Name##_createReversex(Name l, Name *result);										\
+																						\
+Error Name##_findx(Name l, Name##_Type t, EqualsFunction eq, ListU64 *result);			\
+																						\
+Error Name##_eraseAllx(Name *l, Name##_Type t, EqualsFunction eq);						\
+Error Name##_insertx(Name *l, U64 index, Name##_Type t);								\
+Error Name##_pushAllx(Name *l, Name other);												\
+Error Name##_insertAllx(Name *l, Name other, U64 offset);								\
+																						\
+Error Name##_reservex(Name *l, U64 n);													\
+Error Name##_resizex(Name *l, U64 n);													\
+Error Name##_shrinkToFitx(Name *l);														\
+																						\
+Error Name##_pushBackx(Name *l, Name##_Type t);											\
+Error Name##_pushFrontx(Name *l, Name##_Type t);										\
+																						\
+Bool Name##_freex(Name *l);
+
+typedef struct ListListU8 ListListU8;
+typedef struct ListListU16 ListListU16;
+typedef struct ListListU32 ListListU32;
+typedef struct ListListU64 ListListU64;
+typedef struct ListBuffer ListBuffer;
+
+void ListBuffer_freeUnderlyingx (ListBuffer *list);
+
+void ListListU8_freeUnderlyingx (ListListU8 *list);
+void ListListU16_freeUnderlyingx(ListListU16 *list);
+void ListListU32_freeUnderlyingx(ListListU32 *list);
+void ListListU64_freeUnderlyingx(ListListU64 *list);
+
+Bool ListListU8_createCopyUnderlyingx (ListListU8 src, ListListU8 *dst, Error *e_rr);
+Bool ListListU16_createCopyUnderlyingx(ListListU16 src, ListListU16 *dst, Error *e_rr);
+Bool ListListU32_createCopyUnderlyingx(ListListU32 src, ListListU32 *dst, Error *e_rr);
+Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error *e_rr);
+
+#ifdef __cplusplus
+	}
+#endif

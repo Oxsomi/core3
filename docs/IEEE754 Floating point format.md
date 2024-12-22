@@ -18,7 +18,7 @@ This is almost the same as scientific notation, except it's in binary.
 
 Example (in base10/decimal):
 
-- -1.3e39: Uses sign as 1 (negative), 1.3 as the mantissa and 39 as the exponent. 
+- -1.3e39: Uses sign as 1 (negative), 1.3 as the mantissa and 39 as the exponent.
 - 123 = 1.23e2: Sign as 0 (positive), 1.23 as mantissa and 2 as exponent.
 - 0.123 = 1.23e-1: Exponent moved 3 from 123 -> 0.123 (123 / 0.123 = 1e3).
 
@@ -37,7 +37,7 @@ That's mostly all there is to the process. Just like base10 every time the posit
 
 However; decimals aren't possible in binary and the exponent and sign bits also have to be stored. To handle this, we remember the places moved and will have to convert that to a "signed number". About half of the exponent options are assigned to the positive values and half to the negative. This essentially means we add `(1 << (exponentBits - 1)) - 1` to the exponent. So 0b1e-1 (0.5) would turn into exponent 127-1 = 126 if we have 8 bit exponent (single precision float also known as **F32** or *float*). While 2 (0b10 = 0b1e1) would turn into exponent 128 (127 + 1). And 1 (0b1e0) would have exponent 127.
 
-To end it off; our decimal part is stored. And since the first bit is always 1 (except with *denormals*) we can grab the first N bits after the separator 1.1111e2 = .1111 = 1111. If there are more bits in our representation that can't be correctly converted we need to round. In this case a float allows 23 explicit bits so we don't have to do anything besides add empty zeros (19 for a **F32** to be exact): 1111 0000 0000 0000 0000 000. 
+To end it off; our decimal part is stored. And since the first bit is always 1 (except with *denormals*) we can grab the first N bits after the separator 1.1111e2 = .1111 = 1111. If there are more bits in our representation that can't be correctly converted we need to round. In this case a float allows 23 explicit bits so we don't have to do anything besides add empty zeros (19 for a **F32** to be exact): 1111 0000 0000 0000 0000 000.
 
 At the end, we can simply put sign, exponent and mantissa together as a bitset and get the following:
 
@@ -72,10 +72,10 @@ There are other types as well such as F8 (Minifloat. *Pretty useless*) and speci
 
 For common other formats flp.h can be checked to see:
 
-- BF16/bfloat16 (16-bit Google's brain floating point): 8 bit exponent, 7 bit mantissa. 
+- BF16/bfloat16 (16-bit Google's brain floating point): 8 bit exponent, 7 bit mantissa.
 - TF19 (Nvidia TensorFloat 19): 8 bit exponent, 10 bit mantissa.
 - PXR24 (Pixar 24-bit float): 8 bit exponent, 15 bit mantissa.
-- FP24 (AMD 24-bit float): 7 bit exponent, 16 bit mantissa. 
+- FP24 (AMD 24-bit float): 7 bit exponent, 16 bit mantissa.
 
 ### Special numbers
 
@@ -83,7 +83,7 @@ For common other formats flp.h can be checked to see:
 
 A big problem between different float types is that one float might not be able to store the real representation. This is very likely to happen when you're squaring a large number for example, or when you convert a large double to a float (or float to half even more likely).
 
-This is represented by using all 1s for the exponent and an empty mantissa. Sign bit is valid, so -inf and +inf are both valid numbers. This number "inf" works very differently than any other number. Using it in math operations will do all sorts of weird things because of it. For example x < -inf will never be true. 
+This is represented by using all 1s for the exponent and an empty mantissa. Sign bit is valid, so -inf and +inf are both valid numbers. This number "inf" works very differently than any other number. Using it in math operations will do all sorts of weird things because of it. For example x < -inf will never be true.
 
 ##### Example
 
@@ -115,7 +115,7 @@ Like stated before; denormalized numbers are a bit of a special case. They expli
 
 ### Expansion
 
-Expansion is the most straightforward process of casting. 
+Expansion is the most straightforward process of casting.
 
 Mantissa does the following:
 
@@ -123,7 +123,7 @@ Mantissa does the following:
 
 Inf/NaNs do the following:
 
-- Return exponent of all bits set. 
+- Return exponent of all bits set.
 - NaN also sets the highest mantissa bit to ensure an Inf isn't accidentally created.
 
 Exponent does the following:
@@ -139,19 +139,19 @@ Sign is maintained as normal by setting the first bit if it was turned on in the
 
 However; denormals are still a problem if they're in the input. These denormals can't just be cast with the same algorithm. This is because the 1.xxxx notation that is used for non denormals is not followed by denormals. To fix this, we need to find the first bit, remember the places it has moved and move the rest of the bits to the front of our new mantissa (correcting the exponent to reflect this change). I call this process "renormalization".
 
-To do this, we can use binary bit search. Which will search the half of each section until it finally finds the first bit that was turned on (seeking the second section if no match was found). Essentially allowing us to end the search after 4 (F16), 5 (F32) or 6 (F64) iterations with only a few small operations such as shifts, adds, mask and two branches. 
+To do this, we can use binary bit search. Which will search the half of each section until it finally finds the first bit that was turned on (seeking the second section if no match was found). Essentially allowing us to end the search after 4 (F16), 5 (F32) or 6 (F64) iterations with only a few small operations such as shifts, adds, mask and two branches.
 
 ### Truncation
 
 Truncation is the harder cast, since it requires handling denormals and collapses to inf with more care. As well as dealing with rounding. As such, this cast will be less optimal in OxC3 (software mode) to allow it to follow the IEEE754 spec (which was reverse engineered by looking at ground truth results).
 
-NaNs and Infs follow the exact same logic as specified in the expansion section. However; the mantissa bits aren't rounded. The upper 23 bits of mantissa (F64 -> F32) are almost all preserved (the top bit is set to prevent infs with NaN). This means we will lose 30 bits of the mantissa, but preserve the others. 
+NaNs and Infs follow the exact same logic as specified in the expansion section. However; the mantissa bits aren't rounded. The upper 23 bits of mantissa (F64 -> F32) are almost all preserved (the top bit is set to prevent infs with NaN). This means we will lose 30 bits of the mantissa, but preserve the others.
 
-Otherwise the mantissa is shifted down discarding these bits. But it is rounded by checking the discarded part of the mantissa with 0.5 (represented in the discarded mantissa part). For example if the discarded mantissa is 1001 then it's bigger than 1000, so it has to round the non discarded part of the mantissa up by 1. If the mantissa loops around to 0, that means the exponent has to be increased as well. _Keep in mind that for some reason, it has to be **bigger** than 0.5, not bigger than or equal. 1000 in the example would not cause any rounding to occur._ 
+Otherwise the mantissa is shifted down discarding these bits. But it is rounded by checking the discarded part of the mantissa with 0.5 (represented in the discarded mantissa part). For example if the discarded mantissa is 1001 then it's bigger than 1000, so it has to round the non discarded part of the mantissa up by 1. If the mantissa loops around to 0, that means the exponent has to be increased as well. _Keep in mind that for some reason, it has to be **bigger** than 0.5, not bigger than or equal. 1000 in the example would not cause any rounding to occur._
 
 Now the same is done with the exponent as with expansion. However, now we have a problem; the exponent can be bigger than or equal to our exponent mask. This would indicate a float overflow and we have to catch it by turning the float into an inf (respecting the sign).
 
-Another problem with truncation is that the output can generate a denormal; the resulting exponent is 0 or lower. In this case, we clamp the exponent to 0, shift the mantissa the difference of what was shifted by exponent and destination shift and shift in the implicit bit as well. This can of course result in truncating a very small number to zero or 1 + epsilon to 1. A lot of bits of precision are lost the smaller your denormal is. 
+Another problem with truncation is that the output can generate a denormal; the resulting exponent is 0 or lower. In this case, we clamp the exponent to 0, shift the mantissa the difference of what was shifted by exponent and destination shift and shift in the implicit bit as well. This can of course result in truncating a very small number to zero or 1 + epsilon to 1. A lot of bits of precision are lost the smaller your denormal is.
 
 ### Combination of truncation/expansion
 
@@ -165,58 +165,58 @@ Because of the numbers, it was decided that hardware halfs was turned off on Win
 
 #### Non denormalized numbers
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.4ns/op                | 18.3ns/op (3.4x *slower*)    |
-| Truncation F64 -> F16 | 536.9ns/op              | 18.2ns/op (29.5x **faster**) |
-| Expansion F32 -> F64  | 5.5ns/op                | 13.6ns/op (2.5x *slower*)    |
-| Truncation F32 -> F16 | 540.2ns/op              | 19.0ns/op (28.4x **faster**) |
-| Expansion F16 -> F64  | 536.1ns/op              | 13.6ns/op (39.4x **faster**) |
-| Expansion F16 -> F32  | 532.9ns/op              | 13.2ns/op (40.4x **faster**) |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.5ns/op                | 18.8ns/op (3.4x *slower*) |
+| Truncation F64 -> F16 | 6.3ns/op                | 18.1ns/op (2.9x *slower*) |
+| Expansion F32 -> F64  | 5.4ns/op                | 13.0ns/op (2.4x *slower*) |
+| Truncation F32 -> F16 | 6.8ns/op                | 19.4ns/op (2.9x *slower*) |
+| Expansion F16 -> F64  | 6.5ns/op                | 13.4ns/op (2.1x *slower*) |
+| Expansion F16 -> F32  | 7.0ns/op                | 13.3ns/op (1.9x *slower*) |
 
 #### (Un)Signed zero
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.4ns/op                | 15.0ns/op (2.8x *slower*)    |
-| Truncation F64 -> F16 | 535.3ns/op              | 14.3ns/op (37.4x **faster**) |
-| Expansion F32 -> F64  | 4.9ns/op                | 8.9ns/op (1.8x *slower*)     |
-| Truncation F32 -> F16 | 532.2ns/op              | 15.2ns/op (35.0x **faster**) |
-| Expansion F16 -> F64  | 530.1ns/op              | 9.4ns/op (56.0x **faster**)  |
-| Expansion F16 -> F32  | 530.4ns/op              | 9.4ns/op (56.4x **faster**)  |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.4ns/op                | 15.3ns/op (2.8x *slower*) |
+| Truncation F64 -> F16 | 6.1ns/op                | 14.7ns/op (2.4x *slower*) |
+| Expansion F32 -> F64  | 6.0ns/op                | 9.0ns/op (1.5x *slower*)  |
+| Truncation F32 -> F16 | 6.5ns/op                | 15.7ns/op (2.4x *slower*) |
+| Expansion F16 -> F64  | 5.8ns/op                | 9.6ns/op (1.7x *slower*)  |
+| Expansion F16 -> F32  | 6.2ns/op                | 9.6ns/op (1.5x *slower*)  |
 
 #### NaN
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.3ns/op                | 14.5ns/op (2.7x *slower*)    |
-| Truncation F64 -> F16 | 536.4ns/op              | 14.5ns/op (37.0x **faster**) |
-| Expansion F32 -> F64  | 4.9ns/op                | 12.9ns/op (2.6x *slower*)    |
-| Truncation F32 -> F16 | 534.7ns/op              | 14.4ns/op (37.1x **faster**) |
-| Expansion F16 -> F64  | 535.1ns/op              | 13.0ns/op (41.1x **faster**) |
-| Expansion F16 -> F32  | 533.7ns/op              | 12.9ns/op (41.4x **faster**) |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.4ns/op                | 14.6ns/op (2.7x *slower*) |
+| Truncation F64 -> F16 | 6.1ns/op                | 14.6ns/op (2.4x *slower*) |
+| Expansion F32 -> F64  | 4.9ns/op                | 13.4ns/op (2.7x *slower*) |
+| Truncation F32 -> F16 | 6.2ns/op                | 14.7ns/op (2.4x *slower*) |
+| Expansion F16 -> F64  | 5.6ns/op                | 13.3ns/op (2.4x *slower*) |
+| Expansion F16 -> F32  | 6.0ns/op                | 13.2ns/op (2.2x *slower*) |
 
 #### Inf
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.5ns/op                | 10.9ns/op (2.0x *slower*)    |
-| Truncation F64 -> F16 | 540.0ns/op              | 10.9ns/op (49.5x **faster**) |
-| Expansion F32 -> F64  | 5.2ns/op                | 9.3ns/op (1.8x *slower*)     |
-| Truncation F32 -> F16 | 534.8ns/op              | 10.9ns/op (49.1x **faster**) |
-| Expansion F16 -> F64  | 533.4ns/op              | 9.1ns/op (58.6x **faster**)  |
-| Expansion F16 -> F32  | 533.2ns/op              | 9.2ns/op (58.0x **faster**)  |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.6ns/op                | 11.1ns/op (2.0x *slower*) |
+| Truncation F64 -> F16 | 6.3ns/op                | 11.1ns/op (1.8x *slower*) |
+| Expansion F32 -> F64  | 5.4ns/op                | 9.5ns/op (1.8x *slower*)  |
+| Truncation F32 -> F16 | 6.7ns/op                | 11.2ns/op (1.7x *slower*) |
+| Expansion F16 -> F64  | 6.1ns/op                | 9.3ns/op (1.5x *slower*)  |
+| Expansion F16 -> F32  | 6.4ns/op                | 9.4ns/op (1.5x *slower*)  |
 
 #### Denormalized numbers
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 4.8ns/op                | 14.4ns/op (3.0x *slower*)    |
-| Truncation F64 -> F16 | 533.4ns/op              | 14.4ns/op (37.1x **faster**) |
-| Expansion F32 -> F64  | 4.8ns/op                | 25.5ns/op (5.3x *slower*)    |
-| Truncation F32 -> F16 | 531.6ns/op              | 14.3ns/op (37.2x **faster**) |
-| Expansion F16 -> F64  | 527.7ns/op              | 23.0ns/op (22.9x **faster**) |
-| Expansion F16 -> F32  | 528.6ns/op              | 22.8ns/op (23.2x **faster**) |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.2ns/op                | 15.0ns/op (2.9x *slower*) |
+| Truncation F64 -> F16 | 5.9ns/op                | 14.3ns/op (2.4x *slower*) |
+| Expansion F32 -> F64  | 5.4ns/op                | 26.0ns/op (5.3x *slower*) |
+| Truncation F32 -> F16 | 6.2ns/op                | 14.9ns/op (2.4x *slower*) |
+| Expansion F16 -> F64  | 5.6ns/op                | 23.2ns/op (4.1x *slower*) |
+| Expansion F16 -> F32  | 6.2ns/op                | 23.6ns/op (3.8x *slower*) |
 
 #### Sources
 

@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -20,15 +20,12 @@
 
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
-#include "types/error.h"
-#include "types/string.h"
+#include "types/base/error.h"
 
-#define _key(name)																	\
-	if ((err = InputDevice_createButton(											\
-		*result, EKey_##name, CharString_createConstRefCStr("EKey_" #name), &res	\
-	)).genericError) {																\
-		InputDevice_free(result);													\
-		return err;																	\
+#define KEY(name)																						\
+	if ((err = InputDevice_createButton(*result, EKey_##name, "EKey_" #name, &res)).genericError) {		\
+		InputDevice_free(result);																		\
+		return err;																						\
 	}
 
 Error Keyboard_create(Keyboard *result) {
@@ -40,51 +37,45 @@ Error Keyboard_create(Keyboard *result) {
 
 	InputHandle res = 0;
 
-	_key(1);	_key(2);	_key(3);	_key(4);	_key(5); 
-	_key(6);	_key(7);	_key(8);	_key(9);	_key(0); 
+	KEY(0); KEY(1); KEY(2); KEY(3); KEY(4); KEY(5); KEY(6); KEY(7); KEY(8); KEY(9);
 
-	_key(A);	_key(B);	_key(C);	_key(D);	_key(E);
-	_key(F);	_key(G);	_key(H);	_key(I);	_key(J);
-	_key(K);	_key(L);	_key(M);	_key(N);	_key(O);
-	_key(P);	_key(Q);	_key(R);	_key(S);	_key(T);
-	_key(U);	_key(V);	_key(W);	_key(X);	_key(Y);
-	_key(Z);
+	KEY(A); KEY(B); KEY(C); KEY(D); KEY(E); KEY(F); KEY(G); KEY(H); KEY(I); KEY(J);
+	KEY(K); KEY(L); KEY(M); KEY(N); KEY(O); KEY(P); KEY(Q); KEY(R); KEY(S); KEY(T);
+	KEY(U); KEY(V); KEY(W); KEY(X); KEY(Y); KEY(Z);
 
-	_key(Equals);			_key(Comma);		_key(Minus);
-	_key(Period);			_key(Slash);		_key(Acute);
-	_key(Semicolon);		_key(LBracket);		_key(RBracket);
-	_key(Backslash);		_key(Quote);
+	KEY(Backspace);		KEY(Space);			KEY(Tab);
 
-	_key(F1);	_key(F2);	_key(F3);	_key(F4);		_key(F5);	_key(F6);
-	_key(F7);	_key(F8);	_key(F9);	_key(F10);		_key(F11);	_key(F12);
-	_key(F13);	_key(F14);	_key(F15);	_key(F16);		_key(F17);	_key(F18);
-	_key(F19);	_key(F20);	_key(F21);	_key(F22);		_key(F23);	_key(F24);
+	KEY(LShift);		KEY(LCtrl);			KEY(LAlt);			KEY(LMenu);
+	KEY(RShift);		KEY(RCtrl);			KEY(RAlt);			KEY(RMenu);
 
-	_key(Backspace);	_key(Shift);		_key(Ctrl);			_key(Alt);
-	_key(Pause);		_key(Caps);			_key(Escape);		_key(PageUp);
-	_key(PageDown);		_key(End);			_key(Home);			_key(Select);
-	_key(Print);		_key(Execute);		_key(PrintScreen);	_key(Insert);
-	_key(ScrollLock);	_key(Apps);			_key(Back);			_key(Forward);
-	_key(Sleep);		_key(Refresh);		_key(Stop);			_key(Search);
-	_key(Favorites);	_key(Start);		_key(Mute);			_key(VolumeDown);
-	_key(VolumeUp);		_key(Skip);			_key(Previous);		_key(Clear);
-	_key(Zoom);
-	_key(Delete);		_key(Help);			_key(NumLock);
+	KEY(Pause);			KEY(Caps);			KEY(Escape);		KEY(PageUp);
+	KEY(PageDown);		KEY(End);			KEY(Home);			KEY(PrintScreen);
+	KEY(Insert);		KEY(Enter);			KEY(Delete);		KEY(NumLock);		KEY(ScrollLock);
 
-	_key(Space);
-	_key(Tab);
-	_key(Enter);
+	KEY(Select);		KEY(Print);			KEY(Execute);		KEY(Back);			KEY(Forward);
+	KEY(Sleep);			KEY(Refresh);		KEY(Stop);			KEY(Search);		KEY(Favorites);
+	KEY(Start);			KEY(Mute);			KEY(VolumeDown);	KEY(VolumeUp);		KEY(Skip);
+	KEY(Previous);		KEY(Clear);			KEY(Zoom);			KEY(Help);			KEY(Apps);
 
-	_key(Left);
-	_key(Up);
-	_key(Right);
-	_key(Down);
+	KEY(Left);			KEY(Up);			KEY(Right);			KEY(Down);
 
-	_key(Numpad1);		_key(Numpad2);		_key(Numpad3);
-	_key(Numpad4);		_key(Numpad5);		_key(Numpad6);
-	_key(Numpad7);		_key(Numpad8);		_key(Numpad9);
-	_key(Numpad0);		_key(NumpadMul);	_key(NumpadAdd);
-	_key(NumpadDec);	_key(NumpadDiv);	_key(NumpadSub);
+	KEY(Numpad0);
+	KEY(Numpad1);		KEY(Numpad2);		KEY(Numpad3);
+	KEY(Numpad4);		KEY(Numpad5);		KEY(Numpad6);
+	KEY(Numpad7);		KEY(Numpad8);		KEY(Numpad9);
+
+	KEY(NumpadMul);		KEY(NumpadAdd);		KEY(NumpadDot);
+	KEY(NumpadDiv);		KEY(NumpadSub);
+
+	KEY(F1);			KEY(F2);			KEY(F3);			KEY(F4);			KEY(F5);
+	KEY(F6);			KEY(F7);			KEY(F8);			KEY(F9);			KEY(F10);
+	KEY(F11);			KEY(F12);
+
+	KEY(Bar);			KEY(Options);
+
+	KEY(Equals);		KEY(Comma);			KEY(Minus);			KEY(Period);
+	KEY(Slash);			KEY(Backtick);		KEY(Semicolon);		KEY(LBracket);		KEY(RBracket);
+	KEY(Backslash);		KEY(Quote);
 
 	return Error_none();
 }

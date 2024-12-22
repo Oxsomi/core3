@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -20,17 +20,25 @@
 
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
-#include "types/string.h"
-#include "math/math.h"
+#include "types/container/string.h"
+#include "types/math/math.h"
 
 #include <stdlib.h>
 
-void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options) {
+void Log_captureStackTracex(void **stackTrace, U64 stackSize, U8 skip) {
+	Log_captureStackTrace(Platform_instance->alloc, stackTrace, stackSize, skip == U8_MAX ? U8_MAX : skip + 1);
+}
 
-	StackTrace stackTrace;
-	Log_captureStackTrace(stackTrace, _STACKTRACE_SIZE, skip);
+void Log_printStackTracex(U8 skip, ELogLevel lvl, ELogOptions options) {
+	Log_printStackTrace(Platform_instance->alloc, skip + 1 == 0 ? U8_MAX : skip + 1, lvl, options);
+}
 
-	Log_printCapturedStackTrace(stackTrace, lvl, options);
+void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options) {
+	Log_printCapturedStackTraceCustom(Platform_instance->alloc, stackTrace, stackSize, lvl, options);
+}
+
+void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
+	Log_log(Platform_instance->alloc, lvl, options, arg);
 }
 
 #define Log_level(lvl) 													\
@@ -38,53 +46,36 @@ void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options) {
 	if(!format)															\
 		return;															\
 																		\
-	CharString res = CharString_createNull();									\
+	CharString res = CharString_createNull();							\
 																		\
 	va_list arg1;														\
 	va_start(arg1, format);												\
-	Error err = CharString_formatVariadicx(&res, format, arg1);				\
+	Error err = CharString_formatVariadic(alloc, &res, format, arg1);	\
 	va_end(arg1);														\
 																		\
 	if(!err.genericError)												\
-		Log_log(lvl, opt, res);											\
+		Log_log(alloc, lvl, opt, res);									\
 																		\
-	CharString_freex(&res);
+	CharString_free(&res, alloc)
 
-void Log_debug(ELogOptions opt, const C8 *format, ...) {
+//Default allocator. Sometimes they can't be safely used
+
+void Log_debugx(ELogOptions opt, const C8 *format, ...) {
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Debug);
 }
 
-void Log_performance(ELogOptions opt, const C8 *format, ...) {
+void Log_performancex(ELogOptions opt, const C8 *format, ...) {
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Performance);
 }
 
-void Log_warn(ELogOptions opt, const C8 *format, ...) {
+void Log_warnx(ELogOptions opt, const C8 *format, ...) {
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Warn);
 }
 
-void Log_error(ELogOptions opt, const C8 *format, ...) {
+void Log_errorx(ELogOptions opt, const C8 *format, ...) {
+	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Error);
-}
-
-void Log_fatal(ELogOptions opt, const C8 *format, ...) {
-
-	if(!format)
-		return;
-
-	Log_printStackTrace(1, ELogLevel_Fatal, opt);
-
-	CharString res = CharString_createNull();
-
-	va_list arg1;
-	va_start(arg1, format);
-	Error err = CharString_formatVariadicx(&res, format, arg1);
-	va_end(arg1);
-
-	if(err.genericError)
-		return;
-
-	Log_log(ELogLevel_Fatal, opt, res);
-	CharString_freex(&res);
-
-	exit(1);
 }

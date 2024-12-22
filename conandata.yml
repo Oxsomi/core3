@@ -1,0 +1,4 @@
+sources:
+  "0.2.082":
+    url: "https://github.com/Oxsomi/core3"
+    checkout: "vulkan"
