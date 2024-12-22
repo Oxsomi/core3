@@ -25,6 +25,8 @@
 #include "types/container/buffer.h"
 #include "types/base/time.h"
 
+#include "platforms/file.h"
+
 Ns CAFile_loadDate(U16 time, U16 date) {
 	return Time_date(
 		1980 + (date >> 9), 1 + ((date >> 5) & 0xF), date & 0x1F,
@@ -32,7 +34,7 @@ Ns CAFile_loadDate(U16 time, U16 date) {
 	);
 }
 
-Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile, Error *e_rr) {
+Bool CAFile_read(Stream *stream, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile, Stream **fileData, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Bool allocate = false;
@@ -43,25 +45,27 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	if (caFile->archive.entries.ptr)
 		retError(clean, Error_invalidParameter(2, 0, "CAFile_read()::caFile isn't empty, could indicate memleak"))
 
-	if (Buffer_length(file) < sizeof(CAHeader))
+	if (!stream || stream->handle.fileSize < sizeof(CAHeader))
 		retError(clean, Error_outOfBounds(
-			0, sizeof(CAHeader), Buffer_length(file), "CAFile_read()::file doesn't contain header"
+			0, sizeof(CAHeader), !stream ? 0 : stream->handle.fileSize, "CAFile_read()::file doesn't contain header"
 		))
 
-	Buffer filePtr = Buffer_createRefFromBuffer(file, Buffer_isConstRef(file));
-
 	Buffer tmpData = Buffer_createNull();
+	Buffer tmpData1 = Buffer_createNull();
 	DLFile fileNames = (DLFile) { 0 };
 	Archive archive = (Archive) { 0 };
 	CharString tmpPath = CharString_createNull();
 	I32x4 iv = I32x4_zero(), tag = I32x4_zero();
+	Stream readStream = (Stream) { 0 };					//For example a decryption or decompression stream
 
 	gotoIfError3(clean, Archive_create(alloc, &archive, e_rr))
 
 	//Validate header
 
+	U64 off = 0;
 	CAHeader header;
-	gotoIfError2(clean, Buffer_consume(&filePtr, &header, sizeof(header)))
+	gotoIfError3(clean, Stream_read(stream, Buffer_createRef(&header, sizeof(header)), off, 0, 0, false, e_rr))
+	off += sizeof(header);
 
 	if(header.magicNumber != CAHeader_MAGIC)
 		retError(clean, Error_invalidParameter(0, 0, "CAFile_read()::file contained invalid header"))
@@ -69,8 +73,10 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	if(header.version != ECAVersion_V1_0)
 		retError(clean, Error_invalidParameter(0, 1, "CAFile_read()::file header doesn't have correct version"))
 
-	if(header.flags & (ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB))		//TODO: AES chunks
-		retError(clean, Error_unsupportedOperation(0, "CAFile_read() AES chunks not supported yet"))
+	if((header.flags & ECAFlags_ChunkMask) && !header.type)
+		retError(clean, Error_unsupportedOperation(
+			0, "CAFile_read() chunks are disabled for unencrypted and uncompressed files"
+		))
 
 	if(header.type >> 4)								//TODO: Compression
 		retError(clean, Error_unsupportedOperation(1, "CAFile_read() decompression not supported yet"))
@@ -92,10 +98,14 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	//Validate file and dir count
 
 	U32 fileCount = 0;
-	gotoIfError2(clean, Buffer_consume(&filePtr, &fileCount, header.flags & ECAFlags_FilesCountLong ? 4 : 2))
+	U64 counterSiz = header.flags & ECAFlags_FilesCountLong ? 4 : 2;
+	gotoIfError3(clean, Stream_read(stream, Buffer_createRef(&fileCount, counterSiz), off, 0, 0, false, e_rr))
+	off += counterSiz;
 
 	U16 dirCount = 0;
-	gotoIfError2(clean, Buffer_consume(&filePtr, &dirCount, header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1))
+	counterSiz = header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1;
+	gotoIfError3(clean, Stream_read(stream, Buffer_createRef(&dirCount, counterSiz), off, 0, 0, false, e_rr))
+	off += counterSiz;
 
 	if(dirCount >= (header.flags & ECAFlags_DirectoriesCountLong ? U16_MAX : U8_MAX))
 		retError(clean, Error_invalidParameter(0, 7, "CAFile_read() directory count can't be the max bit value"))
@@ -108,34 +118,85 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	CAExtraInfo extra = (CAExtraInfo) { 0 };
 
 	if(header.flags & ECAFlags_HasExtendedData) {
-		gotoIfError2(clean, Buffer_consume(&filePtr, &extra, sizeof(extra)))
-		gotoIfError2(clean, Buffer_consume(&filePtr, NULL, extra.headerExtensionSize))
+		gotoIfError3(clean, Stream_read(stream, Buffer_createRef(&extra, sizeof(extra)), off, 0, 0, false, e_rr))
+		off += sizeof(extra) + extra.headerExtensionSize;
 	}
 
 	//Check for encryption
 
+	static const U64 chunkLengths[4] = { 262144, 1048576, 10485760, 104857600 };
+
+	U64 chunkLength = chunkLengths[(header.flags & ECAFlags_ChunkMask) >> ECAFlags_ChunkShift];
+
+	if(!header.type)
+		chunkLength = stream->handle.fileSize - off;
+
+	U64 chunks = (stream->handle.fileSize - off + chunkLength - 1) / chunkLength;
+
 	if ((header.type & 0xF) == EXXEncryptionType_AES256GCM) {
 
-		U64 headerLen = filePtr.ptr - file.ptr;
+		U64 tagStart = off;
 
+		if(chunks > 1)
+			off += chunks * sizeof(I32x4);
+
+		U64 headerLen = off;
+
+		if(chunks * chunkLength > (4 * GIBI - 3) * sizeof(I32x4))
+			retError(clean, Error_invalidParameter(
+				0, 9, "CAFile_read() file is potentially insecure due to IV reuse (64GB encryption limit)"
+			))
+
+		//Input additional data as input as well as tags 
+
+		gotoIfError2(clean, Buffer_createUninitializedBytes(
+			chunks > 1 ? off + sizeof(I32x4) + 12 : stream->handle.fileSize, alloc, &tmpData1
+		))
+
+		gotoIfError3(clean, Stream_read(stream, tmpData1, 0, 0, 0, false, e_rr))
+
+		Buffer filePtr = Buffer_createRefConst(tmpData1.ptr + off, Buffer_length(tmpData1) - off);
 		gotoIfError2(clean, Buffer_consume(&filePtr, &iv, 12))
 		gotoIfError2(clean, Buffer_consume(&filePtr, &tag, 16))
 
+		off += 12 + 16;
+		U64 len = stream->handle.fileSize - off;
+
+		if(chunks > 1)
+			filePtr = Buffer_createNull();		//Additional data only
+
 		gotoIfError2(clean, Buffer_decrypt(
 			filePtr,
-			Buffer_createRefConst(file.ptr, headerLen),
+			Buffer_createRefConst(tmpData1.ptr, headerLen),
 			EBufferEncryptionType_AES256GCM,
 			encryptionKey,
 			tag,
 			iv
 		))
 
+		if(chunks == 1)
+			gotoIfError3(clean, Stream_openMemoryRead(&tmpData1, off, 0, fileData, e_rr))
+
+		else {
+
+			gotoIfError2(clean, Buffer_createCopy(
+				Buffer_createRefConst(tmpData1.ptr + tagStart, chunks * sizeof(I32x4)), alloc, &tmpData
+			))
+
+			gotoIfError3(clean, Stream_openDecryptionStream(stream, off, 0, &tmpData, iv, len, chunkLength, fileData, e_rr))
+		}
+
+		if(chunks > 1)			//Store iv so each block can be decrypted individually
+			Buffer_free(&tmpData1, alloc);		//Was used for AD only
+
 		iv = I32x4_zero();
 		tag = I32x4_zero();
 	}
 
-	gotoIfError3(clean, DLFile_read(filePtr, NULL, true, alloc, &fileNames, e_rr))
-	gotoIfError2(clean, Buffer_consume(&filePtr, NULL, fileNames.readLength))
+	else gotoIfError3(clean, Stream_openStream(stream, off, 0, fileData, e_rr))
+
+	gotoIfError3(clean, DLFile_read(fileData, NULL, true, alloc, &fileNames, e_rr))
+	off = fileNames.readLength;
 
 	//Validate DLFile
 	//File name validation is done when the entries are inserted into the Archive
@@ -167,19 +228,17 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 	if (header.flags & ECAFlags_FilesHaveDate)
 		fileStride += header.flags & ECAFlags_FilesHaveExtendedDate ? sizeof(U64) : sizeof(U16) * 2;
 
-	U64 fileSize = (U64)fileCount * fileStride;
-	U64 folderSize = (U64)dirCount * folderStride;
-
-	if (Buffer_length(filePtr) < fileSize + folderSize)
-		retError(clean, Error_outOfBounds(
-			0, fileSize + folderSize, Buffer_length(filePtr), "CAFile_read() files out of bounds"
-		))
-
 	//Now we can add dir to the archive
 
 	for (U64 i = 0; i < dirCount; ++i) {
 
-		const U8 *diri = filePtr.ptr + folderStride * i;
+		U16 parent = 0;
+		gotoIfError3(clean, Stream_read(fileData, Buffer_createRef(&parent, dirStride), off, 0, 0, false, e_rr))
+
+		if(fileData->handle.fileSize < off + folderStride)
+			retError(clean, Error_invalidParameter(0, 0, "CAFile_read() extended folder out of bounds"))
+
+		off += folderStride;
 
 		CharString name = fileNames.entryStrings.ptr[i];
 
@@ -187,8 +246,6 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 			retError(clean, Error_invalidParameter(0, 0, "CAFile_read() directory has invalid name"))
 
 		gotoIfError2(clean, CharString_createCopy(name, alloc, &tmpPath))
-
-		U16 parent = dirStride == 2 ? *(const U16*)diri : *diri;
 
 		if (parent != rootDir) {
 
@@ -208,12 +265,13 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 
 	//Add file
 
-	const U8 *fileIt = filePtr.ptr + folderSize;
-	gotoIfError2(clean, Buffer_offset(&filePtr, fileSize + folderSize))
+	U64 fileSize = (U64)fileCount * fileStride;
+	U64 fileOff = off + fileSize;
 
 	for (U64 i = 0; i < fileCount; ++i) {
 
-		const U8 *filei = fileIt + fileStride * i;
+		if(fileData->handle.fileSize < off + fileStride)
+			retError(clean, Error_invalidParameter(0, 0, "CAFile_read() file out of bounds"))
 
 		CharString name = fileNames.entryStrings.ptr[(U64)i + dirCount];
 
@@ -224,8 +282,9 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 
 		//Load parent
 
-		U16 parent = dirStride == 2 ? *(const U16*)filei : *filei;
-		filei += dirStride;
+		U16 parent = 0;
+		gotoIfError3(clean, Stream_read(fileData, Buffer_createRef(&parent, dirStride), off, 0, 0, false, e_rr))
+		off += dirStride;
 
 		if (parent != rootDir) {
 
@@ -245,14 +304,20 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 		if (header.flags & ECAFlags_FilesHaveDate) {
 
 			if(header.flags & ECAFlags_FilesHaveExtendedDate) {
-				timestamp = *(Ns*)filei;
-				filei += sizeof(Ns);
+				gotoIfError3(clean, Stream_read(fileData, Buffer_createRef(&timestamp, sizeof(Ns)), off, 0, 0, false, e_rr))
+				off += sizeof(Ns);
 			}
 
 			else {
 
-				timestamp = CAFile_loadDate(*(const U16*)(filei + 1), *(const U16*)filei);
-				filei += sizeof(U16) * 2;
+				U16 timeStampShort[2];
+
+				gotoIfError3(clean, Stream_read(
+					fileData, Buffer_createRef(timeStampShort, sizeof(timeStampShort)), off, 0, 0, false, e_rr
+				))
+
+				timestamp = CAFile_loadDate(timeStampShort[1], timeStampShort[0]);
+				off += sizeof(timeStampShort);
 
 				if (timestamp == U64_MAX)
 					timestamp = 0;
@@ -262,22 +327,24 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 		//Grab data of file.
 		//This introduces a copy because Archive needs a separate alloc per file
 
-		U64 bufferSize = Buffer_forceReadSizeType(filei, sizeType);
+		U64 bufferSize = 0;
 
-		gotoIfError2(clean, Buffer_createUninitializedBytes(bufferSize, alloc, &tmpData))
+		gotoIfError3(clean, Stream_read(
+			fileData, Buffer_createRef(&bufferSize, (U64)1 << sizeType), off, 0, 0, false, e_rr
+		))
 
-		const U8 *dataPtr = filePtr.ptr;
-		gotoIfError2(clean, Buffer_offset(&filePtr, bufferSize))
+		off += (U64)1 << sizeType;
 
-		Buffer_copy(tmpData, Buffer_createRefConst(dataPtr, bufferSize));
+		if(fileOff + bufferSize > fileData->handle.fileSize)
+			retError(clean, Error_invalidParameter(0, 0, "CAFile_read() file buffer out of bounds"))
 
-		//Move path and data to file
-
-		gotoIfError3(clean, Archive_addFile(&archive, tmpPath, &tmpData, timestamp, alloc, e_rr))
+		gotoIfError3(clean, Archive_addFile(&archive, tmpPath, fileOff, bufferSize, timestamp, alloc, e_rr))
 		CharString_free(&tmpPath, alloc);
+
+		fileOff += bufferSize;
 	}
 
-	if(Buffer_length(filePtr))
+	if(fileOff != fileData->handle.fileSize)
 		retError(clean, Error_invalidState(0, "CAFile_read() had leftover data after oiCA, this is illegal"))
 
 	caFile->archive = archive;
@@ -301,7 +368,7 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 		)
 	};
 
-	//Not copying encryption key, because you probably don't want to store it.
+	//Not copying encryption key, because you probably don't want to store it anywhere.
 	//And you already have it.
 
 clean:
@@ -312,7 +379,9 @@ clean:
 	if(!s_uccess && allocate)
 		CAFile_free(caFile, alloc);
 
+	Stream_free(readStream, alloc);
 	Buffer_free(&tmpData, alloc);
+	Buffer_free(&tmpData1, alloc);
 	CharString_free(&tmpPath, alloc);
 	Archive_free(&archive, alloc);
 	DLFile_free(&fileNames, alloc);

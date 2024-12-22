@@ -43,9 +43,9 @@ typedef struct ListSubResourceData ListSubResourceData;
 
 Bool CAFile_freex(CAFile *caFile);
 
-Bool CAFile_writex(CAFile caFile, Buffer *result, Error *e_rr);
-Bool CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile, Error *e_rr);
-Bool CAFile_combinex(CAFile a, CAFile b, CAFile *combined, Error *e_rr);
+Bool CAFile_writex(Stream *fileData, CAFile caFile, Stream *result, Error *e_rr);
+Bool CAFile_readx(Stream *stream, const U32 encryptionKey[8], CAFile *caFile, Stream **fileData, Error *e_rr);
+Bool CAFile_combinex(Stream *aFileData, CAFile a, Stream *bFileData, CAFile b, CAFile *combined, Stream **result, Error *e_rr);
 
 //oiDL
 
@@ -64,12 +64,6 @@ Bool DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry, Error *e_rr);
 Bool DLFile_writex(DLFile dlFile, Buffer *result, Error *e_rr);
 Bool DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile, Error *e_rr);
 Bool DLFile_combinex(DLFile a, DLFile b, DLFile *combined, Error *e_rr);
-
-//DDS
-
-Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result);
-Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result);
-Bool ListSubResourceData_freeAllx(ListSubResourceData *buf);
 
 #ifdef __cplusplus
 	}

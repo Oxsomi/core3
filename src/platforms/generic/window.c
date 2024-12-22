@@ -217,49 +217,6 @@ clean:
 	return s_uccess;
 }
 
-Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	if (!w)
-		retError(clean, Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required"))
-
-	if(!Buffer_length(w->cpuVisibleBuffer))
-		retError(clean, Error_invalidOperation(
-			0, "Window_storeCPUBufferToDisk()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
-		))
-
-	Buffer file = Buffer_createNull();
-
-	DDSInfo info = (DDSInfo) {
-
-		.w = (U32) I32x2_x(w->size),
-		.h = (U32) I32x2_y(w->size),
-
-		.l = 1, .mips = 1, .layers = 1,
-
-		.type = ETextureType_2D
-	};
-
-	switch (w->format) {
-		default:						info.textureFormatId = ETextureFormatId_BGRA8;		break;
-		case EWindowFormat_BGR10A2:		info.textureFormatId = ETextureFormatId_BGR10A2;	break;
-		case EWindowFormat_RGBA16f:		info.textureFormatId = ETextureFormatId_RGBA16f;	break;
-		case EWindowFormat_RGBA32f:		info.textureFormatId = ETextureFormatId_RGBA32f;	break;
-	}
-
-	SubResourceData subResource = (SubResourceData) { .data = w->cpuVisibleBuffer };
-	ListSubResourceData buf = (ListSubResourceData) { 0 };
-	gotoIfError2(clean, ListSubResourceData_createRefConst(&subResource, 1, &buf))
-	gotoIfError2(clean, DDS_writex(buf, info, &file))
-
-	gotoIfError3(clean, File_writex(file, filePath, 0, 0, maxTimeout, true, e_rr))
-	Buffer_freex(&file);
-
-clean:
-	return s_uccess;
-}
-
 Bool Window_terminate(Window *w) {
 
 	if(!w)

@@ -89,7 +89,7 @@ typedef struct AudioStreamInfo {
 	U32 streamLength;			//0 = bytesPerSecond, else must be >=64KiB
 	U32 bytesPerSecond;
 
-	Stream stream;
+	Stream *stream;
 
 } AudioStreamInfo;
 

@@ -71,7 +71,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result);
 
 #pragma pack(pop)
 
-static const U16 BMP_MAGIC = 0x4D42;
+#define BMP_MAGIC (0x4D42)
 static const U32 BMP_reqHeadersSize = (U32) (sizeof(BMPHeader) + sizeof(BMPInfoHeader));
 
 #ifdef __cplusplus

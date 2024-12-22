@@ -33,7 +33,7 @@ typedef enum EDepthStencilFormat EDepthStencilFormat;
 
 typedef struct SubResourceData {
 	U32 mipId, layerId, z, padding;
-	Buffer data;						//Either a ref to the data in the dds or a real buffer
+	U64 dataOffset, dataLength;			//Points either into input file or resourceData
 } SubResourceData;
 
 typedef struct DDSInfo {
@@ -48,10 +48,14 @@ typedef struct DDSInfo {
 
 TList(SubResourceData);
 
-Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buffer *result);		//buf may be reordered
-Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result);
+typedef struct Stream Stream;
 
+Bool DDS_write(Stream *resourceData, ListSubResourceData bufMutable, DDSInfo info, Stream **result, Error *e_rr);
+Bool DDS_read(Stream *stream, DDSInfo *info, Allocator allocator, ListSubResourceData *result, Error *e_rr);
 Bool ListSubResourceData_freeAll(ListSubResourceData *buf, Allocator allocator);
+
+Bool DDS_readx(Stream *stream, DDSInfo *info, ListSubResourceData *result, Error *e_rr);
+Bool ListSubResourceData_freeAllx(ListSubResourceData *buf);
 
 #ifdef __cplusplus
 	}

@@ -30,12 +30,10 @@
 typedef enum EFileType EFileType;
 
 typedef struct ArchiveEntry {
-
 	CharString path;
-	Buffer data;
+	U64 dataOffset, dataLength;
 	EFileType type;												//If true, data should be empty
 	Ns timestamp;												//Shouldn't be set if isFolder. Will disappear
-
 } ArchiveEntry;
 
 TList(ArchiveEntry);

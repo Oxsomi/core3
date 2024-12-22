@@ -263,7 +263,7 @@ typedef struct CharString CharString;
 
 #define OXC3_MAJOR 0
 #define OXC3_MINOR 2
-#define OXC3_PATCH 0
+#define OXC3_PATCH 78
 #define OXC3_VERSION (OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH))
 
 #ifdef __cplusplus

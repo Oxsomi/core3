@@ -51,7 +51,7 @@ set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 target_link_libraries(
 	OxC3_platforms PUBLIC
 	OxC3_types_base OxC3_types_math OxC3_types_container
-	OxC3_formats_oiXX OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_dds
+	OxC3_formats_oiXX OxC3_formats_oiCA OxC3_formats_oiDL
 )
 
 if(APPLE)

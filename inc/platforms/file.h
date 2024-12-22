@@ -63,30 +63,28 @@ typedef enum EFileOpenType {
 	EFileOpenType_Write				//E.g. ios::ate or wb
 } EFileOpenType;
 
-typedef U8 FileOpenType;
-
 typedef struct FileHandle {
 
 	void *ext;
 
 	CharString filePath;
 
-	FileOpenType type;
-	Bool ownsHandle;				//For if the handle is a copy and shouldn't be affected by File_close
-	U8 padding[6];
+	EFileOpenType type;
+	U8 padding[4];
 
 	U64 fileSize;					//Only if readonly, indicates file size
 
+	AtomicI64 refCount;
+
 } FileHandle;
 
-//Manually ensure that all child FileHandles are disposed before the parent FileHandle is closed.
-Bool FileHandle_createRef(const FileHandle *input, FileHandle *output, Error *e_rr);
+Bool FileHandle_createRef(FileHandle *input, FileHandle **output, Error *e_rr);
 
-Bool File_open(CharString loc, Ns timeout, EFileOpenType type, Bool create, Allocator alloc, FileHandle *handle, Error *e_rr);
-Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr);
+Bool File_open(CharString loc, Ns timeout, EFileOpenType type, Bool create, Allocator alloc, FileHandle **handle, Error *e_rr);
+Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle **handle, Error *e_rr);
 
-void FileHandle_close(FileHandle *handle, Allocator alloc);
-void FileHandle_closex(FileHandle *handle);
+void FileHandle_close(FileHandle **handle, Allocator alloc);
+void FileHandle_closex(FileHandle **handle);
 
 Bool FileHandle_write(const FileHandle *handle, Buffer buf, U64 offset, U64 length, Error *e_rr);
 Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Allocator alloc, Error *e_rr);
@@ -117,7 +115,9 @@ typedef struct Stream {
 		StreamFunc write;
 	};
 
-	FileHandle handle;			//Only valid if it's a file stream, however fileSize has to be set always
+	FileHandle *handle;			//Only valid if it's a file stream, however fileSize has to be set always
+
+	U64 size;					//Only if readonly, indicates stream size
 
 	Buffer cacheData;			//Temporary cache
 
@@ -126,6 +126,10 @@ typedef struct Stream {
 
 	Bool isReadonly;
 	U8 padding[7];
+
+	AtomicI64 refCount;
+
+	SpinLock lock;
 
 } Stream;
 
@@ -136,7 +140,7 @@ Bool File_openStream(
 	Bool create,
 	U64 cache,
 	Allocator alloc,
-	Stream *output,
+	Stream **output,
 	Error *e_rr
 );
 
@@ -146,13 +150,12 @@ Bool File_openStreamx(
 	EFileOpenType type,
 	Bool create,
 	U64 cache,
-	Stream *output,
+	Stream **output,
 	Error *e_rr
 );
 
-//Takes over FileHandle
-Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Stream *stream, Error *e_rr);
-Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr);
+Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Stream **stream, Error *e_rr);
+Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, Stream **stream, Error *e_rr);
 
 Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr);
 Bool Stream_writeStream(Stream *stream, Stream *inputStream, U64 srcOff, U64 dstOff, U64 length, Error *e_rr);

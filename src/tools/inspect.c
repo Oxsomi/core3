@@ -27,6 +27,10 @@
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSH/headers.h"
 #include "formats/oiSB/sb_file.h"
+#include "formats/wav/wav.h"
+#include "formats/dds/dds.h"
+#include "formats/dds/headers.h"
+#include "formats/bmp/bmp.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -100,7 +104,7 @@ static const C8 *dataTypes[] = {
 
 Bool CLI_inspectHeader(ParsedArgs args) {
 
-	Buffer buf = Buffer_createNull();
+	Stream stream = (Stream) { 0 };
 	Error err;
 	Bool success = false;
 
@@ -112,41 +116,156 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		goto clean;
 	}
 
-	if (!File_readx(path, 100 * MS, 0, 0, &buf, &err)) {
+	if (!File_openStreamx(path, 100 * MS, EFileOpenType_Read, false, 0, &stream, &err)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
 
-	if (Buffer_length(buf) < 4) {
+	U64 off = 0;
+	U32 magic = 0;
+	if (!Stream_read(&stream, Buffer_createRef(&magic, sizeof(magic)), 0, 0, 0, false, &err)) {
 		Log_errorLnx("File has to start with magic number.");
 		goto clean;
 	}
 
+	off += sizeof(magic);
+
 	U64 reqLen = 0;
 
-	switch (*(const U32*)buf.ptr) {
+	switch (magic) {
 
-		case CAHeader_MAGIC:	reqLen = sizeof(CAHeader);					break;
-		case DLHeader_MAGIC:	reqLen = sizeof(DLHeader) + sizeof(U32);	break;
-		case SHHeader_MAGIC:	reqLen = sizeof(SHHeader) + sizeof(U32);	break;
-		case SBHeader_MAGIC:	reqLen = sizeof(SBHeader) + sizeof(U32);	break;
-		default:
+		//Oxsomi formats
+
+		case CAHeader_MAGIC:	reqLen = sizeof(CAHeader);															break;
+		case DLHeader_MAGIC:	reqLen = sizeof(DLHeader) + sizeof(U32);											break;
+		case SHHeader_MAGIC:	reqLen = sizeof(SHHeader) + sizeof(U32);											break;
+		case SBHeader_MAGIC:	reqLen = sizeof(SBHeader) + sizeof(U32);											break;
+
+		//Other formats
+
+		case DDS_MAGIC:			reqLen = sizeof(DDSHeader);															break;
+		case RIFFHeader_magic:	reqLen = sizeof(RIFFFmtHeader) + sizeof(RIFFDataHeader) + sizeof(RIFFHeader);		break;
+
+		default: {
+
+			if ((U16)magic == BMP_MAGIC) {
+				reqLen = BMP_reqHeadersSize;
+				magic &= U16_MAX;
+				break;
+			}
+
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;
+		}
 	}
 
-	if (Buffer_length(buf) < reqLen) {
+	if (stream.handle.fileSize < reqLen) {
 		Log_errorLnx("File wasn't the right size.");
 		goto clean;
 	}
 
-	switch (*(const U32*)buf.ptr) {
+	switch (magic) {
+
+		//WAV header
+
+		case RIFFHeader_magic: {
+
+			WAVFile file;
+
+			if (!WAV_readx(&stream, 0, 0, &file, &err)) {
+				Log_errorLnx("Couldn't read wav file");
+				goto clean;
+			}
+
+			Log_debugLnx("Detected WAV file with following info:");
+
+			Log_debugLnx("Data starts at: %"PRIu64" with size %"PRIu32, file.dataStart, file.dataLength);
+
+			RIFFFmtHeader fmt = file.fmt;
+
+			Log_debugLnx(
+				"%"PRIu16" bit (%s) %s audio at %"PRIu32"Hz (at %"PRIu16" bytes per block or %"PRIu32" bytes per second)",
+				fmt.stride,
+				fmt.format != ERIFFAudioFormat_PCM ? "Float" : "PCM",
+				fmt.channels > 1 ? "stereo" : "mono",
+				fmt.frequency,
+				fmt.bytesPerBlock,
+				fmt.bytesPerSecond
+			);
+			
+			break;
+		}
+
+		//BMP header
+
+		case BMP_MAGIC: {
+
+			BMPHeader header;
+			Stream_read(&stream, Buffer_createRef(&header, sizeof(header)), 0, 0, 0, false, NULL);
+			off = sizeof(header);
+
+			BMPInfoHeader info;
+			Stream_read(&stream, Buffer_createRef(&info, sizeof(info)), off, 0, 0, false, NULL);
+
+			Log_debugLnx("Detected BMP file with following info:");
+
+			Log_debugLnx("Data starts at: %"PRIu32" with size %"PRIu32, header.offsetData, header.fileSize);
+
+			Log_debugLnx(
+				"%"PRIi32"x%"PRIi32" %simage with %"PRIu16" bits per pixel and x,y pixels per m: %"PRIi32", %"PRIi32,
+				info.width, I32_abs(info.height),
+				info.height < 0 ? "flipped " : "",
+				info.bitCount,
+				info.xPixPerM,
+				info.yPixPerM
+			);
+			
+			break;
+		}
+
+		//DDS Header
+
+		case DDS_MAGIC: {
+
+			ListSubResourceData subResources = (ListSubResourceData) { 0 };
+			DDSInfo file = (DDSInfo) { 0 };
+			
+			if (!DDS_readx(&stream, &file, &subResources, &err)) {
+				Log_errorLnx("Couldn't read DDS file");
+				goto clean;
+			}
+
+			Log_debugLnx("Detected DDS file with following info:");
+
+			Log_debugLnx(
+				"%"PRIu32"x%"PRIu32"x%"PRIu32" texture%s with format %s, %"PRIu32" mips and %"PRIu32" layers",
+				file.w, file.h, file.l,
+				file.type == ETextureType_3D ? "3D" : (file.type == ETextureType_2D ? "2D" : "Cube"),
+				ETextureFormatId_name[file.textureFormatId],
+				file.mips, file.layers
+			);
+
+			for(U64 i = 0; i < subResources.length; ++i)
+				Log_debugLnx(
+					"Subresource %"PRIu64" (layer: %"PRIu32", mip: %"PRIu32", z: %"PRIu32") starts at offset %"PRIu64" with size %"PRIu64,
+					i,
+					subResources.ptr[i].layerId,
+					subResources.ptr[i].mipId,
+					subResources.ptr[i].z,
+					subResources.ptr[i].dataOffset,
+					subResources.ptr[i].dataLength
+				);
+
+			ListSubResourceData_freex(&subResources);
+			break;
+		}
 
 		//oiSH header
 
 		case SHHeader_MAGIC: {
 
-			const SHHeader shHeader = *(const SHHeader*)(buf.ptr + sizeof(U32));
+			SHHeader shHeader;
+			Stream_read(&stream, Buffer_createRef(&shHeader, sizeof(shHeader)), off, 0, 0, false, NULL);
 
 			Log_debugLnx("Detected oiSH file with following info:");
 
@@ -190,7 +309,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 		case SBHeader_MAGIC: {
 
-			const SBHeader sbHeader = *(const SBHeader*)(buf.ptr + sizeof(U32));
+			SBHeader sbHeader;
+			Stream_read(&stream, Buffer_createRef(&sbHeader, sizeof(sbHeader)), off, 0, 0, false, NULL);
 
 			Log_debugLnx("Detected oiSB file with following info:");
 
@@ -214,7 +334,9 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 		case CAHeader_MAGIC: {
 
-			const CAHeader caHeader = *(const CAHeader*)buf.ptr;
+			CAHeader caHeader;
+			Stream_read(&stream, Buffer_createRef(&caHeader, sizeof(caHeader)), 0, 0, 0, false, NULL);
+			off = sizeof(CAHeader);
 
 			Log_debugLnx("Detected oiCA file with following info:");
 
@@ -235,47 +357,55 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			//File and directory count
 
-			const U64 fileCountPtr = reqLen;
-			reqLen += caHeader.flags & ECAFlags_FilesCountLong ? sizeof(U32) : sizeof(U16);
+			U8 bufSiz[8];
 
-			const U64 dirCountPtr = reqLen;
-			reqLen += caHeader.flags & ECAFlags_DirectoriesCountLong ? sizeof(U16) : sizeof(U8);
-
-			if (Buffer_length(buf) < reqLen) {
+			U64 stride = caHeader.flags & ECAFlags_FilesCountLong ? sizeof(U32) : sizeof(U16);
+			if (!Stream_read(&stream, Buffer_createRef(bufSiz, stride), off, 0, 0, false, NULL)) {
 				Log_errorLnx("File wasn't the right size.");
 				goto clean;
 			}
 
-			//Entry count
-
 			const U64 fileCount = Buffer_forceReadSizeType(
-				buf.ptr + fileCountPtr,
+				bufSiz,
 				caHeader.flags & ECAFlags_FilesCountLong ? EXXDataSizeType_U32 : EXXDataSizeType_U16
 			);
 
+			off += stride;
+
+			stride = caHeader.flags & ECAFlags_DirectoriesCountLong ? sizeof(U16) : sizeof(U8);
+			if (!Stream_read(&stream, Buffer_createRef(bufSiz, stride), off, 0, 0, false, NULL)) {
+				Log_errorLnx("File wasn't the right size.");
+				goto clean;
+			}
+
+			off += stride;
+
 			const U64 dirCount = Buffer_forceReadSizeType(
-				buf.ptr + dirCountPtr,
+				bufSiz,
 				caHeader.flags & ECAFlags_DirectoriesCountLong ? EXXDataSizeType_U16 : EXXDataSizeType_U8
 			);
+
+			//Entry count
 
 			Log_debugLnx("Directory count: %"PRIu64, dirCount);
 			Log_debugLnx("File count: %"PRIu64, fileCount);
 
-			//AES chunking
+			//Chunking
 
-			const U32 aesChunking = caHeader.flags & ECAFlags_AESChunkMask;
+			const U32 chunking = caHeader.flags & ECAFlags_ChunkMask;
 
-			if (aesChunking) {
+			if (caHeader.type) {
 
-				static const C8 *chunking[] = {
+				static const C8 *chunkingStr[] = {
+					"256 KiB"
+					"1 MiB",
 					"10 MiB",
-					"100 MiB",
-					"500 MiB"
+					"100 MiB"
 				};
 
 				Log_debugLnx(
-					"AES Chunking uses %s per chunk.",
-					chunking[(aesChunking >> ECAFlags_AESChunkShift) - 1]
+					"Chunking uses %s per chunk.",
+					chunkingStr[(chunking >> ECAFlags_ChunkShift) - 1]
 				);
 			}
 
@@ -287,15 +417,11 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if (caHeader.flags & ECAFlags_HasExtendedData) {
 
-				const U64 oldPtr = reqLen;
-				reqLen += sizeof(CAExtraInfo);
-
-				if (Buffer_length(buf) < reqLen) {
+				CAExtraInfo extraInfo;
+				if (!Stream_read(&stream, Buffer_createRef(&extraInfo, sizeof(extraInfo)), off, 0, 0, false, NULL)) {
 					Log_errorLnx("File wasn't the right size.");
 					goto clean;
 				}
-
-				const CAExtraInfo extraInfo = *(const CAExtraInfo*)(buf.ptr + oldPtr);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
 				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.headerExtensionSize);
@@ -341,7 +467,9 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 		case DLHeader_MAGIC: {
 
-			const DLHeader dlHeader = *(const DLHeader*)(buf.ptr + sizeof(U32));
+			DLHeader dlHeader;
+			Stream_read(&stream, Buffer_createRef(&dlHeader, sizeof(dlHeader)), off, 0, 0, false, NULL);
+			off += sizeof(DLHeader);
 
 			Log_debugLnx("Detected oiDL file with following info:");
 
@@ -378,19 +506,19 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			Log_debugLnx("Buffer size type uses %s", dataTypes[(dlHeader.sizeTypes >> 4) & 3]);
 
-			reqLen += (U64)1 << (dlHeader.sizeTypes & 3);
+			//Entry count
 
-			if (Buffer_length(buf) < reqLen) {
+			EXXDataSizeType entryCountDat = (EXXDataSizeType)(dlHeader.sizeTypes & 3);
+
+			U8 bufSiz[8];
+			if (!Stream_read(&stream, Buffer_createRef(bufSiz, (U64)1 << entryCountDat), off, 0, 0, false, NULL)) {
 				Log_errorLnx("File wasn't the right size.");
 				goto clean;
 			}
 
-			//Entry count
+			off += (U64)1 << entryCountDat;
 
-			const U64 entryCount = Buffer_forceReadSizeType(
-				buf.ptr + sizeof(U32) + sizeof(DLHeader),
-				(EXXDataSizeType)(dlHeader.sizeTypes & 3)
-			);
+			const U64 entryCount = Buffer_forceReadSizeType(bufSiz, entryCountDat);
 
 			Log_debugLnx("Entry count: %"PRIu64, entryCount);
 
@@ -398,15 +526,11 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if (dlHeader.flags & EDLFlags_HasExtendedData) {
 
-				const U64 oldPtr = reqLen;
-				reqLen += sizeof(DLExtraInfo);
-
-				if (Buffer_length(buf) < reqLen) {
+				DLExtraInfo extraInfo;
+				if (!Stream_read(&stream, Buffer_createRef(&extraInfo, sizeof(extraInfo)), off, 0, 0, false, NULL)) {
 					Log_errorLnx("File wasn't the right size.");
 					goto clean;
 				}
-
-				const DLExtraInfo extraInfo = *(const DLExtraInfo*)(buf.ptr + oldPtr);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
 				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.extendedHeader);
@@ -433,7 +557,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 					const C8 *flag = flags[U64_min(i, sizeof(flags) / sizeof(flags[0]) - 1)];
 
-					if((dlHeader.flags >> i) & 1 && flag)
+					if(((dlHeader.flags >> i) & 1) && flag)
 						Log_debugLnx(flag);
 				}
 			}
@@ -456,7 +580,7 @@ clean:
 		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 
 	CharString_freex(&tmp);
-	Buffer_freex(&buf);
+	Stream_closex(&stream);
 	return success;
 }
 
@@ -513,7 +637,13 @@ clean:
 
 //Showing the entire file or a part to disk or to log
 
-Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii, Bool showEntireFile) {
+typedef enum EShowOption {
+	EShowOption_Data,
+	EShowOption_UTF8,
+	EShowOption_Auto
+} EShowOption;
+
+Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, EShowOption show, Bool showEntireFile) {
 
 	//Validate offset
 
@@ -672,7 +802,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 	//Save file
 
 	else {
-		CLI_showFile(args, e.data, start, len, false, false);
+		CLI_showFile(args, e.data, start, len, EShowOption_Data, false);
 		s_uccess = true;
 		goto clean;
 	}
@@ -687,7 +817,7 @@ clean:
 
 Bool CLI_inspectData(ParsedArgs args) {
 
-	Buffer buf = Buffer_createNull();
+	Stream stream = (Stream) { 0 };
 	Error err = Error_none(), *e_rr = &err;
 	Bool s_uccess = false;
 
@@ -702,15 +832,20 @@ Bool CLI_inspectData(ParsedArgs args) {
 		goto clean;
 	}
 
-	if (!File_readx(path, 100 * MS, 0, 0, &buf, e_rr)) {
+	if (!File_openStreamx(path, 100 * MS, EFileOpenType_Read, false, 0, &stream, e_rr)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
 
-	if (Buffer_length(buf) < 4) {
+	U32 magic;
+	U64 off = 0;
+
+	if (!Stream_read(&stream, Buffer_createRef(&magic, sizeof(magic)), off, 0, 0, false, &err)) {
 		Log_errorLnx("File has to start with magic number.");
 		goto clean;
 	}
+
+	off += sizeof(magic);
 
 	//Parse entry if available
 
@@ -726,14 +861,15 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	CharString starts = CharString_createNull();
 	U64 start = 0;
+	Bool startLengthAsUint = (U16)magic != BMP_MAGIC;
 
 	if (args.parameters & EOperationHasParameter_StartOffset)
 		if (
 			(err = ParsedArgs_getArg(args, EOperationHasParameter_StartOffsetShift, &starts)).genericError ||
-			!CharString_parseU64(starts, &start) ||
+			(!startLengthAsUint && !CharString_parseU64(starts, &start)) ||
 			(start >> 32)
 		) {
-			Log_errorLnx("Invalid argument -start <uint>.");
+			Log_errorLnx("Invalid argument -start <uint or uint,uint for BMP>.");
 			goto clean;
 		}
 
@@ -745,10 +881,10 @@ Bool CLI_inspectData(ParsedArgs args) {
 	if (args.parameters & EOperationHasParameter_Length)
 		if (
 			(err = ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &lengths)).genericError ||
-			!CharString_parseU64(lengths, &length) ||
+			(!startLengthAsUint && !CharString_parseU64(lengths, &length)) ||
 			(length >> 32)
 		) {
-			Log_errorLnx("Invalid argument -length <uint>.");
+			Log_errorLnx("Invalid argument -length <uint or uint,uint for BMP>.");
 			goto clean;
 		}
 
@@ -788,8 +924,6 @@ Bool CLI_inspectData(ParsedArgs args) {
 		encryptionKey = encryptionKeyV;
 	}
 
-	U32 magic = *(const U32*)buf.ptr;
-
 	if(args.flags & (EOperationFlags_Bin | EOperationFlags_Includes) && magic != SHHeader_MAGIC) {
 		Log_errorLnx("--bin and --includes flag can only be used with an oiSH file");
 		return false;
@@ -822,7 +956,185 @@ Bool CLI_inspectData(ParsedArgs args) {
 		}
 	}
 
+	if((U16)magic == BMP_MAGIC)
+		magic &= U16_MAX;
+
+	switch(magic) {
+	
+		case CAHeader_MAGIC:
+		case DLHeader_MAGIC:
+			break;
+
+		default:
+
+			if (encryptionKey) {
+				Log_errorLnx("Encryption key is invalid for types that don't support it");
+				goto clean;
+			}
+
+			break;
+	}
+
 	switch (magic) {
+
+		//BMP
+
+		case BMP_MAGIC: {
+
+			if (entry.ptr) {
+				Log_errorLnx("BMP inspect data doesn't have -entry argument");
+				goto clean;
+			}
+
+			U64 off[2] = { 0 };
+
+			if (starts.ptr) {
+
+				ListCharString str = (ListCharString) { 0 };
+
+				if (
+					CharString_splitSensitivex(starts, ',', &str).genericError ||
+					str.length != 2
+				) {
+					ListCharString_freex(&str);
+					Log_errorLnx("BMP inspect data has misformatted -start argument (expected <uint>,<uint>)");
+					goto clean;
+				}
+
+				Bool cantParse = !CharString_parseU64(str.ptr[0], &off[0]) || !CharString_parseU64(str.ptr[1], &off[1]);
+				ListCharString_freex(&str);
+
+				if(cantParse) {
+					Log_errorLnx("BMP inspect data has misformatted -start argument (expected <uint>,<uint>)");
+					goto clean;
+				}
+			}
+
+			U64 len[2] = { 1, 1 };
+
+			if (lengths.ptr) {
+
+				ListCharString str = (ListCharString) { 0 };
+
+				if (
+					CharString_splitSensitivex(lengths, ',', &str).genericError ||
+					str.length != 2
+				) {
+					ListCharString_freex(&str);
+					Log_errorLnx("BMP inspect data has misformatted -length argument (expected <uint>,<uint>)");
+					goto clean;
+				}
+
+				Bool cantParse = !CharString_parseU64(str.ptr[0], &len[0]) || !CharString_parseU64(str.ptr[1], &len[1]);
+				ListCharString_freex(&str);
+
+				if(cantParse) {
+					Log_errorLnx("BMP inspect data has misformatted -length argument (expected <uint>,<uint>)");
+					goto clean;
+				}
+			}
+
+			Buffer buf = Buffer_createNull();
+			Buffer decoded = Buffer_createNull();
+			Buffer keepFile = Buffer_createNull();
+			gotoIfError2(clean, Buffer_createUninitializedBytesx(stream.handle.fileSize, &buf))
+
+			if (!Stream_read(&stream, buf, 0, 0, 0, true, e_rr)) {
+				Log_errorLnx("BMP data couldn't be read from stream");
+				goto cleanBMP;
+			}
+
+			BMPInfo info;
+			if(BMP_readx(buf, &info, &decoded).genericError) {
+				Log_errorLnx("BMP data wasn't valid");
+				goto cleanBMP;
+			}
+
+			if(
+				(off[0] + len[0] < off[0] || off[0] + len[0] >= info.w) ||
+				(off[1] + len[1] < off[1] || off[1] + len[1] >= info.h)
+			) {
+				Log_errorLnx("BMP start offset out of bounds. Image is %"PRIu32"x%"PRIu32, info.w, info.h);
+				goto cleanBMP;
+			}
+
+			if (!lengths.ptr) {
+				len[0] = info.w - off[0];
+				len[1] = info.h - off[1];
+			}
+
+			//Re-export selected region as new BMP file
+
+			if(len[0] == info.w && len[1] == info.h) {
+
+				if (args.parameters & EOperationHasParameter_Output)				//Export original bmp
+					CLI_showFile(args, buf, 0, 0, EShowOption_Data, false);
+
+				else CLI_showFile(args, decoded, 0, 0, EShowOption_Data, false);	//Show content as hex
+
+				goto cleanBMP;
+			}
+
+			//If no y flip, references original file, keep it alive
+
+			if (decoded.ptr >= buf.ptr && decoded.ptr < buf.ptr + Buffer_length(buf)) {
+				keepFile = buf;
+				buf = Buffer_createNull();
+			}
+
+			else Buffer_freex(&buf);
+
+			U64 channelStride = info.discardAlpha ? 3 : 4;
+			U64 ogStride = channelStride * info.w;
+			U64 stride = channelStride * len[0];
+			gotoIfError2(clean, Buffer_createUninitializedBytesx(stride * len[1], &buf))
+
+			for(
+				U64 j = off[1], k = 0, l = channelStride * off[0];
+				j < off[1] + len[1];
+				++j, k += stride, l += ogStride
+			)
+				Buffer_copy(
+					Buffer_createRef(buf.ptr + k, stride),
+					Buffer_createRefConst(decoded.ptr + l, stride)
+				);
+
+			Buffer_freex(&keepFile);
+
+			if (args.parameters & EOperationHasParameter_Output) {
+
+				BMPInfo bmpInfo = info;
+				bmpInfo.w = (U32) len[0];
+				bmpInfo.h = (U32) len[1];
+
+				Buffer_freex(&decoded);
+				gotoIfError2(clean, BMP_writex(buf, bmpInfo, &decoded))
+
+				if(!CLI_showFile(args, decoded, 0, 0, EShowOption_Data, false))
+					goto cleanBMP;
+			}
+
+			else if(!CLI_showFile(args, buf, 0, 0, EShowOption_Data, false))
+				goto cleanBMP;
+
+		cleanBMP:
+			Buffer_freex(&decoded);
+			Buffer_freex(&buf);
+			Buffer_freex(&keepFile);
+			break;
+		}
+
+		//DDS
+		//TODO:
+
+		case DDS_MAGIC:
+			break;
+
+		//WAV
+		//TODO:
+
+		case RIFFHeader_magic:
+			break;
 
 		//oiCA header
 
@@ -835,7 +1147,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			Bool madeFile = false;
 			CharString out = CharString_createNull();
 
-			gotoIfError3(cleanCa, CAFile_readx(buf, encryptionKey, &file, e_rr))
+			gotoIfError3(cleanCa, CAFile_readx(&stream, encryptionKey, &file, e_rr))
 
 			if(encryptionKey)
 				Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
@@ -894,13 +1206,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 					//Print the subsection of the file
 
 					else {
-
-						Bool isAscii = CharString_isValidAscii(
-							CharString_createRefSizedConst((const C8*) e.data.ptr, Buffer_length(e.data), false)
-						);
-
 						Log_debugLnx("%.*s", CharString_length(e.path), e.path.ptr);
-						CLI_showFile(args, e.data, start, length, isAscii, false);
+						CLI_showFile(args, e.data, start, length, EShowOption_Auto, false);
 						goto cleanCa;
 					}
 
@@ -1036,12 +1343,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 					goto cleanDl;
 				}
 
-				Bool isAscii = file.settings.dataType == EDLDataType_Ascii;
+				Bool isAscii = file.settings.dataType == EDLDataType_Ascii || file.settings.dataType == EDLDataType_UTF8;
 				Buffer b =
 					isAscii ? CharString_bufferConst(file.entryStrings.ptr[entryI]) :
 					file.entryBuffers.ptr[entryI];
 
-				if(!CLI_showFile(args, b, start, length, isAscii, false))
+				if(!CLI_showFile(args, b, start, length, isAscii ? EShowOption_UTF8 : EShowOption_Data, false))
 					goto cleanDl;
 			}
 
@@ -1166,11 +1473,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 								goto cleanSh;
 							}
 
-							if(!CLI_showFile(args, CharString_bufferConst(tmp), start, length, true, true))
+							if(!CLI_showFile(args, CharString_bufferConst(tmp), start, length, EShowOption_UTF8, true))
 								goto cleanSh;
 
 						#else
-							if(!CLI_showFile(args, binary, start, length, false, false))
+							if(!CLI_showFile(args, binary, start, length, EShowOption_Data, false))
 								goto cleanSh;
 						#endif
 					}

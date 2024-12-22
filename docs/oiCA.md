@@ -37,7 +37,9 @@ typedef enum ECAFlags {
 	ECAFlags_FileSizeType_Shift			= 3,
 	ECAFlags_FileSizeType_Mask			= 3,
 
-    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
+    //Chunk size of AES for multi threading and file streaming.
+    //Only read if AES is used.
+    //0 = 256KiB, 1 = 1MiB, 2 = 10MiB, 3 = 100MiB
 
     ECAFlags_UseAESChunksA				= 1 << 5,
     ECAFlags_UseAESChunksB				= 1 << 6,
@@ -131,10 +133,10 @@ CAFile {
 	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
 
     if encryption:
-    	if blockCompression:
-    		I32x4[blocks]; 		//(sum(entries) + blockSize - 1) / blockSize
+    	if chunks > 1:			//For security, length of binary can't exceed 64GB - 48 due to IV limit
+    		I32x4[chunks]; 		//(sum(entries) + blockSize - 1) / blockSize
 		U8[12] iv;
-		I32x4 tag;
+		I32x4 tag;				//Tag generated through AD of header + (block tags or content as PlainText)
 
     compress & encrypt the following if necessary:		//See oiXX.md
 
@@ -171,10 +173,13 @@ CAFile {
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer. Ki is Kibi like KiB (1024).
 
-*Note: oiCA supports the ability to choose between 10MiB, 100MiB and 500MiB blocks for speeding up AES by multi threading.*
+*Note: oiCA supports the ability to choose between 256 KiB, 1MiB, 10MiB and 100MiB blocks for speeding up AES by multi threading as well as allowing to stream only parts of the file chunks (for decompression and/or decryption).*
 
 *Note2: When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok.*
 
 ## Changelog
 
 1.0: Basic format specification.
+
+1.0(.1): No major bump, added spec for how chunks work; if there's only 1 chunk it will remain as it is right now. Otherwise it will divide the content (including names, directory, file info and file data) into chunks and each chunk can be decrypted and decompressed separately. Smallest chunk size is 256KiB and after but it can go to 1MiB, 10MiB and 100MiB as well. Each chunk will have a tag when encrypted and these will be used as the additional data without any plaintext and turned into a single tag behind the IV. Stream has to validate the tag before decrypting the chunk and has to make sure the tag of tags is validated before even reaching there.
+

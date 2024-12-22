@@ -193,7 +193,6 @@ impl Bool Window_presentPhysical(Window *w, Error *e_rr);
 //Should be called if virtual or EWindowHint_ProvideCPUBuffer
 
 Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSize, Error *e_rr);
-Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, Error *e_rr);
 
 //Simple helper functions
 

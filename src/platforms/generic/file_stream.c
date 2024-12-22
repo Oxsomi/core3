@@ -57,7 +57,7 @@ clean:
 	return s_uccess;
 }
 
-Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create, U64 cache, Allocator alloc, Stream *output, Error *e_rr) {
+Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create, U64 cache, Allocator alloc, Stream **output, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Bool allocated = false;
@@ -99,20 +99,20 @@ Bool File_openStreamx(
 	EFileOpenType type,
 	Bool create,
 	U64 cache,
-	Stream *output,
+	Stream **output,
 	Error *e_rr
 ) {
 	return File_openStream(loc, timeout, type, create, cache, Platform_instance->alloc, output, e_rr);
 }
 
-Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Stream *stream, Error *e_rr) {
+Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Stream **stream, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if(!stream)
 		retError(clean, Error_nullPointer(5, "File_openStream()::stream is required"))
 
-	if(stream->handle.filePath.ptr)
+	if(stream->handle)
 		retError(clean, Error_invalidParameter(5, 0, "File_openStream()::stream already defined, might be a memleak"))
 
 	if(!cache)
@@ -120,20 +120,21 @@ Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Strea
 
 	gotoIfError2(clean, Buffer_createUninitializedBytes(cache, alloc, &stream->cacheData))
 
-	if(stream->handle.type == EFileOpenType_Read)
+	if(stream->handle->type == EFileOpenType_Read)
 		stream->read = FileStream_read;
 
 	else stream->write = FileStream_write;
 
 	stream->lastLocation = stream->lastWriteLocation = U64_MAX;
-	stream->handle = *handle;
-	*handle = (FileHandle) { 0 };
+
+	AtomicI64_add(&handle->refCount, 1);
+	stream->handle = handle;
 
 clean:
 	return s_uccess;
 }
 
-Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr) {
+Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, Stream **stream, Error *e_rr) {
 	return FileHandle_openStream(handle, cache, Platform_instance->alloc, stream, e_rr);
 }
 
@@ -141,11 +142,11 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 	
 	Bool s_uccess = true;
 
-	if(!stream)
+	if(!stream || !stream->handle)
 		retError(clean, Error_nullPointer(0, "Stream_write()::stream is required"))
 
-	if(stream->handle.type != EFileOpenType_Write)
-		retError(clean, Error_invalidParameter(0, 0, "Stream_write()::stream must be readonly"))
+	if(stream->isReadonly)
+		retError(clean, Error_invalidParameter(0, 0, "Stream_write()::stream must be writable"))
 
 	if((srcOff >> 48) || (dstOff >> 48) || (length >> 48))
 		retError(clean, Error_invalidParameter(2, 0, "Stream_read()::dst/src off limited to 48b"))
@@ -352,7 +353,7 @@ Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length,
 	gotoIfError3(clean, stream->read(
 		stream,
 		srcOff,
-		U64_min(streamLen, stream->handle.fileSize - srcOff),
+		U64_min(streamLen, stream->size - srcOff),
 		stream->cacheData,
 		Platform_instance->alloc,
 		e_rr
@@ -381,7 +382,9 @@ void Stream_close(Stream *stream, Allocator alloc) {
 		);
 
 	Buffer_free(&stream->cacheData, alloc);
-	FileHandle_close(&stream->handle, alloc);
+
+	if(stream->handle)
+		FileHandle_close(&stream->handle, alloc);
 }
 
 void Stream_closex(Stream *stream) {

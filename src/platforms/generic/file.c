@@ -28,6 +28,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
+#include "types/container/ref_ptr.h"
 
 #include <stdio.h>
 #include <sys/stat.h>
@@ -622,24 +623,24 @@ clean:
 	return s_uccess;
 }
 
-Bool FileHandle_createRef(const FileHandle *input, FileHandle *output, Error *e_rr) {
+Bool FileHandle_createRef(FileHandle *input, FileHandle **output, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if(!input || !input->filePath.ptr || !output)
 		retError(clean, Error_nullPointer(!output ? 1 : 0, "FileHandle_createRef()::input and output are required"))
 
-	if(output->filePath.ptr)
+	if(*output)
 		retError(clean, Error_invalidParameter(1, 0, "FileHandle_createRef()::output wasn't empty"))
 
-	*output = *input;
-	output->ownsHandle = false;
+	AtomicI64_inc(&input->refCount);
+	*output = input;
 
 clean:
 	return s_uccess;
 }
 
-Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, Allocator alloc, FileHandle *handle, Error *e_rr) {
+Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, Allocator alloc, FileHandle **handle, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
@@ -651,7 +652,7 @@ Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, A
 	if(!handle)
 		retError(clean, Error_nullPointer(2, "File_read()::handle is required"))
 
-	if(handle->filePath.ptr)
+	if(*handle)
 		retError(clean, Error_invalidOperation(0, "File_read()::handle was filled, may indicate memleak"))
 
 	if(File_isVirtual(loc))
@@ -692,14 +693,18 @@ Bool File_open(CharString loc, Ns maxTimeout, EFileOpenType type, Bool create, A
 		fileSize = (U64)_ftelli64(f);
 	}
 
-	*handle = (FileHandle) {
+	Buffer tmp = Buffer_createNull();
+	gotoIfError2(clean, Buffer_createUninitializedBytes(sizeof(FileHandle), alloc, &tmp))
+
+	*handle = (FileHandle*) tmp.ptr;
+	**handle = (FileHandle) {
 	
 		.ext = f,
 
 		.filePath = resolved,
 
-		.type = (FileOpenType) type,
-		.ownsHandle = true,
+		.type = type,
+		.refCount = { 1 },
 
 		.fileSize = fileSize
 	};
@@ -713,21 +718,33 @@ clean:
 	return s_uccess;
 }
 
-Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr) {
+Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle **handle, Error *e_rr) {
 	return File_open(loc, timeout, type, create, Platform_instance->alloc, handle, e_rr);
 }
 
-void FileHandle_close(FileHandle *handle, Allocator alloc) {
+void FileHandle_close(FileHandle **handlePtr, Allocator alloc) {
 
-	if(!handle)
+	if(!handlePtr || !*handlePtr)
 		return;
 
+	FileHandle *handle = *handlePtr;
+
+	if (AtomicI64_dec(&handle->refCount)) {		//Only lose the ref
+		*handlePtr = NULL;
+		return;
+	}
+
 	CharString_free(&handle->filePath, alloc);
-	if(handle->ext && handle->ownsHandle) fclose((FILE*)handle->ext);
-	*handle = (FileHandle) { 0 };
+	if(handle->ext) fclose((FILE*)handle->ext);
+	handle->ext = NULL;
+
+	Buffer buf = Buffer_createManagedPtr(*handlePtr, sizeof(FileHandle));
+	Buffer_free(&buf, alloc);
+
+	*handlePtr = NULL;
 }
 
-void FileHandle_closex(FileHandle *handle) {
+void FileHandle_closex(FileHandle **handle) {
 	FileHandle_close(handle, Platform_instance->alloc);
 }
 

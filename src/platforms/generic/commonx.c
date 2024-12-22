@@ -74,10 +74,6 @@ TListXImpl(Symbol);
 TListXImpl(LexerToken);
 TListXImpl(LexerExpression);
 
-//DDS
-
-TListXImpl(SubResourceData);
-
 void ListBuffer_freeUnderlyingx(ListBuffer *list) {
 	ListBuffer_freeUnderlying(list, Platform_instance->alloc);
 }
@@ -196,16 +192,16 @@ Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer,
 
 Bool CAFile_freex(CAFile *caFile) { return CAFile_free(caFile, Platform_instance->alloc); }
 
-Bool CAFile_writex(CAFile caFile, Buffer *result, Error *e_rr) {
-	return CAFile_write(caFile, Platform_instance->alloc, result, e_rr);
+Bool CAFile_writex(Stream *fileData, CAFile caFile, Stream *result, Error *e_rr) {
+	return CAFile_write(fileData, caFile, Platform_instance->alloc, result, e_rr);
 }
 
-Bool CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile, Error *e_rr) {
-	return CAFile_read(file, encryptionKey, Platform_instance->alloc, caFile, e_rr);
+Bool CAFile_readx(Stream *stream, const U32 encryptionKey[8], CAFile *caFile, Stream **fileData, Error *e_rr) {
+	return CAFile_read(stream, encryptionKey, Platform_instance->alloc, caFile, fileData, e_rr);
 }
 
-Bool CAFile_combinex(CAFile a, CAFile b, CAFile *combined, Error *e_rr) {
-	return CAFile_combine(a, b, Platform_instance->alloc, combined, e_rr);
+Bool CAFile_combinex(Stream *aFileData, CAFile a, Stream *bFileData, CAFile b, CAFile *combined, Stream **result, Error *e_rr) {
+	return CAFile_combine(aFileData, a, bFileData, b, Platform_instance->alloc, combined, result, e_rr);
 }
 
 //oiDL
@@ -254,20 +250,6 @@ Bool DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDat
 
 Bool DLFile_combinex(DLFile a, DLFile b, DLFile *combined, Error *e_rr) {
 	return DLFile_combine(a, b, Platform_instance->alloc, combined, e_rr);
-}
-
-//DDS
-
-Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result) {
-	return DDS_read(buf, info, Platform_instance->alloc, result);
-}
-
-Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result) {
-	return DDS_write(buf, info, Platform_instance->alloc, result);
-}
-
-Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
-	return ListSubResourceData_freeAll(buf, Platform_instance->alloc);
 }
 
 //List

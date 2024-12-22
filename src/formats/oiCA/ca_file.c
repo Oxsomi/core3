@@ -19,6 +19,7 @@
 */
 
 #include "formats/oiCA/ca_file.h"
+#include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 
@@ -62,6 +63,7 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 		return true;
 
 	const Bool b = Archive_free(&caFile->archive, alloc);
+	Buffer_free(&caFile->tags, alloc);
 	*caFile = (CAFile) { 0 };
 	return b;
 }

@@ -31,4 +31,4 @@ add_library(
 )
 
 set_target_properties(OxC3_formats_dds PROPERTIES FOLDER Oxsomi/formats)
-target_link_libraries(OxC3_formats_dds PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiXX)
+target_link_libraries(OxC3_formats_dds PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiXX OxC3_platforms)

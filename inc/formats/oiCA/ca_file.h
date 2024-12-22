@@ -62,9 +62,14 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc);
 
 //Serialize
 
-Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr);
-Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile, Error *e_rr);
-Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error *e_rr);
+typedef struct Stream Stream;
+
+Bool CAFile_write(Stream *fileData, CAFile caFile, Allocator alloc, Stream *result, Error *e_rr);
+Bool CAFile_read(Stream *stream, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile, Stream **fileData, Error *e_rr);
+
+Bool CAFile_combine(
+	Stream *aFileData, CAFile a, Stream *bFileData, CAFile b, Allocator alloc, CAFile *combined, Stream **result, Error *e_rr
+);
 
 //File headers
 
@@ -92,10 +97,12 @@ typedef enum ECAFlags {
 
 	ECAFlags_FileSizeType_MaskShifted	= ECAFlags_FileSizeType_Mask << ECAFlags_FileSizeType_Shift,
 
-	//Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
+	//Chunk sizes for multi threading AES and file streaming.
+	//Always relevant for encryption and compression.
+	//0 = 256KiB, 1 = 1MiB, 2 = 10MiB, 3 = 100MiB
 
-	ECAFlags_UseAESChunksA				= 1 << 5,
-	ECAFlags_UseAESChunksB				= 1 << 6,
+	ECAFlags_ChunksA				= 1 << 5,
+	ECAFlags_ChunksB				= 1 << 6,
 
 	ECAFlags_HasExtendedData			= 1 << 7,		//CAExtraInfo
 
@@ -116,11 +123,11 @@ typedef enum ECAFlags {
 
 	//Helpers
 
-	ECAFlags_AESChunkMask				= ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB,
-	ECAFlags_AESChunkShift				= 5,
+	ECAFlags_ChunkMask				= ECAFlags_ChunksA | ECAFlags_ChunksB,
+	ECAFlags_ChunkShift				= 5,
 
 	ECAFlags_NonFlagTypes				=
-		ECAFlags_FileSizeType_MaskShifted | ECAFlags_AESChunkMask | ECAFlags_CompressedSizeType_MaskShifted
+		ECAFlags_FileSizeType_MaskShifted | ECAFlags_ChunkMask | ECAFlags_CompressedSizeType_MaskShifted
 
 } ECAFlags;
 

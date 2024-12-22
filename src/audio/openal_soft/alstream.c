@@ -351,4 +351,3 @@ Bool AudioStream_update(AudioStream *stream, U64 index, Allocator alloc, Error *
 clean:
 	return s_uccess;
 }
-
