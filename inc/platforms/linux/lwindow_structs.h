@@ -21,6 +21,7 @@
 #include "types/base/types.h"
 #include <wayland-client.h>
 #include <xdg_shell_client_protocol.h>
+#include <xdg_decoration_client_protocol.h>
 
 typedef struct LWindowManager {
 
@@ -32,9 +33,10 @@ typedef struct LWindowManager {
 	struct wl_compositor *compositor;
 	struct wl_shm *shm;
 	struct xdg_wm_base *xdgWmBase;
+	struct zxdg_decoration_manager_v1 *xdgDeco;
 
 	U32 compositorId, shmId;
-	U32 xdgWmBaseId, padding;
+	U32 xdgWmBaseId, xdgDecoId;
 
 } LWindowManager;
 
@@ -64,3 +66,4 @@ typedef struct LWindow {
 	Window *parent;
 
 } LWindow;
+

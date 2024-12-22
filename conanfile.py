@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.077"
+	version = "0.2.082"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -103,11 +103,12 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2024.12.15")
+			self.requires("dxc/2024.12.22")
 			self.requires("spirv_reflect/2024.09.22")
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
+			self.requires("xdg_decoration/2024.12.22")
 
 		self.requires("openal_soft/2024.11.04.01")
 

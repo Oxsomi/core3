@@ -340,13 +340,13 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 	struct wl_compositor *compositor = manager->compositor;
 
-    struct wl_surface *surface = wl_compositor_create_surface(compositor);
+	struct wl_surface *surface = wl_compositor_create_surface(compositor);
 	w->nativeHandle = surface;
 
 	if(!surface)
 		retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() wayland create surface failed"))
 
-    wl_surface_set_user_data(surface, w);
+	wl_surface_set_user_data(surface, w);
 
 	Buffer buf = Buffer_createNull();
 	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(LWindow), &buf))
@@ -385,15 +385,24 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	if(w->hint & EWindowHint_ForceFullscreen)
 		gotoIfError3(clean, Window_toggleFullScreen(w, e_rr))
 
-	gotoIfError3(clean, Window_updatePhysicalTitle(w, w->title, e_rr))
+	//Builtin server side decorations :) happy times
 
-	//xdg_toplevel_show_window_menu(lwin->topLevel);???
+	if(manager->xdgDeco) {
+			
+		struct zxdg_toplevel_decoration_v1 *decoration =
+			zxdg_decoration_manager_v1_get_toplevel_decoration(manager->xdgDeco, lwin->topLevel);
+
+		zxdg_toplevel_decoration_v1_set_mode(decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+	}
+
+	gotoIfError3(clean, Window_updatePhysicalTitle(w, w->title, e_rr))
 
 	//Call handlers to set right size
 
-    wl_display_roundtrip(manager->display);
+	wl_display_roundtrip(manager->display);
 	wl_surface_commit(surface);
 
 clean:
 	return s_uccess;
 }
+

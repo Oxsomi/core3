@@ -60,6 +60,13 @@ void LWindowManager_register(
 		data->xdgListener = (struct xdg_wm_base_listener) { .ping = LWindowManager_isAlive };
 		xdg_wm_base_add_listener(data->xdgWmBase, &data->xdgListener, NULL);
 	}
+
+	else if(CharString_equalsStringSensitive(
+		CharString_createRefCStrConst(zxdg_decoration_manager_v1_interface.name), inter
+	)) {
+		data->xdgDeco = wl_registry_bind(registry, id, &zxdg_decoration_manager_v1_interface, 1);
+		data->xdgDecoId = id;
+	}
 }
 
 void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32 id) {
@@ -76,6 +83,9 @@ void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32
 
 	else if(id == data->xdgWmBaseId)
 		data->xdgWmBase = NULL;
+
+	else if(id == data->xdgDecoId)
+		data->xdgDeco = NULL;
 }
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
@@ -124,6 +134,9 @@ Bool WindowManager_freeNative(WindowManager *w) {
 
 	if (manager->compositor)
 		wl_compositor_destroy(manager->compositor);
+		
+	if(manager->xdgDeco)
+		zxdg_decoration_manager_v1_destroy(manager->xdgDeco);
 
 	if(manager->registry)
 		wl_registry_destroy(manager->registry);
@@ -140,3 +153,4 @@ void WindowManager_updateExt(WindowManager *manager) {
 	LWindowManager *lmanager = (LWindowManager*)manager->platformData.ptr;
 	wl_display_dispatch_pending(lmanager->display);
 }
+
