@@ -95,6 +95,13 @@ else()
 		add_compile_options(-fno-fat-lto-objects)
 	endif()
 
+	# add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+	# add_link_options(-fsanitize=address -fno-omit-frame-pointer)
+	# add_compile_options(-fsanitize=undefined)
+	# add_link_options(-fsanitize=undefined)
+	# add_compile_options(-fsanitize=thread)
+	# add_link_options(-fsanitize=thread)
+
 endif()
 
 if(EnableOxC3CLI)

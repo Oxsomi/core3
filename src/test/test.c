@@ -379,6 +379,13 @@ int main() {
 			I32x4 hash = Buffer_md5(CharString_bufferConst(md5Strs[i]));
 			I32x4 targ = I32x4_yxwz(md5Values[i]);
 
+			/*Log_debugLn(
+				alloc,
+				"%X %X %X %X and %X %X %X %X",
+				I32x4_x(hash), I32x4_y(hash), I32x4_z(hash), I32x4_w(hash),
+				I32x4_x(targ), I32x4_y(targ), I32x4_z(targ), I32x4_w(targ)
+			);*/
+
 			if(!I32x4_eq4(hash, targ))
 				gotoIfError(clean, Error_invalidOperation(3, "MD5 test (strs) failed"))
 		}
@@ -1560,7 +1567,7 @@ int main() {
 				void *fiv = &fi;
 
 				if(j)
-					*(U32*)fiv |= 1 << 31;
+					*(U32*)fiv |= (U32)1 << 31;
 
 				const F64 doubTarg = fi;
 				const void *doubTargv = &doubTarg;

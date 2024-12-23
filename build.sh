@@ -1,11 +1,11 @@
 #!/bin/bash
 
 usage() {
-	echo Usage: build [Build type: Debug/Release] [Enable SIMD: True/False] [Enable Tests: True/False] [Dynamic linking: True/False]
+	echo Usage: build [Build type: Debug/Release/RelWithDebInfo] [Enable SIMD: True/False] [Enable Tests: True/False] [Dynamic linking: True/False]
 	exit 1
 }
 
-if [ "$1" != Release ] && [ "$1" != Debug ]; then usage; fi
+if [ "$1" != Release ] && [ "$1" != Debug ] && [ "$1" != RelWithDebInfo ]; then usage; fi
 if [ "$2" != True ] && [ "$2" != False ]; then usage; fi
 if [ "$3" != True ] && [ "$3" != False ]; then usage; fi
 if [ "$4" != True ] && [ "$4" != False ]; then usage; fi

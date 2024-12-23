@@ -610,12 +610,7 @@ Error CharString_createCopy(CharString str, Allocator alloc, CharString *result)
 	if (err.genericError)
 		return err;
 
-	for (U64 i = 0; i < strl >> 3; ++i)
-		*((U64*)b.ptr + i) = *((const U64*)str.ptr + i);
-
-	for (U64 i = strl >> 3 << 3; i < strl; ++i)
-		((C8*)b.ptr)[i] = str.ptr[i];
-
+	Buffer_copy(b, CharString_bufferConst(str));
 	((C8*)b.ptr)[strl] = '\0';
 
 	*result = (CharString) {

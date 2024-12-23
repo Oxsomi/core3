@@ -24,6 +24,8 @@
 #include "types/math/math.h"
 #include "types/math/vec.h"
 
+#include <string.h>
+
 Bool BitRef_get(BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
 void BitRef_set(BitRef b) { if(b.ptr && !b.isConst) *b.ptr |= 1 << b.off; }
 void BitRef_reset(BitRef b) { if(b.ptr && !b.isConst) *b.ptr &= ~(1 << b.off); }
@@ -59,36 +61,7 @@ Bool Buffer_copy(Buffer dst, Buffer src) {
 	if(Buffer_isConstRef(dst))
 		return false;
 
-	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
-
-	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dstLen >> 3);
-	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (srcLen >> 3);
-
-	for(; dstPtr < dstEnd && srcPtr < srcEnd; ++dstPtr, ++srcPtr)
-		*dstPtr = *srcPtr;
-
-	dstEnd = (U64*)(dst.ptr + dstLen);
-	srcEnd = (const U64*)(src.ptr + srcLen);
-
-	if((U64)dstPtr + 4 <= (U64)dstEnd && (U64)srcPtr + 4 <= (U64)srcEnd) {
-
-		*(U32*)dstPtr = *(const U32*)srcPtr;
-
-		dstPtr = (U64*)((U32*)dstPtr + 1);
-		srcPtr = (const U64*)((const U32*)srcPtr + 1);
-	}
-
-	if ((U64)dstPtr + 2 <= (U64)dstEnd && (U64)srcPtr + 2 <= (U64)srcEnd) {
-
-		*(U16*)dstPtr = *(const U16*)srcPtr;
-
-		dstPtr = (U64*)((U16*)dstPtr + 1);
-		srcPtr = (const U64*)((const U16*)srcPtr + 1);
-	}
-
-	if ((U64)dstPtr + 1 <= (U64)dstEnd && (U64)srcPtr + 1 <= (U64)srcEnd)
-		*(U8*)dstPtr = *(const U8*)srcPtr;
-
+	memcpy((void*)dst.ptr, src.ptr, U64_min(Buffer_length(dst), Buffer_length(src)));
 	return true;
 }
 
@@ -231,15 +204,7 @@ Bool Buffer_eq(Buffer buf0, Buffer buf1) {
 	if(len0 != Buffer_length(buf1))
 		return false;
 
-	for (U64 i = 0, j = len0 >> 3; i < j; ++i)
-		if (((const U64*)buf0.ptr)[i] != ((const U64*)buf1.ptr)[i])
-			return false;
-
-	for (U64 i = len0 >> 3 << 3; i < len0; ++i)
-		if (buf0.ptr[i] != buf1.ptr[i])
-			return false;
-
-	return true;
+	return memcmp(buf0.ptr, buf1.ptr, len0) == 0;
 }
 
 Bool Buffer_neq(Buffer buf0, Buffer buf1) { return !Buffer_eq(buf0, buf1); }
@@ -344,7 +309,7 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	return Error_none();
 }
 
-Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
+Error Buffer_setAllToInternal(Buffer buf, U8 b8) {
 
 	if(!buf.ptr)
 		return Error_nullPointer(0, "Buffer_setAllToInternal()::buf is required");
@@ -352,14 +317,7 @@ Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 	if(Buffer_isConstRef(buf))
 		return Error_constData(0, 0, "Buffer_setAllToInternal()::buf should be writable");
 
-	const U64 l = Buffer_length(buf);
-
-	for(U64 i = 0, j = l >> 3; i < j; ++i)
-		*((U64*)buf.ptr + i) = b64;
-
-	for (U64 i = l >> 3 << 3; i < l; ++i)
-		((U8*)buf.ptr)[i] = b8;
-
+	memset((void*)buf.ptr, b8, Buffer_length(buf));
 	return Error_none();
 }
 
@@ -368,11 +326,11 @@ Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result)
 }
 
 Error Buffer_setAllBits(Buffer dst) {
-	return Buffer_setAllToInternal(dst, U64_MAX, U8_MAX);
+	return Buffer_setAllToInternal(dst, 0xFF);
 }
 
 Error Buffer_unsetAllBits(Buffer dst) {
-	return Buffer_setAllToInternal(dst, 0, 0);
+	return Buffer_setAllToInternal(dst, 0x00);
 }
 
 Error Buffer_allocBitsInternal(U64 length, Allocator alloc, Buffer *result) {
