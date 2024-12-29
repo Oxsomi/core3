@@ -23,6 +23,7 @@
 #include "formats/oiDL/dl_file.h"
 #include "types/container/buffer.h"
 #include "types/base/time.h"
+#include "types/base/c8.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/formatx.h"

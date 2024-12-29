@@ -22,6 +22,7 @@
 #include "types/container/string.h"
 #include "types/container/parser.h"
 #include "types/container/lexer.h"
+#include "types/base/c8.h"
 
 //Helpers for classification
 

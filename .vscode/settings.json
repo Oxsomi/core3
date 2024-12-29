@@ -1,6 +1,9 @@
 {
     "files.associations": {
         "stringx.h": "c",
-        "vec.h": "c"
+        "vec.h": "c",
+        "buffer.h": "c",
+        "types.h": "c",
+        "error.h": "c"
     }
 }

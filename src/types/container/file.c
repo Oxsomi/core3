@@ -23,6 +23,7 @@
 #include "types/base/allocator.h"
 #include "types/container/file.h"
 #include "types/base/error.h"
+#include "types/base/c8.h"
 
 Bool FileInfo_free(FileInfo *info, Allocator alloc) {
 

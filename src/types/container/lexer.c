@@ -21,6 +21,7 @@
 #include "types/container/list_impl.h"
 #include "types/container/lexer.h"
 #include "types/container/log.h"
+#include "types/base/c8.h"
 
 TListImpl(LexerToken);
 TListImpl(LexerExpression);

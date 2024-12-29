@@ -21,6 +21,7 @@
 #include "platforms/ext/listx.h"
 #include "types/container/buffer.h"
 #include "types/base/time.h"
+#include "types/base/c8.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/archivex.h"

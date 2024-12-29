@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/base/types.h"
+#include "types/base/c8.h"
 
 #ifdef __cplusplus
 	extern "C" {

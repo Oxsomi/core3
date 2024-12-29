@@ -24,10 +24,10 @@
 
 //Cast
 
-F32x4 F32x4_fromI32x4(I32x4 a) { return *(const F32x4*)&a; }
-I32x4 I32x4_fromF32x4(F32x4 a) { return *(const I32x4*)&a; }
-F32x2 F32x2_fromI32x2(I32x2 a) { return *(const F32x2*)&a; }
-I32x2 I32x2_fromF32x2(F32x2 a) { return *(const I32x2*)&a; }
+F32x4 F32x4_fromI32x4(I32x4 a) { const void *avoid = &a; return *(const F32x4*)avoid; }
+I32x4 I32x4_fromF32x4(F32x4 a) { const void *avoid = &a; return *(const I32x4*)avoid; }
+F32x2 F32x2_fromI32x2(I32x2 a) { const void *avoid = &a; return *(const F32x2*)avoid; }
+I32x2 I32x2_fromF32x2(F32x2 a) { const void *avoid = &a; return *(const I32x2*)avoid; }
 
 //Arithmetic
 

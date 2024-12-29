@@ -20,6 +20,7 @@
 
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/base/c8.h"
 #include "types/container/buffer.h"
 #include "types/math/math.h"
 #include "types/math/vec.h"

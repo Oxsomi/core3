@@ -21,6 +21,7 @@
 #include "platforms/ext/listx.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
+#include "types/base/c8.h"
 #include "types/container/string.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"

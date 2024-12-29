@@ -24,6 +24,7 @@
 #include "types/container/string.h"
 #include "types/base/allocator.h"
 #include "types/base/time.h"
+#include "types/base/c8.h"
 
 #include "types/container/log.h"
 

@@ -20,6 +20,7 @@
 
 #include "tools/cli.h"
 #include "types/base/time.h"
+#include "types/base/c8.h"
 #include "types/container/file.h"
 #include "types/container/buffer.h"
 #include "platforms/log.h"

@@ -20,6 +20,7 @@
 
 #include "types/container/buffer_layout.h"
 #include "types/base/allocator.h"
+#include "types/base/c8.h"
 #include "types/container/list_impl.h"
 #include "types/math/math.h"
 

@@ -24,6 +24,7 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "types/base/error.h"
+#include "types/base/c8.h"
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/container/file.h"

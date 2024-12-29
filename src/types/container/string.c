@@ -24,6 +24,7 @@
 #include "types/math/math.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
+#include "types/base/c8.h"
 
 #include <ctype.h>
 #include <stdio.h>

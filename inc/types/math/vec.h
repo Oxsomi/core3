@@ -132,10 +132,11 @@
 
 #endif
 
-#include "vec4i.h"
-#include "vec4f.h"
-#include "vec2i.h"
-#include "vec2f.h"
+#include "types/math/vec4i.h"
+#include "types/math/vec4f.h"
+#include "types/math/vec2i.h"
+#include "types/math/vec2f.h"
+#include "types/base/buffer.h"
 
 BUFFER_OP(I32x2);
 BUFFER_OP(F32x2);

@@ -134,152 +134,13 @@ typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
 typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);		//Passing NULL as func indicates raw buffer compare
 typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL as func indicates raw buffer hash
 
+//Default stacktrace
+
+#define STACKTRACE_SIZE 32
+typedef void *StackTrace[STACKTRACE_SIZE];
+
+typedef struct CharString CharString;
 typedef struct Error Error;
-
-//Fixed point
-
-#define FixedPoint(frac, integ)																\
-																							\
-typedef U64 FP##integ##f##frac;																\
-																							\
-FP##integ##f##frac FP##integ##f##frac##_add(FP##integ##f##frac a, FP##integ##f##frac b);	\
-FP##integ##f##frac FP##integ##f##frac##_sub(FP##integ##f##frac a, FP##integ##f##frac b);	\
-																							\
-FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v);									\
-F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value);
-
-//Fixed point 42 (FP37f4): 4 fract, 37 integer, 1 sign.
-//+-1.4M km precision 1/16th cm
-//3x F42 < 128 bit (2 bit remainder)
-//Can pack 3 in uint4.
-
-FixedPoint(4, 37)
-
-//Fixed point for bigger scale, 53 (FP46f6): 6 fract, 46 integer, 1 sign.
-//~700M km (about 4.5au) with precision 1/64th cm.
-//Can pack 3 in uint4 + uint.
-
-FixedPoint(6, 46)
-
-//Buffer (more functions in types/buffer.h)
-
-typedef struct Buffer {
-
-	union {
-		const U8 *ptr;
-		U8 *ptrNonConst;		//Requires !Buffer_isConstRef(buf)
-	};
-	
-	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
-
-} Buffer;
-
-U64 Buffer_length(Buffer buf);
-
-Bool Buffer_isRef(Buffer buf);
-Bool Buffer_isConstRef(Buffer buf);
-
-Buffer Buffer_createManagedPtr(void *ptr, U64 length);
-
-//These should never be Buffer_free-d because Buffer doesn't know if it's allocated
-
-Buffer Buffer_createNull();
-
-Buffer Buffer_createRef(void *v, U64 length);
-Buffer Buffer_createRefConst(const void *v, U64 length);
-
-//Bit manipulation
-
-Bool Buffer_copy(Buffer dst, Buffer src);
-Bool Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backwards; useful if ranges overlap
-
-Error Buffer_setAllBits(Buffer dst);
-Error Buffer_unsetAllBits(Buffer dst);
-
-Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
-
-Error Buffer_getBit(Buffer buf, U64 offset, Bool *output);
-
-Error Buffer_setBit(Buffer buf, U64 offset);
-Error Buffer_resetBit(Buffer buf, U64 offset);
-
-Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value);
-
-Error Buffer_bitwiseOr(Buffer dst, Buffer src);
-Error Buffer_bitwiseAnd(Buffer dst, Buffer src);
-Error Buffer_bitwiseXor(Buffer dst, Buffer src);
-Error Buffer_bitwiseNot(Buffer dst);
-
-Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits);
-Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits);
-
-//Comparison
-
-Bool Buffer_eq(Buffer buf0, Buffer buf1);			//Also compares size
-Bool Buffer_neq(Buffer buf0, Buffer buf1);			//Also compares size
-
-#define BUFFER_OP(T)									\
-Error Buffer_append##T(Buffer *buf, T v);				\
-Error Buffer_consume##T(Buffer *buf, T *v);				\
-T Buffer_read##T(Buffer buf, U64 off,  Bool *success);	\
-Bool Buffer_write##T(Buffer buf, U64 off, T v)
-
-#define BUFFER_OP_IMPL(T)																	\
-Error Buffer_append##T(Buffer *buf, T v)	{ return Buffer_append(buf, &v, sizeof(v)); }	\
-Error Buffer_consume##T(Buffer *buf, T *v)	{ return Buffer_consume(buf, v, sizeof(*v)); }	\
-																							\
-T Buffer_read##T(Buffer buf, U64 off, Bool *success) {										\
-																							\
-	T v = (T) { 0 };																		\
-	Error err = Buffer_offset(&buf, off);													\
-																							\
-	if(err.genericError) {																	\
-		if(success) *success = false;														\
-		return v;																			\
-	}																						\
-																							\
-	Bool ok = !Buffer_consume##T(&buf, &v).genericError;									\
-	if(success) *success = ok;																\
-	return v;																				\
-}																							\
-																							\
-Bool Buffer_write##T(Buffer buf, U64 off, T v) {											\
-	Error err = Buffer_offset(&buf, off);													\
-	if(err.genericError) return false;														\
-	return !Buffer_append##T(&buf, v).genericError;											\
-}
-
-BUFFER_OP(U64);
-BUFFER_OP(U32);
-BUFFER_OP(U16);
-BUFFER_OP(U8);
-
-BUFFER_OP(I64);
-BUFFER_OP(I32);
-BUFFER_OP(I16);
-BUFFER_OP(I8);
-
-BUFFER_OP(F64);
-BUFFER_OP(F32);
-
-Error Buffer_offset(Buffer *buf, U64 length);
-
-Error Buffer_append(Buffer *buf, const void *v, U64 length);
-Error Buffer_appendBuffer(Buffer *buf, Buffer append);
-
-Error Buffer_consume(Buffer *buf, void *v, U64 length);
-
-//Use this instead of simply copying the Buffer to a new location
-//A copy like this is only fine if the other doesn't get freed.
-//In all other cases, createRefFromBuffer should be called on the one that shouldn't be freeing.
-//If it needs to be refcounted, RefPtr should be used.
-Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst);
-
-//Char
-//All char helper functions assume ASCII, otherwise use string functions
-
-C8 C8_toLower(C8 c);
-C8 C8_toUpper(C8 c);
 
 typedef enum EStringCase {
 	EStringCase_Sensitive,			//Prefer when possible; avoids transforming the character
@@ -292,57 +153,16 @@ typedef enum EStringTransform {
 	EStringTransform_Upper
 } EStringTransform;
 
-C8 C8_transform(C8 c, EStringTransform transform);
+typedef struct Buffer {
 
-Bool C8_isBin(C8 c);
-Bool C8_isOct(C8 c);
-Bool C8_isDec(C8 c);
+	union {
+		const U8 *ptr;
+		U8 *ptrNonConst;		//Requires !Buffer_isConstRef(buf)
+	};
 
-Bool C8_isUpperCase(C8 c);
-Bool C8_isLowerCase(C8 c);
-Bool C8_isUpperCaseHex(C8 c);
-Bool C8_isLowerCaseHex(C8 c);
-Bool C8_isWhitespace(C8 c);
-Bool C8_isNewLine(C8 c);
+	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
 
-Bool C8_isHex(C8 c);
-Bool C8_isNyto(C8 c);
-Bool C8_isAlphaNumeric(C8 c);
-Bool C8_isAlpha(C8 c);
-
-Bool C8_isSymbol(C8 c);			//~"#%&'()*+,-./$:;<=>?@[\]^`_{|}~
-Bool C8_isLexerSymbol(C8 c);	//isSymbol but excluding $_
-
-Bool C8_isValidAscii(C8 c);
-Bool C8_isValidFileName(C8 c);
-
-U8 C8_bin(C8 c);
-U8 C8_oct(C8 c);
-U8 C8_dec(C8 c);
-
-U8 C8_hex(C8 c);
-U8 C8_nyto(C8 c);
-
-C8 C8_createBin(U8 v);
-C8 C8_createOct(U8 v);
-C8 C8_createDec(U8 v);
-C8 C8_createHex(U8 v);
-
-//Nytodecimal: 0-9A-Za-z_$
-C8 C8_createNyto(U8 v);
-
-//Transforming a string to a U16, U32 or U64
-
-#define C8x2(x, y) ((((U16)y) << 8) | x)
-#define C8x4(x, y, z, w) ((((U32)C8x2(z, w)) << 16) | C8x2(x, y))
-#define C8x8(x, y, z, w, a, b, c, d) ((((U64)C8x4(a, b, c, d)) << 32) | C8x4(x, y, z, w))
-
-//Default stacktrace
-
-#define STACKTRACE_SIZE 32
-typedef void *StackTrace[STACKTRACE_SIZE];
-
-typedef struct CharString CharString;
+} Buffer;
 
 //Version
 

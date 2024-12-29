@@ -26,6 +26,7 @@
 #include "types/container/parser.h"
 #include "types/container/lexer.h"
 #include "types/base/time.h"
+#include "types/base/c8.h"
 #include "types/math/math.h"
 
 TListImpl(Compiler);
