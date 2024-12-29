@@ -418,14 +418,14 @@ int main() {
 	} TestCRC32C;
 
 	static const TestCRC32C TEST_CRC32C[] = {
-		{ "", "\x00\x00\x00\x00" },
-		{ "a", "\x30\x43\xd0\xc1" },
-		{ "abc", "\xb7\x3f\x4b\x36" },
-		{ "message digest", "\xd0\x79\xbd\x02" },
-		{ "abcdefghijklmnopqrstuvwxyz", "\x25\xef\xe6\x9e" },
-		{ "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "\x7d\xd5\x45\xa2" },
-		{ "12345678901234567890123456789012345678901234567890123456789012345678901234567890", "\x81\x67\x7a\x47" },
-		{ "123456789", "\x83\x92\x06\xe3" }
+		{ "", "\x00\x00\x00\x00", { 0 } },
+		{ "a", "\x30\x43\xd0\xc1", { 0 } },
+		{ "abc", "\xb7\x3f\x4b\x36", { 0 } },
+		{ "message digest", "\xd0\x79\xbd\x02", { 0 } },
+		{ "abcdefghijklmnopqrstuvwxyz", "\x25\xef\xe6\x9e", { 0 } },
+		{ "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "\x7d\xd5\x45\xa2", { 0 } },
+		{ "12345678901234567890123456789012345678901234567890123456789012345678901234567890", "\x81\x67\x7a\x47", { 0 } },
+		{ "123456789", "\x83\x92\x06\xe3", { 0 } }
 	};
 
 	for (U64 i = 0; i < sizeof(TEST_CRC32C) / sizeof(TEST_CRC32C[0]); ++i) {
