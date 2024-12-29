@@ -148,26 +148,13 @@ Bool CdfList_setProbability(CdfList *list, U64 i, F32 value, F32 *oldValue) {
 	f[j].self = value;
 
 	return true;
-
 }
 
 Bool CdfList_setElement(CdfList *list, U64 i, Buffer element) {
-	return list && !GenericList_isConstRef(list->elements)  && !GenericList_set(list->elements, i, element).genericError;
+	return list && !GenericList_isConstRef(list->elements) && !GenericList_set(list->elements, i, element).genericError;
 }
 
 Bool CdfList_set(CdfList *list, U64 i, F32 value, Buffer element) {
-
-	if(
-		!list || (
-			(
-				Buffer_length(element) != list->elements.stride &&
-				!(GenericList_isConstRef(list->elements) && !Buffer_length(element))
-			) || (
-				GenericList_isConstRef(list->elements) && Buffer_length(element)
-			)
-		)
-	)
-		return false;
 
 	F32 oldValue;
 
@@ -177,7 +164,7 @@ Bool CdfList_set(CdfList *list, U64 i, F32 value, Buffer element) {
 	if(list && !list->elements.length)		//If elements aren't available
 		return true;
 
-	if(GenericList_isConstRef(list->elements)) {
+	if(!GenericList_isConstRef(list->elements)) {
 
 		const Bool b = CdfList_setElement(list, i, element);
 
@@ -206,7 +193,7 @@ Error CdfList_pushIndex(CdfList *list, U64 i, F32 value, Buffer element, Allocat
 
 	const Bool isLast = list->totalElements == i;
 
-	Error err = ListCdfValue_insert(&list->cdf, i, (CdfValue) { value, 0 }, allocator);
+	Error err = ListCdfValue_insert(&list->cdf, i, (CdfValue) { value, !isLast ? 0 : list->total }, allocator);
 
 	if(err.genericError)
 		return err;
@@ -310,7 +297,7 @@ Error CdfList_getRandomElementSecure(CdfList *list, CdfListElement *elementValue
 	const Buffer b = Buffer_createRef(&v, sizeof(v));
 
 	if(!Buffer_csprng(b))
-		return Error_invalidOperation(0, "");
+		return Error_invalidOperation(0, "CdfList_getRandomElementSecure() Buffer_csprng failed");
 
 	const F32 f = (v << 8 >> 8) / 16777215.f * list->total;
 	return CdfList_getElementAtOffset(list, f, elementValue);
@@ -329,6 +316,9 @@ Error CdfList_getElementAtOffset(CdfList *list, F32 offset, CdfListElement *elem
 	if(!list || !elementValue)
 		return Error_nullPointer(list ? 2 : 0, "CdfList_getElementAtOffset()::list and elementValue are required");
 
+	if(!(list->flags & ECdfListFlags_IsFinalized))
+		return Error_invalidOperation(0, "CdfList_getElementAtOffset()::list isn't finalized");
+
 	if(offset < 0 || offset >= list->total) {
 		const void *f32v = &offset;
 		const void *totalv = &list->total;
@@ -337,9 +327,6 @@ Error CdfList_getElementAtOffset(CdfList *list, F32 offset, CdfListElement *elem
 			"CdfList_getElementAtOffset()::offset is out of bounds"
 		);
 	}
-
-	if(!(list->flags & ECdfListFlags_IsFinalized))
-		return Error_invalidOperation(0, "CdfList_getElementAtOffset()::list isn't finalized");
 
 	if(!list->totalElements || !list->total)
 		return Error_invalidOperation(1, "CdfList_getElementAtOffset()::list doesn't have any elements");

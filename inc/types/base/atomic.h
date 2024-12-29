@@ -26,7 +26,7 @@
 		#include <stdatomic.h>
 	#else
 		#include <atomic>
-		#define _Atomic(X) std::atomic< X >
+		#define _Atomic(X) std::atomic<X>
 	#endif
 #else
 	#define _Atomic(T) T

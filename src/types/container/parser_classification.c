@@ -952,15 +952,6 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 				}
 
 				break;
-
-			case C8x4('u', 's', 'e', 'r'):		//user_impl
-
-				if (len == 9 && getC8x4(tokStr, 4) == C8x4('_', 'i', 'm', 'p') && tokStr.ptr[8] == 'l') {
-					consumed = true;
-					flag |= ESymbolFlagFuncVar_HasUserImpl;
-				}
-
-				break;
 		}
 
 		if(!consumed)

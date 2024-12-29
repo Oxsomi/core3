@@ -1,6 +1,6 @@
 # oiSB (Oxsomi Shader Buffer)
 
-*The oiSB format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness (though enc/comp is not supported, since oiSH is most often packaged inside of an oiCA/oiDL file).*
+*The oiSB format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness (though enc/comp is not supported, since oiSH and thus oiSB is most often packaged inside of an oiCA/oiDL file).*
 
 **NOTE: oiSB (1.2) is the successor of the original oiSB (0.1) from OxC1. This isn't the same format anymore. oiSB (0.1) lacked a lot of important features and is deprecated.**
 
@@ -15,7 +15,7 @@ Just like any oiXX file it's made with the following things in mind:
 ## File format spec
 
 ```c
-typedef struct SBHeader {
+typedef struct SBHeader {		//Should be aligned to 4-byte
 
 	U32 magicNumber;			//oiSB (0x4253696F); optional if it's part of an oiSH.
 

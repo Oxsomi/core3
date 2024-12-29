@@ -385,6 +385,9 @@ void Buffer_sha256(Buffer buf, U32 output[8]) {
 
 	//Store output
 
-	*(I32x4*) output = state0;
-	*((I32x4*)output + 1) = state1;
+	for(U8 i = 0; i < 4; ++i)
+		output[i] = (U32) I32x4_get(state0, i);
+
+	for(U8 i = 0; i < 4; ++i)
+		output[4 + i] = (U32) I32x4_get(state1, i);
 }

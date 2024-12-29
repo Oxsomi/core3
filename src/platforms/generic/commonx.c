@@ -365,7 +365,6 @@ Bool BigInt_setx(BigInt *a, BigInt b, Bool allowResize) { return BigInt_set(a, b
 
 Bool BigInt_truncx(BigInt *big) { return BigInt_trunc(big, Platform_instance->alloc); }
 
-Error BigInt_isBase2x(BigInt a, Bool *isBase2) { return BigInt_isBase2(a, Platform_instance->alloc, isBase2); }
 U128 U128_createFromDecx(CharString text, Error *failed) { return U128_createFromDec(text, failed, Platform_instance->alloc); }
 
 U128 U128_createFromStringx(CharString text, Error *failed) {

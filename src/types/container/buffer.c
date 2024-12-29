@@ -33,352 +33,17 @@ void BitRef_setTo(BitRef b, Bool v) {
 	else BitRef_reset(b);
 }
 
-Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
-
-	if(!output || !buf.ptr)
-		return Error_nullPointer(!buf.ptr ? 0 : 2, "Buffer_getBit()::output and buf are required");
-
-	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset >> 3, Buffer_length(buf), "Buffer_getBit()::offset out of bounds");
-
-	*output = (buf.ptr[offset >> 3] >> (offset & 7)) & 1;
-	return Error_none();
-}
-
-Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value) {
-	return !value ? Buffer_resetBit(buf, offset) : Buffer_setBit(buf, offset);
-}
-
-//Copy forwards
-
-Bool Buffer_copy(Buffer dst, Buffer src) {
-
-	if(!dst.ptr || !src.ptr)
-		return true;
-
-	if(Buffer_isConstRef(dst))
-		return false;
-
-	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
-
-	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dstLen >> 3);
-	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (srcLen >> 3);
-
-	for(; dstPtr < dstEnd && srcPtr < srcEnd; ++dstPtr, ++srcPtr)
-		*dstPtr = *srcPtr;
-
-	dstEnd = (U64*)(dst.ptr + dstLen);
-	srcEnd = (const U64*)(src.ptr + srcLen);
-
-	if((U64)dstPtr + 4 <= (U64)dstEnd && (U64)srcPtr + 4 <= (U64)srcEnd) {
-
-		*(U32*)dstPtr = *(const U32*)srcPtr;
-
-		dstPtr = (U64*)((U32*)dstPtr + 1);
-		srcPtr = (const U64*)((const U32*)srcPtr + 1);
-	}
-
-	if ((U64)dstPtr + 2 <= (U64)dstEnd && (U64)srcPtr + 2 <= (U64)srcEnd) {
-
-		*(U16*)dstPtr = *(const U16*)srcPtr;
-
-		dstPtr = (U64*)((U16*)dstPtr + 1);
-		srcPtr = (const U64*)((const U16*)srcPtr + 1);
-	}
-
-	if ((U64)dstPtr + 1 <= (U64)dstEnd && (U64)srcPtr + 1 <= (U64)srcEnd)
-		*(U8*)dstPtr = *(const U8*)srcPtr;
-
-	return true;
-}
-
-//Copy backwards; if ranges are overlapping this might be important
-
-Bool Buffer_revCopy(Buffer dst, Buffer src) {
-
-	if(!dst.ptr || !src.ptr)
-		return true;
-
-	if(Buffer_isConstRef(dst))
-		return false;
-
-	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
-
-	U64 *dstPtr = (U64*)(dst.ptr + dstLen), *dstBeg = dstPtr - (dstLen >> 3);
-	const U64 *srcPtr = (const U64*)(src.ptr + srcLen), *srcBeg = srcPtr - (srcLen >> 3);
-
-	while(dstPtr > dstBeg && srcPtr > srcBeg) {
-		--srcPtr; --dstPtr;
-		*dstPtr = *srcPtr;
-	}
-
-	if((I64)dstPtr - 4 >= (I64)dst.ptr && (I64)srcPtr - 4 >= (I64)src.ptr ) {
-
-		dstPtr = (U64*)((U32*)dstPtr - 1);
-		srcPtr = (const U64*)((const U32*)srcPtr - 1);
-
-		*(U32*)dstPtr = *(const U32*)srcPtr;
-	}
-
-	if ((I64)dstPtr - 2 >= (I64)dst.ptr && (I64)srcPtr - 2 >= (I64)src.ptr) {
-
-		dstPtr = (U64*)((U16*)dstPtr - 1);
-		srcPtr = (const U64*)((const U16*)srcPtr - 1);
-
-		*(U16*)dstPtr = *(const U16*)srcPtr;
-	}
-
-	if ((I64)dstPtr - 1 >= (I64)dst.ptr && (I64)srcPtr - 1 >= (I64)src.ptr)
-		*((U8*)dstPtr - 1) = *((const U8*)srcPtr - 1);
-
-	return true;
-}
-
-//
-
-Error Buffer_setBit(Buffer buf, U64 offset) {
-
-	if(!buf.ptr)
-		return Error_nullPointer(0, "Buffer_setBit()::buf is required");
-
-	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0, "Buffer_setBit()::buf should be writable");
-
-	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_setBit()::offset out of bounds");
-
-	((U8*)buf.ptr)[offset >> 3] |= 1 << (offset & 7);
-	return Error_none();
-}
-
-Error Buffer_resetBit(Buffer buf, U64 offset) {
-
-	if(!buf.ptr)
-		return Error_nullPointer(0, "Buffer_resetBit()::buf is required");
-
-	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0, "Buffer_resetBit()::buf should be writable");
-
-	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_resetBit()::offset out of bounds");
-
-	((U8*)buf.ptr)[offset >> 3] &= ~(1 << (offset & 7));
-	return Error_none();
-}
-
-#define BitOp(x, dst, src) {															\
-																						\
-	if(!dst.ptr || !src.ptr)															\
-		return Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required");	\
-																						\
-	if(Buffer_isConstRef(dst))															\
-		return Error_constData(0, 0, "BitOp::dst should be writable");					\
-																						\
-	U64 l = U64_min(Buffer_length(dst), Buffer_length(src));							\
-																						\
-	for(U64 i = 0, j = l >> 3; i < j; ++i)												\
-		*((U64*)dst.ptr + i) x *((const U64*)src.ptr + i);								\
-																						\
-	for (U64 i = l >> 3 << 3; i < l; ++i)												\
-		((U8*)dst.ptr)[i] x src.ptr[i];													\
-																						\
-	return Error_none();																\
-}
-
-Error Buffer_bitwiseOr(Buffer dst, Buffer src)  BitOp(|=, dst, src)
-Error Buffer_bitwiseXor(Buffer dst, Buffer src) BitOp(^=, dst, src)
-Error Buffer_bitwiseAnd(Buffer dst, Buffer src) BitOp(&=, dst, src)
-Error Buffer_bitwiseNot(Buffer dst) BitOp(=~, dst, dst)
-
-Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
-	return isOn ? Buffer_setAllBits(buf) : Buffer_unsetAllBits(buf);
-}
-
-Buffer Buffer_createNull() { return (Buffer) { 0 }; }
-
-Buffer Buffer_createRef(void *v, U64 length) {
-
-	if(!length || !v)
-		return Buffer_createNull();
-
-	if(length >> 48 || (U64)v >> 48)		//Invalid addresses (unsupported by CPUs)
-		return Buffer_createNull();
-
-	return (Buffer) { .ptr = (U8*) v, .lengthAndRefBits = length | ((U64)1 << 63) };
-}
-
-Buffer Buffer_createRefConst(const void *v, U64 length) {
-
-	if(!length || !v)
-		return Buffer_createNull();
-
-	if(length >> 48 || (U64)v >> 48)		//Invalid addresses (unsupported by CPUs)
-		return Buffer_createNull();
-
-	return (Buffer) { .ptr = (U8*) v, .lengthAndRefBits = length | ((U64)3 << 62) };
-}
-
-Bool Buffer_eq(Buffer buf0, Buffer buf1) {
-
-	if (!buf0.ptr && !buf1.ptr)
-		return true;
-
-	if (!buf0.ptr || !buf1.ptr)
-		return false;
-
-	const U64 len0 = Buffer_length(buf0);
-
-	if(len0 != Buffer_length(buf1))
-		return false;
-
-	for (U64 i = 0, j = len0 >> 3; i < j; ++i)
-		if (((const U64*)buf0.ptr)[i] != ((const U64*)buf1.ptr)[i])
-			return false;
-
-	for (U64 i = len0 >> 3 << 3; i < len0; ++i)
-		if (buf0.ptr[i] != buf1.ptr[i])
-			return false;
-
-	return true;
-}
-
-Bool Buffer_neq(Buffer buf0, Buffer buf1) { return !Buffer_eq(buf0, buf1); }
-
-Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
-
-	if(!dst.ptr)
-		return Error_nullPointer(0, "Buffer_setBitRange()::dst is required");
-
-	if(Buffer_isConstRef(dst))
-		return Error_constData(0, 0, "Buffer_setBitRange()::dst should be writable");
-
-	if(!bits)
-		return Error_invalidParameter(2, 0, "Buffer_setBitRange()::bits should be non zero");
-
-	if(dstOff + bits > (Buffer_length(dst) << 3))
-		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_setBitRange()::dstOff out of bounds");
-
-	const U64 dstOff8 = (dstOff + 7) >> 3;
-	const U64 bitEnd = dstOff + bits;
-
-	//Bits, begin
-
-	for (U64 i = dstOff; i < bitEnd && i < dstOff8 << 3; ++i)
-		((U8*)dst.ptr)[i >> 3] |= (1 << (i & 7));
-
-	//Bytes, until U64 aligned
-
-	const U64 dstOff64 = (dstOff8 + 7) >> 3;
-	const U64 bitEnd8 = bitEnd >> 3;
-
-	for (U64 i = dstOff8; i < bitEnd8 && i < dstOff64 << 3; ++i)
-		((U8*)dst.ptr)[i] = U8_MAX;
-
-	//U64 aligned
-
-	const U64 bitEnd64 = bitEnd8 >> 3;
-
-	for(U64 i = dstOff64; i < bitEnd64; ++i)
-		*((U64*)dst.ptr + i) = U64_MAX;
-
-	//Bytes unaligned at end
-
-	for(U64 i = bitEnd64 << 3; i < bitEnd8; ++i)
-		((U8*)dst.ptr)[i] = U8_MAX;
-
-	//Bits unaligned at end
-
-	for (U64 i = bitEnd8 << 3; i < bitEnd; ++i)
-		((U8*)dst.ptr)[i >> 3] |= (1 << (i & 7));
-
-	return Error_none();
-}
-
-Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
-
-	if(!dst.ptr)
-		return Error_nullPointer(0, "Buffer_unsetBitRange()::dst is required");
-
-	if(Buffer_isConstRef(dst))
-		return Error_constData(0, 0, "Buffer_unsetBitRange()::dst should be writable");
-
-	if(!bits)
-		return Error_invalidParameter(2, 0, "Buffer_unsetBitRange()::bits should be non zero");
-
-	if(dstOff + bits > (Buffer_length(dst) << 3))
-		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_unsetBitRange()::dstOff out of bounds");
-
-	const U64 dstOff8 = (dstOff + 7) >> 3;
-	const U64 bitEnd = dstOff + bits;
-
-	//Bits, begin
-
-	for (U64 i = dstOff; i < bitEnd && i < dstOff8 << 3; ++i)
-		((U8*)dst.ptr)[i >> 3] &=~ (1 << (i & 7));
-
-	//Bytes, until U64 aligned
-
-	const U64 dstOff64 = (dstOff8 + 7) >> 3;
-	const U64 bitEnd8 = bitEnd >> 3;
-
-	for (U64 i = dstOff8; i < bitEnd8 && i < dstOff64 << 3; ++i)
-		((U8*)dst.ptr)[i] = 0;
-
-	//U64 aligned
-
-	const U64 bitEnd64 = bitEnd8 >> 3;
-
-	for(U64 i = dstOff64; i < bitEnd64; ++i)
-		*((U64*)dst.ptr + i) = 0;
-
-	//Bytes unaligned at end
-
-	for(U64 i = bitEnd64 << 3; i < bitEnd8; ++i)
-		((U8*)dst.ptr)[i] = 0;
-
-	//Bits unaligned at end
-
-	for (U64 i = bitEnd8 << 3; i < bitEnd; ++i)
-		((U8*)dst.ptr)[i >> 3] &=~ (1 << (i & 7));
-
-	return Error_none();
-}
-
-Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
-
-	if(!buf.ptr)
-		return Error_nullPointer(0, "Buffer_setAllToInternal()::buf is required");
-
-	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0, "Buffer_setAllToInternal()::buf should be writable");
-
-	const U64 l = Buffer_length(buf);
-
-	for(U64 i = 0, j = l >> 3; i < j; ++i)
-		*((U64*)buf.ptr + i) = b64;
-
-	for (U64 i = l >> 3 << 3; i < l; ++i)
-		((U8*)buf.ptr)[i] = b8;
-
-	return Error_none();
-}
-
 Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result) {
 	return !value ? Buffer_createZeroBits(length, alloc, result) : Buffer_createOneBits(length, alloc, result);
-}
-
-Error Buffer_setAllBits(Buffer dst) {
-	return Buffer_setAllToInternal(dst, U64_MAX, U8_MAX);
-}
-
-Error Buffer_unsetAllBits(Buffer dst) {
-	return Buffer_setAllToInternal(dst, 0, 0);
 }
 
 Error Buffer_allocBitsInternal(U64 length, Allocator alloc, Buffer *result) {
 
 	if(!length)
 		return Error_invalidParameter(0, 0, "Buffer_allocBitsInternal()::length should be non zero");
+
+	if(length >> 51)
+		return Error_invalidParameter(0, 0, "Buffer_allocBitsInternal()::length buffer length can't exceed 1 << 48 bytes");
 
 	if(!alloc.alloc)
 		return Error_nullPointer(1, "Buffer_allocBitsInternal()::alloc should have allocator");
@@ -442,12 +107,7 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 	if(e.genericError)
 		return e;
 
-	for(U64 i = 0, j = l >> 3; i < j; ++i)
-		*((U64*)result->ptr + i) = *((const U64*)buf.ptr + i);
-
-	for (U64 i = l >> 3 << 3; i < l; ++i)
-		((U8*)result->ptr)[i] = buf.ptr[i];
-
+	Buffer_copy(*result, buf);
 	return Error_none();
 }
 
@@ -475,89 +135,11 @@ Bool Buffer_free(Buffer *buf, Allocator alloc) {
 }
 
 Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output) {
-	return Buffer_createZeroBits(length << 3, alloc, output);
+	return Buffer_createZeroBits(length >> 61 ? U64_MAX : length << 3, alloc, output);
 }
 
 Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *result) {
-	return Buffer_allocBitsInternal(length << 3, alloc, result);
-}
-
-Error Buffer_offset(Buffer *buf, U64 length) {
-
-	if(!length)
-		return Error_none();
-
-	if(!buf || !buf->ptr)
-		return Error_nullPointer(0, "Buffer_offset()::buf and buf->ptr are required");
-
-	if(!Buffer_isRef(*buf))								//Ensure we don't accidentally call this and leak memory
-		return Error_invalidOperation(0, "Buffer_offset() can only be called on a ref");
-
-	const U64 bufLen = Buffer_length(*buf);
-
-	if(length > bufLen)
-		return Error_outOfBounds(1, length, bufLen, "Buffer_offset()::length is out of bounds");
-
-	buf->ptr += length;
-
-	//Maintain constness
-
-	buf->lengthAndRefBits = (bufLen - length) | (buf->lengthAndRefBits >> 62 << 62);
-
-	if(!bufLen)
-		*buf = Buffer_createNull();
-
-	return Error_none();
-}
-
-void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 length) {
-
-	for (U64 i = 0, j = length >> 3; i < j; ++i)
-		*((U64*)ptr + i) = *((const U64*)v + i);
-
-	for (U64 i = length >> 3 << 3; i < length; ++i)
-		ptr[i] = *((const U8*)v + i);
-}
-
-Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
-
-	if(!append.ptr)
-		return Error_nullPointer(1, "Buffer_appendBuffer()::append is required");
-
-	if(buf && Buffer_isConstRef(*buf))					//We need write access
-		return Error_constData(0, 0, "Buffer_appendBuffer()::buf should be writable");
-
-	void *ptr = buf ? (U8*)buf->ptr : NULL;
-
-	const Error e = Buffer_offset(buf, Buffer_length(append));
-
-	if(e.genericError)
-		return e;
-
-	Buffer_copyBytesInternal(ptr, append.ptr, Buffer_length(append));
-	return Error_none();
-}
-
-Error Buffer_append(Buffer *buf, const void *v, U64 length) {
-	return Buffer_appendBuffer(buf, Buffer_createRefConst(v, length));
-}
-
-Error Buffer_consume(Buffer *buf, void *v, U64 length) {
-
-	if(!buf)
-		return Error_nullPointer(!buf ? 0 : 1, "Buffer_consume()::buf is required");
-
-	const void *ptr = buf ? buf->ptr : NULL;
-
-	const Error e = Buffer_offset(buf, length);
-
-	if(e.genericError)
-		return e;
-
-	if(v)
-		Buffer_copyBytesInternal(v, ptr, length);
-
-	return Error_none();
+	return Buffer_allocBitsInternal(length >> 61 ? U64_MAX : length << 3, alloc, result);
 }
 
 Error Buffer_createSubset(
@@ -606,34 +188,9 @@ Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 		return err;
 
 	Buffer_copy(*output, a);
-	Buffer_copy(Buffer_createRef((U8*)output->ptr + alen, blen), b);
+	Buffer_copy(Buffer_createRef(output->ptrNonConst + alen, blen), b);
 	return Error_none();
 }
-
-#define BUFFER_IMPL(T)																		\
-Error Buffer_append##T(Buffer *buf, T v)	{ return Buffer_append(buf, &v, sizeof(v)); }	\
-Error Buffer_consume##T(Buffer *buf, T *v)	{ return Buffer_consume(buf, v, sizeof(*v)); }
-
-BUFFER_IMPL(U64);
-BUFFER_IMPL(U32);
-BUFFER_IMPL(U16);
-BUFFER_IMPL(U8);
-
-BUFFER_IMPL(I64);
-BUFFER_IMPL(I32);
-BUFFER_IMPL(I16);
-BUFFER_IMPL(I8);
-
-BUFFER_IMPL(F64);
-BUFFER_IMPL(F32);
-
-BUFFER_IMPL(I32x2);
-BUFFER_IMPL(F32x2);
-//BUFFER_IMPL(F64x2);		TODO:
-
-BUFFER_IMPL(I32x4);
-BUFFER_IMPL(F32x4);
-//BUFFER_IMPL(F64x4);		TODO:
 
 //UTF-8
 //https://en.wikipedia.org/wiki/UTF-8
@@ -730,7 +287,7 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *byte
 		if(bytes)
 			*bytes = 1;
 
-		((U8*)buf.ptr)[i] = (U8) codepoint;
+		buf.ptrNonConst[i] = (U8) codepoint;
 		return Error_none();
 	}
 
@@ -742,8 +299,8 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *byte
 		if(bytes)
 			*bytes = 2;
 
-		((U8*)buf.ptr)[i]		= 0xC0 | (U8)(codepoint >> 6);
-		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]		= 0xC0 | (U8)(codepoint >> 6);
+		buf.ptrNonConst[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
 		return Error_none();
 	}
 
@@ -755,9 +312,9 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *byte
 		if(bytes)
 			*bytes = 3;
 
-		((U8*)buf.ptr)[i]		= 0xE0 | (U8)(codepoint >> 12);
-		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		((U8*)buf.ptr)[i + 2]	= 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]		= 0xE0 | (U8)(codepoint >> 12);
+		buf.ptrNonConst[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		buf.ptrNonConst[i + 2]	= 0x80 | (U8)(codepoint & 0x3F);
 		return Error_none();
 	}
 
@@ -769,10 +326,10 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *byte
 		if(bytes)
 			*bytes = 4;
 
-		((U8*)buf.ptr)[i]		= 0xF0 | (U8)(codepoint >> 18);
-		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
-		((U8*)buf.ptr)[i + 2]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		((U8*)buf.ptr)[i + 3]	= 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]		= 0xF0 | (U8)(codepoint >> 18);
+		buf.ptrNonConst[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
+		buf.ptrNonConst[i + 2]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		buf.ptrNonConst[i + 3]	= 0x80 | (U8)(codepoint & 0x3F);
 		return Error_none();
 	}
 
@@ -791,7 +348,7 @@ Error Buffer_readAsUTF16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 
 	//1 U16
 
-	const U16 v0 = *(const U16*)(buf.ptr + i);
+	const U16 v0 = Buffer_readU16(buf, i, NULL);	//Uhoh: FORBIDDEN
 	i += 2;
 
 	if (v0 <= 0xD7FF) {
@@ -811,7 +368,7 @@ Error Buffer_readAsUTF16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 	if(i + 2 > Buffer_length(buf))
 		return Error_outOfBounds(1, i, Buffer_length(buf), "Buffer_readAsUTF16()::buf UTF16 ended unexpectedly");
 
-	const U16 v1 = *(const U16*)(buf.ptr + i);
+	const U16 v1 = Buffer_readU16(buf, i, NULL);
 
 	if(v1 < 0xDC00 || (v1 - 0xDC00) >= (1 << 10))
 		return Error_invalidParameter(0, 2, "Buffer_readAsUTF16()::buf[i + 1] had invalid encoding");
@@ -833,7 +390,7 @@ Error Buffer_writeAsUTF16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *byt
 		if(bytes)
 			*bytes = 2;
 
-		*(U16*)(buf.ptr + i) = (U16) codepoint;
+		Buffer_writeU16(buf, i, (U16) codepoint);
 		return Error_none();
 	}
 
@@ -845,8 +402,8 @@ Error Buffer_writeAsUTF16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *byt
 		if(bytes)
 			*bytes = 4;
 
-		((U16*)(buf.ptr + i))[0]		= 0xD800 | (U16)(codepoint >> 10);
-		((U16*)(buf.ptr + i))[1]		= 0xDC00 | (U16)(codepoint & 1023);
+		Buffer_writeU16(buf, i, 	0xD800 | (U16)(codepoint >> 10));
+		Buffer_writeU16(buf, i + 2, 0xDC00 | (U16)(codepoint & 1023));
 		return Error_none();
 	}
 
@@ -863,6 +420,9 @@ Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUTF16) {
 	F64 counter = 0;
 	const F64 invLen = 1.0 / (F64)Buffer_length(buf);
 	const U64 minWidth = isUTF16 ? 2 : 1;
+
+	if(Buffer_length(buf) & (minWidth - 1))
+		return false;
 
 	while (i + minWidth <= Buffer_length(buf)) {
 
@@ -884,7 +444,7 @@ Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUTF16) {
 		i += info.bytes;
 	}
 
-	return i;
+	return !!i;
 }
 
 Bool Buffer_isUTF8(Buffer buf, F32 threshold) { return Buffer_isUnicode(buf, threshold, false); }
@@ -896,5 +456,5 @@ Bool Buffer_isAscii(Buffer buf) {
 		if(!C8_isValidAscii((C8) buf.ptr[i]))
 			return false;
 
-	return Buffer_length(buf);
+	return !!Buffer_length(buf);
 }

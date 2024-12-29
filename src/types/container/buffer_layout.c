@@ -103,7 +103,6 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
 //Manipulating data
 
 U64 BufferLayoutStruct_allocatedData(BufferLayoutStructInfo info, U64 memberDataLen) {
-
 	return
 		sizeof(C8) * CharString_length(info.name) +
 		sizeof(BufferLayoutMember) * info.members.length +
@@ -135,7 +134,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 		const BufferLayoutMemberInfo m = info.members.ptr[i];
 
-		if(!CharString_length(m.name) || CharString_length(m.name) > U8_MAX || !CharString_isValidAscii(m.name))
+		if(!CharString_length(m.name) || CharString_length(m.name) > U8_MAX || !CharString_isValidUTF8(m.name))
 			return Error_invalidParameter(
 				0, 0 + (((U32)i + 1) << 16),
 				"BufferLayoutStruct_create()::info.members[i].name should have <0, 255] characters"
@@ -672,7 +671,7 @@ Error BufferLayout_resolve(
 
 	*location =
 		Buffer_isConstRef(buffer) ? Buffer_createRefConst(buffer.ptr + info.offset, info.length) :
-		Buffer_createRef((U8*)buffer.ptr + info.offset, info.length);
+		Buffer_createRef(buffer.ptrNonConst + info.offset, info.length);
 
 	return Error_none();
 }

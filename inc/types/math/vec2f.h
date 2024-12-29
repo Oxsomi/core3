@@ -125,8 +125,8 @@ void F32x2_set(F32x2 *a, U8 i, F32 v);
 impl F32x2 F32x2_create1(F32 x);
 F32x2 F32x2_create2(F32 x, F32 y);
 
-F32x2 F32x2_load1(const F32 *arr);
-F32x2 F32x2_load2(const F32 *arr);
+F32x2 F32x2_load1(const void *arr);		//F32[1]
+F32x2 F32x2_load2(const void *arr);		//F32[2]
 
 impl F32x2 F32x2_xx(F32x2 a);
 F32x2 F32x2_xy(F32x2 a);

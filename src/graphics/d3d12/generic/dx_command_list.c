@@ -432,7 +432,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				if (i == 8) {		//Depth stencil
 
-					if(utex.depthFormat != EDepthStencilFormat_S8Ext)				//Take both planes (depth & stencil)
+					if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)				//Take both planes (depth & stencil)
 						++range.NumPlanes;
 
 					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)	//Take only the stencil plane

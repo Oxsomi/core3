@@ -142,7 +142,7 @@ Defines should use `_UPPER_CASE` (e.g. `_SIMD`) while macros can use `_<function
 
 Functions should be preferred over macros, unless macros greatly reduce copy + paste and even then, a function should be preferred when possible. Sometimes this is not possible though.
 
-Only impl and user_impl defines can use the lower_snake_casing. This is because it's kind of seen as a function keyword. Another exception is if swapping out a function that is defined on both platforms, but one platform uses a non standard name for the function (Windows's unix-like file function calls) or if a define needs a certain formatting because of a library/api.
+Only impl defines can use the lower_snake_casing. This is because it's kind of seen as a function keyword. Another exception is if swapping out a function that is defined on both platforms, but one platform uses a non standard name for the function (Windows's unix-like file function calls) or if a define needs a certain formatting because of a library/api.
 
 Macros should try to align the `\` required to do multi-line macros on the same column.
 

@@ -39,45 +39,10 @@ void BitRef_reset(BitRef b);
 
 void BitRef_setTo(BitRef b, Bool v);
 
-Error Buffer_getBit(Buffer buf, U64 offset, Bool *output);
-
-Bool Buffer_copy(Buffer dst, Buffer src);
-Bool Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backwards; useful if ranges overlap
-
-Error Buffer_setBit(Buffer buf, U64 offset);
-Error Buffer_resetBit(Buffer buf, U64 offset);
-
-Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value);
-
-Error Buffer_bitwiseOr(Buffer dst, Buffer src);
-Error Buffer_bitwiseAnd(Buffer dst, Buffer src);
-Error Buffer_bitwiseXor(Buffer dst, Buffer src);
-Error Buffer_bitwiseNot(Buffer dst);
-
-Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits);
-Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits);
-
-Error Buffer_setAllBits(Buffer dst);
-Error Buffer_unsetAllBits(Buffer dst);
-
-Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
-
-//Comparison
-
-Bool Buffer_eq(Buffer buf0, Buffer buf1);			//Also compares size
-Bool Buffer_neq(Buffer buf0, Buffer buf1);			//Also compares size
-
-//These should never be Buffer_free-d because Buffer doesn't know if it's allocated
-
-Buffer Buffer_createNull();
-
-Buffer Buffer_createRef(void *v, U64 length);
-Buffer Buffer_createRefConst(const void *v, U64 length);
-
 //All these functions allocate, so Buffer_free them later
 
 Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result);
-Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *result);
+Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *result);		//Guaranteed to be 16-byte aligned
 Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result);
 
 Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result);
@@ -90,39 +55,7 @@ Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buff
 
 //Writing data
 
-Error Buffer_offset(Buffer *buf, U64 length);
-
-Error Buffer_append(Buffer *buf, const void *v, U64 length);
-Error Buffer_appendBuffer(Buffer *buf, Buffer append);
-
-Error Buffer_consume(Buffer *buf, void *v, U64 length);
-
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
-
-#define BUFFER_OP(T)						\
-Error Buffer_append##T(Buffer *buf, T v);	\
-Error Buffer_consume##T(Buffer *buf, T *v)
-
-BUFFER_OP(U64);
-BUFFER_OP(U32);
-BUFFER_OP(U16);
-BUFFER_OP(U8);
-
-BUFFER_OP(I64);
-BUFFER_OP(I32);
-BUFFER_OP(I16);
-BUFFER_OP(I8);
-
-BUFFER_OP(F64);
-BUFFER_OP(F32);
-
-BUFFER_OP(I32x2);
-BUFFER_OP(F32x2);
-//BUFFER_OP(F64x2);		TODO:
-
-BUFFER_OP(I32x4);
-BUFFER_OP(F32x4);
-//BUFFER_OP(F64x4);		TODO:
 
 //UTF-8 helpers
 
@@ -210,7 +143,7 @@ typedef enum EBufferEncryptionFlags {
 //Encrypt function encrypts target into target
 //Be careful about the following if iv and key are manually generated:
 //- Don't reuse iv if supplied
-//- Don't use the key too often (e.g. >2^16 times for good measure)
+//- Don't use the key too often (suggested <2^16 times)
 //- Don't discard iv or key if any of them are generated
 //- Don't discard tag or cut off too many bytes
 
@@ -221,7 +154,7 @@ Error Buffer_encrypt(
 	EBufferEncryptionFlags flags,	//Whether to use supplied keys or generate new ones
 	U32 *key,						//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4])
 	I32x4 *iv,						//Iv should be random 12 bytes. Can be generated if flag is set
-	I32x4 *tag						//Tag should be non-zero if encryption type supports it.
+	I32x4 *tag						//Tag should be non-NULL if encryption type supports it.
 );
 
 //Decrypt functions decrypt ciphertext from target into target
@@ -233,7 +166,7 @@ Error Buffer_encrypt(
 Error Buffer_decrypt(
 	Buffer target,						//"Cyphertext" aka data to decrypt. Leave empty to verify with AES256GCM
 	Buffer additionalData,				//Data that was supplied to verify integrity of the data
-	EBufferEncryptionType type,			//Only AES256GCM is currently supported
+	EBufferEncryptionType type,			//Only AES is currently supported
 	const U32 *key,						//Secret key used to en/decrypt (AES256: U32[8], AES128: U32[4])
 	I32x4 tag,							//Tag that was generated to verify integrity of encrypted data
 	I32x4 iv							//Iv was the 12-byte random number that was used to encrypt the data

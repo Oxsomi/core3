@@ -64,8 +64,8 @@ U32 U32_rol(const U32 v, U32 amount) {
 void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	I32x4 state[2] = {
-		I32x4_load4((const I32*)SHA256_STATE),
-		I32x4_load4((const I32*)SHA256_STATE + 4)
+		I32x4_load4(SHA256_STATE),
+		I32x4_load4(SHA256_STATE + 4)
 	};
 
 	U64 ptr = (U64)(void*) buf.ptr, len = Buffer_length(buf);
@@ -297,14 +297,16 @@ static const U8 MD5_offsets[][16] = {
 	{ 0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9 }		//(0 + 7 * i) & 15
 };
 
-typedef struct MD5State {
+typedef union MD5State {
+	I32x4 vec;
 	U32 v[4];
 } MD5State;
 
 void MD5State_update(MD5State *stateOut, Buffer buf) {
 
 	MD5State state = *stateOut;
-	const U32 *data = (const U32*) buf.ptr;
+	U32 data[16];
+	Buffer_copy(Buffer_createRef(data, sizeof(data)), buf);
 
 	//This contains all rounds.
 	//Since j and i are constant, it will magically unroll for us.
@@ -374,15 +376,13 @@ I32x4 Buffer_md5(Buffer buf) {
 	}
 
 	tmp[off] = (U8)'\x80';
-	Bool flush = off >= 56;
-	off += (off < 56) ? (56 - off) : (120 - off);
 
-	if (flush) {
+	if (off >= 56) {
 		MD5State_update(&state, Buffer_createRefConst(tmp, 64));
-		off &= 63;
+		Buffer_unsetAllBits(Buffer_createRefConst(tmp, 64));
 	}
 
-	*(U64*)(tmp + off) = bufLen << 3;
+	*(U64*)(tmp + 56) = bufLen << 3;
 	MD5State_update(&state, Buffer_createRefConst(tmp, 64));
 
 	//Finish
@@ -390,8 +390,7 @@ I32x4 Buffer_md5(Buffer buf) {
 	for(U8 i = 0; i < 4; ++i)
 		state.v[i] = U32_swapEndianness(state.v[i]);
 
-	const void *v = state.v;
-	return I32x4_load4((const I32*) v);
+	return state.vec;
 }
 
 U64 Buffer_fnv1a64Single(U64 a, U64 hash) {
@@ -400,28 +399,28 @@ U64 Buffer_fnv1a64Single(U64 a, U64 hash) {
 
 U64 Buffer_fnv1a64(Buffer buf, U64 hash) {
 
-	const U64 *ptrU64 = (const U64*) buf.ptr;
-
 	U64 len = Buffer_length(buf);
-	U64 off = len >> 3 << 3;
+	U64 off = 0;
 
-	for(U64 i = 0, j = len >> 3; i < j; ++i)
-		hash = Buffer_fnv1a64Single(ptrU64[i], hash);
-
-	const U8 *ptr = buf.ptr + off;
+	for(; off < (len &~ 7); off += sizeof(U64)) {
+		U64 tmp = Buffer_readU64(buf, off, NULL);
+		hash = Buffer_fnv1a64Single(tmp, hash);
+	}
 
 	if (len & 4) {
-		hash = Buffer_fnv1a64Single(*(const U32*)ptr, hash);
-		ptr += 4;
+		U32 tmp = Buffer_readU32(buf, off, NULL);
+		hash = Buffer_fnv1a64Single(tmp, hash);
+		off += 4;
 	}
 
 	if (len & 2) {
-		hash = Buffer_fnv1a64Single(*(const U16*)ptr, hash);
-		ptr += 2;
+		U16 tmp = Buffer_readU16(buf, off, NULL);
+		hash = Buffer_fnv1a64Single(tmp, hash);
+		off += 2;
 	}
 
 	if (len & 1)
-		hash = Buffer_fnv1a64Single(*ptr, hash);
+		hash = Buffer_fnv1a64Single(buf.ptr[off], hash);
 
 	return hash;
 }

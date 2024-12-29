@@ -259,7 +259,6 @@ int main() {
 	Log_debugLn(alloc, "Testing Buffer MD5");
 
 	{
-
 		CharString md5Strs[] = {
 			CharString_createRefCStrConst(""),
 			CharString_createRefCStrConst("a"),
@@ -408,6 +407,7 @@ int main() {
 	typedef struct TestCRC32C {
 		const C8 *str;
 		const C8 v[5];
+		U8 padding[3];
 	} TestCRC32C;
 
 	static const TestCRC32C TEST_CRC32C[] = {
@@ -700,7 +700,7 @@ int main() {
 
 		F32x4 p0, right, up;
 
-		F32 near, far, fovRad;
+		F32 near, far, fovRad, padding;
 
 	} Camera;
 
@@ -2132,7 +2132,7 @@ int main() {
 		U64 temp[4] = { mulParams[i][0], 0, mulParams[i][1], 0 };
 		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
 		gotoIfError(clean, BigInt_createRefConst(&temp[2], 2, &bBig))
-		gotoIfError(clean, BigInt_createRefConst((const U64*) &mulResult[i][0], 2, &cBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &cBig))
 
 		if(!BigInt_mul(&aBig, bBig, alloc) || BigInt_neq(aBig, cBig))
 			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_mul failed"))
@@ -2312,7 +2312,7 @@ int main() {
 
 	for (U64 i = 0; i < sizeof(lshResult) / sizeof(lshResult[0]); ++i) {
 
-		aBig = bBig = (BigInt){ 0 };
+		aBig = bBig = (BigInt) { 0 };
 
 		U64 temp[2] = { mulParams[1][0], mulParams[1][1] };
 		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
@@ -2340,7 +2340,7 @@ int main() {
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
-		aBig = (BigInt){ 0 };
+		aBig = (BigInt) { 0 };
 		gotoIfError(clean, BigInt_createRefConst(&rshResult[i][0], 2, &aBig))
 
 		U16 off = BigInt_bitScan(aBig);
@@ -2579,12 +2579,15 @@ int main() {
 	F64 dt = (Time_now() - now) / (F64)SECOND;
 
 	Log_debugLn(alloc, "Successful unit test! After %fs", dt);
-	return 0;
+	
+	goto success;
 
 clean:
 
-	Log_errorLn(alloc, "Failed unit test (%s)... Freeing", err.errorStr);
+	F64 dt2 = (Time_now() - now) / (F64)SECOND;
+	Log_errorLn(alloc, "Failed unit test (%s)... Freeing. After %fs", err.errorStr, dt2);
 
+success:
 	BufferLayout_free(alloc, &bufferLayout);
 
 	CharString_free(&tmp, alloc);
@@ -2596,10 +2599,6 @@ clean:
 	Buffer_free(&outputDecrypted, alloc);
 	Buffer_free(&emp, alloc);
 	Buffer_free(&full, alloc);
-
-	F64 dt2 = (Time_now() - now) / (F64)SECOND;
-
-	Log_errorLn(alloc, "Failed unit test... After %fs", dt2);
 
 	return (int) err.genericError;
 }

@@ -29,7 +29,7 @@
 	#define timegm _mkgmtime
 	#define localtime_r(a, b) (!localtime_s(b, a))
 	#define gmtime_r(a, b) (!gmtime_s(b, a))
-#else
+#elif !defined(__clang__)
 	#include <x86intrin.h>
 #endif
 
@@ -67,16 +67,17 @@ F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
 	return (F64)Time_dns(timeStamp0, timeStamp1) / SECOND;
 }
 
-U64 Time_clocks() { return __rdtsc(); }	//TODO: Arm?
+#ifdef __clang__
+	U64 Time_clocks() { return __builtin_readcyclecounter(); }
+#else
+	U64 Time_clocks() { return __rdtsc(); }		//TODO: GCC + Arm, for now this okay
+#endif
+
 I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks()); }
 DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
 //The standard functions strp don't work properly cross-platform.
-//This is not done via our CharString functions because format is called at important moments.
-//At these moments there might not be any space left on the heap to allocate or there might be corruption there,
-//as such, using string would be problematic. (This also includes error handling with logging and signals such as segfault).
-//Our stack is less likely to be corrupted, if it is then we can't properly handle it.
 
 void setNum(TimeFormat format, I64 offset, U64 length, U64 v) {
 
@@ -103,9 +104,9 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 	Bool success = false;
 
 	if(isLocalTime)
-		success = (Bool) localtime_r(&inSecs, &t);
+		success = !!localtime_r(&inSecs, &t);
 
-	else success = (Bool) gmtime_r(&inSecs, &t);
+	else success = !!gmtime_r(&inSecs, &t);
 
 	Buffer_copy(
 		Buffer_createRef(timeString, SHORTSTRING_LEN),

@@ -122,10 +122,10 @@ impl I32x4 I32x4_rsh64(I32x4 a, U8 bits);		//Right shifting each I64 individuall
 I32x4 I32x4_lsh128(I32x4 a, U8 bits);
 I32x4 I32x4_rsh128(I32x4 a, U8 bits);
 
-I32x4 I32x4_load1(const I32 *arr);
-I32x4 I32x4_load2(const I32 *arr);
-I32x4 I32x4_load3(const I32 *arr);
-I32x4 I32x4_load4(const I32 *arr);
+I32x4 I32x4_load1(const void *arr);
+I32x4 I32x4_load2(const void *arr);
+I32x4 I32x4_load3(const void *arr);
+I32x4 I32x4_load4(const void *arr);
 
 I32x4 I32x4_swapEndianness(I32x4 v);
 

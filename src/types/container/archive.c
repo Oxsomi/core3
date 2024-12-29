@@ -133,12 +133,9 @@ Bool Archive_getPath(
 				resolvedPath = CharString_createNull();		//Moved
 			}
 
-			else CharString_free(&resolvedPath, alloc);
-
 			goto clean;
 		}
 
-	CharString_free(&resolvedPath, alloc);
 	retError(clean, Error_notFound(0, 0, "Archive_getPath() path was not found"))
 
 clean:
@@ -533,9 +530,9 @@ Bool Archive_removeInternal(Archive *archive, CharString path, Allocator alloc, 
 
 		for (U64 j = archive->entries.length - 1; j != U64_MAX; --j) {
 
-			const ArchiveEntry cai = archive->entries.ptr[i];
+			const ArchiveEntry caj = archive->entries.ptr[j];
 
-			if(!CharString_startsWithStringInsensitive(cai.path, resolved, 0))
+			if(!CharString_startsWithStringInsensitive(caj.path, resolved, 0))
 				continue;
 
 			//Free and remove from array

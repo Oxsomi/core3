@@ -28,5 +28,5 @@ Bool Buffer_csprng(Buffer target) {
 	if(!Buffer_length(target) || Buffer_isConstRef(target))
 		return false;
 
-	return !SecRandomCopyBytes(kSecRandomDefault, Buffer_length(target), (void*)target.ptr);
+	return !SecRandomCopyBytes(kSecRandomDefault, Buffer_length(target), target.ptrNonConst);
 }

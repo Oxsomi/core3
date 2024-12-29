@@ -44,7 +44,7 @@ typedef enum EDLFlags {
 
 } EDLFlags;
 
-typedef struct DLHeader {
+typedef struct DLHeader {		//Header should always be at least 4-byte aligned
 
 	U32 magicNumber;			//oiDL (0x4C44696F)
 

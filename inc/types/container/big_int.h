@@ -34,7 +34,10 @@ typedef struct CharString CharString;
 
 typedef struct BigInt {
 
-	const U64 *data;
+	union {
+		const U64 *data;	//Aligned
+		U64 *dataNonConst;	//Only if !isConst
+	};
 
 	Bool isConst;
 	Bool isRef;
@@ -108,7 +111,8 @@ U16 BigInt_byteCount(BigInt b);
 U16 BigInt_bitCount(BigInt b);
 
 U16 BigInt_bitScan(BigInt a);						//Find highest bit that was on. Returns U16_MAX if 0
-Error BigInt_isBase2(BigInt a, Allocator allocator, Bool *isBase2);
+U16 BigInt_bitScanReverse(BigInt a);				//Starts at the first bit rather than the last
+Bool BigInt_isBase2(BigInt a);
 
 //Transform to string
 
@@ -144,7 +148,7 @@ Error BigInt_toString(
 
 //Create
 
-U128 U128_create(const U8 data[16]);
+U128 U128_create(const void *data);		//U8[16]
 U128 U128_createU64x2(U64 a, U64 b);
 
 U128 U128_zero();
@@ -195,6 +199,7 @@ U128 U128_sub(U128 a, U128 b);
 //Helpers
 
 U8 U128_bitScan(U128 a);						//Find highest bit that was on. Returns U8_MAX if 0
+U8 U128_bitScanReverse(U128 a);					//Find highest bit that was on. Returns U8_MAX if 0
 Bool U128_isBase2(U128 a);
 
 //Transform to string

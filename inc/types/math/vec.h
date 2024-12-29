@@ -27,12 +27,12 @@
 
 #define NONE_OP_SELF_T(T, N, ...) {			\
 											\
-	T res = (T) { 0 };					  \
+	T res = (T) { 0 };					  	\
 											\
-	for (U8 i = 0; i < N; ++i)			  \
+	for (U8 i = 0; i < N; ++i)			  	\
 		T##_set(&res, i, (__VA_ARGS__));	\
 											\
-	return res;							 \
+	return res;							 	\
 }
 
 #define NONE_OP4I(...) NONE_OP_SELF_T(I32x4, 4, __VA_ARGS__)
@@ -137,3 +137,10 @@
 #include "vec2i.h"
 #include "vec2f.h"
 
+BUFFER_OP(I32x2);
+BUFFER_OP(F32x2);
+//BUFFER_OP(F64x2);		TODO:
+
+BUFFER_OP(I32x4);
+BUFFER_OP(F32x4);
+//BUFFER_OP(F64x4);		TODO:

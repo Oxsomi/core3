@@ -32,20 +32,16 @@
 //The tokenizer will then split *=+ up into *= and + from LexerToken to ParsedToken.
 
 typedef enum ELexerExpressionType {
-
 	ELexerExpressionType_None,
 	ELexerExpressionType_Preprocessor,
 	ELexerExpressionType_Comment,
 	ELexerExpressionType_MultiLineComment,
 	ELexerExpressionType_Generic
-
 } ELexerExpressionType;
 
 typedef struct LexerExpression {
-
 	U16 type, tokenCount;
 	U32 tokenOffset;
-
 } LexerExpression;
 
 typedef struct Lexer Lexer;

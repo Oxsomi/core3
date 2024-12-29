@@ -917,7 +917,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						if(utex.depthFormat >= EDepthStencilFormat_StencilStart)
 							range.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
-						if(utex.depthFormat != EDepthStencilFormat_S8Ext)
+						if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)
 							range.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
 					}
 

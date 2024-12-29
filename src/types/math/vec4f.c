@@ -20,6 +20,9 @@
 
 #include "types/math/math.h"
 #include "types/math/vec.h"
+#include "types/base/error.h"
+
+BUFFER_OP_IMPL(F32x4);
 
 F32x4 F32x4_complement(F32x4 a) { return F32x4_sub(F32x4_one(), a); }
 F32x4 F32x4_negate(F32x4 a) { return F32x4_sub(F32x4_zero(), a); }
@@ -59,16 +62,16 @@ F32x4 F32x4_mod(F32x4 v, F32x4 d) { return F32x4_mul(F32x4_fract(F32x4_div(v, d)
 #define F32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)							\
 F32x4 F32x4_##xv##yv##zv##wv(F32x4 a) { return vecShufflef(a, x0, y0, z0, w0); }
 
-#define F32x4_expand3(...)												\
-F32x4_expand4(__VA_ARGS__, x, 0); F32x4_expand4(__VA_ARGS__, y, 1);	\
+#define F32x4_expand3(...)														\
+F32x4_expand4(__VA_ARGS__, x, 0); F32x4_expand4(__VA_ARGS__, y, 1);				\
 F32x4_expand4(__VA_ARGS__, z, 2); F32x4_expand4(__VA_ARGS__, w, 3);
 
-#define F32x4_expand2(...)												\
-F32x4_expand3(__VA_ARGS__, x, 0); F32x4_expand3(__VA_ARGS__, y, 1);	\
+#define F32x4_expand2(...)														\
+F32x4_expand3(__VA_ARGS__, x, 0); F32x4_expand3(__VA_ARGS__, y, 1);				\
 F32x4_expand3(__VA_ARGS__, z, 2); F32x4_expand3(__VA_ARGS__, w, 3);
 
-#define F32x4_expand(...)												\
-F32x4_expand2(__VA_ARGS__, x, 0); F32x4_expand2(__VA_ARGS__, y, 1);	\
+#define F32x4_expand(...)														\
+F32x4_expand2(__VA_ARGS__, x, 0); F32x4_expand2(__VA_ARGS__, y, 1);				\
 F32x4_expand2(__VA_ARGS__, z, 2); F32x4_expand2(__VA_ARGS__, w, 3);
 
 F32x4_expand(x, 0);
@@ -85,11 +88,11 @@ F32x4_expand(w, 3);
 #define F32x3_expand3(xv, yv, zv) F32x4 F32x4_##xv##yv##zv(F32x4 a) { return F32x4_trunc3(F32x4_##xv##yv##zv##x(a)); }
 
 #define F32x3_expand2(...)										\
-F32x3_expand3(__VA_ARGS__, x); F32x3_expand3(__VA_ARGS__, y); \
+F32x3_expand3(__VA_ARGS__, x); F32x3_expand3(__VA_ARGS__, y); 	\
 F32x3_expand3(__VA_ARGS__, z); F32x3_expand3(__VA_ARGS__, w);
 
 #define F32x3_expand(...)										\
-F32x3_expand2(__VA_ARGS__, x); F32x3_expand2(__VA_ARGS__, y); \
+F32x3_expand2(__VA_ARGS__, x); F32x3_expand2(__VA_ARGS__, y); 	\
 F32x3_expand2(__VA_ARGS__, z); F32x3_expand2(__VA_ARGS__, w);
 
 F32x3_expand(x);
@@ -172,10 +175,29 @@ F32x4 F32x4_negTwo() { return F32x4_xxxx4(-2); }
 Bool F32x4_all(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_zero())) == 4; }
 Bool F32x4_any(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_zero())); }
 
-F32x4 F32x4_load1(const F32 *arr) { return arr ? F32x4_create1(*arr) : F32x4_zero(); }
-F32x4 F32x4_load2(const F32 *arr) { return arr ? F32x4_create2(*arr, arr[1]) : F32x4_zero(); }
-F32x4 F32x4_load3(const F32 *arr) { return arr ? F32x4_create3(*arr, arr[1], arr[2]) : F32x4_zero(); }
-F32x4 F32x4_load4(const F32 *arr) { return arr ? *(const F32x4*) arr : F32x4_zero(); }
+F32x4 F32x4_load1(const void *arr) {
+	F32x4 result = F32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
+	return result;
+}
+
+F32x4 F32x4_load2(const void *arr) {
+	F32x4 result = F32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
+	return result;
+}
+
+F32x4 F32x4_load3(const void *arr) {
+	F32x4 result = F32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 3), Buffer_createRefConst(arr, sizeof(F32) * 3));
+	return result;
+}
+
+F32x4 F32x4_load4(const void *arr) {
+	F32x4 result = F32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 4), Buffer_createRefConst(arr, sizeof(F32) * 4));
+	return result;
+}
 
 void F32x4_setX(F32x4 *a, F32 v) { if(a) *a = F32x4_create4(v,					F32x4_y(*a),	F32x4_z(*a),	F32x4_w(*a)); }
 void F32x4_setY(F32x4 *a, F32 v) { if(a) *a = F32x4_create4(F32x4_x(*a),		v,				F32x4_z(*a),	F32x4_w(*a)); }

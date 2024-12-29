@@ -35,7 +35,7 @@ Bool Buffer_csprng(Buffer target) {
 
 	const NTSTATUS stat = BCryptGenRandom(
 		0,
-		(U8*)target.ptr,
+		target.ptrNonConst,
 		(ULONG) Buffer_length(target),
 		BCRYPT_USE_SYSTEM_PREFERRED_RNG
 	);

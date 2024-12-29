@@ -103,7 +103,7 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 			CharString_length(platformErr), platformErr.ptr
 
 		).genericError
-		)
+	)
 		Log_log(alloc, logLevel, options | ELogOptions_NoBreak, result);
 
 	Log_printCapturedStackTraceCustom(alloc, (const void**)err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);

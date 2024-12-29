@@ -95,8 +95,8 @@ void I32x2_set(I32x2 *a, U8 i, I32 v);
 I32x2 I32x2_create1(I32 x);
 I32x2 I32x2_create2(I32 x, I32 y);
 
-I32x2 I32x2_load1(const I32 *arr);
-I32x2 I32x2_load2(const I32 *arr);
+I32x2 I32x2_load1(const void *arr);		//I32[1]
+I32x2 I32x2_load2(const void *arr);		//I32[2]
 
 I32x2 I32x2_swapEndianness(I32x2 v);
 

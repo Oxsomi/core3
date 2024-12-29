@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "stringx.h": "c"
+        "stringx.h": "c",
+        "vec.h": "c"
     }
 }

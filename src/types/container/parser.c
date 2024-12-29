@@ -68,7 +68,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 			tokenType = ETokenType_Not;
 			break;
 
-		case '?':		// ~
+		case '?':		// ?
 			count = 1;
 			tokenType = ETokenType_Ternary;
 			break;
@@ -125,7 +125,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 
 		case '<':		//<, <=, <<, <<=, <=>
 
-			count = 1 + (next == '=' || next == start) + (next == start && next2 == '=') + (next2 == '>');
+			count = 1 + (next == '=' || next == start) + (next == start && next2 == '=') + (next2 == start && next == '=');
 
 			switch (count) {
 				case 1:		tokenType = ETokenType_Lt;												break;
@@ -252,7 +252,7 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 					--lextStr.lenAndNullTerminated;
 
 				U64 tmp = 0;
-				if(!CharString_parseU64(lextStr, &tmp) || (tmp >> 63))
+				if(!CharString_parseU64(lextStr, &tmp))
 					retError(clean, Error_invalidOperation(3, "Parser_visit() expected integer, but couldn't parse it"))
 
 				if(negate && (tmp >> 63))
@@ -261,9 +261,13 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 				Token tok = (Token) {
 					.naiveTokenId = lexerTokenId + i,
 					.tokenType = negate ? ETokenType_SignedInteger : ETokenType_Integer,
-					.valuei = ((I64) tmp) * (negate ? -1 : 1),
 					.tokenSize = (U8) CharString_length(lextStr) + movedChar
 				};
+
+				if(!negate)
+					tok.valueu = tmp;
+
+				else tok.valuei = -(I64)tmp;
 
 				gotoIfError2(clean, ListToken_pushBack(&parser->tokens, tok, alloc))
 				break;
@@ -326,6 +330,8 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 
 					gotoIfError2(clean, ListToken_pushBack(&parser->tokens, tok, alloc))
 				}
+
+				break;
 			}
 		}
 	}
@@ -612,7 +618,6 @@ Bool Parser_printSymbol(
 		ESymbolFlagFuncVar_IsConst |
 		ESymbolFlagFuncVar_IsConstexpr |
 		ESymbolFlagFuncVar_HasImpl |
-		ESymbolFlagFuncVar_HasUserImpl |
 		ESymbolFlagFuncVar_IsStatic |
 		ESymbolFlagFuncVar_IsExtern |
 		ESymbolFlag_IsPrivate |
@@ -629,7 +634,7 @@ Bool Parser_printSymbol(
 
 	if (!isFiltered && (sym.flags & flagsToQuery)) {
 
-		const C8 *stringsToCombine[18];
+		const C8 *stringsToCombine[17];
 		U64 counter = 0;
 
 		if(sym.flags & ESymbolFlagTypedef_IsUsing)
@@ -672,9 +677,6 @@ Bool Parser_printSymbol(
 
 		if(sym.flags & ESymbolFlagFuncVar_HasImpl)
 			stringsToCombine[counter++] = "impl";
-
-		if(sym.flags & ESymbolFlagFuncVar_HasUserImpl)
-			stringsToCombine[counter++] = "user_impl";
 
 		if(sym.flags & ESymbolFlagFuncVar_IsStatic)
 			stringsToCombine[counter++] = "static";

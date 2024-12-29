@@ -32,8 +32,8 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 	if(allocationBuffer->allocations.ptr)
 		return Error_invalidOperation(0, "AllocationBuffer_create()::allocationBuffer isn't NULL, might indicate memleak");
 
-	if(size >> 48 && !isVirtual)
-		return Error_invalidParameter(0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 48-bit)");
+	if(size >> 62)
+		return Error_invalidParameter(0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 62-bit)");
 
 	Error err;
 

@@ -8,7 +8,7 @@ oSH is a single shader represented in a single or multiple binary/text format(s)
 
 - SPIRV
 - DXIL
-- (**unsupported for now**): MSL
+- (**unsupported for now**): MetalIR (Metal IR)
 - (**unsupported for now**): WGSL
 
 It includes the shader binary/text along with the extensions it uses, so it can easily be validated if the shader binary can be loaded by the runtime.
@@ -26,7 +26,7 @@ Finally, this would become a part of an oiSC file (Oxsomi Shader Cache). Which i
 ## File format spec
 
 ```c
-typedef struct SHHeader {
+typedef struct SHHeader {		//4-byte aligned
 
 	U32 magicNumber;			//oiSH (0x4853696F); optional if it's part of an oiSC.
 
@@ -98,7 +98,7 @@ typedef enum ESHBinaryFlags {
 	ESHBinaryFlags_HasDXIL					= 1 << 1,
 
 	//Reserved
-	//ESHBinaryFlags_HasMSL					= 1 << 2,
+	//ESHBinaryFlags_HasMetalIR				= 1 << 2,
 	//ESHBinaryFlags_HasWGSL				= 1 << 3
 
 	ESHBinaryFlags_HasShaderAnnotation		= 1 << 4,

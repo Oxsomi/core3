@@ -47,7 +47,7 @@ typedef struct FileInfo {
 	U64 fileSize;
 } FileInfo;
 
-typedef Bool (*FileCallback)(FileInfo, void*, Error *e_rr);
+typedef Bool (*FileCallback)(FileInfo, void*, Error*);
 
 Bool File_resolve(
 	CharString loc,

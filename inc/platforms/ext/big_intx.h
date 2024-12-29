@@ -44,7 +44,6 @@ Bool BigInt_setx(BigInt *a, BigInt b, Bool allowResize);
 
 Bool BigInt_truncx(BigInt *big);
 
-Error BigInt_isBase2x(BigInt a, Bool *isBase2);
 U128 U128_createFromDecx(CharString text, Error *failed);
 U128 U128_createFromStringx(CharString text, Error *failed);
 

@@ -86,6 +86,7 @@ I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 }
 
 typedef struct U8x4x4 {
+	I32x4 vec;
 	U8 v[4][4];
 } U8x4x4;
 
@@ -157,8 +158,7 @@ I32x4 AES_mixColumns(I32x4 vvv) {
 				r.v[j][i] ^= AES_g2_8(v.v4x4.v[k][i], AES_MIX_COLUMN[j][k]);
 
 	r = U8x4x4_transpose(&r);
-
-	return *(const I32x4*)&r;
+	return v.v;
 }
 
 I32x4 AES_encodeBlock(I32x4 a, I32x4 b, Bool isLast) {

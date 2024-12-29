@@ -20,6 +20,9 @@
 
 #include "types/math/vec.h"
 #include "types/math/type_cast.h"
+#include "types/base/error.h"
+
+BUFFER_OP_IMPL(I32x4);
 
 //Convert raw bits to data type
 
@@ -57,14 +60,28 @@ I32x4 I32x4_negTwo() { return I32x4_xxxx4(-2); }
 Bool I32x4_all(I32x4 a) { return I32x4_reduce(I32x4_neq(a, I32x4_zero())) == 4; }
 Bool I32x4_any(I32x4 a) { return I32x4_reduce(I32x4_neq(a, I32x4_zero())); }
 
-I32x4 I32x4_load1(const I32 *arr) { return arr ? I32x4_create1(*arr) : I32x4_zero(); }
-I32x4 I32x4_load2(const I32 *arr) { return arr ? I32x4_create2(*arr, arr[1]) : I32x4_zero(); }
-I32x4 I32x4_load3(const I32 *arr) { return arr ? I32x4_create3(*arr, arr[1], arr[2]) : I32x4_zero(); }
+I32x4 I32x4_load1(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
+	return result;
+}
 
-//Not a cast because that doesn't work on misaligned ints
+I32x4 I32x4_load2(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
+	return result;
+}
 
-I32x4 I32x4_load4(const I32 *arr) {
-	return arr ? I32x4_create4(*arr, arr[1], arr[2], arr[3]) : I32x4_zero();
+I32x4 I32x4_load3(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 3), Buffer_createRefConst(arr, sizeof(I32) * 3));
+	return result;
+}
+
+I32x4 I32x4_load4(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 4), Buffer_createRefConst(arr, sizeof(I32) * 4));
+	return result;
 }
 
 I32x4 I32x4_swapEndianness(I32x4 v) {

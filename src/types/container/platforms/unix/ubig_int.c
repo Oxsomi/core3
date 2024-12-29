@@ -20,8 +20,10 @@
 
 #include "types/container/big_int.h"
 
-U128 U128_create(const U8 data[16]) {
-	return *(const U128*)data;
+U128 U128_create(const void *data) {
+	U128 result = U128_zero();
+	Buffer_copy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst(data, sizeof(result)));
+	return result;
 }
 
 typedef union U128_U64x2 {
@@ -53,42 +55,16 @@ U128 U128_sub(U128 a, U128 b) {  return a - b; }
 U128 U128_lsh(U128 a, U8 x) { return a << x; }
 U128 U128_rsh(U128 a, U8 x) { return a >> x; }
 
-typedef union BitScanOpt {
-	U128 a128;
-	U64 a64[2];
-	U32 a32[4];
-	U16 a16[8];
-	U8 a8[16];
-} BitScanOpt;
-
 U8 U128_bitScan(U128 a) {
+	BigInt b = (BigInt) { 0 };
+	BigInt_createRefConst(&a, 2, &b);
+	return (U8) BigInt_bitScan(b);
+}
 
-	BitScanOpt opt = (BitScanOpt) { .a128 = a };
-
-	//Keep subdividing by 2x until the first bit is found
-
-	U64 offset = (Bool)opt.a64[1];
-	offset <<= 1;
-
-	offset |= (Bool)opt.a32[offset + 1];
-	offset <<= 1;
-
-	offset |= (Bool)opt.a16[offset + 1];
-	offset <<= 1;
-
-	offset |= (Bool)opt.a8[offset + 1];
-	U8 b = opt.a8[offset];
-	offset <<= 1;
-
-	offset |= (Bool)(b >> 4);
-	offset <<= 1;
-
-	offset |= (Bool)((b >> (((offset & 2) + 1) * 2)) & 3);
-	offset <<= 1;
-
-	offset |= (Bool)((b >> ((offset & 6) + 1)) & 1);
-
-	return offset;
+U8 U128_bitScanReverse(U128 a) {
+	BigInt b = (BigInt) { 0 };
+	BigInt_createRefConst(&a, 2, &b);
+	return (U8) BigInt_bitScanReverse(b);
 }
 
 ECompareResult U128_cmp(U128 a, U128 b) {

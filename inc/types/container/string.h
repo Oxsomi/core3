@@ -31,20 +31,23 @@
 //The null terminator is omitted for speed and to allow references into an existing string or data.
 //The null terminator is automatically added on copy.
 //
-//There are four types of strings:
+//There are four/five types of strings:
 //
 //Stack strings (or heap if you manually allocate it there):
-//	ShortString; 31 chars max
-//	LongString; 63 char max
+//	ShortString; 31 chars max (includes null terminator)
+//	LongString; 63 char max (includes null terminator)
 //
 //CharString; A string that goes on the heap (or wherever the allocator tells it to go)
 //CharString(Ref); A reference to an already allocated string (CharString with capacity 0)
 //CharString(Ref) const; A const reference that should not allow operations on it (CharString with capacity -1)
 
-//Heap string
+//Dynamic string
 
 typedef struct CharString {
-	const C8 *ptr;					//This is non const if not a const ref, but for safety this is const (cast away if not).
+	union {
+		const C8 *ptr;				//This is non const if not a const ref, but for safety this is const (cast away if not).
+		C8 *ptrNonConst;			//Only use if !isConstRef
+	};
 	U64 lenAndNullTerminated;		//First bit contains if it's null terminated or not. Length excludes null terminator.
 	U64 capacityAndRefInfo;			//capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
 } CharString;
@@ -64,31 +67,31 @@ Bool CharString_isEmpty(CharString str);
 Bool CharString_isNullTerminated(CharString str);
 U64  CharString_bytes(CharString str);
 U64  CharString_length(CharString str);
-U64  CharString_capacity(CharString str);		//Returns 0 if ref
+U64  CharString_capacity(CharString str);				//Returns 0 if ref
 
 Buffer CharString_buffer(CharString str);
 Buffer CharString_bufferConst(CharString str);
-Buffer CharString_allocatedBuffer(CharString str);
+Buffer CharString_allocatedBuffer(CharString str);		//Returns null buffer if ref
 Buffer CharString_allocatedBufferConst(CharString str);
 
 //Iteration
 
 C8 *CharString_begin(CharString str);
+const C8 *CharString_beginConst(CharString str);
+
 C8 *CharString_end(CharString str);
+const C8 *CharString_endConst(CharString str);
 
 C8 *CharString_charAt(CharString str, U64 off);
+const C8 *CharString_charAtConst(CharString str, U64 off);
 
 //Returns U32_MAX if it wasn't a valid UTF8 codepoint
 //TODO: U32 CharString_codepointAtByteConst(CharString str, U64 startByteOffset, U8 *length);
 //TODO: U32 CharString_codepointAtConst(CharString str, U64 offset, U8 *length);
 
-const C8 *CharString_beginConst(CharString str);
-const C8 *CharString_endConst(CharString str);
-
-const C8 *CharString_charAtConst(CharString str, U64 off);
 Bool CharString_isValidAscii(CharString str);
-//TODO: Bool CharString_isValidUTF8(CharString str);
-Bool CharString_isValidFileName(CharString str);		//TODO: Understand UTF8
+Bool CharString_isValidUTF8(CharString str);
+Bool CharString_isValidFileName(CharString str);
 
 ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive);
 ECompareResult CharString_compareSensitive(CharString a, CharString b);						//TODO: sensitivity for unicode?
@@ -96,12 +99,12 @@ ECompareResult CharString_compareInsensitive(CharString a, CharString b);
 
 //Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 
-Bool CharString_isValidFilePath(CharString str);		//TODO: Understand UTF8
+Bool CharString_isValidFilePath(CharString str);
 Bool CharString_clear(CharString *str);
 
 U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize);
-//TODO: U64 CharString_calcUTF8Len(const C8 *ptr, U64 maxBytes);
-//U64 CharString_hash(CharString s);								TODO:
+U64 CharString_unicodeCodepoints(CharString str);				//Returns U64_MAX if invalid codepoints were detected
+U64 CharString_hash(CharString s);								//Hash of content, for maps only (not for cryptography purposes)
 
 C8 CharString_getAt(CharString str, U64 i);
 Bool CharString_setAt(CharString str, U64 i, C8 c);
@@ -124,8 +127,6 @@ CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTe
 CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated);
 
 CharString CharString_createRefStrConst(CharString str);
-
-//
 
 CharString CharString_createRefShortStringConst(const ShortString str);
 CharString CharString_createRefLongStringConst(const LongString str);
@@ -195,7 +196,7 @@ Error CharString_prependString(CharString *s, CharString other, Allocator alloca
 
 //TODO: CharString_appendCodepoint/prependCodepoint
 
-CharString CharString_newLine();			//Should only be used when writing a file for the current OS. Not when parsing files.
+CharString CharString_newLine();			//Always \n since all OSes can handle that nowadays
 
 Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator);
 Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator allocator);
@@ -398,6 +399,8 @@ U64 CharString_findLastStringInsensitive(CharString s, CharString other, U64 off
 
 U64 CharString_findStringSensitive(CharString s, CharString other, Bool isFirst, U64 off, U64 len);
 U64 CharString_findStringInsensitive(CharString s, CharString other, Bool isFirst, U64 off, U64 len);
+
+//TODO: CharString_findCodepoint
 
 Bool CharString_contains(CharString str, C8 c, EStringCase caseSensitive, U64 off, U64 len);
 Bool CharString_containsString(CharString str, CharString other, EStringCase caseSensitive, U64 off, U64 len);

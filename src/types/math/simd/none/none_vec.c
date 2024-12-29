@@ -24,37 +24,26 @@
 
 //Cast
 
-F32x4 F32x4_fromI32x4(I32x4 a) {
-	return (F32x4) { .v = {
-		(F32) I32x4_x(a), (F32) I32x4_y(a), (F32) I32x4_z(a), (F32) I32x4_w(a)
-	} };
-}
-
-I32x4 I32x4_fromF32x4(F32x4 a) {
-	return (I32x4) { .v = {
-		(I32) F32x4_x(a), (I32) F32x4_y(a), (I32) F32x4_z(a), (I32) F32x4_w(a)
-	} };
-}
-
-F32x2 F32x2_fromI32x2(I32x2 a) { return (F32x2) { .v = { (F32) I32x2_x(a), (F32) I32x2_y(a) } }; }
-I32x2 I32x2_fromF32x2(F32x2 a) { return (I32x2) { .v = { (I32) F32x2_x(a), (I32) F32x2_y(a) } }; }
+F32x4 F32x4_fromI32x4(I32x4 a) { return *(const F32x4*)&a; }
+I32x4 I32x4_fromF32x4(F32x4 a) { return *(const I32x4*)&a; }
+F32x2 F32x2_fromI32x2(I32x2 a) { return *(const F32x2*)&a; }
+I32x2 I32x2_fromF32x2(F32x2 a) { return *(const I32x2*)&a; }
 
 //Arithmetic
 
-I32x4 I32x4_add(I32x4 a, I32x4 b) NONE_OP4I(a.v[i] + b.v[i])
+I32x4 I32x4_add(I32x4 a, I32x4 b) NONE_OP4I((I32)((U32)a.v[i] + (U32)b.v[i]))
 F32x4 F32x4_add(F32x4 a, F32x4 b) NONE_OP4F(a.v[i] + b.v[i])
-I32x2 I32x2_add(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] + b.v[i])
+I32x2 I32x2_add(I32x2 a, I32x2 b) NONE_OP2I((I32)((U32)a.v[i] + (U32)b.v[i]))
 F32x2 F32x2_add(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] + b.v[i])
 
-I32x4 I32x4_sub(I32x4 a, I32x4 b) NONE_OP4I(a.v[i] - b.v[i])
+I32x4 I32x4_sub(I32x4 a, I32x4 b) NONE_OP4I((I32)((U32)a.v[i] - (U32)b.v[i]))
 F32x4 F32x4_sub(F32x4 a, F32x4 b) NONE_OP4F(a.v[i] - b.v[i])
-I32x2 I32x2_sub(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] - b.v[i])
+I32x2 I32x2_sub(I32x2 a, I32x2 b) NONE_OP2I((I32)((U32)a.v[i] - (U32)b.v[i]))
 F32x2 F32x2_sub(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] - b.v[i])
 
-I32x4 I32x4_mul(I32x4 a, I32x4 b) NONE_OP4I(a.v[i] * b.v[i])
-
+I32x4 I32x4_mul(I32x4 a, I32x4 b) NONE_OP4I((I32)((I64)a.v[i] * (I64)b.v[i]))
 F32x4 F32x4_mul(F32x4 a, F32x4 b) NONE_OP4F(a.v[i] * b.v[i])
-I32x2 I32x2_mul(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] * b.v[i])
+I32x2 I32x2_mul(I32x2 a, I32x2 b) NONE_OP2I((I32)((I64)a.v[i] * (I64)b.v[i]))
 F32x2 F32x2_mul(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] * b.v[i])
 
 I32x4 I32x4_div(I32x4 a, I32x4 b) NONE_OP4I(a.v[i] / b.v[i])
@@ -386,21 +375,26 @@ I32x4 I32x4_lshByte96(I32x4 a) {
 
 //SHA256 helper functions
 
+typedef union I32x4_U8x8 {
+	I32x4 vec;
+	U8 uc[16];
+} I32x4_U8x8;
+
 I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
 
 	const U8 *ua = (U8*)&a;
 	const U8 *ub = (U8*)&b;
-	U8 uc[16];
+	I32x4_U8x8 c;
 
 	for (U8 i = 0; i < 16; ++i) {
 
 		if(ub[i] >> 7)
-			uc[i] = 0;
+			c.uc[i] = 0;
 
-		else uc[i] = ua[ub[i] & 0xF];
+		else c.uc[i] = ua[ub[i] & 0xF];
 	}
 
-	return *(const I32x4*)uc;
+	return c.vec;
 }
 
 I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {

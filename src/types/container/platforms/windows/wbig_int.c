@@ -20,13 +20,8 @@
 
 #include "types/container/big_int.h"
 
-U128 U128_create(const U8 data[16]) {
-	return I32x4_createFromU64x2(((const U64*)data)[0], ((const U64*)data)[1]);
-}
-
-U128 U128_createU64x2(U64 a, U64 b) {
-	return I32x4_createFromU64x2(a, b);
-}
+U128 U128_create(const void *data) { return I32x4_load4(data); }
+U128 U128_createU64x2(U64 a, U64 b) { return I32x4_createFromU64x2(a, b); }
 
 U128 U128_mul64(U64 au, U64 bu) {
 	const U64 hiProd = 0;
@@ -77,6 +72,18 @@ U8 U128_bitScan(U128 a) {
 
 	const Bool hasLastBit = _BitScanReverse64(&index, ((const U64*)&a)[0]);
 	return hasLastBit ? (U8) index : U8_MAX;
+}
+
+U8 U128_bitScanReverse(U128 a) {
+
+	unsigned long index = 0;
+	const Bool hasFirstBit = _BitScanForward64(&index, ((const U64*)&a)[0]);
+
+	if (hasFirstBit)
+		return (U8)index;
+
+	const Bool hasLastBit = _BitScanForward64(&index, ((const U64*)&a)[1]);
+	return hasLastBit ? (U8) index + 64 : U8_MAX;
 }
 
 ECompareResult U128_cmp(U128 a, U128 b) {

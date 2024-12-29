@@ -52,7 +52,7 @@ Bool CharString_isEmpty(CharString str) { return !CharString_bytes(str); }
 Bool CharString_isNullTerminated(CharString str) { return str.lenAndNullTerminated >> 63; }
 
 Buffer CharString_buffer(CharString str) {
-	return CharString_isConstRef(str) ? Buffer_createNull() : Buffer_createRef((U8*)str.ptr, CharString_bytes(str));
+	return CharString_isConstRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_bytes(str));
 }
 
 Buffer CharString_bufferConst(CharString str) {
@@ -60,23 +60,23 @@ Buffer CharString_bufferConst(CharString str) {
 }
 
 Buffer CharString_allocatedBuffer(CharString str) {
-	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRef((U8*)str.ptr, CharString_capacity(str));
+	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_capacity(str));
 }
 
 Buffer CharString_allocatedBufferConst(CharString str) {
-	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRefConst((const U8*)str.ptr, CharString_capacity(str));
+	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRefConst(str.ptr, CharString_capacity(str));
 }
 
 //Iteration
 
-C8 *CharString_begin(CharString str) { return CharString_isConstRef(str) ? NULL : (C8*)str.ptr; }
+C8 *CharString_begin(CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst; }
 const C8 *CharString_beginConst(CharString str) { return str.ptr; }
 
-C8 *CharString_end(CharString str) { return CharString_isConstRef(str) ? NULL : (C8*)str.ptr + CharString_length(str); }
+C8 *CharString_end(CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst + CharString_length(str); }
 const C8 *CharString_endConst(CharString str) { return str.ptr + CharString_length(str); }
 
 C8 *CharString_charAt(CharString str, U64 off) {
-	return CharString_isConstRef(str) || off >= CharString_length(str) ? NULL : (C8*)str.ptr + off;
+	return CharString_isConstRef(str) || off >= CharString_length(str) ? NULL : str.ptrNonConst + off;
 }
 
 const C8 *CharString_charAtConst(CharString str, U64 off) {
@@ -92,7 +92,13 @@ Bool CharString_isValidAscii(CharString str) {
 	return true;
 }
 
+Bool CharString_isValidUTF8(CharString str) {
+	return Buffer_isUTF8(CharString_bufferConst(str), 1);
+}
+
 Bool CharString_isValidFileName(CharString str) {
+
+	//TODO: Understand UTF8
 
 	for(U64 i = 0; i < CharString_length(str); ++i)
 		if(!C8_isValidFileName(str.ptr[i]))
@@ -164,6 +170,8 @@ Bool CharString_isSupportedInFilePath(CharString str) {
 //File_resolve but without validating if it'd be a valid (permitted) path on disk.
 
 Bool CharString_isValidFilePath(CharString str) {
+
+	//TODO: Understand UTF8
 
 	//myTest/ <-- or myTest\ to myTest
 
@@ -2870,37 +2878,29 @@ U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
 	return i;
 }
 
-/*U64 CharString_hash(CharString s) {			//TODO: FNV for <10 and xxh64 for >
+U64 CharString_unicodeCodepoints(CharString str) {
 
-	U64 h = FNVHash_create();
+	U64 i = 0, j = 0;
+	Buffer buf = CharString_bufferConst(str);
 
-	const U64 *ptr = (const U64*)s.ptr, *end = ptr + (s.length >> 3);
+	while(i < Buffer_length(buf)) {
 
-	for(; ptr < end; ++ptr)
-		h = FNVHash_apply(h, *ptr);
+		UnicodeCodePointInfo codePoint = (UnicodeCodePointInfo) { 0 };
 
-	U64 last = 0, shift = 0;
+		if(Buffer_readAsUTF8(buf, i, &codePoint).genericError)
+			return U64_MAX;
 
-	if (s.length & 4) {
-		last = *(const U32*) ptr;
-		shift = 4;
-		ptr = (const U64*)((const U32*)ptr + 1);
+		i += codePoint.bytes;
+		++j;
 	}
 
-	if (s.length & 2) {
-		last |= (U64)(*(const U16*)ptr) << shift;
-		shift |= 2;
-		ptr = (const U64*)((const U16*)ptr + 1);
-	}
+	return j;
+}
 
-	if (s.length & 1)
-		last |= (U64)(*(const U8*)ptr) << shift++;
-
-	if(shift)
-		h = FNVHash_apply(h, last);
-
-	return h;
-}*/
+U64 CharString_hash(CharString s) {
+	U64 hash = Buffer_fnv1a64Single(CharString_length(s), Buffer_fnv1a64Offset);
+	return Buffer_fnv1a64(CharString_bufferConst(s), hash);
+}
 
 CharString CharString_getFilePath(CharString *str) {
 

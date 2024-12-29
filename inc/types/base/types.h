@@ -27,7 +27,7 @@
 //Null is apparently non-standard
 
 #ifndef NULL
-	#define NULL (void*)0
+	#define NULL ((void*)0)
 #endif
 
 //A hint to show that something is implementation dependent
@@ -35,10 +35,6 @@
 //These should never be directly called by anyone else than the main library the impl is for.
 
 #define impl
-
-//A hint to show that the end user should define these
-
-#define user_impl
 
 #ifdef __cplusplus
 	extern "C" {
@@ -59,8 +55,8 @@ typedef uint64_t U64;
 typedef float F32;
 typedef double F64;
 
-typedef U64 Ns;		/// Time since Unix epoch in Ns
-typedef I64 DNs;	/// Delta Ns
+typedef U64 Ns;		//Time since Unix epoch in Ns
+typedef I64 DNs;	//Delta Ns
 
 typedef char C8;
 
@@ -135,8 +131,10 @@ typedef enum ECompareResult {
 } ECompareResult;
 
 typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
-typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);		//Passing NULL generally indicates raw buffer compare
-typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL generally indicates raw buffer hash
+typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);		//Passing NULL as func indicates raw buffer compare
+typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL as func indicates raw buffer hash
+
+typedef struct Error Error;
 
 //Fixed point
 
@@ -144,8 +142,8 @@ typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL generally in
 																							\
 typedef U64 FP##integ##f##frac;																\
 																							\
-FP##integ##f##frac FP##integ##f##frac##_Add(FP##integ##f##frac a, FP##integ##f##frac b);	\
-FP##integ##f##frac FP##integ##f##frac##_Sub(FP##integ##f##frac a, FP##integ##f##frac b);	\
+FP##integ##f##frac FP##integ##f##frac##_add(FP##integ##f##frac a, FP##integ##f##frac b);	\
+FP##integ##f##frac FP##integ##f##frac##_sub(FP##integ##f##frac a, FP##integ##f##frac b);	\
 																							\
 FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v);									\
 F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value);
@@ -166,8 +164,14 @@ FixedPoint(6, 46)
 //Buffer (more functions in types/buffer.h)
 
 typedef struct Buffer {
-	const U8 *ptr;
+
+	union {
+		const U8 *ptr;
+		U8 *ptrNonConst;		//Requires !Buffer_isConstRef(buf)
+	};
+	
 	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
+
 } Buffer;
 
 U64 Buffer_length(Buffer buf);
@@ -177,14 +181,102 @@ Bool Buffer_isConstRef(Buffer buf);
 
 Buffer Buffer_createManagedPtr(void *ptr, U64 length);
 
+//These should never be Buffer_free-d because Buffer doesn't know if it's allocated
+
+Buffer Buffer_createNull();
+
+Buffer Buffer_createRef(void *v, U64 length);
+Buffer Buffer_createRefConst(const void *v, U64 length);
+
+//Bit manipulation
+
+Bool Buffer_copy(Buffer dst, Buffer src);
+Bool Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backwards; useful if ranges overlap
+
+Error Buffer_setAllBits(Buffer dst);
+Error Buffer_unsetAllBits(Buffer dst);
+
+Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
+
+Error Buffer_getBit(Buffer buf, U64 offset, Bool *output);
+
+Error Buffer_setBit(Buffer buf, U64 offset);
+Error Buffer_resetBit(Buffer buf, U64 offset);
+
+Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value);
+
+Error Buffer_bitwiseOr(Buffer dst, Buffer src);
+Error Buffer_bitwiseAnd(Buffer dst, Buffer src);
+Error Buffer_bitwiseXor(Buffer dst, Buffer src);
+Error Buffer_bitwiseNot(Buffer dst);
+
+Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits);
+Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits);
+
+//Comparison
+
+Bool Buffer_eq(Buffer buf0, Buffer buf1);			//Also compares size
+Bool Buffer_neq(Buffer buf0, Buffer buf1);			//Also compares size
+
+#define BUFFER_OP(T)									\
+Error Buffer_append##T(Buffer *buf, T v);				\
+Error Buffer_consume##T(Buffer *buf, T *v);				\
+T Buffer_read##T(Buffer buf, U64 off,  Bool *success);	\
+Bool Buffer_write##T(Buffer buf, U64 off, T v)
+
+#define BUFFER_OP_IMPL(T)																	\
+Error Buffer_append##T(Buffer *buf, T v)	{ return Buffer_append(buf, &v, sizeof(v)); }	\
+Error Buffer_consume##T(Buffer *buf, T *v)	{ return Buffer_consume(buf, v, sizeof(*v)); }	\
+																							\
+T Buffer_read##T(Buffer buf, U64 off, Bool *success) {										\
+																							\
+	T v = (T) { 0 };																		\
+	Error err = Buffer_offset(&buf, off);													\
+																							\
+	if(err.genericError) {																	\
+		if(success) *success = false;														\
+		return v;																			\
+	}																						\
+																							\
+	Bool ok = !Buffer_consume##T(&buf, &v).genericError;									\
+	if(success) *success = ok;																\
+	return v;																				\
+}																							\
+																							\
+Bool Buffer_write##T(Buffer buf, U64 off, T v) {											\
+	Error err = Buffer_offset(&buf, off);													\
+	if(err.genericError) return false;														\
+	return !Buffer_append##T(&buf, v).genericError;											\
+}
+
+BUFFER_OP(U64);
+BUFFER_OP(U32);
+BUFFER_OP(U16);
+BUFFER_OP(U8);
+
+BUFFER_OP(I64);
+BUFFER_OP(I32);
+BUFFER_OP(I16);
+BUFFER_OP(I8);
+
+BUFFER_OP(F64);
+BUFFER_OP(F32);
+
+Error Buffer_offset(Buffer *buf, U64 length);
+
+Error Buffer_append(Buffer *buf, const void *v, U64 length);
+Error Buffer_appendBuffer(Buffer *buf, Buffer append);
+
+Error Buffer_consume(Buffer *buf, void *v, U64 length);
+
 //Use this instead of simply copying the Buffer to a new location
 //A copy like this is only fine if the other doesn't get freed.
 //In all other cases, createRefFromBuffer should be called on the one that shouldn't be freeing.
 //If it needs to be refcounted, RefPtr should be used.
-//
 Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst);
 
 //Char
+//All char helper functions assume ASCII, otherwise use string functions
 
 C8 C8_toLower(C8 c);
 C8 C8_toUpper(C8 c);
@@ -250,21 +342,20 @@ C8 C8_createNyto(U8 v);
 #define STACKTRACE_SIZE 32
 typedef void *StackTrace[STACKTRACE_SIZE];
 
-typedef struct Error Error;
 typedef struct CharString CharString;
 
 //Version
 
-#define OXC3_MAKE_VERSION(major, minor, patch)	((major) << 22) | ((minor) << 12) | (patch)
+#define OXC3_MAKE_VERSION(major, minor, patch) (((major) << 22) | ((minor) << 12) | (patch))
 
-#define OXC3_GET_MAJOR(v) (v >> 22)
-#define OXC3_GET_MINOR(v) (v << 10 >> 22)
-#define OXC3_GET_PATCH(v) (v << 20 >> 20)
+#define OXC3_GET_MAJOR(v) (((U32)(v)) >> 22)
+#define OXC3_GET_MINOR(v) (((U32)(v)) << 10 >> 22)
+#define OXC3_GET_PATCH(v) (((U32)(v)) << 20 >> 20)
 
 #define OXC3_MAJOR 0
 #define OXC3_MINOR 2
-#define OXC3_PATCH 0
-#define OXC3_VERSION (OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH))
+#define OXC3_PATCH 83
+#define OXC3_VERSION OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 
 #ifdef __cplusplus
 	}

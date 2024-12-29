@@ -28,11 +28,11 @@
 typedef enum EDepthStencilFormat {
 
 	EDepthStencilFormat_None,
-	EDepthStencilFormat_D16,		//Prefer this if stencil isn't needed and precision is no concern
+	EDepthStencilFormat_D16,			//Prefer this if stencil isn't needed and precision is no concern
 	EDepthStencilFormat_D32,
-	EDepthStencilFormat_D24S8Ext,	//On AMD this is unsupported, use D32S8 instead.
-	EDepthStencilFormat_D32S8Ext,
-	EDepthStencilFormat_S8Ext,
+	EDepthStencilFormat_D24S8Ext,		//On AMD this is unsupported, use D32S8 instead.
+	EDepthStencilFormat_D32S8X24Ext,	//Some older systems might not support stencil at all
+	EDepthStencilFormat_S8X24Ext,		//Some APIs and devices might support this, but unlikely
 
 	EDepthStencilFormat_Count,
 
@@ -84,13 +84,13 @@ typedef enum ETextureCompressionAlgo {
 } ETextureCompressionAlgo;
 
 #define _ETextureFormat(primitive, redBits, greenBits, blueBits, alphaBits)											\
-((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) |					\
-(primitive << 24) | (((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
+	((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) |				\
+	(primitive << 24) | (((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
 
 #define _ETextureFormatCompressed(algo, blockSizeBits, alignmentX, alignmentY, compType, hasR, hasG, hasB, hasA)	\
-((hasA ? 1 : 0) | ((hasB ? 1 : 0) << 6) | (compType << 9) | ((hasG ? 1 : 0) << 12) | (alignmentY << 15) |			\
- ((hasR ? 1 : 0) << 18) | (alignmentX << 21) |																		\
- (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27) | (algo << 30))
+	((hasA ? 1 : 0) | ((hasB ? 1 : 0) << 6) | (compType << 9) | ((hasG ? 1 : 0) << 12) | (alignmentY << 15) |		\
+	((hasR ? 1 : 0) << 18) | (alignmentX << 21) |																	\
+	(ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27) | (algo << 30))
 
 //Format of a texture; a bitflag of the properties of the format.
 //

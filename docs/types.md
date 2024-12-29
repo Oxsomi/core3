@@ -25,7 +25,6 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
   - **PLATFORM_OSX**.
 - **_FORCE_FLOAT_FALLBACK**: All explicit float cast operations (e.g. F32_castF64) are software simulated.
 - **impl** indicates that one of the other source files will define this; mostly a platform or API dependent version. For example impl is regularly used to indicate a function that is implemented by the Vulkan or Windows backends rather than one that is generic and used across other platforms & APIs.
-- **user_impl** indicates that the user is meant to define the function themselves when using the framework. This is used by OxC3 platforms to take control of the main function but provide the Program_run & Program_exit function for the user.
 
 ## Basic data types (types/types.h)
 

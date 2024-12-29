@@ -57,16 +57,20 @@ Bool File_resolve(
 		retError(clean, Error_invalidOperation(0, "File_resolve()::result is not NULL, this might indicate a memleak"))
 
 	loc = CharString_createRefStrConst(loc);
-	allocate = true;
+	absoluteDir = CharString_createRefStrConst(absoluteDir);
 
-	if (CharString_equalsStringSensitive(loc, absoluteDir)) {				//Get rid of trailing / and return copy
+	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')						//myTest/ <--
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;
+
+	if(CharString_getAt(absoluteDir, CharString_length(absoluteDir) - 1) == '/')	//base/ <--
+		absoluteDir.lenAndNullTerminated = CharString_length(absoluteDir) - 1;
+
+	U64 abDirLen = CharString_length(absoluteDir);
+
+	if (CharString_equalsStringSensitive(loc, absoluteDir)) {
 		gotoIfError2(clean, CharString_createCopy(loc, alloc, result))
 		goto clean;
 	}
-
-	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')			//myTest/ <--
-		loc.lenAndNullTerminated = CharString_length(loc) - 1;				//unset null terminated
 
 	if(!CharString_isValidFilePath(loc))
 		retError(clean, Error_invalidParameter(0, 0, "File_resolve()::loc is not a valid file path"))
@@ -74,6 +78,7 @@ Bool File_resolve(
 	//Copy string so we can modify it
 
 	gotoIfError2(clean, CharString_createCopy(loc, alloc, result))
+	allocate = true;
 	*isVirtual = File_isVirtual(loc);
 
 	//Virtual files
@@ -85,7 +90,7 @@ Bool File_resolve(
 	//We shouldn't be supporting this.
 	//The reason; you can access servers from an app with a file read instead of a https read,
 	//which can obfuscate the application's true intentions.
-	//ex. \\0.0.0.0\ would make a file web request to 0.0.0.0.
+	//ex. \\0.0.0.0\ would make a file request to 0.0.0.0.
 	//Unix can map a folder to a webserver, but that link has to be created beforehand, not by an app.
 	//You can also read from hardware in a platform dependent way, which makes it harder to standardize.
 	//TODO: We should however support this in the future as a custom instruction that allows it such as //network/
@@ -103,15 +108,11 @@ Bool File_resolve(
 	//We also obviously don't support 0:\ and such or A:/ on unix
 
 	#ifdef _WIN32
-
 		if(CharString_length(*result) >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
 			retError(clean, Error_unsupportedOperation(2, "File_resolve() only supports Windows paths with [A-Z]:/*"))
-
 	#else
-
-		if(CharString_length(*result) && result->ptr[1] == ':')
+		if(CharString_length(*result) >= 2 && result->ptr[1] == ':')
 			retError(clean, Error_invalidOperation(6, "File_resolve() doesn't support Windows paths outside of Windows."))
-
 	#endif
 
 	//Now we have to discover the real directory it references to. This means resolving:
@@ -196,16 +197,9 @@ Bool File_resolve(
 	//If we have nothing left, we get current work/app directory
 
 	if(!res.length) {
-
 		res.length = realSplitLen;
-
 		CharString_free(result, alloc);		//Release temp result
-
 		gotoIfError2(clean, CharString_createCopy(absoluteDir, alloc, result))
-
-		if(CharString_length(absoluteDir))
-			gotoIfError2(clean, CharString_popEnd(result))							//Don't end with /
-
 		goto clean;
 	}
 
@@ -243,8 +237,14 @@ Bool File_resolve(
 	if (isAbsolute) {
 
 		if(
-			!CharString_length(absoluteDir) ||
-			!CharString_startsWithStringSensitive(*result, absoluteDir, 0)
+			!abDirLen ||
+			!(
+				CharString_startsWithStringSensitive(*result, absoluteDir, 0) &&
+				(
+					CharString_length(*result) == abDirLen || 
+					CharString_getAt(*result, abDirLen) == '/'
+				)
+			)
 		)
 			retError(clean, Error_unauthorized(
 				0, "File_resolve()::loc tried to escape working directory, which is unsupported for security reasons"
@@ -253,8 +253,10 @@ Bool File_resolve(
 
 	//Prepend our path
 
-	else if(CharString_length(absoluteDir) && !*isVirtual)
+	else if(abDirLen && !*isVirtual) {
+		gotoIfError2(clean, CharString_insert(result, '/', 0, alloc))
 		gotoIfError2(clean, CharString_insertString(result, absoluteDir, 0, alloc))
+	}
 
 	//Since we're going to use this in file operations, we want to have a null terminator
 

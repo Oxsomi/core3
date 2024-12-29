@@ -176,49 +176,48 @@ typedef enum ESymbolFlag {
 	ESymbolFlagFuncVar_IsConstexpr				= 1 << 4,		//constexpr X
 
 	ESymbolFlagFuncVar_HasImpl					= 1 << 5,		//impl ...
-	ESymbolFlagFuncVar_HasUserImpl				= 1 << 6,		//user_impl ...
-	ESymbolFlagFuncVar_IsStatic					= 1 << 7,		//static ...
-	ESymbolFlagFuncVar_IsExtern					= 1 << 8,		//extern ...
+	ESymbolFlagFuncVar_IsStatic					= 1 << 6,		//static ...
+	ESymbolFlagFuncVar_IsExtern					= 1 << 7,		//extern ...
 
 	//Function modifiers
 
-	ESymbolFlagFunc_IsOperator					= 1 << 9,
+	ESymbolFlagFunc_IsOperator					= 1 << 8,
 
 	//Enum modifiers
 
-	ESymbolFlagEnum_IsClass						= 1 << 10,
+	ESymbolFlagEnum_IsClass						= 1 << 9,
 
 	//Annotation modifiers
 
-	ESymbolFlagAnnotation_IsDoubleBracket		= 1 << 11,
+	ESymbolFlagAnnotation_IsDoubleBracket		= 1 << 10,
 
 	//For both annotation and templates when it's been consumed into a function, variable, class, etc.
 
-	ESymbolFlag_IsParented						= 1 << 12,
+	ESymbolFlag_IsParented						= 1 << 11,
 
 	//Typedef modifiers
 
-	ESymbolFlagTypedef_IsUsing					= 1 << 13,
+	ESymbolFlagTypedef_IsUsing					= 1 << 12,
 
 	//HLSL/GLSL modifiers
 
 	//If ESymbolType_Type
 
-	ESymbolFlagType_IsUnorm						= 1 << 14,
-	ESymbolFlagType_IsSnorm						= 1 << 15,
+	ESymbolFlagType_IsUnorm						= 1 << 13,
+	ESymbolFlagType_IsSnorm						= 1 << 14,
 
 	//If ESymbolType_Variable
 
-	ESymbolFlagVar_IsOut						= 1 << 16,		//out or inout
-	ESymbolFlagVar_IsIn							= 1 << 17,		//in or inout (in not automatically set, though implied if !out)
+	ESymbolFlagVar_IsOut						= 1 << 15,		//out or inout
+	ESymbolFlagVar_IsIn							= 1 << 16,		//in or inout (in not automatically set, though implied if !out)
 
-	ESymbolFlagVar_Sample						= 1 << 18,
-	ESymbolFlagVar_NoInterpolation				= 1 << 19,		//flat in GLSL
-	ESymbolFlagVar_NoPerspective				= 1 << 20,
-	ESymbolFlagVar_Centroid						= 1 << 21,
-	ESymbolFlagVar_Linear						= 1 << 22,		//smooth in GLSL
+	ESymbolFlagVar_Sample						= 1 << 17,
+	ESymbolFlagVar_NoInterpolation				= 1 << 18,		//flat in GLSL
+	ESymbolFlagVar_NoPerspective				= 1 << 19,
+	ESymbolFlagVar_Centroid						= 1 << 20,
+	ESymbolFlagVar_Linear						= 1 << 21,		//smooth in GLSL
 
-	ESymbolFlag_Count							= 23			//Keep less than 32
+	ESymbolFlag_Count							= 22			//Keep less than 32
 
 } ESymbolFlag;
 
@@ -277,7 +276,9 @@ typedef struct Parser {
 
 	ListSymbol symbols;
 	ListU32 symbolMapping;				//Maps global id to local id to allow moving around
+
 	U32 rootSymbols;					//Root symbols that are located at the start of symbols.ptr
+	U32 padding;
 
 } Parser;
 

@@ -806,8 +806,8 @@ Error CommandListRef_copyImageRegions(
 			switch (srcFormat) {
 
 				case EDepthStencilFormat_D32:
-				case EDepthStencilFormat_D32S8Ext:
-					compatible = dstFormat == EDepthStencilFormat_D32S8Ext || dstFormat == EDepthStencilFormat_D32;
+				case EDepthStencilFormat_D32S8X24Ext:
+					compatible = dstFormat == EDepthStencilFormat_D32S8X24Ext || dstFormat == EDepthStencilFormat_D32;
 					break;
 
 				default:
@@ -2002,7 +2002,7 @@ Error CommandListRef_startRenderExt(
 
 	UnifiedTexture depthStencilImg = TextureRef_getUnifiedTexture(depthStencil.image, NULL);
 
-	if(depthStencilImg.depthFormat != EDepthStencilFormat_S8Ext)
+	if(depthStencilImg.depthFormat != EDepthStencilFormat_S8X24Ext)
 		startRender->flags |= EStartRenderFlags_Depth;
 
 	if(depthStencil.depthLoad == ELoadAttachmentType_Clear)

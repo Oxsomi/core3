@@ -20,6 +20,9 @@
 
 #include "types/math/math.h"
 #include "types/math/vec.h"
+#include "types/base/error.h"
+
+BUFFER_OP_IMPL(F32x2);
 
 F32x2 F32x2_one() { return F32x2_xx2(1); }
 F32x2 F32x2_two() { return F32x2_xx2(2); }
@@ -72,8 +75,25 @@ F32x2 F32x2_abs(F32x2 v) { return F32x2_mul(F32x2_sign(v), v); }
 Bool F32x2_all(F32x2 a) { return F32x2_reduce(F32x2_neq(a, F32x2_zero())) == 4; }
 Bool F32x2_any(F32x2 a) { return F32x2_reduce(F32x2_neq(a, F32x2_zero())); }
 
-F32x2 F32x2_load1(const F32 *arr) { return arr ? F32x2_create1(*arr) : F32x2_zero(); }
-F32x2 F32x2_load2(const F32 *arr) { return arr ? F32x2_create2(*arr, arr[1]) : F32x2_zero(); }
+F32x2 F32x2_load1(const void *arr) {
+
+	F32x2 result = F32x2_zero();
+
+	if(arr)
+		Buffer_copy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
+
+	return result;
+}
+
+F32x2 F32x2_load2(const void *arr) {
+
+	F32x2 result = F32x2_zero();
+
+	if(arr)
+		Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
+
+	return result;
+}
 
 void F32x2_setX(F32x2 *a, F32 v) { if(a) *a = F32x2_create2(v, F32x2_y(*a)); }
 void F32x2_setY(F32x2 *a, F32 v) { if(a) *a = F32x2_create2(F32x2_x(*a), v); }
@@ -108,8 +128,8 @@ F32x2 F32x2_mul2x3(F32x2 v2, F32x2 v2x3[3]) {
 
 //Casts from vec4f
 
-F32x2 F32x2_fromF32x4(F32x4 a) { return F32x2_load2((const F32*) &a); }
-F32x4 F32x4_fromF32x2(F32x2 a) { return F32x4_load2((const F32*) &a); }
+F32x2 F32x2_fromF32x4(F32x4 a) { return F32x2_load2(&a); }
+F32x4 F32x4_fromF32x2(F32x2 a) { return F32x4_load2(&a); }
 
 //Cast from vec2f to vec4
 

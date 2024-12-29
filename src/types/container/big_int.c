@@ -55,8 +55,11 @@ Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big) {
 	if(!big)
 		return Error_nullPointer(2, "BigInt_createRef()::big is required");
 
+	if(((U64)(void*)ptr) & 7)
+		return Error_invalidParameter(2, 0, "BigInt_createRef()::ptr is misaligned, requiring proper alignment!");
+
 	if(big->data)
-		return Error_invalidParameter(2, 0, "BigInt_createRef()::big->data is required");
+		return Error_invalidParameter(2, 0, "BigInt_createRef()::big->data should be empty");
 
 	if(ptrCount >> 8)
 		return Error_outOfBounds(1, ptrCount, U8_MAX, "BigInt_createRef()::ptrCount is more than the BigInt limit (256 U64s)");
@@ -70,8 +73,11 @@ Error BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big) {
 	if(!big)
 		return Error_nullPointer(2, "BigInt_createRefConst()::big is required");
 
+	if(((U64)(void*)ptr) & 7)
+		return Error_invalidParameter(2, 0, "BigInt_createRefConst()::ptr is misaligned, requiring proper alignment!");
+
 	if(big->data)
-		return Error_invalidParameter(2, 0, "BigInt_createRefConst()::big->data is required");
+		return Error_invalidParameter(2, 0, "BigInt_createRefConst()::big->data should be empty");
 
 	if(ptrCount >> 8)
 		return Error_outOfBounds(1, 0, U8_MAX, "BigInt_createRefConst()::ptrCount is more than the BigInt limit (256 U64s)");
@@ -171,7 +177,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 
 				const U64 lo = (U64)v << ((countPerChar * j) & 63);
 
-				((U64*)big->data)[k] |= lo;
+				big->dataNonConst[k] |= lo;
 
 				if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
 
@@ -191,7 +197,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 					}
 
 					const U64 hi = (U64)v >> (64 - ((countPerChar * j) & 63));
-					((U64*)big->data)[++k] |= hi;
+					big->dataNonConst[++k] |= hi;
 				}
 
 				break;
@@ -202,7 +208,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
 
 		if(big->data[big->length - 1] >> (bitCount & 63))
-			return Error_outOfBounds(0, bitCount, bitCount, "BigInt_createFromBase2Type()::text contains too much data");
+			gotoIfError(clean, Error_outOfBounds(0, bitCount, bitCount, "BigInt_createFromBase2Type()::text contains too much data"))
 	}
 
 	goto success;
@@ -240,7 +246,7 @@ Error BigInt_createFromString(CharString text, U16 bitCount, Allocator alloc, Bi
 
 	if (CharString_length(text) > 2) {
 
-		const U16 start = *(const U16*) text.ptr;
+		U16 start = Buffer_readU16(CharString_bufferConst(text), 0, NULL);
 
 		switch(start) {
 
@@ -377,7 +383,7 @@ Bool BigInt_free(BigInt *a, Allocator allocator) {
 		return false;
 
 	if(!a->isRef && a->length) {
-		Buffer buf = Buffer_createManagedPtr((U8*)a->data, a->length * sizeof(U64));
+		Buffer buf = Buffer_createManagedPtr(a->dataNonConst, a->length * sizeof(U64));
 		Buffer_free(&buf, allocator);
 	}
 
@@ -495,7 +501,7 @@ Bool BigInt_add(BigInt *a, BigInt b) {
 			nextOverflow |= add < prev;
 		}
 
-		((U64*)a->data)[i] = add;
+		a->dataNonConst[i] = add;
 		overflow = nextOverflow;
 	}
 
@@ -503,7 +509,7 @@ Bool BigInt_add(BigInt *a, BigInt b) {
 
 	while(overflow && next < a->length) {
 		const U64 prev = a->data[next];
-		overflow = (++((U64*)a->data)[next]) < prev;
+		overflow = (++a->dataNonConst[next]) < prev;
 	}
 
 	return true;
@@ -529,7 +535,7 @@ Bool BigInt_sub(BigInt *a, BigInt b) {
 			nextUnderflow |= sub > prev;
 		}
 
-		((U64*)a->data)[i] = sub;
+		a->dataNonConst[i] = sub;
 		underflow = nextUnderflow;
 	}
 
@@ -537,7 +543,7 @@ Bool BigInt_sub(BigInt *a, BigInt b) {
 
 	while(underflow && next < a->length) {
 		const U64 prev = a->data[next];
-		underflow = (--((U64*)a->data)[next]) > prev;
+		underflow = (--a->dataNonConst[next]) > prev;
 	}
 
 	return true;
@@ -549,7 +555,7 @@ Bool BigInt_xor(BigInt *a, BigInt b) {
 		return false;
 
 	for(U64 i = 0; i < a->length && i < b.length; ++i)
-		((U64*)a->data)[i] ^= b.data[i];
+		a->dataNonConst[i] ^= b.data[i];
 
 	return true;
 }
@@ -560,7 +566,7 @@ Bool BigInt_or(BigInt *a, BigInt b) {
 		return false;
 
 	for(U64 i = 0; i < a->length && i < b.length; ++i)
-		((U64*)a->data)[i] |= b.data[i];
+		a->dataNonConst[i] |= b.data[i];
 
 	return true;
 }
@@ -573,10 +579,10 @@ Bool BigInt_and(BigInt *a, BigInt b) {
 	const U64 j = U64_min(a->length, b.length);
 
 	for(U64 i = 0; i < j; ++i)
-		((U64*)a->data)[i] &= b.data[i];
+		a->dataNonConst[i] &= b.data[i];
 
 	for(U64 i = b.length; i < a->length; ++i)
-		((U64*)a->data)[i] = 0;
+		a->dataNonConst[i] = 0;
 
 	return true;
 }
@@ -587,7 +593,7 @@ Bool BigInt_not(BigInt *a) {
 		return false;
 
 	for(U64 i = 0; i < a->length; ++i)
-		((U64*)a->data)[i] = ~a->data[i];
+		a->dataNonConst[i] = ~a->data[i];
 
 	return true;
 }
@@ -613,7 +619,7 @@ Bool BigInt_lsh(BigInt *a, U16 bits) {
 		right <<= shift;
 		left >>= 64 - shift;
 
-		((U64*)a->data)[i] = left | right;
+		a->dataNonConst[i] = left | right;
 	}
 
 	return true;
@@ -640,7 +646,7 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 		right <<= 64 - shift;
 		left >>= shift;
 
-		((U64*)a->data)[i] = left | right;
+		a->dataNonConst[i] = left | right;
 	}
 
 	return true;
@@ -722,10 +728,10 @@ Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc) {
 	}
 
 	for(U64 i = 0; i < a->length && i < b.length; ++i)
-		((U64*)a->data)[i] = b.data[i];
+		a->dataNonConst[i] = b.data[i];
 
 	for(U64 i = b.length; i < a->length; ++i)
-		((U64*)a->data)[i] = 0;
+		a->dataNonConst[i] = 0;
 
 	return true;
 }
@@ -766,11 +772,11 @@ Bool BigInt_trunc(BigInt *big, Allocator allocator) {
 //Bool BigInt_mod(BigInt *a, BigInt b);
 //Bool BigInt_div(BigInt *a, BigInt b);
 
-Buffer BigInt_bufferConst(BigInt b) {
-	return b.isConst ? Buffer_createNull() : Buffer_createRef((U64*)b.data, BigInt_byteCount(b));
+Buffer BigInt_buffer(BigInt b) {
+	return b.isConst ? Buffer_createNull() : Buffer_createRef(b.dataNonConst, BigInt_byteCount(b));
 }
 
-Buffer BigInt_buffer(BigInt b) { return Buffer_createRefConst(b.data, BigInt_byteCount(b)); }
+Buffer BigInt_bufferConst(BigInt b) { return Buffer_createRefConst(b.data, BigInt_byteCount(b)); }
 
 U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
 U16 BigInt_bitCount(BigInt b) { return BigInt_byteCount(b) * 8; }
@@ -788,23 +794,23 @@ U16 BigInt_bitScan(BigInt ai) {
 
 		BitScanOpt a = (BitScanOpt) { .a64 = ai.data[i] };
 
-		U64 offset = (Bool) a.a32[1];
+		U64 offset = !!a.a32[1];
 		offset <<= 1;
 
-		offset |= (Bool) a.a16[offset + 1];
+		offset |= !!a.a16[offset + 1];
 		offset <<= 1;
 
-		offset |= (Bool) a.a8[offset + 1];
+		offset |= !!a.a8[offset + 1];
 		const U8 b = a.a8[offset];
 		offset <<= 1;
 
-		offset |= (Bool)(b >> 4);
+		offset |= !!(b >> 4);
 		offset <<= 1;
 
-		offset |= (Bool)((b >> (((offset & 2) + 1) * 2)) & 3);
+		offset |= !!((b >> (((offset & 2) + 1) * 2)) & 3);
 		offset <<= 1;
 
-		offset |= (Bool)((b >> ((offset & 6) + 1)) & 1);
+		offset |= !!((b >> ((offset & 6) + 1)) & 1);
 
 		if((a.a64 >> offset) & 1)
 			return (U16)(i * 64 + offset);
@@ -813,33 +819,39 @@ U16 BigInt_bitScan(BigInt ai) {
 	return U16_MAX;
 }
 
-Error BigInt_isBase2(BigInt a, Allocator alloc, Bool *isBase2) {
+U16 BigInt_bitScanReverse(BigInt ai) {
 
-	if(!isBase2)
-		return Error_nullPointer(2, "BigInt_isBase2()->isBase2 is required");
+	for (U64 i = 0; i < ai.length; ++i) {
 
-	const U16 v = BigInt_bitScan(a);
+		BitScanOpt a = (BitScanOpt) { .a64 = ai.data[i] };
 
-	if(v == U16_MAX) {
-		*isBase2 = false;
-		return Error_none();
+		U64 offset = !a.a32[0];
+		offset <<= 1;
+
+		offset |= !a.a16[offset];
+		offset <<= 1;
+
+		offset |= !a.a8[offset];
+		const U8 b = a.a8[offset];
+		offset <<= 1;
+
+		offset |= !(b & 0xF);
+		offset <<= 1;
+
+		offset |= !((b >> ((offset & 2) * 2)) & 3);
+		offset <<= 1;
+
+		offset |= !((b >> (offset & 6)) & 1);
+
+		if((a.a64 >> offset) & 1)
+			return (U16)(i * 64 + offset);
 	}
 
-	BigInt temp = (BigInt) { 0 };
-	Error err = BigInt_create(BigInt_bitCount(a), alloc, &temp);
+	return U16_MAX;
+}
 
-	if(err.genericError)
-		return err;
-
-	*(U64*)temp.data = 1;
-
-	if(!BigInt_lsh(&temp, v))
-		gotoIfError(clean, Error_invalidState(0, "BigInt_isBase2() lsh failed"))
-
-	*isBase2 = BigInt_eq(temp, a);
-clean:
-	BigInt_free(&temp, alloc);
-	return err;
+Bool BigInt_isBase2(BigInt a) {
+	return a.length && BigInt_bitScan(a) == BigInt_bitScanReverse(a);
 }
 
 Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type type, Bool leadingZeros) {
@@ -851,7 +863,7 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 	if(err.genericError)
 		return err;
 
-	((C8*)result->ptr)[1] = base2Types[type][1];
+	result->ptrNonConst[1] = base2Types[type][1];
 
 	U64 firstLoc = len - 1;
 	const U8 mask = (1 << countPerChar) - 1;
@@ -867,7 +879,7 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 			const U64 mask2 = ((U64)U64_MAX << (64 - ((countPerChar * j) & 63))) & mask;
 
 			if(k + 1 < b.length)
-				v |= ((U64)((U64*)b.data)[k + 1] & mask2);
+				v |= b.data[k + 1] & mask2;
 
 			++k;
 		}
@@ -876,10 +888,10 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 			continue;
 
 		switch(type) {
-			case EBase2Type_Bin:	((C8*)result->ptr)[i - j] = C8_createBin((U8)v);	break;
-			case EBase2Type_Oct:	((C8*)result->ptr)[i - j] = C8_createOct((U8)v);	break;
-			case EBase2Type_Hex:	((C8*)result->ptr)[i - j] = C8_createHex((U8)v);	break;
-			case EBase2Type_Nyto:	((C8*)result->ptr)[i - j] = C8_createNyto((U8)v);	break;
+			case EBase2Type_Bin:	result->ptrNonConst[i - j] = C8_createBin((U8)v);	break;
+			case EBase2Type_Oct:	result->ptrNonConst[i - j] = C8_createOct((U8)v);	break;
+			case EBase2Type_Hex:	result->ptrNonConst[i - j] = C8_createHex((U8)v);	break;
+			case EBase2Type_Nyto:	result->ptrNonConst[i - j] = C8_createNyto((U8)v);	break;
 		}
 
 		firstLoc = j + 1;
@@ -996,7 +1008,7 @@ U128 U128_createFromString(CharString text, Error *failed, Allocator alloc) {
 
 	if (CharString_length(text) > 2) {
 
-		const U16 start = *(const U16*) text.ptr;
+		U16 start = Buffer_readU16(CharString_bufferConst(text), 0, NULL);
 
 		switch(start) {
 

@@ -308,12 +308,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 				stencilFormat = VK_FORMAT_S8_UINT;
 				break;
 
-			case EDepthStencilFormat_D32S8Ext:
+			case EDepthStencilFormat_D32S8X24Ext:
 				depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 				stencilFormat = VK_FORMAT_S8_UINT;
 				break;
 
-			case EDepthStencilFormat_S8Ext:
+			case EDepthStencilFormat_S8X24Ext:
 				stencilFormat = VK_FORMAT_S8_UINT;
 				break;
 

@@ -29,21 +29,23 @@ F32x2 F32x2_fromI32x2(I32x2 a) { return (F32x2) { .v = { (F32) I32x2_x(a), (F32)
 
 //Arithmetic
 
-I32x4 I32x4_add(I32x4 a, I32x4 b) { return _mm_add_epi32(a, b); }
 I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) { return _mm_add_epi64(a, b); }
+
+I32x4 I32x4_add(I32x4 a, I32x4 b) { return _mm_add_epi32(a, b); }
 F32x4 F32x4_add(F32x4 a, F32x4 b) { return _mm_add_ps(a, b); }
-I32x2 I32x2_add(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] + b.v[i])
+I32x2 I32x2_add(I32x2 a, I32x2 b) NONE_OP2I((I32)((U32)a.v[i] + (U32)b.v[i]))
 F32x2 F32x2_add(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] + b.v[i])
 
 I32x4 I32x4_sub(I32x4 a, I32x4 b) { return _mm_sub_epi32(a, b); }
 F32x4 F32x4_sub(F32x4 a, F32x4 b) { return _mm_sub_ps(a, b); }
-I32x2 I32x2_sub(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] - b.v[i])
+I32x2 I32x2_sub(I32x2 a, I32x2 b) NONE_OP2I((I32)((U32)a.v[i] - (U32)b.v[i]))
 F32x2 F32x2_sub(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] - b.v[i])
 
-I32x4 I32x4_mul(I32x4 a, I32x4 b) { return _mm_mullo_epi32(a, b); }
 I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b) { return _mm_mul_epu32(a, b); }
+
+I32x4 I32x4_mul(I32x4 a, I32x4 b) { return _mm_mullo_epi32(a, b); }
 F32x4 F32x4_mul(F32x4 a, F32x4 b) { return _mm_mul_ps(a, b); }
-I32x2 I32x2_mul(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] * b.v[i])
+I32x2 I32x2_mul(I32x2 a, I32x2 b) NONE_OP2I((I32)((I64)a.v[i] * (I64)b.v[i]))
 F32x2 F32x2_mul(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] * b.v[i])
 
 I32x4 I32x4_div(I32x4 a, I32x4 b) { return _mm_div_epi32(a, b); }

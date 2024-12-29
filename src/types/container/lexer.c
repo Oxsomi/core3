@@ -292,6 +292,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 							))
 
 						//Find string
+						//TODO: Use HashSet
 
 						U64 sourceLoc = 0;
 

@@ -114,7 +114,7 @@ void Log_printCapturedStackTraceCustom(
 
 			anySymbol = true;
 
-			wchar_t symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
+			U32 symbolData[(sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1 + 3) &~ 3] = { 0 };
 
 			PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolData;
 			symbol->SizeOfStruct = sizeof(symbolData);
@@ -174,7 +174,7 @@ void Log_printCapturedStackTraceCustom(
 				CharString_free(&captured[j].mod, alloc);
 			}
 
-			Error_print(alloc, err, lvl, opt);
+			Log_log(alloc, lvl, opt, CharString_createRefCStrConst("Failed to print stacktrace:"));
 			return;
 		}
 

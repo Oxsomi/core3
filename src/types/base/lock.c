@@ -51,7 +51,7 @@ ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime) {
 
 			prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
 
-			if(maxTime != U64_MAX && Time_now() - time >= maxTime)
+			if(prevValue != 0 && maxTime != U64_MAX && Time_now() - time >= maxTime)
 				return ELockAcquire_TimedOut;
 		}
 
@@ -65,7 +65,7 @@ Bool SpinLock_unlock(SpinLock *l) {
 
 	if (l) {
 		const U64 tid = Thread_getId();
-		return (U32) AtomicI64_cmpStore(&l->lockedThreadId, tid, 0) == (I64) tid;
+		return AtomicI64_cmpStore(&l->lockedThreadId, tid, 0) == (I64) tid;
 	}
 
 	return false;

@@ -162,12 +162,10 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 //binary 0b[0-1]+, decimal ([0-9]+) or Nytodecimal (0n[0-9A-Za-z_$]+).
 
 typedef struct BufferLayoutPathInfo {
-
 	U64 offset, length;
 	ETypeId typeId;
 	U32 structId;
 	ListU32 leftoverArray;		//How long the remainder of array is
-
 } BufferLayoutPathInfo;
 
 Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLayoutPathInfo *info, Allocator alloc);

@@ -147,10 +147,10 @@ impl F32x4 F32x4_create2(F32 x, F32 y);
 impl F32x4 F32x4_create3(F32 x, F32 y, F32 z);
 impl F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w);
 
-F32x4 F32x4_load1(const F32 *arr);
-F32x4 F32x4_load2(const F32 *arr);
-F32x4 F32x4_load3(const F32 *arr);
-F32x4 F32x4_load4(const F32 *arr);
+F32x4 F32x4_load1(const void *arr);
+F32x4 F32x4_load2(const void *arr);
+F32x4 F32x4_load3(const void *arr);
+F32x4 F32x4_load4(const void *arr);
 
 //Shuffle and extracting values
 
@@ -201,7 +201,7 @@ F32x2_expand(w);
 F32x3_expand3(a, b, x); F32x3_expand3(a, b, y);			\
 F32x3_expand3(a, b, z); F32x3_expand3(a, b, w);
 
-#define F32x3_expand(a)	\
+#define F32x3_expand(a)									\
 F32x3_expand2(a, x); F32x3_expand2(a, y);				\
 F32x3_expand2(a, z); F32x3_expand2(a, w);
 

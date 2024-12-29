@@ -59,7 +59,7 @@ typedef enum ECAFlags {
 
 } ECAFlags;
 
-typedef struct CAHeader {
+typedef struct CAHeader {		//4-byte aligned
 
     U32 magicNumber;			//oiCA (0x4143696F)
 

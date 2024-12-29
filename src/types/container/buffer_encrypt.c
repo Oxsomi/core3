@@ -108,10 +108,10 @@ I32x4 AESEncryptionContext_expandKey2(const I32x4 im1, const I32x4 im3) {
 
 void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], const EBufferEncryptionType encryptionType) {
 
-	k[0] = I32x4_load4((const I32*)key);
+	k[0] = I32x4_load4(key);
 
 	if(encryptionType == EBufferEncryptionType_AES256GCM)
-		k[1] = I32x4_load4((const I32*)key + 4);
+		k[1] = I32x4_load4(key + 4);
 
 	//Only use AESEncryptionContext_expandKey1 for AES128,
 
@@ -158,22 +158,15 @@ impl I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]);
 
 //Safe fetch a block (even if <16 bytes are left)
 
-I32x4 AESEncryptionContext_fetchBlock(const I32 *dat, const U64 leftOver) {
+I32x4 AESEncryptionContext_fetchBlock(const void *dat, const U64 leftOver) {
 
-	//Avoid out of bounds read, by simply filling additional data by zero
+	I32x4 v = I32x4_zero();
+	Buffer_copy(
+		Buffer_createRef(&v, sizeof(v)),
+		Buffer_createRefConst(dat, U64_min(leftOver, sizeof(v)))
+	);
 
-	if (leftOver < sizeof(I32x4)) {
-
-		I32x4 v = I32x4_zero();
-		Buffer_copy(
-			Buffer_createRef(&v, sizeof(v)),
-			Buffer_createRefConst(dat, leftOver)
-		);
-
-		return v;
-	}
-
-	return I32x4_load4(dat);
+	return v;
 }
 
 //Hash in the additional data
@@ -253,25 +246,18 @@ void AESEncryptionContext_updateTag(AESEncryptionContext *ctx, const I32x4 CTi) 
 	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->ghashLut);
 }
 
-void AESEncryptionContext_storeBlock(I32 *io, const U64 leftOver, const I32 *v) {
+void AESEncryptionContext_storeBlock(I32 *io, const U64 leftOver, void *v) {
 
 	//A special property of unaligned blocks is that the bytes that are added as padding
 	//shouldn't be stored, and so they have to be zero-ed in CTi, otherwise the tag will mess up
 
-	if (leftOver < sizeof(I32x4)) {
-
+	if (leftOver < sizeof(I32x4))
 		Buffer_unsetAllBits(Buffer_createRef((U8*)v + leftOver, sizeof(I32x4) - leftOver));
 
-		Buffer_copy(
-			Buffer_createRef(io, leftOver),
-			Buffer_createRefConst(v, leftOver)
-		);
-	}
-
-	//Full blocks
-
-	else for(U64 i = 0; i < 4; ++i)
-		io[i] = v[i];
+	Buffer_copy(
+		Buffer_createRef(io, sizeof(I32x4)),
+		Buffer_createRefConst(v, U64_min(sizeof(I32x4), leftOver))
+	);
 }
 
 void AESEncryptionContext_processBlock(
@@ -291,7 +277,7 @@ void AESEncryptionContext_processBlock(
 
 	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
 
-	AESEncryptionContext_storeBlock(io, leftOver, (const I32*) &v);
+	AESEncryptionContext_storeBlock(io, leftOver, &v);
 
 	//Continue tag
 
@@ -299,14 +285,16 @@ void AESEncryptionContext_processBlock(
 		AESEncryptionContext_updateTag(ctx, v);
 }
 
-void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32 *data, const U64 leftOver) {
+void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const void *data, const U64 leftOver) {
 	AESEncryptionContext_updateTag(ctx, AESEncryptionContext_fetchBlock(data, leftOver));
 }
 
 //This ensures no expanded key, iv or anything else is leaked on the stack,
 //which might be possible to obtain after execution through for example a buffer overflow.
 void AESEncryptionContext_clear(AESEncryptionContext *ctx) {
-	Buffer_unsetAllBits(Buffer_createRef(ctx, sizeof(*ctx)));
+	Buffer_unsetAllBits(Buffer_createRef(ctx->key, sizeof(ctx->key)));
+	ctx->iv = ctx->tag = ctx->EKY0 = ctx->H = I32x4_zero();
+	ctx->encryptionType = 0;
 }
 
 U64 EBufferEncryptionType_getAdditionalData(const EBufferEncryptionType type) {

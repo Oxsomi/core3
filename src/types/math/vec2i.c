@@ -20,6 +20,9 @@
 
 #include "types/math/vec.h"
 #include "types/math/type_cast.h"
+#include "types/base/error.h"
+
+BUFFER_OP_IMPL(I32x2);
 
 //Convert raw bits to data type
 
@@ -69,8 +72,17 @@ I32x2 I32x2_negTwo() { return I32x2_xx2(-2); }
 Bool I32x2_all(I32x2 a) { return I32x2_reduce(I32x2_neq(a, I32x2_zero())) == 2; }
 Bool I32x2_any(I32x2 a) { return I32x2_reduce(I32x2_neq(a, I32x2_zero())); }
 
-I32x2 I32x2_load1(const I32 *arr) { return arr ? I32x2_create1(*arr) : I32x2_zero(); }
-I32x2 I32x2_load2(const I32 *arr) { return arr ? I32x2_create2(*arr, arr[1]) : I32x2_zero(); }
+I32x2 I32x2_load1(const void *arr) {
+	I32x2 result = I32x2_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
+	return result;
+}
+
+I32x2 I32x2_load2(const void *arr) {
+	I32x2 result = I32x2_zero();
+	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
+	return result;
+}
 
 I32x2 I32x2_swapEndianness(I32x2 v) {
 	return I32x2_create2(I32_swapEndianness(I32x2_x(v)), I32_swapEndianness(I32x2_y(v)));
@@ -96,8 +108,8 @@ I32 I32x2_get(I32x2 a, U8 i) {
 	}
 }
 
-I32x2 I32x2_fromI32x4(I32x4 a) { return I32x2_load2((const I32*) &a); }
-I32x4 I32x4_fromI32x2(I32x2 a) { return I32x4_load2((const I32*) &a); }
+I32x2 I32x2_fromI32x4(I32x4 a) { return I32x2_load2(&a); }
+I32x4 I32x4_fromI32x2(I32x2 a) { return I32x4_load2(&a); }
 
 //Cast from vec2f to vec4
 
