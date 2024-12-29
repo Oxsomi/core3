@@ -19,6 +19,7 @@
 */
 
 #include "types/container/big_int.h"
+#include "types/base/error.h"
 
 U128 U128_create(const void *data) {
 	U128 result = U128_zero();
