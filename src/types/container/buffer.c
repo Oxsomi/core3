@@ -24,6 +24,8 @@
 #include "types/math/math.h"
 #include "types/math/vec.h"
 
+#include <string.h>
+
 Bool BitRef_get(BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
 void BitRef_set(BitRef b) { if(b.ptr && !b.isConst) *b.ptr |= 1 << b.off; }
 void BitRef_reset(BitRef b) { if(b.ptr && !b.isConst) *b.ptr &= ~(1 << b.off); }
