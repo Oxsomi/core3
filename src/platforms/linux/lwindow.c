@@ -32,6 +32,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "types/base/time.h"
+#include "types/base/c8.h"
 #include "platforms/linux/lwindow_structs.h"
 
 #include <errno.h>

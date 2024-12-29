@@ -57,16 +57,16 @@ U128 U128_lsh(U128 a, U8 x) { return a << x; }
 U128 U128_rsh(U128 a, U8 x) { return a >> x; }
 
 U8 U128_bitScan(U128 a) {
-	const void *avoid = &a;
+	U64 arr[2] = { a & U64_MAX, a >> 64 };
 	BigInt b = (BigInt) { 0 };
-	BigInt_createRefConst((const U64*)avoid, 2, &b);
+	BigInt_createRefConst(arr, 2, &b);
 	return (U8) BigInt_bitScan(b);
 }
 
 U8 U128_bitScanReverse(U128 a) {
-	const void *avoid = &a;
+	U64 arr[2] = { a & U64_MAX, a >> 64 };
 	BigInt b = (BigInt) { 0 };
-	BigInt_createRefConst((const U64*)avoid, 2, &b);
+	BigInt_createRefConst(arr, 2, &b);
 	return (U8) BigInt_bitScanReverse(b);
 }
 
