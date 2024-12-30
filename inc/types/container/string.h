@@ -44,12 +44,15 @@
 //Dynamic string
 
 typedef struct CharString {
+
 	union {
 		const C8 *ptr;				//This is non const if not a const ref, but for safety this is const (cast away if not).
 		C8 *ptrNonConst;			//Only use if !isConstRef
 	};
+
 	U64 lenAndNullTerminated;		//First bit contains if it's null terminated or not. Length excludes null terminator.
 	U64 capacityAndRefInfo;			//capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
+
 } CharString;
 
 TList(CharString);

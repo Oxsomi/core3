@@ -159,7 +159,7 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	return Error_none();
 }
 
-#define BitOp(x, dst, src) {															\
+#define BitOp(x, dst, src, ...) {														\
 																						\
 	if(!dst.ptr || !src.ptr)															\
 		return Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required");	\
@@ -170,19 +170,31 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);						\
 	U64 l = dstLen <= srcLen ? dstLen : srcLen;											\
 																						\
-	for(U64 i = 0, j = l >> 3; i < j; ++i)												\
-		*((U64*)dst.ptr + i) x *((const U64*)src.ptr + i);								\
+	if(!((U64)dst.ptr & 7) && !((U64)src.ptr & 7)) {									\
 																						\
-	for (U64 i = l >> 3 << 3; i < l; ++i)												\
-		((U8*)dst.ptr)[i] x src.ptr[i];													\
+		for(U64 i = 0, j = l >> 3; i < j; ++i)											\
+			*((U64*)dst.ptrNonConst + i) x *((const U64*)src.ptr + i);					\
+																						\
+		for (U64 i = l >> 3 << 3; i < l; ++i)											\
+			dst.ptrNonConst[i] x src.ptr[i];											\
+	}																					\
+																						\
+	else for(U8 i = 0; i < l; ++i)														\
+		dst.ptrNonConst[i] x src.ptr[i];												\
+																						\
+	__VA_ARGS__																			\
 																						\
 	return Error_none();																\
 }
 
-Error Buffer_bitwiseOr(Buffer dst, Buffer src)  BitOp(|=, dst, src)
-Error Buffer_bitwiseXor(Buffer dst, Buffer src) BitOp(^=, dst, src)
-Error Buffer_bitwiseAnd(Buffer dst, Buffer src) BitOp(&=, dst, src)
-Error Buffer_bitwiseNot(Buffer dst) BitOp(=~, dst, dst)
+Error Buffer_bitwiseOr(Buffer dst, Buffer src)  BitOp(|=, dst, src, )
+Error Buffer_bitwiseXor(Buffer dst, Buffer src) BitOp(^=, dst, src, )
+Error Buffer_bitwiseNot(Buffer dst) BitOp(=~, dst, dst, )
+Error Buffer_bitwiseAnd(Buffer dst, Buffer src) BitOp(
+	&=, dst, src,
+	if(dstLen > srcLen)
+		Buffer_unsetAllBits(Buffer_createRefConst(dst.ptrNonConst + srcLen, dstLen - srcLen));
+)
 
 Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
 	return isOn ? Buffer_setAllBits(buf) : Buffer_unsetAllBits(buf);

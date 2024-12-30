@@ -457,16 +457,17 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLay
 	if(!info)
 		return Error_nullPointer(2, "BufferLayout_resolveLayout()::info is NULL");
 
-	if(CharString_equalsStringSensitive(path, CharString_createRefCStrConst("//")))
-		return Error_invalidParameter(1, 0, "BufferLayout_resolveLayout()::path is invalid");
-
 	U64 start = CharString_startsWithSensitive(path, '/', 0);
-	U64 end = CharString_length(path) - CharString_endsWithSensitive(path, '/', 0);
+	U64 end = CharString_length(path) - start - CharString_endsWithSensitive(path, '/', 0);
 
 	U32 currentStructId = layout.rootStructIndex;
+
+	if(currentStructId == U32_MAX)
+		return Error_invalidParameter(1, 0, "BufferLayout_resolveLayout() rootStructIndex is unset, can't resolveLayout");
+
 	BufferLayoutStruct currentStruct = layout.structs.ptr[currentStructId];
 
-	if (end <= start) {
+	if (end <= start || end == U64_MAX) {
 
 		U64 totalLength = 0;
 
@@ -507,6 +508,8 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLay
 	for (U64 i = start; i < end; ++i) {
 
 		C8 v = CharString_getAt(path, i);
+
+		//TODO: Support UTF8
 
 		if(!C8_isValidAscii(v))
 			gotoIfError(clean, Error_invalidParameter(1, 3, "BufferLayout_resolveLayout()::path contains non ascii char"))
@@ -549,12 +552,8 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLay
 
 				if (currentArrayDim >= currentMember.arraySizes.length) {
 
-					//Access struct
-
 					currentStructId = currentMember.structId;
 					currentStruct = layout.structs.ptr[currentStructId];
-
-					//
 
 					U16 memberId = BufferLayoutStruct_findMember(currentStruct, copy);
 

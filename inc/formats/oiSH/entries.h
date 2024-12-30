@@ -85,26 +85,28 @@ typedef struct SHEntry {
 	U16 groupZ;
 	U8 intersectionSize, payloadSize;	//Raytracing payload sizes
 
+	U32 padding;
+
 	//Verification for linking and PSO compatibility (graphics only)
 
 	union {
-		U8 inputs[16];					//ESBType, but ESBMatrix_N1
 		U64 inputsU64[2];
+		U8 inputs[16];					//ESBType, but ESBMatrix_N1
 	};
 
 	union {
-		U8 outputs[16];					//ESBType, but ESBMatrix_N1
 		U64 outputsU64[2];
+		U8 outputs[16];					//ESBType, but ESBMatrix_N1
 	};
 
 	union {
-		U8 inputSemanticNames[16];		//(U4 semanticId, semanticName)[]
 		U64 inputSemanticNamesU64[2];
+		U8 inputSemanticNames[16];		//(U4 semanticId, semanticName)[]
 	};
 
 	union {
-		U8 outputSemanticNames[16];		//(U4 semanticId, semanticName)[]
 		U64 outputSemanticNamesU64[2];
+		U8 outputSemanticNames[16];		//(U4 semanticId, semanticName)[]
 	};
 
 	ListCharString semanticNames;		//Unique semantics; outputs start at [uniqueInputSemantics], inputs at 0

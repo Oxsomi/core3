@@ -1646,8 +1646,8 @@ clean:
 }
 
 typedef union TempInOutput {
-	U8 a[16];
 	U64 aU64[2];
+	U8 a[16];
 } TempInOutput;
 
 Bool Compiler_findEntry(ListSHEntryRuntime entry, CharString name, SHEntryRuntime **ptr, Error *e_rr) {

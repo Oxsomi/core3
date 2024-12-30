@@ -96,8 +96,8 @@ typedef struct SHBinding {
 
 //U32_MAX for both space and binding indicates 'not present'
 typedef union SHBindings {
-	SHBinding arr[ESHBinaryType_Count];
 	U64 arrU64[ESHBinaryType_Count];
+	SHBinding arr[ESHBinaryType_Count];
 } SHBindings;
 
 SHBindings SHBindings_dummy();

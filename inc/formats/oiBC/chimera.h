@@ -63,6 +63,8 @@ typedef struct Chimera {
 	//constantCursor (>>10) & 3
 	U64 effects;
 
+	U64 padding;
+
 } Chimera;
 
 void Chimera_stepFidiA(Chimera *chim, const EFidiA op);
