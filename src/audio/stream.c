@@ -74,7 +74,7 @@ Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) 
 	AudioStream *stream = AudioStreamRef_ptr(streamRef);
 
 	if(offset >= stream->info.duration)
-		retError(clean, Error_invalidParameter(1, 0, "AudioDeviceRef_createFileStream() duration offset out of bounds"))
+		retError(clean, Error_invalidParameter(1, 0, "AudioStreamRef_seekTime() duration offset out of bounds"))
 
 	stream->timeOffset = offset;
 

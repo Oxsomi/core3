@@ -33,21 +33,10 @@ typedef struct FileInfo FileInfo;
 
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f);
 
-Bool CLI_convertToDL(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-);
-
-Bool CLI_convertFromDL(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-);
-
-Bool CLI_convertToCA(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-);
-
-Bool CLI_convertFromCA(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-);
+Bool CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
+Bool CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
+Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
+Bool CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
 
 Bool CLI_convertTo(ParsedArgs args);
 Bool CLI_convertFrom(ParsedArgs args);
@@ -91,7 +80,9 @@ typedef enum ECompileType {
 
 	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes);
 	Bool CLI_parseThreads(ParsedArgs args, U64 *threadCount, U64 defaultThreadCount);
+
 	ECompilerWarning CLI_getExtraWarnings(ParsedArgs args);
+
 	Bool CLI_getCompileTargetsFromFile(
 		CharString input,
 		ECompileType compileType,

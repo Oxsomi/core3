@@ -109,6 +109,8 @@ typedef struct AudioStream {
 	AudioStreamFormat format;	//The real format that the device is reading. Stereo to mono and/or F32/F64/U24 -> U16
 	U8 padding[2];
 
+	U64 padding0;
+
 } AudioStream;
 
 typedef RefPtr AudioStreamRef;

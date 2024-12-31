@@ -43,6 +43,7 @@ extern const C8 *EAudioApi_name[EAudioApi_Count];
 typedef struct AudioInterface {
 	EAudioApi api;
 	U32 apiVersion;		//OXC3_MAKE_VERSION
+	U64 padding;		//Just in case next allocation has to be 16-byte aligned
 } AudioInterface;
 
 typedef struct Allocator Allocator;

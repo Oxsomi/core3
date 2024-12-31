@@ -131,27 +131,25 @@ Bool AudioStream_freeExt(AudioStream *stream, Allocator alloc) {
 
 	ALAudioDevice *deviceExt = AudioDevice_ext(AudioDeviceRef_ptr(stream->device), AL);
 	ALAudioStream *streamExt = AudioStream_ext(stream, AL);
-	Error *e_rr = NULL;
 	Bool s_uccess = true;
 
 	if (stream->isPlaying) {
-		AL_PROCESS_ERROR(deviceExt->device, alSourceStop(streamExt->source));
-		AL_PROCESS_ERROR(deviceExt->device, alSourceUnqueueBuffers(streamExt->source, ALAudioStream_bufferCount, streamExt->buffer))
+		alSourceStop(streamExt->source);
+		alSourceUnqueueBuffers(streamExt->source, ALAudioStream_bufferCount, streamExt->buffer);
 	}
 
 	Buffer_free(&streamExt->tmp, alloc);
 	Buffer_free(&streamExt->tmpCvt, alloc);
 
 	if(streamExt->initializedBuffers || streamExt->initializedSource)
-		AL_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context))
+		alcMakeContextCurrent(deviceExt->context);
 
 	if(streamExt->initializedSource)
-		AL_PROCESS_ERROR(deviceExt->device, alDeleteSources(1, &streamExt->source))
+		alDeleteSources(1, &streamExt->source);
 
 	if(streamExt->initializedBuffers)
-		AL_PROCESS_ERROR(deviceExt->device, alDeleteBuffers(ALAudioStream_bufferCount, streamExt->buffer))
+		alDeleteBuffers(ALAudioStream_bufferCount, streamExt->buffer);
 
-clean:
 	return s_uccess;
 }
 

@@ -61,9 +61,9 @@ TList(AudioDeviceInfo);
 
 typedef struct AudioDevice {
 
-	AudioInterfaceRef *interf;
-
 	AudioDeviceInfo info;
+
+	AudioInterfaceRef *interf;
 
 	U8 pendingDirtyMask;
 	U8 padding[7];

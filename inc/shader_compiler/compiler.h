@@ -125,7 +125,7 @@ typedef struct CompileResult {
 	Bool isSuccess;
 	Bool infoAboutIncludes;
 	U8 type;					//ECompileResultType
-	U8 padding[1];
+	U8 padding;
 
 	union {
 		CharString text;
@@ -172,7 +172,7 @@ void Compiler_free(Compiler *comp, Allocator alloc);
 void Compiler_shutdown();
 
 //Generate disassembly from buffer
-Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
+Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *res, Error *e_rr);
 
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.

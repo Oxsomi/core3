@@ -293,15 +293,16 @@ typedef enum EFormatFlags {
 
 typedef struct Operation {
 
-	EOperationCategory category;
 	const C8 *name, *desc;
 	OperationFunc func;
+	EOperationCategory category;
 
 	//If set, this will be used instead of a per format setting.
 
-	Bool isFormatLess;
+	Bool isFormatLess; U8 padding0[3];
 	EOperationFlags operationFlags;
 	EOperationHasParameter requiredParameters, optionalParameters;
+	U32 padding1;
 
 } Operation;
 
