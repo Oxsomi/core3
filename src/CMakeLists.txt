@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

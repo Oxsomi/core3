@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -122,9 +122,6 @@ Bool CLI_audioConvert(ParsedArgs args) {
 		else if(CharString_equalsStringInsensitive(str, CharString_createRefCStrConst("right")))
 			splitType = ESplitType_Right;
 
-		else if(CharString_equalsStringInsensitive(str, CharString_createRefCStrConst("untouched")))
-			splitType = ESplitType_Untouched;
-
 		else {
 			Log_debugLnx("CLI_audioConvert() invalid -split argument. Expected left, right or average");
 			success = false;
@@ -162,8 +159,7 @@ Bool CLI_audioConvert(ParsedArgs args) {
 				goto clean2;
 			}
 
-			bitPreferences[bitPreferenceCount] = (U8) num;
-			++bitPreferenceCount;
+			bitPreferences[bitPreferenceCount++] = (U8) num;
 		}
 
 		ListCharString_freex(&split);
@@ -255,7 +251,7 @@ Bool CLI_audioConvert(ParsedArgs args) {
 
 				Log_debugLnx("CLI_audioConvert() converting \"%.*s\"", (int) CharString_length(input), input.ptr);
 
-				gotoIfError3(clean, File_openStreamx(input,  1 * SECOND, EFileOpenType_Read,  false, 1 * MIBI, &inputStream, e_rr))
+				gotoIfError3(clean, File_openStreamx(input,  1 * SECOND, EFileOpenType_Read, false, 1 * MIBI, &inputStream, e_rr))
 				gotoIfError3(clean, WAV_readx(&inputStream, 0, 0, &wav, e_rr))
 
 				if(wav.fmt.stride == 24)
@@ -275,7 +271,7 @@ Bool CLI_audioConvert(ParsedArgs args) {
 				if(!hasBitPreference)
 					retError(clean, Error_invalidState(0, "CLI_audioConvert() format wasn't supported to truncate to"))
 
-				gotoIfError3(clean, File_openStreamx(output, 1 * SECOND, EFileOpenType_Write, true,  0, &outputStream, e_rr))
+				gotoIfError3(clean, File_openStreamx(output, 1 * SECOND, EFileOpenType_Write, true, 0, &outputStream, e_rr))
 
 				if(wav.fmt.channels == 1)
 					splitType = ESplitType_Untouched;

@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -49,9 +49,9 @@ U64 Buffer_forceReadSizeType(const U8 *ptr, EXXDataSizeType type) {
 
 	switch (type) {
 		case EXXDataSizeType_U8:		return *ptr;
-		case EXXDataSizeType_U16:		return *(const U16*)ptr;
-		case EXXDataSizeType_U32:		return *(const U32*)ptr;
-		case EXXDataSizeType_U64:		return *(const U64*)ptr;
+		case EXXDataSizeType_U16:		return Buffer_readU16(Buffer_createRefConst(ptr, sizeof(U16)), 0, NULL);
+		case EXXDataSizeType_U32:		return Buffer_readU32(Buffer_createRefConst(ptr, sizeof(U32)), 0, NULL);
+		case EXXDataSizeType_U64:		return Buffer_readU64(Buffer_createRefConst(ptr, sizeof(U64)), 0, NULL);
 		default:						return 0;
 	}
 }
@@ -62,11 +62,11 @@ U64 Buffer_forceWriteSizeType(U8 *ptr, EXXDataSizeType type, U64 result) {
 		return 0;
 
 	switch (type) {
-		case EXXDataSizeType_U8:		*ptr = (U8) result;				return sizeof(U8);
-		case EXXDataSizeType_U16:		*(U16*)ptr = (U16) result;		return sizeof(U16);
-		case EXXDataSizeType_U32:		*(U32*)ptr = (U32) result;		return sizeof(U32);
-		case EXXDataSizeType_U64:		*(U64*)ptr = result;			return sizeof(U64);
-		default:						return 0;
+		case EXXDataSizeType_U8:	*ptr = (U8) result;				return sizeof(U8);
+		case EXXDataSizeType_U16:	Buffer_writeU16(Buffer_createRef(ptr, sizeof(U16)), 0, (U16) result);	return sizeof(U16);
+		case EXXDataSizeType_U32:	Buffer_writeU32(Buffer_createRef(ptr, sizeof(U32)), 0, (U32) result);	return sizeof(U32);
+		case EXXDataSizeType_U64:	Buffer_writeU64(Buffer_createRef(ptr, sizeof(U64)), 0, result);			return sizeof(U64);
+		default:					return 0;
 	}
 }
 

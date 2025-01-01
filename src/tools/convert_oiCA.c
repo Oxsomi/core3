@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -61,9 +61,7 @@ clean:
 	return s_uccess;
 }
 
-Bool CLI_convertToCA(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-) {
+Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -100,11 +98,11 @@ Bool CLI_convertToCA(
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
-	if(encryptionKey && !settings.encryptionType)
-		retError(clean, Error_invalidOperation(3, "CLI_convertToCA() encryptionKey provided but no encryption was used"))
+	if(encKey && !settings.encryptionType)
+		retError(clean, Error_invalidOperation(3, "CLI_convertToCA() encKey provided but no encryption was used"))
 
-	if(!encryptionKey && settings.encryptionType)
-		retError(clean, Error_unauthorized(0, "CLI_convertToCA() requires encryptionKey but not provided"))
+	if(!encKey && settings.encryptionType)
+		retError(clean, Error_unauthorized(0, "CLI_convertToCA() requires encKey but not provided"))
 
 	//Compression type
 
@@ -119,7 +117,7 @@ Bool CLI_convertToCA(
 	if(settings.encryptionType)
 		Buffer_copy(
 			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
-			Buffer_createRef(encryptionKey, sizeof(settings.encryptionKey))
+			Buffer_createRef(encKey, sizeof(settings.encryptionKey))
 		);
 
 	//Archive
@@ -181,9 +179,7 @@ clean:
 	return s_uccess;
 }
 
-Bool CLI_convertFromCA(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-) {
+Bool CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -205,7 +201,7 @@ Bool CLI_convertFromCA(
 	//Read file
 
 	gotoIfError3(clean, File_readx(input, 100 * MS, 0, 0, &buf, e_rr))
-	gotoIfError3(clean, CAFile_readx(buf, encryptionKey, &file, e_rr))
+	gotoIfError3(clean, CAFile_readx(buf, encKey, &file, e_rr))
 
 	Bool outputAsSingle = file.archive.entries.length == 1;
 	EFileType outputType = outputAsSingle ? file.archive.entries.ptr->type : EFileType_Folder;

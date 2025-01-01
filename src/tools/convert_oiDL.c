@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -46,9 +46,8 @@ clean:
 	return s_uccess;
 }
 
-Bool CLI_convertToDL(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-) {
+Bool CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr) {
+
 	//TODO: EXXCompressionType_Brotli11
 
 	Bool s_uccess = true;
@@ -74,12 +73,10 @@ Bool CLI_convertToDL(
 
 	//Data type
 
-	if ((args.flags & EOperationFlags_UTF8) && (args.flags & EOperationFlags_Ascii)) {
-		Log_errorLnx("oiDL can only pick UTF8 or Ascii, not both.");
+	if ((args.flags & EOperationFlags_UTF8) && (args.flags & EOperationFlags_Ascii))
 		retError(clean, Error_invalidParameter(
 			0, 0, "CLI_convertToDL() oiDL can only pick UTF8 or Ascii, not both"
 		))
-	}
 
 	if(args.flags & EOperationFlags_UTF8)
 		settings.dataType = EDLDataType_UTF8;
@@ -97,29 +94,27 @@ Bool CLI_convertToDL(
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
-	if(encryptionKey && !settings.encryptionType)
+	if(encKey && !settings.encryptionType)
 		retError(clean, Error_invalidOperation(
-			3, "CLI_convertToDL() encryptionKey was provided but encryption wasn't used"
+			3, "CLI_convertToDL() encKey was provided but encryption wasn't used"
 		))
 
-	if(!encryptionKey && settings.encryptionType)
-		retError(clean, Error_unauthorized(0, "CLI_convertToDL() encryptionKey was needed but not provided"))
+	if(!encKey && settings.encryptionType)
+		retError(clean, Error_unauthorized(0, "CLI_convertToDL() encKey was needed but not provided"))
 
 	//Copying encryption key
 
 	if(settings.encryptionType)
 		Buffer_copy(
 			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
-			Buffer_createRef(encryptionKey, sizeof(settings.encryptionKey))
+			Buffer_createRef(encKey, sizeof(settings.encryptionKey))
 		);
 
 	//Check validity
 
 	if(args.parameters & EOperationHasParameter_SplitBy && !(args.flags & EOperationFlags_Ascii)) {
 
-		//TODO: Support split UTF8
-
-		Log_errorLnx("oiDL doesn't support splitting by a character if it's not a string list.");
+		//TODO: Support split UTF8, in DLFile first, otherwise split can't work
 
 		retError(clean, Error_invalidParameter(
 			0, 1,
@@ -143,7 +138,6 @@ Bool CLI_convertToDL(
 			//Grab split string
 
 			if (args.parameters & EOperationHasParameter_SplitBy) {
-
 				CharString splitBy;
 				gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &splitBy))
 				gotoIfError2(clean, CharString_splitStringSensitivex(str, splitBy, &split))
@@ -236,7 +230,6 @@ Bool CLI_convertToDL(
 
 				fileBuf = Buffer_createNull();
 			}
-
 		}
 
 		//Use sorted to insert into buffers
@@ -249,8 +242,6 @@ Bool CLI_convertToDL(
 
 			fileBuf = Buffer_createNull();
 		}
-
-		//
 
 		ListCharString_freex(&sortedPaths);
 		ListCharString_freex(&paths);
@@ -285,9 +276,7 @@ clean:
 	return s_uccess;
 }
 
-Bool CLI_convertFromDL(
-	ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8], Error *e_rr
-) {
+Bool CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -308,7 +297,7 @@ Bool CLI_convertFromDL(
 	//Read file
 
 	gotoIfError3(clean, File_readx(input, 100 * MS, 0, 0, &buf, e_rr))
-	gotoIfError3(clean, DLFile_readx(buf, encryptionKey, false, &file, e_rr))
+	gotoIfError3(clean, DLFile_readx(buf, encKey, false, &file, e_rr))
 
 	//Write file
 
@@ -339,7 +328,7 @@ Bool CLI_convertFromDL(
 			//File name "$base/$(i).+?(isBin ? ".bin" : ".txt")"
 
 			gotoIfError2(clean, CharString_createDecx(i, 0, &filePathi))
-				gotoIfError2(clean, CharString_insertStringx(&filePathi, outputBase, 0))
+			gotoIfError2(clean, CharString_insertStringx(&filePathi, outputBase, 0))
 
 			if(file.settings.dataType == EDLDataType_Data)
 				gotoIfError2(clean, CharString_appendStringx(&filePathi, bin))
@@ -379,13 +368,10 @@ Bool CLI_convertFromDL(
 			}
 
 			else gotoIfError2(clean, CharString_appendStringx(&concatFile, CharString_newLine()))
-
 		}
 
 		Buffer fileDat = Buffer_createRefConst(concatFile.ptr, CharString_length(concatFile));
-
 		gotoIfError3(clean, File_writex(fileDat, output, 0, 0, 1 * SECOND, true, e_rr))
-
 		CharString_freex(&concatFile);
 	}
 

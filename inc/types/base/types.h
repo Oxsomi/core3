@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -174,7 +174,7 @@ typedef struct Buffer {
 
 #define OXC3_MAJOR 0
 #define OXC3_MINOR 2
-#define OXC3_PATCH 83
+#define OXC3_PATCH 84
 #define OXC3_VERSION OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 
 #ifdef __cplusplus

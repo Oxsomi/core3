@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -56,6 +56,7 @@
 			CharString d3d12 = CharString_createRefCStrConst("d3d12");
 			CharString direct3d12 = CharString_createRefCStrConst("direct3d12");
 			CharString directx12 = CharString_createRefCStrConst("directx12");
+			CharString dx12 = CharString_createRefCStrConst("dx12");
 
 			CharString vulkan = CharString_createRefCStrConst("vulkan");
 			CharString vk = CharString_createRefCStrConst("vk");
@@ -71,7 +72,8 @@
 				if(
 					CharString_equalsStringInsensitive(str, d3d12) ||
 					CharString_equalsStringInsensitive(str, directx12) ||
-					CharString_equalsStringInsensitive(str, direct3d12)
+					CharString_equalsStringInsensitive(str, direct3d12) ||
+					CharString_equalsStringInsensitive(str, dx12)
 				) {
 					queried |= (U64)1 << EGraphicsApi_Direct3D12;
 					wasExplicit = true;
@@ -88,8 +90,10 @@
 				else if(CharString_equalsStringInsensitive(str, all))
 					queried = U64_MAX;
 
-				else if(CharString_equalsStringInsensitive(str, native) || CharString_equalsStringInsensitive(str, def))
+				else if(CharString_equalsStringInsensitive(str, native) || CharString_equalsStringInsensitive(str, def)) {
 					queried |= nativeBit;
+					wasExplicit = true;
+				}
 
 				else Log_debugLnx(
 					"CLI_graphicsDevices() -graphics-api must be one of: vulkan/vk, d3d12/d3d12/direct3d12, native or all"
@@ -158,7 +162,7 @@
 				if(!count && entry < infos.length)
 					count = infos.length - entry;
 
-				Log_debugLnx("Graphics device matching ranges [ %"PRIu64", %"PRIu64" >", entry, entry + count);
+				Log_debugLnx("Graphics device matching ranges [%"PRIu64", %"PRIu64">", entry, entry + count);
 
 				for(U64 i = entry; i < infos.length && i < entry + count; ++i)
 					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], true);

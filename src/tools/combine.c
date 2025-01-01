@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -37,7 +37,6 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
-	CharString inputArg = CharString_createNull();
 	Buffer buf[3] = { 0 };
 	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
 
@@ -56,6 +55,8 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	//TODO: Multiple files
 
 	//Get inputs and output
+
+	CharString inputArg = CharString_createNull();
 
 	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg))
 

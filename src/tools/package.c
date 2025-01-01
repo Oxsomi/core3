@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -59,14 +59,16 @@ Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 
 	if (file.type == EFileType_File) {
 
-		if (
-			CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsl"), 0) ||
-			CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsli"), 0)
-		)
-			goto clean;
+		#ifdef CLI_SHADER_COMPILER
+			if (
+				CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsl"), 0) ||
+				CharString_endsWithStringSensitive(entry.path, CharString_createRefCStrConst(".hlsli"), 0)
+			)
+				goto clean;
+		#endif
 
 		//We have to detect file type and process it here to a custom type.
-		//We don't have a custom file yet, so for now
+		//We don't have a custom file yet (besides oiSH), so for now
 		//this will just be identical to addFileToCAFile.
 
 		gotoIfError3(clean, Archive_addFilex(caFile->archive, entry.path, &entry.data, 0, e_rr))
@@ -244,8 +246,11 @@ Bool CLI_package(ParsedArgs args) {
 			))
 
 		for(U64 i = 0; i < allOutputs.length; ++i)
+
 			if(Buffer_length(allBuffers.ptrNonConst[i]))
 				gotoIfError3(clean, Archive_addFilex(&archive, allOutputs.ptr[i], &allBuffers.ptrNonConst[i], 0, e_rr))
+
+			else retError(clean, Error_invalidState(0, "CLI_package() one of the shaders didn't compile, aborting packaging"))
 
 	#endif
 

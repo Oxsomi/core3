@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -53,13 +53,11 @@ clean:
 }
 
 typedef enum EProfileCastStep {
-
 	EProfileCastStep_Regular,
 	EProfileCastStep_Zero,
 	EProfileCastStep_NaN,
 	EProfileCastStep_Inf,
 	EProfileCastStep_DeN
-
 } EProfileCastStep;
 
 U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
@@ -330,7 +328,9 @@ Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionTy
 	U32 key[8];
 	I32x4 iv, tag;
 
-	Error err = Buffer_encrypt(
+	Error err = Error_none();
+
+	gotoIfError(clean, Buffer_encrypt(
 		buf,
 		Buffer_createNull(),
 		encryptionType,
@@ -338,9 +338,7 @@ Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionTy
 		key,
 		&iv,
 		&tag
-	);
-
-	gotoIfError(clean, err)
+	))
 
 	Ns now = Time_now();
 

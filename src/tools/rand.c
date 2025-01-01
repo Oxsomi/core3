@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -224,12 +224,8 @@ Bool CLI_rand(ParsedArgs args) {
 						U8 v = tmp.ptr[j];
 						U8 prefix = 2;
 
-						switch (outputAsBase) {
-
-							case 16:
-								gotoIfError2(clean, CharString_createHexx(v, 2, &tmpString))
-								break;
-						}
+						if(outputAsBase == 16)
+							gotoIfError2(clean, CharString_createHexx(v, 2, &tmpString))
 
 						gotoIfError2(clean, CharString_popFrontCount(&tmpString, prefix))
 						gotoIfError2(clean, CharString_appendStringx(&outputString, tmpString))
@@ -238,7 +234,7 @@ Bool CLI_rand(ParsedArgs args) {
 							if(j != (k - 1) && !((j + 1) & 15))
 								gotoIfError2(clean, CharString_appendx(&outputString, ' '))
 
-						if(j != (k - 1) && !((j + 1) & 63))
+						if(j != (k - 1) && !((j + 1) & 63) && bytesToGenerate != 64)
 							gotoIfError2(clean, CharString_appendStringx(&outputString, CharString_newLine()))
 
 						CharString_freex(&tmpString);

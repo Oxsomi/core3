@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -229,67 +229,67 @@ ETextureFormatId DXFormat_toTextureFormatId(DXFormat format) {
 		case 2:									return ETextureFormatId_RGBA32f;
 		case 3:									return ETextureFormatId_RGBA32u;
 		case 4:									return ETextureFormatId_RGBA32i;
-	
+
 		case 6:									return ETextureFormatId_RGB32f;
 		case 7:									return ETextureFormatId_RGB32u;
 		case 8:									return ETextureFormatId_RGB32i;
-	
+
 		case 10:								return ETextureFormatId_RGBA16f;
 		case 11:								return ETextureFormatId_RGBA16;
 		case 12:								return ETextureFormatId_RGBA16u;
 		case 13:								return ETextureFormatId_RGBA16s;
 		case 14:								return ETextureFormatId_RGBA16i;
-	
+
 		case 16:								return ETextureFormatId_RG32f;
 		case 17:								return ETextureFormatId_RG32u;
 		case 18:								return ETextureFormatId_RG32i;
-	
+
 		case 24:								return ETextureFormatId_BGR10A2;
-	
+
 		case 28:								return ETextureFormatId_RGBA8;
 		case 30:								return ETextureFormatId_RGBA8u;
 		case 31:								return ETextureFormatId_RGBA8s;
 		case 32:								return ETextureFormatId_RGBA8i;
-	
+
 		case 34:								return ETextureFormatId_RG16f;
 		case 35:								return ETextureFormatId_RG16;
 		case 36:								return ETextureFormatId_RG16u;
 		case 37:								return ETextureFormatId_RG16s;
 		case 38:								return ETextureFormatId_RG16i;
-	
+
 		case 41:								return ETextureFormatId_R32f;
 		case 42:								return ETextureFormatId_R32u;
 		case 43:								return ETextureFormatId_R32i;
-	
+
 		case 49:								return ETextureFormatId_RG8;
 		case 50:								return ETextureFormatId_RG8u;
 		case 51:								return ETextureFormatId_RG8s;
 		case 52:								return ETextureFormatId_RG8i;
-	
+
 		case 54:								return ETextureFormatId_R16f;
 		case 56:								return ETextureFormatId_R16;
 		case 57:								return ETextureFormatId_R16u;
 		case 58:								return ETextureFormatId_R16s;
 		case 59:								return ETextureFormatId_R16i;
-	
+
 		case 61:								return ETextureFormatId_R8;
 		case 62:								return ETextureFormatId_R8u;
 		case 63:								return ETextureFormatId_R8s;
 		case 64:								return ETextureFormatId_R8i;
-	
+
 		case 80:								return ETextureFormatId_BC4;
 		case 81:								return ETextureFormatId_BC4s;
-	
+
 		case 83:								return ETextureFormatId_BC5;
 		case 84:								return ETextureFormatId_BC5s;
-	
+
 		case 91:								return ETextureFormatId_BGRA8;
-	
+
 		case 95:								return ETextureFormatId_BC6H;
-	
+
 		case 98:								return ETextureFormatId_BC7;
 		case 99:								return ETextureFormatId_BC7_sRGB;
-	
+
 		default:								return ETextureFormatId_Undefined;
 	}
 }
