@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "device_buffer.h"
+#include "graphics/generic/device_buffer.h"
 #include "types/container/string.h"
 
 #ifdef __cplusplus
@@ -69,7 +69,7 @@ typedef struct RTAS {
 
 	CharString name;						//Debug name
 
-	SpinLock lock;								//Before reading on CPU; for example for refitting
+	SpinLock lock;							//Before reading on CPU; for example for refitting
 
 } RTAS;
 

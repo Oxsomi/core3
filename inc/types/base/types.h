@@ -174,7 +174,7 @@ typedef struct Buffer {
 
 #define OXC3_MAJOR 0
 #define OXC3_MINOR 2
-#define OXC3_PATCH 84
+#define OXC3_PATCH 85
 #define OXC3_VERSION OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 
 #ifdef __cplusplus

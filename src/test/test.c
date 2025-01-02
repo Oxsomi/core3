@@ -21,14 +21,14 @@
 #include "types/base/time.h"
 #include "types/base/c8.h"
 #include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "types/container/big_int.h"
+#include "types/container/log.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/math/type_cast.h"
-#include "types/container/buffer_layout.h"
 #include "types/math/flp.h"
-#include "types/container/big_int.h"
 #include "formats/oiBC/chimera.h"
-#include "types/container/log.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -119,7 +119,6 @@ int main() {
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
-	BufferLayout bufferLayout = (BufferLayout) { 0 };
 
 	CharString inputs[19 + EXTRA_CHECKS] = { 0 };
 
@@ -544,222 +543,6 @@ int main() {
 
 	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i)
 		CharString_free(&inputs[i], alloc);
-
-	//Test buffer layouts
-
-	//Test 1: Camera[10]
-
-	gotoIfError(clean, BufferLayout_create(alloc, &bufferLayout))
-
-	//Transform
-
-	BufferLayoutStructInfo transformStructInfo = (BufferLayoutStructInfo) {
-		.name = CharString_createRefCStrConst("Transform")
-	};
-
-	BufferLayoutMemberInfo transformMembers[] = {
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("rot"),
-			.typeId = ETypeId_F32x4,
-			.stride = sizeof(F32x4),
-			.structId = U32_MAX
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("pos"),
-			.typeId = ETypeId_F32x4,
-			.stride = sizeof(F32x4),
-			.offset = sizeof(F32x4),
-			.structId = U32_MAX
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("scale"),
-			.typeId = ETypeId_F32x4,
-			.stride = sizeof(F32x4),
-			.offset = sizeof(F32x4) * 2,
-			.structId = U32_MAX
-		}
-	};
-
-	gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
-		transformMembers,
-		sizeof(transformMembers) / sizeof(transformMembers[0]),
-		&transformStructInfo.members
-	))
-
-	U32 transformStruct;
-	gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, transformStructInfo, alloc, &transformStruct))
-
-	//
-
-	BufferLayoutStructInfo cameraStructInfo = (BufferLayoutStructInfo) {
-		.name = CharString_createRefCStrConst("Camera")
-	};
-
-	BufferLayoutMemberInfo cameraMembers[] = {
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("transform"),
-			.structId = transformStruct,
-			.stride = sizeof(F32x4) * 3,
-			.typeId = ETypeId_Undefined
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("p0"),
-			.typeId = ETypeId_F32x4,
-			.stride = sizeof(F32x4),
-			.offset = sizeof(F32x4) * 3,
-			.structId = U32_MAX
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("right"),
-			.typeId = ETypeId_F32x4,
-			.stride = sizeof(F32x4),
-			.offset = sizeof(F32x4) * 4,
-			.structId = U32_MAX
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("up"),
-			.typeId = ETypeId_F32x4,
-			.stride = sizeof(F32x4),
-			.offset = sizeof(F32x4) * 5,
-			.structId = U32_MAX
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("near"),
-			.typeId = ETypeId_F32,
-			.stride = sizeof(F32),
-			.offset = sizeof(F32x4) * 6,
-			.structId = U32_MAX
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("far"),
-			.typeId = ETypeId_F32,
-			.stride = sizeof(F32),
-			.offset = sizeof(F32x4) * 6 + sizeof(F32),
-			.structId = U32_MAX
-		},
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("fovRad"),
-			.typeId = ETypeId_F32,
-			.stride = sizeof(F32),
-			.offset = sizeof(F32x4) * 6 + sizeof(F32) * 2,
-			.structId = U32_MAX
-		}
-	};
-
-	gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
-		cameraMembers,
-		sizeof(cameraMembers) / sizeof(cameraMembers[0]),
-		&cameraStructInfo.members
-	))
-
-	U32 cameraStruct;
-	gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, cameraStructInfo, alloc, &cameraStruct))
-
-	//Camera[10]
-
-	BufferLayoutStructInfo cameraStructArrayInfo = (BufferLayoutStructInfo) { 0 };
-
-	BufferLayoutMemberInfo cameraStructArrayMembers[] = {
-
-		(BufferLayoutMemberInfo) {
-			.name = CharString_createRefCStrConst("arr"),
-			.structId = cameraStruct,
-			.stride = sizeof(F32x4) * 6 + sizeof(F32) * 4 /* 1 float for padding */,
-			.typeId = ETypeId_Undefined
-		}
-	};
-
-	U32 cameraArrayLen = 10;
-	gotoIfError(clean, ListU32_createRefConst(&cameraArrayLen, 1, &cameraStructArrayMembers[0].arraySizes))
-
-	gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
-		cameraStructArrayMembers,
-		sizeof(cameraStructArrayMembers) / sizeof(cameraStructArrayMembers[0]),
-		&cameraStructArrayInfo.members
-	))
-
-	U32 cameraStructArray;
-	gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, cameraStructArrayInfo, alloc, &cameraStructArray))
-
-	gotoIfError(clean, BufferLayout_assignRootStruct(&bufferLayout, cameraStructArray))
-
-	//Instantiate
-
-	gotoIfError(clean, BufferLayout_createInstance(bufferLayout, 1, alloc, &emp))
-
-	typedef struct Transform {
-		QuatF32 rot;
-		F32x4 pos, scale;
-	} Transform;
-
-	typedef struct Camera {
-
-		Transform transform;
-
-		F32x4 p0, right, up;
-
-		F32 near, far, fovRad, padding;
-
-	} Camera;
-
-	if (Buffer_length(emp) != sizeof(Camera) * 10)
-		gotoIfError(clean, Error_invalidState(0, "BufferLayout_createInstance was invalid"))
-
-	//Test simple behavior
-
-	F32x4 p0 = F32x4_create4(1, 2, 3, 4);
-
-	gotoIfError(clean, BufferLayout_setF32x4(
-		emp, bufferLayout,
-		CharString_createRefCStrConst("arr/0/p0"),
-		p0,
-		alloc
-	))
-
-	if(F32x4_neq4(((const Camera*)emp.ptr)[0].p0, p0))
-		gotoIfError(clean, Error_invalidState(1, "BufferLayout_setF32x4 arr/0/p0 didn't work"))
-
-	gotoIfError(clean, BufferLayout_setF32x4(
-		emp, bufferLayout,
-		CharString_createRefCStrConst("arr/1/p0"),
-		p0,
-		alloc
-	))
-
-	if(F32x4_neq4(((const Camera*)emp.ptr)[1].p0, p0))
-		gotoIfError(clean, Error_invalidState(2, "BufferLayout_setF32x4 arr/1/p0 didn't work"))
-
-	gotoIfError(clean, BufferLayout_setF32x4(
-		emp, bufferLayout,
-		CharString_createRefCStrConst("arr/1/transform/scale"),
-		p0,
-		alloc
-	))
-
-	if(F32x4_neq4(((const Camera*)emp.ptr)[1].transform.scale, p0))
-		gotoIfError(clean, Error_invalidState(3, "BufferLayout_setF32x4 arr/1/transform/scale didn't work"))
-
-	F32 fovRadTest = 23;
-
-	gotoIfError(clean, BufferLayout_setF32(
-		emp, bufferLayout,
-		CharString_createRefCStrConst("arr/1/fovRad"),
-		fovRadTest,
-		alloc
-	))
-
-	if(((const Camera*)emp.ptr)[1].fovRad != fovRadTest)
-		gotoIfError(clean, Error_invalidState(4, "BufferLayout_setF32 arr/1/fovRad didn't work"))
 
 	//Test big endian conversions
 
@@ -2596,8 +2379,6 @@ clean:
 	Log_errorLn(alloc, "Failed unit test (%s)... Freeing. After %fs", err.errorStr, dt2);
 
 success:
-	BufferLayout_free(alloc, &bufferLayout);
-
 	CharString_free(&tmp, alloc);
 
 	for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)

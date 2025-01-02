@@ -20,8 +20,8 @@
 
 #pragma once
 #include "types/base/lock.h"
-#include "device.h"
-#include "resource.h"
+#include "graphics/generic/device.h"
+#include "graphics/generic/resource.h"
 
 #ifdef __cplusplus
 	extern "C" {

@@ -19,8 +19,8 @@
 */
 
 #pragma once
-#include "command_structs.h"
-#include "pipeline_structs.h"
+#include "graphics/generic/command_structs.h"
+#include "graphics/generic/pipeline_structs.h"
 #include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus

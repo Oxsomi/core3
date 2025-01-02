@@ -962,6 +962,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			case EGraphicsVendorPCIE_QCOM:		vendor = EGraphicsVendorId_QCOM;		break;
 			case EGraphicsVendorPCIE_INTC:		vendor = EGraphicsVendorId_INTC;		break;
 			case EGraphicsVendorPCIE_IMGT:		vendor = EGraphicsVendorId_IMGT;		break;
+			case EGraphicsVendorPCIE_APPL:		vendor = EGraphicsVendorId_APPL;		break;
 		}
 
 		//Capabilities

@@ -37,7 +37,6 @@
 #include "types/container/cdf_list.h"
 #include "types/container/lexer.h"
 #include "types/container/parser.h"
-#include "types/container/buffer_layout.h"
 #include "platforms/platform.h"
 
 TListXImpl(CharString);
@@ -58,8 +57,6 @@ TListXImpl(Buffer);
 TListXImpl(CdfValue);
 TListXImpl(ArchiveEntry);
 
-TListXImpl(BufferLayoutMemberInfo);
-TListXImpl(BufferLayoutStruct);
 TListXImpl(AllocationBufferBlock);
 
 TListXBaseImpl(ListRefPtr);

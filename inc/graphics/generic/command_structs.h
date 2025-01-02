@@ -122,7 +122,6 @@ typedef struct TransitionInternal {		//Transitions issued by a scope.
 	ResourceRange range;
 
 	EPipelineStage stage;				//First shader stage that will access this resource (if !type)
-
 	ETransitionType type;
 
 } TransitionInternal;
@@ -180,6 +179,8 @@ typedef union ClearColor {
 	F32 colorf[4];
 } ClearColor;
 
+//All commands have to be 16-byte aligned
+
 typedef struct ClearImageCmd {
 	ClearColor color;
 	ImageRange range;
@@ -204,7 +205,7 @@ typedef struct DrawCmd {
 	U32 indexOffset;
 
 	Bool isIndexed;
-	U8 padding[3];
+	U8 padding[11];
 
 } DrawCmd;
 
@@ -222,7 +223,7 @@ typedef struct DrawIndirectCmd {
 
 } DrawIndirectCmd;
 
-typedef struct DispatchCmd { U32 groups[3]; } DispatchCmd;
+typedef struct DispatchCmd { U32 groups[3], padding; } DispatchCmd;
 typedef struct DispatchIndirectCmd { DeviceBufferRef *buffer; U64 offset; } DispatchIndirectCmd;
 
 typedef enum ELoadAttachmentType {
@@ -261,6 +262,8 @@ typedef struct AttachmentInfo {
 
 	ClearColor color;
 
+	U64 padding;
+
 } AttachmentInfo;
 
 typedef struct DepthStencilAttachmentInfo {
@@ -294,10 +297,10 @@ typedef struct AttachmentInfoInternal {
 	ImageRange resolveRange;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
 	RefPtr *resolveImage;				//RenderTexture, DepthStencil or Swapchain. Null is allowed to disable resolving.
 
-	EMSAAResolveMode resolveMode;
-	U32 padding;
-
 	ClearColor color;
+
+	EMSAAResolveMode resolveMode;
+	U32 padding[3];
 
 } AttachmentInfoInternal;
 
@@ -343,7 +346,7 @@ typedef struct StartRenderCmdExt {
 	U8 colorCount;				//Count of render targets (even inactive ones).
 	U8 activeMask;				//Which render targets are active.
 	U8 clearStencil;
-	U8 padding;
+	U8 pad0;
 
 	F32 clearDepth;
 
@@ -353,6 +356,8 @@ typedef struct StartRenderCmdExt {
 	DepthStencilRef *depthStencil;
 
 	DepthStencilRef *resolveDepthStencil;
+
+	U64 pad1;
 
 	//AttachmentInfoInternal attachments[];		//[ active attachments go here ]
 
@@ -383,6 +388,8 @@ typedef struct CopyImageCmd {
 	U32 regionCount;
 	ECopyType copyType;
 
+	U64 padding;
+
 	//CopyImageRegion regions[regionCount];
 
 } CopyImageCmd;
@@ -407,7 +414,7 @@ typedef struct DrawCallIndexed {
 typedef struct Dispatch { U32 x, y, z, pad; } Dispatch;
 
 typedef struct DispatchRaysExt { U32 x, y, z, raygenId; } DispatchRaysExt;		//raygenId can't be set if on GPU
-typedef struct DispatchRaysIndirectExt { DeviceBufferRef *buffer; U64 offset; U32 raygenId; } DispatchRaysIndirectExt;
+typedef struct DispatchRaysIndirectExt { DeviceBufferRef *buffer; U64 offset; U32 raygenId, padding[3]; } DispatchRaysIndirectExt;
 
 #ifdef __cplusplus
 	}

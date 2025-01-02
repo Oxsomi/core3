@@ -94,7 +94,7 @@ clean:
 
 //Showing the entire file or a part to disk or to log
 
-Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii, Bool showEntireFile) {
+Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isUTF8, Bool showEntireFile) {
 
 	//Validate offset
 
@@ -159,11 +159,11 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		//Show what offset is being displayed
 
 		Log_debugLnx("Showing offset #%"PRIx64" with size %"PRIu64, start, length);
-		Log_debugLnx(isAscii ? "File contents: (ascii)" : "File contents: (binary)");
+		Log_debugLnx(isUTF8 ? "File contents: (utf8)" : "File contents: (binary)");
 
-		//Ascii can be directly output to log
+		//UTF8 can be directly output to log
 
-		if (isAscii) {
+		if (isUTF8) {
 			tmp = CharString_createRefSizedConst((const C8*)b.ptr + start, length, false);
 			Log_debugLnx("%.*s", CharString_length(tmp), tmp.ptr);
 			tmp = CharString_createNull();
@@ -476,12 +476,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					else {
 
-						Bool isAscii = CharString_isValidAscii(
+						Bool isUTF8 = CharString_isValidUTF8(
 							CharString_createRefSizedConst((const C8*) e.data.ptr, Buffer_length(e.data), false)
 						);
 
 						Log_debugLnx("%.*s", CharString_length(e.path), e.path.ptr);
-						CLI_showFile(args, e.data, start, length, isAscii, false);
+						CLI_showFile(args, e.data, start, length, isUTF8, false);
 						goto cleanCa;
 					}
 
@@ -668,7 +668,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSH doesn't have aes support!"))
 
 			SHFile file = (SHFile) { 0 };
-			Compiler comp = (Compiler) { 0 };
+
+			#ifdef CLI_SHADER_COMPILER
+				Compiler comp = (Compiler) { 0 };
+			#endif
+
 			gotoIfError3(cleanSh, SHFile_readx(buf, false, &file, e_rr))
 
 			Bool binaryMode = args.flags & EOperationFlags_Bin;
@@ -823,7 +827,10 @@ Bool CLI_inspectData(ParsedArgs args) {
 		cleanSh:
 
 			SHFile_freex(&file);
-			Compiler_freex(&comp);
+
+			#ifdef CLI_SHADER_COMPILER
+				Compiler_freex(&comp);
+			#endif
 
 			if(!s_uccess)
 				goto clean;

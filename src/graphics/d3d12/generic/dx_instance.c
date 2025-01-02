@@ -649,9 +649,15 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Max allocation size and max buffer size isn't queryable in D3D12 yet.
 		//We hardcode the reported sizes from Vulkan and the hardlimit as defined by HLSL.
+		//ByteAddressBuffer.Load takes an int, so only 2GiB accessible,
+		// even though it's against the spec, intel does support it (by converting int to uint).
+		// NV supports it only for structured buffers and VBV/IBV for now (no BAB support).
 
 		caps.maxAllocationSize = vendorId == EGraphicsVendorId_AMD ? 2 * GIBI : 42 * GIGA / 10;
-		caps.maxBufferSize = 2 * GIBI;		//ByteAddressBuffer.Load takes an int, so only 2GiB accessible
+		caps.maxBufferSize = vendorId != EGraphicsVendorId_INTC ? 2 * GIBI : 42 * GIGA / 10;
+
+		if(vendorId == EGraphicsVendorId_QCOM)
+			caps.maxAllocationSize = caps.maxBufferSize = 1 * GIBI;
 
 		//Fully converted type
 

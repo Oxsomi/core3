@@ -19,8 +19,8 @@
 */
 
 #pragma once
-#include "acceleration_structure.h"
-#include "device_buffer.h"
+#include "graphics/generic/acceleration_structure.h"
+#include "graphics/generic/device_buffer.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -84,12 +84,9 @@ Error BLASRef_inc(BLASRef *blas);
 
 //Creating BLASes;
 //If cpu memory is used:
-//	The changes are queued until the graphics device submits the next commands.
-//BLAS recording is done before TLAS recording, but after copy commands.
-//BLASes that use GPU memory and don't have AssumeDataIsPresent on -
-//	have to be manually queued through the buildBLASExt command.
-//	This is because generally, this memory is generated through compute or something else.
-//	This would only be possible the next frame otherwise, which is terrible usage.
+//	It internally allocates a staging buffer to build from.
+//BLAS recording has to be done manually during command list recording.
+//	This is done through the buildBLASExt command which allows both generating BLAS from compute as well.
 //If the BLAS is deleted before submitting any commands then it won't exist.
 //	Submitting an empty/unfinished BLAS to a TLAS will hide the instance.
 //	It has to re-create a TLAS if the BLAS is finished to ensure the BLAS is shown.

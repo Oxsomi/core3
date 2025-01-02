@@ -20,8 +20,8 @@
 
 #pragma once
 #include "types/container/ref_ptr.h"
-#include "pipeline_structs.h"
-#include "texture.h"
+#include "graphics/generic/pipeline_structs.h"
+#include "graphics/generic/texture.h"
 
 #ifdef __cplusplus
 	extern "C" {

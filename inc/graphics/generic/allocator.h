@@ -46,7 +46,11 @@ typedef struct DeviceMemoryBlock {
 
 	void *ext;						//Extended data
 
-	void *stackTrace[16];			//Tracking memleaks if Debug flag is on
+	#ifndef NDEBUG
+		void *stackTrace[16];		//Tracking memleaks if Debug flag is on
+	#else
+		void *stackTrace[4];		//Callstack might still be needed for leaks if Debug flag for gfx instance
+	#endif
 
 } DeviceMemoryBlock;
 

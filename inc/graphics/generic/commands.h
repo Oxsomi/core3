@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "command_structs.h"
+#include "graphics/generic/command_structs.h"
 
 #ifdef __cplusplus
 	extern "C" {

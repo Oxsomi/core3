@@ -46,8 +46,15 @@ typedef struct CBufferData {
 } CBufferData;
 
 typedef struct DescriptorStackTrace {
+
 	U32 resourceId, padding;
-	void *stackTrace[8];
+
+	#ifndef NDEBUG
+		void *stackTrace[8];
+	#else
+		void *stackTrace[4];
+	#endif
+
 } DescriptorStackTrace;
 
 TListNamed(SpinLock*, ListSpinLockPtr);
@@ -70,7 +77,7 @@ typedef struct GraphicsDevice {
 	U64 submitId;
 
 	EGraphicsDeviceFlags flags;
-	U32 padding;
+	U32 pad0;
 
 	Ns lastSubmit;
 
@@ -109,6 +116,8 @@ typedef struct GraphicsDevice {
 	SpinLock descriptorLock;
 	Buffer freeList[EDescriptorType_ResourceCount];
 	ListDescriptorStackTrace descriptorStackTraces;
+
+	U64 pad1;									//Pad to 16-byte aligned to allow impl to use for example vectors
 
 } GraphicsDevice;
 

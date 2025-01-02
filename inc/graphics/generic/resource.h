@@ -128,6 +128,8 @@ typedef struct GraphicsResource {
 
 	U64 deviceAddress;						//Contains the memory address on the device if available (otherwise 0)
 
+	U64 padding;							//Padding to 16-byte to allow next element to have vectors
+
 } GraphicsResource;
 
 Bool GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef);
