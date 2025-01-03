@@ -78,7 +78,17 @@ if(MSVC)
 else()
 
 	if(ARM)
-		add_compile_options(-mfpu=neon -march=armv8-a+crc+simd+crypto)		# We enable neon, but we don't use it in vectors yet
+
+		if(EnableSIMD)
+			add_compile_options(-march=armv8-a+crc+simd+crypto)
+		else()
+			add_compile_options(-march=armv8-a+simd)
+		endif()
+
+		if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+			add_compile_options(-mfpu=neon)
+		endif()
+
 	else()
 		if(EnableSIMD)
 			add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
