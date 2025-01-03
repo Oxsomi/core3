@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     name: OSX build
-    runs-on: macos-15
+    runs-on: macos-15-large
     steps:
     - uses: actions/checkout@v1
       with:
