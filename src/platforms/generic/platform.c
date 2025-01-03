@@ -26,10 +26,6 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 
-#ifndef _MSC_VER
-	#include <cpuid.h>
-#endif
-
 #include <signal.h>
 #include <stdlib.h>
 
