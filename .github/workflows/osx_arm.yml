@@ -14,6 +14,9 @@ jobs:
       uses: humbletim/install-vulkan-sdk@v1.1.1
       with:
         cache: true
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
     - name: Install Conan
       id: conan
       uses: turtlebrowser/get-conan@main
