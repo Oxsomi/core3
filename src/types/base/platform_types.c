@@ -20,18 +20,24 @@
 
 #include "types/base/platform_types.h"
 
-#ifndef _MSC_VER
-	#include <cpuid.h>
-#endif
+#if _ARCH == ARCH_X86_64
 
-void Platform_getCPUId(int leaf, U32 result[4]) {
-
-	if(!result)
-		return;
-
-	#ifdef _MSC_VER
-		__cpuid(result, leaf);
-	#else
-		__get_cpuid(leaf, &result[0], &result[1], &result[2], &result[3]);
+	#ifndef _MSC_VER
+		#include <cpuid.h>
 	#endif
-}
+
+	void Platform_getCPUId(int leaf, U32 result[4]) {
+
+		if(!result)
+			return;
+
+		#ifdef _MSC_VER
+			__cpuid(result, leaf);
+		#else
+			__get_cpuid(leaf, &result[0], &result[1], &result[2], &result[3]);
+		#endif
+	}
+
+#else
+	void Platform_getCPUId(int leaf, U32 result[4]) { (void) leaf; (void) result; }
+#endif

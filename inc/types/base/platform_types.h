@@ -96,7 +96,9 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 
 typedef U32 EPlatform;
 
-void Platform_getCPUId(int leaf, U32 result[4]);
+#if _ARCH == ARCH_X86_64
+	void Platform_getCPUId(int leaf, U32 result[4]);
+#endif
 
 #ifdef __cplusplus
 	}
