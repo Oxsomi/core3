@@ -86,7 +86,6 @@ typedef struct VkGraphicsDevice {
 	U32 uniqueQueues[EVkCommandQueue_Count];			//Queue families ([resolvedQueues], indexed through resolvedId)
 
 	U32 resolvedQueues;
-	U32 pad;
 
 	//3D as 1D flat List: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
 	ListVkCommandAllocator commandPools;
@@ -116,6 +115,8 @@ typedef struct VkGraphicsDevice {
 	ListVkBufferImageCopy bufferImageCopyRanges;
 	ListVkMappedMemoryRange mappedMemoryRange;
 	ListVkBufferCopy bufferCopies;
+
+	U64 padding;
 
 } VkGraphicsDevice;
 

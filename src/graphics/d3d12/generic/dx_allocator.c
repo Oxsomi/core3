@@ -100,7 +100,10 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	//Allocate memory
 
-	U64 realBlockSize = U64_min((U64_max(blockSize, req.length * 2) + blockSize - 1) / blockSize * blockSize, maxAllocationSize);
+	U64 realBlockSize = U64_min(
+		(U64_max(blockSize, req.length * 2) + blockSize - 1) / blockSize * blockSize,
+		maxAllocationSize
+	);
 
 	if(isDedicated)
 		realBlockSize = req.length;
@@ -137,7 +140,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
 			break;
 
-	case EResourceType_DeviceBuffer:
+		case EResourceType_DeviceBuffer:
 
 			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (
 				!cpuSided || hasReBAR || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0

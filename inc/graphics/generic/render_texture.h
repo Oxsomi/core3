@@ -21,7 +21,7 @@
 #pragma once
 #include "types/math/vec.h"
 #include "types/container/ref_ptr.h"
-#include "texture.h"
+#include "graphics/generic/texture.h"
 
 #ifdef __cplusplus
 	extern "C" {

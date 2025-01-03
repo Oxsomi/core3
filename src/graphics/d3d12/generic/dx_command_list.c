@@ -74,7 +74,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 
 			default:
 				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-				rtv.Texture2D = (D3D12_TEX2D_RTV) { 0 };						//No mip and plane slice
+				rtv.Texture2D = (D3D12_TEX2D_RTV) { 0 };								//No mip and plane slice
 				break;
 
 			case ETextureType_Cube:
@@ -221,7 +221,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_ClearImages: {
 
-			U32 imageClearCount = *(const U32*) data;
+			U64 imageClearCount = *(const U64*) data;
 
 			//Prepare attachments
 
@@ -231,7 +231,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			for (U8 i = 0; i < imageClearCount; ++i) {
 
-				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U32)))[i];
+				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U64)))[i];
 				RefPtr *active = image.image;
 
 				//Reuse the same descriptor, it's useless.

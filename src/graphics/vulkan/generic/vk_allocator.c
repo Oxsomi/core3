@@ -226,7 +226,10 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	if(err.genericError)
 		return err;
 
-	U64 realBlockSize = U64_min((U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize, maxAllocationSize);
+	U64 realBlockSize = U64_min(
+		(U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize,
+		maxAllocationSize
+	);
 
 	VkMemoryAllocateFlagsInfo allocNext = (VkMemoryAllocateFlagsInfo) {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,

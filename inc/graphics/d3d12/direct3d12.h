@@ -41,6 +41,7 @@ typedef struct DxUnifiedTexture {
 	D3D12_BARRIER_SYNC lastSync;
 	D3D12_BARRIER_ACCESS lastAccess;
 	D3D12_BARRIER_LAYOUT lastLayout;
+	U32 padding;
 } DxUnifiedTexture;
 
 //Graphics instance doesn't really exist for Direct3D12.
@@ -131,7 +132,7 @@ typedef enum ECompareOp ECompareOp;
 typedef union DxPipeline {
 
 	struct {
-		ID3D12StateObject *stateObject;					//For anything else (RTPSO, workgraphs, etc.)
+		ID3D12StateObject *stateObject;					//For anything else (RTPSO, workgraphs, mesh shaders, etc.)
 		ID3D12StateObjectProperties *stateObjectProps;
 	};
 

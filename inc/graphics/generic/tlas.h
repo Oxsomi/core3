@@ -19,8 +19,8 @@
 */
 
 #pragma once
-#include "acceleration_structure.h"
-#include "device_buffer.h"
+#include "graphics/generic/acceleration_structure.h"
+#include "graphics/generic/device_buffer.h"
 #include "types/math/quat.h"
 
 #ifdef __cplusplus

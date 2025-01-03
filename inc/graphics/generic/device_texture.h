@@ -20,8 +20,8 @@
 
 #pragma once
 #include "types/base/lock.h"
-#include "device_buffer.h"
-#include "texture.h"
+#include "graphics/generic/device_buffer.h"
+#include "graphics/generic/texture.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -33,8 +33,7 @@ typedef RefPtr DeviceTextureRef;
 typedef struct DeviceTexture {
 
 	Bool isPendingFullCopy, isPending, isFirstFrame;
-	U8 pad0;
-	U32 pad1;
+	U8 pad0[13];
 
 	Buffer cpuData;											//If not cpu backed this will free post upload
 

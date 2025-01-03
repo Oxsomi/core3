@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "resource.h"
+#include "graphics/generic/resource.h"
 #include "types/math/vec.h"
 
 #ifdef __cplusplus
@@ -54,7 +54,7 @@ typedef struct UnifiedTexture {				//Base texture definition, should be at end o
 
 } UnifiedTexture;
 
-typedef RefPtr TextureRef;						//DeviceTexture, RenderTexture, DepthStencil, Swapchain
+typedef RefPtr TextureRef;					//DeviceTexture, RenderTexture, DepthStencil, Swapchain
 
 //size and formatId can change at resize time in Swapchain, which means it has to be locked before checking.
 //This can be ensured by calling getUnifiedTexture with DeviceResourceVersion pointing to an object.

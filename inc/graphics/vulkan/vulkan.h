@@ -62,6 +62,7 @@ typedef struct VkBLAS {
 	VkAccelerationStructureBuildGeometryInfoKHR geometries;
 	VkAccelerationStructureBuildRangeInfoKHR range;
 	VkAccelerationStructureKHR as;
+	U64 padding;
 } VkBLAS;
 
 typedef struct VkTLAS {
@@ -69,6 +70,7 @@ typedef struct VkTLAS {
 	VkAccelerationStructureBuildGeometryInfoKHR geometries;
 	VkAccelerationStructureBuildRangeInfoKHR range;
 	VkAccelerationStructureKHR as;
+	U64 padding;
 } VkTLAS;
 
 static const U32 raytracingShaderIdSize = 32;

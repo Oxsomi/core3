@@ -23,7 +23,7 @@
 #include "types/container/string.h"
 #include "types/container/texture_format.h"
 #include "types/container/ref_ptr.h"
-#include "pipeline_structs.h"
+#include "graphics/generic/pipeline_structs.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -43,8 +43,11 @@ typedef struct PipelineGraphicsInfo {
 	DepthStencilState depthStencil;
 	BlendState blendState;
 
-	EMSAASamples msaa;
-	ETopologyMode topologyMode;
+	MSAASamples msaa;
+	TopologyMode topologyMode;
+	U16 padding;
+
+	U32 subPass;							//When renderPass is used
 
 	U32 patchControlPoints;					//Only if TessellationShader feature is enabled.
 	F32 msaaMinSampleShading;				//MSAA quality improvement (but extra perf overhead), set to > 0 to enable
@@ -62,9 +65,6 @@ typedef struct PipelineGraphicsInfo {
 	//If DirectRendering is off (used in between start render pass).
 
 	RefPtr *renderPass;						//Required only if DirectRendering is not on.
-
-	U32 subPass;							//^
-	U32 padding2;
 
 } PipelineGraphicsInfo;
 
@@ -110,7 +110,7 @@ typedef struct PipelineRaytracingInfo {
 
 	U8 flags;								//EPipelineRaytracingFlags
 	U8 maxRecursionDepth;					//1 or 2. For multiple bounces, use for loop in raygen shader.
-	U16 padding0;
+	U16 pad0[3];
 
 	//Only valid after construction
 
@@ -121,7 +121,7 @@ typedef struct PipelineRaytracingInfo {
 	//Layout: [ hits (groupCount), misses (missCount), raygens (raygenCount), callables (callableCount) ]
 
 	U32 raygenCount, missCount;
-	U32 callableCount, padding1;
+	U32 callableCount, pad1[3];
 
 } PipelineRaytracingInfo;
 
@@ -134,7 +134,7 @@ typedef struct Pipeline {
 	GraphicsDeviceRef *device;
 
 	EPipelineType type;
-	U32 padding;
+	U32 padding[3];
 
 	ListPipelineStage stages;
 

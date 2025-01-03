@@ -36,10 +36,12 @@
 #include "types/math/math.h"
 
 #include <dxgi1_6.h>
-#include <nvapi.h>
-
 #include <d3d11.h>			//AMD AGS needs it...
-#include <amd_ags.h>
+
+#if _ARCH == ARCH_X86_64
+	#include <nvapi.h>
+	#include <amd_ags.h>
+#endif
 
 #undef interface
 
@@ -130,11 +132,15 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 	if(instanceExt->debug1)
 		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
 
-	if(instanceExt->flags & EDxGraphicsInstanceFlags_HasNVApi)
-		NvAPI_Unload();
+	#if _ARCH == ARCH_X86_64
 
-	if(instanceExt->flags & EDxGraphicsInstanceFlags_HasAMDAgs)
-		agsDeInitialize(instanceExt->agsContext);
+		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasNVApi)
+			NvAPI_Unload();
+
+		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasAMDAgs)
+			agsDeInitialize(instanceExt->agsContext);
+
+	#endif
 
 	CharString_freex(&instanceExt->nvDriverVersion);
 	CharString_freex(&instanceExt->amdDriverVersion);

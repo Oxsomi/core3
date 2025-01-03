@@ -261,7 +261,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 		.pApplicationName = title.ptr,
 		.applicationVersion = info.version,
 		.pEngineName = "OxC3",
-		.engineVersion = VK_MAKE_VERSION(0, 2, 0),
+		.engineVersion = VK_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH),
 		.apiVersion = VK_MAKE_VERSION(1, 2, 0)
 	};
 
@@ -956,13 +956,14 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsVendorId vendor = EGraphicsVendorId_Unknown;
 
 		switch (properties.vendorID) {
-			case EGraphicsVendorPCIE_NV:		vendor = EGraphicsVendorId_NV;			break;
-			case EGraphicsVendorPCIE_AMD:		vendor = EGraphicsVendorId_AMD;			break;
-			case EGraphicsVendorPCIE_ARM:		vendor = EGraphicsVendorId_ARM;			break;
-			case EGraphicsVendorPCIE_QCOM:		vendor = EGraphicsVendorId_QCOM;		break;
-			case EGraphicsVendorPCIE_INTC:		vendor = EGraphicsVendorId_INTC;		break;
-			case EGraphicsVendorPCIE_IMGT:		vendor = EGraphicsVendorId_IMGT;		break;
-			case EGraphicsVendorPCIE_APPL:		vendor = EGraphicsVendorId_APPL;		break;
+			case EGraphicsVendorPCIE_NV:					vendor = EGraphicsVendorId_NV;			break;
+			case EGraphicsVendorPCIE_AMD:					vendor = EGraphicsVendorId_AMD;			break;
+			case EGraphicsVendorPCIE_ARM:					vendor = EGraphicsVendorId_ARM;			break;
+			case EGraphicsVendorPCIE_QCOM:					vendor = EGraphicsVendorId_QCOM;		break;
+			case EGraphicsVendorPCIE_INTC:					vendor = EGraphicsVendorId_INTC;		break;
+			case EGraphicsVendorPCIE_IMGT:					vendor = EGraphicsVendorId_IMGT;		break;
+			case EGraphicsVendorPCIE_APPL:					vendor = EGraphicsVendorId_APPL;		break;
+			default:																				break;
 		}
 
 		//Capabilities
@@ -1108,7 +1109,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 			capabilities.features |= EGraphicsFeatures_Multiview;
 
-		//Multi view
+		//VRS
 
 		if(
 			optExtensions[EOptExtensions_VariableRateShading] &&
@@ -1266,14 +1267,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 						capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
 				}
 			}
-		}
-
-		//Variable rate shading
-
-		if(optExtensions[EOptExtensions_VariableRateShading]) {
-			//TODO:
-			//https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_fragment_shading_rate.html
-			//EGraphicsFeatures_VariableRateShading		= 1 << 1,
 		}
 
 		//Get data types
@@ -1540,7 +1533,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		capabilities.dataTypes |= EGraphicsDataTypes_I16;
 
 		capabilities.maxBufferSize = maxBufferSize.maxBufferSize ? maxBufferSize.maxBufferSize : 256 * MIBI;
-		capabilities.maxAllocationSize = memorySizeAndDescriptorSets.maxMemoryAllocationSize ;
+		capabilities.maxAllocationSize = memorySizeAndDescriptorSets.maxMemoryAllocationSize;
 
 		//Fully converted type
 

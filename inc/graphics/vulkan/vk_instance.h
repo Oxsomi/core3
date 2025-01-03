@@ -25,7 +25,6 @@ extern const C8 *reqExtensionsName[];
 extern U64 reqExtensionsNameCount;
 
 typedef enum EOptExtensions {
-
 	EOptExtensions_PerfQuery,
 	EOptExtensions_RayPipeline,
 	EOptExtensions_RayQuery,
@@ -42,7 +41,6 @@ typedef enum EOptExtensions {
 	EOptExtensions_RaytracingValidation,
 	EOptExtensions_ComputeDeriv,
 	EOptExtensions_Maintenance4
-
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];
@@ -94,6 +92,8 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetRayTracingShaderGroupHandlesKHR getRayTracingShaderGroupHandles;
 
 	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
+
+	U64 padding;
 
 } VkGraphicsInstance;
 

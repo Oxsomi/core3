@@ -122,11 +122,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_ClearImages: {
 
-			U32 imageClearCount = *(const U32*) data;
+			U64 imageClearCount = *(const U64*) data;
 
 			for(U64 i = 0; i < imageClearCount; ++i) {
 
-				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U32)))[i];
+				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U64)))[i];
 				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(image.image, Vk, 0);
 
 				VkImageSubresourceRange range = (VkImageSubresourceRange) {
@@ -243,7 +243,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			//Prepare attachments
 
 			VkRenderingAttachmentInfoKHR attachmentsExt[8] = { 0 };
-			U8 j = U8_MAX;
+			U8 j = 0;
 
 			for (U8 i = 0; i < startRender->colorCount; ++i) {
 
@@ -259,9 +259,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					continue;
 				}
 
-				++j;
-
-				const AttachmentInfoInternal *attachmentsj = &attachments[j];
+				const AttachmentInfoInternal *attachmentsj = &attachments[j++];
 
 				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachmentsj->image, Vk, 0);
 				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;

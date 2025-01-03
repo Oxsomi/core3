@@ -136,9 +136,6 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	if(!res)
 		gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"))
 
-	if(buf->resource.size / 4 != (U32)(buf->resource.size / 4))
-		gotoIfError(clean, Error_invalidState(1, "D3D12GraphicsDeviceRef_createBuffer() out of bounds"))
-
 	//Allocate memory
 
 	DxBlockRequirements req = (DxBlockRequirements) {

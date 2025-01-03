@@ -22,7 +22,7 @@
 #include "types/math/vec.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/lock.h"
-#include "texture.h"
+#include "graphics/generic/texture.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -36,7 +36,7 @@ typedef enum ESwapchainPresentMode {
 	ESwapchainPresentMode_None,
 	ESwapchainPresentMode_Immediate,			//Low latency apps (shooters, etc.): Allows tearing for less latency
 	ESwapchainPresentMode_Mailbox,				//High performance apps (games): Pops oldest image while continuing
-	ESwapchainPresentMode_Fifo,					//Best quality: Always presents images in order (no dropped frames)
+	ESwapchainPresentMode_Fifo,					//Best quality & low power: Always presents images in order (no dropped frames)
 	ESwapchainPresentMode_FifoRelaxed,			//^ but if vblank is missed continue with the next (can allow tearing)
 	ESwapchainPresentMode_Count
 } ESwapchainPresentMode;

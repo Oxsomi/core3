@@ -705,11 +705,11 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 
 	//Copy buffer
 
-	gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U32), &buf))
+	gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U64), &buf))
 
-	*(U32*)buf.ptr = (U32) clearImages.length;
+	*(U64*)buf.ptr = (U64) clearImages.length;
 	Buffer_copy(
-		Buffer_createRef((U8*) buf.ptr + sizeof(U32), ListClearImageCmd_bytes(clearImages)),
+		Buffer_createRef((U8*) buf.ptr + sizeof(U64), ListClearImageCmd_bytes(clearImages)),
 		ListClearImageCmd_bufferConst(clearImages)
 	);
 
@@ -2206,7 +2206,10 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 	Buffer buf = Buffer_createNull();
 	CommandListRef_validateScope(commandListRef, clean)
 
-	gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(color) + CharString_length(name) + 1, &buf))
+	U64 len = sizeof(color) + CharString_length(name) + 1;
+	len = (len + 15) &~ 15;										//Align to 16-byte to not mess up next instruction alignment
+
+	gotoIfError(clean, Buffer_createEmptyBytesx(len, &buf))
 
 	Buffer_copy(buf, Buffer_createRefConst(&color, sizeof(color)));
 
@@ -2214,6 +2217,8 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 		Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)),
 		CharString_bufferConst(name)
 	);
+
+	buf.ptrNonConst[sizeof(color) + CharString_length(name)] = '\0';
 
 	gotoIfError(clean, CommandList_append(commandList, op, buf, 1))
 

@@ -85,7 +85,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 
 		.mipLodBias = F16_castF32(sinfo.mipBias),
 
-		.anisotropyEnable = (Bool) sinfo.aniso,
+		.anisotropyEnable = !!sinfo.aniso,
 		.maxAnisotropy = sinfo.aniso,
 
 		.compareEnable = sinfo.enableComparison,

@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     name: OSX build
-    runs-on: macos-15
+    runs-on: macos-15-arm64
     steps:
     - uses: actions/checkout@v1
       with:
@@ -14,7 +14,6 @@ jobs:
       uses: humbletim/install-vulkan-sdk@v1.1.1
       with:
         cache: true
-        version: 1.3.290.0
     - name: Install Conan
       id: conan
       uses: turtlebrowser/get-conan@main
@@ -26,10 +25,10 @@ jobs:
       with:
         path: ~/.conan2/p
         key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
-    - name: Release dynamic but no SIMD, not supported yet
-      run: bash build.sh Release False True True -o cliGraphics=False
-    - name: Debug dynamic but no SIMD, not supported yet
-      run: bash build.sh Debug False True True -o cliGraphics=False
+    - name: Release but no SIMD, not supported yet
+      run: bash build.sh Release False True False -o cliGraphics=False
+    - name: Debug but no SIMD, not supported yet
+      run: bash build.sh Debug False True False -o cliGraphics=False
     - name: Delete non package files for cache
       run: rm -rf ~/.conan2/p/b/*/b
     - name: Cache Build

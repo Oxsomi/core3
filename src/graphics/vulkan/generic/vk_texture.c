@@ -67,9 +67,9 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 	VkFormat vkFormat = VK_FORMAT_UNDEFINED;
 
 	switch(texture->depthFormat) {
-		case EDepthStencilFormat_D16:		vkFormat = VK_FORMAT_D16_UNORM;					break;
-		case EDepthStencilFormat_D32:		vkFormat = VK_FORMAT_D32_SFLOAT;				break;
-		case EDepthStencilFormat_D24S8Ext:	vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;			break;
+		case EDepthStencilFormat_D16:			vkFormat = VK_FORMAT_D16_UNORM;					break;
+		case EDepthStencilFormat_D32:			vkFormat = VK_FORMAT_D32_SFLOAT;				break;
+		case EDepthStencilFormat_D24S8Ext:		vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;			break;
 		case EDepthStencilFormat_D32S8X24Ext:	vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;		break;
 		case EDepthStencilFormat_S8X24Ext:		vkFormat = VK_FORMAT_S8_UINT;					break;
 	}

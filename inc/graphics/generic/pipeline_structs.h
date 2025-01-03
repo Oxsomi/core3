@@ -89,6 +89,8 @@ typedef enum ECompareOp {
 	ECompareOp_Count
 } ECompareOp;
 
+typedef U8 CompareOp;
+
 typedef enum EStencilOp {
 	EStencilOp_Keep,
 	EStencilOp_Zero,
@@ -101,6 +103,8 @@ typedef enum EStencilOp {
 	EStencilOp_Count
 } EStencilOp;
 
+typedef U8 StencilOp;
+
 typedef enum EDepthStencilFlags {
 
 	EDepthStencilFlags_DepthTest		= 1 << 0,
@@ -110,6 +114,8 @@ typedef enum EDepthStencilFlags {
 	EDepthStencilFlags_DepthWrite		= EDepthStencilFlags_DepthTest | EDepthStencilFlags_DepthWriteBit
 
 } EDepthStencilFlags;
+
+typedef U8 DepthStencilFlags;
 
 typedef enum ELogicOpExt {
 	ELogicOpExt_Off,
@@ -164,6 +170,8 @@ typedef enum EBlend {
 
 } EBlend;
 
+typedef U8 Blend;
+
 typedef enum EBlendOp {
 	EBlendOp_Add,
 	EBlendOp_Subtract,
@@ -172,6 +180,8 @@ typedef enum EBlendOp {
 	EBlendOp_Max,
 	EBlendOp_Count
 } EBlendOp;
+
+typedef U8 BlendOp;
 
 typedef enum EWriteMask {
 
@@ -195,6 +205,8 @@ typedef enum EMSAASamples {
 	EMSAASamples_Count
 } EMSAASamples;
 
+typedef U8 MSAASamples;
+
 typedef enum ETopologyMode {
 
 	ETopologyMode_TriangleList,
@@ -214,6 +226,8 @@ typedef enum ETopologyMode {
 	EToplogyMode_Count
 
 } ETopologyMode;
+
+typedef U8 TopologyMode;
 
 typedef struct PipelineStage {
 
@@ -240,24 +254,20 @@ typedef struct Rasterizer {
 
 typedef struct DepthStencilState {
 
-	EDepthStencilFlags flags;
-	ECompareOp depthCompare;
-	ECompareOp stencilCompare;
-	EStencilOp stencilFail;
+	DepthStencilFlags flags;
+	CompareOp depthCompare;
+	CompareOp stencilCompare;
+	StencilOp stencilFail;
 
-	EStencilOp stencilPass;
-	EStencilOp stencilDepthFail;
-	U8 stencilWriteMask, stencilReadMask, padding0[2];
-	U32 padding1;
+	StencilOp stencilPass;
+	StencilOp stencilDepthFail;
+	U8 stencilWriteMask, stencilReadMask;
 
 } DepthStencilState;
 
 typedef struct BlendStateAttachment {
-
-	U8 srcBlend, dstBlend, srcBlendAlpha, dstBlendAlpha;		//EBlend
-
-	U8 blendOp, blendOpAlpha;									//EBlendOp
-
+	Blend srcBlend, dstBlend, srcBlendAlpha, dstBlendAlpha;
+	BlendOp blendOp, blendOpAlpha;
 } BlendStateAttachment;
 
 typedef struct BlendState {
@@ -275,18 +285,14 @@ typedef struct BlendState {
 } BlendState;
 
 typedef struct VertexAttribute {
-
 	U16 offset11;						//11-bit offset
 	U8 bufferId4;						//4-bit buffer id
 	U8 format;							//ETextureFormatId (must be no compression!)
-
 } VertexAttribute;
 
 typedef struct VertexBindingLayout {
-
 	U16 bufferStrides12_isInstance1[16];	//<=2048
 	VertexAttribute attributes[16];
-
 } VertexBindingLayout;
 
 #ifdef __cplusplus
