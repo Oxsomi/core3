@@ -98,7 +98,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isUTF8,
 
 	//Validate offset
 
-	if (start + ((Bool)Buffer_length(b)) > Buffer_length(b)) {
+	if (start + (!!Buffer_length(b)) > Buffer_length(b)) {
 		Log_debugLnx("Section out of bounds.");
 		return false;
 	}

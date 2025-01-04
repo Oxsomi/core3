@@ -110,14 +110,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
 			.FrontCounterClockwise = !(info->rasterizer.flags & ERasterizerFlags_IsClockWise),
-			.MultisampleEnable = (Bool) info->msaa
+			.MultisampleEnable = !!info->msaa
 		},
 
 		.DepthStencilState = (D3D12_DEPTH_STENCIL_DESC) {
-			.DepthEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
-			.DepthWriteMask = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
+			.DepthEnable = !!(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
+			.DepthWriteMask = !!(info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
 			.DepthFunc = mapDxCompareOp(info->depthStencil.depthCompare),
-			.StencilEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
+			.StencilEnable = !!(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
 			.StencilReadMask = info->depthStencil.stencilReadMask,
 			.StencilReadMask = info->depthStencil.stencilWriteMask
 		},
@@ -178,7 +178,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
 
 			.BlendEnable			= (info->blendState.renderTargetMask >> realJ) & 1,
-			.LogicOpEnable			= (Bool)info->blendState.logicOpExt,
+			.LogicOpEnable			= !!info->blendState.logicOpExt,
 			.RenderTargetWriteMask	= info->blendState.writeMask[realJ],
 
 			.BlendOp				= mapDxBlendOp(src.blendOp),

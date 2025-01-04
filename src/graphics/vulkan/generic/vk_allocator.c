@@ -193,7 +193,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 				!block->ext ||
 				block->isDedicated ||
 				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
-				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
+				!!(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
 				block->resourceType != resourceType
 			)
 				continue;

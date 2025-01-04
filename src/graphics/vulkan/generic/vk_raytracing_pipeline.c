@@ -312,7 +312,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 			}
 
 		Buffer_copy(
-			Buffer_createRef((U8*)shaderBindings.ptr + raytracingShaderAlignment * groupId,  raytracingShaderIdSize),
+			Buffer_createRef(shaderBindings.ptrNonConst + raytracingShaderAlignment * groupId,  raytracingShaderIdSize),
 			Buffer_createRefConst((const U8*)shaderHandles.ptr + raytracingShaderIdSize * j, raytracingShaderIdSize)
 		);
 	}

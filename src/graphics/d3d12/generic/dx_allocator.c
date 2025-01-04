@@ -80,7 +80,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			if(
 				!block->ext ||
 				block->isDedicated ||
-				(Bool)(block->allocationTypeExt & 1) != !cpuSided ||
+				!!(block->allocationTypeExt & 1) != !cpuSided ||
 				block->typeExt != req.alignment ||						//Alignment is baked into heap
 				block->resourceType != resourceType
 			)

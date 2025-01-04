@@ -864,7 +864,7 @@ clean:
 }
 
 U32 Symbol_size(Symbol s) {
-	return (U32)s.annotations + (Bool)(s.flags & ESymbolFlag_HasTemplate) + 1;
+	return (U32)s.annotations + !!(s.flags & ESymbolFlag_HasTemplate) + 1;
 }
 
 Bool Parser_registerSymbol(Parser *parser, Symbol s, U32 parent, Allocator alloc, U32 *symbolId, Error *e_rr) {
@@ -937,7 +937,7 @@ Bool Parser_registerSymbol(Parser *parser, Symbol s, U32 parent, Allocator alloc
 		//If annotations and templates are in-between, then we'd make that more annoying.
 		//Instead, it can use Symbol_symbolLength(s) to skip over anything that's not important.
 
-		U32 total = (U32)annotations + (Bool)(s.flags & ESymbolFlag_HasTemplate);
+		U32 total = (U32)annotations + !!(s.flags & ESymbolFlag_HasTemplate);
 
 		resolvedId -= total;
 

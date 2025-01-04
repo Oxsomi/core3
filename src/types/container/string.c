@@ -767,7 +767,7 @@ Error CharString_append(CharString *s, C8 c, Allocator allocator) {
 	if(!c && CharString_isNullTerminated(*s))
 		return Error_none();
 
-	return CharString_resize(s, CharString_length(*s) + (Bool)c, c, allocator);
+	return CharString_resize(s, CharString_length(*s) + !!c, c, allocator);
 }
 
 CharString CharString_newLine() { return CharString_createRefCStrConst("\n"); }

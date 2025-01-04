@@ -37,7 +37,9 @@
 #include "types/math/math.h"
 #include "types/base/thread.h"
 
-#include <nvapi.h>
+#if _ARCH == ARCH_X86_64
+	#include <nvapi.h>
+#endif
 
 void onDebugReport(
 	D3D12_MESSAGE_CATEGORY category,
@@ -83,27 +85,31 @@ void onDebugReport(
 	}
 }
 
-void onDebugReportNv(
-	void *pUserData,
-	NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY severity,
-	const char *messageCode,
-	const char *message,
-	const char *messageDetails
-) {
+#if _ARCH == ARCH_X86_64
 
-	(void)pUserData;
+	void onDebugReportNv(
+		void *pUserData,
+		NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY severity,
+		const char *messageCode,
+		const char *message,
+		const char *messageDetails
+	) {
 
-	switch(severity) {
+		(void)pUserData;
 
-		case NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY_ERROR:
-			Log_errorLnx("NVAPI D3D12 Error %s (%s): %s", messageCode, message, messageDetails);
-			break;
+		switch(severity) {
 
-		default:
-			Log_warnLnx("NVAPI D3D12 Warning %s (%s): %s", messageCode, message, messageDetails);
-			break;
+			case NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY_ERROR:
+				Log_errorLnx("NVAPI D3D12 Error %s (%s): %s", messageCode, message, messageDetails);
+				break;
+
+			default:
+				Log_warnLnx("NVAPI D3D12 Warning %s (%s): %s", messageCode, message, messageDetails);
+				break;
+		}
 	}
-}
+
+#endif
 
 TListImpl(DxCommandAllocator);
 TListNamedImpl(ListID3D12Fence);
@@ -197,45 +203,53 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 			)))
 		}
 
-		//Nv specific initialization
+		#if _ARCH == ARCH_X86_64
 
-		if(isNv) {
+			//Nv specific initialization
 
-			//Enable RT validation
+			if(isNv) {
 
-			if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
+				//Enable RT validation
 
-				NvAPI_D3D12_EnableRaytracingValidation(
-					(ID3D12Device5*)deviceExt->device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE
-				);
+				if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
 
-				void *handle = NULL;
-				NvAPI_Status status = NvAPI_D3D12_RegisterRaytracingValidationMessageCallback(
-					(ID3D12Device5*)deviceExt->device, onDebugReportNv, NULL, &handle
-				);
+					NvAPI_D3D12_EnableRaytracingValidation(
+						(ID3D12Device5*)deviceExt->device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE
+					);
 
-				if(status != NVAPI_OK)
-					gotoIfError(clean, Error_invalidState(
-						0, "NvAPI_D3D12_RegisterRaytracingValidationMessageCallback couldn't be called"
-					))
+					void *handle = NULL;
+					NvAPI_Status status = NvAPI_D3D12_RegisterRaytracingValidationMessageCallback(
+						(ID3D12Device5*)deviceExt->device, onDebugReportNv, NULL, &handle
+					);
+
+					if(status != NVAPI_OK)
+						gotoIfError(clean, Error_invalidState(
+							0, "NvAPI_D3D12_RegisterRaytracingValidationMessageCallback couldn't be called"
+						))
+				}
 			}
+
+		#endif
+	}
+
+	#if _ARCH == ARCH_X86_64
+
+		//Enable NV extensions
+
+		static const U32 nvExtSlot = 99999;		//space and u slot
+		EGraphicsFeatures nvExt =
+			EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayMicromapDisplacement |
+			EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation;
+
+		if(isNv && (device->info.capabilities.features & nvExt)) {
+
+			NvAPI_Status status = NvAPI_D3D12_SetNvShaderExtnSlotSpace((IUnknown*)deviceExt->device, nvExtSlot, nvExtSlot);
+
+			if(status != NVAPI_OK)
+				gotoIfError(clean, Error_invalidState(0, "NvAPI_D3D12_SetNvShaderExtnSlotSpace couldn't be called"))
 		}
-	}
 
-	//Enable NV extensions
-
-	static const U32 nvExtSlot = 99999;		//space and u slot
-	EGraphicsFeatures nvExt =
-		EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayMicromapDisplacement |
-		EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation;
-
-	if(isNv && (device->info.capabilities.features & nvExt)) {
-
-		NvAPI_Status status = NvAPI_D3D12_SetNvShaderExtnSlotSpace((IUnknown*)deviceExt->device, nvExtSlot, nvExtSlot);
-
-		if(status != NVAPI_OK)
-			gotoIfError(clean, Error_invalidState(0, "NvAPI_D3D12_SetNvShaderExtnSlotSpace couldn't be called"))
-	}
+	#endif
 
 	//Get queues
 
@@ -498,7 +512,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		cpuHeapSize / 5
 	);
 
-	device->flushThresholdPrimitives = 100 * MIBI / 3;		//100M vertices per frame limit
+	device->flushThresholdPrimitives = 20 * MIBI / 3;		//20M vertices per frame limit
 
 	//Allocate temp storage for transitions
 
@@ -973,18 +987,22 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 clean:
 
-	//Regardless of device removal, we'll ask NV to report anything fishy to us.
-	//It's technically possible that a TDR/Device removal is caused during setup time,
-	//but it's very unlikely. As we do the bulk of D3D12 calls and all RT calls in submitCommands.
-	//Otherwise we'd have to guard every dxCheck, which might not even have a device (could happen on an instance).
+	#if _ARCH == ARCH_X86_64
 
-	if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
+		//Regardless of device removal, we'll ask NV to report anything fishy to us.
+		//It's technically possible that a TDR/Device removal is caused during setup time,
+		//but it's very unlikely. As we do the bulk of D3D12 calls and all RT calls in submitCommands.
+		//Otherwise we'd have to guard every dxCheck, which might not even have a device (could happen on an instance).
 
-		NvAPI_Status status = NvAPI_D3D12_FlushRaytracingValidationMessages((ID3D12Device5*)deviceExt->device);
+		if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
 
-		if(status != NVAPI_OK)
-			gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDevice_submitCommands() flush RT val msgs failed"));
-	}
+			NvAPI_Status status = NvAPI_D3D12_FlushRaytracingValidationMessages((ID3D12Device5*)deviceExt->device);
+
+			if(status != NVAPI_OK)
+				gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDevice_submitCommands() flush RT val msgs failed"));
+		}
+
+	#endif
 
 	if(eventHandle)
 		CloseHandle(eventHandle);

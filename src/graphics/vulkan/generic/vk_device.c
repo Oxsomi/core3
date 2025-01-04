@@ -75,7 +75,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.imageCubeArray = true,
 		.independentBlend = true,
 
-		.geometryShader = (Bool)(feat & EGraphicsFeatures_GeometryShader),
+		.geometryShader = !!(feat & EGraphicsFeatures_GeometryShader),
 		.tessellationShader = true,
 
 		.multiDrawIndirect = true,
@@ -86,22 +86,22 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.depthBiasClamp = true,
 		.samplerAnisotropy = true,
 
-		.textureCompressionASTC_LDR = (Bool)(types & EGraphicsDataTypes_ASTC),
-		.textureCompressionBC = (Bool)(types & EGraphicsDataTypes_BCn),
+		.textureCompressionASTC_LDR = !!(types & EGraphicsDataTypes_ASTC),
+		.textureCompressionBC = !!(types & EGraphicsDataTypes_BCn),
 
 		.shaderUniformBufferArrayDynamicIndexing = true,
 		.shaderSampledImageArrayDynamicIndexing = true,
 		.shaderStorageBufferArrayDynamicIndexing = true,
 		.shaderStorageImageArrayDynamicIndexing = true,
 
-		.shaderFloat64 = (Bool)(types & EGraphicsDataTypes_F64),
-		.shaderInt64 = (Bool)(types & EGraphicsDataTypes_I64),
+		.shaderFloat64 = !!(types & EGraphicsDataTypes_F64),
+		.shaderInt64 = !!(types & EGraphicsDataTypes_I64),
 		.shaderInt16 = true,
 
-		.fillModeNonSolid = (Bool)(feat & EGraphicsFeatures_Wireframe),
-		.logicOp = (Bool)(feat & EGraphicsFeatures_LogicOp),
-		.dualSrcBlend = (Bool)(feat & EGraphicsFeatures_DualSrcBlend),
-		.shaderStorageImageMultisample = (Bool)(feat & EGraphicsFeatures_WriteMSTexture)
+		.fillModeNonSolid = !!(feat & EGraphicsFeatures_Wireframe),
+		.logicOp = !!(feat & EGraphicsFeatures_LogicOp),
+		.dualSrcBlend = !!(feat & EGraphicsFeatures_DualSrcBlend),
+		.shaderStorageImageMultisample = !!(feat & EGraphicsFeatures_WriteMSTexture)
 	};
 
 	VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {
@@ -300,10 +300,10 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		types & (EGraphicsDataTypes_AtomicF32 | EGraphicsDataTypes_AtomicF64),
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
-			.shaderBufferFloat32AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat32Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat64AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF64),
-			.shaderBufferFloat64Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF64)
+			.shaderBufferFloat32AtomicAdd = !!(types & EGraphicsDataTypes_AtomicF32),
+			.shaderBufferFloat32Atomics = !!(types & EGraphicsDataTypes_AtomicF32),
+			.shaderBufferFloat64AtomicAdd = !!(types & EGraphicsDataTypes_AtomicF64),
+			.shaderBufferFloat64Atomics = !!(types & EGraphicsDataTypes_AtomicF64)
 		}
 	)
 
@@ -357,9 +357,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 			default:
 				continue;
-
-			//TODO:
-			//case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_Raytracing;				break;
 		}
 
 		if(on)
@@ -804,6 +801,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	//Get memory properties
 
 	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
+
 	//Determine when we need to flush.
 	//As a rule of thumb I decided for 20% occupied mem by just copies.
 	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
@@ -820,7 +818,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		cpuHeapSize / 5
 	);
 
-	device->flushThresholdPrimitives = 100 * MIBI / 3;		//100M vertices per frame limit
+	device->flushThresholdPrimitives = 20 * MIBI / 3;		//20M vertices per frame limit
 
 	//Allocate temp storage for transitions
 
@@ -902,10 +900,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 				vkDestroySemaphore(deviceExt->device, semaphore, NULL);
 		}
 
-		if(deviceExt->commitSemaphore) {
+		if(deviceExt->commitSemaphore)
 			vkDestroySemaphore(deviceExt->device, deviceExt->commitSemaphore, NULL);
-			deviceExt->commitSemaphore = NULL;
-		}
 
 		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
 

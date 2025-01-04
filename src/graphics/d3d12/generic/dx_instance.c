@@ -615,15 +615,17 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 			caps.dataTypes |= EGraphicsDataTypes_RGB32f;
 
+		format.Format = DXGI_FORMAT_R32G32B32_SINT;
+
 		if(
-			(Bool)(format.Format = DXGI_FORMAT_R32G32B32_SINT) &&
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
 			caps.dataTypes |= EGraphicsDataTypes_RGB32i;
 
+		format.Format = DXGI_FORMAT_R32G32B32_UINT;
+
 		if(
-			(Bool)(format.Format = DXGI_FORMAT_R32G32B32_UINT) &&
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
@@ -644,9 +646,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			goto next;
 		}
 
+		msaa.Format = DXGI_FORMAT_R32G32B32_FLOAT;
+
 		if(
-			(caps.dataTypes & EGraphicsDataTypes_RGB32f) &&
-			(Bool)(msaa.Format = DXGI_FORMAT_R32G32B32_FLOAT) && (
+			(caps.dataTypes & EGraphicsDataTypes_RGB32f) && (
 				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) ||
 				!msaa.NumQualityLevels
 			)

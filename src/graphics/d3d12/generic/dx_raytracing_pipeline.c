@@ -98,7 +98,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	D3D12_RAYTRACING_PIPELINE_CONFIG1 config1 = (D3D12_RAYTRACING_PIPELINE_CONFIG1) {
 		.MaxTraceRecursionDepth = pipelineRt->maxRecursionDepth,
-		.Flags = (pipelineRt->flags & 3) << 8
+		.Flags = ((U16)(pipelineRt->flags & 3)) << 8
 	};
 
 	stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {

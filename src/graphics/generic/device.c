@@ -86,7 +86,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	for (U64 i = 0; i < device->allocator.blocks.length; ++i) {
 		const DeviceMemoryBlock block = device->allocator.blocks.ptr[i];
-		leakedBlocks += (Bool)Buffer_length(block.allocations.buffer);
+		leakedBlocks += !!Buffer_length(block.allocations.buffer);
 	}
 
 	if(leakedBlocks)
