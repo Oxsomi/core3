@@ -63,7 +63,7 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 																												\
 	CommandList *commandList = CommandListRef_ptr(v);															\
 																												\
-	if(!SpinLock_isLockedForThread(&commandList->lock))																\
+	if(!SpinLock_isLockedForThread(&commandList->lock))															\
 		return Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked");						\
 																												\
 	if(commandList->state != ECommandListState_Open)															\
@@ -81,13 +81,8 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 
 	CommandListRef_validate(commandListRef);
 
-	for (U64 i = 0; i < commandList->resources.length; ++i) {
-
-		RefPtr **ptr = &commandList->resources.ptrNonConst[i];
-
-		if(*ptr)
-			RefPtr_dec(ptr);
-	}
+	for (U64 i = 0; i < commandList->resources.length; ++i)
+		RefPtr_dec(&commandList->resources.ptrNonConst[i]);
 
 	Error err;
 	gotoIfError(clean, ListCommandOpInfo_clear(&commandList->commandOps))
@@ -194,7 +189,6 @@ Error CommandList_validateGraphicsPipeline(
 	EDepthStencilFormat depthFormat,
 	EMSAASamples boundSampleCount
 ) {
-
 	PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
 
 	//Depth stencil state can be set to None to ignore writing to depth stencil
@@ -225,28 +219,21 @@ Error CommandList_validateGraphicsPipeline(
 		RefPtr *ref = images[i].image;
 
 		if (!ref)
-			return Error_nullPointer(
-				1, "CommandList_validateGraphicsPipeline()::images[i] is required by pipeline"
-			);
+			return Error_nullPointer(1, "CommandList_validateGraphicsPipeline()::images[i] is required by pipeline");
 
 		if (!TextureRef_isRenderTargetWritable(ref))
-			return Error_invalidParameter(
-				1, i, "CommandList_validateGraphicsPipeline()::images[i] is invalid type"
-			);
+			return Error_invalidParameter(1, i, "CommandList_validateGraphicsPipeline()::images[i] is invalid type");
 
 		DeviceResourceVersion v;
 		const UnifiedTexture tex = TextureRef_getUnifiedTexture(ref, &v);
 
 		if(info->attachmentFormatsExt[i] != tex.textureFormatId)
-			return Error_invalidState(
-				i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format"
-			);
+			return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
 
 		if(info->msaa != tex.sampleCount)
 			return Error_invalidState(
 				i + 2,
-				"CommandList_validateGraphicsPipeline()::images[i] has mismatching MSAA "
-				"between pipeline and RenderTarget"
+				"CommandList_validateGraphicsPipeline()::images[i] has mismatching MSAA between pipeline and RenderTarget"
 			);
 	}
 
@@ -263,8 +250,7 @@ Bool CommandListRef_bufferRangeConflicts(RefPtr *buffer1, BufferRange range1, Re
 	return buffer1 == buffer2;
 }
 
-//TLAS, BLAS, etc.
-Bool CommandListRef_resourceConflicts(RefPtr *res1, RefPtr *res2) {
+Bool CommandListRef_resourceConflicts(RefPtr *res1, RefPtr *res2) {		//TLAS, BLAS, etc.
 	return res1 == res2;
 }
 
@@ -346,7 +332,7 @@ Error CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U3
 	didPush = true;
 
 	if(len) {
-		Buffer_copy(Buffer_createRef((U8*)commandList->data.ptr + commandList->next, len), buf);
+		Buffer_copy(Buffer_createRef(commandList->data.ptrNonConst + commandList->next, len), buf);
 		commandList->next += len;
 	}
 
@@ -578,7 +564,7 @@ Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 
 	const I32x2 end = I32x2_add(offset, size);
 
 	if(I32x2_any(I32x2_gt(end, upperBound)))
-	   return Error_invalidParameter(0, 2, "CommandListRef_checkBounds()::offset + size > upperBound");
+		return Error_invalidParameter(0, 2, "CommandListRef_checkBounds()::offset + size > upperBound");
 
 	return Error_none();
 }
@@ -627,10 +613,14 @@ Error CommandListRef_setViewportAndScissor(CommandListRef *commandListRef, I32x2
 	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_SetViewportAndScissor);
 }
 
-Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue) {
+Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValueU8) {
 
 	CommandListRef_validateScope(commandListRef, clean)
-	gotoIfError(clean, CommandList_append(commandList, ECommandOp_SetStencil, Buffer_createRefConst(&stencilValue, 1), 0))
+
+	U64 stencilValue[2] = { stencilValueU8, 0 };		//Has to be padded to 16-byte
+	gotoIfError(clean, CommandList_append(
+		commandList, ECommandOp_SetStencil, Buffer_createRefConst(stencilValue, sizeof(stencilValue)), 0
+	))
 
 clean:
 
@@ -705,11 +695,11 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 
 	//Copy buffer
 
-	gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U64), &buf))
+	gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U64) * 2, &buf))
 
 	*(U64*)buf.ptr = (U64) clearImages.length;
 	Buffer_copy(
-		Buffer_createRef((U8*) buf.ptr + sizeof(U64), ListClearImageCmd_bytes(clearImages)),
+		Buffer_createRef(buf.ptrNonConst + sizeof(U64) * 2, ListClearImageCmd_bytes(clearImages)),
 		ListClearImageCmd_bufferConst(clearImages)
 	);
 
@@ -881,7 +871,7 @@ Error CommandListRef_copyImageRegions(
 	};
 
 	Buffer_copy(
-		Buffer_createRef((U8*) buf.ptr + sizeof(CopyImageCmd), ListCopyImageRegion_bytes(regions)),
+		Buffer_createRef(buf.ptrNonConst + sizeof(CopyImageCmd), ListCopyImageRegion_bytes(regions)),
 		ListCopyImageRegion_bufferConst(regions)
 	);
 
@@ -1229,8 +1219,10 @@ Error CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pi
 	else if(type == EPipelineType_RaytracingExt)
 		op = ECommandOp_SetRaytracingPipelineExt;
 
+	PipelineRef *commandOp[2] = { pipelineRef, NULL };		//Padding to 16-byte
+
 	gotoIfError(clean, CommandList_append(
-		commandList, op, Buffer_createRefConst((const U8*) &pipelineRef, sizeof(pipelineRef)), 0
+		commandList, op, Buffer_createRefConst(commandOp, sizeof(commandOp)), 0
 	))
 
 	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0, NULL)) {						//TODO: hashSet
@@ -1273,12 +1265,12 @@ Error CommandListRef_validateBufferDesc(
 	if(buffer->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
 		return Error_unsupportedOperation(0, "CommandListRef_validateBufferDesc()::buffer has invalid type");
 
-	if(DeviceBufferRef_ptr(buffer)->resource.device != device)
+	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
+
+	if(buf->resource.device != device)
 		return Error_unsupportedOperation(
 			1, "CommandListRef_validateBufferDesc()::buffer is owned by different device"
 		);
-
-	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if((buf->usage & usage) != usage)
 		return Error_unsupportedOperation(
@@ -1330,7 +1322,7 @@ Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, SetPrim
 	//Issue command
 
 	gotoIfError(clean, CommandList_append(
-		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createRefConst((const U8*) &buffers, sizeof(buffers)), 0
+		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createRefConst(&buffers, sizeof(buffers)), 0
 	))
 
 clean:
@@ -1751,10 +1743,12 @@ Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas
 			}
 	}
 
+	RTASRef *args[2] = { rtas, NULL };
+
 	gotoIfError(clean, CommandList_append(
 		commandList,
 		isBLAS ? ECommandOp_UpdateBLASExt : ECommandOp_UpdateTLASExt,
-		Buffer_createRefConst(&rtas, sizeof(rtas)),
+		Buffer_createRefConst(args, sizeof(args)),
 		0
 	))
 
@@ -2286,13 +2280,8 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	SpinLock_lock(&cmd->lock, U64_MAX);
 
-	for (U64 i = 0; i < cmd->resources.length; ++i) {
-
-		RefPtr **ptr = cmd->resources.ptrNonConst + i;
-
-		if(*ptr)
-			RefPtr_dec(ptr);
-	}
+	for (U64 i = 0; i < cmd->resources.length; ++i)
+		RefPtr_dec(cmd->resources.ptrNonConst + i);
 
 	ListCommandOpInfo_freex(&cmd->commandOps);
 	ListRefPtr_freex(&cmd->resources);

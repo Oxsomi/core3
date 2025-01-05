@@ -218,15 +218,22 @@ Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	device->pendingPrimitives += blasExt->primitives;
 
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
-	RefPtr_inc(pending);
+	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+		RefPtr_inc(pending);
+	}
 
-	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
-	//And losing the reference from our object
+	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource;
+	//And losing the reference from our object. However that's only if allow update is false.
 
-	if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate)) {
+	if(!ListRefPtr_contains(*currentFlight, blas->base.tempScratchBuffer, 0, NULL)) {
+
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, blas->base.tempScratchBuffer))
-		blas->base.tempScratchBuffer = NULL;
+
+		if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate))
+			blas->base.tempScratchBuffer = NULL;
+
+		else RefPtr_inc(blas->base.tempScratchBuffer);
 	}
 
 	//Ensure we don't exceed a maximum amount of time spent on the GPU

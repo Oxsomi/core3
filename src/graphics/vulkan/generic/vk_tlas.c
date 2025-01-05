@@ -310,22 +310,30 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	//Add as flight (keep alive extra)
 
 	Error err = Error_none();
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
-	RefPtr_inc(pending);
+
+	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+		RefPtr_inc(pending);
+	}
 
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 	//We do the same thing on the tempInstances, since it's CPU mem only
 
-	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate)) {
-
+	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL))
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
-		tlas->base.tempScratchBuffer = NULL;
 
-		if(tlas->tempInstanceBuffer) {
-			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
-			tlas->tempInstanceBuffer = NULL;
-		}
+	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL))
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+
+	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate)) {
+		tlas->base.tempScratchBuffer = NULL;
+		tlas->tempInstanceBuffer = NULL;
+	}
+
+	else {
+		RefPtr_inc(tlas->base.tempScratchBuffer);
+		RefPtr_inc(tlas->tempInstanceBuffer);
 	}
 
 	tlas->base.isCompleted = true;

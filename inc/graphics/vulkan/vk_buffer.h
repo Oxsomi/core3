@@ -25,6 +25,7 @@ typedef struct VkDeviceBuffer {
 	VkBuffer buffer;
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
+	U64 padding;
 } VkDeviceBuffer;
 
 Error VkDeviceBuffer_transition(

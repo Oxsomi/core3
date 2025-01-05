@@ -62,6 +62,7 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 	success &= !GraphicsDeviceRef_dec(&sampler->device).genericError;
 	return success;
 }
+
 Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler) {
 
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)

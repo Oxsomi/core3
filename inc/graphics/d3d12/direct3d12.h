@@ -41,7 +41,7 @@ typedef struct DxUnifiedTexture {
 	D3D12_BARRIER_SYNC lastSync;
 	D3D12_BARRIER_ACCESS lastAccess;
 	D3D12_BARRIER_LAYOUT lastLayout;
-	U32 padding;
+	U32 padding[3];
 } DxUnifiedTexture;
 
 //Graphics instance doesn't really exist for Direct3D12.
@@ -143,11 +143,12 @@ typedef union DxPipeline {
 typedef struct DxBLAS {
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry;
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
-	U32 padding, primitives;
+	U32 primitives, padding[3];
 } DxBLAS;
 
 typedef struct DxTLAS {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
+	U64 padding;
 } DxTLAS;
 
 static const U32 raytracingShaderIdSize = 32;

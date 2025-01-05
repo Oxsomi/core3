@@ -87,8 +87,8 @@ typedef struct TLASTransformSRT {
 
 } TLASTransformSRT;
 
-F32x4 TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing);
-F32x4 TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat);
+TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing);
+TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat);
 
 F32x4 TLASTransformSRT_getScale(TLASTransformSRT srt);
 Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value);

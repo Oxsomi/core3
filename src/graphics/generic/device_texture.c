@@ -102,8 +102,6 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	if(!l)
 		l = utex->length - z;
 
-	Bool fullRange = w == utex->width && h == utex->height && l == utex->length;
-
 	ETextureFormat format = ETextureFormatId_unpack[utex->textureFormatId];
 
 	U8 alignX = 4, alignY = 4, alignZ = 4;
@@ -122,6 +120,8 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 
 	U16 startZ = alignDown(z, alignZ);
 	U16 endZ = (U16) U64_min(alignUp(z + l, alignZ), utex->length);
+
+	Bool fullRange = (endX - startX) == utex->width && (endY - startY) == utex->height && (endZ - startZ) == utex->length;
 
 	//If the entire texture is marked dirty, we have to make sure we don't duplicate it
 

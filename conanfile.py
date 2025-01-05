@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.085"
+	version = "0.2.086"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"

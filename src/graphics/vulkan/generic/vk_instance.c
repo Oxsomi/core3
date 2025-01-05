@@ -38,8 +38,8 @@
 GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.blas = sizeof(VkBLAS),
 	.tlas = sizeof(VkTLAS),
-	.pipeline = sizeof(VkPipeline),
-	.sampler = sizeof(VkSampler),
+	.pipeline = sizeof(VkPipeline) + 8,
+	.sampler = sizeof(VkSampler) + 8,
 	.buffer = sizeof(VkDeviceBuffer),
 	.image = sizeof(VkUnifiedTexture),
 	.swapchain = sizeof(VkSwapchain),

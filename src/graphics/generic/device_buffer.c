@@ -74,10 +74,11 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	if(!count)
 		count = bufLen - offset;
 
-	Bool fullRange = count == bufLen;
 
-	U64 start = (offset + 255) &~ 255;
+	U64 start = offset &~ 255;
 	U64 end = U64_min((offset + count + 255) &~ 255, bufLen);
+
+	Bool fullRange = start == 0 && end == bufLen;
 
 	//If the entire buffer is marked dirty, we have to make sure we don't duplicate it
 

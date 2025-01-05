@@ -231,7 +231,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			for (U8 i = 0; i < imageClearCount; ++i) {
 
-				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U64)))[i];
+				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U64) * 2))[i];
 				RefPtr *active = image.image;
 
 				//Reuse the same descriptor, it's useless.

@@ -67,7 +67,9 @@ Error GraphicsInstance_getPreferredDevice(
 
 	U64 preferredDedicated = 0;
 	U64 preferredNonDedicated = 0;
+	U64 preferredIntegrated = 0;
 	Bool hasDedicated = false;
+	Bool hasIntegrated = false;
 	Bool hasAny = false;
 
 	for (U64 i = 0; i < tmp.length; ++i) {
@@ -107,7 +109,15 @@ Error GraphicsInstance_getPreferredDevice(
 			break;
 		}
 
-		else preferredNonDedicated = i;
+		else {
+
+			if (info.type == EGraphicsDeviceType_Integrated) {
+				preferredIntegrated = i;
+				hasIntegrated = true;
+			}
+
+			else preferredNonDedicated = i;
+		}
 
 		hasAny = true;
 	}
@@ -115,7 +125,7 @@ Error GraphicsInstance_getPreferredDevice(
 	if(!hasAny)
 		gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"))
 
-	const U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
+	const U64 picked = hasDedicated ? preferredDedicated : (hasIntegrated ? preferredIntegrated : preferredNonDedicated);
 	*deviceInfo = tmp.ptr[picked];
 
 clean:

@@ -235,40 +235,28 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 	const UnifiedTexture texture = *texturePtr;
 
 	if(texture.resource.allocated)
-		return Error_nullPointer(
-			0, "UnifiedTexture_create()::texturePtr contains initialized resource, possible memleak"
-		);
+		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr contains initialized resource, possible memleak");
 
 	if(!texture.resource.device || texture.resource.device->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->resource.device is required");
 
 	if(!texture.depthFormat && !texture.textureFormatId)
-		return Error_nullPointer(
-			0, "UnifiedTexture_create()::texturePtr->depthFormat or textureFormatId is required"
-		);
+		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->depthFormat or textureFormatId is required");
 
 	if(texture.textureFormatId && texture.textureFormatId >= ETextureFormatId_Count)
-		return Error_invalidParameter(
-			2, 0, "UnifiedTexture_create()::texturePtr->textureFormatId is invalid"
-		);
+		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->textureFormatId is invalid");
 
 	if(texture.depthFormat && texture.depthFormat >= EDepthStencilFormat_Count)
-		return Error_invalidParameter(
-			2, 0, "UnifiedTexture_create()::texturePtr->depthFormat is required"
-		);
+		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->depthFormat is required");
 
 	if(texture.sampleCount >= EMSAASamples_Count)
-		return Error_invalidParameter(
-			2, 0, "UnifiedTexture_create()::texturePtr->sampleCount is invalid"
-		);
+		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->sampleCount is invalid");
 
 	if(texture.type >= ETextureType_Count)
 		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->type is invalid");
 
 	if(texture.resource.type == EResourceType_DeviceTexture && texture.sampleCount)
-		return Error_invalidParameter(
-			1, 0, "UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture"
-		);
+		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture");
 
 	if (texture.resource.type == EResourceType_Swapchain) {
 		if(texture.images != 3)
@@ -278,9 +266,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 	}
 
 	else if(texture.images != 1)
-		return Error_invalidParameter(
-			1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 1 swapchains"
-		);
+		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 1 swapchains");
 
 	if(texture.resource.flags & EGraphicsResourceFlag_CPUAllocated && texture.resource.type != EResourceType_DeviceTexture)
 		return Error_invalidParameter(

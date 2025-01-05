@@ -211,7 +211,7 @@ Error GraphicsDeviceRef_create(
 	#endif
 
 	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
-		device->info.capabilities.features &=~ (EGraphicsFeatures_RayValidation);
+		device->info.capabilities.features &=~ EGraphicsFeatures_RayValidation;
 
 	gotoIfError(clean, GraphicsInstanceRef_inc(instanceRef))
 	device->instance = instanceRef;
@@ -657,7 +657,6 @@ Error GraphicsDeviceRef_submitCommands(
 						0, "GraphicsDeviceRef_submitCommands()::swapchains[i] has outdated commands in submitted command list"
 					))
 			}
-
 		}
 	}
 
@@ -722,7 +721,7 @@ Error GraphicsDeviceRef_submitCommands(
 		data.time = time;
 	}
 
-	Buffer_copy(Buffer_createRef((U8*)data.appData, sizeof(data.appData)), appData);
+	Buffer_copy(Buffer_createRef(data.appData, sizeof(data.appData)), appData);
 
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.

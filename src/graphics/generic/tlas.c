@@ -27,23 +27,97 @@
 #include "graphics/generic/blas.h"
 #include "types/container/buffer.h"
 
-F32x4 TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing);
-F32x4 TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat);
+TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing) {
+	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);
+	TLASTransformSRT_setPivot(&srt, pivot);
+	TLASTransformSRT_setShearing(&srt, shearing);
+	return srt;
 
-F32x4 TLASTransformSRT_getScale(TLASTransformSRT srt);
-Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value);
+}
 
-F32x4 TLASTransformSRT_getPivot(TLASTransformSRT srt);
-Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value);
+TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat) {
+	TLASTransformSRT srt = (TLASTransformSRT) { 0 };
+	TLASTransformSRT_setScale(&srt, scale);
+	TLASTransformSRT_setTranslate(&srt, translate);
+	TLASTransformSRT_setQuat(&srt, quat);
+	return srt;
+}
 
-F32x4 TLASTransformSRT_getTranslate(TLASTransformSRT srt);
-Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value);
+F32x4 TLASTransformSRT_getScale(TLASTransformSRT srt) {
+	return F32x4_create3(srt.sx, srt.sy, srt.sz);
+}
 
-QuatF32 TLASTransformSRT_getQuat(TLASTransformSRT srt);
-Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value);
+Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value) {
 
-F32x4 TLASTransformSRT_getShearing(TLASTransformSRT srt);
-Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value);
+	if(!srt)
+		return false;
+
+	srt->sx = F32x4_x(value);
+	srt->sy = F32x4_y(value);
+	srt->sz = F32x4_z(value);
+	return true;
+}
+
+F32x4 TLASTransformSRT_getPivot(TLASTransformSRT srt) {
+	return F32x4_create3(srt.pvx, srt.pvy, srt.pvz);
+}
+
+Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value) {
+
+	if(!srt)
+		return false;
+
+	srt->pvx = F32x4_x(value);
+	srt->pvy = F32x4_y(value);
+	srt->pvz = F32x4_z(value);
+	return true;
+}
+
+F32x4 TLASTransformSRT_getTranslate(TLASTransformSRT srt) {
+	return F32x4_create3(srt.tx, srt.ty, srt.tz);
+}
+
+Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value) {
+
+	if(!srt)
+		return false;
+
+	srt->tx = F32x4_x(value);
+	srt->ty = F32x4_y(value);
+	srt->tz = F32x4_z(value);
+	return true;
+}
+
+QuatF32 TLASTransformSRT_getQuat(TLASTransformSRT srt) {
+	return QuatF32_create(srt.q0, srt.q1, srt.q2, srt.q3);
+}
+
+Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value) {
+
+	if(!srt)
+		return false;
+
+	srt->q0 = QuatF32_x(value);
+	srt->q1 = QuatF32_y(value);
+	srt->q2 = QuatF32_z(value);
+	srt->q3 = QuatF32_w(value);
+	return true;
+}
+
+F32x4 TLASTransformSRT_getShearing(TLASTransformSRT srt) {
+	return F32x4_create3(srt.a, srt.b, srt.c);
+}
+
+Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value) {
+
+	if(!srt)
+		return false;
+
+	srt->a = F32x4_x(value);
+	srt->b = F32x4_y(value);
+	srt->c = F32x4_z(value);
+	return true;
+}
 
 TListImpl(TLASInstanceMotion);
 TListImpl(TLASInstanceStatic);

@@ -103,7 +103,10 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	swapchain->base.height = (U16) I32x2_y(newSize);
 
 clean:
-	SpinLock_unlock(&swapchain->lock);
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&swapchain->lock);
+
 	return err;
 }
 
@@ -169,12 +172,12 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 	if(!swapchain->info.presentModePriorities[0]) {
 
 		#if _PLATFORM_TYPE != PLATFORM_ANDROID
-			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;			//Priority is to be low latency
+			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;		//Priority is to be low latency
 			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
 			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Fifo;
 			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_FifoRelaxed;
-		#else
-			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;				//Priority is to conserve power
+		#else																				//No mailbox: creates images != 3
+			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;			//Priority is to conserve power
 			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
 			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Immediate;
 		#endif

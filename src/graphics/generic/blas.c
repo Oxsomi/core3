@@ -201,9 +201,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 			}
 
 			default:
-				return Error_unsupportedOperation(
-					2, "GraphicsDeviceRef_createBLAS()::positionFormat must be RGBA(16f/32f/16)"
-				);
+				return Error_unsupportedOperation(2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u");
 		}
 	}
 
@@ -268,7 +266,6 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 	}
 
 	else if (blas.base.asConstructionType == EBLASConstructionType_Procedural) {
-
 		blasPtr->aabbBuffer = (DeviceData) { 0 };
 		gotoIfError(clean, DeviceBufferRef_inc(blas.aabbBuffer.buffer))
 		blasPtr->aabbBuffer = blas.aabbBuffer;
@@ -304,13 +301,13 @@ Error GraphicsDeviceRef_createBLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	EBLASFlag blasFlags,
-	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s
-	U16 positionOffset,					//Offset into first position for first vertex
-	ETextureFormatId indexFormat,		//R16u, R32u, Undefined
-	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-	DeviceData positionBuffer,			//Required
-	DeviceData indexBuffer,				//Optional if indexFormat == Undefined
-	BLASRef *parent,					//If specified, indicates refit
+	ETextureFormatId positionFormat,
+	U16 positionOffset,
+	ETextureFormatId indexFormat,
+	U16 positionBufferStride,
+	DeviceData positionBuffer,
+	DeviceData indexBuffer,
+	BLASRef *parent,
 	CharString name,
 	BLASRef **blas
 ) {
@@ -336,11 +333,11 @@ Error GraphicsDeviceRef_createBLASUnindexedExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	EBLASFlag blasFlags,
-	ETextureFormatId positionFormat,	//RGBA16f, RGBA32f, RGBA16s
-	U16 positionOffset,					//Offset into first position for first vertex
-	U16 positionBufferStride,			//<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
-	DeviceData positionBuffer,			//Required
-	BLASRef *parent,					//If specified, indicates refit
+	ETextureFormatId positionFormat,
+	U16 positionOffset,
+	U16 positionBufferStride,
+	DeviceData positionBuffer,
+	BLASRef *parent,
 	CharString name,
 	BLASRef **blas
 ) {
@@ -373,7 +370,6 @@ Error GraphicsDeviceRef_createBLASProceduralExt(
 	CharString name,
 	BLASRef **blas
 ) {
-
 	const BLAS blasInfo = (BLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Procedural,

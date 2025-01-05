@@ -126,7 +126,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			for(U64 i = 0; i < imageClearCount; ++i) {
 
-				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U64)))[i];
+				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U64) * 2))[i];
 				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(image.image, Vk, 0);
 
 				VkImageSubresourceRange range = (VkImageSubresourceRange) {

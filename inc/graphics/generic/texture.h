@@ -34,6 +34,7 @@ typedef RefPtr GraphicsDeviceRef;
 
 typedef struct UnifiedTextureImage {
 	U32 readHandle, writeHandle;
+	U64 padding;
 } UnifiedTextureImage;
 
 //UnifiedTexture (GraphicsResource, etc.), UnifiedTextureImage[N], UnifiedTextureImageExt_size[N]

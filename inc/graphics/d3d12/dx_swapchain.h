@@ -27,6 +27,7 @@
 
 typedef struct DxSwapchain {
 	IDXGISwapChain1 *swapchain;
+	U64 padding;
 } DxSwapchain;
 
 #ifdef __cplusplus
