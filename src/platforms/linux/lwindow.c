@@ -244,7 +244,7 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
 
-	if(!w || !I32x2_any(w->size) || !title.ptr || !CharString_length(title))
+	if(!w || !I32x2_any(w->size) || !title.ptr || !CharString_length(title) || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		))
@@ -268,7 +268,7 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!w || !I32x2_any(w->size))
+	if(!w || !I32x2_any(w->size) || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))

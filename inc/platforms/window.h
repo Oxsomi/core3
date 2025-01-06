@@ -37,14 +37,13 @@
 //A server would have 0 windows.
 //
 //A virtual window is basically just a render target and can always be used.
-//It can be created as a fallback if no API is present, but has to be manually written to disk (Window_presentCPUBuffer).
+//It can be created as a fallback if no API is present, but has to be manually written to.
 //
 //An extended window is a special type of native window that is only applicable to a different API.
 //An example here is an OpenXR window.
 
 //A hint is only used as a *hint* to the impl.
 //The runtime is allowed to ignore this if it's not applicable.
-//
 typedef enum EWindowHint {
 
 	EWindowHint_AllowFullscreen			= 1 << 0,
@@ -60,7 +59,6 @@ typedef enum EWindowHint {
 
 //Subset of formats that can be used for windows
 //These formats are dependent on the platform too. It's very possible they're not available.
-//
 typedef enum EWindowFormat {
 	EWindowFormat_BGRA8					= ETextureFormat_BGRA8,			//Most common format
 	EWindowFormat_BGR10A2				= ETextureFormat_BGR10A2,
@@ -69,7 +67,6 @@ typedef enum EWindowFormat {
 } EWindowFormat;
 
 //Window flags are set by the implementation
-//
 typedef enum EWindowFlags {
 	EWindowFlags_None					= 0,
 	EWindowFlags_IsFocussed				= 1 << 0,
@@ -84,7 +81,6 @@ typedef enum EWindowFlags {
 #define _RESOLUTION(w, h) (w << 16) | h
 
 //Commonly used resolutions
-//
 typedef enum EResolution {
 	EResolution_Undefined,
 	EResolution_SD						= _RESOLUTION(426, 240),
@@ -131,6 +127,7 @@ typedef enum EWindowType {
 	EWindowType_Physical,			//Native window of the underlying platform
 	EWindowType_Virtual,			//Non-native window, such as headless rendering
 	//EWindowType_ExtendedOpenXR,	//Extended physical window; for use with OpenXR
+	//EWindowType_External,			//Externally managed window, manually calling the necessary functions
 
 	EWindowType_Count,
 	EWindowType_Extended = EWindowType_Virtual + 1
@@ -204,9 +201,6 @@ Bool Window_isFullScreen(const Window *w);
 Bool Window_doesAllowFullScreen(const Window *w);
 
 Bool Window_terminate(Window *w);
-
-//Should be called by implementations only
-Bool Window_onDraw(Window *w);
 
 #ifdef __cplusplus
 	}

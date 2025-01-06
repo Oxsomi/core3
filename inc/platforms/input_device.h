@@ -104,7 +104,7 @@ Error InputDevice_createButton(
 Error InputDevice_createAxis(
 	InputDevice dev,
 	U16 localHandle,
-	const C8 *axisName,		//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
+	const C8 *axisName,			//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
 	F32 deadZone,
 	Bool resetOnInputLoss,
 	InputHandle *result

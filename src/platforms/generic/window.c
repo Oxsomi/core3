@@ -124,7 +124,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 			if(I32x2_y(newSiz) > I32x2_y(w->size))
 				gotoIfError2(clean, Buffer_unsetAllBits(
-					Buffer_createRef((U8*)neo.ptr + linSizOld, linSiz - linSizOld)
+					Buffer_createRef(neo.ptrNonConst + linSizOld, linSiz - linSizOld)
 				))
 		}
 
@@ -199,7 +199,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 	//Ensure it's all properly cleared
 
-	else Buffer_unsetAllBits(Buffer_createRef((U8*)neo.ptr, linSiz));
+	else Buffer_unsetAllBits(Buffer_createRef(neo.ptrNonConst, linSiz));
 
 	//Get rid of our old data
 
@@ -208,6 +208,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 	w->cpuVisibleBuffer = neo;
 	w->size = newSiz;
+	resize = false;
 
 clean:
 

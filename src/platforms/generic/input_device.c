@@ -102,15 +102,13 @@ F32 *InputDevice_getAxisValue(InputDevice dev, U16 localHandle, Bool isCurrent) 
 BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
 
 	if(localHandle >= dev.buttons)
-		return (BitRef){ 0 };
+		return (BitRef) { 0 };
 
 	const U64 bitOff = ((U32)localHandle << 1) + isCurrent;
-	U8 *off = (U8*)dev.states.ptr + dev.axes * 2 * sizeof(F32) + (bitOff >> 3);
+	U8 *off = dev.states.ptrNonConst + dev.axes * 2 * sizeof(F32) + (bitOff >> 3);
 
-	return (BitRef){ .ptr = off, .off = (bitOff & 7) };
+	return (BitRef) { .ptr = off, .off = (bitOff & 7) };
 }
-
-//
 
 Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result) {
 
@@ -308,6 +306,8 @@ void InputDevice_markUpdate(InputDevice d) {
 
 	if(d.type == EInputDeviceType_Undefined)
 		return;
+
+	//TODO: Optimize this
 
 	for(U16 i = 0; i < d.axes; ++i) {
 		F32 *start = InputDevice_getAxisValue(d, i, false);

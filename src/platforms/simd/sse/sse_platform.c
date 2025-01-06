@@ -22,6 +22,11 @@
 
 Bool Platform_checkCPUSupport() {
 
+	U16 v = 1;
+
+	if(!*(const U8*)&v)		//Little endian only
+		return false;
+
 	//We need to double check that our CPU supports
 	//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1 and RDRAND
 	//https://gist.github.com/hi2p-perim/7855506

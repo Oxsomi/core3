@@ -58,8 +58,8 @@ void sigFunc(int signal) {
 //Allocator keeps track of allocations on debug mode (and only about size/count on release)
 //For these allocations, it has a special allocator that doesn't use itself.
 
-AtomicI64 Allocator_memoryAllocationCount;
-AtomicI64 Allocator_memoryAllocationSize;
+AtomicI64 Allocator_memoryAllocationCount = { 0 };
+AtomicI64 Allocator_memoryAllocationSize = { 0 };
 
 typedef struct DebugAllocation {
 	U64 location, length;
@@ -93,7 +93,7 @@ Error Platform_allocNoTracking(void *allocator, U64 length, Buffer *output) {
 
 Bool Platform_freeNoTracking(void *allocator, Buffer buf) {
 	(void)allocator;
-	Platform_free(allocator, (U8*) buf.ptr, Buffer_length(buf));
+	Platform_free(allocator, buf.ptrNonConst, Buffer_length(buf));
 	return true;
 }
 
@@ -126,10 +126,10 @@ Bool Platform_freeTracked(void *allocator, Buffer buf) {
 
 	(void) allocator;
 
-	const Bool canFree = Platform_onFree((void*) buf.ptr, Buffer_length(buf));
+	const Bool canFree = Platform_onFree(buf.ptrNonConst, Buffer_length(buf));
 
 	if(canFree)
-		Platform_free(allocator, (void*) buf.ptr, Buffer_length(buf));
+		Platform_free(allocator, buf.ptrNonConst, Buffer_length(buf));
 
 	return canFree;
 }
@@ -299,7 +299,7 @@ void Allocator_reportLeaks() {
 		Log_warnLn(Allocator_allocationsAllocator, "Leaked %"PRIu64" bytes in %"PRIu64" allocations.", memSize, memCount);
 
 		#ifndef NDEBUG
-			Platform_printAllocations(0, 16, 0);
+			Platform_printAllocations(0, 8, 0);
 		#endif
 	}
 }
@@ -313,13 +313,6 @@ TListImpl(VirtualSection);
 Platform *Platform_instance = 0, platformInstance = { 0 };
 
 Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir) {
-
-	U16 v = 1;
-
-	if(!*(U8*)&v)
-		return Error_unsupportedOperation(
-			0, "Platform_create() failed, invalid endianness (only little endian supported)"
-		);
 
 	const Bool isSupported = Platform_checkCPUSupport();
 
@@ -358,10 +351,10 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 			if(err.genericError)
 				return err;
-
-			Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
 		}
 	#endif
+
+	Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
 
 	Platform_instance = &platformInstance;
 	*Platform_instance = (Platform) {
@@ -415,8 +408,6 @@ void Platform_cleanup() {
 	CharString_freex(&Platform_instance->appDirectory);
 	ListCharString_freex(&Platform_instance->args);
 
-	//Properly clean virtual files
-
 	SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
 	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
@@ -426,8 +417,6 @@ void Platform_cleanup() {
 	}
 
 	ListVirtualSection_freex(&Platform_instance->virtualSections);
-
-	//Reset console text color
 
 	Allocator_reportLeaks();
 

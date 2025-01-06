@@ -262,7 +262,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
 					InputDevice_markUpdate(*dit);
 			}
 
-			requireDraw = true;		//We are in charge of the draw in non Windows systems
+			requireDraw = true;							//We are in charge of the draw in non Windows systems
 
 		#endif
 
@@ -275,10 +275,10 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
 
 		w->lastUpdate = now;
 
-		if(requireDraw && w->callbacks.onDraw)		//Virtual
+		if(requireDraw && w->callbacks.onDraw)			//Virtual
 			w->callbacks.onDraw(w);
 
-		if (w->flags & EWindowFlags_ShouldTerminate)					//Just in case the window closed now
+		if (w->flags & EWindowFlags_ShouldTerminate)	//Just in case the window closed now
 			WindowManager_freeWindow(manager, &w);
 	}
 
@@ -349,7 +349,7 @@ Bool WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep, Er
 			3, 0, "WindowManager_adaptSizes()::*minSizep should be >=240p (0 = 640x360, >=426x240)"
 		))
 
-	//Graphics APIs generally limit the resolution to 16Ki, so let's ensure the window can't get bigger than that
+	//Graphics APIs generally limit the resolution to 16Ki or 32Ki, so let's ensure the window can't get bigger than that
 
 	if(I32x2_any(I32x2_eq(maxSize, I32x2_zero())))
 		maxSize = I32x2_xx2(16384);

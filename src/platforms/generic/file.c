@@ -78,21 +78,19 @@
 	//Can't rely on manifest.xml being present that allows use of RemoveDirectoryA with UTF8.
 	I32 removeFolder(CharString str) {
 
-		ListU16 utf8 = (ListU16) { 0 };
+		ListU16 utf16 = (ListU16) { 0 };
 
-		if (CharString_toUTF16x(str, &utf8).genericError)
+		if (CharString_toUTF16x(str, &utf16).genericError)
 			return -1;
 
-		const I32 res = RemoveDirectoryW((const wchar_t*)utf8.ptr) ? 0 : -1;
-		ListU16_freex(&utf8);
+		const I32 res = RemoveDirectoryW((const wchar_t*)utf16.ptr) ? 0 : -1;
+		ListU16_freex(&utf16);
 		return res;
 	}
 
 #endif
 
 //Private file functions
-
-//Can only operate on //access, //function, //network
 
 Bool File_removeVirtual(CharString loc, Ns maxTimeout, Error *e_rr);
 Bool File_addVirtual(CharString loc, EFileType type, Ns maxTimeout, Error *e_rr);
@@ -108,10 +106,8 @@ Bool File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout, Error *e_rr
 Bool File_getInfoVirtual(CharString loc, FileInfo *info, Error *e_rr);
 Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
-//Inc files only
 Bool File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res, Error *e_rr);
 
-//Inc folders + files
 Bool File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res, Error *e_rr);
 
 //Both Linux and Windows require folder to be empty before removing.
@@ -154,8 +150,6 @@ int removeFileOrFolder(CharString str) {
 
 	return remove(str.ptr);
 }
-
-//
 
 Bool FileInfo_freex(FileInfo *fileInfo) {
 	return FileInfo_free(fileInfo, Platform_instance->alloc);

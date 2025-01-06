@@ -247,20 +247,14 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			RAWINPUT raw;
 			U32 rawSiz = (U32) sizeof(raw);
 			if (!GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) &raw, &rawSiz, sizeof(RAWINPUTHEADER))) {
-
-				Error_printx(
-					Error_platformError(
-						0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"
-					),
-					ELogLevel_Error, ELogOptions_Default
-				);
-
+				Error_printLnx(Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"));
 				break;
 			}
 
 			RAWINPUT *data = &raw;
 
 			//Grab device from the list
+			//TODO: Map
 
 			InputDevice *dev = w->devices.ptrNonConst;
 			InputDevice *end = ListInputDevice_end(w->devices);
@@ -654,7 +648,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Store device and call callback
 
-				*(HANDLE*) device.dataExt.ptr = (HANDLE)lParam;
+				*(HANDLE*) device.dataExt.ptrNonConst = (HANDLE)lParam;
 				*dev = device;
 
 				if (w->callbacks.onDeviceAdd)
@@ -842,7 +836,7 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	ListU16 name = (ListU16) { 0 };
 	const U64 titlel = CharString_length(title);
 
-	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
+	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		))
@@ -866,7 +860,7 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!w || !I32x2_any(w->size))
+	if(!w || !I32x2_any(w->size) || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
