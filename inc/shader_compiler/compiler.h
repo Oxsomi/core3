@@ -168,7 +168,6 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr);
 void Compiler_free(Compiler *comp, Allocator alloc);
 
 //Call this on shutdown for a clean exit
-
 void Compiler_shutdown();
 
 //Generate disassembly from buffer
@@ -176,7 +175,6 @@ Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, A
 
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.
-
 Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos, Error *e_rr);
 
 //Process a file with includes and defines to one without (returns text)
@@ -192,7 +190,14 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext);
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr);
 
 //Manual tokenization for a preprocessed file, to obtain annotations (returns shEntries if !symbolsOnly, otherwise text)
-Bool Compiler_parse(Compiler comp, CompilerSettings settings, Bool symbolsOnly, Allocator alloc, CompileResult *result, Error *e_rr);
+Bool Compiler_parse(
+	Compiler comp,
+	CompilerSettings settings,
+	Bool symbolsOnly,
+	Allocator alloc,
+	CompileResult *result,
+	Error *e_rr
+);
 
 typedef enum ECompileBinaryTypes {
 	ECompileBinaryTypes_Shader,			//Shader binary

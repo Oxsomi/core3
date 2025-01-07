@@ -333,7 +333,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	U64 loc = CharString_findFirstStringSensitive(errs, validationFailed, 0, 0);
 
 	if(loc != U64_MAX)
-		errs.lenAndNullTerminated = loc | (errs.lenAndNullTerminated & ((U64)1 << 63));
+		errs.lenAndNullTerminated = loc;
 
 	Bool s_uccess = true;
 	U64 off = 0;
@@ -513,7 +513,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 					multiplier *= 10;
 
 					if(num >> 32)		//Out of bounds
-						retError(clean, Error_invalidState(1, "Compiler_parseErrors() num is limited to U32"))
+						retError(clean, Error_invalidState(1, "Compiler_parseErrors() lineId is limited to U32"))
 				}
 			}
 
@@ -645,8 +645,9 @@ clean:
 
 ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
+	Buffer buf = CharString_bufferConst(stageName);
 	U64 stageNameLen = CharString_length(stageName);
-	U32 c8x4 = stageNameLen < 4 ? 0 : *(const U32*)stageName.ptr;
+	U32 c8x4 = Buffer_readU32(buf, 0, NULL);
 
 	switch (c8x4) {
 
@@ -655,14 +656,14 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('v', 'e', 'r', 't'):		//vertex
 
-			if(stageNameLen == 6 && *(const U16*)&stageName.ptr[4] == C8x2('e', 'x'))
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('e', 'x'))
 				return ESHPipelineStage_Vertex;
 
 			break;
 
 		case C8x4('d', 'o', 'm', 'a'):		//domain
 
-			if(stageNameLen == 6 && *(const U16*)&stageName.ptr[4] == C8x2('i', 'n'))
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 'n'))
 				return ESHPipelineStage_Domain;
 
 			break;
@@ -676,14 +677,14 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('g', 'e', 'o', 'm'):		//geometry
 
-			if(stageNameLen == 8 && *(const U32*)&stageName.ptr[4] == C8x4('e', 't', 'r', 'y'))
+			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('e', 't', 'r', 'y'))
 				return ESHPipelineStage_GeometryExt;
 
 			break;
 
 		case C8x4('c', 'o', 'm', 'p'):		//compute
 
-			if(stageNameLen == 7 && *(const U32*)&stageName.ptr[3] == C8x4('p', 'u', 't', 'e'))
+			if(stageNameLen == 7 && Buffer_readU32(buf, 3, NULL) == C8x4('p', 'u', 't', 'e'))
 				return ESHPipelineStage_Compute;
 
 			break;
@@ -712,17 +713,14 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('a', 'n', 'y', 'h'):		//anyhit
 
-			if(stageNameLen == 6 && *(const U16*)&stageName.ptr[4] == C8x2('i', 't'))
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 't'))
 				return ESHPipelineStage_AnyHitExt;
 
 			break;
 
 		case C8x4('c', 'l', 'o', 's'):		//closesthit
 
-			if(
-				stageNameLen == 10 &&
-				*(const U64*)&stageName.ptr[2] == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't')
-			)
+			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't'))
 				return ESHPipelineStage_ClosestHitExt;
 
 			break;
@@ -731,7 +729,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 			if(
 				stageNameLen == 13 &&
-				*(const U64*)&stageName.ptr[4] == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
+				Buffer_readU64(buf, 4, NULL) == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
 				stageName.ptr[12] == 'n'
 			)
 				return ESHPipelineStage_RaygenExt;
@@ -740,7 +738,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('i', 'n', 't', 'e'):		//intersection
 
-			if(stageNameLen == 12 && *(const U64*)&stageName.ptr[4] == C8x8('r', 's', 'e', 'c', 't', 'i', 'o', 'n'))
+			if(stageNameLen == 12 && Buffer_readU64(buf, 4, NULL) == C8x8('r', 's', 'e', 'c', 't', 'i', 'o', 'n'))
 				return ESHPipelineStage_IntersectionExt;
 
 			break;
@@ -751,6 +749,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 ESHVendor Compiler_parseVendor(CharString vendor) {
 
+	Buffer buf = CharString_bufferConst(vendor);
 	U64 len = CharString_length(vendor);
 
 	switch(len) {
@@ -759,17 +758,17 @@ ESHVendor Compiler_parseVendor(CharString vendor) {
 			return ESHVendor_Count;
 
 		case 2:		//NV
-			return *(const U16*)vendor.ptr == C8x2('N', 'V') ? ESHVendor_NV : ESHVendor_Count;
+			return Buffer_readU16(buf, 0, NULL) == C8x2('N', 'V') ? ESHVendor_NV : ESHVendor_Count;
 
 		case 3:		//AMD, ARM
-			switch (*(const U16*)vendor.ptr) {
+			switch (Buffer_readU16(buf, 0, NULL)) {
 				default:				return ESHVendor_Count;
 				case C8x2('A', 'M'):	return vendor.ptr[2] == 'D' ? ESHVendor_AMD : ESHVendor_Count;
 				case C8x2('A', 'R'):	return vendor.ptr[2] == 'M' ? ESHVendor_ARM : ESHVendor_Count;
 			}
 
 		case 4:		//QCOM, INTC, IMGT, MSFT
-			switch (*(const U32*)vendor.ptr) {
+			switch (Buffer_readU32(buf, 0, NULL)) {
 				default:							return ESHVendor_Count;
 				case C8x4('Q', 'C', 'O', 'M'):		return ESHVendor_QCOM;
 				case C8x4('I', 'N', 'T', 'C'):		return ESHVendor_INTC;
@@ -781,8 +780,9 @@ ESHVendor Compiler_parseVendor(CharString vendor) {
 
 ESHExtension Compiler_parseExtension(CharString extensionName) {
 
+	Buffer buf = CharString_bufferConst(extensionName);
 	U64 stageNameLen = CharString_length(extensionName);
-	U16 c8x2 = stageNameLen < 2 ? 0 : *(const U16*)extensionName.ptr;
+	U16 c8x2 = Buffer_readU16(buf, 0, NULL);
 
 	switch (c8x2) {
 
@@ -800,20 +800,14 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 		case C8x2('1', '6'):	//16BitTypes
 
-			if(
-				stageNameLen == 10 &&
-				*(const U64*)&extensionName.ptr[2] == C8x8('B', 'i', 't', 'T', 'y', 'p', 'e', 's')
-			)
+			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('B', 'i', 't', 'T', 'y', 'p', 'e', 's'))
 				return ESHExtension_16BitTypes;
 
 			break;
 
 		case C8x2('M', 'u'):	//Multiview
 
-			if(
-				stageNameLen == 9 &&
-				*(const U64*)&extensionName.ptr[1] == C8x8('u', 'l', 't', 'i', 'v', 'i', 'e', 'w')
-			)
+			if(stageNameLen == 9 && Buffer_readU64(buf, 1, NULL) == C8x8('u', 'l', 't', 'i', 'v', 'i', 'e', 'w'))
 				return ESHExtension_Multiview;
 
 			break;
@@ -822,8 +816,8 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if(
 				stageNameLen == 12 &&
-				*(const U64*)&extensionName.ptr[ 2] == C8x8('m', 'p', 'u', 't', 'e', 'D', 'e', 'r') &&
-				*(const U16*)&extensionName.ptr[10] == C8x2('i', 'v')
+				Buffer_readU64(buf,  2, NULL) == C8x8('m', 'p', 'u', 't', 'e', 'D', 'e', 'r') &&
+				Buffer_readU16(buf, 10, NULL) == C8x2('i', 'v')
 			)
 				return ESHExtension_ComputeDeriv;
 
@@ -833,8 +827,8 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if (
 				stageNameLen == 14 &&
-				*(const U64*)&extensionName.ptr[ 2] == C8x8('i', 't', 'e', 'M', 'S', 'T', 'e', 'x') &&
-				*(const U32*)&extensionName.ptr[10] == C8x4('t', 'u', 'r', 'e')
+				Buffer_readU64(buf,  2, NULL) == C8x8('i', 't', 'e', 'M', 'S', 'T', 'e', 'x') &&
+				Buffer_readU32(buf, 10, NULL) == C8x4('t', 'u', 'r', 'e')
 			)
 				return ESHExtension_WriteMSTexture;
 
@@ -844,9 +838,9 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if (
 				stageNameLen == 16 &&
-				*(const U64*)&extensionName.ptr[ 2] == C8x8('s', 'h', 'T', 'a', 's', 'k', 'T', 'e') &&
-				*(const U32*)&extensionName.ptr[10] == C8x4('x', 'D', 'e', 'r') &&
-				*(const U16*)&extensionName.ptr[14] == C8x2('i', 'v')
+				Buffer_readU64(buf,  2, NULL) == C8x8('s', 'h', 'T', 'a', 's', 'k', 'T', 'e') &&
+				Buffer_readU32(buf, 10, NULL) == C8x4('x', 'D', 'e', 'r') &&
+				Buffer_readU16(buf, 14, NULL) == C8x2('i', 'v')
 			)
 				return ESHExtension_MeshTaskTexDeriv;
 
@@ -855,7 +849,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 		case C8x2('A', 't'):	//AtomicI64, AtomicF32, AtomicF64
 
 			if(stageNameLen == 9)
-				switch (*(const U64*)&extensionName.ptr[1]) {
+				switch (Buffer_readU64(buf, 1, NULL)) {
 					case C8x8('t', 'o', 'm', 'i', 'c', 'I', '6', '4'):		return ESHExtension_AtomicI64;
 					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '3', '2'):		return ESHExtension_AtomicF32;
 					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '6', '4'):		return ESHExtension_AtomicF64;
@@ -867,8 +861,8 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if(stageNameLen == 15) {			//SubgroupShuffle
 				if(
-					*(const U64*)&extensionName.ptr[0] == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
-					*(const U64*)&extensionName.ptr[7] == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
+					Buffer_readU64(buf, 0, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
+					Buffer_readU64(buf, 7, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
 				)
 					return ESHExtension_SubgroupShuffle;
 			}
@@ -876,14 +870,14 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			else if (stageNameLen == 18) {		//SubgroupArithmetic, SubgroupOperations
 
 				if(
-					*(const U64*)&extensionName.ptr[ 2] == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
-					*(const U64*)&extensionName.ptr[10] == C8x8('i', 't', 'h', 'm', 'e', 't', 'i', 'c')
+					Buffer_readU64(buf,  2, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
+					Buffer_readU64(buf, 10, NULL) == C8x8('i', 't', 'h', 'm', 'e', 't', 'i', 'c')
 				)
 					return ESHExtension_SubgroupArithmetic;
 					
 				else if(
-					*(const U64*)&extensionName.ptr[ 2] == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'O', 'p') &&
-					*(const U64*)&extensionName.ptr[10] == C8x8('e', 'r', 'a', 't', 'i', 'o', 'n', 's')
+					Buffer_readU64(buf,  2, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'O', 'p') &&
+					Buffer_readU64(buf, 10, NULL) == C8x8('e', 'r', 'a', 't', 'i', 'o', 'n', 's')
 				)
 					return ESHExtension_SubgroupOperations;
 
@@ -893,24 +887,23 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 		case C8x2('R', 'a'):	//RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder
 
-			if(stageNameLen == 8 && *(const U64*)&extensionName.ptr[0] == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
+			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
 				return ESHExtension_RayQuery;
 
 			else if(stageNameLen >= 10)
-				switch (*(const U64*)&extensionName.ptr[2]) {
+				switch (Buffer_readU64(buf, 2, NULL)) {
 
 					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):		//RayMicromapDisplacement & Opacity
 
 						if(
 							stageNameLen == 23 &&
-							*(const U64*)&extensionName.ptr[10] == C8x8('p', 'D', 'i', 's', 'p', 'l', 'a', 'c') &&
-							*(const U64*)&extensionName.ptr[15] == C8x8('l', 'a', 'c', 'e', 'm', 'e', 'n', 't')
+							Buffer_readU64(buf, 10, NULL) == C8x8('p', 'D', 'i', 's', 'p', 'l', 'a', 'c') &&
+							Buffer_readU64(buf, 15, NULL) == C8x8('l', 'a', 'c', 'e', 'm', 'e', 'n', 't')
 						)
 							return ESHExtension_RayMicromapDisplacement;
 
 						else if(
-							stageNameLen == 18 &&
-							*(const U64*)&extensionName.ptr[10] == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
+							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
 						)
 							return ESHExtension_RayMicromapOpacity;
 
@@ -919,7 +912,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 					case C8x8('y', 'M', 'o', 't', 'i', 'o', 'n', 'B'):		//RayMotionBlur
 
-						if(stageNameLen == 13 && *(const U32*)&extensionName.ptr[10] == C8x4('B', 'l', 'u', 'r'))
+						if(stageNameLen == 13 && Buffer_readU32(buf, 10, NULL) == C8x4('B', 'l', 'u', 'r'))
 							return ESHExtension_RayMotionBlur;
 
 						break;
@@ -949,12 +942,12 @@ Bool Compiler_registerExtension(U32 *extensions, U32 tokenId, Parser parser, Err
 
 	if(extension >> ESHExtension_Count)
 		retError(clean, Error_invalidParameter(
-			0, 5, "Compiler_parse() unrecognized extension in extension annotation"
+			0, 5, "Compiler_registerExtension() unrecognized extension in extension annotation"
 		))
 
 	if(*extensions & extension)
 		retError(clean, Error_invalidParameter(
-			0, 6, "Compiler_parse() duplicate extension found"
+			0, 6, "Compiler_registerExtension() duplicate extension found"
 		))
 
 	*extensions |= extension;
@@ -987,12 +980,12 @@ Bool Compiler_registerVendor(U16 *vendors, U32 tokenId, Parser parser, Error *e_
 
 	if(vendor == ESHVendor_Count)
 		retError(clean, Error_invalidParameter(
-			0, 1, "Compiler_parse() unrecognized vendor in vendor annotation"
+			0, 1, "Compiler_registerVendor() unrecognized vendor in vendor annotation"
 		))
 
 	if((*vendors >> vendor) & 1)
 		retError(clean, Error_invalidParameter(
-			0, 2, "Compiler_parse() duplicate vendor found"
+			0, 2, "Compiler_registerVendor() duplicate vendor found"
 		))
 
 	*vendors |= (U16)(1 << vendor);
@@ -1011,19 +1004,19 @@ Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Alloca
 
 	if(modelVersion < 6)
 		retError(clean, Error_invalidParameter(
-			0, 1, "Compiler_parse() model version is too low to be supported (must be >=6.0)"
+			0, 1, "Compiler_registerModel() model version is too low to be supported (must be >=6.0)"
 		))
 
 	if(modelVersion > 6.8)
 		retError(clean, Error_invalidParameter(
-			0, 1, "Compiler_parse() model version is too high, only supported up to 6.8"
+			0, 1, "Compiler_registerModel() model version is too high, only supported up to 6.8"
 		))
 
 	U16 version = OISH_SHADER_MODEL(6, (U16)F64_round((modelVersion - 6) / 0.1));
 
 	if(ListU16_contains(*vendors, version, 0, NULL))
 		retError(clean, Error_invalidParameter(
-			0, 1, "Compiler_parse() model version was referenced multiple times"
+			0, 1, "Compiler_registerModel() model version was referenced multiple times"
 		))
 
 	gotoIfError2(clean, ListU16_pushBack(vendors, version, alloc))
@@ -1137,13 +1130,7 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 
 	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
-	if(ext & ESHExtension_AtomicI64)
-		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
-
-	if(ext & ESHExtension_ComputeDeriv)
-		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
-
-	if(ext & ESHExtension_PAQ)
+	if(ext & (ESHExtension_AtomicI64 | ESHExtension_ComputeDeriv | ESHExtension_PAQ))
 		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	if(ext & ESHExtension_WriteMSTexture)
@@ -1226,6 +1213,7 @@ Bool Compiler_parse(
 				if (tok.tokenType == ETokenType_Identifier) {
 
 					CharString tokStr = Token_asString(tok, &parser);
+					Buffer buf = CharString_bufferConst(tokStr);
 					U64 tokLen = CharString_length(tokStr);
 
 					//oxc::X
@@ -1234,18 +1222,18 @@ Bool Compiler_parse(
 					if(
 						symj.tokenCount + 1 < 3 ||
 						tokLen != 3 ||
-						*(const U16*)tokStr.ptr != C8x2('o', 'x') ||
+						Buffer_readU16(buf, 0, NULL) != C8x2('o', 'x') ||
 						tokStr.ptr[2] != 'c'
 					) {
 
-						U32 c8x4 = tokLen < 4 ? 0 : *(const U32*)tokStr.ptr;
+						U32 c8x4 = Buffer_readU32(buf, 0, NULL);
 
 						//[shader("vertex")]
 						//  ^
 
 						if(
 							c8x4 == C8x4('s', 'h', 'a', 'd') && tokLen == 6 &&
-							*(const U16*)&tokStr.ptr[4] == C8x2('e', 'r')
+							Buffer_readU16(buf, 4, NULL) == C8x2('e', 'r')
 						) {
 
 							if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
@@ -1309,8 +1297,9 @@ Bool Compiler_parse(
 					tok = parser.tokens.ptr[symj.tokenId + 2];
 					tokStr = Token_asString(tok, &parser);
 					tokLen = CharString_length(tokStr);
+					buf = CharString_bufferConst(tokStr);
 
-					U32 c8x4 = tokLen < 4 ? 0 : *(const U32*)tokStr.ptr;
+					U32 c8x4 = Buffer_readU32(buf, 0, NULL);
 
 					switch (c8x4) {
 
@@ -1405,7 +1394,7 @@ Bool Compiler_parse(
 
 							//[[oxc::vendor("NV", "AMD")]]
 							//	   ^
-							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('o', 'r')) {
+							if (tokLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('o', 'r')) {
 
 								if(symj.tokenCount + 1 < 6)
 									retError(clean, Error_invalidParameter(
@@ -1468,7 +1457,7 @@ Bool Compiler_parse(
 							//[[oxc::uniforms("X", "Y", "Z")]]
 							//[[oxc::uniforms("X" = "123", "Y" = "ABC")]]
 							//		     ^
-							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('o', 'r', 'm', 's')) {
+							if (tokLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('o', 'r', 'm', 's')) {
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
@@ -1541,7 +1530,7 @@ Bool Compiler_parse(
 							//	   ^
 							if (
 								tokLen == 9 &&
-								*(const U64*)&tokStr.ptr[1] == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
+								Buffer_readU64(buf, 1, NULL) == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
 							) {
 
 								if(symj.tokenCount + 1 < 5)
@@ -1961,9 +1950,7 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 						hadFirstPaddingScan = true;
 					}
 				}
-
 			}
-
 		}
 
 clean:

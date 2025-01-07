@@ -87,7 +87,7 @@ Bool File_openStream(CharString loc, Ns timeout, EFileOpenType type, Bool create
 
 clean:
 
-	if(!s_uccess & allocated)
+	if(!s_uccess && allocated)
 		Stream_close(output, alloc);
 
 	return s_uccess;
@@ -120,8 +120,10 @@ Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Strea
 
 	gotoIfError2(clean, Buffer_createUninitializedBytes(cache, alloc, &stream->cacheData))
 
-	if(stream->handle.type == EFileOpenType_Read)
+	if(stream->handle.type == EFileOpenType_Read) {
 		stream->read = FileStream_read;
+		stream->isReadonly = true;
+	}
 
 	else stream->write = FileStream_write;
 
@@ -177,7 +179,7 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 		U64 bytesToCopy = U64_min(streamLen - dstRel, length);
 
 		Buffer_copy(
-			Buffer_createRef((U8*)stream->cacheData.ptr + dstRel, bytesToCopy),
+			Buffer_createRef(stream->cacheData.ptrNonConst + dstRel, bytesToCopy),
 			Buffer_createRefConst(buf.ptr + srcOff, bytesToCopy)
 		);
 
@@ -201,7 +203,7 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 			stream,
 			dstOff,
 			len,
-			Buffer_createRef((U8*)buf.ptr + srcOff, len),
+			Buffer_createRef(buf.ptrNonConst + srcOff, len),
 			Platform_instance->alloc,
 			e_rr
 		))
@@ -239,7 +241,7 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 	stream->lastLocation = dstOff;
 	stream->lastWriteLocation = dstOff + length;
 
-	Buffer_copy(stream->cacheData, Buffer_createRef((U8*)buf.ptr + srcOff, length));
+	Buffer_copy(stream->cacheData, Buffer_createRef(buf.ptrNonConst + srcOff, length));
 
 clean:
 	return s_uccess;
@@ -302,7 +304,7 @@ Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length,
 
 		if(bufLen)
 			Buffer_copy(
-				Buffer_createRef((U8*)buf.ptr + dstOff, bytesToCopy),
+				Buffer_createRef(buf.ptrNonConst + dstOff, bytesToCopy),
 				Buffer_createRefConst(stream->cacheData.ptr + srcRel, bytesToCopy)
 			);
 
@@ -328,7 +330,7 @@ Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length,
 				stream,
 				srcOff,
 				len,
-				Buffer_createRef((U8*)buf.ptr + dstOff, len),
+				Buffer_createRef(buf.ptrNonConst + dstOff, len),
 				Platform_instance->alloc,
 				e_rr
 			))
@@ -359,7 +361,7 @@ Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length,
 	))
 	
 	if(bufLen)
-		Buffer_copy(Buffer_createRef((U8*)buf.ptr + dstOff, length), stream->cacheData);
+		Buffer_copy(Buffer_createRef(buf.ptrNonConst + dstOff, length), stream->cacheData);
 
 clean:
 	return s_uccess;
