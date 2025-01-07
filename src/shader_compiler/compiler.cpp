@@ -154,7 +154,7 @@ public:
 			CharString tmp = CharString_createNull();
 
 			if(!CharString_cut(fileName, lastAt, 0, &tmp) || !CharString_length(tmp))
-				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after //"))
+				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after @"))
 
 			gotoIfError2(clean, CharString_createCopy(tmp, alloc, &resolved))
 		}
@@ -403,8 +403,8 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-SpinLock lockThread;
-Bool hasInitialized;
+SpinLock lockThread = { 0 };
+Bool hasInitialized = false;
 
 Bool Compiler_setup(Error *e_rr) {
 
@@ -596,8 +596,6 @@ clean:
 		SpinLock_unlock(&lockThread);
 }
 
-//Thank you Microsoft!
-//Very nice!!
 //What's wrong with UTF8?
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -619,9 +617,7 @@ clean:
 			gotoIfError2(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc))				\
 			tempStrUTF16 = ListU16{};																	\
 		}
-
 #else
-
 	#define Compiler_defineStrings																		\
 		ListU32 tempStrUTF32 = ListU32{};																\
 		ListListU32 stringsUTF32 = ListListU32{};														\
@@ -639,7 +635,6 @@ clean:
 			gotoIfError2(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc))				\
 			tempStrUTF32 = ListU32{};																	\
 		}
-
 #endif
 
 Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, Allocator alloc, Error *e_rr) {
@@ -2529,8 +2524,6 @@ Bool Compiler_processDXIL(
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
 
-	//Prevent dxil.dll load, sign it ourselves :)
-
 	if(isLib && FAILED(interfaces->utils->CreateReflection(&reflectionData, IID_PPV_ARGS(&dxilReflLib))))
 		retError(clean, Error_invalidState(0, "Compiler_processDXIL() lib reflection is invalid"))
 
@@ -2921,8 +2914,8 @@ Bool Compiler_processDXIL(
 
 	if(
 		Buffer_length(*result) <= 0x14 ||
-		*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C') ||
-		I32x4_eq4(I32x4_load4((const I32*)((const U8*)resultPtr + sizeof(U32))), I32x4_zero())		//Unsigned
+		Buffer_readU32(*result, 0, NULL) != C8x4('D', 'X', 'B', 'C') ||
+		I32x4_eq4(I32x4_load4((const U8*)resultPtr + sizeof(U32)), I32x4_zero())		//Unsigned
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"))
 
@@ -3769,7 +3762,7 @@ Bool Compiler_processSPIRV(
 	if(
 		binLen < 0x8 ||
 		(binLen & 3) ||
-		*(const U32*)resultPtr != 0x07230203
+		Buffer_readU32(*result, 0, NULL) != 0x07230203
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned is invalid"))
 
@@ -4118,6 +4111,13 @@ Bool Compiler_processSPIRV(
 		optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
 
 		std::vector<U32> tmp;
+		std::vector<U32> copied;
+
+		if ((U64)resultPtr & 3) {		//Fix alignment
+			copied.resize(binLen >> 2);
+			Buffer_copy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+			resultPtr = copied.data();
+		}
 
 		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"))
@@ -4418,7 +4418,6 @@ Bool Compiler_compile(
 
 		if(error && error->GetStringLength()) {
 			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
-			//Log_debugLnx("%.*s", (int)CharString_length(errs), errs.ptr);
 			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
 		}
 
@@ -4523,11 +4522,11 @@ Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, A
 			if(
 				binLen < 0x8 ||
 				(binLen & 3) ||
-				*(const U32*)resultPtr != 0x07230203
+				Buffer_readU32(buf, 0, NULL) != 0x07230203
 			)
 				retError(clean, Error_invalidState(0, "Compiler_createDisassembly() SPIRV is invalid"))
 
-			spvtools::SpirvTools tool{ SPV_ENV_VULKAN_1_2 };
+			spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_5 };
 
 			spv_binary_to_text_options_t opts = (spv_binary_to_text_options_t) (
 				SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES |
@@ -4537,6 +4536,14 @@ Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, A
 				SPV_BINARY_TO_TEXT_OPTION_SHOW_BYTE_OFFSET |
 				SPV_BINARY_TO_TEXT_OPTION_INDENT
 			);
+
+			std::vector<U32> copied;
+
+			if ((U64)resultPtr & 3) {		//Fix alignment
+				copied.resize(binLen >> 2);
+				Buffer_copy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+				resultPtr = copied.data();
+			}
 
 			std::string str;
 			if(!tool.Disassemble((const U32*)resultPtr, binLen >> 2, &str, opts))
@@ -4553,7 +4560,7 @@ Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, A
 
 			if(
 				binLen <= 0x14 ||
-				*(const U32*)resultPtr != C8x4('D', 'X', 'B', 'C')
+				Buffer_readU32(buf, 0, NULL) != C8x4('D', 'X', 'B', 'C')
 			)
 				retError(clean, Error_invalidState(0, "Compiler_createDisassembly() DXIL is invalid"))
 
@@ -4578,7 +4585,6 @@ Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, A
 
 			CharString str = CharString_createRefSizedConst(blobUtf8->GetStringPointer(), blobUtf8->GetStringLength(), false);
 			gotoIfError2(clean, CharString_createCopy(str, alloc, result))
-
 			break;
 		}
 
