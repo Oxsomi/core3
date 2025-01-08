@@ -94,7 +94,6 @@ Bool GenericList_eq(GenericList a, GenericList b);
 Bool GenericList_neq(GenericList a, GenericList b);
 
 GenericList GenericList_createEmpty(U64 stride);
-Error GenericList_createFromBuffer(Buffer buf, U64 stride, GenericList *result);
 Error GenericList_createSubset(GenericList list, U64 index, U64 length, GenericList *result);
 
 Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericList *result);
@@ -119,8 +118,8 @@ Error GenericList_createSubsetReverse(
 
 Error GenericList_createReverse(GenericList list, Allocator allocator, GenericList *result);
 
-Error GenericList_createRef(void *ptr, U64 length, U64 stride, GenericList *result);
-Error GenericList_createRefConst(const void *ptr, U64 length, U64 stride, GenericList *result);
+Error GenericList_createRef(void *ptr, U64 length, U64 stride, GenericList *result);				//Ensure that ptr is properly aligned
+Error GenericList_createRefConst(const void *ptr, U64 length, U64 stride, GenericList *result);		//Ensure that ptr is properly aligned
 GenericList GenericList_createRefFromList(GenericList list);
 
 Error GenericList_set(GenericList list, U64 index, Buffer buf);

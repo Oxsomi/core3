@@ -75,6 +75,8 @@ if(MSVC)
 
 	add_compile_options(/fp:strict)
 
+	# add_compile_options(/fsanitize=address)
+
 else()
 
 	if(ARM)

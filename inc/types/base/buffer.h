@@ -43,8 +43,8 @@ Buffer Buffer_createRefConst(const void *v, U64 length);
 
 //Bit manipulation
 
-Bool Buffer_copy(Buffer dst, Buffer src);
-Bool Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backwards; useful if ranges overlap
+Bool Buffer_copy(Buffer dst, Buffer src);			//Copies bytes from two separate ranges (memcpy)
+Bool Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backwards; useful if ranges overlap (memmove)
 
 Error Buffer_setAllBits(Buffer dst);
 Error Buffer_unsetAllBits(Buffer dst);

@@ -71,8 +71,6 @@ Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value) {
 	return !value ? Buffer_resetBit(buf, offset) : Buffer_setBit(buf, offset);
 }
 
-//Copy forwards
-
 Bool Buffer_copy(Buffer dst, Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
@@ -87,8 +85,6 @@ Bool Buffer_copy(Buffer dst, Buffer src) {
 	return true;
 }
 
-//Copy backwards; if ranges are overlapping this might be important
-
 Bool Buffer_revCopy(Buffer dst, Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
@@ -97,35 +93,9 @@ Bool Buffer_revCopy(Buffer dst, Buffer src) {
 	if(Buffer_isConstRef(dst))
 		return false;
 
-	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
-
-	U64 *dstPtr = (U64*)(dst.ptr + dstLen), *dstBeg = dstPtr - (dstLen >> 3);
-	const U64 *srcPtr = (const U64*)(src.ptr + srcLen), *srcBeg = srcPtr - (srcLen >> 3);
-
-	while(dstPtr > dstBeg && srcPtr > srcBeg) {
-		--srcPtr; --dstPtr;
-		*dstPtr = *srcPtr;
-	}
-
-	if((I64)dstPtr - 4 >= (I64)dst.ptr && (I64)srcPtr - 4 >= (I64)src.ptr ) {
-
-		dstPtr = (U64*)((U32*)dstPtr - 1);
-		srcPtr = (const U64*)((const U32*)srcPtr - 1);
-
-		*(U32*)dstPtr = *(const U32*)srcPtr;
-	}
-
-	if ((I64)dstPtr - 2 >= (I64)dst.ptr && (I64)srcPtr - 2 >= (I64)src.ptr) {
-
-		dstPtr = (U64*)((U16*)dstPtr - 1);
-		srcPtr = (const U64*)((const U16*)srcPtr - 1);
-
-		*(U16*)dstPtr = *(const U16*)srcPtr;
-	}
-
-	if ((I64)dstPtr - 1 >= (I64)dst.ptr && (I64)srcPtr - 1 >= (I64)src.ptr)
-		*((U8*)dstPtr - 1) = *((const U8*)srcPtr - 1);
-
+	U64 dstLen = Buffer_length(dst);
+	U64 srcLen = Buffer_length(src);
+	memmove(dst.ptrNonConst, src.ptr, srcLen <= dstLen ? srcLen : dstLen);
 	return true;
 }
 

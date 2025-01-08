@@ -94,11 +94,6 @@ Bool Name##_sortCustom(Name l, CompareFunction func) { return GenericList_sortCu
 Bool Name##_eq(Name a, Name b) { return GenericList_eq(Name##_toList(a), Name##_toList(b)); }							\
 Bool Name##_neq(Name a, Name b) { return !Name##_eq(a, b); }															\
 																														\
-Error Name##_createFromBuffer(Buffer buf, Name *result) {																\
-	Allocator alloc = (Allocator) { 0 };																				\
-	TListWrapCtor(Name, Error err = GenericList_createFromBuffer(buf, sizeof(Name##_Type), &list));						\
-}																														\
-																														\
 Error Name##_createSubset(Name l, U64 index, U64 length, Name *result) {												\
 	Allocator alloc = (Allocator) { 0 };																				\
 	TListWrapCtor(Name, Error err = GenericList_createSubset(Name##_toList(l), index, length, &list));					\

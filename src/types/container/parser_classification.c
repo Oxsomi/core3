@@ -141,18 +141,15 @@ Bool Parser_classifyEnum(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 //Classifying type
 
 U16 getC8x2(CharString str, U64 i) {
-	const void *ptr = str.ptr + i;
-	return *(const U16*) ptr;
+	return Buffer_readU16(Buffer_createRefConst(str.ptr + i, 2), 0, NULL);
 }
 
 U32 getC8x4(CharString str, U64 i) {
-	const void *ptr = str.ptr + i;
-	return *(const U32*) ptr;
+	return Buffer_readU32(Buffer_createRefConst(str.ptr + i, 4), 0, NULL);
 }
 
 U64 getC8x8(CharString str, U64 i) {
-	const void *ptr = str.ptr + i;
-	return *(const U64*) ptr;
+	return Buffer_readU64(Buffer_createRefConst(str.ptr + i, 8), 0, NULL);
 }
 
 Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Error *e_rr) {
@@ -555,6 +552,9 @@ clean:
 
 Bool Parser_classifyFunction(Parser *parser, U32 *i, U32 parent, Allocator alloc, Error *e_rr) {
 
+	//TODO: Strangely enough, it's valid for a function to be inside of ().
+	//		Might have to handle this too? (e.g. void ((((main))))())
+
 	Bool s_uccess = true;
 
 	while (!Parser_next(parser, i, ETokenType_RoundParenthesisEnd)) {
@@ -867,7 +867,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 					flag |= ESymbolFlagFuncVar_IsConst;
 				}
 
-				else if (len == 9 && *(const U32 *)&tokStr.ptr[4] == C8x4('t', 'e', 'x', 'p') && tokStr.ptr[8] == 'r') {
+				else if (len == 9 && getC8x4(tokStr, 4) == C8x4('t', 'e', 'x', 'p') && tokStr.ptr[8] == 'r') {
 					consumed = true;
 					flag |= ESymbolFlagFuncVar_IsConstexpr;
 				}

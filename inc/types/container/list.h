@@ -75,7 +75,6 @@ Bool Name##_sortCustom(Name l, CompareFunction func);													\
 Bool Name##_eq(Name a, Name b);																			\
 Bool Name##_neq(Name a, Name b);																		\
 																										\
-Error Name##_createFromBuffer(Buffer buf, Name *result);												\
 Error Name##_createSubset(Name l, U64 index, U64 length, Name *result);									\
 Error Name##_create(U64 length, Allocator alloc, Name *result);											\
 Error Name##_createCopy(Name l, Allocator alloc, Name *result);											\
