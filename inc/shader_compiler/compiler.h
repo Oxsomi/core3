@@ -171,7 +171,56 @@ void Compiler_free(Compiler *comp, Allocator alloc);
 void Compiler_shutdown();
 
 //Generate disassembly from buffer
+
+Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
+Bool Compiler_disassembleDXIL(Compiler comp, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
+
 Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *res, Error *e_rr);
+
+//Convert assembly (SPIRV and DXIL) to oiSH by using the assembly
+
+Bool Compiler_processSPIRV(
+	Buffer *result,						//Required; input & output SPIRV (will be optimized)
+	ListSHRegisterRuntime *registers,	//Required; Output registers
+	CompilerSettings settings,
+	SHBinaryIdentifier toCompile,
+	SpinLock *lock,						//If not NULL will be used before writing into entries
+	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_processDXIL(
+	Compiler compiler,					//To be able to get reflection data
+	Buffer *result,						//Required; input & output DXIL
+	ListSHRegisterRuntime *registers,	//Required; Output registers
+	Buffer reflectionData,				//If not supplied, will try to get it from DXIL, if both are missing it will fail!
+	SHBinaryIdentifier toCompile,
+	SpinLock *lock,						//If not NULL will be used before writing into entries
+	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_finalizeEntrypoint(		//Push reflection data into final entrypoint
+	U32 localSize[3],					//If compute-adj (workgraph, mesh shaders too) the local size per group
+	U8 payloadSize,						//If miss/hit/callable, the payload size that gets transmitted (bytes)
+	U8 intersectSize,					//If intersection/hit shader, size of intersection attributes (generally 8 bytes)
+	U16 waveSize,						//4 pairs of log2(thread) + 1 where 0 = none. req, min, max, rec
+	ESBType inputs[16],					//Input types for graphics shaders
+	ESBType outputs[16],				//Output types for graphics shaders
+	U8 uniqueInputSemantics,			//How many unique semantic names there are
+	ListCharString *uniqueSemantics,	//All semantic names; e.g. NORMAL. Excluding TEXCOORD or SV_TARGET
+	U8 inputSemantics[16],				//U4 each; semanticId and uniqueSemanticOff (0 = TEXCOORD or SV_TARGET)
+	U8 outputSemantics[16],				//^ but for output semantics for graphics shaders
+	CharString entryName,				//Can be empty in case of RT shaders
+	SpinLock *lock,						//If not NULL will be used before writing/validating against previous entry
+	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	Allocator alloc,
+	Error *e_rr
+);
 
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.
@@ -186,6 +235,8 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 //Determine what minimum shader version is required
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize);
 U16 Compiler_minFeatureSetExtension(ESHExtension ext);
+
+Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr);
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr);
 
