@@ -119,6 +119,7 @@ int main() {
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
+	CharString tmpStr = CharString_createNull();
 
 	CharString inputs[19 + EXTRA_CHECKS] = { 0 };
 
@@ -187,7 +188,6 @@ int main() {
 		//Conversion from number to string
 		//TODO: Perhaps make a generic create that can pick any of them
 
-		CharString tmpStr = CharString_createNull();
 		gotoIfError(clean, CharString_createHex(resultsU64[0], 0, alloc, &tmpStr))
 
 		if (!CharString_equalsStringSensitive(resultsStr[0], tmpStr)) {
@@ -1499,7 +1499,7 @@ int main() {
 				U32 floatTarg32 = expectedResultsF32[i];
 
 				if(j)
-					floatTarg32 |= 1 << 31;
+					floatTarg32 |= (U32)1 << 31;
 
 				if (floatEmu32 != floatTarg32)
 					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F16_castF32 was invalid"))
@@ -1786,7 +1786,7 @@ int main() {
 				void *floatTargv = &floatTarg;
 
 				if(j)
-					*(U32*)floatTargv |= 1 << 31;
+					*(U32*)floatTargv |= (U32)1 << 31;
 
 				F16 halfEmu = F32_castF16(floatTarg);
 
@@ -2380,6 +2380,7 @@ clean:
 
 success:
 	CharString_free(&tmp, alloc);
+	CharString_free(&tmpStr, alloc);
 
 	for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)
 		CharString_free(&inputs[j], alloc);
