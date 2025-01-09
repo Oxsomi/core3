@@ -613,9 +613,14 @@ Bool BigInt_lsh(BigInt *a, U16 bits) {
 	for(U64 i = a->length - 1; i != U64_MAX; --i) {
 
 		U64 right = i < (bits >> 6) ? 0 : a->data[i - (bits >> 6)];
-		U64 left = i <= (bits >> 6) ? 0 : a->data[i - (bits >> 6) - 1];
-
 		const U64 shift = bits & 63;
+
+		if(!shift) {
+			a->dataNonConst[i] = right;
+			continue;
+		}
+
+		U64 left = i <= (bits >> 6) ? 0 : a->data[i - (bits >> 6) - 1];
 
 		right <<= shift;
 		left >>= 64 - shift;
@@ -640,9 +645,14 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 	for(U64 i = 0; i < a->length; ++i) {
 
 		U64 left = i + (bits >> 6) > (U64)(a->length - 1) ? 0 : a->data[i + (bits >> 6)];
-		U64 right = i + (bits >> 6) >= (U64)(a->length - 1) ? 0 : a->data[i + (bits >> 6) + 1];
-
 		const U64 shift = bits & 63;
+
+		if(!shift) {
+			a->dataNonConst[i] = left;
+			continue;
+		}
+
+		U64 right = i + (bits >> 6) >= (U64)(a->length - 1) ? 0 : a->data[i + (bits >> 6) + 1];
 
 		right <<= 64 - shift;
 		left >>= shift;
