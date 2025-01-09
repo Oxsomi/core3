@@ -547,7 +547,7 @@ Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices) {
 
 		Buffer_memmove(
 			Buffer_createRef((U8*)list->ptrNonConst + curr * list->stride, (neighbor - me) * list->stride),
-			Buffer_createRefConst((const U8*)list->ptr + me * list->stride, (neighbor - me) * list->stride)
+			Buffer_createRef((U8*)list->ptrNonConst + me * list->stride, (neighbor - me) * list->stride)
 		);
 
 		curr += neighbor - me;
@@ -591,7 +591,7 @@ Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) {
 			for (U64 l = j; l != k; --l)
 				Buffer_memmove(
 					Buffer_createRef(tsorted + l * list.stride, list.stride),
-					Buffer_createRefConst(tsorted + (l - 1) * list.stride, list.stride)
+					Buffer_createRef(tsorted + (l - 1) * list.stride, list.stride)
 				);
 
 			break;
@@ -784,7 +784,7 @@ Error GenericList_erase(GenericList *list, U64 index) {
 	if(index + 1 != list->length)
 		Buffer_memmove(
 			Buffer_createRef((U8*)list->ptrNonConst + index * list->stride, (list->length - 1 - index) * list->stride),
-			Buffer_createRefConst((const U8*)list->ptr + (index + 1) * list->stride, (list->length - 1 - index) * list->stride)
+			Buffer_createRef((U8*)list->ptrNonConst + (index + 1) * list->stride, (list->length - 1 - index) * list->stride)
 		);
 
 	--list->length;
@@ -870,7 +870,7 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 	if(prevSize)
 		Buffer_memmove(
 			Buffer_createRef((U8*)list->ptrNonConst + (index + 1) * list->stride, (prevSize - index) * list->stride),
-			Buffer_createRefConst((const U8*)list->ptr + index * list->stride, (prevSize - index) * list->stride)
+			Buffer_createRef((U8*)list->ptrNonConst + index * list->stride, (prevSize - index) * list->stride)
 		);
 
 	//Copy the other data
@@ -1031,7 +1031,7 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 	if(prevSize)
 		Buffer_memmove(
 			Buffer_createRef((U8*)list->ptrNonConst + (offset + other.length) * list->stride, (prevSize - offset) * list->stride),
-			Buffer_createRefConst((const U8*)list->ptr + offset * list->stride, (prevSize - offset) * list->stride)
+			Buffer_createRef((U8*)list->ptrNonConst + offset * list->stride, (prevSize - offset) * list->stride)
 		);
 
 	//Copy the other data

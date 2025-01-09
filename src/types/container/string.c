@@ -837,11 +837,11 @@ Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 		//Move one to the right
 
 		Buffer_memmove(
-			Buffer_createRef((U8*)s->ptr + i + 1,  strl),
-			Buffer_createRefConst(s->ptr + i, strl)
+			Buffer_createRef(s->ptrNonConst + i + 1,  strl),
+			Buffer_createRef(s->ptrNonConst + i, strl)
 		);
 
-		((C8*)s->ptr)[i] = c;
+		s->ptrNonConst[i] = c;
 	}
 
 	return Error_none();
@@ -870,12 +870,12 @@ Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator 
 	//Move one to the right
 
 	Buffer_memmove(
-		Buffer_createRef((U8*)s->ptr + i + otherl, oldLen - i),
-		Buffer_createRefConst(s->ptr + i, oldLen - i)
+		Buffer_createRef(s->ptrNonConst + i + otherl, oldLen - i),
+		Buffer_createRef(s->ptrNonConst + i, oldLen - i)
 	);
 
 	Buffer_memcpy(
-		Buffer_createRef((U8*)s->ptr + i, otherl),
+		Buffer_createRef(s->ptrNonConst + i, otherl),
 		CharString_bufferConst(other)
 	);
 
@@ -919,7 +919,7 @@ Error CharString_replaceAllString(
 
 		for (U64 i = 0; i < finds.length; ++i)
 			for (U64 j = ptr[i], k = j + replacel, l = 0; j < k; ++j, ++l)
-				((C8*)s->ptr)[j] = replace.ptr[l];
+				s->ptrNonConst[j] = replace.ptr[l];
 
 		goto clean;
 	}
@@ -937,7 +937,7 @@ Error CharString_replaceAllString(
 			//We move our replacement string to iCurrent
 
 			Buffer_memcpy(
-				Buffer_createRef((U8*)s->ptr + iCurrent, replacel),
+				Buffer_createRef(s->ptrNonConst + iCurrent, replacel),
 				CharString_bufferConst(replace)
 			);
 
@@ -949,8 +949,8 @@ Error CharString_replaceAllString(
 			const U64 iEnd = i == finds.length - 1 ? strl : ptr[i + 1];
 
 			Buffer_memmove(
-				Buffer_createRef((U8*)s->ptr + iCurrent, iEnd - iStart),
-				Buffer_createRefConst(s->ptr + iStart, iEnd - iStart)
+				Buffer_createRef(s->ptrNonConst + iCurrent, iEnd - iStart),
+				Buffer_createRef(s->ptrNonConst + iStart, iEnd - iStart)
 			);
 
 			iCurrent += iEnd - iStart;
@@ -985,16 +985,16 @@ Error CharString_replaceAllString(
 			((C8*)s->ptr)[newLoc--] = s->ptr[j];
 
 		Buffer_memmove(
-			Buffer_createRef((U8*)s->ptr + newLoc - (iEnd - iStart), iEnd - iStart),
-			Buffer_createRefConst(s->ptr + iStart, iEnd - iStart)
+			Buffer_createRef(s->ptrNonConst + newLoc - (iEnd - iStart), iEnd - iStart),
+			Buffer_createRef(s->ptrNonConst + iStart, iEnd - iStart)
 		);
 
 		newLoc -= iEnd - iStart;
 
 		//Apply replacement before tail
 
-		Buffer_memmove(
-			Buffer_createRef((U8*)s->ptr + newLoc - replacel, replacel),
+		Buffer_memcpy(
+			Buffer_createRef(s->ptrNonConst + newLoc - replacel, replacel),
 			CharString_bufferConst(replace)
 		);
 
@@ -1050,8 +1050,8 @@ Error CharString_replaceString(
 		//Copy our data over first
 
 		Buffer_memmove(
-			Buffer_createRef((U8*)s->ptr + res + replacel, strl - (res + searchl)),
-			Buffer_createRefConst(s->ptr + res + searchl, strl - (res + searchl))
+			Buffer_createRef(s->ptrNonConst + res + replacel, strl - (res + searchl)),
+			Buffer_createRef(s->ptrNonConst + res + searchl, strl - (res + searchl))
 		);
 
 		//Throw our replacement in there
@@ -1081,13 +1081,13 @@ Error CharString_replaceString(
 	//Copy our data over first
 
 	Buffer_memmove(
-		Buffer_createRef((U8*)s->ptr + res + replacel, strl - (res + searchl)),
-		Buffer_createRefConst(s->ptr + res + searchl, strl - (res + searchl))
+		Buffer_createRef(s->ptrNonConst + res + replacel, strl - (res + searchl)),
+		Buffer_createRef(s->ptrNonConst + res + searchl, strl - (res + searchl))
 	);
 
 	//Throw our replacement in there
 
-	Buffer_memcpy(Buffer_createRef((U8*)s->ptr + res, replacel), CharString_bufferConst(replace));
+	Buffer_memcpy(Buffer_createRef(s->ptrNonConst + res, replacel), CharString_bufferConst(replace));
 	return Error_none();
 }
 
@@ -1588,8 +1588,8 @@ Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 		return Error_outOfBounds(0, i + count, strl, "CharString_eraseAtCount()::i + count is out of bounds");
 
 	Buffer_memmove(
-		Buffer_createRef((U8*)s->ptr + i, strl - i - count),
-		Buffer_createRefConst(s->ptr + i + count, strl - i - count)
+		Buffer_createRef(s->ptrNonConst + i, strl - i - count),
+		Buffer_createRef(s->ptrNonConst + i + count, strl - i - count)
 	);
 
 	const U64 end = strl - count;
@@ -1615,8 +1615,8 @@ Bool CharString_eraseString(CharString *s, CharString other, EStringCase caseSen
 		return false;
 
 	Buffer_memmove(
-		Buffer_createRef((U8*)s->ptr + find, strl - find - otherl),
-		Buffer_createRefConst(s->ptr + find + otherl, strl - find - otherl)
+		Buffer_createRef(s->ptrNonConst + find, strl - find - otherl),
+		Buffer_createRef(s->ptrNonConst + find + otherl, strl - find - otherl)
 	);
 
 	const U64 end = strl - otherl;
