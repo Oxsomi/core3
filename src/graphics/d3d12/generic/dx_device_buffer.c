@@ -307,7 +307,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			Buffer dst = Buffer_createRef((U8*)buffer->resource.mappedMemoryExt + start, len);
 			Buffer src = Buffer_createRefConst(buffer->cpuData.ptr + start, len);
 
-			Buffer_copy(dst, src);
+			Buffer_memcpy(dst, src);
 
 			if (tracking) {
 				D3D12_RANGE rangeD3D12 = (D3D12_RANGE) { .Begin = start, .End = start + len };
@@ -355,7 +355,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
@@ -445,7 +445,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);

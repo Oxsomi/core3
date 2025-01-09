@@ -113,10 +113,8 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 			CharString_freex(&tmp);
 
 			Buffer cpuDat = DeviceBufferRef_ptr(tlas->tempInstanceBuffer)->cpuData;
-			Buffer_copy(
-
+			Buffer_memcpy(
 				cpuDat,
-
 				tlas->base.isMotionBlurExt ? ListTLASInstanceMotion_bufferConst(tlas->cpuInstancesMotion) :
 				ListTLASInstanceStatic_bufferConst(tlas->cpuInstancesStatic)
 			);

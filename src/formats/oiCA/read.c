@@ -269,7 +269,7 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 		const U8 *dataPtr = filePtr.ptr;
 		gotoIfError2(clean, Buffer_offset(&filePtr, bufferSize))
 
-		Buffer_copy(tmpData, Buffer_createRefConst(dataPtr, bufferSize));
+		Buffer_memcpy(tmpData, Buffer_createRefConst(dataPtr, bufferSize));
 
 		//Move path and data to file
 

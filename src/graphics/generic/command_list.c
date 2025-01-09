@@ -317,7 +317,7 @@ Error CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U3
 		Buffer resized = Buffer_createNull();
 		gotoIfError(clean, Buffer_createEmptyBytesx(Buffer_length(commandList->data) * 2 + KIBI + len, &resized))
 
-		Buffer_copy(resized, commandList->data);
+		Buffer_memcpy(resized, commandList->data);
 		Buffer_freex(&commandList->data);
 
 		commandList->data = resized;
@@ -332,7 +332,7 @@ Error CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U3
 	didPush = true;
 
 	if(len) {
-		Buffer_copy(Buffer_createRef(commandList->data.ptrNonConst + commandList->next, len), buf);
+		Buffer_memcpy(Buffer_createRef(commandList->data.ptrNonConst + commandList->next, len), buf);
 		commandList->next += len;
 	}
 
@@ -697,8 +697,8 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 
 	gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U64) * 2, &buf))
 
-	*(U64*)buf.ptr = (U64) clearImages.length;
-	Buffer_copy(
+	*(U64*)buf.ptrNonConst = (U64) clearImages.length;
+	Buffer_memcpy(
 		Buffer_createRef(buf.ptrNonConst + sizeof(U64) * 2, ListClearImageCmd_bytes(clearImages)),
 		ListClearImageCmd_bufferConst(clearImages)
 	);
@@ -870,7 +870,7 @@ Error CommandListRef_copyImageRegions(
 		.copyType = copyType
 	};
 
-	Buffer_copy(
+	Buffer_memcpy(
 		Buffer_createRef(buf.ptrNonConst + sizeof(CopyImageCmd), ListCopyImageRegion_bytes(regions)),
 		ListCopyImageRegion_bufferConst(regions)
 	);
@@ -915,7 +915,7 @@ Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 color
 		.range = range
 	};
 
-	Buffer_copy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createRefConst(coloru, sizeof(F32x4)));
+	Buffer_memcpy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createRefConst(coloru, sizeof(F32x4)));
 
 	ListClearImageCmd clearImages = (ListClearImageCmd) { 0 };
 	gotoIfError(clean, ListClearImageCmd_createRefConst(&clearImage, 1, &clearImages))
@@ -2205,10 +2205,10 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 
 	gotoIfError(clean, Buffer_createEmptyBytesx(len, &buf))
 
-	Buffer_copy(buf, Buffer_createRefConst(&color, sizeof(color)));
+	Buffer_memcpy(buf, Buffer_createRefConst(&color, sizeof(color)));
 
-	Buffer_copy(
-		Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)),
+	Buffer_memcpy(
+		Buffer_createRef((U8*)buf.ptrNonConst + sizeof(color), CharString_length(name)),
 		CharString_bufferConst(name)
 	);
 

@@ -126,7 +126,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 			else {
 
-				Buffer_copy(Buffer_createRef(block, 64), Buffer_createRefConst((const void*)realPtr, realLen));
+				Buffer_memcpy(Buffer_createRef(block, 64), Buffer_createRefConst((const void*)realPtr, realLen));
 
 				*((U8*)(void*)block + realLen) = 0x80;
 
@@ -250,7 +250,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	//Store output
 
-	Buffer_copy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createRefConst(state, sizeof(U32) * 8));
+	Buffer_memcpy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createRefConst(state, sizeof(U32) * 8));
 }
 
 //Ported from https://github.com/krisprice/simd_md5/blob/master/simd_md5/md5_sse.c#L9
@@ -306,7 +306,7 @@ void MD5State_update(MD5State *stateOut, Buffer buf) {
 
 	MD5State state = *stateOut;
 	U32 data[16];
-	Buffer_copy(Buffer_createRef(data, sizeof(data)), buf);
+	Buffer_memcpy(Buffer_createRef(data, sizeof(data)), buf);
 
 	//This contains all rounds.
 	//Since j and i are constant, it will magically unroll for us.
@@ -372,7 +372,7 @@ I32x4 Buffer_md5(Buffer buf) {
 
 	if(lastBlock != blocks) {
 		Buffer bufTmp = Buffer_createRefConst(buf.ptr + (lastBlock << 6), (off += (bufLen & 63)));
-		Buffer_copy(Buffer_createRef(tmp, 64), bufTmp);
+		Buffer_memcpy(Buffer_createRef(tmp, 64), bufTmp);
 	}
 
 	tmp[off] = (U8)'\x80';

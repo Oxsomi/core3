@@ -115,15 +115,15 @@ Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	headerIt += sizeof(SBHeader);
 
-	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(dlFileBuf)), dlFileBuf);
+	Buffer_memcpy(Buffer_createRef(headerIt, Buffer_length(dlFileBuf)), dlFileBuf);
 	headerIt += Buffer_length(dlFileBuf);
 
 	SBStruct *structs = (SBStruct*) headerIt;
 
-	Buffer_copy(Buffer_createRef(structs, ListSBStruct_bytes(sbFile.structs)), ListSBStruct_bufferConst(sbFile.structs));
+	Buffer_memcpy(Buffer_createRef(structs, ListSBStruct_bytes(sbFile.structs)), ListSBStruct_bufferConst(sbFile.structs));
 	SBVar *vars = (SBVar*) (structs + sbFile.structs.length);
 
-	Buffer_copy(Buffer_createRef(vars, ListSBVar_bytes(sbFile.vars)), ListSBVar_bufferConst(sbFile.vars));
+	Buffer_memcpy(Buffer_createRef(vars, ListSBVar_bytes(sbFile.vars)), ListSBVar_bufferConst(sbFile.vars));
 	U8 *arrayDimCount = (U8*) (vars + sbFile.vars.length);
 	U32 *arrayDims = (U32*) (arrayDimCount + sbFile.arrays.length);
 

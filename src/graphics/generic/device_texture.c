@@ -318,7 +318,7 @@ Error GraphicsDeviceRef_createTexture(
 
 	if(Buffer_isRef(*dat)) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(texSize, &texture->cpuData))		//Temporary if not CPUBacked
-		Buffer_copy(texture->cpuData, *dat);
+		Buffer_memcpy(texture->cpuData, *dat);
 	}
 
 	else {									//Move

@@ -721,7 +721,7 @@ Error GraphicsDeviceRef_submitCommands(
 		data.time = time;
 	}
 
-	Buffer_copy(Buffer_createRef(data.appData, sizeof(data.appData)), appData);
+	Buffer_memcpy(Buffer_createRef(data.appData, sizeof(data.appData)), appData);
 
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.

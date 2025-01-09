@@ -328,7 +328,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 			&dst
 		))
 
-		Buffer_copy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
+		Buffer_memcpy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
 	}
 
 	//Insert individual hit groups
@@ -350,7 +350,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 			&dst
 		))
 
-		Buffer_copy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
+		Buffer_memcpy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
 	}
 
 	//Create one big SBT with all handles in it.

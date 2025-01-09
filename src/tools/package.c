@@ -144,7 +144,7 @@ Bool CLI_package(ParsedArgs args) {
 
 	if(settings.encryptionType) {
 
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
 			Buffer_createRef(encryptionKey, sizeof(settings.encryptionKey))
 		);

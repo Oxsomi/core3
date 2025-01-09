@@ -152,7 +152,7 @@ Bool AudioInterface_getDeviceInfos(
 
 			ListCharString_free(&strings, alloc);
 
-			Buffer_copy(Buffer_createRef(info.name, sizeof(info.name)), CharString_bufferConst(str));
+			Buffer_memcpy(Buffer_createRef(info.name, sizeof(info.name)), CharString_bufferConst(str));
 
 			gotoIfError2(clean, ListAudioDeviceInfo_pushBack(infos, info, alloc))
 

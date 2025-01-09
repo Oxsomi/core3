@@ -203,7 +203,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, Allocator alloc, Error *
 		AL_PROCESS_ERROR(deviceExt->device, alSourceUnqueueBuffers(streamExt->source, freeBufferCount, freeBuffers))
 	}
 
-	else Buffer_copy(
+	else Buffer_memcpy(
 		Buffer_createRef(freeBuffers, sizeof(freeBuffers)),
 		Buffer_createRef(streamExt->buffer, sizeof(freeBuffers))
 	);

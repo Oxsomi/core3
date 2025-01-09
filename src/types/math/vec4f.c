@@ -177,25 +177,25 @@ Bool F32x4_any(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_zero())); }
 
 F32x4 F32x4_load1(const void *arr) {
 	F32x4 result = F32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
 	return result;
 }
 
 F32x4 F32x4_load2(const void *arr) {
 	F32x4 result = F32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
 	return result;
 }
 
 F32x4 F32x4_load3(const void *arr) {
 	F32x4 result = F32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 3), Buffer_createRefConst(arr, sizeof(F32) * 3));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 3), Buffer_createRefConst(arr, sizeof(F32) * 3));
 	return result;
 }
 
 F32x4 F32x4_load4(const void *arr) {
 	F32x4 result = F32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 4), Buffer_createRefConst(arr, sizeof(F32) * 4));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 4), Buffer_createRefConst(arr, sizeof(F32) * 4));
 	return result;
 }
 

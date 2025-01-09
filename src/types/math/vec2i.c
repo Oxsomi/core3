@@ -74,13 +74,13 @@ Bool I32x2_any(I32x2 a) { return I32x2_reduce(I32x2_neq(a, I32x2_zero())); }
 
 I32x2 I32x2_load1(const void *arr) {
 	I32x2 result = I32x2_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
 	return result;
 }
 
 I32x2 I32x2_load2(const void *arr) {
 	I32x2 result = I32x2_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
 	return result;
 }
 

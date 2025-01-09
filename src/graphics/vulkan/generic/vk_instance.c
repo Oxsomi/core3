@@ -1551,12 +1551,12 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			.ext = dev
 		};
 
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(info->name, sizeof(info->name)),
 			Buffer_createRefConst(properties.deviceName, sizeof(properties.deviceName))
 		);
 
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
 			Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
 		);

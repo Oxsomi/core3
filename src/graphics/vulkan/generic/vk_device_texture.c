@@ -126,7 +126,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			const U64 start = rowLen * (y + z * h) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(location + allocRange, rowLen * h * l),
 					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h * l)
 				);
@@ -134,14 +134,14 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			else for(U64 k = z; k < z + l; ++k) {
 
 				if(w == texture->base.width)
-					Buffer_copy(
+					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h, rowLen * h),
 						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h, rowLen * h)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					const U64 yOff = (j - y) / alignmentY;
-					Buffer_copy(
+					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h), rowLen),
 						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h), rowLen)
 					);
@@ -278,7 +278,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			U64 start = rowLen * (y + z * h2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(location + allocRange, rowLen * h2 * l),
 					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h2 * l)
 				);
@@ -286,14 +286,14 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			else for(U64 k = z; k < z + l; ++k) {
 
 				if(w == texture->base.width)
-					Buffer_copy(
+					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h2, rowLen * h2),
 						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					U64 yOff = (j - y) / alignmentY;
-					Buffer_copy(
+					Buffer_memcpy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h2), rowLen),
 						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h2), rowLen)
 					);

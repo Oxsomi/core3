@@ -210,7 +210,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_SetBlendConstants:
 
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(&temp->tempBlendConstants, sizeof(F32x4)),
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
@@ -1107,7 +1107,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 			const U32 strLen = (U32) CharString_calcStrLen((const C8*)data + sizeof(I32x4), sizeof(encoded) - 16);
 			const U32 len = U32_min((U32) sizeof(encoded), 16 + strLen);
 
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef((C8*)encoded + 16, sizeof(encoded) - 16),
 				Buffer_createRefConst((const C8*)data + sizeof(I32x4), strLen)
 			);

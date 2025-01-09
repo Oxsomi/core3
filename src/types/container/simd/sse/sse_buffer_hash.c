@@ -271,7 +271,7 @@ void Buffer_sha256(Buffer buf, U32 output[8]) {
 
 			else {
 
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(block, 64),
 					Buffer_createRefConst((const void*)realPtr, realLen)
 				);

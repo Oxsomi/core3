@@ -360,7 +360,7 @@ Error GraphicsDeviceRef_createBufferData(
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
 	if(Buffer_isRef(*dat))
-		Buffer_copy(buffer->cpuData, *dat);
+		Buffer_memcpy(buffer->cpuData, *dat);
 
 	else {							//Move
 		buffer->cpuData = *dat;

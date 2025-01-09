@@ -94,8 +94,8 @@ Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	gotoIfError2(clean, Buffer_createUninitializedBytes(outputSize + headerSize, alloc, &uncompressedData))
 
-	U8 *sizes = (U8*)uncompressedData.ptr + entrySizesOffset;
-	U8 *dat = (U8*)uncompressedData.ptr + headerSize;
+	U8 *sizes = (U8*)uncompressedData.ptrNonConst + entrySizesOffset;
+	U8 *dat = (U8*)uncompressedData.ptrNonConst + headerSize;
 
 	for (U64 i = 0; i < DLFile_entryCount(dlFile); ++i) {
 
@@ -107,7 +107,7 @@ Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		Buffer_forceWriteSizeType(sizes + dataSizeTypeSize * i, dataSizeType, len);
 
-		Buffer_copy(Buffer_createRef(dat, len), buf);
+		Buffer_memcpy(Buffer_createRef(dat, len), buf);
 		dat += len;
 	}
 
@@ -153,7 +153,7 @@ Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	headerIt += Buffer_forceWriteSizeType(headerIt, entrySizeType, DLFile_entryCount(dlFile));
 
-	Buffer_copy(Buffer_createRef(headerIt, entrySizes), Buffer_createRefConst(sizes, entrySizes));
+	Buffer_memcpy(Buffer_createRef(headerIt, entrySizes), Buffer_createRefConst(sizes, entrySizes));
 	headerIt += entrySizes;		//Already filled
 
 	if (dlFile.settings.compressionType)
@@ -162,7 +162,7 @@ Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	//Copy empty hash
 
 	if(dlFile.settings.compressionType)
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(headerIt, hashSize),
 			Buffer_createRefConst(hash, hashSize)
 		);
@@ -180,7 +180,7 @@ Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		//Copy real hash to our header
 
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(headerIt, hashSize),
 			Buffer_createRefConst(hash, hashSize)
 		);

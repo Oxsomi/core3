@@ -257,7 +257,7 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 
 	for (U64 i = 0; i < buf.length; ++i) {
 		bufLen = Buffer_length(buf.ptr[i].data);
-		Buffer_copy(Buffer_createRef(ptr, bufLen), buf.ptr[i].data);
+		Buffer_memcpy(Buffer_createRef(ptr, bufLen), buf.ptr[i].data);
 		ptr += bufLen;
 	}
 

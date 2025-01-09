@@ -80,7 +80,7 @@ F32x2 F32x2_load1(const void *arr) {
 	F32x2 result = F32x2_zero();
 
 	if(arr)
-		Buffer_copy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
+		Buffer_memcpy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
 
 	return result;
 }
@@ -90,7 +90,7 @@ F32x2 F32x2_load2(const void *arr) {
 	F32x2 result = F32x2_zero();
 
 	if(arr)
-		Buffer_copy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
+		Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
 
 	return result;
 }

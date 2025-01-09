@@ -118,7 +118,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 			//If we resized the buffer, we still have to copy the old data
 
 			if(resize)
-				Buffer_copy(neo, Buffer_createRefConst(old.ptr, U64_min(linSizOld, linSiz)));
+				Buffer_memcpy(neo, Buffer_createRefConst(old.ptr, U64_min(linSizOld, linSiz)));
 
 			//If we added size, we need to clear those pixels
 
@@ -141,7 +141,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 			gotoIfError2(clean, Buffer_createSubset(old, 0, rowSizOld, false, &src))
 
 			Buffer dst = Buffer_createNull();
-			gotoIfError2(clean, Buffer_createSubset(neo, 0, rowSiz, false, &src))
+			gotoIfError2(clean, Buffer_createSubset(neo, 0, rowSiz, false, &dst))
 
 			//First we ensure everything is copied to the right location
 
@@ -170,7 +170,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 					//Copy part
 
-					Buffer_revCopy(dst, src);		//Automatically truncates src
+					Buffer_memmove(dst, src);		//Automatically truncates src
 
 					//Jump backwards
 
@@ -179,10 +179,6 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 				}
 			}
 
-			//We're shrinking, so we want to copy from low to high
-			//This is because it ends up at a lower address than source and
-			//we can safely read from higher addresses
-
 			else for (I32 i = 0; i < smallY; ++i) {
 
 				//We can skip copying the first if it's the same buffer
@@ -190,7 +186,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 				if (!i && !resize)
 					continue;
 
-				Buffer_copy(dst, src);		//Automatically truncates src
+				Buffer_memmove(dst, src);		//Automatically truncates src
 				dst.ptr += rowSiz;
 				src.ptr += rowSizOld;
 			}

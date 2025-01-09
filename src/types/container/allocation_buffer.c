@@ -155,7 +155,7 @@ Error AllocationBuffer_allocateAndFillBlock(
 	if(err.genericError)
 		return err;
 
-	Buffer_copy(Buffer_createRef((U8*)ptr, Buffer_length(data)), data);
+	Buffer_memcpy(Buffer_createRef((U8*)ptr, Buffer_length(data)), data);
 	*result = (U8*)ptr;
 	return Error_none();
 }

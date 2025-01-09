@@ -901,7 +901,7 @@ Bool Compiler_convertRegisterSPIRV(
 	);
 
 	U64 imagePtrU64[3];
-	Buffer_copy(
+	Buffer_memcpy(
 		Buffer_createRef(imagePtrU64, sizeof(imagePtrU64)),
 		Buffer_createRefConst(&binding->image, sizeof(&binding->image))
 	);
@@ -914,7 +914,7 @@ Bool Compiler_convertRegisterSPIRV(
 		);
 
 	U64 numericTraitsU64[3];		//Fixes alignment
-	Buffer_copy(
+	Buffer_memcpy(
 		Buffer_createRef(numericTraitsU64, sizeof(numericTraitsU64)),
 		Buffer_createRefConst(&binding->block.numeric, sizeof(&binding->block.numeric))
 	);
@@ -1854,7 +1854,7 @@ Bool Compiler_processSPIRV(
 
 		if ((U64)resultPtr & 3) {		//Fix alignment
 			copied.resize(binLen >> 2);
-			Buffer_copy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+			Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
 			resultPtr = copied.data();
 		}
 
@@ -1902,7 +1902,7 @@ Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, 
 
 	if ((U64)resultPtr & 3) {		//Fix alignment
 		copied.resize(binLen >> 2);
-		Buffer_copy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
 		resultPtr = copied.data();
 	}
 

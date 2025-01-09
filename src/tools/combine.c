@@ -163,7 +163,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			}
 
 			if(encryptionKey)
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)),
 					Buffer_createRefConst(encryptionKey, sizeof(encryptionKeyV))
 				);
@@ -209,7 +209,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			}
 
 			if(encryptionKey)
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)),
 					Buffer_createRefConst(encryptionKey, sizeof(encryptionKeyV))
 				);

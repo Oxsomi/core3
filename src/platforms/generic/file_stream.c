@@ -178,7 +178,7 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 		U64 dstRel = dstOff - stream->lastLocation;
 		U64 bytesToCopy = U64_min(streamLen - dstRel, length);
 
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(stream->cacheData.ptrNonConst + dstRel, bytesToCopy),
 			Buffer_createRefConst(buf.ptr + srcOff, bytesToCopy)
 		);
@@ -241,7 +241,7 @@ Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length
 	stream->lastLocation = dstOff;
 	stream->lastWriteLocation = dstOff + length;
 
-	Buffer_copy(stream->cacheData, Buffer_createRef(buf.ptrNonConst + srcOff, length));
+	Buffer_memcpy(stream->cacheData, Buffer_createRef(buf.ptrNonConst + srcOff, length));
 
 clean:
 	return s_uccess;
@@ -303,7 +303,7 @@ Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length,
 		U64 bytesToCopy = U64_min(streamEnd - srcOff, length);
 
 		if(bufLen)
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(buf.ptrNonConst + dstOff, bytesToCopy),
 				Buffer_createRefConst(stream->cacheData.ptr + srcRel, bytesToCopy)
 			);
@@ -361,7 +361,7 @@ Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length,
 	))
 	
 	if(bufLen)
-		Buffer_copy(Buffer_createRef(buf.ptrNonConst + dstOff, length), stream->cacheData);
+		Buffer_memcpy(Buffer_createRef(buf.ptrNonConst + dstOff, length), stream->cacheData);
 
 clean:
 	return s_uccess;

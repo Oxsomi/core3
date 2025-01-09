@@ -396,10 +396,10 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	headerIt += sizeof(SHHeader);
 
-	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(stringsDlFile)), stringsDlFile);
+	Buffer_memcpy(Buffer_createRef(headerIt, Buffer_length(stringsDlFile)), stringsDlFile);
 	headerIt += Buffer_length(stringsDlFile);
 
-	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(shaderBuffersDlFile)), shaderBuffersDlFile);
+	Buffer_memcpy(Buffer_createRef(headerIt, Buffer_length(shaderBuffersDlFile)), shaderBuffersDlFile);
 	headerIt += Buffer_length(shaderBuffersDlFile);
 
 	//Find offsets
@@ -412,7 +412,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	for (U64 i = 0; i < arrays.length; ++i) {
 		arrayDims[i] = (U8) arrays.ptr[i].length;
-		Buffer_copy(Buffer_createRef(arrayCount, ListU32_bytes(arrays.ptr[i])), ListU32_bufferConst(arrays.ptr[i]));
+		Buffer_memcpy(Buffer_createRef(arrayCount, ListU32_bytes(arrays.ptr[i])), ListU32_bufferConst(arrays.ptr[i]));
 		arrayCount += arrayDims[i];
 	}
 
@@ -532,7 +532,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			U64 length = Buffer_length(binary.binaries[j]);
 
 			if (length) {
-				Buffer_copy(Buffer_createRef(headerIt, length), binary.binaries[j]);
+				Buffer_memcpy(Buffer_createRef(headerIt, length), binary.binaries[j]);
 				headerIt += length;
 			}
 		}

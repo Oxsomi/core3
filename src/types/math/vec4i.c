@@ -62,25 +62,25 @@ Bool I32x4_any(I32x4 a) { return I32x4_reduce(I32x4_neq(a, I32x4_zero())); }
 
 I32x4 I32x4_load1(const void *arr) {
 	I32x4 result = I32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
 	return result;
 }
 
 I32x4 I32x4_load2(const void *arr) {
 	I32x4 result = I32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
 	return result;
 }
 
 I32x4 I32x4_load3(const void *arr) {
 	I32x4 result = I32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 3), Buffer_createRefConst(arr, sizeof(I32) * 3));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 3), Buffer_createRefConst(arr, sizeof(I32) * 3));
 	return result;
 }
 
 I32x4 I32x4_load4(const void *arr) {
 	I32x4 result = I32x4_zero();
-	if(arr) Buffer_copy(Buffer_createRef(&result, sizeof(I32) * 4), Buffer_createRefConst(arr, sizeof(I32) * 4));
+	if(arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 4), Buffer_createRefConst(arr, sizeof(I32) * 4));
 	return result;
 }
 

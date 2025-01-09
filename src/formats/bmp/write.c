@@ -139,8 +139,8 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 		gotoIfError(clean, Buffer_appendBuffer(&fileAppend, buf))
 
 	else for (U64 j = (U64)info.h - 1, k = 0; j != U64_MAX; --j, ++k)
-		Buffer_copy(
-			Buffer_createRef((U8*)fileAppend.ptr + stride * k, stride),
+		Buffer_memcpy(
+			Buffer_createRef((U8*)fileAppend.ptrNonConst + stride * k, stride),
 			Buffer_createRefConst(buf.ptr + stride * j, stride)
 		);
 

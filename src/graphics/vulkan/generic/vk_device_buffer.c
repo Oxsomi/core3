@@ -313,7 +313,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			Buffer dst = Buffer_createRef((U8*)buffer->resource.mappedMemoryExt + start, len);
 			Buffer src = Buffer_createRefConst(buffer->cpuData.ptr + start, len);
 
-			Buffer_copy(dst, src);
+			Buffer_memcpy(dst, src);
 
 			if(incoherent)
 				deviceExt->mappedMemoryRange.ptrNonConst[j] = (VkMappedMemoryRange) {
@@ -373,7 +373,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
@@ -482,7 +482,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);

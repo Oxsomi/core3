@@ -111,7 +111,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_SetBlendConstants:
 
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(&temp->tempBlendConstants, sizeof(F32x4)),
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
@@ -981,7 +981,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				.pMarkerName = (const char*) data + sizeof(F32x4),
 			};
 
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(&markerInfo.color, sizeof(F32x4)),
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);

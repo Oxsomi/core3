@@ -285,7 +285,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				}
 
 				CAExtraInfo extraInfo = (CAExtraInfo) { 0 };
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(&extraInfo, sizeof(extraInfo)),
 					Buffer_createRefConst(buf.ptr + reqLen, sizeof(extraInfo))
 				);
@@ -397,7 +397,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				}
 
 				DLExtraInfo extraInfo = (DLExtraInfo) { 0 };
-				Buffer_copy(
+				Buffer_memcpy(
 					Buffer_createRef(&extraInfo, sizeof(extraInfo)),
 					Buffer_createRefConst(buf.ptr + reqLen, sizeof(extraInfo))
 				);

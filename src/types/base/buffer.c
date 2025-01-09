@@ -71,7 +71,7 @@ Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value) {
 	return !value ? Buffer_resetBit(buf, offset) : Buffer_setBit(buf, offset);
 }
 
-Bool Buffer_copy(Buffer dst, Buffer src) {
+Bool Buffer_memcpy(Buffer dst, Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
 		return true;
@@ -85,7 +85,7 @@ Bool Buffer_copy(Buffer dst, Buffer src) {
 	return true;
 }
 
-Bool Buffer_revCopy(Buffer dst, Buffer src) {
+Bool Buffer_memmove(Buffer dst, Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
 		return true;
@@ -241,7 +241,7 @@ Error Buffer_offset(Buffer *buf, U64 length) {
 }
 
 void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 length) {
-	Buffer_copy(Buffer_createRef(ptr, length), Buffer_createRefConst(v, length));
+	Buffer_memcpy(Buffer_createRef(ptr, length), Buffer_createRefConst(v, length));
 }
 
 Error Buffer_appendBuffer(Buffer *buf, Buffer append) {

@@ -161,7 +161,7 @@ impl I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]);
 I32x4 AESEncryptionContext_fetchBlock(const void *dat, const U64 leftOver) {
 
 	I32x4 v = I32x4_zero();
-	Buffer_copy(
+	Buffer_memcpy(
 		Buffer_createRef(&v, sizeof(v)),
 		Buffer_createRefConst(dat, U64_min(leftOver, sizeof(v)))
 	);
@@ -254,7 +254,7 @@ void AESEncryptionContext_storeBlock(I32 *io, const U64 leftOver, void *v) {
 	if (leftOver < sizeof(I32x4))
 		Buffer_unsetAllBits(Buffer_createRef((U8*)v + leftOver, sizeof(I32x4) - leftOver));
 
-	Buffer_copy(
+	Buffer_memcpy(
 		Buffer_createRef(io, sizeof(I32x4)),
 		Buffer_createRefConst(v, U64_min(sizeof(I32x4), leftOver))
 	);

@@ -110,7 +110,7 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 	if(e.genericError)
 		return e;
 
-	Buffer_copy(*result, buf);
+	Buffer_memcpy(*result, buf);
 	return Error_none();
 }
 
@@ -190,8 +190,8 @@ Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 	if(err.genericError)
 		return err;
 
-	Buffer_copy(*output, a);
-	Buffer_copy(Buffer_createRef(output->ptrNonConst + alen, blen), b);
+	Buffer_memcpy(*output, a);
+	Buffer_memcpy(Buffer_createRef(output->ptrNonConst + alen, blen), b);
 	return Error_none();
 }
 

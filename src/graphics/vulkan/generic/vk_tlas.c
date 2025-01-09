@@ -96,7 +96,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 			DeviceBuffer *tempInstanceBuf = DeviceBufferRef_ptr(tlas->tempInstanceBuffer);
 			void *mem = tempInstanceBuf->resource.mappedMemoryExt;
 
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(mem, stride * instancesU64),
 				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)	//static, motion same pos
 			);

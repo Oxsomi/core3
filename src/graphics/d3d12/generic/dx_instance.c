@@ -685,7 +685,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		gotoIfError(clean, CharString_createFromUTF16x(desc.Description, 128, &tmp));
 
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(info->name, sizeof(info->name)),
 			Buffer_createRefConst(tmp.ptr, CharString_length(tmp))
 		);
@@ -693,14 +693,14 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		//Query driver version as string
 
 		if(vendorId == EGraphicsVendorId_AMD)
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
 				CharString_bufferConst(instanceExt->amdDriverVersion)
 			);
 
 		else if(vendorId == EGraphicsVendorId_NV) {
 
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
 				CharString_bufferConst(instanceExt->nvDriverVersion)
 			);

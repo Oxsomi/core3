@@ -131,8 +131,8 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	) {
 
 		if(pixelStride == 4)		//Simple copy
-			Buffer_copy(
-				Buffer_createRef((U8*)result->ptr + stride * k, stride),
+			Buffer_memcpy(
+				Buffer_createRef((U8*)result->ptrNonConst + stride * k, stride),
 				Buffer_createRefConst(dataStart + stride * j, stride)
 			);
 

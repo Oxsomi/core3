@@ -109,7 +109,7 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 
 	else success = !!gmtime_r(&inSecs, &t);
 
-	Buffer_copy(
+	Buffer_memcpy(
 		Buffer_createRef(timeString, SHORTSTRING_LEN),
 		Buffer_createRefConst(FORMAT_STR, sizeof(FORMAT_STR))
 	);

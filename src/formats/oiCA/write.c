@@ -376,7 +376,7 @@ Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		//Append file data
 
-		Buffer_copy(Buffer_createRef(fileDataPtrIt, Buffer_length(entry->data)), entry->data);
+		Buffer_memcpy(Buffer_createRef(fileDataPtrIt, Buffer_length(entry->data)), entry->data);
 		fileDataPtrIt += Buffer_length(entry->data);
 	}
 
@@ -452,7 +452,7 @@ Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	//Store hash in header before encryption or finish
 
 	if (caFile.settings.compressionType)
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(headerIt, sizeof(hash)),
 			Buffer_createRefConst(hash, sizeof(hash))
 		);*/

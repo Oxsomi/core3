@@ -932,7 +932,7 @@ int main() {
 			//Fetch iv
 
 			I32x4 iv = I32x4_zero();
-			Buffer_copy(Buffer_createRef(&iv, 12), Buffer_createRefConst(ivs[i], 12));
+			Buffer_memcpy(Buffer_createRef(&iv, 12), Buffer_createRefConst(ivs[i], 12));
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
 
@@ -960,7 +960,7 @@ int main() {
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
 			I32x4 tmpTag = I32x4_zero();
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(&tmpTag, sizeof(tmpTag)),
 				Buffer_createRefConst(results[i].ptr + CharString_length(tmp), sizeof(I32x4))
 			);
@@ -1247,7 +1247,7 @@ int main() {
 			//Fetch iv
 
 			I32x4 iv = I32x4_zero();
-			Buffer_copy(Buffer_createRef(&iv, 12), Buffer_createRefConst(ivs[i], 12));
+			Buffer_memcpy(Buffer_createRef(&iv, 12), Buffer_createRefConst(ivs[i], 12));
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
 
@@ -1275,7 +1275,7 @@ int main() {
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
 			I32x4 tmpTag = I32x4_zero();
-			Buffer_copy(
+			Buffer_memcpy(
 				Buffer_createRef(&tmpTag, sizeof(tmpTag)),
 				Buffer_createRefConst(results[i].ptr + CharString_length(tmp), sizeof(I32x4))
 			);

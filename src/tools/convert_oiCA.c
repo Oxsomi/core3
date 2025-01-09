@@ -115,7 +115,7 @@ Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Char
 	//Copying encryption key
 
 	if(settings.encryptionType)
-		Buffer_copy(
+		Buffer_memcpy(
 			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
 			Buffer_createRef(encKey, sizeof(settings.encryptionKey))
 		);
