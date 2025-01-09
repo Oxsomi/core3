@@ -23,7 +23,7 @@
 
 U128 U128_create(const void *data) {
 	U128 result = U128_zero();
-	Buffer_copy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst(data, sizeof(result)));
+	Buffer_memcpy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst(data, sizeof(result)));
 	return result;
 }
 

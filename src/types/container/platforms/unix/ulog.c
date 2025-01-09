@@ -38,8 +38,9 @@ void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skip
 
 	I32 count = backtrace(stack, stackSize);
 
-	if ((U32)count == stackSize) {			//Call backTrace again, but this time we have to allocate
+	if ((U32)count >= stackSize) {			//Call backTrace again, but this time we have to allocate
 
+		U64 oldStackSize = stackSize;
 		stackSize += skip;
 
 		Buffer buf = Buffer_createNull();
@@ -47,14 +48,15 @@ void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skip
 
 		if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
 
-			I32 count = backtrace((void**) buf.ptr, stackSize);
+			I32 count = backtrace((void**) buf.ptrNonConst, stackSize);
 
-			for (U64 i = skip; i < stackSize && ((const void**)buf.ptr)[i]; ++i)
-				stack[i - skip] = stack[i];
+			for (U64 i = 0; i < oldStackSize && ((const void**)buf.ptrNonConst)[i + skip]; ++i)
+				stack[i] = ((void**)buf.ptrNonConst)[i + skip];
 
-			if((U64)(count - skip) < stackSize)
+			if((U64)(count - skip) < oldStackSize)
 				stack[(U64)(count - skip)] = NULL;
 
+			Buffer_free(&buf, alloc);
 			return;
 		}
 	}

@@ -159,7 +159,7 @@ I32x4 AES_mixColumns(I32x4 vvv) {
 	r = U8x4x4_transpose(&r);
 
 	I32x4 res = I32x4_zero();
-	Buffer_copy(Buffer_createRef(&res, sizeof(res)), Buffer_createRefConst(&r, sizeof(r)));
+	Buffer_memcpy(Buffer_createRef(&res, sizeof(res)), Buffer_createRefConst(&r, sizeof(r)));
 	return res;
 }
 

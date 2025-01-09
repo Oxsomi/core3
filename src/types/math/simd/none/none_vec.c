@@ -292,7 +292,7 @@ I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
 		return I32x4_zero();
 
 	I32x4 result = I32x4_zero();
-	Buffer_copy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createRefConst(&a, sizeof(a)));
+	Buffer_memcpy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createRefConst(&a, sizeof(a)));
 
 	return result;
 }
@@ -306,7 +306,7 @@ I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
 		return I32x4_zero();
 
 	I32x4 result = I32x4_zero();
-	Buffer_copy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst((U8*)&a + bytes, sizeof(a) - bytes));
+	Buffer_memcpy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst((U8*)&a + bytes, sizeof(a) - bytes));
 
 	return result;
 }
