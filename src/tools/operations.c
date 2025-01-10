@@ -30,9 +30,13 @@ Bool CLI_info(ParsedArgs args) {
 
 	Log_debugLnx(
 
-		"OxC3 (Oxsomi core 3), a general framework and toolset for cross-platform applications.\n"
+		"OxC3 (Oxsomi core %"PRIu32".%"PRIu32".%03"PRIu32"), a general framework and toolset for cross-platform applications.\n"
 		"Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)"
 		"%s",
+
+		(U32) (OXC3_MAJOR + 3),
+		(U32) OXC3_MINOR,
+		(U32) OXC3_PATCH,
 
 		args.operation != EOperation_InfoLicense ? "" :
 		"\n\n"

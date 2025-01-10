@@ -83,6 +83,7 @@ Error Buffer_consume##T(Buffer *buf, T *v)	{ return Buffer_consume(buf, v, sizeo
 																							\
 T Buffer_read##T(Buffer buf, U64 off, Bool *success) {										\
 																							\
+	buf = Buffer_createRefFromBuffer(buf, true);											\
 	T v = (T) { 0 };																		\
 	Error err = Buffer_offset(&buf, off);													\
 																							\
@@ -97,6 +98,7 @@ T Buffer_read##T(Buffer buf, U64 off, Bool *success) {										\
 }																							\
 																							\
 Bool Buffer_write##T(Buffer buf, U64 off, T v) {											\
+	buf = Buffer_createRefFromBuffer(buf, false);											\
 	Error err = Buffer_offset(&buf, off);													\
 	if(err.genericError) return false;														\
 	return !Buffer_append##T(&buf, v).genericError;											\

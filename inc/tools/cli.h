@@ -76,6 +76,8 @@ typedef enum ECompileType {
 	ECompileType_Symbols			//List all symbols located in the shader or include as a text file
 } ECompileType;
 
+U64 CLI_parseGraphicsAPIs(ParsedArgs args);		//U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
+
 #ifdef CLI_SHADER_COMPILER
 
 	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes);

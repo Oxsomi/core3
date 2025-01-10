@@ -39,69 +39,12 @@
 
 		gotoIfError3(clean, GraphicsInterface_create(e_rr))
 
-		U64 queried = 0;
-		Bool wasExplicit = false;
+		U64 queried = CLI_parseGraphicsAPIs(args);
 
-		if(args.parameters & EOperationHasParameter_GraphicsApi) {
+		if(queried == U64_MAX)
+			retError(clean, Error_invalidState(0, "CLI_parseGraphicsAPIs() failed"))
 
-			CharString arg = CharString_createNull();
-			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_GraphicsApiShift, &arg))
-
-			gotoIfError2(clean, CharString_splitSensitivex(arg, ',', &strings))
-
-			U64 nativeBit = (U64)1 << (
-				Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan
-			);
-
-			CharString d3d12 = CharString_createRefCStrConst("d3d12");
-			CharString direct3d12 = CharString_createRefCStrConst("direct3d12");
-			CharString directx12 = CharString_createRefCStrConst("directx12");
-			CharString dx12 = CharString_createRefCStrConst("dx12");
-
-			CharString vulkan = CharString_createRefCStrConst("vulkan");
-			CharString vk = CharString_createRefCStrConst("vk");
-
-			CharString native = CharString_createRefCStrConst("native");
-			CharString def = CharString_createRefCStrConst("default");
-			CharString all = CharString_createRefCStrConst("all");
-
-			for(U64 i = 0; i < strings.length; ++i) {
-
-				CharString str = strings.ptr[i];
-
-				if(
-					CharString_equalsStringInsensitive(str, d3d12) ||
-					CharString_equalsStringInsensitive(str, directx12) ||
-					CharString_equalsStringInsensitive(str, direct3d12) ||
-					CharString_equalsStringInsensitive(str, dx12)
-				) {
-					queried |= (U64)1 << EGraphicsApi_Direct3D12;
-					wasExplicit = true;
-				}
-
-				else if(
-					CharString_equalsStringInsensitive(str, vulkan) ||
-					CharString_equalsStringInsensitive(str, vk)
-				) {
-					queried |= (U64)1 << EGraphicsApi_Vulkan;
-					wasExplicit = true;
-				}
-
-				else if(CharString_equalsStringInsensitive(str, all))
-					queried = U64_MAX;
-
-				else if(CharString_equalsStringInsensitive(str, native) || CharString_equalsStringInsensitive(str, def)) {
-					queried |= nativeBit;
-					wasExplicit = true;
-				}
-
-				else Log_debugLnx(
-					"CLI_graphicsDevices() -graphics-api must be one of: vulkan/vk, d3d12/d3d12/direct3d12, native or all"
-				);
-			}
-		}
-
-		else queried = U64_MAX;
+		Bool wasExplicit = queried != U32_MAX;
 
 		for(U64 j = 0; j < EGraphicsApi_Count; ++j) {
 

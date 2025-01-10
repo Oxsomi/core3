@@ -24,6 +24,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
+#include "graphics/generic/instance.h"
 #include "tools/cli.h"
 
 #ifdef CLI_SHADER_COMPILER
@@ -524,4 +525,79 @@ clean:
 
 	ListCharString_freex(&args.args);
 	return false;
+}
+
+U64 CLI_parseGraphicsAPIs(ParsedArgs args) {
+	
+	U64 queried = 0;
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+	ListCharString strings = (ListCharString) { 0 };
+
+	if(args.parameters & EOperationHasParameter_GraphicsApi) {
+
+		CharString arg = CharString_createNull();
+		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_GraphicsApiShift, &arg))
+
+		gotoIfError2(clean, CharString_splitSensitivex(arg, ',', &strings))
+
+		U64 nativeBit = (U64)1 << (
+			Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan
+		);
+
+		CharString d3d12 = CharString_createRefCStrConst("d3d12");
+		CharString direct3d12 = CharString_createRefCStrConst("direct3d12");
+		CharString directx12 = CharString_createRefCStrConst("directx12");
+		CharString dx12 = CharString_createRefCStrConst("dx12");
+
+		CharString vulkan = CharString_createRefCStrConst("vulkan");
+		CharString vk = CharString_createRefCStrConst("vk");
+
+		CharString native = CharString_createRefCStrConst("native");
+		CharString def = CharString_createRefCStrConst("default");
+		CharString all = CharString_createRefCStrConst("all");
+
+		for(U64 i = 0; i < strings.length; ++i) {
+
+			CharString str = strings.ptr[i];
+
+			if(
+				CharString_equalsStringInsensitive(str, d3d12) ||
+				CharString_equalsStringInsensitive(str, directx12) ||
+				CharString_equalsStringInsensitive(str, direct3d12) ||
+				CharString_equalsStringInsensitive(str, dx12)
+			)
+				queried |= (U64)1 << EGraphicsApi_Direct3D12;
+
+			else if(
+				CharString_equalsStringInsensitive(str, vulkan) ||
+				CharString_equalsStringInsensitive(str, vk)
+			)
+				queried |= (U64)1 << EGraphicsApi_Vulkan;
+
+			else if(CharString_equalsStringInsensitive(str, all))
+				queried = U32_MAX;
+
+			else if(CharString_equalsStringInsensitive(str, native) || CharString_equalsStringInsensitive(str, def))
+				queried |= nativeBit;
+
+			else {
+
+				Log_debugLnx(
+					"CLI_graphicsDevices() -graphics-api must be one of: "
+					"vulkan/vk, d3d12/d3d12/direct3d12/directx12, native or all"
+				);
+
+				s_uccess = false;
+				goto clean;
+			}
+		}
+	}
+
+	else queried = U32_MAX;
+
+clean:
+	ListCharString_freex(&strings);
+	Error_printLnx(err);
+	return s_uccess ? queried : U64_MAX;
 }
