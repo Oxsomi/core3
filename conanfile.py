@@ -193,7 +193,7 @@ class oxc3(ConanFile):
 
 		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC" ]
 
-		if !self.options.dynamicLinkingGraphics:
+		if not self.options.dynamicLinkingGraphics:
 			if self.settings.os != "Windows" or self.options.forceVulkan:
 				self.cpp_info.libs += [ "OxC3_graphics_vk" ]
 			else:
