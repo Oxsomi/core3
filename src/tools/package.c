@@ -250,7 +250,17 @@ Bool CLI_package(ParsedArgs args) {
 			if(Buffer_length(allBuffers.ptrNonConst[i]))
 				gotoIfError3(clean, Archive_addFilex(&archive, allOutputs.ptr[i], &allBuffers.ptrNonConst[i], 0, e_rr))
 
-			else retError(clean, Error_invalidState(0, "CLI_package() one of the shaders didn't compile, aborting packaging"))
+			else {
+
+				if(															//Merged binaries contain empty buffers
+					!(args.parameters & EOperationFlags_Split) &&
+					i + 1 != allOutputs.length &&
+					CharString_equalsStringSensitive(allOutputs.ptr[i], allOutputs.ptr[i + 1])
+				)
+					continue;
+
+				retError(clean, Error_invalidState(0, "CLI_package() one of the shaders didn't compile, aborting packaging"))
+			}
 
 	#endif
 

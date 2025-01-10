@@ -903,7 +903,7 @@ Bool Compiler_convertRegisterSPIRV(
 	U64 imagePtrU64[3];
 	Buffer_memcpy(
 		Buffer_createRef(imagePtrU64, sizeof(imagePtrU64)),
-		Buffer_createRefConst(&binding->image, sizeof(&binding->image))
+		Buffer_createRefConst(&binding->image, sizeof(binding->image))
 	);
 
 	//Copy numeric desc to U64[3] for easier compares (copy is for alignment)
@@ -916,7 +916,7 @@ Bool Compiler_convertRegisterSPIRV(
 	U64 numericTraitsU64[3];		//Fixes alignment
 	Buffer_memcpy(
 		Buffer_createRef(numericTraitsU64, sizeof(numericTraitsU64)),
-		Buffer_createRefConst(&binding->block.numeric, sizeof(&binding->block.numeric))
+		Buffer_createRefConst(&binding->block.numeric, sizeof(binding->block.numeric))
 	);
 
 	//Variable info
