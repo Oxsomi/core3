@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.091"
+	version = "0.2.092"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -192,13 +192,6 @@ class oxc3(ConanFile):
 		vulkan = False
 
 		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC" ]
-
-		if not self.options.dynamicLinkingGraphics:
-			if self.settings.os != "Windows" or self.options.forceVulkan:
-				self.cpp_info.libs += [ "OxC3_graphics_vk" ]
-			else:
-				self.cpp_info.libs += [ "OxC3_graphics_d3d12" ]
-
 		self.cpp_info.libs += [ "OxC3_graphics", "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
 		if self.settings.os != "Windows":
