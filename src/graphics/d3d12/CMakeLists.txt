@@ -47,7 +47,11 @@ else()
     )
 endif()
 
-target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_graphics)
+target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
+
+if(DynamicLinkingGraphics)
+    target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
+endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
 
