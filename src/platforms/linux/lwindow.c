@@ -406,4 +406,3 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 clean:
 	return s_uccess;
 }
-

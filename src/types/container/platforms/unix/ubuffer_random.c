@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,13 +21,21 @@
 #include "types/container/buffer.h"
 #include "types/base/time.h"
 
-#include <sys/random.h>
+#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+	#include <Security/SecRandom.h>
+#else
+	#include <sys/random.h>
+#endif
 
 Bool Buffer_csprng(Buffer target) {
 
 	if(!Buffer_length(target) || Buffer_isConstRef(target))
 		return false;
 
-	size_t bytes = getrandom(target.ptrNonConst, Buffer_length(target), GRND_NONBLOCK);
-	return bytes == Buffer_length(target);
+	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+		return !SecRandomCopyBytes(kSecRandomDefault, Buffer_length(target), target.ptrNonConst);
+	#else
+		size_t bytes = getrandom(target.ptrNonConst, Buffer_length(target), GRND_NONBLOCK);
+		return bytes == Buffer_length(target);
+	#endif
 }

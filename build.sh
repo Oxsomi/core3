@@ -13,6 +13,8 @@ if [ "$4" != True ] && [ "$4" != False ]; then usage; fi
 RED='\033[0;31m'
 NC='\033[0m'
 
+conan profile detect
+
 if ! conan create packages/dxc -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create DXC failed${NC}\n"
 	exit 1

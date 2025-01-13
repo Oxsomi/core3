@@ -38,15 +38,17 @@ void Log_printStackTracex(U8 skip, ELogLevel lvl, ELogOptions options);
 //When displaying strings, use "%.*s", args.length, arg.ptr instead of args.ptr, because strings aren't null terminated.
 //(Only exception is if the strings are safely generated from code and are determined to be null terminated, then use %s)
 
+void Log_logFormatx(ELogLevel level, ELogOptions options, const C8 *format, ...);
 void Log_debugx(ELogOptions options, const C8 *format, ...);
 void Log_performancex(ELogOptions options, const C8 *format, ...);
 void Log_warnx(ELogOptions options, const C8 *format, ...);
 void Log_errorx(ELogOptions options, const C8 *format, ...);
 
-#define Log_debugLnx(...)				Log_debugx(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_performanceLnx(...)			Log_performancex(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_warnLnx(...)				Log_warnx(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_errorLnx(...)				Log_errorx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_formatLnx(level, ...)	Log_logFormatx(level, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_debugLnx(...)			Log_debugx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_performanceLnx(...)		Log_performancex(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_warnLnx(...)			Log_warnx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_errorLnx(...)			Log_errorx(ELogOptions_NewLine, __VA_ARGS__)
 
 #ifdef __cplusplus
 	}

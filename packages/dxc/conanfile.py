@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2024.12.22"
+	version = "2025.01.11"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -69,6 +69,12 @@ class dxc(ConanFile):
 		tc.variables["LLVM_LIT_ARGS"] = "-v"
 		tc.variables["LLVM_TARGETS_TO_BUILD"] = "None"
 		tc.variables["LLVM_DEFAULT_TARGET_TRIPLE"] = "dxil-ms-dx"
+
+		if self.settings.os == "Android":
+			if self.settings.arch == "x86_64":
+				tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = "x86_64-linux-android"
+			else:
+				tc.variables["LLVM_INFERRED_HOST_TRIPLE"] = "aarch64-linux-android"
 
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 

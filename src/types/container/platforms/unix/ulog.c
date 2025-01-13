@@ -26,71 +26,11 @@
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 
-#include <execinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <dlfcn.h>
 
 CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc; (void)err; return CharString_createNull(); }
-
-void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skipTmp) {
-
-	U64 skip = (U64) skipTmp + 1;
-
-	I32 count = backtrace(stack, stackSize);
-
-	if ((U32)count >= stackSize) {			//Call backTrace again, but this time we have to allocate
-
-		U64 oldStackSize = stackSize;
-		stackSize += skip;
-
-		Buffer buf = Buffer_createNull();
-		Error err = Buffer_createUninitializedBytes(stackSize * sizeof(void*), alloc, &buf);
-
-		if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
-
-			I32 count = backtrace((void**) buf.ptrNonConst, stackSize);
-
-			for (U64 i = 0; i < oldStackSize && ((const void**)buf.ptrNonConst)[i + skip]; ++i)
-				stack[i] = ((void**)buf.ptrNonConst)[i + skip];
-
-			if((U64)(count - skip) < oldStackSize)
-				stack[(U64)(count - skip)] = NULL;
-
-			Buffer_free(&buf, alloc);
-			return;
-		}
-	}
-
-	//Skip part of stack
-
-	for (U64 i = skip; i < stackSize && stack[i]; ++i)
-		stack[i - skip] = stack[i];
-
-	if((U64)(count - skip) < stackSize)
-		stack[(U64)(count - skip)] = NULL;
-}
-
-#define FONT_GREEN  "\e[1;32m"
-#define FONT_CYAN   "\e[1;36m"
-#define FONT_YELLOW "\e[1;33m"
-#define FONT_RED    "\e[1;31m"
-#define FONT_RESET  "\e[1;0m"
-
-#define printColor(lvl, str, ...)																	\
-	switch(lvl) {																					\
-		default:					printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);		break;	\
-		case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);		break;	\
-		case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);		break;	\
-		case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET, __VA_ARGS__);		break;	\
-	}
-
-#define printColorSimple(lvl, str)																	\
-	switch(lvl) {																					\
-		default:					printf(FONT_GREEN  str FONT_RESET);		break;					\
-		case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET);		break;					\
-		case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET);		break;					\
-		case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET);		break;					\
-	}
 
 void Log_printCapturedStackTraceCustom(
 	Allocator alloc,
@@ -106,66 +46,139 @@ void Log_printCapturedStackTraceCustom(
 	if(lvl >= ELogLevel_Count)
 		return;
 
-	(void) opt;
-	(void) alloc;
+	Log_logFormat(alloc, lvl, opt, "Stacktrace:\n");
 
-	printColorSimple(lvl, "Stacktrace:\n");
+	for(U64 i = 0; i < stackSize && stackTrace[i]; ++i) {
 
-	U64 i = 0;
+		Dl_info dlInfo = (Dl_info) { 0 };
 
-	for(; i < stackSize && stackTrace[i]; ++i)		//Find end
-		;
+		if(!dladdr(stackTrace[i], &dlInfo) || !dlInfo.dli_sname)
+			Log_logFormat(alloc, lvl, opt, "%p", stackTrace[i]);
 
-	C8 **symbols = backtrace_symbols((void* const *)stackTrace, i);
-
-	for(U64 j = 0; j < i; ++j)
-		printColor(lvl, "%s\n", symbols[j]);
-
-	free(symbols);
+		else Log_logFormat(
+			alloc,
+			lvl,
+			opt,
+			dlInfo.dli_fname ? "%p: %s (%s)" : "%p: %s",
+			stackTrace[i],
+			dlInfo.dli_sname,
+			dlInfo.dli_fname
+		);
+	}
 }
 
-void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
+#if _PLATFORM_TYPE != PLATFORM_ANDROID
 
-	(void) alloc;
+	#include <execinfo.h>
 
-	Ns t = Time_now();
+	void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skipTmp) {
 
-	if(lvl >= ELogLevel_Count)
-		return;
+		U64 skip = (U64) skipTmp + 1;
 
-	U64 thread = Thread_getId();
+		I32 count = backtrace(stack, stackSize);
 
-	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
+		if ((U32)count >= stackSize) {			//Call backTrace again, but this time we have to allocate
 
-	Bool hasTimestamp = options & ELogOptions_Timestamp;
-	Bool hasThread = options & ELogOptions_Thread;
-	Bool hasNewLine = options & ELogOptions_NewLine;
-	Bool hasPrepend = hasTimestamp || hasThread;
+			U64 oldStackSize = stackSize;
+			stackSize += skip;
 
-	if (hasPrepend)
-		printColorSimple(lvl, "[");
+			Buffer buf = Buffer_createNull();
+			Error err = Buffer_createUninitializedBytes(stackSize * sizeof(void*), alloc, &buf);
 
-	if (hasThread)
-		printColor(lvl, "%"PRIu64, thread);
+			if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
 
-	if (hasTimestamp) {
+				void **newStack = (void**) buf.ptrNonConst;
 
-		TimeFormat tf;
-		Time_format(t, tf, true);
+				I32 count = backtrace(newStack, stackSize);
 
-		printColor(lvl, "%s%s", hasThread ? " " : "", tf);
+				for (U64 i = 0; i < oldStackSize && newStack[i + skip]; ++i)
+					stack[i] = newStack[i + skip];
+
+				if((U64)(count - skip) < oldStackSize)
+					stack[(U64)(count - skip)] = NULL;
+
+				Buffer_free(&buf, alloc);
+				return;
+			}
+
+			stackSize = oldStackSize;		//Restore, apparently can't allocate, so empty elements after
+		}
+
+		//Skip part of stack
+
+		for (U64 i = skip; i < stackSize && stack[i]; ++i)
+			stack[i - skip] = stack[i];
+
+		if((U64)(count - skip) < stackSize)
+			stack[(U64)(count - skip)] = NULL;
 	}
 
-	if (hasPrepend)
-		printColorSimple(lvl, "]: ");
+	#define FONT_GREEN  "\e[1;32m"
+	#define FONT_CYAN   "\e[1;36m"
+	#define FONT_YELLOW "\e[1;33m"
+	#define FONT_RED    "\e[1;31m"
+	#define FONT_RESET  "\e[1;0m"
 
-	//Print to console and debug window
+	#define printColor(lvl, str, ...)																	\
+		switch(lvl) {																					\
+			default:					printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);		break;	\
+			case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);		break;	\
+			case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);		break;	\
+			case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET, __VA_ARGS__);		break;	\
+		}
 
-	const C8 *newLine = hasNewLine ? "\n" : "";
+	#define printColorSimple(lvl, str)																	\
+		switch(lvl) {																					\
+			default:					printf(FONT_GREEN  str FONT_RESET);		break;					\
+			case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET);		break;					\
+			case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET);		break;					\
+			case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET);		break;					\
+		}
 
-	printColor(lvl,
-		"%.*s%s",
-		(int)CharString_length(arg), arg.ptr,
-		newLine
-	);
-}
+	void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
+
+		(void) alloc;
+
+		Ns t = Time_now();
+
+		if(lvl >= ELogLevel_Count)
+			return;
+
+		U64 thread = Thread_getId();
+
+		//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
+
+		Bool hasTimestamp = options & ELogOptions_Timestamp;
+		Bool hasThread = options & ELogOptions_Thread;
+		Bool hasNewLine = options & ELogOptions_NewLine;
+		Bool hasPrepend = hasTimestamp || hasThread;
+
+		if (hasPrepend)
+			printColorSimple(lvl, "[");
+
+		if (hasThread)
+			printColor(lvl, "%"PRIu64, thread);
+
+		if (hasTimestamp) {
+
+			TimeFormat tf;
+			Time_format(t, tf, true);
+
+			printColor(lvl, "%s%s", hasThread ? " " : "", tf);
+		}
+
+		if (hasPrepend)
+			printColorSimple(lvl, "]: ");
+
+		//Print to console and debug window
+
+		const C8 *newLine = hasNewLine ? "\n" : "";
+
+		printColor(lvl,
+			"%.*s%s",
+			(int)CharString_length(arg), arg.ptr,
+			newLine
+		);
+	}
+
+#endif

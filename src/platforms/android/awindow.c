@@ -17,16 +17,3 @@
 *  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 *  This is called dual licensing.
 */
-
-#include "types/container/buffer.h"
-#include "types/base/time.h"
-
-#include <Security/SecRandom.h>
-
-Bool Buffer_csprng(Buffer target) {
-
-	if(!Buffer_length(target) || Buffer_isConstRef(target))
-		return false;
-
-	return !SecRandomCopyBytes(kSecRandomDefault, Buffer_length(target), target.ptrNonConst);
-}

@@ -56,6 +56,10 @@ void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions op
 																		\
 	CharString_free(&res, alloc);
 
+void Log_logFormat(Allocator alloc, ELogLevel level, ELogOptions opt, const C8 *format, ...) {
+	Log_level(level);
+}
+
 void Log_debug(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Debug);
 }

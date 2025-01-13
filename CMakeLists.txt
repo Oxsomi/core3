@@ -56,9 +56,16 @@ set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic lin
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
+elseif(${ANDROID_ABI} MATCHES "arm64-v8a")
+	message("-- Enabling ARM specific optimizations")
+	set(ARM ON)
 else()
 	message("-- Enabling x64 specific optimizations")
 	set(ARM OFF)
+endif()
+
+if(ANDROID AND DynamicLinkingGraphics)
+	message(FATAL_ERROR "-- FATAL configuration (dynamic linking graphics) not compatible with Android")
 endif()
 
 if(MSVC)

@@ -18,31 +18,41 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/base/types.h"
+#include "platforms/window_manager.h"
+#include "types/base/error.h"
 
-typedef void *DynamicLibrary;
+#include <android_native_app_glue.h>
 
-//These functions are optional on systems that don't support dynamic linking,
-//In which case, only isValidPath will be defined.
-//It can be checked via SUPPORTS_DYNAMIC_LINKING.
+struct android_app *AWindowManager_instance = NULL;
 
-#if _PLATFORM_TYPE != PLATFORM_ANDROID
-	#define SUPPORTS_DYNAMIC_LINKING
-#endif
+extern int main(int argc, const char *argv[]);
 
-impl Bool DynamicLibrary_isValidPath(CharString str);
+void android_main(struct android_app *state) {
+    AWindowManager_instance = state;
+    main(0, NULL);                  //So same function can still be used, even though argc is invalid
+}
 
-#ifdef SUPPORTS_DYNAMIC_LINKING
-	impl Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr);
-	impl Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr);
-	impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
-#endif
+void *Platform_getDataImpl(void *ptr) { (void) ptr; return AWindowManager_instance; }
 
-#ifdef _MSVC_TRADITIONAL
-	#define EXPORT_SYMBOL __declspec(dllexport)
-	#define IMPORT_SYMBOL __declspec(dllimport)
-#else
-	#define EXPORT_SYMBOL __attribute__((visibility("default")))
-	#define IMPORT_SYMBOL
-#endif
+Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
+    (void) w; (void) e_rr;
+    return false;
+}
+
+Bool WindowManager_freeNative(WindowManager *w) {
+    (void) w;
+    return false;
+}
+
+void WindowManager_updateExt(WindowManager *manager) {
+
+    (void) manager;
+    
+    int ident, events;
+    struct android_poll_source *source;
+    
+    while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
+        if(source)
+            source->process(AWindowManager_instance, source);
+    }
+}

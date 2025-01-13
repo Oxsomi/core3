@@ -66,6 +66,7 @@ void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions op
 //When displaying strings, use "%.*s", (int) args.length, arg.ptr instead of args.ptr, because strings aren't null terminated.
 //(Only exception is if the strings are safely generated from code and are determined to be null terminated, then use %s)
 
+void Log_logFormat(Allocator alloc, ELogLevel lvl, ELogOptions options, const C8 *format, ...);
 void Log_debug(Allocator alloc, ELogOptions options, const C8 *format, ...);
 void Log_performance(Allocator alloc, ELogOptions options, const C8 *format, ...);
 void Log_warn(Allocator alloc, ELogOptions options, const C8 *format, ...);
@@ -73,10 +74,11 @@ void Log_error(Allocator alloc, ELogOptions options, const C8 *format, ...);
 
 void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);
 
-#define Log_debugLn(alloc, ...)			Log_debug(alloc, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_performanceLn(alloc, ...)	Log_performance(alloc, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_warnLn(alloc, ...)			Log_warn(alloc, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_errorLn(alloc, ...)			Log_error(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_logFormatLn(alloc, lvl, ...)	Log_logFormat(alloc, lvl, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_debugLn(alloc, ...)				Log_debug(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_performanceLn(alloc, ...)		Log_performance(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_warnLn(alloc, ...)				Log_warn(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_errorLn(alloc, ...)				Log_error(alloc, ELogOptions_NewLine, __VA_ARGS__)
 
 #ifdef __cplusplus
 	}

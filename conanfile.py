@@ -17,7 +17,7 @@ class oxc3(ConanFile):
 	author = "Oxsomi / Nielsbishere"
 	url = "https://github.com/Oxsomi/core3"
 	description = "Oxsomi Core3 is a combination of standalone C libraries useful for building applications, such as types, platform, graphics abstraction and file formats"
-	topics = ("c", "windows", "linux", "hashing", "encryption", "osx", "vulkan", "simd", "d3d12", "directx12", "shader-compiler")
+	topics = ("c", "windows", "linux", "android", "hashing", "encryption", "osx", "vulkan", "simd", "d3d12", "directx12", "shader-compiler")
 
 	# Binary configuration
 	settings = "os", "compiler", "build_type", "arch"
@@ -105,14 +105,14 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2024.12.22")
+			self.requires("dxc/2025.01.11")
 			self.requires("spirv_reflect/2024.09.22")
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
 			self.requires("xdg_decoration/2024.12.22")
 
-		self.requires("openal_soft/2024.11.04.01")
+		# self.requires("openal_soft/2024.11.04.01")
 
 	def package(self):
 

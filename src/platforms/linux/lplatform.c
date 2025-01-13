@@ -104,7 +104,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 			continue;
 
 		sectionName.ptr += sizeof("packages");		//sizeof includes null terminator so no need for packages/
-		sectionName.lenAndNullTerminated -= sizeof("packages");
+		sectionName.lenAndNullTerminated = (sectionName.lenAndNullTerminated << 1 >> 1) | sizeof("packages");
 
 		gotoIfError2(clean, CharString_createCopyx(sectionName, &tmpStr))
 

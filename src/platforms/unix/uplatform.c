@@ -40,7 +40,9 @@ void Platform_cleanupExt() {
 	Platform_cleanupUnixExt();
 }
 
-void *Platform_getDataImpl(void *ptr) { (void) ptr; return NULL; }
+#if _PLATFORM_TYPE != PLATFORM_ANDROID
+	void *Platform_getDataImpl(void *ptr) { (void) ptr; return NULL; }
+#endif
 
 U64 Platform_getThreads() { return sysconf(_SC_NPROCESSORS_ONLN); }
 
@@ -48,15 +50,21 @@ Bool Platform_initExt(Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	//Get work directory
+	//Get work directory; since Android doesn't have a working directory, it will work as following:
+	//appDir = internal app dir
+	//work dir = external app dir
 
-	#define PATH_MAX 256
-	C8 cwd[PATH_MAX + 1];
-	if (!getcwd(cwd, sizeof(cwd)))
-		retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"))
+	#if _PLATFORM_TYPE != PLATFORM_ANDROID
 
-	gotoIfError2(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workDirectory))
-	gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
+		#define PATH_MAX 256
+		C8 cwd[PATH_MAX + 1];
+		if (!getcwd(cwd, sizeof(cwd)))
+			retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"))
+
+		gotoIfError2(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workDirectory))
+		gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
+
+	#endif
 
 	//Initialize Linux/OSX dependent as well as app dir path
 

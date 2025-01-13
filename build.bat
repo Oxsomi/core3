@@ -27,6 +27,7 @@ if NOT "%4" == "True" (
 
 for /f "tokens=4,* delims= " %%a in ("%*") do set remainder=%%b
 
+conan profile detect
 conan create packages/agility_sdk -s build_type=%1 --build=missing
 conan create packages/amd_ags -s build_type=%1 --build=missing
 conan create packages/nvapi -s build_type=%1 --build=missing

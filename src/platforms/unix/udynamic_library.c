@@ -30,55 +30,59 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 	return CharString_endsWithStringInsensitive(str, CharString_createRefCStrConst(".so"), 0);
 }
 
-Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr) {
+#ifdef SUPPORTS_DYNAMIC_LINKING
 
-	Bool s_uccess = true;
-	CharString loc = CharString_createNull();
+	Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr) {
 
-	if(!dynamicLib)
-		retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"))
+		Bool s_uccess = true;
+		CharString loc = CharString_createNull();
 
-	if(*dynamicLib)
-		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
+		if(!dynamicLib)
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"))
 
-	Bool isVirtual = false;
+		if(*dynamicLib)
+			retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
 
-	if(isAppDir)
-		gotoIfError3(clean, File_resolve(
-			str, &isVirtual, 260, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+		Bool isVirtual = false;
+
+		if(isAppDir)
+			gotoIfError3(clean, File_resolve(
+				str, &isVirtual, 260, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+			))
+
+		else gotoIfError3(clean, File_resolve(
+			str, &isVirtual, 260, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
 		))
 
-	else gotoIfError3(clean, File_resolve(
-		str, &isVirtual, 260, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
-	))
+		if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"))
 
-	if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
-		retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"))
+	clean:
+		CharString_freex(&loc);
+		return s_uccess;
+	}
 
-clean:
-	CharString_freex(&loc);
-	return s_uccess;
-}
+	Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr) {
 
-Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr) {
+		Bool s_uccess = true;
+		CharString tmp = CharString_createNull();
 
-	Bool s_uccess = true;
-	CharString tmp = CharString_createNull();
+		if(!dynamicLib || !ptr)
+			retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"))
 
-	if(!dynamicLib || !ptr)
-		retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"))
+		if(!CharString_isNullTerminated(str))
+			gotoIfError2(clean, CharString_createCopyx(str, &tmp))
 
-	if(!CharString_isNullTerminated(str))
-		gotoIfError2(clean, CharString_createCopyx(str, &tmp))
+		if(!(*ptr = dlsym(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr)))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"))
 
-	if(!(*ptr = dlsym(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr)))
-		retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"))
+	clean:
+		CharString_freex(&tmp);
+		return s_uccess;
+	}
 
-clean:
-	CharString_freex(&tmp);
-	return s_uccess;
-}
+	void DynamicLibrary_free(DynamicLibrary dynamicLib) {
+		if(dynamicLib) dlclose(dynamicLib);
+	}
 
-void DynamicLibrary_free(DynamicLibrary dynamicLib) {
-	if(dynamicLib) dlclose(dynamicLib);
-}
+#endif

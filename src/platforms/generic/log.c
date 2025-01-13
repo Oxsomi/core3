@@ -60,6 +60,11 @@ void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
 
 //Default allocator. Sometimes they can't be safely used
 
+void Log_logFormatx(ELogLevel level, ELogOptions opt, const C8 *format, ...) {
+	const Allocator alloc = Platform_instance->alloc;
+	Log_level(level);
+}
+
 void Log_debugx(ELogOptions opt, const C8 *format, ...) {
 	const Allocator alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Debug);
