@@ -32,44 +32,44 @@
 
 CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc; (void)err; return CharString_createNull(); }
 
-void Log_printCapturedStackTraceCustom(
-	Allocator alloc,
-	const void **stackTrace,
-	U64 stackSize,
-	ELogLevel lvl,
-	ELogOptions opt
-) {
-
-	if(!stackTrace)
-		return;
-
-	if(lvl >= ELogLevel_Count)
-		return;
-
-	Log_logFormat(alloc, lvl, opt, "Stacktrace:\n");
-
-	for(U64 i = 0; i < stackSize && stackTrace[i]; ++i) {
-
-		Dl_info dlInfo = (Dl_info) { 0 };
-
-		if(!dladdr(stackTrace[i], &dlInfo) || !dlInfo.dli_sname)
-			Log_logFormat(alloc, lvl, opt, "%p", stackTrace[i]);
-
-		else Log_logFormat(
-			alloc,
-			lvl,
-			opt,
-			dlInfo.dli_fname ? "%p: %s (%s)" : "%p: %s",
-			stackTrace[i],
-			dlInfo.dli_sname,
-			dlInfo.dli_fname
-		);
-	}
-}
-
 #if _PLATFORM_TYPE != PLATFORM_ANDROID
 
 	#include <execinfo.h>
+
+	void Log_printCapturedStackTraceCustom(
+		Allocator alloc,
+		const void **stackTrace,
+		U64 stackSize,
+		ELogLevel lvl,
+		ELogOptions opt
+	) {
+
+		if(!stackTrace)
+			return;
+
+		if(lvl >= ELogLevel_Count)
+			return;
+
+		Log_logFormat(alloc, lvl, opt, "Stacktrace:\n");
+
+		U64 i = 0;
+
+		for(; i < stackSize && stackTrace[i]; ++i)		//Find end
+			;
+
+		C8 **symbols = backtrace_symbols((void* const *)stackTrace, i);
+
+		for(U64 j = 0; j < i; ++j)
+			Log_logFormat(
+				alloc,
+				lvl,
+				opt | ELogOptions_NewLine,
+				"%s",
+				symbols[j]
+			);
+
+		free(symbols);
+	}
 
 	void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skipTmp) {
 

@@ -121,3 +121,38 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
     else __android_log_print(androidLvl, "OxC3", "%.*s%s", (int)CharString_length(arg), arg.ptr, newLine);
 }
+
+void Log_printCapturedStackTraceCustom(
+	Allocator alloc,
+	const void **stackTrace,
+	U64 stackSize,
+	ELogLevel lvl,
+	ELogOptions opt
+) {
+
+	if(!stackTrace)
+		return;
+
+	if(lvl >= ELogLevel_Count)
+		return;
+
+	Log_logFormat(alloc, lvl, opt, "Stacktrace:\n");
+
+	for(U64 i = 0; i < stackSize && stackTrace[i]; ++i) {
+
+		Dl_info dlInfo = (Dl_info) { 0 };
+
+		if(!dladdr(stackTrace[i], &dlInfo) || !dlInfo.dli_sname)
+			Log_logFormat(alloc, lvl, opt, "%p", stackTrace[i]);
+
+		else Log_logFormat(
+			alloc,
+			lvl,
+			opt,
+			dlInfo.dli_fname ? "%p: %s (%s)" : "%p: %s",
+			stackTrace[i],
+			dlInfo.dli_sname,
+			dlInfo.dli_fname
+		);
+	}
+}

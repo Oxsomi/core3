@@ -57,7 +57,7 @@ fi
 
 if [ "$3" == True ]; then
 
-	if [[ $(uname -i) == "x86_64" ]]; then
+	if [[ $(uname -m) == "x86_64" ]]; then
 		arch = "x64"
 	else
 		arch = "arm64"
