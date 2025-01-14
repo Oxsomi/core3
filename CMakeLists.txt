@@ -35,10 +35,6 @@ set(CMAKE_CXX_STANDARD 20)				# We need some C++ to interface with DXC, but we w
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 set(CMAKE_CXX_EXTENSIONS ON)
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 	message(FATAL_ERROR "32-bit builds are disabled by core3 because it's legacy and could cause unintended behavior if built anyways.")
 endif()
@@ -56,12 +52,15 @@ set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic lin
 if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
+	set(target "arm64")
 elseif(${ANDROID_ABI} MATCHES "arm64-v8a")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
+	set(target "arm64")
 else()
 	message("-- Enabling x64 specific optimizations")
 	set(ARM OFF)
+	set(target "x64")
 endif()
 
 if(ANDROID AND DynamicLinkingGraphics)
@@ -183,6 +182,17 @@ else()
 	message("-- Enabling Linux support...")
 	set(platform linux)
 endif()
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${target}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${target}/lib")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/${CMAKE_BUILD_TYPE}/${platform}/${target}/bin")
+
+foreach(config ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${config} CONFIG)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${target}/lib")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${target}/lib")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG} "${CMAKE_CURRENT_SOURCE_DIR}/build/${config}/${platform}/${target}/bin")
+endforeach()
 
 # Enable symbols
 

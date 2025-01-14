@@ -68,7 +68,7 @@ class openal_soft(ConanFile):
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if not self.settings.os == "Windows":
 		
-			if self.settings.os == "Linux":
+			if self.settings.os == "Linux" or self.settings.os == "Android":
 				copy(self, "*.so", self.build_folder, lib_dst)
 				copy(self, "*.so", self.build_folder, bin_dst)
 				copy(self, "*.so.*", self.build_folder, lib_dst)

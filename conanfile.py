@@ -112,7 +112,7 @@ class oxc3(ConanFile):
 			self.requires("xdg_shell/2024.10.21")
 			self.requires("xdg_decoration/2024.12.22")
 
-		# self.requires("openal_soft/2024.11.04.01")
+		self.requires("openal_soft/2024.11.04.01")
 
 	def package(self):
 
@@ -130,6 +130,11 @@ class oxc3(ConanFile):
 
 		lib_dst = os.path.join(self.package_folder, "lib")
 		bin_dst = os.path.join(self.package_folder, "bin")
+
+		if self.settings.arch == "x86_64":
+			archName = "x64"
+		else:
+			archName = "arm64"
 
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if cwd.endswith("Debug") or cwd.endswith("Release"):
@@ -201,6 +206,9 @@ class oxc3(ConanFile):
 		elif self.options.forceVulkan or self.options.dynamicLinkingGraphics:
 			self.cpp_info.libs += [ "vulkan-1" ]
 			vulkan = True
+
+		if self.settings.os == "Android":
+			self.cpp_info.system_libs += [ "android", "log" ]
 
 		vulkanMacos = os.path.join(os.environ['VULKAN_SDK'], "macOS")
 

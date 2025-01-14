@@ -57,17 +57,30 @@ fi
 
 if [ "$3" == True ]; then
 
-	cd build/$1/bin
+	if [[ $(uname -i) == "x86_64" ]]; then
+		arch = "x64"
+	else
+		arch = "arm64"
+	fi
+	if [ "$(uname)" == "Darwin" ]; then
+		platform = "osx"
+	elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+		platform = "linux"
+	else
+		platform = "windows"
+	fi
+
+	cd build/$1/$platform/$arch/bin
 
 	if ! ./OxC3_test ; then
 		printf "${RED}-- OxC3_test failed${NC}\n"
 		exit 1
 	fi
 
-	if ! bash ../../../tools/test.sh ; then
+	if ! bash ../../../../tools/test.sh ; then
 		printf "${RED}-- test.sh failed${NC}\n"
 		exit 1
 	fi
 
-	cd ../../..
+	cd ../../../..
 fi

@@ -40,11 +40,11 @@ REM Run tests
 
 if "%3" == "False" goto :eof
 
-cd build/bin/%1
+cd build/%1/windows/x64/bin
 OxC3_test.exe
-..\..\..\tools\test.bat
+..\..\..\..\..\tools\test.bat
 
-cd ../../..
+cd ../../../../..
 goto :eof
 
 :usage

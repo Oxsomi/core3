@@ -53,7 +53,7 @@ def makeProfile(conanHome, llvmRootDir, arch, level, generator):
     with open(outputPath, "w") as output:
         output.write(profile)
 
-def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstall):
+def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstall, enableShaderCompiler):
 
     profile = "android_" + arch + "_" + level + "_" + generator
 
@@ -64,12 +64,17 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstal
 
     subprocess.check_output("conan create packages/openal_soft -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
 
+    if enableShaderCompiler:
+        subprocess.check_output("conan create packages/nvapi -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
+        subprocess.check_output("conan create packages/spirv_reflect -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
+        subprocess.check_output("conan create packages/dxc -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
+
     if doInstall:
         conanType = "create"
     else:
         conanType = "build"
 
-    subprocess.check_output("conan " + conanType + " . -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\" --build=missing")
+    subprocess.check_output("conan " + conanType + " . -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\" --build=missing")
 
 def main():
 
@@ -94,8 +99,9 @@ def main():
     parser.add_argument("-mode", type=str, default="Release", choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"], help="Build mode")
     parser.add_argument("-api", type=int, default=29, help="Android api level (e.g. 29 = Android 10 Q)")
     parser.add_argument("-arch", type=str, default="all", choices=["arm64", "x64", "all"], help="Architecture")
-    parser.add_argument("-simd", type=bool, default=False, help="EnableSIMD (False until properly supported)")
+    parser.add_argument("-simd", type=bool, default=False, help="EnableSIMD (False by default until properly supported)")
     parser.add_argument("-generator", type=str, help="CMake Generator")
+    parser.add_argument("--skip_build", help="Run full build, if false, can be used to package an already built project", action="store_true")
     
     parser.add_argument("-package", type=str, help="APK package name (required if -apk)")
     parser.add_argument("-version", type=str, help="APK version (required if -apk)")
@@ -104,7 +110,9 @@ def main():
     parser.add_argument("-category", type=str, default="game", help="APK category", choices=[ "accessibility", "audio", "game", "image", "maps", "news", "productivity", "social", "video"])
 
     parser.add_argument("-keystore", type=str, help="Sign an apk with a certain keystore, if empty, will require JAVA_HOME to be set (will generate)", default=None)
+    parser.add_argument("-keystore_password", type=str, help="Keystore password, if not entered, will ask it when signing", default=None)
 
+    parser.add_argument("--shader_compiler", help="EnableShaderCompiler (False by default to reduce build times)", action="store_true")
     parser.add_argument("--sign", help="Sign apk if built", action="store_true")
     parser.add_argument("--run", help="Run apk if built", action="store_true")
     parser.add_argument("--apk", help="Build apk (requires -package, -version, -lib and -name)", action="store_true")
@@ -133,12 +141,14 @@ def main():
         break
 
     # Build
-    
-    if args.arch == "all" or args.arch == "x64":
-        doBuild(args.mode, conanHome, rootDir, "x86_64", str(args.api), args.generator, args.simd, args.install)
 
-    if args.arch == "all" or args.arch == "arm64":
-        doBuild(args.mode, conanHome, rootDir, "armv8", str(args.api), args.generator, args.simd, args.install)
+    if not args.skip_build:
+        
+        if args.arch == "all" or args.arch == "x64":
+            doBuild(args.mode, conanHome, rootDir, "x86_64", str(args.api), args.generator, args.simd, args.install, args.shader_compiler)
+
+        if args.arch == "all" or args.arch == "arm64":
+            doBuild(args.mode, conanHome, rootDir, "armv8", str(args.api), args.generator, args.simd, args.install, args.shader_compiler)
 
     # Make APK
 
@@ -155,8 +165,12 @@ def main():
 
         manifest = manifest.format(APP_PACKAGE=args.package, APP_VERSION=args.version, APP_API_LEVEL=str(args.api), APP_NAME=args.name, APP_DEBUGGABLE="false" if args.mode == "Release" else "true", APP_CATEGORY=args.category, APP_LIB_NAME=args.lib)
 
-        outputPath = "build/" + args.mode + "/apk"
+        outputPath = "build/" + args.mode + "/android/"
         Path(outputPath).mkdir(parents=True, exist_ok=True)
+        
+        outputPath += "apk/"
+        Path(outputPath).mkdir(parents=True, exist_ok=True)
+
         outputPath += "/AndroidManifest.xml"
 
         with open(outputPath, "w") as output:
@@ -164,15 +178,24 @@ def main():
 
         # Copy so file(s)
 
-        outputPath = "build/" + args.mode + "/apk/libs"
+        outputPath = "build/" + args.mode + "/android/apk/libs"
         Path(outputPath).mkdir(parents=True, exist_ok=True)
 
-        for f in glob.glob("build/" + args.mode + "/bin/*.so"):
-            shutil.copy2(f, outputPath)
+        tmpPath = outputPath + "/arm64-v8a"
+        Path(tmpPath).mkdir(parents=True, exist_ok=True)
+
+        tmpPath = outputPath + "/x86_64"
+        Path(tmpPath).mkdir(parents=True, exist_ok=True)
+
+        for f in glob.glob("build/" + args.mode + "/android/x64/bin/*.so"):
+            shutil.copy2(f, outputPath + "/x86_64")
+
+        for f in glob.glob("build/" + args.mode + "/android/arm64/bin/*.so"):
+            shutil.copy2(f, outputPath + "/arm64-v8a")
 
         # Copy packages
         
-        assetsFolder = "build/" + args.mode + "/apk/assets"
+        assetsFolder = "build/" + args.mode + "/android/apk/assets"
         outputPath = assetsFolder
         Path(outputPath).mkdir(parents=True, exist_ok=True)
 
@@ -196,7 +219,7 @@ def main():
         # Copy into /res (and provide -S res to aapt package)
         
         inputPath = os.path.dirname(os.path.realpath(__file__)) + "/src/platforms/android/res"
-        resFolder = "build/" + args.mode + "/apk/res"
+        resFolder = "build/" + args.mode + "/android/apk/res"
         Path(resFolder).mkdir(parents=True, exist_ok=True)
         copy_tree(inputPath, resFolder)
 
@@ -211,16 +234,31 @@ def main():
         # Make unsigned apk
         
         print("-- Creating apk")
-        subprocess.check_output("\"" + buildTools + "aapt\" package -f -I \"" + os.environ["ANDROID_SDK"] + "/platforms/android-" + str(args.api) + "/android.jar\" -M \"build/" + args.mode + "/apk/AndroidManifest.xml\" -A \"" + assetsFolder + "\" -S \"" + resFolder + "\" -m -F \"build/" + args.mode + "/apk/app-unsigned.apk\"")
-        subprocess.check_output("\"" + buildTools + "zipalign\" -v -f 4 \"build/" + args.mode + "/apk/app-unsigned.apk\" \"build/" + args.mode + "/apk/app.apk\"")
+        subprocess.check_output("\"" + buildTools + "aapt\" package -f -I \"" + os.environ["ANDROID_SDK"] + "/platforms/android-" + str(args.api) + "/android.jar\" -M \"build/" + args.mode + "/android/apk/AndroidManifest.xml\" -A \"" + assetsFolder + "\" -S \"" + resFolder + "\" -m -F \"build/" + args.mode + "/android/apk/app-unsigned.apk\"")
+        
+        print("-- Adding libs to apk")
 
-        apkFile = "\"build/" + args.mode + "/apk/app.apk\""
+        # Gotta temporary move to android/apk to avoid names from getting messed up by aapt
+         
+        cwd = os.getcwd()
+        os.chdir("build/" + args.mode + "/android/apk")
+        
+        for f in glob.glob("libs/*"):
+            for f0 in glob.glob(f + "/*.so"):
+                subprocess.check_output("\"" + buildTools + "aapt\" add \"app-unsigned.apk\" \"" + f0 + "\"")
+
+        os.chdir(cwd)
+
+        print("-- Zipalign apk")
+        subprocess.check_output("\"" + buildTools + "zipalign\" -v -f 4 \"build/" + args.mode + "/android/apk/app-unsigned.apk\" \"build/" + args.mode + "/android/apk/app.apk\"")
+
+        apkFile = "\"build/" + args.mode + "/android/apk/app.apk\""
 
         if args.sign:
 
             if args.keystore == None:
 
-                args.keystore = "build/" + args.mode + "/apk/.keystore"
+                args.keystore = "build/" + args.mode + "/android/apk/.keystore"
 
                 if not os.path.isfile(args.keystore):
 
@@ -232,12 +270,15 @@ def main():
 
                     subprocess.check_output("\"" + os.environ["JAVA_HOME"] + "/bin/keytool\" -genkeypair -v -keystore \"" + args.keystore + "\" -keyalg RSA -keysize 2048 -validity 10000")
 
-            print("-- Sign apk, please enter keystore password")
+            if args.keystore_password == None:
+                print("-- Sign apk, please enter keystore password")
+                pwd = str(input())
 
-            pwd = str(input())
+            else:
+                pwd = args.keystore_password
 
             signCommand = "\"" + buildTools + "apksigner.bat\"" if os.name == "nt" else "bash \"" + buildTools + "apksigner.sh\""
-            subprocess.check_output(signCommand + " sign --ks \"" + args.keystore + "\" --ks-pass \"pass:" + pwd + "\" --key-pass \"pass:" + pwd + "\" --min-sdk-version " + str(args.api) + " \"build/" + args.mode + "/apk/app.apk\"")
+            subprocess.check_output(signCommand + " sign --ks \"" + args.keystore + "\" --ks-pass \"pass:" + pwd + "\" --key-pass \"pass:" + pwd + "\" --min-sdk-version " + str(args.api) + " \"build/" + args.mode + "/android/apk/app.apk\"")
             
             print("-- Successfully signed apk")
 
@@ -245,8 +286,10 @@ def main():
 
     if args.run:
 
-        if not args.apk:
-            print("APK needs to be built (--apk) if --run is specified", file=sys.stderr)
+        apkFile = "\"build/" + args.mode + "/android/apk/app.apk\""
+
+        if args.package == None or args.lib == None:
+            print("apk run requires the following arguments (example): -package net.osomi.test -lib test", file=sys.stderr)
             return
 
         adb = os.environ["ANDROID_SDK"] + "/platform-tools/adb"

@@ -34,6 +34,10 @@
 #include <sys/stat.h>
 #include <errno.h>
 
+#ifndef S_IWUSR
+	#define S_IWUSR S_IWRITE
+#endif
+
 Bool File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr);
 
 Bool File_foreach(CharString loc, Bool inAppDir, FileCallback callback, void *userData, Bool isRecursive, Error *e_rr) {
@@ -97,7 +101,7 @@ Bool File_foreach(CharString loc, Bool inAppDir, FileCallback callback, void *us
 			FileInfo info = (FileInfo) {
 				.path = tmp,
 				.timestamp = s.st_mtime,
-				.access = s.st_mode & S_IWRITE ? EFileAccess_ReadWrite : EFileAccess_Read,
+				.access = s.st_mode & S_IWUSR ? EFileAccess_ReadWrite : EFileAccess_Read,
 				.type = EFileType_Folder
 			};
 
@@ -115,7 +119,7 @@ Bool File_foreach(CharString loc, Bool inAppDir, FileCallback callback, void *us
 		FileInfo info = (FileInfo) {
 			.path = tmp,
 			.timestamp = s.st_mtime,
-			.access = s.st_mode & S_IWRITE ? EFileAccess_ReadWrite : EFileAccess_Read,
+			.access = s.st_mode & S_IWUSR ? EFileAccess_ReadWrite : EFileAccess_Read,
 			.type = EFileType_File,
 			.fileSize = s.st_size
 		};

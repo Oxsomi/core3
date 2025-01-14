@@ -42,7 +42,7 @@
 
 	#define _ftelli64 ftell
 	#define _fseeki64 fseek
-	#define _mkdir(a) mkdir(a, ALLPERMS)
+	#define _mkdir(a) mkdir(a, S_IRWXU)
 
 	I32 removeFolder(CharString str) {
 
@@ -88,6 +88,14 @@
 		return res;
 	}
 
+#endif
+
+#ifndef S_IRUSR
+	#define S_IRUSR S_IREAD
+#endif
+
+#ifndef S_IWUSR
+	#define S_IWUSR S_IWRITE
 #endif
 
 //Private file functions
@@ -208,7 +216,7 @@ Bool File_getInfo(CharString loc, FileInfo *info, Allocator alloc, Error *e_rr) 
 			2, "File_getInfo()::loc file type not supporterd (must be file or folder)"
 		))
 
-	if (!(inf.st_mode & (S_IREAD | S_IWRITE)))
+	if (!(inf.st_mode & (S_IRUSR | S_IWUSR)))
 		retError(clean, Error_unauthorized(0, "File_getInfo()::loc file must be read and/or write"))
 
 	*info = (FileInfo) {
@@ -220,8 +228,8 @@ Bool File_getInfo(CharString loc, FileInfo *info, Allocator alloc, Error *e_rr) 
 		.fileSize = (U64) inf.st_size,
 
 		.access =
-			(inf.st_mode & S_IWRITE ? EFileAccess_Write : EFileAccess_None) |
-			(inf.st_mode & S_IREAD  ? EFileAccess_Read  : EFileAccess_None)
+			(inf.st_mode & S_IWUSR ? EFileAccess_Write : EFileAccess_None) |
+			(inf.st_mode & S_IRUSR  ? EFileAccess_Read  : EFileAccess_None)
 	};
 
 clean:

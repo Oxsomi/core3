@@ -128,7 +128,7 @@ class dxc(ConanFile):
 		copy(self, "*.h", dx_headers_src, include_dir)
 		copy(self, "*.hpp", dx_headers_src, include_dir)
 
-		# WSL is only needed for linux
+		# WSL is only needed for non windows
 		if not self.settings.os == "Windows":
 
 			wsl_winadapter_src = os.path.join(self.source_folder, "DirectXShaderCompiler/external/DirectX-Headers/include/wsl")

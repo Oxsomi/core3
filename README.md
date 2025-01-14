@@ -60,27 +60,32 @@ One of the useful things about C is that files are incredibly easy to compile an
 
 ## Requirements
 
-- Python 3.8.10+ and conan 2.7.1+ (to avoid huge build times due to DXC/Clang/LLVM/SPIRV).
+- Python 3.8.10+ and Conan 2.7.1+ (to avoid huge build times due to DXC/Clang/LLVM/SPIRV).
 - CMake 3.13+.
-- (Optional on Windows only): Vulkan SDK (latest preferred, but at least 1.3.226).
-- (Optional): Git or any tool that can work with GitHub.
+- (*Optional on Windows only*): Vulkan SDK (latest preferred, but at least 1.3.226).
+- (*Optional*): Git or any tool that can work with GitHub.
 - C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used to interface with some deps not using C such as DXC.
-- OSX:
+- **OSX**:
   - If using Vulkan SDK, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1 if you need bindless rendering. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
-- Android:
+- **Android**:
   - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.
   - For Windows; msys2 or Ninja can be used to target android.
-  - Optional: JDK for creation of a keystore if one can not be provided.
+  - *Optional*: JDK for creation of a keystore if one can not be provided.
 
 ## Running requirements
 
-- Windows (full support).
-- Linux (**partial** support: buggy window implementation).
-- OS X (**partial** support: no virtual files, nor window support).
-- Android (**WIP**).
+- Platforms:
+  - Windows (**full** support).
+  - Linux (**partial** support: buggy window implementation).
+  - OS X (**partial** support: no virtual files, nor window support).
+  - Android (**partial** support: no window implementation yet).
+- Instruction sets:
+  - arm64: **partial** support: no NEON yet.
+  - x64: **partial** support: Fully supported on windows, but SSE doesn't work elsewhere yet.
+  - none: **full** support: arch independent fallback is working as normal, used when platform doesn't support full arm64 or x64.
+    - Note: Turning off SIMD is **not recommended for production builds!!** and building like this for final is highly discouraged.
 - A 64-bit CPU.
-  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off shader compilation and SIMD (**not recommended for production builds!!**). The shader compiler currently is the only thing that doesn't support ARM if SIMD is turned off.
-  - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
+  - Even though SSE4.2+ is recommended, this can be explicitly turned off.. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
   - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
 
 ## Installing OxC3
@@ -113,23 +118,27 @@ The Windows implementation supports SSE.
 
 ### Android
 
-`python3 build_android.py -mode Debug -api 29 -arch arm64 -simd False -generator "MinGW Makefiles"`.
+`python3 build_android.py -mode Debug`.
 
-Where `29` is the API version you're targeting (default); this would be Android 10 (Q). With arch as arm64 would target arm64 rather than both x64 and arm64.
+Where `-api 29` is the API version you're targeting (default = 29); this would be Android 10 (Q). With `-arch` as all default would target both arm64 and x64. `-mode` could be `Debug`, `Release`, `MinSizeRel` or `RelWithDebInfo`. `-simd False` by default.
 
-On Windows if "generator" is not specified it is defaulted to "MinGW Makefiles".
+On Windows if `-generator` is not specified it is defaulted to "MinGW Makefiles".
 
 This would build only the .a files and .so files. To make an APK, it requires to know the following:
 
-`--apk -package net.osomi.test -version 0.1.0 -lib myLibName -name "My test app"`. When apk is used, it requires to specify these arguments to be able to build the apk for you.
+`--apk -package net.osomi.test -version 0.1.0 -lib myLibName -name "My test app"`. When apk is used, it requires to specify these arguments to be able to build the apk for you. If building is disabled (through `--skip-build`, it requires the same settings (arch, mode, api, simd, generator) as the prebuilt binaries.
 
-`--sign` will allow you to sign the apk before running it or distributing it. Provide the path using `-keystore` or have JDK installed with the environment variable `JAVA_HOME` correctly set to allow a temporary keystore to be created.
+`--sign` will allow you to sign the apk before running it or distributing it. Provide the path using `-keystore` or have JDK installed with the environment variable `JAVA_HOME` correctly set to allow a temporary keystore to be created. `-keystore_password` can be used to avoid having to input the keystore password through cmd if needed.
 
-`--run` requires apk to be defined and will attempt to install and run on an attached device, requires the device to be in developer mode and connected.
+`--run` will attempt to install and run on an attached device, requires the device to be in developer mode and connected. If apk isn't defined, you're still expected to specify `-package` and `-lib`.
 
 `-category X` when building an apk shows what kind of category it is, for example `game` (default).
 
 `--install` can be used when OxC3 itself is a dependency rather than the final target.
+
+`--shader_compiler` can be used to enable compiling the shader compiler, which might be useful for applications that require runtime shader generation. This is off by default to save a great deal of compile time.
+
+`--skip_build` can be used to disable building, in case a prebuilt apk could be ran or a new apk can be made.
 
 ### Mac OS X
 
@@ -189,7 +198,7 @@ Vulkan:
 	yourExecutable(,.exe,.apk,.ipa,etc.)
 
 Dynamic linking:
-	Windows only:
+	Windows / D3D12 only:
 		D3D12/*.dll
 		D3D12/*.pdb
 		OxC3_graphics_d3d12.dll
