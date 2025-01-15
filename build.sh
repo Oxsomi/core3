@@ -77,10 +77,10 @@ if [ "$3" == True ]; then
 		exit 1
 	fi
 
-	if ! bash ../../../../tools/test.sh ; then
+	if ! bash ../../../../../tools/test.sh ; then
 		printf "${RED}-- test.sh failed${NC}\n"
 		exit 1
 	fi
 
-	cd ../../../..
+	cd ../../../../..
 fi
