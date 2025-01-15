@@ -57,6 +57,11 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstal
 
     profile = "android_" + arch + "_" + level + "_" + generator
 
+    if arch == "x86_64":
+        archName = "x64"
+    else:
+        archName = "arm64"
+
     if not os.path.isfile(conanHome + "/profiles/" + profile):
         makeProfile(conanHome, llvmRootDir, arch, level, generator)
 
@@ -74,7 +79,8 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstal
     else:
         conanType = "build"
 
-    subprocess.check_output("conan " + conanType + " . -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\" --build=missing")
+    outputFolder = "\"build/" + mode + "/android/" + archName + "\""
+    subprocess.check_output("conan " + conanType + " . -of " + outputFolder + " -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\" --build=missing")
 
 def main():
 

@@ -48,7 +48,20 @@ if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 	fi
 fi
 
-if ! conan build . -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 -o dynamicLinkingGraphics=$4 ${@:5}; then
+if [[ $(uname -m) == "x86_64" ]]; then
+	architecture="x64"
+else
+	architecture="arm64"
+fi
+if [ "$(uname)" == "Darwin" ]; then
+	platform="osx"
+elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+	platform="linux"
+else
+	platform="windows"
+fi
+
+if ! conan build . -of build/$1/$platform/$architecture -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 -o dynamicLinkingGraphics=$4 ${@:5}; then
 	printf "${RED}-- Conan build failed${NC}\n"
 	exit 1
 fi
@@ -56,19 +69,6 @@ fi
 # Run tests
 
 if [ "$3" == True ]; then
-
-	if [[ $(uname -m) == "x86_64" ]]; then
-		architecture="x64"
-	else
-		architecture="arm64"
-	fi
-	if [ "$(uname)" == "Darwin" ]; then
-		platform="osx"
-	elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-		platform="linux"
-	else
-		platform="windows"
-	fi
 
 	cd build/$1/$platform/$architecture/bin
 

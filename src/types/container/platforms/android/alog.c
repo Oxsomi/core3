@@ -28,6 +28,7 @@
 //Comparable to https://stackoverflow.com/questions/8115192/android-ndk-getting-the-backtrace
 
 #include <unwind.h>
+#include <dlfcn.h>
 #include <android/log.h>
 
 typedef struct Backtrace {
