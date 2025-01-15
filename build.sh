@@ -58,9 +58,9 @@ fi
 if [ "$3" == True ]; then
 
 	if [[ $(uname -m) == "x86_64" ]]; then
-		arch = "x64"
+		architecture = "x64"
 	else
-		arch = "arm64"
+		architecture = "arm64"
 	fi
 	if [ "$(uname)" == "Darwin" ]; then
 		platform = "osx"
@@ -70,7 +70,7 @@ if [ "$3" == True ]; then
 		platform = "windows"
 	fi
 
-	cd build/$1/$platform/$arch/bin
+	cd build/$1/$platform/$architecture/bin
 
 	if ! ./OxC3_test ; then
 		printf "${RED}-- OxC3_test failed${NC}\n"
