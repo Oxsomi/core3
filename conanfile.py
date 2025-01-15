@@ -126,8 +126,6 @@ class oxc3(ConanFile):
 		copy(self, "*.h", inc_src, inc_dst)
 		copy(self, "*.hpp", inc_src, inc_dst)
 
-		cwd = os.getcwd()
-
 		lib_dst = os.path.join(self.package_folder, "lib")
 		bin_dst = os.path.join(self.package_folder, "bin")
 
@@ -136,52 +134,24 @@ class oxc3(ConanFile):
 		else:
 			archName = "arm64"
 
-		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
-		if cwd.endswith("Debug") or cwd.endswith("Release"):
-			copy(self, "*.a", os.path.join(self.build_folder, "lib"), os.path.join(self.package_folder, "lib"))
-			copy(self, "*", os.path.join(self.build_folder, "bin"), os.path.join(self.package_folder, "bin"))
-
-		# Windows uses more complicated setups
+		if self.settings.os == "Windows":
+			platform = "windows"
+		elif self.settings.os == "Macos":
+			platform = "osx"
+		elif self.settings.os == "Android":
+			platform = "android"
 		else:
-			dbg_lib_src = os.path.join(self.build_folder, "lib/Debug")
-			dbg_bin_src = os.path.join(self.build_folder, "bin/Debug")
+			platform = "linux"
 
-			copy(self, "*.lib", dbg_lib_src, lib_dst)
-			copy(self, "*.pdb", dbg_lib_src, lib_dst)
-			copy(self, "*.exp", dbg_lib_src, lib_dst)
+		input_dir = os.path.join(self.build_folder, str(self.settings.build_type) + "/" + platform + "/" + archName)
+		input_lib_dir = os.path.join(input_dir, "lib")
+		input_bin_dir = os.path.join(input_dir, "bin")
 
-			copy(self, "*.exp", dbg_bin_src, bin_dst)
-			copy(self, "*.exe", dbg_bin_src, bin_dst)
-			copy(self, "*.dll", dbg_bin_src, bin_dst)
-			copy(self, "*.pdb", dbg_bin_src, bin_dst)
-
-			if os.path.isfile(lib_dst):
-				for filename in os.listdir(lib_dst):
-					f = os.path.join(lib_dst, filename)
-					if os.path.isfile(f):
-						offset = f.rfind(".")
-						rename(self, f, f[:offset] + "d." + f[offset+1:])
-
-			if os.path.isfile(bin_dst):
-				for filename in os.listdir(bin_dst):
-					f = os.path.join(bin_dst, filename)
-					if os.path.isfile(f):
-						offset = f.rfind(".")
-						rename(self, f, f[:offset] + "d." + f[offset+1:])
-
-			# Copy release libs
-
-			rel_lib_src = os.path.join(self.build_folder, "lib/Release")
-			rel_bin_src = os.path.join(self.build_folder, "bin/Release")
-
-			copy(self, "*.lib", rel_lib_src, lib_dst)
-			copy(self, "*.pdb", rel_lib_src, lib_dst)
-			copy(self, "*.exp", rel_lib_src, lib_dst)
-
-			copy(self, "*.exp", rel_bin_src, bin_dst)
-			copy(self, "*.exe", rel_bin_src, bin_dst)
-			copy(self, "*.dll", rel_bin_src, bin_dst)
-			copy(self, "*.pdb", rel_bin_src, bin_dst)
+		copy(self, "*.a", input_lib_dir, lib_dst)
+		copy(self, "*.lib", input_lib_dir, lib_dst)
+		copy(self, "*.pdb", input_lib_dir, lib_dst)
+		copy(self, "*.exp", input_lib_dir, lib_dst)
+		copy(self, "*", input_bin_dir, bin_dst)
 
 	def package_info(self):
 
