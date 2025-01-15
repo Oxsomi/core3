@@ -58,16 +58,16 @@ fi
 if [ "$3" == True ]; then
 
 	if [[ $(uname -m) == "x86_64" ]]; then
-		architecture = "x64"
+		architecture="x64"
 	else
-		architecture = "arm64"
+		architecture="arm64"
 	fi
 	if [ "$(uname)" == "Darwin" ]; then
-		platform = "osx"
+		platform="osx"
 	elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-		platform = "linux"
+		platform="linux"
 	else
-		platform = "windows"
+		platform="windows"
 	fi
 
 	cd build/$1/$platform/$architecture/bin
