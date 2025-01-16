@@ -34,6 +34,7 @@ Error Buffer_createBitsx(U64 length, Bool value, Buffer *result);
 Bool Buffer_freex(Buffer *buf);
 Error Buffer_createEmptyBytesx(U64 length, Buffer *output);
 Error Buffer_createUninitializedBytesx(U64 length, Buffer *output);
+Bool Buffer_resizex(Buffer *buf, U64 newLen, Bool preserveContents, Bool clearUnsetContents, Error *e_rr);
 
 Error AllocationBuffer_createx(U64 size, Bool isVirtual, AllocationBuffer *allocationBuffer);
 Bool AllocationBuffer_freex(AllocationBuffer *allocationBuffer);

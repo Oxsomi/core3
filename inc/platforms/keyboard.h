@@ -54,10 +54,9 @@ typedef enum EKey {
 	EKey_PageDown,		EKey_End,			EKey_Home,			EKey_PrintScreen,
 	EKey_Insert,		EKey_Enter,			EKey_Delete,		EKey_NumLock,		EKey_ScrollLock,
 
-	EKey_Select,		EKey_Print,			EKey_Execute,		EKey_Back,			EKey_Forward,
-	EKey_Sleep,			EKey_Refresh,		EKey_Stop,			EKey_Search,		EKey_Favorites,
-	EKey_Start,			EKey_Mute,			EKey_VolumeDown,	EKey_VolumeUp,		EKey_Skip,
-	EKey_Previous,		EKey_Clear,			EKey_Zoom,			EKey_Help,			EKey_Apps,
+	EKey_Back,			EKey_Forward,		EKey_Sleep,			EKey_Refresh,		EKey_Search,
+	EKey_Mute,			EKey_VolumeDown,	EKey_VolumeUp,		EKey_Skip,			EKey_Previous,
+	EKey_Clear,			EKey_Help,
 
 	EKey_Left,			EKey_Up,			EKey_Right,			EKey_Down,
 

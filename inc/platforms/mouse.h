@@ -50,7 +50,7 @@ typedef enum EMouseActions {
 	EMouseButton_End,
 	EMouseButton_Count = EMouseButton_End - EMouseButton_Begin,
 
-} MouseActions;
+} EMouseActions;
 
 typedef enum EMouseFlag {
 

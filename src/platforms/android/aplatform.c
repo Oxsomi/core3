@@ -41,7 +41,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	CharString tmpStr = CharString_createNull();
 	CharString tmpStr1 = CharString_createNull();
 
-    //We will put app dir = internal data path and working dir = external data path
+	//We will put app dir = internal data path and working dir = external data path
 	//Because unlike CLI we don't have a working directory and our apk is virtual, so only internal is read/write.
 
 	CharString internal = CharString_createRefCStrConst(activity->internalDataPath);
@@ -56,7 +56,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(!CharString_endsWithSensitive(Platform_instance->workDirectory, '/', 0))
 		gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
 
-    //Foreach file, load archive entry
+	//Foreach file, load archive entry
 	//We applied a hack here; the NDK has a longstanding issue where getNextFileName will exclude directories.
 	//https://issuetracker.google.com/issues/37002833?pli=1
 	//There are ways around it with the jni, but I prefer not to use the JNI whenever possible.

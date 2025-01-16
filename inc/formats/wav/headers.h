@@ -66,7 +66,7 @@ typedef struct RIFFFmtHeader {
 
 typedef RIFFSection RIFFDataHeader;		//"data" (RIFFDataHeader_magic)
 
-#define RIFFHeader_magic     C8x4('R', 'I', 'F', 'F')
+#define RIFFHeader_magic	 C8x4('R', 'I', 'F', 'F')
 #define RIFFWAVHeader_magic  C8x4('W', 'A', 'V', 'E')
 #define RIFFFmtHeader_magic  C8x4('f', 'm', 't', ' ')
 #define RIFFDataHeader_magic C8x4('d', 'a', 't', 'a')

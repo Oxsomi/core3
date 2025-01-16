@@ -53,6 +53,8 @@ Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output);
 Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *result);
 Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output);
 
+Bool Buffer_resize(Buffer *buf, U64 newLen, Bool preserveContents, Bool clearUnsetContents, Allocator alloc, Error *e_rr);
+
 //Writing data
 
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);

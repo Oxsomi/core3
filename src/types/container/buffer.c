@@ -178,6 +178,44 @@ Error Buffer_createSubset(
 	return Error_none();
 }
 
+Bool Buffer_resize(Buffer *buf, U64 newLen, Bool preserveContents, Bool clearUnsetContents, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Buffer tmp = Buffer_createNull();
+
+	if(!buf)
+		retError(clean, Error_nullPointer(0, "Buffer_resize()::buf is required"))
+
+	if(Buffer_isRef(*buf) && Buffer_length(*buf))
+		retError(clean, Error_invalidState(0, "Buffer_resize()::buf must not be a ref, to avoid memleaks"))
+
+	U64 prevLen = Buffer_length(*buf);
+
+	if(prevLen == newLen)
+		goto clean;
+
+	gotoIfError2(clean, Buffer_createUninitializedBytes(newLen, alloc, &tmp))
+
+	if(preserveContents) {
+
+		Buffer_memcpy(tmp, *buf);
+
+		if(clearUnsetContents && newLen > prevLen)
+			Buffer_unsetAllBits(Buffer_createRef(tmp.ptrNonConst + prevLen, newLen - prevLen));
+	}
+
+	else if(clearUnsetContents)
+		Buffer_unsetAllBits(tmp);
+
+	if(buf->ptr)
+		Buffer_free(buf, alloc);
+
+	*buf = tmp;
+
+clean:
+	return s_uccess;
+}
+
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 
 	const U64 alen = Buffer_length(a), blen = Buffer_length(b);

@@ -1456,7 +1456,7 @@ Bool Compiler_parse(
 
 							//[[oxc::uniforms("X", "Y", "Z")]]
 							//[[oxc::uniforms("X" = "123", "Y" = "ABC")]]
-							//		     ^
+							//			 ^
 							if (tokLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('o', 'r', 'm', 's')) {
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;

@@ -32,95 +32,95 @@
 #include <android/log.h>
 
 typedef struct Backtrace {
-    void **current, **end;
+	void **current, **end;
 } Backtrace;
 
 _Unwind_Reason_Code unwindCallback(struct _Unwind_Context *context, Backtrace *state) {
 
-    U64 pc = _Unwind_GetIP(context);
+	U64 pc = _Unwind_GetIP(context);
 
-    if (state->current == state->end)
-        return _URC_END_OF_STACK;
+	if (state->current == state->end)
+		return _URC_END_OF_STACK;
 
-    *state->current++ = (void*)pc;
+	*state->current++ = (void*)pc;
 
-    if(!pc)
-        return _URC_END_OF_STACK;
+	if(!pc)
+		return _URC_END_OF_STACK;
 
-    return _URC_NO_REASON;
+	return _URC_NO_REASON;
 }
 
 void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skipTmp) {
 
-    U64 skip = (U64) skipTmp + 1;
-    Backtrace backtrace = (Backtrace) { .current = stack, .end = &stack[stackSize] };
-    _Unwind_Backtrace((_Unwind_Trace_Fn)unwindCallback, &backtrace);
+	U64 skip = (U64) skipTmp + 1;
+	Backtrace backtrace = (Backtrace) { .current = stack, .end = &stack[stackSize] };
+	_Unwind_Backtrace((_Unwind_Trace_Fn)unwindCallback, &backtrace);
 
-    I32 count = backtrace.current - stack;
+	I32 count = backtrace.current - stack;
 
-    if ((U32)count >= stackSize) {			//Call backTrace again, but this time we have to allocate
+	if ((U32)count >= stackSize) {			//Call backTrace again, but this time we have to allocate
 
-        U64 oldStackSize = stackSize;
-        stackSize += skip;
+		U64 oldStackSize = stackSize;
+		stackSize += skip;
 
-        Buffer buf = Buffer_createNull();
-        Error err = Buffer_createUninitializedBytes(stackSize * sizeof(void*), alloc, &buf);
+		Buffer buf = Buffer_createNull();
+		Error err = Buffer_createUninitializedBytes(stackSize * sizeof(void*), alloc, &buf);
 
-        if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
+		if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
 
-            void **newStack = (void**) buf.ptrNonConst;
+			void **newStack = (void**) buf.ptrNonConst;
 
-            backtrace = (Backtrace) { .current = newStack, .end = &newStack[stackSize] };
-            _Unwind_Backtrace((_Unwind_Trace_Fn)unwindCallback, &backtrace);
-            count = backtrace.current - stack;
+			backtrace = (Backtrace) { .current = newStack, .end = &newStack[stackSize] };
+			_Unwind_Backtrace((_Unwind_Trace_Fn)unwindCallback, &backtrace);
+			count = backtrace.current - stack;
 
-            for (U64 i = 0; i < oldStackSize && newStack[i + skip]; ++i)
-                stack[i] = newStack[i + skip];
+			for (U64 i = 0; i < oldStackSize && newStack[i + skip]; ++i)
+				stack[i] = newStack[i + skip];
 
-            if((U64)(count - skip) < oldStackSize)
-                stack[(U64)(count - skip)] = NULL;
+			if((U64)(count - skip) < oldStackSize)
+				stack[(U64)(count - skip)] = NULL;
 
-            Buffer_free(&buf, alloc);
-            return;
-        }
+			Buffer_free(&buf, alloc);
+			return;
+		}
 
-        stackSize = oldStackSize;		//Restore, apparently can't allocate, so empty elements after
-    }
+		stackSize = oldStackSize;		//Restore, apparently can't allocate, so empty elements after
+	}
 
-    //Skip part of stack
+	//Skip part of stack
 
-    for (U64 i = skip; i < stackSize && stack[i]; ++i)
-        stack[i - skip] = stack[i];
+	for (U64 i = skip; i < stackSize && stack[i]; ++i)
+		stack[i - skip] = stack[i];
 
-    if((U64)(count - skip) < stackSize)
-        stack[(U64)(count - skip)] = NULL;
+	if((U64)(count - skip) < stackSize)
+		stack[(U64)(count - skip)] = NULL;
 }
 
 void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
 
-    (void) alloc;
+	(void) alloc;
 
-    if(lvl >= ELogLevel_Count)
-        return;
+	if(lvl >= ELogLevel_Count)
+		return;
 
-    //[<thread>]: <ourStuff><\n if enabled>
+	//[<thread>]: <ourStuff><\n if enabled>
 
-    int androidLvl;
+	int androidLvl;
 
-    switch(lvl) {
-        default:                        androidLvl = ANDROID_LOG_DEBUG;     break;
-	    case ELogLevel_Performance:     androidLvl = ANDROID_LOG_INFO;      break;
-	    case ELogLevel_Warn:            androidLvl = ANDROID_LOG_WARN;      break;
-	    case ELogLevel_Error:           androidLvl = ANDROID_LOG_ERROR;     break;
-    }
-    
-    U64 thread = Thread_getId();
-    const C8 *newLine = options & ELogOptions_NewLine ? "\n" : "";
+	switch(lvl) {
+		default:						androidLvl = ANDROID_LOG_DEBUG;	 break;
+		case ELogLevel_Performance:	 androidLvl = ANDROID_LOG_INFO;	  break;
+		case ELogLevel_Warn:			androidLvl = ANDROID_LOG_WARN;	  break;
+		case ELogLevel_Error:		   androidLvl = ANDROID_LOG_ERROR;	 break;
+	}
+	
+	U64 thread = Thread_getId();
+	const C8 *newLine = options & ELogOptions_NewLine ? "\n" : "";
 
-    if(options & ELogOptions_Thread)
-        __android_log_print(androidLvl, "OxC3", "[%"PRIu64"]: %.*s%s", thread, (int)CharString_length(arg), arg.ptr, newLine);
+	if(options & ELogOptions_Thread)
+		__android_log_print(androidLvl, "OxC3", "[%"PRIu64"]: %.*s%s", thread, (int)CharString_length(arg), arg.ptr, newLine);
 
-    else __android_log_print(androidLvl, "OxC3", "%.*s%s", (int)CharString_length(arg), arg.ptr, newLine);
+	else __android_log_print(androidLvl, "OxC3", "%.*s%s", (int)CharString_length(arg), arg.ptr, newLine);
 }
 
 void Log_printCapturedStackTraceCustom(

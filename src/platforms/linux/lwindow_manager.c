@@ -100,7 +100,7 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	if(!manager->display)
 		retError(clean, Error_stderr(0, "WindowManager_createNative() couldn't connect to display"))
 
-    manager->registry = wl_display_get_registry(manager->display);
+	manager->registry = wl_display_get_registry(manager->display);
 
 	if(!manager->registry)
 		retError(clean, Error_invalidState(0, "WindowManager_createNative() couldn't get registry"))
@@ -110,10 +110,10 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 		.global_remove = LWindowManager_unregister
 	};
 
-    wl_registry_add_listener(manager->registry, &manager->listener, manager);
+	wl_registry_add_listener(manager->registry, &manager->listener, manager);
 
-    wl_display_dispatch(manager->display);
-    wl_display_roundtrip(manager->display);
+	wl_display_dispatch(manager->display);
+	wl_display_roundtrip(manager->display);
 
 	if(!manager->compositor || !manager->shm || !manager->xdgWmBase)
 		retError(clean, Error_invalidState(0, "WindowManager_createNative() couldn't get compositor, shm or xdg"))

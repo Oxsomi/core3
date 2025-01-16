@@ -28,31 +28,31 @@ struct android_app *AWindowManager_instance = NULL;
 extern int main(int argc, const char *argv[]);
 
 void android_main(struct android_app *state) {
-    AWindowManager_instance = state;
-    main(0, NULL);                  //So same function can still be used, even though argc is invalid
+	AWindowManager_instance = state;
+	main(0, NULL);				  //So same function can still be used, even though argc is invalid
 }
 
 void *Platform_getDataImpl(void *ptr) { (void) ptr; return AWindowManager_instance; }
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
-    (void) w; (void) e_rr;
-    return false;
+	(void) w; (void) e_rr;
+	return false;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
-    (void) w;
-    return false;
+	(void) w;
+	return false;
 }
 
 void WindowManager_updateExt(WindowManager *manager) {
 
-    (void) manager;
-    
-    int ident, events;
-    struct android_poll_source *source;
-    
-    while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
-        if(source)
-            source->process(AWindowManager_instance, source);
-    }
+	(void) manager;
+	
+	int ident, events;
+	struct android_poll_source *source;
+	
+	while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
+		if(source)
+			source->process(AWindowManager_instance, source);
+	}
 }

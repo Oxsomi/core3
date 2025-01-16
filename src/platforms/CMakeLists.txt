@@ -59,7 +59,7 @@ if(APPLE)
 elseif(ANDROID)
 
 	add_library(OxC3_platforms_android STATIC "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
-    target_include_directories(OxC3_platforms_android PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
+	target_include_directories(OxC3_platforms_android PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
 	target_compile_options(OxC3_platforms_android PRIVATE -Wno-unused-parameter)
 
 	target_link_libraries(OxC3_platforms PUBLIC OxC3_platforms_android)

@@ -5,6 +5,7 @@
         "buffer.h": "c",
         "types.h": "c",
         "error.h": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "keyboard.h": "c"
     }
 }

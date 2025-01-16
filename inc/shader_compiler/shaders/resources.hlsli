@@ -42,10 +42,10 @@ static const U32 ShortResourceId_mask = (1 << 13) - 1;		//Only for Samplers, AS 
 static const U32 U32_MAX = 0xFFFFFFFFu;
 
 #ifdef __spirv__
-    #define _binding(a, b, ...) [[vk::binding(a, b)]] __VA_ARGS__
+	#define _binding(a, b, ...) [[vk::binding(a, b)]] __VA_ARGS__
 	#define _vkBinding(a, b) [[vk::binding(a, b)]]
 #else
-    #define _binding(a, b, ...) __VA_ARGS__ : register(space##a)
+	#define _binding(a, b, ...) __VA_ARGS__ : register(space##a)
 	#define _vkBinding(a, b)
 #endif
 

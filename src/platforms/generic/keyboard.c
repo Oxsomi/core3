@@ -52,10 +52,10 @@ Error Keyboard_create(Keyboard *result) {
 	KEY(PageDown);		KEY(End);			KEY(Home);			KEY(PrintScreen);
 	KEY(Insert);		KEY(Enter);			KEY(Delete);		KEY(NumLock);		KEY(ScrollLock);
 
-	KEY(Select);		KEY(Print);			KEY(Execute);		KEY(Back);			KEY(Forward);
-	KEY(Sleep);			KEY(Refresh);		KEY(Stop);			KEY(Search);		KEY(Favorites);
-	KEY(Start);			KEY(Mute);			KEY(VolumeDown);	KEY(VolumeUp);		KEY(Skip);
-	KEY(Previous);		KEY(Clear);			KEY(Zoom);			KEY(Help);			KEY(Apps);
+	KEY(Back);			KEY(Forward);
+	KEY(Sleep);			KEY(Refresh);		KEY(Search);
+	KEY(Mute);			KEY(VolumeDown);	KEY(VolumeUp);		KEY(Skip);
+	KEY(Previous);		KEY(Clear);			KEY(Help);
 
 	KEY(Left);			KEY(Up);			KEY(Right);			KEY(Down);
 

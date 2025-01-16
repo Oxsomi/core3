@@ -169,6 +169,10 @@ Error Buffer_createUninitializedBytesx(U64 length, Buffer *output) {
 	return Buffer_createUninitializedBytes(length, Platform_instance->alloc, output);
 }
 
+Bool Buffer_resizex(Buffer *buf, U64 newLen, Bool preserveContents, Bool clearUnsetContents, Error *e_rr) {
+	return Buffer_resize(buf, newLen, preserveContents, clearUnsetContents, Platform_instance->alloc, e_rr);
+}
+
 Error AllocationBuffer_createx(U64 size, Bool isVirtual, AllocationBuffer *allocationBuffer) {
 	return AllocationBuffer_create(size, isVirtual, Platform_instance->alloc, allocationBuffer);
 }

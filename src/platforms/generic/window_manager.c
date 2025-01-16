@@ -116,6 +116,7 @@ Bool WindowManager_createWindow(
 ) {
 
 	Bool s_uccess = true;
+	Bool pushed = false;
 
 	Buffer cpuVisibleBuffer = Buffer_createNull();
 	Buffer extendedData = Buffer_createNull();
@@ -124,23 +125,23 @@ Bool WindowManager_createWindow(
 
 	if(!result)
 		retError(clean, Error_nullPointer(
-			!result ? 4 : 2, "WindowManager_createVirtual()::result and callbacks.onDraw are required"
+			!result ? 4 : 2, "WindowManager_createWindow()::result and callbacks.onDraw are required"
 		))
 
 	if(!WindowManager_isAccessible(manager))
 		retError(clean, Error_invalidOperation(
-			0, "WindowManager_createVirtual() manager is NULL or inaccessible to current thread"
+			0, "WindowManager_createWindow() manager is NULL or inaccessible to current thread"
 		))
 
 	if(*result)
 		retError(clean, Error_invalidOperation(
-			1, "WindowManager_createVirtual()::*result is not NULL, indicates possible memleak"
+			1, "WindowManager_createWindow()::*result is not NULL, indicates possible memleak"
 		))
 
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
 		retError(clean, Error_outOfBounds(
 			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size),
-			"WindowManager_createVirtual()::size[i] must be >0"
+			"WindowManager_createWindow()::size[i] must be >0"
 		))
 
 	if(CharString_length(title) >= 260)
@@ -159,7 +160,7 @@ Bool WindowManager_createWindow(
 		default:
 			retError(clean, Error_invalidEnum(
 				3, (U64) format, 0,
-				"WindowManager_createVirtual()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
+				"WindowManager_createWindow()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
 			))
 	}
 
@@ -219,6 +220,10 @@ Bool WindowManager_createWindow(
 clean:
 
 	if(!s_uccess) {
+
+		if(pushed)
+			ListWindowPtr_popBack(&manager->windows, NULL);
+
 		Buffer_freex(&tmpWindow);
 		Buffer_freex(&extendedData);
 		Buffer_freex(&cpuVisibleBuffer);

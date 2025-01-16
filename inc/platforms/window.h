@@ -111,13 +111,21 @@ typedef void (*WindowDeviceButtonCallback)(Window*, InputDevice*, InputHandle, B
 typedef void (*WindowDeviceAxisCallback)(Window*, InputDevice*, InputHandle, F32);
 typedef void (*WindowTypeCallback)(Window*, CharString);
 
+//On apps this is called by the OS when memory is needed and you're expected to quit everything to continue
+//Another useful thing could be for example switching graphics API on windows during development and reloading the same thing
+
+typedef void (*WindowLoadCallback)(Window*, Buffer buf);
+typedef void (*WindowSaveCallback)(Window*, Buffer *buf);
+
 typedef struct WindowCallbacks {
-	WindowCallback onCreate, onDestroy, onDraw, onResize, onWindowMove, onMonitorChange, onUpdateFocus;
+	WindowCallback onCreate, onDestroy, onDraw, onResize, onWindowMove, onMonitorChange, onUpdateFocus, onUpdateOrientation;
 	WindowUpdateCallback onUpdate;
 	WindowDeviceCallback onDeviceAdd, onDeviceRemove;
 	WindowDeviceButtonCallback onDeviceButton;
 	WindowDeviceAxisCallback onDeviceAxis;
 	WindowTypeCallback onTypeChar;
+	WindowSaveCallback onSave;
+	WindowLoadCallback onLoad;
 } WindowCallbacks;
 
 //Window itself
@@ -134,6 +142,16 @@ typedef enum EWindowType {
 
 } EWindowType;
 
+typedef enum EWindowOrientation {
+	EWindowOrientation_Landscape,
+	EWindowOrientation_Portrait,
+	EWindowOrientation_Square
+} EWindowOrientation;
+
+typedef U8 WindowOrientation;
+typedef U8 WindowType;
+typedef U16 WindowHint;
+
 typedef struct WindowManager WindowManager;
 
 TList(InputDevice);
@@ -143,8 +161,10 @@ typedef struct Window {
 
 	WindowManager *owner;
 
-	EWindowType type;
-	EWindowHint hint;
+	WindowHint hint;
+	WindowType type;
+	WindowOrientation orientation;
+	U32 padding;
 
 	EWindowFormat format;
 	EWindowFlags flags;

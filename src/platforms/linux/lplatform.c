@@ -90,7 +90,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(ptr == (const U8*) MAP_FAILED)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
 
-    const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
+	const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
 	const Elf64_Shdr *shdr = (const Elf64_Shdr*) (ptr + elf->e_shoff);
 	const C8 *strings = (const C8*) (ptr + shdr[elf->e_shstrndx].sh_offset);
 

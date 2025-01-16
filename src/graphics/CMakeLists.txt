@@ -63,9 +63,9 @@ source_group("Shaders" FILES ${shaders})
 add_library(OxC3_graphics_target INTERFACE)
 
 if(graphicsAllowVk)
-    add_subdirectory(vulkan)
+	add_subdirectory(vulkan)
 endif()
 
 if(graphicsAllowD3D12)
-    add_subdirectory(d3d12)
+	add_subdirectory(d3d12)
 endif()

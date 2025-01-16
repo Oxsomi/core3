@@ -27,46 +27,46 @@ set(TARGET_NAME OxC3_graphics_vk)
 
 if(NOT DynamicLinkingGraphics)
 	
-    set(TARGET_NAME OxC3_graphics)
-    message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
+	set(TARGET_NAME OxC3_graphics)
+	message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
-    target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_VULKAN)
+	target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_VULKAN)
 
-    target_sources(OxC3_graphics PUBLIC ${graphicsApiHeaders})
-    target_sources(OxC3_graphics PRIVATE ${graphicsApiSources} ${graphicsApiPlatformSources})
-    
-    source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
-    source_group("Header Files (${graphicsApi})" FILES ${graphicsApiSources})
-    source_group("Source Files (${graphicsApi}: ${platform})" FILES ${graphicsApiPlatformSources})
+	target_sources(OxC3_graphics PUBLIC ${graphicsApiHeaders})
+	target_sources(OxC3_graphics PRIVATE ${graphicsApiSources} ${graphicsApiPlatformSources})
+	
+	source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
+	source_group("Header Files (${graphicsApi})" FILES ${graphicsApiSources})
+	source_group("Source Files (${graphicsApi}: ${platform})" FILES ${graphicsApiPlatformSources})
 
 else()
-    add_library(
-        OxC3_graphics_vk
-        SHARED
-        ${graphicsApiHeaders}
-        ${graphicsApiSources}
-        ${graphicsApiPlatformSources}
-        CMakeLists.txt
-    )
-    target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_graphics)
+	add_library(
+		OxC3_graphics_vk
+		SHARED
+		${graphicsApiHeaders}
+		${graphicsApiSources}
+		${graphicsApiPlatformSources}
+		CMakeLists.txt
+	)
+	target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_graphics)
 endif()
 
 if(DynamicLinkingGraphics)
-    target_compile_definitions(${TARGET_NAME} PUBLIC -DGRAPHICS_API_DYNAMIC)
+	target_compile_definitions(${TARGET_NAME} PUBLIC -DGRAPHICS_API_DYNAMIC)
 endif()
 
 if("${platform}" STREQUAL "windows")
-    target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_win32_surface")
+	target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_win32_surface")
 elseif("${platform}" STREQUAL "android")
-    target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_android_surface")
+	target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_android_surface")
 elseif("${platform}" STREQUAL "osx")
-    target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_MVK_macos_surface")
+	target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_MVK_macos_surface")
 elseif("${platform}" STREQUAL "ios")
-    target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_MVK_ios_surface")
+	target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_MVK_ios_surface")
 elseif("${platform}" STREQUAL "linux")
-    target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_wayland_surface")
+	target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_wayland_surface")
 else()
-    message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
+	message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
 endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
@@ -74,26 +74,26 @@ set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
 source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
 
 if(NOT "${platform}" STREQUAL "osx")
-    target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/include")
-    target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/lib")
+	target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/include")
+	target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/lib")
 endif()
 
 if(WIN32)
-    target_link_libraries(${TARGET_NAME} PUBLIC vulkan-1)
+	target_link_libraries(${TARGET_NAME} PUBLIC vulkan-1)
 elseif("${platform}" STREQUAL "osx")
 
-    if(EXISTS "$ENV{VULKAN_SDK}/macOS/include")
-        target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/macOS/include")
-        target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/macOS/lib")
-    else()
-        target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/include")
-        target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/lib")
-    endif()
+	if(EXISTS "$ENV{VULKAN_SDK}/macOS/include")
+		target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/macOS/include")
+		target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/macOS/lib")
+	else()
+		target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/include")
+		target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/lib")
+	endif()
 
-    target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
+	target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
 
 else()
-    target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
+	target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
 endif()
 
 target_link_libraries(OxC3_graphics_target INTERFACE ${TARGET_NAME})

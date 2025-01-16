@@ -37,9 +37,9 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 
 	CharString isChild = CharString_createNull();
 	CharString tmp = CharString_createNull();
-    Buffer buf = Buffer_createNull();
+	Buffer buf = Buffer_createNull();
 	Bool s_uccess = true;
-    AAsset *asset = NULL;
+	AAsset *asset = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	gotoIfError2(clean, CharString_createCopyx(loc, &isChild))
@@ -73,35 +73,35 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 				if (!allowLoad)
 					retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
 
-                gotoIfError2(clean, CharString_formatx(
-                    &tmp, "packages/%.*s", (int) CharString_length(section->path), section->path.ptr
-                ))
+				gotoIfError2(clean, CharString_formatx(
+					&tmp, "packages/%.*s", (int) CharString_length(section->path), section->path.ptr
+				))
 
-		        asset = AAssetManager_open(assetManager, tmp.ptr, AASSET_MODE_BUFFER);
+				asset = AAssetManager_open(assetManager, tmp.ptr, AASSET_MODE_BUFFER);
 
-                if(!asset)
+				if(!asset)
 					retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was not found by asset manager"));
 
 				CAFile file = (CAFile) { 0 };
 
-                gotoIfError2(clean, Buffer_createUninitializedBytesx(section->lenExt, &buf))
+				gotoIfError2(clean, Buffer_createUninitializedBytesx(section->lenExt, &buf))
 
-                int r = AAsset_read(asset, buf.ptrNonConst, section->lenExt);
+				int r = AAsset_read(asset, buf.ptrNonConst, section->lenExt);
 
-		        if(r < 0 || (U32)r != section->lenExt)
+				if(r < 0 || (U32)r != section->lenExt)
 					retError(clean, Error_invalidState(0, "File_loadVirtualInternal1() asset wasn't readable"));
 
 				gotoIfError3(clean, CAFile_readx(buf, userData->encryptionKey, &file, e_rr))
 
-                AAsset_close(asset);
-                asset = NULL;
+				AAsset_close(asset);
+				asset = NULL;
 
 				section->loadedData = file.archive;
 				section->loaded = true;
 				foundAny = true;
 
-                Buffer_freex(&buf);
-                CharString_freex(&tmp);
+				Buffer_freex(&buf);
+				CharString_freex(&tmp);
 			}
 		}
 
@@ -119,10 +119,10 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
-    if(asset)
-        AAsset_close(asset);
+	if(asset)
+		AAsset_close(asset);
 
-    Buffer_freex(&buf);
+	Buffer_freex(&buf);
 	CharString_freex(&isChild);
 	CharString_freex(&tmp);
 	return s_uccess;

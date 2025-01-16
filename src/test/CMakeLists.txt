@@ -20,9 +20,9 @@
 file(GLOB_RECURSE tests "*.c")
 
 add_executable(
-    OxC3_test
-    ${tests}
-    CMakeLists.txt
+	OxC3_test
+	${tests}
+	CMakeLists.txt
 )
 
 target_link_libraries(OxC3_test PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiBC)

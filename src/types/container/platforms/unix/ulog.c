@@ -115,7 +115,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 	#define FONT_GREEN  "\e[1;32m"
 	#define FONT_CYAN   "\e[1;36m"
 	#define FONT_YELLOW "\e[1;33m"
-	#define FONT_RED    "\e[1;31m"
+	#define FONT_RED	"\e[1;31m"
 	#define FONT_RESET  "\e[1;0m"
 
 	#define printColor(lvl, str, ...)																	\
@@ -123,7 +123,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 			default:					printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);		break;	\
 			case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);		break;	\
 			case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);		break;	\
-			case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET, __VA_ARGS__);		break;	\
+			case ELogLevel_Error:		printf(FONT_RED	str FONT_RESET, __VA_ARGS__);		break;	\
 		}
 
 	#define printColorSimple(lvl, str)																	\
@@ -131,7 +131,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 			default:					printf(FONT_GREEN  str FONT_RESET);		break;					\
 			case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET);		break;					\
 			case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET);		break;					\
-			case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET);		break;					\
+			case ELogLevel_Error:		printf(FONT_RED	str FONT_RESET);		break;					\
 		}
 
 	void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {

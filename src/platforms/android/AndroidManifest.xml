@@ -30,7 +30,7 @@
 	  android:appCategory="{APP_CATEGORY}">
 	  
     <activity android:name="{APP_LIB_NAME}.NativeActivity"
-              android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|fontScale|locale">
+              android:configChanges="orientation|keyboardHidden|screenLayout|fontScale|locale">
 			  
       <meta-data android:name="android.app.lib_name"
                  android:value="{APP_LIB_NAME}" />
