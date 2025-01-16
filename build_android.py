@@ -74,10 +74,10 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstal
 		subprocess.check_output("conan create packages/dxc -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
 
 	outputFolder = "\"build/" + mode + "/android/" + archName + "\""
-	subprocess.check_output("conan build . -of " + outputFolder + " -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\" --build=missing")
+	subprocess.check_output("conan build . -of " + outputFolder + " -o cliGraphics=False -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\" --build=missing")
 
 	if doInstall:
-		subprocess.check_output("conan export-pkg . -of " + outputFolder + " -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\"")
+		subprocess.check_output("conan export-pkg . -of " + outputFolder + " -o cliGraphics=False -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\"")
 
 def main():
 
@@ -187,11 +187,11 @@ def main():
 		tmpPath = outputPath + "/arm64-v8a"
 		Path(tmpPath).mkdir(parents=True, exist_ok=True)
 
-		tmpPath = outputPath + "/x86_64"
+		tmpPath = outputPath + "/x86-64"
 		Path(tmpPath).mkdir(parents=True, exist_ok=True)
 
 		for f in glob.glob("build/" + args.mode + "/android/x64/bin/*.so"):
-			shutil.copy2(f, outputPath + "/x86_64")
+			shutil.copy2(f, outputPath + "/x86-64")
 
 		for f in glob.glob("build/" + args.mode + "/android/arm64/bin/*.so"):
 			shutil.copy2(f, outputPath + "/arm64-v8a")

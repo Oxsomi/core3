@@ -559,6 +559,8 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	AWindowManager_instance->onAppCmd = AWindow_onAppCmd;
 	AWindowManager_instance->onInputEvent = AWindow_onInput;
 
+	w->nativeHandle = AWindowManager_instance->window;
+
 clean:
 	return s_uccess;
 }
