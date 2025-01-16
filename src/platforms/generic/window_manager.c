@@ -186,7 +186,7 @@ Bool WindowManager_createWindow(
 		.owner = manager,
 
 		.type = type,
-		.hint = hint | (type == EWindowType_Virtual ? EWindowHint_ProvideCPUBuffer : 0),
+		.hint = (WindowHint) (hint | (type == EWindowType_Virtual ? EWindowHint_ProvideCPUBuffer : 0)),
 		.format = format,
 		.flags = (type == EWindowType_Virtual ? EWindowFlags_IsFocussed : 0),
 

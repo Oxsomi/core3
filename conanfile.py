@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.093"
+	version = "0.2.094"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -143,7 +143,15 @@ class oxc3(ConanFile):
 		else:
 			platform = "linux"
 
-		input_dir = os.path.join(self.build_folder, str(self.settings.build_type) + "/" + platform + "/" + archName)
+		# Unix stuff always appends <configPath>/build/Debug (etc.) for our package dir since we park our config there.
+		# Windows it stays build/
+
+		if self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
+			input_dir = self.build_folder + "/../../"
+
+		else:
+			input_dir = os.path.join(self.build_folder, str(self.settings.build_type) + "/" + platform + "/" + archName)
+
 		input_lib_dir = os.path.join(input_dir, "lib")
 		input_bin_dir = os.path.join(input_dir, "bin")
 
