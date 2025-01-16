@@ -118,14 +118,30 @@ macro(add_virtual_files)
 		set(OXC3 OxC3)
 	endif()
 	
+	if(WIN32)
+		set(platform windows)
+	elseif(IOS)
+		set(platform ios)
+	elseif(APPLE)
+		set(platform osx)
+	elseif(ANDROID)
+		set(platform android)
+	else()
+		set(platform linux)
+	endif()
+
+	set(RuntimeOutputDir "${CMAKE_CURRENT_SOURCE_DIR}/build/${platform}")
+
+	message("${RuntimeOutputDir}")
+	
 	add_custom_target(
 		${_ARGS_TARGET}_package_${_ARGS_NAME}
-		COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
+		COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
 		WORKING_DIRECTORY ${_ARGS_SELF}
 	)
 		
 	string (REPLACE ";" " " ARGS_STR "${_ARGS_ARGS}")
-	message("-- Packaging: \"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
+	message("-- Packaging: \"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
 	message("-- Packaging: ${_ARGS_TARGET}_package_${_ARGS_NAME} @ ${_ARGS_SELF}")
 
 	set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
@@ -147,11 +163,11 @@ macro(add_virtual_files)
 
 	if(WIN32)
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
-		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
+		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
 	elseif(UNIX AND NOT APPLE)
 		add_custom_command(
 			TARGET ${_ARGS_TARGET} POST_BUILD
-			COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+			COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
 		)
 	endif()
 

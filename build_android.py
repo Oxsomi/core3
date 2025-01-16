@@ -205,7 +205,7 @@ def main():
 		outputPath += "/packages"
 		Path(outputPath).mkdir(parents=True, exist_ok=True)
 		
-		for f in glob.glob("build/bin/packages/*"):
+		for f in glob.glob("build/android/bin/packages/*"):
 
 			# We need to make a file named section_ here, because AAssetManager can't iterate directories
 
@@ -216,7 +216,7 @@ def main():
 
 			Path(outputPath + "/" + sectionName).mkdir(parents=True, exist_ok=True)
 
-			for fc in glob.glob("build/bin/packages/" + sectionName + "/*"):
+			for fc in glob.glob("build/android/bin/packages/" + sectionName + "/*"):
 				shutil.copy2(fc, outputPath + "/" + sectionName + "/" + Path(fc).name)
 
 		# Copy into /res (and provide -S res to aapt package)
