@@ -51,48 +51,41 @@ typedef struct VkGraphicsInstance {
 	VkInstance instance;
 	VkDebugReportCallbackEXT debugReportCallback;
 
+	PFN_vkCreateInstance createInstance;
+	PFN_vkEnumerateInstanceLayerProperties enumerateInstanceLayerProperties;
+	PFN_vkEnumerateInstanceExtensionProperties enumerateInstanceExtensionProperties;
+
+	PFN_vkCreateDevice createDevice;
+	PFN_vkDestroyDevice destroyDevice;
+
+	PFN_vkCreateDebugReportCallbackEXT debugCreateReportCallback;
+	PFN_vkDestroyDebugReportCallbackEXT debugDestroyReportCallback;
+
+	PFN_vkEnumeratePhysicalDevices enumeratePhysicalDevices;
+	PFN_vkEnumerateDeviceLayerProperties enumerateDeviceLayerProperties;
+	PFN_vkEnumerateDeviceExtensionProperties enumerateDeviceExtensionProperties;
+	PFN_vkGetPhysicalDeviceFormatProperties getPhysicalDeviceFormatProperties;
+
 	PFN_vkGetPhysicalDeviceFeatures2KHR getPhysicalDeviceFeatures2;
 	PFN_vkGetPhysicalDeviceProperties2KHR getPhysicalDeviceProperties2;
 
-	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
-	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities;
-	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModes;
-	PFN_vkGetSwapchainImagesKHR getSwapchainImages;
-	PFN_vkGetPhysicalDeviceSurfaceSupportKHR getPhysicalDeviceSurfaceSupport;
-	void *createSurfaceExt;
+	PFN_vkDestroyInstance destroyInstance;
+	PFN_vkGetPhysicalDeviceMemoryProperties getPhysicalDeviceMemoryProperties;
 
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
-
 	PFN_vkCmdDebugMarkerBeginEXT cmdDebugMarkerBegin;
 	PFN_vkCmdDebugMarkerEndEXT cmdDebugMarkerEnd;
 	PFN_vkCmdDebugMarkerInsertEXT cmdDebugMarkerInsert;
+	
+	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
+	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities;
+	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModes;
+	PFN_vkGetPhysicalDeviceSurfaceSupportKHR getPhysicalDeviceSurfaceSupport;
 
-	PFN_vkCmdBeginRenderingKHR cmdBeginRendering;
-	PFN_vkCmdEndRenderingKHR cmdEndRendering;
+	PFN_vkGetPhysicalDeviceQueueFamilyProperties getPhysicalDeviceQueueFamilyProperties;
+	void *createSurfaceExt;									//Android, windows, etc.
 
-	PFN_vkCreateDebugReportCallbackEXT debugCreateReportCallback;
-
-	PFN_vkDestroyDebugReportCallbackEXT debugDestroyReportCallback;
-
-	PFN_vkAcquireNextImageKHR acquireNextImage;
-	PFN_vkCreateSwapchainKHR createSwapchain;
 	PFN_vkDestroySurfaceKHR destroySurface;
-	PFN_vkDestroySwapchainKHR destroySwapchain;
-
-	PFN_vkCmdBuildAccelerationStructuresKHR cmdBuildAccelerationStructures;
-	PFN_vkCreateAccelerationStructureKHR createAccelerationStructure;
-	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
-	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
-	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
-	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
-
-	PFN_vkCmdTraceRaysKHR traceRays;
-	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
-	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;
-	PFN_vkGetRayTracingShaderGroupHandlesKHR getRayTracingShaderGroupHandles;
-
-	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
-
 	U64 padding;
 
 } VkGraphicsInstance;

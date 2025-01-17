@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -37,12 +38,11 @@ Error createShaderModule(
 	Buffer buf,
 	VkShaderModule *mod,
 	VkGraphicsDevice *device,
-	VkGraphicsInstance *instance,
+	VkGraphicsInstance *instanceExt,
 	CharString name,
 	EPipelineStage stage
 ) {
 
-	(void)instance;
 	(void)stage;
 
 	if(Buffer_length(buf) >> 32)
@@ -61,7 +61,7 @@ Error createShaderModule(
 		.pCode = (const U32*) buf.ptr
 	};
 
-	Error err = vkCheck(vkCreateShaderModule(device->device, &info, NULL, mod));
+	Error err = checkVkError(device->createShaderModule(device->device, &info, NULL, mod));
 	CharString temp = CharString_createNull();
 
 	if(err.genericError)
@@ -69,7 +69,7 @@ Error createShaderModule(
 
 	const GraphicsDevice *baseDevice = (const GraphicsDevice*)device - 1;
 
-	if((baseDevice->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName) {
+	if((baseDevice->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
 		const Bool isRt = stage >= EPipelineStage_RtStart && stage <= EPipelineStage_RtEnd;
 
@@ -85,7 +85,7 @@ Error createShaderModule(
 			.pObjectName = temp.ptr
 		};
 
-		gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)))
+		gotoIfError(clean, checkVkError(instanceExt->debugSetName(device->device, &debugName2)))
 	}
 
 	goto clean;
@@ -95,7 +95,7 @@ clean:
 	CharString_freex(&temp);
 
 	if (err.genericError)
-		vkDestroyShaderModule(device->device, *mod, NULL);
+		device->destroyShaderModule(device->device, *mod, NULL);
 
 	return err;
 }
@@ -107,6 +107,6 @@ Bool VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	vkDestroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
+	deviceExt->destroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
 	return true;
 }

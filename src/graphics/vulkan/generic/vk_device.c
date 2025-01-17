@@ -43,7 +43,7 @@ TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
 TListImpl(VkWriteDescriptorSet);
 
-#define vkBindNext(T, condition, ...)	\
+#define bindNextVkStruct(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
 										\
 	if(condition) {						\
@@ -55,6 +55,16 @@ TList(VkDeviceQueueCreateInfo);
 TList(VkQueueFamilyProperties);
 TListImpl(VkDeviceQueueCreateInfo);
 TListImpl(VkQueueFamilyProperties);
+
+#define getVkFunctionDevice(label, function, result) {											\
+																								\
+	PFN_vkVoidFunction v = vkGetDeviceProcAddr(deviceExt->device, #function); 					\
+																								\
+	if(!v)																						\
+		gotoIfError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"))		\
+																								\
+	*(void**)&result = (void*) v;																\
+}
 
 Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	const GraphicsInstance *instance,
@@ -111,7 +121,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	void **currPNext = &features2.pNext;
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceDescriptorIndexingFeatures,
 		true,
 		{
@@ -136,7 +146,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDevicePerformanceQueryFeaturesKHR,
 		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_PerfQuery,
 		(VkPhysicalDevicePerformanceQueryFeaturesKHR) {
@@ -145,7 +155,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceBufferDeviceAddressFeaturesKHR,
 		true,
 		(VkPhysicalDeviceBufferDeviceAddressFeaturesKHR) {
@@ -154,7 +164,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceSynchronization2Features,
 		true,
 		(VkPhysicalDeviceSynchronization2Features) {
@@ -163,7 +173,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceTimelineSemaphoreFeatures,
 		true,
 		(VkPhysicalDeviceTimelineSemaphoreFeatures) {
@@ -172,7 +182,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceDynamicRenderingFeatures,
 		feat & EGraphicsFeatures_DirectRendering,
 		{
@@ -181,7 +191,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceMeshShaderFeaturesEXT,
 		feat & EGraphicsFeatures_MeshShader,
 		{
@@ -191,7 +201,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceMultiviewFeatures,
 		feat & EGraphicsFeatures_Multiview,
 		{
@@ -200,7 +210,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
 		feat & EGraphicsFeatures_VariableRateShading,
 		{
@@ -210,7 +220,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceAccelerationStructureFeaturesKHR,
 		feat & EGraphicsFeatures_Raytracing,
 		{
@@ -220,7 +230,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceRayQueryFeaturesKHR,
 		feat & EGraphicsFeatures_RayQuery,
 		{
@@ -229,7 +239,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceRayTracingValidationFeaturesNV,
 		feat & EGraphicsFeatures_RayValidation,
 		{
@@ -238,7 +248,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
 		feat & EGraphicsFeatures_RayPipeline,
 		{
@@ -249,7 +259,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
 		feat & EGraphicsFeatures_RayMotionBlur,
 		{
@@ -259,7 +269,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
 		feat & EGraphicsFeatures_RayReorder,
 		{
@@ -268,7 +278,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceOpacityMicromapFeaturesEXT,
 		feat & EGraphicsFeatures_RayMicromapOpacity,
 		{
@@ -277,7 +287,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceDisplacementMicromapFeaturesNV,
 		feat & EGraphicsFeatures_RayMicromapDisplacement,
 		{
@@ -286,7 +296,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceShaderAtomicInt64Features,
 		types & EGraphicsDataTypes_AtomicI64,
 		{
@@ -295,7 +305,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceShaderAtomicFloatFeaturesEXT,
 		types & (EGraphicsDataTypes_AtomicF32 | EGraphicsDataTypes_AtomicF64),
 		{
@@ -307,7 +317,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		}
 	)
 
-	vkBindNext(
+	bindNextVkStruct(
 		VkPhysicalDeviceShaderFloat16Int8Features,
 		types & EGraphicsDataTypes_F16,
 		{
@@ -368,13 +378,13 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	//Get queues
 
 	U32 familyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, NULL);
+	instanceExt->getPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, NULL);
 
 	if(!familyCount)
 		gotoIfError(clean, Error_invalidOperation(0, "VkGraphicsDevice_init() no supported queues"))
 
 	gotoIfError(clean, ListVkQueueFamilyProperties_resizex(&queueFamilies, familyCount))
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, queueFamilies.ptrNonConst);
+	instanceExt->getPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, queueFamilies.ptrNonConst);
 
 	//Assign queues to deviceExt (don't have to be unique)
 
@@ -478,7 +488,106 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 			Log_debugLnx("\t%s", extensions.ptr[i]);
 	}
 
-	gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)))
+	gotoIfError(clean, checkVkError(instanceExt->createDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)))
+
+	//Load functions even generic 1.2 functionality;
+	//This is not done statically to prevent hard to track down issues if a function is missing.
+	//Which can happen if an old vulkan runtime is present.
+	//TODO: Downgrade to 1.1 with extensions to possibly allow more platforms
+
+	getVkFunctionDevice(clean, vkAllocateMemory, deviceExt->allocateMemory)
+	getVkFunctionDevice(clean, vkMapMemory, deviceExt->mapMemory)
+	getVkFunctionDevice(clean, vkFreeMemory, deviceExt->freeMemory)
+	getVkFunctionDevice(clean, vkCmdClearColorImage, deviceExt->cmdClearColorImage)
+	getVkFunctionDevice(clean, vkCmdCopyImage, deviceExt->cmdCopyImage)
+	getVkFunctionDevice(clean, vkCmdSetViewport, deviceExt->cmdSetViewport)
+	getVkFunctionDevice(clean, vkCmdSetScissor, deviceExt->cmdSetScissor)
+	getVkFunctionDevice(clean, vkCmdSetBlendConstants, deviceExt->cmdSetBlendConstants)
+	getVkFunctionDevice(clean, vkCmdSetStencilReference, deviceExt->cmdSetStencilReference)
+	getVkFunctionDevice(clean, vkCmdBindPipeline, deviceExt->cmdBindPipeline)
+	getVkFunctionDevice(clean, vkCmdBindIndexBuffer, deviceExt->cmdBindIndexBuffer)
+	getVkFunctionDevice(clean, vkCmdBindVertexBuffers, deviceExt->cmdBindVertexBuffers)
+	getVkFunctionDevice(clean, vkCmdDrawIndexed, deviceExt->cmdDrawIndexed)
+	getVkFunctionDevice(clean, vkCmdDraw, deviceExt->cmdDraw)
+	getVkFunctionDevice(clean, vkCmdDrawIndexedIndirectCount, deviceExt->cmdDrawIndexedIndirectCount)
+	getVkFunctionDevice(clean, vkCmdDrawIndirectCount, deviceExt->cmdDrawIndirectCount)
+	getVkFunctionDevice(clean, vkCmdDrawIndexedIndirect, deviceExt->cmdDrawIndexedIndirect)
+	getVkFunctionDevice(clean, vkCmdDrawIndirect, deviceExt->cmdDrawIndirect)
+	getVkFunctionDevice(clean, vkCmdDispatch, deviceExt->cmdDispatch)
+	getVkFunctionDevice(clean, vkCmdDispatchIndirect, deviceExt->cmdDispatchIndirect)
+	getVkFunctionDevice(clean, vkCreateComputePipelines, deviceExt->createComputePipelines)
+	getVkFunctionDevice(clean, vkDestroyPipeline, deviceExt->destroyPipeline)
+	getVkFunctionDevice(clean, vkDestroyShaderModule, deviceExt->destroyShaderModule)
+	getVkFunctionDevice(clean, vkDestroyBuffer, deviceExt->destroyBuffer)
+	getVkFunctionDevice(clean, vkCreateBuffer, deviceExt->createBuffer)
+	getVkFunctionDevice(clean, vkGetBufferMemoryRequirements2, deviceExt->getBufferMemoryRequirements2)
+	getVkFunctionDevice(clean, vkBindBufferMemory, deviceExt->bindBufferMemory)
+	getVkFunctionDevice(clean, vkGetBufferDeviceAddress, deviceExt->getBufferDeviceAddress)
+	getVkFunctionDevice(clean, vkUpdateDescriptorSets, deviceExt->updateDescriptorSets)
+	getVkFunctionDevice(clean, vkFlushMappedMemoryRanges, deviceExt->flushMappedMemoryRanges)
+	getVkFunctionDevice(clean, vkCmdCopyBuffer, deviceExt->cmdCopyBuffer)
+	getVkFunctionDevice(clean, vkCmdCopyBufferToImage, deviceExt->cmdCopyBufferToImage)
+	getVkFunctionDevice(clean, vkGetDeviceQueue, deviceExt->getDeviceQueue)
+	getVkFunctionDevice(clean, vkCreateSemaphore, deviceExt->createSemaphore)
+	getVkFunctionDevice(clean, vkCreateDescriptorSetLayout, deviceExt->createDescriptorSetLayout)
+	getVkFunctionDevice(clean, vkCreatePipelineLayout, deviceExt->createPipelineLayout)
+	getVkFunctionDevice(clean, vkCreateDescriptorPool, deviceExt->createDescriptorPool)
+	getVkFunctionDevice(clean, vkAllocateDescriptorSets, deviceExt->allocateDescriptorSets)
+	getVkFunctionDevice(clean, vkFreeCommandBuffers, deviceExt->freeCommandBuffers)
+	getVkFunctionDevice(clean, vkDestroyCommandPool, deviceExt->destroyCommandPool)
+	getVkFunctionDevice(clean, vkDestroySemaphore, deviceExt->destroySemaphore)
+	getVkFunctionDevice(clean, vkDestroyDescriptorSetLayout, deviceExt->destroyDescriptorSetLayout)
+	getVkFunctionDevice(clean, vkDestroyDescriptorPool, deviceExt->destroyDescriptorPool)
+	getVkFunctionDevice(clean, vkDestroyPipelineLayout, deviceExt->destroyPipelineLayout)
+	getVkFunctionDevice(clean, vkDeviceWaitIdle, deviceExt->deviceWaitIdle)
+	getVkFunctionDevice(clean, vkWaitSemaphores, deviceExt->waitSemaphores)
+	getVkFunctionDevice(clean, vkCreateCommandPool, deviceExt->createCommandPool)
+	getVkFunctionDevice(clean, vkResetCommandPool, deviceExt->resetCommandPool)
+	getVkFunctionDevice(clean, vkAllocateCommandBuffers, deviceExt->allocateCommandBuffers)
+	getVkFunctionDevice(clean, vkBeginCommandBuffer, deviceExt->beginCommandBuffer)
+	getVkFunctionDevice(clean, vkCmdBindDescriptorSets, deviceExt->cmdBindDescriptorSets)
+	getVkFunctionDevice(clean, vkEndCommandBuffer, deviceExt->endCommandBuffer)
+	getVkFunctionDevice(clean, vkQueueSubmit, deviceExt->queueSubmit)
+	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR)
+	getVkFunctionDevice(clean, vkCreateGraphicsPipelines, deviceExt->createGraphicsPipelines)
+	getVkFunctionDevice(clean, vkDestroyImageView, deviceExt->destroyImageView)
+	getVkFunctionDevice(clean, vkCreateImage, deviceExt->createImage)
+	getVkFunctionDevice(clean, vkGetImageMemoryRequirements2, deviceExt->getImageMemoryRequirements2)
+	getVkFunctionDevice(clean, vkBindImageMemory, deviceExt->bindImageMemory)
+	getVkFunctionDevice(clean, vkCreateImageView, deviceExt->createImageView)
+	getVkFunctionDevice(clean, vkDestroySampler, deviceExt->destroySampler)
+	getVkFunctionDevice(clean, vkCreateSampler, deviceExt->createSampler)
+	getVkFunctionDevice(clean, vkCreateShaderModule, deviceExt->createShaderModule)
+	getVkFunctionDevice(clean, vkDestroyImage, deviceExt->destroyImage)
+
+	getVkFunctionDevice(clean, vkCmdPipelineBarrier2KHR, deviceExt->cmdPipelineBarrier2)
+
+	getVkFunctionDevice(clean, vkGetSwapchainImagesKHR, deviceExt->getSwapchainImages)
+
+	getVkFunctionDevice(clean, vkAcquireNextImageKHR, deviceExt->acquireNextImage)
+	getVkFunctionDevice(clean, vkCreateSwapchainKHR, deviceExt->createSwapchain)
+	getVkFunctionDevice(clean, vkDestroySwapchainKHR, deviceExt->destroySwapchain)
+
+	if(feat & EGraphicsFeatures_Raytracing) {
+		getVkFunctionDevice(clean, vkCmdBuildAccelerationStructuresKHR, deviceExt->cmdBuildAccelerationStructures)
+		getVkFunctionDevice(clean, vkCreateAccelerationStructureKHR, deviceExt->createAccelerationStructure)
+		getVkFunctionDevice(clean, vkCmdCopyAccelerationStructureKHR, deviceExt->copyAccelerationStructure)
+		getVkFunctionDevice(clean, vkDestroyAccelerationStructureKHR, deviceExt->destroyAccelerationStructure)
+		getVkFunctionDevice(clean, vkGetAccelerationStructureBuildSizesKHR, deviceExt->getAccelerationStructureBuildSizes)
+		getVkFunctionDevice(clean, vkGetDeviceAccelerationStructureCompatibilityKHR, deviceExt->getAccelerationStructureCompatibility)
+	}
+
+	if (feat & EGraphicsFeatures_RayPipeline) {
+		getVkFunctionDevice(clean, vkCmdTraceRaysKHR, deviceExt->traceRays)
+		getVkFunctionDevice(clean, vkCmdTraceRaysIndirectKHR, deviceExt->traceRaysIndirect)
+		getVkFunctionDevice(clean, vkCreateRayTracingPipelinesKHR, deviceExt->createRaytracingPipelines)
+		getVkFunctionDevice(clean, vkGetRayTracingShaderGroupHandlesKHR, deviceExt->getRayTracingShaderGroupHandles)
+	}
+
+	if(feat & EGraphicsFeatures_DirectRendering) {
+		getVkFunctionDevice(clean, vkCmdBeginRenderingKHR, deviceExt->cmdBeginRendering)
+		getVkFunctionDevice(clean, vkCmdEndRenderingKHR, deviceExt->cmdEndRendering)
+	}
 
 	//Get queues
 
@@ -488,7 +597,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	U32 resolvedId = 0;
 
-	vkGetDeviceQueue(
+	deviceExt->getDeviceQueue(
 		deviceExt->device,
 		graphicsQueueExt->queueId = graphicsQueueId,
 		0,
@@ -507,7 +616,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	if(device->flags & EGraphicsDeviceFlags_IsDebug && instanceExt->debugSetName) {
 		debugName.pObjectName = "Graphics queue";
 		debugName.objectHandle = (U64) graphicsQueueExt->queue;
-		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
 
 	//Compute
@@ -519,7 +628,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	else {
 
-		vkGetDeviceQueue(
+		deviceExt->getDeviceQueue(
 			deviceExt->device,
 			computeQueueExt->queueId = computeQueueId,
 			0,
@@ -529,7 +638,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 			debugName.pObjectName = "Compute queue";
 			debugName.objectHandle = (U64) computeQueueExt->queue;
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 		}
 
 		deviceExt->uniqueQueues[resolvedId] = computeQueueId;
@@ -549,7 +658,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	else {
 
-		vkGetDeviceQueue(
+		deviceExt->getDeviceQueue(
 			deviceExt->device,
 			copyQueueExt->queueId = copyQueueId,
 			0,
@@ -559,7 +668,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 			debugName.pObjectName = "Copy queue";
 			debugName.objectHandle = (U64) copyQueueExt->queue;
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 		}
 
 		deviceExt->uniqueQueues[resolvedId] = copyQueueId;
@@ -583,7 +692,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		VkSemaphore *semaphore = deviceExt->submitSemaphores.ptrNonConst + k;
 
-		gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
+		gotoIfError(clean, checkVkError(deviceExt->createSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
@@ -596,7 +705,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 				.pObjectName = tempStr.ptr,
 			};
 
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 
 			CharString_freex(&tempStr);
 		}
@@ -614,7 +723,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.pNext = &timelineInfo
 	};
 
-	gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, &deviceExt->commitSemaphore)))
+	gotoIfError(clean, checkVkError(deviceExt->createSemaphore(deviceExt->device, &semaphoreInfo, NULL, &deviceExt->commitSemaphore)))
 
 	deviceExt->resolvedQueues = resolvedId;
 
@@ -703,7 +812,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 			.pBindings = bindings
 		};
 
-		gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(
+		gotoIfError(clean, checkVkError(deviceExt->createDescriptorSetLayout(
 			deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i]
 		)))
 	}
@@ -714,7 +823,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.pSetLayouts = deviceExt->setLayouts
 	};
 
-	gotoIfError(clean, vkCheck(vkCreatePipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)))
+	gotoIfError(clean, checkVkError(deviceExt->createPipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)))
 
 	//We only need one pool and 1 descriptor set per EDescriptorType since we use bindless.
 	//Every resource is automatically allocated into their respective descriptor set.
@@ -737,7 +846,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.pPoolSizes = poolSizes
 	};
 
-	gotoIfError(clean, vkCheck(vkCreateDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->descriptorPool)))
+	gotoIfError(clean, checkVkError(deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->descriptorPool)))
 
 	//Last layout repeat 3x (that's the CBuffer which needs 3 different versions)
 
@@ -753,7 +862,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.pSetLayouts = setLayouts
 	};
 
-	gotoIfError(clean, vkCheck(vkAllocateDescriptorSets(deviceExt->device, &setInfo, deviceExt->sets)))
+	gotoIfError(clean, checkVkError(deviceExt->allocateDescriptorSets(deviceExt->device, &setInfo, deviceExt->sets)))
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
@@ -778,7 +887,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 				.pObjectName = tempStr.ptr,
 			};
 
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 
 			CharString_freex(&tempStr);
 
@@ -793,14 +902,14 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 					.pObjectName = tempStr.ptr,
 				};
 
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+				gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 			}
 		}
 	}
 
 	//Get memory properties
 
-	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
+	instanceExt->getPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
 
 	//Determine when we need to flush.
 	//As a rule of thumb I decided for 20% occupied mem by just copies.
@@ -869,7 +978,7 @@ void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 
 	#undef NBuffering
 
-	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
+	deviceExt->updateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
@@ -877,7 +986,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	if(!instance || !ext)
 		return instance;
 
-	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*)ext;
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) ext;
 
 	if(deviceExt->device) {
 
@@ -886,10 +996,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			const VkCommandAllocator alloc = deviceExt->commandPools.ptr[i];
 
 			if(alloc.cmd)
-				vkFreeCommandBuffers(deviceExt->device, alloc.pool, 1, &alloc.cmd);
+				deviceExt->freeCommandBuffers(deviceExt->device, alloc.pool, 1, &alloc.cmd);
 
 			if(alloc.pool)
-				vkDestroyCommandPool(deviceExt->device, alloc.pool, NULL);
+				deviceExt->destroyCommandPool(deviceExt->device, alloc.pool, NULL);
 		}
 
 		for(U64 i = 0; i < deviceExt->submitSemaphores.length; ++i) {
@@ -897,27 +1007,27 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			const VkSemaphore semaphore = deviceExt->submitSemaphores.ptr[i];
 
 			if(semaphore)
-				vkDestroySemaphore(deviceExt->device, semaphore, NULL);
+				deviceExt->destroySemaphore(deviceExt->device, semaphore, NULL);
 		}
 
 		if(deviceExt->commitSemaphore)
-			vkDestroySemaphore(deviceExt->device, deviceExt->commitSemaphore, NULL);
+			deviceExt->destroySemaphore(deviceExt->device, deviceExt->commitSemaphore, NULL);
 
 		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
 
 			const VkDescriptorSetLayout layout = deviceExt->setLayouts[i];
 
 			if(layout)
-				vkDestroyDescriptorSetLayout(deviceExt->device, layout, NULL);
+				deviceExt->destroyDescriptorSetLayout(deviceExt->device, layout, NULL);
 		}
 
 		if(deviceExt->descriptorPool)
-			vkDestroyDescriptorPool(deviceExt->device, deviceExt->descriptorPool, NULL);
+			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->descriptorPool, NULL);
 
 		if(deviceExt->defaultLayout)
-			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
+			deviceExt->destroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
 
-		vkDestroyDevice(deviceExt->device, NULL);
+		instanceExt->destroyDevice(deviceExt->device, NULL);
 	}
 
 	ListVkCommandAllocator_freex(&deviceExt->commandPools);
@@ -926,7 +1036,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	//Free temp storage
 
 	ListVkPipelineStageFlags_freex(&deviceExt->waitStages);
-	ListVkSemaphore_freex(&deviceExt->waitSemaphores);
+	ListVkSemaphore_freex(&deviceExt->waitSemaphoresList);
 	ListVkResult_freex(&deviceExt->results);
 	ListU32_freex(&deviceExt->swapchainIndices);
 	ListVkSwapchainKHR_freex(&deviceExt->swapchainHandles);
@@ -943,7 +1053,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 //Executing commands
 
 Error VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef) {
-	return vkCheck(vkDeviceWaitIdle(GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Vk)->device));
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	return checkVkError(deviceExt->deviceWaitIdle(GraphicsDevice_ext(device, Vk)->device));
 }
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
@@ -991,8 +1103,8 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	gotoIfError(clean, ListVkResult_clear(&deviceExt->results))
 	gotoIfError(clean, ListVkResult_reservex(&deviceExt->results, swapchains.length))
 
-	gotoIfError(clean, ListVkSemaphore_clear(&deviceExt->waitSemaphores))
-	gotoIfError(clean, ListVkSemaphore_reservex(&deviceExt->waitSemaphores, swapchains.length + 1))
+	gotoIfError(clean, ListVkSemaphore_clear(&deviceExt->waitSemaphoresList))
+	gotoIfError(clean, ListVkSemaphore_reservex(&deviceExt->waitSemaphoresList, swapchains.length + 1))
 
 	gotoIfError(clean, ListVkPipelineStageFlags_clear(&deviceExt->waitStages))
 	gotoIfError(clean, ListVkPipelineStageFlags_reservex(&deviceExt->waitStages, swapchains.length + 1))
@@ -1010,7 +1122,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			.pValues = &value
 		};
 
-		gotoIfError(clean, vkCheck(vkWaitSemaphores(deviceExt->device, &waitInfo, U64_MAX)))
+		gotoIfError(clean, checkVkError(deviceExt->waitSemaphores(deviceExt->device, &waitInfo, U64_MAX)))
 	}
 
 	//Acquire swapchain images
@@ -1025,7 +1137,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
 		U32 currImg = 0;
 
-		gotoIfError(clean, vkCheck(instanceExt->acquireNextImage(
+		gotoIfError(clean, checkVkError(deviceExt->acquireNextImage(
 			deviceExt->device,
 			swapchainExt->swapchain,
 			U64_MAX,
@@ -1045,7 +1157,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			VK_PIPELINE_STAGE_TRANSFER_BIT |
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-		gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphores, semaphore))
+		gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphoresList, semaphore))
 		gotoIfError(clean, ListVkPipelineStageFlags_pushBackx(&deviceExt->waitStages, pipelineStage))
 	}
 
@@ -1081,7 +1193,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.size = sizeof(CBufferData)
 			};
 
-			gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &range)))
+			gotoIfError(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &range)))
 		}
 	}
 
@@ -1120,7 +1232,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.queueFamilyIndex = queue.queueId
 			};
 
-			gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &allocator->pool)))
+			gotoIfError(clean, checkVkError(deviceExt->createCommandPool(deviceExt->device, &poolInfo, NULL, &allocator->pool)))
 
 			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
@@ -1141,13 +1253,13 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 					.objectHandle = (U64) allocator->pool
 				};
 
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+				gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 
 				CharString_freex(&temp);
 			}
 		}
 
-		else gotoIfError(clean, vkCheck(vkResetCommandPool(
+		else gotoIfError(clean, checkVkError(deviceExt->resetCommandPool(
 			deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 		)))
 
@@ -1162,7 +1274,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				.commandBufferCount = 1
 			};
 
-			gotoIfError(clean, vkCheck(vkAllocateCommandBuffers(deviceExt->device, &bufferInfo, &allocator->cmd)))
+			gotoIfError(clean, checkVkError(deviceExt->allocateCommandBuffers(deviceExt->device, &bufferInfo, &allocator->cmd)))
 
 			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
@@ -1183,7 +1295,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 					.objectHandle = (U64) allocator->cmd
 				};
 
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+				gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 
 				CharString_freex(&temp);
 			}
@@ -1197,7 +1309,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
 		};
 
-		gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)))
+		gotoIfError(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer, &beginInfo)))
 
 		//Start copies
 
@@ -1222,7 +1334,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		))
 
 		if(dependency.bufferMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+			deviceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 		ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 
@@ -1239,7 +1351,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
 		for(U64 i = 0; i < bindingCount; ++i)
-			vkCmdBindDescriptorSets(
+			deviceExt->cmdBindDescriptorSets(
 				commandBuffer,
 				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
 					i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
@@ -1300,13 +1412,13 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		}
 
 		if(dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+			deviceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 		ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
 
 		//End buffer
 
-		gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)))
+		gotoIfError(clean, checkVkError(deviceExt->endCommandBuffer(commandBuffer)))
 	}
 
 	//Submit queue
@@ -1332,8 +1444,8 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	VkSubmitInfo submitInfo = (VkSubmitInfo) {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.pNext = &timelineInfo,
-		.waitSemaphoreCount = (U32) deviceExt->waitSemaphores.length,
-		.pWaitSemaphores = deviceExt->waitSemaphores.ptr,
+		.waitSemaphoreCount = (U32) deviceExt->waitSemaphoresList.length,
+		.pWaitSemaphores = deviceExt->waitSemaphoresList.ptr,
 		.signalSemaphoreCount = swapchains.length ? 2 : 1,
 		.pSignalSemaphores = signalSemaphores,
 		.pCommandBuffers = &commandBuffer,
@@ -1341,7 +1453,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		.pWaitDstStageMask = deviceExt->waitStages.ptr
 	};
 
-	gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
+	gotoIfError(clean, checkVkError(deviceExt->queueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
 
 	//Presents
 
@@ -1357,10 +1469,10 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			.pResults = deviceExt->results.ptrNonConst
 		};
 
-		gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue.queue, &presentInfo)))
+		gotoIfError(clean, checkVkError(deviceExt->queuePresentKHR(queue.queue, &presentInfo)))
 
 		for(U64 i = 0; i < deviceExt->results.length; ++i)
-			gotoIfError(clean, vkCheck(deviceExt->results.ptr[i]))
+			gotoIfError(clean, checkVkError(deviceExt->results.ptr[i]))
 	}
 
 clean:
@@ -1383,7 +1495,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	//End current command list
 
 	Error err;
-	gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer->buffer)))
+	gotoIfError(clean, checkVkError(deviceExt->endCommandBuffer(commandBuffer->buffer)))
 
 	//Submit only the copy command list
 
@@ -1405,7 +1517,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	};
 
 	const VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
-	gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
+	gotoIfError(clean, checkVkError(deviceExt->queueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
 
 	//Wait for the device
 
@@ -1419,7 +1531,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
 	);
 
-	gotoIfError(clean, vkCheck(vkResetCommandPool(
+	gotoIfError(clean, checkVkError(deviceExt->resetCommandPool(
 		deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 	)))
 
@@ -1429,7 +1541,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
 	};
 
-	gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer->buffer, &beginInfo)))
+	gotoIfError(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer->buffer, &beginInfo)))
 
 	//Re-bind descriptors
 
@@ -1443,7 +1555,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
 	for(U64 i = 0; i < bindingCount; ++i)
-		vkCmdBindDescriptorSets(
+		deviceExt->cmdBindDescriptorSets(
 			commandBuffer->buffer,
 			i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
 				i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR

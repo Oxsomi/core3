@@ -38,9 +38,6 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	VkTLAS *tlasExt = TLAS_ext(tlas, Vk);
 
 	Error err = Error_none();
@@ -131,7 +128,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 					.size = stride * instancesU64
 				};
 
-				gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &mappedRange)))
+				gotoIfError(clean, checkVkError(deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &mappedRange)))
 			}
 
 			instances = (DeviceData) { .buffer = tlas->tempInstanceBuffer, .len = stride * instancesU64 };
@@ -184,7 +181,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 	tlasExt->range = (VkAccelerationStructureBuildRangeInfoKHR) { .primitiveCount = instancesU32 };
 
-	instanceExt->getAccelerationStructureBuildSizes(
+	deviceExt->getAccelerationStructureBuildSizes(
 		deviceExt->device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
 		&tlasExt->geometries,
@@ -225,7 +222,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		.size = sizes.accelerationStructureSize
 	};
 
-	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &tlasExt->as)))
+	gotoIfError(clean, checkVkError(deviceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &tlasExt->as)))
 
 	//Queue build
 
@@ -259,7 +256,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		.pNext = &tlasDesc
 	};
 
-	vkUpdateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
+	deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
 
 clean:
 	return err;
@@ -270,13 +267,10 @@ Bool VK_WRAP_FUNC(TLAS_free)(TLAS *tlas) {
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	const GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	const VkAccelerationStructureKHR as = TLAS_ext(tlas, Vk)->as;
 
 	if(as)
-		instanceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
+		deviceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
 
 	return true;
 }
@@ -289,9 +283,7 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	VkTLAS *tlasExt = TLAS_ext(tlas, Vk);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 
@@ -300,7 +292,7 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &tlasExt->range;
 
-	instanceExt->cmdBuildAccelerationStructures(
+	deviceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
 		1,
 		&tlasExt->geometries,

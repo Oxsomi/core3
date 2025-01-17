@@ -81,7 +81,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		EPipelineStage_Compute
 	))
 
-	gotoIfError2(clean, vkCheck(vkCreateComputePipelines(
+	gotoIfError2(clean, checkVkError(deviceExt->createComputePipelines(
 		deviceExt->device,
 		NULL,
 		1, &pipelineInfo,
@@ -101,7 +101,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 			.pObjectName = temp.ptr ? temp.ptr : name.ptr
 		};
 
-		gotoIfError2(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		gotoIfError2(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 		CharString_freex(&temp);
 	}
 
@@ -111,12 +111,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 clean:
 
 	if(pipelineHandle)
-		vkDestroyPipeline(deviceExt->device, pipelineHandle, NULL);
+		deviceExt->destroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
 	const VkShaderModule mod = pipelineInfo.stage.module;
 
 	if(mod)
-		vkDestroyShaderModule(deviceExt->device, mod, NULL);
+		deviceExt->destroyShaderModule(deviceExt->device, mod, NULL);
 
 	CharString_freex(&temp);
 	return s_uccess;

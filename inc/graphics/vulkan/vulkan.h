@@ -85,7 +85,7 @@ TList(VkImageMemoryBarrier2);
 TList(VkBufferMemoryBarrier2);
 TList(VkPipeline);
 
-Error vkCheck(VkResult result);
+Error checkVkError(VkResult result);
 
 //Pass types as non NULL to allow validating if the texture format is supported.
 //Sometimes you don't want this, for example when serializing.

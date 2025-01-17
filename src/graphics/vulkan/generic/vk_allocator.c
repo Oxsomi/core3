@@ -247,13 +247,13 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
 	CharString temp = CharString_createNull();
 
-	if((err = vkCheck(vkAllocateMemory(deviceExt->device, &alloc, NULL, &mem))).genericError)
+	if((err = checkVkError(deviceExt->allocateMemory(deviceExt->device, &alloc, NULL, &mem))).genericError)
 		return err;
 
 	void *mappedMem = NULL;
 
 	if(prop & host)
-		gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)))
+		gotoIfError(clean, checkVkError(deviceExt->mapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)))
 
 	//Initialize block
 
@@ -318,7 +318,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			.objectHandle = (U64) mem
 		};
 
-		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 		CharString_freex(&temp);
 	}
 
@@ -328,7 +328,7 @@ clean:
 
 	if(err.genericError) {
 		AllocationBuffer_freex(&block.allocations);
-		vkFreeMemory(deviceExt->device, mem, NULL);
+		deviceExt->freeMemory(deviceExt->device, mem, NULL);
 	}
 
 	return err;
@@ -340,6 +340,6 @@ Bool VK_WRAP_FUNC(DeviceMemoryAllocator_freeAllocation)(GraphicsDevice *device, 
 		return false;
 
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	vkFreeMemory(deviceExt->device, (VkDeviceMemory) ext, NULL);
+	deviceExt->freeMemory(deviceExt->device, (VkDeviceMemory) ext, NULL);
 	return true;
 }

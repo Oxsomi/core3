@@ -104,7 +104,7 @@ typedef struct VkGraphicsDevice {
 
 	//Temporary storage for submit time stuff
 
-	ListVkSemaphore waitSemaphores;
+	ListVkSemaphore waitSemaphoresList;
 	ListVkResult results;
 	ListU32 swapchainIndices;
 	ListVkSwapchainKHR swapchainHandles;
@@ -116,7 +116,97 @@ typedef struct VkGraphicsDevice {
 	ListVkMappedMemoryRange mappedMemoryRange;
 	ListVkBufferCopy bufferCopies;
 
-	U64 padding;
+	PFN_vkGetSwapchainImagesKHR getSwapchainImages;
+
+	PFN_vkCmdBeginRenderingKHR cmdBeginRendering;
+	PFN_vkCmdEndRenderingKHR cmdEndRendering;
+
+	PFN_vkAcquireNextImageKHR acquireNextImage;
+	PFN_vkCreateSwapchainKHR createSwapchain;
+	PFN_vkDestroySwapchainKHR destroySwapchain;
+
+	PFN_vkCmdBuildAccelerationStructuresKHR cmdBuildAccelerationStructures;
+	PFN_vkCreateAccelerationStructureKHR createAccelerationStructure;
+	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
+	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
+	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
+	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
+
+	PFN_vkCmdTraceRaysKHR traceRays;
+	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
+	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;
+	PFN_vkGetRayTracingShaderGroupHandlesKHR getRayTracingShaderGroupHandles;
+
+	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
+
+	//These functions are manually loaded because the runtime will load them anyways.
+	//However, some of these might not be present when statically linked or on the device itself.
+	//And so they're just manually loaded.
+
+	PFN_vkAllocateMemory allocateMemory;
+	PFN_vkMapMemory mapMemory;
+	PFN_vkFreeMemory freeMemory;
+	PFN_vkCmdClearColorImage cmdClearColorImage;
+	PFN_vkCmdCopyImage cmdCopyImage;
+	PFN_vkCmdSetViewport cmdSetViewport;
+	PFN_vkCmdSetScissor cmdSetScissor;
+	PFN_vkCmdSetBlendConstants cmdSetBlendConstants;
+	PFN_vkCmdSetStencilReference cmdSetStencilReference;
+	PFN_vkCmdBindPipeline cmdBindPipeline;
+	PFN_vkCmdBindIndexBuffer cmdBindIndexBuffer;
+	PFN_vkCmdBindVertexBuffers cmdBindVertexBuffers;
+	PFN_vkCmdDrawIndexed cmdDrawIndexed;
+	PFN_vkCmdDraw cmdDraw;
+	PFN_vkCmdDrawIndexedIndirectCount cmdDrawIndexedIndirectCount;
+	PFN_vkCmdDrawIndirectCount cmdDrawIndirectCount;
+	PFN_vkCmdDrawIndexedIndirect cmdDrawIndexedIndirect;
+	PFN_vkCmdDrawIndirect cmdDrawIndirect;
+	PFN_vkCmdDispatch cmdDispatch;
+	PFN_vkCmdDispatchIndirect cmdDispatchIndirect;
+	PFN_vkCreateComputePipelines createComputePipelines;
+	PFN_vkDestroyPipeline destroyPipeline;
+	PFN_vkDestroyShaderModule destroyShaderModule;
+	PFN_vkDestroyBuffer destroyBuffer;
+	PFN_vkCreateBuffer createBuffer;
+	PFN_vkGetBufferMemoryRequirements2 getBufferMemoryRequirements2;
+	PFN_vkBindBufferMemory bindBufferMemory;
+	PFN_vkGetBufferDeviceAddress getBufferDeviceAddress;
+	PFN_vkUpdateDescriptorSets updateDescriptorSets;
+	PFN_vkFlushMappedMemoryRanges flushMappedMemoryRanges;
+	PFN_vkCmdCopyBuffer cmdCopyBuffer;
+	PFN_vkCmdCopyBufferToImage cmdCopyBufferToImage;
+	PFN_vkGetDeviceQueue getDeviceQueue;
+	PFN_vkCreateSemaphore createSemaphore;
+	PFN_vkCreateDescriptorSetLayout createDescriptorSetLayout;
+	PFN_vkCreatePipelineLayout createPipelineLayout;
+	PFN_vkCreateDescriptorPool createDescriptorPool;
+	PFN_vkAllocateDescriptorSets allocateDescriptorSets;
+	PFN_vkFreeCommandBuffers freeCommandBuffers;
+	PFN_vkDestroyCommandPool destroyCommandPool;
+	PFN_vkDestroySemaphore destroySemaphore;
+	PFN_vkDestroyDescriptorSetLayout destroyDescriptorSetLayout;
+	PFN_vkDestroyDescriptorPool destroyDescriptorPool;
+	PFN_vkDestroyPipelineLayout destroyPipelineLayout;
+	PFN_vkDeviceWaitIdle deviceWaitIdle;
+	PFN_vkWaitSemaphores waitSemaphores;
+	PFN_vkCreateCommandPool createCommandPool;
+	PFN_vkResetCommandPool resetCommandPool;
+	PFN_vkAllocateCommandBuffers allocateCommandBuffers;
+	PFN_vkBeginCommandBuffer beginCommandBuffer;
+	PFN_vkCmdBindDescriptorSets cmdBindDescriptorSets;
+	PFN_vkEndCommandBuffer endCommandBuffer;
+	PFN_vkQueueSubmit queueSubmit;
+	PFN_vkQueuePresentKHR queuePresentKHR;
+	PFN_vkCreateGraphicsPipelines createGraphicsPipelines;
+	PFN_vkDestroyImageView destroyImageView;
+	PFN_vkCreateImage createImage;
+	PFN_vkGetImageMemoryRequirements2 getImageMemoryRequirements2;
+	PFN_vkBindImageMemory bindImageMemory;
+	PFN_vkCreateImageView createImageView;
+	PFN_vkDestroySampler destroySampler;
+	PFN_vkCreateSampler createSampler;
+	PFN_vkCreateShaderModule createShaderModule;
+	PFN_vkDestroyImage destroyImage;
 
 } VkGraphicsDevice;
 

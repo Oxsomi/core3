@@ -41,5 +41,13 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 		.window = (struct ANativeWindow*) window->nativeHandle
 	};
 
-	return vkCheck(vkCreateAndroidSurfaceKHR(instanceExt->instance, &surfaceInfo, NULL, surface));
+	if (!instanceExt->createSurfaceExt)
+		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateAndroidSurfaceKHR");
+
+	if (!instanceExt->createSurfaceExt)
+		return Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!");
+
+	return checkVkError(
+		(((PFN_vkCreateAndroidSurfaceKHR)instanceExt->createSurfaceExt)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
+	);
 }

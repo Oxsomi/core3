@@ -38,9 +38,6 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(pending);
@@ -169,7 +166,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				.size = allocRange
 			};
 
-			vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 		}
 
 		gotoIfError(clean, VkDeviceBuffer_transition(
@@ -201,9 +198,9 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 		))
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
-		vkCmdCopyBufferToImage(
+		deviceExt->cmdCopyBufferToImage(
 			commandBuffer->buffer,
 			stagingResourceExt->buffer,
 			textureExt->image,
@@ -321,7 +318,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				.size = allocRange
 			};
 
-			vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 		}
 
 		if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
@@ -359,9 +356,9 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 		))
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
-		vkCmdCopyBufferToImage(
+		deviceExt->cmdCopyBufferToImage(
 			commandBuffer->buffer,
 			stagingExt->buffer,
 			textureExt->image,

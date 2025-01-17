@@ -33,7 +33,7 @@ TListImpl(VkImageMemoryBarrier2);
 TListImpl(VkBufferMemoryBarrier2);
 TListImpl(VkPipeline);
 
-Error vkCheck(VkResult result) {
+Error checkVkError(VkResult result) {
 
 	if(result >= VK_SUCCESS)
 		return Error_none();
@@ -41,61 +41,61 @@ Error vkCheck(VkResult result) {
 	switch (result) {
 
 		case VK_ERROR_OUT_OF_HOST_MEMORY:
-			return Error_outOfMemory(0, "vkCheck() out of host memory");
+			return Error_outOfMemory(0, "checkVkError() out of host memory");
 		case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-			return Error_outOfMemory(1, "vkCheck() out of device memory");
+			return Error_outOfMemory(1, "checkVkError() out of device memory");
 		case VK_ERROR_OUT_OF_POOL_MEMORY:
-			return Error_outOfMemory(2, "vkCheck() out of pool memory");
+			return Error_outOfMemory(2, "checkVkError() out of pool memory");
 		case VK_ERROR_TOO_MANY_OBJECTS:
-			return Error_outOfMemory(3, "vkCheck() too many objects");
+			return Error_outOfMemory(3, "checkVkError() too many objects");
 		case VK_ERROR_FRAGMENTED_POOL:
-			return Error_outOfMemory(4, "vkCheck() fragmented pool");
+			return Error_outOfMemory(4, "checkVkError() fragmented pool");
 		case VK_ERROR_FRAGMENTATION:
-			return Error_outOfMemory(5, "vkCheck() fragmentation");
+			return Error_outOfMemory(5, "checkVkError() fragmentation");
 		case VK_ERROR_COMPRESSION_EXHAUSTED_EXT:
-			return Error_outOfMemory(6, "vkCheck() compression exhausted");
+			return Error_outOfMemory(6, "checkVkError() compression exhausted");
 
 		case VK_ERROR_DEVICE_LOST:
-			return Error_invalidState(0, "vkCheck() device lost");
+			return Error_invalidState(0, "checkVkError() device lost");
 		case VK_ERROR_SURFACE_LOST_KHR:
-			return Error_invalidState(1, "vkCheck() surface lost");
+			return Error_invalidState(1, "checkVkError() surface lost");
 		case VK_ERROR_MEMORY_MAP_FAILED:
-			return Error_invalidState(2, "vkCheck() memory map failed");
+			return Error_invalidState(2, "checkVkError() memory map failed");
 		case VK_ERROR_VALIDATION_FAILED_EXT:
-			return Error_invalidState(3, "vkCheck() validation failed");
+			return Error_invalidState(3, "checkVkError() validation failed");
 		case VK_ERROR_OUT_OF_DATE_KHR:
-			return Error_invalidState(4, "vkCheck() out of date");
+			return Error_invalidState(4, "checkVkError() out of date");
 		case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
-			return Error_invalidState(5, "vkCheck() native window in use");
+			return Error_invalidState(5, "checkVkError() native window in use");
 
 
 		case VK_ERROR_INCOMPATIBLE_DRIVER:
-			return Error_unsupportedOperation(0, "vkCheck() incompatible driver");
+			return Error_unsupportedOperation(0, "checkVkError() incompatible driver");
 		case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:
-			return Error_unsupportedOperation(1, "vkCheck() incompatible display");
+			return Error_unsupportedOperation(1, "checkVkError() incompatible display");
 		case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR:
-			return Error_unsupportedOperation(2, "vkCheck() invalid image usage");
+			return Error_unsupportedOperation(2, "checkVkError() invalid image usage");
 
 		case VK_ERROR_INVALID_EXTERNAL_HANDLE:
-			return Error_invalidParameter(0, 0, "vkCheck() invalid ext handle");
+			return Error_invalidParameter(0, 0, "checkVkError() invalid ext handle");
 		case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS:
-			return Error_invalidParameter(1, 0, "vkCheck() invalid capture addr");
+			return Error_invalidParameter(1, 0, "checkVkError() invalid capture addr");
 
 		case VK_ERROR_LAYER_NOT_PRESENT:
-			return Error_notFound(0, 0, "vkCheck() layer not present");
+			return Error_notFound(0, 0, "checkVkError() layer not present");
 		case VK_ERROR_EXTENSION_NOT_PRESENT:
-			return Error_notFound(1, 0, "vkCheck() extension not present");
+			return Error_notFound(1, 0, "checkVkError() extension not present");
 		case VK_ERROR_FEATURE_NOT_PRESENT:
-			return Error_notFound(2, 0, "vkCheck() feature not present");
+			return Error_notFound(2, 0, "checkVkError() feature not present");
 		case VK_ERROR_FORMAT_NOT_SUPPORTED:
-			return Error_notFound(3, 0, "vkCheck() format not supported");
+			return Error_notFound(3, 0, "checkVkError() format not supported");
 
 		case VK_ERROR_NOT_PERMITTED_KHR:
-			return Error_unauthorized(0, "vkCheck() not permitted");
+			return Error_unauthorized(0, "checkVkError() not permitted");
 
 		case VK_ERROR_UNKNOWN:
 		default:
-			return Error_unsupportedOperation(3, "vkCheck() has unknown error");
+			return Error_unsupportedOperation(3, "checkVkError() has unknown error");
 	}
 }
 

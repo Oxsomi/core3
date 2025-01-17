@@ -135,7 +135,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.layerCount = 1
 				};
 
-				vkCmdClearColorImage(
+				deviceExt->cmdClearColorImage(
 					buffer,
 					imageExt->image,
 					imageExt->lastLayout,
@@ -219,7 +219,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			VkUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Vk, 0);
 			VkUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Vk, 0);
 
-			vkCmdCopyImage(
+			deviceExt->cmdCopyImage(
 				buffer,
 				srcExt->image,
 				srcExt->lastLayout,
@@ -393,12 +393,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 				.pStencilAttachment = startRender->flags & EStartRenderFlags_Stencil ? &stencilAttachment : NULL
 			};
 
-			instanceExt->cmdBeginRendering(buffer, &renderInfo);
+			deviceExt->cmdBeginRendering(buffer, &renderInfo);
 			break;
 		}
 
 		case ECommandOp_EndRenderingExt:
-			instanceExt->cmdEndRendering(buffer);
+			deviceExt->cmdEndRendering(buffer);
 			break;
 
 		//Draws
@@ -432,7 +432,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			if(!eq) {
 				temp->boundViewport = temp->tempViewport;
-				vkCmdSetViewport(buffer, 0, 1, &temp->boundViewport);
+				deviceExt->cmdSetViewport(buffer, 0, 1, &temp->boundViewport);
 			}
 
 			eq = Buffer_eq(
@@ -442,19 +442,19 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			if(!eq) {
 				temp->boundScissor = temp->tempScissor;
-				vkCmdSetScissor(buffer, 0, 1, &temp->boundScissor);
+				deviceExt->cmdSetScissor(buffer, 0, 1, &temp->boundScissor);
 			}
 
 			//Bind blend constants and/or stencil ref
 
 			if (F32x4_neq4(temp->tempBlendConstants, temp->blendConstants)) {
 				temp->blendConstants = temp->tempBlendConstants;
-				vkCmdSetBlendConstants(buffer, (const float*) &temp->blendConstants);
+				deviceExt->cmdSetBlendConstants(buffer, (const float*) &temp->blendConstants);
 			}
 
 			if (temp->tempStencilRef != temp->stencilRef) {
 				temp->stencilRef = temp->tempStencilRef;
-				vkCmdSetStencilReference(buffer, VK_STENCIL_FACE_FRONT_AND_BACK, temp->stencilRef);
+				deviceExt->cmdSetStencilReference(buffer, VK_STENCIL_FACE_FRONT_AND_BACK, temp->stencilRef);
 			}
 
 			//Bind pipeline
@@ -463,7 +463,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				temp->pipelines[EPipelineType_Graphics] = temp->tempPipelines[EPipelineType_Graphics];
 
-				vkCmdBindPipeline(
+				deviceExt->cmdBindPipeline(
 					temp->buffer,
 					VK_PIPELINE_BIND_POINT_GRAPHICS,
 					*Pipeline_ext(PipelineRef_ptr(temp->pipelines[EPipelineType_Graphics]), Vk)
@@ -483,7 +483,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				temp->boundBuffers.indexBuffer = temp->tempBoundBuffers.indexBuffer;
 				temp->boundBuffers.isIndex32Bit = temp->tempBoundBuffers.isIndex32Bit;
 
-				vkCmdBindIndexBuffer(
+				deviceExt->cmdBindIndexBuffer(
 					temp->buffer,
 					DeviceBuffer_ext(DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer), Vk)->buffer,
 					0,
@@ -523,7 +523,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				}
 
 				if(end > start)
-					vkCmdBindVertexBuffers(
+					deviceExt->cmdBindVertexBuffers(
 						temp->buffer,
 						start,
 						end - start,
@@ -539,14 +539,14 @@ void VK_WRAP_FUNC(CommandList_process)(
 				DrawCmd draw = *(const DrawCmd*)data;
 
 				if(draw.isIndexed)
-					vkCmdDrawIndexed(
+					deviceExt->cmdDrawIndexed(
 						buffer,
 						draw.count, draw.instanceCount,
 						draw.indexOffset, draw.vertexOffset,
 						draw.instanceOffset
 					);
 
-				else vkCmdDraw(
+				else deviceExt->cmdDraw(
 					buffer,
 					draw.count, draw.instanceCount,
 					draw.vertexOffset, draw.instanceOffset
@@ -568,14 +568,14 @@ void VK_WRAP_FUNC(CommandList_process)(
 					VkDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Vk);
 
 					if(drawIndirect.isIndexed)
-						vkCmdDrawIndexedIndirectCount(
+						deviceExt->cmdDrawIndexedIndirectCount(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							counterExt->buffer, drawIndirect.countOffsetExt,
 							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
-					else vkCmdDrawIndirectCount(
+					else deviceExt->cmdDrawIndirectCount(
 						buffer,
 						bufferExt->buffer, drawIndirect.bufferOffset,
 						counterExt->buffer, drawIndirect.countOffsetExt,
@@ -588,13 +588,13 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else {
 
 					if(drawIndirect.isIndexed)
-						vkCmdDrawIndexedIndirect(
+						deviceExt->cmdDrawIndexedIndirect(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
-					else vkCmdDrawIndirect(
+					else deviceExt->cmdDrawIndirect(
 						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
 						drawIndirect.drawCalls, sizeof(DrawCallUnindexed)
 					);
@@ -611,7 +611,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				temp->pipelines[EPipelineType_Compute] = temp->tempPipelines[EPipelineType_Compute];
 
-				vkCmdBindPipeline(
+				deviceExt->cmdBindPipeline(
 					temp->buffer,
 					VK_PIPELINE_BIND_POINT_COMPUTE,
 					*Pipeline_ext(PipelineRef_ptr(temp->pipelines[EPipelineType_Compute]), Vk)
@@ -620,7 +620,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
-				vkCmdDispatch(
+				deviceExt->cmdDispatch(
 					buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]
 				);
 			}
@@ -628,7 +628,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			else {
 				DispatchIndirectCmd dispatch = *(const DispatchIndirectCmd*)data;
 				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Vk);
-				vkCmdDispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
+				deviceExt->cmdDispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
 			}
 
 			break;
@@ -652,7 +652,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				temp->pipelines[EPipelineType_RaytracingExt] = temp->tempPipelines[EPipelineType_RaytracingExt];
 
-				vkCmdBindPipeline(
+				deviceExt->cmdBindPipeline(
 					temp->buffer,
 					VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
 					*Pipeline_ext(raytracingPipeline, Vk)
@@ -697,7 +697,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			if(op == ECommandOp_DispatchRaysExt) {
 				DispatchRaysExt dispatch = *(const DispatchRaysExt*)data;
 				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
-				instanceExt->traceRays(
+				deviceExt->traceRays(
 					buffer,
 					&raygen, &miss, &hit, &callable,
 					dispatch.x, dispatch.y, dispatch.z
@@ -707,7 +707,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			else {
 				DispatchRaysIndirectExt dispatch = *(const DispatchRaysIndirectExt*)data;
 				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
-				instanceExt->traceRaysIndirect(
+				deviceExt->traceRaysIndirect(
 					buffer,
 					&raygen, &miss, &hit, &callable,
 					DeviceBufferRef_ptr(dispatch.buffer)->resource.deviceAddress + dispatch.offset
@@ -957,7 +957,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 			}
 
 			if(dependency.imageMemoryBarrierCount || dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+				deviceExt->cmdPipelineBarrier2(buffer, &dependency);
 
 			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);

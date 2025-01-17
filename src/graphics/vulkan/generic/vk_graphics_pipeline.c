@@ -536,7 +536,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		.layout = deviceExt->defaultLayout
 	};
 
-	gotoIfError2(clean, vkCheck(vkCreateGraphicsPipelines(
+	gotoIfError2(clean, checkVkError(deviceExt->createGraphicsPipelines(
 		deviceExt->device,
 		NULL,
 		1,
@@ -557,7 +557,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.pObjectName = temp.ptr ? temp.ptr : name.ptr
 		};
 
-		gotoIfError2(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		gotoIfError2(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 		CharString_freex(&temp);
 	}
 
@@ -567,7 +567,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 clean:
 
 	if(pipelineHandle)
-		vkDestroyPipeline(deviceExt->device, pipelineHandle, NULL);
+		deviceExt->destroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
 	if(currentInfo.pStages)
 		for(U64 j = 0; j < currentInfo.stageCount; ++j) {
@@ -575,7 +575,7 @@ clean:
 			VkShaderModule mod = currentInfo.pStages[j].module;
 
 			if(mod)
-				vkDestroyShaderModule(deviceExt->device, mod, NULL);
+				deviceExt->destroyShaderModule(deviceExt->device, mod, NULL);
 		}
 
 	CharString_freex(&temp);

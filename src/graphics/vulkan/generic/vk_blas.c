@@ -35,9 +35,6 @@ Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	CharString tmp = CharString_createNull();
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
@@ -161,7 +158,7 @@ Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR
 	};
 
-	instanceExt->getAccelerationStructureBuildSizes(
+	deviceExt->getAccelerationStructureBuildSizes(
 		deviceExt->device,
 		VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
 		&blasExt->geometries,
@@ -200,7 +197,7 @@ Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 		.size = sizes.accelerationStructureSize
 	};
 
-	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &blasExt->as)))
+	gotoIfError(clean, checkVkError(deviceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &blasExt->as)))
 	blasExt->geometries.dstAccelerationStructure = blasExt->as;
 
 	blasExt->geometries.scratchData = (VkDeviceOrHostAddressKHR) {
@@ -217,13 +214,10 @@ Bool VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
 	const VkAccelerationStructureKHR as = BLAS_ext(blas, Vk)->as;
 
 	if(as)
-		instanceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
+		deviceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
 
 	return true;
 }
@@ -233,9 +227,7 @@ Error VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	BLAS *blas = BLASRef_ptr(pending);
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
@@ -249,7 +241,7 @@ Error VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;
 
-	instanceExt->cmdBuildAccelerationStructures(
+	deviceExt->cmdBuildAccelerationStructures(
 		commandBuffer->buffer,
 		1,
 		&blasExt->geometries,

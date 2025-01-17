@@ -154,9 +154,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 	if(instanceExt->deviceFactory)
 		instanceExt->deviceFactory->lpVtbl->Release(instanceExt->deviceFactory);
 
-	if(instanceExt->debug1)
-		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
-
 	return true;
 }
 

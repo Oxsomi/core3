@@ -139,16 +139,12 @@ VkBool32 onDebugReport(
 	return VK_FALSE;
 }
 
-#define vkExtensionNoCheck(function, result) {													\
-	*(void**)&result = (void*) vkGetInstanceProcAddr(instanceExt->instance, #function);			\
-}
-
-#define vkExtension(label, function, result) {													\
+#define getVkFunction(label, function, result) {												\
 																								\
 	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 			\
 																								\
 	if(!v)																						\
-		gotoIfError(clean, Error_nullPointer(0, "vkExtension() " #function " failed"))			\
+		gotoIfError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"))		\
 																								\
 	*(void**)&result = (void*) v;																\
 }
@@ -172,8 +168,18 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 	Error err = Error_none();
 
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, NULL)))
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)))
+	//Start with loading the functions
+
+	//These instances are okay with using NULL as the instance
+
+	getVkFunction(clean, vkCreateInstance, instanceExt->createInstance)
+	getVkFunction(clean, vkEnumerateInstanceLayerProperties, instanceExt->enumerateInstanceLayerProperties)
+	getVkFunction(clean, vkEnumerateInstanceExtensionProperties, instanceExt->enumerateInstanceExtensionProperties)
+
+	//Enumerate instance info
+
+	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, NULL)))
+	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)))
 
 	gotoIfError(clean, CharString_createCopyx(info.name, &title))
 	gotoIfError(clean, ListVkExtensionProperties_createx(extensionCount, &extensions))
@@ -182,8 +188,8 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	gotoIfError(clean, ListConstC8_reservex(&enabledLayers, layerCount))
 	gotoIfError(clean, ListConstC8_reservex(&enabledExtensions, extensionCount))
 
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)))
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)))
+	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)))
+	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)))
 
 	Bool supportsDebug[2] = { 0 };
 
@@ -313,52 +319,41 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Create instance
 
-	gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &instanceExt->instance)))
+	gotoIfError(clean, checkVkError(instanceExt->createInstance(&instanceInfo, NULL, &instanceExt->instance)))
 
-	//Load functions
+	//Functions that aren't device dependent, but do need an instance
+	
+	getVkFunction(clean, vkDestroyInstance, instanceExt->destroyInstance)
+	getVkFunction(clean, vkCreateDevice, instanceExt->createDevice)
+	getVkFunction(clean, vkDestroyDevice, instanceExt->destroyDevice)
 
-	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2)
-	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2)
-
-	vkExtension(clean, vkCmdPipelineBarrier2KHR, instanceExt->cmdPipelineBarrier2)
-
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats)
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities)
-	vkExtension(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes)
-	vkExtension(clean, vkGetSwapchainImagesKHR, instanceExt->getSwapchainImages)
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport)
-
-	if(supportsDebug[1]) {
-		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName)
-		vkExtension(clean, vkCmdDebugMarkerBeginEXT, instanceExt->cmdDebugMarkerBegin)
-		vkExtension(clean, vkCmdDebugMarkerEndEXT, instanceExt->cmdDebugMarkerEnd)
-		vkExtension(clean, vkCmdDebugMarkerInsertEXT, instanceExt->cmdDebugMarkerInsert)
+	if (supportsDebug[0]) {
+		getVkFunction(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback)
+		getVkFunction(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback)
 	}
 
-	if(supportsDebug[0]) {
-		vkExtension(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback)
-		vkExtension(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback)
+	if (supportsDebug[1]) {
+		getVkFunction(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName)
+		getVkFunction(clean, vkCmdDebugMarkerBeginEXT, instanceExt->cmdDebugMarkerBegin)
+		getVkFunction(clean, vkCmdDebugMarkerEndEXT, instanceExt->cmdDebugMarkerEnd)
+		getVkFunction(clean, vkCmdDebugMarkerInsertEXT, instanceExt->cmdDebugMarkerInsert)
 	}
 
-	vkExtension(clean, vkAcquireNextImageKHR, instanceExt->acquireNextImage)
-	vkExtension(clean, vkCreateSwapchainKHR, instanceExt->createSwapchain)
-	vkExtension(clean, vkDestroySurfaceKHR, instanceExt->destroySurface)
-	vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain)
-
-	vkExtensionNoCheck(vkCmdBuildAccelerationStructuresKHR, instanceExt->cmdBuildAccelerationStructures)
-	vkExtensionNoCheck(vkCreateAccelerationStructureKHR, instanceExt->createAccelerationStructure)
-	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, instanceExt->copyAccelerationStructure)
-	vkExtensionNoCheck(vkDestroyAccelerationStructureKHR, instanceExt->destroyAccelerationStructure)
-	vkExtensionNoCheck(vkGetAccelerationStructureBuildSizesKHR, instanceExt->getAccelerationStructureBuildSizes)
-	vkExtensionNoCheck(vkGetDeviceAccelerationStructureCompatibilityKHR, instanceExt->getAccelerationStructureCompatibility)
-
-	vkExtensionNoCheck(vkCmdTraceRaysKHR, instanceExt->traceRays)
-	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, instanceExt->traceRaysIndirect)
-	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, instanceExt->createRaytracingPipelines)
-	vkExtensionNoCheck(vkGetRayTracingShaderGroupHandlesKHR, instanceExt->getRayTracingShaderGroupHandles)
-
-	vkExtensionNoCheck(vkCmdBeginRenderingKHR, instanceExt->cmdBeginRendering)
-	vkExtensionNoCheck(vkCmdEndRenderingKHR, instanceExt->cmdEndRendering)
+	getVkFunction(clean, vkEnumeratePhysicalDevices, instanceExt->enumeratePhysicalDevices)
+	getVkFunction(clean, vkEnumerateDeviceLayerProperties, instanceExt->enumerateDeviceLayerProperties)
+	getVkFunction(clean, vkEnumerateDeviceExtensionProperties, instanceExt->enumerateDeviceExtensionProperties)
+	getVkFunction(clean, vkGetPhysicalDeviceFormatProperties, instanceExt->getPhysicalDeviceFormatProperties)
+	getVkFunction(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2)
+	getVkFunction(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2)
+	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties, instanceExt->getPhysicalDeviceMemoryProperties)
+	getVkFunction(clean, vkGetPhysicalDeviceQueueFamilyProperties, instanceExt->getPhysicalDeviceQueueFamilyProperties)
+	
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats)
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities)
+	getVkFunction(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes)
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport)
+	
+	getVkFunction(clean, vkDestroySurfaceKHR, instanceExt->destroySurface)
 
 	//Add debug callback
 
@@ -378,7 +373,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
 		};
 
-		gotoIfError(clean, vkCheck(instanceExt->debugCreateReportCallback(
+		gotoIfError(clean, checkVkError(instanceExt->debugCreateReportCallback(
 			instanceExt->instance, &callbackInfo, NULL, &instanceExt->debugReportCallback
 		)))
 	}
@@ -408,7 +403,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc
 	if(instanceExt->debugDestroyReportCallback)
 		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
 
-	vkDestroyInstance(instanceExt->instance, NULL);
+	instanceExt->destroyInstance(instanceExt->instance, NULL);
 
 	return true;
 }
@@ -467,10 +462,10 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 	if(result->ptr)
 		return Error_invalidParameter(1, 0, "VkGraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak");
 
-	VkGraphicsInstance *graphicsExt = GraphicsInstance_ext(inst, Vk);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
 
 	U32 deviceCount = 0;
-	Error err = vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, NULL));
+	Error err = checkVkError(instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, NULL));
 
 	if(err.genericError)
 		return err;
@@ -483,7 +478,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 	gotoIfError(clean, ListVkPhysicalDevice_createx(deviceCount, &temp))
 	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&temp2, deviceCount))
 
-	gotoIfError(clean, vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, temp.ptrNonConst)))
+	gotoIfError(clean, checkVkError(instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, temp.ptrNonConst)))
 
 	for (U32 i = 0, j = 0; i < deviceCount; ++i) {
 
@@ -493,13 +488,13 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		U32 layerCount = 0, extensionCount = 0;
 
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, NULL)))
+		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, NULL)))
 		gotoIfError(clean, ListVkLayerProperties_resizex(&temp3, layerCount))
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst)))
+		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst)))
 
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)))
+		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)))
 		gotoIfError(clean, ListVkExtensionProperties_resizex(&temp4, extensionCount))
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)))
+		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)))
 
 		//Log device for debugging
 
@@ -644,7 +639,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES
 		)
 
-		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
+		instanceExt->getPhysicalDeviceProperties2(dev, &properties2);
 
 		if(
 			optExtensions[EOptExtensions_Maintenance4] && (
@@ -808,7 +803,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
 		)
 
-		graphicsExt->getPhysicalDeviceFeatures2(dev, &features2);
+		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
 
 		//Query
 
@@ -1421,7 +1416,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		for(U64 k = 0; k < sizeof(toSupport) / sizeof(VkFormat); ++k) {
 
 			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
-			vkGetPhysicalDeviceFormatProperties(dev, toSupport[k], &formatInfo);
+			instanceExt->getPhysicalDeviceFormatProperties(dev, toSupport[k], &formatInfo);
 
 			VkFormatFeatureFlags reqk = reqFormatFeatFlags[k];
 
@@ -1439,7 +1434,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		//Query for memory size
 
 		VkGraphicsDevice fakeDevice = (VkGraphicsDevice) { 0 };
-		vkGetPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
+		instanceExt->getPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
 
 		U64 cpuHeapSize = 0;
 		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, true, U32_MAX, NULL, NULL, &cpuHeapSize))
@@ -1514,7 +1509,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		for(U64 k = 0; k < sizeof(optionalFormats) / sizeof(OptionalFormat); ++k) {
 
 			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
-			vkGetPhysicalDeviceFormatProperties(dev, optionalFormats[k].format, &formatInfo);
+			instanceExt->getPhysicalDeviceFormatProperties(dev, optionalFormats[k].format, &formatInfo);
 
 			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
 				capabilities.dataTypes |= optionalFormats[k].optFormat;

@@ -240,7 +240,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	//Create vulkan pipelines
 
-	gotoIfError2(clean, vkCheck(instanceExt->createRaytracingPipelines(
+	gotoIfError2(clean, checkVkError(deviceExt->createRaytracingPipelines(
 		deviceExt->device,
 		NULL,
 		NULL,
@@ -263,7 +263,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 			.pObjectName = temp.ptr ? temp.ptr : name.ptr
 		};
 
-		gotoIfError2(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		gotoIfError2(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 		CharString_freex(&temp);
 	}
 
@@ -272,7 +272,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	//Fetch all shader handles
 
-	gotoIfError2(clean, vkCheck(instanceExt->getRayTracingShaderGroupHandles(
+	gotoIfError2(clean, checkVkError(deviceExt->getRayTracingShaderGroupHandles(
 		deviceExt->device,
 		*Pipeline_ext(pipeline, Vk),
 		0,
@@ -329,13 +329,13 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 clean:
 
 	if(pipelineHandle)
-		vkDestroyPipeline(deviceExt->device, pipelineHandle, NULL);
+		deviceExt->destroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
 	ListVkPipelineShaderStageCreateInfo_freex(&stages);
 	ListVkRayTracingShaderGroupCreateInfoKHR_freex(&groups);
 
 	for(U64 i = 0; i < modules.length; ++i)
-		vkDestroyShaderModule(deviceExt->device, modules.ptr[i], NULL);
+		deviceExt->destroyShaderModule(deviceExt->device, modules.ptr[i], NULL);
 
 	ListVkShaderModule_freex(&modules);
 	CharString_freex(&temp);

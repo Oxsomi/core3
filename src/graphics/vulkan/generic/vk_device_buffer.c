@@ -86,11 +86,12 @@ Error VkDeviceBuffer_transition(
 
 Bool VK_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(buffer->resource.device), Vk);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
 
 	if(bufferExt->buffer) {
-		vkDestroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
+		deviceExt->destroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
 		bufferExt->buffer = NULL;
 	}
 
@@ -158,14 +159,14 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.pNext = &dedicatedReq
 	};
 
-	gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)))
+	gotoIfError(clean, checkVkError(deviceExt->createBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)))
 
 	VkBufferMemoryRequirementsInfo2 bufferReq = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,
 		.buffer = bufExt->buffer
 	};
 
-	vkGetBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
+	deviceExt->getBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
 
 	gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
@@ -183,7 +184,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 	//Bind memory
 
-	gotoIfError(clean, vkCheck(vkBindBufferMemory(
+	gotoIfError(clean, checkVkError(deviceExt->bindBufferMemory(
 		deviceExt->device, bufExt->buffer, (VkDeviceMemory) block.ext, buf->resource.blockOffset
 	)))
 
@@ -197,7 +198,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.buffer = bufExt->buffer
 	};
 
-	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
+	buf->resource.deviceAddress = deviceExt->getBufferDeviceAddress(deviceExt->device, &address);
 
 	if(!buf->resource.deviceAddress)
 		gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
@@ -239,7 +240,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 			++counter;
 		}
 
-		vkUpdateDescriptorSets(deviceExt->device, counter, descriptors, 0, NULL);
+		deviceExt->updateDescriptorSets(deviceExt->device, counter, descriptors, 0, NULL);
 	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
@@ -251,7 +252,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 			.objectHandle = (U64) bufExt->buffer
 		};
 
-		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
 
 clean:
@@ -264,9 +265,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
 	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
@@ -325,7 +323,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 		}
 
 		if(incoherent)
-			gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
+			gotoIfError(clean, checkVkError(deviceExt->flushMappedMemoryRanges(
 				deviceExt->device, (U32) deviceExt->mappedMemoryRange.length, deviceExt->mappedMemoryRange.ptr
 			)))
 	}
@@ -407,7 +405,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					.size = allocRange
 				};
 
-				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+				deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
 
 			gotoIfError(clean, VkDeviceBuffer_transition(
@@ -422,9 +420,9 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			))
 
 			if(dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+				deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
-			vkCmdCopyBuffer(
+			deviceExt->cmdCopyBuffer(
 				commandBuffer->buffer,
 				stagingResourceExt->buffer,
 				bufferExt->buffer,
@@ -516,7 +514,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					.size = allocRange
 				};
 
-				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+				deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
 
 			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
@@ -537,9 +535,9 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			}
 
 			if(dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
+				deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
-			vkCmdCopyBuffer(
+			deviceExt->cmdCopyBuffer(
 				commandBuffer->buffer,
 				stagingExt->buffer,
 				bufferExt->buffer,
