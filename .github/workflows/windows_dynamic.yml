@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    name: Windows build
+    name: Windows build dynamic
     runs-on: windows-2022
     env:
       VULKAN_SDK: C:\VulkanSDK\

@@ -164,7 +164,7 @@ macro(add_virtual_files)
 	if(WIN32)
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
 		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
-	elseif(UNIX AND NOT APPLE)
+	elseif(UNIX AND NOT APPLE AND NOT ANDROID)
 		add_custom_command(
 			TARGET ${_ARGS_TARGET} POST_BUILD
 			COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"

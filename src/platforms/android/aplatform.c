@@ -41,6 +41,8 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	CharString tmpStr = CharString_createNull();
 	CharString tmpStr1 = CharString_createNull();
 
+	Log_debugLnx("Hello world!");
+
 	//We will put app dir = internal data path and working dir = external data path
 	//Because unlike CLI we don't have a working directory and our apk is virtual, so only internal is read/write.
 

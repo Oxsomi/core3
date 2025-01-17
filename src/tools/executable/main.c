@@ -66,10 +66,10 @@ clean:
 Platform_defineEntrypoint() {
 
 	int status = 0;
-	Error err = Platform_create(argc, argv, Platform_getData(), NULL, true);
+	Error err = Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true);
 
 	if(err.genericError)		//Can't print
-		return -2;
+		Platform_return(-2);
 
 	//playSound();
 
@@ -83,5 +83,5 @@ Platform_defineEntrypoint() {
 clean:
 	CLI_shutdown();
 	Platform_cleanup();
-	return status;
+	Platform_return(status);
 }

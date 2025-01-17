@@ -20,19 +20,11 @@
 
 #include "platforms/window_manager.h"
 #include "types/base/error.h"
+#include "platforms/platform.h"
 
 #include <android_native_app_glue.h>
 
-struct android_app *AWindowManager_instance = NULL;
-
-extern int main(int argc, const char *argv[]);
-
-void android_main(struct android_app *state) {
-	AWindowManager_instance = state;
-	main(0, NULL);				  //So same function can still be used, even though argc is invalid
-}
-
-void *Platform_getDataImpl(void *ptr) { (void) ptr; return AWindowManager_instance; }
+void *Platform_getDataImpl(void *ptr) { (void) ptr; return (struct android_app*) Platform_instance->data; }
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	(void) w; (void) e_rr;
@@ -53,6 +45,6 @@ void WindowManager_updateExt(WindowManager *manager) {
 	
 	while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
 		if(source)
-			source->process(AWindowManager_instance, source);
+			source->process(((struct android_app*) Platform_instance->data), source);
 	}
 }

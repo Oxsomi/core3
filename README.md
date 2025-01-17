@@ -71,6 +71,7 @@ One of the useful things about C is that files are incredibly easy to compile an
   - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.
   - For Windows; msys2 or Ninja can be used to target android.
   - *Optional*: JDK for creation of a keystore if one can not be provided.
+  - For running, at least Android 13 (level 33) is required, due to Vulkan 1.3 being at that level.
 
 ## Running requirements
 

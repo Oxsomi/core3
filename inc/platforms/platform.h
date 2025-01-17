@@ -80,11 +80,22 @@ impl U64 Platform_getThreads();
 
 void Platform_cleanup();			//Call on exit
 
-#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
-
 impl void *Platform_getDataImpl(void *ptr);
 
-#define Platform_getData() Platform_getDataImpl(NULL)
+#if _PLATFORM_TYPE == PLATFORM_ANDROID
+	typedef struct android_app android_app;
+	#define Platform_defineEntrypoint() void android_main(android_app *state)
+	#define Platform_getData() (state)
+	#define Platform_argc (0)
+	#define Platform_argv (NULL)
+	#define Platform_return(x) return
+#else
+	#define Platform_defineEntrypoint() int main(int argc, const char *argv[])
+	#define Platform_getData() Platform_getDataImpl(NULL)
+	#define Platform_argc argc
+	#define Platform_argv argv
+	#define Platform_return(...) return __VA_ARGS__
+#endif
 
 //Call this on allocate to make sure the platform's allocator tracks allocations
 

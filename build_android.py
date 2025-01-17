@@ -100,7 +100,7 @@ def main():
 	parser = argparse.ArgumentParser(description="Build a lib or apk via OxC3")
 
 	parser.add_argument("-mode", type=str, default="Release", choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"], help="Build mode")
-	parser.add_argument("-api", type=int, default=29, help="Android api level (e.g. 29 = Android 10 Q)")
+	parser.add_argument("-api", type=int, default=33, help="Android api level (e.g. 33 = Android 13)")
 	parser.add_argument("-arch", type=str, default="all", choices=["arm64", "x64", "all"], help="Architecture")
 	parser.add_argument("-simd", type=bool, default=False, help="EnableSIMD (False by default until properly supported)")
 	parser.add_argument("-generator", type=str, help="CMake Generator")
@@ -172,8 +172,9 @@ def main():
 		Path(outputPath).mkdir(parents=True, exist_ok=True)
 			
 		outputPath += "apk/"
+		shutil.rmtree(outputPath, ignore_errors=True)
 		Path(outputPath).mkdir(parents=True, exist_ok=True)
-
+		
 		outputPath += "/AndroidManifest.xml"
 
 		with open(outputPath, "w") as output:
@@ -181,20 +182,24 @@ def main():
 
 		# Copy so file(s)
 
-		outputPath = "build/" + args.mode + "/android/apk/libs"
+		outputPath = "build/" + args.mode + "/android/apk/lib"
 		Path(outputPath).mkdir(parents=True, exist_ok=True)
 
-		tmpPath = outputPath + "/arm64-v8a"
-		Path(tmpPath).mkdir(parents=True, exist_ok=True)
+		if args.arch == "arm64" or args.arch == "all":
 
-		tmpPath = outputPath + "/x86-64"
-		Path(tmpPath).mkdir(parents=True, exist_ok=True)
+			tmpPath = outputPath + "/arm64-v8a"
+			Path(tmpPath).mkdir(parents=True, exist_ok=True)
 
-		for f in glob.glob("build/" + args.mode + "/android/x64/bin/*.so"):
-			shutil.copy2(f, outputPath + "/x86-64")
+			for f in glob.glob("build/" + args.mode + "/android/arm64/lib/*.so"):
+				shutil.copy2(f, outputPath + "/arm64-v8a")
 
-		for f in glob.glob("build/" + args.mode + "/android/arm64/bin/*.so"):
-			shutil.copy2(f, outputPath + "/arm64-v8a")
+		if args.arch == "x64" or args.arch == "all":
+
+			tmpPath = outputPath + "/x86_64"
+			Path(tmpPath).mkdir(parents=True, exist_ok=True)
+
+			for f in glob.glob("build/" + args.mode + "/android/x64/lib/*.so"):
+				shutil.copy2(f, outputPath + "/x86_64")
 
 		# Copy packages
 		
@@ -205,7 +210,7 @@ def main():
 		outputPath += "/packages"
 		Path(outputPath).mkdir(parents=True, exist_ok=True)
 		
-		for f in glob.glob("build/android/bin/packages/*"):
+		for f in glob.glob("build/android/packages/*"):
 
 			# We need to make a file named section_ here, because AAssetManager can't iterate directories
 
@@ -216,7 +221,7 @@ def main():
 
 			Path(outputPath + "/" + sectionName).mkdir(parents=True, exist_ok=True)
 
-			for fc in glob.glob("build/android/bin/packages/" + sectionName + "/*"):
+			for fc in glob.glob("build/android/packages/" + sectionName + "/*"):
 				shutil.copy2(fc, outputPath + "/" + sectionName + "/" + Path(fc).name)
 
 		# Copy into /res (and provide -S res to aapt package)
@@ -224,7 +229,7 @@ def main():
 		inputPath = os.path.dirname(os.path.realpath(__file__)) + "/src/platforms/android/res"
 		resFolder = "build/" + args.mode + "/android/apk/res"
 		Path(resFolder).mkdir(parents=True, exist_ok=True)
-		shutil.copytree(inputPath, resFolder, exist_ok=True)
+		shutil.copytree(inputPath, resFolder, dirs_exist_ok=True)
 
 		# Find directory with aapt, zipalign, apksigner, etc.
 
@@ -246,9 +251,9 @@ def main():
 		cwd = os.getcwd()
 		os.chdir("build/" + args.mode + "/android/apk")
 		
-		for f in glob.glob("libs/*"):
+		for f in glob.glob("lib/*"):
 			for f0 in glob.glob(f + "/*.so"):
-				subprocess.check_output("\"" + buildTools + "aapt\" add \"app-unsigned.apk\" \"" + f0 + "\"")
+				subprocess.check_output("\"" + buildTools + "aapt\" add \"app-unsigned.apk\" \"" + f0.replace("\\", "/") + "\"")
 
 		os.chdir(cwd)
 
@@ -295,6 +300,10 @@ def main():
 			print("apk run requires the following arguments (example): -package net.osomi.test -lib test", file=sys.stderr)
 			return
 
+		if not args.sign and args.apk:
+			print("apk run requires apk to be signed", file=sys.stderr)
+			return
+
 		adb = os.environ["ANDROID_SDK"] + "/platform-tools/adb"
 
 		print("-- Installing apk file (" + apkFile + ") using adb (" + adb + ")")
@@ -305,7 +314,7 @@ def main():
 			subprocess.check_output(adb + " install -t -r " + apkFile)
 		
 		print("-- Running apk file")
-		subprocess.check_output(adb + " shell am start -n " + args.package + "/" + args.lib + ".NativeActivity")
+		subprocess.check_output(adb + " shell am start -n " + args.package + "/android.app.NativeActivity")
 		
 		print("-- Starting logcat")
 		subprocess.check_output(adb + " logcat -c")

@@ -25,6 +25,7 @@
 #include "platforms/window_manager.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
+#include "platforms/platform.h"
 
 #include <android_native_app_glue.h>
 #include <android/configuration.h>
@@ -435,13 +436,12 @@ Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat fo
 	return format == EWindowFormat_BGRA8;	//TODO: HDR
 }
 
-extern struct android_app *AWindowManager_instance;
-
 Bool WindowManager_freePhysical(Window *w) {
 	(void) w;
-	AWindowManager_instance->userData = NULL;
-	AWindowManager_instance->onAppCmd = NULL;
-	AWindowManager_instance->onInputEvent = NULL;
+	struct android_app *app = (struct android_app*) Platform_instance->data;
+	app->userData = NULL;
+	app->onAppCmd = NULL;
+	app->onInputEvent = NULL;
 	return true;
 }
 
@@ -486,7 +486,7 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
 		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"))
 
-	ANativeWindow *nativeWindow = AWindowManager_instance->window;
+	ANativeWindow *nativeWindow = ((struct android_app*) Platform_instance->data)->window;
 
 	ANativeWindow_Buffer buffer = (ANativeWindow_Buffer) { 0 };
 	ARect rect = (ARect) { .right = I32x2_x(w->size), .bottom = I32x2_y(w->size) };
@@ -555,11 +555,12 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	gotoIfError2(clean, Keyboard_create(w->devices.ptrNonConst))
 	gotoIfError2(clean, Mouse_create(w->devices.ptrNonConst + 1))
 
-	AWindowManager_instance->userData = w;
-	AWindowManager_instance->onAppCmd = AWindow_onAppCmd;
-	AWindowManager_instance->onInputEvent = AWindow_onInput;
+	struct android_app *app = (struct android_app*) Platform_instance->data;
+	app->userData = w;
+	app->onAppCmd = AWindow_onAppCmd;
+	app->onInputEvent = AWindow_onInput;
 
-	w->nativeHandle = AWindowManager_instance->window;
+	w->nativeHandle = app->window;
 
 clean:
 	return s_uccess;
