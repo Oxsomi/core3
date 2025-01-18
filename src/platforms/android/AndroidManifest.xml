@@ -30,7 +30,7 @@
 	  android:appCategory="{APP_CATEGORY}">
 	  
     <activity android:name="android.app.NativeActivity"
-	  			android:exported="false"
+	  			android:exported="{APP_DEBUGGABLE}"
             	android:configChanges="orientation|keyboardHidden|screenLayout|fontScale|locale">
 			  
       <meta-data android:name="android.app.lib_name"

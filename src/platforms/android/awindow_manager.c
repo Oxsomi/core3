@@ -28,12 +28,12 @@ void *Platform_getDataImpl(void *ptr) { (void) ptr; return (struct android_app*)
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	(void) w; (void) e_rr;
-	return false;
+	return true;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
 	(void) w;
-	return false;
+	return true;
 }
 
 void WindowManager_updateExt(WindowManager *manager) {

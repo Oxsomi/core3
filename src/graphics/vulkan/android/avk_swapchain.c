@@ -48,6 +48,6 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 		return Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!");
 
 	return checkVkError(
-		(((PFN_vkCreateAndroidSurfaceKHR)instanceExt->createSurfaceExt)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
+		((PFN_vkCreateAndroidSurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
 	);
 }

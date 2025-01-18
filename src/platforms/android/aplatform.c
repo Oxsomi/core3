@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/ext/errorx.h"
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
 #include "platforms/log.h"
@@ -40,8 +41,6 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	const C8 *nameSubSection = NULL;
 	CharString tmpStr = CharString_createNull();
 	CharString tmpStr1 = CharString_createNull();
-
-	Log_debugLnx("Hello world!");
 
 	//We will put app dir = internal data path and working dir = external data path
 	//Because unlike CLI we don't have a working directory and our apk is virtual, so only internal is read/write.
@@ -120,6 +119,12 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	}
 
 clean:
+
+	if(!s_uccess) {
+		Log_errorLnx("Couldn't initialize app, encountered issue");
+		if(e_rr) Error_printLnx(*e_rr);
+	}
+	
 	if(asset) AAsset_close(asset);
 	if(subDir) AAssetDir_close(subDir);
 	if(dir) AAssetDir_close(dir);

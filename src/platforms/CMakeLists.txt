@@ -57,13 +57,7 @@ target_link_libraries(
 if(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
 elseif(ANDROID)
-
-	add_library(OxC3_platforms_android STATIC "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
-	target_include_directories(OxC3_platforms_android PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
-	target_compile_options(OxC3_platforms_android PRIVATE -Wno-unused-parameter)
-
-	target_link_libraries(OxC3_platforms PUBLIC OxC3_platforms_android)
-
+	target_include_directories(OxC3_platforms PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
 elseif(UNIX AND NOT APPLE)
 	find_package(xdg_shell REQUIRED)
 	find_package(xdg_decoration REQUIRED)

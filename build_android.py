@@ -312,13 +312,17 @@ def main():
 			subprocess.check_output(adb + " install -r " + apkFile)
 		else:
 			subprocess.check_output(adb + " install -t -r " + apkFile)
+
+		if args.mode == "Release":
+			print("-- Installed apk file, but Release mode has android:exported turned off for security reasons, please manually launch the app")
+			return
 		
 		print("-- Running apk file")
+		subprocess.check_output(adb + " logcat -c")		# Clear log first
 		subprocess.check_output(adb + " shell am start -n " + args.package + "/android.app.NativeActivity")
 		
 		print("-- Starting logcat")
-		subprocess.check_output(adb + " logcat -c")
-		subprocess.check_output(adb + " logcat -s OxC3")
+		print("-- Couldn't start logcat, please manually run: " + adb + " logcat -s OxC3")
 
 if __name__ == "__main__":
 	main()

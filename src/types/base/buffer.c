@@ -31,7 +31,7 @@ U64 Buffer_length(Buffer buf) {
 
 Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
 
-	if((U64)ptr >> 48 || length >> 48 || !ptr || !length)
+	if(length >> 48 || !ptr || !length)
 		return (Buffer) { 0 };
 
 	return (Buffer) { .ptr = ptr, .lengthAndRefBits = length };
@@ -177,7 +177,7 @@ Buffer Buffer_createRef(void *v, U64 length) {
 	if(!length || !v)
 		return Buffer_createNull();
 
-	if(length >> 48 || (U64)v >> 48)		//Invalid addresses (unsupported by CPUs)
+	if(length >> 48)
 		return Buffer_createNull();
 
 	return (Buffer) { .ptrNonConst = (U8*) v, .lengthAndRefBits = length | ((U64)1 << 63) };
@@ -188,7 +188,7 @@ Buffer Buffer_createRefConst(const void *v, U64 length) {
 	if(!length || !v)
 		return Buffer_createNull();
 
-	if(length >> 48 || (U64)v >> 48)		//Invalid addresses (unsupported by CPUs)
+	if(length >> 48)
 		return Buffer_createNull();
 
 	return (Buffer) { .ptr = (const U8*) v, .lengthAndRefBits = length | ((U64)3 << 62) };

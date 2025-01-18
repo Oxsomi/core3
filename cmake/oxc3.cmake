@@ -41,6 +41,11 @@ function(apply_dependencies target)
 			-D "LIBDIRS=\"${CONAN_RUNTIME_LIB_DIRS}\""
 			-P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/copy_dlls.cmake"
 	)
+	
+	if(ANDROID)
+		target_sources(${target} PRIVATE "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
+		set_source_files_properties("${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c" PROPERTIES COMPILE_OPTIONS -Wno-unused-parameter)
+	endif()
 
 	# Ensure that working directory is set to the same place as the exe to ensure it can find .dll/.so
 	set_target_properties(${target} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")

@@ -173,6 +173,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	//These instances are okay with using NULL as the instance
 
 	getVkFunction(clean, vkCreateInstance, instanceExt->createInstance)
+
 	getVkFunction(clean, vkEnumerateInstanceLayerProperties, instanceExt->enumerateInstanceLayerProperties)
 	getVkFunction(clean, vkEnumerateInstanceExtensionProperties, instanceExt->enumerateInstanceExtensionProperties)
 
@@ -1051,11 +1052,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Direct rendering
 
-		if (
-			(vendor == EGraphicsVendorId_NV || vendor == EGraphicsVendorId_AMD || vendor == EGraphicsVendorId_INTC) &&
-			optExtensions[EOptExtensions_DynamicRendering] &&
-			dynamicRendering.dynamicRendering
-		)
+		if (optExtensions[EOptExtensions_DynamicRendering] && dynamicRendering.dynamicRendering)
 			capabilities.features |= EGraphicsFeatures_DirectRendering;
 
 		//Shader types

@@ -109,9 +109,9 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 	switch(lvl) {
 		default:						androidLvl = ANDROID_LOG_DEBUG;	 break;
-		case ELogLevel_Performance:	 androidLvl = ANDROID_LOG_INFO;	  break;
+		case ELogLevel_Performance:	 	androidLvl = ANDROID_LOG_INFO;	  break;
 		case ELogLevel_Warn:			androidLvl = ANDROID_LOG_WARN;	  break;
-		case ELogLevel_Error:		   androidLvl = ANDROID_LOG_ERROR;	 break;
+		case ELogLevel_Error:		   	androidLvl = ANDROID_LOG_ERROR;	 break;
 	}
 	
 	U64 thread = Thread_getId();
