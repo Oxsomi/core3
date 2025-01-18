@@ -46,7 +46,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 
 	//Find suitable memory type
 
-	const VkMemoryPropertyFlags all = local | host | coherent;
+	VkMemoryPropertyFlags all = local | host | coherent;
 
 	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
 		host | coherent,
@@ -87,11 +87,15 @@ Error VkDeviceMemoryAllocator_findMemory(
 		hasLocal = false;
 	}
 
-	if (!cpuSided) {
+	if(!distinct) {
+		all &=~ local;		//Ignore local
+		hasLocal = false;
+	}
 
-		if(hasLocal)
-			for (U32 i = 0; i < 3; ++i)
-				properties[i] |= local;
+	if (!cpuSided && hasLocal) {
+
+		for (U32 i = 0; i < 3; ++i)
+			properties[i] |= local;
 
 		++propertyId;
 	}
@@ -108,26 +112,24 @@ Error VkDeviceMemoryAllocator_findMemory(
 
 	for (U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i) {
 
+		const VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
+
 		if(!((memoryBits >> i) & 1))
 			continue;
-
-		const VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
 
 		if(type.heapIndex != heapIds[0] && type.heapIndex != heapIds[1])
 			continue;
 
 		const VkMemoryPropertyFlags propFlag = type.propertyFlags;
 
-		for(U32 j = 0; j < propertyId; ++j) {
-
+		for(U32 j = 0; j < propertyId; ++j)
 			if ((propFlag & all) == properties[j]) {
 				propertyId = j;
 				memoryId = i;
 				break;
 			}
-		}
 
-		if(!propertyId)
+		if(!propertyId)		//Stop if the most ideal property is found
 			break;
 	}
 

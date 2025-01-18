@@ -41,6 +41,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	const C8 *nameSubSection = NULL;
 	CharString tmpStr = CharString_createNull();
 	CharString tmpStr1 = CharString_createNull();
+	CharString tmpStr2 = CharString_createNull();
 
 	//We will put app dir = internal data path and working dir = external data path
 	//Because unlike CLI we don't have a working directory and our apk is virtual, so only internal is read/write.
@@ -81,7 +82,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		//Now we can open the section directly and find the files through there
 
 		sectionName.ptr += sizeof("section");		//sizeof includes null terminator so no need for section_
-		sectionName.lenAndNullTerminated = (sectionName.lenAndNullTerminated << 1 >> 1) - sizeof("section");
+		sectionName.lenAndNullTerminated -= sizeof("section");
 
 		gotoIfError2(clean, CharString_createCopyx(sectionName, &tmpStr))
 		gotoIfError2(clean, CharString_insertStringx(&tmpStr, CharString_createRefCStrConst("packages/"), 0))
@@ -98,19 +99,27 @@ Bool Platform_initUnixExt(Error *e_rr) {
 			gotoIfError2(clean, CharString_createCopyx(tmpStr, &tmpStr1))
 			gotoIfError2(clean, CharString_appendx(&tmpStr1, '/'))
 			gotoIfError2(clean, CharString_appendStringx(&tmpStr1, CharString_createRefCStrConst(nameSubSection)))
+			
+			gotoIfError2(clean, CharString_createCopyx(sectionName, &tmpStr2))
+			gotoIfError2(clean, CharString_appendx(&tmpStr2, '/'))
+			gotoIfError2(clean, CharString_appendStringx(&tmpStr2, CharString_createRefCStrConst(nameSubSection)))
+
+			if(CharString_endsWithStringInsensitive(tmpStr2, CharString_createRefCStrConst(".oiCA"), 0))
+				gotoIfError2(clean, CharString_popEndCount(&tmpStr2, sizeof("oiCA")))	//sizeof("oiCA") == 5
 
 			asset = AAssetManager_open(assetManager, tmpStr1.ptr, AASSET_MODE_STREAMING);
 
 			if(!asset)
 				retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed, couldn't open asset"))
 
-			VirtualSection section = (VirtualSection) { .path = tmpStr1 };
+			VirtualSection section = (VirtualSection) { .path = tmpStr2 };
 			section.lenExt = AAsset_getLength64(asset);
 
 			gotoIfError2(clean, ListVirtualSection_pushBackx(&Platform_instance->virtualSections, section))
-			tmpStr1 = CharString_createNull();
+			tmpStr2 = CharString_createNull();
 			AAsset_close(asset);
 			asset = NULL;
+			CharString_freex(&tmpStr1);
 		}
 
 		CharString_freex(&tmpStr);
@@ -130,6 +139,7 @@ clean:
 	if(dir) AAssetDir_close(dir);
 	CharString_freex(&tmpStr);
 	CharString_freex(&tmpStr1);
+	CharString_freex(&tmpStr2);
 	return s_uccess;
 }
 

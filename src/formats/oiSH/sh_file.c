@@ -25,6 +25,7 @@
 #endif
 
 #include "formats/oiSH/sh_file.h"
+#include "types/container/log.h"
 
 TListImpl(SHFile);
 
@@ -38,6 +39,10 @@ TListImpl(SHFile);
 
 	void SHFile_freex(SHFile *shFile) {
 		SHFile_free(shFile, Platform_instance->alloc);
+	}
+
+	void SHFile_printx(SHFile a) {
+		SHFile_print(a, Platform_instance->alloc);
 	}
 
 	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr) {
@@ -72,6 +77,34 @@ TListImpl(SHFile);
 		SHInclude_free(include, Platform_instance->alloc);
 	}
 #endif
+
+void SHFile_print(SHFile a, Allocator alloc) {
+
+	Log_debugLn(
+		alloc,
+		"Source hash: %"PRIx32" and OxC3 version: %"PRIu32".%"PRIu32".%"PRIu32,
+		a.sourceHash,
+		OXC3_GET_MAJOR(a.compilerVersion),
+		OXC3_GET_MINOR(a.compilerVersion),
+		OXC3_GET_PATCH(a.compilerVersion)
+	);
+
+	for(U64 i = 0; i < a.binaries.length; ++i) {
+		Log_debugLn(alloc, "SHBinaryInfo at %"PRIu64, i);
+		SHBinaryInfo_print(a.binaries.ptr[i], alloc);
+	}
+
+	for(U64 i = 0; i < a.entries.length; ++i) {
+		Log_debugLn(alloc, "SHEntry at %"PRIu64, i);
+		SHEntry_print(a.entries.ptr[i], alloc);
+	}
+
+	for(U64 i = 0; i < a.includes.length; ++i) {
+		SHInclude incl = a.includes.ptr[i];
+		CharString inc = incl.relativePath;
+		Log_debugLn(alloc, "SHInclude at %"PRIu64" (%.*s %"PRIx32")", i, (int) CharString_length(inc), inc.ptr, incl.crc32c);
+	}
+}
 
 Bool SHFile_create(
 	ESHSettingsFlags flags,

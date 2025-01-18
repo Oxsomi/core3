@@ -74,7 +74,7 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 					retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
 
 				gotoIfError2(clean, CharString_formatx(
-					&tmp, "packages/%.*s", (int) CharString_length(section->path), section->path.ptr
+					&tmp, "packages/%.*s.oiCA", (int) CharString_length(section->path), section->path.ptr
 				))
 
 				asset = AAssetManager_open(assetManager, tmp.ptr, AASSET_MODE_BUFFER);

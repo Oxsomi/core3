@@ -319,10 +319,10 @@ def main():
 		
 		print("-- Running apk file")
 		subprocess.check_output(adb + " logcat -c")		# Clear log first
-		subprocess.check_output(adb + " shell am start -n " + args.package + "/android.app.NativeActivity")
+		subprocess.run(adb + " shell am start -n " + args.package + "/android.app.NativeActivity")
 		
 		print("-- Starting logcat")
-		print("-- Couldn't start logcat, please manually run: " + adb + " logcat -s OxC3")
+		subprocess.check_output(adb + " logcat -s OxC3")
 
 if __name__ == "__main__":
 	main()
