@@ -248,7 +248,7 @@ Available functions:
   - After use, call free() on it.
     - **onUpdate**(), **onDraw**() are generally called when **wait**() is called. However, sometimes events bypass the polling system, in which case it has to call these functions internally. This is the case with Windows resizing/moving, in those cases, WM_PAINT is dispatched only to the window and not to the poll loop. That behavior induces a full window manager update and will cause all windows to receive updates (virtual windows also receive those), but they won't receive paint notifications themselves.
 - **isAccessible**() if the WindowManager is accessible by the current calling thread.
-- Bool **supportsFormat**(EWindowFormat format) where EWindowFormat is one of BGRA8 (always supported), BGR10A2, RGBA16f, RGBA32f (rarely supported).
+- Bool **supportsFormat**(EWindowFormat format) where EWindowFormat is one of BGRA8/RGBA8 (one of which is always supported), BGR10A2, RGBA16f, RGBA32f (rarely supported).
 - Error **wait**() wait for all current windows to exit. If they are physical windows, this means the user (or program) has to close them. If they are virtual windows then the program has to close them explicitly (for example after finishing the renders).
 - **createWindow** and **freeWindow** are specified in Window.
 
@@ -281,7 +281,7 @@ A window has to be managed on the same thread as a WindowManager, through the fo
     - AllowFullscreen (0), DisableResize (1), ForceFullscreen (2), AllowBackgroundUpdates (3), ProvideCPUBuffer (4).
     - Where default is: AllowFullscreen.
   - title must not exceed 260 C8s.
-  - EWindowFormat is one of BGRA8 (always supported), BGR10A2, RGBA16f, RGBA32f (rarely supported).
+  - EWindowFormat is one of BGRA8/RGBA8 (one of which is always supported), BGR10A2, RGBA16f, RGBA32f (rarely supported).
   - extendedDataSize is the size for the buffer that will get allocated to represent the window.
   - WindowCallbacks define the window callbacks. The following are available:
     - void **onCreate**(Window*) after the underlying window is created.

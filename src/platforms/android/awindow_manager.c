@@ -19,8 +19,11 @@
 */
 
 #include "platforms/window_manager.h"
+#include "platforms/window.h"
 #include "types/base/error.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
+#include "types/base/thread.h"
 
 #include <android_native_app_glue.h>
 
@@ -42,9 +45,19 @@ void WindowManager_updateExt(WindowManager *manager) {
 	
 	int ident, events;
 	struct android_poll_source *source;
+	struct android_app *app = (struct android_app*) Platform_instance->data;
 	
+repeat:
 	while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
 		if(source)
-			source->process(((struct android_app*) Platform_instance->data), source);
+			source->process(app, source);
+	}
+
+	//In case of initialization, we have to wait until the surface is ready.
+	//Afterwards, we can continue
+
+	if(ident == ALOOPER_POLL_TIMEOUT && !(((Window*)app->userData)->flags & EWindowFlags_IsFinalized)) {
+		Thread_sleep(100 * MU);
+		goto repeat;
 	}
 }

@@ -87,7 +87,7 @@ typedef struct VkGraphicsDevice {
 
 	U32 resolvedQueues;
 
-	//3D as 1D flat List: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
+	//3D as 1D flat List: resolvedQueueId + (frameInFlightId * threadCount + threadId) * resolvedQueues
 	ListVkCommandAllocator commandPools;
 
 	ListVkSemaphore submitSemaphores;
@@ -235,7 +235,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device,
 	U32 resolvedQueueId,
 	U64 threadId,
-	U8 backBufferId
+	U8 frameInFlightId
 );
 
 Error VkDeviceMemoryAllocator_findMemory(

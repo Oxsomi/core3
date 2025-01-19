@@ -68,6 +68,10 @@ typedef enum EGraphicsDeviceFlags {
 	EGraphicsDeviceFlags_DisableDebug	= 1 << 3	//Force disable debugging even on debug mode. NDEBUG is leading otherwise
 } EGraphicsDeviceFlags;
 
+
+#define FRAMES_IN_FLIGHT 3			//Keep this between [2, MAX_FRAMES_IN_FLIGHT]
+#define MAX_FRAMES_IN_FLIGHT 3		//Keep this at 2 or 3
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -81,24 +85,24 @@ typedef struct GraphicsDevice {
 
 	Ns lastSubmit;
 
-	Ns firstSubmit;								//Start of time
+	Ns firstSubmit;											//Start of time
 
-	ListWeakRefPtr pendingResources;			//Resources pending copy from CPU to device next submit
+	ListWeakRefPtr pendingResources;						//Resources pending copy from CPU to device next submit
 
-	ListRefPtr resourcesInFlight[3];			//Resources in flight, TODO: HashMap
+	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];		//Resources in flight, TODO: HashMap
 
-	SpinLock lock;								//Lock for submission and marking resources dirty
+	SpinLock lock;											//Lock for submission and marking resources dirty
 
 	DeviceMemoryAllocator allocator;
 
 	//Staging allocations and buffers that are used to transmit/receive data from the device
 
-	DeviceBufferRef *staging;					//Staging buffer split by 3
-	AllocationBuffer stagingAllocations[3];
+	DeviceBufferRef *staging;								//Staging buffer split by FRAMES_IN_FLIGHT
+	AllocationBuffer stagingAllocations[MAX_FRAMES_IN_FLIGHT];
 
 	//Graphics constants (globals) accessible by all shaders
 
-	DeviceBufferRef *frameData[3];
+	DeviceBufferRef *frameData[MAX_FRAMES_IN_FLIGHT];
 
 	//Temporary for processing command list and to avoid allocations
 

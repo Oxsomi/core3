@@ -26,6 +26,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/ext/errorx.h"
 #include "formats/oiSH/sh_file.h"
 
 const C8 *EPipelineStage_names[] = {
@@ -97,6 +98,8 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 		if(!CharString_equalsStringSensitive(entry.name, entrypointName))
 			continue;
 
+		Error err = Error_none();
+
 		for (U64 j = 0; j < entry.binaryIds.length; ++j) {
 
 			U16 binj = entry.binaryIds.ptr[j];
@@ -138,16 +141,16 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			//Ensure it's compatible
 
-			if(
-				!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, NULL) ||
-				(binInfo.identifier.extensions & disallow) ||
-				(binInfo.identifier.extensions & require) != require
-			)
+			if((binInfo.identifier.extensions & disallow) || (binInfo.identifier.extensions & require) != require)
+				continue;
+				
+			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, &err))
 				continue;
 
 			return (U16)i | ((U16)j << 16);
 		}
 
+		Error_printLnx(err);
 		return U32_MAX;
 	}
 

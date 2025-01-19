@@ -959,7 +959,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			case EGraphicsVendorPCIE_INTC:					vendor = EGraphicsVendorId_INTC;		break;
 			case EGraphicsVendorPCIE_IMGT:					vendor = EGraphicsVendorId_IMGT;		break;
 			case EGraphicsVendorPCIE_APPL:					vendor = EGraphicsVendorId_APPL;		break;
-			default:																				break;
+			case EGraphicsVendorPCIE_SMSG:					vendor = EGraphicsVendorId_SMSG;		break;
+			case EGraphicsVendorPCIE_HWEI:					vendor = EGraphicsVendorId_HWEI;		break;
+			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, properties.vendorID);				break;
 		}
 
 		//Capabilities

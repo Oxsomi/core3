@@ -66,11 +66,12 @@ typedef struct Swapchain {
 
 	//Device can be rotated and OS won't rotate for you (needs manual composite to flip/rotate).
 	//This is generally on for android devices, and even though it is possible; the compositor is additional overhead.
-	//You can manually adhere to window->monitors[0].orientation by
+	//You can manually adhere to window->orientation by
 	// rotating the camera matrix and adjusting fov.
 	//This is set by the implementation, can't be manually turned off.
 	Bool requiresManualComposite;
-	U8 padding[3];
+	U8 padding;
+	U16 orientation;				//In deg; 0, 90, 180 or 270
 
 	U64 versionId;				//Everytime this swapchain changes format or is resized this will increase.
 

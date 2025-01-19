@@ -325,13 +325,14 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsVendorId vendorId = EGraphicsVendorId_Unknown;
 
 		switch(desc.VendorId) {
-			case EGraphicsVendorPCIE_NV:	vendorId = EGraphicsVendorId_NV;	break;
-			case EGraphicsVendorPCIE_AMD:	vendorId = EGraphicsVendorId_AMD;	break;
-			case EGraphicsVendorPCIE_ARM:	vendorId = EGraphicsVendorId_ARM;	break;
-			case EGraphicsVendorPCIE_QCOM:	vendorId = EGraphicsVendorId_QCOM;	break;
-			case EGraphicsVendorPCIE_INTC:	vendorId = EGraphicsVendorId_INTC;	break;
-			case EGraphicsVendorPCIE_IMGT:	vendorId = EGraphicsVendorId_IMGT;	break;
-			case EGraphicsVendorPCIE_MSFT:	vendorId = EGraphicsVendorId_MSFT;	break;
+			case EGraphicsVendorPCIE_NV:	vendorId = EGraphicsVendorId_NV;		break;
+			case EGraphicsVendorPCIE_AMD:	vendorId = EGraphicsVendorId_AMD;		break;
+			case EGraphicsVendorPCIE_ARM:	vendorId = EGraphicsVendorId_ARM;		break;
+			case EGraphicsVendorPCIE_QCOM:	vendorId = EGraphicsVendorId_QCOM;		break;
+			case EGraphicsVendorPCIE_INTC:	vendorId = EGraphicsVendorId_INTC;		break;
+			case EGraphicsVendorPCIE_IMGT:	vendorId = EGraphicsVendorId_IMGT;		break;
+			case EGraphicsVendorPCIE_MSFT:	vendorId = EGraphicsVendorId_MSFT;		break;
+			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, desc.VendorId);	break;
 		}
 
 		//Grab properties
@@ -370,11 +371,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(vendorId != EGraphicsVendorId_AMD)
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
 
-		if (
-			vendorId == EGraphicsVendorId_NV || vendorId == EGraphicsVendorId_AMD ||
-			vendorId == EGraphicsVendorId_INTC || vendorId == EGraphicsVendorId_MSFT
-		)
-			caps.features |= EGraphicsFeatures_DirectRendering;
+		caps.features |= EGraphicsFeatures_DirectRendering;
 
 		D3D12_FEATURE_DATA_D3D12_OPTIONS opt0 = (D3D12_FEATURE_DATA_D3D12_OPTIONS) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS1 opt1 = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };

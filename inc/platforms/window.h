@@ -60,7 +60,9 @@ typedef enum EWindowHint {
 //Subset of formats that can be used for windows
 //These formats are dependent on the platform too. It's very possible they're not available.
 typedef enum EWindowFormat {
+	EWindowFormat_AutoRGBA8				= 0,							//BGRA8 or RGBA8, depending on platform
 	EWindowFormat_BGRA8					= ETextureFormat_BGRA8,			//Most common format
+	EWindowFormat_RGBA8					= ETextureFormat_RGBA8,			//Also common on non desktop
 	EWindowFormat_BGR10A2				= ETextureFormat_BGR10A2,
 	EWindowFormat_RGBA16f				= ETextureFormat_RGBA16f,
 	EWindowFormat_RGBA32f				= ETextureFormat_RGBA32f		//Rarely supported (only CPU)
@@ -142,12 +144,6 @@ typedef enum EWindowType {
 
 } EWindowType;
 
-typedef enum EWindowOrientation {
-	EWindowOrientation_Landscape,
-	EWindowOrientation_Portrait,
-	EWindowOrientation_Square
-} EWindowOrientation;
-
 typedef U8 WindowOrientation;
 typedef U8 WindowType;
 typedef U16 WindowHint;
@@ -163,8 +159,7 @@ typedef struct Window {
 
 	WindowHint hint;
 	WindowType type;
-	WindowOrientation orientation;
-	U32 padding;
+	U8 padding[5];
 
 	EWindowFormat format;
 	EWindowFlags flags;

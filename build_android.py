@@ -322,7 +322,7 @@ def main():
 		subprocess.run(adb + " shell am start -n " + args.package + "/android.app.NativeActivity")
 		
 		print("-- Starting logcat")
-		subprocess.check_output(adb + " logcat -s OxC3")
+		print("-- Failed, run it manually: " + adb + " logcat -s OxC3")
 
 if __name__ == "__main__":
 	main()

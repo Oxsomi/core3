@@ -22,6 +22,7 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "platforms/window.h"
+#include "platforms/log.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "types/base/error.h"
 
@@ -79,6 +80,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
 	switch (newFormat) {
 		case EWindowFormat_BGRA8:		textureFormatId = ETextureFormatId_BGRA8;		break;
+		case EWindowFormat_RGBA8:		textureFormatId = ETextureFormatId_RGBA8;		break;
 		case EWindowFormat_BGR10A2:		textureFormatId = ETextureFormatId_BGR10A2;		break;
 		case EWindowFormat_RGBA16f:		textureFormatId = ETextureFormatId_RGBA16f;		break;
 		case EWindowFormat_RGBA32f:		textureFormatId = ETextureFormatId_RGBA32f;		break;
@@ -142,6 +144,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 
 	switch (info.window->format) {
 		case EWindowFormat_BGRA8:		formatId = ETextureFormatId_BGRA8;		break;
+		case EWindowFormat_RGBA8:		formatId = ETextureFormatId_RGBA8;		break;
 		case EWindowFormat_BGR10A2:		formatId = ETextureFormatId_BGR10A2;	break;
 		case EWindowFormat_RGBA16f:		formatId = ETextureFormatId_RGBA16f;	break;
 		case EWindowFormat_RGBA32f:		formatId = ETextureFormatId_RGBA32f;	break;

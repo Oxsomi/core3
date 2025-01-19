@@ -208,7 +208,7 @@ To make usage simpler, the following helper functions have been added:
 The following formats are present:
 
 - Raw formats (usable as write without compression):
-  - BGRA8, BGR10A2 for Swapchain usage.
+  - RGBA8, BGRA8, BGR10A2 for Swapchain usage.
   - UNorm formats: R(G(BA))(8/16)
   - SNorm formats: R(G(BA))(8/16)s
   - SInt formats: R(G(BA))(8/16/32)i

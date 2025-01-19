@@ -112,6 +112,9 @@ typedef enum ESHVendor {
 	ESHVendor_INTC,
 	ESHVendor_IMGT,
 	ESHVendor_MSFT,
+	ESHVendor_APPL,
+	ESHVendor_SMSG,
+	ESHVendor_HWEI,
 	ESHVendor_Count
 } ESHVendor;
 
@@ -137,7 +140,7 @@ typedef enum ESHBinaryFlags {
 
 } ESHBinaryFlags;
 
-extern const C8 *ESHVendor_names[ESHVendor_Count];
+extern const C8 *ESHVendor_names[ESHVendor_Count + 1];
 
 typedef struct SHBinaryIdentifier {
 

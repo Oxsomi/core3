@@ -132,7 +132,6 @@ Error VkDeviceMemoryAllocator_findMemory(
 		if(!propertyId)		//Stop if the most ideal property is found
 			break;
 	}
-
 	if (memoryId == U32_MAX)
 		return Error_notFound(1, 0, "VkDeviceMemoryAllocator_findMemory() found no suitable memoryId");
 
@@ -183,6 +182,11 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	Bool isDedicated = dedicated.requiresDedicatedAllocation;
 	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2000;
 
+	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)	//Ensure everything gets placed in cpu space
+		cpuSided = true;
+
+	//Log_debugLnx("Searching for %"PRIu64" bytes", memReq.size);
+
 	//Find an existing allocation
 
 	if (!isDedicated) {
@@ -197,8 +201,23 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
 				!!(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
 				block->resourceType != resourceType
-			)
+			) {
+
+				/*Log_debugLnx(
+					"Skipping block %"PRIu64" because of: %s",
+					i,
+					!block->ext ? "ext" : (
+						block->isDedicated ? "dedicated" : (
+							((block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits) ? "memoryTypeBits" : (
+								!!(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ? "cpu sided" :
+								"resourceType"
+							)
+						)		
+					)
+				);*/
+
 				continue;
+			}
 
 			U64 tempAlignment = memReq.alignment;
 
@@ -208,14 +227,19 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			const U8 *alloc = NULL;
 			Error err = AllocationBuffer_allocateBlockx(&block->allocations, memReq.size, tempAlignment, &alloc);
 
-			if(err.genericError)
+			if(err.genericError) {
+				//Log_debugLnx("Skipping block %"PRIu64" because of: no memory", i);
 				continue;
+			}
 
+			//Log_debugLnx("Found block %"PRIu64, i);
 			*blockId = (U32) i;
 			*blockOffset = (U64) alloc;
 			return Error_none();
 		}
 	}
+
+	Log_debugLnx("Allocating new memory block (%"PRIu64")", allocator->blocks.length);
 
 	//Allocate memory
 
@@ -251,13 +275,16 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	if((err = checkVkError(deviceExt->allocateMemory(deviceExt->device, &alloc, NULL, &mem))).genericError)
 		return err;
-
+	
 	void *mappedMem = NULL;
 
 	if(prop & host)
 		gotoIfError(clean, checkVkError(deviceExt->mapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)))
-
+		
 	//Initialize block
+
+	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)
+		prop &=~ VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	block = (DeviceMemoryBlock) {
 		.typeExt = memReq.memoryTypeBits,

@@ -45,6 +45,8 @@ typedef enum EGraphicsVendorId {
 	EGraphicsVendorId_IMGT,
 	EGraphicsVendorId_MSFT,
 	EGraphicsVendorId_APPL,
+	EGraphicsVendorId_SMSG,
+	EGraphicsVendorId_HWEI,
 	EGraphicsVendorId_Unknown
 } EGraphicsVendorId;
 
@@ -56,7 +58,9 @@ typedef enum EGraphicsVendorPCIE {
 	EGraphicsVendorPCIE_INTC	= 0x8086,
 	EGraphicsVendorPCIE_IMGT	= 0x1010,
 	EGraphicsVendorPCIE_MSFT	= 0x1414,
-	EGraphicsVendorPCIE_APPL	= 0x106B
+	EGraphicsVendorPCIE_APPL	= 0x106B,
+	EGraphicsVendorPCIE_SMSG	= 0x144D,
+	EGraphicsVendorPCIE_HWEI		= 0x19E5
 } EGraphicsVendorPCIE;
 
 static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so they can be easily detected
@@ -67,7 +71,9 @@ static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so t
 	EGraphicsVendorPCIE_INTC,
 	EGraphicsVendorPCIE_IMGT,
 	EGraphicsVendorPCIE_MSFT,
-	EGraphicsVendorPCIE_APPL
+	EGraphicsVendorPCIE_APPL,
+	EGraphicsVendorPCIE_SMSG,
+	EGraphicsVendorPCIE_HWEI
 };
 
 //If api type is Direct3D12

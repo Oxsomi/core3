@@ -116,6 +116,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			return 0;
 
 		case WM_CREATE:
+		
+			w->flags |= EWindowFlags_IsFinalized;
+
+			if(w->callbacks.onResize)
+				w->callbacks.onResize(w);
+
 			break;
 
 		//Setting focus

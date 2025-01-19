@@ -151,10 +151,22 @@ Bool WindowManager_createWindow(
 
 	switch (format) {
 
+		case EWindowFormat_RGBA8:
+
+			#if _PLATFORM_TYPE != PLATFORM_ANDROID
+				retError(clean, Error_invalidOperation(
+					1, "WindowManager_createWindow()::RGBA8 is unsupported "
+				))
+			#endif
+
 		case EWindowFormat_BGRA8:
 		case EWindowFormat_BGR10A2:
 		case EWindowFormat_RGBA16f:
 		case EWindowFormat_RGBA32f:
+			break;
+
+		case EWindowFormat_AutoRGBA8:
+			format = _PLATFORM_TYPE == PLATFORM_ANDROID ? EWindowFormat_RGBA8 : EWindowFormat_BGRA8;
 			break;
 
 		default:
@@ -210,11 +222,6 @@ Bool WindowManager_createWindow(
 	if(callbacks.onCreate)
 		callbacks.onCreate(w);
 
-	w->flags |= EWindowFlags_IsFinalized;
-
-	if(callbacks.onResize)
-		callbacks.onResize(w);
-
 	*result = w;
 
 clean:
@@ -247,6 +254,9 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
 		Window *w = ListWindowPtr_at(manager->windows, i);
 
 		if(w == forcingUpdate)	//Has already been processed
+			continue;
+
+		if(!(w->flags & EWindowFlags_IsFinalized))	//Window not ready yet, wait until ready
 			continue;
 
 		//Update interface

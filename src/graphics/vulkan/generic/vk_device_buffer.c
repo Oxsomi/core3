@@ -29,6 +29,7 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/errorx.h"
 #include "platforms/log.h"
 
 Error VkDeviceBuffer_transition(
@@ -158,7 +159,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
 		.pNext = &dedicatedReq
 	};
-
+	
 	gotoIfError(clean, checkVkError(deviceExt->createBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)))
 
 	VkBufferMemoryRequirementsInfo2 bufferReq = {
@@ -167,7 +168,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	};
 
 	deviceExt->getBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
-
+	
 	gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
 		&requirements,
@@ -197,7 +198,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 		.buffer = bufExt->buffer
 	};
-
+	
 	buf->resource.deviceAddress = deviceExt->getBufferDeviceAddress(deviceExt->device, &address);
 
 	if(!buf->resource.deviceAddress)
@@ -256,6 +257,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	}
 
 clean:
+	Error_printLnx(err);
 	return err;
 }
 
@@ -321,6 +323,8 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					.size = len
 				};
 		}
+	
+		Log_debugLnx("Flush memory ranges");
 
 		if(incoherent)
 			gotoIfError(clean, checkVkError(deviceExt->flushMappedMemoryRanges(
@@ -347,6 +351,8 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 		gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 2 + buffer->pendingChanges.length))
 
 		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+	
+			Log_debugLnx("Create buffer");
 
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
@@ -404,6 +410,8 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					.offset = stagingResource->resource.blockOffset,
 					.size = allocRange
 				};
+	
+				Log_debugLnx("Flush buffer range");
 
 				deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
@@ -418,6 +426,8 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				&deviceExt->bufferTransitions,
 				&dependency
 			))
+	
+			Log_debugLnx("Copy buffer ranges");
 
 			if(dependency.bufferMemoryBarrierCount)
 				deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
@@ -513,6 +523,8 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					.offset = location - block.mappedMemoryExt,
 					.size = allocRange
 				};
+	
+				Log_debugLnx("Flush mapped range");
 
 				deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
@@ -533,6 +545,8 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				RefPtr_inc(device->staging);
 				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
 			}
+	
+			Log_debugLnx("Copy buffer");
 
 			if(dependency.bufferMemoryBarrierCount)
 				deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);

@@ -96,6 +96,15 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	switch(swapchain->base.textureFormatId) {
 
+		case ETextureFormatId_RGBA8:
+
+			searchFormat = (VkSurfaceFormatKHR) {
+				.format = VK_FORMAT_R8G8B8A8_UNORM,
+				.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR
+			};
+
+			break;
+
 		case ETextureFormatId_BGRA8:
 
 			searchFormat = (VkSurfaceFormatKHR) {
@@ -182,8 +191,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		gotoIfError(clean, Error_invalidOperation(
 			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
-
-	if(capabilities.minImageCount > 2 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
+		
+	if(capabilities.minImageCount > 3 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
 		gotoIfError(clean, Error_invalidOperation(
 			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 2 and 3 images"
 		))
@@ -193,29 +202,15 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR |
 		VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR;
 
-	swapchain->requiresManualComposite = capabilities.supportedTransforms & anyRotate;
+	swapchain->requiresManualComposite = !!(capabilities.supportedTransforms & anyRotate);
 
-	if(swapchain->requiresManualComposite) {
-
-		if(window->monitors.length > 1)
-			gotoIfError(clean, Error_invalidOperation(
-				5, "VkGraphicsDeviceRef_createSwapchain() requiresManualComposite only allowed with 1 monitor"
-			))
-
-		MonitorOrientation current = EMonitorOrientation_Landscape;
-
+	if(swapchain->requiresManualComposite)
 		switch (capabilities.currentTransform) {
-			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	current = EMonitorOrientation_Portrait;				break;
-			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	current = EMonitorOrientation_FlippedLandscape;		break;
-			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	current = EMonitorOrientation_FlippedPortrait;		break;
-			default:																							break;
+			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	swapchain->orientation = 90;	break;
+			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	swapchain->orientation = 180;	break;
+			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	swapchain->orientation = 270;	break;
+			default:										swapchain->orientation = 0;		break;
 		}
-
-		MonitorOrientation target = window->monitors.ptr->orientation;
-
-		if(current != target)
-			gotoIfError(clean, Error_invalidOperation(6, "VkGraphicsDeviceRef_createSwapchain() invalid orientation"))
-	}
 
 	//Get present mode
 
@@ -283,6 +278,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	if(presentMode == (VkPresentModeKHR) -1)
 		gotoIfError(clean, Error_invalidOperation(7, "VkGraphicsDeviceRef_createSwapchain() unsupported present mode"))
 
+	Log_debugLnx("Requested present mode: %"PRIu32, presentMode);
+
 	//Turn it into a swapchain
 
 	VkSwapchainKHR prevSwapchain = swapchainExt->swapchain;
@@ -309,16 +306,20 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		.clipped = true,
 		.oldSwapchain = prevSwapchain
 	};
-
+	
 	gotoIfError(clean, checkVkError(deviceExt->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)))
 
 	if(prevSwapchain)
 		deviceExt->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
 
 	//Acquire images
+	
+	Log_debugLnx("Get images");
 
 	U32 imageCount = 0;
 	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)))
+	
+	Log_debugLnx("Get images: %"PRIu32, imageCount);
 
 	if(imageCount != swapchain->base.images)
 		gotoIfError(clean, Error_invalidState(1, "VkGraphicsDeviceRef_createSwapchain() imageCount doesn't match"))
@@ -356,6 +357,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	}
 
 	//Grab semaphores
+
+	Log_debugLnx("Get semas");
 
 	for (U8 i = 0; i < swapchain->base.images; ++i) {
 
@@ -424,7 +427,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
 
+	Log_debugLnx("Done");
+
 clean:
+	Log_debugLnx("Fail?");
 	CharString_freex(&temp);
 	ListVkSurfaceFormatKHR_freex(&surfaceFormats);
 	ListVkPresentModeKHR_freex(&presentModes);

@@ -676,18 +676,17 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		copyQueueExt->type = EVkCommandQueue_Copy;
 	}
 
-	//Create command recorder per queue per thread per backbuffer.
-	//We only allow triple buffering, so allocate for triple buffers.
+	//Create command recorder per queue per thread per frame in flight.
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
 	U64 threads = Platform_getThreads();
-	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * resolvedId))
+	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, FRAMES_IN_FLIGHT * threads * resolvedId))
 
 	//Semaphores
 
-	gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, 3))
+	gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, FRAMES_IN_FLIGHT))
 
-	for (U64 k = 0; k < 3; ++k) {
+	for (U64 k = 0; k < FRAMES_IN_FLIGHT; ++k) {
 
 		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		VkSemaphore *semaphore = deviceExt->submitSemaphores.ptrNonConst + k;
@@ -848,7 +847,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError(clean, checkVkError(deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->descriptorPool)))
 
-	//Last layout repeat 3x (that's the CBuffer which needs 3 different versions)
+	//Last layout repeat 2-3x (that's the CBuffer which needs FRAMES_IN_FLIGHT different versions)
 
 	VkDescriptorSetLayout setLayouts[EDescriptorSetType_Count];
 
@@ -951,14 +950,12 @@ void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	//Fill last 3 descriptor sets with UBO[i] to ensure we only modify things in flight.
+	//Fill last FRAMES_IN_FLIGHT descriptor sets with UBO[i] to ensure we only modify things in flight.
 
-	#define NBuffering (sizeof(device->frameData) / sizeof(device->frameData[0]))
+	VkDescriptorBufferInfo uboBufferInfo[FRAMES_IN_FLIGHT];
+	VkWriteDescriptorSet uboDescriptor[FRAMES_IN_FLIGHT];
 
-	VkDescriptorBufferInfo uboBufferInfo[NBuffering];
-	VkWriteDescriptorSet uboDescriptor[NBuffering];
-
-	for(U64 i = 0; i < NBuffering; ++i) {
+	for(U64 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
 
 		uboBufferInfo[i] = (VkDescriptorBufferInfo) {
 			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[i]), Vk)->buffer,
@@ -976,9 +973,7 @@ void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 		};
 	}
 
-	#undef NBuffering
-
-	deviceExt->updateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
+	deviceExt->updateDescriptorSets(deviceExt->device, FRAMES_IN_FLIGHT, uboDescriptor, 0, NULL);
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
@@ -1059,15 +1054,15 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef) {
 }
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
-	VkGraphicsDevice *device, U32 resolvedQueueId, U64 threadId, U8 backBufferId
+	VkGraphicsDevice *device, U32 resolvedQueueId, U64 threadId, U8 frameInFlightId
 ) {
 
 	const U64 threadCount = Platform_getThreads();
 
-	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || backBufferId >= 3)
+	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || frameInFlightId >= FRAMES_IN_FLIGHT)
 		return NULL;
 
-	const U64 id = resolvedQueueId + (backBufferId * threadCount + threadId) * device->resolvedQueues;
+	const U64 id = resolvedQueueId + (frameInFlightId * threadCount + threadId) * device->resolvedQueues;
 
 	return device->commandPools.ptrNonConst + id;
 }
@@ -1111,9 +1106,9 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Wait for previous frame semaphore
 
-	if (device->submitId > 3) {
+	if (device->submitId > FRAMES_IN_FLIGHT) {
 
-		U64 value = device->submitId - 3;
+		U64 value = device->submitId - FRAMES_IN_FLIGHT;
 
 		VkSemaphoreWaitInfo waitInfo = (VkSemaphoreWaitInfo) {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,

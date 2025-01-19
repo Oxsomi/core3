@@ -50,22 +50,8 @@ void AWindow_onUpdateSize(Window *w) {
 		w->callbacks.onResize(w);
 }
 
-EWindowOrientation AWindow_getOrientation(struct android_app *app) {
+void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 	
-	AConfiguration *config = AConfiguration_new();
-	AConfiguration_fromAssetManager(config, app->activity->assetManager);
-
-	I32 orientation = AConfiguration_getOrientation(config);
-	AConfiguration_delete(config);
-
-	return
-		orientation == ACONFIGURATION_ORIENTATION_PORT ? EWindowOrientation_Portrait : (
-			orientation == ACONFIGURATION_ORIENTATION_SQUARE ? EWindowOrientation_Square : EWindowOrientation_Landscape
-		);
-}
-
-void AWindow_onAppCmd(struct android_app *app, I32 cmd){
-
 	Window *w = (Window*) app->userData;
 
 	if(!w)
@@ -75,17 +61,21 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd){
 		switch (cmd) {
 
 			case APP_CMD_WINDOW_RESIZED: {
+				
+				Log_debugLnx("Resized");
 
 				I32x2 oldSize = w->size;
 				w->size = I32x2_create2(ANativeWindow_getWidth(app->window), ANativeWindow_getHeight(app->window));
 
-				if (I32x2_neq2(w->size, oldSize))
+				if (I32x2_neq2(w->size, oldSize) && w->nativeHandle)
 					AWindow_onUpdateSize(w);
 
 				break;
 			}
 
 			case APP_CMD_CONTENT_RECT_CHANGED: {
+				
+				Log_debugLnx("Content rect change");
 
 				I32x2 oldOffset = w->offset;
 				w->offset = I32x2_create2((I32) app->contentRect.left, (I32) app->contentRect.top);
@@ -97,6 +87,8 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd){
 			}
 
 			case APP_CMD_GAINED_FOCUS:
+				
+				Log_debugLnx("Gained focus");
 
 				w->flags |= EWindowFlags_IsFocussed;
 
@@ -106,6 +98,8 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd){
 				break;
 
 			case APP_CMD_LOST_FOCUS:
+				
+				Log_debugLnx("Lost focus");
 
 				w->flags &= ~EWindowFlags_IsFocussed;
 
@@ -116,6 +110,8 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd){
 
 			case APP_CMD_RESUME:
 				
+				Log_debugLnx("Resume");
+
 				if (app->savedState && w->callbacks.onLoad) {
 					Buffer buf = Buffer_createManagedPtr(app->savedState, app->savedStateSize);
 					w->callbacks.onLoad(w, buf);
@@ -125,11 +121,14 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd){
 				break;
 
 			case APP_CMD_TERM_WINDOW:
+				Log_debugLnx("Terminate");
 				w->flags |= EWindowFlags_ShouldTerminate;
 				break;
 			
 			case APP_CMD_SAVE_STATE:
 		
+				Log_debugLnx("Save state");
+
 				if (w->callbacks.onSave) {
 
 					if (app->savedState) {
@@ -147,14 +146,15 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd){
 			
 			case APP_CMD_INIT_WINDOW:
 
+				w->nativeHandle = ((struct android_app*) Platform_instance->data)->window;
+				w->flags |= EWindowFlags_IsFinalized;
+
 				w->size = I32x2_create2(ANativeWindow_getWidth(app->window), ANativeWindow_getHeight(app->window));
-				w->orientation = AWindow_getOrientation(app);
 				AWindow_onUpdateSize(w);
 
 				if (w->callbacks.onUpdateOrientation)
 					w->callbacks.onUpdateOrientation(w);
 
-				w->flags |= EWindowFlags_IsFinalized;
 				break;
 
 			//On config change can be a lot of things, we only care about orientation for now.
@@ -162,16 +162,9 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd){
 			//keyboardHidden|screenLayout|fontScale|locale
 			//Since these might impact language, text rendering or text input
 
-			case APP_CMD_CONFIG_CHANGED: {
-
-				EWindowOrientation old = w->orientation;
-				w->orientation = AWindow_getOrientation(app);
-
-				if (w->orientation != old && w->callbacks.onUpdateOrientation)
-					w->callbacks.onUpdateOrientation(w);
-
+			case APP_CMD_CONFIG_CHANGED:
+				w->callbacks.onUpdateOrientation(w);
 				break;
-			}
 
 			default:
 				break;
@@ -433,7 +426,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format) {
 	(void) manager;
-	return format == EWindowFormat_BGRA8;	//TODO: HDR
+	return format == EWindowFormat_RGBA8;	//TODO: HDR
 }
 
 Bool WindowManager_freePhysical(Window *w) {
@@ -542,12 +535,19 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	for(U64 i = 0; i < w->owner->windows.length; ++i)
-		if(w->owner->windows.ptr[i]->type == EWindowType_Physical)
+	for(U64 i = 0; i < w->owner->windows.length; ++i) {
+
+		Window *wi = w->owner->windows.ptr[i];
+
+		if(wi != w && wi->type == EWindowType_Physical)
 			retError(clean, Error_invalidState(0, "WindowManager_createWindow() there can be only one window on Android"))
+	}
 
 	if(w->format == EWindowFormat_RGBA32f)
 		retError(clean, Error_invalidState(0, "WindowManager_createWindow() RGBA32f format not natively supported on Android"))
+
+	if(w->format == EWindowFormat_BGRA8)
+		retError(clean, Error_invalidState(0, "WindowManager_createWindow() BGRA8 format not natively supported on Android"))
 
 	gotoIfError2(clean, ListMonitor_reservex(&w->monitors, 16))
 
@@ -559,8 +559,6 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	app->userData = w;
 	app->onAppCmd = AWindow_onAppCmd;
 	app->onInputEvent = AWindow_onInput;
-
-	w->nativeHandle = app->window;
 
 clean:
 	return s_uccess;
