@@ -217,11 +217,6 @@ Bool WindowManager_createWindow(
 	if (type == EWindowType_Physical)
 		gotoIfError3(clean, WindowManager_createWindowPhysical(w, e_rr))
 
-	w->flags |= EWindowFlags_IsActive;
-
-	if(callbacks.onCreate)
-		callbacks.onCreate(w);
-
 	*result = w;
 
 clean:

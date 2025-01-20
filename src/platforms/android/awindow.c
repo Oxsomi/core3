@@ -62,8 +62,6 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 
 			case APP_CMD_WINDOW_RESIZED: {
 				
-				Log_debugLnx("Resized");
-
 				I32x2 oldSize = w->size;
 				w->size = I32x2_create2(ANativeWindow_getWidth(app->window), ANativeWindow_getHeight(app->window));
 
@@ -75,8 +73,6 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 
 			case APP_CMD_CONTENT_RECT_CHANGED: {
 				
-				Log_debugLnx("Content rect change");
-
 				I32x2 oldOffset = w->offset;
 				w->offset = I32x2_create2((I32) app->contentRect.left, (I32) app->contentRect.top);
 
@@ -88,8 +84,6 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 
 			case APP_CMD_GAINED_FOCUS:
 				
-				Log_debugLnx("Gained focus");
-
 				w->flags |= EWindowFlags_IsFocussed;
 
 				if (w->callbacks.onUpdateFocus)
@@ -99,8 +93,6 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 
 			case APP_CMD_LOST_FOCUS:
 				
-				Log_debugLnx("Lost focus");
-
 				w->flags &= ~EWindowFlags_IsFocussed;
 
 				if (w->callbacks.onUpdateFocus)
@@ -110,8 +102,6 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 
 			case APP_CMD_RESUME:
 				
-				Log_debugLnx("Resume");
-
 				if (app->savedState && w->callbacks.onLoad) {
 					Buffer buf = Buffer_createManagedPtr(app->savedState, app->savedStateSize);
 					w->callbacks.onLoad(w, buf);
@@ -121,13 +111,10 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 				break;
 
 			case APP_CMD_TERM_WINDOW:
-				Log_debugLnx("Terminate");
 				w->flags |= EWindowFlags_ShouldTerminate;
 				break;
 			
 			case APP_CMD_SAVE_STATE:
-		
-				Log_debugLnx("Save state");
 
 				if (w->callbacks.onSave) {
 
@@ -150,6 +137,12 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 				w->flags |= EWindowFlags_IsFinalized;
 
 				w->size = I32x2_create2(ANativeWindow_getWidth(app->window), ANativeWindow_getHeight(app->window));
+							
+				w->flags |= EWindowFlags_IsActive;
+
+				if(w->callbacks.onCreate)
+					w->callbacks.onCreate(w);
+		
 				AWindow_onUpdateSize(w);
 
 				if (w->callbacks.onUpdateOrientation)

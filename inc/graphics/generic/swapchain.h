@@ -81,6 +81,10 @@ typedef struct Swapchain {
 
 } Swapchain;
 
+#define SWAPCHAIN_VERSIONING 3		//How many swapchain images should be requested, should always be 3
+#define SWAPCHAIN_MAX_DELTA 2		//How many swapchain images extra can be available (important for android devices)
+#define SWAPCHAIN_MAX_IMAGES (SWAPCHAIN_VERSIONING + SWAPCHAIN_MAX_DELTA)
+
 typedef RefPtr SwapchainRef;
 
 #define SwapchainRef_ptr(ptr) RefPtr_data(ptr, Swapchain)

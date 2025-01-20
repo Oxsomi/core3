@@ -53,7 +53,7 @@ typedef struct VkUnifiedTexture {
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
 	VkImageLayout lastLayout;
-	U64 padding;
+	U32 padding[3];
 } VkUnifiedTexture;
 
 typedef enum ECompareOp ECompareOp;

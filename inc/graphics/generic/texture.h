@@ -50,7 +50,8 @@ typedef struct UnifiedTexture {				//Base texture definition, should be at end o
 	U16 width, height, length;
 	U8 levels, images;
 
-	U8 padding[3];
+	U8 padding[2];
+	U8 maxImages;							//If 0, uses images, otherwise the amount of images to the next struct
 	U8 currentImageId;
 
 } UnifiedTexture;

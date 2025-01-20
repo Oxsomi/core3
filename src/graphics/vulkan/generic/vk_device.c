@@ -680,13 +680,13 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
 	U64 threads = Platform_getThreads();
-	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, FRAMES_IN_FLIGHT * threads * resolvedId))
+	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, MAX_FRAMES_IN_FLIGHT * threads * resolvedId))
 
 	//Semaphores
 
-	gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, FRAMES_IN_FLIGHT))
+	gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, MAX_FRAMES_IN_FLIGHT))
 
-	for (U64 k = 0; k < FRAMES_IN_FLIGHT; ++k) {
+	for (U64 k = 0; k < MAX_FRAMES_IN_FLIGHT; ++k) {
 
 		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		VkSemaphore *semaphore = deviceExt->submitSemaphores.ptrNonConst + k;
@@ -952,8 +952,8 @@ void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 
 	//Fill last FRAMES_IN_FLIGHT descriptor sets with UBO[i] to ensure we only modify things in flight.
 
-	VkDescriptorBufferInfo uboBufferInfo[FRAMES_IN_FLIGHT];
-	VkWriteDescriptorSet uboDescriptor[FRAMES_IN_FLIGHT];
+	VkDescriptorBufferInfo uboBufferInfo[MAX_FRAMES_IN_FLIGHT];
+	VkWriteDescriptorSet uboDescriptor[MAX_FRAMES_IN_FLIGHT];
 
 	for(U64 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
 
@@ -1059,7 +1059,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 	const U64 threadCount = Platform_getThreads();
 
-	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || frameInFlightId >= FRAMES_IN_FLIGHT)
+	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || frameInFlightId >= MAX_FRAMES_IN_FLIGHT)
 		return NULL;
 
 	const U64 id = resolvedQueueId + (frameInFlightId * threadCount + threadId) * device->resolvedQueues;
@@ -1127,7 +1127,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
 		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains.ptr[i]);
 
-		VkSemaphore semaphore = swapchainExt->semaphores.ptr[(device->submitId - 1) % swapchainExt->semaphores.length];
+		VkSemaphore semaphore = swapchainExt->semaphores.ptr[(device->submitId - 1) % FRAMES_IN_FLIGHT];
 
 		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
 		U32 currImg = 0;
@@ -1159,7 +1159,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Prepare per frame cbuffer
 
 	{
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % FRAMES_IN_FLIGHT]);
 
 		for (U32 i = 0; i < swapchains.length; ++i) {
 
@@ -1199,22 +1199,22 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	U32 graphicsQueueId = queue.queueId;
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % FRAMES_IN_FLIGHT];
 
 	if (commandLists.length) {
 
 		U32 threadId = 0;
 
 		VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
-			deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
+			deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % FRAMES_IN_FLIGHT)
 		);
 
 		if(!allocator)
 			gotoIfError(clean, Error_nullPointer(0, "VkGraphicsDevice_submitCommands() command allocator is NULL"))
 
-		//We create command pools only the first 3 frames, after that they're cached.
-		//This is because we have space for [queues][threads][3] command pools.
-		//Allocating them all even though currently only 1x3 are used is quite suboptimal.
+		//We create command pools only the first FRAMES_IN_FLIGHT frames, after that they're cached.
+		//This is because we have space for [queues][threads][FRAMES_IN_FLIGHT] command pools.
+		//Allocating them all even though currently only 1 x FRAMES_IN_FLIGHT are used is quite suboptimal.
 		//We only have the space to allow for using more in the future.
 
 		if(!allocator->pool) {
@@ -1238,7 +1238,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					(device->submitId - 1) % 3
+					(device->submitId - 1) % FRAMES_IN_FLIGHT
 				))
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
@@ -1280,7 +1280,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					(device->submitId - 1) % 3
+					(device->submitId - 1) % FRAMES_IN_FLIGHT
 				))
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
@@ -1315,7 +1315,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
-		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]), Vk);
+		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % FRAMES_IN_FLIGHT]), Vk);
 
 		gotoIfError(clean, VkDeviceBuffer_transition(
 			uboExt,
@@ -1341,7 +1341,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
 			sets[i] =
 				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-				deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % 3)];
+				deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % FRAMES_IN_FLIGHT)];
 
 		U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
@@ -1419,19 +1419,19 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Submit queue
 	//TODO: Multiple queues
 
-	U64 waitValue = device->submitId - 3;
+	U64 waitValue = device->submitId - FRAMES_IN_FLIGHT;
 
 	VkSemaphore signalSemaphores[2] = {
 		deviceExt->commitSemaphore,
-		deviceExt->submitSemaphores.ptr[(device->submitId - 1) % 3]
+		deviceExt->submitSemaphores.ptr[(device->submitId - 1) % FRAMES_IN_FLIGHT]
 	};
 
 	U64 signalValues[2] = { device->submitId, 1 };
 
 	VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
 		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-		.waitSemaphoreValueCount = device->submitId > 3,
-		.pWaitSemaphoreValues = device->submitId > 3 ? &waitValue : NULL,
+		.waitSemaphoreValueCount = device->submitId > FRAMES_IN_FLIGHT,
+		.pWaitSemaphoreValues = device->submitId > FRAMES_IN_FLIGHT ? &waitValue : NULL,
 		.signalSemaphoreValueCount = swapchains.length ? 2 : 1,
 		.pSignalSemaphoreValues = signalValues
 	};
@@ -1457,7 +1457,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
 			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = deviceExt->submitSemaphores.ptr + (device->submitId - 1) % 3,
+			.pWaitSemaphores = deviceExt->submitSemaphores.ptr + (device->submitId - 1) % FRAMES_IN_FLIGHT,
 			.swapchainCount = (U32) swapchains.length,
 			.pSwapchains = deviceExt->swapchainHandles.ptr,
 			.pImageIndices = deviceExt->swapchainIndices.ptr,
@@ -1523,7 +1523,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	const U32 threadId = 0;
 
 	const VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
-		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
+		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % FRAMES_IN_FLIGHT)
 	);
 
 	gotoIfError(clean, checkVkError(deviceExt->resetCommandPool(
@@ -1545,7 +1545,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
 		sets[i] =
 			i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-			deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % 3)];
+			deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % FRAMES_IN_FLIGHT)];
 
 	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 

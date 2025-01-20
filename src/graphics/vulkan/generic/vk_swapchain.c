@@ -194,7 +194,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		
 	if(capabilities.minImageCount > 3 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
 		gotoIfError(clean, Error_invalidOperation(
-			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 2 and 3 images"
+			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 3 images"
 		))
 
 	VkFlags anyRotate =
@@ -278,8 +278,6 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	if(presentMode == (VkPresentModeKHR) -1)
 		gotoIfError(clean, Error_invalidOperation(7, "VkGraphicsDeviceRef_createSwapchain() unsupported present mode"))
 
-	Log_debugLnx("Requested present mode: %"PRIu32, presentMode);
-
 	//Turn it into a swapchain
 
 	VkSwapchainKHR prevSwapchain = swapchainExt->swapchain;
@@ -306,63 +304,33 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		.clipped = true,
 		.oldSwapchain = prevSwapchain
 	};
-	
+
 	gotoIfError(clean, checkVkError(deviceExt->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)))
 
 	if(prevSwapchain)
 		deviceExt->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
 
 	//Acquire images
-	
-	Log_debugLnx("Get images");
 
 	U32 imageCount = 0;
 	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)))
 	
-	Log_debugLnx("Get images: %"PRIu32, imageCount);
+	if(imageCount < SWAPCHAIN_VERSIONING || imageCount > SWAPCHAIN_MAX_IMAGES)
+		gotoIfError(clean, Error_invalidState(
+			1, "VkGraphicsDeviceRef_createSwapchain() imageCount returned exceeds max or subseeds min images permitted by OxC3"
+		))
 
-	if(imageCount != swapchain->base.images)
-		gotoIfError(clean, Error_invalidState(1, "VkGraphicsDeviceRef_createSwapchain() imageCount doesn't match"))
+	swapchain->base.images = (U8) imageCount;
 
-	//Only recreate semaphores if needed.
+	//Only recreate semaphores once.
+	//These semaphores are linked to the FIF (frames in flight), not to the swapchain images
 
-	Bool createSemaphores = false;
+	if(swapchainExt->semaphores.length != MAX_FRAMES_IN_FLIGHT) {
 
-	if(swapchainExt->semaphores.length != imageCount) {
 		ListVkSemaphore_freex(&swapchainExt->semaphores);
-		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, imageCount))
-		createSemaphores = true;
-	}
-
-	//Destroy image views
-
-	//Get images
-
-	VkImage vkImages[3];		//Temp alloc, we only allow up to 3 images.
-
-	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(
-		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
-	)))
-
-	for(U8 i = 0; i < swapchain->base.images; ++i) {
-
-		VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
-		managedImage->lastAccess = managedImage->lastLayout = 0;
-		managedImage->lastStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-		if(managedImage->view)
-			deviceExt->destroyImageView(deviceExt->device, managedImage->view, NULL);
-
-		managedImage->image = vkImages[i];
-	}
-
-	//Grab semaphores
-
-	Log_debugLnx("Get semas");
-
-	for (U8 i = 0; i < swapchain->base.images; ++i) {
-
-		if(createSemaphores) {
+		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, MAX_FRAMES_IN_FLIGHT))
+		
+		for (U8 i = 0; i < imageCount; ++i) {
 
 			VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 			VkSemaphore *semaphore = swapchainExt->semaphores.ptrNonConst + i;
@@ -384,12 +352,30 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 				gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 			}
 		}
+	}
 
-		//Image views
+	//Get images
 
-		if(device->flags & EGraphicsDeviceFlags_IsDebug) {
+	VkImage vkImages[SWAPCHAIN_MAX_IMAGES];		//Temp alloc, we only allow up to 5 images.
 
-			VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
+	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(
+		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
+	)))
+
+	//Destroy image views
+
+	for(U8 i = 0; i < imageCount; ++i) {
+
+		VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
+		managedImage->lastAccess = managedImage->lastLayout = 0;
+		managedImage->lastStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+		if(managedImage->view)
+			deviceExt->destroyImageView(deviceExt->device, managedImage->view, NULL);
+
+		managedImage->image = vkImages[i];
+
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
 			CharString_freex(&temp);
 
@@ -427,10 +413,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
 
-	Log_debugLnx("Done");
-
 clean:
-	Log_debugLnx("Fail?");
 	CharString_freex(&temp);
 	ListVkSurfaceFormatKHR_freex(&surfaceFormats);
 	ListVkPresentModeKHR_freex(&presentModes);

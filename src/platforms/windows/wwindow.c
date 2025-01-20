@@ -116,12 +116,6 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			return 0;
 
 		case WM_CREATE:
-		
-			w->flags |= EWindowFlags_IsFinalized;
-
-			if(w->callbacks.onResize)
-				w->callbacks.onResize(w);
-
 			break;
 
 		//Setting focus
@@ -1066,6 +1060,18 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
 		retError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"))
+
+	//Finalize
+	
+	w->flags |= EWindowFlags_IsActive;
+
+	if(w->callbacks.onCreate)
+		w->callbacks.onCreate(w);
+		
+	w->flags |= EWindowFlags_IsFinalized;
+
+	if(w->callbacks.onResize)
+		w->callbacks.onResize(w);
 
 clean:
 	ListU16_freex(&tmp);

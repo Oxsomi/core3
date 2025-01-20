@@ -58,9 +58,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	if(!device)
 		return true;
 
-	U64 NBuffering = sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]);
-
-	for(U64 i = 0; i < NBuffering; ++i) {
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 
 		for(U64 j = 0; j < device->resourcesInFlight[i].length; ++j)
 			RefPtr_dec(device->resourcesInFlight[i].ptrNonConst + j);
@@ -68,7 +66,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		ListRefPtr_freex(&device->resourcesInFlight[i]);
 	}
 
-	for(U64 i = 0; i < NBuffering; ++i)
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 		DeviceBufferRef_dec(&device->frameData[i]);
 
 	DeviceBufferRef_dec(&device->staging);
@@ -260,7 +258,7 @@ Error GraphicsDeviceRef_create(
 
 	//Allocate UBO
 
-	for(U64 i = 0; i < sizeof(device->frameData) / sizeof(device->frameData[0]); ++i)
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
 		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 			*deviceRef,
 			EDeviceBufferUsage_None,

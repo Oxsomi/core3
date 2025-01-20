@@ -96,11 +96,15 @@ void *TextureRef_getImplExt(TextureRef *ref) {
 	if(!tex)
 		return NULL;
 
+	//Avoid movement of SwapchainExt for example, by allowing a fixed reservation of images.
+
+	U64 img = tex->maxImages ? tex->maxImages : tex->images;
+
 	//TODO: subResource
 	return (UnifiedTextureImage*)(
 		(U8*)tex +
 		sizeof(*tex) +
-		(sizeof(UnifiedTextureImage) + GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image) * tex->images
+		(sizeof(UnifiedTextureImage) + GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image) * img
 	);
 }
 
@@ -259,9 +263,9 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture");
 
 	if (texture.resource.type == EResourceType_Swapchain) {
-		if(texture.images != 3)
+		if(texture.images < 3 || texture.images > 5)
 			return Error_invalidParameter(
-				1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 3 swapchains"
+				1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 3-5 swapchains"
 			);
 	}
 

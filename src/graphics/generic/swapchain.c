@@ -126,10 +126,15 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 			0, "GraphicsDeviceRef_createSwapchain()::deviceRef and info.window (physical) are required"
 		);
 
+	//On some platforms the images we get back != the images we request.
+	//Even though we request 3, we might get 5 even.
+	//https://github.com/googlesamples/vulkan-basic-samples/issues/24#issuecomment-442626040
+	//Unfortunately we still have to allocate up to (48 + 16) * 2 = 128 bytes extra, not too bad though.
+
 	Error err = RefPtr_createx(
 		(U32)(
 			sizeof(Swapchain) +
-			(GraphicsDeviceRef_getObjectSizes(dev)->image + sizeof(UnifiedTextureImage)) * 3 +
+			(GraphicsDeviceRef_getObjectSizes(dev)->image + sizeof(UnifiedTextureImage)) * SWAPCHAIN_MAX_IMAGES +
 			GraphicsDeviceRef_getObjectSizes(dev)->swapchain
 		),
 		(ObjectFreeFunc) Swapchain_free,
@@ -169,20 +174,21 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		.height = (U16) I32x2_y(info.window->size),
 		.length = 1,
 		.levels = 1,
-		.images = 3		//Triple buffering
+		.images = 3,		//Probably there are 3 images, but it's possible impl changes this later (up to 5), don't assume
+		.maxImages = SWAPCHAIN_MAX_IMAGES
 	};
 
 	if(!swapchain->info.presentModePriorities[0]) {
-
 		#if _PLATFORM_TYPE != PLATFORM_ANDROID
 			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;		//Priority is to be low latency
 			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
 			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Fifo;
 			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_FifoRelaxed;
-		#else																				//No mailbox: creates images != 3
+		#else
 			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;			//Priority is to conserve power
 			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
-			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Immediate;
+			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Mailbox;
+			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_Immediate;
 		#endif
 	}
 

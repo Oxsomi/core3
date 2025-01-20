@@ -324,8 +324,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				};
 		}
 	
-		Log_debugLnx("Flush memory ranges");
-
 		if(incoherent)
 			gotoIfError(clean, checkVkError(deviceExt->flushMappedMemoryRanges(
 				deviceExt->device, (U32) deviceExt->mappedMemoryRange.length, deviceExt->mappedMemoryRange.ptr
@@ -351,8 +349,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 		gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 2 + buffer->pendingChanges.length))
 
 		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
-	
-			Log_debugLnx("Create buffer");
 
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
@@ -411,8 +407,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					.size = allocRange
 				};
 	
-				Log_debugLnx("Flush buffer range");
-
 				deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
 
@@ -427,8 +421,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				&dependency
 			))
 	
-			Log_debugLnx("Copy buffer ranges");
-
 			if(dependency.bufferMemoryBarrierCount)
 				deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
@@ -524,8 +516,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					.size = allocRange
 				};
 	
-				Log_debugLnx("Flush mapped range");
-
 				deviceExt->flushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
 
@@ -546,8 +536,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
 			}
 	
-			Log_debugLnx("Copy buffer");
-
 			if(dependency.bufferMemoryBarrierCount)
 				deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
