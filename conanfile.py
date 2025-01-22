@@ -143,10 +143,14 @@ class oxc3(ConanFile):
 		else:
 			platform = "linux"
 
-		# Unix stuff always appends <configPath>/build/Debug (etc.) for our package dir since we park our config there.
+		# Android always appends <configPath>/build/Debug (etc.) for our package dir since we park our config there.
 		# Windows it stays build/
+		# Linux will keep it relative to core3/build/Debug and so we just append platform/archName
 
-		if self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
+		if self.build_folder.replace("\\", "/").endswith("core3/build/" + str(self.settings.build_type)):
+			input_dir = os.path.join(self.build_folder, platform + "/" + archName)
+
+		elif self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
 			input_dir = self.build_folder + "/../../"
 
 		else:
