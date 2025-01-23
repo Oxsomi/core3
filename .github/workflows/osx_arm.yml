@@ -47,7 +47,7 @@ jobs:
       env:
         JOB_STATUS: ${{ job.status }}
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        HOOK_OS_NAME: ${{ runner.os }}-arm64
+        HOOK_OS_NAME: ${{ runner.os }}-arm64-static
         WORKFLOW_NAME: ${{ github.workflow }}
       run: |
         git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook

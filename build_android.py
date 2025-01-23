@@ -43,6 +43,7 @@ def makeProfile(conanHome, llvmRootDir, arch, level, generator):
 
 	# Make profile
 
+	os.makedirs(conanHome + "/profiles")
 	outputPath = conanHome + "/profiles/android_" + arch + "_" + level + "_" + generator
 	inputPath = os.path.dirname(os.path.realpath(__file__)) + "/src/platforms/android/android_profile"
 	profile = Path(inputPath).read_text()
