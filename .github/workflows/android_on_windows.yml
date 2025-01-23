@@ -1,6 +1,6 @@
 name: C/C++ CI
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build:
@@ -28,10 +28,8 @@ jobs:
         distribution: 'temurin'
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
-      with:
-        api-level: 33
-        ndk: 28.0.12674087
-        cache: true
+    - name: Setup Android NDK and right android version
+      run: sdkmanager "platforms;android-33" "ndk;28.0.12674087"
     - name: Setup msys2
       uses: msys2/setup-msys2@v2
     - name: Restore cached
