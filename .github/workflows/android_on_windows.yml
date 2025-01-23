@@ -8,6 +8,8 @@ jobs:
     runs-on: windows-2022
     env:
       VULKAN_SDK: C:\VulkanSDK\
+      ANDROID_SDK: C:\Android\android-sdk
+      ANDROID_NDK: C:\Android\android-sdk\ndk\28.0.12674087
     steps:
     - uses: actions/checkout@v1
       with:
@@ -26,6 +28,10 @@ jobs:
         distribution: 'temurin'
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
+      with:
+        api-level: 33
+        ndk: 28.0.12674087
+        cache: true
     - name: Setup msys2
       uses: msys2/setup-msys2@v2
     - name: Restore cached
@@ -36,7 +42,7 @@ jobs:
         key: android-${{ runner.os }}-${{ hashFiles('**/packages') }}
     - name: build for debug
       run: python3 build_android.py -mode Debug
-    - name: build for debug
+    - name: build for release
       run: python3 build_android.py -mode Release
     - name: Delete non package files for cache
       run: bash -c "rm -rf ~/.conan2/p/b/*/b"
