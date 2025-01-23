@@ -35,9 +35,9 @@ jobs:
         path: ~/.conan2/p
         key: android-${{ runner.os }}-${{ hashFiles('**/packages') }}
     - name: build for debug
-      run: python3 build_android.sh -mode Debug
+      run: python3 build_android.py -mode Debug
     - name: build for debug
-      run: python3 build_android.sh -mode Release
+      run: python3 build_android.py -mode Release
     - name: Delete non package files for cache
       run: bash -c "rm -rf ~/.conan2/p/b/*/b"
     - name: Cache Build
@@ -52,7 +52,7 @@ jobs:
       env:
         JOB_STATUS: ${{ job.status }}
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        HOOK_OS_NAME: android-${{ runner.os }}
+        HOOK_OS_NAME: Android-${{ runner.os }}
         WORKFLOW_NAME: ${{ github.workflow }}
       run: |
         git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
