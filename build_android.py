@@ -43,8 +43,8 @@ def makeProfile(conanHome, llvmRootDir, arch, level, generator):
 
 	# Make profile
 
-	os.makedirs(conanHome + "/profiles")
-	outputPath = conanHome + "/profiles/android_" + arch + "_" + level + "_" + generator
+	os.makedirs(conanHome + "/profiles", exist_ok = True)
+	outputPath = conanHome + "/profiles/android_" + arch + "_" + level + "_" + generator.replace(" ", "_")
 	inputPath = os.path.dirname(os.path.realpath(__file__)) + "/src/platforms/android/android_profile"
 	profile = Path(inputPath).read_text()
 
@@ -55,7 +55,7 @@ def makeProfile(conanHome, llvmRootDir, arch, level, generator):
 
 def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstall, enableShaderCompiler):
 
-	profile = "android_" + arch + "_" + level + "_" + generator
+	profile = "android_" + arch + "_" + level + "_" + generator.replace(" ", "_")
 
 	if arch == "x86_64":
 		archName = "x64"
@@ -67,18 +67,19 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstal
 
 	# Build dependencies
 
-	subprocess.check_output("conan create packages/openal_soft -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
+	subprocess.call("conan profile detect")
+	subprocess.check_output("conan create packages/openal_soft -s build_type=" + mode + " --profile=" + profile + " --build=missing")
 
 	if enableShaderCompiler:
-		subprocess.check_output("conan create packages/nvapi -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
-		subprocess.check_output("conan create packages/spirv_reflect -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
-		subprocess.check_output("conan create packages/dxc -s build_type=" + mode + " --profile \"" + profile + "\" --build=missing")
+		subprocess.check_output("conan create packages/nvapi -s build_type=" + mode + " --profile=" + profile + " --build=missing")
+		subprocess.check_output("conan create packages/spirv_reflect -s build_type=" + mode + " --profile=" + profile + " --build=missing")
+		subprocess.check_output("conan create packages/dxc -s build_type=" + mode + " --profile=" + profile + " --build=missing")
 
 	outputFolder = "\"build/" + mode + "/android/" + archName + "\""
-	subprocess.check_output("conan build . -of " + outputFolder + " -o cliGraphics=False -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\" --build=missing")
+	subprocess.check_output("conan build . -of " + outputFolder + " -o cliGraphics=False -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile=" + profile + " --build=missing")
 
 	if doInstall:
-		subprocess.check_output("conan export-pkg . -of " + outputFolder + " -o cliGraphics=False -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile \"" + profile + "\"")
+		subprocess.check_output("conan export-pkg . -of " + outputFolder + " -o cliGraphics=False -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile=" + profile + "")
 
 def main():
 
