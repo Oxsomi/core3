@@ -418,6 +418,7 @@ const C8 *reqExtensionsName[] = {
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
 
 const C8 *optExtensionsName[] = {
+
 	"VK_KHR_performance_query",
 	"VK_KHR_ray_tracing_pipeline",
 	"VK_KHR_ray_query",
@@ -432,7 +433,13 @@ const C8 *optExtensionsName[] = {
 	"VK_EXT_shader_atomic_float",
 	"VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
-	"VK_KHR_compute_shader_derivatives",
+
+	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
+		"VK_KHR_compute_shader_derivatives",
+	#else
+		"VK_NV_compute_shader_derivatives"
+	#endif
+
 	"VK_KHR_maintenance4",
 	"VK_KHR_buffer_device_address",
 	"VK_EXT_descriptor_indexing",
@@ -708,12 +715,21 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV
 		)
 
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_ComputeDeriv],
-			VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR,
-			computeDeriv,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR
-		)
+		#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME		//Prevent failing for older SDK versions
+			getDeviceFeatures(
+				optExtensions[EOptExtensions_ComputeDeriv],
+				VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR,
+				computeDeriv,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR
+			)
+		#else
+			getDeviceFeatures(
+				optExtensions[EOptExtensions_ComputeDeriv],
+				VkPhysicalDeviceComputeShaderDerivativesFeaturesNV,
+				computeDeriv,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV
+			)
+		#endif
 
 		getDeviceFeatures(
 			true,
