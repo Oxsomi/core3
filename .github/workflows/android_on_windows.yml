@@ -29,7 +29,7 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
     - name: Setup Android NDK and right android version
-      run: sdkmanager "platforms;android-33" "ndk;28.0.12674087"
+      run: sdkmanager "platforms;android-29" "ndk;28.0.12674087"
     - name: Setup msys2
       uses: msys2/setup-msys2@v2
     - name: Restore cached

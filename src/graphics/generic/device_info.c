@@ -255,6 +255,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_Maintenance4)
 				Log_debugLnx("\t\tMaintenance4");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress)
+				Log_debugLnx("\t\tBuffer device address");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_DriverProperties)
+				Log_debugLnx("\t\tDriver properties");
 		}
 	}
 }

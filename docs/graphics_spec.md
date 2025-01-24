@@ -30,7 +30,7 @@ We're mainly targeting the following systems in OxC3 0.2. Though older systems w
 
 Because of this, a device needs the following requirements to be OxC3 compatible:
 
-- Vulkan 1.2 or higher.
+- Vulkan 1.1 or higher.
 - Tessellation shaders are required, but geometry shaders are optional.
 - More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - Required instance extensions:
@@ -45,11 +45,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
   - VK_KHR_push_descriptor
-  - Descriptor indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
-    - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
   - VK_KHR_synchronization2
-  - Timeline semaphore with timelineSemaphore = true
-  - Buffer device address with bufferDeviceAddress = true
   - VK_KHR_swapchain
     - Requires at least 1 image layer.
     - Requires ability to make 3 images.
@@ -78,6 +74,8 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_fragment_shading_rate as VariableRateShading
   - VK_NV_compute_shader_derivatives as ComputeDeriv as long as computeDerivativeGroupLinear is true.
   - VK_KHR_maintenance4 as Vk extension Maintainance4. Without this extension, max buffer size and allocation size is 256 MiB.
+  - VK_KHR_buffer_device_address as Vk extension BufferDeviceAddress. Without this extension the device buffer addresses are 0.
+  - VK_KHR_driver_properties as GraphicsDeviceInfo::driverInfo; empty if unsupported.
 - sampleRateShading of true.
 - maxMemoryAllocationSize and maxBufferSize of a minimum of 256MiB (ideally should use <=128MiB).
 - SubgroupOperations extension: subgroupSize of 4 - 128. subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
@@ -144,6 +142,21 @@ Bindless is supported when the GPU has the following capabilities:
 - maxDescriptorSetSampledImages of 250k or higher.
 - maxDescriptorSetStorageImages of 250k or higher.
 - 16 acceleration structures if RT is supported.
+- VK_EXT_descriptor_indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing as Bindless.
+  - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
+- maxDescriptorSetUpdateAfterBindInputAttachments 8
+- maxDescriptorSetUpdateAfterBindSampledImages 1000000
+- maxDescriptorSetUpdateAfterBindSamplers 1024
+- maxDescriptorSetUpdateAfterBindStorageBuffers 1000000
+- maxDescriptorSetUpdateAfterBindStorageImages 1000000
+- maxDescriptorSetUpdateAfterBindUniformBuffers 1000000
+- maxPerStageDescriptorUpdateAfterBindInputAttachments 8
+- maxPerStageDescriptorUpdateAfterBindSampledImages 1000000
+- maxPerStageDescriptorUpdateAfterBindSamplers 1024
+- maxPerStageDescriptorUpdateAfterBindStorageBuffers 1000000
+- maxPerStageDescriptorUpdateAfterBindStorageImages 1000000
+- maxPerStageDescriptorUpdateAfterBindUniformBuffers 1000000
+- maxPerStageUpdateAfterBindResources 1000000
 
 Without bindless, it should be guaranteed that at least the following are available (any higher would indicate bindless):
 

@@ -7,7 +7,7 @@
 
   <uses-sdk android:minSdkVersion="{APP_API_LEVEL}" />
 
-  <!-- Vulkan 1.2 + astc, sample rate shading, a few others -->
+  <!-- Vulkan 1.1 + astc, sample rate shading, a few others -->
 
   <uses-feature
     android:name="android.hardware.vulkan.level"
@@ -16,7 +16,7 @@
 
   <uses-feature
     android:name="android.hardware.vulkan.version"
-    android:version="0x402000"
+    android:version="0x401000"
     android:required="true" />
 		  
   <application

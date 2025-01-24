@@ -106,7 +106,8 @@ gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 ### Properties
 
-- name, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
+- name; null-terminated UTF-8 string giving information about the device.
+- driverInfo; might not be available (always available on D3D12, but sometimes available on Vk) or might give a UTF-8 string in arbitrary format that specifies info about the driver version. Generally this follows (x.y or x.y.z) but that is vendor specific (at least NV, AMD and INTC seem to agree on it on desktop).
 - type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
 - vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Microsoft (MSFT) or unknown).
 - id; number in the list of supported devices.

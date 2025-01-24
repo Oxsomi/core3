@@ -103,7 +103,9 @@ typedef enum EDxGraphicsFeatures {
 
 typedef enum EVkGraphicsFeatures {
 	EVkGraphicsFeatures_PerfQuery				= 1 << 0,
-	EVkGraphicsFeatures_Maintenance4			= 1 << 1
+	EVkGraphicsFeatures_Maintenance4			= 1 << 1,
+	EVkGraphicsFeatures_BufferDeviceAddress		= 1 << 2,
+	EVkGraphicsFeatures_DriverProperties		= 1 << 3
 } EVkGraphicsFeatures;
 
 //Generic graphics features
@@ -234,7 +236,7 @@ typedef struct GraphicsDeviceCapabilities {
 typedef struct GraphicsDeviceInfo {
 
 	C8 name[256];
-	C8 driverInfo[256];
+	C8 driverInfo[256];		//Can be empty if unsupported
 
 	EGraphicsDeviceType type;
 	EGraphicsVendorId vendor;

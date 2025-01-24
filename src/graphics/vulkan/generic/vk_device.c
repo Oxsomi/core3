@@ -157,7 +157,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	bindNextVkStruct(
 		VkPhysicalDeviceBufferDeviceAddressFeaturesKHR,
-		true,
+		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress,
 		(VkPhysicalDeviceBufferDeviceAddressFeaturesKHR) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
 			.bufferDeviceAddress = true
@@ -170,15 +170,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		(VkPhysicalDeviceSynchronization2Features) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
 			.synchronization2 = true
-		}
-	)
-
-	bindNextVkStruct(
-		VkPhysicalDeviceTimelineSemaphoreFeatures,
-		true,
-		(VkPhysicalDeviceTimelineSemaphoreFeatures) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
-			.timelineSemaphore = true
 		}
 	)
 
@@ -341,6 +332,17 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	for(U64 i = 0; i < reqExtensionsNameCount; ++i)
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, reqExtensionsName[i]))
 
+	if(feat & EGraphicsFeatures_RayPipeline) {
+		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_spirv_1_4"))
+		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_shader_float_controls"))
+	}
+
+	if(feat & EGraphicsFeatures_VariableRateShading)
+		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_create_renderpass2"))
+
+	if(feat & EGraphicsFeatures_DirectRendering)
+		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_depth_stencil_resolve"))
+
 	for (U64 i = 0; i < optExtensionsNameCount; ++i) {
 
 		const C8 *ptr = optExtensionsName[i];
@@ -364,6 +366,12 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_RaytracingValidation:		on = feat & EGraphicsFeatures_RayValidation;			break;
 			case EOptExtensions_ComputeDeriv:				on = feat & EGraphicsFeatures_ComputeDeriv;				break;
 			case EOptExtensions_Maintenance4:				on = featEx & EVkGraphicsFeatures_Maintenance4;			break;
+			case EOptExtensions_BufferDeviceAddress:		on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;	break;
+			case EOptExtensions_Bindless:					on = feat & EGraphicsFeatures_Bindless;					break;
+			case EOptExtensions_DriverProperties:			on = featEx & EVkGraphicsFeatures_DriverProperties;		break;
+			case EOptExtensions_AtomicI64:					on = types & EGraphicsDataTypes_AtomicI64;				break;
+			case EOptExtensions_F16:						on = types & EGraphicsDataTypes_F16;					break;
+			case EOptExtensions_MultiDrawIndirectCount:		on = feat & EGraphicsFeatures_MultiDrawIndirectCount;	break;
 
 			default:
 				continue;
@@ -509,8 +517,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCmdBindVertexBuffers, deviceExt->cmdBindVertexBuffers)
 	getVkFunctionDevice(clean, vkCmdDrawIndexed, deviceExt->cmdDrawIndexed)
 	getVkFunctionDevice(clean, vkCmdDraw, deviceExt->cmdDraw)
-	getVkFunctionDevice(clean, vkCmdDrawIndexedIndirectCount, deviceExt->cmdDrawIndexedIndirectCount)
-	getVkFunctionDevice(clean, vkCmdDrawIndirectCount, deviceExt->cmdDrawIndirectCount)
 	getVkFunctionDevice(clean, vkCmdDrawIndexedIndirect, deviceExt->cmdDrawIndexedIndirect)
 	getVkFunctionDevice(clean, vkCmdDrawIndirect, deviceExt->cmdDrawIndirect)
 	getVkFunctionDevice(clean, vkCmdDispatch, deviceExt->cmdDispatch)
@@ -522,7 +528,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCreateBuffer, deviceExt->createBuffer)
 	getVkFunctionDevice(clean, vkGetBufferMemoryRequirements2, deviceExt->getBufferMemoryRequirements2)
 	getVkFunctionDevice(clean, vkBindBufferMemory, deviceExt->bindBufferMemory)
-	getVkFunctionDevice(clean, vkGetBufferDeviceAddress, deviceExt->getBufferDeviceAddress)
 	getVkFunctionDevice(clean, vkUpdateDescriptorSets, deviceExt->updateDescriptorSets)
 	getVkFunctionDevice(clean, vkFlushMappedMemoryRanges, deviceExt->flushMappedMemoryRanges)
 	getVkFunctionDevice(clean, vkCmdCopyBuffer, deviceExt->cmdCopyBuffer)
@@ -540,7 +545,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkDestroyDescriptorPool, deviceExt->destroyDescriptorPool)
 	getVkFunctionDevice(clean, vkDestroyPipelineLayout, deviceExt->destroyPipelineLayout)
 	getVkFunctionDevice(clean, vkDeviceWaitIdle, deviceExt->deviceWaitIdle)
-	getVkFunctionDevice(clean, vkWaitSemaphores, deviceExt->waitSemaphores)
 	getVkFunctionDevice(clean, vkCreateCommandPool, deviceExt->createCommandPool)
 	getVkFunctionDevice(clean, vkResetCommandPool, deviceExt->resetCommandPool)
 	getVkFunctionDevice(clean, vkAllocateCommandBuffers, deviceExt->allocateCommandBuffers)
@@ -559,14 +563,22 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkCreateSampler, deviceExt->createSampler)
 	getVkFunctionDevice(clean, vkCreateShaderModule, deviceExt->createShaderModule)
 	getVkFunctionDevice(clean, vkDestroyImage, deviceExt->destroyImage)
+	getVkFunctionDevice(clean, vkCreateFence, deviceExt->createFence)
+	getVkFunctionDevice(clean, vkWaitForFences, deviceExt->waitForFences)
+	getVkFunctionDevice(clean, vkResetFences, deviceExt->resetFences)
+	getVkFunctionDevice(clean, vkDestroyFence, deviceExt->destroyFence)
 
 	getVkFunctionDevice(clean, vkCmdPipelineBarrier2KHR, deviceExt->cmdPipelineBarrier2)
-
 	getVkFunctionDevice(clean, vkGetSwapchainImagesKHR, deviceExt->getSwapchainImages)
 
 	getVkFunctionDevice(clean, vkAcquireNextImageKHR, deviceExt->acquireNextImage)
 	getVkFunctionDevice(clean, vkCreateSwapchainKHR, deviceExt->createSwapchain)
 	getVkFunctionDevice(clean, vkDestroySwapchainKHR, deviceExt->destroySwapchain)
+
+	if(feat & EGraphicsFeatures_MultiDrawIndirectCount) {
+		getVkFunctionDevice(clean, vkCmdDrawIndexedIndirectCountKHR, deviceExt->cmdDrawIndexedIndirectCount)
+		getVkFunctionDevice(clean, vkCmdDrawIndirectCountKHR, deviceExt->cmdDrawIndirectCount)
+	}
 
 	if(feat & EGraphicsFeatures_Raytracing) {
 		getVkFunctionDevice(clean, vkCmdBuildAccelerationStructuresKHR, deviceExt->cmdBuildAccelerationStructures)
@@ -588,6 +600,9 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(clean, vkCmdBeginRenderingKHR, deviceExt->cmdBeginRendering)
 		getVkFunctionDevice(clean, vkCmdEndRenderingKHR, deviceExt->cmdEndRendering)
 	}
+
+	if(feat & EVkGraphicsFeatures_BufferDeviceAddress)
+		getVkFunctionDevice(clean, vkGetBufferDeviceAddressKHR, deviceExt->getBufferDeviceAddress)
 
 	//Get queues
 
@@ -712,17 +727,10 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	//Create timeline semaphore
 
-	VkSemaphoreTypeCreateInfo timelineInfo = (VkSemaphoreTypeCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
-	};
+	VkFenceCreateInfo fenceInfo = (VkFenceCreateInfo) { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 
-	VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		.pNext = &timelineInfo
-	};
-
-	gotoIfError(clean, checkVkError(deviceExt->createSemaphore(deviceExt->device, &semaphoreInfo, NULL, &deviceExt->commitSemaphore)))
+	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+		gotoIfError(clean, checkVkError(deviceExt->createFence(deviceExt->device, &fenceInfo, NULL, &deviceExt->commitFence[i])))
 
 	deviceExt->resolvedQueues = resolvedId;
 
@@ -1005,8 +1013,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 				deviceExt->destroySemaphore(deviceExt->device, semaphore, NULL);
 		}
 
-		if(deviceExt->commitSemaphore)
-			deviceExt->destroySemaphore(deviceExt->device, deviceExt->commitSemaphore, NULL);
+		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+			if(deviceExt->commitFence[i])
+				deviceExt->destroyFence(deviceExt->device, deviceExt->commitFence[i], NULL);
 
 		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
 
@@ -1106,18 +1115,18 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Wait for previous frame semaphore
 
+	VkFence *fence = &deviceExt->commitFence[device->submitId % FRAMES_IN_FLIGHT];
+
 	if (device->submitId > FRAMES_IN_FLIGHT) {
 
-		U64 value = device->submitId - FRAMES_IN_FLIGHT;
+		gotoIfError(clean, checkVkError(deviceExt->waitForFences(
+			deviceExt->device,
+			1, fence,
+			true,
+			U64_MAX
+		)))
 
-		VkSemaphoreWaitInfo waitInfo = (VkSemaphoreWaitInfo) {
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-			.pSemaphores = &deviceExt->commitSemaphore,
-			.semaphoreCount = 1,
-			.pValues = &value
-		};
-
-		gotoIfError(clean, checkVkError(deviceExt->waitSemaphores(deviceExt->device, &waitInfo, U64_MAX)))
+		gotoIfError(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence)))
 	}
 
 	//Acquire swapchain images
@@ -1419,36 +1428,20 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Submit queue
 	//TODO: Multiple queues
 
-	U64 waitValue = device->submitId - FRAMES_IN_FLIGHT;
-
-	VkSemaphore signalSemaphores[2] = {
-		deviceExt->commitSemaphore,
-		deviceExt->submitSemaphores.ptr[(device->submitId - 1) % FRAMES_IN_FLIGHT]
-	};
-
-	U64 signalValues[2] = { device->submitId, 1 };
-
-	VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
-		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-		.waitSemaphoreValueCount = device->submitId > FRAMES_IN_FLIGHT,
-		.pWaitSemaphoreValues = device->submitId > FRAMES_IN_FLIGHT ? &waitValue : NULL,
-		.signalSemaphoreValueCount = swapchains.length ? 2 : 1,
-		.pSignalSemaphoreValues = signalValues
-	};
+	VkSemaphore signalSemaphores = deviceExt->submitSemaphores.ptr[(device->submitId - 1) % FRAMES_IN_FLIGHT];
 
 	VkSubmitInfo submitInfo = (VkSubmitInfo) {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.pNext = &timelineInfo,
 		.waitSemaphoreCount = (U32) deviceExt->waitSemaphoresList.length,
 		.pWaitSemaphores = deviceExt->waitSemaphoresList.ptr,
-		.signalSemaphoreCount = swapchains.length ? 2 : 1,
-		.pSignalSemaphores = signalSemaphores,
+		.signalSemaphoreCount = !!swapchains.length,
+		.pSignalSemaphores = swapchains.length ? &signalSemaphores : NULL,
 		.pCommandBuffers = &commandBuffer,
 		.commandBufferCount = commandBuffer ? 1 : 0,
 		.pWaitDstStageMask = deviceExt->waitStages.ptr
 	};
 
-	gotoIfError(clean, checkVkError(deviceExt->queueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
+	gotoIfError(clean, checkVkError(deviceExt->queueSubmit(queue.queue, 1, &submitInfo, *fence)))
 
 	//Presents
 
@@ -1494,25 +1487,18 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 
 	//Submit only the copy command list
 
-	const U64 waitValue = device->submitId;
-
-	const VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
-		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-		.waitSemaphoreValueCount = device->submitId > 0,
-		.pWaitSemaphoreValues = device->submitId > 0 ? &waitValue : NULL,
-	};
-
 	const VkSubmitInfo submitInfo = (VkSubmitInfo) {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.pNext = &timelineInfo,
-		.waitSemaphoreCount = timelineInfo.waitSemaphoreValueCount,
-		.pWaitSemaphores = (VkSemaphore*) &deviceExt->commitSemaphore,
 		.pCommandBuffers = &commandBuffer->buffer,
 		.commandBufferCount = 1
 	};
 
 	const VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
-	gotoIfError(clean, checkVkError(deviceExt->queueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
+	gotoIfError(clean, checkVkError(deviceExt->queueSubmit(
+		queue.queue,
+		1, &submitInfo,
+		deviceExt->commitFence[(device->submitId - 1) % FRAMES_IN_FLIGHT]
+	)))
 
 	//Wait for the device
 

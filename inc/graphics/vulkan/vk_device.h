@@ -92,7 +92,7 @@ typedef struct VkGraphicsDevice {
 
 	ListVkSemaphore submitSemaphores;
 
-	VkSemaphore commitSemaphore;
+	VkFence commitFence[MAX_FRAMES_IN_FLIGHT];
 
 	VkDescriptorSetLayout setLayouts[EDescriptorSetType_UniqueLayouts];
 	VkDescriptorSet sets[EDescriptorSetType_Count];				//1 per type and 2 extra for ubo to allow versioning
@@ -157,8 +157,8 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCmdBindVertexBuffers cmdBindVertexBuffers;
 	PFN_vkCmdDrawIndexed cmdDrawIndexed;
 	PFN_vkCmdDraw cmdDraw;
-	PFN_vkCmdDrawIndexedIndirectCount cmdDrawIndexedIndirectCount;
-	PFN_vkCmdDrawIndirectCount cmdDrawIndirectCount;
+	PFN_vkCmdDrawIndexedIndirectCountKHR cmdDrawIndexedIndirectCount;
+	PFN_vkCmdDrawIndirectCountKHR cmdDrawIndirectCount;
 	PFN_vkCmdDrawIndexedIndirect cmdDrawIndexedIndirect;
 	PFN_vkCmdDrawIndirect cmdDrawIndirect;
 	PFN_vkCmdDispatch cmdDispatch;
@@ -170,7 +170,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCreateBuffer createBuffer;
 	PFN_vkGetBufferMemoryRequirements2 getBufferMemoryRequirements2;
 	PFN_vkBindBufferMemory bindBufferMemory;
-	PFN_vkGetBufferDeviceAddress getBufferDeviceAddress;
+	PFN_vkGetBufferDeviceAddressKHR getBufferDeviceAddress;
 	PFN_vkUpdateDescriptorSets updateDescriptorSets;
 	PFN_vkFlushMappedMemoryRanges flushMappedMemoryRanges;
 	PFN_vkCmdCopyBuffer cmdCopyBuffer;
@@ -188,7 +188,6 @@ typedef struct VkGraphicsDevice {
 	PFN_vkDestroyDescriptorPool destroyDescriptorPool;
 	PFN_vkDestroyPipelineLayout destroyPipelineLayout;
 	PFN_vkDeviceWaitIdle deviceWaitIdle;
-	PFN_vkWaitSemaphores waitSemaphores;
 	PFN_vkCreateCommandPool createCommandPool;
 	PFN_vkResetCommandPool resetCommandPool;
 	PFN_vkAllocateCommandBuffers allocateCommandBuffers;
@@ -207,6 +206,12 @@ typedef struct VkGraphicsDevice {
 	PFN_vkCreateSampler createSampler;
 	PFN_vkCreateShaderModule createShaderModule;
 	PFN_vkDestroyImage destroyImage;
+	PFN_vkCreateFence createFence;
+	PFN_vkWaitForFences waitForFences;
+	PFN_vkResetFences resetFences;
+	PFN_vkDestroyFence destroyFence;
+
+	U64 paddding;
 
 } VkGraphicsDevice;
 

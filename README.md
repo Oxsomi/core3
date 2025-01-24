@@ -1,4 +1,4 @@
-# OxC3 (Oxsomi core 3.2.095)
+# OxC3 (Oxsomi core 3.2.096)
 | Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | x64 dynamic (Vk + Native)                                    | ARM -> Vulkan                                                | ARM -> Native API  | ARM dynamic (Vk + Native)                                    |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------ | ------------------------------------------------------------ |
 | Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **?**                                                        | **D3D12**: **?**   | **?**                                                        |
@@ -71,7 +71,7 @@ One of the useful things about C is that files are incredibly easy to compile an
   - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.
   - For Windows; msys2 or Ninja can be used to target android.
   - *Optional*: JDK for creation of a keystore if one can not be provided.
-  - For running, at least Android 13 (level 33) is required, due to Vulkan 1.3 being at that level.
+  - For running, at least Android 10 (level 29) is required, due to Vulkan 1.3 being at that level.
 
 ## Running requirements
 

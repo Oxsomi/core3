@@ -40,7 +40,13 @@ typedef enum EOptExtensions {
 	EOptExtensions_DeferredHostOperations,
 	EOptExtensions_RaytracingValidation,
 	EOptExtensions_ComputeDeriv,
-	EOptExtensions_Maintenance4
+	EOptExtensions_Maintenance4,
+	EOptExtensions_BufferDeviceAddress,
+	EOptExtensions_Bindless,
+	EOptExtensions_DriverProperties,
+	EOptExtensions_AtomicI64,
+	EOptExtensions_F16,
+	EOptExtensions_MultiDrawIndirectCount
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

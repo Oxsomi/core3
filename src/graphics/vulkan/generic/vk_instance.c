@@ -269,7 +269,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 		.applicationVersion = info.version,
 		.pEngineName = "OxC3",
 		.engineVersion = VK_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH),
-		.apiVersion = VK_MAKE_VERSION(1, 2, 0)
+		.apiVersion = VK_MAKE_VERSION(1, 1, 0)
 	};
 
 	VkInstanceCreateInfo instanceInfo = (VkInstanceCreateInfo) {
@@ -432,8 +432,14 @@ const C8 *optExtensionsName[] = {
 	"VK_EXT_shader_atomic_float",
 	"VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
-	"VK_NV_compute_shader_derivatives",
-	"VK_KHR_maintenance4"
+	"VK_KHR_compute_shader_derivatives",
+	"VK_KHR_maintenance4",
+	"VK_KHR_buffer_device_address",
+	"VK_EXT_descriptor_indexing",
+	"VK_KHR_driver_properties",
+	"VK_KHR_shader_atomic_int64",
+	"VK_KHR_shader_float16_int8",
+	"VK_KHR_draw_indirect_count"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -624,10 +630,18 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
 		)
 
+		getDeviceProperties(
+			optExtensions[EOptExtensions_Bindless],
+			VkPhysicalDeviceDescriptorIndexingProperties,
+			bindlessProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES
+		)
+
 		getDeviceProperties(true, VkPhysicalDeviceIDProperties, id, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES)
 
 		getDeviceProperties(
-			true, VkPhysicalDeviceDriverProperties, driver, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
+			optExtensions[EOptExtensions_DriverProperties], VkPhysicalDeviceDriverProperties, driver,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
 		)
 
 		getDeviceProperties(
@@ -660,7 +674,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		void **featuresNext = &features2.pNext;
 
 		getDeviceFeatures(
-			true,
+			optExtensions[EOptExtensions_Bindless],
 			VkPhysicalDeviceDescriptorIndexingFeatures,
 			descriptorIndexing,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
@@ -671,13 +685,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VkPhysicalDeviceDynamicRenderingFeatures,
 			dynamicRendering,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
-		)
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceTimelineSemaphoreFeatures,
-			semaphore,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
 		)
 
 		getDeviceFeatures(
@@ -703,9 +710,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_ComputeDeriv],
-			VkPhysicalDeviceComputeShaderDerivativesFeaturesNV ,
+			VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR,
 			computeDeriv,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR
 		)
 
 		getDeviceFeatures(
@@ -772,14 +779,14 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 
 		getDeviceFeatures(
-			true,
+			optExtensions[EOptExtensions_F16],
 			VkPhysicalDeviceShaderFloat16Int8Features,
 			float16,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES
 		)
 
 		getDeviceFeatures(
-			true,
+			optExtensions[EOptExtensions_AtomicI64],
 			VkPhysicalDeviceShaderAtomicInt64Features,
 			atomics64,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES
@@ -800,7 +807,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 
 		getDeviceFeatures(
-			true, VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
+			optExtensions[EOptExtensions_BufferDeviceAddress], VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
 		)
 
@@ -982,20 +989,13 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(features.fillModeNonSolid)
 			capabilities.features |= EGraphicsFeatures_Wireframe;
 
-		if(!deviceAddress.bufferDeviceAddress) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", buffer device address is missing!", i);
-			continue;
-		}
+		if(deviceAddress.bufferDeviceAddress)
+			capabilities.featuresExt |= EVkGraphicsFeatures_BufferDeviceAddress;
 
 		if(optExtensions[EOptExtensions_Maintenance4])
 			capabilities.featuresExt |= EVkGraphicsFeatures_Maintenance4;
 
-		//Force enable synchronization and timeline semaphores
-
-		if (!semaphore.timelineSemaphore) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Timeline semaphores unsupported!", i);
-			continue;
-		}
+		//Force enable synchronization
 
 		if (!sync2.synchronization2) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Synchronization 2 unsupported!", i);
@@ -1004,52 +1004,53 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Check if indexing is properly supported
 
-		VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-			.shaderUniformTexelBufferArrayDynamicIndexing = true,
-			.shaderStorageTexelBufferArrayDynamicIndexing = true,
-			.shaderUniformBufferArrayNonUniformIndexing = true,
-			.shaderSampledImageArrayNonUniformIndexing = true,
-			.shaderStorageBufferArrayNonUniformIndexing = true,
-			.shaderStorageImageArrayNonUniformIndexing = true,
-			.shaderUniformTexelBufferArrayNonUniformIndexing = true,
-			.shaderStorageTexelBufferArrayNonUniformIndexing = true,
-			.descriptorBindingSampledImageUpdateAfterBind = true,
-			.descriptorBindingStorageImageUpdateAfterBind = true,
-			.descriptorBindingStorageBufferUpdateAfterBind = true,
-			.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
-			.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
-			.descriptorBindingUpdateUnusedWhilePending = true,
-			.descriptorBindingPartiallyBound = true,
-			.descriptorBindingVariableDescriptorCount = true,
-			.runtimeDescriptorArray = true
-		};
+		if(optExtensions[EOptExtensions_Bindless]) {
 
-		Bool eq = false;
+			VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+				.shaderUniformTexelBufferArrayDynamicIndexing = true,
+				.shaderStorageTexelBufferArrayDynamicIndexing = true,
+				.shaderUniformBufferArrayNonUniformIndexing = true,
+				.shaderSampledImageArrayNonUniformIndexing = true,
+				.shaderStorageBufferArrayNonUniformIndexing = true,
+				.shaderStorageImageArrayNonUniformIndexing = true,
+				.shaderUniformTexelBufferArrayNonUniformIndexing = true,
+				.shaderStorageTexelBufferArrayNonUniformIndexing = true,
+				.descriptorBindingSampledImageUpdateAfterBind = true,
+				.descriptorBindingStorageImageUpdateAfterBind = true,
+				.descriptorBindingStorageBufferUpdateAfterBind = true,
+				.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
+				.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
+				.descriptorBindingUpdateUnusedWhilePending = true,
+				.descriptorBindingPartiallyBound = true,
+				.descriptorBindingVariableDescriptorCount = true,
+				.runtimeDescriptorArray = true
+			};
 
-		for(U32 q = 0; q < 4; ++q) {
+			Bool eq = false;
 
-			target.shaderInputAttachmentArrayNonUniformIndexing = q & 1;
-			target.descriptorBindingUniformBufferUpdateAfterBind = q >> 1;
+			for(U32 q = 0; q < 4; ++q) {
 
-			//We skip shaderInputAttachmentArrayDynamicIndexing as well by not starting there.
+				target.shaderInputAttachmentArrayNonUniformIndexing = q & 1;
+				target.descriptorBindingUniformBufferUpdateAfterBind = q >> 1;
 
-			U64 sz = sizeof(target) - offsetof(
-				VkPhysicalDeviceDescriptorIndexingFeatures, shaderUniformTexelBufferArrayDynamicIndexing
-			);
+				//We skip shaderInputAttachmentArrayDynamicIndexing as well by not starting there.
 
-			eq = Buffer_eq(
-				Buffer_createRefConst(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz),
-				Buffer_createRefConst(&descriptorIndexing.shaderUniformTexelBufferArrayDynamicIndexing, sz)
-			);
+				U64 sz = sizeof(target) - offsetof(
+					VkPhysicalDeviceDescriptorIndexingFeatures, shaderUniformTexelBufferArrayDynamicIndexing
+				);
 
-			if(eq)
-				break;
-		}
+				eq = Buffer_eq(
+					Buffer_createRefConst(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz),
+					Buffer_createRefConst(&descriptorIndexing.shaderUniformTexelBufferArrayDynamicIndexing, sz)
+				);
 
-		if(!eq) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", descriptor indexing isn't properly supported.", i);
-			continue;
+				if(eq)
+					break;
+			}
+
+			if(!eq)
+				optExtensions[EOptExtensions_Bindless] = false;
 		}
 
 		//Direct rendering
@@ -1064,7 +1065,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Multi draw
 
-		if(limits.maxDrawIndirectCount >= GIBI)
+		if(limits.maxDrawIndirectCount >= GIBI && optExtensions[EOptExtensions_MultiDrawIndirectCount])
 			capabilities.features |= EGraphicsFeatures_MultiDrawIndirectCount;
 
 		//Subgroup operations
@@ -1327,6 +1328,20 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		//Hopefully enable bindless
 
 		if(
+			optExtensions[EOptExtensions_Bindless] &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindInputAttachments >= 8 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindSampledImages >= 1000000 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindStorageBuffers >= 1000000 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindStorageImages >= 1000000 &&
+			bindlessProp.maxDescriptorSetUpdateAfterBindUniformBuffers >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindInputAttachments >= 8 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindSampledImages >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 1024 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageBuffers >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageImages >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindUniformBuffers >= 1000000 &&
+			bindlessProp.maxPerStageUpdateAfterBindResources >= 1000000 &&
 			limits.maxPerStageDescriptorSamplers >= 2 * KIBI &&
 			limits.maxPerStageDescriptorUniformBuffers >= 12 &&
 			limits.maxPerStageDescriptorStorageBuffers >= 500 * KIBI &&
@@ -1550,10 +1565,15 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			Buffer_createRefConst(properties.deviceName, sizeof(properties.deviceName))
 		);
 
-		Buffer_memcpy(
-			Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
-			Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
-		);
+		if(optExtensions[EOptExtensions_DriverProperties]) {
+
+			Buffer_memcpy(
+				Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
+				Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
+			);
+
+			info->capabilities.featuresExt |= EVkGraphicsFeatures_DriverProperties;
+		}
 
 		++j;
 	}
