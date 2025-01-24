@@ -112,7 +112,7 @@ class oxc3(ConanFile):
 			self.requires("xdg_shell/2024.10.21")
 			self.requires("xdg_decoration/2024.12.22")
 
-		self.requires("openal_soft/2024.11.04.01")
+		self.requires("openal_soft/2025.01.24")
 
 	def package(self):
 

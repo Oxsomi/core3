@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class openal_soft(ConanFile):
 
 	name = "openal_soft"
-	version = "2024.11.04.01"
+	version = "2025.01.24"
 
 	# Optional metadata
 	license = "BSD-3 License"
