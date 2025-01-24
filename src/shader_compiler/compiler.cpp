@@ -1088,8 +1088,12 @@ Bool Compiler_compile(
 			if ((toCompile.extensions >> i) & 1)
 				lastExtension = i + 1;
 
-		if(toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt)
+		Bool isRt = !!(toCompile.extensions & ESHExtension_RayQuery);
+
+		if(toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt) {
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr))
+			isRt = true;
+		}
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
@@ -1122,7 +1126,11 @@ Bool Compiler_compile(
 
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr))
+
+			if(!isRt)
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr))
+
+			else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1spirv1.4", alloc, e_rr))
 
 			if(
 				toCompile.stageType == ESHPipelineStage_Vertex ||

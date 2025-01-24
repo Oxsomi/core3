@@ -1490,7 +1490,9 @@ Bool Compiler_processSPIRV(
 	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
 	ESHExtension exts = ESHExtension_None;
 	SpvReflectShaderModule spvMod{};
-	spvtools::Optimizer optimizer{ SPV_ENV_UNIVERSAL_1_3 };
+	Bool isRt = toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt;
+	isRt |= !!(toCompile.extensions & ESHExtension_RayQuery);
+	spvtools::Optimizer optimizer{ isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3 };
 
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
@@ -1879,7 +1881,7 @@ Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, 
 	U64 binLen = Buffer_length(buf);
 	const void *resultPtr = buf.ptr;
 
-	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_3 };
+	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_4 };
 	std::string str;
 
 	spv_binary_to_text_options_t opts = (spv_binary_to_text_options_t) (

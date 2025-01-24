@@ -191,10 +191,13 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		gotoIfError(clean, Error_invalidOperation(
 			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
+
+	if(capabilities.minImageCount > 3)
+		swapchain->base.images = 4;
 		
-	if(capabilities.minImageCount > 3 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
+	if(capabilities.minImageCount > 4 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
 		gotoIfError(clean, Error_invalidOperation(
-			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 3 images"
+			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 3 or 4 images"
 		))
 
 	VkFlags anyRotate =

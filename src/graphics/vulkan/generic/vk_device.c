@@ -1115,7 +1115,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Wait for previous frame semaphore
 
-	VkFence *fence = &deviceExt->commitFence[device->submitId % FRAMES_IN_FLIGHT];
+	VkFence *fence = &deviceExt->commitFence[(device->submitId - 1) % FRAMES_IN_FLIGHT];
 
 	if (device->submitId > FRAMES_IN_FLIGHT) {
 
@@ -1123,7 +1123,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			deviceExt->device,
 			1, fence,
 			true,
-			U64_MAX
+			10 * SECOND
 		)))
 
 		gotoIfError(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence)))
@@ -1144,7 +1144,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		gotoIfError(clean, checkVkError(deviceExt->acquireNextImage(
 			deviceExt->device,
 			swapchainExt->swapchain,
-			U64_MAX,
+			10 * SECOND,
 			semaphore,
 			VK_NULL_HANDLE,
 			&currImg
@@ -1450,7 +1450,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
 			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = deviceExt->submitSemaphores.ptr + (device->submitId - 1) % FRAMES_IN_FLIGHT,
+			.pWaitSemaphores = &signalSemaphores,
 			.swapchainCount = (U32) swapchains.length,
 			.pSwapchains = deviceExt->swapchainHandles.ptr,
 			.pImageIndices = deviceExt->swapchainIndices.ptr,
