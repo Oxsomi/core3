@@ -1095,27 +1095,32 @@ void DX_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_StartRegionDebugExt: {
 
 			const F32x4 colf = F32x4_round(F32x4_mul(F32x4_saturate(F32x4_load4((F32*)data)), F32x4_xxxx4(255)));
-			const I32x4 v = I32x4_mul(I32x4_fromF32x4(colf), I32x4_create4(1 << 16, 1 << 8, 1, 0));
+			const I32x4 v = I32x4_mul(I32x4_fromF32x4(colf), I32x4_create4(1 << 16, 1 << 8, 1 << 0, 0));
 
 			const I32x2 reduc2 = I32x2_or(I32x4_xy(v), I32x4_zw(v));
 			const I32 reduc = I32x2_x(reduc2) | I32x2_y(reduc2);
 
 			U64 encoded[62] = { 0 };
-			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x018 : 0x002) << 10;
+			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x008 : 0x002) << 10;
 			encoded[1] = 0xFF000000 | (*(const U32*)&reduc);
+			encoded[2] = ((U64)8 << 55) | ((U64)1 << 54);		//Address alignment = 8 and indicate "ansi"
 
-			const U32 strLen = (U32) CharString_calcStrLen((const C8*)data + sizeof(I32x4), sizeof(encoded) - 16);
-			const U32 len = U32_min((U32) sizeof(encoded), 16 + strLen);
+			const U32 strLen = (U32) CharString_calcStrLen(
+				(const C8*)data + sizeof(F32x4),
+				sizeof(encoded) - sizeof(U64) * 3 - 1
+			);
+
+			const U32 len = (U32) sizeof(U64) * 3 + strLen;
 
 			Buffer_memcpy(
-				Buffer_createRef((C8*)encoded + 16, sizeof(encoded) - 16),
-				Buffer_createRefConst((const C8*)data + sizeof(I32x4), strLen)
+				Buffer_createRef(&encoded[3], sizeof(encoded) - sizeof(U64) * 3),
+				Buffer_createRefConst((const C8*)data + sizeof(F32x4), strLen)
 			);
 
 			if(op == ECommandOp_AddMarkerDebugExt)
-				buffer->lpVtbl->SetMarker(buffer, 2, encoded, len);
+				buffer->lpVtbl->SetMarker(buffer, 2, encoded, (len + 7) &~ 7);
 
-			else buffer->lpVtbl->BeginEvent(buffer, 2, encoded, len);
+			else buffer->lpVtbl->BeginEvent(buffer, 2, encoded, (len + 7) &~ 7);
 
 			break;
 		}

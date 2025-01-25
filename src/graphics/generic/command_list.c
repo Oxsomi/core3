@@ -2203,12 +2203,12 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 	U64 len = sizeof(color) + CharString_length(name) + 1;
 	len = (len + 15) &~ 15;										//Align to 16-byte to not mess up next instruction alignment
 
-	gotoIfError(clean, Buffer_createEmptyBytesx(len, &buf))
+	gotoIfError(clean, Buffer_createUninitializedBytesx(len, &buf))
 
 	Buffer_memcpy(buf, Buffer_createRefConst(&color, sizeof(color)));
 
 	Buffer_memcpy(
-		Buffer_createRef((U8*)buf.ptrNonConst + sizeof(color), CharString_length(name)),
+		Buffer_createRef(buf.ptrNonConst + sizeof(color), CharString_length(name)),
 		CharString_bufferConst(name)
 	);
 
