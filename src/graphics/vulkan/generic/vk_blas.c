@@ -232,7 +232,7 @@ Error VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	BLAS *blas = BLASRef_ptr(pending);
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	Error err = Error_none();
 

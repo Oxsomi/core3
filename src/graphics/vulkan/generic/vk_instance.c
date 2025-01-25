@@ -437,7 +437,7 @@ const C8 *optExtensionsName[] = {
 	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
 		"VK_KHR_compute_shader_derivatives",
 	#else
-		"VK_NV_compute_shader_derivatives"
+		"VK_NV_compute_shader_derivatives",
 	#endif
 
 	"VK_KHR_maintenance4",

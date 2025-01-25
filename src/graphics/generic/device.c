@@ -58,7 +58,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	if(!device)
 		return true;
 
-	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
 		for(U64 j = 0; j < device->resourcesInFlight[i].length; ++j)
 			RefPtr_dec(device->resourcesInFlight[i].ptrNonConst + j);
@@ -66,7 +66,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		ListRefPtr_freex(&device->resourcesInFlight[i]);
 	}
 
-	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	for(U64 i = 0; i < device->framesInFlight; ++i)
 		DeviceBufferRef_dec(&device->frameData[i]);
 
 	DeviceBufferRef_dec(&device->staging);
@@ -153,6 +153,7 @@ Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
 	EGraphicsDeviceFlags flags,
+	EGraphicsBufferingMode bufferMode,
 	GraphicsDeviceRef **deviceRef
 ) {
 
@@ -188,8 +189,12 @@ Error GraphicsDeviceRef_create(
 
 	gotoIfError(clean, ListWeakRefPtr_reservex(&device->pendingResources, 128))
 
+	if (bufferMode < 2 || bufferMode > 3)
+		bufferMode = _PLATFORM_TYPE == PLATFORM_ANDROID ? EGraphicsBufferingMode_Double : EGraphicsBufferingMode_Triple;
+
 	device->info = *info;
 	device->flags = flags;
+	device->framesInFlight = (U8) bufferMode;
 
 	if(device->flags & EGraphicsDeviceFlags_DisableRt)
 		device->info.capabilities.features &=~ (
@@ -220,7 +225,7 @@ Error GraphicsDeviceRef_create(
 
 	//Create in flight resource refs
 
-	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i)
+	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64))
 
 	//Create descriptor type free list
@@ -258,7 +263,7 @@ Error GraphicsDeviceRef_create(
 
 	//Allocate UBO
 
-	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 			*deviceRef,
 			EDeviceBufferUsage_None,
@@ -436,7 +441,7 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 	//This might cause resource deletions because we might be the last one releasing them.
 	//For example temporary staging resources are released this way.
 
-	ListRefPtr *inFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *inFlight = &device->resourcesInFlight[device->fifId];
 
 	for (U64 i = 0; i < inFlight->length; ++i)
 		RefPtr_dec(inFlight->ptrNonConst + i);
@@ -446,7 +451,7 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 
 	//Release all allocations of buffer that was in flight
 
-	if(!AllocationBuffer_freeAll(&device->stagingAllocations[(device->submitId - 1) % 3]))
+	if(!AllocationBuffer_freeAll(&device->stagingAllocations[device->fifId]))
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_handleNextFrame() AllocationBuffer_freeAll failed"))
 
 	//Update buffer data
@@ -701,6 +706,7 @@ Error GraphicsDeviceRef_submitCommands(
 	//We start counting from 1, since implementation might set fence to 0 as init.
 	//We don't want a possible deadlock there.
 
+	device->fifId = device->submitId % device->framesInFlight;
 	++device->submitId;
 
 	//Set app data
@@ -728,7 +734,7 @@ Error GraphicsDeviceRef_submitCommands(
 
 	//Add resources from command lists to resources in flight
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	for (U64 j = 0; j < commandLists.length; ++j) {
 

@@ -207,7 +207,7 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	TLAS *tlas = TLASRef_ptr(pending);
 	DxTLAS *tlasExt = TLAS_ext(tlas, Dx);

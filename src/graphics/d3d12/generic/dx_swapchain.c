@@ -22,12 +22,15 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
+#include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_swapchain.h"
 #include "graphics/d3d12/dx_device.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "types/container/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
+
+UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
 Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
 
@@ -120,6 +123,9 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	else {
 
 		for(U8 i = 0; i < swapchain->base.images; ++i) {
+
+			UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchainRef, NULL);
+			unifiedTexture->currentImageId = 0;
 
 			DxUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Dx, 0, i);
 			managedImage->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;

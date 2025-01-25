@@ -214,9 +214,13 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 
 		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
 
-		ListU32 allocations = (ListU32) { 0 };
-		ListU32_createRefConst((const U32*)img, texture->images * 2, &allocations);
-		GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
+		//Can't batch this anymore, we have U64 padding in between now, for alignment purposes
+
+		for(U8 i = 0; i < texture->images; ++i) {
+			ListU32 allocations = (ListU32) { 0 };
+			ListU32_createRefConst((const U32*)&img[i], 2, &allocations);
+			GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
+		}
 
 		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(&device->descriptorLock);

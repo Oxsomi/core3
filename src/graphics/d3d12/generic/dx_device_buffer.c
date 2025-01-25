@@ -274,7 +274,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 	Error err = Error_none();
 
 	Bool isInFlight = false;
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	gotoIfError(clean, ListD3D12_BUFFER_BARRIER_reservex(&deviceExt->bufferTransitions, 2))
@@ -408,7 +408,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 		else {
 
-			AllocationBuffer *stagingBuffer = &device->stagingAllocations[(device->submitId - 1) % 3];
+			AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->fifId];
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 			DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 

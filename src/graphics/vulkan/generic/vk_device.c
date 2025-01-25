@@ -320,6 +320,8 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
+	deviceExt->framesInFlight = device->framesInFlight;		//Copy so it's known at delete
+
 	ListConstC8 extensions = (ListConstC8) { 0 };
 	ListVkDeviceQueueCreateInfo queues = (ListVkDeviceQueueCreateInfo) { 0 };
 	ListVkQueueFamilyProperties queueFamilies = (ListVkQueueFamilyProperties) { 0 };
@@ -695,13 +697,13 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
 	U64 threads = Platform_getThreads();
-	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, MAX_FRAMES_IN_FLIGHT * threads * resolvedId))
+	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, device->framesInFlight * threads * resolvedId))
 
 	//Semaphores
 
-	gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, MAX_FRAMES_IN_FLIGHT))
+	gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, device->framesInFlight))
 
-	for (U64 k = 0; k < MAX_FRAMES_IN_FLIGHT; ++k) {
+	for (U64 k = 0; k < device->framesInFlight; ++k) {
 
 		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		VkSemaphore *semaphore = deviceExt->submitSemaphores.ptrNonConst + k;
@@ -729,7 +731,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	VkFenceCreateInfo fenceInfo = (VkFenceCreateInfo) { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 
-	for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, checkVkError(deviceExt->createFence(deviceExt->device, &fenceInfo, NULL, &deviceExt->commitFence[i])))
 
 	deviceExt->resolvedQueues = resolvedId;
@@ -963,7 +965,7 @@ void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 	VkDescriptorBufferInfo uboBufferInfo[MAX_FRAMES_IN_FLIGHT];
 	VkWriteDescriptorSet uboDescriptor[MAX_FRAMES_IN_FLIGHT];
 
-	for(U64 i = 0; i < FRAMES_IN_FLIGHT; ++i) {
+	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
 		uboBufferInfo[i] = (VkDescriptorBufferInfo) {
 			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[i]), Vk)->buffer,
@@ -981,7 +983,7 @@ void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 		};
 	}
 
-	deviceExt->updateDescriptorSets(deviceExt->device, FRAMES_IN_FLIGHT, uboDescriptor, 0, NULL);
+	deviceExt->updateDescriptorSets(deviceExt->device, device->framesInFlight, uboDescriptor, 0, NULL);
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
@@ -1013,7 +1015,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 				deviceExt->destroySemaphore(deviceExt->device, semaphore, NULL);
 		}
 
-		for(U64 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+		for(U64 i = 0; i < deviceExt->framesInFlight; ++i)
 			if(deviceExt->commitFence[i])
 				deviceExt->destroyFence(deviceExt->device, deviceExt->commitFence[i], NULL);
 
@@ -1063,12 +1065,21 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef) {
 }
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
-	VkGraphicsDevice *device, U32 resolvedQueueId, U64 threadId, U8 frameInFlightId
+	VkGraphicsDevice *device,
+	U32 resolvedQueueId,
+	U64 threadId,
+	U8 frameInFlightId,
+	U8 fifCount
 ) {
 
 	const U64 threadCount = Platform_getThreads();
 
-	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || frameInFlightId >= MAX_FRAMES_IN_FLIGHT)
+	if(
+		!device ||
+		resolvedQueueId >= device->resolvedQueues ||
+		threadId >= threadCount ||
+		frameInFlightId >= fifCount
+	)
 		return NULL;
 
 	const U64 id = resolvedQueueId + (frameInFlightId * threadCount + threadId) * device->resolvedQueues;
@@ -1115,9 +1126,9 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Wait for previous frame semaphore
 
-	VkFence *fence = &deviceExt->commitFence[(device->submitId - 1) % FRAMES_IN_FLIGHT];
+	VkFence *fence = &deviceExt->commitFence[device->fifId];
 
-	if (device->submitId > FRAMES_IN_FLIGHT) {
+	if (device->submitId > device->framesInFlight) {
 
 		gotoIfError(clean, checkVkError(deviceExt->waitForFences(
 			deviceExt->device,
@@ -1136,7 +1147,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
 		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains.ptr[i]);
 
-		VkSemaphore semaphore = swapchainExt->semaphores.ptr[(device->submitId - 1) % FRAMES_IN_FLIGHT];
+		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->fifId];
 
 		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
 		U32 currImg = 0;
@@ -1168,7 +1179,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Prepare per frame cbuffer
 
 	{
-		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % FRAMES_IN_FLIGHT]);
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 
 		for (U32 i = 0; i < swapchains.length; ++i) {
 
@@ -1208,14 +1219,14 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	U32 graphicsQueueId = queue.queueId;
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % FRAMES_IN_FLIGHT];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	if (commandLists.length) {
 
 		U32 threadId = 0;
 
 		VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
-			deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % FRAMES_IN_FLIGHT)
+			deviceExt, queue.resolvedQueueId, threadId, device->fifId, device->framesInFlight
 		);
 
 		if(!allocator)
@@ -1247,7 +1258,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					(device->submitId - 1) % FRAMES_IN_FLIGHT
+					device->fifId
 				))
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
@@ -1289,7 +1300,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					(device->submitId - 1) % FRAMES_IN_FLIGHT
+					device->fifId
 				))
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
@@ -1324,7 +1335,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
-		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % FRAMES_IN_FLIGHT]), Vk);
+		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[device->fifId]), Vk);
 
 		gotoIfError(clean, VkDeviceBuffer_transition(
 			uboExt,
@@ -1350,7 +1361,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
 			sets[i] =
 				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-				deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % FRAMES_IN_FLIGHT)];
+				deviceExt->sets[EDescriptorSetType_CBuffer0 + device->fifId];
 
 		U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
@@ -1428,7 +1439,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Submit queue
 	//TODO: Multiple queues
 
-	VkSemaphore signalSemaphores = deviceExt->submitSemaphores.ptr[(device->submitId - 1) % FRAMES_IN_FLIGHT];
+	VkSemaphore signalSemaphores = deviceExt->submitSemaphores.ptr[device->fifId];
 
 	VkSubmitInfo submitInfo = (VkSubmitInfo) {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1497,7 +1508,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	gotoIfError(clean, checkVkError(deviceExt->queueSubmit(
 		queue.queue,
 		1, &submitInfo,
-		deviceExt->commitFence[(device->submitId - 1) % FRAMES_IN_FLIGHT]
+		deviceExt->commitFence[device->fifId]
 	)))
 
 	//Wait for the device
@@ -1509,7 +1520,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	const U32 threadId = 0;
 
 	const VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
-		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % FRAMES_IN_FLIGHT)
+		deviceExt, queue.resolvedQueueId, threadId, device->fifId, device->framesInFlight
 	);
 
 	gotoIfError(clean, checkVkError(deviceExt->resetCommandPool(
@@ -1531,7 +1542,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 	for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
 		sets[i] =
 			i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-			deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % FRAMES_IN_FLIGHT)];
+			deviceExt->sets[EDescriptorSetType_CBuffer0 + device->fifId];
 
 	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 

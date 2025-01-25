@@ -328,10 +328,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	//Only recreate semaphores once.
 	//These semaphores are linked to the FIF (frames in flight), not to the swapchain images
 
-	if(swapchainExt->semaphores.length != MAX_FRAMES_IN_FLIGHT) {
+	if(swapchainExt->semaphores.length != device->framesInFlight) {
 
 		ListVkSemaphore_freex(&swapchainExt->semaphores);
-		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, MAX_FRAMES_IN_FLIGHT))
+		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, device->framesInFlight))
 		
 		for (U8 i = 0; i < imageCount; ++i) {
 

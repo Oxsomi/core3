@@ -708,12 +708,12 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	++deviceExt->fenceId;
 
-	if (deviceExt->fenceId > 3) {
+	if (deviceExt->fenceId > device->framesInFlight) {
 
 		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-			deviceExt->commitSemaphore, deviceExt->fenceId - 3, eventHandle
+			deviceExt->commitSemaphore, deviceExt->fenceId - device->framesInFlight, eventHandle
 		)))
 
 		WaitForSingleObject(eventHandle, INFINITE);
@@ -721,17 +721,9 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		eventHandle = NULL;
 	}
 
-	//Acquire swapchain images in D3D12 is just a simple sequential id.
-	//No mailbox, so no problem.
-
-	for(U64 i = 0; i < swapchains.length; ++i) {
-		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
-		unifiedTexture->currentImageId = (device->submitId - 1) % 3;
-	}
-
 	//Prepare per frame cbuffer
 
-	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[(device->submitId - 1) % 3]);
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 
 	for (U32 i = 0; i < swapchains.length; ++i) {
 
@@ -754,14 +746,14 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	if (commandLists.length) {
 
 		U32 threadId = 0;
 
 		DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
-			deviceExt, queue.resolvedQueueId, threadId, (device->submitId - 1) % 3
+			deviceExt, queue.resolvedQueueId, threadId, device->fifId
 		);
 
 		if(!allocator)
@@ -792,7 +784,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					(device->submitId - 1) % 3
+					device->fifId
 				))
 
 				gotoIfError(clean, CharString_toUTF16x(temp, &temp16))
@@ -828,7 +820,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					(device->submitId - 1) % 3
+					device->fifId
 				))
 
 				gotoIfError(clean, CharString_toUTF16x(temp, &temp16))
@@ -979,6 +971,10 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			allowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0,
 			&regions
 		)))
+
+		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
+		++unifiedTexture->currentImageId;
+		unifiedTexture->currentImageId %= 3; //Always triple buffering, %3
 	}
 
 	//Fence value after present
@@ -1057,7 +1053,7 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState 
 	const U32 threadId = 0;
 
 	const DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
-		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
+		deviceExt, queue.resolvedQueueId, threadId, (U8) device->fifId
 	);
 
 	gotoIfError(clean, dxCheck(commandBuffer->buffer->lpVtbl->Reset(commandBuffer->buffer, allocator->pool, NULL)))

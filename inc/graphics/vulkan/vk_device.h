@@ -211,7 +211,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkResetFences resetFences;
 	PFN_vkDestroyFence destroyFence;
 
-	U64 paddding;
+	U8 padding[7], framesInFlight;
 
 } VkGraphicsDevice;
 
@@ -240,7 +240,8 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device,
 	U32 resolvedQueueId,
 	U64 threadId,
-	U8 frameInFlightId
+	U8 frameInFlightId,
+	U8 fifCount
 );
 
 Error VkDeviceMemoryAllocator_findMemory(

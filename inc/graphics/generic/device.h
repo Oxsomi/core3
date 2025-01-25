@@ -68,9 +68,14 @@ typedef enum EGraphicsDeviceFlags {
 	EGraphicsDeviceFlags_DisableDebug	= 1 << 3	//Force disable debugging even on debug mode. NDEBUG is leading otherwise
 } EGraphicsDeviceFlags;
 
+typedef enum EGraphicsBufferingMode {
+	EGraphicsBufferingMode_Default,		//Defaults to device preferred; e.g. 2 on mobile, 3 on desktop
+	EGraphicsBufferingMode_Default2,
+	EGraphicsBufferingMode_Double,		//2 frames in flight (less latency, less memory usage)
+	EGraphicsBufferingMode_Triple		//3 frames in flight (more latency, but more performant)
+} EGraphicsBufferingMode;
 
-#define FRAMES_IN_FLIGHT 3			//Keep this between [2, MAX_FRAMES_IN_FLIGHT]
-#define MAX_FRAMES_IN_FLIGHT 3		//Keep this at 2 or 3
+#define MAX_FRAMES_IN_FLIGHT 3			//Don't touch
 
 typedef struct GraphicsDevice {
 
@@ -81,7 +86,9 @@ typedef struct GraphicsDevice {
 	U64 submitId;
 
 	EGraphicsDeviceFlags flags;
-	U32 pad0;
+	U16 pad0;
+	U8 framesInFlight;
+	U8 fifId;				//(submitId - 1) % FRAMES_IN_FLIGHT
 
 	Ns lastSubmit;
 
@@ -140,6 +147,7 @@ Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
 	EGraphicsDeviceFlags flags,
+	EGraphicsBufferingMode bufferingMode,
 	GraphicsDeviceRef **device
 );
 

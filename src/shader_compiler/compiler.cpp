@@ -1111,17 +1111,6 @@ Bool Compiler_compile(
 		if(toCompile.extensions & ESHExtension_16BitTypes)
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr))
 
-		if(
-			settings.outputType == ESHBinaryType_SPIRV &&
-			(toCompile.extensions & ESHExtension_F64) &&
-			!(toCompile.extensions & ESHExtension_I64)
-		)
-			retError(clean, Error_invalidState(
-				0,
-				"Compiler_compile() a bug is present in DXC->SPIRV where "
-				"F64 might also secretly emit I64 instructions, please enable it explicitly"
-			))
-
 		if (settings.outputType == ESHBinaryType_SPIRV) {
 
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
