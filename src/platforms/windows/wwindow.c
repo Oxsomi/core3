@@ -23,6 +23,7 @@
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
