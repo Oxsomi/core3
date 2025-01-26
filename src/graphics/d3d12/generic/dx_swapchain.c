@@ -140,8 +140,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
 			swapchainExt->swapchain,
-			3,
-			0, 0, DXGI_FORMAT_UNKNOWN,		//Update to current w/h and keep format
+			3, 0, 0, DXGI_FORMAT_UNKNOWN,
 			flags
 		)))
 	}

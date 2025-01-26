@@ -79,9 +79,9 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetPhysicalDeviceMemoryProperties getPhysicalDeviceMemoryProperties;
 
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
-	PFN_vkCmdDebugMarkerBeginEXT cmdDebugMarkerBegin;
-	PFN_vkCmdDebugMarkerEndEXT cmdDebugMarkerEnd;
-	PFN_vkCmdDebugMarkerInsertEXT cmdDebugMarkerInsert;
+	PFN_vkCmdBeginDebugUtilsLabelEXT cmdDebugMarkerBegin;
+	PFN_vkCmdEndDebugUtilsLabelEXT cmdDebugMarkerEnd;
+	PFN_vkCmdInsertDebugUtilsLabelEXT cmdDebugMarkerInsert;
 	
 	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
 	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities;

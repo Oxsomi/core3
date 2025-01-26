@@ -976,9 +976,9 @@ void VK_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_AddMarkerDebugExt:
 		case ECommandOp_StartRegionDebugExt: {
 
-			VkDebugMarkerMarkerInfoEXT markerInfo = (VkDebugMarkerMarkerInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT,
-				.pMarkerName = (const char*) data + sizeof(F32x4),
+			VkDebugUtilsLabelEXT markerInfo = (VkDebugUtilsLabelEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+				.pLabelName = (const char*) data + sizeof(F32x4),
 			};
 
 			Buffer_memcpy(

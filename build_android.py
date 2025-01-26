@@ -53,7 +53,7 @@ def makeProfile(conanHome, llvmRootDir, arch, level, generator):
 	with open(outputPath, "w") as output:
 		output.write(profile)
 
-def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstall, enableShaderCompiler):
+def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, generatorValidationLayer, simd, doInstall, enableShaderCompiler):
 
 	profile = "android_" + arch + "_" + level + "_" + generator.replace(" ", "_")
 
@@ -74,6 +74,15 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, simd, doInstal
 		subprocess.check_output("conan create packages/nvapi -s build_type=" + mode + " --profile=" + profile + " --build=missing")
 		subprocess.check_output("conan create packages/spirv_reflect -s build_type=" + mode + " --profile=" + profile + " --build=missing")
 		subprocess.check_output("conan create packages/dxc -s build_type=" + mode + " --profile=" + profile + " --build=missing")
+
+	if mode == "Debug":
+
+		profile2 = "android_" + arch + "_" + level + "_" + generatorValidationLayer.replace(" ", "_")
+		
+		if not os.path.isfile(conanHome + "/profiles/" + profile2):
+			makeProfile(conanHome, llvmRootDir, arch, level, generatorValidationLayer)
+			
+		subprocess.check_output("conan create packages/vulkan_validation_layers -s build_type=" + mode + " --profile=" + profile2 + " --build=missing")
 
 	outputFolder = "\"build/" + mode + "/android/" + archName + "\""
 	subprocess.check_output("conan build . -of " + outputFolder + " -o cliGraphics=False -o enableOxC3CLI=False -o forceFloatFallback=False -o enableTests=False -o dynamicLinkingGraphics=False -o enableShaderCompiler=False -s build_type=" + mode + " -o enableSIMD=" + str(simd) + " --profile=" + profile + " --build=missing")
@@ -130,6 +139,10 @@ def main():
 
 	if args.generator == None:
 		args.generator = "MinGW Makefiles" if os.name == "nt" else "Unix Makefiles"
+		generatorValidationLayer = "Ninja" if os.name == "nt" else "Unix Makefiles"
+
+	else:
+		generatorValidationLayer = args.generator
 
 	# Grab conan home to prepare the profiles for build
 
@@ -150,10 +163,10 @@ def main():
 	if not args.skip_build:
 			
 		if args.arch == "all" or args.arch == "x64":
-			doBuild(args.mode, conanHome, rootDir, "x86_64", str(args.api), args.generator, args.simd, args.install, args.shader_compiler)
+			doBuild(args.mode, conanHome, rootDir, "x86_64", str(args.api), args.generator, generatorValidationLayer, args.simd, args.install, args.shader_compiler)
 
 		if args.arch == "all" or args.arch == "arm64":
-			doBuild(args.mode, conanHome, rootDir, "armv8", str(args.api), args.generator, args.simd, args.install, args.shader_compiler)
+			doBuild(args.mode, conanHome, rootDir, "armv8", str(args.api), args.generator, generatorValidationLayer, args.simd, args.install, args.shader_compiler)
 
 	# Make APK
 

@@ -335,9 +335,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	if (supportsDebug[1]) {
 		getVkFunction(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName)
-		getVkFunction(clean, vkCmdDebugMarkerBeginEXT, instanceExt->cmdDebugMarkerBegin)
-		getVkFunction(clean, vkCmdDebugMarkerEndEXT, instanceExt->cmdDebugMarkerEnd)
-		getVkFunction(clean, vkCmdDebugMarkerInsertEXT, instanceExt->cmdDebugMarkerInsert)
+		getVkFunction(clean, vkCmdBeginDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerBegin)
+		getVkFunction(clean, vkCmdEndDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerEnd)
+		getVkFunction(clean, vkCmdInsertDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerInsert)
 	}
 
 	getVkFunction(clean, vkEnumeratePhysicalDevices, instanceExt->enumeratePhysicalDevices)

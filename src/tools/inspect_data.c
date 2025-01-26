@@ -744,20 +744,25 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 						#ifdef CLI_SHADER_COMPILER
 
-							gotoIfError3(cleanSh, Compiler_createx(&comp, e_rr))
+							if(!(args.parameters & EOperationHasParameter_Output)) {
 
-							if (!Compiler_createDisassemblyx(comp, binaryType, binary, &tmp, e_rr)) {
-								Log_errorLnx("%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
+								gotoIfError3(cleanSh, Compiler_createx(&comp, e_rr))
+
+								if (!Compiler_createDisassemblyx(comp, binaryType, binary, &tmp, e_rr)) {
+									Log_errorLnx("%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
+									goto cleanSh;
+								}
+
+								if(!CLI_showFile(args, CharString_bufferConst(tmp), start, length, true, true))
+									goto cleanSh;
+
 								goto cleanSh;
 							}
 
-							if(!CLI_showFile(args, CharString_bufferConst(tmp), start, length, true, true))
-								goto cleanSh;
-
-						#else
-							if(!CLI_showFile(args, binary, start, length, false, false))
-								goto cleanSh;
 						#endif
+						
+						if(!CLI_showFile(args, binary, start, length, false, false))
+							goto cleanSh;
 					}
 
 					else SHBinaryInfo_printx(file.binaries.ptr[entryI]);

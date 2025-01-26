@@ -112,6 +112,10 @@ class oxc3(ConanFile):
 			self.requires("xdg_shell/2024.10.21")
 			self.requires("xdg_decoration/2024.12.22")
 
+		# We need to manually build Vulkan layers
+		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
+			self.requires("vulkan_validation_layers/2025.01.25")
+
 		self.requires("openal_soft/2025.01.24")
 
 	def package(self):
