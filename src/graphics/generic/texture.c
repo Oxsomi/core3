@@ -25,6 +25,7 @@
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/resource.h"
+#include "platforms/log.h"
 #include "types/container/texture_format.h"
 #include "types/container/string.h"
 
@@ -207,6 +208,8 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 	GraphicsDeviceRef *deviceRef = texture->resource.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//Log_debugLnx("Destroy: Texture (%p)", texture);
 
 	const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
@@ -398,6 +401,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 		acq = ELockAcquire_Invalid;
 	}
 
+	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
 	gotoIfError(clean, UnifiedTexture_createExt(ref, name))
 
 clean:

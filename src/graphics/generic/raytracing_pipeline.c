@@ -26,6 +26,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "types/math/math.h"
 #include "formats/oiSH/sh_file.h"
 
@@ -303,6 +304,8 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	Pipeline *pipeline = PipelineRef_ptr(*pipelineRef);
 
 	GraphicsDeviceRef_inc(deviceRef);
+
+	//Log_debugLnx("Create: RaytracingPipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipeline);
 
 	*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_RaytracingExt };
 

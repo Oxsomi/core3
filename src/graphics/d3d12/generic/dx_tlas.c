@@ -243,20 +243,24 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	//And losing the reference from our object
 	//We do the same thing on the tempInstances, since it's CPU mem only
 
-	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL))
+	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL)) {
+
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
 
-	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+			RefPtr_inc(tlas->base.tempScratchBuffer);
 
-	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate)) {
-		tlas->base.tempScratchBuffer = NULL;
-		tlas->tempInstanceBuffer = NULL;
+		else tlas->base.tempScratchBuffer = NULL;
 	}
 
-	else {
-		RefPtr_inc(tlas->base.tempScratchBuffer);
-		RefPtr_inc(tlas->tempInstanceBuffer);
+	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL)) {
+
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+			RefPtr_inc(tlas->tempInstanceBuffer);
+
+		else tlas->tempInstanceBuffer = NULL;
 	}
 
 	tlas->base.isCompleted = true;

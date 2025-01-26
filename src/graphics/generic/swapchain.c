@@ -183,12 +183,10 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;		//Priority is to be low latency
 			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
 			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Fifo;
-			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_FifoRelaxed;
 		#else
 			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;			//Priority is to conserve power
-			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
-			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Mailbox;
-			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_Immediate;
+			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_Mailbox;
+			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Immediate;
 		#endif
 	}
 

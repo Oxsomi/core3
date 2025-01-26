@@ -23,6 +23,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "types/container/buffer.h"
@@ -187,6 +188,7 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 	SpinLock_lock(&tlas->base.lock, U64_MAX);
 
 	Bool success = TLAS_freeExt(tlas);
+	//Log_debugLnx("Destroy: %s (%p)", tlas->base.name.ptr, tlas);
 	success &= CharString_freex(&tlas->base.name);
 
 	success &= !DeviceBufferRef_dec(&tlas->base.asBuffer).genericError;
@@ -435,6 +437,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	tlasPtr->base.device = dev;
 
 	gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name))
+	//Log_debugLnx("Create: %s", tlasPtr->base.name.ptr);
 
 	//Reserve TLAS in array
 

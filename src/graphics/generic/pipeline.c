@@ -27,6 +27,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
+#include "platforms/log.h"
 #include "formats/oiSH/sh_file.h"
 
 const C8 *EPipelineStage_names[] = {
@@ -67,6 +68,8 @@ Error PipelineRef_inc(PipelineRef *pipeline) {
 Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 
 	Pipeline_freeExt(pipeline, alloc);
+
+	//Log_debugLnx("Destroy: %p", pipeline);
 
 	if (pipeline->type == EPipelineType_RaytracingExt) {
 		PipelineRaytracingInfo *info = Pipeline_info(pipeline, PipelineRaytracingInfo);

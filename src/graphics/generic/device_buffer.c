@@ -23,6 +23,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
 
@@ -174,6 +175,8 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
 	SpinLock_lock(&buffer->lock, U64_MAX);
+		
+	//Log_debugLnx("Destroy: DeviceBuffer (%p)", buffer);
 
 	if (buffer->resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
@@ -239,6 +242,8 @@ Error GraphicsDeviceRef_createBufferIntern(
 		gotoIfError(clean, Error_invalidState(
 			2, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
 		))
+		
+	//Log_debugLnx("Create: DeviceBuffer %.*s (%p)", (int) CharString_length(name), name.ptr, DeviceBufferRef_ptr(*ref));
 
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
 		gotoIfError(clean, GraphicsDeviceRef_inc(dev))

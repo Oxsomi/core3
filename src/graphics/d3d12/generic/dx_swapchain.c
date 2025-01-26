@@ -48,34 +48,14 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	const Window *window = info->window;
 
-	Bool containsValid = false;
-	Bool isFifo = false;
-
-	for(U32 i = 0; i < sizeof(info->presentModePriorities); ++i)
-
-		if(info->presentModePriorities[i] == ESwapchainPresentMode_Fifo) {
-			isFifo = true;
-			containsValid = true;
-			break;
-		}
-
-		else if(info->presentModePriorities[i] == ESwapchainPresentMode_Immediate) {
-			isFifo = false;
-			containsValid = true;
-			break;
-		}
-
-	if(!containsValid)
-		gotoIfError(clean, Error_unsupportedOperation(
-			0, "D3D12GraphicsDeviceRef_createSwapchain() only fifo and immediate are supported in D3D12"
-		))
+	ESwapchainPresentMode mode = info->presentModePriorities[0];
 
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
 		gotoIfError(clean, Error_unsupportedOperation(
 			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"
 		))
 
-	DXGI_SWAP_CHAIN_FLAG flags = !isFifo ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+	DXGI_SWAP_CHAIN_FLAG flags = mode == ESwapchainPresentMode_Immediate ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
 	if(!swapchainExt->swapchain) {
 
@@ -101,7 +81,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			.BufferUsage = usage,
 			.BufferCount = 3,
 			.Scaling = DXGI_SCALING_NONE,
-			.SwapEffect = isFifo ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_FLIP_DISCARD,
+			.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
 			.AlphaMode = DXGI_ALPHA_MODE_IGNORE,
 			.Flags = flags
 		};
@@ -117,7 +97,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		)))
 
 		swapchain->requiresManualComposite = false;
-		swapchain->presentMode = isFifo ? ESwapchainPresentMode_Fifo : ESwapchainPresentMode_Immediate;
+		swapchain->presentMode = mode;
 	}
 
 	else {

@@ -25,6 +25,7 @@
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "formats/oiSH/sh_file.h"
 
 Bool GraphicsDeviceRef_createPipelineCompute(
@@ -86,6 +87,8 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	))
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);
+
+	//Log_debugLnx("Create: ComputePipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipelinePtr);
 
 	GraphicsDeviceRef_inc(deviceRef);
 

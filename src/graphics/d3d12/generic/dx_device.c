@@ -961,14 +961,12 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
 		DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains.ptr[i]);
 
-		Bool allowTearing = swapchain->presentMode == ESwapchainPresentMode_Immediate;
-
 		DXGI_PRESENT_PARAMETERS regions = (DXGI_PRESENT_PARAMETERS) { 0 };
 
 		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->Present1(
 			swapchainExt->swapchain,
-			allowTearing ? 0 : 1,
-			allowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0,
+			swapchain->presentMode == ESwapchainPresentMode_Fifo ? 1 : 0,
+			swapchain->presentMode == ESwapchainPresentMode_Immediate ? DXGI_PRESENT_ALLOW_TEARING : 0,
 			&regions
 		)))
 
@@ -1025,19 +1023,6 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState 
 	gotoIfError(clean, dxCheck(commandBuffer->buffer->lpVtbl->Close(commandBuffer->buffer)))
 
 	//Submit only the copy command list
-
-	if(deviceExt->fenceId) {		//Ensure GPU is complete, so we don't override anything
-
-		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
-
-		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-			deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
-		)))
-
-		WaitForSingleObject(eventHandle, INFINITE);
-		CloseHandle(eventHandle);
-		eventHandle = NULL;
-	}
 
 	++deviceExt->fenceId;
 	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];

@@ -420,6 +420,8 @@ void Platform_cleanup() {
 
 	Allocator_reportLeaks();
 
+	Log_debugLnx("Safe exit");
+
 	ListDebugAllocation_free(&Allocator_allocations, Allocator_allocationsAllocator);
 
 	Platform_cleanupExt();

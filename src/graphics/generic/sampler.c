@@ -25,6 +25,7 @@
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "types/container/string.h"
 
 Error SamplerRef_dec(SamplerRef **sampler) {
@@ -40,6 +41,8 @@ Error SamplerRef_inc(SamplerRef *sampler) {
 Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 
 	(void)allocator;
+
+	//Log_debugLnx("Destroy: %p", sampler);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
 
@@ -124,6 +127,8 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
+
+	//Log_debugLnx("Create: Sampler %.*s (%p)", (int) CharString_length(name), name.ptr, samp);
 
 	*samp = (Sampler) { .device = dev, .info = info };
 

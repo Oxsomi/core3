@@ -2280,6 +2280,8 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	SpinLock_lock(&cmd->lock, U64_MAX);
 
+	//Log_debugLnx("Destroy: CommandList %p", cmd);
+
 	for (U64 i = 0; i < cmd->resources.length; ++i)
 		RefPtr_dec(cmd->resources.ptrNonConst + i);
 
@@ -2324,7 +2326,8 @@ Error GraphicsDeviceRef_createCommandList(
 	gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32))
-
+	
+	//Log_debugLnx("Create: CommandList %p", commandList);
 	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;
 	commandList->allowResize = allowResize;

@@ -789,7 +789,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 
 	gotoIfError(clean, GraphicsDeviceRef_waitExt(deviceRef))
 
-	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
+	for (U64 i = 0; i < device->framesInFlight; ++i) {
 
 		//Release resources that were in flight.
 		//This might cause resource deletions because we might be the last one releasing them.
