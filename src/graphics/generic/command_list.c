@@ -527,6 +527,7 @@ Error CommandListRef_transitionImage(
 			);
 
 		switch (type) {
+
 			case ETransitionType_Clear:
 			case ETransitionType_CopyWrite:
 			case ETransitionType_ShaderWrite:
@@ -536,6 +537,9 @@ Error CommandListRef_transitionImage(
 					"CommandListRef_transitionImage()::image was used as writable target in the same scope, "
 					"this is a write hazard and needs a separate scope to handle synchronization properly."
 				);
+
+			default:
+				break;
 		}
 
 		//To combine shader transitions we just take the highest up shader stage it's used
@@ -671,7 +675,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 			1, clearImages.length, U32_MAX, "CommandListRef_clearImages()::clearImages.length > U32_MAX"
 		))
 
-	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+	GraphicsDeviceRef *device = commandList->device;
 
 	for(U64 i = 0; i < clearImages.length; ++i) {
 
