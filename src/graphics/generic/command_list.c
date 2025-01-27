@@ -526,6 +526,18 @@ Error CommandListRef_transitionImage(
 				4, "CommandListRef_transitionImage()::image was already transitioned in scope!"
 			);
 
+		switch (type) {
+			case ETransitionType_Clear:
+			case ETransitionType_CopyWrite:
+			case ETransitionType_ShaderWrite:
+			case ETransitionType_ResolveTargetWrite:
+				return Error_invalidOperation(
+					4,
+					"CommandListRef_transitionImage()::image was used as writable target in the same scope, "
+					"this is a write hazard and needs a separate scope to handle synchronization properly."
+				);
+		}
+
 		//To combine shader transitions we just take the highest up shader stage it's used
 
 		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);

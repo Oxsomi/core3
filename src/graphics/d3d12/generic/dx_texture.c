@@ -79,7 +79,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		.DepthOrArraySize = texture->length,
 		.MipLevels = texture->levels,
 		.Format = dxFormat,
-		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1, .Quality = 0 }
+		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 << texture->sampleCount, .Quality = 0 }
 	};
 
 	if(!isDeviceTexture) {
@@ -93,7 +93,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 	if(texture->resource.flags & EGraphicsResourceFlag_ShaderWrite)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead))
+	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead) && texture->depthFormat)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
 	//Allocate memory

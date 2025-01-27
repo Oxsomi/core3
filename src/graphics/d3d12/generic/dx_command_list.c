@@ -73,6 +73,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 		switch(tex.type) {
 
 			default:
+
+				if (tex.sampleCount) {
+					rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
+					rtv.Texture2DMS = (D3D12_TEX2DMS_RTV) { 0 };
+					break;
+				}
+
 				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 				rtv.Texture2D = (D3D12_TEX2D_RTV) { 0 };								//No mip and plane slice
 				break;
@@ -132,6 +139,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 		switch(tex.type) {
 
 			default:
+
+				if (tex.sampleCount) {
+					dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+					dsv.Texture2DMS = (D3D12_TEX2DMS_DSV) { 0 };
+					break;
+				}
+
 				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 				dsv.Texture2D = (D3D12_TEX2D_DSV) { 0 };							//No mip
 				break;
@@ -481,8 +495,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 					buffer->lpVtbl->ResolveSubresource(
 						buffer,
-						imageExt->image, 0,
 						resolveExt->image, 0,
+						imageExt->image, 0,
 						format
 					);
 				}

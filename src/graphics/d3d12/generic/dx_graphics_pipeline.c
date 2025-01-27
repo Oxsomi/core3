@@ -129,7 +129,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		.NumRenderTargets = info->attachmentCountExt,
 		.DSVFormat = EDepthStencilFormat_toDXFormat(info->depthFormatExt),
 
-		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 }
+		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 << info->msaa }
 	};
 
 	//Rasterizer
