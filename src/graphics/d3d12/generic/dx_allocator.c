@@ -122,6 +122,17 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			"D3D12DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
 		);
 
+	//We lock this early to avoid other mem alloc from allocating too many memory blocks at once.
+	//Maybe what we end up allocating now can be used for the next.
+
+	ELockAcquire acq = SpinLock_lock(&allocator->lock, U64_MAX);
+
+	CharString temp = CharString_createNull();
+	ListU16 temp16 = (ListU16) { 0 };
+
+	ID3D12Heap *heap = NULL;
+	Error err = Error_none();
+
 	//Find an existing allocation
 
 	for(U64 i = 0; i < allocator->blocks.length; ++i) {
@@ -138,14 +149,14 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			continue;
 
 		const U8 *alloc = NULL;
-		const Error err = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, &alloc);
+		const Error err1 = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, &alloc);
 
-		if(err.genericError)
+		if(err1.genericError)
 			continue;
 
 		*blockId = (U32) i;
 		*blockOffset = (U64) alloc;
-		return Error_none();
+		goto clean;
 	}
 
 	//Allocate memory
@@ -156,17 +167,10 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	);
 
 	heapDesc.SizeInBytes = realBlockSize;
-
-	CharString temp = CharString_createNull();
-	ListU16 temp16 = (ListU16) { 0 };
-
-	ID3D12Heap *heap = NULL;
-	Error err = dxCheck(deviceExt->device->lpVtbl->CreateHeap(
+	
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateHeap(
 		deviceExt->device, &heapDesc, &IID_ID3D12Heap, (void**) &heap
-	));
-
-	if(err.genericError)
-		return err;
+	)))
 
 	//Initialize block
 
@@ -223,6 +227,9 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	}
 
 clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&allocator->lock);
 
 	ListU16_freex(&temp16);
 	CharString_freex(&temp);

@@ -54,6 +54,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 	Error err = Error_none();
 	ListU16 temp16 = (ListU16) { 0 };
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(texture->resource.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -130,13 +131,21 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
 				Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
 
-			if(device->allocator.blocks.length >= U32_MAX)
-				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate dedicated block"))
-
 			if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
 				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"))
 
+			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
+			if(device->allocator.blocks.length >= U32_MAX)
+				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate dedicated block"))
+
+			U32 blockId = (U32) device->allocator.blocks.length;
 			gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&device->allocator.blocks, block))
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&device->allocator.lock);
+
+			acq = ELockAcquire_Invalid;
 
 			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, texture->resource.type);
 			heap.Flags &=~ (
@@ -158,7 +167,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			)))
 
 			texture->resource.allocated = true;
-			texture->resource.blockId = (U32) device->allocator.blocks.length - 1;
+			texture->resource.blockId = blockId;
 			texture->resource.blockOffset = 0;
 		}
 
@@ -291,6 +300,10 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 	}
 
 clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
 	ListU16_freex(&temp16);
 	return err;
 }

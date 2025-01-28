@@ -187,20 +187,33 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	//Log_debugLnx("Searching for %"PRIu64" bytes", memReq.size);
 
+	VkDeviceMemory mem = NULL;
+	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
+	CharString temp = CharString_createNull();
+
+	//We lock this early to avoid other mem alloc from allocating too many memory blocks at once.
+	//Maybe what we end up allocating now can be used for the next.
+
+	ELockAcquire acq = SpinLock_lock(&allocator->lock, U64_MAX);
+
+	U32 memoryId = 0;
+	VkMemoryPropertyFlags prop = 0;
+	Error err = Error_none();
+
 	//Find an existing allocation
 
 	if (!isDedicated) {
 
 		for(U64 i = 0; i < allocator->blocks.length; ++i) {
 
-			DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[i];
+			DeviceMemoryBlock *blocki = &allocator->blocks.ptrNonConst[i];
 
 			if(
-				!block->ext ||
-				block->isDedicated ||
-				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
-				!!(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
-				block->resourceType != resourceType
+				!blocki->ext ||
+				blocki->isDedicated ||
+				(blocki->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
+				!!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
+				blocki->resourceType != resourceType
 			) {
 
 				/*Log_debugLnx(
@@ -221,13 +234,13 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 			U64 tempAlignment = memReq.alignment;
 
-			if(!(block->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))		//Adhere to memory requirements
+			if(!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))		//Adhere to memory requirements
 				tempAlignment = U64_max(256, tempAlignment);
 
 			const U8 *alloc = NULL;
-			Error err = AllocationBuffer_allocateBlockx(&block->allocations, memReq.size, tempAlignment, &alloc);
+			Error err1 = AllocationBuffer_allocateBlockx(&blocki->allocations, memReq.size, tempAlignment, &alloc);
 
-			if(err.genericError) {
+			if(err1.genericError) {
 				//Log_debugLnx("Skipping block %"PRIu64" because of: no memory", i);
 				continue;
 			}
@@ -235,22 +248,18 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			//Log_debugLnx("Found block %"PRIu64, i);
 			*blockId = (U32) i;
 			*blockOffset = (U64) alloc;
-			return Error_none();
+
+			goto clean;
 		}
 	}
 
 	Log_debugLnx("Allocating new memory block (%"PRIu64")", allocator->blocks.length);
 
 	//Allocate memory
-
-	U32 memoryId = 0;
-	VkMemoryPropertyFlags prop = 0;
-	Error err = VkDeviceMemoryAllocator_findMemory(
+	
+	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(
 		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
-	);
-
-	if(err.genericError)
-		return err;
+	))
 
 	U64 realBlockSize = U64_min(
 		(U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize,
@@ -269,12 +278,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.memoryTypeIndex = memoryId
 	};
 
-	VkDeviceMemory mem = NULL;
-	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
-	CharString temp = CharString_createNull();
-
-	if((err = checkVkError(deviceExt->allocateMemory(deviceExt->device, &alloc, NULL, &mem))).genericError)
-		return err;
+	gotoIfError(clean, checkVkError(deviceExt->allocateMemory(deviceExt->device, &alloc, NULL, &mem)))
 	
 	void *mappedMem = NULL;
 
@@ -353,11 +357,17 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 clean:
 
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&allocator->lock);
+
 	CharString_freex(&temp);
 
 	if(err.genericError) {
+
 		AllocationBuffer_freex(&block.allocations);
-		deviceExt->freeMemory(deviceExt->device, mem, NULL);
+
+		if(mem)
+			deviceExt->freeMemory(deviceExt->device, mem, NULL);
 	}
 
 	return err;
