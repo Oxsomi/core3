@@ -229,9 +229,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		physicalDevice, swapchainExt->surface, &modes, presentModes.ptrNonConst
 	)))
 
-	Bool supports[ESwapchainPresentMode_Count - 1] = { 0 };	
-
-	//supportsMailbox ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR
+	Bool supports[ESwapchainPresentMode_Count - 1] = { 0 };
 
 	for (U32 i = 0; i < modes; ++i) {
 
@@ -242,6 +240,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			default:																							break;
 			case VK_PRESENT_MODE_IMMEDIATE_KHR:		supports[ESwapchainPresentMode_Immediate - 1] = true;		break;
 			case VK_PRESENT_MODE_FIFO_KHR:			supports[ESwapchainPresentMode_Fifo - 1] = true;			break;
+			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:	supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;		break;
 
 			//Mailbox can allocate additional images on Android,
 			//we don't want to deal with versioning 4x.
@@ -269,6 +268,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 				default:																						break;
 				case ESwapchainPresentMode_Immediate:		presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;		break;
 				case ESwapchainPresentMode_Fifo:			presentMode = VK_PRESENT_MODE_FIFO_KHR;				break;
+				case ESwapchainPresentMode_FifoRelaxed:		presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;		break;
 				case ESwapchainPresentMode_Mailbox:			presentMode = VK_PRESENT_MODE_MAILBOX_KHR;			break;
 			}
 

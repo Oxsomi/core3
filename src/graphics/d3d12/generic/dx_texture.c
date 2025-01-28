@@ -26,6 +26,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/log.h"
 #include "types/container/texture_format.h"
 
 Bool DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
@@ -109,43 +110,94 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		if(!res)
 			gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't query allocInfo"))
 
-		DxBlockRequirements req = (DxBlockRequirements) {
-			.flags = !isDeviceTexture ? EDxBlockFlags_IsDedicated : EDxBlockFlags_None,
-			.alignment = (U32) allocInfo.Alignment,
-			.length = allocInfo.SizeInBytes
-		};
-
-		gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
-			&device->allocator,
-			&req,
-			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
-			&texture->resource.blockId,
-			&texture->resource.blockOffset,
-			texture->resource.type,
-			name
-		))
-
-		texture->resource.allocated = true;
-
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[texture->resource.blockId];
-
 		//TODO: versioned image
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, 0);
+		
+		Bool cpuSided = !!(texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit);
 
-		D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
+		//Dedicated allocations for depth stencil and render targets
 
-		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
-			deviceExt->device,
-			block.ext,
-			texture->resource.blockOffset,
-			&resourceDesc,
-			D3D12_BARRIER_LAYOUT_COMMON,
-			texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
-			0, NULL,
-			&IID_ID3D12Resource,
-			(void**)&managedImageExt->image
-		)))
+		if(!isDeviceTexture) {
+
+			DeviceMemoryBlock block = (DeviceMemoryBlock) {
+				.typeExt = (U32) allocInfo.Alignment,
+				.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
+				.isDedicated = true,
+				.resourceType = (U8) texture->resource.type
+			};
+
+			if(device->flags & EGraphicsDeviceFlags_IsDebug)
+				Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
+
+			if(device->allocator.blocks.length >= U32_MAX)
+				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate dedicated block"))
+
+			if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
+				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"))
+
+			gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&device->allocator.blocks, block))
+
+			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, texture->resource.type);
+			heap.Flags &=~ (
+				D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_BUFFERS
+			);
+
+			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
+
+			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommittedResource3(
+				deviceExt->device,
+				&heap.Properties,
+				heap.Flags,
+				&resourceDesc,
+				D3D12_BARRIER_LAYOUT_COMMON,
+				texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
+				NULL, 0, NULL,
+				&IID_ID3D12Resource,
+				(void**)&managedImageExt->image
+			)))
+
+			texture->resource.allocated = true;
+			texture->resource.blockId = (U32) device->allocator.blocks.length - 1;
+			texture->resource.blockOffset = 0;
+		}
+
+		else {
+
+			DxBlockRequirements req = (DxBlockRequirements) {
+				.flags = EDxBlockFlags_None,
+				.alignment = (U32) allocInfo.Alignment,
+				.length = allocInfo.SizeInBytes
+			};
+
+			gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
+				&device->allocator,
+				&req,
+				cpuSided,
+				&texture->resource.blockId,
+				&texture->resource.blockOffset,
+				texture->resource.type,
+				name
+			))
+
+			texture->resource.allocated = true;
+
+			DeviceMemoryBlock block = device->allocator.blocks.ptr[texture->resource.blockId];
+
+			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
+
+			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
+				deviceExt->device,
+				block.ext,
+				texture->resource.blockOffset,
+				&resourceDesc,
+				D3D12_BARRIER_LAYOUT_COMMON,
+				texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
+				0, NULL,
+				&IID_ID3D12Resource,
+				(void**)&managedImageExt->image
+			)))
+		}
 	}
 
 	//Image views

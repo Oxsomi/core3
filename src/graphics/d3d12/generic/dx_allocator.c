@@ -30,6 +30,64 @@
 #include "types/math/math.h"
 #include "types/container/string.h"
 
+D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType) {
+
+	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
+	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
+	Bool forceCpuSided = *cpuSided;
+
+	if(!isGpu || hasReBAR)			//Force shared allocations if not dedicated or if ReBAR is available
+		*cpuSided = true;
+	
+	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
+		.Properties = (D3D12_HEAP_PROPERTIES) {
+			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT),
+			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
+			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
+		},
+		.Alignment = alignment,
+		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED		//Equal to vulkan behavior, clear manually
+	};
+
+	if (isGpu && !hasReBAR) {
+		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	}
+
+	if (!isGpu || hasReBAR)
+		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
+
+	switch(resourceType) {
+
+		default:
+			break;
+
+		case EResourceType_DeviceTexture:
+			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
+			break;
+
+		case EResourceType_RenderTargetOrDepthStencil:
+			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
+			break;
+
+		case EResourceType_DeviceBuffer:
+
+			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (
+				!*cpuSided || hasReBAR || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0
+			);
+
+			break;
+	}
+
+	if (
+		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
+		EDxGraphicsFeatures_ReallyReportReBARWrites
+	)
+		heapDesc.Flags |= D3D12_HEAP_FLAG_TOOLS_USE_MANUAL_WRITE_TRACKING;
+
+	return heapDesc;
+}
+
 Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryAllocator *allocator,
 	void *requirementsExt,
@@ -49,16 +107,13 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		);
 
 	GraphicsDevice *device = allocator->device;
-
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
-	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
-	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
-	Bool forceCpuSided = cpuSided;
 
-	if(!isGpu || hasReBAR)			//Force shared allocations if not dedicated or if ReBAR is available
-		cpuSided = true;
+	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
+	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType);
+
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
 
 	if(req.length > maxAllocationSize)
@@ -67,35 +122,30 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			"D3D12DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
 		);
 
-	Bool isDedicated = req.flags & EDxBlockFlags_IsDedicated;
-
 	//Find an existing allocation
 
-	if (!isDedicated) {
+	for(U64 i = 0; i < allocator->blocks.length; ++i) {
 
-		for(U64 i = 0; i < allocator->blocks.length; ++i) {
+		DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[i];
 
-			DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[i];
+		if(
+			!block->ext ||
+			block->isDedicated ||
+			!!(block->allocationTypeExt & 1) != !cpuSided ||
+			block->typeExt != req.alignment ||						//Alignment is baked into heap
+			block->resourceType != resourceType
+		)
+			continue;
 
-			if(
-				!block->ext ||
-				block->isDedicated ||
-				!!(block->allocationTypeExt & 1) != !cpuSided ||
-				block->typeExt != req.alignment ||						//Alignment is baked into heap
-				block->resourceType != resourceType
-			)
-				continue;
+		const U8 *alloc = NULL;
+		const Error err = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, &alloc);
 
-			const U8 *alloc = NULL;
-			const Error err = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, &alloc);
+		if(err.genericError)
+			continue;
 
-			if(err.genericError)
-				continue;
-
-			*blockId = (U32) i;
-			*blockOffset = (U64) alloc;
-			return Error_none();
-		}
+		*blockId = (U32) i;
+		*blockOffset = (U64) alloc;
+		return Error_none();
 	}
 
 	//Allocate memory
@@ -105,55 +155,10 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		maxAllocationSize
 	);
 
-	if(isDedicated)
-		realBlockSize = req.length;
+	heapDesc.SizeInBytes = realBlockSize;
 
-	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
 	CharString temp = CharString_createNull();
 	ListU16 temp16 = (ListU16) { 0 };
-
-	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
-		.SizeInBytes = realBlockSize,
-		.Properties = (D3D12_HEAP_PROPERTIES) {
-			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT),
-			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
-			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
-		},
-		.Alignment = req.alignment
-	};
-
-	if (isGpu && !hasReBAR) {
-		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	}
-
-	if (!isGpu || hasReBAR)
-		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
-
-	switch(resourceType) {
-
-		case EResourceType_DeviceTexture:
-			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
-			break;
-
-		case EResourceType_RenderTargetOrDepthStencil:
-			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
-			break;
-
-		case EResourceType_DeviceBuffer:
-
-			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (
-				!cpuSided || hasReBAR || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0
-			);
-
-			break;
-	}
-
-	if (
-		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
-		EDxGraphicsFeatures_ReallyReportReBARWrites
-	)
-		heapDesc.Flags |= D3D12_HEAP_FLAG_TOOLS_USE_MANUAL_WRITE_TRACKING;
 
 	ID3D12Heap *heap = NULL;
 	Error err = dxCheck(deviceExt->device->lpVtbl->CreateHeap(
@@ -165,10 +170,10 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	//Initialize block
 
-	block = (DeviceMemoryBlock) {
+	DeviceMemoryBlock block = (DeviceMemoryBlock) {
 		.typeExt = req.alignment,			//Only place things with the same alignment in this block
 		.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
-		.isDedicated = isDedicated,
+		.isDedicated = false,
 		.ext = heap,
 		.resourceType = (U8) resourceType
 	};
@@ -206,12 +211,10 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 		gotoIfError(clean, CharString_formatx(
 			&temp,
-			isDedicated ? "Memory block %"PRIu32" (host: %s, device: %s): %s" :
 			"Memory block %"PRIu32" (host: %s, device: %s)",
 			(U32) i,
 			cpuSided ? "true" : "false",
-			hasReBAR || !cpuSided ? "true" : "false",
-			objectName.ptr
+			hasReBAR || !cpuSided ? "true" : "false"
 		))
 
 		gotoIfError(clean, CharString_toUTF16x(temp, &temp16));
@@ -240,7 +243,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_freeAllocation)(GraphicsDevice *device, 
 	(void)device;
 
 	if(!ext)
-		return false;
+		return true;
 
 	((ID3D12Heap*)ext)->lpVtbl->Release((ID3D12Heap*)ext);
 	return true;

@@ -34,7 +34,7 @@ typedef enum EResourceType EResourceType;
 
 typedef struct DeviceMemoryBlock {
 
-	AllocationBuffer allocations;
+	AllocationBuffer allocations;	//Can be absent if dedicated
 
 	U32 typeExt;					//Resource flags
 
@@ -44,7 +44,7 @@ typedef struct DeviceMemoryBlock {
 
 	U8 *mappedMemoryExt;			//Not always available, can be done on a resource basis
 
-	void *ext;						//Extended data
+	void *ext;						//Extended data (Can also be NULL if dedicated on some apis)
 
 	#ifndef NDEBUG
 		void *stackTrace[16];		//Tracking memleaks if Debug flag is on

@@ -53,6 +53,7 @@ typedef enum EGraphicsResourceFlag {
 } EGraphicsResourceFlag;
 
 typedef enum EResourceType {
+	EResourceType_Undefined,
 	EResourceType_DeviceTexture,					//Texture only copyable (no RTV, DSV or UAV)
 	EResourceType_RenderTargetOrDepthStencil,		//Also depth stencil
 	EResourceType_DeviceBuffer,						//Any buffer type

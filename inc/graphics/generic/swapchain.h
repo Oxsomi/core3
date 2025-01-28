@@ -34,9 +34,10 @@ typedef enum EWindowFormat EWindowFormat;
 
 typedef enum ESwapchainPresentMode {
 	ESwapchainPresentMode_None,
-	ESwapchainPresentMode_Immediate,			//Low latency games (shooters, etc.): Tearing; Allows tearing for less latency
-	ESwapchainPresentMode_Mailbox,				//High performance apps (games): Coalesing; Pops oldest image while continuing
-	ESwapchainPresentMode_Fifo,					//Best quality & low power: Vsync; present images in order (no dropped frames)
+	ESwapchainPresentMode_Immediate,			//Low latency apps (shooters, etc.): Allows tearing for less latency
+	ESwapchainPresentMode_Mailbox,				//High performance apps (games): Pops oldest image while continuing
+	ESwapchainPresentMode_Fifo,					//Best quality & low power: Always presents images in order (no dropped frames)
+	ESwapchainPresentMode_FifoRelaxed,			//^ but if vblank is missed continue with the next (can allow tearing)
 	ESwapchainPresentMode_Count
 } ESwapchainPresentMode;
 

@@ -48,7 +48,34 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	const Window *window = info->window;
 
-	ESwapchainPresentMode mode = info->presentModePriorities[0];
+	ESwapchainPresentMode mode = ESwapchainPresentMode_Count;
+
+	for (U64 i = 0; i < ESwapchainPresentMode_Count - 1; ++i) {
+
+		ESwapchainPresentMode modei = info->presentModePriorities[i];
+
+		if(!modei)
+			break;
+
+		switch (modei) {
+
+			default:
+				break;
+
+			case ESwapchainPresentMode_Fifo:
+			case ESwapchainPresentMode_Immediate:
+				mode = modei;
+				break;
+		}
+
+		if(mode != ESwapchainPresentMode_Count)
+			break;
+	}
+
+	if(mode == ESwapchainPresentMode_Count)
+		gotoIfError(clean, Error_unsupportedOperation(
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support the current write mode"
+		))
 
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
 		gotoIfError(clean, Error_unsupportedOperation(

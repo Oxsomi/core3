@@ -45,10 +45,11 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext);
 		block->ext = NULL;
 		block->mappedMemoryExt = NULL;
+		block->resourceType = 0;
 	}
 
 	if(blockId + 1 == allocator->blocks.length)
-		while(allocator->blocks.length && !ListDeviceMemoryBlock_last(allocator->blocks)->ext)
+		while(allocator->blocks.length && !ListDeviceMemoryBlock_last(allocator->blocks)->resourceType)
 			success &= !ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL).genericError;
 
 	if(acq == ELockAcquire_Acquired)	//Only release if it wasn't already active

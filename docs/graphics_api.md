@@ -3,21 +3,13 @@
 The core pillars of the abstraction of this graphics library are the following:
 
 - Support feature sets as close as possible to Vulkan, Direct3D12 and Metal3.
-  - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.2 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
+  - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.1 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
 - Simplify usage for these APIs, as they're too verbose.
   - But don't oversimplify them to the point of being useless.
   - This does mean features not deemed important enough might not be included in the main specification. Though a branch could maintain support if needed.
 - Force modern minimum specs to avoid having to build too many diverging renderers to deal with limitations of old devices.
 - Allow modern usage of these APIs such as raytracing and bindless.
 - Support various systems such as Android, Apple, Windows and Linux (console should be kept in mind, though not officially supported).
-
-## Getting started
-
-Before getting started, there needs to be a header file included in the main entrypoint. Not including this will result in linker errors. This is to prevent the user from running without the Agility SDK, which requires certain symbols to be injected into the main executable. This header file should only be included into the main exe/apk, it should not be linked into a dynamic or static lib!
-
-```c
-#include "graphics/generic/application.h" //Enables proper OxC3 graphics support
-```
 
 ## Ref counting
 
@@ -450,6 +442,8 @@ See the "Commands" section.
 ## GraphicsResource
 
 A GraphicsResource is defined as any object that has allocated memory on the GraphicsDevice. This includes two types of resources: DeviceBuffer and UnifiedTexture.
+
+By default, a GraphicsResource's data is uninitialized (of questionable state) and has to be cleared or written right away.
 
 A graphics resource consists of the following:
 
