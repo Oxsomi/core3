@@ -357,7 +357,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 		gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 2 + buffer->pendingChanges.length))
 
-		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+		if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,

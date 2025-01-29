@@ -153,6 +153,16 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			);
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
+			
+			if(device->flags & EGraphicsDeviceFlags_IsDebug)
+				Log_debugLnx(
+					"-- Graphics: Allocating dedicated memory block (%"PRIu32" with size %"PRIu64")\n"
+					"\tResource type: %s, %s",
+					blockId,
+					allocInfo.SizeInBytes,
+					EResourceType_names[texture->resource.type],
+					cpuSided ? "cpu sided allocation" : "gpu sided allocation"
+				);
 
 			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommittedResource3(
 				deviceExt->device,

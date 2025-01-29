@@ -98,8 +98,6 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	CharString objectName
 ) {
 
-	U64 blockSize = DeviceMemoryBlock_defaultSize;
-
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
 			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
@@ -154,6 +152,16 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		if(err1.genericError)
 			continue;
 
+		if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
+			Log_debugLnx(
+				"-- Graphics: Allocating into existing memory block "
+				"(%"PRIu64" from allocation of size %"PRIu64" at offset %"PRIx64" and alignment %"PRIu32")",
+				i,
+				req.length,
+				(U64) alloc,
+				req.alignment
+			);
+
 		*blockId = (U32) i;
 		*blockOffset = (U64) alloc;
 		goto clean;
@@ -161,12 +169,24 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	//Allocate memory
 
+	U64 blockSize = cpuSided ? device->blockSizeCpu : device->blockSizeGpu;
 	U64 realBlockSize = U64_min(
 		(U64_max(blockSize, req.length * 2) + blockSize - 1) / blockSize * blockSize,
 		maxAllocationSize
 	);
 
 	heapDesc.SizeInBytes = realBlockSize;
+
+	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
+		Log_debugLnx(
+			"-- Graphics: Allocating new memory block (%"PRIu64" with size %"PRIu64" from allocation with size %"PRIu64")\n"
+			"\tResource type: %s, %s",
+			allocator->blocks.length,
+			realBlockSize,
+			req.length,
+			EResourceType_names[resourceType],
+			cpuSided ? "cpu sided allocation" : "gpu sided allocation"
+		);
 	
 	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateHeap(
 		deviceExt->device, &heapDesc, &IID_ID3D12Heap, (void**) &heap

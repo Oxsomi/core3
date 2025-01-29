@@ -76,7 +76,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 	D3D12_BARRIER_GROUP bufDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 	D3D12_BARRIER_GROUP imgDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
-	if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+	if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
 		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 			deviceRef,

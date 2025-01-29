@@ -128,6 +128,8 @@ typedef struct GraphicsDevice {
 	Buffer freeList[EDescriptorType_ResourceCount];
 	ListDescriptorStackTrace descriptorStackTraces;
 
+	U64 blockSizeCpu, blockSizeGpu;				//Block sizes for memory allocator
+
 	U64 pad1;									//Pad to 16-byte aligned to allow impl to use for example vectors
 
 } GraphicsDevice;

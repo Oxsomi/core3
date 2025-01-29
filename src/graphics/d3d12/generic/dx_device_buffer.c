@@ -331,7 +331,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
-		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+		if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,

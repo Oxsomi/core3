@@ -920,24 +920,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	instanceExt->getPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
 
-	//Determine when we need to flush.
-	//As a rule of thumb I decided for 20% occupied mem by just copies.
-	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
-	// (as long as it doesn't exceed 33%).
-	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
-
-	Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
-	U64 cpuHeapSize = device->info.capabilities.sharedMemory;
-	U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
-
-	device->flushThreshold = U64_min(
-		4 * GIBI,
-		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
-		cpuHeapSize / 5
-	);
-
-	device->flushThresholdPrimitives = 20 * MIBI / 3;		//20M vertices per frame limit
-
 	//Allocate temp storage for transitions
 
 	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 17))

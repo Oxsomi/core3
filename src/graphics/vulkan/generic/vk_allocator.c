@@ -151,8 +151,6 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	CharString objectName
 ) {
 
-	U64 blockSize = DeviceMemoryBlock_defaultSize;
-
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
 			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
@@ -246,6 +244,17 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			}
 
 			//Log_debugLnx("Found block %"PRIu64, i);
+
+			if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
+				Log_debugLnx(
+					"-- Graphics: Allocating into existing memory block "
+					"(%"PRIu64" from allocation of size %"PRIu64" at offset %"PRIx64" and alignment %"PRIu64")",
+					i,
+					memReq.size,
+					(U64) alloc,
+					tempAlignment
+				);
+
 			*blockId = (U32) i;
 			*blockOffset = (U64) alloc;
 
@@ -253,14 +262,13 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		}
 	}
 
-	Log_debugLnx("Allocating new memory block (%"PRIu64")", allocator->blocks.length);
-
 	//Allocate memory
 	
 	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(
 		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
 	))
 
+	U64 blockSize = cpuSided ? allocator->device->blockSizeCpu : allocator->device->blockSizeGpu;
 	U64 realBlockSize = U64_min(
 		(U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize,
 		maxAllocationSize
@@ -277,6 +285,18 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.allocationSize = isDedicated ? memReq.size : realBlockSize,
 		.memoryTypeIndex = memoryId
 	};
+
+	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
+		Log_debugLnx(
+			"-- Graphics: Allocating new memory block (%"PRIu64" with size %"PRIu64" from allocation with size %"PRIu64")\n"
+			"\tResource type: %s, %s (memory id: %"PRIu32")",
+			allocator->blocks.length,
+			alloc.allocationSize,
+			memReq.size,
+			EResourceType_names[resourceType],
+			cpuSided ? "cpu sided allocation" : "gpu sided allocation",
+			memoryId
+		);
 
 	gotoIfError(clean, checkVkError(deviceExt->allocateMemory(deviceExt->device, &alloc, NULL, &mem)))
 	

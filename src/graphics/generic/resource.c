@@ -25,6 +25,14 @@
 
 TListImpl(DeviceResourceVersion);
 
+const C8 *EResourceType_names[EResourceType_Count] = {
+	"Undefined",
+	"DeviceTexture",
+	"RenderTargetOrDepthStencil",
+	"DeviceBuffer",
+	"Swapchain"
+};
+
 U16 TextureRange_width(TextureRange r) { return r.endRange[0] - r.startRange[0]; }
 U16 TextureRange_height(TextureRange r) { return r.endRange[1] - r.startRange[1]; }
 U16 TextureRange_length(TextureRange r) { return r.endRange[2] - r.startRange[2]; }

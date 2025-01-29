@@ -33,6 +33,7 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/base/time.h"
+#include "types/math/math.h"
 
 #include <stddef.h>
 
@@ -250,15 +251,53 @@ Error GraphicsDeviceRef_create(
 
 	gotoIfError(clean, GraphicsDevice_initExt(instance, info, deviceRef))
 
+	//Determine some flushing and block size sizes for the current GPU
+	
+	//Determine when we need to flush.
+	//As a rule of thumb I decided for 20% occupied mem by just copies.
+	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
+	// (as long as it doesn't exceed 33%).
+	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
+
+	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
+	U64 cpuHeapSize = device->info.capabilities.sharedMemory;
+	U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
+
+	device->flushThreshold = U64_min(
+		4 * GIBI,
+		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
+		cpuHeapSize / 5
+	);
+
+	device->flushThresholdPrimitives = 20 * MIBI / 3;		//20M vertices per frame limit
+
+	//Block sizes based on memory of each device (CPU or GPU):
+	// 0 -  6GB ("4GB"):   64MB
+	// 6 - 12GB ("8GB"):  128MB
+	//12 - 24GB ("16GB"): 256MB
+	//24GB+ 	("32GB"): 512MB
+	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would 
+
+	if (!isDistinct) {		//Assume 50/50 split to take a conservative block size approach
+		cpuHeapSize >>= 1;
+		gpuHeapSize >>= 1;
+	}
+
+	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 3);
+	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 3);
+
 	//Create constant buffer and staging buffer / allocators
 
 	//Allocate staging buffer.
-	//64 MiB / 3 = 21.333 MiB per frame.
+	//For block size 256MiB: 64 MiB / NBuffering (2 or 3) = 32MiB or 21.333 MiB per frame.
+	//For block size 64MiB: 16 MiB / NBuffering (2 or 3) = 8MiB or 5.3 MiB per frame.
+	//	This block size is generally used in very memory limited systems (such as Android devices)
+	//	that generally use shared mem (so won't push much over staging buffer).
 	//If out of mem this will grow to be bigger.
-	//But it's only used for "small" allocations (< 16 MiB)
+	//But it's only used for "small" allocations (< 25% of staging buffer)
 	//If a lot of these larger allocations are found it will resize the staging buffer to try to encompass it too.
 
-	U64 stagingSize = 64 * MIBI;
+	U64 stagingSize = device->blockSizeCpu / 4;
 	gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(*deviceRef, stagingSize))
 
 	//Allocate UBO

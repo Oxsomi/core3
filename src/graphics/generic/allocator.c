@@ -21,7 +21,9 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/allocator.h"
+#include "graphics/generic/device.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/log.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
 
@@ -41,6 +43,10 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	Bool success = AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset);
 
 	if (!block->allocations.allocations.length) {
+		
+		if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
+			Log_debugLnx("-- Graphics: Freeing block %"PRIu32, blockId);
+
 		AllocationBuffer_freex(&block->allocations);
 		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext);
 		block->ext = NULL;

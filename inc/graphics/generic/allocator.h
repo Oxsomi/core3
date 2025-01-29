@@ -66,8 +66,6 @@ typedef struct DeviceMemoryAllocator {
 
 } DeviceMemoryAllocator;
 
-static const U64 DeviceMemoryBlock_defaultSize = 268435456;		//256 * MIBI
-
 //Locks automatically
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset);
 

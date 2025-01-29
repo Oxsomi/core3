@@ -61,6 +61,8 @@ typedef enum EResourceType {
 	EResourceType_Count
 } EResourceType;
 
+extern const C8 *EResourceType_names[EResourceType_Count];
+
 typedef struct BufferRange {
 	U64 startRange;
 	U64 endRange;
