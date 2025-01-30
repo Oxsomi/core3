@@ -92,7 +92,8 @@
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName				//Name of the object that allocates (for dedicated allocations)
+		CharString objectName,				//Name of the object that allocates (for dedicated allocations)
+		DeviceMemoryBlock *resultBlock
 	);
 
 	Bool VkDeviceMemoryAllocator_freeAllocation(GraphicsDevice *device, void *ext);

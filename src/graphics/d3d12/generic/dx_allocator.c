@@ -30,7 +30,7 @@
 #include "types/math/math.h"
 #include "types/container/string.h"
 
-D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType) {
+D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment) {
 
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
@@ -57,28 +57,6 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 	if (!isGpu || hasReBAR)
 		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
 
-	switch(resourceType) {
-
-		default:
-			break;
-
-		case EResourceType_DeviceTexture:
-			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
-			break;
-
-		case EResourceType_RenderTargetOrDepthStencil:
-			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
-			break;
-
-		case EResourceType_DeviceBuffer:
-
-			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (
-				!*cpuSided || hasReBAR || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0
-			);
-
-			break;
-	}
-
 	if (
 		(device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReallyReportReBARWrites) ==
 		EDxGraphicsFeatures_ReallyReportReBARWrites
@@ -95,8 +73,11 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	U32 *blockId,
 	U64 *blockOffset,
 	EResourceType resourceType,
-	CharString objectName
+	CharString objectName,
+	DeviceMemoryBlock *resultBlock
 ) {
+
+	(void) resourceType;
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
@@ -110,7 +91,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
-	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType);
+	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment);
 
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
 
@@ -141,8 +122,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			!block->ext ||
 			block->isDedicated ||
 			!!(block->allocationTypeExt & 1) != !cpuSided ||
-			block->typeExt != req.alignment ||						//Alignment is baked into heap
-			block->resourceType != resourceType
+			block->typeExt != req.alignment						//Alignment is baked into heap
 		)
 			continue;
 
@@ -164,6 +144,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 		*blockId = (U32) i;
 		*blockOffset = (U64) alloc;
+		*resultBlock = *block;
 		goto clean;
 	}
 
@@ -180,12 +161,11 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_debugLnx(
 			"-- Graphics: Allocating new memory block (%"PRIu64" with size %"PRIu64" from allocation with size %"PRIu64")\n"
-			"\tResource type: %s, %s",
+			"\t%s",
 			allocator->blocks.length,
 			realBlockSize,
 			req.length,
-			EResourceType_names[resourceType],
-			cpuSided ? "cpu sided allocation" : "gpu sided allocation"
+			cpuSided ? "Cpu sided allocation" : "Gpu sided allocation"
 		);
 	
 	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateHeap(
@@ -195,11 +175,11 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	//Initialize block
 
 	DeviceMemoryBlock block = (DeviceMemoryBlock) {
+		.isActive = true,
 		.typeExt = req.alignment,			//Only place things with the same alignment in this block
 		.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
 		.isDedicated = false,
-		.ext = heap,
-		.resourceType = (U8) resourceType
+		.ext = heap
 	};
 
 	gotoIfError(clean, AllocationBuffer_createx(realBlockSize, true, &block.allocations))
@@ -212,7 +192,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	U64 i = 0;
 
 	for(; i < allocator->blocks.length; ++i)
-		if (!allocator->blocks.ptr[i].ext)
+		if (!allocator->blocks.ptr[i].isActive)
 			break;
 
 	const U8 *allocLoc = NULL;
@@ -230,6 +210,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
+	*resultBlock = block;
 
 	if(CharString_length(objectName) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
 

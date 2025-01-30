@@ -175,6 +175,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	if (buf->usage & EDeviceBufferUsage_ScratchExt)
 		requirements.memoryRequirements.alignment = U64_max(256, requirements.memoryRequirements.alignment);
 	
+	DeviceMemoryBlock block;
 	gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		&device->allocator,
 		&requirements,
@@ -182,12 +183,11 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		&buf->resource.blockId,
 		&buf->resource.blockOffset,
 		EResourceType_DeviceBuffer,
-		name
+		name,
+		&block
 	))
 
 	buf->resource.allocated = true;
-
-	DeviceMemoryBlock block = device->allocator.blocks.ptr[buf->resource.blockId];
 
 	//Bind memory
 
@@ -284,6 +284,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 	Error err = Error_none();
 
+	ELockAcquire acq = ELockAcquire_Invalid;
 	Bool isInFlight = false;
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 	DeviceBufferRef *tempStagingResource = NULL;
@@ -304,7 +305,15 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 	if(!isInFlight && buffer->resource.mappedMemoryExt) {
 
+		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[buffer->resource.blockId];
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->allocator.lock);
+
+		acq = ELockAcquire_Invalid;
+
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if(incoherent)
@@ -370,7 +379,15 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
 			U8 *location = stagingResource->resource.mappedMemoryExt;
 
+			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 			DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&device->allocator.lock);
+
+			acq = ELockAcquire_Invalid;
+
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer
@@ -479,7 +496,16 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				stagingExt = DeviceBuffer_ext(staging, Vk);
 			}
 
+			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 			DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&device->allocator.lock);
+
+			acq = ELockAcquire_Invalid;
+
+
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer
@@ -571,6 +597,10 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 		gotoIfError(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer))
 
 clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
 	DeviceBufferRef_dec(&tempStagingResource);
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 	ListVkMappedMemoryRange_clear(&deviceExt->mappedMemoryRange);

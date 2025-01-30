@@ -128,6 +128,8 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 		deviceExt->getImageMemoryRequirements2(deviceExt->device, &imageReq, &requirements);
 
+		DeviceMemoryBlock block;
+
 		gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			&device->allocator,
 			&requirements,
@@ -135,12 +137,11 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			&texture->resource.blockId,
 			&texture->resource.blockOffset,
 			texture->resource.type,
-			name
+			name,
+			&block
 		))
 
 		texture->resource.allocated = true;
-
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[texture->resource.blockId];
 
 		gotoIfError(clean, checkVkError(deviceExt->bindImageMemory(
 			deviceExt->device, managedImageExt->image, (VkDeviceMemory) block.ext, texture->resource.blockOffset

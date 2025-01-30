@@ -39,7 +39,7 @@ typedef struct DeviceMemoryBlock {
 	U32 typeExt;					//Resource flags
 
 	Bool isDedicated;
-	U8 resourceType;				//EResourceType
+	Bool isActive;
 	U16 allocationTypeExt;			//Allocation type flags (e.g. host visible)
 
 	U8 *mappedMemoryExt;			//Not always available, can be done on a resource basis

@@ -165,7 +165,7 @@ D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data);
 D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset);
 
-D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType);
+D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment);
 
 //Transitions entire resource rather than sub-resources
 

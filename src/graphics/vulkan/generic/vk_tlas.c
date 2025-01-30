@@ -42,6 +42,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
 		return Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet");		//TODO:
@@ -116,7 +117,15 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 				});
 			}
 
+			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 			DeviceMemoryBlock block = device->allocator.blocks.ptr[tempInstanceBuf->resource.blockId];
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&device->allocator.lock);
+
+			acq = ELockAcquire_Invalid;
+
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			if(incoherent) {
@@ -259,6 +268,10 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
 
 clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
 	return err;
 }
 

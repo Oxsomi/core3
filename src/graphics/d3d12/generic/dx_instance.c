@@ -392,6 +392,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
 		D3D12_FEATURE_DATA_HARDWARE_COPY hwCopy = (D3D12_FEATURE_DATA_HARDWARE_COPY) { 0 };
 
+		#if D3D12_PREVIEW_SDK_VERSION >= 716
+			D3D12_FEATURE_DATA_TIGHT_ALIGNMENT tightAlignment = (D3D12_FEATURE_DATA_TIGHT_ALIGNMENT) { 0 };
+		#endif
+
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &opt0, sizeof(opt0))) ||
 			!opt0.TypedUAVLoadAdditionalFormats ||
@@ -539,6 +543,15 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);
 			goto next;
 		}
+
+		#if D3D12_PREVIEW_SDK_VERSION >= 716
+
+			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+				device, D3D12_FEATURE_D3D12_TIGHT_ALIGNMENT, &tightAlignment, sizeof(tightAlignment)
+			)) && tightAlignment.SupportTier >= D3D12_TIGHT_ALIGNMENT_TIER_1)
+				caps.featuresExt |= EDxGraphicsFeatures_TightAlignment;
+
+		#endif
 
 		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;

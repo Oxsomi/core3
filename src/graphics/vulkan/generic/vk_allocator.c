@@ -148,8 +148,11 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	U32 *blockId,
 	U64 *blockOffset,
 	EResourceType resourceType,
-	CharString objectName
+	CharString objectName,
+	DeviceMemoryBlock *resultBlock
 ) {
+
+	(void) resourceType;
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
@@ -173,18 +176,6 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			"VkDeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
 		);
 
-	//When block count hits 1999 that means there were at least 2000 memory objects (+1 UBO)
-	//After that, the allocator should be more conservative for dedicating separate memory blocks.
-	//Most devices only support up to 4000 memory objects.
-
-	Bool isDedicated = dedicated.requiresDedicatedAllocation;
-	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2000;
-
-	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)	//Ensure everything gets placed in cpu space
-		cpuSided = true;
-
-	//Log_debugLnx("Searching for %"PRIu64" bytes", memReq.size);
-
 	VkDeviceMemory mem = NULL;
 	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
 	CharString temp = CharString_createNull();
@@ -198,7 +189,23 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	VkMemoryPropertyFlags prop = 0;
 	Error err = Error_none();
 
+	//When block count hits 1999 that means there were at least 2000 memory objects (+1 UBO)
+	//After that, the allocator should be more conservative for dedicating separate memory blocks.
+	//Most devices only support up to 4000 memory objects.
+
+	Bool isDedicated = dedicated.requiresDedicatedAllocation;
+	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2000;
+
+	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)	//Ensure everything gets placed in cpu space
+		cpuSided = true;
+
+	//Log_debugLnx("Searching for %"PRIu64" bytes", memReq.size);
+
 	//Find an existing allocation
+	
+	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(
+		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
+	))
 
 	if (!isDedicated) {
 
@@ -209,9 +216,8 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			if(
 				!blocki->ext ||
 				blocki->isDedicated ||
-				(blocki->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
-				!!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
-				blocki->resourceType != resourceType
+				blocki->typeExt != memoryId ||
+				!!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided
 			) {
 
 				/*Log_debugLnx(
@@ -257,16 +263,13 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 			*blockId = (U32) i;
 			*blockOffset = (U64) alloc;
+			*resultBlock = *blocki;
 
 			goto clean;
 		}
 	}
 
 	//Allocate memory
-	
-	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(
-		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
-	))
 
 	U64 blockSize = cpuSided ? allocator->device->blockSizeCpu : allocator->device->blockSizeGpu;
 	U64 realBlockSize = U64_min(
@@ -274,14 +277,14 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		maxAllocationSize
 	);
 
-	VkMemoryAllocateFlagsInfo allocNext = (VkMemoryAllocateFlagsInfo) {
+	VkMemoryAllocateFlagsInfo next = (VkMemoryAllocateFlagsInfo) {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
 		.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
 	};
 
 	VkMemoryAllocateInfo alloc = (VkMemoryAllocateInfo) {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = resourceType == EResourceType_DeviceBuffer ? &allocNext : NULL,
+		.pNext = allocator->device->info.capabilities.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress ? &next : NULL,
 		.allocationSize = isDedicated ? memReq.size : realBlockSize,
 		.memoryTypeIndex = memoryId
 	};
@@ -289,12 +292,11 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_debugLnx(
 			"-- Graphics: Allocating new memory block (%"PRIu64" with size %"PRIu64" from allocation with size %"PRIu64")\n"
-			"\tResource type: %s, %s (memory id: %"PRIu32")",
+			"\t%s (memory id: %"PRIu32")",
 			allocator->blocks.length,
 			alloc.allocationSize,
 			memReq.size,
-			EResourceType_names[resourceType],
-			cpuSided ? "cpu sided allocation" : "gpu sided allocation",
+			cpuSided ? "Cpu sided allocation" : "Gpu sided allocation",
 			memoryId
 		);
 
@@ -311,12 +313,12 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		prop &=~ VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 	block = (DeviceMemoryBlock) {
-		.typeExt = memReq.memoryTypeBits,
+		.isActive = true,
+		.typeExt = memoryId,
 		.allocationTypeExt = (U16) prop,
 		.isDedicated = isDedicated,
 		.mappedMemoryExt = mappedMem,
-		.ext = mem,
-		.resourceType = (U8) resourceType
+		.ext = mem
 	};
 
 	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations))
@@ -329,7 +331,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	U64 i = 0;
 
 	for(; i < allocator->blocks.length; ++i)
-		if (!allocator->blocks.ptr[i].ext)
+		if (!allocator->blocks.ptr[i].isActive)
 			break;
 
 	const U8 *allocLoc = NULL;
@@ -347,6 +349,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
+	*resultBlock = block;
 
 	if(
 		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&

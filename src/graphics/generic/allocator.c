@@ -31,7 +31,7 @@ TListImpl(DeviceMemoryBlock);
 
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset) {
 
-	if(!allocator || blockId >= allocator->blocks.length)
+	if(!allocator)
 		return false;
 
 	ELockAcquire acq = SpinLock_lock(&allocator->lock, U64_MAX);
@@ -39,8 +39,16 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	if (acq < ELockAcquire_Success)
 		return false;		//Can't free.
 
+	Bool s_uccess = true;
+	Error *e_rr = NULL;
+
+	if(blockId >= allocator->blocks.length)
+		retError(clean, Error_outOfBounds(
+			1, blockId, allocator->blocks.length, "DeviceMemoryAllocator_freeAllocation() blockId out of bounds"
+		))
+
 	DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[blockId];
-	Bool success = AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset);
+	gotoIfError3(clean, AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset))
 
 	if (!block->allocations.allocations.length) {
 		
@@ -51,15 +59,17 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext);
 		block->ext = NULL;
 		block->mappedMemoryExt = NULL;
-		block->resourceType = 0;
+		block->isActive = false;
 	}
 
 	if(blockId + 1 == allocator->blocks.length)
-		while(allocator->blocks.length && !ListDeviceMemoryBlock_last(allocator->blocks)->resourceType)
-			success &= !ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL).genericError;
+		while(allocator->blocks.length && !ListDeviceMemoryBlock_last(allocator->blocks)->isActive)
+			ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL);
+
+clean:
 
 	if(acq == ELockAcquire_Acquired)	//Only release if it wasn't already active
 		SpinLock_unlock(&allocator->lock);
 
-	return success;
+	return s_uccess;
 }

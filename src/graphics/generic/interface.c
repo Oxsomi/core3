@@ -227,10 +227,11 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName
+		CharString objectName,
+		DeviceMemoryBlock *resultBlock
 	) {
 		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(allocator->device->instance)->api].memoryAllocate(
-			allocator, requirementsExt, cpuSided, blockId, blockOffset, resourceType, objectName
+			allocator, requirementsExt, cpuSided, blockId, blockOffset, resourceType, objectName, resultBlock
 		);
 	}
 

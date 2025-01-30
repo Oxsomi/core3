@@ -41,6 +41,7 @@ typedef struct CBufferData CBufferData;
 typedef struct ListSHFile ListSHFile;
 typedef struct ListCommandListRef ListCommandListRef;
 typedef struct ListSwapchainRef ListSwapchainRef;
+typedef struct DeviceMemoryBlock DeviceMemoryBlock;
 
 typedef struct RefPtr RefPtr;
 
@@ -144,7 +145,8 @@ typedef struct GraphicsObjectSizes {
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName				//Name of the object that allocates (for dedicated allocations)
+		CharString objectName,				//Name of the object that allocates (for dedicated allocations)
+		DeviceMemoryBlock *resultBlock
 	);
 
 	impl Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
@@ -257,7 +259,8 @@ typedef struct GraphicsObjectSizes {
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName
+		CharString objectName,
+		DeviceMemoryBlock *resultBlock
 	);
 
 	typedef Bool (*DeviceMemoryAllocator_freeAllocationImpl)(GraphicsDevice *device, void *ext);
@@ -438,7 +441,8 @@ typedef struct GraphicsObjectSizes {
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName				//Name of the object that allocates (for dedicated allocations)
+		CharString objectName,						//Name of the object that allocates (for dedicated allocations)
+		DeviceMemoryBlock *resultBlock
 	);
 
 	Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);

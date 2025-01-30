@@ -232,6 +232,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_PAQ)
 				Log_debugLnx("\t\tPAQ (Payload Access Qualifiers)");
 
+			if(cap.featuresExt & EDxGraphicsFeatures_TightAlignment)
+				Log_debugLnx("\t\tTight resource alignment");
+
 			if(cap.featuresExt & EDxGraphicsFeatures_SM6_6)
 				Log_debugLnx("\t\tShader model 6.6");
 

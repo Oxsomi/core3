@@ -124,6 +124,11 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 	if(buf->usage & EDeviceBufferUsage_ASExt)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
+		
+	#if D3D12_PREVIEW_SDK_VERSION >= 716
+		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
+			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
+	#endif
 
 	D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
 	D3D12_RESOURCE_ALLOCATION_INFO retVal = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
@@ -131,46 +136,112 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		deviceExt->device, &retVal, 0, 1, &resourceDesc, &allocInfo
 	);
 
-	Error err;
+	Error err = Error_none();
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(!res)
 		gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"))
 
-	//Allocate memory
+	Bool cpuSided = !!(buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit);
 
-	DxBlockRequirements req = (DxBlockRequirements) {
-		.flags = EDxBlockFlags_None,
-		.alignment = (U32) allocInfo.Alignment,
-		.length = allocInfo.SizeInBytes
-	};
+	DeviceMemoryBlock block;
 
-	gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
-		&device->allocator,
-		&req,
-		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
-		&buf->resource.blockId,
-		&buf->resource.blockOffset,
-		EResourceType_DeviceBuffer,
-		name
-	))
+	//When a buffer gets "too big" we will give it a dedicated allocation.
+	//This means ring buffers are always dedicated resources (they're always >64MiB).
 
-	buf->resource.allocated = true;
+	if (buf->resource.size >= 64 * MIBI) {
+	
+		block = (DeviceMemoryBlock) {
+			.isActive = true,
+			.typeExt = (U32) allocInfo.Alignment,
+			.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
+			.isDedicated = true
+		};
 
-	DeviceMemoryBlock block = device->allocator.blocks.ptr[buf->resource.blockId];
+		if(device->flags & EGraphicsDeviceFlags_IsDebug)
+			Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
 
-	//Bind memory
+		if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
+			gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"))
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
-		deviceExt->device,
-		block.ext,
-		buf->resource.blockOffset,
-		&resourceDesc,
-		D3D12_BARRIER_LAYOUT_UNDEFINED,
-		NULL,
-		0, NULL,
-		&IID_ID3D12Resource,
-		(void**)&bufExt->buffer
-	)))
+		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
+		if(device->allocator.blocks.length >= U32_MAX)
+			gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate dedicated block"))
+
+		U32 blockId = (U32) device->allocator.blocks.length;
+		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&device->allocator.blocks, block))
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->allocator.lock);
+
+		acq = ELockAcquire_Invalid;
+
+		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment);
+
+		if(device->flags & EGraphicsDeviceFlags_IsDebug)
+			Log_debugLnx(
+				"-- Graphics: Allocating dedicated memory block (%"PRIu32" with size %"PRIu64")\n"
+				"\t%s",
+				blockId,
+				allocInfo.SizeInBytes,
+				cpuSided ? "Cpu sided allocation" : "Gpu sided allocation"
+			);
+
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommittedResource3(
+			deviceExt->device,
+			&heap.Properties,
+			heap.Flags,
+			&resourceDesc,
+			D3D12_BARRIER_LAYOUT_UNDEFINED,
+			NULL,
+			NULL, 0, NULL,
+			&IID_ID3D12Resource,
+			(void**)&bufExt->buffer
+		)))
+
+		buf->resource.allocated = true;
+		buf->resource.blockId = blockId;
+		buf->resource.blockOffset = 0;
+	}
+
+	//Allocate as memory block
+
+	else {
+
+		DxBlockRequirements req = (DxBlockRequirements) {
+			.flags = EDxBlockFlags_None,
+			.alignment = (U32) allocInfo.Alignment,
+			.length = allocInfo.SizeInBytes
+		};
+
+		gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
+			&device->allocator,
+			&req,
+			cpuSided,
+			&buf->resource.blockId,
+			&buf->resource.blockOffset,
+			EResourceType_DeviceBuffer,
+			name,
+			&block
+		))
+
+		buf->resource.allocated = true;
+
+		//Bind memory
+
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
+			deviceExt->device,
+			block.ext,
+			buf->resource.blockOffset,
+			&resourceDesc,
+			D3D12_BARRIER_LAYOUT_UNDEFINED,
+			NULL,
+			0, NULL,
+			&IID_ID3D12Resource,
+			(void**)&bufExt->buffer
+		)))
+	}
 
 	if (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->Map(
@@ -257,6 +328,10 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	bufExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
 
 clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
 	ListU16_freex(&name16);
 	return err;
 }

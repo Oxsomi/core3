@@ -47,6 +47,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 	DeviceBufferRef *tempStagingResource = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
 	Bool compressed = ETextureFormat_getIsCompressed(format);
@@ -98,7 +99,15 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 		VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
 		U8 *location = stagingResource->resource.mappedMemoryExt;
 
+		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->allocator.lock);
+
+		acq = ELockAcquire_Invalid;
+
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
@@ -249,7 +258,15 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			stagingExt = DeviceBuffer_ext(staging, Vk);
 		}
 
+		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
+
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
+
+		if(acq == ELockAcquire_Acquired)
+			SpinLock_unlock(&device->allocator.lock);
+
+		acq = ELockAcquire_Invalid;
+
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
@@ -381,6 +398,10 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 		gotoIfError(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer))
 
 clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&device->allocator.lock);
+
 	DeviceBufferRef_dec(&tempStagingResource);
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);

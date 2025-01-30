@@ -98,13 +98,47 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead) && texture->depthFormat)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
+	#if D3D12_PREVIEW_SDK_VERSION >= 716
+		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
+			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
+	#endif
+
 	//Allocate memory
 
 	if(texture->resource.type != EResourceType_Swapchain) {
 
 		D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
 		D3D12_RESOURCE_ALLOCATION_INFO retVal = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
-		D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo2(
+		D3D12_RESOURCE_ALLOCATION_INFO *res = NULL;
+
+		//Small texture optimization:
+		//DeviceTextures with certain properties allow 4KiB alignment rather than 64KiB.
+		// (This generally happens when the mip 0 size is <64KiB)
+		//RenderTextures or DepthStencils can't.
+		//This saves some space.
+
+		if (texture->resource.type == EResourceType_DeviceTexture) {
+
+			allocInfo.Alignment = 4 * KIBI;
+
+			res = deviceExt->device->lpVtbl->GetResourceAllocationInfo2(
+				deviceExt->device, &retVal, 0, 1, &resourceDesc, &allocInfo
+			);
+
+			//Small alignment failed, try again with default alignment.
+
+			if (!res || allocInfo.Alignment != 4 * KIBI || allocInfo.SizeInBytes == U64_MAX) {
+
+				allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
+				retVal = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
+
+				res = deviceExt->device->lpVtbl->GetResourceAllocationInfo2(
+					deviceExt->device, &retVal, 0, 1, &resourceDesc, &allocInfo
+				);
+			}
+		}
+
+		else res = deviceExt->device->lpVtbl->GetResourceAllocationInfo2(
 			deviceExt->device, &retVal, 0, 1, &resourceDesc, &allocInfo
 		);
 
@@ -117,15 +151,16 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		
 		Bool cpuSided = !!(texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit);
 
-		//Dedicated allocations for depth stencil and render targets
+		//Dedicated allocations for depth stencil and render targets that are >=512px
+		//Magic number from NV best practices and seems to match Vulkan's behavior closely.
 
-		if(!isDeviceTexture) {
+		if(!isDeviceTexture && texture->width >= 512 && texture->height >= 512) {
 
 			DeviceMemoryBlock block = (DeviceMemoryBlock) {
+				.isActive = true,
 				.typeExt = (U32) allocInfo.Alignment,
 				.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
-				.isDedicated = true,
-				.resourceType = (U8) texture->resource.type
+				.isDedicated = true
 			};
 
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
@@ -147,21 +182,17 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 			acq = ELockAcquire_Invalid;
 
-			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, texture->resource.type);
-			heap.Flags &=~ (
-				D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_BUFFERS
-			);
+			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment);
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
 			
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
 				Log_debugLnx(
 					"-- Graphics: Allocating dedicated memory block (%"PRIu32" with size %"PRIu64")\n"
-					"\tResource type: %s, %s",
+					"\t%s",
 					blockId,
 					allocInfo.SizeInBytes,
-					EResourceType_names[texture->resource.type],
-					cpuSided ? "cpu sided allocation" : "gpu sided allocation"
+					cpuSided ? "Cpu sided allocation" : "Gpu sided allocation"
 				);
 
 			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommittedResource3(
@@ -189,6 +220,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				.length = allocInfo.SizeInBytes
 			};
 
+			DeviceMemoryBlock block;
 			gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 				&device->allocator,
 				&req,
@@ -196,12 +228,11 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				&texture->resource.blockId,
 				&texture->resource.blockOffset,
 				texture->resource.type,
-				name
+				name,
+				&block
 			))
 
 			texture->resource.allocated = true;
-
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[texture->resource.blockId];
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
 
