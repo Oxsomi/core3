@@ -475,7 +475,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
-			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
+			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, false, (const U8**) &location);
 
 			if(temp.genericError && location == defaultLocation)		//Something else went wrong
 				gotoIfError(clean, temp)
@@ -490,7 +490,9 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 				U64 newSize = prevSize * 2 + allocRange * 3;
 				gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
-				gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
+				gotoIfError(clean, AllocationBuffer_allocateBlockx(
+					stagingBuffer, allocRange, 4, false, (const U8**) &location
+				))
 
 				staging = DeviceBufferRef_ptr(device->staging);
 				stagingExt = DeviceBuffer_ext(staging, Vk);

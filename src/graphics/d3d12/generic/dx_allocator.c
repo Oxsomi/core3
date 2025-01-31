@@ -127,7 +127,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			continue;
 
 		const U8 *alloc = NULL;
-		const Error err1 = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, &alloc);
+		const Error err1 = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, false, &alloc);
 
 		if(err1.genericError)
 			continue;
@@ -182,7 +182,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.ext = heap
 	};
 
-	gotoIfError(clean, AllocationBuffer_createx(realBlockSize, true, &block.allocations))
+	gotoIfError(clean, AllocationBuffer_createx(realBlockSize, true, 0, &block.allocations))
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
@@ -196,7 +196,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			break;
 
 	const U8 *allocLoc = NULL;
-	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, req.length, req.alignment, &allocLoc))
+	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, req.length, req.alignment, false, &allocLoc))
 
 	if(i == allocator->blocks.length) {
 

@@ -152,8 +152,6 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryBlock *resultBlock
 ) {
 
-	(void) resourceType;
-
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
 			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
@@ -239,10 +237,16 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			U64 tempAlignment = memReq.alignment;
 
 			if(!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))		//Adhere to memory requirements
-				tempAlignment = U64_max(256, tempAlignment);
+				tempAlignment = U64_max(deviceExt->atomSize, tempAlignment);
 
 			const U8 *alloc = NULL;
-			Error err1 = AllocationBuffer_allocateBlockx(&blocki->allocations, memReq.size, tempAlignment, &alloc);
+			Error err1 = AllocationBuffer_allocateBlockx(
+				&blocki->allocations,
+				memReq.size,
+				tempAlignment,
+				resourceType != EResourceType_DeviceBuffer,
+				&alloc
+			);
 
 			if(err1.genericError) {
 				//Log_debugLnx("Skipping block %"PRIu64" because of: no memory", i);
@@ -321,7 +325,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.ext = mem
 	};
 
-	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations))
+	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, deviceExt->nonLinearAlignment, &block.allocations))
 
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
@@ -335,7 +339,13 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			break;
 
 	const U8 *allocLoc = NULL;
-	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc))
+	gotoIfError(clean, AllocationBuffer_allocateBlockx(
+		&block.allocations,
+		memReq.size,
+		memReq.alignment,
+		resourceType != EResourceType_DeviceBuffer,
+		&allocLoc
+	))
 
 	if(i == allocator->blocks.length) {
 

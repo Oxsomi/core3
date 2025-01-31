@@ -236,7 +236,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 		Error temp = AllocationBuffer_allocateBlockx(
-			stagingBuffer, allocRange, compressed ? 16 : 4, (const U8**) &location
+			stagingBuffer, allocRange, compressed ? 16 : 4, false, (const U8**) &location
 		);
 
 		if(temp.genericError && location == defaultLocation)		//Something major went wrong
@@ -252,7 +252,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 			U64 newSize = prevSize * 2 + allocRange * 3;
 			gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
-			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
+			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, false, (const U8**) &location))
 
 			staging = DeviceBufferRef_ptr(device->staging);
 			stagingExt = DeviceBuffer_ext(staging, Vk);

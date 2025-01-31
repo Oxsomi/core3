@@ -211,7 +211,9 @@ typedef struct VkGraphicsDevice {
 	PFN_vkResetFences resetFences;
 	PFN_vkDestroyFence destroyFence;
 
-	U8 padding[7], framesInFlight;
+	U32 nonLinearAlignment;
+	U8 padding[1], framesInFlight;
+	U16 atomSize;
 
 } VkGraphicsDevice;
 

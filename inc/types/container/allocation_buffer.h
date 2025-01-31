@@ -28,9 +28,14 @@
 //An allocation buffer functions mostly like a ring buffer, but it falls back to a
 //normal block buffer if it can't allocate in O(1) (e.g. space at back or front is unavailable).
 //This means it can be used for both purposes.
+//
+//"Non linear" is a flag that can be used for Vulkan when textures and buffers are placed closely together.
+//In that case, the block's alignment isn't the only one that is important, but also the buffer's nonLinearAlignment is.
+// If a non linear buffer is next to a linear buffer it needs to introduce this extra padding.
 
 typedef struct AllocationBufferBlock {
-	U64 start, end, alignment;
+	U64 startAndNonLinearAndFree;	//1 bit isFree, 1 bit isNonLinear, 62 bit start
+	U64 end, alignment;
 } AllocationBufferBlock;
 
 TList(AllocationBufferBlock);
@@ -38,14 +43,22 @@ TList(AllocationBufferBlock);
 typedef struct AllocationBuffer {
 	Buffer buffer;							//Our data buffer
 	ListAllocationBufferBlock allocations;
+	U64 nonLinearAlignment;					//Padding between linear and non linear allocations
 } AllocationBuffer;
 
-Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer);
+Error AllocationBuffer_create(
+	U64 size,
+	Bool isVirtual,
+	U64 nonLinearAlignment,
+	Allocator alloc,
+	AllocationBuffer *allocationBuffer
+);
 
 Error AllocationBuffer_createRefFromRegion(
 	Buffer origin,
 	U64 offset,
 	U64 size,
+	U64 nonLinearAlignment,
 	Allocator alloc,
 	AllocationBuffer *allocationBuffer
 );
@@ -62,6 +75,7 @@ Error AllocationBuffer_allocateBlock(
 	AllocationBuffer *allocationBuffer,
 	U64 size,
 	U64 alignment,
+	Bool isNonLinearResource,
 	Allocator alloc,
 	const U8 **result
 );
@@ -70,6 +84,7 @@ Error AllocationBuffer_allocateAndFillBlock(
 	AllocationBuffer *allocationBuffer,
 	Buffer data,
 	U64 alignment,
+	Bool isNonLinearResource,
 	Allocator alloc,
 	U8 **result
 );

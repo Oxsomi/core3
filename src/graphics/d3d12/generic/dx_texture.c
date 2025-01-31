@@ -154,7 +154,11 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		//Dedicated allocations for depth stencil and render targets that are >=512px
 		//Magic number from NV best practices and seems to match Vulkan's behavior closely.
 
-		if(!isDeviceTexture && texture->width >= 512 && texture->height >= 512) {
+		if(
+			!isDeviceTexture &&
+			texture->width >= 512 && texture->height >= 512 &&
+			device->info.type == EGraphicsDeviceType_Dedicated
+		) {
 
 			DeviceMemoryBlock block = (DeviceMemoryBlock) {
 				.isActive = true,

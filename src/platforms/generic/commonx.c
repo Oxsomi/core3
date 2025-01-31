@@ -173,24 +173,63 @@ Bool Buffer_resizex(Buffer *buf, U64 newLen, Bool preserveContents, Bool clearUn
 	return Buffer_resize(buf, newLen, preserveContents, clearUnsetContents, Platform_instance->alloc, e_rr);
 }
 
-Error AllocationBuffer_createx(U64 size, Bool isVirtual, AllocationBuffer *allocationBuffer) {
-	return AllocationBuffer_create(size, isVirtual, Platform_instance->alloc, allocationBuffer);
+Error AllocationBuffer_createx(U64 size, Bool isVirtual, U64 nonLinearAlignment, AllocationBuffer *allocationBuffer) {
+	return AllocationBuffer_create(size, isVirtual, nonLinearAlignment, Platform_instance->alloc, allocationBuffer);
 }
 
 Bool AllocationBuffer_freex(AllocationBuffer *allocationBuffer) {
 	return AllocationBuffer_free(allocationBuffer, Platform_instance->alloc);
 }
 
-Error AllocationBuffer_createRefFromRegionx(Buffer origin, U64 offset, U64 size, AllocationBuffer *allocationBuffer) {
-	return AllocationBuffer_createRefFromRegion(origin, offset, size, Platform_instance->alloc, allocationBuffer);
+Error AllocationBuffer_createRefFromRegionx(
+	Buffer origin,
+	U64 offset,
+	U64 size,
+	U64 nonLinearAlignment,
+	AllocationBuffer *allocationBuffer
+) {
+	return AllocationBuffer_createRefFromRegion(
+		origin,
+		offset,
+		size,
+		nonLinearAlignment,
+		Platform_instance->alloc,
+		allocationBuffer
+	);
 }
 
-Error AllocationBuffer_allocateBlockx(AllocationBuffer *allocationBuffer, U64 size, U64 alignment, const U8 **result) {
-	return AllocationBuffer_allocateBlock(allocationBuffer, size, alignment, Platform_instance->alloc, result);
+Error AllocationBuffer_allocateBlockx(
+	AllocationBuffer *allocationBuffer,
+	U64 size,
+	U64 alignment,
+	Bool isNonLinearResource,
+	const U8 **result
+) {
+	return AllocationBuffer_allocateBlock(
+		allocationBuffer,
+		size,
+		alignment,
+		isNonLinearResource,
+		Platform_instance->alloc,
+		result
+	);
 }
 
-Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer, Buffer data, U64 alignment, U8 **result) {
-	return AllocationBuffer_allocateAndFillBlock(allocationBuffer, data, alignment, Platform_instance->alloc, result);
+Error AllocationBuffer_allocateAndFillBlockx(
+	AllocationBuffer *allocationBuffer,
+	Buffer data,
+	U64 alignment,
+	Bool isNonLinearResource,
+	U8 **result
+) {
+	return AllocationBuffer_allocateAndFillBlock(
+		allocationBuffer,
+		data,
+		alignment,
+		isNonLinearResource,
+		Platform_instance->alloc,
+		result
+	);
 }
 
 //oiCA

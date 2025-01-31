@@ -36,12 +36,32 @@ Error Buffer_createEmptyBytesx(U64 length, Buffer *output);
 Error Buffer_createUninitializedBytesx(U64 length, Buffer *output);
 Bool Buffer_resizex(Buffer *buf, U64 newLen, Bool preserveContents, Bool clearUnsetContents, Error *e_rr);
 
-Error AllocationBuffer_createx(U64 size, Bool isVirtual, AllocationBuffer *allocationBuffer);
+Error AllocationBuffer_createx(U64 size, Bool isVirtual, U64 nonLinearAlignment, AllocationBuffer *allocationBuffer);
 Bool AllocationBuffer_freex(AllocationBuffer *allocationBuffer);
 
-Error AllocationBuffer_createRefFromRegionx(Buffer origin, U64 offset, U64 size, AllocationBuffer *allocationBuffer);
-Error AllocationBuffer_allocateBlockx(AllocationBuffer *allocationBuffer, U64 size, U64 alignment, const U8 **result);
-Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer, Buffer data, U64 alignment, U8 **result);
+Error AllocationBuffer_createRefFromRegionx(
+	Buffer origin,
+	U64 offset,
+	U64 size,
+	U64 nonLinearAlignment,
+	AllocationBuffer *allocationBuffer
+);
+
+Error AllocationBuffer_allocateBlockx(
+	AllocationBuffer *allocationBuffer,
+	U64 size,
+	U64 alignment,
+	Bool isNonLinearResource,
+	const U8 **result
+);
+
+Error AllocationBuffer_allocateAndFillBlockx(
+	AllocationBuffer *allocationBuffer,
+	Buffer data,
+	U64 alignment,
+	Bool isNonLinearResource,
+	U8 **result
+);
 
 #ifdef __cplusplus
 	}

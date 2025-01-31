@@ -558,7 +558,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
 		gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
-			stagingBuffer, newSize / 3 * i, newSize / 3, &device->stagingAllocations[i]
+			stagingBuffer, newSize / 3 * i, newSize / 3, 0, &device->stagingAllocations[i]
 		))
 
 clean:

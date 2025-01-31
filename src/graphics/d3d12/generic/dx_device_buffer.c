@@ -149,7 +149,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	//When a buffer gets "too big" we will give it a dedicated allocation.
 	//This means ring buffers are always dedicated resources (they're always >64MiB).
 
-	if (buf->resource.size >= 64 * MIBI) {
+	if (buf->resource.size >= 64 * MIBI && device->info.type == EGraphicsDeviceType_Dedicated) {
 	
 		block = (DeviceMemoryBlock) {
 			.isActive = true,
@@ -490,7 +490,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			ID3D12ManualWriteTrackingResource *tracking = (ID3D12ManualWriteTrackingResource*) staging->resource.debugExt;
 
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
-			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
+			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, false, (const U8**) &location);
 
 			if(temp.genericError && location == defaultLocation)		//Something else went wrong
 				gotoIfError(clean, temp)
@@ -505,7 +505,9 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 				U64 newSize = prevSize * 2 + allocRange * 3;
 				gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
-				gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
+				gotoIfError(clean, AllocationBuffer_allocateBlockx(
+					stagingBuffer, allocRange, 4, false, (const U8**) &location
+				))
 
 				staging = DeviceBufferRef_ptr(device->staging);
 				stagingExt = DeviceBuffer_ext(staging, Dx);

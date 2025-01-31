@@ -926,6 +926,17 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	gotoIfError(clean, ListVkImageMemoryBarrier2_reservex(&deviceExt->imageTransitions, 16))
 	gotoIfError(clean, ListVkImageCopy_reservex(&deviceExt->imageCopyRanges, 8))
 
+	//Alignment rules
+
+	VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
+	};
+
+	instanceExt->getPhysicalDeviceProperties2((VkPhysicalDevice) device->info.ext, &properties2);
+
+	deviceExt->atomSize = (U8) properties2.properties.limits.nonCoherentAtomSize;
+	deviceExt->nonLinearAlignment = (U32) properties2.properties.limits.bufferImageGranularity;
+
 clean:
 
 	if(err.genericError)
