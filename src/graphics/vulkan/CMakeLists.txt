@@ -57,6 +57,7 @@ endif()
 
 if("${platform}" STREQUAL "windows")
 	target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_win32_surface")
+	target_link_libraries(${TARGET_NAME} PUBLIC dxgi dxguid)
 elseif("${platform}" STREQUAL "android")
 	target_compile_definitions(${TARGET_NAME} PRIVATE -D_VK_SURFACE_EXT="VK_KHR_android_surface")
 elseif("${platform}" STREQUAL "osx")

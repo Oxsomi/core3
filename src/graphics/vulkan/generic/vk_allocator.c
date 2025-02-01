@@ -22,6 +22,8 @@
 #include "graphics/generic/allocator.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
+#include "graphics/generic/interface.h"
+#include "graphics/vulkan/vk_interface.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
@@ -40,13 +42,16 @@ Error VkDeviceMemoryAllocator_findMemory(
 	Bool cpuSided,
 	U32 memoryBits,
 	U32 *outMemoryId,
-	VkMemoryPropertyFlags *outPropertyFlags,
-	U64 *size
+	VkMemoryPropertyFlags *outPropertyFlags
 ) {
 
-	//Find suitable memory type
-
 	VkMemoryPropertyFlags all = local | host | coherent;
+	U32 propertyId = 2;
+
+	U32 memoryId = U32_MAX;
+
+	if(!deviceExt->hasDistinctMemory)
+		all &=~ local;
 
 	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
 		host | coherent,
@@ -54,58 +59,12 @@ Error VkDeviceMemoryAllocator_findMemory(
 		0
 	};
 
-	U32 memoryId = U32_MAX;
-	U32 propertyId = 2;
-
-	U64 maxHeapSizes[2] = { 0 };
-	U32 heapIds[2] = { 0 };
-
-	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
-
-		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
-		heap.flags &= 1;														//OOB
-
-		if (heap.size > maxHeapSizes[heap.flags] && heap.size > 256 * MIBI) {	//Ignore 256MB to allow AMD APU to work.
-			maxHeapSizes[heap.flags] = heap.size;
-			heapIds[heap.flags] = i;
-		}
-	}
-
-	Bool distinct = true;
-	Bool hasLocal = true;
-
- 	if (!maxHeapSizes[0]) {						//If there's only local heaps then we know we're on mobile. Use local heap.
-		maxHeapSizes[0] = maxHeapSizes[1];
-		heapIds[0] = heapIds[1];
-		distinct = false;
-	}
-
-	else if (!maxHeapSizes[1]) {				//If there's only host heaps then we know we're on AMD APU. Use host heap.
-		maxHeapSizes[1] = maxHeapSizes[0];
-		heapIds[1] = heapIds[0];
-		distinct = false;
-		hasLocal = false;
-	}
-
-	if(!distinct) {
-		all &=~ local;		//Ignore local
-		hasLocal = false;
-	}
-
-	if (!cpuSided && hasLocal) {
+	if (!cpuSided && deviceExt->hasLocalMemory) {
 
 		for (U32 i = 0; i < 3; ++i)
 			properties[i] |= local;
 
 		++propertyId;
-	}
-
-	if (!maxHeapSizes[0] || !maxHeapSizes[1])
-		return Error_notFound(0, 0, "VkDeviceMemoryAllocator_findMemory() failed, no heaps found");
-
-	if (size) {
-		*size = (cpuSided ? maxHeapSizes[0] : maxHeapSizes[1]) | ((U64)distinct << 63);
-		return Error_none();
 	}
 
 	//Allocate from the heaps we selected
@@ -117,7 +76,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 		if(!((memoryBits >> i) & 1))
 			continue;
 
-		if(type.heapIndex != heapIds[0] && type.heapIndex != heapIds[1])
+		if(type.heapIndex != deviceExt->heapIds[0] && type.heapIndex != deviceExt->heapIds[1])
 			continue;
 
 		const VkMemoryPropertyFlags propFlag = type.propertyFlags;
@@ -202,7 +161,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	//Find an existing allocation
 	
 	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(
-		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
+		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop
 	))
 
 	if (!isDedicated) {
@@ -293,15 +252,24 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.memoryTypeIndex = memoryId
 	};
 
+	U64 usedMem = VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(allocator->device, !cpuSided);
+	U64 maxAlloc = 
+		cpuSided ? allocator->device->info.capabilities.sharedMemory :
+		allocator->device->info.capabilities.dedicatedMemory;
+
+	if(usedMem != U64_MAX && usedMem + alloc.allocationSize > maxAlloc)
+		gotoIfError(clean, Error_outOfMemory(0, "Memory block allocation would exceed available memory"))
+
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_debugLnx(
 			"-- Graphics: Allocating new memory block (%"PRIu64" with size %"PRIu64" from allocation with size %"PRIu64")\n"
-			"\t%s (memory id: %"PRIu32")",
+			"\t%s (memory id: %"PRIu32", available memory: %"PRIu64")",
 			allocator->blocks.length,
 			alloc.allocationSize,
 			memReq.size,
 			cpuSided ? "Cpu sided allocation" : "Gpu sided allocation",
-			memoryId
+			memoryId,
+			usedMem == U64_MAX ? U64_MAX : maxAlloc - usedMem
 		);
 
 	gotoIfError(clean, checkVkError(deviceExt->allocateMemory(deviceExt->device, &alloc, NULL, &mem)))

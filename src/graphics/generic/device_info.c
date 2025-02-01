@@ -264,6 +264,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_DriverProperties)
 				Log_debugLnx("\t\tDriver properties");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_MemoryBudget)
+				Log_debugLnx("\t\tMemory budget");
 		}
 	}
 }

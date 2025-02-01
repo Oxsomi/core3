@@ -107,6 +107,8 @@
 	);
 
 	void VkGraphicsDevice_postInit(GraphicsDevice *device);
+	U64 VkGraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
+
 	Bool VkGraphicsDevice_free(const GraphicsInstance *instance, void *ext);
 
 	Error VkGraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);

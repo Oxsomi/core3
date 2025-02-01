@@ -21,6 +21,13 @@
 #pragma once
 #include "graphics/vulkan/vulkan.h"
 
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+	#define UNICODE
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <dxgi1_6.h>
+#endif
+
 extern const C8 *reqExtensionsName[];
 extern U64 reqExtensionsNameCount;
 
@@ -46,7 +53,8 @@ typedef enum EOptExtensions {
 	EOptExtensions_DriverProperties,
 	EOptExtensions_AtomicI64,
 	EOptExtensions_F16,
-	EOptExtensions_MultiDrawIndirectCount
+	EOptExtensions_MultiDrawIndirectCount,
+	EOptExtensions_MemoryBudget
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];
@@ -92,7 +100,12 @@ typedef struct VkGraphicsInstance {
 	void *createSurfaceExt;									//Android, windows, etc.
 
 	PFN_vkDestroySurfaceKHR destroySurface;
-	U64 padding;
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		IDXGIFactory6 *dxgiFactory;
+	#else
+		U64 padding;
+	#endif
 
 } VkGraphicsInstance;
 

@@ -107,7 +107,8 @@ typedef enum EVkGraphicsFeatures {
 	EVkGraphicsFeatures_PerfQuery				= 1 << 0,
 	EVkGraphicsFeatures_Maintenance4			= 1 << 1,
 	EVkGraphicsFeatures_BufferDeviceAddress		= 1 << 2,
-	EVkGraphicsFeatures_DriverProperties		= 1 << 3
+	EVkGraphicsFeatures_DriverProperties		= 1 << 3,
+	EVkGraphicsFeatures_MemoryBudget			= 1 << 4
 } EVkGraphicsFeatures;
 
 //Generic graphics features

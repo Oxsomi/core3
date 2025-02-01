@@ -274,6 +274,8 @@ typedef struct GraphicsObjectSizes {
 	);
 
 	typedef void (*GraphicsDevice_postInitImpl)(GraphicsDevice *device);
+	typedef U64 (*GraphicsDevice_getMemoryBudgetImpl)(GraphicsDevice *device, Bool isDeviceLocal);
+
 	typedef Bool (*GraphicsDevice_freeImpl)(const GraphicsInstance *instance, void *ext);
 
 	typedef Error (*GraphicsDeviceRef_waitImpl)(GraphicsDeviceRef *deviceRef);
@@ -343,6 +345,8 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDeviceRef_waitImpl						deviceWait;
 		GraphicsDevice_freeImpl							deviceFree;
 		GraphicsDevice_submitCommandsImpl				deviceSubmitCommands;
+		GraphicsDevice_getMemoryBudgetImpl				deviceGetMemoryBudget;
+
 		CommandList_processImpl							commandListProcess;
 
 		GraphicsInstance_createImpl						instanceCreate;
@@ -354,7 +358,7 @@ typedef struct GraphicsObjectSizes {
 	typedef struct Platform Platform;
 	typedef struct GraphicsInterface GraphicsInterface;
 
-	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance, GraphicsInterface *interface);
+	typedef GraphicsInterfaceTable (*GraphicsInterface_getTableImpl)(Platform *instance, GraphicsInterface *interf);
 
 	typedef struct GraphicsInterface {
 		GraphicsInterfaceTable tables[EGraphicsApi_Count];
@@ -456,6 +460,8 @@ typedef struct GraphicsObjectSizes {
 	);
 
 	void GraphicsDevice_postInitExt(GraphicsDevice *device);
+	U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
+
 	Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
 	Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);

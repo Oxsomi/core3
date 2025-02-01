@@ -253,6 +253,12 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].devicePostInit(device);
 	}
 
+	U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal) {
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].deviceGetMemoryBudget(
+			device, isDeviceLocal
+		);
+	}
+
 	Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 		return GraphicsInterface_instance->tables[instance->api].deviceFree(instance, ext);
 	}

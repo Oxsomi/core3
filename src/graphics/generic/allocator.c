@@ -48,6 +48,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 		))
 
 	DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[blockId];
+
 	gotoIfError3(clean, AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset))
 
 	if (!block->allocations.allocations.length) {

@@ -164,6 +164,12 @@ typedef RefPtr SwapchainRef;
 TListNamed(CommandListRef*, ListCommandListRef);
 TListNamed(SwapchainRef*, ListSwapchainRef);
 
+//Returns memory in use in bytes.
+//For dGPU, isDeviceLocal is VRAM while !isDeviceLocal is "shared" mem
+//For iGPU/CPU it will return the same 0 for device local.
+//It returns U64_MAX on error (e.g. if nullptr)
+U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal);
+
 //Submit commands to device
 //appData is up to a 368 byte per frame array used for transmitting render critical info.
 Error GraphicsDeviceRef_submitCommands(

@@ -172,7 +172,7 @@ class oxc3(ConanFile):
 	def package_info(self):
 
 		if self.settings.os == "Windows":
-			self.cpp_info.system_libs = [ "Bcrypt" ]
+			self.cpp_info.system_libs = [ "Bcrypt", "dxgi" ]
 
 		elif self.settings.os == "Macos" or self.settings.os == "iOS" or self.settings.os == "watchOS":
 			self.cpp_info.frameworks = [ "Security", "CoreFoundation", "ApplicationServices", "AppKit" ]

@@ -21,6 +21,8 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/allocator.h"
 #include "graphics/d3d12/dx_device.h"
+#include "graphics/generic/interface.h"
+#include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
@@ -157,15 +159,24 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	);
 
 	heapDesc.SizeInBytes = realBlockSize;
+	
+	U64 usedMem = DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(allocator->device, !cpuSided);
+	U64 maxAlloc = 
+		cpuSided ? allocator->device->info.capabilities.sharedMemory :
+		allocator->device->info.capabilities.dedicatedMemory;
+
+	if(usedMem != U64_MAX && usedMem + heapDesc.SizeInBytes > maxAlloc)
+		gotoIfError(clean, Error_outOfMemory(0, "Memory block allocation would exceed available memory"))
 
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_debugLnx(
 			"-- Graphics: Allocating new memory block (%"PRIu64" with size %"PRIu64" from allocation with size %"PRIu64")\n"
-			"\t%s",
+			"\t%s (Available memory: %"PRIu64")",
 			allocator->blocks.length,
 			realBlockSize,
 			req.length,
-			cpuSided ? "Cpu sided allocation" : "Gpu sided allocation"
+			cpuSided ? "Cpu sided allocation" : "Gpu sided allocation",
+			maxAlloc - usedMem
 		);
 	
 	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateHeap(

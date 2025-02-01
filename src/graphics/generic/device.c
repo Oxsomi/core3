@@ -813,6 +813,19 @@ clean:
 	return err;
 }
 
+U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal) {
+
+	if(!deviceRef || deviceRef->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+		return U64_MAX;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->info.type != EGraphicsDeviceType_Dedicated && isDeviceLocal)
+		return 0;
+
+	return GraphicsDevice_getMemoryBudgetExt(device, isDeviceLocal);
+}
+
 Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 
 	if(!deviceRef || deviceRef->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)

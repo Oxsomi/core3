@@ -43,8 +43,6 @@
 	#include <amd_ags.h>
 #endif
 
-#undef interface
-
 TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
 TListNamedImpl(ListIDXGIAdapter4)
 
@@ -66,10 +64,10 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 		return &DxGraphicsObjectSizes;
 	}
 #else
-	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interface) {
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interf) {
 
 		Platform_instance = instance;
-		GraphicsInterface_instance = interface;
+		GraphicsInterface_instance = interf;
 
 		return (GraphicsInterfaceTable) {
 
@@ -111,6 +109,8 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 			.deviceWait = D3D12GraphicsDeviceRef_wait,
 			.deviceFree = D3D12GraphicsDevice_free,
 			.deviceSubmitCommands = D3D12GraphicsDevice_submitCommands,
+			.deviceGetMemoryBudget = D3D12GraphicsDevice_getMemoryBudget,
+
 			.commandListProcess = D3D12CommandList_process,
 
 			.instanceCreate = D3D12GraphicsInstance_create,

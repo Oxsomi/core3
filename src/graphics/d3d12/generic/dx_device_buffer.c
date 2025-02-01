@@ -163,6 +163,12 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 		if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
 			gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"))
+			
+		U64 usedMem = DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(device, !cpuSided);
+		U64 maxAlloc = cpuSided ? device->info.capabilities.sharedMemory : device->info.capabilities.dedicatedMemory;
+
+		if(usedMem != U64_MAX && usedMem + allocInfo.SizeInBytes > maxAlloc)
+			gotoIfError(clean, Error_outOfMemory(0, "Dedicated memory block allocation would exceed available memory"))
 
 		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
 
@@ -171,6 +177,19 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 		U32 blockId = (U32) device->allocator.blocks.length;
 		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&device->allocator.blocks, block))
+
+		AllocationBuffer *allocBuf = &device->allocator.blocks.ptrNonConst[blockId].allocations;
+
+		gotoIfError(clean, AllocationBuffer_createx(allocInfo.SizeInBytes, true, 0, allocBuf))
+
+		U8 *dummy = NULL;
+		gotoIfError(clean, AllocationBuffer_allocateBlockx(
+			allocBuf,
+			allocInfo.SizeInBytes,
+			allocInfo.Alignment,
+			false,
+			(const U8**) &dummy
+		))
 
 		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(&device->allocator.lock);
@@ -182,10 +201,11 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx(
 				"-- Graphics: Allocating dedicated memory block (%"PRIu32" with size %"PRIu64")\n"
-				"\t%s",
+				"\t%s (Memory left: %"PRIu64")",
 				blockId,
 				allocInfo.SizeInBytes,
-				cpuSided ? "Cpu sided allocation" : "Gpu sided allocation"
+				cpuSided ? "Cpu sided allocation" : "Gpu sided allocation",
+				maxAlloc - usedMem
 			);
 
 		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommittedResource3(

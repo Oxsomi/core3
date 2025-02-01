@@ -374,6 +374,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_AtomicI64:					on = types & EGraphicsDataTypes_AtomicI64;				break;
 			case EOptExtensions_F16:						on = types & EGraphicsDataTypes_F16;					break;
 			case EOptExtensions_MultiDrawIndirectCount:		on = feat & EGraphicsFeatures_MultiDrawIndirectCount;	break;
+			case EOptExtensions_MemoryBudget:				on = featEx & EVkGraphicsFeatures_MemoryBudget;			break;
 
 			default:
 				continue;
@@ -569,6 +570,9 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkWaitForFences, deviceExt->waitForFences)
 	getVkFunctionDevice(clean, vkResetFences, deviceExt->resetFences)
 	getVkFunctionDevice(clean, vkDestroyFence, deviceExt->destroyFence)
+
+	if(featEx & EVkGraphicsFeatures_MemoryBudget)
+		getVkFunctionDevice(clean, vkGetPhysicalDeviceMemoryProperties2, deviceExt->getPhysicalDeviceMemoryProperties2)
 
 	getVkFunctionDevice(clean, vkCmdPipelineBarrier2KHR, deviceExt->cmdPipelineBarrier2)
 	getVkFunctionDevice(clean, vkGetSwapchainImagesKHR, deviceExt->getSwapchainImages)
@@ -937,6 +941,27 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	deviceExt->atomSize = (U8) properties2.properties.limits.nonCoherentAtomSize;
 	deviceExt->nonLinearAlignment = (U32) properties2.properties.limits.bufferImageGranularity;
 
+	//DXGI adapter in case there's no other way to query memory
+	
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+		LUID luid = (LUID) { 0 };
+		Buffer_memcpy(Buffer_createRef(&luid, sizeof(U64)), Buffer_createRefConst(&device->info.luid, sizeof(U64)));
+
+		if(instanceExt->dxgiFactory && (device->info.capabilities.features & EGraphicsFeatures_LUID))
+			instanceExt->dxgiFactory->lpVtbl->EnumAdapterByLuid(
+				instanceExt->dxgiFactory,
+				luid,
+				&IID_IDXGIAdapter3,
+				(void**) &deviceExt->dxgiAdapter
+			);
+
+	#endif
+
+	//Find memory types
+
+	gotoIfError(clean, VkGraphicsDevice_findAllMemory(deviceExt))
+
 clean:
 
 	if(err.genericError)
@@ -946,6 +971,48 @@ clean:
 	ListConstC8_freex(&extensions);
 	ListVkDeviceQueueCreateInfo_freex(&queues);
 	ListVkQueueFamilyProperties_freex(&queueFamilies);
+	return err;
+}
+
+Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
+
+	Error err = Error_none();
+
+	deviceExt->hasDistinctMemory = true;
+	deviceExt->hasLocalMemory = true;
+
+	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
+
+		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
+		heap.flags &= 1;														//OOB
+
+		//Ignore 256MB to allow AMD APU to work.
+		if (heap.size > deviceExt->maxHeapSizes[heap.flags] && heap.size > 256 * MIBI) {
+			deviceExt->maxHeapSizes[heap.flags] = heap.size;
+			deviceExt->heapIds[heap.flags] = i;
+		}
+	}
+
+	if (!deviceExt->maxHeapSizes[0]) {			//If there's only local heaps then we know we're on mobile. Use local heap.
+		deviceExt->maxHeapSizes[0] = deviceExt->maxHeapSizes[1];
+		deviceExt->heapIds[0] = deviceExt->heapIds[1];
+		deviceExt->hasDistinctMemory = false;
+	}
+
+	else if (!deviceExt->maxHeapSizes[1]) {		//If there's only host heaps then we know we're on AMD APU. Use host heap.
+		deviceExt->maxHeapSizes[1] = deviceExt->maxHeapSizes[0];
+		deviceExt->heapIds[1] = deviceExt->heapIds[0];
+		deviceExt->hasDistinctMemory = false;
+		deviceExt->hasLocalMemory = false;
+	}
+
+	if (!deviceExt->maxHeapSizes[0] || !deviceExt->maxHeapSizes[1])
+		gotoIfError(clean, Error_notFound(0, 0, "VkGraphicsDevice_findAllMemory() failed, no heaps found"))
+
+	if(!deviceExt->hasDistinctMemory)
+		deviceExt->hasLocalMemory = false;
+
+clean:
 	return err;
 }
 
@@ -977,6 +1044,52 @@ void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
 	}
 
 	deviceExt->updateDescriptorSets(deviceExt->device, device->framesInFlight, uboDescriptor, 0, NULL);
+}
+
+U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
+
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	if(deviceExt->getPhysicalDeviceMemoryProperties2) {
+
+		VkPhysicalDeviceMemoryBudgetPropertiesEXT propertiesMemoryBudget = (VkPhysicalDeviceMemoryBudgetPropertiesEXT) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT
+		};
+
+		VkPhysicalDeviceMemoryProperties2 properties = (VkPhysicalDeviceMemoryProperties2) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+			.pNext = &propertiesMemoryBudget
+		};
+
+		deviceExt->getPhysicalDeviceMemoryProperties2((VkPhysicalDevice) device->info.ext, &properties);
+
+		return propertiesMemoryBudget.heapUsage[deviceExt->heapIds[isDeviceLocal]];
+	}
+
+	//If on windows, we can actually use a fallback in case the extension isn't present,
+	//We can use our DXGI adapter to query instead.
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+		if(deviceExt->dxgiAdapter) {
+
+			DXGI_QUERY_VIDEO_MEMORY_INFO vidMem = (DXGI_QUERY_VIDEO_MEMORY_INFO) { 0 };
+			HRESULT hr = deviceExt->dxgiAdapter->lpVtbl->QueryVideoMemoryInfo(
+				deviceExt->dxgiAdapter,
+				0,
+				isDeviceLocal ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
+				&vidMem
+			);
+
+			if(FAILED(hr))
+				return U64_MAX;
+
+			return vidMem.CurrentUsage;
+		}
+
+	#endif
+
+	return U64_MAX;
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
@@ -1045,6 +1158,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	ListVkMappedMemoryRange_freex(&deviceExt->mappedMemoryRange);
 	ListVkBufferImageCopy_freex(&deviceExt->bufferImageCopyRanges);
 	ListVkBufferCopy_freex(&deviceExt->bufferCopies);
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		deviceExt->dxgiAdapter->lpVtbl->Release(deviceExt->dxgiAdapter);
+	#endif
 
 	return true;
 }

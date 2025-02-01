@@ -53,10 +53,10 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 		return &VkGraphicsObjectSizes;
 	}
 #else
-	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interface) {
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interf) {
 
 		Platform_instance = instance;
-		GraphicsInterface_instance = interface;
+		GraphicsInterface_instance = interf;
 
 		return (GraphicsInterfaceTable) {
 
@@ -98,6 +98,8 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 			.deviceWait = VkGraphicsDeviceRef_wait,
 			.deviceFree = VkGraphicsDevice_free,
 			.deviceSubmitCommands = VkGraphicsDevice_submitCommands,
+			.deviceGetMemoryBudget = VkGraphicsDevice_getMemoryBudget,
+
 			.commandListProcess = VkCommandList_process,
 
 			.instanceCreate = VkGraphicsInstance_create,
@@ -382,6 +384,10 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	instance->api = EGraphicsApi_Vulkan;
 	instance->apiVersion = application.apiVersion;
 
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->dxgiFactory);
+	#endif
+
 clean:
 
 	CharString_freex(&title);
@@ -400,6 +406,11 @@ Bool VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc
 	(void)alloc;
 
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		if(instanceExt->dxgiFactory)
+			instanceExt->dxgiFactory->lpVtbl->Release(instanceExt->dxgiFactory);
+	#endif
 
 	if(instanceExt->debugDestroyReportCallback)
 		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
@@ -446,7 +457,8 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_driver_properties",
 	"VK_KHR_shader_atomic_int64",
 	"VK_KHR_shader_float16_int8",
-	"VK_KHR_draw_indirect_count"
+	"VK_KHR_draw_indirect_count",
+	"VK_EXT_memory_budget"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1466,13 +1478,10 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		VkGraphicsDevice fakeDevice = (VkGraphicsDevice) { 0 };
 		instanceExt->getPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
 
-		U64 cpuHeapSize = 0;
-		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, true, U32_MAX, NULL, NULL, &cpuHeapSize))
-		cpuHeapSize &= (U64)I64_MAX;
+		gotoIfError(clean, VkGraphicsDevice_findAllMemory(&fakeDevice))
 
-		U64 gpuHeapSize = 0;
-		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, false, U32_MAX, NULL, NULL, &gpuHeapSize))
-		gpuHeapSize &= (U64)I64_MAX;
+		U64 cpuHeapSize = fakeDevice.maxHeapSizes[0];
+		U64 gpuHeapSize = fakeDevice.maxHeapSizes[1];
 
 		if(cpuHeapSize < 512 * MIBI || gpuHeapSize < 512 * MIBI) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", not enough VRAM or RAM (requires 512MB each).", i);

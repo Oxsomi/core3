@@ -551,6 +551,24 @@ void DX_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {		//No-op in
 	(void)device;
 }
 
+U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
+
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	DXGI_QUERY_VIDEO_MEMORY_INFO vidMem = (DXGI_QUERY_VIDEO_MEMORY_INFO) { 0 };
+	HRESULT hr = deviceExt->adapter4->lpVtbl->QueryVideoMemoryInfo(
+		deviceExt->adapter4,
+		0,
+		isDeviceLocal ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
+		&vidMem
+	);
+
+	if(FAILED(hr))
+		return U64_MAX;
+
+	return vidMem.CurrentUsage;
+}
+
 Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)

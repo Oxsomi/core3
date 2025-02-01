@@ -107,6 +107,8 @@
 	);
 
 	void D3D12GraphicsDevice_postInit(GraphicsDevice *device);
+	U64 D3D12GraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
+
 	Bool D3D12GraphicsDevice_free(const GraphicsInstance *instance, void *ext);
 
 	Error D3D12GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);

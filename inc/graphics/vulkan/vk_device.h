@@ -24,6 +24,13 @@
 #include "types/container/list.h"
 #include "types/math/vec.h"
 
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS		//For fallback to query memory usage
+	#define UNICODE
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <dxgi1_4.h>
+#endif
+
 typedef RefPtr PipelineRef;
 
 //Special features that are only important for implementation, but we do want to be cached.
@@ -210,10 +217,24 @@ typedef struct VkGraphicsDevice {
 	PFN_vkWaitForFences waitForFences;
 	PFN_vkResetFences resetFences;
 	PFN_vkDestroyFence destroyFence;
+	PFN_vkGetPhysicalDeviceMemoryProperties2 getPhysicalDeviceMemoryProperties2;
 
 	U32 nonLinearAlignment;
-	U8 padding[1], framesInFlight;
+	U8 framesInFlight; Bool hasLocalMemory;
 	U16 atomSize;
+
+	U64 maxHeapSizes[2];
+
+	U32 heapIds[2];
+
+	Bool hasDistinctMemory;
+	U8 padding[7];
+	
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS		//For fallback to query memory usage
+		IDXGIAdapter3 *dxgiAdapter;
+	#else
+		U64 padding0;
+	#endif
 
 } VkGraphicsDevice;
 
@@ -246,13 +267,6 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	U8 fifCount
 );
 
-Error VkDeviceMemoryAllocator_findMemory(
-	VkGraphicsDevice *deviceExt,
-	Bool cpuSided,
-	U32 memoryBits,
-	U32 *memoryId,
-	VkMemoryPropertyFlags *propertyFlags,
-	U64 *size
-);
+Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt);
 
 Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer);
