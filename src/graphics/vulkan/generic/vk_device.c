@@ -571,9 +571,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkResetFences, deviceExt->resetFences)
 	getVkFunctionDevice(clean, vkDestroyFence, deviceExt->destroyFence)
 
-	if(featEx & EVkGraphicsFeatures_MemoryBudget)
-		getVkFunctionDevice(clean, vkGetPhysicalDeviceMemoryProperties2, deviceExt->getPhysicalDeviceMemoryProperties2)
-
 	getVkFunctionDevice(clean, vkCmdPipelineBarrier2KHR, deviceExt->cmdPipelineBarrier2)
 	getVkFunctionDevice(clean, vkGetSwapchainImagesKHR, deviceExt->getSwapchainImages)
 
@@ -1050,7 +1047,7 @@ U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	if(deviceExt->getPhysicalDeviceMemoryProperties2) {
+	if(device->info.capabilities.featuresExt & EVkGraphicsFeatures_MemoryBudget) {
 
 		VkPhysicalDeviceMemoryBudgetPropertiesEXT propertiesMemoryBudget = (VkPhysicalDeviceMemoryBudgetPropertiesEXT) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT
@@ -1061,7 +1058,8 @@ U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 			.pNext = &propertiesMemoryBudget
 		};
 
-		deviceExt->getPhysicalDeviceMemoryProperties2((VkPhysicalDevice) device->info.ext, &properties);
+		VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+		instanceExt->getPhysicalDeviceMemoryProperties2((VkPhysicalDevice) device->info.ext, &properties);
 
 		return propertiesMemoryBudget.heapUsage[deviceExt->heapIds[isDeviceLocal]];
 	}

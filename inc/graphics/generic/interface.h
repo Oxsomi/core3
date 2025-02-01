@@ -160,6 +160,8 @@ typedef struct GraphicsObjectSizes {
 	);
 
 	impl void GraphicsDevice_postInitExt(GraphicsDevice *device);
+	impl U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
+
 	impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
 	impl Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);

@@ -101,6 +101,9 @@ typedef struct VkGraphicsInstance {
 
 	PFN_vkDestroySurfaceKHR destroySurface;
 
+	PFN_vkGetPhysicalDeviceMemoryProperties2 getPhysicalDeviceMemoryProperties2;
+	U64 padding0;
+
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		IDXGIFactory6 *dxgiFactory;
 	#else

@@ -355,6 +355,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	getVkFunction(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities)
 	getVkFunction(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes)
 	getVkFunction(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport)
+	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties2, instanceExt->getPhysicalDeviceMemoryProperties2)
 	
 	getVkFunction(clean, vkDestroySurfaceKHR, instanceExt->destroySurface)
 
@@ -1022,6 +1023,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		if(optExtensions[EOptExtensions_Maintenance4])
 			capabilities.featuresExt |= EVkGraphicsFeatures_Maintenance4;
+
+		if(optExtensions[EOptExtensions_MemoryBudget])
+			capabilities.featuresExt |= EVkGraphicsFeatures_MemoryBudget;
 
 		//Force enable synchronization
 

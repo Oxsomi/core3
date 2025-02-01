@@ -217,7 +217,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkWaitForFences waitForFences;
 	PFN_vkResetFences resetFences;
 	PFN_vkDestroyFence destroyFence;
-	PFN_vkGetPhysicalDeviceMemoryProperties2 getPhysicalDeviceMemoryProperties2;
+	U64 padding0;
 
 	U32 nonLinearAlignment;
 	U8 framesInFlight; Bool hasLocalMemory;
@@ -228,12 +228,12 @@ typedef struct VkGraphicsDevice {
 	U32 heapIds[2];
 
 	Bool hasDistinctMemory;
-	U8 padding[7];
+	U8 padding1[7];
 	
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS		//For fallback to query memory usage
 		IDXGIAdapter3 *dxgiAdapter;
 	#else
-		U64 padding0;
+		U64 padding2;
 	#endif
 
 } VkGraphicsDevice;
