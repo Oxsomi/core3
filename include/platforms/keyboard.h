@@ -96,7 +96,7 @@ Error Keyboard_create(Keyboard *result);
 //For text boxes, use the typeChar callback of Window; this handles OS-level input such as IME (Japanese) and emojis.
 //If there's no remap available it will return an empty string.
 //Make sure to free this.
-impl CharString Keyboard_remap(EKey key);
+impl CharString Keyboard_remap(const Keyboard *keyboard, EKey key);
 
 #ifdef __cplusplus
 	}

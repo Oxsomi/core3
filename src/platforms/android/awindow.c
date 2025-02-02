@@ -26,6 +26,7 @@
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
 #include "platforms/platform.h"
+#include "types/math/math.h"
 
 #include <android_native_app_glue.h>
 #include <android/configuration.h>
@@ -156,7 +157,10 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 			//Since these might impact language, text rendering or text input
 
 			case APP_CMD_CONFIG_CHANGED:
-				w->callbacks.onUpdateOrientation(w);
+			
+				if (w->callbacks.onUpdateOrientation)
+					w->callbacks.onUpdateOrientation(w);
+
 				break;
 
 			default:
@@ -277,7 +281,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 	Keyboard *keyboard = w->devices.ptrNonConst;
 	Mouse *mouse = w->devices.ptrNonConst + 1;
 
-	Bool isDown = AKeyEvent_getAction(event) == AKEY_EVENT_ACTION_DOWN;
+	Bool isDown = (AKeyEvent_getAction(event) & AMOTION_EVENT_ACTION_MASK) == AKEY_EVENT_ACTION_DOWN;
 	
 	I32 type = AInputEvent_getType(event);
 	I32 source = AInputEvent_getSource(event);
@@ -294,37 +298,50 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 				
 				if (action == AMOTION_EVENT_ACTION_MOVE || action == AMOTION_EVENT_ACTION_HOVER_MOVE) {
 					
-					F32 x = AMotionEvent_getXOffset(event);
-					F32 y = AMotionEvent_getYOffset(event);
+					F32 x = AMotionEvent_getRawX(event, 0);
+					F32 y = AMotionEvent_getRawY(event, 0);
 
-					F32x2 pos = F32x2_div(F32x2_create2(x, y), F32x2_fromI32x2(w->size));
+					F32 prevAbsX = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp0);
+					F32 prevAbsY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp1);
 
-					F32 nextX = F32x2_x(pos);
-					F32 nextY = 1 - F32x2_y(pos);
+					F32 nextX = F32_ceil(F32_clamp((F32) (x - prevAbsX), -1, 1));
+					F32 nextY = F32_ceil(F32_clamp((F32) (y - prevAbsY), -1, 1));
 
-					F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_X);
-					F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Y);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp0, x);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp1, y);
+
+					I32x2 oldCursor = w->cursor;
+					w->cursor = I32x2_create2(x, y);
+
+					if (w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
+						w->callbacks.onCursorMove(w);
+
+					F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_RX);
+					F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_RY);
 
 					if (nextX != prevX) {
 
-						InputDevice_setCurrentAxis(*dev, EMouseAxis_X, nextX);
+						InputDevice_setCurrentAxis(*dev, EMouseAxis_RX, nextX);
 
 						if (w->callbacks.onDeviceAxis)
-							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_X, nextX);
+							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RX, nextX);
 					}
 
 					if (nextY != prevY) {
 
-						InputDevice_setCurrentAxis(*dev, EMouseAxis_Y, nextY);
+						InputDevice_setCurrentAxis(*dev, EMouseAxis_RY, nextY);
 
 						if (w->callbacks.onDeviceAxis)
-							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_Y, nextY);
+							w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RY, nextY);
 					}
 					
 				} else if (action == AMOTION_EVENT_ACTION_SCROLL) {
 
 					F32 nextX = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_HSCROLL, 0);
 					F32 nextY = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_VSCROLL, 0);
+
+					nextX = F32_clamp(F32_ceil(nextX), -1, 1);
+					nextY = F32_clamp(F32_ceil(nextY), -1, 1);
 
 					F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_ScrollWheel_X);
 					F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_ScrollWheel_Y);
@@ -346,12 +363,12 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 					}
 
 				} else if(
-					action == AMOTION_EVENT_ACTION_POINTER_UP || 
-					action == AMOTION_EVENT_ACTION_UP
+					action == AMOTION_EVENT_ACTION_BUTTON_PRESS ||
+					action == AMOTION_EVENT_ACTION_BUTTON_RELEASE
 				) {
 
 					I32 buttonState = AMotionEvent_getButtonState(event);
-
+					
 					Bool primary = buttonState & AMOTION_EVENT_BUTTON_PRIMARY;
 					Bool secondary = buttonState & AMOTION_EVENT_BUTTON_SECONDARY;
 					Bool tertiary = buttonState & AMOTION_EVENT_BUTTON_TERTIARY;
@@ -360,9 +377,9 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 					Bool states[5] = { primary, secondary, tertiary, forward, backward };
 					EMouseActions buttons[5] = { EMouseButton_Left, EMouseButton_Right, EMouseButton_Middle, EMouseButton_Forward, EMouseButton_Back };
-					
+
 					for(U64 i = 0; i < 5; ++i) {
-						
+
 						//Send keys through interface and update input device
 
 						InputHandle handle = buttons[i];
@@ -374,6 +391,20 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 						if(prevState != newState && w->callbacks.onDeviceButton)
 							w->callbacks.onDeviceButton(w, dev, handle, states[i]);
 					}
+
+				} else if(
+					action == AMOTION_EVENT_ACTION_DOWN ||
+  					action == AMOTION_EVENT_ACTION_UP
+				) {
+					
+					InputHandle handle = EMouseButton_Left;
+					EInputState prevState = InputDevice_getState(*dev, handle);
+
+					InputDevice_setCurrentState(*dev, handle, isDown);
+					EInputState newState = InputDevice_getState(*dev, handle);
+
+					if(prevState != newState && w->callbacks.onDeviceButton)
+						w->callbacks.onDeviceButton(w, dev, handle, isDown);
 				}
 			}
 

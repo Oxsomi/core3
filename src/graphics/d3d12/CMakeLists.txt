@@ -19,7 +19,7 @@
 
 message("-- Enabling Direct3D12 support...")
 
-file(GLOB_RECURSE graphicsApiHeaders "../../../inc/graphics/d3d12/*.h")
+file(GLOB_RECURSE graphicsApiHeaders "../../../include/graphics/d3d12/*.h")
 file(GLOB_RECURSE graphicsApiSources "generic/*.c")
 
 set(TARGET_NAME OxC3_graphics_d3d12)

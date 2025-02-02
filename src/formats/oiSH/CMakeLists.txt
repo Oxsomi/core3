@@ -19,7 +19,7 @@
 
 set(AllowOxC3PlatformsSH ON)
 
-file(GLOB formatsSHHeaders "../../../inc/formats/oiSH/*.h")
+file(GLOB formatsSHHeaders "../../../include/formats/oiSH/*.h")
 file(GLOB formatsSHSources "*.c")
 
 add_library(

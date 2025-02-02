@@ -121,6 +121,7 @@ typedef void (*WindowSaveCallback)(Window*, Buffer *buf);
 
 typedef struct WindowCallbacks {
 	WindowCallback onCreate, onDestroy, onDraw, onResize, onWindowMove, onMonitorChange, onUpdateFocus, onUpdateOrientation;
+	WindowCallback onCursorMove;
 	WindowUpdateCallback onUpdate;
 	WindowDeviceCallback onDeviceAdd, onDeviceRemove;
 	WindowDeviceButtonCallback onDeviceButton;
@@ -159,7 +160,7 @@ typedef struct Window {
 
 	WindowHint hint;
 	WindowType type;
-	U8 padding[5];
+	U8 padding0[5];
 
 	EWindowFormat format;
 	EWindowFlags flags;
@@ -168,6 +169,7 @@ typedef struct Window {
 	I32x2 minSize, maxSize;
 
 	I32x2 prevSize;				//For full screen toggle
+	I32x2 cursor;
 
 	Buffer cpuVisibleBuffer;
 
@@ -187,6 +189,8 @@ typedef struct Window {
 	//Data initialized by onCreate such as extended window data
 
 	Buffer extendedData;
+
+	U64 padding1;
 
 	//Temporary data such as input buffer
 

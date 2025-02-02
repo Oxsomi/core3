@@ -44,6 +44,8 @@ function(apply_dependencies target)
 	
 	if(ANDROID)
 		target_sources(${target} PRIVATE "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
+		target_sources(${target} PRIVATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../include/platforms/android/aoxc3_activity_glue.c")
+		target_include_directories(${target} PRIVATE "${ANDROID_NDK}/sources/android/native_app_glue")
 		set_source_files_properties("${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c" PROPERTIES COMPILE_OPTIONS -Wno-unused-parameter)
 	endif()
 

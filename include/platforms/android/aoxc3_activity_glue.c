@@ -18,52 +18,22 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/base/types.h"
+#include "platforms/platform.h"
+#include "platforms/window.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+#include <android_native_app_glue.h>
 
-typedef struct Error Error;
-typedef struct InputDevice Mouse;
+JNIEXPORT void JNICALL
+Java_net_osomi_nativeactivity_OxC3Activity_onTypeChar(JNIEnv *env, jclass clazz, jstring input) {
 
-typedef enum EMouseActions {
+	(void) clazz;
 
-	//Mouse axes
+    const C8 *nativeString = (*env)->GetStringUTFChars(env, input, NULL);
+    
+	Window *window = (Window*)((struct android_app*)Platform_instance->data)->userData;
 
-	EMouseAxis_Begin,
+	if(window->callbacks.onTypeChar)
+		window->callbacks.onTypeChar(window, CharString_createRefCStrConst(nativeString));
 
-	EMouseAxis_X = EMouseAxis_Begin, EMouseAxis_Y,
-	EMouseAxis_ScrollWheel_X, EMouseAxis_ScrollWheel_Y,
-
-	EMouseAxis_End,
-	EMouseAxis_Count = EMouseAxis_End - EMouseAxis_Begin,
-
-	//Mouse buttons
-
-	EMouseButton_Begin = EMouseAxis_End,
-
-	EMouseButton_Left = EMouseButton_Begin, EMouseButton_Middle, EMouseButton_Right,
-	EMouseButton_Back, EMouseButton_Forward,
-
-	EMouseButton_End,
-	EMouseButton_Count = EMouseButton_End - EMouseButton_Begin,
-
-} EMouseActions;
-
-typedef enum EMouseFlag {
-
-	//When this happens, the mouse position is relative, not absolute
-	//So, the cursor position shouldn't be taken as absolute
-	//This means using the delta functions instead of the absolute functions
-
-	EMouseFlag_IsRelative
-
-} EMouseFlag;
-
-Error Mouse_create(Mouse *result);
-
-#ifdef __cplusplus
-	}
-#endif
+    (*env)->ReleaseStringUTFChars(env, input, nativeString);
+}

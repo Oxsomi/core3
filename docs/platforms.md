@@ -185,7 +185,7 @@ The main part of the keyboard uses scan codes, but the extended keyboard doesn't
 Because the main part of the keyboard uses scan codes, you shouldn't assume for example Key_W is really the W key! (e.g. AZERTY would be Z instead of W. Might even be non latin char). This means that *Keyboard_remap* should be used in favor of *InputDevice_getName* if it's something that's visual to the user. For serialization it's fine to still use it (since it's ASCII, so it's super easy to read).
 Use Keyboard_remap(keyboard, key) to get the localized keyboard unicode codepoint for GUI control screens. When typing text the typeChar callback of Window should be used to ensure IME/unicode/etc. are all properly available.
 
-- CharString **Keyboard_remap**(EKey key): Used for remapping the key for GUI text only. Don't use this to build text fields/text areas. This is purely for debugging the key or key mapping. This function allocates, so be sure to CharString_free.
+- CharString **Keyboard_remap**(const Keyboard *keyboard, EKey key): Used for remapping the key for GUI text only. Don't use this to build text fields/text areas. This is purely for debugging the key or key mapping. This function allocates, so be sure to CharString_free.
 
 **Note**: On Windows, it's possible to distinguish multiple keyboards. This might be useful for local multiplayer or simulators (e.g. flight sim). However, this is not standard across all platforms. This means that it is possible for multiple keyboards to have different key states, keep that in mind.
 

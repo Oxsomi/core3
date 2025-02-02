@@ -44,7 +44,7 @@ class oxc3(ConanFile):
 		"dynamicLinkingGraphics": False
 	}
 
-	exports_sources = [ "inc/*", "cmake/*" ]
+	exports_sources = [ "include/*", "cmake/*" ]
 
 	def layout(self):
 		cmake_layout(self)
@@ -125,9 +125,10 @@ class oxc3(ConanFile):
 
 		copy(self, "*.cmake", os.path.join(self.source_folder, "cmake"), os.path.join(self.package_folder, "cmake"))
 
-		inc_src = os.path.join(self.source_folder, "inc")
+		inc_src = os.path.join(self.source_folder, "include")
 		inc_dst = os.path.join(self.package_folder, "include")
 		copy(self, "*.h", inc_src, inc_dst)
+		copy(self, "*.c", inc_src, inc_dst)
 		copy(self, "*.hpp", inc_src, inc_dst)
 
 		lib_dst = os.path.join(self.package_folder, "lib")

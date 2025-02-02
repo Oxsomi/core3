@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesMathHeaders "../../../inc/types/math/*.h")
+file(GLOB_RECURSE typesMathHeaders "../../../include/types/math/*.h")
 file(GLOB typesMathSources "*.c")
 file(GLOB_RECURSE typesMathSIMDSources "simd/${simd}/*.c")
 

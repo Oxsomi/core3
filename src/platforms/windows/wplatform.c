@@ -39,6 +39,11 @@ U64 Platform_getThreads() {
 	return systemInfo.dwNumberOfProcessors;
 }
 
+Bool Platform_setKeyboardVisible(Bool isVisible) {
+	(void) isVisible;
+	return true;
+}
+
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
@@ -163,7 +168,9 @@ clean:
 	return s_uccess;
 }
 
-CharString Keyboard_remap(EKey key) {
+CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
+
+	(void) keyboard;
 
 	U32 vkey = 0, scanCode = 0;
 	const C8 *raw = NULL;

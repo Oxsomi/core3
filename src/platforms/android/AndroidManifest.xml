@@ -24,14 +24,14 @@
     android:label="{APP_NAME}"
 	  android:debuggable="{APP_DEBUGGABLE}"
     android:testOnly="{APP_DEBUGGABLE}"
-    android:hasCode="false"
+    android:hasCode="true"
     android:resizeableActivity="true"
 	  android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
 	  android:appCategory="{APP_CATEGORY}">
 	  
-    <activity android:name="android.app.NativeActivity"
+    <activity android:name="net.osomi.nativeactivity.OxC3Activity"
 	  			android:exported="{APP_DEBUGGABLE}"
-            	android:configChanges="orientation|keyboardHidden|screenLayout|fontScale|locale">
+            	android:configChanges="orientation|keyboard|keyboardHidden|screenLayout|fontScale|locale|touchscreen|density|uiMode|colorMode|layoutDirection|navigation">
 			  
       <meta-data android:name="android.app.lib_name"
                  android:value="{APP_LIB_NAME}" />

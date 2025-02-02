@@ -78,6 +78,10 @@ impl Bool Platform_initExt(Error *e_rr);
 impl Bool Platform_checkCPUSupport();								//SIMD dependent: SSE, None, NEON
 impl U64 Platform_getThreads();
 
+//If the device has an on screen keyboard (e.g. Android) you need to call this before handling text input.
+//Also make sure to hide it later with isVisible=false to avoid having a keyboard taking up half of your screen.
+impl Bool Platform_setKeyboardVisible(Bool isVisible);
+
 void Platform_cleanup();			//Call on exit
 
 impl void *Platform_getDataImpl(void *ptr);

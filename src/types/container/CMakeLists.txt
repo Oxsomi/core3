@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesContainerHeaders "../../../inc/types/container/*.h")
+file(GLOB_RECURSE typesContainerHeaders "../../../include/types/container/*.h")
 file(GLOB typesContainerSources "*.c")
 file(GLOB_RECURSE typesContainerPlatformSources "platforms/${platform}/*.c")
 file(GLOB_RECURSE typesContainerSIMDSources "simd/${simd}/*.c")

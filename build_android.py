@@ -254,10 +254,30 @@ def main():
 
 		buildTools += "/"
 
+		# Compile .java files
+
+		print("-- Compiling .java file")
+		androidJar = "\"" + os.environ["ANDROID_SDK"] + "/platforms/android-" + str(args.api) + "/android.jar\""
+		baseDir = os.path.dirname(os.path.realpath(__file__)) + "/src/platforms/android/*.java"
+		subprocess.check_output("javac -cp " + androidJar + " -d \"build/" + args.mode + "/android/apk/bin/\" \"" + baseDir + "\"")
+
+		# Compile .class files to .dex
+
+		print("-- Compiling .class file")
+		cwd = os.getcwd()
+		os.chdir("build/" + args.mode + "/android/apk")
+
+		if os.name == "nt":
+			subprocess.check_output("\"" + buildTools + "d8.bat\" bin/net/osomi/nativeactivity/*.class --min-api " + str(args.api))
+		else:
+			subprocess.check_output("bash \"" + buildTools + "d8.sh\" bin/net/osomi/nativeactivity/*.class --min-api" + str(args.api))
+
+		os.chdir(cwd)
+
 		# Make unsigned apk
 		
 		print("-- Creating apk")
-		subprocess.check_output("\"" + buildTools + "aapt\" package -f -I \"" + os.environ["ANDROID_SDK"] + "/platforms/android-" + str(args.api) + "/android.jar\" -M \"build/" + args.mode + "/android/apk/AndroidManifest.xml\" -A \"" + assetsFolder + "\" -S \"" + resFolder + "\" -m -F \"build/" + args.mode + "/android/apk/app-unsigned.apk\"")
+		subprocess.check_output("\"" + buildTools + "aapt\" package -f -I " + androidJar + " -M \"build/" + args.mode + "/android/apk/AndroidManifest.xml\" -A \"" + assetsFolder + "\" -S \"" + resFolder + "\" -m -F \"build/" + args.mode + "/android/apk/app-unsigned.apk\"")
 		
 		print("-- Adding libs to apk")
 
@@ -270,7 +290,10 @@ def main():
 			for f0 in glob.glob(f + "/*.so"):
 				subprocess.check_output("\"" + buildTools + "aapt\" add \"app-unsigned.apk\" \"" + f0.replace("\\", "/") + "\"")
 
+		subprocess.check_output("\"" + buildTools + "aapt\" add \"app-unsigned.apk\" classes.dex")
 		os.chdir(cwd)
+
+		# Zip align and sign
 
 		print("-- Zipalign apk")
 		subprocess.check_output("\"" + buildTools + "zipalign\" -v -f 4 \"build/" + args.mode + "/android/apk/app-unsigned.apk\" \"build/" + args.mode + "/android/apk/app.apk\"")
@@ -334,7 +357,7 @@ def main():
 		
 		print("-- Running apk file")
 		subprocess.check_output(adb + " logcat -c")		# Clear log first
-		subprocess.run(adb + " shell am start -n " + args.package + "/android.app.NativeActivity")
+		subprocess.run(adb + " shell am start -n " + args.package + "/net.osomi.nativeactivity.OxC3Activity")
 		
 		print("-- Starting logcat")
 		print("-- Failed, run it manually: " + adb + " logcat -s OxC3")

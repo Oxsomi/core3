@@ -39,7 +39,7 @@ if(NOT graphicsAllowVk AND NOT graphicsAllowD3D12)
 	message(FATAL_ERROR "-- No valid graphics API found, aborting...")
 endif()
 
-file(GLOB_RECURSE graphicsHeaders "../../inc/graphics/generic/*.h")
+file(GLOB_RECURSE graphicsHeaders "../../include/graphics/generic/*.h")
 file(GLOB_RECURSE graphicsSources "generic/*.c")
 
 add_library(

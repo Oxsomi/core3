@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB formatsWAVHeaders "../../../inc/formats/wav/*.h")
+file(GLOB formatsWAVHeaders "../../../include/formats/wav/*.h")
 file(GLOB formatsWAVSources "*.c")
 
 add_library(

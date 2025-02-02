@@ -222,7 +222,7 @@ Because of the numbers, it was decided that hardware halfs was turned off on Win
 
 More details and useful tools can be found at:
 
-- [C implementation of conversions between any float type in OxC3](https://github.com/Oxsomi/core3/blob/main/inc/types/flp.h).
+- [C implementation of conversions between any float type in OxC3](https://github.com/Oxsomi/core3/blob/main/include/types/flp.h).
 - [H-Schmidt.net float converter (singles)](https://www.h-schmidt.net/FloatConverter/IEEE754.html).
 - [Binaryconvert.com converter (doubles)](https://www.binaryconvert.com/convert_double.html).
 - [evanw.github.io's float toy (halfs)](https://evanw.github.io/float-toy/).

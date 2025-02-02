@@ -19,7 +19,7 @@
 
 set(AllowOxC3PlatformsDDS ON)
 
-file(GLOB formatsDDSHeaders "../../../inc/formats/dds/*.h")
+file(GLOB formatsDDSHeaders "../../../include/formats/dds/*.h")
 file(GLOB formatsDDSSources "*.c")
 
 add_library(

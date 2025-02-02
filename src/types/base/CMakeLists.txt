@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesBaseHeaders "../../../inc/types/base/*.h")
+file(GLOB_RECURSE typesBaseHeaders "../../../include/types/base/*.h")
 file(GLOB typesBaseSources "*.c")
 
 if(WIN32)
@@ -38,4 +38,4 @@ add_library(
 source_group("Source Files (${platform})" FILES ${typesBasePlatformSources})
 
 set_target_properties(OxC3_types_base PROPERTIES FOLDER Oxsomi/types)
-target_include_directories(OxC3_types_base PUBLIC "../../../inc")
+target_include_directories(OxC3_types_base PUBLIC "../../../include")

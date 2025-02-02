@@ -23,11 +23,13 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
+#include "platforms/input_device.h"
 #include "platforms/log.h"
 #include "types/base/error.h"
 
 #include <android/asset_manager.h>
 #include <android_native_app_glue.h>
+#include <jni.h>
 
 Bool Platform_initUnixExt(Error *e_rr) {
 
@@ -145,7 +147,56 @@ clean:
 
 void Platform_cleanupUnixExt() { }
 
-CharString Keyboard_remap(EKey key) {
-	(void) key;
-	return CharString_createNull();			//TODO: 
+CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
+
+	if(!keyboard || key >= keyboard->buttons)
+		return CharString_createNull();
+
+	//There's no better way to remap keys on Android that is safe for different localizations,
+	//Because nobody is crazy enough to use keyboards on Android.
+	//+ sizeof(EKey) == substr("EKey_".size())
+
+	CharString oldStr = CharString_createRefCStrConst(InputDevice_getButton(*keyboard, key)->name + sizeof("EKey"));
+
+	CharString str = CharString_createNull();
+	CharString_createCopyx(oldStr, &str);
+	return str;
+}
+
+Bool Platform_setKeyboardVisible(Bool isVisible) {
+
+	struct android_app *app = (struct android_app*)Platform_instance->data;
+	JavaVM *vm = app->activity->vm;
+	JNIEnv *env = app->activity->env;
+
+	Bool attached = false;
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+		(*vm)->AttachCurrentThread(vm, &env, NULL);
+		attached = true;
+	}
+
+    jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
+
+	if(!cls)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"))
+
+	jmethodID methodId = (*env)->GetMethodID(env, cls, "toggleKeyboard", "(Z)V");
+
+	if (!methodId)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.toggleKeyboard"))
+
+	(*env)->CallVoidMethod(env, app->activity->clazz, methodId, isVisible);
+
+clean:
+
+	if(!s_uccess)
+		Error_printLnx(err);
+
+	if(attached)
+		(*vm)->DetachCurrentThread(vm);
+
+	return true;
 }

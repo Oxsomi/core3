@@ -19,10 +19,10 @@
 
 message("-- Targeting platform: ${platform}")
 
-file(GLOB platformsHeaders "../../inc/platforms/*.h" "../../inc/platforms/ext/*.h")
+file(GLOB platformsHeaders "../../include/platforms/*.h" "../../include/platforms/ext/*.h")
 
 file(GLOB_RECURSE platformsPlatformSources "${platform}/*.c")
-file(GLOB_RECURSE platformsPlatformIncludes "../../inc/platforms/${platform}/*.h")
+file(GLOB_RECURSE platformsPlatformIncludes "../../include/platforms/${platform}/*.h")
 file(GLOB_RECURSE platformsSources "generic/*.c")
 file(GLOB_RECURSE platformsSIMDSources "simd/${simd}/*.c")
 

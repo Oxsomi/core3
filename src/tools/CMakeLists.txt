@@ -19,7 +19,7 @@
 
 # CLI, useful for manually calling CLI utility functions
 
-file(GLOB headers "../../inc/tools/*.h")
+file(GLOB headers "../../include/tools/*.h")
 file(GLOB sources "*.c")
 
 add_library(

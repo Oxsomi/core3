@@ -144,8 +144,8 @@ void Platform_cleanupUnixExt() {
 		close((I32)(U32) fd);
 }
 
-CharString Keyboard_remap(EKey key) {
-	(void) key;
+CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
+	(void) key; (void) keyboard;
 	return CharString_createNull();			//TODO: 
 }
 

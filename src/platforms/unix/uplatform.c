@@ -41,7 +41,14 @@ void Platform_cleanupExt() {
 }
 
 #if _PLATFORM_TYPE != PLATFORM_ANDROID
+
 	void *Platform_getDataImpl(void *ptr) { (void) ptr; return NULL; }
+	
+	Bool Platform_setKeyboardVisible(Bool isVisible) {
+		(void) isVisible;
+		return true;
+	}
+
 #endif
 
 U64 Platform_getThreads() { return sysconf(_SC_NPROCESSORS_ONLN); }

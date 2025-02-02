@@ -23,7 +23,7 @@ find_package(spirv_reflect REQUIRED)
 
 # Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.
 
-file(GLOB_RECURSE compilerHeaders "../../inc/shader_compiler/*.h")
+file(GLOB_RECURSE compilerHeaders "../../include/shader_compiler/*.h")
 file(GLOB_RECURSE compilerSources "*.c" "*.cpp")	# Some CPP to interface with DXC
 
 add_library(
