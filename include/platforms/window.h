@@ -145,7 +145,6 @@ typedef enum EWindowType {
 
 } EWindowType;
 
-typedef U8 WindowOrientation;
 typedef U8 WindowType;
 typedef U16 WindowHint;
 
@@ -154,13 +153,25 @@ typedef struct WindowManager WindowManager;
 TList(InputDevice);
 TList(Monitor);
 
+typedef enum EWindowOrientation {
+	EWindowOrientation_Landscape			= 0,
+	EWindowOrientation_Portrait				= 90,
+	EWindowOrientation_FlippedLandscape		= 180,
+	EWindowOrientation_FlippedPortrait		= 270
+} EWindowOrientation;
+
+typedef U16 WindowOrientation;
+
 typedef struct Window {
 
 	WindowManager *owner;
 
 	WindowHint hint;
 	WindowType type;
-	U8 padding0[5];
+	Bool requireResize;			//Can be set by for example the graphics API to indicate a resize should be performed
+
+	WindowOrientation orientation;
+	U16 padding1;
 
 	EWindowFormat format;
 	EWindowFlags flags;
@@ -190,7 +201,7 @@ typedef struct Window {
 
 	Buffer extendedData;
 
-	U64 padding1;
+	U64 padding2;
 
 	//Temporary data such as input buffer
 

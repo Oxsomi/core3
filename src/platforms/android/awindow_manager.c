@@ -39,6 +39,9 @@ Bool WindowManager_freeNative(WindowManager *w) {
 	return true;
 }
 
+I32 APlatform_getDeviceOrientation();
+void AWindow_onUpdateSize(Window *w);
+
 void WindowManager_updateExt(WindowManager *manager) {
 
 	(void) manager;
@@ -46,6 +49,7 @@ void WindowManager_updateExt(WindowManager *manager) {
 	int ident, events;
 	struct android_poll_source *source;
 	struct android_app *app = (struct android_app*) Platform_instance->data;
+	Window *w = (Window*)app->userData;
 	
 repeat:
 	while((ident = ALooper_pollOnce(0, NULL, &events, (void**)&source)) >= 0) {
@@ -53,10 +57,24 @@ repeat:
 			source->process(app, source);
 	}
 
+	//It's possible our last update was successful but suboptimal.
+	//This happens when the device is rotated in landscape mode which won't trigger any config change or resize.
+	//In this case, the compositor will happily rotate for us, but we should still resize to ensure optimal performance.
+
+	if(w->requireResize) {
+
+		I32 orientation = APlatform_getDeviceOrientation();
+		
+		if(orientation >= 0)
+			w->orientation = (U16) orientation;
+
+		AWindow_onUpdateSize(w);
+	}
+
 	//In case of initialization, we have to wait until the surface is ready.
 	//Afterwards, we can continue
 
-	if(ident == ALOOPER_POLL_TIMEOUT && !(((Window*)app->userData)->flags & EWindowFlags_IsFinalized)) {
+	if(ident == ALOOPER_POLL_TIMEOUT && !(w->flags & EWindowFlags_IsFinalized)) {
 		Thread_sleep(100 * MU);
 		goto repeat;
 	}

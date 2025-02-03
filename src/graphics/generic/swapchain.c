@@ -75,6 +75,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
 	I32x2 newSize = swapchain->info.window->size;
 	EWindowFormat newFormat = swapchain->info.window->format;
+	WindowOrientation orientation = swapchain->info.window->orientation;
 
 	ETextureFormatId textureFormatId = 0;
 
@@ -90,7 +91,8 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
 	if(
 		I32x2_x(newSize) == swapchain->base.width && I32x2_y(newSize) == swapchain->base.height &&
-		swapchain->base.textureFormatId == textureFormatId
+		swapchain->base.textureFormatId == textureFormatId &&
+		swapchain->orientation == orientation
 	)
 		goto clean;
 

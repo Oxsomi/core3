@@ -192,6 +192,9 @@ Bool Platform_setKeyboardVisible(Bool isVisible) {
 
 clean:
 
+	if(cls)
+		(*env)->DeleteLocalRef(env, cls);
+
 	if(!s_uccess)
 		Error_printLnx(err);
 

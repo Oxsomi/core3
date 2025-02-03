@@ -89,6 +89,12 @@ public class OxC3Activity extends NativeActivity {
 		}
 	}
 
+	//Callbacks called from OxC3
+
+	public int getDeviceOrientation() {
+		return getWindowManager().getDefaultDisplay().getRotation() * 90;
+	}
+
 	public void toggleKeyboard(boolean show) {
 
 		//Can't call this from any random thread, we have to ask the UI thread

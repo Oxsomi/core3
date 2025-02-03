@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/errorx.h"
 #include "platforms/log.h"
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
@@ -49,6 +50,53 @@ void AWindow_onUpdateSize(Window *w) {
 
 	if (w->callbacks.onResize)
 		w->callbacks.onResize(w);
+		
+	if (w->callbacks.onUpdateOrientation)
+		w->callbacks.onUpdateOrientation(w);
+
+	w->requireResize = false;
+}
+
+I32 APlatform_getDeviceOrientation() {
+
+	struct android_app *app = (struct android_app*)Platform_instance->data;
+	JavaVM *vm = app->activity->vm;
+	JNIEnv *env = app->activity->env;
+
+	Bool attached = false;
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+	I32 orientation = -1;
+
+	if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+		(*vm)->AttachCurrentThread(vm, &env, NULL);
+		attached = true;
+	}
+
+    jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
+
+	if(!cls)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"))
+
+	jmethodID methodId = (*env)->GetMethodID(env, cls, "getDeviceOrientation", "()I");
+
+	if (!methodId)
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.getDeviceOrientation"))
+
+	orientation = (*env)->CallIntMethod(env, app->activity->clazz, methodId);
+
+clean:
+
+	if(cls)
+		(*env)->DeleteLocalRef(env, cls);
+
+	if(!s_uccess)
+		Error_printLnx(err);
+
+	if(attached)
+		(*vm)->DetachCurrentThread(vm);
+
+	return orientation;
 }
 
 void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
@@ -62,12 +110,37 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 		switch (cmd) {
 
 			case APP_CMD_WINDOW_RESIZED: {
+
+				I32 orientation = APlatform_getDeviceOrientation();
+
+				if(orientation < 0) {
+					Log_errorLnx("-- Error! Orientation couldn't be detected! Defaulting to portrait");
+					orientation = 0;
+				}
+
+				I32 width = ANativeWindow_getWidth(app->window);
+				I32 height = ANativeWindow_getHeight(app->window);
+
+				switch(orientation) {
+
+					case 90:	case 270: {		//Ensure we maintain "no rotation", we'll do it ourselves
+						I32 tmp = width;
+						width = height;
+						height = tmp;
+						break;
+					}
+
+					default:
+						break;
+				}
 				
 				I32x2 oldSize = w->size;
-				w->size = I32x2_create2(ANativeWindow_getWidth(app->window), ANativeWindow_getHeight(app->window));
+				w->size = I32x2_create2(width, height);
 
-				if (I32x2_neq2(w->size, oldSize) && w->nativeHandle)
+				if ((I32x2_neq2(w->size, oldSize) || w->orientation != (U16) orientation) && w->nativeHandle) {
+					w->orientation = (U16) orientation;
 					AWindow_onUpdateSize(w);
+				}
 
 				break;
 			}
@@ -146,21 +219,14 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 		
 				AWindow_onUpdateSize(w);
 
-				if (w->callbacks.onUpdateOrientation)
-					w->callbacks.onUpdateOrientation(w);
-
 				break;
 
-			//On config change can be a lot of things, we only care about orientation for now.
+			//On config change can be a lot of things, orientation is already handled by onUpdateSize.
 			//We will later care about:
 			//keyboardHidden|screenLayout|fontScale|locale
 			//Since these might impact language, text rendering or text input
 
 			case APP_CMD_CONFIG_CHANGED:
-			
-				if (w->callbacks.onUpdateOrientation)
-					w->callbacks.onUpdateOrientation(w);
-
 				break;
 
 			default:

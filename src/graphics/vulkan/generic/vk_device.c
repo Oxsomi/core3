@@ -33,6 +33,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
+#include "platforms/window.h"
 #include "types/math/math.h"
 #include "types/base/thread.h"
 
@@ -1224,7 +1225,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	gotoIfError(clean, ListU32_reservex(&deviceExt->swapchainIndices, swapchains.length))
 
 	gotoIfError(clean, ListVkResult_clear(&deviceExt->results))
-	gotoIfError(clean, ListVkResult_reservex(&deviceExt->results, swapchains.length))
+	gotoIfError(clean, ListVkResult_resizex(&deviceExt->results, swapchains.length))
 
 	gotoIfError(clean, ListVkSemaphore_clear(&deviceExt->waitSemaphoresList))
 	gotoIfError(clean, ListVkSemaphore_reservex(&deviceExt->waitSemaphoresList, swapchains.length + 1))
@@ -1578,8 +1579,19 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		gotoIfError(clean, checkVkError(deviceExt->queuePresentKHR(queue.queue, &presentInfo)))
 
-		for(U64 i = 0; i < deviceExt->results.length; ++i)
-			gotoIfError(clean, checkVkError(deviceExt->results.ptr[i]))
+		for(U64 i = 0; i < deviceExt->results.length; ++i) {
+
+			VkResult res = deviceExt->results.ptr[i];
+			gotoIfError(clean, checkVkError(res))
+
+			if(res == VK_SUBOPTIMAL_KHR) {
+
+				SwapchainRef *swapchainRef = swapchains.ptr[i];
+				Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
+
+				swapchain->info.window->requireResize = true;
+			}
+		}
 	}
 
 clean:

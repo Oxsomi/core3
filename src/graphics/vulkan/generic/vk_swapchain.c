@@ -168,6 +168,16 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	)))
 
 	I32x2 size = I32x2_create2(capabilities.currentExtent.width, capabilities.currentExtent.height);
+	
+	switch (capabilities.currentTransform) {
+
+		case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:		//Avoid compositor
+			size = I32x2_yx(size);
+			break;
+
+		default:
+			break;
+	}
 
 	//Validate if it's compatible with the OxC3_platforms window
 	//currentExtent can be -1 but only for Wayland, which means "do whatever you want" and in this case it won't match.
@@ -192,10 +202,12 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
 
-	if(capabilities.minImageCount > 3)
-		swapchain->base.images = 4;
+	U32 requestedImages = SWAPCHAIN_VERSIONING;		//Don't use the already requested images, since we might get a different image count
+
+	if(capabilities.minImageCount > requestedImages)
+		++requestedImages;
 		
-	if(capabilities.minImageCount > 4 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
+	if(capabilities.minImageCount > requestedImages || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
 		gotoIfError(clean, Error_invalidOperation(
 			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 3 or 4 images"
 		))
@@ -207,13 +219,29 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	swapchain->requiresManualComposite = !!(capabilities.supportedTransforms & anyRotate);
 
+	U16 expectOrientation = 0;
+
 	if(swapchain->requiresManualComposite)
 		switch (capabilities.currentTransform) {
-			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	swapchain->orientation = 90;	break;
-			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	swapchain->orientation = 180;	break;
-			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	swapchain->orientation = 270;	break;
-			default:										swapchain->orientation = 0;		break;
+			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	expectOrientation = 90;		break;
+			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	expectOrientation = 180;	break;
+			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	expectOrientation = 270;	break;
+			default:										expectOrientation = 0;		break;
 		}
+
+	if(window->orientation != expectOrientation) {
+
+		Log_debugLnx(
+			"-- Mismatching orientation %"PRIu16" and %"PRIu16" %"PRIi32,
+			window->orientation,
+			expectOrientation,
+			capabilities.currentTransform
+		);
+
+		gotoIfError(clean, Error_invalidState(
+			0, "VkGraphicsDeviceRef_createSwapchain() expected orientation didn't match real orientation"
+		))
+	}
 
 	//Get present mode
 
@@ -287,7 +315,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = swapchainExt->surface,
-		.minImageCount = swapchain->base.images,
+		.minImageCount = requestedImages,
 		.imageFormat = swapchainExt->format.format,
 		.imageColorSpace = swapchainExt->format.colorSpace,
 		.imageExtent = (VkExtent2D) { .width = I32x2_x(window->size), .height = I32x2_y(window->size) },
@@ -316,10 +344,24 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	U32 imageCount = 0;
 	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)))
 	
-	if(imageCount < SWAPCHAIN_VERSIONING || imageCount > SWAPCHAIN_MAX_IMAGES)
+	if(device->flags & EGraphicsDeviceFlags_IsDebug)
+		Log_debugLnx(
+			"Creating swapchain: %"PRIi32"x%"PRIi32"x%"PRIu32" and orientation: %"PRIu16,
+			I32x2_x(window->size),
+			I32x2_y(window->size),
+			imageCount,
+			expectOrientation
+		);
+
+	if(imageCount < SWAPCHAIN_VERSIONING || imageCount > SWAPCHAIN_MAX_IMAGES) {
+
+		if(device->flags & EGraphicsDeviceFlags_IsDebug)
+			Log_debugLnx("Swapchain: Invalid image count: %"PRIu32, imageCount);
+
 		gotoIfError(clean, Error_invalidState(
 			1, "VkGraphicsDeviceRef_createSwapchain() imageCount returned exceeds max or subseeds min images permitted by OxC3"
 		))
+	}
 
 	swapchain->base.images = (U8) imageCount;
 

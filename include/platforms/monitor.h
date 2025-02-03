@@ -32,7 +32,7 @@ typedef enum EMonitorOrientation {
 	EMonitorOrientation_Portrait			= 90,
 	EMonitorOrientation_FlippedLandscape	= 180,
 	EMonitorOrientation_FlippedPortrait		= 270
-} MonitorOrientation;
+} EMonitorOrientation;
 
 //A monitor is something a physical window is displayed on.
 //The window can know this to handle monitor specific processing,
@@ -44,7 +44,7 @@ typedef struct Monitor {
 	I32x2 offsetR, offsetG;
 	I32x2 offsetB, sizeInches;
 
-	MonitorOrientation orientation;
+	EMonitorOrientation orientation;
 	F32 gamma, contrast, refreshRate;
 
 } Monitor;

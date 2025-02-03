@@ -44,7 +44,7 @@ typedef enum ESwapchainPresentMode {
 typedef struct SwapchainInfo {
 
 	//Window that this swapchain is created for. Call SwapchainRef_resize on resize
-	const Window *window;
+	Window *window;
 
 	//Priorities using ESwapchainPresentMode.
 	//Tries to use presentModePriorities[i] until it reaches one that's supported.
@@ -69,7 +69,7 @@ typedef struct Swapchain {
 	//This is set by the implementation, can't be manually turned off.
 	Bool requiresManualComposite;
 	U8 padding;
-	U16 orientation;				//In deg; 0, 90, 180 or 270
+	U16 orientation;			//Orientation the swapchain was previously created with
 
 	U64 versionId;				//Everytime this swapchain changes format or is resized this will increase.
 
