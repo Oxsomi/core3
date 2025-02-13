@@ -63,6 +63,8 @@ typedef enum ESHPipelineStage {
 
 } ESHPipelineStage;
 
+typedef U8 SHPipelineStage;
+
 const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage);
 
 //Deserialized SHEntry (in oiSH file)
@@ -76,7 +78,7 @@ typedef struct SHEntry {
 
 	//Don't change order
 
-	U8 stage;							//ESHPipelineStage
+	SHPipelineStage stage;
 	U8 uniqueInputSemantics;
 	U16 waveSize;						//U4[4] req, min, max, preferSize: each U4 is in range [0, 9]. 0 = 0, 3 = 8, etc.
 
@@ -139,6 +141,7 @@ typedef struct SHEntryRuntime {
 typedef struct SHBinaryIdentifier SHBinaryIdentifier;
 typedef struct SHBinaryInfo SHBinaryInfo;
 typedef enum ESHBinaryType ESHBinaryType;
+typedef enum ESHExtension ESHExtension;
 
 U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime);
 

@@ -19,15 +19,114 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 #include "types/base/error.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "graphics/generic/instance.h"
-#include "graphics/generic/device_info.h"
 
 #ifdef CLI_GRAPHICS
+
+	#include "graphics/generic/instance.h"
+	#include "graphics/generic/device.h"
+	#include "graphics/generic/device_info.h"
+
+	Bool CLI_graphicsCreate(ParsedArgs args) {
+
+		Bool s_uccess = true;
+		Error err = Error_none(), *e_rr = &err;
+		GraphicsInstanceRef *instanceRef = NULL;
+		GraphicsDeviceRef *deviceRef = NULL;
+		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
+
+		gotoIfError3(clean, GraphicsInterface_create(e_rr))
+
+		U64 queried = CLI_parseGraphicsAPIs(args);
+
+		if(queried == U64_MAX)
+			retError(clean, Error_invalidState(0, "CLI_graphicsCreate() CLI_parseGraphicsAPIs failed"))
+		
+		Bool wasExplicit = queried != U32_MAX;
+
+		for(U64 j = 0; j < EGraphicsApi_Count; ++j) {
+
+			EGraphicsApi api = (EGraphicsApi) j;
+
+			if(!((queried >> j) & 1))
+				continue;
+
+			if (!GraphicsInterface_supportsApi(api)) {
+
+				if(wasExplicit)
+					Log_warnLnx("CLI_graphicsCreate() -graphics-api specifically requested API, but wasn't found");
+
+				continue;
+			}
+			
+			gotoIfError2(clean, GraphicsInstance_create(
+				(GraphicsApplicationInfo) {
+					.name = CharString_createRefCStrConst("OxC3 CLI"),
+					.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
+				},
+				api,
+				EGraphicsInstanceFlags_None,
+				&instanceRef
+			))
+
+			gotoIfError2(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos))
+			
+			U64 entry = 0;
+
+			if (args.parameters & EOperationHasParameter_Entry) {
+
+				CharString arg = CharString_createNull();
+				gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
+
+				if(!CharString_parseU64(arg, &entry))
+					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() expected entry as U64"))
+
+				if(entry >= infos.length)
+					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() device entry not found"))
+			}
+			
+			U64 count = 0;
+
+			if (args.parameters & EOperationHasParameter_CountArg) {
+
+				CharString arg = CharString_createNull();
+				gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
+
+				if(!CharString_parseU64(arg, &entry))
+					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() expected count as U64"))
+
+				if(entry + count > infos.length)
+					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() device index not found"))
+			}
+
+			if(!count)
+				count = infos.length - entry;
+
+			for (U64 i = entry; i < entry + count; ++i) {
+
+				gotoIfError2(clean, GraphicsDeviceRef_create(
+					instanceRef, &infos.ptr[i], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef
+				))
+				
+				GraphicsDeviceRef_dec(&deviceRef);
+				Log_debugLnx("Create device success %"PRIu64" (%s)", i, EGraphicsApi_name[api]);
+			}
+
+			ListGraphicsDeviceInfo_freex(&infos);
+			GraphicsInstanceRef_dec(&instanceRef);
+		}
+
+	clean:
+		ListGraphicsDeviceInfo_freex(&infos);
+		GraphicsInstanceRef_dec(&instanceRef);
+		GraphicsDeviceRef_dec(&deviceRef);
+		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+		return s_uccess;
+	}
 
 	Bool CLI_graphicsDevices(ParsedArgs args) {
 
@@ -42,7 +141,7 @@
 		U64 queried = CLI_parseGraphicsAPIs(args);
 
 		if(queried == U64_MAX)
-			retError(clean, Error_invalidState(0, "CLI_parseGraphicsAPIs() failed"))
+			retError(clean, Error_invalidState(0, "CLI_graphicsDevices(): CLI_parseGraphicsAPIs failed"))
 
 		Bool wasExplicit = queried != U32_MAX;
 

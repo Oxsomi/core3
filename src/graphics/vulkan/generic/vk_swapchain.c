@@ -456,6 +456,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
 
+	swapchain->orientation = expectOrientation;
+
 clean:
 	CharString_freex(&temp);
 	ListVkSurfaceFormatKHR_freex(&surfaceFormats);

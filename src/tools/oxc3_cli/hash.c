@@ -18,14 +18,14 @@
 *  This is called dual licensing.
 */
 
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 #include "types/container/buffer.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
-#include "tools/operations.h"
+#include "tools/oxc3_cli/operations.h"
 
 Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 

@@ -66,7 +66,7 @@ endfunction()
 #	SELF
 #		${CMAKE_CURRENT_SOURCE_DIR}
 #	ARGS
-#		-threads "100%%" -compile-type dxil	# Compile shaders using all available threads and only output DXIL, %% = escape %
+#		-threads "100%%" -compile-type dxil	# Compile shaders using all available threads and only output DXIL, %% = escape % on windows
 # )
 # This would add myTarget/shaders as a virtual directory.
 # myTarget/shaders has to be loaded manually by the app to process it.
@@ -75,7 +75,7 @@ endfunction()
 
 macro(add_virtual_files)
 
-	set(_OPTIONS)
+	set(_OPTIONS FORCE_PACKAGER)
 	set(_ONE_VALUE TARGET ROOT NAME SELF)
 	set(_MULTI_VALUE ARGS)
 
@@ -118,11 +118,19 @@ macro(add_virtual_files)
 	endif()
 
 	# Add processed file as a file
-
-	if(NOT TARGET OxC3)
-		find_program(OXC3 OxC3 REQUIRED)
+	
+	if(_ARGS_FORCE_PACKAGER)
+		if(NOT TARGET OxC3_package)
+			find_program(OXC3_PACKAGE OxC3_package REQUIRED)
+		else()
+			set(OXC3_PACKAGE OxC3_package)
+		endif()
 	else()
-		set(OXC3 OxC3)
+		if(NOT TARGET OxC3)
+			find_program(OXC3 OxC3 REQUIRED)
+		else()
+			set(OXC3 OxC3)
+		endif()
 	endif()
 	
 	if(WIN32)
@@ -137,24 +145,41 @@ macro(add_virtual_files)
 		set(platform linux)
 	endif()
 
-	set(RuntimeOutputDir "${CMAKE_CURRENT_SOURCE_DIR}/build/${platform}")
+	set(RuntimeOutputDir "${_ARGS_SELF}/build/${platform}")
 
-	message("${RuntimeOutputDir}")
+	if(_ARGS_FORCE_PACKAGER)
+
+		set(OxC3_command "${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
 	
-	add_custom_target(
-		${_ARGS_TARGET}_package_${_ARGS_NAME}
-		COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
-		WORKING_DIRECTORY ${_ARGS_SELF}
-	)
+		add_custom_target(
+			${_ARGS_TARGET}_package_${_ARGS_NAME}
+			COMMAND ${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			WORKING_DIRECTORY ${_ARGS_SELF}
+		)
+
+	else()
+
+		set(OxC3_command "${OXC3} file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
+	
+		add_custom_target(
+			${_ARGS_TARGET}_package_${_ARGS_NAME}
+			COMMAND ${OXC3} file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			WORKING_DIRECTORY ${_ARGS_SELF}
+		)
+
+	endif()
 		
 	string (REPLACE ";" " " ARGS_STR "${_ARGS_ARGS}")
-	message("-- Packaging: \"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
+	message("-- Packaging: ${OxC3_command} ${ARGS_STR}")
 	message("-- Packaging: ${_ARGS_TARGET}_package_${_ARGS_NAME} @ ${_ARGS_SELF}")
 
 	set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 
 	# When adding from external package manager, it's already been installed
-	if(TARGET OxC3)
+
+	if(_ARGS_FORCE_PACKAGER AND TARGET OxC3_package)
+		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3_package)
+	elseif(TARGET OxC3)
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
 	else()
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})

@@ -31,6 +31,7 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DeviceBufferRef;
+typedef RefPtr DescriptorLayoutRef;
 
 //Graphics pipeline
 
@@ -94,6 +95,11 @@ typedef enum EPipelineRaytracingFlags {
 
 } EPipelineRaytracingFlags;
 
+typedef enum EPipelineFlags {
+	EPipelineFlags_None								= 0,
+	EPipelineFlags_InternalWeakDeviceRef			= 1 << 0		//Internal use only
+} EPipelineFlags;
+
 typedef struct PipelineRaytracingGroup {
 
 	//Indices into the local stage offset
@@ -134,7 +140,8 @@ typedef struct Pipeline {
 	GraphicsDeviceRef *device;
 
 	EPipelineType type;
-	U32 padding[3];
+	EPipelineFlags flags;
+	U32 padding[2];
 
 	ListPipelineStage stages;
 
@@ -165,16 +172,18 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
 	CharString entrypointName,
-	ListCharString uniforms,				//[ key, value ][]
-	ESHExtension disallow,					//Extensions that should be disallowed (only find with extension disabled)
-	ESHExtension require					//Extensions that should be required (only find with extension enabled)
+	ListCharString uniforms,					//[ key, value ][]
+	ESHExtension disallow,						//Extensions that should be disallowed (only find with extension disabled)
+	ESHExtension require						//Extensions that should be required (only find with extension enabled)
 );
 
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
-	CharString name,						//Temporary name for debugging
-	U32 entryId,							//Identifier from getFirstShaderEntry
+	CharString name,							//Temporary name for debugging
+	U32 entryId,								//Identifier from getFirstShaderEntry
+	EPipelineFlags flags,
+	DescriptorLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 );
@@ -182,9 +191,11 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 Bool GraphicsDeviceRef_createPipelineGraphics(
 	GraphicsDeviceRef *deviceRef,
 	ListSHFile shaderBinary,
-	ListPipelineStage *stages,				//Will be moved
+	ListPipelineStage *stages,					//Will be moved
 	PipelineGraphicsInfo info,
-	CharString name,						//Temporary name for debugging
+	CharString name,							//Temporary name for debugging
+	EPipelineFlags flags,
+	DescriptorLayoutRef *layout,
 	PipelineRef **pipelines,
 	Error *e_rr
 );
@@ -192,11 +203,13 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 //stages, groups will be freed
 Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	GraphicsDeviceRef *deviceRef,
-	ListPipelineStage *stages,				//Will be moved
+	ListPipelineStage *stages,					//Will be moved
 	ListSHFile binaries,
-	ListPipelineRaytracingGroup *groups,	//Will be moved
+	ListPipelineRaytracingGroup *groups,		//Will be moved
 	PipelineRaytracingInfo info,
-	CharString name,						//Temporary name for debugging
+	CharString name,							//Temporary name for debugging
+	EPipelineFlags flags,
+	DescriptorLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 );

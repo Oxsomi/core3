@@ -25,7 +25,7 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "graphics/generic/instance.h"
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"

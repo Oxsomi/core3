@@ -39,10 +39,14 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	ListSHFile binaries,
 	ListPipelineRaytracingGroup *groups,
 	PipelineRaytracingInfo info,
-	CharString name,					//Temporary names for debugging. Can be empty, else match infos->length
+	CharString name,
+	EPipelineFlags flags,
+	DescriptorLayoutRef *layout,
 	PipelineRef **pipelineRef,
 	Error *e_rr
 ) {
+
+	(void) layout;		//TODO:
 
 	Bool s_uccess = true;
 	Bool madePipeline = false;
@@ -303,11 +307,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	madePipeline = true;
 	Pipeline *pipeline = PipelineRef_ptr(*pipelineRef);
 
-	GraphicsDeviceRef_inc(deviceRef);
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		GraphicsDeviceRef_inc(deviceRef);
 
 	//Log_debugLnx("Create: RaytracingPipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipeline);
 
-	*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_RaytracingExt };
+	*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_RaytracingExt, .flags = flags };
 
 	PipelineRaytracingInfo *dstInfo = Pipeline_info(pipeline, PipelineRaytracingInfo);
 	*dstInfo = info;

@@ -82,6 +82,16 @@
 	Error D3D12GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
 	Bool  D3D12Swapchain_free(Swapchain *data, Allocator alloc);
 
+	//DescriptorHeap
+
+	Error D3D12GraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
+	Bool D3D12DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
+
+	//DescriptorLayout
+
+	Error D3D12GraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+	Bool D3D12DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
+
 	//Allocator
 
 	//Needs explicit lock, because allocator is accessed after.

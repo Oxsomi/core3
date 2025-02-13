@@ -836,29 +836,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError(clean, checkVkError(deviceExt->createPipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)))
 
-	//We only need one pool and 1 descriptor set per EDescriptorType since we use bindless.
-	//Every resource is automatically allocated into their respective descriptor set.
-	//Last descriptor set (cbuffer) is triple buffered to allow swapping part of the UBO
-
-	VkDescriptorPoolSize poolSizes[] = {
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLER, EDescriptorTypeCount_Sampler },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, EDescriptorTypeCount_RWTextures },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, EDescriptorTypeCount_Textures },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, EDescriptorTypeCount_SSBO },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, EDescriptorTypeCount_TLASExt }
-	};
-
-	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-		.maxSets = EDescriptorSetType_Count,
-		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]) - !hasRt,
-		.pPoolSizes = poolSizes
-	};
-
-	gotoIfError(clean, checkVkError(deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->descriptorPool)))
-
 	//Last layout repeat 2-3x (that's the CBuffer which needs FRAMES_IN_FLIGHT different versions)
 
 	VkDescriptorSetLayout setLayouts[EDescriptorSetType_Count];
@@ -1131,9 +1108,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			if(layout)
 				deviceExt->destroyDescriptorSetLayout(deviceExt->device, layout, NULL);
 		}
-
-		if(deviceExt->descriptorPool)
-			deviceExt->destroyDescriptorPool(deviceExt->device, deviceExt->descriptorPool, NULL);
 
 		if(deviceExt->defaultLayout)
 			deviceExt->destroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);

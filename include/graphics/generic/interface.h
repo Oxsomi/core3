@@ -33,6 +33,9 @@ typedef struct Pipeline Pipeline;
 typedef struct Swapchain Swapchain;
 typedef struct CommandList CommandList;
 typedef struct DeviceBuffer DeviceBuffer;
+typedef struct DescriptorLayout DescriptorLayout;
+typedef struct DescriptorTable DescriptorTable;
+typedef struct DescriptorHeap DescriptorHeap;
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct SHBinaryInfo SHBinaryInfo;
 typedef struct DeviceMemoryAllocator DeviceMemoryAllocator;
@@ -52,9 +55,13 @@ typedef RefPtr DeviceTextureRef;
 typedef RefPtr DeviceBufferRef;
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr SwapchainRef;
+typedef RefPtr DescriptorLayoutRef;
+typedef RefPtr DescriptorTableRef;
+typedef RefPtr DescriptorHeapRef;
 
 typedef struct GraphicsObjectSizes {
 	U64 blas, tlas, pipeline, sampler, buffer, image, swapchain, device, instance;
+	U64 descriptorLayout, descriptorSet, descriptorHeap;
 } GraphicsObjectSizes;
 
 //Dynamic linking will load the dlls to generate the function tables.
@@ -252,6 +259,21 @@ typedef struct GraphicsObjectSizes {
 	typedef Error (*GraphicsDeviceRef_createSwapchainImpl)(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
 	typedef Bool (*Swapchain_freeImpl)(Swapchain *data, Allocator alloc);
 
+	//DescriptorLayout
+
+	typedef Error (*GraphicsDeviceRef_createDescriptorLayoutImpl)(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+	typedef Bool (*DescriptorLayout_freeImpl)(DescriptorLayout *layout, Allocator alloc);
+
+	//DescriptorTable
+
+	typedef Error (*GraphicsDeviceRef_createDescriptorTableImpl)(GraphicsDeviceRef *dev, DescriptorTable *table);
+	typedef Bool (*DescriptorTable_freeImpl)(DescriptorTable *table, Allocator alloc);
+
+	//DescriptorHeap
+
+	typedef Error (*GraphicsDeviceRef_createDescriptorHeapImpl)(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
+	typedef Bool (*DescriptorHeap_freeImpl)(DescriptorHeap *heap, Allocator alloc);
+
 	//Allocator
 
 	typedef Error (*DeviceMemoryAllocator_allocateImpl)(
@@ -338,6 +360,15 @@ typedef struct GraphicsObjectSizes {
 
 		GraphicsDeviceRef_createSwapchainImpl			swapchainCreate;
 		Swapchain_freeImpl								swapchainFree;
+
+		GraphicsDeviceRef_createDescriptorLayoutImpl	descriptorLayoutCreate;
+		DescriptorLayout_freeImpl						descriptorLayoutFree;
+
+		//GraphicsDeviceRef_createDescriptorTableImpl		descriptorTableCreate;
+		//DescriptorTable_freeImpl						descriptorTableFree;
+
+		GraphicsDeviceRef_createDescriptorHeapImpl		descriptorHeapCreate;
+		DescriptorHeap_freeImpl							descriptorHeapFree;
 
 		DeviceMemoryAllocator_allocateImpl				memoryAllocate;
 		DeviceMemoryAllocator_freeAllocationImpl		memoryFree;
@@ -436,6 +467,21 @@ typedef struct GraphicsObjectSizes {
 
 	Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
 	Bool Swapchain_freeExt(Swapchain *data, Allocator alloc);
+
+	//DescriptorLayout
+
+	Error GraphicsDeviceRef_createDescriptorLayoutExt(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+	Bool DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc);
+
+	//DescriptorTable
+
+	Error GraphicsDeviceRef_createDescriptorTableExt(GraphicsDeviceRef *dev, DescriptorTable *table);
+	Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc);
+
+	//DescriptorHeap
+
+	Error GraphicsDeviceRef_createDescriptorHeapExt(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
+	Bool DescriptorHeap_freeExt(DescriptorHeap *heap, Allocator alloc);
 
 	//Allocator
 

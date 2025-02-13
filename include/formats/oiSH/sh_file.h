@@ -80,7 +80,7 @@ Bool SHFile_create(
 
 void SHFile_free(SHFile *shFile, Allocator alloc);
 
-Bool SHFile_addBinaries(
+Bool SHFile_addBinary(
 	SHFile *shFile,
 	SHBinaryInfo *binaries,				//Moves binaries
 	Allocator alloc,

@@ -18,19 +18,17 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx.h"
-#include "types/container/buffer.h"
+#include "platforms/ext/listx_impl.h"
+#include "tools/package_cli/packager.h"
 #include "types/base/time.h"
-#include "types/base/c8.h"
+#include "types/base/allocator.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/container/archive.h"
+#include "formats/oiCA/ca_file.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
-#include "platforms/ext/archivex.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/formatx.h"
-#include "formats/oiCA/ca_file.h"
-#include "tools/cli.h"
+#include "platforms/platform.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"
@@ -39,12 +37,14 @@
 typedef struct CAFileRecursion {
 	Archive *archive;
 	CharString root;
+	Allocator alloc;
 } CAFileRecursion;
 
 Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString subPath = CharString_createNull();
+	Allocator alloc = caFile->alloc;
 
 	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
 		retError(clean, Error_invalidState(0, "packageFile()::file.path cut failed"))
@@ -55,7 +55,7 @@ Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 	};
 
 	if (entry.type == EFileType_File)
-		gotoIfError3(clean, File_readx(file.path, 100 * MS, 0, 0, &entry.data, e_rr))
+		gotoIfError3(clean, File_read(file.path, 100 * MS, 0, 0, alloc, &entry.data, e_rr))
 
 	if (file.type == EFileType_File) {
 
@@ -71,30 +71,38 @@ Bool packageFile(FileInfo file, CAFileRecursion *caFile, Error *e_rr) {
 		//We don't have a custom file yet (besides oiSH), so for now
 		//this will just be identical to addFileToCAFile.
 
-		gotoIfError3(clean, Archive_addFilex(caFile->archive, entry.path, &entry.data, 0, e_rr))
+		gotoIfError3(clean, Archive_addFile(caFile->archive, entry.path, &entry.data, 0, alloc, e_rr))
 	}
 
-	else gotoIfError3(clean, Archive_addDirectoryx(caFile->archive, entry.path, e_rr))
+	else gotoIfError3(clean, Archive_addDirectory(caFile->archive, entry.path, alloc, e_rr))
 
 clean:
-	Buffer_freex(&entry.data);
+	Buffer_free(&entry.data, alloc);
 	return s_uccess;
 }
 
-Bool CLI_package(ParsedArgs args) {
-
-	//Parse encryption key
-
-	U32 encryptionKeyV[8] = { 0 };
-	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
-	Bool s_uccess = true;
-	Error err = Error_none(), *e_rr = &err;
-
+Bool Packager_package(
+	CharString input,
+	CharString output,
+	const U32 encryptionKey[8],
+	Bool multipleModes,
+	U64 compileModeU64,
+	U64 threadCount,
+	CharString includeDir,
+	Bool merge,
+	ECompilerWarning extraWarnings,
+	Bool enableLogging,
+	Bool isDebug,
+	Bool ignoreEmptyFiles,
+	Allocator alloc,
+	Error *e_rr
+) {
 	Archive archive = (Archive) { 0 };
 	CharString resolved = CharString_createNull();
 	CAFile file = (CAFile) { 0 };
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
+	Bool s_uccess = true;
 
 	ListCharString allFiles = (ListCharString) { 0 };
 	ListCharString allShaderText = (ListCharString) { 0 };
@@ -104,94 +112,30 @@ Bool CLI_package(ParsedArgs args) {
 
 	Ns start = Time_now();
 
-	if (args.parameters & EOperationHasParameter_AES) {
-
-		CharString key = CharString_createNull();
-
-		if (
-			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
-			!CharString_isHex(key)
-		) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
-		}
-
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
-
-		if (CharString_length(key) - off != 64) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
-		}
-
-		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
-
-			U8 v0 = C8_hex(key.ptr[i]);
-			U8 v1 = C8_hex(key.ptr[++i]);
-
-			v0 = (v0 << 4) | v1;
-			*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
-		}
-
-		encryptionKey = encryptionKeyV;
-	}
-
 	CASettings settings = (CASettings) { .compressionType = EXXCompressionType_None };
 
-	if(args.parameters & EOperationHasParameter_AES)
+	if(encryptionKey)
 		settings.encryptionType = EXXEncryptionType_AES256GCM;
 
 	//Copying encryption key
 
-	if(settings.encryptionType) {
-
+	if(settings.encryptionType)
 		Buffer_memcpy(
 			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
-			Buffer_createRef(encryptionKey, sizeof(settings.encryptionKey))
+			Buffer_createRefConst(encryptionKey, sizeof(settings.encryptionKey))
 		);
 
-		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
-	}
-
-	//Get input
-
-	CharString input = (CharString) { 0 };
-	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
-
-	//Check if output is valid
-
-	CharString output = (CharString) { 0 };
-	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
-
-	//Get compile settings
+	//Grab all files that need compilation
 
 	#ifdef CLI_SHADER_COMPILER
-
-		//Get compile types
-
-		Bool multipleModes = false;
-		U64 compileModeU64 = 0;
-		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes))
-
-		//Check thread count
-
-		U64 threadCount = 0;
-		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 1))
-
-		//Additional includeDir
-
-		CharString includeDir = (CharString) { 0 };
-
-		if (args.parameters & EOperationHasParameter_IncludeDir)
-			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
-
-		//Grab all files that need compilation
-
-		gotoIfError3(clean, CLI_getCompileTargetsFromFile(
+		gotoIfError3(clean, Compiler_getTargetsFromFile(
 			input,
 			ECompileType_Compile,
 			compileModeU64,
 			multipleModes,
-			!(args.flags & EOperationFlags_Split),
+			merge,
+			enableLogging,
+			alloc,
 			NULL,
 			NULL,		//Don't write to output, write to Buffer[] instead
 			&allFiles,
@@ -199,23 +143,19 @@ Bool CLI_package(ParsedArgs args) {
 			&allOutputs,
 			&allCompileOutputs
 		))
-
-		//Grab info about extra detailed compiler warnings
-
-		ECompilerWarning extraWarnings = CLI_getExtraWarnings(args);
-
 	#endif
 
 	//Make archive
 
-	gotoIfError3(clean, Archive_createx(&archive, e_rr))
-	gotoIfError3(clean, File_resolvex(input, &isVirtual, false, 0, &resolved, e_rr))
+	gotoIfError3(clean, Archive_create(alloc, &archive, e_rr))
+	gotoIfError3(clean, File_resolve(input, &isVirtual, 128, Platform_instance->defaultDir, alloc, &resolved, e_rr))
 
-	gotoIfError2(clean, CharString_appendx(&resolved, '/'))
+	gotoIfError2(clean, CharString_append(&resolved, '/', alloc))
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
-		.root = resolved
+		.root = resolved,
+		.alloc = alloc
 	};
 
 	gotoIfError3(clean, File_foreach(
@@ -232,15 +172,17 @@ Bool CLI_package(ParsedArgs args) {
 	#ifdef CLI_SHADER_COMPILER
 
 		if(allFiles.length)
-			gotoIfError3(clean, CLI_compileShaders(
+			gotoIfError3(clean, Compiler_compileShaders(
 				allFiles, allShaderText, allOutputs, allCompileOutputs,
 				threadCount,
-				args.flags & EOperationFlags_Debug,
+				isDebug,
 				extraWarnings,
-				args.flags & EOperationFlags_IgnoreEmptyFiles,
+				ignoreEmptyFiles,
 				ECompileType_Compile,
 				includeDir,
 				CharString_createNull(),
+				true,
+				alloc,
 				&allBuffers,
 				e_rr
 			))
@@ -248,18 +190,18 @@ Bool CLI_package(ParsedArgs args) {
 		for(U64 i = 0; i < allOutputs.length; ++i)
 
 			if(Buffer_length(allBuffers.ptrNonConst[i]))
-				gotoIfError3(clean, Archive_addFilex(&archive, allOutputs.ptr[i], &allBuffers.ptrNonConst[i], 0, e_rr))
+				gotoIfError3(clean, Archive_addFile(&archive, allOutputs.ptr[i], &allBuffers.ptrNonConst[i], 0, alloc, e_rr))
 
 			else {
 
 				if(															//Merged binaries contain empty buffers
-					!(args.parameters & EOperationFlags_Split) &&
+					merge &&
 					i + 1 != allOutputs.length &&
 					CharString_equalsStringSensitive(allOutputs.ptr[i], allOutputs.ptr[i + 1])
 				)
 					continue;
 
-				retError(clean, Error_invalidState(0, "CLI_package() one of the shaders didn't compile, aborting packaging"))
+				retError(clean, Error_invalidState(0, "Packager_package() one of the shaders didn't compile, aborting packaging"))
 			}
 
 	#endif
@@ -267,32 +209,36 @@ Bool CLI_package(ParsedArgs args) {
 	//Convert to CAFile and write to file
 
 	gotoIfError3(clean, CAFile_create(settings, &archive, &file, e_rr))
-	gotoIfError3(clean, CAFile_writex(file, &res, e_rr))
-	gotoIfError3(clean, File_writex(res, output, 0, 0, 1 * SECOND, true, e_rr))
+	gotoIfError3(clean, CAFile_write(file, alloc, &res, e_rr))
+	gotoIfError3(clean, File_write(res, output, 0, 0, 1 * SECOND, true, alloc, e_rr))
 
 clean:
-
 	if(settings.encryptionType)
 		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
 
 	F64 dt = (F64)(Time_now() - start) / SECOND;
 
-	if(s_uccess)
-		Log_debugLnx("-- Packaging %s success in %fs!", resolved.ptr, dt);
+	if(enableLogging) {
 
-	else Log_errorLnx("-- Packaging %s failed in %fs!!", resolved.ptr, dt);
+		if(s_uccess)
+			Log_debugLn(alloc, "-- Packaging %s success in %fs!", resolved.ptr, dt);
 
-	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+		else Log_errorLn(alloc, "-- Packaging %s failed in %fs!!", resolved.ptr, dt);
 
-	ListBuffer_freeUnderlyingx(&allBuffers);
-	ListCharString_freeUnderlyingx(&allFiles);
-	ListCharString_freeUnderlyingx(&allShaderText);
-	ListCharString_freeUnderlyingx(&allOutputs);
-	ListU8_freex(&allCompileOutputs);
+		if(e_rr)
+			Error_print(alloc, *e_rr, ELogLevel_Error, ELogOptions_NewLine);
+	}
 
-	Buffer_freex(&res);
-	CAFile_freex(&file);
-	Archive_freex(&archive);
-	CharString_freex(&resolved);
+	ListBuffer_freeUnderlying(&allBuffers, alloc);
+	ListCharString_freeUnderlying(&allFiles, alloc);
+	ListCharString_freeUnderlying(&allShaderText, alloc);
+	ListCharString_freeUnderlying(&allOutputs, alloc);
+	ListU8_free(&allCompileOutputs, alloc);
+
+	Buffer_free(&res, alloc);
+	CAFile_free(&file, alloc);
+	Archive_free(&archive, alloc);
+	CharString_free(&resolved, alloc);
+
 	return s_uccess;
 }

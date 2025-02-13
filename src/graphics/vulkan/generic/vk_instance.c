@@ -44,7 +44,10 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.image = sizeof(VkUnifiedTexture),
 	.swapchain = sizeof(VkSwapchain),
 	.device = sizeof(VkGraphicsDevice),
-	.instance = sizeof(VkGraphicsInstance)
+	.instance = sizeof(VkGraphicsInstance),
+	.descriptorLayout = sizeof(VkDescriptorLayout),
+	.descriptorSet = 0, //TODO: sizeof(VkDescriptorTable),
+	.descriptorHeap = sizeof(VkDescriptorHeap)
 };
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -89,6 +92,13 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 
 			.swapchainCreate = VkGraphicsDeviceRef_createSwapchain,
 			.swapchainFree = VkSwapchain_free,
+
+			.descriptorLayoutCreate = VkGraphicsDeviceRef_createDescriptorLayout,
+			.descriptorLayoutFree = VkDescriptorLayout_free,
+			//.descriptorTableCreate = VkGraphicsDeviceRef_createDescriptorTable,
+			//.descriptorTableFree = VkDescriptorTable_free,
+			.descriptorHeapCreate = VkGraphicsDeviceRef_createDescriptorHeap,
+			.descriptorHeapFree = VkDescriptorHeap_free,
 
 			.memoryAllocate = VkDeviceMemoryAllocator_allocate,
 			.memoryFree = VkDeviceMemoryAllocator_freeAllocation,

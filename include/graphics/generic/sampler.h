@@ -98,8 +98,8 @@ typedef struct Sampler {
 #define Sampler_ext(ptr, T) (!ptr ? NULL : (T##Sampler*)(ptr + 1))		//impl
 #define SamplerRef_ptr(ptr) RefPtr_data(ptr, Sampler)
 
-Error SamplerRef_dec(SamplerRef **buffer);
-Error SamplerRef_inc(SamplerRef *buffer);
+Error SamplerRef_dec(SamplerRef **sampler);
+Error SamplerRef_inc(SamplerRef *sampler);
 
 Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler);
 

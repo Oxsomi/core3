@@ -170,6 +170,17 @@ The graphics API is built around modern APIs. So it won't be supporting OpenGL, 
 
 For the graphics minimum spec check the [minimum spec](graphics_spec.md). When unsure if a device is capable, please run `OxC3 graphics devices` to see if your device is supported.
 
+To be able to create a graphics device, you are required to provide the OxC3_graphics/*.oiCA file(s) in your executable. As follows:
+
+```cmake
+# Optional: configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+add_virtual_dependencies(TARGET Target DEPENDENCIES OxC3_graphics)
+configure_virtual_files(Target)
+apply_dependencies(Target)
+```
+
+This will ensure that the executable can find the oiCA file(s) relevant to OxC3_graphics, which could for example be shaders for common graphics operations (copy image, mip mapping, etc.), fonts for font rendering and LUTs in the future.
+
 ## Contributions
 
 To contribute to this repository, you agree to the [contribution guidelines](FOR_CONTRIBUTORS.md). Before merging a PR as an external party, you have to sign a contributor license agreement.

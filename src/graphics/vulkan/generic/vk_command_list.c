@@ -157,17 +157,6 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
 
-			if(src.depthFormat) {
-
-				if(copyImage.copyType == ECopyType_DepthOnly)
-					aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-				else if(copyImage.copyType == ECopyType_StencilOnly)
-					aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
-
-				else aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-			}
-
 			for(U64 i = 0; i < copyImage.regionCount; ++i) {
 
 				CopyImageRegion image = copyImageRegions[i];

@@ -56,9 +56,13 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	ListPipelineStage *stages,
 	PipelineGraphicsInfo info,
 	CharString name,
+	EPipelineFlags flags,
+	DescriptorLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 ) {
+
+	(void) layout;		//TODO:
 
 	Bool s_uccess = true;
 
@@ -431,9 +435,10 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 	//Log_debugLnx("Create: GraphicsPipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipelinePtr);
 
-	GraphicsDeviceRef_inc(deviceRef);
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		GraphicsDeviceRef_inc(deviceRef);
 
-	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Graphics };
+	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Graphics, .flags = flags };
 
 	*Pipeline_info(pipelinePtr, PipelineGraphicsInfo) = info;
 

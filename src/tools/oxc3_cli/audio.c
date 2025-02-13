@@ -19,7 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 #include "audio/interface.h"
 #include "audio/device.h"
 #include "formats/wav/wav.h"

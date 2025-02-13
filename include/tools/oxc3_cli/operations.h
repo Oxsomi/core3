@@ -199,6 +199,7 @@ typedef enum EOperation {
 	//EOperation_CompileChimera,
 
 	EOperation_GraphicsDevices,
+	EOperation_GraphicsCreateDevice,		//Attempts to create a device for testing
 
 	EOperation_AudioDevices,
 	EOperation_AudioConvert,

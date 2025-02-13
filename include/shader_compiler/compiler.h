@@ -280,6 +280,49 @@ typedef enum ECompilerWarning {
 
 Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocator alloc, Error *e_rr);
 
+//Simplied compiler workflow, this is what the CLI calls too; it automatically handles threading and other things.
+
+typedef enum ECompileType {
+	ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
+	ECompileType_Includes,			//Turns shader with includes into a list of their dependencies (direct + indirect)
+	ECompileType_Compile,			//Compile all shaders into an oiSH file for consumption
+	ECompileType_Symbols			//List all symbols located in the shader or include as a text file
+} ECompileType;
+
+Bool Compiler_getTargetsFromFile(
+	CharString input,
+	ECompileType compileType,
+	U64 compileModeU64,
+	Bool multipleModes,
+	Bool combineFlag,
+	Bool enableLogging,
+	Allocator alloc,
+	Bool *isFolder,					//Optional (out); if the input is a folder or not
+	CharString *output,				//Optional; the output directory. If NULL, will output file names only (relative to none)
+	ListCharString *allFiles,		//Fully resolved file names (may contain duplicates per compile mode)
+	ListCharString *allShaderText,	//Per file name: Input shader files
+	ListCharString *allOutputs,		//Per file name: Output shader file names
+	ListU8 *allCompileModes			//Per file name: ESHBinaryType
+);
+
+Bool Compiler_compileShaders(
+	ListCharString allFiles,
+	ListCharString allShaderText,
+	ListCharString allOutputs,
+	ListU8 allCompileOutputs,
+	U64 threadCount,
+	Bool isDebug,
+	ECompilerWarning extraWarnings,
+	Bool ignoreEmptyFiles,
+	ECompileType type,
+	CharString includeDir,			//Optional
+	CharString outputDir,			//Optional outputDir,
+	Bool enableLogging,
+	Allocator alloc,
+	ListBuffer *allBuffers,			//Optional: buffer outputs (if NULL, outputs to file)
+	Error *e_rr
+);
+
 //Extended functions for basic allocators
 
 void CompileResult_freex(CompileResult *result);

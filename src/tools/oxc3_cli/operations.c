@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
@@ -512,6 +512,20 @@ void Operations_init() {
 
 			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi,
 			.operationFlags = EOperation_Verbose
+		};
+
+		Operation_values[EOperation_GraphicsCreateDevice] = (Operation) {
+
+			.category = EOperationCategory_Graphics,
+
+			.name = "create",
+			.desc = "Create a graphics device using the specified graphics API, useful for testing purposes.",
+
+			.func = &CLI_graphicsCreate,
+
+			.isFormatLess = true,
+
+			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi
 		};
 
 	#endif

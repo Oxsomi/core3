@@ -29,7 +29,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 
 Bool addFileToDLFile(FileInfo file, ListCharString *names, Error *e_rr) {
 

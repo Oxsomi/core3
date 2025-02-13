@@ -105,8 +105,6 @@ typedef struct VkGraphicsDevice {
 	VkDescriptorSet sets[EDescriptorSetType_Count];				//1 per type and 2 extra for ubo to allow versioning
 	VkPipelineLayout defaultLayout;								//Default layout if push constants aren't present
 
-	VkDescriptorPool descriptorPool;
-
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 
 	//Temporary storage for submit time stuff
@@ -217,7 +215,6 @@ typedef struct VkGraphicsDevice {
 	PFN_vkWaitForFences waitForFences;
 	PFN_vkResetFences resetFences;
 	PFN_vkDestroyFence destroyFence;
-	U64 padding0;
 
 	U32 nonLinearAlignment;
 	U8 framesInFlight; Bool hasLocalMemory;
@@ -258,6 +255,14 @@ typedef struct VkCommandBufferState {
 	VkRect2D boundScissor, tempScissor;
 
 } VkCommandBufferState;
+
+typedef struct VkDescriptorHeap {
+	VkDescriptorPool pool;
+} VkDescriptorHeap;
+
+typedef struct VkDescriptorLayout {
+	VkDescriptorSetLayout layouts[4];
+} VkDescriptorLayout;
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device,

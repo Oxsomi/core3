@@ -46,7 +46,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 	const DxGraphicsDevice *deviceExt,
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
-	const DxHeap heap,
+	const DxDescriptorHeapSingle *heap,
 	RefPtr *image
 ) {
 
@@ -97,7 +97,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 	}
 
 	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
-		.ptr = start.ptr + relativeLoc * heap.cpuIncrement
+		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
 	};
 
 	deviceExt->device->lpVtbl->CreateRenderTargetView(deviceExt->device, resource, &rtv, location);
@@ -109,7 +109,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
 	EStartRenderFlags flags,
-	const DxHeap heap,
+	const DxDescriptorHeapSingle *heap,
 	RefPtr *image
 ) {
 
@@ -163,7 +163,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 	}
 
 	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
-		.ptr = start.ptr + relativeLoc * heap.cpuIncrement
+		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
 	};
 
 	deviceExt->device->lpVtbl->CreateDepthStencilView(deviceExt->device, resource, &dsv, location);
@@ -239,9 +239,9 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			//Prepare attachments
 
-			DxHeap heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[EDescriptorHeapType_RTV];
 
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr };
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr };
 
 			for (U8 i = 0; i < imageClearCount; ++i) {
 
@@ -265,17 +265,6 @@ void DX_WRAP_FUNC(CommandList_process)(
 			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
 			U8 planes = 1;
 			U8 planeOffset = 0;
-
-			if(src.depthFormat) {
-
-				if(copyImage.copyType == ECopyType_DepthOnly)
-					planeOffset = 0;
-
-				else if(copyImage.copyType == ECopyType_StencilOnly)
-					planeOffset = 1;
-
-				else planes = 2;
-			}
 
 			DxUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Dx, 0);
 			DxUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Dx, 0);
@@ -340,9 +329,9 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			//Prepare attachments
 
-			DxHeap heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[EDescriptorHeapType_RTV];
 
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap.cpuHandle;
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap->cpuHandle;
 			U8 j = 0;
 
 			D3D12_RECT rect = (D3D12_RECT) {
@@ -382,8 +371,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 			for (U8 i = startRender->colorCount; i < 9; ++i)
 				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
 
-			DxHeap dsvHeap = deviceExt->heaps[EDescriptorHeapType_DSV];
-			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap.cpuHandle;
+			const DxDescriptorHeapSingle *dsvHeap = &deviceExt->cpuHeaps[EDescriptorHeapType_DSV];
+			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap->cpuHandle;
 			D3D12_CPU_DESCRIPTOR_HANDLE dsv = createTempDSV(
 				deviceExt, 0, dsvCpuDesc, startRender->flags, dsvHeap, startRender->depthStencil
 			);

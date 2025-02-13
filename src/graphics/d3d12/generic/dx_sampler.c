@@ -20,6 +20,7 @@
 
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
 
@@ -101,13 +102,13 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 		samplerView.Filter |= 0x80;		//Signal we want comparison sampler
 	}
 
-	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Sampler];
+	const DxDescriptorHeapSingle *heap = &DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx)->resourcesHeap;
 	const U64 id = ResourceHandle_getId(sampler->samplerLocation);
 
 	deviceExt->device->lpVtbl->CreateSampler(
 		deviceExt->device,
 		&samplerView,
-		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
+		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * id }
 	);
 
 	return Error_none();

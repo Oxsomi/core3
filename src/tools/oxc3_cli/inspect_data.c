@@ -35,7 +35,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"

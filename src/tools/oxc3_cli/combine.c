@@ -29,7 +29,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 
 Bool CLI_fileCombine(ParsedArgs args) {
 

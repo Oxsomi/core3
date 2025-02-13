@@ -31,6 +31,9 @@
 
 typedef RefPtr GraphicsInstanceRef;
 typedef RefPtr DeviceBufferRef;
+typedef RefPtr PipelineRef;
+typedef RefPtr DescriptorLayoutRef;
+typedef RefPtr DescriptorHeapRef;
 
 typedef struct CBufferData {
 
@@ -130,7 +133,10 @@ typedef struct GraphicsDevice {
 
 	U64 blockSizeCpu, blockSizeGpu;				//Block sizes for memory allocator
 
-	U64 pad1;									//Pad to 16-byte aligned to allow impl to use for example vectors
+	PipelineRef *copyShaders[2];				//[0]: copy single, [1]: copy single, rotated
+	DescriptorLayoutRef *copyShaderLayout;
+
+	DescriptorHeapRef *descriptorHeaps;
 
 } GraphicsDevice;
 

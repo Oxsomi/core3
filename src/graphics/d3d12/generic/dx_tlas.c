@@ -24,6 +24,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
@@ -185,7 +186,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		}
 	};
 
-	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+	const DxDescriptorHeapSingle *heap = &DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx)->resourcesHeap;
 
 	U64 id = EDescriptorTypeOffsets_TLASExt + ResourceHandle_getId(tlas->handle);
 
@@ -193,7 +194,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		deviceExt->device,
 		NULL,
 		&resourceView,
-		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
+		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * id }
 	);
 
 clean:

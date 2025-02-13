@@ -59,11 +59,11 @@ Error CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd 
 TList(CopyImageRegion);
 
 Error CommandListRef_copyImageRegions(
-	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ECopyType copyType, ListCopyImageRegion regions
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ListCopyImageRegion regions
 );
 
 Error CommandListRef_copyImage(
-	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ECopyType copyType, CopyImageRegion region
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, CopyImageRegion region
 );
 
 //Draw calls and dispatches

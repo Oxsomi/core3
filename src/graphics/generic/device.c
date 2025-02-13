@@ -27,10 +27,14 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/pipeline.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
+#include "platforms/file.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/base/time.h"
@@ -67,6 +71,12 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 		ListRefPtr_freex(&device->resourcesInFlight[i]);
 	}
+
+	for(U64 i = 0; i < 2; ++i)
+		RefPtr_dec(&device->copyShaders[i]);
+
+	RefPtr_dec(&device->copyShaderLayout);
+	RefPtr_dec(&device->descriptorHeaps);
 
 	for(U64 i = 0; i < device->framesInFlight; ++i)
 		DeviceBufferRef_dec(&device->frameData[i]);
@@ -149,6 +159,80 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	GraphicsInstanceRef_dec(&device->instance);
 
 	return true;
+}
+
+Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	
+	Bool s_uccess = true;
+	Buffer tempBuffer = Buffer_createNull();
+	SHFile tmpBinary = (SHFile) { 0 };
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//Load prebuilt shaders
+	
+	if(!File_loadVirtual(CharString_createRefCStrConst("//OxC3_graphics"), NULL, e_rr))
+		goto clean;
+
+	//image_copy shaders, only the 2nd can rotate images
+
+	CharString path = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
+	gotoIfError3(clean, File_readx(path, U64_MAX, 0, 0, &tempBuffer, e_rr))
+	gotoIfError3(clean, SHFile_readx(tempBuffer, false, &tmpBinary, e_rr))
+
+	CharString uniforms[4] = {
+		CharString_createRefCStrConst("THREAD_COUNT"),
+		CharString_createRefCStrConst("1"),
+		CharString_createRefCStrConst("ROTATE"),
+		CharString_createRefCStrConst("1")
+	};
+
+	for(U64 i = 0; i < 2; ++i) {
+
+		ListCharString uniformsList = (ListCharString) { 0 };
+		gotoIfError2(clean, ListCharString_createRefConst(uniforms, 2 * (i + 1), &uniformsList))
+		
+		U32 mainSingle = GraphicsDeviceRef_getFirstShaderEntry(
+			deviceRef,
+			tmpBinary,
+			CharString_createRefCStrConst("mainSingle"),
+			uniformsList,
+			ESHExtension_None,
+			ESHExtension_None
+		);
+
+		if(mainSingle == U32_MAX)
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createPrebuiltShaders() couldn't find entrypoint"))
+
+		ListU32 binaries = (ListU32) { 0 };
+		gotoIfError2(clean, ListU32_createRefConst(&mainSingle, 1, &binaries))
+
+		DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+		gotoIfError3(clean, DescriptorLayout_detect(
+			tmpBinary, binaries, EDescriptorLayoutFlags_InternalWeakDeviceRef, &info
+		))
+
+		if(!device->copyShaderLayout)
+			gotoIfError2(clean, GraphicsDeviceRef_createDescriptorLayout(
+				deviceRef, &info, CharString_createRefCStrConst("Copy image layout"), &device->copyShaderLayout
+			))
+
+		gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
+			deviceRef,
+			tmpBinary,
+			CharString_createRefCStrConst("Copy image shader"),
+			mainSingle,
+			EPipelineFlags_InternalWeakDeviceRef,
+			device->copyShaderLayout,
+			&device->copyShaders[i],
+			e_rr
+		))
+	}
+
+clean:
+	SHFile_freex(&tmpBinary);
+	Buffer_freex(&tempBuffer);
+	return s_uccess;
 }
 
 Error GraphicsDeviceRef_create(
@@ -252,6 +336,32 @@ Error GraphicsDeviceRef_create(
 
 	gotoIfError(clean, GraphicsDevice_initExt(instance, info, deviceRef))
 
+	//Create default descriptor heaps
+	
+	CharString name =
+		!!(device->flags & EGraphicsDeviceFlags_IsDebug) ? CharString_createRefCStrConst("Default heap") :
+		CharString_createNull();
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
+
+		.flags = EDescriptorHeapFlags_InternalWeakDeviceRef,
+
+		.maxAccelerationStructures =
+			device->info.capabilities.features & EGraphicsFeatures_Raytracing ? EDescriptorTypeCount_TLASExt : 0,
+
+		.maxSamplers = EDescriptorTypeCount_Sampler,
+		.maxTextures = EDescriptorTypeCount_Textures,
+		.maxTexturesRW = EDescriptorTypeCount_RWTextures,
+		.maxBuffersRW = EDescriptorTypeCount_SSBO,
+		.maxConstantBuffers = 3,
+		.maxDescriptorTables = 4
+	};
+
+	if(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+		heapInfo.flags |= EDescriptorHeapFlags_AllowBindless;
+
+	gotoIfError(clean, GraphicsDeviceRef_createDescriptorHeap(*deviceRef, heapInfo, name, &device->descriptorHeaps))
+
 	//Determine some flushing and block size sizes for the current GPU
 	
 	//Determine when we need to flush.
@@ -311,6 +421,13 @@ Error GraphicsDeviceRef_create(
 			CharString_createRefCStrConst("Per frame data"),
 			sizeof(CBufferData), &device->frameData[i]
 		))
+
+	//Load prebuilt shaders
+	
+	if(!GraphicsDeviceRef_createPrebuiltShaders(*deviceRef, &err))
+		goto clean;
+
+	//Finish setting up descriptors
 
 	GraphicsDevice_postInitExt(device);
 

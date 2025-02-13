@@ -55,7 +55,10 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	.image = sizeof(DxUnifiedTexture),
 	.swapchain = sizeof(DxSwapchain),
 	.device = sizeof(DxGraphicsDevice),
-	.instance = sizeof(DxGraphicsInstance)
+	.instance = sizeof(DxGraphicsInstance),
+	.descriptorLayout = sizeof(DxDescriptorLayout),
+	.descriptorSet = sizeof(DxDescriptorTable),
+	.descriptorHeap = sizeof(DxDescriptorHeap)
 };
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -100,6 +103,13 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 
 			.swapchainCreate = D3D12GraphicsDeviceRef_createSwapchain,
 			.swapchainFree = D3D12Swapchain_free,
+
+			.descriptorLayoutCreate = D3D12GraphicsDeviceRef_createDescriptorLayout,
+			.descriptorLayoutFree = D3D12DescriptorLayout_free,
+			//.descriptorTableCreate = D3D12GraphicsDeviceRef_createDescriptorTable,
+			//.descriptorTableFree = D3D12DescriptorTable_free,
+			.descriptorHeapCreate = D3D12GraphicsDeviceRef_createDescriptorHeap,
+			.descriptorHeapFree = D3D12DescriptorHeap_free,
 
 			.memoryAllocate = D3D12DeviceMemoryAllocator_allocate,
 			.memoryFree = D3D12DeviceMemoryAllocator_freeAllocation,

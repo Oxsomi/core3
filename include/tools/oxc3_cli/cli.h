@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "tools/operations.h"
+#include "tools/oxc3_cli/operations.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"
@@ -69,13 +69,6 @@ Bool CLI_inspectData(ParsedArgs args);
 
 Bool CLI_package(ParsedArgs args);
 
-typedef enum ECompileType {
-	ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
-	ECompileType_Includes,			//Turns shader with includes into a list of their dependencies (direct + indirect)
-	ECompileType_Compile,			//Compile all shaders into an oiSH file for consumption
-	ECompileType_Symbols			//List all symbols located in the shader or include as a text file
-} ECompileType;
-
 U64 CLI_parseGraphicsAPIs(ParsedArgs args);		//U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
 
 #ifdef CLI_SHADER_COMPILER
@@ -85,41 +78,12 @@ U64 CLI_parseGraphicsAPIs(ParsedArgs args);		//U64_MAX indicates invalid, U32_MA
 
 	ECompilerWarning CLI_getExtraWarnings(ParsedArgs args);
 
-	Bool CLI_getCompileTargetsFromFile(
-		CharString input,
-		ECompileType compileType,
-		U64 compileModeU64,
-		Bool multipleModes,
-		Bool combineFlag,
-		Bool *isFolder,					//Optional (out); if the input is a folder or not
-		CharString *output,				//Optional; the output directory. If NULL, will output file names only (relative to none)
-		ListCharString *allFiles,		//Fully resolved file names (may contain duplicates per compile mode)
-		ListCharString *allShaderText,	//Per file name: Input shader files
-		ListCharString *allOutputs,		//Per file name: Output shader file names
-		ListU8 *allCompileModes			//Per file name: ESHBinaryType
-	);
-
-	Bool CLI_compileShaders(
-		ListCharString allFiles,
-		ListCharString allShaderText,
-		ListCharString allOutputs,
-		ListU8 allCompileOutputs,
-		U64 threadCount,
-		Bool isDebug,
-		ECompilerWarning extraWarnings,
-		Bool ignoreEmptyFiles,
-		ECompileType type,
-		CharString includeDir,			//Optional
-		CharString outputDir,			//Optional
-		ListBuffer *allBuffers,			//Optional: buffer outputs (if NULL, outputs to file)
-		Error *e_rr
-	);
-
 #endif
 
 Bool CLI_compileShader(ParsedArgs args);
 
 Bool CLI_graphicsDevices(ParsedArgs args);
+Bool CLI_graphicsCreate(ParsedArgs args);
 
 Bool CLI_audioDevices(ParsedArgs args);
 Bool CLI_audioConvert(ParsedArgs args);

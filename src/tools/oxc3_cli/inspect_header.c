@@ -31,7 +31,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 
 typedef struct VersionString {
 	C8 v[5];		//XX.Y

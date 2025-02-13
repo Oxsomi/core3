@@ -60,8 +60,6 @@ typedef struct DxCommandQueue {
 } DxCommandQueue;
 
 typedef enum EDescriptorHeapType {
-	EDescriptorHeapType_Sampler,		//Sampler heap
-	EDescriptorHeapType_Resources,		//SRV UAV heap
 	EDescriptorHeapType_DSV,			//Depth stencils
 	EDescriptorHeapType_RTV,			//Render targets
 	EDescriptorHeapType_Count
@@ -77,7 +75,7 @@ typedef struct DxCommandAllocator {
 TList(DxCommandAllocator);
 TListNamed(ID3D12Fence*, ListID3D12Fence);
 
-typedef struct DxHeap {
+typedef struct DxDescriptorHeapSingle {
 
 	ID3D12DescriptorHeap *heap;
 
@@ -86,7 +84,28 @@ typedef struct DxHeap {
 
 	U64 cpuIncrement, gpuIncrement;
 
-} DxHeap;
+	U64 padding;
+
+} DxDescriptorHeapSingle;
+
+typedef struct DxDescriptorHeap {
+	DxDescriptorHeapSingle samplerHeap, resourcesHeap;
+} DxDescriptorHeap;
+
+TList(D3D12_DESCRIPTOR_RANGE1);
+
+//DxDescriptorLayout is no real DX object, only root signature is.
+//But by abstracting it like this we map more closely to Vk while also allowing splitting of root signature and desc layout.
+// And reducing unnecessary conversions of ListDescriptorBinding -> DxDescriptorLayout.
+//For example; we might make the same root sig multiple times but with different root constants or IA/streamout flags.
+typedef struct DxDescriptorLayout {
+	ListD3D12_DESCRIPTOR_RANGE1 ranges;
+	ListU32 bindingOffsets;
+} DxDescriptorLayout;
+
+typedef struct DxDescriptorTable {
+	U64 padding[2];				//TODO:
+} DxDescriptorTable;
 
 typedef enum EExecuteIndirectCommand {
 	EExecuteIndirectCommand_Dispatch,
@@ -114,8 +133,8 @@ typedef struct DxGraphicsDevice {
 
 	ID3D12CommandSignature *commandSigs[EExecuteIndirectCommand_Count];
 
-	DxHeap heaps[EDescriptorHeapType_Count];
-	ID3D12RootSignature *defaultLayout;								//Default layout if push constants aren't present
+	DxDescriptorHeapSingle cpuHeaps[EDescriptorHeapType_Count];
+	ID3D12RootSignature *defaultLayout;
 
 	IDXGIAdapter4 *adapter4;
 
@@ -154,6 +173,14 @@ typedef struct DxCommandBufferState {
 } DxCommandBufferState;
 
 Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer);
+
+Error DxGraphicsDevice_createDescriptorHeapSingle(
+	DxGraphicsDevice *deviceExt,
+	D3D12_DESCRIPTOR_HEAP_DESC desc,
+	CharString *name,
+	DxDescriptorHeapSingle *heap,
+	Bool reqGpuHandle
+);
 
 #ifdef __cplusplus
 	}

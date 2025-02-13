@@ -24,6 +24,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
@@ -277,7 +278,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 	//Image views
 
-	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+	const DxDescriptorHeapSingle *heap = &DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx)->resourcesHeap;
 
 	for(U8 i = 0; i < texture->images; ++i) {
 
@@ -320,7 +321,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				deviceExt->device,
 				managedImageExt->image,
 				&srv,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
 			);
 		}
 
@@ -354,7 +355,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				managedImageExt->image,
 				NULL,
 				&uav,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
 			);
 		}
 

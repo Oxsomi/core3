@@ -82,6 +82,16 @@
 	Error VkGraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
 	Bool  VkSwapchain_free(Swapchain *data, Allocator alloc);
 
+	//DescriptorHeap
+
+	Error VkGraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
+	Bool VkDescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
+
+	//DescriptorLayout
+
+	Error VkGraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+	Bool VkDescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
+
 	//Allocator
 
 	//Needs explicit lock, because allocator is accessed after.

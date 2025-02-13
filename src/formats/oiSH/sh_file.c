@@ -46,7 +46,7 @@ TListImpl(SHFile);
 	}
 
 	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr) {
-		return SHFile_addBinaries(shFile, binaries, Platform_instance->alloc, e_rr);
+		return SHFile_addBinary(shFile, binaries, Platform_instance->alloc, e_rr);
 	}
 
 	Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr) {

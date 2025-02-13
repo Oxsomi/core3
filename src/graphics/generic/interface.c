@@ -25,6 +25,8 @@
 	#include "graphics/generic/pipeline.h"
 	#include "graphics/generic/sampler.h"
 	#include "graphics/generic/swapchain.h"
+	#include "graphics/generic/descriptor_heap.h"
+	#include "graphics/generic/descriptor_layout.h"
 	#include "graphics/generic/command_list.h"
 	#include "platforms/file.h"
 	#include "platforms/log.h"
@@ -216,6 +218,36 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool Swapchain_freeExt(Swapchain *data, Allocator alloc) {
 		return WrapperFunction(data->base.resource.device, swapchainFree)(data, alloc);
+	}
+
+	//DescriptorLayout
+
+	Error GraphicsDeviceRef_createDescriptorLayoutExt(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name) {
+		return WrapperFunction(dev, descriptorLayoutCreate)(dev, layout, name);
+	}
+	
+	Bool DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc) {
+		return WrapperFunction(layout->device, descriptorLayoutFree)(layout, alloc);
+	}
+
+	//DescriptorTable TODO:
+
+	//Error GraphicsDeviceRef_createDescriptorTableExt(GraphicsDeviceRef *dev, DescriptorTable *table) {
+	//	return WrapperFunction(dev, descriptorTableCreate)(dev, table);
+	//}
+	//
+	//Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc) {
+	//	return WrapperFunction(table->device, descriptorTableFree)(table, alloc);
+	//}
+	
+	//DescriptorHeap
+
+	Error GraphicsDeviceRef_createDescriptorHeapExt(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name) {
+		return WrapperFunction(dev, descriptorHeapCreate)(dev, heap, name);
+	}
+
+	Bool DescriptorHeap_freeExt(DescriptorHeap *heap, Allocator alloc) {
+		return WrapperFunction(heap->device, descriptorHeapFree)(heap, alloc);
 	}
 
 	//Allocator

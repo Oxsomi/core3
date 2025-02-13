@@ -145,15 +145,17 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_IsWrite				= 1 << 6,
 
 	ESHRegisterType_Masks				=
-	ESHRegisterType_IsArray | ESHRegisterType_IsCombinedSampler | ESHRegisterType_IsWrite
+		ESHRegisterType_IsArray | ESHRegisterType_IsCombinedSampler | ESHRegisterType_IsWrite
 
 } ESHRegisterType;
+
+typedef U8 SHRegisterType;
 
 typedef struct SHRegister {			//Treated as U64[N + 1]
 
 	SHBindings bindings;			//Treated as U64[N]
 
-	U8 registerType;				//ESHRegisterType
+	SHRegisterType registerType;
 	U8 isUsedFlag;					//Per ESHBinaryType if the register is used
 
 	union {

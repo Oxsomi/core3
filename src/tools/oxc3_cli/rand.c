@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "tools/cli.h"
+#include "tools/oxc3_cli/cli.h"
 #include "types/container/string.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"

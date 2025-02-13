@@ -31,11 +31,15 @@
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
-	CharString name,			//Temporary name for debugging
+	CharString name,
 	U32 entryId,
+	EPipelineFlags flags,
+	DescriptorLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 ) {
+
+	(void) layout;		//TODO:
 
 	Bool s_uccess = true;
 	U16 entrypointId = (U16) entryId;
@@ -90,9 +94,10 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 
 	//Log_debugLnx("Create: ComputePipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipelinePtr);
 
-	GraphicsDeviceRef_inc(deviceRef);
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		GraphicsDeviceRef_inc(deviceRef);
 
-	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
+	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute, .flags = flags };
 
 	gotoIfError2(clean, ListPipelineStage_resizex(&pipelinePtr->stages, 1))
 	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute, .binaryId = entryId };

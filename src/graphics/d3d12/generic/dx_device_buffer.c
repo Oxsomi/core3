@@ -23,6 +23,7 @@
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/dx_device.h"
@@ -289,7 +290,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 	if(flags & EGraphicsResourceFlag_ShaderRW) {
 
-		const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+		const DxDescriptorHeapSingle *heap = &DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx)->resourcesHeap;
 
 		//Create readonly buffer
 
@@ -311,7 +312,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 				deviceExt->device,
 				bufExt->buffer,
 				&srv,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
 			);
 		}
 
@@ -335,7 +336,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 				bufExt->buffer,
 				NULL,
 				&uav,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
 			);
 		}
 	}
