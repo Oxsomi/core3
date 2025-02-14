@@ -154,6 +154,7 @@ Bool SHFile_detectDuplicate(
 	Bool anyBinding = false;
 
 	Bool anyDxilBinding = false;
+	Bool anySpvBinding = false;
 
 	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
 		if(bindings.arr[i].space != U32_MAX || bindings.arr[i].binding != U32_MAX) {
@@ -162,6 +163,9 @@ Bool SHFile_detectDuplicate(
 
 			if(i == ESHBinaryType_DXIL)
 				anyDxilBinding = true;
+
+			if(i == ESHBinaryType_SPIRV)
+				anySpvBinding = true;
 		}
 
 	if(!anyBinding)
@@ -197,36 +201,50 @@ Bool SHFile_detectDuplicate(
 		if(CharString_equalsStringSensitive(reg.name, name))
 			retError(clean, Error_invalidState(0, "SHFile_detectDuplicate()::name was already found in SHFile"))
 
-		else if (anyDxilBinding) {
+		else {
 
-			SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_DXIL];
-			SHBinding srcBinding = bindings.arr[ESHBinaryType_DXIL];
+			if(anySpvBinding) {
 
-			U8 registerBindingTypei = 0;
+				SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_SPIRV];
+				SHBinding srcBinding = bindings.arr[ESHBinaryType_SPIRV];
 
-			switch (reg.reg.registerType & ESHRegisterType_TypeMask) {
-
-				case ESHRegisterType_Sampler:
-				case ESHRegisterType_SamplerComparisonState:
-					registerBindingTypei = 2;
-					break;
-
-				case ESHRegisterType_ConstantBuffer:
-					registerBindingTypei = 3;
-					break;
-
-				default:
-					registerBindingTypei = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
-					break;
+				if(dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space)
+					retError(clean, Error_invalidState(
+						0, "SHFile_detectDuplicate() SPIRV space & binding combo was already found in SHFile"
+					))
 			}
 
-			if(
-				registerBindingType == registerBindingTypei &&
-				dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space
-			)
-				retError(clean, Error_invalidState(
-					0, "SHFile_detectDuplicate() DXIL space & binding combo was already found in SHFile"
-				))
+			if (anyDxilBinding) {
+
+				SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_DXIL];
+				SHBinding srcBinding = bindings.arr[ESHBinaryType_DXIL];
+
+				U8 registerBindingTypei = 0;
+
+				switch (reg.reg.registerType & ESHRegisterType_TypeMask) {
+
+					case ESHRegisterType_Sampler:
+					case ESHRegisterType_SamplerComparisonState:
+						registerBindingTypei = 2;
+						break;
+
+					case ESHRegisterType_ConstantBuffer:
+						registerBindingTypei = 3;
+						break;
+
+					default:
+						registerBindingTypei = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
+						break;
+				}
+
+				if(
+					registerBindingType == registerBindingTypei &&
+					dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space
+				)
+					retError(clean, Error_invalidState(
+						0, "SHFile_detectDuplicate() DXIL space & binding combo was already found in SHFile"
+					))
+			}
 		}
 	}
 

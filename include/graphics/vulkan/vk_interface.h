@@ -92,6 +92,11 @@
 	Error VkGraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
 	Bool VkDescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
 
+	//PipelineLayout
+
+	Error VkGraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
+	Bool VkPipelineLayout_free(PipelineLayout *layout, Allocator alloc);
+
 	//Allocator
 
 	//Needs explicit lock, because allocator is accessed after.

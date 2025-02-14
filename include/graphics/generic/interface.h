@@ -36,6 +36,7 @@ typedef struct DeviceBuffer DeviceBuffer;
 typedef struct DescriptorLayout DescriptorLayout;
 typedef struct DescriptorTable DescriptorTable;
 typedef struct DescriptorHeap DescriptorHeap;
+typedef struct PipelineLayout PipelineLayout;
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct SHBinaryInfo SHBinaryInfo;
 typedef struct DeviceMemoryAllocator DeviceMemoryAllocator;
@@ -58,10 +59,11 @@ typedef RefPtr SwapchainRef;
 typedef RefPtr DescriptorLayoutRef;
 typedef RefPtr DescriptorTableRef;
 typedef RefPtr DescriptorHeapRef;
+typedef RefPtr PipelineLayoutRef;
 
 typedef struct GraphicsObjectSizes {
 	U64 blas, tlas, pipeline, sampler, buffer, image, swapchain, device, instance;
-	U64 descriptorLayout, descriptorSet, descriptorHeap;
+	U64 descriptorLayout, descriptorSet, descriptorHeap, pipelineLayout;
 } GraphicsObjectSizes;
 
 //Dynamic linking will load the dlls to generate the function tables.
@@ -264,6 +266,11 @@ typedef struct GraphicsObjectSizes {
 	typedef Error (*GraphicsDeviceRef_createDescriptorLayoutImpl)(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
 	typedef Bool (*DescriptorLayout_freeImpl)(DescriptorLayout *layout, Allocator alloc);
 
+	//PipelineLayout
+
+	typedef Error (*GraphicsDeviceRef_createPipelineLayoutImpl)(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
+	typedef Bool (*PipelineLayout_freeImpl)(PipelineLayout *layout, Allocator alloc);
+
 	//DescriptorTable
 
 	typedef Error (*GraphicsDeviceRef_createDescriptorTableImpl)(GraphicsDeviceRef *dev, DescriptorTable *table);
@@ -363,6 +370,9 @@ typedef struct GraphicsObjectSizes {
 
 		GraphicsDeviceRef_createDescriptorLayoutImpl	descriptorLayoutCreate;
 		DescriptorLayout_freeImpl						descriptorLayoutFree;
+
+		GraphicsDeviceRef_createPipelineLayoutImpl		pipelineLayoutCreate;
+		PipelineLayout_freeImpl							pipelineLayoutFree;
 
 		//GraphicsDeviceRef_createDescriptorTableImpl		descriptorTableCreate;
 		//DescriptorTable_freeImpl						descriptorTableFree;
@@ -472,6 +482,11 @@ typedef struct GraphicsObjectSizes {
 
 	Error GraphicsDeviceRef_createDescriptorLayoutExt(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
 	Bool DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc);
+
+	//PipelineLayout
+
+	Error GraphicsDeviceRef_createPipelineLayoutExt(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
+	Bool PipelineLayout_freeExt(PipelineLayout *layout, Allocator alloc);
 
 	//DescriptorTable
 

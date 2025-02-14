@@ -230,6 +230,16 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(layout->device, descriptorLayoutFree)(layout, alloc);
 	}
 
+	//PipelineLayout
+
+	Error GraphicsDeviceRef_createPipelineLayoutExt(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name) {
+		return WrapperFunction(dev, pipelineLayoutCreate)(dev, layout, name);
+	}
+	
+	Bool PipelineLayout_freeExt(PipelineLayout *layout, Allocator alloc) {
+		return WrapperFunction(layout->device, pipelineLayoutFree)(layout, alloc);
+	}
+
 	//DescriptorTable TODO:
 
 	//Error GraphicsDeviceRef_createDescriptorTableExt(GraphicsDeviceRef *dev, DescriptorTable *table) {

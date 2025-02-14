@@ -91,7 +91,7 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 			!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
 		)
 			return Error_invalidOperation(
-				0, "GraphicsDeviceRef_createDescriptorHeap()::info.bindings has an RTAS, but device doesn't have RT"
+				0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings has an RTAS, but device doesn't have RT"
 			);
 
 	Error err = RefPtr_createx(

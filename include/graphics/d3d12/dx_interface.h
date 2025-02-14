@@ -92,6 +92,11 @@
 	Error D3D12GraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
 	Bool D3D12DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
 
+	//PipelineLayout
+
+	Error D3D12GraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
+	Bool D3D12PipelineLayout_free(PipelineLayout *layout, Allocator alloc);
+
 	//Allocator
 
 	//Needs explicit lock, because allocator is accessed after.

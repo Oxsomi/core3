@@ -46,15 +46,16 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_DepthStencil				= makeObjectId(0x1C33, 10, 0),
 
 	EGraphicsTypeId_DescriptorLayout			= makeObjectId(0x1C33, 11, 0),
-	EGraphicsTypeId_DescriptorTable				= makeObjectId(0x1C33, 12, 0),
-	EGraphicsTypeId_DescriptorHeap				= makeObjectId(0x1C33, 13, 0),
+	EGraphicsTypeId_PipelineLayout				= makeObjectId(0x1C33, 12, 0),
+	EGraphicsTypeId_DescriptorTable				= makeObjectId(0x1C33, 13, 0),
+	EGraphicsTypeId_DescriptorHeap				= makeObjectId(0x1C33, 14, 0),
 
 	//Requires EGraphicsFeatures_Raytracing
 
-	EGraphicsTypeId_BLASExt						= makeObjectId(0x1C33, 14, 0),
-	EGraphicsTypeId_TLASExt						= makeObjectId(0x1C33, 15, 0),
+	EGraphicsTypeId_BLASExt						= makeObjectId(0x1C33, 15, 0),
+	EGraphicsTypeId_TLASExt						= makeObjectId(0x1C33, 16, 0),
 
-	EGraphicsTypeId_Count						= 16
+	EGraphicsTypeId_Count						= 17
 
 } EGraphicsTypeId;
 

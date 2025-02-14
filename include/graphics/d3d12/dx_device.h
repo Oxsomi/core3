@@ -59,11 +59,11 @@ typedef struct DxCommandQueue {
 
 } DxCommandQueue;
 
-typedef enum EDescriptorHeapType {
-	EDescriptorHeapType_DSV,			//Depth stencils
-	EDescriptorHeapType_RTV,			//Render targets
-	EDescriptorHeapType_Count
-} EDescriptorHeapType;
+typedef enum ECPUDescriptorHeapType {
+	ECPUDescriptorHeapType_DSV,			//Depth stencils
+	ECPUDescriptorHeapType_RTV,			//Render targets
+	ECPUDescriptorHeapType_Count
+} ECPUDescriptorHeapType;
 
 typedef ID3D12GraphicsCommandList10 DxCommandBuffer;
 
@@ -99,7 +99,8 @@ TList(D3D12_DESCRIPTOR_RANGE1);
 // And reducing unnecessary conversions of ListDescriptorBinding -> DxDescriptorLayout.
 //For example; we might make the same root sig multiple times but with different root constants or IA/streamout flags.
 typedef struct DxDescriptorLayout {
-	ListD3D12_DESCRIPTOR_RANGE1 ranges;
+	ListD3D12_DESCRIPTOR_RANGE1 rangesResources;
+	ListD3D12_DESCRIPTOR_RANGE1 rangesSamplers;
 	ListU32 bindingOffsets;
 } DxDescriptorLayout;
 
@@ -133,8 +134,7 @@ typedef struct DxGraphicsDevice {
 
 	ID3D12CommandSignature *commandSigs[EExecuteIndirectCommand_Count];
 
-	DxDescriptorHeapSingle cpuHeaps[EDescriptorHeapType_Count];
-	ID3D12RootSignature *defaultLayout;
+	DxDescriptorHeapSingle cpuHeaps[ECPUDescriptorHeapType_Count];
 
 	IDXGIAdapter4 *adapter4;
 

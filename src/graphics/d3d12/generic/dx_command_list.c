@@ -239,7 +239,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			//Prepare attachments
 
-			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[EDescriptorHeapType_RTV];
+			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV];
 
 			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr };
 
@@ -329,7 +329,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			//Prepare attachments
 
-			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[EDescriptorHeapType_RTV];
+			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV];
 
 			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap->cpuHandle;
 			U8 j = 0;
@@ -371,7 +371,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 			for (U8 i = startRender->colorCount; i < 9; ++i)
 				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
 
-			const DxDescriptorHeapSingle *dsvHeap = &deviceExt->cpuHeaps[EDescriptorHeapType_DSV];
+			const DxDescriptorHeapSingle *dsvHeap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV];
 			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap->cpuHandle;
 			D3D12_CPU_DESCRIPTOR_HANDLE dsv = createTempDSV(
 				deviceExt, 0, dsvCpuDesc, startRender->flags, dsvHeap, startRender->depthStencil

@@ -30,7 +30,7 @@
 Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout) {
 	DxDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Dx);
 	ListU32_freex(&layoutExt->bindingOffsets);
-	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->ranges);
+	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesResources);
 	return true;
 }
 
@@ -150,10 +150,12 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Create our ranges
 
-	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->ranges, sortedList.length))
+	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, sortedList.length))
+	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, sortedList.length))
 	gotoIfError(clean, ListU32_resizex(&layoutExt->bindingOffsets, layout->info.bindings.length))
 
-	U32 offset = 0;
+	U32 offset1 = 0, offset2 = 0;
+	U64 resourceRange = 0, samplerRange = 0;
 
 	for (U64 i = 0; i < sortedList.length; ++i) {
 
@@ -174,18 +176,29 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		)
 			bindFlags = 0;
 
-		layoutExt->ranges.ptrNonConst[i] = (D3D12_DESCRIPTOR_RANGE1) {
+		D3D12_DESCRIPTOR_RANGE1 range = (D3D12_DESCRIPTOR_RANGE1) {
 			.RangeType = type,
 			.NumDescriptors = count,
 			.BaseShaderRegister = key.binding->id,
 			.RegisterSpace = key.binding->space,
 			.Flags = bindFlags,
-			.OffsetInDescriptorsFromTableStart = offset
+			.OffsetInDescriptorsFromTableStart = offset1
 		};
+
+		if (type == D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER) {
+			range.OffsetInDescriptorsFromTableStart = offset2;
+			layoutExt->rangesSamplers.ptrNonConst[samplerRange++] = range;
+			offset2 += count;
+		}
+
+		else {
+			layoutExt->rangesResources.ptrNonConst[resourceRange++] = range;
+			offset1 += count;
+		}
 
 		//Map registers to descriptor table offset
 
-		for (U64 j = 0; j < info.bindings.length; ++i) {
+		for (U64 j = 0; j < info.bindings.length; ++j) {
 
 			DescriptorBinding bindj = info.bindings.ptr[j];
 			D3D12_DESCRIPTOR_RANGE_TYPE typej = dxGetDescriptorType(bindj.registerType);
@@ -197,13 +210,12 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			)
 				continue;
 			
-			layoutExt->bindingOffsets.ptrNonConst[j] = offset + bindj.id - key.binding->id;
+			layoutExt->bindingOffsets.ptrNonConst[j] = range.OffsetInDescriptorsFromTableStart + bindj.id - key.binding->id;
 		}
-
-		//Manual D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND to track offset
-
-		offset += count;
 	}
+	
+	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, resourceRange))
+	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, samplerRange))
 
 clean:
 	ListSortingKey_freex(&sortedList);

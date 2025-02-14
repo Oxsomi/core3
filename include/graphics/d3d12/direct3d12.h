@@ -79,45 +79,6 @@ typedef enum EDxBlockFlags {
 	EDxBlockFlags_IsDedicated		= 1 << 0
 } EDxBlockFlags;
 
-typedef enum EDescriptorTypeOffsets {
-
-	EDescriptorTypeOffsets_Texture2D		= 0,
-	EDescriptorTypeOffsets_TextureCube		= EDescriptorTypeOffsets_Texture2D + EDescriptorTypeCount_Texture2D,
-	EDescriptorTypeOffsets_Texture3D		= EDescriptorTypeOffsets_TextureCube + EDescriptorTypeCount_TextureCube,
-	EDescriptorTypeOffsets_Buffer			= EDescriptorTypeOffsets_Texture3D + EDescriptorTypeCount_Texture3D,
-	EDescriptorTypeOffsets_TLASExt			= EDescriptorTypeOffsets_Buffer + EDescriptorTypeCount_Buffer,
-
-	EDescriptorTypeOffsets_RWBuffer			= EDescriptorTypeOffsets_TLASExt + EDescriptorTypeCount_TLASExt,
-	EDescriptorTypeOffsets_RWTexture3D		= EDescriptorTypeOffsets_RWBuffer + EDescriptorTypeCount_RWBuffer,
-	EDescriptorTypeOffsets_RWTexture3Ds		= EDescriptorTypeOffsets_RWTexture3D + EDescriptorTypeCount_RWTexture3D,
-	EDescriptorTypeOffsets_RWTexture3Df		= EDescriptorTypeOffsets_RWTexture3Ds + EDescriptorTypeCount_RWTexture3Ds,
-	EDescriptorTypeOffsets_RWTexture3Di		= EDescriptorTypeOffsets_RWTexture3Df + EDescriptorTypeCount_RWTexture3Df,
-	EDescriptorTypeOffsets_RWTexture3Du		= EDescriptorTypeOffsets_RWTexture3Di + EDescriptorTypeCount_RWTexture3Di,
-	EDescriptorTypeOffsets_RWTexture2D		= EDescriptorTypeOffsets_RWTexture3Du + EDescriptorTypeCount_RWTexture3Du,
-	EDescriptorTypeOffsets_RWTexture2Ds		= EDescriptorTypeOffsets_RWTexture2D + EDescriptorTypeCount_RWTexture2D,
-	EDescriptorTypeOffsets_RWTexture2Df		= EDescriptorTypeOffsets_RWTexture2Ds + EDescriptorTypeCount_RWTexture2Ds,
-	EDescriptorTypeOffsets_RWTexture2Di		= EDescriptorTypeOffsets_RWTexture2Df + EDescriptorTypeCount_RWTexture2Df,
-	EDescriptorTypeOffsets_RWTexture2Du		= EDescriptorTypeOffsets_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
-
-	//Add one to the resource count to add an extension slot for NV
-	EDescriptorTypeOffsets_ResourceCount	= EDescriptorTypeOffsets_RWTexture2Du + EDescriptorTypeCount_RWTexture2Du + 1,
-
-	EDescriptorTypeOffsets_Sampler			= 0,
-	EDescriptorTypeOffsets_SamplerCount		= EDescriptorTypeCount_Sampler,
-
-	EDescriptorTypeOffsets_RTVCount			= 8,								//No more than 8 RTVs can be active at a time
-	EDescriptorTypeOffsets_DSVCount			= 1,								//No more than 1 DSV can be active at a time
-
-	EDescriptorTypeOffsets_SRVStart			= EDescriptorTypeOffsets_Texture2D,
-	EDescriptorTypeOffsets_SRVEnd			= EDescriptorTypeOffsets_RWBuffer,
-
-	EDescriptorTypeOffsets_UAVStart			= EDescriptorTypeOffsets_RWBuffer,
-	EDescriptorTypeOffsets_UAVEnd			= EDescriptorTypeOffsets_ResourceCount,
-
-} EDescriptorTypeOffsets;
-
-EDescriptorTypeOffsets EDescriptorTypeOffsets_values[EDescriptorType_ResourceCount];
-
 typedef struct DxBlockRequirements {
 
 	EDxBlockFlags flags;

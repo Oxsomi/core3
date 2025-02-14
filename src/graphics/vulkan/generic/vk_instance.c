@@ -47,7 +47,8 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.instance = sizeof(VkGraphicsInstance),
 	.descriptorLayout = sizeof(VkDescriptorLayout),
 	.descriptorSet = 0, //TODO: sizeof(VkDescriptorTable),
-	.descriptorHeap = sizeof(VkDescriptorHeap)
+	.descriptorHeap = sizeof(VkDescriptorHeap),
+	.pipelineLayout = sizeof(VkPipelineLayout) + 8
 };
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -95,6 +96,8 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 
 			.descriptorLayoutCreate = VkGraphicsDeviceRef_createDescriptorLayout,
 			.descriptorLayoutFree = VkDescriptorLayout_free,
+			.pipelineLayoutCreate = VkGraphicsDeviceRef_createPipelineLayout,
+			.pipelineLayoutFree = VkPipelineLayout_free,
 			//.descriptorTableCreate = VkGraphicsDeviceRef_createDescriptorTable,
 			//.descriptorTableFree = VkDescriptorTable_free,
 			.descriptorHeapCreate = VkGraphicsDeviceRef_createDescriptorHeap,

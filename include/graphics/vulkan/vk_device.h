@@ -101,7 +101,6 @@ typedef struct VkGraphicsDevice {
 
 	VkFence commitFence[MAX_FRAMES_IN_FLIGHT];
 
-	VkDescriptorSetLayout setLayouts[EDescriptorSetType_UniqueLayouts];
 	VkDescriptorSet sets[EDescriptorSetType_Count];				//1 per type and 2 extra for ubo to allow versioning
 	VkPipelineLayout defaultLayout;								//Default layout if push constants aren't present
 

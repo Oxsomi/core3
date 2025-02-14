@@ -71,35 +71,6 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
 	}
 }
 
-typedef struct SortingKey {
-	const DescriptorBinding *binding;
-	U32 mergedCount;						//Useful to allow merging later
-	U32 padding;
-} SortingKey;
-
-ECompareResult SortingKey_compare(const SortingKey *aKey, const SortingKey *bKey) {
-
-	const DescriptorBinding *a = aKey->binding;
-	const DescriptorBinding *b = bKey->binding;
-
-	if(a->space != b->space)
-		return a->space < b->space ? ECompareResult_Lt : ECompareResult_Gt;
-
-	VkDescriptorType registerTypeA = vkGetDescriptorType(a->registerType);
-	VkDescriptorType registerTypeB = vkGetDescriptorType(b->registerType);
-
-	if(registerTypeA != registerTypeB)
-		return registerTypeA < registerTypeB ? ECompareResult_Lt : ECompareResult_Gt;
-
-	if(a->id != b->id)
-		return a->id < b->id ? ECompareResult_Lt : ECompareResult_Gt;
-
-	return ECompareResult_Eq;
-}
-
-TList(SortingKey);
-TListImpl(SortingKey);
-
 TList(VkDescriptorSetLayoutBinding);
 TListImpl(VkDescriptorSetLayoutBinding);
 
@@ -114,7 +85,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	Error err = Error_none();
 	CharString tmpName = CharString_createNull();
-	ListSortingKey sortedList = (ListSortingKey) { 0 };
+	ListU64 sortedList = (ListU64) { 0 };
 	ListVkDescriptorSetLayoutBinding bindings = (ListVkDescriptorSetLayoutBinding) { 0 };
 	ListVkDescriptorBindingFlags flags = (ListVkDescriptorBindingFlags) { 0 };
 
@@ -147,7 +118,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		partiallyBound[i] = partiallyBound[0];
 	}
 
-	gotoIfError(clean, ListSortingKey_reservex(&sortedList, info.bindings.length))
+	gotoIfError(clean, ListU64_reservex(&sortedList, info.bindings.length))
 	gotoIfError(clean, ListVkDescriptorSetLayoutBinding_resizex(&bindings, info.bindings.length))
 
 	if(anyBindless)
@@ -158,9 +129,9 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Sort by set and merge shaders that allow it and check we only have 4 sets bound
 
-	for(U64 i = 0; i < info.bindings.length; ++i) {
+	for(U32 i = 0; i < (U32) info.bindings.length; ++i) {
 
-		gotoIfError(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { &info.bindings.ptr[i] }, (Allocator) { 0 }))
+		gotoIfError(clean, ListU64_pushBack(&sortedList, ((U64)info.bindings.ptr[i].space << 32) | i, (Allocator) { 0 }))
 
 		//Make sure the set is registered to avoid going over 4 sets
 
@@ -190,36 +161,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			isBindlessSet |= 1 << j;
 	}
 
-	if(!ListSortingKey_sortCustom(sortedList, (CompareFunction) SortingKey_compare))
+	if(!ListU64_sort(sortedList))
 		gotoIfError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"
 		))
-
-	//Collapse nearby bindings if possible
-
-	for (U64 i = sortedList.length - 1; i != U64_MAX && !!i; --i) {
-
-		//Combining is only allowed if same space, id, visibility, type.
-		//And if bindless on arrays is on; we don't want to combine non bindless + bindless in one.
-		//This would not allow us to turn off descriptor flags we don't want turned on.
-
-		DescriptorBinding a = *sortedList.ptr[i - 1].binding;
-		DescriptorBinding b = *sortedList.ptr[i].binding;
-
-		if(
-			vkGetDescriptorType(a.registerType) != vkGetDescriptorType(b.registerType) ||
-			a.space != b.space ||
-			a.visibility != b.visibility ||
-			a.id + a.count != b.id ||
-			(!!(info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && (a.count > 1) != (b.count > 1))
-		)
-			continue;
-
-		//We've found a match, let's shorten the array and remember how many we merge
-
-		gotoIfError(clean, ListSortingKey_popLocation(&sortedList, i, NULL))
-		sortedList.ptrNonConst[i - 1].mergedCount = a.count + b.count;
-	}
 
 	//Create our sets and bindings
 
@@ -227,10 +172,11 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	for (U64 i = 0; i < sortedList.length; ++i) {
 
-		SortingKey key = sortedList.ptr[i];
+		U64 key = sortedList.ptr[i];
+		DescriptorBinding *binding = &info.bindings.ptr[(U32) key];
 
-		U32 count = key.mergedCount ? key.mergedCount : key.binding->count;
-		U32 vis = key.binding->visibility;
+		U32 count = binding->count;
+		U32 vis = binding->visibility;
 
 		VkShaderStageFlags stageFlags = 0;
 
@@ -276,10 +222,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		if(!!((vis >> ESHPipelineStage_TaskExt) & 1))
 			stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT;
 
-		VkDescriptorType type = vkGetDescriptorType(key.binding->registerType);
+		VkDescriptorType type = vkGetDescriptorType(binding->registerType);
 
 		bindings.ptrNonConst[i] = (VkDescriptorSetLayoutBinding) {
-			.binding = key.binding->id,
+			.binding = binding->id,
 			.descriptorCount = count,
 			.descriptorType = type,
 			.stageFlags = stageFlags
@@ -295,7 +241,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		if(
 			!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
-			!(!!(info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && key.binding->count > 1)
+			!(!!(info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
 		)
 			bindFlags = 0;
 
@@ -306,7 +252,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		U8 linkId = 0;
 
 		for(U8 j = 1; j < 4; ++j)
-			if (sets[j] == key.binding->space) {
+			if (sets[j] == binding->space) {
 				linkId = j;
 				break;
 			}
@@ -356,7 +302,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 clean:
 	ListVkDescriptorSetLayoutBinding_freex(&bindings);
 	ListVkDescriptorBindingFlags_freex(&flags);
-	ListSortingKey_freex(&sortedList);
+	ListU64_freex(&sortedList);
 	CharString_freex(&tmpName);
 	return err;
 }

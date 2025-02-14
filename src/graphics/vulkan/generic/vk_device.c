@@ -740,94 +740,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	//Create shared layout since we use bindless
 
-	Bool hasRt = physicalDevice->capabilities.features & EGraphicsFeatures_Raytracing;
-
-	for (U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
-
-		VkDescriptorSetLayoutBinding bindings[EDescriptorType_ResourceCount - 1];
-		U8 bindingCount = 0;
-
-		if (i == EDescriptorSetType_Resources) {
-
-			for(U32 j = EDescriptorType_Texture2D; j < EDescriptorType_ResourceCount; ++j) {
-
-				if(j == EDescriptorType_Sampler)
-					continue;
-
-				if(j == EDescriptorType_TLASExt && !hasRt)
-					continue;
-
-				U32 id = j;
-
-				if(j > EDescriptorType_Sampler)
-					--id;
-
-				if(j > EDescriptorType_TLASExt && !hasRt)
-					--id;
-
-				bindings[id] = (VkDescriptorSetLayoutBinding) {
-					.binding = id,
-					.stageFlags = VK_SHADER_STAGE_ALL,
-					.descriptorCount = descriptorTypeCount[j],
-					.descriptorType =
-						j == EDescriptorType_TLASExt ? VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : (
-							j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
-								j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
-								VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-							)
-						)
-				};
-			}
-
-			bindingCount = EDescriptorType_ResourceCount - 1 - !hasRt;
-		}
-
-		else {
-
-			Bool isSampler = i == EDescriptorSetType_Sampler;
-
-			bindings[0] = (VkDescriptorSetLayoutBinding) {
-				.stageFlags = VK_SHADER_STAGE_ALL,
-				.descriptorCount = isSampler ? EDescriptorTypeCount_Sampler : 1,
-				.descriptorType = isSampler ? VK_DESCRIPTOR_TYPE_SAMPLER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-			};
-
-			bindingCount = 1;
-		}
-
-		//One binding per set.
-
-		VkDescriptorBindingFlags flags[EDescriptorType_ResourceCount - 1] = {
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
-			VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT
-		};
-
-		for(U32 j = 1; j < EDescriptorType_ResourceCount - 1; ++j)
-			flags[j] = flags[0];
-
-		if (i >= EDescriptorSetType_CBuffer0 && i <= EDescriptorSetType_CBuffer2)	//We don't touch CBuffer after bind
-			flags[0] &=~ VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-
-		VkDescriptorSetLayoutBindingFlagsCreateInfo partiallyBound = (VkDescriptorSetLayoutBindingFlagsCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-			.bindingCount = bindingCount,
-			.pBindingFlags = flags
-		};
-
-		VkDescriptorSetLayoutCreateInfo setInfo = (VkDescriptorSetLayoutCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-			.pNext = &partiallyBound,
-			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-			.bindingCount = bindingCount,
-			.pBindings = bindings
-		};
-
-		gotoIfError(clean, checkVkError(deviceExt->createDescriptorSetLayout(
-			deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i]
-		)))
-	}
-
 	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = EDescriptorSetType_UniqueLayouts,
@@ -878,20 +790,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 
 			CharString_freex(&tempStr);
-
-			gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%"PRIu32": %s)", i, debugNames[i]))
-
-			if(i < EDescriptorSetType_UniqueLayouts) {
-
-				debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-					.objectHandle = (U64) deviceExt->setLayouts[i],
-					.pObjectName = tempStr.ptr,
-				};
-
-				gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-			}
 		}
 	}
 
@@ -1100,14 +998,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		for(U64 i = 0; i < deviceExt->framesInFlight; ++i)
 			if(deviceExt->commitFence[i])
 				deviceExt->destroyFence(deviceExt->device, deviceExt->commitFence[i], NULL);
-
-		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
-
-			const VkDescriptorSetLayout layout = deviceExt->setLayouts[i];
-
-			if(layout)
-				deviceExt->destroyDescriptorSetLayout(deviceExt->device, layout, NULL);
-		}
 
 		if(deviceExt->defaultLayout)
 			deviceExt->destroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
