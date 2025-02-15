@@ -173,7 +173,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	for (U64 i = 0; i < sortedList.length; ++i) {
 
 		U64 key = sortedList.ptr[i];
-		DescriptorBinding *binding = &info.bindings.ptr[(U32) key];
+		const DescriptorBinding *binding = &info.bindings.ptr[(U32) key];
 
 		U32 count = binding->count;
 		U32 vis = binding->visibility;

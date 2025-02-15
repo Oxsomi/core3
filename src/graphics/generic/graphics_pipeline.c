@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
@@ -57,12 +58,10 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	PipelineGraphicsInfo info,
 	CharString name,
 	EPipelineFlags flags,
-	DescriptorLayoutRef *layout,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 ) {
-
-	(void) layout;		//TODO:
 
 	Bool s_uccess = true;
 
@@ -422,6 +421,12 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 				"GraphicsDeviceRef_createPipelineGraphics()::info.attachmentFormatsExt[j] out of bounds"
 			))
 
+	if(!!layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+		retError(clean, Error_invalidParameter(
+			3, 0,
+			"GraphicsDeviceRef_createPipelineGraphics() pipeline layout is invalid"
+		))
+
 	//Create ref ptrs
 
 	gotoIfError2(clean, RefPtr_createx(
@@ -436,9 +441,19 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	//Log_debugLnx("Create: GraphicsPipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipelinePtr);
 
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
-		GraphicsDeviceRef_inc(deviceRef);
+		gotoIfError2(clean, GraphicsDeviceRef_inc(deviceRef))
 
-	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Graphics, .flags = flags };
+	*pipelinePtr = (Pipeline) {
+		.device = deviceRef,
+		.type = EPipelineType_Graphics,
+		.flags = flags
+	};
+
+	if(!!layout)
+		layout = device->defaultPipelineLayout;
+
+	gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+	pipelinePtr->layout = layout;
 
 	*Pipeline_info(pipelinePtr, PipelineGraphicsInfo) = info;
 

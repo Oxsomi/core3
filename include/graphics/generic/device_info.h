@@ -91,6 +91,7 @@ typedef enum EDxGraphicsFeatures {
 	EDxGraphicsFeatures_ReportReBARWrites		= 1 << 6,		//A tool is attached and requires marking updates to ReBAR
 
 	EDxGraphicsFeatures_TightAlignment			= 1 << 7,
+	EDxGraphicsFeatures_RootSig1_1				= 1 << 8,
 
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 

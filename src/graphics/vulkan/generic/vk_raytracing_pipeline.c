@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
@@ -235,7 +236,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		.groupCount = (U32) groupCounter,
 		.pGroups = groups.ptr,
 		.maxPipelineRayRecursionDepth = rtPipeline->maxRecursionDepth,
-		.layout = deviceExt->defaultLayout
+		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
 	//Create vulkan pipelines

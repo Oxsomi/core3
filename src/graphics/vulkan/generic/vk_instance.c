@@ -853,20 +853,23 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
 		)
 
-		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
+		getDeviceFeatures(
+			true, VkPhysicalDevicePushDescriptorPropertiesKHR, pushDescriptor,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR
+		)
 
-		//Query
+		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
 
 		VkPhysicalDeviceProperties properties = properties2.properties;
 		VkPhysicalDeviceFeatures features = features2.features;
 		VkPhysicalDeviceLimits limits = properties.limits;
 
-		if (limits.nonCoherentAtomSize > 256) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", nonCoherentAtomSize needs to be up to 256", i);
+		//Ensure device is compatible first
+
+		if (pushDescriptor.maxPushDescriptors < 32) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", push descriptors >=32 is required", i);
 			continue;
 		}
-
-		//Ensure device is compatible first
 
 		if(
 			!features.shaderInt16 ||

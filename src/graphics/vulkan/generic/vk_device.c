@@ -123,6 +123,15 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	void **currPNext = &features2.pNext;
 
 	bindNextVkStruct(
+		VkPhysicalDevicePushDescriptorPropertiesKHR,
+		true,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR,
+			.maxPushDescriptors = 32
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceDescriptorIndexingFeatures,
 		true,
 		{
@@ -738,16 +747,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	deviceExt->resolvedQueues = resolvedId;
 
-	//Create shared layout since we use bindless
-
-	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = EDescriptorSetType_UniqueLayouts,
-		.pSetLayouts = deviceExt->setLayouts
-	};
-
-	gotoIfError(clean, checkVkError(deviceExt->createPipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)))
-
 	//Last layout repeat 2-3x (that's the CBuffer which needs FRAMES_IN_FLIGHT different versions)
 
 	VkDescriptorSetLayout setLayouts[EDescriptorSetType_Count];
@@ -998,9 +997,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 		for(U64 i = 0; i < deviceExt->framesInFlight; ++i)
 			if(deviceExt->commitFence[i])
 				deviceExt->destroyFence(deviceExt->device, deviceExt->commitFence[i], NULL);
-
-		if(deviceExt->defaultLayout)
-			deviceExt->destroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
 
 		instanceExt->destroyDevice(deviceExt->device, NULL);
 	}

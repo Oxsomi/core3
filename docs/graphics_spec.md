@@ -44,7 +44,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_surface (and the variant of the platform such as VK_KHR_win32_surface)
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
-  - VK_KHR_push_descriptor
+  - VK_KHR_push_descriptor and maxPushDescriptors >= 32
   - VK_KHR_synchronization2
   - VK_KHR_swapchain
     - Requires at least 1 image layer.
@@ -108,7 +108,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxMemoryAllocationCount of 4096 or higher.
 - viewportBoundsRange[0] <= -32768.
 - viewportBoundsRange[1] >= 32767.
-- nonCoherentAtomSize of 0 -> 256 and has to be base2.
 - Requires UBO alignment of <=256.
 - Supported tesselation:
   - maxTessellationControlPerVertexInputComponents, maxTessellationControlPerVertexOutputComponents, maxTessellationEvaluationInputComponents, maxTessellationEvaluationOutputComponents of 124 or higher.

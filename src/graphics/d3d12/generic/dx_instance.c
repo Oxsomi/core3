@@ -404,6 +404,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
 		D3D12_FEATURE_DATA_HARDWARE_COPY hwCopy = (D3D12_FEATURE_DATA_HARDWARE_COPY) { 0 };
+		D3D12_FEATURE_DATA_ROOT_SIGNATURE rootSig = (D3D12_FEATURE_DATA_ROOT_SIGNATURE) { 0 };
 
 		#if D3D12_PREVIEW_SDK_VERSION >= 716
 			D3D12_FEATURE_DATA_TIGHT_ALIGNMENT tightAlignment = (D3D12_FEATURE_DATA_TIGHT_ALIGNMENT) { 0 };
@@ -527,6 +528,12 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			hwCopy.Supported
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
+
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))) &&
+			rootSig.HighestVersion >= D3D_ROOT_SIGNATURE_VERSION_1_1
+		)
+			caps.featuresExt |= EDxGraphicsFeatures_RootSig1_1;
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {

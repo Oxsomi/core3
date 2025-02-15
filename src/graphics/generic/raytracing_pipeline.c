@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
@@ -41,12 +42,10 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	PipelineRaytracingInfo info,
 	CharString name,
 	EPipelineFlags flags,
-	DescriptorLayoutRef *layout,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipelineRef,
 	Error *e_rr
 ) {
-
-	(void) layout;		//TODO:
 
 	Bool s_uccess = true;
 	Bool madePipeline = false;
@@ -297,6 +296,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
 		))
 
+	if(!!layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+		retError(clean, Error_invalidParameter(
+			3, 0,
+			"GraphicsDeviceRef_createPipelineRaytracing() pipeline layout is invalid"
+		))
+
 	gotoIfError2(clean, RefPtr_createx(
 		(U32)(sizeof(Pipeline) + GraphicsDeviceRef_getObjectSizes(deviceRef)->pipeline + sizeof(PipelineRaytracingInfo)),
 		(ObjectFreeFunc) Pipeline_free,
@@ -308,11 +313,21 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	Pipeline *pipeline = PipelineRef_ptr(*pipelineRef);
 
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
-		GraphicsDeviceRef_inc(deviceRef);
+		gotoIfError2(clean, GraphicsDeviceRef_inc(deviceRef))
 
 	//Log_debugLnx("Create: RaytracingPipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipeline);
 
-	*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_RaytracingExt, .flags = flags };
+	*pipeline = (Pipeline) {
+		.device = deviceRef,
+		.type = EPipelineType_RaytracingExt,
+		.flags = flags
+	};
+	
+	if(!!layout)
+		layout = GraphicsDeviceRef_ptr(deviceRef)->defaultPipelineLayout;
+
+	gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+	pipeline->layout = layout;
 
 	PipelineRaytracingInfo *dstInfo = Pipeline_info(pipeline, PipelineRaytracingInfo);
 	*dstInfo = info;

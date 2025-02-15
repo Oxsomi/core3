@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
@@ -102,7 +103,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics = (D3D12_GRAPHICS_PIPELINE_STATE_DESC) {
 
-		.pRootSignature = deviceExt->defaultLayout,
+		.pRootSignature = PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Dx)->rootSig,
 
 		.BlendState = (D3D12_BLEND_DESC) { .IndependentBlendEnable = info->blendState.allowIndependentBlend },
 

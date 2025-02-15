@@ -31,7 +31,7 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DeviceBufferRef;
-typedef RefPtr DescriptorLayoutRef;
+typedef RefPtr PipelineLayoutRef;
 
 //Graphics pipeline
 
@@ -141,7 +141,7 @@ typedef struct Pipeline {
 
 	EPipelineType type;
 	EPipelineFlags flags;
-	U32 padding[2];
+	PipelineLayoutRef *layout;
 
 	ListPipelineStage stages;
 
@@ -183,7 +183,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	CharString name,							//Temporary name for debugging
 	U32 entryId,								//Identifier from getFirstShaderEntry
 	EPipelineFlags flags,
-	DescriptorLayoutRef *layout,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 );
@@ -195,7 +195,7 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	PipelineGraphicsInfo info,
 	CharString name,							//Temporary name for debugging
 	EPipelineFlags flags,
-	DescriptorLayoutRef *layout,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipelines,
 	Error *e_rr
 );
@@ -209,7 +209,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	PipelineRaytracingInfo info,
 	CharString name,							//Temporary name for debugging
 	EPipelineFlags flags,
-	DescriptorLayoutRef *layout,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 );

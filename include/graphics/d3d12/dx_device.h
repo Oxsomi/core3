@@ -93,6 +93,7 @@ typedef struct DxDescriptorHeap {
 } DxDescriptorHeap;
 
 TList(D3D12_DESCRIPTOR_RANGE1);
+TList(D3D12_DESCRIPTOR_RANGE);
 
 //DxDescriptorLayout is no real DX object, only root signature is.
 //But by abstracting it like this we map more closely to Vk while also allowing splitting of root signature and desc layout.
@@ -101,8 +102,15 @@ TList(D3D12_DESCRIPTOR_RANGE1);
 typedef struct DxDescriptorLayout {
 	ListD3D12_DESCRIPTOR_RANGE1 rangesResources;
 	ListD3D12_DESCRIPTOR_RANGE1 rangesSamplers;
+	ListD3D12_DESCRIPTOR_RANGE legacyResources;
+	ListD3D12_DESCRIPTOR_RANGE legacySamplers;
 	ListU32 bindingOffsets;
 } DxDescriptorLayout;
+
+typedef struct DxPipelineLayout {
+	ID3D12RootSignature *rootSig;
+	U64 padding;
+} DxPipelineLayout;
 
 typedef struct DxDescriptorTable {
 	U64 padding[2];				//TODO:
@@ -144,6 +152,7 @@ typedef struct DxGraphicsDevice {
 	ListD3D12_TEXTURE_BARRIER imageTransitions;
 
 	U64 fenceId;
+	U64 padding;
 
 } DxGraphicsDevice;
 

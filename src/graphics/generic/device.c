@@ -29,6 +29,7 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/pipeline.h"
@@ -76,6 +77,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		RefPtr_dec(&device->copyShaders[i]);
 
 	RefPtr_dec(&device->copyDescLayout);
+	RefPtr_dec(&device->copyPipelineLayout);
 	RefPtr_dec(&device->defaultDescLayout);
 	RefPtr_dec(&device->defaultPipelineLayout);
 	RefPtr_dec(&device->descriptorHeaps);
@@ -214,10 +216,22 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 			tmpBinary, binaries, EDescriptorLayoutFlags_InternalWeakDeviceRef, &info
 		))
 
-		if(!device->copyDescLayout)
+		if(!device->copyDescLayout) {
+
 			gotoIfError2(clean, GraphicsDeviceRef_createDescriptorLayout(
-				deviceRef, &info, CharString_createRefCStrConst("Copy image layout"), &device->copyDescLayout
+				deviceRef, &info, CharString_createRefCStrConst("Copy image desc layout"), &device->copyDescLayout
 			))
+
+			PipelineLayoutInfo pipelineInfo = (PipelineLayoutInfo) {
+				.flags = EPipelineLayoutFlags_InternalWeakDeviceRef,
+				.bindings = device->copyDescLayout
+			};
+
+			gotoIfError2(clean, GraphicsDeviceRef_createPipelineLayout(
+				deviceRef, pipelineInfo, CharString_createRefCStrConst("Copy image pipeline layout"),
+				&device->copyPipelineLayout
+			))
+		}
 
 		gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
 			deviceRef,
@@ -225,7 +239,7 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 			CharString_createRefCStrConst("Copy image shader"),
 			mainSingle,
 			EPipelineFlags_InternalWeakDeviceRef,
-			device->copyDescLayout,
+			device->copyPipelineLayout,
 			&device->copyShaders[i],
 			e_rr
 		))
@@ -341,9 +355,7 @@ Error GraphicsDeviceRef_create(
 	//Create default descriptor heaps
 	//TODO: Allow user to define these
 	
-	CharString name =
-		!!(device->flags & EGraphicsDeviceFlags_IsDebug) ? CharString_createRefCStrConst("Default heap") :
-		CharString_createNull();
+	CharString name = CharString_createRefCStrConst("Default heap");
 
 	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
 
@@ -368,9 +380,7 @@ Error GraphicsDeviceRef_create(
 	//Create default descriptor layout
 	//TODO: Make this configurable and have a way to create the default one
 
-	name =
-		!!(device->flags & EGraphicsDeviceFlags_IsDebug) ? CharString_createRefCStrConst("Default descriptor layout") :
-		CharString_createNull();
+	name = CharString_createRefCStrConst("Default descriptor layout");
 
 	Bool isSpirv = instance->api == EGraphicsApi_Vulkan;
 
@@ -519,8 +529,14 @@ Error GraphicsDeviceRef_create(
 	gotoIfError(clean, GraphicsDeviceRef_createDescriptorLayout(*deviceRef, &descLayoutInfo, name, &device->defaultDescLayout))
 
 	//Create pipeline layout
-	//TODO:
-	//gotoIfError(clean, GraphicsDeviceRef_createPipelineLayout(*deviceRef, &descLayoutInfo, name, &device->defaultDescLayout))
+
+	name = CharString_createRefCStrConst("Default pipeline layout");
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) {
+		.flags = EPipelineLayoutFlags_InternalWeakDeviceRef,
+		.bindings = device->defaultDescLayout
+	};
+
+	gotoIfError(clean, GraphicsDeviceRef_createPipelineLayout(*deviceRef, pipelineLayoutInfo, name, &device->defaultDescLayout))
 
 	//Determine some flushing and block size sizes for the current GPU
 	

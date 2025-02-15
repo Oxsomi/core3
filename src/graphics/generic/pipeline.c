@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_buffer.h"
@@ -78,6 +79,8 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 	}
 
 	ListPipelineStage_freex(&pipeline->stages);
+
+	PipelineLayoutRef_dec(&pipeline->layout);
 
 	if(!(pipeline->flags & EPipelineFlags_InternalWeakDeviceRef))
 		GraphicsDeviceRef_dec(&pipeline->device);

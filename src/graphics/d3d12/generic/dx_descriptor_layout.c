@@ -27,10 +27,16 @@
 #include "platforms/ext/stringx.h"
 #include "formats/oiSH/entries.h"
 
+TListImpl(D3D12_DESCRIPTOR_RANGE)
+TListImpl(D3D12_DESCRIPTOR_RANGE1)
+
 Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout) {
 	DxDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Dx);
 	ListU32_freex(&layoutExt->bindingOffsets);
 	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesResources);
+	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesSamplers);
+	ListD3D12_DESCRIPTOR_RANGE_freex(&layoutExt->legacyResources);
+	ListD3D12_DESCRIPTOR_RANGE_freex(&layoutExt->legacySamplers);
 	return true;
 }
 
@@ -102,7 +108,6 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 ) {
 
 	(void) name;
-	(void) dev;
 
 	Error err = Error_none();
 	ListSortingKey sortedList = (ListSortingKey) { 0 };
@@ -150,7 +155,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Create our ranges
 
-	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, sortedList.length))
+	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, sortedList.length + 1))
 	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, sortedList.length))
 	gotoIfError(clean, ListU32_resizex(&layoutExt->bindingOffsets, layout->info.bindings.length))
 
@@ -213,9 +218,58 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			layoutExt->bindingOffsets.ptrNonConst[j] = range.OffsetInDescriptorsFromTableStart + bindj.id - key.binding->id;
 		}
 	}
+
+	//Dummy UAV for NVAPI extensions
+
+	if (GraphicsDeviceRef_ptr(dev)->info.vendor == EGraphicsVendorId_NV)
+		layoutExt->rangesResources.ptrNonConst[resourceRange++] = (D3D12_DESCRIPTOR_RANGE1) {
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+			.NumDescriptors = 1,
+			.BaseShaderRegister = 99999,
+			.RegisterSpace = 99999,
+			.OffsetInDescriptorsFromTableStart = offset1
+		};
 	
 	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, resourceRange))
 	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, samplerRange))
+	
+	//Legacy root sig support
+	//Note: Even if unsupported, D3D12_DESCRIPTOR_RANGE1[] will still hang around.
+	//		This is to allow ID3D12RootSignature to be able to detect DENY flags.
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+
+	if (!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_RootSig1_1)) {
+
+		gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE_resizex(&layoutExt->legacyResources, layoutExt->rangesResources.length))
+		gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE_resizex(&layoutExt->legacySamplers, layoutExt->rangesSamplers.length))
+		
+		for(U64 i = 0; i < layoutExt->rangesResources.length; ++i) {
+
+			D3D12_DESCRIPTOR_RANGE1 range = layoutExt->rangesResources.ptr[i];
+
+			layoutExt->legacyResources.ptrNonConst[i] = (D3D12_DESCRIPTOR_RANGE) {
+				.RangeType = range.RangeType,
+				.NumDescriptors = range.NumDescriptors,
+				.BaseShaderRegister = range.BaseShaderRegister,
+				.RegisterSpace = range.RegisterSpace,
+				.OffsetInDescriptorsFromTableStart = range.OffsetInDescriptorsFromTableStart
+			};
+		}
+		
+		for(U64 i = 0; i < layoutExt->rangesSamplers.length; ++i) {
+
+			D3D12_DESCRIPTOR_RANGE1 range = layoutExt->rangesSamplers.ptr[i];
+
+			layoutExt->legacySamplers.ptrNonConst[i] = (D3D12_DESCRIPTOR_RANGE) {
+				.RangeType = range.RangeType,
+				.NumDescriptors = range.NumDescriptors,
+				.BaseShaderRegister = range.BaseShaderRegister,
+				.RegisterSpace = range.RegisterSpace,
+				.OffsetInDescriptorsFromTableStart = range.OffsetInDescriptorsFromTableStart
+			};
+		}
+	}
 
 clean:
 	ListSortingKey_freex(&sortedList);

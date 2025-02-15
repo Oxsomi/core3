@@ -42,8 +42,6 @@
 	#include <nvapi.h>
 #endif
 
-TListImpl(D3D12_DESCRIPTOR_RANGE1);
-
 void onDebugReport(
 	D3D12_MESSAGE_CATEGORY category,
 	D3D12_MESSAGE_SEVERITY severity,

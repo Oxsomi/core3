@@ -27,6 +27,7 @@
 	#include "graphics/generic/swapchain.h"
 	#include "graphics/generic/descriptor_heap.h"
 	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/pipeline_layout.h"
 	#include "graphics/generic/command_list.h"
 	#include "platforms/file.h"
 	#include "platforms/log.h"

@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
@@ -45,7 +46,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	//TODO: Push constants
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC compute = (D3D12_COMPUTE_PIPELINE_STATE_DESC) {
-		.pRootSignature = deviceExt->defaultLayout,
+		.pRootSignature = PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Dx)->rootSig,
 		.CS = (D3D12_SHADER_BYTECODE) {
 			.pShaderBytecode = dxil.ptr,
 			.BytecodeLength = Buffer_length(dxil)
