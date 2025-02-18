@@ -18,12 +18,14 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/log.h"
 #include "types/container/texture_format.h"
 #include "graphics/generic/instance.h"
 #include "types/math/type_cast.h"
+#include "formats/oiSH/binaries.h"
 
 void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
 
@@ -32,8 +34,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 	Log_debugLnx(
 		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
-		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\r\t"
-		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64,
+		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\n\t"
+		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64"\n\t"
+		"Vendor: %s",
 		api == EGraphicsApi_Direct3D12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
@@ -50,7 +53,8 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		deviceInfo->id,
 		deviceInfo->capabilities.features & EGraphicsFeatures_LUID ? U64_swapEndianness(deviceInfo->luid) : 0,
 		U64_swapEndianness(deviceInfo->uuid[0]),
-		U64_swapEndianness(deviceInfo->uuid[1])
+		U64_swapEndianness(deviceInfo->uuid[1]),
+		ESHVendor_names[deviceInfo->vendor]
 	);
 
 	if (printCapabilities) {
@@ -228,6 +232,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_PAQ)
 				Log_debugLnx("\t\tPAQ (Payload Access Qualifiers)");
 
+			if(cap.featuresExt & EDxGraphicsFeatures_TightAlignment)
+				Log_debugLnx("\t\tTight resource alignment");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_RootSig1_1)
+				Log_debugLnx("\t\tRoot signature 1.1");
+
 			if(cap.featuresExt & EDxGraphicsFeatures_SM6_6)
 				Log_debugLnx("\t\tShader model 6.6");
 
@@ -251,6 +261,15 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EVkGraphicsFeatures_Maintenance4)
 				Log_debugLnx("\t\tMaintenance4");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_BufferDeviceAddress)
+				Log_debugLnx("\t\tBuffer device address");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_DriverProperties)
+				Log_debugLnx("\t\tDriver properties");
+
+			if(cap.featuresExt & EVkGraphicsFeatures_MemoryBudget)
+				Log_debugLnx("\t\tMemory budget");
 		}
 	}
 }

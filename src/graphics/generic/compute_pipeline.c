@@ -21,17 +21,21 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "formats/oiSH/sh_file.h"
 
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
-	CharString name,			//Temporary name for debugging
+	CharString name,
 	U32 entryId,
+	EPipelineFlags flags,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
 	Error *e_rr
 ) {
@@ -71,6 +75,12 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 			"GraphicsDeviceRef_createPipelineCompute() entry binaryId out of bounds"
 		))
 
+	if(!!layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+		retError(clean, Error_invalidParameter(
+			3, 0,
+			"GraphicsDeviceRef_createPipelineCompute() pipeline layout is invalid"
+		))
+
 	U32 finalBinaryId = entry.binaryIds.ptr[binaryId];
 	SHBinaryInfo binary = shaderBinary.binaries.ptr[finalBinaryId];
 
@@ -87,9 +97,22 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);
 
-	GraphicsDeviceRef_inc(deviceRef);
+	//Log_debugLnx("Create: ComputePipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipelinePtr);
 
-	*pipelinePtr = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		gotoIfError2(clean, GraphicsDeviceRef_inc(deviceRef))
+
+	*pipelinePtr = (Pipeline) {
+		.device = deviceRef,
+		.type = EPipelineType_Compute,
+		.flags = flags
+	};
+	
+	if(!!layout)
+		layout = device->defaultPipelineLayout;
+
+	gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+	pipelinePtr->layout = layout;
 
 	gotoIfError2(clean, ListPipelineStage_resizex(&pipelinePtr->stages, 1))
 	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute, .binaryId = entryId };

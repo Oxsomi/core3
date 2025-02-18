@@ -19,38 +19,38 @@
 
 message("-- Enabling Direct3D12 support...")
 
-file(GLOB_RECURSE graphicsApiHeaders "../../../inc/graphics/d3d12/*.h")
+file(GLOB_RECURSE graphicsApiHeaders "../../../include/graphics/d3d12/*.h")
 file(GLOB_RECURSE graphicsApiSources "generic/*.c")
 
 set(TARGET_NAME OxC3_graphics_d3d12)
 
 if(NOT DynamicLinkingGraphics)
 
-    set(TARGET_NAME OxC3_graphics)
-    message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
+	set(TARGET_NAME OxC3_graphics)
+	message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
-    target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_D3D12)
+	target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=GRAPHICS_API_D3D12)
 
-    target_sources(OxC3_graphics PUBLIC ${graphicsApiHeaders})
-    target_sources(OxC3_graphics PRIVATE ${graphicsApiSources})
-    
-    source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
-    source_group("Header Files (${graphicsApi})" FILES ${graphicsApiSources})
+	target_sources(OxC3_graphics PUBLIC ${graphicsApiHeaders})
+	target_sources(OxC3_graphics PRIVATE ${graphicsApiSources})
+	
+	source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
+	source_group("Header Files (${graphicsApi})" FILES ${graphicsApiSources})
 
 else()
-    add_library(
-        OxC3_graphics_d3d12
-        SHARED
-        ${graphicsApiHeaders}
-        ${graphicsApiSources}
-        CMakeLists.txt
-    )
+	add_library(
+		OxC3_graphics_d3d12
+		SHARED
+		${graphicsApiHeaders}
+		${graphicsApiSources}
+		CMakeLists.txt
+	)
 endif()
 
 target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
 
 if(DynamicLinkingGraphics)
-    target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
+	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
 endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
@@ -62,15 +62,15 @@ target_include_directories(${TARGET_NAME} PUBLIC "${CMAKE_BINARY_DIR}/external/a
 
 if(NOT ${ARM})
 
-    # AMD AGS and NVAPI are required because Direct3D12 was apparently not good enough :/
-    # These are not supported for ARM, so don't include them there
+	# AMD AGS and NVAPI are required because Direct3D12 was apparently not good enough :/
+	# These are not supported for ARM, so don't include them there
 
-    # NVAPI, used for NV extensions and getting driver version
+	# NVAPI, used for NV extensions and getting driver version
 
-    find_package(ags REQUIRED)
-    find_package(nvapi REQUIRED)
+	find_package(ags REQUIRED)
+	find_package(nvapi REQUIRED)
 
-    target_link_libraries(${TARGET_NAME} PUBLIC ags::ags nvapi::nvapi)
+	target_link_libraries(${TARGET_NAME} PUBLIC ags::ags nvapi::nvapi)
 
 endif()
 

@@ -27,11 +27,12 @@
 
 Bool VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(sampler->device), Vk);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	const VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
 	if(*samplerExt)
-		vkDestroySampler(deviceExt->device, *samplerExt, NULL);
+		deviceExt->destroySampler(deviceExt->device, *samplerExt, NULL);
 
 	return true;
 }
@@ -62,8 +63,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	const VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
-	(void)instance;
+	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
@@ -97,9 +97,9 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 		.borderColor = mapVkBorderColor(sinfo.borderColor)
 	};
 
-	gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)))
+	gotoIfError(clean, checkVkError(deviceExt->createSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)))
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
 		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -108,7 +108,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 			.objectHandle = (U64) *samplerExt
 		};
 
-		gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
 
 	//Allocate descriptor
@@ -124,7 +124,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 		.pImageInfo = &imageInfo
 	};
 
-	vkUpdateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
+	deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
 
 clean:
 	return err;

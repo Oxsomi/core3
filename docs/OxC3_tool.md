@@ -151,6 +151,14 @@ The current file types that will be preprocessed include the following:
 
 `-threads` can be overriden to change how many threads are spun up during baking process (default is 1 to avoid interfering with other build processes). Other extra warnings (using commandline arguments) regarding shader compilation are also accessible through OxC3 file package.
 
+### OxC3_package
+
+OxC3_package is an executable which allows it to be used by OxC3 graphics itself. Since OxC3CLI has a (potential) dependency on OxC3 graphics, it can't be used to bake shaders and other data that is essential to OxC3 graphics (default fonts, LUTs, placeholder images). Including a hardcoded binary file is not great for maintainability, so OxC3 graphics uses OxC3_package instead. It is also optimized to build only for the current graphics API target (e.g. Vulkan or D3D12) to minimize compile times when possible. To be inline with this, encryption is disabled to save compile time (and because these packages generally are used by other dependencies that would need the same key). To simplify, OxC3_package is essentially the following command (to avoid having to use the CLI system):
+
+`OxC3_package input/ output/ <optional: include-dir/>` = `OxC3 package -input input/ -output output/ -compile-output <depends on build settings> <-include-dir if not empty> -threads 100%`.
+
+The compile-output is automatically `dxil` if D3D12 is statically linked, while `spv` is available in Vulkan is statically linked. In the case of dynamic linking, dxil is only included if D3D12 is available. This ensures the minimum amount of compiles for the target system, minimizing storage and compile time. In the case of WIndows both dxil and spv are included if dynamic linking is used.
+
 ## Compiling shaders
 
 `OxC3 compile shaders` is used to compile text shaders to application ready shaders. This could mean preprocessing text shaders to inline all includes for graphics APIs/platforms that take text only or compiling to an actual binary (DXIL or SPIRV).
@@ -279,7 +287,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
   - Type must be one of vertex, pixel, compute, geometry, hull, domain, mesh, task.
   - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type, when this feature becomes available with workgraphs.
   - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
-- `[[oxc::vendor("NV", "AMD", "QCOM")]]` which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
+- `[[oxc::vendor("NV", "AMD", "QCOM")]]` which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
 - `[[oxc::extension("16BitTypes")]]` which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint.
   - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
   - `__OXC3_EXT_<X>` can be used to see which extension is enabled. For example `__OXC3_EXT_ATOMICI64`.
@@ -334,6 +342,14 @@ It can also be used to print GPU info regarding devices that support OxC3 and wh
 
 When dynamically linked, `-graphics-api X` can be used to show only the devices for a certain api, for example `vulkan` or `d3d12`. It can also be combined for example `vulkan,d3d12` or `all`. `native` can also be used to specify the one that's native on the current system (Windows = d3d12, otherwise vulkan).
 
+### Create graphics device
+
+For testing purposes, it is also possible to create a device on the specified device to be able to test if there's any problem with device creation on the system (for example due to a driver bug).
+
+`OxC3 graphics create` where `-graphics-api` is the same as with the `devices` command, though both `-count` and `-entry` are available too.
+
+On success, it will print success, otherwise it might not print anything at all or print that it failed to create a device. This is also useful to see if the graphics device has any leaks (as such, it is a debug device if on debug mode).
+
 ## Audio
 
 ### List devices
@@ -383,10 +399,6 @@ The following can be compiled through special offline compiler tools:
 - spv + Mali: [Mali offline compiler](https://developer.arm.com/documentation/101863/0804/Using-Mali-Offline-Compiler/Compiling-Vulkan-shaders).
 
 - Intel's shader compiler: doesn't support SM6+, so not supported. However, the Intel profiler itself does have a view for the new assembly.
-
-The following vendors don't have (publicly available) support for this as far as is known to me:
-
-- Nvidia, ImgTec.
 
 ## Encrypt
 

@@ -33,17 +33,19 @@
 Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(textureRef, NULL);
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(utex.resource.device), Vk);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(utex.resource.device);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	for(U8 i = 0; i < utex.images; ++i) {
 
 		const VkUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Vk, 0, i);
 
 		if(image->view)
-			vkDestroyImageView(deviceExt->device, image->view, NULL);
+			deviceExt->destroyImageView(deviceExt->device, image->view, NULL);
 
 		if(image->image && utex.resource.type != EResourceType_Swapchain)
-			vkDestroyImage(deviceExt->device, image->image, NULL);
+			deviceExt->destroyImage(deviceExt->device, image->image, NULL);
 	}
 
 	return true;
@@ -62,7 +64,7 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(texture->resource.device);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	VkFormat vkFormat = VK_FORMAT_UNDEFINED;
 
@@ -117,14 +119,16 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		//TODO: versioned image
 
 		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, 0);
-		gotoIfError(clean, vkCheck(vkCreateImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)))
+		gotoIfError(clean, checkVkError(deviceExt->createImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)))
 
 		VkImageMemoryRequirementsInfo2 imageReq = (VkImageMemoryRequirementsInfo2) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
 			.image = managedImageExt->image
 		};
 
-		vkGetImageMemoryRequirements2(deviceExt->device, &imageReq, &requirements);
+		deviceExt->getImageMemoryRequirements2(deviceExt->device, &imageReq, &requirements);
+
+		DeviceMemoryBlock block;
 
 		gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			&device->allocator,
@@ -133,14 +137,13 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			&texture->resource.blockId,
 			&texture->resource.blockOffset,
 			texture->resource.type,
-			name
+			name,
+			&block
 		))
 
 		texture->resource.allocated = true;
 
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[texture->resource.blockId];
-
-		gotoIfError(clean, vkCheck(vkBindImageMemory(
+		gotoIfError(clean, checkVkError(deviceExt->bindImageMemory(
 			deviceExt->device, managedImageExt->image, (VkDeviceMemory) block.ext, texture->resource.blockOffset
 		)))
 	}
@@ -164,7 +167,7 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		}
 		};
 
-		gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, &managedImageExt->view)))
+		gotoIfError(clean, checkVkError(deviceExt->createImageView(deviceExt->device, &viewCreate, NULL, &managedImageExt->view)))
 
 		if(texture->resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
@@ -209,10 +212,10 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				++counter;
 			}
 
-			vkUpdateDescriptorSets(deviceExt->device, counter, writeDescriptorSet, 0, NULL);
+			deviceExt->updateDescriptorSets(deviceExt->device, counter, writeDescriptorSet, 0, NULL);
 		}
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName) {
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
 			gotoIfError(clean, CharString_formatx(
 				&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
@@ -225,7 +228,7 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				.objectHandle =  (U64) managedImageExt->view
 			};
 
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 
 			CharString_freex(&temp);
 
@@ -236,7 +239,7 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				.objectHandle =  (U64) managedImageExt->image
 			};
 
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 		}
 	}
 

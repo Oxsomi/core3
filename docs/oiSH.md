@@ -157,6 +157,9 @@ typedef enum ESHVendor {
 	ESHVendor_INTC,
 	ESHVendor_IMGT,
 	ESHVendor_MSFT,
+	ESHVendor_APPL,
+	ESHVendor_SMSG,
+	ESHVendor_HWEI,
 	ESHVendor_Count
 } ESHVendor;
 
@@ -377,6 +380,7 @@ The following define the requirements of binaries embedded in oiSH files.
 ### SPIRV spec
 
 - Main entrypoint should be called "main" unless it's compiled as a lib file (raytracing, workgraphs, etc.).
+- SPV1.3 is used by default but SPV1.4 is used when RT is present (RT stage or RayQuery).
 - Capabilities:
   - Always supported:
     - Shader

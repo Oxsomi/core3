@@ -21,11 +21,13 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "types/math/math.h"
 #include "formats/oiSH/sh_file.h"
 
@@ -38,7 +40,9 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	ListSHFile binaries,
 	ListPipelineRaytracingGroup *groups,
 	PipelineRaytracingInfo info,
-	CharString name,					//Temporary names for debugging. Can be empty, else match infos->length
+	CharString name,
+	EPipelineFlags flags,
+	PipelineLayoutRef *layout,
 	PipelineRef **pipelineRef,
 	Error *e_rr
 ) {
@@ -292,6 +296,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
 		))
 
+	if(!!layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+		retError(clean, Error_invalidParameter(
+			3, 0,
+			"GraphicsDeviceRef_createPipelineRaytracing() pipeline layout is invalid"
+		))
+
 	gotoIfError2(clean, RefPtr_createx(
 		(U32)(sizeof(Pipeline) + GraphicsDeviceRef_getObjectSizes(deviceRef)->pipeline + sizeof(PipelineRaytracingInfo)),
 		(ObjectFreeFunc) Pipeline_free,
@@ -302,9 +312,22 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	madePipeline = true;
 	Pipeline *pipeline = PipelineRef_ptr(*pipelineRef);
 
-	GraphicsDeviceRef_inc(deviceRef);
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		gotoIfError2(clean, GraphicsDeviceRef_inc(deviceRef))
 
-	*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_RaytracingExt };
+	//Log_debugLnx("Create: RaytracingPipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipeline);
+
+	*pipeline = (Pipeline) {
+		.device = deviceRef,
+		.type = EPipelineType_RaytracingExt,
+		.flags = flags
+	};
+	
+	if(!!layout)
+		layout = GraphicsDeviceRef_ptr(deviceRef)->defaultPipelineLayout;
+
+	gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+	pipeline->layout = layout;
 
 	PipelineRaytracingInfo *dstInfo = Pipeline_info(pipeline, PipelineRaytracingInfo);
 	*dstInfo = info;

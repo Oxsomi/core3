@@ -31,6 +31,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "types/base/time.h"
+#include "types/math/math.h"
 
 #include <stdlib.h>
 
@@ -307,27 +308,19 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					case VK_DOWN:				handle = EKey_Down;				break;
 					case VK_RIGHT:				handle = EKey_Right;			break;
 
-					case VK_SELECT:				handle = EKey_Select;			break;
-					case VK_PRINT:				handle = EKey_Print;			break;
-					case VK_EXECUTE:			handle = EKey_Execute;			break;
 					case VK_BROWSER_BACK:		handle = EKey_Back;				break;
 					case VK_BROWSER_FORWARD:	handle = EKey_Forward;			break;
 					case VK_SLEEP:				handle = EKey_Sleep;			break;
 					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;			break;
-					case VK_BROWSER_STOP:		handle = EKey_Stop;				break;
 					case VK_BROWSER_SEARCH:		handle = EKey_Search;			break;
-					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;		break;
-					case VK_BROWSER_HOME:		handle = EKey_Start;			break;
 					case VK_VOLUME_MUTE:		handle = EKey_Mute;				break;
 					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;		break;
 					case VK_VOLUME_UP:			handle = EKey_VolumeUp;			break;
 					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;				break;
 					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;			break;
 					case VK_CLEAR:				handle = EKey_Clear;			break;
-					case VK_ZOOM:				handle = EKey_Zoom;				break;
 					case VK_RETURN:				handle = EKey_Enter;			break;
 					case VK_HELP:				handle = EKey_Help;				break;
-					case VK_APPS:				handle = EKey_Apps;				break;
 
 					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
 					case VK_ADD:				handle = EKey_NumpadAdd;		break;
@@ -466,7 +459,9 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(!isDown && !isUp)
 						continue;
 
-					InputHandle handle = (InputHandle) (EMouseButton_Left + i);
+					U64 j = i == 1 ? 2 : (i == 2 ? 1 : i);
+
+					InputHandle handle = (InputHandle) (EMouseButton_Left + j);
 					InputDevice_setCurrentState(*dev, handle, isDown);
 
 					if (w->callbacks.onDeviceButton)
@@ -475,7 +470,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
 
-					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
+					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
 					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_X, delta);
 
 					if (w->callbacks.onDeviceAxis)
@@ -484,48 +479,60 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
 
-					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
+					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
 					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_Y, delta);
 
 					if (w->callbacks.onDeviceAxis)
 						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, delta);
 				}
 
-				F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_X);
-				F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Y);
+				F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_RX);
+				F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_RY);
 
 				F32 nextX, nextY;
 
 				if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
 
-					RECT rect;
-					GetClientRect(hwnd, &rect);
+					F32 prevAbsX = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp0);
+					F32 prevAbsY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp1);
 
-					InputDevice_resetFlag(dev, EMouseFlag_IsRelative);
+					nextX = F32_clamp((F32) (mouseDat.lLastX - prevAbsX), -1, 1);
+					nextY = F32_clamp((F32) (mouseDat.lLastY - prevAbsY), -1, 1);
 
-					nextX = (F32) (mouseDat.lLastX - rect.left);
-					nextY = (F32) (mouseDat.lLastY - rect.top);
+					//These temp axes don't need a callback and are only for 
+
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp0, (F32) mouseDat.lLastX);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp1, (F32) mouseDat.lLastY);
 
 				} else {
-					InputDevice_setFlag(dev, EMouseFlag_IsRelative);
-					nextX = prevX + (F32) mouseDat.lLastX;
-					nextY = prevY + (F32) mouseDat.lLastY;
+					nextX = (F32) mouseDat.lLastX;
+					nextY = (F32) mouseDat.lLastY;
 				}
+
+				POINT p = (POINT) { 0 };
+				GetCursorPos(&p);
+				ScreenToClient(w->nativeHandle, &p);
+
+				I32x2 oldCursor = w->cursor;
+				w->cursor = I32x2_create2(p.x, p.y);
+
+				if (w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
+					w->callbacks.onCursorMove(w);
 
 				if (nextX != prevX) {
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_X, nextX);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_RX, nextX);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_X, nextX);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RX, nextX);
 				}
 
 				if (nextY != prevY) {
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Y, nextY);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_RY, nextY);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_Y, nextY);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RY, nextY);
 				}
 			}
 
@@ -1068,6 +1075,18 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
 		retError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"))
+
+	//Finalize
+	
+	w->flags |= EWindowFlags_IsActive;
+
+	if(w->callbacks.onCreate)
+		w->callbacks.onCreate(w);
+		
+	w->flags |= EWindowFlags_IsFinalized;
+
+	if(w->callbacks.onResize)
+		w->callbacks.onResize(w);
 
 clean:
 	ListU16_freex(&tmp);

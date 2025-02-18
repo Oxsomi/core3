@@ -39,7 +39,7 @@ if(NOT graphicsAllowVk AND NOT graphicsAllowD3D12)
 	message(FATAL_ERROR "-- No valid graphics API found, aborting...")
 endif()
 
-file(GLOB_RECURSE graphicsHeaders "../../inc/graphics/generic/*.h")
+file(GLOB_RECURSE graphicsHeaders "../../include/graphics/generic/*.h")
 file(GLOB_RECURSE graphicsSources "generic/*.c")
 
 add_library(
@@ -58,14 +58,22 @@ endif()
 set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi/graphics)
 target_link_libraries(OxC3_graphics PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
 
+include(../../cmake/oxc3.cmake)
+add_virtual_files(
+	TARGET OxC3_graphics NAME shaders
+	ROOT ${CMAKE_CURRENT_SOURCE_DIR}/generic/shaders
+	SELF ${CMAKE_CURRENT_SOURCE_DIR}/../..
+	FORCE_PACKAGER
+)
+
 source_group("Shaders" FILES ${shaders})
 
 add_library(OxC3_graphics_target INTERFACE)
 
 if(graphicsAllowVk)
-    add_subdirectory(vulkan)
+	add_subdirectory(vulkan)
 endif()
 
 if(graphicsAllowD3D12)
-    add_subdirectory(d3d12)
+	add_subdirectory(d3d12)
 endif()

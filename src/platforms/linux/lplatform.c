@@ -63,9 +63,9 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(!containedSlash)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"))
 
-	gotoIfError2(clean, CharString_createCopyx(
-		CharString_createRefSizedConst(exeName, exeNameLen, true), &Platform_instance->appDirectory
-	))
+	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
+
+	gotoIfError2(clean, CharString_createCopyx(appDir, &Platform_instance->appDirectory))
 
 	//Try to open the main executable within 1s, if it fails we can't init
 
@@ -90,7 +90,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(ptr == (const U8*) MAP_FAILED)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
 
-    const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
+	const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
 	const Elf64_Shdr *shdr = (const Elf64_Shdr*) (ptr + elf->e_shoff);
 	const C8 *strings = (const C8*) (ptr + shdr[elf->e_shstrndx].sh_offset);
 
@@ -144,8 +144,8 @@ void Platform_cleanupUnixExt() {
 		close((I32)(U32) fd);
 }
 
-CharString Keyboard_remap(EKey key) {
-	(void) key;
+CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
+	(void) key; (void) keyboard;
 	return CharString_createNull();			//TODO: 
 }
 

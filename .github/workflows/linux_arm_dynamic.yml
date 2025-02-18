@@ -1,0 +1,53 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  build:
+    name: Linux build arm dynamic
+    runs-on: ubuntu-24.04-arm
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        cache: true
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
+    - name: Configure conan
+      run: conan profile detect
+    - name: Install wayland
+      run: sudo apt-get update; sudo apt-get install --no-install-recommends libwayland-dev
+    - name: Restore cached
+      id: cache-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.conan2/p
+        key: ${{ runner.os }}-arm64-${{ hashFiles('**/packages') }}
+    - name: Release dynamic but no SIMD, not supported yet
+      run: bash build.sh Release False True True -o cliGraphics=False
+    - name: Debug dynamic but no SIMD, not supported yet
+      run: bash build.sh Debug False True True -o cliGraphics=False
+    - name: Delete non package files for cache
+      run: rm -rf ~/.conan2/p/b/*/b
+    - name: Cache Build
+      id: cache-build
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.conan2/p
+        key: ${{ runner.os }}-arm64-${{ hashFiles('**/packages') }}
+    - uses: actions/setup-ruby@v1
+    - name: Send Webhook Notification
+      if: always()
+      env:
+        JOB_STATUS: ${{ job.status }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        HOOK_OS_NAME: ${{ runner.os }}-arm64-dynamic
+        WORKFLOW_NAME: ${{ github.workflow }}
+      run: |
+        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
+        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+      shell: bash

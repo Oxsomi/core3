@@ -10,14 +10,14 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.093"
+	version = "0.2.096"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
 	author = "Oxsomi / Nielsbishere"
 	url = "https://github.com/Oxsomi/core3"
 	description = "Oxsomi Core3 is a combination of standalone C libraries useful for building applications, such as types, platform, graphics abstraction and file formats"
-	topics = ("c", "windows", "linux", "hashing", "encryption", "osx", "vulkan", "simd", "d3d12", "directx12", "shader-compiler")
+	topics = ("c", "windows", "linux", "android", "hashing", "encryption", "osx", "vulkan", "simd", "d3d12", "directx12", "shader-compiler")
 
 	# Binary configuration
 	settings = "os", "compiler", "build_type", "arch"
@@ -44,7 +44,7 @@ class oxc3(ConanFile):
 		"dynamicLinkingGraphics": False
 	}
 
-	exports_sources = [ "inc/*", "cmake/*" ]
+	exports_sources = [ "include/*", "cmake/*" ]
 
 	def layout(self):
 		cmake_layout(self)
@@ -105,14 +105,18 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2024.12.22")
+			self.requires("dxc/2025.01.25")
 			self.requires("spirv_reflect/2024.09.22")
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")
 			self.requires("xdg_decoration/2024.12.22")
 
-		self.requires("openal_soft/2024.11.04.01")
+		# We need to manually build Vulkan layers
+		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
+			self.requires("vulkan_validation_layers/2025.01.25")
+
+		self.requires("openal_soft/2025.01.24")
 
 	def package(self):
 
@@ -121,67 +125,55 @@ class oxc3(ConanFile):
 
 		copy(self, "*.cmake", os.path.join(self.source_folder, "cmake"), os.path.join(self.package_folder, "cmake"))
 
-		inc_src = os.path.join(self.source_folder, "inc")
+		inc_src = os.path.join(self.source_folder, "include")
 		inc_dst = os.path.join(self.package_folder, "include")
 		copy(self, "*.h", inc_src, inc_dst)
+		copy(self, "*.c", inc_src, inc_dst)
 		copy(self, "*.hpp", inc_src, inc_dst)
-
-		cwd = os.getcwd()
 
 		lib_dst = os.path.join(self.package_folder, "lib")
 		bin_dst = os.path.join(self.package_folder, "bin")
 
-		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
-		if cwd.endswith("Debug") or cwd.endswith("Release"):
-			copy(self, "*.a", os.path.join(self.build_folder, "lib"), os.path.join(self.package_folder, "lib"))
-			copy(self, "*", os.path.join(self.build_folder, "bin"), os.path.join(self.package_folder, "bin"))
-
-		# Windows uses more complicated setups
+		if self.settings.arch == "x86_64":
+			archName = "x64"
 		else:
-			dbg_lib_src = os.path.join(self.build_folder, "lib/Debug")
-			dbg_bin_src = os.path.join(self.build_folder, "bin/Debug")
+			archName = "arm64"
 
-			copy(self, "*.lib", dbg_lib_src, lib_dst)
-			copy(self, "*.pdb", dbg_lib_src, lib_dst)
-			copy(self, "*.exp", dbg_lib_src, lib_dst)
+		if self.settings.os == "Windows":
+			platform = "windows"
+		elif self.settings.os == "Macos":
+			platform = "osx"
+		elif self.settings.os == "Android":
+			platform = "android"
+		else:
+			platform = "linux"
 
-			copy(self, "*.exp", dbg_bin_src, bin_dst)
-			copy(self, "*.exe", dbg_bin_src, bin_dst)
-			copy(self, "*.dll", dbg_bin_src, bin_dst)
-			copy(self, "*.pdb", dbg_bin_src, bin_dst)
+		# Android always appends <configPath>/build/Debug (etc.) for our package dir since we park our config there.
+		# Windows it stays build/
+		# Linux will keep it relative to core3/build/Debug and so we just append platform/archName
 
-			if os.path.isfile(lib_dst):
-				for filename in os.listdir(lib_dst):
-					f = os.path.join(lib_dst, filename)
-					if os.path.isfile(f):
-						offset = f.rfind(".")
-						rename(self, f, f[:offset] + "d." + f[offset+1:])
+		if self.build_folder.replace("\\", "/").endswith("core3/build/" + str(self.settings.build_type)):
+			input_dir = os.path.join(self.build_folder, platform + "/" + archName)
 
-			if os.path.isfile(bin_dst):
-				for filename in os.listdir(bin_dst):
-					f = os.path.join(bin_dst, filename)
-					if os.path.isfile(f):
-						offset = f.rfind(".")
-						rename(self, f, f[:offset] + "d." + f[offset+1:])
+		elif self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
+			input_dir = self.build_folder + "/../../"
 
-			# Copy release libs
+		else:
+			input_dir = os.path.join(self.build_folder, str(self.settings.build_type) + "/" + platform + "/" + archName)
 
-			rel_lib_src = os.path.join(self.build_folder, "lib/Release")
-			rel_bin_src = os.path.join(self.build_folder, "bin/Release")
+		input_lib_dir = os.path.join(input_dir, "lib")
+		input_bin_dir = os.path.join(input_dir, "bin")
 
-			copy(self, "*.lib", rel_lib_src, lib_dst)
-			copy(self, "*.pdb", rel_lib_src, lib_dst)
-			copy(self, "*.exp", rel_lib_src, lib_dst)
-
-			copy(self, "*.exp", rel_bin_src, bin_dst)
-			copy(self, "*.exe", rel_bin_src, bin_dst)
-			copy(self, "*.dll", rel_bin_src, bin_dst)
-			copy(self, "*.pdb", rel_bin_src, bin_dst)
+		copy(self, "*.a", input_lib_dir, lib_dst)
+		copy(self, "*.lib", input_lib_dir, lib_dst)
+		copy(self, "*.pdb", input_lib_dir, lib_dst)
+		copy(self, "*.exp", input_lib_dir, lib_dst)
+		copy(self, "*", input_bin_dir, bin_dst)
 
 	def package_info(self):
 
 		if self.settings.os == "Windows":
-			self.cpp_info.system_libs = [ "Bcrypt" ]
+			self.cpp_info.system_libs = [ "Bcrypt", "dxgi" ]
 
 		elif self.settings.os == "Macos" or self.settings.os == "iOS" or self.settings.os == "watchOS":
 			self.cpp_info.frameworks = [ "Security", "CoreFoundation", "ApplicationServices", "AppKit" ]
@@ -201,6 +193,9 @@ class oxc3(ConanFile):
 		elif self.options.forceVulkan or self.options.dynamicLinkingGraphics:
 			self.cpp_info.libs += [ "vulkan-1" ]
 			vulkan = True
+
+		if self.settings.os == "Android":
+			self.cpp_info.system_libs += [ "android", "log" ]
 
 		vulkanMacos = os.path.join(os.environ['VULKAN_SDK'], "macOS")
 

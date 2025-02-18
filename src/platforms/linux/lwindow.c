@@ -402,8 +402,19 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	wl_display_roundtrip(manager->display);
 	wl_surface_commit(surface);
+	
+	//Finalize
+	
+	w->flags |= EWindowFlags_IsActive;
+
+	if(w->callbacks.onCreate)
+		w->callbacks.onCreate(w);
+		
+	w->flags |= EWindowFlags_IsFinalized;
+
+	if(w->callbacks.onResize)
+		w->callbacks.onResize(w);
 
 clean:
 	return s_uccess;
 }
-

@@ -190,7 +190,7 @@ Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	BLAS *blas = BLASRef_ptr(pending);
 	DxBLAS *blasExt = BLAS_ext(blas, Dx);

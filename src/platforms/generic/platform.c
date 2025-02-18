@@ -326,9 +326,9 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	if(Platform_instance)
 		return Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
 
-	if(!cmdArgc || !cmdArgs)
+	if(cmdArgc && !cmdArgs)
 		return Error_invalidParameter(
-			!cmdArgc ? 0 : 1, 0, "Platform_create()::cmdArgc and cmdArgs are required"
+			!cmdArgc ? 0 : 1, 0, "Platform_create()::cmdArgs are required when cmdArgc is set"
 		);
 
 	#ifndef _NO_SIGNAL_HANDLING
@@ -367,8 +367,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		}
 	};
 
-	Error err = Error_none();;
-	CharString appDir = CharString_createNull();
+	Error err = Error_none();
 
 	ListCharString sl = (ListCharString) { 0 };
 
@@ -390,8 +389,6 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		goto clean;
 
 clean:
-
-	CharString_freex(&appDir);
 
 	if(err.genericError)
 		Platform_cleanup();

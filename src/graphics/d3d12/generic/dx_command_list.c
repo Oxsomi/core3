@@ -46,7 +46,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 	const DxGraphicsDevice *deviceExt,
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
-	const DxHeap heap,
+	const DxDescriptorHeapSingle *heap,
 	RefPtr *image
 ) {
 
@@ -73,6 +73,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 		switch(tex.type) {
 
 			default:
+
+				if (tex.sampleCount) {
+					rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
+					rtv.Texture2DMS = (D3D12_TEX2DMS_RTV) { 0 };
+					break;
+				}
+
 				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 				rtv.Texture2D = (D3D12_TEX2D_RTV) { 0 };								//No mip and plane slice
 				break;
@@ -90,7 +97,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 	}
 
 	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
-		.ptr = start.ptr + relativeLoc * heap.cpuIncrement
+		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
 	};
 
 	deviceExt->device->lpVtbl->CreateRenderTargetView(deviceExt->device, resource, &rtv, location);
@@ -102,7 +109,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
 	EStartRenderFlags flags,
-	const DxHeap heap,
+	const DxDescriptorHeapSingle *heap,
 	RefPtr *image
 ) {
 
@@ -132,6 +139,13 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 		switch(tex.type) {
 
 			default:
+
+				if (tex.sampleCount) {
+					dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+					dsv.Texture2DMS = (D3D12_TEX2DMS_DSV) { 0 };
+					break;
+				}
+
 				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 				dsv.Texture2D = (D3D12_TEX2D_DSV) { 0 };							//No mip
 				break;
@@ -149,7 +163,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 	}
 
 	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
-		.ptr = start.ptr + relativeLoc * heap.cpuIncrement
+		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
 	};
 
 	deviceExt->device->lpVtbl->CreateDepthStencilView(deviceExt->device, resource, &dsv, location);
@@ -225,9 +239,9 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			//Prepare attachments
 
-			DxHeap heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV];
 
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr };
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr };
 
 			for (U8 i = 0; i < imageClearCount; ++i) {
 
@@ -251,17 +265,6 @@ void DX_WRAP_FUNC(CommandList_process)(
 			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
 			U8 planes = 1;
 			U8 planeOffset = 0;
-
-			if(src.depthFormat) {
-
-				if(copyImage.copyType == ECopyType_DepthOnly)
-					planeOffset = 0;
-
-				else if(copyImage.copyType == ECopyType_StencilOnly)
-					planeOffset = 1;
-
-				else planes = 2;
-			}
 
 			DxUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Dx, 0);
 			DxUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Dx, 0);
@@ -326,9 +329,9 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			//Prepare attachments
 
-			DxHeap heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			const DxDescriptorHeapSingle *heap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV];
 
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap.cpuHandle;
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap->cpuHandle;
 			U8 j = 0;
 
 			D3D12_RECT rect = (D3D12_RECT) {
@@ -368,8 +371,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 			for (U8 i = startRender->colorCount; i < 9; ++i)
 				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
 
-			DxHeap dsvHeap = deviceExt->heaps[EDescriptorHeapType_DSV];
-			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap.cpuHandle;
+			const DxDescriptorHeapSingle *dsvHeap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV];
+			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap->cpuHandle;
 			D3D12_CPU_DESCRIPTOR_HANDLE dsv = createTempDSV(
 				deviceExt, 0, dsvCpuDesc, startRender->flags, dsvHeap, startRender->depthStencil
 			);
@@ -481,8 +484,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 					buffer->lpVtbl->ResolveSubresource(
 						buffer,
-						imageExt->image, 0,
 						resolveExt->image, 0,
+						imageExt->image, 0,
 						format
 					);
 				}
@@ -1095,27 +1098,32 @@ void DX_WRAP_FUNC(CommandList_process)(
 		case ECommandOp_StartRegionDebugExt: {
 
 			const F32x4 colf = F32x4_round(F32x4_mul(F32x4_saturate(F32x4_load4((F32*)data)), F32x4_xxxx4(255)));
-			const I32x4 v = I32x4_mul(I32x4_fromF32x4(colf), I32x4_create4(1 << 16, 1 << 8, 1, 0));
+			const I32x4 v = I32x4_mul(I32x4_fromF32x4(colf), I32x4_create4(1 << 16, 1 << 8, 1 << 0, 0));
 
 			const I32x2 reduc2 = I32x2_or(I32x4_xy(v), I32x4_zw(v));
 			const I32 reduc = I32x2_x(reduc2) | I32x2_y(reduc2);
 
 			U64 encoded[62] = { 0 };
-			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x018 : 0x002) << 10;
+			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x008 : 0x002) << 10;
 			encoded[1] = 0xFF000000 | (*(const U32*)&reduc);
+			encoded[2] = ((U64)8 << 55) | ((U64)1 << 54);		//Address alignment = 8 and indicate "ansi"
 
-			const U32 strLen = (U32) CharString_calcStrLen((const C8*)data + sizeof(I32x4), sizeof(encoded) - 16);
-			const U32 len = U32_min((U32) sizeof(encoded), 16 + strLen);
+			const U32 strLen = (U32) CharString_calcStrLen(
+				(const C8*)data + sizeof(F32x4),
+				sizeof(encoded) - sizeof(U64) * 3 - 1
+			);
+
+			const U32 len = (U32) sizeof(U64) * 3 + strLen;
 
 			Buffer_memcpy(
-				Buffer_createRef((C8*)encoded + 16, sizeof(encoded) - 16),
-				Buffer_createRefConst((const C8*)data + sizeof(I32x4), strLen)
+				Buffer_createRef(&encoded[3], sizeof(encoded) - sizeof(U64) * 3),
+				Buffer_createRefConst((const C8*)data + sizeof(F32x4), strLen)
 			);
 
 			if(op == ECommandOp_AddMarkerDebugExt)
-				buffer->lpVtbl->SetMarker(buffer, 2, encoded, len);
+				buffer->lpVtbl->SetMarker(buffer, 2, encoded, (len + 7) &~ 7);
 
-			else buffer->lpVtbl->BeginEvent(buffer, 2, encoded, len);
+			else buffer->lpVtbl->BeginEvent(buffer, 2, encoded, (len + 7) &~ 7);
 
 			break;
 		}

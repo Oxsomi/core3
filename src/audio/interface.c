@@ -41,7 +41,7 @@ Error AudioInterfaceRef_inc(AudioInterfaceRef *interf) {
 
 impl extern U32 AudioInterface_sizeExt;
 impl Bool AudioInterface_createExt(AudioInterface *interf, Error *e_rr);
-impl Bool AudioInterface_freeExt(AudioInterface *interface, Allocator alloc);
+impl Bool AudioInterface_freeExt(AudioInterface *interf, Allocator alloc);
 
 Bool AudioInterface_create(AudioInterfaceRef **interf, Allocator alloc, Error *e_rr) {
 

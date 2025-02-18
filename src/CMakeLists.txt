@@ -20,12 +20,15 @@
 add_subdirectory(types)
 add_subdirectory(formats)
 add_subdirectory(platforms)
-add_subdirectory(graphics)
-add_subdirectory(audio)
 
 if(EnableShaderCompiler)
 	add_subdirectory(shader_compiler)
 endif()
+
+add_subdirectory(tools/package_cli)		# OxC3_graphics uses the packager
+
+add_subdirectory(graphics)
+add_subdirectory(audio)
 
 if(EnableOxC3CLI)
 	add_subdirectory(tools)

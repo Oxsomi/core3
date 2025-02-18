@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
@@ -117,7 +118,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	};
 
 	D3D12_GLOBAL_ROOT_SIGNATURE rootSig = (D3D12_GLOBAL_ROOT_SIGNATURE) {
-		.pGlobalRootSignature = deviceExt->defaultLayout
+		.pGlobalRootSignature = PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Dx)->rootSig
 	};
 
 	stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {

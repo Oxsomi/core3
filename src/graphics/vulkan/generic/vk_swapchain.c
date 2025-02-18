@@ -54,7 +54,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchainRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	VkPhysicalDevice physicalDevice = (VkPhysicalDevice) device->info.ext;
 	const Window *window = info->window;
@@ -66,7 +66,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	VkBool32 support = false;
 
-	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceSupport(
+	gotoIfError(clean, checkVkError(instanceExt->getPhysicalDeviceSurfaceSupport(
 		(VkPhysicalDevice) device->info.ext,
 		deviceExt->queues[EVkCommandQueue_Graphics].queueId, swapchainExt->surface, &support
 	)))
@@ -79,7 +79,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	U32 formatCount = 0;
 
-	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceFormats(
+	gotoIfError(clean, checkVkError(instanceExt->getPhysicalDeviceSurfaceFormats(
 		physicalDevice, swapchainExt->surface, &formatCount, NULL
 	)))
 
@@ -88,13 +88,22 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	gotoIfError(clean, ListVkSurfaceFormatKHR_resizex(&surfaceFormats, formatCount))
 
-	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceFormats(
+	gotoIfError(clean, checkVkError(instanceExt->getPhysicalDeviceSurfaceFormats(
 		physicalDevice, swapchainExt->surface, &formatCount, surfaceFormats.ptrNonConst
 	)))
 
 	VkSurfaceFormatKHR searchFormat = (VkSurfaceFormatKHR) { 0 };
 
 	switch(swapchain->base.textureFormatId) {
+
+		case ETextureFormatId_RGBA8:
+
+			searchFormat = (VkSurfaceFormatKHR) {
+				.format = VK_FORMAT_R8G8B8A8_UNORM,
+				.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR
+			};
+
+			break;
 
 		case ETextureFormatId_BGRA8:
 
@@ -154,11 +163,21 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	VkSurfaceCapabilitiesKHR capabilities = (VkSurfaceCapabilitiesKHR) { 0 };
 
-	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceCapabilities(
+	gotoIfError(clean, checkVkError(instanceExt->getPhysicalDeviceSurfaceCapabilities(
 		physicalDevice, swapchainExt->surface, &capabilities
 	)))
 
 	I32x2 size = I32x2_create2(capabilities.currentExtent.width, capabilities.currentExtent.height);
+	
+	switch (capabilities.currentTransform) {
+
+		case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:		//Avoid compositor
+			size = I32x2_yx(size);
+			break;
+
+		default:
+			break;
+	}
 
 	//Validate if it's compatible with the OxC3_platforms window
 	//currentExtent can be -1 but only for Wayland, which means "do whatever you want" and in this case it won't match.
@@ -183,9 +202,14 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
 
-	if(capabilities.minImageCount > 2 || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
+	U32 requestedImages = SWAPCHAIN_VERSIONING;		//Don't use the already requested images, since we might get a different image count
+
+	if(capabilities.minImageCount > requestedImages)
+		++requestedImages;
+		
+	if(capabilities.minImageCount > requestedImages || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
 		gotoIfError(clean, Error_invalidOperation(
-			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 2 and 3 images"
+			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 3 or 4 images"
 		))
 
 	VkFlags anyRotate =
@@ -193,47 +217,47 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR |
 		VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR;
 
-	swapchain->requiresManualComposite = capabilities.supportedTransforms & anyRotate;
+	swapchain->requiresManualComposite = !!(capabilities.supportedTransforms & anyRotate);
 
-	if(swapchain->requiresManualComposite) {
+	U16 expectOrientation = 0;
 
-		if(window->monitors.length > 1)
-			gotoIfError(clean, Error_invalidOperation(
-				5, "VkGraphicsDeviceRef_createSwapchain() requiresManualComposite only allowed with 1 monitor"
-			))
-
-		MonitorOrientation current = EMonitorOrientation_Landscape;
-
+	if(swapchain->requiresManualComposite)
 		switch (capabilities.currentTransform) {
-			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	current = EMonitorOrientation_Portrait;				break;
-			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	current = EMonitorOrientation_FlippedLandscape;		break;
-			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	current = EMonitorOrientation_FlippedPortrait;		break;
-			default:																							break;
+			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	expectOrientation = 90;		break;
+			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	expectOrientation = 180;	break;
+			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	expectOrientation = 270;	break;
+			default:										expectOrientation = 0;		break;
 		}
 
-		MonitorOrientation target = window->monitors.ptr->orientation;
+	if(window->orientation != expectOrientation) {
 
-		if(current != target)
-			gotoIfError(clean, Error_invalidOperation(6, "VkGraphicsDeviceRef_createSwapchain() invalid orientation"))
+		Log_debugLnx(
+			"-- Mismatching orientation %"PRIu16" and %"PRIu16" %"PRIi32,
+			window->orientation,
+			expectOrientation,
+			capabilities.currentTransform
+		);
+
+		gotoIfError(clean, Error_invalidState(
+			0, "VkGraphicsDeviceRef_createSwapchain() expected orientation didn't match real orientation"
+		))
 	}
 
 	//Get present mode
 
 	U32 modes = 0;
 
-	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfacePresentModes(
+	gotoIfError(clean, checkVkError(instanceExt->getPhysicalDeviceSurfacePresentModes(
 		physicalDevice, swapchainExt->surface, &modes, NULL
 	)))
 
 	gotoIfError(clean, ListVkPresentModeKHR_resizex(&presentModes, modes))
 
-	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfacePresentModes(
+	gotoIfError(clean, checkVkError(instanceExt->getPhysicalDeviceSurfacePresentModes(
 		physicalDevice, swapchainExt->surface, &modes, presentModes.ptrNonConst
 	)))
 
 	Bool supports[ESwapchainPresentMode_Count - 1] = { 0 };
-
-	//supportsMailbox ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR
 
 	for (U32 i = 0; i < modes; ++i) {
 
@@ -291,7 +315,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = swapchainExt->surface,
-		.minImageCount = swapchain->base.images,
+		.minImageCount = requestedImages,
 		.imageFormat = swapchainExt->format.format,
 		.imageColorSpace = swapchainExt->format.colorSpace,
 		.imageExtent = (VkExtent2D) { .width = I32x2_x(window->size), .height = I32x2_y(window->size) },
@@ -310,63 +334,53 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		.oldSwapchain = prevSwapchain
 	};
 
-	gotoIfError(clean, vkCheck(instance->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)))
+	gotoIfError(clean, checkVkError(deviceExt->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)))
 
 	if(prevSwapchain)
-		instance->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
+		deviceExt->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
 
 	//Acquire images
 
 	U32 imageCount = 0;
-	gotoIfError(clean, vkCheck(instance->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)))
+	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)))
+	
+	if(device->flags & EGraphicsDeviceFlags_IsDebug)
+		Log_debugLnx(
+			"Creating swapchain: %"PRIi32"x%"PRIi32"x%"PRIu32" and orientation: %"PRIu16,
+			I32x2_x(window->size),
+			I32x2_y(window->size),
+			imageCount,
+			expectOrientation
+		);
 
-	if(imageCount != swapchain->base.images)
-		gotoIfError(clean, Error_invalidState(1, "VkGraphicsDeviceRef_createSwapchain() imageCount doesn't match"))
+	if(imageCount < SWAPCHAIN_VERSIONING || imageCount > SWAPCHAIN_MAX_IMAGES) {
 
-	//Only recreate semaphores if needed.
+		if(device->flags & EGraphicsDeviceFlags_IsDebug)
+			Log_debugLnx("Swapchain: Invalid image count: %"PRIu32, imageCount);
 
-	Bool createSemaphores = false;
+		gotoIfError(clean, Error_invalidState(
+			1, "VkGraphicsDeviceRef_createSwapchain() imageCount returned exceeds max or subseeds min images permitted by OxC3"
+		))
+	}
 
-	if(swapchainExt->semaphores.length != imageCount) {
+	swapchain->base.images = (U8) imageCount;
+
+	//Only recreate semaphores once.
+	//These semaphores are linked to the FIF (frames in flight), not to the swapchain images
+
+	if(swapchainExt->semaphores.length != device->framesInFlight) {
+
 		ListVkSemaphore_freex(&swapchainExt->semaphores);
-		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, imageCount))
-		createSemaphores = true;
-	}
-
-	//Destroy image views
-
-	//Get images
-
-	VkImage vkImages[3];		//Temp alloc, we only allow up to 3 images.
-
-	gotoIfError(clean, vkCheck(instance->getSwapchainImages(
-		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
-	)))
-
-	for(U8 i = 0; i < swapchain->base.images; ++i) {
-
-		VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
-		managedImage->lastAccess = managedImage->lastLayout = 0;
-		managedImage->lastStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-		if(managedImage->view)
-			vkDestroyImageView(deviceExt->device, managedImage->view, NULL);
-
-		managedImage->image = vkImages[i];
-	}
-
-	//Grab semaphores
-
-	for (U8 i = 0; i < swapchain->base.images; ++i) {
-
-		if(createSemaphores) {
+		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, device->framesInFlight))
+		
+		for (U8 i = 0; i < imageCount; ++i) {
 
 			VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 			VkSemaphore *semaphore = swapchainExt->semaphores.ptrNonConst + i;
 
-			gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
+			gotoIfError(clean, checkVkError(deviceExt->createSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
 
-			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instance->debugSetName) {
+			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
 				CharString_freex(&temp);
 				gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %"PRIu64, (U64)i))
@@ -378,15 +392,33 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 					.pObjectName = temp.ptr
 				};
 
-				gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+				gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 			}
 		}
+	}
 
-		//Image views
+	//Get images
 
-		if(device->flags & EGraphicsDeviceFlags_IsDebug) {
+	VkImage vkImages[SWAPCHAIN_MAX_IMAGES];		//Temp alloc, we only allow up to 5 images.
 
-			VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
+	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(
+		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
+	)))
+
+	//Destroy image views
+
+	for(U8 i = 0; i < imageCount; ++i) {
+
+		VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
+		managedImage->lastAccess = managedImage->lastLayout = 0;
+		managedImage->lastStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+		if(managedImage->view)
+			deviceExt->destroyImageView(deviceExt->device, managedImage->view, NULL);
+
+		managedImage->image = vkImages[i];
+
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
 			CharString_freex(&temp);
 
@@ -402,11 +434,11 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 				.objectHandle =  (U64) managedImage->image
 			};
 
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 		}
 	}
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instance->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
 		CharString_freex(&temp);
 
@@ -421,8 +453,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			.objectHandle = (U64) swapchainExt->swapchain
 		};
 
-		gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
+
+	swapchain->orientation = expectOrientation;
 
 clean:
 	CharString_freex(&temp);
@@ -440,23 +474,23 @@ Bool VK_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 	VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchainRef);
 
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	const VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	for(U8 i = 0; i < swapchain->base.images; ++i) {
 
 		const VkSemaphore semaphore = swapchainExt->semaphores.ptr[i];
 
 		if(semaphore)
-			vkDestroySemaphore(deviceExt->device, semaphore, NULL);
+			deviceExt->destroySemaphore(deviceExt->device, semaphore, NULL);
 	}
 
 	ListVkSemaphore_freex(&swapchainExt->semaphores);
 
 	if(swapchainExt->swapchain)
-		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);
+		deviceExt->destroySwapchain(deviceExt->device, swapchainExt->swapchain, NULL);
 
 	if(swapchainExt->surface)
-		vkDestroySurfaceKHR(instance->instance, swapchainExt->surface, NULL);
+		instanceExt->destroySurface(instanceExt->instance, swapchainExt->surface, NULL);
 
 	return true;
 }

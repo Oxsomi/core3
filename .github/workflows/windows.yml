@@ -1,6 +1,6 @@
 name: C/C++ CI
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build:
@@ -47,7 +47,7 @@ jobs:
       env:
         JOB_STATUS: ${{ job.status }}
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        HOOK_OS_NAME: ${{ runner.os }}
+        HOOK_OS_NAME: ${{ runner.os }}-x64-vk-static
         WORKFLOW_NAME: ${{ github.workflow }}
       run: |
         git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook

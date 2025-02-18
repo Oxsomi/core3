@@ -41,7 +41,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 	Error err = Error_none();
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
@@ -76,7 +76,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 	D3D12_BARRIER_GROUP bufDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 	D3D12_BARRIER_GROUP imgDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
-	if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+	if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
 		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 			deviceRef,
@@ -231,13 +231,13 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 	else {
 
-		AllocationBuffer *stagingBuffer = &device->stagingAllocations[(device->submitId - 1) % 3];
+		AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->fifId];
 		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 		DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 		Error temp = AllocationBuffer_allocateBlockx(
-			stagingBuffer, allocRange, compressed ? 16 : 4, (const U8**) &location
+			stagingBuffer, allocRange, compressed ? 16 : 4, false, (const U8**) &location
 		);
 
 		if(temp.genericError && location == defaultLocation)		//Something major went wrong
@@ -253,7 +253,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 			U64 newSize = prevSize * 2 + allocRange * 3;
 			gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
-			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
+			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, false, (const U8**) &location))
 
 			staging = DeviceBufferRef_ptr(device->staging);
 			stagingExt = DeviceBuffer_ext(staging, Dx);

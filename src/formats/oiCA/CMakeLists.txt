@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB formatsCAHeaders "../../../inc/formats/oiCA/*.h")
+file(GLOB formatsCAHeaders "../../../include/formats/oiCA/*.h")
 file(GLOB formatsCASources "*.c")
 
 add_library(

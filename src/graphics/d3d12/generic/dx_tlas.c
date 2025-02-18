@@ -24,6 +24,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
@@ -174,28 +175,6 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		&tlas->base.tempScratchBuffer
 	))
 
-	//Add as descriptor
-
-	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
-	D3D12_SHADER_RESOURCE_VIEW_DESC resourceView = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
-		.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE,
-		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-		.RaytracingAccelerationStructure = (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV) {
-			.Location = dstAS
-		}
-	};
-
-	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
-
-	U64 id = EDescriptorTypeOffsets_TLASExt + ResourceHandle_getId(tlas->handle);
-
-	deviceExt->device->lpVtbl->CreateShaderResourceView(
-		deviceExt->device,
-		NULL,
-		&resourceView,
-		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
-	);
-
 clean:
 	CharString_freex(&tmp);
 	return err;
@@ -207,7 +186,7 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	TLAS *tlas = TLASRef_ptr(pending);
 	DxTLAS *tlasExt = TLAS_ext(tlas, Dx);
@@ -243,20 +222,24 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	//And losing the reference from our object
 	//We do the same thing on the tempInstances, since it's CPU mem only
 
-	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL))
+	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL)) {
+
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
 
-	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+			RefPtr_inc(tlas->base.tempScratchBuffer);
 
-	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate)) {
-		tlas->base.tempScratchBuffer = NULL;
-		tlas->tempInstanceBuffer = NULL;
+		else tlas->base.tempScratchBuffer = NULL;
 	}
 
-	else {
-		RefPtr_inc(tlas->base.tempScratchBuffer);
-		RefPtr_inc(tlas->tempInstanceBuffer);
+	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL)) {
+
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+			RefPtr_inc(tlas->tempInstanceBuffer);
+
+		else tlas->tempInstanceBuffer = NULL;
 	}
 
 	tlas->base.isCompleted = true;

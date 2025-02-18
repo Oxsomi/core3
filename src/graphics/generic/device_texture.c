@@ -25,6 +25,7 @@
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "types/container/texture_format.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
@@ -242,6 +243,8 @@ Bool DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 	RefPtr *refPtr = (RefPtr*)((const U8*)texture - sizeof(RefPtr));
 
 	SpinLock_lock(&texture->lock, U64_MAX);
+
+	//Log_debugLnx("Destroy: DeviceTexture (%p)", texture);
 
 	Bool success = UnifiedTexture_free(refPtr);
 	success &= Buffer_freex(&texture->cpuData);

@@ -52,8 +52,9 @@ Error Mouse_create(Mouse *result) {
 	BUTTON(Left);				BUTTON(Middle);			BUTTON(Right);
 	BUTTON(Back);				BUTTON(Forward);
 
-	AXIS(X, false);				AXIS(Y, false);
+	AXIS(RX, false);			AXIS(RY, false);
 	AXIS(ScrollWheel_X, true);	AXIS(ScrollWheel_Y, true);
+	AXIS(Temp0, false);			AXIS(Temp1, false);
 
 	return Error_none();
 }

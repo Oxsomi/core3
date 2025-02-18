@@ -21,11 +21,14 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/ext/errorx.h"
+#include "platforms/log.h"
 #include "formats/oiSH/sh_file.h"
 
 const C8 *EPipelineStage_names[] = {
@@ -67,6 +70,8 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 
 	Pipeline_freeExt(pipeline, alloc);
 
+	//Log_debugLnx("Destroy: %p", pipeline);
+
 	if (pipeline->type == EPipelineType_RaytracingExt) {
 		PipelineRaytracingInfo *info = Pipeline_info(pipeline, PipelineRaytracingInfo);
 		ListPipelineRaytracingGroup_freex(&info->groups);
@@ -74,7 +79,12 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 	}
 
 	ListPipelineStage_freex(&pipeline->stages);
-	GraphicsDeviceRef_dec(&pipeline->device);
+
+	PipelineLayoutRef_dec(&pipeline->layout);
+
+	if(!(pipeline->flags & EPipelineFlags_InternalWeakDeviceRef))
+		GraphicsDeviceRef_dec(&pipeline->device);
+
 	return true;
 }
 
@@ -96,6 +106,8 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 		if(!CharString_equalsStringSensitive(entry.name, entrypointName))
 			continue;
+
+		Error err = Error_none();
 
 		for (U64 j = 0; j < entry.binaryIds.length; ++j) {
 
@@ -138,16 +150,16 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			//Ensure it's compatible
 
-			if(
-				!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, NULL) ||
-				(binInfo.identifier.extensions & disallow) ||
-				(binInfo.identifier.extensions & require) != require
-			)
+			if((binInfo.identifier.extensions & disallow) || (binInfo.identifier.extensions & require) != require)
+				continue;
+				
+			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, &err))
 				continue;
 
 			return (U16)i | ((U16)j << 16);
 		}
 
+		Error_printLnx(err);
 		return U32_MAX;
 	}
 

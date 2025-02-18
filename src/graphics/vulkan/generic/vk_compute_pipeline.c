@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
@@ -27,6 +28,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/log.h"
 #include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/buffer.h"
@@ -69,7 +71,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
 			.pName = "main"
 		},
-		.layout = deviceExt->defaultLayout
+		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
 	gotoIfError2(clean, createShaderModule(
@@ -81,7 +83,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		EPipelineStage_Compute
 	))
 
-	gotoIfError2(clean, vkCheck(vkCreateComputePipelines(
+	gotoIfError2(clean, checkVkError(deviceExt->createComputePipelines(
 		deviceExt->device,
 		NULL,
 		1, &pipelineInfo,
@@ -101,7 +103,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 			.pObjectName = temp.ptr ? temp.ptr : name.ptr
 		};
 
-		gotoIfError2(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		gotoIfError2(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 		CharString_freex(&temp);
 	}
 
@@ -111,12 +113,12 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 clean:
 
 	if(pipelineHandle)
-		vkDestroyPipeline(deviceExt->device, pipelineHandle, NULL);
+		deviceExt->destroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
 	const VkShaderModule mod = pipelineInfo.stage.module;
 
 	if(mod)
-		vkDestroyShaderModule(deviceExt->device, mod, NULL);
+		deviceExt->destroyShaderModule(deviceExt->device, mod, NULL);
 
 	CharString_freex(&temp);
 	return s_uccess;

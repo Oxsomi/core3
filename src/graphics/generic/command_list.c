@@ -526,6 +526,22 @@ Error CommandListRef_transitionImage(
 				4, "CommandListRef_transitionImage()::image was already transitioned in scope!"
 			);
 
+		switch (type) {
+
+			case ETransitionType_Clear:
+			case ETransitionType_CopyWrite:
+			case ETransitionType_ShaderWrite:
+			case ETransitionType_ResolveTargetWrite:
+				return Error_invalidOperation(
+					4,
+					"CommandListRef_transitionImage()::image was used as writable target in the same scope, "
+					"this is a write hazard and needs a separate scope to handle synchronization properly."
+				);
+
+			default:
+				break;
+		}
+
 		//To combine shader transitions we just take the highest up shader stage it's used
 
 		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
@@ -659,7 +675,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 			1, clearImages.length, U32_MAX, "CommandListRef_clearImages()::clearImages.length > U32_MAX"
 		))
 
-	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+	GraphicsDeviceRef *device = commandList->device;
 
 	for(U64 i = 0; i < clearImages.length; ++i) {
 
@@ -720,21 +736,20 @@ Error CommandListRef_copyImageRegions(
 	CommandListRef *commandListRef,
 	RefPtr *srcRef,
 	RefPtr *dstRef,
-	ECopyType copyType,
 	ListCopyImageRegion regions
 ) {
 
 	Buffer buf = Buffer_createNull();
 	CommandListRef_validateScope(commandListRef, clean)
 
-	//Validate regions.length to be <0, U32_MAX]
+	//Validate regions.length to be <0, 128]
 
 	if(!regions.length)
 		gotoIfError(clean, Error_nullPointer(3, "CommandListRef_copyImage()::regions.length is 0"))
 
-	if(regions.length > U32_MAX)
+	if(regions.length > 128)
 		gotoIfError(clean, Error_outOfBounds(
-			4, regions.length, U32_MAX, "CommandListRef_copyImage()::regions.length > U32_MAX"
+			4, regions.length, 128, "CommandListRef_copyImage()::regions.length should be less than 128"
 		))
 
 	//Validate src and dst
@@ -761,57 +776,14 @@ Error CommandListRef_copyImageRegions(
 			1, 0, "CommandListRef_copyImage()::src and dst should be DepthStencil if one of them is to be compatible"
 		))
 
-	if(!isDepthStencil && copyType != ECopyType_All)
-		gotoIfError(clean, Error_invalidParameter(
-			3, 0, "CommandListRef_copyImage()::copyType should be ECopyType_All if DepthStencil isn't copied"
-		))
-
 	DeviceResourceVersion v;
 	UnifiedTexture src = TextureRef_getUnifiedTexture(srcRef, &v);
 	UnifiedTexture dst = TextureRef_getUnifiedTexture(dstRef, &v);
 
-	if (isDepthStencil) {
-
-		EDepthStencilFormat srcFormat = src.depthFormat;
-		EDepthStencilFormat dstFormat = dst.depthFormat;
-
-		if(copyType == ECopyType_All && srcFormat != dstFormat)
-			gotoIfError(clean, Error_invalidParameter(
-				1, 1, "CommandListRef_copyImage()::src and dst don't match in depth stencil format"
-			))
-
-		if (
-			copyType == ECopyType_StencilOnly && (
-				srcFormat < EDepthStencilFormat_StencilStart || dstFormat < EDepthStencilFormat_StencilStart
-			)
-		)
-			gotoIfError(clean, Error_invalidParameter(
-				1, 2, "CommandListRef_copyImage()::src and dst both require stencil when using ECopyType_StencilOnly"
-			))
-
-		if (copyType == ECopyType_DepthOnly) {
-
-			Bool compatible = srcFormat == dstFormat;
-
-			switch (srcFormat) {
-
-				case EDepthStencilFormat_D32:
-				case EDepthStencilFormat_D32S8X24Ext:
-					compatible = dstFormat == EDepthStencilFormat_D32S8X24Ext || dstFormat == EDepthStencilFormat_D32;
-					break;
-
-				default:
-					break;
-			}
-
-			if(!compatible)
-				gotoIfError(clean, Error_invalidParameter(
-					1, 3,
-					"CommandListRef_copyImage()::src and dst require the same depth format if ECopyType_DepthOnly is used "
-					"(D32/D32S8 is compatible with D32/D32S8)"
-				))
-		}
-	}
+	if (isDepthStencil)
+		gotoIfError(clean, Error_invalidParameter(
+			1, 0, "CommandListRef_copyImage()::src and dst aren't allowed to be depth stencil"
+		))
 
 	//Ensure both formats are the same
 
@@ -866,8 +838,7 @@ Error CommandListRef_copyImageRegions(
 	*(CopyImageCmd*)buf.ptr = (CopyImageCmd) {
 		.src = srcRef,
 		.dst = dstRef,
-		.regionCount = (U32) regions.length,
-		.copyType = copyType
+		.regionCount = (U32) regions.length
 	};
 
 	Buffer_memcpy(
@@ -889,14 +860,14 @@ clean:
 }
 
 Error CommandListRef_copyImage(
-	CommandListRef *commandListRef, RefPtr *src, RefPtr *dst, ECopyType copyType, CopyImageRegion region
+	CommandListRef *commandListRef, RefPtr *src, RefPtr *dst, CopyImageRegion region
 ) {
 	CommandListRef_validateScope(commandListRef, clean)
 
 	ListCopyImageRegion regions = (ListCopyImageRegion) { 0 };
 	gotoIfError(clean, ListCopyImageRegion_createRefConst(&region, 1, &regions))
 
-	gotoIfError(clean, CommandListRef_copyImageRegions(commandListRef, src, dst, copyType, regions))
+	gotoIfError(clean, CommandListRef_copyImageRegions(commandListRef, src, dst, regions))
 
 clean:
 
@@ -2203,12 +2174,12 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 	U64 len = sizeof(color) + CharString_length(name) + 1;
 	len = (len + 15) &~ 15;										//Align to 16-byte to not mess up next instruction alignment
 
-	gotoIfError(clean, Buffer_createEmptyBytesx(len, &buf))
+	gotoIfError(clean, Buffer_createUninitializedBytesx(len, &buf))
 
 	Buffer_memcpy(buf, Buffer_createRefConst(&color, sizeof(color)));
 
 	Buffer_memcpy(
-		Buffer_createRef((U8*)buf.ptrNonConst + sizeof(color), CharString_length(name)),
+		Buffer_createRef(buf.ptrNonConst + sizeof(color), CharString_length(name)),
 		CharString_bufferConst(name)
 	);
 
@@ -2280,6 +2251,8 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	SpinLock_lock(&cmd->lock, U64_MAX);
 
+	//Log_debugLnx("Destroy: CommandList %p", cmd);
+
 	for (U64 i = 0; i < cmd->resources.length; ++i)
 		RefPtr_dec(cmd->resources.ptrNonConst + i);
 
@@ -2324,7 +2297,8 @@ Error GraphicsDeviceRef_createCommandList(
 	gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32))
-
+	
+	//Log_debugLnx("Create: CommandList %p", commandList);
 	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;
 	commandList->allowResize = allowResize;

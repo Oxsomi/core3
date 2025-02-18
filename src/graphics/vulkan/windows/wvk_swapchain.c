@@ -45,7 +45,10 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 	if (!instanceExt->createSurfaceExt)
 		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateWin32SurfaceKHR");
 
-	return vkCheck(
+	if (!instanceExt->createSurfaceExt)
+		return Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!");
+
+	return checkVkError(
 		((PFN_vkCreateWin32SurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
 	);
 }

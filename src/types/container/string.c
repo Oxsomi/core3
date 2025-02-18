@@ -263,7 +263,7 @@ Bool CharString_isValidFilePath(CharString str) {
 	if(!CharString_isSupportedInFilePath(part))
 		return false;
 
-	return strl;
+	return !!strl;
 }
 
 Bool CharString_clear(CharString *str) {

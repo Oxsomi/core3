@@ -13,6 +13,8 @@ if [ "$4" != True ] && [ "$4" != False ]; then usage; fi
 RED='\033[0;31m'
 NC='\033[0m'
 
+conan profile detect
+
 if ! conan create packages/dxc -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create DXC failed${NC}\n"
 	exit 1
@@ -46,7 +48,20 @@ if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 	fi
 fi
 
-if ! conan build . -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 -o dynamicLinkingGraphics=$4 ${@:5}; then
+if [[ $(uname -m) == "x86_64" ]]; then
+	architecture="x64"
+else
+	architecture="arm64"
+fi
+if [ "$(uname)" == "Darwin" ]; then
+	platform="osx"
+elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+	platform="linux"
+else
+	platform="windows"
+fi
+
+if ! conan build . -of build/$1/$platform/$architecture -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 -o dynamicLinkingGraphics=$4 ${@:5}; then
 	printf "${RED}-- Conan build failed${NC}\n"
 	exit 1
 fi
@@ -55,17 +70,17 @@ fi
 
 if [ "$3" == True ]; then
 
-	cd build/$1/bin
+	cd build/$1/$platform/$architecture/bin
 
 	if ! ./OxC3_test ; then
 		printf "${RED}-- OxC3_test failed${NC}\n"
 		exit 1
 	fi
 
-	if ! bash ../../../tools/test.sh ; then
+	if ! bash ../../../../../tools/test.sh ; then
 		printf "${RED}-- test.sh failed${NC}\n"
 		exit 1
 	fi
 
-	cd ../../..
+	cd ../../../../..
 fi

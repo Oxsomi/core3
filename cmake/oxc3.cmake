@@ -41,6 +41,13 @@ function(apply_dependencies target)
 			-D "LIBDIRS=\"${CONAN_RUNTIME_LIB_DIRS}\""
 			-P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/copy_dlls.cmake"
 	)
+	
+	if(ANDROID)
+		target_sources(${target} PRIVATE "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
+		target_sources(${target} PRIVATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../include/platforms/android/aoxc3_activity_glue.c")
+		target_include_directories(${target} PRIVATE "${ANDROID_NDK}/sources/android/native_app_glue")
+		set_source_files_properties("${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c" PROPERTIES COMPILE_OPTIONS -Wno-unused-parameter)
+	endif()
 
 	# Ensure that working directory is set to the same place as the exe to ensure it can find .dll/.so
 	set_target_properties(${target} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")
@@ -59,7 +66,7 @@ endfunction()
 #	SELF
 #		${CMAKE_CURRENT_SOURCE_DIR}
 #	ARGS
-#		-threads "100%%" -compile-type dxil	# Compile shaders using all available threads and only output DXIL, %% = escape %
+#		-threads "100%%" -compile-type dxil	# Compile shaders using all available threads and only output DXIL, %% = escape % on windows
 # )
 # This would add myTarget/shaders as a virtual directory.
 # myTarget/shaders has to be loaded manually by the app to process it.
@@ -68,7 +75,7 @@ endfunction()
 
 macro(add_virtual_files)
 
-	set(_OPTIONS)
+	set(_OPTIONS FORCE_PACKAGER)
 	set(_ONE_VALUE TARGET ROOT NAME SELF)
 	set(_MULTI_VALUE ARGS)
 
@@ -111,27 +118,68 @@ macro(add_virtual_files)
 	endif()
 
 	# Add processed file as a file
-
-	if(NOT TARGET OxC3)
-		find_program(OXC3 OxC3 REQUIRED)
+	
+	if(_ARGS_FORCE_PACKAGER)
+		if(NOT TARGET OxC3_package)
+			find_program(OXC3_PACKAGE OxC3_package REQUIRED)
+		else()
+			set(OXC3_PACKAGE OxC3_package)
+		endif()
 	else()
-		set(OXC3 OxC3)
+		if(NOT TARGET OxC3)
+			find_program(OXC3 OxC3 REQUIRED)
+		else()
+			set(OXC3 OxC3)
+		endif()
 	endif()
 	
-	add_custom_target(
-		${_ARGS_TARGET}_package_${_ARGS_NAME}
-		COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
-		WORKING_DIRECTORY ${_ARGS_SELF}
-	)
+	if(WIN32)
+		set(platform windows)
+	elseif(IOS)
+		set(platform ios)
+	elseif(APPLE)
+		set(platform osx)
+	elseif(ANDROID)
+		set(platform android)
+	else()
+		set(platform linux)
+	endif()
+
+	set(RuntimeOutputDir "${_ARGS_SELF}/build/${platform}")
+
+	if(_ARGS_FORCE_PACKAGER)
+
+		set(OxC3_command "${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
+	
+		add_custom_target(
+			${_ARGS_TARGET}_package_${_ARGS_NAME}
+			COMMAND ${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			WORKING_DIRECTORY ${_ARGS_SELF}
+		)
+
+	else()
+
+		set(OxC3_command "${OXC3} file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
+	
+		add_custom_target(
+			${_ARGS_TARGET}_package_${_ARGS_NAME}
+			COMMAND ${OXC3} file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			WORKING_DIRECTORY ${_ARGS_SELF}
+		)
+
+	endif()
 		
 	string (REPLACE ";" " " ARGS_STR "${_ARGS_ARGS}")
-	message("-- Packaging: \"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
+	message("-- Packaging: ${OxC3_command} ${ARGS_STR}")
 	message("-- Packaging: ${_ARGS_TARGET}_package_${_ARGS_NAME} @ ${_ARGS_SELF}")
 
 	set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 
 	# When adding from external package manager, it's already been installed
-	if(TARGET OxC3)
+
+	if(_ARGS_FORCE_PACKAGER AND TARGET OxC3_package)
+		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3_package)
+	elseif(TARGET OxC3)
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
 	else()
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
@@ -147,11 +195,11 @@ macro(add_virtual_files)
 
 	if(WIN32)
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
-		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
-	elseif(UNIX AND NOT APPLE)
+		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
+	elseif(UNIX AND NOT APPLE AND NOT ANDROID)
 		add_custom_command(
 			TARGET ${_ARGS_TARGET} POST_BUILD
-			COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+			COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
 		)
 	endif()
 

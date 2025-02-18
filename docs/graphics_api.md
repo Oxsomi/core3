@@ -3,21 +3,13 @@
 The core pillars of the abstraction of this graphics library are the following:
 
 - Support feature sets as close as possible to Vulkan, Direct3D12 and Metal3.
-  - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.2 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
+  - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.1 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
 - Simplify usage for these APIs, as they're too verbose.
   - But don't oversimplify them to the point of being useless.
   - This does mean features not deemed important enough might not be included in the main specification. Though a branch could maintain support if needed.
 - Force modern minimum specs to avoid having to build too many diverging renderers to deal with limitations of old devices.
 - Allow modern usage of these APIs such as raytracing and bindless.
 - Support various systems such as Android, Apple, Windows and Linux (console should be kept in mind, though not officially supported).
-
-## Getting started
-
-Before getting started, there needs to be a header file included in the main entrypoint. Not including this will result in linker errors. This is to prevent the user from running without the Agility SDK, which requires certain symbols to be injected into the main executable. This header file should only be included into the main exe/apk, it should not be linked into a dynamic or static lib!
-
-```c
-#include "graphics/generic/application.h" //Enables proper OxC3 graphics support
-```
 
 ## Ref counting
 
@@ -106,7 +98,8 @@ gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 ### Properties
 
-- name, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
+- name; null-terminated UTF-8 string giving information about the device.
+- driverInfo; might not be available (always available on D3D12, but sometimes available on Vk) or might give a UTF-8 string in arbitrary format that specifies info about the driver version. Generally this follows (x.y or x.y.z) but that is vendor specific (at least NV, AMD and INTC seem to agree on it on desktop).
 - type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
 - vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Microsoft (MSFT) or unknown).
 - id; number in the list of supported devices.
@@ -450,6 +443,8 @@ See the "Commands" section.
 
 A GraphicsResource is defined as any object that has allocated memory on the GraphicsDevice. This includes two types of resources: DeviceBuffer and UnifiedTexture.
 
+By default, a GraphicsResource's data is uninitialized (of questionable state) and has to be cleared or written right away.
+
 A graphics resource consists of the following:
 
 - device: the owning graphics device.
@@ -733,6 +728,55 @@ gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
 - Can be written in (compute) shaders (if usage permits it) by passing the writeLocation to the shader and using rwTexture2D(format)Uniform() or rwTexture2D(format)() in the shader.
   - Where format is the type of primitive the texture uses. Such as: (none): unorm, (s): snorm, (i): int, (u): uint, (f): float. e.g. rwTexture2DfUniform(resourceId) would access the writeonly float texture at resourceId and rwTexture2DUniform would access a unorm RW texture.
 
+## DescriptorHeap
+
+### Summary
+
+A DescriptorHeap is the description of many resources are available max during the application. In Vulkan this would correspond to VkDescriptorPool while in D3D12 it'd be ID3D12DescriptorHeap. This can later be allocated into by a DescriptorSet, which will place descriptors at the location (in the case of D3D12) or will consume them from the descriptor pool (in the case of Vulkan).
+
+### Properties
+
+- device: ref to the graphics device that owns it.
+- info.flags
+  - If bindless is enabled which will enable use of bindless descriptors in descriptor sets.
+  - If it's owned by a graphics device or not, useful for internal use only.
+- info.max[T]: Defines the limits of each type of descriptor.
+  - maxAccelerationStructures
+  - maxSamplers
+  - maxInputAttachments
+  - maxCombinedSamplers
+  - maxTextures
+  - maxTexturesRW
+  - maxBuffersRW
+  - maxConstantBuffers
+- descriptorTableCount: how many descriptor tables have been created through it, useful for tracking and to enforce the limit in info.maxDescriptorTables.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createDescriptorHeap.
+- A DescriptorHeapInfo (to create the heap itself) has to be defined from the app or the device generally, this is to allow it to save memory or descriptors when it needs to.
+- Used when creating a DescriptorTable and can be bound together with the DescriptorTable by the command list.
+
+## DescriptorLayout
+
+### Summary
+
+A DescriptorLayout is the description of how the resources are bound to the pipeline. In Vulkan this would be VkDescriptorSetLayout[4] while in D3D12 it'd be D3D12_DESCRIPTOR_RANGE1[]. This would then later be able to be turned into a VkPipelineLayout or ID3D12RootSignature. When doing full bindless, there's only one descriptor set layout that is declared when creating a device, this descriptor layout can be used by setting the PipelineLayout's DescriptorLayout to NULL.
+
+### Properties
+
+- device: ref to the graphics device that owns it.
+- flags
+  - If bindless is enabled only on arrays or on everything in the DescriptorLayout. Enabling bindless means that the descriptors themselves might not be valid and are dynamically changed. Doing this only on an array is recommended, since an array is generally the thing that contains bindless resources. Only enable bindless if it makes sense (e.g. raytracing, complicated render pipelines) to ensure full combability and performance on all target devices. 
+  - If it's owned by a graphics device or not, useful for internal use only.
+- bindings: a list of descriptor bindings that specifies the count, register type, id, visibility and space of a specific resource binding. The definition of this depends on the API; in Vulkan there are other binding types than DirectX12, so the implementation will try to merge ranges together if possible. As such, try to put UAVs, SRVs and CBVs closely together and a similar recommendation for Vulkan register types (images, textures, subpass inputs, ssbo, ubo, RTAS). The implementation can determine it can't merge a range if for example visibility mismatches (Vulkan) or the two have mismatching bindless flags.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createDescriptorLayout.
+- A DescriptorLayoutInfo (to create the layout itself) can generally be obtained through the shader reflection by using `DescriptorLayout_detect`, though this might not be optimal if all shaders have a similar / the same DescriptorLayout (unless you manually avoid creating duplicates).
+- Used when creating a PipelineLayout.
+
 ## Pipeline
 
 ### Summary
@@ -743,6 +787,8 @@ A pipeline is a combination of the states and shader binaries that are required 
 
 - device: ref to the graphics device that owns it.
 - type: compute, graphics or raytracing pipeline type.
+- flags: if it's owned by a graphics device or not, useful for internal use only.
+- pipelineLayout: what kind of pipeline layout is used, can be NULL to indicate default bindless layout.
 - stages: `ListPipelineStage` the binaries that are used for the shader.
   - stageType: which stage the binary is for. This is not necessarily unique, but should be unique for graphics shaders and compute. For raytracing shaders there can be multiple for the same stage.
   - Non raytracing shaders (compute / graphics):
@@ -879,18 +925,24 @@ Compilation spits out a single binary with HLSL, which means that only a single 
 ### Compute example
 
 ```c
-tempShader = ...;		//Buffer: Load from virtual file or hardcode.
+SHFile tempShader = ...;		//SHFile: Load from virtual file or hardcode.
+CharString name = CharString_createConstRefCStr("Test compute pipeline");
+CharString entrypoint = CharString_createRefCStrConst("main");
 
-CharString nameArr[] = {
-    CharString_createConstRefCStr("Test compute pipeline")
-};
+U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
+	device,
+	tempShader,
+	entrypoint,
+	(ListCharString) { 0 },		//Uniforms
+	ESHExtension_None,			//Extensions to disallow
+	ESHExtension_None			//Extensions to require
+);
 
-ListBuffer computeBinaries = (ListBuffer) { 0 };
-gotoIfError(clean, ListBuffer_createRefConst(tempShader, 1, &computeBinaries));
-gotoIfError(clean, ListCharString_createConstRefConst(nameArr, 1, &names));
-gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, names, &computeShaders));
+gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
+	device, tempShader, name, entryId, EPipelineFlags_None, NULL, &computeShaders, e_rr
+));
 
-tempShader = Buffer_createNull();
+SHFile_freex(&tempShader);
 ```
 
 Create pipelines will take ownership of the buffers referenced in computeBinaries and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory.
@@ -900,46 +952,41 @@ It is recommended to generate all pipelines that are needed in this one call at 
 ### Graphics example
 
 ```c
-//... Load shaders from virtual file system into tempShaders[0], [1]
+ListSHFile tempShaders = ...;		//SHFile: Load from virtual file or hardcode.
+
 //Define the entrypoints
 
+U32 mainVSDepth = GraphicsDeviceRef_getFirstShaderEntry(...);		//Check the compute example for more
+U32 mainPS = GraphicsDeviceRef_getFirstShaderEntry(...);
+
 PipelineStage stage[2] = {
-    (PipelineStage) {
-        .stageType = EPipelineStage_Vertex,
-        .shaderBinary = tempShaders[0]
-    },
-    (PipelineStage) {
-        .stageType = EPipelineStage_Pixel,
-        .shaderBinary = tempShaders[1]
-    }
+    (PipelineStage) { .binaryId = mainVSDepth, .shFileId = 1 },		//tempShaders[1] contains mainVSDepth entrypoint
+    (PipelineStage) { .binaryId = mainPS, .shFileId = 0 }			//tempShaders[0] contains mainPS entrypoint
 };
 
 ListPipelineStage stageInfos = (ListPipelineStage) { 0 };
-gotoIfError(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / sizeof(stage[0]), &stageInfos));
+gotoIfError2(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / sizeof(stage[0]), &stageInfos));
 
 //Define all pipelines.
 //These pipelines require the graphics feature DirectRendering and will error otherwise!
 //Otherwise .attachmentCountExt, .attachmentFormatsExt and/or .depthStencilFormat
 //  need to be replaced with .renderPass = renderPass and/or .subPass = subPassId.
 
-PipelineGraphicsInfo info[1] = {
-    (PipelineGraphicsInfo) {
-        .stageCount = 2,
-        .attachmentCountExt = 1,
-        .attachmentFormatsExt = { ETextureFormat_BGRA8 }
-    }
+PipelineGraphicsInfo info = (PipelineGraphicsInfo) {
+	.stageCount = 2,
+	.attachmentCountExt = 1,
+	.attachmentFormatsExt = { ETextureFormat_BGRA8 }
 };
 
-//Create pipelines, this will take ownership of the binaries (if they're managed).
-//Make sure to release them after to avoid freeing twice!
+//Create pipelines
 
-ListPipelineGraphicsInfo infos = (ListPipelineGraphicsInfo) { 0 };
-gotoIfError(clean, ListPipelineGraphicsInfo_createConstRef(info, sizeof(info) / sizeof(info[0]), &infos));
-gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
-    device, &stageInfos, &infos, ListCharString_createNull(), &graphicsShaders
+CharString name = CharString_createConstRefCStr("Test compute pipeline");
+
+gotoIfError3(clean, GraphicsDeviceRef_createPipelineGraphics(
+    device, tempShaders, &stageInfos, info, name, EPipelineFlags_None, NULL, &graphicsShaders, e_rr
 ));
 
-tempShaders[0] = tempShaders[1] = Buffer_createNull();
+...;	//Free binaries (tempShaders)
 ```
 
 Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref then the implementation will copy to avoid unsafe behavior.
@@ -949,81 +996,63 @@ It is recommended to generate all pipelines that are needed in this one call at 
 ### Raytracing example
 
 ```c
-//... Load shaders from virtual file system into tempShaders[0]
+ListSHFile tempShaders = ...;		//SHFile: Load from virtual file or hardcode.
 
 //Define our entrypoints; a single compiled binary with specified entry points.
 
-PipelineStage stageArr[] = {
-    (PipelineStage) { .stageType = EPipelineStage_ClosestHitExt, .binaryId = 0 },
-    (PipelineStage) { .stageType = EPipelineStage_MissExt, .binaryId = 0 },
-    (PipelineStage) { .stageType = EPipelineStage_RaygenExt, .binaryId = 0 }
-};
+U32 mainClosestHit = GraphicsDeviceRef_getFirstShaderEntry(...);		//Check the compute example for more
+U32 mainMiss = GraphicsDeviceRef_getFirstShaderEntry(...);
+U32 mainRaygen = GraphicsDeviceRef_getFirstShaderEntry(...);
 
-CharString entrypointArr[] = {
-    CharString_createRefCStrConst("mainClosestHit"),
-    CharString_createRefCStrConst("mainMiss"),
-    CharString_createRefCStrConst("mainRaygen")
+PipelineStage stageArr[] = {
+	(PipelineStage) { .binaryId = mainClosestHit,	.shFileId = 0 },
+	(PipelineStage) { .binaryId = mainMiss,			.shFileId = 0 },
+	(PipelineStage) { .binaryId = mainRaygen,		.shFileId = 0 }
 };
 
 //Define a hit group
 
 PipelineRaytracingGroup hitArr[] = {
-    (PipelineRaytracingGroup) {
-        .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX
-    }
+	(PipelineRaytracingGroup) { .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX }
 };
 
 //Define the pipeline that links these together as one.
 //We can link multiple at the same time.
 //All ids (in hitArr, stageArr) are relative to the stage itself (no global binary id).
 
-CharString nameArr[] = {
-    CharString_createRefCStrConst("Raytracing pipeline test")
-};
-
-U64 count = sizeof(nameArr) / sizeof(nameArr[0]);
 U64 entrypointCount = sizeof(stageArr) / sizeof(stageArr[0]);
 U64 hitCount = sizeof(hitArr) / sizeof(hitArr[0]);
 
-PipelineRaytracingInfo infoArr[] = {
-    (PipelineRaytracingInfo) {
-
-        (U8) EPipelineRaytracingFlags_Default,	//No intersection shaders
-        16,										//Payload size
-        8,										//Attribute size
-        1,										//Recursion
-
-        (U32) entrypointCount,
-        (U32) count,
-        (U32) hitCount
-    }
+PipelineRaytracingInfo info = (PipelineRaytracingInfo) {
+	.flags = (U8) EPipelineRaytracingFlags_DefaultStrict,
+	.maxRecursionDepth = 1
 };
 
 //Turn into lists
 
-ListBuffer binaries = (ListBuffer) { 0 };
-ListCharString names = (ListCharString) { 0 };
 ListPipelineStage stages = (ListPipelineStage) { 0 };
-ListCharString entrypoints = (ListCharString) { 0 };
 ListPipelineRaytracingGroup hitGroups = (ListPipelineRaytracingGroup) { 0 };
-ListPipelineRaytracingInfo infos = (ListPipelineRaytracingInfo) { 0 };
 
-gotoIfError(clean, ListBuffer_createRefConst(tempBuffers, count, &binaries));
-gotoIfError(clean, ListCharString_createRefConst(nameArr, count, &names));
-gotoIfError(clean, ListPipelineRaytracingInfo_createRefConst(infoArr, count, &infos));
-
-gotoIfError(clean, ListPipelineStage_createRefConst(stageArr, entrypointCount, &stages));
-gotoIfError(clean, ListCharString_createRefConst(entrypointArr, entrypointCount, &entrypoints));
-
-gotoIfError(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount, &hitGroups));
+gotoIfError2(clean, ListPipelineStage_createRefConst(stageArr, entrypointCount, &stages));
+gotoIfError2(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount, &hitGroups));
 
 //Finalize into pipeline
 
-gotoIfError(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
-    twm->device, stages, &binaries, hitGroups, infos, &entrypoints, names, &raytracingShaders
+gotoIfError3(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
+    device,
+	&stages,
+	tempShaders,
+	&hitGroups,
+	info,
+	&entrypoints
+	CharString_createRefCStrConst("Raytracing pipeline test"),
+	EPipelineFlags_None,
+	NULL,
+	&raytracingShaders,
+	e_rr
 ));
 
-tempBuffers[0] = tempBuffers[1] = tempBuffers[2] = Buffer_createNull();
+...;	//Free binaries (tempShaders)
 ```
 
 ## Shader binary types

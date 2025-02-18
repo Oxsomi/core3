@@ -318,27 +318,19 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					case VK_DOWN:				handle = EKey_Down;				break;
 					case VK_RIGHT:				handle = EKey_Right;			break;
 
-					case VK_SELECT:				handle = EKey_Select;			break;
-					case VK_PRINT:				handle = EKey_Print;			break;
-					case VK_EXECUTE:			handle = EKey_Execute;			break;
 					case VK_BROWSER_BACK:		handle = EKey_Back;				break;
 					case VK_BROWSER_FORWARD:	handle = EKey_Forward;			break;
 					case VK_SLEEP:				handle = EKey_Sleep;			break;
 					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;			break;
-					case VK_BROWSER_STOP:		handle = EKey_Stop;				break;
 					case VK_BROWSER_SEARCH:		handle = EKey_Search;			break;
-					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;		break;
-					case VK_BROWSER_HOME:		handle = EKey_Start;			break;
 					case VK_VOLUME_MUTE:		handle = EKey_Mute;				break;
 					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;		break;
 					case VK_VOLUME_UP:			handle = EKey_VolumeUp;			break;
 					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;				break;
 					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;			break;
 					case VK_CLEAR:				handle = EKey_Clear;			break;
-					case VK_ZOOM:				handle = EKey_Zoom;				break;
 					case VK_RETURN:				handle = EKey_Enter;			break;
 					case VK_HELP:				handle = EKey_Help;				break;
-					case VK_APPS:				handle = EKey_Apps;				break;
 
 					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
 					case VK_ADD:				handle = EKey_NumpadAdd;		break;

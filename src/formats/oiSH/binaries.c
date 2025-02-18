@@ -100,17 +100,21 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"SubgroupOperations"
 };
 
-const C8 *ESHVendor_names[ESHVendor_Count] = {
-		"NV",
-		"AMD",
-		"ARM",
-		"QCOM",
-		"INTC",
-		"IMGT",
-		"MSFT"
+const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
+	"NV",
+	"AMD",
+	"ARM",
+	"QCOM",
+	"INTC",
+	"IMGT",
+	"MSFT",
+	"APPL",
+	"SMSG",
+	"HWEI",
+	"Unknown"
 };
 
-Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, Error *e_rr) {
+Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	SHBinaryInfo info = (SHBinaryInfo) { 0 };

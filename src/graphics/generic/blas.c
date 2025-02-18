@@ -23,6 +23,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "types/container/buffer.h"
@@ -42,6 +43,7 @@ Bool BLAS_free(BLAS *blas, Allocator allocator) {
 	SpinLock_lock(&blas->base.lock, U64_MAX);
 
 	Bool success = BLAS_freeExt(blas);
+	//Log_debugLnx("Destroy: %s (%p)", blas->base.name.ptr, blas);
 	success &= CharString_freex(&blas->base.name);
 
 	success &= !DeviceBufferRef_dec(&blas->base.asBuffer).genericError;
@@ -287,6 +289,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 	blasPtr->base.device = dev;
 
 	gotoIfError(clean, CharString_createCopyx(name, &blasPtr->base.name))
+	//Log_debugLnx("Create: %s (%p)", blasPtr->base.name.ptr, blasPtr);
 	gotoIfError(clean, BLAS_initExt(blasPtr))
 
 clean:

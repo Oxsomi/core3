@@ -25,6 +25,7 @@
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/resource.h"
+#include "platforms/log.h"
 #include "types/container/texture_format.h"
 #include "types/container/string.h"
 
@@ -96,11 +97,15 @@ void *TextureRef_getImplExt(TextureRef *ref) {
 	if(!tex)
 		return NULL;
 
+	//Avoid movement of SwapchainExt for example, by allowing a fixed reservation of images.
+
+	U64 img = tex->maxImages ? tex->maxImages : tex->images;
+
 	//TODO: subResource
 	return (UnifiedTextureImage*)(
 		(U8*)tex +
 		sizeof(*tex) +
-		(sizeof(UnifiedTextureImage) + GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image) * tex->images
+		(sizeof(UnifiedTextureImage) + GraphicsDeviceRef_getObjectSizes(tex->resource.device)->image) * img
 	);
 }
 
@@ -204,15 +209,21 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 	GraphicsDeviceRef *deviceRef = texture->resource.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
+	//Log_debugLnx("Destroy: Texture (%p)", texture);
+
 	const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 	if (acq >= ELockAcquire_Success) {
 
 		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
 
-		ListU32 allocations = (ListU32) { 0 };
-		ListU32_createRefConst((const U32*)img, texture->images * 2, &allocations);
-		GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
+		//Can't batch this anymore, we have U64 padding in between now, for alignment purposes
+
+		for(U8 i = 0; i < texture->images; ++i) {
+			ListU32 allocations = (ListU32) { 0 };
+			ListU32_createRefConst((const U32*)&img[i], 2, &allocations);
+			GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
+		}
 
 		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(&device->descriptorLock);
@@ -252,6 +263,9 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 	if(texture.sampleCount >= EMSAASamples_Count)
 		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->sampleCount is invalid");
 
+	if(texture.sampleCount && texture.levels)
+		return Error_invalidParameter(2, 0, "UnifiedTexture_create() MSAA textures can't have mips");
+
 	if(texture.type >= ETextureType_Count)
 		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->type is invalid");
 
@@ -259,9 +273,9 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture");
 
 	if (texture.resource.type == EResourceType_Swapchain) {
-		if(texture.images != 3)
+		if(texture.images < 3 || texture.images > 5)
 			return Error_invalidParameter(
-				1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 3 swapchains"
+				1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 3-5 swapchains"
 			);
 	}
 
@@ -390,6 +404,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 		acq = ELockAcquire_Invalid;
 	}
 
+	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
 	gotoIfError(clean, UnifiedTexture_createExt(ref, name))
 
 clean:

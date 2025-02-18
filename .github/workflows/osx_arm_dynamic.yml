@@ -1,10 +1,10 @@
 name: C/C++ CI
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build:
-    name: OSX build
+    name: OSX build arm dynamic
     runs-on: macos-15
     steps:
     - uses: actions/checkout@v1
@@ -28,7 +28,7 @@ jobs:
       uses: actions/cache/restore@v3
       with:
         path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
+        key: ${{ runner.os }}-arm64-${{ hashFiles('**/packages') }}
     - name: Release dynamic but no SIMD, not supported yet
       run: bash build.sh Release False True True -o cliGraphics=False
     - name: Debug dynamic but no SIMD, not supported yet
@@ -40,14 +40,14 @@ jobs:
       uses: actions/cache/save@v3
       with:
         path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
+        key: ${{ runner.os }}-arm64-${{ hashFiles('**/packages') }}
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()
       env:
         JOB_STATUS: ${{ job.status }}
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        HOOK_OS_NAME: ${{ runner.os }}
+        HOOK_OS_NAME: ${{ runner.os }}-arm64-dynamic
         WORKFLOW_NAME: ${{ github.workflow }}
       run: |
         git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook

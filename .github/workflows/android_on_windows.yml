@@ -1,0 +1,65 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  build:
+    name: Android build on windows
+    runs-on: windows-2022
+    env:
+      VULKAN_SDK: C:\VulkanSDK\
+      ANDROID_SDK: C:\Android\android-sdk
+      ANDROID_NDK: C:\Android\android-sdk\ndk\28.0.12674087
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - uses: seanmiddleditch/gha-setup-ninja@master
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        cache: true
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    - name: Setup Android NDK and right android version
+      run: sdkmanager "platforms;android-29" "ndk;28.0.12674087"
+    - name: Setup msys2
+      uses: msys2/setup-msys2@v2
+    - name: Restore cached
+      id: cache-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.conan2/p
+        key: android-${{ runner.os }}-${{ hashFiles('**/packages') }}
+    - name: build for debug
+      run: python3 build_android.py -mode Debug
+    - name: build for release
+      run: python3 build_android.py -mode Release
+    - name: Delete non package files for cache
+      run: bash -c "rm -rf ~/.conan2/p/b/*/b"
+    - name: Cache Build
+      id: cache-build
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.conan2/p
+        key: android-${{ runner.os }}-${{ hashFiles('**/packages') }}
+    - uses: actions/setup-ruby@v1
+    - name: Send Webhook Notification
+      if: always()
+      env:
+        JOB_STATUS: ${{ job.status }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        HOOK_OS_NAME: Android-${{ runner.os }}-static
+        WORKFLOW_NAME: ${{ github.workflow }}
+      run: |
+        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
+        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+      shell: bash

@@ -19,10 +19,10 @@
 
 message("-- Targeting platform: ${platform}")
 
-file(GLOB platformsHeaders "../../inc/platforms/*.h" "../../inc/platforms/ext/*.h")
+file(GLOB platformsHeaders "../../include/platforms/*.h" "../../include/platforms/ext/*.h")
 
 file(GLOB_RECURSE platformsPlatformSources "${platform}/*.c")
-file(GLOB_RECURSE platformsPlatformIncludes "../../inc/platforms/${platform}/*.h")
+file(GLOB_RECURSE platformsPlatformIncludes "../../include/platforms/${platform}/*.h")
 file(GLOB_RECURSE platformsSources "generic/*.c")
 file(GLOB_RECURSE platformsSIMDSources "simd/${simd}/*.c")
 
@@ -56,6 +56,8 @@ target_link_libraries(
 
 if(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
+elseif(ANDROID)
+	target_include_directories(OxC3_platforms PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")
 elseif(UNIX AND NOT APPLE)
 	find_package(xdg_shell REQUIRED)
 	find_package(xdg_decoration REQUIRED)

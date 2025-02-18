@@ -27,23 +27,24 @@ if NOT "%4" == "True" (
 
 for /f "tokens=4,* delims= " %%a in ("%*") do set remainder=%%b
 
+conan profile detect
 conan create packages/agility_sdk -s build_type=%1 --build=missing
 conan create packages/amd_ags -s build_type=%1 --build=missing
 conan create packages/nvapi -s build_type=%1 --build=missing
 conan create packages/spirv_reflect -s build_type=%1 --build=missing
 conan create packages/dxc -s build_type=%1 --build=missing
 conan create packages/openal_soft -s build_type=%1 --build=missing
-conan build . -s build_type=%1 -o enableSIMD=%2 -o enableTests=%3 -o dynamicLinkingGraphics=%4 !remainder!
+conan build . -s build_type=%1 -of build/%1/windows/x64 -o enableSIMD=%2 -o enableTests=%3 -o dynamicLinkingGraphics=%4 !remainder!
 
 REM Run tests
 
 if "%3" == "False" goto :eof
 
-cd build/bin/%1
+cd build/%1/windows/x64/bin
 OxC3_test.exe
-..\..\..\tools\test.bat
+..\..\..\..\..\tools\test.bat
 
-cd ../../..
+cd ../../../../..
 goto :eof
 
 :usage

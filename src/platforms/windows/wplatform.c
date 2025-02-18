@@ -39,6 +39,11 @@ U64 Platform_getThreads() {
 	return systemInfo.dwNumberOfProcessors;
 }
 
+Bool Platform_setKeyboardVisible(Bool isVisible) {
+	(void) isVisible;
+	return true;
+}
+
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
@@ -163,7 +168,9 @@ clean:
 	return s_uccess;
 }
 
-CharString Keyboard_remap(EKey key) {
+CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
+
+	(void) keyboard;
 
 	U32 vkey = 0, scanCode = 0;
 	const C8 *raw = NULL;
@@ -186,27 +193,19 @@ CharString Keyboard_remap(EKey key) {
 		case EKey_Down:			vkey = VK_DOWN;					break;
 		case EKey_Right:		vkey = VK_RIGHT;				break;
 
-		case EKey_Select:		vkey = VK_SELECT;				break;
-		case EKey_Print:		vkey = VK_PRINT;				break;
-		case EKey_Execute:		vkey = VK_EXECUTE;				break;
 		case EKey_Back:			vkey = VK_BROWSER_BACK;			break;
 		case EKey_Forward:		vkey = VK_BROWSER_FORWARD;		break;
 		case EKey_Sleep:		vkey = VK_SLEEP;				break;
 		case EKey_Refresh:		vkey = VK_BROWSER_REFRESH;		break;
-		case EKey_Stop:			vkey = VK_BROWSER_STOP;			break;
 		case EKey_Search:		vkey = VK_BROWSER_SEARCH;		break;
-		case EKey_Favorites:	vkey = VK_BROWSER_FAVORITES;	break;
-		case EKey_Start:		vkey = VK_BROWSER_HOME;			break;
 		case EKey_Mute:			vkey = VK_VOLUME_MUTE;			break;
 		case EKey_VolumeDown:	vkey = VK_VOLUME_DOWN;			break;
 		case EKey_VolumeUp:		vkey = VK_VOLUME_UP;			break;
 		case EKey_Skip:			vkey = VK_MEDIA_NEXT_TRACK;		break;
 		case EKey_Previous:		vkey = VK_MEDIA_PREV_TRACK;		break;
 		case EKey_Clear:		vkey = VK_CLEAR;				break;
-		case EKey_Zoom:			vkey = VK_ZOOM;					break;
 		case EKey_Enter:		vkey = VK_RETURN;				break;
 		case EKey_Help:			vkey = VK_HELP;					break;
-		case EKey_Apps:			vkey = VK_APPS;					break;
 
 		case EKey_NumpadMul:	vkey = VK_MULTIPLY;				break;
 		case EKey_NumpadAdd:	vkey = VK_ADD;					break;

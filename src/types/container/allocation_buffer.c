@@ -21,10 +21,17 @@
 #include "types/container/list_impl.h"
 #include "types/container/allocation_buffer.h"
 #include "types/base/allocator.h"
+#include "types/math/math.h"
 
 TListImpl(AllocationBufferBlock);
 
-Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer) {
+Error AllocationBuffer_create(
+	U64 size,
+	Bool isVirtual,
+	U64 nonLinearAlignment,
+	Allocator alloc,
+	AllocationBuffer *allocationBuffer
+) {
 
 	if(!allocationBuffer || !size)
 		return Error_nullPointer(!size ? 0 : 2, "AllocationBuffer_create()::size or allocationBuffer is NULL");
@@ -47,6 +54,8 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 
 	else allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | size };
 
+	allocationBuffer->nonLinearAlignment = nonLinearAlignment;
+
 	if ((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
 		Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
 		*allocationBuffer = (AllocationBuffer) { 0 };
@@ -60,6 +69,7 @@ Error AllocationBuffer_createRefFromRegion(
 	Buffer origin,
 	U64 offset,
 	U64 size,
+	U64 nonLinearAlignment,
 	Allocator alloc,
 	AllocationBuffer *allocationBuffer
 ) {
@@ -76,6 +86,8 @@ Error AllocationBuffer_createRefFromRegion(
 
 	if(err.genericError)
 		return err;
+
+	allocationBuffer->nonLinearAlignment = nonLinearAlignment;
 
 	if((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
 		*allocationBuffer = (AllocationBuffer) { 0 };
@@ -97,7 +109,7 @@ Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc) 
 }
 
 U64 AllocationBufferBlock_getStart(AllocationBufferBlock block) {
-	return block.start << 1 >> 1;
+	return block.startAndNonLinearAndFree << 2 >> 2;
 }
 
 U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
@@ -105,7 +117,11 @@ U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
 }
 
 U64 AllocationBufferBlock_isFree(AllocationBufferBlock block) {
-	return block.start >> 63;
+	return block.startAndNonLinearAndFree >> 63;
+}
+
+Bool AllocationBufferBlock_isNonLinear(AllocationBufferBlock block) {
+	return (block.startAndNonLinearAndFree >> 62) & 1;
 }
 
 U64 AllocationBufferBlock_getCenter(AllocationBufferBlock block) {
@@ -134,6 +150,7 @@ Error AllocationBuffer_allocateAndFillBlock(
 	AllocationBuffer *allocationBuffer,
 	Buffer data,
 	U64 alignment,
+	Bool isNonLinearResource,
 	Allocator alloc,
 	U8 **result
 ) {
@@ -145,7 +162,9 @@ Error AllocationBuffer_allocateAndFillBlock(
 		);
 
 	const U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
-	const Error err = AllocationBuffer_allocateBlock(allocationBuffer, Buffer_length(data), alignment, alloc, &ptr);
+	const Error err = AllocationBuffer_allocateBlock(
+		allocationBuffer, Buffer_length(data), alignment, isNonLinearResource, alloc, &ptr
+	);
 
 	if (err.genericError && ptr != defaultPtr) {	//Touch pointer so it can be checked if blocks are all gone or not.
 		*result = NULL;
@@ -164,6 +183,7 @@ Error AllocationBuffer_allocateBlock(
 	AllocationBuffer *allocationBuffer,
 	U64 size,
 	U64 alignment,
+	Bool isNonLinearResource,
 	Allocator alloc,
 	const U8 **result
 ) {
@@ -197,25 +217,37 @@ Error AllocationBuffer_allocateBlock(
 
 	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
-		const AllocationBufferBlock v = (AllocationBufferBlock) { .end = size, .alignment = alignment };
+		const AllocationBufferBlock v = (AllocationBufferBlock) { 
+			.startAndNonLinearAndFree = (U64) isNonLinearResource << 62,
+			.end = size,
+			.alignment = alignment
+		};
+
 		const Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
 
 		if(err.genericError)
 			return err;
 
-		*result = allocationBuffer->buffer.ptr + v.start;
+		*result = allocationBuffer->buffer.ptr;
 		return Error_none();
 	}
 
 	//Grab area behind last allocation to see if there's still space
 
 	const AllocationBufferBlock last = *ListAllocationBufferBlock_last(allocationBuffer->allocations);
-	const U64 lastAlign = AllocationBufferBlock_alignTo(last.end, alignment);
+
+	U64 nonLinearAlignment = U64_max(allocationBuffer->nonLinearAlignment, alignment);
+	Bool mismatchAlignment = AllocationBufferBlock_isNonLinear(last) != isNonLinearResource;
+	U64 nextAlignment = mismatchAlignment ? nonLinearAlignment : alignment;
+
+	const U64 lastAlign = AllocationBufferBlock_alignTo(last.end, nextAlignment);
 
 	if (lastAlign + size <= len) {
 
 		const AllocationBufferBlock v = (AllocationBufferBlock) {
-			.start = last.end, .end = lastAlign + size, .alignment = alignment
+			.startAndNonLinearAndFree = last.end | ((U64) isNonLinearResource << 62),
+			.end = lastAlign + size,
+			.alignment = nextAlignment
 		};
 
 		const Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
@@ -230,12 +262,18 @@ Error AllocationBuffer_allocateBlock(
 	//Grab area before first allocation to see if there's still space
 
 	const AllocationBufferBlock first = *allocationBuffer->allocations.ptr;
+	U64 firstOff = AllocationBufferBlock_getStart(first);
 
-	if (size <= AllocationBufferBlock_getStart(first)) {
+	mismatchAlignment = AllocationBufferBlock_isNonLinear(first) != isNonLinearResource;
+
+	if (size <= firstOff && (!mismatchAlignment || !(firstOff & (allocationBuffer->nonLinearAlignment - 1)))) {
 
 		const AllocationBufferBlock v = (AllocationBufferBlock) {
-			.start = AllocationBufferBlock_alignToBackwards(AllocationBufferBlock_getStart(first) - size, alignment),
-			.end = AllocationBufferBlock_getStart(first),
+
+			.startAndNonLinearAndFree =
+				AllocationBufferBlock_alignToBackwards(firstOff - size, alignment) | ((U64)isNonLinearResource << 62),
+
+			.end = firstOff,
 			.alignment = alignment
 		};
 
@@ -244,36 +282,55 @@ Error AllocationBuffer_allocateBlock(
 		if(err.genericError)
 			return err;
 
-		*result = allocationBuffer->buffer.ptr + v.start;
+		*result = allocationBuffer->buffer.ptr + AllocationBufferBlock_getStart(v);
 		return Error_none();
 	}
 
 	//Try to find an empty spot in between.
 	//This technically makes it not a ring buffer, but it mostly functions like one
 
-	for (U64 i = 0; i < allocationBuffer->allocations.length; ++i) {
+	for (U64 i = 0, j = allocationBuffer->allocations.length; i < j; ++i) {
 
 		AllocationBufferBlock *b = &allocationBuffer->allocations.ptrNonConst[i], v = *b;
 
 		if(!AllocationBufferBlock_isFree(v))
 			continue;
 
+		U64 vstart = AllocationBufferBlock_getStart(v);
+
 		if (size <= AllocationBufferBlock_size(v)) {
 
 			//See if the buffer can hold this aligned as well
 
-			U64 aligned = AllocationBufferBlock_alignTo(AllocationBufferBlock_getStart(v), alignment);
+			mismatchAlignment = AllocationBufferBlock_isNonLinear(v) != isNonLinearResource;
+			nextAlignment = mismatchAlignment ? nonLinearAlignment : alignment;
+			U64 aligned = AllocationBufferBlock_alignTo(vstart, nextAlignment);
 
 			if(aligned + size > v.end)
 				continue;
+
+			//Also make sure that if our next block mismatches type but isn't aligned to allocationBuffer->nonLinearAlignment
+			// that we skip checking this spot
+
+			if (i + 1 < j) {
+
+				const AllocationBufferBlock *next = &allocationBuffer->allocations.ptrNonConst[i + 1];
+				
+				if(
+					AllocationBufferBlock_isNonLinear(*next) != isNonLinearResource &&
+					(AllocationBufferBlock_getStart(*next) & (allocationBuffer->nonLinearAlignment - 1))
+				)
+					continue;
+			}
 
 			//We only split if >33% is left over.
 			//Otherwise, we scoop up the entire block.
 			//This is to avoid tiny areas left over, causing the ring buffer portion to become slower.
 
 			if (size * 4 / 3 >= AllocationBufferBlock_size(v)) {
-				b->start &= ~((U64)1 << 63);
-				b->alignment = alignment;
+				b->startAndNonLinearAndFree &= ~((U64)3 << 62);
+				b->startAndNonLinearAndFree |= (U64) isNonLinearResource << 62;
+				b->alignment = nextAlignment;
 				*result = allocationBuffer->buffer.ptr + aligned;
 				return Error_none();
 			}
@@ -287,7 +344,7 @@ Error AllocationBuffer_allocateBlock(
 				if(aligned + size != v.end) {
 
 					const AllocationBufferBlock empty = (AllocationBufferBlock) {
-						.start = aligned + size,
+						.startAndNonLinearAndFree = (aligned + size) | ((U64)1 << 63),
 						.end = v.end,
 						.alignment = 1
 					};
@@ -298,7 +355,10 @@ Error AllocationBuffer_allocateBlock(
 						return err;
 				}
 
-				v.start &= ~((U64)1 << 63);		//Occupied
+				//Occupied
+
+				v.startAndNonLinearAndFree &= ~((U64)3 << 62);
+				v.startAndNonLinearAndFree |= (U64) isNonLinearResource << 62;
 				v.end = aligned + size;
 				v.alignment = alignment;
 
@@ -307,7 +367,7 @@ Error AllocationBuffer_allocateBlock(
 				return Error_none();
 			}
 
-			aligned = AllocationBufferBlock_alignToBackwards(v.end - size, alignment);
+			aligned = AllocationBufferBlock_alignToBackwards(v.end - size, nextAlignment);
 
 			if(aligned < AllocationBufferBlock_getStart(v))
 				continue;
@@ -317,7 +377,7 @@ Error AllocationBuffer_allocateBlock(
 				//Try to split near the front
 
 				const AllocationBufferBlock empty = (AllocationBufferBlock) {
-					.start = AllocationBufferBlock_getStart(v),
+					.startAndNonLinearAndFree = ((U64)1 << 63) | AllocationBufferBlock_getStart(v),
 					.end = aligned,
 					.alignment = 1
 				};
@@ -330,7 +390,7 @@ Error AllocationBuffer_allocateBlock(
 
 			const Bool spaceLeft = aligned != AllocationBufferBlock_getStart(v);
 
-			v.start = aligned;
+			v.startAndNonLinearAndFree = aligned | ((U64) isNonLinearResource << 62);
 			v.end = aligned + size;
 
 			allocationBuffer->allocations.ptrNonConst[i + spaceLeft] = v;
@@ -364,7 +424,7 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 		if (!AllocationBufferBlock_isSame(*p, allocationBuffer->buffer.ptr, ptr))
 			continue;
 
-		p->start |= (U64)1 << 63;		//Free up
+		p->startAndNonLinearAndFree |= (U64)1 << 63;		//Free up
 		U64 self = i;
 
 		//Merge freed right blocks until they're gone

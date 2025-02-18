@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB formatsDLHeaders "../../../inc/formats/oiDL/*.h")
+file(GLOB formatsDLHeaders "../../../include/formats/oiDL/*.h")
 file(GLOB formatsDLSources "*.c")
 
 add_library(

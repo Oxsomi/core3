@@ -19,7 +19,7 @@
 
 set(AllowOxC3PlatformsSB ON)
 
-file(GLOB formatsSBHeaders "../../../inc/formats/oiSB/*.h")
+file(GLOB formatsSBHeaders "../../../include/formats/oiSB/*.h")
 file(GLOB formatsSBSources "*.c")
 
 add_library(

@@ -20,11 +20,11 @@
 message("-- Targeting audio API: OpenAL")
 find_package(openal_soft REQUIRED)
 
-file(GLOB_RECURSE graphicsHeaders "../../inc/audio/*.h")
+file(GLOB_RECURSE graphicsHeaders "../../include/audio/*.h")
 file(GLOB graphicsSources "*.c")
 
 file(GLOB_RECURSE apiPlatformSources "openal_soft/*.c")
-file(GLOB_RECURSE apiPlatformIncludes "../../inc/audio/openal_soft/*.h")
+file(GLOB_RECURSE apiPlatformIncludes "../../include/audio/openal_soft/*.h")
 
 add_library(
 	OxC3_audio

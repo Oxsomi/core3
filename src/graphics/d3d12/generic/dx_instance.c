@@ -43,8 +43,6 @@
 	#include <amd_ags.h>
 #endif
 
-#undef interface
-
 TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
 TListNamedImpl(ListIDXGIAdapter4)
 
@@ -57,7 +55,11 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	.image = sizeof(DxUnifiedTexture),
 	.swapchain = sizeof(DxSwapchain),
 	.device = sizeof(DxGraphicsDevice),
-	.instance = sizeof(DxGraphicsInstance)
+	.instance = sizeof(DxGraphicsInstance),
+	.descriptorLayout = sizeof(DxDescriptorLayout),
+	.descriptorTable = sizeof(DxDescriptorTable),
+	.descriptorHeap = sizeof(DxDescriptorHeap),
+	.pipelineLayout = sizeof(ID3D12RootSignature) + 8
 };
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -66,10 +68,10 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 		return &DxGraphicsObjectSizes;
 	}
 #else
-	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interface) {
+	EXPORT_SYMBOL GraphicsInterfaceTable GraphicsInterface_getTable(Platform *instance, GraphicsInterface *interf) {
 
 		Platform_instance = instance;
-		GraphicsInterface_instance = interface;
+		GraphicsInterface_instance = interf;
 
 		return (GraphicsInterfaceTable) {
 
@@ -103,6 +105,17 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 			.swapchainCreate = D3D12GraphicsDeviceRef_createSwapchain,
 			.swapchainFree = D3D12Swapchain_free,
 
+			.descriptorLayoutCreate = D3D12GraphicsDeviceRef_createDescriptorLayout,
+			.descriptorLayoutFree = D3D12DescriptorLayout_free,
+			.pipelineLayoutCreate = D3D12GraphicsDeviceRef_createPipelineLayout,
+			.pipelineLayoutFree = D3D12PipelineLayout_free,
+			.descriptorHeapCreate = D3D12GraphicsDeviceRef_createDescriptorHeap,
+			.descriptorHeapFree = D3D12DescriptorHeap_free,
+
+			.descriptorTableCreate = D3D12DescriptorHeap_createDescriptorTable,
+			.descriptorTableFree = D3D12DescriptorTable_free,
+			.descriptorTableSet = D3D12DescriptorTable_setDescriptor,
+
 			.memoryAllocate = D3D12DeviceMemoryAllocator_allocate,
 			.memoryFree = D3D12DeviceMemoryAllocator_freeAllocation,
 
@@ -111,6 +124,8 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 			.deviceWait = D3D12GraphicsDeviceRef_wait,
 			.deviceFree = D3D12GraphicsDevice_free,
 			.deviceSubmitCommands = D3D12GraphicsDevice_submitCommands,
+			.deviceGetMemoryBudget = D3D12GraphicsDevice_getMemoryBudget,
+
 			.commandListProcess = D3D12CommandList_process,
 
 			.instanceCreate = D3D12GraphicsInstance_create,
@@ -153,9 +168,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 
 	if(instanceExt->deviceFactory)
 		instanceExt->deviceFactory->lpVtbl->Release(instanceExt->deviceFactory);
-
-	if(instanceExt->debug1)
-		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
 
 	return true;
 }
@@ -328,13 +340,14 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsVendorId vendorId = EGraphicsVendorId_Unknown;
 
 		switch(desc.VendorId) {
-			case EGraphicsVendorPCIE_NV:	vendorId = EGraphicsVendorId_NV;	break;
-			case EGraphicsVendorPCIE_AMD:	vendorId = EGraphicsVendorId_AMD;	break;
-			case EGraphicsVendorPCIE_ARM:	vendorId = EGraphicsVendorId_ARM;	break;
-			case EGraphicsVendorPCIE_QCOM:	vendorId = EGraphicsVendorId_QCOM;	break;
-			case EGraphicsVendorPCIE_INTC:	vendorId = EGraphicsVendorId_INTC;	break;
-			case EGraphicsVendorPCIE_IMGT:	vendorId = EGraphicsVendorId_IMGT;	break;
-			case EGraphicsVendorPCIE_MSFT:	vendorId = EGraphicsVendorId_MSFT;	break;
+			case EGraphicsVendorPCIE_NV:	vendorId = EGraphicsVendorId_NV;		break;
+			case EGraphicsVendorPCIE_AMD:	vendorId = EGraphicsVendorId_AMD;		break;
+			case EGraphicsVendorPCIE_ARM:	vendorId = EGraphicsVendorId_ARM;		break;
+			case EGraphicsVendorPCIE_QCOM:	vendorId = EGraphicsVendorId_QCOM;		break;
+			case EGraphicsVendorPCIE_INTC:	vendorId = EGraphicsVendorId_INTC;		break;
+			case EGraphicsVendorPCIE_IMGT:	vendorId = EGraphicsVendorId_IMGT;		break;
+			case EGraphicsVendorPCIE_MSFT:	vendorId = EGraphicsVendorId_MSFT;		break;
+			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, desc.VendorId);	break;
 		}
 
 		//Grab properties
@@ -373,11 +386,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(vendorId != EGraphicsVendorId_AMD)
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
 
-		if (
-			vendorId == EGraphicsVendorId_NV || vendorId == EGraphicsVendorId_AMD ||
-			vendorId == EGraphicsVendorId_INTC || vendorId == EGraphicsVendorId_MSFT
-		)
-			caps.features |= EGraphicsFeatures_DirectRendering;
+		caps.features |= EGraphicsFeatures_DirectRendering;
 
 		D3D12_FEATURE_DATA_D3D12_OPTIONS opt0 = (D3D12_FEATURE_DATA_D3D12_OPTIONS) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS1 opt1 = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };
@@ -397,6 +406,11 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
 		D3D12_FEATURE_DATA_HARDWARE_COPY hwCopy = (D3D12_FEATURE_DATA_HARDWARE_COPY) { 0 };
+		D3D12_FEATURE_DATA_ROOT_SIGNATURE rootSig = (D3D12_FEATURE_DATA_ROOT_SIGNATURE) { 0 };
+
+		#if D3D12_PREVIEW_SDK_VERSION >= 716
+			D3D12_FEATURE_DATA_TIGHT_ALIGNMENT tightAlignment = (D3D12_FEATURE_DATA_TIGHT_ALIGNMENT) { 0 };
+		#endif
 
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &opt0, sizeof(opt0))) ||
@@ -517,6 +531,12 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
 
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))) &&
+			rootSig.HighestVersion >= D3D_ROOT_SIGNATURE_VERSION_1_1
+		)
+			caps.featuresExt |= EDxGraphicsFeatures_RootSig1_1;
+
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required shader model (6.5)", i);
@@ -545,6 +565,15 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);
 			goto next;
 		}
+
+		#if D3D12_PREVIEW_SDK_VERSION >= 716
+
+			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+				device, D3D12_FEATURE_D3D12_TIGHT_ALIGNMENT, &tightAlignment, sizeof(tightAlignment)
+			)) && tightAlignment.SupportTier >= D3D12_TIGHT_ALIGNMENT_TIER_1)
+				caps.featuresExt |= EDxGraphicsFeatures_TightAlignment;
+
+		#endif
 
 		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;

@@ -134,6 +134,11 @@ Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericLis
 	if (result->ptr)
 		return Error_invalidOperation(0, "GenericList_create()::result wasn't empty, which might indicate memleak");
 
+	if(!length && stride) {		//Keep the list empty
+		*result = (GenericList) { .stride = stride };
+		return Error_none();
+	}
+
 	if(!length || !stride)
 		return Error_invalidParameter(!length ? 0 : 1, 0, "GenericList_create()::length and stride are required");
 
@@ -1058,7 +1063,7 @@ Error GenericList_reserve(GenericList *list, U64 capacity, Allocator allocator) 
 	if(capacity * list->stride / list->stride != capacity)
 		return Error_overflow(1, capacity * list->stride, U64_MAX, "GenericList_reserve() overflow");
 
-	if(capacity <= list->capacityAndRefInfo)
+	if(capacity <= GenericList_capacity(*list))
 		return Error_none();
 
 	Buffer buffer = Buffer_createNull();

@@ -19,7 +19,7 @@
 
 set(AllowOxC3PlatformsBMP ON)
 
-file(GLOB formatsBMPHeaders "../../../inc/formats/bmp/*.h")
+file(GLOB formatsBMPHeaders "../../../include/formats/bmp/*.h")
 file(GLOB formatsBMPSources "*.c")
 
 add_library(

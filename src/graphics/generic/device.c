@@ -22,17 +22,25 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/pipeline.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
+#include "platforms/file.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/base/time.h"
+#include "types/math/math.h"
 
 #include <stddef.h>
 
@@ -58,9 +66,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	if(!device)
 		return true;
 
-	U64 NBuffering = sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]);
-
-	for(U64 i = 0; i < NBuffering; ++i) {
+	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
 		for(U64 j = 0; j < device->resourcesInFlight[i].length; ++j)
 			RefPtr_dec(device->resourcesInFlight[i].ptrNonConst + j);
@@ -68,7 +74,17 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		ListRefPtr_freex(&device->resourcesInFlight[i]);
 	}
 
-	for(U64 i = 0; i < NBuffering; ++i)
+	for(U64 i = 0; i < 2; ++i)
+		RefPtr_dec(&device->copyShaders[i]);
+
+	RefPtr_dec(&device->copyDescLayout);
+	RefPtr_dec(&device->copyPipelineLayout);
+	RefPtr_dec(&device->defaultDescLayout);
+	RefPtr_dec(&device->defaultPipelineLayout);
+	RefPtr_dec(&device->descriptorHeaps);
+	RefPtr_dec(&device->defaultDescriptorTable);
+
+	for(U64 i = 0; i < device->framesInFlight; ++i)
 		DeviceBufferRef_dec(&device->frameData[i]);
 
 	DeviceBufferRef_dec(&device->staging);
@@ -151,10 +167,97 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	return true;
 }
 
+Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+	
+	Bool s_uccess = true;
+	Buffer tempBuffer = Buffer_createNull();
+	SHFile tmpBinary = (SHFile) { 0 };
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	//Load prebuilt shaders
+	
+	if(!File_loadVirtual(CharString_createRefCStrConst("//OxC3_graphics"), NULL, e_rr))
+		goto clean;
+
+	//image_copy shaders, only the 2nd can rotate images
+
+	CharString path = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
+	gotoIfError3(clean, File_readx(path, U64_MAX, 0, 0, &tempBuffer, e_rr))
+	gotoIfError3(clean, SHFile_readx(tempBuffer, false, &tmpBinary, e_rr))
+
+	CharString uniforms[4] = {
+		CharString_createRefCStrConst("THREAD_COUNT"),
+		CharString_createRefCStrConst("1"),
+		CharString_createRefCStrConst("ROTATE"),
+		CharString_createRefCStrConst("1")
+	};
+
+	for(U64 i = 0; i < 2; ++i) {
+
+		ListCharString uniformsList = (ListCharString) { 0 };
+		gotoIfError2(clean, ListCharString_createRefConst(uniforms, 2 * (i + 1), &uniformsList))
+		
+		U32 mainSingle = GraphicsDeviceRef_getFirstShaderEntry(
+			deviceRef,
+			tmpBinary,
+			CharString_createRefCStrConst("mainSingle"),
+			uniformsList,
+			ESHExtension_None,
+			ESHExtension_None
+		);
+
+		if(mainSingle == U32_MAX)
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createPrebuiltShaders() couldn't find entrypoint"))
+
+		ListU32 binaries = (ListU32) { 0 };
+		gotoIfError2(clean, ListU32_createRefConst(&mainSingle, 1, &binaries))
+
+		DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+		gotoIfError3(clean, DescriptorLayout_detect(
+			tmpBinary, binaries, EDescriptorLayoutFlags_InternalWeakDeviceRef, &info
+		))
+
+		if(!device->copyDescLayout) {
+
+			gotoIfError2(clean, GraphicsDeviceRef_createDescriptorLayout(
+				deviceRef, &info, CharString_createRefCStrConst("Copy image desc layout"), &device->copyDescLayout
+			))
+
+			PipelineLayoutInfo pipelineInfo = (PipelineLayoutInfo) {
+				.flags = EPipelineLayoutFlags_InternalWeakDeviceRef,
+				.bindings = device->copyDescLayout
+			};
+
+			gotoIfError2(clean, GraphicsDeviceRef_createPipelineLayout(
+				deviceRef, pipelineInfo, CharString_createRefCStrConst("Copy image pipeline layout"),
+				&device->copyPipelineLayout
+			))
+		}
+
+		gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
+			deviceRef,
+			tmpBinary,
+			CharString_createRefCStrConst("Copy image shader"),
+			mainSingle,
+			EPipelineFlags_InternalWeakDeviceRef,
+			device->copyPipelineLayout,
+			&device->copyShaders[i],
+			e_rr
+		))
+	}
+
+clean:
+	SHFile_freex(&tmpBinary);
+	Buffer_freex(&tempBuffer);
+	return s_uccess;
+}
+
 Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
 	EGraphicsDeviceFlags flags,
+	EGraphicsBufferingMode bufferMode,
 	GraphicsDeviceRef **deviceRef
 ) {
 
@@ -190,8 +293,12 @@ Error GraphicsDeviceRef_create(
 
 	gotoIfError(clean, ListWeakRefPtr_reservex(&device->pendingResources, 128))
 
+	if (bufferMode < 2 || bufferMode > 3)
+		bufferMode = _PLATFORM_TYPE == PLATFORM_ANDROID ? EGraphicsBufferingMode_Double : EGraphicsBufferingMode_Triple;
+
 	device->info = *info;
 	device->flags = flags;
+	device->framesInFlight = (U8) bufferMode;
 
 	if(device->flags & EGraphicsDeviceFlags_DisableRt)
 		device->info.capabilities.features &=~ (
@@ -222,7 +329,7 @@ Error GraphicsDeviceRef_create(
 
 	//Create in flight resource refs
 
-	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i)
+	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64))
 
 	//Create descriptor type free list
@@ -247,20 +354,279 @@ Error GraphicsDeviceRef_create(
 
 	gotoIfError(clean, GraphicsDevice_initExt(instance, info, deviceRef))
 
+	//Create default descriptor heaps
+	//TODO: Allow user to define these
+	
+	CharString name = CharString_createRefCStrConst("Default heap");
+
+	DescriptorHeapInfo heapInfo = (DescriptorHeapInfo) {
+
+		.flags = EDescriptorHeapFlags_InternalWeakDeviceRef,
+
+		.maxAccelerationStructures =
+			device->info.capabilities.features & EGraphicsFeatures_Raytracing ? EDescriptorTypeCount_TLASExt : 0,
+
+		.maxSamplers = EDescriptorTypeCount_Sampler,
+		.maxTextures = EDescriptorTypeCount_Textures,
+		.maxTexturesRW = EDescriptorTypeCount_RWTextures,
+		.maxBuffersRW = EDescriptorTypeCount_SSBO,
+		.maxConstantBuffers = 3,
+		.maxDescriptorTables = 1
+	};
+
+	if(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+		heapInfo.flags |= EDescriptorHeapFlags_AllowBindless;
+
+	gotoIfError(clean, GraphicsDeviceRef_createDescriptorHeap(*deviceRef, heapInfo, name, &device->descriptorHeaps))
+
+	//Create default descriptor layout
+	//TODO: Make this configurable and have a way to create the default one
+
+	name = CharString_createRefCStrConst("Default descriptor layout");
+
+	Bool isSpirv = instance->api == EGraphicsApi_Vulkan;
+
+	CharString bindingNames[18] = {
+		CharString_createRefCStrConst("_samplers"),
+		CharString_createRefCStrConst("globals"),
+		CharString_createRefCStrConst("_textures2D"),
+		CharString_createRefCStrConst("_textureCubes"),
+		CharString_createRefCStrConst("_textures3D"),
+		CharString_createRefCStrConst("_buffer"),
+		CharString_createRefCStrConst("_rwBuffer"),
+		CharString_createRefCStrConst("_rwTextures3D"),
+		CharString_createRefCStrConst("_rwTextures3Ds"),
+		CharString_createRefCStrConst("_rwTextures3Df"),
+		CharString_createRefCStrConst("_rwTextures3Di"),
+		CharString_createRefCStrConst("_rwTextures3Du"),
+		CharString_createRefCStrConst("_rwTextures2D"),
+		CharString_createRefCStrConst("_rwTextures2Ds"),
+		CharString_createRefCStrConst("_rwTextures2Df"),
+		CharString_createRefCStrConst("_rwTextures2Di"),
+		CharString_createRefCStrConst("_rwTextures2Du"),
+		CharString_createRefCStrConst("_tlasExt")
+	};
+
+	DescriptorBinding bindings[18] = {
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Sampler,
+			.count = EDescriptorTypeCount_Sampler,
+			.space = 0,
+			.id = isSpirv ? 0 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_ConstantBuffer,
+			.count = 1,
+			.space = isSpirv ? 2 : 0,
+			.id = isSpirv ? 0 : 0,
+			.visibility = U32_MAX,
+			.strideOrLength = (U32) sizeof(CBufferData)
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture2D,
+			.count = EDescriptorTypeCount_Texture2D,
+			.space = isSpirv ? 1 : 0,
+			.id = isSpirv ? 0 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_TextureCube,
+			.count = EDescriptorTypeCount_TextureCube,
+			.space = isSpirv ? 1 : 1,
+			.id = isSpirv ? 1 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture3D,
+			.count = EDescriptorTypeCount_Texture3D,
+			.space = isSpirv ? 1 : 2,
+			.id = isSpirv ? 2 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_ByteAddressBuffer,
+			.count = EDescriptorTypeCount_Buffer,
+			.space = isSpirv ? 1 : 3,
+			.id = isSpirv ? 3 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWBuffer,
+			.space = isSpirv ? 1 : 4,
+			.id = isSpirv ? 4 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture3D,
+			.space = isSpirv ? 1 : 5,
+			.id = isSpirv ? 5 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture3Ds,
+			.space = isSpirv ? 1 : 6,
+			.id = isSpirv ? 6 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture3Df,
+			.space = isSpirv ? 1 : 7,
+			.id = isSpirv ? 7 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture3Di,
+			.space = isSpirv ? 1 : 8,
+			.id = isSpirv ? 8 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture3Du,
+			.space = isSpirv ? 1 : 9,
+			.id = isSpirv ? 9 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture2D,
+			.space = isSpirv ? 1 : 10,
+			.id = isSpirv ? 10 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture2Ds,
+			.space = isSpirv ? 1 : 11,
+			.id = isSpirv ? 11 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture2Df,
+			.space = isSpirv ? 1 : 12,
+			.id = isSpirv ? 12 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture2Di,
+			.space = isSpirv ? 1 : 13,
+			.id = isSpirv ? 13 : 0,
+			.visibility = U32_MAX
+		},
+		(DescriptorBinding) {
+			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
+			.count = EDescriptorTypeCount_RWTexture2Du,
+			.space = isSpirv ? 1 : 14,
+			.id = isSpirv ? 14 : 0,
+			.visibility = U32_MAX
+		}
+	};
+
+	U64 descBindings = 17;
+
+	if(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
+		bindings[descBindings++] = (DescriptorBinding) {
+			.registerType = ESHRegisterType_AccelerationStructure,
+			.count = EDescriptorTypeCount_TLASExt,
+			.space = isSpirv ? 1 : 15,
+			.id = isSpirv ? 15 : 0,
+			.visibility = U32_MAX
+		};
+
+	DescriptorLayoutInfo descLayoutInfo = (DescriptorLayoutInfo) {
+		.flags = EDescriptorLayoutFlags_InternalWeakDeviceRef
+	};
+
+	gotoIfError(clean, ListDescriptorBinding_createRefConst(bindings, descBindings, &descLayoutInfo.bindings))
+	gotoIfError(clean, ListCharString_createRefConst(bindingNames, descBindings, &descLayoutInfo.bindingNames))
+
+	if(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+		descLayoutInfo.flags |= EDescriptorLayoutFlags_AllowBindlessOnArrays;
+
+	gotoIfError(clean, GraphicsDeviceRef_createDescriptorLayout(*deviceRef, &descLayoutInfo, name, &device->defaultDescLayout))
+
+	//Create descriptor set
+
+	name = CharString_createRefCStrConst("Default descriptor table");
+
+	gotoIfError(clean, DescriptorHeapRef_createDescriptorTable(
+		device->descriptorHeaps,
+		device->defaultDescLayout,
+		EDescriptorTableFlags_None,
+		name,
+		&device->defaultDescriptorTable
+	))
+
+	//Create pipeline layout
+
+	name = CharString_createRefCStrConst("Default pipeline layout");
+	PipelineLayoutInfo pipelineLayoutInfo = (PipelineLayoutInfo) {
+		.flags = EPipelineLayoutFlags_InternalWeakDeviceRef,
+		.bindings = device->defaultDescLayout
+	};
+
+	gotoIfError(clean, GraphicsDeviceRef_createPipelineLayout(*deviceRef, pipelineLayoutInfo, name, &device->defaultPipelineLayout))
+
+	//Determine some flushing and block size sizes for the current GPU
+	
+	//Determine when we need to flush.
+	//As a rule of thumb I decided for 20% occupied mem by just copies.
+	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
+	// (as long as it doesn't exceed 33%).
+	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
+
+	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
+	U64 cpuHeapSize = device->info.capabilities.sharedMemory;
+	U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
+
+	device->flushThreshold = U64_min(
+		4 * GIBI,
+		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
+		cpuHeapSize / 5
+	);
+
+	device->flushThresholdPrimitives = 20 * MIBI / 3;		//20M vertices per frame limit
+
+	//Block sizes based on memory of each device (CPU or GPU):
+	// 0 -  6GB ("4GB"):   64MB
+	// 6 - 12GB ("8GB"):  128MB
+	//12 - 24GB ("16GB"): 256MB
+	//24GB+ 	("32GB"): 512MB
+	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would 
+
+	if (!isDistinct) {		//Assume 50/50 split to take a conservative block size approach
+		cpuHeapSize >>= 1;
+		gpuHeapSize >>= 1;
+	}
+
+	device->blockSizeCpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)cpuHeapSize)) - 32, 0, 3);
+	device->blockSizeGpu = (64 * MIBI) << (U64) F64_clamp(F64_round(F64_log2((F64)gpuHeapSize)) - 32, 0, 3);
+
 	//Create constant buffer and staging buffer / allocators
 
 	//Allocate staging buffer.
-	//64 MiB / 3 = 21.333 MiB per frame.
+	//For block size 256MiB: 64 MiB / NBuffering (2 or 3) = 32MiB or 21.333 MiB per frame.
+	//For block size 64MiB: 16 MiB / NBuffering (2 or 3) = 8MiB or 5.3 MiB per frame.
+	//	This block size is generally used in very memory limited systems (such as Android devices)
+	//	that generally use shared mem (so won't push much over staging buffer).
 	//If out of mem this will grow to be bigger.
-	//But it's only used for "small" allocations (< 16 MiB)
+	//But it's only used for "small" allocations (< 25% of staging buffer)
 	//If a lot of these larger allocations are found it will resize the staging buffer to try to encompass it too.
 
-	U64 stagingSize = 64 * MIBI;
+	U64 stagingSize = device->blockSizeCpu / 4;
 	gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(*deviceRef, stagingSize))
 
 	//Allocate UBO
 
-	for(U64 i = 0; i < sizeof(device->frameData) / sizeof(device->frameData[0]); ++i)
+	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 			*deviceRef,
 			EDeviceBufferUsage_None,
@@ -268,6 +634,13 @@ Error GraphicsDeviceRef_create(
 			CharString_createRefCStrConst("Per frame data"),
 			sizeof(CBufferData), &device->frameData[i]
 		))
+
+	//Load prebuilt shaders
+	
+	if(!GraphicsDeviceRef_createPrebuiltShaders(*deviceRef, &err))
+		goto clean;
+
+	//Finish setting up descriptors
 
 	GraphicsDevice_postInitExt(device);
 
@@ -438,7 +811,7 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 	//This might cause resource deletions because we might be the last one releasing them.
 	//For example temporary staging resources are released this way.
 
-	ListRefPtr *inFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *inFlight = &device->resourcesInFlight[device->fifId];
 
 	for (U64 i = 0; i < inFlight->length; ++i)
 		RefPtr_dec(inFlight->ptrNonConst + i);
@@ -448,7 +821,7 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 
 	//Release all allocations of buffer that was in flight
 
-	if(!AllocationBuffer_freeAll(&device->stagingAllocations[(device->submitId - 1) % 3]))
+	if(!AllocationBuffer_freeAll(&device->stagingAllocations[device->fifId]))
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_handleNextFrame() AllocationBuffer_freeAll failed"))
 
 	//Update buffer data
@@ -516,7 +889,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
 		gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
-			stagingBuffer, newSize / 3 * i, newSize / 3, &device->stagingAllocations[i]
+			stagingBuffer, newSize / 3 * i, newSize / 3, 0, &device->stagingAllocations[i]
 		))
 
 clean:
@@ -703,6 +1076,7 @@ Error GraphicsDeviceRef_submitCommands(
 	//We start counting from 1, since implementation might set fence to 0 as init.
 	//We don't want a possible deadlock there.
 
+	device->fifId = device->submitId % device->framesInFlight;
 	++device->submitId;
 
 	//Set app data
@@ -730,7 +1104,7 @@ Error GraphicsDeviceRef_submitCommands(
 
 	//Add resources from command lists to resources in flight
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
 	for (U64 j = 0; j < commandLists.length; ++j) {
 
@@ -770,6 +1144,19 @@ clean:
 	return err;
 }
 
+U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDeviceLocal) {
+
+	if(!deviceRef || deviceRef->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+		return U64_MAX;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(device->info.type != EGraphicsDeviceType_Dedicated && isDeviceLocal)
+		return 0;
+
+	return GraphicsDevice_getMemoryBudgetExt(device, isDeviceLocal);
+}
+
 Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 
 	if(!deviceRef || deviceRef->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
@@ -785,7 +1172,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 
 	gotoIfError(clean, GraphicsDeviceRef_waitExt(deviceRef))
 
-	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
+	for (U64 i = 0; i < device->framesInFlight; ++i) {
 
 		//Release resources that were in flight.
 		//This might cause resource deletions because we might be the last one releasing them.

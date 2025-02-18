@@ -22,12 +22,15 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
+#include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_swapchain.h"
 #include "graphics/d3d12/dx_device.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "types/container/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
+
+UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
 Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
 
@@ -45,26 +48,33 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	const Window *window = info->window;
 
-	Bool containsValid = false;
-	Bool isFifo = false;
+	ESwapchainPresentMode mode = ESwapchainPresentMode_Count;
 
-	for(U32 i = 0; i < sizeof(info->presentModePriorities); ++i)
+	for (U64 i = 0; i < ESwapchainPresentMode_Count - 1; ++i) {
 
-		if(info->presentModePriorities[i] == ESwapchainPresentMode_Fifo) {
-			isFifo = true;
-			containsValid = true;
+		ESwapchainPresentMode modei = info->presentModePriorities[i];
+
+		if(!modei)
 			break;
+
+		switch (modei) {
+
+			default:
+				break;
+
+			case ESwapchainPresentMode_Fifo:
+			case ESwapchainPresentMode_Immediate:
+				mode = modei;
+				break;
 		}
 
-		else if(info->presentModePriorities[i] == ESwapchainPresentMode_Immediate) {
-			isFifo = false;
-			containsValid = true;
+		if(mode != ESwapchainPresentMode_Count)
 			break;
-		}
+	}
 
-	if(!containsValid)
+	if(mode == ESwapchainPresentMode_Count)
 		gotoIfError(clean, Error_unsupportedOperation(
-			0, "D3D12GraphicsDeviceRef_createSwapchain() only fifo and immediate are supported in D3D12"
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support the current write mode"
 		))
 
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
@@ -72,7 +82,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"
 		))
 
-	DXGI_SWAP_CHAIN_FLAG flags = !isFifo ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+	DXGI_SWAP_CHAIN_FLAG flags = mode == ESwapchainPresentMode_Immediate ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
 	if(!swapchainExt->swapchain) {
 
@@ -98,7 +108,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			.BufferUsage = usage,
 			.BufferCount = 3,
 			.Scaling = DXGI_SCALING_NONE,
-			.SwapEffect = isFifo ? DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL : DXGI_SWAP_EFFECT_FLIP_DISCARD,
+			.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
 			.AlphaMode = DXGI_ALPHA_MODE_IGNORE,
 			.Flags = flags
 		};
@@ -114,12 +124,15 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		)))
 
 		swapchain->requiresManualComposite = false;
-		swapchain->presentMode = isFifo ? ESwapchainPresentMode_Fifo : ESwapchainPresentMode_Immediate;
+		swapchain->presentMode = mode;
 	}
 
 	else {
 
 		for(U8 i = 0; i < swapchain->base.images; ++i) {
+
+			UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchainRef, NULL);
+			unifiedTexture->currentImageId = 0;
 
 			DxUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Dx, 0, i);
 			managedImage->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
@@ -134,8 +147,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
 			swapchainExt->swapchain,
-			3,
-			0, 0, DXGI_FORMAT_UNKNOWN,		//Update to current w/h and keep format
+			3, 0, 0, DXGI_FORMAT_UNKNOWN,
 			flags
 		)))
 	}

@@ -56,8 +56,8 @@ clean:
 	return s_uccess;
 }
 
-Bool AudioInterface_freeExt(AudioInterface *interface, Allocator alloc) {
-	(void) interface; (void) alloc;
+Bool AudioInterface_freeExt(AudioInterface *interf, Allocator alloc) {
+	(void) interf; (void) alloc;
 	return true;
 }
 

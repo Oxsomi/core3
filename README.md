@@ -1,11 +1,11 @@
-# OxC3 (Oxsomi core 3.2.093)
+# OxC3 (Oxsomi core 3.2.096)
 | Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | x64 dynamic (Vk + Native)                                    | ARM -> Vulkan                                                | ARM -> Native API  | ARM dynamic (Vk + Native)                                    |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------ | ------------------------------------------------------------ |
 | Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **?**                                                        | **D3D12**: **?**   | **?**                                                        |
 | Mac OS X  | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **TBD**                                           | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_dynamic.yml/badge.svg) | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/osx_arm.yml/badge.svg) | **Metal**: **TBD** | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/osx_arm_dynamic.yml/badge.svg) |
-| Linux     | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A                                                          | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic.yml/badge.svg) | **?**                                                        | N/A                | **?**                                                        |
-| Android   | **TBD**                                                      | N/A                                                          | **TBD**                                                      | **TBD**                                                      | N/A                | **TBD**                                                      |
-| iOS       | **TBD**                                                      | **Metal**: **TBD**                                           | **TBD**                                                      | **TBD**                                                      | **Metal**: **TBD** | **TBD**                                                      |
+| Linux     | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A                                                          | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm.yml/badge.svg)** | N/A                | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_dynamic.yml/badge.svg)** |
+| Android   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A                                                          | N/A, no dynamic linking                                      | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A                | N/A, no dynamic linking                                      |
+| iOS       | **TBD**                                                      | **Metal**: **TBD**                                           | N/A, no dynamic linking                                      | **TBD**                                                      | **Metal**: **TBD** | N/A, no dynamic linking                                      |
 
 OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
@@ -60,20 +60,34 @@ One of the useful things about C is that files are incredibly easy to compile an
 
 ## Requirements
 
-- CMake >=3.13.
-- (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
-- If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
-- (Optional): Git or any tool that can work with GitHub.
+- Python 3.8.10+ and Conan 2.7.1+ (to avoid huge build times due to DXC/Clang/LLVM/SPIRV).
+- CMake 3.13+.
+- (*Optional on Windows only*): Vulkan SDK (latest preferred, but at least 1.3.226).
+- (*Optional*): Git or any tool that can work with GitHub.
 - C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used to interface with some deps not using C such as DXC.
-- Conan to avoid huge build times due to DXC/Clang/LLVM/SPIRV.
+- **OSX**:
+  - If using Vulkan SDK, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1 if you need bindless rendering. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
+- **Android**:
+  - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.
+  - For Windows; msys2 or Ninja can be used to target android.
+  - *Optional*: JDK for creation of a keystore if one can not be provided.
+  - *Optional*: For debug build, Ninja is required on Windows since the Vulkan validation layers require it.
+  - For running, at least Android 10 (level 29) is required, due to Vulkan 1.3 being at that level.
 
 ## Running requirements
 
-- Windows (full support).
-- Linux / OS X (**partial** support: no virtual files, nor window support).
+- Platforms:
+  - Windows (**full** support).
+  - Linux (**partial** support: buggy window implementation).
+  - OS X (**partial** support: no virtual files, nor window support).
+  - Android (**partial** support: no window implementation yet).
+- Instruction sets:
+  - arm64: **partial** support: no NEON yet.
+  - x64: **partial** support: Fully supported on windows, but SSE doesn't work elsewhere yet.
+  - none: **full** support: arch independent fallback is working as normal, used when platform doesn't support full arm64 or x64.
+    - Note: Turning off SIMD is **not recommended for production builds!!** and building like this for final is highly discouraged.
 - A 64-bit CPU.
-  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off shader compilation and SIMD (**not recommended for production builds!!**). The shader compiler currently is the only thing that doesn't support ARM if SIMD is turned off.
-  - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
+  - Even though SSE4.2+ is recommended, this can be explicitly turned off.. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
   - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
 
 ## Installing OxC3
@@ -104,6 +118,30 @@ build Release True False
 
 The Windows implementation supports SSE.
 
+### Android
+
+`python3 build_android.py -mode Debug`.
+
+Where `-api 29` is the API version you're targeting (default = 29); this would be Android 10 (Q). With `-arch` as all default would target both arm64 and x64. `-mode` could be `Debug`, `Release`, `MinSizeRel` or `RelWithDebInfo`. `-simd False` by default.
+
+On Windows if `-generator` is not specified it is defaulted to "MinGW Makefiles".
+
+This would build only the .a files and .so files. To make an APK, it requires to know the following:
+
+`--apk -package net.osomi.test -version 0.1.0 -lib myLibName -name "My test app"`. When apk is used, it requires to specify these arguments to be able to build the apk for you. If building is disabled (through `--skip-build`, it requires the same settings (arch, mode, api, simd, generator) as the prebuilt binaries.
+
+`--sign` will allow you to sign the apk before running it or distributing it. Provide the path using `-keystore` or have JDK installed with the environment variable `JAVA_HOME` correctly set to allow a temporary keystore to be created. `-keystore_password` can be used to avoid having to input the keystore password through cmd if needed.
+
+`--run` will attempt to install and run on an attached device, requires the device to be in developer mode and connected. If apk isn't defined, you're still expected to specify `-package` and `-lib`.
+
+`-category X` when building an apk shows what kind of category it is, for example `game` (default).
+
+`--install` can be used when OxC3 itself is a dependency rather than the final target.
+
+`--shader_compiler` can be used to enable compiling the shader compiler, which might be useful for applications that require runtime shader generation. This is off by default to save a great deal of compile time.
+
+`--skip_build` can be used to disable building, in case a prebuilt apk could be ran or a new apk can be made.
+
 ### Mac OS X
 
 ```c
@@ -131,6 +169,17 @@ Other platforms like Android and iOS are coming in the future.
 The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, Direct3D12 and Metal usable, it will keep on bumping the minimum specs every so often in a release.
 
 For the graphics minimum spec check the [minimum spec](graphics_spec.md). When unsure if a device is capable, please run `OxC3 graphics devices` to see if your device is supported.
+
+To be able to create a graphics device, you are required to provide the OxC3_graphics/*.oiCA file(s) in your executable. As follows:
+
+```cmake
+# Optional: configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+add_virtual_dependencies(TARGET Target DEPENDENCIES OxC3_graphics)
+configure_virtual_files(Target)
+apply_dependencies(Target)
+```
+
+This will ensure that the executable can find the oiCA file(s) relevant to OxC3_graphics, which could for example be shaders for common graphics operations (copy image, mip mapping, etc.), fonts for font rendering and LUTs in the future.
 
 ## Contributions
 
@@ -162,7 +211,7 @@ Vulkan:
 	yourExecutable(,.exe,.apk,.ipa,etc.)
 
 Dynamic linking:
-	Windows only:
+	Windows / D3D12 only:
 		D3D12/*.dll
 		D3D12/*.pdb
 		OxC3_graphics_d3d12.dll
