@@ -284,63 +284,6 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 			bufExt->buffer, &IID_ID3D12ManualWriteTrackingResource, (void**) &buf->resource.debugExt
 		)))
 
-	//Fill relevant descriptor sets if shader accessible
-
-	EGraphicsResourceFlag flags = buf->resource.flags;
-
-	if(flags & EGraphicsResourceFlag_ShaderRW) {
-
-		const DxDescriptorHeapSingle *heap = &DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx)->resourcesHeap;
-
-		//Create readonly buffer
-
-		if (flags & EGraphicsResourceFlag_ShaderRead) {
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
-				.Format = DXGI_FORMAT_R32_TYPELESS,
-				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-				.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.Buffer = (D3D12_BUFFER_SRV) {
-					.NumElements = (U32)(buf->resource.size / 4),
-					.Flags = D3D12_BUFFER_SRV_FLAG_RAW
-				}
-			};
-
-			U64 offset = EDescriptorTypeOffsets_Buffer + ResourceHandle_getId(buf->readHandle);
-
-			deviceExt->device->lpVtbl->CreateShaderResourceView(
-				deviceExt->device,
-				bufExt->buffer,
-				&srv,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
-			);
-		}
-
-		//Create writable buffer
-
-		if (flags & EGraphicsResourceFlag_ShaderWrite) {
-
-			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) {
-				.Format = DXGI_FORMAT_R32_TYPELESS,
-				.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
-				.Buffer = (D3D12_BUFFER_UAV) {
-					.NumElements = (U32)(buf->resource.size / 4),
-					.Flags = D3D12_BUFFER_UAV_FLAG_RAW
-				}
-			};
-
-			U64 offset = EDescriptorTypeOffsets_RWBuffer + ResourceHandle_getId(buf->writeHandle);
-
-			deviceExt->device->lpVtbl->CreateUnorderedAccessView(
-				deviceExt->device,
-				bufExt->buffer,
-				NULL,
-				&uav,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
-			);
-		}
-	}
-
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
 		gotoIfError(clean, CharString_toUTF16x(name, &name16))
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->SetName(bufExt->buffer, name16.ptr)))

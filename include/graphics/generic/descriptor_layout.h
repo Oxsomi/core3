@@ -46,6 +46,7 @@ typedef struct DescriptorBinding {
 	U32 space;
 	U32 id;
 	U32 visibility;			//Bit mask of ESHPipelineStage
+	U32 strideOrLength;		//Constant buffers; length, structured buffers: stride
 } DescriptorBinding;
 
 TList(DescriptorBinding);
@@ -56,6 +57,7 @@ typedef struct DescriptorLayoutInfo {
 	U32 padding;
 
 	ListDescriptorBinding bindings;
+	ListCharString bindingNames;
 
 } DescriptorLayoutInfo;
 

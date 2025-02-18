@@ -35,6 +35,7 @@ typedef RefPtr PipelineRef;
 typedef RefPtr DescriptorLayoutRef;
 typedef RefPtr PipelineLayoutRef;
 typedef RefPtr DescriptorHeapRef;
+typedef RefPtr DescriptorTableRef;
 
 typedef struct CBufferData {
 
@@ -139,6 +140,7 @@ typedef struct GraphicsDevice {
 	PipelineLayoutRef *copyPipelineLayout;
 	DescriptorLayoutRef *defaultDescLayout;
 	PipelineLayoutRef *defaultPipelineLayout;
+	DescriptorTableRef *defaultDescriptorTable;
 
 	DescriptorHeapRef *descriptorHeaps;
 

@@ -87,6 +87,19 @@
 	Error VkGraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
 	Bool VkDescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
 
+	//DescriptorTable
+
+	Error VkDescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
+	Bool VkDescriptorTable_free(DescriptorTable *table, Allocator alloc);
+
+	Bool VkDescriptorTable_setDescriptor(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		Descriptor d,
+		Error *e_rr
+	);
+
 	//DescriptorLayout
 
 	Error VkGraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);

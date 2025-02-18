@@ -87,6 +87,19 @@
 	Error D3D12GraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
 	Bool D3D12DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
 
+	//DescriptorTable
+
+	Error D3D12DescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
+	Bool D3D12DescriptorTable_free(DescriptorTable *table, Allocator alloc);
+
+	Bool D3D12DescriptorTable_setDescriptor(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		Descriptor d,
+		Error *e_rr
+	);
+
 	//DescriptorLayout
 
 	Error D3D12GraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);

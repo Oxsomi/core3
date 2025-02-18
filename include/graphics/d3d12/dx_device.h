@@ -113,7 +113,8 @@ typedef struct DxPipelineLayout {
 } DxPipelineLayout;
 
 typedef struct DxDescriptorTable {
-	U64 padding[2];				//TODO:
+	U64 allocationLocations[2];		//Resources, samplers
+	U64 allocationSizes[2];			//Resources, samplers
 } DxDescriptorTable;
 
 typedef enum EExecuteIndirectCommand {

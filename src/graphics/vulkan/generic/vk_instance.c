@@ -46,7 +46,7 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.device = sizeof(VkGraphicsDevice),
 	.instance = sizeof(VkGraphicsInstance),
 	.descriptorLayout = sizeof(VkDescriptorLayout),
-	.descriptorSet = 0, //TODO: sizeof(VkDescriptorTable),
+	.descriptorTable = sizeof(VkDescriptorTable),
 	.descriptorHeap = sizeof(VkDescriptorHeap),
 	.pipelineLayout = sizeof(VkPipelineLayout) + 8
 };
@@ -98,10 +98,12 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 			.descriptorLayoutFree = VkDescriptorLayout_free,
 			.pipelineLayoutCreate = VkGraphicsDeviceRef_createPipelineLayout,
 			.pipelineLayoutFree = VkPipelineLayout_free,
-			//.descriptorTableCreate = VkGraphicsDeviceRef_createDescriptorTable,
-			//.descriptorTableFree = VkDescriptorTable_free,
 			.descriptorHeapCreate = VkGraphicsDeviceRef_createDescriptorHeap,
 			.descriptorHeapFree = VkDescriptorHeap_free,
+
+			.descriptorTableCreate = VkDescriptorHeap_createDescriptorTable,
+			.descriptorTableFree = VkDescriptorTable_free,
+			.descriptorTableSet = VkDescriptorTable_setDescriptor,
 
 			.memoryAllocate = VkDeviceMemoryAllocator_allocate,
 			.memoryFree = VkDeviceMemoryAllocator_freeAllocation,

@@ -256,6 +256,7 @@ typedef struct VkCommandBufferState {
 
 typedef struct VkDescriptorHeap {
 	VkDescriptorPool pool;
+	U64 padding;
 } VkDescriptorHeap;
 
 typedef struct VkDescriptorLayout {

@@ -175,28 +175,6 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		&tlas->base.tempScratchBuffer
 	))
 
-	//Add as descriptor
-
-	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
-	D3D12_SHADER_RESOURCE_VIEW_DESC resourceView = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
-		.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE,
-		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-		.RaytracingAccelerationStructure = (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV) {
-			.Location = dstAS
-		}
-	};
-
-	const DxDescriptorHeapSingle *heap = &DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx)->resourcesHeap;
-
-	U64 id = EDescriptorTypeOffsets_TLASExt + ResourceHandle_getId(tlas->handle);
-
-	deviceExt->device->lpVtbl->CreateShaderResourceView(
-		deviceExt->device,
-		NULL,
-		&resourceView,
-		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * id }
-	);
-
 clean:
 	CharString_freex(&tmp);
 	return err;

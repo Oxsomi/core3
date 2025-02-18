@@ -57,7 +57,7 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	.device = sizeof(DxGraphicsDevice),
 	.instance = sizeof(DxGraphicsInstance),
 	.descriptorLayout = sizeof(DxDescriptorLayout),
-	.descriptorSet = sizeof(DxDescriptorTable),
+	.descriptorTable = sizeof(DxDescriptorTable),
 	.descriptorHeap = sizeof(DxDescriptorHeap),
 	.pipelineLayout = sizeof(ID3D12RootSignature) + 8
 };
@@ -109,10 +109,12 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 			.descriptorLayoutFree = D3D12DescriptorLayout_free,
 			.pipelineLayoutCreate = D3D12GraphicsDeviceRef_createPipelineLayout,
 			.pipelineLayoutFree = D3D12PipelineLayout_free,
-			//.descriptorTableCreate = D3D12GraphicsDeviceRef_createDescriptorTable,
-			//.descriptorTableFree = D3D12DescriptorTable_free,
 			.descriptorHeapCreate = D3D12GraphicsDeviceRef_createDescriptorHeap,
 			.descriptorHeapFree = D3D12DescriptorHeap_free,
+
+			.descriptorTableCreate = D3D12DescriptorHeap_createDescriptorTable,
+			.descriptorTableFree = D3D12DescriptorTable_free,
+			.descriptorTableSet = D3D12DescriptorTable_setDescriptor,
 
 			.memoryAllocate = D3D12DeviceMemoryAllocator_allocate,
 			.memoryFree = D3D12DeviceMemoryAllocator_freeAllocation,

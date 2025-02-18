@@ -263,6 +263,9 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 	if(texture.sampleCount >= EMSAASamples_Count)
 		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->sampleCount is invalid");
 
+	if(texture.sampleCount && texture.levels)
+		return Error_invalidParameter(2, 0, "UnifiedTexture_create() MSAA textures can't have mips");
+
 	if(texture.type >= ETextureType_Count)
 		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->type is invalid");
 

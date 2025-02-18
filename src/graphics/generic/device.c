@@ -28,6 +28,7 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/blas.h"
@@ -81,6 +82,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	RefPtr_dec(&device->defaultDescLayout);
 	RefPtr_dec(&device->defaultPipelineLayout);
 	RefPtr_dec(&device->descriptorHeaps);
+	RefPtr_dec(&device->defaultDescriptorTable);
 
 	for(U64 i = 0; i < device->framesInFlight; ++i)
 		DeviceBufferRef_dec(&device->frameData[i]);
@@ -369,7 +371,7 @@ Error GraphicsDeviceRef_create(
 		.maxTexturesRW = EDescriptorTypeCount_RWTextures,
 		.maxBuffersRW = EDescriptorTypeCount_SSBO,
 		.maxConstantBuffers = 3,
-		.maxDescriptorTables = 4
+		.maxDescriptorTables = 1
 	};
 
 	if(device->info.capabilities.features & EGraphicsFeatures_Bindless)
@@ -384,6 +386,27 @@ Error GraphicsDeviceRef_create(
 
 	Bool isSpirv = instance->api == EGraphicsApi_Vulkan;
 
+	CharString bindingNames[18] = {
+		CharString_createRefCStrConst("_samplers"),
+		CharString_createRefCStrConst("globals"),
+		CharString_createRefCStrConst("_textures2D"),
+		CharString_createRefCStrConst("_textureCubes"),
+		CharString_createRefCStrConst("_textures3D"),
+		CharString_createRefCStrConst("_buffer"),
+		CharString_createRefCStrConst("_rwBuffer"),
+		CharString_createRefCStrConst("_rwTextures3D"),
+		CharString_createRefCStrConst("_rwTextures3Ds"),
+		CharString_createRefCStrConst("_rwTextures3Df"),
+		CharString_createRefCStrConst("_rwTextures3Di"),
+		CharString_createRefCStrConst("_rwTextures3Du"),
+		CharString_createRefCStrConst("_rwTextures2D"),
+		CharString_createRefCStrConst("_rwTextures2Ds"),
+		CharString_createRefCStrConst("_rwTextures2Df"),
+		CharString_createRefCStrConst("_rwTextures2Di"),
+		CharString_createRefCStrConst("_rwTextures2Du"),
+		CharString_createRefCStrConst("_tlasExt")
+	};
+
 	DescriptorBinding bindings[18] = {
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Sampler,
@@ -397,7 +420,8 @@ Error GraphicsDeviceRef_create(
 			.count = 1,
 			.space = isSpirv ? 2 : 0,
 			.id = isSpirv ? 0 : 0,
-			.visibility = U32_MAX
+			.visibility = U32_MAX,
+			.strideOrLength = (U32) sizeof(CBufferData)
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D,
@@ -522,11 +546,24 @@ Error GraphicsDeviceRef_create(
 	};
 
 	gotoIfError(clean, ListDescriptorBinding_createRefConst(bindings, descBindings, &descLayoutInfo.bindings))
+	gotoIfError(clean, ListCharString_createRefConst(bindingNames, descBindings, &descLayoutInfo.bindingNames))
 
 	if(device->info.capabilities.features & EGraphicsFeatures_Bindless)
 		descLayoutInfo.flags |= EDescriptorLayoutFlags_AllowBindlessOnArrays;
 
 	gotoIfError(clean, GraphicsDeviceRef_createDescriptorLayout(*deviceRef, &descLayoutInfo, name, &device->defaultDescLayout))
+
+	//Create descriptor set
+
+	name = CharString_createRefCStrConst("Default descriptor table");
+
+	gotoIfError(clean, DescriptorHeapRef_createDescriptorTable(
+		device->descriptorHeaps,
+		device->defaultDescLayout,
+		EDescriptorTableFlags_None,
+		name,
+		&device->defaultDescriptorTable
+	))
 
 	//Create pipeline layout
 
@@ -536,7 +573,7 @@ Error GraphicsDeviceRef_create(
 		.bindings = device->defaultDescLayout
 	};
 
-	gotoIfError(clean, GraphicsDeviceRef_createPipelineLayout(*deviceRef, pipelineLayoutInfo, name, &device->defaultDescLayout))
+	gotoIfError(clean, GraphicsDeviceRef_createPipelineLayout(*deviceRef, pipelineLayoutInfo, name, &device->defaultPipelineLayout))
 
 	//Determine some flushing and block size sizes for the current GPU
 	

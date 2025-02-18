@@ -23,6 +23,7 @@
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/ext/stringx.h"
 #include "types/container/string.h"
 
 TListImpl(DescriptorBinding);
@@ -43,6 +44,7 @@ void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, Allocator alloc) {
 		return;
 
 	ListDescriptorBinding_free(&info->bindings, alloc);
+	ListCharString_freeUnderlying(&info->bindingNames, alloc);
 }
 
 Bool DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc) {
@@ -85,14 +87,32 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings.length is limited to U16_MAX"
 		);
 
-	for(U64 i = 0; i < info->bindings.length; ++i)
+	for(U64 i = 0; i < info->bindings.length; ++i) {
+
+		DescriptorBinding b = info->bindings.ptr[i];
+		ESHRegisterType type = b.registerType & ESHRegisterType_TypeMask;
+
 		if(
-			info->bindings.ptr[i].registerType == ESHRegisterType_AccelerationStructure &&
+			type == ESHRegisterType_AccelerationStructure &&
 			!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
 		)
 			return Error_invalidOperation(
 				0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings has an RTAS, but device doesn't have RT"
 			);
+
+		if(type == ESHRegisterType_ConstantBuffer && (!b.strideOrLength || b.strideOrLength > 64 * KIBI))
+			return Error_invalidOperation(
+				0,
+				"GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the constant buffer size "
+				"(0 < x < 64KiB)"
+			);
+
+		if((type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) && !b.strideOrLength)
+			return Error_invalidOperation(
+				0,
+				"GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the structured buffer size"
+			);
+	}
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DescriptorLayout) + GraphicsDeviceRef_getObjectSizes(dev)->descriptorLayout),
@@ -112,13 +132,19 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 	//Log_debugLnx("Create: DescriptorLayout %.*s (%p)", (int) CharString_length(name), name.ptr, layout);
 
 	*layout = (DescriptorLayout) { .device = dev, .info = *info };
-	*info = (DescriptorLayoutInfo) { 0 };
 
-	if(ListDescriptorBinding_isRef(layout->info.bindings)) {
-		ListDescriptorBinding tmp = (ListDescriptorBinding) { 0 };
-		gotoIfError(clean, ListDescriptorBinding_createCopyx(layout->info.bindings, &tmp))
-		layout->info.bindings = tmp;
-	}
+	layout->info.bindingNames = (ListCharString) { 0 };
+	layout->info.bindings = (ListDescriptorBinding) { 0 };
+
+	if(!ListCharString_movex(&info->bindingNames, &layout->info.bindingNames, &err))
+		goto clean;
+
+	if(ListDescriptorBinding_isRef(layout->info.bindings))
+		gotoIfError(clean, ListDescriptorBinding_createCopyx(info->bindings, &layout->info.bindings))
+
+	else layout->info.bindings = info->bindings;
+
+	*info = (DescriptorLayoutInfo) { 0 };
 
 	gotoIfError(clean, GraphicsDeviceRef_createDescriptorLayoutExt(dev, layout, name))
 

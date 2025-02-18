@@ -27,6 +27,7 @@
 	#include "graphics/generic/swapchain.h"
 	#include "graphics/generic/descriptor_heap.h"
 	#include "graphics/generic/descriptor_layout.h"
+	#include "graphics/generic/descriptor_table.h"
 	#include "graphics/generic/pipeline_layout.h"
 	#include "graphics/generic/command_list.h"
 	#include "platforms/file.h"
@@ -241,15 +242,27 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(layout->device, pipelineLayoutFree)(layout, alloc);
 	}
 
-	//DescriptorTable TODO:
+	//DescriptorTable
 
-	//Error GraphicsDeviceRef_createDescriptorTableExt(GraphicsDeviceRef *dev, DescriptorTable *table) {
-	//	return WrapperFunction(dev, descriptorTableCreate)(dev, table);
-	//}
-	//
-	//Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc) {
-	//	return WrapperFunction(table->device, descriptorTableFree)(table, alloc);
-	//}
+	Error DescriptorHeap_createDescriptorTableExt(DescriptorHeapRef *heap, DescriptorTable *table, CharString name) {
+		return WrapperFunction(DescriptorHeapRef_ptr(heap)->device, descriptorTableCreate)(heap, table, name);
+	}
+	
+	Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc) {
+		return WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableFree)(table, alloc);
+	}
+
+	Bool DescriptorTable_setDescriptorExt(
+		DescriptorTable *table,
+		U64 bindingId,
+		U64 arrayId,
+		Descriptor d,
+		Error *e_rr
+	) {
+		return WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableSet)(
+			table, bindingId, arrayId, d, e_rr
+		);
+	}
 	
 	//DescriptorHeap
 

@@ -80,7 +80,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = !!(info.flags & EDescriptorHeapFlags_AllowBindless) ? 0 : VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-		.maxSets = info.maxDescriptorTables,
+		.maxSets = info.maxDescriptorTables * 4,
 		.poolSizeCount = counter,
 		.pPoolSizes = poolSizes
 	};

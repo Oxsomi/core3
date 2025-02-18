@@ -26,6 +26,7 @@
 typedef enum ECommandOp ECommandOp;
 typedef enum EResourceType EResourceType;
 
+typedef union ResourceRange ResourceRange;
 typedef struct Sampler Sampler;
 typedef struct BLAS BLAS;
 typedef struct TLAS TLAS;
@@ -41,6 +42,7 @@ typedef struct GraphicsDevice GraphicsDevice;
 typedef struct SHBinaryInfo SHBinaryInfo;
 typedef struct DeviceMemoryAllocator DeviceMemoryAllocator;
 typedef struct CBufferData CBufferData;
+typedef struct Descriptor Descriptor;
 
 typedef struct ListSHFile ListSHFile;
 typedef struct ListCommandListRef ListCommandListRef;
@@ -63,7 +65,7 @@ typedef RefPtr PipelineLayoutRef;
 
 typedef struct GraphicsObjectSizes {
 	U64 blas, tlas, pipeline, sampler, buffer, image, swapchain, device, instance;
-	U64 descriptorLayout, descriptorSet, descriptorHeap, pipelineLayout;
+	U64 descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
 } GraphicsObjectSizes;
 
 //Dynamic linking will load the dlls to generate the function tables.
@@ -272,9 +274,17 @@ typedef struct GraphicsObjectSizes {
 	typedef Bool (*PipelineLayout_freeImpl)(PipelineLayout *layout, Allocator alloc);
 
 	//DescriptorTable
-
-	typedef Error (*GraphicsDeviceRef_createDescriptorTableImpl)(GraphicsDeviceRef *dev, DescriptorTable *table);
+	
+	typedef Error (*DescriptorHeap_createDescriptorTableImpl)(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
 	typedef Bool (*DescriptorTable_freeImpl)(DescriptorTable *table, Allocator alloc);
+
+	typedef Bool (*DescriptorTable_setImpl)(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		Descriptor d,
+		Error *e_rr
+	);
 
 	//DescriptorHeap
 
@@ -374,8 +384,9 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDeviceRef_createPipelineLayoutImpl		pipelineLayoutCreate;
 		PipelineLayout_freeImpl							pipelineLayoutFree;
 
-		//GraphicsDeviceRef_createDescriptorTableImpl		descriptorTableCreate;
-		//DescriptorTable_freeImpl						descriptorTableFree;
+		DescriptorHeap_createDescriptorTableImpl		descriptorTableCreate;
+		DescriptorTable_freeImpl						descriptorTableFree;
+		DescriptorTable_setImpl							descriptorTableSet;
 
 		GraphicsDeviceRef_createDescriptorHeapImpl		descriptorHeapCreate;
 		DescriptorHeap_freeImpl							descriptorHeapFree;
@@ -490,8 +501,16 @@ typedef struct GraphicsObjectSizes {
 
 	//DescriptorTable
 
-	Error GraphicsDeviceRef_createDescriptorTableExt(GraphicsDeviceRef *dev, DescriptorTable *table);
+	Error DescriptorHeap_createDescriptorTableExt(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
 	Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc);
+
+	Bool DescriptorTable_setDescriptorExt(
+		DescriptorTable *table,
+		U64 bindingId,
+		U64 arrayId,
+		Descriptor d,
+		Error *e_rr
+	);
 
 	//DescriptorHeap
 

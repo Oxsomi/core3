@@ -52,6 +52,8 @@ typedef enum EGraphicsResourceFlag {
 
 } EGraphicsResourceFlag;
 
+typedef U16 GraphicsResourceFlag;
+
 typedef enum EResourceType {
 	EResourceType_Undefined,
 	EResourceType_DeviceTexture,					//Texture only copyable (no RTV, DSV or UAV)
@@ -121,7 +123,7 @@ typedef struct GraphicsResource {
 
 	U32 blockId;
 
-	U16 flags;								//EGraphicsResourceFlag
+	GraphicsResourceFlag flags;
 	U8 type;								//EResourceType
 	Bool allocated;
 
