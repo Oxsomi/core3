@@ -22,6 +22,7 @@
 #include "types/base/types.h"
 #include "types/base/error.h"
 #include "types/base/atomic.h"
+#include "types/base/lock.h"
 #include "types/container/ref_ptr.h"
 #include "graphics/generic/resource.h"
 
@@ -33,6 +34,8 @@ typedef enum EDescriptorTableFlags {
 	EDescriptorTableFlags_None
 } EDescriptorTableFlags;
 
+typedef U8 DescriptorTableFlags;
+
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DescriptorTableRef;
 typedef RefPtr DescriptorHeapRef;
@@ -43,39 +46,12 @@ typedef RefPtr DeviceBufferRef;
 typedef RefPtr TLASRef;
 typedef RefPtr SamplerRef;
 
-typedef struct DescriptorTable {
-
-	DescriptorHeapRef *parent;
-	DescriptorLayoutRef *layout;
-
-	EDescriptorTableFlags flags;
-	Bool acquiredAtomic;
-	U8 padding[11];
-
-} DescriptorTable;
-
-#define DescriptorTable_ext(ptr, T) (!ptr ? NULL : (T##DescriptorTable*)(ptr + 1))		//impl
-#define DescriptorTableRef_ptr(ptr) RefPtr_data(ptr, DescriptorTable)
-
-Error DescriptorTableRef_dec(DescriptorTableRef **table);
-Error DescriptorTableRef_inc(DescriptorTableRef *table);
-
-Error DescriptorHeapRef_createDescriptorTable(
-	DescriptorHeapRef *parent,
-	DescriptorLayoutRef *layout,
-	EDescriptorTableFlags flags,
-	CharString name,
-	DescriptorTableRef **table
-);
-
 typedef struct TextureDescriptorRange {
 
 	U8 mipId, mipCount;
 	U8 planeId, imageId;
 
 	U16 arrayId, arrayCount;
-
-	U64 padding[2];
 
 } TextureDescriptorRange;
 
@@ -106,6 +82,96 @@ typedef struct Descriptor {
 
 } Descriptor;
 
+TList(Descriptor);
+TList(TextureDescriptorRange);
+TList(BufferDescriptorRange);
+
+typedef struct DescriptorStackTrace {
+
+	#ifndef NDEBUG
+		void *stackTrace[8];
+	#else
+		void *stackTrace[4];
+	#endif
+
+} DescriptorStackTrace;
+
+TList(DescriptorStackTrace);
+
+typedef struct DescriptorTableBindingMultiple {
+
+	ListU64 freeList;			//Quicker than indexing descriptors
+	ListWeakRefPtr descriptors;
+	ListDescriptorStackTrace stackTraces;
+
+	union {
+		ListBufferDescriptorRange buffers;
+		ListTextureDescriptorRange textures;		//This is 3x less mem than buffer descs
+	};
+
+} DescriptorTableBindingMultiple;
+
+typedef struct DescriptorTableBindingSingle {
+
+	DescriptorStackTrace stackTrace;
+	WeakRefPtr *descriptor;
+
+	union {
+		BufferDescriptorRange buffer;
+		TextureDescriptorRange texture;			//This is 3x less mem than buffer descs
+	};
+
+} DescriptorTableBindingSingle;
+
+typedef struct DescriptorTableBinding {
+
+	SpinLock lock;
+
+	union {
+		DescriptorTableBindingMultiple multiple;
+		DescriptorTableBindingSingle single;
+	};
+
+} DescriptorTableBinding;
+
+typedef struct DescriptorTableResourceRef {
+	RefPtr *resource;
+	U64 count;
+} DescriptorTableResourceRef;
+
+TList(DescriptorTableBinding);
+TList(DescriptorTableResourceRef);
+
+typedef struct DescriptorTable {
+
+	DescriptorHeapRef *parent;
+	DescriptorLayoutRef *layout;
+
+	DescriptorTableFlags flags;
+	Bool acquiredAtomic;
+	U8 padding[6];
+
+	SpinLock lock;									//To access resources
+
+	ListDescriptorTableResourceRef resources;		//All resources that are bound by the table
+	ListDescriptorTableBinding bindings;
+
+} DescriptorTable;
+
+#define DescriptorTable_ext(ptr, T) (!ptr ? NULL : (T##DescriptorTable*)(ptr + 1))		//impl
+#define DescriptorTableRef_ptr(ptr) RefPtr_data(ptr, DescriptorTable)
+
+Error DescriptorTableRef_dec(DescriptorTableRef **table);
+Error DescriptorTableRef_inc(DescriptorTableRef *table);
+
+Error DescriptorHeapRef_createDescriptorTable(
+	DescriptorHeapRef *parent,
+	DescriptorLayoutRef *layout,
+	EDescriptorTableFlags flags,
+	CharString name,
+	DescriptorTableRef **table
+);
+
 Descriptor Descriptor_texture(
 	TextureRef *texture, U8 mipId, U8 mipCount, U8 planeId, U8 imageId, U16 arrayId, U16 arrayCount
 );
@@ -123,9 +189,30 @@ U64 Descriptor_endBuffer(Descriptor d);
 U64 Descriptor_bufferLength(Descriptor d);
 U32 Descriptor_counterOffset(Descriptor d);
 
+//Note: When setting descriptors, ensure all descriptors are valid (e.g. resource != NULL)
+//		not all implementations support null descriptors, as such, setting all descriptors in a range to NULL
+//		is unexpected behavior.
+//		For telling our front end that descriptors are free use unsetDescriptor(s)(byName).
+
+Bool DescriptorTableRef_setDescriptors(
+	DescriptorTableRef *table,
+	U64 bindId,				//ListDescriptorBinding[i]
+	U64 arrayId,			//arrayId into descriptor
+	ListDescriptor d,
+	Error *e_rr
+);
+
+Bool DescriptorTableRef_unsetDescriptors(
+	DescriptorTableRef *table,
+	U64 bindId,				//ListDescriptorBinding[i]
+	U64 arrayId,			//arrayId into descriptor
+	U64 count,
+	Error *e_rr
+);
+
 Bool DescriptorTableRef_setDescriptor(
 	DescriptorTableRef *table,
-	U64 i,					//ListDescriptorBinding[i]
+	U64 bindId,				//ListDescriptorBinding[i]
 	U64 arrayId,			//arrayId into descriptor
 	Descriptor d,
 	Error *e_rr
@@ -139,6 +226,22 @@ Bool DescriptorTableRef_setDescriptorByName(
 	CharString registerName,
 	U64 arrayId,			//arrayId into descriptor
 	Descriptor d,
+	Error *e_rr
+);
+
+Bool DescriptorTableRef_setDescriptorsByName(
+	DescriptorTableRef *table,
+	CharString registerName,
+	U64 arrayId,			//arrayId into descriptor
+	ListDescriptor d,
+	Error *e_rr
+);
+
+Bool DescriptorTableRef_unsetDescriptorsByName(
+	DescriptorTableRef *table,
+	CharString registerName,
+	U64 arrayId,
+	U64 count,
 	Error *e_rr
 );
 

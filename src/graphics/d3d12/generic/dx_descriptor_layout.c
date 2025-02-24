@@ -68,7 +68,7 @@ D3D12_DESCRIPTOR_RANGE_TYPE dxGetDescriptorType(ESHRegisterType regType) {
 		case ESHRegisterType_Texture3D:
 		case ESHRegisterType_TextureCube:
 		case ESHRegisterType_Texture2DMS:
-			return !!(regType & ESHRegisterType_IsWrite) ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+			return regType & ESHRegisterType_IsWrite ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	}
 }
 
@@ -83,8 +83,8 @@ ECompareResult SortingKey_compare(const SortingKey *aKey, const SortingKey *bKey
 	const DescriptorBinding *a = aKey->binding;
 	const DescriptorBinding *b = bKey->binding;
 
-	if(a->space != b->space)
-		return a->space < b->space ? ECompareResult_Lt : ECompareResult_Gt;
+	if(a->binding.space != b->binding.space)
+		return a->binding.space < b->binding.space ? ECompareResult_Lt : ECompareResult_Gt;
 
 	D3D12_DESCRIPTOR_RANGE_TYPE registerTypeA = dxGetDescriptorType(a->registerType);
 	D3D12_DESCRIPTOR_RANGE_TYPE registerTypeB = dxGetDescriptorType(b->registerType);
@@ -92,8 +92,8 @@ ECompareResult SortingKey_compare(const SortingKey *aKey, const SortingKey *bKey
 	if(registerTypeA != registerTypeB)
 		return registerTypeA < registerTypeB ? ECompareResult_Lt : ECompareResult_Gt;
 
-	if(a->id != b->id)
-		return a->id < b->id ? ECompareResult_Lt : ECompareResult_Gt;
+	if(a->binding.binding != b->binding.binding)
+		return a->binding.binding < b->binding.binding ? ECompareResult_Lt : ECompareResult_Gt;
 
 	return ECompareResult_Eq;
 }
@@ -130,7 +130,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Collapse nearby bindings if possible
 
-	for (U64 i = sortedList.length - 1; i != U64_MAX && !!i; --i) {
+	for (U64 i = sortedList.length - 1; i != U64_MAX && i; --i) {
 
 		//Combining is only allowed if same space, id and type.
 		//And if bindless on arrays is on; we don't want to combine non bindless + bindless in one.
@@ -141,9 +141,9 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		if(
 			dxGetDescriptorType(a.registerType) != dxGetDescriptorType(b.registerType) ||
-			a.space != b.space ||
-			a.id + a.count != b.id ||
-			(!!(info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && (a.count > 1) != (b.count > 1))
+			a.binding.space != b.binding.space ||
+			a.binding.binding + a.count != b.binding.binding ||
+			((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && (a.count > 1) != (b.count > 1))
 		)
 			continue;
 
@@ -177,15 +177,15 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		if(
 			!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
-			!(!!(info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && key.binding->count > 1)
+			!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && key.binding->count > 1)
 		)
 			bindFlags = 0;
 
 		D3D12_DESCRIPTOR_RANGE1 range = (D3D12_DESCRIPTOR_RANGE1) {
 			.RangeType = type,
 			.NumDescriptors = count,
-			.BaseShaderRegister = key.binding->id,
-			.RegisterSpace = key.binding->space,
+			.BaseShaderRegister = key.binding->binding.binding,
+			.RegisterSpace = key.binding->binding.space,
 			.Flags = bindFlags,
 			.OffsetInDescriptorsFromTableStart = offset1
 		};
@@ -210,12 +210,16 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			if(
 				typej != type ||
-				bindj.space != key.binding->space ||
-				!(bindj.id >= key.binding->id && bindj.id < key.binding->id + count)
+				bindj.binding.space != key.binding->binding.space ||
+				!(
+					bindj.binding.binding >= key.binding->binding.binding &&
+					bindj.binding.binding < key.binding->binding.binding + count
+				)
 			)
 				continue;
 			
-			layoutExt->bindingOffsets.ptrNonConst[j] = range.OffsetInDescriptorsFromTableStart + bindj.id - key.binding->id;
+			layoutExt->bindingOffsets.ptrNonConst[j] =
+				range.OffsetInDescriptorsFromTableStart + bindj.binding.binding - key.binding->binding.binding;
 		}
 	}
 

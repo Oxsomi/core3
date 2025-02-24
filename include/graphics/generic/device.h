@@ -50,20 +50,7 @@ typedef struct CBufferData {
 
 } CBufferData;
 
-typedef struct DescriptorStackTrace {
-
-	U32 resourceId, padding;
-
-	#ifndef NDEBUG
-		void *stackTrace[8];
-	#else
-		void *stackTrace[4];
-	#endif
-
-} DescriptorStackTrace;
-
 TListNamed(SpinLock*, ListSpinLockPtr);
-TList(DescriptorStackTrace);
 
 typedef enum EGraphicsDeviceFlags {
 	EGraphicsDeviceFlags_None			= 0,
@@ -127,12 +114,6 @@ typedef struct GraphicsDevice {
 	U64 pendingPrimitives;						//For determining if it's time to flush because of BLAS creation
 	U64 flushThresholdPrimitives;				//When the pending primitives are too much and the device should flush
 
-	//Used for allocating descriptors
-
-	SpinLock descriptorLock;
-	Buffer freeList[EDescriptorType_ResourceCount];
-	ListDescriptorStackTrace descriptorStackTraces;
-
 	U64 blockSizeCpu, blockSizeGpu;				//Block sizes for memory allocator
 
 	PipelineRef *copyShaders[2];				//[0]: copy single, [1]: copy single, rotated
@@ -142,7 +123,7 @@ typedef struct GraphicsDevice {
 	PipelineLayoutRef *defaultPipelineLayout;
 	DescriptorTableRef *defaultDescriptorTable;
 
-	DescriptorHeapRef *descriptorHeaps;
+	DescriptorHeapRef *defaultDescriptorHeaps;
 
 } GraphicsDevice;
 

@@ -178,7 +178,7 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 		
 	//Log_debugLnx("Destroy: DeviceBuffer (%p)", buffer);
 
-	if (buffer->resource.flags & EGraphicsResourceFlag_ShaderRW) {
+	if (buffer->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
 		GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
 		const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
@@ -268,7 +268,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	//Allocate
 
-	if(buf->resource.flags & EGraphicsResourceFlag_ShaderRW) {
+	if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
 		acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
@@ -279,7 +279,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 		//Create images
 
-		if(buf->resource.flags & EGraphicsResourceFlag_ShaderRead) {
+		if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) {
 
 			buf->readHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Buffer);
 
@@ -289,7 +289,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 				))
 		}
 
-		if(buf->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
+		if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) {
 
 			buf->writeHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_RWBuffer);
 

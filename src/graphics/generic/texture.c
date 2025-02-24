@@ -211,22 +211,25 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 
 	//Log_debugLnx("Destroy: Texture (%p)", texture);
 
-	const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
+	if(texture->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
-	if (acq >= ELockAcquire_Success) {
+		const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
-		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
+		if (acq >= ELockAcquire_Success) {
 
-		//Can't batch this anymore, we have U64 padding in between now, for alignment purposes
+			const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
 
-		for(U8 i = 0; i < texture->images; ++i) {
-			ListU32 allocations = (ListU32) { 0 };
-			ListU32_createRefConst((const U32*)&img[i], 2, &allocations);
-			GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
+			//Can't batch this anymore, we have U64 padding in between now, for alignment purposes
+
+			for(U8 i = 0; i < texture->images; ++i) {
+				ListU32 allocations = (ListU32) { 0 };
+				ListU32_createRefConst((const U32*)&img[i], 2, &allocations);
+				GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
+			}
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(&device->descriptorLock);
 		}
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&device->descriptorLock);
 	}
 
 	Bool success = UnifiedTexture_freeExt(textureRef);
@@ -349,10 +352,14 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 			2, "UnifiedTexture_create()::texturePtr->sampleCount MSAA8x is unsupported"
 		);
 
-	if(texture.sampleCount && (texture.resource.flags & EGraphicsResourceFlag_ShaderRW))
+	if(
+		texture.sampleCount && (texture.resource.flags & EGraphicsResourceFlag_ShaderWrite) &&
+		!(device->info.capabilities.features & EGraphicsFeatures_WriteMSTexture)
+	)
 		return Error_unsupportedOperation(
 			4,
-			"UnifiedTexture_create()::texturePtr->sampleCount isn't allowed when ShaderRead or Write is enabled"
+			"UnifiedTexture_create()::texturePtr->sampleCount isn't allowed when ShaderWrite is enabled, "
+			"but the feature isn't enabled"
 		);
 
 	//Allocate in descriptors
@@ -360,7 +367,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 	Error err;
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	if(texture.resource.flags & EGraphicsResourceFlag_ShaderRW) {
+	if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
 		acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
@@ -373,7 +380,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 
 			UnifiedTextureImage *img = TextureRef_getImageIntern(ref, 0 /* TODO: subResource */, i);
 
-			if(texture.resource.flags & EGraphicsResourceFlag_ShaderRead) {
+			if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) {
 
 				const U32 locationRead = GraphicsDeviceRef_allocateDescriptor(
 					texture.resource.device,
@@ -386,7 +393,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 				img->readHandle = locationRead;
 			}
 
-			if(texture.resource.flags & EGraphicsResourceFlag_ShaderWrite) {		//Not for DepthStencil
+			if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) {		//Not for DepthStencil
 
 				const EDescriptorType descType = UnifiedTexture_getWriteDescriptorType(texture);
 				const U32 locationWrite = GraphicsDeviceRef_allocateDescriptor(texture.resource.device, descType);

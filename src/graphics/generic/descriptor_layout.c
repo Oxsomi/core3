@@ -25,6 +25,7 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "platforms/ext/stringx.h"
 #include "types/container/string.h"
+#include "formats/oiSH/sh_file.h"
 
 TListImpl(DescriptorBinding);
 
@@ -36,6 +37,203 @@ Error DescriptorLayoutRef_dec(DescriptorLayoutRef **layout) {
 Error DescriptorLayoutRef_inc(DescriptorLayoutRef *layout) {
 	return !RefPtr_inc(layout) ?
 		Error_invalidOperation(0, "DescriptorLayoutRef_inc()::layout is required") : Error_none();
+}
+
+U8 getDxilRegisterType(ESHRegisterType type) {
+
+	U8 regType = type & ESHRegisterType_TypeMask;
+
+	if(regType == ESHRegisterType_ConstantBuffer)
+		return 2;
+
+	if(regType == ESHRegisterType_Sampler || regType == ESHRegisterType_SamplerComparisonState)
+		return 3;
+
+	return type & ESHRegisterType_IsWrite;
+}
+
+Bool GraphicsDeviceRef_detectLayoutFromEntries(
+	GraphicsDeviceRef *dev,
+	SHFile binary,
+	ListU32 entrypoints,
+	EDescriptorLayoutFlags flags,
+	DescriptorLayoutInfo *info,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	Bool init = false;
+
+	if(!info || !entrypoints.length)
+		retError(clean, Error_nullPointer(
+			!entrypoints.length ? 2 : 4, "DescriptorLayoutInfo_detect()::info and entrypoints are required"
+		))
+
+	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "DescriptorLayoutInfo_detect()::dev is required"))
+
+	if(info->bindings.ptr)
+		retError(clean, Error_invalidParameter(
+			4, 0, "DescriptorLayoutInfo_detect()::info was already defined, possible memleak"
+		))
+
+	info->flags = flags;
+	init = true;
+
+	gotoIfError2(clean, ListDescriptorBinding_reservex(&info->bindings, 24))
+	gotoIfError2(clean, ListCharString_reservex(&info->bindingNames, 24))
+
+	ESHBinaryType binaryType =
+		GraphicsInstanceRef_ptr(GraphicsDeviceRef_ptr(dev)->instance)->api == EGraphicsApi_Direct3D12 ?
+		ESHBinaryType_DXIL : ESHBinaryType_SPIRV;
+
+	CharString tmp = CharString_createNull();
+
+	for (U64 i = 0; i < entrypoints.length; ++i) {
+
+		U16 entrypointId = (U16) entrypoints.ptr[i];
+		U16 binaryId = entrypoints.ptr[i] >> 16;
+
+		if(binaryId >= binary.binaries.length || entrypointId >= binary.entries.length)
+			retError(clean, Error_invalidParameter(
+				3, 0, "DescriptorLayoutInfo_detect()::entrypoints binary or entry index out of bounds"
+			))
+
+		SHBinaryInfo bin = binary.binaries.ptr[binaryId];
+
+		for(U64 j = 0; j < bin.registers.length; ++j) {
+
+			SHRegisterRuntime reg = bin.registers.ptr[j];
+			U64 registerNameMatch = U64_MAX;
+			U64 registerBindingsMatch = U64_MAX;
+			SHBinding regMatch = reg.reg.bindings.arr[binaryType];
+
+			if(regMatch.binding == U32_MAX && regMatch.space == U32_MAX)	//Doesn't exist in current binary type
+				continue;
+
+			U8 regType = getDxilRegisterType(reg.reg.registerType);
+
+			//Find matching register by name or binding
+
+			for(U64 k = 0; k < info->bindingNames.length; ++k) {
+
+				if (CharString_equalsStringSensitive(info->bindingNames.ptr[k], reg.name))
+					registerNameMatch = k;
+
+				DescriptorBinding dk = info->bindings.ptr[k];
+				SHBinding bindk = dk.binding;
+
+				switch (binaryType) {
+
+					//SPIRV; register intersection only happens if they're identical
+
+					case ESHBinaryType_SPIRV:
+						
+						if(bindk.space == regMatch.space && bindk.binding == regMatch.binding)
+							registerBindingsMatch = k;
+
+						break;
+
+					//DXIL; register intersection happens when the range overlaps
+
+					case ESHBinaryType_DXIL:
+						
+						if (bindk.space == regMatch.space && regType == getDxilRegisterType(dk.registerType)) {
+
+							if(bindk.binding == regMatch.binding)
+								registerBindingsMatch = k;
+
+							else if(bindk.binding + dk.count > regMatch.binding && bindk.binding <= regMatch.binding)
+								retError(clean, Error_invalidParameter(
+									3, 0, "DescriptorLayoutInfo_detect() dxil register range conflicts"
+								))
+						}
+
+						break;
+				}
+			}
+
+			if(registerNameMatch != registerBindingsMatch)
+				retError(clean, Error_invalidParameter(
+					3, 0, "DescriptorLayoutInfo_detect() detected mismatching register names with same binding"
+				))
+
+			//Find visibility; e.g. by checking if it's unused and by finding all entries
+
+			U32 visibility = 0;
+
+			if ((reg.reg.isUsedFlag >> binaryType) & 1)
+				visibility |= (U32)1 << binary.entries.ptr[i].stage;
+
+			//Grab count
+
+			U32 count = 1;
+
+			for(U64 k = 0; k < reg.arrays.length; ++k)
+				count *= reg.arrays.ptr[k];
+
+			//Unique register, create another
+
+			if (registerNameMatch == U64_MAX) {
+
+				gotoIfError2(clean, CharString_createCopyx(reg.name, &tmp))
+				gotoIfError2(clean, ListCharString_pushBackx(&info->bindingNames, tmp))
+				tmp = CharString_createNull();
+
+				DescriptorBinding binding = (DescriptorBinding) {
+					.registerType = reg.reg.registerType,
+					.count = count,
+					.binding = regMatch,
+					.visibility = visibility,
+					.strideOrLength = reg.shaderBuffer.bufferSize
+				};
+
+				gotoIfError2(clean, ListDescriptorBinding_pushBackx(&info->bindings, binding))
+				continue;
+			}
+
+			//Validate bindings
+
+			DescriptorBinding dk = info->bindings.ptr[registerNameMatch];
+
+			U32 strideOrLength = reg.shaderBuffer.bufferSize;
+
+			if(reg.reg.registerType != dk.registerType || count != dk.count || strideOrLength != dk.strideOrLength)
+				retError(clean, Error_invalidParameter(
+					3, 0, "DescriptorLayoutInfo_detect() mismatching register count, register type or stride/buffer length"
+				))
+
+			info->bindings.ptrNonConst[registerNameMatch].visibility |= visibility;
+		}
+	}
+
+	init = false;
+
+clean:
+
+	if(init)
+		DescriptorLayoutInfo_free(info, Platform_instance->alloc);
+
+	CharString_freex(&tmp);
+	return s_uccess;
+}
+
+Bool GraphicsDeviceRef_detectLayoutFromEntry(
+	GraphicsDeviceRef *dev,
+	SHFile binary,
+	U32 entrypoint,
+	EDescriptorLayoutFlags flags,
+	DescriptorLayoutInfo *info,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListU32 entrypoints = (ListU32) { 0 };
+	gotoIfError2(clean, ListU32_createRefConst(&entrypoint, 1, &entrypoints))
+	gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntries(dev, binary, entrypoints, flags, info, e_rr))
+
+clean:
+	return s_uccess;
 }
 
 void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, Allocator alloc) {
@@ -77,7 +275,7 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(!!(info->flags & EDescriptorLayoutFlags_AllowBindlessAny) && !(device->info.capabilities.features & EGraphicsFeatures_Bindless))
+	if((info->flags & EDescriptorLayoutFlags_AllowBindlessAny) && !(device->info.capabilities.features & EGraphicsFeatures_Bindless))
 		return Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.flags can't include bindless if bindless feature is missing"
 		);

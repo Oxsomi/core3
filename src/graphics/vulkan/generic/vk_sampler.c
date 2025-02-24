@@ -85,7 +85,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 
 		.mipLodBias = F16_castF32(sinfo.mipBias),
 
-		.anisotropyEnable = !!sinfo.aniso,
+		.anisotropyEnable = (Bool) sinfo.aniso,
 		.maxAnisotropy = sinfo.aniso,
 
 		.compareEnable = sinfo.enableComparison,
@@ -110,21 +110,6 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 
 		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
-
-	//Allocate descriptor
-
-	const VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) { .sampler = *samplerExt };
-
-	const VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-		.dstSet = deviceExt->sets[EDescriptorSetType_Sampler],
-		.dstArrayElement = ResourceHandle_getId(sampler->samplerLocation),
-		.pImageInfo = &imageInfo
-	};
-
-	deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
 
 clean:
 	return err;

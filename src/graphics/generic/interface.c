@@ -256,11 +256,23 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		DescriptorTable *table,
 		U64 bindingId,
 		U64 arrayId,
-		Descriptor d,
+		ListDescriptor darr,
 		Error *e_rr
 	) {
 		return WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableSet)(
-			table, bindingId, arrayId, d, e_rr
+			table, bindingId, arrayId, darr, e_rr
+		);
+	}
+
+	Bool DescriptorTable_unsetDescriptorExt(
+		DescriptorTable *table,
+		U64 bindingId,
+		U64 arrayId,
+		U64 count,
+		Error *e_rr
+	) {
+		return WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableUnset)(
+			table, bindingId, arrayId, count, e_rr
 		);
 	}
 	
@@ -303,10 +315,6 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		GraphicsDeviceRef **deviceRef
 	) {
 		return GraphicsInterface_instance->tables[instance->api].deviceInit(instance, deviceInfo, deviceRef);
-	}
-
-	void GraphicsDevice_postInitExt(GraphicsDevice *device) {
-		GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(device->instance)->api].devicePostInit(device);
 	}
 
 	U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal) {

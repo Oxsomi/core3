@@ -151,7 +151,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, 0);
 		
-		Bool cpuSided = !!(texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit);
+		Bool cpuSided = texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 
 		//Dedicated allocations for depth stencil and render targets that are >=512px
 		//Magic number from NV best practices and seems to match Vulkan's behavior closely.
@@ -276,14 +276,11 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		}
 	}
 
-	//Image views
-
-	const DxDescriptorHeapSingle *heap = &DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx)->resourcesHeap;
+	//Name resources
 
 	for(U8 i = 0; i < texture->images; ++i) {
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, i);
-		UnifiedTextureImage managedImage = TextureRef_getImage(textureRef, 0, i);
 
 		managedImageExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
 

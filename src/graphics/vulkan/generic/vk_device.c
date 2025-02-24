@@ -30,6 +30,7 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
@@ -42,7 +43,6 @@ TListImpl(VkSemaphore);
 TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
-TListImpl(VkWriteDescriptorSet);
 
 #define bindNextVkStruct(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
@@ -56,6 +56,11 @@ TList(VkDeviceQueueCreateInfo);
 TList(VkQueueFamilyProperties);
 TListImpl(VkDeviceQueueCreateInfo);
 TListImpl(VkQueueFamilyProperties);
+
+TListImpl(VkDescriptorBufferInfo);
+TListImpl(VkDescriptorImageInfo);
+TListImpl(VkAccelerationStructureKHR);
+TListImpl(VkDescriptorTableRange);
 
 #define getVkFunctionDevice(label, function, result) {											\
 																								\
@@ -86,7 +91,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.imageCubeArray = true,
 		.independentBlend = true,
 
-		.geometryShader = !!(feat & EGraphicsFeatures_GeometryShader),
+		.geometryShader = (Bool)(feat & EGraphicsFeatures_GeometryShader),
 		.tessellationShader = true,
 
 		.multiDrawIndirect = true,
@@ -97,22 +102,22 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.depthBiasClamp = true,
 		.samplerAnisotropy = true,
 
-		.textureCompressionASTC_LDR = !!(types & EGraphicsDataTypes_ASTC),
-		.textureCompressionBC = !!(types & EGraphicsDataTypes_BCn),
+		.textureCompressionASTC_LDR = (Bool)(types & EGraphicsDataTypes_ASTC),
+		.textureCompressionBC = (Bool)(types & EGraphicsDataTypes_BCn),
 
 		.shaderUniformBufferArrayDynamicIndexing = true,
 		.shaderSampledImageArrayDynamicIndexing = true,
 		.shaderStorageBufferArrayDynamicIndexing = true,
 		.shaderStorageImageArrayDynamicIndexing = true,
 
-		.shaderFloat64 = !!(types & EGraphicsDataTypes_F64),
-		.shaderInt64 = !!(types & EGraphicsDataTypes_I64),
+		.shaderFloat64 = (Bool)(types & EGraphicsDataTypes_F64),
+		.shaderInt64 = (Bool)(types & EGraphicsDataTypes_I64),
 		.shaderInt16 = true,
 
-		.fillModeNonSolid = !!(feat & EGraphicsFeatures_Wireframe),
-		.logicOp = !!(feat & EGraphicsFeatures_LogicOp),
-		.dualSrcBlend = !!(feat & EGraphicsFeatures_DualSrcBlend),
-		.shaderStorageImageMultisample = !!(feat & EGraphicsFeatures_WriteMSTexture)
+		.fillModeNonSolid = (Bool)(feat & EGraphicsFeatures_Wireframe),
+		.logicOp = (Bool)(feat & EGraphicsFeatures_LogicOp),
+		.dualSrcBlend = (Bool)(feat & EGraphicsFeatures_DualSrcBlend),
+		.shaderStorageImageMultisample = (Bool)(feat & EGraphicsFeatures_WriteMSTexture)
 	};
 
 	VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {
@@ -311,10 +316,10 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		types & (EGraphicsDataTypes_AtomicF32 | EGraphicsDataTypes_AtomicF64),
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
-			.shaderBufferFloat32AtomicAdd = !!(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat32Atomics = !!(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat64AtomicAdd = !!(types & EGraphicsDataTypes_AtomicF64),
-			.shaderBufferFloat64Atomics = !!(types & EGraphicsDataTypes_AtomicF64)
+			.shaderBufferFloat32AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF32),
+			.shaderBufferFloat32Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF32),
+			.shaderBufferFloat64AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF64),
+			.shaderBufferFloat64Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF64)
 		}
 	)
 
@@ -580,6 +585,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkWaitForFences, deviceExt->waitForFences)
 	getVkFunctionDevice(clean, vkResetFences, deviceExt->resetFences)
 	getVkFunctionDevice(clean, vkDestroyFence, deviceExt->destroyFence)
+	getVkFunctionDevice(clean, vkFreeDescriptorSets, deviceExt->freeDescriptorSets)
 
 	getVkFunctionDevice(clean, vkCmdPipelineBarrier2KHR, deviceExt->cmdPipelineBarrier2)
 	getVkFunctionDevice(clean, vkGetSwapchainImagesKHR, deviceExt->getSwapchainImages)
@@ -747,51 +753,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	deviceExt->resolvedQueues = resolvedId;
 
-	//Last layout repeat 2-3x (that's the CBuffer which needs FRAMES_IN_FLIGHT different versions)
-
-	VkDescriptorSetLayout setLayouts[EDescriptorSetType_Count];
-
-	for(U64 i = 0; i < EDescriptorSetType_Count; ++i)
-		setLayouts[i] = deviceExt->setLayouts[U64_min(i, EDescriptorSetType_UniqueLayouts - 1)];
-
-	VkDescriptorSetAllocateInfo setInfo = (VkDescriptorSetAllocateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = deviceExt->descriptorPool,
-		.descriptorSetCount = EDescriptorSetType_Count,
-		.pSetLayouts = setLayouts
-	};
-
-	gotoIfError(clean, checkVkError(deviceExt->allocateDescriptorSets(deviceExt->device, &setInfo, deviceExt->sets)))
-
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
-
-		static const C8 *debugNames[] = {
-			"Samplers",
-			"Resources",
-			"Global frame cbuffer (0)",
-			"Global frame cbuffer (1)",
-			"Global frame cbuffer (2)"
-		};
-
-		for (U32 i = 0; i < EDescriptorSetType_Count; ++i) {
-
-			CharString_freex(&tempStr);
-
-			gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set (%"PRIu32": %s)", i, debugNames[i]))
-
-			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
-				.objectHandle = (U64) deviceExt->sets[i],
-				.pObjectName = tempStr.ptr,
-			};
-
-			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-
-			CharString_freex(&tempStr);
-		}
-	}
-
 	//Get memory properties
 
 	instanceExt->getPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
@@ -886,36 +847,6 @@ Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
 
 clean:
 	return err;
-}
-
-void VK_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {
-
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
-	//Fill last FRAMES_IN_FLIGHT descriptor sets with UBO[i] to ensure we only modify things in flight.
-
-	VkDescriptorBufferInfo uboBufferInfo[MAX_FRAMES_IN_FLIGHT];
-	VkWriteDescriptorSet uboDescriptor[MAX_FRAMES_IN_FLIGHT];
-
-	for(U64 i = 0; i < device->framesInFlight; ++i) {
-
-		uboBufferInfo[i] = (VkDescriptorBufferInfo) {
-			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData[i]), Vk)->buffer,
-			.range = sizeof(CBufferData)
-		};
-
-		uboDescriptor[i] = (VkWriteDescriptorSet) {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = deviceExt->sets[EDescriptorSetType_CBuffer0 + i],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &uboBufferInfo[i]
-		};
-	}
-
-	deviceExt->updateDescriptorSets(deviceExt->device, device->framesInFlight, uboDescriptor, 0, NULL);
 }
 
 U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
@@ -1057,6 +988,34 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 }
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
+
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer commandBuffer) {
+
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
+
+	PipelineLayout *defaultLayout = PipelineLayoutRef_ptr(device->defaultPipelineLayout);
+	VkPipelineLayout *defaultLayoutExt = PipelineLayout_ext(defaultLayout, Vk);
+
+	VkDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Vk);
+
+	for(U64 i = 0, k = 0; i < bindingCount; ++i)
+		for(U64 j = 0; j < table->bindCommands; ++j) {
+
+			deviceExt->cmdBindDescriptorSets(
+				commandBuffer,
+				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
+					i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+					),
+				*defaultLayoutExt,
+				table->offsets[j], table->counts[j], &table->sets[k],
+				0, NULL
+			);
+
+			k += table->counts[j];
+		}
+}
 
 Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
@@ -1322,28 +1281,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 
-		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
-		//For every bind point
-
-		VkDescriptorSet sets[EDescriptorSetType_UniqueLayouts];
-
-		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
-			sets[i] =
-				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-				deviceExt->sets[EDescriptorSetType_CBuffer0 + device->fifId];
-
-		U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
-
-		for(U64 i = 0; i < bindingCount; ++i)
-			deviceExt->cmdBindDescriptorSets(
-				commandBuffer,
-				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
-					i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
-				),
-				deviceExt->defaultLayout,
-				0, EDescriptorSetType_UniqueLayouts, sets,
-				0, NULL
-			);
+		GraphicsDevice_rebindDescriptors(device, commandBuffer);
 
 		//Record commands
 
@@ -1414,7 +1352,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.waitSemaphoreCount = (U32) deviceExt->waitSemaphoresList.length,
 		.pWaitSemaphores = deviceExt->waitSemaphoresList.ptr,
-		.signalSemaphoreCount = !!swapchains.length,
+		.signalSemaphoreCount = (Bool) swapchains.length,
 		.pSignalSemaphores = swapchains.length ? &signalSemaphores : NULL,
 		.pCommandBuffers = &commandBuffer,
 		.commandBufferCount = commandBuffer ? 1 : 0,
@@ -1515,27 +1453,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState 
 
 	gotoIfError(clean, checkVkError(deviceExt->beginCommandBuffer(commandBuffer->buffer, &beginInfo)))
 
-	//Re-bind descriptors
-
-	VkDescriptorSet sets[EDescriptorSetType_UniqueLayouts];
-
-	for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
-		sets[i] =
-			i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-			deviceExt->sets[EDescriptorSetType_CBuffer0 + device->fifId];
-
-	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
-
-	for(U64 i = 0; i < bindingCount; ++i)
-		deviceExt->cmdBindDescriptorSets(
-			commandBuffer->buffer,
-			i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
-				i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
-			),
-			deviceExt->defaultLayout,
-			0, EDescriptorSetType_UniqueLayouts, sets,
-			0, NULL
-		);
+	GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer);
 
 	//Reset temporary variables to avoid invalid caching behavior
 

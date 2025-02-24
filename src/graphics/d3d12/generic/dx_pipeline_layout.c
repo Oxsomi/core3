@@ -162,7 +162,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 
 	if(err.genericError) {
 
-		if(errBlob && !!(device->flags & EGraphicsDeviceFlags_IsDebug))
+		if(errBlob && (device->flags & EGraphicsDeviceFlags_IsDebug))
 			Log_errorLnx(
 				"D3D12: Create root signature failed: %s", (const C8*) errBlob->lpVtbl->GetBufferPointer(errBlob)
 			);
@@ -176,7 +176,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 		&IID_ID3D12RootSignature, (void**) &layoutExt->rootSig
 	)))
 
-	if (CharString_length(name) && !!(device->flags & EGraphicsDeviceFlags_IsDebug)) {
+	if (CharString_length(name) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
 		gotoIfError(clean, CharString_toUTF16x(name, &nameUtf16))
 		gotoIfError(clean, dxCheck(layoutExt->rootSig->lpVtbl->SetName(layoutExt->rootSig, (const wchar_t*) nameUtf16.ptr)))
 	}

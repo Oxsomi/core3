@@ -47,7 +47,7 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
 		
 		case ESHRegisterType_Sampler:
 		case ESHRegisterType_SamplerComparisonState:
-			return !!(regType & ESHRegisterType_IsCombinedSampler) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
+			return regType & ESHRegisterType_IsCombinedSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
 				VK_DESCRIPTOR_TYPE_SAMPLER;
 
 		case ESHRegisterType_ByteAddressBuffer:
@@ -67,7 +67,8 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
 		case ESHRegisterType_Texture3D:
 		case ESHRegisterType_TextureCube:
 		case ESHRegisterType_Texture2DMS:
-			return !!(regType & ESHRegisterType_IsWrite) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+			return regType & ESHRegisterType_IsWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE :
+			VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	}
 }
 
@@ -97,7 +98,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	VkDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Vk);
 
 	const DescriptorLayoutInfo info = layout->info;
-	Bool anyBindless = !!(info.flags & EDescriptorLayoutFlags_AllowBindlessAny);
+	Bool anyBindless = info.flags & EDescriptorLayoutFlags_AllowBindlessAny;
 
 	//Basic setup
 
@@ -131,7 +132,9 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	for(U32 i = 0; i < (U32) info.bindings.length; ++i) {
 
-		gotoIfError(clean, ListU64_pushBack(&sortedList, ((U64)info.bindings.ptr[i].space << 32) | i, (Allocator) { 0 }))
+		gotoIfError(clean, ListU64_pushBack(
+			&sortedList, ((U64)info.bindings.ptr[i].binding.space << 32) | i, (Allocator) { 0 }
+		))
 
 		//Make sure the set is registered to avoid going over 4 sets
 
@@ -140,7 +143,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		U8 j = 0;
 
 		for(; j < uniqueSetCounter; ++j)
-			if(sets[j] == binding.space)
+			if(sets[j] == binding.binding.space)
 				break;
 			
 		if (j == uniqueSetCounter) {
@@ -150,13 +153,14 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 					0, 4, 4, "GraphicsDeviceRef_createDescriptorLayout can only have 4 unique descriptor sets bound at once"
 				))
 			
-			sets[uniqueSetCounter] = binding.space;
+			layoutExt->setIds[uniqueSetCounter] = binding.binding.space;
+			sets[uniqueSetCounter] = binding.binding.space;
 			++uniqueSetCounter;
 		}
 
 		if(
-			!!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) ||
-			(!!(info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding.count > 1)
+			(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) ||
+			((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding.count > 1)
 		)
 			isBindlessSet |= 1 << j;
 	}
@@ -180,52 +184,52 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		VkShaderStageFlags stageFlags = 0;
 
-		if(!!((vis >> ESHPipelineStage_Vertex) & 1))
+		if((vis >> ESHPipelineStage_Vertex) & 1)
 			stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-		if(!!((vis >> ESHPipelineStage_Pixel) & 1))
+		if((vis >> ESHPipelineStage_Pixel) & 1)
 			stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-		if(!!((vis >> ESHPipelineStage_Compute) & 1))
+		if((vis >> ESHPipelineStage_Compute) & 1)
 			stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-		if(!!((vis >> ESHPipelineStage_GeometryExt) & 1))
+		if((vis >> ESHPipelineStage_GeometryExt) & 1)
 			stageFlags = VK_SHADER_STAGE_GEOMETRY_BIT;
 
-		if(!!((vis >> ESHPipelineStage_Hull) & 1))
+		if((vis >> ESHPipelineStage_Hull) & 1)
 			stageFlags = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
 
-		if(!!((vis >> ESHPipelineStage_Domain) & 1))
+		if((vis >> ESHPipelineStage_Domain) & 1)
 			stageFlags = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 
-		if(!!((vis >> ESHPipelineStage_RaygenExt) & 1))
+		if((vis >> ESHPipelineStage_RaygenExt) & 1)
 			stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
-		if(!!((vis >> ESHPipelineStage_CallableExt) & 1))
+		if((vis >> ESHPipelineStage_CallableExt) & 1)
 			stageFlags = VK_SHADER_STAGE_CALLABLE_BIT_KHR;
 
-		if(!!((vis >> ESHPipelineStage_MissExt) & 1))
+		if((vis >> ESHPipelineStage_MissExt) & 1)
 			stageFlags = VK_SHADER_STAGE_MISS_BIT_KHR;
 
-		if(!!((vis >> ESHPipelineStage_ClosestHitExt) & 1))
+		if((vis >> ESHPipelineStage_ClosestHitExt) & 1)
 			stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
-		if(!!((vis >> ESHPipelineStage_AnyHitExt) & 1))
+		if((vis >> ESHPipelineStage_AnyHitExt) & 1)
 			stageFlags = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
 
-		if(!!((vis >> ESHPipelineStage_IntersectionExt) & 1))
+		if((vis >> ESHPipelineStage_IntersectionExt) & 1)
 			stageFlags = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
 
-		if(!!((vis >> ESHPipelineStage_MeshExt) & 1))
+		if((vis >> ESHPipelineStage_MeshExt) & 1)
 			stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT;
 
-		if(!!((vis >> ESHPipelineStage_TaskExt) & 1))
+		if((vis >> ESHPipelineStage_TaskExt) & 1)
 			stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT;
 
 		VkDescriptorType type = vkGetDescriptorType(binding->registerType);
 
 		bindings.ptrNonConst[i] = (VkDescriptorSetLayoutBinding) {
-			.binding = binding->id,
+			.binding = binding->binding.binding,
 			.descriptorCount = count,
 			.descriptorType = type,
 			.stageFlags = stageFlags
@@ -241,7 +245,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		if(
 			!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
-			!(!!(info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
+			!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
 		)
 			bindFlags = 0;
 
@@ -252,7 +256,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		U8 linkId = 0;
 
 		for(U8 j = 1; j < 4; ++j)
-			if (sets[j] == binding->space) {
+			if (sets[j] == binding->binding.space) {
 				linkId = j;
 				break;
 			}
@@ -262,7 +266,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			setInfo[linkId].pBindings = &bindings.ptr[i];
 			partiallyBound[linkId].pBindingFlags = &flags.ptr[i];
 
-			if (!!((isBindlessSet >> linkId) & 1)) {
+			if ((isBindlessSet >> linkId) & 1) {
 				setInfo[linkId].pNext = &partiallyBound[linkId];
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 			}
@@ -289,7 +293,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_DESCRIPTOR_POOL,
+				.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
 				.pObjectName = tmpName.ptr,
 				.objectHandle = (U64) layoutExt->layouts[i]
 			};

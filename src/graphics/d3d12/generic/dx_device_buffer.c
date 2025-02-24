@@ -143,7 +143,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	if(!res)
 		gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"))
 
-	Bool cpuSided = !!(buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit);
+	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 
 	DeviceMemoryBlock block;
 

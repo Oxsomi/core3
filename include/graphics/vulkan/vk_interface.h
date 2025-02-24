@@ -92,11 +92,19 @@
 	Error VkDescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
 	Bool VkDescriptorTable_free(DescriptorTable *table, Allocator alloc);
 
-	Bool VkDescriptorTable_setDescriptor(
+	Bool VkDescriptorTable_setDescriptors(
 		DescriptorTable *table,
 		U64 bindId,
 		U64 arrayId,
-		Descriptor d,
+		ListDescriptor darr,
+		Error *e_rr
+	);
+
+	Bool VkDescriptorTable_unsetDescriptors(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		U64 count,
 		Error *e_rr
 	);
 
@@ -134,7 +142,6 @@
 		GraphicsDeviceRef **deviceRef
 	);
 
-	void VkGraphicsDevice_postInit(GraphicsDevice *device);
 	U64 VkGraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
 	Bool VkGraphicsDevice_free(const GraphicsInstance *instance, void *ext);

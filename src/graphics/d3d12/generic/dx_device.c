@@ -32,6 +32,8 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
@@ -431,10 +433,6 @@ clean:
 	return err;
 }
 
-void DX_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {		//No-op in D3D12, CBV can be made/bound at runtime :)
-	(void)device;
-}
-
 U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
 
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -568,6 +566,41 @@ DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
 }
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
+
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *commandBuffer) {
+
+	//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
+	//For every bind point.
+
+	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
+
+	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
+
+	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
+	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2] = {
+		heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement,
+		heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->resourcesHeap.gpuIncrement
+	};
+
+	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
+
+	PipelineLayout *defaultLayout = PipelineLayoutRef_ptr(device->defaultPipelineLayout);
+	DxPipelineLayout *defaultLayoutExt = PipelineLayout_ext(defaultLayout, Dx);
+
+	commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, defaultLayoutExt->rootSig);
+	commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, defaultLayoutExt->rootSig);
+
+	for(U32 i = 0; i < 2; ++i) {
+		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+	}
+
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
+	D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
+
+	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
+	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
+}
 
 Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
@@ -747,28 +780,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 
-		//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
-		//For every bind point.
-
-		DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->descriptorHeaps), Dx);
-
-		ID3D12DescriptorHeap *descriptorHeaps[] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
-		D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[] = { heap->resourcesHeap.gpuHandle, heap->samplerHeap.gpuHandle };
-
-		commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
-
-		commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, deviceExt->defaultLayout);
-		commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, deviceExt->defaultLayout);
-
-		for(U32 i = 0; i < 2; ++i) {
-			commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-			commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-		}
-
-		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
-
-		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
-		commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
+		GraphicsDevice_rebindDescriptors(device, commandBuffer);
 
 		//Record commands
 
@@ -927,6 +939,8 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState 
 	commandBuffer->boundPrimitiveTopology = U8_MAX;
 	commandBuffer->stencilRef = 0;
 	commandBuffer->blendConstants = F32x4_zero();
+
+	GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer);
 
 clean:
 

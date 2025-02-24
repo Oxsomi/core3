@@ -75,7 +75,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 			"GraphicsDeviceRef_createPipelineCompute() entry binaryId out of bounds"
 		))
 
-	if(!!layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+	if(layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() pipeline layout is invalid"
@@ -108,7 +108,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 		.flags = flags
 	};
 	
-	if(!!layout)
+	if(layout)
 		layout = device->defaultPipelineLayout;
 
 	gotoIfError2(clean, PipelineLayoutRef_inc(layout))

@@ -90,6 +90,8 @@ typedef struct DxDescriptorHeapSingle {
 
 typedef struct DxDescriptorHeap {
 	DxDescriptorHeapSingle samplerHeap, resourcesHeap;
+	AllocationBuffer allocators[2];
+	SpinLock locks[2];
 } DxDescriptorHeap;
 
 TList(D3D12_DESCRIPTOR_RANGE1);
@@ -116,6 +118,9 @@ typedef struct DxDescriptorTable {
 	U64 allocationLocations[2];		//Resources, samplers
 	U64 allocationSizes[2];			//Resources, samplers
 } DxDescriptorTable;
+
+Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table);
+Error DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table);
 
 typedef enum EExecuteIndirectCommand {
 	EExecuteIndirectCommand_Dispatch,

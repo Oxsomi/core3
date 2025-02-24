@@ -92,11 +92,19 @@
 	Error D3D12DescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
 	Bool D3D12DescriptorTable_free(DescriptorTable *table, Allocator alloc);
 
-	Bool D3D12DescriptorTable_setDescriptor(
+	Bool D3D12DescriptorTable_setDescriptors(
 		DescriptorTable *table,
 		U64 bindId,
 		U64 arrayId,
-		Descriptor d,
+		ListDescriptor darr,
+		Error *e_rr
+	);
+
+	Bool D3D12DescriptorTable_unsetDescriptors(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		U64 count,
 		Error *e_rr
 	);
 
@@ -134,7 +142,6 @@
 		GraphicsDeviceRef **deviceRef
 	);
 
-	void D3D12GraphicsDevice_postInit(GraphicsDevice *device);
 	U64 D3D12GraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
 	Bool D3D12GraphicsDevice_free(const GraphicsInstance *instance, void *ext);

@@ -247,26 +247,6 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	if(tlas->base.flags & ERTASBuildFlags_IsUpdate)
 		tlasExt->geometries.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
 
-	//Add as descriptor
-
-	VkWriteDescriptorSetAccelerationStructureKHR tlasDesc = (VkWriteDescriptorSetAccelerationStructureKHR) {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
-		.accelerationStructureCount = 1,
-		.pAccelerationStructures = &tlasExt->geometries.dstAccelerationStructure
-	};
-
-	VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstBinding = EDescriptorType_TLASExt - 1,				//Sampler is skipped
-		.dstArrayElement = ResourceHandle_getId(tlas->handle),
-		.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-		.pNext = &tlasDesc
-	};
-
-	deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
-
 clean:
 
 	if(acq == ELockAcquire_Acquired)

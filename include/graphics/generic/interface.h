@@ -44,6 +44,7 @@ typedef struct DeviceMemoryAllocator DeviceMemoryAllocator;
 typedef struct CBufferData CBufferData;
 typedef struct Descriptor Descriptor;
 
+typedef struct ListDescriptor ListDescriptor;
 typedef struct ListSHFile ListSHFile;
 typedef struct ListCommandListRef ListCommandListRef;
 typedef struct ListSwapchainRef ListSwapchainRef;
@@ -170,7 +171,6 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDeviceRef **deviceRef
 	);
 
-	impl void GraphicsDevice_postInitExt(GraphicsDevice *device);
 	impl U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
 
 	impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
@@ -278,11 +278,19 @@ typedef struct GraphicsObjectSizes {
 	typedef Error (*DescriptorHeap_createDescriptorTableImpl)(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
 	typedef Bool (*DescriptorTable_freeImpl)(DescriptorTable *table, Allocator alloc);
 
-	typedef Bool (*DescriptorTable_setImpl)(
+	typedef Bool (*DescriptorTable_setDescriptorsImpl)(
 		DescriptorTable *table,
 		U64 bindId,
 		U64 arrayId,
-		Descriptor d,
+		ListDescriptor darr,
+		Error *e_rr
+	);
+
+	typedef Bool (*DescriptorTable_unsetDescriptorsImpl)(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		U64 count,
 		Error *e_rr
 	);
 
@@ -314,7 +322,6 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDeviceRef **deviceRef
 	);
 
-	typedef void (*GraphicsDevice_postInitImpl)(GraphicsDevice *device);
 	typedef U64 (*GraphicsDevice_getMemoryBudgetImpl)(GraphicsDevice *device, Bool isDeviceLocal);
 
 	typedef Bool (*GraphicsDevice_freeImpl)(const GraphicsInstance *instance, void *ext);
@@ -386,7 +393,8 @@ typedef struct GraphicsObjectSizes {
 
 		DescriptorHeap_createDescriptorTableImpl		descriptorTableCreate;
 		DescriptorTable_freeImpl						descriptorTableFree;
-		DescriptorTable_setImpl							descriptorTableSet;
+		DescriptorTable_setDescriptorsImpl				descriptorTableSet;
+		DescriptorTable_unsetDescriptorsImpl			descriptorTableUnset;
 
 		GraphicsDeviceRef_createDescriptorHeapImpl		descriptorHeapCreate;
 		DescriptorHeap_freeImpl							descriptorHeapFree;
@@ -395,7 +403,6 @@ typedef struct GraphicsObjectSizes {
 		DeviceMemoryAllocator_freeAllocationImpl		memoryFree;
 
 		GraphicsDevice_initImpl							deviceInit;
-		GraphicsDevice_postInitImpl						devicePostInit;
 		GraphicsDeviceRef_waitImpl						deviceWait;
 		GraphicsDevice_freeImpl							deviceFree;
 		GraphicsDevice_submitCommandsImpl				deviceSubmitCommands;
@@ -504,11 +511,19 @@ typedef struct GraphicsObjectSizes {
 	Error DescriptorHeap_createDescriptorTableExt(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
 	Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc);
 
-	Bool DescriptorTable_setDescriptorExt(
+	Bool DescriptorTable_setDescriptorsExt(
 		DescriptorTable *table,
 		U64 bindingId,
 		U64 arrayId,
-		Descriptor d,
+		ListDescriptor darr,
+		Error *e_rr
+	);
+
+	Bool DescriptorTable_unsetDescriptorsExt(
+		DescriptorTable *table,
+		U64 bindingId,
+		U64 arrayId,
+		U64 count,
 		Error *e_rr
 	);
 
@@ -541,7 +556,6 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDeviceRef **deviceRef
 	);
 
-	void GraphicsDevice_postInitExt(GraphicsDevice *device);
 	U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
 
 	Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);

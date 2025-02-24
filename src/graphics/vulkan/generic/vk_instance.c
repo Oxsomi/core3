@@ -103,13 +103,13 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 
 			.descriptorTableCreate = VkDescriptorHeap_createDescriptorTable,
 			.descriptorTableFree = VkDescriptorTable_free,
-			.descriptorTableSet = VkDescriptorTable_setDescriptor,
+			.descriptorTableSet = VkDescriptorTable_setDescriptors,
+			.descriptorTableUnset = VkDescriptorTable_unsetDescriptors,
 
 			.memoryAllocate = VkDeviceMemoryAllocator_allocate,
 			.memoryFree = VkDeviceMemoryAllocator_freeAllocation,
 
 			.deviceInit = VkGraphicsDevice_init,
-			.devicePostInit = VkGraphicsDevice_postInit,
 			.deviceWait = VkGraphicsDeviceRef_wait,
 			.deviceFree = VkGraphicsDevice_free,
 			.deviceSubmitCommands = VkGraphicsDevice_submitCommands,

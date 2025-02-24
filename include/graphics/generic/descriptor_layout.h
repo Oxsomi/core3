@@ -28,6 +28,9 @@
 	extern "C" {
 #endif
 
+typedef struct SHFile SHFile;
+typedef RefPtr GraphicsDeviceRef;
+
 typedef enum EDescriptorLayoutFlags {
 
 	EDescriptorLayoutFlags_None						= 0,
@@ -43,8 +46,7 @@ typedef enum EDescriptorLayoutFlags {
 typedef struct DescriptorBinding {
 	ESHRegisterType registerType;
 	U32 count;
-	U32 space;
-	U32 id;
+	SHBinding binding;
 	U32 visibility;			//Bit mask of ESHPipelineStage
 	U32 strideOrLength;		//Constant buffers; length, structured buffers: stride
 } DescriptorBinding;
@@ -60,6 +62,24 @@ typedef struct DescriptorLayoutInfo {
 	ListCharString bindingNames;
 
 } DescriptorLayoutInfo;
+
+Bool GraphicsDeviceRef_detectLayoutFromEntries(
+	GraphicsDeviceRef *dev,
+	SHFile tmpBinary,
+	ListU32 entrypoints,				//U32 (U16 entryId, binaryId)
+	EDescriptorLayoutFlags flags,
+	DescriptorLayoutInfo *info,
+	Error *e_rr
+);
+
+Bool GraphicsDeviceRef_detectLayoutFromEntry(
+	GraphicsDeviceRef *dev,
+	SHFile binary,
+	U32 entrypoint,						//U32 (U16 entryId, binaryId)
+	EDescriptorLayoutFlags flags,
+	DescriptorLayoutInfo *info,
+	Error *e_rr
+);
 
 void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, Allocator alloc);
 

@@ -47,7 +47,6 @@
 TListNamedImpl(ListSpinLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
-TListImpl(DescriptorStackTrace);
 
 Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {
 	return !RefPtr_dec(device) ?
@@ -81,7 +80,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	RefPtr_dec(&device->copyPipelineLayout);
 	RefPtr_dec(&device->defaultDescLayout);
 	RefPtr_dec(&device->defaultPipelineLayout);
-	RefPtr_dec(&device->descriptorHeaps);
+	RefPtr_dec(&device->defaultDescriptorHeaps);
 	RefPtr_dec(&device->defaultDescriptorTable);
 
 	for(U64 i = 0; i < device->framesInFlight; ++i)
@@ -102,7 +101,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	for (U64 i = 0; i < device->allocator.blocks.length; ++i) {
 		const DeviceMemoryBlock block = device->allocator.blocks.ptr[i];
-		leakedBlocks += !!Buffer_length(block.allocations.buffer);
+		leakedBlocks += (Bool) Buffer_length(block.allocations.buffer);
 	}
 
 	if(leakedBlocks)
@@ -127,40 +126,6 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	ListDeviceMemoryBlock_freex(&device->allocator.blocks);
 	ListSpinLockPtr_freex(&device->currentLocks);
-
-	//Announce descriptor memleaks
-
-	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
-		Buffer_freex(&device->freeList[i]);
-
-	SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
-
-		//TODO: HashMap
-
-		ListDescriptorStackTrace *stack = &device->descriptorStackTraces;
-
-		if(stack->length)
-			Log_warnLnx("Leaked %"PRIu64" descriptors. Displaying up to 16:", stack->length);
-
-		for (U64 j = 0; j < stack->length; ++j) {
-
-			const DescriptorStackTrace elem = stack->ptr[j];
-
-			if(j < 16)
-				Log_warnLnx(
-					"%"PRIu64": Resource type: %"PRIu64", id: %"PRIu64,
-					j, (U64)elem.resourceId >> 20, (U64)elem.resourceId & ((1 << 20) - 1)
-				);
-
-			Log_printCapturedStackTraceCustomx(
-				(const void**) elem.stackTrace, sizeof(elem.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_Default
-			);
-		}
-
-		ListDescriptorStackTrace_freex(stack);
-	}
 
 	GraphicsInstanceRef_dec(&device->instance);
 
@@ -210,12 +175,9 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 		if(mainSingle == U32_MAX)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createPrebuiltShaders() couldn't find entrypoint"))
 
-		ListU32 binaries = (ListU32) { 0 };
-		gotoIfError2(clean, ListU32_createRefConst(&mainSingle, 1, &binaries))
-
 		DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
-		gotoIfError3(clean, DescriptorLayout_detect(
-			tmpBinary, binaries, EDescriptorLayoutFlags_InternalWeakDeviceRef, &info
+		gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntry(
+			deviceRef, tmpBinary, mainSingle, EDescriptorLayoutFlags_InternalWeakDeviceRef, &info, e_rr
 		))
 
 		if(!device->copyDescLayout) {
@@ -332,11 +294,6 @@ Error GraphicsDeviceRef_create(
 	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64))
 
-	//Create descriptor type free list
-
-	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
-		gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &device->freeList[i]))
-
 	//Reserve sampler 0 because we want to be able to use read/write handle 0 as invalid.
 
 	SpinLock_lock(&device->descriptorLock, U64_MAX);
@@ -344,11 +301,6 @@ Error GraphicsDeviceRef_create(
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_create() couldn't reserve null descriptor (sampler 0)"))
 
 	SpinLock_unlock(&device->descriptorLock);
-
-	//Allocate temp storage for descriptor tracking
-
-	if(device->flags & EGraphicsDeviceFlags_IsDebug)
-		gotoIfError(clean, ListDescriptorStackTrace_reservex(&device->descriptorStackTraces, 16))
 
 	//Create extended device
 
@@ -377,7 +329,7 @@ Error GraphicsDeviceRef_create(
 	if(device->info.capabilities.features & EGraphicsFeatures_Bindless)
 		heapInfo.flags |= EDescriptorHeapFlags_AllowBindless;
 
-	gotoIfError(clean, GraphicsDeviceRef_createDescriptorHeap(*deviceRef, heapInfo, name, &device->descriptorHeaps))
+	gotoIfError(clean, GraphicsDeviceRef_createDescriptorHeap(*deviceRef, heapInfo, name, &device->defaultDescriptorHeaps))
 
 	//Create default descriptor layout
 	//TODO: Make this configurable and have a way to create the default one
@@ -411,121 +363,155 @@ Error GraphicsDeviceRef_create(
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Sampler,
 			.count = EDescriptorTypeCount_Sampler,
-			.space = 0,
-			.id = isSpirv ? 0 : 0,
+			.binding = (SHBinding) {
+				.space = 0,
+				.binding = isSpirv ? 0 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_ConstantBuffer,
 			.count = 1,
-			.space = isSpirv ? 2 : 0,
-			.id = isSpirv ? 0 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 2 : 0,
+				.binding = isSpirv ? 0 : 0
+			},
 			.visibility = U32_MAX,
 			.strideOrLength = (U32) sizeof(CBufferData)
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D,
 			.count = EDescriptorTypeCount_Texture2D,
-			.space = isSpirv ? 1 : 0,
-			.id = isSpirv ? 0 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 0 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_TextureCube,
 			.count = EDescriptorTypeCount_TextureCube,
-			.space = isSpirv ? 1 : 1,
-			.id = isSpirv ? 1 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 1,
+				.binding = isSpirv ? 1 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D,
 			.count = EDescriptorTypeCount_Texture3D,
-			.space = isSpirv ? 1 : 2,
-			.id = isSpirv ? 2 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 2,
+				.binding = isSpirv ? 2 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_ByteAddressBuffer,
 			.count = EDescriptorTypeCount_Buffer,
-			.space = isSpirv ? 1 : 3,
-			.id = isSpirv ? 3 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 3,
+				.binding = isSpirv ? 3 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWBuffer,
-			.space = isSpirv ? 1 : 4,
-			.id = isSpirv ? 4 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 4,
+				.binding = isSpirv ? 4 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3D,
-			.space = isSpirv ? 1 : 5,
-			.id = isSpirv ? 5 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 5,
+				.binding = isSpirv ? 5 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Ds,
-			.space = isSpirv ? 1 : 6,
-			.id = isSpirv ? 6 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 6,
+				.binding = isSpirv ? 6 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Df,
-			.space = isSpirv ? 1 : 7,
-			.id = isSpirv ? 7 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 7,
+				.binding = isSpirv ? 7 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Di,
-			.space = isSpirv ? 1 : 8,
-			.id = isSpirv ? 8 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 8,
+				.binding = isSpirv ? 8 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Du,
-			.space = isSpirv ? 1 : 9,
-			.id = isSpirv ? 9 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 9,
+				.binding = isSpirv ? 9 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2D,
-			.space = isSpirv ? 1 : 10,
-			.id = isSpirv ? 10 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 10,
+				.binding = isSpirv ? 10 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Ds,
-			.space = isSpirv ? 1 : 11,
-			.id = isSpirv ? 11 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 11,
+				.binding = isSpirv ? 11 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Df,
-			.space = isSpirv ? 1 : 12,
-			.id = isSpirv ? 12 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 12,
+				.binding = isSpirv ? 12 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Di,
-			.space = isSpirv ? 1 : 13,
-			.id = isSpirv ? 13 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 13,
+				.binding = isSpirv ? 13 : 0
+			},
 			.visibility = U32_MAX
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Du,
-			.space = isSpirv ? 1 : 14,
-			.id = isSpirv ? 14 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 14,
+				.binding = isSpirv ? 14 : 0
+			},
 			.visibility = U32_MAX
 		}
 	};
@@ -536,8 +522,10 @@ Error GraphicsDeviceRef_create(
 		bindings[descBindings++] = (DescriptorBinding) {
 			.registerType = ESHRegisterType_AccelerationStructure,
 			.count = EDescriptorTypeCount_TLASExt,
-			.space = isSpirv ? 1 : 15,
-			.id = isSpirv ? 15 : 0,
+			.binding = (SHBinding) {
+				.space = isSpirv ? 1 : 15,
+				.binding = isSpirv ? 15 : 0
+			},
 			.visibility = U32_MAX
 		};
 
@@ -558,7 +546,7 @@ Error GraphicsDeviceRef_create(
 	name = CharString_createRefCStrConst("Default descriptor table");
 
 	gotoIfError(clean, DescriptorHeapRef_createDescriptorTable(
-		device->descriptorHeaps,
+		device->defaultDescriptorHeaps,
 		device->defaultDescLayout,
 		EDescriptorTableFlags_None,
 		name,
@@ -629,7 +617,7 @@ Error GraphicsDeviceRef_create(
 	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 			*deviceRef,
-			EDeviceBufferUsage_None,
+			EDeviceBufferUsage_Uniform,
 			EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 			CharString_createRefCStrConst("Per frame data"),
 			sizeof(CBufferData), &device->frameData[i]
@@ -639,10 +627,6 @@ Error GraphicsDeviceRef_create(
 	
 	if(!GraphicsDeviceRef_createPrebuiltShaders(*deviceRef, &err))
 		goto clean;
-
-	//Finish setting up descriptors
-
-	GraphicsDevice_postInitExt(device);
 
 clean:
 

@@ -1078,7 +1078,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 			if(dep[0].NumBarriers || dep[1].NumBarriers)
 				buffer->lpVtbl->Barrier(
 					buffer,
-					!!dep[0].NumBarriers + !!dep[1].NumBarriers,
+					(Bool) dep[0].NumBarriers + (Bool) dep[1].NumBarriers,
 					dep[0].NumBarriers ? &dep[0] : &dep[1]
 				);
 

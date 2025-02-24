@@ -296,7 +296,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
 		))
 
-	if(!!layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+	if(layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineRaytracing() pipeline layout is invalid"
@@ -323,7 +323,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		.flags = flags
 	};
 	
-	if(!!layout)
+	if(layout)
 		layout = GraphicsDeviceRef_ptr(deviceRef)->defaultPipelineLayout;
 
 	gotoIfError2(clean, PipelineLayoutRef_inc(layout))

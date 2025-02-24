@@ -39,10 +39,12 @@ Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 	for(U8 i = 0; i < utex.images; ++i) {
 
-		const VkUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Vk, 0, i);
+		VkUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Vk, 0, i);
 
-		if(image->view)
-			deviceExt->destroyImageView(deviceExt->device, image->view, NULL);
+		for (U64 j = 0; j < image->views.length; ++j)
+			deviceExt->destroyImageView(deviceExt->device, image->views.ptr[i].view, NULL);
+
+		ListVkImageViewMapping_freex(&image->views);
 
 		if(image->image && utex.resource.type != EResourceType_Swapchain)
 			deviceExt->destroyImage(deviceExt->device, image->image, NULL);
@@ -148,91 +150,13 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		)))
 	}
 
-	//Image views
-
 	for(U8 i = 0; i < texture->images; ++i) {
 
 		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, i);
-		UnifiedTextureImage managedImage = TextureRef_getImage(textureRef, 0, i);
-
-		VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = managedImageExt->image,
-			.viewType = texture->type == ETextureType_2D ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_3D,
-			.format = vkFormat,
-			.subresourceRange = (VkImageSubresourceRange) {
-				.aspectMask = texture->depthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
-				.layerCount = texture->length,
-				.levelCount = texture->levels
-		}
-		};
-
-		gotoIfError(clean, checkVkError(deviceExt->createImageView(deviceExt->device, &viewCreate, NULL, &managedImageExt->view)))
-
-		if(texture->resource.flags & EGraphicsResourceFlag_ShaderRW) {
-
-			VkDescriptorImageInfo descriptorImageInfos[2] = {
-				(VkDescriptorImageInfo) {
-					.imageView = managedImageExt->view,
-					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				},
-				(VkDescriptorImageInfo) {
-					.imageView = managedImageExt->view,
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-				}
-			};
-
-			VkWriteDescriptorSet writeDescriptorSet[2] = {
-				(VkWriteDescriptorSet) {
-					.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
-					.descriptorCount = 1
-				}
-			};
-
-			U32 counter = 0;
-
-			if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
-				writeDescriptorSet[0].dstBinding = EDescriptorType_Texture2D;
-				writeDescriptorSet[0].dstArrayElement = ResourceHandle_getId(managedImage.readHandle);
-				writeDescriptorSet[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-				writeDescriptorSet[0].pImageInfo = &descriptorImageInfos[0];
-				++counter;
-			}
-
-			if (texture->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
-
-				if(counter)
-					writeDescriptorSet[1] = writeDescriptorSet[0];
-
-				writeDescriptorSet[counter].dstBinding = UnifiedTexture_getWriteDescriptorType(*texture);
-				writeDescriptorSet[counter].dstArrayElement = ResourceHandle_getId(managedImage.writeHandle);
-				writeDescriptorSet[counter].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				writeDescriptorSet[counter].pImageInfo = &descriptorImageInfos[1];
-				++counter;
-			}
-
-			deviceExt->updateDescriptorSets(deviceExt->device, counter, writeDescriptorSet, 0, NULL);
-		}
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
-			gotoIfError(clean, CharString_formatx(
-				&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
-			))
-
 			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
-				.pObjectName = temp.ptr,
-				.objectHandle =  (U64) managedImageExt->view
-			};
-
-			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
-
-			CharString_freex(&temp);
-
-			debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 				.objectType = VK_OBJECT_TYPE_IMAGE,
 				.pObjectName = name.ptr,

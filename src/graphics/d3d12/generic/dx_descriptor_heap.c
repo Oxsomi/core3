@@ -24,17 +24,21 @@
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/ext/bufferx.h"
 #include "types/container/string.h"
 
 Bool DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap) {
 
-	const DxDescriptorHeap *heapExt = DescriptorHeap_ext(heap, Dx);
+	DxDescriptorHeap *heapExt = DescriptorHeap_ext(heap, Dx);
 
 	if(heapExt->samplerHeap.heap)
 		heapExt->samplerHeap.heap->lpVtbl->Release(heapExt->samplerHeap.heap);
 
 	if(heapExt->resourcesHeap.heap)
 		heapExt->resourcesHeap.heap->lpVtbl->Release(heapExt->resourcesHeap.heap);
+
+	AllocationBuffer_freex(&heapExt->allocators[0]);
+	AllocationBuffer_freex(&heapExt->allocators[1]);
 
 	return true;
 }
@@ -69,6 +73,8 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 		gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
 			deviceExt, heapDesc, &tmpName, &heapExt->resourcesHeap, true
 		))
+
+		gotoIfError(clean, AllocationBuffer_createx(srvCbvUav, true, 1, &heapExt->allocators[0]))
 	}
 
 	if (info.maxSamplers) {
@@ -85,9 +91,86 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 		gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
 			deviceExt, heapDesc, &tmpName, &heapExt->samplerHeap, true
 		))
+		
+		gotoIfError(clean, AllocationBuffer_createx(info.maxSamplers, true, 1, &heapExt->allocators[1]))
 	}
 
 clean:
 	CharString_freex(&tmpName);
+	return err;
+}
+
+Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table) {
+	
+	SpinLock *lock = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Error err = Error_none();
+
+	//Free CBV/SRV/UAV and sampler ranges
+
+	for(U8 i = 0; i < 2; ++i)
+		if(table->allocationSizes[i]) {
+
+			lock = &heapExt->locks[i];
+			acq = SpinLock_lock(lock, 1 * SECOND);
+
+			if(acq < ELockAcquire_Success)
+				gotoIfError(clean, Error_invalidState(0, "DxDescriptorHeap_freeTable couldn't lock"))
+
+			AllocationBuffer_freeBlock(&heapExt->allocators[i], (const U8*) (const void*) table->allocationLocations[i]);
+
+			table->allocationSizes[i] = 0;
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(lock);
+
+			acq = ELockAcquire_Invalid;
+		}
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(lock);
+
+	return !err.genericError;
+}
+
+Error DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table) {
+
+	SpinLock *lock = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Error err = Error_none();
+
+	U64 ranges[2] = { table->allocationSizes[0], table->allocationSizes[1] };
+	table->allocationSizes[1] = table->allocationSizes[0] = 0;
+
+	//Allocate CBV/SRV/UAV and sampler ranges
+
+	for(U8 i = 0; i < 2; ++i)
+		if(ranges[i]) {
+
+			lock = &heapExt->locks[i];
+			acq = SpinLock_lock(lock, 1 * SECOND);
+
+			if(acq < ELockAcquire_Success)
+				gotoIfError(clean, Error_invalidState(0, "DxDescriptorHeap_allocTable couldn't lock"))
+
+			const U8 *loc = NULL;
+			gotoIfError(clean, AllocationBuffer_allocateBlockx(&heapExt->allocators[i], ranges[i], 1, false, &loc))
+
+			table->allocationLocations[i] = (U64) (const void*) loc;
+			table->allocationSizes[i] = ranges[i];
+
+			if(acq == ELockAcquire_Acquired)
+				SpinLock_unlock(lock);
+
+			acq = ELockAcquire_Invalid;
+		}
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(lock);
+
 	return err;
 }

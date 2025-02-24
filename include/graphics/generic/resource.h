@@ -38,17 +38,32 @@ typedef enum EGraphicsResourceFlag {
 
 	EGraphicsResourceFlag_None						= 0,
 
-	EGraphicsResourceFlag_ShaderRead				= 1 << 0,
-	EGraphicsResourceFlag_ShaderWrite				= 1 << 1,
+	EGraphicsResourceFlag_ShaderRead				= 1 << 0,		//Can be read by shaders; excluding constant buffers
+	EGraphicsResourceFlag_ShaderWrite				= 1 << 1,		//Can be written by shaders
+	EGraphicsResourceFlag_ExposeBindlessRead		= 1 << 2,		//Expose descriptor(s) to bindless DescriptorTable (read)
+	EGraphicsResourceFlag_ExposeBindlessWrite		= 1 << 3,		//Expose descriptor(s) to bindless DescriptorTable (RW)
 
-	EGraphicsResourceFlag_InternalWeakDeviceRef		= 1 << 2,		//Only for internal use in device
+	EGraphicsResourceFlag_InternalWeakDeviceRef		= 1 << 4,		//Only for internal use in device
 
-	EGraphicsResourceFlag_CPUBacked					= 1 << 3,		//Keep a CPU side copy texture for read/write operations
-	EGraphicsResourceFlag_CPUAllocatedBit			= 1 << 4,		//Keep entirely on CPU
+	EGraphicsResourceFlag_CPUBacked					= 1 << 5,		//Keep a CPU side copy texture for read/write operations
+	EGraphicsResourceFlag_CPUAllocatedBit			= 1 << 6,		//Keep entirely on CPU
 
 	EGraphicsResourceFlag_CPUAllocated				= EGraphicsResourceFlag_CPUBacked | EGraphicsResourceFlag_CPUAllocatedBit,
 
-	EGraphicsResourceFlag_ShaderRW					= EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ShaderWrite
+	EGraphicsResourceFlag_ShaderRWBindful			=
+		EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ShaderWrite,
+
+	EGraphicsResourceFlag_ShaderReadBindless		=
+		EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ExposeBindlessRead,
+
+	EGraphicsResourceFlag_ExposeBindless			=
+	EGraphicsResourceFlag_ExposeBindlessRead | EGraphicsResourceFlag_ExposeBindlessWrite,
+
+	EGraphicsResourceFlag_ShaderWriteBindless		=
+		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_ExposeBindlessWrite,
+
+	EGraphicsResourceFlag_ShaderRWBindless			=
+		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_ShaderReadBindless,
 
 } EGraphicsResourceFlag;
 

@@ -83,7 +83,6 @@ TList(VkSemaphore);
 TList(VkResult);
 TList(VkSwapchainKHR);
 TList(VkPipelineStageFlags);
-TList(VkWriteDescriptorSet);
 
 typedef struct VkGraphicsDevice {
 
@@ -100,8 +99,6 @@ typedef struct VkGraphicsDevice {
 	ListVkSemaphore submitSemaphores;
 
 	VkFence commitFence[MAX_FRAMES_IN_FLIGHT];
-
-	VkDescriptorSet sets[EDescriptorSetType_Count];				//1 per type and 2 extra for ubo to allow versioning
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -213,6 +210,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkWaitForFences waitForFences;
 	PFN_vkResetFences resetFences;
 	PFN_vkDestroyFence destroyFence;
+	PFN_vkFreeDescriptorSets freeDescriptorSets;
 
 	U32 nonLinearAlignment;
 	U8 framesInFlight; Bool hasLocalMemory;
@@ -261,7 +259,37 @@ typedef struct VkDescriptorHeap {
 
 typedef struct VkDescriptorLayout {
 	VkDescriptorSetLayout layouts[4];
+	U32 setIds[4];
 } VkDescriptorLayout;
+
+TList(VkDescriptorBufferInfo);
+TList(VkDescriptorImageInfo);
+TList(VkAccelerationStructureKHR);
+
+typedef struct VkDescriptorTableRange {
+
+	union {
+		ListVkDescriptorBufferInfo updateBuffers;
+		ListVkDescriptorImageInfo updateImages;
+		ListVkAccelerationStructureKHR tlases;
+	};
+
+	ListU32 views;
+	ListU32 newViews;		//Temp data for new view ids
+
+} VkDescriptorTableRange;
+
+TList(VkDescriptorTableRange);
+
+typedef struct VkDescriptorTable {
+
+	VkDescriptorSet sets[4];
+	ListVkDescriptorTableRange ranges;
+
+	U8 bindCommands, pad[3], counts[4];
+	U32 offsets[4];
+
+} VkDescriptorTable;
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device,

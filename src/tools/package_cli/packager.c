@@ -223,7 +223,7 @@ clean:
 		if(s_uccess)
 			Log_debugLn(alloc, "-- Packaging %s success in %fs!", resolved.ptr, dt);
 
-		else Log_errorLn(alloc, "-- Packaging %s failed in %fs!!", resolved.ptr, dt);
+		else Log_errorLn(alloc, "-- Packaging %s failed in %fs!", resolved.ptr, dt);
 
 		if(e_rr)
 			Error_print(alloc, *e_rr, ELogLevel_Error, ELogOptions_NewLine);

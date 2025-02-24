@@ -114,13 +114,13 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 
 			.descriptorTableCreate = D3D12DescriptorHeap_createDescriptorTable,
 			.descriptorTableFree = D3D12DescriptorTable_free,
-			.descriptorTableSet = D3D12DescriptorTable_setDescriptor,
+			.descriptorTableSet = D3D12DescriptorTable_setDescriptors,
+			.descriptorTableUnset = D3D12DescriptorTable_unsetDescriptors,
 
 			.memoryAllocate = D3D12DeviceMemoryAllocator_allocate,
 			.memoryFree = D3D12DeviceMemoryAllocator_freeAllocation,
 
 			.deviceInit = D3D12GraphicsDevice_init,
-			.devicePostInit = D3D12GraphicsDevice_postInit,
 			.deviceWait = D3D12GraphicsDeviceRef_wait,
 			.deviceFree = D3D12GraphicsDevice_free,
 			.deviceSubmitCommands = D3D12GraphicsDevice_submitCommands,
