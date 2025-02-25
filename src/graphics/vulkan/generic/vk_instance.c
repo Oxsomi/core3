@@ -887,7 +887,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			!features.depthBiasClamp ||
 			!(features.textureCompressionBC || features.textureCompressionASTC_LDR) ||
 			!features.multiDrawIndirect ||
-			!features.sampleRateShading
+			!features.sampleRateShading ||
+			!features.shaderStorageImageReadWithoutFormat ||
+			!features.shaderStorageImageWriteWithoutFormat
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required features wasn't enabled", i);
 			continue;

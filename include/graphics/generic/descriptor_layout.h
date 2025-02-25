@@ -44,11 +44,19 @@ typedef enum EDescriptorLayoutFlags {
 } EDescriptorLayoutFlags;
 
 typedef struct DescriptorBinding {
+
 	ESHRegisterType registerType;
 	U32 count;
 	SHBinding binding;
 	U32 visibility;			//Bit mask of ESHPipelineStage
-	U32 strideOrLength;		//Constant buffers; length, structured buffers: stride
+
+	union {
+		U32 structedBufferStride;
+		U32 constantBufferSize;
+		SHTextureFormat textureFormat;
+		U32 data;
+	};
+
 } DescriptorBinding;
 
 TList(DescriptorBinding);

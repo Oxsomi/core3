@@ -298,14 +298,17 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 				0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings has an RTAS, but device doesn't have RT"
 			);
 
-		if(type == ESHRegisterType_ConstantBuffer && (!b.strideOrLength || b.strideOrLength > 64 * KIBI))
+		if(type == ESHRegisterType_ConstantBuffer && (!b.constantBufferSize || b.constantBufferSize > 64 * KIBI))
 			return Error_invalidOperation(
 				0,
 				"GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the constant buffer size "
 				"(0 < x < 64KiB)"
 			);
 
-		if((type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) && !b.strideOrLength)
+		if(
+			(type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) &&
+			!b.structedBufferStride
+		)
 			return Error_invalidOperation(
 				0,
 				"GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the structured buffer size"

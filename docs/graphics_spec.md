@@ -79,6 +79,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - sampleRateShading of true.
 - maxMemoryAllocationSize and maxBufferSize of a minimum of 256MiB (ideally should use <=128MiB).
 - SubgroupOperations extension: subgroupSize of 4 - 128. subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
+- shaderStorageImageReadWithoutFormat and shaderStorageImageWriteWithoutFormat turned on.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.
 - samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp, multiDrawIndirect turned on.
 - Either BCn (textureCompressionBC) or ASTC (textureCompressionASTC_LDR) compression *must* be supported (can be both supported).

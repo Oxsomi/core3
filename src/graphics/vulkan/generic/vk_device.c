@@ -96,6 +96,8 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 		.multiDrawIndirect = true,
 		.sampleRateShading = true,
+		.shaderStorageImageReadWithoutFormat = true,
+		.shaderStorageImageWriteWithoutFormat = true,
 
 		.drawIndirectFirstInstance = true,
 		.depthClamp = true,

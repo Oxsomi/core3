@@ -353,7 +353,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			case ESHRegisterType_StructuredBufferAtomic: {
 
 				DxDeviceBuffer *deviceBuffer = d.resource ? DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Dx) : NULL;
-				U32 reflStride = binding.strideOrLength;
+				U32 reflStride = binding.structedBufferStride;
 
 				if (isWrite) {
 			

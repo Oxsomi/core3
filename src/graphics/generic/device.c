@@ -338,7 +338,7 @@ Error GraphicsDeviceRef_create(
 
 	Bool isSpirv = instance->api == EGraphicsApi_Vulkan;
 
-	CharString bindingNames[18] = {
+	CharString bindingNames[15] = {
 		CharString_createRefCStrConst("_samplers"),
 		CharString_createRefCStrConst("globals"),
 		CharString_createRefCStrConst("_textures2D"),
@@ -347,19 +347,15 @@ Error GraphicsDeviceRef_create(
 		CharString_createRefCStrConst("_buffer"),
 		CharString_createRefCStrConst("_rwBuffer"),
 		CharString_createRefCStrConst("_rwTextures3D"),
-		CharString_createRefCStrConst("_rwTextures3Ds"),
-		CharString_createRefCStrConst("_rwTextures3Df"),
 		CharString_createRefCStrConst("_rwTextures3Di"),
 		CharString_createRefCStrConst("_rwTextures3Du"),
 		CharString_createRefCStrConst("_rwTextures2D"),
-		CharString_createRefCStrConst("_rwTextures2Ds"),
-		CharString_createRefCStrConst("_rwTextures2Df"),
 		CharString_createRefCStrConst("_rwTextures2Di"),
 		CharString_createRefCStrConst("_rwTextures2Du"),
 		CharString_createRefCStrConst("_tlasExt")
 	};
 
-	DescriptorBinding bindings[18] = {
+	DescriptorBinding bindings[15] = {
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Sampler,
 			.count = EDescriptorTypeCount_Sampler,
@@ -377,7 +373,7 @@ Error GraphicsDeviceRef_create(
 				.binding = isSpirv ? 0 : 0
 			},
 			.visibility = U32_MAX,
-			.strideOrLength = (U32) sizeof(CBufferData)
+			.constantBufferSize = (U32) sizeof(CBufferData)
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D,
@@ -431,100 +427,70 @@ Error GraphicsDeviceRef_create(
 				.space = isSpirv ? 1 : 5,
 				.binding = isSpirv ? 5 : 0
 			},
-			.visibility = U32_MAX
-		},
-		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
-			.count = EDescriptorTypeCount_RWTexture3Ds,
-			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 6,
-				.binding = isSpirv ? 6 : 0
-			},
-			.visibility = U32_MAX
-		},
-		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
-			.count = EDescriptorTypeCount_RWTexture3Df,
-			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 7,
-				.binding = isSpirv ? 7 : 0
-			},
-			.visibility = U32_MAX
+			.visibility = U32_MAX,
+			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_Float }
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 8,
-				.binding = isSpirv ? 8 : 0
+				.space = isSpirv ? 1 : 6,
+				.binding = isSpirv ? 6 : 0
 			},
-			.visibility = U32_MAX
+			.visibility = U32_MAX,
+			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_SInt }
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 9,
-				.binding = isSpirv ? 9 : 0
+				.space = isSpirv ? 1 : 7,
+				.binding = isSpirv ? 7 : 0
 			},
-			.visibility = U32_MAX
+			.visibility = U32_MAX,
+			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UInt }
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 10,
-				.binding = isSpirv ? 10 : 0
+				.space = isSpirv ? 1 : 8,
+				.binding = isSpirv ? 8 : 0
 			},
-			.visibility = U32_MAX
-		},
-		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
-			.count = EDescriptorTypeCount_RWTexture2Ds,
-			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 11,
-				.binding = isSpirv ? 11 : 0
-			},
-			.visibility = U32_MAX
-		},
-		(DescriptorBinding) {
-			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
-			.count = EDescriptorTypeCount_RWTexture2Df,
-			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 12,
-				.binding = isSpirv ? 12 : 0
-			},
-			.visibility = U32_MAX
+			.visibility = U32_MAX,
+			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UNorm }
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 13,
-				.binding = isSpirv ? 13 : 0
+				.space = isSpirv ? 1 : 9,
+				.binding = isSpirv ? 9 : 0
 			},
-			.visibility = U32_MAX
+			.visibility = U32_MAX,
+			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_SInt }
 		},
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 14,
-				.binding = isSpirv ? 14 : 0
+				.space = isSpirv ? 1 : 10,
+				.binding = isSpirv ? 10 : 0
 			},
-			.visibility = U32_MAX
+			.visibility = U32_MAX,
+			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UInt }
 		}
 	};
 
-	U64 descBindings = 17;
+	U64 descBindings = 14;
 
 	if(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
 		bindings[descBindings++] = (DescriptorBinding) {
 			.registerType = ESHRegisterType_AccelerationStructure,
 			.count = EDescriptorTypeCount_TLASExt,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 15,
-				.binding = isSpirv ? 15 : 0
+				.space = isSpirv ? 1 : 11,
+				.binding = isSpirv ? 11 : 0
 			},
 			.visibility = U32_MAX
 		};

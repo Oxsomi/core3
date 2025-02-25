@@ -119,6 +119,7 @@ typedef struct DescriptorTableBindingSingle {
 	union {
 		BufferDescriptorRange buffer;
 		TextureDescriptorRange texture;			//This is 3x less mem than buffer descs
+		U64 data[3];
 	};
 
 } DescriptorTableBindingSingle;
@@ -218,6 +219,39 @@ Bool DescriptorTableRef_setDescriptor(
 	Error *e_rr
 );
 
+Bool DescriptorTableRef_allocDescriptor(
+	DescriptorTableRef *table,
+	U64 bindId,				//ListDescriptorBinding[i]
+	U64 *arrayId,			//outputs arrayId into descriptor if success
+	Descriptor d,
+	Error *e_rr
+);
+
+//Find a bindless register of the relevant type for the current format, descriptor type, etc.
+//This will only try to find it if the register type matches.
+Bool DescriptorTableRef_findBindlessRegister(
+	DescriptorTableRef *table,
+	ESHRegisterType type,
+	U32 strideOrLength,		//Used to find a resource of this size (can be 0)
+	U64 *bindId,
+	RefPtr *resource,
+	U8 planeId,				//Useful for depth buffer (stencil read)
+	Error *e_rr
+);
+
+//Finds a bindless descriptor by resource type and allocate into the array.
+//allocDescriptor(ByName) can still be used if you know the binding but want to allocate into it.
+//This even works with normal descriptor sets.
+Bool DescriptorTableRef_allocDescriptorBindless(
+	DescriptorTableRef *table,
+	ESHRegisterType type,
+	U32 strideOrLength,		//Used to find a resource of this size (can be 0)
+	U64 *bindId,			//ListDescriptorBinding[i]
+	U64 *arrayId,			//outputs arrayId into descriptor if success
+	Descriptor d,
+	Error *e_rr
+);
+
 //Resolves register name to binding index, returns U64_MAX if invalid
 U64 DescriptorTableRef_resolveRegisterName(DescriptorTableRef *table, CharString registerName);
 
@@ -242,6 +276,14 @@ Bool DescriptorTableRef_unsetDescriptorsByName(
 	CharString registerName,
 	U64 arrayId,
 	U64 count,
+	Error *e_rr
+);
+
+Bool DescriptorTableRef_allocDescriptorByName(
+	DescriptorTableRef *table,
+	CharString registerName,
+	U64 *arrayId,			//outputs arrayId into descriptor if success
+	Descriptor d,
 	Error *e_rr
 );
 

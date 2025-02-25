@@ -476,6 +476,33 @@ clean:
 	return s_uccess;
 }
 
+Bool Descriptor_eq(Descriptor a, DescriptorTableBindingSingle b, ESHRegisterType type) {
+
+	if (a.resource != b.descriptor) 
+		return false;
+
+	static_assert(
+		sizeof(a.texture) == sizeof(U64),
+		"DescriptorTableRef_setDescriptors() checks for texture by using data[0] (U64)"
+	);
+
+	static_assert(
+		sizeof(a.buffer) == sizeof(U64) * 3,
+		"DescriptorTableRef_setDescriptors() checks for texture by using data[0, 1 and 2] (U64[3])"
+	);
+
+	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+		return a.data[0] == b.data[0];
+
+	else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+		return Buffer_eq(
+			Buffer_createRefConst(a.data, sizeof(U64) * 3),
+			Buffer_createRefConst(b.data, sizeof(U64) * 3)
+		);
+
+	return true;
+}
+
 Bool DescriptorTableRef_setDescriptors(
 	DescriptorTableRef *table,
 	U64 bindId,
@@ -906,14 +933,31 @@ Bool DescriptorTableRef_setDescriptors(
 
 	if(b.count > 1) {
 
-		for(U64 j = arrayId; j < arrayId + darr.length; ++j)
-			if(binding->)
+		Bool allEq = true;
+		DescriptorTableBindingSingle single = (DescriptorTableBindingSingle) { 0 };
 
-	} else {
+		for(U64 j = arrayId; j < arrayId + darr.length; ++j) {
 
-		if()
+			single.descriptor = binding->multiple.descriptors.ptr[j];
 
+			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+				single.texture = binding->multiple.textures.ptr[j];
+
+			else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+				single.buffer = binding->multiple.buffers.ptr[j];
+
+			if (!Descriptor_eq(darr.ptr[j - arrayId], binding->single, type)) {
+				allEq = false;
+				break;
+			}
+		}
+
+		if(allEq)
+			goto clean;
 	}
+	
+	else if(Descriptor_eq(darr.ptr[0], binding->single, type))
+		goto clean;
 
 	//Release previous descriptors and set new ones
 
@@ -960,7 +1004,8 @@ Bool DescriptorTableRef_setDescriptors(
 			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 				binding->multiple.textures.ptrNonConst[j] = darr.ptr[j - arrayId].texture;
 
-			else binding->multiple.buffers.ptrNonConst[j] = darr.ptr[j - arrayId].buffer;
+			else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+				binding->multiple.buffers.ptrNonConst[j] = darr.ptr[j - arrayId].buffer;
 		}
 
 	else {
@@ -971,7 +1016,8 @@ Bool DescriptorTableRef_setDescriptors(
 		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 			binding->single.texture = darr.ptr[0].texture;
 
-		else binding->single.buffer = darr.ptr[0].buffer;
+		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+			binding->single.buffer = darr.ptr[0].buffer;
 	}
 
 clean:
@@ -1068,6 +1114,233 @@ Bool DescriptorTableRef_unsetDescriptorsByName(
 		retError(clean, Error_notFound(0, 1, "DescriptorTableRef_unsetDescriptorsByName register not found"))
 
 	gotoIfError3(clean, DescriptorTableRef_unsetDescriptors(table, binding, arrayId, count, e_rr))
+
+clean:
+	return s_uccess;
+}
+
+Bool DescriptorTableRef_findBindlessRegister(
+	DescriptorTableRef *table,
+	ESHRegisterType regType,
+	U32 strideOrLength,
+	U64 *bindId,
+	RefPtr *resource,
+	U8 planeId,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!table || !bindId || !resource)
+		retError(clean, Error_nullPointer(
+			!table || table->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable ? 0 : (!bindId ? 3 : 4),
+			"DescriptorTableRef_findBindlessRegister() requires table, bindId and resource"
+		))
+
+	DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
+	ListDescriptorBinding bindings = DescriptorLayoutRef_ptr(tablePtr->layout)->info.bindings;
+
+	DescriptorHeap *heapPtr = DescriptorHeapRef_ptr(tablePtr->parent);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(heapPtr->device);
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device);
+
+	U8 resourceType = 0;
+	Bool isDepthStencil = resource->typeId == (ETypeId) EGraphicsTypeId_DepthStencil;
+
+	if(TextureRef_isTexture(resource)) {
+
+		if(isDepthStencil && (regType & ESHRegisterType_IsWrite))
+			retError(clean, Error_invalidOperation(
+				0, "DescriptorTableRef_findBindlessRegister() DepthStencil is not permitted on RW texture"
+			))
+
+		if (isDepthStencil) {
+
+			UnifiedTexture tex = TextureRef_getUnifiedTexture(resource, NULL);
+
+			if(planeId &&!(
+				tex.depthFormat >= EDepthStencilFormat_StencilStart &&
+				tex.depthFormat < EDepthStencilFormat_StencilEnd
+			))
+				retError(clean, Error_invalidOperation(
+					0, "DescriptorTableRef_findBindlessRegister() Requested DepthStencil planeId 1 but no stencil was present"
+				))
+
+			if (!planeId && tex.depthFormat == EDepthStencilFormat_S8X24Ext)
+				retError(clean, Error_invalidOperation(
+					0, "DescriptorTableRef_findBindlessRegister() Requested DepthStencil planeId 0 but no depth was present"
+				))
+		}
+
+		resourceType = 0;
+	}
+
+	else if(resource->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
+		resourceType = 1;
+
+	else if(resource->typeId == (ETypeId) EGraphicsTypeId_Sampler)
+		resourceType = 2;
+
+	else if(resource->typeId == (ETypeId) EGraphicsTypeId_TLASExt)
+		resourceType = 3;
+
+	else retError(clean, Error_invalidOperation(0, "DescriptorTableRef_findBindlessRegister() invalid resource type"))
+
+	if(!isDepthStencil && planeId)
+		retError(clean, Error_invalidOperation(
+			0, "DescriptorTableRef_findBindlessRegister() depth stencil is the only one allowed a planeId"
+		))
+
+	ESHRegisterType type = regType & ESHRegisterType_TypeMask;
+
+	U8 otherResourceType = 0;
+
+	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
+		otherResourceType = 0;
+
+	else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
+		otherResourceType = 1;
+
+	else if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
+		otherResourceType = 2;
+
+	else if(type == ESHRegisterType_AccelerationStructure)
+		otherResourceType = 3;
+
+	else retError(clean, Error_invalidOperation(1, "DescriptorTableRef_findBindlessRegister() invalid register type"))
+
+	if(resourceType != otherResourceType)
+		retError(clean, Error_invalidOperation(
+			2, "DescriptorTableRef_findBindlessRegister() mismatching resource and register type"
+		))
+
+	for (U64 i = 0; i < tablePtr->bindings.length; ++i) {
+
+		DescriptorTableBinding tableBind = tablePtr->bindings.ptr[i];
+		DescriptorBinding bind = bindings.ptr[i];
+
+		if(bind.count <= 1)
+			continue;
+
+		if(bind.registerType != regType)
+			continue;
+
+		if(strideOrLength && bind.data != strideOrLength)
+			continue;
+
+		//Write textures need to match format somewhat;
+		//For DXIL the rules are as follows:
+		//	float textures are all implicitly castable (snorm, unorm, float) -> float
+		//	uint/int/float textures aren't
+		//For SPIRV the rules are as follows:
+		//	Unknown allows anything
+		//	Otherwise the format needs to match 1:1
+		// 
+		//Read textures are simpler;
+		//DXIL all textures are implicitly float, but int/uint are separate types.
+		//SPIRV: Unknown allows anything, otherwise match 1:1
+
+		if (otherResourceType == 0) {
+
+			UnifiedTexture tex = TextureRef_getUnifiedTexture(resource, NULL);
+			ETextureFormatId formatId = tex.textureFormatId;
+
+			if (isDepthStencil)
+				formatId = !planeId ? ETextureFormatId_R8u : (
+					tex.depthFormat == EDepthStencilFormat_D16 ? ETextureFormatId_R16 : ETextureFormatId_R32f
+				);
+
+			if (instance->api == EGraphicsApi_Vulkan) {
+				if(bind.textureFormat.formatId && bind.textureFormat.formatId != formatId)
+					continue;
+			} else {
+				
+				ETextureFormat bindFormat = ETextureFormatId_unpack[bind.textureFormat.formatId];
+				ESHTexturePrimitive targPrim = ETextureFormat_getPrimitive(bindFormat);
+				ESHTexturePrimitive prim = ETextureFormat_getPrimitive(ETextureFormatId_unpack[formatId]);
+				Bool compatible = false;
+
+				if (bind.registerType & ESHRegisterType_IsWrite)
+					switch (targPrim) {
+
+						case ETexturePrimitive_Float:
+
+							compatible =
+								prim == ETexturePrimitive_Float ||
+								prim == ETexturePrimitive_SNorm || prim == ETexturePrimitive_UNorm;
+
+							break;
+
+						default:
+							compatible = prim == targPrim;
+							break;
+					}
+
+				else switch (targPrim) {
+
+					case ETexturePrimitive_Float:
+						compatible = true;
+						break;
+
+					default:
+						compatible = prim == targPrim;
+						break;
+				}
+
+				if(!compatible)
+					continue;
+			}
+		}
+
+		*bindId = i;
+		goto clean;
+	}
+
+	retError(clean, Error_notFound(0, 0, "DescriptorTableRef_findBindlessRegister() no legal resource found"))
+
+clean:
+	return s_uccess;
+}
+
+Bool DescriptorTableRef_allocDescriptor(
+	DescriptorTableRef *table,
+	U64 bindId,				//ListDescriptorBinding[i]
+	U64 *arrayId,			//outputs arrayId into descriptor if success
+	Descriptor d,
+	Error *e_rr
+);
+
+Bool DescriptorTableRef_allocDescriptorBindless(
+	DescriptorTableRef *table,
+	ESHRegisterType type,
+	U32 strideOrLength,
+	U64 *bindId,
+	U64 *arrayId,
+	Descriptor d,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ESHRegisterType type4 = type & ESHRegisterType_TypeMask;
+	Bool isTexture = type4 >= ESHRegisterType_TextureStart && type4 < ESHRegisterType_TextureEnd;
+
+	gotoIfError3(clean, DescriptorTableRef_findBindlessRegister(
+		table,
+		type,
+		strideOrLength,
+		bindId,
+		d.resource,
+		isTexture ? d.texture.planeId : 0,
+		e_rr
+	))
+
+	gotoIfError3(clean, DescriptorTableRef_allocDescriptor(
+		table,
+		*bindId,
+		arrayId,
+		d,
+		e_rr
+	))
 
 clean:
 	return s_uccess;
