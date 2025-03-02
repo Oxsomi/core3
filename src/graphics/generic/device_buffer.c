@@ -21,11 +21,14 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/bindless_descriptor.h"
+#include "graphics/generic/descriptor_table.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "platforms/log.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
+#include "formats/oiSH/registers.h"
 
 TListImpl(DevicePendingRange);
 
@@ -179,20 +182,8 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 	//Log_debugLnx("Destroy: DeviceBuffer (%p)", buffer);
 
 	if (buffer->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
-
-		GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
-		const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-		if(acq >= ELockAcquire_Success) {
-
-			const U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
-			ListU32 allocationList = (ListU32) { 0 };
-			ListU32_createRefConst(allocations, 2, &allocationList);
-			GraphicsDeviceRef_freeDescriptors(buffer->resource.device, &allocationList);
-
-			if(acq == ELockAcquire_Acquired)
-				SpinLock_unlock(&device->descriptorLock);
-		}
+		GraphicsDeviceRef_freeDescriptorBindless(buffer->resource.device, descTable, buffer->readHandle, NULL);
+		GraphicsDeviceRef_freeDescriptorBindless(buffer->resource.device, descTable, buffer->writeHandle, NULL);
 	}
 
 	Bool success = DeviceBuffer_freeExt(buffer);
@@ -222,7 +213,6 @@ Error GraphicsDeviceRef_createBufferIntern(
 		return err;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
-	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"))
@@ -268,43 +258,6 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	//Allocate
 
-	if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
-
-		acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(
-				0, "GraphicsDeviceRef_createBufferIntern() couldn't acquire descriptor lock"
-			))
-
-		//Create images
-
-		if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) {
-
-			buf->readHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Buffer);
-
-			if(buf->readHandle == U32_MAX)
-				gotoIfError(clean, Error_outOfMemory(
-					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
-				))
-		}
-
-		if(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) {
-
-			buf->writeHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_RWBuffer);
-
-			if(buf->writeHandle == U32_MAX)
-				gotoIfError(clean, Error_outOfMemory(
-					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
-				))
-		}
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&device->descriptorLock);
-
-		acq = ELockAcquire_Invalid;
-	}
-
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
 
 	if(allocate) {
@@ -314,10 +267,38 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buf, name))
 
-clean:
+	//Create descriptor
+	//TODO: Allow creation as StructuredBuffer
 
-	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&device->descriptorLock);
+	if(
+		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
+		!GraphicsDeviceRef_allocateDescriptorBindless(
+			dev,
+			descTable,
+			ESHRegisterType_ByteAddressBuffer,
+			0,
+			(Descriptor) { .resource = *ref },
+			&buf->readHandle,
+			&err
+		)
+	)
+		goto clean;
+
+	if(
+		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
+		!GraphicsDeviceRef_allocateDescriptorBindless(
+			dev,
+			descTable,
+			ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
+			0,
+			(Descriptor) { .resource = *ref },
+			&buf->readHandle,
+			&err
+		)
+	)
+		goto clean;
+
+clean:
 
 	if(err.genericError)
 		DeviceBufferRef_dec(ref);

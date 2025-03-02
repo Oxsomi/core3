@@ -46,6 +46,8 @@ typedef RefPtr DeviceBufferRef;
 typedef RefPtr TLASRef;
 typedef RefPtr SamplerRef;
 
+typedef enum ESHRegisterType ESHRegisterType;
+
 typedef struct TextureDescriptorRange {
 
 	U8 mipId, mipCount;
@@ -100,7 +102,7 @@ TList(DescriptorStackTrace);
 
 typedef struct DescriptorTableBindingMultiple {
 
-	ListU64 freeList;			//Quicker than indexing descriptors
+	ListU64 activeList;			//Quicker than indexing descriptors
 	ListWeakRefPtr descriptors;
 	ListDescriptorStackTrace stackTraces;
 
@@ -233,7 +235,8 @@ Bool DescriptorTableRef_findBindlessRegister(
 	DescriptorTableRef *table,
 	ESHRegisterType type,
 	U32 strideOrLength,		//Used to find a resource of this size (can be 0)
-	U64 *bindId,
+	U16 *bindId,
+	U8 *bindlessTypeId,
 	RefPtr *resource,
 	U8 planeId,				//Useful for depth buffer (stencil read)
 	Error *e_rr
@@ -246,7 +249,8 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 	DescriptorTableRef *table,
 	ESHRegisterType type,
 	U32 strideOrLength,		//Used to find a resource of this size (can be 0)
-	U64 *bindId,			//ListDescriptorBinding[i]
+	U16 *bindId,			//ListDescriptorBinding[i]
+	U8 *bindlessTypeId,		//Index for bindless handle
 	U64 *arrayId,			//outputs arrayId into descriptor if success
 	Descriptor d,
 	Error *e_rr

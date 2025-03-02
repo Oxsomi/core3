@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_texture.h"
@@ -25,9 +26,12 @@
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/resource.h"
+#include "graphics/generic/bindless_descriptor.h"
+#include "graphics/generic/descriptor_table.h"
 #include "platforms/log.h"
 #include "types/container/texture_format.h"
 #include "types/container/string.h"
+#include "formats/oiSH/registers.h"
 
 //Specifying DeviceResourceVersion* will force lock the resource to get the texture format, size and version id.
 //When those properties aren't read, the lock isn't important.
@@ -207,28 +211,16 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 	GraphicsDeviceRef *deviceRef = texture->resource.device;
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	//Log_debugLnx("Destroy: Texture (%p)", texture);
 
 	if(texture->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
-		const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
+		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
 
-		if (acq >= ELockAcquire_Success) {
-
-			const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
-
-			//Can't batch this anymore, we have U64 padding in between now, for alignment purposes
-
-			for(U8 i = 0; i < texture->images; ++i) {
-				ListU32 allocations = (ListU32) { 0 };
-				ListU32_createRefConst((const U32*)&img[i], 2, &allocations);
-				GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
-			}
-
-			if(acq == ELockAcquire_Acquired)
-				SpinLock_unlock(&device->descriptorLock);
+		for(U8 i = 0; i < texture->images; ++i) {
+			GraphicsDeviceRef_freeDescriptorBindless(deviceRef, descTable, img[i].readHandle, NULL);
+			GraphicsDeviceRef_freeDescriptorBindless(deviceRef, descTable, img[i].writeHandle, NULL);
 		}
 	}
 
@@ -290,7 +282,8 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 			1, 0, "UnifiedTexture_create()::texturePtr->flags CPU flags are only allowed for DeviceTexture"
 		);
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(texture.resource.device);
+	GraphicsDeviceRef *deviceRef = texture.resource.device;
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	const GraphicsDeviceInfo *info = &device->info;
 
 	if(texture.textureFormatId) {
@@ -364,82 +357,47 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 
 	//Allocate in descriptors
 
-	Error err;
-	ELockAcquire acq = ELockAcquire_Invalid;
-
 	if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
-		acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(0, "UnifiedTexture_create() couldn't acquire descriptor lock"))
-
 		//Create images
+
+		Error err;
 
 		for(U8 i = 0; i < texture.images; ++i) {
 
 			UnifiedTextureImage *img = TextureRef_getImageIntern(ref, 0 /* TODO: subResource */, i);
 
-			if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) {
-
-				const U32 locationRead = GraphicsDeviceRef_allocateDescriptor(
-					texture.resource.device,
-					texture.type == ETextureType_2D ? EDescriptorType_Texture2D : EDescriptorType_Texture3D
-				);
-
-				if(locationRead == U32_MAX)
-					gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate texture descriptor"))
-
-				img->readHandle = locationRead;
-			}
-
-			if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) {		//Not for DepthStencil
-
-				const EDescriptorType descType = UnifiedTexture_getWriteDescriptorType(texture);
-				const U32 locationWrite = GraphicsDeviceRef_allocateDescriptor(texture.resource.device, descType);
-
-				if(locationWrite == U32_MAX)
-					gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate image descriptor"))
-
-				img->writeHandle = locationWrite;
-			}
+			if(
+				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
+				!GraphicsDeviceRef_allocateDescriptorBindless(
+					deviceRef,
+					descTable,
+					texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D,
+					0,
+					(Descriptor) { .resource = img, .texture = (TextureDescriptorRange) { .imageId = i } },
+					&img->readHandle,
+					&err
+				)
+			)
+				return err;
+				
+			if(
+				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
+				!GraphicsDeviceRef_allocateDescriptorBindless(
+					deviceRef,
+					descTable,
+					(texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D) |
+					ESHRegisterType_IsWrite,
+					0,
+					(Descriptor) { .resource = img, .texture = (TextureDescriptorRange) { .imageId = i } },
+					&img->writeHandle,
+					&err
+				)
+			)
+				return err;
 		}
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&device->descriptorLock);
-
-		acq = ELockAcquire_Invalid;
 	}
 
 	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
-	gotoIfError(clean, UnifiedTexture_createExt(ref, name))
-
-clean:
-
-	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&device->descriptorLock);
-
-	return err;
-}
-
-EDescriptorType UnifiedTexture_getWriteDescriptorType(UnifiedTexture texture) {
-
-	const ETexturePrimitive prim = ETextureFormat_getPrimitive(ETextureFormatId_unpack[texture.textureFormatId]);
-
-	if (texture.type != ETextureType_2D)
-		switch (prim) {
-			default:						return EDescriptorType_RWTexture3D;
-			case ETexturePrimitive_SNorm:	return EDescriptorType_RWTexture3Ds;
-			case ETexturePrimitive_UInt:	return EDescriptorType_RWTexture3Du;
-			case ETexturePrimitive_SInt:	return EDescriptorType_RWTexture3Di;
-			case ETexturePrimitive_Float:	return EDescriptorType_RWTexture3Df;
-		}
-
-	switch (prim) {
-		default:							return EDescriptorType_RWTexture2D;
-		case ETexturePrimitive_SNorm:		return EDescriptorType_RWTexture2Ds;
-		case ETexturePrimitive_UInt:		return EDescriptorType_RWTexture2Du;
-		case ETexturePrimitive_SInt:		return EDescriptorType_RWTexture2Di;
-		case ETexturePrimitive_Float:		return EDescriptorType_RWTexture2Df;
-	}
+	return UnifiedTexture_createExt(ref, name);
 }

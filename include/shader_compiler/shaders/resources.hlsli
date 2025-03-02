@@ -50,8 +50,13 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 
 _binding( 0, 0, SamplerState _samplers[2048]);
 
+[[vk::image_format("Unknown")]]
 _binding( 0, 1, Texture2D _textures2D[131072]);
+
+[[vk::image_format("Unknown")]]
 _binding( 1, 1, TextureCube _textureCubes[32768]);
+
+[[vk::image_format("Unknown")]]
 _binding( 2, 1, Texture3D _textures3D[32768]);
 
 _binding( 3, 1, ByteAddressBuffer _buffer[131072]);

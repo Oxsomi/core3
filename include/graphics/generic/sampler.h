@@ -101,7 +101,9 @@ typedef struct Sampler {
 Error SamplerRef_dec(SamplerRef **sampler);
 Error SamplerRef_inc(SamplerRef *sampler);
 
-Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler);
+Error GraphicsDeviceRef_createSampler(
+	GraphicsDeviceRef *dev, SamplerInfo info, Bool disallowBindlessDescriptor, CharString name, SamplerRef **sampler
+);
 
 #ifdef __cplusplus
 	}

@@ -21,7 +21,6 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/allocator.h"
-#include "graphics/generic/descriptor.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
 

@@ -81,7 +81,7 @@ Error BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big) {
 		return Error_invalidParameter(2, 0, "BigInt_createRefConst()::big->data should be empty");
 
 	if(ptrCount >> 8)
-		return Error_outOfBounds(1, 0, U8_MAX, "BigInt_createRefConst()::ptrCount is more than the BigInt limit (256 U64s)");
+		return Error_outOfBounds(1, 0, U8_MAX, "BigInt_createRefConst()::ptrCount is more than the BigInt limit (255 U64s)");
 
 	*big = (BigInt) { .data = ptr, .isConst = true, .isRef = true, .length = (U8) ptrCount };
 	return Error_none();

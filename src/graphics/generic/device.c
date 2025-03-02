@@ -294,20 +294,43 @@ Error GraphicsDeviceRef_create(
 	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64))
 
-	//Reserve sampler 0 because we want to be able to use read/write handle 0 as invalid.
-
-	SpinLock_lock(&device->descriptorLock, U64_MAX);
-	if(GraphicsDeviceRef_allocateDescriptor(*deviceRef, EDescriptorType_Texture2D) != 0)
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_create() couldn't reserve null descriptor (sampler 0)"))
-
-	SpinLock_unlock(&device->descriptorLock);
-
 	//Create extended device
 
 	gotoIfError(clean, GraphicsDevice_initExt(instance, info, deviceRef))
 
 	//Create default descriptor heaps
 	//TODO: Allow user to define these
+
+	typedef enum EDescriptorTypeCount {
+
+		EDescriptorTypeCount_Texture2D			= 131072,
+		EDescriptorTypeCount_TextureCube		= 32768,
+		EDescriptorTypeCount_Texture3D			= 32768,
+
+		EDescriptorTypeCount_Buffer				= 131072,
+		EDescriptorTypeCount_RWBuffer			= 131072,
+
+		EDescriptorTypeCount_RWTexture3D		= 32768,
+		EDescriptorTypeCount_RWTexture3Di		= 8192,
+		EDescriptorTypeCount_RWTexture3Du		= 8192,
+		EDescriptorTypeCount_RWTexture2D		= 131072,
+		EDescriptorTypeCount_RWTexture2Di		= 16384,
+		EDescriptorTypeCount_RWTexture2Du		= 16384,
+
+		EDescriptorTypeCount_Sampler			= 2048,
+		EDescriptorTypeCount_TLASExt			= 16,
+
+		EDescriptorTypeCount_Buffers =
+			EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer,
+
+		EDescriptorTypeCount_TexturesRead =
+			EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,
+
+		EDescriptorTypeCount_TexturesRW =
+			EDescriptorTypeCount_RWTexture2D + EDescriptorTypeCount_RWTexture2Du + EDescriptorTypeCount_RWTexture2Di +
+			EDescriptorTypeCount_RWTexture3D + EDescriptorTypeCount_RWTexture3Du + EDescriptorTypeCount_RWTexture3Di
+
+	} EDescriptorTypeCount;
 	
 	CharString name = CharString_createRefCStrConst("Default heap");
 
@@ -319,9 +342,9 @@ Error GraphicsDeviceRef_create(
 			device->info.capabilities.features & EGraphicsFeatures_Raytracing ? EDescriptorTypeCount_TLASExt : 0,
 
 		.maxSamplers = EDescriptorTypeCount_Sampler,
-		.maxTextures = EDescriptorTypeCount_Textures,
-		.maxTexturesRW = EDescriptorTypeCount_RWTextures,
-		.maxBuffersRW = EDescriptorTypeCount_SSBO,
+		.maxTextures = EDescriptorTypeCount_TexturesRead,
+		.maxTexturesRW = EDescriptorTypeCount_TexturesRW,
+		.maxBuffersRW = EDescriptorTypeCount_Buffers,
 		.maxConstantBuffers = 3,
 		.maxDescriptorTables = 1
 	};
@@ -1147,142 +1170,4 @@ clean:
 		SpinLock_unlock(&device->lock);
 
 	return err;
-}
-
-U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescriptorType type) {
-
-	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice || type >= EDescriptorType_ResourceCount)
-		return U32_MAX;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(!SpinLock_isLockedForThread(&device->descriptorLock))
-		return U32_MAX;
-
-	const Buffer buf = device->freeList[type];
-
-	for(U32 i = 0; i < (U32)(Buffer_length(buf) << 3); ++i) {
-
-		Bool bit = false;
-
-		if(Buffer_getBit(buf, i, &bit).genericError)
-			return U32_MAX;
-
-		if(!bit) {
-
-			U32 extendedType = 0, descType = type;
-
-			if (type >= EDescriptorType_ExtendedType) {
-				extendedType = (U32)(type - EDescriptorType_ExtendedType);
-				descType = EDescriptorType_ExtendedType;
-			}
-
-			const U32 resourceId = i | (extendedType << 13) | (descType << 17);
-
-			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
-
-				DescriptorStackTrace stackTrace = (DescriptorStackTrace) {  .resourceId = resourceId };
-				Log_captureStackTracex(stackTrace.stackTrace, sizeof(stackTrace.stackTrace) / sizeof(void*), 1);
-
-				//Disable tracking for resourceId 0 because that's reserved as a safeguard
-				//It's technically "leaked" but for a good reason.
-
-				if(resourceId && ListDescriptorStackTrace_pushBackx(&device->descriptorStackTraces, stackTrace).genericError)
-					return U32_MAX;
-			}
-
-			Buffer_setBit(buf, i);
-			return resourceId;
-		}
-	}
-
-	return U32_MAX;
-}
-
-Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *allocations) {
-
-	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		return U32_MAX;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(!SpinLock_isLockedForThread(&device->descriptorLock))
-		return false;
-
-	Bool success = true;
-
-	for (U64 i = 0; i < allocations->length; ++i) {
-
-		const U32 id = allocations->ptr[i];
-
-		if(id && id != U32_MAX) {		//0 and -1 are both invalid to avoid freeing uninitialized memory (NULL descriptor)
-
-			const EDescriptorType type = ResourceHandle_getType(id);
-
-			if(type >= EDescriptorType_ResourceCount)
-				continue;
-
-			const U32 realId = ResourceHandle_getId(id);
-
-			success &= !Buffer_resetBit(device->freeList[type], realId).genericError;
-
-			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
-
-				//TODO: HashMap
-
-				ListDescriptorStackTrace *stack = &device->descriptorStackTraces;
-
-				for (U64 j = 0; j < stack->length; ++j)
-					if (stack->ptr[j].resourceId == id) {
-						ListDescriptorStackTrace_erase(stack, j);
-						break;
-					}
-			}
-		}
-	}
-
-	ListU32_clear(allocations);
-	return success;
-}
-
-U64 ResourceHandle_pack3(U32 a, U32 b, U32 c) {
-	return a | ((U64)b << 21) |  ((U64)c << 42);
-}
-
-I32x4 ResourceHandle_unpack3(U64 v) {
-
-	const U32 a = v & ((1 << 21) - 1);
-	const U32 b = (v >> 21) & ((1 << 21) - 1);
-	const U32 c = v >> 42;
-
-	return I32x4_create3((I32)a, (I32)b, (I32)c);
-}
-
-EDescriptorType ResourceHandle_getType(U32 handle) {
-
-	EDescriptorType type = (EDescriptorType)(handle >> 17);
-	const U32 realId = handle & ((1 << 17) - 1);
-
-	if (type == EDescriptorType_ExtendedType)
-		type += (realId >> 13) & 0xF;
-
-	return type;
-}
-
-U32 ResourceHandle_getId(U32 handle) {
-
-	if ((EDescriptorType)(handle >> 17) == EDescriptorType_ExtendedType)
-		return handle & ((1 << 13) - 1);
-
-	return handle & ((1 << 17) - 1);
-}
-
-Bool ResourceHandle_isValid(U32 handle) {
-
-	const EDescriptorType type = ResourceHandle_getType(handle);
-
-	if(type >= EDescriptorType_ResourceCount)
-		return false;
-
-	return ResourceHandle_getId(handle) >= descriptorTypeCount[type];
 }

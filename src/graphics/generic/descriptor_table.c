@@ -30,6 +30,8 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "platforms/log.h"
 #include "types/container/string.h"
+#include "types/container/big_int.h"
+#include "types/math/math.h"
 
 TListImpl(TextureDescriptorRange);
 TListImpl(BufferDescriptorRange);
@@ -53,7 +55,7 @@ void DescriptorTableBinding_free(DescriptorTableBinding *binding, Allocator allo
 	if(!(type & 4))
 		return;
 
-	ListU64_free(&binding->multiple.freeList, alloc);
+	ListU64_free(&binding->multiple.activeList, alloc);
 	ListWeakRefPtr_free(&binding->multiple.descriptors, alloc);
 
 	if(type == 0)
@@ -86,7 +88,7 @@ Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 				Buffer stackBuf = Buffer_createRef(stack.stackTrace, sizeof(stack.stackTrace));
 
 				for(U64 j = 0, k = 0; j < b.count; ++j)
-					if((tb.multiple.freeList.ptr[j >> 6] >> (j & 63)) & 1) {
+					if((tb.multiple.activeList.ptr[j >> 6] >> (j & 63)) & 1) {
 
 						Log_warnLnx(
 							"Leaked descriptor at %.*s[%"PRIu64"] (#%"PRIu64", id % "PRIu64", space % "PRIu64")",
@@ -248,7 +250,7 @@ Error DescriptorHeapRef_createDescriptorTable(
 
 		DescriptorTableBindingMultiple *multiple = &table->bindings.ptrNonConst[i].multiple;
 
-		gotoIfError(clean, ListU64_resizex(&multiple->freeList, (j + 63) >> 5))
+		gotoIfError(clean, ListU64_resizex(&multiple->activeList, (j + 63) >> 5))
 		gotoIfError(clean, ListWeakRefPtr_resizex(&multiple->descriptors, j))
 
 		if(GraphicsDeviceRef_ptr(dev)->flags & EGraphicsDeviceFlags_IsDebug)
@@ -445,7 +447,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 		for (U64 i = arrayId; i < arrayId + count; ++i) {
 
 			WeakRefPtr *ref = binding->multiple.descriptors.ptr[i];
-			binding->multiple.freeList.ptrNonConst[i >> 6] &=~ ((U64)1 << (i & 63));
+			binding->multiple.activeList.ptrNonConst[i >> 6] &=~ ((U64)1 << (i & 63));
 
 			if(ref && ref->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer) {
 				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->multiple.buffers.ptr[i].counter, e_rr))
@@ -646,7 +648,7 @@ Bool DescriptorTableRef_setDescriptors(
 							3, 0, "DescriptorTableRef_setDescriptors() constant buffer length needs to be 256-byte aligned"
 						))
 
-					if(descLen != b.strideOrLength)
+					if(descLen != b.constantBufferSize)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() constant buffer offset needs to be 256-byte aligned"
 						))
@@ -674,21 +676,19 @@ Bool DescriptorTableRef_setDescriptors(
 						3, 0, "DescriptorTableRef_setDescriptors() byte address buffer is limited to 2GiB"
 					))
 
-				if(descLen / b.strideOrLength > 2 * GIBI && (
-					type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic
-				))
-					retError(clean, Error_invalidParameter(
-						3, 0, "DescriptorTableRef_setDescriptors() structured buffer is limited to 2Gi elements"
-					))
-
 				if (type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) {
 
-					if(descLen % b.strideOrLength)
+					if(descLen / b.structedBufferStride > 2 * GIBI )
+						retError(clean, Error_invalidParameter(
+							3, 0, "DescriptorTableRef_setDescriptors() structured buffer is limited to 2Gi elements"
+						))
+
+					if(descLen % b.structedBufferStride)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() structured buffer length should be aligned to stride"
 						))
 
-					if(start % b.strideOrLength)
+					if(start % b.structedBufferStride)
 						retError(clean, Error_invalidParameter(
 							3, 0,
 							"DescriptorTableRef_setDescriptors() structured buffer startRange should be aligned to stride"
@@ -996,7 +996,7 @@ Bool DescriptorTableRef_setDescriptors(
 		for(U64 j = arrayId; j < arrayId + darr.length; ++j) {
 
 			binding->multiple.descriptors.ptrNonConst[j] = darr.ptr[j - arrayId].resource;
-			binding->multiple.freeList.ptrNonConst[j >> 6] |= (U64)1 << (j & 63);
+			binding->multiple.activeList.ptrNonConst[j >> 6] |= (U64)1 << (j & 63);
 
 			if(binding->multiple.stackTraces.ptr)
 				binding->multiple.stackTraces.ptrNonConst[j] = stack;
@@ -1123,7 +1123,8 @@ Bool DescriptorTableRef_findBindlessRegister(
 	DescriptorTableRef *table,
 	ESHRegisterType regType,
 	U32 strideOrLength,
-	U64 *bindId,
+	U16 *bindId,
+	U8 *bindlessTypeId,
 	RefPtr *resource,
 	U8 planeId,
 	Error *e_rr
@@ -1131,14 +1132,17 @@ Bool DescriptorTableRef_findBindlessRegister(
 
 	Bool s_uccess = true;
 
-	if(!table || !bindId || !resource)
+	if(!table || !bindId || !bindlessTypeId || !resource)
 		retError(clean, Error_nullPointer(
-			!table || table->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable ? 0 : (!bindId ? 3 : 4),
+			!table || table->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable ? 0 : (
+				!bindId ? 3 : (!bindlessTypeId ? 4 : 5)
+			),
 			"DescriptorTableRef_findBindlessRegister() requires table, bindId and resource"
 		))
 
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
-	ListDescriptorBinding bindings = DescriptorLayoutRef_ptr(tablePtr->layout)->info.bindings;
+	DescriptorLayout *layout = DescriptorLayoutRef_ptr(tablePtr->layout);
+	ListDescriptorBinding bindings = layout->info.bindings;
 
 	DescriptorHeap *heapPtr = DescriptorHeapRef_ptr(tablePtr->parent);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(heapPtr->device);
@@ -1214,13 +1218,10 @@ Bool DescriptorTableRef_findBindlessRegister(
 			2, "DescriptorTableRef_findBindlessRegister() mismatching resource and register type"
 		))
 
-	for (U64 i = 0; i < tablePtr->bindings.length; ++i) {
+	for(U8 i = 0; i < layout->bindlessTypeToBinding.length; ++i) {
 
-		DescriptorTableBinding tableBind = tablePtr->bindings.ptr[i];
-		DescriptorBinding bind = bindings.ptr[i];
-
-		if(bind.count <= 1)
-			continue;
+		U16 bindIdi = layout->bindlessTypeToBinding.ptr[i];
+		DescriptorBinding bind = bindings.ptr[bindIdi];
 
 		if(bind.registerType != regType)
 			continue;
@@ -1292,7 +1293,8 @@ Bool DescriptorTableRef_findBindlessRegister(
 			}
 		}
 
-		*bindId = i;
+		*bindId = bindIdi;
+		*bindlessTypeId = i;
 		goto clean;
 	}
 
@@ -1308,13 +1310,82 @@ Bool DescriptorTableRef_allocDescriptor(
 	U64 *arrayId,			//outputs arrayId into descriptor if success
 	Descriptor d,
 	Error *e_rr
-);
+) {
+
+	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	SpinLock *lock = NULL;
+
+	if(!table || table->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		retError(clean, Error_nullPointer(0, "DescriptorTableRef_allocDescriptor()::table is required"))
+
+	if(!arrayId)
+		retError(clean, Error_nullPointer(2, "DescriptorTableRef_allocDescriptor()::arrayId is required"))
+
+	DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
+
+	if(bindId >= tablePtr->bindings.length)
+		retError(clean, Error_outOfBounds(
+			1, bindId, tablePtr->bindings.length, "DescriptorTableRef_allocDescriptor()::bindId out of bounds"
+		))
+		
+	ListDescriptorBinding bindings = DescriptorLayoutRef_ptr(tablePtr->layout)->info.bindings;
+
+	if(bindings.ptr[bindId].count <= 1)
+		retError(clean, Error_invalidState(0, "DescriptorTableRef_allocDescriptor() can't be called on non arrays"));
+
+	DescriptorTableBinding *binding = tablePtr->bindings.ptrNonConst + bindId;
+	lock = &binding->lock;
+
+	if((acq = SpinLock_lock(lock, 1 * SECOND)) < ELockAcquire_Success)
+		retError(clean, Error_invalidState(0, "DescriptorTableRef_allocDescriptor() couldn't acquire lock"));
+
+	//Quick search, we perform per 2 U128, since there's no U64 version yet.
+	//TODO: This could be sped up by having a reduction bitset, for example:
+	//		isFree0
+	//		isFree00 isFree01
+	//		isFree000 isFree001 isFree010 isFree011
+	//		etc.
+
+	ListU64 activeList = binding->multiple.activeList;
+	U64 foundId = activeList.length;
+
+	for(U64 j = 0; j < activeList.length; j += 2) {
+
+		U128 big = U128_createU64x2(
+			activeList.ptr[j],
+			j + 1 < activeList.length ? activeList.ptr[j + 1] : 0
+		);
+
+		U8 bit = U128_bitScanReverse(big);
+
+		if(bit == U8_MAX)
+			continue;
+
+		foundId = (j << 7) | bit;
+		break;
+	}
+
+	if(foundId >= activeList.length)
+		retError(clean, Error_outOfMemory(0, "DescriptorTableRef_allocDescriptor() out of memory"))
+
+	*arrayId = (U32) foundId;
+	gotoIfError3(clean, DescriptorTableRef_setDescriptor(table, bindId, *arrayId, d, e_rr))
+
+clean:
+
+	if(lock && acq == ELockAcquire_Acquired)
+		SpinLock_unlock(lock);
+
+	return s_uccess;
+}
 
 Bool DescriptorTableRef_allocDescriptorBindless(
 	DescriptorTableRef *table,
 	ESHRegisterType type,
 	U32 strideOrLength,
-	U64 *bindId,
+	U16 *bindId,
+	U8 *bindlessTypeId,
 	U64 *arrayId,
 	Descriptor d,
 	Error *e_rr
@@ -1329,6 +1400,7 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 		type,
 		strideOrLength,
 		bindId,
+		bindlessTypeId,
 		d.resource,
 		isTexture ? d.texture.planeId : 0,
 		e_rr

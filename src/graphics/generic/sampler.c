@@ -23,10 +23,13 @@
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/bindless_descriptor.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "platforms/log.h"
 #include "types/container/string.h"
+#include "formats/oiSH/registers.h"
 
 Error SamplerRef_dec(SamplerRef **sampler) {
 	return !RefPtr_dec(sampler) ?
@@ -46,27 +49,16 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
 
-	if(sampler->samplerLocation) {
-
-		ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-		if(acq >= ELockAcquire_Success) {
-			ListU32 allocationList = (ListU32) { 0 };
-			ListU32_createRefConst(&sampler->samplerLocation, 1, &allocationList);
-			GraphicsDeviceRef_freeDescriptors(sampler->device, &allocationList);
-			sampler->samplerLocation = 0;
-		}
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&device->descriptorLock);
-	}
+	GraphicsDeviceRef_freeDescriptorBindless(sampler->device, descTable, sampler->samplerLocation, NULL);
 
 	Bool success = Sampler_freeExt(sampler);
 	success &= !GraphicsDeviceRef_dec(&sampler->device).genericError;
 	return success;
 }
 
-Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler) {
+Error GraphicsDeviceRef_createSampler(
+	GraphicsDeviceRef *dev, SamplerInfo info, Bool disallowBindlessDescriptor, CharString name, SamplerRef **sampler
+) {
 
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::dev is required");
@@ -132,24 +124,20 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 
 	*samp = (Sampler) { .device = dev, .info = info };
 
-	acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createSampler() couldn't acquire descriptor lock"
-		))
-
-	samp->samplerLocation = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Sampler);
-
-	if(samp->samplerLocation == U32_MAX)
-		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createSampler() couldn't allocate Sampler descriptor"))
-
 	gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name))
 
-clean:
+	if(!disallowBindlessDescriptor && !GraphicsDeviceRef_allocateDescriptorBindless(
+		dev,
+		descTable,
+		info.enableComparison ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler,
+		0,
+		(Descriptor) { .resource = *sampler },
+		&samp->samplerLocation,
+		&err
+	))
+		goto clean;
 
-	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&device->descriptorLock);
+clean:
 
 	if(err.genericError)
 		SamplerRef_dec(sampler);

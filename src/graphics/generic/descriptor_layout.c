@@ -174,6 +174,15 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			//Unique register, create another
 
+			ESHRegisterType regType4 = reg.reg.registerType & ESHRegisterType_TypeMask;
+
+			Bool hasStrideOrLen = 
+				regType4 == ESHRegisterType_ConstantBuffer ||
+				regType4 == ESHRegisterType_StructuredBuffer ||
+				regType4 == ESHRegisterType_StructuredBufferAtomic;
+
+			Bool isTexture = regType4 >= ESHRegisterType_TextureStart && regType4 <= ESHRegisterType_TextureEnd;
+
 			if (registerNameMatch == U64_MAX) {
 
 				gotoIfError2(clean, CharString_createCopyx(reg.name, &tmp))
@@ -184,9 +193,14 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 					.registerType = reg.reg.registerType,
 					.count = count,
 					.binding = regMatch,
-					.visibility = visibility,
-					.strideOrLength = reg.shaderBuffer.bufferSize
+					.visibility = visibility
 				};
+
+				if(hasStrideOrLen)
+					binding.data = reg.shaderBuffer.bufferSize;		//Same as setting structuredBufferSize/constantBufferSize
+
+				else if(isTexture)
+					binding.textureFormat = reg.reg.texture;
 
 				gotoIfError2(clean, ListDescriptorBinding_pushBackx(&info->bindings, binding))
 				continue;
@@ -198,10 +212,23 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			U32 strideOrLength = reg.shaderBuffer.bufferSize;
 
-			if(reg.reg.registerType != dk.registerType || count != dk.count || strideOrLength != dk.strideOrLength)
+			if(reg.reg.registerType != dk.registerType || count != dk.count)
 				retError(clean, Error_invalidParameter(
-					3, 0, "DescriptorLayoutInfo_detect() mismatching register count, register type or stride/buffer length"
+					3, 0, "DescriptorLayoutInfo_detect() mismatching register count or register type"
 				))
+
+			if (hasStrideOrLen) {
+				if(dk.data != reg.shaderBuffer.bufferSize)
+					retError(clean, Error_invalidParameter(
+						3, 0, "DescriptorLayoutInfo_detect() mismatching stride/buffer length"
+					))
+			}
+
+			//Validate compatibility of primitive and format
+
+			else if (isTexture) {
+				todo
+			}
 
 			info->bindings.ptrNonConst[registerNameMatch].visibility |= visibility;
 		}
@@ -256,6 +283,8 @@ Bool DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc) {
 	if(!(layout->info.flags & EDescriptorLayoutFlags_InternalWeakDeviceRef))
 		success &= !GraphicsDeviceRef_dec(&layout->device).genericError;
 
+	ListU16_freex(&layout->bindlessTypeToBinding);
+	ListU8_freex(&layout->bindingToBindlessType);
 	DescriptorLayoutInfo_free(&layout->info, alloc);
 	return success;
 }
@@ -285,6 +314,8 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.bindings.length is limited to U16_MAX"
 		);
 
+	U64 bindlessTypes = 0;
+
 	for(U64 i = 0; i < info->bindings.length; ++i) {
 
 		DescriptorBinding b = info->bindings.ptr[i];
@@ -313,7 +344,17 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 				0,
 				"GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the structured buffer size"
 			);
+
+		if ((info->flags & EDescriptorLayoutFlags_AllowBindlessAny) && b.count > 1)
+			++bindlessTypes;
 	}
+
+	if(bindlessTypes > 15)
+		return Error_invalidOperation(
+			0,
+			"GraphicsDeviceRef_createDescriptorLayout() more than 15 bindless arrays are present, this is unsupported "
+			"due to BindlessDescriptor's limits"
+		);
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DescriptorLayout) + GraphicsDeviceRef_getObjectSizes(dev)->descriptorLayout),
@@ -346,6 +387,29 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 	else layout->info.bindings = info->bindings;
 
 	*info = (DescriptorLayoutInfo) { 0 };
+
+	if (bindlessTypes) {
+
+		gotoIfError(clean, ListU16_reservex(&layout->bindlessTypeToBinding, layout->info.bindings.length))
+		gotoIfError(clean, ListU8_resizex(&layout->bindingToBindlessType, bindlessTypes))
+		
+		bindlessTypes = 0;
+
+		for(U16 i = 0; i < (U16) info->bindings.length; ++i) {
+
+			DescriptorBinding b = info->bindings.ptr[i];
+
+			U8 bindlessType = U8_MAX;
+
+			if ((info->flags & EDescriptorLayoutFlags_AllowBindlessAny) && b.count > 1) {
+				bindlessType = (U8) bindlessTypes;
+				gotoIfError(clean, ListU16_pushBackx(&layout->bindlessTypeToBinding, i))
+				++bindlessTypes;
+			}
+
+			layout->bindingToBindlessType.ptrNonConst[i] = bindlessType;
+		}
+	}
 
 	gotoIfError(clean, GraphicsDeviceRef_createDescriptorLayoutExt(dev, layout, name))
 

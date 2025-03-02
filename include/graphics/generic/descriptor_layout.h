@@ -95,8 +95,13 @@ typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DescriptorLayoutRef;
 
 typedef struct DescriptorLayout {
+
 	GraphicsDeviceRef *device;
 	DescriptorLayoutInfo info;
+
+	ListU16 bindlessTypeToBinding;
+	ListU8 bindingToBindlessType;		//U8_MAX indicates "none"
+
 } DescriptorLayout;
 
 #define DescriptorLayout_ext(ptr, T) (!ptr ? NULL : (T##DescriptorLayout*)(ptr + 1))		//impl

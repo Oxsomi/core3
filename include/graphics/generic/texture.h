@@ -27,7 +27,6 @@
 #endif
 
 typedef enum EMSAASamples EMSAASamples;
-typedef enum EDescriptorType EDescriptorType;
 
 typedef struct CharString CharString;
 typedef RefPtr GraphicsDeviceRef;
@@ -72,8 +71,6 @@ Bool TextureRef_isDepthStencil(TextureRef *tex);
 Bool TextureRef_isTexture(RefPtr *tex);
 
 UnifiedTextureImage TextureRef_getImage(TextureRef *tex, U32 subResource, U8 imageId);
-
-EDescriptorType UnifiedTexture_getWriteDescriptorType(UnifiedTexture texture);
 
 U32 TextureRef_getCurrReadHandle(TextureRef *tex, U32 subResource);
 U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
