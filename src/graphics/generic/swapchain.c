@@ -121,7 +121,13 @@ Bool Swapchain_free(Swapchain *swapchain, Allocator alloc) {
 	return success;
 }
 
-Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo info, Bool allowWriteExt, SwapchainRef **scRef) {
+Error GraphicsDeviceRef_createSwapchain(
+	GraphicsDeviceRef *dev,
+	SwapchainInfo info,
+	Bool allowWriteExt,
+	DescriptorTableRef *bindlessDescriptorTable,
+	SwapchainRef **scRef
+) {
 
 	if(!info.window || !info.window->nativeHandle)
 		return Error_nullPointer(
@@ -195,7 +201,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 	}
 
 	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef))
-	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title))
+	gotoIfError(clean, UnifiedTexture_create(*scRef, bindlessDescriptorTable, info.window->title))
 
 clean:
 

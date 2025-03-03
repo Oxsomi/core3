@@ -360,6 +360,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	gotoIfError2(clean, GraphicsDeviceRef_createBufferData(
 		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None,
+		NULL,
 		CharString_createRefCStrConst("Shader binding table"),
 		&shaderTable,
 		&sbt

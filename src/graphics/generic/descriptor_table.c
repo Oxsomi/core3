@@ -56,7 +56,7 @@ void DescriptorTableBinding_free(DescriptorTableBinding *binding, Allocator allo
 		return;
 
 	ListU64_free(&binding->multiple.activeList, alloc);
-	ListWeakRefPtr_free(&binding->multiple.descriptors, alloc);
+	ListWeakRefPtr_free(&binding->multiple.resources, alloc);
 
 	if(type == 0)
 		ListTextureDescriptorRange_free(&binding->multiple.textures, alloc);
@@ -120,7 +120,7 @@ Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 					}
 			}
 
-			else if(tb.single.descriptor) {
+			else if(tb.single.resource) {
 
 				Log_warnLnx(
 					"Leaked descriptor at %.*s (#%"PRIu64", id %"PRIu64", space %"PRIu64")",
@@ -251,7 +251,7 @@ Error DescriptorHeapRef_createDescriptorTable(
 		DescriptorTableBindingMultiple *multiple = &table->bindings.ptrNonConst[i].multiple;
 
 		gotoIfError(clean, ListU64_resizex(&multiple->activeList, (j + 63) >> 5))
-		gotoIfError(clean, ListWeakRefPtr_resizex(&multiple->descriptors, j))
+		gotoIfError(clean, ListWeakRefPtr_resizex(&multiple->resources, j))
 
 		if(GraphicsDeviceRef_ptr(dev)->flags & EGraphicsDeviceFlags_IsDebug)
 			gotoIfError(clean, ListDescriptorStackTrace_resizex(&multiple->stackTraces, j))
@@ -446,7 +446,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 	if(b.count > 1)
 		for (U64 i = arrayId; i < arrayId + count; ++i) {
 
-			WeakRefPtr *ref = binding->multiple.descriptors.ptr[i];
+			WeakRefPtr *ref = binding->multiple.resources.ptr[i];
 			binding->multiple.activeList.ptrNonConst[i >> 6] &=~ ((U64)1 << (i & 63));
 
 			if(ref && ref->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer) {
@@ -455,11 +455,11 @@ Bool DescriptorTableRef_unsetDescriptors(
 			}
 
 			gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr))
-			binding->multiple.descriptors.ptrNonConst[i] = NULL;
+			binding->multiple.resources.ptrNonConst[i] = NULL;
 		}
 
 	else {
-		WeakRefPtr *ref = binding->single.descriptor;
+		WeakRefPtr *ref = binding->single.resource;
 
 		if(ref && ref->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer) {
 			gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, binding->single.buffer.counter, e_rr))
@@ -467,7 +467,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 		}
 
 		gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr))
-		binding->single.descriptor = NULL;
+		binding->single.resource = NULL;
 	}
 
 clean:
@@ -480,7 +480,7 @@ clean:
 
 Bool Descriptor_eq(Descriptor a, DescriptorTableBindingSingle b, ESHRegisterType type) {
 
-	if (a.resource != b.descriptor) 
+	if (a.resource != b.resource) 
 		return false;
 
 	static_assert(
@@ -678,7 +678,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if (type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) {
 
-					if(descLen / b.structedBufferStride > 2 * GIBI )
+					if(descLen / b.structedBufferStride > 2 * GIBI)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() structured buffer is limited to 2Gi elements"
 						))
@@ -938,7 +938,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 		for(U64 j = arrayId; j < arrayId + darr.length; ++j) {
 
-			single.descriptor = binding->multiple.descriptors.ptr[j];
+			single.resource = binding->multiple.resources.ptr[j];
 
 			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 				single.texture = binding->multiple.textures.ptr[j];
@@ -995,7 +995,7 @@ Bool DescriptorTableRef_setDescriptors(
 	if(b.count > 1)
 		for(U64 j = arrayId; j < arrayId + darr.length; ++j) {
 
-			binding->multiple.descriptors.ptrNonConst[j] = darr.ptr[j - arrayId].resource;
+			binding->multiple.resources.ptrNonConst[j] = darr.ptr[j - arrayId].resource;
 			binding->multiple.activeList.ptrNonConst[j >> 6] |= (U64)1 << (j & 63);
 
 			if(binding->multiple.stackTraces.ptr)
@@ -1010,7 +1010,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 	else {
 
-		binding->single.descriptor = darr.ptr[0].resource;
+		binding->single.resource = darr.ptr[0].resource;
 		binding->single.stackTrace = stack;
 
 		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)

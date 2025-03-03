@@ -147,9 +147,11 @@ typedef struct TLAS {
 
 	RTAS base;
 
+	DescriptorTableRef *bindlessDescriptorTable;
+
 	Bool useDeviceMemory;
 	Bool disallowBindlessDescriptor;
-	U8 padding[2];
+	U8 padding[10];
 
 	BindlessDescriptor handle;
 
@@ -193,6 +195,7 @@ Error GraphicsDeviceRef_createTLASExt(
 	TLASRef *parent,					//If specified, indicates refit
 	ListTLASInstanceStatic instances,
 	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 );
@@ -203,6 +206,7 @@ Error GraphicsDeviceRef_createTLASMotionExt(
 	TLASRef *parent,					//If specified, indicates refit
 	ListTLASInstanceMotion instances,
 	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 );
@@ -214,6 +218,7 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 	TLASRef *parent,					//If specified, indicates refit
 	DeviceData instancesDevice,			//Instances on the GPU, should be sized correctly
 	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 );

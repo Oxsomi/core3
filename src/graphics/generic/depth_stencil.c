@@ -48,6 +48,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	EDepthStencilFormat format,
 	Bool allowShaderRead,
 	EMSAASamples msaa,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	DepthStencilRef **depthStencilRef
 ) {
@@ -80,7 +81,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, name))
+	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, bindlessDescriptorTable, name))
 
 clean:
 

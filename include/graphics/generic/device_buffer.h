@@ -48,6 +48,7 @@ typedef enum EDeviceBufferUsage {
 } EDeviceBufferUsage;
 
 typedef RefPtr DeviceBufferRef;
+typedef RefPtr DescriptorTableRef;
 
 TList(DevicePendingRange);
 
@@ -62,7 +63,9 @@ typedef struct DeviceBuffer {
 
 	EDeviceBufferUsage usage;
 	Bool isPendingFullCopy, isPending, isFirstFrame;
-	U8 padding0;
+	U8 padding0[9];
+
+	DescriptorTableRef *bindlessDescriptorTable;
 
 	Buffer cpuData;							//Null if not cpu backed & uploaded. If not cpu backed this will free post upload
 
@@ -88,6 +91,7 @@ Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
 	DeviceBufferRef **buf
@@ -97,6 +101,7 @@ Error GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
 	DeviceBufferRef **buf

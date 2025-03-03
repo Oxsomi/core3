@@ -58,6 +58,7 @@ Error GraphicsDeviceRef_createTexture(
 	U16 width,					//<= 16384
 	U16 height,					//^
 	U16 length,					//<= 256
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
 	DeviceTextureRef **tex

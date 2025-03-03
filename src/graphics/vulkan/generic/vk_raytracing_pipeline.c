@@ -322,6 +322,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		deviceRef,
 		EDeviceBufferUsage_SBTExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		CharString_createRefCStrConst("Shader binding table"),
 		&shaderBindings,
 		&Pipeline_info(pipeline, PipelineRaytracingInfo)->shaderBindingTable

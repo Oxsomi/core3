@@ -103,7 +103,7 @@ TList(DescriptorStackTrace);
 typedef struct DescriptorTableBindingMultiple {
 
 	ListU64 activeList;			//Quicker than indexing descriptors
-	ListWeakRefPtr descriptors;
+	ListWeakRefPtr resources;
 	ListDescriptorStackTrace stackTraces;
 
 	union {
@@ -116,7 +116,7 @@ typedef struct DescriptorTableBindingMultiple {
 typedef struct DescriptorTableBindingSingle {
 
 	DescriptorStackTrace stackTrace;
-	WeakRefPtr *descriptor;
+	WeakRefPtr *resource;
 
 	union {
 		BufferDescriptorRange buffer;

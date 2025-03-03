@@ -82,6 +82,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 				deviceRef,
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocatedBit,
+				NULL,
 				tmp,
 				stride * instancesU64,
 				&tlas->tempInstanceBuffer
@@ -204,6 +205,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		deviceRef,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tlas->base.name,
 		sizes.accelerationStructureSize,
 		&tlas->base.asBuffer
@@ -217,6 +219,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		deviceRef,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
 		&tlas->base.tempScratchBuffer

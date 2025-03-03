@@ -106,6 +106,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 				tlas->base.device,
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocated,
+				NULL,
 				tmp,
 				stride * instancesU64,
 				&tlas->tempInstanceBuffer
@@ -157,6 +158,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		tlas->base.device,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tlas->base.name,
 		sizes.ResultDataMaxSizeInBytes,
 		&tlas->base.asBuffer
@@ -170,6 +172,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		tlas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
 		&tlas->base.tempScratchBuffer

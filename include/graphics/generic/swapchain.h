@@ -29,6 +29,7 @@
 #endif
 
 typedef RefPtr GraphicsDeviceRef;
+typedef RefPtr DescriptorTableRef;
 typedef struct Window Window;
 typedef enum EWindowFormat EWindowFormat;
 
@@ -90,7 +91,14 @@ typedef RefPtr SwapchainRef;
 Error SwapchainRef_dec(SwapchainRef **swapchain);
 Error SwapchainRef_inc(SwapchainRef *swapchain);
 
-Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *device, SwapchainInfo info, Bool allowComputeExt, SwapchainRef **ref);
+Error GraphicsDeviceRef_createSwapchain(
+	GraphicsDeviceRef *device,
+	SwapchainInfo info,
+	Bool allowComputeExt,
+	DescriptorTableRef *bindlessDescriptorTable,
+	SwapchainRef **ref
+);
+
 Error SwapchainRef_resize(SwapchainRef *swapchain);
 
 #ifdef __cplusplus

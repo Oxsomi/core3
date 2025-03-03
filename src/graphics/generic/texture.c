@@ -210,7 +210,7 @@ Bool TextureRef_isRenderTargetWritable(TextureRef *tex) {
 Bool UnifiedTexture_free(TextureRef *textureRef) {
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
-	GraphicsDeviceRef *deviceRef = texture->resource.device;
+	GraphicsDeviceRef *device = texture->resource.device;
 
 	//Log_debugLnx("Destroy: Texture (%p)", texture);
 
@@ -218,10 +218,12 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 
 		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
 
-		for(U8 i = 0; i < texture->images; ++i) {
-			GraphicsDeviceRef_freeDescriptorBindless(deviceRef, descTable, img[i].readHandle, NULL);
-			GraphicsDeviceRef_freeDescriptorBindless(deviceRef, descTable, img[i].writeHandle, NULL);
-		}
+		if(texture->bindlessDescriptorTable)
+			for(U8 i = 0; i < texture->images; ++i) {
+				GraphicsDeviceRef_freeDescriptorBindless(device, texture->bindlessDescriptorTable, img[i].readHandle, NULL);
+				GraphicsDeviceRef_freeDescriptorBindless(device, texture->bindlessDescriptorTable, img[i].writeHandle, NULL);
+				DescriptorTableRef_dec(&texture->bindlessDescriptorTable);
+			}
 	}
 
 	Bool success = UnifiedTexture_freeExt(textureRef);
@@ -231,9 +233,9 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 	return success;
 }
 
-Error UnifiedTexture_create(TextureRef *ref, CharString name) {
+Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name) {
 
-	const UnifiedTexture *texturePtr = TextureRef_getUnifiedTextureIntern(ref, NULL);
+	UnifiedTexture *texturePtr = TextureRef_getUnifiedTextureIntern(ref, NULL);
 
 	if(!texturePtr)
 		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr is required");
@@ -245,6 +247,18 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 
 	if(!texture.resource.device || texture.resource.device->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->resource.device is required");
+
+	if(bindlessDescriptorTable && !(texture.resource.flags & EGraphicsResourceFlag_ExposeBindless))
+		return Error_invalidState(0, "UnifiedTexture_create() bindlessDescriptorTable is set, but disallowed");
+
+	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		return Error_nullPointer(0, "UnifiedTexture_create()::bindlessDescriptorTable should be valid if non NULL");
+
+	if ((texture.resource.flags & EGraphicsResourceFlag_ExposeBindless) && !bindlessDescriptorTable)
+		bindlessDescriptorTable = GraphicsDeviceRef_ptr(texture.resource.device)->defaultDescriptorTable;
+
+	if(!bindlessDescriptorTable && (texture.resource.flags & EGraphicsResourceFlag_ExposeBindless))
+		return Error_invalidState(0, "UnifiedTexture_create() can't expose resource for bindless without bindless");
 
 	if(!texture.depthFormat && !texture.textureFormatId)
 		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->depthFormat or textureFormatId is required");
@@ -355,6 +369,14 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 			"but the feature isn't enabled"
 		);
 
+	if(bindlessDescriptorTable) {
+
+		if(!RefPtr_inc(bindlessDescriptorTable))
+			return Error_invalidState(0, "UnifiedTexture_create()::bindlessDescriptorTable was invalid");
+
+		texturePtr->bindlessDescriptorTable = bindlessDescriptorTable;
+	}
+
 	//Allocate in descriptors
 
 	if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindless) {
@@ -371,10 +393,10 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
 				!GraphicsDeviceRef_allocateDescriptorBindless(
 					deviceRef,
-					descTable,
+					bindlessDescriptorTable,
 					texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D,
 					0,
-					(Descriptor) { .resource = img, .texture = (TextureDescriptorRange) { .imageId = i } },
+					(Descriptor) { .resource = ref, .texture = (TextureDescriptorRange) { .imageId = i } },
 					&img->readHandle,
 					&err
 				)
@@ -385,11 +407,11 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
 				!GraphicsDeviceRef_allocateDescriptorBindless(
 					deviceRef,
-					descTable,
+					bindlessDescriptorTable,
 					(texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D) |
 					ESHRegisterType_IsWrite,
 					0,
-					(Descriptor) { .resource = img, .texture = (TextureDescriptorRange) { .imageId = i } },
+					(Descriptor) { .resource = ref, .texture = (TextureDescriptorRange) { .imageId = i } },
 					&img->writeHandle,
 					&err
 				)

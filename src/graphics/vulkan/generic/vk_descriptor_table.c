@@ -88,9 +88,9 @@ void VkDescriptorTable_loseRef(DescriptorTable *table, U64 i, U64 j) {
 	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
 
 		if(layoutBind.count > 1)
-			VkDescriptor_loseRef(tableBind.multiple.descriptors.ptr[j], tableBind.multiple.textures.ptr[j]);
+			VkDescriptor_loseRef(tableBind.multiple.resources.ptr[j], tableBind.multiple.textures.ptr[j]);
 
-		else VkDescriptor_loseRef(tableBind.single.descriptor, tableBind.single.texture);
+		else VkDescriptor_loseRef(tableBind.single.resource, tableBind.single.texture);
 	}
 }
 

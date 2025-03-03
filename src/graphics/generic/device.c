@@ -608,6 +608,7 @@ Error GraphicsDeviceRef_create(
 			*deviceRef,
 			EDeviceBufferUsage_Uniform,
 			EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+			NULL,
 			CharString_createRefCStrConst("Per frame data"),
 			sizeof(CBufferData), &device->frameData[i]
 		))
@@ -853,6 +854,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 		deviceRef,
 		EDeviceBufferUsage_None,
 		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+		NULL,
 		CharString_createRefCStrConst("Staging buffer"),
 		newSize, &device->staging
 	))

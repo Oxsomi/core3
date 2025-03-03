@@ -30,9 +30,12 @@ typedef enum EMSAASamples EMSAASamples;
 
 typedef struct CharString CharString;
 typedef RefPtr GraphicsDeviceRef;
+typedef RefPtr DescriptorTableRef;
+
+typedef U32 BindlessDescriptor;
 
 typedef struct UnifiedTextureImage {
-	U32 readHandle, writeHandle;
+	BindlessDescriptor readHandle, writeHandle;
 	U64 padding;
 } UnifiedTextureImage;
 
@@ -49,9 +52,11 @@ typedef struct UnifiedTexture {				//Base texture definition, should be at end o
 	U16 width, height, length;
 	U8 levels, images;
 
-	U8 padding[2];
+	U8 padding[10];
 	U8 maxImages;							//If 0, uses images, otherwise the amount of images to the next struct
 	U8 currentImageId;
+
+	DescriptorTableRef *bindlessDescriptorTable;
 
 } UnifiedTexture;
 
@@ -78,7 +83,7 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
 //Only for child classes
 
 Bool UnifiedTexture_free(TextureRef *textureRef);
-Error UnifiedTexture_create(TextureRef *ref, CharString name);
+Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name);
 
 //Internal (only use inside GraphicsDeviceRef_submitCommands)
 

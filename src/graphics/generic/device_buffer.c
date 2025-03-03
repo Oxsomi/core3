@@ -181,9 +181,12 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 		
 	//Log_debugLnx("Destroy: DeviceBuffer (%p)", buffer);
 
-	if (buffer->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
-		GraphicsDeviceRef_freeDescriptorBindless(buffer->resource.device, descTable, buffer->readHandle, NULL);
-		GraphicsDeviceRef_freeDescriptorBindless(buffer->resource.device, descTable, buffer->writeHandle, NULL);
+	GraphicsDeviceRef *device = buffer->resource.device;
+
+	if(buffer->bindlessDescriptorTable) {
+		GraphicsDeviceRef_freeDescriptorBindless(device, buffer->bindlessDescriptorTable, buffer->readHandle, NULL);
+		GraphicsDeviceRef_freeDescriptorBindless(device, buffer->bindlessDescriptorTable, buffer->writeHandle, NULL);
+		DescriptorTableRef_dec(&buffer->bindlessDescriptorTable);
 	}
 
 	Bool success = DeviceBuffer_freeExt(buffer);
@@ -197,6 +200,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
 	Bool allocate,
@@ -216,6 +220,24 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"))
+
+	if(bindlessDescriptorTable && !(resourceFlags & EGraphicsResourceFlag_ExposeBindless))
+		gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createBufferIntern() bindlessDescriptorTable is set, but disallowed"
+		))
+
+	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		gotoIfError(clean, Error_nullPointer(
+			0, "GraphicsDeviceRef_createBufferIntern()::bindlessDescriptorTable should be valid if non NULL"
+		))
+
+	if ((resourceFlags & EGraphicsResourceFlag_ExposeBindless) && !bindlessDescriptorTable)
+		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
+
+	if(!bindlessDescriptorTable && (resourceFlags & EGraphicsResourceFlag_ExposeBindless))
+		gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createBufferIntern() can't expose resource for bindless without bindless"
+		))
 
 	if((usage & EDeviceBufferUsage_ScratchExt) && (usage != EDeviceBufferUsage_ScratchExt))
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"))
@@ -256,6 +278,11 @@ Error GraphicsDeviceRef_createBufferIntern(
 		.isFirstFrame = true
 	};
 
+	if(bindlessDescriptorTable) {
+		gotoIfError(clean, DescriptorTableRef_inc(bindlessDescriptorTable))
+		buf->bindlessDescriptorTable = bindlessDescriptorTable;
+	}
+
 	//Allocate
 
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
@@ -274,7 +301,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
 		!GraphicsDeviceRef_allocateDescriptorBindless(
 			dev,
-			descTable,
+			bindlessDescriptorTable,
 			ESHRegisterType_ByteAddressBuffer,
 			0,
 			(Descriptor) { .resource = *ref },
@@ -288,7 +315,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
 		!GraphicsDeviceRef_allocateDescriptorBindless(
 			dev,
-			descTable,
+			bindlessDescriptorTable,
 			ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
 			0,
 			(Descriptor) { .resource = *ref },
@@ -310,12 +337,13 @@ Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
 	DeviceBufferRef **buf
 ) {
 	return GraphicsDeviceRef_createBufferIntern(
-		dev, usage, resourceFlags, name, len, resourceFlags & EGraphicsResourceFlag_CPUBacked, buf
+		dev, usage, resourceFlags, bindlessDescriptorTable, name, len, resourceFlags & EGraphicsResourceFlag_CPUBacked, buf
 	);
 }
 
@@ -323,6 +351,7 @@ Error GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag flags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
 	DeviceBufferRef **buf
@@ -332,7 +361,7 @@ Error GraphicsDeviceRef_createBufferData(
 		return Error_nullPointer(4, "GraphicsDeviceRef_createBufferData()::dat is required");
 
 	Error err = GraphicsDeviceRef_createBufferIntern(
-		dev, usage, flags, name, Buffer_length(*dat), Buffer_isRef(*dat), buf
+		dev, usage, flags, bindlessDescriptorTable, name, Buffer_length(*dat), Buffer_isRef(*dat), buf
 	);
 
 	if(err.genericError)

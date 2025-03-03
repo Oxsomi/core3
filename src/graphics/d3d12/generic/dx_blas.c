@@ -161,6 +161,7 @@ Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 		blas->base.device,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		blas->base.name,
 		sizes.ResultDataMaxSizeInBytes,
 		&blas->base.asBuffer
@@ -174,6 +175,7 @@ Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 		blas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
 		&blas->base.tempScratchBuffer

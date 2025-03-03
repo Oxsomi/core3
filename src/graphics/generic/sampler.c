@@ -47,9 +47,14 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 
 	//Log_debugLnx("Destroy: %p", sampler);
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
+	if(sampler->bindlessDescriptorTable) {
 
-	GraphicsDeviceRef_freeDescriptorBindless(sampler->device, descTable, sampler->samplerLocation, NULL);
+		GraphicsDeviceRef_freeDescriptorBindless(
+			sampler->device, sampler->bindlessDescriptorTable, sampler->samplerLocation, NULL
+		);
+
+		DescriptorTableRef_dec(&sampler->bindlessDescriptorTable);
+	}
 
 	Bool success = Sampler_freeExt(sampler);
 	success &= !GraphicsDeviceRef_dec(&sampler->device).genericError;
@@ -57,11 +62,25 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 }
 
 Error GraphicsDeviceRef_createSampler(
-	GraphicsDeviceRef *dev, SamplerInfo info, Bool disallowBindlessDescriptor, CharString name, SamplerRef **sampler
+	GraphicsDeviceRef *dev,
+	SamplerInfo info,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
+	CharString name,
+	SamplerRef **sampler
 ) {
 
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::dev is required");
+
+	if(bindlessDescriptorTable && disallowBindlessDescriptor)
+		return Error_invalidState(0, "GraphicsDeviceRef_createSampler() bindlessDescriptorTable is set, but disallowed");
+
+	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		return Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::bindlessDescriptorTable should be valid if non NULL");
+
+	if (!disallowBindlessDescriptor && !bindlessDescriptorTable)
+		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
 
 	if(info.filter &~ ESamplerFilterMode_All)
 		return Error_invalidParameter(
@@ -114,8 +133,6 @@ Error GraphicsDeviceRef_createSampler(
 	if(err.genericError)
 		return err;
 
-	ELockAcquire acq = ELockAcquire_Invalid;
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
@@ -124,18 +141,27 @@ Error GraphicsDeviceRef_createSampler(
 
 	*samp = (Sampler) { .device = dev, .info = info };
 
+	if(bindlessDescriptorTable) {
+		gotoIfError(clean, DescriptorTableRef_inc(bindlessDescriptorTable))
+		samp->bindlessDescriptorTable = bindlessDescriptorTable;
+	}
+
 	gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name))
 
-	if(!disallowBindlessDescriptor && !GraphicsDeviceRef_allocateDescriptorBindless(
+	U32 samplerLocation = 0;
+
+	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
 		dev,
-		descTable,
+		bindlessDescriptorTable,
 		info.enableComparison ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler,
 		0,
 		(Descriptor) { .resource = *sampler },
-		&samp->samplerLocation,
+		&samplerLocation,
 		&err
 	))
 		goto clean;
+
+	samp->samplerLocation = (U16) samplerLocation;
 
 clean:
 
