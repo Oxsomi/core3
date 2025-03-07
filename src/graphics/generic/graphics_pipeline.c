@@ -449,10 +449,12 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 		.flags = flags
 	};
 
-	if(layout)
+	if(!layout)
 		layout = device->defaultPipelineLayout;
 
-	gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+
 	pipelinePtr->layout = layout;
 
 	*Pipeline_info(pipelinePtr, PipelineGraphicsInfo) = info;

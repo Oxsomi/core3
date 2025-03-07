@@ -87,6 +87,11 @@ typedef struct VkUnifiedTexture {
 
 } VkUnifiedTexture;
 
+typedef struct Descriptor Descriptor;
+typedef enum ESHRegisterType ESHRegisterType;
+
+Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *view, U32 *viewId, Error *e_rr);
+
 typedef enum ECompareOp ECompareOp;
 
 typedef struct VkBLAS {

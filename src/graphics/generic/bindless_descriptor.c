@@ -79,6 +79,7 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	DescriptorTableRef *descTableRef,
 	ESHRegisterType type,
 	U32 strideOrLength,
+	Bool maintainRef,
 	Descriptor desc,
 	BindlessDescriptor *descriptorHandle,
 	Error *e_rr
@@ -101,7 +102,7 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 		descTableRef = device->defaultDescriptorTable;
 
 	gotoIfError3(clean, DescriptorTableRef_allocDescriptorBindless(
-		descTableRef, type, strideOrLength, &bindId, &bindlessTypeId, &arrayId, desc, e_rr
+		descTableRef, type, strideOrLength, &bindId, &bindlessTypeId, &arrayId, maintainRef, desc, e_rr
 	))
 
 	*descriptorHandle = (((BindlessDescriptor) bindlessTypeId + 1) << 17) | (BindlessDescriptor) arrayId;

@@ -210,8 +210,6 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			DescriptorBinding dk = info->bindings.ptr[registerNameMatch];
 
-			U32 strideOrLength = reg.shaderBuffer.bufferSize;
-
 			if(reg.reg.registerType != dk.registerType || count != dk.count)
 				retError(clean, Error_invalidParameter(
 					3, 0, "DescriptorLayoutInfo_detect() mismatching register count or register type"
@@ -226,9 +224,13 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			//Validate compatibility of primitive and format
 
-			else if (isTexture) {
-				todo
-			}
+			else if (isTexture && (
+				dk.textureFormat.primitive != reg.reg.texture.primitive ||
+				dk.textureFormat.formatId != reg.reg.texture.formatId
+			))
+				retError(clean, Error_invalidParameter(
+					3, 0, "DescriptorLayoutInfo_detect() mismatching texture primitive or format id"
+				))
 
 			info->bindings.ptrNonConst[registerNameMatch].visibility |= visibility;
 		}
@@ -381,7 +383,7 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 	if(!ListCharString_movex(&info->bindingNames, &layout->info.bindingNames, &err))
 		goto clean;
 
-	if(ListDescriptorBinding_isRef(layout->info.bindings))
+	if(ListDescriptorBinding_isRef(info->bindings))
 		gotoIfError(clean, ListDescriptorBinding_createCopyx(info->bindings, &layout->info.bindings))
 
 	else layout->info.bindings = info->bindings;
@@ -390,18 +392,18 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 
 	if (bindlessTypes) {
 
-		gotoIfError(clean, ListU16_reservex(&layout->bindlessTypeToBinding, layout->info.bindings.length))
-		gotoIfError(clean, ListU8_resizex(&layout->bindingToBindlessType, bindlessTypes))
+		gotoIfError(clean, ListU16_reservex(&layout->bindlessTypeToBinding, bindlessTypes))
+		gotoIfError(clean, ListU8_resizex(&layout->bindingToBindlessType, layout->info.bindings.length))
 		
 		bindlessTypes = 0;
 
-		for(U16 i = 0; i < (U16) info->bindings.length; ++i) {
+		for(U16 i = 0; i < (U16) layout->info.bindings.length; ++i) {
 
-			DescriptorBinding b = info->bindings.ptr[i];
+			DescriptorBinding b = layout->info.bindings.ptr[i];
 
 			U8 bindlessType = U8_MAX;
 
-			if ((info->flags & EDescriptorLayoutFlags_AllowBindlessAny) && b.count > 1) {
+			if ((layout->info.flags & EDescriptorLayoutFlags_AllowBindlessAny) && b.count > 1) {
 				bindlessType = (U8) bindlessTypes;
 				gotoIfError(clean, ListU16_pushBackx(&layout->bindlessTypeToBinding, i))
 				++bindlessTypes;

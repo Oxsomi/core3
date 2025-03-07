@@ -31,7 +31,8 @@
 #endif
 
 typedef enum EDescriptorTableFlags {
-	EDescriptorTableFlags_None
+	EDescriptorTableFlags_None						= 0,
+	EDescriptorTableFlags_InternalWeakDeviceRef		= 1 << 0
 } EDescriptorTableFlags;
 
 typedef U8 DescriptorTableFlags;
@@ -103,6 +104,7 @@ TList(DescriptorStackTrace);
 typedef struct DescriptorTableBindingMultiple {
 
 	ListU64 activeList;			//Quicker than indexing descriptors
+	ListU64 maintainRef;		//If the resource affects ListDescriptorTableResourceRef in DescriptorTable
 	ListWeakRefPtr resources;
 	ListDescriptorStackTrace stackTraces;
 
@@ -117,6 +119,8 @@ typedef struct DescriptorTableBindingSingle {
 
 	DescriptorStackTrace stackTrace;
 	WeakRefPtr *resource;
+	Bool maintainRef;
+	U8 padding0[7];
 
 	union {
 		BufferDescriptorRange buffer;
@@ -201,6 +205,7 @@ Bool DescriptorTableRef_setDescriptors(
 	DescriptorTableRef *table,
 	U64 bindId,				//ListDescriptorBinding[i]
 	U64 arrayId,			//arrayId into descriptor
+	Bool maintainRef,
 	ListDescriptor d,
 	Error *e_rr
 );
@@ -217,6 +222,7 @@ Bool DescriptorTableRef_setDescriptor(
 	DescriptorTableRef *table,
 	U64 bindId,				//ListDescriptorBinding[i]
 	U64 arrayId,			//arrayId into descriptor
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 );
@@ -225,6 +231,7 @@ Bool DescriptorTableRef_allocDescriptor(
 	DescriptorTableRef *table,
 	U64 bindId,				//ListDescriptorBinding[i]
 	U64 *arrayId,			//outputs arrayId into descriptor if success
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 );
@@ -252,6 +259,7 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 	U16 *bindId,			//ListDescriptorBinding[i]
 	U8 *bindlessTypeId,		//Index for bindless handle
 	U64 *arrayId,			//outputs arrayId into descriptor if success
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 );
@@ -263,6 +271,7 @@ Bool DescriptorTableRef_setDescriptorByName(
 	DescriptorTableRef *table,
 	CharString registerName,
 	U64 arrayId,			//arrayId into descriptor
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 );
@@ -271,6 +280,7 @@ Bool DescriptorTableRef_setDescriptorsByName(
 	DescriptorTableRef *table,
 	CharString registerName,
 	U64 arrayId,			//arrayId into descriptor
+	Bool maintainRef,
 	ListDescriptor d,
 	Error *e_rr
 );

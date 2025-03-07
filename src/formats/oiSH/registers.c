@@ -626,11 +626,6 @@ Bool ListSHRegisterRuntime_addTextureBase(
 			"ListSHRegisterRuntime_addRWTexture()::textureFormatPrimitive out of bounds"
 		))
 
-	if(textureFormatPrimitive == ESHTexturePrimitive_Count && !textureFormatId && isWrite)
-		retError(clean, Error_invalidState(
-			0, "ListSHRegisterRuntime_addRWTexture() either texture format primitive or texture format id has to be set for RW"
-		))
-
 	ETextureFormat format = ETextureFormatId_unpack[textureFormatId];
 	ESHTexturePrimitive primitive = ESHTexturePrimitive_Count;
 

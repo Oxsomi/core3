@@ -459,6 +459,7 @@ Error GraphicsDeviceRef_createTLAS(
 		bindlessDescriptorTable,
 		ESHRegisterType_AccelerationStructure,
 		0,
+		false,
 		(Descriptor) { .resource = *tlasRef },
 		&tlasPtr->handle,
 		&err

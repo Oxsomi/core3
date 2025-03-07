@@ -155,7 +155,9 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Create our ranges
 
-	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, sortedList.length + 1))
+	Bool isNv = GraphicsDeviceRef_ptr(dev)->info.vendor == EGraphicsVendorId_NV;
+
+	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, sortedList.length + isNv))
 	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, sortedList.length))
 	gotoIfError(clean, ListU32_resizex(&layoutExt->bindingOffsets, layout->info.bindings.length))
 
@@ -225,7 +227,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Dummy UAV for NVAPI extensions
 
-	if (GraphicsDeviceRef_ptr(dev)->info.vendor == EGraphicsVendorId_NV)
+	if (isNv)
 		layoutExt->rangesResources.ptrNonConst[resourceRange++] = (D3D12_DESCRIPTOR_RANGE1) {
 			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
 			.NumDescriptors = 1,

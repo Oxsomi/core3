@@ -55,8 +55,12 @@ void DescriptorTableBinding_free(DescriptorTableBinding *binding, Allocator allo
 	if(!(type & 4))
 		return;
 
+	type &= 3;
+
 	ListU64_free(&binding->multiple.activeList, alloc);
+	ListU64_free(&binding->multiple.maintainRef, alloc);
 	ListWeakRefPtr_free(&binding->multiple.resources, alloc);
+	ListDescriptorStackTrace_free(&binding->multiple.stackTraces, alloc);
 
 	if(type == 0)
 		ListTextureDescriptorRange_free(&binding->multiple.textures, alloc);
@@ -170,7 +174,9 @@ Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 
 	ListDescriptorTableResourceRef_freex(&table->resources);
 
-	success &= !DescriptorHeapRef_dec(&table->parent).genericError;
+	if(!(table->flags & EDescriptorTableFlags_InternalWeakDeviceRef))
+		success &= !DescriptorHeapRef_dec(&table->parent).genericError;
+
 	return success;
 }
 
@@ -204,7 +210,7 @@ Error DescriptorHeapRef_createDescriptorTable(
 	GraphicsDeviceRef *dev = parentPtr->device;
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(DescriptorTable) + GraphicsDeviceRef_getObjectSizes(dev)->descriptorHeap),
+		(U32)(sizeof(DescriptorTable) + GraphicsDeviceRef_getObjectSizes(dev)->descriptorTable),
 		(ObjectFreeFunc) DescriptorTable_free,
 		(ETypeId) EGraphicsTypeId_DescriptorTable,
 		tableRef
@@ -213,7 +219,8 @@ Error DescriptorHeapRef_createDescriptorTable(
 	if(err.genericError)
 		return err;
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(parent))
+	if(!(flags & EDescriptorTableFlags_InternalWeakDeviceRef))
+		gotoIfError(clean, GraphicsDeviceRef_inc(parent))
 
 	DescriptorTable *table = DescriptorTableRef_ptr(*tableRef);
 
@@ -251,6 +258,7 @@ Error DescriptorHeapRef_createDescriptorTable(
 		DescriptorTableBindingMultiple *multiple = &table->bindings.ptrNonConst[i].multiple;
 
 		gotoIfError(clean, ListU64_resizex(&multiple->activeList, (j + 63) >> 5))
+		gotoIfError(clean, ListU64_resizex(&multiple->maintainRef, (j + 63) >> 5))
 		gotoIfError(clean, ListWeakRefPtr_resizex(&multiple->resources, j))
 
 		if(GraphicsDeviceRef_ptr(dev)->flags & EGraphicsDeviceFlags_IsDebug)
@@ -454,7 +462,9 @@ Bool DescriptorTableRef_unsetDescriptors(
 				binding->multiple.buffers.ptrNonConst[i].counter = NULL;
 			}
 
-			gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr))
+			if((binding->multiple.maintainRef.ptr[i >> 6] >> (i & 63)) & 1)
+				gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr))
+
 			binding->multiple.resources.ptrNonConst[i] = NULL;
 		}
 
@@ -466,7 +476,9 @@ Bool DescriptorTableRef_unsetDescriptors(
 			binding->single.buffer.counter = NULL;
 		}
 
-		gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr))
+		if(binding->single.maintainRef)
+			gotoIfError3(clean, DescriptorTable_loseRef(tablePtr, ref, e_rr))
+
 		binding->single.resource = NULL;
 	}
 
@@ -509,6 +521,7 @@ Bool DescriptorTableRef_setDescriptors(
 	DescriptorTableRef *table,
 	U64 bindId,
 	U64 arrayId,
+	Bool maintainRef,
 	ListDescriptor darr,
 	Error *e_rr
 ) {
@@ -964,31 +977,32 @@ Bool DescriptorTableRef_setDescriptors(
 	gotoIfError3(clean, DescriptorTableRef_unsetDescriptors(table, bindId, arrayId, darr.length, e_rr))
 	gotoIfError3(clean, DescriptorTable_setDescriptorsExt(tablePtr, bindId, arrayId, darr, e_rr))
 
-	for(U64 j = 0; j < darr.length; ++j) {
+	if(maintainRef)
+		for(U64 j = 0; j < darr.length; ++j) {
 
-		RefPtr *res = darr.ptr[j].resource;
-		Bool isBuffer = res && res->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer;
+			RefPtr *res = darr.ptr[j].resource;
+			Bool isBuffer = res && res->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer;
 
-		Bool addRes = DescriptorTable_addRef(tablePtr, res, e_rr);
-		Bool addCounter = !isBuffer ? true : addRes && DescriptorTable_addRef(tablePtr, darr.ptr[j].buffer.counter, e_rr);
+			Bool addRes = DescriptorTable_addRef(tablePtr, res, e_rr);
+			Bool addCounter = !isBuffer ? true : addRes && DescriptorTable_addRef(tablePtr, darr.ptr[j].buffer.counter, e_rr);
 
-		if (!addRes || !addCounter) {
+			if (!addRes || !addCounter) {
 
-			for(U64 k = 0; k < j; ++k) {
+				for(U64 k = 0; k < j; ++k) {
 
-				RefPtr *resk = darr.ptr[k].resource;
-				DescriptorTable_loseRef(tablePtr, resk, e_rr);
+					RefPtr *resk = darr.ptr[k].resource;
+					DescriptorTable_loseRef(tablePtr, resk, e_rr);
 
-				if(resk && resk->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
-					DescriptorTable_loseRef(tablePtr, darr.ptr[k].buffer.counter, e_rr);
+					if(resk && resk->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
+						DescriptorTable_loseRef(tablePtr, darr.ptr[k].buffer.counter, e_rr);
+				}
+
+				if(addRes)
+					DescriptorTable_loseRef(tablePtr, darr.ptr[j].resource, e_rr);
+
+				goto clean;
 			}
-
-			if(addRes)
-				DescriptorTable_loseRef(tablePtr, darr.ptr[j].resource, e_rr);
-
-			goto clean;
 		}
-	}
 
 	//Now that we have registered all resources, it should be safe to set them properly
 
@@ -997,6 +1011,13 @@ Bool DescriptorTableRef_setDescriptors(
 
 			binding->multiple.resources.ptrNonConst[j] = darr.ptr[j - arrayId].resource;
 			binding->multiple.activeList.ptrNonConst[j >> 6] |= (U64)1 << (j & 63);
+			
+			U64 *maintainRefPtr = &binding->multiple.maintainRef.ptrNonConst[j >> 6];
+
+			if(!maintainRef)
+				*maintainRefPtr &= ~((U64)1 << (j & 63));
+
+			else *maintainRefPtr |= (U64)1 << (j & 63);
 
 			if(binding->multiple.stackTraces.ptr)
 				binding->multiple.stackTraces.ptrNonConst[j] = stack;
@@ -1012,6 +1033,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 		binding->single.resource = darr.ptr[0].resource;
 		binding->single.stackTrace = stack;
+		binding->single.maintainRef = maintainRef;
 
 		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 			binding->single.texture = darr.ptr[0].texture;
@@ -1032,6 +1054,7 @@ Bool DescriptorTableRef_setDescriptor(
 	DescriptorTableRef *table,
 	U64 bindId,
 	U64 arrayId,
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 ) {
@@ -1039,7 +1062,7 @@ Bool DescriptorTableRef_setDescriptor(
 	ListDescriptor descriptors = (ListDescriptor) { 0 };
 
 	gotoIfError2(clean, ListDescriptor_createRefConst(&d, 1, &descriptors))
-	gotoIfError3(clean, DescriptorTableRef_setDescriptors(table, bindId, arrayId, descriptors, e_rr))
+	gotoIfError3(clean, DescriptorTableRef_setDescriptors(table, bindId, arrayId, maintainRef, descriptors, e_rr))
 
 clean:
 	return s_uccess;
@@ -1063,6 +1086,7 @@ Bool DescriptorTableRef_setDescriptorByName(
 	DescriptorTableRef *table,
 	CharString registerName,
 	U64 arrayId,
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 ) {
@@ -1073,7 +1097,7 @@ Bool DescriptorTableRef_setDescriptorByName(
 	if(binding == U64_MAX)
 		retError(clean, Error_notFound(0, 1, "DescriptorTableRef_setDescriptorByName register not found"))
 
-	gotoIfError3(clean, DescriptorTableRef_setDescriptor(table, binding, arrayId, d, e_rr))
+	gotoIfError3(clean, DescriptorTableRef_setDescriptor(table, binding, arrayId, maintainRef, d, e_rr))
 
 clean:
 	return s_uccess;
@@ -1083,6 +1107,7 @@ Bool DescriptorTableRef_setDescriptorsByName(
 	DescriptorTableRef *table,
 	CharString registerName,
 	U64 arrayId,
+	Bool maintainRef,
 	ListDescriptor d,
 	Error *e_rr
 ) {
@@ -1093,7 +1118,7 @@ Bool DescriptorTableRef_setDescriptorsByName(
 	if(binding == U64_MAX)
 		retError(clean, Error_notFound(0, 1, "DescriptorTableRef_setDescriptorsByName register not found"))
 
-	gotoIfError3(clean, DescriptorTableRef_setDescriptors(table, binding, arrayId, d, e_rr))
+	gotoIfError3(clean, DescriptorTableRef_setDescriptors(table, binding, arrayId, maintainRef, d, e_rr))
 
 clean:
 	return s_uccess;
@@ -1306,8 +1331,9 @@ clean:
 
 Bool DescriptorTableRef_allocDescriptor(
 	DescriptorTableRef *table,
-	U64 bindId,				//ListDescriptorBinding[i]
-	U64 *arrayId,			//outputs arrayId into descriptor if success
+	U64 bindId,
+	U64 *arrayId,
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 ) {
@@ -1370,7 +1396,7 @@ Bool DescriptorTableRef_allocDescriptor(
 		retError(clean, Error_outOfMemory(0, "DescriptorTableRef_allocDescriptor() out of memory"))
 
 	*arrayId = (U32) foundId;
-	gotoIfError3(clean, DescriptorTableRef_setDescriptor(table, bindId, *arrayId, d, e_rr))
+	gotoIfError3(clean, DescriptorTableRef_setDescriptor(table, bindId, *arrayId, maintainRef, d, e_rr))
 
 clean:
 
@@ -1387,6 +1413,7 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 	U16 *bindId,
 	U8 *bindlessTypeId,
 	U64 *arrayId,
+	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
 ) {
@@ -1410,6 +1437,7 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 		table,
 		*bindId,
 		arrayId,
+		maintainRef,
 		d,
 		e_rr
 	))

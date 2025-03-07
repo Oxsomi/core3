@@ -155,6 +155,7 @@ Error GraphicsDeviceRef_createSampler(
 		bindlessDescriptorTable,
 		info.enableComparison ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler,
 		0,
+		false,
 		(Descriptor) { .resource = *sampler },
 		&samplerLocation,
 		&err

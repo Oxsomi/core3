@@ -396,6 +396,7 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 					bindlessDescriptorTable,
 					texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D,
 					0,
+					false,
 					(Descriptor) { .resource = ref, .texture = (TextureDescriptorRange) { .imageId = i } },
 					&img->readHandle,
 					&err
@@ -411,6 +412,7 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 					(texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D) |
 					ESHRegisterType_IsWrite,
 					0,
+					false,
 					(Descriptor) { .resource = ref, .texture = (TextureDescriptorRange) { .imageId = i } },
 					&img->writeHandle,
 					&err

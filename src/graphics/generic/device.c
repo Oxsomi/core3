@@ -76,12 +76,12 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	for(U64 i = 0; i < 2; ++i)
 		RefPtr_dec(&device->copyShaders[i]);
 
+	RefPtr_dec(&device->copyPipelineLayout);		//Even though it's 'ref counted' it's internal so destruction order matters
 	RefPtr_dec(&device->copyDescLayout);
-	RefPtr_dec(&device->copyPipelineLayout);
-	RefPtr_dec(&device->defaultDescLayout);
-	RefPtr_dec(&device->defaultPipelineLayout);
-	RefPtr_dec(&device->defaultDescriptorHeaps);
 	RefPtr_dec(&device->defaultDescriptorTable);
+	RefPtr_dec(&device->defaultPipelineLayout);
+	RefPtr_dec(&device->defaultDescLayout);
+	RefPtr_dec(&device->defaultDescriptorHeaps);
 
 	for(U64 i = 0; i < device->framesInFlight; ++i)
 		DeviceBufferRef_dec(&device->frameData[i]);
@@ -175,12 +175,12 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 		if(mainSingle == U32_MAX)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createPrebuiltShaders() couldn't find entrypoint"))
 
-		DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
-		gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntry(
-			deviceRef, tmpBinary, mainSingle, EDescriptorLayoutFlags_InternalWeakDeviceRef, &info, e_rr
-		))
-
 		if(!device->copyDescLayout) {
+
+			DescriptorLayoutInfo info = (DescriptorLayoutInfo) { 0 };
+			gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntry(
+				deviceRef, tmpBinary, mainSingle, EDescriptorLayoutFlags_InternalWeakDeviceRef, &info, e_rr
+			))
 
 			gotoIfError2(clean, GraphicsDeviceRef_createDescriptorLayout(
 				deviceRef, &info, CharString_createRefCStrConst("Copy image desc layout"), &device->copyDescLayout
@@ -361,7 +361,7 @@ Error GraphicsDeviceRef_create(
 
 	Bool isSpirv = instance->api == EGraphicsApi_Vulkan;
 
-	CharString bindingNames[15] = {
+	CharString bindingNames[14] = {
 		CharString_createRefCStrConst("_samplers"),
 		CharString_createRefCStrConst("globals"),
 		CharString_createRefCStrConst("_textures2D"),
@@ -378,7 +378,7 @@ Error GraphicsDeviceRef_create(
 		CharString_createRefCStrConst("_tlasExt")
 	};
 
-	DescriptorBinding bindings[15] = {
+	DescriptorBinding bindings[14] = {
 		(DescriptorBinding) {
 			.registerType = ESHRegisterType_Sampler,
 			.count = EDescriptorTypeCount_Sampler,
@@ -505,7 +505,7 @@ Error GraphicsDeviceRef_create(
 		}
 	};
 
-	U64 descBindings = 14;
+	U64 descBindings = 13;
 
 	if(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
 		bindings[descBindings++] = (DescriptorBinding) {
@@ -537,7 +537,7 @@ Error GraphicsDeviceRef_create(
 	gotoIfError(clean, DescriptorHeapRef_createDescriptorTable(
 		device->defaultDescriptorHeaps,
 		device->defaultDescLayout,
-		EDescriptorTableFlags_None,
+		EDescriptorTableFlags_InternalWeakDeviceRef,
 		name,
 		&device->defaultDescriptorTable
 	))

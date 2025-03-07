@@ -45,7 +45,7 @@ Error DX_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 
 	Error err = Error_none();
 
-	DxDescriptorHeap *heapExt = DescriptorHeap_ext(heap, Dx);
+	DxDescriptorHeap *heapExt = DescriptorHeap_ext(DescriptorHeapRef_ptr(heap), Dx);
 	DxDescriptorTable *tableExt = DescriptorTable_ext(table, Dx);
 
 	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);

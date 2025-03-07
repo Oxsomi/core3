@@ -80,10 +80,10 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 
 	ListPipelineStage_freex(&pipeline->stages);
 
-	PipelineLayoutRef_dec(&pipeline->layout);
-
-	if(!(pipeline->flags & EPipelineFlags_InternalWeakDeviceRef))
+	if(!(pipeline->flags & EPipelineFlags_InternalWeakDeviceRef)) {
+		PipelineLayoutRef_dec(&pipeline->layout);
 		GraphicsDeviceRef_dec(&pipeline->device);
+	}
 
 	return true;
 }

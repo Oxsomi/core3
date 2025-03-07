@@ -323,10 +323,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		.flags = flags
 	};
 	
-	if(layout)
+	if(!layout)
 		layout = GraphicsDeviceRef_ptr(deviceRef)->defaultPipelineLayout;
 
-	gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+
 	pipeline->layout = layout;
 
 	PipelineRaytracingInfo *dstInfo = Pipeline_info(pipeline, PipelineRaytracingInfo);

@@ -245,7 +245,7 @@ typedef struct SHBindings {
 	SHBinding arr[ESHBinaryType_Count];
 } SHBindings;
 
-typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
+typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId can be set only for SPIRV (only when RW)
 	U8 primitive;					//Optional for readonly registers: ESHTexturePrimitive must match format approximately
 	U8 formatId;					//Optional for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
 } SHTextureFormat;
@@ -409,6 +409,7 @@ The following define the requirements of binaries embedded in oiSH files.
     - Sampled1D
     - Image1D
     - ImageCubeArray
+    - StorageImage(Read/Write)WithoutFormat
   - Anything to do with kernels (OpenCL) is unsupported.
   - Int64Atomics as I64 | AtomicI64.
   - Int64 as I64.

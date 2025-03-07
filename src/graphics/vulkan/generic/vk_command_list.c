@@ -39,8 +39,9 @@
 #include "platforms/log.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
+#include "formats/oiSH/registers.h"
 
-void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
+Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 
 	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
 
@@ -50,8 +51,18 @@ void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInf
 		case EMSAAResolveMode_Max:		result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;		break;
 	}
 
-	result->resolveImageView = imageExt->view;
+	U32 viewId = U32_MAX;
+	VkImageView view = NULL;
+
+	Descriptor descriptor = (Descriptor) { .resource = attachment.resolveImage };
+	ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+
+	if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL))
+		return false;
+
+	result->resolveImageView = view;
 	result->resolveImageLayout = imageExt->lastLayout;
+	return true;
 }
 
 void VK_WRAP_FUNC(CommandList_process)(
@@ -259,10 +270,25 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else if((startRender->preserveMask >> i) & 1)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
+				//Even though this adds a new view that we don't clean up it should be okay.
+				//Likely this view will get accessed again in the same way.
+				//If we don't, we still clean it up during destruction of the resource.
+
+				U32 viewId = U32_MAX;
+				VkImageView view = NULL;
+
+				Descriptor descriptor = (Descriptor) { .resource = attachmentsj->image };
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+				
+				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
+					Log_errorLnx("VkUnifiedTexture_getView color at ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
+
 				attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
 
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = imageExt->view,
+					.imageView = view,
 					.imageLayout = imageExt->lastLayout,
 					.loadOp = loadOp,
 
@@ -282,8 +308,10 @@ void VK_WRAP_FUNC(CommandList_process)(
 					}
 				};
 
-				if(attachmentsj->resolveImage)
-					addResolveImage(*attachmentsj, &attachmentsExt[i]);
+				if(attachmentsj->resolveImage && !addResolveImage(*attachmentsj, &attachmentsExt[i])) {
+					Log_errorLnx("addResolveImage failed during ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
 			}
 
 			//Send begin render command
@@ -305,9 +333,22 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else if(startRender->flags & EStartRenderFlags_PreserveDepth)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
+				//See the comment during attachmentsExt[i] setup above about view creation.
+
+				U32 viewId = U32_MAX;
+				VkImageView view = NULL;
+
+				Descriptor descriptor = (Descriptor) { .resource = startRender->depthStencil };
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+				
+				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
+					Log_errorLnx("VkUnifiedTexture_getView depth at ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
+
 				depthAttachment = (VkRenderingAttachmentInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = depthExt->view,
+					.imageView = view,
 					.imageLayout = depthExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
@@ -341,9 +382,26 @@ void VK_WRAP_FUNC(CommandList_process)(
 				else if(startRender->flags & EStartRenderFlags_PreserveStencil)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
+				//See the comment during attachmentsExt[i] setup above about view creation.
+
+				U32 viewId = U32_MAX;
+				VkImageView view = NULL;
+
+				Descriptor descriptor = (Descriptor) {
+					.resource = startRender->depthStencil,
+					.texture = (TextureDescriptorRange) { .planeId = 1 }
+				};
+
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+
+				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
+					Log_errorLnx("VkUnifiedTexture_getView stencil at ECommandOp_StartRenderingExt, this is problematic!");
+					break;
+				}
+
 				stencilAttachment = (VkRenderingAttachmentInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = stencilExt->view,
+					.imageView = view,
 					.imageLayout = stencilExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,

@@ -126,7 +126,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 
 	else {
 
-		if(descExt->legacyResources.length)
+		if(descExt->rangesResources.length)
 			rootParam1[rootParamCounter++] = (D3D12_ROOT_PARAMETER1) {
 					.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 					.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE1) {
@@ -136,7 +136,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 					.ShaderVisibility = DxPipelineLayout_convertVisibility(visibility1)
 				};
 
-		if(descExt->legacySamplers.length)
+		if(descExt->rangesSamplers.length)
 			rootParam1[rootParamCounter++] = (D3D12_ROOT_PARAMETER1) {
 					.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 					.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE1) {

@@ -108,10 +108,12 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 		.flags = flags
 	};
 	
-	if(layout)
+	if(!layout)
 		layout = device->defaultPipelineLayout;
 
-	gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
+		gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+
 	pipelinePtr->layout = layout;
 
 	gotoIfError2(clean, ListPipelineStage_resizex(&pipelinePtr->stages, 1))

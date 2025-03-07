@@ -531,10 +531,9 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
 
-		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))) &&
-			rootSig.HighestVersion >= D3D_ROOT_SIGNATURE_VERSION_1_1
-		)
+		rootSig.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;	//Nice way of querying..
+
+		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))))
 			caps.featuresExt |= EDxGraphicsFeatures_RootSig1_1;
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...

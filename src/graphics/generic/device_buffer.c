@@ -304,6 +304,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			bindlessDescriptorTable,
 			ESHRegisterType_ByteAddressBuffer,
 			0,
+			false,
 			(Descriptor) { .resource = *ref },
 			&buf->readHandle,
 			&err
@@ -318,6 +319,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			bindlessDescriptorTable,
 			ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
 			0,
+			false,
 			(Descriptor) { .resource = *ref },
 			&buf->readHandle,
 			&err

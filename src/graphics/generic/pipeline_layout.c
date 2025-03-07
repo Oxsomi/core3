@@ -44,10 +44,11 @@ Bool PipelineLayout_free(PipelineLayout *layout, Allocator alloc) {
 
 	Bool success = PipelineLayout_freeExt(layout, alloc);
 
-	if(!(layout->info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
+	if(!(layout->info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef)) {
 		success &= !GraphicsDeviceRef_dec(&layout->device).genericError;
+		DescriptorLayoutRef_dec(&layout->info.bindings);
+	}
 
-	DescriptorLayoutRef_dec(&layout->info.bindings);
 	return success;
 }
 
@@ -81,9 +82,11 @@ Error GraphicsDeviceRef_createPipelineLayout(
 
 	//Log_debugLnx("Create: PipelineLayout %.*s (%p)", (int) CharString_length(name), name.ptr, layout);
 
-	gotoIfError(clean, DescriptorLayoutRef_inc(layout->info.bindings))
-
 	*layout = (PipelineLayout) { .device = dev, .info = info };
+
+	if(!(info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
+		gotoIfError(clean, DescriptorLayoutRef_inc(layout->info.bindings))
+
 	gotoIfError(clean, GraphicsDeviceRef_createPipelineLayoutExt(dev, layout, name))
 
 clean:

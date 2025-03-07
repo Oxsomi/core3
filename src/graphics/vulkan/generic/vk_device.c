@@ -130,15 +130,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	void **currPNext = &features2.pNext;
 
 	bindNextVkStruct(
-		VkPhysicalDevicePushDescriptorPropertiesKHR,
-		true,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR,
-			.maxPushDescriptors = 32
-		}
-	)
-
-	bindNextVkStruct(
 		VkPhysicalDeviceDescriptorIndexingFeatures,
 		true,
 		{

@@ -50,35 +50,19 @@ static const U32 U32_MAX = 0xFFFFFFFFu;
 
 _binding( 0, 0, SamplerState _samplers[2048]);
 
-[[vk::image_format("Unknown")]]
 _binding( 0, 1, Texture2D _textures2D[131072]);
-
-[[vk::image_format("Unknown")]]
 _binding( 1, 1, TextureCube _textureCubes[32768]);
-
-[[vk::image_format("Unknown")]]
 _binding( 2, 1, Texture3D _textures3D[32768]);
 
 _binding( 3, 1, ByteAddressBuffer _buffer[131072]);
 _binding( 4, 1, RWByteAddressBuffer _rwBuffer[131072]);
 
-[[vk::image_format("Unknown")]]
-_binding( 5, 1, RWTexture3D<F32x4> _rwTextures3D[32768]);
-
-[[vk::image_format("Unknown")]]
-_binding( 6, 1, RWTexture3D<I32x4> _rwTextures3Di[8192]);
-
-[[vk::image_format("Unknown")]]
-_binding( 7, 1, RWTexture3D<U32x4> _rwTextures3Du[8192]);
-
-[[vk::image_format("Unknown")]]
-_binding( 8, 1, RWTexture2D<F32x4> _rwTextures2D[131072]);
-
-[[vk::image_format("Unknown")]]
-_binding( 9, 1, RWTexture2D<I32x4> _rwTextures2Di[16384]);
-
-[[vk::image_format("Unknown")]]
-_binding(10, 1, RWTexture2D<U32x4> _rwTextures2Du[16384]);
+UNKNOWN_FORMAT _binding( 5, 1, RWTexture3D<F32x4> _rwTextures3D[32768]);
+UNKNOWN_FORMAT _binding( 6, 1, RWTexture3D<I32x4> _rwTextures3Di[8192]);
+UNKNOWN_FORMAT _binding( 7, 1, RWTexture3D<U32x4> _rwTextures3Du[8192]);
+UNKNOWN_FORMAT _binding( 8, 1, RWTexture2D<F32x4> _rwTextures2D[131072]);
+UNKNOWN_FORMAT _binding( 9, 1, RWTexture2D<I32x4> _rwTextures2Di[16384]);
+UNKNOWN_FORMAT _binding(10, 1, RWTexture2D<U32x4> _rwTextures2Du[16384]);
 
 #if defined(__OXC_EXT_RAYQUERY) || defined(__OXC_EXT_RAYTRACING)
 	_binding(11, 1, RaytracingAccelerationStructure _tlasExt[16]);

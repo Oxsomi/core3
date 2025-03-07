@@ -449,4 +449,10 @@ F32x4 F32x4_fromU32x4(U32x4 u) { return asfloat(u); }
 
 #endif
 
+#ifdef __spirv__
+	#define UNKNOWN_FORMAT [[vk::image_format("unknown")]]
+#else
+	#define UNKNOWN_FORMAT
+#endif
+
 )"

@@ -140,6 +140,8 @@ Bool VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table) {
 		ListU32_freex(&range->newViews);
 	}
 
+	ListVkDescriptorTableRange_freex(&tableExt->ranges);
+
 	return true;
 }
 
@@ -199,6 +201,12 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 		}
 
 	//Prepare bind command(s)
+	//We should sort the set ids, just in case it's 0,2,1 for example (that'd generate 2 bind commands)
+
+	U32 sets[4] = { layoutExt->setIds[0], layoutExt->setIds[1], layoutExt->setIds[2], layoutExt->setIds[3] };
+	ListU32 sortSets = (ListU32) { 0 };
+	gotoIfError(clean, ListU32_createRef(sets, count, &sortSets))
+	ListU32_sort(sortSets);
 
 	U32 prevSetId = U32_MAX;
 
@@ -206,7 +214,7 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 
 		//If we're a subsequent id, we can simply increase that bind command
 
-		U32 nextSetId = layout->info.bindings.ptr[i].binding.space;
+		U32 nextSetId = sets[i];
 
 		if (prevSetId == U32_MAX || nextSetId != prevSetId + 1) {
 			tableExt->offsets[tableExt->bindCommands] = nextSetId;
@@ -214,6 +222,7 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 		}
 
 		++tableExt->counts[tableExt->bindCommands - 1];
+		prevSetId = nextSetId;
 	}
 
 clean:
@@ -264,13 +273,9 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 	ESHRegisterType type = binding.registerType & ESHRegisterType_TypeMask;
 	Bool isWrite = binding.registerType & ESHRegisterType_IsWrite;
-	Bool isArray = binding.registerType & ESHRegisterType_IsArray;
 
 	VkDescriptorSet set = NULL;
-	VkImageView tmp = NULL;
 	CharString temp = CharString_createNull();
-	ELockAcquire acq = ELockAcquire_Invalid;
-	SpinLock *lock = NULL;
 	Bool allocatedNewViews = false;
 
 	for(U8 i = 0; i < 4; ++i)
@@ -439,150 +444,12 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			for(U64 i = 0; i < darr.length; ++i) {
 
 				Descriptor d = darr.ptr[i];
-				UnifiedTexture tex = (UnifiedTexture) { 0 };
-				VkUnifiedTexture *texExt = NULL;
-
-				if (d.resource) {
-					tex = TextureRef_getUnifiedTexture(d.resource, NULL);
-					texExt = d.resource ? TextureRef_getImgExtT(d.resource, Vk, 0, d.texture.imageId) : NULL;
-				}
-
-				VkFormat vkFormat;
-
-				if(tex.depthFormat)
-					switch(tex.depthFormat) {
-
-						default:
-						case EDepthStencilFormat_D32:			vkFormat = VK_FORMAT_D32_SFLOAT;	break;
-						case EDepthStencilFormat_D16:			vkFormat = VK_FORMAT_D16_UNORM;		break;
-
-						case EDepthStencilFormat_D32S8X24Ext:
-							vkFormat = d.texture.planeId ? VK_FORMAT_S8_UINT : VK_FORMAT_D32_SFLOAT;
-							break;
-
-						case EDepthStencilFormat_D24S8Ext:
-							vkFormat = d.texture.planeId ? VK_FORMAT_S8_UINT : VK_FORMAT_D24_UNORM_S8_UINT;
-							break;
-
-						case EDepthStencilFormat_S8X24Ext:
-							vkFormat = VK_FORMAT_S8_UINT;
-							break;
-					}
-
-				else vkFormat = mapVkFormat(tex.textureFormatId);
-
-				//Find valid view or create one
-
 				VkImageView view = NULL;
-
-				//A lock can be maintained; for example if you're creating a descriptor table like this:
-				//RWTexture2D[8] mipLevels
-				//Texture2D[8] sampleMip
-				//Where each mip has the same resource, so you don't want to relock
-
-				if(!lock) {
-
-					lock = &texExt->lock;
-					acq = SpinLock_lock(lock, 1 * SECOND);
-
-					if(acq < ELockAcquire_Success)
-						retError(clean, Error_invalidState(0, "DescriptorTable_setDescriptor() couldn't acquire lock"))
-				}
-
-				U32 viewId = 0;
-				U32 firstEmptyViewId = U32_MAX;
-
-				for (; viewId < texExt->views.length; ++viewId)
-
-					if (texExt->views.ptr[viewId].textureDescU64 == d.data[0]) {
-						view = texExt->views.ptr[viewId].view;
-						++texExt->views.ptrNonConst[viewId].refCount;
-						break;
-					}
-
-					else if(!texExt->views.ptr[viewId].view && firstEmptyViewId == U32_MAX)
-						firstEmptyViewId = viewId;
-
-				if (!view && texExt) {
-
-					VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-
-					if(tex.depthFormat)
-						aspect = d.texture.planeId ? VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_DEPTH_BIT;
-
-					VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
-						.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-						.image = texExt->image,
-						.format = vkFormat,
-						.subresourceRange = (VkImageSubresourceRange) {
-							.aspectMask = aspect,
-							.layerCount = d.texture.arrayCount,
-							.levelCount = d.texture.mipCount,
-							.baseMipLevel = d.texture.mipId,
-							.baseArrayLayer = d.texture.arrayId
-						}
-					};
-
-					switch (type) {
-
-						default:
-						case ESHRegisterType_Texture2D:
-						case ESHRegisterType_Texture2DMS:
-							viewCreate.viewType = isArray ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
-							break;
-
-						case ESHRegisterType_TextureCube:
-							viewCreate.viewType = isArray ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
-							break;
-
-						case ESHRegisterType_Texture3D:
-							viewCreate.viewType = VK_IMAGE_VIEW_TYPE_3D;
-							break;
-					}
-
-					gotoIfError2(clean, checkVkError(deviceExt->createImageView(deviceExt->device, &viewCreate, NULL, &tmp)))
-
-					//Deposit the tmp into our list of views and ensure we don't free it without a reason
-
-					VkImageViewMapping mapping = (VkImageViewMapping) {
-						.textureDesc = d.texture,
-						.view = tmp,
-						.refCount = 1
-					};
-
-					if(firstEmptyViewId == U32_MAX)
-						gotoIfError2(clean, ListVkImageViewMapping_pushBackx(&texExt->views, mapping))
-
-					else {
-						texExt->views.ptrNonConst[firstEmptyViewId] = mapping;
-						viewId = firstEmptyViewId;
-					}
-
-					view = tmp;
-					tmp = NULL;
-				}
-
-				newViews[i] = viewId;
-
-				Bool releaseLock = true;
-
-				if (i + 1 < darr.length) {
-					Descriptor dnext = darr.ptr[i + 1];
-					releaseLock = dnext.resource != d.resource || dnext.texture.imageId != d.texture.imageId;
-				}
-
-				if(releaseLock) {
-
-					if(acq == ELockAcquire_Acquired)
-						SpinLock_unlock(lock);
-			
-					acq = ELockAcquire_Invalid;
-					lock = NULL;
-				}
+				gotoIfError3(clean, VkUnifiedTexture_getView(darr.ptr[i], binding.registerType, &view, &newViews[i], e_rr))
 
 				//Turn view into descriptor
 
-				if (texExt)
+				if (d.resource)
 					img[i] = (VkDescriptorImageInfo) {
 						.imageView = view,
 						.imageLayout = isWrite ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -612,19 +479,13 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
 
 clean:
-
-	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(lock);
-
-	lock = NULL;
-	acq = ELockAcquire_Invalid;
-
-	if(tmp)
-		deviceExt->destroyImageView(deviceExt->device, tmp, NULL);
 		
 	if (allocatedNewViews) {		//Release temporary views if invalid
 
 		U32 *newViews = darr.length > 1 ? range->newViews.ptrNonConst : &newViewId;
+
+		ELockAcquire acq = ELockAcquire_Invalid;
+		SpinLock *lock = NULL;
 
 		for(U64 i = 0; i < darr.length; ++i) {
 
@@ -641,8 +502,8 @@ clean:
 				acq = SpinLock_lock(lock, 1 * SECOND);
 
 				if(acq < ELockAcquire_Success) {
-					Log_warnLnx("Couldn't free view while cleaning up");
-					break;
+					Log_warnLnx("Couldn't free view while cleaning up (%"PRIu64")", i);
+					continue;
 				}
 			}
 

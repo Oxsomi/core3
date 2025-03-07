@@ -47,7 +47,7 @@ U32 _padding;
 #endif
 
 Texture2DArray<U32x4> _input;
-RWTexture2DArray<U32x4> _output;
+UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
 
 //Simplest variant, only 1 dispatch, allows us to use root constants and works everywhere.
 //Only turn on rotate if sizRot.w != 0

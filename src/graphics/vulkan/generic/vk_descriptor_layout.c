@@ -104,7 +104,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	VkDescriptorSetLayoutBindingFlagsCreateInfo partiallyBound[4] = {
 		(VkDescriptorSetLayoutBindingFlagsCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO
 		}
 	};
 
@@ -185,46 +185,46 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		VkShaderStageFlags stageFlags = 0;
 
 		if((vis >> ESHPipelineStage_Vertex) & 1)
-			stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+			stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
 
 		if((vis >> ESHPipelineStage_Pixel) & 1)
-			stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
 
 		if((vis >> ESHPipelineStage_Compute) & 1)
-			stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+			stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
 
 		if((vis >> ESHPipelineStage_GeometryExt) & 1)
-			stageFlags = VK_SHADER_STAGE_GEOMETRY_BIT;
+			stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
 
 		if((vis >> ESHPipelineStage_Hull) & 1)
-			stageFlags = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+			stageFlags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
 
 		if((vis >> ESHPipelineStage_Domain) & 1)
-			stageFlags = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+			stageFlags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 
 		if((vis >> ESHPipelineStage_RaygenExt) & 1)
-			stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+			stageFlags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
 		if((vis >> ESHPipelineStage_CallableExt) & 1)
-			stageFlags = VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+			stageFlags |= VK_SHADER_STAGE_CALLABLE_BIT_KHR;
 
 		if((vis >> ESHPipelineStage_MissExt) & 1)
-			stageFlags = VK_SHADER_STAGE_MISS_BIT_KHR;
+			stageFlags |= VK_SHADER_STAGE_MISS_BIT_KHR;
 
 		if((vis >> ESHPipelineStage_ClosestHitExt) & 1)
-			stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+			stageFlags |= VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
 		if((vis >> ESHPipelineStage_AnyHitExt) & 1)
-			stageFlags = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+			stageFlags |= VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
 
 		if((vis >> ESHPipelineStage_IntersectionExt) & 1)
-			stageFlags = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+			stageFlags |= VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
 
 		if((vis >> ESHPipelineStage_MeshExt) & 1)
-			stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT;
+			stageFlags |= VK_SHADER_STAGE_MESH_BIT_EXT;
 
 		if((vis >> ESHPipelineStage_TaskExt) & 1)
-			stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT;
+			stageFlags |= VK_SHADER_STAGE_TASK_BIT_EXT;
 
 		VkDescriptorType type = vkGetDescriptorType(binding->registerType);
 
@@ -249,7 +249,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		)
 			bindFlags = 0;
 
-		flags.ptrNonConst[i] = bindFlags;
+		if(anyBindless)
+			flags.ptrNonConst[i] = bindFlags;
 
 		//Link set
 

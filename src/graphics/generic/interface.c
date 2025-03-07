@@ -252,7 +252,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableFree)(table, alloc);
 	}
 
-	Bool DescriptorTable_setDescriptorExt(
+	Bool DescriptorTable_setDescriptorsExt(
 		DescriptorTable *table,
 		U64 bindingId,
 		U64 arrayId,
@@ -264,7 +264,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		);
 	}
 
-	Bool DescriptorTable_unsetDescriptorExt(
+	Bool DescriptorTable_unsetDescriptorsExt(
 		DescriptorTable *table,
 		U64 bindingId,
 		U64 arrayId,

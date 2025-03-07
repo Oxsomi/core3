@@ -60,6 +60,7 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	DescriptorTableRef *descTable,		//Can be NULL in case the device has a default bindless table
 	ESHRegisterType type,
 	U32 strideOrLength,					//For structured/storage buffers
+	Bool maintainRef,					//Only if the resource isn't in charge of managing the descriptor
 	Descriptor desc,
 	BindlessDescriptor *descriptorHandle,
 	Error *e_rr

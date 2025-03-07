@@ -314,7 +314,6 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 							if(rega.reg.texture.formatId != regb.reg.texture.formatId)
 								retError(clean, Error_invalidState(0, "SHFile_combine() texture formatId are incompatible"))
-
 						}
 
 						else {
