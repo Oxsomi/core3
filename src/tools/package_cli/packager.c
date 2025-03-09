@@ -97,6 +97,16 @@ Bool Packager_package(
 	Allocator alloc,
 	Error *e_rr
 ) {
+
+	(void) multipleModes;
+	(void) compileModeU64;
+	(void) threadCount;
+	(void) includeDir;
+	(void) merge;
+	(void) extraWarnings;
+	(void) isDebug;
+	(void) ignoreEmptyFiles;
+
 	Archive archive = (Archive) { 0 };
 	CharString resolved = CharString_createNull();
 	CAFile file = (CAFile) { 0 };

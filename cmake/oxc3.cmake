@@ -209,6 +209,8 @@ endmacro()
 # This is useful if a dependency would need to include things like fonts, or other kinds of resources.
 # This would for example allow you to load myTarget/shaders in myNewTarget (from the other example).
 # These dependencies are always public, so if myTarget would have a dependency, this one does too.
+# NOTE: This only works for projects visible to cmake,
+#       but for projects managed with conan you should use add_virtual_dependencies_external
 # Example:
 # add_virtual_dependencies(TARGET myNewTarget DEPENDENCIES myTarget)
 
@@ -220,14 +222,8 @@ macro(add_virtual_dependencies)
 
 	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
 
-	# Validate
-
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_dependencies: target \"${_ARGS_TARGET}\" not present.")
-	endif()
-
-	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
-		message(FATAL_ERROR "add_virtual_dependencies: 'TARGET' has to conform to alphanumeric (plus _ and $).")
 	endif()
 
 	# Add dependencies
@@ -244,6 +240,84 @@ macro(add_virtual_dependencies)
 
 			add_dependencies(${_ARGS_TARGET} ${file})
 			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${res0}\n${res1})
+
+		endforeach()
+	else()
+		message(FATAL_ERROR "add_virtual_dependencies: DEPENDENCIES argument is required!")
+	endif()
+
+endmacro()
+
+# See add_virtual_dependencies, this is the same, except "DEPENDENCIES" is now the programs fetched from conan.
+# For example: add_virtual_dependencies_external(TARGET rt_core PROGRAMS OxC3)
+
+macro(add_virtual_dependencies_external)
+	
+	set(_OPTIONS)
+	set(_ONE_VALUE TARGET)
+	set(_MULTI_VALUE DEPENDENCIES)
+
+	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
+
+	if(NOT TARGET ${_ARGS_TARGET})
+		message(FATAL_ERROR "add_virtual_dependencies_external: target \"${_ARGS_TARGET}\" not present.")
+	endif()
+	
+	if(_ARGS_DEPENDENCIES)
+		foreach(file ${_ARGS_DEPENDENCIES})
+
+			# Get bin folder from our conan package
+		
+			# find_package(${file} REQUIRED)
+
+			# set(INCLUDE_DIRS_VAR "${file}_INCLUDE_DIRS")
+
+			# if(DEFINED ${INCLUDE_DIRS_VAR})
+			#	list(GET ${INCLUDE_DIRS_VAR} 0 FIRST_INCLUDE_DIR)
+			# 	string(REPLACE "/include" "/bin" BIN_DIR "${FIRST_INCLUDE_DIR}")
+			# else()
+			# 	message(FATAL_ERROR "Can't find bin directory of package dependency")
+			# endif()
+			
+			find_program(OXC3 OxC3 REQUIRED)
+			get_filename_component(BIN_DIR "${OXC3}" DIRECTORY)
+			
+			message(STATUS "add_virtual_dependencies_external: Found ${file}'s bin Directory: ${BIN_DIR}")
+
+			# Grab the packages conan has prepared
+
+			set(PACKAGE_DIR "${BIN_DIR}/packages")
+
+			if(EXISTS "${PACKAGE_DIR}")
+
+				file(GLOB_RECURSE PACKAGE_FILES "${PACKAGE_DIR}/*/*.oiCA")
+
+				foreach(PACKAGE_FILE ${PACKAGE_FILES})
+
+					# Register so it ends up in the final executable
+					# See add_virtual_files for more info
+
+					string(REPLACE "\\" "/" BASE_PATH "${PACKAGE_DIR}/")
+					string(REPLACE "\\" "/" PACKAGE_FILE "${PACKAGE_FILE}")
+
+					string(REPLACE "${BASE_PATH}" "" RELATIVE_PATH "${PACKAGE_FILE}")
+					string(REGEX REPLACE "\\.oiCA$" "" RELATIVE_PATH "${RELATIVE_PATH}")
+					
+					if(WIN32)
+						get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+						set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${PACKAGE_FILE}\"\n${res})
+					elseif(UNIX AND NOT APPLE AND NOT ANDROID)
+						add_custom_command(
+							TARGET ${_ARGS_TARGET} POST_BUILD
+							COMMAND objcopy --add-section "packages/${RELATIVE_PATH}=${PACKAGE_FILE}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+						)
+					endif()
+
+				endforeach()
+
+			else()
+				message(FATAL_ERROR "${target} package directory not found: ${PACKAGE_DIR}")
+			endif()
 
 		endforeach()
 	else()

@@ -44,21 +44,24 @@ Platform_defineEntrypoint() {
 	}
 
 	ECompilerWarning warnings = (ECompilerWarning) 0;
+	U64 compileModeU64 = 0;
+	Bool multipleModes = false;
 
 	#ifdef CLI_SHADER_COMPILER
+
 		warnings = ECompilerWarning_BufferPadding | ECompilerWarning_UnusedRegisters;
-	#endif
 
-	Bool multipleModes = false;
-	U64 compileModeU64 = 1 << ESHBinaryType_SPIRV;
+		compileModeU64 = 1 << ESHBinaryType_SPIRV;
 
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		#ifdef GRAPHICS_API_DYNAMIC		//Both DXIL and SPIRV
-			multipleModes = true;
-			compileModeU64 |= 1 << ESHBinaryType_DXIL;
-		#elif !defined(FORCE_VULKAN)	//DXIL only
-			compileModeU64 = 1 << ESHBinaryType_DXIL;
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			#ifdef GRAPHICS_API_DYNAMIC		//Both DXIL and SPIRV
+				multipleModes = true;
+				compileModeU64 |= 1 << ESHBinaryType_DXIL;
+			#elif !defined(FORCE_VULKAN)	//DXIL only
+				compileModeU64 = 1 << ESHBinaryType_DXIL;
+			#endif
 		#endif
+
 	#endif
 
 	if (!Packager_package(

@@ -56,6 +56,7 @@ endif()
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
 
 find_package(agility_sdk REQUIRED)
+target_compile_definitions(${TARGET_NAME} PUBLIC -D_DISABLE_TIGHT_ALIGNMENT)		# TODO: On agility sdk update, fix this
 
 target_link_libraries(${TARGET_NAME} PUBLIC agility_sdk::agility_sdk)
 target_include_directories(${TARGET_NAME} PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")

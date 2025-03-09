@@ -142,6 +142,30 @@ TListImpl(SHRegisterRuntime);
 
 #endif
 
+ESHTexturePrimitive ESHTexturePrimitive_fromTextureFormat(ETextureFormat format) {
+
+	ETexturePrimitive prim = ETextureFormat_getPrimitive(format);
+
+	U8 channels = ETextureFormat_getChannels(format);
+	ESHTexturePrimitive res = (channels - 1) << ESHTexturePrimitive_ComponentShift;
+
+	switch(prim) {
+
+		default:						return 0xFF;
+		case ETexturePrimitive_UInt:	return res | ESHTexturePrimitive_UInt;
+		case ETexturePrimitive_SInt:	return res | ESHTexturePrimitive_SInt;
+		case ETexturePrimitive_SNorm:	return res | ESHTexturePrimitive_SNorm;
+
+		case ETexturePrimitive_Compressed:
+		case ETexturePrimitive_Float:
+			return res | ESHTexturePrimitive_Float;
+
+		case ETexturePrimitive_UNorm:
+		case ETexturePrimitive_UNormBGR:
+			return res | ESHTexturePrimitive_UNorm;
+	}
+}
+
 Bool SHFile_detectDuplicate(
 	const ListSHRegisterRuntime *info,
 	CharString name,

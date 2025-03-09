@@ -156,7 +156,7 @@ Error GraphicsDeviceRef_createSampler(
 		info.enableComparison ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler,
 		0,
 		false,
-		(Descriptor) { .resource = *sampler },
+		Descriptor_sampler(*sampler),
 		&samplerLocation,
 		&err
 	))

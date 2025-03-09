@@ -332,7 +332,7 @@ U64 Descriptor_startBuffer(Descriptor d) {
 }
 
 U64 Descriptor_endBuffer(Descriptor d) {
-	return d.buffer.startRegionAndCounterOffset.region48 << 16 >> 16;
+	return d.buffer.endRegionAndCounterOffset.region48 << 16 >> 16;
 }
 
 U64 Descriptor_bufferLength(Descriptor d) {
@@ -497,12 +497,12 @@ Bool Descriptor_eq(Descriptor a, DescriptorTableBindingSingle b, ESHRegisterType
 
 	static_assert(
 		sizeof(a.texture) == sizeof(U64),
-		"DescriptorTableRef_setDescriptors() checks for texture by using data[0] (U64)"
+		"Descriptor_eq() checks for texture by using data[0] (U64)"
 	);
 
 	static_assert(
 		sizeof(a.buffer) == sizeof(U64) * 3,
-		"DescriptorTableRef_setDescriptors() checks for texture by using data[0, 1 and 2] (U64[3])"
+		"Descriptor_eq() checks for texture by using data[0, 1 and 2] (U64[3])"
 	);
 
 	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
@@ -635,7 +635,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if(Descriptor_endBuffer(d) > len || start >= len)
 					retError(clean, Error_outOfBounds(
-						0, Descriptor_endBuffer(d) > len ? Descriptor_endBuffer(d) :start, len,
+						0, Descriptor_endBuffer(d) > len ? Descriptor_endBuffer(d) : start, len,
 						"DescriptorTableRef_setDescriptors()::buffer start/end range out of bounds"
 					))
 
@@ -1263,7 +1263,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 		//	Otherwise the format needs to match 1:1
 		// 
 		//Read textures are simpler;
-		//DXIL all textures are implicitly float, but int/uint are separate types.
+		//DXIL all textures are typeless.
 		//SPIRV: Unknown allows anything, otherwise match 1:1
 
 		if (otherResourceType == 0) {
@@ -1277,35 +1277,24 @@ Bool DescriptorTableRef_findBindlessRegister(
 				);
 
 			if (instance->api == EGraphicsApi_Vulkan) {
+
 				if(bind.textureFormat.formatId && bind.textureFormat.formatId != formatId)
 					continue;
-			} else {
+
+			} else if(bind.registerType & ESHRegisterType_IsWrite) {
 				
-				ETextureFormat bindFormat = ETextureFormatId_unpack[bind.textureFormat.formatId];
-				ESHTexturePrimitive targPrim = ETextureFormat_getPrimitive(bindFormat);
-				ESHTexturePrimitive prim = ETextureFormat_getPrimitive(ETextureFormatId_unpack[formatId]);
+				ESHTexturePrimitive targPrim = bind.textureFormat.primitive;
+				ESHTexturePrimitive prim = ESHTexturePrimitive_fromTextureFormat(ETextureFormatId_unpack[formatId]) & ESHTexturePrimitive_TypeMask;
 				Bool compatible = false;
 
-				if (bind.registerType & ESHRegisterType_IsWrite)
-					switch (targPrim) {
-
-						case ETexturePrimitive_Float:
-
-							compatible =
-								prim == ETexturePrimitive_Float ||
-								prim == ETexturePrimitive_SNorm || prim == ETexturePrimitive_UNorm;
-
-							break;
-
-						default:
-							compatible = prim == targPrim;
-							break;
-					}
-
-				else switch (targPrim) {
+				switch (targPrim) {
 
 					case ETexturePrimitive_Float:
-						compatible = true;
+
+						compatible =
+							prim == ETexturePrimitive_Float ||
+							prim == ETexturePrimitive_SNorm || prim == ETexturePrimitive_UNorm;
+
 						break;
 
 					default:
@@ -1382,6 +1371,8 @@ Bool DescriptorTableRef_allocDescriptor(
 			activeList.ptr[j],
 			j + 1 < activeList.length ? activeList.ptr[j + 1] : 0
 		);
+
+		big = U128_not(big);
 
 		U8 bit = U128_bitScanReverse(big);
 

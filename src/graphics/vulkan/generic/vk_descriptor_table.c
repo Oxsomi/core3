@@ -273,6 +273,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 	ESHRegisterType type = binding.registerType & ESHRegisterType_TypeMask;
 	Bool isWrite = binding.registerType & ESHRegisterType_IsWrite;
+	Bool isArrayType = binding.registerType & ESHRegisterType_IsArray;
 
 	VkDescriptorSet set = NULL;
 	CharString temp = CharString_createNull();
@@ -323,6 +324,11 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			for(U64 i = 0; i < darr.length; ++i) {
 
 				Descriptor d = darr.ptr[i];
+				
+				if(d.resource && !Descriptor_endBuffer(d)) {
+					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
+				}
 
 				if (d.resource)
 					buf[i] = (VkDescriptorBufferInfo) {
@@ -401,6 +407,11 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			for(U64 i = 0; i < darr.length; ++i) {
 
 				Descriptor d = darr.ptr[i];
+				
+				if(d.resource && !Descriptor_endBuffer(d)) {
+					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
+				}
 
 				if(d.buffer.counter)
 					retError(clean, Error_unimplemented(
@@ -444,6 +455,23 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			for(U64 i = 0; i < darr.length; ++i) {
 
 				Descriptor d = darr.ptr[i];
+
+				if(d.resource) {
+
+					UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
+
+					if(isArrayType && !d.texture.arrayCount)
+						d.texture.arrayCount = tex.length - d.texture.arrayId;
+
+					if (!isWrite) {
+						if(!d.texture.mipCount)
+							d.texture.mipCount = tex.levels - d.texture.mipId;
+					}
+
+					else if(!d.texture.mipCount)
+						d.texture.mipCount = 1;
+				}
+
 				VkImageView view = NULL;
 				gotoIfError3(clean, VkUnifiedTexture_getView(darr.ptr[i], binding.registerType, &view, &newViews[i], e_rr))
 

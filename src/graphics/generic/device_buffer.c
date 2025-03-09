@@ -305,7 +305,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			ESHRegisterType_ByteAddressBuffer,
 			0,
 			false,
-			(Descriptor) { .resource = *ref },
+			Descriptor_buffer(*ref, 0, 0, NULL, 0),
 			&buf->readHandle,
 			&err
 		)
@@ -320,7 +320,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
 			0,
 			false,
-			(Descriptor) { .resource = *ref },
+			Descriptor_buffer(*ref, 0, 0, NULL, 0),
 			&buf->readHandle,
 			&err
 		)

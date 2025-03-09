@@ -272,7 +272,7 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 	if(texture.sampleCount >= EMSAASamples_Count)
 		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->sampleCount is invalid");
 
-	if(texture.sampleCount && texture.levels)
+	if(texture.sampleCount && texture.levels > 1)
 		return Error_invalidParameter(2, 0, "UnifiedTexture_create() MSAA textures can't have mips");
 
 	if(texture.type >= ETextureType_Count)
@@ -377,13 +377,19 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 		texturePtr->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
+	//Create resource
+	
+	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
+	Error err = UnifiedTexture_createExt(ref, name);
+
+	if(err.genericError)
+		return err;
+
 	//Allocate in descriptors
 
 	if(texture.resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
 		//Create images
-
-		Error err;
 
 		for(U8 i = 0; i < texture.images; ++i) {
 
@@ -397,7 +403,7 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 					texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D,
 					0,
 					false,
-					(Descriptor) { .resource = ref, .texture = (TextureDescriptorRange) { .imageId = i } },
+					Descriptor_texture(ref, 0, 0, 0, i, 0, 0),
 					&img->readHandle,
 					&err
 				)
@@ -413,7 +419,7 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 					ESHRegisterType_IsWrite,
 					0,
 					false,
-					(Descriptor) { .resource = ref, .texture = (TextureDescriptorRange) { .imageId = i } },
+					Descriptor_texture(ref, 0, 0, 0, i, 0, 0),
 					&img->writeHandle,
 					&err
 				)
@@ -422,6 +428,5 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 		}
 	}
 
-	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
-	return UnifiedTexture_createExt(ref, name);
+	return Error_none();
 }

@@ -460,7 +460,7 @@ Error GraphicsDeviceRef_createTLAS(
 		ESHRegisterType_AccelerationStructure,
 		0,
 		false,
-		(Descriptor) { .resource = *tlasRef },
+		Descriptor_tlas(*tlasRef),
 		&tlasPtr->handle,
 		&err
 	))

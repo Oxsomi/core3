@@ -128,6 +128,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 	ESHRegisterType type = binding.registerType & ESHRegisterType_TypeMask;
 	Bool isWrite = binding.registerType & ESHRegisterType_IsWrite;
+	Bool isArrayType = binding.registerType & ESHRegisterType_IsArray;
 
 	U64 heapPtrRes = heapExt->resourcesHeap.cpuHandle.ptr;
 	U64 heapIncRes = heapExt->resourcesHeap.cpuIncrement;
@@ -135,6 +136,32 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	for(U64 i = 0; i < darr.length; ++i) {
 
 		Descriptor d = darr.ptr[i];
+
+		if(d.resource) {
+
+			if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd) {
+
+				U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
+
+				if(!Descriptor_endBuffer(d))
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
+
+			} else if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
+
+				UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
+
+				if(isArrayType && !d.texture.arrayCount)
+					d.texture.arrayCount = tex.length - d.texture.arrayId;
+
+				if (!isWrite) {
+					if(!d.texture.mipCount)
+						d.texture.mipCount = tex.levels - d.texture.mipId;
+				}
+
+				else if(!d.texture.mipCount)
+					d.texture.mipCount = 1;
+			}
+		}
 
 		switch (type) {
 

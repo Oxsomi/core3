@@ -50,7 +50,7 @@ Bool BindlessDescriptor_isValid(GraphicsDeviceRef *deviceRef, DescriptorTableRef
 	if(!handle)
 		return true;
 
-	if(!deviceRef || deviceRef->typeId == (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return false;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -58,7 +58,7 @@ Bool BindlessDescriptor_isValid(GraphicsDeviceRef *deviceRef, DescriptorTableRef
 	if(!descTableRef)
 		descTableRef = device->defaultDescriptorTable;
 
-	if(!descTableRef || descTableRef->typeId == (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(!descTableRef || descTableRef->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
 		return false;
 
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(descTableRef);
@@ -90,7 +90,7 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	U64 arrayId = U64_MAX;
 	U8 bindlessTypeId = 0;
 
-	if(!deviceRef || deviceRef->typeId == (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_allocateDescriptorBindless() deviceRef is required"))
 
 	if(!descriptorHandle)
@@ -130,7 +130,7 @@ Bool GraphicsDeviceRef_freeDescriptorBindless(
 	if(!descriptor)
 		goto clean;
 
-	if(!deviceRef || deviceRef->typeId == (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_freeDescriptorBindless() deviceRef is required"))
 		
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
