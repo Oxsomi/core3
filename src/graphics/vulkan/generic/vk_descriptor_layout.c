@@ -26,6 +26,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/log.h"
 #include "formats/oiSH/entries.h"
 
 Bool VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
@@ -258,7 +259,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		U8 linkId = 0;
 
-		for(U8 j = 1; j < 4; ++j)
+		for(U8 j = 1; j < uniqueSetCounter; ++j)
 			if (sets[j] == binding->binding.space) {
 				linkId = j;
 				break;
@@ -281,7 +282,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		++partiallyBound[linkId].bindingCount;
 	}
 
-	for(U8 i = 0; i < 4; ++i) {
+	for(U8 i = 0; i < uniqueSetCounter; ++i) {
 
 		if(!setInfo[i].pBindings)
 			continue;

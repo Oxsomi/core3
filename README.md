@@ -175,7 +175,6 @@ To be able to create a graphics device, you are required to provide the OxC3_gra
 ```cmake
 # Optional: configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 add_virtual_dependencies(TARGET Target DEPENDENCIES OxC3_graphics)
-configure_virtual_files(Target)
 apply_dependencies(Target)
 ```
 

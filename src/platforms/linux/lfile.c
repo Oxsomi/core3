@@ -26,6 +26,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/file.h"
+#include "platforms/log.h"
 #include "types/base/lock.h"
 
 Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad, Error *e_rr) {
@@ -74,6 +75,8 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 				section->loaded = true;
 				foundAny = true;
 			}
+
+			else foundAny = true;
 		}
 
 		//Otherwise we want to use error to determine if it's present or not

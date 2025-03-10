@@ -67,7 +67,6 @@ target_link_libraries(OxC3 PUBLIC OxC3_types_base OxC3_types_math OxC3_types_con
 include(../../../cmake/oxc3.cmake)
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 add_virtual_dependencies(TARGET OxC3 DEPENDENCIES OxC3_graphics)
-configure_virtual_files(OxC3)
 apply_dependencies(OxC3)
 
 # Done automatically by apply_dependencies in things that use OxC3 as a conan package

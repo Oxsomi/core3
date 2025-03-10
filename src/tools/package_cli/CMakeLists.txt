@@ -67,5 +67,4 @@ target_link_libraries(OxC3_package PUBLIC OxC3_types_base OxC3_types_math OxC3_t
 
 include(../../../cmake/oxc3.cmake)
 configure_icon(OxC3_package "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-configure_virtual_files(OxC3_package)
 apply_dependencies(OxC3_package)

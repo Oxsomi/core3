@@ -103,6 +103,8 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 				Buffer_freex(&buf);
 				CharString_freex(&tmp);
 			}
+
+			else foundAny = true;
 		}
 
 		//Otherwise we want to use error to determine if it's present or not

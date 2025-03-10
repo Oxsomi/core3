@@ -8,7 +8,7 @@ function(configure_icon target icon)
 	endif()
 
 	if(WIN32)
-		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
+		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST_RC)
 		set_property(TARGET ${target} PROPERTY RESOURCE_LIST LOGO\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ICON\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${icon}\"\n${res})
 		target_sources(${target} PRIVATE ${icon})
 	endif()
@@ -51,6 +51,46 @@ function(apply_dependencies target)
 
 	# Ensure that working directory is set to the same place as the exe to ensure it can find .dll/.so
 	set_target_properties(${target} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")
+
+	get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
+
+	foreach(file ${res})
+
+		string(FIND "${file}" "packages/" PACKAGE_POS)
+		string(SUBSTRING "${file}" ${PACKAGE_POS} -1 RESULT)
+		string(SUBSTRING "${RESULT}" 9 -1 FINAL_RESULT)
+
+		string(REPLACE "\\" "/" FINAL_RESULT "${FINAL_RESULT}")
+
+		string(REGEX REPLACE "\\.oiCA$" "" RELATIVE_PATH "${FINAL_RESULT}")
+
+		# Differences in packaging:
+		# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
+		# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
+		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
+		# iOS has IPA which is the same idea as APK.
+		# OS X has llvm-objcopy.
+		# web/emscripten has a virtual filesystem.
+		
+		if(WIN32)
+			get_property(res2 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC)
+			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${file}\"\n${res2})
+		elseif(UNIX AND NOT APPLE AND NOT ANDROID)
+			add_custom_command(
+				TARGET ${_ARGS_TARGET} POST_BUILD
+				COMMAND objcopy --add-section "packages/${RELATIVE_PATH}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+			)
+		endif()
+
+	endforeach()
+
+	if(WIN32)
+		get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
+		if(NOT "${res2}" STREQUAL "")
+			file(WRITE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc" ${res2})
+			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
+		endif()
+	endif()
 
 endfunction()
 
@@ -185,26 +225,8 @@ macro(add_virtual_files)
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
 	endif()
 
-	# Differences in packaging:
-	# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
-	# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
-	# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
-	# iOS has IPA which is the same idea as APK.
-	# OS X has llvm-objcopy.
-	# web/emscripten has a virtual filesystem.
-
-	if(WIN32)
-		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
-		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
-	elseif(UNIX AND NOT APPLE AND NOT ANDROID)
-		get_target_property(targetType ${_ARGS_TARGET} TYPE)
-		if (NOT targetType STREQUAL STATIC_LIBRARY)
-			add_custom_command(
-				TARGET ${_ARGS_TARGET} POST_BUILD
-				COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
-			)
-		endif()
-	endif()
+	get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+	set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA;${res})
 
 endmacro()
 
@@ -242,7 +264,7 @@ macro(add_virtual_dependencies)
 			get_property(res1 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
 
 			add_dependencies(${_ARGS_TARGET} ${file})
-			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${res0}\n${res1})
+			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${res0};${res1})
 
 		endforeach()
 	else()
@@ -282,8 +304,8 @@ macro(add_virtual_dependencies_external)
 			# 	message(FATAL_ERROR "Can't find bin directory of package dependency")
 			# endif()
 			
-			find_program(OXC3 OxC3 REQUIRED)
-			get_filename_component(BIN_DIR "${OXC3}" DIRECTORY)
+			find_program(PROGRAM_PATH ${file} REQUIRED)
+			get_filename_component(BIN_DIR "${PROGRAM_PATH}" DIRECTORY)
 			
 			message(STATUS "add_virtual_dependencies_external: Found ${file}'s bin Directory: ${BIN_DIR}")
 
@@ -296,26 +318,8 @@ macro(add_virtual_dependencies_external)
 				file(GLOB_RECURSE PACKAGE_FILES "${PACKAGE_DIR}/*/*.oiCA")
 
 				foreach(PACKAGE_FILE ${PACKAGE_FILES})
-
-					# Register so it ends up in the final executable
-					# See add_virtual_files for more info
-
-					string(REPLACE "\\" "/" BASE_PATH "${PACKAGE_DIR}/")
-					string(REPLACE "\\" "/" PACKAGE_FILE "${PACKAGE_FILE}")
-
-					string(REPLACE "${BASE_PATH}" "" RELATIVE_PATH "${PACKAGE_FILE}")
-					string(REGEX REPLACE "\\.oiCA$" "" RELATIVE_PATH "${RELATIVE_PATH}")
-					
-					if(WIN32)
-						get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
-						set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${PACKAGE_FILE}\"\n${res})
-					elseif(UNIX AND NOT APPLE AND NOT ANDROID)
-						add_custom_command(
-							TARGET ${_ARGS_TARGET} POST_BUILD
-							COMMAND objcopy --add-section "packages/${RELATIVE_PATH}=${PACKAGE_FILE}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
-						)
-					endif()
-
+					get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+					set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${PACKAGE_FILE};${res})
 				endforeach()
 
 			else()
@@ -328,22 +332,3 @@ macro(add_virtual_dependencies_external)
 	endif()
 
 endmacro()
-
-# Configure virtual files (and icon) for a target
-
-function(configure_virtual_files target)
-
-	if(NOT TARGET ${target})
-		message(FATAL_ERROR "configure_virtual_files: target ${target} not present.")
-	endif()
-
-	if(WIN32)
-		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
-		if(NOT "${res}" STREQUAL "")
-			file(WRITE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc" ${res})
-			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
-		endif()
-	endif()
-
-endfunction()
-
