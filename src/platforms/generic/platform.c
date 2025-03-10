@@ -147,7 +147,7 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 		captured.location = (U64) ptr;
 		captured.length = length;
 
-		Log_captureStackTrace(Allocator_allocationsAllocator, captured.stack, STACKTRACE_SIZE, 1);
+		Error_captureStackTrace(captured.stack, STACKTRACE_SIZE, 1);
 
 		const ELockAcquire acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 

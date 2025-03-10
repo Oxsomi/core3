@@ -29,7 +29,9 @@
 #include "platforms/log.h"
 #include "formats/oiSH/entries.h"
 
-Bool DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout) {
+Bool DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
+
+	(void) alloc;
 
 	DxPipelineLayout *layoutExt = PipelineLayout_ext(layout, Dx);
 

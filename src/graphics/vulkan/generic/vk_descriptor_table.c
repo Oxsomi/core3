@@ -70,8 +70,11 @@ void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
 		}
 
 clean:
+
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
+
+	(void) s_uccess;
 }
 
 void VkDescriptorTable_loseRef(DescriptorTable *table, U64 i, U64 j) {
@@ -94,7 +97,9 @@ void VkDescriptorTable_loseRef(DescriptorTable *table, U64 i, U64 j) {
 	}
 }
 
-Bool VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table) {
+Bool VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc) {
+
+	(void) alloc;
 
 	DescriptorHeap *heap = DescriptorHeapRef_ptr(table->parent);
 	VkDescriptorHeap *heapExt = DescriptorHeap_ext(heap, Vk);

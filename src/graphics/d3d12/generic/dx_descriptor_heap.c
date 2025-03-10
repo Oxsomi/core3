@@ -27,7 +27,9 @@
 #include "platforms/ext/bufferx.h"
 #include "types/container/string.h"
 
-Bool DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap) {
+Bool DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
+
+	(void) alloc;
 
 	DxDescriptorHeap *heapExt = DescriptorHeap_ext(heap, Dx);
 

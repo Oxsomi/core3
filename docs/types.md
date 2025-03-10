@@ -1007,7 +1007,7 @@ The following enums exist to allow logging:
 
 The following utility function exists:
 
-- void **Log_captureStackTrace**(Allocator alloc, void **stackTrace, U64 stackSize, U8 skip): Capture a `void*[stackSize]`  where each `void*` represents an address in the stack. 'skip' indicates how many previous stacks to skip; this might be because it's called in a helper function where it wants to point higher up in the stack.
+- void **Error_captureStackTrace**(void **stackTrace, U8 stackSize, U8 skip): Capture a `void*[stackSize]`  where each `void*` represents an address in the stack. 'skip' indicates how many previous stacks to skip; this might be because it's called in a helper function where it wants to point higher up in the stack. It is valid for this to fail if stackSize + skip + 1 > 128, since some implementations might use 1KB of temp memory to capture an intermediate.
 
 The following functions print an output to the console (or whatever is relevant on the platform).
 

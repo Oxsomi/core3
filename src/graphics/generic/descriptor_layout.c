@@ -150,6 +150,9 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 						}
 
 						break;
+
+					default:
+						retError(clean, Error_invalidState(0, "DescriptorLayoutInfo_detect() Unknown binary type"))
 				}
 			}
 
@@ -275,8 +278,6 @@ void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, Allocator alloc) {
 }
 
 Bool DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc) {
-
-	(void)alloc;
 
 	//Log_debugLnx("Destroy: %p", layout);
 

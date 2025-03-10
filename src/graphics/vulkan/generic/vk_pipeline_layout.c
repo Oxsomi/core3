@@ -30,7 +30,9 @@
 #include "platforms/log.h"
 #include "formats/oiSH/entries.h"
 
-Bool VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout) {
+Bool VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
+
+	(void) alloc;
 
 	VkGraphicsDevice *device = GraphicsDevice_ext(GraphicsDeviceRef_ptr(layout->device), Vk);
 	VkPipelineLayout *layoutExt = PipelineLayout_ext(layout, Vk);

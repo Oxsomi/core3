@@ -38,13 +38,16 @@ struct CopyImageRegion {
 //		This will allow each dispatch to quickly identify which group is responsible for which region.
 
 U32 _regionCount;
-U32 _padding;
+U32 _pad3, _pad4, _pad5;
 
 #if $THREAD_COUNT != 1
-	CopyImageRegion _regions[128];		//Likely not all allocated, avoid reading >= regionCount
+	#define ARRAY_COUNT 128
 #else
-	CopyImageRegion _regions[1];		//Brings root constant size to 32 bytes
+	#define ARRAY_COUNT 1
 #endif
+
+U32x4 _srcDsts[ARRAY_COUNT];				//Likely not all allocated, avoid reading >= regionCount
+U32x4 _sizRots2[(ARRAY_COUNT + 1) >> 1];	//2 sizRot per time
 
 Texture2DArray<U32x4> _input;
 UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
@@ -58,13 +61,18 @@ UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
 [numthreads(16, 8, 1)]
 void mainSingle(U32x3 id : SV_DispatchThreadID) {
 
-	U32x4 xyzRot = _regions[0].getSizRot();
+	CopyImageRegion region;
+	region.src = _srcDsts[0].xy;
+	region.dst = _srcDsts[0].zw;
+	region.sizRot = _sizRots2[0].xy;
+
+	U32x4 xyzRot = region.getSizRot();
 
 	if(any(id >= xyzRot.xyz))
 		return;
 
-	U32x3 src = _regions[0].getSrc().xyz + id;
-	U32x3 dst = _regions[0].getDst().xyz + id;
+	U32x3 src = region.getSrc().xyz + id;
+	U32x3 dst = region.getDst().xyz + id;
 
 	#if ROTATE
 

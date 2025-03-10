@@ -35,6 +35,11 @@ add_library(
 	CMakeLists.txt
 )
 
+if(ANDROID)
+	file(GLOB_RECURSE typesBaseAndroidSources "platforms/android/*.c")
+	target_sources(OxC3_types_base PRIVATE ${typesBaseAndroidSources})
+endif()
+
 source_group("Source Files (${platform})" FILES ${typesBasePlatformSources})
 
 set_target_properties(OxC3_types_base PROPERTIES FOLDER Oxsomi/types)

@@ -43,11 +43,6 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skip) {
-	(void) alloc;
-	RtlCaptureStackBackTrace((DWORD)(1 + (U32)skip), (DWORD) stackSize, stack, NULL);
-}
-
 typedef struct CapturedStackTrace {
 
 	//Module and symbol

@@ -79,124 +79,8 @@ typedef struct GraphicsObjectSizes {
 #ifndef GRAPHICS_API_DYNAMIC
 
 	Bool GraphicsInterface_init(Error *e_rr);
-
 	Bool GraphicsInterface_supports(EGraphicsApi api);
-
 	impl const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api);
-
-	//RTAS
-
-	impl Bool BLAS_freeExt(BLAS *blas);
-	impl Error BLAS_initExt(BLAS *blas);
-	impl Error BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
-
-	impl Bool TLAS_freeExt(TLAS *tlas);
-	impl Error TLAS_initExt(TLAS *tlas);
-	impl Error TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
-
-	//Pipeline
-
-	impl Bool GraphicsDevice_createPipelineComputeExt(
-		GraphicsDevice *device,
-		CharString name,
-		Pipeline *pipeline,
-		SHBinaryInfo buf,
-		Error *e_rr
-	);
-
-	impl Bool GraphicsDevice_createPipelineGraphicsExt(
-		GraphicsDevice *dev,
-		ListSHFile binaries,
-		CharString name,
-		Pipeline *pipeline,
-		Error *e_rr
-	);
-
-	impl Bool GraphicsDevice_createPipelineRaytracingInternalExt(
-		GraphicsDeviceRef *deviceRef,
-		ListSHFile binaries,
-		CharString name,
-		U8 maxPayloadSize,
-		U8 maxAttributeSize,
-		ListU32 binaryIndices,
-		Pipeline *pipeline,
-		Error *e_rr
-	);
-
-	impl Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc);
-
-	//Sampler
-
-	impl Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
-	impl Bool Sampler_freeExt(Sampler *sampler);
-
-	//Device buffer
-
-	impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
-	impl Bool DeviceBuffer_freeExt(DeviceBuffer *buffer);
-	impl Error DeviceBufferRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
-
-	//Device texture
-
-	impl Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name);
-	impl Error DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
-	impl Bool UnifiedTexture_freeExt(TextureRef *textureRef);
-
-	//Swapchain
-
-	impl Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
-	impl Bool Swapchain_freeExt(Swapchain *data, Allocator alloc);
-
-	//Allocator
-
-	//Needs explicit lock, because allocator is accessed after.
-	impl Error DeviceMemoryAllocator_allocateExt(
-		DeviceMemoryAllocator *allocator,
-		void *requirementsExt,
-		Bool cpuSided,
-		U32 *blockId,
-		U64 *blockOffset,
-		EResourceType resourceType,
-		CharString objectName,				//Name of the object that allocates (for dedicated allocations)
-		DeviceMemoryBlock *resultBlock
-	);
-
-	impl Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
-
-	//Device
-
-	impl Error GraphicsDevice_initExt(
-		const GraphicsInstance *instance,
-		const GraphicsDeviceInfo *deviceInfo,
-		GraphicsDeviceRef **deviceRef
-	);
-
-	impl U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
-
-	impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
-
-	impl Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);
-
-	impl Error GraphicsDevice_submitCommandsExt(
-		GraphicsDeviceRef *deviceRef,
-		ListCommandListRef commandLists,
-		ListSwapchainRef swapchains,
-		CBufferData data
-	);
-
-	impl void CommandList_processExt(
-		CommandList *commandList,
-		GraphicsDeviceRef *deviceRef,
-		ECommandOp op,
-		const U8 *data,
-		void *commandListExt
-	);
-
-	//Interface
-
-	impl Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
-	impl Bool GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc);
-	impl Error GraphicsInstance_getDeviceInfosExt(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
 
 #else
 
@@ -430,161 +314,162 @@ typedef struct GraphicsObjectSizes {
 	Bool GraphicsInterface_init(Error *e_rr);
 	Bool GraphicsInterface_supports(EGraphicsApi api);
 
-	//These are kept for ease of use, these are just a wrapper for the interface
-	//As such, calling them from GraphicsInterface implementation is illegal!
-
-	//RTAS
-
-	Bool BLAS_freeExt(BLAS *blas);
-	Error BLAS_initExt(BLAS *blas);
-	Error BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
-
-	Bool TLAS_freeExt(TLAS *tlas);
-	Error TLAS_initExt(TLAS *tlas);
-	Error TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
-
-	//Pipelines
-
-	Bool GraphicsDevice_createPipelineComputeExt(
-		GraphicsDevice *device,
-		CharString name,
-		Pipeline *pipeline,
-		SHBinaryInfo buf,
-		Error *e_rr
-	);
-
-	Bool GraphicsDevice_createPipelineGraphicsExt(
-		GraphicsDevice *dev,
-		ListSHFile binaries,
-		CharString name,
-		Pipeline *pipeline,
-		Error *e_rr
-	);
-
-	Bool GraphicsDevice_createPipelineRaytracingInternalExt(
-		GraphicsDeviceRef *deviceRef,
-		ListSHFile binaries,
-		CharString name,
-		U8 maxPayloadSize,
-		U8 maxAttributeSize,
-		ListU32 binaryIndices,
-		Pipeline *pipeline,
-		Error *e_rr
-	);
-
-	Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc);
-
-	//Sampler
-
-	Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
-	Bool Sampler_freeExt(Sampler *sampler);
-
-	//Device buffer
-
-	Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
-	Bool DeviceBuffer_freeExt(DeviceBuffer *buffer);
-	Error DeviceBufferRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
-
-	//Device texture
-
-	Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name);
-	Error DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
-	Bool UnifiedTexture_freeExt(TextureRef *textureRef);
-
-	//Swapchain
-
-	Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
-	Bool Swapchain_freeExt(Swapchain *data, Allocator alloc);
-
-	//DescriptorLayout
-
-	Error GraphicsDeviceRef_createDescriptorLayoutExt(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
-	Bool DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc);
-
-	//PipelineLayout
-
-	Error GraphicsDeviceRef_createPipelineLayoutExt(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
-	Bool PipelineLayout_freeExt(PipelineLayout *layout, Allocator alloc);
-
-	//DescriptorTable
-
-	Error DescriptorHeap_createDescriptorTableExt(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
-	Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc);
-
-	Bool DescriptorTable_setDescriptorsExt(
-		DescriptorTable *table,
-		U64 bindingId,
-		U64 arrayId,
-		ListDescriptor darr,
-		Error *e_rr
-	);
-
-	Bool DescriptorTable_unsetDescriptorsExt(
-		DescriptorTable *table,
-		U64 bindingId,
-		U64 arrayId,
-		U64 count,
-		Error *e_rr
-	);
-
-	//DescriptorHeap
-
-	Error GraphicsDeviceRef_createDescriptorHeapExt(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
-	Bool DescriptorHeap_freeExt(DescriptorHeap *heap, Allocator alloc);
-
-	//Allocator
-
-	//Needs explicit lock, because allocator is accessed after.
-	Error DeviceMemoryAllocator_allocateExt(
-		DeviceMemoryAllocator *allocator,
-		void *requirementsExt,
-		Bool cpuSided,
-		U32 *blockId,
-		U64 *blockOffset,
-		EResourceType resourceType,
-		CharString objectName,						//Name of the object that allocates (for dedicated allocations)
-		DeviceMemoryBlock *resultBlock
-	);
-
-	Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
-
-	//Device
-
-	Error GraphicsDevice_initExt(
-		const GraphicsInstance *instance,
-		const GraphicsDeviceInfo *deviceInfo,
-		GraphicsDeviceRef **deviceRef
-	);
-
-	U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
-
-	Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
-
-	Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);
-
-	Error GraphicsDevice_submitCommandsExt(
-		GraphicsDeviceRef *deviceRef,
-		ListCommandListRef commandLists,
-		ListSwapchainRef swapchains,
-		CBufferData data
-	);
-
-	void CommandList_processExt(
-		CommandList *commandList,
-		GraphicsDeviceRef *deviceRef,
-		ECommandOp op,
-		const U8 *data,
-		void *commandListExt
-	);
-
-	//Instance
-
-	Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
-	Bool GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc);
-	Error GraphicsInstance_getDeviceInfosExt(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
-
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api);
 
 #endif
 
 const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *device);
+
+//These have two different meanings depending on how OxC3 graphics is linked:
+//Dynamic linking: These are just wrappers that call the graphics table directly.
+//Static linking:  These are direct callers to the implementation.
+
+//RTAS
+
+Bool BLAS_freeExt(BLAS *blas);
+Error BLAS_initExt(BLAS *blas);
+Error BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
+
+Bool TLAS_freeExt(TLAS *tlas);
+Error TLAS_initExt(TLAS *tlas);
+Error TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
+
+//Pipelines
+
+Bool GraphicsDevice_createPipelineComputeExt(
+	GraphicsDevice *device,
+	CharString name,
+	Pipeline *pipeline,
+	SHBinaryInfo buf,
+	Error *e_rr
+);
+
+Bool GraphicsDevice_createPipelineGraphicsExt(
+	GraphicsDevice *dev,
+	ListSHFile binaries,
+	CharString name,
+	Pipeline *pipeline,
+	Error *e_rr
+);
+
+Bool GraphicsDevice_createPipelineRaytracingInternalExt(
+	GraphicsDeviceRef *deviceRef,
+	ListSHFile binaries,
+	CharString name,
+	U8 maxPayloadSize,
+	U8 maxAttributeSize,
+	ListU32 binaryIndices,
+	Pipeline *pipeline,
+	Error *e_rr
+);
+
+Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc);
+
+//Sampler
+
+Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
+Bool Sampler_freeExt(Sampler *sampler);
+
+//Device buffer
+
+Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
+Bool DeviceBuffer_freeExt(DeviceBuffer *buffer);
+Error DeviceBufferRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
+
+//Device texture
+
+Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name);
+Error DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
+Bool UnifiedTexture_freeExt(TextureRef *textureRef);
+
+//Swapchain
+
+Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
+Bool Swapchain_freeExt(Swapchain *data, Allocator alloc);
+
+//DescriptorLayout
+
+Error GraphicsDeviceRef_createDescriptorLayoutExt(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+Bool DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc);
+
+//PipelineLayout
+
+Error GraphicsDeviceRef_createPipelineLayoutExt(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
+Bool PipelineLayout_freeExt(PipelineLayout *layout, Allocator alloc);
+
+//DescriptorTable
+
+Error DescriptorHeap_createDescriptorTableExt(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
+Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc);
+
+Bool DescriptorTable_setDescriptorsExt(
+	DescriptorTable *table,
+	U64 bindingId,
+	U64 arrayId,
+	ListDescriptor darr,
+	Error *e_rr
+);
+
+Bool DescriptorTable_unsetDescriptorsExt(
+	DescriptorTable *table,
+	U64 bindingId,
+	U64 arrayId,
+	U64 count,
+	Error *e_rr
+);
+
+//DescriptorHeap
+
+Error GraphicsDeviceRef_createDescriptorHeapExt(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
+Bool DescriptorHeap_freeExt(DescriptorHeap *heap, Allocator alloc);
+
+//Allocator
+
+//Needs explicit lock, because allocator is accessed after.
+Error DeviceMemoryAllocator_allocateExt(
+	DeviceMemoryAllocator *allocator,
+	void *requirementsExt,
+	Bool cpuSided,
+	U32 *blockId,
+	U64 *blockOffset,
+	EResourceType resourceType,
+	CharString objectName,						//Name of the object that allocates (for dedicated allocations)
+	DeviceMemoryBlock *resultBlock
+);
+
+Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
+
+//Device
+
+Error GraphicsDevice_initExt(
+	const GraphicsInstance *instance,
+	const GraphicsDeviceInfo *deviceInfo,
+	GraphicsDeviceRef **deviceRef
+);
+
+U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal);
+
+Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
+
+Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);
+
+Error GraphicsDevice_submitCommandsExt(
+	GraphicsDeviceRef *deviceRef,
+	ListCommandListRef commandLists,
+	ListSwapchainRef swapchains,
+	CBufferData data
+);
+
+void CommandList_processExt(
+	CommandList *commandList,
+	GraphicsDeviceRef *deviceRef,
+	ECommandOp op,
+	const U8 *data,
+	void *commandListExt
+);
+
+//Instance
+
+Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
+Bool GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc);
+Error GraphicsInstance_getDeviceInfosExt(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);

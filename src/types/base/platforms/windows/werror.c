@@ -18,16 +18,18 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/buffer.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/log.h"
-#include "platforms/platform.h"
+#include "types/base/error.h"
 
-void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
-	Error_print(Platform_instance->alloc, err, logLevel, options);
-}
+#define UNICODE
+#define WIN32_LEAN_AND_MEAN
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define NOMINMAX
+#include <Windows.h>
 
-void Error_printLnx(Error err) {
-	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+void Error_captureStackTrace(void **stack, U8 stackSize, U8 skip) {
+
+    if(!stack || !stackSize)
+        return;
+
+	RtlCaptureStackBackTrace((DWORD)(1 + (U32)skip), (DWORD) stackSize, stack, NULL);
 }

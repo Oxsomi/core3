@@ -27,7 +27,6 @@
 	extern "C" {
 #endif
 
-void Log_captureStackTracex(void **stackTrace, U64 stackSize, U8 skip);
 void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options);
 void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg);
 void Log_printCapturedStackTracex(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);

@@ -28,7 +28,9 @@
 #include "platforms/ext/stringx.h"
 #include "formats/oiSH/entries.h"
 
-Bool VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout) {
+Bool VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
+
+	(void) alloc;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(layout->device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);

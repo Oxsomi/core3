@@ -1,3 +1,4 @@
+
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -18,16 +19,51 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/buffer.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/log.h"
-#include "platforms/platform.h"
+#include "types/base/error.h"
 
-void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
-	Error_print(Platform_instance->alloc, err, logLevel, options);
+//Comparable to https://stackoverflow.com/questions/8115192/android-ndk-getting-the-backtrace
+
+#include <unwind.h>
+#include <dlfcn.h>
+
+typedef struct Backtrace {
+	void **current, **end;
+    U64 skip;
+} Backtrace;
+
+_Unwind_Reason_Code unwindCallback(struct _Unwind_Context *context, Backtrace *state) {
+
+	U64 pc = _Unwind_GetIP(context);
+
+	if (state->current == state->end)
+		return _URC_END_OF_STACK;
+
+    if(state->skip)
+        --state->skip;
+
+	else *state->current++ = (void*)pc;
+
+	if(!pc)
+		return _URC_END_OF_STACK;
+
+	return _URC_NO_REASON;
 }
 
-void Error_printLnx(Error err) {
-	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+void Error_captureStackTrace(void **stack, U8 stackSize, U8 skipTmp) {
+
+    if(!stack || !stackSize)
+        return;
+
+	Backtrace backtrace = (Backtrace) {
+        .current = stack,
+        .end = &stack[stackSize],
+        .skip = (U64) skipTmp + 1
+    };
+    
+	_Unwind_Backtrace((_Unwind_Trace_Fn)unwindCallback, &backtrace);
+
+	I32 count = backtrace.current - stack;
+
+	if(count < stackSize)
+		stack[count] = NULL;
 }

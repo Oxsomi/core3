@@ -25,7 +25,9 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
 
-Bool VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap) {
+Bool VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
+
+	(void) alloc;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(heap->device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);

@@ -34,7 +34,7 @@ void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, E
 void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions options) {
 
 	StackTrace stackTrace;
-	Log_captureStackTrace(alloc, stackTrace, STACKTRACE_SIZE, skip);
+	Error_captureStackTrace(stackTrace, STACKTRACE_SIZE, skip);
 
 	Log_printCapturedStackTrace(alloc, stackTrace, lvl, options);
 }

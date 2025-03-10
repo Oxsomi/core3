@@ -133,7 +133,7 @@ Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 
 				if(tb.single.stackTrace.stackTrace[0])
 					Log_printCapturedStackTraceCustomx(
-						tb.single.stackTrace.stackTrace,
+						(const void**) tb.single.stackTrace.stackTrace,
 						sizeof(tb.single.stackTrace) / sizeof(void*),
 						ELogLevel_Warn,
 						ELogOptions_None
@@ -934,7 +934,7 @@ Bool DescriptorTableRef_setDescriptors(
 	//Capture stackTrace
 
 	DescriptorStackTrace stack;
-	Log_captureStackTracex(stack.stackTrace, sizeof(DescriptorStackTrace) / sizeof(void*), 1);
+	Error_captureStackTrace(stack.stackTrace, (U8)(sizeof(DescriptorStackTrace) / sizeof(void*)), 1);
 
 	//Lock descriptor and check if descriptor is the same
 
@@ -959,7 +959,7 @@ Bool DescriptorTableRef_setDescriptors(
 			else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
 				single.buffer = binding->multiple.buffers.ptr[j];
 
-			if (!Descriptor_eq(darr.ptr[j - arrayId], binding->single, type)) {
+			if (!Descriptor_eq(darr.ptr[j - arrayId], single, type)) {
 				allEq = false;
 				break;
 			}
@@ -1283,17 +1283,18 @@ Bool DescriptorTableRef_findBindlessRegister(
 
 			} else if(bind.registerType & ESHRegisterType_IsWrite) {
 				
-				ESHTexturePrimitive targPrim = bind.textureFormat.primitive;
+				ESHTexturePrimitive targPrim = bind.textureFormat.primitive & ESHTexturePrimitive_TypeMask;
 				ESHTexturePrimitive prim = ESHTexturePrimitive_fromTextureFormat(ETextureFormatId_unpack[formatId]) & ESHTexturePrimitive_TypeMask;
 				Bool compatible = false;
 
 				switch (targPrim) {
 
-					case ETexturePrimitive_Float:
+					case ESHTexturePrimitive_Float:
+					case ESHTexturePrimitive_Double:
 
 						compatible =
-							prim == ETexturePrimitive_Float ||
-							prim == ETexturePrimitive_SNorm || prim == ETexturePrimitive_UNorm;
+							prim == ESHTexturePrimitive_Float || prim == ESHTexturePrimitive_Double ||
+							prim == ESHTexturePrimitive_SNorm || prim == ESHTexturePrimitive_UNorm;
 
 						break;
 

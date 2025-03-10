@@ -30,7 +30,8 @@
 TListImpl(D3D12_DESCRIPTOR_RANGE)
 TListImpl(D3D12_DESCRIPTOR_RANGE1)
 
-Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout) {
+Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
+	(void) alloc;
 	DxDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Dx);
 	ListU32_freex(&layoutExt->bindingOffsets);
 	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesResources);

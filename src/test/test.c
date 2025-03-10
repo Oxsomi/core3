@@ -57,13 +57,6 @@ Bool ourFree(void *allocator, Buffer buf) {
 	return true;
 }
 
-//Required to compile
-
-void Error_fillStackTrace(Error *err) {
-	if(err)
-		err->stackTrace[0] = NULL;
-}
-
 //#define STRICT_VALIDATION
 
 #ifdef STRICT_VALIDATION

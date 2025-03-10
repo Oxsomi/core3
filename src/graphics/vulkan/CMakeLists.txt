@@ -97,5 +97,3 @@ else()
 	target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
 endif()
 
-target_link_libraries(OxC3_graphics_target INTERFACE ${TARGET_NAME})
-

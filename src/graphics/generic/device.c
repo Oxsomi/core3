@@ -215,6 +215,37 @@ clean:
 	return s_uccess;
 }
 
+typedef enum EDescriptorTypeCount {
+
+	EDescriptorTypeCount_Texture2D			= 131072,
+	EDescriptorTypeCount_TextureCube		= 32768,
+	EDescriptorTypeCount_Texture3D			= 32768,
+
+	EDescriptorTypeCount_Buffer				= 131072,
+	EDescriptorTypeCount_RWBuffer			= 131072,
+
+	EDescriptorTypeCount_RWTexture3D		= 32768,
+	EDescriptorTypeCount_RWTexture3Di		= 8192,
+	EDescriptorTypeCount_RWTexture3Du		= 8192,
+	EDescriptorTypeCount_RWTexture2D		= 131072,
+	EDescriptorTypeCount_RWTexture2Di		= 16384,
+	EDescriptorTypeCount_RWTexture2Du		= 16384,
+
+	EDescriptorTypeCount_Sampler			= 2048,
+	EDescriptorTypeCount_TLASExt			= 16,
+
+	EDescriptorTypeCount_Buffers =
+		EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer,
+
+	EDescriptorTypeCount_TexturesRead =
+		EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,
+
+	EDescriptorTypeCount_TexturesRW =
+		EDescriptorTypeCount_RWTexture2D + EDescriptorTypeCount_RWTexture2Du + EDescriptorTypeCount_RWTexture2Di +
+		EDescriptorTypeCount_RWTexture3D + EDescriptorTypeCount_RWTexture3Du + EDescriptorTypeCount_RWTexture3Di
+
+} EDescriptorTypeCount;
+
 Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
@@ -300,37 +331,6 @@ Error GraphicsDeviceRef_create(
 
 	//Create default descriptor heaps
 	//TODO: Allow user to define these
-
-	typedef enum EDescriptorTypeCount {
-
-		EDescriptorTypeCount_Texture2D			= 131072,
-		EDescriptorTypeCount_TextureCube		= 32768,
-		EDescriptorTypeCount_Texture3D			= 32768,
-
-		EDescriptorTypeCount_Buffer				= 131072,
-		EDescriptorTypeCount_RWBuffer			= 131072,
-
-		EDescriptorTypeCount_RWTexture3D		= 32768,
-		EDescriptorTypeCount_RWTexture3Di		= 8192,
-		EDescriptorTypeCount_RWTexture3Du		= 8192,
-		EDescriptorTypeCount_RWTexture2D		= 131072,
-		EDescriptorTypeCount_RWTexture2Di		= 16384,
-		EDescriptorTypeCount_RWTexture2Du		= 16384,
-
-		EDescriptorTypeCount_Sampler			= 2048,
-		EDescriptorTypeCount_TLASExt			= 16,
-
-		EDescriptorTypeCount_Buffers =
-			EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer,
-
-		EDescriptorTypeCount_TexturesRead =
-			EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,
-
-		EDescriptorTypeCount_TexturesRW =
-			EDescriptorTypeCount_RWTexture2D + EDescriptorTypeCount_RWTexture2Du + EDescriptorTypeCount_RWTexture2Di +
-			EDescriptorTypeCount_RWTexture3D + EDescriptorTypeCount_RWTexture3Du + EDescriptorTypeCount_RWTexture3Di
-
-	} EDescriptorTypeCount;
 	
 	CharString name = CharString_createRefCStrConst("Default heap");
 

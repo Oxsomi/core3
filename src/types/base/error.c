@@ -54,6 +54,14 @@ const C8 *EGenericError_TO_STRING[] = {
 	"Std error"
 };
 
+void Error_fillStackTrace(Error *err) {
+
+	//Skip Error_fillStackTrace (skip=1), Error_x (skip=2)
+
+	if(err)
+		Error_captureStackTrace(err->stackTrace, ERROR_STACKTRACE, 2);
+}
+
 Error Error_platformError(U32 subId, U64 platformError, const C8 *errorStr) {
 	Error_base(
 		.genericError = EGenericError_PlatformError, .errorSubId = subId, .paramValue0 = platformError, .errorStr = errorStr

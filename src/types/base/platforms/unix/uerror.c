@@ -18,16 +18,32 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/buffer.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/log.h"
-#include "platforms/platform.h"
+#include "types/base/error.h"
 
-void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
-	Error_print(Platform_instance->alloc, err, logLevel, options);
-}
+#if _PLATFORM_TYPE != PLATFORM_ANDROID
 
-void Error_printLnx(Error err) {
-	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-}
+    #include <execinfo.h>
+
+    void Error_captureStackTrace(void **stack, U8 stackSize, U8 skipTmp) {
+
+        if(!stack || !stackSize)
+            return;
+
+        void *tmpStack[128];
+        I32 count = backtrace(tmpStack, 128);
+
+        if(count <= 0 || ((U64)stackSize + skipTmp + 1) > 128) {
+            stack[0] = NULL;
+            return;
+        }
+
+        U64 j = (U64)skipTmp + 1;
+
+        for(U64 i = j; i < 128 && i < (U32) count && i < j + stackSize; ++i)
+            stack[i - j] = tmpStack[i];
+
+        if(count - j < stackSize)
+            stack[count - j] = NULL;
+    }
+
+#endif

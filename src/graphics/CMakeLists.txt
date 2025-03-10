@@ -68,8 +68,6 @@ add_virtual_files(
 
 source_group("Shaders" FILES ${shaders})
 
-add_library(OxC3_graphics_target INTERFACE)
-
 if(graphicsAllowVk)
 	add_subdirectory(vulkan)
 endif()

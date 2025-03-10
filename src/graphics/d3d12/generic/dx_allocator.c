@@ -196,7 +196,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	gotoIfError(clean, AllocationBuffer_createx(realBlockSize, true, 0, &block.allocations))
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
-		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
+		Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 	//Find a spot in the blocks list
 
