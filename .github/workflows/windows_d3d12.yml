@@ -7,7 +7,7 @@ jobs:
     name: Windows build d3d12
     runs-on: windows-2022
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Install Conan

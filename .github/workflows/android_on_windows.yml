@@ -11,7 +11,7 @@ jobs:
       ANDROID_SDK: C:\Android\android-sdk
       ANDROID_NDK: C:\Android\android-sdk\ndk\28.0.12674087
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
     - uses: seanmiddleditch/gha-setup-ninja@master
