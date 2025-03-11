@@ -44,6 +44,8 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 	C8 exeName[1024];
 	I32 fd = -1;
+	const C8 *ptr = NULL;
+	U64 fileSize = 0;
 	I32 exeNameLen = readlink("/proc/self/exe", exeName, sizeof(exeName) - 1);
 
 	if(exeNameLen < 0)
@@ -84,17 +86,19 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 	//Grab file data
 
-	U64 fileSize = lseek(fd, 0, SEEK_END);
-	const U8 *ptr = (const U8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
+	fileSize = lseek(fd, 0, SEEK_END);
+	ptr = (const U8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
 	if(ptr == (const U8*) MAP_FAILED)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
 
+	//Read sections
+
+	Bool anySection = false;
+
 	const Elf64_Ehdr *elf = (const Elf64_Ehdr*) ptr;
 	const Elf64_Shdr *shdr = (const Elf64_Shdr*) (ptr + elf->e_shoff);
 	const C8 *strings = (const C8*) (ptr + shdr[elf->e_shstrndx].sh_offset);
-
-	Bool anySection = false;
 
 	for(U64 i = 0; i < elf->e_shnum; ++i) {
 
@@ -123,8 +127,11 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	//This doesn't keep anything in memory, until we actually load the sections.
 
 	if(anySection) {
-		Platform_instance->data = (void*) (((U32)fd) | ((U64)1 << 32));
+		Platform_instance->data = (void*) (U32) fd;
+		Platform_instance->data1 = ptr;
+		Platform_instance->size1 = fileSize;
 		fd = -1;
+		ptr = NULL;
 	}
 
 clean:
@@ -132,16 +139,18 @@ clean:
 	if(fd >= 0)
 		close(fd);
 
+	if(ptr)
+		munmap(ptr, size);
+
 	CharString_freex(&tmpStr);
 	return s_uccess;
 }
 
 void Platform_cleanupUnixExt() {
-
-	U64 fd = (U64) Platform_instance->data;
-
-	if(fd >> 32)
-		close((I32)(U32) fd);
+	if(Platform_instance->data1) {
+		munmap(Platform_instance->data1, Platform_instance->size1);
+		close((I32)(U32) Platform_instance->data);
+	}
 }
 
 CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {

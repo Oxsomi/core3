@@ -51,14 +51,15 @@ _Unwind_Reason_Code unwindCallback(struct _Unwind_Context *context, Backtrace *s
 
 void Error_captureStackTrace(void **stack, U8 stackSize, U8 skipTmp) {
 
+    if(!stack || !stackSize) {
+        return;
+	}
+
 	Backtrace backtrace = (Backtrace) {
         .current = stack,
         .end = stack + stackSize,
         .skip = (U64) skipTmp + 1
     };
-
-    if(!stack || !stackSize)
-        return;
     
 	_Unwind_Backtrace((_Unwind_Trace_Fn)unwindCallback, &backtrace);
 

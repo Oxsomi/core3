@@ -26,6 +26,9 @@
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
 
+#include <fcntl.h>
+#include <mach-o/loader.h>
+
 //Port of https://github.com/CodaFi/C-Macs/blob/master/CMacs/AppDelegate.c
 //Platform is the one that holds the NSApp, since there can only be done.
 
@@ -50,9 +53,15 @@ SEL EObjCFunc_obj[(int)EObjCFunc_Count];
 
 Bool Platform_initUnixExt(Error *e_rr) {
 
+	//Get exe name
+
 	Bool s_uccess = true;
 	C8 exeName[256];
 	U32 exeNameLen = 255;
+	CharString tmpStr = CharString_createNull();
+	I32 fd = -1;
+	const C8 *ptr = NULL;
+	U64 fileSize = 0;
 
   	if (_NSGetExecutablePath(exeName, &exeNameLen) != 0)
 		retError(clean2, Error_invalidState(0, "Platform_initUnixExt() exePath exceeds maximum"))
@@ -76,7 +85,69 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		CharString_createRefSizedConst(exeName, exeNameLen, true), &Platform_instance->appDirectory
 	))
 
+	//Try to open the main executable within 1s, if it fails we can't init
+
+	U64 i = 0;
+
+	for(; i < 1000 && (fd = open(exeName, O_RDONLY)) < 0; ++i) {
+
+		if(errno != EINTR)
+			retError(clean, Error_stderr(0, "Platform_initUnixExt() open failed on executable"))
+
+		Thread_sleep(MS);
+	}
+
+	if(i == 1000)
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"))
+
+	//Grab file data
+
+	fileSize = lseek(fd, 0, SEEK_END);
+	ptr = (const U8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
+
+	if(ptr == (const U8*) MAP_FAILED)
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
+
+	//Read sections
+
+	Bool anySection = false;
+	struct load_command *lc = (struct load_command*)((C8*)ptr + sizeof(struct mach_header_64));
+
+	for (U32 i = 0; i < header->ncmds; i++) {
+
+        if (lc->cmd == LC_SEGMENT_64) {
+
+            struct segment_command_64 *seg = (struct segment_command_64*)lc;
+            struct section_64 *sec = (struct section_64*)((C8*)seg + sizeof(struct segment_command_64));
+
+            for (U32 j = 0; j < seg->nsects; j++)
+                Log_debugLnx("[%2u] %s (Segment: %s)\n", j, sec[j].sectname, seg->segname);
+        }
+
+        lc = (struct load_command*)((C8*)lc + lc->cmdsize);
+    }
+
+	//Keep file open until end of program.
+	//Unless there's no need (when there's no sections present).
+	//This doesn't keep anything in memory, until we actually load the sections.
+
+	if(anySection) {
+		Platform_instance->data = (void*) (U32) fd;
+		Platform_instance->data1 = ptr;
+		Platform_instance->size1 = fileSize;
+		fd = -1;
+		ptr = NULL;
+	}
+
 clean2:
+
+	if(fd >= 0)
+		close(fd);
+
+	if(ptr)
+		munmap(ptr, fileSize);
+
+	CharString_freex(&tmpStr);
 	return s_uccess;
 
 	//TODO:
@@ -178,4 +249,9 @@ clean:
 	return s_uccess;
 }
 
-void Platform_cleanupUnixExt() { }
+void Platform_cleanupUnixExt() {
+	if(Platform_instance->data1) {
+		munmap(Platform_instance->data1, Platform_instance->size1);
+		close((I32)(U32) Platform_instance->data);
+	}
+}

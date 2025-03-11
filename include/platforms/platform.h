@@ -49,7 +49,9 @@ TList(VirtualSection);
 typedef struct Platform {
 
 	EPlatform platformType;
-	U32 pad0;
+
+	Bool useWorkingDir;		//TODO: Find a better solution for this for dlls
+	U8 pad1[3];
 
 	ListCharString args;
 	CharString defaultDir;				//Either workDir or appDir based on 'useWorkingDir'
@@ -63,8 +65,8 @@ typedef struct Platform {
 
 	void *data;
 
-	Bool useWorkingDir;		//TODO: Find a better solution for this for dlls
-	U8 pad1[3];
+	void *data1;						//If present can contain the executable file
+	U64 size1;
 
 } Platform;
 

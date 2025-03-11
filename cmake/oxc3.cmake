@@ -9,7 +9,7 @@ function(configure_icon target icon)
 
 	if(WIN32)
 		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST_RC)
-		set_property(TARGET ${target} PROPERTY RESOURCE_LIST LOGO\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ICON\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${icon}\"\n${res})
+		set_property(TARGET ${target} PROPERTY RESOURCE_LIST_RC LOGO\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ICON\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${icon}\"\n${res})
 		target_sources(${target} PRIVATE ${icon})
 	endif()
 
@@ -77,7 +77,12 @@ function(apply_dependencies target)
 		if(WIN32)
 			get_property(res2 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC)
 			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${file}\"\n${res2})
-		elseif(UNIX AND NOT APPLE AND NOT ANDROID)
+		elseif(APPLE)
+			add_custom_command(
+				TARGET ${_ARGS_TARGET} POST_BUILD
+				COMMAND llvm-objcopy --add-section "packages/${RELATIVE_PATH}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+			)
+		elseif(UNIX AND NOT ANDROID)
 			add_custom_command(
 				TARGET ${_ARGS_TARGET} POST_BUILD
 				COMMAND objcopy --add-section "packages/${RELATIVE_PATH}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
