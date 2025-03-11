@@ -11,7 +11,7 @@ jobs:
       with:
         submodules: recursive
     - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.1.1
+      uses: humbletim/install-vulkan-sdk@main
       with:
         cache: true
     - name: Install Conan
@@ -40,6 +40,9 @@ jobs:
         path: ~/.conan2/p
         key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
     - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: true
     - name: Send Webhook Notification
       if: always()
       env:
