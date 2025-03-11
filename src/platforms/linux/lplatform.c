@@ -44,7 +44,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 	C8 exeName[1024];
 	I32 fd = -1;
-	const C8 *ptr = NULL;
+	C8 *ptr = NULL;
 	U64 fileSize = 0;
 	I32 exeNameLen = readlink("/proc/self/exe", exeName, sizeof(exeName) - 1);
 
@@ -87,9 +87,9 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	//Grab file data
 
 	fileSize = lseek(fd, 0, SEEK_END);
-	ptr = (const U8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
+	ptr = (C8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
-	if(ptr == (const U8*) MAP_FAILED)
+	if(ptr == (const C8*) MAP_FAILED)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
 
 	//Read sections
@@ -127,7 +127,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	//This doesn't keep anything in memory, until we actually load the sections.
 
 	if(anySection) {
-		Platform_instance->data = (void*) (U32) fd;
+		Platform_instance->data = (void*) (U64) fd;
 		Platform_instance->data1 = ptr;
 		Platform_instance->size1 = fileSize;
 		fd = -1;
@@ -149,7 +149,7 @@ clean:
 void Platform_cleanupUnixExt() {
 	if(Platform_instance->data1) {
 		munmap(Platform_instance->data1, Platform_instance->size1);
-		close((I32)(U32) Platform_instance->data);
+		close((I32)(U64) Platform_instance->data);
 	}
 }
 

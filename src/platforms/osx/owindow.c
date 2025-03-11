@@ -32,14 +32,6 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "types/base/time.h"
-#include "platforms/osx/objective_c.h"
-
-//Adaptation of
-// Official apple documentation
-// And https://gist.github.com/hasenj/1bba3ca00af1a3c0b2035c9bd14a85ef
-// And https://github.com/CodaFi/C-Macs/blob/master/CMacs/CMacsTypes.h
-
-extern id NSApp;
 
 Error OWindow_initSize(Window *w, I32x2 size) { (void)w; (void)size; return Error_none(); }
 
@@ -829,14 +821,14 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"))
 
-	CharString copy = CharString_createNull();
-	id wrapped;
-	gotoIfError2(clean, ObjC_wrapString(title, &copy, &wrapped))
+	//CharString copy = CharString_createNull();
+	//id wrapped;
+	//gotoIfError2(clean, ObjC_wrapString(title, &copy, &wrapped))
 
-	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle(), wrapped);
+	//ObjC_sendVoidPtr(w->nativeHandle, selSetTitle(), wrapped);		TODO:
 
 clean:
-	CharString_freex(&copy);
+	//CharString_freex(&copy);
 	return s_uccess;
 }
 
@@ -856,7 +848,7 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
 	else w->flags &= ~EWindowFlags_IsFullscreen;
 
-	ObjC_sendId((id)w->nativeHandle, selToggleFullScreen());
+	//ObjC_sendId((id)w->nativeHandle, selToggleFullScreen());		TODO:
 
 clean:
 	return s_uccess;

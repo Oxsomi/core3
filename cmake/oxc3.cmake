@@ -56,8 +56,6 @@ function(apply_dependencies target)
 
 	foreach(file ${res})
 
-		message("Package file: ${file}")
-
 		string(REPLACE "\\" "/" file "${file}")
 
 		string(FIND "${file}" "packages/" PACKAGE_POS)
@@ -66,12 +64,32 @@ function(apply_dependencies target)
 
 		string(REGEX REPLACE "\\.oiCA$" "" RELATIVE_PATH "${FINAL_RESULT}")
 
+		string(REPLACE "/" ";" PARTS ${RELATIVE_PATH})
+		list(LENGTH PARTS PART_COUNT)
+
+		if(NOT PART_COUNT EQUAL 2)
+			message(FATAL_ERROR "Package file is expected to be packages/target/file")
+		endif()
+
+		foreach(PART IN LISTS PARTS)
+
+			string(LENGTH "${PART}" PART_LEN)
+
+			if(PART_LEN GREATER 15)
+				message(FATAL_ERROR "Package name and target name is limited to 15 characters")
+			endif()
+
+		endforeach()
+
+		list(GET PARTS 0 TARGET_OF_PACKAGE)
+		list(GET PARTS 1 PACKAGE_NAME)
+
 		# Differences in packaging:
 		# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
 		# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
 		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
 		# iOS has IPA which is the same idea as APK.
-		# OS X has llvm-objcopy.
+		# OS X we will manually link the section into it too.
 		# web/emscripten has a virtual filesystem.
 		
 		if(WIN32)
@@ -80,7 +98,7 @@ function(apply_dependencies target)
 		elseif(APPLE)
 			add_custom_command(
 				TARGET ${_ARGS_TARGET} POST_BUILD
-				COMMAND llvm-objcopy --add-section "packages/${RELATIVE_PATH}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+				COMMAND llvm-objcopy --add-section "@${TARGET_OF_PACKAGE},${PACKAGE_NAME}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
 			)
 		elseif(UNIX AND NOT ANDROID)
 			add_custom_command(
