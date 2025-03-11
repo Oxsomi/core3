@@ -56,11 +56,13 @@ function(apply_dependencies target)
 
 	foreach(file ${res})
 
+		message("Package file: ${file}")
+
+		string(REPLACE "\\" "/" file "${file}")
+
 		string(FIND "${file}" "packages/" PACKAGE_POS)
 		string(SUBSTRING "${file}" ${PACKAGE_POS} -1 RESULT)
 		string(SUBSTRING "${RESULT}" 9 -1 FINAL_RESULT)
-
-		string(REPLACE "\\" "/" FINAL_RESULT "${FINAL_RESULT}")
 
 		string(REGEX REPLACE "\\.oiCA$" "" RELATIVE_PATH "${FINAL_RESULT}")
 

@@ -508,7 +508,7 @@ Bool Descriptor_eq(Descriptor a, DescriptorTableBindingSingle b, ESHRegisterType
 	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 		return a.data[0] == b.data[0];
 
-	else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+	else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
 		return Buffer_eq(
 			Buffer_createRefConst(a.data, sizeof(U64) * 3),
 			Buffer_createRefConst(b.data, sizeof(U64) * 3)
@@ -956,7 +956,7 @@ Bool DescriptorTableRef_setDescriptors(
 			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 				single.texture = binding->multiple.textures.ptr[j];
 
-			else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+			else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
 				single.buffer = binding->multiple.buffers.ptr[j];
 
 			if (!Descriptor_eq(darr.ptr[j - arrayId], single, type)) {
@@ -1025,7 +1025,7 @@ Bool DescriptorTableRef_setDescriptors(
 			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 				binding->multiple.textures.ptrNonConst[j] = darr.ptr[j - arrayId].texture;
 
-			else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+			else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
 				binding->multiple.buffers.ptrNonConst[j] = darr.ptr[j - arrayId].buffer;
 		}
 
@@ -1038,7 +1038,7 @@ Bool DescriptorTableRef_setDescriptors(
 		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
 			binding->single.texture = darr.ptr[0].texture;
 
-		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferStart)
+		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
 			binding->single.buffer = darr.ptr[0].buffer;
 	}
 
