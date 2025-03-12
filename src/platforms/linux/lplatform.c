@@ -140,7 +140,7 @@ clean:
 		close(fd);
 
 	if(ptr)
-		munmap(ptr, size);
+		munmap(ptr, fileSize);
 
 	CharString_freex(&tmpStr);
 	return s_uccess;
