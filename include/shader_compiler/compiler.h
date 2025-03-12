@@ -271,12 +271,7 @@ Bool Compiler_compile(
 
 //Extra warnings useful for debugging purposes and optimization.
 
-typedef enum ECompilerWarning {
-	ECompilerWarning_None				= 0,
-	ECompilerWarning_UnusedRegisters	= 1 << 0,
-	ECompilerWarning_UnusedConstants	= 1 << 1,
-	ECompilerWarning_BufferPadding		= 1 << 2
-} ECompilerWarning;
+typedef enum ECompilerWarning ECompilerWarning;
 
 Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocator alloc, Error *e_rr);
 

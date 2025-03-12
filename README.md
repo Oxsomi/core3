@@ -1,4 +1,4 @@
-# OxC3 (Oxsomi core 3.2.096)
+# OxC3 (Oxsomi core 3.2.097)
 | Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | x64 dynamic (Vk + Native)                                    | ARM -> Vulkan                                                | ARM -> Native API  | ARM dynamic (Vk + Native)                                    |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------ | ------------------------------------------------------------ |
 | Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **?**                                                        | **D3D12**: **?**   | **?**                                                        |
@@ -7,32 +7,33 @@
 | Android   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A                                                          | N/A, no dynamic linking                                      | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A                | N/A, no dynamic linking                                      |
 | iOS       | **TBD**                                                      | **Metal**: **TBD**                                           | N/A, no dynamic linking                                      | **TBD**                                                      | **Metal**: **TBD** | N/A, no dynamic linking                                      |
 
-OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
+OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
-- OxC3_types
+- OxC3_types (base, math, container)
   - The basic types that you might need and useful utilities.
   - Archive for managing zip-file like entries.
   - 16-bit float casts and arbitrary floating point formats.
+  - Fixed point.
   - 128-bit and bigger unsigned ints (U128 and BigInt).
   - AllocationBuffer for managing block allocations.
   - Buffer manipulation such as compares, copies, bit manipulation,
     - Encryption (aes256gcm), hashing (sha256, crc32c, md5), cryptographically secure random (CSPRNG).
-    - Buffer layouts for manipulating buffers using struct metadata and a path.
   - GenericList, CharString, TList (Makes Lists such as ListCharString, ListU32, etc.) and CDFList.
   - Error type including stacktrace option.
   - Time utility.
   - Vectors (mathematical) such as F32x2, F32x4, I32x2, I32x4.
   - SpinLock, Atomics and Thread for multi threading purposes.
   - Log for colored and proper cross platform logging.
+  - Very simple parser and tokenizer.
   - For more info check the [documentation](docs/types.md).
 - OxC3_formats
-  - A library for reading/writing files. Currently only for BMP, DDS and oiCA/oiDL (proprietary zip-style formats) and oiSH (wrapping compiled shaders into one for use in different graphics APIs).
+  - A library for reading/writing files. Currently only for BMP, DDS, WAV and oiCA/oiDL (proprietary zip-style formats), oiSB (shader buffer reflection) and oiSH (wrapping compiled shaders into one for use in different graphics APIs).
   - For more info check the [documentation](docs/formats.md).
 - OxC3_platforms
   - For everything that's platform dependent (excluding some exceptions for OxC3_types).
   - Helpers for default allocator to simplify OxC3_types functions that require allocators.
   - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
-  - Virtual file system; for accessing files included into the exe, apk, etc. Which are built through CMake.
+  - Virtual file system; for accessing files included into the exe, apk, etc. Which are built through CMake and conan.
   - Input devices: multiple mice and keyboards.
   - Window for physical (OS-backed) and virtual (in memory) windows.
   - Allocator that detects memory leaks, free without alloc (or double free) and allocation stacktraces.
@@ -42,7 +43,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Ability to create both D3D12 and Vulkan context side-by-side to allow switching API at runtime and/or better support for existing applications which might determine that at runtime.
   - For more info check the [documentation](docs/graphics_api.md).
 - OxC3_shader_compiler
-  - Abstraction layer around DXC to make it possible to statically link, execute on other platforms and sign DXIL even on non Windows PCs. This also allows being able to find symbols in shaders, preprocess files (transform to without includes + defines) and output include info. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
+  - Abstraction layer around DXC to make it possible to statically link, execute on all target platforms and to have more reflection data. This also allows being able to find symbols in shaders, preprocess files (transform to without includes + defines) and output include info. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
 - OxC3(CLI)
   - Command line tool that exposes useful functions from OxC3.
   - File manipulation:
@@ -52,7 +53,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Hash tool for files and strings (supporting sha256, crc32c, md5).
   - Random key, char, data and number generator.
   - Profile tool for testing speed of float casts, csprng, crc32c, sha256, md5 and aes256 (encryption and decryption).
-  - Shader preprocessing, viewing includes, viewing symbols, multi threaded compilation to DXIL/SPIRV and reflection (TBD).
+  - Shader preprocessing, viewing includes, viewing symbols and multi threaded compilation to DXIL/SPIRV.
   - Iterating graphics devices (Vulkan or Direct3D12).
   - For more info check the [documentation](docs/OxC3_tool.md).
 
@@ -67,20 +68,21 @@ One of the useful things about C is that files are incredibly easy to compile an
 - C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used to interface with some deps not using C such as DXC.
 - **OSX**:
   - If using Vulkan SDK, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1 if you need bindless rendering. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
+  - llvm-objcopy for example via `brew install llvm`.
 - **Android**:
   - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.
   - For Windows; msys2 or Ninja can be used to target android.
   - *Optional*: JDK for creation of a keystore if one can not be provided.
   - *Optional*: For debug build, Ninja is required on Windows since the Vulkan validation layers require it.
-  - For running, at least Android 10 (level 29) is required, due to Vulkan 1.3 being at that level.
+  - For running, at least Android 10 (level 29) is required, due to Vulkan 1.1 being at that level.
 
 ## Running requirements
 
 - Platforms:
   - Windows (**full** support).
-  - Linux (**partial** support: buggy window implementation).
-  - OS X (**partial** support: no virtual files, nor window support).
-  - Android (**partial** support: no window implementation yet).
+  - Linux (**partial** support: buggy window implementation, no input).
+  - OS X (**partial** support: no window support or input).
+  - Android (**okay** support: close to full support, missing render passes and bindful).
 - Instruction sets:
   - arm64: **partial** support: no NEON yet.
   - x64: **partial** support: Fully supported on windows, but SSE doesn't work elsewhere yet.
@@ -162,7 +164,7 @@ For window support, Wayland is used (along with wayland-scanner to generate the 
 
 ### Other platforms
 
-Other platforms like Android and iOS are coming in the future.
+Other platforms like iOS are coming in the future.
 
 ## Graphics
 
@@ -174,7 +176,7 @@ To be able to create a graphics device, you are required to provide the OxC3_gra
 
 ```cmake
 # Optional: configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-add_virtual_dependencies(TARGET Target DEPENDENCIES OxC3_graphics)
+add_virtual_dependencies_external(TARGET Target DEPENDENCIES OxC3)
 apply_dependencies(Target)
 ```
 

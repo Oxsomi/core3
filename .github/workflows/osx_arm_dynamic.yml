@@ -21,6 +21,11 @@ jobs:
     - name: Install Conan
       id: conan
       uses: turtlebrowser/get-conan@main
+    - name: Set up Homebrew
+      id: set-up-homebrew
+      uses: Homebrew/actions/setup-homebrew@master
+    - name: Ensure we can run llvm-objcopy
+      run: brew install llvm
     - name: Configure conan
       run: conan profile detect
     - name: Restore cached
