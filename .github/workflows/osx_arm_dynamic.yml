@@ -26,10 +26,10 @@ jobs:
     - name: Set up Homebrew
       id: set-up-homebrew
       uses: Homebrew/actions/setup-homebrew@master
-    - name: Ensure we can run llvm-objcopy
-      run: brew install llvm
-    - name: Add llvm-objcopy to path
-      run: echo 'export PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> /Users/runner/.bash_profile
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: "10.0"
     - name: Restore cached
       id: cache-restore
       uses: actions/cache/restore@v4

@@ -23,9 +23,8 @@ add_subdirectory(platforms)
 
 if(EnableShaderCompiler)
 	add_subdirectory(shader_compiler)
+	add_subdirectory(tools/package_cli)		# OxC3_graphics uses the packager
 endif()
-
-add_subdirectory(tools/package_cli)		# OxC3_graphics uses the packager
 
 add_subdirectory(graphics)
 add_subdirectory(audio)
