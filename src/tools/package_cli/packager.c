@@ -26,6 +26,7 @@
 #include "types/container/buffer.h"
 #include "types/container/archive.h"
 #include "formats/oiCA/ca_file.h"
+#include "formats/oiSH/sh_file.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/platform.h"
