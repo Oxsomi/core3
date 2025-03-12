@@ -27,7 +27,7 @@ jobs:
     - name: Ensure we can run llvm-objcopy
       run: brew install llvm
     - name: Add llvm-objcopy to path
-      run: export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+      run: echo 'export PATH="/opt/homebrew/opt/llvm/bin:$PATH"' >> /Users/runner/.bash_profile
     - name: Configure conan
       run: conan profile detect
     - name: Restore cached

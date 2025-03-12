@@ -32,6 +32,7 @@
 Platform_defineEntrypoint() {
 
 	int status = 0;
+	(void) status;
 	Error err = Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true);
 
 	if(err.genericError)		//Can't print
