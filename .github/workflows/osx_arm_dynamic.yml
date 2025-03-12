@@ -28,6 +28,8 @@ jobs:
       uses: Homebrew/actions/setup-homebrew@master
     - name: Ensure we can run llvm-objcopy
       run: brew install llvm
+    - name: Add llvm-objcopy to path
+      run: export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
     - name: Restore cached
       id: cache-restore
       uses: actions/cache/restore@v4

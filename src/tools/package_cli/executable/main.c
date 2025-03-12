@@ -22,6 +22,7 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
+#include "formats/oiSH/sh_file.h"
 #include "tools/package_cli/packager.h"
 
 #ifdef CLI_SHADER_COMPILER
