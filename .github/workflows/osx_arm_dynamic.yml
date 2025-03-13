@@ -26,10 +26,10 @@ jobs:
     - name: Set up Homebrew
       id: set-up-homebrew
       uses: Homebrew/actions/setup-homebrew@master
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v2
+    - name: Setup LLVM
+      uses: ZhongRuoyu/setup-llvm@v0
       with:
-        version: "10.0"
+        llvm-version: 17
     - name: Restore cached
       id: cache-restore
       uses: actions/cache/restore@v4
