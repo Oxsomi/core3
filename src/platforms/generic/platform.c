@@ -312,7 +312,11 @@ TListImpl(VirtualSection);
 
 Platform *Platform_instance = 0, platformInstance = { 0 };
 
+#include <stdio.h>
+
 Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir) {
+
+	printf("CPU support check\n");
 
 	const Bool isSupported = Platform_checkCPUSupport();
 
@@ -323,8 +327,12 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 			"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
 		);
 
+	printf("Platform_instance check\n");
+
 	if(Platform_instance)
 		return Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
+
+	printf("CmdArgc check\n");
 
 	if(cmdArgc && !cmdArgs)
 		return Error_invalidParameter(
@@ -372,6 +380,8 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	ListCharString sl = (ListCharString) { 0 };
 
 	if(cmdArgc > 1) {
+		
+		printf("Create list char strng\n");
 
 		gotoIfError(clean, ListCharString_createx(cmdArgc - 1, &sl));
 
@@ -384,6 +394,8 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 	Platform_instance->args = sl;
 	Platform_instance->useWorkingDir = useWorkingDir;
+		
+	printf("Create platform ext\n");
 
 	if(!Platform_initExt(&err))
 		goto clean;
