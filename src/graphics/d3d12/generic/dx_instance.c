@@ -323,6 +323,52 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&tempInfos, adapters.length))
 
+	//Pre-filter, this removes duplicate devices that get generated because of virtual displays (RDP).
+	//The reason why we want to filter this:
+	//	Even though this is a valid D3D12 device, the LUID is not real.
+	//	This would mean no other device can interop if it were to be selected (CUDA, Vulkan, etc.).
+	//	It shows as multiple devices, which might give the indication of having multiple physical devices
+	//		(e.g. 2 of the same GPU).
+
+	for(U64 i = 0; i < adapters.length; ++i) {
+
+		DXGI_ADAPTER_DESC3 desci = (DXGI_ADAPTER_DESC3) { 0 };
+		gotoIfError(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desci)))
+
+		for(U64 j = 0; j < i; ++j) {
+
+			DXGI_ADAPTER_DESC3 descj = (DXGI_ADAPTER_DESC3) { 0 };
+			gotoIfError(clean, dxCheck(adapters.ptr[j]->lpVtbl->GetDesc3(adapters.ptr[j], &descj)))
+
+			//Duplicate, this is generally a virtual display
+
+			if (desci.DeviceId == descj.DeviceId) {
+
+				Bool isVirtualj =
+					descj.GraphicsPreemptionGranularity == DXGI_GRAPHICS_PREEMPTION_DMA_BUFFER_BOUNDARY &&
+					descj.ComputePreemptionGranularity == DXGI_COMPUTE_PREEMPTION_DMA_BUFFER_BOUNDARY;
+
+				Bool isVirtuali =
+					desci.GraphicsPreemptionGranularity == DXGI_GRAPHICS_PREEMPTION_DMA_BUFFER_BOUNDARY &&
+					desci.ComputePreemptionGranularity == DXGI_COMPUTE_PREEMPTION_DMA_BUFFER_BOUNDARY;
+
+				if (isVirtuali) {
+					adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);
+					ListIDXGIAdapter4_erase(&adapters, i);
+					--i;
+					break;
+				}
+
+				if (isVirtualj) {
+					adapters.ptr[j]->lpVtbl->Release(adapters.ptr[j]);
+					ListIDXGIAdapter4_erase(&adapters, j);
+					--i;
+					break;
+				}
+			}
+		}
+	}
+
 	//Get compatible adapters
 
 	for(U64 i = 0; i < adapters.length; ++i) {
