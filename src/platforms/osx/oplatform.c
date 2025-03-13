@@ -31,13 +31,10 @@
 #include <errno.h>
 #include <sys/mman.h>
 #include <mach-o/loader.h>
-#include <stdio.h>
 
 Bool Platform_initUnixExt(Error *e_rr) {
 
 	//Get exe name
-
-	printf("Get executable path\n");
 
 	Bool s_uccess = true;
 	C8 exeName[256];
@@ -57,7 +54,6 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	for(U64 i = exeNameLen - 1; i != U64_MAX; --i)
 		if(exeName[i] == '/') {
 			containedSlash = true;
-			exeName[i + 1] = '\0';
 			exeNameLen = i + 1;
 			break;
 		}
@@ -65,15 +61,11 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(!containedSlash)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"))
 
-	printf("Get executable path copy\n");
-
-	gotoIfError2(clean, CharString_createCopyx(
-		CharString_createRefSizedConst(exeName, exeNameLen, true), &Platform_instance->appDirectory
-	))
+	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
+	gotoIfError2(clean, CharString_createCopyx(appDir, &Platform_instance->appDirectory))
 
 	//Try to open the main executable within 1s, if it fails we can't init
 
-	printf("Open file: %s\n", exeName);
 	U64 i = 0;
 
 	for(; i < 1000 && (fd = open(exeName, O_RDONLY)) < 0; ++i) {
@@ -88,8 +80,6 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"))
 
 	//Grab file data
-
-	printf("Map file\n");
 
 	fileSize = lseek(fd, 0, SEEK_END);
 	ptr = (C8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
@@ -107,8 +97,6 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
         if (lc->cmd == LC_SEGMENT_64) {
 
-			printf("Found segment %"PRIu32"\n", i);
-
             const struct segment_command_64 *seg = (const struct segment_command_64*) lc;
             const struct section_64 *sec = (const struct section_64*)((const C8*)seg + sizeof(struct segment_command_64));
 
@@ -116,8 +104,6 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 				if(seg->segname[0] != '@')		//Packages are marked with @ in front
 					continue;
-
-				printf("Found virtual file %"PRIu32"\n", j);
 
 				gotoIfError2(clean, CharString_formatx(&tmpStr, "%s/%s", seg->segname + 1, sec[j].sectname))
 
