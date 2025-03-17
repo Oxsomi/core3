@@ -40,32 +40,36 @@ R"(
 static const U32 ResourceId_mask = (1 << 17) - 1;
 static const U32 U32_MAX = 0xFFFFFFFFu;
 
+//Even though DXIL bindings could use setId == spaceId and default registerId on 0,
+//It'd be inefficient, because the root signature can't simplify this to 3 ranges.
+
 #ifdef __spirv__
-	#define _binding(a, b, ...) [[vk::binding(a, b)]] __VA_ARGS__
+	#define _binding(bindingId, setId, a, ...) [[vk::binding(bindingId, setId)]] __VA_ARGS__
 	#define _vkBinding(a, b) [[vk::binding(a, b)]]
 #else
-	#define _binding(a, b, ...) __VA_ARGS__ : register(space##a)
+	#define _binding(a, b, registerId, ...) __VA_ARGS__ : register(registerId)
 	#define _vkBinding(a, b)
 #endif
 
-_binding( 0, 0, SamplerState _samplers[2048]);
+_binding( 0, 0, s0, 		SamplerState _samplers[1024]);
 
-_binding( 0, 1, Texture2D _textures2D[131072]);
-_binding( 1, 1, TextureCube _textureCubes[32768]);
-_binding( 2, 1, Texture3D _textures3D[32768]);
+_binding( 0, 1, t0, 		Texture2D _textures2D[131072]);
+_binding( 1, 1, t131072, 	TextureCube _textureCubes[32768]);
+_binding( 2, 1, t163840,	Texture3D _textures3D[32768]);
 
-_binding( 3, 1, ByteAddressBuffer _buffer[131072]);
-_binding( 4, 1, RWByteAddressBuffer _rwBuffer[131072]);
+_binding( 3, 1, t196608, 	ByteAddressBuffer _buffer[131072]);
 
-UNKNOWN_FORMAT _binding( 5, 1, RWTexture3D<F32x4> _rwTextures3D[32768]);
-UNKNOWN_FORMAT _binding( 6, 1, RWTexture3D<I32x4> _rwTextures3Di[8192]);
-UNKNOWN_FORMAT _binding( 7, 1, RWTexture3D<U32x4> _rwTextures3Du[8192]);
-UNKNOWN_FORMAT _binding( 8, 1, RWTexture2D<F32x4> _rwTextures2D[131072]);
-UNKNOWN_FORMAT _binding( 9, 1, RWTexture2D<I32x4> _rwTextures2Di[16384]);
-UNKNOWN_FORMAT _binding(10, 1, RWTexture2D<U32x4> _rwTextures2Du[16384]);
+_binding( 4, 1, u0, 		RWByteAddressBuffer _rwBuffer[131072]);
+
+UNKNOWN_FORMAT _binding( 5, 1, u131072, RWTexture3D<F32x4> _rwTextures3D[32768]);
+UNKNOWN_FORMAT _binding( 6, 1, u163840, RWTexture3D<I32x4> _rwTextures3Di[8192]);
+UNKNOWN_FORMAT _binding( 7, 1, u172032, RWTexture3D<U32x4> _rwTextures3Du[8192]);
+UNKNOWN_FORMAT _binding( 8, 1, u180224, RWTexture2D<F32x4> _rwTextures2D[131072]);
+UNKNOWN_FORMAT _binding( 9, 1, u311296, RWTexture2D<I32x4> _rwTextures2Di[16384]);
+UNKNOWN_FORMAT _binding(10, 1, u327680, RWTexture2D<U32x4> _rwTextures2Du[16384]);
 
 #if defined(__OXC_EXT_RAYQUERY) || defined(__OXC_EXT_RAYTRACING)
-	_binding(11, 1, RaytracingAccelerationStructure _tlasExt[16]);
+	_binding(11, 1, t327680, RaytracingAccelerationStructure _tlasExt[16]);
 #endif
 
 _vkBinding( 0, 2) cbuffer globals {	//Globals used during the entire frame for useful information such as frame id.

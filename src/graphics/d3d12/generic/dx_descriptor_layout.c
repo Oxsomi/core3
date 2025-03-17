@@ -140,10 +140,13 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		DescriptorBinding a = *sortedList.ptr[i - 1].binding;
 		DescriptorBinding b = *sortedList.ptr[i].binding;
 
+		U32 aCount = sortedList.ptr[i - 1].mergedCount ? sortedList.ptr[i - 1].mergedCount : a.count;
+		U32 bCount = sortedList.ptr[i].mergedCount ? sortedList.ptr[i].mergedCount : b.count;
+
 		if(
 			dxGetDescriptorType(a.registerType) != dxGetDescriptorType(b.registerType) ||
 			a.binding.space != b.binding.space ||
-			a.binding.binding + a.count != b.binding.binding ||
+			a.binding.binding + aCount != b.binding.binding ||
 			((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && (a.count > 1) != (b.count > 1))
 		)
 			continue;
@@ -151,7 +154,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		//We've found a match, let's shorten the array and remember how many we merge
 
 		gotoIfError(clean, ListSortingKey_popLocation(&sortedList, i, NULL))
-		sortedList.ptrNonConst[i - 1].mergedCount = a.count + b.count;
+		sortedList.ptrNonConst[i - 1].mergedCount = aCount + bCount;
 	}
 
 	//Create our ranges

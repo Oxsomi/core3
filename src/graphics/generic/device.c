@@ -231,8 +231,26 @@ typedef enum EDescriptorTypeCount {
 	EDescriptorTypeCount_RWTexture2Di		= 16384,
 	EDescriptorTypeCount_RWTexture2Du		= 16384,
 
-	EDescriptorTypeCount_Sampler			= 2048,
+	EDescriptorTypeCount_Sampler			= 1024,
 	EDescriptorTypeCount_TLASExt			= 16,
+
+	//DirectX bindings
+
+	EDescriptorTypeOffset_Texture2D			= 0,
+	EDescriptorTypeOffset_TextureCube		= EDescriptorTypeOffset_Texture2D + EDescriptorTypeCount_Texture2D,
+	EDescriptorTypeOffset_Texture3D			= EDescriptorTypeOffset_TextureCube + EDescriptorTypeCount_TextureCube,
+	EDescriptorTypeOffset_Buffer			= EDescriptorTypeOffset_Texture3D + EDescriptorTypeCount_Texture3D,
+	EDescriptorTypeOffset_TLASExt			= EDescriptorTypeOffset_Buffer + EDescriptorTypeCount_Buffer,
+
+	EDescriptorTypeOffset_RWBuffer			= 0,
+	EDescriptorTypeOffset_RWTexture3D		= EDescriptorTypeOffset_RWBuffer + EDescriptorTypeCount_RWBuffer,
+	EDescriptorTypeOffset_RWTexture3Di		= EDescriptorTypeOffset_RWTexture3D + EDescriptorTypeCount_RWTexture3D,
+	EDescriptorTypeOffset_RWTexture3Du		= EDescriptorTypeOffset_RWTexture3Di + EDescriptorTypeCount_RWTexture3Di,
+	EDescriptorTypeOffset_RWTexture2D		= EDescriptorTypeOffset_RWTexture3Du + EDescriptorTypeCount_RWTexture3Du,
+	EDescriptorTypeOffset_RWTexture2Di		= EDescriptorTypeOffset_RWTexture2D + EDescriptorTypeCount_RWTexture2D,
+	EDescriptorTypeOffset_RWTexture2Du		= EDescriptorTypeOffset_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
+
+	EDescriptorTypeOffset_Sampler			= 0,
 
 	EDescriptorTypeCount_Buffers =
 		EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer,
@@ -384,7 +402,7 @@ Error GraphicsDeviceRef_create(
 			.count = EDescriptorTypeCount_Sampler,
 			.binding = (SHBinding) {
 				.space = 0,
-				.binding = isSpirv ? 0 : 0
+				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Sampler
 			},
 			.visibility = U32_MAX
 		},
@@ -403,7 +421,7 @@ Error GraphicsDeviceRef_create(
 			.count = EDescriptorTypeCount_Texture2D,
 			.binding = (SHBinding) {
 				.space = isSpirv ? 1 : 0,
-				.binding = isSpirv ? 0 : 0
+				.binding = isSpirv ? 0 : EDescriptorTypeOffset_Texture2D
 			},
 			.visibility = U32_MAX
 		},
@@ -411,8 +429,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_TextureCube,
 			.count = EDescriptorTypeCount_TextureCube,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 1,
-				.binding = isSpirv ? 1 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 1 : EDescriptorTypeOffset_TextureCube
 			},
 			.visibility = U32_MAX
 		},
@@ -420,8 +438,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_Texture3D,
 			.count = EDescriptorTypeCount_Texture3D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 2,
-				.binding = isSpirv ? 2 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 2 : EDescriptorTypeOffset_Texture3D
 			},
 			.visibility = U32_MAX
 		},
@@ -429,8 +447,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_ByteAddressBuffer,
 			.count = EDescriptorTypeCount_Buffer,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 3,
-				.binding = isSpirv ? 3 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 3 : EDescriptorTypeOffset_Buffer
 			},
 			.visibility = U32_MAX
 		},
@@ -438,8 +456,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWBuffer,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 4,
-				.binding = isSpirv ? 4 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 4 : EDescriptorTypeOffset_RWBuffer
 			},
 			.visibility = U32_MAX
 		},
@@ -447,8 +465,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 5,
-				.binding = isSpirv ? 5 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 5 : EDescriptorTypeOffset_RWTexture3D
 			},
 			.visibility = U32_MAX,
 			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_Float }
@@ -457,8 +475,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 6,
-				.binding = isSpirv ? 6 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 6 : EDescriptorTypeOffset_RWTexture3Di
 			},
 			.visibility = U32_MAX,
 			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_SInt }
@@ -467,8 +485,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_Texture3D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture3Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 7,
-				.binding = isSpirv ? 7 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 7 : EDescriptorTypeOffset_RWTexture3Du
 			},
 			.visibility = U32_MAX,
 			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UInt }
@@ -477,8 +495,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2D,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 8,
-				.binding = isSpirv ? 8 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 8 : EDescriptorTypeOffset_RWTexture2D
 			},
 			.visibility = U32_MAX,
 			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UNorm }
@@ -487,8 +505,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Di,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 9,
-				.binding = isSpirv ? 9 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 9 : EDescriptorTypeOffset_RWTexture2Di
 			},
 			.visibility = U32_MAX,
 			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_SInt }
@@ -497,8 +515,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_Texture2D | ESHRegisterType_IsWrite,
 			.count = EDescriptorTypeCount_RWTexture2Du,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 10,
-				.binding = isSpirv ? 10 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 10 : EDescriptorTypeOffset_RWTexture2Du
 			},
 			.visibility = U32_MAX,
 			.textureFormat = (SHTextureFormat) { .primitive = ESHTexturePrimitive_UInt }
@@ -512,8 +530,8 @@ Error GraphicsDeviceRef_create(
 			.registerType = ESHRegisterType_AccelerationStructure,
 			.count = EDescriptorTypeCount_TLASExt,
 			.binding = (SHBinding) {
-				.space = isSpirv ? 1 : 11,
-				.binding = isSpirv ? 11 : 0
+				.space = isSpirv ? 1 : 0,
+				.binding = isSpirv ? 11 : EDescriptorTypeOffset_TLASExt
 			},
 			.visibility = U32_MAX
 		};
