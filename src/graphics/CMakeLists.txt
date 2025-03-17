@@ -68,6 +68,15 @@ add_virtual_files(
 
 source_group("Shaders" FILES ${shaders})
 
+add_library(
+	OxC3_graphics_target		# Since dynamic linking might not define dependencies correctly
+	INTERFACE
+)
+
+if(NOT DynamicLinkingGraphics)
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics)
+endif()
+
 if(graphicsAllowVk)
 	add_subdirectory(vulkan)
 endif()

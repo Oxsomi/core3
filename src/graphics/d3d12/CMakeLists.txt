@@ -38,6 +38,7 @@ if(NOT DynamicLinkingGraphics)
 	source_group("Header Files (${graphicsApi})" FILES ${graphicsApiSources})
 
 else()
+
 	add_library(
 		OxC3_graphics_d3d12
 		SHARED
@@ -45,12 +46,12 @@ else()
 		${graphicsApiSources}
 		CMakeLists.txt
 	)
-endif()
 
-target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
+	target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container)
 
-if(DynamicLinkingGraphics)
 	target_link_libraries(OxC3_graphics_d3d12 PUBLIC OxC3_graphics)
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics_d3d12)
+
 endif()
 
 set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)

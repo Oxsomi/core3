@@ -40,7 +40,7 @@ target_link_libraries(
 )
 
 if(CLIGraphics)
-	target_link_libraries(OxC3CLI PUBLIC OxC3_graphics)
+	target_link_libraries(OxC3CLI PUBLIC OxC3_graphics_target)
 	target_compile_definitions(OxC3CLI PUBLIC -DCLI_GRAPHICS)
 endif()
 
