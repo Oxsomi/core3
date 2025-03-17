@@ -472,6 +472,9 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(opt0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3)
 			caps.features |= EGraphicsFeatures_Bindless;
 
+		if(opt0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2)
+			caps.featuresExt |= EDxGraphicsFeatures_AllowCombineHeaps;
+
 		if(opt0.DoublePrecisionFloatShaderOps)
 			caps.dataTypes |= EGraphicsDataTypes_F64;
 

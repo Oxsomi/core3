@@ -32,7 +32,7 @@
 #include "types/math/math.h"
 #include "types/container/string.h"
 
-D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment) {
+D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType) {
 
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
@@ -50,6 +50,25 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 		.Alignment = alignment,
 		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED		//Equal to vulkan behavior, clear manually
 	};
+
+	if (!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))
+		switch (resourceType) {
+
+			case EResourceType_DeviceTexture:
+				heapDesc.Flags |= D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
+				break;
+
+			case EResourceType_DeviceBuffer:
+				heapDesc.Flags |= D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES | D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
+				break;
+
+			case EResourceType_RenderTargetOrDepthStencil:
+				heapDesc.Flags |= D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES;
+				break;
+
+			default:		//Used for committed allocations
+				break;
+		}
 
 	if (isGpu && !hasReBAR) {
 		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
@@ -79,8 +98,6 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryBlock *resultBlock
 ) {
 
-	(void) resourceType;
-
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
 			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
@@ -93,7 +110,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
-	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment);
+	D3D12_HEAP_DESC heapDesc = getDxHeapDesc(device, &cpuSided, req.alignment, resourceType);
 
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
 
@@ -114,6 +131,11 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	ID3D12Heap *heap = NULL;
 	Error err = Error_none();
 
+	U8 heapType = 0;
+
+	if(!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))
+		heapType = (U8) resourceType;
+
 	//Find an existing allocation
 
 	for(U64 i = 0; i < allocator->blocks.length; ++i) {
@@ -124,6 +146,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			!block->ext ||
 			block->isDedicated ||
 			!!(block->allocationTypeExt & 1) != !cpuSided ||
+			(block->allocationTypeExt >> 1) != heapType ||
 			block->typeExt != req.alignment						//Alignment is baked into heap
 		)
 			continue;
@@ -187,8 +210,8 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	DeviceMemoryBlock block = (DeviceMemoryBlock) {
 		.isActive = true,
-		.typeExt = req.alignment,			//Only place things with the same alignment in this block
-		.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
+		.typeExt = req.alignment,								//Only place things with the same alignment in this block
+		.allocationTypeExt = (!cpuSided) | (heapType << 1),		//Don't share GPU mem and CPU mem or heap sharing if no support
 		.isDedicated = false,
 		.ext = heap
 	};

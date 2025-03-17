@@ -197,7 +197,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 		acq = ELockAcquire_Invalid;
 
-		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment);
+		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx(

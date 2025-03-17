@@ -92,6 +92,7 @@ typedef enum EDxGraphicsFeatures {
 
 	EDxGraphicsFeatures_TightAlignment			= 1 << 7,
 	EDxGraphicsFeatures_RootSig1_1				= 1 << 8,
+	EDxGraphicsFeatures_AllowCombineHeaps		= 1 << 9,		//Some devices don't (Arc alchemist, <= Nv Pascal)
 
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 
