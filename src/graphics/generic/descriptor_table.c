@@ -1261,6 +1261,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 		//For SPIRV the rules are as follows:
 		//	Unknown allows anything
 		//	Otherwise the format needs to match 1:1
+		//	However, since we're relying on reading a descriptor at a certain place, we can't reuse.
 		// 
 		//Read textures are simpler;
 		//DXIL all textures are typeless.
@@ -1276,15 +1277,13 @@ Bool DescriptorTableRef_findBindlessRegister(
 					tex.depthFormat == EDepthStencilFormat_D16 ? ETextureFormatId_R16 : ETextureFormatId_R32f
 				);
 
-			if (instance->api == EGraphicsApi_Vulkan) {
+			ESHTexturePrimitive targPrim = bind.textureFormat.primitive & ESHTexturePrimitive_TypeMask;
 
-				if(bind.textureFormat.formatId && bind.textureFormat.formatId != formatId)
-					continue;
-
-			} else if(bind.registerType & ESHRegisterType_IsWrite) {
+			if((bind.registerType & ESHRegisterType_IsWrite) && targPrim != ESHTexturePrimitive_Count) {
 				
-				ESHTexturePrimitive targPrim = bind.textureFormat.primitive & ESHTexturePrimitive_TypeMask;
-				ESHTexturePrimitive prim = ESHTexturePrimitive_fromTextureFormat(ETextureFormatId_unpack[formatId]) & ESHTexturePrimitive_TypeMask;
+				ESHTexturePrimitive prim =
+					ESHTexturePrimitive_fromTextureFormat(ETextureFormatId_unpack[formatId]) & ESHTexturePrimitive_TypeMask;
+
 				Bool compatible = false;
 
 				switch (targPrim) {
@@ -1306,6 +1305,9 @@ Bool DescriptorTableRef_findBindlessRegister(
 				if(!compatible)
 					continue;
 			}
+
+			if (instance->api == EGraphicsApi_Vulkan && bind.textureFormat.formatId && bind.textureFormat.formatId != formatId)
+				continue;
 		}
 
 		*bindId = bindIdi;
