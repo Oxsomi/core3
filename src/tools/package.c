@@ -253,7 +253,7 @@ Bool CLI_package(ParsedArgs args) {
 			else {
 
 				if(															//Merged binaries contain empty buffers
-					!(args.parameters & EOperationFlags_Split) &&
+					!(args.parameters & EOperationHasParameter_SplitBy) &&
 					i + 1 != allOutputs.length &&
 					CharString_equalsStringSensitive(allOutputs.ptr[i], allOutputs.ptr[i + 1])
 				)

@@ -348,7 +348,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		if(FAILED(lastError = instanceExt->deviceFactory->lpVtbl->CreateDevice(
 			instanceExt->deviceFactory,
-			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_1, &IID_ID3D12Device10, (void**) &device
+			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device10, (void**) &device
 		))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 11.1", i);
 			goto next;
@@ -399,9 +399,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &opt0, sizeof(opt0))) ||
 			!opt0.TypedUAVLoadAdditionalFormats ||
-			!opt0.OutputMergerLogicOp ||
-			!opt0.ROVsSupported ||
-			opt0.ConservativeRasterizationTier < D3D12_CONSERVATIVE_RASTERIZATION_TIER_2
+			!opt0.OutputMergerLogicOp
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS", i);
 			goto next;
