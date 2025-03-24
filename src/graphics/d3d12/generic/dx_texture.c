@@ -24,6 +24,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
@@ -99,7 +100,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead) && texture->depthFormat)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
-	#if D3D12_PREVIEW_SDK_VERSION >= 716
+	#if D3D12_PREVIEW_SDK_VERSION >= 716 && !defined(_DISABLE_TIGHT_ALIGNMENT)
 		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
 	#endif
@@ -150,7 +151,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, 0);
 		
-		Bool cpuSided = !!(texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit);
+		Bool cpuSided = texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 
 		//Dedicated allocations for depth stencil and render targets that are >=512px
 		//Magic number from NV best practices and seems to match Vulkan's behavior closely.
@@ -169,7 +170,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			};
 
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
-				Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
+				Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 			if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
 				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"))
@@ -206,7 +207,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 			acq = ELockAcquire_Invalid;
 
-			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment);
+			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
 			
@@ -275,88 +276,13 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		}
 	}
 
-	//Image views
-
-	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+	//Name resources
 
 	for(U8 i = 0; i < texture->images; ++i) {
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, i);
-		UnifiedTextureImage managedImage = TextureRef_getImage(textureRef, 0, i);
 
 		managedImageExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
-
-		if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
-				.Format = dxFormat,
-				.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
-			};
-
-			U64 offset = ResourceHandle_getId(managedImage.readHandle);
-
-			switch(texture->type) {
-
-				case ETextureType_3D:
-					offset += EDescriptorTypeOffsets_Texture3D;
-					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-					srv.Texture3D = (D3D12_TEX3D_SRV) { .MipLevels = texture->levels };
-					break;
-
-				case ETextureType_Cube:
-					offset += EDescriptorTypeOffsets_TextureCube;
-					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-					srv.TextureCube = (D3D12_TEXCUBE_SRV) { .MipLevels = texture->levels };
-					break;
-
-				default:
-					offset += EDescriptorTypeOffsets_Texture2D;
-					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-					srv.Texture2D = (D3D12_TEX2D_SRV) { .MipLevels = texture->levels };
-					break;
-			}
-
-			deviceExt->device->lpVtbl->CreateShaderResourceView(
-				deviceExt->device,
-				managedImageExt->image,
-				&srv,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
-			);
-		}
-
-		if (texture->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
-
-			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) { .Format = dxFormat };
-
-			U64 offset = ResourceHandle_getId(managedImage.writeHandle);
-			offset += EDescriptorTypeOffsets_values[UnifiedTexture_getWriteDescriptorType(*texture)];
-
-			switch(texture->type) {
-
-				case ETextureType_3D:
-					uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
-					uav.Texture3D = (D3D12_TEX3D_UAV) { .WSize = texture->length };
-					break;
-
-				case ETextureType_Cube:
-					uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-					uav.Texture2DArray = (D3D12_TEX2D_ARRAY_UAV) { .ArraySize = texture->length };
-					break;
-
-				default:
-					uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-					uav.Texture2D = (D3D12_TEX2D_UAV) { 0 };
-					break;
-			}
-
-			deviceExt->device->lpVtbl->CreateUnorderedAccessView(
-				deviceExt->device,
-				managedImageExt->image,
-				NULL,
-				&uav,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
-			);
-		}
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
 			gotoIfError(clean, CharString_toUTF16x(name, &temp16))

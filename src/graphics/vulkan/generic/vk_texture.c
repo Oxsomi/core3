@@ -29,6 +29,7 @@
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
 #include "types/container/texture_format.h"
+#include "formats/oiSH/registers.h"
 
 Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
@@ -39,10 +40,12 @@ Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 	for(U8 i = 0; i < utex.images; ++i) {
 
-		const VkUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Vk, 0, i);
+		VkUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Vk, 0, i);
 
-		if(image->view)
-			deviceExt->destroyImageView(deviceExt->device, image->view, NULL);
+		for (U64 j = 0; j < image->views.length; ++j)
+			deviceExt->destroyImageView(deviceExt->device, image->views.ptr[i].view, NULL);
+
+		ListVkImageViewMapping_freex(&image->views);
 
 		if(image->image && utex.resource.type != EResourceType_Swapchain)
 			deviceExt->destroyImage(deviceExt->device, image->image, NULL);
@@ -148,91 +151,13 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		)))
 	}
 
-	//Image views
-
 	for(U8 i = 0; i < texture->images; ++i) {
 
 		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, i);
-		UnifiedTextureImage managedImage = TextureRef_getImage(textureRef, 0, i);
-
-		VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = managedImageExt->image,
-			.viewType = texture->type == ETextureType_2D ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_3D,
-			.format = vkFormat,
-			.subresourceRange = (VkImageSubresourceRange) {
-				.aspectMask = texture->depthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
-				.layerCount = texture->length,
-				.levelCount = texture->levels
-		}
-		};
-
-		gotoIfError(clean, checkVkError(deviceExt->createImageView(deviceExt->device, &viewCreate, NULL, &managedImageExt->view)))
-
-		if(texture->resource.flags & EGraphicsResourceFlag_ShaderRW) {
-
-			VkDescriptorImageInfo descriptorImageInfos[2] = {
-				(VkDescriptorImageInfo) {
-					.imageView = managedImageExt->view,
-					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				},
-				(VkDescriptorImageInfo) {
-					.imageView = managedImageExt->view,
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-				}
-			};
-
-			VkWriteDescriptorSet writeDescriptorSet[2] = {
-				(VkWriteDescriptorSet) {
-					.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
-					.descriptorCount = 1
-				}
-			};
-
-			U32 counter = 0;
-
-			if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
-				writeDescriptorSet[0].dstBinding = EDescriptorType_Texture2D;
-				writeDescriptorSet[0].dstArrayElement = ResourceHandle_getId(managedImage.readHandle);
-				writeDescriptorSet[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-				writeDescriptorSet[0].pImageInfo = &descriptorImageInfos[0];
-				++counter;
-			}
-
-			if (texture->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
-
-				if(counter)
-					writeDescriptorSet[1] = writeDescriptorSet[0];
-
-				writeDescriptorSet[counter].dstBinding = UnifiedTexture_getWriteDescriptorType(*texture);
-				writeDescriptorSet[counter].dstArrayElement = ResourceHandle_getId(managedImage.writeHandle);
-				writeDescriptorSet[counter].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				writeDescriptorSet[counter].pImageInfo = &descriptorImageInfos[1];
-				++counter;
-			}
-
-			deviceExt->updateDescriptorSets(deviceExt->device, counter, writeDescriptorSet, 0, NULL);
-		}
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
-			gotoIfError(clean, CharString_formatx(
-				&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
-			))
-
 			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
-				.pObjectName = temp.ptr,
-				.objectHandle =  (U64) managedImageExt->view
-			};
-
-			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
-
-			CharString_freex(&temp);
-
-			debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 				.objectType = VK_OBJECT_TYPE_IMAGE,
 				.pObjectName = name.ptr,
@@ -301,4 +226,137 @@ Error VkUnifiedTexture_transition(
 	dependency->imageMemoryBarrierCount = (U32) imageBarriers->length;
 
 	return Error_none();
+}
+
+Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *view, U32 *viewIdOutput, Error *e_rr) {
+
+	if(!d.resource)
+		return false;
+
+	Bool s_uccess = true;
+	VkImageView tmp = NULL;
+
+	UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
+	VkUnifiedTexture *texExt = TextureRef_getImgExtT(d.resource, Vk, 0, d.texture.imageId);
+
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(tex.resource.device), Vk);
+
+	VkFormat vkFormat;
+
+	if(tex.depthFormat)
+		switch(tex.depthFormat) {
+
+			default:
+			case EDepthStencilFormat_D32:			vkFormat = VK_FORMAT_D32_SFLOAT;	break;
+			case EDepthStencilFormat_D16:			vkFormat = VK_FORMAT_D16_UNORM;		break;
+
+			case EDepthStencilFormat_D32S8X24Ext:
+				vkFormat = d.texture.planeId ? VK_FORMAT_S8_UINT : VK_FORMAT_D32_SFLOAT;
+				break;
+
+			case EDepthStencilFormat_D24S8Ext:
+				vkFormat = d.texture.planeId ? VK_FORMAT_S8_UINT : VK_FORMAT_D24_UNORM_S8_UINT;
+				break;
+
+			case EDepthStencilFormat_S8X24Ext:
+				vkFormat = VK_FORMAT_S8_UINT;
+				break;
+		}
+
+	else vkFormat = mapVkFormat(tex.textureFormatId);
+
+	SpinLock *lock = &texExt->lock;
+	ELockAcquire acq = SpinLock_lock(lock, 1 * SECOND);
+
+	if(acq < ELockAcquire_Success)
+		goto clean;
+
+	U32 viewId = 0;
+	U32 firstEmptyViewId = U32_MAX;
+
+	for (; viewId < texExt->views.length; ++viewId)
+
+		if (texExt->views.ptr[viewId].textureDescU64 == d.data[0]) {
+
+			*view = texExt->views.ptr[viewId].view;
+			*viewIdOutput = viewId;
+
+			++texExt->views.ptrNonConst[viewId].refCount;
+			goto clean;
+		}
+
+		else if(!texExt->views.ptr[viewId].view && firstEmptyViewId == U32_MAX)
+			firstEmptyViewId = viewId;
+
+	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	if(tex.depthFormat)
+		aspect = d.texture.planeId ? VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_DEPTH_BIT;
+
+	VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = texExt->image,
+		.format = vkFormat,
+		.subresourceRange = (VkImageSubresourceRange) {
+			.aspectMask = aspect,
+			.layerCount = d.texture.arrayCount,
+			.levelCount = d.texture.mipCount,
+			.baseMipLevel = d.texture.mipId,
+			.baseArrayLayer = d.texture.arrayId
+		}
+	};
+
+	Bool isArray = type & ESHRegisterType_IsArray;
+	type = type & ESHRegisterType_TypeMask;
+
+	switch (type) {
+
+		default:
+		case ESHRegisterType_Texture2D:
+		case ESHRegisterType_Texture2DMS:
+			viewCreate.viewType = isArray ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
+			break;
+
+		case ESHRegisterType_TextureCube:
+			viewCreate.viewType = isArray ? VK_IMAGE_VIEW_TYPE_CUBE_ARRAY : VK_IMAGE_VIEW_TYPE_CUBE;
+			break;
+
+		case ESHRegisterType_Texture3D:
+			viewCreate.viewType = VK_IMAGE_VIEW_TYPE_3D;
+			break;
+	}
+
+	gotoIfError2(clean, checkVkError(deviceExt->createImageView(deviceExt->device, &viewCreate, NULL, &tmp)))
+
+		//Deposit the tmp into our list of views and ensure we don't free it without a reason
+
+	VkImageViewMapping mapping = (VkImageViewMapping) {
+		.textureDesc = d.texture,
+		.view = tmp,
+		.refCount = 1
+	};
+
+	if(firstEmptyViewId == U32_MAX)
+		gotoIfError2(clean, ListVkImageViewMapping_pushBackx(&texExt->views, mapping))
+
+	else {
+		texExt->views.ptrNonConst[firstEmptyViewId] = mapping;
+		viewId = firstEmptyViewId;
+	}
+
+	*view = tmp;
+	tmp = NULL;
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(lock);
+
+	lock = NULL;
+	acq = ELockAcquire_Invalid;
+
+	if(tmp)
+		deviceExt->destroyImageView(deviceExt->device, tmp, NULL);
+
+	return s_uccess;
 }

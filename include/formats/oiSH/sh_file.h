@@ -35,6 +35,13 @@ typedef enum ESHSettingsFlags {
 	ESHSettingsFlags_Invalid			= 0xFFFFFFFF << 2
 } ESHSettingsFlags;
 
+typedef enum ECompilerWarning {							//Present here in case shader compiler isn't present
+	ECompilerWarning_None				= 0,
+	ECompilerWarning_UnusedRegisters	= 1 << 0,
+	ECompilerWarning_UnusedConstants	= 1 << 1,
+	ECompilerWarning_BufferPadding		= 1 << 2
+} ECompilerWarning;
+
 //Check docs/oiSH.md for the file spec
 
 typedef struct SHInclude {
@@ -80,7 +87,7 @@ Bool SHFile_create(
 
 void SHFile_free(SHFile *shFile, Allocator alloc);
 
-Bool SHFile_addBinaries(
+Bool SHFile_addBinary(
 	SHFile *shFile,
 	SHBinaryInfo *binaries,				//Moves binaries
 	Allocator alloc,

@@ -142,6 +142,30 @@ TListImpl(SHRegisterRuntime);
 
 #endif
 
+ESHTexturePrimitive ESHTexturePrimitive_fromTextureFormat(ETextureFormat format) {
+
+	ETexturePrimitive prim = ETextureFormat_getPrimitive(format);
+
+	U8 channels = ETextureFormat_getChannels(format);
+	ESHTexturePrimitive res = (channels - 1) << ESHTexturePrimitive_ComponentShift;
+
+	switch(prim) {
+
+		default:						return 0xFF;
+		case ETexturePrimitive_UInt:	return res | ESHTexturePrimitive_UInt;
+		case ETexturePrimitive_SInt:	return res | ESHTexturePrimitive_SInt;
+		case ETexturePrimitive_SNorm:	return res | ESHTexturePrimitive_SNorm;
+
+		case ETexturePrimitive_Compressed:
+		case ETexturePrimitive_Float:
+			return res | ESHTexturePrimitive_Float;
+
+		case ETexturePrimitive_UNorm:
+		case ETexturePrimitive_UNormBGR:
+			return res | ESHTexturePrimitive_UNorm;
+	}
+}
+
 Bool SHFile_detectDuplicate(
 	const ListSHRegisterRuntime *info,
 	CharString name,
@@ -154,6 +178,7 @@ Bool SHFile_detectDuplicate(
 	Bool anyBinding = false;
 
 	Bool anyDxilBinding = false;
+	Bool anySpvBinding = false;
 
 	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
 		if(bindings.arr[i].space != U32_MAX || bindings.arr[i].binding != U32_MAX) {
@@ -162,6 +187,9 @@ Bool SHFile_detectDuplicate(
 
 			if(i == ESHBinaryType_DXIL)
 				anyDxilBinding = true;
+
+			if(i == ESHBinaryType_SPIRV)
+				anySpvBinding = true;
 		}
 
 	if(!anyBinding)
@@ -197,36 +225,50 @@ Bool SHFile_detectDuplicate(
 		if(CharString_equalsStringSensitive(reg.name, name))
 			retError(clean, Error_invalidState(0, "SHFile_detectDuplicate()::name was already found in SHFile"))
 
-		else if (anyDxilBinding) {
+		else {
 
-			SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_DXIL];
-			SHBinding srcBinding = bindings.arr[ESHBinaryType_DXIL];
+			if(anySpvBinding) {
 
-			U8 registerBindingTypei = 0;
+				SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_SPIRV];
+				SHBinding srcBinding = bindings.arr[ESHBinaryType_SPIRV];
 
-			switch (reg.reg.registerType & ESHRegisterType_TypeMask) {
-
-				case ESHRegisterType_Sampler:
-				case ESHRegisterType_SamplerComparisonState:
-					registerBindingTypei = 2;
-					break;
-
-				case ESHRegisterType_ConstantBuffer:
-					registerBindingTypei = 3;
-					break;
-
-				default:
-					registerBindingTypei = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
-					break;
+				if(dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space)
+					retError(clean, Error_invalidState(
+						0, "SHFile_detectDuplicate() SPIRV space & binding combo was already found in SHFile"
+					))
 			}
 
-			if(
-				registerBindingType == registerBindingTypei &&
-				dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space
-			)
-				retError(clean, Error_invalidState(
-					0, "SHFile_detectDuplicate() DXIL space & binding combo was already found in SHFile"
-				))
+			if (anyDxilBinding) {
+
+				SHBinding dstBinding = reg.reg.bindings.arr[ESHBinaryType_DXIL];
+				SHBinding srcBinding = bindings.arr[ESHBinaryType_DXIL];
+
+				U8 registerBindingTypei = 0;
+
+				switch (reg.reg.registerType & ESHRegisterType_TypeMask) {
+
+					case ESHRegisterType_Sampler:
+					case ESHRegisterType_SamplerComparisonState:
+						registerBindingTypei = 2;
+						break;
+
+					case ESHRegisterType_ConstantBuffer:
+						registerBindingTypei = 3;
+						break;
+
+					default:
+						registerBindingTypei = reg.reg.registerType & ESHRegisterType_IsWrite ? 1 : 0;
+						break;
+				}
+
+				if(
+					registerBindingType == registerBindingTypei &&
+					dstBinding.binding == srcBinding.binding && dstBinding.space == srcBinding.space
+				)
+					retError(clean, Error_invalidState(
+						0, "SHFile_detectDuplicate() DXIL space & binding combo was already found in SHFile"
+					))
+			}
 		}
 	}
 
@@ -606,11 +648,6 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		retError(clean, Error_outOfBounds(
 			5, textureFormatPrimitive, ESHTexturePrimitive_Count,
 			"ListSHRegisterRuntime_addRWTexture()::textureFormatPrimitive out of bounds"
-		))
-
-	if(textureFormatPrimitive == ESHTexturePrimitive_Count && !textureFormatId && isWrite)
-		retError(clean, Error_invalidState(
-			0, "ListSHRegisterRuntime_addRWTexture() either texture format primitive or texture format id has to be set for RW"
 		))
 
 	ETextureFormat format = ETextureFormatId_unpack[textureFormatId];

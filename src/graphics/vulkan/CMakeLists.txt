@@ -40,6 +40,7 @@ if(NOT DynamicLinkingGraphics)
 	source_group("Source Files (${graphicsApi}: ${platform})" FILES ${graphicsApiPlatformSources})
 
 else()
+
 	add_library(
 		OxC3_graphics_vk
 		SHARED
@@ -48,11 +49,12 @@ else()
 		${graphicsApiPlatformSources}
 		CMakeLists.txt
 	)
-	target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_graphics)
-endif()
 
-if(DynamicLinkingGraphics)
+	target_link_libraries(${TARGET_NAME} PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH OxC3_graphics)
+
 	target_compile_definitions(${TARGET_NAME} PUBLIC -DGRAPHICS_API_DYNAMIC)
+	target_link_libraries(OxC3_graphics_target INTERFACE OxC3_graphics_vk)
+
 endif()
 
 if("${platform}" STREQUAL "windows")
@@ -96,6 +98,4 @@ elseif("${platform}" STREQUAL "osx")
 else()
 	target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
 endif()
-
-target_link_libraries(OxC3_graphics_target INTERFACE ${TARGET_NAME})
 

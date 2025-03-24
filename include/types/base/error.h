@@ -118,7 +118,8 @@ typedef struct Error {
 	goto x;							\
 }
 
-impl void Error_fillStackTrace(Error *err);
+impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);	//May fail if (stackSize + skip + 1 > 128)
+void Error_fillStackTrace(Error *err);
 
 #define Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
 

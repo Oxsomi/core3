@@ -43,11 +43,6 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skip) {
-	(void) alloc;
-	RtlCaptureStackBackTrace((DWORD)(1 + (U32)skip), (DWORD) stackSize, stack, NULL);
-}
-
 typedef struct CapturedStackTrace {
 
 	//Module and symbol
@@ -229,6 +224,20 @@ void Log_printCapturedStackTraceCustom(
 
 SpinLock lock;
 
+Bool isConsole(HANDLE stdOut) {
+
+	if(stdOut == INVALID_HANDLE_VALUE)
+		return false;
+	
+	U32 fileType = GetFileType(stdOut) &~ FILE_TYPE_REMOTE;
+
+	if(fileType != FILE_TYPE_CHAR || FAILED(GetLastError()))
+		return false;
+
+	DWORD mode;
+	return GetConsoleMode(stdOut, &mode);
+}
+
 void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
 
 	if(lvl >= ELogLevel_Count)
@@ -246,6 +255,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 	CharString copy = (CharString) { 0 };
 	ListU16 tmp = (ListU16) { 0 };
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	Bool panic = false;
 
@@ -301,24 +311,25 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 			break;
 	}
 
-	panic |= CharString_toUTF16(copy, alloc, &tmp).genericError;
+	HANDLE stdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+	Bool hasConsole = isConsole(stdOut);
 
-	if(debugger) {
+	if(hasConsole)
+		panic |= CharString_toUTF16(copy, alloc, &tmp).genericError;
 
+	if(CharString_length(copy) >= U32_MAX)
+		goto skipConsole;
+
+	if(debugger)
 		OutputDebugStringW(tmp.ptr);
 
-		if(panic)
-			OutputDebugStringW(
-				L"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-				L"This is normally okay, as long as a new string can be allocated.\n"
-				L"In this case, allocation failed, which suggests corruption or out of memory.\n"
-			);
-	}
+	if(!stdOut)
+		goto skipConsole;
 
 	//We have to lock to ensure that the console text is the right color.
 	//Otherwise if #1 logs green, #2 logs red, it might change color in-between.
 
-	ELockAcquire acq = SpinLock_lock(&lock, 1 * SECOND);
+	acq = SpinLock_lock(&lock, 1 * SECOND);
 
 	if(acq < ELockAcquire_Success) {
 
@@ -331,20 +342,34 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	//Remember old to ensure we can reset
 
 	CONSOLE_SCREEN_BUFFER_INFO info;
-	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
+	GetConsoleScreenBufferInfo(stdOut, &info);
 	const WORD oldColor = info.wAttributes;
 
 	//Prepare for message
+	//https://archives.miloush.net/michkap/archive/2010/10/07/10072032.html
+	//We can't use printf because we need colors.
+	//We can't just use WriteConsole because our message might be redirected to a file!
+	// This also happens when we are being executed by visual studio, git bash or on a runner or something.
 
-	const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, COLORS[lvl]);
+	if (!panic) {
 
-	if (!panic)
-		WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), (const wchar_t*) tmp.ptr, (int) tmp.length, NULL, NULL);
+		SetConsoleTextAttribute(stdOut, COLORS[lvl]);
+		
+		if(hasConsole)
+			WriteConsoleW(stdOut, (const wchar_t*) tmp.ptr, (int) tmp.length, NULL, NULL);
 
-	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
+		else if(!WriteFile(stdOut, copy.ptr, (DWORD) CharString_length(copy), NULL, NULL)) {
+			panic = true;
+			goto skipConsole;
+		}
+
+		SetConsoleTextAttribute(stdOut, oldColor);
+	}
 
 skipConsole:
+
+	if(panic && debugger)
+		OutputDebugStringW(L"PANIC! Internal error occurred during wlog.c::Log_log, such as allocation or WriteFile");
 
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&lock);

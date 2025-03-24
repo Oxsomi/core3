@@ -51,6 +51,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	ETextureFormatId formatId,
 	EGraphicsResourceFlag flag,
 	EMSAASamples msaa,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	RenderTextureRef **renderTextureRef
 ) {
@@ -83,7 +84,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, name))
+	gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, bindlessDescriptorTable, name))
 
 clean:
 

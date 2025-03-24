@@ -177,6 +177,7 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 	//in
 	//out
 	//inout
+	//groupshared
 	//^
 
 	//Search to next token
@@ -213,7 +214,7 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 				//Search to next token
 				//const F32
-				//	  ^
+				//	    ^
 
 				++*i;
 				gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
@@ -229,6 +230,23 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 			if (len == 5 && tokStr.ptr[4] == 'n') {
 				consumed = true;
 				gotoIfError3(clean, Parser_classifyUnion(parser, i, parent, alloc, e_rr))
+				break;
+			}
+
+			break;
+
+		case C8x4('g', 'r', 'o', 'u'):		//groupshared
+
+			if (len == 11 && getC8x8(tokStr, 3) == C8x8('u', 'p', 's', 'h', 'a', 'r', 'e', 'd')) {
+
+				//Search next token:
+				//groupshared uint X
+				//            ^
+
+				++*i;
+				gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
+
+				modifiers |= ESymbolFlagVar_GroupShared;
 				break;
 			}
 
@@ -694,8 +712,73 @@ Bool Parser_classifyFunction(Parser *parser, U32 *i, U32 parent, Allocator alloc
 		gotoIfError3(clean, Parser_setSymbolName(parser, semanticSymbolId, &semanticStr, alloc, e_rr))
 	}
 
+	//F32 myMemberFunc(F32 a) const { }
+	//						  ^
+	//There are up to five keywords here;
+	//const, noexcept, final, override, volatile
+
+	for (U64 j = 0; *i < parser->tokens.length && j < 5; ++*i, ++j) {
+
+		if (Parser_next(parser, i, ETokenType_Identifier)) {
+
+			CharString tokStr = Token_asString(parser->tokens.ptr[*i], parser);
+
+			switch (CharString_length(tokStr)) {
+
+				case 5: {		//const, final
+
+					Bool match = false;
+
+					switch (getC8x4(tokStr, 0)) {
+
+						case C8x4('c', 'o', 'n', 's'):
+							if(tokStr.ptr[4] == 't') match = true;
+							break;
+
+						case C8x4('f', 'i', 'n', 'a'):
+							if(tokStr.ptr[4] == 'l') match = true;
+							break;
+
+						default:
+							break;
+					}
+
+					if(match)		//TODO: Add modifier
+						break;
+
+					retError(clean, Error_invalidState(0, "Parser_classifyFunction() invalid function modifier (5)"))
+				}
+
+				case 8: {		//noexcept, override, volatile
+
+					Bool match = false;
+
+					switch (getC8x8(tokStr, 0)) {
+
+						case C8x8('n', 'o', 'e', 'x', 'c', 'e', 'p', 't'):		match = true;	break;
+						case C8x8('o', 'v', 'e', 'r', 'r', 'i', 'd', 'e'):		match = true;	break;
+						case C8x8('v', 'o', 'l', 'a', 't', 'i', 'l', 'e'):		match = true;	break;
+
+						default:
+							break;
+					}
+
+					if(match)		//TODO: Add modifier
+						break;
+
+					retError(clean, Error_invalidState(0, "Parser_classifyFunction() invalid function modifier (8)"))
+				}
+
+				default:
+					retError(clean, Error_invalidState(0, "Parser_classifyFunction() invalid function modifier"))
+			}
+		}
+
+		else break;
+	}
+
 	//static F32 test(F32 a, F32 b) {
-	//							  ^
+	//							    ^
 
 	gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceStart, e_rr))
 
@@ -1117,11 +1200,93 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 			//extern static const F32 x[5], y[3][3], z, w, a[];
 			//						  ^	 ^  ^
 
-			gotoIfError3(clean, Parser_assert2(parser, i, ETokenType_Integer, ETokenType_Identifier, e_rr))
-
-			//U64 arrayCount = parser->tokens.ptr[*i].valueu;		//TODO: parse arraySize
+			//F32 test[(5 / 3)]
+			//U64 arrayCount = parser->tokens.ptr[*i].valueu;		//TODO: parse arraySize (difficult, because it's an expression)
 			//arrayCount;
-			++*i;
+
+			Bool eof = false;
+			U8 brackets[3] = { 0 };
+
+			while(true) {
+
+				if (Parser_eof(parser, i)) {
+					eof = true;
+					break;
+				}
+
+				Bool ended = false;
+
+				switch (parser->tokens.ptr[*i].tokenType) {
+
+					case ETokenType_RoundParenthesisStart:
+
+						if(brackets[0] == U8_MAX)
+							retError(clean, Error_outOfBounds(
+								0, U8_MAX, U8_MAX, "Parser_classifyFunctionOrVariable() too many nested parentheses '('"
+							))
+
+						++brackets[0];
+						break;
+
+					case ETokenType_RoundParenthesisEnd:
+
+						if(!brackets[0])
+							retError(clean, Error_invalidState(
+								0, "Parser_classifyFunctionOrVariable() couldn't match parentheses ')'"
+							))
+
+						--brackets[0];
+						break;
+
+					case ETokenType_CurlyBraceStart:
+
+						if(brackets[1] == U8_MAX)
+							retError(clean, Error_outOfBounds(
+								0, U8_MAX, U8_MAX, "Parser_classifyFunctionOrVariable() too many nested braces '{'"
+							))
+
+						++brackets[1];
+						break;
+
+					case ETokenType_CurlyBraceEnd:
+
+						if(!brackets[1])
+							retError(clean, Error_invalidState(
+								0, "Parser_classifyFunctionOrVariable() couldn't match braces '}'"
+							))
+
+						--brackets[1];
+						break;
+
+					case ETokenType_SquareBracketStart:
+
+						if(brackets[2] == U8_MAX)
+							retError(clean, Error_outOfBounds(
+								0, U8_MAX, U8_MAX, "Parser_classifyFunctionOrVariable() too many nested brackets '['"
+							))
+
+						++brackets[2];
+						break;
+
+					case ETokenType_SquareBracketEnd:
+
+						if (!brackets[2]) {		//End of expression
+							ended = true;
+							break;
+						}
+
+						--brackets[2];
+						break;
+				}
+
+				if(ended)
+					break;
+				
+				++*i;
+			}
+
+			if(eof)
+				retError(clean, Error_invalidState(0, "Parser_classifyFunctionOrVariable() Couldn't parse inside of array size"))
 
 			//extern static const F32 x[5], y[3][3], z, w;
 			//						   ^	 ^  ^

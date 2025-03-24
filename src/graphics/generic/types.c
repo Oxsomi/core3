@@ -37,6 +37,11 @@ EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 	EGraphicsTypeId_Sampler,
 	EGraphicsTypeId_DepthStencil,
 
+	EGraphicsTypeId_DescriptorLayout,
+	EGraphicsTypeId_PipelineLayout,
+	EGraphicsTypeId_DescriptorTable,
+	EGraphicsTypeId_DescriptorHeap,
+
 	EGraphicsTypeId_BLASExt,
 	EGraphicsTypeId_TLASExt
 };

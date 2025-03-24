@@ -113,6 +113,12 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 			}
 		}
 
+		if(lwin->mainBufferPtr) {
+			U32 oldHeight = lwin->height | ((U32) lwin->heightHi8 << 16);
+			U64 siz = (U64) lwin->pixelStride * oldHeight;
+			munmap(lwin->mainBufferPtr, siz);
+		}
+
 		if(lwin->fileDescriptor)
 			close(lwin->fileDescriptor);
 
@@ -228,6 +234,12 @@ Bool WindowManager_freePhysical(Window *w) {
 
 	if(lwin->backBuffer)
 		wl_shm_pool_destroy(lwin->backBuffer);
+
+	if(lwin->mainBufferPtr) {
+		U32 oldHeight = lwin->height | ((U32) lwin->heightHi8 << 16);
+		U64 siz = (U64) lwin->pixelStride * oldHeight;
+		munmap(lwin->mainBufferPtr, siz);
+	}
 
 	if(lwin->fileDescriptor)
 		close(lwin->fileDescriptor);

@@ -23,6 +23,7 @@
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/dx_device.h"
@@ -125,7 +126,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	if(buf->usage & EDeviceBufferUsage_ASExt)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 		
-	#if D3D12_PREVIEW_SDK_VERSION >= 716
+	#if D3D12_PREVIEW_SDK_VERSION >= 716 && !defined(_DISABLE_TIGHT_ALIGNMENT)
 		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
 	#endif
@@ -142,7 +143,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	if(!res)
 		gotoIfError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"))
 
-	Bool cpuSided = !!(buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit);
+	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 
 	DeviceMemoryBlock block;
 
@@ -159,7 +160,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		};
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
-			Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
+			Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 		if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
 			gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"))
@@ -196,7 +197,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 		acq = ELockAcquire_Invalid;
 
-		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment);
+		D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
 
 		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx(
@@ -282,63 +283,6 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->QueryInterface(
 			bufExt->buffer, &IID_ID3D12ManualWriteTrackingResource, (void**) &buf->resource.debugExt
 		)))
-
-	//Fill relevant descriptor sets if shader accessible
-
-	EGraphicsResourceFlag flags = buf->resource.flags;
-
-	if(flags & EGraphicsResourceFlag_ShaderRW) {
-
-		const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
-
-		//Create readonly buffer
-
-		if (flags & EGraphicsResourceFlag_ShaderRead) {
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
-				.Format = DXGI_FORMAT_R32_TYPELESS,
-				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
-				.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.Buffer = (D3D12_BUFFER_SRV) {
-					.NumElements = (U32)(buf->resource.size / 4),
-					.Flags = D3D12_BUFFER_SRV_FLAG_RAW
-				}
-			};
-
-			U64 offset = EDescriptorTypeOffsets_Buffer + ResourceHandle_getId(buf->readHandle);
-
-			deviceExt->device->lpVtbl->CreateShaderResourceView(
-				deviceExt->device,
-				bufExt->buffer,
-				&srv,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
-			);
-		}
-
-		//Create writable buffer
-
-		if (flags & EGraphicsResourceFlag_ShaderWrite) {
-
-			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) {
-				.Format = DXGI_FORMAT_R32_TYPELESS,
-				.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
-				.Buffer = (D3D12_BUFFER_UAV) {
-					.NumElements = (U32)(buf->resource.size / 4),
-					.Flags = D3D12_BUFFER_UAV_FLAG_RAW
-				}
-			};
-
-			U64 offset = EDescriptorTypeOffsets_RWBuffer + ResourceHandle_getId(buf->writeHandle);
-
-			deviceExt->device->lpVtbl->CreateUnorderedAccessView(
-				deviceExt->device,
-				bufExt->buffer,
-				NULL,
-				&uav,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
-			);
-		}
-	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
 		gotoIfError(clean, CharString_toUTF16x(name, &name16))
@@ -431,6 +375,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
 				EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+				NULL,
 				CharString_createRefCStrConst("Dedicated staging buffer"),
 				allocRange, &tempStagingResource
 			))

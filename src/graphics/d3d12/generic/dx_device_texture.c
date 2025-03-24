@@ -81,6 +81,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 		gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 			deviceRef,
 			EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+			NULL,
 			CharString_createRefCStrConst("Dedicated staging buffer"),
 			allocRange, &tempStagingResource
 		))

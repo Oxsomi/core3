@@ -158,8 +158,8 @@ Bool File_resolve(
 				))
 			}
 
-			for (U64 k = res.length - 1; k > i + 1; --k)
-				res.ptrNonConst[k - 2] = res.ptr[k];			//This is OK, we're dealing with refs from split
+			for (U64 k = i - 1; k < res.length - 2; ++k)
+				res.ptrNonConst[k] = res.ptr[k + 2];			//This is OK, we're dealing with refs from split
 
 			i -= 2;												//Ensure we keep track of the removed element
 			res.length -= 2;

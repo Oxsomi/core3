@@ -95,7 +95,7 @@ to add the virtual files to your project, you can use the following:
 ```cmake
 add_virtual_files(TARGET myProject NAME mySection ROOT ${CMAKE_CURRENT_SOURCE_DIR}/res/mySectionFolder SELF ${CMAKE_CURRENT_SOURCE_DIR})
 configure_icon(myProject "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-configure_virtual_files(myProject)
+apply_dependencies(myProject)
 ```
 
 Virtual files are then linked into the project.
@@ -106,7 +106,7 @@ To add a dependency, use the following:
 add_virtual_dependencies(TARGET myProject DEPENDENCIES myDep)
 ```
 
-This should be done before the configure_virtual_files and ensures the files for the dependency are present in this project. A dependency itself can't include an icon or use configure_virtual_files; as this is reserved for executables only.
+This should be done before the apply_dependencies and ensures the files for the dependency are present in this project.
 
 *Note: Dependencies can't be overlapping. So if B and C both include A then including B and C in D won't work.*
 

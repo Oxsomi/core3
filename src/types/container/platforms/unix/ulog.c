@@ -70,48 +70,6 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 		free(symbols);
 	}
 
-	void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skipTmp) {
-
-		U64 skip = (U64) skipTmp + 1;
-
-		I32 count = backtrace(stack, stackSize);
-
-		if ((U32)count >= stackSize) {			//Call backTrace again, but this time we have to allocate
-
-			U64 oldStackSize = stackSize;
-			stackSize += skip;
-
-			Buffer buf = Buffer_createNull();
-			Error err = Buffer_createUninitializedBytes(stackSize * sizeof(void*), alloc, &buf);
-
-			if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
-
-				void **newStack = (void**) buf.ptrNonConst;
-
-				I32 count = backtrace(newStack, stackSize);
-
-				for (U64 i = 0; i < oldStackSize && newStack[i + skip]; ++i)
-					stack[i] = newStack[i + skip];
-
-				if((U64)(count - skip) < oldStackSize)
-					stack[(U64)(count - skip)] = NULL;
-
-				Buffer_free(&buf, alloc);
-				return;
-			}
-
-			stackSize = oldStackSize;		//Restore, apparently can't allocate, so empty elements after
-		}
-
-		//Skip part of stack
-
-		for (U64 i = skip; i < stackSize && stack[i]; ++i)
-			stack[i - skip] = stack[i];
-
-		if((U64)(count - skip) < stackSize)
-			stack[(U64)(count - skip)] = NULL;
-	}
-
 	#define FONT_GREEN  "\e[1;32m"
 	#define FONT_CYAN   "\e[1;36m"
 	#define FONT_YELLOW "\e[1;33m"

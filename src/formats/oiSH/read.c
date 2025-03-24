@@ -322,7 +322,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 			gotoIfError2(clean, Buffer_createCopy(entryBuf, alloc, &binaryInfo.binaries[i]))
 		}
 
-		gotoIfError3(clean, SHFile_addBinaries(shFile, &binaryInfo, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addBinary(shFile, &binaryInfo, alloc, e_rr))
 	}
 
 	//Parse stages

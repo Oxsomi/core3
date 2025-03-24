@@ -241,6 +241,8 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 					FreeResource(handle);
 				}
 			}
+
+			else foundAny = true;
 		}
 
 		//Otherwise we want to use error to determine if it's present or not

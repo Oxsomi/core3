@@ -32,6 +32,7 @@ typedef RefPtr GraphicsDeviceRef;
 typedef UnifiedTexture RenderTexture;
 
 typedef RefPtr RenderTextureRef;
+typedef RefPtr DescriptorTableRef;
 
 #define RenderTextureRef_ptr(ptr) RefPtr_data(ptr, RenderTexture)
 
@@ -47,6 +48,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	ETextureFormatId format,
 	EGraphicsResourceFlag flag,
 	EMSAASamples msaa,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	RenderTextureRef **renderTexture
 );

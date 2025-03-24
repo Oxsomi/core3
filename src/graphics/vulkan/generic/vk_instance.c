@@ -44,7 +44,11 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.image = sizeof(VkUnifiedTexture),
 	.swapchain = sizeof(VkSwapchain),
 	.device = sizeof(VkGraphicsDevice),
-	.instance = sizeof(VkGraphicsInstance)
+	.instance = sizeof(VkGraphicsInstance),
+	.descriptorLayout = sizeof(VkDescriptorLayout),
+	.descriptorTable = sizeof(VkDescriptorTable),
+	.descriptorHeap = sizeof(VkDescriptorHeap),
+	.pipelineLayout = sizeof(VkPipelineLayout) + 8
 };
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -90,11 +94,22 @@ GraphicsObjectSizes VkGraphicsObjectSizes = {
 			.swapchainCreate = VkGraphicsDeviceRef_createSwapchain,
 			.swapchainFree = VkSwapchain_free,
 
+			.descriptorLayoutCreate = VkGraphicsDeviceRef_createDescriptorLayout,
+			.descriptorLayoutFree = VkDescriptorLayout_free,
+			.pipelineLayoutCreate = VkGraphicsDeviceRef_createPipelineLayout,
+			.pipelineLayoutFree = VkPipelineLayout_free,
+			.descriptorHeapCreate = VkGraphicsDeviceRef_createDescriptorHeap,
+			.descriptorHeapFree = VkDescriptorHeap_free,
+
+			.descriptorTableCreate = VkDescriptorHeap_createDescriptorTable,
+			.descriptorTableFree = VkDescriptorTable_free,
+			.descriptorTableSet = VkDescriptorTable_setDescriptors,
+			.descriptorTableUnset = VkDescriptorTable_unsetDescriptors,
+
 			.memoryAllocate = VkDeviceMemoryAllocator_allocate,
 			.memoryFree = VkDeviceMemoryAllocator_freeAllocation,
 
 			.deviceInit = VkGraphicsDevice_init,
-			.devicePostInit = VkGraphicsDevice_postInit,
 			.deviceWait = VkGraphicsDeviceRef_wait,
 			.deviceFree = VkGraphicsDevice_free,
 			.deviceSubmitCommands = VkGraphicsDevice_submitCommands,
@@ -674,6 +689,11 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES
 		)
 
+		getDeviceProperties(
+			true, VkPhysicalDevicePushDescriptorPropertiesKHR, pushDescriptor,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR
+		)
+
 		instanceExt->getPhysicalDeviceProperties2(dev, &properties2);
 
 		if(
@@ -682,6 +702,11 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			)
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 256MiB", i);
+			continue;
+		}
+
+		if (pushDescriptor.maxPushDescriptors < 32) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", push descriptors >=32 is required", i);
 			continue;
 		}
 
@@ -842,16 +867,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		instanceExt->getPhysicalDeviceFeatures2(dev, &features2);
 
-		//Query
-
 		VkPhysicalDeviceProperties properties = properties2.properties;
 		VkPhysicalDeviceFeatures features = features2.features;
 		VkPhysicalDeviceLimits limits = properties.limits;
-
-		if (limits.nonCoherentAtomSize > 256) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", nonCoherentAtomSize needs to be up to 256", i);
-			continue;
-		}
 
 		//Ensure device is compatible first
 
@@ -869,7 +887,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			!features.depthBiasClamp ||
 			!(features.textureCompressionBC || features.textureCompressionASTC_LDR) ||
 			!features.multiDrawIndirect ||
-			!features.sampleRateShading
+			!features.sampleRateShading ||
+			!features.shaderStorageImageReadWithoutFormat ||
+			!features.shaderStorageImageWriteWithoutFormat
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required features wasn't enabled", i);
 			continue;

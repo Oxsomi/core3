@@ -82,6 +82,42 @@
 	Error VkGraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
 	Bool  VkSwapchain_free(Swapchain *data, Allocator alloc);
 
+	//DescriptorHeap
+
+	Error VkGraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
+	Bool VkDescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
+
+	//DescriptorTable
+
+	Error VkDescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
+	Bool VkDescriptorTable_free(DescriptorTable *table, Allocator alloc);
+
+	Bool VkDescriptorTable_setDescriptors(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		ListDescriptor darr,
+		Error *e_rr
+	);
+
+	Bool VkDescriptorTable_unsetDescriptors(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		U64 count,
+		Error *e_rr
+	);
+
+	//DescriptorLayout
+
+	Error VkGraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+	Bool VkDescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
+
+	//PipelineLayout
+
+	Error VkGraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
+	Bool VkPipelineLayout_free(PipelineLayout *layout, Allocator alloc);
+
 	//Allocator
 
 	//Needs explicit lock, because allocator is accessed after.
@@ -106,7 +142,6 @@
 		GraphicsDeviceRef **deviceRef
 	);
 
-	void VkGraphicsDevice_postInit(GraphicsDevice *device);
 	U64 VkGraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
 	Bool VkGraphicsDevice_free(const GraphicsInstance *instance, void *ext);

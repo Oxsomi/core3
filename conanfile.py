@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.096"
+	version = "0.2.097"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -99,13 +99,13 @@ class oxc3(ConanFile):
 			self.requires("nvapi/2024.09.21")
 
 		if hasD3D12:
-			self.requires("agility_sdk/2024.09.22")
+			self.requires("agility_sdk/2025.03.08")
 
 		if hasD3D12 and self.settings.arch == "x86_64":
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2025.01.25")
+			self.requires("dxc/2025.03.12")
 			self.requires("spirv_reflect/2024.09.22")
 
 		if self.settings.os == "Linux":
@@ -161,6 +161,17 @@ class oxc3(ConanFile):
 		else:
 			input_dir = os.path.join(self.build_folder, str(self.settings.build_type) + "/" + platform + "/" + archName)
 
+		# Package dir where our oiCA files are output
+		
+		if self.build_folder.replace("\\", "/").endswith("core3/build/" + str(self.settings.build_type)):
+			OxC3_package_dir = os.path.join(self.build_folder, "../" + platform + "/packages")
+
+		elif self.build_folder.replace("\\", "/").endswith("/build/" + str(self.settings.build_type)):
+			OxC3_package_dir = os.path.join(self.build_folder, "/../../../" + platform + "/packages")
+
+		else:
+			OxC3_package_dir = os.path.join(self.build_folder, platform + "/packages")
+
 		input_lib_dir = os.path.join(input_dir, "lib")
 		input_bin_dir = os.path.join(input_dir, "bin")
 
@@ -169,6 +180,7 @@ class oxc3(ConanFile):
 		copy(self, "*.pdb", input_lib_dir, lib_dst)
 		copy(self, "*.exp", input_lib_dir, lib_dst)
 		copy(self, "*", input_bin_dir, bin_dst)
+		copy(self, "*", OxC3_package_dir, bin_dst + "/packages")
 
 	def package_info(self):
 

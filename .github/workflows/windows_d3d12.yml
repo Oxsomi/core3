@@ -7,7 +7,7 @@ jobs:
     name: Windows build d3d12
     runs-on: windows-2022
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Install Conan
@@ -17,10 +17,10 @@ jobs:
       run: conan profile detect
     - name: Restore cached
       id: cache-restore
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       with:
         path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/external/dxc') }}
+        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
     - name: build for fast check
       run: cmd /C build.bat Release True True False -o cliGraphics=False
     - name: build for SIMD fallback check
@@ -31,11 +31,14 @@ jobs:
       run: bash -c "rm -rf ~/.conan2/p/b/*/b"
     - name: Cache Build
       id: cache-build
-      uses: actions/cache/save@v3
+      uses: actions/cache/save@v4
       with:
         path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/external/dxc') }}
-    - uses: actions/setup-ruby@v1
+        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: true
     - name: Send Webhook Notification
       if: always()
       env:

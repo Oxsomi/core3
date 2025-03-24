@@ -18,44 +18,34 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
-#include "platforms/osx/objective_c.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
 #include "types/base/atomic.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
 
-//Port of https://github.com/CodaFi/C-Macs/blob/master/CMacs/AppDelegate.c
-//Platform is the one that holds the NSApp, since there can only be done.
-
-extern id NSApp;
-
-typedef struct AppDelegate { Class cls; } AppDelegate;
-
-//Wait til app is created
-
-AtomicI64 isReady;
-
-Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
-	(void)self; (void)cmd; (void)notif;
-	AtomicI64_add(&isReady, 1);
-	return true;
-}
-
-//Initialize all ObjectiveC classes and functions
-
-Class EObjCClass_obj[(int)EObjCClass_Count];
-SEL EObjCFunc_obj[(int)EObjCFunc_Count];
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/mman.h>
+#include <mach-o/loader.h>
 
 Bool Platform_initUnixExt(Error *e_rr) {
+
+	//Get exe name
 
 	Bool s_uccess = true;
 	C8 exeName[256];
 	U32 exeNameLen = 255;
+	CharString tmpStr = CharString_createNull();
+	I32 fd = -1;
+	C8 *ptr = NULL;
+	U64 fileSize = 0;
 
   	if (_NSGetExecutablePath(exeName, &exeNameLen) != 0)
-		retError(clean2, Error_invalidState(0, "Platform_initUnixExt() exePath exceeds maximum"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() exePath exceeds maximum"))
 
 	exeName[exeNameLen] = '\0';
 
@@ -64,7 +54,6 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	for(U64 i = exeNameLen - 1; i != U64_MAX; --i)
 		if(exeName[i] == '/') {
 			containedSlash = true;
-			exeName[i + 1] = '\0';
 			exeNameLen = i + 1;
 			break;
 		}
@@ -72,110 +61,93 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	if(!containedSlash)
 		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"))
 
-	gotoIfError2(clean2, CharString_createCopyx(
-		CharString_createRefSizedConst(exeName, exeNameLen, true), &Platform_instance->appDirectory
-	))
+	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
+	gotoIfError2(clean, CharString_createCopyx(appDir, &Platform_instance->appDirectory))
 
-clean2:
-	return s_uccess;
+	//Try to open the main executable within 1s, if it fails we can't init
 
-	//TODO:
+	U64 i = 0;
 
-	Log_debugLnx("Start!");
+	for(; i < 1000 && (fd = open(exeName, O_RDONLY)) < 0; ++i) {
 
-	//Get all classes
+		if(errno != EINTR)
+			retError(clean, Error_stderr(0, "Platform_initUnixExt() open failed on executable"))
 
-	for (U64 i = 0; i < EObjCClass_Count; ++i) {
-
-		Class c = objc_getClass(EObjCClass_names[i]);
-
-		if(!c)
-			retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't get required class"))
-
-		EObjCClass_obj[i] = c;
+		Thread_sleep(MS);
 	}
 
-	Log_debugLnx("Complete get classes!");
+	if(i == 1000)
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"))
 
-	//Get all functions
+	//Grab file data
 
-	for (U64 i = 0; i < EObjCFunc_Count; ++i) {
+	fileSize = lseek(fd, 0, SEEK_END);
+	ptr = (C8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
-		SEL sel = sel_getUid(EObjCFunc_names[i]);
+	if(ptr == (const C8*) MAP_FAILED)
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
 
-		if(!sel)
-			retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't get SEL / function"))
+	//Read sections
 
-		EObjCFunc_obj[i] = sel;
+	Bool anySection = false;
+	const struct mach_header_64 *header = (const struct mach_header_64*) ptr;
+	const struct load_command *lc = (const struct load_command*)((const C8*) ptr + sizeof(struct mach_header_64));
+
+	for (U32 i = 0; i < header->ncmds; i++) {
+
+        if (lc->cmd == LC_SEGMENT_64) {
+
+            const struct segment_command_64 *seg = (const struct segment_command_64*) lc;
+            const struct section_64 *sec = (const struct section_64*)((const C8*)seg + sizeof(struct segment_command_64));
+
+            for (U32 j = 0; j < seg->nsects; j++) {
+
+				if(seg->segname[0] != '@')		//Packages are marked with @ in front
+					continue;
+
+				gotoIfError2(clean, CharString_formatx(&tmpStr, "%s/%s", seg->segname + 1, sec[j].sectname))
+
+				VirtualSection section = (VirtualSection) { .path = tmpStr };
+				section.lenExt = sec[j].size;
+				section.dataExt = ptr + sec[j].offset;
+
+				gotoIfError2(clean, ListVirtualSection_pushBackx(&Platform_instance->virtualSections, section))
+
+				tmpStr = CharString_createNull();
+				anySection = true;
+			}
+        }
+
+        lc = (const struct load_command*)((const C8*)lc + lc->cmdsize);
+    }
+
+	//Keep file open until end of program.
+	//Unless there's no need (when there's no sections present).
+	//This doesn't keep anything in memory, until we actually load the sections.
+
+	if(anySection) {
+		Platform_instance->data = (void*) (U64) fd;
+		Platform_instance->data1 = ptr;
+		Platform_instance->size1 = fileSize;
+		fd = -1;
+		ptr = NULL;
 	}
-
-	Log_debugLnx("Complete get functions!");
-
-	//Create auto release pool
-
-	id pool = class_createInstance(clsNSAutoreleasePool(), 0);
-
-	if(!pool)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed to create auto release pool"))
-
-	if(!ObjC_sendId(pool, selInit()))
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed to init auto release pool"))
-
-	Log_debugLnx("Complete create autorelease pool!");
-
-	//Create delegate
-
-	Class delegateClass = objc_allocateClassPair(clsNSObject(), "AppDelegate", 0);
-
-	if(!delegateClass)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed to create delegateClass"))
-
-	if(!class_addMethod(delegateClass, selApplicationDidFinishLaunching(), (IMP)Platform_signalReady, "i@:@"))
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed to add function to delegateClass"))
-
-	objc_registerClassPair(delegateClass);
-
-	Log_debugLnx("Complete create delegate!");
-
-	//Instantiate application with our delegate
-
-	ObjC_sendId((id)clsNSApplication(), selSharedApplication());
-
-	if(!NSApp)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed to create NSApplication"))
-
-	id delegateObj = ObjC_sendId((id)objc_getClass("AppDelegate"), selAlloc());
-
-	if(!delegateObj)
-		retError(clean, Error_invalidState(1, "Platform_initUnixExt() failed to create AppDelegate"))
-
-	delegateObj = ObjC_sendId(delegateObj, selInit());
-
-	if(!delegateObj)
-		retError(clean, Error_invalidState(2, "Platform_initUnixExt() failed to init AppDelegate"))
-
-	ObjC_sendVoidPtr(NSApp, selSetDelegate(), delegateObj);
-
-	Log_debugLnx("Complete create delegate!");
-
-	ObjC_send(NSApp, selRun());
-
-	//Wait for the app to be ready (interval of 100ns)
-
-	Ns i = 0;
-
-	while(!AtomicI64_load(&isReady) && i < 2 * SECOND) {
-		Thread_sleep(100);
-		i += 100;
-	}
-
-	if(i >= 2 * SECOND)
-		retError(clean, Error_invalidState(3, "Platform_initUnixExt() failed to initialize the app; timed out"))
-
-	Log_debugLnx("Success!");
 
 clean:
+
+	if(fd >= 0)
+		close(fd);
+
+	if(ptr)
+		munmap(ptr, fileSize);
+
+	CharString_freex(&tmpStr);
 	return s_uccess;
 }
 
-void Platform_cleanupUnixExt() { }
+void Platform_cleanupUnixExt() {
+	if(Platform_instance->data1) {
+		munmap(Platform_instance->data1, Platform_instance->size1);
+		close((I32)(U64) Platform_instance->data);
+	}
+}

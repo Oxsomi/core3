@@ -24,14 +24,6 @@
 #include "platforms/log.h"
 #include "platforms/platform.h"
 
-void Error_fillStackTrace(Error *err) {
-
-	//Skip Error_fillStackTrace (skip=1), Error_x (skip=2)
-
-	if(err)
-		Log_captureStackTracex(err->stackTrace, ERROR_STACKTRACE, 2);
-}
-
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	Error_print(Platform_instance->alloc, err, logLevel, options);
 }

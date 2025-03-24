@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
@@ -378,10 +379,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	if(info->depthStencil.flags)
 		depthStencilState = (VkPipelineDepthStencilStateCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-			.depthTestEnable = !!(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
-			.depthWriteEnable = !!(info->depthStencil.flags & EDepthStencilFlags_DepthWriteBit),
+			.depthTestEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
+			.depthWriteEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthWriteBit),
 			.depthCompareOp = mapVkCompareOp(info->depthStencil.depthCompare),
-			.stencilTestEnable = !!(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
+			.stencilTestEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
 			.front = stencil,
 			.back = stencil,
 			.minDepthBounds = 1,
@@ -419,9 +420,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 			.cullMode = cullMode,
 			.frontFace = windingOrder,
-			.depthClampEnable = !!(info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp),
+			.depthClampEnable = (Bool)(info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp),
 			.polygonMode = polygonMode,
-			.depthBiasEnable = !!(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias),
+			.depthBiasEnable = (Bool)(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias),
 			.depthBiasConstantFactor = (F32) info->rasterizer.depthBiasConstantFactor,
 			.depthBiasClamp = info->rasterizer.depthBiasClamp,
 			.depthBiasSlopeFactor = info->rasterizer.depthBiasSlopeFactor,
@@ -533,7 +534,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		.pDepthStencilState = &depthStencilState,
 		.pColorBlendState = &blendState,
 		.pDynamicState = &dynamicState,
-		.layout = deviceExt->defaultLayout
+		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
 	gotoIfError2(clean, checkVkError(deviceExt->createGraphicsPipelines(

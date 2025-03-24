@@ -26,7 +26,10 @@
 #include "platforms/log.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/bindless_descriptor.h"
+#include "graphics/generic/descriptor_table.h"
 #include "types/container/buffer.h"
+#include "formats/oiSH/registers.h"
 
 TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing) {
 	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);
@@ -218,29 +221,36 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 		}
 	}
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
-	const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-	if (acq >= ELockAcquire_Success) {
-
-		ListU32 allocations = (ListU32) { 0 };
-		ListU32_createRefConst(&tlas->handle, 1, &allocations);
-		GraphicsDeviceRef_freeDescriptors(tlas->base.device, &allocations);
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&device->descriptorLock);
+	if(tlas->bindlessDescriptorTable) {
+		GraphicsDeviceRef_freeDescriptorBindless(tlas->base.device, tlas->bindlessDescriptorTable, tlas->handle, NULL);
+		DescriptorTableRef_dec(&tlas->bindlessDescriptorTable);
 	}
 
 	success &= !GraphicsDeviceRef_dec(&tlas->base.device).genericError;
 	return success;
 }
 
-Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString name, TLASRef **tlasRef) {
+Error GraphicsDeviceRef_createTLAS(
+	GraphicsDeviceRef *dev,
+	TLAS tlas,
+	DescriptorTableRef *bindlessDescriptorTable,
+	CharString name,
+	TLASRef **tlasRef
+) {
 
 	//Validate
 
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createTLAS()::dev is required");
+
+	if(bindlessDescriptorTable && tlas.disallowBindlessDescriptor)
+		return Error_invalidState(0, "GraphicsDeviceRef_createTLAS() bindlessDescriptorTable is set, but disallowed");
+
+	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		return Error_nullPointer(0, "GraphicsDeviceRef_createTLAS()::bindlessDescriptorTable should be valid if non NULL");
+
+	if (!tlas.disallowBindlessDescriptor && !bindlessDescriptorTable)
+		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
 
 	if(!tlasRef)
 		return Error_nullPointer(3, "GraphicsDeviceRef_createTLAS()::tlasRef is required");
@@ -343,9 +353,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 			1, "GraphicsDeviceRef_createTLAS()::cpuData should be valid if serialized construction is used"
 		);
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	Error err = Error_none();
-	ELockAcquire acq0 = ELockAcquire_Invalid;
 
 	//Allocate refPtr
 
@@ -436,31 +444,29 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 	tlasPtr->base.device = dev;
 
+	if(bindlessDescriptorTable) {
+		gotoIfError(clean, DescriptorTableRef_inc(bindlessDescriptorTable))
+		tlasPtr->bindlessDescriptorTable = bindlessDescriptorTable;
+	}
+
 	gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name))
 	//Log_debugLnx("Create: %s", tlasPtr->base.name.ptr);
-
-	//Reserve TLAS in array
-
-	acq0 = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-	if(acq0 < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createTLAS() couldn't acquire descriptor lock"
-		))
-
-	//Create images
-
-	tlasPtr->handle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_TLASExt);
-
-	if(tlasPtr->handle == U32_MAX)
-		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't allocate AS descriptor"))
-
+	
 	gotoIfError(clean, TLAS_initExt(tlasPtr));
 
-clean:
+	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
+		dev,
+		bindlessDescriptorTable,
+		ESHRegisterType_AccelerationStructure,
+		0,
+		false,
+		Descriptor_tlas(*tlasRef),
+		&tlasPtr->handle,
+		&err
+	))
+		goto clean;
 
-	if(acq0 == ELockAcquire_Acquired)
-		SpinLock_unlock(&device->descriptorLock);
+clean:
 
 	if(err.genericError)
 		TLASRef_dec(tlasRef);
@@ -473,6 +479,8 @@ Error GraphicsDeviceRef_createTLASExt(
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,					//If specified, indicates refit
 	ListTLASInstanceStatic instances,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 ) {
@@ -483,17 +491,20 @@ Error GraphicsDeviceRef_createTLASExt(
 			.flags = (U8) buildFlags,
 			.parent = parent
 		},
-		.cpuInstancesStatic = instances
+		.cpuInstancesStatic = instances,
+		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
 
-	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, bindlessDescriptorTable, name, tlas);
 }
 
 Error GraphicsDeviceRef_createTLASMotionExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,					//If specified, indicates refit
+	TLASRef *parent,
 	ListTLASInstanceMotion instances,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 ) {
@@ -504,18 +515,21 @@ Error GraphicsDeviceRef_createTLASMotionExt(
 			.flags = (U8) buildFlags,
 			.parent = parent
 		},
-		.cpuInstancesMotion = instances
+		.cpuInstancesMotion = instances,
+		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
 
-	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, bindlessDescriptorTable, name, tlas);
 }
 
 Error GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	Bool isMotionBlurExt,				//Requires extension
-	TLASRef *parent,					//If specified, indicates refit
-	DeviceData instancesDevice,			//Instances on the GPU, should be sized correctly
+	Bool isMotionBlurExt,
+	TLASRef *parent,
+	DeviceData instancesDevice,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 ) {
@@ -528,19 +542,23 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 			.parent = parent
 		},
 		.useDeviceMemory = true,
+		.disallowBindlessDescriptor = disallowBindlessDescriptor,
 		.deviceData = instancesDevice
 	};
 
-	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, bindlessDescriptorTable, name, tlas);
 }
 
 //Creating TLAS from cache
 
-//Error GraphicsDeviceRef_createTLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, TLASRef **tlas) {
+//Error GraphicsDeviceRef_createTLASFromCacheExt(
+// GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas
+//) {
 //
 //	TLAS tlasInfo = (TLAS) {
 //		.base = (RTAS) { .asConstructionType = (U8) ETLASConstructionType_Serialized, },
-//		.cpuData = cache
+//		.cpuData = cache,
+//		.disallowBindlessDescriptor = disallowBindlessDescriptor
 //	};
 //
 //	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);

@@ -365,30 +365,23 @@ typedef struct StartRenderCmdExt {
 
 typedef struct CopyImageRegion {
 
-	U32 srcLevelId, dstLevelId;
+	U16 srcX, srcY, srcZ;
+	U16 srcLevelId;
 
-	U32 srcX, srcY, srcZ;
-	U32 dstX, dstY, dstZ;
+	U16 dstX, dstY, dstZ;
+	U16 dstLevelId;
 
-	U32 width, height, length;
-	U32 padding;
+	U16 width, height, length;
+	U16 outputRotation;			//0, 1, 2, 3, useful for mobile (also known as 0, 90, 180, 270)
 
 } CopyImageRegion;
 
-typedef enum ECopyType {
-	ECopyType_All,				//Color or DepthStencil
-	ECopyType_DepthOnly,		//DepthStencil: Stencil isn't copied and only depth has to be compatible
-	ECopyType_StencilOnly		//DepthStencil: Depth isn't copied and only stencil has to be compatible
-} ECopyType;
-
 typedef struct CopyImageCmd {
 
-	RefPtr *src, *dst;
+	RefPtr *src, *dst;		//dst = RenderTexture, src = RenderTexture or regular Texture
 
 	U32 regionCount;
-	ECopyType copyType;
-
-	U64 padding;
+	U32 padding;
 
 	//CopyImageRegion regions[regionCount];
 

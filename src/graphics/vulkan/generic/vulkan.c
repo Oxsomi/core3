@@ -32,6 +32,7 @@ TListImpl(VkBufferImageCopy);
 TListImpl(VkImageMemoryBarrier2);
 TListImpl(VkBufferMemoryBarrier2);
 TListImpl(VkPipeline);
+TListImpl(VkImageViewMapping);
 
 Error checkVkError(VkResult result) {
 

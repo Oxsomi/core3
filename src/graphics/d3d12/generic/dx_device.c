@@ -31,6 +31,9 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
@@ -113,6 +116,49 @@ void onDebugReport(
 
 TListImpl(DxCommandAllocator);
 TListNamedImpl(ListID3D12Fence);
+
+Error DxGraphicsDevice_createDescriptorHeapSingle(
+	DxGraphicsDevice *deviceExt,
+	D3D12_DESCRIPTOR_HEAP_DESC desc,
+	CharString *name,
+	DxDescriptorHeapSingle *heap,
+	Bool reqGpuHandle
+) {
+
+	Error err = Error_none();
+	ListU16 tmpName16 = (ListU16) { 0 };
+
+	if(name->ptr)
+		gotoIfError(clean, CharString_toUTF16x(*name, &tmpName16))
+		
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
+		deviceExt->device,
+		&desc,
+		&IID_ID3D12DescriptorHeap,
+		(void**) &heap->heap
+	)))
+
+	if(tmpName16.ptr)
+		gotoIfError(clean, dxCheck(heap->heap->lpVtbl->SetName(heap->heap, tmpName16.ptr)))
+
+	heap->cpuIncrement = deviceExt->device->lpVtbl->GetDescriptorHandleIncrementSize(deviceExt->device, desc.Type);
+
+	if(!heap->heap->lpVtbl->GetCPUDescriptorHandleForHeapStart(heap->heap, &heap->cpuHandle))
+		gotoIfError(clean, Error_nullPointer(0, "D3D12: GetCPUDescriptorHandleForHeapStart() returned NULL"))
+
+	if(!reqGpuHandle)
+		goto clean;
+
+	heap->gpuIncrement = heap->cpuIncrement;
+
+	if(!heap->heap->lpVtbl->GetGPUDescriptorHandleForHeapStart(heap->heap, &heap->gpuHandle))
+		gotoIfError(clean, Error_nullPointer(0, "D3D12: GetGPUDescriptorHandleForHeapStart() returned NULL"))
+
+clean:
+	CharString_freex(name);
+	ListU16_freex(&tmpName16);
+	return err;
+}
 
 Error DX_WRAP_FUNC(GraphicsDevice_init)(
 	const GraphicsInstance *instance,
@@ -233,11 +279,12 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		#endif
 	}
 
+	static const U32 nvExtSlot = 99999;		//space and u slot
+
 	#if _ARCH == ARCH_X86_64
 
 		//Enable NV extensions
 
-		static const U32 nvExtSlot = 99999;		//space and u slot
 		EGraphicsFeatures nvExt =
 			EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayMicromapDisplacement |
 			EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation;
@@ -308,194 +355,33 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &deviceExt->commitSemaphore
 	)))
 
-	//Create root signature
-
-	D3D12_DESCRIPTOR_RANGE descRanges[17] = {
-
-		//Unused register, but nv wants it
-
-		(D3D12_DESCRIPTOR_RANGE) {
-			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-			.BaseShaderRegister = nvExtSlot,
-			.RegisterSpace = nvExtSlot,
-			.NumDescriptors = 1,
-			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_UAVEnd
-		}
-	};
-
-	for(U32 i = 0; i < 16; ++i) {
-
-		EDescriptorType type = i == 15 ? EDescriptorType_TLASExt : i;
-		U32 offset = EDescriptorTypeOffsets_values[type];
-		Bool isSrv = offset >= EDescriptorTypeOffsets_SRVStart && offset < EDescriptorTypeOffsets_SRVEnd;
-
-		descRanges[i + 1] = (D3D12_DESCRIPTOR_RANGE) {
-			.RangeType = isSrv ? D3D12_DESCRIPTOR_RANGE_TYPE_SRV : D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-			.NumDescriptors = descriptorTypeCount[type],
-			.OffsetInDescriptorsFromTableStart = offset,
-			.RegisterSpace = i
-		};
-	}
-
-	D3D12_DESCRIPTOR_RANGE samplerRange = (D3D12_DESCRIPTOR_RANGE) {
-		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-		.NumDescriptors = EDescriptorTypeOffsets_SamplerCount,
-		.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_Sampler
-	};
-
-	D3D12_ROOT_PARAMETER rootParam[] = {
-
-		//All other SRV/UAVs are bound through a descriptor table
-
-		(D3D12_ROOT_PARAMETER) {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-			.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE) {
-				.NumDescriptorRanges = (U32)(sizeof(descRanges) / sizeof(descRanges[0])),
-				.pDescriptorRanges = descRanges
-			}
-		},
-
-		//Samplers are bound through another descriptor table
-
-		(D3D12_ROOT_PARAMETER) {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-			.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE) {
-				.NumDescriptorRanges = 1,
-				.pDescriptorRanges = &samplerRange
-			}
-		},
-
-		//CBV at b0, space0
-
-		(D3D12_ROOT_PARAMETER) {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
-			.Descriptor = (D3D12_ROOT_DESCRIPTOR) { 0 }
-		}
-	};
-
-	D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSig = (D3D12_VERSIONED_ROOT_SIGNATURE_DESC) {
-		.Version = D3D_ROOT_SIGNATURE_VERSION_1,
-		.Desc_1_0 = (D3D12_ROOT_SIGNATURE_DESC) {
-			.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
-			.NumParameters = (U32)(sizeof(rootParam) / sizeof(rootParam[0])),
-			.pParameters = rootParam
-		}
-	};
-
-	err = dxCheck(deviceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(
-		deviceExt->deviceConfig, &rootSig, &rootSigBlob, &errBlob
-	));
-
-	if(err.genericError) {
-
-		if(errBlob)
-			Log_errorLnx("D3D12: Create root signature failed: %s", (const C8*) errBlob->lpVtbl->GetBufferPointer(errBlob));
-
-		goto clean;
-	}
-
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateRootSignature(
-		deviceExt->device,
-		0, rootSigBlob->lpVtbl->GetBufferPointer(rootSigBlob), rootSigBlob->lpVtbl->GetBufferSize(rootSigBlob),
-		&IID_ID3D12RootSignature, (void**) &deviceExt->defaultLayout
-	)))
-
-	//Create samplers
-
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-		.NumDescriptors = EDescriptorTypeOffsets_SamplerCount,
-		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-	};
-
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_Sampler].heap
-	)))
-
-	//Create resources
-
-	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = EDescriptorTypeOffsets_ResourceCount,
-		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-	};
-
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_Resources].heap
-	)))
-
 	//Create DSVs
 
-	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-		.NumDescriptors = EDescriptorTypeOffsets_DSVCount
+		.NumDescriptors = 1
 	};
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_DSV].heap
-	)))
+	CharString tmpName = CharString_createRefCStrConst("DSV heap");
+
+	if(device->flags & EGraphicsDeviceFlags_IsDebug)
+		gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
+			deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV], false
+		))
 
 	//Create RTVs
 
 	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		.NumDescriptors = EDescriptorTypeOffsets_RTVCount
+		.NumDescriptors = 8
 	};
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
-		deviceExt->device,
-		&heapDesc,
-		&IID_ID3D12DescriptorHeap,
-		(void**) &deviceExt->heaps[EDescriptorHeapType_RTV].heap
-	)))
+	if(device->flags & EGraphicsDeviceFlags_IsDebug)
+		tmpName = CharString_createRefCStrConst("RTV heap");
 
-	for (U32 i = 0; i < EDescriptorHeapType_Count; ++i) {
-
-		DxHeap *heap = &deviceExt->heaps[i];
-
-		if(device->flags & EGraphicsDeviceFlags_IsDebug) {
-
-			static const wchar_t *debugNames[] = {
-				L"Descriptor heap (0: Samplers)",
-				L"Descriptor heap (1: Resources)",
-				L"Descriptor heap (2: DSV)",
-				L"Descriptor heap (3: RTV)"
-			};
-
-			gotoIfError(clean, dxCheck(heap->heap->lpVtbl->SetName(heap->heap, debugNames[i])))
-		}
-
-		D3D12_DESCRIPTOR_HEAP_TYPE type;
-
-		switch(i) {
-			case EDescriptorHeapType_Sampler:	type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;		break;
-			default:							type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;	break;
-			case EDescriptorHeapType_DSV:		type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;			break;
-			case EDescriptorHeapType_RTV:		type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;			break;
-		}
-
-		heap->cpuIncrement = deviceExt->device->lpVtbl->GetDescriptorHandleIncrementSize(deviceExt->device, type);
-
-		if(!heap->heap->lpVtbl->GetCPUDescriptorHandleForHeapStart(heap->heap, &heap->cpuHandle))
-			gotoIfError(clean, Error_nullPointer(0, "D3D12: GetCPUDescriptorHandleForHeapStart() returned NULL"))
-
-		if(i >= EDescriptorHeapType_DSV)		//No GPU descriptor handle offsets
-			continue;
-
-		heap->gpuIncrement = heap->cpuIncrement;
-
-		if(!heap->heap->lpVtbl->GetGPUDescriptorHandleForHeapStart(heap->heap, &heap->gpuHandle))
-			gotoIfError(clean, Error_nullPointer(0, "D3D12: GetGPUDescriptorHandleForHeapStart() returned NULL"))
-	}
+	gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
+		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV], false
+	))
 
 	//Allocate temp storage for transitions
 
@@ -547,10 +433,6 @@ clean:
 	return err;
 }
 
-void DX_WRAP_FUNC(GraphicsDevice_postInit)(GraphicsDevice *device) {		//No-op in D3D12, CBV can be made/bound at runtime :)
-	(void)device;
-}
-
 U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool isDeviceLocal) {
 
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -596,12 +478,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 			if(deviceExt->commandSigs[i])
 				deviceExt->commandSigs[i]->lpVtbl->Release(deviceExt->commandSigs[i]);
 
-		for(U64 i = 0; i < EDescriptorHeapType_Count; ++i)
-			if(deviceExt->heaps[i].heap)
-				deviceExt->heaps[i].heap->lpVtbl->Release(deviceExt->heaps[i].heap);
-
-		if(deviceExt->defaultLayout)
-			deviceExt->defaultLayout->lpVtbl->Release(deviceExt->defaultLayout);
+		for(U64 i = 0; i < ECPUDescriptorHeapType_Count; ++i)
+			if(deviceExt->cpuHeaps[i].heap)
+				deviceExt->cpuHeaps[i].heap->lpVtbl->Release(deviceExt->cpuHeaps[i].heap);
 
 		for(U64 i = 0; i < EDxCommandQueue_Count; ++i)
 			if(deviceExt->queues[i].queue)
@@ -687,6 +566,41 @@ DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
 }
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
+
+void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *commandBuffer) {
+
+	//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
+	//For every bind point.
+
+	DxDescriptorHeap *heap = DescriptorHeap_ext(DescriptorHeapRef_ptr(device->defaultDescriptorHeaps), Dx);
+
+	ID3D12DescriptorHeap *descriptorHeaps[2] = { heap->resourcesHeap.heap, heap->samplerHeap.heap };
+
+	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
+	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2] = {
+		heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement,
+		heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->resourcesHeap.gpuIncrement
+	};
+
+	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
+
+	PipelineLayout *defaultLayout = PipelineLayoutRef_ptr(device->defaultPipelineLayout);
+	DxPipelineLayout *defaultLayoutExt = PipelineLayout_ext(defaultLayout, Dx);
+
+	commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, defaultLayoutExt->rootSig);
+	commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, defaultLayoutExt->rootSig);
+
+	for(U32 i = 0; i < 2; ++i) {
+		commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+		commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+	}
+
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
+	D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
+
+	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
+	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
+}
 
 Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
@@ -866,33 +780,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 
-		//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
-		//For every bind point.
-
-		ID3D12DescriptorHeap *descriptorHeaps[] = {
-			deviceExt->heaps[EDescriptorHeapType_Resources].heap,
-			deviceExt->heaps[EDescriptorHeapType_Sampler].heap
-		};
-
-		D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[] = {
-			deviceExt->heaps[EDescriptorHeapType_Resources].gpuHandle,
-			deviceExt->heaps[EDescriptorHeapType_Sampler].gpuHandle
-		};
-
-		commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
-
-		commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, deviceExt->defaultLayout);
-		commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, deviceExt->defaultLayout);
-
-		for(U32 i = 0; i < 2; ++i) {
-			commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-			commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
-		}
-
-		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
-
-		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
-		commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
+		GraphicsDevice_rebindDescriptors(device, commandBuffer);
 
 		//Record commands
 
@@ -1051,6 +939,8 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState 
 	commandBuffer->boundPrimitiveTopology = U8_MAX;
 	commandBuffer->stencilRef = 0;
 	commandBuffer->blendConstants = F32x4_zero();
+
+	GraphicsDevice_rebindDescriptors(device, commandBuffer->buffer);
 
 clean:
 

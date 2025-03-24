@@ -32,6 +32,7 @@ typedef RefPtr GraphicsDeviceRef;
 typedef UnifiedTexture DepthStencil;
 
 typedef RefPtr DepthStencilRef;
+typedef RefPtr DescriptorTableRef;
 
 #define DepthStencilRef_ptr(ptr) RefPtr_data(ptr, DepthStencil)
 
@@ -45,6 +46,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	EDepthStencilFormat format,
 	Bool allowShaderRead,
 	EMSAASamples msaa,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	DepthStencilRef **depthStencil
 );

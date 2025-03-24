@@ -7,12 +7,12 @@ required_conan_version = ">=2.0"
 class agility_sdk(ConanFile):
 
 	name = "agility_sdk"
-	version = "2024.09.22"
+	version = "2025.03.08"
 
 	license = "Microsoft DirectX, Direct3D WARP and MIT licenses"
 	author = "Microsoft"
 	url = "https://www.nuget.org/profiles/Direct3D"
-	description = "Library that contains both d3d10warp.dll and the agility sdk"
+	description = "Library that contains both d3d10warp.dll (1.0.13) and the agility sdk (1.615.1)"
 	topics = ("microsoft", "d3d12", "agility", "directx", "warp", "pre-built")
 
 	exports_sources = [ "agility/build/native/include/*.h", "agility/LICENSE.txt", "agility/LICENSE-CODE.txt", "warp/LICENSE.txt" ]
@@ -21,10 +21,10 @@ class agility_sdk(ConanFile):
 
 	def source(self):
 
-		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP", "warp.zip")
+		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.13", "warp.zip")
 		unzip(self, "warp.zip", "warp")
 
-		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12", "d3d12.zip")
+		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.615.1", "d3d12.zip")
 		unzip(self, "d3d12.zip", "agility")
 
 	def package(self):

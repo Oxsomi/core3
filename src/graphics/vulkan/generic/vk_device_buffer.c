@@ -114,7 +114,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 
 	VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-	if(buf->resource.flags & EGraphicsResourceFlag_ShaderRW)
+	if(buf->resource.flags & EGraphicsResourceFlag_ShaderRWBindful)
 		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
 	if(buf->usage & EDeviceBufferUsage_Vertex)
@@ -138,7 +138,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	if(buf->usage & EDeviceBufferUsage_SBTExt)
 		usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
 
-	if(buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit)		//Only for internal usage
+	if(buf->usage & EDeviceBufferUsage_Uniform)
 		usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
 	usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -213,45 +213,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 			gotoIfError(clean, Error_invalidState(0, "VkGraphicsDeviceRef_createBuffer() Couldn't obtain GPU address"))
 	}
 
-	//Fill relevant descriptor sets if shader accessible
-
-	EGraphicsResourceFlag flags = buf->resource.flags;
-
-	if(flags & EGraphicsResourceFlag_ShaderRW) {
-
-		//Create readonly buffer
-
-		VkDescriptorBufferInfo bufferDesc = (VkDescriptorBufferInfo) { .buffer = bufExt->buffer, .range = buf->resource.size };
-
-		VkWriteDescriptorSet descriptors[2] = {
-			(VkWriteDescriptorSet) {
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstBinding = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pBufferInfo = &bufferDesc
-			}
-		};
-
-		U32 counter = 0;
-
-		if (flags & EGraphicsResourceFlag_ShaderRead) {
-			descriptors[counter].dstBinding = EDescriptorType_Buffer;
-			descriptors[counter].dstArrayElement = ResourceHandle_getId(buf->readHandle);
-			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
-			++counter;
-		}
-
-		if (flags & EGraphicsResourceFlag_ShaderWrite) {
-			descriptors[counter] = descriptors[0];
-			descriptors[counter].dstBinding = EDescriptorType_RWBuffer;
-			descriptors[counter].dstArrayElement = ResourceHandle_getId(buf->writeHandle);
-			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
-			++counter;
-		}
-
-		deviceExt->updateDescriptorSets(deviceExt->device, counter, descriptors, 0, NULL);
-	}
+	//Debug name
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
@@ -371,6 +333,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
 				EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+				NULL,
 				CharString_createRefCStrConst("Dedicated staging buffer"),
 				allocRange, &tempStagingResource
 			))

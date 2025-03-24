@@ -24,6 +24,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
+#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
@@ -105,6 +106,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 				tlas->base.device,
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocated,
+				NULL,
 				tmp,
 				stride * instancesU64,
 				&tlas->tempInstanceBuffer
@@ -156,6 +158,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		tlas->base.device,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tlas->base.name,
 		sizes.ResultDataMaxSizeInBytes,
 		&tlas->base.asBuffer
@@ -169,32 +172,11 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 		tlas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
 		&tlas->base.tempScratchBuffer
 	))
-
-	//Add as descriptor
-
-	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
-	D3D12_SHADER_RESOURCE_VIEW_DESC resourceView = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
-		.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE,
-		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-		.RaytracingAccelerationStructure = (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV) {
-			.Location = dstAS
-		}
-	};
-
-	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
-
-	U64 id = EDescriptorTypeOffsets_TLASExt + ResourceHandle_getId(tlas->handle);
-
-	deviceExt->device->lpVtbl->CreateShaderResourceView(
-		deviceExt->device,
-		NULL,
-		&resourceView,
-		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
-	);
 
 clean:
 	CharString_freex(&tmp);

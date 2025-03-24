@@ -413,9 +413,6 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 		managedImage->lastAccess = managedImage->lastLayout = 0;
 		managedImage->lastStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-		if(managedImage->view)
-			deviceExt->destroyImageView(deviceExt->device, managedImage->view, NULL);
-
 		managedImage->image = vkImages[i];
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
@@ -455,6 +452,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
+
+	swapchain->orientation = expectOrientation;
 
 clean:
 	CharString_freex(&temp);

@@ -21,6 +21,7 @@
 #pragma once
 #include "types/container/list.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/descriptor_table.h"
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 
@@ -47,14 +48,49 @@
 	VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT |					\
 	VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV)
 
-typedef struct VkUnifiedTexture {
-	VkImage image;
+TList(VkMappedMemoryRange);
+TList(VkBufferCopy);
+TList(VkImageCopy);
+TList(VkBufferImageCopy);
+TList(VkImageMemoryBarrier2);
+TList(VkBufferMemoryBarrier2);
+TList(VkPipeline);
+
+typedef struct VkImageViewMapping {
+
+	union {
+		TextureDescriptorRange textureDesc;
+		U64 textureDescU64;
+	};
+
 	VkImageView view;
+	U64 refCount;
+
+} VkImageViewMapping;
+
+TList(VkImageViewMapping);
+
+typedef struct VkUnifiedTexture {
+
+	VkImage image;
+
 	VkPipelineStageFlagBits2 lastStage;
+
 	VkAccessFlagBits2 lastAccess;
+
 	VkImageLayout lastLayout;
-	U32 padding[3];
+	U32 padding;
+
+	ListVkImageViewMapping views;
+
+	SpinLock lock;					//To acquire views
+
 } VkUnifiedTexture;
+
+typedef struct Descriptor Descriptor;
+typedef enum ESHRegisterType ESHRegisterType;
+
+Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *view, U32 *viewId, Error *e_rr);
 
 typedef enum ECompareOp ECompareOp;
 
@@ -76,14 +112,6 @@ typedef struct VkTLAS {
 
 static const U32 raytracingShaderIdSize = 32;
 static const U32 raytracingShaderAlignment = 64;
-
-TList(VkMappedMemoryRange);
-TList(VkBufferCopy);
-TList(VkImageCopy);
-TList(VkBufferImageCopy);
-TList(VkImageMemoryBarrier2);
-TList(VkBufferMemoryBarrier2);
-TList(VkPipeline);
 
 Error checkVkError(VkResult result);
 

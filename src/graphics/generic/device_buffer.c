@@ -21,11 +21,14 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/bindless_descriptor.h"
+#include "graphics/generic/descriptor_table.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "platforms/log.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
+#include "formats/oiSH/registers.h"
 
 TListImpl(DevicePendingRange);
 
@@ -178,21 +181,12 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 		
 	//Log_debugLnx("Destroy: DeviceBuffer (%p)", buffer);
 
-	if (buffer->resource.flags & EGraphicsResourceFlag_ShaderRW) {
+	GraphicsDeviceRef *device = buffer->resource.device;
 
-		GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
-		const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-		if(acq >= ELockAcquire_Success) {
-
-			const U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
-			ListU32 allocationList = (ListU32) { 0 };
-			ListU32_createRefConst(allocations, 2, &allocationList);
-			GraphicsDeviceRef_freeDescriptors(buffer->resource.device, &allocationList);
-
-			if(acq == ELockAcquire_Acquired)
-				SpinLock_unlock(&device->descriptorLock);
-		}
+	if(buffer->bindlessDescriptorTable) {
+		GraphicsDeviceRef_freeDescriptorBindless(device, buffer->bindlessDescriptorTable, buffer->readHandle, NULL);
+		GraphicsDeviceRef_freeDescriptorBindless(device, buffer->bindlessDescriptorTable, buffer->writeHandle, NULL);
+		DescriptorTableRef_dec(&buffer->bindlessDescriptorTable);
 	}
 
 	Bool success = DeviceBuffer_freeExt(buffer);
@@ -206,6 +200,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
 	Bool allocate,
@@ -222,10 +217,27 @@ Error GraphicsDeviceRef_createBufferIntern(
 		return err;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
-	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"))
+
+	if(bindlessDescriptorTable && !(resourceFlags & EGraphicsResourceFlag_ExposeBindless))
+		gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createBufferIntern() bindlessDescriptorTable is set, but disallowed"
+		))
+
+	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		gotoIfError(clean, Error_nullPointer(
+			0, "GraphicsDeviceRef_createBufferIntern()::bindlessDescriptorTable should be valid if non NULL"
+		))
+
+	if ((resourceFlags & EGraphicsResourceFlag_ExposeBindless) && !bindlessDescriptorTable)
+		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
+
+	if(!bindlessDescriptorTable && (resourceFlags & EGraphicsResourceFlag_ExposeBindless))
+		gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createBufferIntern() can't expose resource for bindless without bindless"
+		))
 
 	if((usage & EDeviceBufferUsage_ScratchExt) && (usage != EDeviceBufferUsage_ScratchExt))
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"))
@@ -266,43 +278,9 @@ Error GraphicsDeviceRef_createBufferIntern(
 		.isFirstFrame = true
 	};
 
-	//Allocate
-
-	if(buf->resource.flags & EGraphicsResourceFlag_ShaderRW) {
-
-		acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(
-				0, "GraphicsDeviceRef_createBufferIntern() couldn't acquire descriptor lock"
-			))
-
-		//Create images
-
-		if(buf->resource.flags & EGraphicsResourceFlag_ShaderRead) {
-
-			buf->readHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Buffer);
-
-			if(buf->readHandle == U32_MAX)
-				gotoIfError(clean, Error_outOfMemory(
-					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
-				))
-		}
-
-		if(buf->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
-
-			buf->writeHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_RWBuffer);
-
-			if(buf->writeHandle == U32_MAX)
-				gotoIfError(clean, Error_outOfMemory(
-					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
-				))
-		}
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&device->descriptorLock);
-
-		acq = ELockAcquire_Invalid;
+	if(bindlessDescriptorTable) {
+		gotoIfError(clean, DescriptorTableRef_inc(bindlessDescriptorTable))
+		buf->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, buf->resource.flags & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
@@ -314,10 +292,40 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buf, name))
 
-clean:
+	//Create descriptor
+	//TODO: Allow creation as StructuredBuffer
 
-	if(acq == ELockAcquire_Acquired)
-		SpinLock_unlock(&device->descriptorLock);
+	if(
+		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
+		!GraphicsDeviceRef_allocateDescriptorBindless(
+			dev,
+			bindlessDescriptorTable,
+			ESHRegisterType_ByteAddressBuffer,
+			0,
+			false,
+			Descriptor_buffer(*ref, 0, 0, NULL, 0),
+			&buf->readHandle,
+			&err
+		)
+	)
+		goto clean;
+
+	if(
+		(buf->resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
+		!GraphicsDeviceRef_allocateDescriptorBindless(
+			dev,
+			bindlessDescriptorTable,
+			ESHRegisterType_ByteAddressBuffer | ESHRegisterType_IsWrite,
+			0,
+			false,
+			Descriptor_buffer(*ref, 0, 0, NULL, 0),
+			&buf->readHandle,
+			&err
+		)
+	)
+		goto clean;
+
+clean:
 
 	if(err.genericError)
 		DeviceBufferRef_dec(ref);
@@ -329,12 +337,13 @@ Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
 	DeviceBufferRef **buf
 ) {
 	return GraphicsDeviceRef_createBufferIntern(
-		dev, usage, resourceFlags, name, len, resourceFlags & EGraphicsResourceFlag_CPUBacked, buf
+		dev, usage, resourceFlags, bindlessDescriptorTable, name, len, resourceFlags & EGraphicsResourceFlag_CPUBacked, buf
 	);
 }
 
@@ -342,6 +351,7 @@ Error GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag flags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
 	DeviceBufferRef **buf
@@ -351,7 +361,7 @@ Error GraphicsDeviceRef_createBufferData(
 		return Error_nullPointer(4, "GraphicsDeviceRef_createBufferData()::dat is required");
 
 	Error err = GraphicsDeviceRef_createBufferIntern(
-		dev, usage, flags, name, Buffer_length(*dat), Buffer_isRef(*dat), buf
+		dev, usage, flags, bindlessDescriptorTable, name, Buffer_length(*dat), Buffer_isRef(*dat), buf
 	);
 
 	if(err.genericError)

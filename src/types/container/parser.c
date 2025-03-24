@@ -630,7 +630,8 @@ Bool Parser_printSymbol(
 		ESymbolFlagVar_NoInterpolation |
 		ESymbolFlagVar_NoPerspective |
 		ESymbolFlagVar_Centroid |
-		ESymbolFlagVar_Linear;
+		ESymbolFlagVar_Linear |
+		ESymbolFlagVar_GroupShared;
 
 	if (!isFiltered && (sym.flags & flagsToQuery)) {
 
@@ -692,6 +693,9 @@ Bool Parser_printSymbol(
 
 		else if(sym.flags & ESymbolFlag_IsPublic)
 			stringsToCombine[counter++] = "private";
+
+		else if(sym.flags & ESymbolFlagVar_GroupShared)
+			stringsToCombine[counter++] = "groupshared";
 
 		gotoIfError2(clean, CharString_append(&tmp2, '\t', alloc))
 		gotoIfError2(clean, CharString_appendString(&tmp2, tmp, alloc))

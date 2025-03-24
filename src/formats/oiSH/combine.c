@@ -314,7 +314,6 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 							if(rega.reg.texture.formatId != regb.reg.texture.formatId)
 								retError(clean, Error_invalidState(0, "SHFile_combine() texture formatId are incompatible"))
-
 						}
 
 						else {
@@ -370,7 +369,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		if(registers.length)
 			c.registers = registers;
 
-		gotoIfError3(clean, SHFile_addBinaries(combined, &c, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addBinary(combined, &c, alloc, e_rr))
 		registers = (ListSHRegisterRuntime) { 0 };
 	}
 
@@ -405,7 +404,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		*(U64*)extPtrDst = *(const U64*)extPtrSrc;
 
-		gotoIfError3(clean, SHFile_addBinaries(combined, &c, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addBinary(combined, &c, alloc, e_rr))
 		remappedBinaries.ptrNonConst[i] = (U16) (combined->binaries.length - 1);
 	}
 

@@ -24,29 +24,6 @@
 #include "graphics/generic/pipeline_structs.h"
 #include "types/base/error.h"
 
-EDescriptorTypeOffsets EDescriptorTypeOffsets_values[] = {
-
-	EDescriptorTypeOffsets_Texture2D,
-	EDescriptorTypeOffsets_TextureCube,
-	EDescriptorTypeOffsets_Texture3D,
-	EDescriptorTypeOffsets_Buffer,
-
-	EDescriptorTypeOffsets_RWBuffer,
-	EDescriptorTypeOffsets_RWTexture3D,
-	EDescriptorTypeOffsets_RWTexture3Ds,
-	EDescriptorTypeOffsets_RWTexture3Df,
-	EDescriptorTypeOffsets_RWTexture3Di,
-	EDescriptorTypeOffsets_RWTexture3Du,
-	EDescriptorTypeOffsets_RWTexture2D,
-	EDescriptorTypeOffsets_RWTexture2Ds,
-	EDescriptorTypeOffsets_RWTexture2Df,
-	EDescriptorTypeOffsets_RWTexture2Di,
-	EDescriptorTypeOffsets_RWTexture2Du,
-
-	EDescriptorTypeOffsets_Sampler,
-	EDescriptorTypeOffsets_TLASExt
-};
-
 TListImpl(D3D12_TEXTURE_BARRIER);
 TListImpl(D3D12_BUFFER_BARRIER);
 TListImpl(ID3D12PipelineState);

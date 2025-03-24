@@ -261,6 +261,7 @@ Error GraphicsDeviceRef_createTexture(
 	U16 width,
 	U16 height,
 	U16 length,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
 	DeviceTextureRef **tex
@@ -317,7 +318,7 @@ Error GraphicsDeviceRef_createTexture(
 		.isFirstFrame = true
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*tex, name))
+	gotoIfError(clean, UnifiedTexture_create(*tex, bindlessDescriptorTable, name))
 
 	if(Buffer_isRef(*dat)) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(texSize, &texture->cpuData))		//Temporary if not CPUBacked

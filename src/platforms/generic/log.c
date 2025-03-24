@@ -25,10 +25,6 @@
 
 #include <stdlib.h>
 
-void Log_captureStackTracex(void **stackTrace, U64 stackSize, U8 skip) {
-	Log_captureStackTrace(Platform_instance->alloc, stackTrace, stackSize, skip == U8_MAX ? U8_MAX : skip + 1);
-}
-
 void Log_printStackTracex(U8 skip, ELogLevel lvl, ELogOptions options) {
 	Log_printStackTrace(Platform_instance->alloc, skip + 1 == 0 ? U8_MAX : skip + 1, lvl, options);
 }

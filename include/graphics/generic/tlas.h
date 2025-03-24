@@ -141,14 +141,19 @@ TList(TLASInstanceStatic);
 //A TLAS is a ListTLASInstance or a DeviceBuffer that contains either
 // TLASInstance[] (isMotionBlurExt) or TLASInstanceStatic[] (!isMotionBlurExt)
 
+typedef U32 BindlessDescriptor;
+
 typedef struct TLAS {
 
 	RTAS base;
 
-	Bool useDeviceMemory;
-	U8 padding[3];
+	DescriptorTableRef *bindlessDescriptorTable;
 
-	U32 handle;
+	Bool useDeviceMemory;
+	Bool disallowBindlessDescriptor;
+	U8 padding[10];
+
+	BindlessDescriptor handle;
 
 	DeviceBufferRef *tempInstanceBuffer;		//If cpuInstanceMotion or cpuInstancesStatic, temp upload heap
 
@@ -189,6 +194,8 @@ Error GraphicsDeviceRef_createTLASExt(
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,					//If specified, indicates refit
 	ListTLASInstanceStatic instances,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 );
@@ -198,6 +205,8 @@ Error GraphicsDeviceRef_createTLASMotionExt(
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,					//If specified, indicates refit
 	ListTLASInstanceMotion instances,
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 );
@@ -208,11 +217,15 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 	Bool isMotionBlurExt,				//Requires extension
 	TLASRef *parent,					//If specified, indicates refit
 	DeviceData instancesDevice,			//Instances on the GPU, should be sized correctly
+	Bool disallowBindlessDescriptor,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	TLASRef **tlas
 );
 
-//Error GraphicsDeviceRef_createTLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, TLASRef **tlas);
+//Error GraphicsDeviceRef_createTLASFromCacheExt(
+//	GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas
+//);
 
 #ifdef __cplusplus
 	}

@@ -55,7 +55,11 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	.image = sizeof(DxUnifiedTexture),
 	.swapchain = sizeof(DxSwapchain),
 	.device = sizeof(DxGraphicsDevice),
-	.instance = sizeof(DxGraphicsInstance)
+	.instance = sizeof(DxGraphicsInstance),
+	.descriptorLayout = sizeof(DxDescriptorLayout),
+	.descriptorTable = sizeof(DxDescriptorTable),
+	.descriptorHeap = sizeof(DxDescriptorHeap),
+	.pipelineLayout = sizeof(ID3D12RootSignature) + 8
 };
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -101,11 +105,22 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 			.swapchainCreate = D3D12GraphicsDeviceRef_createSwapchain,
 			.swapchainFree = D3D12Swapchain_free,
 
+			.descriptorLayoutCreate = D3D12GraphicsDeviceRef_createDescriptorLayout,
+			.descriptorLayoutFree = D3D12DescriptorLayout_free,
+			.pipelineLayoutCreate = D3D12GraphicsDeviceRef_createPipelineLayout,
+			.pipelineLayoutFree = D3D12PipelineLayout_free,
+			.descriptorHeapCreate = D3D12GraphicsDeviceRef_createDescriptorHeap,
+			.descriptorHeapFree = D3D12DescriptorHeap_free,
+
+			.descriptorTableCreate = D3D12DescriptorHeap_createDescriptorTable,
+			.descriptorTableFree = D3D12DescriptorTable_free,
+			.descriptorTableSet = D3D12DescriptorTable_setDescriptors,
+			.descriptorTableUnset = D3D12DescriptorTable_unsetDescriptors,
+
 			.memoryAllocate = D3D12DeviceMemoryAllocator_allocate,
 			.memoryFree = D3D12DeviceMemoryAllocator_freeAllocation,
 
 			.deviceInit = D3D12GraphicsDevice_init,
-			.devicePostInit = D3D12GraphicsDevice_postInit,
 			.deviceWait = D3D12GraphicsDeviceRef_wait,
 			.deviceFree = D3D12GraphicsDevice_free,
 			.deviceSubmitCommands = D3D12GraphicsDevice_submitCommands,
@@ -308,6 +323,52 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&tempInfos, adapters.length))
 
+	//Pre-filter, this removes duplicate devices that get generated because of virtual displays (RDP).
+	//The reason why we want to filter this:
+	//	Even though this is a valid D3D12 device, the LUID is not real.
+	//	This would mean no other device can interop if it were to be selected (CUDA, Vulkan, etc.).
+	//	It shows as multiple devices, which might give the indication of having multiple physical devices
+	//		(e.g. 2 of the same GPU).
+
+	for(U64 i = 0; i < adapters.length; ++i) {
+
+		DXGI_ADAPTER_DESC3 desci = (DXGI_ADAPTER_DESC3) { 0 };
+		gotoIfError(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desci)))
+
+		for(U64 j = 0; j < i; ++j) {
+
+			DXGI_ADAPTER_DESC3 descj = (DXGI_ADAPTER_DESC3) { 0 };
+			gotoIfError(clean, dxCheck(adapters.ptr[j]->lpVtbl->GetDesc3(adapters.ptr[j], &descj)))
+
+			//Duplicate, this is generally a virtual display
+
+			if (desci.DeviceId == descj.DeviceId) {
+
+				Bool isVirtualj =
+					descj.GraphicsPreemptionGranularity == DXGI_GRAPHICS_PREEMPTION_DMA_BUFFER_BOUNDARY &&
+					descj.ComputePreemptionGranularity == DXGI_COMPUTE_PREEMPTION_DMA_BUFFER_BOUNDARY;
+
+				Bool isVirtuali =
+					desci.GraphicsPreemptionGranularity == DXGI_GRAPHICS_PREEMPTION_DMA_BUFFER_BOUNDARY &&
+					desci.ComputePreemptionGranularity == DXGI_COMPUTE_PREEMPTION_DMA_BUFFER_BOUNDARY;
+
+				if (isVirtuali) {
+					adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);
+					ListIDXGIAdapter4_erase(&adapters, i);
+					--i;
+					break;
+				}
+
+				if (isVirtualj) {
+					adapters.ptr[j]->lpVtbl->Release(adapters.ptr[j]);
+					ListIDXGIAdapter4_erase(&adapters, j);
+					--i;
+					break;
+				}
+			}
+		}
+	}
+
 	//Get compatible adapters
 
 	for(U64 i = 0; i < adapters.length; ++i) {
@@ -391,8 +452,9 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
 		D3D12_FEATURE_DATA_HARDWARE_COPY hwCopy = (D3D12_FEATURE_DATA_HARDWARE_COPY) { 0 };
+		D3D12_FEATURE_DATA_ROOT_SIGNATURE rootSig = (D3D12_FEATURE_DATA_ROOT_SIGNATURE) { 0 };
 
-		#if D3D12_PREVIEW_SDK_VERSION >= 716
+		#if D3D12_PREVIEW_SDK_VERSION >= 716 && !defined(_DISABLE_TIGHT_ALIGNMENT)
 			D3D12_FEATURE_DATA_TIGHT_ALIGNMENT tightAlignment = (D3D12_FEATURE_DATA_TIGHT_ALIGNMENT) { 0 };
 		#endif
 
@@ -407,6 +469,9 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		if(opt0.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3)
 			caps.features |= EGraphicsFeatures_Bindless;
+
+		if(opt0.ResourceHeapTier >= D3D12_RESOURCE_HEAP_TIER_2)
+			caps.featuresExt |= EDxGraphicsFeatures_AllowCombineHeaps;
 
 		if(opt0.DoublePrecisionFloatShaderOps)
 			caps.dataTypes |= EGraphicsDataTypes_F64;
@@ -513,6 +578,11 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
 
+		rootSig.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;	//Nice way of querying..
+
+		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))))
+			caps.featuresExt |= EDxGraphicsFeatures_RootSig1_1;
+
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required shader model (6.5)", i);
@@ -542,7 +612,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			goto next;
 		}
 
-		#if D3D12_PREVIEW_SDK_VERSION >= 716
+		#if D3D12_PREVIEW_SDK_VERSION >= 716 && !defined(_DISABLE_TIGHT_ALIGNMENT)
 
 			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 				device, D3D12_FEATURE_D3D12_TIGHT_ALIGNMENT, &tightAlignment, sizeof(tightAlignment)

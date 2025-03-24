@@ -7,6 +7,12 @@
 		"error.h": "c",
 		"time.h": "c",
 		"keyboard.h": "c",
-		"vk_instance.h": "c"
+		"vk_instance.h": "c",
+		"string.h": "c",
+		"log.h": "c",
+		"allocator.h": "c",
+		"execinfo.h": "c",
+		"entries.h": "c",
+		"vk_device.h": "c"
 	}
 }

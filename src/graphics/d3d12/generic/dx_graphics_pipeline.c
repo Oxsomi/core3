@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
@@ -102,7 +103,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics = (D3D12_GRAPHICS_PIPELINE_STATE_DESC) {
 
-		.pRootSignature = deviceExt->defaultLayout,
+		.pRootSignature = PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Dx)->rootSig,
 
 		.BlendState = (D3D12_BLEND_DESC) { .IndependentBlendEnable = info->blendState.allowIndependentBlend },
 
@@ -110,14 +111,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
 			.FrontCounterClockwise = !(info->rasterizer.flags & ERasterizerFlags_IsClockWise),
-			.MultisampleEnable = !!info->msaa
+			.MultisampleEnable = (Bool) info->msaa
 		},
 
 		.DepthStencilState = (D3D12_DEPTH_STENCIL_DESC) {
-			.DepthEnable = !!(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
-			.DepthWriteMask = !!(info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
+			.DepthEnable = (Bool) (info->depthStencil.flags & EDepthStencilFlags_DepthTest),
+			.DepthWriteMask = (Bool) (info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
 			.DepthFunc = mapDxCompareOp(info->depthStencil.depthCompare),
-			.StencilEnable = !!(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
+			.StencilEnable = (Bool) (info->depthStencil.flags & EDepthStencilFlags_StencilTest),
 			.StencilReadMask = info->depthStencil.stencilReadMask,
 			.StencilReadMask = info->depthStencil.stencilWriteMask
 		},
@@ -178,7 +179,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
 
 			.BlendEnable			= (info->blendState.renderTargetMask >> realJ) & 1,
-			.LogicOpEnable			= !!info->blendState.logicOpExt,
+			.LogicOpEnable			= (Bool) info->blendState.logicOpExt,
 			.RenderTargetWriteMask	= info->blendState.writeMask[realJ],
 
 			.BlendOp				= mapDxBlendOp(src.blendOp),

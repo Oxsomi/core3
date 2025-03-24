@@ -217,7 +217,9 @@ typedef enum ESymbolFlag {
 	ESymbolFlagVar_Centroid						= 1 << 20,
 	ESymbolFlagVar_Linear						= 1 << 21,		//smooth in GLSL
 
-	ESymbolFlag_Count							= 22			//Keep less than 32
+	ESymbolFlagVar_GroupShared					= 1 << 22,
+
+	ESymbolFlag_Count							= 23			//Keep less than 32
 
 } ESymbolFlag;
 

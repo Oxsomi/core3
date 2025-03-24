@@ -82,26 +82,33 @@ typedef struct SamplerInfo {
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr SamplerRef;
+typedef RefPtr DescriptorTableRef;
 
 typedef struct Sampler {
 
 	GraphicsDeviceRef *device;
 
-	U32 samplerLocation;
-	U32 pad0;
+	DescriptorTableRef *bindlessDescriptorTable;
 
 	SamplerInfo info;
-	U16 pad1;
+	U16 samplerLocation;
 
 } Sampler;
 
 #define Sampler_ext(ptr, T) (!ptr ? NULL : (T##Sampler*)(ptr + 1))		//impl
 #define SamplerRef_ptr(ptr) RefPtr_data(ptr, Sampler)
 
-Error SamplerRef_dec(SamplerRef **buffer);
-Error SamplerRef_inc(SamplerRef *buffer);
+Error SamplerRef_dec(SamplerRef **sampler);
+Error SamplerRef_inc(SamplerRef *sampler);
 
-Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler);
+Error GraphicsDeviceRef_createSampler(
+	GraphicsDeviceRef *dev,
+	SamplerInfo info,
+	Bool disallowBindlessDescriptor,				//Won't try to allocate into bindlessDescriptorTable or device's default
+	DescriptorTableRef *bindlessDescriptorTable,
+	CharString name,
+	SamplerRef **sampler
+);
 
 #ifdef __cplusplus
 	}

@@ -8,8 +8,8 @@ function(configure_icon target icon)
 	endif()
 
 	if(WIN32)
-		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
-		set_property(TARGET ${target} PROPERTY RESOURCE_LIST LOGO\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ICON\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${icon}\"\n${res})
+		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST_RC)
+		set_property(TARGET ${target} PROPERTY RESOURCE_LIST_RC LOGO\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ICON\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${icon}\"\n${res})
 		target_sources(${target} PRIVATE ${icon})
 	endif()
 
@@ -52,6 +52,71 @@ function(apply_dependencies target)
 	# Ensure that working directory is set to the same place as the exe to ensure it can find .dll/.so
 	set_target_properties(${target} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${target}>")
 
+	get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
+
+	foreach(file ${res})
+
+		string(REPLACE "\\" "/" file "${file}")
+
+		string(FIND "${file}" "packages/" PACKAGE_POS)
+		string(SUBSTRING "${file}" ${PACKAGE_POS} -1 RESULT)
+		string(SUBSTRING "${RESULT}" 9 -1 FINAL_RESULT)
+
+		string(REGEX REPLACE "\\.oiCA$" "" RELATIVE_PATH "${FINAL_RESULT}")
+
+		string(REPLACE "/" ";" PARTS ${RELATIVE_PATH})
+		list(LENGTH PARTS PART_COUNT)
+
+		if(NOT PART_COUNT EQUAL 2)
+			message(FATAL_ERROR "Package file is expected to be packages/target/file")
+		endif()
+
+		foreach(PART IN LISTS PARTS)
+
+			string(LENGTH "${PART}" PART_LEN)
+
+			if(PART_LEN GREATER 15)
+				message(FATAL_ERROR "Package name and target name is limited to 15 characters")
+			endif()
+
+		endforeach()
+
+		list(GET PARTS 0 TARGET_OF_PACKAGE)
+		list(GET PARTS 1 PACKAGE_NAME)
+
+		# Differences in packaging:
+		# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
+		# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
+		# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
+		# iOS has IPA which is the same idea as APK.
+		# OS X we will manually link the section into it too.
+		# web/emscripten has a virtual filesystem.
+		
+		if(WIN32)
+			get_property(res2 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC)
+			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST_RC ${RELATIVE_PATH}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${file}\"\n${res2})
+		elseif(APPLE)
+			add_custom_command(
+				TARGET ${_ARGS_TARGET} POST_BUILD
+				COMMAND llvm-objcopy --add-section "@${TARGET_OF_PACKAGE},${PACKAGE_NAME}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+			)
+		elseif(UNIX AND NOT ANDROID)
+			add_custom_command(
+				TARGET ${_ARGS_TARGET} POST_BUILD
+				COMMAND objcopy --add-section "packages/${RELATIVE_PATH}=${file}" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
+			)
+		endif()
+
+	endforeach()
+
+	if(WIN32)
+		get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
+		if(NOT "${res2}" STREQUAL "")
+			file(WRITE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc" ${res2})
+			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
+		endif()
+	endif()
+
 endfunction()
 
 # Add virtual directory as a loadable section.
@@ -66,7 +131,7 @@ endfunction()
 #	SELF
 #		${CMAKE_CURRENT_SOURCE_DIR}
 #	ARGS
-#		-threads "100%%" -compile-type dxil	# Compile shaders using all available threads and only output DXIL, %% = escape %
+#		-threads "100%%" -compile-type dxil	# Compile shaders using all available threads and only output DXIL, %% = escape % on windows
 # )
 # This would add myTarget/shaders as a virtual directory.
 # myTarget/shaders has to be loaded manually by the app to process it.
@@ -75,7 +140,7 @@ endfunction()
 
 macro(add_virtual_files)
 
-	set(_OPTIONS)
+	set(_OPTIONS FORCE_PACKAGER)
 	set(_ONE_VALUE TARGET ROOT NAME SELF)
 	set(_MULTI_VALUE ARGS)
 
@@ -118,11 +183,19 @@ macro(add_virtual_files)
 	endif()
 
 	# Add processed file as a file
-
-	if(NOT TARGET OxC3)
-		find_program(OXC3 OxC3 REQUIRED)
+	
+	if(_ARGS_FORCE_PACKAGER)
+		if(NOT TARGET OxC3_package)
+			find_program(OXC3_PACKAGE OxC3_package REQUIRED)
+		else()
+			set(OXC3_PACKAGE OxC3_package)
+		endif()
 	else()
-		set(OXC3 OxC3)
+		if(NOT TARGET OxC3)
+			find_program(OXC3 OxC3 REQUIRED)
+		else()
+			set(OXC3 OxC3)
+		endif()
 	endif()
 	
 	if(WIN32)
@@ -137,46 +210,48 @@ macro(add_virtual_files)
 		set(platform linux)
 	endif()
 
-	set(RuntimeOutputDir "${CMAKE_CURRENT_SOURCE_DIR}/build/${platform}")
+	set(RuntimeOutputDir "${_ARGS_SELF}/build/${platform}")
 
-	message("${RuntimeOutputDir}")
+	if(_ARGS_FORCE_PACKAGER)
+
+		set(OxC3_command "${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
 	
-	add_custom_target(
-		${_ARGS_TARGET}_package_${_ARGS_NAME}
-		COMMAND "${OXC3}" file package -input "${_ARGS_ROOT}" -output "${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" ${_ARGS_ARGS}
-		WORKING_DIRECTORY ${_ARGS_SELF}
-	)
+		add_custom_target(
+			${_ARGS_TARGET}_package_${_ARGS_NAME}
+			COMMAND ${OXC3_PACKAGE} \"${_ARGS_ROOT}\" \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			WORKING_DIRECTORY ${_ARGS_SELF}
+		)
+
+	else()
+
+		set(OxC3_command "${OXC3} file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"")
+	
+		add_custom_target(
+			${_ARGS_TARGET}_package_${_ARGS_NAME}
+			COMMAND ${OXC3} file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${_ARGS_ARGS}
+			WORKING_DIRECTORY ${_ARGS_SELF}
+		)
+
+	endif()
 		
 	string (REPLACE ";" " " ARGS_STR "${_ARGS_ARGS}")
-	message("-- Packaging: \"${OXC3}\" file package -input \"${_ARGS_ROOT}\" -output \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" ${ARGS_STR}")
+	message("-- Packaging: ${OxC3_command} ${ARGS_STR}")
 	message("-- Packaging: ${_ARGS_TARGET}_package_${_ARGS_NAME} @ ${_ARGS_SELF}")
 
 	set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 
 	# When adding from external package manager, it's already been installed
-	if(TARGET OxC3)
+
+	if(_ARGS_FORCE_PACKAGER AND TARGET OxC3_package)
+		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3_package)
+	elseif(TARGET OxC3)
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
 	else()
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME})
 	endif()
 
-	# Differences in packaging:
-	# Windows you can embed using an .rc file; then this handle can be opened through FindResourceW
-	# Linux you can embed into the elf manually by using objcopy and manually read the section data to find where it's located
-	# Android has APKs which are just like zip files, so can be easily read (though the NDK can't access subfolders easily)
-	# iOS has IPA which is the same idea as APK.
-	# OS X has llvm-objcopy.
-	# web/emscripten has a virtual filesystem.
-
-	if(WIN32)
-		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
-		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
-	elseif(UNIX AND NOT APPLE AND NOT ANDROID)
-		add_custom_command(
-			TARGET ${_ARGS_TARGET} POST_BUILD
-			COMMAND objcopy --add-section "packages/${_ARGS_TARGET}/${_ARGS_NAME}=${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>" "$<TARGET_FILE_DIR:${_ARGS_TARGET}>/$<TARGET_FILE_NAME:${_ARGS_TARGET}>"
-		)
-	endif()
+	get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+	set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${RuntimeOutputDir}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA;${res})
 
 endmacro()
 
@@ -184,6 +259,8 @@ endmacro()
 # This is useful if a dependency would need to include things like fonts, or other kinds of resources.
 # This would for example allow you to load myTarget/shaders in myNewTarget (from the other example).
 # These dependencies are always public, so if myTarget would have a dependency, this one does too.
+# NOTE: This only works for projects visible to cmake,
+#       but for projects managed with conan you should use add_virtual_dependencies_external
 # Example:
 # add_virtual_dependencies(TARGET myNewTarget DEPENDENCIES myTarget)
 
@@ -195,14 +272,8 @@ macro(add_virtual_dependencies)
 
 	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
 
-	# Validate
-
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_dependencies: target \"${_ARGS_TARGET}\" not present.")
-	endif()
-
-	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
-		message(FATAL_ERROR "add_virtual_dependencies: 'TARGET' has to conform to alphanumeric (plus _ and $).")
 	endif()
 
 	# Add dependencies
@@ -218,7 +289,7 @@ macro(add_virtual_dependencies)
 			get_property(res1 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
 
 			add_dependencies(${_ARGS_TARGET} ${file})
-			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${res0}\n${res1})
+			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${res0};${res1})
 
 		endforeach()
 	else()
@@ -227,21 +298,62 @@ macro(add_virtual_dependencies)
 
 endmacro()
 
-# Configure virtual files (and icon) for a target
+# See add_virtual_dependencies, this is the same, except "DEPENDENCIES" is now the programs fetched from conan.
+# For example: add_virtual_dependencies_external(TARGET rt_core PROGRAMS OxC3)
 
-function(configure_virtual_files target)
+macro(add_virtual_dependencies_external)
+	
+	set(_OPTIONS)
+	set(_ONE_VALUE TARGET)
+	set(_MULTI_VALUE DEPENDENCIES)
 
-	if(NOT TARGET ${target})
-		message(FATAL_ERROR "configure_virtual_files: target ${target} not present.")
+	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
+
+	if(NOT TARGET ${_ARGS_TARGET})
+		message(FATAL_ERROR "add_virtual_dependencies_external: target \"${_ARGS_TARGET}\" not present.")
+	endif()
+	
+	if(_ARGS_DEPENDENCIES)
+		foreach(file ${_ARGS_DEPENDENCIES})
+
+			# Get bin folder from our conan package
+		
+			# find_package(${file} REQUIRED)
+
+			# set(INCLUDE_DIRS_VAR "${file}_INCLUDE_DIRS")
+
+			# if(DEFINED ${INCLUDE_DIRS_VAR})
+			#	list(GET ${INCLUDE_DIRS_VAR} 0 FIRST_INCLUDE_DIR)
+			# 	string(REPLACE "/include" "/bin" BIN_DIR "${FIRST_INCLUDE_DIR}")
+			# else()
+			# 	message(FATAL_ERROR "Can't find bin directory of package dependency")
+			# endif()
+			
+			find_program(PROGRAM_PATH ${file} REQUIRED)
+			get_filename_component(BIN_DIR "${PROGRAM_PATH}" DIRECTORY)
+			
+			message(STATUS "add_virtual_dependencies_external: Found ${file}'s bin Directory: ${BIN_DIR}")
+
+			# Grab the packages conan has prepared
+
+			set(PACKAGE_DIR "${BIN_DIR}/packages")
+
+			if(EXISTS "${PACKAGE_DIR}")
+
+				file(GLOB_RECURSE PACKAGE_FILES "${PACKAGE_DIR}/*/*.oiCA")
+
+				foreach(PACKAGE_FILE ${PACKAGE_FILES})
+					get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+					set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${PACKAGE_FILE};${res})
+				endforeach()
+
+			else()
+				message(FATAL_ERROR "${target} package directory not found: ${PACKAGE_DIR}")
+			endif()
+
+		endforeach()
+	else()
+		message(FATAL_ERROR "add_virtual_dependencies: DEPENDENCIES argument is required!")
 	endif()
 
-	if(WIN32)
-		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
-		if(NOT "${res}" STREQUAL "")
-			file(WRITE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc" ${res})
-			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
-		endif()
-	endif()
-
-endfunction()
-
+endmacro()

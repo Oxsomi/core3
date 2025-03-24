@@ -21,7 +21,6 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/allocator.h"
-#include "graphics/generic/descriptor.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
 
@@ -31,6 +30,11 @@
 
 typedef RefPtr GraphicsInstanceRef;
 typedef RefPtr DeviceBufferRef;
+typedef RefPtr PipelineRef;
+typedef RefPtr DescriptorLayoutRef;
+typedef RefPtr PipelineLayoutRef;
+typedef RefPtr DescriptorHeapRef;
+typedef RefPtr DescriptorTableRef;
 
 typedef struct CBufferData {
 
@@ -45,20 +49,7 @@ typedef struct CBufferData {
 
 } CBufferData;
 
-typedef struct DescriptorStackTrace {
-
-	U32 resourceId, padding;
-
-	#ifndef NDEBUG
-		void *stackTrace[8];
-	#else
-		void *stackTrace[4];
-	#endif
-
-} DescriptorStackTrace;
-
 TListNamed(SpinLock*, ListSpinLockPtr);
-TList(DescriptorStackTrace);
 
 typedef enum EGraphicsDeviceFlags {
 	EGraphicsDeviceFlags_None			= 0,
@@ -122,15 +113,16 @@ typedef struct GraphicsDevice {
 	U64 pendingPrimitives;						//For determining if it's time to flush because of BLAS creation
 	U64 flushThresholdPrimitives;				//When the pending primitives are too much and the device should flush
 
-	//Used for allocating descriptors
-
-	SpinLock descriptorLock;
-	Buffer freeList[EDescriptorType_ResourceCount];
-	ListDescriptorStackTrace descriptorStackTraces;
-
 	U64 blockSizeCpu, blockSizeGpu;				//Block sizes for memory allocator
 
-	U64 pad1;									//Pad to 16-byte aligned to allow impl to use for example vectors
+	PipelineRef *copyShaders[2];				//[0]: copy single, [1]: copy single, rotated
+	DescriptorLayoutRef *copyDescLayout;
+	PipelineLayoutRef *copyPipelineLayout;
+	DescriptorLayoutRef *defaultDescLayout;
+	PipelineLayoutRef *defaultPipelineLayout;
+	DescriptorTableRef *defaultDescriptorTable;
+
+	DescriptorHeapRef *defaultDescriptorHeaps;
 
 } GraphicsDevice;
 

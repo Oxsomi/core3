@@ -50,8 +50,6 @@ typedef enum ELogOptions {
 
 } ELogOptions;
 
-impl void Log_captureStackTrace(Allocator alloc, void **stackTrace, U64 stackSize, U8 skip);
-
 impl void Log_printCapturedStackTraceCustom(
 	Allocator alloc, const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options
 );

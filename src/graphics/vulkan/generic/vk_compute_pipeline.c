@@ -20,6 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
@@ -70,7 +71,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
 			.pName = "main"
 		},
-		.layout = deviceExt->defaultLayout
+		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
 	gotoIfError2(clean, createShaderModule(

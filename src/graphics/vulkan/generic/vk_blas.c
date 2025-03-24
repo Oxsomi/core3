@@ -172,6 +172,7 @@ Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 		deviceRef,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		blas->base.name,
 		sizes.accelerationStructureSize,
 		&blas->base.asBuffer
@@ -185,6 +186,7 @@ Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 		deviceRef,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
+		NULL,
 		tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
 		&blas->base.tempScratchBuffer

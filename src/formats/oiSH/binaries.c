@@ -114,7 +114,7 @@ const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
 	"Unknown"
 };
 
-Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, Error *e_rr) {
+Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	SHBinaryInfo info = (SHBinaryInfo) { 0 };

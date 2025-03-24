@@ -36,17 +36,19 @@ typedef enum EDeviceBufferUsage {
 	EDeviceBufferUsage_Vertex				= 1 << 0,		//Allow for use as vertex buffer
 	EDeviceBufferUsage_Index				= 1 << 1,		//Allow for use as index buffer
 	EDeviceBufferUsage_Indirect				= 1 << 2,		//Allow for use in indirect draw/dispatch calls
+	EDeviceBufferUsage_Uniform				= 1 << 3,		//Allow use as a UBO/constant buffer
 
-	//Raytracing types
+	//Raytracing types (internal)
 
-	EDeviceBufferUsage_ScratchExt			= 1 << 3,		//Allow for internal use as scratch buffer
-	EDeviceBufferUsage_ASExt				= 1 << 4,		//Allow for internal use as acceleration structure
-	EDeviceBufferUsage_ASReadExt			= 1 << 5,		//Allow buffer to be read by AS creation
-	EDeviceBufferUsage_SBTExt				= 1 << 6		//Allow for internal use as shader binding table
+	EDeviceBufferUsage_ScratchExt			= 1 << 4,		//Allow for internal use as scratch buffer
+	EDeviceBufferUsage_ASExt				= 1 << 5,		//Allow for internal use as acceleration structure
+	EDeviceBufferUsage_ASReadExt			= 1 << 6,		//Allow buffer to be read by AS creation
+	EDeviceBufferUsage_SBTExt				= 1 << 7		//Allow for internal use as shader binding table
 
 } EDeviceBufferUsage;
 
 typedef RefPtr DeviceBufferRef;
+typedef RefPtr DescriptorTableRef;
 
 TList(DevicePendingRange);
 
@@ -61,7 +63,9 @@ typedef struct DeviceBuffer {
 
 	EDeviceBufferUsage usage;
 	Bool isPendingFullCopy, isPending, isFirstFrame;
-	U8 padding0;
+	U8 padding0[9];
+
+	DescriptorTableRef *bindlessDescriptorTable;
 
 	Buffer cpuData;							//Null if not cpu backed & uploaded. If not cpu backed this will free post upload
 
@@ -87,6 +91,7 @@ Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
 	DeviceBufferRef **buf
@@ -96,6 +101,7 @@ Error GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
+	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
 	DeviceBufferRef **buf

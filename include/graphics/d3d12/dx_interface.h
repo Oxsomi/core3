@@ -82,6 +82,42 @@
 	Error D3D12GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
 	Bool  D3D12Swapchain_free(Swapchain *data, Allocator alloc);
 
+	//DescriptorHeap
+
+	Error D3D12GraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
+	Bool D3D12DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
+
+	//DescriptorTable
+
+	Error D3D12DescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
+	Bool D3D12DescriptorTable_free(DescriptorTable *table, Allocator alloc);
+
+	Bool D3D12DescriptorTable_setDescriptors(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		ListDescriptor darr,
+		Error *e_rr
+	);
+
+	Bool D3D12DescriptorTable_unsetDescriptors(
+		DescriptorTable *table,
+		U64 bindId,
+		U64 arrayId,
+		U64 count,
+		Error *e_rr
+	);
+
+	//DescriptorLayout
+
+	Error D3D12GraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+	Bool D3D12DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
+
+	//PipelineLayout
+
+	Error D3D12GraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
+	Bool D3D12PipelineLayout_free(PipelineLayout *layout, Allocator alloc);
+
 	//Allocator
 
 	//Needs explicit lock, because allocator is accessed after.
@@ -106,7 +142,6 @@
 		GraphicsDeviceRef **deviceRef
 	);
 
-	void D3D12GraphicsDevice_postInit(GraphicsDevice *device);
 	U64 D3D12GraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
 	Bool D3D12GraphicsDevice_free(const GraphicsInstance *instance, void *ext);

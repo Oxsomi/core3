@@ -271,6 +271,9 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilitySampled1D:
 		case SpvCapabilityImage1D:
 		case SpvCapabilityImageCubeArray:
+
+		case SpvCapabilityStorageImageReadWithoutFormat:
+		case SpvCapabilityStorageImageWriteWithoutFormat:
 			break;
 
 		//Unsupported
@@ -450,8 +453,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityFragmentShadingRateKHR:
 
 		case SpvCapabilityGeometryStreams:
-		case SpvCapabilityStorageImageReadWithoutFormat:
-		case SpvCapabilityStorageImageWriteWithoutFormat:
 
 		case SpvCapabilityImageRect:
 		case SpvCapabilitySampledRect:
@@ -1221,7 +1222,7 @@ Bool Compiler_convertRegisterSPIRV(
 						1, "Compiler_convertRegisterSPIRV() storage image didn't have UAV resource flag"
 					))
 
-				if(!binding->image.image_format || binding->image.sampled != 2)
+				if(binding->image.sampled != 2)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() unexpected image data on storage image"
 					))
@@ -1287,6 +1288,7 @@ Bool Compiler_convertRegisterSPIRV(
 				ETextureFormatId formatId = ETextureFormatId_Undefined;
 
 				switch (binding->image.image_format) {
+
 					case SpvImageFormatRgba32f:		formatId = ETextureFormatId_RGBA32f;	break;
 					case SpvImageFormatRgba16f:		formatId = ETextureFormatId_RGBA16f;	break;
 					case SpvImageFormatR32f:		formatId = ETextureFormatId_R32f;		break;
@@ -1324,6 +1326,7 @@ Bool Compiler_convertRegisterSPIRV(
 					case SpvImageFormatRg8ui:		formatId = ETextureFormatId_RG8u;		break;
 					case SpvImageFormatR16ui:		formatId = ETextureFormatId_R16u;		break;
 					case SpvImageFormatR8ui:		formatId = ETextureFormatId_R8u;		break;
+					case SpvImageFormatUnknown:												break;
 
 					default:
 					case SpvImageFormatRgb10a2ui:

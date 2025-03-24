@@ -36,7 +36,8 @@ typedef enum EDepthStencilFormat {
 
 	EDepthStencilFormat_Count,
 
-	EDepthStencilFormat_StencilStart = EDepthStencilFormat_D24S8Ext
+	EDepthStencilFormat_StencilStart = EDepthStencilFormat_D24S8Ext,
+	EDepthStencilFormat_StencilEnd = EDepthStencilFormat_Count
 
 } EDepthStencilFormat;
 
