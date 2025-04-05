@@ -79,10 +79,9 @@ _vkBinding( 0, 2) cbuffer globals {	//Globals used during the entire frame for u
 	F32 _deltaTime;					//deltaTime since last frame.
 	U32 _swapchainCount;			//How many swapchains are present (will insert ids into appData)
 
-	U32x4 _swapchains[8];			//Descriptors of swapchains: (Read, write)[2][8]
+	U32x4 _swapchains[8];			//Descriptors of swapchains: (Read, write)[2][16]
 
 	//Up to 368 bytes of user data, useful for supplying constant per frame data.
-	//Make sure to offset to make sure.
 
 	U32x4 _appData[23];
 };

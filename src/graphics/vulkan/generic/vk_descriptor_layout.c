@@ -75,6 +75,55 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
 	}
 }
 
+VkShaderStageFlags vkGetShaderStages(U32 vis) {
+
+	VkShaderStageFlags stageFlags = 0;
+
+	if((vis >> ESHPipelineStage_Vertex) & 1)
+		stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+
+	if((vis >> ESHPipelineStage_Pixel) & 1)
+		stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	if((vis >> ESHPipelineStage_Compute) & 1)
+		stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+
+	if((vis >> ESHPipelineStage_GeometryExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+
+	if((vis >> ESHPipelineStage_Hull) & 1)
+		stageFlags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+
+	if((vis >> ESHPipelineStage_Domain) & 1)
+		stageFlags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+
+	if((vis >> ESHPipelineStage_RaygenExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+	if((vis >> ESHPipelineStage_CallableExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+
+	if((vis >> ESHPipelineStage_MissExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_MISS_BIT_KHR;
+
+	if((vis >> ESHPipelineStage_ClosestHitExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+
+	if((vis >> ESHPipelineStage_AnyHitExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+
+	if((vis >> ESHPipelineStage_IntersectionExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+
+	if((vis >> ESHPipelineStage_MeshExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_MESH_BIT_EXT;
+
+	if((vis >> ESHPipelineStage_TaskExt) & 1)
+		stageFlags |= VK_SHADER_STAGE_TASK_BIT_EXT;
+
+	return stageFlags;
+}
+
 TList(VkDescriptorSetLayoutBinding);
 TListImpl(VkDescriptorSetLayoutBinding);
 
@@ -176,6 +225,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	//Create our sets and bindings
 
 	U8 setPresent = 0;
+	Bool hasPushDescriptor = info.flags & EDescriptorLayoutFlags_HasPushDescriptors;
 
 	for (U64 i = 0; i < sortedList.length; ++i) {
 
@@ -183,52 +233,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		const DescriptorBinding *binding = &info.bindings.ptr[(U32) key];
 
 		U32 count = binding->count;
-		U32 vis = binding->visibility;
 
-		VkShaderStageFlags stageFlags = 0;
-
-		if((vis >> ESHPipelineStage_Vertex) & 1)
-			stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
-
-		if((vis >> ESHPipelineStage_Pixel) & 1)
-			stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
-
-		if((vis >> ESHPipelineStage_Compute) & 1)
-			stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
-
-		if((vis >> ESHPipelineStage_GeometryExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
-
-		if((vis >> ESHPipelineStage_Hull) & 1)
-			stageFlags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-
-		if((vis >> ESHPipelineStage_Domain) & 1)
-			stageFlags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-
-		if((vis >> ESHPipelineStage_RaygenExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-
-		if((vis >> ESHPipelineStage_CallableExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_CALLABLE_BIT_KHR;
-
-		if((vis >> ESHPipelineStage_MissExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_MISS_BIT_KHR;
-
-		if((vis >> ESHPipelineStage_ClosestHitExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-
-		if((vis >> ESHPipelineStage_AnyHitExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-
-		if((vis >> ESHPipelineStage_IntersectionExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
-
-		if((vis >> ESHPipelineStage_MeshExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_MESH_BIT_EXT;
-
-		if((vis >> ESHPipelineStage_TaskExt) & 1)
-			stageFlags |= VK_SHADER_STAGE_TASK_BIT_EXT;
-
+		VkShaderStageFlags stageFlags = vkGetShaderStages(binding->visibility);
 		VkDescriptorType type = vkGetDescriptorType(binding->registerType);
 
 		bindings.ptrNonConst[i] = (VkDescriptorSetLayoutBinding) {
@@ -274,6 +280,9 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				setInfo[linkId].pNext = &partiallyBound[linkId];
 				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 			}
+
+			if(hasPushDescriptor)
+				setInfo[linkId].flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
 
 			setPresent |= 1 << linkId;
 		}

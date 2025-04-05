@@ -53,12 +53,20 @@ const C8 *nvHLSLExtns2 =
 	#include "nvHLSLExtns2.h"
 	;
 
+const C8 *nvHLSLExtns3 =
+	#include "nvHLSLExtns3.h"
+	;
+
 const C8 *nvShaderExtnEnums =
 	#include "nvShaderExtnEnums.h"
 	;
 
 const C8 *nvHLSLExtnsInternal =
 	#include "nvHLSLExtnsInternal.h"
+	;
+
+const C8 *nvHLSLExtnsInternal2 =
+	#include "nvHLSLExtnsInternal2.h"
 	;
 
 //This file is only because DXC doesn't have a C interface.
@@ -311,8 +319,18 @@ public:
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvShaderExtnEnums.h")))
 					tmpTmp = CharString_createRefCStrConst(nvShaderExtnEnums);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtnsInternal.h")))
+				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtnsInternal.h"))) {
+					
+					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
+
+					CharString tmp = CharString_createRefCStrConst(nvHLSLExtnsInternal);
+					gotoIfError2(clean, CharString_createCopy(tmp, alloc, &tempFile))
+
+					tmp = CharString_createRefCStrConst(nvHLSLExtnsInternal2);
+					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
+
 					tmpTmp = CharString_createRefCStrConst(nvHLSLExtnsInternal);
+				}
 
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtns.h"))) {
 
@@ -322,6 +340,9 @@ public:
 					gotoIfError2(clean, CharString_createCopy(tmp, alloc, &tempFile))
 
 					tmp = CharString_createRefCStrConst(nvHLSLExtns2);
+					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
+
+					tmp = CharString_createRefCStrConst(nvHLSLExtns3);
 					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
 				}
 

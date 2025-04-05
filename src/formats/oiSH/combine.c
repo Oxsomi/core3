@@ -240,8 +240,17 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				Bool isCmpSamplerB = regb.reg.registerType == ESHRegisterType_SamplerComparisonState;
 				Bool isSamplerB = regb.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerB;
 
+				if(regb.reg.registerType == ESHRegisterType_PushConstants && rega.reg.registerType == ESHRegisterType_ConstantBuffer)
+					merged.registerType = ESHRegisterType_PushConstants;
+
+				if(merged.registerType == ESHRegisterType_PushConstants && (
+					regb.reg.registerType != ESHRegisterType_PushConstants && rega.reg.registerType != ESHRegisterType_ConstantBuffer
+				))
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types (expected push constants)"))
+
 				if(
 					(isSamplerA != isSamplerB) &&
+					merged.registerType != ESHRegisterType_PushConstants &&
 					(rega.reg.registerType &~ ESHRegisterType_IsCombinedSampler) !=
 					(regb.reg.registerType &~ ESHRegisterType_IsCombinedSampler)
 				)

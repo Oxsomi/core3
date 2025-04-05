@@ -192,7 +192,7 @@ Bool SHFile_detectDuplicate(
 				anySpvBinding = true;
 		}
 
-	if(!anyBinding)
+	if(!anyBinding && type != ESHRegisterType_PushConstants)
 		retError(clean, Error_invalidState(0, "SHFile_detectDuplicate()::bindings contained no valid bindings"))
 
 	if(!CharString_length(name))
@@ -210,6 +210,7 @@ Bool SHFile_detectDuplicate(
 			break;
 
 		case ESHRegisterType_ConstantBuffer:
+		case ESHRegisterType_PushConstants:
 			registerBindingType = 3;
 			break;
 
@@ -253,6 +254,7 @@ Bool SHFile_detectDuplicate(
 						break;
 
 					case ESHRegisterType_ConstantBuffer:
+					case ESHRegisterType_PushConstants:
 						registerBindingTypei = 3;
 						break;
 
@@ -533,7 +535,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 ) {
 
 	Bool s_uccess = true;
-	Bool isCBV = registerType == ESHBufferType_ConstantBuffer;
+	Bool isCBV = registerType == ESHBufferType_ConstantBuffer || registerType == ESHBufferType_PushConstants;
 
 	if(registerType >= ESHBufferType_Count)
 		retError(clean, Error_outOfBounds(
@@ -579,6 +581,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 
 		case ESHBufferType_ConstantBuffer:
 		case ESHBufferType_AccelerationStructure:
+		case ESHBufferType_PushConstants:
 
 			if(isWrite)
 				retError(clean, Error_invalidState(
@@ -852,6 +855,7 @@ Bool ListSHRegisterRuntime_addRegister(
 	switch (baseRegType) {
 
 		case ESHRegisterType_ConstantBuffer:
+		case ESHRegisterType_PushConstants:
 		case ESHRegisterType_ByteAddressBuffer:
 		case ESHRegisterType_StructuredBuffer:
 		case ESHRegisterType_StructuredBufferAtomic:
@@ -1022,7 +1026,9 @@ void SHRegister_printBindings(ESHRegisterType type, SHBindings bindings, Allocat
 
 	if(dxilBinding.space != U32_MAX || dxilBinding.binding != U32_MAX) {
 
-		C8 letter = type == ESHRegisterType_ConstantBuffer ? 'b' : (
+		Bool isCBV = type == ESHRegisterType_ConstantBuffer || type == ESHRegisterType_PushConstants;
+
+		C8 letter = isCBV ? 'b' : (
 			type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState ? 's' : (
 				type & ESHRegisterType_IsWrite ? 'u' : 't'
 			)
@@ -1059,6 +1065,7 @@ void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
 		case ESHRegisterType_Sampler:					Log_debugLn(alloc, "%sSamplerState", indent);					 break;
 		case ESHRegisterType_SamplerComparisonState:	Log_debugLn(alloc, "%sSamplerComparisonState", indent);			 break;
 		case ESHRegisterType_ConstantBuffer:			Log_debugLn(alloc, "%sConstantBuffer", indent);					 break;
+		case ESHRegisterType_PushConstants:				Log_debugLn(alloc, "%sPushConstants", indent);					 break;
 		case ESHRegisterType_AccelerationStructure:		Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
 
 		case ESHRegisterType_ByteAddressBuffer:
@@ -1145,7 +1152,14 @@ void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator all
 
 	for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
 
-		if(reg.reg.bindings.arr[i].space == U32_MAX && reg.reg.bindings.arr[i].binding == U32_MAX)
+		SHBinding binding = reg.reg.bindings.arr[i];
+
+		Bool validBinding = !(binding.binding == U32_MAX && binding.space == U32_MAX);
+
+		if(reg.reg.registerType == ESHRegisterType_PushConstants && i == ESHBinaryType_SPIRV)
+			validBinding = (reg.reg.isUsedFlag >> i) & 1;
+
+		if(!validBinding)
 			continue;
 
 		Log_debug(

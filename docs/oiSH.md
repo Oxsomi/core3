@@ -187,6 +187,7 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_Sampler,
 
 	ESHRegisterType_ConstantBuffer,					//UBO or CBuffer
+	ESHRegisterType_PushConstants,					//Push constants or CBuffer (DXIL)
 	ESHRegisterType_ByteAddressBuffer,
 	ESHRegisterType_StructuredBuffer,
 	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter

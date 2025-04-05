@@ -199,6 +199,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		Counter_Texture,
 		Counter_SSBO,
 		Counter_SubpassInput,
+		Counter_PushConstants,
 		Counter_Count
 	};
 
@@ -274,6 +275,11 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 				if(hasSPIRV) counters[Counter_UBO] += regs;
 				if(hasDXIL)  counters[Counter_CBV] += regs;
 				break;
+				
+			case ESHRegisterType_PushConstants:
+				if(hasDXIL)	 counters[Counter_CBV] += regs;
+				if(hasSPIRV) counters[Counter_PushConstants] += regs;
+				break;
 
 			case ESHRegisterType_ByteAddressBuffer:
 			case ESHRegisterType_StructuredBuffer:
@@ -310,6 +316,9 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		counters[Counter_SubpassInput] > 8
 	)
 		retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 8 SubpassInputs or 16 RTASes"))
+
+	if(counters[Counter_PushConstants] > 1)
+		retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 1 push constant"))
 
 	//Ensure we don't surpass the limits
 

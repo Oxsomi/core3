@@ -306,15 +306,17 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 		//Maximum validation
 
 		VkValidationFeatureEnableEXT enables[] = {
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
 			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT
 		};
+
+		U32 count = instance->flags & EGraphicsInstanceFlags_DisableGPUBV ? 2 : 4;
 
 		VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
 			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-			.enabledValidationFeatureCount = (U32) (sizeof(enables) / sizeof(enables[0])),
+			.enabledValidationFeatureCount = count,
 			.pEnabledValidationFeatures = enables
 		};
 

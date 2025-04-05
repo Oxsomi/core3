@@ -8,7 +8,7 @@ required_conan_version = ">=2.0"
 class nvapi(ConanFile):
 
 	name = "nvapi"
-	version = "2024.09.21"
+	version = "2025.04.01.01"
 
 	license = "NVIDIA custom license"
 	author = "NVIDIA (original) & Oxsomi (modifications only)"

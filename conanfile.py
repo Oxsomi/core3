@@ -96,7 +96,7 @@ class oxc3(ConanFile):
 			hasD3D12 = True
 
 		if self.options.enableShaderCompiler or hasD3D12:
-			self.requires("nvapi/2024.09.21")
+			self.requires("nvapi/2025.04.01.01")
 
 		if hasD3D12:
 			self.requires("agility_sdk/2025.03.08")
@@ -105,7 +105,7 @@ class oxc3(ConanFile):
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2025.03.12")
+			self.requires("dxc/2025.04.01")
 			self.requires("spirv_reflect/2024.09.22")
 
 		if self.settings.os == "Linux":

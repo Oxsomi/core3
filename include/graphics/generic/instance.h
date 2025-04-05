@@ -49,7 +49,8 @@ typedef enum EGraphicsInstanceFlags {
 	EGraphicsInstanceFlags_None				= 0,
 	EGraphicsInstanceFlags_IsDebug			= 1 << 0,
 	EGraphicsInstanceFlags_IsVerbose		= 1 << 1,
-	EGraphicsInstanceFlags_DisableDebug		= 1 << 2
+	EGraphicsInstanceFlags_DisableDebug		= 1 << 2,
+	EGraphicsInstanceFlags_DisableGPUBV		= 1 << 3	//Disable GPU based validation (but keep other debugging)
 } EGraphicsInstanceFlags;
 
 typedef struct GraphicsInstance {

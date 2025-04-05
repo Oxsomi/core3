@@ -66,7 +66,68 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 	if(texture->depthFormat)
 		dxFormat = EDepthStencilFormat_toDXFormat(texture->depthFormat);
 
-	else dxFormat = ETextureFormatId_toDXFormat(texture->textureFormatId);
+	//We make everything typeless to allow an easy copy image for example
+
+	else switch(texture->textureFormatId) {
+
+		case ETextureFormatId_R8 : case ETextureFormatId_R8s: case ETextureFormatId_R8u: case ETextureFormatId_R8i:
+			dxFormat = DXGI_FORMAT_R8_TYPELESS;
+			break;
+
+		case ETextureFormatId_RG8 : case ETextureFormatId_RG8s: case ETextureFormatId_RG8u: case ETextureFormatId_RG8i:
+			dxFormat = DXGI_FORMAT_R8G8_TYPELESS;
+			break;
+		
+		case ETextureFormatId_RGBA8 : case ETextureFormatId_RGBA8s: case ETextureFormatId_RGBA8u: case ETextureFormatId_RGBA8i:
+			dxFormat = DXGI_FORMAT_R8G8B8A8_TYPELESS;
+			break;
+
+		case ETextureFormatId_BGRA8:
+			dxFormat = DXGI_FORMAT_B8G8R8A8_TYPELESS;
+			break;
+
+		case ETextureFormatId_R16 : case ETextureFormatId_R16s:
+		case ETextureFormatId_R16u: case ETextureFormatId_R16i: case ETextureFormatId_R16f:
+			dxFormat = DXGI_FORMAT_R16_TYPELESS;
+			break;
+
+		case ETextureFormatId_RG16 : case ETextureFormatId_RG16s:
+		case ETextureFormatId_RG16u: case ETextureFormatId_RG16i: case ETextureFormatId_RG16f:
+			dxFormat = DXGI_FORMAT_R16G16_TYPELESS;
+			break;
+
+		case ETextureFormatId_RGBA16 : case ETextureFormatId_RGBA16s:
+		case ETextureFormatId_RGBA16u: case ETextureFormatId_RGBA16i: case ETextureFormatId_RGBA16f:
+			dxFormat = DXGI_FORMAT_R16G16B16A16_TYPELESS;
+			break;
+
+		case ETextureFormatId_R32u: case ETextureFormatId_R32i: case ETextureFormatId_R32f:
+			dxFormat = DXGI_FORMAT_R32_TYPELESS;
+			break;
+
+		case ETextureFormatId_RG32u: case ETextureFormatId_RG32i: case ETextureFormatId_RG32f:
+			dxFormat = DXGI_FORMAT_R32G32_TYPELESS;
+			break;
+
+		case ETextureFormatId_RGB32u: case ETextureFormatId_RGB32i: case ETextureFormatId_RGB32f:
+			dxFormat = DXGI_FORMAT_R32G32B32_TYPELESS;
+			break;
+
+		case ETextureFormatId_RGBA32u: case ETextureFormatId_RGBA32i: case ETextureFormatId_RGBA32f:
+			dxFormat = DXGI_FORMAT_R32G32B32A32_TYPELESS;
+			break;
+
+		case ETextureFormatId_BGR10A2:								dxFormat = DXGI_FORMAT_R10G10B10A2_TYPELESS;	break;
+		case ETextureFormatId_BC6H:									dxFormat = DXGI_FORMAT_BC6H_TYPELESS;			break;
+
+		case ETextureFormatId_BC4:	case ETextureFormatId_BC4s:		dxFormat = DXGI_FORMAT_BC4_TYPELESS;			break;
+		case ETextureFormatId_BC5:	case ETextureFormatId_BC5s:		dxFormat = DXGI_FORMAT_BC5_TYPELESS;			break;
+
+		case ETextureFormatId_BC7: case ETextureFormatId_BC7_sRGB:	dxFormat = DXGI_FORMAT_BC7_TYPELESS;			break;
+
+		default:
+			return Error_unsupportedOperation(0, "UnifiedTexture_create() was called with unsupported texture format");
+	}
 
 	Bool isDeviceTexture = texture->resource.type == EResourceType_DeviceTexture;
 

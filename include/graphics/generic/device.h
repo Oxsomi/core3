@@ -117,8 +117,10 @@ typedef struct GraphicsDevice {
 
 	PipelineRef *copyShaders[2];				//[0]: copy single, [1]: copy single, rotated
 	DescriptorLayoutRef *copyDescLayout;
+	DescriptorLayoutRef *copyDescPushDesc;
 	PipelineLayoutRef *copyPipelineLayout;
 	DescriptorLayoutRef *defaultDescLayout;
+	DescriptorLayoutRef *defaultCBufferLayout;
 	PipelineLayoutRef *defaultPipelineLayout;
 	DescriptorTableRef *defaultDescriptorTable;
 

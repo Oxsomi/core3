@@ -37,17 +37,23 @@ typedef enum EDescriptorLayoutFlags {
 	EDescriptorLayoutFlags_AllowBindlessOnArrays	= 1 << 0,		//Required to use bindless, only enables bindless on desc[]
 	EDescriptorLayoutFlags_AllowBindlessEverywhere	= 1 << 1,		//Potentially slower, will assume all registers are dynamic
 	EDescriptorLayoutFlags_InternalWeakDeviceRef	= 1 << 2,
+	EDescriptorLayoutFlags_HasPushDescriptors		= 1 << 3,		//Push descriptor set, no other descriptors allowed
 
 	EDescriptorLayoutFlags_AllowBindlessAny			=
 		EDescriptorLayoutFlags_AllowBindlessOnArrays | EDescriptorLayoutFlags_AllowBindlessEverywhere
 
 } EDescriptorLayoutFlags;
 
+typedef U16 DescriptorBindingFlags;
+
 typedef struct DescriptorBinding {
 
 	ESHRegisterType registerType;
+
 	U32 count;
+
 	SHBinding binding;
+
 	U32 visibility;			//Bit mask of ESHPipelineStage
 
 	union {
@@ -58,6 +64,15 @@ typedef struct DescriptorBinding {
 	};
 
 } DescriptorBinding;
+
+Bool DescriptorBinding_overlaps(
+	DescriptorBinding binding,
+	ESHRegisterType regType,
+	SHBinding b,
+	U32 bcount,
+	ESHBinaryType type,
+	Bool isPushConstant
+);
 
 TList(DescriptorBinding);
 
@@ -71,12 +86,31 @@ typedef struct DescriptorLayoutInfo {
 
 } DescriptorLayoutInfo;
 
+typedef enum EDetectDescriptorLayoutFlags {
+
+	EDetectDescriptorLayoutFlags_None					= 0,
+
+	//These should only be used if the contents are so frequently changing that allocating a descriptor set makes no sense.
+	//For example a copy image or mip map shader, otherwise use None.
+	//These only apply on non arrays, since those could be used for bindless for example.
+	//Samplers need static samplers, doesn't work with push descriptors.
+
+	EDetectDescriptorLayoutFlags_AssumePushConstants	= 1 << 0,		//First buffer (<128 bytes) receives a push constant
+	EDetectDescriptorLayoutFlags_AssumePushDescriptors	= 1 << 1		//Assume non push constant buffer as push descriptors
+
+} EDetectDescriptorLayoutFlags;
+
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	GraphicsDeviceRef *dev,
 	SHFile tmpBinary,
 	ListU32 entrypoints,				//U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
+	EDetectDescriptorLayoutFlags detectFlags,
+	ListCharString pushDescriptors,		//Empty if no push descriptors or if AssumePushConstants
+	CharString pushConstantName,		//Empty if no push constants or AssumePushConstants
+	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
+	DescriptorLayoutInfo *pushDescriptorInfo,
 	Error *e_rr
 );
 
@@ -85,7 +119,12 @@ Bool GraphicsDeviceRef_detectLayoutFromEntry(
 	SHFile binary,
 	U32 entrypoint,						//U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
+	EDetectDescriptorLayoutFlags detectFlags,
+	ListCharString pushDescriptors,		//Empty if no push descriptors or if AssumePushDescriptors
+	CharString pushConstantName,		//Empty if no push constants or AssumePushConstants
+	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
+	DescriptorLayoutInfo *pushDescriptorInfo,
 	Error *e_rr
 );
 
@@ -101,6 +140,9 @@ typedef struct DescriptorLayout {
 
 	ListU16 bindlessTypeToBinding;
 	ListU8 bindingToBindlessType;		//U8_MAX indicates "none"
+
+	Bool anySampler, anyResource;
+	U8 padding[14];
 
 } DescriptorLayout;
 

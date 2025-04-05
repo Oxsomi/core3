@@ -124,6 +124,9 @@ VkCompareOp mapVkCompareOp(ECompareOp op);
 VkDeviceAddress getVkDeviceAddress(DeviceData data);
 VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset);
 
+VkShaderStageFlags vkGetShaderStages(U32 vis);
+VkDescriptorType vkGetDescriptorType(ESHRegisterType regType);
+
 //Transitions entire resource rather than sub-resources
 
 Error VkUnifiedTexture_transition(

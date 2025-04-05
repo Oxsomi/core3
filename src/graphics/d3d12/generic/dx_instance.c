@@ -223,7 +223,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 		)))
 
 		instanceExt->debug1->lpVtbl->EnableDebugLayer(instanceExt->debug1);
-		instanceExt->debug1->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1, true);
+
+
+		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
+			instanceExt->debug1->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1, true);
 	}
 
 	//Check for NVApi
@@ -582,8 +585,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		rootSig.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;	//Nice way of querying..
 
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig))))
-			caps.featuresExt |= EDxGraphicsFeatures_RootSig1_1;
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig)))) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required root signature 1.1", i);
+			goto next;
+		}
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {

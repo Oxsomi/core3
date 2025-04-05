@@ -44,6 +44,7 @@ typedef enum ESHBinaryType {
 
 typedef enum ESHBufferType {
 	ESHBufferType_ConstantBuffer,					//UBO or CBuffer
+	ESHBufferType_PushConstants,
 	ESHBufferType_ByteAddressBuffer,
 	ESHBufferType_StructuredBuffer,
 	ESHBufferType_StructuredBufferAtomic,			//SBuffer + atomic counter
@@ -115,6 +116,7 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_SamplerComparisonState,
 
 	ESHRegisterType_ConstantBuffer,					//UBO or CBuffer
+	ESHRegisterType_PushConstants,
 	ESHRegisterType_ByteAddressBuffer,
 	ESHRegisterType_StructuredBuffer,
 	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter

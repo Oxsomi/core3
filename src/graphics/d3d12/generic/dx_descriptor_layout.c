@@ -27,8 +27,8 @@
 #include "platforms/ext/stringx.h"
 #include "formats/oiSH/entries.h"
 
-TListImpl(D3D12_DESCRIPTOR_RANGE)
 TListImpl(D3D12_DESCRIPTOR_RANGE1)
+TListImpl(D3D12_ROOT_PARAMETER1)
 
 Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
 	(void) alloc;
@@ -36,8 +36,8 @@ Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator all
 	ListU32_freex(&layoutExt->bindingOffsets);
 	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesResources);
 	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesSamplers);
-	ListD3D12_DESCRIPTOR_RANGE_freex(&layoutExt->legacyResources);
-	ListD3D12_DESCRIPTOR_RANGE_freex(&layoutExt->legacySamplers);
+	ListU8_freex(&layoutExt->rootParamOffsets);
+	ListD3D12_ROOT_PARAMETER1_freex(&layoutExt->rootParams);
 	return true;
 }
 
@@ -99,6 +99,19 @@ ECompareResult SortingKey_compare(const SortingKey *aKey, const SortingKey *bKey
 	return ECompareResult_Eq;
 }
 
+D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 a) {
+	switch (a) {
+		case 1 << ESHPipelineStage_Vertex:		return D3D12_SHADER_VISIBILITY_VERTEX;
+		case 1 << ESHPipelineStage_Pixel:		return D3D12_SHADER_VISIBILITY_PIXEL;
+		case 1 << ESHPipelineStage_Hull:		return D3D12_SHADER_VISIBILITY_HULL;
+		case 1 << ESHPipelineStage_Domain:		return D3D12_SHADER_VISIBILITY_DOMAIN;
+		case 1 << ESHPipelineStage_GeometryExt:	return D3D12_SHADER_VISIBILITY_GEOMETRY;
+		case 1 << ESHPipelineStage_MeshExt:		return D3D12_SHADER_VISIBILITY_MESH;
+		case 1 << ESHPipelineStage_TaskExt:		return D3D12_SHADER_VISIBILITY_AMPLIFICATION;
+		default:								return D3D12_SHADER_VISIBILITY_ALL;
+	}
+}
+
 TList(SortingKey);
 TListImpl(SortingKey);
 
@@ -118,11 +131,89 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	const DescriptorLayoutInfo info = layout->info;
 
 	gotoIfError(clean, ListSortingKey_reservex(&sortedList, info.bindings.length))
+	gotoIfError(clean, ListU8_resizex(&layoutExt->rootParamOffsets, info.bindings.length))
+	gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_reservex(&layoutExt->rootParams, 4))	//Sampler, resource, NV, pad
 
 	//Sort by set and merge shaders that allow it and check we only have 4 sets bound
 
-	for(U64 i = 0; i < info.bindings.length; ++i)
-		gotoIfError(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { &info.bindings.ptr[i] }, (Allocator) { 0 }))
+	U32 visibility1 = 0;
+	U32 visibility2 = 0;
+
+	U8 resourceParam = U8_MAX, samplerParam = U8_MAX;
+
+	Bool isPushDescriptors = info.flags & EDescriptorLayoutFlags_HasPushDescriptors;
+
+	for(U64 i = 0; i < info.bindings.length; ++i) {
+
+		const DescriptorBinding *binding = &info.bindings.ptr[i];
+
+		if(isPushDescriptors) {		//Root param instead
+
+			layoutExt->rootParamOffsets.ptrNonConst[i] = (U8) layoutExt->rootParams.length;
+
+			D3D12_ROOT_PARAMETER_TYPE type = D3D12_ROOT_PARAMETER_TYPE_SRV;
+
+			if(binding->registerType == ESHRegisterType_ConstantBuffer)
+				type = D3D12_ROOT_PARAMETER_TYPE_CBV;
+
+			else if(binding->registerType & ESHRegisterType_IsWrite)
+				type = D3D12_ROOT_PARAMETER_TYPE_UAV;
+
+			D3D12_DESCRIPTOR_RANGE_FLAGS bindFlags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+
+			if(type == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
+				bindFlags = 0;
+
+			if(
+				!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
+				!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
+			)
+				bindFlags = 0;
+
+			gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
+				.ParameterType = type,
+				.Descriptor = (D3D12_ROOT_DESCRIPTOR1) {
+					.ShaderRegister = binding->binding.binding,
+					.RegisterSpace = binding->binding.space,
+					.Flags = bindFlags
+				},
+				.ShaderVisibility = DxDescriptorLayout_convertVisibility(binding->visibility)
+			}))
+
+			continue;
+		}
+
+		//Remember visibility for root params
+
+		if (
+			binding->registerType == ESHRegisterType_Sampler ||
+			binding->registerType  == ESHRegisterType_SamplerComparisonState
+		) {
+
+			visibility2 |= binding->visibility;
+
+			if(samplerParam == U8_MAX) {		//Reserve root param
+				samplerParam = (U8) layoutExt->rootParams.length;
+				gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) { 0 }))
+			}
+
+			layoutExt->rootParamOffsets.ptrNonConst[i] = samplerParam;
+		}
+
+		else {
+
+			visibility1 |= binding->visibility;
+
+			if(resourceParam == U8_MAX) {		//Reserve root param
+				resourceParam = (U8) layoutExt->rootParams.length;
+				gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) { 0 }))
+			}
+
+			layoutExt->rootParamOffsets.ptrNonConst[i] = resourceParam;
+		}
+
+		gotoIfError(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { binding }, (Allocator) { 0 }))
+	}
 
 	if(!ListSortingKey_sortCustom(sortedList, (CompareFunction) SortingKey_compare))
 		gotoIfError(clean, Error_invalidState(
@@ -231,55 +322,39 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Dummy UAV for NVAPI extensions
 
-	if (isNv)
-		layoutExt->rangesResources.ptrNonConst[resourceRange++] = (D3D12_DESCRIPTOR_RANGE1) {
-			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-			.NumDescriptors = 1,
-			.BaseShaderRegister = 99999,
-			.RegisterSpace = 99999,
-			.OffsetInDescriptorsFromTableStart = offset1
-		};
+	if (isNv && !isPushDescriptors)
+		gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV,
+			.Descriptor = (D3D12_ROOT_DESCRIPTOR1) {
+				.ShaderRegister = 99999,
+				.RegisterSpace = 99999
+			},
+		}))
 	
 	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, resourceRange))
 	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, samplerRange))
-	
-	//Legacy root sig support
-	//Note: Even if unsupported, D3D12_DESCRIPTOR_RANGE1[] will still hang around.
-	//		This is to allow ID3D12RootSignature to be able to detect DENY flags.
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+	//Root params fo sampler and resource ranges
 
-	if (!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_RootSig1_1)) {
-
-		gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE_resizex(&layoutExt->legacyResources, layoutExt->rangesResources.length))
-		gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE_resizex(&layoutExt->legacySamplers, layoutExt->rangesSamplers.length))
-		
-		for(U64 i = 0; i < layoutExt->rangesResources.length; ++i) {
-
-			D3D12_DESCRIPTOR_RANGE1 range = layoutExt->rangesResources.ptr[i];
-
-			layoutExt->legacyResources.ptrNonConst[i] = (D3D12_DESCRIPTOR_RANGE) {
-				.RangeType = range.RangeType,
-				.NumDescriptors = range.NumDescriptors,
-				.BaseShaderRegister = range.BaseShaderRegister,
-				.RegisterSpace = range.RegisterSpace,
-				.OffsetInDescriptorsFromTableStart = range.OffsetInDescriptorsFromTableStart
+	if(layoutExt->rangesResources.length)
+		layoutExt->rootParams.ptrNonConst[resourceParam] = (D3D12_ROOT_PARAMETER1) {
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+				.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE1) {
+					.NumDescriptorRanges = (U32) layoutExt->rangesResources.length,
+					.pDescriptorRanges = layoutExt->rangesResources.ptr
+				},
+				.ShaderVisibility = DxDescriptorLayout_convertVisibility(visibility1)
 			};
-		}
-		
-		for(U64 i = 0; i < layoutExt->rangesSamplers.length; ++i) {
 
-			D3D12_DESCRIPTOR_RANGE1 range = layoutExt->rangesSamplers.ptr[i];
-
-			layoutExt->legacySamplers.ptrNonConst[i] = (D3D12_DESCRIPTOR_RANGE) {
-				.RangeType = range.RangeType,
-				.NumDescriptors = range.NumDescriptors,
-				.BaseShaderRegister = range.BaseShaderRegister,
-				.RegisterSpace = range.RegisterSpace,
-				.OffsetInDescriptorsFromTableStart = range.OffsetInDescriptorsFromTableStart
+	if(layoutExt->rangesSamplers.length)
+		layoutExt->rootParams.ptrNonConst[samplerParam] = (D3D12_ROOT_PARAMETER1) {
+				.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+				.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE1) {
+					.NumDescriptorRanges = (U32) layoutExt->rangesSamplers.length,
+					.pDescriptorRanges = layoutExt->rangesSamplers.ptr
+				},
+				.ShaderVisibility = DxDescriptorLayout_convertVisibility(visibility2)
 			};
-		}
-	}
 
 clean:
 	ListSortingKey_freex(&sortedList);

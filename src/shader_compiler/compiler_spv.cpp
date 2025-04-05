@@ -776,7 +776,7 @@ clean:
 }
 
 Bool Compiler_convertShaderBufferSPIRV(
-	SpvReflectDescriptorBinding *binding,
+	SpvReflectBlockVariable *block,
 	Bool isPacked,
 	Allocator alloc,
 	SBFile *sbFile,
@@ -788,14 +788,14 @@ Bool Compiler_convertShaderBufferSPIRV(
 
 	ESBSettingsFlags packedFlags = isPacked ? ESBSettingsFlags_IsTightlyPacked : (ESBSettingsFlags) 0;
 
-	if (!binding->block.padded_size) {
+	if (!block->padded_size) {
 
-		if(binding->block.member_count != 1 || !binding->block.members)
+		if(block->member_count != 1 || !block->members)
 			retError(clean, Error_invalidState(
-				0, "Compiler_convertShaderBufferSPIRV()::binding is missing member count or members"
+				0, "Compiler_convertShaderBufferSPIRV()::block is missing member count or members"
 			))
 
-		SpvReflectBlockVariable *innerStruct = binding->block.members;
+		SpvReflectBlockVariable *innerStruct = block->members;
 
 		if(!innerStruct->member_count || !innerStruct->members || !innerStruct->padded_size) {
 
@@ -823,7 +823,7 @@ Bool Compiler_convertShaderBufferSPIRV(
 				sbFile,
 				&elementName,
 				0, U16_MAX, type,
-				binding->block.flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
+				block->flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
 				arrays.length ? &arrays : NULL,
 				alloc, e_rr
 			))
@@ -859,10 +859,10 @@ Bool Compiler_convertShaderBufferSPIRV(
 
 	//CBuffer or storage buffer (without dynamic entries)
 
-	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, binding->block.padded_size, alloc, sbFile, e_rr))
+	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, block->padded_size, alloc, sbFile, e_rr))
 
-	for (U64 l = 0; l < binding->block.member_count; ++l) {
-		SpvReflectBlockVariable var = binding->block.members[l];
+	for (U64 l = 0; l < block->member_count; ++l) {
+		SpvReflectBlockVariable var = block->members[l];
 		gotoIfError3(clean, Compiler_convertMemberSPIRV(sbFile, &var, U16_MAX, 0, isPacked, alloc, e_rr))
 	}
 
@@ -912,7 +912,7 @@ Bool Compiler_convertRegisterSPIRV(
 	static_assert(
 		sizeof(binding->block.numeric) == sizeof(U64) * 3,
 		"Compiler_convertShaderBufferSPIRV() does compares in U64[3] of binding->block.numeric, but size changed"
-		);
+	);
 
 	U64 numericTraitsU64[3];		//Fixes alignment
 	Buffer_memcpy(
@@ -1094,7 +1094,7 @@ Bool Compiler_convertRegisterSPIRV(
 					))
 
 				gotoIfError3(clean, Compiler_convertShaderBufferSPIRV(
-					binding,
+					&binding->block,
 					binding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 					alloc,
 					&sbFile,
@@ -1497,6 +1497,7 @@ Bool Compiler_processSPIRV(
 	isRt |= !!(toCompile.extensions & ESHExtension_RayQuery);
 	spvtools::Optimizer optimizer{ isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3 };
 
+	SBFile sbFile{};
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
 
@@ -1540,6 +1541,15 @@ Bool Compiler_processSPIRV(
 	//This is used to see if demotion is possible
 
 	*demotions = (ESHExtension)((~exts) & ESHExtension_SpirvNative);
+
+	for(U64 i = 0; i < spvMod.push_constant_block_count; ++i)
+		if(spvMod.push_constant_blocks[i].offset)
+			retError(clean, Error_invalidState(
+				2, "Compiler_processSPIRV() oiSH doesn't support push constants with an offset"
+			))
+
+	if(spvMod.spec_constant_count)
+		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() doesn't support spec constants"))
 
 	//Check entrypoints
 
@@ -1795,7 +1805,7 @@ Bool Compiler_processSPIRV(
 			}
 		}
 
-		//Grab constant buffers
+		//Grab resources
 
 		for (U64 j = 0; j < entrypoint.descriptor_set_count; ++j) {
 
@@ -1810,6 +1820,56 @@ Bool Compiler_processSPIRV(
 
 				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, descriptorSet.set, alloc, e_rr))
 			}
+		}
+
+		if(entrypoint.used_push_constant_count > 1)
+			retError(clean, Error_invalidState(
+				2, "Compiler_processSPIRV() not supporting more than 1 set of push constants per entrypoint"
+			))
+
+		for (U64 j = 0; j < entrypoint.used_push_constant_count; ++j) {
+
+			//Find push constant
+
+			U64 k = 0;
+
+			for(; k < spvMod.push_constant_block_count; ++k)
+				if(entrypoint.used_push_constants[j] == spvMod.push_constant_blocks[k].spirv_id)
+					break;
+		
+			if(k == spvMod.push_constant_block_count)
+				retError(clean, Error_invalidState(
+					2, "Compiler_processSPIRV() push constants not found"
+				))
+
+			SpvReflectBlockVariable var = spvMod.push_constant_blocks[k];
+
+			gotoIfError3(clean, Compiler_convertShaderBufferSPIRV(
+				&var,
+				false,
+				alloc,
+				&sbFile,
+				e_rr
+			))
+
+			CharString name = CharString_createRefCStrConst(var.name);
+			SHBindings bindings = SHBindings{};
+
+			for(U64 l = 0; l < ESHBinaryType_Count; ++l)
+				bindings.arrU64[l] = U64_MAX;
+
+			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
+				registers,
+				ESHBufferType_PushConstants,
+				false,
+				(U8)(1 << ESHBinaryType_SPIRV),
+				&name,
+				NULL,
+				&sbFile,
+				bindings,
+				alloc,
+				e_rr
+			))
 		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
@@ -1873,6 +1933,7 @@ Bool Compiler_processSPIRV(
 clean:
 
 	ListCharString_freeUnderlying(&strings, alloc);
+	SBFile_free(&sbFile, alloc);
 
 	spvReflectDestroyShaderModule(&spvMod);
 	return s_uccess;

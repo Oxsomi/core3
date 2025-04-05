@@ -84,7 +84,7 @@ Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 
 			DescriptorBinding b = bindings.ptr[i];
 			DescriptorTableBinding tb = table->bindings.ptr[i];
-			CharString name = info.bindingNames.ptr[i];
+			CharString name = i < info.bindingNames.length ? info.bindingNames.ptr[i] : CharString_createNull();
 
 			if (b.count > 1) {
 
@@ -207,6 +207,13 @@ Error DescriptorHeapRef_createDescriptorTable(
 			0, "DescriptorHeapRef_createDescriptorTable() bindless descriptor set requires bindless descriptor heap"
 		);
 
+	ListDescriptorBinding bindings = layoutPtr->info.bindings;
+
+	if(layoutPtr->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
+		return Error_invalidOperation(
+			0, "DescriptorHeapRef_createDescriptorTable() creating a descriptor table for push descriptors is illegal"
+		);
+
 	GraphicsDeviceRef *dev = parentPtr->device;
 
 	Error err = RefPtr_createx(
@@ -243,8 +250,6 @@ Error DescriptorHeapRef_createDescriptorTable(
 	}
 
 	table->acquiredAtomic = true;
-
-	ListDescriptorBinding bindings = layoutPtr->info.bindings;
 
 	gotoIfError(clean, ListDescriptorTableBinding_resizex(&table->bindings, bindings.length))
 
@@ -421,17 +426,21 @@ Bool DescriptorTableRef_unsetDescriptors(
 		retError(clean, Error_nullPointer(0, "DescriptorTableRef_unsetDescriptors()::table is required"))
 
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
-	ListDescriptorBinding bindings = DescriptorLayoutRef_ptr(tablePtr->layout)->info.bindings;
+	DescriptorLayout *layoutPtr = DescriptorLayoutRef_ptr(tablePtr->layout);
+	ListDescriptorBinding bindings = layoutPtr->info.bindings;
 
 	if(bindId >= bindings.length)
 		retError(clean, Error_outOfBounds(
 			0, bindId, bindings.length, "DescriptorTableRef_unsetDescriptors()::bindId out of bounds"
 		))
 
-	DescriptorBinding b = bindings.ptr[bindId];
+	if(layoutPtr->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
+		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_unsetDescriptors() called on a push descriptor"))
 
 	if(!count)
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_unsetDescriptors() needs count of >0"))
+
+	DescriptorBinding b = bindings.ptr[bindId];
 
 	if(arrayId >= b.count)
 		retError(clean, Error_outOfBounds(0, arrayId, b.count, "DescriptorTableRef_unsetDescriptors()::arrayId out of bounds"))
@@ -533,15 +542,19 @@ Bool DescriptorTableRef_setDescriptors(
 		retError(clean, Error_nullPointer(0, "DescriptorTableRef_setDescriptors()::table is required"))
 
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
+	DescriptorLayout *layoutPtr = DescriptorLayoutRef_ptr(tablePtr->layout);
 	DescriptorHeap *heapPtr = DescriptorHeapRef_ptr(tablePtr->parent);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(heapPtr->device);
 
-	ListDescriptorBinding bindings = DescriptorLayoutRef_ptr(tablePtr->layout)->info.bindings;
+	ListDescriptorBinding bindings = layoutPtr->info.bindings;
 
 	if(bindId >= bindings.length)
 		retError(clean, Error_outOfBounds(
 			0, bindId, bindings.length, "DescriptorTableRef_setDescriptors()::bindId out of bounds"
 		))
+
+	if(layoutPtr->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
+		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_setDescriptors() called on a push descriptor"))
 
 	DescriptorBinding b = bindings.ptr[bindId];
 	ESHRegisterType type = b.registerType & ESHRegisterType_TypeMask;
@@ -1169,6 +1182,9 @@ Bool DescriptorTableRef_findBindlessRegister(
 	DescriptorLayout *layout = DescriptorLayoutRef_ptr(tablePtr->layout);
 	ListDescriptorBinding bindings = layout->info.bindings;
 
+	if(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
+		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_findBindlessRegister() called on a push descriptor"))
+
 	DescriptorHeap *heapPtr = DescriptorHeapRef_ptr(tablePtr->parent);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(heapPtr->device);
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device);
@@ -1346,8 +1362,13 @@ Bool DescriptorTableRef_allocDescriptor(
 		retError(clean, Error_outOfBounds(
 			1, bindId, tablePtr->bindings.length, "DescriptorTableRef_allocDescriptor()::bindId out of bounds"
 		))
+
+	DescriptorLayout *layout = DescriptorLayoutRef_ptr(tablePtr->layout);
+
+	if(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
+		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_allocDescriptor() called on a push descriptor"))
 		
-	ListDescriptorBinding bindings = DescriptorLayoutRef_ptr(tablePtr->layout)->info.bindings;
+	ListDescriptorBinding bindings = layout->info.bindings;
 
 	if(bindings.ptr[bindId].count <= 1)
 		retError(clean, Error_invalidState(0, "DescriptorTableRef_allocDescriptor() can't be called on non arrays"));

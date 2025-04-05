@@ -56,19 +56,47 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	DescriptorLayout *desc = DescriptorLayoutRef_ptr(layout->info.bindings);
-	VkDescriptorLayout *descExt = DescriptorLayout_ext(desc, Vk);
-
+	VkDescriptorSetLayout layouts[4];
 	U32 count = 0;
 
-	for(; count < 4 && descExt->layouts[count]; ++count)
-		;
+	if(layout->info.bindings) {
+
+		DescriptorLayout *desc = DescriptorLayoutRef_ptr(layout->info.bindings);
+		VkDescriptorLayout *descExt = DescriptorLayout_ext(desc, Vk);
+
+		for(; count < 4 && descExt->layouts[count]; ++count)
+			layouts[count] = descExt->layouts[count];
+	}
+
+	if(layout->info.pushDescriptors) {
+
+		DescriptorLayout *desc = DescriptorLayoutRef_ptr(layout->info.pushDescriptors);
+		VkDescriptorLayout *descExt = DescriptorLayout_ext(desc, Vk);
+
+		U32 startCount = count;
+
+		for(; count < 4 && descExt->layouts[count - startCount]; ++count)
+			layouts[count] = descExt->layouts[count - startCount];
+	}
 
 	VkPipelineLayoutCreateInfo create = (VkPipelineLayoutCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = count,
-		.pSetLayouts = descExt->layouts
+		.pSetLayouts = count ? layouts : NULL
 	};
+
+	VkPushConstantRange pushConstants = (VkPushConstantRange) { 0 };
+
+	if (layout->info.pushConstants.count) {
+
+		pushConstants = (VkPushConstantRange) {
+			.stageFlags = vkGetShaderStages(layout->info.pushConstants.visibility),
+			.size = layout->info.pushConstants.constantBufferSize
+		};
+
+		create.pushConstantRangeCount = 1;
+		create.pPushConstantRanges = &pushConstants;
+	}
 
 	gotoIfError(clean, checkVkError(deviceExt->createPipelineLayout(deviceExt->device, &create, NULL, layoutExt)))
 	

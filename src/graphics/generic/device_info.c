@@ -238,9 +238,6 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_TightAlignment)
 				Log_debugLnx("\t\tTight resource alignment");
 
-			if(cap.featuresExt & EDxGraphicsFeatures_RootSig1_1)
-				Log_debugLnx("\t\tRoot signature 1.1");
-
 			if(cap.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps)
 				Log_debugLnx("\t\tAllow combine heaps");
 

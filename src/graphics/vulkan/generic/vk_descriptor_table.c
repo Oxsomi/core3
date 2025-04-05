@@ -165,7 +165,7 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 	VkDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Vk);
 
 	U32 count = 1;
-
+	
 	for(; count < 4 && layoutExt->layouts[count]; ++count)
 		;
 
@@ -503,6 +503,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		}
 
 		case ESHRegisterType_SubpassInput:				//Doesn't do anything
+		case ESHRegisterType_PushConstants:
 		default:
 			descriptor.descriptorCount = 0;
 			break;

@@ -24,6 +24,7 @@
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/ref_ptrx.h"
+#include "platforms/log.h"
 #include "types/container/string.h"
 
 Error PipelineLayoutRef_dec(PipelineLayoutRef **layout) {
@@ -47,6 +48,7 @@ Bool PipelineLayout_free(PipelineLayout *layout, Allocator alloc) {
 	if(!(layout->info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef)) {
 		success &= !GraphicsDeviceRef_dec(&layout->device).genericError;
 		DescriptorLayoutRef_dec(&layout->info.bindings);
+		DescriptorLayoutRef_dec(&layout->info.pushDescriptors);
 	}
 
 	return success;
@@ -62,8 +64,206 @@ Error GraphicsDeviceRef_createPipelineLayout(
 	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createPipelineLayout()::dev is required");
 
-	if(!info.bindings || info.bindings->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
-		return Error_nullPointer(0, "GraphicsDeviceRef_createPipelineLayout()::info.bindings is required");
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+
+	if(info.bindings && info.bindings->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+		return Error_nullPointer(
+			1, "GraphicsDeviceRef_createPipelineLayout()::info.bindings must be DescriptorLayout if present"
+		);
+
+	if(info.pushDescriptors && info.pushDescriptors->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+		return Error_nullPointer(
+			1, "GraphicsDeviceRef_createPipelineLayout()::info.pushDescriptors must be DescriptorLayout if present"
+		);
+
+	//Validate push constants
+
+	if(info.pushConstants.count && (
+		!info.pushConstants.constantBufferSize ||
+		info.pushConstants.constantBufferSize > 128 ||
+		(info.pushConstants.constantBufferSize & 3)
+	))
+		return Error_invalidParameter(
+			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must be 4-128 bytes (multiple of 4)"
+		);
+
+	if(info.pushConstants.count && !info.pushConstants.visibility)
+		return Error_invalidParameter(
+			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must have at least one visibility"
+		);
+
+	Bool isVulkan = GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Vulkan;
+	ESHBinaryType binaryType = isVulkan ? ESHBinaryType_SPIRV : ESHBinaryType_DXIL;
+
+	Bool canBePushConstant =
+		(binaryType == ESHBinaryType_DXIL && info.pushConstants.registerType == ESHRegisterType_ConstantBuffer) ||
+		info.pushConstants.registerType == ESHRegisterType_PushConstants;
+
+	if(info.pushConstants.count && !canBePushConstant)
+		return Error_invalidParameter(
+			1, 0,
+			"GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must be a constant buffer (DXIL) or "
+			"push constants (SPV)"
+		);
+
+	if(info.pushConstants.count > 1)
+		return Error_invalidParameter(
+			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants.count must be 1 or 0"
+		);
+
+	//Validate DWORD root signature limit (DirectX).
+	//At the same time; ensure the descriptor sets don't exceed 4 active sets if SPIRV is used.
+	//Added here to ensure all backends behave relatively similar.
+
+	U32 dwords = 0;
+
+	U32 uniqueSets[4];
+	U8 setCounter = 0;
+
+	if(info.pushConstants.count)	//Push constants take 1 DWORD each
+		dwords += info.pushConstants.constantBufferSize >> 2;
+
+	if (info.pushDescriptors) {		//Push descriptors take 2 DWORDs each
+
+		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.pushDescriptors);
+
+		if(!(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors))
+			return Error_invalidParameter(
+				1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushDescriptors doesn't have the right flags"
+			);
+
+		dwords += (U32)(layout->info.bindings.length << 1);
+
+		//Check overlap with push constant and push descriptors
+
+		for (U64 i = 0; i < layout->info.bindings.length; ++i) {
+
+			DescriptorBinding bind = layout->info.bindings.ptr[i];
+
+			if(info.pushConstants.count && DescriptorBinding_overlaps(
+				info.pushConstants,
+				bind.registerType,
+				bind.binding,
+				bind.count,
+				binaryType,
+				false
+			))
+				return Error_invalidParameter(
+					1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants overlaps with push descriptors"
+				);
+
+			if(isVulkan) {		//Grab sets of binding, DescriptorLayout already protects these to be <=4
+
+				U8 j = 0;
+
+				for(; j < setCounter; ++j)
+					if(uniqueSets[j] == bind.binding.space)
+						break;
+
+				if(j == setCounter)
+					uniqueSets[setCounter++] = bind.binding.space;
+			}
+		}
+	}
+
+	U8 setCounterPushDesc = setCounter;
+
+	if (info.bindings) {			//Descriptor tables take 1 DWORD each
+
+		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.bindings);
+
+		if(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
+			return Error_invalidParameter(
+				1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.bindings doesn't have the right flags"
+			);
+
+		dwords += (U32)layout->anySampler + layout->anyResource;
+
+		//Check overlap with bindings, push constants and push descriptors
+
+		for (U64 i = 0; i < layout->info.bindings.length; ++i) {
+
+			DescriptorBinding bind = layout->info.bindings.ptr[i];
+
+			if(isVulkan) {		//If we run out of sets or have an overlapping, we have a problem
+
+				U8 j = 0;
+
+				for(; j < setCounterPushDesc; ++j)
+					if(uniqueSets[j] == bind.binding.space)
+						return Error_invalidParameter(
+							1, 0,
+							"GraphicsDeviceRef_createPipelineLayout() push descriptors and descriptors can't share same sets"
+						);
+
+				for(; j < setCounter; ++j)
+					if(uniqueSets[j] == bind.binding.space)
+						break;
+
+				if(j == setCounter) {
+
+					if(setCounter == 4)
+						return Error_invalidParameter(
+							1, 0,
+							"GraphicsDeviceRef_createPipelineLayout() push descriptor + descriptors set count exceeds 4"
+						);
+
+					uniqueSets[setCounter++] = bind.binding.space;
+				}
+			}
+
+			Bool match = false;
+
+			if(info.pushDescriptors) {
+
+				DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(info.pushDescriptors);
+
+				for (U64 j = 0; j < pushLayout->info.bindings.length; ++j)
+					if (DescriptorBinding_overlaps(
+						pushLayout->info.bindings.ptr[j],
+						bind.registerType,
+						bind.binding,
+						bind.count,
+						binaryType,
+						false
+					)) {
+						match = true;
+						break;
+					}
+			}
+
+			if(!match && info.pushConstants.count && DescriptorBinding_overlaps(
+				info.pushConstants,
+				bind.registerType,
+				bind.binding,
+				bind.count,
+				binaryType,
+				true
+			))
+				match = true;
+
+			if(match)
+				return Error_invalidParameter(
+					1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.bindings has an overlapping register"
+				);
+		}
+	}
+
+	if(dwords > 64)
+		return Error_invalidParameter(
+			1, 0,
+			"GraphicsDeviceRef_createPipelineLayout() "
+			"root signature shouldn't exceed 64 DWORDs in case a DirectX backend is used, "
+			"push constants bytes are 4:1, push descriptors 1:2 and "
+			"bindings +1 if non static samplers are used, +1 if other resources are used"
+		);
+
+	if(dwords > 13)
+		Log_performanceLnx(
+			"GraphicsDeviceRef_createPipelineLayout() root signature would exceed 13 DWORDs if a DirectX backend is used"
+		);
+
+	//Create object
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(PipelineLayout) + GraphicsDeviceRef_getObjectSizes(dev)->pipelineLayout),

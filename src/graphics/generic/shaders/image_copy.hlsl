@@ -37,17 +37,21 @@ struct CopyImageRegion {
 //		In the case of mainMultiple they can be brought together to form the image dispatch offset instead.
 //		This will allow each dispatch to quickly identify which group is responsible for which region.
 
-U32 _regionCount;
-U32 _pad3, _pad4, _pad5;
+struct CopyImageCommand {
 
-#if $THREAD_COUNT != 1
-	#define ARRAY_COUNT 128
-#else
-	#define ARRAY_COUNT 1
+	U32 regionCount;
+	U32 pad3;
+
+	U32x2 src;
+	U32x2 dst;
+	U32x2 sizRot;
+};
+
+#ifdef __spirv__
+[[vk::push_constant]] 
 #endif
 
-U32x4 _srcDsts[ARRAY_COUNT];				//Likely not all allocated, avoid reading >= regionCount
-U32x4 _sizRots2[(ARRAY_COUNT + 1) >> 1];	//2 sizRot per time
+CopyImageCommand cmd;
 
 Texture2DArray<U32x4> _input;
 UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
@@ -56,15 +60,15 @@ UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
 //Only turn on rotate if sizRot.w != 0
 
 [[oxc::stage("compute")]]
-[[oxc::uniforms("THREAD_COUNT" = "1")]]
-[[oxc::uniforms("THREAD_COUNT" = "1", "ROTATE" = "1")]]
+[[oxc::uniforms()]]
+[[oxc::uniforms("ROTATE" = "1")]]
 [numthreads(16, 8, 1)]
 void mainSingle(U32x3 id : SV_DispatchThreadID) {
 
 	CopyImageRegion region;
-	region.src = _srcDsts[0].xy;
-	region.dst = _srcDsts[0].zw;
-	region.sizRot = _sizRots2[0].xy;
+	region.src = cmd.src;
+	region.dst = cmd.dst;
+	region.sizRot = cmd.sizRot;
 
 	U32x4 xyzRot = region.getSizRot();
 
@@ -74,7 +78,7 @@ void mainSingle(U32x3 id : SV_DispatchThreadID) {
 	U32x3 src = region.getSrc().xyz + id;
 	U32x3 dst = region.getDst().xyz + id;
 
-	#if ROTATE
+	#if $ROTATE
 
 		if(xyzRot.w & 1) {
 			xyzRot.xy = xyzRot.yx;

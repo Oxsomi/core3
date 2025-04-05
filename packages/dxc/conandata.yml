@@ -1,4 +1,4 @@
 sources:
-  "2025.03.12":
+  "2025.04.01":
     url: "https://github.com/Oxsomi/DirectXShaderCompiler.git"
     checkout: "main"

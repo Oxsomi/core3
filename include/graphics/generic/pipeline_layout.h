@@ -19,10 +19,7 @@
 */
 
 #pragma once
-#include "platforms/ext/listx.h"
-#include "types/base/error.h"
-#include "types/container/ref_ptr.h"
-#include "formats/oiSH/registers.h"
+#include "graphics/generic/descriptor_layout.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -41,6 +38,8 @@ typedef struct PipelineLayoutInfo {
 	U32 padding;
 
 	DescriptorLayoutRef *bindings;
+	DescriptorLayoutRef *pushDescriptors;
+	DescriptorBinding pushConstants;
 
 } PipelineLayoutInfo;
 
