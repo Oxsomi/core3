@@ -283,9 +283,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 		buf->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
-	//Allocate
-
-	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
+	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, buf->resource.flags & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
 
 	if(allocate) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))		//Temporary if not CPUBacked

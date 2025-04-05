@@ -182,7 +182,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->CreateDevice(
 		instanceExt->deviceFactory,
-		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_1,
+		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_0,
 		&IID_ID3D12Device10, (void**) &deviceExt->device
 	)))
 

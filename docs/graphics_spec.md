@@ -320,16 +320,14 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 ## List of Direct3D12 requirements
 
-- Direct3D12 Feature level 11_1.
+- Direct3D12 Feature level 11_0.
   - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
   - DXGI feature PRESENT_ALLOW_TEARING.
 - The following features:
   - Tiled resource tier 1 (Bindful) or 3 (Bindless).
-  - Conservative rasterization tier 2.
-  - Rasterizer-ordered views.
   - waveSize of 4 to 128.
   - Logical blend operations.
-  - OutputMergerLogicOp, TypedUAVLoadAdditionalFormats, ROVsSupported, ConservativeRasterizationTier >= tier3, HighestShaderModel of >= 6_5, WaveOps, Int64ShaderOps, EnhancedBarriersSupported, UnalignedBlockTexturesSupported.
+  - OutputMergerLogicOp, TypedUAVLoadAdditionalFormats, HighestShaderModel of >= 6_5, WaveOps, Int64ShaderOps, EnhancedBarriersSupported, UnalignedBlockTexturesSupported.
   - All standard ETextureFormat types have to be supported. Meaning float/snorm/unorm textures can be sampled and all texture formats have typed uav read/write. Non standard types include RGB32f/RGB32u/RGB32i which only requires usage as vertex attribute. All BCn formats have to be supported. BGRA8 doesn't need to be writable.
 - WDDM 2.7 and above.
 - More than 512 MiB of CPU + GPU visible memory (At least 1GB total).

@@ -206,6 +206,7 @@ Bool Packager_package(
 			else {
 
 				if(															//Merged binaries contain empty buffers
+					!(args.parameters & EOperationHasParameter_SplitBy) &&
 					merge &&
 					i + 1 != allOutputs.length &&
 					CharString_equalsStringSensitive(allOutputs.ptr[i], allOutputs.ptr[i + 1])

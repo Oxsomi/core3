@@ -82,7 +82,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	(void)instanceExt;
 
 	EGraphicsFeatures feat = physicalDevice->capabilities.features;
-	EGraphicsFeatures featEx = physicalDevice->capabilities.featuresExt;
+	EVkGraphicsFeatures featEx = physicalDevice->capabilities.featuresExt;
 	EGraphicsDataTypes types = physicalDevice->capabilities.dataTypes;
 
 	VkPhysicalDeviceFeatures features = (VkPhysicalDeviceFeatures) {
@@ -613,7 +613,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		getVkFunctionDevice(clean, vkCmdEndRenderingKHR, deviceExt->cmdEndRendering)
 	}
 
-	if(feat & EVkGraphicsFeatures_BufferDeviceAddress)
+	if(featEx & EVkGraphicsFeatures_BufferDeviceAddress)
 		getVkFunctionDevice(clean, vkGetBufferDeviceAddressKHR, deviceExt->getBufferDeviceAddress)
 
 	//Get queues
