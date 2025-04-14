@@ -91,7 +91,9 @@ typedef struct Sampler {
 	DescriptorTableRef *bindlessDescriptorTable;
 
 	SamplerInfo info;
-	U16 samplerLocation;
+	U16 padding[7];
+
+	U32 samplerLocation;
 
 } Sampler;
 

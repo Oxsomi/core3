@@ -468,6 +468,9 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 					if(isArrayType && !d.texture.arrayCount)
 						d.texture.arrayCount = tex.length - d.texture.arrayId;
 
+					else if(!isArrayType)
+						d.texture.arrayCount = 1;
+
 					if (!isWrite) {
 						if(!d.texture.mipCount)
 							d.texture.mipCount = tex.levels - d.texture.mipId;
@@ -478,7 +481,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				}
 
 				VkImageView view = NULL;
-				gotoIfError3(clean, VkUnifiedTexture_getView(darr.ptr[i], binding.registerType, &view, &newViews[i], e_rr))
+				gotoIfError3(clean, VkUnifiedTexture_getView(d, binding.registerType, &view, &newViews[i], e_rr))
 
 				//Turn view into descriptor
 
@@ -497,7 +500,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			allocatedNewViews = false;		//Success, no need to free the views
 
 			for(U64 i = 0; i < darr.length; ++i)
-				tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = range->newViews.ptr[i];
+				tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = newViews[i];
 
 			break;
 		}

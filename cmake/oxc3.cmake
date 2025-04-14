@@ -1,5 +1,5 @@
 # Setting the icon of the app
-# Call this immediately before configure_virtual_files with the executable
+# Call this immediately before apply_dependencies with the executable
 
 function(configure_icon target icon)
 

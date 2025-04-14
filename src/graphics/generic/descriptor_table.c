@@ -910,25 +910,15 @@ Bool DescriptorTableRef_setDescriptors(
 						0, "DescriptorTableRef_setDescriptors() Texture2D(Array) is the only one permitted to have a planeId"
 					))
 
-				//Validate SRV
-
-				if (!isWrite) {
-					if(!d.texture.mipCount)
-						d.texture.mipCount = tex.levels - d.texture.mipId;
-				}
-
 				//Validate UAV
 
-				else {
+				if(isWrite) {
 
 					if(d.texture.mipCount > 1)
 						retError(clean, Error_invalidState(
 							0,
 							"DescriptorTableRef_setDescriptors() RWTextures aren't allowed to have more than 1 mip selected"
 						))
-
-					if(!d.texture.mipCount)
-						d.texture.mipCount = 1;
 
 					if(tex.sampleCount && !(device->info.capabilities.features & EGraphicsFeatures_WriteMSTexture))
 						retError(clean, Error_unsupportedOperation(

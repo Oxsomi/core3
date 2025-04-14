@@ -263,7 +263,7 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 				break;
 		}
 
-	else vkFormat = mapVkFormat(tex.textureFormatId);
+	else vkFormat = mapVkFormat(ETextureFormatId_unpack[tex.textureFormatId]);
 
 	SpinLock *lock = &texExt->lock;
 	ELockAcquire acq = SpinLock_lock(lock, 1 * SECOND);
@@ -344,6 +344,7 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 		viewId = firstEmptyViewId;
 	}
 
+	*viewIdOutput = viewId;
 	*view = tmp;
 	tmp = NULL;
 

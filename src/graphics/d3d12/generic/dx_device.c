@@ -578,8 +578,8 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 
 	DxDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Dx);
 	D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[2] = {
-		heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement,
-		heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->resourcesHeap.gpuIncrement
+		heap->samplerHeap.gpuHandle.ptr + table->allocationLocations[1] * heap->resourcesHeap.gpuIncrement,
+		heap->resourcesHeap.gpuHandle.ptr + table->allocationLocations[0] * heap->resourcesHeap.gpuIncrement
 	};
 
 	commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
@@ -598,8 +598,10 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 	D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress;
 
-	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
-	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
+	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
+
+	commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
+	commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2 + isNv, cbvLoc);
 }
 
 Error DX_WRAP_FUNC(GraphicsDevice_submitCommands)(

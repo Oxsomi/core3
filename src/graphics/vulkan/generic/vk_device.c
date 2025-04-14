@@ -561,6 +561,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	getVkFunctionDevice(clean, vkAllocateCommandBuffers, deviceExt->allocateCommandBuffers)
 	getVkFunctionDevice(clean, vkBeginCommandBuffer, deviceExt->beginCommandBuffer)
 	getVkFunctionDevice(clean, vkCmdBindDescriptorSets, deviceExt->cmdBindDescriptorSets)
+	getVkFunctionDevice(clean, vkCmdPushDescriptorSetKHR, deviceExt->cmdPushDescriptorSet)
 	getVkFunctionDevice(clean, vkEndCommandBuffer, deviceExt->endCommandBuffer)
 	getVkFunctionDevice(clean, vkQueueSubmit, deviceExt->queueSubmit)
 	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR)
@@ -988,19 +989,22 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 
 	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
-	PipelineLayout *defaultLayout = PipelineLayoutRef_ptr(device->defaultPipelineLayout);
-	VkPipelineLayout *defaultLayoutExt = PipelineLayout_ext(defaultLayout, Vk);
+	VkPipelineLayout *defaultLayoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(device->defaultPipelineLayout), Vk);
+	VkPipelineLayout *pushLayoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(device->defaultCBufferLayout), Vk);
 
 	VkDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Vk);
 
-	for(U64 i = 0, k = 0; i < bindingCount; ++i)
+	for(U64 i = 0, k = 0; i < bindingCount; ++i) {
+
+		VkPipelineBindPoint bindPoint = i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
+			i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+		);
+
 		for(U64 j = 0; j < table->bindCommands; ++j) {
 
 			deviceExt->cmdBindDescriptorSets(
 				commandBuffer,
-				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
-					i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
-					),
+				bindPoint,
 				*defaultLayoutExt,
 				table->offsets[j], table->counts[j], &table->sets[k],
 				0, NULL
@@ -1008,6 +1012,34 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 
 			k += table->counts[j];
 		}
+
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
+		VkDeviceBuffer *frameDataExt = DeviceBuffer_ext(frameData, Vk);
+
+		VkDescriptorBufferInfo bufferInfo = (VkDescriptorBufferInfo) {
+			.buffer = frameDataExt->buffer,
+			.offset = 0,
+			.range = frameData->resource.size
+		};
+
+		VkWriteDescriptorSet cbv = (VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pBufferInfo = &bufferInfo
+		};
+
+		deviceExt->cmdPushDescriptorSet(
+			commandBuffer,
+			bindPoint,
+			*pushLayoutExt,
+			2,
+			1,
+			&cbv
+		);
+	}
 }
 
 Error VK_WRAP_FUNC(GraphicsDevice_submitCommands)(

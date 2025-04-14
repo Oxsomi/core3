@@ -319,7 +319,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			0,
 			false,
 			Descriptor_buffer(*ref, 0, 0, NULL, 0),
-			&buf->readHandle,
+			&buf->writeHandle,
 			&err
 		)
 	)

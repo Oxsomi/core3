@@ -193,6 +193,7 @@ typedef struct VkGraphicsDevice {
 	PFN_vkAllocateCommandBuffers allocateCommandBuffers;
 	PFN_vkBeginCommandBuffer beginCommandBuffer;
 	PFN_vkCmdBindDescriptorSets cmdBindDescriptorSets;
+	PFN_vkCmdPushDescriptorSetKHR cmdPushDescriptorSet;
 	PFN_vkEndCommandBuffer endCommandBuffer;
 	PFN_vkQueueSubmit queueSubmit;
 	PFN_vkQueuePresentKHR queuePresentKHR;

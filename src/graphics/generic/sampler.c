@@ -148,8 +148,6 @@ Error GraphicsDeviceRef_createSampler(
 
 	gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name))
 
-	U32 samplerLocation = 0;
-
 	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
 		dev,
 		bindlessDescriptorTable,
@@ -157,12 +155,10 @@ Error GraphicsDeviceRef_createSampler(
 		0,
 		false,
 		Descriptor_sampler(*sampler),
-		&samplerLocation,
+		&samp->samplerLocation,
 		&err
 	))
 		goto clean;
-
-	samp->samplerLocation = (U16) samplerLocation;
 
 clean:
 

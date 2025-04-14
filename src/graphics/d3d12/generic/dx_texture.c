@@ -62,9 +62,10 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	DXGI_FORMAT dxFormat = DXGI_FORMAT_UNKNOWN;
+	DXGI_FORMAT dxFormatFullyQualified = DXGI_FORMAT_UNKNOWN;
 
 	if(texture->depthFormat)
-		dxFormat = EDepthStencilFormat_toDXFormat(texture->depthFormat);
+		dxFormatFullyQualified = dxFormat = EDepthStencilFormat_toDXFormat(texture->depthFormat);
 
 	//We make everything typeless to allow an easy copy image for example
 
@@ -128,6 +129,9 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		default:
 			return Error_unsupportedOperation(0, "UnifiedTexture_create() was called with unsupported texture format");
 	}
+
+	if(!texture->depthFormat)
+		dxFormatFullyQualified = ETextureFormatId_toDXFormat(texture->textureFormatId);
 
 	Bool isDeviceTexture = texture->resource.type == EResourceType_DeviceTexture;
 
@@ -270,7 +274,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
 
-			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
+			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
 			
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
 				Log_debugLnx(
@@ -321,7 +325,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 			texture->resource.allocated = true;
 
-			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
+			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
 
 			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
 				deviceExt->device,

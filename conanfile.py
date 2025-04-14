@@ -88,6 +88,23 @@ class oxc3(ConanFile):
 
 		cmake.build()
 
+	# In case we don't have the shader compiler (and OxC3 package) enabled, we will have to depend on a previously built
+	# OxC3 with shader compiler enabled.
+	# This happens for example with Android, where shader compilation is disabled by default.
+
+	def build_requirements(self):
+		if not self.options.enableShaderCompiler:
+			self.tool_requires("oxc3/0.2.097", options = {
+				"forceVulkan": self.options.forceVulkan,
+				"enableSIMD": self.options.enableSIMD,
+				"enableTests": False,
+				"enableOxC3CLI": True,
+				"forceFloatFallback": False,
+				"enableShaderCompiler": True,
+				"cliGraphics": False,
+				"dynamicLinkingGraphics": True
+			})
+
 	def requirements(self):
 
 		hasD3D12 = not self.options.forceVulkan and self.settings.os == "Windows"
