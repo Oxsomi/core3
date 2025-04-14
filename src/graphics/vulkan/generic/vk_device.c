@@ -990,17 +990,16 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 	U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
 	VkPipelineLayout *defaultLayoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(device->defaultPipelineLayout), Vk);
-	VkPipelineLayout *pushLayoutExt = PipelineLayout_ext(PipelineLayoutRef_ptr(device->defaultCBufferLayout), Vk);
 
 	VkDescriptorTable *table = DescriptorTable_ext(DescriptorTableRef_ptr(device->defaultDescriptorTable), Vk);
 
-	for(U64 i = 0, k = 0; i < bindingCount; ++i) {
+	for(U64 i = 0; i < bindingCount; ++i) {
 
 		VkPipelineBindPoint bindPoint = i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
 			i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
 		);
 
-		for(U64 j = 0; j < table->bindCommands; ++j) {
+		for(U64 j = 0, k = 0; j < table->bindCommands; ++j) {
 
 			deviceExt->cmdBindDescriptorSets(
 				commandBuffer,
@@ -1034,7 +1033,7 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 		deviceExt->cmdPushDescriptorSet(
 			commandBuffer,
 			bindPoint,
-			*pushLayoutExt,
+			*defaultLayoutExt,
 			2,
 			1,
 			&cbv

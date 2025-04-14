@@ -233,6 +233,12 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 	if(!d.resource)
 		return false;
 
+	if(!d.texture.arrayCount)
+		d.texture.arrayCount = 1;
+
+	if(!d.texture.mipCount)
+		d.texture.mipCount = 1;
+
 	Bool s_uccess = true;
 	VkImageView tmp = NULL;
 
