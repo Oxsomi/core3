@@ -177,7 +177,12 @@ typedef struct DxCommandBufferState {
 	U8 boundPrimitiveTopology;
 	U8 inRender;
 
-	U32 scopeCounter;
+	U16 scopeCounter;
+	U8 colorCount;									//If inRender, how many colors are bound (upper mask = has depth)
+	U8 anyResolve;
+
+	I32x2 size;										//If inRender,	defines current size
+	I32x2 offset;									//^				defines offset
 
 	DxCommandBuffer *buffer;
 

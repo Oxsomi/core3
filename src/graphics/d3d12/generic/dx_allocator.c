@@ -47,8 +47,8 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
 			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
-		.Alignment = alignment,
-		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED		//Equal to vulkan behavior, clear manually
+		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED,		//Equal to vulkan behavior, clear manually
+		.Alignment = alignment
 	};
 
 	if (!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))

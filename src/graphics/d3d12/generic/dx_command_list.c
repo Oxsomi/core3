@@ -341,6 +341,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 				.bottom = I32x2_y(startRender->offset) + I32x2_y(startRender->size)
 			};
 
+			Bool anyResolve = false;
+
 			for (U8 i = 0; i < startRender->colorCount; ++i) {
 
 				const AttachmentInfoInternal *attachmentsj = &attachments[j];
@@ -351,18 +353,40 @@ void DX_WRAP_FUNC(CommandList_process)(
 					active = attachmentsj->image;
 
 					if(attachmentsj->resolveImage) {
+
 						temp->boundTargets[i] = (ImageAndRange) { .range = attachmentsj->range, .image = active };
 						temp->resolveTargets[i] = (ImageAndRange) {
 							.range = attachmentsj->resolveRange,
 							.image = attachmentsj->resolveImage
 						};
+
+						anyResolve = true;
 					}
 				}
 
 				D3D12_CPU_DESCRIPTOR_HANDLE curr = createTempRTV(deviceExt, i, cpuDesc, heap, active);
 
+				UnifiedTexture utex = TextureRef_getUnifiedTexture(active, NULL);
+				Bool hasRect = I32x2_neq2(startRender->size, I32x2_create2(utex.width, utex.height));
+
 				if(((startRender->clearMask & startRender->activeMask) >> i) & 1)
-					buffer->lpVtbl->ClearRenderTargetView(buffer, curr, attachmentsj->color.colorf, 1, &rect);
+					buffer->lpVtbl->ClearRenderTargetView(
+						buffer, curr, attachmentsj->color.colorf, hasRect ? 1 : 0, hasRect ? &rect : NULL
+					);
+
+				else if(!(((startRender->preserveMask & startRender->activeMask) >> i) & 1)) {
+
+					DxUnifiedTexture *tex = TextureRef_getCurrImgExtT(active, Dx, 0);
+
+					D3D12_DISCARD_REGION region = (D3D12_DISCARD_REGION) {
+						.NumRects = hasRect ? 1 : 0,
+						.pRects = hasRect ? &rect : NULL,
+						.FirstSubresource = 0,				//TODO:
+						.NumSubresources = 1
+					};
+
+					buffer->lpVtbl->DiscardResource(buffer, tex->image, hasRect ? &region : NULL);
+				}
 
 				if(active)
 					++j;
@@ -373,9 +397,16 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			const DxDescriptorHeapSingle *dsvHeap = &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV];
 			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap->cpuHandle;
-			D3D12_CPU_DESCRIPTOR_HANDLE dsv = createTempDSV(
-				deviceExt, 0, dsvCpuDesc, startRender->flags, dsvHeap, startRender->depthStencil
-			);
+			D3D12_CPU_DESCRIPTOR_HANDLE dsv =
+				!startRender->depthStencil ? (D3D12_CPU_DESCRIPTOR_HANDLE) { 0 } :
+				createTempDSV(deviceExt, 0, dsvCpuDesc, startRender->flags, dsvHeap, startRender->depthStencil);
+
+			//TODO: Respect EStartRenderFlags_StencilReadOnly and EStartRenderFlags_DepthReadOnly
+
+			UnifiedTexture utex = TextureRef_getUnifiedTexture(startRender->depthStencil, NULL);
+			Bool hasRect = I32x2_neq2(startRender->size, I32x2_create2(utex.width, utex.height));
+
+			EStartRenderFlags preserveDepthStencil = EStartRenderFlags_PreserveStencil | EStartRenderFlags_PreserveDepth;
 
 			if(startRender->flags & EStartRenderFlags_ClearDepthStencil)
 				buffer->lpVtbl->ClearDepthStencilView(
@@ -383,8 +414,40 @@ void DX_WRAP_FUNC(CommandList_process)(
 					(startRender->flags & EStartRenderFlags_ClearDepth ? D3D12_CLEAR_FLAG_DEPTH : 0) |
 					(startRender->flags & EStartRenderFlags_ClearStencil ? D3D12_CLEAR_FLAG_STENCIL : 0),
 					startRender->clearDepth, startRender->clearStencil,
-					1, &rect
+					hasRect ? 1 : 0, hasRect ? &rect : NULL
 				);
+
+			else if (startRender->depthStencil && (startRender->flags & preserveDepthStencil) != preserveDepthStencil) {
+
+				DxUnifiedTexture *tex = TextureRef_getCurrImgExtT(startRender->depthStencil, Dx, 0);
+
+				D3D12_DISCARD_REGION region = (D3D12_DISCARD_REGION) {
+					.NumRects = hasRect ? 1 : 0,
+					.pRects = hasRect ? &rect : NULL,
+					.FirstSubresource = 0,		//TODO: Ensure all are valid
+					.NumSubresources = 1		//TODO: ^
+				};
+
+				Bool preserveDepth = startRender->flags & EStartRenderFlags_PreserveDepth;
+				Bool preserveStencil = startRender->flags & EStartRenderFlags_PreserveStencil;
+
+				Bool hasStencil = utex.depthFormat >= EDepthStencilFormat_StencilStart;
+
+				Bool isPartial = hasStencil && preserveDepth && !preserveStencil;
+
+				if(!isPartial && hasStencil && !preserveStencil)
+					++region.NumSubresources;
+
+				Bool hasRegion = !isPartial || hasRect;
+
+				if(!preserveDepth)
+					buffer->lpVtbl->DiscardResource(buffer, tex->image, hasRegion ? &region : NULL);
+
+				if(!preserveStencil && isPartial) {
+					++region.FirstSubresource;
+					buffer->lpVtbl->DiscardResource(buffer, tex->image, &region);
+				}
+			}
 
 			if(startRender->resolveDepthStencil) {
 
@@ -397,15 +460,21 @@ void DX_WRAP_FUNC(CommandList_process)(
 					.range = startRender->resolveDepthStencilRange,
 					.image = startRender->resolveDepthStencil
 				};
+
+				anyResolve = true;
 			}
 
 			buffer->lpVtbl->OMSetRenderTargets(
 				buffer, j,
 				&cpuDesc, true,
-				&dsv
+				!startRender->depthStencil ? NULL : &dsv
 			);
 
 			temp->inRender = true;
+			temp->anyResolve = anyResolve;
+			temp->size = startRender->size;
+			temp->offset = startRender->offset;
+			temp->colorCount = startRender->colorCount | (startRender->depthStencil ? 0x80 : 0);
 			break;
 		}
 
@@ -413,17 +482,82 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 		case ECommandOp_EndRenderingExt: {
 
+			temp->inRender = false;
+
+			if(!temp->anyResolve)
+				break;
+
 			D3D12_BARRIER_GROUP deps = { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
-			//All DSVs and RTVs to the correct state
+			//All DSVs and RTVs to the correct state (resolve source)
 
-			for(U8 i = 0; i < 9; ++i) {
+			U32 count = temp->colorCount & 0x7F;
+			U32 forCount = count + (temp->colorCount >> 7);
 
-				ImageAndRange input = temp->boundTargets[i];
+			D3D12_RECT rect = (D3D12_RECT) {
+				.left = I32x2_x(temp->offset),
+				.top = I32x2_y(temp->offset),
+				.right = I32x2_x(temp->offset) + I32x2_x(temp->size),
+				.bottom = I32x2_y(temp->offset) + I32x2_y(temp->size)
+			};
 
-				if(!input.image)		//Only there if it's really required
+			for(U8 i = 0; i < forCount; ++i) {
+
+				ImageAndRange input = temp->boundTargets[i == count ? 8 : i];
+				ImageAndRange output = temp->resolveTargets[i == count ? 8 : i];
+
+				if(!input.image || !output.image)		//Only there if it's really required
 					continue;
 
+				//Discard destination and transition to correct state
+
+				{
+					const DxUnifiedTexture *resolveExt = TextureRef_getCurrImgExtT(output.image, Dx, 0);
+					const UnifiedTexture utex = TextureRef_getUnifiedTexture(output.image, NULL);
+					DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(output.image, Dx, 0);
+
+					Bool hasRect = I32x2_neq2(temp->size, I32x2_create2(utex.width, utex.height));
+
+					D3D12_DISCARD_REGION region = (D3D12_DISCARD_REGION) {
+						.NumRects = hasRect ? 1 : 0,
+						.pRects = hasRect ? &rect : NULL,
+						.FirstSubresource = 0,		//TODO: Ensure all are valid
+						.NumSubresources = 1		//TODO: ^
+					};
+
+					buffer->lpVtbl->DiscardResource(buffer, resolveExt->image, &region);
+
+					D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+						.NumMipLevels = 1,
+						.NumArraySlices = 1,
+						.NumPlanes = 1
+					};
+
+					if (i == count) {		//Depth stencil
+
+						if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)				//Take both planes (depth & stencil)
+							++range.NumPlanes;
+
+						else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)		//Take only the stencil plane
+							++range.FirstPlane;
+					}
+
+					Error err = DxUnifiedTexture_transition(
+						imageExt,
+						D3D12_BARRIER_SYNC_RESOLVE,
+						D3D12_BARRIER_ACCESS_RESOLVE_DEST,
+						D3D12_BARRIER_LAYOUT_RESOLVE_DEST,
+						&range,
+						&deviceExt->imageTransitions,
+						&deps
+					);
+
+					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+				}
+
+				//Transition both source and destination;
+				//Source wasn't transitioned, but destination was only transitioned for discard
+				
 				const UnifiedTexture utex = TextureRef_getUnifiedTexture(input.image, NULL);
 				DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(input.image, Dx, 0);
 
@@ -433,16 +567,14 @@ void DX_WRAP_FUNC(CommandList_process)(
 					.NumPlanes = 1
 				};
 
-				if (i == 8) {		//Depth stencil
+				if (i == count) {		//Depth stencil
 
 					if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)				//Take both planes (depth & stencil)
 						++range.NumPlanes;
 
-					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)	//Take only the stencil plane
+					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)		//Take only the stencil plane
 						++range.FirstPlane;
 				}
-
-				//Only transition source, because dest was already transitioned in startScope
 
 				Error err = DxUnifiedTexture_transition(
 					imageExt,
@@ -462,35 +594,35 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
 
-			if(deps.NumBarriers)
-				for(U8 i = 0; i < 9; ++i) {
+			//Resolve
 
-					ImageAndRange input = temp->boundTargets[i];
-					ImageAndRange output = temp->resolveTargets[i];
+			for(U8 i = 0; i < forCount; ++i) {
 
-					if(!input.image)		//Only there if it's really required
-						continue;
+				ImageAndRange input = temp->boundTargets[i == count ? 8 : i];
+				ImageAndRange output = temp->resolveTargets[i == count ? 8 : i];
 
-					const DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(input.image, Dx, 0);
-					const DxUnifiedTexture *resolveExt = TextureRef_getCurrImgExtT(output.image, Dx, 0);
-					const UnifiedTexture utex = TextureRef_getUnifiedTexture(input.image, NULL);
+				if(!input.image || !output.image)		//Only there if it's really required
+					continue;
 
-					DXGI_FORMAT format = 0;
+				const DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(input.image, Dx, 0);
+				const DxUnifiedTexture *resolveExt = TextureRef_getCurrImgExtT(output.image, Dx, 0);
+				const UnifiedTexture utex = TextureRef_getUnifiedTexture(input.image, NULL);
 
-					if(utex.depthFormat)
-						format = EDepthStencilFormat_toDXFormat(utex.depthFormat);
+				DXGI_FORMAT format = 0;
 
-					else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
+				if(i == count)
+					format = EDepthStencilFormat_toDXFormat(utex.depthFormat);
 
-					buffer->lpVtbl->ResolveSubresource(
-						buffer,
-						resolveExt->image, 0,
-						imageExt->image, 0,
-						format
-					);
-				}
+				else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
 
-			temp->inRender = false;
+				buffer->lpVtbl->ResolveSubresource(
+					buffer,
+					resolveExt->image, 0,
+					imageExt->image, 0,
+					format
+				);
+			}
+
 			break;
 		}
 
@@ -984,12 +1116,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 							break;
 
-						case ETransitionType_ResolveTargetWrite:
-							pipelineStage = D3D12_BARRIER_SYNC_RESOLVE;
-							access = D3D12_BARRIER_ACCESS_RESOLVE_DEST;
-							layout = D3D12_BARRIER_LAYOUT_RESOLVE_DEST;
-							break;
-
+						case ETransitionType_ResolveTargetWrite:		//We handle a 'secret' transition after (needs discard first)
 						case ETransitionType_Clear:
 							pipelineStage = D3D12_BARRIER_SYNC_RENDER_TARGET;
 							access = D3D12_BARRIER_ACCESS_RENDER_TARGET;

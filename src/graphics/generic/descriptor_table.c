@@ -817,9 +817,7 @@ Bool DescriptorTableRef_setDescriptors(
 				Bool hasStencil = false;
 
 				if(isDepthBuffer)
-					hasStencil =
-						tex.depthFormat >= EDepthStencilFormat_StencilStart &&
-						tex.depthFormat < EDepthStencilFormat_StencilEnd;
+					hasStencil = tex.depthFormat >= EDepthStencilFormat_StencilStart;
 
 				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderRead) && !(b.registerType & ESHRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
@@ -1193,10 +1191,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 
 			UnifiedTexture tex = TextureRef_getUnifiedTexture(resource, NULL);
 
-			if(planeId &&!(
-				tex.depthFormat >= EDepthStencilFormat_StencilStart &&
-				tex.depthFormat < EDepthStencilFormat_StencilEnd
-			))
+			if(planeId && !(tex.depthFormat >= EDepthStencilFormat_StencilStart))
 				retError(clean, Error_invalidOperation(
 					0, "DescriptorTableRef_findBindlessRegister() Requested DepthStencil planeId 1 but no stencil was present"
 				))
