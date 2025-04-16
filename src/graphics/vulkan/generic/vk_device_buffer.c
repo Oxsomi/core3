@@ -171,9 +171,13 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 	deviceExt->getBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
 
 	//Some drivers won't correctly report alignment for scratch buffers; which have a max alignment of 256
+	//They also don't always correctly report alignment for ASRead (e.g. instance)
 
 	if (buf->usage & EDeviceBufferUsage_ScratchExt)
 		requirements.memoryRequirements.alignment = U64_max(256, requirements.memoryRequirements.alignment);
+
+	if (buf->usage & EDeviceBufferUsage_ASReadExt)
+		requirements.memoryRequirements.alignment = U64_max(16, requirements.memoryRequirements.alignment);
 	
 	DeviceMemoryBlock block;
 	gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
