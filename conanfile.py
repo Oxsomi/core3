@@ -4,6 +4,7 @@ from conan.tools.scm import Git
 from conan.tools.files import collect_libs, copy
 import os
 import shutil
+import platform
 
 required_conan_version = ">=2.0"
 
@@ -50,6 +51,7 @@ class oxc3(ConanFile):
 		cmake_layout(self)
 
 	def configure(self):
+		print(platform.machine())
 		self.settings.rm_safe("compiler.cppstd")
 		self.settings.rm_safe("compiler.libcxx")
 
