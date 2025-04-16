@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2025.04.01"
+	version = "2025.04.16"
 
 	# Optional metadata
 	license = "LLVM Release License"
