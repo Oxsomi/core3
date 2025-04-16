@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   build:
-    name: Windows build dynamic
+    name: Windows build dynamic arm
     runs-on: windows-11-arm
     env:
       VULKAN_SDK: C:\VulkanSDK\
@@ -26,7 +26,7 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
+        key: ${{ runner.os }}-arm64-${{ hashFiles('**/packages') }}
     - name: build for fast check dynamic
       run: cmd /C build.bat Release True True True -o cliGraphics=False -o forceVulkan=True
     - name: build for SIMD fallback check dynamic
@@ -40,7 +40,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
+        key: ${{ runner.os }}-arm64-${{ hashFiles('**/packages') }}
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: '3.3'
@@ -50,7 +50,7 @@ jobs:
       env:
         JOB_STATUS: ${{ job.status }}
         WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        HOOK_OS_NAME: ${{ runner.os }}-x64-dynamic
+        HOOK_OS_NAME: ${{ runner.os }}-arm64-dynamic
         WORKFLOW_NAME: ${{ github.workflow }}
       run: |
         git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
