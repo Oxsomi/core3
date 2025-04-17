@@ -49,7 +49,7 @@ set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic lin
 
 # Set general compile options
 
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "ARM64")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
 	set(target "arm64")
