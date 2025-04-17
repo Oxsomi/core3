@@ -69,10 +69,18 @@ if(NOT ${ARM})
 
 	# NVAPI, used for NV extensions and getting driver version
 
-	find_package(ags REQUIRED)
-	find_package(nvapi REQUIRED)
+	find_package(ags)
+	find_package(nvapi)
 
-	target_link_libraries(${TARGET_NAME} PUBLIC ags::ags nvapi::nvapi)
+	if (ags_FOUND)
+		target_link_libraries(${TARGET_NAME} PUBLIC ags::ags)
+		target_compile_definitions(${TARGET_NAME} PUBLIC -D_HAS_AMD_AGS)
+	endif()
+
+	if (nvapi_FOUND)
+		target_link_libraries(${TARGET_NAME} PUBLIC nvapi::nvapi)
+		target_compile_definitions(${TARGET_NAME} PUBLIC -D_HAS_NV_API)
+	endif()
 
 endif()
 

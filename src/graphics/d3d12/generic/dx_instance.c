@@ -38,8 +38,11 @@
 #include <dxgi1_6.h>
 #include <d3d11.h>			//AMD AGS needs it...
 
-#if _ARCH == ARCH_X86_64
+#ifdef _HAS_NV_API
 	#include <nvapi.h>
+#endif
+
+#ifdef _HAS_AMD_AGS
 	#include <amd_ags.h>
 #endif
 
@@ -147,14 +150,14 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 	if(instanceExt->debug1)
 		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
 
-	#if _ARCH == ARCH_X86_64
-
+	#ifdef _HAS_NV_API
 		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasNVApi)
 			NvAPI_Unload();
+	#endif
 
+	#ifdef _HAS_AMD_AGS
 		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasAMDAgs)
 			agsDeInitialize(instanceExt->agsContext);
-
 	#endif
 
 	CharString_freex(&instanceExt->nvDriverVersion);
@@ -231,7 +234,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Check for NVApi
 
-	#if _ARCH == ARCH_X86_64
+	#ifdef _HAS_NV_API
 
 		const NvAPI_Status status = NvAPI_Initialize();
 
@@ -252,6 +255,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 			))
 		}
 
+	#endif
+
+	#ifdef _HAS_AMD_AGS
+
 		//Check for AMDAgs
 
 		const AGSConfiguration config = (AGSConfiguration) { 0 };
@@ -268,7 +275,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 			if(CharString_length(instanceExt->amdDriverVersion) >= 256) {
 				Log_warnLnx("D3D12GraphicsInstance_create() AMD AGS initialize failed, version string is too long");
 				agsDeInitialize(instanceExt->agsContext);
-				instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
+				instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasAMDAgs;
 			}
 		}
 
@@ -785,59 +792,63 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 				CharString_bufferConst(instanceExt->nvDriverVersion)
 			);
 
-			//Raytracing validation
+			#ifdef _HAS_NV_API
 
-			NvAPI_Status status = NvAPI_D3D12_EnableRaytracingValidation(
-				(ID3D12Device5*)device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE
-			);
+				//Raytracing validation
 
-			if(status != NVAPI_ACCESS_DENIED && status != NVAPI_OK)
-				Log_debugLnx("D3D12: NVAPI: Couldn't enable raytracing validation on device %"PRIu32"", i);
+				NvAPI_Status status = NvAPI_D3D12_EnableRaytracingValidation(
+					(ID3D12Device5*)device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE
+				);
 
-			if(status == NVAPI_OK)
-				info->capabilities.features |= EGraphicsFeatures_RayValidation;
+				if(status != NVAPI_ACCESS_DENIED && status != NVAPI_OK)
+					Log_debugLnx("D3D12: NVAPI: Couldn't enable raytracing validation on device %"PRIu32"", i);
 
-			//SER (Shader execution reordering)
+				if(status == NVAPI_OK)
+					info->capabilities.features |= EGraphicsFeatures_RayValidation;
 
-			NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS ser = (NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS) { 0 };
+				//SER (Shader execution reordering)
 
-			status = NvAPI_D3D12_GetRaytracingCaps(
-				(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING, &ser, sizeof(ser)
-			);
+				NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS ser = (NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS) { 0 };
 
-			if(status != NVAPI_OK)
-				Log_debugLnx("D3D12: NVAPI: Couldn't query for SER on device %"PRIu32"", i);
+				status = NvAPI_D3D12_GetRaytracingCaps(
+					(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING, &ser, sizeof(ser)
+				);
 
-			else if(ser == NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAP_STANDARD)
-				info->capabilities.features |= EGraphicsFeatures_RayReorder;
+				if(status != NVAPI_OK)
+					Log_debugLnx("D3D12: NVAPI: Couldn't query for SER on device %"PRIu32"", i);
 
-			//Opacity micromaps
+				else if(ser == NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAP_STANDARD)
+					info->capabilities.features |= EGraphicsFeatures_RayReorder;
 
-			NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS omm = (NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS) { 0 };
+				//Opacity micromaps
 
-			status = NvAPI_D3D12_GetRaytracingCaps(
-				(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP, &omm, sizeof(omm)
-			);
+				NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS omm = (NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS) { 0 };
 
-			if(status != NVAPI_OK)
-				Log_debugLnx("D3D12: NVAPI: Couldn't query for OMM on device %"PRIu32"", i);
+				status = NvAPI_D3D12_GetRaytracingCaps(
+					(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP, &omm, sizeof(omm)
+				);
 
-			else if(omm == NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAP_STANDARD)
-				info->capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+				if(status != NVAPI_OK)
+					Log_debugLnx("D3D12: NVAPI: Couldn't query for OMM on device %"PRIu32"", i);
 
-			//Displacement micromaps
+				else if(omm == NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAP_STANDARD)
+					info->capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
 
-			NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS dmm = (NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS) { 0 };
+				//Displacement micromaps
 
-			status = NvAPI_D3D12_GetRaytracingCaps(
-				(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP, &dmm, sizeof(dmm)
-			);
+				NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS dmm = (NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS) { 0 };
 
-			if(status != NVAPI_OK)
-				Log_debugLnx("D3D12: NVAPI: Couldn't query for DMM on device %"PRIu32"", i);
+				status = NvAPI_D3D12_GetRaytracingCaps(
+					(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP, &dmm, sizeof(dmm)
+				);
 
-			else if(dmm == NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAP_STANDARD)
-				info->capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
+				if(status != NVAPI_OK)
+					Log_debugLnx("D3D12: NVAPI: Couldn't query for DMM on device %"PRIu32"", i);
+
+				else if(dmm == NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAP_STANDARD)
+					info->capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
+
+			#endif
 		}
 
 		else {
