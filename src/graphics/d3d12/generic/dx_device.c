@@ -191,6 +191,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 	)))
 
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
+	(void) isNv;
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 

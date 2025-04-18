@@ -23,11 +23,24 @@
 U128 U128_create(const void *data) { return I32x4_load4(data); }
 U128 U128_createU64x2(U64 a, U64 b) { return I32x4_createFromU64x2(a, b); }
 
-U128 U128_mul64(U64 au, U64 bu) {
-	const U64 hiProd = 0;
-	const U64 loProd = _umul128(bu, au, &hiProd);
-	return U128_createU64x2(loProd, hiProd);
-}
+
+#if _ARCH == ARCH_ARM64
+
+	uint64_t __umulh(uint64_t a, uint64_t b);
+
+	U128 U128_mul64(U64 au, U64 bu) {
+		U64 hiProd = __umulh(au, bu);
+		U64 loProd = au * bu;
+		return U128_createU64x2(loProd, hiProd);
+	}
+
+#else
+	U128 U128_mul64(U64 au, U64 bu) {
+		U64 hiProd = 0;
+		const U64 loProd = _umul128(bu, au, &hiProd);
+		return U128_createU64x2(loProd, hiProd);
+	}
+#endif
 
 U128 U128_zero() { return I32x4_zero(); }
 U128 U128_one() { return I32x4_create4(1, 0, 0, 0); }

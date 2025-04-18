@@ -354,8 +354,15 @@ Error GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayValidation
 		);
 
+	Bool isDebugInstance = instance->flags & EGraphicsInstanceFlags_IsDebug;
+
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && !isDebugInstance)
+		gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_create() tried to create debug device but the instance had it disabled"
+		))
+
 	#ifndef NDEBUG
-		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug))
+		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug) && isDebugInstance)
 			device->flags |= EGraphicsDeviceFlags_IsDebug;
 	#endif
 

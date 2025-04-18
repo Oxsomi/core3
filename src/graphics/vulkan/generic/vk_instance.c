@@ -937,7 +937,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			limits.maxPushConstantsSize < 128 ||
 			limits.maxSamplerAllocationCount < 1024 ||
 			limits.maxSamplerAnisotropy < 16 ||
-			limits.maxStorageBufferRange < 250 * MEGA ||
+			limits.maxStorageBufferRange < 128 * MEGA ||
 			limits.maxSamplerLodBias < 4 ||
 			limits.maxUniformBufferRange < 64 * KIBI ||
 			limits.maxVertexInputAttributeOffset < 2047 ||

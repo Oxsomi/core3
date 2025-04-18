@@ -384,7 +384,7 @@ I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
 
 	const U8 *ua = (U8*)&a;
 	const U8 *ub = (U8*)&b;
-	I32x4_U8x8 c;
+	I32x4_U8x8 c = (I32x4_U8x8) { 0 };
 
 	for (U8 i = 0; i < 16; ++i) {
 
