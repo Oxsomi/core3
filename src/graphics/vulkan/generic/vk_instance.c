@@ -528,6 +528,22 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		VkPhysicalDevice dev = temp.ptr[i];
 
+		//VkOnD3D12 might not match our feature set and it might cause confusion, because it shows 2 extra devices on QCOM
+		//Even though we only really have 1 physical device there (it exists only for emulating GL).
+
+		{
+			VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2){
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
+			};
+
+			instanceExt->getPhysicalDeviceProperties2(dev, &properties2);
+
+			CharString deviceName = CharString_createRefCStrConst(properties2.properties.deviceName);
+
+			if (CharString_startsWithStringSensitive(deviceName, CharString_createRefCStrConst("Microsoft Direct3D12"), 0))
+				continue;
+		}
+
 		//Get extensions and layers
 
 		U32 layerCount = 0, extensionCount = 0;

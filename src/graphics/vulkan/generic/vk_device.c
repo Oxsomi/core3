@@ -641,7 +641,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.objectType = VK_OBJECT_TYPE_QUEUE
 	};
 
-	if(device->flags & EGraphicsDeviceFlags_IsDebug && instanceExt->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 		debugName.pObjectName = "Graphics queue";
 		debugName.objectHandle = (U64) graphicsQueueExt->queue;
 		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
