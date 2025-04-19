@@ -13,7 +13,7 @@ jobs:
     - name: Set up Visual Studio Build Tools
       run: choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended"
     - name: Try to find armasm64
-      run: dir "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
+      run: dir "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.43.34808\bin\Hostx64\arm64"
     - uses: actions/setup-python@v5
       with:
         python-version: '3.13' 
