@@ -66,6 +66,8 @@ One of the useful things about C is that files are incredibly easy to compile an
 - (*Optional on Windows only*): Vulkan SDK (latest preferred, but at least 1.3.226).
 - (*Optional*): Git or any tool that can work with GitHub.
 - C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used to interface with some deps not using C such as DXC.
+- **Windows**:
+  - If using ARM64 needs ARMASM64 to be present if MSVC is used, this can be installed by installing the arm64 build tools via the VS installer.
 - **OSX**:
   - If using Vulkan SDK, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1 if you need bindless rendering. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
   - llvm-objcopy for example via `brew install llvm`.
