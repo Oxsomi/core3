@@ -342,7 +342,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	for(U64 i = 0; i < reqExtensionsNameCount; ++i)
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, reqExtensionsName[i]))
 
-	if(feat & EGraphicsFeatures_RayPipeline) {
+	if(feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery)) {
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_spirv_1_4"))
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_shader_float_controls"))
 	}
