@@ -50,7 +50,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 
 	U32 memoryId = U32_MAX;
 
-	if(!deviceExt->hasDistinctMemory)
+	if(!deviceExt->hasDistinctMemory && !deviceExt->hasOnlyLocalMemory)
 		all &=~ local;
 
 	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
@@ -59,7 +59,10 @@ Error VkDeviceMemoryAllocator_findMemory(
 		0
 	};
 
-	if (!cpuSided && deviceExt->hasLocalMemory) {
+	if (
+		(!cpuSided && deviceExt->hasLocalMemory) ||
+		(cpuSided && deviceExt->hasOnlyLocalMemory)
+	) {
 
 		for (U32 i = 0; i < 3; ++i)
 			properties[i] |= local;

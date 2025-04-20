@@ -807,6 +807,7 @@ Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
 
 	deviceExt->hasDistinctMemory = true;
 	deviceExt->hasLocalMemory = true;
+	deviceExt->hasOnlyLocalMemory = false;
 
 	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
 
@@ -824,6 +825,7 @@ Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
 		deviceExt->maxHeapSizes[0] = deviceExt->maxHeapSizes[1];
 		deviceExt->heapIds[0] = deviceExt->heapIds[1];
 		deviceExt->hasDistinctMemory = false;
+		deviceExt->hasOnlyLocalMemory = true;
 	}
 
 	else if (!deviceExt->maxHeapSizes[1]) {		//If there's only host heaps then we know we're on AMD APU. Use host heap.

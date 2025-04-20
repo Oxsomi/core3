@@ -222,7 +222,8 @@ typedef struct VkGraphicsDevice {
 	U32 heapIds[2];
 
 	Bool hasDistinctMemory;
-	U8 padding1[7];
+	Bool hasOnlyLocalMemory;
+	U8 padding1[6];
 	
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS		//For fallback to query memory usage
 		IDXGIAdapter3 *dxgiAdapter;
