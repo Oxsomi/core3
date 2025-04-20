@@ -757,8 +757,9 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"))
 
-	if(!((bin.vendorMask >> device->info.vendor) & 1))
-		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"))
+	if(bin.vendorMask != ((1 << ESHVendor_Count) - 1))
+		if(!((bin.vendorMask >> device->info.vendor) & 1))
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"))
 
 	//Check for D3D12 features, shader models and DXIL
 

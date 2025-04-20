@@ -347,7 +347,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_shader_float_controls"))
 	}
 
-	if(feat & EGraphicsFeatures_VariableRateShading)
+	if(feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering))
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_create_renderpass2"))
 
 	if(feat & EGraphicsFeatures_DirectRendering)
