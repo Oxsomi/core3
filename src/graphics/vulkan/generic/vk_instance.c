@@ -1394,7 +1394,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindSamplers >= 1024 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageBuffers >= 1000000 &&
 			bindlessProp.maxPerStageDescriptorUpdateAfterBindStorageImages >= 1000000 &&
-			bindlessProp.maxPerStageDescriptorUpdateAfterBindUniformBuffers >= 1000000 &&
+			bindlessProp.maxPerStageDescriptorUpdateAfterBindUniformBuffers >= 15 &&
 			bindlessProp.maxPerStageUpdateAfterBindResources >= 1000000 &&
 			limits.maxPerStageDescriptorSamplers >= 2 * KIBI &&
 			limits.maxPerStageDescriptorUniformBuffers >= 12 &&

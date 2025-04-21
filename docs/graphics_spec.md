@@ -155,7 +155,7 @@ Bindless is supported when the GPU has the following capabilities:
 - maxPerStageDescriptorUpdateAfterBindSamplers 1024
 - maxPerStageDescriptorUpdateAfterBindStorageBuffers 1000000
 - maxPerStageDescriptorUpdateAfterBindStorageImages 1000000
-- maxPerStageDescriptorUpdateAfterBindUniformBuffers 1000000
+- maxPerStageDescriptorUpdateAfterBindUniformBuffers 15
 - maxPerStageUpdateAfterBindResources 1000000
 
 Without bindless, it should be guaranteed that at least the following are available (any higher would indicate bindless):
