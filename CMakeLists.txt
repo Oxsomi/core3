@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-cmake_minimum_required(VERSION 3.21.0)
+cmake_minimum_required(VERSION 3.26.0)
 project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -69,19 +69,22 @@ endif()
 
 if(MSVC)
 
-	add_compile_options(/MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy /W4 /WX)
+	set(BUILD_FLAGS "/MP" "/GR" "/D_CRT_SECURE_NO_WARNINGS" "/Gy" "/W4" "/WX" "/fp:strict")
 
 	if(EnableSIMD)
 		if(ARM)
-			add_compile_options(/arch:ARMv7VE)		# Enable ARM arch
+			list(APPEND BUILD_FLAGS "/arch:ARMv7VE")	# Enable ARM arch
 		else()
-			add_compile_options(/d2archSSE42)		# Require SSE4.2
+			list(APPEND BUILD_FLAGS "/d2archSSE42")		#  Require SSE4.2
 		endif()
 	endif()
 
-	add_compile_options(/fp:strict)
-
 	# add_compile_options(/fsanitize=address)
+	
+	add_compile_options(
+		"$<$<COMPILE_LANGUAGE:C>:${BUILD_FLAGS}>"
+		"$<$<COMPILE_LANGUAGE:CXX>:${BUILD_FLAGS}>"
+	)
 
 else()
 

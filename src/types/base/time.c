@@ -69,9 +69,30 @@ F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
 }
 
 #ifdef __clang__
-	U64 Time_clocks() { return __builtin_readcyclecounter(); }
+	U64 Time_clocks() {
+		return __builtin_readcyclecounter();
+	}
+#elif _ARCH == ARCH_ARM64
+
+	//Windows doesn't support inline ASM with arm64,
+	//To support this anyways, we have time_clocks_arm64.s
+	//This will then turn into time_clocks_arm64.obj and we will link this.
+	
+	#ifndef _WIN32
+		U64 Time_clocks() {
+			U64 result;
+    		asm volatile("mrs %0, cntvct_el0" : "=r"(result));
+    		return result;
+		}
+	#else
+		extern U64 Time_clocksAsm();
+		U64 Time_clocks() { return Time_clocksAsm(); }
+	#endif
+
 #else
-	U64 Time_clocks() { return __rdtsc(); }		//TODO: GCC + Arm, for now this okay
+	U64 Time_clocks() {
+		return __rdtsc();
+	}
 #endif
 
 I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks()); }

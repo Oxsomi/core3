@@ -191,6 +191,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 	)))
 
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
+	(void) isNv;
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
@@ -362,12 +363,14 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		.NumDescriptors = 1
 	};
 
-	CharString tmpName = CharString_createRefCStrConst("DSV heap");
+	CharString tmpName = CharString_createNull();
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
-		gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
-			deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV], false
-		))
+		tmpName = CharString_createRefCStrConst("DSV heap");
+
+	gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
+		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV], false
+	))
 
 	//Create RTVs
 

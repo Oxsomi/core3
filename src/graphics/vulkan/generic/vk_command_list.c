@@ -866,8 +866,10 @@ void VK_WRAP_FUNC(CommandList_process)(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-				if(transition.stage == EPipelineStage_RTASBuild && !isShaderRead)	//Scratch buffer is AS write
-					access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+				if(transition.stage == EPipelineStage_RTASBuild)	//RTASBuild inputs/outputs are AS read/write
+					access =
+						isShaderRead ? VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR :
+						VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 
 				if(!pipelineStage)
 					switch ((ETransitionType) transition.type) {

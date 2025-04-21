@@ -38,8 +38,9 @@
 #include <dxgi1_6.h>
 #include <d3d11.h>			//AMD AGS needs it...
 
-#ifdef _HAS_NV_API
+#if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64	//TODO: Enable for arm later
 	#include <nvapi.h>
+	#define USE_NVAPI
 #endif
 
 #ifdef _HAS_AMD_AGS
@@ -150,7 +151,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 	if(instanceExt->debug1)
 		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
 
-	#ifdef _HAS_NV_API
+	#ifdef USE_NVAPI
 		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasNVApi)
 			NvAPI_Unload();
 	#endif
@@ -183,15 +184,25 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	CharString locationD3D12 = CharString_createNull();
 	Bool isVirtual = false;
 
-	U32 flags = 0;
+	if (instance->flags & EGraphicsInstanceFlags_IsDebug)
 
-	if(instance->flags & EGraphicsInstanceFlags_IsDebug)
-		flags |= DXGI_CREATE_FACTORY_DEBUG;
+		if (FAILED(CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory6, (void**)&instanceExt->factory))) {
+			Log_warnLnx(
+				"Tried to enable debugging on DxGraphicsInstance but couldn't, "
+				"please setup the developer environment for this functionality"
+			);
 
-	Error err = dxCheck(CreateDXGIFactory2(flags, &IID_IDXGIFactory6, (void**) &instanceExt->factory));
+			instance->flags &= ~EGraphicsInstanceFlags_IsDebug;
+		}
+
+		else goto setup;
+
+	Error err = dxCheck(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->factory));
 
 	if(err.genericError)
 		return err;
+
+setup:
 
 	if (!File_resolve(
 		CharString_createRefCStrConst("./D3D12/"),
@@ -234,7 +245,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Check for NVApi
 
-	#ifdef _HAS_NV_API
+	#ifdef USE_NVAPI
 
 		const NvAPI_Status status = NvAPI_Initialize();
 
@@ -399,6 +410,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			case EGraphicsVendorPCIE_NV:	vendorId = EGraphicsVendorId_NV;		break;
 			case EGraphicsVendorPCIE_AMD:	vendorId = EGraphicsVendorId_AMD;		break;
 			case EGraphicsVendorPCIE_ARM:	vendorId = EGraphicsVendorId_ARM;		break;
+			case EGraphicsVendorPCIE_QCOM2:
 			case EGraphicsVendorPCIE_QCOM:	vendorId = EGraphicsVendorId_QCOM;		break;
 			case EGraphicsVendorPCIE_INTC:	vendorId = EGraphicsVendorId_INTC;		break;
 			case EGraphicsVendorPCIE_IMGT:	vendorId = EGraphicsVendorId_IMGT;		break;
@@ -718,7 +730,9 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 			caps.dataTypes |= EGraphicsDataTypes_RGB32u;
 
-		//Require 8x MSAA for RGBA32f and RGB32f
+		//8x MSAA is optional for RGBA32f and RGB32f
+
+		Bool supportRGBX32MSAA = true;
 
 		D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msaa = (D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS) {
 			.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
@@ -728,10 +742,8 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) ||
 			!msaa.NumQualityLevels
-		) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required MSAA flag for RGBA32f", i);
-			goto next;
-		}
+		)
+			supportRGBX32MSAA = false;
 
 		msaa.Format = DXGI_FORMAT_R32G32B32_FLOAT;
 
@@ -741,7 +753,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 				!msaa.NumQualityLevels
 			)
 		)
-			caps.dataTypes &= ~EGraphicsDataTypes_RGB32f;
+			supportRGBX32MSAA = false;
+
+		if(supportRGBX32MSAA)
+			caps.featuresExt |= EDxGraphicsFeatures_RGBX32fMSAA;
 
 		//Max allocation size and max buffer size isn't queryable in D3D12 yet.
 		//We hardcode the reported sizes from Vulkan and the hardlimit as defined by HLSL.
@@ -792,7 +807,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 				CharString_bufferConst(instanceExt->nvDriverVersion)
 			);
 
-			#ifdef _HAS_NV_API
+			#ifdef USE_NVAPI
 
 				//Raytracing validation
 

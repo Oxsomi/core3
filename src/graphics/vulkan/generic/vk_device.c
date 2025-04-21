@@ -342,12 +342,12 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	for(U64 i = 0; i < reqExtensionsNameCount; ++i)
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, reqExtensionsName[i]))
 
-	if(feat & EGraphicsFeatures_RayPipeline) {
+	if(feat & (EGraphicsFeatures_RayPipeline | EGraphicsFeatures_RayQuery)) {
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_spirv_1_4"))
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_shader_float_controls"))
 	}
 
-	if(feat & EGraphicsFeatures_VariableRateShading)
+	if(feat & (EGraphicsFeatures_VariableRateShading | EGraphicsFeatures_DirectRendering))
 		gotoIfError(clean, ListConstC8_pushBackx(&extensions, "VK_KHR_create_renderpass2"))
 
 	if(feat & EGraphicsFeatures_DirectRendering)
@@ -641,7 +641,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 		.objectType = VK_OBJECT_TYPE_QUEUE
 	};
 
-	if(device->flags & EGraphicsDeviceFlags_IsDebug && instanceExt->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 		debugName.pObjectName = "Graphics queue";
 		debugName.objectHandle = (U64) graphicsQueueExt->queue;
 		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
@@ -807,6 +807,7 @@ Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
 
 	deviceExt->hasDistinctMemory = true;
 	deviceExt->hasLocalMemory = true;
+	deviceExt->hasOnlyLocalMemory = false;
 
 	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
 
@@ -824,6 +825,7 @@ Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
 		deviceExt->maxHeapSizes[0] = deviceExt->maxHeapSizes[1];
 		deviceExt->heapIds[0] = deviceExt->heapIds[1];
 		deviceExt->hasDistinctMemory = false;
+		deviceExt->hasOnlyLocalMemory = true;
 	}
 
 	else if (!deviceExt->maxHeapSizes[1]) {		//If there's only host heaps then we know we're on AMD APU. Use host heap.

@@ -98,7 +98,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxPushConstantsSize of 128 or higher.
 - maxSamplerAllocationCount of 1024 or higher.
 - maxSamplerAnisotropy of 16 or higher.
-- maxStorageBufferRange of .25GiB or higher.
+- maxStorageBufferRange of 128MiB or higher.
 - maxSamplerLodBias of 4 or higher.
 - maxUniformBufferRange of 64KiB or higher.
 - maxVertexInputAttributeOffset of 2047 or higher.
@@ -364,7 +364,8 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally), D32S8 is always available.
 - For format RGB32(u/i) to be enabled, it has to support render target.
-- For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
+- For format RGB32f to be enabled, it has to support render target, blend, shader sample.
+- If RGBA32f supports msaa 4x and 8x it will be exposed as EDxGraphicsFeatures_RGBX32fMSAA. However, it does also require RGB32f to also support it (if RGB32f textures are supported).
 - AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
 - DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
 - ShaderModel 6.6 support as ComputeDeriv.

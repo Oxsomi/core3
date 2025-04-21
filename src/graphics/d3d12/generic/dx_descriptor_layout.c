@@ -160,22 +160,27 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				type = D3D12_ROOT_PARAMETER_TYPE_UAV;
 
 			D3D12_DESCRIPTOR_RANGE_FLAGS bindFlags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+			D3D12_ROOT_DESCRIPTOR_FLAGS rootFlags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
 
-			if(type == D3D12_DESCRIPTOR_RANGE_TYPE_CBV)
+			if (type == D3D12_ROOT_PARAMETER_TYPE_CBV) {
 				bindFlags = 0;
+				rootFlags = 0;
+			}
 
 			if(
 				!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
 				!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
-			)
+			) {
 				bindFlags = 0;
+				rootFlags = 0;
+			}
 
 			gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
 				.ParameterType = type,
 				.Descriptor = (D3D12_ROOT_DESCRIPTOR1) {
 					.ShaderRegister = binding->binding.binding,
 					.RegisterSpace = binding->binding.space,
-					.Flags = bindFlags
+					.Flags = rootFlags
 				},
 				.ShaderVisibility = DxDescriptorLayout_convertVisibility(binding->visibility)
 			}))

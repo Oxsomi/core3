@@ -35,9 +35,21 @@ add_library(
 	CMakeLists.txt
 )
 
+target_compile_definitions(OxC3_types_base PUBLIC -D_ENABLE_SIMD=${SIMD})
+
 if(ANDROID)
 	file(GLOB_RECURSE typesBaseAndroidSources "platforms/android/*.c")
 	target_sources(OxC3_types_base PRIVATE ${typesBaseAndroidSources})
+endif()
+
+if(MSVC AND ARM)
+	enable_language(ASM_MARMASM)
+	file(GLOB_RECURSE armAsmWin "platforms/windows/arm/*.asm")
+	target_sources(OxC3_types_base PRIVATE ${armAsmWin})
+	set_source_files_properties(
+        ${armAsmWin}
+        PROPERTY LANGUAGE ASM_MASM
+	)
 endif()
 
 source_group("Source Files (${platform})" FILES ${typesBasePlatformSources})

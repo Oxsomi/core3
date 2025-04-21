@@ -241,6 +241,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 			if(cap.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps)
 				Log_debugLnx("\t\tAllow combine heaps");
 
+			if(cap.featuresExt & EDxGraphicsFeatures_RGBX32fMSAA)
+				Log_debugLnx("\t\tRGB(A)32f supports MSAA");
+
 			if(cap.featuresExt & EDxGraphicsFeatures_SM6_6)
 				Log_debugLnx("\t\tShader model 6.6");
 

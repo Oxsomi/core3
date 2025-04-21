@@ -55,12 +55,13 @@ typedef enum EGraphicsVendorPCIE {
 	EGraphicsVendorPCIE_AMD		= 0x1002,
 	EGraphicsVendorPCIE_ARM		= 0x13B5,
 	EGraphicsVendorPCIE_QCOM	= 0x5143,
+	EGraphicsVendorPCIE_QCOM2	= 0x4D4F4351,
 	EGraphicsVendorPCIE_INTC	= 0x8086,
 	EGraphicsVendorPCIE_IMGT	= 0x1010,
 	EGraphicsVendorPCIE_MSFT	= 0x1414,
 	EGraphicsVendorPCIE_APPL	= 0x106B,
 	EGraphicsVendorPCIE_SMSG	= 0x144D,
-	EGraphicsVendorPCIE_HWEI		= 0x19E5
+	EGraphicsVendorPCIE_HWEI	= 0x19E5
 } EGraphicsVendorPCIE;
 
 static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so they can be easily detected
@@ -92,6 +93,8 @@ typedef enum EDxGraphicsFeatures {
 
 	EDxGraphicsFeatures_TightAlignment			= 1 << 7,
 	EDxGraphicsFeatures_AllowCombineHeaps		= 1 << 8,		//Some devices don't (Arc alchemist, <= Nv Pascal)
+
+	EDxGraphicsFeatures_RGBX32fMSAA				= 1 << 9,		//3 and 4 element float MSAA
 
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 

@@ -354,8 +354,15 @@ Error GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayValidation
 		);
 
+	Bool isDebugInstance = instance->flags & EGraphicsInstanceFlags_IsDebug;
+
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && !isDebugInstance)
+		gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_create() tried to create debug device but the instance had it disabled"
+		))
+
 	#ifndef NDEBUG
-		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug))
+		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug) && isDebugInstance)
 			device->flags |= EGraphicsDeviceFlags_IsDebug;
 	#endif
 
@@ -750,8 +757,9 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"))
 
-	if(!((bin.vendorMask >> device->info.vendor) & 1))
-		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"))
+	if(bin.vendorMask != ((1 << ESHVendor_Count) - 1))
+		if(!((bin.vendorMask >> device->info.vendor) & 1))
+			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"))
 
 	//Check for D3D12 features, shader models and DXIL
 
