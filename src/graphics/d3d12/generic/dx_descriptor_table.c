@@ -340,7 +340,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.Buffer = (D3D12_BUFFER_UAV) {
 							.FirstElement = Descriptor_startBuffer(d) / 4,
 							.NumElements = (U32)(Descriptor_bufferLength(d) / 4),
-							.Flags = D3D12_BUFFER_SRV_FLAG_RAW
+							.Flags = D3D12_BUFFER_UAV_FLAG_RAW
 						}
 					};
 
