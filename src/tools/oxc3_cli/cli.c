@@ -72,7 +72,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 			const Operation opVal = Operation_values[i];
 
-			if(opVal.category != category)
+			if(opVal.category != category || !opVal.name)
 				continue;
 
 			Log_debugLnx(

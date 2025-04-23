@@ -9,7 +9,7 @@ jobs:
     env:
       VULKAN_SDK: C:\VulkanSDK\
       ANDROID_SDK: C:\Android\android-sdk
-      ANDROID_NDK: C:\Android\android-sdk\ndk\28.0.12674087
+      ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
     steps:
     - uses: actions/checkout@v4
       with:
@@ -30,7 +30,7 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
     - name: Setup Android NDK and right android version
-      run: sdkmanager "platforms;android-29" "ndk;28.0.12674087"
+      run: sdkmanager "platforms;android-29" "ndk;29.0.13113456"
     - name: Setup msys2
       uses: msys2/setup-msys2@v2
     - name: Restore cached

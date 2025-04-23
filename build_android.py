@@ -111,7 +111,7 @@ def main():
 	parser = argparse.ArgumentParser(description="Build a lib or apk via OxC3")
 
 	parser.add_argument("-mode", type=str, default="Release", choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"], help="Build mode")
-	parser.add_argument("-api", type=int, default=29, help="Android api level (e.g. 29 = Android 10)")
+	parser.add_argument("-api", type=int, default=31, help="Android api level (e.g. 31 = Android 12)")
 	parser.add_argument("-arch", type=str, default="all", choices=["arm64", "x64", "all"], help="Architecture")
 	parser.add_argument("-simd", type=bool, default=False, help="EnableSIMD (False by default until properly supported)")
 	parser.add_argument("-generator", type=str, help="CMake Generator")
@@ -259,7 +259,7 @@ def main():
 		print("-- Compiling .java file")
 		androidJar = "\"" + os.environ["ANDROID_SDK"] + "/platforms/android-" + str(args.api) + "/android.jar\""
 		baseDir = os.path.dirname(os.path.realpath(__file__)) + "/src/platforms/android/*.java"
-		subprocess.check_output("javac -cp " + androidJar + " -d \"build/" + args.mode + "/android/apk/bin/\" \"" + baseDir + "\"")
+		subprocess.check_output("javac -Xlint:deprecation -cp " + androidJar + " -d \"build/" + args.mode + "/android/apk/bin/\" \"" + baseDir + "\"")
 
 		# Compile .class files to .dex
 

@@ -36,7 +36,6 @@ target_link_libraries(
 	OxC3_platforms
 	OxC3_formats_oiSH OxC3_formats_oiSB OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_wav
 	OxC3_audio
-	OxC3_package_CLI
 )
 
 if(CLIGraphics)
@@ -45,7 +44,7 @@ if(CLIGraphics)
 endif()
 
 if(EnableShaderCompiler)
-	target_link_libraries(OxC3CLI PUBLIC OxC3_shader_compiler)
+	target_link_libraries(OxC3CLI PUBLIC OxC3_shader_compiler OxC3_package_CLI)
 	target_compile_definitions(OxC3CLI PUBLIC -DCLI_SHADER_COMPILER)
 endif()
 

@@ -24,72 +24,70 @@
 #include "types/base/c8.h"
 #include "types/container/buffer.h"
 #include "tools/oxc3_cli/cli.h"
-#include "tools/package_cli/packager.h"
 
 #ifdef CLI_SHADER_COMPILER
+
+	#include "tools/package_cli/packager.h"
 	#include "shader_compiler/compiler.h"
-#endif
 
-Bool CLI_package(ParsedArgs args) {
+	Bool CLI_package(ParsedArgs args) {
 
-	//Parse encryption key
+		//Parse encryption key
 
-	U32 encryptionKeyV[8] = { 0 };
-	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
-	Bool s_uccess = true;
-	Error err = Error_none(), *e_rr = &err;
+		U32 encryptionKeyV[8] = { 0 };
+		U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+		Bool s_uccess = true;
+		Error err = Error_none(), *e_rr = &err;
 
-	if (args.parameters & EOperationHasParameter_AES) {
+		if (args.parameters & EOperationHasParameter_AES) {
 
-		CharString key = CharString_createNull();
+			CharString key = CharString_createNull();
 
-		if (
-			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
-			!CharString_isHex(key)
-		) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
+			if (
+				(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
+				!CharString_isHex(key)
+			) {
+				Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+				return false;
+			}
+
+			U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
+
+			if (CharString_length(key) - off != 64) {
+				Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+				return false;
+			}
+
+			for (U64 i = off; i + 1 < CharString_length(key); ++i) {
+
+				U8 v0 = C8_hex(key.ptr[i]);
+				U8 v1 = C8_hex(key.ptr[++i]);
+
+				v0 = (v0 << 4) | v1;
+				*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
+			}
+
+			encryptionKey = encryptionKeyV;
 		}
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
+		//Get input
 
-		if (CharString_length(key) - off != 64) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
-		}
+		CharString input = (CharString) { 0 };
+		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
 
-		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
+		//Check if output is valid
 
-			U8 v0 = C8_hex(key.ptr[i]);
-			U8 v1 = C8_hex(key.ptr[++i]);
+		CharString output = (CharString) { 0 };
+		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
 
-			v0 = (v0 << 4) | v1;
-			*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
-		}
+		//Get compile settings
 
-		encryptionKey = encryptionKeyV;
-	}
-
-	//Get input
-
-	CharString input = (CharString) { 0 };
-	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
-
-	//Check if output is valid
-
-	CharString output = (CharString) { 0 };
-	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
-
-	//Get compile settings
-
-	Bool multipleModes = false;
-	U64 compileModeU64 = 0;
-	U64 threadCount = 0;
-	CharString includeDir = (CharString) { 0 };
-	ECompilerWarning extraWarnings = (ECompilerWarning) 0;
-	Bool merge = !(args.flags & EOperationFlags_Split);
-
-	#ifdef CLI_SHADER_COMPILER
+		Bool multipleModes = false;
+		U64 compileModeU64 = 0;
+		U64 threadCount = 0;
+		CharString includeDir = (CharString) { 0 };
+		ECompilerWarning extraWarnings = (ECompilerWarning) 0;
+		Bool merge = !(args.flags & EOperationFlags_Split);
 
 		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes))
 		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 1))
@@ -99,29 +97,34 @@ Bool CLI_package(ParsedArgs args) {
 
 		extraWarnings = CLI_getExtraWarnings(args);
 
-	#endif
+		gotoIfError3(clean, Packager_package(
+			input,
+			output,
+			encryptionKey,
+			multipleModes,
+			compileModeU64,
+			threadCount,
+			includeDir,
+			merge,
+			extraWarnings,
+			true,
+			!!(args.flags & EOperationFlags_Debug),
+			!!(args.flags & EOperationFlags_IgnoreEmptyFiles),
+			Platform_instance->alloc,
+			&err
+		))
 
-	gotoIfError3(clean, Packager_package(
-		input,
-		output,
-		encryptionKey,
-		multipleModes,
-		compileModeU64,
-		threadCount,
-		includeDir,
-		merge,
-		extraWarnings,
-		true,
-		!!(args.flags & EOperationFlags_Debug),
-		!!(args.flags & EOperationFlags_IgnoreEmptyFiles),
-		Platform_instance->alloc,
-		&err
-	))
+	clean:
 
-clean:
+		if(encryptionKey)
+			Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
-	if(encryptionKey)
-		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+		return s_uccess;
+	}
 
-	return s_uccess;
-}
+#else
+	Bool CLI_package(ParsedArgs args) {
+		(void) args;
+		return false;
+	}
+#endif

@@ -67,11 +67,11 @@ Bool CLI_helpOperation(ParsedArgs args);
 Bool CLI_inspectHeader(ParsedArgs args);
 Bool CLI_inspectData(ParsedArgs args);
 
-Bool CLI_package(ParsedArgs args);
-
 U64 CLI_parseGraphicsAPIs(ParsedArgs args);		//U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
 
 #ifdef CLI_SHADER_COMPILER
+
+	Bool CLI_package(ParsedArgs args);
 
 	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes);
 	Bool CLI_parseThreads(ParsedArgs args, U64 *threadCount, U64 defaultThreadCount);

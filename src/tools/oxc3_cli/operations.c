@@ -439,32 +439,32 @@ void Operations_init() {
 		.operationFlags = EOperationFlags_RandNum
 	};
 
-	//Package file for virtual file system
-
-	Operation_values[EOperation_Package] = (Operation) {
-
-		.category = EOperationCategory_File,
-
-		.name = "package",
-		.desc = "Package files such as shaders, textures and models into an oiCA as Oxsomi file formats.",
-
-		.func = &CLI_package,
-
-		.isFormatLess = true,
-
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
-		.optionalParameters =
-			EOperationHasParameter_AES | EOperationHasParameter_ThreadCount |
-			EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
-
-		.operationFlags =
-			EOperationFlags_Debug | EOperationFlags_Split |
-			EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
-	};
-
-	//Compile shaders
-
 	#ifdef CLI_SHADER_COMPILER
+
+		//Package file for virtual file system
+
+		Operation_values[EOperation_Package] = (Operation) {
+
+			.category = EOperationCategory_File,
+
+			.name = "package",
+			.desc = "Package files such as shaders, textures and models into an oiCA as Oxsomi file formats.",
+
+			.func = &CLI_package,
+
+			.isFormatLess = true,
+
+			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+			.optionalParameters =
+				EOperationHasParameter_AES | EOperationHasParameter_ThreadCount |
+				EOperationHasParameter_IncludeDir | EOperationHasParameter_ShaderOutputMode,
+
+			.operationFlags =
+				EOperationFlags_Debug | EOperationFlags_Split |
+				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
+		};
+
+		//Compile shaders
 
 		Format_values[EFormat_HLSL] = (Format) {
 
