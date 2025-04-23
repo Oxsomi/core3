@@ -152,14 +152,14 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 	if(binaries->identifier.stageType >= ESHPipelineStage_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.stageType out of bounds"))
 
-	if(binaries->identifier.uniforms.length & 1)
+	if(binaries->identifier.defines.length & 1)
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.uniforms needs [uniformName,uniformValue][]"
+			2, 0, "SHFile_addBinary()::binaries->identifier.defines needs [defineName,defineValue][]"
 		))
 
-	if((binaries->identifier.uniforms.length >> 1) >= U8_MAX)
+	if((binaries->identifier.defines.length >> 1) >= U8_MAX)
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.uniforms needs to be <=[uniformName,uniformValue][255]"
+			2, 0, "SHFile_addBinary()::binaries->identifier.defines needs to be <=[defineName,defineValue][255]"
 		))
 
 	if(binaries->hasShaderAnnotation && CharString_length(binaries->identifier.entrypoint))
@@ -363,7 +363,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 	if(shFile->binaries.length + 1 >= U16_MAX)
 		retError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "SHFile_addBinary() requires binaries to not exceed U16_MAX"))
 
-	//Validate unique uniforms
+	//Validate unique defines
 
 	Bool isUTF8 = false;
 
@@ -373,9 +373,9 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 	)
 		isUTF8 = true;
 
-	for (U64 i = 0; i < binaries->identifier.uniforms.length; ++i) {
+	for (U64 i = 0; i < binaries->identifier.defines.length; ++i) {
 
-		CharString str = binaries->identifier.uniforms.ptr[i];
+		CharString str = binaries->identifier.defines.ptr[i];
 
 		if(!CharString_length(str))
 			continue;
@@ -385,8 +385,8 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 		if(i && !(i & 1))
 			for(U64 j = 0; j < (i >> 1); ++j)
-				if(CharString_equalsStringSensitive(str, binaries->identifier.uniforms.ptr[j << 1]))
-					retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() uniform already defined"))
+				if(CharString_equalsStringSensitive(str, binaries->identifier.defines.ptr[j << 1]))
+					retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() define already defined"))
 	}
 
 	//Start copying
@@ -420,29 +420,29 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 	binaries->identifier.entrypoint = CharString_createNull();
 
-	//Copy uniforms
+	//Copy defines
 
-	if(binaries->identifier.uniforms.length) {
+	if(binaries->identifier.defines.length) {
 
-		if(ListCharString_isRef(binaries->identifier.uniforms))
+		if(ListCharString_isRef(binaries->identifier.defines))
 			gotoIfError2(clean, ListCharString_createCopyUnderlying(
-				binaries->identifier.uniforms, alloc, &info.identifier.uniforms
+				binaries->identifier.defines, alloc, &info.identifier.defines
 			))
 
 		else {
 
-			info.identifier.uniforms = binaries->identifier.uniforms;
-			binaries->identifier.uniforms = (ListCharString) { 0 };
+			info.identifier.defines = binaries->identifier.defines;
+			binaries->identifier.defines = (ListCharString) { 0 };
 
-			for (U64 i = 0; i < info.identifier.uniforms.length; ++i) {
+			for (U64 i = 0; i < info.identifier.defines.length; ++i) {
 
-				CharString *uniform = &info.identifier.uniforms.ptrNonConst[i], uniformOld = *uniform;
+				CharString *define = &info.identifier.defines.ptrNonConst[i], defineOld = *define;
 
-				if(!CharString_isRef(uniformOld))		//It's already moved
+				if(!CharString_isRef(defineOld))		//It's already moved
 					continue;
 
-				*uniform = CharString_createNull();
-				gotoIfError2(clean, CharString_createCopy(uniformOld, alloc, uniform))		//Allocate real data
+				*define = CharString_createNull();
+				gotoIfError2(clean, CharString_createCopy(defineOld, alloc, define))		//Allocate real data
 			}
 		}
 	}
@@ -486,13 +486,13 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 
 	if(
 		*(const U64*)extensionsA != *(const U64*)extensionsB ||
-		a.uniforms.length != b.uniforms.length ||
+		a.defines.length != b.defines.length ||
 		!CharString_equalsStringSensitive(a.entrypoint, b.entrypoint)
 	)
 		return false;
 
-	for(U64 i = 0; i < a.uniforms.length; ++i)
-		if(!CharString_equalsStringSensitive(a.uniforms.ptr[i], b.uniforms.ptr[i]))
+	for(U64 i = 0; i < a.defines.length; ++i)
+		if(!CharString_equalsStringSensitive(a.defines.ptr[i], b.defines.ptr[i]))
 			return false;
 
 	return true;
@@ -551,21 +551,21 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
-	ListCharString uniforms = binary.identifier.uniforms;
+	ListCharString defines = binary.identifier.defines;
 
-	if(!(uniforms.length / 2))
-		Log_debugLn(alloc, "\t[[oxc::uniforms()]");
+	if(!(defines.length / 2))
+		Log_debugLn(alloc, "\t[[oxc::defines()]");
 
 	else {
 
-		Log_debug(alloc, ELogOptions_None, "\t[[oxc::uniforms(");
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::defines(");
 
 		Bool prev = false;
 
-		for(U64 j = 0; j < uniforms.length / 2; ++j) {
+		for(U64 j = 0; j < defines.length / 2; ++j) {
 
-			CharString name = uniforms.ptr[j << 1];
-			CharString value = uniforms.ptr[(j << 1) | 1];
+			CharString name = defines.ptr[j << 1];
+			CharString value = defines.ptr[(j << 1) | 1];
 
 			Log_debug(
 				alloc, ELogOptions_None,
@@ -605,7 +605,7 @@ void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc) {
 		return;
 
 	CharString_free(&identifier->entrypoint, alloc);
-	ListCharString_freeUnderlying(&identifier->uniforms, alloc);
+	ListCharString_freeUnderlying(&identifier->defines, alloc);
 }
 
 void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc) {

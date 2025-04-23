@@ -133,8 +133,8 @@ typedef struct SHEntryRuntime {
 
 	ListU16 shaderVersions;				//U16: U8 major, minor;		If not defined will default.
 
-	ListCharString uniformNameValues;	//[uniformName, uniformValue][]
-	ListU8 uniformsPerCompilation;		//How many uniforms are relevant for each compilation
+	ListCharString defineNameValues;	//[defineName, defineValue][]
+	ListU8 definesPerCompilation;		//How many defines are relevant for each compilation
 
 } SHEntryRuntime;
 

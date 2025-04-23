@@ -145,7 +145,7 @@ extern const C8 *ESHVendor_names[ESHVendor_Count + 1];
 typedef struct SHBinaryIdentifier {
 
 	CharString entrypoint;		//If it's not a lib, this defines the entrypoint to compile with
-	ListCharString uniforms;	//[uniformName, uniformValue][]
+	ListCharString defines;		//[defineName, defineValue][]
 
 	//Don't change order, is used for compare (U64)
 

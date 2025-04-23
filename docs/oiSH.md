@@ -32,11 +32,11 @@ typedef struct SHHeader {		//4-byte aligned
 
     U32 compilerVersion;
 
-	U32 hash;					//CRC32C of contents starting at uniqueUniforms
+	U32 hash;					//CRC32C of contents starting at uniqueDefines
 
     U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty. See CRC32C section.
 
-	U16 uniqueUniforms;
+	U16 uniqueDefines;
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
     U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
 
@@ -170,7 +170,7 @@ typedef struct BinaryInfoFixedSize {
 	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
 
 	U16 vendorMask;				//Bitset of ESHVendor
-	U8 uniformCount;
+	U8 defineCount;
 	U8 binaryFlags;				//ESHBinaryFlags
 
 	ESHExtension extensions;	//&~ dormantExt = used extensions, this is what the shader was compiled with
@@ -283,7 +283,7 @@ SHFile {
     //strings[^ - stageCount,       ^ - semanticCount] contains entrypoint names.
     //strings[^ - includeFileCount, ^ - stageCount] contains (relative) include names.
     //strings[^ - stageCount, 		^ - includeFileCount] contains unique register names.
-    //strings[0,                    ^ - registerNameCount] contains uniform values & names and register names.
+    //strings[0,                    ^ - registerNameCount] contains define values & names and register names.
     DLFile strings;
 
     //No magic number, no encryption/compression/SHA256 (see oiDL.md).
@@ -302,10 +302,10 @@ SHFile {
 
     for i < binaryCount:
 
-    	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[0]
-    	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [uniformCount]
+    	U16 defineNames[binaryInfos[i].defineCount];	//offset to strings[0]
+    	U16 defineValues[binaryInfos[i].defineCount];	//^ [defineCount]
 
-    	SHRegister registers[binaryInfos[i].registerCount];	//Name starts after all uniform names & values
+    	SHRegister registers[binaryInfos[i].registerCount];	//Name starts after all define names & values
 
         if binary[i] has SPIRV:
             EXXDataSizeType<spirvType> spirvLength;
@@ -519,7 +519,7 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
 
-1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets). Various extensions and abilities to use HLSL or GLSL specific features for all backends.
+1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added defines. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets). Various extensions and abilities to use HLSL or GLSL specific features for all backends.
 
 1.2(.2): No major bump, because no oiSH files exist in the wild yet. Added 'dormant' extension, which is an extension enabled by the shader compiler but isn't used by the final executable. If for example SPIRV and DXIL are merged, then only extensions present by both can be marked as dormant, because for example SER (Shader Execution Reordering) can be present in DXIL but is undetectable without writing custom code processing DXIL due to NVAPI hackery. Due to this it could be possible that for example SER is enabled but isn't present in DXIL or SPIRV but since both are merged it (DXIL can't detect) it can't be certain that this extension is dormant. Same is true for SPIRV only extensions that DXIL doesn't have or vice versa.
 

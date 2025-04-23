@@ -933,7 +933,7 @@ U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
 	device,
 	tempShader,
 	entrypoint,
-	(ListCharString) { 0 },		//Uniforms
+	(ListCharString) { 0 },		//Defines
 	ESHExtension_None,			//Extensions to disallow
 	ESHExtension_None			//Extensions to require
 );

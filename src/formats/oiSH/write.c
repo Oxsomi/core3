@@ -74,7 +74,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	gotoIfError3(clean, DLFile_create(settings, alloc, &shaderBuffers, e_rr))
 
-	//Calculate easy sizes and add uniform names
+	//Calculate easy sizes and add define names
 
 	U64 binaryCount[ESHBinaryType_Count] = { 0 };
 	U8 requiredTypes[ESHBinaryType_Count] = { 0 };
@@ -83,13 +83,13 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		SHBinaryInfo binary = shFile.binaries.ptr[i];
 
-		//Register uniform names
+		//Register define names
 
-		for (U64 j = 0; j < binary.identifier.uniforms.length; j += 2) {
+		for (U64 j = 0; j < binary.identifier.defines.length; j += 2) {
 
 			//Only add if it's new
 
-			CharString str = binary.identifier.uniforms.ptr[j];
+			CharString str = binary.identifier.defines.ptr[j];
 
 			if(DLFile_find(strings, 0, U64_MAX, str) != U64_MAX)
 				continue;
@@ -100,13 +100,13 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(str), alloc, e_rr))
 
 			if(strings.entryBuffers.length - shFile.entries.length >= (U16)(U16_MAX - 1))
-				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
+				retError(clean, Error_invalidState(0, "DLFile didn't have space for define names"))
 		}
 
 		//Add size
 
 		headerSize +=
-			binary.identifier.uniforms.length * sizeof(U16) +
+			binary.identifier.defines.length * sizeof(U16) +
 			binary.registers.length * sizeof(SHRegister);
 
 		for(U8 j = 0; j < ESHBinaryType_Count; ++j) {
@@ -122,31 +122,31 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		}
 	}
 
-	//Add uniform values
+	//Add define values
 
 	U64 uniNamesStart = 0;
 	U64 uniValStart = strings.entryBuffers.length;
 
 	if(uniValStart >> 16)
-		retError(clean, Error_invalidState(0, "SHFile_write() exceeded max uniform count"))
+		retError(clean, Error_invalidState(0, "SHFile_write() exceeded max define count"))
 
 	for(U64 i = 0; i < shFile.binaries.length; ++i) {
 
 		SHBinaryInfo binary = shFile.binaries.ptr[i];
 
-		//Register uniform values
+		//Register define values
 
-		for (U64 j = 1; j < binary.identifier.uniforms.length; j += 2) {
+		for (U64 j = 1; j < binary.identifier.defines.length; j += 2) {
 
 			//Only add if it's new
 
-			CharString str = binary.identifier.uniforms.ptr[j];
+			CharString str = binary.identifier.defines.ptr[j];
 
 			if(DLFile_find(strings, uniValStart, strings.entryBuffers.length, str) != U64_MAX)
 				continue;
 
 			if(strings.entryBuffers.length - uniValStart >= (U16)(U16_MAX - 1))
-				retError(clean, Error_invalidState(0, "SHFile_write() DLFile didn't have space for uniform values"))
+				retError(clean, Error_invalidState(0, "SHFile_write() DLFile didn't have space for define values"))
 
 			if(isUTF8)
 				gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(str), alloc, e_rr))
@@ -387,7 +387,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		.sizeTypes = sizeTypes,
 		.binaryCount = (U16) shFile.binaries.length,
 		.stageCount = (U16) shFile.entries.length,
-		.uniqueUniforms = (U16) uniValStart,
+		.uniqueDefines = (U16) uniValStart,
 		.includeFileCount = (U16) shFile.includes.length,
 		.semanticCount = (U16) uniqueSemantics,
 		.arrayDimCount = (U16) arrays.length,
@@ -450,7 +450,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				retError(clean, Error_invalidState(0, "SHFile_write() couldn't link binary to entrypoint"))
 		}
 
-		U8 uniformCount = (U8)(binary.identifier.uniforms.length >> 1);
+		U8 defineCount = (U8)(binary.identifier.defines.length >> 1);
 
 		binaryStaticStart[i] = (BinaryInfoFixedSize) {
 
@@ -459,7 +459,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			.entrypoint = (U16)(entrypoint - entryStart),
 
 			.vendorMask = binary.vendorMask,
-			.uniformCount = uniformCount,
+			.defineCount = defineCount,
 			.binaryFlags = binaryFlags,
 
 			.extensions = binary.identifier.extensions,
@@ -469,16 +469,16 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		//Dynamic part
 
-		U16 *uniformNames = (U16*) headerIt;
-		headerIt += sizeof(U16) * uniformCount;
+		U16 *defineNames = (U16*) headerIt;
+		headerIt += sizeof(U16) * defineCount;
 
 		U16 *uniValues = (U16*) headerIt;
-		headerIt += sizeof(U16) * uniformCount;
+		headerIt += sizeof(U16) * defineCount;
 
-		for(U64 j = 0; j < uniformCount; ++j) {
-			ListCharString uniforms = binary.identifier.uniforms;
-			uniformNames[j] = (U16) (DLFile_find(strings, uniNamesStart, uniValStart, uniforms.ptr[j << 1]) - uniNamesStart);
-			uniValues[j] = (U16) (DLFile_find(strings, uniValStart, includeStart, uniforms.ptr[(j << 1) | 1]) - uniValStart);
+		for(U64 j = 0; j < defineCount; ++j) {
+			ListCharString defines = binary.identifier.defines;
+			defineNames[j] = (U16) (DLFile_find(strings, uniNamesStart, uniValStart, defines.ptr[j << 1]) - uniNamesStart);
+			uniValues[j] = (U16) (DLFile_find(strings, uniValStart, includeStart, defines.ptr[(j << 1) | 1]) - uniValStart);
 		}
 
 		SHRegister *regs = (SHRegister*) headerIt;
@@ -656,8 +656,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Finalize by adding the hash
 
-	U64 hashLen = Buffer_length(*result) - offsetof(SHHeader, uniqueUniforms);
-	const U8 *shHashStart = (const U8*) &shHeader->uniqueUniforms;
+	U64 hashLen = Buffer_length(*result) - offsetof(SHHeader, uniqueDefines);
+	const U8 *shHashStart = (const U8*) &shHeader->uniqueDefines;
 
 	if (!(shFile.flags & ESHSettingsFlags_HideMagicNumber))
 		hashLen -= sizeof(U32);

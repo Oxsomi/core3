@@ -421,7 +421,7 @@ U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime) {
 	return (U32)(
 		U64_max(runtime.shaderVersions.length, 1) *
 		U64_max(runtime.extensions.length, 1) *
-		U64_max(runtime.uniformsPerCompilation.length, 1)
+		U64_max(runtime.definesPerCompilation.length, 1)
 	);
 }
 
@@ -439,7 +439,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 	U16 shaderVersions = (U16) U64_max(runtime.shaderVersions.length, 1);
 	U16 extensions = (U16) U64_max(runtime.extensions.length, 1);
-	U16 uniforms = (U16) U64_max(runtime.uniformsPerCompilation.length, 1);
+	U16 defines = (U16) U64_max(runtime.definesPerCompilation.length, 1);
 
 	U16 shaderVersion = combinationId % shaderVersions;
 	combinationId /= shaderVersions;
@@ -447,11 +447,11 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	U16 extensionId = combinationId % extensions;
 	combinationId /= extensions;
 
-	U16 uniformId = combinationId % uniforms;
+	U16 defineId = combinationId % defines;
 
-	if(combinationId >= uniforms)
+	if(combinationId >= defines)
 		retError(clean, Error_outOfBounds(
-			0, combinationId, uniforms,
+			0, combinationId, defines,
 			"SHEntryRuntime_asBinaryIdentifier()::combinationId out of bounds"
 		))
 
@@ -469,18 +469,18 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	)
 		binaryIdentifier->stageType = ESHPipelineStage_RtStartExt;
 
-	if(runtime.uniformsPerCompilation.length) {
+	if(runtime.definesPerCompilation.length) {
 
-		U64 uniformOffset = 0;
+		U64 defineOffset = 0;
 
-		for(U64 i = 0; i < uniformId; ++i)
-			uniformOffset += runtime.uniformsPerCompilation.ptr[i];
+		for(U64 i = 0; i < defineId; ++i)
+			defineOffset += runtime.definesPerCompilation.ptr[i];
 
-		if(runtime.uniformsPerCompilation.ptr[uniformId])
+		if(runtime.definesPerCompilation.ptr[defineId])
 			gotoIfError2(clean, ListCharString_createRefConst(
-				runtime.uniformNameValues.ptr + (uniformOffset << 1),
-				(U64)runtime.uniformsPerCompilation.ptr[uniformId] << 1,
-				&binaryIdentifier->uniforms
+				runtime.definesNameValues.ptr + (defineOffset << 1),
+				(U64)runtime.definesPerCompilation.ptr[defineId] << 1,
+				&binaryIdentifier->defines
 			))
 	}
 
@@ -651,23 +651,23 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 		}
 	}
 
-	for (U64 i = 0, k = 0; i < entry.uniformsPerCompilation.length; ++i) {
+	for (U64 i = 0, k = 0; i < entry.definesPerCompilation.length; ++i) {
 
-		U8 uniforms = entry.uniformsPerCompilation.ptr[i];
+		U8 defines = entry.definesPerCompilation.ptr[i];
 
-		if(!uniforms) {
-			Log_debugLn(alloc, "\t[[oxc::uniforms()]]");
+		if(!defines) {
+			Log_debugLn(alloc, "\t[[oxc::defines()]]");
 			continue;
 		}
 
-		Log_debug(alloc, ELogOptions_None, "\t[[oxc::uniforms(");
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::defines(");
 
 		Bool prev = false;
 
-		for(U64 j = 0; j < uniforms; ++j) {
+		for(U64 j = 0; j < defines; ++j) {
 
-			CharString name = entry.uniformNameValues.ptr[(j + k) << 1];
-			CharString value = entry.uniformNameValues.ptr[((j + k) << 1) | 1];
+			CharString name = entry.defineNameValues.ptr[(j + k) << 1];
+			CharString value = entry.defineNameValues.ptr[((j + k) << 1) | 1];
 
 			Log_debug(
 				alloc, ELogOptions_None,
@@ -682,7 +682,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 
-		k += uniforms;
+		k += defines;
 	}
 
 	if(entry.vendorMask == U16_MAX)
@@ -713,8 +713,8 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 	SHEntry_free(&entry->entry, alloc);
 	ListU16_free(&entry->shaderVersions, alloc);
 	ListU32_free(&entry->extensions, alloc);
-	ListU8_free(&entry->uniformsPerCompilation, alloc);
-	ListCharString_freeUnderlying(&entry->uniformNameValues, alloc);
+	ListU8_free(&entry->definesPerCompilation, alloc);
+	ListCharString_freeUnderlying(&entry->definesNameValues, alloc);
 }
 
 void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc) {

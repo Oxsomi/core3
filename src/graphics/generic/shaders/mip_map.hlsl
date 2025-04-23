@@ -52,11 +52,11 @@ Texture2D<F32x4> _baseTexture;
 RWTexture2DArray<F32x4> _writeSlices;						//Resource(s) excluding the first one
 // [globallycoherent] RWTexture2DArray<Flp4> _writeSlices6;	//6 slice+
 
-enum MipFilter {
-	MipFilter_Avg,
-	MipFilter_Min,
-	MipFilter_Max
-};
+#define MipFilter_Avg 0
+#define MipFilter_Min 1
+#define MipFilter_Max 2
+
+#define $FILTER MipFilter_Avg		//TODO: Make into a uniform
 
 #if $FILTER == MipFilter_Min
 	Flp4 filter(Flp4 i00, Flp4 i01, Flp4 i10, Flp4 i11) { return min(min(i00, i01), min(i10, i11)); }
@@ -66,6 +66,7 @@ enum MipFilter {
 	Flp4 filter(Flp4 i00, Flp4 i01, Flp4 i10, Flp4 i11) { return ((i00 + i01) + (i10 + i11)) * 0.25; }
 #endif
 
+//TODO: Uniform that disables using this
 #ifdef __OXC_EXT_16BITTYPES		//Some operations still use F32x4 when not storing to groupshared
 	#if $FILTER == MipFilter_Min
 		F32x4 filterFull(F32x4 i00, F32x4 i01, F32x4 i10, F32x4 i11) { return min(min(i00, i01), min(i10, i11)); }
@@ -101,10 +102,6 @@ void write(U32x2 xy, U32 it, U32x2 og, Flp4 v) {
 
 [[oxc::stage("compute")]]
 [[oxc::extension("16BitTypes")]]
-[[oxc::extension()]]
-[[oxc::uniforms("FILTER" = "MipFilter_Avg")]]
-[[oxc::uniforms("FILTER" = "MipFilter_Min")]]
-[[oxc::uniforms("FILTER" = "MipFilter_Max")]]
 [numthreads(8, 8, 1)]
 void main(U32x2 id : SV_DispatchThreadID, U32x2 threadId : SV_GroupThreadID) {
 

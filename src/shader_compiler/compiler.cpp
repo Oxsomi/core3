@@ -1089,8 +1089,8 @@ Bool Compiler_compile(
 	if(!CharString_length(settings.string))
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings.string is required"))
 
-	if(toCompile.uniforms.length & 1)
-		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile.uniforms.length should be aligned to 2"))
+	if(toCompile.defines.length & 1)
+		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile.defines.length should be aligned to 2"))
 
 	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"))
@@ -1259,24 +1259,24 @@ Bool Compiler_compile(
 		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
 		tempStr = CharString_createNull();
 
-		//$<X> foreach uniform
+		//$<X> foreach define
 
-		for(U32 i = 0; i < toCompile.uniforms.length; i += 2) {
+		for(U32 i = 0; i < toCompile.defines.length; i += 2) {
 
-			CharString uniformName  = toCompile.uniforms.ptr[i];
-			CharString uniformValue = toCompile.uniforms.ptr[i + 1];
+			CharString defineName  = toCompile.defines.ptr[i];
+			CharString defineValue = toCompile.defines.ptr[i + 1];
 
 			gotoIfError2(clean, CharString_format(
 
 				alloc, &tempStr,
 
-				!CharString_length(uniformValue) ? "-D$%.*s" : "-D$%.*s=%.*s",
+				!CharString_length(defineValue) ? "-D$%.*s" : "-D$%.*s=%.*s",
 
-				(int) CharString_length(uniformName),
-				uniformName.ptr,
+				(int) CharString_length(defineName),
+				defineName.ptr,
 
-				(int) CharString_length(uniformValue),
-				uniformValue.ptr
+				(int) CharString_length(defineValue),
+				defineValue.ptr
 			))
 
 			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))

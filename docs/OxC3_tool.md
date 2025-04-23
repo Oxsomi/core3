@@ -259,7 +259,7 @@ Struct Camera at L#26:1
 
 ### Compile
 
-Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the uniforms, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
+Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the defines, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
 
 #### Built-in defines
 
@@ -296,12 +296,19 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
     - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[[extension()]]` and `[[extension("16BitTypes")]]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
       - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[[extension("RayReorder")]]` while the rest such as non NV and Pascal, Turing, Ampere would need `[[extension()]]`. This will force a recompile.
       - If multiple extensions are available, it will pick from top to bottom if they're all available. So `[[extension("16BitTypes")]]` and `[[extension("RayReorder")]]` would for example only pick the second one if the first one isn't available.
-- `[[oxc::uniforms("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")]]` Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
+- `[[oxc::uniforms(U32 x = 45, F32 y = 90.f)]]` Creates either 2 spec constants (spv) or 2 library exports (dxil) that contain these values. These are only accessible as functions and not as static const at compile time, but they will be fossilized in a subsequent linking step internally to reduce compile time (but keep runtime performance).
+  - Please try to use uniforms if possible and avoid defines, since defines cause a full HLSL compile, while uniforms will only cause DXIL/SPV to be fossilized into the right shader. Each unique uniform combo will cause DXIL/SPV linking to happen.
+  - The types are `((U/I/F)(8/16/32/64)/Bool)`(x(1/2/3/4)(x(1/2/3/4))). For example; F32x4x4 would be a float matrix and I32x4 would be an int vector. Other types are not supported, because the uniforms have to be passed from the application like this to match the entrypoint.
+    - Even though GPUs generally don't support these types natively, we support them for packing reasons, allowing less data to be stored in the shaders. So U8x4 is valid, even though there's no real type for it in HLSL, it'll get expanded to uint4 (or U32x4) automatically. Though it will try to keep the native type if possible (e.g. U16x4 will turn into uint16_t4 if 16-bit types are enabled, otherwise it will become U32x4).
+  - Syntax for defining vectors is `(1, 2, 3, 4)` for example and matrices are `((1, 2, 3), (4, 5, 6), (7, 8, 9))`.
+  - Since the uniform becomes a function or variable, it must not include symbols or spaces (excluding _$). 
+  - The application is in charge of picking the uniform combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models and extensions which are handled by the runtime.
+- `[[oxc::defines("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")]]` Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
+  - Try to avoid defines in favor of uniforms to reduce compilation time (each unique define combo will cause an additional full HLSL compile).
   - This attribute can be used multiple times to compile the same entrypoint with different defines. It will try to bundle compiles wherever possible (try to keep defines similar).
-  - Only defining the uniform but no assign will just see it as a define that can be checked with #ifdef.
-  - Uniform name must not indicate symbols or spaces.
-  - The application is in charge of picking the uniform combo for the entire lib or each entrypoint. So it is possible to switch between uniforms based on what the app wants, unlike models and extensions which are handled by the runtime.
-
+  - Only defining the define but no assign will just see it as a define that can be checked with #ifdef.
+  - Define name must not indicate symbols or spaces (excluding _).
+- The application is in charge of picking the define combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models and extensions which are handled by the runtime.
 - `[[oxc::model(6.8)]]`
   - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
     - Minimum must be 6.5+ since that's the minimum OxC3 supports.
@@ -318,7 +325,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
   - If not defined, will use minimum for the detected feature set.
   - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled.
 
-**NOTE**: Since multiple models, uniforms and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of uniforms + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints).
+**NOTE**: Since multiple models, defines and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of defines + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints). Please prefer uniforms rather than defines to keep compile times low, this is because uniforms are specialization constants under the hood (or libraries in DXIL) and this in turn means that they get fossilized after HLSL has been compiled to DXIL/SPIRV, which is way cheaper than processing the entire file.
 
 #### Special flags
 

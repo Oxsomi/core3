@@ -92,7 +92,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
 	CharString entrypointName,
-	ListCharString uniforms,
+	ListCharString defines,
 	ESHExtension disallow,
 	ESHExtension require
 ) {
@@ -114,24 +114,24 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 			U16 binj = entry.binaryIds.ptr[j];
 			SHBinaryInfo binInfo = shaderBinary.binaries.ptr[binj];
 
-			ListCharString uniforms2 = binInfo.identifier.uniforms;
+			ListCharString defines2 = binInfo.identifier.defines;
 
-			//Find all uniforms
+			//Find all defines
 
-			if (uniforms2.length != uniforms.length)
+			if (defines2.length != defines.length)
 				continue;
 
 			Bool missing = false;
 
-			for (U64 k = 0; k < uniforms.length / 2; ++k) {
+			for (U64 k = 0; k < defines.length / 2; ++k) {
 
 				Bool contains = false;
 
-				for (U64 l = 0; l < uniforms2.length / 2; ++l) {
+				for (U64 l = 0; l < defines.length / 2; ++l) {
 
 					if (
-						!CharString_equalsStringSensitive(uniforms.ptr[l << 1], uniforms2.ptr[l << 1]) ||
-						!CharString_equalsStringSensitive(uniforms.ptr[(l << 1) | 1], uniforms2.ptr[(l << 1) | 1])
+						!CharString_equalsStringSensitive(defines.ptr[l << 1], defines2.ptr[l << 1]) ||
+						!CharString_equalsStringSensitive(defines.ptr[(l << 1) | 1], defines2.ptr[(l << 1) | 1])
 					)
 						continue;
 

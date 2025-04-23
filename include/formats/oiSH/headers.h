@@ -40,7 +40,7 @@ typedef struct BinaryInfoFixedSize {
 	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
 
 	U16 vendorMask;				//Bitset of ESHVendor
-	U8 uniformCount;
+	U8 defineCount;
 	U8 binaryFlags;				//ESHBinaryFlags
 
 	ESHExtension extensions;	//&~ dormantExt = used extensions, this is what the shader was compiled with
@@ -65,7 +65,7 @@ typedef struct SHHeader {
 
 	U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty
 
-	U16 uniqueUniforms;
+	U16 uniqueDefines;
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
 	U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
 

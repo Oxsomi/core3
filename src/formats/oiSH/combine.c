@@ -84,7 +84,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		SHBinaryInfo c = (SHBinaryInfo) {
 			.identifier = (SHBinaryIdentifier) {
-				.uniforms = ListCharString_createRefFromList(ai.identifier.uniforms),
+				.defines = ListCharString_createRefFromList(ai.identifier.defines),
 				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint)
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(ai.registers),
@@ -399,7 +399,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		SHBinaryInfo c = (SHBinaryInfo) {
 			.identifier = (SHBinaryIdentifier) {
-				.uniforms = ListCharString_createRefFromList(bi.identifier.uniforms),
+				.defines = ListCharString_createRefFromList(bi.identifier.defines),
 				.entrypoint = CharString_createRefStrConst(bi.identifier.entrypoint)
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(bi.registers),

@@ -256,11 +256,11 @@ Bool Compiler_precompileShader(
 
 				SHEntryRuntime *entry = &shEntriesRuntime->ptrNonConst[i];
 
-				//Copy uniform names if needed
+				//Copy define names if needed
 
-				for (U64 j = 0; j < entry->uniformNameValues.length; ++j) {
+				for (U64 j = 0; j < entry->defineNameValues.length; ++j) {
 
-					CharString *curr = &entry->uniformNameValues.ptrNonConst[j];
+					CharString *curr = &entry->defineNameValues.ptrNonConst[j];
 					CharString temp = CharString_createNull();
 
 					if(!CharString_isRef(*curr))

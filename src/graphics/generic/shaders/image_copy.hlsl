@@ -58,10 +58,11 @@ UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
 
 //Simplest variant, only 1 dispatch, allows us to use root constants and works everywhere.
 //Only turn on rotate if sizRot.w != 0
+//TODO: Turn ROTATE into uniform
 
 [[oxc::stage("compute")]]
-[[oxc::uniforms()]]
-[[oxc::uniforms("ROTATE" = "1")]]
+[[oxc::defines()]]
+[[oxc::defines("ROTATE" = "1")]]
 [numthreads(16, 8, 1)]
 void mainSingle(U32x3 id : SV_DispatchThreadID) {
 
@@ -118,12 +119,12 @@ void mainSingle(U32x3 id : SV_DispatchThreadID) {
 
 [[oxc::stage("compute")]]
 [[oxc::extension("SubgroupOperations")]]
-[[oxc::uniforms("THREAD_COUNT" = "4")]]		//Warp
-[[oxc::uniforms("THREAD_COUNT" = "8")]]		//Samsung (sometimes)
-[[oxc::uniforms("THREAD_COUNT" = "16")]]	//Intel (sometimes)
-[[oxc::uniforms("THREAD_COUNT" = "32")]]	//NV/AMD/Intel
-[[oxc::uniforms("THREAD_COUNT" = "64")]]	//AMD & Samsung
-[[oxc::uniforms("THREAD_COUNT" = "128")]]	//QCOM, ARM
+[[oxc::defines("THREAD_COUNT" = "4")]]		//Warp
+[[oxc::defines("THREAD_COUNT" = "8")]]		//Samsung (sometimes)
+[[oxc::defines("THREAD_COUNT" = "16")]]	//Intel (sometimes)
+[[oxc::defines("THREAD_COUNT" = "32")]]	//NV/AMD/Intel
+[[oxc::defines("THREAD_COUNT" = "64")]]	//AMD & Samsung
+[[oxc::defines("THREAD_COUNT" = "128")]]	//QCOM, ARM
 [numthreads(16, 8, 1)]
 void mainMultiple(U32x3 id : SV_DispatchThreadID, U32 threadId : SV_GroupIndex) {
 

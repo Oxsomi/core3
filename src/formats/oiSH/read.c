@@ -76,7 +76,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 	//Validate hash
 
-	Buffer_offset(&hash, offsetof(SHHeader, uniqueUniforms));
+	Buffer_offset(&hash, offsetof(SHHeader, uniqueDefines));
 
 	if(Buffer_crc32c(hash) != header.hash)
 		retError(clean, Error_unauthorized(0, "SHFile_read() mismatching CRC32C"))
@@ -90,8 +90,8 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		header.includeFileCount +
 		header.semanticCount +
 		header.registerNameCount +
-		header.uniqueUniforms +				//Names have to be unique
-		(header.uniqueUniforms ? 1 : 0);	//Values can be shared
+		header.uniqueDefines +				//Names have to be unique
+		(header.uniqueDefines ? 1 : 0);	//Values can be shared
 
 	if(
 		strings.entryBuffers.length < minEntryBuffers ||
@@ -216,51 +216,51 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				1, "SHFile_read() contained binary that wasn't marked as shader annotation but had entrypoint = U16_MAX"
 			))
 
-		//Grab uniforms
+		//Grab defines
 
-		const U16 *uniformNames = (const U16*) file.ptr;
-		const U16 *uniformValues = uniformNames + binary.uniformCount;
+		const U16 *defineNames = (const U16*) file.ptr;
+		const U16 *defineValues = defineNames + binary.defineCount;
 
 		//Grab registers
 
-		const SHRegister *regs = (const SHRegister*) (uniformValues + binary.uniformCount);
+		const SHRegister *regs = (const SHRegister*) (defineValues + binary.defineCount);
 		const SHRegister *regEnd = (const SHRegister*) (regs + binary.registerCount);
 
 		gotoIfError2(clean, Buffer_offset(&file, (const U8*) regEnd - file.ptr))
 
-		//Parse uniforms (names must be unique)
+		//Parse defines (names must be unique)
 
-		ListCharString *uniformStrs = &binaryInfo.identifier.uniforms;
-		gotoIfError2(clean, ListCharString_resize(uniformStrs, (U64) binary.uniformCount * 2, alloc))
+		ListCharString *defineStrs = &binaryInfo.identifier.defines;
+		gotoIfError2(clean, ListCharString_resize(defineStrs, (U64) binary.defineCount * 2, alloc))
 
-		for(U64 i = 0; i < binary.uniformCount; ++i) {
+		for(U64 i = 0; i < binary.defineCount; ++i) {
 
-			//Grab uniform and values, validate them too
+			//Grab define and values, validate them too
 
-			if(uniformNames[i] >= header.uniqueUniforms)
-				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
+			if(defineNames[i] >= header.uniqueDefines)
+				retError(clean, Error_invalidState(1, "SHFile_read() defineName out of bounds"))
 
-			CharString uniformName = DLFile_stringAt(strings, (U64) uniformNames[i], NULL);
+			CharString defineName = DLFile_stringAt(strings, (U64) defineNames[i], NULL);
 
-			//Since uniform values can be shared, we need to ensure we're not indexing out of bounds
+			//Since define values can be shared, we need to ensure we're not indexing out of bounds
 
-			U64 uniformNameId = (U64) uniformValues[i] + header.uniqueUniforms;
+			U64 defineNameId = (U64) defineValues[i] + header.uniqueDefines;
 
-			if(uniformNameId >= registerNameStart)
-				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
+			if(defineNameId >= registerNameStart)
+				retError(clean, Error_invalidState(1, "SHFile_read() defineName out of bounds"))
 
-			CharString uniformValue = DLFile_stringAt(strings, uniformNameId, NULL);
+			CharString defineValue = DLFile_stringAt(strings, defineNameId, NULL);
 
-			//Check for duplicate uniform names
+			//Check for duplicate define names
 
 			for(U64 k = 0; k < i; ++k)
-				if(CharString_equalsStringSensitive(uniformStrs->ptr[k << 1], uniformName))
-					retError(clean, Error_alreadyDefined(1, "SHFile_read() uniformName already declared"))
+				if(CharString_equalsStringSensitive(defineStrs->ptr[k << 1], defineName))
+					retError(clean, Error_alreadyDefined(1, "SHFile_read() defineName already declared"))
 
 			//Store
 
-			gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &uniformStrs->ptrNonConst[i << 1]));
-			gotoIfError2(clean, CharString_createCopy(uniformValue, alloc, &uniformStrs->ptrNonConst[(i << 1) | 1]));
+			gotoIfError2(clean, CharString_createCopy(defineName, alloc, &defineStrs->ptrNonConst[i << 1]));
+			gotoIfError2(clean, CharString_createCopy(defineValue, alloc, &defineStrs->ptrNonConst[(i << 1) | 1]));
 		}
 
 		//Parse registers

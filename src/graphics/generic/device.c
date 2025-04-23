@@ -156,23 +156,23 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	gotoIfError3(clean, File_readx(path, U64_MAX, 0, 0, &tempBuffer, e_rr))
 	gotoIfError3(clean, SHFile_readx(tempBuffer, false, &tmpBinary, e_rr))
 
-	CharString uniforms[2] = {
+	CharString defines[2] = {
 		CharString_createRefCStrConst("ROTATE"),
 		CharString_createRefCStrConst("1")
 	};
 
 	for(U64 i = 0; i < 2; ++i) {
 
-		ListCharString uniformsList = (ListCharString) { 0 };
+		ListCharString definesList = (ListCharString) { 0 };
 
 		if(i)
-			gotoIfError2(clean, ListCharString_createRefConst(uniforms, 2, &uniformsList))
+			gotoIfError2(clean, ListCharString_createRefConst(defines, 2, &definesList))
 		
 		U32 mainSingle = GraphicsDeviceRef_getFirstShaderEntry(
 			deviceRef,
 			tmpBinary,
 			CharString_createRefCStrConst("mainSingle"),
-			uniformsList,
+			definesList,
 			ESHExtension_None,
 			ESHExtension_None
 		);
