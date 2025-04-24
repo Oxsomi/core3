@@ -22,6 +22,7 @@
 #include "types/container/string.h"
 #include "types/math/math.h"
 #include "types/base/c8.h"
+#include "types/base/type_id.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -1400,4 +1401,69 @@ Error CharString_format(Allocator alloc, CharString *result, const C8 *format, .
 	va_end(arg1);
 
 	return err;
+}
+
+Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result);
+
+ETypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeStride stride) {
+
+	U64 strl = CharString_length(str);
+
+	if(str.ptr[off] != 'x' || (strl != off + 2 && strl != off + 4))
+		return ETypeId_Undefined;
+
+	U8 w = C8_dec(str.ptr[off + 1]);
+
+	if(w == U8_MAX || !w || w > 4)
+		return ETypeId_Undefined;
+
+	Bool needsMatrix = w == 1;
+
+	Bool isMatrix = strl == off + 4;
+	U8 h = 1;
+
+	if (isMatrix) {
+
+		if(str.ptr[off + 2] != 'x')
+			return ETypeId_Undefined;
+
+		h = C8_dec(str.ptr[off + 3]);
+
+		if(h == U8_MAX || h <= 1 || h > 4)
+			return ETypeId_Undefined;
+	}
+
+	if(needsMatrix && !isMatrix)
+		return ETypeId_Undefined;
+
+	return makeTypeId(LIBRARYID_DEFAULT, 0, w, h, stride, type);
+}
+
+ETypeId ETypeId_parse(CharString str) {
+
+	U64 strl = CharString_length(str);
+
+	if(!strl)
+		return ETypeId_Undefined;
+
+	switch (str.ptr[0]) {
+
+		case 'C':
+			return ...;
+
+		case 'F':
+		case 'U':
+		case 'I':
+
+		//B1, B1xN, B1xWxH
+		case 'B':
+
+			if(strl == 1 || str.ptr[1] != '1')
+				return ETypeId_Undefined;
+
+			return strl == 2 ? ETypeId_B1 : ETypeId_parseVecOrMat(str, 2, EDataType_Bool, EDataTypeStride_8);
+
+		default:
+			return ETypeId_Undefined;
+	}
 }

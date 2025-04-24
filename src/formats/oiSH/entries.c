@@ -478,7 +478,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 		if(runtime.definesPerCompilation.ptr[defineId])
 			gotoIfError2(clean, ListCharString_createRefConst(
-				runtime.definesNameValues.ptr + (defineOffset << 1),
+				runtime.defineNameValues.ptr + (defineOffset << 1),
 				(U64)runtime.definesPerCompilation.ptr[defineId] << 1,
 				&binaryIdentifier->defines
 			))
@@ -714,7 +714,7 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 	ListU16_free(&entry->shaderVersions, alloc);
 	ListU32_free(&entry->extensions, alloc);
 	ListU8_free(&entry->definesPerCompilation, alloc);
-	ListCharString_freeUnderlying(&entry->definesNameValues, alloc);
+	ListCharString_freeUnderlying(&entry->defineNameValues, alloc);
 }
 
 void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc) {

@@ -28,6 +28,7 @@
 #include "types/base/time.h"
 #include "types/base/c8.h"
 #include "types/math/math.h"
+#include "types/base/type_id.h"
 
 TListImpl(Compiler);
 TListImpl(CompileError);
@@ -1114,6 +1115,108 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_registerUniform(
+	SHEntryRuntime *runtimeEntry,
+	U32 *tokenCounter,
+	U32 tokenEnd,
+	Bool isFirst,
+	Parser parser,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	//Register uniform type
+
+	Token tok = parser.tokens.ptr[*tokenCounter];
+	CharString uniformType = parser.parsedLiterals.ptr[tok.valueu];
+	++*tokenCounter;
+
+	if(*tokenCounter >= tokenEnd)
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() invalid syntax, expected 'type name = value'"))
+
+	ETypeId typeId = ETypeId_parse(uniformType);
+
+	if(typeId == ETypeId_Undefined || typeId == ETypeId_C8)
+		retError(clean, Error_invalidState(
+			0,
+			"Compiler_registerUniform() invalid syntax, expected type = ((U/I/F)(8/16/32/64)/B)(x(1/2/3/4)(x(1/2/3/4)))"
+		))
+
+	//Register uniform name
+
+	Token tok = parser.tokens.ptr[*tokenCounter];
+	CharString defineName = parser.parsedLiterals.ptr[tok.valueu];
+	++*tokenCounter;
+
+	U64 inserted = U64_MAX;
+
+	for(U64 i = 0; i < CharString_length(defineName); ++i)
+		if((C8_isSymbol(defineName.ptr[i]) && defineName.ptr[i] != '_') || C8_isWhitespace(defineName.ptr[i]))
+			retError(clean, Error_alreadyDefined(0, "Compiler_registerDefine() can't contain symbols or whitespace"))
+
+	U16 currentDefines = 0;
+
+	if(isFirst)
+		gotoIfError2(clean, ListU8_pushBack(&runtimeEntry->definesPerCompilation, 0, alloc))
+
+	else currentDefines = *ListU8_last(runtimeEntry->definesPerCompilation);
+
+	//Scan last strings for the same define
+
+	for(
+		U64 i = (runtimeEntry->defineNameValues.length >> 1) - 1;
+		i != (runtimeEntry->defineNameValues.length >> 1) - currentDefines - 1;
+		--i
+	)
+		if (CharString_equalsStringSensitive(defineName, runtimeEntry->defineNameValues.ptr[i << 1]))
+			retError(clean, Error_alreadyDefined(0, "Compiler_registerDefine() already contains define"))
+
+	//Insert defineName
+
+	defineName = CharString_createRefStrConst(defineName);
+	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->defineNameValues, defineName, alloc))
+	inserted = runtimeEntry->definesPerCompilation.length - 1;
+
+	//If next token is equals then defineValue
+
+	CharString defineValue = CharString_createNull();
+
+	if (*tokenCounter < tokenEnd) {
+
+		ETokenType tokenType = parser.tokens.ptr[*tokenCounter].tokenType;
+
+		if(tokenType != ETokenType_Comma) {
+
+			if(tokenType != ETokenType_Asg)
+				retError(clean, Error_invalidOperation(0, "Compiler_registerDefine() expected \"string\" = \"string\""))
+
+			++*tokenCounter;
+
+			if(*tokenCounter >= tokenEnd || parser.tokens.ptr[*tokenCounter].tokenType != ETokenType_String)
+				retError(clean, Error_invalidOperation(1, "Compiler_registerDefine() expected \"string\" = \"string\""))
+
+			defineValue = parser.parsedLiterals.ptr[parser.tokens.ptr[*tokenCounter].valueu];
+			++*tokenCounter;
+
+			defineValue = CharString_createRefStrConst(defineValue);
+		}
+	}
+
+	//Insert defineValue
+
+	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->defineNameValues, defineValue, alloc))
+	++*ListU8_last(runtimeEntry->definesPerCompilation);
+
+clean:
+
+	if(!s_uccess && inserted != U64_MAX)
+		ListCharString_erase(&runtimeEntry->defineNameValues, inserted);
+
+	return s_uccess;
+}
+
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
 
 	U16 minVersion = OISH_SHADER_MODEL(6, 5);
@@ -1522,6 +1625,79 @@ Bool Compiler_parse(
 
 									++k;
 									gotoIfError3(clean, Compiler_registerDefine(
+										&runtimeEntry, &k, tokenEnd, false, parser, alloc, e_rr
+									))
+								}
+							}
+
+							break;
+
+						case C8x4('u', 'n', 'i', 'f'):		//oxc::uniforms()
+
+							//[[oxc::uniforms(U8x4 x = (1, 2, 3, 4))]]
+							//[[oxc::uniforms(Bool b = true)]]
+							//		 ^
+							if (tokLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('o', 'r', 'm', 's')) {
+
+								U32 tokenEnd = symj.tokenId + symj.tokenCount;
+
+								//[[oxc::uniforms()]]
+								//Used to declare another entrypoint without uniforms
+
+								if (
+									symj.tokenCount + 1 == 5 &&
+									parser.tokens.ptr[tokenStart].tokenType == ETokenType_RoundParenthesisStart &&
+									parser.tokens.ptr[tokenEnd].tokenType == ETokenType_RoundParenthesisEnd
+								) {
+									gotoIfError2(clean, ListU8_pushBack(&runtimeEntry.uniformsPerCompilation, 0, alloc))
+									break;
+								}
+
+								if(symj.tokenCount + 1 < 9)
+									retError(clean, Error_invalidParameter(
+										0, 0,
+										"Compiler_parse() uniforms annotation expected oxc::uniforms(type name = value, ...)"
+									))
+
+								//[[oxc::uniforms(U32 x = 21)]]
+								//				 ^
+
+								if(
+									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_Identifier ||
+									parser.tokens.ptr[tokenEnd].tokenType != ETokenType_RoundParenthesisEnd
+								)
+									retError(clean, Error_invalidParameter(
+										0, 1,
+										"Compiler_parse() uniforms annotation expected oxc::uniforms(type name = value, ...)"
+									))
+
+								U32 tokenCounter = tokenStart + 1;
+
+								gotoIfError3(clean, Compiler_registerUniform(
+									&runtimeEntry, &tokenCounter, tokenEnd, true, parser, alloc, e_rr
+								))
+
+								//[[oxc::uniforms(U32 x = 21, Bool y = false)]]
+								//							^
+
+								for (U32 k = tokenCounter; k < tokenEnd; ) {
+
+									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
+										retError(clean, Error_invalidParameter(
+											0, 3,
+											"Compiler_parse() uniforsm annotation expected comma in oxc::uniforms(string, ...)"
+										))
+
+									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_Identifier)
+										retError(clean, Error_invalidParameter(
+											0, 4,
+											"Compiler_parse() uniforms annotation expected string in "
+											"oxc::uniforms(type name = value, ...)"
+										))
+
+									++k;
+									gotoIfError3(clean, Compiler_registerUniform(
 										&runtimeEntry, &k, tokenEnd, false, parser, alloc, e_rr
 									))
 								}

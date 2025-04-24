@@ -101,7 +101,7 @@ void write(U32x2 xy, U32 it, U32x2 og, Flp4 v) {
 }
 
 [[oxc::stage("compute")]]
-[[oxc::extension("16BitTypes")]]
+[[oxc::extension()]]		//TODO: "16BitTypes"
 [numthreads(8, 8, 1)]
 void main(U32x2 id : SV_DispatchThreadID, U32x2 threadId : SV_GroupThreadID) {
 

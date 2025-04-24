@@ -58,11 +58,10 @@ UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
 
 //Simplest variant, only 1 dispatch, allows us to use root constants and works everywhere.
 //Only turn on rotate if sizRot.w != 0
-//TODO: Turn ROTATE into uniform
 
 [[oxc::stage("compute")]]
-[[oxc::defines()]]
-[[oxc::defines("ROTATE" = "1")]]
+[[oxc::uniforms()]]
+[[oxc::uniforms(B1 ROTATE = true)]]
 [numthreads(16, 8, 1)]
 void mainSingle(U32x3 id : SV_DispatchThreadID) {
 
@@ -79,7 +78,7 @@ void mainSingle(U32x3 id : SV_DispatchThreadID) {
 	U32x3 src = region.getSrc().xyz + id;
 	U32x3 dst = region.getDst().xyz + id;
 
-	#if $ROTATE
+	if($$ROTATE) {
 
 		if(xyzRot.w & 1) {
 			xyzRot.xy = xyzRot.yx;
@@ -91,8 +90,7 @@ void mainSingle(U32x3 id : SV_DispatchThreadID) {
 
 		if(xyzRot.w > 1)
 			dst.x = xyzRot.x - 1 - dst.x;
-
-	#endif
+	}
 
 	_output[dst] = _input[src];
 }

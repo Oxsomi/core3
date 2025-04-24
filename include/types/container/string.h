@@ -646,6 +646,13 @@ Error ListCharString_concatString(ListCharString arr, CharString between, Alloca
 Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args);
 Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...);
 
+//Parsing and stringifying ETypeId
+
+typedef enum ETypeId ETypeId;
+
+Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result);
+ETypeId ETypeId_parse(CharString str);
+
 #ifdef __cplusplus
 	}
 #endif
