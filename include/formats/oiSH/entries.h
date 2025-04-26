@@ -121,6 +121,19 @@ extern const C8 *SHEntry_stageNames[ESHPipelineStage_Count];
 //This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.
 //Then the SHEntry will point to the binaries instead to save space.
 
+typedef struct SHUniformRuntime {
+
+	CharString name;
+
+	ETypeId typeId;
+	U32 dataOffset;
+
+} SHUniformRuntime;
+
+TList(SHUniformRuntime);
+
+void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, Allocator alloc);
+
 typedef struct SHEntryRuntime {
 
 	SHEntry entry;
@@ -135,6 +148,10 @@ typedef struct SHEntryRuntime {
 
 	ListCharString defineNameValues;	//[defineName, defineValue][]
 	ListU8 definesPerCompilation;		//How many defines are relevant for each compilation
+
+	ListSHUniformRuntime uniforms;
+	ListU8 uniformData;
+	ListU8 uniformsPerCompilation;		//How many uniforms are relevant for each compilation
 
 } SHEntryRuntime;
 

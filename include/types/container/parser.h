@@ -131,6 +131,10 @@ typedef struct Token {
 typedef struct Parser Parser;
 
 CharString Token_asString(Token t, const Parser *p);
+Bool Token_assert(Token t, ETokenType type, Error *e_rr);
+Bool Token_assertJump(
+	U32 *tokenCounter, U32 tokenEnd, ETokenType type, const Parser *p, Error *e_rr
+);
 
 //A symbol is a function, constant or typedef.
 

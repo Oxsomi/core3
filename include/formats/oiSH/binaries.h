@@ -147,6 +147,9 @@ typedef struct SHBinaryIdentifier {
 	CharString entrypoint;		//If it's not a lib, this defines the entrypoint to compile with
 	ListCharString defines;		//[defineName, defineValue][]
 
+	ListSHUniformRuntime uniforms;
+	ListU8 uniformData;
+
 	//Don't change order, is used for compare (U64)
 
 	ESHExtension extensions;

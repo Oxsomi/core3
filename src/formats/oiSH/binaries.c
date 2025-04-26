@@ -487,6 +487,7 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 	if(
 		*(const U64*)extensionsA != *(const U64*)extensionsB ||
 		a.defines.length != b.defines.length ||
+		a.uniforms.length != b.uniforms.length ||
 		!CharString_equalsStringSensitive(a.entrypoint, b.entrypoint)
 	)
 		return false;
@@ -494,6 +495,26 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 	for(U64 i = 0; i < a.defines.length; ++i)
 		if(!CharString_equalsStringSensitive(a.defines.ptr[i], b.defines.ptr[i]))
 			return false;
+
+	for (U64 i = 0; i < a.uniforms.length; ++i) {
+		
+		SHUniformRuntime ai = a.uniforms.ptr[i];
+		SHUniformRuntime bi = b.uniforms.ptr[i];
+		
+		if (
+			!CharString_equalsStringSensitive(ai.name, bi.name) ||
+			ai.typeId != bi.typeId
+		)
+			return false;
+
+		U64 len = ETypeId_getBytes(ai.typeId);
+
+		if (!Buffer_eq(
+			Buffer_createRefConst(a.uniformData.ptr + ai.dataOffset, len),
+			Buffer_createRefConst(b.uniformData.ptr + bi.dataOffset, len)
+		))
+			return false;
+	}
 
 	return true;
 }

@@ -40,6 +40,36 @@ CharString Token_asString(Token t, const Parser *p) {
 	return CharString_createRefSizedConst(lextStr.ptr + t.lexerTokenSubId, t.tokenSize, false);
 }
 
+Bool Token_assert(Token t, ETokenType type, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(t.tokenType != type)
+		retError(clean, Error_invalidParameter(0, 0, "Token_assert() tokenType doesn't match expectations"))
+
+clean:
+	return s_uccess;
+}
+
+Bool Token_assertJump(
+	U32 *tokenCounter,
+	U32 tokenEnd,
+	ETokenType type,
+	const Parser *p,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!tokenCounter || *tokenCounter >= tokenEnd)
+		retError(clean, Error_invalidParameter(0, 0, "Token_assertJump() tokenCounter null or out of bounds"))
+
+	gotoIfError3(clean, Token_assert(p->tokens.ptr[*tokenCounter++], type, e_rr))
+
+clean:
+	return s_uccess;
+}
+
 //Parse token type
 
 ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {

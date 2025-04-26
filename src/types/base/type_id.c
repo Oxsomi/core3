@@ -23,9 +23,10 @@
 Bool EDataType_isSigned(EDataType type) { return type & EDataType_IsSigned; }
 
 EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
+EDataTypeStride ETypeId_getDataTypeStride(ETypeId id) { return (EDataTypeStride)((id >> 3) & 3); }
 Bool ETypeId_isObject(ETypeId id) { return ETypeId_getDataType(id) == EDataType_Object; }
 
-U8 ETypeId_getDataTypeBytes(ETypeId id) { return ETypeId_isObject(id) ? 0 : 1 << ((id >> 3) & 3); }
+U8 ETypeId_getDataTypeBytes(ETypeId id) { return ETypeId_isObject(id) ? 0 : 1 << ETypeId_getDataType(id); }
 U8 ETypeId_getHeight(ETypeId id) { return ETypeId_isObject(id) ? 0 : (id >> 5) & 3; }
 U8 ETypeId_getWidth(ETypeId id) { return ETypeId_isObject(id) ? 0 : (id >> 7) & 3; }
 
@@ -34,7 +35,13 @@ U8 ETypeId_getElements(ETypeId id) {
 }
 
 U64 ETypeId_getBytes(ETypeId id) {
-	return ETypeId_isObject(id) ? 0 : (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id);
+
+	U64 siz = ETypeId_isObject(id) ? 0 : (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id);
+
+	if (ETypeId_getDataType(id) == EDataType_Bool)	//Bits, not bytes
+		return (siz + 7) >> 3;
+
+	return siz;
 }
 
 U16 ETypeId_getLibraryId(ETypeId id) { return (U16)(id >> 19); }

@@ -22,7 +22,6 @@
 #include "types/container/string.h"
 #include "types/math/math.h"
 #include "types/base/c8.h"
-#include "types/base/type_id.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -1403,7 +1402,57 @@ Error CharString_format(Allocator alloc, CharString *result, const C8 *format, .
 	return err;
 }
 
-Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result);
+Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result, Error *e_rr) {
+
+	EDataType dataType = ETypeId_getDataType(type);
+	EDataTypeStride dataTypeStride = ETypeId_getDataTypeStride(type);
+	U8 w = ETypeId_getWidth(type);
+	U8 h = ETypeId_getHeight(type);
+
+	Bool s_uccess = true;
+	const C8 *ptr = NULL;
+
+	switch (dataType) {
+
+		default:
+			retError(clean, CharString_createCopy(CharString_createRefCStrConst("C8"), alloc, result))
+			goto clean;
+
+		case EDataType_Bool:			ptr = "B1";		break;
+		case EDataType_UInt:			ptr = "U";		break;
+		case EDataType_Int:				ptr = "I";		break;
+		case EDataType_Float:			ptr = "F";		break;
+	}
+
+	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result))
+
+	if(dataType != EDataType_Bool) {
+
+		switch(dataTypeStride) {
+			default:					ptr = "8";		break;
+			case EDataTypeStride_16:	ptr = "16";		break;
+			case EDataTypeStride_32:	ptr = "32";		break;
+			case EDataTypeStride_64:	ptr = "64";		break;
+		}
+
+		retError(clean, CharString_appendString(result, CharString_createRefCStrConst(ptr), alloc))
+	}
+
+	if(w == 1 && h == 1)
+		goto clean;
+
+	gotoIfError2(clean, CharString_append(result, 'x', alloc))
+	gotoIfError2(clean, CharString_append(result, C8_createDec(w), alloc))
+
+	if(h == 1)
+		goto clean;
+
+	gotoIfError2(clean, CharString_append(result, 'x', alloc))
+	gotoIfError2(clean, CharString_append(result, C8_createDec(h), alloc))
+
+clean:
+	return s_uccess;
+}
 
 ETypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeStride stride) {
 
@@ -1449,11 +1498,65 @@ ETypeId ETypeId_parse(CharString str) {
 	switch (str.ptr[0]) {
 
 		case 'C':
-			return ...;
+			return strl != 2 || str.ptr[1] != '8' ? ETypeId_Undefined : ETypeId_C8;
 
 		case 'F':
 		case 'U':
-		case 'I':
+		case 'I': {
+
+			if (strl < 2)
+				return ETypeId_Undefined;
+
+			U8 v = C8_dec(str.ptr[1]);
+
+			switch (v) {
+				case 8: case 1: case 3: case 6:		break;	//8, 16, 32, 64
+				default:							return ETypeId_Undefined;
+			}
+
+			if (v != 8 && strl == 2)
+				return ETypeId_Undefined;
+
+			U8 start = 1;
+
+			if (v != 8) {
+
+				U8 v2 = C8_dec(str.ptr[2]);
+
+				switch (v2) {
+					case 6: case 2: case 4:			break;
+					default:						return ETypeId_Undefined;
+				}
+
+				v = v * 10 + v2;
+				++start;
+			}
+
+			else if (str.ptr[0] == 'F')
+				return ETypeId_Undefined;
+
+			EDataType dataType;
+
+			switch (str.ptr[0]) {
+				default:	dataType = EDataType_Float;		break;
+				case 'U':	dataType = EDataType_UInt;		break;
+				case 'I':	dataType = EDataType_Int;		break;
+			}
+
+			EDataTypeStride stride;
+
+			switch (v) {
+				default:	stride = EDataTypeStride_8;		break;
+				case 16:	stride = EDataTypeStride_16;	break;
+				case 32:	stride = EDataTypeStride_32;	break;
+				case 64:	stride = EDataTypeStride_64;	break;
+			}
+
+			if(strl == start)
+				return makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, dataType);
+
+			return ETypeId_parseVecOrMat(str, start, dataType, stride);
+		}
 
 		//B1, B1xN, B1xWxH
 		case 'B':

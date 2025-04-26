@@ -26,6 +26,8 @@
 
 #include "formats/oiSH/sh_file.h"
 #include "types/container/log.h"
+#include "types/base/type_id.h"
+#include "types/math/flp.h"
 
 TListImpl(SHFile);
 
@@ -167,4 +169,148 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 	ListSHInclude_freeUnderlying(&shFile->includes, alloc);
 
 	*shFile = (SHFile) { 0 };
+}
+
+Bool SHValue_stringifyOne(
+	const SHValue *value,
+	ETypeId typeId,
+	U64 *counter,
+	Allocator alloc,
+	CharString *val,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CharString tmp = CharString_createNull();
+
+	if(!value)
+		retError(clean, Error_nullPointer(0, "SHValue_stringify() value is missing"))
+
+	if(*counter) {
+		gotoIfError2(clean, CharString_append(val, ',', alloc))
+		gotoIfError2(clean, CharString_append(val, ' ', alloc))
+	}
+
+	U32 w = ETypeId_getWidth(typeId);
+	U32 h = ETypeId_getWidth(typeId);
+	EDataType type = ETypeId_getDataType(typeId);
+	EDataTypeStride stride = ETypeId_getDataTypeStride(typeId);
+
+	//Scalar;
+	//true
+	//1
+	//1.5
+	//-32
+	//^
+
+	if (w == 1 && h == 1) {
+
+		switch (type) {
+
+			default: {
+				const C8 *v = (value->vu64[0] >> *counter) & 1 ? "true" : "false";
+				gotoIfError2(clean, CharString_appendString(val, CharString_createRefCStrConst(v), alloc))
+				break;
+			}
+
+			case EDataType_Float: {
+			
+				F64 v;
+
+				switch (stride) {
+					default:					v = F16_castF64(value->vu16[*counter]);		break;
+					case EDataTypeStride_32:	v = value->vf32[*counter];					break;
+					case EDataTypeStride_64:	v = value->vf64[*counter];					break;
+				}
+
+				gotoIfError2(clean, CharString_format(alloc, &tmp, "%g", v))
+				break;
+			}
+
+			case EDataType_Int:	{
+				
+				I64 vi;
+
+				switch (stride) {
+					default:					vi = value->vi8[*counter];	break;
+					case EDataTypeStride_16:	vi = value->vi16[*counter];	break;
+					case EDataTypeStride_32:	vi = value->vi32[*counter];	break;
+					case EDataTypeStride_64:	vi = value->vi64[*counter];	break;
+				}
+
+				U64 v = vi < 0 ? ((~(U64)vi) + 1) : (U64)vi;
+
+				if(vi < 0)
+					gotoIfError2(clean, CharString_append(val, '-', alloc))
+
+				gotoIfError2(clean, CharString_createDec(v, 0, alloc, &tmp))
+				break;
+			}
+
+			case EDataType_UInt: {
+
+				U64 v;
+
+				switch (stride) {
+					default:					v = value->vu8[*counter];	break;
+					case EDataTypeStride_16:	v = value->vu16[*counter];	break;
+					case EDataTypeStride_32:	v = value->vu32[*counter];	break;
+					case EDataTypeStride_64:	v = value->vu64[*counter];	break;
+				}
+
+				gotoIfError2(clean, CharString_createDec(v, 0, alloc, &tmp))
+				break;
+			}
+		}
+
+		++*counter;
+		goto clean;
+	}
+
+	//Vector
+	//(1, 2, 3)
+	//^
+
+	if (h == 1) {
+
+		ETypeId single = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, type);
+
+		gotoIfError2(clean, CharString_append(val, '(', alloc))
+
+		for(U64 i = 0; i < w; ++i)
+			gotoIfError3(clean, SHValue_stringifyOne(value, single, counter, alloc, val, e_rr))
+			
+		gotoIfError2(clean, CharString_append(val, ')', alloc))
+		goto clean;
+	}
+
+	//Matrix
+	//((1, 2, 3), (4, 5, 6), (7, 8, 9))
+	
+	ETypeId vec = makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, stride, type);
+
+	gotoIfError2(clean, CharString_append(val, '(', alloc))
+
+	for(U64 i = 0; i < h; ++i)
+		gotoIfError3(clean, SHValue_stringifyOne(value, vec, counter, alloc, val, e_rr))
+			
+	gotoIfError2(clean, CharString_append(val, ')', alloc))
+
+clean:
+	CharString_free(&tmp, alloc);
+	return s_uccess;
+}
+
+Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, CharString *val, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!val || CharString_length(*val))
+		retError(clean, Error_invalidState(0, "SHValue_stringify()::val is required but should be empty"))
+
+	U64 counter = 0;
+	gotoIfError3(clean, SHValue_stringifyOne(value, typeId, &counter, alloc, val, e_rr))
+
+clean:
+	return s_uccess;
 }

@@ -27,9 +27,11 @@
 #include "types/container/log.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/math/math.h"
+#include "types/base/type_id.h"
 
 TListImpl(SHEntry);
 TListImpl(SHEntryRuntime);
+TListImpl(SHUniformRuntime);
 
 #ifndef DISALLOW_SH_OXC3_PLATFORMS
 
@@ -421,7 +423,8 @@ U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime) {
 	return (U32)(
 		U64_max(runtime.shaderVersions.length, 1) *
 		U64_max(runtime.extensions.length, 1) *
-		U64_max(runtime.definesPerCompilation.length, 1)
+		U64_max(runtime.definesPerCompilation.length, 1) *
+		U64_max(runtime.uniformsPerCompilation.length, 1)
 	);
 }
 
@@ -440,6 +443,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	U16 shaderVersions = (U16) U64_max(runtime.shaderVersions.length, 1);
 	U16 extensions = (U16) U64_max(runtime.extensions.length, 1);
 	U16 defines = (U16) U64_max(runtime.definesPerCompilation.length, 1);
+	U16 uniforms = (U16) U64_max(runtime.uniformsPerCompilation.length, 1);
 
 	U16 shaderVersion = combinationId % shaderVersions;
 	combinationId /= shaderVersions;
@@ -448,8 +452,11 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	combinationId /= extensions;
 
 	U16 defineId = combinationId % defines;
+	combinationId /= defines;
 
-	if(combinationId >= defines)
+	U16 uniformId = combinationId % uniforms;
+
+	if(combinationId >= uniforms)
 		retError(clean, Error_outOfBounds(
 			0, combinationId, defines,
 			"SHEntryRuntime_asBinaryIdentifier()::combinationId out of bounds"
@@ -480,6 +487,21 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 			gotoIfError2(clean, ListCharString_createRefConst(
 				runtime.defineNameValues.ptr + (defineOffset << 1),
 				(U64)runtime.definesPerCompilation.ptr[defineId] << 1,
+				&binaryIdentifier->defines
+			))
+	}
+
+	if(runtime.uniformsPerCompilation.length) {
+
+		U64 uniformOffset = 0;
+
+		for(U64 i = 0; i < uniformId; ++i)
+			uniformOffset += runtime.uniformsPerCompilation.ptr[i];
+
+		if(runtime.uniformsPerCompilation.ptr[uniformId])
+			gotoIfError2(clean, ListCharString_createRefConst(
+				runtime.defineNameValues.ptr + (defineOffset << 1),
+				(U64)runtime.uniformsPerCompilation.ptr[deuniformIdfineId] << 1,
 				&binaryIdentifier->defines
 			))
 	}
@@ -685,6 +707,56 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 		k += defines;
 	}
 
+	for (U64 i = 0, k = 0; i < entry.uniformsPerCompilation.length; ++i) {
+
+		U8 uniforms = entry.uniformsPerCompilation.ptr[i];
+
+		if (!uniforms) {
+			Log_debugLn(alloc, "\t[[oxc::uniforms()]]");
+			continue;
+		}
+
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::uniforms(");
+
+		Bool prev = false;
+
+		for (U64 j = 0; j < uniforms; ++j) {
+
+			SHUniformRuntime uniform = entry.uniforms.ptr[j + k];
+
+			SHValue value = (SHValue) { 0 };
+			Buffer_memcpy(
+				Buffer_createRef(value.vu8, sizeof(value)),
+				Buffer_createRefConst(entry.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(uniform.typeId))
+			);
+
+			CharString str = CharString_createNull();
+			if (!CharString_createFromETypeId(uniform.typeId, alloc, &str, NULL))
+				str = CharString_createRefCStrConst("unknown");
+
+			CharString val = CharString_createNull();
+			if (!SHValue_stringify(&value, uniform.typeId, alloc, &val, NULL))
+				val = CharString_createRefCStrConst("unknown");
+
+			Log_debug(
+				alloc, ELogOptions_None,
+				"%s%s %.*s = %.*s",
+				prev ? ", " : "",
+				str.ptr,
+				(int)CharString_length(uniform.name), uniform.name.ptr,
+				(int)CharString_length(val), val.ptr
+			);
+
+			prev = true;
+			CharString_free(&val, alloc);
+			CharString_free(&str, alloc);
+		}
+
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
+
+		k += uniforms;
+	}
+
 	if(entry.vendorMask == U16_MAX)
 		Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
 
@@ -705,6 +777,17 @@ void SHEntry_free(SHEntry *entry, Allocator alloc) {
 	ListCharString_freeUnderlying(&entry->semanticNames, alloc);
 }
 
+void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, Allocator alloc) {
+
+	if (!uniforms)
+		return;
+
+	for (U64 i = 0; i < uniforms->length; ++i)
+		CharString_free(&uniforms->ptrNonConst[i].name, alloc);
+
+	ListSHUniformRuntime_free(uniforms, alloc);
+}
+
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 
 	if(!entry)
@@ -713,8 +796,13 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 	SHEntry_free(&entry->entry, alloc);
 	ListU16_free(&entry->shaderVersions, alloc);
 	ListU32_free(&entry->extensions, alloc);
+
 	ListU8_free(&entry->definesPerCompilation, alloc);
 	ListCharString_freeUnderlying(&entry->defineNameValues, alloc);
+
+	ListU8_free(&entry->uniformsPerCompilation, alloc);
+	ListU8_free(&entry->uniformData, alloc);
+	ListSHUniformRuntime_freeUnderlying(&entry->uniforms, alloc);
 }
 
 void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc) {

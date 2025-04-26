@@ -58,6 +58,25 @@ TList(SHInclude);
 void SHInclude_free(SHInclude *include, Allocator alloc);
 void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc);
 
+typedef union SHValue {		//Intermediate value (can be packed heavily according to type)
+
+	U64 vu64[16];
+	U32 vu32[16];
+	U16 vu16[16];
+	U8  vu8 [16];
+
+	I64 vi64[16];
+	I32 vi32[16];
+	I16 vi16[16];
+	I8  vi8 [16];
+
+	F64 vf64[16];
+	F32 vf32[16];
+
+} SHValue;
+
+Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, CharString *val, Error *e_rr);
+
 typedef struct SHFile {
 
 	ListSHBinaryInfo binaries;

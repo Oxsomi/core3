@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/container/list.h"
+#include "types/base/type_id.h"
 
 #include <stdarg.h>
 
@@ -646,11 +647,9 @@ Error ListCharString_concatString(ListCharString arr, CharString between, Alloca
 Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args);
 Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...);
 
-//Parsing and stringifying ETypeId
+//Parsing and stringifying ETypeId (as long as it's a basic OxC3 base type)
 
-typedef enum ETypeId ETypeId;
-
-Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result);
+Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result, Error *e_rr);
 ETypeId ETypeId_parse(CharString str);
 
 #ifdef __cplusplus

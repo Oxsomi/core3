@@ -27,6 +27,7 @@
 #include "types/container/lexer.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
+#include "types/math/flp.h"
 #include "types/math/math.h"
 #include "types/base/type_id.h"
 
@@ -1041,14 +1042,14 @@ Bool Compiler_registerDefine(
 ) {
 
 	Bool s_uccess = true;
+	U64 inserted = U64_MAX;
 
 	//Register define name
 
 	Token tok = parser.tokens.ptr[*tokenCounter];
+	gotoIfError3(clean, Token_assert(tok, ETokenType_String, e_rr))
 	CharString defineName = parser.parsedLiterals.ptr[tok.valueu];
 	++*tokenCounter;
-
-	U64 inserted = U64_MAX;
 
 	for(U64 i = 0; i < CharString_length(defineName); ++i)
 		if((C8_isSymbol(defineName.ptr[i]) && defineName.ptr[i] != '_') || C8_isWhitespace(defineName.ptr[i]))
@@ -1115,6 +1116,217 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_parseValue(
+	SHValue *value,
+	U64 *dstOff,
+	ETypeId typeId,
+	U32 *tokenCounter,
+	U32 tokenEnd,
+	Parser parser,
+	Error *e_rr
+) {
+
+	EDataType type = ETypeId_getDataType(typeId);
+	EDataTypeStride typeStride = ETypeId_getDataTypeStride(typeId);
+	U32 w = ETypeId_getWidth(typeId);
+	U32 h = ETypeId_getHeight(typeId);
+
+	Bool s_uccess = true;
+
+	//Value
+	//true
+	//0
+	//-3
+	//1.5
+	//^
+
+	if (w == 1 && h == 1) {
+
+		Token tok = parser.tokens.ptr[*tokenCounter];
+		CharString val = Token_asString(tok, &parser);
+		
+		switch (type) {
+
+			case EDataType_Bool: {
+
+				Bool isTrue = CharString_equalsStringSensitive(val, CharString_createRefCStrConst("true"));
+				Bool isFalse = CharString_equalsStringSensitive(val, CharString_createRefCStrConst("false"));
+
+				if(!isTrue && !isFalse)
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected Bool/B1 'true' or 'false'"))
+
+				if(isTrue)
+					value->vu64[0] |= (U64)1 << (*dstOff++);
+
+				break;
+			}
+
+			case EDataType_Float: {
+
+				F64 res = 0;
+				if(!CharString_parseDouble(val, &res))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"))
+
+				switch(typeStride) {
+
+					case EDataTypeStride_16: {
+
+						F16 v = F64_castF16(res);
+
+						if(!EFloatType_isFinite(EFloatType_F16, v))
+							retError(clean, Error_invalidParameter(
+								0, 0, "Compiler_parseValue() passed float value not representable as F16"
+							))
+
+						value->vu16[*dstOff++] = v;
+						break;
+					}
+
+					case EDataTypeStride_32: {
+
+						F32 v = F64_castF32(res);
+
+						if (!EFloatType_isFinite(EFloatType_F32, *(const U32*)&v))
+							retError(clean, Error_invalidParameter(
+								0, 0, "Compiler_parseValue() passed float value not representable as F32"
+							))
+
+						value->vf32[*dstOff++] = v;
+						break;
+					}
+
+					default:
+
+						if (!EFloatType_isFinite(EFloatType_F64, *(const U64*)&res))
+							retError(clean, Error_invalidParameter(
+								0, 0, "Compiler_parseValue() passed float value not representable as F64"
+							))
+
+						value->vf64[*dstOff++] = res;
+						break;
+				}
+
+				break;
+			}
+
+			case EDataType_UInt: {
+
+				if (tok.tokenType == ETokenType_Add) {
+
+					++*tokenCounter;
+
+					if(*tokenCounter >= tokenEnd)
+						retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected (+)U64"))
+
+					tok = parser.tokens.ptr[*tokenCounter];
+					val = Token_asString(tok, &parser);
+				}
+
+				U64 res = 0;
+				if (!CharString_parseU64(val, &res))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a U64 value"))
+
+				U8 bits = ETypeId_getDataTypeBytes(typeId) << 3;
+
+				if(bits != 64 && (res >> bits))
+					retError(clean, Error_outOfBounds(
+						0, res, ((U64)1 << bits) - 1, "Compiler_parseValue() parsed U64 couldn't fit in the target bits"
+					))
+
+				switch(bits) {
+					default:	value->vu8[*dstOff++] = (U8) res;		break;
+					case 16:	value->vu16[*dstOff++] = (U16) res;		break;
+					case 32:	value->vu32[*dstOff++] = (U32) res;		break;
+					case 64:	value->vu64[*dstOff++] = res;			break;
+				}
+
+				break;
+			}
+
+			case EDataType_Int: {
+
+				Bool neg = tok.tokenType == ETokenType_Sub;
+
+				if (neg || tok.tokenType == ETokenType_Add) {
+
+					++*tokenCounter;
+
+					if(*tokenCounter >= tokenEnd)
+						retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected (-+)U64"))
+
+					tok = parser.tokens.ptr[*tokenCounter];
+					val = Token_asString(tok, &parser);
+				}
+
+				U64 ures = 0;
+				if (!CharString_parseU64(val, &ures))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an I64 value"))
+
+				if(ures >> 63)
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() overflow on I64 value"))
+
+				I64 res = neg ? -(I64)ures : (I64)ures;
+
+				U8 bits = ETypeId_getDataTypeBytes(typeId) << 3;
+
+				I64 mi = (I64)((U64)1 << (bits - 1));
+				I64 ma = (I64)((U64)mi - 1);
+
+				if(bits != 64 && (neg ? (res < mi) : (res > ma)))
+					retError(clean, Error_invalidParameter(
+						0, 0, "Compiler_parseValue() parsed I64 couldn't fit in the target bits"
+					))
+
+				switch(bits) {
+					default:	value->vi8[*dstOff++] = (I8) res;		break;
+					case 16:	value->vi16[*dstOff++] = (I16) res;		break;
+					case 32:	value->vi32[*dstOff++] = (I32) res;		break;
+					case 64:	value->vi64[*dstOff++] = res;			break;
+				}
+
+				break;
+			}
+
+			default:
+				retError(clean, Error_invalidState(0, "Compiler_parseValue() is an invalid type"))
+		}
+
+		goto clean;
+	}
+
+	//Vector
+	//(x, y, z, w)
+	//^
+
+	if (h == 1) {
+
+		ETypeId singleType = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, typeStride, type);
+
+		gotoIfError3(clean, Token_assertJump(tokenCounter, tokenEnd, ETokenType_RoundParenthesisStart, &parser, e_rr))
+
+		for (U64 i = 0; i < w; ++i)
+			gotoIfError3(clean, Compiler_parseValue(value, dstOff, singleType, tokenCounter, tokenEnd, parser, e_rr))
+			
+		gotoIfError3(clean, Token_assertJump(tokenCounter, tokenEnd, ETokenType_RoundParenthesisEnd, &parser, e_rr))
+		goto clean;
+	}
+
+	//Matrix
+	//((0, 1), (2, 3), (4, 5))
+	
+	ETypeId vecType = makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, typeStride, type);
+
+	gotoIfError3(clean, Token_assertJump(tokenCounter, tokenEnd, ETokenType_RoundParenthesisStart, &parser, e_rr))
+
+	for (U64 i = 0; i < h; ++i)
+		gotoIfError3(clean, Compiler_parseValue(value, dstOff, vecType, tokenCounter, tokenEnd, parser, e_rr))
+			
+	gotoIfError3(clean, Token_assertJump(tokenCounter, tokenEnd, ETokenType_RoundParenthesisEnd, &parser, e_rr))
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_registerUniform(
 	SHEntryRuntime *runtimeEntry,
 	U32 *tokenCounter,
@@ -1126,11 +1338,13 @@ Bool Compiler_registerUniform(
 ) {
 
 	Bool s_uccess = true;
+	U64 inserted = U64_MAX;
+	CharString tmp = CharString_createNull();
 
 	//Register uniform type
 
 	Token tok = parser.tokens.ptr[*tokenCounter];
-	CharString uniformType = parser.parsedLiterals.ptr[tok.valueu];
+	CharString uniformType = Token_asString(tok, &parser);
 	++*tokenCounter;
 
 	if(*tokenCounter >= tokenEnd)
@@ -1146,74 +1360,80 @@ Bool Compiler_registerUniform(
 
 	//Register uniform name
 
-	Token tok = parser.tokens.ptr[*tokenCounter];
-	CharString defineName = parser.parsedLiterals.ptr[tok.valueu];
+	tok = parser.tokens.ptr[*tokenCounter];
+	CharString uniformName = Token_asString(tok, &parser);
 	++*tokenCounter;
 
-	U64 inserted = U64_MAX;
+	for (U64 i = 0; i < CharString_length(uniformName); ++i) {
 
-	for(U64 i = 0; i < CharString_length(defineName); ++i)
-		if((C8_isSymbol(defineName.ptr[i]) && defineName.ptr[i] != '_') || C8_isWhitespace(defineName.ptr[i]))
-			retError(clean, Error_alreadyDefined(0, "Compiler_registerDefine() can't contain symbols or whitespace"))
+		C8 c = uniformName.ptr[i];
+		Bool isDec = C8_isDec(c);
 
-	U16 currentDefines = 0;
+		if(!i && isDec)
+			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() can't start with a number"))
 
-	if(isFirst)
-		gotoIfError2(clean, ListU8_pushBack(&runtimeEntry->definesPerCompilation, 0, alloc))
-
-	else currentDefines = *ListU8_last(runtimeEntry->definesPerCompilation);
-
-	//Scan last strings for the same define
-
-	for(
-		U64 i = (runtimeEntry->defineNameValues.length >> 1) - 1;
-		i != (runtimeEntry->defineNameValues.length >> 1) - currentDefines - 1;
-		--i
-	)
-		if (CharString_equalsStringSensitive(defineName, runtimeEntry->defineNameValues.ptr[i << 1]))
-			retError(clean, Error_alreadyDefined(0, "Compiler_registerDefine() already contains define"))
-
-	//Insert defineName
-
-	defineName = CharString_createRefStrConst(defineName);
-	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->defineNameValues, defineName, alloc))
-	inserted = runtimeEntry->definesPerCompilation.length - 1;
-
-	//If next token is equals then defineValue
-
-	CharString defineValue = CharString_createNull();
-
-	if (*tokenCounter < tokenEnd) {
-
-		ETokenType tokenType = parser.tokens.ptr[*tokenCounter].tokenType;
-
-		if(tokenType != ETokenType_Comma) {
-
-			if(tokenType != ETokenType_Asg)
-				retError(clean, Error_invalidOperation(0, "Compiler_registerDefine() expected \"string\" = \"string\""))
-
-			++*tokenCounter;
-
-			if(*tokenCounter >= tokenEnd || parser.tokens.ptr[*tokenCounter].tokenType != ETokenType_String)
-				retError(clean, Error_invalidOperation(1, "Compiler_registerDefine() expected \"string\" = \"string\""))
-
-			defineValue = parser.parsedLiterals.ptr[parser.tokens.ptr[*tokenCounter].valueu];
-			++*tokenCounter;
-
-			defineValue = CharString_createRefStrConst(defineValue);
-		}
+		if (!isDec && !C8_isAlpha(c) && c != '_')
+			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() name must be [A-Za-z_]+[0-9A-Za-z_]*"))
 	}
 
-	//Insert defineValue
+	//type name = value;
+	//          ^
 
-	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->defineNameValues, defineValue, alloc))
-	++*ListU8_last(runtimeEntry->definesPerCompilation);
+	gotoIfError3(clean, Token_assertJump(tokenCounter, tokenEnd, ETokenType_Asg, &parser, e_rr))
+			
+	if(*tokenCounter + 1 >= tokenEnd)
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() invalid syntax, expected 'type name = value'"))
+		
+	//type name = value;
+	//			  ^
+
+	SHValue value = (SHValue) { 0 };
+	U64 dstOff = 0;
+	gotoIfError3(clean, Compiler_parseValue(&value, &dstOff, typeId, tokenCounter, tokenEnd, parser, e_rr))
+
+	U64 valLen = ETypeId_getBytes(typeId);
+
+	if(isFirst)
+		gotoIfError2(clean, ListU8_pushBack(&runtimeEntry->uniformsPerCompilation, 0, alloc))
+
+	for(U64 i = 0; i < runtimeEntry->uniforms.length; ++i)
+		if(CharString_equalsStringSensitive(runtimeEntry->uniforms.ptr[i].name, uniformName))
+			retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform already present"))
+
+	//Insert uniform
+
+	gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &tmp))
+	U64 uniformDatLen = runtimeEntry->uniformData.length;
+
+	if(uniformDatLen + valLen >= U16_MAX)
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform buffer data is limited to 65535"))
+
+	SHUniformRuntime uniform = (SHUniformRuntime) {
+		.name = tmp,
+		.typeId = typeId,
+		.dataOffset = (U32) uniformDatLen
+	};
+
+	inserted = runtimeEntry->uniforms.length;
+	gotoIfError2(clean, ListSHUniformRuntime_pushBack(&runtimeEntry->uniforms, uniform, alloc))
+
+	gotoIfError2(clean, ListU8_resize(&runtimeEntry->uniformData, uniformDatLen + valLen, alloc))
+
+	tmp = CharString_createNull();		//Moved
+
+	Buffer_memcpy(
+		Buffer_createRef(runtimeEntry->uniformData.ptrNonConst + uniformDatLen, valLen),
+		Buffer_createRefConst(&value, valLen)
+	);
+
+	++*ListU8_last(runtimeEntry->uniformsPerCompilation);
 
 clean:
 
 	if(!s_uccess && inserted != U64_MAX)
-		ListCharString_erase(&runtimeEntry->defineNameValues, inserted);
+		ListSHUniformRuntime_erase(&runtimeEntry->uniforms, inserted);
 
+	CharString_free(&tmp, alloc);
 	return s_uccess;
 }
 
@@ -1635,7 +1855,7 @@ Bool Compiler_parse(
 						case C8x4('u', 'n', 'i', 'f'):		//oxc::uniforms()
 
 							//[[oxc::uniforms(U8x4 x = (1, 2, 3, 4))]]
-							//[[oxc::uniforms(Bool b = true)]]
+							//[[oxc::uniforms(B1 b = true)]]
 							//		 ^
 							if (tokLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('o', 'r', 'm', 's')) {
 
@@ -1678,7 +1898,7 @@ Bool Compiler_parse(
 									&runtimeEntry, &tokenCounter, tokenEnd, true, parser, alloc, e_rr
 								))
 
-								//[[oxc::uniforms(U32 x = 21, Bool y = false)]]
+								//[[oxc::uniforms(U32 x = 21, B1 y = false)]]
 								//							^
 
 								for (U32 k = tokenCounter; k < tokenEnd; ) {
