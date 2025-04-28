@@ -125,8 +125,11 @@ typedef struct SHUniformRuntime {
 
 	CharString name;
 
-	ETypeId typeId;
-	U32 dataOffset;
+	U8 pad0;
+	U8 typeIdShort;
+	U16 dataOffset;
+
+	U64 pad1;
 
 } SHUniformRuntime;
 

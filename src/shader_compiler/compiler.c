@@ -1410,7 +1410,7 @@ Bool Compiler_registerUniform(
 
 	SHUniformRuntime uniform = (SHUniformRuntime) {
 		.name = tmp,
-		.typeId = typeId,
+		.typeIdShort = ETypeId_mapToShortTypeId(typeId),
 		.dataOffset = (U32) uniformDatLen
 	};
 

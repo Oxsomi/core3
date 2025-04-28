@@ -159,6 +159,8 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 		ListSHRegisterRuntime_freeUnderlying(&binary->registers, alloc);
 		CharString_free(&binary->identifier.entrypoint, alloc);
 		ListCharString_freeUnderlying(&binary->identifier.defines, alloc);
+		ListSHUniformRuntime_freeUnderlying(&binary->identifier.uniforms, alloc);
+		ListU8_free(&binary->identifier.uniformData, alloc);
 
 		for(U64 i = 0; i < ESHBinaryType_Count; ++i)
 			Buffer_free(&binary->binaries[i], alloc);

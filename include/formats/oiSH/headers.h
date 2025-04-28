@@ -48,7 +48,8 @@ typedef struct BinaryInfoFixedSize {
 	ESHExtension dormantExt;	//Dormant extensions (not detected in final executable)
 
 	U16 registerCount;
-	U16 padding;
+	U8 uniformCount;
+	U8 padding;
 
 } BinaryInfoFixedSize;
 

@@ -27,6 +27,7 @@
 #include "types/container/log.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/math/math.h"
+#include "types/base/c8.h"
 
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
@@ -161,6 +162,50 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		retError(clean, Error_invalidParameter(
 			2, 0, "SHFile_addBinary()::binaries->identifier.defines needs to be <=[defineName,defineValue][255]"
 		))
+
+	if(binaries->identifier.uniforms.length >= U8_MAX)
+		retError(clean, Error_invalidParameter(
+			2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.length needs to be < 255"
+		))
+
+	for (U64 i = 0; i < binaries->identifier.uniforms.length; ++i) {
+
+		SHUniformRuntime uniform = binaries->identifier.uniforms.ptr[i];
+
+		if(uniform.typeIdShort >= ETypeId_Max)
+			retError(clean, Error_invalidParameter(
+				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] has an invalid type"
+			))
+
+		ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+
+		if((U32)uniform.dataOffset + ETypeId_getBytes(typeId) >= binaries->identifier.uniformData.length)
+			retError(clean, Error_invalidParameter(
+				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] data out of bounds"
+			))
+
+		if(!CharString_length(uniform.name))
+			retError(clean, Error_invalidParameter(
+				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] empty name"
+			))
+
+		if(!C8_isAlpha(uniform.name.ptr[i]) && uniform.name.ptr[i] != '_')
+			retError(clean, Error_invalidParameter(
+				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name[0] must start with [A-Za-z_]"
+			))
+
+		for(U64 j = 1; j < CharString_length(uniform.name); ++j)
+			if(!C8_isAlphaNumeric(uniform.name.ptr[i]))
+				retError(clean, Error_invalidParameter(
+					2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name[j] must be [A-Za-z0-9_]"
+				))
+
+		for(U64 j = 0; j < i; ++j)
+			if(CharString_equalsStringSensitive(uniform.name, binaries->identifier.uniforms.ptr[j].name))
+				retError(clean, Error_invalidParameter(
+					2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name is a duplicate"
+				))
+	}
 
 	if(binaries->hasShaderAnnotation && CharString_length(binaries->identifier.entrypoint))
 		retError(clean, Error_invalidParameter(
@@ -447,6 +492,10 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		}
 	}
 
+	//Copy uniforms
+
+	todo
+
 	//Copy registers
 
 	if(binaries->registers.length) {
@@ -503,11 +552,11 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 		
 		if (
 			!CharString_equalsStringSensitive(ai.name, bi.name) ||
-			ai.typeId != bi.typeId
+			ai.typeIdShort != bi.typeIdShort
 		)
 			return false;
 
-		U64 len = ETypeId_getBytes(ai.typeId);
+		U64 len = ETypeId_getBytes(ETypeId_arr[ai.typeIdShort]);
 
 		if (!Buffer_eq(
 			Buffer_createRefConst(a.uniformData.ptr + ai.dataOffset, len),
@@ -602,6 +651,54 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
+	ListSHUniformRuntime uniforms = binary.identifier.uniforms;
+
+	if(!uniforms.length)
+		Log_debugLn(alloc, "\t[[oxc::uniforms()]");
+
+	else {
+
+		Log_debug(alloc, ELogOptions_None, "\t[[oxc::uniforms(");
+
+		Bool prev = false;
+
+		for(U64 j = 0; j < uniforms.length; ++j) {
+
+			SHUniformRuntime uniform = uniforms.ptr[j];
+			CharString tmp = CharString_createNull();
+			CharString tmp1 = CharString_createNull();
+
+			ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+
+			if(!CharString_createFromETypeId(typeId, alloc, &tmp, NULL))
+				tmp = CharString_createRefCStrConst("unknown");
+
+			SHValue value = (SHValue) { 0 };
+			Buffer_memcpy(
+				Buffer_createRef(&value, sizeof(value)),
+				Buffer_createRefConst(binary.identifier.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId))
+			);
+
+			if(!SHValue_stringify(&value, typeId, alloc, &tmp1, NULL))
+				tmp1 = CharString_createRefCStrConst("unknown");
+
+			Log_debug(
+				alloc, ELogOptions_None,
+				"%s%s %.*s = %s",
+				prev ? ", " : "",
+				tmp.ptr,
+				(int)CharString_length(uniform.name), uniform.name.ptr,
+				tmp1.ptr
+			);
+
+			prev = true;
+			CharString_free(&tmp, alloc);
+			CharString_free(&tmp1, alloc);
+		}
+
+		Log_debug(alloc, ELogOptions_NewLine, ")]]");
+	}
+
 	U16 mask = (1 << ESHVendor_Count) - 1;
 
 	if((binary.vendorMask & mask) == mask)
@@ -627,6 +724,8 @@ void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc) {
 
 	CharString_free(&identifier->entrypoint, alloc);
 	ListCharString_freeUnderlying(&identifier->defines, alloc);
+	ListSHUniformRuntime_freeUnderlying(&identifier->uniforms, alloc);
+	ListU8_free(&identifier->uniformData, alloc);
 }
 
 void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc) {

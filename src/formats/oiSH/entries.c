@@ -724,18 +724,20 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 			SHUniformRuntime uniform = entry.uniforms.ptr[j + k];
 
+			ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+
 			SHValue value = (SHValue) { 0 };
 			Buffer_memcpy(
 				Buffer_createRef(value.vu8, sizeof(value)),
-				Buffer_createRefConst(entry.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(uniform.typeId))
+				Buffer_createRefConst(entry.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId))
 			);
 
 			CharString str = CharString_createNull();
-			if (!CharString_createFromETypeId(uniform.typeId, alloc, &str, NULL))
+			if (!CharString_createFromETypeId(typeId, alloc, &str, NULL))
 				str = CharString_createRefCStrConst("unknown");
 
 			CharString val = CharString_createNull();
-			if (!SHValue_stringify(&value, uniform.typeId, alloc, &val, NULL))
+			if (!SHValue_stringify(&value, typeId, alloc, &val, NULL))
 				val = CharString_createRefCStrConst("unknown");
 
 			Log_debug(

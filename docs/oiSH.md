@@ -8,7 +8,7 @@ oSH is a single shader represented in a single or multiple binary/text format(s)
 
 - SPIRV
 - DXIL
-- (**unsupported for now**): MetalIR (Metal IR)
+- (**unsupported for now**): AIR (Apple IR)
 - (**unsupported for now**): WGSL
 
 It includes the shader binary/text along with the extensions it uses, so it can easily be validated if the shader binary can be loaded by the runtime.
@@ -98,13 +98,13 @@ typedef enum ESHBinaryFlags {
 	ESHBinaryFlags_HasDXIL					= 1 << 1,
 
 	//Reserved
-	//ESHBinaryFlags_HasMetalIR				= 1 << 2,
+	//ESHBinaryFlags_HasAIR					= 1 << 2,
 	//ESHBinaryFlags_HasWGSL				= 1 << 3
 
 	ESHBinaryFlags_HasShaderAnnotation		= 1 << 4,
 
 	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,
-	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasMSL | ESHBinaryFlags_HasWGSL
+	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasAIR | ESHBinaryFlags_HasWGSL
 	ESHBinaryFlags_HasSource				= ESHBinaryFlags_HasBinary // | ESHBinaryFlags_HasText
 
 } ESHBinaryFlags;
@@ -144,7 +144,9 @@ typedef enum ESHExtension {
 	ESHExtension_WriteMSTexture				= 1 << 17,
 
 	ESHExtension_Bindless					= 1 << 18,
-	ESHExtension_UnboundArraySize			= 1 << 19
+	ESHExtension_UnboundArraySize			= 1 << 19,
+    
+	ESHExtension_SubgroupOperations			= 1 << 20
 
 } ESHExtension;
 
@@ -178,7 +180,8 @@ typedef struct BinaryInfoFixedSize {
 	ESHExtension dormantExt;	//Dormant extensions (not detected in final executable)
 
 	U16 registerCount;
-	U16 padding;
+    U8 uniformCount;
+	U8 padding;
 
 } BinaryInfoFixedSize;
 
@@ -302,10 +305,17 @@ SHFile {
 
     for i < binaryCount:
 
-    	U16 defineNames[binaryInfos[i].defineCount];	//offset to strings[0]
-    	U16 defineValues[binaryInfos[i].defineCount];	//^ [defineCount]
+    	U16 defineNames[binaryInfos[i].defineCount];		//offset to strings[0]
+    	U16 defineValues[binaryInfos[i].defineCount];		//^ [defineCount]
+    
+    	U16 uniformNames[binaryInfos[i].uniformCount];		//^ [defineCount + defineValueCount]
+    	(U8, U24) uniforms[binaryInfo[i].uniformCount];		//index into ETypeId_arr, bufferOffset
+    	U8 uniformData[
+            max(uniforms[i].bufferOffset + ETypeId_getBytes(ETypeId_arr[uniforms[i].typeId]))
+       	];
 
-    	SHRegister registers[binaryInfos[i].registerCount];	//Name starts after all define names & values
+	    //Name starts after all define values & define/uniform names
+    	SHRegister registers[binaryInfos[i].registerCount];
 
         if binary[i] has SPIRV:
             EXXDataSizeType<spirvType> spirvLength;
@@ -444,7 +454,7 @@ The following define the requirements of binaries embedded in oiSH files.
 
 ### DXIL spec
 
-- Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. To be compatible with SPIRV. Though of course SV_TARGET and other SVs are accepted.
+- HLSL Semantics should use TEXCOORD[N] rather than for example NORMAL, TANGENT, etc. Though of course SV_TARGET and other SVs are accepted. However, it is supported to just use semantics and let auto binding handle things, though this is generally less desirable.
 - Extensions available by default:
   - D3D_SHADER_REQUIRES_TYPED_UAV_LOAD_ADDITIONAL_FORMATS
   - D3D_SHADER_REQUIRES_STENCIL_REF
@@ -508,7 +518,7 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 - In DXIL, samplers and textures are always separated, there exist no combined samplers. As such, they will be presented as two separate registers. When SPIRV is combined or used, it will merge the texture by name into a combined sampler. In this case, the separate sampler itself will not exist for SPIRV (only the texture ala combined sampler) but will for DXIL. In a DXIL+SPIRV merged binary, the texture is marked as combined sampler: ESHRegisterType_IsCombinedSampler and the separate sampler will only be available with DXIL bindings.
 - SPIRV has the concept of subpass inputs, but DXIL doesn't. This means the bindings of input attachments should only be valid for SPIRV.
 - DXIL has the concept of sampler comparison states, but SPIRV just sees them as samplers. If DXIL and SPIRV binaries are merged it will promote sampler register type to sampler comparison register type.
-- DXIL has more info about the texture primitive than SPIRV, though SPIRV has a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.
+- DXIL has more info about the texture primitive than SPIRV, though SPIRV can have a format (which DXIL doesn't have). This means that formatId will always come from SPIRV and texture primitive from DXIL. SPIRV's texture primitive is unreliable for use for DXIL.
 - When stripping SPIRV info from one that has both DXIL and SPIRV, it will keep the reflection data it gained from merging the two. This is intentional, as this would allow you to re-gain some reflection info that is missing from DXIL and keeps the reflection data consistent across two different splits.
 - Combining DXIL and SPIRV underestimates dormant extensions, it could be possible a certain extension isn't present in DXIL or SPIRV, however if it can't be queried by the underlying format then it's impossible to tell. In this case, it will assume the extension the shader was compiled with is leading and so remove it from being dormant.
   - Dormant extensions include all extensions that are supported by the shader mode (DXIL or SPIRV) but that weren't detected. This allows easy merging of dormant extensions by just bitwise ANDing them and getting an underestimated version of dormant extensions.
@@ -522,4 +532,6 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added defines. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking. Also added a better language spec about what is legal to be contained in a oiSH file (SPIRV and DXIL subsets). Various extensions and abilities to use HLSL or GLSL specific features for all backends.
 
 1.2(.2): No major bump, because no oiSH files exist in the wild yet. Added 'dormant' extension, which is an extension enabled by the shader compiler but isn't used by the final executable. If for example SPIRV and DXIL are merged, then only extensions present by both can be marked as dormant, because for example SER (Shader Execution Reordering) can be present in DXIL but is undetectable without writing custom code processing DXIL due to NVAPI hackery. Due to this it could be possible that for example SER is enabled but isn't present in DXIL or SPIRV but since both are merged it (DXIL can't detect) it can't be certain that this extension is dormant. Same is true for SPIRV only extensions that DXIL doesn't have or vice versa.
+
+1.2(.3): No major bump, no oiSH files exist in the wild yet. Added uniforms, which are like defines except they're not strings; they're a type, name and value. These are a replacement for defines and will allow the linker to take care of the shader variants rather than the defines. They're comparable to specialization constants (Vulkan) or linking library functions (DirectX). They will still store duplicate shader binaries, but will be quicker to compile.
 
