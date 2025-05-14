@@ -20,15 +20,56 @@
 
 #include "types/base/type_id.h"
 
+TypeIdShort ETypeId_toShortId(ETypeId typeId) {
+	
+	EDataType type = ETypeId_getDataType(typeId);
+
+	U8 offsetId = 0;
+
+	switch (type) {
+
+		case EDataType_Char:
+		default:								return 0;
+
+		case EDataType_Bool:	offsetId = 0;	break;
+		case EDataType_Int:		offsetId = 1;	break;
+		case EDataType_UInt:	offsetId = 5;	break;
+		case EDataType_Float:	offsetId = 9;	break;
+	}
+
+	U8 stride = 12;
+
+	U8 w = ETypeId_getWidth(typeId);
+	U8 h = ETypeId_getHeight(typeId);
+
+	if (w == 1 && h == 1)
+		return 1 + offsetId;		//C8 starts at 0
+
+	if (h == 1)						//Skip vectors and C8, offset with stride 3 and add width (starting 2)
+		return 1 + stride + offsetId * 3 + (w - 2);
+
+	//Skip vectors, matrices, stride 4x3, add width and height (starting at 2) offsets by 4 each time
+	return 1 + stride + stride * 3 + offsetId * 4 * 3 + (w - 1) + (h - 2) * 4;
+}
+
 Bool EDataType_isSigned(EDataType type) { return type & EDataType_IsSigned; }
 
 EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
 EDataTypeStride ETypeId_getDataTypeStride(ETypeId id) { return (EDataTypeStride)((id >> 3) & 3); }
 Bool ETypeId_isObject(ETypeId id) { return ETypeId_getDataType(id) == EDataType_Object; }
 
-U8 ETypeId_getDataTypeBytes(ETypeId id) { return ETypeId_isObject(id) ? 0 : 1 << ETypeId_getDataType(id); }
-U8 ETypeId_getHeight(ETypeId id) { return ETypeId_isObject(id) ? 0 : (id >> 5) & 3; }
-U8 ETypeId_getWidth(ETypeId id) { return ETypeId_isObject(id) ? 0 : (id >> 7) & 3; }
+U8 ETypeId_getDataTypeBytes(ETypeId id) { 
+
+	EDataType type = ETypeId_getDataType(id);
+
+	if (type == EDataType_Char || type == EDataType_Bool)
+		return 1;
+
+	return ETypeId_isObject(id) ? 0 : (1 << type);
+}
+
+U8 ETypeId_getHeight(ETypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 5) & 3) + 1); }
+U8 ETypeId_getWidth(ETypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 7) & 3) + 1); }
 
 U8 ETypeId_getElements(ETypeId id) {
 	return ETypeId_isObject(id) ? 0 : ETypeId_getWidth(id) * ETypeId_getHeight(id);

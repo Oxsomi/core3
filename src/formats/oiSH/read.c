@@ -22,6 +22,8 @@
 #include "formats/oiSH/headers.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/base/c8.h"
+#include "types/math/math.h"
 #include "types/container/buffer.h"
 #include "formats/oiDL/dl_file.h"
 
@@ -90,8 +92,9 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		header.includeFileCount +
 		header.semanticCount +
 		header.registerNameCount +
+		header.uniformNameCount +
 		header.uniqueDefines +				//Names have to be unique
-		(header.uniqueDefines ? 1 : 0);	//Values can be shared
+		(header.uniqueDefines ? 1 : 0);		//Values can be shared
 
 	if(
 		strings.entryBuffers.length < minEntryBuffers ||
@@ -167,6 +170,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	U64 entrypointNameStart = strings.entryBuffers.length - header.semanticCount - header.stageCount;
 	U64 includeNameStart = entrypointNameStart - header.includeFileCount;
 	U64 registerNameStart = includeNameStart - header.registerNameCount;
+	U64 uniformNameStart = registerNameStart - header.uniformNameCount;
 
 	for(U64 j = 0; j < header.binaryCount; ++j) {
 
@@ -221,12 +225,31 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		const U16 *defineNames = (const U16*) file.ptr;
 		const U16 *defineValues = defineNames + binary.defineCount;
 
+		//Grab uniforms
+
+		const SHUniform *uniforms = (const SHUniform*) (defineValues + binary.defineCount);
+		const U8 *ptr = (const U8*)(uniforms + binary.uniformCount);
+
+		gotoIfError2(clean, Buffer_offset(&file, ptr - file.ptr))
+
+		U64 maxOff = 0;
+
+		for (U64 i = 0; i < binary.uniformCount; ++i) {
+
+			if(uniforms[i].typeIdShort >= ETypeId_Max)
+				retError(clean, Error_invalidState(
+					1, "SHFile_read() typeIdShort wasn't a valid index into ETypeId_arr"
+				))
+
+			maxOff = U64_max(maxOff, uniforms[i].dataOffset + ETypeId_getBytes(ETypeId_arr[uniforms[i].typeIdShort]));
+		}
+
 		//Grab registers
 
-		const SHRegister *regs = (const SHRegister*) (defineValues + binary.defineCount);
+		const SHRegister *regs = (const SHRegister*) (ptr + maxOff);
 		const SHRegister *regEnd = (const SHRegister*) (regs + binary.registerCount);
 
-		gotoIfError2(clean, Buffer_offset(&file, (const U8*) regEnd - file.ptr))
+		gotoIfError2(clean, Buffer_offset(&file, (const U8*) regEnd - ptr))
 
 		//Parse defines (names must be unique)
 
@@ -261,6 +284,47 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 			gotoIfError2(clean, CharString_createCopy(defineName, alloc, &defineStrs->ptrNonConst[i << 1]));
 			gotoIfError2(clean, CharString_createCopy(defineValue, alloc, &defineStrs->ptrNonConst[(i << 1) | 1]));
+		}
+
+		//Parse uniforms
+
+		gotoIfError2(clean, ListU8_resize(&binaryInfo.identifier.uniformData, maxOff, alloc))
+		Buffer_memcpy(ListU8_buffer(binaryInfo.identifier.uniformData), Buffer_createRefConst(ptr, maxOff));
+
+		gotoIfError2(clean, ListSHUniformRuntime_resize(&binaryInfo.identifier.uniforms, binary.uniformCount, alloc))
+
+		for(U64 i = 0; i < binary.uniformCount; ++i) {
+
+			SHUniform uniform = uniforms[i];
+			CharString uniformName = DLFile_stringAt(strings, uniformNameStart + uniform.nameId, NULL);
+
+			if(!CharString_length(uniformName) || (!C8_isAlpha(uniformName.ptr[0]) && uniformName.ptr[0] != '_'))
+				retError(clean, Error_invalidState(
+					1, "SHFile_read() couldn't get uniform name or uniform started with non [A-Za-z_]"
+				))
+
+			for(U64 k = 1; k < CharString_length(uniformName); ++k)
+				if(!C8_isAlphaNumeric(uniformName.ptr[k]) && uniformName.ptr[k] != '_')
+					retError(clean, Error_invalidState(
+						1, "SHFile_read() uniform didn't end with [A-Za-z0-9_]"
+					))
+
+			//Check for duplicate define names
+
+			for(U64 k = 0; k < i; ++k)
+				if(CharString_equalsStringSensitive(binaryInfo.identifier.uniforms.ptr[k].name, uniformName))
+					retError(clean, Error_alreadyDefined(1, "SHFile_read() uniformName already declared"))
+
+			//Store
+
+			binaryInfo.identifier.uniforms.ptrNonConst[j] = (SHUniformRuntime) {
+				.dataOffset = uniform.dataOffset,
+				.typeIdShort = uniform.typeIdShort
+			};
+
+			gotoIfError2(clean, CharString_createCopy(
+				uniformName, alloc, &binaryInfo.identifier.uniforms.ptrNonConst[j].name
+			))
 		}
 
 		//Parse registers

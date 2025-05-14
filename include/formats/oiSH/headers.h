@@ -79,6 +79,9 @@ typedef struct SHHeader {
 	U16 arrayDimCount;
 	U16 registerNameCount;
 
+	U16 uniformNameCount;
+	U16 padding;
+
 } SHHeader;
 
 #define SHHeader_MAGIC 0x4853696F

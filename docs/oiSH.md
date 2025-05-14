@@ -49,6 +49,9 @@ typedef struct SHHeader {		//4-byte aligned
     U16 arrayDimCount;
     U16 registerNameCount;
 
+	U16 uniformNameCount;
+	U16 padding;
+
 } SHHeader;
 
 //Loosely maps to EPipelineStage in OxC3 graphics
@@ -103,8 +106,8 @@ typedef enum ESHBinaryFlags {
 
 	ESHBinaryFlags_HasShaderAnnotation		= 1 << 4,
 
-	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,
-	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasAIR | ESHBinaryFlags_HasWGSL
+	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,		//| ESHBinaryFlags_HasAIR
+	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasWGSL,
 	ESHBinaryFlags_HasSource				= ESHBinaryFlags_HasBinary // | ESHBinaryFlags_HasText
 
 } ESHBinaryFlags;
@@ -273,6 +276,12 @@ typedef struct SHRegister {
 
 } SHRegister;
 
+typedef struct SHUniform {
+	U16 bufferOffset;
+	U8 typeIdShort;					//ETypeId_arr[typeIdShort] = ETypeId
+	U8 nameId;
+} SHUniform;
+
 //Final file format; please manually parse the members.
 //Verify if everything's in bounds.
 //Verify if SHFile includes any invalid data.
@@ -286,7 +295,9 @@ SHFile {
     //strings[^ - stageCount,       ^ - semanticCount] contains entrypoint names.
     //strings[^ - includeFileCount, ^ - stageCount] contains (relative) include names.
     //strings[^ - stageCount, 		^ - includeFileCount] contains unique register names.
-    //strings[0,                    ^ - registerNameCount] contains define values & names and register names.
+	//strings[^ - registerNameCount, ^ - stageCount] contains register names
+	//strings[^ - uniformNameCount, ^ - registerNameCount] contains uniform names
+    //strings[0,                    ^ - uniformNameCount] contains define values & names.
     DLFile strings;
 
     //No magic number, no encryption/compression/SHA256 (see oiDL.md).
@@ -308,8 +319,7 @@ SHFile {
     	U16 defineNames[binaryInfos[i].defineCount];		//offset to strings[0]
     	U16 defineValues[binaryInfos[i].defineCount];		//^ [defineCount]
     
-    	U16 uniformNames[binaryInfos[i].uniformCount];		//^ [defineCount + defineValueCount]
-    	(U8, U24) uniforms[binaryInfo[i].uniformCount];		//index into ETypeId_arr, bufferOffset
+    	SHUniform uniforms[binaryInfo[i].uniformCount];
     	U8 uniformData[
             max(uniforms[i].bufferOffset + ETypeId_getBytes(ETypeId_arr[uniforms[i].typeId]))
        	];

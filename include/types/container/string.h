@@ -650,6 +650,17 @@ Error CharString_format(Allocator alloc, CharString *result, const C8 *format, .
 //Parsing and stringifying ETypeId (as long as it's a basic OxC3 base type)
 
 Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result, Error *e_rr);
+Bool CharString_createFromETypeIdHLSL(
+	ETypeId type,
+	Bool has16Bit,
+	Bool hasF64,
+	Bool hasInt64,
+	Bool isStrict,		//Deny 'soft' promotion (e.g. 16-bit becomes 32-bit) if not present
+	Allocator alloc,
+	CharString *result,
+	Error *e_rr
+);
+
 ETypeId ETypeId_parse(CharString str);
 
 #ifdef __cplusplus

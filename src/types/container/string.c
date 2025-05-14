@@ -1454,6 +1454,121 @@ clean:
 	return s_uccess;
 }
 
+Bool CharString_createFromETypeIdHLSL(
+	ETypeId type,
+	Bool has16Bit,
+	Bool hasF64,
+	Bool hasInt64,
+	Bool isStrict,
+	Allocator alloc,
+	CharString *result,
+	Error *e_rr
+) {
+
+	EDataType dataType = ETypeId_getDataType(type);
+	EDataTypeStride dataTypeStride = ETypeId_getDataTypeStride(type);
+	U8 w = ETypeId_getWidth(type);
+	U8 h = ETypeId_getHeight(type);
+
+	Bool s_uccess = true;
+	const C8 *ptr = NULL;
+
+	switch (dataType) {
+
+		default:
+			retError(clean, Error_invalidState(0, "CharString_createFromETypeIdHLSL() HLSL doesn't have a type for a char"))
+
+		case EDataType_Bool:			ptr = "bool";	break;
+
+		case EDataType_UInt:
+		case EDataType_Int:
+			
+			switch(dataTypeStride) {
+
+				default:
+
+					if(isStrict)
+						retError(clean, Error_invalidState(0, "CharString_createFromETypeIdHLSL() HLSL doesn't have xint8_t"))
+
+					ptr = dataType == EDataType_UInt ? (has16Bit ? "uint16_t" : "uint") : (has16Bit ? "int16_t" : "int");
+					break;
+
+				case EDataTypeStride_16:
+
+					if (isStrict && !has16Bit)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have xint16_t enabled"
+						))
+
+					ptr = dataType == EDataType_UInt ? (has16Bit ? "uint16_t" : "uint") : (has16Bit ? "int16_t" : "int");
+					break;
+
+				case EDataTypeStride_32:
+					ptr = dataType == EDataType_UInt ? "uint" : "int";
+					break;
+
+				case EDataTypeStride_64:
+
+					if (!hasInt64)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have xint64_t enabled"
+						))
+
+					ptr = dataType == EDataType_UInt ? "uint64_t" : "int64_t";
+					break;
+			}
+
+			break;
+
+		case EDataType_Float:
+			
+			switch(dataTypeStride) {
+
+				default:
+					ptr = "float";
+					break;
+
+				case EDataTypeStride_16:
+
+					if (isStrict && !has16Bit)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have float16_t enabled"
+						))
+
+					ptr = has16Bit ? "float16_t" : "float";
+					break;
+
+				case EDataTypeStride_64:
+
+					if (!hasF64)
+						retError(clean, Error_invalidState(
+							0, "CharString_createFromETypeIdHLSL() HLSL doesn't have double enabled"
+						))
+
+					ptr = "double";
+					break;
+			}
+			
+			break;
+	}
+
+	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result))
+
+	if(w == 1 && h == 1)
+		goto clean;
+
+	gotoIfError2(clean, CharString_append(result, C8_createDec(w), alloc))
+
+	if(h == 1)
+		goto clean;
+
+	gotoIfError2(clean, CharString_append(result, 'x', alloc))
+	gotoIfError2(clean, CharString_append(result, C8_createDec(h), alloc))
+
+clean:
+	return s_uccess;
+}
+
 ETypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeStride stride) {
 
 	U64 strl = CharString_length(str);

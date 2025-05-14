@@ -1156,7 +1156,7 @@ Bool Compiler_parseValue(
 					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected Bool/B1 'true' or 'false'"))
 
 				if(isTrue)
-					value->vu64[0] |= (U64)1 << (*dstOff++);
+					value->vu64[0] |= (U64)1 << ((*dstOff)++);
 
 				break;
 			}
@@ -1178,7 +1178,7 @@ Bool Compiler_parseValue(
 								0, 0, "Compiler_parseValue() passed float value not representable as F16"
 							))
 
-						value->vu16[*dstOff++] = v;
+						value->vu16[(*dstOff)++] = v;
 						break;
 					}
 
@@ -1191,7 +1191,7 @@ Bool Compiler_parseValue(
 								0, 0, "Compiler_parseValue() passed float value not representable as F32"
 							))
 
-						value->vf32[*dstOff++] = v;
+						value->vf32[(*dstOff)++] = v;
 						break;
 					}
 
@@ -1202,7 +1202,7 @@ Bool Compiler_parseValue(
 								0, 0, "Compiler_parseValue() passed float value not representable as F64"
 							))
 
-						value->vf64[*dstOff++] = res;
+						value->vf64[(*dstOff)++] = res;
 						break;
 				}
 
@@ -1234,10 +1234,10 @@ Bool Compiler_parseValue(
 					))
 
 				switch(bits) {
-					default:	value->vu8[*dstOff++] = (U8) res;		break;
-					case 16:	value->vu16[*dstOff++] = (U16) res;		break;
-					case 32:	value->vu32[*dstOff++] = (U32) res;		break;
-					case 64:	value->vu64[*dstOff++] = res;			break;
+					default:	value->vu8[(*dstOff)++] = (U8) res;		break;
+					case 16:	value->vu16[(*dstOff)++] = (U16) res;		break;
+					case 32:	value->vu32[(*dstOff)++] = (U32) res;		break;
+					case 64:	value->vu64[(*dstOff)++] = res;			break;
 				}
 
 				break;
@@ -1278,10 +1278,10 @@ Bool Compiler_parseValue(
 					))
 
 				switch(bits) {
-					default:	value->vi8[*dstOff++] = (I8) res;		break;
-					case 16:	value->vi16[*dstOff++] = (I16) res;		break;
-					case 32:	value->vi32[*dstOff++] = (I32) res;		break;
-					case 64:	value->vi64[*dstOff++] = res;			break;
+					default:	value->vi8[(*dstOff)++] = (I8) res;		break;
+					case 16:	value->vi16[(*dstOff)++] = (I16) res;		break;
+					case 32:	value->vi32[(*dstOff)++] = (I32) res;		break;
+					case 64:	value->vi64[(*dstOff)++] = res;			break;
 				}
 
 				break;
@@ -1291,6 +1291,7 @@ Bool Compiler_parseValue(
 				retError(clean, Error_invalidState(0, "Compiler_parseValue() is an invalid type"))
 		}
 
+		++*tokenCounter;
 		goto clean;
 	}
 
@@ -1331,7 +1332,6 @@ Bool Compiler_registerUniform(
 	SHEntryRuntime *runtimeEntry,
 	U32 *tokenCounter,
 	U32 tokenEnd,
-	Bool isFirst,
 	Parser parser,
 	Allocator alloc,
 	Error *e_rr
@@ -1381,7 +1381,7 @@ Bool Compiler_registerUniform(
 
 	gotoIfError3(clean, Token_assertJump(tokenCounter, tokenEnd, ETokenType_Asg, &parser, e_rr))
 			
-	if(*tokenCounter + 1 >= tokenEnd)
+	if(*tokenCounter + 1 > tokenEnd)
 		retError(clean, Error_invalidState(0, "Compiler_registerUniform() invalid syntax, expected 'type name = value'"))
 		
 	//type name = value;
@@ -1393,40 +1393,56 @@ Bool Compiler_registerUniform(
 
 	U64 valLen = ETypeId_getBytes(typeId);
 
-	if(isFirst)
-		gotoIfError2(clean, ListU8_pushBack(&runtimeEntry->uniformsPerCompilation, 0, alloc))
+	//Validate if uniform already exists
+
+	Bool didInit = runtimeEntry->isInitializedFlags & 2;
+	Bool contains = false;
 
 	for(U64 i = 0; i < runtimeEntry->uniforms.length; ++i)
-		if(CharString_equalsStringSensitive(runtimeEntry->uniforms.ptr[i].name, uniformName))
-			retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform already present"))
+		if (CharString_equalsStringSensitive(runtimeEntry->uniforms.ptr[i].name, uniformName)) {
+			contains = true;
+			break;
+		}
+	
+	if (!didInit && contains)
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform already present"))
+
+	else if(didInit && !contains)
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform not present in previous definition"))
 
 	//Insert uniform
 
-	gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &tmp))
 	U64 uniformDatLen = runtimeEntry->uniformData.length;
 
-	if(uniformDatLen + valLen >= U16_MAX)
-		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform buffer data is limited to 65535"))
+	if(!didInit) {
 
-	SHUniformRuntime uniform = (SHUniformRuntime) {
-		.name = tmp,
-		.typeIdShort = ETypeId_mapToShortTypeId(typeId),
-		.dataOffset = (U32) uniformDatLen
-	};
+		gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &tmp))
 
-	inserted = runtimeEntry->uniforms.length;
-	gotoIfError2(clean, ListSHUniformRuntime_pushBack(&runtimeEntry->uniforms, uniform, alloc))
+		if(uniformDatLen + valLen >= U16_MAX)
+			retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform buffer data is limited to 65535"))
 
+		SHUniformRuntime uniform = (SHUniformRuntime) {
+			.name = tmp,
+			.typeIdShort = ETypeId_toShortId(typeId),
+			.dataOffset = (U16) uniformDatLen
+		};
+
+		inserted = runtimeEntry->uniforms.length;
+		gotoIfError2(clean, ListSHUniformRuntime_pushBack(&runtimeEntry->uniforms, uniform, alloc))
+
+		runtimeEntry->uniformStride += (U16) valLen;
+	}
+
+	//Insert uniform data
+	
 	gotoIfError2(clean, ListU8_resize(&runtimeEntry->uniformData, uniformDatLen + valLen, alloc))
-
-	tmp = CharString_createNull();		//Moved
 
 	Buffer_memcpy(
 		Buffer_createRef(runtimeEntry->uniformData.ptrNonConst + uniformDatLen, valLen),
 		Buffer_createRefConst(&value, valLen)
 	);
 
-	++*ListU8_last(runtimeEntry->uniformsPerCompilation);
+	tmp = CharString_createNull();		//Moved
 
 clean:
 
@@ -1869,7 +1885,13 @@ Bool Compiler_parse(
 									parser.tokens.ptr[tokenStart].tokenType == ETokenType_RoundParenthesisStart &&
 									parser.tokens.ptr[tokenEnd].tokenType == ETokenType_RoundParenthesisEnd
 								) {
-									gotoIfError2(clean, ListU8_pushBack(&runtimeEntry.uniformsPerCompilation, 0, alloc))
+
+									if ((runtimeEntry.isInitializedFlags & 2) && runtimeEntry.uniforms.length)
+										retError(clean, Error_invalidState(
+											0, "Compiler_parse() oxc::uniforms annotation mismatches uniform count"
+										))
+
+									runtimeEntry.isInitializedFlags |= 2;
 									break;
 								}
 
@@ -1885,6 +1907,8 @@ Bool Compiler_parse(
 								if(
 									parser.tokens.ptr[tokenStart].tokenType != ETokenType_RoundParenthesisStart ||
 									parser.tokens.ptr[tokenStart + 1].tokenType != ETokenType_Identifier ||
+									parser.tokens.ptr[tokenStart + 2].tokenType != ETokenType_Identifier ||
+									parser.tokens.ptr[tokenStart + 3].tokenType != ETokenType_Asg ||
 									parser.tokens.ptr[tokenEnd].tokenType != ETokenType_RoundParenthesisEnd
 								)
 									retError(clean, Error_invalidParameter(
@@ -1895,13 +1919,19 @@ Bool Compiler_parse(
 								U32 tokenCounter = tokenStart + 1;
 
 								gotoIfError3(clean, Compiler_registerUniform(
-									&runtimeEntry, &tokenCounter, tokenEnd, true, parser, alloc, e_rr
+									&runtimeEntry, &tokenCounter, tokenEnd, parser, alloc, e_rr
 								))
 
+								U32 uniformCount = 1;
+
 								//[[oxc::uniforms(U32 x = 21, B1 y = false)]]
+								//[[oxc::uniforms(U32 x = 21)]]
 								//							^
 
-								for (U32 k = tokenCounter; k < tokenEnd; ) {
+								for (U32 k = tokenCounter; k < tokenEnd + 1; ) {
+
+									if (k == tokenEnd && parser.tokens.ptr[k].tokenType == ETokenType_RoundParenthesisEnd)
+										break;
 
 									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
 										retError(clean, Error_invalidParameter(
@@ -1918,9 +1948,18 @@ Bool Compiler_parse(
 
 									++k;
 									gotoIfError3(clean, Compiler_registerUniform(
-										&runtimeEntry, &k, tokenEnd, false, parser, alloc, e_rr
+										&runtimeEntry, &k, tokenEnd, parser, alloc, e_rr
 									))
+
+									++uniformCount;
 								}
+
+								if (uniformCount != runtimeEntry.uniforms.length)
+									retError(clean, Error_invalidParameter(
+										0, 4, "Compiler_parse() oxc::uniforms mismatches in count with other oxc::uniforms"
+									))
+
+								runtimeEntry.isInitializedFlags |= 2;
 							}
 
 							break;
@@ -2107,6 +2146,74 @@ Bool Compiler_parse(
 					retError(clean, Error_invalidState(
 						0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
 					))
+
+				//Validate uniforms used with stage intrinsic instead of shader.
+
+				if(runtimeEntry.uniforms.length && !runtimeEntry.isShaderAnnotation)
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_parse() tried to enable [[oxc::uniforms(...)]] but [oxc::stage(...)] intrinsic is used. "
+						"This is illegal, because it uses libraries to link with DXIL (and is suboptimal otherwise)."
+					))
+
+				//Validate if uniforms are the same as all other uniforms (excluding contents)
+
+				if (result->shEntriesRuntime.length) {
+
+					SHEntryRuntime first = result->shEntriesRuntime.ptr[0];
+
+					if (first.uniforms.length != runtimeEntry.uniforms.length)
+						retError(clean, Error_invalidState(
+							0,
+							"Compiler_parse() one of the entrypoints enabled uniforms but didn't have the same uniform count"
+						))
+
+					if (first.uniformStride != runtimeEntry.uniformStride)
+						retError(clean, Error_invalidState(
+							0, "Compiler_parse() one of the entrypoints enabled uniforms but didn't have the same types"
+						))
+
+					for (U64 j = 0; j < first.uniforms.length; ++j) {
+
+						U64 k = 0;
+
+						for (; k < runtimeEntry.uniforms.length; ++k)
+							if (CharString_equalsStringSensitive(
+								runtimeEntry.uniforms.ptr[k].name,
+								first.uniforms.ptr[j].name
+							))
+								break;
+
+						if (k == runtimeEntry.uniforms.length)
+							retError(clean, Error_invalidState(
+								0, "Compiler_parse() one of the required uniforms is missing between the next entry"
+							))
+
+						if (runtimeEntry.uniforms.ptr[k].typeIdShort != first.uniforms.ptr[j].typeIdShort)
+							retError(clean, Error_invalidState(
+								0, "Compiler_parse() one of the uniforms did match name but has a mismatching type"
+							))
+
+						if (runtimeEntry.uniforms.ptr[k].dataOffset != first.uniforms.ptr[j].dataOffset)
+							retError(clean, Error_invalidState(
+								0, "Compiler_parse() one of the uniforms did match order"
+							))
+					}
+				}
+
+				//Ensure we didn't define the same uniform multiple times
+
+				U64 stride = runtimeEntry.uniformStride;
+
+				for (U64 j = 1; j < runtimeEntry.uniformData.length / stride; ++j)
+					for (U64 k = 0; k < j; ++k)
+						if(Buffer_eq(
+							Buffer_createRefConst(runtimeEntry.uniformData.ptr + stride * k, stride),
+							Buffer_createRefConst(runtimeEntry.uniformData.ptr + stride * j, stride)
+						))
+							retError(clean, Error_invalidState(
+								0, "Compiler_parse() some of the uniform combinations are duplicated"
+							))
 
 				//Defines reference parsedLiterals, which are owned by the Parser.
 				//The parser goes out of scope at the end of the function, so we have to copy it.

@@ -59,9 +59,9 @@ UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;
 //Simplest variant, only 1 dispatch, allows us to use root constants and works everywhere.
 //Only turn on rotate if sizRot.w != 0
 
-[[oxc::stage("compute")]]
-[[oxc::uniforms()]]
+[[oxc::uniforms(B1 ROTATE = false)]]
 [[oxc::uniforms(B1 ROTATE = true)]]
+[shader("compute")]
 [numthreads(16, 8, 1)]
 void mainSingle(U32x3 id : SV_DispatchThreadID) {
 

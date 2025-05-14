@@ -124,10 +124,10 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Add define values
 
-	U64 uniNamesStart = 0;
-	U64 uniValStart = strings.entryBuffers.length;
+	U64 defineNamesStart = 0;
+	U64 defineValStart = strings.entryBuffers.length;
 
-	if(uniValStart >> 16)
+	if(defineValStart >> 16)
 		retError(clean, Error_invalidState(0, "SHFile_write() exceeded max define count"))
 
 	for(U64 i = 0; i < shFile.binaries.length; ++i) {
@@ -142,10 +142,10 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			CharString str = binary.identifier.defines.ptr[j];
 
-			if(DLFile_find(strings, uniValStart, strings.entryBuffers.length, str) != U64_MAX)
+			if(DLFile_find(strings, defineValStart, strings.entryBuffers.length, str) != U64_MAX)
 				continue;
 
-			if(strings.entryBuffers.length - uniValStart >= (U16)(U16_MAX - 1))
+			if(strings.entryBuffers.length - defineValStart >= (U16)(U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "SHFile_write() DLFile didn't have space for define values"))
 
 			if(isUTF8)
@@ -154,8 +154,37 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(str), alloc, e_rr))
 		}
 	}
+	
+	//Add uniforms
+
+	U64 uniNamesStart = strings.entryBuffers.length;
+
+	for (U64 i = 0; i < shFile.binaries.length; ++i) {
+
+		SHBinaryInfo bin = shFile.binaries.ptr[i];
+		ListSHUniformRuntime uniforms = bin.identifier.uniforms;
+
+		headerSize += uniforms.length * sizeof(SHUniform);
+		headerSize += bin.identifier.uniformData.length;
+
+		for (U64 j = 0; j < uniforms.length; ++j) {
+
+			CharString str = uniforms.ptr[j].name;
+
+			if (DLFile_find(strings, 0, U64_MAX, str) != U64_MAX)
+				continue;
+
+			if (isUTF8)
+				gotoIfError3(clean, DLFile_addEntryUTF8(&strings, CharString_bufferConst(str), alloc, e_rr))
+
+			else gotoIfError3(clean, DLFile_addEntryAscii(&strings, CharString_createRefStrConst(str), alloc, e_rr))
+		}
+	}
 
 	U64 regNameStart = strings.entryBuffers.length;
+
+	if((regNameStart - uniNamesStart) >= U8_MAX)
+		retError(clean, Error_invalidState(0, "SHFile_write() exceeded max uniform count"))
 
 	//Add register names, arrays and shader buffers
 
@@ -387,11 +416,12 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		.sizeTypes = sizeTypes,
 		.binaryCount = (U16) shFile.binaries.length,
 		.stageCount = (U16) shFile.entries.length,
-		.uniqueDefines = (U16) uniValStart,
+		.uniqueDefines = (U16) defineValStart,
 		.includeFileCount = (U16) shFile.includes.length,
 		.semanticCount = (U16) uniqueSemantics,
 		.arrayDimCount = (U16) arrays.length,
-		.registerNameCount = (U16) (includeStart - regNameStart)
+		.registerNameCount = (U16) (includeStart - regNameStart),
+		.uniformNameCount = (U16) (regNameStart - uniNamesStart)
 	};
 
 	headerIt += sizeof(SHHeader);
@@ -464,7 +494,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			.extensions = binary.identifier.extensions,
 			.dormantExt = binary.dormantExtensions,
-			.registerCount = (U16) binary.registers.length
+
+			.registerCount = (U16) binary.registers.length,
+			.uniformCount = (U8) binary.identifier.uniforms.length
 		};
 
 		//Dynamic part
@@ -477,9 +509,33 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		for(U64 j = 0; j < defineCount; ++j) {
 			ListCharString defines = binary.identifier.defines;
-			defineNames[j] = (U16) (DLFile_find(strings, uniNamesStart, uniValStart, defines.ptr[j << 1]) - uniNamesStart);
-			uniValues[j] = (U16) (DLFile_find(strings, uniValStart, includeStart, defines.ptr[(j << 1) | 1]) - uniValStart);
+			defineNames[j] = (U16) (DLFile_find(strings, defineNamesStart, defineValStart, defines.ptr[j << 1]) - defineNamesStart);
+			uniValues[j] = (U16) (DLFile_find(strings, defineValStart, uniNamesStart, defines.ptr[(j << 1) | 1]) - defineValStart);
 		}
+
+		SHUniform *uniforms = (SHUniform*) headerIt;
+
+		for (U64 j = 0; j < binary.identifier.uniforms.length; ++j) {
+
+			SHUniformRuntime uniform = binary.identifier.uniforms.ptr[j];
+
+			uniforms[j] = (SHUniform) {
+				.dataOffset = uniform.dataOffset,
+				.typeIdShort = uniform.typeIdShort,
+				.nameId = (U8)(DLFile_find(strings, uniNamesStart, regNameStart, uniform.name) - uniNamesStart)
+			};
+		}
+
+		headerIt += sizeof(SHUniform) * binary.identifier.uniforms.length;
+
+		U64 uniformLen = binary.identifier.uniformData.length;
+
+		Buffer_memcpy(
+			Buffer_createRef(headerIt, uniformLen),
+			Buffer_createRefConst(binary.identifier.uniformData.ptr, uniformLen)
+		);
+
+		headerIt += binary.identifier.uniformData.length;
 
 		SHRegister *regs = (SHRegister*) headerIt;
 

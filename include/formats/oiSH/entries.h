@@ -19,11 +19,7 @@
 */
 
 #pragma once
-#include "types/container/string.h"
-
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	#include "platforms/ext/listx.h"
-#endif
+#include "formats/oiSH/binaries.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -117,33 +113,16 @@ typedef struct SHEntry {
 
 extern const C8 *SHEntry_stageNames[ESHPipelineStage_Count];
 
-//Runtime SHEntry with some extra information that is used to decide how to compile
-//This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.
-//Then the SHEntry will point to the binaries instead to save space.
-
-typedef struct SHUniformRuntime {
-
-	CharString name;
-
-	U8 pad0;
-	U8 typeIdShort;
-	U16 dataOffset;
-
-	U64 pad1;
-
-} SHUniformRuntime;
-
-TList(SHUniformRuntime);
-
-void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, Allocator alloc);
-
 typedef struct SHEntryRuntime {
 
 	SHEntry entry;
 
 	U16 vendorMask;
-	Bool isShaderAnnotation;			//Switches [shader("string")] and [[oxc::stage("string")]], shader = StateObject
-	Bool isInitialized;
+	U8 isShaderAnnotation;				//Switches [shader("string")] and [[oxc::stage("string")]]
+	U8 isInitializedFlags;				//1 = init, 2 = init oxc::uniforms
+
+	U16 padding;
+	U16 uniformStride;					//How many bytes all uniforms combined take
 
 	ListU32 extensions;					//Explicitly enabled extensions (ESHExtension[])
 
@@ -152,9 +131,8 @@ typedef struct SHEntryRuntime {
 	ListCharString defineNameValues;	//[defineName, defineValue][]
 	ListU8 definesPerCompilation;		//How many defines are relevant for each compilation
 
-	ListSHUniformRuntime uniforms;
-	ListU8 uniformData;
-	ListU8 uniformsPerCompilation;		//How many uniforms are relevant for each compilation
+	ListSHUniformRuntime uniforms;		//Uniforms used in the compilation unit; offset indexes into uniformData
+	ListU8 uniformData;					//(U8[uniformStride])[uniforms.length]
 
 } SHEntryRuntime;
 
@@ -163,10 +141,11 @@ typedef struct SHBinaryInfo SHBinaryInfo;
 typedef enum ESHBinaryType ESHBinaryType;
 typedef enum ESHExtension ESHExtension;
 
-U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime);
+U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime);				//How many binaries are stored (compile + link)
+U32 SHEntryRuntime_getCombinationsCompiled(SHEntryRuntime runtime);		//How many binaries are compiled
 
 Bool SHEntryRuntime_asBinaryInfo(
-	SHEntryRuntime runtime,
+	const SHEntryRuntime *runtime,
 	U16 combinationId,
 	ESHBinaryType binaryType,
 	Buffer buf,
@@ -176,7 +155,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 );
 
 Bool SHEntryRuntime_asBinaryIdentifier(
-	SHEntryRuntime runtime,
+	const SHEntryRuntime *runtime,
 	U16 combinationId,
 	SHBinaryIdentifier *binaryIdentifier,
 	Error *e_rr

@@ -492,10 +492,6 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		}
 	}
 
-	//Copy uniforms
-
-	todo
-
 	//Copy registers
 
 	if(binaries->registers.length) {

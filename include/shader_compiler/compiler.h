@@ -56,7 +56,8 @@ typedef struct CompilerSettings {
 
 	Bool debug;
 	Bool infoAboutIncludes;		//Saves extra include info, useful for debugging includes or hot shader reload
-	U8 padding[6];
+	Bool isLib;
+	U8 padding[5];
 
 } CompilerSettings;
 

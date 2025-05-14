@@ -19,6 +19,13 @@
 */
 
 #pragma once
+
+#ifndef DISALLOW_SH_OXC3_PLATFORMS
+	#include "platforms/ext/listx.h"
+#else
+	#include "types/container/list.h"
+#endif
+
 #include "formats/oiSH/registers.h"
 
 #ifdef __cplusplus
@@ -141,6 +148,32 @@ typedef enum ESHBinaryFlags {
 } ESHBinaryFlags;
 
 extern const C8 *ESHVendor_names[ESHVendor_Count + 1];
+
+typedef struct SHUniform {
+	U16 dataOffset;
+	TypeIdShort typeIdShort;		//< ETypeId_Max
+	U8 nameId;
+} SHUniform;
+
+//Runtime SHEntry with some extra information that is used to decide how to compile
+//This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.
+//Then the SHEntry will point to the binaries instead to save space.
+
+typedef struct SHUniformRuntime {
+
+	CharString name;
+
+	U8 pad0;
+	TypeIdShort typeIdShort;
+	U16 dataOffset;
+
+	U32 pad1;
+
+} SHUniformRuntime;
+
+TList(SHUniformRuntime);
+
+void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, Allocator alloc);
 
 typedef struct SHBinaryIdentifier {
 

@@ -976,9 +976,11 @@ Bool Compiler_finalizeEntrypoint(
 			retError(clean, Error_invalidState(0, "Compiler_finalizeEntrypoint() couldn't acquire spin lock"))
 	}
 
-	didInit = !entry->isInitialized;
+	didInit = false;
 
-	if (!entry->isInitialized) {
+	if (!(entry->isInitializedFlags & 1)) {
+
+		didInit = true;
 
 		//Store payloadSize, intersectionSize, localSize, inputs, outputs
 
@@ -1006,7 +1008,7 @@ Bool Compiler_finalizeEntrypoint(
 
 		gotoIfError3(clean, ListCharString_move(uniqueSemantics, alloc, &entry->entry.semanticNames, e_rr))
 
-		entry->isInitialized = true;
+		entry->isInitializedFlags |= 1;
 	}
 
 	//Compare to ensure we have the exact same properties
@@ -1079,6 +1081,8 @@ Bool Compiler_compile(
 	IDxcBlob *resultBlob = NULL;
 	Bool hasErrors = false;
 	CharString tempStr = CharString_createNull();
+	CharString tempStr1 = CharString_createNull();
+	CharString tmpFile = CharString_createNull();
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
 
 	Compiler_defineStrings;
@@ -1141,16 +1145,19 @@ Bool Compiler_compile(
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr))
 
 			else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1spirv1.4", alloc, e_rr))
+				
+			Bool isLib = settings.isLib;
 
 			if(
 				toCompile.stageType == ESHPipelineStage_Vertex ||
 				toCompile.stageType == ESHPipelineStage_Domain ||
 				toCompile.stageType == ESHPipelineStage_GeometryExt ||
-				toCompile.stageType == ESHPipelineStage_MeshExt
+				toCompile.stageType == ESHPipelineStage_MeshExt ||
+				isLib
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr))
 
-			else if(toCompile.stageType == ESHPipelineStage_Pixel)
+			if(toCompile.stageType == ESHPipelineStage_Pixel || isLib)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-position-w", alloc, e_rr))
 
 			if(CharString_length(toCompile.entrypoint))
@@ -1250,7 +1257,9 @@ Bool Compiler_compile(
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr))
 
-		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix((ESHPipelineStage) toCompile.stageType);
+		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix(
+			settings.isLib ? ESHPipelineStage_Count : (ESHPipelineStage) toCompile.stageType
+		);
 
 		U32 major = toCompile.shaderVersion >> 8;
 		U32 minor = (U8)toCompile.shaderVersion;
@@ -1258,6 +1267,93 @@ Bool Compiler_compile(
 		gotoIfError2(clean, CharString_format(alloc, &tempStr, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor))
 		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
 		tempStr = CharString_createNull();
+
+		//$$<X> foreach uniform
+		//This will point towards the function export if DXIL, otherwise it'll be the spec constant directly
+
+		Bool isDXIL = settings.outputType == ESHBinaryType_DXIL;
+
+		if (isDXIL)
+			for (U32 i = 0; i < toCompile.uniforms.length; ++i) {
+			
+				CharString uniformName = toCompile.uniforms.ptr[i].name;
+
+				gotoIfError2(clean, CharString_format(
+
+					alloc, &tempStr,
+
+					"-D$$%.*s=($$specConst_%.*s())",
+
+					(int) CharString_length(uniformName),
+					uniformName.ptr,
+
+					(int) CharString_length(uniformName),
+					uniformName.ptr
+				))
+
+				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+				tempStr = CharString_createNull();
+			}
+
+		//TODO: Add exports or spec constants to input
+		//SPIRV:
+		//#line 1 "Spec constants (SPIRV)"
+		//[[vk::constant_id(N)]] const T $$%.*s;
+		//#line 1
+		//DXIL:
+		//#line 1 "Spec constants (DXIL)"
+		//T $$specConst_%.*s();
+		//#line 1
+
+		if (toCompile.uniforms.length) {
+
+			gotoIfError2(clean, CharString_createCopy(
+				CharString_createRefCStrConst(
+					isDXIL ? "#line 1 \"Spec constants (DXIL)\"\n" : "#line 1 \"Spec constants (SPIRV)\"\n"
+				),
+				alloc,
+				&tmpFile
+			))
+
+			Bool has16Bit = toCompile.extensions & ESHExtension_16BitTypes;
+			Bool hasInt64 = toCompile.extensions & ESHExtension_I64;
+			Bool hasF64   = toCompile.extensions & ESHExtension_F64;
+
+			for (U64 i = 0; i < toCompile.uniforms.length; ++i) {
+
+				SHUniformRuntime uniform = toCompile.uniforms.ptr[i];
+
+				gotoIfError3(clean, CharString_createFromETypeIdHLSL(
+					ETypeId_arr[uniform.typeIdShort],
+					has16Bit,
+					hasF64,
+					hasInt64,
+					false,
+					alloc, &tempStr, e_rr
+				))
+
+				if(isDXIL)
+					gotoIfError2(clean, CharString_format(
+						alloc, &tempStr1, "%s $$specConst_%.*s();\n",
+						tempStr.ptr,
+						(int) CharString_length(uniform.name), uniform.name.ptr
+					))
+
+				else gotoIfError2(clean, CharString_format(
+					alloc, &tempStr1, "[[vk::constant_id(%" PRIu64 ")]] const %s $$%.*s;\n",
+					i,
+					tempStr.ptr,
+					(int) CharString_length(uniform.name), uniform.name.ptr
+				))
+
+				gotoIfError2(clean, CharString_appendString(&tmpFile, tempStr1, alloc))
+				CharString_free(&tempStr, alloc);
+				CharString_free(&tempStr1, alloc);
+			}
+
+			gotoIfError2(clean, CharString_appendString(&tmpFile, CharString_createRefCStrConst("#line 1\n"), alloc))
+			gotoIfError2(clean, CharString_appendString(&tmpFile, settings.string, alloc))
+		}
 
 		//$<X> foreach define
 
@@ -1319,8 +1415,8 @@ Bool Compiler_compile(
 		//Compile
 
 		DxcBuffer buffer{
-			.Ptr = settings.string.ptr,
-			.Size = CharString_length(settings.string),
+			.Ptr = tmpFile.ptr ? tmpFile.ptr : settings.string.ptr,
+			.Size = tmpFile.ptr ? CharString_length(tmpFile) : CharString_length(settings.string),
 			.Encoding = DXC_CP_UTF8
 		};
 
@@ -1419,6 +1515,8 @@ clean:
 
 	Compiler_freeStrings;
 	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr1, alloc);
+	CharString_free(&tmpFile, alloc);
 	ListCharString_freeUnderlying(&stringsUTF8, alloc);
 	return s_uccess;
 }

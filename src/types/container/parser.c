@@ -64,7 +64,7 @@ Bool Token_assertJump(
 	if(!tokenCounter || *tokenCounter >= tokenEnd)
 		retError(clean, Error_invalidParameter(0, 0, "Token_assertJump() tokenCounter null or out of bounds"))
 
-	gotoIfError3(clean, Token_assert(p->tokens.ptr[*tokenCounter++], type, e_rr))
+	gotoIfError3(clean, Token_assert(p->tokens.ptr[(*tokenCounter)++], type, e_rr))
 
 clean:
 	return s_uccess;

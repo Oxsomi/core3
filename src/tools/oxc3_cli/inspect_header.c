@@ -165,14 +165,16 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			Log_debugLnx(
 				"With %"PRIu16" binaries, %"PRIu16" stages, %"PRIu16" defines, "
-				"%"PRIu16" stored semantics, %"PRIu16" includes, %"PRIu16" arrayDimCount and %"PRIu16" registerNameCount",
+				"%"PRIu16" stored semantics, %"PRIu16" includes, %"PRIu16" arrayDimCount, %"PRIu16" registerNameCount and " 
+				"%"PRIu16" uniformNameCount",
 				shHeader.binaryCount,
 				shHeader.stageCount,
 				shHeader.uniqueDefines,
 				shHeader.semanticCount,
 				shHeader.includeFileCount,
 				shHeader.arrayDimCount,
-				shHeader.registerNameCount
+				shHeader.registerNameCount,
+				shHeader.uniformNameCount
 			);
 
 			break;

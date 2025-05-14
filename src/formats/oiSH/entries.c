@@ -424,12 +424,20 @@ U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime) {
 		U64_max(runtime.shaderVersions.length, 1) *
 		U64_max(runtime.extensions.length, 1) *
 		U64_max(runtime.definesPerCompilation.length, 1) *
-		U64_max(runtime.uniformsPerCompilation.length, 1)
+		U64_max(runtime.uniformData.length / runtime.uniformStride, 1)
+	);
+}
+
+U32 SHEntryRuntime_getCombinationsCompiled(SHEntryRuntime runtime) {
+	return (U32)(
+		U64_max(runtime.shaderVersions.length, 1) *
+		U64_max(runtime.extensions.length, 1) *
+		U64_max(runtime.definesPerCompilation.length, 1)
 	);
 }
 
 Bool SHEntryRuntime_asBinaryIdentifier(
-	SHEntryRuntime runtime,
+	const SHEntryRuntime *runtime,
 	U16 combinationId,
 	SHBinaryIdentifier *binaryIdentifier,
 	Error *e_rr
@@ -437,13 +445,15 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 	Bool s_uccess = true;
 
-	if(!binaryIdentifier)
-		retError(clean, Error_nullPointer(2, "SHEntryRuntime_asBinaryIdentifier()::binaryIdentifier is required"))
+	if(!runtime || !binaryIdentifier)
+		retError(clean, Error_nullPointer(
+			!runtime ? 0 : 2, "SHEntryRuntime_asBinaryIdentifier()::binaryIdentifier and runtime are required"
+		))
 
-	U16 shaderVersions = (U16) U64_max(runtime.shaderVersions.length, 1);
-	U16 extensions = (U16) U64_max(runtime.extensions.length, 1);
-	U16 defines = (U16) U64_max(runtime.definesPerCompilation.length, 1);
-	U16 uniforms = (U16) U64_max(runtime.uniformsPerCompilation.length, 1);
+	U16 shaderVersions = (U16) U64_max(runtime->shaderVersions.length, 1);
+	U16 extensions = (U16) U64_max(runtime->extensions.length, 1);
+	U16 defines = (U16) U64_max(runtime->definesPerCompilation.length, 1);
+	U16 uniforms = (U16) U64_max(runtime->uniformData.length / runtime->uniformStride, 1);
 
 	U16 shaderVersion = combinationId % shaderVersions;
 	combinationId /= shaderVersions;
@@ -463,10 +473,10 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 		))
 
 	*binaryIdentifier = (SHBinaryIdentifier) {
-		.entrypoint = runtime.isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime.entry.name),
-		.extensions = runtime.extensions.length ? runtime.extensions.ptr[extensionId] : 0,
-		.shaderVersion = runtime.shaderVersions.length ? runtime.shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL(6, 5),
-		.stageType = runtime.entry.stage
+		.entrypoint = runtime->isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime->entry.name),
+		.extensions = runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0,
+		.shaderVersion = runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL(6, 5),
+		.stageType = runtime->entry.stage
 	};
 
 	//Combine raytracing shaders, since they don't have different configs
@@ -476,34 +486,30 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	)
 		binaryIdentifier->stageType = ESHPipelineStage_RtStartExt;
 
-	if(runtime.definesPerCompilation.length) {
+	if(runtime->definesPerCompilation.length) {
 
 		U64 defineOffset = 0;
 
 		for(U64 i = 0; i < defineId; ++i)
-			defineOffset += runtime.definesPerCompilation.ptr[i];
+			defineOffset += runtime->definesPerCompilation.ptr[i];
 
-		if(runtime.definesPerCompilation.ptr[defineId])
+		if(runtime->definesPerCompilation.ptr[defineId])
 			gotoIfError2(clean, ListCharString_createRefConst(
-				runtime.defineNameValues.ptr + (defineOffset << 1),
-				(U64)runtime.definesPerCompilation.ptr[defineId] << 1,
+				runtime->defineNameValues.ptr + (defineOffset << 1),
+				(U64)runtime->definesPerCompilation.ptr[defineId] << 1,
 				&binaryIdentifier->defines
 			))
 	}
 
-	if(runtime.uniformsPerCompilation.length) {
+	if(runtime->uniforms.length) {
 
-		U64 uniformOffset = 0;
+		U64 uniformOffset = runtime->uniformStride * uniformId;
 
-		for(U64 i = 0; i < uniformId; ++i)
-			uniformOffset += runtime.uniformsPerCompilation.ptr[i];
+		gotoIfError2(clean, ListU8_createRefConst(
+			runtime->uniformData.ptr + uniformOffset, runtime->uniformStride, &binaryIdentifier->uniformData
+		))
 
-		if(runtime.uniformsPerCompilation.ptr[uniformId])
-			gotoIfError2(clean, ListCharString_createRefConst(
-				runtime.defineNameValues.ptr + (defineOffset << 1),
-				(U64)runtime.uniformsPerCompilation.ptr[deuniformIdfineId] << 1,
-				&binaryIdentifier->defines
-			))
+		binaryIdentifier->uniforms = ListSHUniformRuntime_createRefFromList(runtime->uniforms);
 	}
 
 clean:
@@ -511,7 +517,7 @@ clean:
 }
 
 Bool SHEntryRuntime_asBinaryInfo(
-	SHEntryRuntime runtime,
+	const SHEntryRuntime *runtime,
 	U16 combinationId,
 	ESHBinaryType binaryType,
 	Buffer buf,
@@ -533,8 +539,8 @@ Bool SHEntryRuntime_asBinaryInfo(
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, combinationId, &binaryInfo->identifier, e_rr))
 
 	binaryInfo->dormantExtensions = dormantExtensions;
-	binaryInfo->vendorMask = runtime.vendorMask;
-	binaryInfo->hasShaderAnnotation = runtime.isShaderAnnotation;
+	binaryInfo->vendorMask = runtime->vendorMask;
+	binaryInfo->hasShaderAnnotation = runtime->isShaderAnnotation;
 	binaryInfo->binaries[binaryType] = Buffer_createRefFromBuffer(buf, true);
 
 clean:
@@ -707,9 +713,9 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 		k += defines;
 	}
 
-	for (U64 i = 0, k = 0; i < entry.uniformsPerCompilation.length; ++i) {
+	for (U64 i = 0; i < entry.uniformData.length / entry.uniformStride; ++i) {
 
-		U8 uniforms = entry.uniformsPerCompilation.ptr[i];
+		U8 uniforms = (U8) entry.uniforms.length;
 
 		if (!uniforms) {
 			Log_debugLn(alloc, "\t[[oxc::uniforms()]]");
@@ -722,7 +728,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 		for (U64 j = 0; j < uniforms; ++j) {
 
-			SHUniformRuntime uniform = entry.uniforms.ptr[j + k];
+			SHUniformRuntime uniform = entry.uniforms.ptr[j];
 
 			ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
 
@@ -755,8 +761,6 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 		}
 
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
-
-		k += uniforms;
 	}
 
 	if(entry.vendorMask == U16_MAX)
@@ -781,7 +785,7 @@ void SHEntry_free(SHEntry *entry, Allocator alloc) {
 
 void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, Allocator alloc) {
 
-	if (!uniforms)
+	if (!uniforms || ListSHUniformRuntime_isConstRef(*uniforms))
 		return;
 
 	for (U64 i = 0; i < uniforms->length; ++i)
@@ -802,7 +806,6 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 	ListU8_free(&entry->definesPerCompilation, alloc);
 	ListCharString_freeUnderlying(&entry->defineNameValues, alloc);
 
-	ListU8_free(&entry->uniformsPerCompilation, alloc);
 	ListU8_free(&entry->uniformData, alloc);
 	ListSHUniformRuntime_freeUnderlying(&entry->uniforms, alloc);
 }

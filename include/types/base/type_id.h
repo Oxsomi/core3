@@ -146,17 +146,13 @@ typedef enum ETypeId {
 
 	ETypeIdFloat(F, EDataType_Float),			//F<16/32/64>
 
-	ETypeIdXIntVecN(I, EDataType_Int),			//I<8/16/32/64>x<2/3/4>
-	ETypeIdXIntVecN(U, EDataType_UInt),			//U<8/16/32/64>x<2/3/4>
-	ETypeIdFloatVecN(),							//F<16/32/64>x<2/3/4>
-
 	ETypeId_B1x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 1, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x3								= makeTypeId(LIBRARYID_DEFAULT, 0, 3, 1, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 4, 1, EDataTypeStride_8, EDataType_Bool),
 
-	ETypeIdXIntMat(I, EDataType_Int),			//I<8/16/32/64>x<1/2/3/4>x<2/3/4>
-	ETypeIdXIntMat(U, EDataType_UInt),			//U<8/16/32/64>x<1/2/3/4>x<2/3/4>
-	ETypeIdFloatMat(),							//F<16/32/64>x<1/2/3/4>x<2/3/4>
+	ETypeIdXIntVecN(I, EDataType_Int),			//I<8/16/32/64>x<2/3/4>
+	ETypeIdXIntVecN(U, EDataType_UInt),			//U<8/16/32/64>x<2/3/4>
+	ETypeIdFloatVecN(),							//F<16/32/64>x<2/3/4>
 
 	ETypeId_B1x1x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 2, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x2x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 2, EDataTypeStride_8, EDataType_Bool),
@@ -172,6 +168,10 @@ typedef enum ETypeId {
 	ETypeId_B1x2x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 4, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x3x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 3, 4, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x4x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 4, 4, EDataTypeStride_8, EDataType_Bool),
+
+	ETypeIdXIntMat(I, EDataType_Int),			//I<8/16/32/64>x<1/2/3/4>x<2/3/4>
+	ETypeIdXIntMat(U, EDataType_UInt),			//U<8/16/32/64>x<1/2/3/4>x<2/3/4>
+	ETypeIdFloatMat(),							//F<16/32/64>x<1/2/3/4>x<2/3/4>
 
 	ETypeId_Max = 193,
 
@@ -191,22 +191,26 @@ static const ETypeId ETypeId_arr[ETypeId_Max] = {
 
 	ETypeIdFloat(F, EDataType_Float),			//F<16/32/64>
 
-	ETypeIdXIntVecN(I, EDataType_Int),			//I<8/16/32/64>x<2/3/4>
-	ETypeIdXIntVecN(U, EDataType_UInt),			//U<8/16/32/64>x<2/3/4>
-	ETypeIdFloatVecN(),							//F<16/32/64>x<2/3/4>
-
 	ETypeId_B1x2,
 	ETypeId_B1x3,
 	ETypeId_B1x4,
 
-	ETypeIdXIntMat(I, EDataType_Int),			//I<8/16/32/64>x<1/2/3/4>x<2/3/4>
-	ETypeIdXIntMat(U, EDataType_UInt),			//U<8/16/32/64>x<1/2/3/4>x<2/3/4>
-	ETypeIdFloatMat(),							//F<16/32/64>x<1/2/3/4>x<2/3/4>
+	ETypeIdXIntVecN(I, EDataType_Int),			//I<8/16/32/64>x<2/3/4>
+	ETypeIdXIntVecN(U, EDataType_UInt),			//U<8/16/32/64>x<2/3/4>
+	ETypeIdFloatVecN(),							//F<16/32/64>x<2/3/4>
 
 	ETypeId_B1x1x2, ETypeId_B1x2x2, ETypeId_B1x3x2, ETypeId_B1x4x2,
 	ETypeId_B1x1x3, ETypeId_B1x2x3, ETypeId_B1x3x3, ETypeId_B1x4x3,
-	ETypeId_B1x1x4, ETypeId_B1x2x4, ETypeId_B1x3x4, ETypeId_B1x4x4
+	ETypeId_B1x1x4, ETypeId_B1x2x4, ETypeId_B1x3x4, ETypeId_B1x4x4,
+
+	ETypeIdXIntMat(I, EDataType_Int),			//I<8/16/32/64>x<1/2/3/4>x<2/3/4>
+	ETypeIdXIntMat(U, EDataType_UInt),			//U<8/16/32/64>x<1/2/3/4>x<2/3/4>
+	ETypeIdFloatMat()							//F<16/32/64>x<1/2/3/4>x<2/3/4>
 };
+
+typedef U8 TypeIdShort;
+
+TypeIdShort ETypeId_toShortId(ETypeId id);
 
 #undef ETIDAsg
 

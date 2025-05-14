@@ -256,6 +256,32 @@ Bool Compiler_precompileShader(
 
 				SHEntryRuntime *entry = &shEntriesRuntime->ptrNonConst[i];
 
+				//Copy uniforms
+
+				ListSHUniformRuntime prev = entry->uniforms;
+				Bool usePrev = ListSHUniformRuntime_isRef(prev);
+
+				if (usePrev) {
+					entry->uniforms = (ListSHUniformRuntime) { 0 };
+					gotoIfError2(clean, ListSHUniformRuntime_createCopy(prev, alloc, &entry->uniforms))
+				}
+
+				for(U64 j = 0; j < entry->uniforms.length; ++j) {
+
+					CharString str = usePrev ? prev.ptr[j].name : entry->uniforms.ptr[j].name;
+
+					if (usePrev || CharString_isRef(str)) {
+						entry->uniforms.ptrNonConst[j].name = CharString_createNull();
+						gotoIfError2(clean, CharString_createCopy(str, alloc, &entry->uniforms.ptrNonConst[j].name))
+					}
+				}
+
+				if (ListU8_isRef(entry->uniformData)) {
+					ListU8 tmp = (ListU8) { 0 };
+					gotoIfError2(clean, ListU8_createCopy(entry->uniformData, alloc, &tmp))
+					entry->uniformData = tmp;
+				}
+
 				//Copy define names if needed
 
 				for (U64 j = 0; j < entry->defineNameValues.length; ++j) {
@@ -349,13 +375,17 @@ Bool Compiler_getUniqueCompiles(
 
 		SHEntryRuntime runtime = runtimeEntries.ptr[i];
 
-		for (U64 j = 0; j < SHEntryRuntime_getCombinations(runtime); ++j) {
+		//Note: Since compiled combinations excludes uniforms, it'll "compile" for uniformId 0 which will later be
+		//		explicitly linked for the real uniform information.
+		//		This means the compiler will only do 1 compile step, but multiple linking steps for the uniforms.
+
+		for (U64 j = 0; j < SHEntryRuntime_getCombinationsCompiled(runtime); ++j) {
 
 			if(j >> 16)
 				retError(clean, Error_overflow(1, j, 1 << 16, "Compiler_getUniqueCompiles() j out of bounds"))
 
 			SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, (U16) j, &binaryIdentifier, e_rr))
+			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtime, (U16) j, &binaryIdentifier, e_rr))
 
 			//Find SHBinaryIdentifier or not
 
@@ -429,7 +459,10 @@ Bool Compiler_compileShaderSingle(
 
 	SHEntryRuntime entry = runtimeEntries.ptrNonConst[runtimeEntryId];
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
-	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(entry, combinationId, &binaryIdentifier, e_rr))
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&entry, combinationId, &binaryIdentifier, e_rr))
+
+	settings.isLib = entry.isShaderAnnotation;
+
 	gotoIfError3(clean, Compiler_compile(compiler, settings, binaryIdentifier, lock, runtimeEntries, alloc, dest, e_rr))
 
 	if(enableLogging)
@@ -767,7 +800,7 @@ Bool Compiler_registerShaderBinary(
 	CompileResult *tempResult,
 	ESHBinaryType compileMode,
 	CharString sourceFile,
-	SHEntryRuntime runtimeEntry,
+	const SHEntryRuntime *runtimeEntry,
 	U16 combinationId,
 	Allocator alloc,
 	Error *e_rr
@@ -1254,7 +1287,7 @@ Bool Compiler_compileShaders(
 				compileResult,
 				allCompileOutputs.ptr[jobId],
 				allFiles.ptr[jobId],
-				shEntries.ptr[jobId].ptr[runtimeEntryId],
+				&shEntries.ptr[jobId].ptr[runtimeEntryId],
 				combinationId,
 				alloc,
 				e_rr
@@ -1372,7 +1405,7 @@ Bool Compiler_compileShaders(
 					//Add binary to SHFile
 
 					else gotoIfError3(clean, Compiler_registerShaderBinary(
-						&shFile, &tempResult, allCompileOutputs.ptr[i], allFiles.ptr[i], runtimeEntry, combinationId,
+						&shFile, &tempResult, allCompileOutputs.ptr[i], allFiles.ptr[i], &runtimeEntry, combinationId,
 						alloc, e_rr
 					))
 				}
