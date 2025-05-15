@@ -205,6 +205,30 @@ Bool Compiler_processDXIL(
 	Error *e_rr
 );
 
+Bool Compiler_linkSPIRV(
+	Compiler compiler,
+	ListBuffer inputs,					//Input SPIRV(s); library data
+	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
+	ListU8 uniformData,					//Contents of the current compilation
+	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	ListCompileError *errors,
+	Buffer *result,						//Output SPIRV: Either library or specialized binary (PS/GS/CS/etc.)
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_linkDXIL(
+	Compiler compiler,
+	ListBuffer inputs,					//Input DXIL(s); library data
+	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
+	ListU8 uniformData,					//Contents of the current compilation
+	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	ListCompileError *errors,
+	Buffer *result,						//Output DXIL: Either library or specialized binary (PS/GS/CS/etc.)
+	Allocator alloc,
+	Error *e_rr
+);
+
 Bool Compiler_finalizeEntrypoint(		//Push reflection data into final entrypoint
 	U32 localSize[3],					//If compute-adj (workgraph, mesh shaders too) the local size per group
 	U8 payloadSize,						//If miss/hit/callable, the payload size that gets transmitted (bytes)

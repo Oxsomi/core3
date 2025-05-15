@@ -865,6 +865,32 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_specializeBinary(
+	SHFile *shFile,
+	CompileResult *tempResult,
+	ESHBinaryType compileMode,
+	CharString sourceFile,
+	const SHEntryRuntime *runtimeEntry,
+	U16 combinationId,
+	U16 uniformCombinationId,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	U16 newComboId = combinationId + uniformCombinationId * combos;
+
+	if(compileMode == ESHBinaryType_SPIRV)
+		gotoIfError3(clean, Compiler_linkSPIRV(compiler, inputs, uniforms, uniformData, entrypoint, result, alloc, e_rr))
+	
+	else gotoIfError3(clean, Compiler_linkDXIL(compiler, inputs, uniforms, uniformData, entrypoint, result, alloc, e_rr))
+
+	gotoIfError3(clean, Compiler_registerShaderBinary(shFile, &newTempResult, compileMode, sourceFile, runtimeEntry, newComboId, alloc, e_rr))
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_registerShaderEntries(SHFile *shFile, ListSHEntryRuntime entries, ListU16 binaryIndices, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -1404,13 +1430,52 @@ Bool Compiler_compileShaders(
 
 					//Add binary to SHFile
 
-					else gotoIfError3(clean, Compiler_registerShaderBinary(
-						&shFile, &tempResult, allCompileOutputs.ptr[i], allFiles.ptr[i], &runtimeEntry, combinationId,
-						alloc, e_rr
-					))
+					Bool allowRawRegister = !runtimeEntry.uniforms.length;		//If an unlinked / unspecialized version can be registered
+
+					//Lib files need to be specialized per shader annotation if uniforms are present
+					//or per entrypoint for graphics shaders
+
+					if (runtimeEntry.isShaderAnnotation) {
+
+						//TODO:
+						//for(all entrypoints):
+						//	if graphics/compute:
+						//		allowRawRegister = false;
+						//		break;
+						//	if non graphics (rt, workgraph):
+						//		register binary for that entrypoint
+
+						for (U64 k = 0; k < U64_safeDiv(runtimeEntry.uniformData.length, runtimeEntry.uniformStride); ++k)
+							gotoIfError3(clean, Compiler_specializeBinary(
+								&shFile,
+								&tempResult,
+								allCompileOutputs.ptr[i],
+								allFiles.ptr[i],
+								&runtimeEntry,
+								combinationId,
+								k,
+								alloc,
+								e_rr
+							))
+					}
+
+					//Regular shaders can not use uniforms or multiple entrypoints
+
+					if(allowRawRegister)
+						gotoIfError3(clean, Compiler_registerShaderBinary(
+							&shFile,
+							&tempResult,
+							allCompileOutputs.ptr[i],
+							allFiles.ptr[i],
+							&runtimeEntry,
+							combinationId,
+							alloc,
+							e_rr
+						))
 				}
 
 				//Link entrypoint to binaries
+				//TODO: binaryIndices changed of course
 
 				if (didSucceed)
 					gotoIfError3(clean, Compiler_registerShaderEntries(&shFile, runtimeEntries, binaryIndices, alloc, e_rr))

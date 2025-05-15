@@ -424,7 +424,7 @@ U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime) {
 		U64_max(runtime.shaderVersions.length, 1) *
 		U64_max(runtime.extensions.length, 1) *
 		U64_max(runtime.definesPerCompilation.length, 1) *
-		U64_max(runtime.uniformData.length / runtime.uniformStride, 1)
+		U64_max(U64_safeDiv(runtime.uniformData.length, runtime.uniformStride), 1)
 	);
 }
 
@@ -453,7 +453,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	U16 shaderVersions = (U16) U64_max(runtime->shaderVersions.length, 1);
 	U16 extensions = (U16) U64_max(runtime->extensions.length, 1);
 	U16 defines = (U16) U64_max(runtime->definesPerCompilation.length, 1);
-	U16 uniforms = (U16) U64_max(runtime->uniformData.length / runtime->uniformStride, 1);
+	U16 uniforms = (U16) U64_max(U64_safeDiv(runtime->uniformData.length, runtime->uniformStride), 1);
 
 	U16 shaderVersion = combinationId % shaderVersions;
 	combinationId /= shaderVersions;
@@ -713,7 +713,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 		k += defines;
 	}
 
-	for (U64 i = 0; i < entry.uniformData.length / entry.uniformStride; ++i) {
+	for (U64 i = 0; i < U64_safeDiv(entry.uniformData.length, entry.uniformStride); ++i) {
 
 		U8 uniforms = (U8) entry.uniforms.length;
 

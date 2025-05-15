@@ -26,7 +26,8 @@
 #define XINT_OP_IMPL(T)													\
 T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }					\
 T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }					\
-T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }
+T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }	\
+T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }
 
 const U64 U64_EXP10[] = {
 	1,

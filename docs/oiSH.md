@@ -396,6 +396,8 @@ All includes must have reproducible hashes (regardless of OS) as noted in the CR
 The following define the requirements of binaries embedded in oiSH files.
 
 - All capabilities have to match the extensions known by oiSH, otherwise it is considered to be an incompatible binary and undefined behavior is imminent if produced by a non standard oiSH writer. As an example; if RayReorder is used in a SPIRV shader, it must be present as an extension for that binary too.
+- Graphics shaders and compute shader must only contain 1 entrypoint (in spirv with the name main). You can use the linker to satisfy this behavior.
+  - This is to minify the runtime to avoid it from having to include DXC or SPIRV-Tools for further processing of shaders.
 - Payload + intersection size must stay within <=128 and <=32 bytes respectively.
 
 ### SPIRV spec

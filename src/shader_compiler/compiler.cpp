@@ -1082,6 +1082,7 @@ Bool Compiler_compile(
 	Bool hasErrors = false;
 	CharString tempStr = CharString_createNull();
 	CharString tempStr1 = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
 	CharString tmpFile = CharString_createNull();
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
 
@@ -1298,7 +1299,7 @@ Bool Compiler_compile(
 		//TODO: Add exports or spec constants to input
 		//SPIRV:
 		//#line 1 "Spec constants (SPIRV)"
-		//[[vk::constant_id(N)]] const T $$%.*s;
+		//[[vk::constant_id(N)]] const T $$%.*s = (zero);
 		//#line 1
 		//DXIL:
 		//#line 1 "Spec constants (DXIL)"
@@ -1319,18 +1320,23 @@ Bool Compiler_compile(
 			Bool hasInt64 = toCompile.extensions & ESHExtension_I64;
 			Bool hasF64   = toCompile.extensions & ESHExtension_F64;
 
+			EHLSLStringifyFlags flags = EHLSLStringifyFlags_None;
+
+			if(has16Bit)
+				flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_Has16Bit);
+
+			if(hasF64)
+				flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasF64);
+
+			if(hasInt64)
+				flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasI64);
+
 			for (U64 i = 0; i < toCompile.uniforms.length; ++i) {
 
 				SHUniformRuntime uniform = toCompile.uniforms.ptr[i];
+				ETypeId type = ETypeId_arr[uniform.typeIdShort];
 
-				gotoIfError3(clean, CharString_createFromETypeIdHLSL(
-					ETypeId_arr[uniform.typeIdShort],
-					has16Bit,
-					hasF64,
-					hasInt64,
-					false,
-					alloc, &tempStr, e_rr
-				))
+				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tempStr, e_rr))
 
 				if(isDXIL)
 					gotoIfError2(clean, CharString_format(
@@ -1339,16 +1345,24 @@ Bool Compiler_compile(
 						(int) CharString_length(uniform.name), uniform.name.ptr
 					))
 
-				else gotoIfError2(clean, CharString_format(
-					alloc, &tempStr1, "[[vk::constant_id(%" PRIu64 ")]] const %s $$%.*s;\n",
-					i,
-					tempStr.ptr,
-					(int) CharString_length(uniform.name), uniform.name.ptr
-				))
+				else {
+
+					SHValue value = SHValue{};
+					gotoIfError3(clean, SHValue_stringifyHLSL(&value, type, flags, alloc, &tempStr2, e_rr))
+
+					gotoIfError2(clean, CharString_format(
+						alloc, &tempStr1, "[[vk::constant_id(%" PRIu64 ")]] const %s $$%.*s = %s;\n",
+						i,
+						tempStr.ptr,
+						(int) CharString_length(uniform.name), uniform.name.ptr,
+						tempStr2.ptr
+					))
+				}
 
 				gotoIfError2(clean, CharString_appendString(&tmpFile, tempStr1, alloc))
 				CharString_free(&tempStr, alloc);
 				CharString_free(&tempStr1, alloc);
+				CharString_free(&tempStr2, alloc);
 			}
 
 			gotoIfError2(clean, CharString_appendString(&tmpFile, CharString_createRefCStrConst("#line 1\n"), alloc))
@@ -1516,6 +1530,7 @@ clean:
 	Compiler_freeStrings;
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr1, alloc);
+	CharString_free(&tempStr2, alloc);
 	CharString_free(&tmpFile, alloc);
 	ListCharString_freeUnderlying(&stringsUTF8, alloc);
 	return s_uccess;

@@ -2205,7 +2205,7 @@ Bool Compiler_parse(
 
 				U64 stride = runtimeEntry.uniformStride;
 
-				for (U64 j = 1; j < runtimeEntry.uniformData.length / stride; ++j)
+				for (U64 j = 1; j < U64_safeDiv(runtimeEntry.uniformData.length, stride); ++j)
 					for (U64 k = 0; k < j; ++k)
 						if(Buffer_eq(
 							Buffer_createRefConst(runtimeEntry.uniformData.ptr + stride * k, stride),

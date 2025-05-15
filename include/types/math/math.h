@@ -55,7 +55,8 @@ T T##_pow3(T v);								\
 T T##_pow4(T v);								\
 T T##_pow5(T v);								\
 T T##_exp10(T v);								\
-T T##_exp2(T v)
+T T##_exp2(T v);								\
+T T##_safeDiv(T a, T b)							//A / B is 0 if B is zero
 
 //TODO: Int, uint %/^*+-
 

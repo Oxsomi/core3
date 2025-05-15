@@ -173,10 +173,17 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 	*shFile = (SHFile) { 0 };
 }
 
+typedef enum EStringifyFlavor {
+	EStringifyFlavor_OxC3,
+	EStringifyFlavor_HLSL
+} EStringifyFlavor;
+
 Bool SHValue_stringifyOne(
 	const SHValue *value,
 	ETypeId typeId,
 	U64 *counter,
+	EStringifyFlavor flavor,
+	EHLSLStringifyFlags flags,
 	Allocator alloc,
 	CharString *val,
 	Error *e_rr
@@ -265,6 +272,7 @@ Bool SHValue_stringifyOne(
 			}
 		}
 
+		gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
 		++*counter;
 		goto clean;
 	}
@@ -275,12 +283,22 @@ Bool SHValue_stringifyOne(
 
 	if (h == 1) {
 
+		if(flavor == EStringifyFlavor_HLSL) {
+
+			//float16_t3(1, 2, 3)
+			//^
+
+			gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tmp, e_rr))
+			gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
+			CharString_free(&tmp, alloc);
+		}
+
 		ETypeId single = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, type);
 
 		gotoIfError2(clean, CharString_append(val, '(', alloc))
 
 		for(U64 i = 0; i < w; ++i)
-			gotoIfError3(clean, SHValue_stringifyOne(value, single, counter, alloc, val, e_rr))
+			gotoIfError3(clean, SHValue_stringifyOne(value, single, counter, flavor, flags, alloc, val, e_rr))
 			
 		gotoIfError2(clean, CharString_append(val, ')', alloc))
 		goto clean;
@@ -288,13 +306,23 @@ Bool SHValue_stringifyOne(
 
 	//Matrix
 	//((1, 2, 3), (4, 5, 6), (7, 8, 9))
+
+	if(flavor == EStringifyFlavor_HLSL) {
+
+		//float16_t3x3(float16_t3(1, 2, 3), float16_t3(4, 5, 6), float16_t3(7, 8, 9))
+		//^
+
+		gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tmp, e_rr))
+		gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
+		CharString_free(&tmp, alloc);
+	}
 	
 	ETypeId vec = makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, stride, type);
 
 	gotoIfError2(clean, CharString_append(val, '(', alloc))
 
 	for(U64 i = 0; i < h; ++i)
-		gotoIfError3(clean, SHValue_stringifyOne(value, vec, counter, alloc, val, e_rr))
+		gotoIfError3(clean, SHValue_stringifyOne(value, vec, counter, flavor, flags, alloc, val, e_rr))
 			
 	gotoIfError2(clean, CharString_append(val, ')', alloc))
 
@@ -303,7 +331,15 @@ clean:
 	return s_uccess;
 }
 
-Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, CharString *val, Error *e_rr) {
+Bool SHValue_stringifyWithFlavor(
+	const SHValue *value,
+	ETypeId typeId,
+	EStringifyFlavor flavor,
+	EHLSLStringifyFlags flags,
+	Allocator alloc,
+	CharString *val,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
@@ -311,8 +347,23 @@ Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, Ch
 		retError(clean, Error_invalidState(0, "SHValue_stringify()::val is required but should be empty"))
 
 	U64 counter = 0;
-	gotoIfError3(clean, SHValue_stringifyOne(value, typeId, &counter, alloc, val, e_rr))
+	gotoIfError3(clean, SHValue_stringifyOne(value, typeId, &counter, flavor, flags, alloc, val, e_rr))
 
 clean:
 	return s_uccess;
+}
+
+Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, CharString *val, Error *e_rr) {
+	return SHValue_stringifyWithFlavor(value, typeId, EStringifyFlavor_OxC3, 0, alloc, val, e_rr);
+}
+
+Bool SHValue_stringifyHLSL(
+	const SHValue *value,
+	ETypeId typeId,
+	EHLSLStringifyFlags flags,
+	Allocator alloc,
+	CharString *val,
+	Error *e_rr
+) {
+	return SHValue_stringifyWithFlavor(value, typeId, EStringifyFlavor_HLSL, flags, alloc, val, e_rr);
 }

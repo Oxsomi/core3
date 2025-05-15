@@ -989,6 +989,23 @@ Bool Compiler_processDXIL(
 			U16 waveSizes = 0;
 			Bool hasGroupSize = false;
 
+			switch (funcDesc.ShaderType) {
+				case D3D12_SHVER_PIXEL_SHADER:
+				case D3D12_SHVER_VERTEX_SHADER:
+				case D3D12_SHVER_GEOMETRY_SHADER:
+				case D3D12_SHVER_HULL_SHADER:
+				case D3D12_SHVER_DOMAIN_SHADER:
+				case D3D12_SHVER_COMPUTE_SHADER:
+				case D3D12_SHVER_MESH_SHADER:
+				case D3D12_SHVER_AMPLIFICATION_SHADER:
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_processDXIL() "
+						"Hull, domain, compute, mesh, amplification, compute, geometry, vertex or pixel shaders have to be "
+						"finalized through linking before adding to oiSH file"
+					))
+			}
+
 			//Reflect payload size & attribute size
 
 			if (
@@ -1397,6 +1414,95 @@ clean:
 
 	if(blobUtf8)
 		blobUtf8->Release();
+
+	return s_uccess;
+}
+
+Bool Compiler_linkDXIL(
+	Compiler comp,
+	ListBuffer inputs,
+	ListSHUniformRuntime uniforms,
+	ListU8 uniformData,
+	CharString entrypoint,
+	ListCompileError *errors,
+	Buffer *finalResult,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
+	IDxcLinker *linker = nullptr;
+	IDxcOperationResult *result = nullptr;
+	IDxcBlob *finalShader = nullptr;
+	IDxcBlobEncoding *temp = nullptr;
+
+	//Create linker
+
+	HRESULT hr = DxcCreateInstance(CLSID_DxcLinker, IID_PPV_ARGS(&linker));
+
+	if(FAILED(hr))
+		retError(clean, Error_invalidState(2, "Compiler_create() IDxcLinker couldn't be created"))
+
+	for (U64 i = 0; i < inputs.length; ++i) {
+
+		U64 len = Buffer_length(inputs.ptr[i]);
+
+		if(!len)
+			retError(clean, Error_invalidState(2, "Compiler_create() Inputs contained an empty binary"))
+
+		hr = interfaces->utils->CreateBlobFromPinned(inputs.ptr[i].ptr, len, DXC_CP_ACP, &temp);
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_create() Couldn't create IDxcBlob"))
+
+		push tempStrW
+
+		hr = linker->RegisterLibrary(tempStrW, &temp);
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_create() Couldn't register binary"))
+
+		temp = NULL;		//Moved
+	}
+
+	hr = linker->Link(
+		entrypointW,
+		targetProfileW,
+		libNames,
+		libCount,
+		nullptr,
+		0,
+		&result
+	);
+
+	if (FAILED(hr)) {
+
+		parse into errors;
+
+		retError(clean, Error_invalidOperation(0, "Compiler_linkDXIL() DXIL couldn't be linked"))
+	}
+
+	if(FAILED(result->GetResult(&finalShader)))
+		retError(clean, Error_invalidOperation(0, "Compiler_linkDXIL() final DXIL couldn't be obtained"))
+
+	gotoIfError2(clean, Buffer_createUninitializedBytes(finalShader->GetBufferSize(), alloc, finalResult))
+	Buffer_memcpy(*finalResult, Buffer_createRefConst(finalShader->GetBufferPointer(), finalShader->GetBufferSize()));
+
+clean:
+
+	if(linker)
+		linker->Release();
+
+	if(result)
+		result->Release();
+
+	if(finalShader)
+		finalShader->Release();
+
+	if(temp)
+		temp->Release();
 
 	return s_uccess;
 }

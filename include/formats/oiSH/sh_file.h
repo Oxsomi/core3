@@ -76,6 +76,14 @@ typedef union SHValue {		//Intermediate value (can be packed heavily according t
 } SHValue;
 
 Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, CharString *val, Error *e_rr);
+Bool SHValue_stringifyHLSL(
+	const SHValue *value,
+	ETypeId typeId,
+	EHLSLStringifyFlags flags,
+	Allocator alloc,
+	CharString *val,
+	Error *e_rr
+);
 
 typedef struct SHFile {
 

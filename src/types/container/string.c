@@ -1456,10 +1456,7 @@ clean:
 
 Bool CharString_createFromETypeIdHLSL(
 	ETypeId type,
-	Bool has16Bit,
-	Bool hasF64,
-	Bool hasInt64,
-	Bool isStrict,
+	EHLSLStringifyFlags flags,
 	Allocator alloc,
 	CharString *result,
 	Error *e_rr
@@ -1469,6 +1466,11 @@ Bool CharString_createFromETypeIdHLSL(
 	EDataTypeStride dataTypeStride = ETypeId_getDataTypeStride(type);
 	U8 w = ETypeId_getWidth(type);
 	U8 h = ETypeId_getHeight(type);
+
+	Bool has16Bit	= flags & EHLSLStringifyFlags_Has16Bit;
+	Bool hasF64		= flags & EHLSLStringifyFlags_HasF64;
+	Bool hasInt64	= flags & EHLSLStringifyFlags_HasI64;
+	Bool isStrict	= flags & EHLSLStringifyFlags_IsStrict;
 
 	Bool s_uccess = true;
 	const C8 *ptr = NULL;

@@ -650,12 +650,18 @@ Error CharString_format(Allocator alloc, CharString *result, const C8 *format, .
 //Parsing and stringifying ETypeId (as long as it's a basic OxC3 base type)
 
 Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result, Error *e_rr);
+
+typedef enum EHLSLStringifyFlags {
+	EHLSLStringifyFlags_None			= 0,
+	EHLSLStringifyFlags_Has16Bit		= 1 << 0,
+	EHLSLStringifyFlags_HasF64			= 1 << 1,
+	EHLSLStringifyFlags_HasI64			= 1 << 2,
+	EHLSLStringifyFlags_IsStrict		= 1 << 3		//Deny 'soft' promotion (e.g. 16-bit becomes 32-bit) if not present
+} EHLSLStringifyFlags;
+
 Bool CharString_createFromETypeIdHLSL(
 	ETypeId type,
-	Bool has16Bit,
-	Bool hasF64,
-	Bool hasInt64,
-	Bool isStrict,		//Deny 'soft' promotion (e.g. 16-bit becomes 32-bit) if not present
+	EHLSLStringifyFlags stringifyFlags,
 	Allocator alloc,
 	CharString *result,
 	Error *e_rr
