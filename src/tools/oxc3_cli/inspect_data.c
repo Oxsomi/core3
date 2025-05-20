@@ -748,7 +748,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 								gotoIfError3(cleanSh, Compiler_createx(&comp, e_rr))
 
-								if (!Compiler_createDisassemblyx(comp, binaryType, binary, &tmp, e_rr)) {
+								if (!Compiler_disassemblex(comp, binaryType, binary, &tmp, e_rr)) {
 									Log_errorLnx("%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
 									goto cleanSh;
 								}

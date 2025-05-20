@@ -283,8 +283,8 @@ Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e
 	return Compiler_mergeIncludeInfo(comp, Platform_instance->alloc, infos, e_rr);
 }
 
-Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr) {
-	return Compiler_createDisassembly(comp, type, buf, Platform_instance->alloc, result, e_rr);
+Bool Compiler_disassemblex(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr) {
+	return Compiler_disassemble(comp, type, buf, Platform_instance->alloc, result, e_rr);
 }
 
 const C8 *ignoredWarnings[] = {
@@ -2460,6 +2460,172 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 				}
 			}
 		}
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
+Bool Compiler_disassembleDXIL(Compiler comp, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
+
+Bool Compiler_disassemble(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	switch (type) {
+
+		case ESHBinaryType_SPIRV: 
+			gotoIfError3(clean, Compiler_disassembleSPIRV(buf, alloc, result, e_rr))
+			break;
+
+		case ESHBinaryType_DXIL:
+			gotoIfError3(clean, Compiler_disassembleDXIL(comp, buf, alloc, result, e_rr))
+				break;
+
+		default:
+			retError(clean, Error_unimplemented(0, "Compiler_createDisassembly() has invalid type"))
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_processSPIRV(
+	Buffer *result,						//Required; input & output SPIRV (will be optimized)
+	ListSHRegisterRuntime *registers,	//Required; Output registers
+	Bool isDebug,
+	SHBinaryIdentifier toCompile,
+	SpinLock *lock,						//If not NULL will be used before writing into entries
+	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_processDXIL(
+	Compiler compiler,					//To be able to get reflection data
+	Buffer *result,						//Required; input & output DXIL
+	ListSHRegisterRuntime *registers,	//Required; Output registers
+	Buffer reflectionData,				//If not supplied, will try to get it from DXIL, if both are missing it will fail!
+	SHBinaryIdentifier toCompile,
+	SpinLock *lock,						//If not NULL will be used before writing into entries
+	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_process(
+	Compiler compiler,
+	ESHBinaryType type,
+	Buffer *result,
+	ListSHRegisterRuntime *registers,
+	Buffer reflectionData,
+	Bool isDebug,
+	SHBinaryIdentifier toCompile,
+	SpinLock *lock,
+	ListSHEntryRuntime entries,
+	ESHExtension *demotions,
+	Allocator alloc,
+	Error *e_rr
+) {
+	
+	Bool s_uccess = true;
+
+	switch (type) {
+
+		case ESHBinaryType_SPIRV: 
+
+			gotoIfError3(clean, Compiler_processSPIRV(
+				result, registers, isDebug, toCompile, lock, entries, demotions, alloc, e_rr
+			))
+
+			break;
+
+		case ESHBinaryType_DXIL:
+
+			gotoIfError3(clean, Compiler_processDXIL(
+				compiler, result, registers, reflectionData, toCompile, lock, entries, demotions, alloc, e_rr
+			))
+
+			break;
+
+		default:
+			retError(clean, Error_unimplemented(0, "Compiler_process() has invalid type"))
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_linkSPIRV(
+	Compiler compiler,
+	ListBuffer inputs,					//Input SPIRV(s); library data
+	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
+	ListU8 uniformData,					//Contents of the current compilation
+	ESHPipelineStage stage,				//Whether or not to be a final executable (ESHPipelineStage_Count = keep library)
+	ESHExtension exts,
+	ListCompileError *errors,
+	Buffer *result,						//Output SPIRV: Either library or specialized binary (PS/GS/CS/etc.)
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_linkDXIL(
+	Compiler compiler,
+	ListBuffer inputs,					//Input DXIL(s); library data
+	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
+	ListU8 uniformData,					//Contents of the current compilation
+	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	U16 shaderVersion,					//U8 maj, minor
+	ESHPipelineStage stageType,
+	ESHExtension exts,
+	ListCompileError *errors,
+	Buffer *result,						//Output DXIL: Either library or specialized binary (PS/GS/CS/etc.)
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_link(
+	Compiler compiler,
+	ESHBinaryType type,
+	ListBuffer inputs,
+	ListSHUniformRuntime uniforms,
+	ListU8 uniformData,
+	CharString entrypoint,
+	U16 shaderVersion,
+	ESHPipelineStage stageType,
+	ESHExtension exts,
+	ListCompileError *errors,
+	Buffer *result,
+	Allocator alloc,
+	Error *e_rr
+) {
+	
+	Bool s_uccess = true;
+
+	switch (type) {
+
+		case ESHBinaryType_SPIRV: 
+
+			gotoIfError3(clean, Compiler_linkSPIRV(
+				compiler, inputs, uniforms, uniformData, stageType, exts, errors, result, alloc, e_rr
+			))
+
+			break;
+
+		case ESHBinaryType_DXIL:
+
+			gotoIfError3(clean, Compiler_linkDXIL(
+				compiler, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, errors, result,
+				alloc, e_rr
+			))
+
+			break;
+
+		default:
+			retError(clean, Error_unimplemented(0, "Compiler_link() has invalid type"))
+	}
 
 clean:
 	return s_uccess;

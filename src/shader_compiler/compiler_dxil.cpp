@@ -1424,12 +1424,15 @@ Bool Compiler_linkDXIL(
 	ListSHUniformRuntime uniforms,
 	ListU8 uniformData,
 	CharString entrypoint,
+	U16 shaderVersion,
+	ESHPipelineStage stageType,
+	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *finalResult,
 	Allocator alloc,
 	Error *e_rr
 ) {
-
+	
 	Bool s_uccess = true;
 
 	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
@@ -1437,52 +1440,250 @@ Bool Compiler_linkDXIL(
 	IDxcOperationResult *result = nullptr;
 	IDxcBlob *finalShader = nullptr;
 	IDxcBlobEncoding *temp = nullptr;
+	IDxcBlobEncoding *errs = nullptr;
+	CharString tempStr = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
+	CharString tempStr3 = CharString_createNull();
+	IDxcResult *dxcResult = NULL;
+	IDxcBlobUtf8 *error = NULL;
+	IDxcBlob *resultBlob = NULL;
+	
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16 tmpWStr = ListU16{}, tmpWStr2 = ListU16{}, tmpWStr3 = ListU16{};
+		ListListU16 wstrArr = ListListU16{};
+		ListU16PtrConst wstrConstArr = ListU16PtrConst{};
+	#else
+		ListU32 tmpWStr = ListU32{}, tmpWStr2 = ListU32{}, tmpWStr3 = ListU32{};
+		ListListU32 wstrArr = ListListU32{};
+		ListU32PtrConst wstrConstArr = ListU32PtrConst{};
+	#endif
+
+	Bool isShaderAnnotation =
+		(stageType >= ESHPipelineStage_RtStartExt && stageType >= ESHPipelineStage_RtEndExt) ||
+		stageType >= ESHPipelineStage_Count ||			//Maintain lib linking
+		stageType == ESHPipelineStage_WorkgraphExt;
+
+	Bool hasErrors = false;
 
 	//Create linker
 
 	HRESULT hr = DxcCreateInstance(CLSID_DxcLinker, IID_PPV_ARGS(&linker));
+	Bool has16Bit = exts & ESHExtension_16BitTypes;
 
 	if(FAILED(hr))
-		retError(clean, Error_invalidState(2, "Compiler_create() IDxcLinker couldn't be created"))
+		retError(clean, Error_invalidState(2, "Compiler_linkDXIL() IDxcLinker couldn't be created"))
+
+	//Compile DXIL with only the uniform exports;
+
+	if(uniforms.length) {
+
+		EHLSLStringifyFlags flags = EHLSLStringifyFlags_None;
+
+		if (has16Bit)
+			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_Has16Bit);
+
+		if (exts & ESHExtension_F64)
+			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasF64);
+
+		if (exts & ESHExtension_I64)
+			flags = EHLSLStringifyFlags(flags | EHLSLStringifyFlags_HasI64);
+
+		//Stringify uniforms into exports
+		//export Type $$specConst_Name() { return ...; }
+
+		for (U64 i = 0; i < uniforms.length; ++i) {
+
+			//Uniform info
+
+			SHUniformRuntime uniform = uniforms.ptr[i];
+
+			if(uniform.typeIdShort >= ETypeId_Max)
+				retError(clean, Error_invalidState(2, "Compiler_linkDXIL() typeIdShort out of bounds"))
+
+			ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+			U64 len = ETypeId_getBytes(typeId);
+			
+			if(uniform.dataOffset + len > uniformData.length)
+				retError(clean, Error_invalidState(2, "Compiler_linkDXIL() uniformData out of bounds"))
+
+			//Format start of function export
+
+			gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tempStr3, e_rr))
+
+			gotoIfError2(clean, CharString_format(
+				alloc, &tempStr2,
+				"export %s $$specConst_%.*s() { return ",
+				tempStr3.ptr,
+				(int) CharString_length(uniform.name), uniform.name.ptr
+			))
+
+			CharString_free(&tempStr3, alloc);
+
+			gotoIfError2(clean, CharString_appendString(&tempStr, tempStr2, alloc))
+			CharString_free(&tempStr2, alloc);
+
+			//Turn uniform into real constructor
+
+			SHValue value = SHValue{};
+			Buffer_memcpy(
+				Buffer_createRef(&value, sizeof(value)),
+				Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
+			);
+
+			gotoIfError3(clean, SHValue_stringifyHLSL(&value, typeId, flags, alloc, &tempStr2, e_rr))
+			gotoIfError2(clean, CharString_appendString(&tempStr, tempStr2, alloc))
+			CharString_free(&tempStr2, alloc);
+
+			//Finish function export
+
+			gotoIfError2(clean, CharString_appendString(&tempStr, CharString_createRefCStrConst("; }\n"), alloc))
+		}
+		
+		//Compile binary
+
+		DxcBuffer buffer = DxcBuffer{
+			.Ptr = tempStr.ptr,
+			.Size = CharString_length(tempStr),
+			.Encoding = DXC_CP_UTF8
+		};
+
+		LPCWSTR args[] = { L"-T", L"lib_6_3", L"-enable-16bit-types" };
+
+		hr = interfaces->compiler->Compile(
+			&buffer, args, has16Bit ? 3 : 2, NULL,
+			IID_PPV_ARGS(&dxcResult)
+		);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidState(0, "Compiler_linkDXIL() Compile uniforms failed"))
+		
+		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(1, "Compiler_linkDXIL() fetch errors failed"))
+
+		if(error && error->GetStringLength()) {
+			CharString errStr = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
+			gotoIfError3(clean, Compiler_parseErrors(errStr, alloc, errors, &hasErrors, e_rr))
+		}
+
+		if(error) {
+			error->Release();
+			error = NULL;
+		}
+
+		if (hasErrors)
+			goto clean;
+
+		hr = dxcResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&resultBlob), NULL);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Fetch dxil failed"))
+		
+		LPCWSTR lib = L"uniforms";
+		hr = linker->RegisterLibrary(lib, resultBlob);
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Couldn't register uniforms binary"))
+			
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			gotoIfError2(clean, ListU16PtrConst_pushBack(&wstrConstArr, (const U16*) lib, alloc))
+		#else
+			gotoIfError2(clean, ListU32PtrConst_pushBack(&wstrConstArr, (const U32*) lib, alloc))
+		#endif
+	}
+
+	//Add all libraries
 
 	for (U64 i = 0; i < inputs.length; ++i) {
 
 		U64 len = Buffer_length(inputs.ptr[i]);
 
-		if(!len)
-			retError(clean, Error_invalidState(2, "Compiler_create() Inputs contained an empty binary"))
+		if(!len || len >= U32_MAX)
+			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Inputs contained an empty binary"))
 
-		hr = interfaces->utils->CreateBlobFromPinned(inputs.ptr[i].ptr, len, DXC_CP_ACP, &temp);
+		hr = interfaces->utils->CreateBlobFromPinned(inputs.ptr[i].ptr, (U32) len, DXC_CP_ACP, &temp);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Couldn't create IDxcBlob"))
+
+		gotoIfError2(clean, CharString_format(alloc, &tempStr, "%" PRIu64, i))
+			
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &tmpWStr))
+		#else
+			gotoIfError2(clean, CharString_toUTF32(tempStr, alloc, &tmpWStr))
+		#endif
+
+		CharString_free(&tempStr, alloc);
+
+		hr = linker->RegisterLibrary((const wchar_t*) tmpWStr.ptr, (IDxcBlob*)&temp);
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_create() Couldn't create IDxcBlob"))
-
-		push tempStrW
-
-		hr = linker->RegisterLibrary(tempStrW, &temp);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_create() Couldn't register binary"))
+			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Couldn't register binary"))
+			
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			gotoIfError2(clean, ListListU16_pushBack(&wstrArr, tmpWStr, alloc))
+			gotoIfError2(clean, ListU16PtrConst_pushBack(&wstrConstArr, tmpWStr.ptr, alloc))
+			tmpWStr = ListU16{};
+		#else
+			gotoIfError2(clean, ListListU32_pushBack(&wstrArr, tmpWStr, alloc))
+			gotoIfError2(clean, ListU32PtrConst_pushBack(&wstrConstArr, tmpWStr.ptr, alloc))
+			tmpWStr = ListU32{};
+		#endif
 
 		temp = NULL;		//Moved
 	}
 
+	//Turn inputs into UTF16/UTF32
+
+	if (CharString_length(entrypoint)) {
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			gotoIfError2(clean, CharString_toUTF16(entrypoint, alloc, &tmpWStr2))
+		#else
+			gotoIfError2(clean, CharString_toUTF32(entrypoint, alloc, &tmpWStr2))
+		#endif
+	}
+
+	if (isShaderAnnotation)
+		gotoIfError2(clean, CharString_format(
+			alloc, &tempStr, "lib_%" PRIu8 "_%" PRIu8,
+			(U8)(shaderVersion >> 8), (U8)shaderVersion
+		))
+
+	else gotoIfError2(clean, CharString_format(
+		alloc, &tempStr, "%s_%" PRIu8 "_%" PRIu8,
+		ESHPipelineStage_getStagePrefix(stageType),
+		(U8)(shaderVersion >> 8), (U8)shaderVersion
+	))
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &tmpWStr3))
+	#else
+		gotoIfError2(clean, CharString_toUTF32(tempStr, alloc, &tmpWStr3))
+	#endif
+
+	CharString_free(&tempStr, alloc);
+
+	//Link
+
 	hr = linker->Link(
-		entrypointW,
-		targetProfileW,
-		libNames,
-		libCount,
+		tmpWStr2.ptr ? (const wchar_t*) tmpWStr2.ptr : NULL,
+		(const wchar_t*) tmpWStr3.ptr,
+		(const LPCWSTR*) wstrConstArr.ptr,
+		(U32) wstrConstArr.length,
 		nullptr,
 		0,
 		&result
 	);
 
-	if (FAILED(hr)) {
-
-		parse into errors;
-
-		retError(clean, Error_invalidOperation(0, "Compiler_linkDXIL() DXIL couldn't be linked"))
+	if (SUCCEEDED(result->GetErrorBuffer(&errs))) {
+		CharString errStr = CharString_createRefSizedConst((const C8*)errs->GetBufferPointer(), errs->GetBufferSize(), false);
+		gotoIfError3(clean, Compiler_parseErrors(errStr, alloc, errors, &hasErrors, e_rr))
 	}
+
+	if (FAILED(hr) || hasErrors)
+		retError(clean, Error_invalidOperation(0, "Compiler_linkDXIL() DXIL couldn't be linked"))
 
 	if(FAILED(result->GetResult(&finalShader)))
 		retError(clean, Error_invalidOperation(0, "Compiler_linkDXIL() final DXIL couldn't be obtained"))
@@ -1500,9 +1701,38 @@ clean:
 
 	if(finalShader)
 		finalShader->Release();
+	
+	if(resultBlob)
+		resultBlob->Release();
+
+	if(dxcResult)
+		dxcResult->Release();
+
+	if(error)
+		error->Release();
 
 	if(temp)
 		temp->Release();
 
+	if(errs)
+		errs->Release();
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16_free(&tmpWStr, alloc);
+		ListU16_free(&tmpWStr2, alloc);
+		ListU16_free(&tmpWStr3, alloc);
+		ListListU16_freeUnderlying(&wstrArr, alloc);
+		ListU16PtrConst_free(&wstrConstArr, alloc);
+	#else
+		ListU32_free(&tmpWStr, alloc);
+		ListU32_free(&tmpWStr2, alloc);
+		ListU32_free(&tmpWStr3, alloc);
+		ListListU32_freeUnderlying(&wstrArr, alloc);
+		ListU32PtrConst_free(&wstrConstArr, alloc);
+	#endif
+
+	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr2, alloc);
+	CharString_free(&tempStr3, alloc);
 	return s_uccess;
 }

@@ -1296,7 +1296,7 @@ Bool Compiler_compile(
 				tempStr = CharString_createNull();
 			}
 
-		//TODO: Add exports or spec constants to input
+		//Add exports or spec constants to input
 		//SPIRV:
 		//#line 1 "Spec constants (SPIRV)"
 		//[[vk::constant_id(N)]] const T $$%.*s = (zero);
@@ -1480,13 +1480,15 @@ Bool Compiler_compile(
 			hr = dxcResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&resultBlob), NULL);
 
 			if (FAILED(hr) || !resultBlob)
-				retError(clean, Error_invalidState(0, "Compiler_processDXIL() fetch reflection failed"))
+				retError(clean, Error_invalidState(0, "Compiler_compile() fetch reflection failed"))
 
-			gotoIfError3(clean, Compiler_processDXIL(
+			gotoIfError3(clean, Compiler_process(
 				comp,
+				ESHBinaryType_DXIL,
 				&result->binary,
 				&result->registers,
 				Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
+				settings.debug,
 				toCompile,
 				lock,
 				entries,
@@ -1497,8 +1499,19 @@ Bool Compiler_compile(
 		}
 
 		else if (settings.outputType == ESHBinaryType_SPIRV)
-			gotoIfError3(clean, Compiler_processSPIRV(
-				&result->binary, &result->registers, settings, toCompile, lock, entries, &result->demotion, alloc, e_rr
+			gotoIfError3(clean, Compiler_process(
+				comp,
+				ESHBinaryType_SPIRV,
+				&result->binary,
+				&result->registers,
+				Buffer_createNull(),
+				settings.debug,
+				toCompile,
+				lock, 
+				entries,
+				&result->demotion,
+				alloc,
+				e_rr
 			))
 
 		else retError(clean, Error_invalidState(2, "Compiler_compile() unsupported type. Only supporting DXIL and SPIRV"))
@@ -1533,27 +1546,5 @@ clean:
 	CharString_free(&tempStr2, alloc);
 	CharString_free(&tmpFile, alloc);
 	ListCharString_freeUnderlying(&stringsUTF8, alloc);
-	return s_uccess;
-}
-
-Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	switch (type) {
-
-		case ESHBinaryType_SPIRV: 
-			gotoIfError3(clean, Compiler_disassembleSPIRV(buf, alloc, result, e_rr))
-			break;
-
-		case ESHBinaryType_DXIL:
-			gotoIfError3(clean, Compiler_disassembleDXIL(comp, buf, alloc, result, e_rr))
-				break;
-
-		default:
-			retError(clean, Error_unimplemented(0, "Compiler_createDisassembly() has invalid type"))
-	}
-
-clean:
 	return s_uccess;
 }

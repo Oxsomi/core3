@@ -173,30 +173,17 @@ void Compiler_shutdown();
 
 //Generate disassembly from buffer
 
-Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
-Bool Compiler_disassembleDXIL(Compiler comp, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
-
-Bool Compiler_createDisassembly(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *res, Error *e_rr);
+Bool Compiler_disassemble(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
 
 //Convert assembly (SPIRV and DXIL) to oiSH by using the assembly
 
-Bool Compiler_processSPIRV(
-	Buffer *result,						//Required; input & output SPIRV (will be optimized)
-	ListSHRegisterRuntime *registers,	//Required; Output registers
-	CompilerSettings settings,
-	SHBinaryIdentifier toCompile,
-	SpinLock *lock,						//If not NULL will be used before writing into entries
-	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
-	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
-	Allocator alloc,
-	Error *e_rr
-);
-
-Bool Compiler_processDXIL(
+Bool Compiler_process(
 	Compiler compiler,					//To be able to get reflection data
-	Buffer *result,						//Required; input & output DXIL
+	ESHBinaryType type,
+	Buffer *result,						//Required; input & output binary
 	ListSHRegisterRuntime *registers,	//Required; Output registers
-	Buffer reflectionData,				//If not supplied, will try to get it from DXIL, if both are missing it will fail!
+	Buffer reflectionData,				//(DXIL only): If not supplied, will try to get it from DXIL, if unavailable will fail!
+	Bool isDebug,
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,						//If not NULL will be used before writing into entries
 	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
@@ -205,26 +192,18 @@ Bool Compiler_processDXIL(
 	Error *e_rr
 );
 
-Bool Compiler_linkSPIRV(
+Bool Compiler_link(
 	Compiler compiler,
-	ListBuffer inputs,					//Input SPIRV(s); library data
+	ESHBinaryType type,
+	ListBuffer inputs,					//Input binary/binaries
 	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
 	ListU8 uniformData,					//Contents of the current compilation
 	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	U16 shaderVersion,					//U8 maj, minor
+	ESHPipelineStage stageType,
+	ESHExtension exts,
 	ListCompileError *errors,
-	Buffer *result,						//Output SPIRV: Either library or specialized binary (PS/GS/CS/etc.)
-	Allocator alloc,
-	Error *e_rr
-);
-
-Bool Compiler_linkDXIL(
-	Compiler compiler,
-	ListBuffer inputs,					//Input DXIL(s); library data
-	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
-	ListU8 uniformData,					//Contents of the current compilation
-	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
-	ListCompileError *errors,
-	Buffer *result,						//Output DXIL: Either library or specialized binary (PS/GS/CS/etc.)
+	Buffer *result,						//Output binary: Either library or specialized binary (PS/GS/CS/etc.)
 	Allocator alloc,
 	Error *e_rr
 );
@@ -366,7 +345,7 @@ void Compiler_freex(Compiler *comp);
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr);
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
-Bool Compiler_createDisassemblyx(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr);
+Bool Compiler_disassemblex(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr);
 
 Bool Compiler_compilex(
 	Compiler comp,

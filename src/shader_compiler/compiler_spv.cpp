@@ -25,6 +25,7 @@
 #include "platforms/log.h"
 #include "shader_compiler/compiler.h"
 #include "optimizer.hpp"
+#include "linker.hpp"
 #include "SPIRV-Reflect/spirv_reflect.h"
 
 Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_rr) {
@@ -1475,7 +1476,7 @@ clean:
 Bool Compiler_processSPIRV(
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
-	CompilerSettings settings,
+	Bool isDebug,
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,
 	ListSHEntryRuntime entries,
@@ -1885,10 +1886,12 @@ Bool Compiler_processSPIRV(
 
 	//Strip debug and optimize
 
-	if(!settings.debug) {
+	if(!isDebug) {
 
 		optimizer.SetMessageConsumer(
 			[alloc](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
+
+				//TODO: Output to CompileError
 
 				const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
 
@@ -1978,6 +1981,110 @@ Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, 
 	gotoIfError2(clean, CharString_createCopy(
 		CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result
 	))
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_linkSPIRV(
+	Compiler compiler,
+	ListBuffer inputs,
+	ListSHUniformRuntime uniforms,
+	ListU8 uniformData,
+	ESHPipelineStage stage,
+	ESHExtension exts,
+	ListCompileError *errors,
+	Buffer *result,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	(void) compiler;
+	Bool s_uccess = true;
+
+	spvtools::LinkerOptions opts{};
+	opts.SetVerifyIds(true);
+
+	Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+	Bool isLib = stage >= ESHPipelineStage_Count || isRt;
+
+	isRt |= !!(exts & ESHExtension_RayQuery);
+
+	opts.SetCreateLibrary(isLib);
+	opts.SetAllowPartialLinkage(stage >= ESHPipelineStage_Count);
+
+	spv_target_env env = isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3;
+
+	spvtools::Context ctx(env);
+
+	ctx.SetMessageConsumer(
+		[alloc](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
+
+			//TODO: Output to CompileError
+
+			const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
+
+			switch(level) {
+
+				case SPV_MSG_FATAL:
+				case SPV_MSG_INTERNAL_ERROR:
+				case SPV_MSG_ERROR:
+					Log_errorLn(alloc, format, source, position.line, position.column, position.index, msg);
+					break;
+
+				case SPV_MSG_WARNING:
+					Log_warnLn(alloc, format, source, position.line, position.column, position.index, msg);
+					break;
+
+				default:
+					Log_debugLn(alloc, format, source, position.line, position.column, position.index, msg);
+					break;
+			}
+		}
+	);
+
+	std::vector<std::vector<U32>> bins;
+	bins.resize(inputs.length);
+
+	spv_result_t res{};
+	std::vector<U32> linkedBin;
+
+	if(!bins.size())
+		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() no binaries provided"))
+
+	for (U64 i = 0; i < inputs.length; ++i) {
+
+		U64 len = Buffer_length(inputs.ptr[i]);
+
+		if(len & 3)
+			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
+
+		bins[i].resize(len >> 2);
+		Buffer_memcpy(
+			Buffer_createRef(bins[i].data(), len),
+			inputs.ptr[i]
+		);
+	}
+
+	res = spvtools::Link(
+		ctx,
+		bins,
+		&linkedBin,
+		opts
+	);
+
+	if(res != SPV_SUCCESS)
+		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary couldn't be linked"))
+
+	//TODO: Strip non entrypoint if entrypoint is provided
+	//TODO: Link uniforms
+
+	gotoIfError3(clean, Buffer_resize(result, linkedBin.size() << 2, false, false, alloc, e_rr))
+
+	Buffer_memcpy(
+		*result,
+		Buffer_createRefConst(linkedBin.data(), Buffer_length(*result))
+	);
 
 clean:
 	return s_uccess;

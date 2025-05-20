@@ -509,10 +509,9 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 	gotoIfError(clean, checkVkError(instanceExt->createDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)))
 
-	//Load functions even generic 1.2 functionality;
+	//Load functions even generic 1.1 functionality;
 	//This is not done statically to prevent hard to track down issues if a function is missing.
 	//Which can happen if an old vulkan runtime is present.
-	//TODO: Downgrade to 1.1 with extensions to possibly allow more platforms
 
 	getVkFunctionDevice(clean, vkAllocateMemory, deviceExt->allocateMemory)
 	getVkFunctionDevice(clean, vkMapMemory, deviceExt->mapMemory)
