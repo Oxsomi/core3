@@ -1891,8 +1891,6 @@ Bool Compiler_processSPIRV(
 		optimizer.SetMessageConsumer(
 			[alloc](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
 
-				//TODO: Output to CompileError
-
 				const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
 
 				switch(level) {
@@ -1986,11 +1984,144 @@ clean:
 	return s_uccess;
 }
 
+void Compiler_spvToolsCallback(
+	spv_message_level_t level,
+	const C8 *source,
+	const spv_position_t &position,
+	const C8 *msg,
+	ListCompileError *errors,
+	Bool *success,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CharString error = CharString_createNull();
+	CharString file = CharString_createNull();
+
+	const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
+
+	switch(level) {
+
+		case SPV_MSG_FATAL:
+		case SPV_MSG_INTERNAL_ERROR:
+		case SPV_MSG_ERROR:
+		case SPV_MSG_WARNING: {
+
+			if(position.column > U8_MAX || position.line >= (1 << (7 + 16)))
+				retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() referenced line or colum out of bounds"))
+
+			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(source), alloc, &file))
+			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(msg), alloc, &error))
+
+			CompileError err = CompileError{
+						
+				.lineId = (U16) position.line,
+
+				.typeLineId = (U8)(
+					((level == SPV_MSG_WARNING ? ECompileErrorType_Warn : ECompileErrorType_Error) << 7) |
+					(position.line >> 16)
+				),
+
+				.lineOffset = (U8) position.column,
+
+				.error = error,
+				.file = file
+			};
+
+			gotoIfError2(clean, ListCompileError_pushBack(errors, err, alloc))
+			error = CharString_createNull();
+			file = CharString_createNull();
+			break;
+		}
+
+		default:
+		case SPV_MSG_INFO:
+		case SPV_MSG_DEBUG:
+			Log_debugLn(alloc, format, source, position.line, position.column, position.index, msg);
+			break;
+	}
+
+clean:
+
+	CharString_free(&error, alloc);
+	CharString_free(&file, alloc);
+
+	if(!s_uccess)
+		Log_errorLnx(
+			"Couldn't return error as CompileError: %s:L#%zu:%zu (index: %zu): %s",
+			format, source, position.line, position.column, position.index, msg
+		);
+
+	*success = s_uccess;
+}
+
+/*
+* TODO: This is ChatGPT coded, probably garbage, test and compare carefully!
+* 
+class StripAllButOneEntryPointPass : public spvtools::opt::Pass {
+public:
+    explicit StripAllButOneEntryPointPass(const std::string& keep_entry_point)
+        : keep_entry_name_(keep_entry_point) {}
+
+    const char* name() const override { return "strip-all-but-one-entry-point"; }
+
+    Status Process() override {
+        using namespace spvtools::opt;
+
+        auto* module = get_module();
+        auto* ctx = context();
+
+        // Step 1: Find entry point instruction to keep
+        Instruction* target_entry = nullptr;
+        for (auto& entry : module->entry_points()) {
+            std::string name = reinterpret_cast<const char*>(entry.GetInOperand(2).words.data());
+            if (name == keep_entry_name_) {
+                target_entry = &entry;
+                break;
+            }
+        }
+
+        if (!target_entry) {
+            std::cerr << "Entry point \"" << keep_entry_name_ << "\" not found.\n";
+            return Status::SuccessWithoutChange;
+        }
+
+        // Step 2: Remove all other entry points
+        std::vector<Instruction*> to_remove;
+        for (auto& entry : module->entry_points()) {
+            if (&entry != target_entry) {
+                to_remove.push_back(&entry);
+            }
+        }
+
+        // Remove all non-matching entry points
+        for (auto* ep : to_remove) {
+            ctx->KillNamesAndDecorates(ep);
+            ctx->module()->RemoveEntryPoint(ep);
+        }
+
+        // Step 3: Now safely rename the retained entry point to "main"
+        uint32_t string_id = ctx->get_feature_mgr()->GetStringId("main");
+        target_entry->SetInOperand(2, {string_id});
+
+        return Status::SuccessWithChange;
+    }
+
+private:
+    std::string keep_entry_name_;
+};
+
+spvtools::opt::PassToken CreateStripAllButOneEntryPointPass(const std::string& name) {
+    return spvtools::opt::PassToken(std::make_unique<StripAllButOneEntryPointPass>(name));
+}*/
+
 Bool Compiler_linkSPIRV(
 	Compiler compiler,
 	ListBuffer inputs,
 	ListSHUniformRuntime uniforms,
 	ListU8 uniformData,
+	CharString entrypoint,
 	ESHPipelineStage stage,
 	ESHExtension exts,
 	ListCompileError *errors,
@@ -2002,88 +2133,194 @@ Bool Compiler_linkSPIRV(
 	(void) compiler;
 	Bool s_uccess = true;
 
-	spvtools::LinkerOptions opts{};
-	opts.SetVerifyIds(true);
-
 	Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
 	Bool isLib = stage >= ESHPipelineStage_Count || isRt;
 
 	isRt |= !!(exts & ESHExtension_RayQuery);
 
-	opts.SetCreateLibrary(isLib);
-	opts.SetAllowPartialLinkage(stage >= ESHPipelineStage_Count);
-
 	spv_target_env env = isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3;
 
-	spvtools::Context ctx(env);
+	spvtools::Optimizer opt(env);
 
-	ctx.SetMessageConsumer(
-		[alloc](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
+	//Link (or just use the already linked binary)
 
-			//TODO: Output to CompileError
-
-			const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
-
-			switch(level) {
-
-				case SPV_MSG_FATAL:
-				case SPV_MSG_INTERNAL_ERROR:
-				case SPV_MSG_ERROR:
-					Log_errorLn(alloc, format, source, position.line, position.column, position.index, msg);
-					break;
-
-				case SPV_MSG_WARNING:
-					Log_warnLn(alloc, format, source, position.line, position.column, position.index, msg);
-					break;
-
-				default:
-					Log_debugLn(alloc, format, source, position.line, position.column, position.index, msg);
-					break;
-			}
-		}
-	);
-
-	std::vector<std::vector<U32>> bins;
-	bins.resize(inputs.length);
-
-	spv_result_t res{};
 	std::vector<U32> linkedBin;
+	const U32 *linkedBinPtr = NULL;
+	U64 linkedBinSiz = 0;
 
-	if(!bins.size())
-		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() no binaries provided"))
+	if(inputs.length > 1) {
 
-	for (U64 i = 0; i < inputs.length; ++i) {
+		spvtools::LinkerOptions opts{};
+		opts.SetVerifyIds(true);
 
-		U64 len = Buffer_length(inputs.ptr[i]);
+		opts.SetCreateLibrary(isLib);
+		opts.SetAllowPartialLinkage(stage >= ESHPipelineStage_Count);
 
-		if(len & 3)
-			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
+		spvtools::Context ctx(env);
 
-		bins[i].resize(len >> 2);
-		Buffer_memcpy(
-			Buffer_createRef(bins[i].data(), len),
-			inputs.ptr[i]
+		ctx.SetMessageConsumer(
+			[alloc, errors, e_rr, &s_uccess](
+				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
+			) -> void {
+				Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
+			}
 		);
+
+		std::vector<std::vector<U32>> bins;
+		bins.resize(inputs.length);
+
+		spv_result_t res{};
+
+		if(!bins.size())
+			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() no binaries provided"))
+
+		for (U64 i = 0; i < inputs.length; ++i) {
+
+			U64 len = Buffer_length(inputs.ptr[i]);
+
+			if(len & 3)
+				retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
+
+			bins[i].resize(len >> 2);
+			Buffer_memcpy(
+				Buffer_createRef(bins[i].data(), len),
+				inputs.ptr[i]
+			);
+		}
+
+		res = spvtools::Link(
+			ctx,
+			bins,
+			&linkedBin,
+			opts
+		);
+
+		if(res != SPV_SUCCESS)
+			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary couldn't be linked"))
+
+		linkedBinPtr = linkedBin.data();
+		linkedBinSiz = linkedBin.size();
 	}
 
-	res = spvtools::Link(
-		ctx,
-		bins,
-		&linkedBin,
-		opts
-	);
+	else {
 
-	if(res != SPV_SUCCESS)
-		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary couldn't be linked"))
+		linkedBinPtr = (const U32*) inputs.ptr[0].ptr;
+		linkedBinSiz = Buffer_length(inputs.ptr[0]);
 
-	//TODO: Strip non entrypoint if entrypoint is provided
-	//TODO: Link uniforms
+		if (linkedBinSiz & 3)
+			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
 
-	gotoIfError3(clean, Buffer_resize(result, linkedBin.size() << 2, false, false, alloc, e_rr))
+		linkedBinSiz >>= 2;
+	}
+
+	//Run optimizer to get rid of uniforms
+
+	if (uniforms.length || CharString_length(entrypoint)) {
+
+		opt.SetMessageConsumer(
+			[alloc, errors, e_rr, &s_uccess](
+				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
+			) -> void {
+				Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
+			}
+		);
+		
+		//TODO:
+		//if (needsEntrypointStrip)
+		//	opt.RegisterPass(spvtools::CreateStripAllButOneEntryPointPass(as string entrypoint));		//Entrypoint strip
+
+		//Resolve spec constants to real constants
+
+		if (uniforms.length) {
+
+			std::unordered_map<U32, std::vector<U32>> uniformMap;
+
+			for (U32 i = 0; i < (U32) uniforms.length; ++i) {
+				
+				//Uniform info
+
+				SHUniformRuntime uniform = uniforms.ptr[i];
+
+				if(uniform.typeIdShort >= ETypeId_Max)
+					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() typeIdShort out of bounds"))
+
+				ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
+				U64 len = ETypeId_getBytes(typeId);
+			
+				if(uniform.dataOffset + len > uniformData.length)
+					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() uniformData out of bounds"))
+
+				U8 width = ETypeId_getWidth(typeId);
+				U8 height = ETypeId_getHeight(typeId);
+				EDataType dt = ETypeId_getDataType(typeId);
+				EDataTypeStride dts = ETypeId_getDataTypeStride(typeId);
+
+				Bool isBool = dt == EDataType_Bool;
+
+				Bool isX8 = dts == EDataTypeStride_8;
+				Bool isX16 = dts == EDataTypeStride_16;
+
+				Bool is16 = (exts & ESHExtension_16BitTypes) && (isX16 || (isX8 && !isBool));
+
+				Bool is64 = dts == EDataTypeStride_64;
+
+				U32 stride16 = is64 ? 4 : (is16 ? 1 : 2);		//width in U16s
+				uniformMap[i].resize((width * height * stride16 + 1) >> 1);
+
+				//Copy into uniformMap; normally this is quite straightforward.
+				//Except for bools and 8-bit types; not natively supported.
+				//Another exception is 16-bit while 16-bit types aren't supported.
+				//These all get expanded to either 16-bit (if supported, unless bool) or 32-bit.
+
+				U32 *asU32 = uniformMap[i].data();
+				U16 *asU16 = (U16*) asU32;
+
+				const U8 *inputAsU8 = uniformData.ptr + uniform.dataOffset;
+				const U16 *inputAsU16 = (const U16*) inputAsU8;
+
+				if (isBool || isX8 || (!is16 && isX16))
+					for (U64 j = 0; j < width * height; ++j) {
+
+						if (is16)						//Expand 8-bit to 16-bit
+							asU16[j] = inputAsU8[j];
+
+						else if (isX8)					//Expand 8-bit to 32-bit
+							asU32[j] = inputAsU8[j];
+
+						else if (isBool)				//Expand B1 to 32-bit
+							asU32[j] = (inputAsU16[0] >> j) & 1;
+
+						else asU32[j] = inputAsU16[j];	//Expand 16-bit to 32-bit
+					}
+
+				else Buffer_memcpy(
+					Buffer_createRef(asU32, uniformMap.size() << 2),
+					Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
+				);
+			}
+
+			opt.RegisterPass(spvtools::CreateSetSpecConstantDefaultValuePass(uniformMap));
+			opt.RegisterPass(spvtools::CreateFoldSpecConstantOpAndCompositePass());
+		}
+
+		//Remove dead code and resolve branches generated by spec constants or entrypoint strip
+
+		opt.RegisterPerformancePasses();
+
+		std::vector<U32> tmp;
+		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp))
+			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() couldn't run optimizer"))
+
+		linkedBin = std::move(tmp);
+		linkedBinPtr = linkedBin.data();
+		linkedBinSiz = linkedBin.size();
+	}
+
+	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, alloc, e_rr))
 
 	Buffer_memcpy(
 		*result,
-		Buffer_createRefConst(linkedBin.data(), Buffer_length(*result))
+		Buffer_createRefConst(linkedBinPtr, Buffer_length(*result))
 	);
 
 clean:

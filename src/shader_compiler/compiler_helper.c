@@ -880,10 +880,9 @@ Bool Compiler_specializeBinary(
 	Bool s_uccess = true;
 	U16 newComboId = combinationId + uniformCombinationId * combos;
 
-	if(compileMode == ESHBinaryType_SPIRV)
-		gotoIfError3(clean, Compiler_linkSPIRV(compiler, inputs, uniforms, uniformData, entrypoint, result, alloc, e_rr))
-	
-	else gotoIfError3(clean, Compiler_linkDXIL(compiler, inputs, uniforms, uniformData, entrypoint, result, alloc, e_rr))
+	gotoIfError3(clean, Compiler_link(
+		compiler, compileMode, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, errors, result, alloc, e_rr
+	))
 
 	gotoIfError3(clean, Compiler_registerShaderBinary(shFile, &newTempResult, compileMode, sourceFile, runtimeEntry, newComboId, alloc, e_rr))
 

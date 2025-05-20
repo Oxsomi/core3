@@ -2563,6 +2563,7 @@ Bool Compiler_linkSPIRV(
 	ListBuffer inputs,					//Input SPIRV(s); library data
 	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
 	ListU8 uniformData,					//Contents of the current compilation
+	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
 	ESHPipelineStage stage,				//Whether or not to be a final executable (ESHPipelineStage_Count = keep library)
 	ESHExtension exts,
 	ListCompileError *errors,
@@ -2604,12 +2605,15 @@ Bool Compiler_link(
 	
 	Bool s_uccess = true;
 
+	if(uniforms.length >> 8)
+		retError(clean, Error_invalidState(0, "Compiler_link() uniforms.length is capped to 256"))
+
 	switch (type) {
 
 		case ESHBinaryType_SPIRV: 
 
 			gotoIfError3(clean, Compiler_linkSPIRV(
-				compiler, inputs, uniforms, uniformData, stageType, exts, errors, result, alloc, e_rr
+				compiler, inputs, uniforms, uniformData, entrypoint, stageType, exts, errors, result, alloc, e_rr
 			))
 
 			break;
