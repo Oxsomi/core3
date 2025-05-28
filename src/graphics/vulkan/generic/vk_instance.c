@@ -458,7 +458,6 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_fragment_shading_rate",
 	"VK_KHR_dynamic_rendering",
 	"VK_EXT_opacity_micromap",
-	"VK_NV_displacement_micromap",
 	"VK_EXT_shader_atomic_float",
 	"VK_KHR_deferred_host_operations",
 	"VK_NV_ray_tracing_validation",
@@ -841,13 +840,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VkPhysicalDeviceOpacityMicromapFeaturesEXT,
 			rayOpacityMicroFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMicromapDisplacement],
-			VkPhysicalDeviceDisplacementMicromapFeaturesNV,
-			rayDispMicroFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV
 		)
 
 		getDeviceFeatures(
@@ -1327,9 +1319,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 					if(rayOpacityMicroFeat.micromap)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
-
-					if(rayDispMicroFeat.displacementMicromap)
-						capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
 				}
 			}
 		}

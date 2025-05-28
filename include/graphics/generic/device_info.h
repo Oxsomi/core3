@@ -146,31 +146,30 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_RayPipeline				= 1 << 9,
 	EGraphicsFeatures_RayQuery					= 1 << 10,
 	EGraphicsFeatures_RayMicromapOpacity		= 1 << 11,
-	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 12,
-	EGraphicsFeatures_RayMotionBlur				= 1 << 13,
-	EGraphicsFeatures_RayReorder				= 1 << 14,
-	EGraphicsFeatures_RayValidation				= 1 << 15,		//Debugging for raytracing validation
+	EGraphicsFeatures_RayMotionBlur				= 1 << 12,
+	EGraphicsFeatures_RayReorder				= 1 << 13,
+	EGraphicsFeatures_RayValidation				= 1 << 14,		//Debugging for raytracing validation
 
 	//LUID for sharing devices
 
-	EGraphicsFeatures_LUID						= 1 << 16,
+	EGraphicsFeatures_LUID						= 1 << 15,
 
 	//Other features
 
-	EGraphicsFeatures_Wireframe					= 1 << 17,
-	EGraphicsFeatures_LogicOp					= 1 << 18,
-	EGraphicsFeatures_DualSrcBlend				= 1 << 19,
+	EGraphicsFeatures_Wireframe					= 1 << 16,
+	EGraphicsFeatures_LogicOp					= 1 << 17,
+	EGraphicsFeatures_DualSrcBlend				= 1 << 18,
 
-	EGraphicsFeatures_Workgraphs				= 1 << 20,
-	EGraphicsFeatures_SwapchainCompute			= 1 << 21,		//isComputeExt in createSwapchain is supported
+	EGraphicsFeatures_Workgraphs				= 1 << 19,
+	EGraphicsFeatures_SwapchainCompute			= 1 << 20,		//isComputeExt in createSwapchain is supported
 
-	EGraphicsFeatures_ComputeDeriv				= 1 << 22,		//Compute derivatives (ddx/ddy)
-	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 23,		//Compute derivatives in mesh/task shaders
+	EGraphicsFeatures_ComputeDeriv				= 1 << 21,		//Compute derivatives (ddx/ddy)
+	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 22,		//Compute derivatives in mesh/task shaders
 
-	EGraphicsFeatures_WriteMSTexture			= 1 << 24,		//image2DMS or RWTexture2DMS
-	EGraphicsFeatures_Bindless					= 1 << 25,
+	EGraphicsFeatures_WriteMSTexture			= 1 << 23,		//image2DMS or RWTexture2DMS
+	EGraphicsFeatures_Bindless					= 1 << 24,
 
-	EGraphicsFeatures_SubgroupOperations		= 1 << 26
+	EGraphicsFeatures_SubgroupOperations		= 1 << 25
 
 } EGraphicsFeatures;
 

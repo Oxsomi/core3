@@ -849,20 +849,6 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 				else if(omm == NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAP_STANDARD)
 					info->capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
 
-				//Displacement micromaps
-
-				NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS dmm = (NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS) { 0 };
-
-				status = NvAPI_D3D12_GetRaytracingCaps(
-					(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP, &dmm, sizeof(dmm)
-				);
-
-				if(status != NVAPI_OK)
-					Log_debugLnx("D3D12: NVAPI: Couldn't query for DMM on device %"PRIu32"", i);
-
-				else if(dmm == NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAP_STANDARD)
-					info->capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
-
 			#endif
 		}
 

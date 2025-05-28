@@ -348,7 +348,6 @@ Error GraphicsDeviceRef_create(
 			EGraphicsFeatures_RayPipeline				|
 			EGraphicsFeatures_RayQuery					|
 			EGraphicsFeatures_RayMicromapOpacity		|
-			EGraphicsFeatures_RayMicromapDisplacement	|
 			EGraphicsFeatures_RayMotionBlur				|
 			EGraphicsFeatures_RayReorder				|
 			EGraphicsFeatures_RayValidation
@@ -717,7 +716,6 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 
 	if(extensions & ESHExtension_RayQuery)					features |= EGraphicsFeatures_RayQuery;
 	if(extensions & ESHExtension_RayMicromapOpacity)		features |= EGraphicsFeatures_RayMicromapOpacity;
-	if(extensions & ESHExtension_RayMicromapDisplacement)	features |= EGraphicsFeatures_RayMicromapDisplacement;
 	if(extensions & ESHExtension_RayMotionBlur)				features |= EGraphicsFeatures_RayMotionBlur;
 	if(extensions & ESHExtension_RayReorder)				features |= EGraphicsFeatures_RayReorder;
 

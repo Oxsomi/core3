@@ -890,7 +890,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('R', 'a'):	//RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder
+		case C8x2('R', 'a'):	//RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder
 
 			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
 				return ESHExtension_RayQuery;
@@ -898,16 +898,9 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			else if(stageNameLen >= 10)
 				switch (Buffer_readU64(buf, 2, NULL)) {
 
-					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):		//RayMicromapDisplacement & Opacity
+					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):		//RayMicromapOpacity
 
 						if(
-							stageNameLen == 23 &&
-							Buffer_readU64(buf, 10, NULL) == C8x8('p', 'D', 'i', 's', 'p', 'l', 'a', 'c') &&
-							Buffer_readU64(buf, 15, NULL) == C8x8('l', 'a', 'c', 'e', 'm', 'e', 'n', 't')
-						)
-							return ESHExtension_RayMicromapDisplacement;
-
-						else if(
 							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
 						)
 							return ESHExtension_RayMicromapOpacity;

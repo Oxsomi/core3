@@ -67,7 +67,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_ray_tracing_invocation_reorder as RayReorder
   - VK_EXT_mesh_shader as MeshShader
   - VK_EXT_opacity_micromap as RayMicromapOpacity
-  - VK_NV_displacement_micromap as RayMicromapDisplacement
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
   - VK_KHR_multiview as Multiview.
@@ -353,7 +352,6 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - Bindless is almost always supported (Resource binding tier 3), but if it's not then it's required to use resource binding tier 1 (11.1+ of 64 UAVs, 128 SRVs).
 - Writeable MSAA textures as EGraphicsFeatures_WriteMSTexture.
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP as EGraphicsFeatures_RayMicromapOpacity.
-- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP as EGraphicsFeatures_RayMicromapDisplacement.
 - NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING as EGraphicsFeatures_RayReorder.
 - WorkGraphsTier as EGraphicsFeatures_Workgraphs.
 - MeshShaderTier as EGraphicsFeatures_MeshShader.

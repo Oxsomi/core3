@@ -287,15 +287,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
-		VkPhysicalDeviceDisplacementMicromapFeaturesNV,
-		feat & EGraphicsFeatures_RayMicromapDisplacement,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV,
-			.displacementMicromap = true
-		}
-	)
-
-	bindNextVkStruct(
 		VkPhysicalDeviceShaderAtomicInt64Features,
 		types & EGraphicsDataTypes_AtomicI64,
 		{
@@ -370,7 +361,6 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_VariableRateShading;		break;
 			case EOptExtensions_DynamicRendering:			on = feat & EGraphicsFeatures_DirectRendering;			break;
 			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
-			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;
 			case EOptExtensions_AtomicF32:					on = types & EGraphicsDataTypes_AtomicF32;				break;
 			case EOptExtensions_DeferredHostOperations:		on = feat & EGraphicsFeatures_Raytracing;				break;
 			case EOptExtensions_RaytracingValidation:		on = feat & EGraphicsFeatures_RayValidation;			break;

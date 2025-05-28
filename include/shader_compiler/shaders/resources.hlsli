@@ -22,11 +22,11 @@ R"(
 #pragma once
 #include "@types.hlsli"
 
-//We only include nv extensions if DXIL compilation and ray: reorder, motion blur, micromap opacity / displacement is required
+//We only include nv extensions if DXIL compilation and ray: reorder, motion blur, micromap opacity is required
 //This saves us from parsing, preprocessing and compiling useless stuff.
 
 #if !defined(__spirv__) && (																	\
-	defined(__OXC_EXT_RAYMICROMAPOPACITY)	|| defined(__OXC_EXT_RAYMICROMAPDISPLACEMENT) ||	\
+	defined(__OXC_EXT_RAYMICROMAPOPACITY)	||													\
 	defined(__OXC_EXT_RAYMOTIONBLUR)		|| defined(__OXC_EXT_RAYREORDER)					\
 )
 

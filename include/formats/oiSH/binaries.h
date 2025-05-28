@@ -55,7 +55,7 @@ typedef enum ESHExtension {
 
 	ESHExtension_RayQuery					= 1 << 8,
 	ESHExtension_RayMicromapOpacity			= 1 << 9,
-	ESHExtension_RayMicromapDisplacement	= 1 << 10,
+	ESHExtension_Reserved					= 1 << 10,
 	ESHExtension_RayMotionBlur				= 1 << 11,
 	ESHExtension_RayReorder					= 1 << 12,
 

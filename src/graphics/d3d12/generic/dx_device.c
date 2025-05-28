@@ -287,7 +287,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		//Enable NV extensions
 
 		EGraphicsFeatures nvExt =
-			EGraphicsFeatures_RayMicromapOpacity | EGraphicsFeatures_RayMicromapDisplacement |
+			EGraphicsFeatures_RayMicromapOpacity |
 			EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation;
 
 		if(isNv && (device->info.capabilities.features & nvExt)) {
