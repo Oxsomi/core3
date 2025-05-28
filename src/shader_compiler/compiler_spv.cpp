@@ -1473,7 +1473,81 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_processSPIRV(
+
+
+void Compiler_spvToolsCallback(
+	spv_message_level_t level,
+	const C8 *source,
+	const spv_position_t &position,
+	const C8 *msg,
+	ListCompileError *errors,
+	Bool *success,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	CharString error = CharString_createNull();
+	CharString file = CharString_createNull();
+
+	const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
+
+	switch(level) {
+
+		case SPV_MSG_FATAL:
+		case SPV_MSG_INTERNAL_ERROR:
+		case SPV_MSG_ERROR:
+		case SPV_MSG_WARNING: {
+
+			if(position.column > U8_MAX || position.line >= (1 << (7 + 16)))
+				retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() referenced line or colum out of bounds"))
+
+			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(source), alloc, &file))
+			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(msg), alloc, &error))
+
+			CompileError err = CompileError{
+						
+				.lineId = (U16) position.line,
+
+				.typeLineId = (U8)(
+					((level == SPV_MSG_WARNING ? ECompileErrorType_Warn : ECompileErrorType_Error) << 7) |
+					(position.line >> 16)
+				),
+
+				.lineOffset = (U8) position.column,
+
+				.error = error,
+				.file = file
+			};
+
+			gotoIfError2(clean, ListCompileError_pushBack(errors, err, alloc))
+			error = CharString_createNull();
+			file = CharString_createNull();
+			break;
+		}
+
+		default:
+		case SPV_MSG_INFO:
+		case SPV_MSG_DEBUG:
+			Log_debugLn(alloc, format, source, position.line, position.column, position.index, msg);
+			break;
+	}
+
+clean:
+
+	CharString_free(&error, alloc);
+	CharString_free(&file, alloc);
+
+	if(!s_uccess)
+		Log_errorLnx(
+			"Couldn't return error as CompileError: %s:L#%zu:%zu (index: %zu): %s",
+			format, source, position.line, position.column, position.index, msg
+		);
+
+	*success = s_uccess;
+}
+
+extern "C" Bool Compiler_processSPIRV(
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
 	Bool isDebug,
@@ -1481,6 +1555,7 @@ Bool Compiler_processSPIRV(
 	SpinLock *lock,
 	ListSHEntryRuntime entries,
 	ESHExtension *demotions,
+	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
 ) {
@@ -1497,6 +1572,9 @@ Bool Compiler_processSPIRV(
 	Bool isRt = toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt;
 	isRt |= !!(toCompile.extensions & ESHExtension_RayQuery);
 	spvtools::Optimizer optimizer{ isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3 };
+
+	std::vector<U32> tmp;
+	std::vector<U32> copied;
 
 	SBFile sbFile{};
 	ListCharString strings{};
@@ -1886,50 +1964,30 @@ Bool Compiler_processSPIRV(
 
 	//Strip debug and optimize
 
-	if(!isDebug) {
+	optimizer.SetMessageConsumer(
+		[alloc, errors, &s_uccess, e_rr](
+			spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
+		) -> void {
+			Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
+		}
+	);
 
-		optimizer.SetMessageConsumer(
-			[alloc](spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg) -> void {
+	optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
 
-				const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
-
-				switch(level) {
-
-					case SPV_MSG_FATAL:
-					case SPV_MSG_INTERNAL_ERROR:
-					case SPV_MSG_ERROR:
-						Log_errorLn(alloc, format, source, position.line, position.column, position.index, msg);
-						break;
-
-					case SPV_MSG_WARNING:
-						Log_warnLn(alloc, format, source, position.line, position.column, position.index, msg);
-						break;
-
-					default:
-						Log_debugLn(alloc, format, source, position.line, position.column, position.index, msg);
-						break;
-				}
-			}
-		);
-
-		optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
+	if (!isDebug)
 		optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
 
-		std::vector<U32> tmp;
-		std::vector<U32> copied;
-
-		if ((U64)resultPtr & 3) {		//Fix alignment
-			copied.resize(binLen >> 2);
-			Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
-			resultPtr = copied.data();
-		}
-
-		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
-			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"))
-
-		Buffer_free(result, alloc);
-		gotoIfError2(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result))
+	if ((U64)resultPtr & 3) {		//Fix alignment
+		copied.resize(binLen >> 2);
+		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+		resultPtr = copied.data();
 	}
+
+	if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
+		retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"))
+
+	Buffer_free(result, alloc);
+	gotoIfError2(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result))
 
 clean:
 
@@ -1940,7 +1998,7 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
+extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
 	
 	Bool s_uccess = true;
 	U64 binLen = Buffer_length(buf);
@@ -1982,78 +2040,6 @@ Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, 
 
 clean:
 	return s_uccess;
-}
-
-void Compiler_spvToolsCallback(
-	spv_message_level_t level,
-	const C8 *source,
-	const spv_position_t &position,
-	const C8 *msg,
-	ListCompileError *errors,
-	Bool *success,
-	Allocator alloc,
-	Error *e_rr
-) {
-
-	Bool s_uccess = true;
-	CharString error = CharString_createNull();
-	CharString file = CharString_createNull();
-
-	const C8 *format = "%s:L#%zu:%zu (index: %zu): %s";
-
-	switch(level) {
-
-		case SPV_MSG_FATAL:
-		case SPV_MSG_INTERNAL_ERROR:
-		case SPV_MSG_ERROR:
-		case SPV_MSG_WARNING: {
-
-			if(position.column > U8_MAX || position.line >= (1 << (7 + 16)))
-				retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() referenced line or colum out of bounds"))
-
-			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(source), alloc, &file))
-			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(msg), alloc, &error))
-
-			CompileError err = CompileError{
-						
-				.lineId = (U16) position.line,
-
-				.typeLineId = (U8)(
-					((level == SPV_MSG_WARNING ? ECompileErrorType_Warn : ECompileErrorType_Error) << 7) |
-					(position.line >> 16)
-				),
-
-				.lineOffset = (U8) position.column,
-
-				.error = error,
-				.file = file
-			};
-
-			gotoIfError2(clean, ListCompileError_pushBack(errors, err, alloc))
-			error = CharString_createNull();
-			file = CharString_createNull();
-			break;
-		}
-
-		default:
-		case SPV_MSG_INFO:
-		case SPV_MSG_DEBUG:
-			Log_debugLn(alloc, format, source, position.line, position.column, position.index, msg);
-			break;
-	}
-
-clean:
-
-	CharString_free(&error, alloc);
-	CharString_free(&file, alloc);
-
-	if(!s_uccess)
-		Log_errorLnx(
-			"Couldn't return error as CompileError: %s:L#%zu:%zu (index: %zu): %s",
-			format, source, position.line, position.column, position.index, msg
-		);
-
-	*success = s_uccess;
 }
 
 /*
@@ -2116,11 +2102,11 @@ spvtools::opt::PassToken CreateStripAllButOneEntryPointPass(const std::string& n
     return spvtools::opt::PassToken(std::make_unique<StripAllButOneEntryPointPass>(name));
 }*/
 
-Bool Compiler_linkSPIRV(
+extern "C" Bool Compiler_linkSPIRV(
 	Compiler compiler,
 	ListBuffer inputs,
 	ListSHUniformRuntime uniforms,
-	ListU8 uniformData,
+	Buffer uniformData,
 	CharString entrypoint,
 	ESHPipelineStage stage,
 	ESHExtension exts,
@@ -2247,7 +2233,7 @@ Bool Compiler_linkSPIRV(
 				ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
 				U64 len = ETypeId_getBytes(typeId);
 			
-				if(uniform.dataOffset + len > uniformData.length)
+				if(uniform.dataOffset + len > Buffer_length(uniformData))
 					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() uniformData out of bounds"))
 
 				U8 width = ETypeId_getWidth(typeId);
@@ -2300,7 +2286,7 @@ Bool Compiler_linkSPIRV(
 			}
 
 			opt.RegisterPass(spvtools::CreateSetSpecConstantDefaultValuePass(uniformMap));
-			opt.RegisterPass(spvtools::CreateFoldSpecConstantOpAndCompositePass());
+			opt.RegisterPass(spvtools::CreateFreezeSpecConstantValuePass());
 		}
 
 		//Remove dead code and resolve branches generated by spec constants or entrypoint strip
@@ -2311,10 +2297,14 @@ Bool Compiler_linkSPIRV(
 		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp))
 			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() couldn't run optimizer"))
 
+		//Note: we don't strip reflection here, Compiler_process will handle that.
+
 		linkedBin = std::move(tmp);
 		linkedBinPtr = linkedBin.data();
 		linkedBinSiz = linkedBin.size();
 	}
+	
+	//Output to final target
 
 	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, alloc, e_rr))
 

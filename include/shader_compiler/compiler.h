@@ -57,7 +57,9 @@ typedef struct CompilerSettings {
 	Bool debug;
 	Bool infoAboutIncludes;		//Saves extra include info, useful for debugging includes or hot shader reload
 	Bool isLib;
-	U8 padding[5];
+	Bool containsGfxOrComp;
+	Bool isRt;
+	U8 padding[3];
 
 } CompilerSettings;
 
@@ -154,6 +156,14 @@ typedef struct IncludedFile {
 
 TList(IncludedFile);
 
+typedef struct CompilerEntrypoint {
+	CharString name;
+	ESHPipelineStage stage;
+	U32 padding;
+} CompilerEntrypoint;
+
+TList(CompilerEntrypoint);
+
 TListNamed(const U16*, ListU16PtrConst);
 TListNamed(const U32*, ListU32PtrConst);
 
@@ -162,6 +172,8 @@ void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
 
 void CompileResult_free(CompileResult *result, Allocator alloc);
 void ListCompileResult_freeUnderlying(ListCompileResult *result, Allocator alloc);
+
+void ListCompilerEntrypoint_freeUnderlying(ListCompilerEntrypoint *entry, Allocator alloc);
 
 //A separate Compiler should be created per thread
 
@@ -182,12 +194,12 @@ Bool Compiler_process(
 	ESHBinaryType type,
 	Buffer *result,						//Required; input & output binary
 	ListSHRegisterRuntime *registers,	//Required; Output registers
-	Buffer reflectionData,				//(DXIL only): If not supplied, will try to get it from DXIL, if unavailable will fail!
 	Bool isDebug,
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,						//If not NULL will be used before writing into entries
 	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
 	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
 );
@@ -197,7 +209,7 @@ Bool Compiler_link(
 	ESHBinaryType type,
 	ListBuffer inputs,					//Input binary/binaries
 	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
-	ListU8 uniformData,					//Contents of the current compilation
+	Buffer uniformData,					//Contents of the current compilation
 	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
 	U16 shaderVersion,					//U8 maj, minor
 	ESHPipelineStage stageType,
@@ -266,8 +278,6 @@ Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
-	SpinLock *lock,					//Locked when entries are changed
-	ListSHEntryRuntime entries,		//Writes into to update reflected properties
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -351,8 +361,6 @@ Bool Compiler_compilex(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
-	SpinLock *lock,					//Locked when entries are changed
-	ListSHEntryRuntime entries,		//Writes into to update reflected properties
 	CompileResult *result,
 	Error *e_rr
 );

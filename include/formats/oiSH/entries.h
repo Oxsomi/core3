@@ -118,10 +118,11 @@ typedef struct SHEntryRuntime {
 	SHEntry entry;
 
 	U16 vendorMask;
-	U8 isShaderAnnotation;				//Switches [shader("string")] and [[oxc::stage("string")]]
+	Bool isShaderAnnotation;			//Switches [shader("string")] and [[oxc::stage("string")]]
 	U8 isInitializedFlags;				//1 = init, 2 = init oxc::uniforms
 
-	U16 padding;
+	Bool isRt;
+	Bool containsGfxOrComp;
 	U16 uniformStride;					//How many bytes all uniforms combined take
 
 	ListU32 extensions;					//Explicitly enabled extensions (ESHExtension[])

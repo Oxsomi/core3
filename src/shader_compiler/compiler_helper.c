@@ -358,7 +358,6 @@ clean:
 Bool Compiler_getUniqueCompiles(
 	ListSHEntryRuntime runtimeEntries,
 	ListU32 *compileCombinations,
-	ListU16 *binaryIndices,
 	Allocator alloc,
 	Error *e_rr
 ) {
@@ -366,12 +365,14 @@ Bool Compiler_getUniqueCompiles(
 	Bool s_uccess = true;
 	ListSHBinaryIdentifier identifiers = (ListSHBinaryIdentifier) { 0 };
 
-	//Go through each combination
+	//Go through each compile combination.
+	//Linking is a different story;
+	//Each combination of uniforms and entrypoints will have to be linked later.
 
 	for (U64 i = 0; i < runtimeEntries.length; ++i) {
 
-		if(i >> 16)
-			retError(clean, Error_overflow(0, i, 1 << 16, "Compiler_getUniqueCompiles() i out of bounds"))
+		if(i >> 15)
+			retError(clean, Error_overflow(0, i, 1 << 15, "Compiler_getUniqueCompiles() i out of bounds"))
 
 		SHEntryRuntime runtime = runtimeEntries.ptr[i];
 
@@ -381,13 +382,14 @@ Bool Compiler_getUniqueCompiles(
 
 		for (U64 j = 0; j < SHEntryRuntime_getCombinationsCompiled(runtime); ++j) {
 
-			if(j >> 16)
-				retError(clean, Error_overflow(1, j, 1 << 16, "Compiler_getUniqueCompiles() j out of bounds"))
+			if(j >> 15)
+				retError(clean, Error_overflow(1, j, 1 << 15, "Compiler_getUniqueCompiles() j out of bounds"))
 
 			SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
 			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtime, (U16) j, &binaryIdentifier, e_rr))
 
 			//Find SHBinaryIdentifier or not
+			//TODO: Avoid RT and non RT from being combined.
 
 			U64 k = 0;
 
@@ -406,10 +408,19 @@ Bool Compiler_getUniqueCompiles(
 					gotoIfError2(clean, ListU32_pushBack(compileCombinations, (U32)(j | (i << 16)), alloc))
 			}
 
-			//Insert id of found binary or newly inserted
+			//Update flags of compileCombinations->ptr[k] stored in bit 15 (isRt), 31 (isGfxOrComp)
+			
+			if(compileCombinations) {
 
-			if(binaryIndices)
-				gotoIfError2(clean, ListU16_pushBack(binaryIndices, (U16)k, alloc))
+				Bool isRt =
+					runtime.entry.stage >= ESHPipelineStage_RtStartExt && runtime.entry.stage <= ESHPipelineStage_RtEndExt;
+
+				if (isRt)
+					compileCombinations->ptrNonConst[k] |= 1 << 15;
+
+				if (!isRt && runtime.entry.stage != ESHPipelineStage_WorkgraphExt)
+					compileCombinations->ptrNonConst[k] |= 1 << 31;
+			}
 		}
 	}
 
@@ -419,14 +430,115 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_getUniqueEntrypoints(
+	ListSHEntryRuntime runtimeEntries,
+	ListCompilerEntrypoint *uniqueEntrypoints,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!uniqueEntrypoints)
+		retError(clean, Error_nullPointer(1, "Compiler_getUniqueEntrypoints()::uniqueEntrypoints is required"))
+
+	if(uniqueEntrypoints->length)
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_getUniqueEntrypoints()::uniqueEntrypoints should be empty"))
+
+	for (U64 i = 0; i < runtimeEntries.length; ++i) {
+		
+		SHEntryRuntime entry = runtimeEntries.ptr[i];
+
+		Bool isLib =
+			(entry.entry.stage >= ESHPipelineStage_RtStartExt && entry.entry.stage <= ESHPipelineStage_RtEndExt) ||
+			entry.entry.stage == ESHPipelineStage_WorkgraphExt;
+
+		if (isLib) {		//Split link of RT/workgraph from gfx/compute
+
+			U64 j = 0;
+
+			for (; j < uniqueEntrypoints->length; ++j)
+				if (uniqueEntrypoints->ptr[j].stage == ESHPipelineStage_Count)
+					break;
+
+			if(j == uniqueEntrypoints->length)
+				gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+					uniqueEntrypoints, (CompilerEntrypoint) { .stage = ESHPipelineStage_Count }, alloc
+				))
+		}
+
+		//Each entry needs its own link
+
+		else gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+			uniqueEntrypoints,
+			(CompilerEntrypoint) {
+				.name = CharString_createRefStrConst(entry.entry.name),
+				.stage = entry.entry.stage
+			},
+			alloc
+		))
+	}
+
+clean:
+	return s_uccess;
+}
+
+void Compiler_printErrors(ListCompileError errors, Allocator alloc) {
+	
+	for(U64 i = 0; i < errors.length; ++i) {
+
+		CompileError e = errors.ptr[i];
+
+		if(e.file.ptr) {
+
+			if((e.typeLineId >> 7) == ECompileErrorType_Warn)
+				Log_warnLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+
+			else Log_errorLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+		}
+
+		else if((e.typeLineId >> 7) == ECompileErrorType_Warn)
+			Log_warnLn(alloc, "%s", e.error.ptr);
+
+		else Log_errorLn(alloc, "%s", e.error.ptr);
+	}
+}
+void Compiler_logStatus(
+	ESHBinaryType binaryType,
+	const C8 *type,
+	CharString inputPath,
+	U16 runtimeEntryId,
+	U16 combinationId,
+	Allocator alloc,
+	Bool s_uccess
+) {
+	
+	const C8 *binType = binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil";
+
+		if(s_uccess)
+			Log_debugLn(
+				alloc, "%s success: %.*s (%s, %"PRIu32":%"PRIu32")",
+				type, (int) CharString_length(inputPath), inputPath.ptr,
+				binType, runtimeEntryId, combinationId
+			);
+
+		else
+			Log_errorLn(
+				alloc, "%s failed: %.*s (%s, %"PRIu32":%"PRIu32")",
+				type, (int) CharString_length(inputPath), inputPath.ptr,
+				binType, runtimeEntryId, combinationId
+			);
+}
+
 Bool Compiler_compileShaderSingle(
 	Compiler compiler,
 	ESHBinaryType binaryType,
 	Bool isDebug,
+	Bool isRt,
+	Bool isGfxOrComp,
 	CharString inputPath,
 	CharString input,
 	CompileResult *dest,
-	SpinLock *lock,						//When modifying/reading entry
 	ListSHEntryRuntime runtimeEntries,
 	U16 runtimeEntryId,
 	U16 combinationId,
@@ -448,6 +560,8 @@ Bool Compiler_compileShaderSingle(
 		.string = input,
 		.path = inputPath,
 		.debug = isDebug,
+		.isRt = isRt,
+		.containsGfxOrComp = isGfxOrComp,
 		.format = ECompilerFormat_HLSL,
 		.outputType = binaryType,
 		.infoAboutIncludes = true,		//Required to supply oiSH info about includes
@@ -462,52 +576,117 @@ Bool Compiler_compileShaderSingle(
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&entry, combinationId, &binaryIdentifier, e_rr))
 
 	settings.isLib = entry.isShaderAnnotation;
+	settings.containsGfxOrComp = entry.containsGfxOrComp;
+	settings.isRt = entry.isRt;
 
-	gotoIfError3(clean, Compiler_compile(compiler, settings, binaryIdentifier, lock, runtimeEntries, alloc, dest, e_rr))
+	gotoIfError3(clean, Compiler_compile(compiler, settings, binaryIdentifier, alloc, dest, e_rr))
 
 	if(enableLogging)
-		for(U64 i = 0; i < dest->compileErrors.length; ++i) {
-
-			CompileError e = dest->compileErrors.ptr[i];
-
-			if(e.file.ptr) {
-
-				if((e.typeLineId >> 7) == ECompileErrorType_Warn)
-					Log_warnLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
-
-				else Log_errorLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
-			}
-
-			else if((e.typeLineId >> 7) == ECompileErrorType_Warn)
-				Log_warnLn(alloc, "%s", e.error.ptr);
-
-			else Log_errorLn(alloc, "%s", e.error.ptr);
-		}
+		Compiler_printErrors(dest->compileErrors, alloc);
 
 clean:
 
 	s_uccess &= dest && dest->isSuccess;
 
-	const C8 *binType = binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil";
-
-	if(enableLogging) {
-
-		if(s_uccess)
-			Log_debugLn(
-				alloc, "Compile success: %.*s (%s, %"PRIu32":%"PRIu32")",
-				(int) CharString_length(inputPath), inputPath.ptr,
-				binType, runtimeEntryId, combinationId
-			);
-
-		else
-			Log_errorLn(
-				alloc, "Compile failed: %.*s (%s, %"PRIu32":%"PRIu32")",
-				(int) CharString_length(inputPath), inputPath.ptr,
-				binType, runtimeEntryId, combinationId
-			);
-	}
+	if(enableLogging) 
+		Compiler_logStatus(binaryType, "Compile", inputPath, runtimeEntryId, combinationId, alloc, s_uccess);
 		
 	Error_print(alloc, errTemp, ELogLevel_Error, ELogOptions_Default);
+	return s_uccess;
+}
+
+Bool Compiler_linkSingle(
+	Compiler compiler,
+	CharString path,
+	U16 runtimeEntryId,
+	U16 combinationId,
+	ESHBinaryType type,
+	ListBuffer inputs,
+	ListSHUniformRuntime uniforms,
+	Buffer uniformData,
+	CharString entrypoint,
+	U16 shaderVersion,
+	ESHPipelineStage stageType,
+	ESHExtension exts,
+	Bool enableLogging,
+	Buffer *result,
+	Allocator alloc
+) {
+
+	Error errTemp = Error_none(), *e_rr = &errTemp;
+	Bool s_uccess = true;
+	ListCompileError errors = (ListCompileError) { 0 };
+
+	if(!result)
+		retError(clean, Error_nullPointer(5, "Compiler_linkSingle()::result is required"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(5, 0, "Compiler_linkSingle()::result was present, but not empty"))
+
+	gotoIfError3(clean, Compiler_link(
+		compiler, type, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, &errors, result,
+		alloc, e_rr
+	))
+
+	if (enableLogging)
+		Compiler_printErrors(errors, alloc);
+
+clean:
+
+	if (enableLogging)
+		Compiler_logStatus(type, "Link", path, runtimeEntryId, combinationId, alloc, s_uccess);
+		
+	Error_print(alloc, errTemp, ELogLevel_Error, ELogOptions_Default);
+	ListCompileError_freeUnderlying(&errors, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_processSingle(
+	Compiler compiler,
+	CharString path,
+	U16 runtimeEntryId,
+	U16 combinationId,
+	ESHBinaryType binaryType,
+	CompileResult *tempResult,
+	Bool isDebug,
+	SHBinaryIdentifier binaryIdentifier,
+	SpinLock *lock,
+	ListSHEntryRuntime runtimeEntries,
+	Bool enableLogging,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListCompileError errors = (ListCompileError) { 0 };
+
+	if(!tempResult)
+		retError(clean, Error_nullPointer(5, "Compiler_processSingle()::tempResult is required"));
+		
+	gotoIfError3(clean, Compiler_process(
+		compiler,
+		binaryType,
+		&tempResult->binary,
+		&tempResult->registers,
+		isDebug,
+		binaryIdentifier,
+		lock,
+		runtimeEntries,
+		&tempResult->demotion,
+		&errors,
+		alloc,
+		e_rr
+	))
+		
+	if (enableLogging)
+		Compiler_printErrors(errors, alloc);
+
+clean:
+	
+	if (enableLogging)
+		Compiler_logStatus(binaryType, "Process", path, runtimeEntryId, combinationId, alloc, s_uccess);
+	
+	ListCompileError_freeUnderlying(&errors, alloc);
 	return s_uccess;
 }
 
@@ -592,7 +771,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 				ListSHEntryRuntime runtimeEntries = job->shEntries->ptr[lastJobId];
 				ListU32 compileCombinations = (ListU32) { 0 };
 
-				if(!Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, NULL, alloc, NULL)) {
+				if(!Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, alloc, NULL)) {
 					if(job->enableLogging)
 						Log_errorLn(alloc, "Compiler_compileJob() failed (Compiler_getUniqueCompiles)");
 				}
@@ -759,6 +938,12 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 			U16 runtimeEntryId = (U16)(ourNext >> 16);
 			U16 combinationId = (U16) ourNext;
 
+			Bool isRt = combinationId >> 15;
+			Bool isGfxOrComp = runtimeEntryId >> 15;
+
+			runtimeEntryId &= (U16)I16_MAX;
+			combinationId &= (U16)I16_MAX;
+
 			CharString input = job->inputPaths.ptr[ourOldJobId];
 
 			lastJobId = ourJobId;
@@ -767,10 +952,11 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 				job->compilers.ptr[threadCounter],
 				job->compileModes.ptr[ourOldJobId],
 				job->isDebug,
+				isRt,
+				isGfxOrComp,
 				input,
 				job->inputData.ptr[ourOldJobId],
 				&tmp,
-				job->lock,
 				entries,
 				runtimeEntryId,
 				combinationId,
@@ -862,31 +1048,6 @@ clean:
 	SHInclude_free(&shInclude, alloc);
 	SHBinaryInfo_free(&binaryInfo, alloc);
 	CharString_free(&tempStr, alloc);
-	return s_uccess;
-}
-
-Bool Compiler_specializeBinary(
-	SHFile *shFile,
-	CompileResult *tempResult,
-	ESHBinaryType compileMode,
-	CharString sourceFile,
-	const SHEntryRuntime *runtimeEntry,
-	U16 combinationId,
-	U16 uniformCombinationId,
-	Allocator alloc,
-	Error *e_rr
-) {
-
-	Bool s_uccess = true;
-	U16 newComboId = combinationId + uniformCombinationId * combos;
-
-	gotoIfError3(clean, Compiler_link(
-		compiler, compileMode, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, errors, result, alloc, e_rr
-	))
-
-	gotoIfError3(clean, Compiler_registerShaderBinary(shFile, &newTempResult, compileMode, sourceFile, runtimeEntry, newComboId, alloc, e_rr))
-
-clean:
 	return s_uccess;
 }
 
@@ -1107,6 +1268,7 @@ Bool Compiler_compileShaders(
 	ListU64 shEntryIdsSorted = (ListU64) { 0 };
 	ListCompileResult compileResults = (ListCompileResult) { 0 };
 	CompileResult tempResult = (CompileResult) { 0 };
+	CompileResult tempResult2 = (CompileResult) { 0 };
 
 	Compiler compiler = (Compiler) { 0 };
 	ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
@@ -1122,6 +1284,7 @@ Bool Compiler_compileShaders(
 	SpinLock lock = (SpinLock) { 0 };
 
 	ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
+	ListCompilerEntrypoint uniqueEntrypoints = (ListCompilerEntrypoint) { 0 };
 
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
@@ -1203,7 +1366,9 @@ Bool Compiler_compileShaders(
 
 			if (jobId != lastJobId && lastJobId != U32_MAX && shFile.entries.ptr) {
 
-				gotoIfError3(clean, Compiler_getUniqueCompiles(shEntries.ptr[lastJobId], NULL, &binaryIndices, alloc, e_rr))
+				//TODO: binaryIndices
+				//gotoIfError3(clean, Compiler_getUniqueCompiles(shEntries.ptr[lastJobId], NULL, alloc, e_rr))
+				
 				gotoIfError3(clean, Compiler_registerShaderEntries(
 					&shFile, shEntries.ptr[lastJobId], binaryIndices, alloc, e_rr
 				))
@@ -1260,7 +1425,6 @@ Bool Compiler_compileShaders(
 					shFile = (SHFile) { 0 };
 				}
 
-				ListU16_free(&binaryIndices, alloc);
 				SHFile_free(&shFile, alloc);
 			}
 
@@ -1384,9 +1548,8 @@ Bool Compiler_compileShaders(
 					e_rr
 				))
 
-				gotoIfError3(clean, Compiler_getUniqueCompiles(
-					runtimeEntries, &compileCombinations, &binaryIndices, alloc, e_rr
-				))
+				gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, alloc, e_rr))
+				gotoIfError3(clean, Compiler_getUniqueEntrypoints(runtimeEntries, &uniqueEntrypoints, alloc, e_rr))
 
 				//Only for non lib entries, and then once per lib entry
 
@@ -1397,16 +1560,27 @@ Bool Compiler_compileShaders(
 					U16 runtimeEntryId = (U16) (compileCombinations.ptr[j] >> 16);
 					U16 combinationId  = (U16) compileCombinations.ptr[j];
 
+					Bool isRt = combinationId >> 15;
+					Bool isGfxOrComp = runtimeEntryId >> 15;
+
+					runtimeEntryId &= (U16) I16_MAX;
+					combinationId  &= (U16) I16_MAX;
+
 					SHEntryRuntime runtimeEntry = runtimeEntries.ptr[runtimeEntryId];
 
 					//Compile and return error if failed
 
+					ESHBinaryType binaryType = allCompileOutputs.ptr[i];
+
 					if(!Compiler_compileShaderSingle(
-						compiler, allCompileOutputs.ptr[i],
+						compiler,
+						binaryType,
 						isDebug,
-						allFiles.ptr[i], allShaderText.ptr[i],
+						isRt,
+						isGfxOrComp,
+						allFiles.ptr[i],
+						allShaderText.ptr[i],
 						&tempResult,
-						NULL,
 						runtimeEntries,
 						runtimeEntryId,
 						combinationId,
@@ -1427,54 +1601,125 @@ Bool Compiler_compileShaders(
 						break;
 					}
 
-					//Add binary to SHFile
+					SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier){ 0 };
+					gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
+						&runtimeEntry, combinationId, &binaryIdentifier, e_rr
+					))
 
-					Bool allowRawRegister = !runtimeEntry.uniforms.length;		//If an unlinked / unspecialized version can be registered
+					U16 binaryCombos = (U16) SHEntryRuntime_getCombinationsCompiled(runtimeEntry);
 
 					//Lib files need to be specialized per shader annotation if uniforms are present
-					//or per entrypoint for graphics shaders
+					//or per entrypoint for graphics shaders.
+					//For non libs this wil just loop once and only call process.
 
-					if (runtimeEntry.isShaderAnnotation) {
+					U64 uniformCombos =
+						U64_max(1, U64_safeDiv(runtimeEntry.uniformData.length, runtimeEntry.uniformStride));
 
-						//TODO:
-						//for(all entrypoints):
-						//	if graphics/compute:
-						//		allowRawRegister = false;
-						//		break;
-						//	if non graphics (rt, workgraph):
-						//		register binary for that entrypoint
+					U64 separateEntrypoints = U64_max(1, uniqueEntrypoints.length);
 
-						for (U64 k = 0; k < U64_safeDiv(runtimeEntry.uniformData.length, runtimeEntry.uniformStride); ++k)
-							gotoIfError3(clean, Compiler_specializeBinary(
-								&shFile,
-								&tempResult,
-								allCompileOutputs.ptr[i],
+					U16 binStart = (U16) shFile.binaries.length;
+					U16 combos = (U16)(uniformCombos * separateEntrypoints);
+
+					for (U64 k = 0; k < combos; ++k) {
+
+						U64 uniformCombo = k % uniformCombos;
+						U64 separateEntrypoint = k / uniformCombos;
+
+						Buffer uniformData = Buffer_createRefConst(
+							runtimeEntry.uniformData.ptr + uniformCombo * runtimeEntry.uniformStride,
+							runtimeEntry.uniformStride
+						);
+
+						//TODO: This doesn't account for entrypoint!
+						U16 currentCombinationId = (U16)(combinationId + uniformCombo * binaryCombos);
+
+						ListBuffer inputs = (ListBuffer) { 0 };
+						gotoIfError2(clean, ListBuffer_createRefConst(&tempResult.binary, 1, &inputs))
+
+						Bool isShaderAnnotation = runtimeEntry.isShaderAnnotation;
+
+						if(isShaderAnnotation) {
+
+							CompilerEntrypoint entry = uniqueEntrypoints.ptr[separateEntrypoint];
+
+							tempResult2.type = ECompileResultType_Binary;
+
+							gotoIfError3(clean, Compiler_linkSingle(
+								compiler,
 								allFiles.ptr[i],
-								&runtimeEntry,
-								combinationId,
-								k,
-								alloc,
-								e_rr
+								runtimeEntryId,
+								currentCombinationId,
+								binaryType,
+								inputs,
+								runtimeEntry.uniforms,
+								uniformData,
+								entry.name,
+								binaryIdentifier.shaderVersion,
+								entry.stage,
+								binaryIdentifier.extensions,
+								enableLogging,
+								&tempResult2.binary,
+								alloc
 							))
-					}
 
-					//Regular shaders can not use uniforms or multiple entrypoints
+							binaryIdentifier.stageType = entry.stage;
 
-					if(allowRawRegister)
-						gotoIfError3(clean, Compiler_registerShaderBinary(
-							&shFile,
-							&tempResult,
-							allCompileOutputs.ptr[i],
+							Bool currGfxOrComp = !(
+								(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
+								entry.stage >= ESHPipelineStage_Count ||
+								entry.stage == ESHPipelineStage_WorkgraphExt
+							);
+
+							if(currGfxOrComp)
+								binaryIdentifier.entrypoint = CharString_createRefStrConst(entry.name);
+
+							runtimeEntry.isShaderAnnotation = !currGfxOrComp;
+						}
+								
+						//Process reflection and strip debug/reflection info if necessary
+
+						gotoIfError3(clean, Compiler_processSingle(
+							compiler,
 							allFiles.ptr[i],
-							&runtimeEntry,
-							combinationId,
+							runtimeEntryId,
+							currentCombinationId,
+							binaryType,
+							tempResult2.binary.ptr ? &tempResult2 : &tempResult,
+							isDebug,
+							binaryIdentifier,
+							&lock,
+							runtimeEntries,
+							enableLogging,
 							alloc,
 							e_rr
 						))
+
+						gotoIfError3(clean, Compiler_registerShaderBinary(
+							&shFile,
+							tempResult2.binary.ptr ? &tempResult2 : &tempResult,
+							allCompileOutputs.ptr[i],
+							allFiles.ptr[i],
+							&runtimeEntry,
+							currentCombinationId,
+							alloc,
+							e_rr
+						))
+
+						runtimeEntry.isShaderAnnotation = isShaderAnnotation;
+
+						//TODO: What if entrypoints have different uniform combos?
+					}
+
+					CompileResult_free(&tempResult, alloc);
+
+					//Go over each entrypoint and set the correct binary id
+
+					for (U64 k = 0, m = 0; k < runtimeEntries.length; ++k)
+						for (U64 l = 0; l < uniformCombos; ++l, ++m)
+							gotoIfError2(clean, ListU16_pushBack(&binaryIndices, (U16)(binStart + m), alloc))
 				}
 
 				//Link entrypoint to binaries
-				//TODO: binaryIndices changed of course
 
 				if (didSucceed)
 					gotoIfError3(clean, Compiler_registerShaderEntries(&shFile, runtimeEntries, binaryIndices, alloc, e_rr))
@@ -1542,6 +1787,7 @@ Bool Compiler_compileShaders(
 
 				ListU32_free(&compileCombinations, alloc);
 				ListU16_free(&binaryIndices, alloc);
+				ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
 				SHFile_free(&shFile, alloc);
 			}
 
@@ -1615,6 +1861,7 @@ clean:
 	Buffer_free(&temp, alloc);
 
 	ListSHEntryRuntime_freeUnderlying(&runtimeEntries, alloc);
+	ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
 	SHFile_free(&shFile, alloc);
 	SHFile_free(&previous, alloc);
 	SHEntry_free(&shEntry, alloc);
@@ -1626,6 +1873,7 @@ clean:
 	ListU64_free(&shEntryIdsSorted, alloc);
 	ListCompileResult_freeUnderlying(&compileResults, alloc);
 	CompileResult_free(&tempResult, alloc);
+	CompileResult_free(&tempResult2, alloc);
 
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);

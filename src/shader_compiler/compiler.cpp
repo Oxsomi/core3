@@ -1066,8 +1066,6 @@ Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
-	SpinLock *lock,
-	ListSHEntryRuntime entries,
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -1085,6 +1083,8 @@ Bool Compiler_compile(
 	CharString tempStr2 = CharString_createNull();
 	CharString tmpFile = CharString_createNull();
 	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
+
+	Bool requiresLink = toCompile.uniforms.length || (settings.isLib && settings.containsGfxOrComp);
 
 	Compiler_defineStrings;
 
@@ -1116,14 +1116,14 @@ Bool Compiler_compile(
 
 		Bool isRt = !!(toCompile.extensions & ESHExtension_RayQuery);
 
-		if(toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt) {
+		if(settings.isRt) {
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr))
 			isRt = true;
 		}
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, settings.debug ? "-Od" : "-O3", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-O3", alloc, e_rr))
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
@@ -1131,8 +1131,10 @@ Bool Compiler_compile(
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wconversion", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wdouble-promotion", alloc, e_rr))
 
-		if(settings.debug)
+		if(settings.debug || requiresLink) {
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qembed_debug", alloc, e_rr))
+		}
 
 		if(toCompile.extensions & ESHExtension_16BitTypes)
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr))
@@ -1147,18 +1149,16 @@ Bool Compiler_compile(
 
 			else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1spirv1.4", alloc, e_rr))
 				
-			Bool isLib = settings.isLib;
-
 			if(
 				toCompile.stageType == ESHPipelineStage_Vertex ||
 				toCompile.stageType == ESHPipelineStage_Domain ||
 				toCompile.stageType == ESHPipelineStage_GeometryExt ||
 				toCompile.stageType == ESHPipelineStage_MeshExt ||
-				isLib
+				settings.isLib
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr))
 
-			if(toCompile.stageType == ESHPipelineStage_Pixel || isLib)
+			if(toCompile.stageType == ESHPipelineStage_Pixel || settings.isLib)
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-position-w", alloc, e_rr))
 
 			if(CharString_length(toCompile.entrypoint))
@@ -1238,8 +1238,6 @@ Bool Compiler_compile(
 
 		else {
 
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qstrip_debug", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qstrip_reflect", alloc, e_rr))
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-auto-binding-space", alloc, e_rr))
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "0", alloc, e_rr))
 
@@ -1472,49 +1470,6 @@ Bool Compiler_compile(
 			alloc,
 			&result->binary
 		))
-
-		if (settings.outputType == ESHBinaryType_DXIL) {
-
-			resultBlob->Release();
-			resultBlob = NULL;
-			hr = dxcResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(&resultBlob), NULL);
-
-			if (FAILED(hr) || !resultBlob)
-				retError(clean, Error_invalidState(0, "Compiler_compile() fetch reflection failed"))
-
-			gotoIfError3(clean, Compiler_process(
-				comp,
-				ESHBinaryType_DXIL,
-				&result->binary,
-				&result->registers,
-				Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
-				settings.debug,
-				toCompile,
-				lock,
-				entries,
-				&result->demotion,
-				alloc,
-				e_rr
-			))
-		}
-
-		else if (settings.outputType == ESHBinaryType_SPIRV)
-			gotoIfError3(clean, Compiler_process(
-				comp,
-				ESHBinaryType_SPIRV,
-				&result->binary,
-				&result->registers,
-				Buffer_createNull(),
-				settings.debug,
-				toCompile,
-				lock, 
-				entries,
-				&result->demotion,
-				alloc,
-				e_rr
-			))
-
-		else retError(clean, Error_invalidState(2, "Compiler_compile() unsupported type. Only supporting DXIL and SPIRV"))
 
 		if (settings.infoAboutIncludes)
 			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))

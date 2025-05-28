@@ -35,6 +35,7 @@ TListImpl(Compiler);
 TListImpl(CompileError);
 TListImpl(IncludeInfo);
 TListImpl(IncludedFile);
+TListImpl(CompilerEntrypoint);
 TListImpl(CompileResult);
 TListNamedImpl(ListU16PtrConst);
 TListNamedImpl(ListU32PtrConst);
@@ -263,12 +264,10 @@ Bool Compiler_compilex(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryIdentifier toCompile,
-	SpinLock *lock,
-	ListSHEntryRuntime entries,
 	CompileResult *result,
 	Error *e_rr
 ) {
-	return Compiler_compile(comp, settings, toCompile, lock, entries, Platform_instance->alloc, result, e_rr);
+	return Compiler_compile(comp, settings, toCompile, Platform_instance->alloc, result, e_rr);
 }
 
 Bool Compiler_handleExtraWarningsx(SHFile file, ECompilerWarning warning, Error *e_rr) {
@@ -2498,6 +2497,7 @@ Bool Compiler_processSPIRV(
 	SpinLock *lock,						//If not NULL will be used before writing into entries
 	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
 	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
 );
@@ -2506,11 +2506,12 @@ Bool Compiler_processDXIL(
 	Compiler compiler,					//To be able to get reflection data
 	Buffer *result,						//Required; input & output DXIL
 	ListSHRegisterRuntime *registers,	//Required; Output registers
-	Buffer reflectionData,				//If not supplied, will try to get it from DXIL, if both are missing it will fail!
+	Bool isDebug,
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,						//If not NULL will be used before writing into entries
 	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
 	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
 );
@@ -2520,12 +2521,12 @@ Bool Compiler_process(
 	ESHBinaryType type,
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
-	Buffer reflectionData,
 	Bool isDebug,
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,
 	ListSHEntryRuntime entries,
 	ESHExtension *demotions,
+	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
 ) {
@@ -2537,7 +2538,7 @@ Bool Compiler_process(
 		case ESHBinaryType_SPIRV: 
 
 			gotoIfError3(clean, Compiler_processSPIRV(
-				result, registers, isDebug, toCompile, lock, entries, demotions, alloc, e_rr
+				result, registers, isDebug, toCompile, lock, entries, demotions, errors, alloc, e_rr
 			))
 
 			break;
@@ -2545,7 +2546,7 @@ Bool Compiler_process(
 		case ESHBinaryType_DXIL:
 
 			gotoIfError3(clean, Compiler_processDXIL(
-				compiler, result, registers, reflectionData, toCompile, lock, entries, demotions, alloc, e_rr
+				compiler, result, registers, isDebug, toCompile, lock, entries, demotions, errors, alloc, e_rr
 			))
 
 			break;
@@ -2562,7 +2563,7 @@ Bool Compiler_linkSPIRV(
 	Compiler compiler,
 	ListBuffer inputs,					//Input SPIRV(s); library data
 	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
-	ListU8 uniformData,					//Contents of the current compilation
+	Buffer uniformData,					//Contents of the current compilation
 	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
 	ESHPipelineStage stage,				//Whether or not to be a final executable (ESHPipelineStage_Count = keep library)
 	ESHExtension exts,
@@ -2576,7 +2577,7 @@ Bool Compiler_linkDXIL(
 	Compiler compiler,
 	ListBuffer inputs,					//Input DXIL(s); library data
 	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
-	ListU8 uniformData,					//Contents of the current compilation
+	Buffer uniformData,					//Contents of the current compilation
 	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
 	U16 shaderVersion,					//U8 maj, minor
 	ESHPipelineStage stageType,
@@ -2592,7 +2593,7 @@ Bool Compiler_link(
 	ESHBinaryType type,
 	ListBuffer inputs,
 	ListSHUniformRuntime uniforms,
-	ListU8 uniformData,
+	Buffer uniformData,
 	CharString entrypoint,
 	U16 shaderVersion,
 	ESHPipelineStage stageType,
@@ -2634,3 +2635,15 @@ Bool Compiler_link(
 clean:
 	return s_uccess;
 }
+
+void ListCompilerEntrypoint_freeUnderlying(ListCompilerEntrypoint *entry, Allocator alloc) {
+
+	if (!entry)
+		return;
+
+	for (U64 i = 0; i < entry->length; ++i)
+		CharString_free(&entry->ptrNonConst[i].name, alloc);
+
+	ListCompilerEntrypoint_free(entry, alloc);
+}
+

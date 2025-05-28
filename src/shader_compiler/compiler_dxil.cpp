@@ -897,15 +897,16 @@ typedef struct CompilerInterfaces {
 	IncludeHandler *includeHandler;
 } CompilerInterfaces;
 
-Bool Compiler_processDXIL(
+extern "C" Bool Compiler_processDXIL(
 	Compiler compiler,
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
-	Buffer reflectionData,
+	Bool isDebug,
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,
 	ListSHEntryRuntime entries,
 	ESHExtension *demotions,
+	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
 ) {
@@ -913,43 +914,40 @@ Bool Compiler_processDXIL(
 	Bool s_uccess = true;
 	ID3D12ShaderReflection1 *dxilRefl{};
 	ID3D12LibraryReflection1 *dxilReflLib{};
+	IDxcBlobEncoding *finalShader{};
+	IDxcBlob *finalVersion{};
+	IDxcContainerBuilder *containerBuilder{};
+	IDxcOperationResult *opResult{};
+	IDxcBlobEncoding *err{};
 
-	const void *resultPtr = NULL;
+	HRESULT hr = S_OK;
+
 	Bool isLib = !CharString_length(toCompile.entrypoint);
 	ESHExtension exts = ESHExtension_None;
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
 	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler.interfaces;
 
+	DxcBuffer inputBuf = DxcBuffer{};
 	DxcBuffer reflDat = DxcBuffer{};
+
+	void *part = NULL;
+	U32 partSize = 0;
 
 	if(!demotions || !result || !registers)
 		retError(clean, Error_nullPointer(0, "Compiler_processSPIRV() demotions, result and registers are required"))
 
-	resultPtr = result->ptr;
+	inputBuf = DxcBuffer{ .Ptr = result->ptr, .Size = Buffer_length(*result), .Encoding = 0 };
 
-	if (Buffer_length(reflectionData))
-		reflDat = DxcBuffer{ .Ptr = reflectionData.ptr, .Size = Buffer_length(reflectionData), .Encoding = 0 };
+	if(FAILED(hr = interfaces->utils->GetDxilContainerPart(&inputBuf, DXC_PART_REFLECTION_DATA, &part, &partSize)))
+		retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL didn't contain any reflection"))
 
-	else {
+	reflDat = DxcBuffer{ .Ptr = part, .Size = partSize, .Encoding = 0 };
 
-		DxcBuffer input = DxcBuffer{ .Ptr = resultPtr, .Size = Buffer_length(*result), .Encoding = 0 };
-
-		void *part = NULL;
-		U32 partSize = 0;
-
-		if(FAILED(interfaces->utils->GetDxilContainerPart(&input, DXC_PART_REFLECTION_DATA, &part, &partSize)))
-			retError(clean, Error_invalidState(
-				0, "Compiler_processDXIL() DXIL didn't contain any reflection, but no additional reflection data was specified"
-			))
-
-			reflDat = DxcBuffer{ .Ptr = part, .Size = partSize, .Encoding = 0 };
-	}
-
-	if(isLib && FAILED(interfaces->utils->CreateReflection(&reflDat, IID_PPV_ARGS(&dxilReflLib))))
+	if(isLib && FAILED(hr = interfaces->utils->CreateReflection(&reflDat, IID_PPV_ARGS(&dxilReflLib))))
 		retError(clean, Error_invalidState(0, "Compiler_processDXIL() lib reflection is invalid"))
 
-	else if (!isLib && FAILED(interfaces->utils->CreateReflection(&reflDat, IID_PPV_ARGS(&dxilRefl))))
+	else if (!isLib && FAILED(hr = interfaces->utils->CreateReflection(&reflDat, IID_PPV_ARGS(&dxilRefl))))
 		retError(clean, Error_invalidState(0, "Compiler_processDXIL() shader reflection is invalid"))
 
 	//Payload / intersection data reflection
@@ -1349,14 +1347,59 @@ Bool Compiler_processDXIL(
 			2, "Compiler_processDXIL() DXIL contained capability that wasn't enabled by oiSH file (use annotations)"
 		))
 
+	//Strip debug info
+
+	if(!isDebug) {
+
+		hr = DxcCreateInstance(CLSID_DxcContainerBuilder, IID_PPV_ARGS(&containerBuilder));
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_create() IDxcContainerBuilder couldn't be created"))
+		
+		hr = interfaces->utils->CreateBlobFromPinned(result->ptr, (U32) Buffer_length(*result), DXC_CP_ACP, &finalShader);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_processDXIL() Couldn't create IDxcBlob"))
+
+		if(FAILED(containerBuilder->Load(finalShader)))
+			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() Couldn't turn into container"))
+	
+		containerBuilder->RemovePart(DXC_PART_PDB);
+		containerBuilder->RemovePart(DXC_PART_PDB_NAME);
+		containerBuilder->RemovePart(DXC_PART_REFLECTION_DATA);
+
+		hr = containerBuilder->SerializeContainer(&opResult);
+
+		Bool hasErrors = false;
+
+		if (opResult && SUCCEEDED(opResult->GetErrorBuffer(&err)) && err && err->GetBufferSize()) {
+			CharString errStr = CharString_createRefSizedConst((const C8*)err->GetBufferPointer(), err->GetBufferSize(), false);
+			gotoIfError3(clean, Compiler_parseErrors(errStr, alloc, errors, &hasErrors, e_rr))
+		}
+
+		if (FAILED(hr) || hasErrors)
+			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() DXIL couldn't be assembled"))
+
+		hr = opResult->GetResult(&finalVersion);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() DXIL couldn't be obtained"))
+
+		if(!Buffer_resize(result, finalVersion->GetBufferSize(), false, false, alloc, e_rr))
+			retError(clean, Error_invalidState(2, "Compiler_processDXIL() Couldn't allocate copy"))
+
+		Buffer_memcpy(*result, Buffer_createRefConst(finalVersion->GetBufferPointer(), finalVersion->GetBufferSize()));
+	}
+
 	//Ensure we have a valid DXIL file
 
 	if(
 		Buffer_length(*result) <= 0x14 ||
 		Buffer_readU32(*result, 0, NULL) != C8x4('D', 'X', 'B', 'C') ||
-		I32x4_eq4(I32x4_load4((const U8*)resultPtr + sizeof(U32)), I32x4_zero())		//Unsigned
+		I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero())		//Unsigned
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"))
+
 
 clean:
 
@@ -1365,13 +1408,28 @@ clean:
 	if(dxilRefl)
 		dxilRefl->Release();
 
+	if(finalShader)
+		finalShader->Release();
+
+	if(finalVersion)
+		finalVersion->Release();
+
+	if(containerBuilder)
+		containerBuilder->Release();
+
+	if(opResult)
+		opResult->Release();
+
+	if(err)
+		err->Release();
+
 	if(dxilReflLib)
 		dxilReflLib->Release();
 
 	return s_uccess;
 }
 
-Bool Compiler_disassembleDXIL(Compiler comp, Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
+extern "C" Bool Compiler_disassembleDXIL(Compiler comp, Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
 
 	Bool s_uccess = true;
 	U64 binLen = Buffer_length(buf);
@@ -1418,11 +1476,11 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_linkDXIL(
+extern "C" Bool Compiler_linkDXIL(
 	Compiler comp,
 	ListBuffer inputs,
 	ListSHUniformRuntime uniforms,
-	ListU8 uniformData,
+	Buffer uniformData,
 	CharString entrypoint,
 	U16 shaderVersion,
 	ESHPipelineStage stageType,
@@ -1503,7 +1561,7 @@ Bool Compiler_linkDXIL(
 			ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
 			U64 len = ETypeId_getBytes(typeId);
 			
-			if(uniform.dataOffset + len > uniformData.length)
+			if(uniform.dataOffset + len > Buffer_length(uniformData))
 				retError(clean, Error_invalidState(2, "Compiler_linkDXIL() uniformData out of bounds"))
 
 			//Format start of function export
@@ -1557,6 +1615,8 @@ Bool Compiler_linkDXIL(
 		if (FAILED(hr))
 			retError(clean, Error_invalidState(0, "Compiler_linkDXIL() Compile uniforms failed"))
 		
+		CharString_free(&tempStr, alloc);
+
 		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
 
 		if(FAILED(hr))
@@ -1579,7 +1639,7 @@ Bool Compiler_linkDXIL(
 
 		if (FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Fetch dxil failed"))
-		
+
 		LPCWSTR lib = L"uniforms";
 		hr = linker->RegisterLibrary(lib, resultBlob);
 
@@ -1616,8 +1676,7 @@ Bool Compiler_linkDXIL(
 		#endif
 
 		CharString_free(&tempStr, alloc);
-
-		hr = linker->RegisterLibrary((const wchar_t*) tmpWStr.ptr, (IDxcBlob*)&temp);
+		hr = linker->RegisterLibrary((const wchar_t*) tmpWStr.ptr, temp);
 
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Couldn't register binary"))
@@ -1677,7 +1736,7 @@ Bool Compiler_linkDXIL(
 		&result
 	);
 
-	if (SUCCEEDED(result->GetErrorBuffer(&errs))) {
+	if (SUCCEEDED(result->GetErrorBuffer(&errs)) && errs && errs->GetBufferSize()) {
 		CharString errStr = CharString_createRefSizedConst((const C8*)errs->GetBufferPointer(), errs->GetBufferSize(), false);
 		gotoIfError3(clean, Compiler_parseErrors(errStr, alloc, errors, &hasErrors, e_rr))
 	}
@@ -1685,8 +1744,14 @@ Bool Compiler_linkDXIL(
 	if (FAILED(hr) || hasErrors)
 		retError(clean, Error_invalidOperation(0, "Compiler_linkDXIL() DXIL couldn't be linked"))
 
-	if(FAILED(result->GetResult(&finalShader)))
+	//Remove shader reflection
+
+	if (FAILED(result->GetResult(&finalShader)))
 		retError(clean, Error_invalidOperation(0, "Compiler_linkDXIL() final DXIL couldn't be obtained"))
+
+	//Note: We don't strip reflection here, because we need it in processDXIL
+	
+	//Copy to final destination
 
 	gotoIfError2(clean, Buffer_createUninitializedBytes(finalShader->GetBufferSize(), alloc, finalResult))
 	Buffer_memcpy(*finalResult, Buffer_createRefConst(finalShader->GetBufferPointer(), finalShader->GetBufferSize()));

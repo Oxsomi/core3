@@ -179,7 +179,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 		ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
 
-		if((U32)uniform.dataOffset + ETypeId_getBytes(typeId) >= binaries->identifier.uniformData.length)
+		if((U32)uniform.dataOffset + ETypeId_getBytes(typeId) > binaries->identifier.uniformData.length)
 			retError(clean, Error_invalidParameter(
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] data out of bounds"
 			))
@@ -488,6 +488,49 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 				*define = CharString_createNull();
 				gotoIfError2(clean, CharString_createCopy(defineOld, alloc, define))		//Allocate real data
+			}
+		}
+	}
+
+	//Copy uniforms
+
+	if(binaries->identifier.uniforms.length) {
+
+		if(
+			ListSHUniformRuntime_isRef(binaries->identifier.uniforms) ||
+			ListU8_isRef(binaries->identifier.uniformData)
+		) {
+
+			gotoIfError2(clean, ListU8_createCopy(binaries->identifier.uniformData, alloc, &info.identifier.uniformData))
+
+			gotoIfError2(clean, ListSHUniformRuntime_createCopy(
+				binaries->identifier.uniforms, alloc, &info.identifier.uniforms
+			))
+
+			for(U64 i = 0; i < binaries->identifier.uniforms.length; ++i)
+				info.identifier.uniforms.ptrNonConst[i].name = CharString_createNull();
+
+			for(U64 i = 0; i < info.identifier.uniforms.length; ++i)
+				gotoIfError2(clean, CharString_createCopy(
+					binaries->identifier.uniforms.ptr[i].name, alloc, &info.identifier.uniforms.ptrNonConst[i].name
+				))
+
+		} else {
+
+			info.identifier.uniformData = binaries->identifier.uniformData;
+			info.identifier.uniforms = binaries->identifier.uniforms;
+			binaries->identifier.uniforms = (ListSHUniformRuntime) { 0 };
+			binaries->identifier.uniformData = (ListU8) { 0 };
+
+			for (U64 i = 0; i < info.identifier.uniforms.length; ++i) {
+
+				CharString *uniform = &info.identifier.uniforms.ptrNonConst[i].name, uniformOld = *uniform;
+
+				if(!CharString_isRef(uniformOld))		//It's already moved
+					continue;
+
+				*uniform = CharString_createNull();
+				gotoIfError2(clean, CharString_createCopy(uniformOld, alloc, uniform))		//Allocate real data
 			}
 		}
 	}

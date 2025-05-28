@@ -85,7 +85,9 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		SHBinaryInfo c = (SHBinaryInfo) {
 			.identifier = (SHBinaryIdentifier) {
 				.defines = ListCharString_createRefFromList(ai.identifier.defines),
-				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint)
+				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint),
+				.uniformData = ListU8_createRefFromList(ai.identifier.uniformData),
+				.uniforms = ListSHUniformRuntime_createRefFromList(ai.identifier.uniforms)
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(ai.registers),
 			.dormantExtensions = ai.dormantExtensions,
