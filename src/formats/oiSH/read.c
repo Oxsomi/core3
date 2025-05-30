@@ -309,7 +309,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 						1, "SHFile_read() uniform didn't end with [A-Za-z0-9_]"
 					))
 
-			//Check for duplicate define names
+			//Check for duplicate uniform names
 
 			for(U64 k = 0; k < i; ++k)
 				if(CharString_equalsStringSensitive(binaryInfo.identifier.uniforms.ptr[k].name, uniformName))
@@ -317,13 +317,13 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 			//Store
 
-			binaryInfo.identifier.uniforms.ptrNonConst[j] = (SHUniformRuntime) {
+			binaryInfo.identifier.uniforms.ptrNonConst[i] = (SHUniformRuntime) {
 				.dataOffset = uniform.dataOffset,
 				.typeIdShort = uniform.typeIdShort
 			};
 
 			gotoIfError2(clean, CharString_createCopy(
-				uniformName, alloc, &binaryInfo.identifier.uniforms.ptrNonConst[j].name
+				uniformName, alloc, &binaryInfo.identifier.uniforms.ptrNonConst[i].name
 			))
 		}
 
