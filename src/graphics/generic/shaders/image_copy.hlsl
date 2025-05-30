@@ -47,11 +47,7 @@ struct CopyImageCommand {
 	U32x2 sizRot;
 };
 
-#ifdef __spirv__
-[[vk::push_constant]] 
-#endif
-
-CopyImageCommand cmd;
+PUSH_CONSTANT CopyImageCommand cmd;
 
 Texture2DArray<U32x4> _input;
 UNKNOWN_FORMAT RWTexture2DArray<U32x4> _output;

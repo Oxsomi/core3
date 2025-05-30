@@ -451,8 +451,10 @@ F32x4 F32x4_fromU32x4(U32x4 u) { return asfloat(u); }
 
 #ifdef __spirv__
 	#define UNKNOWN_FORMAT [[vk::image_format("unknown")]]
+	#define PUSH_CONSTANT [[vk::push_constant]] 
 #else
 	#define UNKNOWN_FORMAT
+	#define PUSH_CONSTANT
 #endif
 
 )"
