@@ -26,9 +26,9 @@ struct CopyImageRegion {
 	U32x2 dst;
 	U32x2 sizRot;
 
-	U32x4 getSrc() { return (src.xxyy << U32x4(0, 16, 0, 16)) & 0xFFFF; }
-	U32x4 getDst() { return (dst.xxyy << U32x4(0, 16, 0, 16)) & 0xFFFF; }
-	U32x4 getSizRot() { return (sizRot.xxyy << U32x4(0, 16, 0, 16)) & 0xFFFF; }
+	U32x4 getSrc() { return (src.xxyy >> U32x4(0, 16, 0, 16)) & 0xFFFF; }
+	U32x4 getDst() { return (dst.xxyy >> U32x4(0, 16, 0, 16)) & 0xFFFF; }
+	U32x4 getSizRot() { return (sizRot.xxyy >> U32x4(0, 16, 0, 16)) & 0xFFFF; }
 };
 
 //Command signature
