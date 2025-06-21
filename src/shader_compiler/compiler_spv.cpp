@@ -1569,9 +1569,9 @@ extern "C" Bool Compiler_processSPIRV(
 	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
 	ESHExtension exts = ESHExtension_None;
 	SpvReflectShaderModule spvMod{};
-	Bool isRt = toCompile.stageType >= ESHPipelineStage_RtStartExt && toCompile.stageType <= ESHPipelineStage_RtEndExt;
-	isRt |= !!(toCompile.extensions & ESHExtension_RayQuery);
-	spvtools::Optimizer optimizer{ isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3 };
+	Bool isRt = !!(toCompile.extensions & ESHExtension_RayQuery);
+	spvtools::Optimizer optimizerRt{ SPV_ENV_UNIVERSAL_1_4 };
+	spvtools::Optimizer optimizerNoRt{ SPV_ENV_UNIVERSAL_1_3 };
 
 	std::vector<U32> tmp;
 	std::vector<U32> copied;
@@ -1755,15 +1755,18 @@ extern "C" Bool Compiler_processSPIRV(
 		if(searchIntersection && !intersectSize)
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() intersection attribute wasn't found in SPIRV"))
 
+		if(searchPayload || searchIntersection)
+			isRt = true;
+
 		if(stage == ESHPipelineStage_Count)
 			retError(clean, Error_invalidState(
 				0, "Compiler_processSPIRV() SPIRV entrypoint couldn't be mapped to ESHPipelineStage"
 			))
 
-		Bool isGfx =
-			!(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) &&
-			stage != ESHPipelineStage_WorkgraphExt &&
-			stage != ESHPipelineStage_Compute;
+		Bool isStageRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+		Bool isGfx = !isStageRt && stage != ESHPipelineStage_WorkgraphExt && stage != ESHPipelineStage_Compute;
+
+		isRt |= isStageRt;
 
 		//Reflect inputs & outputs
 
@@ -1955,7 +1958,6 @@ extern "C" Bool Compiler_processSPIRV(
 			localSize, payloadSize, intersectSize, 0,
 			inputs, outputs,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
-			CharString_length(toCompile.entrypoint) ? toCompile.entrypoint :
 			CharString_createRefCStrConst(entrypoint.name),
 			lock, entries,
 			alloc, e_rr
@@ -1964,27 +1966,31 @@ extern "C" Bool Compiler_processSPIRV(
 
 	//Strip debug and optimize
 
-	optimizer.SetMessageConsumer(
-		[alloc, errors, &s_uccess, e_rr](
-			spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
-		) -> void {
-			Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
+	{
+		spvtools::Optimizer &optimizer = isRt ? optimizerRt : optimizerNoRt;
+
+		optimizer.SetMessageConsumer(
+			[alloc, errors, &s_uccess, e_rr](
+				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
+			) -> void {
+				Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
+			}
+		);
+
+		optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
+
+		if (!isDebug)
+			optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
+
+		if ((U64)resultPtr & 3) {		//Fix alignment
+			copied.resize(binLen >> 2);
+			Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
+			resultPtr = copied.data();
 		}
-	);
 
-	optimizer.RegisterPassesFromFlags({ "-O", "--legalize-hlsl" });
-
-	if (!isDebug)
-		optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
-
-	if ((U64)resultPtr & 3) {		//Fix alignment
-		copied.resize(binLen >> 2);
-		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
-		resultPtr = copied.data();
+		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
+			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"))
 	}
-
-	if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
-		retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"))
 
 	Buffer_free(result, alloc);
 	gotoIfError2(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result))
@@ -2037,6 +2043,112 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharStrin
 	gotoIfError2(clean, CharString_createCopy(
 		CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result
 	))
+
+clean:
+	return s_uccess;
+}
+
+extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
+	Compiler compiler,
+	Buffer binary,
+	Bool showAll,
+	ListCompilerEntrypoint *uniqueEntrypoints,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	(void) compiler;
+
+	Bool s_uccess = true;
+	const void *resultPtr = binary.ptr;
+	U64 binLen = Buffer_length(binary);
+
+	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
+	SpvReflectShaderModule spvMod{};
+	Bool alreadyContainsLib = false;	//Avoid re-inserting uniqueEntrypoint of lib
+	
+	if(
+		binLen < 0x8 ||
+		(binLen & 3) ||
+		Buffer_readU32(binary, 0, NULL) != 0x07230203
+	)
+		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned is invalid"))
+
+	//Reflect binary information, since our own parser doesn't have the info yet.
+
+	res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
+
+	if(res != SPV_REFLECT_RESULT_SUCCESS)
+		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned couldn't be reflected"))
+
+	for(U32 i = 0; i < spvMod.entry_point_count; ++i) {
+
+		SpvReflectEntryPoint entrypoint = spvMod.entry_points[i];
+		
+		const C8 *name = entrypoint.name;
+
+		ESHPipelineStage stage = ESHPipelineStage_Count;
+
+		switch (entrypoint.spirv_execution_model) {
+
+			case SpvExecutionModelRayGenerationKHR:			stage = ESHPipelineStage_RaygenExt;			break;
+			case SpvExecutionModelIntersectionKHR:			stage = ESHPipelineStage_IntersectionExt;	break;
+			case SpvExecutionModelAnyHitKHR:				stage = ESHPipelineStage_AnyHitExt;			break;
+			case SpvExecutionModelClosestHitKHR:			stage = ESHPipelineStage_ClosestHitExt;		break;
+			case SpvExecutionModelMissKHR:					stage = ESHPipelineStage_MissExt;			break;
+			case SpvExecutionModelCallableKHR:				stage = ESHPipelineStage_CallableExt;		break;
+
+			case SpvExecutionModelVertex:					stage = ESHPipelineStage_Vertex;			break;
+			case SpvExecutionModelFragment:					stage = ESHPipelineStage_Pixel;				break;
+			case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;		break;
+			case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;				break;
+			case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;			break;
+		
+			case SpvExecutionModelGLCompute:				stage = ESHPipelineStage_Compute;			break;
+
+			case SpvExecutionModelTaskEXT:
+			case SpvExecutionModelTaskNV:					stage = ESHPipelineStage_TaskExt;			break;
+
+			case SpvExecutionModelMeshEXT:
+			case SpvExecutionModelMeshNV:					stage = ESHPipelineStage_MeshExt;			break;
+
+			default:
+				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsSPIRV() had an invalid shader type"))
+		}
+
+		Bool insertPlain = false;
+
+		if(showAll) 
+			insertPlain = true;
+
+		else {
+
+			if((stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) || stage == ESHPipelineStage_WorkgraphExt) {
+
+				if(!alreadyContainsLib)
+					gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, alloc
+					))
+
+				alreadyContainsLib = true;
+			}
+
+			else insertPlain = true;
+		}
+
+		if(insertPlain) {
+
+			gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, alloc
+			))
+
+			gotoIfError2(clean, CharString_createCopy(
+				CharString_createRefCStrConst(name),
+				alloc,
+				&ListCompilerEntrypoint_last(*uniqueEntrypoints)->name
+			))
+		}
+	}
 
 clean:
 	return s_uccess;
@@ -2202,6 +2314,10 @@ extern "C" Bool Compiler_linkSPIRV(
 	//Run optimizer to get rid of uniforms
 
 	if (uniforms.length || CharString_length(entrypoint)) {
+
+		//TODO: Think about this; what if a binary with RT enabled produces a non RT entrypoint.
+		//We need to produce SPV1.4 but afterwards we need to go back to SPV1.3?
+		//Maybe we need to disallow this since we can't go backwards.
 
 		opt.SetMessageConsumer(
 			[alloc, errors, e_rr, &s_uccess](

@@ -476,10 +476,10 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 		.entrypoint = runtime->isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime->entry.name),
 		.extensions = runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0,
 		.shaderVersion = runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL(6, 5),
-		.stageType = runtime->entry.stage
+		.stageType = runtime->isShaderAnnotation ? ESHPipelineStage_Count : runtime->entry.stage	//Turn into lib if possible
 	};
 
-	//Combine raytracing shaders, since they don't have different configs
+	//Only combine raytracing shaders, since they don't have different configs
 	if(
 		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
 		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt

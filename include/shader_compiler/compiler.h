@@ -187,6 +187,18 @@ void Compiler_shutdown();
 
 Bool Compiler_disassemble(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
 
+//Query entrypoints embedded in a binary
+
+Bool Compiler_getUniqueEntrypoints(
+	Compiler compiler,
+	ESHBinaryType binaryType,
+	Buffer binary,									//Must be a lib
+	Bool showAll,									//true: show all entrypoints, false: only show targets to link
+	ListCompilerEntrypoint *uniqueEntrypoints,
+	Allocator alloc,
+	Error *e_rr
+);
+
 //Convert assembly (SPIRV and DXIL) to oiSH by using the assembly
 
 Bool Compiler_process(

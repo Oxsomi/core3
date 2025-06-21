@@ -1575,7 +1575,7 @@ ETypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeS
 
 	U64 strl = CharString_length(str);
 
-	if(str.ptr[off] != 'x' || (strl != off + 2 && strl != off + 4))
+	if(str.ptr[off] != 'x' || (strl != ((U64)off + 2) && strl != ((U64)off + 4)))
 		return ETypeId_Undefined;
 
 	U8 w = C8_dec(str.ptr[off + 1]);
@@ -1585,7 +1585,7 @@ ETypeId ETypeId_parseVecOrMat(CharString str, U8 off, EDataType type, EDataTypeS
 
 	Bool needsMatrix = w == 1;
 
-	Bool isMatrix = strl == off + 4;
+	Bool isMatrix = strl == ((U64)off + 4);
 	U8 h = 1;
 
 	if (isMatrix) {

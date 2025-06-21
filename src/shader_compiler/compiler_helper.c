@@ -389,12 +389,11 @@ Bool Compiler_getUniqueCompiles(
 			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtime, (U16) j, &binaryIdentifier, e_rr))
 
 			//Find SHBinaryIdentifier or not
-			//TODO: Avoid RT and non RT from being combined.
 
 			U64 k = 0;
 
 			for(; k < identifiers.length; ++k)
-				if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))
+				if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))		//TODO: This one should combine compilations if isShaderAnnotation
 					break;
 
 			//When it's new, we gotta remember the binary identifier for reuse.
@@ -427,59 +426,6 @@ Bool Compiler_getUniqueCompiles(
 clean:
 	//We will never allocate nested memory into this, so it's fine to just free it (no underlying data)
 	ListSHBinaryIdentifier_free(&identifiers, alloc);
-	return s_uccess;
-}
-
-Bool Compiler_getUniqueEntrypoints(
-	ListSHEntryRuntime runtimeEntries,
-	ListCompilerEntrypoint *uniqueEntrypoints,
-	Allocator alloc,
-	Error *e_rr
-) {
-
-	Bool s_uccess = true;
-
-	if(!uniqueEntrypoints)
-		retError(clean, Error_nullPointer(1, "Compiler_getUniqueEntrypoints()::uniqueEntrypoints is required"))
-
-	if(uniqueEntrypoints->length)
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_getUniqueEntrypoints()::uniqueEntrypoints should be empty"))
-
-	for (U64 i = 0; i < runtimeEntries.length; ++i) {
-		
-		SHEntryRuntime entry = runtimeEntries.ptr[i];
-
-		Bool isLib =
-			(entry.entry.stage >= ESHPipelineStage_RtStartExt && entry.entry.stage <= ESHPipelineStage_RtEndExt) ||
-			entry.entry.stage == ESHPipelineStage_WorkgraphExt;
-
-		if (isLib) {		//Split link of RT/workgraph from gfx/compute
-
-			U64 j = 0;
-
-			for (; j < uniqueEntrypoints->length; ++j)
-				if (uniqueEntrypoints->ptr[j].stage == ESHPipelineStage_Count)
-					break;
-
-			if(j == uniqueEntrypoints->length)
-				gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
-					uniqueEntrypoints, (CompilerEntrypoint) { .stage = ESHPipelineStage_Count }, alloc
-				))
-		}
-
-		//Each entry needs its own link
-
-		else gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
-			uniqueEntrypoints,
-			(CompilerEntrypoint) {
-				.name = CharString_createRefStrConst(entry.entry.name),
-				.stage = entry.entry.stage
-			},
-			alloc
-		))
-	}
-
-clean:
 	return s_uccess;
 }
 
@@ -528,6 +474,54 @@ void Compiler_logStatus(
 				type, (int) CharString_length(inputPath), inputPath.ptr,
 				binType, runtimeEntryId, combinationId
 			);
+}
+
+Bool Compiler_getUniqueEntrypointsDXIL(
+	Compiler compiler,
+	Buffer binary,
+	Bool showAll,
+	ListCompilerEntrypoint *uniqueEntrypoints,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_getUniqueEntrypointsSPIRV(
+	Compiler compiler,
+	Buffer binary,
+	Bool showAll,
+	ListCompilerEntrypoint *uniqueEntrypoints,
+	Allocator alloc,
+	Error *e_rr
+);
+
+Bool Compiler_getUniqueEntrypoints(
+	Compiler compiler,
+	ESHBinaryType binaryType,
+	Buffer binary,
+	Bool showAll,
+	ListCompilerEntrypoint *uniqueEntrypoints,
+	Allocator alloc,
+	Error *e_rr
+) {
+	
+	Bool s_uccess = true;
+
+	switch (binaryType) {
+
+		case ESHBinaryType_SPIRV:
+			gotoIfError3(clean, Compiler_getUniqueEntrypointsSPIRV(compiler, binary, showAll, uniqueEntrypoints, alloc, e_rr))
+			break;
+
+		case ESHBinaryType_DXIL:
+			gotoIfError3(clean, Compiler_getUniqueEntrypointsDXIL(compiler, binary, showAll, uniqueEntrypoints, alloc, e_rr))
+			break;
+
+		default:
+			retError(clean, Error_unimplemented(0, "Compiler_getUniqueEntrypoints() has invalid type"))
+	}
+
+clean:
+	return s_uccess;
 }
 
 Bool Compiler_compileShaderSingle(
@@ -1549,7 +1543,6 @@ Bool Compiler_compileShaders(
 				))
 
 				gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, alloc, e_rr))
-				gotoIfError3(clean, Compiler_getUniqueEntrypoints(runtimeEntries, &uniqueEntrypoints, alloc, e_rr))
 
 				//Only for non lib entries, and then once per lib entry
 
@@ -1614,6 +1607,10 @@ Bool Compiler_compileShaders(
 
 					U64 uniformCombos =
 						U64_max(1, U64_safeDiv(runtimeEntry.uniformData.length, runtimeEntry.uniformStride));
+
+					gotoIfError3(clean, Compiler_getUniqueEntrypoints(
+						compiler, binaryType, tempResult.binary, false, &uniqueEntrypoints, alloc, e_rr
+					))
 
 					U64 separateEntrypoints = U64_max(1, uniqueEntrypoints.length);
 
@@ -1710,6 +1707,7 @@ Bool Compiler_compileShaders(
 						//TODO: What if entrypoints have different uniform combos?
 					}
 
+					ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
 					CompileResult_free(&tempResult, alloc);
 
 					//Go over each entrypoint and set the correct binary id
@@ -1787,7 +1785,6 @@ Bool Compiler_compileShaders(
 
 				ListU32_free(&compileCombinations, alloc);
 				ListU16_free(&binaryIndices, alloc);
-				ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
 				SHFile_free(&shFile, alloc);
 			}
 

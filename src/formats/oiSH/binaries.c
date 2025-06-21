@@ -580,6 +580,12 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 	)
 		return false;
 
+	//Split up RT compile from other compiles, since RT will enable access to RTAS and other functionality.
+	//(Though by enabling inline RT you can still access this)
+
+	if((a.stageType == ESHPipelineStage_RtStartExt) != (b.stageType == ESHPipelineStage_RtStartExt))
+		return false;
+
 	for(U64 i = 0; i < a.defines.length; ++i)
 		if(!CharString_equalsStringSensitive(a.defines.ptr[i], b.defines.ptr[i]))
 			return false;

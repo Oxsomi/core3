@@ -929,25 +929,16 @@ extern "C" Bool Compiler_processDXIL(
 	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler.interfaces;
 
 	DxcBuffer inputBuf = DxcBuffer{};
-	DxcBuffer reflDat = DxcBuffer{};
-
-	void *part = NULL;
-	U32 partSize = 0;
 
 	if(!demotions || !result || !registers)
-		retError(clean, Error_nullPointer(0, "Compiler_processSPIRV() demotions, result and registers are required"))
+		retError(clean, Error_nullPointer(0, "Compiler_processDXIL() demotions, result and registers are required"))
 
 	inputBuf = DxcBuffer{ .Ptr = result->ptr, .Size = Buffer_length(*result), .Encoding = 0 };
 
-	if(FAILED(hr = interfaces->utils->GetDxilContainerPart(&inputBuf, DXC_PART_REFLECTION_DATA, &part, &partSize)))
-		retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL didn't contain any reflection"))
-
-	reflDat = DxcBuffer{ .Ptr = part, .Size = partSize, .Encoding = 0 };
-
-	if(isLib && FAILED(hr = interfaces->utils->CreateReflection(&reflDat, IID_PPV_ARGS(&dxilReflLib))))
+	if(isLib && FAILED(hr = interfaces->utils->CreateReflection(&inputBuf, IID_PPV_ARGS(&dxilReflLib))))
 		retError(clean, Error_invalidState(0, "Compiler_processDXIL() lib reflection is invalid"))
 
-	else if (!isLib && FAILED(hr = interfaces->utils->CreateReflection(&reflDat, IID_PPV_ARGS(&dxilRefl))))
+	else if (!isLib && FAILED(hr = interfaces->utils->CreateReflection(&inputBuf, IID_PPV_ARGS(&dxilRefl))))
 		retError(clean, Error_invalidState(0, "Compiler_processDXIL() shader reflection is invalid"))
 
 	//Payload / intersection data reflection
@@ -1472,6 +1463,134 @@ clean:
 
 	if(blobUtf8)
 		blobUtf8->Release();
+
+	return s_uccess;
+}
+
+extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
+	Compiler compiler,
+	Buffer binary,
+	Bool showAll,
+	ListCompilerEntrypoint *uniqueEntrypoints,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	DxcBuffer inputBuf = DxcBuffer{ .Ptr = binary.ptr, .Size = Buffer_length(binary), .Encoding = 0 };
+	HRESULT hr = S_OK;
+	DxcBuffer reflDat{};
+
+	ID3D12LibraryReflection1 *dxilReflLib{};
+
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler.interfaces;
+
+	Bool freeEp = false;
+	Bool alreadyContainsLib = false;	//Avoid re-inserting uniqueEntrypoint of lib
+	D3D12_LIBRARY_DESC desc;
+
+	if(!interfaces)
+		retError(clean, Error_nullPointer(0, "Compiler_getUniqueEntrypointsDXIL() compiler is required"))
+
+	if(!uniqueEntrypoints)
+		retError(clean, Error_nullPointer(3, "Compiler_getUniqueEntrypointsDXIL() uniqueEntrypoints are required"))
+
+	if(uniqueEntrypoints->length)
+		retError(clean, Error_invalidParameter(3, 0, "Compiler_getUniqueEntrypointsDXIL() uniqueEntrypoints should be empty"))
+
+	freeEp = true;
+
+	if(FAILED(hr = interfaces->utils->CreateReflection(&inputBuf, IID_PPV_ARGS(&dxilReflLib))))
+		retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() reflection is invalid, is it a lib file?"))
+
+	//Iterate through lib; we will only output linkable entries if !showAll, otherwise we will show all entrypoints
+
+	if(FAILED(hr = dxilReflLib->GetDesc(&desc)))
+		retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() couldn't obtain lib info"))
+
+	for(U32 i = 0; i < desc.FunctionCount; ++i) {
+
+		ID3D12FunctionReflection1 *funcRefl = dxilReflLib->GetFunctionByIndex1(i);
+
+		if(!funcRefl)
+			retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() couldn't obtain function"))
+
+		D3D12_FUNCTION_DESC funcDesc;
+		if(FAILED(hr = funcRefl->GetDesc(&funcDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() couldn't obtain function desc"))
+
+		D3D12_FUNCTION_DESC1 funcDesc1;
+		if(FAILED(hr = funcRefl->GetDesc1(&funcDesc1)))
+			retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() couldn't obtain function desc1"))
+
+		const C8 *name = funcDesc.Name;
+
+		ESHPipelineStage stage = ESHPipelineStage_Count;		//Lib
+
+		switch (funcDesc1.ShaderType) {
+
+			case D3D12_SHVER_RAY_GENERATION_SHADER:	stage = ESHPipelineStage_RaygenExt;			break;
+			case D3D12_SHVER_INTERSECTION_SHADER:	stage = ESHPipelineStage_IntersectionExt;	break;
+			case D3D12_SHVER_ANY_HIT_SHADER:		stage = ESHPipelineStage_AnyHitExt;			break;
+			case D3D12_SHVER_CLOSEST_HIT_SHADER:	stage = ESHPipelineStage_ClosestHitExt;		break;
+			case D3D12_SHVER_MISS_SHADER:			stage = ESHPipelineStage_MissExt;			break;
+			case D3D12_SHVER_CALLABLE_SHADER:		stage = ESHPipelineStage_CallableExt;		break;
+			case D3D12_SHVER_NODE_SHADER:			stage = ESHPipelineStage_WorkgraphExt;		break;
+
+			case D3D12_SHVER_PIXEL_SHADER:			stage = ESHPipelineStage_Pixel;				break;
+			case D3D12_SHVER_VERTEX_SHADER:			stage = ESHPipelineStage_Vertex;			break;
+			case D3D12_SHVER_GEOMETRY_SHADER:		stage = ESHPipelineStage_GeometryExt;		break;
+			case D3D12_SHVER_HULL_SHADER:			stage = ESHPipelineStage_Hull;				break;
+			case D3D12_SHVER_DOMAIN_SHADER:			stage = ESHPipelineStage_Domain;			break;
+			case D3D12_SHVER_COMPUTE_SHADER:		stage = ESHPipelineStage_Compute;			break;
+			case D3D12_SHVER_MESH_SHADER:			stage = ESHPipelineStage_MeshExt;			break;
+			case D3D12_SHVER_AMPLIFICATION_SHADER:	stage = ESHPipelineStage_TaskExt;			break;
+
+			default:
+				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() had an invalid shader type"))
+		}
+
+		Bool insertPlain = false;
+
+		if(showAll) 
+			insertPlain = true;
+
+		else {
+
+			if((stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) || stage == ESHPipelineStage_WorkgraphExt) {
+
+				if(!alreadyContainsLib)
+					gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, alloc
+					))
+
+				alreadyContainsLib = true;
+			}
+
+			else insertPlain = true;
+		}
+
+		if(insertPlain) {
+
+			gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, alloc
+			))
+
+			gotoIfError2(clean, CharString_createCopy(
+				CharString_createRefCStrConst(name),
+				alloc,
+				&ListCompilerEntrypoint_last(*uniqueEntrypoints)->name
+			))
+		}
+	}
+
+clean:
+
+	if(!s_uccess && freeEp)
+		ListCompilerEntrypoint_freeUnderlying(uniqueEntrypoints, alloc);
+
+	if(dxilReflLib)
+		dxilReflLib->Release();
 
 	return s_uccess;
 }

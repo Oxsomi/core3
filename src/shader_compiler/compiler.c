@@ -1613,6 +1613,8 @@ Bool Compiler_parse(
 							);
 
 							runtimeEntry.entry.name = name;
+							runtimeEntry.isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+							runtimeEntry.containsGfxOrComp = !runtimeEntry.isRt && stage != ESHPipelineStage_WorkgraphExt;
 						}
 
 						continue;
@@ -1688,6 +1690,8 @@ Bool Compiler_parse(
 
 								CharString name = CharString_createRefStrConst(parser.symbolNames.ptr[sym.name]);
 								runtimeEntry.entry.name = name;
+								runtimeEntry.isRt = false;
+								runtimeEntry.containsGfxOrComp = true;
 							}
 
 							break;

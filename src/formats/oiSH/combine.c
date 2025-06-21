@@ -92,7 +92,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			.registers = ListSHRegisterRuntime_createRefFromList(ai.registers),
 			.dormantExtensions = ai.dormantExtensions,
 			.vendorMask = ai.vendorMask,
-			.hasShaderAnnotation = ai.hasShaderAnnotation,
+			.hasShaderAnnotation = ai.hasShaderAnnotation
 		};
 
 		const void *extPtrSrc = &ai.identifier.extensions;

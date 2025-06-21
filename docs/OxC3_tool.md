@@ -266,6 +266,7 @@ Compile mode (default) will turn the text into shaders ready for consumption by 
 The following defines are set by OxC3 during compilation:
 
 - `__OXC` to indicate that OxC3 is compiling or parsing the shader.
+- `__OXC_PREPROCESS` to indicate that OxC3 is parsing the entrypoints (useful for ensuring OxC3 sees all entrypoints even if some get hidden in other compilations).
 - `__OXC_MAJOR`, `__OXC_MINOR` and `__OXC_PATCH` to indicate OxC3 version. For 0.2.0 these would be 0, 2 and 0 respectively.
 - `__OXC_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
 - `__OXC_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC_EXT_F16`, `__OXC_EXT_F64`, `__OXC_EXT_RAYQUERY`, etc.

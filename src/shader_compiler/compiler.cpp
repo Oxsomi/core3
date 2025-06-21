@@ -771,6 +771,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-P", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_PREPROCESS", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
 
