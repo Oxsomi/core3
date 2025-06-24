@@ -267,17 +267,17 @@ Bool ListSHRegisterRuntime_addRegister(
 	Error *e_rr
 );
 
-void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc);
-void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator alloc);
-void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Allocator alloc);
+void SHRegister_print(SHRegister reg, U64 indenting, Bool isVerbose, Allocator alloc);
+void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Bool isVerbose, Allocator alloc);
+void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Bool isVerbose, Allocator alloc);
 void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc);
 void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, Allocator alloc);
 
 #ifndef DISALLOW_SH_OXC3_PLATFORMS
 
-	void SHRegister_printx(SHRegister reg, U64 indenting);
-	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting);
-	void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting);
+	void SHRegister_printx(SHRegister reg, U64 indenting, Bool isVerbose);
+	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting, Bool isVerbose);
+	void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting, Bool isVerbose);
 
 	Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr);
 

@@ -37,7 +37,7 @@ TListImpl(SHUniformRuntime);
 
 	#include "platforms/platform.h"
 
-	void SHEntry_printx(SHEntry entry) { SHEntry_print(entry, Platform_instance->alloc); }
+	void SHEntry_printx(SHEntry entry, Bool isVerbose) { SHEntry_print(entry, isVerbose, Platform_instance->alloc); }
 	void SHEntryRuntime_printx(SHEntryRuntime entry) { SHEntryRuntime_print(entry, Platform_instance->alloc); }
 
 	void SHEntry_freex(SHEntry *entry) {
@@ -465,7 +465,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	combinationId /= defines;
 
 	U16 uniformId = combinationId % uniforms;
-
+	
 	if(combinationId >= uniforms)
 		retError(clean, Error_outOfBounds(
 			0, combinationId, defines,
@@ -518,7 +518,7 @@ clean:
 
 Bool SHEntryRuntime_asBinaryInfo(
 	const SHEntryRuntime *runtime,
-	U16 combinationId,
+	const SHBinaryIdentifier *identifier,
 	ESHBinaryType binaryType,
 	Buffer buf,
 	ESHExtension dormantExtensions,
@@ -536,8 +536,7 @@ Bool SHEntryRuntime_asBinaryInfo(
 	if(!binaryInfo)
 		retError(clean, Error_nullPointer(0, "SHEntryRuntime_asBinaryInfo()::binaryInfo is required"))
 
-	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, combinationId, &binaryInfo->identifier, e_rr))
-
+	binaryInfo->identifier = *identifier;
 	binaryInfo->dormantExtensions = dormantExtensions;
 	binaryInfo->vendorMask = runtime->vendorMask;
 	binaryInfo->hasShaderAnnotation = runtime->isShaderAnnotation;
@@ -547,109 +546,125 @@ clean:
 	return s_uccess;
 }
 
-void SHEntry_print(SHEntry shEntry, Allocator alloc) {
+void SHEntry_print(SHEntry shEntry, Bool isVerbose, Allocator alloc) {
 
 	const C8 *name = SHEntry_stageName(shEntry);
 
 	Log_debugLn(alloc, "Entry (%s): %.*s", name, (int) CharString_length(shEntry.name), shEntry.name.ptr);
 
-	switch(shEntry.stage) {
+	if(isVerbose) {
 
-		default: {
+		Log_debug(alloc, ELogOptions_None, "\tBinaries: [");
 
-			Bool hasSemantics =
-				shEntry.inputSemanticNamesU64[0] || shEntry.inputSemanticNamesU64[1] |
-				shEntry.outputSemanticNamesU64[0] || shEntry.outputSemanticNamesU64[1];
-
-			Bool hasInputs = shEntry.inputsU64[0] || shEntry.inputsU64[1];
-			Bool hasOutputs = shEntry.outputsU64[0] | shEntry.outputsU64[1];
-			U8 value = (hasInputs ? 1 : 0) | (hasOutputs ? 2 : 0);
-
-			for(U64 j = 0; j < 2; ++j)
-				if ((value >> j) & 1) {
-
-					Log_debugLn(alloc, j ? "\tOutputs:" : "\tInputs:");
-
-					for (U8 i = 0; i < 16; ++i) {
-
-						ESBType type = (ESBType)(j ? shEntry.outputs[i] : shEntry.inputs[i]);
-
-						if(!type)
-							continue;
-
-						U8 semanticValue = j ? shEntry.outputSemanticNames[i] : shEntry.inputSemanticNames[i];
-						U64 semanticNameId = semanticValue >> 4;
-						U64 semanticOff = j ? shEntry.uniqueInputSemantics : 0;
-
-						CharString semantic =
-							semanticNameId ? shEntry.semanticNames.ptr[semanticNameId - 1 + semanticOff] : (
-								j && shEntry.stage == ESHPipelineStage_Pixel ? CharString_createRefCStrConst("SV_TARGET") :
-								CharString_createRefCStrConst("TEXCOORD")
-								);
-
-						Log_debugLn(
-							alloc,
-							"\t\t%"PRIu8" %s : %.*s%"PRIu8,
-							i,
-							ESBType_name(type),
-							(int) CharString_length(semantic),
-							semantic.ptr,
-							hasSemantics ? (U8) (semanticValue & 0xF) : i
-						);
-					}
-				}
-
-			if(shEntry.stage != ESHPipelineStage_MeshExt && shEntry.stage != ESHPipelineStage_TaskExt)
-				break;
-		}
-
-		// fallthrough
-
-		case ESHPipelineStage_Compute:
-		case ESHPipelineStage_WorkgraphExt:
-
-			Log_debugLn(
+		for(U64 i = 0; i < shEntry.binaryIds.length; ++i)
+			Log_debug(
 				alloc,
-				"\tThread count: %"PRIu16", %"PRIu16", %"PRIu16,
-				shEntry.groupX, shEntry.groupY, shEntry.groupZ
+				ELogOptions_None,
+				"%s%"PRIu16,
+				i == 0 ? " " : ", ",
+				shEntry.binaryIds.ptr[i]
 			);
 
-			for (U8 j = 0; j < 4; ++j) {
+		Log_debugLn(alloc, " ]");
 
-				const C8 *formats[] = {
-					"\tWaveSize.required: %"PRIu8,
-					"\tWaveSize.min: %"PRIu8,
-					"\tWaveSize.max: %"PRIu8,
-					"\tWaveSize.recommended: %"PRIu8,
-				};
+		switch(shEntry.stage) {
 
-				U8 curr = (shEntry.waveSize >> (j << 2)) & 0xF;
+			default: {
 
-				if(curr)
-					Log_debugLn(alloc, formats[j], curr);
+				Bool hasSemantics =
+					shEntry.inputSemanticNamesU64[0] || shEntry.inputSemanticNamesU64[1] |
+					shEntry.outputSemanticNamesU64[0] || shEntry.outputSemanticNamesU64[1];
+
+				Bool hasInputs = shEntry.inputsU64[0] || shEntry.inputsU64[1];
+				Bool hasOutputs = shEntry.outputsU64[0] | shEntry.outputsU64[1];
+				U8 value = (hasInputs ? 1 : 0) | (hasOutputs ? 2 : 0);
+
+				for(U64 j = 0; j < 2; ++j)
+					if ((value >> j) & 1) {
+
+						Log_debugLn(alloc, j ? "\tOutputs:" : "\tInputs:");
+
+						for (U8 i = 0; i < 16; ++i) {
+
+							ESBType type = (ESBType)(j ? shEntry.outputs[i] : shEntry.inputs[i]);
+
+							if(!type)
+								continue;
+
+							U8 semanticValue = j ? shEntry.outputSemanticNames[i] : shEntry.inputSemanticNames[i];
+							U64 semanticNameId = semanticValue >> 4;
+							U64 semanticOff = j ? shEntry.uniqueInputSemantics : 0;
+
+							CharString semantic =
+								semanticNameId ? shEntry.semanticNames.ptr[semanticNameId - 1 + semanticOff] : (
+									j && shEntry.stage == ESHPipelineStage_Pixel ? CharString_createRefCStrConst("SV_TARGET") :
+									CharString_createRefCStrConst("TEXCOORD")
+									);
+
+							Log_debugLn(
+								alloc,
+								"\t\t%"PRIu8" %s : %.*s%"PRIu8,
+								i,
+								ESBType_name(type),
+								(int) CharString_length(semantic),
+								semantic.ptr,
+								hasSemantics ? (U8) (semanticValue & 0xF) : i
+							);
+						}
+					}
+
+				if(shEntry.stage != ESHPipelineStage_MeshExt && shEntry.stage != ESHPipelineStage_TaskExt)
+					break;
 			}
 
-			break;
+			// fallthrough
 
-		case ESHPipelineStage_RaygenExt:
-		case ESHPipelineStage_CallableExt:
-			break;
+			case ESHPipelineStage_Compute:
+			case ESHPipelineStage_WorkgraphExt:
 
-		case ESHPipelineStage_ClosestHitExt:
-		case ESHPipelineStage_AnyHitExt:
-		case ESHPipelineStage_IntersectionExt:
-			Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry.intersectionSize);
-			// fall through
+				Log_debugLn(
+					alloc,
+					"\tThread count: %"PRIu16", %"PRIu16", %"PRIu16,
+					shEntry.groupX, shEntry.groupY, shEntry.groupZ
+				);
 
-		case ESHPipelineStage_MissExt:
-			Log_debugLn(alloc, "\tPayload size: %"PRIu8, shEntry.payloadSize);
-			break;
+				for (U8 j = 0; j < 4; ++j) {
+
+					const C8 *formats[] = {
+						"\tWaveSize.required: %"PRIu8,
+						"\tWaveSize.min: %"PRIu8,
+						"\tWaveSize.max: %"PRIu8,
+						"\tWaveSize.recommended: %"PRIu8,
+					};
+
+					U8 curr = (shEntry.waveSize >> (j << 2)) & 0xF;
+
+					if(curr)
+						Log_debugLn(alloc, formats[j], curr);
+				}
+
+				break;
+
+			case ESHPipelineStage_RaygenExt:
+			case ESHPipelineStage_CallableExt:
+				break;
+
+			case ESHPipelineStage_ClosestHitExt:
+			case ESHPipelineStage_AnyHitExt:
+			case ESHPipelineStage_IntersectionExt:
+				Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry.intersectionSize);
+				// fall through
+
+			case ESHPipelineStage_MissExt:
+				Log_debugLn(alloc, "\tPayload size: %"PRIu8, shEntry.payloadSize);
+				break;
+		}
 	}
 }
 
 void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
-	SHEntry_print(entry.entry, alloc);
+	SHEntry_print(entry.entry, true, alloc);
 
 	for(U64 i = 0; i < entry.shaderVersions.length; ++i) {
 		U16 shaderVersion = entry.shaderVersions.ptr[i];

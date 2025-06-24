@@ -309,7 +309,7 @@ void Operations_init() {
 		.func = &CLI_inspectData,
 
 		.isFormatLess = true,
-		.operationFlags = EOperationFlags_Bin | EOperationFlags_Includes,
+		.operationFlags = EOperationFlags_Bin | EOperationFlags_Includes | EOperationFlags_Verbose,
 		.requiredParameters = EOperationHasParameter_Input,
 		.optionalParameters =
 			EOperationHasParameter_AES | EOperationHasParameter_Output |
@@ -511,7 +511,7 @@ void Operations_init() {
 			.isFormatLess = true,
 
 			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg | EOperationHasParameter_GraphicsApi,
-			.operationFlags = EOperation_Verbose
+			.operationFlags = EOperationFlags_Verbose
 		};
 
 		Operation_values[EOperation_GraphicsCreateDevice] = (Operation) {

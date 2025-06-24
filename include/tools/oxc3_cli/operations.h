@@ -159,7 +159,7 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_CompilerWarnings	= 7 << 21,
 
-	EOperation_Verbose					= 1 << 24,
+	EOperationFlags_Verbose				= 1 << 24,
 
 	EOperationFlags_Count				= 25
 

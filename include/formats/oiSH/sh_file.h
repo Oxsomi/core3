@@ -129,14 +129,14 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr);
 
-void SHFile_print(SHFile a, Allocator alloc);
+void SHFile_print(SHFile a, Bool isVerbose, Allocator alloc);
 
 #ifndef DISALLOW_SH_OXC3_PLATFORMS
 
 	Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr);
 	void SHFile_freex(SHFile *shFile);
 
-	void SHFile_printx(SHFile a);
+	void SHFile_printx(SHFile a, Bool isVerbose);
 
 	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr);	//Moves entry
 	Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr);		//Moves entry->name

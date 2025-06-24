@@ -43,8 +43,8 @@ TListImpl(SHFile);
 		SHFile_free(shFile, Platform_instance->alloc);
 	}
 
-	void SHFile_printx(SHFile a) {
-		SHFile_print(a, Platform_instance->alloc);
+	void SHFile_printx(SHFile a, Bool isVerbose) {
+		SHFile_print(a, isVerbose, Platform_instance->alloc);
 	}
 
 	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr) {
@@ -80,7 +80,7 @@ TListImpl(SHFile);
 	}
 #endif
 
-void SHFile_print(SHFile a, Allocator alloc) {
+void SHFile_print(SHFile a, Bool isVerbose, Allocator alloc) {
 
 	Log_debugLn(
 		alloc,
@@ -93,12 +93,12 @@ void SHFile_print(SHFile a, Allocator alloc) {
 
 	for(U64 i = 0; i < a.binaries.length; ++i) {
 		Log_debugLn(alloc, "SHBinaryInfo at %"PRIu64, i);
-		SHBinaryInfo_print(a.binaries.ptr[i], alloc);
+		SHBinaryInfo_print(a.binaries.ptr[i], isVerbose, alloc);
 	}
 
 	for(U64 i = 0; i < a.entries.length; ++i) {
 		Log_debugLn(alloc, "SHEntry at %"PRIu64, i);
-		SHEntry_print(a.entries.ptr[i], alloc);
+		SHEntry_print(a.entries.ptr[i], true, alloc);
 	}
 
 	for(U64 i = 0; i < a.includes.length; ++i) {

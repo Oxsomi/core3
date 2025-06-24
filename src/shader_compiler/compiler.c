@@ -2064,13 +2064,20 @@ Bool Compiler_parse(
 
 				//Ensure all shader versions are compatible with minimum featureset
 
+				Bool containsValidVersion = minVersion == OISH_SHADER_MODEL(6, 5);
+
 				for (U64 j = 0; j < runtimeEntry.shaderVersions.length; ++j)
-					if(runtimeEntry.shaderVersions.ptr[j] < minVersion)
-						retError(clean, Error_invalidState(
-							0,
-							"Compiler_parse() one of the shader models was incompatible with minimum shader featureset "
-							"of WaveSize or stage"
-						))
+					if (runtimeEntry.shaderVersions.ptr[j] >= minVersion) {
+						containsValidVersion = true;
+						break;
+					}
+
+				if(!containsValidVersion)
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_parse() one of the shader models was incompatible with minimum shader featureset "
+						"of WaveSize or stage"
+					))
 
 				//Find a shader version that has the requirements.
 				//If there's no model available, then it should be ok.
@@ -2112,7 +2119,7 @@ Bool Compiler_parse(
 
 					U16 reqVersion = Compiler_minFeatureSetExtension(runtimeEntry.extensions.ptr[j]);
 
-					Bool containsValidVersion = false;
+					containsValidVersion = false;
 
 					for (U64 k = 0; k < runtimeEntry.shaderVersions.length; ++k)
 						if (runtimeEntry.shaderVersions.ptr[k] >= reqVersion) {

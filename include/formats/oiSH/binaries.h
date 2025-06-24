@@ -210,12 +210,12 @@ TList(SHBinaryIdentifier);
 TList(SHBinaryInfo);
 
 Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b);
-void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc);
+void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc);
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
 void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);
 
 #ifndef DISALLOW_SH_OXC3_PLATFORMS
-	void SHBinaryInfo_printx(SHBinaryInfo binary);
+	void SHBinaryInfo_printx(SHBinaryInfo binary, Bool isVerbose);
 	void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
 	void SHBinaryInfo_freex(SHBinaryInfo *info);
 #endif

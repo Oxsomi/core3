@@ -255,6 +255,7 @@ Bool Compiler_precompileShader(
 			for (U64 i = 0; i < shEntriesRuntime->length; ++i) {
 
 				SHEntryRuntime *entry = &shEntriesRuntime->ptrNonConst[i];
+				entry->entry.idOrPadding = (U16) i;
 
 				//Copy uniforms
 
@@ -981,7 +982,7 @@ Bool Compiler_registerShaderBinary(
 	ESHBinaryType compileMode,
 	CharString sourceFile,
 	const SHEntryRuntime *runtimeEntry,
-	U16 combinationId,
+	const SHBinaryIdentifier *binaryIdentifier,		//Make sure this binary identifier only contains references
 	Allocator alloc,
 	Error *e_rr
 ) {
@@ -995,7 +996,7 @@ Bool Compiler_registerShaderBinary(
 		retError(clean, Error_invalidState(0, "Compiler_registerShaderBinary() should return binary"))
 
 	gotoIfError3(clean, SHEntryRuntime_asBinaryInfo(
-		runtimeEntry, combinationId, compileMode, tempResult->binary, tempResult->demotion, &binaryInfo, e_rr
+		runtimeEntry, binaryIdentifier, compileMode, tempResult->binary, tempResult->demotion, &binaryInfo, e_rr
 	))
 
 	//Add info regarding includes.
@@ -1237,6 +1238,212 @@ clean:
 	return s_uccess;
 }
 
+typedef struct LinkEntry {
+	ListU16 runtimeEntries;
+	Buffer uniformData;
+	U16 combinationId, entrypointId;
+	U32 padding;
+} LinkEntry;
+
+TList(LinkEntry);
+TListImpl(LinkEntry);
+
+Bool Compiler_getLinkEntries(
+	Compiler compiler,
+	const ListSHEntryRuntime *runtimeEntries,
+	const SHBinaryIdentifier *binaryIdentifier,
+	ESHBinaryType binaryType,
+	Buffer *binary,
+	ListCompilerEntrypoint *entrypoints,
+	ListLinkEntry *linkEntries,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListU16 tmpEntries = (ListU16) { 0 };
+
+	gotoIfError3(clean, Compiler_getUniqueEntrypoints(compiler, binaryType, *binary, true, entrypoints, alloc, e_rr))
+
+	ListCompilerEntrypoint entrypointL = *entrypoints;
+	ListSHEntryRuntime runtimeEntryL = *runtimeEntries;
+	SHBinaryIdentifier ident = *binaryIdentifier;
+
+	for (U64 i = 0; i < entrypointL.length; ++i) {
+
+		CompilerEntrypoint entrypoint = entrypointL.ptr[i];
+
+		//Find entrypoint in input array and ensure it exists / is the same stage
+
+		U64 j = 0;
+
+		for (; j < runtimeEntryL.length; ++j)
+			if (CharString_equalsStringSensitive(entrypoint.name, runtimeEntryL.ptr[j].entry.name))
+				break;
+
+		if (j == runtimeEntryL.length)
+			retError(clean, Error_invalidState(
+				0, "Compiler_getLinkEntries() had an entrypoint that wasn't defined while parsing but is present in reflection"
+			))
+
+		SHEntryRuntime entry = runtimeEntryL.ptr[j];
+
+		if(entry.entry.stage != entrypoint.stage)
+			retError(clean, Error_invalidState(
+				0, "Compiler_getLinkEntries() had a reflection stage type that mismatched with what was parsed"
+			))
+
+		Bool isLib =
+			(entry.entry.stage >= ESHPipelineStage_RtStartExt && entry.entry.stage <= ESHPipelineStage_RtEndExt) ||
+			entry.entry.stage == ESHPipelineStage_WorkgraphExt;
+
+		//Ensure we're actually present for what we're currently compiling and that we do really need linking (otherwise skip)
+		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
+		//However, if you have a mix of extensions and defines, then some entrypoints might not need to be linked again.
+		//Example: raygen with both SER and no SER. This would only be linked once per compilation, but any other shaders should exclude this.
+		//			(We don't want to have 2x hit shaders included while only raygen needs these compilations)
+
+		//Check extensions
+
+		Bool containsExtension = !ident.extensions && !entry.extensions.length;
+		U16 extensionId = 0;
+
+		for(U64 k = 0; k < entry.extensions.length; ++k)
+			if (entry.extensions.ptr[k] == (U32) ident.extensions) {
+				containsExtension = true;
+				extensionId = (U16) k;
+				break;
+			}
+
+		if (!containsExtension)			//Extension not found
+			continue;
+
+		//Check shader versions
+
+		Bool containsShaderVersion = ident.shaderVersion == OISH_SHADER_MODEL(6, 5) && !entry.shaderVersions.length;
+		U16 shaderVersion = 0;
+
+		for(U64 k = 0; k < entry.shaderVersions.length; ++k)
+			if (entry.shaderVersions.ptr[k] == ident.shaderVersion) {
+				containsShaderVersion = true;
+				shaderVersion = (U16) k;
+				break;
+			}
+
+		if (!containsShaderVersion)		//Shader model not found
+			continue;
+
+		//Check defines
+
+		Bool containsDefines = !ident.defines.length && !entry.definesPerCompilation.length;
+		U16 defineId = 0;
+
+		for (U64 k = 0, l = 0; k < entry.definesPerCompilation.length; ++k) {
+
+			U64 m = entry.definesPerCompilation.ptr[k];
+
+			ListCharString tmp = (ListCharString) { 0 };
+			gotoIfError2(clean, ListCharString_createRefConst(entry.defineNameValues.ptr + (l << 1), m << 1, &tmp))
+
+			Bool eq = tmp.length == ident.defines.length;		//TODO: ListCharString_equalsUnderlying
+
+			if (eq)
+				for (U64 n = 0; n < tmp.length; ++n)
+					if (!CharString_equalsStringSensitive(tmp.ptr[n], ident.defines.ptr[n])) {
+						eq = false;
+						break;
+					}
+
+			if (eq) {
+				defineId = (U16) k;
+				containsDefines = true;
+				break;
+			}
+
+			l += m;
+		}
+
+		if (!containsDefines)			//Defines not found
+			continue;
+
+		//Go through all uniforms defined by the runtime, since there may be multiple
+
+		U16 shaderVersions = (U16)U64_max(entry.shaderVersions.length, 1);
+		U16 extensions = (U16)U64_max(entry.extensions.length, 1);
+		U16 defines = (U16)U64_max(entry.definesPerCompilation.length, 1);
+		U64 uniformCombos = U64_safeDiv(entry.uniformData.length, entry.uniformStride);
+
+		for (U64 k = 0; k < U64_max(1, uniformCombos); ++k) {
+
+			U64 combinationId = ((k * defines + defineId) * extensions + extensionId) * shaderVersions + shaderVersion;
+
+			LinkEntry linkEntry = (LinkEntry) {
+				.uniformData = Buffer_createRefConst(entry.uniformData.ptr + entry.uniformStride * k, entry.uniformStride),
+				.combinationId = (U16) combinationId
+			};
+
+			if (!isLib) {
+
+				linkEntry.entrypointId = (U16)j;
+
+				//The ptr below is the same as linkEntry.entrypointId, except can be used as ptr to avoid intermediate ListU16
+				gotoIfError2(clean, ListU16_createRefConst(&runtimeEntryL.ptr[i].entry.idOrPadding, 1, &linkEntry.runtimeEntries))
+			}
+
+			else {
+
+				//If RT/workgraph shader, try to find a previous linkEntry
+				//In that case, we just reference the same binary.
+
+				U64 l = 0;
+
+				for (; l < linkEntries->length; ++l) {
+
+					LinkEntry linkEntry2 = linkEntries->ptr[l];
+
+					if (linkEntry2.entrypointId != U16_MAX)
+						continue;
+
+					if (Buffer_eq(linkEntry.uniformData, linkEntry2.uniformData))
+						continue;
+
+					break;
+				}
+
+				if (l != linkEntries->length) {
+					gotoIfError2(clean, ListU16_pushBack(&linkEntries->ptrNonConst[k].runtimeEntries, (U16)j, alloc))
+					continue;
+				}
+
+				linkEntry.entrypointId = U16_MAX;
+				gotoIfError2(clean, ListU16_pushBack(&tmpEntries, (U16)j, alloc))
+				linkEntry.runtimeEntries = tmpEntries;
+			}
+
+			gotoIfError2(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, alloc))
+			tmpEntries = (ListU16) { 0 };	//Moved
+		}
+	}
+
+clean:
+	ListU16_free(&tmpEntries, alloc);
+	return s_uccess;
+}
+
+void ListLinkEntry_freeUnderlying(ListLinkEntry *entries, Allocator alloc) {
+
+	if (!entries)
+		return;
+
+	for (U64 i = 0; i < entries->length; ++i) {
+		LinkEntry *entry = &entries->ptrNonConst[i];
+		Buffer_free(&entry->uniformData, alloc);
+		ListU16_free(&entry->runtimeEntries, alloc);
+	}
+
+	ListLinkEntry_free(entries, alloc);
+}
+
 Bool Compiler_compileShaders(
 	ListCharString allFiles,
 	ListCharString allShaderText,
@@ -1268,6 +1475,7 @@ Bool Compiler_compileShaders(
 	ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
 	ListU32 compileCombinations = (ListU32) { 0 };
 	ListU16 binaryIndices = (ListU16) { 0 };
+	ListU32 binaryIndicesUnsorted = (ListU32) { 0 };
 	SHEntry shEntry = (SHEntry) { 0 };
 
 	SHFile shFile = (SHFile) { 0 };
@@ -1278,6 +1486,7 @@ Bool Compiler_compileShaders(
 	SpinLock lock = (SpinLock) { 0 };
 
 	ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
+	ListLinkEntry linkEntries = (ListLinkEntry) { 0 };
 	ListCompilerEntrypoint uniqueEntrypoints = (ListCompilerEntrypoint) { 0 };
 
 	CharString tempStr = CharString_createNull();
@@ -1465,13 +1674,18 @@ Bool Compiler_compileShaders(
 			U16 runtimeEntryId = (U16)(next >> 16);
 			U16 combinationId = (U16) next;
 
+			const SHEntryRuntime *runtimeEntry = &shEntries.ptr[jobId].ptr[runtimeEntryId];
+
+			SHBinaryIdentifier identifier = (SHBinaryIdentifier) { 0 };
+			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtimeEntry, combinationId, &identifier, e_rr))
+
 			gotoIfError3(clean, Compiler_registerShaderBinary(
 				&shFile,
 				compileResult,
 				allCompileOutputs.ptr[jobId],
 				allFiles.ptr[jobId],
-				&shEntries.ptr[jobId].ptr[runtimeEntryId],
-				combinationId,
+				runtimeEntry,
+				&identifier,
 				alloc,
 				e_rr
 			))
@@ -1598,37 +1812,36 @@ Bool Compiler_compileShaders(
 					gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
 						&runtimeEntry, combinationId, &binaryIdentifier, e_rr
 					))
-
-					U16 binaryCombos = (U16) SHEntryRuntime_getCombinationsCompiled(runtimeEntry);
-
+						
 					//Lib files need to be specialized per shader annotation if uniforms are present
 					//or per entrypoint for graphics shaders.
 					//For non libs this wil just loop once and only call process.
+					//It uses both the oxc data (uniforms, defines, etc.) and binary data to know the relevant entrypoints.
+					//For example; it might compile a function, but it's unused or a function is not present in the final binary.
 
-					U64 uniformCombos =
-						U64_max(1, U64_safeDiv(runtimeEntry.uniformData.length, runtimeEntry.uniformStride));
-
-					gotoIfError3(clean, Compiler_getUniqueEntrypoints(
-						compiler, binaryType, tempResult.binary, false, &uniqueEntrypoints, alloc, e_rr
+					gotoIfError3(clean, Compiler_getLinkEntries(
+						compiler,
+						&runtimeEntries,
+						&binaryIdentifier,
+						binaryType,
+						&tempResult.binary,
+						&uniqueEntrypoints,
+						&linkEntries,
+						alloc,
+						e_rr
 					))
 
-					U64 separateEntrypoints = U64_max(1, uniqueEntrypoints.length);
+					for (U64 k = 0; k < linkEntries.length; ++k) {
 
-					U16 binStart = (U16) shFile.binaries.length;
-					U16 combos = (U16)(uniformCombos * separateEntrypoints);
+						LinkEntry linkEntry = linkEntries.ptr[k];
+						Buffer uniformData = linkEntry.uniformData;
 
-					for (U64 k = 0; k < combos; ++k) {
+						U16 currentCombinationId = linkEntry.combinationId;
 
-						U64 uniformCombo = k % uniformCombos;
-						U64 separateEntrypoint = k / uniformCombos;
-
-						Buffer uniformData = Buffer_createRefConst(
-							runtimeEntry.uniformData.ptr + uniformCombo * runtimeEntry.uniformStride,
-							runtimeEntry.uniformStride
-						);
-
-						//TODO: This doesn't account for entrypoint!
-						U16 currentCombinationId = (U16)(combinationId + uniformCombo * binaryCombos);
+						binaryIdentifier = (SHBinaryIdentifier){ 0 };
+						gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
+							&runtimeEntry, currentCombinationId, &binaryIdentifier, e_rr
+						))
 
 						ListBuffer inputs = (ListBuffer) { 0 };
 						gotoIfError2(clean, ListBuffer_createRefConst(&tempResult.binary, 1, &inputs))
@@ -1637,8 +1850,13 @@ Bool Compiler_compileShaders(
 
 						if(isShaderAnnotation) {
 
-							CompilerEntrypoint entry = uniqueEntrypoints.ptr[separateEntrypoint];
+							CompilerEntrypoint entry = (CompilerEntrypoint) { 0 }; 
+							
+							if (linkEntry.entrypointId != U16_MAX)
+								entry = uniqueEntrypoints.ptr[linkEntry.entrypointId];
 
+							else entry.stage = ESHPipelineStage_Count;		//Mark as lib
+							
 							tempResult2.type = ECompileResultType_Binary;
 
 							gotoIfError3(clean, Compiler_linkSingle(
@@ -1691,33 +1909,41 @@ Bool Compiler_compileShaders(
 							e_rr
 						))
 
+						U16 binaryId = (U16) shFile.binaries.length;
+
 						gotoIfError3(clean, Compiler_registerShaderBinary(
 							&shFile,
 							tempResult2.binary.ptr ? &tempResult2 : &tempResult,
 							allCompileOutputs.ptr[i],
 							allFiles.ptr[i],
 							&runtimeEntry,
-							currentCombinationId,
+							&binaryIdentifier,
 							alloc,
 							e_rr
 						))
 
-						runtimeEntry.isShaderAnnotation = isShaderAnnotation;
+						for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)		//Link runtime entry to binary
+							gotoIfError2(clean, ListU32_pushBack(
+								&binaryIndicesUnsorted, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc
+							))
 
-						//TODO: What if entrypoints have different uniform combos?
+						runtimeEntry.isShaderAnnotation = isShaderAnnotation;
 					}
 
+					ListLinkEntry_freeUnderlying(&linkEntries, alloc);
 					ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
 					CompileResult_free(&tempResult, alloc);
-
-					//Go over each entrypoint and set the correct binary id
-
-					for (U64 k = 0, m = 0; k < runtimeEntries.length; ++k)
-						for (U64 l = 0; l < uniformCombos; ++l, ++m)
-							gotoIfError2(clean, ListU16_pushBack(&binaryIndices, (U16)(binStart + m), alloc))
 				}
 
+				if(!ListU32_sort(binaryIndicesUnsorted))
+					retError(clean, Error_invalidState(0, "Compiler_compileShaders() sort failed"))
+
+				for(U64 k = 0; k < binaryIndicesUnsorted.length; ++k)
+					gotoIfError2(clean, ListU16_pushBack(&binaryIndices, (U16) binaryIndicesUnsorted.ptr[k], alloc))
+
 				//Link entrypoint to binaries
+				//TODO: Seems like compute has somehow disappeared??
+				//TODO: Also, binary ids isn't proper here?
 
 				if (didSucceed)
 					gotoIfError3(clean, Compiler_registerShaderEntries(&shFile, runtimeEntries, binaryIndices, alloc, e_rr))
@@ -1784,7 +2010,8 @@ Bool Compiler_compileShaders(
 				else errorInPrevious = true;
 
 				ListU32_free(&compileCombinations, alloc);
-				ListU16_free(&binaryIndices, alloc);
+				ListU32_clear(&binaryIndicesUnsorted);
+				ListU16_clear(&binaryIndices);
 				SHFile_free(&shFile, alloc);
 			}
 
@@ -1858,12 +2085,15 @@ clean:
 	Buffer_free(&temp, alloc);
 
 	ListSHEntryRuntime_freeUnderlying(&runtimeEntries, alloc);
+	ListLinkEntry_freeUnderlying(&linkEntries, alloc);
 	ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
 	SHFile_free(&shFile, alloc);
+
 	SHFile_free(&previous, alloc);
 	SHEntry_free(&shEntry, alloc);
 	ListU32_free(&compileCombinations, alloc);
 	ListU16_free(&binaryIndices, alloc);
+	ListU32_free(&binaryIndicesUnsorted, alloc);
 
 	ListListSHEntryRuntime_freeUnderlying(&shEntries, alloc);
 	ListU64_free(&shEntryIds, alloc);

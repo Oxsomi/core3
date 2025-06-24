@@ -83,7 +83,8 @@ typedef struct SHEntry {
 	U16 groupZ;
 	U8 intersectionSize, payloadSize;	//Raytracing payload sizes
 
-	U32 padding;
+	U16 idOrPadding;					//Sometimes is used to store id in an array
+	U16 padding;
 
 	//Verification for linking and PSO compatibility (graphics only)
 
@@ -147,7 +148,7 @@ U32 SHEntryRuntime_getCombinationsCompiled(SHEntryRuntime runtime);		//How many 
 
 Bool SHEntryRuntime_asBinaryInfo(
 	const SHEntryRuntime *runtime,
-	U16 combinationId,
+	const SHBinaryIdentifier *identifier,
 	ESHBinaryType binaryType,
 	Buffer buf,
 	ESHExtension dormantExtensions,
@@ -165,7 +166,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 TList(SHEntry);
 TList(SHEntryRuntime);
 
-void SHEntry_print(SHEntry entry, Allocator alloc);
+void SHEntry_print(SHEntry entry, Bool isVerbose, Allocator alloc);
 void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc);
 void SHEntry_free(SHEntry *entry, Allocator alloc);
 const C8 *SHEntry_stageName(SHEntry entry);
@@ -174,7 +175,7 @@ void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
 
 #ifndef DISALLOW_SH_OXC3_PLATFORMS
-	void SHEntry_printx(SHEntry entry);
+	void SHEntry_printx(SHEntry entry, Bool isVerbose);
 	void SHEntryRuntime_printx(SHEntryRuntime entry);
 	void SHEntry_freex(SHEntry *entry);
 	void SHEntryRuntime_freex(SHEntryRuntime *entry);

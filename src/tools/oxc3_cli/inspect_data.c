@@ -677,6 +677,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			Bool binaryMode = args.flags & EOperationFlags_Bin;
 			Bool includesMode = args.flags & EOperationFlags_Includes;
+			Bool isVerbose = args.flags & EOperationFlags_Verbose;
 
 			if (binaryMode && includesMode) {
 				Log_errorLnx("oiSH file data can't use --bin and --includes at the same time");
@@ -725,7 +726,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				}
 
 				if(!binaryMode)
-					SHEntry_printx(file.entries.ptr[entryI]);
+					SHEntry_printx(file.entries.ptr[entryI], true);
 
 				else {
 
@@ -765,7 +766,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 							goto cleanSh;
 					}
 
-					else SHBinaryInfo_printx(file.binaries.ptr[entryI]);
+					else SHBinaryInfo_printx(file.binaries.ptr[entryI], true);
 				}
 			}
 
@@ -793,38 +794,28 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					Log_debugLnx("oiSH binaries:");
 
-					for (U64 i = start; i < end && i < count; ++i) {
-
-						SHBinaryInfo bin = file.binaries.ptr[i];
-
-						if(bin.hasShaderAnnotation)
-							Log_debugLnx(
-								"Binary %"PRIu64" (lib_%"PRIu8"_%"PRIu8")",
-								i, (U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion
-							);
-
-						else Log_debugLnx(
-							"Binary %"PRIu64" (%s_%"PRIu8"_%"PRIu8": %.*s)",
-							i, ESHPipelineStage_getStagePrefix(bin.identifier.stageType),
-							(U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion,
-							(int) CharString_length(bin.identifier.entrypoint),
-							bin.identifier.entrypoint.ptr
-						);
-					}
+					for (U64 i = start; i < end && i < count; ++i)
+						SHBinaryInfo_printx(file.binaries.ptr[i], isVerbose);
 				}
 
 				else {
 
-					Log_debugLnx("oiSH entries:");
+					if (!(args.parameters & (EOperationHasParameter_Entry | EOperationHasParameter_StartOffset)))
+						SHFile_printx(file, isVerbose);
 
-					for (U64 i = start; i < end && i < count; ++i) {
+					else {
 
-						SHEntry shEntry = file.entries.ptr[i];
-						const C8 *name = SHEntry_stageName(shEntry);
+						Log_debugLnx("oiSH entries:");
 
-						Log_debugLnx(
-							"Entry %"PRIu64" (%s): %.*s", i, name, (int) CharString_length(shEntry.name), shEntry.name.ptr
-						);
+						for (U64 i = start; i < end && i < count; ++i) {
+
+							SHEntry shEntry = file.entries.ptr[i];
+							const C8 *name = SHEntry_stageName(shEntry);
+
+							Log_debugLnx(
+								"Entry %"PRIu64" (%s): %.*s", i, name, (int) CharString_length(shEntry.name), shEntry.name.ptr
+							);
+						}
 					}
 				}
 			}

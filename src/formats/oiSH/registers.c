@@ -34,14 +34,16 @@ TListImpl(SHRegisterRuntime);
 
 	#include "platforms/platform.h"
 
-	void SHRegister_printx(SHRegister reg, U64 indenting) { SHRegister_print(reg, indenting, Platform_instance->alloc); }
-
-	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting) {
-		SHRegisterRuntime_print(reg, indenting, Platform_instance->alloc);
+	void SHRegister_printx(SHRegister reg, U64 indenting, Bool isVerbose) {
+		SHRegister_print(reg, indenting, isVerbose, Platform_instance->alloc);
 	}
 
-	void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting) {
-		ListSHRegisterRuntime_print(reg, indenting, Platform_instance->alloc);
+	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting, Bool isVerbose) {
+		SHRegisterRuntime_print(reg, indenting, isVerbose, Platform_instance->alloc);
+	}
+
+	void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting, Bool isVerbose) {
+		ListSHRegisterRuntime_print(reg, indenting, isVerbose, Platform_instance->alloc);
 	}
 
 	Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr) {
@@ -1045,7 +1047,7 @@ void SHRegister_printBindings(ESHRegisterType type, SHBindings bindings, Allocat
 	}
 }
 
-void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
+void SHRegister_print(SHRegister reg, U64 indenting, Bool isVerbose, Allocator alloc) {
 
 	if(indenting >= SHORTSTRING_LEN) {
 		Log_debugLn(alloc, "SHRegister_print() short string out of bounds");
@@ -1120,10 +1122,11 @@ void SHRegister_print(SHRegister reg, U64 indenting, Allocator alloc) {
 		}
 	}
 
-	SHRegister_printBindings(reg.registerType, reg.bindings, alloc, "", indent);
+	if(isVerbose)
+		SHRegister_printBindings(reg.registerType, reg.bindings, alloc, "", indent);
 }
 
-void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator alloc) {
+void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Bool isVerbose, Allocator alloc) {
 
 	if(indenting >= SHORTSTRING_LEN) {
 		Log_debugLn(alloc, "SHRegisterRuntime_print() short string out of bounds");
@@ -1171,13 +1174,13 @@ void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Allocator all
 
 	Log_debugLn(alloc, "");
 
-	SHRegister_print(reg.reg, indenting + 1, alloc);
+	SHRegister_print(reg.reg, indenting + 1, isVerbose, alloc);
 
-	if(reg.shaderBuffer.vars.ptr)
+	if(reg.shaderBuffer.vars.ptr && isVerbose)
 		SBFile_print(reg.shaderBuffer, indenting + 1, U16_MAX, true, alloc);
 }
 
-void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Allocator alloc) {
+void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Bool isVerbose, Allocator alloc) {
 
 	if(indenting >= SHORTSTRING_LEN) {
 		Log_debugLn(alloc, "ListSHRegisterRuntime_print() short string out of bounds");
@@ -1191,7 +1194,7 @@ void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Alloc
 	Log_debugLn(alloc, "%sRegisters:", indent);
 
 	for(U64 i = 0; i < reg.length; ++i)
-		SHRegisterRuntime_print(reg.ptr[i], indenting + 1, alloc);
+		SHRegisterRuntime_print(reg.ptr[i], indenting + 1, isVerbose, alloc);
 }
 
 void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc) {

@@ -217,7 +217,7 @@
 				Log_debugLnx("%s: %"PRIu64" graphics devices:", EGraphicsApi_name[api], infos.length);
 
 				for(U64 i = 0; i < infos.length; ++i)
-					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], args.flags & EOperation_Verbose);
+					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], args.flags & EOperationFlags_Verbose);
 			}
 
 			ListGraphicsDeviceInfo_freex(&infos);

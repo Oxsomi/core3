@@ -36,7 +36,9 @@ TListImpl(SHBinaryIdentifier);
 
 	#include "platforms/platform.h"
 
-	void SHBinaryInfo_printx(SHBinaryInfo binary) { SHBinaryInfo_print(binary, Platform_instance->alloc); }
+	void SHBinaryInfo_printx(SHBinaryInfo binary, Bool isVerbose) {
+		SHBinaryInfo_print(binary, isVerbose, Platform_instance->alloc);
+	}
 
 	void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier) {
 		SHBinaryIdentifier_free(identifier, Platform_instance->alloc);
@@ -323,7 +325,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 				
 			case ESHRegisterType_PushConstants:
 				if(hasDXIL)	 counters[Counter_CBV] += regs;
-				if(hasSPIRV) counters[Counter_PushConstants] += regs;
+				counters[Counter_PushConstants] += regs;		//SPV is the only one that can make type push constants
 				break;
 
 			case ESHRegisterType_ByteAddressBuffer:
@@ -613,7 +615,7 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 	return true;
 }
 
-void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
+void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc) {
 
 	if(binary.hasShaderAnnotation)
 		Log_debugLn(alloc, "SH Binary (lib file)");
@@ -625,13 +627,17 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 	}
 
 	U16 shaderVersion = binary.identifier.shaderVersion;
-	Log_debugLn(alloc, "\t[[oxc::model(%"PRIu8".%"PRIu8")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+
+	if (isVerbose || (shaderVersion != OISH_SHADER_MODEL(6, 5)))
+		Log_debugLn(alloc, "\t[[oxc::model(%"PRIu8".%"PRIu8")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 
 	ESHExtension activeExt = (binary.identifier.extensions &~ binary.dormantExtensions) & ESHExtension_All;
 	ESHExtension exts = binary.identifier.extensions;
 
-	if(!exts)
-		Log_debugLn(alloc, "\t[[oxc::extension()]]");
+	if (!exts) {
+		if(isVerbose)
+			Log_debugLn(alloc, "\t[[oxc::extension()]]");
+	}
 
 	else {
 
@@ -648,8 +654,10 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
-	if(!activeExt)
-		Log_debugLn(alloc, "\t[[oxc::active_extension()]]");
+	if (!activeExt) {
+		if(isVerbose)
+			Log_debugLn(alloc, "\t[[oxc::active_extension()]]");
+	}
 
 	else {
 
@@ -668,8 +676,10 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 
 	ListCharString defines = binary.identifier.defines;
 
-	if(!(defines.length / 2))
-		Log_debugLn(alloc, "\t[[oxc::defines()]");
+	if (!(defines.length / 2)) {
+		if(isVerbose)
+			Log_debugLn(alloc, "\t[[oxc::defines()]");
+	}
 
 	else {
 
@@ -698,8 +708,10 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 
 	ListSHUniformRuntime uniforms = binary.identifier.uniforms;
 
-	if(!uniforms.length)
-		Log_debugLn(alloc, "\t[[oxc::uniforms()]");
+	if (!uniforms.length) {
+		if(isVerbose)
+			Log_debugLn(alloc, "\t[[oxc::uniforms()]");
+	}
 
 	else {
 
@@ -746,8 +758,10 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 
 	U16 mask = (1 << ESHVendor_Count) - 1;
 
-	if((binary.vendorMask & mask) == mask)
-		Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
+	if ((binary.vendorMask & mask) == mask) {
+		if (isVerbose)
+			Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
+	}
 
 	else for(U64 i = 0; i < ESHVendor_Count; ++i)
 		if((binary.vendorMask >> i) & 1)
@@ -759,7 +773,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 		if(Buffer_length(binary.binaries[i]))
 			Log_debugLn(alloc, "\t\t%s: %"PRIu64, ESHBinaryType_names[i], Buffer_length(binary.binaries[i]));
 
-	ListSHRegisterRuntime_print(binary.registers, 1, alloc);
+	ListSHRegisterRuntime_print(binary.registers, 1, isVerbose, alloc);
 }
 
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc) {
