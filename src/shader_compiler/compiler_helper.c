@@ -1046,9 +1046,16 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_registerShaderEntries(SHFile *shFile, ListSHEntryRuntime entries, ListU16 binaryIndices, Allocator alloc, Error *e_rr) {
+Bool Compiler_registerShaderEntries(
+	SHFile *shFile,
+	ListSHEntryRuntime entries,
+	ListU32 binaryIndices,
+	Allocator alloc,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
+	ListU16 binaryIndicesShort = (ListU16) { 0 };
 
 	for (U64 j = 0, k = 0; j < entries.length; ++j) {
 
@@ -1056,27 +1063,43 @@ Bool Compiler_registerShaderEntries(SHFile *shFile, ListSHEntryRuntime entries, 
 
 		U32 l = SHEntryRuntime_getCombinations(*runtime);
 
-		if (k + l > binaryIndices.length)
+		//Skip missing binaries
+
+		if (k == binaryIndices.length)
+			break;
+
+		if ((binaryIndices.ptr[k] >> 16) != j)
+			continue;
+
+		//Validate that [k, k + l> is valid (points to same binary)
+
+		if(k + l > binaryIndices.length)
 			retError(clean, Error_outOfBounds(
 				0, k + l, binaryIndices.length,
 				"CLI_compileShader() runtime accessed binaryIndices out of bounds"
 			))
+
+		if((binaryIndices.ptr[k + l - 1] >> 16) != j)
+			retError(clean, Error_invalidState(0, "CLI_compileShader() has missing binaries for index j"))
 
 		if(runtime->entry.binaryIds.length)
 			retError(clean, Error_invalidOperation(
 				0, "CLI_compileShader() runtime already included binaryIds"
 			))
 
-		ListU16 tempBinaryIds = (ListU16) { 0 };
-		gotoIfError2(clean, ListU16_createSubset(binaryIndices, k, l, &tempBinaryIds))
+		gotoIfError2(clean, ListU16_resize(&binaryIndicesShort, l, alloc))
 
-		runtime->entry.binaryIds = tempBinaryIds;
+		for(U64 m = 0; m < l; ++m)
+			binaryIndicesShort.ptrNonConst[m] = (U16) binaryIndices.ptr[k + m];
+
+		runtime->entry.binaryIds = ListU16_createRefFromList(binaryIndicesShort);
 		gotoIfError3(clean, SHFile_addEntrypoint(shFile, &runtime->entry, alloc, e_rr))
 
 		k += l;
 	}
 
 clean:
+	ListU16_free(&binaryIndicesShort, alloc);
 	return s_uccess;
 }
 
@@ -1242,7 +1265,7 @@ typedef struct LinkEntry {
 	ListU16 runtimeEntries;
 	Buffer uniformData;
 	U16 combinationId, entrypointId;
-	U32 padding;
+	U8 padding[4];
 } LinkEntry;
 
 TList(LinkEntry);
@@ -1474,8 +1497,7 @@ Bool Compiler_compileShaders(
 	Compiler compiler = (Compiler) { 0 };
 	ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
 	ListU32 compileCombinations = (ListU32) { 0 };
-	ListU16 binaryIndices = (ListU16) { 0 };
-	ListU32 binaryIndicesUnsorted = (ListU32) { 0 };
+	ListU32 binaryIndices = (ListU32) { 0 };
 	SHEntry shEntry = (SHEntry) { 0 };
 
 	SHFile shFile = (SHFile) { 0 };
@@ -1572,9 +1594,9 @@ Bool Compiler_compileShaders(
 				//TODO: binaryIndices
 				//gotoIfError3(clean, Compiler_getUniqueCompiles(shEntries.ptr[lastJobId], NULL, alloc, e_rr))
 				
-				gotoIfError3(clean, Compiler_registerShaderEntries(
+				/*gotoIfError3(clean, Compiler_registerShaderEntries(
 					&shFile, shEntries.ptr[lastJobId], binaryIndices, alloc, e_rr
-				))
+				))*/
 
 				if (
 					lastJobId &&
@@ -1909,6 +1931,9 @@ Bool Compiler_compileShaders(
 							e_rr
 						))
 
+						if (linkEntry.entrypointId == U16_MAX)
+							binaryIdentifier.stageType = isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
+
 						U16 binaryId = (U16) shFile.binaries.length;
 
 						gotoIfError3(clean, Compiler_registerShaderBinary(
@@ -1924,7 +1949,7 @@ Bool Compiler_compileShaders(
 
 						for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)		//Link runtime entry to binary
 							gotoIfError2(clean, ListU32_pushBack(
-								&binaryIndicesUnsorted, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc
+								&binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc
 							))
 
 						runtimeEntry.isShaderAnnotation = isShaderAnnotation;
@@ -1935,15 +1960,10 @@ Bool Compiler_compileShaders(
 					CompileResult_free(&tempResult, alloc);
 				}
 
-				if(!ListU32_sort(binaryIndicesUnsorted))
+				if(!ListU32_sort(binaryIndices))
 					retError(clean, Error_invalidState(0, "Compiler_compileShaders() sort failed"))
 
-				for(U64 k = 0; k < binaryIndicesUnsorted.length; ++k)
-					gotoIfError2(clean, ListU16_pushBack(&binaryIndices, (U16) binaryIndicesUnsorted.ptr[k], alloc))
-
 				//Link entrypoint to binaries
-				//TODO: Seems like compute has somehow disappeared??
-				//TODO: Also, binary ids isn't proper here?
 
 				if (didSucceed)
 					gotoIfError3(clean, Compiler_registerShaderEntries(&shFile, runtimeEntries, binaryIndices, alloc, e_rr))
@@ -2010,8 +2030,7 @@ Bool Compiler_compileShaders(
 				else errorInPrevious = true;
 
 				ListU32_free(&compileCombinations, alloc);
-				ListU32_clear(&binaryIndicesUnsorted);
-				ListU16_clear(&binaryIndices);
+				ListU32_clear(&binaryIndices);
 				SHFile_free(&shFile, alloc);
 			}
 
@@ -2092,8 +2111,7 @@ clean:
 	SHFile_free(&previous, alloc);
 	SHEntry_free(&shEntry, alloc);
 	ListU32_free(&compileCombinations, alloc);
-	ListU16_free(&binaryIndices, alloc);
-	ListU32_free(&binaryIndicesUnsorted, alloc);
+	ListU32_free(&binaryIndices, alloc);
 
 	ListListSHEntryRuntime_freeUnderlying(&shEntries, alloc);
 	ListU64_free(&shEntryIds, alloc);

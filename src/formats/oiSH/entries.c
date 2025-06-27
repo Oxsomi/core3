@@ -481,8 +481,8 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 	//Only combine raytracing shaders, since they don't have different configs
 	if(
-		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
-		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt
+		runtime->entry.stage >= ESHPipelineStage_RtStartExt &&
+		runtime->entry.stage <= ESHPipelineStage_RtEndExt
 	)
 		binaryIdentifier->stageType = ESHPipelineStage_RtStartExt;
 

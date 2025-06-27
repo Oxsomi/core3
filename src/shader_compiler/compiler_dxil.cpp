@@ -1576,8 +1576,21 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, alloc
 			))
 
+			CharString nameStr = CharString_createRefCStrConst(name);
+			U64 questionMark = CharString_findFirstSensitive(nameStr, '?', 0, 0);
+
+			if (questionMark != U64_MAX) {		//Mangled name
+
+				U64 atAt = CharString_findFirstSensitive(nameStr, '@', questionMark + 1, 0);
+
+				if(atAt == U64_MAX || CharString_getAt(nameStr, atAt + 1) != '@')
+					retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() invalid mangling"))
+
+				nameStr = CharString_createRefSizedConst(nameStr.ptr + questionMark + 1, atAt - questionMark - 1, false);
+			}
+
 			gotoIfError2(clean, CharString_createCopy(
-				CharString_createRefCStrConst(name),
+				nameStr,
 				alloc,
 				&ListCompilerEntrypoint_last(*uniqueEntrypoints)->name
 			))
