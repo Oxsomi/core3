@@ -171,6 +171,8 @@ TList(VkLayerProperties);
 TListImpl(VkExtensionProperties);
 TListImpl(VkLayerProperties);
 
+//#define _GRAPHICS_VERBOSE_DEBUGGING
+
 Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
 
 	U32 layerCount = 0, extensionCount = 0;
@@ -278,7 +280,53 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	if (supportsColorSpace)
 		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr))
 
-	gotoIfError(clean, VkGraphicsInstance_getLayers(instance->flags & EGraphicsInstanceFlags_IsDebug, &enabledLayers))
+	const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
+	const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
+
+	U8 hasDebugLayer = 0;
+
+	if(instance->flags & EGraphicsInstanceFlags_IsDebug)
+		for(U64 i = 0; i < layerCount; ++i) {
+
+			CharString name = CharString_createRefCStrConst(layers.ptr[i].layerName);
+			U64 len = CharString_length(name);
+			
+			switch(len ? name.ptr[len - 1] : ' ') {
+
+				case 'n':	//validatioN
+
+					if(CharString_equalsStringSensitive(name, CharString_createRefCStrConst(vkValidation)))
+						hasDebugLayer |= 1;
+
+					break;
+
+				#ifdef _GRAPHICS_VERBOSE_DEBUGGING
+
+					case 'p':	//dumP
+
+						if(CharString_equalsStringSensitive(name, CharString_createRefCStrConst(vkApiDump)))
+							hasDebugLayer |= 2;
+
+						break;
+
+				#endif
+
+				default:
+					break;
+			}
+
+			if(hasDebugLayer & 3)
+				break;
+		}
+
+	if (!hasDebugLayer && (instance->flags & EGraphicsInstanceFlags_IsDebug))
+		Log_warnLnx("VkGraphicsInstance_create tried to enable debug layer, but no debug layer was present");
+
+	if(hasDebugLayer & 1)
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, vkValidation))
+
+	if(hasDebugLayer & 2)
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, vkApiDump))
 
 	VkApplicationInfo application = (VkApplicationInfo) {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -301,7 +349,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	if(isMoltenVk)
 		instanceInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
-	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
+	if(hasDebugLayer & 1) {
 
 		//Maximum validation
 
@@ -378,7 +426,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Add debug callback
 
-	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
+	if(supportsDebug[0]) {
 
 		VkDebugReportCallbackCreateInfoEXT callbackInfo = (VkDebugReportCallbackCreateInfoEXT) {
 
@@ -403,7 +451,8 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	instance->apiVersion = application.apiVersion;
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->dxgiFactory);
+		if(FAILED(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->dxgiFactory)))
+			gotoIfError(clean, Error_invalidState(0, "VkGraphicsInstance_create couldn't create DXGI factory"))
 	#endif
 
 clean:
