@@ -2500,6 +2500,7 @@ Bool Compiler_processSPIRV(
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,						//If not NULL will be used before writing into entries
 	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	Bool isLibTarget,
 	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
 	ListCompileError *errors,
 	Allocator alloc,
@@ -2529,6 +2530,7 @@ Bool Compiler_process(
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,
 	ListSHEntryRuntime entries,
+	Bool isLib,
 	ESHExtension *demotions,
 	ListCompileError *errors,
 	Allocator alloc,
@@ -2542,7 +2544,7 @@ Bool Compiler_process(
 		case ESHBinaryType_SPIRV: 
 
 			gotoIfError3(clean, Compiler_processSPIRV(
-				result, registers, isDebug, toCompile, lock, entries, demotions, errors, alloc, e_rr
+				result, registers, isDebug, toCompile, lock, entries, isLib, demotions, errors, alloc, e_rr
 			))
 
 			break;

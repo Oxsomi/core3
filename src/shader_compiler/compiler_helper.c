@@ -647,6 +647,7 @@ Bool Compiler_processSingle(
 	SHBinaryIdentifier binaryIdentifier,
 	SpinLock *lock,
 	ListSHEntryRuntime runtimeEntries,
+	Bool isShaderAnnotation,
 	Bool enableLogging,
 	Allocator alloc,
 	Error *e_rr
@@ -667,6 +668,7 @@ Bool Compiler_processSingle(
 		binaryIdentifier,
 		lock,
 		runtimeEntries,
+		isShaderAnnotation,
 		&tempResult->demotion,
 		&errors,
 		alloc,
@@ -1286,7 +1288,31 @@ Bool Compiler_getLinkEntries(
 	Bool s_uccess = true;
 	ListU16 tmpEntries = (ListU16) { 0 };
 
-	gotoIfError3(clean, Compiler_getUniqueEntrypoints(compiler, binaryType, *binary, true, entrypoints, alloc, e_rr))
+	Bool isRt =
+		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
+		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt;
+
+	Bool isLib =
+		binaryIdentifier->stageType == ESHPipelineStage_WorkgraphExt ||
+		isRt;
+
+	Bool isLibTarget = isLib;
+	isLib = isLibTarget || (binaryIdentifier->stageType == ESHPipelineStage_Count);
+
+	if (!isLib) {
+		
+		gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+			entrypoints, (CompilerEntrypoint) { .stage = binaryIdentifier->stageType }, alloc
+		))
+
+		gotoIfError2(clean, CharString_createCopy(
+			binaryIdentifier->entrypoint,
+			alloc,
+			&ListCompilerEntrypoint_last(*entrypoints)->name
+		))
+	}
+	
+	else gotoIfError3(clean, Compiler_getUniqueEntrypoints(compiler, binaryType, *binary, true, entrypoints, alloc, e_rr))
 
 	ListCompilerEntrypoint entrypointL = *entrypoints;
 	ListSHEntryRuntime runtimeEntryL = *runtimeEntries;
@@ -1315,10 +1341,6 @@ Bool Compiler_getLinkEntries(
 			retError(clean, Error_invalidState(
 				0, "Compiler_getLinkEntries() had a reflection stage type that mismatched with what was parsed"
 			))
-
-		Bool isLib =
-			(entry.entry.stage >= ESHPipelineStage_RtStartExt && entry.entry.stage <= ESHPipelineStage_RtEndExt) ||
-			entry.entry.stage == ESHPipelineStage_WorkgraphExt;
 
 		//Ensure we're actually present for what we're currently compiling and that we do really need linking (otherwise skip)
 		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
@@ -1405,12 +1427,23 @@ Bool Compiler_getLinkEntries(
 				.combinationId = (U16) combinationId
 			};
 
-			if (!isLib) {
+			if (!isLibTarget) {
 
 				linkEntry.entrypointId = (U16)j;
 
+				U64 l = 0;
+
+				for (; l < runtimeEntryL.length; ++l)
+					if (CharString_equalsStringSensitive(runtimeEntryL.ptr[l].entry.name, entrypoint.name))
+						break;
+
+				if(l == runtimeEntryL.length)
+					retError(clean, Error_invalidState(
+						0, "Compiler_getLinkEntries() had an entrypoint that couldn't be found in runtime entry"
+					))
+
 				//The ptr below is the same as linkEntry.entrypointId, except can be used as ptr to avoid intermediate ListU16
-				gotoIfError2(clean, ListU16_createRefConst(&runtimeEntryL.ptr[i].entry.idOrPadding, 1, &linkEntry.runtimeEntries))
+				gotoIfError2(clean, ListU16_createRefConst(&runtimeEntryL.ptr[l].entry.idOrPadding, 1, &linkEntry.runtimeEntries))
 			}
 
 			else {
@@ -1874,8 +1907,28 @@ Bool Compiler_compileShaders(
 
 							CompilerEntrypoint entry = (CompilerEntrypoint) { 0 }; 
 							
-							if (linkEntry.entrypointId != U16_MAX)
-								entry = uniqueEntrypoints.ptr[linkEntry.entrypointId];
+							if (linkEntry.entrypointId != U16_MAX) {
+
+								//entrypointId doesn't map to uniqueEntrypoints as some might be missing there;
+								//it maps to our parsed runtimeEntries.
+
+								CharString entrypointName = runtimeEntries.ptr[linkEntry.entrypointId].entry.name;
+
+								U64 l = 0;
+
+								for (; l < uniqueEntrypoints.length; ++l)
+									if (CharString_equalsStringSensitive(entrypointName, uniqueEntrypoints.ptr[l].name))
+										break;
+
+								if(l == uniqueEntrypoints.length)
+									retError(clean, Error_invalidState(
+										0,
+										"Compiler_compileShaders() somehow an entrypointId was referenced by a linkEntry "
+										"that doesn't exist"
+									))
+
+								entry = uniqueEntrypoints.ptr[l];
+							}
 
 							else entry.stage = ESHPipelineStage_Count;		//Mark as lib
 							
@@ -1926,6 +1979,7 @@ Bool Compiler_compileShaders(
 							binaryIdentifier,
 							&lock,
 							runtimeEntries,
+							isShaderAnnotation,
 							enableLogging,
 							alloc,
 							e_rr

@@ -1554,6 +1554,7 @@ extern "C" Bool Compiler_processSPIRV(
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,
 	ListSHEntryRuntime entries,
+	Bool isLib,
 	ESHExtension *demotions,
 	ListCompileError *errors,
 	Allocator alloc,
@@ -1630,6 +1631,11 @@ extern "C" Bool Compiler_processSPIRV(
 	if(spvMod.spec_constant_count)
 		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() doesn't support spec constants"))
 
+	if(!isLib && spvMod.entry_point_count != 1)
+		retError(clean, Error_invalidState(
+			2, "Compiler_processSPIRV() requires to have only 1 entrypoint in binary for compute/gfx"
+		))
+
 	//Check entrypoints
 
 	for(U64 i = 0; i < spvMod.entry_point_count; ++i) {
@@ -1639,6 +1645,16 @@ extern "C" Bool Compiler_processSPIRV(
 		Bool searchIntersection = false;
 
 		U8 payloadSize = 0, intersectSize = 0;
+
+		CharString name = CharString_createRefCStrConst(entrypoint.name);
+
+		if(!isLib && !CharString_equalsStringSensitive(name, CharString_createRefCStrConst("main")))
+			retError(clean, Error_invalidState(
+				2, "Compiler_processSPIRV() with gfx/compute must have 1 entrypoint named \"main\""
+			))
+
+		if(!isLib)
+			name = CharString_createRefStrConst(toCompile.entrypoint);
 
 		U32 localSize[3] = { 0 };
 
@@ -1934,7 +1950,7 @@ extern "C" Bool Compiler_processSPIRV(
 				e_rr
 			))
 
-			CharString name = CharString_createRefCStrConst(var.name);
+			CharString bufferName = CharString_createRefCStrConst(var.name);
 			SHBindings bindings = SHBindings{};
 
 			for(U64 l = 0; l < ESHBinaryType_Count; ++l)
@@ -1945,7 +1961,7 @@ extern "C" Bool Compiler_processSPIRV(
 				ESHBufferType_PushConstants,
 				false,
 				(U8)(1 << ESHBinaryType_SPIRV),
-				&name,
+				&bufferName,
 				NULL,
 				&sbFile,
 				bindings,
@@ -1958,7 +1974,7 @@ extern "C" Bool Compiler_processSPIRV(
 			localSize, payloadSize, intersectSize, 0,
 			inputs, outputs,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
-			CharString_createRefCStrConst(entrypoint.name),
+			name,
 			lock, entries,
 			alloc, e_rr
 		))

@@ -210,6 +210,7 @@ Bool Compiler_process(
 	SHBinaryIdentifier toCompile,
 	SpinLock *lock,						//If not NULL will be used before writing into entries
 	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	Bool isLib,							//If input file was compiled as lib
 	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
 	ListCompileError *errors,
 	Allocator alloc,
