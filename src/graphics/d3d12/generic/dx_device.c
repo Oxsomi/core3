@@ -180,8 +180,15 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		&IID_IDXGIAdapter4, (void**)&deviceExt->adapter4
 	)))
 
-	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->CreateDevice(
-		instanceExt->deviceFactory,
+	if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_IndependentDevices)
+		gotoIfError(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->CreateDevice(
+			instanceExt->deviceFactoryNoSingleton,
+			(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_0,
+			&IID_ID3D12Device10, (void**) &deviceExt->device
+		)))
+
+	else gotoIfError(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->CreateDevice(
+		instanceExt->deviceFactorySingleton,
 		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_0,
 		&IID_ID3D12Device10, (void**) &deviceExt->device
 	)))

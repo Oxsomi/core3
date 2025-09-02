@@ -61,9 +61,11 @@ typedef struct DxGraphicsInstance {
 
 	ID3D12SDKConfiguration1 *config;
 
-	ID3D12Debug1 *debug1;
+	ID3D12Debug1 *debug1NoSingleton;
+	ID3D12Debug1 *debug1Singleton;
 
-	ID3D12DeviceFactory *deviceFactory;
+	ID3D12DeviceFactory *deviceFactoryNoSingleton;
+	ID3D12DeviceFactory *deviceFactorySingleton;
 
 	AGSContext *agsContext;
 

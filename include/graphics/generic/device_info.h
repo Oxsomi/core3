@@ -96,6 +96,8 @@ typedef enum EDxGraphicsFeatures {
 
 	EDxGraphicsFeatures_RGBX32fMSAA				= 1 << 9,		//3 and 4 element float MSAA
 
+	EDxGraphicsFeatures_IndependentDevices		= 1 << 10,
+
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 
 	EDxGraphicsFeatures_SM6_6					= 1 << 16,		//Last bits are for shader model
