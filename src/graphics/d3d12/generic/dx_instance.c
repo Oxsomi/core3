@@ -148,8 +148,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 	if(!instanceExt)
 		return true;
 
-	if(instanceExt->debug1)
-		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
+	if(instanceExt->debug1NoSingleton)
+		instanceExt->debug1NoSingleton->lpVtbl->Release(instanceExt->debug1NoSingleton);
+
+	if(instanceExt->debug1Singleton)
+		instanceExt->debug1Singleton->lpVtbl->Release(instanceExt->debug1Singleton);
 
 	#ifdef USE_NVAPI
 		if(instanceExt->flags & EDxGraphicsInstanceFlags_HasNVApi)
@@ -170,8 +173,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 	if(instanceExt->config)
 		instanceExt->config->lpVtbl->Release(instanceExt->config);
 
-	if(instanceExt->deviceFactory)
-		instanceExt->deviceFactory->lpVtbl->Release(instanceExt->deviceFactory);
+	if(instanceExt->deviceFactoryNoSingleton)
+		instanceExt->deviceFactoryNoSingleton->lpVtbl->Release(instanceExt->deviceFactoryNoSingleton);
+
+	if(instanceExt->deviceFactorySingleton)
+		instanceExt->deviceFactorySingleton->lpVtbl->Release(instanceExt->deviceFactorySingleton);
 
 	return true;
 }
@@ -222,25 +228,44 @@ setup:
 	gotoIfError(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
 		instanceExt->config,
 		D3D12_SDK_VERSION, locationD3D12.ptr,
-		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactory
+		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactoryNoSingleton
 	)))
 
-	gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->SetFlags(
-		instanceExt->deviceFactory, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
+	gotoIfError(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->SetFlags(
+		instanceExt->deviceFactoryNoSingleton, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
+	)))
+
+	gotoIfError(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
+		instanceExt->config,
+		D3D12_SDK_VERSION, locationD3D12.ptr,
+		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactorySingleton
+	)))
+
+	gotoIfError(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->SetFlags(
+		instanceExt->deviceFactorySingleton, D3D12_DEVICE_FACTORY_FLAG_ALLOW_RETURNING_EXISTING_DEVICE
 	)))
 
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-		gotoIfError(clean, dxCheck(instanceExt->deviceFactory->lpVtbl->GetConfigurationInterface(
-			instanceExt->deviceFactory, &CLSID_D3D12Debug,
-			&IID_ID3D12Debug1, (void**) &instanceExt->debug1
+		gotoIfError(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->GetConfigurationInterface(
+			instanceExt->deviceFactoryNoSingleton, &CLSID_D3D12Debug,
+			&IID_ID3D12Debug1, (void**) &instanceExt->debug1NoSingleton
 		)))
 
-		instanceExt->debug1->lpVtbl->EnableDebugLayer(instanceExt->debug1);
-
+		instanceExt->debug1NoSingleton->lpVtbl->EnableDebugLayer(instanceExt->debug1NoSingleton);
 
 		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
-			instanceExt->debug1->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1, true);
+			instanceExt->debug1NoSingleton->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1NoSingleton, true);
+
+		gotoIfError(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->GetConfigurationInterface(
+			instanceExt->deviceFactorySingleton, &CLSID_D3D12Debug,
+			&IID_ID3D12Debug1, (void**) &instanceExt->debug1Singleton
+		)))
+
+		instanceExt->debug1Singleton->lpVtbl->EnableDebugLayer(instanceExt->debug1Singleton);
+
+		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
+			instanceExt->debug1Singleton->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1Singleton, true);
 	}
 
 	//Check for NVApi
@@ -427,13 +452,23 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		//Create temporary device.
 		//Unfortunately, there's no other way to query features it seems.
 
-		HRESULT lastError = 0;
-
-		if(FAILED(lastError = instanceExt->deviceFactory->lpVtbl->CreateDevice(
-			instanceExt->deviceFactory,
+		HRESULT lastError = instanceExt->deviceFactoryNoSingleton->lpVtbl->CreateDevice(
+			instanceExt->deviceFactoryNoSingleton,
 			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device10, (void**) &device
-		))) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 11.1", i);
+		);
+
+		bool independentDevices = false;
+
+		if(lastError == DXGI_ERROR_UNSUPPORTED)
+			lastError = instanceExt->deviceFactorySingleton->lpVtbl->CreateDevice(
+				instanceExt->deviceFactorySingleton,
+				(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device10, (void**) &device
+			);
+
+		else independentDevices = true;
+
+		if(FAILED(lastError)) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 11.0", i);
 			goto next;
 		}
 
@@ -455,6 +490,9 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
 
 		caps.features |= EGraphicsFeatures_DirectRendering;
+
+		if(independentDevices)
+			caps.featuresExt |= EDxGraphicsFeatures_IndependentDevices;
 
 		D3D12_FEATURE_DATA_D3D12_OPTIONS opt0 = (D3D12_FEATURE_DATA_D3D12_OPTIONS) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS1 opt1 = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };
