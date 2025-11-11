@@ -90,17 +90,17 @@
 
 	//Float64 matrices
 
-	typedef float64_t4x4 F64x4x4;
-	typedef float64_t3x4 F64x3x4;
-	typedef float64_t2x4 F64x2x4;
+	typedef double4x4 F64x4x4;
+	typedef double3x4 F64x3x4;
+	typedef double2x4 F64x2x4;
 
-	typedef float64_t4x3 F64x4x3;
-	typedef float64_t3x3 F64x3x3;
-	typedef float64_t2x3 F64x2x3;
+	typedef double4x3 F64x4x3;
+	typedef double3x3 F64x3x3;
+	typedef double2x3 F64x2x3;
 
-	typedef float64_t4x2 F64x4x2;
-	typedef float64_t3x2 F64x3x2;
-	typedef float64_t2x2 F64x2x2;
+	typedef double4x2 F64x4x2;
+	typedef double3x2 F64x3x2;
+	typedef double2x2 F64x2x2;
 
 #endif
 

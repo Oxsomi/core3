@@ -598,7 +598,7 @@ void Compiler_shutdown() {
 		goto clean;
 
 	try {
-		DxcShutdown(true);
+		DxcShutdown();
 	} catch(std::exception&){}
 
 	hasInitialized = false;

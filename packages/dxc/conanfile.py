@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class dxc(ConanFile):
 
 	name = "dxc"
-	version = "2025.07.15"
+	version = "2025.11.11"
 
 	# Optional metadata
 	license = "LLVM Release License"
@@ -200,6 +200,9 @@ class dxc(ConanFile):
 
 		self.cpp_info.libs += [
 
+			"dxcreflection",
+			"dxcreflectioncontainer",
+
 			"LLVMDxrFallback",
 
 			"clangFrontendTool",
@@ -224,7 +227,6 @@ class dxc(ConanFile):
 			"clangTooling",
 			"clangSPIRV",
 
-			"SPIRV-Tools-link",
 			"SPIRV-Tools-opt",
 			"SPIRV-Tools",
 

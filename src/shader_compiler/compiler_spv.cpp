@@ -2248,7 +2248,6 @@ extern "C" Bool Compiler_linkSPIRV(
 	Bool s_uccess = true;
 
 	Bool isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
-	Bool isLib = stage >= ESHPipelineStage_Count || isRt;
 
 	isRt |= !!(exts & ESHExtension_RayQuery);
 
@@ -2262,70 +2261,16 @@ extern "C" Bool Compiler_linkSPIRV(
 	const U32 *linkedBinPtr = NULL;
 	U64 linkedBinSiz = 0;
 
-	if(inputs.length > 1) {
+	if (inputs.length > 1)
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_linkSPIRV() linking multiple spirv modules isn't supported"));
 
-		spvtools::LinkerOptions opts{};
-		opts.SetVerifyIds(true);
+	linkedBinPtr = (const U32*) inputs.ptr[0].ptr;
+	linkedBinSiz = Buffer_length(inputs.ptr[0]);
 
-		opts.SetCreateLibrary(isLib);
-		opts.SetAllowPartialLinkage(stage >= ESHPipelineStage_Count);
+	if (linkedBinSiz & 3)
+		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
 
-		spvtools::Context ctx(env);
-
-		ctx.SetMessageConsumer(
-			[alloc, errors, e_rr, &s_uccess](
-				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
-			) -> void {
-				Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
-			}
-		);
-
-		std::vector<std::vector<U32>> bins;
-		bins.resize(inputs.length);
-
-		spv_result_t res{};
-
-		if(!bins.size())
-			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() no binaries provided"))
-
-		for (U64 i = 0; i < inputs.length; ++i) {
-
-			U64 len = Buffer_length(inputs.ptr[i]);
-
-			if(len & 3)
-				retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
-
-			bins[i].resize(len >> 2);
-			Buffer_memcpy(
-				Buffer_createRef(bins[i].data(), len),
-				inputs.ptr[i]
-			);
-		}
-
-		res = spvtools::Link(
-			ctx,
-			bins,
-			&linkedBin,
-			opts
-		);
-
-		if(res != SPV_SUCCESS)
-			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary couldn't be linked"))
-
-		linkedBinPtr = linkedBin.data();
-		linkedBinSiz = linkedBin.size();
-	}
-
-	else {
-
-		linkedBinPtr = (const U32*) inputs.ptr[0].ptr;
-		linkedBinSiz = Buffer_length(inputs.ptr[0]);
-
-		if (linkedBinSiz & 3)
-			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
-
-		linkedBinSiz >>= 2;
-	}
+	linkedBinSiz >>= 2;
 
 	//Run optimizer to get rid of uniforms
 
