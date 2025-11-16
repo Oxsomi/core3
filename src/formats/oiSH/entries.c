@@ -668,7 +668,7 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 	for(U64 i = 0; i < entry.shaderVersions.length; ++i) {
 		U16 shaderVersion = entry.shaderVersions.ptr[i];
-		Log_debugLn(alloc, "\t[[oxc::model(%"PRIu8".%"PRIu8")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 	}
 
 	for (U64 i = 0; i < entry.extensions.length; ++i) {

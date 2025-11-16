@@ -23,6 +23,8 @@
 #include "platforms/platform.h"
 #include "shader_compiler/compiler.h"
 #include "types/container/file.h"
+#include "types/base/c8.h"
+#include "types/math/flp.h"
 #include "types/math/math.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -35,6 +37,7 @@
 
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
+#include "dxcompiler/dxcreflect.h"
 #include <exception>
 
 const C8 *resources =
@@ -78,6 +81,7 @@ typedef struct CompilerInterfaces {		//Also defined in compiler_dxil
 	IDxcUtils *utils;
 	IDxcCompiler3 *compiler;
 	IncludeHandler *includeHandler;
+	IHLSLReflector *reflector;
 } CompilerInterfaces;
 
 class IncludeHandler : public IDxcIncludeHandler {
@@ -479,7 +483,14 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 		HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&interfaces->utils));
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created. Missing DLL?"))
+			retError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created"))
+
+		//Create reflector
+
+		hr = DxcCreateInstance(CLSID_DxcReflector, IID_PPV_ARGS(&interfaces->reflector));
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(0, "Compiler_create() IHLSLReflector couldn't be created"))
 
 		//Create include handler
 
@@ -492,7 +503,7 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"))
 
-	} catch (std::exception&) {
+	} catch (...) {
 		retError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"))
 	}
 
@@ -515,6 +526,9 @@ void Compiler_free(Compiler *comp, Allocator alloc) {
 
 	if(interfaces->utils)
 		interfaces->utils->Release();
+
+	if(interfaces->reflector)
+		interfaces->reflector->Release();
 
 	if(interfaces->compiler)
 		interfaces->compiler->Release();
@@ -599,7 +613,7 @@ void Compiler_shutdown() {
 
 	try {
 		DxcShutdown();
-	} catch(std::exception&){}
+	} catch(...){}
 
 	hasInitialized = false;
 
@@ -1500,5 +1514,2082 @@ clean:
 	CharString_free(&tempStr2, alloc);
 	CharString_free(&tmpFile, alloc);
 	ListCharString_freeUnderlying(&stringsUTF8, alloc);
+	return s_uccess;
+}
+
+//Call HLSL reflection API to acquire functions + annotations
+
+ESHPipelineStage Compiler_parseStage(CharString stageName) {
+
+	Buffer buf = CharString_bufferConst(stageName);
+	U64 stageNameLen = CharString_length(stageName);
+	U32 c8x4 = Buffer_readU32(buf, 0, NULL);
+
+	switch (c8x4) {
+
+		default:
+			break;
+
+		case C8x4('v', 'e', 'r', 't'):		//vertex
+
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('e', 'x'))
+				return ESHPipelineStage_Vertex;
+
+			break;
+
+		case C8x4('d', 'o', 'm', 'a'):		//domain
+
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 'n'))
+				return ESHPipelineStage_Domain;
+
+			break;
+
+		case C8x4('p', 'i', 'x', 'e'):		//pixel
+
+			if(stageNameLen == 5 && stageName.ptr[4] == 'l')
+				return ESHPipelineStage_Pixel;
+
+			break;
+
+		case C8x4('g', 'e', 'o', 'm'):		//geometry
+
+			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('e', 't', 'r', 'y'))
+				return ESHPipelineStage_GeometryExt;
+
+			break;
+
+		case C8x4('c', 'o', 'm', 'p'):		//compute
+
+			if(stageNameLen == 7 && Buffer_readU32(buf, 3, NULL) == C8x4('p', 'u', 't', 'e'))
+				return ESHPipelineStage_Compute;
+
+			break;
+
+		case C8x4('n', 'o', 'd', 'e'):		//node
+			if(stageNameLen == 4)			return ESHPipelineStage_WorkgraphExt;
+			break;
+
+		case C8x4('m', 'e', 's', 'h'):		//mesh
+			if(stageNameLen == 4)			return ESHPipelineStage_MeshExt;
+			break;
+
+		case C8x4('t', 'a', 's', 'k'):		//task
+			if(stageNameLen == 4)			return ESHPipelineStage_TaskExt;
+			break;
+
+		case C8x4('h', 'u', 'l', 'l'):		//hull
+			if(stageNameLen == 4)			return ESHPipelineStage_Hull;
+			break;
+
+		//Raytracing
+
+		case C8x4('m', 'i', 's', 's'):		//miss
+			if(stageNameLen == 4)			return ESHPipelineStage_MissExt;
+			break;
+
+		case C8x4('a', 'n', 'y', 'h'):		//anyhit
+
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 't'))
+				return ESHPipelineStage_AnyHitExt;
+
+			break;
+
+		case C8x4('c', 'l', 'o', 's'):		//closesthit
+
+			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't'))
+				return ESHPipelineStage_ClosestHitExt;
+
+			break;
+
+		case C8x4('r', 'a', 'y', 'g'):		//raygeneration
+
+			if(
+				stageNameLen == 13 &&
+				Buffer_readU64(buf, 4, NULL) == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
+				stageName.ptr[12] == 'n'
+			)
+				return ESHPipelineStage_RaygenExt;
+
+			break;
+
+		case C8x4('i', 'n', 't', 'e'):		//intersection
+
+			if(stageNameLen == 12 && Buffer_readU64(buf, 4, NULL) == C8x8('r', 's', 'e', 'c', 't', 'i', 'o', 'n'))
+				return ESHPipelineStage_IntersectionExt;
+
+			break;
+	}
+
+	return ESHPipelineStage_Count;
+}
+
+ESHVendor Compiler_parseVendor(CharString vendor) {
+
+	Buffer buf = CharString_bufferConst(vendor);
+	U64 len = CharString_length(vendor);
+
+	switch(len) {
+
+		default:
+			return ESHVendor_Count;
+
+		case 2:		//NV
+			return Buffer_readU16(buf, 0, NULL) == C8x2('N', 'V') ? ESHVendor_NV : ESHVendor_Count;
+
+		case 3:		//AMD, ARM
+			switch (Buffer_readU16(buf, 0, NULL)) {
+				default:				return ESHVendor_Count;
+				case C8x2('A', 'M'):	return vendor.ptr[2] == 'D' ? ESHVendor_AMD : ESHVendor_Count;
+				case C8x2('A', 'R'):	return vendor.ptr[2] == 'M' ? ESHVendor_ARM : ESHVendor_Count;
+			}
+
+		case 4:		//QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI
+			switch (Buffer_readU32(buf, 0, NULL)) {
+				default:							return ESHVendor_Count;
+				case C8x4('Q', 'C', 'O', 'M'):		return ESHVendor_QCOM;
+				case C8x4('I', 'N', 'T', 'C'):		return ESHVendor_INTC;
+				case C8x4('I', 'M', 'G', 'T'):		return ESHVendor_IMGT;
+				case C8x4('M', 'S', 'F', 'T'):		return ESHVendor_MSFT;
+				case C8x4('A', 'P', 'P', 'L'):		return ESHVendor_APPL;
+				case C8x4('S', 'M', 'S', 'G'):		return ESHVendor_SMSG;
+				case C8x4('H', 'W', 'E', 'I'):		return ESHVendor_HWEI;
+			}
+	}
+}
+
+ESHExtension Compiler_parseExtension(CharString extensionName) {
+
+	Buffer buf = CharString_bufferConst(extensionName);
+	U64 stageNameLen = CharString_length(extensionName);
+	U16 c8x2 = Buffer_readU16(buf, 0, NULL);
+
+	switch (c8x2) {
+
+		case C8x2('F', '6'):	//F64
+			if(stageNameLen == 3 && extensionName.ptr[2] == '4')	return ESHExtension_F64;
+			break;
+
+		case C8x2('I', '6'):	//I64
+			if(stageNameLen == 3 && extensionName.ptr[2] == '4')	return ESHExtension_I64;
+			break;
+
+		case C8x2('P', 'A'):	//PAQ
+			if(stageNameLen == 3 && extensionName.ptr[2] == 'Q')	return ESHExtension_PAQ;
+			break;
+
+		case C8x2('1', '6'):	//16BitTypes
+
+			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('B', 'i', 't', 'T', 'y', 'p', 'e', 's'))
+				return ESHExtension_16BitTypes;
+
+			break;
+
+		case C8x2('M', 'u'):	//Multiview
+
+			if(stageNameLen == 9 && Buffer_readU64(buf, 1, NULL) == C8x8('u', 'l', 't', 'i', 'v', 'i', 'e', 'w'))
+				return ESHExtension_Multiview;
+
+			break;
+
+		case C8x2('C', 'o'):	//ComputeDeriv
+
+			if(
+				stageNameLen == 12 &&
+				Buffer_readU64(buf,  2, NULL) == C8x8('m', 'p', 'u', 't', 'e', 'D', 'e', 'r') &&
+				Buffer_readU16(buf, 10, NULL) == C8x2('i', 'v')
+			)
+				return ESHExtension_ComputeDeriv;
+
+			break;
+
+		case C8x2('W', 'r'):
+
+			if (
+				stageNameLen == 14 &&
+				Buffer_readU64(buf,  2, NULL) == C8x8('i', 't', 'e', 'M', 'S', 'T', 'e', 'x') &&
+				Buffer_readU32(buf, 10, NULL) == C8x4('t', 'u', 'r', 'e')
+			)
+				return ESHExtension_WriteMSTexture;
+
+			break;
+
+		case C8x2('M', 'e'):
+
+			if (
+				stageNameLen == 16 &&
+				Buffer_readU64(buf,  2, NULL) == C8x8('s', 'h', 'T', 'a', 's', 'k', 'T', 'e') &&
+				Buffer_readU32(buf, 10, NULL) == C8x4('x', 'D', 'e', 'r') &&
+				Buffer_readU16(buf, 14, NULL) == C8x2('i', 'v')
+			)
+				return ESHExtension_MeshTaskTexDeriv;
+
+			break;
+
+		case C8x2('A', 't'):	//AtomicI64, AtomicF32, AtomicF64
+
+			if(stageNameLen == 9)
+				switch (Buffer_readU64(buf, 1, NULL)) {
+					case C8x8('t', 'o', 'm', 'i', 'c', 'I', '6', '4'):		return ESHExtension_AtomicI64;
+					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '3', '2'):		return ESHExtension_AtomicF32;
+					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '6', '4'):		return ESHExtension_AtomicF64;
+				}
+
+			break;
+
+		case C8x2('S', 'u'):	//SubgroupArithmetic, SubgroupShuffle, SubgroupOperations
+
+			if(stageNameLen == 15) {			//SubgroupShuffle
+				if(
+					Buffer_readU64(buf, 0, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
+					Buffer_readU64(buf, 7, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
+				)
+					return ESHExtension_SubgroupShuffle;
+			}
+
+			else if (stageNameLen == 18) {		//SubgroupArithmetic, SubgroupOperations
+
+				if(
+					Buffer_readU64(buf,  2, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
+					Buffer_readU64(buf, 10, NULL) == C8x8('i', 't', 'h', 'm', 'e', 't', 'i', 'c')
+				)
+					return ESHExtension_SubgroupArithmetic;
+					
+				else if(
+					Buffer_readU64(buf,  2, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'O', 'p') &&
+					Buffer_readU64(buf, 10, NULL) == C8x8('e', 'r', 'a', 't', 'i', 'o', 'n', 's')
+				)
+					return ESHExtension_SubgroupOperations;
+
+			}
+
+			break;
+
+		case C8x2('R', 'a'):	//RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder
+
+			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
+				return ESHExtension_RayQuery;
+
+			else if(stageNameLen >= 10)
+				switch (Buffer_readU64(buf, 2, NULL)) {
+
+					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):		//RayMicromapOpacity
+
+						if(
+							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
+						)
+							return ESHExtension_RayMicromapOpacity;
+
+
+						break;
+
+					case C8x8('y', 'M', 'o', 't', 'i', 'o', 'n', 'B'):		//RayMotionBlur
+
+						if(stageNameLen == 13 && Buffer_readU32(buf, 10, NULL) == C8x4('B', 'l', 'u', 'r'))
+							return ESHExtension_RayMotionBlur;
+
+						break;
+
+					case C8x8('y', 'R', 'e', 'o', 'r', 'd', 'e', 'r'):		//RayReorder
+
+						if(stageNameLen == 10)
+							return ESHExtension_RayReorder;
+
+						break;
+				}
+
+			break;
+	}
+
+	return (ESHExtension)(1u << ESHExtension_Count);
+}
+
+Bool Compiler_registerExtension(U32 *extensions, CharString extensionName, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	ESHExtension extension = Compiler_parseExtension(extensionName);
+
+	if(extension >> ESHExtension_Count)
+		retError(clean, Error_invalidParameter(
+			0, 5, "Compiler_registerExtension() unrecognized extension in extension annotation"
+		))
+
+	if(*extensions & extension)
+		retError(clean, Error_invalidParameter(
+			0, 6, "Compiler_registerExtension() duplicate extension found"
+		))
+
+	*extensions |= extension;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_registerExtensions(ListU32 *extensionsRegistered, U32 extensions, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(ListU32_contains(*extensionsRegistered, extensions, 0, NULL))
+		retError(clean, Error_alreadyDefined(0, "Compiler_registerExtensions() extensions already defined"))
+
+	gotoIfError2(clean, ListU32_pushBack(extensionsRegistered, extensions, alloc));
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_registerVendor(U16 *vendors, CharString vendorName, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	//Find vendor
+
+	ESHVendor vendor = Compiler_parseVendor(vendorName);
+
+	if(vendor == ESHVendor_Count)
+		retError(clean, Error_invalidParameter(
+			0, 1, "Compiler_registerVendor() unrecognized vendor in vendor annotation"
+		))
+
+	if((*vendors >> vendor) & 1)
+		retError(clean, Error_invalidParameter(
+			0, 2, "Compiler_registerVendor() duplicate vendor found"
+		))
+
+	*vendors |= (U16)(1 << vendor);
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_registerModel(ListU16 *vendors, const C8 *strStart, const C8 *strEnd, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U16 version = 0;
+	U8 maj = 0, mi = 0;
+
+	//Find model version
+
+	if (!C8_isDec(strStart[0]))
+		retError(clean, Error_invalidParameter(0, 1, "Compiler_registerModel() expected maj.min"));
+
+	maj = C8_dec(strStart[0]);
+
+	if (maj < 6)
+		retError(clean, Error_invalidParameter(
+			0, 1, "Compiler_registerModel() model maj version is too low to be supported (must be >=6)"
+		));
+
+	++strStart;
+
+	if (strStart >= strEnd || strStart[0] != '.')
+		retError(clean, Error_invalidParameter(0, 1, "Compiler_registerModel() expected maj.min"));
+
+	++strStart;
+
+	if (strStart >= strEnd || !C8_isDec(strStart[0]))
+		retError(clean, Error_invalidParameter(0, 1, "Compiler_registerModel() expected min (maj.min)"));
+
+	++strStart;
+
+	mi = C8_dec(strStart[0]);
+
+	if (strStart < strEnd) {
+
+		if(!C8_isDec(strStart[0]))
+			retError(clean, Error_invalidParameter(0, 1, "Compiler_registerModel() expected min (maj.min)"));
+
+		mi = mi * 10 + C8_dec(strStart[0]);
+		++strStart;
+
+		if(strStart != strEnd)
+			retError(clean, Error_invalidParameter(0, 1, "Compiler_registerModel() expected min (max 2 digits) (maj.min)"));
+	}
+
+	if(maj == 6 && mi < 5)
+		retError(clean, Error_invalidParameter(
+			0, 1, "Compiler_registerModel() model maj.min version is too low to be supported (must be >=6.5)"
+		));
+
+	if (maj > 6 || mi > 10)
+		retError(clean, Error_invalidParameter(
+			0, 1, "Compiler_registerModel() model version is too high, only supported up to 6.10"
+		));
+
+	version = OISH_SHADER_MODEL(maj, mi);
+
+	if(ListU16_contains(*vendors, version, 0, NULL))
+		retError(clean, Error_invalidParameter(
+			0, 1, "Compiler_registerModel() model version was referenced multiple times"
+		))
+
+	gotoIfError2(clean, ListU16_pushBack(vendors, version, alloc))
+
+clean:
+	return s_uccess;
+}
+
+U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSizeType) {
+
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
+
+	if(stage == ESHPipelineStage_WorkgraphExt)
+		minVersion = OISH_SHADER_MODEL(6, 8);
+
+	if(waveSizeType == 1)
+		minVersion = OISH_SHADER_MODEL(6, 6);
+
+	if(waveSizeType == 2)
+		minVersion = OISH_SHADER_MODEL(6, 8);
+
+	return minVersion;
+}
+
+U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
+
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
+
+	if(ext & (ESHExtension_AtomicI64 | ESHExtension_ComputeDeriv | ESHExtension_PAQ))
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
+
+	if(ext & ESHExtension_WriteMSTexture)
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 7), minVersion);
+
+	return minVersion;
+}
+
+//Simplified ComPtr to be cross platform
+template<typename T>
+struct OxComPtr {
+
+	T *t;
+
+	OxComPtr() : t(nullptr) {}
+	OxComPtr(T *t): t(t) {}
+	~OxComPtr() { if (t) t->Release(); t = nullptr; }
+
+	operator T*() { return t; }
+	T **operator&() { return &t; }
+	T *operator->() { return t; }
+};
+
+Bool Compiler_skipWhitespace(const C8 *&ptr) {
+
+	while (C8_isWhitespace(*ptr))
+		++ptr;
+
+	return *ptr;
+}
+
+Bool Compiler_skipAlphaNumeric(const C8 *&ptr) {
+
+	while (C8_isAlphaNumeric(*ptr))
+		++ptr;
+
+	return *ptr;
+}
+
+Bool Compiler_skipNumericDot(const C8 *&ptr) {
+
+	while (C8_isDec(*ptr) || *ptr == '.')
+		++ptr;
+
+	return *ptr;
+}
+
+Bool Compiler_skipRndBracket(const C8 *&str, Bool isLeft, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_skipRndBracket() reached end of token"));
+
+	if (str[0] != (isLeft ? '(' : ')'))
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_skipRndBracket() expected ()"));
+
+	++str;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_skipDblQuot(const C8 *&str, Bool isLeft, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (isLeft && !Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_skipDblQuot() reached end of token"));
+
+	if (str[0] != '"')
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_skipDblQuot() expected ()"));
+
+	++str;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_consumeString(const C8 *&str, const C8 *&strStart, const C8 *&strEnd, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	// "test"
+	//^^
+
+	gotoIfError3(clean, Compiler_skipDblQuot(str, true, e_rr));
+
+	// "test"
+	//  ^^^^
+
+	strEnd = strStart = str;
+
+	//Still a loop like this because at some point we might add escaping anyways.
+
+	while (true) {
+
+		C8 c = *strEnd;
+		++strEnd;
+
+		if(!c)
+			retError(clean, Error_invalidParameter(0, 0, "Compiler_consumeString() unexpected end of token"));
+
+		//Because we reference a literal string when using defines/uniforms/etc.
+		// Rather than a copied/processed string.
+
+		if (c == '\\')
+			retError(clean, Error_invalidParameter(0, 0, "Compiler_consumeString() escaping characters is unsupported"));
+
+		// "test"
+		// "test"
+		//      ^
+
+		if (c == '"') {
+			--strEnd;
+			break;
+		}
+	}
+
+	str = strEnd + 1;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_consumeIdentifier(const C8 *&str, const C8 *&start, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_consumeIdentifier() ended unexpectedly"));
+
+	start = str;
+	C8 c;
+
+	while ((c = *str) != '\0' && !C8_isWhitespace(c) && !C8_isSymbol(c))
+		++str;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseShaderStageAnnot(
+	const C8 *&str, SHEntryRuntime &entry, CharString functionName, Allocator alloc, Error *e_rr
+) {
+	
+	const C8 *annotStart = NULL;
+	const C8 *annotEnd = NULL;
+	ESHPipelineStage stage = ESHPipelineStage_Count;
+
+	Bool s_uccess = true;
+
+	if (entry.entry.stage != ESHPipelineStage_Count)
+		retError(clean, Error_invalidParameter(
+			0, 0, "Compiler_parseShaderStageAnnot() shader already had shader or stage annotation"
+		));
+	
+	//shader     ( "test" )
+	//oxc::stage ( "test" )
+	//          ^^^^^^^^^^^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+	gotoIfError3(clean, Compiler_consumeString(str, annotStart, annotEnd, e_rr));
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
+
+	//Ensure nothing is leftover
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseShaderStageAnnot() expected end of token"));
+
+	//Parse stage
+
+	stage = Compiler_parseStage(CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false));
+
+	if (stage == ESHPipelineStage_Count)
+		retError(clean, Error_invalidParameter(
+			0, 1, "Compiler_parseShaderStageAnnot() unrecognized stage in shader annotation"
+		));
+
+	gotoIfError2(clean, CharString_createCopy(functionName, alloc, &entry.entry.name));
+
+	entry.entry.stage = SHPipelineStage(stage);
+	entry.isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
+	entry.containsGfxOrComp = !entry.isRt && stage != ESHPipelineStage_WorkgraphExt;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseShaderAnnot(
+	const D3D12_HLSL_ANNOTATION &annot,
+	CharString functionName,
+	const C8 *&str,
+	U64 annotLen,
+	SHEntryRuntime &entry,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Buffer buf = Buffer_createRefConst(str, annotLen);
+	U32 c8x4 = 0;
+
+	Bool s_uccess = true;
+
+	if (!annot.IsBuiltin)	//not [shader("")]
+		goto clean;
+
+	c8x4 = Buffer_readU32(buf, 0, NULL);
+
+	//[shader("vertex")]
+	// ^
+
+	if (c8x4 != C8x4('s', 'h', 'a', 'd') || Buffer_readU16(buf, 4, NULL) != C8x2('e', 'r'))
+		goto clean;
+
+	str += annotLen;
+
+	//[shader("vertex")]
+	//       ^
+
+	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr))
+	entry.isShaderAnnotation = true;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseStageAnnot(SHEntryRuntime &entry, CharString functionName, const C8 *&str, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	//[[oxc::stage("vertex")]]
+	//	          ^
+
+	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr))
+
+	entry.isShaderAnnotation = false;
+	entry.containsGfxOrComp = true;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseModelAnnot(SHEntryRuntime &entry, const C8 *&str, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const C8 *strStart = nullptr;
+	const C8 *strEnd = nullptr;
+	
+	//oxc::model ( "6.5" )
+	//          ^^^^^^^^^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr))
+	gotoIfError3(clean, Compiler_consumeString(str, strStart, strEnd, e_rr))
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+		
+	//Ensure nothing is leftover
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseModelAnnot() expected end of token"))
+
+	gotoIfError3(clean, Compiler_registerModel(&entry.shaderVersions, strStart, strEnd, alloc, e_rr))
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseVendorAnnot(SHEntryRuntime &entry, const C8 *&str, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const C8 *annotStart = NULL;
+	const C8 *annotEnd = NULL;
+
+	//oxc::vendor ( "NV", "AMD" )
+	//           ^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+
+	//oxc::vendor ( "NV" , "AMD" )
+	//             ^^^^^
+
+	gotoIfError3(clean, Compiler_consumeString(str, annotStart, annotEnd, e_rr));
+
+	gotoIfError3(clean, Compiler_registerVendor(
+		&entry.vendorMask, CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false), e_rr
+	));
+
+	while (true) {
+
+		//oxc::vendor ( "NV" , "AMD" )
+		//                  ^       ^
+
+		if (!Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(0, "Compiler_parseVendorAnnot() vendor annotation ended unexpectedly"));
+
+		//oxc::vendor ( "NV" , "AMD" )
+		//                           ^
+
+		if (*str == ')')
+			break;
+
+		//oxc::vendor ( "NV" , "AMD" )
+		//                   ^
+
+		if(*str != ',')
+			retError(clean, Error_invalidState(0, "Compiler_parseVendorAnnot() vendor annotation expected ,"));
+
+		++str;
+
+		//oxc::vendor ( "NV" , "AMD" )
+		//                    ^^^^^^
+
+		gotoIfError3(clean, Compiler_consumeString(str, annotStart, annotEnd, e_rr));
+
+		gotoIfError3(clean, Compiler_registerVendor(
+			&entry.vendorMask, CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false), e_rr
+		));
+	}
+
+	//oxc::vendor ( "NV" , "AMD" )
+	//                           ^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+		
+	//Ensure nothing is leftover
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseVendorAnnot() expected end of token"))
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseExtensionAnnot(SHEntryRuntime &entry, const C8 *&str, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const C8 *annotStart = NULL;
+	const C8 *annotEnd = NULL;
+	U32 extensions = 0;
+
+	//oxc::extension ( "16BitTypes", "I64" )
+	//              ^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+
+	//oxc::extension ( "16BitTypes", "I64" )
+	//oxc::extension ( )
+	//                ^
+
+	if (!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseExtensionAnnot() extension annotation ended unexpectedly"));
+
+	if (str[0] == ')') {
+
+		++str;
+
+		if (Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(
+				0, "Compiler_parseExtensionAnnot() extension annotation had unknown syntax appended"
+			));
+
+		goto clean;
+	}
+
+	//oxc::extension ( "16BitTypes", "I64" )
+	//                 ^^^^^^^^^^^^
+
+	gotoIfError3(clean, Compiler_consumeString(str, annotStart, annotEnd, e_rr));
+
+	gotoIfError3(clean, Compiler_registerExtension(
+		&extensions, CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false), e_rr
+	));
+
+	while (true) {
+
+		//oxc::extension ( "16BitTypes" , "I64" )
+		//                             ^       ^
+
+		if (!Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(0, "Compiler_parseExtensionAnnot() extension annotation ended unexpectedly"));
+
+		//oxc::extension ( "16BitTypes" , "I64" )
+		//                                      ^
+
+		if (*str == ')')
+			break;
+
+		//oxc::extension ( "16BitTypes" , "I64" )
+		//                              ^
+
+		if(*str != ',')
+			retError(clean, Error_invalidState(0, "Compiler_parseExtensionAnnot() extension annotation expected ,"));
+
+		++str;
+
+		//oxc::extension ( "16BitTypes" , "I64" )
+		//                               ^^^^^^
+
+		gotoIfError3(clean, Compiler_consumeString(str, annotStart, annotEnd, e_rr));
+
+		gotoIfError3(clean, Compiler_registerExtension(
+			&extensions, CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false), e_rr
+		));
+	}
+
+	//oxc::extension ( "16BitTypes" , "I64" )
+	//                                      ^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+		
+	//Ensure nothing is leftover
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseExtensionAnnot() expected end of token"))
+
+clean:
+	if(s_uccess)
+		gotoIfError3(clean1, Compiler_registerExtensions(
+			&entry.extensions, extensions, alloc, e_rr
+		))
+
+clean1:
+	return s_uccess;
+}
+
+Bool Compiler_parseDefine(SHEntryRuntime &entry, const C8 *&str, U8 &defineCount, Allocator alloc, Error *e_rr) {
+
+	const C8 *strStart = NULL;
+	const C8 *strEnd = NULL;
+
+	Bool s_uccess = true;
+
+	CharString defineName = CharString_createNull();
+	CharString defineValue = CharString_createNull();
+
+	//"X" = "12345"
+	//"Y"
+	//^
+
+	gotoIfError3(clean, Compiler_consumeString(str, strStart, strEnd, e_rr));
+
+	//"X" = "12345"
+	//"Y"
+	//    ^
+	
+	if(!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_parseDefine() reached unexpected end of token"));
+
+	defineName = CharString_createRefSizedConst(strStart, strEnd - strStart, false);
+
+	for(U64 i = 0; i < CharString_length(defineName); ++i)
+		if((C8_isSymbol(defineName.ptr[i]) && defineName.ptr[i] != '_') || C8_isWhitespace(defineName.ptr[i]))
+			retError(clean, Error_alreadyDefined(0, "Compiler_parseDefine() can't contain symbols or whitespace"))
+			
+	//Scan last strings for the same define
+
+	for(
+		U64 i = (entry.defineNameValues.length >> 1) - 1;
+		i != (entry.defineNameValues.length >> 1) - defineCount - 1;
+		--i
+	)
+		if (CharString_equalsStringSensitive(defineName, entry.defineNameValues.ptr[i << 1]))
+			retError(clean, Error_alreadyDefined(0, "Compiler_parseDefine() already contains define"))
+
+	//Let caller handle invalid syntax or ,).
+	//And push current define / with empty value to allow , to work.
+
+	gotoIfError2(clean, ListCharString_pushBack(&entry.defineNameValues, defineName, alloc));
+
+	if (*str != '=') {
+		gotoIfError2(clean, ListCharString_pushBack(&entry.defineNameValues, defineValue, alloc));
+		goto clean;
+	}
+
+	++str;
+
+	//"X" = "12345"
+	//     ^
+
+	gotoIfError3(clean, Compiler_consumeString(str, strStart, strEnd, e_rr));
+	defineValue = CharString_createRefSizedConst(strStart, strEnd - strStart, false);
+
+	gotoIfError2(clean, ListCharString_pushBack(&entry.defineNameValues, defineValue, alloc))
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseDefinesAnnot(SHEntryRuntime &entry, const C8 *&str, Allocator alloc, Error *e_rr) {
+	
+	Bool s_uccess = true;
+
+	U8 defineCount = 0;
+
+	//oxc::defines ( "X" = "Y" )
+	//oxc::defines ( "X" )
+	//oxc::defines ( )
+	//            ^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+
+	//oxc::defines ( "X" = "Y" )
+	//oxc::defines ( "X" )
+	//oxc::defines ( )
+	//              ^
+
+	if (!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseDefinesAnnot() defines annotation ended unexpectedly"));
+
+	if (str[0] == ')') {
+
+		++str;
+
+		if (Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(
+				0, "Compiler_parseDefinesAnnot() defines annotation had unknown syntax appended"
+			));
+
+		goto clean;
+	}
+
+	//oxc::defines ( "X" = "Y" )
+	//oxc::defines ( "X" )
+	//               ^
+
+	gotoIfError3(clean, Compiler_parseDefine(entry, str, defineCount, alloc, e_rr))
+	++defineCount;
+
+	while (true) {
+
+		//oxc::defines ( "X" = "Y" )
+		//oxc::defines ( "X" = "Y" , "Z" )
+		//oxc::defines ( "X" )
+		//                  ^     ^     ^
+
+		if (!Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(0, "Compiler_parseDefinesAnnot() defines annotation ended unexpectedly"));
+
+		//oxc::defines ( "X" = "Y" )
+		//oxc::defines ( "X" = "Y" , "Z" )
+		//oxc::defines ( "X" )
+		//                   ^     ^     ^
+
+		if (*str == ')')
+			break;
+
+		//oxc::defines ( "X" = "Y" , "Z" )
+		//                         ^
+
+		if(*str != ',')
+			retError(clean, Error_invalidState(0, "Compiler_parseDefinesAnnot() defines annotation expected ,"));
+
+		++str;
+
+		//oxc::defines ( "X" = "Y" , "Z" )
+		//                          ^^^^
+
+		gotoIfError3(clean, Compiler_parseDefine(entry, str, defineCount, alloc, e_rr))
+		++defineCount;
+	}
+
+	//oxc::defines ( "X" = "Y" , "Z" )
+	//                               ^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+		
+	//Ensure nothing is leftover
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseDefinesAnnot() expected end of token"))
+
+clean:
+
+	if (s_uccess)
+		gotoIfError2(clean, ListU8_pushBack(&entry.definesPerCompilation, defineCount, alloc))
+
+	goto clean1;
+
+clean1:
+	return s_uccess;
+}
+
+Bool Compiler_parseValue(
+	SHValue *value,
+	U64 &dstOff,
+	ETypeId typeId,
+	const C8 *&str,
+	Error *e_rr
+) {
+
+	EDataType type = ETypeId_getDataType(typeId);
+	EDataTypeStride typeStride = ETypeId_getDataTypeStride(typeId);
+	U32 w = ETypeId_getWidth(typeId);
+	U32 h = ETypeId_getHeight(typeId);
+	ETypeId vecType = ETypeId_Undefined;
+	C8 next = '\0';
+
+	Bool s_uccess = true;
+
+	// 0
+	// true
+	//^^^^^
+
+	if (!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseValue() ended unexpectedly"));
+
+	next = *str;
+
+	//Value
+	//true
+	//0
+	//-3
+	//1.5
+	//^
+
+	if (w == 1 && h == 1) {
+
+		switch (type) {
+
+			case EDataType_Bool:
+
+				//true
+				//^
+				if (next == 't') {
+
+					if(str[1] != 'r' || str[2] != 'u' || str[3] != 'e')
+						retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected Bool/B1 'true'"));
+
+					str += 4;
+					value->vu64[0] |= (U64)1 << dstOff;
+				}
+
+				//false
+				//^
+				else if (next == 'f') {
+
+					if (str[1] != 'a' || str[2] != 'l' || str[3] != 's' || str[4] != 'e')
+						retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected Bool/B1 'false'"));
+
+					str += 5;
+				}
+
+				else retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected Bool/B1 'true' or 'false'"));
+
+				++dstOff;
+				break;
+
+			case EDataType_Float: {
+
+				//Greedy grab (+-.eEfF0-9)
+
+				const C8 *fStart = str;
+
+				while (C8_isDec(next = *str) ||
+					next == 'E' || next == 'e' ||
+					next == 'F' || next == 'f' ||
+					next == '-' || next == '+'
+				)
+					++str;
+
+				if(str == fStart)
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"))
+
+				CharString val = CharString_createRefSizedConst(fStart, str - fStart, false);
+				F64 res = 0;
+				if(!CharString_parseDouble(val, &res))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"))
+
+				switch(typeStride) {
+
+					case EDataTypeStride_16: {
+
+						F16 v = F64_castF16(res);
+
+						if(!EFloatType_isFinite(EFloatType_F16, v))
+							retError(clean, Error_invalidParameter(
+								0, 0, "Compiler_parseValue() passed float value not representable as F16"
+							))
+
+						value->vu16[dstOff] = v;
+						break;
+					}
+
+					case EDataTypeStride_32: {
+
+						F32 v = F64_castF32(res);
+
+						if (!EFloatType_isFinite(EFloatType_F32, *(const U32*)&v))
+							retError(clean, Error_invalidParameter(
+								0, 0, "Compiler_parseValue() passed float value not representable as F32"
+							))
+
+						value->vf32[dstOff] = v;
+						break;
+					}
+
+					default:
+
+						if (!EFloatType_isFinite(EFloatType_F64, *(const U64*)&res))
+							retError(clean, Error_invalidParameter(
+								0, 0, "Compiler_parseValue() passed float value not representable as F64"
+							))
+
+						value->vf64[dstOff] = res;
+						break;
+				}
+
+				++dstOff;
+				break;
+			}
+
+			case EDataType_UInt: {
+
+				if (next == '+')
+					++str;
+
+				const C8 *strStart = str;
+
+				while (C8_isDec(*str))
+					++str;
+
+				if(str == strStart)
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a uint value"))
+
+				CharString val = CharString_createRefSizedConst(strStart, str - strStart, false);
+				U64 res = 0;
+				if (!CharString_parseU64(val, &res))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a uint value"))
+
+				U8 bits = ETypeId_getDataTypeBytes(typeId) << 3;
+
+				if(bits != 64 && (res >> bits))
+					retError(clean, Error_outOfBounds(
+						0, res, ((U64)1 << bits) - 1, "Compiler_parseValue() parsed uint couldn't fit in the target bits"
+					))
+
+				switch(bits) {
+					default:	value->vu8[dstOff] = (U8) res;		break;
+					case 16:	value->vu16[dstOff] = (U16) res;	break;
+					case 32:	value->vu32[dstOff] = (U32) res;	break;
+					case 64:	value->vu64[dstOff] = res;			break;
+				}
+
+				++dstOff;
+				break;
+			}
+
+			case EDataType_Int: {
+
+				Bool neg = next == '-';
+
+				if (neg || next == '+')
+					++str;
+
+				const C8 *strStart = str;
+
+				while (C8_isDec(*str))
+					++str;
+
+				if (str == strStart)
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an int value"))
+
+				CharString val = CharString_createRefSizedConst(strStart, str - strStart, false);
+				U64 ures = 0;
+				if (!CharString_parseU64(val, &ures))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an int value"))
+
+				//Easier than allowing I64_MIN
+
+				if(ures >> 63)
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() overflow on int value"))
+
+				I64 res = neg ? -(I64)ures : (I64)ures;
+
+				U8 bits = ETypeId_getDataTypeBytes(typeId) << 3;
+
+				U64 miBits = (U64)1 << (bits - 1);
+				I64 mi = -(I64)miBits;
+				I64 ma = (I64)((U64)miBits - 1);
+
+				if(bits != 64 && (neg ? (res < mi) : (res > ma)))
+					retError(clean, Error_invalidParameter(
+						0, 0, "Compiler_parseValue() parsed int couldn't fit in the target bits"
+					))
+
+				switch(bits) {
+					default:	value->vi8[dstOff]  = (I8) res;		break;
+					case 16:	value->vi16[dstOff] = (I16) res;	break;
+					case 32:	value->vi32[dstOff] = (I32) res;	break;
+					case 64:	value->vi64[dstOff] = res;			break;
+				}
+
+				++dstOff;
+				break;
+			}
+
+			default:
+				retError(clean, Error_invalidState(0, "Compiler_parseValue() is an invalid type"))
+		}
+
+		goto clean;
+	}
+
+	//Vector
+	//(x, y, z, w)
+	//^
+
+	if (h == 1) {
+
+		if (next != '(')
+			retError(clean, Error_invalidState(0, "Compiler_parseValue() expected ("));
+
+		++str;
+
+		ETypeId singleType = ETypeId(makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, typeStride, type));
+
+		for (U64 i = 0; i < w; ++i) {
+
+			//(x, y, z, w)
+			// ^  ^  ^  ^
+
+			gotoIfError3(clean, Compiler_parseValue(value, dstOff, singleType, str, e_rr))
+				
+			//(x, y, z, w)
+			//  ^  ^  ^
+
+			if (i != w - 1) {
+
+				if (!Compiler_skipWhitespace(str))
+					retError(clean, Error_invalidState(0, "Compiler_parseValue() ended unexpectedly"));
+
+				if(str[0] != ',')
+					retError(clean, Error_invalidState(0, "Compiler_parseValue() expected ,"));
+
+				++str;
+			}
+		}
+
+		//(x, y, z, w)
+		//           ^
+			
+		gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
+		goto clean;
+	}
+
+	//Matrix
+	//((0, 1), (2, 3), (4, 5))
+	//^
+	
+	vecType = ETypeId(makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, typeStride, type));
+
+	if (next != '(')
+		retError(clean, Error_invalidState(0, "Compiler_parseValue() expected ("));
+
+	++str;
+
+	for (U64 i = 0; i < h; ++i) {
+
+		//((0, 1), (2, 3), (4, 5))
+		// ^       ^       ^
+
+		gotoIfError3(clean, Compiler_parseValue(value, dstOff, vecType, str, e_rr));
+
+		//((0, 1), (2, 3), (4, 5))
+		//       ^       ^
+
+		if (i != w - 1) {
+
+			if (!Compiler_skipWhitespace(str))
+				retError(clean, Error_invalidState(0, "Compiler_parseValue() ended unexpectedly"));
+
+			if(str[0] != ',')
+				retError(clean, Error_invalidState(0, "Compiler_parseValue() expected ,"));
+
+			++str;
+		}
+	}
+
+	//((0, 1), (2, 3), (4, 5))
+	//                       ^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_registerUniform(
+	SHEntryRuntime &entry,
+	const C8 *&str,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	const C8 *idenStart = nullptr;
+
+	CharString uniformType = CharString_createNull();
+	CharString uniformName = CharString_createNull();
+	CharString tmp = CharString_createNull();
+
+	SHValue value = SHValue{ 0 };
+	U64 dstOff = 0;
+	U64 valLen = 0;
+	U64 uniformDatLen = entry.uniformData.length;
+
+	ETypeId typeId = ETypeId_Undefined;
+
+	Bool didInit = entry.isInitializedFlags & 2;
+	Bool contains = false;
+
+	Bool s_uccess = true;
+
+	//type name = value;
+	//^
+
+	gotoIfError3(clean, Compiler_consumeIdentifier(str, idenStart, e_rr));
+
+	uniformType = CharString_createRefSizedConst(idenStart, str - idenStart, false);
+	typeId = ETypeId_parse(uniformType);
+
+	if (typeId == ETypeId_Undefined || typeId == ETypeId_C8)
+		retError(clean, Error_invalidState(
+			0,
+			"Compiler_registerUniform() invalid syntax, expected type = ((U/I/F)(8/16/32/64)/B)(x(1/2/3/4)(x(1/2/3/4)))"
+		));
+
+	valLen = ETypeId_getBytes(typeId);
+
+	//type name = value;
+	//     ^
+
+	gotoIfError3(clean, Compiler_consumeIdentifier(str, idenStart, e_rr));
+
+	uniformName = CharString_createRefSizedConst(idenStart, str - idenStart, false);
+
+	for (U64 i = 0; i < CharString_length(uniformName); ++i) {
+
+		C8 c = uniformName.ptr[i];
+		Bool isDec = C8_isDec(c);
+
+		if (!i && isDec)
+			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() can't start with a number"));
+
+		if (!isDec && !C8_isAlpha(c) && c != '_')
+			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() name must be [A-Za-z_]+[0-9A-Za-z_]*"));
+	}
+
+	//type name = value;
+	//         ^^
+
+	if (!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_consumeIdentifier() ended unexpectedly"));
+
+	if (str[0] != '=')
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() invalid syntax, expected 'type name = value'"));
+
+	++str;
+
+	//type name = value;
+	//			  ^
+
+	gotoIfError3(clean, Compiler_parseValue(&value, dstOff, typeId, str, e_rr))
+
+	//Validate if uniform already exists
+
+	for(U64 i = 0; i < entry.uniforms.length; ++i)
+		if (CharString_equalsStringSensitive(entry.uniforms.ptr[i].name, uniformName)) {
+			contains = true;
+			break;
+		}
+	
+	if (!didInit && contains)
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform already present"))
+
+	else if(didInit && !contains)
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform not present in previous definition"))
+
+	//Insert uniform
+
+	if(!didInit) {
+
+		gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &tmp))
+
+		if(uniformDatLen + valLen >= U16_MAX)
+			retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform buffer data is limited to 65535"))
+
+		SHUniformRuntime uniform = SHUniformRuntime{
+			.name = tmp,
+			.typeIdShort = ETypeId_toShortId(typeId),
+			.dataOffset = (U16)uniformDatLen
+		};
+
+		gotoIfError2(clean, ListSHUniformRuntime_pushBack(&entry.uniforms, uniform, alloc))
+		entry.uniformStride += (U16) valLen;
+	}
+
+	//Insert uniform data
+	
+	gotoIfError2(clean, ListU8_resize(&entry.uniformData, uniformDatLen + valLen, alloc))
+
+	Buffer_memcpy(
+		Buffer_createRef(entry.uniformData.ptrNonConst + uniformDatLen, valLen),
+		Buffer_createRefConst(&value, valLen)
+	);
+
+	tmp = CharString_createNull();		//Moved
+
+clean:
+	CharString_free(&tmp, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_parseUniformsAnnot(SHEntryRuntime &entry, const C8 *&str, Allocator alloc, Error *e_rr) {
+	
+	Bool s_uccess = true;
+
+	U32 uniformCount = 0;
+
+	//oxc::uniforms ( B1 x = true, U32 y = 1 )
+	//oxc::uniforms ( B1 x = true )
+	//oxc::uniforms ( )
+	//             ^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+
+	//oxc::uniforms ( B1 x = true, U32 y = 1 )
+	//oxc::uniforms ( B1 x = true )
+	//oxc::uniforms ( )
+	//               ^
+
+	if (!Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseUniformsAnnot() uniforms annotation ended unexpectedly"));
+
+	//oxc::uniforms ( )
+	//                ^
+
+	if (str[0] == ')') {
+
+		++str;
+
+		//oxc::uniforms ( ) 
+		//oxc::uniforms ( ) abc
+		//                 ^^
+
+		if (Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(
+				0, "Compiler_parseUniformsAnnot() uniforms annotation had unknown syntax appended"
+			));
+		
+		if ((entry.isInitializedFlags & 2) && entry.uniforms.length)
+			retError(clean, Error_invalidState(
+				0, "Compiler_parseUniformsAnnot() oxc::uniforms annotation mismatches uniform count"
+			));
+
+		entry.isInitializedFlags |= 2;
+		goto clean;
+	}
+
+	//oxc::uniforms ( B1 x = true, U32 y = 1 )
+	//oxc::uniforms ( B1 x = true )
+	//				  ^
+
+	gotoIfError3(clean, Compiler_registerUniform(entry, str, alloc, e_rr));
+	uniformCount = 1;
+
+	//[[oxc::uniforms(U32 x = 21, B1 y = false)]]
+	//[[oxc::uniforms(U32 x = 21)]]
+	//							^
+
+	while(true) {
+
+		//oxc::uniforms(U32 x = 21 , B1 y = false)
+		//oxc::uniforms(U32 x = 21 )
+		//						  ^
+
+		if (!Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(0, "Compiler_parseUniformsAnnot() uniforms annotation ended unexpectedly"));
+
+		//oxc::uniforms(U32 x = 21, B1 y = false) abc
+		//oxc::uniforms(U32 x = 21, B1 y = false)
+		//oxc::uniforms(U32 x = 21)
+		//						  ^^            ^^
+
+		if (str[0] == ')') {
+
+			++str;
+
+			if (Compiler_skipWhitespace(str))
+				retError(clean, Error_invalidState(
+					0, "Compiler_parseUniformsAnnot() uniforms annotation had unknown syntax appended"
+				));
+
+			break;
+		}
+
+		//oxc::uniforms(U32 x = 21, B1 y = false)
+		//						  ^
+
+		if (*str != ',')
+			retError(clean, Error_invalidState(0, "Compiler_parseUniformsAnnot() uniforms annotation expected ,"));
+
+		++str;
+
+		//oxc::uniforms(U32 x = 21, B1 y = false)
+		//						   ^
+
+		gotoIfError3(clean, Compiler_registerUniform(entry, str, alloc, e_rr));
+		++uniformCount;
+	}
+
+	if (uniformCount != entry.uniforms.length)
+		retError(clean, Error_invalidParameter(
+			0, 4, "Compiler_parseUniformsAnnot() oxc::uniforms mismatches in count with other oxc::uniforms"
+		))
+
+	entry.isInitializedFlags |= 2;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseOxcAnnot(
+	CharString functionName,
+	const C8 *&str,
+	U64 annotLen,
+	SHEntryRuntime &entry,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Buffer buf = Buffer_createRefConst(str, annotLen);
+	Bool s_uccess = true;
+	U32 c8x4 = 0;
+	const C8 *annotEnd = str + annotLen;
+
+	//oxc
+	//^
+
+	if (Buffer_readU16(buf, 0, NULL) != C8x2('o', 'x') || buf.ptr[2] != 'c')
+		goto clean;
+
+	//oxc::X
+	//   ^
+
+	str = annotEnd;
+
+	if (!Compiler_skipWhitespace(str))
+		goto clean;
+
+	if (*str != ':' || str[1] != ':')
+		goto clean;
+
+	str += 2;
+
+	if (!Compiler_skipWhitespace(str))
+		goto clean;
+
+	annotEnd = str;
+	if (!Compiler_skipAlphaNumeric(annotEnd))
+		goto clean;
+
+	annotLen = annotEnd - str;
+
+	if (annotLen < 5 || annotLen > 9)	//Skip unknown
+		goto clean;
+
+	buf = Buffer_createRefConst(str, annotLen);
+	c8x4 = Buffer_readU32(buf, 0, NULL);
+
+	switch (c8x4) {
+
+	case C8x4('s', 't', 'a', 'g'):		//oxc::stage()
+
+		//[[oxc::stage("vertex")]]
+		//	   ^
+		if (annotLen == 5 && str[4] == 'e') {
+			str += 5;
+			gotoIfError3(clean, Compiler_parseStageAnnot(entry, functionName, str, alloc, e_rr));
+		}
+
+		goto clean;
+
+	case C8x4('m', 'o', 'd', 'e'):		//oxc::model()
+
+		//[[oxc::model("6.8")]]
+		//	   ^
+		if (annotLen == 5 && str[4] == 'l') {
+			str += 5;
+			gotoIfError3(clean, Compiler_parseModelAnnot(entry, str, alloc, e_rr));
+		}
+
+		break;
+
+	case C8x4('v', 'e', 'n', 'd'):		//oxc::vendor()
+
+		//[[oxc::vendor("NV", "AMD")]]
+		//	   ^
+		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('o', 'r')) {
+			str += 6;
+			gotoIfError3(clean, Compiler_parseVendorAnnot(entry, str, e_rr));
+		}
+
+		break;
+
+	case C8x4('d', 'e', 'f', 'i'):		//oxc::defines()
+
+		//[[oxc::defines("X", "Y", "Z")]]
+		//[[oxc::defines("X" = "123", "Y" = "ABC")]]
+		//		 ^
+		if (annotLen == 7 && Buffer_readU16(buf, 4, NULL) == C8x2('n', 'e') && buf.ptr[6] == 's') {
+			str += 7;
+			gotoIfError3(clean, Compiler_parseDefinesAnnot(entry, str, alloc, e_rr));
+		}
+
+		break;
+
+	case C8x4('u', 'n', 'i', 'f'):		//oxc::uniforms()
+
+		//[[oxc::uniforms(U8x4 x = (1, 2, 3, 4))]]
+		//[[oxc::uniforms(B1 b = true)]]
+		//		 ^
+		if (annotLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('o', 'r', 'm', 's')) {
+			str += 8;
+			gotoIfError3(clean, Compiler_parseUniformsAnnot(entry, str, alloc, e_rr));
+		}
+
+		break;
+
+	case C8x4('e', 'x', 't', 'e'):		//oxc::extension()
+
+		//[[oxc::extension()]]
+		//	   ^
+		if (
+			annotLen == 9 &&
+			Buffer_readU64(buf, 1, NULL) == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
+		) {
+			str += 9;
+			gotoIfError3(clean, Compiler_parseExtensionAnnot(entry, str, alloc, e_rr));
+		}
+
+		break;
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseAnnot(
+	const D3D12_HLSL_ANNOTATION &annot,
+	CharString funcName,
+	SHEntryRuntime &entry,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	//Skip invalid annotations and find length
+
+	const C8 *str = annot.Name;
+	const C8 *annotEnd = NULL;
+	U64 annotLen = 0;
+
+	Bool s_uccess = true;
+
+	if (!Compiler_skipWhitespace(str))
+		goto clean;
+
+	annotEnd = str;
+	if (!Compiler_skipAlphaNumeric(annotEnd))
+		goto clean;
+
+	annotLen = annotEnd - str;
+
+	if (annotLen != 3 && annotLen != 6)	//Ignore non oxc and shader annots
+		goto clean;
+
+	//[shader()]
+	// ^
+
+	if (annotLen == 6) {
+		gotoIfError3(clean, Compiler_parseShaderAnnot(annot, funcName, str, annotLen, entry, alloc, e_rr));
+		goto clean;
+	}
+
+	if (annot.IsBuiltin)	//not [[oxc::]]
+		goto clean;
+
+	//[[oxc::defines()]]
+	//[[oxc::extension()]]
+	//[[oxc::vendor()]]
+	//[[oxc::model()]]
+	//[[oxc::stage()]]
+	//[[oxc::uniforms()]]
+	//	^
+
+	gotoIfError3(clean, Compiler_parseOxcAnnot(funcName, str, annotLen, entry, alloc, e_rr))
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parse(
+	Compiler comp,
+	CompilerSettings settings,
+	Allocator alloc,
+	CompileResult *result,
+	Error *e_rr
+) {
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16 tmpWStr = ListU16{};
+	#else
+		ListU32 tmpWStr = ListU32{};
+	#endif
+
+	CharString tmp = CharString_createNull();
+	Bool s_uccess = true;
+
+	SHEntryRuntime runtimeEntry = SHEntryRuntime{};
+	CompilerInterfaces *interfaces = nullptr;
+
+	Bool hasErrors = false;
+	OxComPtr<IDxcResult> hlslReflectRes;
+	OxComPtr<IDxcBlob> reflectBinary;
+	OxComPtr<IHLSLReflectionData> reflectionData;
+	OxComPtr<IDxcBlobEncoding> source;
+	D3D12_HLSL_REFLECTION_DESC reflDesc;
+	HRESULT hr = S_OK;
+
+	if (!result)
+		retError(clean, Error_nullPointer(3, "Compiler_parse()::result is required"));
+		
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &tmpWStr))
+	#else
+		gotoIfError2(clean, CharString_toUTF32(settings.path, alloc, &tmpWStr))
+	#endif
+
+	interfaces = (CompilerInterfaces*)comp.interfaces;
+
+	if (!interfaces->reflector || !interfaces->utils)
+		retError(clean, Error_nullPointer(3, "Compiler_parse()::interfaces->reflector & utils are required"));
+
+	if(CharString_length(settings.string) >> 32)
+		retError(clean, Error_invalidOperation(0, "Compiler_parse() string out of bounds"));
+
+	hr = interfaces->utils->CreateBlobFromPinned(
+		settings.string.ptr, (U32) CharString_length(settings.string), DXC_CP_UTF8, &source
+	);
+
+	if (FAILED(hr))
+		retError(clean, Error_invalidState(0, "Compiler_parse() source couldn't be wrapped into IDxcBlobEncoding"));
+
+	static const wchar_t *args[] = {
+		L"-reflect-functions",
+		L"-T",
+		L"lib_6_9",
+		L"-enable-16bit-types"
+	};
+
+	//TODO: define these rather than use Compiler_preprocess
+	static const DxcDefine *defines = nullptr;
+	static const uint32_t defineCount = 0;
+
+	hr = interfaces->reflector->FromSource(
+		source,
+		(const wchar_t*)tmpWStr.ptr,
+		args, U32(sizeof(args) / sizeof(args[0])),
+		(DxcDefine*) defines, defineCount,
+		interfaces->includeHandler,
+		&hlslReflectRes
+	);
+
+	if (hlslReflectRes) {
+
+		OxComPtr<IDxcBlobUtf8> err;
+		hr = hlslReflectRes->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&err), NULL);
+
+		if (FAILED(hr))
+			retError(clean, Error_invalidState(1, "Compiler_parse() fetch errors failed"));
+
+		if (err && err->GetStringLength()) {
+			CharString errs = CharString_createRefSizedConst(err->GetStringPointer(), err->GetStringLength(), false);
+			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
+		}
+	}
+
+	if (hasErrors)
+		goto clean;
+
+	if (FAILED(hr) || !hlslReflectRes)
+		retError(clean, Error_invalidState(0, "Compiler_parse() failed to call IHLSLReflector::FromSource"));
+
+	hr = hlslReflectRes->GetResult(&reflectBinary);
+
+	if (FAILED(hr) || !reflectBinary)
+		retError(clean, Error_invalidState(0, "Compiler_parse() failed to get result binary"));
+
+	hr = interfaces->reflector->FromBlob(reflectBinary, &reflectionData);
+
+	if(FAILED(hr))
+		retError(clean, Error_invalidState(0, "Compiler_parse() failed to deserialize result binary"));
+
+	if (FAILED(hr = reflectionData->GetDesc(&reflDesc)))
+		retError(clean, Error_invalidState(0, "Compiler_parse() failed to get reflection desc"));
+
+	//Find all functions with at least an oxc or dxc annotation
+	//We basically parse the annotations to generate ListSHEntryRuntime
+
+	for (U32 i = 0; i < reflDesc.FunctionCount; ++i) {
+
+		D3D12_HLSL_FUNCTION_DESC funcDesc;
+
+		if (FAILED(hr = reflectionData->GetFunctionDesc(i, &funcDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_parse() failed to get reflection desc"));
+		
+		CharString funcName = CharString_createRefCStrConst(funcDesc.Name);
+
+		D3D12_HLSL_NODE nodeDesc;
+
+		if (FAILED(hr = reflectionData->GetNodeDesc(funcDesc.NodeId, &nodeDesc)))
+			retError(clean, Error_invalidState(0, "Compiler_parse() failed to get node desc"));
+
+		if (!nodeDesc.AnnotationCount)
+			continue;
+
+		//We found a potential entrypoint, check for shader or stage annotation
+
+		runtimeEntry.entry.stage = ESHPipelineStage_Count;
+
+		for (uint32_t j = 0; j < nodeDesc.AnnotationCount; ++j) {
+
+			D3D12_HLSL_ANNOTATION annot;
+			if (FAILED(hr = reflectionData->GetAnnotationByIndex(funcDesc.NodeId, j, &annot)))
+				retError(clean, Error_invalidState(0, "Compiler_parse() failed to get node annot"));
+
+			gotoIfError3(clean, Compiler_parseAnnot(annot, funcName, runtimeEntry, alloc, e_rr));
+		}
+		
+		//If we didn't find a stage, but we did find annotations that match, we need to free them
+
+		if (runtimeEntry.entry.stage == ESHPipelineStage_Count)
+			SHEntryRuntime_free(&runtimeEntry, alloc);
+
+		//Otherwise we found an entry
+
+		else {
+
+			U16 minVersion = Compiler_minFeatureSetStage(ESHPipelineStage(runtimeEntry.entry.stage), 0);
+
+			//Ensure all shader versions are compatible with minimum featureset
+
+			Bool containsValidVersion = minVersion == OISH_SHADER_MODEL(6, 5);
+
+			for (U64 j = 0; j < runtimeEntry.shaderVersions.length; ++j)
+				if (runtimeEntry.shaderVersions.ptr[j] >= minVersion) {
+					containsValidVersion = true;
+					break;
+				}
+
+			if (!containsValidVersion)
+				retError(clean, Error_invalidState(
+					0,
+					"Compiler_parse() one of the shader models was incompatible with minimum shader featureset "
+					"of WaveSize or stage"
+				));
+
+			//Find a shader version that has the requirements.
+			//If there's no model available, then it should be ok.
+
+			Bool isRt =
+				runtimeEntry.entry.stage >= ESHPipelineStage_RtStartExt &&
+				runtimeEntry.entry.stage <= ESHPipelineStage_RtEndExt;
+
+			for (U64 j = 0; j < runtimeEntry.extensions.length; ++j) {
+
+				if(
+					runtimeEntry.entry.stage != ESHPipelineStage_RaygenExt &&
+					(runtimeEntry.extensions.ptr[j] & ESHExtension_RayReorder)
+				)
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_parse() one of the non raygen stages uses RayReorder, which isn't supported"
+					));
+
+				if(!isRt && (runtimeEntry.extensions.ptr[j] & ESHExtension_PAQ))
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_parse() one of the non raytracing stages uses PAQ, which isn't supported"
+					));
+
+				if(
+					runtimeEntry.entry.stage != ESHPipelineStage_Compute &&
+					runtimeEntry.entry.stage != ESHPipelineStage_MeshExt &&
+					runtimeEntry.entry.stage != ESHPipelineStage_TaskExt &&
+					(runtimeEntry.extensions.ptr[j] & ESHExtension_ComputeDeriv)
+				)
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_parse() one of the non compute/mesh/task stages uses ComputeDeriv, which isn't supported"
+					));
+
+				if(!runtimeEntry.shaderVersions.length)
+					continue;
+
+				U16 reqVersion = Compiler_minFeatureSetExtension(ESHExtension(runtimeEntry.extensions.ptr[j]));
+
+				containsValidVersion = false;
+
+				for (U64 k = 0; k < runtimeEntry.shaderVersions.length; ++k)
+					if (runtimeEntry.shaderVersions.ptr[k] >= reqVersion) {
+						containsValidVersion = true;
+						break;
+					}
+
+				if(!containsValidVersion)
+					retError(clean, Error_invalidState(
+						0, "Compiler_parse() one of the shader extensions was incompatible with all shader models"
+					));
+			}
+
+			//Validate groups with stage
+
+			if(!runtimeEntry.vendorMask)
+				runtimeEntry.vendorMask = U16_MAX;
+
+			//Ready for push
+
+			if(result->shEntriesRuntime.length + 1 >= U16_MAX)
+				retError(clean, Error_invalidState(
+					0, "Compiler_parse() found way too many SHEntries. Found U16_MAX!"
+				));
+
+			if(SHEntryRuntime_getCombinations(runtimeEntry) + 1 >= U16_MAX)
+				retError(clean, Error_invalidState(
+					0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
+				));
+
+			//Validate uniforms used with stage intrinsic instead of shader.
+
+			if(runtimeEntry.uniforms.length && !runtimeEntry.isShaderAnnotation)
+				retError(clean, Error_invalidState(
+					0,
+					"Compiler_parse() tried to enable [[oxc::uniforms(...)]] but [oxc::stage(...)] intrinsic is used. "
+					"This is illegal, because it uses libraries to link with DXIL (and is suboptimal otherwise)."
+				));
+
+			//Validate if uniforms are the same as all other uniforms (excluding contents)
+
+			if (result->shEntriesRuntime.length) {
+
+				SHEntryRuntime first = result->shEntriesRuntime.ptr[0];
+
+				if (first.uniforms.length != runtimeEntry.uniforms.length)
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_parse() one of the entrypoints enabled uniforms but didn't have the same uniform count"
+					));
+
+				if (first.uniformStride != runtimeEntry.uniformStride)
+					retError(clean, Error_invalidState(
+						0, "Compiler_parse() one of the entrypoints enabled uniforms but didn't have the same types"
+					));
+
+				for (U64 j = 0; j < first.uniforms.length; ++j) {
+
+					U64 k = 0;
+
+					for (; k < runtimeEntry.uniforms.length; ++k)
+						if (CharString_equalsStringSensitive(
+							runtimeEntry.uniforms.ptr[k].name,
+							first.uniforms.ptr[j].name
+						))
+							break;
+
+					if (k == runtimeEntry.uniforms.length)
+						retError(clean, Error_invalidState(
+							0, "Compiler_parse() one of the required uniforms is missing between the next entry"
+						));
+
+					if (runtimeEntry.uniforms.ptr[k].typeIdShort != first.uniforms.ptr[j].typeIdShort)
+						retError(clean, Error_invalidState(
+							0, "Compiler_parse() one of the uniforms did match name but has a mismatching type"
+						));
+
+					if (runtimeEntry.uniforms.ptr[k].dataOffset != first.uniforms.ptr[j].dataOffset)
+						retError(clean, Error_invalidState(
+							0, "Compiler_parse() one of the uniforms did match order"
+						));
+				}
+			}
+
+			//Ensure we didn't define the same uniform multiple times
+
+			U64 stride = runtimeEntry.uniformStride;
+
+			for (U64 j = 1; j < U64_safeDiv(runtimeEntry.uniformData.length, stride); ++j)
+				for (U64 k = 0; k < j; ++k)
+					if(Buffer_eq(
+						Buffer_createRefConst(runtimeEntry.uniformData.ptr + stride * k, stride),
+						Buffer_createRefConst(runtimeEntry.uniformData.ptr + stride * j, stride)
+					))
+						retError(clean, Error_invalidState(
+							0, "Compiler_parse() some of the uniform combinations are duplicated"
+						));
+
+			//Defines reference parsedLiterals, which are owned by the Parser.
+			//The parser goes out of scope at the end of the function, so we have to copy it.
+			//We won't do this for other params, because they're references to the input string
+			//which will be alive after this function.
+
+			if(runtimeEntry.defineNameValues.length) {
+				ListCharString tmpArr = ListCharString{};
+				gotoIfError2(clean, ListCharString_createCopyUnderlying(runtimeEntry.defineNameValues, alloc, &tmpArr))
+				ListCharString_freeUnderlying(&runtimeEntry.defineNameValues, alloc);
+				runtimeEntry.defineNameValues = tmpArr;
+			}
+
+			gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
+			runtimeEntry = SHEntryRuntime{};
+		}
+	}
+
+	result->type = ECompileResultType_SHEntryRuntime;
+	result->isSuccess = true;
+
+clean:
+
+	if(!s_uccess && result)
+		CompileResult_free(result, alloc);
+
+	SHEntryRuntime_free(&runtimeEntry, alloc);
+	
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		ListU16_free(&tmpWStr, alloc);
+	#else
+		ListU32_free(&tmpWStr, alloc);
+	#endif
+
+	CharString_free(&tmp, alloc);
 	return s_uccess;
 }

@@ -35,8 +35,6 @@
 #include "types/container/archive.h"
 #include "types/container/big_int.h"
 #include "types/container/cdf_list.h"
-#include "types/container/lexer.h"
-#include "types/container/parser.h"
 #include "platforms/platform.h"
 
 TListXImpl(CharString);
@@ -63,13 +61,6 @@ TListXBaseImpl(ListRefPtr);
 TListXBaseImpl(ListWeakRefPtr);
 
 TListXBaseImpl(ListThread);
-
-//Lexer and parser
-
-TListXImpl(Token);
-TListXImpl(Symbol);
-TListXImpl(LexerToken);
-TListXImpl(LexerExpression);
 
 //DDS
 
@@ -117,28 +108,6 @@ Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error 
 
 Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
 	return RefPtr_create(objectLength, Platform_instance->alloc, free, type, result);
-}
-
-//Lexer and parser
-
-Bool Lexer_createx(CharString str, Lexer *lexer, Error *e_rr) {
-	return Lexer_create(str, Platform_instance->alloc, lexer, e_rr);
-}
-
-void Lexer_freex(Lexer *lexer) {
-	Lexer_free(lexer, Platform_instance->alloc);
-}
-
-void Lexer_printx(Lexer lexer) {
-	Lexer_print(lexer, Platform_instance->alloc);
-}
-
-Bool Parser_createx(const Lexer *lexer, Parser *parser, Error *e_rr) {
-	return Parser_create(lexer, parser, Platform_instance->alloc, e_rr);
-}
-
-void Parser_freex(Parser *parser) {
-	Parser_free(parser, Platform_instance->alloc);
 }
 
 //Buffer

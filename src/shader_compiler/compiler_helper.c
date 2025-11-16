@@ -80,11 +80,11 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 
 		if (CharString_endsWithStringInsensitive(file.path, hlsl, 0)) {
 
-			gotoIfError2(clean, CharString_createCopy(file.path, alloc, &copy))
+			gotoIfError2(clean, CharString_createCopy(file.path, alloc, &copy));
 
 			//Move to allShaders
 
-			gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allShaders, copy, alloc))
+			gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allShaders, copy, alloc));
 			copy = CharString_createNull();
 
 			//Grab subPath
@@ -92,20 +92,20 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 			CharString subPath = CharString_createNull();
 
 			if(!CharString_cut(file.path, CharString_length(shaderFiles->base), 0, &subPath))
-				retError(clean, Error_invalidState(0, "registerFile() couldn't get subPath"))
+				retError(clean, Error_invalidState(0, "registerFile() couldn't get subPath"));
 
 			//Copy subPath
 
-			gotoIfError2(clean, CharString_createCopy(subPath, alloc, &copy))
+			gotoIfError2(clean, CharString_createCopy(subPath, alloc, &copy));
 
 			//Move subPath into new folder
 
-			gotoIfError2(clean, CharString_insertString(&copy, shaderFiles->output, 0, alloc))
+			gotoIfError2(clean, CharString_insertString(&copy, shaderFiles->output, 0, alloc));
 
 			//Move output file to allOutputs, unless it needs to be renamed
 
 			if(!shaderFiles->hasMultipleModes && isPreprocess) {
-				gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allOutputs, copy, alloc))
+				gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allOutputs, copy, alloc));
 				copy = CharString_createNull();
 			}
 
@@ -118,7 +118,7 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 				if(!((shaderFiles->compileModeU64 >> i) & 1))
 					continue;
 
-				gotoIfError2(clean, ListU8_pushBack(shaderFiles->allModes, i, alloc))
+				gotoIfError2(clean, ListU8_pushBack(shaderFiles->allModes, i, alloc));
 
 				//Add double reference to input, so we don't waste memory (besides 24 for CharString struct itself)
 				//Because we want to compile it with two different modes
@@ -129,7 +129,7 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 					CharString input = *ListCharString_last(*shaderFiles->allShaders);
 					input = CharString_createRefStrConst(input);
 
-					gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allShaders, input, alloc))
+					gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allShaders, input, alloc));
 				}
 
 				//Append .spv.hlsl and .dxil.hlsl at the end
@@ -144,15 +144,14 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 						),
 						copy.ptr,
 						isPreprocess ? fileSuffixes[i] : (
-							shaderFiles->compileType == ECompileType_Includes ||
-							shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : (
+							shaderFiles->compileType == ECompileType_Includes ? txtSuffix : (
 								shaderFiles->hasCombineFlag ? oiSHCombineSuffix : oiSHSuffixes[i]
 							)
 						)
-					))
+					));
 
-					gotoIfError3(clean, File_add(tempStr, EFileType_File, 1 * MS, true, alloc, e_rr))
-					gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allOutputs, tempStr, alloc))
+					gotoIfError3(clean, File_add(tempStr, EFileType_File, 1 * MS, true, alloc, e_rr));
+					gotoIfError2(clean, ListCharString_pushBack(shaderFiles->allOutputs, tempStr, alloc));
 					tempStr = CharString_createNull();
 				}
 
@@ -228,10 +227,21 @@ Bool Compiler_precompileShader(
 
 		settings.string = tempStr;
 
-		gotoIfError3(clean, Compiler_parse(
-			compiler, settings, compileType == ECompileType_Symbols, alloc, &compileResult, e_rr
-		))
+		gotoIfError3(clean, Compiler_parse(compiler, settings, alloc, &compileResult, e_rr));
 	}
+
+	if(enableLogging)
+		for(U64 i = 0; i < compileResult.compileErrors.length; ++i) {
+
+			CompileError e = compileResult.compileErrors.ptr[i];
+
+			if((e.typeLineId >> 7) == ECompileErrorType_Warn)
+				Log_warnLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+
+			else Log_errorLn(
+				alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr
+			);
+		}
 
 	//Write final compile result
 
@@ -1195,7 +1205,7 @@ Bool Compiler_getTargetsFromFile(
 			) : (int)(sizeof("output") - 1),
 			output ? output->ptr : "output",
 			compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
-				compileType == ECompileType_Includes || compileType == ECompileType_Symbols ? txtSuffix :
+				compileType == ECompileType_Includes ? txtSuffix :
 				oiSHSuffixes[i]
 			)
 		))

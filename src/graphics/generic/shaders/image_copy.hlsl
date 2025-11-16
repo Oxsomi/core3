@@ -74,19 +74,21 @@ void mainSingle(U32x3 id : SV_DispatchThreadID) {
 	U32x3 src = region.getSrc().xyz + id;
 	U32x3 dst = region.getDst().xyz + id;
 
-	if($$ROTATE) {
+	#ifdef $$ROTATE
+		if($$ROTATE) {
 
-		if(xyzRot.w & 1) {
-			xyzRot.xy = xyzRot.yx;
-			dst.xy = dst.yx;
+			if(xyzRot.w & 1) {
+				xyzRot.xy = xyzRot.yx;
+				dst.xy = dst.yx;
+			}
+
+			if(xyzRot.w < 3)
+				dst.y = xyzRot.y - 1 - dst.y;
+
+			if(xyzRot.w > 1)
+				dst.x = xyzRot.x - 1 - dst.x;
 		}
-
-		if(xyzRot.w < 3)
-			dst.y = xyzRot.y - 1 - dst.y;
-
-		if(xyzRot.w > 1)
-			dst.x = xyzRot.x - 1 - dst.x;
-	}
+	#endif
 
 	_output[dst] = _input[src];
 }

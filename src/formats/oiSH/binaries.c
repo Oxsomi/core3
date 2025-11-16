@@ -629,7 +629,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc) {
 	U16 shaderVersion = binary.identifier.shaderVersion;
 
 	if (isVerbose || (shaderVersion != OISH_SHADER_MODEL(6, 5)))
-		Log_debugLn(alloc, "\t[[oxc::model(%"PRIu8".%"PRIu8")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 
 	ESHExtension activeExt = (binary.identifier.extensions &~ binary.dormantExtensions) & ESHExtension_All;
 	ESHExtension exts = binary.identifier.extensions;

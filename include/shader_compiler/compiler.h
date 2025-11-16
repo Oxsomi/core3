@@ -273,7 +273,6 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 Bool Compiler_parse(
 	Compiler comp,
 	CompilerSettings settings,
-	Bool symbolsOnly,
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -307,8 +306,7 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 typedef enum ECompileType {
 	ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
 	ECompileType_Includes,			//Turns shader with includes into a list of their dependencies (direct + indirect)
-	ECompileType_Compile,			//Compile all shaders into an oiSH file for consumption
-	ECompileType_Symbols			//List all symbols located in the shader or include as a text file
+	ECompileType_Compile			//Compile all shaders into an oiSH file for consumption
 } ECompileType;
 
 Bool Compiler_getTargetsFromFile(
@@ -366,7 +364,7 @@ Bool Compiler_createx(Compiler *comp, Error *e_rr);
 void Compiler_freex(Compiler *comp);
 
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
-Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr);
+Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
 Bool Compiler_disassemblex(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr);
 

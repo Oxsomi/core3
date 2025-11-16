@@ -314,7 +314,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
   - Only defining the define but no assign will just see it as a define that can be checked with #ifdef.
   - Define name must not indicate symbols or spaces (excluding _).
 - The application is in charge of picking the define combo for the entire lib or each entrypoint. So it is possible to switch between defines based on what the app wants, unlike models and extensions which are handled by the runtime.
-- `[[oxc::model(6.8)]]`
+- `[[oxc::model("6.8")]]`
   - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
     - Minimum must be 6.5+ since that's the minimum OxC3 supports.
     - Workgraphs require SM6.8.

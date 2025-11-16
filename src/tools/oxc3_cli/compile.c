@@ -205,9 +205,6 @@
 			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
 				compileType = ECompileType_Includes;
 
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
-				compileType = ECompileType_Symbols;
-
 			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
 				compileType = ECompileType_Compile;
 

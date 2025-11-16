@@ -31,17 +31,11 @@
 #include "types/math/math.h"
 #include "formats/oiSB/sb_file.h"
 
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-#define UNICODE
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#include <Unknwn.h>
-#endif
+#include "directx/d3d12shader.h"
 
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
-#include "directx/d3d12shader.h"
+#include "dxcompiler/dxcreflect.h"
 #include <exception>
 
 Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtension *demotion, Error *e_rr) {
@@ -895,6 +889,7 @@ typedef struct CompilerInterfaces {
 	IDxcUtils *utils;
 	IDxcCompiler3 *compiler;
 	IncludeHandler *includeHandler;
+	IHLSLReflector *reflector;
 } CompilerInterfaces;
 
 extern "C" Bool Compiler_processDXIL(

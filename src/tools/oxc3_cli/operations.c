@@ -96,7 +96,7 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Start offset",
 	"Shader output mode (spv, dxil or all; also allows multiple such as dxil,spv)",
 	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)",
-	"Shader compile mode (preprocess, includes, reflect, compile)",
+	"Shader compile mode (preprocess, includes, compile)",
 	"Set extra include path",
 	"Input file to merge with",
 	"Graphics api to use. Default is either all or the native one depending on command."
