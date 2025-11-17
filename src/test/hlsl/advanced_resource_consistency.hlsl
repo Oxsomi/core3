@@ -42,6 +42,7 @@ cbuffer test4 : register(space1) { float d; };
 
 float e;
 
+[[oxc::stage("compute")]]
 [numthreads(16, 16, 1)]
 void main(uint id : SV_DispatchThreadID) {
     output2.Store(id * 4, 1);		//Only use 1 output, but this won't result into output2 receiving wrong bindings

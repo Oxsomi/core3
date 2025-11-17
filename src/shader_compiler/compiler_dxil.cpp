@@ -377,6 +377,7 @@ Bool Compiler_convertShaderBufferDXIL(
 	const C8 *nameCStr,
 	ID3D12FunctionReflection1 *funcRefl,
 	ID3D12ShaderReflection1 *shaderRefl,
+	Bool &emptyBuffer,
 	Allocator alloc,
 	SBFile *sbFile,
 	Error *e_rr
@@ -388,6 +389,10 @@ Bool Compiler_convertShaderBufferDXIL(
 	ESBSettingsFlags flags = ESBSettingsFlags_None;
 	CharString name = CharString_createNull();
 	D3D_CBUFFER_TYPE cbufferType = D3D_CT_CBUFFER;
+	U32 variables = 0;
+	ID3D12ShaderReflectionVariable *cbufVariableRoot = nullptr;
+	ID3D12ShaderReflectionType *cbufVariableTypeRoot = nullptr;
+	Bool cbufUsedRoot = false;
 
 	if(!shaderRefl && !funcRefl)
 		retError(clean, Error_nullPointer(
@@ -435,51 +440,128 @@ Bool Compiler_convertShaderBufferDXIL(
 		cbufferType = D3D_CT_RESOURCE_BIND_INFO;
 	}
 
-	if(
+	if (
 		constantBufferDesc.Type != cbufferType ||
 		constantBufferDesc.uFlags ||
-		!constantBufferDesc.Size ||
-		!constantBufferDesc.Variables
+		!constantBufferDesc.Size
 	)
 		retError(clean, Error_invalidState(
 			0, "Compiler_convertShaderBufferDXIL() DXIL contained shader with unsupported buffer type or flags"
-		))
+		));
 
-	gotoIfError3(clean, SBFile_create(flags, constantBufferDesc.Size, alloc, sbFile, e_rr))
+	if (!constantBufferDesc.Variables) {
+		emptyBuffer = true;
+		goto clean;
+	}
 
-	for (U32 k = 0; k < constantBufferDesc.Variables; ++k) {
+	gotoIfError3(clean, SBFile_create(flags, constantBufferDesc.Size, alloc, sbFile, e_rr));
 
-		ID3D12ShaderReflectionVariable *variable = constantBuffer->GetVariableByIndex(k);
+	//Possibly a ConstantBuffer<T>, check if inner variable is a member named T with typename T that is a struct.
 
+	variables = constantBufferDesc.Variables;
+
+	if (resourceDesc.Type == D3D_SIT_CBUFFER && constantBufferDesc.Variables == 1) {
+
+		ID3D12ShaderReflectionVariable *variable = constantBuffer->GetVariableByIndex(0);
 		D3D12_SHADER_VARIABLE_DESC variableDesc{};
 
-		const void *startTextureU64 = &variableDesc.StartTexture;
-		const void *startSamplerU64 = &variableDesc.StartSampler;
-
-		if(!variable || !variable->GetType() || FAILED(variable->GetDesc(&variableDesc)))
+		if (!variable || !variable->GetType() || FAILED(variable->GetDesc(&variableDesc)))
 			retError(clean, Error_invalidState(
 				0, "Compiler_convertShaderBufferDXIL() DXIL contained buffer variable with no desc or type"
-			))
-
+			));
+		
 		ID3D12ShaderReflectionType *type = variable->GetType();
+		D3D12_SHADER_TYPE_DESC typeDesc{};
 
-		if(
-			variableDesc.DefaultValue ||
-			!variableDesc.Name ||
-			(variableDesc.uFlags && variableDesc.uFlags != D3D_SVF_USED) ||
-			(*(const U64*)startTextureU64 && *(const U64*)startTextureU64 != U32_MAX) ||
-			(*(const U64*)startSamplerU64 && *(const U64*)startSamplerU64 != U32_MAX)
-		)
+		if (!type || FAILED(type->GetDesc(&typeDesc)))
 			retError(clean, Error_invalidState(
-				0, "Compiler_convertShaderBufferDXIL() DXIL contained illegal buffer variable"
+				0, "Compiler_convertMemberDXIL() DXIL contained constant buffer variable type with no desc"
 			))
+
+		CharString varName = CharString_createRefCStrConst(variableDesc.Name);
+
+		//We found a ConstantBuffer, we'll do two things:
+		// - Pretend we have 1 + inner variable count variables.
+		//		This will allow us to validate the root node and variables.
+		// - Ignore the root node for the actual contents, it's only for validation.
+
+		if (typeDesc.Class == D3D_SVC_STRUCT && CharString_equalsStringSensitive(varName, name)) {
+			variables += typeDesc.Members;
+			cbufVariableRoot = variable;
+			cbufVariableTypeRoot = type;
+			cbufUsedRoot = variableDesc.uFlags & D3D_SVF_USED;
+		}
+	}
+
+	for (U32 k = 0; k < variables; ++k) {
+
+		D3D12_SHADER_VARIABLE_DESC variableDesc{};
+		ID3D12ShaderReflectionType *type = nullptr;
+
+		if(!(cbufVariableRoot && k)) {
+
+			ID3D12ShaderReflectionVariable *variable = constantBuffer->GetVariableByIndex(k);
+
+			const void *startTextureU64 = &variableDesc.StartTexture;
+			const void *startSamplerU64 = &variableDesc.StartSampler;
+
+			if (!variable || !variable->GetType() || FAILED(variable->GetDesc(&variableDesc)))
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertShaderBufferDXIL() DXIL contained buffer variable with no desc or type"
+				));
+
+			type = variable->GetType();
+
+			if(
+				variableDesc.DefaultValue ||
+				!variableDesc.Name ||
+				(variableDesc.uFlags && variableDesc.uFlags != D3D_SVF_USED) ||
+				(*(const U64*)startTextureU64 && *(const U64*)startTextureU64 != U32_MAX) ||
+				(*(const U64*)startSamplerU64 && *(const U64*)startSamplerU64 != U32_MAX)
+			)
+				retError(clean, Error_invalidState(
+					0, "Compiler_convertShaderBufferDXIL() DXIL contained illegal buffer variable"
+				));
+		}
+
+		else {
+
+			type = cbufVariableTypeRoot->GetMemberTypeByIndex(k - 1);
+			variableDesc.Name = cbufVariableTypeRoot->GetMemberTypeName(k - 1);
+
+			D3D12_SHADER_TYPE_DESC memberDesc{};
+			if (!type || FAILED(type->GetDesc(&memberDesc)))
+				retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing member desc"));
+
+			variableDesc.StartOffset = memberDesc.Offset;
+			variableDesc.uFlags = cbufUsedRoot ? D3D_SVF_USED : 0;
+		}
+
+		if (!k && cbufVariableRoot) //Skip root
+			continue;
 
 		const C8 *variableName = variableDesc.Name;
 		CharString varName = CharString_createRefCStrConst(variableName);
 
 		U32 varSize = 0;
 
-		if(k + 1 == constantBufferDesc.Variables)
+		if (cbufVariableRoot) {
+			
+			if(k + 1 == variables)
+				varSize = (U32)constantBufferDesc.Size - variableDesc.StartOffset;
+
+			else {
+
+				D3D12_SHADER_TYPE_DESC neighborDesc{};
+				ID3D12ShaderReflectionType *neighbor = cbufVariableTypeRoot->GetMemberTypeByIndex((U32) k);
+				if(!neighbor || FAILED(neighbor->GetDesc(&neighborDesc)))
+					retError(clean, Error_invalidState(0, "Compiler_convertShaderBufferDXIL() missing neighbor member desc"))
+
+				varSize = neighborDesc.Offset - variableDesc.StartOffset;
+			}
+		}
+
+		else if(k + 1 == constantBufferDesc.Variables)
 			varSize = constantBufferDesc.Size - variableDesc.StartOffset;
 
 		else {
@@ -543,7 +625,7 @@ Bool Compiler_convertRegisterDXIL(
 	ListU32 arrays{};
 
 	U32 texFlags = D3D_SIF_TEXTURE_COMPONENT_0 | D3D_SIF_TEXTURE_COMPONENT_1;
-	U32 unknownFlags = D3D_SIF_FORCE_DWORD &~ (D3D_SIF_COMPARISON_SAMPLER | texFlags);
+	U32 unknownFlags = D3D_SIF_FORCE_DWORD &~ (D3D_SIF_COMPARISON_SAMPLER | texFlags | D3D_SIF_UNUSED);
 
 	Bool isReadTexture = input->Type == D3D_SIT_TEXTURE;
 
@@ -555,7 +637,10 @@ Bool Compiler_convertRegisterDXIL(
 	ESHTexturePrimitive prim = ESHTexturePrimitive_Count;
 	ESHTextureType registerType = ESHTextureType_Count;
 	Bool isArray = false;
+	Bool emptyBuffer = false;
 	SBFile sbFile = SBFile{};
+
+	U8 isUsedFlag = (!(input->uFlags & D3D_SIF_UNUSED)) << ESHBinaryType_DXIL;
 
 	if(input->Type == D3D_SIT_CBUFFER) {
 
@@ -665,6 +750,7 @@ Bool Compiler_convertRegisterDXIL(
 				input->Name,
 				funcRefl,
 				shaderRefl,
+				emptyBuffer,
 				alloc,
 				&sbFile,
 				e_rr
@@ -677,6 +763,11 @@ Bool Compiler_convertRegisterDXIL(
 			break;
 	}
 
+	if (emptyBuffer) {
+		Log_warnLn(alloc, "Compiler_convertShaderBufferDXIL() Buffer with no variables detected");
+		goto clean;
+	}
+
 	switch (input->Type) {
 
 		case D3D_SIT_TEXTURE:
@@ -686,7 +777,7 @@ Bool Compiler_convertRegisterDXIL(
 				registerType,
 				isArray,
 				false,
-				(U8)(1 << ESHBinaryType_DXIL),
+				isUsedFlag,
 				prim,
 				&name,
 				arrays.length ? &arrays : NULL,
@@ -706,7 +797,7 @@ Bool Compiler_convertRegisterDXIL(
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
-				(U8)(1 << ESHBinaryType_DXIL),
+				isUsedFlag,
 				input->uFlags & D3D_SIF_COMPARISON_SAMPLER,
 				&name,
 				arrays.length ? &arrays : NULL,
@@ -740,7 +831,7 @@ Bool Compiler_convertRegisterDXIL(
 				registers,
 				registerType,
 				isArray,
-				(U8)(1 << ESHBinaryType_DXIL),
+				isUsedFlag,
 				prim,
 				ETextureFormatId_Undefined,
 				&name,
@@ -768,7 +859,7 @@ Bool Compiler_convertRegisterDXIL(
 				registers,
 				ESHBufferType_ByteAddressBuffer,
 				input->Type == D3D_SIT_UAV_RWBYTEADDRESS,
-				(U8)(1 << ESHBinaryType_DXIL),
+				isUsedFlag,
 				&name,
 				arrays.length ? &arrays : NULL,
 				NULL,
@@ -795,7 +886,7 @@ Bool Compiler_convertRegisterDXIL(
 				registers,
 				ESHBufferType_ConstantBuffer,
 				false,
-				(U8)(1 << ESHBinaryType_DXIL),
+				isUsedFlag,
 				&name,
 				NULL,
 				&sbFile,
@@ -829,7 +920,7 @@ Bool Compiler_convertRegisterDXIL(
 				registers,
 				type,
 				input->Type != D3D_SIT_STRUCTURED,
-				(U8)(1 << ESHBinaryType_DXIL),
+				isUsedFlag,
 				&name,
 				arrays.length ? &arrays : NULL,
 				&sbFile,
@@ -856,7 +947,7 @@ Bool Compiler_convertRegisterDXIL(
 				registers,
 				ESHBufferType_AccelerationStructure,
 				false,
-				(U8)(1 << ESHBinaryType_DXIL),
+				isUsedFlag,
 				&name,
 				arrays.length ? &arrays : NULL,
 				NULL,

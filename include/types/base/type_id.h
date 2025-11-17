@@ -86,11 +86,11 @@ ETypeId_##prefix##16##x##w##x##h	ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, 
 ETypeId_##prefix##32##x##w##x##h	ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_32, dataType)),		\
 ETypeId_##prefix##64##x##w##x##h	ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_64, dataType))
 
-#define ETypeIdXIntMatW(prefix, dataType, w) 																			\
-ETypeIdXIntMatWH(prefix, dataType, w, 1),																				\
-ETypeIdXIntMatWH(prefix, dataType, w, 2),																				\
-ETypeIdXIntMatWH(prefix, dataType, w, 3),																				\
-ETypeIdXIntMatWH(prefix, dataType, w, 4)
+#define ETypeIdXIntMatW(prefix, dataType, h) 																			\
+ETypeIdXIntMatWH(prefix, dataType, 1, h),																				\
+ETypeIdXIntMatWH(prefix, dataType, 2, h),																				\
+ETypeIdXIntMatWH(prefix, dataType, 3, h),																				\
+ETypeIdXIntMatWH(prefix, dataType, 4, h)
 
 #define ETypeIdXIntMat(prefix, dataType) 																				\
 ETypeIdXIntMatW(prefix, dataType, 2),																					\
@@ -129,10 +129,10 @@ ETypeId_F32x##w##x##h	ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeSt
 ETypeId_F64x##w##x##h	ETIDAsg(makeTypeId(LIBRARYID_DEFAULT, 0, w, h, EDataTypeStride_64, EDataType_Float))
 
 #define ETypeIdFloatMatW(w) 																							\
-ETypeIdFloatMatWH(w, 2), ETypeIdFloatMatWH(w, 3), ETypeIdFloatMatWH(w, 4)
+ETypeIdFloatMatWH(1, w), ETypeIdFloatMatWH(2, w), ETypeIdFloatMatWH(3, w), ETypeIdFloatMatWH(4, w)
 
 #define ETypeIdFloatMat() 																								\
-ETypeIdFloatMatW(1), ETypeIdFloatMatW(2), ETypeIdFloatMatW(3), ETypeIdFloatMatW(4)
+ETypeIdFloatMatW(2), ETypeIdFloatMatW(3), ETypeIdFloatMatW(4)
 
 //All possible types
 
@@ -154,17 +154,17 @@ typedef enum ETypeId {
 	ETypeIdXIntVecN(U, EDataType_UInt),			//U<8/16/32/64>x<2/3/4>
 	ETypeIdFloatVecN(),							//F<16/32/64>x<2/3/4>
 
-	ETypeId_B1x1x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 2, EDataTypeStride_8, EDataType_Bool),
+	ETypeId_B1x1x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 1, 2, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x2x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 2, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x3x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 3, 2, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x4x2								= makeTypeId(LIBRARYID_DEFAULT, 0, 4, 2, EDataTypeStride_8, EDataType_Bool),
 
-	ETypeId_B1x1x3								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 3, EDataTypeStride_8, EDataType_Bool),
+	ETypeId_B1x1x3								= makeTypeId(LIBRARYID_DEFAULT, 0, 1, 3, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x2x3								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 3, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x3x3								= makeTypeId(LIBRARYID_DEFAULT, 0, 3, 3, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x4x3								= makeTypeId(LIBRARYID_DEFAULT, 0, 4, 3, EDataTypeStride_8, EDataType_Bool),
 
-	ETypeId_B1x1x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 4, EDataTypeStride_8, EDataType_Bool),
+	ETypeId_B1x1x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 1, 4, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x2x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 2, 4, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x3x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 3, 4, EDataTypeStride_8, EDataType_Bool),
 	ETypeId_B1x4x4								= makeTypeId(LIBRARYID_DEFAULT, 0, 4, 4, EDataTypeStride_8, EDataType_Bool),

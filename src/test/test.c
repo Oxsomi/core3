@@ -2233,6 +2233,21 @@ int main() {
 		CharString_free(&tmp, alloc);
 	}*/
 
+	//Test ETypeId_toShortId
+
+	Log_debugLn(alloc, "Testing ETypeId_toShortId");
+
+	for (U64 i = 0; i < ETypeId_Max; ++i) {
+
+		ETypeId typeId = ETypeId_arr[i];
+		TypeIdShort shortTypeId = ETypeId_toShortId(typeId);
+
+		if (shortTypeId != i) {
+			shortTypeId = ETypeId_toShortId(typeId);
+			gotoIfError(clean, Error_invalidState((U32)i, "ETypeId_toShortId failed"))
+		}
+	}
+
 	//Test some basic chimera operations
 
 	Chimera chimera = (Chimera) {

@@ -1365,7 +1365,7 @@ Bool Compiler_getLinkEntries(
 					if (linkEntry2.entrypointId != U16_MAX)
 						continue;
 
-					if (Buffer_eq(linkEntry.uniformData, linkEntry2.uniformData))
+					if (!Buffer_eq(linkEntry.uniformData, linkEntry2.uniformData))
 						continue;
 
 					break;
@@ -1909,6 +1909,7 @@ Bool Compiler_compileShaders(
 							))
 
 						runtimeEntry.isShaderAnnotation = isShaderAnnotation;
+						CompileResult_free(&tempResult2, alloc);
 					}
 
 					ListLinkEntry_freeUnderlying(&linkEntries, alloc);

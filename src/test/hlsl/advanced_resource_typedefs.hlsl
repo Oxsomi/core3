@@ -40,5 +40,6 @@ texxf32c tex6c;
 SamplerState sampler0;
 smp sampler1;
 
+[[oxc::stage("compute")]]
 [numthreads(16, 16, 1)]
 void main() { }

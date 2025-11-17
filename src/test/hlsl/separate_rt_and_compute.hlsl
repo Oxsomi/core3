@@ -28,7 +28,7 @@
 
 RWTexture2D<F32x4> _test;
 
-#if !defined(__OXC_EXT_RAYTRACING)
+#if !defined(__OXC_EXT_RAYTRACING) || defined(__OXC_PREPROCESS)
 
 [shader("compute")]
 [numthreads(16, 16, 1)]

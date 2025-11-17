@@ -1634,7 +1634,7 @@ ETypeId ETypeId_parse(CharString str) {
 			if (v != 8 && strl == 2)
 				return ETypeId_Undefined;
 
-			U8 start = 1;
+			U8 start = 2;
 
 			if (v != 8) {
 
@@ -1646,6 +1646,12 @@ ETypeId ETypeId_parse(CharString str) {
 				}
 
 				v = v * 10 + v2;
+
+				switch (v) {
+					case 16: case 32: case 64:		break;
+					default:						return ETypeId_Undefined;
+				}
+
 				++start;
 			}
 

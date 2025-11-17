@@ -571,11 +571,20 @@ clean:
 
 Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 
-	const void *extensionsA = &a.extensions;
-	const void *extensionsB = &b.extensions;
+	//Bindless is not something that is turned on manually, but automatically.
+	//SPIRV and DXIL "bindless" differ, they don't get specified by oxc annotations.
+	//As such, they could disagree on if bindless is required or not.
+	//If they're merged, bindless will be required for both.
+	//Another reason is SPIRV might strip resources that are kept in dxil with -fhlsl-unused-resources=comkeep-all
+
+	ESHExtension toIgnore = ESHExtension_Bindless | ESHExtension_UnboundArraySize;
+
+	ESHExtension extensionsA = a.extensions & ~toIgnore;
+	ESHExtension extensionsB = b.extensions &~ toIgnore;
 
 	if(
-		*(const U64*)extensionsA != *(const U64*)extensionsB ||
+		extensionsA != extensionsB ||
+		*(const U32*)&a.shaderVersion != *(const U32*)&b.shaderVersion ||
 		a.defines.length != b.defines.length ||
 		a.uniforms.length != b.uniforms.length ||
 		!CharString_equalsStringSensitive(a.entrypoint, b.entrypoint)

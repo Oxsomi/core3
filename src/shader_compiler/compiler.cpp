@@ -332,8 +332,6 @@ public:
 
 					tmp = CharString_createRefCStrConst(nvHLSLExtnsInternal2);
 					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
-
-					tmpTmp = CharString_createRefCStrConst(nvHLSLExtnsInternal);
 				}
 
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtns.h"))) {
@@ -2471,7 +2469,8 @@ Bool Compiler_parseValue(
 				while (C8_isDec(next = *str) ||
 					next == 'E' || next == 'e' ||
 					next == 'F' || next == 'f' ||
-					next == '-' || next == '+'
+					next == '-' || next == '+' ||
+					next == '.'
 				)
 					++str;
 
@@ -2738,10 +2737,18 @@ Bool Compiler_registerUniform(
 	if (typeId == ETypeId_Undefined || typeId == ETypeId_C8)
 		retError(clean, Error_invalidState(
 			0,
-			"Compiler_registerUniform() invalid syntax, expected type = ((U/I/F)(8/16/32/64)/B)(x(1/2/3/4)(x(1/2/3/4)))"
+			"Compiler_registerUniform() invalid syntax, expected type = ((U/I/F)(8/16/32/64)/B)"
 		));
 
 	valLen = ETypeId_getBytes(typeId);
+
+	//In the future we could add support, but would require adding multiple spec constants, quite annoying.
+
+	if(ETypeId_getWidth(typeId) > 1 || ETypeId_getHeight(typeId) > 1)
+		retError(clean, Error_invalidState(
+			0,
+			"Compiler_registerUniform() Vectors and matrices are unsupported, spirv doesn't support non scalar spec constants"
+		));
 
 	//type name = value;
 	//     ^
@@ -2806,6 +2813,11 @@ Bool Compiler_registerUniform(
 			.typeIdShort = ETypeId_toShortId(typeId),
 			.dataOffset = (U16)uniformDatLen
 		};
+
+		ETypeId val = ETypeId_arr[uniform.typeIdShort];
+
+		if(val != typeId)
+			retError(clean, Error_invalidState(0, "Compiler_registerUniform() ETypeId_toShortId misfunctioning"));
 
 		gotoIfError2(clean, ListSHUniformRuntime_pushBack(&entry.uniforms, uniform, alloc))
 		entry.uniformStride += (U16) valLen;

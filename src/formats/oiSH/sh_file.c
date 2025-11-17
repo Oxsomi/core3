@@ -182,6 +182,7 @@ Bool SHValue_stringifyOne(
 	const SHValue *value,
 	ETypeId typeId,
 	U64 *counter,
+	U8 *localCounter,
 	EStringifyFlavor flavor,
 	EHLSLStringifyFlags flags,
 	Allocator alloc,
@@ -195,13 +196,13 @@ Bool SHValue_stringifyOne(
 	if(!value)
 		retError(clean, Error_nullPointer(0, "SHValue_stringify() value is missing"))
 
-	if(*counter) {
+	if(*localCounter) {
 		gotoIfError2(clean, CharString_append(val, ',', alloc))
 		gotoIfError2(clean, CharString_append(val, ' ', alloc))
 	}
 
 	U32 w = ETypeId_getWidth(typeId);
-	U32 h = ETypeId_getWidth(typeId);
+	U32 h = ETypeId_getHeight(typeId);
 	EDataType type = ETypeId_getDataType(typeId);
 	EDataTypeStride stride = ETypeId_getDataTypeStride(typeId);
 
@@ -274,6 +275,7 @@ Bool SHValue_stringifyOne(
 
 		gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
 		++*counter;
+		++*localCounter;
 		goto clean;
 	}
 
@@ -288,7 +290,7 @@ Bool SHValue_stringifyOne(
 			//float16_t3(1, 2, 3)
 			//^
 
-			gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tmp, e_rr))
+			gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tmp, e_rr))
 			gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
 			CharString_free(&tmp, alloc);
 		}
@@ -296,11 +298,13 @@ Bool SHValue_stringifyOne(
 		ETypeId single = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, type);
 
 		gotoIfError2(clean, CharString_append(val, '(', alloc))
+		U8 localCounteri = 0;
 
 		for(U64 i = 0; i < w; ++i)
-			gotoIfError3(clean, SHValue_stringifyOne(value, single, counter, flavor, flags, alloc, val, e_rr))
+			gotoIfError3(clean, SHValue_stringifyOne(value, single, counter, &localCounteri, flavor, flags, alloc, val, e_rr))
 			
 		gotoIfError2(clean, CharString_append(val, ')', alloc))
+		++*localCounter;
 		goto clean;
 	}
 
@@ -312,7 +316,7 @@ Bool SHValue_stringifyOne(
 		//float16_t3x3(float16_t3(1, 2, 3), float16_t3(4, 5, 6), float16_t3(7, 8, 9))
 		//^
 
-		gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tmp, e_rr))
+		gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tmp, e_rr))
 		gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
 		CharString_free(&tmp, alloc);
 	}
@@ -321,8 +325,10 @@ Bool SHValue_stringifyOne(
 
 	gotoIfError2(clean, CharString_append(val, '(', alloc))
 
+	U8 localCounteri = 0;
+
 	for(U64 i = 0; i < h; ++i)
-		gotoIfError3(clean, SHValue_stringifyOne(value, vec, counter, flavor, flags, alloc, val, e_rr))
+		gotoIfError3(clean, SHValue_stringifyOne(value, vec, counter, &localCounteri, flavor, flags, alloc, val, e_rr))
 			
 	gotoIfError2(clean, CharString_append(val, ')', alloc))
 
@@ -347,7 +353,8 @@ Bool SHValue_stringifyWithFlavor(
 		retError(clean, Error_invalidState(0, "SHValue_stringify()::val is required but should be empty"))
 
 	U64 counter = 0;
-	gotoIfError3(clean, SHValue_stringifyOne(value, typeId, &counter, flavor, flags, alloc, val, e_rr))
+	U8 localCounter = 0;
+	gotoIfError3(clean, SHValue_stringifyOne(value, typeId, &counter, &localCounter, flavor, flags, alloc, val, e_rr))
 
 clean:
 	return s_uccess;

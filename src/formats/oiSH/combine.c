@@ -113,6 +113,9 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 			SHBinaryInfo bi = b.binaries.ptr[j];
 
+			//Bindless and unbound array size need to be manually combined.
+			c.identifier.extensions |= bi.identifier.extensions;
+
 			c.dormantExtensions &= bi.dormantExtensions;
 
 			if(ai.vendorMask != bi.vendorMask || ai.hasShaderAnnotation != bi.hasShaderAnnotation)
