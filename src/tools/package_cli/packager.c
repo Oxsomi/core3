@@ -191,7 +191,6 @@ Bool Packager_package(
 				ignoreEmptyFiles,
 				ECompileType_Compile,
 				includeDir,
-				CharString_createNull(),
 				true,
 				alloc,
 				&allBuffers,

@@ -199,13 +199,7 @@
 
 			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr))
 
-			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
-				compileType = ECompileType_Preprocess;
-
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
-				compileType = ECompileType_Includes;
-
-			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
+			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
 				compileType = ECompileType_Compile;
 
 			else {
@@ -255,7 +249,6 @@
 			args.flags & EOperationFlags_IgnoreEmptyFiles,
 			ECompileType_Compile,
 			includeDir,
-			isFolder ? output : CharString_createNull(),
 			true,
 			Platform_instance->alloc,
 			NULL,

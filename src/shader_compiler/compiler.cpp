@@ -752,145 +752,6 @@ Bool Compiler_registerArgCStr(ListCharString *strings, const C8 *str, Allocator 
 	return Compiler_registerArgStr(strings, CharString_createRefCStrConst(str), alloc, e_rr);
 }
 
-Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
-
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
-
-	Bool s_uccess = true;
-	IDxcResult *dxcResult = NULL;
-	IDxcBlobUtf8 *error = NULL;
-	Bool hasErrors = false;
-	CharString tempStr = CharString_createNull();
-	CharString tempStr2 = CharString_createNull();
-	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
-
-	Compiler_defineStrings;
-
-	if(!interfaces->utils || !result)
-		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_preprocess()::comp is required"))
-
-	if(!CharString_length(settings.string))
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_preprocess()::settings.string is required"))
-
-	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_preprocess()::settings contains invalid format or outputType"))
-
-	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
-
-	try {
-
-		interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
-
-		result->isSuccess = false;
-
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-P", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_PREPROCESS", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
-
-		if (settings.outputType == ESHBinaryType_SPIRV)		//-spirv
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
-
-		//Format major, minor, patch and version
-
-		const C8 *formats[] = {
-			"-D__OXC_MAJOR=%" PRIu64,
-			"-D__OXC_MINOR=%" PRIu64,
-			"-D__OXC_PATCH=%" PRIu64,
-			"-D__OXC_VERSION=%" PRIu64,
-		};
-
-		const U64 formatInts[] = {
-			OXC3_MAJOR,
-			OXC3_MINOR,
-			OXC3_PATCH,
-			OXC3_VERSION
-		};
-
-		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-			gotoIfError2(clean, CharString_format(alloc, &tempStr, formats[i], formatInts[i]))
-			gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tempStr, alloc))
-			tempStr = CharString_createNull();
-		}
-
-		Compiler_convertToWString(stringsUTF8, clean)
-
-		//Compile
-
-		DxcBuffer buffer{
-			.Ptr = settings.string.ptr,
-			.Size = CharString_length(settings.string),
-			.Encoding = DXC_CP_UTF8
-		};
-
-		HRESULT hr = interfaces->compiler->Compile(
-			&buffer,
-			(LPCWSTR*) strings.ptr, (int) strings.length,
-			interfaces->includeHandler,
-			IID_PPV_ARGS(&dxcResult)
-		);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_preprocess() \"Compile\" failed"))
-
-		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(1, "Compiler_preprocess() fetch errors failed"))
-
-		if(error && error->GetStringLength()) {
-			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
-			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
-		}
-
-		if(error) {
-			error->Release();
-			error = NULL;
-		}
-
-		if (settings.infoAboutIncludes)
-			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))
-
-		if (hasErrors)
-			goto clean;
-
-		hr = dxcResult->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(&error), NULL);
-
-		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_preprocess() fetch hlsl failed"))
-
-		gotoIfError2(clean, CharString_createCopy(
-			CharString_createRefSizedConst(error->GetStringPointer(), error->GetBufferSize(), false),
-			alloc,
-			&result->text
-		))
-
-		result->type = ECompileResultType_Text;
-		result->isSuccess = true;
-
-	} catch (std::exception&) {
-		retError(clean, Error_invalidState(1, "Compiler_preprocess() raised an internal exception"))
-	}
-
-clean:
-
-	if(!s_uccess)
-		CompileResult_free(result, alloc);
-
-	if(dxcResult)
-		dxcResult->Release();
-
-	if(error)
-		error->Release();
-
-	Compiler_freeStrings;
-	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr2, alloc);
-	ListCharString_freeUnderlying(&stringsUTF8, alloc);
-	return s_uccess;
-}
-
 Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -1135,6 +996,8 @@ Bool Compiler_compile(
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr))
 			isRt = true;
 		}
+
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fhlsl-unused-resource-bindings=reserve-all", alloc, e_rr))
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
@@ -3280,6 +3143,9 @@ Bool Compiler_parse(
 	D3D12_HLSL_REFLECTION_DESC reflDesc;
 	HRESULT hr = S_OK;
 
+	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
+	Compiler_defineStrings;
+
 	if (!result)
 		retError(clean, Error_nullPointer(3, "Compiler_parse()::result is required"));
 		
@@ -3294,8 +3160,13 @@ Bool Compiler_parse(
 	if (!interfaces->reflector || !interfaces->utils)
 		retError(clean, Error_nullPointer(3, "Compiler_parse()::interfaces->reflector & utils are required"));
 
+	if (!CharString_length(settings.string))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_parse()::settings.string is required"))
+
 	if(CharString_length(settings.string) >> 32)
 		retError(clean, Error_invalidOperation(0, "Compiler_parse() string out of bounds"));
+
+	//TODO: Handle preprocess?
 
 	hr = interfaces->utils->CreateBlobFromPinned(
 		settings.string.ptr, (U32) CharString_length(settings.string), DXC_CP_UTF8, &source
@@ -3304,22 +3175,64 @@ Bool Compiler_parse(
 	if (FAILED(hr))
 		retError(clean, Error_invalidState(0, "Compiler_parse() source couldn't be wrapped into IDxcBlobEncoding"));
 
-	static const wchar_t *args[] = {
-		L"-reflect-functions",
-		L"-T",
-		L"lib_6_9",
-		L"-enable-16bit-types"
+	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
+
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-reflect-functions", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_PREPROCESS", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
+
+	//if (settings.outputType == ESHBinaryType_SPIRV)
+	//	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
+
+	//We will pretend that all extensions are enabled, this will avoid parser errors when extensions are used.
+
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr));
+
+		//Format major, minor, patch and version
+
+	static const C8 *formats[] = {
+		"-D__OXC_MAJOR=%" PRIu64,
+		"-D__OXC_MINOR=%" PRIu64,
+		"-D__OXC_PATCH=%" PRIu64,
+		"-D__OXC_VERSION=%" PRIu64,
 	};
 
-	//TODO: define these rather than use Compiler_preprocess
-	static const DxcDefine *defines = nullptr;
-	static const uint32_t defineCount = 0;
+	static const U64 formatInts[] = {
+		OXC3_MAJOR,
+		OXC3_MINOR,
+		OXC3_PATCH,
+		OXC3_VERSION
+	};
+
+	for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+		gotoIfError2(clean, CharString_format(alloc, &tmp, formats[i], formatInts[i]));
+		gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tmp, alloc));
+		tmp = CharString_createNull();
+	}
+
+	//__OXC_EXT_<X> foreach extension
+
+	for(U32 i = 0; i < ESHExtension_Count; ++i) {
+		gotoIfError2(clean, CharString_format(alloc, &tmp, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
+		tmp = CharString_createNull();
+	}
+
+	Compiler_convertToWString(stringsUTF8, clean);
+
+	interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
 
 	hr = interfaces->reflector->FromSource(
 		source,
 		(const wchar_t*)tmpWStr.ptr,
-		args, U32(sizeof(args) / sizeof(args[0])),
-		(DxcDefine*) defines, defineCount,
+		(LPCWSTR*) strings.ptr, U32(strings.length),
+		nullptr, 0,
 		interfaces->includeHandler,
 		&hlslReflectRes
 	);
@@ -3590,6 +3503,8 @@ clean:
 		ListU32_free(&tmpWStr, alloc);
 	#endif
 
+	Compiler_freeStrings;
 	CharString_free(&tmp, alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, alloc);
 	return s_uccess;
 }

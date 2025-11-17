@@ -169,104 +169,28 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-compile-output` is the outputs that are enabled. If this mode is multiple and --split is enabled then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends. Without --split, it will include the output modes as specified into a single oiSH file.
 
-`-compile-type` is the compile type. Can be one of the following: `preprocess`, `includes` and `compile`. Each compile mode has their own info section. By default (if the argument isn't present) the mode is `compile`.
+`-compile-type` is the compile type. Can currently only be `compile`.
 
 `-include-dir` can be used to add only a single include directory to search for includes (aside from relative includes).
 
 `@myFile.hlsl` specifies builtin shaders, such as `@types.hlsl` and `@resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target and the `extension` annotation is used.
 
-### Preprocess
-
-The `-compile-type preprocess` will turn the .hlsl into an HLSL ready for parsing (without includes and defines) and is used internally automatically when other compile modes are used; the option to do it can still prove useful if there's another compiler or parser or if it's important that only a single shader file is shipped rather than multiple includes.
-
-`OxC3 compile shaders -format HLSL -compile-output spv -compile-type preprocess -input a.hlsl -output a.preprocessed.hlsl`
-
-### Includes
-
-The `-compile-type includes` will turn the .hlsl into an include list and can be used to determine the heaviest include dependencies. Each include will have their own counter and either a file or a folder can be used to determine how many times an include is referenced by other includes or source files.
-
-`OxC3 compile shaders -format HLSL -compile-output spv -compile-type includes -input a.hlsl -output a.preprocessed.hlsl`
-
-Will show something like this:
-
-```
-Includes:
-123 reference(s): <hash> <fileSize> <optional: timestamp> //types.hlsl
-<hash> <fileSize> <optional: timestamp> /shaders/mySimpleInclude.hlsl
-
-Sources:
-<hash> <fileSize> /shaders/mySimpleFile.comp.hlsl
-```
-
-This tool can be useful to determine if the includes should be re-examined because they might trigger to many recompiles on change for example. Timestamp is in `Time_format` (0000-00-00T00:00:00.000000000Z), hash is CRC32c and fileSize is in bytes.
-
-Reference count is optional if reference count is 1, since it's a common case for single include files (since #pragma once is almost always used).
-
-When toggled on a folder, it will make a .txt file per file that it processes, so individual files can be inspected. It also makes a root.txt file which contains a merged version that  is easier to read if it's about getting all of them in one place. Example:
-
-```
-Includes:
-022 reference(s): fe9ec6b9 10219 types.hlsl
-022 reference(s): cc0a2ce9 08839 resources.hlsl
-012 reference(s): bb15afc7 01860 2024-05-04T14:32:55.000000000Z D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
-008 reference(s): c36476d2 87746 nvHLSLExtns.h
-008 reference(s): a78d6265 01329 2024-05-04T14:33:08.000000000Z D:/programming/repos/rt_core/res/shaders/ray_basics.hlsl
-008 reference(s): 32fdc427 10554 nvShaderExtnEnums.h
-008 reference(s): 10398840 29623 nvHLSLExtnsInternal.h
-004 reference(s): 916fbecd 03174 2024-05-04T14:33:14.000000000Z D:/programming/repos/rt_core/res/shaders/primitive.hlsl
-002 reference(s): 70055f36 01630 2024-05-04T21:10:48.000000000Z D:/programming/repos/rt_core/res/shaders/camera.hlsl
-002 reference(s): 4470bdfa 07490 2024-05-07T21:36:53.000000000Z D:/programming/repos/rt_core/res/shaders/atmosphere.hlsl
-
-Sources:
-4470bdfa 07490 D:/programming/repos/rt_core/res/shaders/atmosphere.hlsl
-70055f36 01630 D:/programming/repos/rt_core/res/shaders/camera.hlsl
-31e8a279 02363 D:/programming/repos/rt_core/res/shaders/depth_test.hlsl
-3acc8620 01888 D:/programming/repos/rt_core/res/shaders/graphics_test.hlsl
-bcc2bb61 01373 D:/programming/repos/rt_core/res/shaders/indirect_compute.hlsl
-0b762523 02790 D:/programming/repos/rt_core/res/shaders/indirect_prepare.hlsl
-916fbecd 03174 D:/programming/repos/rt_core/res/shaders/primitive.hlsl
-db3878c9 03860 D:/programming/repos/rt_core/res/shaders/raytracing_pipeline_test.hlsl
-aeb6a491 02528 D:/programming/repos/rt_core/res/shaders/raytracing_test.hlsl
-a78d6265 01329 D:/programming/repos/rt_core/res/shaders/ray_basics.hlsl
-bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
-```
-
-#### Limits
-
-Includes use OxC3 file paths, as such, escaping out of the working directory is prohibited. Any resolved file path that doesn't start with the working directory is illegal. And any tool that may read these includes (such as a file watcher) should have a similar protection mechanism.
-This gives a logical limit to how far back an include can go. Such a limit is also very useful to prevent any tooling from reading into files that weren't intentional or don't exist within the scope of the program (such as embedding a fictional include file which could read any file the program has access to). It will also enforce relative files, rather than allowing absolute files in the includes for some reason.
-
-### Symbols
-
-The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser. This mode is and likely will always be experimental, since DXC can't output this info and the parser likely will never be able to handle more complex syntax.
-
-`OxC3 compile shaders -format HLSL -compile-output dxil -compile-type symbols -input a.hlsl -output a.symbols.hlsl`
-
-Will show something like this:
-
-```
-Struct Camera at L#26:1
-	Variable v at L#28:10
-	Variable p at L#28:13
-	Variable vp at L#28:16
-	Variable vInv at L#29:10
-	Variable pInv at L#29:16
-	Variable vpInv at L#29:22
-	Function getRay at L#31:2
-		Parameter id at L#31:17
-		Parameter dims at L#31:27
-```
-
 ### Compile
 
 Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the defines, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
 
+#### Include limits
+Includes use OxC3 file paths, as such, escaping out of the working directory is prohibited. Any resolved file path that doesn't start with the working directory is illegal. And any tool that may read these includes (such as a file watcher) should have a similar protection mechanism.
+This gives a logical limit to how far back an include can go. Such a limit is also very useful to prevent any tooling from reading into files that weren't intentional or don't exist within the scope of the program (such as embedding a fictional include file which could read any file the program has access to). It will also enforce relative files, rather than allowing absolute files in the includes for some reason.
+
 #### Built-in defines
 
-The following defines are set by OxC3 during compilation:
+The following defines are set by OxC3 during compilation or preprocess:
 
 - `__OXC` to indicate that OxC3 is compiling or parsing the shader.
 - `__OXC_PREPROCESS` to indicate that OxC3 is parsing the entrypoints (useful for ensuring OxC3 sees all entrypoints even if some get hidden in other compilations).
+  - When this happens, all extensions are turned on but no uniforms or defines are set. This means that your shader should gracefully handle a uniform or define not being present. As well as too many extensions being available while `__OXC_PREPROCESS` is used; these extensions won't make it into the final binary. For example, defines should check `#ifdef $$UNIFORM` before using them, just like normal defines.
+
 - `__OXC_MAJOR`, `__OXC_MINOR` and `__OXC_PATCH` to indicate OxC3 version. For 0.2.0 these would be 0, 2 and 0 respectively.
 - `__OXC_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
 - `__OXC_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC_EXT_F16`, `__OXC_EXT_F64`, `__OXC_EXT_RAYQUERY`, etc.
@@ -325,7 +249,7 @@ Each entrypoint can have annotations on top of the ones used by DXC (have to be 
     - PAQ (Payload Access Qualifiers) requires SM6.6.
     - Stage type always has to be compatible with specified models.
     - If extensions are defined, one of the pair of extensions/models has to be compatible with the minimum requirement. If this is the case, that one is used as fallback.
-      - Example: `[[model(6.2)]]` and `[[model(6.0)]]` is possible with `[[extensions("16BitTypes")]]` only if there's another `[[extensions()]]` available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on).
+      - Example: `[[model("6.2")]]` and `[[model("6.0")]]` is possible with `[[extensions("16BitTypes")]]` only if there's another `[[extensions()]]` available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on).
     - If multiple models are available, the runtime will choose from highest shader model to lowest shader model available.
   - If not defined, will use minimum for the detected feature set.
   - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled.

@@ -113,7 +113,6 @@ void ListIncludeInfo_freeUnderlying(ListIncludeInfo *infos, Allocator alloc);
 Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *output, Error *e_rr);
 
 typedef enum ECompileResultType {
-	ECompileResultType_Text,
 	ECompileResultType_Binary,
 	ECompileResultType_SHEntryRuntime,
 	ECompileResultType_Count
@@ -131,7 +130,6 @@ typedef struct CompileResult {
 	U8 padding;
 
 	union {
-		CharString text;
 		ListSHEntryRuntime shEntriesRuntime;
 		Buffer binary;
 	};
@@ -255,12 +253,6 @@ Bool Compiler_finalizeEntrypoint(		//Push reflection data into final entrypoint
 //This makes it possible to get a list of all includes.
 Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos, Error *e_rr);
 
-//Process a file with includes and defines to one without (returns text)
-//Always CompileResult_free after.
-//On success returns result->success; otherwise the compile did happen but returned with errors.
-//result->compileErrors.length can still be non zero if warnings are present.
-Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr);
-
 //Determine what minimum shader version is required
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize);
 U16 Compiler_minFeatureSetExtension(ESHExtension ext);
@@ -269,7 +261,7 @@ Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr);
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr);
 
-//Manual tokenization for a preprocessed file, to obtain annotations (returns shEntries if !symbolsOnly, otherwise text)
+//Invoke HLSL reflection, to obtain & parse annotations
 Bool Compiler_parse(
 	Compiler comp,
 	CompilerSettings settings,
@@ -304,8 +296,6 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 //Simplied compiler workflow, this is what the CLI calls too; it automatically handles threading and other things.
 
 typedef enum ECompileType {
-	ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
-	ECompileType_Includes,			//Turns shader with includes into a list of their dependencies (direct + indirect)
 	ECompileType_Compile			//Compile all shaders into an oiSH file for consumption
 } ECompileType;
 
@@ -336,7 +326,6 @@ Bool Compiler_compileShaders(
 	Bool ignoreEmptyFiles,
 	ECompileType type,
 	CharString includeDir,			//Optional
-	CharString outputDir,			//Optional outputDir,
 	Bool enableLogging,
 	Allocator alloc,
 	ListBuffer *allBuffers,			//Optional: buffer outputs (if NULL, outputs to file)
@@ -363,7 +352,6 @@ void ListIncludedFile_freeUnderlyingx(ListIncludedFile *file);
 Bool Compiler_createx(Compiler *comp, Error *e_rr);
 void Compiler_freex(Compiler *comp);
 
-Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
 Bool Compiler_disassemblex(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr);

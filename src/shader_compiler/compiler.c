@@ -220,9 +220,6 @@ void CompileResult_free(CompileResult *result, Allocator alloc) {
 	switch (result->type) {
 
 		default:
-			CharString_free(&result->text, alloc);
-			break;
-
 		case ECompileResultType_Binary:
 			Buffer_free(&result->binary, alloc);
 			break;
@@ -252,10 +249,6 @@ Bool Compiler_createx(Compiler *comp, Error *e_rr) {
 
 void Compiler_freex(Compiler *comp) {
 	Compiler_free(comp, Platform_instance->alloc);
-}
-
-Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
-	return Compiler_preprocess(comp, settings, Platform_instance->alloc, result, e_rr);
 }
 
 Bool Compiler_compilex(
