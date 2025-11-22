@@ -1751,9 +1751,8 @@ Bool Compiler_registerModel(ListU16 *vendors, const C8 *strStart, const C8 *strE
 	if (strStart >= strEnd || !C8_isDec(strStart[0]))
 		retError(clean, Error_invalidParameter(0, 1, "Compiler_registerModel() expected min (maj.min)"));
 
-	++strStart;
-
 	mi = C8_dec(strStart[0]);
+	++strStart;
 
 	if (strStart < strEnd) {
 

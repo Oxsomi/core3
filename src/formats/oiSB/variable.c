@@ -278,10 +278,10 @@ Bool SBFile_addVariableAsType(
 	U32 size = ESBType_getSize(type, isTightlyPacked);
 	U8 typeSize = 1 << ESBType_getStride(type);
 
-	if(!isTightlyPacked && ((offset + size - 1) >> 4) != (offset >> 4) && (offset & 15))
+	if(isTightlyPacked && ((offset + size - 1) >> 4) != (offset >> 4) && (offset & 15))
 		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsType()::offset spans 16 bytes, not tightly packed"))
 
-	if(isTightlyPacked && (offset & (typeSize - 1)))
+	if(!isTightlyPacked && (offset & (typeSize - 1)))
 		retError(clean, Error_invalidParameter(5, 0, "SBFile_addVariableAsType()::offset doesn't follow req type alignment"))
 
 	U64 totalSizeBytes = isTightlyPacked ? size : (size + 15) &~ 15;

@@ -1,3 +1,5 @@
+//TODO: Rename from .hlsli -> .hlsl when https://github.com/microsoft/DirectXShaderCompiler/issues/7922 is fixed.
+
 #include "@resources.hlsli"
 
 struct PushConstant {

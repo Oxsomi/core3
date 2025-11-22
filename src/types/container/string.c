@@ -1411,11 +1411,13 @@ Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *res
 
 	Bool s_uccess = true;
 	const C8 *ptr = NULL;
+	Bool createString = false;
 
 	switch (dataType) {
 
 		default:
-			retError(clean, CharString_createCopy(CharString_createRefCStrConst("C8"), alloc, result))
+			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst("C8"), alloc, result));
+			createString = true;
 			goto clean;
 
 		case EDataType_Bool:			ptr = "B1";		break;
@@ -1424,7 +1426,8 @@ Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *res
 		case EDataType_Float:			ptr = "F";		break;
 	}
 
-	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result))
+	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(ptr), alloc, result));
+	createString = true;
 
 	if(dataType != EDataType_Bool) {
 
@@ -1435,22 +1438,26 @@ Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *res
 			case EDataTypeStride_64:	ptr = "64";		break;
 		}
 
-		retError(clean, CharString_appendString(result, CharString_createRefCStrConst(ptr), alloc))
+		gotoIfError2(clean, CharString_appendString(result, CharString_createRefCStrConst(ptr), alloc));
 	}
 
 	if(w == 1 && h == 1)
 		goto clean;
 
-	gotoIfError2(clean, CharString_append(result, 'x', alloc))
-	gotoIfError2(clean, CharString_append(result, C8_createDec(w), alloc))
+	gotoIfError2(clean, CharString_append(result, 'x', alloc));
+	gotoIfError2(clean, CharString_append(result, C8_createDec(w), alloc));
 
 	if(h == 1)
 		goto clean;
 
-	gotoIfError2(clean, CharString_append(result, 'x', alloc))
-	gotoIfError2(clean, CharString_append(result, C8_createDec(h), alloc))
+	gotoIfError2(clean, CharString_append(result, 'x', alloc));
+	gotoIfError2(clean, CharString_append(result, C8_createDec(h), alloc));
 
 clean:
+
+	if (createString && !s_uccess)
+		CharString_free(result, alloc);
+
 	return s_uccess;
 }
 
