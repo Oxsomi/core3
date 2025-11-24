@@ -25,6 +25,17 @@
 	extern "C" {
 #endif
 
+typedef enum EStringCase {
+	EStringCase_Sensitive,			//Prefer when possible; avoids transforming the character
+	EStringCase_Insensitive
+} EStringCase;
+
+typedef enum EStringTransform {
+	EStringTransform_None,
+	EStringTransform_Lower,
+	EStringTransform_Upper
+} EStringTransform;
+
 //Char
 //All char helper functions assume ASCII, otherwise use string functions
 

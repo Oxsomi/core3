@@ -19,6 +19,7 @@
 */
 
 #include "types/base/c8.h"
+#include "types/base/string.h"
 #include "types/base/constants.h"
 
 #include <ctype.h>

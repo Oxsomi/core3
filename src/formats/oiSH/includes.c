@@ -67,7 +67,7 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 	U64 i = 0;
 
 	for(; i < shFile->includes.length; ++i)
-		if(CharString_compareSensitive(shFile->includes.ptr[i].relativePath, include->relativePath) == ECompareResult_Gt)
+		if(CharString_compareSensitive(&shFile->includes.ptr[i].relativePath, &include->relativePath) == ECompareResult_Gt)
 			break;
 
 	//Create copy and/or move

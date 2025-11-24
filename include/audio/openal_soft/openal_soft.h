@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/base/types.h"
+#include "types/base/buffer.h"
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <AL/alext.h>

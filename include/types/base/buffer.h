@@ -25,6 +25,17 @@
 	extern "C" {
 #endif
 
+typedef struct Buffer {
+
+	union {
+		const U8* ptr;
+		U8* ptrNonConst;		//Requires !Buffer_isConstRef(buf)
+	};
+
+	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
+
+} Buffer;
+
 //Buffer (more functions in types/container/buffer.h)
 
 U64 Buffer_length(Buffer buf);

@@ -535,10 +535,10 @@ Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v, U64 off, U64 l
 Bool CharString_toLower(CharString str) { return CharString_transform(str, EStringTransform_Lower); }
 Bool CharString_toUpper(CharString str) { return CharString_transform(str, EStringTransform_Upper); }
 
-ECompareResult CharString_compareSensitive(CharString a, CharString b) {
+ECompareResult CharString_compareSensitive(const CharString *a, const CharString *b) {
 	return CharString_compare(a, b, EStringCase_Sensitive);
 }
 
-ECompareResult CharString_compareInsensitive(CharString a, CharString b) {
+ECompareResult CharString_compareInsensitive(const CharString *a, const CharString *b) {
 	return CharString_compare(a, b, EStringCase_Insensitive);
 }

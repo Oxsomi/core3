@@ -25,6 +25,8 @@
 	extern "C" {
 #endif
 
+typedef struct Buffer Buffer;
+
 typedef Error (*AllocFunc)(void *allocator, U64 length, Buffer *output);
 
 //Free should only return if it successfully freed.

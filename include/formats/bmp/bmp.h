@@ -27,6 +27,7 @@
 
 typedef struct Allocator Allocator;
 typedef struct Error Error;
+typedef struct Buffer Buffer;
 
 typedef struct BMPInfo {
 

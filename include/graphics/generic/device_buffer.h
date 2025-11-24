@@ -27,6 +27,8 @@
 	extern "C" {
 #endif
 
+typedef struct CharString CharString;
+
 typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EDeviceBufferUsage {

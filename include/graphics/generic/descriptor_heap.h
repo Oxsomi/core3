@@ -28,6 +28,8 @@
 	extern "C" {
 #endif
 
+typedef struct CharString CharString;
+
 typedef enum EDescriptorHeapFlags {
 	EDescriptorHeapFlags_None					= 0,
 	EDescriptorHeapFlags_AllowBindless			= 1 << 0,		//Required to use bindless

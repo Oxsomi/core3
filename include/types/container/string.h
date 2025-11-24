@@ -20,41 +20,15 @@
 
 #pragma once
 #include "types/container/list.h"
+#include "types/container/buffer.h"
 #include "types/base/type_id.h"
+#include "types/base/string.h"
 
 #include <stdarg.h>
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-//Since a CharString can be a ref to existing memory, it doesn't necessarily have a null terminator.
-//The null terminator is omitted for speed and to allow references into an existing string or data.
-//The null terminator is automatically added on copy.
-//
-//There are four/five types of strings:
-//
-//Stack strings (or heap if you manually allocate it there):
-//	ShortString; 31 chars max (includes null terminator)
-//	LongString; 63 char max (includes null terminator)
-//
-//CharString; A string that goes on the heap (or wherever the allocator tells it to go)
-//CharString(Ref); A reference to an already allocated string (CharString with capacity 0)
-//CharString(Ref) const; A const reference that should not allow operations on it (CharString with capacity -1)
-
-//Dynamic string
-
-typedef struct CharString {
-
-	union {
-		const C8 *ptr;				//This is non const if not a const ref, but for safety this is const (cast away if not).
-		C8 *ptrNonConst;			//Only use if !isConstRef
-	};
-
-	U64 lenAndNullTerminated;		//First bit contains if it's null terminated or not. Length excludes null terminator.
-	U64 capacityAndRefInfo;			//capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
-
-} CharString;
 
 TList(CharString);
 TListNamed(const C8*, ListConstC8);
@@ -63,80 +37,21 @@ Bool ListCharString_sort(ListCharString list, EStringCase stringCase);
 Bool ListCharString_sortSensitive(ListCharString list);
 Bool ListCharString_sortInsensitive(ListCharString list);
 
-//Simple helper functions
-
-Bool CharString_isConstRef(CharString str);
-Bool CharString_isRef(CharString str);
-Bool CharString_isEmpty(CharString str);
-Bool CharString_isNullTerminated(CharString str);
-U64  CharString_bytes(CharString str);
-U64  CharString_length(CharString str);
-U64  CharString_capacity(CharString str);				//Returns 0 if ref
-
-Buffer CharString_buffer(CharString str);
-Buffer CharString_bufferConst(CharString str);
-Buffer CharString_allocatedBuffer(CharString str);		//Returns null buffer if ref
-Buffer CharString_allocatedBufferConst(CharString str);
-
-//Iteration
-
-C8 *CharString_begin(CharString str);
-const C8 *CharString_beginConst(CharString str);
-
-C8 *CharString_end(CharString str);
-const C8 *CharString_endConst(CharString str);
-
-C8 *CharString_charAt(CharString str, U64 off);
-const C8 *CharString_charAtConst(CharString str, U64 off);
-
-//Returns U32_MAX if it wasn't a valid UTF8 codepoint
-//TODO: U32 CharString_codepointAtByteConst(CharString str, U64 startByteOffset, U8 *length);
-//TODO: U32 CharString_codepointAtConst(CharString str, U64 offset, U8 *length);
-
-Bool CharString_isValidAscii(CharString str);
-Bool CharString_isValidUTF8(CharString str);
-Bool CharString_isValidFileName(CharString str);
-
-ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive);
-ECompareResult CharString_compareSensitive(CharString a, CharString b);						//TODO: sensitivity for unicode?
-ECompareResult CharString_compareInsensitive(CharString a, CharString b);
-
-//Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
-
+Bool CharString_isValidFileName(const CharString str);
 Bool CharString_isValidFilePath(CharString str);
+
+ECompareResult CharString_compare(const CharString *a, const CharString *b, EStringCase caseSensitive);
+ECompareResult CharString_compareSensitive(const CharString *a, const CharString *b);		//TODO: sensitivity for unicode?
+ECompareResult CharString_compareInsensitive(const CharString *a, const CharString *b);
+
+U64 CharString_unicodeCodepoints(const CharString str);				//Returns U64_MAX if invalid codepoints were detected
+U64 CharString_hash(const CharString s);								//Hash of content, for maps only (not for cryptography purposes)
+
 Bool CharString_clear(CharString *str);
 
-U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize);
-U64 CharString_unicodeCodepoints(CharString str);				//Returns U64_MAX if invalid codepoints were detected
-U64 CharString_hash(CharString s);								//Hash of content, for maps only (not for cryptography purposes)
-
-C8 CharString_getAt(CharString str, U64 i);
-Bool CharString_setAt(CharString str, U64 i, C8 c);
-
-//Freeing refs won't do anything, but is still recommended for consistency.
-//Const ref disallow modifying functions to be used.
-
-CharString CharString_createNull();
-
-CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
-
-CharString CharString_createRefCStrConst(const C8 *ptr);					//Only use this if string is created safely (\0)
-CharString CharString_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
-
-//isNullTerminated is true if the size given excludes the null terminator (e.g. ptr[size] == '\0').
-//In this case ptr[size] has to be the null terminator.
-//If this is false, it will automatically check if ptr contains a null terminator
-
-CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated);
-CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated);
-
-CharString CharString_createRefStrConst(CharString str);
-
-CharString CharString_createRefShortStringConst(const ShortString str);
-CharString CharString_createRefLongStringConst(const LongString str);
-
-CharString CharString_createRefShortString(ShortString str);
-CharString CharString_createRefLongString(LongString str);
+inline Bool CharString_isValidUTF8(const CharString str) {
+	return Buffer_isUTF8(CharString_bufferConst(str), 1);
+}
 
 //Strings that HAVE to be freed (anything that uses an allocator needs freeing)
 //These reside on the heap/free space (or wherever allocator allocates them)

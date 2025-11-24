@@ -69,15 +69,7 @@ typedef char C8;
 
 typedef bool Bool;
 
-//TODO: Move to string.
-
-//Stack strings that are faster and easier to allocate
-
-#define SHORTSTRING_LEN 32
-#define LONGSTRING_LEN 64
-
-typedef C8 ShortString[SHORTSTRING_LEN];
-typedef C8 LongString[LONGSTRING_LEN];
+//TODO: Remove
 
 typedef enum ECompareResult {
 	ECompareResult_Lt,
@@ -91,30 +83,9 @@ typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL as func indi
 
 //Default stacktrace
 
+//TODO: Remove
+
 #define STACKTRACE_SIZE 32
 typedef void *StackTrace[STACKTRACE_SIZE];
 
-typedef struct CharString CharString;
 typedef struct Error Error;
-
-typedef enum EStringCase {
-	EStringCase_Sensitive,			//Prefer when possible; avoids transforming the character
-	EStringCase_Insensitive
-} EStringCase;
-
-typedef enum EStringTransform {
-	EStringTransform_None,
-	EStringTransform_Lower,
-	EStringTransform_Upper
-} EStringTransform;
-
-typedef struct Buffer {
-
-	union {
-		const U8 *ptr;
-		U8 *ptrNonConst;		//Requires !Buffer_isConstRef(buf)
-	};
-
-	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
-
-} Buffer;

@@ -57,7 +57,7 @@ ECompareResult sortParentCountAndFileNames(CharString *a, CharString *b) {
 	if (foldersA > foldersB)
 		return ECompareResult_Gt;
 
-	return CharString_compareInsensitive(*a, *b);
+	return CharString_compareInsensitive(a, b);
 }
 
 //We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.

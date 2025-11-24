@@ -28,6 +28,7 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "types/container/texture_format.h"
 #include "types/container/ref_ptr.h"
+#include "types/container/string.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "types/base/constants.h"

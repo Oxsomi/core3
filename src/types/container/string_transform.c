@@ -23,15 +23,6 @@
 #include "types/base/c8.h"
 #include "types/base/constants.h"
 
-Bool CharString_setAt(CharString str, U64 i, C8 c) {
-
-	if(i >= CharString_length(str) || CharString_isConstRef(str) || !c)
-		return false;
-
-	str.ptrNonConst[i] = c;
-	return true;
-}
-
 Error CharString_append(CharString *s, C8 c, Allocator allocator) {
 
 	if (!s)

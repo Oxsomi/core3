@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/base/types.h"
+#include "types/container/string.h"
 
 typedef void *DynamicLibrary;
 

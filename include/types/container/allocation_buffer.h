@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/container/list.h"
+#include "types/base/buffer.h"
 
 #ifdef __cplusplus
 	extern "C" {

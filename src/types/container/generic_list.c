@@ -721,11 +721,11 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 TGenericList_sorts(TGenericList_sort);
 
 ECompareResult GenericList_compareString(const CharString *a, const CharString *b) {
-	return CharString_compareSensitive(*a, *b);
+	return CharString_compareSensitive(a, b);
 }
 
 ECompareResult GenericList_compareStringInsensitive(const CharString *a, const CharString *b) {
-	return CharString_compareInsensitive(*a, *b);
+	return CharString_compareInsensitive(a, b);
 }
 
 Bool GenericList_sortString(GenericList list, EStringCase stringCase) {

@@ -30,6 +30,8 @@
 	extern "C" {
 #endif
 
+typedef struct CharString CharString;
+
 typedef enum EDescriptorTableFlags {
 	EDescriptorTableFlags_None						= 0,
 	EDescriptorTableFlags_InternalWeakDeviceRef		= 1 << 0

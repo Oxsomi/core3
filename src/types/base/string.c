@@ -18,33 +18,41 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/string.h"
+#include "types/base/string.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
 
-typedef enum ECompilerWarning ECompilerWarning;
-typedef struct Allocator Allocator;
+	if (!ptr)
+		return CharString_createNull();
 
-Bool Packager_package(
-	CharString input,
-	CharString output,
-	const U32 encryptionKey[8],		//Pass NULL to disable AES256GCM
-	Bool multipleModes,
-	U64 compileModeU64,
-	U64 threadCount,
-	CharString includeDir,
-	Bool merge,
-	ECompilerWarning extraWarnings,
-	Bool enableLogging,
-	Bool isDebug,
-	Bool ignoreEmptyFiles,
-	Allocator alloc,
-	Error *e_rr
-);
+	const U64 strl = CharString_calcStrLen(ptr, maxSize);
 
-#ifdef __cplusplus
+	return (CharString) {
+		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
+		.ptr = ptr,
+		.capacityAndRefInfo = U64_MAX		//Flag as const
+	};
+}
+
+CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated) {
+
+	if (!ptr || (size >> 48))
+		return CharString_createNull();
+
+	if (isNullTerminated && ptr[size])	//Invalid!
+		return CharString_createNull();
+
+	if (!isNullTerminated && size) {
+
+		isNullTerminated = !ptr[size - 1];
+
+		if (isNullTerminated)
+			--size;
 	}
-#endif
+
+	return (CharString) {
+		.lenAndNullTerminated = size | ((U64)isNullTerminated << 63),
+		.ptr = ptr,
+		.capacityAndRefInfo = U64_MAX		//Flag as const
+	};
+}

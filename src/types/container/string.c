@@ -42,56 +42,7 @@ Bool ListCharString_sortInsensitive(ListCharString list) {
 	return GenericList_sortStringInsensitive(ListCharString_toList(list));
 }
 
-Bool CharString_isConstRef(CharString str) { return str.capacityAndRefInfo == U64_MAX; }
-Bool CharString_isRef(CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
-U64  CharString_bytes(CharString str) { return str.lenAndNullTerminated << 1 >> 1; }
-U64  CharString_length(CharString str) { return CharString_bytes(str); }
-U64  CharString_capacity(CharString str) { return CharString_isRef(str) ? 0 : str.capacityAndRefInfo; }
-Bool CharString_isEmpty(CharString str) { return !CharString_bytes(str); }
-Bool CharString_isNullTerminated(CharString str) { return str.lenAndNullTerminated >> 63; }
-
-Buffer CharString_buffer(CharString str) {
-	return CharString_isConstRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_bytes(str));
-}
-
-Buffer CharString_bufferConst(CharString str) {
-	return Buffer_createRefConst(str.ptr, CharString_bytes(str));
-}
-
-Buffer CharString_allocatedBuffer(CharString str) {
-	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_capacity(str));
-}
-
-Buffer CharString_allocatedBufferConst(CharString str) {
-	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRefConst(str.ptr, CharString_capacity(str));
-}
-
-//Iteration
-
-C8 *CharString_begin(CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst; }
-const C8 *CharString_beginConst(CharString str) { return str.ptr; }
-
-C8 *CharString_end(CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst + CharString_length(str); }
-const C8 *CharString_endConst(CharString str) { return str.ptr + CharString_length(str); }
-
-C8 *CharString_charAt(CharString str, U64 off) {
-	return CharString_isConstRef(str) || off >= CharString_length(str) ? NULL : str.ptrNonConst + off;
-}
-
-const C8 *CharString_charAtConst(CharString str, U64 off) {
-	return off >= CharString_length(str) ? NULL : str.ptr + off;
-}
-
-Bool CharString_isValidAscii(CharString str) {
-
-	for(U64 i = 0; i < CharString_length(str); ++i)
-		if(!C8_isValidAscii(str.ptr[i]))
-			return false;
-
-	return true;
-}
-
-Bool CharString_isValidFileName(CharString str) {
+Bool CharString_isValidFileName(const CharString str) {
 
 	//TODO: Understand UTF8
 
@@ -277,85 +228,6 @@ Bool CharString_clear(CharString *str) {
 
 	str->lenAndNullTerminated &= ~(((U64)1 << 63) - 1);		//Clear size
 	return true;
-}
-
-C8 CharString_getAt(CharString str, U64 i) {
-	return i < CharString_length(str) ? str.ptr[i] : C8_MAX;
-}
-
-CharString CharString_createNull() { return (CharString) { 0 }; }
-
-CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
-
-	if(!ptr)
-		return CharString_createNull();
-
-	const U64 strl = CharString_calcStrLen(ptr, maxSize);
-
-	return (CharString) {
-		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
-		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
-	};
-}
-
-CharString CharString_createRefCStrConst(const C8 *ptr) {
-	return CharString_createRefAutoConst(ptr, U64_MAX);
-}
-
-CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) {
-	CharString str = CharString_createRefAutoConst(ptr, maxSize);
-	str.capacityAndRefInfo = 0;		//Flag as mutable
-	return str;
-}
-
-CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated) {
-
-	if(!ptr || (size >> 48))
-		return CharString_createNull();
-
-	if(isNullTerminated && ptr[size])	//Invalid!
-		return CharString_createNull();
-
-	if(!isNullTerminated && size) {
-
-		isNullTerminated = !ptr[size - 1];
-
-		if(isNullTerminated)
-			--size;
-	}
-
-	return (CharString) {
-		.lenAndNullTerminated = size | ((U64)isNullTerminated << 63),
-		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
-	};
-}
-
-CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
-	CharString str = CharString_createRefSizedConst(ptr, size, isNullTerminated);
-	str.capacityAndRefInfo = 0;		//Flag as mutable
-	return str;
-}
-
-CharString CharString_createRefStrConst(CharString str) {
-	return CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
-}
-
-CharString CharString_createRefShortStringConst(const ShortString str) {
-	return CharString_createRefAutoConst(str, SHORTSTRING_LEN);
-}
-
-CharString CharString_createRefLongStringConst(const LongString str) {
-	return CharString_createRefAutoConst(str, LONGSTRING_LEN);
-}
-
-CharString CharString_createRefShortString(ShortString str) {
-	return CharString_createRefAuto(str, SHORTSTRING_LEN);
-}
-
-CharString CharString_createRefLongString(LongString str) {
-	return CharString_createRefAuto(str, LONGSTRING_LEN);
 }
 
 //Simple checks (consts)
@@ -1211,18 +1083,7 @@ clean:
 	return s_uccess;
 }
 
-U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
-
-	U64 i = 0;
-
-	if(ptr)
-		for(; i < maxSize && ptr[i]; ++i)
-			;
-
-	return i;
-}
-
-U64 CharString_hash(CharString s) {
+U64 CharString_hash(const CharString s) {
 	U64 hash = Buffer_fnv1a64Single(CharString_length(s), Buffer_fnv1a64Offset);
 	return Buffer_fnv1a64(CharString_bufferConst(s), hash);
 }
@@ -1308,10 +1169,10 @@ Bool CharString_formatPath(CharString *str) {
 	return CharString_replaceAllSensitive(str, '\\', '/', 0, 0);
 }
 
-ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive) {
+ECompareResult CharString_compare(const CharString *a, const CharString *b, EStringCase caseSensitive) {
 
-	const U64 al = CharString_length(a);
-	const U64 bl = CharString_length(b);
+	const U64 al = !a ? 0 : CharString_length(*a);
+	const U64 bl = !b ? 0 : CharString_length(*b);
 
 	//We want to sort on contents
 	//Provided it's the same level of parenting.
@@ -1319,8 +1180,8 @@ ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSe
 
 	for (U64 i = 0; i < al && i < bl; ++i) {
 
-		const C8 ai = C8_transform(a.ptr[i], (EStringTransform) caseSensitive);
-		const C8 bi = C8_transform(b.ptr[i], (EStringTransform) caseSensitive);
+		const C8 ai = C8_transform(a->ptr[i], (EStringTransform) caseSensitive);
+		const C8 bi = C8_transform(b->ptr[i], (EStringTransform) caseSensitive);
 
 		if (ai < bi)
 			return ECompareResult_Lt;

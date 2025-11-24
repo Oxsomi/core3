@@ -29,6 +29,7 @@
 
 typedef struct GenericList GenericList;
 typedef struct ListU64 ListU64;
+typedef struct Buffer Buffer;
 
 Error GenericList_createx(U64 length, U64 stride, GenericList *result);
 Error GenericList_createRepeatedx(U64 length, U64 stride, Buffer data, GenericList *result);

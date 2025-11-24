@@ -184,7 +184,7 @@ clean:
 	return err;
 }
 
-U64 CharString_unicodeCodepoints(CharString str) {
+U64 CharString_unicodeCodepoints(const CharString str) {
 
 	U64 i = 0, j = 0;
 	Buffer buf = CharString_bufferConst(str);
@@ -201,8 +201,4 @@ U64 CharString_unicodeCodepoints(CharString str) {
 	}
 
 	return j;
-}
-
-Bool CharString_isValidUTF8(CharString str) {
-	return Buffer_isUTF8(CharString_bufferConst(str), 1);
 }
