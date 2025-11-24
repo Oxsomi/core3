@@ -19,14 +19,17 @@
 */
 
 #pragma once
-#include "atomic.h"
+#include "types/base/atomic.h"
+#include "types/base/thread.h"
+#include <stdalign.h>
+#include <assert.h>
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
 typedef struct SpinLock {
-	AtomicI64 lockedThreadId;
+	alignas(64) AtomicI64 lockedThreadId;
 } SpinLock;
 
 typedef struct Error Error;
@@ -48,9 +51,21 @@ typedef enum ELockAcquire {
 
 ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime);
 
-Bool SpinLock_unlock(SpinLock *l);
+static inline Bool SpinLock_unlock(SpinLock *l) {
 
-Bool SpinLock_isLockedForThread(SpinLock *l);
+	if (l) {
+		const U64 tid = Thread_getId();
+		Bool unlocked = AtomicI64_cmpStore(&l->lockedThreadId, tid, 0) == (I64) tid;
+		assert(unlocked && "Thread tried unlocking for a SpinLock it didn't own");
+		return unlocked;
+	}
+
+	return false;
+}
+
+static inline Bool SpinLock_isLockedForThread(SpinLock *l) {
+	return AtomicI64_load(&l->lockedThreadId) == (I64)Thread_getId();
+}
 
 #ifdef __cplusplus
 	}

@@ -222,8 +222,10 @@ Bool Platform_onFree(void *ptr, U64 len) {
 
 		ListDebugAllocation_erase(&Allocator_allocations, i);
 
-		if(acq == ELockAcquire_Acquired)
+		if (acq == ELockAcquire_Acquired) {
 			SpinLock_unlock(&Allocator_lock);
+			acq = ELockAcquire_Invalid;
+		}
 
 	#endif
 
@@ -424,10 +426,6 @@ void Platform_cleanup() {
 
 	*Platform_instance = (Platform) { 0 };
 	Platform_instance = NULL;
-}
-
-Bool SpinLock_isLockedForThread(SpinLock *l) {
-	return AtomicI64_add(&l->lockedThreadId, 0) == (I64) Thread_getId();
 }
 
 void Log_printCapturedStackTracex(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {

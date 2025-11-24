@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/base/platform_types.h"
 #include "types/base/lock.h"
 #include "types/base/constants.h"
 #include "types/base/thread.h"
@@ -25,9 +26,33 @@
 #include "types/base/time.h"
 #include "types/math/math.h"
 
+#if _ARCH == ARCH_ARM64
+	#define SHORT_SPIN 16
+#else
+	#define SHORT_SPIN 32
+#endif
+
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+	#define NOMINMAX
+	#define WIN32_LEAN_AND_MEAN
+	#include <Windows.h>
+	#define CPU_PAUSE() YieldProcessor()
+	#define THREAD_YIELD() SwitchToThread()
+#else
+	#include <sched.h>
+	#define THREAD_YIELD() sched_yield()
+	#if _ARCH == ARCH_ARM64
+		#define CPU_PAUSE() __builtin_arm_yield()
+	#else
+		#define CPU_PAUSE() __builtin_ia32_pause()
+	#endif
+#endif
+
 ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime) {
 
 	if (l) {
+
+		const Ns startTime = maxTime == U64_MAX ? 0 : Time_now();
 
 		const I64 tid = (I64) Thread_getId();
 		I64 prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
@@ -46,28 +71,31 @@ ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime) {
 		//It's possible that within this time someone else is waiting for it and locked it before us.
 		//So we have to wait in a loop.
 
-		const Ns time = maxTime == U64_MAX ? 0 : Time_now();
+		//Short spin, useful for super short waits
 
-		while(prevValue != 0) {
+		for (U8 i = 0; i < SHORT_SPIN; ++i) {
 
-			prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
+			if (AtomicI64_cmpStore(&l->lockedThreadId, 0, tid) == 0)
+				return ELockAcquire_Acquired;
 
-			if(prevValue != 0 && maxTime != U64_MAX && Time_now() - time >= maxTime)
+			CPU_PAUSE();
+
+			if(Time_now() - startTime >= maxTime)
 				return ELockAcquire_TimedOut;
 		}
 
-		return prevValue == 0 ? ELockAcquire_Acquired : ELockAcquire_Invalid;
+		//Longer wait
+
+		while(Time_now() - startTime < maxTime) {
+
+			if (AtomicI64_cmpStore(&l->lockedThreadId, 0, tid) == 0)
+				return ELockAcquire_Acquired;
+
+			THREAD_YIELD();
+		}
+
+		return ELockAcquire_TimedOut;
 	}
 
 	return ELockAcquire_Invalid;
-}
-
-Bool SpinLock_unlock(SpinLock *l) {
-
-	if (l) {
-		const U64 tid = Thread_getId();
-		return AtomicI64_cmpStore(&l->lockedThreadId, tid, 0) == (I64) tid;
-	}
-
-	return false;
 }
