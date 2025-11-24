@@ -21,7 +21,6 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
-#include <inttypes.h>
 #include "types/base/platform_types.h"
 
 //Null is apparently non-standard
@@ -30,15 +29,23 @@
 	#define NULL ((void*)0)
 #endif
 
+//Version
+
+#define OXC3_MAKE_VERSION(major, minor, patch) (((major) << 22) | ((minor) << 12) | (patch))
+
+#define OXC3_GET_MAJOR(v) (((U32)(v)) >> 22)
+#define OXC3_GET_MINOR(v) (((U32)(v)) << 10 >> 22)
+#define OXC3_GET_PATCH(v) (((U32)(v)) << 20 >> 20)
+
+#define OXC3_MAJOR 0
+#define OXC3_MINOR 2
+#define OXC3_PATCH 96
+#define OXC3_VERSION OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
+
 //A hint to show that something is implementation dependent
 //For ease of implementing a new implementation
 //These should never be directly called by anyone else than the main library the impl is for.
-
 #define impl
-
-#ifdef __cplusplus
-	extern "C" {
-#endif
 
 //Types
 
@@ -62,6 +69,8 @@ typedef char C8;
 
 typedef bool Bool;
 
+//TODO: Move to string.
+
 //Stack strings that are faster and easier to allocate
 
 #define SHORTSTRING_LEN 32
@@ -69,60 +78,6 @@ typedef bool Bool;
 
 typedef C8 ShortString[SHORTSTRING_LEN];
 typedef C8 LongString[LONGSTRING_LEN];
-
-//Constants
-
-extern const U64 KIBI;
-extern const U64 MIBI;
-extern const U64 GIBI;
-extern const U64 TIBI;
-extern const U64 PEBI;
-
-extern const U64 KILO;
-extern const U64 MEGA;
-extern const U64 GIGA;
-extern const U64 TERA;
-extern const U64 PETA;
-
-extern const Ns MU;
-extern const Ns MS;
-extern const Ns SECOND;
-extern const Ns MIN;
-extern const Ns HOUR;
-extern const Ns DAY;
-extern const Ns WEEK;
-
-extern const U8 U8_MIN;
-extern const C8 C8_MIN;
-extern const U16 U16_MIN;
-extern const U32 U24_MIN;
-extern const U32 U32_MIN;
-extern const U64 U64_MIN;
-
-extern const I8  I8_MIN;
-extern const I16 I16_MIN;
-extern const U32 I24_MIN;
-extern const I32 I32_MIN;
-extern const I64 I64_MIN;
-
-extern const U8  U8_MAX;
-extern const C8  C8_MAX;
-extern const U16 U16_MAX;
-extern const U32 U24_MAX;
-extern const U32 U32_MAX;
-extern const U64 U64_MAX;
-
-extern const I8  I8_MAX;
-extern const I16 I16_MAX;
-extern const U32 I24_MAX;
-extern const I32 I32_MAX;
-extern const I64 I64_MAX;
-
-extern const F32 F32_MIN;
-extern const F32 F32_MAX;
-
-extern const F64 F64_MIN;
-extern const F64 F64_MAX;
 
 typedef enum ECompareResult {
 	ECompareResult_Lt,
@@ -163,20 +118,3 @@ typedef struct Buffer {
 	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
 
 } Buffer;
-
-//Version
-
-#define OXC3_MAKE_VERSION(major, minor, patch) (((major) << 22) | ((minor) << 12) | (patch))
-
-#define OXC3_GET_MAJOR(v) (((U32)(v)) >> 22)
-#define OXC3_GET_MINOR(v) (((U32)(v)) << 10 >> 22)
-#define OXC3_GET_PATCH(v) (((U32)(v)) << 20 >> 20)
-
-#define OXC3_MAJOR 0
-#define OXC3_MINOR 2
-#define OXC3_PATCH 96
-#define OXC3_VERSION OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
-
-#ifdef __cplusplus
-	}
-#endif

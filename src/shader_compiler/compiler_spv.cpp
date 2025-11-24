@@ -24,6 +24,7 @@
 #include "types/container/buffer.h"
 #include "platforms/log.h"
 #include "shader_compiler/compiler.h"
+#include "types/base/constants.h"
 #include "optimizer.hpp"
 #include "linker.hpp"
 #include "SPIRV-Reflect/spirv_reflect.h"

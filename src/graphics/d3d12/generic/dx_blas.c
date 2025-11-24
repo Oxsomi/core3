@@ -27,6 +27,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/direct3d12.h"
+#include "types/base/constants.h"
 
 Bool DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; return true; }		//No-op
 

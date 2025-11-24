@@ -24,6 +24,7 @@
 #include "types/math/math.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
+#include "types/base/constants.h"
 
 //Note: This only handles truncation, it can't handle expansion
 

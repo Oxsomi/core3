@@ -28,6 +28,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "formats/oiSH/entries.h"
+#include "types/base/constants.h"
 
 Bool VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
 

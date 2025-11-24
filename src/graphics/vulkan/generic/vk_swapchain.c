@@ -32,6 +32,7 @@
 #include "types/container/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "types/base/constants.h"
 
 TList(VkSurfaceFormatKHR);
 TList(VkPresentModeKHR);

@@ -22,6 +22,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/math/vec.h"
+#include "types/base/constants.h"
 #include <nmmintrin.h>
 
 #include "types/math/math.h"

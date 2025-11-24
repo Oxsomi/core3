@@ -22,6 +22,7 @@
 #include "formats/dds/dds.h"
 #include "formats/dds/headers.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result) {
 

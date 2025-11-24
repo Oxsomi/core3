@@ -34,6 +34,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
 

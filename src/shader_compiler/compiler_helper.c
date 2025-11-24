@@ -30,6 +30,7 @@
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "shader_compiler/compiler.h"
+#include "types/base/constants.h"
 
 typedef struct ShaderFileRecursion {
 

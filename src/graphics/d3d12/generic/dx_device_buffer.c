@@ -30,6 +30,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
+#include "types/base/constants.h"
 
 Error DxDeviceBuffer_transition(
 	DxDeviceBuffer *buffer,

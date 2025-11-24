@@ -32,7 +32,9 @@
 #include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/string.h"
+#include "types/container/log.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 Error createShaderModule(
 	Buffer buf,

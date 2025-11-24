@@ -40,6 +40,7 @@
 #include "types/container/buffer.h"
 #include "types/base/error.h"
 #include "formats/oiSH/registers.h"
+#include "types/base/constants.h"
 
 Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 

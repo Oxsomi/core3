@@ -32,6 +32,7 @@
 #include "types/container/string.h"
 #include "types/container/big_int.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 TListImpl(TextureDescriptorRange);
 TListImpl(BufferDescriptorRange);

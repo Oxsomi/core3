@@ -26,6 +26,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
+#include "types/base/constants.h"
 
 typedef Error (*ProfileOperation)(ParsedArgs, Buffer);
 

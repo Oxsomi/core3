@@ -22,6 +22,7 @@
 #include "graphics/generic/resource.h"
 #include "graphics/generic/allocator.h"
 #include "graphics/generic/device.h"
+#include "types/base/constants.h"
 
 TListImpl(DeviceResourceVersion);
 

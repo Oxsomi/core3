@@ -25,6 +25,7 @@
 #include "platforms/log.h"
 #include "types/container/ref_ptr.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 U32 AudioStream_sizeExt = sizeof(ALAudioStream);
 

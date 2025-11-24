@@ -28,6 +28,7 @@
 #include "types/math/flp.h"
 #include "types/math/math.h"
 #include "types/base/type_id.h"
+#include "types/base/constants.h"
 
 TListImpl(Compiler);
 TListImpl(CompileError);

@@ -29,6 +29,7 @@
 #include "types/math/type_cast.h"
 #include "types/math/flp.h"
 #include "formats/oiBC/chimera.h"
+#include "types/base/constants.h"
 
 #include <stdlib.h>
 #include <string.h>

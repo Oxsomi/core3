@@ -23,9 +23,11 @@
 #include "platforms/platform.h"
 #include "shader_compiler/compiler.h"
 #include "types/container/file.h"
+#include "types/container/log.h"
 #include "types/base/c8.h"
 #include "types/math/flp.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE

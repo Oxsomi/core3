@@ -26,6 +26,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/file.h"
+#include "types/base/constants.h"
 
 Bool CLI_convert(ParsedArgs args, Bool isTo) {
 

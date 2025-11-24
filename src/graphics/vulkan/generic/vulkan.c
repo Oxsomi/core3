@@ -24,6 +24,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "types/container/texture_format.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 TListImpl(VkMappedMemoryRange);
 TListImpl(VkBufferCopy);

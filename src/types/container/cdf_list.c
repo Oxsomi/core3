@@ -22,6 +22,7 @@
 #include "types/container/cdf_list.h"
 #include "types/base/allocator.h"
 #include "types/math/rand.h"
+#include "types/base/constants.h"
 
 TListImpl(CdfValue);
 

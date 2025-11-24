@@ -29,6 +29,7 @@
 #include "types/base/allocator.h"
 #include "types/container/file.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 #include "formats/oiSB/sb_file.h"
 
 #include "directx/d3d12shader.h"

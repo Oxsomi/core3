@@ -28,6 +28,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
+#include "types/base/constants.h"
 
 Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 

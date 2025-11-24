@@ -26,6 +26,7 @@
 #include "types/base/error.h"
 #include "platforms/ext/stringx.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 #include "platforms/log.h"
 

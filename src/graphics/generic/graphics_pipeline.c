@@ -30,6 +30,7 @@
 #include "platforms/log.h"
 #include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/base/constants.h"
 
 TListImpl(PipelineGraphicsInfo);
 

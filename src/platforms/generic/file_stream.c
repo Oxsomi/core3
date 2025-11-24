@@ -26,6 +26,7 @@
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 Bool FileStream_read(Stream *stream, U64 offset, U64 length, Buffer buf, Allocator alloc, Error *e_rr) {
 	

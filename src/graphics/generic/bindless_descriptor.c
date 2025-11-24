@@ -23,6 +23,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_table.h"
+#include "types/base/constants.h"
 
 U64 BindlessDescriptor_pack3(BindlessDescriptor a, BindlessDescriptor b, BindlessDescriptor c) {
 	return a | ((U64)b << 21) |  ((U64)c << 42);

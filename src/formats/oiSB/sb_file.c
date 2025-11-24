@@ -27,6 +27,7 @@
 #include "types/container/log.h"
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiDL/dl_file.h"
+#include "types/base/constants.h"
 
 TListImpl(SBFile);
 

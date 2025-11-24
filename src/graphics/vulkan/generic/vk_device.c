@@ -37,6 +37,7 @@
 #include "platforms/window.h"
 #include "types/math/math.h"
 #include "types/base/thread.h"
+#include "types/base/constants.h"
 
 TListImpl(VkCommandAllocator);
 TListImpl(VkSemaphore);

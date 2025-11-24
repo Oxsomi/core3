@@ -21,6 +21,7 @@
 #include "types/container/string.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, ListCharString *result) {
 	return CharString_split(s, c, EStringCase_Sensitive, allocator, result);

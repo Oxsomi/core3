@@ -23,6 +23,7 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
+#include "types/base/constants.h"
 
 Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *result, Error *e_rr) {
 

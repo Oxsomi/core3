@@ -29,6 +29,7 @@
 #include "types/container/texture_format.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 Error DeviceTextureRef_dec(DeviceTextureRef **texture) {
 	return !RefPtr_dec(texture) ?

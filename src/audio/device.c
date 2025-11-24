@@ -28,6 +28,7 @@
 #include "platforms/platform.h"
 #include "types/base/time.h"
 #include "types/base/thread.h"
+#include "types/base/constants.h"
 
 TListImpl(AudioDeviceInfo);
 

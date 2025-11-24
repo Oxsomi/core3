@@ -26,6 +26,7 @@
 #include "types/container/string.h"
 #include "platforms/ext/stringx.h"
 #include "formats/oiSH/entries.h"
+#include "types/base/constants.h"
 
 TListImpl(D3D12_DESCRIPTOR_RANGE1)
 TListImpl(D3D12_ROOT_PARAMETER1)

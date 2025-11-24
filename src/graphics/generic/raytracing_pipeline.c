@@ -30,6 +30,7 @@
 #include "platforms/log.h"
 #include "types/math/math.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/base/constants.h"
 
 TListImpl(PipelineRaytracingGroup);
 TListImpl(PipelineRaytracingInfo);

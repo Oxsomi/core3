@@ -22,6 +22,7 @@
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/container/buffer.h"
+#include "types/base/constants.h"
 
 Bool DLFile_createIntern(DLSettings settings, Allocator alloc, U64 reserve, DLFile *dlFile, Error *e_rr) {
 

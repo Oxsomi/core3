@@ -29,6 +29,7 @@
 #include "types/math/math.h"
 #include "types/container/string.h"
 #include "formats/oiSH/registers.h"
+#include "types/base/constants.h"
 
 TListImpl(DevicePendingRange);
 

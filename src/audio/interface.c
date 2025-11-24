@@ -24,6 +24,7 @@
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"
 #include "platforms/platform.h"
+#include "types/base/constants.h"
 
 const C8 *EAudioApi_name[EAudioApi_Count] = {
 	"OpenAL"

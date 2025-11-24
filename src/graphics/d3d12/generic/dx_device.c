@@ -39,6 +39,7 @@
 #include "platforms/log.h"
 #include "types/math/math.h"
 #include "types/base/thread.h"
+#include "types/base/constants.h"
 
 #if _ARCH == ARCH_X86_64
 	#include <nvapi.h>

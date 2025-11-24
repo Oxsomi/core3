@@ -34,6 +34,7 @@
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 Error createShaderModule(
 	Buffer buf,

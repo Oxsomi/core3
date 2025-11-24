@@ -30,6 +30,7 @@
 #include "graphics/generic/descriptor_table.h"
 #include "types/container/buffer.h"
 #include "formats/oiSH/registers.h"
+#include "types/base/constants.h"
 
 TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing) {
 	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);

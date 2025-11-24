@@ -25,6 +25,7 @@
 #endif
 
 #include "formats/oiSB/sb_file.h"
+#include "types/base/constants.h"
 
 TListImpl(SBStruct);
 TListImpl(SBVar);

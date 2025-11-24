@@ -21,6 +21,7 @@
 #include "formats/oiSB/sb_file.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr) {
 

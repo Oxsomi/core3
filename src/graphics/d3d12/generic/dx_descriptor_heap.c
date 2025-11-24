@@ -26,6 +26,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 Bool DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
 

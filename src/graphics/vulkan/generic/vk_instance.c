@@ -34,6 +34,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.blas = sizeof(VkBLAS),

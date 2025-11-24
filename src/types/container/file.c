@@ -24,6 +24,7 @@
 #include "types/container/file.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"
+#include "types/base/constants.h"
 
 Bool FileInfo_free(FileInfo *info, Allocator alloc) {
 

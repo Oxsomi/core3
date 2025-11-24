@@ -20,6 +20,7 @@
 
 #include "types/math/math.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 #include <math.h>
 

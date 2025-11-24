@@ -32,6 +32,7 @@
 #include "types/base/error.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 static const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;

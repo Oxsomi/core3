@@ -24,6 +24,7 @@
 #include "types/container/buffer.h"
 #include "types/math/math.h"
 #include "types/math/vec.h"
+#include "types/base/constants.h"
 
 #include <string.h>
 

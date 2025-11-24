@@ -19,6 +19,7 @@
 */
 
 #include "types/math/pack.h"
+#include "types/base/constants.h"
 
 U64 U64_pack21x3(U32 x, U32 y, U32 z) {
 

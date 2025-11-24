@@ -28,6 +28,7 @@
 #include "formats/oiSH/sh_file.h"
 #include "types/math/math.h"
 #include "types/base/c8.h"
+#include "types/base/constants.h"
 
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);

@@ -26,6 +26,8 @@
 #include "types/math/math.h"
 #include "types/container/buffer.h"
 #include "formats/oiDL/dl_file.h"
+#include "types/base/constants.h"
+#include "types/base/constants.h"
 
 #include <stddef.h>
 

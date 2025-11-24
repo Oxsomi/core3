@@ -30,6 +30,7 @@
 #include "platforms/log.h"
 #include "types/container/string.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 TList(VkPipelineShaderStageCreateInfo);
 TListImpl(VkPipelineShaderStageCreateInfo);

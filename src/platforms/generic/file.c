@@ -28,6 +28,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 #include <stdio.h>
 #include <sys/stat.h>

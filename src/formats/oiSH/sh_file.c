@@ -28,6 +28,7 @@
 #include "types/container/log.h"
 #include "types/base/type_id.h"
 #include "types/math/flp.h"
+#include "types/base/constants.h"
 
 TListImpl(SHFile);
 

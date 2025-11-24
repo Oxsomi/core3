@@ -19,6 +19,7 @@
 */
 
 #include "types/container/list_impl.h"
+#include "types/base/constants.h"
 
 TListNamedBaseImpl(ListU64);
 

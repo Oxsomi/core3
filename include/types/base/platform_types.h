@@ -23,6 +23,7 @@
 #include <assert.h>
 
 typedef uint32_t U32;
+typedef U32 EPlatform;
 
 //Defines instead of enums to allow #if
 
@@ -93,8 +94,6 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-typedef U32 EPlatform;
 
 #if _ARCH == ARCH_X86_64
 	void Platform_getCPUId(int leaf, U32 result[4]);

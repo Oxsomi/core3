@@ -30,6 +30,7 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "tools/oxc3_cli/cli.h"
+#include "types/base/constants.h"
 
 Bool addFileToDLFile(FileInfo file, ListCharString *names, Error *e_rr) {
 

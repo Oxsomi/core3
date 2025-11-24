@@ -30,6 +30,7 @@
 #include "types/container/ref_ptr.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
+#include "types/base/constants.h"
 
 Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
 

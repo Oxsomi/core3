@@ -28,6 +28,7 @@
 #include "platforms/ext/archivex.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
+#include "types/base/constants.h"
 
 typedef struct CAFileRecursion {
 	Archive *archive;

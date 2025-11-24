@@ -30,6 +30,7 @@
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/platform.h"
+#include "types/base/constants.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"

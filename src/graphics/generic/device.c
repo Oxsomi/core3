@@ -42,6 +42,7 @@
 #include "formats/oiSH/sh_file.h"
 #include "types/base/time.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 #include <stddef.h>
 

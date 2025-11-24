@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/base/types.h"
+#include <inttypes.h>
 
 #ifdef __cplusplus
 	extern "C" {

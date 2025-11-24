@@ -26,6 +26,7 @@
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/base/lock.h"
+#include "types/base/constants.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing

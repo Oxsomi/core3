@@ -25,6 +25,7 @@
 #include "types/container/buffer.h"
 #include "types/base/time.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 

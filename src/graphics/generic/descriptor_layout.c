@@ -26,6 +26,7 @@
 #include "platforms/ext/stringx.h"
 #include "types/container/string.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/base/constants.h"
 
 TListImpl(DescriptorBinding);
 

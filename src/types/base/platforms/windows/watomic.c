@@ -25,6 +25,7 @@
 #include <Windows.h>
 
 #include "types/base/atomic.h"
+#include "types/base/constants.h"
 
 I64 AtomicI64_and(AtomicI64 *ptr, I64 value) {
 	return InterlockedAnd64(&ptr->atomic, value);

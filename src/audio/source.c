@@ -25,6 +25,7 @@
 #include "platforms/platform.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 Error AudioSourceRef_dec(AudioSourceRef **src) {
 	return !RefPtr_dec(src) ?

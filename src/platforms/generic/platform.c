@@ -25,6 +25,7 @@
 #include "types/base/thread.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
+#include "types/base/constants.h"
 
 #include <signal.h>
 #include <stdlib.h>

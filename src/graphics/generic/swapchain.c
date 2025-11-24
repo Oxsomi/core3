@@ -25,6 +25,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 Error SwapchainRef_dec(SwapchainRef **swapchain) {
 	return !RefPtr_dec(swapchain) ?

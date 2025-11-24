@@ -24,6 +24,7 @@
 #include "platforms/keyboard.h"
 #include "types/container/string.h"
 #include "platforms/ext/stringx.h"
+#include "types/base/constants.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN

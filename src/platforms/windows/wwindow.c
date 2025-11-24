@@ -32,6 +32,7 @@
 #include "platforms/ext/stringx.h"
 #include "types/base/time.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 #include <stdlib.h>
 

@@ -26,6 +26,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
+#include "types/base/constants.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN

@@ -20,6 +20,7 @@
 
 #include "types/base/buffer.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 #include <string.h>
 

@@ -23,6 +23,7 @@
 #include "types/container/buffer.h"
 #include "types/math/vec.h"
 #include "types/math/type_cast.h"
+#include "types/base/constants.h"
 
 //SHA state
 

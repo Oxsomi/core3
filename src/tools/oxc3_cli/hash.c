@@ -26,6 +26,7 @@
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "tools/oxc3_cli/operations.h"
+#include "types/base/constants.h"
 
 Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 

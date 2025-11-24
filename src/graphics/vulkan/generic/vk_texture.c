@@ -30,6 +30,7 @@
 #include "platforms/ext/stringx.h"
 #include "types/container/texture_format.h"
 #include "formats/oiSH/registers.h"
+#include "types/base/constants.h"
 
 Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 

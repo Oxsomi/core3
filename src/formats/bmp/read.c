@@ -23,6 +23,7 @@
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 #ifndef DISALLOW_BMP_OXC3_PLATFORMS
 

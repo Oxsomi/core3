@@ -27,6 +27,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
+#include "types/base/constants.h"
 
 U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format) {
 	return (U8)(format & 1) + 1;

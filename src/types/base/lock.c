@@ -19,6 +19,7 @@
 */
 
 #include "types/base/lock.h"
+#include "types/base/constants.h"
 #include "types/base/thread.h"
 #include "types/base/error.h"
 #include "types/base/time.h"

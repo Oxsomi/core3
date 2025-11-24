@@ -24,6 +24,7 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
+#include "types/base/constants.h"
 
 #ifdef CLI_GRAPHICS
 

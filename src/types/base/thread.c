@@ -22,6 +22,7 @@
 #include "types/base/thread.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
+#include "types/base/constants.h"
 
 TListNamedImpl(ListThread);
 

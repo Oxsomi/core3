@@ -26,6 +26,7 @@
 #include "platforms/ext/stringx.h"
 #include "graphics/generic/instance.h"
 #include "tools/oxc3_cli/cli.h"
+#include "types/base/constants.h"
 
 #ifdef CLI_SHADER_COMPILER
 	#include "shader_compiler/compiler.h"

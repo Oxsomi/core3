@@ -29,6 +29,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
+#include "types/base/constants.h"
 
 Bool CLI_rand(ParsedArgs args) {
 

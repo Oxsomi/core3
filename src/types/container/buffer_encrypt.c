@@ -23,6 +23,7 @@
 #include "types/container/buffer.h"
 #include "types/math/type_cast.h"
 #include "types/math/vec.h"
+#include "types/base/constants.h"
 
 //Explanation of algorithm; AES256 GCM + GMAC
 //https://www.alexeyshmalko.com/20200319144641/

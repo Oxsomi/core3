@@ -23,6 +23,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 TListImpl(D3D12_TEXTURE_BARRIER);
 TListImpl(D3D12_BUFFER_BARRIER);

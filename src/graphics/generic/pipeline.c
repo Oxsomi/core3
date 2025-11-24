@@ -30,6 +30,7 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/base/constants.h"
 
 const C8 *EPipelineStage_names[] = {
 	"vertex",

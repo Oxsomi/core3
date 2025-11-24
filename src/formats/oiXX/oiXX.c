@@ -21,6 +21,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "formats/oiXX/oiXX.h"
+#include "types/base/constants.h"
 
 Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result) {
 

@@ -34,6 +34,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 #include <dxgi1_6.h>
 #include <d3d11.h>			//AMD AGS needs it...

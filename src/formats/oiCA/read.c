@@ -24,6 +24,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/base/time.h"
+#include "types/base/constants.h"
 
 Ns CAFile_loadDate(U16 time, U16 date) {
 	return Time_date(

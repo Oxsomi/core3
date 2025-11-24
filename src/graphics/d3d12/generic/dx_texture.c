@@ -30,6 +30,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "types/container/texture_format.h"
+#include "types/base/constants.h"
 
 Bool DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 

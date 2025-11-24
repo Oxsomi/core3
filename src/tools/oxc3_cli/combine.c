@@ -30,6 +30,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
 #include "tools/oxc3_cli/cli.h"
+#include "types/base/constants.h"
 
 Bool CLI_fileCombine(ParsedArgs args) {
 

@@ -29,6 +29,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
+#include "types/base/constants.h"
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 

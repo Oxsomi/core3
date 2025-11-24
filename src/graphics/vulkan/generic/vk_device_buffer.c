@@ -32,6 +32,7 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 Error VkDeviceBuffer_transition(
 	VkDeviceBuffer *buffer,

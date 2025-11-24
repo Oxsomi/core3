@@ -23,6 +23,7 @@
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 GenericList ListVoid_toList(ListVoid v, U64 stride) {
 	return (GenericList) {

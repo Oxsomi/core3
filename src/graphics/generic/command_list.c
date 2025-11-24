@@ -36,6 +36,7 @@
 #include "types/container/string.h"
 #include "types/container/texture_format.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 TListImpl(CommandOpInfo);
 TListImpl(TransitionInternal);

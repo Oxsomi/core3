@@ -23,6 +23,7 @@
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/math/math.h"
+#include "types/base/constants.h"
 
 Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr) {
 

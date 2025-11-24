@@ -32,6 +32,7 @@
 #include "types/container/texture_format.h"
 #include "types/container/string.h"
 #include "formats/oiSH/registers.h"
+#include "types/base/constants.h"
 
 //Specifying DeviceResourceVersion* will force lock the resource to get the texture format, size and version id.
 //When those properties aren't read, the lock isn't important.

@@ -21,6 +21,7 @@
 #include "types/container/list_impl.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/type_id.h"
+#include "types/base/constants.h"
 
 TListNamedImpl(ListRefPtr);
 TListNamedImpl(ListWeakRefPtr);

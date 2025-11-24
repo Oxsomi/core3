@@ -23,6 +23,7 @@
 #include "types/container/buffer.h"
 #include "types/math/math.h"
 #include "types/base/allocator.h"
+#include "types/base/constants.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN

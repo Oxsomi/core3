@@ -31,6 +31,7 @@
 #include "types/base/error.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
+#include "types/base/constants.h"
 
 D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType) {
 

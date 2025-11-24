@@ -22,6 +22,7 @@
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
+#include "types/base/constants.h"
 
 Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result) {
 
