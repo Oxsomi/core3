@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/base/platform_types.h"
+#include "types/base/algorithm.h"
 #include "types/math/vec.h"
 
 #ifdef __cplusplus

@@ -26,29 +26,39 @@
 #endif
 
 //Fixed point
-
-#define FixedPoint(frac, integ)																\
-																							\
-typedef U64 FP##integ##f##frac;																\
-																							\
-FP##integ##f##frac FP##integ##f##frac##_add(FP##integ##f##frac a, FP##integ##f##frac b);	\
-FP##integ##f##frac FP##integ##f##frac##_sub(FP##integ##f##frac a, FP##integ##f##frac b);	\
-																							\
-FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v);									\
-F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value);
+		
+#define FixedPoint(frac, integ)																			\
+																										\
+typedef I64 FP##integ##f##frac;																			\
+																										\
+static inline FP##integ##f##frac FP##integ##f##frac##_add(FP##integ##f##frac a, FP##integ##f##frac b) {	\
+	return a + b;																						\
+}																										\
+																										\
+static inline FP##integ##f##frac FP##integ##f##frac##_sub(FP##integ##f##frac a, FP##integ##f##frac b) {	\
+	return a - b;																						\
+}																										\
+																										\
+static inline FP##integ##f##frac FP##integ##f##frac##_fromDouble(F64 v) {								\
+	return (FP##integ##f##frac)(v * ((FP##integ##f##frac)1 << frac));									\
+}																										\
+																										\
+static inline F64 FP##integ##f##frac##_toDouble(FP##integ##f##frac value) {								\
+	return (F64)value / ((FP##integ##f##frac)1 << frac);												\
+}
 
 //Fixed point 42 (FP37f4): 4 fract, 37 integer, 1 sign.
 //+-1.4M km precision 1/16th cm
 //3x F42 < 128 bit (2 bit remainder)
 //Can pack 3 in uint4.
 
-FixedPoint(4, 37)
+FixedPoint(4, 37);
 
 //Fixed point for bigger scale, 53 (FP46f6): 6 fract, 46 integer, 1 sign.
 //~700M km (about 4.5au) with precision 1/64th cm.
 //Can pack 3 in uint4 + uint.
 
-FixedPoint(6, 46)
+FixedPoint(6, 46);
 
 #ifdef __cplusplus
 	}

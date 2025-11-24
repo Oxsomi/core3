@@ -68,48 +68,48 @@ CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTe
 
 //Simple helper functions
 
-inline U64  CharString_bytes(const CharString str) { return str.lenAndNullTerminated << 1 >> 1; }
-inline Bool CharString_isConstRef(const CharString str) { return str.capacityAndRefInfo == U64_MAX; }
-inline Bool CharString_isRef(const CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
-inline Bool CharString_isEmpty(const CharString str) { return !CharString_bytes(str); }
-inline Bool CharString_isNullTerminated(const CharString str) { return str.lenAndNullTerminated >> 63; }
-inline U64  CharString_length(const CharString str) { return CharString_bytes(str); }
+static inline U64  CharString_bytes(const CharString str) { return str.lenAndNullTerminated << 1 >> 1; }
+static inline Bool CharString_isConstRef(const CharString str) { return str.capacityAndRefInfo == U64_MAX; }
+static inline Bool CharString_isRef(const CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
+static inline Bool CharString_isEmpty(const CharString str) { return !CharString_bytes(str); }
+static inline Bool CharString_isNullTerminated(const CharString str) { return str.lenAndNullTerminated >> 63; }
+static inline U64  CharString_length(const CharString str) { return CharString_bytes(str); }
 
 //Returns 0 if ref
-inline U64  CharString_capacity(const CharString str) { return CharString_isRef(str) ? 0 : str.capacityAndRefInfo; }
+static inline U64  CharString_capacity(const CharString str) { return CharString_isRef(str) ? 0 : str.capacityAndRefInfo; }
 
-inline Buffer CharString_buffer(const CharString str) {
+static inline Buffer CharString_buffer(const CharString str) {
 	return CharString_isConstRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_bytes(str));
 }
 
-inline Buffer CharString_bufferConst(const CharString str) {
+static inline Buffer CharString_bufferConst(const CharString str) {
 	return Buffer_createRefConst(str.ptr, CharString_bytes(str));
 }
 
-inline Buffer CharString_allocatedBuffer(const CharString str) {
+static inline Buffer CharString_allocatedBuffer(const CharString str) {
 	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptrNonConst, CharString_capacity(str));
 }
 
-inline Buffer CharString_allocatedBufferConst(const CharString str) {
+static inline Buffer CharString_allocatedBufferConst(const CharString str) {
 	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRefConst(str.ptr, CharString_capacity(str));
 }
 
 //Iteration
 
-inline C8 *CharString_begin(const CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst; }
-inline const C8 *CharString_beginConst(const CharString str) { return str.ptr; }
+static inline C8 *CharString_begin(const CharString str) { return CharString_isConstRef(str) ? NULL : str.ptrNonConst; }
+static inline const C8 *CharString_beginConst(const CharString str) { return str.ptr; }
 
-inline C8 *CharString_end(const CharString str) {
+static inline C8 *CharString_end(const CharString str) {
 	return CharString_isConstRef(str) ? NULL : str.ptrNonConst + CharString_length(str);
 }
 
-inline const C8 *CharString_endConst(const CharString str) { return str.ptr + CharString_length(str); }
+static inline const C8 *CharString_endConst(const CharString str) { return str.ptr + CharString_length(str); }
 
-inline C8 *CharString_charAt(const CharString str, U64 off) {
+static inline C8 *CharString_charAt(const CharString str, U64 off) {
 	return CharString_isConstRef(str) || off >= CharString_length(str) ? NULL : str.ptrNonConst + off;
 }
 
-inline const C8 *CharString_charAtConst(const CharString str, U64 off) {
+static inline const C8 *CharString_charAtConst(const CharString str, U64 off) {
 	return off >= CharString_length(str) ? NULL : str.ptr + off;
 }
 
@@ -117,7 +117,7 @@ inline const C8 *CharString_charAtConst(const CharString str, U64 off) {
 //TODO: U32 CharString_codepointAtByteConst(CharString str, U64 startByteOffset, U8 *length);
 //TODO: U32 CharString_codepointAtConst(CharString str, U64 offset, U8 *length);
 
-inline Bool CharString_isValidAscii(const CharString str) {
+static inline Bool CharString_isValidAscii(const CharString str) {
 
 	for (U64 i = 0; i < CharString_length(str); ++i)
 		if (!C8_isValidAscii(str.ptr[i]))
@@ -128,18 +128,18 @@ inline Bool CharString_isValidAscii(const CharString str) {
 
 //Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 
-inline U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
+static inline U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
 	if (!ptr) return 0;
 	U64 i = 0;
 	for (; i < maxSize && ptr[i]; ++i) (void) 0;
 	return i;
 }
 
-inline C8 CharString_getAt(const CharString str, U64 i) {
+static inline C8 CharString_getAt(const CharString str, U64 i) {
 	return i < CharString_length(str) ? str.ptr[i] : C8_MAX;
 }
 
-inline Bool CharString_setAt(const CharString str, U64 i, C8 c) {
+static inline Bool CharString_setAt(const CharString str, U64 i, C8 c) {
 
 	if (i >= CharString_length(str) || CharString_isConstRef(str) || !c)
 		return false;
@@ -151,18 +151,18 @@ inline Bool CharString_setAt(const CharString str, U64 i, C8 c) {
 //Freeing refs won't do anything, but is still recommended for consistency.
 //Const ref disallow modifying functions to be used.
 
-inline CharString CharString_createNull() {
+static inline CharString CharString_createNull() {
 	CharString str = { .ptr = NULL, .lenAndNullTerminated = 0, .capacityAndRefInfo = 0 };
 	return str;
 }
 
 //Only use this if string is known to be safe (with null terminator '\0')
-inline CharString CharString_createRefCStrConst(const C8 *ptr) {
+static inline CharString CharString_createRefCStrConst(const C8 *ptr) {
 	return CharString_createRefAutoConst(ptr, U64_MAX);
 }
 
 //Auto detect end (up to maxSize chars)
-inline CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) {
+static inline CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) {
 	CharString str = CharString_createRefAutoConst(ptr, maxSize);
 	str.capacityAndRefInfo = 0;		//Flag as mutable
 	return str;
@@ -172,29 +172,29 @@ inline CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) {
 //In this case ptr[size] has to be the null terminator.
 //If this is false, it will automatically check if ptr contains a null terminator
 
-inline CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
+static inline CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
 	CharString str = CharString_createRefSizedConst(ptr, size, isNullTerminated);
 	str.capacityAndRefInfo = 0;		//Flag as mutable
 	return str;
 }
 
-inline CharString CharString_createRefStrConst(const CharString str) {
+static inline CharString CharString_createRefStrConst(const CharString str) {
 	return CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
 }
 
-inline CharString CharString_createRefShortStringConst(const ShortString str) {
+static inline CharString CharString_createRefShortStringConst(const ShortString str) {
 	return CharString_createRefAutoConst(str, SHORTSTRING_LEN);
 }
 
-inline CharString CharString_createRefLongStringConst(const LongString str) {
+static inline CharString CharString_createRefLongStringConst(const LongString str) {
 	return CharString_createRefAutoConst(str, LONGSTRING_LEN);
 }
 
-inline CharString CharString_createRefShortString(ShortString str) {
+static inline CharString CharString_createRefShortString(ShortString str) {
 	return CharString_createRefAuto(str, SHORTSTRING_LEN);
 }
 
-inline CharString CharString_createRefLongString(LongString str) {
+static inline CharString CharString_createRefLongString(LongString str) {
 	return CharString_createRefAuto(str, LONGSTRING_LEN);
 }
 

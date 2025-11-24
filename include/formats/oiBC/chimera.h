@@ -19,9 +19,10 @@
 */
 
 #pragma once
-#include "fidi_a.h"
+#include "types/base/algorithm.h"
 #include "types/math/flp.h"
 #include "types/math/vec.h"
+#include "fidi_a.h"
 
 #ifdef __cplusplus
 	extern "C" {

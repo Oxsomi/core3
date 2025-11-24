@@ -28,8 +28,8 @@
 typedef struct Buffer {
 
 	union {
-		const U8* ptr;
-		U8* ptrNonConst;		//Requires !Buffer_isConstRef(buf)
+		const U8 *ptr;
+		U8 *ptrNonConst;		//Requires !Buffer_isConstRef(buf)
 	};
 
 	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
@@ -38,19 +38,57 @@ typedef struct Buffer {
 
 //Buffer (more functions in types/container/buffer.h)
 
-U64 Buffer_length(Buffer buf);
+static inline U64 Buffer_length(const Buffer buf) {
+	return buf.lengthAndRefBits << 2 >> 2;
+}
 
-Bool Buffer_isRef(Buffer buf);
-Bool Buffer_isConstRef(Buffer buf);
+static inline Bool Buffer_isRef(const Buffer buf) {
+	return buf.lengthAndRefBits >> 62;
+}
 
-Buffer Buffer_createManagedPtr(void *ptr, U64 length);
+static inline Bool Buffer_isConstRef(const Buffer buf) {
+	return (buf.lengthAndRefBits >> 62) == 3;
+}
+
+static inline Buffer Buffer_createNull() {
+	Buffer buf = { .ptr = NULL, .lengthAndRefBits = 0 };
+	return buf;
+}
+
+inline Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
+
+	if (length >> 48 || !ptr || !length)
+		return Buffer_createNull();
+
+	Buffer buf = { .ptrNonConst = (U8*)ptr, .lengthAndRefBits = length };
+	return buf;
+}
 
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
-Buffer Buffer_createNull();
+inline Buffer Buffer_createRef(void *v, U64 length) {
 
-Buffer Buffer_createRef(void *v, U64 length);
-Buffer Buffer_createRefConst(const void *v, U64 length);
+	if (!length || !v)
+		return Buffer_createNull();
+
+	if (length >> 48)
+		return Buffer_createNull();
+
+	Buffer buf = { .ptrNonConst = (U8*)v, .lengthAndRefBits = length | ((U64)1 << 63) };
+	return buf;
+}
+
+inline Buffer Buffer_createRefConst(const void *v, U64 length) {
+
+	if (!length || !v)
+		return Buffer_createNull();
+
+	if (length >> 48)
+		return Buffer_createNull();
+
+	Buffer buf = { .ptr = (const U8*)v, .lengthAndRefBits = length | ((U64)3 << 62) };
+	return buf;
+}
 
 //Bit manipulation
 
@@ -81,6 +119,19 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits);
 
 Bool Buffer_eq(Buffer buf0, Buffer buf1);			//Also compares size
 Bool Buffer_neq(Buffer buf0, Buffer buf1);			//Also compares size
+
+//Use this instead of simply copying the Buffer to a new location
+//A copy like this is only fine if the other doesn't get freed.
+//In all other cases, createRefFromBuffer should be called on the one that shouldn't be freeing.
+//If it needs to be refcounted, RefPtr should be used.
+Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst);
+
+Error Buffer_offset(Buffer* buf, U64 length);
+
+Error Buffer_append(Buffer* buf, const void* v, U64 length);
+Error Buffer_appendBuffer(Buffer* buf, Buffer append);
+
+Error Buffer_consume(Buffer* buf, void* v, U64 length);
 
 #define BUFFER_OP(T)									\
 Error Buffer_append##T(Buffer *buf, T v);				\
@@ -127,19 +178,6 @@ BUFFER_OP(I8);
 
 BUFFER_OP(F64);
 BUFFER_OP(F32);
-
-Error Buffer_offset(Buffer *buf, U64 length);
-
-Error Buffer_append(Buffer *buf, const void *v, U64 length);
-Error Buffer_appendBuffer(Buffer *buf, Buffer append);
-
-Error Buffer_consume(Buffer *buf, void *v, U64 length);
-
-//Use this instead of simply copying the Buffer to a new location
-//A copy like this is only fine if the other doesn't get freed.
-//In all other cases, createRefFromBuffer should be called on the one that shouldn't be freeing.
-//If it needs to be refcounted, RefPtr should be used.
-Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst);
 
 #ifdef __cplusplus
 	}

@@ -19,14 +19,13 @@
 */
 
 #pragma once
-#include "types/base/types.h"
+#include "types/base/error.h"
 #include <inttypes.h>
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef struct Error Error;
 typedef struct CharString CharString;
 typedef struct Allocator Allocator;
 

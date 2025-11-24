@@ -21,27 +21,12 @@
 #pragma once
 #include "types/base/types.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+typedef enum ECompareResult {
+	ECompareResult_Lt,
+	ECompareResult_Eq,
+	ECompareResult_Gt
+} ECompareResult;
 
-typedef struct Buffer Buffer;
-typedef struct Error Error;
-
-typedef Error (*AllocFunc)(void *allocator, U64 length, Buffer *output);
-
-//Free should only return if it successfully freed.
-//It shouldn't return any errors, as freeing also happens on cleanup.
-//This could bring the program into an invalid state.
-//
-typedef Bool (*FreeFunc)(void *allocator, Buffer buf);
-
-typedef struct Allocator {
-	void *ptr;
-	AllocFunc alloc;
-	FreeFunc free;
-} Allocator;
-
-#ifdef __cplusplus
-	}
-#endif
+typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
+typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);		//Passing NULL as func indicates raw buffer compare
+typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL as func indicates raw buffer hash

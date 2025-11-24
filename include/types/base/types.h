@@ -67,24 +67,3 @@ typedef I64 DNs;	//Delta Ns
 typedef char C8;
 
 typedef bool Bool;
-
-//TODO: Remove
-
-typedef enum ECompareResult {
-	ECompareResult_Lt,
-	ECompareResult_Eq,
-	ECompareResult_Gt
-} ECompareResult;
-
-typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
-typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);		//Passing NULL as func indicates raw buffer compare
-typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL as func indicates raw buffer hash
-
-//Default stacktrace
-
-//TODO: Remove
-
-#define STACKTRACE_SIZE 32
-typedef void *StackTrace[STACKTRACE_SIZE];
-
-typedef struct Error Error;

@@ -25,6 +25,11 @@
 	extern "C" {
 #endif
 
+//Default stacktrace
+
+#define STACKTRACE_SIZE 32
+typedef void *StackTrace[STACKTRACE_SIZE];
+
 //TODO: Make errors extendable like TypeId
 
 typedef enum EGenericError {

@@ -26,18 +26,6 @@
 
 //Basic buffer helpers
 
-U64 Buffer_length(Buffer buf) {
-	return buf.lengthAndRefBits << 2 >> 2;
-}
-
-Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
-
-	if(length >> 48 || !ptr || !length)
-		return (Buffer) { 0 };
-
-	return (Buffer) { .ptr = ptr, .lengthAndRefBits = length };
-}
-
 Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst) {
 
 	if(!buf.ptr || (!isConst && Buffer_isConstRef(buf)))
@@ -46,14 +34,6 @@ Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst) {
 	Buffer copy = buf;
 	copy.lengthAndRefBits |= ((U64)1 << 63) | ((U64)isConst << 62);
 	return copy;
-}
-
-Bool Buffer_isRef(Buffer buf) {
-	return buf.lengthAndRefBits >> 62;
-}
-
-Bool Buffer_isConstRef(Buffer buf) {
-	return (buf.lengthAndRefBits >> 62) == 3;
 }
 
 Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
@@ -169,30 +149,6 @@ Error Buffer_bitwiseAnd(Buffer dst, Buffer src) BitOp(
 
 Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
 	return isOn ? Buffer_setAllBits(buf) : Buffer_unsetAllBits(buf);
-}
-
-Buffer Buffer_createNull() { return (Buffer) { 0 }; }
-
-Buffer Buffer_createRef(void *v, U64 length) {
-
-	if(!length || !v)
-		return Buffer_createNull();
-
-	if(length >> 48)
-		return Buffer_createNull();
-
-	return (Buffer) { .ptrNonConst = (U8*) v, .lengthAndRefBits = length | ((U64)1 << 63) };
-}
-
-Buffer Buffer_createRefConst(const void *v, U64 length) {
-
-	if(!length || !v)
-		return Buffer_createNull();
-
-	if(length >> 48)
-		return Buffer_createNull();
-
-	return (Buffer) { .ptr = (const U8*) v, .lengthAndRefBits = length | ((U64)3 << 62) };
 }
 
 Bool Buffer_eq(Buffer buf0, Buffer buf1) {

@@ -27,6 +27,7 @@
 
 typedef struct InputDevice Keyboard;
 typedef struct CharString CharString;
+typedef struct Error Error;
 
 //EKey is remapped using scan codes for QWERTY iso layout (https://kbdlayout.info/kbdusx)
 // The main part of the keyboard uses scan codes, but the following don't:

@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/base/c8.h"
+#include "types/base/algorithm.h"
 
 #ifdef __cplusplus
 	extern "C" {
