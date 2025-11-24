@@ -19,6 +19,7 @@
 */
 
 #pragma once
+#include "types/base/platform_types.h"
 #include "graphics/vulkan/vulkan.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS

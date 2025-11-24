@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/base/platform_types.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
@@ -173,7 +174,7 @@ void Buffer_sha256(Buffer buf, U32 output[8]) {
 
 	if(hasSHA256 < 0) {
 		U32 cpuInfo1[4];
-		Platform_getCPUId(7, cpuInfo1);
+		Platform_getCPUId(7, cpuInfo1);		//TODO: Find a cleaner way
 		hasSHA256 = (cpuInfo1[1] >> 29) & 1;
 	}
 

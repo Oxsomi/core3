@@ -19,6 +19,7 @@
 */
 
 #pragma once
+#include "types/base/platform_types.h"
 #include "types/math/vec.h"
 
 #ifdef __cplusplus

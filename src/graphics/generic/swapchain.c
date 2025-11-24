@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"

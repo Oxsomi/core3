@@ -19,10 +19,9 @@
 */
 
 #pragma once
-#include <stdint.h>
+#include "types/base/types.h"
 #include <assert.h>
 
-typedef uint32_t U32;
 typedef U32 EPlatform;
 
 //Defines instead of enums to allow #if

@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/base/types.h"
+#include "types/base/platform_types.h"
 
 #if _PLATFORM_TYPE != PLATFORM_WINDOWS
 	#ifndef __cplusplus

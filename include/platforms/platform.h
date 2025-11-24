@@ -19,6 +19,7 @@
 */
 
 #pragma once
+#include "types/base/platform_types.h"
 #include "types/container/string.h"
 #include "types/base/allocator.h"
 #include "types/container/archive.h"

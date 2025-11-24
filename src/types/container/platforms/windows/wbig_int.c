@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/base/platform_types.h"
 #include "types/container/big_int.h"
 #include "types/base/constants.h"
 

@@ -20,6 +20,7 @@
 
 #define INITGUID
 #include <guiddef.h>
+#include "types/base/platform_types.h"
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/direct3d12.h"

@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/base/platform_types.h"
 #include "types/math/flp.h"
 #include "types/math/vec.h"
 
@@ -344,7 +345,7 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 				if (hasF16C < 0) {
 					U32 cpuInfo[4];
-					Platform_getCPUId(1, cpuInfo);
+					Platform_getCPUId(1, cpuInfo);		//TODO: Find a cleaner way
 					hasF16C = (cpuInfo[2] >> 29) & 1;
 				}
 

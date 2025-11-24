@@ -19,6 +19,7 @@
 */
 
 #pragma once
+#include "types/base/platform_types.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/command_list.h"
 #include "types/container/list.h"
