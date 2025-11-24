@@ -19,7 +19,13 @@
 */
 
 #pragma once
-#include "types/base/types.h"
+#include "types/base/constants.h"
+
+//Transforming a string to a U16, U32 or U64
+
+#define C8x2(x, y) ((((U16)y) << 8) | x)
+#define C8x4(x, y, z, w) ((((U32)C8x2(z, w)) << 16) | C8x2(x, y))
+#define C8x8(x, y, z, w, a, b, c, d) ((((U64)C8x4(a, b, c, d)) << 32) | C8x4(x, y, z, w))
 
 #ifdef __cplusplus
 	extern "C" {
@@ -36,56 +42,109 @@ typedef enum EStringTransform {
 	EStringTransform_Upper
 } EStringTransform;
 
-//Char
-//All char helper functions assume ASCII, otherwise use string functions
+inline C8 C8_toLower(C8 c) {
+	return (c >= 'A' && c <= 'Z') ? c + 32 : c;
+}
 
-C8 C8_toLower(C8 c);
-C8 C8_toUpper(C8 c);
+inline C8 C8_toUpper(C8 c) {
+	return (c >= 'a' && c <= 'z') ? c - 32 : c;
+}
 
-C8 C8_transform(C8 c, EStringTransform transform);
+inline C8 C8_transform(C8 c, EStringTransform transform) {
+	return transform == EStringTransform_None ? c : (
+		transform == EStringTransform_Lower ? C8_toLower(c) :
+		C8_toUpper(c)
+	);
+}
 
-Bool C8_isBin(C8 c);
-Bool C8_isOct(C8 c);
-Bool C8_isDec(C8 c);
+inline Bool C8_isBin(C8 c) { return c == '0' || c == '1'; }
+inline Bool C8_isOct(C8 c) { return c >= '0' && c <= '7'; }
+inline Bool C8_isDec(C8 c) { return c >= '0' && c <= '9'; }
 
-Bool C8_isUpperCase(C8 c);
-Bool C8_isLowerCase(C8 c);
-Bool C8_isUpperCaseHex(C8 c);
-Bool C8_isLowerCaseHex(C8 c);
-Bool C8_isWhitespace(C8 c);
-Bool C8_isNewLine(C8 c);
+inline Bool C8_isUpperCase(C8 c) { return c >= 'A' && c <= 'Z'; }
+inline Bool C8_isLowerCase(C8 c) { return c >= 'a' && c <= 'z'; }
+inline Bool C8_isUpperCaseHex(C8 c) { return c >= 'A' && c <= 'F'; }
+inline Bool C8_isLowerCaseHex(C8 c) { return c >= 'a' && c <= 'f'; }
+inline Bool C8_isWhitespace(C8 c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+inline Bool C8_isNewLine(C8 c) { return c == '\n' || c == '\r'; }
 
-Bool C8_isHex(C8 c);
-Bool C8_isNyto(C8 c);
-Bool C8_isAlphaNumeric(C8 c);
-Bool C8_isAlpha(C8 c);
+inline Bool C8_isHex(C8 c) { return C8_isDec(c) || C8_isUpperCaseHex(c) || C8_isLowerCaseHex(c); }
+inline Bool C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '$'; }
+inline Bool C8_isAlphaNumeric(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c); }
+inline Bool C8_isAlpha(C8 c) { return C8_isUpperCase(c) || C8_isLowerCase(c); }
 
-Bool C8_isSymbol(C8 c);			//~"#%&'()*+,-./$:;<=>?@[\]^`_{|}~
-Bool C8_isLexerSymbol(C8 c);	//isSymbol but excluding $_
+inline Bool C8_isSymbol(C8 c) {
 
-Bool C8_isValidAscii(C8 c);
-Bool C8_isValidFileName(C8 c);
+	Bool symbolRange0 = c > ' ' && c < '0';		//~"#%&'()*+,-./$
+	Bool symbolRange1 = c > '9' && c < 'A';		//:;<=>?@
+	Bool symbolRange2 = c > 'Z' && c < 'a';		//[\]^`_
+	Bool symbolRange3 = c > 'z' && c < 0x7F;	//{|}~
 
-U8 C8_bin(C8 c);
-U8 C8_oct(C8 c);
-U8 C8_dec(C8 c);
+	return symbolRange0 || symbolRange1 || symbolRange2 || symbolRange3;
+}
 
-U8 C8_hex(C8 c);
-U8 C8_nyto(C8 c);
+inline Bool C8_isValidAscii(C8 c) { return (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\n' || c == '\r'; }
 
-C8 C8_createBin(U8 v);
-C8 C8_createOct(U8 v);
-C8 C8_createDec(U8 v);
-C8 C8_createHex(U8 v);
+inline Bool C8_isValidFileName(C8 c) {
+	return
+		(c >= 0x20 && c < 0x7F) &&
+		c != '<' && c != '>' && c != ':' && c != '"' && c != '|' &&
+		c != '?' && c != '*' && c != '/' && c != '\\';
+}
+
+inline U8 C8_bin(C8 c) { return c == '0' ? 0 : (c == '1' ? 1 : U8_MAX); }
+inline U8 C8_oct(C8 c) { return C8_isOct(c) ? c - '0' : U8_MAX; }
+inline U8 C8_dec(C8 c) { return C8_isDec(c) ? c - '0' : U8_MAX; }
+
+inline U8 C8_hex(C8 c) {
+
+	if (C8_isDec(c))
+		return c - '0';
+
+	if (C8_isUpperCaseHex(c))
+		return c - 'A' + 10;
+
+	if (C8_isLowerCaseHex(c))
+		return c - 'a' + 10;
+
+	return U8_MAX;
+}
+
+inline U8 C8_nyto(C8 c) {
+
+	if (C8_isDec(c))
+		return c - '0';
+
+	if (C8_isUpperCase(c))
+		return c - 'A' + 10;
+
+	if (C8_isLowerCase(c))
+		return c - 'a' + 36;
+
+	if (c == '_')
+		return 62;
+
+	return c == '$' ? 63 : U8_MAX;
+}
+
+inline C8 C8_createBin(U8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : C8_MAX)); }
+inline C8 C8_createOct(U8 v) { return v < 8 ? '0' + v : C8_MAX; }
+inline C8 C8_createDec(U8 v) { return v < 10 ? '0' + v : C8_MAX; }
+inline C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : C8_MAX); }
 
 //Nytodecimal: 0-9A-Za-z_$
-C8 C8_createNyto(U8 v);
 
-//Transforming a string to a U16, U32 or U64
-
-#define C8x2(x, y) ((((U16)y) << 8) | x)
-#define C8x4(x, y, z, w) ((((U32)C8x2(z, w)) << 16) | C8x2(x, y))
-#define C8x8(x, y, z, w, a, b, c, d) ((((U64)C8x4(a, b, c, d)) << 32) | C8x4(x, y, z, w))
+inline C8 C8_createNyto(U8 v) {
+	return v < 10 ? '0' + v : (
+		v < 36 ? 'A' + v - 10 : (
+			v < 62 ? 'a' + v - 36 : (
+				v == 62 ? '_' : (
+					v == 63 ? '$' : C8_MAX
+				)
+			)
+		)
+	);
+}
 
 #ifdef __cplusplus
 	}
