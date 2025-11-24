@@ -607,6 +607,16 @@ clean:
 TList(ListSHEntryRuntime);
 TListImpl(ListSHEntryRuntime);
 
+typedef struct LinkEntry {
+	ListU16 runtimeEntries;
+	Buffer uniformData;
+	U16 combinationId, entrypointId;
+	U8 padding[4];
+} LinkEntry;
+
+TList(LinkEntry);
+TListImpl(LinkEntry);
+
 void ListListSHEntryRuntime_freeUnderlying(ListListSHEntryRuntime *entry, Allocator alloc) {
 
 	if(!entry)
@@ -618,6 +628,254 @@ void ListListSHEntryRuntime_freeUnderlying(ListListSHEntryRuntime *entry, Alloca
 	ListListSHEntryRuntime_free(entry, alloc);
 }
 
+void ListLinkEntry_freeUnderlying(ListLinkEntry* entries, Allocator alloc) {
+
+	if (!entries)
+		return;
+
+	for (U64 i = 0; i < entries->length; ++i) {
+		LinkEntry* entry = &entries->ptrNonConst[i];
+		Buffer_free(&entry->uniformData, alloc);
+		ListU16_free(&entry->runtimeEntries, alloc);
+	}
+
+	ListLinkEntry_free(entries, alloc);
+}
+
+
+Bool Compiler_getLinkEntries(
+	Compiler compiler,
+	const ListSHEntryRuntime *runtimeEntries,
+	const SHBinaryIdentifier *binaryIdentifier,
+	ESHBinaryType binaryType,
+	Buffer *binary,
+	ListCompilerEntrypoint *entrypoints,
+	ListLinkEntry *linkEntries,
+	Allocator alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListU16 tmpEntries = (ListU16) { 0 };
+	Bool freeEntrypoints = false;
+	Bool freeLinkEntries = false;
+
+	Bool isRt =
+		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
+		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt;
+
+	Bool isLib =
+		binaryIdentifier->stageType == ESHPipelineStage_WorkgraphExt ||
+		isRt;
+
+	Bool isLibTarget = isLib;
+	isLib = isLibTarget || (binaryIdentifier->stageType == ESHPipelineStage_Count);
+
+	if (!isLib) {
+		
+		gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
+			entrypoints, (CompilerEntrypoint) { .stage = binaryIdentifier->stageType }, alloc
+		))
+
+		freeEntrypoints = true;
+
+		gotoIfError2(clean, CharString_createCopy(
+			binaryIdentifier->entrypoint,
+			alloc,
+			&ListCompilerEntrypoint_last(*entrypoints)->name
+		))
+	}
+	
+	else gotoIfError3(clean, Compiler_getUniqueEntrypoints(compiler, binaryType, *binary, true, entrypoints, alloc, e_rr))
+
+	freeEntrypoints = true;
+
+	ListCompilerEntrypoint entrypointL = *entrypoints;
+	ListSHEntryRuntime runtimeEntryL = *runtimeEntries;
+	SHBinaryIdentifier ident = *binaryIdentifier;
+
+	for (U64 i = 0; i < entrypointL.length; ++i) {
+
+		CompilerEntrypoint entrypoint = entrypointL.ptr[i];
+
+		//Find entrypoint in input array and ensure it exists / is the same stage
+
+		U64 j = 0;
+
+		for (; j < runtimeEntryL.length; ++j)
+			if (CharString_equalsStringSensitive(entrypoint.name, runtimeEntryL.ptr[j].entry.name))
+				break;
+
+		if (j == runtimeEntryL.length)
+			retError(clean, Error_invalidState(
+				0, "Compiler_getLinkEntries() had an entrypoint that wasn't defined while parsing but is present in reflection"
+			))
+
+		SHEntryRuntime entry = runtimeEntryL.ptr[j];
+
+		if(entry.entry.stage != entrypoint.stage)
+			retError(clean, Error_invalidState(
+				0, "Compiler_getLinkEntries() had a reflection stage type that mismatched with what was parsed"
+			))
+
+		//Ensure we're actually present for what we're currently compiling and that we do really need linking (otherwise skip)
+		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
+		//However, if you have a mix of extensions and defines, then some entrypoints might not need to be linked again.
+		//Example: raygen with both SER and no SER. This would only be linked once per compilation, but any other shaders should exclude this.
+		//			(We don't want to have 2x hit shaders included while only raygen needs these compilations)
+
+		//Check extensions
+
+		Bool containsExtension = !ident.extensions && !entry.extensions.length;
+		U16 extensionId = 0;
+
+		for(U64 k = 0; k < entry.extensions.length; ++k)
+			if (entry.extensions.ptr[k] == (U32) ident.extensions) {
+				containsExtension = true;
+				extensionId = (U16) k;
+				break;
+			}
+
+		if (!containsExtension)			//Extension not found
+			continue;
+
+		//Check shader versions
+
+		Bool containsShaderVersion = ident.shaderVersion == OISH_SHADER_MODEL(6, 5) && !entry.shaderVersions.length;
+		U16 shaderVersion = 0;
+
+		for(U64 k = 0; k < entry.shaderVersions.length; ++k)
+			if (entry.shaderVersions.ptr[k] == ident.shaderVersion) {
+				containsShaderVersion = true;
+				shaderVersion = (U16) k;
+				break;
+			}
+
+		if (!containsShaderVersion)		//Shader model not found
+			continue;
+
+		//Check defines
+
+		Bool containsDefines = !ident.defines.length && !entry.definesPerCompilation.length;
+		U16 defineId = 0;
+
+		for (U64 k = 0, l = 0; k < entry.definesPerCompilation.length; ++k) {
+
+			U64 m = entry.definesPerCompilation.ptr[k];
+
+			ListCharString tmp = (ListCharString) { 0 };
+			gotoIfError2(clean, ListCharString_createRefConst(entry.defineNameValues.ptr + (l << 1), m << 1, &tmp))
+
+			Bool eq = tmp.length == ident.defines.length;		//TODO: ListCharString_equalsUnderlying
+
+			if (eq)
+				for (U64 n = 0; n < tmp.length; ++n)
+					if (!CharString_equalsStringSensitive(tmp.ptr[n], ident.defines.ptr[n])) {
+						eq = false;
+						break;
+					}
+
+			if (eq) {
+				defineId = (U16) k;
+				containsDefines = true;
+				break;
+			}
+
+			l += m;
+		}
+
+		if (!containsDefines)			//Defines not found
+			continue;
+
+		//Go through all uniforms defined by the runtime, since there may be multiple
+
+		U16 shaderVersions = (U16)U64_max(entry.shaderVersions.length, 1);
+		U16 extensions = (U16)U64_max(entry.extensions.length, 1);
+		U16 defines = (U16)U64_max(entry.definesPerCompilation.length, 1);
+		U64 uniformCombos = U64_safeDiv(entry.uniformData.length, entry.uniformStride);
+
+		for (U64 k = 0; k < U64_max(1, uniformCombos); ++k) {
+
+			U64 combinationId = ((k * defines + defineId) * extensions + extensionId) * shaderVersions + shaderVersion;
+
+			LinkEntry linkEntry = (LinkEntry) {
+				.uniformData = Buffer_createRefConst(entry.uniformData.ptr + entry.uniformStride * k, entry.uniformStride),
+				.combinationId = (U16) combinationId
+			};
+
+			if (!isLibTarget) {
+
+				linkEntry.entrypointId = (U16)j;
+
+				U64 l = 0;
+
+				for (; l < runtimeEntryL.length; ++l)
+					if (CharString_equalsStringSensitive(runtimeEntryL.ptr[l].entry.name, entrypoint.name))
+						break;
+
+				if(l == runtimeEntryL.length)
+					retError(clean, Error_invalidState(
+						0, "Compiler_getLinkEntries() had an entrypoint that couldn't be found in runtime entry"
+					))
+
+				//The ptr below is the same as linkEntry.entrypointId, except can be used as ptr to avoid intermediate ListU16
+				gotoIfError2(clean, ListU16_createRefConst(&runtimeEntryL.ptr[l].entry.idOrPadding, 1, &linkEntry.runtimeEntries))
+			}
+
+			else {
+
+				//If RT/workgraph shader, try to find a previous linkEntry
+				//In that case, we just reference the same binary.
+
+				U64 l = 0;
+
+				for (; l < linkEntries->length; ++l) {
+
+					LinkEntry linkEntry2 = linkEntries->ptr[l];
+
+					if (linkEntry2.entrypointId != U16_MAX)
+						continue;
+
+					if (!Buffer_eq(linkEntry.uniformData, linkEntry2.uniformData))
+						continue;
+
+					break;
+				}
+
+				if (l != linkEntries->length) {
+					gotoIfError2(clean, ListU16_pushBack(&linkEntries->ptrNonConst[k].runtimeEntries, (U16)j, alloc))
+					continue;
+				}
+
+				linkEntry.entrypointId = U16_MAX;
+				gotoIfError2(clean, ListU16_pushBack(&tmpEntries, (U16)j, alloc))
+				linkEntry.runtimeEntries = tmpEntries;
+			}
+
+			gotoIfError2(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, alloc))
+			tmpEntries = (ListU16) { 0 };	//Moved
+			freeLinkEntries = true;
+		}
+	}
+
+	if (linkEntries->length >> 32)
+		retError(clean, Error_invalidState(0, "Compiler_getLinkEntries() must return <32bit entries"));
+
+clean:
+
+	if (!s_uccess) {
+
+		if (freeEntrypoints)
+			ListCompilerEntrypoint_freeUnderlying(entrypoints, alloc);
+
+		if (freeLinkEntries)
+			ListLinkEntry_freeUnderlying(linkEntries, alloc);
+	}
+
+	ListU16_free(&tmpEntries, alloc);
+	return s_uccess;
+}
+
 typedef struct CompilerJobScheduler {
 
 	ListCharString inputPaths;
@@ -627,13 +885,21 @@ typedef struct CompilerJobScheduler {
 	ListCompiler compilers;
 
 	ListListSHEntryRuntime *shEntries;
-	ListU64 *shEntryIds;				//[U32 shEntries[i], U16 shEntries[i][j], U16 shEntries[i][j][k]]
+
+	//[U32 shEntries[i], U16 shEntries[i][j], U16 shEntries[i][j][k]]
+
+	ListU64 *shEntryIds;
+	ListU64 *shEntryIdsIntermediate;
+	ListU64 *shEntryIdsIntermediate1;
+
 	ListCompileResult *compileResults;
+	ListCompileResult *compileResultsTemp;
 
 	SpinLock *lock;
 	U64 *counter;						//This one is to acquire job ids
 	U64 *completedCounter;				//This one is to signal jobs that are done
 	U64 *counterCompiledBinaries;		//How many binaries have been compiled
+	U64 *counterLinkedBinaries;			//How many binaries have been linked
 	U64 *threadCounter;
 	Bool *success;
 
@@ -660,8 +926,12 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 	ELockAcquire acq = ELockAcquire_Invalid;
 	U64 threadCounter = U64_MAX;
 	CompileResult tmp = (CompileResult) { 0 };
+	ListLinkEntry linkEntries = (ListLinkEntry) { 0 };
+	ListCompilerEntrypoint uniqueEntrypoints = (ListCompilerEntrypoint) { 0 };
+	Compiler compiler = (Compiler) { 0 };
 
 	//Pre-compile
+	//TODO: Test something that fails only in pre-compile and see what happens.
 
 	U64 lastJobId = U64_MAX;
 
@@ -694,14 +964,14 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 			else if(compileCombinations.length) {
 
 				if(ListU64_reserve(
-					job->shEntryIds, job->shEntryIds->length + compileCombinations.length, alloc
+					job->shEntryIdsIntermediate, job->shEntryIdsIntermediate->length + compileCombinations.length, alloc
 				).genericError) {
 					if(job->enableLogging)
 						Log_errorLn(alloc, "Compiler_compileJob() failed (ListU64_reserve)");
 				}
 
 				else if(ListCompileResult_resize(
-					job->compileResults, job->compileResults->length + compileCombinations.length, alloc
+					job->compileResultsTemp, job->compileResultsTemp->length + compileCombinations.length, alloc
 				).genericError) {
 					if(job->enableLogging)
 						Log_errorLn(alloc, "Compiler_compileJob() failed (ListCompileResult_resize)");
@@ -712,7 +982,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 					U32 compileCombination = compileCombinations.ptr[i];
 
 					if (ListU64_pushBack(
-						job->shEntryIds, ((U64)lastJobId << 32) | compileCombination, (Allocator) { 0 }
+						job->shEntryIdsIntermediate, ((U64)lastJobId << 32) | compileCombination, (Allocator) { 0 }
 					).genericError) {
 						Log_errorLn(alloc, "Compiler_compileJob() failed (ListU64_pushBack)");
 						break;
@@ -740,13 +1010,26 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 
 		//Assign thread counter, because it might be needed later
 
-		if (threadCounter == U64_MAX)
+		if (threadCounter == U64_MAX) {
 			threadCounter = (*job->threadCounter)++;
+			compiler = job->compilers.ptr[threadCounter];
+		}
 
 		//Remember if we succeeded or not
 
 		if(*job->counter == job->inputData.length) {
 			*job->success &= s_uccess;
+			break;
+		}
+
+		if (*job->counter == U32_MAX) {
+
+			Log_errorLn(
+				alloc, "Precompile ran out of counters starting at file \"%.*s\"",
+				(int)CharString_length(job->outputPaths.ptr[lastJobId]), job->outputPaths.ptr[lastJobId].ptr
+			);
+
+			*job->success = false;
 			break;
 		}
 
@@ -763,7 +1046,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 		CharString input = job->inputPaths.ptr[ourJobId];
 
 		if(!Compiler_precompileShader(
-			job->compilers.ptr[threadCounter],
+			compiler,
 			job->compileModes.ptr[ourJobId],
 			job->isDebug,
 			input,
@@ -800,7 +1083,116 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 		//Now that we have the lock, we can write back the result
 
 		if (lastJobId != U64_MAX) {
-			job->compileResults->ptrNonConst[lastJobId] = tmp;
+
+			//Figure out if linking is even necessary; only for lib targets
+
+			U64 ourLast = job->shEntryIdsIntermediate->ptr[lastJobId];
+
+			U32 ourOldJobId = ourLast >> 32;
+			ListSHEntryRuntime entries = job->shEntries->ptr[ourOldJobId];
+
+			U16 runtimeEntryId = (U16)(ourLast >> 16) & (U16)I16_MAX;
+			SHEntryRuntime entry = entries.ptrNonConst[runtimeEntryId];
+
+			if (entry.isShaderAnnotation && tmp.isSuccess) {
+
+				CharString input = job->inputPaths.ptr[ourOldJobId];
+
+				if (tmp.type != ECompileResultType_Binary) {
+
+					if (job->enableLogging)
+						Log_errorLn(
+							alloc, "Compile failed for file \"%.*s\", invalid compile output",
+							(int)CharString_length(input), input.ptr
+						);
+
+					s_uccess = false;
+
+				} else {
+
+					U16 combinationId = (U16)(ourLast & (U16)I16_MAX);
+
+					SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier){ 0 };
+
+					if (!SHEntryRuntime_asBinaryIdentifier(&entry, combinationId, &binaryIdentifier, NULL)) {
+
+						Log_errorLn(
+							alloc, "Compile failed for file \"%.*s\", invalid binary identifier",
+							(int)CharString_length(input), input.ptr
+						);
+
+						s_uccess = false;
+					}
+
+					else {
+					
+						Error errTemp = Error_none();
+
+						if (Compiler_getLinkEntries(
+							compiler,
+							&entries,
+							&binaryIdentifier,
+							job->compileModes.ptr[ourOldJobId],
+							&tmp.binary,
+							&uniqueEntrypoints,
+							&linkEntries,
+							alloc,
+							&errTemp
+						)) {
+
+							//Setup next pass
+
+							if (ListU64_reserve(
+								job->shEntryIdsIntermediate1, job->shEntryIdsIntermediate1->length + linkEntries.length, alloc
+							).genericError) {
+								if (job->enableLogging)
+									Log_errorLn(alloc, "Compiler_compileJob() failed (ListU64_reserve)");
+							}
+
+							else if (ListCompileResult_resize(
+								job->compileResults, job->compileResults->length + linkEntries.length, alloc
+							).genericError) {
+								if (job->enableLogging)
+									Log_errorLn(alloc, "Compiler_compileJob() failed (ListCompileResult_resize)");
+							}
+
+							else for (U64 i = 0; i < linkEntries.length; ++i) {
+
+								if (ListU64_pushBack(
+									job->shEntryIdsIntermediate1, ((U64)lastJobId << 32) | (U32)i, (Allocator) { 0 }
+								).genericError) {
+									Log_errorLn(alloc, "Compiler_compileJob() failed (ListU64_pushBack)");
+									break;
+								}
+							}
+
+						} else {
+
+							Log_errorLn(
+								alloc, "Compile failed for file \"%.*s\", invalid link entries",
+								(int)CharString_length(input), input.ptr
+							);
+
+							s_uccess = false;
+							Error_print(alloc, errTemp, ELogLevel_Error, ELogOptions_Default);
+						}
+
+						ListLinkEntry_freeUnderlying(&linkEntries, alloc);
+						ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
+					}
+				}
+			}
+
+			//Move our binary we compiled to the registry directly without linking.
+			//This happens when compiling an oxc::stage or when an error occurs.
+
+			else if (ListU64_pushBack(job->shEntryIds, ourLast, (Allocator) { 0 }).genericError) {
+				//TODO: Move to job->compileResults
+				Log_errorLn(alloc, "Compiler_compileJob() failed (ListU64_pushBack)");
+				break;
+			}
+
+			job->compileResultsTemp->ptrNonConst[lastJobId] = tmp;
 			tmp = (CompileResult) { 0 };
 		}
 
@@ -809,14 +1201,14 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 
 		if(
 			*job->completedCounter == job->inputData.length &&
-			*job->counterCompiledBinaries == job->shEntryIds->length
+			*job->counterCompiledBinaries == job->shEntryIdsIntermediate->length
 		)
 			break;
 
 		//We currently don't have any pending, more will likely spawn.
 		//Come back a bit later to try again.
 
-		if(*job->counterCompiledBinaries == job->shEntryIds->length) {
+		if(*job->counterCompiledBinaries == job->shEntryIdsIntermediate->length) {
 
 			if(acq == ELockAcquire_Acquired)		//Release lock to prevent deadlock
 				SpinLock_unlock(job->lock);
@@ -830,7 +1222,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 		//Grab next job id
 
 		U64 ourJobId = (*job->counterCompiledBinaries)++;
-		U64 ourNext = job->shEntryIds->ptr[ourJobId];
+		U64 ourNext = job->shEntryIdsIntermediate->ptr[ourJobId];
 
 		U32 ourOldJobId = ourNext >> 32;
 		ListSHEntryRuntime entries = job->shEntries->ptr[ourOldJobId];		//Grab entries as shEntries can be modified
@@ -856,7 +1248,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 		lastJobId = ourJobId;
 
 		if(!Compiler_compileShaderSingle(
-			job->compilers.ptr[threadCounter],
+			compiler,
 			job->compileModes.ptr[ourOldJobId],
 			job->isDebug,
 			isRt,
@@ -878,12 +1270,205 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 		}
 	}
 
+	//Linking stage, our previous compile step has hopefully spawned more.
+	//If no linking is necessary, it moves shEntryIdsIntermediate -> shEntryIds.
+	//If an error occurred in the previous step, it will not execute.
+	//Otherwise it'll link per link entry.
+	//If errors occur while linking, it'll merge the compile errors.
+
+	lastJobId = U64_MAX;
+	
+	while (true) {
+
+		//Lock to get next job id
+
+		acq = SpinLock_lock(job->lock, U64_MAX);
+
+		if (acq < ELockAcquire_Success)
+			return;
+
+		//Now that we have the lock, we can write back the result
+
+		if (lastJobId != U64_MAX) {
+			job->compileResults->ptrNonConst[lastJobId] = tmp;
+			tmp = (CompileResult){ 0 };
+		}
+		
+		//We're done, since all initial threads are done spawning children.
+		//And those children's children have also finished.
+
+		if(
+			*job->completedCounter == job->inputData.length &&
+			*job->counterCompiledBinaries == job->shEntryIdsIntermediate->length &&
+			*job->counterLinkedBinaries == job->shEntryIdsIntermediate1->length
+		)
+			break;
+
+		//We currently don't have any pending, more will likely spawn.
+		//Come back a bit later to try again.
+
+		if(*job->counterLinkedBinaries == job->shEntryIdsIntermediate1->length) {
+
+			if(acq == ELockAcquire_Acquired)		//Release lock to prevent deadlock
+				SpinLock_unlock(job->lock);
+
+			acq = ELockAcquire_Invalid;
+
+			Thread_sleep(100 * MU);
+			continue;
+		}
+
+		U64 ourJobId = (*job->counterLinkedBinaries)++;
+		U64 ourNext = job->shEntryIdsIntermediate1->ptr[ourJobId];		//((U64)lastJobId << 32) | (U32)linkId
+
+		U32 compileJobId = (U32)(ourNext >> 32);
+		U32 linkEntryId = (U32)ourNext;
+
+		ourNext = job->shEntryIdsIntermediate->ptr[compileJobId];
+		CompileResult result = job->compileResultsTemp->ptr[compileJobId];
+
+		U32 ourOldJobId = ourNext >> 32;
+		ListSHEntryRuntime entries = job->shEntries->ptr[ourOldJobId];
+
+		if (acq == ELockAcquire_Acquired)
+			SpinLock_unlock(job->lock);
+
+		acq = ELockAcquire_Invalid;
+		lastJobId = ourJobId;
+
+		//Link binaries
+
+		U16 runtimeEntryId = (U16)(ourNext >> 16) & (U16)I16_MAX;
+		SHEntryRuntime entry = entries.ptrNonConst[runtimeEntryId];
+
+		U16 combinationId = (U16)(ourNext & (U16)I16_MAX);
+
+		SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier){ 0 };
+		CharString inputPath = job->inputPaths.ptr[ourOldJobId];
+
+		if (!SHEntryRuntime_asBinaryIdentifier(&entry, combinationId, &binaryIdentifier, NULL)) {
+
+			Log_errorLn(
+				alloc, "Link failed for file \"%.*s\", invalid binary identifier",
+				(int)CharString_length(inputPath), inputPath.ptr
+			);
+
+			s_uccess = false;
+		}
+
+		else {
+
+			ESHBinaryType binaryType = job->compileModes.ptr[ourOldJobId];
+
+			Error errTemp = Error_none();
+
+			if (Compiler_getLinkEntries(
+				compiler,
+				&entries,
+				&binaryIdentifier,
+				binaryType,
+				&result.binary,
+				&uniqueEntrypoints,
+				&linkEntries,
+				alloc,
+				&errTemp
+			)) {
+
+				//Link
+
+				LinkEntry linkEntry = linkEntries.ptr[linkEntryId];
+				
+				Buffer uniformData = linkEntry.uniformData;
+
+				U16 currentCombinationId = linkEntry.combinationId;
+
+				binaryIdentifier = (SHBinaryIdentifier) { 0 };
+				SHEntryRuntime_asBinaryIdentifier(		//TODO: error handling
+					&entry, currentCombinationId, &binaryIdentifier, NULL
+				);
+
+				ListBuffer inputs = (ListBuffer) { 0 };
+				ListBuffer_createRefConst(&result.binary, 1, &inputs);	//TODO: Error handling
+
+				CompilerEntrypoint entrypoint = (CompilerEntrypoint) { 0 };
+							
+				if (linkEntry.entrypointId != U16_MAX) {
+
+					//entrypointId doesn't map to uniqueEntrypoints as some might be missing there;
+					//it maps to our parsed runtimeEntries.
+
+					CharString entrypointName = entries.ptr[linkEntry.entrypointId].entry.name;
+
+					U64 l = 0;
+
+					for (; l < uniqueEntrypoints.length; ++l)
+						if (CharString_equalsStringSensitive(entrypointName, uniqueEntrypoints.ptr[l].name))
+							break;
+
+					//TODO: Error handling
+					//if (l == uniqueEntrypoints.length)
+					//	retError(clean, Error_invalidState(
+					//		0,
+					//		"Compiler_compileShaders() somehow an entrypointId was referenced by a linkEntry "
+					//		"that doesn't exist"
+					//	));
+
+					entrypoint = uniqueEntrypoints.ptr[l];
+				}
+
+				else entrypoint.stage = ESHPipelineStage_Count;		//Mark as lib
+
+				tmp.type = ECompileResultType_Binary;
+				if (!Compiler_linkSingle(
+					compiler,
+					inputPath,
+					runtimeEntryId,
+					combinationId,
+					binaryType,
+					inputs,
+					entry.uniforms,
+					uniformData,
+					entrypoint.name,
+					binaryIdentifier.shaderVersion,
+					entrypoint.stage,
+					binaryIdentifier.extensions,
+					job->enableLogging,
+					&tmp.binary,
+					alloc
+				)) {
+					Log_errorLn(alloc, "Link failed for file \"%.*s\"", (int)CharString_length(inputPath), inputPath.ptr);
+					s_uccess = false;
+				}
+
+			} else {
+
+				Log_errorLn(
+					alloc, "Compile failed for file \"%.*s\", invalid link entries",
+					(int)CharString_length(inputPath), inputPath.ptr
+				);
+
+				s_uccess = false;
+				Error_print(alloc, errTemp, ELogLevel_Error, ELogOptions_Default);
+			}
+
+			ListLinkEntry_freeUnderlying(&linkEntries, alloc);
+			ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
+		}
+	}
+
+	if (acq == ELockAcquire_Acquired)
+		SpinLock_unlock(job->lock);
+
+	acq = ELockAcquire_Invalid;
+
 clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(job->lock);
 
 	acq = ELockAcquire_Invalid;
 	CompileResult_free(&tmp, alloc);
+	ListLinkEntry_freeUnderlying(&linkEntries, alloc);
+	ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
 }
 
 Bool Compiler_registerShaderBinary(
@@ -1168,243 +1753,6 @@ clean:
 	return s_uccess;
 }
 
-typedef struct LinkEntry {
-	ListU16 runtimeEntries;
-	Buffer uniformData;
-	U16 combinationId, entrypointId;
-	U8 padding[4];
-} LinkEntry;
-
-TList(LinkEntry);
-TListImpl(LinkEntry);
-
-Bool Compiler_getLinkEntries(
-	Compiler compiler,
-	const ListSHEntryRuntime *runtimeEntries,
-	const SHBinaryIdentifier *binaryIdentifier,
-	ESHBinaryType binaryType,
-	Buffer *binary,
-	ListCompilerEntrypoint *entrypoints,
-	ListLinkEntry *linkEntries,
-	Allocator alloc,
-	Error *e_rr
-) {
-
-	Bool s_uccess = true;
-	ListU16 tmpEntries = (ListU16) { 0 };
-
-	Bool isRt =
-		binaryIdentifier->stageType >= ESHPipelineStage_RtStartExt &&
-		binaryIdentifier->stageType <= ESHPipelineStage_RtEndExt;
-
-	Bool isLib =
-		binaryIdentifier->stageType == ESHPipelineStage_WorkgraphExt ||
-		isRt;
-
-	Bool isLibTarget = isLib;
-	isLib = isLibTarget || (binaryIdentifier->stageType == ESHPipelineStage_Count);
-
-	if (!isLib) {
-		
-		gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
-			entrypoints, (CompilerEntrypoint) { .stage = binaryIdentifier->stageType }, alloc
-		))
-
-		gotoIfError2(clean, CharString_createCopy(
-			binaryIdentifier->entrypoint,
-			alloc,
-			&ListCompilerEntrypoint_last(*entrypoints)->name
-		))
-	}
-	
-	else gotoIfError3(clean, Compiler_getUniqueEntrypoints(compiler, binaryType, *binary, true, entrypoints, alloc, e_rr))
-
-	ListCompilerEntrypoint entrypointL = *entrypoints;
-	ListSHEntryRuntime runtimeEntryL = *runtimeEntries;
-	SHBinaryIdentifier ident = *binaryIdentifier;
-
-	for (U64 i = 0; i < entrypointL.length; ++i) {
-
-		CompilerEntrypoint entrypoint = entrypointL.ptr[i];
-
-		//Find entrypoint in input array and ensure it exists / is the same stage
-
-		U64 j = 0;
-
-		for (; j < runtimeEntryL.length; ++j)
-			if (CharString_equalsStringSensitive(entrypoint.name, runtimeEntryL.ptr[j].entry.name))
-				break;
-
-		if (j == runtimeEntryL.length)
-			retError(clean, Error_invalidState(
-				0, "Compiler_getLinkEntries() had an entrypoint that wasn't defined while parsing but is present in reflection"
-			))
-
-		SHEntryRuntime entry = runtimeEntryL.ptr[j];
-
-		if(entry.entry.stage != entrypoint.stage)
-			retError(clean, Error_invalidState(
-				0, "Compiler_getLinkEntries() had a reflection stage type that mismatched with what was parsed"
-			))
-
-		//Ensure we're actually present for what we're currently compiling and that we do really need linking (otherwise skip)
-		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
-		//However, if you have a mix of extensions and defines, then some entrypoints might not need to be linked again.
-		//Example: raygen with both SER and no SER. This would only be linked once per compilation, but any other shaders should exclude this.
-		//			(We don't want to have 2x hit shaders included while only raygen needs these compilations)
-
-		//Check extensions
-
-		Bool containsExtension = !ident.extensions && !entry.extensions.length;
-		U16 extensionId = 0;
-
-		for(U64 k = 0; k < entry.extensions.length; ++k)
-			if (entry.extensions.ptr[k] == (U32) ident.extensions) {
-				containsExtension = true;
-				extensionId = (U16) k;
-				break;
-			}
-
-		if (!containsExtension)			//Extension not found
-			continue;
-
-		//Check shader versions
-
-		Bool containsShaderVersion = ident.shaderVersion == OISH_SHADER_MODEL(6, 5) && !entry.shaderVersions.length;
-		U16 shaderVersion = 0;
-
-		for(U64 k = 0; k < entry.shaderVersions.length; ++k)
-			if (entry.shaderVersions.ptr[k] == ident.shaderVersion) {
-				containsShaderVersion = true;
-				shaderVersion = (U16) k;
-				break;
-			}
-
-		if (!containsShaderVersion)		//Shader model not found
-			continue;
-
-		//Check defines
-
-		Bool containsDefines = !ident.defines.length && !entry.definesPerCompilation.length;
-		U16 defineId = 0;
-
-		for (U64 k = 0, l = 0; k < entry.definesPerCompilation.length; ++k) {
-
-			U64 m = entry.definesPerCompilation.ptr[k];
-
-			ListCharString tmp = (ListCharString) { 0 };
-			gotoIfError2(clean, ListCharString_createRefConst(entry.defineNameValues.ptr + (l << 1), m << 1, &tmp))
-
-			Bool eq = tmp.length == ident.defines.length;		//TODO: ListCharString_equalsUnderlying
-
-			if (eq)
-				for (U64 n = 0; n < tmp.length; ++n)
-					if (!CharString_equalsStringSensitive(tmp.ptr[n], ident.defines.ptr[n])) {
-						eq = false;
-						break;
-					}
-
-			if (eq) {
-				defineId = (U16) k;
-				containsDefines = true;
-				break;
-			}
-
-			l += m;
-		}
-
-		if (!containsDefines)			//Defines not found
-			continue;
-
-		//Go through all uniforms defined by the runtime, since there may be multiple
-
-		U16 shaderVersions = (U16)U64_max(entry.shaderVersions.length, 1);
-		U16 extensions = (U16)U64_max(entry.extensions.length, 1);
-		U16 defines = (U16)U64_max(entry.definesPerCompilation.length, 1);
-		U64 uniformCombos = U64_safeDiv(entry.uniformData.length, entry.uniformStride);
-
-		for (U64 k = 0; k < U64_max(1, uniformCombos); ++k) {
-
-			U64 combinationId = ((k * defines + defineId) * extensions + extensionId) * shaderVersions + shaderVersion;
-
-			LinkEntry linkEntry = (LinkEntry) {
-				.uniformData = Buffer_createRefConst(entry.uniformData.ptr + entry.uniformStride * k, entry.uniformStride),
-				.combinationId = (U16) combinationId
-			};
-
-			if (!isLibTarget) {
-
-				linkEntry.entrypointId = (U16)j;
-
-				U64 l = 0;
-
-				for (; l < runtimeEntryL.length; ++l)
-					if (CharString_equalsStringSensitive(runtimeEntryL.ptr[l].entry.name, entrypoint.name))
-						break;
-
-				if(l == runtimeEntryL.length)
-					retError(clean, Error_invalidState(
-						0, "Compiler_getLinkEntries() had an entrypoint that couldn't be found in runtime entry"
-					))
-
-				//The ptr below is the same as linkEntry.entrypointId, except can be used as ptr to avoid intermediate ListU16
-				gotoIfError2(clean, ListU16_createRefConst(&runtimeEntryL.ptr[l].entry.idOrPadding, 1, &linkEntry.runtimeEntries))
-			}
-
-			else {
-
-				//If RT/workgraph shader, try to find a previous linkEntry
-				//In that case, we just reference the same binary.
-
-				U64 l = 0;
-
-				for (; l < linkEntries->length; ++l) {
-
-					LinkEntry linkEntry2 = linkEntries->ptr[l];
-
-					if (linkEntry2.entrypointId != U16_MAX)
-						continue;
-
-					if (!Buffer_eq(linkEntry.uniformData, linkEntry2.uniformData))
-						continue;
-
-					break;
-				}
-
-				if (l != linkEntries->length) {
-					gotoIfError2(clean, ListU16_pushBack(&linkEntries->ptrNonConst[k].runtimeEntries, (U16)j, alloc))
-					continue;
-				}
-
-				linkEntry.entrypointId = U16_MAX;
-				gotoIfError2(clean, ListU16_pushBack(&tmpEntries, (U16)j, alloc))
-				linkEntry.runtimeEntries = tmpEntries;
-			}
-
-			gotoIfError2(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, alloc))
-			tmpEntries = (ListU16) { 0 };	//Moved
-		}
-	}
-
-clean:
-	ListU16_free(&tmpEntries, alloc);
-	return s_uccess;
-}
-
-void ListLinkEntry_freeUnderlying(ListLinkEntry *entries, Allocator alloc) {
-
-	if (!entries)
-		return;
-
-	for (U64 i = 0; i < entries->length; ++i) {
-		LinkEntry *entry = &entries->ptrNonConst[i];
-		Buffer_free(&entry->uniformData, alloc);
-		ListU16_free(&entry->runtimeEntries, alloc);
-	}
-
-	ListLinkEntry_free(entries, alloc);
-}
-
 Bool Compiler_compileShaders(
 	ListCharString allFiles,
 	ListCharString allShaderText,
@@ -1425,9 +1773,12 @@ Bool Compiler_compileShaders(
 	ListCompiler compilers = (ListCompiler) { 0 };
 	ListListSHEntryRuntime shEntries = (ListListSHEntryRuntime) { 0 };
 
-	ListU64 shEntryIds = (ListU64) { 0 };
+	ListU64 shEntryIdsIntermediate = (ListU64) { 0 };					//Precompile
+	ListU64 shEntryIdsIntermediate1 = (ListU64) { 0 };					//Pre-link
+	ListU64 shEntryIds = (ListU64) { 0 };								//Post-link
 	ListU64 shEntryIdsSorted = (ListU64) { 0 };
-	ListCompileResult compileResults = (ListCompileResult) { 0 };
+	ListCompileResult compileResults = (ListCompileResult) { 0 };		//Post-link
+	ListCompileResult compileResultsTemp = (ListCompileResult) { 0 };	//Pre-link
 	CompileResult tempResult = (CompileResult) { 0 };
 	CompileResult tempResult2 = (CompileResult) { 0 };
 
@@ -1460,7 +1811,13 @@ Bool Compiler_compileShaders(
 
 	if (threadCount > 1) {
 
-		U64 counter = 0, threadCounter = 0, completedCounter = 0, counterCompiledBinaries = 0;
+		threadCount = 1;		//No support yet, test TODO: Remove
+
+		U64 counter = 0;
+		U64 threadCounter = 0;
+		U64 completedCounter = 0;
+		U64 counterCompiledBinaries = 0;
+		U64 counterLinkedBinaries = 0;
 
 		gotoIfError2(clean, ListThread_resize(&threads, threadCount, alloc))
 		gotoIfError2(clean, ListCompiler_resize(&compilers, threadCount, alloc))
@@ -1478,13 +1835,17 @@ Bool Compiler_compileShaders(
 			.compilers = compilers,
 
 			.shEntries = &shEntries,
+			.shEntryIdsIntermediate = &shEntryIdsIntermediate,
+			.shEntryIdsIntermediate1 = &shEntryIdsIntermediate1,
 			.shEntryIds = &shEntryIds,
 			.compileResults = &compileResults,
+			.compileResultsTemp = &compileResultsTemp,
 
 			.lock = &lock,
 			.counter = &counter,
 			.completedCounter = &completedCounter,
 			.counterCompiledBinaries = &counterCompiledBinaries,
+			.counterLinkedBinaries = &counterLinkedBinaries,
 			.threadCounter = &threadCounter,
 			.success = &s_uccess,
 
@@ -1659,7 +2020,6 @@ Bool Compiler_compileShaders(
 		for (U64 i = 0; i < allFiles.length; ++i) {
 
 			//Preprocess to get information necessary for real compiles.
-			//Though this is generally enough info for includes, (most) reflection and preprocessing
 
 			if(!Compiler_precompileShader(
 				compiler, allCompileOutputs.ptr[i],
@@ -1683,313 +2043,310 @@ Bool Compiler_compileShaders(
 
 			//Finish by going over all individual runtime entries and outputting it as a raw binary
 
-			if (compileType == ECompileType_Compile) {
+			if (!runtimeEntries.length) {
 
-				if (!runtimeEntries.length) {
+				if(!ignoreEmptyFiles) {
 
-					if(!ignoreEmptyFiles) {
+					if(enableLogging)
+						Log_errorLn(
+							alloc, "Precompile couldn't find entrypoints for file \"%.*s\"",
+							(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
+						);
 
-						if(enableLogging)
-							Log_errorLn(
-								alloc, "Precompile couldn't find entrypoints for file \"%.*s\"",
-								(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
-							);
-
-						s_uccess = false;
-					}
-
-					ListSHEntryRuntime_freeUnderlying(&runtimeEntries, alloc);
-					continue;
+					s_uccess = false;
 				}
 
-				U32 crc32c = Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[i]));
+				ListSHEntryRuntime_freeUnderlying(&runtimeEntries, alloc);
+				continue;
+			}
 
-				gotoIfError3(clean, SHFile_create(
-					ESHSettingsFlags_None,
-					OXC3_VERSION,
-					crc32c,
+			U32 crc32c = Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[i]));
+
+			gotoIfError3(clean, SHFile_create(
+				ESHSettingsFlags_None,
+				OXC3_VERSION,
+				crc32c,
+				alloc,
+				&shFile,
+				e_rr
+			))
+
+			gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, alloc, e_rr))
+
+			//Only for non lib entries, and then once per lib entry
+
+			Bool didSucceed = true;
+
+			for(U64 j = 0; j < compileCombinations.length; ++j) {
+
+				U16 runtimeEntryId = (U16) (compileCombinations.ptr[j] >> 16);
+				U16 combinationId  = (U16) compileCombinations.ptr[j];
+
+				Bool isRt = combinationId >> 15;
+				Bool isGfxOrComp = runtimeEntryId >> 15;
+
+				runtimeEntryId &= (U16) I16_MAX;
+				combinationId  &= (U16) I16_MAX;
+
+				SHEntryRuntime runtimeEntry = runtimeEntries.ptr[runtimeEntryId];
+
+				//Compile and return error if failed
+
+				ESHBinaryType binaryType = allCompileOutputs.ptr[i];
+
+				if(!Compiler_compileShaderSingle(
+					compiler,
+					binaryType,
+					isDebug,
+					isRt,
+					isGfxOrComp,
+					allFiles.ptr[i],
+					allShaderText.ptr[i],
+					&tempResult,
+					runtimeEntries,
+					runtimeEntryId,
+					combinationId,
+					includeDir,
+					enableLogging,
+					alloc
+				)) {
+					s_uccess = false;
+
+					if(enableLogging)
+						Log_errorLn(
+							alloc, "Compile failed for file \"%.*s\"",
+							(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
+						);
+
+					didSucceed = false;
+					CompileResult_free(&tempResult, alloc);
+					break;
+				}
+
+				SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier){ 0 };
+				gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
+					&runtimeEntry, combinationId, &binaryIdentifier, e_rr
+				))
+
+				//Lib files need to be specialized per shader annotation if uniforms are present
+				//or per entrypoint for graphics shaders.
+				//For non libs this wil just loop once and only call process.
+				//It uses both the oxc data (uniforms, defines, etc.) and binary data to know the relevant entrypoints.
+				//For example; it might compile a function, but it's unused or a function is not present in the final binary.
+
+				gotoIfError3(clean, Compiler_getLinkEntries(
+					compiler,
+					&runtimeEntries,
+					&binaryIdentifier,
+					binaryType,
+					&tempResult.binary,
+					&uniqueEntrypoints,
+					&linkEntries,
 					alloc,
-					&shFile,
 					e_rr
 				))
 
-				gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, alloc, e_rr))
+				for (U64 k = 0; k < linkEntries.length; ++k) {
 
-				//Only for non lib entries, and then once per lib entry
+					LinkEntry linkEntry = linkEntries.ptr[k];
+					Buffer uniformData = linkEntry.uniformData;
 
-				Bool didSucceed = true;
+					U16 currentCombinationId = linkEntry.combinationId;
 
-				for(U64 j = 0; j < compileCombinations.length; ++j) {
-
-					U16 runtimeEntryId = (U16) (compileCombinations.ptr[j] >> 16);
-					U16 combinationId  = (U16) compileCombinations.ptr[j];
-
-					Bool isRt = combinationId >> 15;
-					Bool isGfxOrComp = runtimeEntryId >> 15;
-
-					runtimeEntryId &= (U16) I16_MAX;
-					combinationId  &= (U16) I16_MAX;
-
-					SHEntryRuntime runtimeEntry = runtimeEntries.ptr[runtimeEntryId];
-
-					//Compile and return error if failed
-
-					ESHBinaryType binaryType = allCompileOutputs.ptr[i];
-
-					if(!Compiler_compileShaderSingle(
-						compiler,
-						binaryType,
-						isDebug,
-						isRt,
-						isGfxOrComp,
-						allFiles.ptr[i],
-						allShaderText.ptr[i],
-						&tempResult,
-						runtimeEntries,
-						runtimeEntryId,
-						combinationId,
-						includeDir,
-						enableLogging,
-						alloc
-					)) {
-						s_uccess = false;
-
-						if(enableLogging)
-							Log_errorLn(
-								alloc, "Compile failed for file \"%.*s\"",
-								(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
-							);
-
-						didSucceed = false;
-						CompileResult_free(&tempResult, alloc);
-						break;
-					}
-
-					SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier){ 0 };
+					binaryIdentifier = (SHBinaryIdentifier){ 0 };
 					gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
-						&runtimeEntry, combinationId, &binaryIdentifier, e_rr
-					))
-						
-					//Lib files need to be specialized per shader annotation if uniforms are present
-					//or per entrypoint for graphics shaders.
-					//For non libs this wil just loop once and only call process.
-					//It uses both the oxc data (uniforms, defines, etc.) and binary data to know the relevant entrypoints.
-					//For example; it might compile a function, but it's unused or a function is not present in the final binary.
+						&runtimeEntry, currentCombinationId, &binaryIdentifier, e_rr
+					));
 
-					gotoIfError3(clean, Compiler_getLinkEntries(
-						compiler,
-						&runtimeEntries,
-						&binaryIdentifier,
-						binaryType,
-						&tempResult.binary,
-						&uniqueEntrypoints,
-						&linkEntries,
-						alloc,
-						e_rr
-					))
+					ListBuffer inputs = (ListBuffer) { 0 };
+					gotoIfError2(clean, ListBuffer_createRefConst(&tempResult.binary, 1, &inputs));
 
-					for (U64 k = 0; k < linkEntries.length; ++k) {
+					Bool isShaderAnnotation = runtimeEntry.isShaderAnnotation;
 
-						LinkEntry linkEntry = linkEntries.ptr[k];
-						Buffer uniformData = linkEntry.uniformData;
+					if(isShaderAnnotation) {
 
-						U16 currentCombinationId = linkEntry.combinationId;
-
-						binaryIdentifier = (SHBinaryIdentifier){ 0 };
-						gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
-							&runtimeEntry, currentCombinationId, &binaryIdentifier, e_rr
-						))
-
-						ListBuffer inputs = (ListBuffer) { 0 };
-						gotoIfError2(clean, ListBuffer_createRefConst(&tempResult.binary, 1, &inputs))
-
-						Bool isShaderAnnotation = runtimeEntry.isShaderAnnotation;
-
-						if(isShaderAnnotation) {
-
-							CompilerEntrypoint entry = (CompilerEntrypoint) { 0 }; 
+						CompilerEntrypoint entry = (CompilerEntrypoint) { 0 }; 
 							
-							if (linkEntry.entrypointId != U16_MAX) {
+						if (linkEntry.entrypointId != U16_MAX) {
 
-								//entrypointId doesn't map to uniqueEntrypoints as some might be missing there;
-								//it maps to our parsed runtimeEntries.
+							//entrypointId doesn't map to uniqueEntrypoints as some might be missing there;
+							//it maps to our parsed runtimeEntries.
 
-								CharString entrypointName = runtimeEntries.ptr[linkEntry.entrypointId].entry.name;
+							CharString entrypointName = runtimeEntries.ptr[linkEntry.entrypointId].entry.name;
 
-								U64 l = 0;
+							U64 l = 0;
 
-								for (; l < uniqueEntrypoints.length; ++l)
-									if (CharString_equalsStringSensitive(entrypointName, uniqueEntrypoints.ptr[l].name))
-										break;
+							for (; l < uniqueEntrypoints.length; ++l)
+								if (CharString_equalsStringSensitive(entrypointName, uniqueEntrypoints.ptr[l].name))
+									break;
 
-								if(l == uniqueEntrypoints.length)
-									retError(clean, Error_invalidState(
-										0,
-										"Compiler_compileShaders() somehow an entrypointId was referenced by a linkEntry "
-										"that doesn't exist"
-									))
+							if(l == uniqueEntrypoints.length)
+								retError(clean, Error_invalidState(
+									0,
+									"Compiler_compileShaders() somehow an entrypointId was referenced by a linkEntry "
+									"that doesn't exist"
+								))
 
-								entry = uniqueEntrypoints.ptr[l];
-							}
-
-							else entry.stage = ESHPipelineStage_Count;		//Mark as lib
-							
-							tempResult2.type = ECompileResultType_Binary;
-
-							gotoIfError3(clean, Compiler_linkSingle(
-								compiler,
-								allFiles.ptr[i],
-								runtimeEntryId,
-								currentCombinationId,
-								binaryType,
-								inputs,
-								runtimeEntry.uniforms,
-								uniformData,
-								entry.name,
-								binaryIdentifier.shaderVersion,
-								entry.stage,
-								binaryIdentifier.extensions,
-								enableLogging,
-								&tempResult2.binary,
-								alloc
-							))
-
-							binaryIdentifier.stageType = entry.stage;
-
-							Bool currGfxOrComp = !(
-								(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
-								entry.stage >= ESHPipelineStage_Count ||
-								entry.stage == ESHPipelineStage_WorkgraphExt
-							);
-
-							if(currGfxOrComp)
-								binaryIdentifier.entrypoint = CharString_createRefStrConst(entry.name);
-
-							runtimeEntry.isShaderAnnotation = !currGfxOrComp;
+							entry = uniqueEntrypoints.ptr[l];
 						}
-								
-						//Process reflection and strip debug/reflection info if necessary
 
-						gotoIfError3(clean, Compiler_processSingle(
+						else entry.stage = ESHPipelineStage_Count;		//Mark as lib
+							
+						tempResult2.type = ECompileResultType_Binary;
+
+						gotoIfError3(clean, Compiler_linkSingle(
 							compiler,
 							allFiles.ptr[i],
 							runtimeEntryId,
 							currentCombinationId,
 							binaryType,
-							tempResult2.binary.ptr ? &tempResult2 : &tempResult,
-							isDebug,
-							binaryIdentifier,
-							&lock,
-							runtimeEntries,
-							isShaderAnnotation,
+							inputs,
+							runtimeEntry.uniforms,
+							uniformData,
+							entry.name,
+							binaryIdentifier.shaderVersion,
+							entry.stage,
+							binaryIdentifier.extensions,
 							enableLogging,
-							alloc,
-							e_rr
+							&tempResult2.binary,
+							alloc
 						))
 
-						if (linkEntry.entrypointId == U16_MAX)
-							binaryIdentifier.stageType = isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
+						binaryIdentifier.stageType = entry.stage;
 
-						U16 binaryId = (U16) shFile.binaries.length;
+						Bool currGfxOrComp = !(
+							(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
+							entry.stage >= ESHPipelineStage_Count ||
+							entry.stage == ESHPipelineStage_WorkgraphExt
+						);
 
-						gotoIfError3(clean, Compiler_registerShaderBinary(
-							&shFile,
-							tempResult2.binary.ptr ? &tempResult2 : &tempResult,
-							allCompileOutputs.ptr[i],
-							allFiles.ptr[i],
-							&runtimeEntry,
-							&binaryIdentifier,
-							alloc,
-							e_rr
-						))
+						if(currGfxOrComp)
+							binaryIdentifier.entrypoint = CharString_createRefStrConst(entry.name);
 
-						for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)		//Link runtime entry to binary
-							gotoIfError2(clean, ListU32_pushBack(
-								&binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc
-							))
-
-						runtimeEntry.isShaderAnnotation = isShaderAnnotation;
-						CompileResult_free(&tempResult2, alloc);
+						runtimeEntry.isShaderAnnotation = !currGfxOrComp;
 					}
+								
+					//Process reflection and strip debug/reflection info if necessary
 
-					ListLinkEntry_freeUnderlying(&linkEntries, alloc);
-					ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
-					CompileResult_free(&tempResult, alloc);
+					gotoIfError3(clean, Compiler_processSingle(
+						compiler,
+						allFiles.ptr[i],
+						runtimeEntryId,
+						currentCombinationId,
+						binaryType,
+						tempResult2.binary.ptr ? &tempResult2 : &tempResult,
+						isDebug,
+						binaryIdentifier,
+						&lock,
+						runtimeEntries,
+						isShaderAnnotation,
+						enableLogging,
+						alloc,
+						e_rr
+					))
+
+					if (linkEntry.entrypointId == U16_MAX)
+						binaryIdentifier.stageType = isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
+
+					U16 binaryId = (U16) shFile.binaries.length;
+
+					gotoIfError3(clean, Compiler_registerShaderBinary(
+						&shFile,
+						tempResult2.binary.ptr ? &tempResult2 : &tempResult,
+						allCompileOutputs.ptr[i],
+						allFiles.ptr[i],
+						&runtimeEntry,
+						&binaryIdentifier,
+						alloc,
+						e_rr
+					))
+
+					for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)		//Link runtime entry to binary
+						gotoIfError2(clean, ListU32_pushBack(
+							&binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc
+						))
+
+					runtimeEntry.isShaderAnnotation = isShaderAnnotation;
+					CompileResult_free(&tempResult2, alloc);
 				}
 
-				if(!ListU32_sort(binaryIndices))
-					retError(clean, Error_invalidState(0, "Compiler_compileShaders() sort failed"))
+				ListLinkEntry_freeUnderlying(&linkEntries, alloc);
+				ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
+				CompileResult_free(&tempResult, alloc);
+			}
 
-				//Link entrypoint to binaries
+			if(!ListU32_sort(binaryIndices))
+				retError(clean, Error_invalidState(0, "Compiler_compileShaders() sort failed"))
 
-				if (didSucceed)
-					gotoIfError3(clean, Compiler_registerShaderEntries(&shFile, runtimeEntries, binaryIndices, alloc, e_rr))
+			//Link entrypoint to binaries
 
-				//Write to disk and free temp data
+			if (didSucceed)
+				gotoIfError3(clean, Compiler_registerShaderEntries(&shFile, runtimeEntries, binaryIndices, alloc, e_rr))
 
-				if (didSucceed) {
+			//Write to disk and free temp data
 
-					//Merge with previous if present
+			if (didSucceed) {
 
-					if (
-						i &&
-						CharString_equalsStringSensitive(allOutputs.ptr[i - 1], allOutputs.ptr[i])
-					) {
-						SHFile tmp = (SHFile) { 0 };
-						gotoIfError3(clean, SHFile_combine(previous, shFile, alloc, &tmp, e_rr))
-						SHFile_free(&previous, alloc);
-						previous = tmp;
-					}
+				//Merge with previous if present
 
-					else errorInPrevious = false;		//Reset error report
+				if (
+					i &&
+					CharString_equalsStringSensitive(allOutputs.ptr[i - 1], allOutputs.ptr[i])
+				) {
+					SHFile tmp = (SHFile) { 0 };
+					gotoIfError3(clean, SHFile_combine(previous, shFile, alloc, &tmp, e_rr))
+					SHFile_free(&previous, alloc);
+					previous = tmp;
+				}
 
-					if(
-						i + 1 == allOutputs.length ||
-						!CharString_equalsStringSensitive(allOutputs.ptr[i + 1], allOutputs.ptr[i])
-					) {
+				else errorInPrevious = false;		//Reset error report
 
-						if(errorInPrevious) {
-							if(enableLogging)
-								Log_warnLn(alloc, "One of the previous oiSH compilations failed, not producing a binary");
-						}
+				if(
+					i + 1 == allOutputs.length ||
+					!CharString_equalsStringSensitive(allOutputs.ptr[i + 1], allOutputs.ptr[i])
+				) {
 
-						else {
-
-							if(extraWarnings)
-								gotoIfError3(clean, Compiler_handleExtraWarnings(
-									previous.entries.length ? previous : shFile, extraWarnings, alloc, e_rr
-								))
-
-							if(previous.entries.length)
-								gotoIfError3(clean, SHFile_write(previous, alloc, &temp, e_rr))
-
-							else gotoIfError3(clean, SHFile_write(shFile, alloc, &temp, e_rr))
-
-							if(allBuffers) {
-								allBuffers->ptrNonConst[i] = temp;
-								temp = Buffer_createNull();		//Moved
-							}
-
-							else {
-								gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 0, 0, 100 * MS, true, alloc, e_rr))
-								Buffer_free(&temp, alloc);
-							}
-						}
+					if(errorInPrevious) {
+						if(enableLogging)
+							Log_warnLn(alloc, "One of the previous oiSH compilations failed, not producing a binary");
 					}
 
 					else {
-						SHFile_free(&previous, alloc);
-						previous = shFile;
-						shFile = (SHFile) { 0 };
+
+						if(extraWarnings)
+							gotoIfError3(clean, Compiler_handleExtraWarnings(
+								previous.entries.length ? previous : shFile, extraWarnings, alloc, e_rr
+							))
+
+						if(previous.entries.length)
+							gotoIfError3(clean, SHFile_write(previous, alloc, &temp, e_rr))
+
+						else gotoIfError3(clean, SHFile_write(shFile, alloc, &temp, e_rr))
+
+						if(allBuffers) {
+							allBuffers->ptrNonConst[i] = temp;
+							temp = Buffer_createNull();		//Moved
+						}
+
+						else {
+							gotoIfError3(clean, File_write(temp, allOutputs.ptr[i], 0, 0, 100 * MS, true, alloc, e_rr))
+							Buffer_free(&temp, alloc);
+						}
 					}
 				}
 
-				else errorInPrevious = true;
-
-				ListU32_free(&compileCombinations, alloc);
-				ListU32_clear(&binaryIndices);
-				SHFile_free(&shFile, alloc);
+				else {
+					SHFile_free(&previous, alloc);
+					previous = shFile;
+					shFile = (SHFile) { 0 };
+				}
 			}
+
+			else errorInPrevious = true;
+
+			ListU32_free(&compileCombinations, alloc);
+			ListU32_clear(&binaryIndices);
+			SHFile_free(&shFile, alloc);
 
 			ListSHEntryRuntime_freeUnderlying(&runtimeEntries, alloc);
 		}
@@ -2020,8 +2377,11 @@ clean:
 
 	ListListSHEntryRuntime_freeUnderlying(&shEntries, alloc);
 	ListU64_free(&shEntryIds, alloc);
+	ListU64_free(&shEntryIdsIntermediate, alloc);
+	ListU64_free(&shEntryIdsIntermediate1, alloc);
 	ListU64_free(&shEntryIdsSorted, alloc);
 	ListCompileResult_freeUnderlying(&compileResults, alloc);
+	ListCompileResult_freeUnderlying(&compileResultsTemp, alloc);
 	CompileResult_free(&tempResult, alloc);
 	CompileResult_free(&tempResult2, alloc);
 
