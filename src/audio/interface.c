@@ -30,10 +30,7 @@ const C8 *EAudioApi_name[EAudioApi_Count] = {
 	"OpenAL"
 };
 
-Error AudioInterfaceRef_dec(AudioInterfaceRef **interf) {
-	return !RefPtr_dec(interf) ?
-		Error_invalidOperation(0, "AudioInterfaceRef_dec()::interf is invalid") : Error_none();
-}
+void AudioInterfaceRef_dec(AudioInterfaceRef **interf) { RefPtr_dec(interf); }
 
 Error AudioInterfaceRef_inc(AudioInterfaceRef *interf) {
 	return !RefPtr_inc(interf) ?

@@ -57,10 +57,7 @@ void *Pipeline_infoOffset(Pipeline *pipeline) {
 	return (U8*)(pipeline + 1) + GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline;
 }
 
-Error PipelineRef_dec(PipelineRef **pipeline) {
-	return !RefPtr_dec(pipeline) ?
-		Error_invalidOperation(0, "PipelineRef_dec():: pipeline invalid") : Error_none();
-}
+void PipelineRef_dec(PipelineRef **pipeline) { RefPtr_dec(pipeline); }
 
 Error PipelineRef_inc(PipelineRef *pipeline) {
 	return !RefPtr_inc(pipeline) ?

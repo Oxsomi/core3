@@ -47,9 +47,7 @@ TListImpl(ClearImageCmd);
 TListImpl(AttachmentInfo);
 TListImpl(CopyImageRegion);
 
-Error CommandListRef_dec(CommandListRef **cmd) {
-	return !RefPtr_dec(cmd) ? Error_invalidOperation(0, "CommandListRef_dec()::cmd invalid") : Error_none();
-}
+void CommandListRef_dec(CommandListRef **cmd) { RefPtr_dec(cmd); }
 
 Error CommandListRef_inc(CommandListRef *cmd) {
 	return !RefPtr_inc(cmd) ? Error_invalidOperation(0, "CommandListRef_inc()::cmd invalid") : Error_none();

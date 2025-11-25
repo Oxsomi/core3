@@ -41,10 +41,7 @@ TListImpl(DescriptorTableResourceRef);
 TListImpl(Descriptor);
 TListImpl(DescriptorStackTrace);
 
-Error DescriptorTableRef_dec(DescriptorTableRef **table) {
-	return !RefPtr_dec(table) ?
-		Error_invalidOperation(0, "DescriptorTableRef_dec()::table is required") : Error_none();
-}
+void DescriptorTableRef_dec(DescriptorTableRef **table) { RefPtr_dec(table); }
 
 Error DescriptorTableRef_inc(DescriptorTableRef *table) {
 	return !RefPtr_inc(table) ?

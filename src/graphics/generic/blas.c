@@ -29,9 +29,7 @@
 #include "types/container/buffer.h"
 #include "types/base/constants.h"
 
-Error BLASRef_dec(BLASRef **blas) {
-	return !RefPtr_dec(blas) ? Error_invalidOperation(0, "BLASRef_dec()::blas is required") : Error_none();
-}
+void BLASRef_dec(BLASRef **blas) { RefPtr_dec(blas); }
 
 Error BLASRef_inc(BLASRef *blas) {
 	return !RefPtr_inc(blas) ? Error_invalidOperation(0, "BLASRef_inc()::blas is required") : Error_none();

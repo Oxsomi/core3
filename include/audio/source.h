@@ -64,7 +64,7 @@ typedef RefPtr AudioSourceRef;
 #define AudioSource_ext(ptr, T) (!ptr ? NULL : (T##AudioSource*)(ptr + 1))		//impl
 #define AudioSourceRef_ptr(ptr) RefPtr_data(ptr, AudioSource)
 
-Error AudioSourceRef_dec(AudioSourceRef **source);
+void AudioSourceRef_dec(AudioSourceRef **source);
 Error AudioSourceRef_inc(AudioSourceRef *source);
 
 Bool AudioDeviceRef_createSource(

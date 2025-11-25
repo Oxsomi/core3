@@ -27,10 +27,7 @@
 #include "types/base/error.h"
 #include "types/container/string.h"
 
-Error RenderTextureRef_dec(RenderTextureRef **renderTexture) {
-	return !RefPtr_dec(renderTexture) ?
-		Error_invalidOperation(0, "RenderTextureRef_dec()::renderTexture is invalid") : Error_none();
-}
+void RenderTextureRef_dec(RenderTextureRef **renderTexture) { RefPtr_dec(renderTexture); }
 
 Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
 	return !RefPtr_inc(renderTexture) ?

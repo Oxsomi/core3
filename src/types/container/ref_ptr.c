@@ -62,23 +62,20 @@ Bool RefPtr_inc(RefPtr *ptr) {
 	return true;
 }
 
-Bool RefPtr_dec(RefPtr **pptr) {
+void RefPtr_dec(RefPtr **pptr) {
 
 	if(!pptr || !*pptr)
-		return true;
+		return;
 
 	RefPtr *ptr = *pptr;
 
-	Bool b = true;
-
 	if(!AtomicI64_dec(&ptr->refCount)) {
 
-		b = ptr->free(RefPtr_data(ptr, void), ptr->alloc);
+		ptr->free(RefPtr_data(ptr, void), ptr->alloc);
 
 		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + ptr->length);
-		b &= Buffer_free(&orig, ptr->alloc);
+		Buffer_free(&orig, ptr->alloc);
 	}
 
 	*pptr = NULL;
-	return b;
 }

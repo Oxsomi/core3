@@ -25,10 +25,7 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "types/container/string.h"
 
-Error DescriptorHeapRef_dec(DescriptorHeapRef **heap) {
-	return !RefPtr_dec(heap) ?
-		Error_invalidOperation(0, "DescriptorHeapRef_dec()::heap is required") : Error_none();
-}
+void DescriptorHeapRef_dec(DescriptorHeapRef **heap) { RefPtr_dec(heap); }
 
 Error DescriptorHeapRef_inc(DescriptorHeapRef *heap) {
 	return !RefPtr_inc(heap) ?

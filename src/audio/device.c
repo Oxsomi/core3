@@ -32,10 +32,7 @@
 
 TListImpl(AudioDeviceInfo);
 
-Error AudioDeviceRef_dec(AudioDeviceRef **dev) {
-	return !RefPtr_dec(dev) ?
-		Error_invalidOperation(0, "AudioDeviceRef_dec()::dev is invalid") : Error_none();
-}
+void AudioDeviceRef_dec(AudioDeviceRef **dev) { RefPtr_dec(dev); }
 
 Error AudioDeviceRef_inc(AudioDeviceRef *dev) {
 	return !RefPtr_inc(dev) ?

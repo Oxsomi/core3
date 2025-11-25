@@ -47,7 +47,7 @@ typedef struct DeviceTexture {
 
 #define DeviceTextureRef_ptr(ptr) RefPtr_data(ptr, DeviceTexture)
 
-Error DeviceTextureRef_dec(DeviceTextureRef **texture);
+void DeviceTextureRef_dec(DeviceTextureRef **texture);
 Error DeviceTextureRef_inc(DeviceTextureRef *texture);
 
 Error GraphicsDeviceRef_createTexture(

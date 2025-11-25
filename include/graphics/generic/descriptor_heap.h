@@ -75,7 +75,7 @@ typedef struct DescriptorHeap {
 #define DescriptorHeap_ext(ptr, T) (!ptr ? NULL : (T##DescriptorHeap*)(ptr + 1))		//impl
 #define DescriptorHeapRef_ptr(ptr) RefPtr_data(ptr, DescriptorHeap)
 
-Error DescriptorHeapRef_dec(DescriptorHeapRef **heap);
+void DescriptorHeapRef_dec(DescriptorHeapRef **heap);
 Error DescriptorHeapRef_inc(DescriptorHeapRef *heap);
 
 Error GraphicsDeviceRef_createDescriptorHeap(

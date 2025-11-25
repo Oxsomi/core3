@@ -180,7 +180,7 @@ typedef RefPtr TLASRef;
 #define TLAS_ext(ptr, T) (!ptr ? NULL : (T##TLAS*)(ptr + 1))		//impl
 #define TLASRef_ptr(ptr) RefPtr_data(ptr, TLAS)
 
-Error TLASRef_dec(TLASRef **tlas);
+void TLASRef_dec(TLASRef **tlas);
 Error TLASRef_inc(TLASRef *tlas);
 
 Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result);

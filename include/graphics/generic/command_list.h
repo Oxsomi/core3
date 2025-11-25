@@ -83,7 +83,7 @@ typedef RefPtr CommandListRef;
 #define CommandList_ext(ptr, T) (!ptr ? NULL : (T##CommandList*)(ptr + 1))		//impl
 #define CommandListRef_ptr(ptr) RefPtr_data(ptr, CommandList)
 
-Error CommandListRef_dec(CommandListRef **cmd);
+void CommandListRef_dec(CommandListRef **cmd);
 Error CommandListRef_inc(CommandListRef *cmd);
 
 Error GraphicsDeviceRef_createCommandList(

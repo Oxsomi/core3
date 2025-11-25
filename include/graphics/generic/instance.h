@@ -71,7 +71,7 @@ typedef struct ListGraphicsDeviceInfo ListGraphicsDeviceInfo;
 #define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))		//impl
 #define GraphicsInstanceRef_ptr(ptr) RefPtr_data(ptr, GraphicsInstance)
 
-Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
+void GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
 Bool GraphicsInterface_create(Error *e_rr);				//Prepare interface to query info about supported APIs

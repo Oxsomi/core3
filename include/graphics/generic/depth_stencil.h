@@ -36,7 +36,7 @@ typedef RefPtr DescriptorTableRef;
 
 #define DepthStencilRef_ptr(ptr) RefPtr_data(ptr, DepthStencil)
 
-Error DepthStencilRef_dec(DepthStencilRef **depthStencil);
+void DepthStencilRef_dec(DepthStencilRef **depthStencil);
 Error DepthStencilRef_inc(DepthStencilRef *depthStencil);
 
 Error GraphicsDeviceRef_createDepthStencil(

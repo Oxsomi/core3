@@ -31,10 +31,7 @@
 #include "types/container/string.h"
 #include "formats/oiSH/registers.h"
 
-Error SamplerRef_dec(SamplerRef **sampler) {
-	return !RefPtr_dec(sampler) ?
-		Error_invalidOperation(0, "SamplerRef_dec()::sampler is required") : Error_none();
-}
+void SamplerRef_dec(SamplerRef **sampler) { RefPtr_dec(sampler); }
 
 Error SamplerRef_inc(SamplerRef *sampler) {
 	return !RefPtr_inc(sampler) ?

@@ -33,10 +33,7 @@
 
 TListImpl(DevicePendingRange);
 
-Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
-	return !RefPtr_dec(buffer) ?
-		Error_invalidOperation(0, "DeviceBufferRef_dec()::buffer is required") : Error_none();
-}
+void DeviceBufferRef_dec(DeviceBufferRef **buffer) { RefPtr_dec(buffer); }
 
 Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
 	return !RefPtr_inc(buffer) ?

@@ -25,7 +25,7 @@
 	Error D3D12BLAS_init(BLAS *blas);
 	Error D3D12BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
 
-	Bool  D3D12TLAS_free(TLAS *tlas);
+	void  D3D12TLAS_free(TLAS *tlas);
 	Error D3D12TLAS_init(TLAS *tlas);
 	Error D3D12TLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
 

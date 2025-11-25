@@ -118,7 +118,7 @@ typedef RefPtr AudioStreamRef;
 #define AudioStream_ext(ptr, T) (!ptr ? NULL : (T##AudioStream*)(ptr + 1))		//impl
 #define AudioStreamRef_ptr(ptr) RefPtr_data(ptr, AudioStream)
 
-Error AudioStreamRef_dec(AudioStreamRef **stream);
+void AudioStreamRef_dec(AudioStreamRef **stream);
 Error AudioStreamRef_inc(AudioStreamRef *stream);
 
 typedef RefPtr AudioDeviceRef;

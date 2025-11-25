@@ -36,7 +36,7 @@ typedef RefPtr DescriptorTableRef;
 
 #define RenderTextureRef_ptr(ptr) RefPtr_data(ptr, RenderTexture)
 
-Error RenderTextureRef_dec(RenderTextureRef **renderTexture);
+void RenderTextureRef_dec(RenderTextureRef **renderTexture);
 Error RenderTextureRef_inc(RenderTextureRef *renderTexture);
 
 Error GraphicsDeviceRef_createRenderTexture(

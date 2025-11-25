@@ -28,10 +28,7 @@
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
-Error SwapchainRef_dec(SwapchainRef **swapchain) {
-	return !RefPtr_dec(swapchain) ?
-		Error_invalidOperation(0, "SwapchainRef_dec()::swapchain is invalid") : Error_none();
-}
+void SwapchainRef_dec(SwapchainRef **swapchain) { RefPtr_dec(swapchain); }
 
 Error SwapchainRef_inc(SwapchainRef *swapchain) {
 	return !RefPtr_inc(swapchain) ?

@@ -31,10 +31,7 @@
 #include "types/container/string.h"
 #include "types/base/constants.h"
 
-Error DeviceTextureRef_dec(DeviceTextureRef **texture) {
-	return !RefPtr_dec(texture) ?
-		Error_invalidOperation(0, "DeviceTextureRef_dec()::texture is required") : Error_none();
-}
+void DeviceTextureRef_dec(DeviceTextureRef **texture) { RefPtr_dec(texture); }
 
 Error DeviceTextureRef_inc(DeviceTextureRef *texture) {
 	return !RefPtr_inc(texture) ?

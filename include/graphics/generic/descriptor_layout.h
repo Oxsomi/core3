@@ -149,7 +149,7 @@ typedef struct DescriptorLayout {
 #define DescriptorLayout_ext(ptr, T) (!ptr ? NULL : (T##DescriptorLayout*)(ptr + 1))		//impl
 #define DescriptorLayoutRef_ptr(ptr) RefPtr_data(ptr, DescriptorLayout)
 
-Error DescriptorLayoutRef_dec(DescriptorLayoutRef **layout);
+void DescriptorLayoutRef_dec(DescriptorLayoutRef **layout);
 Error DescriptorLayoutRef_inc(DescriptorLayoutRef *layout);
 
 Error GraphicsDeviceRef_createDescriptorLayout(

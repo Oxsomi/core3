@@ -51,10 +51,7 @@ TListNamedImpl(ListSpinLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
 
-Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {
-	return !RefPtr_dec(device) ?
-		Error_invalidOperation(0, "GraphicsDeviceRef_dec()::device is invalid") : Error_none();
-}
+void GraphicsDeviceRef_dec(GraphicsDeviceRef **device) { RefPtr_dec(device); }
 
 Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device) {
 	return !RefPtr_inc(device) ?

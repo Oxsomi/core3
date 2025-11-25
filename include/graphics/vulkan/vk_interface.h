@@ -25,7 +25,7 @@
 	Error VkBLAS_init(BLAS *blas);
 	Error VkBLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
 
-	Bool  VkTLAS_free(TLAS *tlas);
+	void  VkTLAS_free(TLAS *tlas);
 	Error VkTLAS_init(TLAS *tlas);
 	Error VkTLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
 

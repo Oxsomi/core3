@@ -27,10 +27,7 @@
 #include "platforms/log.h"
 #include "types/container/string.h"
 
-Error PipelineLayoutRef_dec(PipelineLayoutRef **layout) {
-	return !RefPtr_dec(layout) ?
-		Error_invalidOperation(0, "PipelineLayoutRef_dec()::layout is required") : Error_none();
-}
+void PipelineLayoutRef_dec(PipelineLayoutRef **layout) { RefPtr_dec(layout); }
 
 Error PipelineLayoutRef_inc(PipelineLayoutRef *layout) {
 	return !RefPtr_inc(layout) ?

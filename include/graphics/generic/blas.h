@@ -79,7 +79,7 @@ typedef RefPtr BLASRef;
 #define BLAS_ext(ptr, T) (!ptr ? NULL : (T##BLAS*)(ptr + 1))		//impl
 #define BLASRef_ptr(ptr) RefPtr_data(ptr, BLAS)
 
-Error BLASRef_dec(BLASRef **blas);
+void BLASRef_dec(BLASRef **blas);
 Error BLASRef_inc(BLASRef *blas);
 
 //Creating BLASes;

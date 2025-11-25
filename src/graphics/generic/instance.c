@@ -35,10 +35,7 @@ const C8 *EGraphicsApi_name[EGraphicsApi_Count] = {
 	"D3D12"
 };
 
-Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
-	return !RefPtr_dec(inst) ?
-		Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
-}
+void GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) { RefPtr_dec(inst); }
 
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
 	return !RefPtr_inc(inst) ?

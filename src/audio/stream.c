@@ -45,10 +45,7 @@ U8 EAudioStreamFormat_getSize(EAudioStreamFormat format) {
 	return EAudioStreamFormat_getChannels(format) * EAudioStreamFormat_getStrideBytes(format);
 }
 
-Error AudioStreamRef_dec(AudioStreamRef **dev) {
-	return !RefPtr_dec(dev) ?
-		Error_invalidOperation(0, "AudioStreamRef_dec()::dev is invalid") : Error_none();
-}
+void AudioStreamRef_dec(AudioStreamRef **dev) { RefPtr_dec(dev); }
 
 Error AudioStreamRef_inc(AudioStreamRef *dev) {
 	return !RefPtr_inc(dev) ?

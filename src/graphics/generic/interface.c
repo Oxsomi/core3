@@ -128,7 +128,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(deviceRef, blasFlush)(commandBuffer, deviceRef, pending);
 	}
 
-	Bool TLAS_freeExt(TLAS *tlas) { return WrapperFunction(tlas->base.device, tlasFree)(tlas); }
+	void TLAS_freeExt(TLAS *tlas) { WrapperFunction(tlas->base.device, tlasFree)(tlas); }
 	Error TLAS_initExt(TLAS *tlas) { return WrapperFunction(tlas->base.device, tlasInit)(tlas); }
 
 	Error TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending) {

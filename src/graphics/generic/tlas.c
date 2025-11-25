@@ -139,9 +139,7 @@ TLASInstanceData TLASInstanceMotion_getData(TLASInstanceMotion mot) {
 	return *TLASInstanceMotion_getDataInternal(&mot);
 }
 
-Error TLASRef_dec(TLASRef **tlas) {
-	return !RefPtr_dec(tlas) ? Error_invalidOperation(0, "TLASRef_dec()::tlas is required") : Error_none();
-}
+void TLASRef_dec(TLASRef **tlas) { RefPtr_dec(tlas); }
 
 Error TLASRef_inc(TLASRef *tlas) {
 	return !RefPtr_inc(tlas) ? Error_invalidOperation(0, "TLASRef_inc()::tlas is required") : Error_none();
@@ -185,27 +183,27 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 	return true;
 }
 
-Bool TLAS_free(TLAS *tlas, Allocator allocator) {
+void TLAS_free(TLAS *tlas, Allocator allocator) {
 
 	(void)allocator;
 
 	SpinLock_lock(&tlas->base.lock, U64_MAX);
 
-	Bool success = TLAS_freeExt(tlas);
+	TLAS_freeExt(tlas);
 	//Log_debugLnx("Destroy: %s (%p)", tlas->base.name.ptr, tlas);
-	success &= CharString_freex(&tlas->base.name);
+	CharString_freex(&tlas->base.name);
 
-	success &= !DeviceBufferRef_dec(&tlas->base.asBuffer).genericError;
-	success &= !DeviceBufferRef_dec(&tlas->base.tempScratchBuffer).genericError;
-	success &= !DeviceBufferRef_dec(&tlas->tempInstanceBuffer).genericError;
+	DeviceBufferRef_dec(&tlas->base.asBuffer);
+	DeviceBufferRef_dec(&tlas->base.tempScratchBuffer);
+	DeviceBufferRef_dec(&tlas->tempInstanceBuffer);
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		success &= Buffer_freex(&tlas->cpuData);
+		Buffer_freex(&tlas->cpuData);
 
 	else if (tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
 		if(tlas->useDeviceMemory)
-			success &= !DeviceBufferRef_dec(&tlas->deviceData.buffer).genericError;
+			DeviceBufferRef_dec(&tlas->deviceData.buffer);
 
 		else {
 
@@ -216,9 +214,9 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 			}
 
 			if(tlas->base.isMotionBlurExt)
-				success &= ListTLASInstanceMotion_freex(&tlas->cpuInstancesMotion);
+				ListTLASInstanceMotion_freex(&tlas->cpuInstancesMotion);
 
-			else success &= ListTLASInstanceStatic_freex(&tlas->cpuInstancesStatic);
+			else ListTLASInstanceStatic_freex(&tlas->cpuInstancesStatic);
 		}
 	}
 
@@ -227,8 +225,7 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 		DescriptorTableRef_dec(&tlas->bindlessDescriptorTable);
 	}
 
-	success &= !GraphicsDeviceRef_dec(&tlas->base.device).genericError;
-	return success;
+	GraphicsDeviceRef_dec(&tlas->base.device);
 }
 
 Error GraphicsDeviceRef_createTLAS(

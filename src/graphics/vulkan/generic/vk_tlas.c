@@ -259,7 +259,7 @@ clean:
 	return err;
 }
 
-Bool VK_WRAP_FUNC(TLAS_free)(TLAS *tlas) {
+void VK_WRAP_FUNC(TLAS_free)(TLAS *tlas) {
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -268,8 +268,6 @@ Bool VK_WRAP_FUNC(TLAS_free)(TLAS *tlas) {
 
 	if(as)
 		deviceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
-
-	return true;
 }
 
 Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {

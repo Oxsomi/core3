@@ -30,7 +30,7 @@
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/direct3d12.h"
 
-Bool DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; return true; }		//No-op
+void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; }		//No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
 Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {

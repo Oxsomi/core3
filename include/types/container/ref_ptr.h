@@ -51,7 +51,7 @@ TListNamed(RefPtr*, ListRefPtr);
 Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
 
 Bool RefPtr_inc(RefPtr *ptr);
-Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
+void RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
 
 #define RefPtr_data(dat, T) (!(dat) ? NULL : (T*)((dat) + 1))
 

@@ -30,10 +30,7 @@
 
 TListImpl(DescriptorBinding);
 
-Error DescriptorLayoutRef_dec(DescriptorLayoutRef **layout) {
-	return !RefPtr_dec(layout) ?
-		Error_invalidOperation(0, "DescriptorLayoutRef_dec()::layout is required") : Error_none();
-}
+void DescriptorLayoutRef_dec(DescriptorLayoutRef **layout) { RefPtr_dec(layout); }
 
 Error DescriptorLayoutRef_inc(DescriptorLayoutRef *layout) {
 	return !RefPtr_inc(layout) ?

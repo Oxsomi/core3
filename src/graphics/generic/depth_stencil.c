@@ -26,10 +26,7 @@
 #include "types/base/error.h"
 #include "types/container/string.h"
 
-Error DepthStencilRef_dec(DepthStencilRef **depth) {
-	return !RefPtr_dec(depth) ?
-		Error_invalidOperation(0, "DepthStencilRef_dec()::depth is invalid") : Error_none();
-}
+void DepthStencilRef_dec(DepthStencilRef **depth) { RefPtr_dec(depth); }
 
 Error DepthStencilRef_inc(DepthStencilRef *depth) {
 	return !RefPtr_inc(depth) ?

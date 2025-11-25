@@ -81,7 +81,7 @@ typedef RefPtr AudioDeviceRef;
 #define AudioDevice_ext(ptr, T) (!ptr ? NULL : (T##AudioDevice*)(ptr + 1))		//impl
 #define AudioDeviceRef_ptr(ptr) RefPtr_data(ptr, AudioDevice)
 
-Error AudioDeviceRef_dec(AudioDeviceRef **device);
+void AudioDeviceRef_dec(AudioDeviceRef **device);
 Error AudioDeviceRef_inc(AudioDeviceRef *device);
 
 void AudioDeviceInfo_print(AudioDeviceInfo info, Allocator alloc);

@@ -27,10 +27,7 @@
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
-Error AudioSourceRef_dec(AudioSourceRef **src) {
-	return !RefPtr_dec(src) ?
-		Error_invalidOperation(0, "AudioSourceRef_dec()::src is invalid") : Error_none();
-}
+void AudioSourceRef_dec(AudioSourceRef **src) { RefPtr_dec(src); }
 
 Error AudioSourceRef_inc(AudioSourceRef *src) {
 	return !RefPtr_inc(src) ?

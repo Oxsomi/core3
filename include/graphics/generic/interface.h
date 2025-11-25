@@ -90,7 +90,7 @@ typedef struct GraphicsObjectSizes {
 	typedef Error (*BLAS_initImpl)(BLAS *blas);
 	typedef Error (*BLASRef_flushImpl)(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
 
-	typedef Bool (*TLAS_freeImpl)(TLAS *tlas);
+	typedef void (*TLAS_freeImpl)(TLAS *tlas);
 	typedef Error (*TLAS_initImpl)(TLAS *tlas);
 	typedef Error (*TLASRef_flushImpl)(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
 
@@ -330,7 +330,7 @@ void BLAS_freeExt(BLAS *blas);
 Error BLAS_initExt(BLAS *blas);
 Error BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
 
-Bool TLAS_freeExt(TLAS *tlas);
+void TLAS_freeExt(TLAS *tlas);
 Error TLAS_initExt(TLAS *tlas);
 Error TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
 

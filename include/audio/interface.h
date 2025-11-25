@@ -59,7 +59,7 @@ typedef struct AudioDeviceInfo AudioDeviceInfo;
 #define AudioInterface_ext(ptr, T) (!ptr ? NULL : (T##AudioInterface*)(ptr + 1))		//impl
 #define AudioInterfaceRef_ptr(ptr) RefPtr_data(ptr, AudioInterface)
 
-Error AudioInterfaceRef_dec(AudioInterfaceRef **interf);
+void AudioInterfaceRef_dec(AudioInterfaceRef **interf);
 Error AudioInterfaceRef_inc(AudioInterfaceRef *interf);
 
 Bool AudioInterface_create(AudioInterfaceRef **interf, Allocator alloc, Error *e_rr);
