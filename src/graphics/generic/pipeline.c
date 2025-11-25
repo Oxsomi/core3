@@ -67,7 +67,7 @@ Error PipelineRef_inc(PipelineRef *pipeline) {
 		Error_invalidOperation(0, "PipelineRef_inc()::pipeline invalid") : Error_none();
 }
 
-Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
+void Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 
 	Pipeline_freeExt(pipeline, alloc);
 
@@ -85,8 +85,6 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 		PipelineLayoutRef_dec(&pipeline->layout);
 		GraphicsDeviceRef_dec(&pipeline->device);
 	}
-
-	return true;
 }
 
 U32 GraphicsDeviceRef_getFirstShaderEntry(

@@ -28,7 +28,7 @@
 #include "types/container/string.h"
 #include "types/base/constants.h"
 
-Bool DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
+void DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
 
 	(void) alloc;
 
@@ -42,8 +42,6 @@ Bool DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
 
 	AllocationBuffer_freex(&heapExt->allocators[0]);
 	AllocationBuffer_freex(&heapExt->allocators[1]);
-
-	return true;
 }
 
 Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name) {

@@ -37,21 +37,19 @@ Error PipelineLayoutRef_inc(PipelineLayoutRef *layout) {
 		Error_invalidOperation(0, "PipelineLayoutRef_inc()::layout is required") : Error_none();
 }
 
-Bool PipelineLayout_free(PipelineLayout *layout, Allocator alloc) {
+void PipelineLayout_free(PipelineLayout *layout, Allocator alloc) {
 
 	(void)alloc;
 
 	//Log_debugLnx("Destroy: %p", layout);
 
-	Bool success = PipelineLayout_freeExt(layout, alloc);
+	PipelineLayout_freeExt(layout, alloc);
 
 	if(!(layout->info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef)) {
-		success &= !GraphicsDeviceRef_dec(&layout->device).genericError;
+		GraphicsDeviceRef_dec(&layout->device);
 		DescriptorLayoutRef_dec(&layout->info.bindings);
 		DescriptorLayoutRef_dec(&layout->info.pushDescriptors);
 	}
-
-	return success;
 }
 
 Error GraphicsDeviceRef_createPipelineLayout(

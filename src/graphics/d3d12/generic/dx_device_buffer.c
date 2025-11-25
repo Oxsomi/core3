@@ -78,7 +78,7 @@ Error DxDeviceBuffer_transition(
 	return Error_none();
 }
 
-Bool DX_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
+void DX_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 
 	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Dx);
 
@@ -89,8 +89,6 @@ Bool DX_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 
 	if(bufferExt->buffer)
 		bufferExt->buffer->lpVtbl->Release(bufferExt->buffer);
-
-	return true;
 }
 
 Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {

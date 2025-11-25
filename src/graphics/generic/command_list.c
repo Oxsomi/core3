@@ -2246,7 +2246,7 @@ clean:
 
 //Free and create
 
-Bool CommandList_free(CommandList *cmd, Allocator alloc) {
+void CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	(void)alloc;
 
@@ -2266,8 +2266,6 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 	Buffer_freex(&cmd->data);
 
 	GraphicsDeviceRef_dec(&cmd->device);
-
-	return true;
 }
 
 Error GraphicsDeviceRef_createCommandList(

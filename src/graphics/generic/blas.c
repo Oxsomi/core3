@@ -37,32 +37,31 @@ Error BLASRef_inc(BLASRef *blas) {
 	return !RefPtr_inc(blas) ? Error_invalidOperation(0, "BLASRef_inc()::blas is required") : Error_none();
 }
 
-Bool BLAS_free(BLAS *blas, Allocator allocator) {
+void BLAS_free(BLAS *blas, Allocator allocator) {
 
 	(void)allocator;
 
 	SpinLock_lock(&blas->base.lock, U64_MAX);
 
-	Bool success = BLAS_freeExt(blas);
+	BLAS_freeExt(blas);
 	//Log_debugLnx("Destroy: %s (%p)", blas->base.name.ptr, blas);
-	success &= CharString_freex(&blas->base.name);
+	CharString_freex(&blas->base.name);
 
-	success &= !DeviceBufferRef_dec(&blas->base.asBuffer).genericError;
-	success &= !DeviceBufferRef_dec(&blas->base.tempScratchBuffer).genericError;
+	DeviceBufferRef_dec(&blas->base.asBuffer);
+	DeviceBufferRef_dec(&blas->base.tempScratchBuffer);
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		success &= Buffer_freex(&blas->cpuData);
+		Buffer_freex(&blas->cpuData);
 
 	else if (blas->base.asConstructionType == EBLASConstructionType_Procedural)
-		success &= !DeviceBufferRef_dec(&blas->aabbBuffer.buffer).genericError;
+		DeviceBufferRef_dec(&blas->aabbBuffer.buffer);
 
 	else {
-		success &= !DeviceBufferRef_dec(&blas->indexBuffer.buffer).genericError;
-		success &= !DeviceBufferRef_dec(&blas->positionBuffer.buffer).genericError;
+		DeviceBufferRef_dec(&blas->indexBuffer.buffer);
+		DeviceBufferRef_dec(&blas->positionBuffer.buffer);
 	}
 
-	success &= !GraphicsDeviceRef_dec(&blas->base.device).genericError;
-	return success;
+	GraphicsDeviceRef_dec(&blas->base.device);
 }
 
 Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString name, BLASRef **blasRef) {

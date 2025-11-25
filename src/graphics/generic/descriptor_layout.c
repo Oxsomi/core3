@@ -427,19 +427,18 @@ void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, Allocator alloc) {
 	ListCharString_freeUnderlying(&info->bindingNames, alloc);
 }
 
-Bool DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc) {
+void DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc) {
 
 	//Log_debugLnx("Destroy: %p", layout);
 
-	Bool success = DescriptorLayout_freeExt(layout, alloc);
+	DescriptorLayout_freeExt(layout, alloc);
 
 	if(!(layout->info.flags & EDescriptorLayoutFlags_InternalWeakDeviceRef))
-		success &= !GraphicsDeviceRef_dec(&layout->device).genericError;
+		GraphicsDeviceRef_dec(&layout->device);
 
 	ListU16_freex(&layout->bindlessTypeToBinding);
 	ListU8_freex(&layout->bindingToBindlessType);
 	DescriptorLayoutInfo_free(&layout->info, alloc);
-	return success;
 }
 
 Error DescriptorBinding_validate(GraphicsDevice *device, DescriptorBinding b, Bool isPushDescriptor) {

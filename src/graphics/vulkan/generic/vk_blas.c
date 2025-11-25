@@ -212,7 +212,7 @@ clean:
 	return err;
 }
 
-Bool VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
+void VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -221,8 +221,6 @@ Bool VK_WRAP_FUNC(BLAS_free)(BLAS *blas) {
 
 	if(as)
 		deviceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
-
-	return true;
 }
 
 Error VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {

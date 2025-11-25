@@ -29,7 +29,7 @@
 	extern "C" {
 #endif
 
-typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
+typedef void (*ObjectFreeFunc)(void *ptr, Allocator allocator);
 
 typedef enum ETypeId ETypeId;
 

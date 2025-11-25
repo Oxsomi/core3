@@ -152,7 +152,7 @@ typedef struct GraphicsResource {
 
 } GraphicsResource;
 
-Bool GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef);
+void GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef);
 
 #ifdef __cplusplus
 	}

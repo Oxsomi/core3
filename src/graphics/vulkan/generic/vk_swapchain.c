@@ -463,7 +463,7 @@ clean:
 	return err;
 }
 
-Bool VK_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
+void VK_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 
 	(void)alloc;
 
@@ -489,6 +489,4 @@ Bool VK_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 
 	if(swapchainExt->surface)
 		instanceExt->destroySurface(instanceExt->instance, swapchainExt->surface, NULL);
-
-	return true;
 }

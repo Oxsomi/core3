@@ -164,7 +164,7 @@ clean:
 	return err;
 }
 
-Bool DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
+void DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 
 	(void)alloc;
 
@@ -181,6 +181,4 @@ Bool DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
 
 	if(swapchainExt->swapchain)
 		swapchainExt->swapchain->lpVtbl->Release(swapchainExt->swapchain);
-
-	return true;
 }

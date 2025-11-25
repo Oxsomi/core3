@@ -29,7 +29,7 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "types/base/constants.h"
 
-Bool DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; return true; }		//No-op
+void DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; }		//No-op
 
 Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 

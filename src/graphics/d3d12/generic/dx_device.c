@@ -463,10 +463,10 @@ U64 DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 	return vidMem.CurrentUsage;
 }
 
-Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
+void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)
-		return instance;
+		return;
 
 	DxGraphicsDevice *deviceExt = (DxGraphicsDevice*)ext;
 
@@ -530,8 +530,6 @@ Bool DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 	ListD3D12_BUFFER_BARRIER_freex(&deviceExt->bufferTransitions);
 	ListD3D12_TEXTURE_BARRIER_freex(&deviceExt->imageTransitions);
-
-	return true;
 }
 
 //Executing commands

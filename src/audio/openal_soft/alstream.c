@@ -126,13 +126,12 @@ clean:
 	return s_uccess;
 }
 
-Bool AudioStream_freeExt(AudioStream *stream, Allocator alloc) {
+void AudioStream_freeExt(AudioStream *stream, Allocator alloc) {
 
 	(void) alloc;
 
 	ALAudioDevice *deviceExt = AudioDevice_ext(AudioDeviceRef_ptr(stream->device), AL);
 	ALAudioStream *streamExt = AudioStream_ext(stream, AL);
-	Bool s_uccess = true;
 
 	if (stream->isPlaying) {
 		alSourceStop(streamExt->source);
@@ -150,8 +149,6 @@ Bool AudioStream_freeExt(AudioStream *stream, Allocator alloc) {
 
 	if(streamExt->initializedBuffers)
 		alDeleteBuffers(ALAudioStream_bufferCount, streamExt->buffer);
-
-	return s_uccess;
 }
 
 U64 ALAudioStream_fetchInput(const U8 *cvt8, const U16 *cvt16, const F32 *cvt32, const F64 *cvt64, U8 ogStride, U64 i) {

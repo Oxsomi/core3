@@ -24,17 +24,17 @@
 #include "graphics/d3d12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 
-Bool DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
+void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 
 	(void)allocator;
 
 	if(!pipeline)
-		return true;
+		return;
 
 	const DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
 
 	if(!dxPipeline->pso)
-		return true;
+		return;
 
 	if(pipeline->type == EPipelineType_RaytracingExt) {
 
@@ -45,6 +45,4 @@ Bool DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 	}
 
 	else dxPipeline->pso->lpVtbl->Release(dxPipeline->pso);
-
-	return true;
 }

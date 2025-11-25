@@ -21,7 +21,7 @@
 #pragma once
 #ifdef GRAPHICS_API_DYNAMIC
 
-	Bool  D3D12BLAS_free(BLAS *blas);
+	void  D3D12BLAS_free(BLAS *blas);
 	Error D3D12BLAS_init(BLAS *blas);
 	Error D3D12BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
 
@@ -58,39 +58,39 @@
 		Error *e_rr
 	);
 
-	Bool D3D12Pipeline_free(Pipeline *pipeline, Allocator alloc);
+	void D3D12Pipeline_free(Pipeline *pipeline, Allocator alloc);
 
 	//Sampler
 
 	Error D3D12GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
-	Bool  D3D12Sampler_free(Sampler *sampler);
+	void  D3D12Sampler_free(Sampler *sampler);
 
 	//Device buffer
 
 	Error D3D12GraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
-	Bool  D3D12DeviceBuffer_free(DeviceBuffer *buffer);
+	void  D3D12DeviceBuffer_free(DeviceBuffer *buffer);
 	Error D3D12DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
 
 	//Device texture
 
 	Error D3D12UnifiedTexture_create(TextureRef *textureRef, CharString name);
 	Error D3D12DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
-	Bool  D3D12UnifiedTexture_free(TextureRef *textureRef);
+	void  D3D12UnifiedTexture_free(TextureRef *textureRef);
 
 	//Swapchain
 
 	Error D3D12GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
-	Bool  D3D12Swapchain_free(Swapchain *data, Allocator alloc);
+	void  D3D12Swapchain_free(Swapchain *data, Allocator alloc);
 
 	//DescriptorHeap
 
 	Error D3D12GraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
-	Bool D3D12DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
+	void D3D12DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
 
 	//DescriptorTable
 
 	Error D3D12DescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
-	Bool D3D12DescriptorTable_free(DescriptorTable *table, Allocator alloc);
+	void D3D12DescriptorTable_free(DescriptorTable *table, Allocator alloc);
 
 	Bool D3D12DescriptorTable_setDescriptors(
 		DescriptorTable *table,
@@ -111,12 +111,12 @@
 	//DescriptorLayout
 
 	Error D3D12GraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
-	Bool D3D12DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
+	void D3D12DescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
 
 	//PipelineLayout
 
 	Error D3D12GraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
-	Bool D3D12PipelineLayout_free(PipelineLayout *layout, Allocator alloc);
+	void D3D12PipelineLayout_free(PipelineLayout *layout, Allocator alloc);
 
 	//Allocator
 
@@ -144,7 +144,7 @@
 
 	U64 D3D12GraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
-	Bool D3D12GraphicsDevice_free(const GraphicsInstance *instance, void *ext);
+	void D3D12GraphicsDevice_free(const GraphicsInstance *instance, void *ext);
 
 	Error D3D12GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
 
@@ -166,7 +166,7 @@
 	//Interface
 
 	Error D3D12GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
-	Bool  D3D12GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
+	void  D3D12GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
 	Error D3D12GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
 
 #endif

@@ -469,7 +469,7 @@ clean:
 	return err;
 }
 
-Bool VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc) {
+void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc) {
 
 	(void)alloc;
 
@@ -484,8 +484,6 @@ Bool VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc
 		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
 
 	instanceExt->destroyInstance(instanceExt->instance, NULL);
-
-	return true;
 }
 
 const C8 *reqExtensionsName[] = {

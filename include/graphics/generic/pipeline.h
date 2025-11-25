@@ -158,7 +158,7 @@ void *Pipeline_infoOffset(Pipeline *ref);
 Error PipelineRef_dec(PipelineRef **pipeline);
 Error PipelineRef_inc(PipelineRef *pipeline);
 
-Bool Pipeline_free(Pipeline *pipeline, Allocator alloc);
+void Pipeline_free(Pipeline *pipeline, Allocator alloc);
 
 typedef struct SHFile SHFile;
 typedef struct ListSHFile ListSHFile;

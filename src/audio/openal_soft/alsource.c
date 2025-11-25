@@ -44,7 +44,7 @@ clean:
 	return s_uccess;
 };
 
-Bool AudioSource_freeExt(AudioSource *source, Allocator alloc) {
+void AudioSource_freeExt(AudioSource *source, Allocator alloc) {
 	
 	(void) alloc;
 
@@ -60,7 +60,7 @@ Bool AudioSource_freeExt(AudioSource *source, Allocator alloc) {
 	}
 
 clean:
-	return s_uccess;
+	return;
 }
 
 void alSource3fv(ALuint id, ALenum e, F32x4 v) {

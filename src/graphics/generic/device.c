@@ -61,12 +61,12 @@ Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device) {
 		Error_invalidOperation(0, "GraphicsDeviceRef_inc()::device is invalid") : Error_none();
 }
 
-Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
+void GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	(void)alloc;
 
 	if(!device)
-		return true;
+		return;
 
 	for(U64 i = 0; i < device->framesInFlight; ++i) {
 
@@ -133,8 +133,6 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	ListSpinLockPtr_freex(&device->currentLocks);
 
 	GraphicsInstanceRef_dec(&device->instance);
-
-	return true;
 }
 
 Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error *e_rr) {

@@ -30,7 +30,7 @@
 #include "formats/oiSH/entries.h"
 #include "types/base/constants.h"
 
-Bool VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
+void VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
 
 	(void) alloc;
 
@@ -41,8 +41,6 @@ Bool VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator all
 	for(U64 i = 0; i < 4; ++i)
 		if(layoutExt->layouts[i])
 			deviceExt->destroyDescriptorSetLayout(deviceExt->device, layoutExt->layouts[i], NULL);
-
-	return true;
 }
 
 VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {

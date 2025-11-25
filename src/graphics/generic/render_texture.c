@@ -37,9 +37,9 @@ Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
 		Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") : Error_none();
 }
 
-Bool GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator alloc) {
+void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator alloc) {
 	(void)alloc;
-	return UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
+	UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
 }
 
 Error GraphicsDeviceRef_createRenderTexture(

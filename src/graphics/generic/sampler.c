@@ -41,7 +41,7 @@ Error SamplerRef_inc(SamplerRef *sampler) {
 		Error_invalidOperation(0, "SamplerRef_inc()::sampler is required") : Error_none();
 }
 
-Bool Sampler_free(Sampler *sampler, Allocator allocator) {
+void Sampler_free(Sampler *sampler, Allocator allocator) {
 
 	(void)allocator;
 
@@ -56,9 +56,8 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 		DescriptorTableRef_dec(&sampler->bindlessDescriptorTable);
 	}
 
-	Bool success = Sampler_freeExt(sampler);
-	success &= !GraphicsDeviceRef_dec(&sampler->device).genericError;
-	return success;
+	Sampler_freeExt(sampler);
+	GraphicsDeviceRef_dec(&sampler->device);
 }
 
 Error GraphicsDeviceRef_createSampler(

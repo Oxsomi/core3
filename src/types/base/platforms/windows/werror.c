@@ -28,8 +28,8 @@
 
 void Error_captureStackTrace(void **stack, U8 stackSize, U8 skip) {
 
-    if(!stack || !stackSize)
-        return;
+	if(!stack || !stackSize)
+		return;
 
 	RtlCaptureStackBackTrace((DWORD)(1 + (U32)skip), (DWORD) stackSize, stack, NULL);
 }

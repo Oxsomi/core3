@@ -141,14 +141,14 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	}
 #endif
 
-Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc) {
+void DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc) {
 
 	(void)alloc;
 
 	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(data, Dx);
 
 	if(!instanceExt)
-		return true;
+		return;
 
 	if(instanceExt->debug1NoSingleton)
 		instanceExt->debug1NoSingleton->lpVtbl->Release(instanceExt->debug1NoSingleton);
@@ -180,8 +180,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 
 	if(instanceExt->deviceFactorySingleton)
 		instanceExt->deviceFactorySingleton->lpVtbl->Release(instanceExt->deviceFactorySingleton);
-
-	return true;
 }
 
 Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {

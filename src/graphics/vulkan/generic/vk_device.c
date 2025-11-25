@@ -882,10 +882,10 @@ U64 VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(GraphicsDevice *device, Bool is
 	return U64_MAX;
 }
 
-Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
+void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)
-		return instance;
+		return;
 
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) ext;
@@ -938,8 +938,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		deviceExt->dxgiAdapter->lpVtbl->Release(deviceExt->dxgiAdapter);
 	#endif
-
-	return true;
 }
 
 //Executing commands

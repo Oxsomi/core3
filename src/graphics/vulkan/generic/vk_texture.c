@@ -32,7 +32,7 @@
 #include "formats/oiSH/registers.h"
 #include "types/base/constants.h"
 
-Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
+void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(textureRef, NULL);
 
@@ -51,8 +51,6 @@ Bool VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 		if(image->image && utex.resource.type != EResourceType_Swapchain)
 			deviceExt->destroyImage(deviceExt->device, image->image, NULL);
 	}
-
-	return true;
 }
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);

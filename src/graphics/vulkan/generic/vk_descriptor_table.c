@@ -98,7 +98,7 @@ void VkDescriptorTable_loseRef(DescriptorTable *table, U64 i, U64 j) {
 	}
 }
 
-Bool VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc) {
+void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc) {
 
 	(void) alloc;
 
@@ -147,8 +147,6 @@ Bool VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc)
 	}
 
 	ListVkDescriptorTableRange_freex(&tableExt->ranges);
-
-	return true;
 }
 
 Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heapRef, DescriptorTable *table, CharString name) {

@@ -116,11 +116,10 @@ clean:
 	return err;
 }
 
-Bool Swapchain_free(Swapchain *swapchain, Allocator alloc) {
-	Bool success = SpinLock_lock(&swapchain->lock, U64_MAX);
-	success &= Swapchain_freeExt(swapchain, alloc);
-	success &= UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
-	return success;
+void Swapchain_free(Swapchain *swapchain, Allocator alloc) {
+	SpinLock_lock(&swapchain->lock, U64_MAX);
+	Swapchain_freeExt(swapchain, alloc);
+	UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
 }
 
 Error GraphicsDeviceRef_createSwapchain(

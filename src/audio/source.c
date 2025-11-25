@@ -39,17 +39,17 @@ Error AudioSourceRef_inc(AudioSourceRef *src) {
 
 impl extern U32 AudioSource_sizeExt;
 impl Bool AudioSource_createExt(AudioSource *source, Allocator alloc, Error *e_rr);
-impl Bool AudioSource_freeExt(AudioSource *source, Allocator alloc);
+impl void AudioSource_freeExt(AudioSource *source, Allocator alloc);
 
-Bool AudioSource_free(AudioSource *source, Allocator alloc) {
+void AudioSource_free(AudioSource *source, Allocator alloc) {
 
 	if(!source)
-		return true;
+		return;
 
 	AudioSource_freeExt(source, alloc);
 	AudioStreamRef_dec(&source->stream);
 	AudioDeviceRef_dec(&source->device);
-	return true;
+	return;
 }
 
 Bool AudioDeviceRef_createSourceGeneric(

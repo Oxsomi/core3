@@ -70,7 +70,7 @@ void DescriptorTableBinding_free(DescriptorTableBinding *binding, Allocator allo
 		ListBufferDescriptorRange_free(&binding->multiple.buffers, alloc);
 }
 
-Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
+void DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 
 	//Announce descriptor leaks
 
@@ -149,7 +149,7 @@ Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 	if(table->acquiredAtomic)
 		AtomicI64_dec(&parentPtr->descriptorTableCount);
 
-	Bool success = DescriptorTable_freeExt(table, alloc);
+	DescriptorTable_freeExt(table, alloc);
 
 	for(U64 i = 0; i < table->bindings.length; ++i) {
 
@@ -176,9 +176,7 @@ Bool DescriptorTable_free(DescriptorTable *table, Allocator alloc) {
 	ListDescriptorTableResourceRef_freex(&table->resources);
 
 	if(!(table->flags & EDescriptorTableFlags_InternalWeakDeviceRef))
-		success &= !DescriptorHeapRef_dec(&table->parent).genericError;
-
-	return success;
+		DescriptorHeapRef_dec(&table->parent);
 }
 
 Error DescriptorHeapRef_createDescriptorTable(

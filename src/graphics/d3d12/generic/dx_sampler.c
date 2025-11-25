@@ -24,7 +24,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
 
-Bool DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void)sampler; return true; }
+void DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void)sampler; }
 
 Error DX_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
 	(void)name; (void) dev; (void) sampler;

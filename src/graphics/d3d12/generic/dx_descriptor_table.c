@@ -33,11 +33,10 @@
 #include "platforms/ext/stringx.h"
 #include "types/container/string.h"
 
-Bool DX_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc) {
+void DX_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc) {
 	(void) alloc;
 	DxDescriptorHeap *heapExt = DescriptorHeap_ext(DescriptorHeapRef_ptr(table->parent), Dx);
 	DxDescriptorHeap_freeTable(heapExt, DescriptorTable_ext(table, Dx));
-	return true;
 }
 
 Error DX_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap, DescriptorTable *table, CharString name) {

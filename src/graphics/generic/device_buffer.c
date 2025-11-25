@@ -172,7 +172,7 @@ clean:
 	return err;
 }
 
-Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
+void DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	(void)allocator;
 
@@ -190,11 +190,10 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 		DescriptorTableRef_dec(&buffer->bindlessDescriptorTable);
 	}
 
-	Bool success = DeviceBuffer_freeExt(buffer);
-	success &= GraphicsResource_free(&buffer->resource, refPtr);
-	success &= Buffer_freex(&buffer->cpuData);
-	success &= ListDevicePendingRange_freex(&buffer->pendingChanges);
-	return success;
+	DeviceBuffer_freeExt(buffer);
+	GraphicsResource_free(&buffer->resource, refPtr);
+	Buffer_freex(&buffer->cpuData);
+	ListDevicePendingRange_freex(&buffer->pendingChanges);
 }
 
 Error GraphicsDeviceRef_createBufferIntern(

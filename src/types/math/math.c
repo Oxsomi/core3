@@ -24,6 +24,16 @@
 
 #include <math.h>
 
+#undef CONST_IMPL
+#define CONST_IMPL(T, suffix)								\
+const T T##_E				= 2.718281828459045##suffix;	\
+const T T##_PI				= 3.141592653589793##suffix;	\
+const T T##_RAD_TO_DEG		= 57.2957795131##suffix;		\
+const T T##_DEG_TO_RAD		= 0.01745329251##suffix;
+
+CONST_IMPL(F32, f);
+CONST_IMPL(F64, );
+
 #define XINT_OP_IMPL(T)													\
 T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }					\
 T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }					\

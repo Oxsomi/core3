@@ -29,7 +29,7 @@
 #include "platforms/log.h"
 #include "formats/oiSH/entries.h"
 
-Bool DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
+void DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
 
 	(void) alloc;
 
@@ -37,8 +37,6 @@ Bool DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) 
 
 	if(layoutExt->rootSig)
 		layoutExt->rootSig->lpVtbl->Release(layoutExt->rootSig);
-
-	return true;
 }
 
 D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 a);

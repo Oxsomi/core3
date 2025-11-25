@@ -30,7 +30,7 @@
 #include "platforms/log.h"
 #include "formats/oiSH/entries.h"
 
-Bool VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
+void VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
 
 	(void) alloc;
 
@@ -39,8 +39,6 @@ Bool VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) 
 
 	if(*layoutExt)
 		device->destroyPipelineLayout(device->device, *layoutExt, NULL);
-
-	return true;
 }
 
 Error VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(

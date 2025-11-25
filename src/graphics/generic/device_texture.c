@@ -237,7 +237,7 @@ clean:
 	return err;
 }
 
-Bool DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
+void DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 
 	(void)allocator;
 
@@ -247,11 +247,9 @@ Bool DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 
 	//Log_debugLnx("Destroy: DeviceTexture (%p)", texture);
 
-	Bool success = UnifiedTexture_free(refPtr);
-	success &= Buffer_freex(&texture->cpuData);
-	success &= ListDevicePendingRange_freex(&texture->pendingChanges);
-
-	return success;
+	UnifiedTexture_free(refPtr);
+	Buffer_freex(&texture->cpuData);
+	ListDevicePendingRange_freex(&texture->pendingChanges);
 }
 
 Error GraphicsDeviceRef_createTexture(

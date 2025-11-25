@@ -121,7 +121,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//RTAS
 
-	Bool BLAS_freeExt(BLAS *blas) { return WrapperFunction(blas->base.device, blasFree)(blas); }
+	void BLAS_freeExt(BLAS *blas) { WrapperFunction(blas->base.device, blasFree)(blas); }
 	Error BLAS_initExt(BLAS *blas) { return WrapperFunction(blas->base.device, blasInit)(blas); }
 
 	Error BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
@@ -172,8 +172,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		);
 	}
 
-	Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc) {
-		return WrapperFunction(pipeline->device, pipelineFree)(pipeline, alloc);
+	void Pipeline_freeExt(Pipeline *pipeline, Allocator alloc) {
+		WrapperFunction(pipeline->device, pipelineFree)(pipeline, alloc);
 	}
 
 	//Sampler
@@ -182,7 +182,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(dev, samplerCreate)(dev, sampler, name);
 	}
 
-	Bool Sampler_freeExt(Sampler *sampler) { return WrapperFunction(sampler->device, samplerFree)(sampler); }
+	void Sampler_freeExt(Sampler *sampler) { WrapperFunction(sampler->device, samplerFree)(sampler); }
 
 	//Device buffer
 
@@ -190,9 +190,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(dev, bufferCreate)(dev, buf, name);
 	}
 
-	Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
-		return WrapperFunction(buffer->resource.device, bufferFree)(buffer);
-	}
+	void DeviceBuffer_freeExt(DeviceBuffer *buffer) { WrapperFunction(buffer->resource.device, bufferFree)(buffer); }
 
 	Error DeviceBufferRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
 		return WrapperFunction(deviceRef, bufferFlush)(commandBuffer, deviceRef, pending);
@@ -208,8 +206,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(deviceRef, textureFlush)(commandBuffer, deviceRef, pending);
 	}
 
-	Bool UnifiedTexture_freeExt(TextureRef *texture) {
-		return WrapperFunction(TextureRef_getUnifiedTexture(texture, NULL).resource.device, textureFree)(texture);
+	void UnifiedTexture_freeExt(TextureRef *texture) {
+		WrapperFunction(TextureRef_getUnifiedTexture(texture, NULL).resource.device, textureFree)(texture);
 	}
 
 	//Swapchain
@@ -218,8 +216,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(dev, swapchainCreate)(dev, swapchain);
 	}
 
-	Bool Swapchain_freeExt(Swapchain *data, Allocator alloc) {
-		return WrapperFunction(data->base.resource.device, swapchainFree)(data, alloc);
+	void Swapchain_freeExt(Swapchain *data, Allocator alloc) {
+		WrapperFunction(data->base.resource.device, swapchainFree)(data, alloc);
 	}
 
 	//DescriptorLayout
@@ -228,8 +226,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(dev, descriptorLayoutCreate)(dev, layout, name);
 	}
 	
-	Bool DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc) {
-		return WrapperFunction(layout->device, descriptorLayoutFree)(layout, alloc);
+	void DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc) {
+		WrapperFunction(layout->device, descriptorLayoutFree)(layout, alloc);
 	}
 
 	//PipelineLayout
@@ -238,8 +236,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(dev, pipelineLayoutCreate)(dev, layout, name);
 	}
 	
-	Bool PipelineLayout_freeExt(PipelineLayout *layout, Allocator alloc) {
-		return WrapperFunction(layout->device, pipelineLayoutFree)(layout, alloc);
+	void PipelineLayout_freeExt(PipelineLayout *layout, Allocator alloc) {
+		WrapperFunction(layout->device, pipelineLayoutFree)(layout, alloc);
 	}
 
 	//DescriptorTable
@@ -248,8 +246,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(DescriptorHeapRef_ptr(heap)->device, descriptorTableCreate)(heap, table, name);
 	}
 	
-	Bool DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc) {
-		return WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableFree)(table, alloc);
+	void DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc) {
+		WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableFree)(table, alloc);
 	}
 
 	Bool DescriptorTable_setDescriptorsExt(
@@ -282,8 +280,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return WrapperFunction(dev, descriptorHeapCreate)(dev, heap, name);
 	}
 
-	Bool DescriptorHeap_freeExt(DescriptorHeap *heap, Allocator alloc) {
-		return WrapperFunction(heap->device, descriptorHeapFree)(heap, alloc);
+	void DescriptorHeap_freeExt(DescriptorHeap *heap, Allocator alloc) {
+		WrapperFunction(heap->device, descriptorHeapFree)(heap, alloc);
 	}
 
 	//Allocator
@@ -323,8 +321,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		);
 	}
 
-	Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
-		return GraphicsInterface_instance->tables[instance->api].deviceFree(instance, ext);
+	void GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
+		GraphicsInterface_instance->tables[instance->api].deviceFree(instance, ext);
 	}
 
 	Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
@@ -356,8 +354,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef);
 	}
 
-	Bool GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc) {
-		return GraphicsInterface_instance->tables[inst->api].instanceFree(inst, alloc);
+	void GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc) {
+		GraphicsInterface_instance->tables[inst->api].instanceFree(inst, alloc);
 	}
 
 	Error GraphicsInstance_getDeviceInfosExt(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos) {

@@ -31,7 +31,7 @@
 TListImpl(D3D12_DESCRIPTOR_RANGE1)
 TListImpl(D3D12_ROOT_PARAMETER1)
 
-Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
+void DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
 	(void) alloc;
 	DxDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Dx);
 	ListU32_freex(&layoutExt->bindingOffsets);
@@ -39,7 +39,6 @@ Bool DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator all
 	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesSamplers);
 	ListU8_freex(&layoutExt->rootParamOffsets);
 	ListD3D12_ROOT_PARAMETER1_freex(&layoutExt->rootParams);
-	return true;
 }
 
 D3D12_DESCRIPTOR_RANGE_TYPE dxGetDescriptorType(ESHRegisterType regType) {

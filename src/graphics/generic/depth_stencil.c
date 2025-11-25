@@ -36,9 +36,9 @@ Error DepthStencilRef_inc(DepthStencilRef *depth) {
 		Error_invalidOperation(0, "DepthStencilRef_inc()::depth is invalid") : Error_none();
 }
 
-Bool GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, Allocator alloc) {
+void GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, Allocator alloc) {
 	(void)alloc;
-	return UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
+	UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
 }
 
 Error GraphicsDeviceRef_createDepthStencil(

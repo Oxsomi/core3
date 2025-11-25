@@ -208,7 +208,7 @@ Bool TextureRef_isRenderTargetWritable(TextureRef *tex) {
 	return tex && (tex->typeId == (ETypeId) EGraphicsTypeId_RenderTexture || tex->typeId == (ETypeId) EGraphicsTypeId_Swapchain);
 }
 
-Bool UnifiedTexture_free(TextureRef *textureRef) {
+void UnifiedTexture_free(TextureRef *textureRef) {
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 	GraphicsDeviceRef *device = texture->resource.device;
@@ -227,11 +227,10 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 			}
 	}
 
-	Bool success = UnifiedTexture_freeExt(textureRef);
-	success &= GraphicsResource_free(&texture->resource, textureRef);
+	UnifiedTexture_freeExt(textureRef);
+	GraphicsResource_free(&texture->resource, textureRef);
 
 	texture->resource = (GraphicsResource) { 0 };
-	return success;
 }
 
 Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name) {

@@ -87,7 +87,7 @@ Error VkDeviceBuffer_transition(
 }
 
 
-Bool VK_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
+void VK_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -97,8 +97,6 @@ Bool VK_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 		deviceExt->destroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
 		bufferExt->buffer = NULL;
 	}
-
-	return true;
 }
 
 Error VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {

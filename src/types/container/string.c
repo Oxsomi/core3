@@ -561,10 +561,8 @@ Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 	b.ptrNonConst[length] = '\0';
 	str->lenAndNullTerminated |= (U64)1 << 63;
 
-	if(str->capacityAndRefInfo)
-		err =
-			alloc.free(alloc.ptr, Buffer_createManagedPtr(str->ptrNonConst, str->capacityAndRefInfo)) ?
-			Error_none() : Error_invalidOperation(0, "CharString_reserve() free failed");
+	if (str->capacityAndRefInfo)
+		alloc.free(alloc.ptr, Buffer_createManagedPtr(str->ptrNonConst, str->capacityAndRefInfo));
 
 	str->capacityAndRefInfo = Buffer_length(b);
 	str->ptr = (const C8*) b.ptr;

@@ -44,20 +44,18 @@ Error AudioDeviceRef_inc(AudioDeviceRef *dev) {
 
 impl extern U32 AudioDevice_sizeExt;
 impl Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr);
-impl Bool AudioDevice_freeExt(AudioDevice *dev, Allocator alloc);
+impl void AudioDevice_freeExt(AudioDevice *dev, Allocator alloc);
 
-Bool AudioDevice_free(AudioDevice *dev, Allocator alloc) {
+void AudioDevice_free(AudioDevice *dev, Allocator alloc) {
 
 	if(!dev)
-		return true;
+		return;
 
 	ListWeakRefPtr_free(&dev->streams, alloc);
 	ListWeakRefPtr_free(&dev->pendingSources, alloc);
 
-	Bool s_uccess = AudioDevice_freeExt(dev, alloc);
-	s_uccess &= !AudioInterfaceRef_dec(&dev->interf).genericError;
-
-	return s_uccess;
+	AudioDevice_freeExt(dev, alloc);
+	AudioInterfaceRef_dec(&dev->interf);
 }
 
 Bool AudioDeviceRef_create(

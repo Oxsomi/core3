@@ -101,7 +101,7 @@ clean:
 	return err;
 }
 
-Bool VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
+void VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 
 	(void)allocator;
 
@@ -109,5 +109,4 @@ Bool VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	deviceExt->destroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
-	return true;
 }

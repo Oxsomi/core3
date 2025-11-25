@@ -25,7 +25,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
 
-Bool VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
+void VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
 
 	(void) alloc;
 
@@ -35,8 +35,6 @@ Bool VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
 
 	if(heapExt->pool)
 		deviceExt->destroyDescriptorPool(deviceExt->device, heapExt->pool, NULL);
-
-	return true;
 }
 
 Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name) {

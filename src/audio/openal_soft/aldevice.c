@@ -81,7 +81,7 @@ clean:
 	return s_uccess;
 }
 
-Bool AudioDevice_freeExt(AudioDevice *dev, Allocator alloc) {
+void AudioDevice_freeExt(AudioDevice *dev, Allocator alloc) {
 
 	(void) alloc;
 
@@ -97,6 +97,4 @@ Bool AudioDevice_freeExt(AudioDevice *dev, Allocator alloc) {
 
 	if(devExt->device)
 		alcCloseDevice(devExt->device);
-
-	return true;
 }

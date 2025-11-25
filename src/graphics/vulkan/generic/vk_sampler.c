@@ -25,7 +25,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
 
-Bool VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
+void VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -33,8 +33,6 @@ Bool VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
 	if(*samplerExt)
 		deviceExt->destroySampler(deviceExt->device, *samplerExt, NULL);
-
-	return true;
 }
 
 VkSamplerAddressMode mapVkAddressMode(ESamplerAddressMode addressMode) {

@@ -165,12 +165,12 @@ Bool AudioStreamRef_playx(AudioStreamRef *stream, Error *e_rr) {
 
 impl extern U32 AudioStream_sizeExt;
 impl Bool AudioStream_createExt(AudioStream *stream, Allocator alloc, Error *e_rr);
-impl Bool AudioStream_freeExt(AudioStream *stream, Allocator alloc);
+impl void AudioStream_freeExt(AudioStream *stream, Allocator alloc);
 
-Bool AudioStream_free(AudioStream *stream, Allocator alloc) {
+void AudioStream_free(AudioStream *stream, Allocator alloc) {
 
 	if(!stream)
-		return true;
+		return;
 
 	AudioStream_freeExt(stream, alloc);
 	Stream_close(&stream->info.stream, alloc);
@@ -191,8 +191,6 @@ Bool AudioStream_free(AudioStream *stream, Allocator alloc) {
 		SpinLock_unlock(&dev->pendingUpdateLock);
 
 	AudioDeviceRef_dec(&stream->device);
-
-	return true;
 }
 
 Bool AudioDeviceRef_createStream(

@@ -21,7 +21,7 @@
 #pragma once
 #ifdef GRAPHICS_API_DYNAMIC
 
-	Bool  VkBLAS_free(BLAS *blas);
+	void  VkBLAS_free(BLAS *blas);
 	Error VkBLAS_init(BLAS *blas);
 	Error VkBLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
 
@@ -58,39 +58,39 @@
 		Error *e_rr
 	);
 
-	Bool VkPipeline_free(Pipeline *pipeline, Allocator alloc);
+	void VkPipeline_free(Pipeline *pipeline, Allocator alloc);
 
 	//Sampler
 
 	Error VkGraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
-	Bool  VkSampler_free(Sampler *sampler);
+	void  VkSampler_free(Sampler *sampler);
 
 	//Device buffer
 
 	Error VkGraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
-	Bool  VkDeviceBuffer_free(DeviceBuffer *buffer);
+	void  VkDeviceBuffer_free(DeviceBuffer *buffer);
 	Error VkDeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
 
 	//Device texture
 
 	Error VkUnifiedTexture_create(TextureRef *textureRef, CharString name);
 	Error VkDeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
-	Bool  VkUnifiedTexture_free(TextureRef *textureRef);
+	void  VkUnifiedTexture_free(TextureRef *textureRef);
 
 	//Swapchain
 
 	Error VkGraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
-	Bool  VkSwapchain_free(Swapchain *data, Allocator alloc);
+	void  VkSwapchain_free(Swapchain *data, Allocator alloc);
 
 	//DescriptorHeap
 
 	Error VkGraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
-	Bool VkDescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
+	void VkDescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
 
 	//DescriptorTable
 
 	Error VkDescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
-	Bool VkDescriptorTable_free(DescriptorTable *table, Allocator alloc);
+	void VkDescriptorTable_free(DescriptorTable *table, Allocator alloc);
 
 	Bool VkDescriptorTable_setDescriptors(
 		DescriptorTable *table,
@@ -111,12 +111,12 @@
 	//DescriptorLayout
 
 	Error VkGraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
-	Bool VkDescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
+	void VkDescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
 
 	//PipelineLayout
 
 	Error VkGraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
-	Bool VkPipelineLayout_free(PipelineLayout *layout, Allocator alloc);
+	void VkPipelineLayout_free(PipelineLayout *layout, Allocator alloc);
 
 	//Allocator
 
@@ -144,7 +144,7 @@
 
 	U64 VkGraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
-	Bool VkGraphicsDevice_free(const GraphicsInstance *instance, void *ext);
+	void VkGraphicsDevice_free(const GraphicsInstance *instance, void *ext);
 
 	Error VkGraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
 
@@ -166,7 +166,7 @@
 	//Interface
 
 	Error VkGraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
-	Bool  VkGraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
+	void  VkGraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
 	Error VkGraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
 
 #endif

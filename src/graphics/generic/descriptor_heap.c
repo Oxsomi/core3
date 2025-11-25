@@ -35,18 +35,16 @@ Error DescriptorHeapRef_inc(DescriptorHeapRef *heap) {
 		Error_invalidOperation(0, "DescriptorHeapRef_inc()::heap is required") : Error_none();
 }
 
-Bool DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc) {
+void DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc) {
 
 	(void)alloc;
 
 	//Log_debugLnx("Destroy: %p", heap);
 
-	Bool success = DescriptorHeap_freeExt(heap, alloc);
+	DescriptorHeap_freeExt(heap, alloc);
 
 	if(!(heap->info.flags & EDescriptorHeapFlags_InternalWeakDeviceRef))
-		success &= !GraphicsDeviceRef_dec(&heap->device).genericError;
-
-	return success;
+		GraphicsDeviceRef_dec(&heap->device);
 }
 
 Error GraphicsDeviceRef_createDescriptorHeap(

@@ -82,7 +82,7 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
 
 //Only for child classes
 
-Bool UnifiedTexture_free(TextureRef *textureRef);
+void UnifiedTexture_free(TextureRef *textureRef);
 Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name);
 
 //Internal (only use inside GraphicsDeviceRef_submitCommands)

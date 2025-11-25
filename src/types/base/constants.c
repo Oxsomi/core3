@@ -18,17 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "types/math/math.h"
+#include "types/base/constants.h"
 #include <float.h>
-
-#define CONST_IMPL(T, suffix)								\
-const T T##_E				= 2.718281828459045##suffix;	\
-const T T##_PI				= 3.141592653589793##suffix;	\
-const T T##_RAD_TO_DEG		= 57.2957795131##suffix;		\
-const T T##_DEG_TO_RAD		= 0.01745329251##suffix;
-
-CONST_IMPL(F32, f);
-CONST_IMPL(F64, );
 
 const U64 KIBI			= 1 << 10;
 const U64 MIBI			= 1 << 20;
