@@ -1861,12 +1861,12 @@ Bool Compiler_compileShaders(
 			gotoIfError3(clean, Compiler_create(alloc, &compilers.ptrNonConst[i], e_rr))
 
 			gotoIfError2(clean, Thread_create(
-				alloc, (ThreadCallbackFunction) Compiler_compileJob, &jobScheduler, &threads.ptrNonConst[i]
+				&alloc, (ThreadCallbackFunction) Compiler_compileJob, &jobScheduler, &threads.ptrNonConst[i]
 			))
 		}
 
 		for(U64 i = 0; i < threadCount; ++i)
-			Thread_waitAndCleanup(alloc, &threads.ptrNonConst[i]);
+			Thread_waitAndCleanup(&alloc, &threads.ptrNonConst[i]);
 
 		ListThread_free(&threads, alloc);
 
@@ -2359,7 +2359,7 @@ Bool Compiler_compileShaders(
 clean:
 
 	for(U64 i = 0; i < threads.length; ++i)
-		Thread_waitAndCleanup(alloc, &threads.ptrNonConst[i]);
+		Thread_waitAndCleanup(&alloc, &threads.ptrNonConst[i]);
 
 	ListThread_free(&threads, alloc);
 	ListCompiler_freeUnderlying(&compilers, alloc);

@@ -18,28 +18,31 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/list_impl.h"
 #include "types/base/thread.h"
 #include "types/base/error.h"
+#include "types/base/allocator.h"
 #include "types/container/buffer.h"
-#include "types/base/constants.h"
 
-TListNamedImpl(ListThread);
+impl void Thread_freeExt(Thread *thread);
 
-Bool Thread_free(Allocator alloc, Thread **thread) {
+Bool Thread_free(const Allocator *alloc, Thread **thread) {
 
 	if(!thread || !*thread)
 		return true;
 
-	const Bool freed = alloc.free(alloc.ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
+	Thread_freeExt(*thread);
+	const Bool freed = alloc->free(alloc->ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
 	*thread = NULL;
 	return freed;
 }
 
-Error Thread_waitAndCleanup(Allocator alloc, Thread **thread) {
+Error Thread_waitAndCleanup(const Allocator *alloc, Thread **thread) {
 
 	if(!thread || !*thread)
 		return Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required");
+
+	if(!alloc || !alloc->free)
+		return Error_nullPointer(0, "Thread_waitAndCleanup()::alloc and alloc->free are required");
 
 	const Error err = Thread_wait(*thread);
 

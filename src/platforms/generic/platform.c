@@ -30,6 +30,8 @@
 #include <signal.h>
 #include <stdlib.h>
 
+TListImpl(Thread);
+
 //Error handling
 
 void sigFunc(int signal) {

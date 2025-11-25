@@ -24,6 +24,7 @@
 #include "types/base/allocator.h"
 #include "types/container/archive.h"
 #include "types/base/lock.h"
+#include "types/base/thread.h"
 #include "platforms/dynamic_library.h"
 
 #ifdef __cplusplus
@@ -46,6 +47,7 @@ typedef struct VirtualSection {
 } VirtualSection;
 
 TList(VirtualSection);
+TListNamed(Thread*, ListThread);
 
 typedef struct Platform {
 

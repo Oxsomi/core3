@@ -27,7 +27,10 @@
 #include <pthread.h>
 #include <errno.h>
 
-U64 Thread_getId() { return (U64)(void*)pthread_self(); }
+//Nothing to do for uthread, unlike wthread.
+void Thread_freeExt(Thread *thread) {}
+
+U64 Thread_getId() { return (U64)(uintptr_t)pthread_self(); }
 
 Bool Thread_sleep(Ns ns) {
 
@@ -58,7 +61,7 @@ void *ThreadFunc(void *t) {
 	return NULL;
 }
 
-Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+Error Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
 
 	if(!thread)
 		return Error_nullPointer(2, "Thread_create()::thread is required");
@@ -69,11 +72,11 @@ Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *obje
 	if(!callback)
 		return Error_nullPointer(0, "Thread_create()::callback is required");
 
-	if(!alloc.alloc || !alloc.free)
+	if(!alloc || !alloc->alloc || !alloc->free)
 		return Error_nullPointer(0, "Thread_create()::alloc is required");
 
 	Buffer buf = (Buffer) { 0 };
-	Error err = alloc.alloc(alloc.ptr, sizeof(Thread), &buf);
+	Error err = alloc->alloc(alloc->ptr, sizeof(Thread), &buf);
 
 	if (err.genericError)
 		return err;

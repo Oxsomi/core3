@@ -60,8 +60,6 @@ TListXImpl(AllocationBufferBlock);
 TListXBaseImpl(ListRefPtr);
 TListXBaseImpl(ListWeakRefPtr);
 
-TListXBaseImpl(ListThread);
-
 //DDS
 
 TListXImpl(SubResourceData);
@@ -769,13 +767,13 @@ Bool Archive_foreachx(
 //Thread
 
 Error Thread_createx(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
-	return Thread_create(Platform_instance->alloc, callback, objectHandle, thread);
+	return Thread_create(&Platform_instance->alloc, callback, objectHandle, thread);
 }
 
 Bool Thread_freex(Thread **thread) {
-	return Thread_free(Platform_instance->alloc, thread);
+	return Thread_free(&Platform_instance->alloc, thread);
 }
 
 Error Thread_waitAndCleanupx(Thread **thread) {
-	return Thread_waitAndCleanup(Platform_instance->alloc, thread);
+	return Thread_waitAndCleanup(&Platform_instance->alloc, thread);
 }

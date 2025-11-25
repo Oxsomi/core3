@@ -19,11 +19,14 @@
 */
 
 #pragma once
-#include "types/container/list.h"
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+typedef struct Allocator Allocator;
+typedef struct Error Error;
 
 typedef void (*ThreadCallbackFunction)(void*);
 
@@ -32,17 +35,15 @@ typedef struct Thread {
 	void *nativeHandle, *objectHandle;
 } Thread;
 
-TListNamed(Thread*, ListThread);
-
 impl U64 Thread_getId();					//Current thread id
 
 impl Bool Thread_sleep(Ns ns);				//Can be in a different time unit. Ex. on Windows it's rounded up to ms
 
-impl Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
-Bool Thread_free(Allocator alloc, Thread **thread);
+impl Error Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
+Bool Thread_free(const Allocator *alloc, Thread **thread);
 
 impl Error Thread_wait(Thread *thread);
-Error Thread_waitAndCleanup(Allocator alloc, Thread **thread);
+Error Thread_waitAndCleanup(const Allocator *alloc, Thread **thread);
 
 #ifdef __cplusplus
 	}

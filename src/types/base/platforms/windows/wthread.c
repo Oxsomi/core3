@@ -31,6 +31,11 @@
 #define NOMINMAX
 #include <Windows.h>
 
+void Thread_freeExt(Thread *thread) {
+	if(thread->nativeHandle)
+		CloseHandle(thread->nativeHandle);
+}
+
 U64 Thread_getId() { return GetCurrentThreadId(); }
 
 Bool Thread_sleep(Ns ns) {
@@ -41,8 +46,10 @@ Bool Thread_sleep(Ns ns) {
 	if(!timer)
 		return false;
 
-	if(!SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0))
+	if (!SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0)) {
+		CloseHandle(timer);
 		return false;
+	}
 
 	WaitForSingleObject(timer, INFINITE);
 	CloseHandle(timer);
@@ -57,7 +64,7 @@ DWORD ThreadFunc(Thread *thread) {
 	return 0;
 }
 
-Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+Error Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
 
 	if(!thread)
 		return Error_nullPointer(2, "Thread_create()::thread is required");
@@ -68,12 +75,12 @@ Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *obje
 	if(!callback)
 		return Error_nullPointer(0, "Thread_create()::callback is required");
 
-	if(!alloc.alloc || !alloc.free)
+	if(!alloc || !alloc->alloc || !alloc->free)
 		return Error_nullPointer(0, "Thread_create()::alloc is required");
 
 	Buffer buf = Buffer_createNull();
 
-	const Error err = alloc.alloc(alloc.ptr, sizeof(Thread), &buf);
+	const Error err = alloc->alloc(alloc->ptr, sizeof(Thread), &buf);
 
 	if (err.genericError)
 		return err;

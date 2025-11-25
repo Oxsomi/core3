@@ -64,7 +64,7 @@ static inline Bool SpinLock_unlock(SpinLock *l) {
 }
 
 static inline Bool SpinLock_isLockedForThread(SpinLock *l) {
-	return AtomicI64_load(&l->lockedThreadId) == (I64)Thread_getId();
+	return l && AtomicI64_load(&l->lockedThreadId) == (I64)Thread_getId();
 }
 
 #ifdef __cplusplus
