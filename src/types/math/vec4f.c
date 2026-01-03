@@ -22,8 +22,6 @@
 #include "types/math/vec.h"
 #include "types/base/error.h"
 
-BUFFER_OP_IMPL(F32x4);
-
 F32x4 F32x4_complement(F32x4 a) { return F32x4_sub(F32x4_one(), a); }
 F32x4 F32x4_negate(F32x4 a) { return F32x4_sub(F32x4_zero(), a); }
 F32x4 F32x4_inverse(F32x4 a) { return F32x4_div(F32x4_one(), a); }

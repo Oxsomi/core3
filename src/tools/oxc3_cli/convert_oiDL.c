@@ -40,8 +40,8 @@ Bool addFileToDLFile(FileInfo file, ListCharString *names, Error *e_rr) {
 	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
 
-	gotoIfError2(clean, CharString_createCopyx(file.path, &copy))
-	gotoIfError2(clean, ListCharString_pushBackx(names, copy))
+	gotoIfError3(clean, CharString_createCopyx(file.path, &copy, e_rr));
+	gotoIfError2(clean, ListCharString_pushBackx(names, copy, e_rr));
 
 clean:
 	return s_uccess;

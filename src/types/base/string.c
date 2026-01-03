@@ -19,6 +19,7 @@
 */
 
 #include "types/base/string.h"
+#include "types/base/algorithm.h"
 
 CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
 

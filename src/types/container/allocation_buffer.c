@@ -26,192 +26,183 @@
 
 TListImpl(AllocationBufferBlock);
 
-Error AllocationBuffer_create(
-	U64 size,
-	Bool isVirtual,
-	U64 nonLinearAlignment,
-	Allocator alloc,
-	AllocationBuffer *allocationBuffer
-) {
+Bool AllocationBuffer_create(const AllocationBufferCreate *create, Bool isVirtual, Error *e_rr) {
 
-	if(!allocationBuffer || !size)
-		return Error_nullPointer(!size ? 0 : 2, "AllocationBuffer_create()::size or allocationBuffer is NULL");
+	Bool s_uccess = true;
+	const Allocator *alloc = NULL;
 
-	if(allocationBuffer->allocations.ptr)
-		return Error_invalidOperation(0, "AllocationBuffer_create()::allocationBuffer isn't NULL, might indicate memleak");
+	if(!create || !create->allocationBuffer || !create->size)
+		retError(clean, Error_nullPointer(
+			0, "AllocationBuffer_create()::create, create->size or create->allocationBuffer is NULL"
+		));
 
-	if(size >> 62)
-		return Error_invalidParameter(0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 62-bit)");
+	if(create->allocationBuffer->allocations.ptr)
+		retError(clean, Error_invalidOperation(
+			0, "AllocationBuffer_create()::allocationBuffer isn't NULL, might indicate memleak"
+		));
 
-	Error err;
+	if(create->size >> 62)
+		retError(clean, Error_invalidParameter(
+			0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 62-bit)"
+		));
 
-	if(!isVirtual) {
-
-		err = Buffer_createEmptyBytes(size, alloc, &allocationBuffer->buffer);
-
-		if(err.genericError)
-			return err;
+	if (!isVirtual) {
+		gotoIfError3(clean, Buffer_createEmptyBytes(create->size, create->alloc, &create->allocationBuffer->buffer, e_rr));
 	}
 
-	else allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | size };
+	else create->allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | create->size };
 
-	allocationBuffer->nonLinearAlignment = nonLinearAlignment;
+	create->allocationBuffer->nonLinearAlignment = create->nonLinearAlignment;
+	alloc = create->alloc;
 
-	if ((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
-		Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
-		*allocationBuffer = (AllocationBuffer) { 0 };
-		return err;
+	gotoIfError3(clean, ListAllocationBufferBlock_reserve(&create->allocationBuffer->allocations, 16, alloc, e_rr));
+
+clean:
+
+	if (alloc && !s_uccess) {
+		Buffer_free(&create->allocationBuffer->buffer, alloc);		//Ignores if !ptr
+		*create->allocationBuffer = (AllocationBuffer){ 0 };
 	}
 
-	return Error_none();
+	return s_uccess;
 }
 
-Error AllocationBuffer_createRefFromRegion(
-	Buffer origin,
-	U64 offset,
-	U64 size,
-	U64 nonLinearAlignment,
-	Allocator alloc,
-	AllocationBuffer *allocationBuffer
-) {
+Bool AllocationBuffer_createRefFromRegion(const AllocationBufferCreate *create, const Buffer origin, U64 offset, Error *e_rr) {
 
-	if(!allocationBuffer || !size)
-		return Error_nullPointer(!size ? 2 : 3, "AllocationBuffer_createRefFromRegion()::size or allocationBuffer is NULL");
+	Bool s_uccess = true;
+	Bool alloc = false;
 
-	if(allocationBuffer->allocations.ptr)
-		return Error_invalidOperation(
+	if(!create || !create->allocationBuffer || !create->size)
+		retError(clean, Error_nullPointer(
+			!size ? 2 : 3, "AllocationBuffer_createRefFromRegion()::size or allocationBuffer is NULL"
+		));
+
+	if(create->allocationBuffer->allocations.ptr)
+		retError(clean, Error_invalidOperation(
 			0, "AllocationBuffer_createRefFromRegion()::allocationBuffer isn't NULL, might indicate memleak"
-		);
+		));
 
-	Error err = Buffer_createSubset(origin, offset, size, false, &allocationBuffer->buffer);
+	gotoIfError3(clean, Buffer_createSubset(origin, offset, create->size, false, &create->allocationBuffer->buffer, e_rr));
 
-	if(err.genericError)
-		return err;
+	create->allocationBuffer->nonLinearAlignment = create->nonLinearAlignment;
+	alloc = true;
 
-	allocationBuffer->nonLinearAlignment = nonLinearAlignment;
+	gotoIfError3(clean, ListAllocationBufferBlock_reserve(&create->allocationBuffer->allocations, 16, alloc, e_rr));
 
-	if((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
-		*allocationBuffer = (AllocationBuffer) { 0 };
-		return err;
-	}
+clean:
 
-	return Error_none();
+	if (alloc && !s_uccess)
+		*create->allocationBuffer = (AllocationBuffer){ 0 };
+
+	return s_uccess;
 }
 
-Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc) {
+void AllocationBuffer_free(AllocationBuffer *allocationBuffer, const Allocator *alloc) {
 
 	if (!allocationBuffer)
-		return true;
+		return;
 
-	Bool success = Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
-	success &= ListAllocationBufferBlock_free(&allocationBuffer->allocations, alloc);
+	Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
+	ListAllocationBufferBlock_free(&allocationBuffer->allocations, alloc);
 	*allocationBuffer = (AllocationBuffer) { 0 };
-	return success;
 }
 
-U64 AllocationBufferBlock_getStart(AllocationBufferBlock block) {
+static inline U64 AllocationBufferBlock_getStart(AllocationBufferBlock block) {
 	return block.startAndNonLinearAndFree << 2 >> 2;
 }
 
-U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
+static inline U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
 	return block.end - AllocationBufferBlock_getStart(block);
 }
 
-U64 AllocationBufferBlock_isFree(AllocationBufferBlock block) {
+static inline U64 AllocationBufferBlock_isFree(AllocationBufferBlock block) {
 	return block.startAndNonLinearAndFree >> 63;
 }
 
-Bool AllocationBufferBlock_isNonLinear(AllocationBufferBlock block) {
+static inline Bool AllocationBufferBlock_isNonLinear(AllocationBufferBlock block) {
 	return (block.startAndNonLinearAndFree >> 62) & 1;
 }
 
-U64 AllocationBufferBlock_getCenter(AllocationBufferBlock block) {
+static inline U64 AllocationBufferBlock_getCenter(AllocationBufferBlock block) {
 	return (AllocationBufferBlock_getStart(block) + block.end) >> 1;
 }
 
-U64 AllocationBufferBlock_alignTo(U64 a, U64 alignment) {
+static inline U64 AllocationBufferBlock_alignTo(U64 a, U64 alignment) {
 	return alignment ? (a + alignment - 1) / alignment * alignment : a;
 }
 
-U64 AllocationBufferBlock_alignToBackwards(U64 a, U64 alignment) {
+static inline U64 AllocationBufferBlock_alignToBackwards(U64 a, U64 alignment) {
 	return alignment ? a / alignment * alignment : a;
 }
 
-U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) {
+static inline U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) {
 	return AllocationBufferBlock_alignTo(AllocationBufferBlock_getStart(block), block.alignment);
 }
 
-Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
+static inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
 	const U64 blockStart = AllocationBufferBlock_getStart(block);
 	const U64 aligned = AllocationBufferBlock_getAligned(block);
 	return ptr == start + blockStart || ptr == start + aligned;
 }
 
-Error AllocationBuffer_allocateAndFillBlock(
-	AllocationBuffer *allocationBuffer,
-	Buffer data,
-	U64 alignment,
-	Bool isNonLinearResource,
-	Allocator alloc,
-	U8 **result
-) {
+Bool AllocationBuffer_allocateAndFillBlock(const AllocationBufferAllocate *allocate, const Buffer data, U8 **result, Error *e_rr) {
 
-	if(!allocationBuffer || !allocationBuffer->buffer.ptr || !result)
-		return Error_nullPointer(
-			!allocationBuffer ? 0 : (!allocationBuffer->buffer.ptr ? 0 : 4),
-			"AllocationBuffer_allocateAndFillBlock()::allocationBuffer is NULL"
-		);
-
+	Bool s_uccess = true;
 	const U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
-	const Error err = AllocationBuffer_allocateBlock(
-		allocationBuffer, Buffer_length(data), alignment, isNonLinearResource, alloc, &ptr
-	);
 
-	if (err.genericError && ptr != defaultPtr) {	//Touch pointer so it can be checked if blocks are all gone or not.
-		*result = NULL;
-		return err;
-	}
-
-	if(err.genericError)
-		return err;
+	if(!allocate || !allocate->allocationBuffer || !allocate->allocationBuffer->buffer.ptr || !result)
+		retError(clean, Error_nullPointer(
+			!allocate->allocationBuffer ? 0 : (!allocate->allocationBuffer->buffer.ptr ? 0 : 4),
+			"AllocationBuffer_allocateAndFillBlock()::allocate or allocate->allocationBuffer is NULL"
+		));
+	
+	gotoIfError3(clean, AllocationBuffer_allocateBlock(allocate, Buffer_length(data), &ptr, e_rr));
 
 	Buffer_memcpy(Buffer_createRef((U8*)ptr, Buffer_length(data)), data);
 	*result = (U8*)ptr;
-	return Error_none();
+
+clean:
+
+	if (!s_uccess && ptr != defaultPtr)		//Touch pointer so it can be checked if blocks are all gone or not.
+		*result = NULL;
+
+	return s_uccess;
 }
 
-Error AllocationBuffer_allocateBlock(
-	AllocationBuffer *allocationBuffer,
-	U64 size,
-	U64 alignment,
-	Bool isNonLinearResource,
-	Allocator alloc,
-	const U8 **result
-) {
+Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U64 size, const U8 **result, Error *e_rr) {
 
-	if (!allocationBuffer || !size || !alignment || !result)
-		return Error_nullPointer(
-			!allocationBuffer ? 0 : (!size ? 1 : (!alignment ? 2 : 4)),
-			"AllocationBuffer_allocateBlock()::allocationBuffer or result is NULL or size or alignment is 0"
-		);
+	Bool s_uccess = true;
+
+	if (!allocate || !allocate->allocationBuffer || !size || !allocate->alignment || !result)
+		retError(clean, Error_nullPointer(
+			!result ? 2 : (!size ? 1 : 0),
+			"AllocationBuffer_allocateBlock()::allocate, allocate->allocationBuffer, result or size or alignment is 0/NULL"
+		));
+
+	AllocationBuffer *allocationBuffer = allocate->allocationBuffer;
+	const U64 alignment = allocate->alignment;
+	const Bool isNonLinearResource = allocate->isNonLinearResource;
+	const Allocator *alloc = allocate->alloc;
 
 	if(*result && *result != (const U8*)1)
-		return Error_invalidParameter(4, 0, "AllocationBuffer_allocateBlock()::*result is not NULL, might indicate memleak");
+		retError(clean, Error_invalidParameter(
+			4, 0, "AllocationBuffer_allocateBlock()::*result is not NULL, might indicate memleak"
+		));
 
 	if(((size >> 48) || (alignment >> 48)) && allocationBuffer->buffer.ptr)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			size >> 48 ? 2 : 1, size >> 48 ? size : alignment, (U64)1 << 48,
 			"AllocationBuffer_allocateBlock()::size or alignment is out of bounds (should be max 48-bit)"
-		);
+		));
 
 	const U64 len = Buffer_length(allocationBuffer->buffer);
 
 	if(size > len || alignment > len) {
 		*result = NULL;
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			size > len ? 1 : 2, size > len ? size : alignment, len,
 			"AllocationBuffer_allocateBlock()::size or alignment is bigger than allocationBuffer->buffer"
-		);
+		));
 	}
 
 	//No allocations? We start at the front, it's always aligned
@@ -219,18 +210,15 @@ Error AllocationBuffer_allocateBlock(
 	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
 		const AllocationBufferBlock v = (AllocationBufferBlock) { 
-			.startAndNonLinearAndFree = (U64) isNonLinearResource << 62,
+			.startAndNonLinearAndFree = (U64)isNonLinearResource << 62,
 			.end = size,
 			.alignment = alignment
 		};
 
-		const Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
-
-		if(err.genericError)
-			return err;
+		gotoIfError3(clean, ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, allocate->alloc, e_rr));
 
 		*result = allocationBuffer->buffer.ptr;
-		return Error_none();
+		goto clean;
 	}
 
 	//Grab area behind last allocation to see if there's still space
@@ -251,13 +239,10 @@ Error AllocationBuffer_allocateBlock(
 			.alignment = nextAlignment
 		};
 
-		const Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
-
-		if(err.genericError)
-			return err;
+		gotoIfError3(clean, ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc, e_rr));
 
 		*result = allocationBuffer->buffer.ptr + lastAlign;
-		return Error_none();
+		goto clean;
 	}
 
 	//Grab area before first allocation to see if there's still space
@@ -278,13 +263,10 @@ Error AllocationBuffer_allocateBlock(
 			.alignment = alignment
 		};
 
-		const Error err = ListAllocationBufferBlock_pushFront(&allocationBuffer->allocations, v, alloc);
-
-		if(err.genericError)
-			return err;
+		gotoIfError3(clean, ListAllocationBufferBlock_pushFront(&allocationBuffer->allocations, v, alloc, e_rr));
 
 		*result = allocationBuffer->buffer.ptr + AllocationBufferBlock_getStart(v);
-		return Error_none();
+		goto clean;
 	}
 
 	//Try to find an empty spot in between.
@@ -333,7 +315,7 @@ Error AllocationBuffer_allocateBlock(
 				b->startAndNonLinearAndFree |= (U64) isNonLinearResource << 62;
 				b->alignment = nextAlignment;
 				*result = allocationBuffer->buffer.ptr + aligned;
-				return Error_none();
+				goto clean;
 			}
 
 			//Splitting the buffer, ideally if we're near the back of the buffer
@@ -350,10 +332,7 @@ Error AllocationBuffer_allocateBlock(
 						.alignment = 1
 					};
 
-					const Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i + 1, empty, alloc);
-
-					if(err.genericError)
-						return err;
+					gotoIfError3(clean, ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i + 1, empty, alloc, e_rr));
 				}
 
 				//Occupied
@@ -365,7 +344,7 @@ Error AllocationBuffer_allocateBlock(
 
 				allocationBuffer->allocations.ptrNonConst[i] = v;
 				*result = allocationBuffer->buffer.ptr + aligned;
-				return Error_none();
+				goto clean;
 			}
 
 			aligned = AllocationBufferBlock_alignToBackwards(v.end - size, nextAlignment);
@@ -383,10 +362,7 @@ Error AllocationBuffer_allocateBlock(
 					.alignment = 1
 				};
 
-				const Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i, empty, alloc);
-
-				if(err.genericError)
-					return err;
+				gotoIfError3(clean, ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i, empty, alloc, e_rr));
 			}
 
 			const Bool spaceLeft = aligned != AllocationBufferBlock_getStart(v);
@@ -396,25 +372,28 @@ Error AllocationBuffer_allocateBlock(
 
 			allocationBuffer->allocations.ptrNonConst[i + spaceLeft] = v;
 			*result = allocationBuffer->buffer.ptr + aligned;
-			return Error_none();
+			goto clean;
 		}
 	}
 
 	*result = NULL;					//Write null so out of memory can be detected
-	return Error_outOfMemory(0, "AllocationBuffer_allocateBlock() out of memory");
+	retError(clean, Error_outOfMemory(0, "AllocationBuffer_allocateBlock() out of memory"));
+
+clean:
+	return s_uccess;
 }
 
-Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr) {
+void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr) {
 
 	if(!allocationBuffer)
-		return true;
+		return;
 
 	if(
 		ptr < allocationBuffer->buffer.ptr ||
 		ptr >= allocationBuffer->buffer.ptr + Buffer_length(allocationBuffer->buffer) ||
 		!allocationBuffer->allocations.length
 	)
-		return false;
+		return;
 
 	//Middle block somewhere possibly, we have to find it first
 
@@ -462,7 +441,7 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 			AllocationBufferBlock_isFree(*allocationBuffer->allocations.ptr)
 		) {
 			ListAllocationBufferBlock_popFront(&allocationBuffer->allocations, NULL);
-			return true;
+			return;
 		}
 
 		//Check if it's the last block, so it can be popped
@@ -472,15 +451,13 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 			AllocationBufferBlock_isFree(*ListAllocationBufferBlock_last(allocationBuffer->allocations))
 		) {
 			ListAllocationBufferBlock_popBack(&allocationBuffer->allocations, NULL);
-			return true;
+			return;
 		}
 
-		return true;
+		return;
 	}
-
-	return false;
 }
 
-Bool AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer) {
-	return !ListAllocationBufferBlock_clear(&allocationBuffer->allocations).genericError;
+void AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer) {
+	ListAllocationBufferBlock_clear(&allocationBuffer->allocations);
 }

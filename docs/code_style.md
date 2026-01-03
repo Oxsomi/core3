@@ -46,7 +46,7 @@ No inline should be used; aside from short two/four liners. This is useful to pr
 
 C "Member functions" should be using ClassName_functionName. This makes it clear that it's either a helper function or a member function. Using direct structs `T t` instead of `const T *t` is recommended only if the struct isn't too big (16+ bytes) to be copied, though the compiler might inline. Data passed that is const should be marked as such. The only exception is for example string (24-byte or <=32 bytes) where extremely simple helper functions are allowed to pass by value.
 
-If a function has more than 4 parameters, consider if it should have a struct as initializer. If not, make sure to reserve a newline per parameter to make the function easier to read:
+If a function has more than 4 parameters (excluding Error/Allocator), consider if it should have a struct as initializer. If not, make sure to reserve a newline per parameter to make the function easier to read:
 
 ```c++
 void myFunction(U8 x, U16 y, U32 z, U32 w);		// Correct

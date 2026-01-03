@@ -86,10 +86,11 @@ inline Bool C8_isSymbol(C8 c) {
 inline Bool C8_isValidAscii(C8 c) { return (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\n' || c == '\r'; }
 
 inline Bool C8_isValidFileName(C8 c) {
-	return
+	return c >= 0x80 || (					//UTF8 is always >=0x80
 		(c >= 0x20 && c < 0x7F) &&
 		c != '<' && c != '>' && c != ':' && c != '"' && c != '|' &&
-		c != '?' && c != '*' && c != '/' && c != '\\';
+		c != '?' && c != '*' && c != '/' && c != '\\'
+	);
 }
 
 inline U8 C8_bin(C8 c) { return c == '0' ? 0 : (c == '1' ? 1 : U8_MAX); }

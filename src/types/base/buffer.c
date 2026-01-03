@@ -24,35 +24,23 @@
 
 #include <string.h>
 
-//Basic buffer helpers
+Bool Buffer_getBit(const Buffer buf, U64 offset, Bool *output, Error *e_rr) {
 
-Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst) {
-
-	if(!buf.ptr || (!isConst && Buffer_isConstRef(buf)))
-		return (Buffer) { 0 };
-
-	Buffer copy = buf;
-	copy.lengthAndRefBits |= ((U64)1 << 63) | ((U64)isConst << 62);
-	return copy;
-}
-
-Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
+	Bool s_uccess = true;
 
 	if(!output || !buf.ptr)
-		return Error_nullPointer(!buf.ptr ? 0 : 2, "Buffer_getBit()::output and buf are required");
+		retError(clean, Error_nullPointer(!buf.ptr ? 0 : 2, "Buffer_getBit()::output and buf are required"));
 
 	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset >> 3, Buffer_length(buf), "Buffer_getBit()::offset out of bounds");
+		retError(clean, Error_outOfBounds(1, offset >> 3, Buffer_length(buf), "Buffer_getBit()::offset out of bounds"));
 
 	*output = (buf.ptr[offset >> 3] >> (offset & 7)) & 1;
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value) {
-	return !value ? Buffer_resetBit(buf, offset) : Buffer_setBit(buf, offset);
-}
-
-Bool Buffer_memcpy(Buffer dst, Buffer src) {
+Bool Buffer_memcpy(const Buffer dst, const Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
 		return true;
@@ -66,7 +54,7 @@ Bool Buffer_memcpy(Buffer dst, Buffer src) {
 	return true;
 }
 
-Bool Buffer_memmove(Buffer dst, Buffer src) {
+Bool Buffer_memmove(const Buffer dst, const Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
 		return true;
@@ -80,78 +68,87 @@ Bool Buffer_memmove(Buffer dst, Buffer src) {
 	return true;
 }
 
-Error Buffer_setBit(Buffer buf, U64 offset) {
+Bool Buffer_setBit(const Buffer buf, U64 offset, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!buf.ptr)
-		return Error_nullPointer(0, "Buffer_setBit()::buf is required");
+		retError(clean, Error_nullPointer(0, "Buffer_setBit()::buf is required"));
 
 	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0, "Buffer_setBit()::buf should be writable");
+		retError(clean, Error_constData(0, 0, "Buffer_setBit()::buf should be writable"));
 
 	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_setBit()::offset out of bounds");
+		retError(clean, Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_setBit()::offset out of bounds"));
 
 	buf.ptrNonConst[offset >> 3] |= 1 << (offset & 7);
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-Error Buffer_resetBit(Buffer buf, U64 offset) {
+Bool Buffer_resetBit(Buffer buf, U64 offset, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!buf.ptr)
-		return Error_nullPointer(0, "Buffer_resetBit()::buf is required");
+		retError(clean, Error_nullPointer(0, "Buffer_resetBit()::buf is required"));
 
 	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0, "Buffer_resetBit()::buf should be writable");
+		retError(clean, Error_constData(0, 0, "Buffer_resetBit()::buf should be writable"));
 
 	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_resetBit()::offset out of bounds");
+		retError(clean, Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_resetBit()::offset out of bounds"));
 
 	buf.ptrNonConst[offset >> 3] &= ~(1 << (offset & 7));
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-#define BitOp(x, dst, src, ...) {														\
-																						\
-	if(!dst.ptr || !src.ptr)															\
-		return Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required");	\
-																						\
-	if(Buffer_isConstRef(dst))															\
-		return Error_constData(0, 0, "BitOp::dst should be writable");					\
-																						\
-	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);						\
-	U64 l = dstLen <= srcLen ? dstLen : srcLen;											\
-																						\
-	if(!((U64)dst.ptr & 7) && !((U64)src.ptr & 7)) {									\
-																						\
-		for(U64 i = 0, j = l >> 3; i < j; ++i)											\
-			*((U64*)dst.ptrNonConst + i) x *((const U64*)src.ptr + i);					\
-																						\
-		for (U64 i = l >> 3 << 3; i < l; ++i)											\
-			dst.ptrNonConst[i] x src.ptr[i];											\
-	}																					\
-																						\
-	else for(U8 i = 0; i < l; ++i)														\
-		dst.ptrNonConst[i] x src.ptr[i];												\
-																						\
-	__VA_ARGS__																			\
-																						\
-	return Error_none();																\
+#define BitOp(x, dst, src, ...) {																	\
+																									\
+	Bool s_uccess = true;																			\
+																									\
+	if(!dst.ptr || !src.ptr)																		\
+		retError(clean, Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required"));	\
+																									\
+	if(Buffer_isConstRef(dst))																		\
+		retError(clean, Error_constData(0, 0, "BitOp::dst should be writable"));					\
+																									\
+	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);									\
+	U64 l = dstLen <= srcLen ? dstLen : srcLen;														\
+																									\
+	if(!((U64)dst.ptr & 7) && !((U64)src.ptr & 7)) {												\
+																									\
+		for(U64 i = 0, j = l >> 3; i < j; ++i)														\
+			*((U64*)dst.ptrNonConst + i) x *((const U64*)src.ptr + i);								\
+																									\
+		for (U64 i = l >> 3 << 3; i < l; ++i)														\
+			dst.ptrNonConst[i] x src.ptr[i];														\
+	}																								\
+																									\
+	else for(U8 i = 0; i < l; ++i)																	\
+		dst.ptrNonConst[i] x src.ptr[i];															\
+																									\
+	__VA_ARGS__																						\
+																									\
+clean:																								\
+	return s_uccess;																				\
 }
 
-Error Buffer_bitwiseOr(Buffer dst, Buffer src)  BitOp(|=, dst, src, )
-Error Buffer_bitwiseXor(Buffer dst, Buffer src) BitOp(^=, dst, src, )
-Error Buffer_bitwiseNot(Buffer dst) BitOp(=~, dst, dst, )
-Error Buffer_bitwiseAnd(Buffer dst, Buffer src) BitOp(
+//TODO: Optimize this
+
+Bool Buffer_bitwiseOr(const Buffer dst, const Buffer src, Error *e_rr)  BitOp(|=, dst, src, )
+Bool Buffer_bitwiseXor(const Buffer dst, const Buffer src, Error *e_rr) BitOp(^=, dst, src, )
+Bool Buffer_bitwiseNot(const Buffer dst, Error *e_rr) BitOp(=~, dst, dst, )
+Bool Buffer_bitwiseAnd(const Buffer dst, const Buffer src, Error *e_rr) BitOp(
 	&=, dst, src,
 	if(dstLen > srcLen)
-		Buffer_unsetAllBits(Buffer_createRefConst(dst.ptrNonConst + srcLen, dstLen - srcLen));
+		gotoIfError3(clean, Buffer_unsetAllBits(Buffer_createRefConst(dst.ptrNonConst + srcLen, dstLen - srcLen), e_rr));
 )
 
-Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
-	return isOn ? Buffer_setAllBits(buf) : Buffer_unsetAllBits(buf);
-}
-
-Bool Buffer_eq(Buffer buf0, Buffer buf1) {
+Bool Buffer_eq(const Buffer buf0, const Buffer buf1) {
 
 	if (!buf0.ptr && !buf1.ptr)
 		return true;
@@ -167,23 +164,23 @@ Bool Buffer_eq(Buffer buf0, Buffer buf1) {
 	return memcmp(buf0.ptr, buf1.ptr, len0) == 0;
 }
 
-Bool Buffer_neq(Buffer buf0, Buffer buf1) { return !Buffer_eq(buf0, buf1); }
+Bool Buffer_offset(Buffer *buf, U64 length, Error *e_rr) {
 
-Error Buffer_offset(Buffer *buf, U64 length) {
+	Bool s_uccess = true;
 
-	if(!length)
-		return Error_none();
+	if (!length)
+		goto clean;
 
 	if(!buf || !buf->ptr)
-		return Error_nullPointer(0, "Buffer_offset()::buf and buf->ptr are required");
+		retError(clean, Error_nullPointer(0, "Buffer_offset()::buf and buf->ptr are required"));
 
 	if(!Buffer_isRef(*buf))								//Ensure we don't accidentally call this and leak memory
-		return Error_invalidOperation(0, "Buffer_offset() can only be called on a ref");
+		retError(clean, Error_invalidOperation(0, "Buffer_offset() can only be called on a ref"));
 
 	const U64 bufLen = Buffer_length(*buf);
 
 	if(length > bufLen)
-		return Error_outOfBounds(1, length, bufLen, "Buffer_offset()::length is out of bounds");
+		retError(clean, Error_outOfBounds(1, length, bufLen, "Buffer_offset()::length is out of bounds"));
 
 	buf->ptr += length;
 
@@ -194,65 +191,67 @@ Error Buffer_offset(Buffer *buf, U64 length) {
 	if(!bufLen)
 		*buf = Buffer_createNull();
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
 void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 length) {
 	Buffer_memcpy(Buffer_createRef(ptr, length), Buffer_createRefConst(v, length));
 }
 
-Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
+Bool Buffer_appendBuffer(Buffer *buf, const Buffer append, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!append.ptr)
-		return Error_nullPointer(1, "Buffer_appendBuffer()::append is required");
+		retError(clean, Error_nullPointer(1, "Buffer_appendBuffer()::append is required"));
 
 	if(buf && Buffer_isConstRef(*buf))					//We need write access
-		return Error_constData(0, 0, "Buffer_appendBuffer()::buf should be writable");
+		retError(clean, Error_constData(0, 0, "Buffer_appendBuffer()::buf should be writable"));
 
 	U8 *ptr = buf->ptrNonConst;
-	const Error e = Buffer_offset(buf, Buffer_length(append));
-
-	if(e.genericError)
-		return e;
+	gotoIfError3(clean, Buffer_offset(buf, Buffer_length(append), e_rr));
 
 	Buffer_copyBytesInternal(ptr, append.ptr, Buffer_length(append));
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-Error Buffer_append(Buffer *buf, const void *v, U64 length) {
-	return Buffer_appendBuffer(buf, Buffer_createRefConst(v, length));
-}
+Bool Buffer_consume(Buffer *buf, void *v, U64 length, Error *e_rr) {
 
-Error Buffer_consume(Buffer *buf, void *v, U64 length) {
+	Bool s_uccess = true;
 
 	if(!buf)
-		return Error_nullPointer(!buf ? 0 : 1, "Buffer_consume()::buf is required");
+		retError(clean, Error_nullPointer(!buf ? 0 : 1, "Buffer_consume()::buf is required"));
 
 	const void *ptr = buf ? buf->ptr : NULL;
-	const Error e = Buffer_offset(buf, length);
-
-	if(e.genericError)
-		return e;
+	gotoIfError3(clean, Buffer_offset(buf, length, e_rr));
 
 	if(v)
 		Buffer_copyBytesInternal(v, ptr, length);
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
+Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!dst.ptr)
-		return Error_nullPointer(0, "Buffer_setBitRange()::dst is required");
+		retError(clean, Error_nullPointer(0, "Buffer_setBitRange()::dst is required"));
 
 	if(Buffer_isConstRef(dst))
-		return Error_constData(0, 0, "Buffer_setBitRange()::dst should be writable");
+		retError(clean, Error_constData(0, 0, "Buffer_setBitRange()::dst should be writable"));
 
 	if(!bits)
-		return Error_invalidParameter(2, 0, "Buffer_setBitRange()::bits should be non zero");
+		retError(clean, Error_invalidParameter(2, 0, "Buffer_setBitRange()::bits should be non zero"));
 
 	if(dstOff + bits > (Buffer_length(dst) << 3))
-		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_setBitRange()::dstOff out of bounds");
+		retError(clean, Error_outOfBounds(
+			1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_setBitRange()::dstOff out of bounds"
+		));
 
 	//Bits, unaligned
 
@@ -279,22 +278,27 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 		dst.ptrNonConst[endOff >> 3] |= mask;
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
+Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!dst.ptr)
-		return Error_nullPointer(0, "Buffer_unsetBitRange()::dst is required");
+		retError(clean, Error_nullPointer(0, "Buffer_unsetBitRange()::dst is required"));
 
 	if(Buffer_isConstRef(dst))
-		return Error_constData(0, 0, "Buffer_unsetBitRange()::dst should be writable");
+		retError(clean, Error_constData(0, 0, "Buffer_unsetBitRange()::dst should be writable"));
 
 	if(!bits)
-		return Error_invalidParameter(2, 0, "Buffer_unsetBitRange()::bits should be non zero");
+		retError(clean, Error_invalidParameter(2, 0, "Buffer_unsetBitRange()::bits should be non zero"));
 
 	if(dstOff + bits > (Buffer_length(dst) << 3))
-		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_unsetBitRange()::dstOff out of bounds");
+		retError(clean, Error_outOfBounds(
+			1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_unsetBitRange()::dstOff out of bounds"
+		));
 
 	//Bits, unaligned
 
@@ -321,38 +325,22 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 		dst.ptrNonConst[endOff >> 3] &=~ mask;
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error Buffer_setAllToInternal(Buffer buf, U8 b8) {
+Bool Buffer_setAllToU8(const Buffer buf, U8 b8, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!buf.ptr)
-		return Error_nullPointer(0, "Buffer_setAllToInternal()::buf is required");
+		retError(clean, Error_nullPointer(0, "Buffer_setAllTo()::buf is required"));
 
 	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0, "Buffer_setAllToInternal()::buf should be writable");
+		retError(clean, Error_constData(0, 0, "Buffer_setAllTo()::buf should be writable"));
 
 	memset(buf.ptrNonConst, b8, Buffer_length(buf));
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
-
-Error Buffer_setAllBits(Buffer dst) {
-	return Buffer_setAllToInternal(dst, U8_MAX);
-}
-
-Error Buffer_unsetAllBits(Buffer dst) {
-	return Buffer_setAllToInternal(dst, 0);
-}
-
-BUFFER_OP_IMPL(U64);
-BUFFER_OP_IMPL(U32);
-BUFFER_OP_IMPL(U16);
-BUFFER_OP_IMPL(U8);
-
-BUFFER_OP_IMPL(I64);
-BUFFER_OP_IMPL(I32);
-BUFFER_OP_IMPL(I16);
-BUFFER_OP_IMPL(I8);
-
-BUFFER_OP_IMPL(F64);
-BUFFER_OP_IMPL(F32);

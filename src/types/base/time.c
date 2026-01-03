@@ -46,30 +46,6 @@ Ns Time_now() {
 	return (Ns)ts.tv_sec * SECOND + (Ns)ts.tv_nsec;
 }
 
-DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
-
-	if (timeStamp0 > timeStamp1) {
-
-		const Ns diff = timeStamp0 - timeStamp1;
-
-		if (diff >> 63)
-			return I64_MAX;
-
-		return -(DNs) diff;
-	}
-
-	const Ns diff = timeStamp1 - timeStamp0;
-
-	if (diff >> 63)
-		return I64_MAX;
-
-	return (DNs) diff;
-}
-
-F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
-	return (F64)Time_dns(timeStamp0, timeStamp1) / SECOND;
-}
-
 #ifdef __clang__
 	U64 Time_clocks() {
 		return __builtin_readcyclecounter();
@@ -83,8 +59,8 @@ F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
 	#ifndef _WIN32
 		U64 Time_clocks() {
 			U64 result;
-    		asm volatile("mrs %0, cntvct_el0" : "=r"(result));
-    		return result;
+			asm volatile("mrs %0, cntvct_el0" : "=r"(result));
+			return result;
 		}
 	#else
 		extern U64 Time_clocksAsm();
@@ -97,13 +73,10 @@ F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
 	}
 #endif
 
-I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks()); }
-DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
-
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
 //The standard functions strp don't work properly cross-platform.
 
-void setNum(TimeFormat format, I64 offset, U64 length, U64 v) {
+static inline void setNum(TimeFormat format, I64 offset, U64 length, U64 v) {
 
 	I64 off = (I64)(offset + length) - 1;
 
@@ -128,9 +101,9 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 	Bool success = false;
 
 	if(isLocalTime)
-		success = !!localtime_r(&inSecs, &t);
+		success = localtime_r(&inSecs, &t);
 
-	else success = !!gmtime_r(&inSecs, &t);
+	else success = gmtime_r(&inSecs, &t);
 
 	Buffer_memcpy(
 		Buffer_createRef(timeString, SHORTSTRING_LEN),
@@ -149,7 +122,7 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 	setNum(timeString, OFFSETS[6], SIZES[6], inNs);
 }
 
-const C8 separators[] = "--T::.Z";
+static const C8 separators[] = "--T::.Z";
 
 Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
@@ -160,9 +133,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 	U64 curr = 0, currSep = 0, prevI = U64_MAX;
 
-	U32 ns = 0;
-	U16 year = 0;
-	U8 month = 0, day = 0, hour = 0, minute = 0, second = 0;
+	Date date = { 0 };
 
 	for (U64 i = 0; i < length; ++i) {
 
@@ -201,12 +172,12 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 		switch (currSep) {
 
-			case 0:		year = (U16) curr;		break;
-			case 1:		month = (U8) curr;		break;
-			case 2:		day = (U8) curr;		break;
-			case 3:		hour = (U8) curr;		break;
-			case 4:		minute = (U8) curr;		break;
-			case 5:		second = (U8) curr;		break;
+			case 0:		date.year = (U16) curr;		break;
+			case 1:		date.month = (U8) curr;		break;
+			case 2:		date.day = (U8) curr;		break;
+			case 3:		date.hour = (U8) curr;		break;
+			case 4:		date.minute = (U8) curr;	break;
+			case 5:		date.second = (U8) curr;	break;
 
 			case 6: {	//Nanoseconds
 
@@ -223,7 +194,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 				if (curr * mul >= SECOND)
 					return false;
 
-				ns = (U32)(curr * mul);
+				date.ns = (U32)(curr * mul);
 				break;
 			}
 
@@ -236,7 +207,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 		prevI = i + 1;
 	}
 
-	const Ns res = Time_date(year, month, day, hour, minute, second, ns, isLocalTime);
+	const Ns res = Time_date(&date, isLocalTime);
 
 	if (res == U64_MAX)
 		return false;
@@ -245,20 +216,21 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 	return true;
 }
 
-Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, Bool isLocalTime) {
+Ns Time_date(const Date *date, Bool isLocalTime) {
 
 	if(
-		year < 1970 ||
-		month < 1 || month > 12 ||
-		day > 31 ||
-		hour >= 24 || minute >= 60 || second >= 60 ||
-		ns >= SECOND
+		!date ||
+		date->year < 1970 ||
+		date->month < 1 || date->month > 12 ||
+		date->day > 31 ||
+		date->hour >= 24 || date->minute >= 60 || date->second >= 60 ||
+		date->ns >= SECOND
 	)
 		return U64_MAX;
 
 	struct tm tm = {
-		.tm_year = year - 1900, .tm_mon = month - 1, .tm_mday = day,
-		.tm_hour = hour, .tm_min = minute, .tm_sec = second
+		.tm_year = date->year - 1900, .tm_mon = date->month - 1, .tm_mday = date->day,
+		.tm_hour = date->hour, .tm_min = date->minute, .tm_sec = date->second
 	};
 
 	if(isLocalTime)
@@ -266,13 +238,13 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, 
 
 	const time_t ts = isLocalTime ? mktime(&tm) : timegm(&tm);
 
-	if (ts == (time_t)-1 || (U64)ts * SECOND + ns < (U64)ts)
+	if (ts == (time_t)-1 || (U64)ts * SECOND + date->ns < (U64)ts)
 		return U64_MAX;
 
-	return (Ns)ts * SECOND + ns;
+	return (Ns)ts * SECOND + date->ns;
 }
 
-Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *minute, U8 *second, U32 *ns, Bool isLocalTime) {
+Bool Time_getDate(Ns timestamp, Date *date, Bool isLocalTime) {
 
 	const time_t inSecs = (time_t)(timestamp / SECOND);
 
@@ -291,13 +263,15 @@ Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *min
 	if(t.tm_year > 1900 + U16_MAX)
 		return false;
 
-	if(ns)		*ns = (U32)(timestamp % SECOND);
-	if(year)	*year = (U16)(t.tm_year + 1900);
-	if(month)	*month = (U8)(t.tm_mon + 1);
-	if(day)		*day = (U8)t.tm_mday;
-	if(hour)	*hour = (U8)t.tm_hour;
-	if(minute)	*minute = (U8)t.tm_min;
-	if(second)	*second = (U8)t.tm_sec;
+	if (!date)
+		return false;
 
+	date->ns = (U32)(timestamp % SECOND);
+	date->year = (U16)(t.tm_year + 1900);
+	date->month = (U8)(t.tm_mon + 1);
+	date->day = (U8)t.tm_mday;
+	date->hour = (U8)t.tm_hour;
+	date->minute = (U8)t.tm_min;
+	date->second = (U8)t.tm_sec;
 	return true;
 }

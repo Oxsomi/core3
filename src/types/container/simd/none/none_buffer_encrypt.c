@@ -18,10 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/type_cast.h"
 #include "types/math/vec.h"
 
 //Implemented from
@@ -47,7 +45,7 @@ static const U8 AES_SBOX[256] = {
 	0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16
 };
 
-U32 AES_subWord(U32 a) {
+static inline U32 AES_subWord(U32 a) {
 
 	U32 res = 0;
 
@@ -57,7 +55,7 @@ U32 AES_subWord(U32 a) {
 	return res;
 }
 
-U32 AES_rotWord(U32 a) {
+static inline U32 AES_rotWord(U32 a) {
 	return (a >> 8) | (a << 24);
 }
 
@@ -89,7 +87,7 @@ typedef struct U8x4x4 {
 	U8 v[4][4];
 } U8x4x4;
 
-U8x4x4 U8x4x4_transpose(const U8x4x4 *r) {
+static inline U8x4x4 U8x4x4_transpose(const U8x4x4 *r) {
 
 	U8x4x4 t = *r;
 
@@ -105,7 +103,7 @@ typedef union I32x4_U8x4x4 {
 	U8x4x4 v4x4;
 } I32x4_U8x4x4;
 
-I32x4 AES_shiftRows(I32x4 a) {
+static inline I32x4 AES_shiftRows(I32x4 a) {
 
 	I32x4_U8x4x4 ap = (I32x4_U8x4x4) { .v = a };
 	I32x4_U8x4x4 res = ap;
@@ -117,7 +115,7 @@ I32x4 AES_shiftRows(I32x4 a) {
 	return res.v;
 }
 
-I32x4 AES_subBytes(I32x4 a) {
+static inline I32x4 AES_subBytes(I32x4 a) {
 
 	I32x4 res = a;
 	U8 *ptr = (U8*)&res;
@@ -128,7 +126,7 @@ I32x4 AES_subBytes(I32x4 a) {
 	return res;
 }
 
-U8 AES_g2_8(U8 v, U8 mul) {
+static inline U8 AES_g2_8(U8 v, U8 mul) {
 	switch (mul) {
 		case 2:		return (v << 1) ^ ((v >> 7) * 0x1B);
 		case 3:		return v ^ AES_g2_8(v, 2);
@@ -143,7 +141,7 @@ static U8 AES_MIX_COLUMN[4][4] = {
 	{ 3, 1, 1, 2 }
 };
 
-I32x4 AES_mixColumns(I32x4 vvv) {
+static inline I32x4 AES_mixColumns(I32x4 vvv) {
 
 	I32x4_U8x4x4 v = (I32x4_U8x4x4) { .v = vvv };
 
@@ -163,18 +161,20 @@ I32x4 AES_mixColumns(I32x4 vvv) {
 	return res;
 }
 
-I32x4 AES_encodeBlock(I32x4 a, I32x4 b, Bool isLast) {
-
+I32x4 AES_encodeBlock(I32x4 a, I32x4 b) {
 	I32x4 t = AES_shiftRows(a);
 	t = AES_subBytes(t);
-
-	if(!isLast)
-		t = AES_mixColumns(t);
-
+	t = AES_mixColumns(t);
 	return I32x4_xor(t, b);
 }
 
-I32x4 AESEncryptionContext_rsh(I32x4 v, U8 shift) {
+I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b) {
+	I32x4 t = AES_shiftRows(a);
+	t = AES_subBytes(t);
+	return I32x4_xor(t, b);
+}
+
+static inline I32x4 AESEncryptionContext_rsh(I32x4 v, U8 shift) {
 
 	U64 *a = (U64*) &v;
 	U64 *b = a + 1;

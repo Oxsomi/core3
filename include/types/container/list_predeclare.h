@@ -19,18 +19,24 @@
 */
 
 #pragma once
-#include "types/base/types.h"
+#include "types/container/generic_list_predeclare.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef struct Allocator Allocator;
-typedef struct Lexer Lexer;
+typedef struct Buffer Buffer;
 
-Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr);
-void Lexer_freex(Lexer *lexer);
-void Lexer_print(Lexer lexer);
+TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
+TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
+TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+
+TListDefinition(Buffer, ListBuffer);
+
+TListDefinition(ListU8, ListListU8);
+TListDefinition(ListU16, ListListU16);
+TListDefinition(ListU32, ListListU32);
+TListDefinition(ListU64, ListListU64);
 
 #ifdef __cplusplus
 	}

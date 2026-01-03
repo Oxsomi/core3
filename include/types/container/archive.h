@@ -62,71 +62,64 @@ typedef struct ArchiveCombineSettings {
 	EArchiveCombineFlags flags;
 } ArchiveCombineSettings;
 
-Bool Archive_create(Allocator alloc, Archive *archive, Error *e_rr);
-Bool Archive_createCopy(Archive a, Allocator alloc, Archive *archive, Error *e_rr);
-Bool Archive_free(Archive *archive, Allocator alloc);
+Bool Archive_create(const Allocator *alloc, Archive *archive, Error *e_rr);
+Bool Archive_createCopy(const Archive *a, const Allocator *alloc, Archive *archive, Error *e_rr);
+void Archive_free(Archive *archive, const Allocator *alloc);
 
-Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allocator alloc, Archive *combined, Error *e_rr);
+typedef struct ArchiveOptionsConst {		//Needs to match ArchiveOptions except Archive*
+	const Archive *archive;
+	const CharString *path;
+	const Allocator *alloc;
+} ArchiveOptionsConst;
 
-Bool Archive_hasFile(Archive archive, CharString path, Allocator alloc);
-Bool Archive_hasFolder(Archive archive, CharString path, Allocator alloc);
-Bool Archive_has(Archive archive, CharString path, Allocator alloc);
+typedef struct ArchiveOptions {
+	Archive *archive;
+	const CharString *path;
+	const Allocator *alloc;
+} ArchiveOptions;
 
-Bool Archive_addDirectory(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
-Bool Archive_addFile(Archive *archive, CharString path, Buffer *data, Ns timestamp, Allocator alloc, Error *e_rr);
+Bool Archive_hasFile(const ArchiveOptionsConst *archive);
+Bool Archive_hasFolder(const ArchiveOptionsConst *archive);
+Bool Archive_has(const ArchiveOptionsConst *archive);
 
-Bool Archive_updateFileData(Archive *archive, CharString path, Buffer data, Allocator alloc, Error *e_rr);
-
-Bool Archive_getFileData(Archive archive, CharString path, Buffer *data, Allocator alloc, Error *e_rr);
-Bool Archive_getFileDataConst(Archive archive, CharString path, Buffer *data, Allocator alloc, Error *e_rr);
-
-Bool Archive_removeFile(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
-Bool Archive_removeFolder(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
-Bool Archive_remove(Archive *archive, CharString path, Allocator alloc, Error *e_rr);
-
-Bool Archive_rename(Archive *archive, CharString loc, CharString newFileName, Allocator alloc, Error *e_rr);
-Bool Archive_move(Archive *archive, CharString loc, CharString directoryName, Allocator alloc, Error *e_rr);
-
-U64 Archive_getIndex(Archive archive, CharString path, Allocator alloc);		//Get index in archive
-Bool Archive_getInfo(Archive archive, CharString path, FileInfo *info, Allocator alloc, Error *e_rr);
-
-Bool Archive_queryFileEntryCount(
-	Archive archive,
-	CharString loc,
-	Bool isRecursive,
-	U64 *res,
-	Allocator alloc,
+Bool Archive_combine(
+	const Archive *a,
+	const Archive *b,
+	ArchiveCombineSettings settings,
+	const Allocator *alloc,
+	Archive *combined,
 	Error *e_rr
 );
 
-Bool Archive_queryFileCount(
-	Archive archive,
-	CharString loc,
-	Bool isRecursive,
-	U64 *res,
-	Allocator alloc,
-	Error *e_rr
-);
+Bool Archive_addDirectory(const ArchiveOptions *archive, Error *e_rr);
+Bool Archive_addFile(const ArchiveOptions *archive, Buffer *data, Ns timestamp, Error *e_rr);
 
-Bool Archive_queryFolderCount(
-	Archive archive,
-	CharString loc,
-	Bool isRecursive,
-	U64 *res,
-	Allocator alloc,
-	Error *e_rr
-);
+Bool Archive_updateFileData(const ArchiveOptions *archive, const Buffer *data, Error *e_rr);
 
-Bool Archive_foreach(
-	Archive archive,
-	CharString loc,
-	FileCallback callback,
-	void *userData,
-	Bool isRecursive,
-	EFileType type,
-	Allocator alloc,
-	Error *e_rr
-);
+Bool Archive_getFileData(const ArchiveOptions *archive, Buffer *data, Error *e_rr);
+Bool Archive_getFileDataConst(const ArchiveOptions *archive, Buffer *data, Error *e_rr);
+
+Bool Archive_removeFile(const ArchiveOptions *archive, Error *e_rr);
+Bool Archive_removeFolder(const ArchiveOptions *archive, Error *e_rr);
+Bool Archive_remove(const ArchiveOptions *archive, Error *e_rr);
+
+Bool Archive_rename(const ArchiveOptions *archive, const CharString *newFileName, Error *e_rr);
+Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName, Error *e_rr);
+
+U64 Archive_getIndex(const ArchiveOptions *archive);		//Get index in archive
+Bool Archive_getInfo(const ArchiveOptions *archive, FileInfo *info, Error *e_rr);
+
+typedef struct ArchiveQuery {
+	const Archive *archive;
+	const CharString *loc;
+	Bool isRecursive;
+	const Allocator *alloc;
+} ArchiveQuery;
+
+Bool Archive_queryFileEntryCount(const ArchiveQuery *query, U64 *res, Error *e_rr);
+Bool Archive_queryFileCount(const ArchiveQuery *query, U64 *res, Error *e_rr);
+Bool Archive_queryFolderCount(const ArchiveQuery *query, U64 *res, Error *e_rr);
+Bool Archive_foreach(const ArchiveQuery *query, FileCallback callback, void *userData, EFileType type, Error *e_rr);
 
 #ifdef __cplusplus
 	}

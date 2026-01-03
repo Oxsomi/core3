@@ -18,11 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "types/base/allocator.h"
-#include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/math/vec.h"
-#include "types/math/type_cast.h"
 #include "types/base/constants.h"
 
 //SHA state
@@ -52,17 +49,17 @@ static const U32 SHA256_K[64] = {
 
 //Arm7's ror instruction aka Java's >>>; shift that maintains right side of the bits into left side
 
-U32 U32_ror(const U32 v, U32 amount) {
+static inline U32 U32_ror(const U32 v, U32 amount) {
 	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
 	return amount ? ((v >> amount) | (v << (32 - amount))) : v;
 }
 
-U32 U32_rol(const U32 v, U32 amount) {
+static inline U32 U32_rol(const U32 v, U32 amount) {
 	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
 	return amount ? ((v << amount) | (v >> (32 - amount))) : v;
 }
 
-void Buffer_sha256Internal(Buffer buf, U32 *output) {
+void Buffer_sha256Internal(const Buffer buf, U32 *output) {
 
 	I32x4 state[2] = {
 		I32x4_load4(SHA256_STATE),
@@ -101,7 +98,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 			if (wasPaddingBlock) {
 
-				Buffer_unsetAllBits(Buffer_createRef(block, 64 - sizeof(U64)));
+				Buffer_unsetAllBits(Buffer_createRef(block, 64 - sizeof(U64)), NULL);
 
 				if(wasPerfectlyAligned)
 					block[0] = 0x80;
@@ -132,7 +129,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 				*((U8*)(void*)block + realLen) = 0x80;
 
 				if(realLen <= 62)
-					Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1));
+					Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1), NULL);
 
 				//We need one more block just to contain the length at the end
 
@@ -303,7 +300,7 @@ typedef union MD5State {
 	U32 v[4];
 } MD5State;
 
-void MD5State_update(MD5State *stateOut, Buffer buf) {
+static inline void MD5State_update(MD5State *stateOut, const Buffer buf) {
 
 	MD5State state = *stateOut;
 	U32 data[16];
@@ -343,7 +340,7 @@ void MD5State_update(MD5State *stateOut, Buffer buf) {
 		stateOut->v[i] += state.v[i];
 }
 
-void Buffer_md5Generic(Buffer buf, MD5State *state) {
+static inline void Buffer_md5Generic(const Buffer buf, MD5State *state) {
 
 	//Create state for first perfectly filled blocks
 
@@ -356,7 +353,7 @@ void Buffer_md5Generic(Buffer buf, MD5State *state) {
 		MD5State_update(state, Buffer_createRefConst(buf.ptr + (i << 6), 64));
 }
 
-I32x4 Buffer_md5(Buffer buf) {
+I32x4 Buffer_md5(const Buffer buf) {
 
 	MD5State state;
 	Buffer_md5Generic(buf, &state);
@@ -380,7 +377,7 @@ I32x4 Buffer_md5(Buffer buf) {
 
 	if (off >= 56) {
 		MD5State_update(&state, Buffer_createRefConst(tmp, 64));
-		Buffer_unsetAllBits(Buffer_createRefConst(tmp, 64));
+		Buffer_unsetAllBits(Buffer_createRefConst(tmp, 64), NULL);
 	}
 
 	*(U64*)(tmp + 56) = bufLen << 3;
@@ -398,24 +395,24 @@ U64 Buffer_fnv1a64Single(U64 a, U64 hash) {
 	return (a ^ hash) * Buffer_fnv1a64Prime;
 }
 
-U64 Buffer_fnv1a64(Buffer buf, U64 hash) {
+U64 Buffer_fnv1a64(const Buffer buf, U64 hash) {
 
 	U64 len = Buffer_length(buf);
 	U64 off = 0;
 
 	for(; off < (len &~ 7); off += sizeof(U64)) {
-		U64 tmp = Buffer_readU64(buf, off, NULL);
+		U64 tmp = Buffer_readU64(buf, off, NULL, NULL);
 		hash = Buffer_fnv1a64Single(tmp, hash);
 	}
 
 	if (len & 4) {
-		U32 tmp = Buffer_readU32(buf, off, NULL);
+		U32 tmp = Buffer_readU32(buf, off, NULL, NULL);
 		hash = Buffer_fnv1a64Single(tmp, hash);
 		off += 4;
 	}
 
 	if (len & 2) {
-		U16 tmp = Buffer_readU16(buf, off, NULL);
+		U16 tmp = Buffer_readU16(buf, off, NULL, NULL);
 		hash = Buffer_fnv1a64Single(tmp, hash);
 		off += 2;
 	}

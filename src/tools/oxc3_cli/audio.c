@@ -28,6 +28,7 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "types/container/ref_ptr.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/constants.h"
 
 Bool CLI_audioDevices(ParsedArgs args) {
@@ -64,24 +65,22 @@ typedef struct CLIAudioConvertForeach {
 Bool CLI_audioConvertFind(FileInfo info, CLIAudioConvertForeach *data, Error *e_rr) {
 
 	CharString copy = CharString_createNull();
+	CharString wav = CharString_createRefCStrConst(".wav");
 	Bool s_uccess = true;
 
-	if (
-		info.type == EFileType_File &&
-		CharString_endsWithStringInsensitive(info.path, CharString_createRefCStrConst(".wav"), 0)
-	) {
+	if (info.type == EFileType_File && CharString_endsWithStringInsensitive(&info.path, &wav, 0)) {
 
 		CharString cut = CharString_createNull();
-		if (!CharString_cut(info.path, CharString_length(data->inputDir), 0, &cut))
-			retError(clean, Error_invalidState(0, "CLI_audioConvertFind() cut failed"))
+		if (!CharString_cut(&info.path, CharString_length(data->inputDir), 0, &cut))
+			retError(clean, Error_invalidState(0, "CLI_audioConvertFind() cut failed"));
 
-		gotoIfError2(clean, CharString_createCopyx(data->outputDir, &copy))
-		gotoIfError2(clean, CharString_appendStringx(&copy, cut))
-		gotoIfError2(clean, ListCharString_pushBackx(data->outputs, copy))
+		gotoIfError3(clean, CharString_createCopyx(data->outputDir, &copy, e_rr));
+		gotoIfError3(clean, CharString_appendStringx(&copy, cut, e_rr));
+		gotoIfError3(clean, ListCharString_pushBackx(data->outputs, copy, e_rr));
 		copy = CharString_createNull();
 
-		gotoIfError2(clean, CharString_createCopyx(info.path, &copy))
-		gotoIfError2(clean, ListCharString_pushBackx(data->inputs, copy))
+		gotoIfError3(clean, CharString_createCopyx(info.path, &copy, e_rr));
+		gotoIfError3(clean, ListCharString_pushBackx(data->inputs, copy, e_rr));
 		copy = CharString_createNull();
 	}
 

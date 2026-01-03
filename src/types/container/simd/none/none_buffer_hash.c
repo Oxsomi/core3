@@ -24,7 +24,7 @@
 #include "types/math/math.h"
 #include "types/math/vec.h"
 
-void Buffer_sha256Internal(Buffer buf, U32 *output);
+void Buffer_sha256Internal(const Buffer buf, U32 *output);
 
 //Fallback CRC32 implementation
 
@@ -33,7 +33,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output);
 
 extern const U32 CRC32C_TABLE[16][256];
 
-U32 Buffer_crc32c(Buffer buf) {
+U32 Buffer_crc32c(const Buffer buf) {
 
 	U64 crc = U32_MAX;
 
@@ -80,7 +80,7 @@ U32 Buffer_crc32c(Buffer buf) {
 	return (U32)crc ^ U32_MAX;
 }
 
-void Buffer_sha256(Buffer buf, U32 output[8]) {
+void Buffer_sha256(const Buffer buf, U32 output[8]) {
 
 	if(!output)
 		return;

@@ -43,16 +43,19 @@ FLP_CONSTS(F64);
 //Uint
 //TODO: Errors
 
-#define ARIT_OP(T)								\
-T T##_min(T v0, T v1);							\
-T T##_max(T v0, T v1);							\
+#define ARIT_OP(T)									\
+T T##_min(T v0, T v1);								\
+T T##_max(T v0, T v1);								\
 T T##_clamp(T v, T mi, T ma)
 
-#define XINT_OP(T)								\
-ARIT_OP(T);										\
-T T##_pow2(T v);								\
-T T##_exp10(T v);								\
-T T##_exp2(T v);								\
+#define XINT_OP(T)									\
+ARIT_OP(T);											\
+T T##_pow2(T v);									\
+T T##_pow3(T v);									\
+T T##_pow4(T v);									\
+T T##_pow5(T v);									\
+T T##_exp10(T v);									\
+T T##_exp2(T v);									\
 T T##_safeDiv(T a, T b)							//A / B is 0 if B is zero
 
 //TODO: Int, uint %/^*+-
@@ -64,8 +67,8 @@ XINT_OP(U8);
 
 //Int
 
-#define INT_IOP(T)								\
-XINT_OP(T);										\
+#define INT_IOP(T)									\
+XINT_OP(T);											\
 T T##_abs(T v)
 
 INT_IOP(I64);
@@ -79,47 +82,50 @@ INT_IOP(I8);
 //		If not, throw! +- etc can check on lost precision (e.g. 1% of value)
 //TODO: Proper error checking!
 
-#define FLP_OP(T)								\
-												\
-ARIT_OP(T);										\
-												\
-Error T##_pow2(T v, T *res);					\
-Error T##_exp10(T v, T *res);					\
-Error T##_exp2(T v, T *res);					\
-												\
-T T##_saturate(T v);							\
-												\
-T T##_lerp(T a, T b, T perc);					\
-T T##_abs(T v);									\
-T T##_sqrt(T v);								\
-												\
-Bool T##_isNaN(T v);							\
-Bool T##_isInf(T v);							\
-Bool T##_isValid(T v);							\
-												\
-Error T##_pow(T v, T exp, T *res);				\
-Error T##_expe(T v, T *res);					\
-												\
-T T##_log10(T v);								\
-T T##_loge(T v);								\
-T T##_log2(T v);								\
-												\
-T T##_asin(T v);								\
-T T##_sin(T v);									\
-T T##_cos(T v);									\
-T T##_acos(T v);								\
-T T##_tan(T v);									\
-T T##_atan(T v);								\
-T T##_atan2(T y, T x);							\
-												\
-T T##_round(T v);								\
-T T##_ceil(T v);								\
-T T##_floor(T v);								\
-T T##_fract(T v);								\
-												\
-Error T##_mod(T v, T mod, T *result);			\
-												\
-T T##_sign(T v);								\
+#define FLP_OP(T)									\
+													\
+ARIT_OP(T);											\
+													\
+Bool T##_pow2(T v, T *res, Error *e_rr);			\
+Bool T##_pow3(T v, T *res, Error *e_rr);			\
+Bool T##_pow4(T v, T *res, Error *e_rr);			\
+Bool T##_pow5(T v, T *res, Error *e_rr);			\
+Bool T##_exp10(T v, T *res, Error *e_rr);			\
+Bool T##_exp2(T v, T *res, Error *e_rr);			\
+													\
+T T##_saturate(T v);								\
+													\
+T T##_lerp(T a, T b, T perc);						\
+T T##_abs(T v);										\
+T T##_sqrt(T v);									\
+													\
+Bool T##_isNaN(T v);								\
+Bool T##_isInf(T v);								\
+Bool T##_isValid(T v);								\
+													\
+Bool T##_pow(T v, T exp, T *res, Error *e_rr);		\
+Bool T##_expe(T v, T *res, Error *e_rr);			\
+													\
+T T##_log10(T v);									\
+T T##_loge(T v);									\
+T T##_log2(T v);									\
+													\
+T T##_asin(T v);									\
+T T##_sin(T v);										\
+T T##_cos(T v);										\
+T T##_acos(T v);									\
+T T##_tan(T v);										\
+T T##_atan(T v);									\
+T T##_atan2(T y, T x);								\
+													\
+T T##_round(T v);									\
+T T##_ceil(T v);									\
+T T##_floor(T v);									\
+T T##_fract(T v);									\
+													\
+Bool T##_mod(T v, T mod, T *result, Error *e_rr);	\
+													\
+T T##_sign(T v);									\
 T T##_signInc(T v)
 
 FLP_OP(F32);

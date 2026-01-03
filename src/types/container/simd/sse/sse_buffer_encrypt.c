@@ -18,10 +18,6 @@
 *  This is called dual licensing.
 */
 
-#include "types/base/allocator.h"
-#include "types/base/error.h"
-#include "types/container/buffer.h"
-#include "types/math/type_cast.h"
 #include "types/math/vec.h"
 
 I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
@@ -44,9 +40,8 @@ I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 	}
 }
 
-I32x4 AES_encodeBlock(I32x4 a, I32x4 b, Bool isLast) {
-	return isLast ? _mm_aesenclast_si128(a, b) : _mm_aesenc_si128(a, b);
-}
+I32x4 AES_encodeBlock(I32x4 a, I32x4 b) { return _mm_aesenc_si128(a, b); }
+I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b) { return _mm_aesenclast_si128(a, b); }
 
 void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
 	ghashLut[0] = I32x4_swapEndianness(H);

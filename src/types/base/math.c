@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "types/math/math.h"
+#include "types/base/math.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
@@ -74,24 +74,6 @@ T T##_pow2(T v) {														\
 	return res / v != v ? T##_MAX : res;								\
 }																		\
 																		\
-T T##_pow3(T v) {														\
-	if(!v) return 0;													\
-	T res = T##_pow2(v), res2 = res * v;								\
-	return res == T##_MAX || res2 / v != res ? T##_MAX : res2;			\
-}																		\
-																		\
-T T##_pow4(T v) {														\
-	if(!v) return 0;													\
-	T res = T##_pow2(v), res2 = T##_pow2(res);							\
-	return res == T##_MAX || res2 == T##_MAX ? T##_MAX : res2;			\
-}																		\
-																		\
-T T##_pow5(T v) {														\
-	if(!v) return 0;													\
-	T res = T##_pow4(v), res2 = res * v;								\
-	return res == T##_MAX || res2 / v != res ? T##_MAX : res2;			\
-}																		\
-																		\
 T T##_exp10(T v) {														\
 																		\
 	if(v >= sizeof(U64_EXP10) / sizeof(U64_EXP10[0]))					\
@@ -126,21 +108,6 @@ T T##_pow2(T v) { 																			\
 	return res < T##_abs(v) ? T##_MAX : res;												\
 }																							\
 																							\
-T T##_pow3(T v) { 																			\
-	T res = v * v * v; 																		\
-	return res < T##_abs(v) ? T##_MAX : res;												\
-}																							\
-																							\
-T T##_pow4(T v) { 																			\
-	T res = v * v; res *= res;																\
-	return res < T##_abs(v) ? T##_MAX : res;												\
-}																							\
-																							\
-T T##_pow5(T v) { 																			\
-	T res = v * v; res *= res * v;															\
-	return res < T##_abs(v) ? T##_MAX : res;												\
-}																							\
-																							\
 T T##_exp10(T v) {																			\
 																							\
 	if(v < 0 || v >= (T)(sizeof(U64_EXP10) / sizeof(U64_EXP10[0]) - 1))						\
@@ -172,23 +139,29 @@ T T##_saturate(T v) { return T##_clamp(v, 0, 1); }											\
 T T##_lerp(T a, T b, T perc) { return a + (b - a) * perc; }									\
 T T##_abs(T v) { return v < 0 ? -v : v; }													\
 																							\
-Error T##_mod(T v, T mod, T *res) { 														\
+Bool T##_mod(T v, T mod, T *res, Error *e_rr) { 											\
+																							\
+	Bool s_uccess = true;																	\
 																							\
 	if(!res)																				\
-		return Error_nullPointer(1, #T "_mod()::res is required");							\
+		retError(clean, Error_nullPointer(1, #T "_mod()::res is required"));				\
 																							\
 	const void *vptr = &v;																	\
 																							\
 	if(!mod)																				\
-		return Error_divideByZero(0, *(const TInt*) vptr, 0, #T "_mod() division by zero");	\
+		retError(clean, Error_divideByZero(													\
+			0, *(const TInt*) vptr, 0, #T "_mod() division by zero"							\
+		));																					\
 																							\
 	T r = fmod##suffix(v, mod); 															\
 																							\
 	if(!T##_isValid(r))																		\
-		return Error_NaN(0, #T "_mod() generated NaN or Inf");								\
+		retError(clean, Error_NaN(0, #T "_mod() generated NaN or Inf"));					\
 																							\
 	*res = r;																				\
-	return Error_none();																	\
+																							\
+clean:																						\
+	return s_uccess;																		\
 }																							\
 																							\
 Bool T##_isNaN(T v) { return isnan(v); }													\
@@ -218,78 +191,46 @@ T T##_round(T v) { return round##suffix(v); }												\
 T T##_ceil(T v) { return ceil##suffix(v); }													\
 T T##_floor(T v) { return floor##suffix(v); }												\
 																							\
-Error T##_pow2(T v, T *res) { 																\
+Bool T##_pow2(T v, T *res, Error *e_rr) { 													\
+																							\
+	Bool s_uccess = true;																	\
 																							\
 	if(!res)																				\
-		return Error_nullPointer(1, #T "_pow2()::res is required");							\
-																							\
-	*res = v * v; 																			\
-																							\
-	const void *rPtr = res, *vPtr = &v;														\
-	return !T##_isValid(*res) ? Error_overflow(												\
-		0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow2() generated an inf"			\
-	) : Error_none();																		\
-}																							\
-																							\
-Error T##_pow3(T v, T *res) { 																\
-																							\
-	if(!res)																				\
-		return Error_nullPointer(1, #T "_pow3()::res is required");							\
-																							\
-	*res = v * v * v;																		\
-																							\
-	const void *rPtr = res, *vPtr = &v;														\
-	return !T##_isValid(*res) ? Error_overflow(												\
-		0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow3() generated an inf"			\
-	) : Error_none();																		\
-}																							\
-																							\
-Error T##_pow4(T v, T *res) { 																\
-																							\
-	if(!res)																				\
-		return Error_nullPointer(1, #T "_pow4()::res is required");							\
+		retError(clean, Error_nullPointer(1, #T "_pow2()::res is required"));				\
 																							\
 	*res = v * v;																			\
-	*res *= *res;																			\
 																							\
 	const void *rPtr = res, *vPtr = &v;														\
-	return !T##_isValid(*res) ? Error_overflow(												\
-		0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow4() generated an inf"			\
-	) : Error_none();																		\
+	if(!T##_isValid(*res))																	\
+		retError(clean, Error_overflow(														\
+			0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow2() generated an inf"		\
+		));																					\
+																							\
+clean:																						\
+	return s_uccess;																		\
 }																							\
 																							\
-Error T##_pow5(T v, T *res) { 																\
+Bool T##_pow(T v, T exp, T *res, Error *e_rr) { 											\
 																							\
-	if(!res)																				\
-		return Error_nullPointer(1, #T "_pow5()::res is required");							\
+	Bool s_uccess = true;																	\
 																							\
-	*res = v * v; 																			\
-	*res *= *res; 																			\
-	*res *= v;																				\
-																							\
-	const void *rPtr = res, *vPtr = &v;														\
-	return !T##_isValid(*res) ? Error_overflow(												\
-		0,*(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow5() generated an inf"				\
-	) : Error_none();																		\
-}																							\
-																							\
-Error T##_pow(T v, T exp, T *res) { 														\
-																							\
-	T r = pow##suffix(v, exp); 																\
+	T r = pow##suffix(v, exp);																\
 	const void *rPtr = &r, *vPtr = &v;														\
 																							\
 	if(!T##_isValid(r))																		\
-		return Error_overflow(																\
+		retError(clean, Error_overflow(														\
 			0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow() generated an inf"			\
-		);																					\
+		));																					\
 																							\
 	*res = r;																				\
-	return Error_none();																	\
+																							\
+clean:																						\
+	return s_uccess;																		\
 }																							\
 																							\
-Error T##_expe(T v, T *res) { return T##_pow(T##_E, v, res); }								\
-Error T##_exp2(T v, T *res) { return T##_pow(2, v, res); }									\
-Error T##_exp10(T v, T *res) { return T##_pow(10, v, res); }
+Bool T##_expe(T v, T *res, Error *e_rr) { return T##_pow(T##_E, v, res, e_rr); }			\
+Bool T##_exp2(T v, T *res, Error *e_rr) { return T##_pow(2, v, res, e_rr); }				\
+Bool T##_exp10(T v, T *res, Error *e_rr) { return T##_pow(10, v, res, e_rr); }
 
 FLP_OP_IMPL(F32, U32, f);
 FLP_OP_IMPL(F64, U64, );

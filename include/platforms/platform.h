@@ -20,16 +20,16 @@
 
 #pragma once
 #include "types/base/platform_types.h"
-#include "types/container/string.h"
-#include "types/base/allocator.h"
+#include "types/base/string.h"
 #include "types/container/archive.h"
 #include "types/base/lock.h"
-#include "types/base/thread.h"
-#include "platforms/dynamic_library.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+typedef struct Allocator Allocator;
+typedef struct Thread Thread;
 
 typedef struct VirtualSection {
 
@@ -61,7 +61,7 @@ typedef struct Platform {
 	CharString workDirectory;			//Contains a trailing slash to make file stuff easier
 	CharString appDirectory;			//Installation location if useWorkingDir, otherwise same as workDirectory
 
-	Allocator alloc;
+	const Allocator *alloc;
 
 	SpinLock virtualSectionsLock;
 	ListVirtualSection virtualSections;

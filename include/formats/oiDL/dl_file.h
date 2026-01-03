@@ -21,6 +21,7 @@
 #pragma once
 #include "formats/oiXX/oiXX.h"
 #include "types/container/list.h"
+#include "types/container/list_predeclare.h"
 
 #ifdef __cplusplus
 	extern "C" {

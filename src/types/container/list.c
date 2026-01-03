@@ -19,6 +19,7 @@
 */
 
 #include "types/container/list_impl.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/constants.h"
 
 TListNamedBaseImpl(ListU64);
@@ -38,7 +39,7 @@ TListImpl(ListU16);
 TListImpl(ListU32);
 TListImpl(ListU64);
 
-void ListBuffer_freeUnderlying(ListBuffer *list, Allocator alloc) {
+void ListBuffer_freeUnderlying(ListBuffer *list, const Allocator *alloc) {
 
 	if(!list)
 		return;
@@ -49,7 +50,7 @@ void ListBuffer_freeUnderlying(ListBuffer *list, Allocator alloc) {
 	ListBuffer_free(list, alloc);
 }
 
-void ListListU8_freeUnderlying(ListListU8 *list, Allocator alloc) {
+void ListListU8_freeUnderlying(ListListU8 *list, const Allocator *alloc) {
 
 	if(!list)
 		return;
@@ -60,7 +61,7 @@ void ListListU8_freeUnderlying(ListListU8 *list, Allocator alloc) {
 	ListListU8_free(list, alloc);
 }
 
-void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc) {
+void ListListU16_freeUnderlying(ListListU16 *list, const Allocator *alloc) {
 
 	if(!list)
 		return;
@@ -71,7 +72,7 @@ void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc) {
 	ListListU16_free(list, alloc);
 }
 
-void ListListU32_freeUnderlying(ListListU32 *list, Allocator alloc) {
+void ListListU32_freeUnderlying(ListListU32 *list, const Allocator *alloc) {
 
 	if(!list)
 		return;
@@ -82,7 +83,7 @@ void ListListU32_freeUnderlying(ListListU32 *list, Allocator alloc) {
 	ListListU32_free(list, alloc);
 }
 
-void ListListU64_freeUnderlying(ListListU64 *list, Allocator alloc) {
+void ListListU64_freeUnderlying(ListListU64 *list, const Allocator *alloc) {
 
 	if(!list)
 		return;
@@ -93,7 +94,7 @@ void ListListU64_freeUnderlying(ListListU64 *list, Allocator alloc) {
 	ListListU64_free(list, alloc);
 }
 
-Bool ListListU8_createCopyUnderlying(ListListU8 src, Allocator alloc, ListListU8 *dst, Error *e_rr) {
+Bool ListListU8_createCopyUnderlying(const ListListU8 *src, const Allocator *alloc, ListListU8 *dst, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -112,7 +113,7 @@ clean:
 	return s_uccess;
 }
 
-Bool ListListU16_createCopyUnderlying(ListListU16 src, Allocator alloc, ListListU16 *dst, Error *e_rr) {
+Bool ListListU16_createCopyUnderlying(const ListListU16 *src, const Allocator *alloc, ListListU16 *dst, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -131,7 +132,7 @@ clean:
 	return s_uccess;
 }
 
-Bool ListListU32_createCopyUnderlying(ListListU32 src, Allocator alloc, ListListU32 *dst, Error *e_rr) {
+Bool ListListU32_createCopyUnderlying(const ListListU32 *src, const Allocator *alloc, ListListU32 *dst, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -150,7 +151,7 @@ clean:
 	return s_uccess;
 }
 
-Bool ListListU64_createCopyUnderlying(ListListU64 src, Allocator alloc, ListListU64 *dst, Error *e_rr) {
+Bool ListListU64_createCopyUnderlying(const ListListU64 *src, const Allocator *alloc, ListListU64 *dst, Error *e_rr) {
 
 	Bool s_uccess = true;
 

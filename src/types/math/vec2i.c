@@ -22,8 +22,6 @@
 #include "types/math/type_cast.h"
 #include "types/base/error.h"
 
-BUFFER_OP_IMPL(I32x2);
-
 //Convert raw bits to data type
 
 F32x2 F32x2_bitsI32x2(I32x2 a) {

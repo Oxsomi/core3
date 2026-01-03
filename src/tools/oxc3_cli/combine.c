@@ -22,6 +22,8 @@
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "types/container/buffer.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_read.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
 #include "platforms/log.h"
@@ -80,9 +82,10 @@ Bool CLI_fileCombine(ParsedArgs args) {
 		)
 			gotoIfError(clean, Error_invalidState(
 				2, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
-			))
+			));
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
+		const CharString ox = CharString_createRefCStrConst("0x");
+		U64 off = CharString_startsWithStringInsensitive(&key, &ox, 0) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64)
 			gotoIfError(clean, Error_invalidState(
@@ -172,14 +175,18 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			if (!CAFile_writex(tmp[2], &buf[2], e_rr)) {
 
 				if(encryptionKey)
-					Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
+					Buffer_unsetAllBits(
+						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+					);
 
 				Log_warnLnx("CLI_fileCombine() CAFile can't be serialized");
 				goto cleanCA;
 			}
 
 			if(encryptionKey)
-				Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
+				Buffer_unsetAllBits(
+					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+				);
 
 		cleanCA:
 
@@ -218,14 +225,18 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			if (!DLFile_writex(tmp[2], &buf[2], e_rr)) {
 
 				if(encryptionKey)
-					Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
+					Buffer_unsetAllBits(
+						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+					);
 
 				Log_warnLnx("CLI_fileCombine() DLFile can't be serialized");
 				goto cleanDL;
 			}
 
 			if(encryptionKey)
-				Buffer_unsetAllBits(Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)));
+				Buffer_unsetAllBits(
+					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+				);
 
 		cleanDL:
 
@@ -253,7 +264,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 clean:
 
 	if(encryptionKey)
-		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
 
 	for(U8 i = 0; i < sizeof(buf) / sizeof(buf[0]); ++i)
 		Buffer_freex(&buf[i]);

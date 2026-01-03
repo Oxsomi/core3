@@ -22,6 +22,7 @@
 #include "formats/oiCA/ca_file.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
+#include "types/base/string_read_helper.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
@@ -148,7 +149,7 @@ Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Char
 
 	else {
 
-		gotoIfError2(clean, CharString_appendx(&resolved, '/'))
+		gotoIfError3(clean, CharString_appendx(&resolved, '/', e_rr))
 		caFileRecursion.root = resolved;
 
 		gotoIfError3(clean, File_foreach(
@@ -169,7 +170,7 @@ Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Char
 
 clean:
 	if(settings.encryptionType)
-		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
+		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)), NULL);
 
 	FileInfo_freex(&fileInfo);
 	CAFile_freex(&file);
@@ -217,10 +218,10 @@ Bool CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		//Grab destination dest
 
-		gotoIfError2(clean, CharString_createCopyx(output, &outputPath))
+		gotoIfError3(clean, CharString_createCopyx(output, &outputPath, e_rr));
 
 		if(!CharString_endsWithSensitive(outputPath, '/', 0))
-			gotoIfError2(clean, CharString_appendx(&outputPath, '/'))
+			gotoIfError3(clean, CharString_appendx(&outputPath, '/', e_rr));
 
 		//Write archive to disk
 
@@ -228,16 +229,16 @@ Bool CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 			ArchiveEntry ei = file.archive.entries.ptr[i];
 
-			gotoIfError2(clean, CharString_createCopyx(outputPath, &loc))
-			gotoIfError2(clean, CharString_appendStringx(&loc, ei.path))
+			gotoIfError3(clean, CharString_createCopyx(outputPath, &loc, e_rr));
+			gotoIfError3(clean, CharString_appendStringx(&loc, ei.path, e_rr));
 
 			if (ei.type == EFileType_Folder) {
-				gotoIfError3(clean, File_addx(loc, EFileType_Folder, 1 * SECOND, false, e_rr))
+				gotoIfError3(clean, File_addx(loc, EFileType_Folder, 1 * SECOND, false, e_rr));
 				CharString_freex(&loc);
 				continue;
 			}
 
-			gotoIfError3(clean, File_writex(ei.data, loc, 0, 0, 1 * SECOND, true, e_rr))
+			gotoIfError3(clean, File_writex(ei.data, loc, 0, 0, 1 * SECOND, true, e_rr));
 			CharString_freex(&loc);
 		}
 	}

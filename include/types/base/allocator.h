@@ -28,7 +28,7 @@
 typedef struct Buffer Buffer;
 typedef struct Error Error;
 
-typedef Error (*AllocFunc)(void *allocator, U64 length, Buffer *output);
+typedef Bool (*AllocFunc)(void *allocator, U64 length, Buffer *output, Error *e_rr);
 
 //Free should only return if it successfully freed.
 //It shouldn't return any errors, as freeing also happens on cleanup.

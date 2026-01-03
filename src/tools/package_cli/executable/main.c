@@ -72,7 +72,7 @@ Platform_defineEntrypoint() {
 		NULL,
 		multipleModes,
 		compileModeU64,
-		Platform_getThreads(),
+		1,	//TODO: Platform_getThreads(),
 		args.length == 3 ? args.ptr[2] : CharString_createNull(),
 		true,
 		warnings,

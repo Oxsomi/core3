@@ -47,48 +47,33 @@ typedef struct AllocationBuffer {
 	U64 nonLinearAlignment;					//Padding between linear and non linear allocations
 } AllocationBuffer;
 
-Error AllocationBuffer_create(
-	U64 size,
-	Bool isVirtual,
-	U64 nonLinearAlignment,
-	Allocator alloc,
-	AllocationBuffer *allocationBuffer
-);
+typedef struct AllocationBufferCreate {
+	U64 size;
+	U64 nonLinearAlignment;
+	const Allocator *alloc;
+	AllocationBuffer *allocationBuffer;
+} AllocationBufferCreate;
 
-Error AllocationBuffer_createRefFromRegion(
-	Buffer origin,
-	U64 offset,
-	U64 size,
-	U64 nonLinearAlignment,
-	Allocator alloc,
-	AllocationBuffer *allocationBuffer
-);
+Bool AllocationBuffer_create(const AllocationBufferCreate *create, Bool isVirtual, Error *e_rr);
+Bool AllocationBuffer_createRefFromRegion(const AllocationBufferCreate *create, const Buffer origin, U64 offset, Error *e_rr);
 
-Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc);
-Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr);
-Bool AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer);						//Frees all blocks
+void AllocationBuffer_free(AllocationBuffer *allocationBuffer, const Allocator *alloc);
+void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr);
+void AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer);						//Frees all blocks
 
 //If !allocationBuffer->buffer.ptr the pointer shouldn't be de-referenced, it's just for offset tracking.
 //Result doesn't get touched if validation of arguments failed or if out of memory is triggered by the list.
 //If there's no available blocks then it will set *result to NULL and return out of memory.
 
-Error AllocationBuffer_allocateBlock(
-	AllocationBuffer *allocationBuffer,
-	U64 size,
-	U64 alignment,
-	Bool isNonLinearResource,
-	Allocator alloc,
-	const U8 **result
-);
+typedef struct AllocationBufferAllocate {
+	AllocationBuffer *allocationBuffer;
+	U64 alignment;
+	Bool isNonLinearResource;
+	const Allocator *alloc;
+} AllocationBufferAllocate;
 
-Error AllocationBuffer_allocateAndFillBlock(
-	AllocationBuffer *allocationBuffer,
-	Buffer data,
-	U64 alignment,
-	Bool isNonLinearResource,
-	Allocator alloc,
-	U8 **result
-);
+Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U64 size, const U8 **result, Error *e_rr);
+Bool AllocationBuffer_allocateAndFillBlock(const AllocationBufferAllocate *allocate, const Buffer data, U8 **result, Error *e_rr);
 
 #ifdef __cplusplus
 	}

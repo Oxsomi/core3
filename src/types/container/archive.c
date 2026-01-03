@@ -28,28 +28,28 @@
 
 TListImpl(ArchiveEntry);
 
-Bool Archive_create(Allocator alloc, Archive *archive, Error *e_rr) {
+Bool Archive_create(const Allocator *alloc, Archive *archive, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if(!archive)
-		retError(clean, Error_nullPointer(1, "Archive_create()::archive is required"))
+		retError(clean, Error_nullPointer(1, "Archive_create()::archive is required"));
 
 	if(archive->entries.ptr)
 		retError(clean, Error_invalidOperation(
 			0, "Archive_create()::archive is already initialized, indicates possible memleak"
-		))
+		));
 
-	gotoIfError2(clean, ListArchiveEntry_reserve(&archive->entries, 100, alloc))
+	gotoIfError3(clean, ListArchiveEntry_reserve(&archive->entries, 100, alloc, e_rr));
 
 clean:
 	return s_uccess;
 }
 
-Bool Archive_free(Archive *archive, Allocator alloc) {
+void Archive_free(Archive *archive, const Allocator *alloc) {
 
 	if(!archive || !archive->entries.ptr)
-		return true;
+		return;
 
 	for (U64 i = 0; i < archive->entries.length; ++i) {
 		ArchiveEntry entry = archive->entries.ptr[i];
@@ -59,35 +59,39 @@ Bool Archive_free(Archive *archive, Allocator alloc) {
 
 	ListArchiveEntry_free(&archive->entries, alloc);
 	*archive = (Archive) { 0 };
-	return true;
 }
 
-Bool Archive_createCopy(Archive a, Allocator alloc, Archive *archive, Error *e_rr) {
+Bool Archive_createCopy(const Archive *a, const Allocator *alloc, Archive *archive, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Bool allocate = false;
 
-	if(!archive)
-		retError(clean, Error_nullPointer(4, "Archive_combine()::combined is required"))
+	if(!a || !archive)
+		retError(clean, Error_nullPointer(!a ? 0 : 4, "Archive_combine()::a and combined are required"));
 
 	if(archive->entries.ptr)
-		retError(clean, Error_invalidParameter(4, 0, "Archive_combine()::combined contains data, which could indicate a memleak"))
+		retError(clean, Error_invalidParameter(
+			4, 0, "Archive_combine()::combined contains data, which could indicate a memleak"
+		));
 
-	gotoIfError2(clean, ListArchiveEntry_createCopy(a.entries, alloc, &archive->entries))
+	ListArchiveEntry aEntries = a->entries;
+	ListArchiveEntry *archiveEntries = &archive->entries;
+
+	gotoIfError3(clean, ListArchiveEntry_createCopy(aEntries, alloc, archiveEntries, e_rr));
 	allocate = true;
 
-	for(U64 i = 0; i < archive->entries.length; ++i) {						//Reset state, before creating copy of buffers and strings
-		archive->entries.ptrNonConst[i].data = Buffer_createNull();
-		archive->entries.ptrNonConst[i].path = CharString_createNull();
+	for(U64 i = 0; i < archiveEntries->length; ++i) {						//Reset state, before creating copy of buffers and strings
+		archiveEntries->ptrNonConst[i].data = Buffer_createNull();
+		archiveEntries->ptrNonConst[i].path = CharString_createNull();
 	}
 
 	for(U64 i = 0; i < archive->entries.length; ++i) {
 
-		ArchiveEntry *dst = &archive->entries.ptrNonConst[i];
-		ArchiveEntry src = a.entries.ptr[i];
+		ArchiveEntry *dst = &archiveEntries->ptrNonConst[i];
+		ArchiveEntry src = aEntries.ptr[i];
 
-		gotoIfError2(clean, CharString_createCopy(src.path, alloc, &dst->path))
-		gotoIfError2(clean, Buffer_createCopy(src.data, alloc, &dst->data))
+		gotoIfError3(clean, CharString_createCopy(src.path, alloc, &dst->path, e_rr));
+		gotoIfError3(clean, Buffer_createCopy(src.data, alloc, &dst->data, e_rr));
 	}
 
 clean:
@@ -98,13 +102,11 @@ clean:
 	return s_uccess;
 }
 
-Bool Archive_getPath(
-	Archive archive,
-	CharString path,
+static inline Bool Archive_getPath(
+	const ArchiveOptionsConst *archive,
 	ArchiveEntry *entryOut,
 	U64 *iPtr,
 	CharString *resolvedPathPtr,
-	Allocator alloc,
 	Error *e_rr
 ) {
 
@@ -112,21 +114,29 @@ Bool Archive_getPath(
 	Bool s_uccess = true;
 	CharString resolvedPath = CharString_createNull();
 
-	if(!archive.entries.ptr || !CharString_length(path))
-		retError(clean, Error_nullPointer(!archive.entries.ptr ? 0 : 1, "Archive_getPath()::archive and path are required"))
+	Bool noArchive = !archive || !archive->archive || !archive->archive->entries.ptr;
 
-	gotoIfError3(clean, File_resolve(path, &isVirtual, 128, CharString_createNull(), alloc, &resolvedPath, e_rr))
+	if (noArchive || !archive->path || !CharString_length(*archive->path))
+		retError(clean, Error_nullPointer(
+			noArchive ? 0 : 1, "Archive_getPath()::archive, archive->archive and archive->path are required"
+		));
+
+	ListArchiveEntry entries = archive->archive->entries;
+
+	gotoIfError3(clean, File_resolve(
+		archive->path, &isVirtual, 128, CharString_createNull(), archive->alloc, &resolvedPath, e_rr
+	));
 
 	if (isVirtual)
-		retError(clean, Error_invalidState(0, "Archive_getPath()::path was virtual, not allowed in an archive"))
+		retError(clean, Error_invalidState(0, "Archive_getPath()::path was virtual, not allowed in an archive"));
 
 	//TODO: Optimize this with a hashmap
 
-	for(U64 i = 0; i < archive.entries.length; ++i)
-		if (CharString_equalsStringInsensitive(archive.entries.ptr[i].path, resolvedPath)) {
+	for(U64 i = 0; i < entries.length; ++i)
+		if (CharString_equalsStringInsensitive(entries.ptr[i].path, resolvedPath)) {
 
 			if(entryOut && !CharString_length(entryOut->path))
-				*entryOut = archive.entries.ptr[i];
+				*entryOut = entries.ptr[i];
 
 			if(iPtr)
 				*iPtr = i;
@@ -139,14 +149,23 @@ Bool Archive_getPath(
 			goto clean;
 		}
 
-	retError(clean, Error_notFound(0, 0, "Archive_getPath() path was not found"))
+	retError(clean, Error_notFound(0, 0, "Archive_getPath() path was not found"));
 
 clean:
-	CharString_free(&resolvedPath, alloc);
+	if(resolvedPath.ptr)
+		CharString_free(&resolvedPath, archive->alloc);
+
 	return s_uccess;
 }
 
-Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allocator alloc, Archive *combined, Error *e_rr) {
+Bool Archive_combine(
+	const Archive *a,
+	const Archive *b,
+	ArchiveCombineSettings settings,
+	const Allocator *alloc,
+	Archive *combined,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	Bool allocate = false;
@@ -154,32 +173,44 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 	ListU64 movedBEntries = (ListU64) { 0 };
 	CharString renamed = CharString_createNull();
 
-	if(a.entries.length >> 63 || b.entries.length >> 63)
-		retError(clean, Error_invalidState(0, "Archive_combine()::a and b should be 63 bit"))
+	if (!a || !b)
+		retError(clean, Error_nullPointer(!a ? 0 : 1, "Archive_combine()::a and b are required"));
 
-	if(settings.mode == EArchiveCombineMode_Rename)
-		gotoIfError2(clean, ListU64_create(b.entries.length, alloc, &movedBEntries))
+	const ListArchiveEntry aEntries = a->entries;
+	const ListArchiveEntry bEntries = b->entries;
 
-	gotoIfError3(clean, Archive_createCopy(a, alloc, combined, e_rr))
+	if(aEntries.length >> 63 || bEntries.length >> 63)
+		retError(clean, Error_invalidState(0, "Archive_combine()::a and b should be 63 bit"));
 
-	for (U64 i = 0; i < b.entries.length; ++i) {
+	if (settings.mode == EArchiveCombineMode_Rename)
+		gotoIfError3(clean, ListU64_create(bEntries.length, alloc, &movedBEntries, e_rr));
 
-		ArchiveEntry bi = b.entries.ptr[i];
+	gotoIfError3(clean, Archive_createCopy(a, alloc, combined, e_rr));
+
+	for (U64 i = 0; i < bEntries.length; ++i) {
+
+		ArchiveEntry bi = bEntries.ptr[i];
 
 		ArchiveEntry ai = (ArchiveEntry) { 0 };
 		U64 aIndex = 0;
 
-		if(!Archive_getPath(a, bi.path, &ai, &aIndex, NULL, alloc, NULL))
+		ArchiveOptionsConst getPath = (ArchiveOptionsConst) {
+			.archive = a,
+			.path = &bi.path,
+			.alloc = alloc
+		};
+
+		if(!Archive_getPath(&getPath, &ai, &aIndex, NULL, NULL))
 			goto insert;
 
 		ArchiveEntry *finalDst = &combined->entries.ptrNonConst[aIndex];
 
 		//Conflict file type has no solution that isn't defined by combine mode
 
-		if(ai.type != bi.type)
+		if (ai.type != bi.type)
 			retError(clean, Error_invalidState(
 				0, "Archive_combine()::a and b had file that was mismatching in file type"
-			))
+			));
 
 		Bool conflict = false;
 
@@ -205,7 +236,7 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 
 					else if(ai.timestamp < bi.timestamp) {
 						Buffer_free(&finalDst->data, alloc);
-						gotoIfError2(clean, Buffer_createCopy(bi.data, alloc, &finalDst->data))
+						gotoIfError3(clean, Buffer_createCopy(bi.data, alloc, &finalDst->data, e_rr));
 					}
 				}
 
@@ -240,7 +271,7 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 				default:
 					retError(clean, Error_invalidState(
 						0, "Archive_combine()::settings.mode is invalid"
-					))
+					));
 
 				case EArchiveCombineMode_AcceptA:		//No-op
 					break;
@@ -248,13 +279,13 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 				case EArchiveCombineMode_AcceptB:
 					finalDst->timestamp = bi.timestamp;
 					Buffer_free(&finalDst->data, alloc);
-					gotoIfError2(clean, Buffer_createCopy(bi.data, alloc, &finalDst->data))
+					gotoIfError3(clean, Buffer_createCopy(bi.data, alloc, &finalDst->data, e_rr));
 					break;
 
 				case EArchiveCombineMode_RequireSame:
 					retError(clean, Error_invalidState(
 						0, "Archive_combine()::a and b had matching file paths, but mismatching contents"
-					))
+					));
 
 				case EArchiveCombineMode_Rename: {
 
@@ -290,8 +321,8 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 								bi.path.ptr + startCounter + 1, j - startCounter - 1, false
 							);
 
-							if(!CharString_parseU64(num, &counter))
-								retError(clean, Error_invalidState(0, "Archive_combine() parse U64 failed"))
+							if (!CharString_parseU64(num, &counter))
+								retError(clean, Error_invalidState(0, "Archive_combine() parse U64 failed"));
 						}
 					}
 
@@ -324,20 +355,25 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 						);
 					}
 
+					getPath.archive = combined;
+
 					do {
 
 						CharString_free(&renamed, alloc);
 
 						++counter;
 
-						gotoIfError2(clean, CharString_format(
+						gotoIfError3(clean, CharString_format(
 							alloc, &renamed, "%.*s-%"PRIu64"%.*s",
 							CharString_length(basePath), basePath.ptr,
 							counter,
-							CharString_length(extension), extension.ptr
-						))
+							CharString_length(extension), extension.ptr,
+							e_rr
+						));
+
+						getPath.path = &renamed;
 					}
-					while(Archive_getPath(*combined, renamed, NULL, NULL, NULL, alloc, NULL));
+					while(Archive_getPath(&getPath, NULL, NULL, NULL, NULL));
 
 					goto insert;
 				}
@@ -350,16 +386,16 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 
 	insert:
 
-		ArchiveEntry entryCopy = b.entries.ptr[i];
+		ArchiveEntry entryCopy = bEntries.ptr[i];
 		entryCopy.data = Buffer_createNull();
 		entryCopy.path = CharString_createNull();
 
 		if((combined->entries.length + 1) >> 63)
 			retError(clean, Error_outOfBounds(
 				0, combined->entries.length + 1, (U64)1 << 63, "Archive_combine() final combined archive size should be 63 bit"
-			))
+			));
 
-		gotoIfError2(clean, ListArchiveEntry_pushBack(&combined->entries, entryCopy, alloc))
+		gotoIfError3(clean, ListArchiveEntry_pushBack(&combined->entries, entryCopy, alloc, e_rr));
 
 		ArchiveEntry *entryLast = ListArchiveEntry_last(combined->entries);
 
@@ -368,9 +404,9 @@ Bool Archive_combine(Archive a, Archive b, ArchiveCombineSettings settings, Allo
 			renamed = CharString_createNull();
 		}
 
-		else gotoIfError2(clean, CharString_createCopy(bi.path, alloc, &entryLast->path))
+		else gotoIfError3(clean, CharString_createCopy(bi.path, alloc, &entryLast->path, e_rr));
 
-		gotoIfError2(clean, Buffer_createCopy(bi.data, alloc, &entryLast->data))
+		gotoIfError3(clean, Buffer_createCopy(bi.data, alloc, &entryLast->data, e_rr));
 
 		if(settings.mode == EArchiveCombineMode_Rename)
 			movedBEntries.ptrNonConst[i] = combined->entries.length - 1;
@@ -386,39 +422,39 @@ clean:
 	return s_uccess;
 }
 
-Bool Archive_has(Archive archive, CharString path, Allocator alloc) {
-	return Archive_getPath(archive, path, NULL, NULL, NULL, alloc, NULL);
+Bool Archive_has(const ArchiveOptionsConst *archive) {
+	return Archive_getPath(archive, NULL, NULL, NULL, NULL);
 }
 
-Bool Archive_hasFile(Archive archive, CharString path, Allocator alloc) {
+Bool Archive_hasFile(const ArchiveOptionsConst *archive) {
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
-	if(!Archive_getPath(archive, path, &entry, NULL, NULL, alloc, NULL))
+	if(!Archive_getPath(archive, &entry, NULL, NULL, NULL))
 		return false;
 
 	return entry.type == EFileType_File;
 }
 
-Bool Archive_hasFolder(Archive archive, CharString path, Allocator alloc) {
+Bool Archive_hasFolder(const ArchiveOptionsConst *archive) {
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
-	if(!Archive_getPath(archive, path, &entry, NULL, NULL, alloc, NULL))
+	if(!Archive_getPath(archive, &entry, NULL, NULL, NULL))
 		return false;
 
 	return entry.type == EFileType_Folder;
 }
 
-Bool Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc, Error *e_rr);
+Bool Archive_addInternal(const ArchiveOptions *archive, const ArchiveEntry *entry, Bool successIfExists, Error *e_rr);
 
-Bool Archive_createOrFindParent(Archive *archive, CharString path, Allocator alloc) {
+static inline Bool Archive_createOrFindParent(const ArchiveOptions *archive) {
 
 	//If it doesn't contain / then we are already at the root
 	//So we don't need to create a parent
 
 	CharString substr = CharString_createNull();
-	if (!CharString_cutAfterLastSensitive(path, '/', &substr))
+	if (!CharString_cutAfterLastSensitive(archive->path, '/', &substr))
 		return true;
 
 	//Try to add parent (returns true if already exists)
@@ -428,24 +464,28 @@ Bool Archive_createOrFindParent(Archive *archive, CharString path, Allocator all
 		.type = EFileType_Folder
 	};
 
-	return Archive_addInternal(archive, entry, true, alloc, NULL);
+	return Archive_addInternal(archive, &entry, true, NULL);
 }
 
-Bool Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc, Error *e_rr) {
+Bool Archive_addInternal(const ArchiveOptions *archive, const ArchiveEntry *entry, Bool successIfExists, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 	ArchiveEntry out = (ArchiveEntry) { 0 };
+	const Allocator *alloc = NULL;
 
-	if (!archive || !archive->entries.ptr)
-		retError(clean, Error_nullPointer(0, "Archive_addInternal()::archive is required"))
+	if (!archive || !archive->archive || !archive->archive->entries.ptr)
+		retError(clean, Error_nullPointer(0, "Archive_addInternal()::archive is required"));
+
+	if(!entry)
+		retError(clean, Error_nullPointer(1, "Archive_addInternal()::entry is required"));
 
 	//If folder already exists, we're done
 
-	if (Archive_getPath(*archive, entry.path, &out, NULL, NULL, alloc, NULL)) {
+	if (Archive_getPath((const ArchiveOptionsConst*)archive, &out, NULL, NULL, NULL)) {
 
-		if(out.type != entry.type || !successIfExists)
-			retError(clean, Error_alreadyDefined(0, "Archive_addInternal()::entry.path already exists"))
+		if (out.type != entry->type || !successIfExists)
+			retError(clean, Error_alreadyDefined(0, "Archive_addInternal() path already exists"));
 
 		goto clean;
 	}
@@ -453,59 +493,62 @@ Bool Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExi
 	//Resolve
 
 	Bool isVirtual = false;
-	gotoIfError3(clean, File_resolve(entry.path, &isVirtual, 128, CharString_createNull(), alloc, &resolved, e_rr))
+	gotoIfError3(clean, File_resolve(&entry->path, &isVirtual, 128, CharString_createNull(), archive->alloc, &resolved, e_rr));
+	alloc = archive->alloc;
 
 	if (isVirtual)
 		retError(clean, Error_unsupportedOperation(0, "Archive_addInternal()::entry.path was virtual (//)"))
 
-	entry.path = resolved;
+	entry->path = resolved;
 
 	//Try to find a parent or make one
 
-	if(!Archive_createOrFindParent(archive, entry.path, alloc))
+	if(!Archive_createOrFindParent(archive))
 		retError(clean, Error_notFound(0, 0, "Archive_addInternal()::entry.path parent couldn't be created"))
 
-	gotoIfError2(clean, ListArchiveEntry_pushBack(&archive->entries, entry, alloc))
-	resolved = CharString_createNull();
+	gotoIfError3(clean, ListArchiveEntry_pushBack(&archive->entries, entry, alloc, e_rr));
+	alloc = NULL;
 
 clean:
 
-	CharString_free(&resolved, alloc);
+	if(alloc)
+		CharString_free(&resolved, alloc);
+
 	return s_uccess;
 }
 
-Bool Archive_addDirectory(Archive *archive, CharString path, Allocator alloc, Error *e_rr) {
+Bool Archive_addDirectory(const ArchiveOptions *archive, Error *e_rr) {
 
-	const ArchiveEntry entry = (ArchiveEntry) {
-		.path = path,
-		.type = EFileType_Folder
-	};
+	ArchiveEntry entry = (ArchiveEntry) { .type = EFileType_Folder };
 
-	return Archive_addInternal(archive, entry, true, alloc, e_rr);
+	if (archive && archive->path)
+		entry.path = *archive->path;
+
+	return Archive_addInternal(archive, &entry, true, e_rr);
 }
 
-Bool Archive_addFile(Archive *archive, CharString path, Buffer *data, Ns timestamp, Allocator alloc, Error *e_rr) {
+Bool Archive_addFile(const ArchiveOptions *archive, Buffer *data, Ns timestamp, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!data)
-		retError(clean, Error_nullPointer(2, "Archive_addFile()::data is required"))
+	if (!data)
+		retError(clean, Error_nullPointer(2, "Archive_addFile()::data is required"));
 
-	const ArchiveEntry entry = (ArchiveEntry) {
-		.path = path,
-		.type = EFileType_File,
-		.data = *data,
-		.timestamp = timestamp
-	};
+	ArchiveEntry entry = (ArchiveEntry) { .type = EFileType_File, .data = *data, .timestamp = timestamp };
 
-	gotoIfError3(clean, Archive_addInternal(archive, entry, false, alloc, e_rr))
+	if (archive && archive->path)
+		entry.path = *archive->path;
+
+	gotoIfError3(clean, Archive_addInternal(archive, &entry, false, e_rr));
 	*data = Buffer_createNull();		//Moved
 
 clean:
 	return s_uccess;
 }
 
-Bool Archive_removeInternal(Archive *archive, CharString path, Allocator alloc, EFileType type, Error *e_rr) {
+//TODO:
+
+static inline Bool Archive_removeInternal(const ArchiveOptions *archive, EFileType type, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
@@ -564,85 +607,100 @@ clean:
 	return s_uccess;
 }
 
-Bool Archive_removeFile(Archive *archive, CharString path, Allocator alloc, Error *e_rr) {
-	return Archive_removeInternal(archive, path, alloc, EFileType_File, e_rr);
+Bool Archive_removeFile(const ArchiveOptions *archive, Error *e_rr) {
+	return Archive_removeInternal(archive, EFileType_File, e_rr);
 }
 
-Bool Archive_removeFolder(Archive *archive, CharString path, Allocator alloc, Error *e_rr) {
-	return Archive_removeInternal(archive, path, alloc, EFileType_Folder, e_rr);
+Bool Archive_removeFolder(const ArchiveOptions *archive, Error *e_rr) {
+	return Archive_removeInternal(archive, EFileType_Folder, e_rr);
 }
 
-Bool Archive_remove(Archive *archive, CharString path, Allocator alloc, Error *e_rr) {
-	return Archive_removeInternal(archive, path, alloc, EFileType_Any, e_rr);
+Bool Archive_remove(const ArchiveOptions *archive, Error *e_rr) {
+	return Archive_removeInternal(archive, EFileType_Any, e_rr);
 }
 
-Bool Archive_rename(Archive *archive, CharString loc, CharString newFileName, Allocator alloc, Error *e_rr) {
+Bool Archive_rename(const ArchiveOptions *archive, const CharString *newFileName, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolvedLoc = CharString_createNull();
+	const Allocator *alloc = NULL;
 
-	if (!archive || !archive->entries.ptr)
-		retError(clean, Error_nullPointer(0, "Archive_rename()::archive is required"))
+	if (!newFileName)
+		retError(clean, Error_nullPointer(1, "Archive_rename()::newFileName is required"));
 
-	if (!CharString_isValidFileName(newFileName))
-		retError(clean, Error_invalidParameter(1, 0, "Archive_rename()::newFileName isn't a valid filename"))
+	if (!CharString_isValidFileName(*newFileName))
+		retError(clean, Error_invalidParameter(1, 0, "Archive_rename()::newFileName isn't a valid filename"));
 
 	U64 i = 0;
-	if (!Archive_getPath(*archive, loc, NULL, &i, &resolvedLoc, alloc, e_rr))
-		retError(clean, Error_notFound(0, 1, "Archive_rename()::loc couldn't be resolved to path"))
+	if (!Archive_getPath(archive, NULL, &i, &resolvedLoc, e_rr))
+		retError(clean, Error_notFound(0, 1, "Archive_rename()::loc couldn't be resolved to path"));
+
+	alloc = archive->alloc;
 
 	//Rename
 
-	CharString *prevPath = &archive->entries.ptrNonConst[i].path;
+	CharString *prevPath = &archive->archive->entries.ptrNonConst[i].path;
 	CharString subStr = CharString_createNull();
 
 	CharString_cutAfterLastSensitive(*prevPath, '/', &subStr);
 	prevPath->lenAndNullTerminated = CharString_length(subStr);
 
-	gotoIfError2(clean, CharString_appendString(prevPath, newFileName, alloc))
+	gotoIfError3(clean, CharString_appendString(prevPath, newFileName, alloc, e_rr));
 
 clean:
-	CharString_free(&resolvedLoc, alloc);
+
+	if(alloc)
+		CharString_free(&resolvedLoc, alloc);
+
 	return s_uccess;
 }
 
-Bool Archive_move(Archive *archive, CharString loc, CharString directoryName, Allocator alloc, Error *e_rr) {
+Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 	U64 i = 0;
 	ArchiveEntry parent = (ArchiveEntry) { 0 };
+	const Allocator *alloc = NULL;
 
-	if (!archive || !archive->entries.ptr)
-		retError(clean, Error_nullPointer(0, "Archive_move()::archive is required"))
+	if (!Archive_getPath((const ArchiveOptionsConst*)archive, NULL, &i, NULL, e_rr))
+		retError(clean, Error_notFound(0, 1, "Archive_move()::loc couldn't be resolved to path"));
 
-	if (!Archive_getPath(*archive, loc, NULL, &i, NULL, alloc, e_rr))
-		retError(clean, Error_notFound(0, 1, "Archive_move()::loc couldn't be resolved to path"))
+	ArchiveOptionsConst directoryNameArchive = (ArchiveOptionsConst) {
+		.archive = archive->archive, .path = directoryName, .alloc = archive->alloc
+	};
 
-	if (!Archive_getPath(*archive, directoryName, &parent, NULL, &resolved, alloc, e_rr))
-		retError(clean, Error_notFound(0, 2, "Archive_move()::directoryName couldn't be resolved to path"))
+	if (!Archive_getPath(&directoryNameArchive, &parent, NULL, &resolved, e_rr))
+		retError(clean, Error_notFound(0, 2, "Archive_move()::directoryName couldn't be resolved to path"));
+
+	alloc = archive->alloc;
 
 	if (parent.type != EFileType_Folder)
-		retError(clean, Error_invalidOperation(0, "Archive_move()::directoryName should resolve to folder file"))
+		retError(clean, Error_invalidOperation(0, "Archive_move()::directoryName should resolve to folder file"));
 
-	CharString *filePath = &archive->entries.ptrNonConst[i].path;
+	CharString *filePath = &archive->archive->entries.ptrNonConst[i].path;
 
 	const U64 v = CharString_findLastSensitive(*filePath, '/', 0, 0);
 
 	if (v != U64_MAX)
-		gotoIfError2(clean, CharString_popFrontCount(filePath, v + 1))
+		gotoIfError3(clean, CharString_popFrontCount(filePath, v + 1, e_rr))
 
-	if (CharString_length(directoryName)) {
-		gotoIfError2(clean, CharString_insert(filePath, '/', 0, alloc))
-		gotoIfError2(clean, CharString_insertString(filePath, directoryName, 0, alloc))
+	if (CharString_length(*directoryName)) {
+		gotoIfError3(clean, CharString_insert(filePath, '/', 0, alloc, e_rr));
+		gotoIfError3(clean, CharString_insertString(filePath, directoryName, 0, alloc, e_rr));
 	}
 
 clean:
-	CharString_free(&resolved, alloc);
+
+	if(alloc)
+		CharString_free(&resolved, alloc);
+
 	return s_uccess;
 }
 
-Bool Archive_getInfo(Archive archive, CharString path, FileInfo *info, Allocator alloc, Error *e_rr) {
+//TODO:
+
+Bool Archive_getInfo(const ArchiveOptions *archive, FileInfo *info, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
@@ -666,13 +724,15 @@ clean:
 	return s_uccess;
 }
 
-U64 Archive_getIndex(Archive archive, CharString path, Allocator alloc) {
+U64 Archive_getIndex(const ArchiveOptions *archive) {
 	U64 v = U64_MAX;
-	Archive_getPath(archive, path, NULL, &v, NULL, alloc, NULL);
+	Archive_getPath(archive, NULL, &v, NULL, NULL);
 	return v;
 }
 
-Bool Archive_updateFileData(Archive *archive, CharString path, Buffer data, Allocator alloc, Error *e_rr) {
+//TODO:
+
+Bool Archive_updateFileData(const ArchiveOptions *archive, const Buffer *data, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
@@ -691,14 +751,9 @@ clean:
 	return s_uccess;
 }
 
-Bool Archive_getFileDataInternal(
-	Archive archive,
-	CharString path,
-	Buffer *data,
-	Allocator alloc,
-	Bool isConst,
-	Error *e_rr
-) {
+//TODO:
+
+Bool Archive_getFileDataInternal(const ArchiveOptions *archive, Buffer *data, Bool isConst, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
@@ -731,24 +786,17 @@ clean:
 	return s_uccess;
 }
 
-Bool Archive_getFileData(Archive archive, CharString path, Buffer *data, Allocator alloc, Error *e_rr) {
-	return Archive_getFileDataInternal(archive, path, data, alloc, false, e_rr);
+Bool Archive_getFileData(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
+	return Archive_getFileDataInternal(archive, data, false, e_rr);
 }
 
-Bool Archive_getFileDataConst(Archive archive, CharString path, Buffer *data, Allocator alloc, Error *e_rr) {
-	return Archive_getFileDataInternal(archive, path, data, alloc, true, e_rr);
+Bool Archive_getFileDataConst(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
+	return Archive_getFileDataInternal(archive, data, true, e_rr);
 }
 
-Bool Archive_foreach(
-	Archive archive,
-	CharString loc,
-	FileCallback callback,
-	void *userData,
-	Bool isRecursive,
-	EFileType type,
-	Allocator alloc,
-	Error *e_rr
-) {
+//TODO:
+
+Bool Archive_foreach(const ArchiveQuery *query, FileCallback callback, void *userData, EFileType type, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
@@ -813,71 +861,33 @@ clean:
 	return s_uccess;
 }
 
-Bool countFile(FileInfo info, U64 *res, Error *e_rr) {
+static Bool countFile(FileInfo info, U64 *res, Error *e_rr) {
 	(void)info; (void) e_rr;
 	++*res;
 	return true;
 }
 
-Bool Archive_queryFileObjectCount(
-	Archive archive,
-	CharString loc,
-	EFileType type,
-	Bool isRecursive,
-	U64 *res,
-	Allocator alloc,
-	Error *e_rr
-) {
+static inline Bool Archive_queryFileObjectCount(const ArchiveQuery *query, EFileType type, U64 *res, Error *e_rr) {
 
-	if(!res) {
+	Bool s_uccess = true;
 
-		if(e_rr)
-			*e_rr = Error_nullPointer(4, "Archive_queryFileObjectCount()::res is required");
+	if (!res)
+		retError(clean, Error_nullPointer(2, "Archive_queryFileObjectCount()::res is required"));
 
-		return false;
-	}
+	gotoIfError3(clean, Archive_foreach(query, (FileCallback) countFile, res, type, e_rr));
 
-	return Archive_foreach(
-		archive,
-		loc,
-		(FileCallback) countFile,
-		res,
-		isRecursive,
-		type,
-		alloc,
-		e_rr
-	);
+clean:
+	return s_uccess;
 }
 
-Bool Archive_queryFileEntryCount(
-	Archive archive,
-	CharString loc,
-	Bool isRecursive,
-	U64 *res,
-	Allocator alloc,
-	Error *e_rr
-) {
-	return Archive_queryFileObjectCount(archive, loc, EFileType_Any, isRecursive, res, alloc, e_rr);
+Bool Archive_queryFileEntryCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
+	return Archive_queryFileObjectCount(query, EFileType_Any, res, e_rr);
 }
 
-Bool Archive_queryFileCount(
-	Archive archive,
-	CharString loc,
-	Bool isRecursive,
-	U64 *res,
-	Allocator alloc,
-	Error *e_rr
-) {
-	return Archive_queryFileObjectCount(archive, loc, EFileType_File, isRecursive, res, alloc, e_rr);
+Bool Archive_queryFileCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
+	return Archive_queryFileObjectCount(query, EFileType_File, res, e_rr);
 }
 
-Bool Archive_queryFolderCount(
-	Archive archive,
-	CharString loc,
-	Bool isRecursive,
-	U64 *res,
-	Allocator alloc,
-	Error *e_rr
-) {
-	return Archive_queryFileObjectCount(archive, loc, EFileType_Folder, isRecursive, res, alloc, e_rr);
+Bool Archive_queryFolderCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
+	return Archive_queryFileObjectCount(query, EFileType_Folder, res, e_rr);
 }

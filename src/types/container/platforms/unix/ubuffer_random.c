@@ -27,7 +27,7 @@
 	#include <sys/random.h>
 #endif
 
-Bool Buffer_csprng(Buffer target) {
+Bool Buffer_csprng(const Buffer target) {
 
 	if(!Buffer_length(target) || Buffer_isConstRef(target))
 		return false;

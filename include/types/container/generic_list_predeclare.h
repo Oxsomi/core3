@@ -25,11 +25,22 @@
 	extern "C" {
 #endif
 
-typedef struct Lexer Lexer;
-typedef struct Parser Parser;
+#define TListDefinition(T, Name) typedef T Name##_Type; typedef struct Name {											\
+																														\
+	union {																												\
+		const Name##_Type *ptr;																							\
+		Name##_Type *ptrNonConst;		/* check if !const first */														\
+	};																													\
+																														\
+	U64 length;																											\
+	U64 capacityAndRefInfo;																								\
+																														\
+} Name
 
-Bool Parser_createx(const Lexer *lexer, Parser *parser, Error *e_rr);
-void Parser_freex(Parser *parser);
+TListDefinition(U64, ListU64);		//Used by _find and _eraseAllIndices
+TListDefinition(void, ListVoid);
+
+typedef struct GenericList GenericList;
 
 #ifdef __cplusplus
 	}

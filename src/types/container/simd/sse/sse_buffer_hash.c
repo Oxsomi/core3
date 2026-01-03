@@ -30,7 +30,7 @@
 
 extern const U32 SHA256_STATE[8];
 
-void Buffer_sha256Internal(Buffer buf, U32 *output);
+void Buffer_sha256Internal(const Buffer buf, U32 *output);
 
 //Implementation of hardware CRC32C but ported back to C and restructured a bit
 //https://github.com/rurban/smhasher/blob/master/crc32c.cpp
@@ -50,7 +50,7 @@ U32 CRC32C_shiftLong(U32 crc0) {
 		CRC32C_LONG_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_LONG_SHIFTS[3][(U8)(crc0 >> 24)];
 }
 
-U32 Buffer_crc32c(Buffer buf) {
+U32 Buffer_crc32c(const Buffer buf) {
 
 	U32 crc = U32_MAX;
 
@@ -165,7 +165,7 @@ U32 Buffer_crc32c(Buffer buf) {
 
 static I8 hasSHA256 = -1;
 
-void Buffer_sha256(Buffer buf, U32 output[8]) {
+void Buffer_sha256(const Buffer buf, U32 output[8]) {
 
 	if(!output)
 		return;
@@ -247,7 +247,7 @@ void Buffer_sha256(Buffer buf, U32 output[8]) {
 
 			if (wasPaddingBlock) {
 
-				Buffer_unsetAllBits(Buffer_createRef(block, 64 - sizeof(U64)));
+				Buffer_unsetAllBits(Buffer_createRef(block, 64 - sizeof(U64)), NULL);
 
 				if(wasPerfectlyAligned)
 					block[0] = 0x80;
@@ -281,7 +281,7 @@ void Buffer_sha256(Buffer buf, U32 output[8]) {
 				*((U8*)(void*)block + realLen) = 0x80;
 
 				if(realLen <= 62)
-					Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1));
+					Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1), NULL);
 
 				//We need one more block just to contain the length at the end
 

@@ -23,6 +23,8 @@
 #include "types/base/c8.h"
 #include "types/container/file.h"
 #include "types/container/buffer.h"
+#include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/file.h"

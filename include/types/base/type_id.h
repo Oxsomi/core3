@@ -45,7 +45,7 @@ typedef enum EDataTypeStride {
 	EDataTypeStride_64
 } EDataTypeStride;
 
-Bool EDataType_isSigned(EDataType type);
+static inline Bool EDataType_isSigned(EDataType type) { return type & EDataType_IsSigned; }
 
 //Layout is as follows:
 //U13 library id (0x1000-0x1FFF are reserved for default library)
@@ -214,17 +214,39 @@ TypeIdShort ETypeId_toShortId(ETypeId id);
 
 #undef ETIDAsg
 
-EDataType ETypeId_getDataType(ETypeId id);
-EDataTypeStride ETypeId_getDataTypeStride(ETypeId id);
-Bool ETypeId_isObject(ETypeId id);
+static inline EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
+static inline EDataTypeStride ETypeId_getDataTypeStride(ETypeId id) { return (EDataTypeStride)((id >> 3) & 3); }
+static inline Bool ETypeId_isObject(ETypeId id) { return ETypeId_getDataType(id) == EDataType_Object; }
 
-U8 ETypeId_getDataTypeBytes(ETypeId id);
-U8 ETypeId_getWidth(ETypeId id);
-U8 ETypeId_getHeight(ETypeId id);
-U8 ETypeId_getElements(ETypeId id);
-U64 ETypeId_getBytes(ETypeId id);
-U16 ETypeId_getLibraryId(ETypeId id);
-U16 ETypeId_getLibraryTypeId(ETypeId id);
+static inline U8 ETypeId_getDataTypeBytes(ETypeId id) {
+
+	EDataType type = ETypeId_getDataType(id);
+
+	if (type == EDataType_Char || type == EDataType_Bool)
+		return 1;
+
+	return ETypeId_isObject(id) ? 0 : (1 << type);
+}
+
+static inline U8 ETypeId_getHeight(ETypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 5) & 3) + 1); }
+static inline U8 ETypeId_getWidth(ETypeId id) { return ETypeId_isObject(id) ? 0 : (((id >> 7) & 3) + 1); }
+
+static inline U8 ETypeId_getElements(ETypeId id) {
+	return ETypeId_isObject(id) ? 0 : ETypeId_getWidth(id) * ETypeId_getHeight(id);
+}
+
+static inline U64 ETypeId_getBytes(ETypeId id) {
+
+	U64 siz = ETypeId_isObject(id) ? 0 : (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id);
+
+	if (ETypeId_getDataType(id) == EDataType_Bool)	//Bits, not bytes
+		return (siz + 7) >> 3;
+
+	return siz;
+}
+
+static inline U16 ETypeId_getLibraryId(ETypeId id) { return (U16)(id >> 19); }
+static inline U16 ETypeId_getLibraryTypeId(ETypeId id) { return (U16)((id >> 9) & ((1 << 10) - 1)); }
 
 #ifdef __cplusplus
 	}

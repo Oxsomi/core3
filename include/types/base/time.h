@@ -28,18 +28,33 @@
 typedef ShortString TimeFormat;
 
 Ns Time_now();
-DNs Time_elapsed(Ns prev);
+U64 Time_clocks();
 
 //e.g. year: 1970, month: 1, day: 1, hour: 0, minute: 0, seconds: 0, ns: 0 = (Ns)0
+typedef struct Date {
+	U32 ns;
+	U16 year;
+	U8 month;
+	U8 day;
+	U8 hour;
+	U8 minute;
+	U8 second;
+	U8 padding;
+} Date;
 
-Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, Bool isLocalTime);
-Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *minute, U8 *second, U32 *ns, Bool isLocalTime);
+Ns Time_date(const Date *date, Bool isLocalTime);
+Bool Time_getDate(Ns timestamp, Date *date, Bool isLocalTime);
 
-DNs Time_dns(Ns timeStamp0, Ns timeStamp1);
-F64 Time_dt(Ns timeStamp0, Ns timeStamp1);
+static inline DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
+	return (DNs)(timeStamp0 - timeStamp1);
+}
 
-U64 Time_clocks();
-I64 Time_clocksElapsed(U64 prevClocks);
+static inline F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
+	return (F64)Time_dns(timeStamp0, timeStamp1) / SECOND;
+}
+
+static inline I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks()); }
+static inline DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 
 void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime);
 Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime);

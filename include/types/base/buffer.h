@@ -20,6 +20,8 @@
 
 #pragma once
 #include "types/base/error.h"
+#include "types/base/constants.h"
+#include "types/base/c8.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -51,7 +53,7 @@ static inline Bool Buffer_isConstRef(const Buffer buf) {
 }
 
 static inline Buffer Buffer_createNull() {
-	Buffer buf = { .ptr = NULL, .lengthAndRefBits = 0 };
+	Buffer buf = { 0 };
 	return buf;
 }
 
@@ -60,7 +62,9 @@ inline Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
 	if (length >> 48 || !ptr || !length)
 		return Buffer_createNull();
 
-	Buffer buf = { .ptrNonConst = (U8*)ptr, .lengthAndRefBits = length };
+	Buffer buf;
+	buf.ptrNonConst = (U8*)ptr;
+	buf.lengthAndRefBits = length;
 	return buf;
 }
 
@@ -74,7 +78,9 @@ inline Buffer Buffer_createRef(void *v, U64 length) {
 	if (length >> 48)
 		return Buffer_createNull();
 
-	Buffer buf = { .ptrNonConst = (U8*)v, .lengthAndRefBits = length | ((U64)1 << 63) };
+	Buffer buf;
+	buf.ptrNonConst = (U8*)v;
+	buf.lengthAndRefBits = length | ((U64)1 << 63);
 	return buf;
 }
 
@@ -86,98 +92,139 @@ inline Buffer Buffer_createRefConst(const void *v, U64 length) {
 	if (length >> 48)
 		return Buffer_createNull();
 
-	Buffer buf = { .ptr = (const U8*)v, .lengthAndRefBits = length | ((U64)3 << 62) };
+	Buffer buf;
+	buf.ptr = (const U8*)v;
+	buf.lengthAndRefBits = length | ((U64)3 << 62);
 	return buf;
 }
 
 //Bit manipulation
 
-Bool Buffer_memcpy(Buffer dst, Buffer src);			//Copies bytes from two separate ranges
-Bool Buffer_memmove(Buffer dst, Buffer src);		//Copies bytes from two overlapping ranges
+Bool Buffer_memcpy(const Buffer dst, const Buffer src);			//Copies bytes from two separate ranges
+Bool Buffer_memmove(const Buffer dst, const Buffer src);		//Copies bytes from two overlapping ranges
 
-Error Buffer_setAllBits(Buffer dst);
-Error Buffer_unsetAllBits(Buffer dst);
+Bool Buffer_setAllToU8(const Buffer buf, U8 b8, Error *e_rr);
 
-Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
+static inline Bool Buffer_setAllBits(const Buffer dst, Error *e_rr) {
+	return Buffer_setAllToU8(dst, U8_MAX, e_rr);
+}
 
-Error Buffer_getBit(Buffer buf, U64 offset, Bool *output);
+static inline Bool Buffer_unsetAllBits(const Buffer dst, Error *e_rr) {
+	return Buffer_setAllToU8(dst, 0, e_rr);
+}
 
-Error Buffer_setBit(Buffer buf, U64 offset);
-Error Buffer_resetBit(Buffer buf, U64 offset);
+static inline Bool Buffer_setAllBitsTo(const Buffer buf, Bool isOn, Error *e_rr) {
+	return isOn ? Buffer_setAllBits(buf, e_rr) : Buffer_unsetAllBits(buf, e_rr);
+}
 
-Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value);
+Bool Buffer_getBit(const Buffer buf, U64 offset, Bool *output, Error *e_rr);
+Bool Buffer_setBit(Buffer buf, U64 offset, Error *e_rr);
+Bool Buffer_resetBit(Buffer buf, U64 offset, Error *e_rr);
 
-Error Buffer_bitwiseOr(Buffer dst, Buffer src);
-Error Buffer_bitwiseAnd(Buffer dst, Buffer src);
-Error Buffer_bitwiseXor(Buffer dst, Buffer src);
-Error Buffer_bitwiseNot(Buffer dst);
+static inline Bool Buffer_setBitTo(const Buffer buf, U64 offset, Bool value, Error *e_rr) {
+	return !value ? Buffer_resetBit(buf, offset, e_rr) : Buffer_setBit(buf, offset, e_rr);
+}
 
-Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits);
-Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits);
+Bool Buffer_bitwiseOr(const Buffer dst, Buffer src, Error *e_rr);
+Bool Buffer_bitwiseAnd(const Buffer dst, const Buffer src, Error *e_rr);
+Bool Buffer_bitwiseXor(const Buffer dst, const Buffer src, Error *e_rr);
+Bool Buffer_bitwiseNot(const Buffer dst);
+
+Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr);
+Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr);
 
 //Comparison
 
-Bool Buffer_eq(Buffer buf0, Buffer buf1);			//Also compares size
-Bool Buffer_neq(Buffer buf0, Buffer buf1);			//Also compares size
+Bool Buffer_eq(const Buffer buf0, const Buffer buf1);			//Also compares size
+static inline Bool Buffer_neq(const Buffer buf0, const Buffer buf1) { return !Buffer_eq(buf0, buf1); }
 
 //Use this instead of simply copying the Buffer to a new location
 //A copy like this is only fine if the other doesn't get freed.
 //In all other cases, createRefFromBuffer should be called on the one that shouldn't be freeing.
 //If it needs to be refcounted, RefPtr should be used.
-Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst);
+static inline Buffer Buffer_createRefFromBuffer(const Buffer buf, Bool isConst) {
 
-Error Buffer_offset(Buffer* buf, U64 length);
+	Buffer copy = { 0 };
 
-Error Buffer_append(Buffer* buf, const void* v, U64 length);
-Error Buffer_appendBuffer(Buffer* buf, Buffer append);
+	if (!buf.ptr || (!isConst && Buffer_isConstRef(buf)))
+		return copy;
 
-Error Buffer_consume(Buffer* buf, void* v, U64 length);
+	copy = buf;
+	copy.lengthAndRefBits |= ((U64)1 << 63) | ((U64)isConst << 62);
+	return copy;
+}
 
-#define BUFFER_OP(T)									\
-Error Buffer_append##T(Buffer *buf, T v);				\
-Error Buffer_consume##T(Buffer *buf, T *v);				\
-T Buffer_read##T(Buffer buf, U64 off,  Bool *success);	\
-Bool Buffer_write##T(Buffer buf, U64 off, T v)
+Bool Buffer_offset(Buffer *buf, U64 length, Error *e_rr);
+Bool Buffer_appendBuffer(Buffer *buf, const Buffer append, Error *e_rr);
+
+static inline Bool Buffer_append(Buffer *buf, const void *v, U64 length, Error *e_rr) {
+	return Buffer_appendBuffer(buf, Buffer_createRefConst(v, length), e_rr);
+}
+
+Bool Buffer_consume(Buffer *buf, void *v, U64 length, Error *e_rr);
 
 #define BUFFER_OP_IMPL(T)																	\
-Error Buffer_append##T(Buffer *buf, T v)	{ return Buffer_append(buf, &v, sizeof(v)); }	\
-Error Buffer_consume##T(Buffer *buf, T *v)	{ return Buffer_consume(buf, v, sizeof(*v)); }	\
 																							\
-T Buffer_read##T(Buffer buf, U64 off, Bool *success) {										\
+static inline Bool Buffer_append##T(Buffer *buf, T v, Error *e_rr) {						\
+	return Buffer_append(buf, &v, sizeof(v), e_rr);											\
+}																							\
+																							\
+static inline Bool Buffer_consume##T(Buffer *buf, T *v, Error *e_rr) {						\
+	return Buffer_consume(buf, v, sizeof(*v), e_rr);										\
+}																							\
+																							\
+static inline T Buffer_read##T(Buffer buf, U64 off, Bool *success, Error *e_rr) {			\
 																							\
 	buf = Buffer_createRefFromBuffer(buf, true);											\
-	T v = (T) { 0 };																		\
-	Error err = Buffer_offset(&buf, off);													\
+	T v = { 0 };																			\
+	if(!Buffer_offset(&buf, off, e_rr)) { if(success) *success = false; return v; }			\
 																							\
-	if(err.genericError) {																	\
-		if(success) *success = false;														\
-		return v;																			\
-	}																						\
-																							\
-	Bool ok = !Buffer_consume##T(&buf, &v).genericError;									\
+	Bool ok = Buffer_consume##T(&buf, &v, e_rr);											\
 	if(success) *success = ok;																\
 	return v;																				\
 }																							\
 																							\
-Bool Buffer_write##T(Buffer buf, U64 off, T v) {											\
+static inline Bool Buffer_write##T(Buffer buf, U64 off, T v, Error *e_rr) {					\
 	buf = Buffer_createRefFromBuffer(buf, false);											\
-	Error err = Buffer_offset(&buf, off);													\
-	if(err.genericError) return false;														\
-	return !Buffer_append##T(&buf, v).genericError;											\
+	if(!Buffer_offset(&buf, off, e_rr)) return false;										\
+	return Buffer_append##T(&buf, v, e_rr);													\
 }
 
-BUFFER_OP(U64);
-BUFFER_OP(U32);
-BUFFER_OP(U16);
-BUFFER_OP(U8);
+BUFFER_OP_IMPL(U64);
+BUFFER_OP_IMPL(U32);
+BUFFER_OP_IMPL(U16);
+BUFFER_OP_IMPL(U8);
 
-BUFFER_OP(I64);
-BUFFER_OP(I32);
-BUFFER_OP(I16);
-BUFFER_OP(I8);
+BUFFER_OP_IMPL(I64);
+BUFFER_OP_IMPL(I32);
+BUFFER_OP_IMPL(I16);
+BUFFER_OP_IMPL(I8);
 
-BUFFER_OP(F64);
-BUFFER_OP(F32);
+BUFFER_OP_IMPL(F64);
+BUFFER_OP_IMPL(F32);
+
+static inline Bool Buffer_isAscii(const Buffer buf) {
+
+	for (U64 i = 0; i < Buffer_length(buf); ++i)
+		if (!C8_isValidAscii((C8)buf.ptr[i]))
+			return false;
+
+	return !!Buffer_length(buf);
+}
+
+typedef struct BitRef {
+	U8 *ptr;
+	U8 off, isConst, padding[6];
+} BitRef;
+
+static inline Bool BitRef_get(const BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
+static inline void BitRef_set(const BitRef b) { if (b.ptr && !b.isConst) *b.ptr |= 1 << b.off; }
+static inline void BitRef_reset(const BitRef b) { if (b.ptr && !b.isConst) *b.ptr &= ~(1 << b.off); }
+
+static inline void BitRef_setTo(const BitRef b, Bool v) {
+	if (v) BitRef_set(b);
+	else BitRef_reset(b);
+}
 
 #ifdef __cplusplus
 	}

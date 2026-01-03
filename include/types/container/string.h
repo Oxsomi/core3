@@ -37,504 +37,86 @@ Bool ListCharString_sort(ListCharString list, EStringCase stringCase);
 Bool ListCharString_sortSensitive(ListCharString list);
 Bool ListCharString_sortInsensitive(ListCharString list);
 
-Bool CharString_isValidFileName(const CharString str);
-Bool CharString_isValidFilePath(CharString str);
-
-ECompareResult CharString_compare(const CharString *a, const CharString *b, EStringCase caseSensitive);
-ECompareResult CharString_compareSensitive(const CharString *a, const CharString *b);		//TODO: sensitivity for unicode?
-ECompareResult CharString_compareInsensitive(const CharString *a, const CharString *b);
-
-U64 CharString_unicodeCodepoints(const CharString str);				//Returns U64_MAX if invalid codepoints were detected
-U64 CharString_hash(const CharString s);								//Hash of content, for maps only (not for cryptography purposes)
-
-Bool CharString_clear(CharString *str);
-
-inline Bool CharString_isValidUTF8(const CharString str) {
-	return Buffer_isUTF8(CharString_bufferConst(str), 1);
-}
-
 //Strings that HAVE to be freed (anything that uses an allocator needs freeing)
 //These reside on the heap/free space (or wherever allocator allocates them)
 //Which means that they aren't const nor refs
 
-Bool CharString_free(CharString *str, Allocator alloc);
+void CharString_free(CharString *str, const Allocator *alloc);
 
-Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result);
-Error CharString_createCopy(CharString str, Allocator alloc, CharString *result);
+Bool CharString_create(C8 c, U64 size, const Allocator *alloc, CharString *result, Error *e_rr);
+Bool CharString_createCopy(const CharString str, const Allocator *alloc, CharString *result, Error *e_rr);
 
-Error CharString_createNyto(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
-Error CharString_createHex(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
-Error CharString_createDec(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
-Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
-Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
+typedef struct CharStringCreateNumber {
+	U64 v;
+	U8 leadingZeros;
+	const Allocator *allocator;
+	CharString *result;
+} CharStringCreateNumber;
 
-//Interop between wchar_t. Converts UTF16 or UTF32 to UTF8
+Bool CharString_createNyto(const CharStringCreateNumber *number, Error *e_rr);
+Bool CharString_createHex(const CharStringCreateNumber *number, Error *e_rr);
+Bool CharString_createDec(const CharStringCreateNumber *number, Error *e_rr);
+Bool CharString_createOct(const CharStringCreateNumber *number, Error *e_rr);
+Bool CharString_createBin(const CharStringCreateNumber *number, Error *e_rr);
 
-Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result);
-Error CharString_createFromUTF32(const U32 *ptr, U64 limit, Allocator allocator, CharString *result);
+typedef struct CharStringSplit {
+	const CharString *s;
+	const Allocator *allocator;
+	ListCharString *result;
+} CharStringSplit;
 
-//TODO: Error CharString_setCodepointAt(CharString str, U64 index, U32 codepoint);
+Bool CharString_split(const CharStringSplit *split, C8 c, EStringCase casing, Error *e_rr);
+Bool CharString_splitString(const CharStringSplit *split, const CharString *other, EStringCase casing, Error *e_rr);
 
-Error CharString_split(
-	CharString s,
-	C8 c,
-	EStringCase casing,
-	Allocator allocator,
-	ListCharString *result
-);
-
-Error CharString_splitString(
-	CharString s,
-	CharString other,
-	EStringCase casing,
-	Allocator allocator,
-	ListCharString *result
-);
-
-Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, ListCharString *result);
-Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, ListCharString *result);
-Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, ListCharString *result);
-Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, ListCharString *result);
-
-//TODO: CharString_splitCodepoint
-
-Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result);
+Bool CharString_splitLine(const CharString s, const Allocator *alloc, ListCharString *result, Error *e_rr);
 
 //This will operate on this string, so it will need a heap allocated string
 
-Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator alloc);
-Error CharString_reserve(CharString *str, U64 length, Allocator alloc);
-
-//TODO: CharString_resizeCodepoint?
-
-Error CharString_append(CharString *s, C8 c, Allocator allocator);
-Error CharString_appendString(CharString *s, CharString other, Allocator allocator);
-
-Error CharString_prepend(CharString *s, C8 c, Allocator allocator);
-Error CharString_prependString(CharString *s, CharString other, Allocator allocator);
-
-//TODO: CharString_appendCodepoint/prependCodepoint
-
-CharString CharString_newLine();			//Always \n since all OSes can handle that nowadays
-
-Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator);
-Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator allocator);
-
-//TODO: CharString_insertCodepoint
-
-Error CharString_replaceAllString(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	EStringCase caseSensitive,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceString(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	EStringCase caseSensitive,
-	Allocator allocator,
-	Bool isFirst,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceFirstString(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	EStringCase caseSensitive,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceLastString(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	EStringCase caseSensitive,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceAllStringSensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceStringSensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	Bool isFirst,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceFirstStringSensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceLastStringSensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceAllStringInsensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceStringInsensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	Bool isFirst,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceFirstStringInsensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-Error CharString_replaceLastStringInsensitive(
-	CharString *s,
-	CharString search,
-	CharString replace,
-	Allocator allocator,
-	U64 off,
-	U64 len
-);
-
-//TODO: CharString_replaceCodepoint
-
-//Interop between wide strings. Converts UTF8 to UTF16 or UTF32
-
-Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr);
-Error CharString_toUTF32(CharString s, Allocator allocator, ListU32 *arr);
-
-//Simple checks (consts)
-
-Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off);
-Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off);
-
-Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off);
-Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off);
-
-U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive, U64 off);
-U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSensitive, U64 off);
-
-Bool CharString_startsWithSensitive(CharString str, C8 c, U64 off);
-Bool CharString_startsWithStringSensitive(CharString str, CharString other, U64 off);
-
-Bool CharString_endsWithSensitive(CharString str, C8 c, U64 off);
-Bool CharString_endsWithStringSensitive(CharString str, CharString other, U64 off);
-
-U64 CharString_countAllSensitive(CharString s, C8 c, U64 off);
-U64 CharString_countAllStringSensitive(CharString s, CharString other, U64 off);
-
-Bool CharString_startsWithInsensitive(CharString str, C8 c, U64 off);
-Bool CharString_startsWithStringInsensitive(CharString str, CharString other, U64 off);
-
-Bool CharString_endsWithInsensitive(CharString str, C8 c, U64 off);
-Bool CharString_endsWithStringInsensitive(CharString str, CharString other, U64 off);
-
-U64 CharString_countAllInsensitive(CharString s, C8 c, U64 off);
-U64 CharString_countAllStringInsensitive(CharString s, CharString other, U64 off);
-
-//TODO: CharString_countCodepoint/endsWithCodepoint/startsWithCodepoint
-
-Error CharString_findAll(CharString s, C8 c, Allocator alloc, EStringCase caseSensitive, U64 off, U64 len, ListU64 *result);
-Error CharString_findAllString(
-	CharString s,
-	CharString other,
-	Allocator alloc,
-	EStringCase caseSensitive,
-	U64 off,
-	U64 len,
-	ListU64 *result
-);
-
-U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive, U64 off, U64 len);
-U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive, U64 off, U64 len);
-
-U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst, U64 off, U64 len);
-
-U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseSensitive, U64 off, U64 len);
-U64 CharString_findLastString(CharString s, CharString other, EStringCase caseSensitive, U64 off, U64 len);
-U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst, U64 off, U64 len);
-
-Error CharString_findAllSensitive(CharString s, C8 c, U64 off, U64 len, Allocator alloc, ListU64 *result);
-Error CharString_findAllInsensitive(CharString s, C8 c, U64 off, U64 len, Allocator alloc, ListU64 *result);
-
-Error CharString_findAllStringSensitive(CharString s, CharString other, U64 off, U64 len, Allocator alloc, ListU64 *result);
-Error CharString_findAllStringInsensitive(CharString s, CharString other, U64 off, U64 len, Allocator alloc, ListU64 *result);
-
-U64 CharString_findFirstSensitive(CharString s, C8 c, U64 off, U64 len);
-U64 CharString_findFirstInsensitive(CharString s, C8 c, U64 off, U64 len);
-
-U64 CharString_findLastSensitive(CharString s, C8 c, U64 off, U64 len);
-U64 CharString_findLastInsensitive(CharString s, C8 c, U64 off, U64 len);
-
-U64 CharString_findSensitive(CharString s, C8 c, Bool isFirst, U64 off, U64 len);
-U64 CharString_findInsensitive(CharString s, C8 c, Bool isFirst, U64 off, U64 len);
-
-U64 CharString_findFirstStringSensitive(CharString s, CharString other, U64 off, U64 len);
-U64 CharString_findFirstStringInsensitive(CharString s, CharString other, U64 off, U64 len);
-
-U64 CharString_findLastStringSensitive(CharString s, CharString other, U64 off, U64 len);
-U64 CharString_findLastStringInsensitive(CharString s, CharString other, U64 off, U64 len);
-
-U64 CharString_findStringSensitive(CharString s, CharString other, Bool isFirst, U64 off, U64 len);
-U64 CharString_findStringInsensitive(CharString s, CharString other, Bool isFirst, U64 off, U64 len);
-
-//TODO: CharString_findCodepoint
-
-Bool CharString_contains(CharString str, C8 c, EStringCase caseSensitive, U64 off, U64 len);
-Bool CharString_containsString(CharString str, CharString other, EStringCase caseSensitive, U64 off, U64 len);
-
-Bool CharString_containsSensitive(CharString str, C8 c, U64 off, U64 len);
-Bool CharString_containsInsensitive(CharString str, C8 c, U64 off, U64 len);
-
-Bool CharString_containsStringSensitive(CharString str, CharString other, U64 off, U64 len);
-Bool CharString_containsStringInsensitive(CharString str, CharString other, U64 off, U64 len);
-
-//TODO: CharString_containsCodepoint
-
-Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive);
-Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive);
-
-Bool CharString_equalsStringSensitive(CharString s, CharString other);
-Bool CharString_equalsSensitive(CharString s, C8 c);
-
-Bool CharString_equalsStringInsensitive(CharString s, CharString other);
-Bool CharString_equalsInsensitive(CharString s, C8 c);
-
-//TODO: CharString_equalsCodepoint
-
-Bool CharString_parseNyto(CharString s, U64 *result);
-Bool CharString_parseHex(CharString s, U64 *result);
-Bool CharString_parseDec(CharString s, U64 *result);
-Bool CharString_parseDecSigned(CharString s, I64 *result);
-Bool CharString_parseDouble(CharString s, F64 *result);
-Bool CharString_parseFloat(CharString s, F32 *result);
-Bool CharString_parseOct(CharString s, U64 *result);
-Bool CharString_parseBin(CharString s, U64 *result);
-Bool CharString_parseU64(CharString s, U64 *result);
-
-Bool CharString_isNyto(CharString s);				//[0-9A-Za-z_$]+
-Bool CharString_isAlphaNumeric(CharString s);		//[0-9A-Za-z]+
-Bool CharString_isHex(CharString s);				//[0-9A-Fa-f]+
-Bool CharString_isDec(CharString s);				//[0-9]+
-Bool CharString_isOct(CharString s);				//[0-7]+
-Bool CharString_isBin(CharString s);				//[0-1]+
-
-Bool CharString_isUnsignedNumber(CharString s);		//[+]?[0-9]+
-Bool CharString_isSignedNumber(CharString s);		//[-+]?[0-9]+
-Bool CharString_isFloat(CharString s);				//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
-
-//Things that perform on this string to reduce overhead
-
-Bool CharString_cutBegin(CharString s, U64 off, CharString *result);
-Bool CharString_cutEnd(CharString s, U64 length, CharString *result);
-Bool CharString_cut(CharString s, U64 off, U64 length, CharString *result);
-
-Bool CharString_cutAfter(
-	CharString s,
-	C8 c,
-	EStringCase caseSensitive,
-	Bool isFirst,
-	CharString *result
-);
-
-Bool CharString_cutAfterLast(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
-Bool CharString_cutAfterFirst(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
-
-Bool CharString_cutAfterString(
-	CharString s,
-	CharString other,
-	EStringCase caseSensitive,
-	Bool isFirst,
-	CharString *result
-);
-
-Bool CharString_cutAfterLastString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
-Bool CharString_cutAfterFirstString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
-
-Bool CharString_cutBefore(
-	CharString s,
-	C8 c,
-	EStringCase caseSensitive,
-	Bool isFirst,
-	CharString *result
-);
-
-Bool CharString_cutBeforeLast(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
-Bool CharString_cutBeforeFirst(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
-
-Bool CharString_cutBeforeString(
-	CharString s,
-	CharString other,
-	EStringCase caseSensitive,
-	Bool isFirst,
-	CharString *result
-);
-
-Bool CharString_cutBeforeLastString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
-Bool CharString_cutBeforeFirstString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
-
-Bool CharString_cutAfterSensitive(CharString s, C8 c, Bool isFirst, CharString *result);
-Bool CharString_cutAfterInsensitive(CharString s, C8 c, Bool isFirst, CharString *result);
-
-Bool CharString_cutAfterLastSensitive(CharString s, C8 c, CharString *result);
-Bool CharString_cutAfterLastInsensitive(CharString s, C8 c, CharString *result);
-
-Bool CharString_cutAfterFirstSensitive(CharString s, C8 c, CharString *result);
-Bool CharString_cutAfterFirstInsensitive(CharString s, C8 c, CharString *result);
-
-Bool CharString_cutAfterStringSensitive(CharString s, CharString other, Bool isFirst, CharString *result);
-Bool CharString_cutAfterStringInsensitive(CharString s, CharString other, Bool isFirst, CharString *result);
-
-Bool CharString_cutAfterFirstStringSensitive(CharString s, CharString other, CharString *result);
-Bool CharString_cutAfterFirstStringInsensitive(CharString s, CharString other, CharString *result);
-
-Bool CharString_cutAfterLastStringSensitive(CharString s, CharString other, CharString *result);
-Bool CharString_cutAfterLastStringInsensitive(CharString s, CharString other, CharString *result);
-
-Bool CharString_cutBeforeSensitive(CharString s, C8 c, Bool isFirst, CharString *result);
-Bool CharString_cutBeforeInsensitive(CharString s, C8 c, Bool isFirst, CharString *result);
-
-Bool CharString_cutBeforeLastSensitive(CharString s, C8 c, CharString *result);
-Bool CharString_cutBeforeLastInsensitive(CharString s, C8 c, CharString *result);
-
-Bool CharString_cutBeforeFirstSensitive(CharString s, C8 c, CharString *result);
-Bool CharString_cutBeforeFirstInsensitive(CharString s, C8 c, CharString *result);
-
-Bool CharString_cutBeforeStringSensitive(CharString s, CharString other, Bool isFirst, CharString *result);
-Bool CharString_cutBeforeStringInsensitive(CharString s, CharString other, Bool isFirst, CharString *result);
-
-Bool CharString_cutBeforeFirstStringSensitive(CharString s, CharString other, CharString *result);
-Bool CharString_cutBeforeFirstStringInsensitive(CharString s, CharString other, CharString *result);
-
-Bool CharString_cutBeforeLastStringSensitive(CharString s, CharString other, CharString *result);
-Bool CharString_cutBeforeLastStringInsensitive(CharString s, CharString other, CharString *result);
-
-//TODO: CharString_cut(Before/After)Codepoint
-
-Error CharString_eraseAtCount(CharString *s, U64 i, U64 count);
-Error CharString_popFrontCount(CharString *s, U64 count);
-Error CharString_popEndCount(CharString *s, U64 count);
-
-Error CharString_eraseAt(CharString *s, U64 i);
-Error CharString_popFront(CharString *s);
-Error CharString_popEnd(CharString *s);
-
-Bool CharString_eraseAll(CharString *s, C8 c, EStringCase caseSensitive, U64 off, U64 len);
-Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase caseSensitive, U64 off, U64 len);
-
-Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFirst, U64 off, U64 len);
-
-Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive, U64 off, U64 len);
-Bool CharString_eraseLast(CharString *s, C8 c, EStringCase caseSensitive, U64 off, U64 len);
-
-Bool CharString_eraseString(CharString *s, CharString other, EStringCase caseSensitive, Bool isFirst, U64 off, U64 len);
-
-Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive, U64 off, U64 len);
-Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive, U64 off, U64 len);
-
-//Duplicates of erase to simplify casing
-
-Bool CharString_eraseAllSensitive(CharString *s, C8 c, U64 off, U64 len);
-Bool CharString_eraseAllStringSensitive(CharString *s, CharString other, U64 off, U64 len);
-
-Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst, U64 off, U64 len);
-
-Bool CharString_eraseFirstSensitive(CharString *s, C8 c, U64 off, U64 len);
-Bool CharString_eraseLastSensitive(CharString *s, C8 c, U64 off, U64 len);
-
-Bool CharString_eraseStringSensitive(CharString *s, CharString other, Bool isFirst, U64 off, U64 len);
-
-Bool CharString_eraseFirstStringSensitive(CharString *s, CharString other, U64 off, U64 len);
-Bool CharString_eraseLastStringSensitive(CharString *s, CharString other, U64 off, U64 len);
-
-Bool CharString_eraseAllInsensitive(CharString *s, C8 c, U64 off, U64 len);
-Bool CharString_eraseAllStringInsensitive(CharString *s, CharString other, U64 off, U64 len);
-
-Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst, U64 off, U64 len);
-
-Bool CharString_eraseFirstInsensitive(CharString *s, C8 c, U64 off, U64 len);
-Bool CharString_eraseLastInsensitive(CharString *s, C8 c, U64 off, U64 len);
-
-Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isFirst, U64 off, U64 len);
-
-Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other, U64 off, U64 len);
-Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other, U64 off, U64 len);
-
-//TODO: CharString_eraseCodepoint
-
-//Replace
-
-Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off, U64 len);
-Bool CharString_replace(CharString *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst, U64 off, U64 len);
-Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off, U64 len);
-Bool CharString_replaceLast(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off, U64 len);
-
-Bool CharString_replaceAllSensitive(CharString *s, C8 c, C8 v, U64 off, U64 len);
-Bool CharString_replaceSensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off, U64 len);
-Bool CharString_replaceFirstSensitive(CharString *s, C8 c, C8 v, U64 off, U64 len);
-Bool CharString_replaceLastSensitive(CharString *s, C8 c, C8 v, U64 off, U64 len);
-
-Bool CharString_replaceAllInsensitive(CharString *s, C8 c, C8 v, U64 off, U64 len);
-Bool CharString_replaceInsensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off, U64 len);
-Bool CharString_replaceFirstInsensitive(CharString *s, C8 c, C8 v, U64 off, U64 len);
-Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v, U64 off, U64 len);
-
-//TODO: CharString_replaceCodepoint
-
-CharString CharString_trim(CharString s);		//Returns a substring ref in a string
-
-Bool CharString_transform(CharString s, EStringTransform stringTransform);
-
-Bool CharString_toLower(CharString str);		//TODO: Understand UTF8
-Bool CharString_toUpper(CharString str);		//TODO: Understand UTF8
-
-//Simple file utils
-
-Bool CharString_formatPath(CharString *str);
-
-CharString CharString_getFilePath(CharString *str);		//Formats on string first to ensure it's proper
-CharString CharString_getBasePath(CharString *str);		//Formats on string first to ensure it's proper
+Bool CharString_resize(CharString *str, U64 length, C8 defaultChar, const Allocator *alloc, Error *e_rr);
+Bool CharString_reserve(CharString *str, U64 length, const Allocator *alloc, Error *e_rr);
+
+Bool CharString_append(CharString *s, C8 c, const Allocator *allocator, Error *e_rr);
+Bool CharString_appendString(CharString *s, const CharString *other, const Allocator *allocator, Error *e_rr);
+
+Bool CharString_insert(CharString *s, C8 c, U64 i, const Allocator *allocator, Error *e_rr);
+Bool CharString_insertString(CharString *s, const CharString *other, U64 i, const Allocator *allocator, Error *e_rr);
+
+static inline Bool CharString_prepend(CharString *s, C8 c, const Allocator *allocator, Error *e_rr) {
+	return CharString_insert(s, c, 0, allocator, e_rr);
+}
+
+static inline Bool CharString_prependString(CharString *s, const CharString *other, const Allocator *allocator, Error *e_rr) {
+	return CharString_insertString(s, other, 0, allocator, e_rr);
+}
+
+typedef struct CharStringReplace2 {
+	CharString *s;
+	const CharString *search;
+	const CharString *replace;
+	const Allocator *allocator;
+	U64 off;
+	U64 len;
+} CharStringReplace2;
+
+Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase caseSensitive, Error *e_rr);
+Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, EStringCase caseSensitive, Error *e_rr);
+
+typedef struct CharStringFind {
+	const CharString *s;
+	const Allocator *alloc;
+	U64 off;
+	U64 len;
+	ListU64 *result;
+} CharStringFind;
+
+Bool CharString_findAll(const CharStringFind *find, C8 c, EStringCase caseSensitive, Error *e_rr);
+Bool CharString_findAllString(const CharStringFind *find, const CharString *other, EStringCase caseSensitive, Error *e_rr);
+
+U64 CharString_unicodeCodepoints(const CharString str);		//Returns U64_MAX if invalid codepoints were detected
+U64 CharString_hash(const CharString s);					//Hash of content, for maps only (not for cryptography purposes)
+
+CharString CharString_getFilePath(CharString *str);			//Formats on string first to ensure it's proper
+CharString CharString_getBasePath(CharString *str);			//Formats on string first to ensure it's proper
 
 //TODO: Regex
 
@@ -542,29 +124,35 @@ CharString CharString_getBasePath(CharString *str);		//Formats on string first t
 //This handles copies, but should only be used when managed strings are used.
 //For a list of ref strings, the normal functionality should be used and makes everything a lot easier.
 
-Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc);
-
-Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr);
+void ListCharString_freeUnderlying(ListCharString *arr, const Allocator *alloc);
+Bool ListCharString_createCopyUnderlying(
+	const ListCharString *toCopy, const Allocator *alloc, ListCharString *arr, Error *e_rr
+);
 
 //Move data for strings + array wherever possible.
 //Otherwise, allocate.
-Bool ListCharString_move(ListCharString *src, Allocator alloc, ListCharString *dst, Error *e_rr);
+Bool ListCharString_move(ListCharString *src, const Allocator *alloc, ListCharString *dst, Error *e_rr);
 
 //Combining all strings into one
 
-Error ListCharString_combine(ListCharString arr, Allocator alloc, CharString *result);
+typedef struct ListCharStringConcat {
+	const ListCharString *arr;
+	const Allocator *alloc;
+	CharString *result;
+} ListCharStringConcat;
 
-Error ListCharString_concat(ListCharString arr, C8 between, Allocator alloc, CharString *result);
-Error ListCharString_concatString(ListCharString arr, CharString between, Allocator alloc, CharString *result);
+Bool ListCharString_combine(const ListCharStringConcat *concat, Error *e_rr);
+Bool ListCharString_concat(const ListCharStringConcat *concat, C8 between, Error *e_rr);
+Bool ListCharString_concatString(const ListCharStringConcat *concat, const CharString *between, Error *e_rr);
 
 //Formatting
 
-Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args);
-Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...);
+Bool CharString_formatVariadic(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, va_list args);
+Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, const C8 *format, ...);
 
 //Parsing and stringifying ETypeId (as long as it's a basic OxC3 base type)
 
-Bool CharString_createFromETypeId(ETypeId type, Allocator alloc, CharString *result, Error *e_rr);
+Bool CharString_createFromETypeId(ETypeId type, const Allocator *alloc, CharString *result, Error *e_rr);
 
 typedef enum EHLSLStringifyFlags {
 	EHLSLStringifyFlags_None			= 0,
@@ -577,12 +165,12 @@ typedef enum EHLSLStringifyFlags {
 Bool CharString_createFromETypeIdHLSL(
 	ETypeId type,
 	EHLSLStringifyFlags stringifyFlags,
-	Allocator alloc,
+	const Allocator *alloc,
 	CharString *result,
 	Error *e_rr
 );
 
-ETypeId ETypeId_parse(CharString str);
+ETypeId ETypeId_parse(const CharString str);
 
 #ifdef __cplusplus
 	}

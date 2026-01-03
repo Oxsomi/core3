@@ -26,10 +26,13 @@
 #ifdef __cplusplus
 	extern "C" {
 #endif
-		
+
+typedef enum ECompareResult ECompareResult;
+
 //Since a CharString can be a ref to existing memory, it doesn't necessarily have a null terminator.
 //The null terminator is omitted for speed and to allow references into an existing string or data.
 //The null terminator is automatically added on copy.
+//Be careful that when passing a string to an API that expects null termination that you copy it first.
 //
 //There are four/five types of strings:
 //
@@ -63,7 +66,7 @@ typedef struct CharString {
 typedef C8 ShortString[SHORTSTRING_LEN];
 typedef C8 LongString[LONGSTRING_LEN];
 
-CharString CharString_createRefAutoConst(const C8* ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
+CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
 CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated);
 
 //Simple helper functions
@@ -112,10 +115,6 @@ static inline C8 *CharString_charAt(const CharString str, U64 off) {
 static inline const C8 *CharString_charAtConst(const CharString str, U64 off) {
 	return off >= CharString_length(str) ? NULL : str.ptr + off;
 }
-
-//Returns U32_MAX if it wasn't a valid UTF8 codepoint
-//TODO: U32 CharString_codepointAtByteConst(CharString str, U64 startByteOffset, U8 *length);
-//TODO: U32 CharString_codepointAtConst(CharString str, U64 offset, U8 *length);
 
 static inline Bool CharString_isValidAscii(const CharString str) {
 
@@ -196,6 +195,23 @@ static inline CharString CharString_createRefShortString(ShortString str) {
 
 static inline CharString CharString_createRefLongString(LongString str) {
 	return CharString_createRefAuto(str, LONGSTRING_LEN);
+}
+
+//Clear owned memory of CharString
+static inline Bool CharString_clear(CharString *str) {
+
+	if(!str || CharString_isRef(*str))
+		return false;
+
+	if(CharString_isNullTerminated(*str))					//If null terminated, we want to keep it null terminated
+		str->ptrNonConst[0] = '\0';
+
+	str->lenAndNullTerminated &= ~(((U64)1 << 63) - 1);		//Clear size
+	return true;
+}
+
+static inline CharString CharString_newLine() {			//Always \n since all OSes can handle that nowadays
+	return CharString_createRefCStrConst("\n");
 }
 
 #ifdef __cplusplus

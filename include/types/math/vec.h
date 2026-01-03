@@ -132,16 +132,18 @@
 
 #endif
 
+//TODO: Split this
+
 #include "types/math/vec4i.h"
 #include "types/math/vec4f.h"
 #include "types/math/vec2i.h"
 #include "types/math/vec2f.h"
 #include "types/base/buffer.h"
 
-BUFFER_OP(I32x2);
-BUFFER_OP(F32x2);
-//BUFFER_OP(F64x2);		TODO:
+BUFFER_OP_IMPL(I32x2);
+BUFFER_OP_IMPL(F32x2);
+//BUFFER_OP_IMPL(F64x2);		TODO:
 
-BUFFER_OP(I32x4);
-BUFFER_OP(F32x4);
-//BUFFER_OP(F64x4);		TODO:
+BUFFER_OP_IMPL(I32x4);
+BUFFER_OP_IMPL(F32x4);
+//BUFFER_OP_IMPL(F64x4);		TODO:
