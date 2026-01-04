@@ -82,12 +82,14 @@ void WindowManager_updateExt(WindowManager *manager) {
 	MSG msg = (MSG) { 0 };
 	U64 seenWindows[4] = { 0 };
 	ListU64 seenWindowsLarge = (ListU64) { 0 };
-	Error err = Error_none();
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = true;
 
-	if(manager->windows.length > 256)
-		gotoIfError(clean, ListU64_resizex(&seenWindowsLarge, (manager->windows.length + 63) >> 6))
+	if (manager->windows.length > 256) {
+		gotoIfError3(clean, ListU64_resizex(&seenWindowsLarge, (manager->windows.length + 63) >> 6, e_rr));
+	}
 
-	else gotoIfError(clean, ListU64_createRefConst(seenWindows, 4, &seenWindowsLarge))
+	else gotoIfError3(clean, ListU64_createRefConst(seenWindows, 4, &seenWindowsLarge, e_rr));
 
 	while(PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
 

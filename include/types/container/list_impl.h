@@ -53,7 +53,7 @@ clean:																														\
 
 #define TListNamedBaseImpl(Name) 																							\
 																															\
-Bool Name##_swap(Name l, U64 i, U64 j, Error *e_rr) { return GenericList_swap(Name##_toList(l), i, j); }					\
+Bool Name##_swap(Name l, U64 i, U64 j, Error *e_rr) { return GenericList_swap(Name##_toList(l), i, j, e_rr); }				\
 Bool Name##_reverse(Name l) { return GenericList_reverse(Name##_toList(l)); }												\
 Bool Name##_sortCustom(Name l, CompareFunction func) { return GenericList_sortCustom(Name##_toList(l), func); }				\
 																															\

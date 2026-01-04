@@ -21,102 +21,113 @@
 #pragma once
 #include "listx.h"
 #include "types/container/generic_list.h"
-#include "types/container/list.h"
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 
 //Helpers for creating the "template" functions of a TList
 
-#define TListWrapCtorx(Name, ...) {																						\
-																														\
-	GenericList list = (GenericList) { 0 }; 																			\
-	__VA_ARGS__;																										\
-																														\
-	if (err.genericError || (err = ListVoid_fromList(list, sizeof(Name##_Type), (ListVoid*)result)).genericError)		\
-		GenericList_freex(&list);																						\
-																														\
-	return err;																											\
+#define TListWrapCtorx(Name, ...) {																							\
+																															\
+	Bool s_uccess = true;																									\
+	Bool alloc = false;																										\
+	GenericList list = (GenericList) { 0 }; 																				\
+	__VA_ARGS__;																											\
+	alloc = true;																											\
+																															\
+	gotoIfError3(clean, ListVoid_fromList(list, sizeof(Name##_Type), (ListVoid*)result, e_rr));								\
+																															\
+clean:																														\
+	if(!s_uccess && alloc)																									\
+		GenericList_freex(&list);																							\
+																															\
+	return s_uccess;																										\
 }
 
 //Extended TList
 
-#define TListXBaseImpl(Name)																							\
-																														\
-Error Name##_createx(U64 length, Name *result) {																		\
-	TListWrapCtorx(Name, Error err = GenericList_createx(length, sizeof(Name##_Type), &list));							\
-}																														\
-																														\
-Error Name##_createRepeatedx(U64 length, Name##_Type t, Name *result) {													\
-	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));												\
-	TListWrapCtorx(Name, Error err = GenericList_createRepeatedx(length, sizeof(Name##_Type), buf, &list));				\
-}																														\
-																														\
-Error Name##_createCopyx(Name l, Name *result) {																		\
-	TListWrapCtorx(Name, Error err = GenericList_createCopyx(Name##_toList(l), &list));									\
-}																														\
-																														\
-Error Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result) {												\
-	TListWrapCtorx(Name, Error err = GenericList_createCopySubsetx(Name##_toList(l), off, len, &list));					\
-}																														\
-																														\
-Error Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result) {										\
-	TListWrapCtorx(Name, Error err = GenericList_createSubsetReversex(Name##_toList(l), index, length, &list));			\
-}																														\
-																														\
-Error Name##_createReversex(Name l, Name *result) {																		\
-	TListWrapCtorx(Name, Error err = GenericList_createReversex(Name##_toList(l), &list));								\
-}																														\
-																														\
-Error Name##_findx(Name l, Name##_Type t, EqualsFunction eq, ListU64 *result) {											\
-	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	return GenericList_findx(Name##_toList(l), buf, eq, result);														\
-}																														\
-																														\
-Error Name##_eraseAllx(Name *l, Name##_Type t, EqualsFunction eq) {														\
-	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_eraseAllx(&list, buf, eq));										\
-}																														\
-																														\
-Error Name##_insertx(Name *l, U64 index, Name##_Type t) {																\
-	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_insertx(&list, index, buf));										\
-}																														\
-																														\
-Error Name##_pushAllx(Name *l, Name other) {																			\
-	TListWrapModifying(Name, Error err = GenericList_pushAllx(&list, Name##_toList(other)));							\
-}																														\
-																														\
-Error Name##_insertAllx(Name *l, Name other, U64 offset) {																\
-	TListWrapModifying(Name, Error err = GenericList_insertAllx(&list, Name##_toList(other), offset));					\
-}																														\
-																														\
-Error Name##_reservex(Name *l, U64 n) {																					\
-	TListWrapModifying(Name, Error err = GenericList_reservex(&list, n));												\
-}																														\
-																														\
-Error Name##_resizex(Name *l, U64 n) { TListWrapModifying(Name, Error err = GenericList_resizex(&list, n)); }			\
-Error Name##_shrinkToFitx(Name *l) { TListWrapModifying(Name, Error err = GenericList_shrinkToFitx(&list)); }			\
-																														\
-Error Name##_pushBackx(Name *l, Name##_Type t) {																		\
-	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_pushBackx(&list, buf));											\
-}																														\
-																														\
-Error Name##_pushFrontx(Name *l, Name##_Type t) {																		\
-	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_pushFrontx(&list, buf));											\
-}																														\
-																														\
-Bool Name##_freex(Name *l) {																							\
-																														\
-	if(!l)																												\
-		return true;																									\
-																														\
-	GenericList temp = Name##_toList(*l);																				\
-	Bool b = GenericList_freex(&temp);																					\
-	*l = (Name) { 0 };																									\
-	return b;																											\
+#define TListXBaseImpl(Name)																								\
+																															\
+Bool Name##_createx(U64 length, Name *result, Error *e_rr) {																\
+	TListWrapCtorx(Name, gotoIfError3(clean, GenericList_createx(length, sizeof(Name##_Type), &list, e_rr)));				\
+}																															\
+																															\
+Bool Name##_createRepeatedx(U64 length, Name##_Type t, Name *result, Error *e_rr) {											\
+	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));													\
+	TListWrapCtorx(Name, gotoIfError3(clean, GenericList_createRepeatedx(length, sizeof(Name##_Type), &buf, &list, e_rr)));	\
+}																															\
+																															\
+Bool Name##_createCopyx(Name l, Name *result, Error *e_rr) {																\
+	TListWrapCtorx(Name, gotoIfError3(clean, GenericList_createCopyx(Name##_toList(l), &list, e_rr)));						\
+}																															\
+																															\
+Bool Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result, Error *e_rr) {										\
+	TListWrapCtorx(Name, gotoIfError3(clean, GenericList_createCopySubsetx(Name##_toList(l), off, len, &list, e_rr)));		\
+}																															\
+																															\
+Bool Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result, Error *e_rr) {								\
+	TListWrapCtorx(Name, gotoIfError3(clean, GenericList_createSubsetReversex(												\
+		Name##_toList(l), index, length, &list, e_rr																		\
+	)));																													\
+}																															\
+																															\
+Bool Name##_createReversex(Name l, Name *result, Error *e_rr) {																\
+	TListWrapCtorx(Name, gotoIfError3(clean, GenericList_createReversex(Name##_toList(l), &list, e_rr)));					\
+}																															\
+																															\
+Bool Name##_findx(Name l, Name##_Type t, EqualsFunction eq, ListU64 *result, Error *e_rr) {									\
+	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));															\
+	return GenericList_findx(Name##_toList(l), &buf, eq, result, e_rr);														\
+}																															\
+																															\
+Bool Name##_eraseAllx(Name *l, Name##_Type t, EqualsFunction eq, Error *e_rr) {												\
+	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));															\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_eraseAllx(&list, &buf, eq, e_rr)));							\
+}																															\
+																															\
+Bool Name##_insertx(Name *l, U64 index, Name##_Type t, Error *e_rr) {														\
+	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));															\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_insertx(&list, index, &buf, e_rr)));							\
+}																															\
+																															\
+Bool Name##_pushAllx(Name *l, Name other, Error *e_rr) {																	\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_pushAllx(&list, Name##_toList(other), e_rr)));					\
+}																															\
+																															\
+Bool Name##_insertAllx(Name *l, Name other, U64 offset, Error *e_rr) {														\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_insertAllx(&list, Name##_toList(other), offset, e_rr)));		\
+}																															\
+																															\
+Bool Name##_reservex(Name *l, U64 n, Error *e_rr) {																			\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_reservex(&list, n, e_rr)));									\
+}																															\
+																															\
+Bool Name##_resizex(Name *l, U64 n, Error *e_rr) {																			\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_resizex(&list, n, e_rr)));										\
+}																															\
+																															\
+Bool Name##_shrinkToFitx(Name *l, Error *e_rr) {																			\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_shrinkToFitx(&list, e_rr)));									\
+}																															\
+																															\
+Bool Name##_pushBackx(Name *l, Name##_Type t, Error *e_rr) {																\
+	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));															\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_pushBackx(&list, &buf, e_rr)));								\
+}																															\
+																															\
+Bool Name##_pushFrontx(Name *l, Name##_Type t, Error *e_rr) {																\
+	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));															\
+	TListWrapModifying(Name, gotoIfError3(clean, GenericList_pushFrontx(&list, buf, e_rr)));								\
+}																															\
+																															\
+void Name##_freex(Name *l) {																								\
+																															\
+	if(!l)																													\
+		return;																												\
+																															\
+	GenericList temp = Name##_toList(*l);																					\
+	GenericList_freex(&temp);																								\
+	*l = { 0 };																												\
 }
 
 #define TListXImpl(T) TListXBaseImpl(List##T);

@@ -49,8 +49,8 @@ Bool collectArchiveEntries(FileInfo info, ListCharString *arg, Error *e_rr) {
 	Bool s_uccess = true;
 	CharString tmp = CharString_createNull();
 
-	gotoIfError2(clean, CharString_createCopyx(info.path, &tmp))
-	gotoIfError2(clean, ListCharString_pushBackx(arg, tmp))
+	gotoIfError3(clean, CharString_createCopyx(info.path, &tmp, e_rr));
+	gotoIfError3(clean, ListCharString_pushBackx(arg, tmp, e_rr));
 
 	tmp = CharString_createNull();		//Belongs to list now
 
@@ -74,11 +74,11 @@ Bool writeToDisk(FileInfo info, OutputFolderToDisk *output, Error *e_rr) {
 
 	const U64 start = CharString_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : CharString_length(output->base);
 
-	if(!CharString_cut(info.path, start, 0, &subDir))
-		retError(clean, Error_invalidOperation(0, "writeToDisk()::info.path cut failed"))
+	if (!CharString_cut(info.path, start, 0, &subDir))
+		retError(clean, Error_invalidOperation(0, "writeToDisk()::info.path cut failed"));
 
-	gotoIfError2(clean, CharString_createCopyx(output->output, &tmp))
-	gotoIfError2(clean, CharString_appendStringx(&tmp, subDir))
+	gotoIfError3(clean, CharString_createCopyx(output->output, &tmp, e_rr));
+	gotoIfError3(clean, CharString_appendStringx(&tmp, &subDir, e_rr));
 
 	if (info.type == EFileType_File) {
 		Buffer data = Buffer_createNull();
@@ -174,15 +174,17 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isUTF8,
 
 		else {
 
+			const CharString newLine = CharString_newLine();
+
 			for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
 
-				gotoIfError2(clean, CharString_createHexx(b.ptr[i], 2, &tmp1))
-				gotoIfError2(clean, CharString_popFrontCount(&tmp1, 2))
-				gotoIfError2(clean, CharString_appendStringx(&tmp, tmp1))
-				gotoIfError2(clean, CharString_appendx(&tmp, ' '))
+				gotoIfError3(clean, CharString_createHexx(b.ptr[i], 2, &tmp1, e_rr));
+				gotoIfError3(clean, CharString_popFrontCount(&tmp1, 2, e_rr));
+				gotoIfError3(clean, CharString_appendStringx(&tmp, &tmp1, e_rr));
+				gotoIfError3(clean, CharString_appendx(&tmp, ' ', e_rr));
 
-				if(!((k + 1) & 31))
-					gotoIfError2(clean, CharString_appendStringx(&tmp, CharString_newLine()))
+				if (!((k + 1) & 31))
+					gotoIfError3(clean, CharString_appendStringx(&tmp, &newLine, e_rr));
 
 				CharString_freex(&tmp1);
 			}
@@ -225,8 +227,8 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 		gotoIfError3(clean, File_addx(out, EFileType_Folder, 1 * SECOND, true, e_rr))
 		*madeFile = true;
 
-		gotoIfError2(clean, CharString_createCopyx(out, &tmp))
-		gotoIfError2(clean, CharString_appendx(&tmp, '/'))
+		gotoIfError3(clean, CharString_createCopyx(out, &tmp, e_rr));
+		gotoIfError3(clean, CharString_appendx(&tmp, '/', e_rr));
 
 		OutputFolderToDisk output = (OutputFolderToDisk) {
 			.base = e.path,
@@ -542,21 +544,21 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//000: self
 				//001:   child (indented by 2)
 
-				if(v == U64_MAX)
-					retError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"))
+				if (v == U64_MAX)
+					retError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"));
 
-				gotoIfError2(cleanCa, CharString_createDecx(v, 3, &tmp))
- 				gotoIfError2(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1))
-				gotoIfError2(cleanCa, CharString_appendx(&tmp, ':'))
-				gotoIfError2(cleanCa, CharString_appendx(&tmp, ' '))
-				gotoIfError2(cleanCa, CharString_appendStringx(&tmp, tmp1))
+				gotoIfError3(cleanCa, CharString_createDecx(v, 3, &tmp, e_rr));
+ 				gotoIfError3(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1, e_rr));
+				gotoIfError3(cleanCa, CharString_appendx(&tmp, ':', e_rr));
+				gotoIfError3(cleanCa, CharString_appendx(&tmp, ' ', e_rr));
+				gotoIfError3(cleanCa, CharString_appendStringx(&tmp, &tmp1, e_rr));
 				CharString_freex(&tmp1);
 
 				CharString sub = CharString_createNull();
 				if(!CharString_cutBeforeLastSensitive(pathi, '/', &sub))
 					sub = CharString_createRefSizedConst(pathi.ptr, CharString_length(pathi), false);
 
-				gotoIfError2(cleanCa, CharString_appendStringx(&tmp, sub))
+				gotoIfError3(cleanCa, CharString_appendStringx(&tmp, &sub, e_rr));
 
 				//Log and free temp
 
@@ -637,11 +639,13 @@ Bool CLI_inspectData(ParsedArgs args) {
 						file.settings.dataType == EDLDataType_Ascii ? CharString_length(file.entryStrings.ptr[i]) :
 						Buffer_length(file.entryBuffers.ptr[i]);
 
-					gotoIfError2(cleanDl, CharString_createDecx(i, 3, &tmp))
-					gotoIfError2(cleanDl, CharString_appendStringx(&tmp, CharString_createRefCStrConst(": length = ")))
+					const CharString colLen = CharString_createRefCStrConst(": length = ");
 
-					gotoIfError2(cleanDl, CharString_createDecx(entrySize, 0, &tmp1))
-					gotoIfError2(cleanDl, CharString_appendStringx(&tmp, tmp1))
+					gotoIfError3(cleanDl, CharString_createDecx(i, 3, &tmp, e_rr));
+					gotoIfError3(cleanDl, CharString_appendStringx(&tmp, &colLen, e_rr));
+
+					gotoIfError3(cleanDl, CharString_createDecx(entrySize, 0, &tmp1, e_rr));
+					gotoIfError3(cleanDl, CharString_appendStringx(&tmp, &tmp1, e_rr));
 
 					Log_debugLnx("%s", tmp.ptr);
 					CharString_freex(&tmp);

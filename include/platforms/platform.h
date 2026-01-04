@@ -21,8 +21,8 @@
 #pragma once
 #include "types/base/platform_types.h"
 #include "types/base/string.h"
-#include "types/container/archive.h"
 #include "types/base/lock.h"
+#include "types/container/generic_list_predeclare.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -30,14 +30,13 @@
 
 typedef struct Allocator Allocator;
 typedef struct Thread Thread;
+typedef struct Archive Archive;
 
 typedef struct VirtualSection {
 
 	CharString path;
 
 	const void *dataExt;	//Information about how to load the virtual file
-
-	Archive loadedData;		//If the data is in memory, this will be used
 
 	Bool loaded;
 	U8 padding[7];
@@ -46,8 +45,8 @@ typedef struct VirtualSection {
 
 } VirtualSection;
 
-TList(VirtualSection);
-TListNamed(Thread*, ListThread);
+TListDefinition(Archive, ListArchive);
+TListDefinition(VirtualSection, ListVirtualSection);
 
 typedef struct Platform {
 
@@ -64,7 +63,9 @@ typedef struct Platform {
 	const Allocator *alloc;
 
 	SpinLock virtualSectionsLock;
+
 	ListVirtualSection virtualSections;
+	ListArchive archives;
 
 	void *data;
 

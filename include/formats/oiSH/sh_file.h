@@ -124,7 +124,7 @@ Bool SHFile_addBinary(
 Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error *e_rr);	//Moves entry->name and binaryIds
 Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Error *e_rr);	//Moves include->name
 
-Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr);
+Bool SHFile_write(const SHFile *shFile, const Allocator *alloc, Buffer *result, Error *e_rr);
 Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, Error *e_rr);
 
 Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr);

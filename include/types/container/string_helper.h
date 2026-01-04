@@ -49,15 +49,11 @@ static inline Bool CharString_splitStringInsensitive(const CharStringSplit *spli
 	return CharString_splitString(split, other, EStringCase_Insensitive, e_rr);
 }
 
-static inline Bool CharString_replaceAllStringSensitive(
-	const CharStringReplace2 *replace, EStringCase caseSensitive, Error *e_rr
-) {
+static inline Bool CharString_replaceAllStringSensitive(const CharStringReplace2 *replace, Error *e_rr) {
 	return CharString_replaceAllString(replace, EStringCase_Sensitive, e_rr);
 }
 
-static inline Bool CharString_replaceAllStringInsensitive(
-	const CharStringReplace2 *replace, EStringCase caseSensitive, Error *e_rr
-) {
+static inline Bool CharString_replaceAllStringInsensitive(const CharStringReplace2 *replace, Error *e_rr) {
 	return CharString_replaceAllString(replace, EStringCase_Insensitive, e_rr);
 }
 

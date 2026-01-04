@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/container/list.h"
+#include "types/container/list_predeclare.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -28,14 +29,14 @@
 TListNamedBase(ListU64);
 Bool ListU64_sort(ListU64 l);
 
-TListSort(U8); TListSort(U16); TListSort(U32);
-TListSort(I8); TListSort(I16); TListSort(I32); TListSort(I64);
-TListSort(F32); TListSort(F64);
+TListNamedBase(ListU8); TListNamedBase(ListU16); TListNamedBase(ListU32);
+TListNamedBase(ListI8); TListNamedBase(ListI16); TListNamedBase(ListI32); TListNamedBase(ListI64);
+TListNamedBase(ListF32); TListNamedBase(ListF64);
 
-TList(ListU8);
-TList(ListU16);
-TList(ListU32);
-TList(ListU64);
+TListNamedBase(ListListU8);
+TListNamedBase(ListListU16);
+TListNamedBase(ListListU32);
+TListNamedBase(ListListU64);
 
 void ListListU8_freeUnderlying (ListListU8  *list, const Allocator *alloc);
 void ListListU16_freeUnderlying(ListListU16 *list, const Allocator *alloc);
@@ -47,7 +48,7 @@ Bool ListListU16_createCopyUnderlying(const ListListU16 *src, const Allocator *a
 Bool ListListU32_createCopyUnderlying(const ListListU32 *src, const Allocator *alloc, ListListU32 *dst, Error *e_rr);
 Bool ListListU64_createCopyUnderlying(const ListListU64 *src, const Allocator *alloc, ListListU64 *dst, Error *e_rr);
 
-TList(Buffer);
+TListNamedBase(ListBuffer);
 
 void ListBuffer_freeUnderlying(ListBuffer *list, const Allocator *alloc);
 

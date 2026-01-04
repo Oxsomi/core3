@@ -64,42 +64,6 @@ TListXBaseImpl(ListWeakRefPtr);
 
 TListXImpl(SubResourceData);
 
-void ListBuffer_freeUnderlyingx(ListBuffer *list) {
-	ListBuffer_freeUnderlying(list, Platform_instance->alloc);
-}
-
-void ListListU8_freeUnderlyingx(ListListU8 *list) {
-	ListListU8_freeUnderlying(list, Platform_instance->alloc);
-}
-
-void ListListU16_freeUnderlyingx(ListListU16 *list) {
-	ListListU16_freeUnderlying(list, Platform_instance->alloc);
-}
-
-void ListListU32_freeUnderlyingx(ListListU32 *list) {
-	ListListU32_freeUnderlying(list, Platform_instance->alloc);
-}
-
-void ListListU64_freeUnderlyingx(ListListU64 *list) {
-	ListListU64_freeUnderlying(list, Platform_instance->alloc);
-}
-
-Bool ListListU8_createCopyUnderlyingx(ListListU8 src, ListListU8 *dst, Error *e_rr) {
-	return ListListU8_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
-}
-
-Bool ListListU16_createCopyUnderlyingx(ListListU16 src, ListListU16 *dst, Error *e_rr) {
-	return ListListU16_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
-}
-
-Bool ListListU32_createCopyUnderlyingx(ListListU32 src, ListListU32 *dst, Error *e_rr) {
-	return ListListU32_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
-}
-
-Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error *e_rr) {
-	return ListListU64_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
-}
-
 //Contains small helper functions that don't require their own .c file
 
 //RefPtr
@@ -276,63 +240,6 @@ Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result) {
 Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
 	return ListSubResourceData_freeAll(buf, Platform_instance->alloc);
 }
-
-//List
-
-Error GenericList_createx(U64 length, U64 stride, GenericList *result) {
-	return GenericList_create(length, stride, Platform_instance->alloc, result);
-}
-
-Error GenericList_createRepeatedx(U64 length, U64 stride, Buffer data, GenericList *result) {
-	return GenericList_createRepeated(length, stride, data, Platform_instance->alloc, result);
-}
-
-Error GenericList_createCopyx(GenericList list, GenericList *result) {
-	return GenericList_createCopy(list, Platform_instance->alloc, result);
-}
-
-Error GenericList_createCopySubsetx(GenericList list, U64 offset, U64 len, GenericList *result) {
-	return GenericList_createCopySubset(list, offset, len, Platform_instance->alloc, result);
-}
-
-Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result) {
-	return GenericList_createSubsetReverse(list, index, length, Platform_instance->alloc, result);
-}
-
-Error GenericList_createReversex(GenericList list, GenericList *result) {
-	return GenericList_createSubsetReversex(list, 0, list.length, result);
-}
-
-Error GenericList_findx(GenericList list, Buffer buf, EqualsFunction eq, ListU64 *result) {
-	return GenericList_find(list, buf, eq, Platform_instance->alloc, result);
-}
-
-Error GenericList_eraseAllx(GenericList *list, Buffer buf, EqualsFunction eq) {
-	return GenericList_eraseAll(list, buf, Platform_instance->alloc, eq);
-}
-
-Error GenericList_insertx(GenericList *list, U64 index, Buffer buf) {
-	return GenericList_insert(list, index, buf, Platform_instance->alloc);
-}
-
-Error GenericList_pushAllx(GenericList *list, GenericList other) {
-	return GenericList_pushAll(list, other, Platform_instance->alloc);
-}
-
-Error GenericList_insertAllx(GenericList *list, GenericList other, U64 offset) {
-	return GenericList_insertAll(list, other, offset, Platform_instance->alloc);
-}
-
-Error GenericList_reservex(GenericList *list, U64 capacity) {
-	return GenericList_reserve(list, capacity, Platform_instance->alloc);
-}
-
-Error GenericList_resizex(GenericList *list, U64 size) { return GenericList_resize(list, size, Platform_instance->alloc); }
-Error GenericList_shrinkToFitx(GenericList *list) { return GenericList_shrinkToFit(list, Platform_instance->alloc); }
-
-Error GenericList_pushBackx(GenericList *l, Buffer buf) { return GenericList_pushBack(l, buf, Platform_instance->alloc); }
-Error GenericList_pushFrontx(GenericList *l, Buffer buf) { return GenericList_pushFront(l, buf, Platform_instance->alloc); }
-Bool GenericList_freex(GenericList *result) { return GenericList_free(result, Platform_instance->alloc); }
 
 //BigInt
 

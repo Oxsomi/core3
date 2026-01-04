@@ -25,30 +25,29 @@
 
 impl void Thread_freeExt(Thread *thread);
 
-Bool Thread_free(const Allocator *alloc, Thread **thread) {
+void Thread_free(const Allocator *alloc, Thread **thread) {
 
 	if(!thread || !*thread)
-		return true;
+		return;
 
 	Thread_freeExt(*thread);
-	const Bool freed = alloc->free(alloc->ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
+	alloc->free(alloc->ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
 	*thread = NULL;
-	return freed;
 }
 
-Error Thread_waitAndCleanup(const Allocator *alloc, Thread **thread) {
+Bool Thread_waitAndCleanup(const Allocator *alloc, Thread **thread, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!thread || !*thread)
-		return Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required");
+		retError(clean, Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required"));
 
 	if(!alloc || !alloc->free)
-		return Error_nullPointer(0, "Thread_waitAndCleanup()::alloc and alloc->free are required");
+		retError(clean, Error_nullPointer(0, "Thread_waitAndCleanup()::alloc and alloc->free are required"));
 
-	const Error err = Thread_wait(*thread);
-
-	if(err.genericError == EGenericError_TimedOut)
-		return err;
-
+	gotoIfError3(clean, Thread_wait(*thread, e_rr));
 	Thread_free(alloc, thread);
-	return err;
+
+clean:
+	return s_uccess;
 }

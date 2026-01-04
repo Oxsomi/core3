@@ -35,7 +35,14 @@ Bool CharString_erase(const CharStringReplaceErase *erase, C8 c, Bool isFirst) {
 
 	//Skipping first match
 
-	const U64 find = CharString_find(*s, c, erase->caseSensitive, isFirst, erase->off, erase->len);
+	CharStringSensOffLen strSensOffLen = {
+		s,
+		erase->caseSensitive,
+		erase->off,
+		erase->len
+	};
+
+	const U64 find = isFirst ? CharString_findFirst(&strSensOffLen, c) : CharString_findLast(&strSensOffLen, c);
 
 	if (find == U64_MAX)
 		return false;
@@ -99,7 +106,15 @@ Bool CharString_eraseString(const CharStringReplaceErase *erase, const CharStrin
 
 	//Skipping first match
 
-	const U64 find = CharString_findString(*s, other, erase->caseSensitive, isFirst, erase->off, erase->len);
+	CharStringSensOffLen strSensOffLen = {
+		s,
+		erase->caseSensitive,
+		erase->off,
+		erase->len
+	};
+
+	const U64 find =
+		isFirst ? CharString_findFirstString(&strSensOffLen, other) : CharString_findLastString(&strSensOffLen, other);
 
 	if (find == U64_MAX)
 		return false;
@@ -235,13 +250,14 @@ Bool CharString_replace(const CharStringReplaceErase *replace, C8 c, C8 v, Bool 
 	if (!s || CharString_isConstRef(*s))
 		return false;
 
-	U64 off = replace->off;
-	U64 len = replace->len;
-	EStringCase caseSensitive = replace->caseSensitive;
+	CharStringSensOffLen strSensOffLen = {
+		s,
+		replace->caseSensitive,
+		replace->off,
+		replace->len
+	};
 
-	const U64 i =
-		isFirst ? CharString_findFirst(*s, c, caseSensitive, off, len) :
-		CharString_findLast(*s, c, caseSensitive, off, len);
+	const U64 i = isFirst ? CharString_findFirst(&strSensOffLen, c) : CharString_findLast(&strSensOffLen, c);
 
 	if (i != U64_MAX)
 		s->ptrNonConst[i] = v;

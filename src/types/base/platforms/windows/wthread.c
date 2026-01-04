@@ -64,26 +64,24 @@ DWORD ThreadFunc(Thread *thread) {
 	return 0;
 }
 
-Error Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+Bool Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!thread)
-		return Error_nullPointer(2, "Thread_create()::thread is required");
+		retError(clean, Error_nullPointer(2, "Thread_create()::thread is required"));
 
 	if(*thread)
-		return Error_invalidParameter(2, 0, "Thread_create()::*thread isn't NULL, might indicate memleak");
+		retError(clean, Error_invalidParameter(2, 0, "Thread_create()::*thread isn't NULL, might indicate memleak"));
 
 	if(!callback)
-		return Error_nullPointer(0, "Thread_create()::callback is required");
+		retError(clean, Error_nullPointer(0, "Thread_create()::callback is required"));
 
 	if(!alloc || !alloc->alloc || !alloc->free)
-		return Error_nullPointer(0, "Thread_create()::alloc is required");
+		retError(clean, Error_nullPointer(0, "Thread_create()::alloc is required"));
 
 	Buffer buf = Buffer_createNull();
-
-	const Error err = alloc->alloc(alloc->ptr, sizeof(Thread), &buf);
-
-	if (err.genericError)
-		return err;
+	gotoIfError3(clean, alloc->alloc(alloc->ptr, sizeof(Thread), &buf, e_rr));
 
 	Thread *thr = (*thread = (Thread*) buf.ptr);
 
@@ -94,19 +92,23 @@ Error Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, voi
 
 	if (!thr->nativeHandle) {
 		Thread_free(alloc, thread);
-		return Error_platformError(0, GetLastError(), "Thread_wait() couldn't create thread");
+		retError(clean, Error_platformError(0, GetLastError(), "Thread_wait() couldn't create thread"));
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error Thread_wait(Thread *thread) {
+Bool Thread_wait(Thread *thread, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!thread)
-		return Error_nullPointer(0, "Thread_wait()::thread is required");
+		retError(clean, Error_nullPointer(0, "Thread_wait()::thread is required"));
 
 	if(WaitForSingleObject(thread->nativeHandle, U32_MAX) == WAIT_FAILED)
-		return Error_timedOut(0, U32_MAX, "Thread_wait() couldn't wait on thread");
+		retError(clean, Error_timedOut(0, U32_MAX, "Thread_wait() couldn't wait on thread"));
 
-	return Error_none();
+clean:
+	return s_uccess;
 }

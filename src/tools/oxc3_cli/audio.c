@@ -75,7 +75,7 @@ Bool CLI_audioConvertFind(FileInfo info, CLIAudioConvertForeach *data, Error *e_
 			retError(clean, Error_invalidState(0, "CLI_audioConvertFind() cut failed"));
 
 		gotoIfError3(clean, CharString_createCopyx(data->outputDir, &copy, e_rr));
-		gotoIfError3(clean, CharString_appendStringx(&copy, cut, e_rr));
+		gotoIfError3(clean, CharString_appendStringx(&copy, &cut, e_rr));
 		gotoIfError3(clean, ListCharString_pushBackx(data->outputs, copy, e_rr));
 		copy = CharString_createNull();
 

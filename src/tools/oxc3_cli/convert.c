@@ -32,6 +32,8 @@
 
 Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
+	const CharString ox = CharString_createRefCStrConst("0x");
+
 	Bool s_uccess = true;
 	Ns start = Time_now();
 
@@ -84,9 +86,9 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 		)
 			retError(clean, Error_invalidState(
 				2, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
-			))
+			));
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
+		U64 off = CharString_startsWithStringInsensitive(&key, &ox, 0) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64)
 			retError(clean, Error_invalidState(
@@ -138,7 +140,7 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 clean:
 
 	if(encryptionKey)
-		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
 
 	if (!s_uccess)
 		Log_errorLnx("File conversion failed!");

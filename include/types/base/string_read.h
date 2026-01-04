@@ -81,21 +81,21 @@ static inline Bool CharString_contains(const CharStringSensOffLen *strSensOffLen
 	return CharString_findFirst(strSensOffLen, c) != U64_MAX;
 }
 
-Bool CharString_containsString(const CharStringSensOffLen *strSensOffLen, const CharString *other) {
+static inline Bool CharString_containsString(const CharStringSensOffLen *strSensOffLen, const CharString *other) {
 	return CharString_findFirstString(strSensOffLen, other) != U64_MAX;
 }
 
 Bool CharString_equalsString(const CharString *s, const CharString *other, EStringCase caseSensitive);
 Bool CharString_equals(const CharString s, C8 c, EStringCase caseSensitive);
 
-Bool CharString_parseNyto(const CharString s, U64 *result);
-Bool CharString_parseHex(const CharString s, U64 *result);
+Bool CharString_parseNyto(CharString s, U64 *result);
+Bool CharString_parseHex(CharString s, U64 *result);
 Bool CharString_parseDec(const CharString s, U64 *result);
-Bool CharString_parseDecSigned(const CharString s, I64 *result);
+Bool CharString_parseDecSigned(CharString s, I64 *result);
 Bool CharString_parseDouble(CharString s, F64 *result);
 Bool CharString_parseFloat(const CharString s, F32 *result);
-Bool CharString_parseOct(const CharString s, U64 *result);
-Bool CharString_parseBin(const CharString s, U64 *result);
+Bool CharString_parseOct(CharString s, U64 *result);
+Bool CharString_parseBin(CharString s, U64 *result);
 Bool CharString_parseU64(const CharString s, U64 *result);
 
 #define CharString_matchesPattern(testFunc, ...)								\

@@ -22,44 +22,14 @@
 #include "types/base/algorithm.h"
 #include "types/base/math.h"
 
-CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
-
-	if (!ptr)
-		return CharString_createNull();
-
-	const U64 strl = CharString_calcStrLen(ptr, maxSize);
-
-	return (CharString) {
-		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
-		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
-	};
-}
-
-CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated) {
-
-	if (!ptr || (size >> 48))
-		return CharString_createNull();
-
-	if (isNullTerminated && ptr[size])	//Invalid!
-		return CharString_createNull();
-
-	if (!isNullTerminated && size) {
-
-		isNullTerminated = !ptr[size - 1];
-
-		if (isNullTerminated)
-			--size;
-	}
-
-	return (CharString) {
-		.lenAndNullTerminated = size | ((U64)isNullTerminated << 63),
-		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
-	};
-}
-
 Bool CharString_isValidFileName(const CharString str) {
+
+	const CharString CON = CharString_createRefCStrConst("CON");
+	const CharString AUX = CharString_createRefCStrConst("AUX");
+	const CharString NUL = CharString_createRefCStrConst("NUL");
+	const CharString PRN = CharString_createRefCStrConst("PRN");
+	const CharString COM = CharString_createRefCStrConst("COM");
+	const CharString LPT = CharString_createRefCStrConst("LPT");
 
 	for(U64 i = 0; i < CharString_length(str); ++i)
 		if(!C8_isValidFileName(str.ptr[i]))
@@ -82,21 +52,17 @@ Bool CharString_isValidFileName(const CharString str) {
 	if (strl >= 3) {
 
 		if(
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("CON"), 0) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("AUX"), 0) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("NUL"), 0) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("PRN"), 0)
+			CharString_startsWithStringInsensitive(&str, &CON, 0) ||
+			CharString_startsWithStringInsensitive(&str, &AUX, 0) ||
+			CharString_startsWithStringInsensitive(&str, &NUL, 0) ||
+			CharString_startsWithStringInsensitive(&str, &PRN, 0)
 		)
 			illegalStart = 3;
 
 		else if (strl >= 4) {
 
-			if(
-				(
-					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("COM"), 0) ||
-					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("LPT"), 0)
-				) &&
-				C8_isDec(str.ptr[3])
+			if((CharString_startsWithStringInsensitive(&str, &COM, 0) || CharString_startsWithStringInsensitive(&str, &LPT, 0))
+				&& C8_isDec(str.ptr[3])
 			)
 				illegalStart = 4;
 		}
@@ -577,11 +543,11 @@ clean:
 	return s_uccess;
 }
 
-Bool CharString_parseNyto(const CharString s, U64 *result) {
+Bool CharString_parseNyto(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0n");
 
-	const U64 prepend = CharString_startsWithStringInsensitive(s, prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -609,10 +575,10 @@ Bool CharString_parseNyto(const CharString s, U64 *result) {
 	return true;
 }
 
-Bool CharString_parseHex(const CharString s, U64 *result) {
+Bool CharString_parseHex(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0x");
-	const U64 prepend = CharString_startsWithStringInsensitive(s, prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -637,10 +603,10 @@ Bool CharString_parseHex(const CharString s, U64 *result) {
 	return true;
 }
 
-Bool CharString_parseOct(const CharString s, U64 *result) {
+Bool CharString_parseOct(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0o");
-	const U64 prepend = CharString_startsWithStringInsensitive(s, prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -666,10 +632,10 @@ Bool CharString_parseOct(const CharString s, U64 *result) {
 	return true;
 }
 
-Bool CharString_parseBin(const CharString s, U64 *result) {
+Bool CharString_parseBin(CharString s, U64 *result) {
 
 	const CharString prefix = CharString_createRefCStrConst("0b");
-	const U64 prepend = CharString_startsWithStringInsensitive(s, prefix, 0) ? CharString_length(prefix) : 0;
+	const U64 prepend = CharString_startsWithStringInsensitive(&s, &prefix, 0) ? CharString_length(prefix) : 0;
 	
 	if (!CharString_offsetAsRef(s, prepend, &s, NULL))
 		return false;
@@ -718,7 +684,7 @@ Bool CharString_parseDec(const CharString s, U64 *result) {
 	return true;
 }
 
-Bool CharString_parseDecSigned(const CharString s, I64 *result) {
+Bool CharString_parseDecSigned(CharString s, I64 *result) {
 
 	const Bool neg = CharString_startsWithSensitive(s, '-', 0);
 
@@ -891,9 +857,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 			if(s.ptr[0] == 'f' || s.ptr[0] == 'F') {
 
-				const Error err = F64_exp10(esign ? -exponent : exponent, &exponent);
-
-				if(err.genericError)
+				if (!F64_exp10(esign ? -exponent : exponent, &exponent, NULL))
 					return false;
 
 				const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
@@ -917,9 +881,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			break;
 	}
 
-	const Error err = F64_exp10(esign ? -exponent : exponent, &exponent);
-
-	if(err.genericError)
+	if (!F64_exp10(esign ? -exponent : exponent, &exponent, NULL))
 		return false;
 
 	const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
@@ -1083,17 +1045,13 @@ Bool CharString_cutAfter(const CharStringCut *cut, C8 c, Bool isFirst) {
 	if (!cut || !cut->s)
 		return false;
 
-	EStringCase caseSensitive = cut->caseSensitive;
-	const CharString *s = cut->s;
-
-	const U64 found =
-		isFirst ? CharString_findFirst(s, c, caseSensitive, 0, 0) :
-		CharString_findLast(s, c, caseSensitive, 0, 0);
+	const CharStringSensOffLen strSensOffLen = { cut->s, cut->caseSensitive, 0, 0 };
+	const U64 found = isFirst ? CharString_findFirst(&strSensOffLen, c) : CharString_findLast(&strSensOffLen, c);
 
 	if (found == U64_MAX)
 		return false;
 
-	return CharString_cut(s, 0, found, cut->result);
+	return CharString_cut(cut->s, 0, found, cut->result);
 }
 
 Bool CharString_cutAfterString(const CharStringCut *cut, const CharString *other, Bool isFirst) {
@@ -1101,16 +1059,14 @@ Bool CharString_cutAfterString(const CharStringCut *cut, const CharString *other
 	if (!cut || !cut->s)
 		return false;
 
-	EStringCase caseSensitive = cut->caseSensitive;
-	const CharString *s = cut->s;
-
-	const U64 found = isFirst ? CharString_findFirstString(s, other, caseSensitive, 0, 0) :
-		CharString_findLastString(s, other, caseSensitive, 0, 0);
+	const CharStringSensOffLen strSensOffLen = { cut->s, cut->caseSensitive, 0, 0 };
+	const U64 found =
+		isFirst ? CharString_findFirstString(&strSensOffLen, other) : CharString_findLastString(&strSensOffLen, other);
 
 	if (found == U64_MAX)
 		return false;
 
-	return CharString_cut(s, 0, found, cut->result);
+	return CharString_cut(cut->s, 0, found, cut->result);
 }
 
 Bool CharString_cutBefore(const CharStringCut *cut, C8 c, Bool isFirst) {
@@ -1118,18 +1074,14 @@ Bool CharString_cutBefore(const CharStringCut *cut, C8 c, Bool isFirst) {
 	if (!cut || !cut->s)
 		return false;
 
-	EStringCase caseSensitive = cut->caseSensitive;
-	const CharString *s = cut->s;
-
-	U64 found =
-		isFirst ? CharString_findFirst(s, c, caseSensitive, 0, 0) :
-		CharString_findLast(s, c, caseSensitive, 0, 0);
+	const CharStringSensOffLen strSensOffLen = { cut->s, cut->caseSensitive, 0, 0 };
+	U64 found = isFirst ? CharString_findFirst(&strSensOffLen, c) : CharString_findLast(&strSensOffLen, c);
 
 	if (found == U64_MAX)
 		return false;
 
 	++found;	//The end of the occurence is the begin of the next string
-	return CharString_cut(s, found, 0, cut->result);
+	return CharString_cut(cut->s, found, 0, cut->result);
 }
 
 Bool CharString_cutBeforeString(const CharStringCut *cut, const CharString *other, Bool isFirst) {
@@ -1137,16 +1089,12 @@ Bool CharString_cutBeforeString(const CharStringCut *cut, const CharString *othe
 	if (!cut || !other)
 		return false;
 
-	EStringCase caseSensitive = cut->caseSensitive;
-	const CharString *s = cut->s;
-
-	U64 found =
-		isFirst ? CharString_findFirstString(s, other, caseSensitive, 0, 0) :
-		CharString_findLastString(s, other, caseSensitive, 0, 0);
+	const CharStringSensOffLen strSensOffLen = { cut->s, cut->caseSensitive, 0, 0 };
+	U64 found = isFirst ? CharString_findFirstString(&strSensOffLen, other) : CharString_findLastString(&strSensOffLen, other);
 
 	if (found == U64_MAX)
 		return false;
 
 	found += CharString_length(*other);	//The end of the occurence is the begin of the next string
-	return CharString_cut(s, found, 0, cut->result);
+	return CharString_cut(cut->s, found, 0, cut->result);
 }

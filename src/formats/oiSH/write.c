@@ -29,7 +29,7 @@
 
 #include <stddef.h>
 
-Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
+Bool SHFile_write(const SHFile *shFile, const Allocator *alloc, Buffer *result, Error *e_rr) {
 
 	Bool s_uccess = true;
 

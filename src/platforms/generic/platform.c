@@ -30,8 +30,6 @@
 #include <signal.h>
 #include <stdlib.h>
 
-TListImpl(Thread);
-
 //Error handling
 
 void sigFunc(int signal) {
@@ -308,10 +306,6 @@ void Allocator_reportLeaks() {
 		#endif
 	}
 }
-
-//Virtual section
-
-TListImpl(VirtualSection);
 
 //Platform creation
 

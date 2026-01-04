@@ -21,6 +21,7 @@
 #pragma once
 #include "types/base/error.h"
 #include "types/base/algorithm.h"
+#include "platforms/platform.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -32,71 +33,149 @@ typedef struct GenericList GenericList;
 typedef struct ListU64 ListU64;
 typedef struct Buffer Buffer;
 
-Error GenericList_createx(U64 length, U64 stride, GenericList *result);
-Error GenericList_createRepeatedx(U64 length, U64 stride, Buffer data, GenericList *result);
-Error GenericList_createCopyx(GenericList list, GenericList *result);
-Error GenericList_createCopySubsetx(GenericList list, U64 offset, U64 len, GenericList *result);
+static inline Bool GenericList_createx(U64 length, U64 stride, GenericList *result, Error *e_rr) {
+	return GenericList_create(length, stride, Platform_instance->alloc, result, e_rr);
+}
 
-Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result);
-Error GenericList_createReversex(GenericList list, GenericList *result);
+static inline Bool GenericList_createRepeatedx(U64 length, U64 stride, const Buffer *data, GenericList *result, Error *e_rr) {
+	return GenericList_createRepeated(length, stride, data, Platform_instance->alloc, result, e_rr);
+}
 
-Error GenericList_findx(GenericList list, Buffer buf, EqualsFunction eq, ListU64 *result);
+static inline Bool GenericList_createCopyx(const GenericList list, GenericList *result, Error *e_rr) {
+	return GenericList_createCopy(list, Platform_instance->alloc, result, e_rr);
+}
 
-Error GenericList_eraseAllx(GenericList *list, Buffer buf, EqualsFunction eq);
-Error GenericList_insertx(GenericList *list, U64 index, Buffer buf);
-Error GenericList_pushAllx(GenericList *list, GenericList other);
-Error GenericList_insertAllx(GenericList *list, GenericList other, U64 offset);
+static inline Bool GenericList_createCopySubsetx(
+	const GenericList list,
+	U64 offset,
+	U64 len,
+	GenericList *result,
+	Error *e_rr
+) {
+	return GenericList_createCopySubset(list, offset, len, Platform_instance->alloc, result, e_rr);
+}
 
-Error GenericList_reservex(GenericList *list, U64 capacity);
-Error GenericList_resizex(GenericList *list, U64 size);
-Error GenericList_shrinkToFitx(GenericList *list);
+static inline Bool GenericList_createSubsetReversex(
+	const GenericList list,
+	U64 index,
+	U64 length,
+	GenericList *result,
+	Error *e_rr
+) {
+	return GenericList_createSubsetReverse(list, index, length, Platform_instance->alloc, result, e_rr);
+}
 
-Error GenericList_pushBackx(GenericList *list, Buffer buf);
-Error GenericList_pushFrontx(GenericList *list, Buffer buf);
+static inline Bool GenericList_createReversex(const GenericList list, GenericList *result, Error *e_rr) {
+	return GenericList_createSubsetReversex(list, 0, list.length, result, e_rr);
+}
 
-Bool GenericList_freex(GenericList *result);
+static inline Bool GenericList_findx(
+	const GenericList list,
+	const Buffer *buf,
+	EqualsFunction eq,
+	ListU64 *result,
+	Error *e_rr
+) {
+	return GenericList_find(list, buf, eq, Platform_instance->alloc, result, e_rr);
+}
 
-#define TListX(Name)																	\
-Error Name##_createx(U64 length, Name *result);											\
-Error Name##_createRepeatedx(U64 length, Name##_Type t, Name *result);					\
-Error Name##_createCopyx(Name l, Name *result);											\
-Error Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result);					\
-Error Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result);			\
-Error Name##_createReversex(Name l, Name *result);										\
-																						\
-Error Name##_findx(Name l, Name##_Type t, EqualsFunction eq, ListU64 *result);			\
-																						\
-Error Name##_eraseAllx(Name *l, Name##_Type t, EqualsFunction eq);						\
-Error Name##_insertx(Name *l, U64 index, Name##_Type t);								\
-Error Name##_pushAllx(Name *l, Name other);												\
-Error Name##_insertAllx(Name *l, Name other, U64 offset);								\
-																						\
-Error Name##_reservex(Name *l, U64 n);													\
-Error Name##_resizex(Name *l, U64 n);													\
-Error Name##_shrinkToFitx(Name *l);														\
-																						\
-Error Name##_pushBackx(Name *l, Name##_Type t);											\
-Error Name##_pushFrontx(Name *l, Name##_Type t);										\
-																						\
-Bool Name##_freex(Name *l);
+static inline Bool GenericList_eraseAllx(GenericList *list, const Buffer *buf, EqualsFunction eq, Error *e_rr) {
+	return GenericList_eraseAll(list, buf, Platform_instance->alloc, eq, e_rr);
+}
 
-typedef struct ListListU8 ListListU8;
-typedef struct ListListU16 ListListU16;
-typedef struct ListListU32 ListListU32;
-typedef struct ListListU64 ListListU64;
-typedef struct ListBuffer ListBuffer;
+static inline Bool GenericList_insertx(GenericList *list, U64 index, const Buffer *buf, Error *e_rr) {
+	return GenericList_insert(list, index, buf, Platform_instance->alloc, e_rr);
+}
 
-void ListBuffer_freeUnderlyingx (ListBuffer *list);
+static inline Bool GenericList_pushAllx(GenericList *list, const GenericList other, Error *e_rr) {
+	return GenericList_pushAll(list, other, Platform_instance->alloc, e_rr);
+}
 
-void ListListU8_freeUnderlyingx (ListListU8 *list);
-void ListListU16_freeUnderlyingx(ListListU16 *list);
-void ListListU32_freeUnderlyingx(ListListU32 *list);
-void ListListU64_freeUnderlyingx(ListListU64 *list);
+static inline Bool GenericList_insertAllx(GenericList *list, const GenericList other, U64 offset, Error *e_rr) {
+	return GenericList_insertAll(list, other, offset, Platform_instance->alloc, e_rr);
+}
 
-Bool ListListU8_createCopyUnderlyingx (ListListU8 src, ListListU8 *dst, Error *e_rr);
-Bool ListListU16_createCopyUnderlyingx(ListListU16 src, ListListU16 *dst, Error *e_rr);
-Bool ListListU32_createCopyUnderlyingx(ListListU32 src, ListListU32 *dst, Error *e_rr);
-Bool ListListU64_createCopyUnderlyingx(ListListU64 src, ListListU64 *dst, Error *e_rr);
+static inline Bool GenericList_reservex(GenericList *list, U64 capacity, Error *e_rr) {
+	return GenericList_reserve(list, capacity, Platform_instance->alloc, e_rr);
+}
+
+static inline Bool GenericList_resizex(GenericList *list, U64 size, Error *e_rr) {
+	return GenericList_resize(list, size, Platform_instance->alloc, e_rr);
+}
+
+static inline Bool GenericList_shrinkToFitx(GenericList *list, Error *e_rr) {
+	return GenericList_shrinkToFit(list, Platform_instance->alloc, e_rr);
+}
+
+static inline Bool GenericList_pushBackx(GenericList *l, const Buffer *buf, Error *e_rr) {
+	return GenericList_pushBack(l, buf, Platform_instance->alloc, e_rr);
+}
+
+static inline Bool GenericList_pushFrontx(GenericList *l, const Buffer *buf, Error *e_rr) {
+	return GenericList_pushFront(l, buf, Platform_instance->alloc, e_rr);
+}
+
+static inline void GenericList_freex(GenericList *result) { GenericList_free(result, Platform_instance->alloc); }
+
+#define TListX(Name)																			\
+Bool Name##_createx(U64 length, Name *result, Error *e_rr);										\
+Bool Name##_createRepeatedx(U64 length, Name##_Type t, Name *result, Error *e_rr);				\
+Bool Name##_createCopyx(Name l, Name *result, Error *e_rr);										\
+Bool Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result, Error *e_rr);				\
+Bool Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result, Error *e_rr);		\
+Bool Name##_createReversex(Name l, Name *result, Error *e_rr);									\
+																								\
+Bool Name##_findx(Name l, Name##_Type t, EqualsFunction eq, ListU64 *result, Error *e_rr);		\
+																								\
+Bool Name##_eraseAllx(Name *l, Name##_Type t, EqualsFunction eq, Error *e_rr);					\
+Bool Name##_insertx(Name *l, U64 index, Name##_Type t, Error *e_rr);							\
+Bool Name##_pushAllx(Name *l, Name other, Error *e_rr);											\
+Bool Name##_insertAllx(Name *l, Name other, U64 offset, Error *e_rr);							\
+																								\
+Bool Name##_reservex(Name *l, U64 n, Error *e_rr);												\
+Bool Name##_resizex(Name *l, U64 n, Error *e_rr);												\
+Bool Name##_shrinkToFitx(Name *l, Error *e_rr);													\
+																								\
+Bool Name##_pushBackx(Name *l, Name##_Type t, Error *e_rr);										\
+Bool Name##_pushFrontx(Name *l, Name##_Type t, Error *e_rr);									\
+																								\
+void Name##_freex(Name *l);
+
+static inline void ListBuffer_freeUnderlyingx(ListBuffer *list) {
+	ListBuffer_freeUnderlying(list, Platform_instance->alloc);
+}
+
+static inline void ListListU8_freeUnderlyingx(ListListU8 *list) {
+	ListListU8_freeUnderlying(list, Platform_instance->alloc);
+}
+
+static inline void ListListU16_freeUnderlyingx(ListListU16 *list) {
+	ListListU16_freeUnderlying(list, Platform_instance->alloc);
+}
+
+static inline void ListListU32_freeUnderlyingx(ListListU32 *list) {
+	ListListU32_freeUnderlying(list, Platform_instance->alloc);
+}
+
+static inline void ListListU64_freeUnderlyingx(ListListU64 *list) {
+	ListListU64_freeUnderlying(list, Platform_instance->alloc);
+}
+
+static inline Bool ListListU8_createCopyUnderlyingx(const ListListU8 *src, ListListU8 *dst, Error *e_rr) {
+	return ListListU8_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
+}
+
+static inline Bool ListListU16_createCopyUnderlyingx(const ListListU16 *src, ListListU16 *dst, Error *e_rr) {
+	return ListListU16_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
+}
+
+static inline Bool ListListU32_createCopyUnderlyingx(const ListListU32 *src, ListListU32 *dst, Error *e_rr) {
+	return ListListU32_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
+}
+
+static inline Bool ListListU64_createCopyUnderlyingx(const ListListU64 *src, ListListU64 *dst, Error *e_rr) {
+	return ListListU64_createCopyUnderlying(src, Platform_instance->alloc, dst, e_rr);
+}
 
 #ifdef __cplusplus
 	}

@@ -128,7 +128,7 @@ static inline Bool Buffer_setBitTo(const Buffer buf, U64 offset, Bool value, Err
 Bool Buffer_bitwiseOr(const Buffer dst, Buffer src, Error *e_rr);
 Bool Buffer_bitwiseAnd(const Buffer dst, const Buffer src, Error *e_rr);
 Bool Buffer_bitwiseXor(const Buffer dst, const Buffer src, Error *e_rr);
-Bool Buffer_bitwiseNot(const Buffer dst);
+Bool Buffer_bitwiseNot(const Buffer dst, Error *e_rr);
 
 Bool Buffer_setBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr);
 Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr);

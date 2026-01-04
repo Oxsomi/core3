@@ -51,7 +51,7 @@ void WWindow_updateMonitors(Window *w) {
 		w->callbacks.onMonitorChange(w);
 }
 
-Error WWindow_initSize(Window *w, I32x2 size) {
+Bool WWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 
 	if(w->nativeData) {
 		DeleteObject((HGDIOBJ) w->nativeData);
@@ -59,7 +59,8 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 	}
 
 	HDC screen = NULL;
-	Error err = Error_none();
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = true;
 
 	if(w->hint & EWindowHint_ProvideCPUBuffer) {
 
@@ -83,8 +84,8 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 
 		w->nativeData = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, NULL, 0);
 
-		if(!screen)
-			gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"))
+		if (!screen)
+			retError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
 
 		//Manually set it to be a reference
 		//This makes it, so we don't free it, because we don't own the memory
@@ -100,7 +101,7 @@ clean:
 	if(screen)
 		ReleaseDC(w->nativeHandle, screen);
 
-	return err;
+	return s_uccess;
 }
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -847,17 +848,17 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel || w->type != EWindowType_Physical)
 		retError(clean, Error_nullPointer(
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
-		))
+		));
 
 	if (titlel >= MAX_PATH)
 		retError(clean, Error_outOfBounds(
 			1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters"
-		))
+		));
 
-	gotoIfError2(clean, CharString_toUTF16x(title, &name))
+	gotoIfError3(clean, CharString_toUTF16x(title, &name, e_rr));
 
 	if(!SetWindowTextW(w->nativeHandle, name.ptr))
-		retError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"))
+		retError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"));
 
 clean:
 	ListU16_freex(&name);
@@ -1014,7 +1015,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	//Our strings are UTF8, but windows wants UTF16
 
 	ListU16 tmp = (ListU16) { 0 };
-	gotoIfError2(clean, CharString_toUTF16x(w->title, &tmp))
+	gotoIfError3(clean, CharString_toUTF16x(w->title, &tmp, e_rr));
 
 	const HWND nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
@@ -1039,12 +1040,12 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Alloc cpu visible buffer if needed
 
-	gotoIfError2(clean, WWindow_initSize(w, w->size))
+	gotoIfError3(clean, WWindow_initSize(w, w->size, e_rr));
 
 	//Lock for when we are updating this window
 
-	gotoIfError2(clean, ListInputDevice_reservex(&w->devices,  16))
-	gotoIfError2(clean, ListMonitor_reservex(&w->monitors, 16))
+	gotoIfError3(clean, ListInputDevice_reservex(&w->devices,  16, e_rr));
+	gotoIfError3(clean, ListMonitor_reservex(&w->monitors, 16, e_rr));
 
 	w->nativeHandle = nativeWindow;
 

@@ -61,22 +61,24 @@ void *ThreadFunc(void *t) {
 	return NULL;
 }
 
-Error Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+Bool Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!thread)
-		return Error_nullPointer(2, "Thread_create()::thread is required");
+		retError(clean, Error_nullPointer(2, "Thread_create()::thread is required"));
 
 	if(*thread)
-		return Error_invalidParameter(2, 0, "Thread_create()::*thread isn't NULL, might indicate memleak");
+		retError(clean, Error_invalidParameter(2, 0, "Thread_create()::*thread isn't NULL, might indicate memleak"));
 
 	if(!callback)
-		return Error_nullPointer(0, "Thread_create()::callback is required");
+		retError(clean, Error_nullPointer(0, "Thread_create()::callback is required"));
 
 	if(!alloc || !alloc->alloc || !alloc->free)
-		return Error_nullPointer(0, "Thread_create()::alloc is required");
+		retError(clean, Error_nullPointer(0, "Thread_create()::alloc is required"));
 
 	Buffer buf = (Buffer) { 0 };
-	Error err = alloc->alloc(alloc->ptr, sizeof(Thread), &buf);
+	gotoIfError3(clean, alloc->alloc(alloc->ptr, sizeof(Thread), &buf, e_rr));
 
 	if (err.genericError)
 		return err;
@@ -88,19 +90,23 @@ Error Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, voi
 
 	if (pthread_create((pthread_t*)&thr->nativeHandle, NULL, ThreadFunc, thr)) {
 		Thread_free(alloc, thread);
-		return Error_stderr(errno, "Thread_wait() couldn't create thread");
+		retError(clean, Error_stderr(errno, "Thread_wait() couldn't create thread"));
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Error Thread_wait(Thread *thread) {
+Bool Thread_wait(Thread *thread, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!thread)
-		return Error_nullPointer(0, "Thread_wait()::thread is required");
+		retError(clean, Error_nullPointer(0, "Thread_wait()::thread is required"));
 
 	if(pthread_join((pthread_t)thread->nativeHandle, NULL))
-		return Error_timedOut(0, U64_MAX, "Thread_wait() couldn't wait on thread");
+		retError(clean, Error_timedOut(0, U64_MAX, "Thread_wait() couldn't wait on thread"));
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
