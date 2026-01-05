@@ -268,15 +268,15 @@ static inline U64 GenericList_findLast(const GenericList list, const Buffer *buf
 	return U64_MAX;
 }
 
-static inline U64 GenericList_count(const GenericList *list, const Buffer *buf, EqualsFunction eq) {
+static inline U64 GenericList_count(const GenericList list, const Buffer *buf, EqualsFunction eq) {
 
-	if (!list || !buf || Buffer_length(*buf) != list->stride)
+	if (!buf || Buffer_length(*buf) != list.stride)
 		return U64_MAX;
 
 	U64 count = 0;
 
-	for (U64 i = 0; i < list->length; ++i)
-		if (!eq ? Buffer_eq(GenericList_atConst(*list, i), *buf) : eq(GenericList_ptrConst(*list, i), buf->ptr))
+	for (U64 i = 0; i < list.length; ++i)
+		if (!eq ? Buffer_eq(GenericList_atConst(list, i), *buf) : eq(GenericList_ptrConst(list, i), buf->ptr))
 			++count;
 
 	return count;
@@ -350,21 +350,21 @@ Bool GenericList_resize(GenericList *list, U64 size, const Allocator *allocator,
 
 Bool GenericList_shrinkToFit(GenericList *list, const Allocator *allocator, Error *e_rr);
 
-Bool GenericList_sortU64(GenericList *list);
-Bool GenericList_sortU32(GenericList *list);
-Bool GenericList_sortU16(GenericList *list);
-Bool GenericList_sortU8(GenericList *list);
+Bool GenericList_sortU64(GenericList list);
+Bool GenericList_sortU32(GenericList list);
+Bool GenericList_sortU16(GenericList list);
+Bool GenericList_sortU8(GenericList list);
 
-Bool GenericList_sortI64(GenericList *list);
-Bool GenericList_sortI32(GenericList *list);
-Bool GenericList_sortI16(GenericList *list);
-Bool GenericList_sortI8(GenericList *list);
+Bool GenericList_sortI64(GenericList list);
+Bool GenericList_sortI32(GenericList list);
+Bool GenericList_sortI16(GenericList list);
+Bool GenericList_sortI8(GenericList list);
 
-Bool GenericList_sortF32(GenericList *list);
-Bool GenericList_sortF64(GenericList *list);
+Bool GenericList_sortF32(GenericList list);
+Bool GenericList_sortF64(GenericList list);
 
 //Only allowed when the stride is <= 1024 (it needs to copy to a temp buffer)
-Bool GenericList_sortCustom(GenericList *list, CompareFunction func);
+Bool GenericList_sortCustom(GenericList list, CompareFunction func);
 
 Bool GenericList_sortString(GenericList *list, EStringCase stringCase);
 

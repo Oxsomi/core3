@@ -20,7 +20,7 @@
 
 #include "types/math/quat.h"
 #include "types/base/error.h"
-#include "types/math/math.h"
+#include "types/base/math.h"
 
 #define QUAT_IMPL(T, suffix)																							\
 																														\
@@ -175,9 +175,8 @@ Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target) {															\
 	T leno = T##x4_len3(origin), lent = T##x4_len3(target);																\
 																														\
 	T leno2 = 0, lent2 = 0;																								\
-	Error err;																											\
 																														\
-	if((err = T##_pow2(leno, &leno2)).genericError || (err = T##_pow2(lent, &lent2)).genericError)						\
+	if(!T##_pow2(leno, &leno2, NULL) || !T##_pow2(lent, &lent2, NULL))													\
 		return Quat##T##_identity();																					\
 																														\
 	T w = T##_sqrt(leno2 * lent2) + T##x4_dot3(origin, target);															\
@@ -202,10 +201,7 @@ Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {																	\
 																														\
 	T cosTheta2Pow = 0;																									\
 																														\
-	Error err = T##_pow2(cosTheta2, &cosTheta2Pow);																		\
-																														\
-	if(err.genericError)																								\
-		return b;																										\
+	if(!T##_pow2(cosTheta2, &cosTheta2Pow, NULL)) return b;																\
 																														\
 	T halfTheta = T##_acos(cosTheta2);																					\
 	T sinTheta2 = T##_sqrt(1 - cosTheta2Pow);																			\

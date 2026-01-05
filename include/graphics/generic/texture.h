@@ -62,6 +62,8 @@ typedef struct UnifiedTexture {				//Base texture definition, should be at end o
 
 typedef RefPtr TextureRef;					//DeviceTexture, RenderTexture, DepthStencil, Swapchain
 
+//TODO: Ability to query allocation size (inc alignment)
+
 //size and formatId can change at resize time in Swapchain, which means it has to be locked before checking.
 //This can be ensured by calling getUnifiedTexture with DeviceResourceVersion pointing to an object.
 //If version->resource isn't NULL it signifies that the resource is resizable and

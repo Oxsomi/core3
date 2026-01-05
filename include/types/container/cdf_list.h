@@ -53,12 +53,13 @@ typedef struct CdfList {
 //Create a CdfList. If isReserved is true, the maxElements are inaccessible until they're appended.
 //If it's false, they're already accessible but a probability has to be set manually through CdfList_setProbability.
 
-Error CdfList_create(
+Bool CdfList_create(
 	U64 maxElements,
 	Bool isReserved,
 	U64 elementSize,
-	Allocator allocator,
-	CdfList *result
+	const Allocator *allocator,
+	CdfList *result,
+	Error *e_rr
 );
 
 //Create a subset from a pre-allocated list.
@@ -75,7 +76,7 @@ Error CdfList_createSubset(
 	CdfList *result
 );
 
-Bool CdfList_free(CdfList *list, Allocator allocator);
+void CdfList_free(CdfList *list, const Allocator *allocator);
 
 //Setting probability and/or element.
 

@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/math/math.h"
+#include "types/base/math.h"
 #include "types/base/error.h"
 
 #ifdef __cplusplus
@@ -49,12 +49,21 @@ Error I32_fromInt(I64 v, I32 *res);
 Error I32_fromFloat(F32 v, I32 *res);
 Error I32_fromDouble(F64 v, I32 *res);
 
-I16 I16_swapEndianness(I16 v);
-I32 I32_swapEndianness(I32 v);
-I64 I64_swapEndianness(I64 v);
-U16 U16_swapEndianness(U16 v);
-U32 U32_swapEndianness(U32 v);
-U64 U64_swapEndianness(U64 v);
+//Endianness, because sometimes it's needed
+
+static inline U16 U16_swapEndianness(U16 v) { return (v >> 8) | (v << 8); }
+
+static inline U32 U32_swapEndianness(U32 v) {
+	return ((U32)U16_swapEndianness((U16)v) << 16) | U16_swapEndianness((U16)(v >> 16));
+}
+
+static inline U64 U64_swapEndianness(U64 v) {
+	return ((U64)U32_swapEndianness((U32)v) << 32) | U32_swapEndianness((U32)(v >> 32));
+}
+
+static inline I16 I16_swapEndianness(I16 v) { return (I16)U16_swapEndianness((U16)v); }
+static inline I32 I32_swapEndianness(I32 v) { return (I32)U32_swapEndianness((U32)v); }
+static inline I64 I64_swapEndianness(I64 v) { return (I64)U64_swapEndianness((U64)v); }
 
 Error I64_fromUInt(U64 v, I64 *res);
 Error I64_fromFloat(F32 v, I64 *res);

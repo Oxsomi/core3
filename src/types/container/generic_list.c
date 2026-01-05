@@ -908,24 +908,24 @@ static inline Bool GenericList_qsort(GenericList list, CompareFunction f) {
 	return GenericList_qsortRecurse(list, 0, list.length - 1, f);
 }
 
-Bool GenericList_sortCustom(GenericList *list, CompareFunction f) {
+Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 
-	if(!list || list->length <= 1)
+	if(list.length <= 1)
 		return true;
 
-	if(list->stride > 1024)			//Current limitation, because we don't allocate.
+	if(list.stride > 1024)			//Current limitation, because we don't allocate.
 		return false;
 
-	if(GenericList_isConstRef(*list))
+	if(GenericList_isConstRef(list))
 		return false;
 
-	if(GenericList_bytes(*list) <= 8192)
-		return GenericList_insertionSort8K(*list, f);
+	if(GenericList_bytes(list) <= 8192)
+		return GenericList_insertionSort8K(list, f);
 
-	return GenericList_qsort(*list, f);
+	return GenericList_qsort(list, f);
 }
 
-#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList *l) { \
+#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) {	\
 	return GenericList_sortCustom(l, (CompareFunction) sort##T); 		\
 }
 

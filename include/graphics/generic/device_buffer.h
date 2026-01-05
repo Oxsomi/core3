@@ -79,6 +79,9 @@ typedef struct DeviceBuffer {
 
 } DeviceBuffer;
 
+//TODO: Ability to query allocation size (inc alignment)
+//TODO: Ability to say resource won't need upload / or only clear.
+
 #define DeviceBuffer_ext(ptr, T) (!ptr ? NULL : (T##DeviceBuffer*)(ptr + 1))		//impl
 #define DeviceBufferRef_ptr(ptr) RefPtr_data(ptr, DeviceBuffer)
 

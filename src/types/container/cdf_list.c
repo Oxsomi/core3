@@ -26,31 +26,36 @@
 
 TListImpl(CdfValue);
 
-Error CdfList_create(
+Bool CdfList_create(
 	U64 maxElements,
 	Bool isReserved,
 	U64 elementSize,
-	Allocator allocator,
-	CdfList *result
+	const Allocator *allocator,
+	CdfList *result,
+	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
+	Bool pass = false;
+
 	if(!result)
-		return Error_nullPointer(4, "CdfList_create()::result is required");
+		retError(clean, Error_nullPointer(4, "CdfList_create()::result is required"));
 
 	if(result->cdf.ptr)
-		return Error_invalidOperation(0, "CdfList_create()::result wasn't empty, indicating a possible memleak");
+		retError(clean, Error_invalidOperation(0, "CdfList_create()::result wasn't empty, indicating a possible memleak"));
 
-	Error err = Error_none();
+	pass = true;
 
 	result->flags |= ECdfListFlags_IsFinalized;
 
 	if(maxElements) {
 
-		if(isReserved)
-			gotoIfError(clean, ListCdfValue_reserve(&result->cdf, maxElements, allocator))
+		if (isReserved) {
+			gotoIfError3(clean, ListCdfValue_reserve(&result->cdf, maxElements, allocator, e_rr));
+		}
 
 		else {
-			gotoIfError(clean, ListCdfValue_resize(&result->cdf, maxElements, allocator))
+			gotoIfError3(clean, ListCdfValue_resize(&result->cdf, maxElements, allocator, e_rr));
 			result->totalElements = maxElements;
 		}
 	}
@@ -61,21 +66,23 @@ Error CdfList_create(
 
 		if(maxElements) {
 
-			if(isReserved)
-				gotoIfError(clean, GenericList_reserve(&result->elements, maxElements, allocator))
+			if (isReserved) {
+				gotoIfError3(clean, GenericList_reserve(&result->elements, maxElements, allocator, e_rr));
+			}
 
-			else gotoIfError(clean, GenericList_resize(&result->elements, maxElements, allocator))
+			else gotoIfError3(clean, GenericList_resize(&result->elements, maxElements, allocator, e_rr));
 		}
 	}
 
-	return Error_none();
-
 clean:
 
-	ListCdfValue_free(&result->cdf, allocator);
-	GenericList_free(&result->elements, allocator);
-	*result = (CdfList) { 0 };
-	return err;
+	if (!s_uccess && pass) {
+		ListCdfValue_free(&result->cdf, allocator);
+		GenericList_free(&result->elements, allocator);
+		*result = (CdfList){ 0 };
+	}
+
+	return s_uccess;
 }
 
 Error CdfList_createSubset(
@@ -112,16 +119,15 @@ clean:
 	return err;
 }
 
-Bool CdfList_free(CdfList *list, Allocator allocator) {
+void CdfList_free(CdfList *list, const Allocator *allocator) {
 
 	if(!list || !list->cdf.ptr)
-		return true;
+		return;
 
-	Bool success = ListCdfValue_free(&list->cdf, allocator);
-	success &= GenericList_free(&list->elements, allocator);
+	ListCdfValue_free(&list->cdf, allocator);
+	GenericList_free(&list->elements, allocator);
 
 	*list = (CdfList) { 0 };
-	return success;
 }
 
 U64 CDFList_getLinearIndex(CdfList *list, U64 i) {			//We might override this later if we want to swizzle it around

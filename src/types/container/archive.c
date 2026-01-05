@@ -23,7 +23,7 @@
 #include "types/base/c8.h"
 #include "types/base/constants.h"
 #include "types/container/list_impl.h"
-#include "types/math/math.h"
+#include "types/base/math.h"
 #include "types/container/log.h"
 
 TListImpl(ArchiveEntry);
@@ -124,7 +124,7 @@ static inline Bool Archive_getPath(
 	ListArchiveEntry entries = archive->archive->entries;
 
 	gotoIfError3(clean, File_resolve(
-		archive->path, &isVirtual, 128, CharString_createNull(), archive->alloc, &resolvedPath, e_rr
+		*archive->path, &isVirtual, 128, CharString_createNull(), archive->alloc, &resolvedPath, e_rr
 	));
 
 	if (isVirtual)

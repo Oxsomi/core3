@@ -20,8 +20,8 @@
 
 #include "types/base/thread.h"
 #include "types/base/error.h"
-#include "types/container/buffer.h"
-#include "types/math/math.h"
+#include "types/base/buffer.h"
+#include "types/base/math.h"
 #include "types/base/allocator.h"
 #include "types/base/constants.h"
 

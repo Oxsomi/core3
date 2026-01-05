@@ -21,12 +21,13 @@
 #pragma once
 #include "types/container/list.h"
 #include "types/container/buffer.h"
-#include "types/base/allocator.h"
 #include "types/base/error.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+typedef struct Allocator Allocator;
 
 //Helpers for creating the "template" functions of a TList
 
@@ -42,7 +43,7 @@
 	__VA_ARGS__;																											\
 	isAlloc = alloc;																										\
 																															\
-	gotoIfError3(clean, ListVoid_fromList(&list, sizeof(Name##_Type), (ListVoid*)result, e_rr));							\
+	gotoIfError3(clean, ListVoid_fromList(list, sizeof(Name##_Type), (ListVoid*)result, e_rr));								\
 																															\
 clean:																														\
 	if(!s_uccess && isAlloc)																								\
@@ -74,13 +75,17 @@ Bool Name##_createCopySubset(const Name l, U64 off, U64 len, const Allocator *al
 	TListWrapCtor(Name, gotoIfError3(clean, GenericList_createCopySubset(Name##_toList(l), off, len, alloc, &list, e_rr)));	\
 }																															\
 																															\
-Bool Name##_createRepeated(U64 len, Name##_Type data, const Allocator *alc, Name *result, Error *e_rr) {					\
+Bool Name##_createRepeated(U64 len, Name##_Type data, const Allocator *alloc, Name *result, Error *e_rr) {					\
 	Buffer buf = Buffer_createRefConst((const U8*)&data, sizeof(Name##_Type));												\
-	TListWrapCtor(Name, gotoIfError3(clean, GenericList_createRepeated(len, sizeof(Name##_Type), &buf, alc, &list, e_rr)));	\
+	TListWrapCtor(Name, gotoIfError3(																						\
+		clean, GenericList_createRepeated(len, sizeof(Name##_Type), &buf, alloc, &list, e_rr)								\
+	));																														\
 }																															\
 																															\
-Bool Name##_createSubsetReverse(const Name l, U64 id, U64 len, const Allocator *alc, Name *result, Error *e_rr) {			\
-	TListWrapCtor(Name, gotoIfError3(clean, GenericList_createSubsetReverse(Name##_toList(l), id, len, alc, &list, e_rr)));	\
+Bool Name##_createSubsetReverse(const Name l, U64 id, U64 len, const Allocator *alloc, Name *result, Error *e_rr) {			\
+	TListWrapCtor(Name, gotoIfError3(																						\
+		clean, GenericList_createSubsetReverse(Name##_toList(l), id, len, alloc, &list, e_rr)								\
+	));																														\
 }																															\
 																															\
 Bool Name##_createReverse(const Name l, const Allocator *alloc, Name *result, Error *e_rr) {								\
@@ -138,7 +143,7 @@ U64 Name##_findLast(const Name l, Name##_Type t, U64 index, EqualsFunction eq) {
 }																															\
 																															\
 Bool Name##_copy(const Name src, U64 srcOffset, Name dst, U64 dstOffset, U64 count, Error *e_rr) {							\
-	return GenericList_copy(Name##_toList(src), srcOffset, Name##_toList(dst), dstOffset, count);							\
+	return GenericList_copy(Name##_toList(src), srcOffset, Name##_toList(dst), dstOffset, count, e_rr);						\
 }																															\
 																															\
 Bool Name##_find(Name l, Name##_Type t, EqualsFunction eq, const Allocator *allocator, ListU64 *result, Error *e_rr) {		\
@@ -247,7 +252,7 @@ TListXBaseImpl(Name)
 
 #define TListSortImpl(T) TListNamedBaseImpl(List##T); Bool List##T##_sort(List##T l) {									\
 	GenericList gll = List##T##_toList(l);																				\
-	return GenericList_sort##T(&gll);																					\
+	return GenericList_sort##T(gll);																					\
 }
 
 #ifdef __cplusplus

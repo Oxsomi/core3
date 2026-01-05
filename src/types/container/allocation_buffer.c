@@ -21,7 +21,7 @@
 #include "types/container/list_impl.h"
 #include "types/container/allocation_buffer.h"
 #include "types/base/allocator.h"
-#include "types/math/math.h"
+#include "types/base/math.h"
 #include "types/base/constants.h"
 
 TListImpl(AllocationBufferBlock);
@@ -74,7 +74,7 @@ Bool AllocationBuffer_createRefFromRegion(const AllocationBufferCreate *create, 
 
 	if(!create || !create->allocationBuffer || !create->size)
 		retError(clean, Error_nullPointer(
-			!size ? 2 : 3, "AllocationBuffer_createRefFromRegion()::size or allocationBuffer is NULL"
+			create && !create->size ? 2 : 3, "AllocationBuffer_createRefFromRegion()::size or allocationBuffer is NULL"
 		));
 
 	if(create->allocationBuffer->allocations.ptr)
@@ -418,7 +418,7 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 			)
 		) {
 			p->end = tmp->end;
-			ListAllocationBufferBlock_popLocation(&allocationBuffer->allocations, self + 1, NULL);
+			ListAllocationBufferBlock_popLocation(&allocationBuffer->allocations, self + 1, NULL, NULL);
 		}
 
 		//Merge freed left blocks until they're gone
@@ -430,7 +430,7 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 			)
 		) {
 			tmp->end = p->end;
-			ListAllocationBufferBlock_popLocation(&allocationBuffer->allocations, self, NULL);
+			ListAllocationBufferBlock_popLocation(&allocationBuffer->allocations, self, NULL, NULL);
 			--self;
 		}
 
@@ -440,7 +440,7 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 			allocationBuffer->allocations.length &&
 			AllocationBufferBlock_isFree(*allocationBuffer->allocations.ptr)
 		) {
-			ListAllocationBufferBlock_popFront(&allocationBuffer->allocations, NULL);
+			ListAllocationBufferBlock_popFront(&allocationBuffer->allocations, NULL, NULL);
 			return;
 		}
 
@@ -450,7 +450,7 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 			allocationBuffer->allocations.length &&
 			AllocationBufferBlock_isFree(*ListAllocationBufferBlock_last(allocationBuffer->allocations))
 		) {
-			ListAllocationBufferBlock_popBack(&allocationBuffer->allocations, NULL);
+			ListAllocationBufferBlock_popBack(&allocationBuffer->allocations, NULL, NULL);
 			return;
 		}
 
@@ -459,5 +459,5 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 }
 
 void AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer) {
-	ListAllocationBufferBlock_clear(&allocationBuffer->allocations);
+	ListAllocationBufferBlock_clear(&allocationBuffer->allocations, NULL);
 }

@@ -22,7 +22,7 @@
 #include "types/base/error.h"
 #include "types/base/c8.h"
 #include "types/container/buffer.h"
-#include "types/math/math.h"
+#include "types/base/math.h"
 #include "types/math/vec.h"
 #include "types/base/constants.h"
 
@@ -61,14 +61,14 @@ clean:
 Bool Buffer_createZeroBits(U64 length, const Allocator *alloc, Buffer *result, Error *e_rr) {
 
 	Bool s_uccess = true;
-	Bool alloc = false;
+	Bool allocated = false;
 
 	gotoIfError3(clean, Buffer_allocBitsInternal(length, alloc, result, e_rr));
-	alloc = true;
+	allocated = true;
 	gotoIfError3(clean, Buffer_unsetAllBits(*result, e_rr));
 
 clean:
-	if(!s_uccess && alloc)
+	if(!s_uccess && allocated)
 		Buffer_free(result, alloc);
 
 	return s_uccess;
@@ -77,14 +77,14 @@ clean:
 Bool Buffer_createOneBits(U64 length, const Allocator *alloc, Buffer *result, Error *e_rr ) {
 
 	Bool s_uccess = true;
-	Bool alloc = false;
+	Bool allocated = false;
 
 	gotoIfError3(clean, Buffer_allocBitsInternal(length, alloc, result, e_rr));
-	alloc = true;
+	allocated = true;
 	gotoIfError3(clean, Buffer_setAllBits(*result, e_rr));
 
 clean:
-	if(!s_uccess && alloc)
+	if(!s_uccess && allocated)
 		Buffer_free(result, alloc);
 
 	return s_uccess;

@@ -20,7 +20,7 @@
 
 #include "types/container/log.h"
 #include "types/container/string.h"
-#include "types/math/math.h"
+#include "types/base/math.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 

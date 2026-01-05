@@ -19,56 +19,37 @@
 */
 
 #pragma once
-#include "types/base/platform_types.h"
+#include "types/container/big_int_predeclare.h"
+#include "types/base/c8.h"
 #include "types/base/algorithm.h"
+#include "types/base/constants.h"
+#include "types/base/string.h"
+#include "types/base/math.h"
 #include "types/math/vec.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef struct Allocator Allocator;
-typedef struct CharString CharString;
+static inline Bool BigInt_createFromHex(const BigIntCreate *bigIntCreate, Error *e_rr) {
+	return BigInt_createFromBase2Type(bigIntCreate, EIntEncoding_Hex, e_rr);
+}
 
-//BigInt allow up to 16320 bit ints but isn't well optimized.
-//For optimized versions please use U128 and U256 since they don't dynamically allocate,
-//and because big int can be varying length so no SIMD optimizations are present.
+static inline Bool BigInt_createFromOct(const BigIntCreate *bigIntCreate, Error *e_rr) {
+	return BigInt_createFromBase2Type(bigIntCreate, EIntEncoding_Oct, e_rr);
+}
 
-typedef struct BigInt {
+static inline Bool BigInt_createFromBin(const BigIntCreate *bigIntCreate, Error *e_rr) {
+	return BigInt_createFromBase2Type(bigIntCreate, EIntEncoding_Bin, e_rr);
+}
 
-	union {
-		const U64 *data;	//Aligned
-		U64 *dataNonConst;	//Only if !isConst
-	};
-
-	Bool isConst;
-	Bool isRef;
-	U8 length;		//In U64s
-	U8 pad;
-
-} BigInt;
-
-BigInt BigInt_createNull();
-Error BigInt_create(U16 bitCount, Allocator allocator, BigInt *big);			//Aligns bitCount to 64.
-Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big);					//ref U64 ptr[ptrCount]
-Error BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big);			//const ref U64 ptr[ptrCount]
-Error BigInt_createCopy(BigInt *a, Allocator alloc, BigInt *b);
-
-Bool BigInt_free(BigInt *a, Allocator allocator);
-
-//bitCount set to 0 indicates "auto".
-//bitCount set to U16_MAX indicates "already allocated"
-
-Error BigInt_createFromHex(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromString(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+static inline Bool BigInt_createFromNyto(const BigIntCreate *bigIntCreate, Error *e_rr) {
+	return BigInt_createFromBase2Type(bigIntCreate, EIntEncoding_Nyto, e_rr);
+}
 
 //Arithmetic
 
-Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);						//Multiply on self and keep bit count
+Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr);	//Multiply on self and keep bit count
 Bool BigInt_add(BigInt *a, BigInt b);											//Add on self and keep bit count
 Bool BigInt_sub(BigInt *a, BigInt b);											//Subtract on self and keep bit count
 
@@ -77,147 +58,184 @@ Bool BigInt_sub(BigInt *a, BigInt b);											//Subtract on self and keep bit 
 
 //Bitwise
 
-Bool BigInt_xor(BigInt *a, BigInt b);
-Bool BigInt_or(BigInt *a, BigInt b);
-Bool BigInt_and(BigInt *a, BigInt b);
-Bool BigInt_not(BigInt *a);
+static inline Bool BigInt_xor(BigInt *a, BigInt b) {
+
+	if (!a || a->isConst)
+		return false;
+
+	for (U64 i = 0; i < a->length && i < b.length; ++i)
+		a->dataNonConst[i] ^= b.data[i];
+
+	return true;
+}
+
+static inline Bool BigInt_or(BigInt *a, BigInt b) {
+
+	if (!a || a->isConst)
+		return false;
+
+	for (U64 i = 0; i < a->length && i < b.length; ++i)
+		a->dataNonConst[i] |= b.data[i];
+
+	return true;
+}
+
+static inline Bool BigInt_and(BigInt *a, BigInt b) {
+
+	if (!a || a->isConst)
+		return false;
+
+	const U64 j = U64_min(a->length, b.length);
+
+	for (U64 i = 0; i < j; ++i)
+		a->dataNonConst[i] &= b.data[i];
+
+	for (U64 i = b.length; i < a->length; ++i)
+		a->dataNonConst[i] = 0;
+
+	return true;
+}
+
+static inline Bool BigInt_not(BigInt *a) {
+
+	if (!a || a->isConst)
+		return false;
+
+	for (U64 i = 0; i < a->length; ++i)
+		a->dataNonConst[i] = ~a->data[i];
+
+	return true;
+}
 
 Bool BigInt_lsh(BigInt *a, U16 bits);
 Bool BigInt_rsh(BigInt *a, U16 bits);
 
 //Compare
 
-ECompareResult BigInt_cmp(BigInt a, BigInt b);
-Bool BigInt_eq(BigInt a, BigInt b);
-Bool BigInt_neq(BigInt a, BigInt b);
-Bool BigInt_lt(BigInt a, BigInt b);
-Bool BigInt_leq(BigInt a, BigInt b);
-Bool BigInt_gt(BigInt a, BigInt b);
-Bool BigInt_geq(BigInt a, BigInt b);
+static inline ECompareResult BigInt_cmp(BigInt a, BigInt b) {
 
-BigInt *BigInt_min(BigInt *a, BigInt *b);										//Returns one of two passed pointers
-BigInt *BigInt_max(BigInt *a, BigInt *b);										//Returns one of two passed pointers
-BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma);						//Returns one of two passed pointers
+	const U64 biggestLen = U64_max(a.length, b.length);
 
-//Helpers
+	for (U64 i = biggestLen - 1; i != U64_MAX; --i) {
 
-Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc);					//newSize in U64s
-Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc);		//Set all bits to b, resize if allowResize
+		const U64 ai = i >= a.length ? 0 : a.data[i];
+		const U64 bi = i >= b.length ? 0 : b.data[i];
 
-Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
+		if (ai > bi)
+			return ECompareResult_Gt;
 
-Buffer BigInt_bufferConst(BigInt b);
-Buffer BigInt_buffer(BigInt b);
+		else if (ai < bi)
+			return ECompareResult_Lt;
+	}
 
-U16 BigInt_byteCount(BigInt b);
-U16 BigInt_bitCount(BigInt b);
+	return ECompareResult_Eq;
+}
 
-U16 BigInt_bitScan(BigInt a);						//Find highest bit that was on. Returns U16_MAX if 0
-U16 BigInt_bitScanReverse(BigInt a);				//Starts at the first bit rather than the last
-Bool BigInt_isBase2(BigInt a);
+static inline Bool BigInt_eq(BigInt a, BigInt b) { return BigInt_cmp(a, b) == ECompareResult_Eq; }
+static inline Bool BigInt_neq(BigInt a, BigInt b) { return BigInt_cmp(a, b) != ECompareResult_Eq; }
+static inline Bool BigInt_lt(BigInt a, BigInt b) { return BigInt_cmp(a, b) < ECompareResult_Eq; }
+static inline Bool BigInt_leq(BigInt a, BigInt b) { return BigInt_cmp(a, b) <= ECompareResult_Eq; }
+static inline Bool BigInt_gt(BigInt a, BigInt b) { return BigInt_cmp(a, b) > ECompareResult_Eq; }
+static inline Bool BigInt_geq(BigInt a, BigInt b) { return BigInt_cmp(a, b) >= ECompareResult_Eq; }
 
-//Transform to string
+//Returns one of two passed pointers
 
-typedef enum EIntegerEncoding {
-	EIntegerEncoding_Hex,
-	EIntegerEncoding_Bin,
-	EIntegerEncoding_Oct,
-	EIntegerEncoding_Nyto,
-	//EIntegerEncoding_Dec,
-	EIntegerEncoding_Count
-} EIntegerEncoding;
-
-Error BigInt_hex(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
-Error BigInt_oct(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
-//Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
-Error BigInt_bin(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
-Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
-Error BigInt_toString(
-	BigInt b,
-	Allocator allocator,
-	CharString *result,
-	EIntegerEncoding encoding,
-	Bool leadingZeros
-);
-
-//U128
-
-#if _PLATFORM_TYPE != PLATFORM_WINDOWS
-	typedef __uint128_t U128;
-#else
-	typedef I32x4 U128;
-#endif
-
-//Create
-
-U128 U128_create(const void *data);		//U8[16]
-U128 U128_createU64x2(U64 a, U64 b);
-
-U128 U128_zero();
-U128 U128_one();
-
-U128 U128_createFromHex(CharString text, Error *failed);
-U128 U128_createFromOct(CharString text, Error *failed);
-U128 U128_createFromBin(CharString text, Error *failed);
-U128 U128_createFromNyto(CharString text, Error *failed);
-U128 U128_createFromDec(CharString text, Error *failed, Allocator alloc);
-U128 U128_createFromString(CharString text, Error *failed, Allocator alloc);
-
-//Bitwise
-
-U128 U128_xor(U128 a, U128 b);
-U128 U128_or(U128 a, U128 b);
-U128 U128_and(U128 a, U128 b);
-
-U128 U128_not(U128 a);
-
-U128 U128_lsh(U128 a, U8 x);
-U128 U128_rsh(U128 a, U8 x);
-
-//Comparison
-
-ECompareResult U128_cmp(U128 a, U128 b);
-Bool U128_eq(U128 a, U128 b);
-Bool U128_neq(U128 a, U128 b);
-Bool U128_lt(U128 a, U128 b);
-Bool U128_leq(U128 a, U128 b);
-Bool U128_gt(U128 a, U128 b);
-Bool U128_geq(U128 a, U128 b);
-
-U128 U128_min(U128 a, U128 b);
-U128 U128_max(U128 a, U128 b);
-U128 U128_clamp(U128 a, U128 mi, U128 ma);
-
-//Arithmetic
-
-U128 U128_mul64(U64 a, U64 b);			//Multiply two 64-bit numbers to generate a 128-bit number
-U128 U128_add64(U64 a, U64 b);			//Add two 64-bit numbers but keep the overflow bit
-//U128 U128_div(U128 a, U128 b);
-//U128 U128_mod(U128 a, U128 b);
-U128 U128_mul(U128 a, U128 b);
-U128 U128_add(U128 a, U128 b);
-U128 U128_sub(U128 a, U128 b);
+static inline BigInt *BigInt_min(BigInt *a, BigInt *b) { return !a ? b : (!b ? a : (BigInt_leq(*a, *b) ? a : b)); }
+static inline BigInt *BigInt_max(BigInt *a, BigInt *b) { return !a ? b : (!b ? a : (BigInt_geq(*a, *b) ? a : b)); }
+static inline BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma) { return BigInt_max(BigInt_min(a, ma), mi); }
 
 //Helpers
 
-U8 U128_bitScan(U128 a);						//Find highest bit that was on. Returns U8_MAX if 0
-U8 U128_bitScanReverse(U128 a);					//Find highest bit that was on. Returns U8_MAX if 0
-Bool U128_isBase2(U128 a);
+Bool BigInt_resize(BigInt *a, U8 newSize, const Allocator *alloc, Error *e_rr);	//newSize in U64s
+
+//Set all bits to b, resize if allowResize
+Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, const Allocator *alloc, Error *e_rr);
+
+//Gets rid of all hi bits that are unset
+static inline Bool BigInt_trunc(BigInt *big, const Allocator *allocator, Error *e_rr) {
+
+	if (!big)
+		return false;
+
+	U8 i = big->length - 1;
+
+	for (; i != U8_MAX; --i)
+		if (big->data[i])
+			break;
+
+	return BigInt_resize(big, i + 1, allocator, e_rr);
+}
+
+static inline U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
+static inline U16 BigInt_bitCount(BigInt b) { return BigInt_byteCount(b) * 8; }
+
+static inline Buffer BigInt_buffer(BigInt b) {
+	return b.isConst ? Buffer_createNull() : Buffer_createRef(b.dataNonConst, BigInt_byteCount(b));
+}
+
+static inline Buffer BigInt_bufferConst(BigInt b) { return Buffer_createRefConst(b.data, BigInt_byteCount(b)); }
+
+//Find highest bit that was on. Returns U16_MAX if 0
+static inline U16 BigInt_bitScan(BigInt a) {
+
+	for (U64 i = a.length - 1; i != U64_MAX; --i) {
+
+		const U64 v = a.data[i];
+		if (!v) continue;
+
+		#if defined(_MSC_VER)
+			unsigned long index = 0;
+			_BitScanReverse64(&index, v);
+			return (U16)(i * 64 + index);
+		#else
+			return (U16)(i * 64 + 63 - __builtin_clzll(v));
+		#endif
+	}
+
+	return U16_MAX;
+}
+
+//Starts at the first bit rather than the last
+static inline U16 BigInt_bitScanReverse(BigInt a) {
+
+	for (U64 i = 0; i < a.length; ++i) {
+		
+		const U64 v = a.data[i];
+		if (!v) continue;
+
+		#if defined(_MSC_VER)
+			unsigned long index = 0;
+			_BitScanForward64(&index, v);
+			return (U16)(i * 64 + index);
+		#else
+			return (U16)(i * 64 + __builtin_ctzll(v));
+		#endif
+	}
+
+	return U16_MAX;
+}
+
+static inline Bool BigInt_isBase2(BigInt a) {
+	return a.length && BigInt_bitScan(a) == BigInt_bitScanReverse(a);
+}
 
 //Transform to string
 
-Error U128_hex(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
-Error U128_oct(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
-//Error U128_dec(BigInt a, Allocator allocator, CharString *result, Bool leadingZeros);
-Error U128_bin(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
-Error U128_nyto(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
-Error U128_toString(
-	U128 a,
-	Allocator allocator,
-	CharString *result,
-	EIntegerEncoding encoding,
-	Bool leadingZeros
-);
+static inline Bool BigInt_hex(const BigIntStringify *stringify, BigInt b, Error *e_rr) {
+	return BigInt_base2(stringify, EIntEncoding_Hex, b, e_rr);
+}
+
+static inline Bool BigInt_oct(const BigIntStringify *stringify, BigInt b, Error *e_rr) {
+	return BigInt_base2(stringify, EIntEncoding_Oct, b, e_rr);
+}
+
+static inline Bool BigInt_bin(const BigIntStringify *stringify, BigInt b, Error *e_rr) {
+	return BigInt_base2(stringify, EIntEncoding_Bin, b, e_rr);
+}
+
+static inline Bool BigInt_nyto(const BigIntStringify *stringify, BigInt b, Error *e_rr) {
+	return BigInt_base2(stringify, EIntEncoding_Nyto, b, e_rr);
+}
 
 #ifdef __cplusplus
 	}

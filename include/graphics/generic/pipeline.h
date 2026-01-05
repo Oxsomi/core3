@@ -214,6 +214,8 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	Error *e_rr
 );
 
+//TODO: Ability to query PSO binary size (req. extension)
+
 #ifdef __cplusplus
 	}
 #endif
