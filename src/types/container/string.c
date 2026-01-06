@@ -20,6 +20,7 @@
 
 #include "types/container/list_impl.h"
 #include "types/container/string.h"
+#include "types/base/allocator.h"
 #include "types/base/string_read.h"
 #include "types/base/math.h"
 #include "types/base/c8.h"
@@ -30,18 +31,6 @@
 
 TListImpl(CharString);
 TListNamedImpl(ListConstC8);
-
-Bool ListCharString_sort(ListCharString list, EStringCase stringCase) {
-	return GenericList_sortString(ListCharString_toList(list), stringCase);
-}
-
-Bool ListCharString_sortSensitive(ListCharString list) {
-	return GenericList_sortStringSensitive(ListCharString_toList(list));
-}
-
-Bool ListCharString_sortInsensitive(ListCharString list) {
-	return GenericList_sortStringInsensitive(ListCharString_toList(list));
-}
 
 //Simple checks (consts)
 
@@ -364,7 +353,7 @@ Bool CharString_reserve(CharString *str, U64 length, const Allocator *alloc, Err
 		goto clean;
 
 	Buffer b = Buffer_createNull();
-	gotoIfError3(clean, alloc->alloc(alloc->ptr, length + 1, &b));
+	gotoIfError3(clean, alloc->alloc(alloc->ptr, length + 1, &b, e_rr));
 
 	Buffer_memcpy(b, CharString_bufferConst(*str));
 
@@ -559,7 +548,7 @@ Bool ListCharString_createCopyUnderlying(
 ) {
 
 	Bool s_uccess = true;
-	Bool alloc = false;
+	Bool allocated = false;
 
 	if (!toCopy)
 		retError(clean, Error_nullPointer(0, "ListCharString_createCopyUnderlying()::toCopy is required"));
@@ -581,14 +570,14 @@ Bool ListCharString_createCopyUnderlying(
 	}
 
 	gotoIfError3(clean, ListCharString_create(toCopyl, alloc, arr, e_rr));
-	alloc = true;
+	allocated = true;
 
 	for (U64 i = 0; i < toCopyl; ++i)
 		gotoIfError3(clean, CharString_createCopy(toCopy->ptr[i], alloc, arr->ptrNonConst + i, e_rr));
 
 clean:
 
-	if(!s_uccess && alloc)
+	if(!s_uccess && allocated)
 		ListCharString_freeUnderlying(arr, alloc);
 
 	return s_uccess;

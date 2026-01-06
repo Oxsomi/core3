@@ -20,6 +20,7 @@
 
 #include "types/container/list.h"
 #include "types/base/error.h"
+#include "types/base/string_read.h"
 #include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/allocator.h"
@@ -306,7 +307,7 @@ Bool GenericList_set(GenericList list, U64 index, const Buffer *buf, Error *e_rr
 		retError(clean, Error_invalidOperation(0, "GenericList_set()::buf.length incompatible with list"));
 
 	if(bufLen)
-		Buffer_memcpy(Buffer_createRef((U8*)list.ptrNonConst + index * stride, stride), *buf, e_rr);
+		Buffer_memcpy(Buffer_createRef((U8*)list.ptrNonConst + index * stride, stride), *buf);
 
 	else Buffer_unsetAllBits(Buffer_createRef((U8*)list.ptrNonConst + index * stride, stride), e_rr);
 
@@ -461,7 +462,7 @@ Bool GenericList_eraseAllIndices(GenericList *list, const ListU64 *indices, Erro
 
 	GenericList indicesAsGenericList = ListU64_toList(*indices);
 
-	if(!GenericList_sortU64(&indicesAsGenericList))
+	if(!GenericList_sortU64(indicesAsGenericList))
 		retError(clean, Error_invalidParameter(1, 0, "GenericList_eraseAllIndices()::indices sort failed"));
 
 	//Ensure none of them reference out of bounds or are duplicate
@@ -939,9 +940,9 @@ static inline ECompareResult GenericList_compareStringInsensitive(const CharStri
 	return CharString_compareInsensitive(a, b);
 }
 
-Bool GenericList_sortString(GenericList *list, EStringCase stringCase) {
+Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
 
-	if(!list || list->stride != sizeof(CharString))		//We don't know the real type, but at least it's a check
+	if(list.stride != sizeof(CharString))		//We don't know the real type, but at least it's a check
 		return false;
 
 	return

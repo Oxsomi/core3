@@ -39,6 +39,8 @@ TListImpl(ListU16);
 TListImpl(ListU32);
 TListImpl(ListU64);
 
+//TODO: Reduce boilerplate here
+
 void ListBuffer_freeUnderlying(ListBuffer *list, const Allocator *alloc) {
 
 	if(!list)
@@ -94,20 +96,22 @@ void ListListU64_freeUnderlying(ListListU64 *list, const Allocator *alloc) {
 	ListListU64_free(list, alloc);
 }
 
+//TODO: Reduce boilerplate here
+
 Bool ListListU8_createCopyUnderlying(const ListListU8 *src, const Allocator *alloc, ListListU8 *dst, Error *e_rr) {
 
 	Bool s_uccess = true;
 
-	if(!dst)
-		retError(clean, Error_nullPointer(2, "ListListU8_createCopyUnderlying()::dst is required"))
+	if(!dst || !src)
+		retError(clean, Error_nullPointer(!src ? 0 : 2, "ListListU8_createCopyUnderlying()::src and dst are required"));
 
 	if(dst->ptr)
-		retError(clean, Error_invalidParameter(2, 0, "ListListU8_createCopyUnderlying()::dst not empty, indicates memleak"))
+		retError(clean, Error_invalidParameter(2, 0, "ListListU8_createCopyUnderlying()::dst not empty, indicates memleak"));
 
-	gotoIfError2(clean, ListListU8_resize(dst, src.length, alloc))
+	gotoIfError3(clean, ListListU8_resize(dst, src->length, alloc, e_rr));
 
-	for(U64 i = 0; i < src.length; ++i)
-		gotoIfError2(clean, ListU8_createCopy(src.ptr[i], alloc, &dst->ptrNonConst[i]))
+	for(U64 i = 0; i < src->length; ++i)
+		gotoIfError3(clean, ListU8_createCopy(src->ptr[i], alloc, &dst->ptrNonConst[i], e_rr));
 
 clean:
 	return s_uccess;
@@ -117,16 +121,16 @@ Bool ListListU16_createCopyUnderlying(const ListListU16 *src, const Allocator *a
 
 	Bool s_uccess = true;
 
-	if(!dst)
-		retError(clean, Error_nullPointer(2, "ListListU16_createCopyUnderlying()::dst is required"))
+	if (!dst || !src)
+		retError(clean, Error_nullPointer(!src ? 0 : 2, "ListListU8_createCopyUnderlying()::src and dst are required"));
 
 	if(dst->ptr)
-		retError(clean, Error_invalidParameter(2, 0, "ListListU16_createCopyUnderlying()::dst not empty, indicates memleak"))
+		retError(clean, Error_invalidParameter(2, 0, "ListListU16_createCopyUnderlying()::dst not empty, indicates memleak"));
 
-	gotoIfError2(clean, ListListU16_resize(dst, src.length, alloc))
+	gotoIfError3(clean, ListListU16_resize(dst, src->length, alloc, e_rr));
 
-	for(U64 i = 0; i < src.length; ++i)
-		gotoIfError2(clean, ListU16_createCopy(src.ptr[i], alloc, &dst->ptrNonConst[i]))
+	for(U64 i = 0; i < src->length; ++i)
+		gotoIfError3(clean, ListU16_createCopy(src->ptr[i], alloc, &dst->ptrNonConst[i], e_rr));
 
 clean:
 	return s_uccess;
@@ -136,16 +140,16 @@ Bool ListListU32_createCopyUnderlying(const ListListU32 *src, const Allocator *a
 
 	Bool s_uccess = true;
 
-	if(!dst)
-		retError(clean, Error_nullPointer(2, "ListListU32_createCopyUnderlying()::dst is required"))
+	if (!dst || !src)
+		retError(clean, Error_nullPointer(!src ? 0 : 2, "ListListU8_createCopyUnderlying()::src and dst are required"));
 
 	if(dst->ptr)
-		retError(clean, Error_invalidParameter(2, 0, "ListListU32_createCopyUnderlying()::dst not empty, indicates memleak"))
+		retError(clean, Error_invalidParameter(2, 0, "ListListU32_createCopyUnderlying()::dst not empty, indicates memleak"));
 
-	gotoIfError2(clean, ListListU32_resize(dst, src.length, alloc))
+	gotoIfError3(clean, ListListU32_resize(dst, src->length, alloc, e_rr));
 
-	for(U64 i = 0; i < src.length; ++i)
-		gotoIfError2(clean, ListU32_createCopy(src.ptr[i], alloc, &dst->ptrNonConst[i]))
+	for(U64 i = 0; i < src->length; ++i)
+		gotoIfError3(clean, ListU32_createCopy(src->ptr[i], alloc, &dst->ptrNonConst[i], e_rr));
 
 clean:
 	return s_uccess;
@@ -155,16 +159,16 @@ Bool ListListU64_createCopyUnderlying(const ListListU64 *src, const Allocator *a
 
 	Bool s_uccess = true;
 
-	if(!dst)
-		retError(clean, Error_nullPointer(2, "ListListU64_createCopyUnderlying()::dst is required"))
+	if (!dst || !src)
+		retError(clean, Error_nullPointer(!src ? 0 : 2, "ListListU8_createCopyUnderlying()::src and dst are required"));
 
 	if(dst->ptr)
-		retError(clean, Error_invalidParameter(2, 0, "ListListU64_createCopyUnderlying()::dst not empty, indicates memleak"))
+		retError(clean, Error_invalidParameter(2, 0, "ListListU64_createCopyUnderlying()::dst not empty, indicates memleak"));
 
-	gotoIfError2(clean, ListListU64_resize(dst, src.length, alloc))
+	gotoIfError3(clean, ListListU64_resize(dst, src->length, alloc, e_rr));
 
-	for(U64 i = 0; i < src.length; ++i)
-		gotoIfError2(clean, ListU64_createCopy(src.ptr[i], alloc, &dst->ptrNonConst[i]))
+	for(U64 i = 0; i < src->length; ++i)
+		gotoIfError3(clean, ListU64_createCopy(src->ptr[i], alloc, &dst->ptrNonConst[i], e_rr));
 
 clean:
 	return s_uccess;

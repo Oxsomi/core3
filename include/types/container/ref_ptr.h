@@ -29,26 +29,27 @@
 	extern "C" {
 #endif
 
-typedef void (*ObjectFreeFunc)(void *ptr, Allocator allocator);
+typedef void (*ObjectFreeFunc)(void *ptr, const Allocator *allocator);
 
 typedef enum ETypeId ETypeId;
 
-typedef struct RefPtr {
-
-	AtomicI64 refCount;
-
+typedef struct RefPtrType {
 	ETypeId typeId;
 	U32 length;
-
-	Allocator alloc;
-
+	const Allocator *alloc;
 	ObjectFreeFunc free;
+} RefPtrType;
 
+typedef struct RefPtr {
+	AtomicI64 refCount;
+	const RefPtrType *refPtrType;
 } RefPtr;
 
 TListNamed(RefPtr*, ListRefPtr);
 
-Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
+//Needs type to stay allocated through the lifetime of the RefPtr.
+//Also needs a unique one per length & alloc. So there can be multiple RefPtrType* that reference to the same typeId.
+Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr);
 
 Bool RefPtr_inc(RefPtr *ptr);
 void RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone

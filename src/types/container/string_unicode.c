@@ -19,10 +19,7 @@
 */
 
 #include "types/container/string.h"
-#include "types/container/buffer.h"
-#include "types/base/allocator.h"
-#include "types/base/error.h"
-#include "types/base/constants.h"
+#include "types/container/list_basic_types.h"
 
 Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allocator, CharString *result, Error *e_rr) {
 
@@ -32,7 +29,7 @@ Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allo
 	gotoIfError3(clean, CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator, e_rr));
 	alloc = true;
 
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 	U64 j = 0;
 
 	const Buffer buf = Buffer_createRefConst(ptr, limit == U64_MAX ? ((U64)1 << 48) - 1 : limit * sizeof(U16));
@@ -42,8 +39,10 @@ Bool CharString_createFromUTF16(const U16 *ptr, U64 limit, const Allocator *allo
 
 		U16 c = ptr[i >> 1];
 
-		if (!c)
+		if (!c) {
+			result->lenAndNullTerminated = j | ((U64)1 << 63);
 			break;
+		}
 
 		if(limit == U64_MAX) {
 			gotoIfError3(clean, CharString_reserve(result, j + 5, allocator, e_rr));
@@ -80,7 +79,7 @@ Bool CharString_createFromUTF32(const U32 *ptr, U64 limit, const Allocator *allo
 	gotoIfError3(clean, CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator, e_rr));
 	alloc = true;
 
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 	U64 j = 0;
 
 	Buffer buf0 = CharString_allocatedBuffer(*result);
@@ -89,8 +88,10 @@ Bool CharString_createFromUTF32(const U32 *ptr, U64 limit, const Allocator *allo
 
 		U32 c = ptr[i];
 
-		if (!c)
+		if (!c) {
+			result->lenAndNullTerminated = j | ((U64)1 << 63);
 			break;
+		}
 
 		if(limit == U64_MAX) {
 			gotoIfError3(clean, CharString_reserve(result, j + 5, allocator, e_rr));
@@ -125,7 +126,7 @@ Bool CharString_toUTF16(const CharString s, const Allocator *allocator, ListU16 
 
 	const Buffer buf0 = ListU16_allocatedBuffer(*arr);
 	const Buffer buf = CharString_bufferConst(s);
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 
 	U64 j = 0;
 
@@ -163,7 +164,7 @@ Bool CharString_toUTF32(const CharString s, const Allocator *allocator, ListU32 
 	alloc = true;
 
 	const Buffer buf = CharString_bufferConst(s);
-	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	UnicodeCodePointInfo codepoint = { 0 };
 
 	U32 *buf0 = arr->ptrNonConst;
 

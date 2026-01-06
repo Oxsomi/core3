@@ -20,42 +20,34 @@
 
 #include "types/container/list_impl.h"
 #include "types/container/ref_ptr.h"
-#include "types/base/type_id.h"
-#include "types/base/constants.h"
 
 TListNamedImpl(ListRefPtr);
 TListNamedImpl(ListWeakRefPtr);
 
-Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
+Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr) {
 
-	if(!objectLength || !free || !result)
-		return Error_nullPointer(
-			!result ? 3 : (!free ? 2 : 0), "RefPtr_create()::objectLength, free and result are required"
-		);
+	Bool s_uccess = true;
+
+	if(!type || !type->length || !type->free || !type->alloc || !result)
+		retError(clean, Error_nullPointer(
+			!result ? 1 : 0, "RefPtr_create()::type, ->length, ->free, ->alloc and result are required"
+		));
 
 	if(*result)
-		return Error_invalidParameter(3, 0, "RefPtr_create()::result isn't empty, might indicate memleak");
+		retError(clean, Error_invalidParameter(3, 0, "RefPtr_create()::result isn't empty, might indicate memleak"));
 
 	Buffer buf = Buffer_createNull();
-	const Error err = Buffer_createEmptyBytes(sizeof(RefPtr) + objectLength, alloc, &buf);
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(RefPtr) + type->length, type->alloc, &buf, e_rr));
 
-	if(err.genericError)
-		return err;
+	*(*result = (RefPtr*)buf.ptr) = (RefPtr) { .refCount = (AtomicI64) { 1 }, .refPtrType = type };
 
-	*(*result = (RefPtr*)buf.ptr) = (RefPtr) {
-		.refCount = (AtomicI64) { 1 },
-		.typeId = type,
-		.length = objectLength,
-		.alloc = alloc,
-		.free = free
-	};
-
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
 Bool RefPtr_inc(RefPtr *ptr) {
 
-	if(!ptr || !ptr->free)
+	if(!ptr || !ptr->refPtrType)
 		return false;
 
 	AtomicI64_inc(&ptr->refCount);
@@ -71,10 +63,10 @@ void RefPtr_dec(RefPtr **pptr) {
 
 	if(!AtomicI64_dec(&ptr->refCount)) {
 
-		ptr->free(RefPtr_data(ptr, void), ptr->alloc);
+		ptr->refPtrType->free(RefPtr_data(ptr, void), ptr->refPtrType->alloc);
 
-		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + ptr->length);
-		Buffer_free(&orig, ptr->alloc);
+		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + ptr->refPtrType->length);
+		Buffer_free(&orig, ptr->refPtrType->alloc);
 	}
 
 	*pptr = NULL;

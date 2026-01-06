@@ -19,8 +19,11 @@
 */
 
 #include "types/base/math.h"
-#include "types/container/string.h"
 #include "types/base/allocator.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
+#include "types/container/string.h"
+#include "types/container/string_helper.h"
 #include "types/container/file.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"
@@ -68,7 +71,7 @@ Bool File_resolve(
 
 	U64 abDirLen = CharString_length(absoluteDir);
 
-	if (CharString_equalsStringSensitive(loc, absoluteDir)) {
+	if (CharString_equalsStringSensitive(&loc, &absoluteDir)) {
 		gotoIfError3(clean, CharString_createCopy(loc, alloc, result, e_rr));
 		goto clean;
 	}
@@ -119,7 +122,8 @@ Bool File_resolve(
 	//Now we have to discover the real directory it references to. This means resolving:
 	//Empty filename and . to mean no difference and .. to step back
 
-	gotoIfError3(clean, CharString_splitSensitive(*result, '/', alloc, &res, e_rr));
+	const CharStringSplit split = { .s = result, .allocator = alloc, .result = &res };
+	gotoIfError3(clean, CharString_splitSensitive(&split, '/', e_rr));
 
 	U64 realSplitLen = res.length;
 
@@ -149,7 +153,7 @@ Bool File_resolve(
 
 		//In this case, we have to pop ListCharString[j], so that's only possible if that's still there
 
-		if (CharString_equalsStringSensitive(res.ptr[i], back)) {
+		if (CharString_equalsStringSensitive(&res.ptr[i], &back)) {
 
 			if(!i) {
 				res.length = realSplitLen;
@@ -207,7 +211,8 @@ Bool File_resolve(
 	//Re-assemble path now
 
 	CharString tmp = CharString_createNull();
-	gotoIfError3(clean, ListCharString_concat(res, '/', alloc, &tmp, e_rr));
+	const ListCharStringConcat concat = { .arr = &res, .alloc = alloc, .result = &tmp };
+	gotoIfError3(clean, ListCharString_concat(&concat, '/', e_rr));
 
 	CharString_free(result, alloc);		//This can't be done before concat, because the string is still in use.
 	*result = tmp;
@@ -240,9 +245,9 @@ Bool File_resolve(
 		if(
 			!abDirLen ||
 			!(
-				CharString_startsWithStringSensitive(*result, absoluteDir, 0) &&
+				CharString_startsWithStringSensitive(result, &absoluteDir, 0) &&
 				(
-					CharString_length(*result) == abDirLen || 
+					CharString_length(*result) == abDirLen ||
 					CharString_getAt(*result, abDirLen) == '/'
 				)
 			)
@@ -306,10 +311,10 @@ Bool File_makeRelative(
 
 	CharString baseAbsDir = CharString_createNull();
 	CharString subFileAbsDir = CharString_createNull();
-	CharString_cut(resolvedBase, CharString_length(absoluteDir), 0, &baseAbsDir);
-	CharString_cut(resolvedSubFile, CharString_length(absoluteDir), 0, &subFileAbsDir);
+	CharString_cut(&resolvedBase, CharString_length(absoluteDir), 0, &baseAbsDir);
+	CharString_cut(&resolvedSubFile, CharString_length(absoluteDir), 0, &subFileAbsDir);
 
-	U64 baseAbsSlashes = CharString_countAllSensitive(baseAbsDir, '/', 0);
+	U64 baseAbsSlashes = CharString_countAllSensitive(&baseAbsDir, '/', 0);
 
 	if (!baseAbsSlashes) {							//Base is working dir, so easy to compute
 		gotoIfError3(clean, CharString_createCopy(subFileAbsDir, alloc, result, e_rr));
@@ -325,21 +330,21 @@ Bool File_makeRelative(
 	for (U64 it = 0, it2 = 0; i < baseAbsSlashes; ++i, ++it, ++it2) {
 
 		U64 prev = it;
-		it = CharString_findSensitive(baseAbsDir, '/', true, it, 0);
+		it = CharString_findFirstSensitive(&baseAbsDir, '/', it, 0);
 
 		U64 prev2 = it2;
-		it2 = CharString_findSensitive(subFileAbsDir, '/', true, it2, 0);
+		it2 = CharString_findFirstSensitive(&subFileAbsDir, '/', it2, 0);
 
 		if(it == U64_MAX || it2 == U64_MAX)
 			break;
 
 		CharString sub = CharString_createNull();
-		CharString_cut(baseAbsDir, prev, it - prev, &sub);
+		CharString_cut(&baseAbsDir, prev, it - prev, &sub);
 
 		CharString sub2 = CharString_createNull();
-		CharString_cut(baseAbsDir, prev2, it2 - prev2, &sub2);
+		CharString_cut(&baseAbsDir, prev2, it2 - prev2, &sub2);
 
-		if(!CharString_equalsStringSensitive(sub, sub2))
+		if(!CharString_equalsStringSensitive(&sub, &sub2))
 			break;
 
 		subFileLen = it2 + 1;

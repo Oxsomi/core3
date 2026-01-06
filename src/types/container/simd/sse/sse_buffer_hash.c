@@ -26,7 +26,7 @@
 #include "types/base/constants.h"
 #include <nmmintrin.h>
 
-#include "types/math/math.h"
+#include "types/base/math.h"
 
 extern const U32 SHA256_STATE[8];
 

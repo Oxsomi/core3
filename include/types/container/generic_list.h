@@ -366,13 +366,13 @@ Bool GenericList_sortF64(GenericList list);
 //Only allowed when the stride is <= 1024 (it needs to copy to a temp buffer)
 Bool GenericList_sortCustom(GenericList list, CompareFunction func);
 
-Bool GenericList_sortString(GenericList *list, EStringCase stringCase);
+Bool GenericList_sortString(GenericList list, EStringCase stringCase);
 
-static inline Bool GenericList_sortStringSensitive(GenericList *list) {
+static inline Bool GenericList_sortStringSensitive(GenericList list) {
 	return GenericList_sortString(list, EStringCase_Sensitive);
 }
 
-static inline Bool GenericList_sortStringInsensitive(GenericList *list) {
+static inline Bool GenericList_sortStringInsensitive(GenericList list) {
 	return GenericList_sortString(list, EStringCase_Insensitive);
 }
 

@@ -157,8 +157,8 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 
 	ListU64 finds = { 0 };
 
-	const CharStringFind find = { replace->s, replace->allocator, caseSensitive, replace->off, replace->len, &finds };
-	gotoIfError3(clean, CharString_findAllString(&find, replace->search, e_rr));
+	const CharStringFind find = { replace->s, replace->allocator, replace->off, replace->len, &finds };
+	gotoIfError3(clean, CharString_findAllString(&find, replace->search, caseSensitive, e_rr));
 
 	if (!finds.length)
 		goto clean;
@@ -168,7 +168,7 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 	const U64 *ptr = finds.ptr;
 
 	const U64 searchl = CharString_length(*replace->search);
-	C8 *sPtrNonConst = replace->search->ptr;
+	C8 *sPtrNonConst = replace->s->ptrNonConst;
 
 	const U64 strl = CharString_length(*replace->replace);
 	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
@@ -214,7 +214,7 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 
 		//Ensure the string is now the right size
 
-		gotoIfError3(clean, CharString_resize(s, strl - diff * finds.length, ' ', alloc, e_rr));
+		gotoIfError3(clean, CharString_resize(replace->s, strl - diff * finds.length, ' ', alloc, e_rr));
 		goto clean;
 	}
 
@@ -224,7 +224,7 @@ Bool CharString_replaceAllString(const CharStringReplace2 *replace, EStringCase 
 
 	const U64 diff = replacel - searchl;
 
-	gotoIfError3(clean, CharString_resize(s, strl + diff * finds.length, ' ', alloc, e_rr));
+	gotoIfError3(clean, CharString_resize(replace->s, strl + diff * finds.length, ' ', alloc, e_rr));
 
 	//Move from right to left
 
@@ -280,7 +280,7 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 		goto clean;
 
 	const U64 searchl = CharString_length(*replace->search);
-	C8 *sPtrNonConst = replace->search->ptr;
+	C8 *sPtrNonConst = replace->s->ptrNonConst;
 
 	const U64 strl = CharString_length(*replace->replace);
 	const Buffer replaceBuf = CharString_bufferConst(*replace->replace);
@@ -313,7 +313,7 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 
 		//Shrink the string; this is done after because we need to read the right of the string first
 
-		gotoIfError3(clean, CharString_resize(s, strl - diff, ' ', alloc, e_rr));
+		gotoIfError3(clean, CharString_resize(replace->s, strl - diff, ' ', replace->allocator, e_rr));
 		goto clean;
 	}
 
@@ -322,7 +322,7 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 
 	const U64 diff = replacel - searchl;
 
-	gotoIfError3(clean, CharString_resize(s, strl + diff, ' ', alloc, e_rr));
+	gotoIfError3(clean, CharString_resize(replace->s, strl + diff, ' ', replace->allocator, e_rr));
 
 	//Copy our data over first
 

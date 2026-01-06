@@ -33,9 +33,17 @@
 TList(CharString);
 TListNamed(const C8*, ListConstC8);
 
-Bool ListCharString_sort(ListCharString list, EStringCase stringCase);
-Bool ListCharString_sortSensitive(ListCharString list);
-Bool ListCharString_sortInsensitive(ListCharString list);
+static inline Bool ListCharString_sort(ListCharString list, EStringCase stringCase) {
+	return GenericList_sortString(ListCharString_toList(list), stringCase);
+}
+
+static inline Bool ListCharString_sortSensitive(ListCharString list) {
+	return GenericList_sortStringSensitive(ListCharString_toList(list));
+}
+
+static inline Bool ListCharString_sortInsensitive(ListCharString list) {
+	return GenericList_sortStringInsensitive(ListCharString_toList(list));
+}
 
 //Strings that HAVE to be freed (anything that uses an allocator needs freeing)
 //These reside on the heap/free space (or wherever allocator allocates them)
