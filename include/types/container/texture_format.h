@@ -28,13 +28,13 @@
 typedef enum EDepthStencilFormat {
 
 	EDepthStencilFormat_None,
-	EDepthStencilFormat_D16,			//Prefer this if stencil isn't needed and precision is no concern
-	EDepthStencilFormat_D32,
-	EDepthStencilFormat_D24S8Ext,		//On AMD this is unsupported, use D32S8 instead.
+	EDepthStencilFormat_D16,			//Prefer this if stencil isn't needed and precision is no concern on mobile
+	EDepthStencilFormat_D32,			//Prefer on desktop if stencil isn't needed
+	EDepthStencilFormat_D24S8Ext,		//On AMD this is unsupported, use D32S8 instead
 	EDepthStencilFormat_D32S8X24Ext,	//Some older systems might not support stencil at all
 	EDepthStencilFormat_S8X24Ext,		//Some APIs and devices might support this, but unlikely
 
-	EDepthStencilFormat_Count,
+	EDepthStencilFormat_Count,			//Ensure < 0x10
 
 	EDepthStencilFormat_StencilStart = EDepthStencilFormat_D24S8Ext,
 	EDepthStencilFormat_StencilEnd = EDepthStencilFormat_Count
@@ -114,7 +114,6 @@ typedef enum ETextureCompressionAlgo {
 //For compression, the nibbleSize is replaced with size in uint2s (8-byte)
 //E.g. 0 = 8 byte, 1 = 16 byte
 //If compression is enabled: Compression algo: ASTC (0), BCn (1)
-//
 typedef enum ETextureFormat {
 
 	ETextureFormat_Undefined		= _ETextureFormat(ETextureCompressionType_Invalid, 4, 0, 0, 0),
@@ -377,37 +376,96 @@ typedef enum ETextureFormat {
 
 } ETextureFormat;
 
-ETexturePrimitive ETextureFormat_getPrimitive(ETextureFormat f);
+static inline ETexturePrimitive ETextureFormat_getPrimitive(ETextureFormat f) {
+	return (ETexturePrimitive)((f >> 24) & 7);
+}
 
-Bool ETextureFormat_getIsCompressed(ETextureFormat f);
+static inline Bool ETextureFormat_getIsCompressed(ETextureFormat f) {
+	return ETextureFormat_getPrimitive(f) == ETexturePrimitive_Compressed;
+}
 
-U64 ETextureFormat_getBits(ETextureFormat f);
-U64 ETextureFormat_getAlphaBits(ETextureFormat f);
-U64 ETextureFormat_getBlueBits(ETextureFormat f);
-U64 ETextureFormat_getGreenBits(ETextureFormat f);
-U64 ETextureFormat_getRedBits(ETextureFormat f);
+static inline U64 ETextureFormat_getBits(ETextureFormat f) {
+	const Bool isCompressed = ETextureFormat_getIsCompressed(f);
+	const U64 length = ((f >> 27) & (isCompressed ? 7 : 0x1F)) + 1;
+	return length << (isCompressed ? 6 : 2);
+}
 
-Bool ETextureFormat_hasRed(ETextureFormat f);
-Bool ETextureFormat_hasGreen(ETextureFormat f);
-Bool ETextureFormat_hasBlue(ETextureFormat f);
-Bool ETextureFormat_hasAlpha(ETextureFormat f);
+static inline U64 ETextureFormat_getAlphaBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? f & 7 : (f & 077) << 1;
+}
 
-U8 ETextureFormat_getChannels(ETextureFormat f);
+static inline U64 ETextureFormat_getBlueBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 3) & 077) << 1;
+}
 
-ETextureCompressionType ETextureFormat_getCompressionType(ETextureFormat f);
-ETextureCompressionAlgo ETextureFormat_getCompressionAlgo(ETextureFormat f);
+static inline U64 ETextureFormat_getGreenBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 6) & 077) << 1;
+}
+
+static inline U64 ETextureFormat_getRedBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 9) & 077) << 1;
+}
+
+static inline Bool ETextureFormat_hasRed(ETextureFormat f) { return ETextureFormat_getRedBits(f); }
+static inline Bool ETextureFormat_hasGreen(ETextureFormat f) { return ETextureFormat_getGreenBits(f); }
+static inline Bool ETextureFormat_hasBlue(ETextureFormat f) { return ETextureFormat_getBlueBits(f); }
+static inline Bool ETextureFormat_hasAlpha(ETextureFormat f) { return ETextureFormat_getAlphaBits(f); }
+
+static inline U8 ETextureFormat_getChannels(ETextureFormat f) {
+	return
+		(U8)ETextureFormat_hasRed(f)  + (U8)ETextureFormat_hasGreen(f) +
+		(U8)ETextureFormat_hasBlue(f) + (U8)ETextureFormat_hasAlpha(f);
+}
+
+static inline ETextureCompressionType ETextureFormat_getCompressionType(ETextureFormat f) {
+
+	if(!ETextureFormat_getIsCompressed(f))
+		return ETextureCompressionType_Invalid;
+
+	return (ETextureCompressionType)((f >> 9) & 7);
+}
+
+static inline ETextureCompressionAlgo ETextureFormat_getCompressionAlgo(ETextureFormat f) {
+
+	if(!ETextureFormat_getIsCompressed(f))
+		return ETextureCompressionAlgo_None;
+
+	return (ETextureCompressionAlgo)((f >> 30) & 7);
+}
 
 //Get the alignments (x, y) of a texture format
 //Returns false if it doesn't need alignment (so alignment = 1x1)
+static inline Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y) {
 
-Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y);
+	if(!ETextureFormat_getIsCompressed(f))
+		return false;
+
+	if(x)
+		*x = ETextureAlignment_toAlignment[(f >> 15) & 7];
+
+	if(y)
+		*y = ETextureAlignment_toAlignment[(f >> 21) & 7];
+
+	return true;
+}
 
 //Get texture's size in bytes, if misaligned it will align to next block count
-U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h, U32 l);
+static inline U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h, U32 l) {
+
+	U8 alignW = 1, alignH = 1;
+
+	//If compressed; the size of the texture format is specified per blocks
+
+	if (ETextureFormat_getAlignment(f, &alignW, &alignH)) {
+		w += alignW - 1;	h += alignH - 1;
+		w /= alignW;		h /= alignH;
+	}
+
+	return ((((U64)w * h * ETextureFormat_getBits(f)) + 7) >> 3) * l;
+}
 
 //Map ETextureFormat to simplified id for storing in a more compact manner
 //ETextureFormatId = U8 while ETextureFormat is U32.
-
 typedef enum ETextureFormatId {
 
 	ETextureFormatId_Undefined,
@@ -460,7 +518,7 @@ typedef enum ETextureFormatId {
 	ETextureFormatId_ASTC_12x10,	ETextureFormatId_ASTC_12x10_sRGB,
 	ETextureFormatId_ASTC_12x12,	ETextureFormatId_ASTC_12x12_sRGB,
 
-	ETextureFormatId_Count
+	ETextureFormatId_Count		//Ensure Count < 0xF0, because depth stencil might occupy it.
 
 } ETextureFormatId;
 
@@ -521,13 +579,189 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 
 //Mapping between DXGI_FORMAT and ETextureFormat
 
-typedef U32 DXFormat;			//DXGI_FORMAT
+typedef U32 DXFormat;			//DXGI_FORMAT (Can't use Windows.h, bloated and not cross platform)
 
-ETextureFormatId DXFormat_toTextureFormatId(DXFormat format);
-DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format);
+static const U8 DXFormat_toTextureFormatIdArr[100] = {
+	ETextureFormatId_Undefined,				// 0
+	ETextureFormatId_Undefined,				// 1
+	ETextureFormatId_RGBA32f,				// 2
+	ETextureFormatId_RGBA32u,				// 3
+	ETextureFormatId_RGBA32i,				// 4
+	ETextureFormatId_Undefined,				// 5
+	ETextureFormatId_RGB32f,				// 6
+	ETextureFormatId_RGB32u,				// 7
+	ETextureFormatId_RGB32i,				// 8
+	ETextureFormatId_Undefined,				// 9
+	ETextureFormatId_RGBA16f,				// 10
+	ETextureFormatId_RGBA16,				// 11
+	ETextureFormatId_RGBA16u,				// 12
+	ETextureFormatId_RGBA16s,				// 13
+	ETextureFormatId_RGBA16i,				// 14
+	ETextureFormatId_Undefined,				// 15
+	ETextureFormatId_RG32f,					// 16
+	ETextureFormatId_RG32u,					// 17
+	ETextureFormatId_RG32i,					// 18
+	ETextureFormatId_Undefined,				// 19
+	EDepthStencilFormat_D32S8X24Ext + 0xF0,	// 20 (DepthStencil)
+	ETextureFormatId_Undefined,				// 21
+	ETextureFormatId_Undefined,				// 22
+	ETextureFormatId_Undefined,				// 23
+	ETextureFormatId_BGR10A2,				// 24
+	ETextureFormatId_Undefined,				// 25
+	ETextureFormatId_Undefined,				// 26
+	ETextureFormatId_Undefined,				// 27
+	ETextureFormatId_RGBA8,					// 28
+	ETextureFormatId_Undefined,				// 29
+	ETextureFormatId_RGBA8u,				// 30
+	ETextureFormatId_RGBA8s,				// 31
+	ETextureFormatId_RGBA8i,				// 32
+	ETextureFormatId_Undefined,				// 33
+	ETextureFormatId_RG16f,					// 34
+	ETextureFormatId_RG16,					// 35
+	ETextureFormatId_RG16u,					// 36
+	ETextureFormatId_RG16s,					// 37
+	ETextureFormatId_RG16i,					// 38
+	ETextureFormatId_Undefined,				// 39
+	EDepthStencilFormat_D32 + 0xF0,			// 40 (DepthStencil)
+	ETextureFormatId_R32f,					// 41
+	ETextureFormatId_R32u,					// 42
+	ETextureFormatId_R32i,					// 43
+	ETextureFormatId_Undefined,				// 44
+	EDepthStencilFormat_D24S8Ext + 0xF0,	// 45 (DepthStencil)
+	ETextureFormatId_Undefined,				// 46
+	ETextureFormatId_Undefined,				// 47
+	ETextureFormatId_Undefined,				// 48
+	ETextureFormatId_RG8,					// 49
+	ETextureFormatId_RG8u,					// 50
+	ETextureFormatId_RG8s,					// 51
+	ETextureFormatId_RG8i,					// 52
+	ETextureFormatId_Undefined,				// 53
+	ETextureFormatId_R16f,					// 54
+	EDepthStencilFormat_D16 + 0xF0,			// 55 (DepthStencil)
+	ETextureFormatId_R16,					// 56
+	ETextureFormatId_R16u,					// 57
+	ETextureFormatId_R16s,					// 58
+	ETextureFormatId_R16i,					// 59
+	ETextureFormatId_Undefined,				// 60
+	ETextureFormatId_R8,					// 61
+	ETextureFormatId_R8u,					// 62
+	ETextureFormatId_R8s,					// 63
+	ETextureFormatId_R8i,					// 64
+	ETextureFormatId_Undefined,				// 65
+	ETextureFormatId_Undefined,				// 66
+	ETextureFormatId_Undefined,				// 67
+	ETextureFormatId_Undefined,				// 68
+	ETextureFormatId_Undefined,				// 69
+	ETextureFormatId_Undefined,				// 70
+	ETextureFormatId_Undefined,				// 71
+	ETextureFormatId_Undefined,				// 72
+	ETextureFormatId_Undefined,				// 73
+	ETextureFormatId_Undefined,				// 74
+	ETextureFormatId_Undefined,				// 75
+	ETextureFormatId_Undefined,				// 76
+	ETextureFormatId_Undefined,				// 77
+	ETextureFormatId_Undefined,				// 78
+	ETextureFormatId_Undefined,				// 79
+	ETextureFormatId_BC4,					// 80
+	ETextureFormatId_BC4s,					// 81
+	ETextureFormatId_Undefined,				// 82
+	ETextureFormatId_BC5,					// 83
+	ETextureFormatId_BC5s,					// 84
+	ETextureFormatId_Undefined,				// 85
+	ETextureFormatId_Undefined,				// 86
+	ETextureFormatId_BGRA8,					// 87
+	ETextureFormatId_Undefined,				// 88
+	ETextureFormatId_Undefined,				// 89
+	ETextureFormatId_Undefined,				// 90
+	ETextureFormatId_Undefined,				// 91
+	ETextureFormatId_Undefined,				// 92
+	ETextureFormatId_Undefined,				// 93
+	ETextureFormatId_Undefined,				// 94
+	ETextureFormatId_BC6H,					// 95
+	ETextureFormatId_Undefined,				// 96
+	ETextureFormatId_Undefined,				// 97
+	ETextureFormatId_BC7,					// 98
+	ETextureFormatId_BC7_sRGB				// 99
+};
 
-EDepthStencilFormat DXFormat_toDepthStencilFormat(DXFormat format);
-DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format);
+static inline ETextureFormatId DXFormat_toTextureFormatId(DXFormat format) {
+
+	if ((U64)format >= sizeof(DXFormat_toTextureFormatIdArr))
+		return ETextureFormatId_Undefined;
+
+	U8 i = DXFormat_toTextureFormatIdArr[format];
+
+	if(i >= 0xF0)		//Can't convert depth stencil to ETextureFormatId
+		return ETextureFormatId_Undefined;
+
+	return (ETextureFormatId) i;
+}
+
+static const U8 ETextureFormatId_toDXFormatArr[ETextureFormatId_Count] = {
+
+	0,	// ETextureFormatId_Undefined
+
+	// R8..BGRA8
+	61, 49, 28, 87,		// R8, RG8, RGBA8, BGRA8
+	63, 51, 31,			// R8s, RG8s, RGBA8s
+	62, 50, 30,			// R8u, RG8u, RGBA8u
+	64, 52, 32,			// R8i, RG8i, RGBA8i
+
+	// R16..RGBA16f
+	56, 35, 11,			// R16, RG16, RGBA16
+	58, 37, 13,			// R16s, RG16s, RGBA16s
+	57, 36, 12,			// R16u, RG16u, RGBA16u
+	59, 38, 14,			// R16i, RG16i, RGBA16i
+	54, 34, 10,			// R16f, RG16f, RGBA16f
+
+	// R32..RGBA32f
+	42, 17, 7, 3,		// R32u, RG32u, RGB32u, RGBA32u
+	43, 18, 8, 4,		// R32i, RG32i, RGB32i, RGBA32i
+	41, 16, 6, 2,		// R32f, RG32f, RGB32f, RGBA32f
+
+	// Special
+	24,					// BGR10A2
+
+	// BCn
+	80, 83, 95, 98,		// BC4, BC5, BC6H, BC7
+	81, 84, 99,			// BC4s, BC5s, -, BC7_sRGB
+
+	// ASTC (skip mapping to DXFormat, 0)
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0,
+	0, 0, 0, 0
+};
+
+static inline DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format) {
+	return ETextureFormatId_toDXFormatArr[format];
+}
+
+static const U8 EDepthStencilFormat_toDXFormatArr[] = { 0, 55, 40, 45, 20, 0 };
+
+DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format) {
+
+	if ((U64)format >= sizeof(EDepthStencilFormat_toDXFormatArr))
+		return 0;
+
+	return EDepthStencilFormat_toDXFormatArr[(U64)format];
+}
+
+static inline EDepthStencilFormat DXFormat_toDepthStencilFormat(DXFormat format) {
+
+	if ((U64)format >= sizeof(DXFormat_toTextureFormatIdArr))
+		return EDepthStencilFormat_None;
+
+	U8 i = DXFormat_toTextureFormatIdArr[format];
+
+	if (i < 0xF0)		//Can't convert color format to depth stencil
+		return EDepthStencilFormat_None;
+
+	return (EDepthStencilFormat)(i - 0xF0);
+}
 
 #ifdef __cplusplus
 	}
