@@ -51,26 +51,32 @@ typedef enum ELogOptions {
 } ELogOptions;
 
 impl void Log_printCapturedStackTraceCustom(
-	Allocator alloc, const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options
+	const Allocator *alloc,
+	const void **stackTrace,
+	U64 stackSize,
+	ELogLevel lvl,
+	ELogOptions options
 );
 
-impl void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg);
+//TODO: Proper logging system where you put them on a message queue unformatted so it doesn't impact perf at record time.
 
-void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);
-void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions options);
+impl void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const CharString *arg);
+
+void Log_printCapturedStackTrace(const Allocator *alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);
+void Log_printStackTrace(const Allocator *alloc, U8 skip, ELogLevel lvl, ELogOptions options);
 
 //IMPORTANT:
 //NEVER! Supply user generated content into format. Instead, use "%.*s".
 //When displaying strings, use "%.*s", (int) args.length, arg.ptr instead of args.ptr, because strings aren't null terminated.
 //(Only exception is if the strings are safely generated from code and are determined to be null terminated, then use %s)
 
-void Log_logFormat(Allocator alloc, ELogLevel lvl, ELogOptions options, const C8 *format, ...);
-void Log_debug(Allocator alloc, ELogOptions options, const C8 *format, ...);
-void Log_performance(Allocator alloc, ELogOptions options, const C8 *format, ...);
-void Log_warn(Allocator alloc, ELogOptions options, const C8 *format, ...);
-void Log_error(Allocator alloc, ELogOptions options, const C8 *format, ...);
+void Log_logFormat(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const C8 *format, ...);
+void Log_debug(const Allocator *alloc, ELogOptions options, const C8 *format, ...);
+void Log_performance(const Allocator *alloc, ELogOptions options, const C8 *format, ...);
+void Log_warn(const Allocator *alloc, ELogOptions options, const C8 *format, ...);
+void Log_error(const Allocator *alloc, ELogOptions options, const C8 *format, ...);
 
-void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);
+void Error_print(const Allocator *alloc, const Error *e_rr, ELogLevel logLevel, ELogOptions options);
 
 #define Log_logFormatLn(alloc, lvl, ...)	Log_logFormat(alloc, lvl, ELogOptions_NewLine, __VA_ARGS__)
 #define Log_debugLn(alloc, ...)				Log_debug(alloc, ELogOptions_NewLine, __VA_ARGS__)

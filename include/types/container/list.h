@@ -142,8 +142,8 @@ U64 Name##_count(const Name l, Name##_Type t, EqualsFunction eq);															
 U64 Name##_findFirst(const Name l, Name##_Type t, U64 index, EqualsFunction eq);											\
 U64 Name##_findLast(const Name l, Name##_Type t, U64 index, EqualsFunction eq);												\
 																															\
-Bool Name##_copy(const Name src, U64 srcOffset, Name dst, U64 dstOffset, U64 count);										\
-Bool Name##_find(const Name l, Name##_Type t, EqualsFunction eq, const Allocator *allocator, ListU64 *result);				\
+Bool Name##_copy(const Name src, U64 srcOffset, Name dst, U64 dstOffset, U64 count, Error *e_rr);							\
+Bool Name##_find(const Name l, Name##_Type t, EqualsFunction eq, const Allocator *allocator, ListU64 *result, Error *e_rr);	\
 																															\
 Bool Name##_popBack(Name *l, Name##_Type *output, Error *e_rr);																\
 Bool Name##_popFront(Name *l, Name##_Type *output, Error *e_rr);															\

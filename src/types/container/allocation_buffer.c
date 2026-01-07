@@ -87,7 +87,7 @@ Bool AllocationBuffer_createRefFromRegion(const AllocationBufferCreate *create, 
 	create->allocationBuffer->nonLinearAlignment = create->nonLinearAlignment;
 	alloc = true;
 
-	gotoIfError3(clean, ListAllocationBufferBlock_reserve(&create->allocationBuffer->allocations, 16, alloc, e_rr));
+	gotoIfError3(clean, ListAllocationBufferBlock_reserve(&create->allocationBuffer->allocations, 16, create->alloc, e_rr));
 
 clean:
 

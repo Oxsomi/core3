@@ -29,14 +29,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc; (void)err; return CharString_createNull(); }
+CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) {
+	(void) alloc; (void)err;
+	return CharString_createNull();
+}
 
 #if _PLATFORM_TYPE != PLATFORM_ANDROID
 
 	#include <execinfo.h>
 
 	void Log_printCapturedStackTraceCustom(
-		Allocator alloc,
+		const Allocator *alloc,
 		const void **stackTrace,
 		U64 stackSize,
 		ELogLevel lvl,
@@ -92,7 +95,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 			case ELogLevel_Error:		printf(FONT_RED	str FONT_RESET);		break;					\
 		}
 
-	void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
+	void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const CharString *arg) {
 
 		(void) alloc;
 
@@ -100,8 +103,6 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 
 		if(lvl >= ELogLevel_Count)
 			return;
-
-		U64 thread = Thread_getId();
 
 		//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
 
@@ -114,7 +115,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 			printColorSimple(lvl, "[");
 
 		if (hasThread)
-			printColor(lvl, "%"PRIu64, thread);
+			printColor(lvl, "%"PRIu64, Thread_getId());
 
 		if (hasTimestamp) {
 
@@ -133,7 +134,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 
 		printColor(lvl,
 			"%.*s%s",
-			(int)CharString_length(arg), arg.ptr,
+			!arg ? 0 : (int)CharString_length(arg), !arg ? "" : arg.ptr,
 			newLine
 		);
 	}

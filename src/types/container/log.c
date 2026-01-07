@@ -27,11 +27,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
+void Log_printCapturedStackTrace(const Allocator *alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
 	Log_printCapturedStackTraceCustom(alloc, (const void**) stackTrace, STACKTRACE_SIZE, lvl, options);
 }
 
-void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions options) {
+void Log_printStackTrace(const Allocator *alloc, U8 skip, ELogLevel lvl, ELogOptions options) {
 
 	StackTrace stackTrace;
 	Error_captureStackTrace(stackTrace, STACKTRACE_SIZE, skip);
@@ -39,78 +39,76 @@ void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions op
 	Log_printCapturedStackTrace(alloc, stackTrace, lvl, options);
 }
 
-#define Log_level(lvl) 													\
-																		\
-	if(!format)															\
-		return;															\
-																		\
-	CharString res = CharString_createNull();							\
-																		\
-	va_list arg1;														\
-	va_start(arg1, format);												\
-	Error err = CharString_formatVariadic(alloc, &res, format, arg1);	\
-	va_end(arg1);														\
-																		\
-	if(!err.genericError)												\
-		Log_log(alloc, lvl, opt, res);									\
-																		\
+#define Log_level(lvl) 															\
+																				\
+	if(!format)																	\
+		return;																	\
+																				\
+	CharString res = CharString_createNull();									\
+																				\
+	va_list arg1;																\
+	va_start(arg1, format);														\
+	Bool s_uccess = CharString_formatVariadic(alloc, &res, NULL, format, arg1);	\
+	va_end(arg1);																\
+																				\
+	if(s_uccess)																\
+		Log_log(alloc, lvl, opt, &res);											\
+																				\
 	CharString_free(&res, alloc);
 
-void Log_logFormat(Allocator alloc, ELogLevel level, ELogOptions opt, const C8 *format, ...) {
+void Log_logFormat(const Allocator *alloc, ELogLevel level, ELogOptions opt, const C8 *format, ...) {
 	Log_level(level);
 }
 
-void Log_debug(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
+void Log_debug(const Allocator *alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Debug);
 }
 
-void Log_performance(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
+void Log_performance(const Allocator *alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Performance);
 }
 
-void Log_warn(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
+void Log_warn(const Allocator *alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Warn);
 }
 
-void Log_error(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
+void Log_error(const Allocator *alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Error);
 }
 
-impl CharString Error_formatPlatformError(Allocator alloc, Error err);
+impl CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr);
 
-void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options) {
+void Error_print(const Allocator *alloc, const Error *e_rr, ELogLevel logLevel, ELogOptions options) {
 
-	if(!err.genericError)
+	if(!e_rr || !e_rr->genericError)
 		return;
 
 	CharString result = CharString_createNull();
-	CharString platformErr = Error_formatPlatformError(alloc, err);
+	CharString platformErr = CharString_createNull();
 
-	if(err.genericError == EGenericError_Stderr)
-		platformErr = CharString_createRefCStrConst(strerror((int)err.paramValue0));
+	if (e_rr->genericError == EGenericError_PlatformError)
+		platformErr = Error_formatPlatformError(alloc, e_rr);
 
-	if(
-		!CharString_format(
+	if(e_rr->genericError == EGenericError_Stderr)
+		platformErr = CharString_createRefCStrConst(strerror((int)e_rr->paramValue0));
 
-			alloc,
-			&result,
+	//TODO: Replace this with something less annoying.
 
-			"%s (%s)\nsub id: %"PRIu32"X, param id: %"PRIu32", param0: %08X, param1: %08X.\nPlatform/std error: %.*s.",
+	if(CharString_format(
+		alloc, &result,
+		NULL,
+		"%s (%s)\nsub id: %"PRIu32"X, param id: %"PRIu32", param0: %08X, param1: %08X.\nPlatform/std error: %.*s.",
+		e_rr->errorStr,
+		EGenericError_TO_STRING[e_rr->genericError],
+		e_rr->errorSubId,
+		e_rr->paramId,
+		e_rr->paramValue0,
+		e_rr->paramValue1,
+		CharString_length(platformErr), platformErr.ptr
+	))
+		Log_log(alloc, logLevel, options | ELogOptions_NoBreak, &result);
 
-			err.errorStr,
-			EGenericError_TO_STRING[err.genericError],
-
-			err.errorSubId,
-			err.paramId,
-			err.paramValue0,
-			err.paramValue1,
-			CharString_length(platformErr), platformErr.ptr
-
-		).genericError
-	)
-		Log_log(alloc, logLevel, options | ELogOptions_NoBreak, result);
-
-	Log_printCapturedStackTraceCustom(alloc, (const void**)err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
+	Log_printCapturedStackTraceCustom(alloc, (const void**)e_rr->stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
 
 	CharString_free(&result, alloc);
 	CharString_free(&platformErr, alloc);

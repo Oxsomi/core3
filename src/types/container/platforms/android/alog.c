@@ -31,7 +31,7 @@
 #include <dlfcn.h>
 #include <android/log.h>
 
-void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
+void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const CharString *arg) {
 
 	(void) alloc;
 
@@ -55,11 +55,13 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	if(options & ELogOptions_Thread)
 		__android_log_print(androidLvl, "OxC3", "[%"PRIu64"]: %.*s%s", thread, (int)CharString_length(arg), arg.ptr, newLine);
 
-	else __android_log_print(androidLvl, "OxC3", "%.*s%s", (int)CharString_length(arg), arg.ptr, newLine);
+	else __android_log_print(
+		androidLvl, "OxC3", "%.*s%s", !arg ? 0 : (int)CharString_length(arg), !arg ? "" : arg.ptr, newLine
+	);
 }
 
 void Log_printCapturedStackTraceCustom(
-	Allocator alloc,
+	const Allocator *alloc,
 	const void **stackTrace,
 	U64 stackSize,
 	ELogLevel lvl,

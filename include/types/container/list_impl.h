@@ -59,7 +59,7 @@ Bool Name##_reverse(Name l) { return GenericList_reverse(Name##_toList(l)); }			
 Bool Name##_sortCustom(Name l, CompareFunction func) { return GenericList_sortCustom(Name##_toList(l), func); }				\
 																															\
 Bool Name##_createSubset(const Name l, U64 index, U64 length, Name *result, Error *e_rr) {									\
-	Allocator *alloc = NULL;																								\
+	const Allocator *alloc = (const Allocator*)NULL;																		\
 	TListWrapCtor(Name, gotoIfError3(clean, GenericList_createSubset(Name##_toList(l), index, length, &list, e_rr)));		\
 }																															\
 																															\
@@ -93,12 +93,12 @@ Bool Name##_createReverse(const Name l, const Allocator *alloc, Name *result, Er
 }																															\
 																															\
 Bool Name##_createRef(Name##_Type *ptr, U64 length, Name *result, Error *e_rr) {											\
-	Allocator *alloc = NULL;																								\
+	const Allocator *alloc = (const Allocator*)NULL;																		\
 	TListWrapCtor(Name, gotoIfError3(clean, GenericList_createRef(ptr, length, sizeof(Name##_Type), &list, e_rr)));			\
 }																															\
 																															\
 Bool Name##_createRefConst(const Name##_Type *ptr, U64 length, Name *result, Error *e_rr) {									\
-	Allocator *alloc = NULL;																								\
+	const Allocator *alloc = (const Allocator*)NULL;																		\
 	TListWrapCtor(Name, gotoIfError3(clean, GenericList_createRefConst(ptr, length, sizeof(Name##_Type), &list, e_rr)));	\
 }																															\
 																															\
@@ -107,7 +107,7 @@ Bool Name##_set(Name l, U64 index, Name##_Type t, Error *e_rr) {															\
 	return GenericList_set(Name##_toList(l), index, &buf, e_rr);															\
 }																															\
 																															\
-Bool Name##_get(Name l, U64 index, Name##_Type *t, Error *e_rr) {															\
+Bool Name##_get(const Name l, U64 index, Name##_Type *t, Error *e_rr) {														\
 																															\
 	Bool s_uccess = true;																									\
 																															\
@@ -146,7 +146,7 @@ Bool Name##_copy(const Name src, U64 srcOffset, Name dst, U64 dstOffset, U64 cou
 	return GenericList_copy(Name##_toList(src), srcOffset, Name##_toList(dst), dstOffset, count, e_rr);						\
 }																															\
 																															\
-Bool Name##_find(Name l, Name##_Type t, EqualsFunction eq, const Allocator *allocator, ListU64 *result, Error *e_rr) {		\
+Bool Name##_find(const Name l, Name##_Type t, EqualsFunction eq, const Allocator *allocator, ListU64 *result, Error *e_rr) {\
 	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));													\
 	return GenericList_find(Name##_toList(l), &buf, eq, allocator, result, e_rr);											\
 }																															\
@@ -219,11 +219,11 @@ Bool Name##_insert(Name *l, U64 index, Name##_Type t, const Allocator *allocator
 	TListWrapModifying(Name, gotoIfError3(clean, GenericList_insert(&list, index, &buf, allocator, e_rr)));					\
 }																															\
 																															\
-Bool Name##_pushAll(Name *l, Name other, const Allocator *allocator, Error *e_rr) {											\
+Bool Name##_pushAll(Name *l, const Name other, const Allocator *allocator, Error *e_rr) {									\
 	TListWrapModifying(Name, gotoIfError3(clean, GenericList_pushAll(&list, Name##_toList(other), allocator, e_rr)));		\
 }																															\
 																															\
-Bool Name##_insertAll(Name *l, Name oth, U64 off, const Allocator *allocator, Error *e_rr) {								\
+Bool Name##_insertAll(Name *l, const Name oth, U64 off, const Allocator *allocator, Error *e_rr) {							\
 	TListWrapModifying(Name, gotoIfError3(clean, GenericList_insertAll(&list, Name##_toList(oth), off, allocator, e_rr)));	\
 }																															\
 																															\
