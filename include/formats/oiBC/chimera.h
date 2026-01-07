@@ -22,7 +22,7 @@
 #include "types/base/algorithm.h"
 #include "types/math/flp.h"
 #include "types/math/vec.h"
-#include "fidi_a.h"
+#include "formats/oiBC/fidi_a.h"
 
 #ifdef __cplusplus
 	extern "C" {

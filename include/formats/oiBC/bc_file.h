@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/container/list.h"
+#include "types/container/list_predeclare.h"
 #include "formats/oiXX/oiXX.h"
 
 #ifdef __cplusplus
@@ -48,13 +48,12 @@ typedef struct BCFile {
 	BCSettings settings;
 } BCFile;
 
-Error BCFile_create(BCSettings settings, ListU8 fidiA, ListU8 fidiB, ListU8 gida, ListU8 leon, BCFile *bcFile);
-Bool BCFile_free(BCFile *bcFile, Allocator alloc);
+void BCFile_free(BCFile *bcFile, const Allocator *alloc);
 
 //Serialize
 
-Error BCFile_write(BCFile bcFile, Allocator alloc, Buffer *result);
-Error BCFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, BCFile *bcFile);
+Bool BCFile_write(const BCFile *bcFile, const Allocator *alloc, Buffer *result, Error *e_rr);
+Bool BCFile_read(const Buffer *file, const U32 encryptionKey[8], const Allocator *alloc, BCFile *bcFile, Error *e_rr);
 
 //File headers
 
