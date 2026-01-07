@@ -20,7 +20,7 @@
 
 #include "formats/oiBC/chimera.h"
 #include "types/base/error.h"
-#include "types/math/math.h"
+#include "types/base/math.h"
 
 void Chimera_swapF32(F32 *a, F32 *b) {
 	const F32 tmp = *a;
@@ -96,7 +96,7 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 
 		case EFidiA_mod:
 
-			if(F32_mod(chim->f[4], chim->f[0], &chim->f[4]).genericError)
+			if(!F32_mod(chim->f[4], chim->f[0], &chim->f[4], NULL))
 				chim->f[4] = NaN;
 
 			return;

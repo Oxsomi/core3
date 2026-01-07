@@ -47,7 +47,7 @@ typedef enum EXXDataSizeType {		//Can be represented as a 2-bit array for exampl
 
 static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
-Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result);
+Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Error *e_rr);
 
 U64 Buffer_forceReadSizeType(const U8 *ptr, EXXDataSizeType type);
 U64 Buffer_forceWriteSizeType(U8 *ptr, EXXDataSizeType type, U64 result);
