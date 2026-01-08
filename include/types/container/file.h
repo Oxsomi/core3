@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/container/string.h"
+#include "types/base/string.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -47,7 +47,7 @@ typedef struct FileInfo {
 	U64 fileSize;
 } FileInfo;
 
-typedef Bool (*FileCallback)(FileInfo, void*, Error*);
+typedef Bool (*FileCallback)(const FileInfo*, void*, Error*);
 
 Bool File_resolve(
 	CharString loc,
@@ -60,18 +60,27 @@ Bool File_resolve(
 );
 
 Bool File_makeRelative(
-	CharString absoluteDir,		//Can't escape absoluteDir with baseFolder or subFile. Must end with /
-	CharString base,			//File in which the parent is located (e.g. myFolder/test.txt)
-	CharString subFile,			//File to made relative to the parent of base (e.g. myOtherFolder/test.txt)
+	const CharString absoluteDir,		//Can't escape absoluteDir with baseFolder or subFile. Must end with /
+	const CharString base,				//File in which the parent is located (e.g. myFolder/test.txt)
+	const CharString subFile,			//File to made relative to the parent of base (e.g. myOtherFolder/test.txt)
 	U64 maxFilePathLimit,
 	const Allocator *alloc,
 	CharString *result,
 	Error *e_rr
 );
 
-Bool File_isVirtual(CharString loc);
+static inline Bool File_isVirtual(CharString loc) {
+	return CharString_getAt(loc, 0) == '/' && CharString_getAt(loc, 1) == '/';
+}
 
-void FileInfo_free(FileInfo *info, const Allocator *alloc);
+static inline void FileInfo_free(FileInfo *info, const Allocator *alloc) {
+
+	if (!info)
+		return;
+
+	CharString_free(&info->path, alloc);
+	*info = (FileInfo){ 0 };
+}
 
 #ifdef __cplusplus
 	}

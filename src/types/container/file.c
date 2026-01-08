@@ -29,16 +29,8 @@
 #include "types/base/c8.h"
 #include "types/base/constants.h"
 
-void FileInfo_free(FileInfo *info, const Allocator *alloc) {
-
-	if(!info)
-		return;
-
-	CharString_free(&info->path, alloc);
-	*info = (FileInfo) { 0 };
-}
-
-Bool File_isVirtual(CharString loc) { return CharString_getAt(loc, 0) == '/' && CharString_getAt(loc, 1) == '/'; }
+//We enforce this consistently even on Linux to try and reproduce errors that might occur on Windows with long paths.
+#define MAX_WINDOWS_PATH 260
 
 Bool File_resolve(
 	CharString loc,
@@ -52,18 +44,15 @@ Bool File_resolve(
 
 	Bool s_uccess = true;
 	Bool allocate = false;
-	ListCharString res = (ListCharString) { 0 };
+	ListCharString res = { 0 };
 
-	if(!isVirtual || !result)
-		retError(clean, Error_nullPointer(!isVirtual ? 1 : 2, "File_resolve()::result and isVirtual are required"))
-
-	if(result->ptr)
-		retError(clean, Error_invalidOperation(0, "File_resolve()::result is not NULL, this might indicate a memleak"))
+	if(!isVirtual)
+		retError(clean, Error_nullPointer(!isVirtual ? 1 : 2, "File_resolve()::isVirtual is required"))
 
 	loc = CharString_createRefStrConst(loc);
 	absoluteDir = CharString_createRefStrConst(absoluteDir);
 
-	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')						//myTest/ <--
+	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')					//myTest/ <--
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;
 
 	if(CharString_getAt(absoluteDir, CharString_length(absoluteDir) - 1) == '/')	//base/ <--
@@ -125,11 +114,11 @@ Bool File_resolve(
 	const CharStringSplit split = { .s = result, .allocator = alloc, .result = &res };
 	gotoIfError3(clean, CharString_splitSensitive(&split, '/', e_rr));
 
-	U64 realSplitLen = res.length;
+	U64 fakeSplitLen = res.length;
 
-	CharString back = CharString_createRefCStrConst("..");
+	const CharString back = CharString_createRefCStrConst("..");
 
-	for (U64 i = 0; i < res.length; ++i) {
+	for (U64 i = 0; i < fakeSplitLen; ++i) {
 
 		//We pop from ListCharString since it doesn't change anything
 		//Starting with a / is valid with local files, so don't remove it. (not with virtual files)
@@ -143,11 +132,11 @@ Bool File_resolve(
 
 			//Move to left
 
-			for (U64 k = res.length - 1; k > i; --k)
+			for (U64 k = fakeSplitLen - 1; k > i; --k)
 				res.ptrNonConst[k - 1] = res.ptr[k];			//This is OK, we're dealing with refs from split
 
 			--i;			//Ensure we keep track of the removed element
-			--res.length;
+			--fakeSplitLen;
 			continue;
 		}
 
@@ -155,18 +144,16 @@ Bool File_resolve(
 
 		if (CharString_equalsStringSensitive(&res.ptr[i], &back)) {
 
-			if(!i) {
-				res.length = realSplitLen;
+			if(!i)
 				retError(clean, Error_invalidParameter(
 					0, 0, "File_resolve()::loc tried to exit working directory, this is not allowed for security reasons"
 				));
-			}
 
-			for (U64 k = i - 1; k < res.length - 2; ++k)
+			for (U64 k = i - 1; k < fakeSplitLen - 2; ++k)
 				res.ptrNonConst[k] = res.ptr[k + 2];			//This is OK, we're dealing with refs from split
 
 			i -= 2;												//Ensure we keep track of the removed element
-			res.length -= 2;
+			fakeSplitLen -= 2;
 			continue;
 		}
 
@@ -190,7 +177,6 @@ Bool File_resolve(
 
 			#endif
 
-			res.length = realSplitLen;
 			retError(clean, Error_invalidParameter(0, 1, "File_resolve()::loc contains subpath with invalid file name"));
 		}
 
@@ -201,8 +187,7 @@ Bool File_resolve(
 
 	//If we have nothing left, we get current work/app directory
 
-	if(!res.length) {
-		res.length = realSplitLen;
+	if(!fakeSplitLen) {
 		CharString_free(result, alloc);		//Release temp result
 		gotoIfError3(clean, CharString_createCopy(absoluteDir, alloc, result, e_rr));
 		goto clean;
@@ -211,13 +196,14 @@ Bool File_resolve(
 	//Re-assemble path now
 
 	CharString tmp = CharString_createNull();
-	const ListCharStringConcat concat = { .arr = &res, .alloc = alloc, .result = &tmp };
+	ListCharString tmpList = ListCharString_createRefFromList(res);
+	tmpList.length = fakeSplitLen;
+	const ListCharStringConcat concat = { .arr = &tmpList, .alloc = alloc, .result = &tmp };
 	gotoIfError3(clean, ListCharString_concat(&concat, '/', e_rr));
 
 	CharString_free(result, alloc);		//This can't be done before concat, because the string is still in use.
 	*result = tmp;
 
-	res.length = realSplitLen;
 	ListCharString_free(&res, alloc);
 
 	//Check if we're an absolute or relative path
@@ -246,10 +232,7 @@ Bool File_resolve(
 			!abDirLen ||
 			!(
 				CharString_startsWithStringSensitive(result, &absoluteDir, 0) &&
-				(
-					CharString_length(*result) == abDirLen ||
-					CharString_getAt(*result, abDirLen) == '/'
-				)
+				(CharString_length(*result) == abDirLen || CharString_getAt(*result, abDirLen) == '/')
 			)
 		)
 			retError(clean, Error_unauthorized(
@@ -267,10 +250,10 @@ Bool File_resolve(
 	//Since we're going to use this in file operations, we want to have a null terminator
 
 	if(!maxFilePathLimit)
-		maxFilePathLimit = 260;
+		maxFilePathLimit = MAX_WINDOWS_PATH;
 
 	#ifdef _WIN32
-		maxFilePathLimit = U64_min(260, maxFilePathLimit);		/* MAX_PATH */
+		maxFilePathLimit = U64_min(MAX_WINDOWS_PATH, maxFilePathLimit);
 	#endif
 
 	if(CharString_length(*result) >= maxFilePathLimit)
@@ -288,17 +271,19 @@ clean:
 }
 
 Bool File_makeRelative(
-	CharString absoluteDir,
-	CharString base,
-	CharString subFile,
+	const CharString absoluteDir,
+	const CharString base,
+	const CharString subFile,
 	U64 maxFilePathLimit,
 	const Allocator *alloc,
 	CharString *result,
 	Error *e_rr
 ) {
-	Bool s_uccess = true, isVirtual = false;
+	Bool s_uccess = true;
+	Bool isVirtualBase = false, isVirtualSub = false;
 	CharString resolvedBase = CharString_createNull();
 	CharString resolvedSubFile = CharString_createNull();
+	CharString relPath = CharString_createNull();
 
 	if(!result)
 		retError(clean, Error_nullPointer(5, "File_makeRelative()::result is required"));
@@ -306,62 +291,89 @@ Bool File_makeRelative(
 	if(result->ptr)
 		retError(clean, Error_invalidParameter(5, 0, "File_makeRelative()::*result must be empty"));
 
-	gotoIfError3(clean, File_resolve(base, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedBase, e_rr));
-	gotoIfError3(clean, File_resolve(subFile, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedSubFile, e_rr));
+	U64 absDirLen = CharString_length(absoluteDir);
+
+	gotoIfError3(clean, File_resolve(base, &isVirtualBase, maxFilePathLimit, absoluteDir, alloc, &resolvedBase, e_rr));
+	gotoIfError3(clean, File_resolve(subFile, &isVirtualSub, maxFilePathLimit, absoluteDir, alloc, &resolvedSubFile, e_rr));
+
+	if(isVirtualBase != isVirtualSub)
+		retError(clean, Error_invalidParameter(
+			5, 0, "File_makeRelative() one of base or subFile is virtual while the other isn't"
+		));
 
 	CharString baseAbsDir = CharString_createNull();
 	CharString subFileAbsDir = CharString_createNull();
-	CharString_cut(&resolvedBase, CharString_length(absoluteDir), 0, &baseAbsDir);
-	CharString_cut(&resolvedSubFile, CharString_length(absoluteDir), 0, &subFileAbsDir);
+	CharString_cut(&resolvedBase, absDirLen, 0, &baseAbsDir);
+	CharString_cut(&resolvedSubFile, absDirLen, 0, &subFileAbsDir);
 
-	U64 baseAbsSlashes = CharString_countAllSensitive(&baseAbsDir, '/', 0);
+	U64 it		= 0;
+	U64 baseLen	= CharString_length(baseAbsDir);
+	U64 subLen	= CharString_length(subFileAbsDir);
 
-	if (!baseAbsSlashes) {							//Base is working dir, so easy to compute
-		gotoIfError3(clean, CharString_createCopy(subFileAbsDir, alloc, result, e_rr));
-		goto clean;
-	}
+	U64 commonEnd = 0;	//Index of last character in common
 
-	//Otherwise, check how many folders match. Find first one that doesn't match.
-	//The first one that doesn't match, we need more ..s
+	//Find all common folders
 
-	U64 i = 0;
-	U64 subFileLen = 0;
+	while (it < baseLen && it < subLen) {
 
-	for (U64 it = 0, it2 = 0; i < baseAbsSlashes; ++i, ++it, ++it2) {
+		U64 baseSlash = CharString_findFirstSensitive(&baseAbsDir, '/', it, 0);
+		U64 subSlash  = CharString_findFirstSensitive(&subFileAbsDir, '/', it, 0);
 
-		U64 prev = it;
-		it = CharString_findFirstSensitive(&baseAbsDir, '/', it, 0);
-
-		U64 prev2 = it2;
-		it2 = CharString_findFirstSensitive(&subFileAbsDir, '/', it2, 0);
-
-		if(it == U64_MAX || it2 == U64_MAX)
+		if (baseSlash != subSlash || baseSlash == U64_MAX)
 			break;
 
-		CharString sub = CharString_createNull();
-		CharString_cut(&baseAbsDir, prev, it - prev, &sub);
+		U64 baseSegLen = baseSlash != U64_MAX ? baseSlash - it : baseLen - it;
+		U64 subSegLen = subSlash != U64_MAX ? subSlash - it : subLen - it;
 
-		CharString sub2 = CharString_createNull();
-		CharString_cut(&baseAbsDir, prev2, it2 - prev2, &sub2);
+		const CharString baseStr = CharString_createRefSizedConst(baseAbsDir.ptr + it, baseSegLen, false);
+		const CharString subStr = CharString_createRefSizedConst(subFileAbsDir.ptr + it, subSegLen, false);
 
-		if(!CharString_equalsStringSensitive(&sub, &sub2))
+		if (!CharString_equalsStringSensitive(&baseStr, &subStr))
 			break;
 
-		subFileLen = it2 + 1;
+		it = (baseSlash != U64_MAX) ? baseSlash + 1 : baseLen;;
+		commonEnd = it;
 	}
+	
+	//Reserve relPath first
 
-	gotoIfError3(clean, CharString_popFrontCount(&resolvedSubFile, CharString_length(absoluteDir), e_rr));
-	gotoIfError3(clean, CharString_popFrontCount(&resolvedSubFile, subFileLen, e_rr));
+	U64 remainingBaseSlashes = CharString_countAllSensitive(&baseAbsDir, '/', commonEnd);
+	U64 reserveSize = 3 * remainingBaseSlashes + (subLen > commonEnd ? subLen - commonEnd : 0);
+	gotoIfError3(clean, CharString_reserve(&relPath, reserveSize, alloc, e_rr));
+
+	//Append ../ as much as needed until we're back to the common folder
 
 	const CharString dotDotSlash = CharString_createRefCStrConst("../");
 
-	for (U64 j = 0; j < baseAbsSlashes - i; ++j)
-		gotoIfError3(clean, CharString_prependString(&resolvedSubFile, &dotDotSlash, alloc, e_rr));
+	U64 j = commonEnd;
+	while (j < baseLen) {
 
-	*result = resolvedSubFile;
-	resolvedSubFile = CharString_createNull();
+		U64 nextNonSlash = CharString_findFirstSensitive(&baseAbsDir, '/', j, 0);
+
+		if (nextNonSlash == j) {
+			++j;
+			continue;
+		}
+
+		if (nextNonSlash == U64_MAX)
+			nextNonSlash = baseLen;
+
+		gotoIfError3(clean, CharString_appendString(&relPath, &dotDotSlash, alloc, e_rr));
+		j = nextNonSlash + 1;
+	}
+
+	//Append the last part that's different
+
+	if (commonEnd < subLen) {
+		CharString remainder = CharString_createRefSizedConst(subFileAbsDir.ptr + commonEnd, subLen - commonEnd, false);
+		gotoIfError3(clean, CharString_appendString(&relPath, &remainder, alloc, e_rr));
+	}
+
+	*result = relPath;
+	relPath = CharString_createNull();
 
 clean:
+	CharString_free(&relPath, alloc);
 	CharString_free(&resolvedBase, alloc);
 	CharString_free(&resolvedSubFile, alloc);
 	return s_uccess;

@@ -2374,6 +2374,10 @@ int main() {
 			gotoIfError(clean, Error_invalidState(0, "EFidiA all test failed"))
 	}
 
+	//File test for disallowed file names and hard to handle cases such as
+	// "", "/", "a/./b", "a/b/../../c", "../outside", "C:/folder", "C:folder", "//virtual/file"
+	//File_resolve and File_makeRelative.
+
 	//
 
 	F64 dt = (Time_now() - now) / (F64)SECOND;
