@@ -27,7 +27,7 @@
 	extern "C" {
 #endif
 
-#ifdef _PLATFORM_TYPE == PLATFORM_WINDOWS
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 	static inline U128 U128_create(const void *data) { return I32x4_load4(data); }
 	static inline U128 U128_createU64x2(U64 a, U64 b) { return I32x4_createFromU64x2(a, b); }

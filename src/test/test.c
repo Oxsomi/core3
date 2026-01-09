@@ -23,39 +23,43 @@
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/container/big_int.h"
+#include "types/container/u128.h"
 #include "types/container/log.h"
 #include "types/base/allocator.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 #include "types/math/type_cast.h"
 #include "types/math/flp.h"
 #include "formats/oiBC/chimera.h"
 #include "types/base/constants.h"
+#include "types/math/quat.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-#include "types/math/quat.h"
+Bool ourAlloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
 
-Error ourAlloc(void *allocator, U64 length, Buffer *output) {
+	Bool s_uccess = true;
 
 	(void)allocator;
 
 	if(!output)
-		return Error_nullPointer(2, "ourAlloc()::output is required");
+		retError(clean, Error_nullPointer(2, "ourAlloc()::output is required"));
 
 	void *ptr = malloc(length);
 
 	if(!ptr)
-		return Error_outOfMemory(0, "ourAlloc() malloc failed");
+		retError(clean, Error_outOfMemory(0, "ourAlloc() malloc failed"));
 
 	*output = Buffer_createManagedPtr(ptr, length);
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-Bool ourFree(void *allocator, Buffer buf) {
+void ourFree(void *allocator, Buffer buf) {
 	(void)allocator;
-	free((U8*)buf.ptr);
-	return true;
+	free((void*)buf.ptrNonConst);
 }
 
 //#define STRICT_VALIDATION
@@ -70,11 +74,13 @@ Bool ourFree(void *allocator, Buffer buf) {
 
 int main() {
 
-	Allocator alloc = (Allocator) {
+	const Allocator allocObj = (Allocator) {
 		.alloc = ourAlloc,
 		.free = ourFree,
 		.ptr = NULL
 	};
+
+	const Allocator *alloc = &allocObj;
 
 	//Fail for big endian systems, because we don't support them.
 
@@ -111,7 +117,8 @@ int main() {
 
 	Buffer emp = Buffer_createNull(), full = Buffer_createNull();
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
-	Error err = Error_none();
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = true;
 	CharString tmp = CharString_createNull();
 	CharString tmpStr = CharString_createNull();
 
@@ -121,44 +128,48 @@ int main() {
 
 	Log_debugLn(alloc, "Testing Buffer");
 
-	gotoIfError(clean, Buffer_createZeroBits(256, alloc, &emp))
-	gotoIfError(clean, Buffer_createOneBits(256, alloc, &full))
+	gotoIfError3(clean, Buffer_createZeroBits(256, alloc, &emp, e_rr));
+	gotoIfError3(clean, Buffer_createOneBits(256, alloc, &full, e_rr));
 
 	if (Buffer_eq(emp, full))
-		gotoIfError(clean, Error_invalidOperation(0, "Buffer_eq test failed"))
+		retError(clean, Error_invalidOperation(0, "Buffer_eq test failed"));
 
-	Buffer_bitwiseNot(emp);
+	gotoIfError3(clean, Buffer_bitwiseNot(emp, e_rr));
 
 	if (!Buffer_eq(emp, full))
-		gotoIfError(clean, Error_invalidOperation(1, "!Buffer_eq test failed"))
+		retError(clean, Error_invalidOperation(1, "!Buffer_eq test failed"));
 
-	Buffer_bitwiseNot(emp);
+	gotoIfError3(clean, Buffer_bitwiseNot(emp, e_rr));
 
-	Buffer_setBitRange(emp, 9, 240);
-	Buffer_unsetBitRange(full, 9, 240);
+	gotoIfError3(clean, Buffer_setBitRange(emp, 9, 240, e_rr));
+	gotoIfError3(clean, Buffer_unsetBitRange(full, 9, 240, e_rr));
 
-	Buffer_bitwiseNot(emp);
+	gotoIfError3(clean, Buffer_bitwiseNot(emp, e_rr));
 
 	if (Buffer_neq(emp, full))
-		gotoIfError(clean, Error_invalidOperation(2, "Buffer_neq test failed"))
+		retError(clean, Error_invalidOperation(2, "Buffer_neq test failed"));
 
 	Buffer_free(&emp, alloc);
 	Buffer_free(&full, alloc);
 
 	//TODO: Test vectors
 	//TODO: Test quaternions
-	//TODO: Test transform
 	//TODO: Test string
 	//TODO: Test math
-	//TODO: Test file
 	//TODO: Test list
+	//TODO: Test archive
+	//TODO: Test texture format
+	//TODO: Test ref ptr?
+	//TODO: Test allocation buffer
+	//TODO: Test buffer more
+	//TODO: Test fixed point
 
 	//Test string to number functions
 
 	{
 		Log_debugLn(alloc, "Testing number to CharString conversions");
 
-		CharString resultsStr[] = {
+		const CharString resultsStr[] = {
 			CharString_createRefCStrConst("0x1234"),
 			CharString_createRefCStrConst("0b10101"),
 			CharString_createRefCStrConst("0o707"),
@@ -166,7 +177,7 @@ int main() {
 			CharString_createRefCStrConst("69420")
 		};
 
-		U64 resultsU64[] = {
+		const U64 resultsU64[] = {
 
 			0x1234,
 			0b10101,
@@ -182,65 +193,68 @@ int main() {
 		//Conversion from number to string
 		//TODO: Perhaps make a generic create that can pick any of them
 
-		gotoIfError(clean, CharString_createHex(resultsU64[0], 0, alloc, &tmpStr))
+		CharStringCreateNumber createNumber = (CharStringCreateNumber) {
+			.v = resultsU64[0],
+			.leadingZeros = 0,
+			.allocator = alloc,
+			.result = &tmpStr
+		};
 
-		if (!CharString_equalsStringSensitive(resultsStr[0], tmpStr)) {
-			CharString_free(&tmpStr, alloc);
-			gotoIfError(clean, Error_invalidState(0, "CharString_createHex test failed"))
-		}
+		gotoIfError3(clean, CharString_createHex(&createNumber, e_rr));
 
-		CharString_free(&tmpStr, alloc);
-		gotoIfError(clean, CharString_createBin(resultsU64[1], 0, alloc, &tmpStr))
-
-		if (!CharString_equalsStringSensitive(resultsStr[1], tmpStr)) {
-			CharString_free(&tmpStr, alloc);
-			gotoIfError(clean, Error_invalidState(1, "CharString_createBin test failed"))
-		}
+		if (!CharString_equalsStringSensitive(resultsStr + 0, &tmpStr))
+			retError(clean, Error_invalidState(0, "CharString_createHex test failed"));
 
 		CharString_free(&tmpStr, alloc);
-		gotoIfError(clean, CharString_createOct(resultsU64[2], 0, alloc, &tmpStr))
+		createNumber.v = resultsU64[1];
+		gotoIfError3(clean, CharString_createBin(&createNumber, e_rr));
 
-		if (!CharString_equalsStringSensitive(resultsStr[2], tmpStr)) {
-			CharString_free(&tmpStr, alloc);
-			gotoIfError(clean, Error_invalidState(2, "CharString_createOct test failed"))
-		}
-
-		CharString_free(&tmpStr, alloc);
-		gotoIfError(clean, CharString_createNyto(resultsU64[3], 0, alloc, &tmpStr))
-
-		if (!CharString_equalsStringSensitive(resultsStr[3], tmpStr)) {
-			CharString_free(&tmpStr, alloc);
-			gotoIfError(clean, Error_invalidState(3, "CharString_createNyto test failed"))
-		}
+		if (!CharString_equalsStringSensitive(resultsStr + 1, &tmpStr))
+			retError(clean, Error_invalidState(1, "CharString_createBin test failed"));
 
 		CharString_free(&tmpStr, alloc);
-		gotoIfError(clean, CharString_createDec(resultsU64[4], 0, alloc, &tmpStr))
+		createNumber.v = resultsU64[2];
+		gotoIfError3(clean, CharString_createOct(&createNumber, e_rr));
 
-		if (!CharString_equalsStringSensitive(resultsStr[4], tmpStr)) {
-			CharString_free(&tmpStr, alloc);
-			gotoIfError(clean, Error_invalidState(4, "CharString_createDec test failed"))
-		}
+		if (!CharString_equalsStringSensitive(resultsStr + 2, &tmpStr))
+			retError(clean, Error_invalidState(2, "CharString_createOct test failed"));
+
+		CharString_free(&tmpStr, alloc);
+		createNumber.v = resultsU64[3];
+		gotoIfError3(clean, CharString_createNyto(&createNumber, e_rr));
+
+		if (!CharString_equalsStringSensitive(resultsStr + 3, &tmpStr))
+			retError(clean, Error_invalidState(3, "CharString_createNyto test failed"));
+
+		CharString_free(&tmpStr, alloc);
+		createNumber.v = resultsU64[4];
+		gotoIfError3(clean, CharString_createDec(&createNumber, e_rr));
+
+		if (!CharString_equalsStringSensitive(resultsStr + 4, &tmpStr))
+			retError(clean, Error_invalidState(4, "CharString_createDec test failed"));
 
 		//Conversion from string to number
 
 		U64 tmpRes[5] = { 0 };
 
-		Bool success = true;
+		if (!CharString_parseHex(resultsStr[0], tmpRes + 0))
+			retError(clean, Error_invalidState(0, "CharString_parseHex failed"));
 
-		success &= CharString_parseHex(resultsStr[0], tmpRes + 0);
-		success &= CharString_parseBin(resultsStr[1], tmpRes + 1);
-		success &= CharString_parseOct(resultsStr[2], tmpRes + 2);
-		success &= CharString_parseNyto(resultsStr[3], tmpRes + 3);
-		success &= CharString_parseDec(resultsStr[4], tmpRes + 4);
+		if(!CharString_parseBin(resultsStr[1], tmpRes + 1))
+			retError(clean, Error_invalidState(0, "CharString_parseBin failed"));
 
-		if(!success)
-			gotoIfError(clean, Error_invalidState(5, "CharString_parseHex/Bin/Oct/Nyto/Dec returned error(s)"))
+		if(!CharString_parseOct(resultsStr[2], tmpRes + 2))
+			retError(clean, Error_invalidState(0, "CharString_parseOct failed"));
 
-		for(U64 i = 0; i < sizeof(resultsStr) / sizeof(resultsStr[0]); ++i)
-			success &= tmpRes[i] == resultsU64[i];
+		if(!CharString_parseNyto(resultsStr[3], tmpRes + 3))
+			retError(clean, Error_invalidState(0, "CharString_parseNyto failed"));
 
-		if(!success)
-			gotoIfError(clean, Error_invalidState(6, "CharString_parseHex/Bin/Oct/Nyto/Dec test failed"))
+		if(!CharString_parseDec(resultsStr[4], tmpRes + 4))
+			retError(clean, Error_invalidState(0, "CharString_parseDec failed"));
+
+		for (U32 i = 0; i < (U32)(sizeof(resultsStr) / sizeof(resultsStr[0])); ++i)
+			if (tmpRes[i] != resultsU64[i])
+				retError(clean, Error_invalidState(i, "CharString_parseHex/Bin/Oct/Nyto/Dec test failed"));
 	}
 
 	//Test MD5 function
@@ -253,7 +267,7 @@ int main() {
 	Log_debugLn(alloc, "Testing Buffer MD5");
 
 	{
-		CharString md5Strs[] = {
+		const CharString md5Strs[] = {
 			CharString_createRefCStrConst(""),
 			CharString_createRefCStrConst("a"),
 			CharString_createRefCStrConst("abc"),
@@ -264,7 +278,7 @@ int main() {
 			CharString_createRefCStrConst("The quick brown fox jumps over the lazy dog.")
 		};
 
-		I32x4 md5Values[] = {
+		const I32x4 md5Values[] = {
 
 			//Constants
 
@@ -362,25 +376,17 @@ int main() {
 			I32x4_createFromU64x2(0xAB40B115CE85A866, 0xA20F7E9B7E7A7E0F),	//191 * '\0'
 			I32x4_createFromU64x2(0xB7DD5E0194EE0AC0, 0x8A4B802CB73D867F),	//192 * '\0'
 			I32x4_createFromU64x2(0xA9320A41AC8208A5, 0x4979900A8FF67DD9)	//193 * '\0'
-
 		};
 
-		U64 md5StrCount = sizeof(md5Strs) / sizeof(md5Strs[0]);
+		const U64 md5StrCount = sizeof(md5Strs) / sizeof(md5Strs[0]);
 
 		for(U64 i = 0; i < md5StrCount; ++i) {
 
-			I32x4 hash = Buffer_md5(CharString_bufferConst(md5Strs[i]));
-			I32x4 targ = I32x4_yxwz(md5Values[i]);
+			const I32x4 hash = Buffer_md5(CharString_bufferConst(md5Strs[i]));
+			const I32x4 targ = I32x4_yxwz(md5Values[i]);
 
-			/*Log_debugLn(
-				alloc,
-				"%X %X %X %X and %X %X %X %X",
-				I32x4_x(hash), I32x4_y(hash), I32x4_z(hash), I32x4_w(hash),
-				I32x4_x(targ), I32x4_y(targ), I32x4_z(targ), I32x4_w(targ)
-			);*/
-
-			if(!I32x4_eq4(hash, targ))
-				gotoIfError(clean, Error_invalidOperation(3, "MD5 test (strs) failed"))
+			if (!I32x4_eq4(hash, targ))
+				gotoIfError(clean, Error_invalidOperation(3, "MD5 test (strs) failed"));
 		}
 
 		const U8 empty[194] = { 0 };
@@ -392,11 +398,11 @@ int main() {
 			if(count >= 72)
 				count = count < 75 ? (count - 72 + 127) : (count - 75 + 191);
 
-			I32x4 hash = Buffer_md5(Buffer_createRefConst(empty, count));
-			I32x4 targ = I32x4_yxwz(md5Values[i]);
+			const I32x4 hash = Buffer_md5(Buffer_createRefConst(empty, count));
+			const I32x4 targ = I32x4_yxwz(md5Values[i]);
 
-			if(!I32x4_eq4(hash, targ))
-				gotoIfError(clean, Error_invalidOperation(3, "MD5 test (data) failed"))
+			if (!I32x4_eq4(hash, targ))
+				gotoIfError(clean, Error_invalidOperation(3, "MD5 test (data) failed"));
 		}
 	}
 
@@ -405,34 +411,36 @@ int main() {
 
 	Log_debugLn(alloc, "Testing Buffer CRC32C");
 
-	typedef struct TestCRC32C {
-		const C8 *str;
-		const C8 v[5];
-		U8 padding[3];
-	} TestCRC32C;
+	{
+		typedef struct TestCRC32C {
+			const C8 *str;
+			const C8 v[5];
+			U8 padding[3];
+		} TestCRC32C;
 
-	static const TestCRC32C TEST_CRC32C[] = {
-		{ "", "\x00\x00\x00\x00", { 0 } },
-		{ "a", "\x30\x43\xd0\xc1", { 0 } },
-		{ "abc", "\xb7\x3f\x4b\x36", { 0 } },
-		{ "message digest", "\xd0\x79\xbd\x02", { 0 } },
-		{ "abcdefghijklmnopqrstuvwxyz", "\x25\xef\xe6\x9e", { 0 } },
-		{ "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "\x7d\xd5\x45\xa2", { 0 } },
-		{ "12345678901234567890123456789012345678901234567890123456789012345678901234567890", "\x81\x67\x7a\x47", { 0 } },
-		{ "123456789", "\x83\x92\x06\xe3", { 0 } }
-	};
+		static const TestCRC32C TEST_CRC32C[] = {
+			{ "", "\x00\x00\x00\x00", { 0 } },
+			{ "a", "\x30\x43\xd0\xc1", { 0 } },
+			{ "abc", "\xb7\x3f\x4b\x36", { 0 } },
+			{ "message digest", "\xd0\x79\xbd\x02", { 0 } },
+			{ "abcdefghijklmnopqrstuvwxyz", "\x25\xef\xe6\x9e", { 0 } },
+			{ "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "\x7d\xd5\x45\xa2", { 0 } },
+			{ "12345678901234567890123456789012345678901234567890123456789012345678901234567890", "\x81\x67\x7a\x47", { 0 } },
+			{ "123456789", "\x83\x92\x06\xe3", { 0 } }
+		};
 
-	for (U64 i = 0; i < sizeof(TEST_CRC32C) / sizeof(TEST_CRC32C[0]); ++i) {
+		for (U64 i = 0; i < sizeof(TEST_CRC32C) / sizeof(TEST_CRC32C[0]); ++i) {
 
-		Buffer buf = Buffer_createRefConst(
-			TEST_CRC32C[i].str, CharString_calcStrLen(TEST_CRC32C[i].str, U64_MAX)
-		);
+			const Buffer buf = Buffer_createRefConst(
+				TEST_CRC32C[i].str, CharString_calcStrLen(TEST_CRC32C[i].str, U64_MAX)
+			);
 
-		U32 groundTruth = *(const U32*) TEST_CRC32C[i].v;
-		U32 ours = Buffer_crc32c(buf);
+			const U32 groundTruth = *(const U32*) TEST_CRC32C[i].v;
+			const U32 ours = Buffer_crc32c(buf);
 
-		if(groundTruth != ours)
-			gotoIfError(clean, Error_invalidOperation(3, "CRC32C test failed"))
+			if(groundTruth != ours)
+				gotoIfError(clean, Error_invalidOperation(3, "CRC32C test failed"))
+		}
 	}
 
 	//Test SHA256 function
@@ -442,101 +450,103 @@ int main() {
 
 	Log_debugLn(alloc, "Testing Buffer SHA256");
 
-	static const U32 resultHashes[][8] = {
-		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },
-		{ 0xBA7816BF, 0x8F01CFEA, 0x414140DE, 0x5DAE2223, 0xB00361A3, 0x96177A9C, 0xB410FF61, 0xF20015AD },
-		{ 0xCDC76E5C, 0x9914FB92, 0x81A1C7E2, 0x84D73E67, 0xF1809A48, 0xA497200E, 0x046D39CC, 0xC7112CD0 },
-		{ 0x067C5312, 0x69735CA7, 0xF541FDAC, 0xA8F0DC76, 0x305D3CAD, 0xA140F893, 0x72A410FE, 0x5EFF6E4D },
-		{ 0x038051E9, 0xC324393B, 0xD1CA1978, 0xDD0952C2, 0xAA3742CA, 0x4F1BD5CD, 0x4611CEA8, 0x3892D382 },
-		{ 0x248D6A61, 0xD20638B8, 0xE5C02693, 0x0C3E6039, 0xA33CE459, 0x64FF2167, 0xF6ECEDD4, 0x19DB06C1 },
-		{ 0xCF5B16A7, 0x78AF8380, 0x036CE59E, 0x7B049237, 0x0B249B11, 0xE8F07A51, 0xAFAC4503, 0x7AFEE9D1 },
-		{ 0xA8AE6E6E, 0xE929ABEA, 0x3AFCFC52, 0x58C8CCD6, 0xF85273E0, 0xD4626D26, 0xC7279F32, 0x50F77C8E },
-		{ 0x057EE79E, 0xCE0B9A84, 0x9552AB8D, 0x3C335FE9, 0xA5F1C46E, 0xF5F1D9B1, 0x90C29572, 0x8628299C },
-		{ 0x2A6AD82F, 0x3620D3EB, 0xE9D678C8, 0x12AE1231, 0x2699D673, 0x240D5BE8, 0xFAC0910A, 0x70000D93 },
-		{ 0x68325720, 0xAABD7C82, 0xF30F554B, 0x313D0570, 0xC95ACCBB, 0x7DC4B5AA, 0xE11204C0, 0x8FFE732B },
-		{ 0x7ABC22C0, 0xAE5AF26C, 0xE93DBB94, 0x433A0E0B, 0x2E119D01, 0x4F8E7F65, 0xBD56C61C, 0xCCCD9504 },
-		{ 0x02779466, 0xCDEC1638, 0x11D07881, 0x5C633F21, 0x90141308, 0x1449002F, 0x24AA3E80, 0xF0B88EF7 },
-		{ 0xD4817AA5, 0x497628E7, 0xC77E6B60, 0x6107042B, 0xBBA31308, 0x88C5F47A, 0x375E6179, 0xBE789FBB },
-		{ 0x65A16CB7, 0x861335D5, 0xACE3C607, 0x18B5052E, 0x44660726, 0xDA4CD13B, 0xB745381B, 0x235A1785 },
-		{ 0xF5A5FD42, 0xD16A2030, 0x2798EF6E, 0xD309979B, 0x43003D23, 0x20D9F0E8, 0xEA9831A9, 0x2759FB4B },
-		{ 0x541B3E9D, 0xAA09B20B, 0xF85FA273, 0xE5CBD3E8, 0x0185AA4E, 0xC298E765, 0xDB87742B, 0x70138A53 },
-		{ 0xC2E68682, 0x3489CED2, 0x017F6059, 0xB8B23931, 0x8B6364F6, 0xDCD835D0, 0xA519105A, 0x1EADD6E4 },
-		{ 0xF4D62DDE, 0xC0F3DD90, 0xEA1380FA, 0x16A5FF8D, 0xC4C54B21, 0x740650F2, 0x4AFC4120, 0x903552B0 },
-		{ 0xD29751F2, 0x649B32FF, 0x572B5E0A, 0x9F541EA6, 0x60A50F94, 0xFF0BEEDF, 0xB0B692B9, 0x24CC8025 },
-		{ 0x15A1868C, 0x12CC5395, 0x1E182344, 0x277447CD, 0x0979536B, 0xADCC512A, 0xD24C67E9, 0xB2D4F3DD },
-		{ 0x461C19A9, 0x3BD4344F, 0x9215F5EC, 0x64357090, 0x342BC66B, 0x15A14831, 0x7D276E31, 0xCBC20B53 },
-		{ 0xC23CE8A7, 0x895F4B21, 0xEC0DAF37, 0x920AC0A2, 0x62A22004, 0x5A03EB2D, 0xFED48EF9, 0xB05AABEA }
-	};
+	{
+		static const U32 resultHashes[][8] = {
+			{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },
+			{ 0xBA7816BF, 0x8F01CFEA, 0x414140DE, 0x5DAE2223, 0xB00361A3, 0x96177A9C, 0xB410FF61, 0xF20015AD },
+			{ 0xCDC76E5C, 0x9914FB92, 0x81A1C7E2, 0x84D73E67, 0xF1809A48, 0xA497200E, 0x046D39CC, 0xC7112CD0 },
+			{ 0x067C5312, 0x69735CA7, 0xF541FDAC, 0xA8F0DC76, 0x305D3CAD, 0xA140F893, 0x72A410FE, 0x5EFF6E4D },
+			{ 0x038051E9, 0xC324393B, 0xD1CA1978, 0xDD0952C2, 0xAA3742CA, 0x4F1BD5CD, 0x4611CEA8, 0x3892D382 },
+			{ 0x248D6A61, 0xD20638B8, 0xE5C02693, 0x0C3E6039, 0xA33CE459, 0x64FF2167, 0xF6ECEDD4, 0x19DB06C1 },
+			{ 0xCF5B16A7, 0x78AF8380, 0x036CE59E, 0x7B049237, 0x0B249B11, 0xE8F07A51, 0xAFAC4503, 0x7AFEE9D1 },
+			{ 0xA8AE6E6E, 0xE929ABEA, 0x3AFCFC52, 0x58C8CCD6, 0xF85273E0, 0xD4626D26, 0xC7279F32, 0x50F77C8E },
+			{ 0x057EE79E, 0xCE0B9A84, 0x9552AB8D, 0x3C335FE9, 0xA5F1C46E, 0xF5F1D9B1, 0x90C29572, 0x8628299C },
+			{ 0x2A6AD82F, 0x3620D3EB, 0xE9D678C8, 0x12AE1231, 0x2699D673, 0x240D5BE8, 0xFAC0910A, 0x70000D93 },
+			{ 0x68325720, 0xAABD7C82, 0xF30F554B, 0x313D0570, 0xC95ACCBB, 0x7DC4B5AA, 0xE11204C0, 0x8FFE732B },
+			{ 0x7ABC22C0, 0xAE5AF26C, 0xE93DBB94, 0x433A0E0B, 0x2E119D01, 0x4F8E7F65, 0xBD56C61C, 0xCCCD9504 },
+			{ 0x02779466, 0xCDEC1638, 0x11D07881, 0x5C633F21, 0x90141308, 0x1449002F, 0x24AA3E80, 0xF0B88EF7 },
+			{ 0xD4817AA5, 0x497628E7, 0xC77E6B60, 0x6107042B, 0xBBA31308, 0x88C5F47A, 0x375E6179, 0xBE789FBB },
+			{ 0x65A16CB7, 0x861335D5, 0xACE3C607, 0x18B5052E, 0x44660726, 0xDA4CD13B, 0xB745381B, 0x235A1785 },
+			{ 0xF5A5FD42, 0xD16A2030, 0x2798EF6E, 0xD309979B, 0x43003D23, 0x20D9F0E8, 0xEA9831A9, 0x2759FB4B },
+			{ 0x541B3E9D, 0xAA09B20B, 0xF85FA273, 0xE5CBD3E8, 0x0185AA4E, 0xC298E765, 0xDB87742B, 0x70138A53 },
+			{ 0xC2E68682, 0x3489CED2, 0x017F6059, 0xB8B23931, 0x8B6364F6, 0xDCD835D0, 0xA519105A, 0x1EADD6E4 },
+			{ 0xF4D62DDE, 0xC0F3DD90, 0xEA1380FA, 0x16A5FF8D, 0xC4C54B21, 0x740650F2, 0x4AFC4120, 0x903552B0 },
+			{ 0xD29751F2, 0x649B32FF, 0x572B5E0A, 0x9F541EA6, 0x60A50F94, 0xFF0BEEDF, 0xB0B692B9, 0x24CC8025 },
+			{ 0x15A1868C, 0x12CC5395, 0x1E182344, 0x277447CD, 0x0979536B, 0xADCC512A, 0xD24C67E9, 0xB2D4F3DD },
+			{ 0x461C19A9, 0x3BD4344F, 0x9215F5EC, 0x64357090, 0x342BC66B, 0x15A14831, 0x7D276E31, 0xCBC20B53 },
+			{ 0xC23CE8A7, 0x895F4B21, 0xEC0DAF37, 0x920AC0A2, 0x62A22004, 0x5A03EB2D, 0xFED48EF9, 0xB05AABEA }
+		};
 
-	inputs[1] = CharString_createRefCStrConst("abc");
+		inputs[1] = CharString_createRefCStrConst("abc");
 
-	gotoIfError(clean, CharString_create('a', MEGA, alloc, inputs + 2))
+		gotoIfError3(clean, CharString_create('a', MEGA, alloc, inputs + 2, e_rr));
 
-	inputs[3] = CharString_createRefSizedConst(
-		"\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16, true
-	);
+		inputs[3] = CharString_createRefSizedConst(
+			"\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16, true
+		);
 
-	inputs[4] = CharString_createRefSizedConst(
-		"\xDE\x18\x89\x41\xA3\x37\x5D\x3A\x8A\x06\x1E\x67\x57\x6E\x92\x6D\xC7\x1A\x7F\xA3\xF0"
-		"\xCC\xEB\x97\x45\x2B\x4D\x32\x27\x96\x5F\x9E\xA8\xCC\x75\x07\x6D\x9F\xB9\xC5\x41\x7A"
-		"\xA5\xCB\x30\xFC\x22\x19\x8B\x34\x98\x2D\xBB\x62\x9E",
-		55,
-		true
-	);
+		inputs[4] = CharString_createRefSizedConst(
+			"\xDE\x18\x89\x41\xA3\x37\x5D\x3A\x8A\x06\x1E\x67\x57\x6E\x92\x6D\xC7\x1A\x7F\xA3\xF0"
+			"\xCC\xEB\x97\x45\x2B\x4D\x32\x27\x96\x5F\x9E\xA8\xCC\x75\x07\x6D\x9F\xB9\xC5\x41\x7A"
+			"\xA5\xCB\x30\xFC\x22\x19\x8B\x34\x98\x2D\xBB\x62\x9E",
+			55,
+			true
+		);
 
-	inputs[5] = CharString_createRefCStrConst("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
+		inputs[5] = CharString_createRefCStrConst("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
 
-	inputs[6] = CharString_createRefCStrConst(
-		"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"
-	);
+		inputs[6] = CharString_createRefCStrConst(
+			"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"
+		);
 
-	inputs[7] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
-	inputs[8] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde");
-	inputs[9] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0");
+		inputs[7] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+		inputs[8] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde");
+		inputs[9] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0");
 
-	inputs[10] = CharString_createRefSizedConst("\xBD", 1, true);
-	inputs[11] = CharString_createRefSizedConst("\xC9\x8C\x8E\x55", 4, true);
+		inputs[10] = CharString_createRefSizedConst("\xBD", 1, true);
+		inputs[11] = CharString_createRefSizedConst("\xC9\x8C\x8E\x55", 4, true);
 
-	U8 data7[1001] = { 0 }, data8[1000], data9[1005];
+		U8 data7[1001] = { 0 }, data8[1000], data9[1005];
 
-	memset(data8, 0x41, sizeof(data8));
-	memset(data9, 0x55, sizeof(data9));
+		gotoIfError3(clean, Buffer_setAllToU8(Buffer_createRef(data8, sizeof(data8)), 0x41, e_rr));
+		gotoIfError3(clean, Buffer_setAllToU8(Buffer_createRef(data9, sizeof(data9)), 0x55, e_rr));
 
-	inputs[12] = CharString_createRefSizedConst((const C8*)data7, 55, true);
-	inputs[13] = CharString_createRefSizedConst((const C8*)data7, 56, true);
-	inputs[14] = CharString_createRefSizedConst((const C8*)data7, 57, true);
-	inputs[15] = CharString_createRefSizedConst((const C8*)data7, 64, true);
-	inputs[16] = CharString_createRefSizedConst((const C8*)data7, 1000, true);
-	inputs[17] = CharString_createRefSizedConst((const C8*)data8, 1000, false);
-	inputs[18] = CharString_createRefSizedConst((const C8*)data9, 1005, false);
+		inputs[12] = CharString_createRefSizedConst((const C8*)data7, 55, true);
+		inputs[13] = CharString_createRefSizedConst((const C8*)data7, 56, true);
+		inputs[14] = CharString_createRefSizedConst((const C8*)data7, 57, true);
+		inputs[15] = CharString_createRefSizedConst((const C8*)data7, 64, true);
+		inputs[16] = CharString_createRefSizedConst((const C8*)data7, 1000, true);
+		inputs[17] = CharString_createRefSizedConst((const C8*)data8, 1000, false);
+		inputs[18] = CharString_createRefSizedConst((const C8*)data9, 1005, false);
 
-	//More extreme checks. Don't want to run this every time.
+		//More extreme checks. Don't want to run this every time.
 
-	#if EXTRA_CHECKS
+		#if EXTRA_CHECKS
 
-		gotoIfError(clean, CharString_create('\x5A', 536870912, alloc, inputs + 20))
-		gotoIfError(clean, CharString_create('\0', 1090519040, alloc, inputs + 21))
-		gotoIfError(clean, CharString_create('\x42', 1610612798, alloc, inputs + 22))
+			gotoIfError3(clean, CharString_create('\x5A', 536870912, alloc, inputs + 20, e_rr));
+			gotoIfError3(clean, CharString_create('\0', 1090519040, alloc, inputs + 21, e_rr));
+			gotoIfError3(clean, CharString_create('\x42', 1610612798, alloc, inputs + 22, e_rr));
 
-		inputs[19] = CharString_createRefSizedConst(inputs[21].ptr, 1000000, true);
+			inputs[19] = CharString_createRefSizedConst(inputs[21].ptr, 1000000, true);
 
-	#endif
+		#endif
 
-	//Validate inputs
+		//Validate inputs
 
-	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i) {
+		for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i) {
 
-		U32 result[8];
-		Buffer_sha256(CharString_bufferConst(inputs[i]), result);
+			U32 result[8];
+			Buffer_sha256(CharString_bufferConst(inputs[i]), result);
 
-		Bool b = Buffer_eq(Buffer_createRefConst(result, 32), Buffer_createRefConst(resultHashes[i], 32));
+			const Bool b = Buffer_eq(Buffer_createRefConst(result, 32), Buffer_createRefConst(resultHashes[i], 32));
 
-		if(!b)
-			gotoIfError(clean, Error_invalidOperation(4, "Buffer_sha256 test failed"))
+			if(!b)
+				gotoIfError(clean, Error_invalidOperation(4, "Buffer_sha256 test failed"))
+		}
+
+		for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i)
+			CharString_free(&inputs[i], alloc);
 	}
-
-	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i)
-		CharString_free(&inputs[i], alloc);
 
 	//Test big endian conversions
 
@@ -546,14 +556,14 @@ int main() {
 	U32 be32 = U32_swapEndianness(0x12345678);
 	U64 be64 = U64_swapEndianness(0x123456789ABCDEF0);
 
-	if(be16 != 0x3412)
-		gotoIfError(clean, Error_invalidState(5, "Little endian to big failed on U16"))
+	if (be16 != 0x3412)
+		retError(clean, Error_invalidState(5, "Little endian to big failed on U16"));
 
-	if(be32 != 0x78563412)
-		gotoIfError(clean, Error_invalidState(6, "Little endian to big failed on U32"))
+	if (be32 != 0x78563412)
+		retError(clean, Error_invalidState(6, "Little endian to big failed on U32"));
 
-	if(be64 != 0xF0DEBC9A78563412)
-		gotoIfError(clean, Error_invalidState(7, "Little endian to big failed on U64"))
+	if (be64 != 0xF0DEBC9A78563412)
+		retError(clean, Error_invalidState(7, "Little endian to big failed on U64"));
 
 	//Test encryption
 
@@ -566,7 +576,7 @@ int main() {
 	{
 		Log_debugLn(alloc, "Testing Buffer encrypt/decrypt (AES256)");
 
-		CharString testKeys[] = {
+		const CharString testKeys[] = {
 
 			CharString_createRefSizedConst(
 				"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -653,7 +663,7 @@ int main() {
 			)
 		};
 
-		CharString testPlainText[] = {
+		const CharString testPlainText[] = {
 
 			CharString_createNull(),
 
@@ -724,7 +734,7 @@ int main() {
 			)
 		};
 
-		CharString additionalData[] = {
+		const CharString additionalData[] = {
 
 			CharString_createNull(),
 			CharString_createNull(),
@@ -808,7 +818,7 @@ int main() {
 			)
 		};
 
-		const C8 ivs[][13] = {
+		static const C8 ivs[][13] = {
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
 			"\xCA\xFE\xBA\xBE\xFA\xCE\xDB\xAD\xDE\xCA\xF8\x88",
@@ -823,7 +833,7 @@ int main() {
 			"\x7A\xE8\xE2\xCA\x4E\xC5\x00\x01\x2E\x58\x49\x5C"
 		};
 
-		CharString results[] = {
+		const CharString results[] = {
 
 			CharString_createRefSizedConst(
 				"\x53\x0F\x8A\xFB\xC7\x45\x36\xB9\xA9\x63\xB4\xF1\xC4\xCB\x73\x8B",		//Tag (iv is prepended automatically)
@@ -930,26 +940,33 @@ int main() {
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
 
-			gotoIfError(clean, CharString_createCopy(testPlainText[i], alloc, &tmp))
+			gotoIfError3(clean, CharString_createCopy(testPlainText[i], alloc, &tmp, e_rr));
 
 			//Encrypt plain text
 
 			I32x4 tag = I32x4_zero();
 
-			gotoIfError(clean, Buffer_encrypt(
-				CharString_buffer(tmp),
-				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_AES256GCM,
-				EBufferEncryptionFlags_None,
-				(U32*) testKeys[i].ptr,
-				&iv,
-				&tag
-			))
+			Buffer target = CharString_buffer(tmp);
+			Buffer addDat = CharString_bufferConst(additionalData[i]);
+
+			BufferEncrypt encrypt = (BufferEncrypt) {
+				.target = &target,
+				.additionalData = &addDat,
+				.type = EBufferEncryptionType_AES256GCM,
+				.flags = EBufferEncryptionFlags_None,
+				.nonConstEncrypt = {
+					.key = (U32*) testKeys[i].ptr,
+					.tag = &tag,
+					.iv = &iv
+				}
+			};
+
+			gotoIfError3(clean, Buffer_encrypt(&encrypt, e_rr));
 
 			//Check size
 
-			if(CharString_length(tmp) + 16 != CharString_length(results[i]))
-				gotoIfError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"))
+			if (CharString_length(tmp) + 16 != CharString_length(results[i]))
+				retError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"));
 
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
@@ -959,38 +976,26 @@ int main() {
 				Buffer_createRefConst(results[i].ptr + CharString_length(tmp), sizeof(I32x4))
 			);
 
-			if(I32x4_any(I32x4_neq(tag, tmpTag)))
-				gotoIfError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"))
+			if (I32x4_any(I32x4_neq(tag, tmpTag)))
+				retError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"));
 
 			//Check result
 
-			Bool b = Buffer_eq(
+			const Bool b = Buffer_eq(
 				Buffer_createRefConst(results[i].ptr, CharString_length(testPlainText[i])),
 				CharString_bufferConst(tmp)
 			);
 
-			if(!b)
-				gotoIfError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"))
+			if (!b)
+				retError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"));
 
 			//Decrypt the encrypted string and verify if it decrypts to the same thing
 
-			gotoIfError(clean, Buffer_decrypt(
-				CharString_buffer(tmp),
-				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_AES256GCM,
-				(const U32*) testKeys[i].ptr,
-				tag,
-				iv
-			))
+			gotoIfError3(clean, Buffer_decrypt(&encrypt, e_rr));
 
 			//Check result
 
-			b = Buffer_eq(
-				CharString_bufferConst(testPlainText[i]),
-				CharString_bufferConst(tmp)
-			);
-
-			if(!b)
+			if(Buffer_neq(CharString_bufferConst(testPlainText[i]), CharString_bufferConst(tmp)))
 				gotoIfError(clean, Error_invalidState(4, "Buffer_decrypt failed"))
 
 			CharString_free(&tmp, alloc);
@@ -1000,7 +1005,7 @@ int main() {
 	{
 		Log_debugLn(alloc, "Testing Buffer encrypt/decrypt (AES128)");
 
-		CharString testKeys[] = {
+		const CharString testKeys[] = {
 			CharString_createRefSizedConst("\xAD\x7A\x2B\xD0\x3E\xAC\x83\x5A\x6F\x62\x0F\xDC\xB5\x06\xB3\x45", 16, true),
 			CharString_createRefSizedConst("\xAD\x7A\x2B\xD0\x3E\xAC\x83\x5A\x6F\x62\x0F\xDC\xB5\x06\xB3\x45", 16, true),
 			CharString_createRefSizedConst("\x07\x1B\x11\x3B\x0C\xA7\x43\xFE\xCC\xCF\x3D\x05\x1F\x73\x73\x82", 16, true),
@@ -1015,7 +1020,7 @@ int main() {
 			CharString_createRefSizedConst("\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08", 16, true)
 		};
 
-		CharString testPlainText[] = {
+		const CharString testPlainText[] = {
 			CharString_createNull(),
 			CharString_createRefSizedConst(
 				"\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C"
@@ -1067,7 +1072,7 @@ int main() {
 			)
 		};
 
-		CharString additionalData[] = {
+		const CharString additionalData[] = {
 
 			CharString_createRefSizedConst(
 				"\xD6\x09\xB1\xF0\x56\x63\x7A\x0D\x46\xDF\x99\x8D\x88\xE5\x22\x2A"
@@ -1150,7 +1155,7 @@ int main() {
 			)
 		};
 
-		const C8 ivs[][13] = {
+		static const C8 ivs[][13] = {
 			"\x12\x15\x35\x24\xC0\x89\x5E\x81\xB2\xC2\x84\x65",
 			"\x12\x15\x35\x24\xC0\x89\x5E\x81\xB2\xC2\x84\x65",
 			"\xF0\x76\x1E\x8D\xCD\x3D\x00\x01\x76\xD4\x57\xED",
@@ -1165,7 +1170,7 @@ int main() {
 			"\xCA\xFE\xBA\xBE\xFA\xCE\xDB\xAD\xDE\xCA\xF8\x88"
 		};
 
-		CharString results[] = {
+		const CharString results[] = {
 
 			CharString_createRefSizedConst("\xF0\x94\x78\xA9\xB0\x90\x07\xD0\x6F\x46\xE9\xB6\xA1\xDA\x25\xDD", 16, true),
 
@@ -1245,26 +1250,33 @@ int main() {
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
 
-			gotoIfError(clean, CharString_createCopy(testPlainText[i], alloc, &tmp))
+			gotoIfError3(clean, CharString_createCopy(testPlainText[i], alloc, &tmp, e_rr));
 
 			//Encrypt plain text
 
 			I32x4 tag = I32x4_zero();
 
-			gotoIfError(clean, Buffer_encrypt(
-				CharString_buffer(tmp),
-				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_AES128GCM,
-				EBufferEncryptionFlags_None,
-				(U32*) testKeys[i].ptr,
-				&iv,
-				&tag
-			))
+			Buffer target = CharString_buffer(tmp);
+			Buffer addDat = CharString_bufferConst(additionalData[i]);
+
+			BufferEncrypt encrypt = (BufferEncrypt) {
+				.target = &target,
+				.additionalData = &addDat,
+				.type = EBufferEncryptionType_AES128GCM,
+				.flags = EBufferEncryptionFlags_None,
+				.nonConstEncrypt = {
+					.key = (U32*) testKeys[i].ptr,
+					.tag = &tag,
+					.iv = &iv
+				}
+			};
+
+			gotoIfError3(clean, Buffer_encrypt(&encrypt, e_rr));
 
 			//Check size
 
 			if(CharString_length(tmp) + 16 != CharString_length(results[i]))
-				gotoIfError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"))
+				retError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"));
 
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
@@ -1274,8 +1286,8 @@ int main() {
 				Buffer_createRefConst(results[i].ptr + CharString_length(tmp), sizeof(I32x4))
 			);
 
-			if(I32x4_any(I32x4_neq(tag, tmpTag)))
-				gotoIfError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"))
+			if (I32x4_any(I32x4_neq(tag, tmpTag)))
+				retError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"));
 
 			//Check result
 
@@ -1284,29 +1296,17 @@ int main() {
 				CharString_bufferConst(tmp)
 			);
 
-			if(!b)
-				gotoIfError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"))
+			if (!b)
+				retError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"));
 
 			//Decrypt the encrypted string and verify if it decrypts to the same thing
 
-			gotoIfError(clean, Buffer_decrypt(
-				CharString_buffer(tmp),
-				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_AES128GCM,
-				(const U32*) testKeys[i].ptr,
-				tag,
-				iv
-			))
+			gotoIfError3(clean, Buffer_decrypt(&encrypt, e_rr));
 
 			//Check result
 
-			b = Buffer_eq(
-				CharString_bufferConst(testPlainText[i]),
-				CharString_bufferConst(tmp)
-			);
-
-			if(!b)
-				gotoIfError(clean, Error_invalidState(4, "Buffer_decrypt failed"))
+			if (Buffer_neq(CharString_bufferConst(testPlainText[i]), CharString_bufferConst(tmp)))
+				retError(clean, Error_invalidState(4, "Buffer_decrypt failed"));
 
 			CharString_free(&tmp, alloc);
 		}
@@ -1356,7 +1356,7 @@ int main() {
 				const U64 doubEmu64  = *(const U64*) doubEmuv;
 
 				if (doubEmu64 != doubTarg64)
-					gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F32_castF64 returned invalid data"))
+					retError(clean, Error_invalidState((U32)((i << 1) | j), "F32_castF64 returned invalid data"));
 			}
 		}
 
@@ -1365,10 +1365,10 @@ int main() {
 		U64 N = 1024;
 
 		Buffer_free(&emp, alloc);
-		gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp))
+		gotoIfError3(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp, e_rr));
 
 		if (!Buffer_csprng(emp))
-			gotoIfError(clean, Error_invalidState(0, "Buffer_csprng failed"))
+			retError(clean, Error_invalidState(0, "Buffer_csprng failed"));
 
 		const U32 *rptr = (const U32*) emp.ptr;
 
@@ -1404,7 +1404,7 @@ int main() {
 				U64 doubEmu64 = *(const U64*)doubEmuv;
 
 				if (doubEmu64 != doubTarg64)
-					gotoIfError(clean, Error_invalidState((U32)i, "F32_castF64 returned invalid data for random data"))
+					retError(clean, Error_invalidState((U32)i, "F32_castF64 returned invalid data for random data"));
 			}
 		}
 
@@ -1414,7 +1414,7 @@ int main() {
 	//Halfs
 
 	{
-		F16 halfs[] = {
+		static const F16 halfs[] = {
 			0x7C00,					//Inf
 			0x0000,					//0
 			0x7C01,					//NaN #1
@@ -1435,7 +1435,7 @@ int main() {
 			0x3BFF					//Almost 1
 		};
 
-		U32 expectedResultsF32[] = {
+		static const U32 expectedResultsF32[] = {
 			0x7F800000,				//Inf
 			0x00000000,				//0
 			0x7FC02000,				//NaN #1
@@ -1456,7 +1456,7 @@ int main() {
 			0x3F7FE000				//0.9995117
 		};
 
-		U64 expectedResultsF64[] = {
+		static const U64 expectedResultsF64[] = {
 			0x7FF0000000000000,		//Inf
 			0x0000000000000000,		//0
 			0x7FF8040000000000,		//NaN #1
@@ -1496,7 +1496,7 @@ int main() {
 					floatTarg32 |= (U32)1 << 31;
 
 				if (floatEmu32 != floatTarg32)
-					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F16_castF32 was invalid"))
+					retError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F16_castF32 was invalid"));
 
 				const F64 doubEmu = F16_castF64(fh);
 				const void *doubEmuv = &doubEmu;
@@ -1508,7 +1508,7 @@ int main() {
 					doubTarg64 |= (U64)1 << 63;
 
 				if (doubEmu64 != doubTarg64)
-					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F16_castF64 was invalid"))
+					retError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F16_castF64 was invalid"));
 			}
 		}
 	}
@@ -1619,7 +1619,7 @@ int main() {
 				const U32 floatEmu32 = *(const U32*)floatEmuv;
 
 				if (floatEmu32 != floatTarg32)
-					gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F64_castF32 was invalid"))
+					retError(clean, Error_invalidState((U32)((i << 1) | j), "F64_castF32 was invalid"));
 			}
 		}
 
@@ -1628,10 +1628,10 @@ int main() {
 		U64 N = 1024;
 
 		Buffer_free(&emp, alloc);
-		gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U64), alloc, &emp))
+		gotoIfError3(clean, Buffer_createEmptyBytes(N * sizeof(U64), alloc, &emp, e_rr));
 
 		if (!Buffer_csprng(emp))
-			gotoIfError(clean, Error_invalidState(0, "Buffer_csprng failed (2)"))
+			retError(clean, Error_invalidState(0, "Buffer_csprng failed (2)"));
 
 		const U64 *rptr = (const U64*) emp.ptr;
 
@@ -1666,7 +1666,7 @@ int main() {
 				const U32 floatEmu32 = *(const U32*)floatEmuv;
 
 				if (floatEmu32 != floatTarg32)
-					gotoIfError(clean, Error_invalidState((U32)i, "F64_castF32 failed with random data"))
+					retError(clean, Error_invalidState((U32)i, "F64_castF32 failed with random data"));
 			}
 		}
 
@@ -1676,7 +1676,7 @@ int main() {
 	//Halfs
 
 	{
-		U32 inputFloats[] = {
+		static const U32 inputFloats[] = {
 			0x7F800000,				//Inf
 			0x4781E480,				//66505 (collapses to inf)
 			0x7E967699,				//1e38 (near float max, collapses to inf)
@@ -1706,7 +1706,7 @@ int main() {
 			0x33000000				//Collapses to 0
 		};
 
-		U64 inputDoubles[] = {
+		static const U64 inputDoubles[] = {
 			0x7FF0000000000000,		//Inf
 			0x40F03C9000000000,		//65505 (collapses to inf)
 			0x7FE1CCF385EBC8A0,		//1e308 (near double max, collapses to inf)
@@ -1736,7 +1736,7 @@ int main() {
 			0x3E60000000000000		//Collapses to 0
 		};
 
-		F16 halfResults[] = {
+		static const F16 halfResults[] = {
 			0x7C00,					//Inf
 			0x7C00,					//Inf
 			0x7C00,					//Inf
@@ -1785,7 +1785,7 @@ int main() {
 				F16 halfEmu = F32_castF16(floatTarg);
 
 				if (halfEmu != fh)
-					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F32_castF16 failed"))
+					retError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F32_castF16 failed"));
 
 				const void *inputDoublesv = inputDoubles;
 				F64 doubTarg = ((const F64*)inputDoublesv)[i];
@@ -1797,7 +1797,7 @@ int main() {
 				halfEmu = F64_castF16(doubTarg);
 
 				if (halfEmu != fh)
-					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F64_castF16 failed"))
+					retError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F64_castF16 failed"));
 			}
 		}
 	}
@@ -1807,7 +1807,7 @@ int main() {
 	{
 		Log_debugLn(alloc, "Comparing U128 to U128 as BigInt and U128");
 
-		U128 compares[] = {
+		const U128 compares[] = {
 			U128_createU64x2(0x0000000000000000, 0x0000000000000000),
 			U128_createU64x2(0x0000000000000001, 0x0000000000000000),
 			U128_createU64x2(0x000000007FFFFFFF, 0x0000000000000000),
@@ -1823,21 +1823,18 @@ int main() {
 
 		for(U64 i = 1; i < sizeof(compares) / sizeof(compares[0]); ++i) {
 
-			if(
+			if (
 				U128_cmp(compares[i - 1], compares[i]) != ECompareResult_Lt ||
 				U128_cmp(compares[i], compares[i - 1]) != ECompareResult_Gt
 			)
-				gotoIfError(clean, Error_invalidState((U32)i, "U128_cmp failed"))
+				retError(clean, Error_invalidState((U32)i, "U128_cmp failed"));
 
-			BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 };
-			gotoIfError(clean, BigInt_createRefConst((const U64*)&compares[i - 1], 2, &aBig))
-			gotoIfError(clean, BigInt_createRefConst((const U64*)&compares[i], 2, &bBig))
+			BigInt aBig = { 0 }, bBig = { 0 };
+			gotoIfError3(clean, BigInt_createRefConst((const U64*)&compares[i - 1], 2, &aBig, e_rr));
+			gotoIfError3(clean, BigInt_createRefConst((const U64*)&compares[i], 2, &bBig, e_rr));
 
-			if(
-				BigInt_cmp(aBig, bBig) != ECompareResult_Lt ||
-				BigInt_cmp(bBig, aBig) != ECompareResult_Gt
-			)
-				gotoIfError(clean, Error_invalidState((U32)i, "BigInt_cmp failed"))
+			if(BigInt_cmp(aBig, bBig) != ECompareResult_Lt || BigInt_cmp(bBig, aBig) != ECompareResult_Gt)
+				retError(clean, Error_invalidState((U32)i, "BigInt_cmp failed"));
 		}
 	}
 
@@ -1851,7 +1848,7 @@ int main() {
 		{ 0xC9DB73597154808E, 0xCE841590CDB048A4 }
 	};
 
-	const U64 mulResult[][2] = {
+	static const U64 mulResult[][2] = {
 		{ 0x2236D88FE5618CF0, 0x0121FA00AD77D742 },
 		{ 0x0000000000000001, 0xFFFFFFFFFFFFFFFE },
 		{ 0xE9F1BC96FD7C3408, 0x259137B5CA1EDC29 },
@@ -1859,7 +1856,7 @@ int main() {
 		{ 0x3191981675EA4AF8, 0xA2D6BCFAA1676325 }
 	};
 
-	const U64 addResult[][2] = {
+	static const U64 addResult[][2] = {
 		{ 0x235A1DF76F0D5ADF, 0xFFFEB49923CC0952 },
 		{ 0x0000000000000000, 0xFFFFFFFFFFFFFFFE },
 		{ 0x14AC1A38FB730F17, 0x6A5B4AA678507A2 },
@@ -1867,7 +1864,7 @@ int main() {
 		{ 0xFB6D0B6FE73ECB86, 0x715AD28B6F17ABC9 }
 	};
 
-	const C8 *stringified[] = {
+	static const C8 *stringified[] = {
 		"0xFEDCBA98765432100123456789ABCDEF",
 		("0b1111111111111111111111111111111111111111111111111111111111111111"
 		  "1111111111111111111111111111111111111111111111111111111111111111"),
@@ -1876,33 +1873,37 @@ int main() {
 		"274506787720133886812119851071477940366"
 	};
 
-	BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 }, cBig = (BigInt) { 0 };
+	BigInt aBig = { 0 }, bBig = { 0 }, cBig = { 0 };
 
 	Log_debugLn(alloc, "Testing big int create from hex/bin/oct/dec");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
-		gotoIfError(clean, BigInt_createFromString(CharString_createRefCStrConst(stringified[i]), 128, alloc, &aBig))
-		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig))
+		const CharString text = CharString_createRefCStrConst(stringified[i]);
 
-		if(BigInt_neq(aBig, bBig))
-			gotoIfError(clean, Error_invalidState((U32)i, "BigInt_createFromString failed"))
+		const BigIntCreate create = (BigIntCreate) { .text = &text, .bitCount = 128, .alloc = alloc, .big = &aBig };
+		gotoIfError3(clean, BigInt_createFromString(&create, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig, e_rr));
+
+		if (BigInt_neq(aBig, bBig))
+			retError(clean, Error_invalidState((U32)i, "BigInt_createFromString failed"));
 
 		BigInt_free(&aBig, alloc);
 		bBig = (BigInt) { 0 };
 	}
 
-	Log_debugLn(alloc, "Testing big int to hex/bin/oct");
+	Log_debugLn(alloc, "Testing big int to hex/bin/oct/nyto");
 
-	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
+	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntEncoding_Count; ++i) {
 
-		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig))
-		gotoIfError(clean, BigInt_toString(bBig, alloc, &tmp, (EIntegerEncoding)i, false))
+		gotoIfError3(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig, e_rr));
+		BigIntStringify intStringify = (BigIntStringify) { .leadingZeros = false, .alloc = alloc, .result = &tmp };
+		gotoIfError3(clean, BigInt_toString(&intStringify, (EIntEncoding)i, bBig, e_rr));
 
-		CharString ref = CharString_createRefCStrConst(stringified[i]);
+		const CharString ref = CharString_createRefCStrConst(stringified[i]);
 
-		if(!CharString_equalsStringSensitive(ref, tmp))
-			gotoIfError(clean, Error_invalidState((U32)i, "BigInt_toString failed"))
+		if (!CharString_equalsStringSensitive(&ref, &tmp))
+			retError(clean, Error_invalidState((U32)i, "BigInt_toString failed"));
 
 		CharString_free(&tmp, alloc);
 		bBig = (BigInt) { 0 };
@@ -1915,12 +1916,12 @@ int main() {
 		aBig = bBig = cBig = (BigInt) { 0 };
 
 		U64 temp[4] = { mulParams[i][0], 0, mulParams[i][1], 0 };
-		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createRefConst(&temp[2], 2, &bBig))
-		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &cBig))
+		gotoIfError3(clean, BigInt_createRef(&temp[0], 2, &aBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&temp[2], 2, &bBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&mulResult[i][0], 2, &cBig, e_rr));
 
-		if(!BigInt_mul(&aBig, bBig, alloc) || BigInt_neq(aBig, cBig))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_mul failed"))
+		if(!BigInt_mul(&aBig, bBig, alloc, NULL) || BigInt_neq(aBig, cBig))
+			retError(clean, Error_invalidOperation((U32)i, "BigInt_mul failed"));
 	}
 
 	Log_debugLn(alloc, "Testing big int add");
@@ -1930,12 +1931,12 @@ int main() {
 		aBig = bBig = cBig = (BigInt) { 0 };
 
 		U64 temp[2] = { mulParams[i][0], mulParams[i][1] };
-		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig))
-		gotoIfError(clean, BigInt_createRefConst(&addResult[i][0], 2, &cBig))
+		gotoIfError3(clean, BigInt_createRef(&temp[0], 2, &aBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&addResult[i][0], 2, &cBig, e_rr));
 
-		if(!BigInt_add(&aBig, bBig) || BigInt_neq(aBig, cBig))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_add failed"))
+		if (!BigInt_add(&aBig, bBig) || BigInt_neq(aBig, cBig))
+			retError(clean, Error_invalidOperation((U32)i, "BigInt_add failed"));
 	}
 
 	Log_debugLn(alloc, "Testing big int sub");
@@ -1945,21 +1946,21 @@ int main() {
 		aBig = bBig = cBig = (BigInt) { 0 };
 
 		U64 temp[2] = { addResult[i][0], addResult[i][1] };
-		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &cBig))
-		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &aBig))
-		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig))
+		gotoIfError3(clean, BigInt_createRef(&temp[0], 2, &cBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&mulParams[i][0], 2, &aBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig, e_rr));
 
-		if(!BigInt_sub(&cBig, bBig) || BigInt_neq(aBig, cBig))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - b = a"))
+		if (!BigInt_sub(&cBig, bBig) || BigInt_neq(aBig, cBig))
+			retError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - b = a"));
 
 		temp[0] = addResult[i][0];
 		temp[1] = addResult[i][1];
 
-		if(!BigInt_sub(&cBig, aBig) || BigInt_neq(bBig, cBig))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - a = b"))
+		if (!BigInt_sub(&cBig, aBig) || BigInt_neq(bBig, cBig))
+			retError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - a = b"));
 	}
 
-	const U64 lshResult[][2] = {
+	static const U64 lshResult[][2] = {
 		{ 0xFFFFFFFFFFFFFFFE, 0xFFFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFC, 0xFFFFFFFFFFFFFFFF },
 		{ 0xFFFFFFFFFFFFFFF8, 0xFFFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFF0, 0xFFFFFFFFFFFFFFFF },
 		{ 0xFFFFFFFFFFFFFFE0, 0xFFFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFC0, 0xFFFFFFFFFFFFFFFF },
@@ -2026,7 +2027,7 @@ int main() {
 		{ 0x0000000000000000, 0x8000000000000000 }
 	};
 
-	const U64 rshResult[][2] = {
+	static const U64 rshResult[][2] = {
 		{ 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFF, 0x3FFFFFFFFFFFFFFF },
 		{ 0xFFFFFFFFFFFFFFFF, 0x1FFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF },
 		{ 0xFFFFFFFFFFFFFFFF, 0x07FFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFF, 0x03FFFFFFFFFFFFFF },
@@ -2100,11 +2101,11 @@ int main() {
 		aBig = bBig = (BigInt) { 0 };
 
 		U64 temp[2] = { mulParams[1][0], mulParams[1][1] };
-		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createRefConst(&lshResult[i][0], 2, &bBig))
+		gotoIfError3(clean, BigInt_createRef(&temp[0], 2, &aBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&lshResult[i][0], 2, &bBig, e_rr));
 
-		if(!BigInt_lsh(&aBig, (U16)(i + 1)) || BigInt_neq(aBig, bBig))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_lsh failed"))
+		if (!BigInt_lsh(&aBig, (U16)(i + 1)) || BigInt_neq(aBig, bBig))
+			retError(clean, Error_invalidOperation((U32)i, "BigInt_lsh failed"));
 	}
 
 	Log_debugLn(alloc, "Testing big int rsh");
@@ -2114,11 +2115,11 @@ int main() {
 		aBig = bBig = (BigInt){ 0 };
 
 		U64 temp[2] = { mulParams[1][0], mulParams[1][1] };
-		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createRefConst(&rshResult[i][0], 2, &bBig))
+		gotoIfError3(clean, BigInt_createRef(&temp[0], 2, &aBig, e_rr));
+		gotoIfError3(clean, BigInt_createRefConst(&rshResult[i][0], 2, &bBig, e_rr));
 
 		if(!BigInt_rsh(&aBig, (U16)(i + 1)) || BigInt_neq(aBig, bBig))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_rsh failed"))
+			retError(clean, Error_invalidOperation((U32)i, "BigInt_rsh failed"));
 	}
 
 	Log_debugLn(alloc, "Testing big int bitScan");
@@ -2126,12 +2127,12 @@ int main() {
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
 		aBig = (BigInt) { 0 };
-		gotoIfError(clean, BigInt_createRefConst(&rshResult[i][0], 2, &aBig))
+		gotoIfError3(clean, BigInt_createRefConst(&rshResult[i][0], 2, &aBig, e_rr));
 
 		U16 off = BigInt_bitScan(aBig);
 
-		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_bitScan failed"))
+		if (off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
+			retError(clean, Error_invalidOperation((U32)i, "BigInt_bitScan failed"));
 	}
 
 	//U128 unit test
@@ -2144,7 +2145,7 @@ int main() {
 		U128 mulReal = U128_mul64(mulParams[i][0], mulParams[i][1]);
 
 		if (U128_neq(mulRes, mulReal))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_mul64 failed"))
+			retError(clean, Error_invalidOperation((U32)i, "U128_mul64 failed"));
 	}
 
 	Log_debugLn(alloc, "Testing U128 + U128 = U128 (optimized)");
@@ -2155,8 +2156,8 @@ int main() {
 		U128 b = U128_create((const U8*) mulResult[i]);
 		U128 c = U128_create((const U8*) addResult[i]);
 
-		if(U128_neq(U128_add(a, b), c))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_add failed"))
+		if (U128_neq(U128_add(a, b), c))
+			retError(clean, Error_invalidOperation((U32)i, "U128_add failed"));
 	}
 
 	Log_debugLn(alloc, "Testing U128 - U128 = U128 (optimized)");
@@ -2167,8 +2168,8 @@ int main() {
 		U128 a = U128_create((const U8*) mulParams[i]);
 		U128 b = U128_create((const U8*) mulResult[i]);
 
-		if(U128_neq(U128_sub(c, b), a) || U128_neq(U128_sub(c, a), b))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_sub failed"))
+		if (U128_neq(U128_sub(c, b), a) || U128_neq(U128_sub(c, a), b))
+			retError(clean, Error_invalidOperation((U32)i, "U128_sub failed"));
 	}
 
 	Log_debugLn(alloc, "Testing U128 lsh (optimized)");
@@ -2179,8 +2180,8 @@ int main() {
 		U128 b = U128_create((const U8*) lshResult[i]);
 		U128 c = U128_lsh(a, (U8)(1 + i));
 
-		if(U128_neq(c, b))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_lsh failed"))
+		if (U128_neq(c, b))
+			retError(clean, Error_invalidOperation((U32)i, "U128_lsh failed"));
 	}
 
 	Log_debugLn(alloc, "Testing U128 rsh (optimized)");
@@ -2191,8 +2192,8 @@ int main() {
 		U128 b = U128_create((const U8*) rshResult[i]);
 		U128 c = U128_rsh(a, (U8)(1 + i));
 
-		if(U128_neq(c, b))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_rsh failed"))
+		if (U128_neq(c, b))
+			retError(clean, Error_invalidOperation((U32)i, "U128_rsh failed"));
 	}
 
 	Log_debugLn(alloc, "Testing U128 bitScan");
@@ -2202,37 +2203,38 @@ int main() {
 		U128 a = U128_create((const U8*) rshResult[i]);
 		U16 off = U128_bitScan(a);
 
-		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
-			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_bitScan failed"))
+		if (off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
+			retError(clean, Error_invalidOperation((U32)i, "U128_bitScan failed"));
 	}
 
 	Log_debugLn(alloc, "Testing U128 create from hex/bin/oct/dec/nyto");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
-		U128 vi = U128_createFromString(CharString_createRefCStrConst(stringified[i]), &err, alloc);
+		U128 vi = U128_createFromString(CharString_createRefCStrConst(stringified[i]), alloc, e_rr);
 		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
 
-		gotoIfError(clean, err)
+		gotoIfError(clean, *e_rr);	//Continue to error if there was any
 
 		if(U128_neq(vi, realVi))
-			gotoIfError(clean, Error_invalidState((U32)i, "U128_createFromString failed"))
+			retError(clean, Error_invalidState((U32)i, "U128_createFromString failed"));
 	}
 
-	/*Log_debugLn(alloc, "Testing U128 to hex/bin/oct/dec/nyto");
+	Log_debugLn(alloc, "Testing U128 to hex/bin/oct/dec/nyto");
 
-	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
+	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntEncoding_Count; ++i) {
 
 		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
-		gotoIfError(clean, U128_toString(realVi, alloc, &tmp, (EIntegerEncoding)i, false))
+		BigIntStringify intStringify = (BigIntStringify) { .leadingZeros = false, .alloc = alloc, .result = &tmp };
+		gotoIfError3(clean, U128_toString(&intStringify, (EIntEncoding)i, realVi, e_rr));
 
-		CharString ref = CharString_createRefCStrConst(stringified[i]);
+		const CharString ref = CharString_createRefCStrConst(stringified[i]);
 
-		if(!CharString_equalsStringSensitive(ref, tmp))
-			gotoIfError(clean, Error_invalidState((U32)i, "U128_toString failed"))
+		if(!CharString_equalsStringSensitive(&ref, &tmp))
+			retError(clean, Error_invalidState((U32)i, "U128_toString failed"));
 
 		CharString_free(&tmp, alloc);
-	}*/
+	}
 
 	//Test ETypeId_toShortId
 
@@ -2245,7 +2247,7 @@ int main() {
 
 		if (shortTypeId != i) {
 			shortTypeId = ETypeId_toShortId(typeId);
-			gotoIfError(clean, Error_invalidState((U32)i, "ETypeId_toShortId failed"))
+			retError(clean, Error_invalidState((U32)i, "ETypeId_toShortId failed"));
 		}
 	}
 
@@ -2267,22 +2269,22 @@ int main() {
 		F32 expected = chimera.f[4] + chimera.f[i];
 		Chimera_stepFidiA(&chimera, EFidiA_add(i));
 
-		if(chimera.f[4] != expected)
-			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA add test failed"))
+		if (chimera.f[4] != expected)
+			retError(clean, Error_invalidState((U32)i, "EFidiA add test failed"));
 
 		expected = chimera.f[4] - chimera.f[i];
 		Chimera_stepFidiA(&chimera, EFidiA_sub(i));
 
-		if(chimera.f[4] != expected)
-			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA sub test failed"))
+		if (chimera.f[4] != expected)
+			retError(clean, Error_invalidState((U32)i, "EFidiA sub test failed"));
 
 		//mul
 
 		expected = chimera.f[4] * chimera.f[i];
 		Chimera_stepFidiA(&chimera, EFidiA_mul(i));
 
-		if(chimera.f[4] != expected)
-			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA mul test failed"))
+		if (chimera.f[4] != expected)
+			retError(clean, Error_invalidState((U32)i, "EFidiA mul test failed"));
 
 		//swap
 
@@ -2290,8 +2292,8 @@ int main() {
 		F32 old = chimera.f[4];
 		Chimera_stepFidiA(&chimera, EFidiA_swap(i));
 
-		if(chimera.f[4] != expected || chimera.f[i] != old)
-			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA swap test failed"))
+		if (chimera.f[4] != expected || chimera.f[i] != old)
+			retError(clean, Error_invalidState((U32)i, "EFidiA swap test failed"));
 
 		//compare
 
@@ -2300,14 +2302,14 @@ int main() {
 		);
 
 		Chimera_stepFidiA(&chimera, EFidiA_cmp(i));
-		if(expectedCmp != Chimera_getLastCompare(&chimera))
-			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA cmp test failed"))
+		if (expectedCmp != Chimera_getLastCompare(&chimera))
+			retError(clean, Error_invalidState((U32)i, "EFidiA cmp test failed"));
 
 		//load fN
 
 		Chimera_stepFidiA(&chimera, EFidiA_load(i));
-		if(chimera.f[i] != chimera.f[4])
-			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA load test failed"))
+		if (chimera.f[i] != chimera.f[4])
+			retError(clean, Error_invalidState((U32)i, "EFidiA load test failed"));
 	}
 
 	{
@@ -2317,61 +2319,61 @@ int main() {
 
 		expected = F32_max(chimera.f[4], chimera.f[0]);
 		Chimera_stepFidiA(&chimera, EFidiA_max);
-		if(chimera.f[4] != expected)
-			gotoIfError(clean, Error_invalidState(0, "EFidiA max test failed"))
+		if (chimera.f[4] != expected)
+			retError(clean, Error_invalidState(0, "EFidiA max test failed"));
 
 		//div
 
 		expected = chimera.f[4] / chimera.f[0];
 		Chimera_stepFidiA(&chimera, EFidiA_div);
-		if(chimera.f[4] != expected)
-			gotoIfError(clean, Error_invalidState(0, "EFidiA div test failed"))
+		if (chimera.f[4] != expected)
+			retError(clean, Error_invalidState(0, "EFidiA div test failed"));
 
 		//mod
 
-		gotoIfError(clean, F32_mod(chimera.f[4], chimera.f[0], &expected))
+		gotoIfError3(clean, F32_mod(chimera.f[4], chimera.f[0], &expected, e_rr));
 		Chimera_stepFidiA(&chimera, EFidiA_mod);
-		if(chimera.f[4] != expected)
-			gotoIfError(clean, Error_invalidState(0, "EFidiA mod test failed"))
+		if (chimera.f[4] != expected)
+			retError(clean, Error_invalidState(0, "EFidiA mod test failed"));
 
 		//min
 
 		expected = F32_min(chimera.f[4], chimera.f[0]);
 		Chimera_stepFidiA(&chimera, EFidiA_min);
-		if(chimera.f[4] != expected)
-			gotoIfError(clean, Error_invalidState(0, "EFidiA min test failed"))
+		if (chimera.f[4] != expected)
+			retError(clean, Error_invalidState(0, "EFidiA min test failed"));
 
 		//isfinite
 
 		ECompareResult expectedCmp = F32_isValid(chimera.f[4]) ? ECompareResult_Gt : ECompareResult_Eq;
 
 		Chimera_stepFidiA(&chimera, EFidiA_isfinite);
-		if(expectedCmp != Chimera_getLastCompare(&chimera))
-			gotoIfError(clean, Error_invalidState(0, "EFidiA isfinite test failed"))
+		if (expectedCmp != Chimera_getLastCompare(&chimera))
+			retError(clean, Error_invalidState(0, "EFidiA isfinite test failed"));
 
 		//isnan
 
 		expectedCmp = F32_isNaN(chimera.f[4]) ? ECompareResult_Gt : ECompareResult_Eq;
 
 		Chimera_stepFidiA(&chimera, EFidiA_isnan);
-		if(expectedCmp != Chimera_getLastCompare(&chimera))
-			gotoIfError(clean, Error_invalidState(0, "EFidiA isnan test failed"))
+		if (expectedCmp != Chimera_getLastCompare(&chimera))
+			retError(clean, Error_invalidState(0, "EFidiA isnan test failed"));
 
 		//any
 
 		expectedCmp = F32x4_any(chimera.vf[4]) ? ECompareResult_Gt : ECompareResult_Eq;
 
 		Chimera_stepFidiA(&chimera, EFidiA_anyFv);
-		if(expectedCmp != Chimera_getLastCompare(&chimera))
-			gotoIfError(clean, Error_invalidState(0, "EFidiA any test failed"))
+		if (expectedCmp != Chimera_getLastCompare(&chimera))
+			retError(clean, Error_invalidState(0, "EFidiA any test failed"));
 
 		//all
 
 		expectedCmp = F32x4_all(chimera.vf[4]) ? ECompareResult_Gt : ECompareResult_Eq;
 
 		Chimera_stepFidiA(&chimera, EFidiA_allFv);
-		if(expectedCmp != Chimera_getLastCompare(&chimera))
-			gotoIfError(clean, Error_invalidState(0, "EFidiA all test failed"))
+		if (expectedCmp != Chimera_getLastCompare(&chimera))
+			retError(clean, Error_invalidState(0, "EFidiA all test failed"));
 	}
 
 	//File test for disallowed file names and hard to handle cases such as
