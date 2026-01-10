@@ -20,6 +20,7 @@
 
 #include "types/container/list_impl.h"
 #include "types/container/string.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/allocator.h"
 #include "types/base/string_read.h"
 #include "types/base/math.h"
@@ -533,7 +534,7 @@ clean:
 void ListCharString_freeUnderlying(ListCharString *arr, const Allocator *alloc) {
 
 	if(!arr || !ListCharString_allocatedBytes(*arr))
-		return true;
+		return;
 
 	for(U64 i = 0; i < arr->length; ++i) {
 		CharString *str = arr->ptrNonConst + i;
@@ -1092,12 +1093,13 @@ Bool ListCharString_combine(const ListCharStringConcat *concat, Error *e_rr) {
 #define CharString_createNum(maxVal, func, prefixRaw, ...)																	\
 																															\
 	Bool s_uccess = true;																									\
-	Allocator *allocator = NULL;																							\
+	const Allocator *allocator = NULL;																						\
+	CharString *result = NULL;																								\
 																															\
 	if (!number || !number->result)																							\
 		retError(clean, Error_nullPointer(3, "CharString_createNum()::number and number->result are required"));			\
 																															\
-	CharString *result = number->result;																					\
+	result = number->result;																								\
 	CharString prefix = CharString_createRefCStrConst(prefixRaw);															\
 																															\
 	if (result->ptr)																										\
@@ -1134,7 +1136,7 @@ Bool ListCharString_combine(const ListCharStringConcat *concat, Error *e_rr) {
 																															\
 	result->ptrNonConst[CharString_length(*result)] = '\0';																	\
 clean:																														\
-	if(allocator && !s_uccess) CharString_free(result, allocator);																\
+	if(allocator && !s_uccess) CharString_free(result, allocator);															\
 	return s_uccess;
 
 Bool CharString_createNyto(const CharStringCreateNumber *number, Error *e_rr) {

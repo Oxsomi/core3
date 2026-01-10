@@ -20,14 +20,12 @@
 
 #pragma once
 #include "types/container/list.h"
-#include "types/container/string.h"
 #include "types/container/file.h"
+#include "types/base/string.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-typedef enum EFileType EFileType;
 
 typedef struct ArchiveEntry {
 	CharString path;
@@ -51,15 +49,19 @@ typedef enum EArchiveCombineMode {
 	EArchiveCombineMode_Count
 } EArchiveCombineMode;
 
+typedef U8 ArchiveCombineMode;		//EArchiveCombineMode
+
 typedef enum EArchiveCombineFlags {
 	EArchiveCombineFlags_None					= 0,
 	EArchiveCombineFlags_ResolveLatestTimestamp = 1 << 0,		//Resolve timestamp with latest, as long as data matches
 	EArchiveCombineFlags_ResolveAcceptLatest	= 1 << 1		//Override file with latest file contents, otherwise conflict
 } EArchiveCombineFlags;
 
+typedef U8 ArchiveCombineFlags;		//EArchiveCombineFlags
+
 typedef struct ArchiveCombineSettings {
-	EArchiveCombineMode mode;
-	EArchiveCombineFlags flags;
+	ArchiveCombineMode mode;
+	ArchiveCombineFlags flags;
 } ArchiveCombineSettings;
 
 Bool Archive_create(const Allocator *alloc, Archive *archive, Error *e_rr);
@@ -96,8 +98,15 @@ Bool Archive_addFile(const ArchiveOptions *archive, Buffer *data, Ns timestamp, 
 
 Bool Archive_updateFileData(const ArchiveOptions *archive, const Buffer *data, Error *e_rr);
 
-Bool Archive_getFileData(const ArchiveOptions *archive, Buffer *data, Error *e_rr);
-Bool Archive_getFileDataConst(const ArchiveOptions *archive, Buffer *data, Error *e_rr);
+Bool Archive_getFileDataInternal(const ArchiveOptions *archive, Buffer *data, Bool isConst, Error *e_rr);
+
+static inline Bool Archive_getFileData(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
+	return Archive_getFileDataInternal(archive, data, false, e_rr);
+}
+
+static inline Bool Archive_getFileDataConst(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
+	return Archive_getFileDataInternal(archive, data, true, e_rr);
+}
 
 Bool Archive_removeFile(const ArchiveOptions *archive, Error *e_rr);
 Bool Archive_removeFolder(const ArchiveOptions *archive, Error *e_rr);
@@ -107,7 +116,7 @@ Bool Archive_rename(const ArchiveOptions *archive, const CharString *newFileName
 Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName, Error *e_rr);
 
 U64 Archive_getIndex(const ArchiveOptions *archive);		//Get index in archive
-Bool Archive_getInfo(const ArchiveOptions *archive, FileInfo *info, Error *e_rr);
+Bool Archive_getInfo(const ArchiveOptions *archive, FileInfo *info, Error *e_rr);	//FileInfo returned needs freeing
 
 typedef struct ArchiveQuery {
 	const Archive *archive;
@@ -116,10 +125,38 @@ typedef struct ArchiveQuery {
 	const Allocator *alloc;
 } ArchiveQuery;
 
-Bool Archive_queryFileEntryCount(const ArchiveQuery *query, U64 *res, Error *e_rr);
-Bool Archive_queryFileCount(const ArchiveQuery *query, U64 *res, Error *e_rr);
-Bool Archive_queryFolderCount(const ArchiveQuery *query, U64 *res, Error *e_rr);
 Bool Archive_foreach(const ArchiveQuery *query, FileCallback callback, void *userData, EFileType type, Error *e_rr);
+
+static inline Bool Archive_countFile(const FileInfo *info, U64 *res, Error *e_rr) {
+	(void)info; (void) e_rr;
+	++*res;
+	return true;
+}
+
+static inline Bool Archive_queryFileObjectCount(const ArchiveQuery *query, EFileType type, U64 *res, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!res)
+		retError(clean, Error_nullPointer(2, "Archive_queryFileObjectCount()::res is required"));
+
+	gotoIfError3(clean, Archive_foreach(query, (FileCallback) Archive_countFile, res, type, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+static inline Bool Archive_queryFileEntryCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
+	return Archive_queryFileObjectCount(query, EFileType_Any, res, e_rr);
+}
+
+static inline Bool Archive_queryFileCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
+	return Archive_queryFileObjectCount(query, EFileType_File, res, e_rr);
+}
+
+static inline Bool Archive_queryFolderCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
+	return Archive_queryFileObjectCount(query, EFileType_Folder, res, e_rr);
+}
 
 #ifdef __cplusplus
 	}

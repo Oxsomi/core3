@@ -73,14 +73,7 @@ static inline Bool File_isVirtual(CharString loc) {
 	return CharString_getAt(loc, 0) == '/' && CharString_getAt(loc, 1) == '/';
 }
 
-static inline void FileInfo_free(FileInfo *info, const Allocator *alloc) {
-
-	if (!info)
-		return;
-
-	CharString_free(&info->path, alloc);
-	*info = (FileInfo){ 0 };
-}
+void FileInfo_free(FileInfo *info, const Allocator *alloc);
 
 #ifdef __cplusplus
 	}

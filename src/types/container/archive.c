@@ -22,9 +22,13 @@
 #include "types/base/allocator.h"
 #include "types/base/c8.h"
 #include "types/base/constants.h"
+#include "types/container/list_basic_types.h"
 #include "types/container/list_impl.h"
 #include "types/base/math.h"
 #include "types/container/log.h"
+#include "types/container/string.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
 
 TListImpl(ArchiveEntry);
 
@@ -46,21 +50,6 @@ clean:
 	return s_uccess;
 }
 
-void Archive_free(Archive *archive, const Allocator *alloc) {
-
-	if(!archive || !archive->entries.ptr)
-		return;
-
-	for (U64 i = 0; i < archive->entries.length; ++i) {
-		ArchiveEntry entry = archive->entries.ptr[i];
-		Buffer_free(&entry.data, alloc);
-		CharString_free(&entry.path, alloc);
-	}
-
-	ListArchiveEntry_free(&archive->entries, alloc);
-	*archive = (Archive) { 0 };
-}
-
 Bool Archive_createCopy(const Archive *a, const Allocator *alloc, Archive *archive, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -80,7 +69,7 @@ Bool Archive_createCopy(const Archive *a, const Allocator *alloc, Archive *archi
 	gotoIfError3(clean, ListArchiveEntry_createCopy(aEntries, alloc, archiveEntries, e_rr));
 	allocate = true;
 
-	for(U64 i = 0; i < archiveEntries->length; ++i) {						//Reset state, before creating copy of buffers and strings
+	for(U64 i = 0; i < archiveEntries->length; ++i) {				//Reset state, before creating copy of buffers and strings
 		archiveEntries->ptrNonConst[i].data = Buffer_createNull();
 		archiveEntries->ptrNonConst[i].path = CharString_createNull();
 	}
@@ -102,6 +91,21 @@ clean:
 	return s_uccess;
 }
 
+void Archive_free(Archive *archive, const Allocator *alloc) {
+
+	if (!archive || !archive->entries.ptr)
+		return;
+
+	for (U64 i = 0; i < archive->entries.length; ++i) {
+		ArchiveEntry entry = archive->entries.ptr[i];
+		Buffer_free(&entry.data, alloc);
+		CharString_free(&entry.path, alloc);
+	}
+
+	ListArchiveEntry_free(&archive->entries, alloc);
+	*archive = (Archive) { 0 };
+}
+
 static inline Bool Archive_getPath(
 	const ArchiveOptionsConst *archive,
 	ArchiveEntry *entryOut,
@@ -117,9 +121,7 @@ static inline Bool Archive_getPath(
 	Bool noArchive = !archive || !archive->archive || !archive->archive->entries.ptr;
 
 	if (noArchive || !archive->path || !CharString_length(*archive->path))
-		retError(clean, Error_nullPointer(
-			noArchive ? 0 : 1, "Archive_getPath()::archive, archive->archive and archive->path are required"
-		));
+		retError(clean, Error_nullPointer(0, "Archive_getPath()::archive, archive->archive and archive->path are required"));
 
 	ListArchiveEntry entries = archive->archive->entries;
 
@@ -133,7 +135,7 @@ static inline Bool Archive_getPath(
 	//TODO: Optimize this with a hashmap
 
 	for(U64 i = 0; i < entries.length; ++i)
-		if (CharString_equalsStringInsensitive(entries.ptr[i].path, resolvedPath)) {
+		if (CharString_equalsStringInsensitive(&entries.ptr[i].path, &resolvedPath)) {
 
 			if(entryOut && !CharString_length(entryOut->path))
 				*entryOut = entries.ptr[i];
@@ -189,9 +191,9 @@ Bool Archive_combine(
 
 	for (U64 i = 0; i < bEntries.length; ++i) {
 
-		ArchiveEntry bi = bEntries.ptr[i];
+		const ArchiveEntry bi = bEntries.ptr[i];
 
-		ArchiveEntry ai = (ArchiveEntry) { 0 };
+		ArchiveEntry ai = { 0 };
 		U64 aIndex = 0;
 
 		ArchiveOptionsConst getPath = (ArchiveOptionsConst) {
@@ -293,7 +295,7 @@ Bool Archive_combine(
 					//Remember N, so we can increment.
 
 					U64 counter = 0;
-					U64 startCounter = CharString_findLastSensitive(bi.path, '-', 0, 0);
+					U64 startCounter = CharString_findLastSensitive(&bi.path, '-', 0, 0);
 
 					if (startCounter != U64_MAX && C8_isDec(CharString_getAt(bi.path, startCounter + 1))) {
 
@@ -339,12 +341,12 @@ Bool Archive_combine(
 					CharString basePath = bi.path;
 					CharString extension = CharString_createRefCStrConst("");
 
-					U64 lastSlash = CharString_findFirstSensitive(bi.path, '/', 0, 0);
+					U64 lastSlash = CharString_findFirstSensitive(&bi.path, '/', 0, 0);
 
 					if(lastSlash == U64_MAX)
 						lastSlash = 0;
 
-					U64 lastDot = CharString_findLastSensitive(bi.path, '.', lastSlash, 0);
+					U64 lastDot = CharString_findLastSensitive(&bi.path, '.', lastSlash, 0);
 
 					if(lastDot != U64_MAX) {
 						basePath = CharString_createRefSizedConst(bi.path.ptr, lastDot, false);
@@ -364,11 +366,10 @@ Bool Archive_combine(
 						++counter;
 
 						gotoIfError3(clean, CharString_format(
-							alloc, &renamed, "%.*s-%"PRIu64"%.*s",
+							alloc, &renamed, e_rr, "%.*s-%"PRIu64"%.*s",
 							CharString_length(basePath), basePath.ptr,
 							counter,
-							CharString_length(extension), extension.ptr,
-							e_rr
+							CharString_length(extension), extension.ptr
 						));
 
 						getPath.path = &renamed;
@@ -446,7 +447,7 @@ Bool Archive_hasFolder(const ArchiveOptionsConst *archive) {
 	return entry.type == EFileType_Folder;
 }
 
-Bool Archive_addInternal(const ArchiveOptions *archive, const ArchiveEntry *entry, Bool successIfExists, Error *e_rr);
+Bool Archive_addInternal(const ArchiveOptions *archive, ArchiveEntry entry, Bool successIfExists, Error *e_rr);
 
 static inline Bool Archive_createOrFindParent(const ArchiveOptions *archive) {
 
@@ -464,27 +465,21 @@ static inline Bool Archive_createOrFindParent(const ArchiveOptions *archive) {
 		.type = EFileType_Folder
 	};
 
-	return Archive_addInternal(archive, &entry, true, NULL);
+	return Archive_addInternal(archive, entry, true, NULL);
 }
 
-Bool Archive_addInternal(const ArchiveOptions *archive, const ArchiveEntry *entry, Bool successIfExists, Error *e_rr) {
+Bool Archive_addInternal(const ArchiveOptions *archive, ArchiveEntry entry, Bool successIfExists, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 	ArchiveEntry out = (ArchiveEntry) { 0 };
 	const Allocator *alloc = NULL;
 
-	if (!archive || !archive->archive || !archive->archive->entries.ptr)
-		retError(clean, Error_nullPointer(0, "Archive_addInternal()::archive is required"));
-
-	if(!entry)
-		retError(clean, Error_nullPointer(1, "Archive_addInternal()::entry is required"));
-
 	//If folder already exists, we're done
 
 	if (Archive_getPath((const ArchiveOptionsConst*)archive, &out, NULL, NULL, NULL)) {
 
-		if (out.type != entry->type || !successIfExists)
+		if (out.type != entry.type || !successIfExists)
 			retError(clean, Error_alreadyDefined(0, "Archive_addInternal() path already exists"));
 
 		goto clean;
@@ -493,20 +488,20 @@ Bool Archive_addInternal(const ArchiveOptions *archive, const ArchiveEntry *entr
 	//Resolve
 
 	Bool isVirtual = false;
-	gotoIfError3(clean, File_resolve(&entry->path, &isVirtual, 128, CharString_createNull(), archive->alloc, &resolved, e_rr));
+	gotoIfError3(clean, File_resolve(entry.path, &isVirtual, 128, CharString_createNull(), archive->alloc, &resolved, e_rr));
 	alloc = archive->alloc;
 
 	if (isVirtual)
-		retError(clean, Error_unsupportedOperation(0, "Archive_addInternal()::entry.path was virtual (//)"))
+		retError(clean, Error_unsupportedOperation(0, "Archive_addInternal()::entry.path was virtual (//)"));
 
-	entry->path = resolved;
+	entry.path = resolved;
 
 	//Try to find a parent or make one
 
-	if(!Archive_createOrFindParent(archive))
-		retError(clean, Error_notFound(0, 0, "Archive_addInternal()::entry.path parent couldn't be created"))
+	if (!Archive_createOrFindParent(archive))
+		retError(clean, Error_notFound(0, 0, "Archive_addInternal()::entry.path parent couldn't be created"));
 
-	gotoIfError3(clean, ListArchiveEntry_pushBack(&archive->entries, entry, alloc, e_rr));
+	gotoIfError3(clean, ListArchiveEntry_pushBack(&archive->archive->entries, entry, alloc, e_rr));
 	alloc = NULL;
 
 clean:
@@ -524,7 +519,7 @@ Bool Archive_addDirectory(const ArchiveOptions *archive, Error *e_rr) {
 	if (archive && archive->path)
 		entry.path = *archive->path;
 
-	return Archive_addInternal(archive, &entry, true, e_rr);
+	return Archive_addInternal(archive, entry, true, e_rr);
 }
 
 Bool Archive_addFile(const ArchiveOptions *archive, Buffer *data, Ns timestamp, Error *e_rr) {
@@ -539,46 +534,44 @@ Bool Archive_addFile(const ArchiveOptions *archive, Buffer *data, Ns timestamp, 
 	if (archive && archive->path)
 		entry.path = *archive->path;
 
-	gotoIfError3(clean, Archive_addInternal(archive, &entry, false, e_rr));
+	gotoIfError3(clean, Archive_addInternal(archive, entry, false, e_rr));
 	*data = Buffer_createNull();		//Moved
 
 clean:
 	return s_uccess;
 }
 
-//TODO:
-
 static inline Bool Archive_removeInternal(const ArchiveOptions *archive, EFileType type, Error *e_rr) {
 
 	Bool s_uccess = true;
-	ArchiveEntry entry = (ArchiveEntry) { 0 };
+	ArchiveEntry entry = { 0 };
 	U64 i = 0;
 	CharString resolved = CharString_createNull();
+	const Allocator *alloc = NULL;
 
-	if (!archive || !archive->entries.ptr)
-		retError(clean, Error_nullPointer(0, "Archive_removeInternal()::archive is required"))
-
-	if(!Archive_getPath(*archive, path, &entry, &i, &resolved, alloc, e_rr))
-		retError(clean, Error_notFound(0, 1, "Archive_removeInternal()::path doesn't exist"))
+	if(!Archive_getPath((const ArchiveOptionsConst*)archive, &entry, &i, &resolved, e_rr))
+		retError(clean, Error_notFound(0, 1, "Archive_removeInternal()::path doesn't exist"));
 
 	if(type != EFileType_Any && entry.type != type)
-		retError(clean, Error_invalidOperation(0, "Archive_removeInternal()::type doesn't match file type"))
+		retError(clean, Error_invalidOperation(0, "Archive_removeInternal()::type doesn't match file type"));
 
 	//Remove children
+
+	ListArchiveEntry *entries = &archive->archive->entries;
 
 	if (entry.type == EFileType_Folder) {
 
 		//Get myFolder/*
 
-		gotoIfError2(clean, CharString_append(&resolved, '/', alloc))
+		gotoIfError3(clean, CharString_append(&resolved, '/', alloc, e_rr));
 
 		//Remove
 
-		for (U64 j = archive->entries.length - 1; j != U64_MAX; --j) {
+		for (U64 j = entries->length - 1; j != U64_MAX; --j) {
 
-			const ArchiveEntry caj = archive->entries.ptr[j];
+			const ArchiveEntry caj = entries->ptr[j];
 
-			if(!CharString_startsWithStringInsensitive(caj.path, resolved, 0))
+			if(!CharString_startsWithStringInsensitive(&caj.path, &resolved, 0))
 				continue;
 
 			//Free and remove from array
@@ -586,7 +579,7 @@ static inline Bool Archive_removeInternal(const ArchiveOptions *archive, EFileTy
 			Buffer_free(&entry.data, alloc);
 			CharString_free(&entry.path, alloc);
 
-			gotoIfError2(clean, ListArchiveEntry_popLocation(&archive->entries, j, NULL))
+			gotoIfError3(clean, ListArchiveEntry_popLocation(entries, j, NULL, e_rr));
 
 			//Ensure our *self* id still makes sense
 
@@ -600,7 +593,7 @@ static inline Bool Archive_removeInternal(const ArchiveOptions *archive, EFileTy
 	Buffer_free(&entry.data, alloc);
 	CharString_free(&entry.path, alloc);
 
-	gotoIfError2(clean, ListArchiveEntry_popLocation(&archive->entries, i, NULL))
+	gotoIfError3(clean, ListArchiveEntry_popLocation(entries, i, NULL, e_rr));
 
 clean:
 	CharString_free(&resolved, alloc);
@@ -632,7 +625,7 @@ Bool Archive_rename(const ArchiveOptions *archive, const CharString *newFileName
 		retError(clean, Error_invalidParameter(1, 0, "Archive_rename()::newFileName isn't a valid filename"));
 
 	U64 i = 0;
-	if (!Archive_getPath(archive, NULL, &i, &resolvedLoc, e_rr))
+	if (!Archive_getPath((const ArchiveOptionsConst*)archive, NULL, &i, &resolvedLoc, e_rr))
 		retError(clean, Error_notFound(0, 1, "Archive_rename()::loc couldn't be resolved to path"));
 
 	alloc = archive->alloc;
@@ -642,7 +635,7 @@ Bool Archive_rename(const ArchiveOptions *archive, const CharString *newFileName
 	CharString *prevPath = &archive->archive->entries.ptrNonConst[i].path;
 	CharString subStr = CharString_createNull();
 
-	CharString_cutAfterLastSensitive(*prevPath, '/', &subStr);
+	CharString_cutAfterLastSensitive(prevPath, '/', &subStr);
 	prevPath->lenAndNullTerminated = CharString_length(subStr);
 
 	gotoIfError3(clean, CharString_appendString(prevPath, newFileName, alloc, e_rr));
@@ -660,14 +653,16 @@ Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 	U64 i = 0;
-	ArchiveEntry parent = (ArchiveEntry) { 0 };
+	ArchiveEntry parent = { 0 };
 	const Allocator *alloc = NULL;
 
 	if (!Archive_getPath((const ArchiveOptionsConst*)archive, NULL, &i, NULL, e_rr))
 		retError(clean, Error_notFound(0, 1, "Archive_move()::loc couldn't be resolved to path"));
 
 	ArchiveOptionsConst directoryNameArchive = (ArchiveOptionsConst) {
-		.archive = archive->archive, .path = directoryName, .alloc = archive->alloc
+		.archive = archive->archive,
+		.path = directoryName,
+		.alloc = archive->alloc
 	};
 
 	if (!Archive_getPath(&directoryNameArchive, &parent, NULL, &resolved, e_rr))
@@ -680,12 +675,12 @@ Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName
 
 	CharString *filePath = &archive->archive->entries.ptrNonConst[i].path;
 
-	const U64 v = CharString_findLastSensitive(*filePath, '/', 0, 0);
+	const U64 v = CharString_findLastSensitive(filePath, '/', 0, 0);
 
 	if (v != U64_MAX)
-		gotoIfError3(clean, CharString_popFrontCount(filePath, v + 1, e_rr))
+		gotoIfError3(clean, CharString_popFrontCount(filePath, v + 1, e_rr));
 
-	if (CharString_length(*directoryName)) {
+	if (directoryName && CharString_length(*directoryName)) {
 		gotoIfError3(clean, CharString_insert(filePath, '/', 0, alloc, e_rr));
 		gotoIfError3(clean, CharString_insertString(filePath, directoryName, 0, alloc, e_rr));
 	}
@@ -698,19 +693,17 @@ clean:
 	return s_uccess;
 }
 
-//TODO:
-
 Bool Archive_getInfo(const ArchiveOptions *archive, FileInfo *info, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	CharString resolved = CharString_createNull();
 
-	if(!archive.entries.ptr || !info)
-		retError(clean, Error_nullPointer(!info ? 2 : 0, "Archive_getInfo()::archive and info are required"))
+	if(!info)
+		retError(clean, Error_nullPointer(2, "Archive_getInfo()::info is required"));
 
-	if(!Archive_getPath(archive, path, &entry, NULL, &resolved, alloc, e_rr))
-		retError(clean, Error_notFound(0, 1, "Archive_getInfo()::path couldn't resolve to path"))
+	if(!Archive_getPath((const ArchiveOptionsConst*)archive, &entry, NULL, &resolved, e_rr))
+		retError(clean, Error_notFound(0, 1, "Archive_getInfo()::path couldn't resolve to path"));
 
 	*info = (FileInfo) {
 		.access = Buffer_isConstRef(entry.data) ? EFileAccess_Read : EFileAccess_ReadWrite,
@@ -726,11 +719,9 @@ clean:
 
 U64 Archive_getIndex(const ArchiveOptions *archive) {
 	U64 v = U64_MAX;
-	Archive_getPath(archive, NULL, &v, NULL, NULL);
+	Archive_getPath((const ArchiveOptionsConst*)archive, NULL, &v, NULL, NULL);
 	return v;
 }
-
-//TODO:
 
 Bool Archive_updateFileData(const ArchiveOptions *archive, const Buffer *data, Error *e_rr) {
 
@@ -738,41 +729,36 @@ Bool Archive_updateFileData(const ArchiveOptions *archive, const Buffer *data, E
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
 
-	if (!archive || !archive->entries.ptr)
-		retError(clean, Error_nullPointer(0, "Archive_updateFileData()::archive is required"))
-
-	if(!Archive_getPath(*archive, path, &entry, &i, NULL, alloc, e_rr))
+	if(!Archive_getPath((const ArchiveOptionsConst*)archive, &entry, &i, NULL, e_rr))
 		retError(clean, Error_notFound(0, 1, "Archive_updateFileData()::path couldn't resolve to path"))
 
-	Buffer_free(&entry.data, alloc);
-	archive->entries.ptrNonConst[i].data = data;
+	Buffer_free(&entry.data, archive->alloc);
+	archive->archive->entries.ptrNonConst[i].data = *data;
 
 clean:
 	return s_uccess;
 }
-
-//TODO:
 
 Bool Archive_getFileDataInternal(const ArchiveOptions *archive, Buffer *data, Bool isConst, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
-	if (!archive.entries.ptr || !data)
-		retError(clean, Error_nullPointer(!data ? 2 : 0, "Archive_getFileDataInternal()::archive and data are required"))
+	if (!data)
+		retError(clean, Error_nullPointer(!data ? 2 : 0, "Archive_getFileDataInternal()::data is required"));
 
 	if(data->ptr)
 		retError(clean, Error_invalidParameter(
 			2, 0, "Archive_getFileDataInternal()::data wasn't empty, might indicate memleak"
-		))
+		));
 
-	if(!Archive_getPath(archive, path, &entry, NULL, NULL, alloc, e_rr))
-		retError(clean, Error_notFound(0, 1, "Archive_getFileDataInternal()::path couldn't be resolved to path"))
+	if (!Archive_getPath((const ArchiveOptionsConst*)archive, &entry, NULL, NULL, e_rr))
+		retError(clean, Error_notFound(0, 1, "Archive_getFileDataInternal()::path couldn't be resolved to path"));
 
 	if (entry.type != EFileType_File)
 		retError(clean, Error_invalidOperation(
 			0, "Archive_getFileDataInternal()::entry.type isn't file, can't get data of folder"
-		))
+		));
 
 	if(isConst)
 		*data = Buffer_createRefConst(entry.data.ptr, Buffer_length(entry.data));
@@ -780,66 +766,66 @@ Bool Archive_getFileDataInternal(const ArchiveOptions *archive, Buffer *data, Bo
 	else if(Buffer_isConstRef(entry.data))
 		retError(clean, Error_constData(1, 0, "Archive_getFileDataInternal()::entry.data should be writable"))
 
-	else *data = Buffer_createRef((U8*)entry.data.ptr, Buffer_length(entry.data));
+	else *data = Buffer_createRef(entry.data.ptrNonConst, Buffer_length(entry.data));
 
 clean:
 	return s_uccess;
 }
-
-Bool Archive_getFileData(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
-	return Archive_getFileDataInternal(archive, data, false, e_rr);
-}
-
-Bool Archive_getFileDataConst(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
-	return Archive_getFileDataInternal(archive, data, true, e_rr);
-}
-
-//TODO:
 
 Bool Archive_foreach(const ArchiveQuery *query, FileCallback callback, void *userData, EFileType type, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
 	Bool isVirtual = false;
+	const Allocator *alloc = NULL;
 
-	if(!archive.entries.ptr || !callback)
-		retError(clean, Error_nullPointer(!callback ? 3 : 0, "Archive_foreach()::archive and callback are required"))
+	if (!query || !query->archive || !query->archive->entries.ptr || !callback)
+		retError(clean, Error_nullPointer(!callback ? 3 : 0, "Archive_foreach()::query, ->archive and callback are required"));
 
-	if(type > EFileType_Any)
+	if ((U64)type > EFileType_Any)
 		retError(clean, Error_invalidEnum(
 			5, (U64)type, (U64)EFileType_Any, "Archive_foreach()::type should be file, folder or any"
-		))
+		));
 
-	gotoIfError3(clean, File_resolve(loc, &isVirtual, 128, CharString_createNull(), alloc, &resolved, e_rr))
+	CharString loc = CharString_createNull();
 
-	if(isVirtual)
-		retError(clean, Error_invalidOperation(0, "Archive_foreach()::path can't start with start with // (virtual)"))
+	if (query->loc)
+		loc = *query->loc;
+
+	gotoIfError3(clean, File_resolve(loc, &isVirtual, 128, CharString_createNull(), query->alloc, &resolved, e_rr));
+	alloc = query->alloc;
+
+	if (isVirtual)
+		retError(clean, Error_invalidOperation(0, "Archive_foreach()::path can't start with start with // (virtual)"));
 
 	//Append / (replace last \0)
 
-	if(CharString_length(resolved))									//Ignore root
-		gotoIfError2(clean, CharString_append(&resolved, '/', alloc))
+	if (CharString_length(resolved))									//Ignore root
+		gotoIfError3(clean, CharString_append(&resolved, '/', alloc, e_rr));
 
-	const U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(resolved, '/', 0);
+	const Bool isRecursive = query->isRecursive;
+	const U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(&resolved, '/', 0);
 
 	//TODO: Have a map where it's easy to find child files/folders.
 	//		For now we'll have to loop over every file.
 	//		Because our files are dynamic, so we don't want to reorder those every time.
 	//		Maybe we should have Archive_optimize which is called before writing or if this functionality should be used.
 
-	for (U64 i = 0; i < archive.entries.length; ++i) {
+	ListArchiveEntry entries = query->archive->entries;
 
-		const ArchiveEntry cai = archive.entries.ptr[i];
+	for (U64 i = 0; i < entries.length; ++i) {
+
+		const ArchiveEntry cai = entries.ptr[i];
 
 		if(type != EFileType_Any && type != cai.type)
 			continue;
 
-		if(!CharString_startsWithStringInsensitive(cai.path, resolved, 0))
+		if(!CharString_startsWithStringInsensitive(&cai.path, &resolved, 0))
 			continue;
 
 		//It contains at least one sub dir
 
-		if(!isRecursive && baseSlash != CharString_countAllSensitive(cai.path, '/', 0))
+		if(!isRecursive && baseSlash != CharString_countAllSensitive(&cai.path, '/', 0))
 			continue;
 
 		FileInfo info = (FileInfo) {
@@ -853,41 +839,12 @@ Bool Archive_foreach(const ArchiveQuery *query, FileCallback callback, void *use
 			info.timestamp = cai.timestamp;
 		}
 
-		gotoIfError3(clean, callback(info, userData, e_rr))
+		gotoIfError3(clean, callback(&info, userData, e_rr));
 	}
 
 clean:
-	CharString_free(&resolved, alloc);
+	if(alloc)
+		CharString_free(&resolved, alloc);
+
 	return s_uccess;
-}
-
-static Bool countFile(FileInfo info, U64 *res, Error *e_rr) {
-	(void)info; (void) e_rr;
-	++*res;
-	return true;
-}
-
-static inline Bool Archive_queryFileObjectCount(const ArchiveQuery *query, EFileType type, U64 *res, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	if (!res)
-		retError(clean, Error_nullPointer(2, "Archive_queryFileObjectCount()::res is required"));
-
-	gotoIfError3(clean, Archive_foreach(query, (FileCallback) countFile, res, type, e_rr));
-
-clean:
-	return s_uccess;
-}
-
-Bool Archive_queryFileEntryCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
-	return Archive_queryFileObjectCount(query, EFileType_Any, res, e_rr);
-}
-
-Bool Archive_queryFileCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
-	return Archive_queryFileObjectCount(query, EFileType_File, res, e_rr);
-}
-
-Bool Archive_queryFolderCount(const ArchiveQuery *query, U64 *res, Error *e_rr) {
-	return Archive_queryFileObjectCount(query, EFileType_Folder, res, e_rr);
 }

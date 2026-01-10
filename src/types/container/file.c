@@ -378,3 +378,12 @@ clean:
 	CharString_free(&resolvedSubFile, alloc);
 	return s_uccess;
 }
+
+void FileInfo_free(FileInfo *info, const Allocator *alloc) {
+
+	if (!info)
+		return;
+
+	CharString_free(&info->path, alloc);
+	*info = (FileInfo){ 0 };
+}
