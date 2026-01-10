@@ -28,15 +28,16 @@
 #endif
 
 typedef struct ArchiveEntry {
-	CharString path;
+	CharString path;											//Fully qualified name
 	Buffer data;
-	EFileType type;												//If true, data should be empty
+	EFileType type;												//If EFileType_Folder, data should be empty
 	U32 padding;
-	Ns timestamp;												//Shouldn't be set if isFolder. Will disappear
+	Ns timestamp;												//Shouldn't be set if EFileType_Folder
 } ArchiveEntry;
 
 TList(ArchiveEntry);
 
+//An archive is case insensitive to allow ease of write from an archive to disk.
 typedef struct Archive {
 	ListArchiveEntry entries;
 } Archive;
@@ -82,7 +83,7 @@ typedef struct ArchiveOptions {
 
 Bool Archive_hasFile(const ArchiveOptionsConst *archive);
 Bool Archive_hasFolder(const ArchiveOptionsConst *archive);
-Bool Archive_has(const ArchiveOptionsConst *archive);
+Bool Archive_has(const ArchiveOptionsConst *archive);			//Has file or folder
 
 Bool Archive_combine(
 	const Archive *a,
@@ -96,26 +97,27 @@ Bool Archive_combine(
 Bool Archive_addDirectory(const ArchiveOptions *archive, Error *e_rr);
 Bool Archive_addFile(const ArchiveOptions *archive, Buffer *data, Ns timestamp, Error *e_rr);
 
+//Moves ownership from Buffer to archive and preserves constness
 Bool Archive_updateFileData(const ArchiveOptions *archive, const Buffer *data, Error *e_rr);
 
-Bool Archive_getFileDataInternal(const ArchiveOptions *archive, Buffer *data, Bool isConst, Error *e_rr);
+Bool Archive_getFileDataWithConst(const ArchiveOptions *archive, Buffer *data, Bool isConst, Error *e_rr);
 
 static inline Bool Archive_getFileData(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
-	return Archive_getFileDataInternal(archive, data, false, e_rr);
+	return Archive_getFileDataWithConst(archive, data, false, e_rr);
 }
 
 static inline Bool Archive_getFileDataConst(const ArchiveOptions *archive, Buffer *data, Error *e_rr) {
-	return Archive_getFileDataInternal(archive, data, true, e_rr);
+	return Archive_getFileDataWithConst(archive, data, true, e_rr);
 }
 
 Bool Archive_removeFile(const ArchiveOptions *archive, Error *e_rr);
-Bool Archive_removeFolder(const ArchiveOptions *archive, Error *e_rr);
+Bool Archive_removeFolder(const ArchiveOptions *archive, Error *e_rr);		//Recursively delete folder
 Bool Archive_remove(const ArchiveOptions *archive, Error *e_rr);
 
-Bool Archive_rename(const ArchiveOptions *archive, const CharString *newFileName, Error *e_rr);
-Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName, Error *e_rr);
+Bool Archive_rename(const ArchiveOptions *archive, const CharString *newFileName, Error *e_rr);		//Non recursively rename
+Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName, Error *e_rr);		//Non recursively move
 
-U64 Archive_getIndex(const ArchiveOptions *archive);		//Get index in archive
+U64 Archive_getIndex(const ArchiveOptions *archive);		//Get current index in archive (U64_MAX if missing)
 Bool Archive_getInfo(const ArchiveOptions *archive, FileInfo *info, Error *e_rr);	//FileInfo returned needs freeing
 
 typedef struct ArchiveQuery {

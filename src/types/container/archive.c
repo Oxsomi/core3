@@ -56,11 +56,11 @@ Bool Archive_createCopy(const Archive *a, const Allocator *alloc, Archive *archi
 	Bool allocate = false;
 
 	if(!a || !archive)
-		retError(clean, Error_nullPointer(!a ? 0 : 4, "Archive_combine()::a and combined are required"));
+		retError(clean, Error_nullPointer(!a ? 0 : 4, "Archive_createCopy()::a and combined are required"));
 
 	if(archive->entries.ptr)
 		retError(clean, Error_invalidParameter(
-			4, 0, "Archive_combine()::combined contains data, which could indicate a memleak"
+			4, 0, "Archive_createCopy()::combined contains data, which could indicate a memleak"
 		));
 
 	ListArchiveEntry aEntries = a->entries;
@@ -188,6 +188,7 @@ Bool Archive_combine(
 		gotoIfError3(clean, ListU64_create(bEntries.length, alloc, &movedBEntries, e_rr));
 
 	gotoIfError3(clean, Archive_createCopy(a, alloc, combined, e_rr));
+	allocate = true;
 
 	for (U64 i = 0; i < bEntries.length; ++i) {
 
@@ -569,15 +570,15 @@ static inline Bool Archive_removeInternal(const ArchiveOptions *archive, EFileTy
 
 		for (U64 j = entries->length - 1; j != U64_MAX; --j) {
 
-			const ArchiveEntry caj = entries->ptr[j];
+			ArchiveEntry *caj = entries->ptrNonConst + j;
 
-			if(!CharString_startsWithStringInsensitive(&caj.path, &resolved, 0))
+			if(!CharString_startsWithStringInsensitive(&caj->path, &resolved, 0))
 				continue;
 
 			//Free and remove from array
 
-			Buffer_free(&entry.data, alloc);
-			CharString_free(&entry.path, alloc);
+			Buffer_free(&caj->data, alloc);
+			CharString_free(&caj->path, alloc);
 
 			gotoIfError3(clean, ListArchiveEntry_popLocation(entries, j, NULL, e_rr));
 
@@ -652,6 +653,7 @@ Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName
 
 	Bool s_uccess = true;
 	CharString resolved = CharString_createNull();
+	CharString newPath = CharString_createNull();
 	U64 i = 0;
 	ArchiveEntry parent = { 0 };
 	const Allocator *alloc = NULL;
@@ -659,13 +661,13 @@ Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName
 	if (!Archive_getPath((const ArchiveOptionsConst*)archive, NULL, &i, NULL, e_rr))
 		retError(clean, Error_notFound(0, 1, "Archive_move()::loc couldn't be resolved to path"));
 
-	ArchiveOptionsConst directoryNameArchive = (ArchiveOptionsConst) {
+	ArchiveOptionsConst queryArchive = (ArchiveOptionsConst) {
 		.archive = archive->archive,
 		.path = directoryName,
 		.alloc = archive->alloc
 	};
 
-	if (!Archive_getPath(&directoryNameArchive, &parent, NULL, &resolved, e_rr))
+	if (!Archive_getPath(&queryArchive, &parent, NULL, &resolved, e_rr))
 		retError(clean, Error_notFound(0, 2, "Archive_move()::directoryName couldn't be resolved to path"));
 
 	alloc = archive->alloc;
@@ -673,22 +675,40 @@ Bool Archive_move(const ArchiveOptions *archive, const CharString *directoryName
 	if (parent.type != EFileType_Folder)
 		retError(clean, Error_invalidOperation(0, "Archive_move()::directoryName should resolve to folder file"));
 
-	CharString *filePath = &archive->archive->entries.ptrNonConst[i].path;
+	//Make new path
 
-	const U64 v = CharString_findLastSensitive(filePath, '/', 0, 0);
+	ArchiveEntry *entry = archive->archive->entries.ptrNonConst + i;
 
-	if (v != U64_MAX)
-		gotoIfError3(clean, CharString_popFrontCount(filePath, v + 1, e_rr));
+	CharString fileName = entry->path;
+	Bool containsSlash = CharString_cutBeforeLastSensitive(&entry->path, '/', &fileName);
 
-	if (directoryName && CharString_length(*directoryName)) {
-		gotoIfError3(clean, CharString_insert(filePath, '/', 0, alloc, e_rr));
-		gotoIfError3(clean, CharString_insertString(filePath, directoryName, 0, alloc, e_rr));
+	if (CharString_length(resolved)) {
+
+		gotoIfError3(clean, CharString_createCopy(resolved, alloc, &newPath, e_rr));
+
+		if(!containsSlash)
+			gotoIfError3(clean, CharString_append(&newPath, '/', alloc, e_rr));
 	}
+
+	gotoIfError3(clean, CharString_appendString(&newPath, &fileName, alloc, e_rr));
+
+	if (containsSlash && !CharString_length(resolved))		//cutBeforeLast returns /fileName if there was one
+		gotoIfError3(clean, CharString_popFront(&newPath, e_rr));
+
+	queryArchive.path = &newPath;
+	if (Archive_has(&queryArchive))
+		retError(clean, Error_alreadyDefined(0, "Archive_move() file path already exists"));
+
+	CharString_free(&entry->path, alloc);
+	entry->path = newPath;
+	newPath = CharString_createNull();
 
 clean:
 
-	if(alloc)
+	if (alloc) {
 		CharString_free(&resolved, alloc);
+		CharString_free(&newPath, alloc);
+	}
 
 	return s_uccess;
 }
@@ -739,7 +759,7 @@ clean:
 	return s_uccess;
 }
 
-Bool Archive_getFileDataInternal(const ArchiveOptions *archive, Buffer *data, Bool isConst, Error *e_rr) {
+Bool Archive_getFileDataWithConst(const ArchiveOptions *archive, Buffer *data, Bool isConst, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
