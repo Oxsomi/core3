@@ -395,15 +395,15 @@ static inline U64 ETextureFormat_getAlphaBits(ETextureFormat f) {
 }
 
 static inline U64 ETextureFormat_getBlueBits(ETextureFormat f) {
-	return ETextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 3) & 077) << 1;
+	return ETextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 6) & 077) << 1;
 }
 
 static inline U64 ETextureFormat_getGreenBits(ETextureFormat f) {
-	return ETextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 6) & 077) << 1;
+	return ETextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 12) & 077) << 1;
 }
 
 static inline U64 ETextureFormat_getRedBits(ETextureFormat f) {
-	return ETextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 9) & 077) << 1;
+	return ETextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 18) & 077) << 1;
 }
 
 static inline Bool ETextureFormat_hasRed(ETextureFormat f) { return ETextureFormat_getRedBits(f); }

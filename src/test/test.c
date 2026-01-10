@@ -33,6 +33,8 @@
 #include "formats/oiBC/chimera.h"
 #include "types/base/constants.h"
 #include "types/math/quat.h"
+#include "types/base/fixed_point.h"
+#include "types/container/texture_format.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -158,11 +160,9 @@ int main() {
 	//TODO: Test math
 	//TODO: Test list
 	//TODO: Test archive
-	//TODO: Test texture format
 	//TODO: Test ref ptr?
 	//TODO: Test allocation buffer
 	//TODO: Test buffer more
-	//TODO: Test fixed point
 
 	//Test string to number functions
 
@@ -2236,6 +2236,54 @@ int main() {
 		CharString_free(&tmp, alloc);
 	}
 
+	//Fixed point tests
+
+	Log_debugLn(alloc, "Testing fixed point (FP37f4)");
+
+	{
+		const FP37f4 a = FP37f4_fromDouble(123.25);			//123.25
+		const FP37f4 b = FP37f4_fromDouble(0.75);			//0.75
+
+		if (FP37f4_toDouble(a) != 123.25)
+			retError(clean, Error_invalidState(0, "FP37f4_toDouble failed"));
+
+		if(a != (FP37f4)(0b0100 | (123 << 4)))				//123.25 rendered as FP37f4
+			retError(clean, Error_invalidState(0, "FP37f4_fromDouble failed"));
+
+		const FP37f4 sum = FP37f4_add(a, b);				//124.0
+
+		if (FP37f4_toDouble(sum) != 124)
+			retError(clean, Error_invalidState(0, "FP37f4_add failed"));
+
+		const FP37f4 diff = FP37f4_sub(a, b);				//122.5
+
+		if (FP37f4_toDouble(diff) != 122.5)
+			retError(clean, Error_invalidState(0, "FP37f4_sub failed"));
+	}
+
+	Log_debugLn(alloc, "Testing fixed point (FP46f6)");
+
+	{
+		const FP46f6 a = FP46f6_fromDouble(1000000.0625);	//1e6 + 1/16
+		const FP46f6 b = FP46f6_fromDouble(0.9375);			//15/16
+
+		if (FP46f6_toDouble(a) != 1000000.0625)
+			retError(clean, Error_invalidState(0, "FP46f6_toDouble failed"));
+
+		if(a != (FP46f6)(0b000100 | (1000000 << 6)))		//1000000.0625 rendered as FP46f6
+			retError(clean, Error_invalidState(0, "FP46f6_fromDouble failed"));
+
+		const FP46f6 sum = FP46f6_add(a, b);				//1000001.0
+
+		if (FP46f6_toDouble(sum) != 1000001.0)
+			retError(clean, Error_invalidState(0, "FP46f6_add failed"));
+
+		const FP46f6 diff = FP46f6_sub(a, b);				//999999.125
+
+		if (FP46f6_toDouble(diff) != 999999.125)
+			retError(clean, Error_invalidState(0, "FP46f6_sub failed"));
+	}
+
 	//Test ETypeId_toShortId
 
 	Log_debugLn(alloc, "Testing ETypeId_toShortId");
@@ -2249,6 +2297,169 @@ int main() {
 			shortTypeId = ETypeId_toShortId(typeId);
 			retError(clean, Error_invalidState((U32)i, "ETypeId_toShortId failed"));
 		}
+	}
+
+	//Test ETextureFormat
+
+	Log_debugLn(alloc, "Testing ETextureFormatId (mapping DXGI_FORMAT)");
+
+	{
+		DXFormat dx = ETextureFormatId_toDXFormat(ETextureFormatId_RGBA8);
+		if (dx != 28)
+			retError(clean, Error_invalidState(0, "DXFormat mapping failed for RGBA8"));
+
+		ETextureFormatId id = DXFormat_toTextureFormatId(dx);
+		if (id != ETextureFormatId_RGBA8)
+			retError(clean, Error_invalidState(0, "Reverse DXFormat mapping failed for RGBA8"));
+
+		dx = ETextureFormatId_toDXFormat(ETextureFormatId_BC7);
+		if (dx != 98)
+			retError(clean, Error_invalidState(0, "DXFormat mapping failed for BC7"));
+
+		id = DXFormat_toTextureFormatId(dx);
+		if (id != ETextureFormatId_BC7)
+			retError(clean, Error_invalidState(0, "Reverse DXFormat mapping failed for BC7"));
+	}
+
+	Log_debugLn(alloc, "Testing ETextureFormatId (mapping to ETextureFormat)");
+
+	{
+		if(ETextureFormatId_unpack[ETextureFormatId_RGBA8] != ETextureFormat_RGBA8)
+			retError(clean, Error_invalidState(0, "ETextureFormatId_unpack mapping failed for RGBA8"));
+
+		if(ETextureFormatId_unpack[ETextureFormatId_BC7] != ETextureFormat_BC7)
+			retError(clean, Error_invalidState(0, "ETextureFormatId_unpack mapping failed for BC7"));
+
+		if(ETextureFormatId_unpack[ETextureFormatId_ASTC_10x10] != ETextureFormat_ASTC_10x10)
+			retError(clean, Error_invalidState(0, "ETextureFormatId_unpack mapping failed for ASTC_10x10"));
+	}
+
+	Log_debugLn(alloc, "Testing ETextureFormatId (non compressed)");
+
+	{
+		const ETextureFormat fmt = ETextureFormat_RGBA8;
+		
+		if(ETextureFormat_getPrimitive(fmt) != ETexturePrimitive_UNorm)
+			retError(clean, Error_invalidState(0, "RGBA8 primitive mismatch"));
+
+		if(
+			ETextureFormat_getRedBits(fmt) != 8 ||
+			ETextureFormat_getGreenBits(fmt) != 8 ||
+			ETextureFormat_getBlueBits(fmt) != 8 ||
+			ETextureFormat_getAlphaBits(fmt) != 8
+		)
+			retError(clean, Error_invalidState(0, "RGBA8 R|G|B|A bits mismatch"));
+		
+		if(ETextureFormat_getIsCompressed(fmt))
+			retError(clean, Error_invalidState(0, "RGBA8 should not be compressed"));
+		
+		if(ETextureFormat_getChannels(fmt) != 4)
+			retError(clean, Error_invalidState(0, "RGBA8 channel count mismatch"));
+		
+		if(ETextureFormat_getSize(fmt, 1, 1, 1) != 4)
+			retError(clean, Error_invalidState(0, "RGBA8 size mismatch"));
+	}
+
+	Log_debugLn(alloc, "Testing ETextureFormatId (compressed BCn)");
+
+	{
+		static const ETextureFormat fmt = ETextureFormat_BC7;
+
+		if (ETextureFormat_getPrimitive(fmt) != ETexturePrimitive_Compressed)
+			retError(clean, Error_invalidState(0, "BC7 primitive mismatch"));
+
+		if (ETextureFormat_getCompressionType(fmt) != ETextureCompressionType_UNorm)
+			retError(clean, Error_invalidState(0, "BC7 compression type mismatch"));
+
+		if (ETextureFormat_getCompressionAlgo(fmt) != ETextureCompressionAlgo_BCn)
+			retError(clean, Error_invalidState(0, "BC7 compression algo mismatch"));
+
+		if (
+			!ETextureFormat_hasRed(fmt) ||
+			!ETextureFormat_hasGreen(fmt) ||
+			!ETextureFormat_hasBlue(fmt) ||
+			!ETextureFormat_hasAlpha(fmt)
+		)
+			retError(clean, Error_invalidState(0, "BC7 should have R|G|B|A"));
+
+		if (ETextureFormat_getChannels(fmt) != 4)
+			retError(clean, Error_invalidState(0, "BC7 channel count mismatch"));
+
+		U8 alignX = 0, alignY = 0;
+		if (!ETextureFormat_getAlignment(fmt, &alignX, &alignY))
+			retError(clean, Error_invalidState(0, "BC7 alignment query failed"));
+
+		if (alignX != 4 || alignY != 4)
+			retError(clean, Error_invalidState(0, "BC7 alignment mismatch"));
+
+		//Size calculation for 8x8x1
+		const U64 expectedSize = (((8 + alignX - 1) / alignX) * ((8 + alignY - 1) / alignY) * ETextureFormat_getBits(fmt) + 7) >> 3;
+		if (ETextureFormat_getSize(fmt, 8, 8, 1) != expectedSize)
+			retError(clean, Error_invalidState(0, "BC7 size calculation mismatch"));
+	}
+
+	Log_debugLn(alloc, "Testing ETextureFormatId (compressed ASTC)");
+
+	{
+		static const ETextureFormat fmt = ETextureFormat_ASTC_8x8_sRGB;
+
+		if (ETextureFormat_getPrimitive(fmt) != ETexturePrimitive_Compressed)
+			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB primitive mismatch"));
+
+		if (ETextureFormat_getCompressionAlgo(fmt) != ETextureCompressionAlgo_ASTC)
+			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB algo mismatch"));
+
+		if (ETextureFormat_getCompressionType(fmt) != ETextureCompressionType_sRGB)
+			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB compression type mismatch"));
+		
+		if (
+			!ETextureFormat_hasRed(fmt) ||
+			!ETextureFormat_hasGreen(fmt) ||
+			!ETextureFormat_hasBlue(fmt) ||
+			!ETextureFormat_hasAlpha(fmt)
+		)
+			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB should have R|G|B|A"));
+
+		U8 alignX = 0, alignY = 0;
+		if (!ETextureFormat_getAlignment(fmt, &alignX, &alignY))
+			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB alignment query failed"));
+
+		if (alignX != 8 || alignY != 8)
+			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB alignment mismatch"));
+
+		U64 size = ETextureFormat_getSize(fmt, 16, 16, 1);
+		if (size != (((16 + alignX - 1) / alignX) * ((16 + alignY - 1) / alignY) * ETextureFormat_getBits(fmt) + 7) >> 3)
+			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB size calculation mismatch"));
+	}
+
+	Log_debugLn(alloc, "Testing EDepthStencilFormat");
+
+	{
+		static const EDepthStencilFormat depthFormats[] = {
+			EDepthStencilFormat_D16,
+			EDepthStencilFormat_D32,
+			EDepthStencilFormat_D24S8Ext,
+			EDepthStencilFormat_D32S8X24Ext
+		};
+
+		for (U32 i = 0; i < (U32)(sizeof(depthFormats) / sizeof(depthFormats[0])); ++i) {
+
+			const EDepthStencilFormat f = depthFormats[i];
+
+			const DXFormat dx = EDepthStencilFormat_toDXFormat(f);
+			if (dx == 0)
+				retError(clean, Error_invalidState(i, "Depth format DXFormat mapping failed"));
+
+			EDepthStencilFormat fBack = DXFormat_toDepthStencilFormat(dx);
+			if (fBack != f)
+				retError(clean, Error_invalidState(i, "DXFormat to DepthStencilFormat reverse mapping failed"));
+		}
+
+		if(EDepthStencilFormat_toDXFormat(EDepthStencilFormat_D24S8Ext) != 45)
+			retError(clean, Error_invalidState(0, "DXFormat to DepthStencilFormat D24S8 format check failed"));
+
+		if(EDepthStencilFormat_toDXFormat(EDepthStencilFormat_D32) != 40)
+			retError(clean, Error_invalidState(0, "DXFormat to DepthStencilFormat D32 format check failed"));
 	}
 
 	//Test some basic chimera operations
@@ -2376,7 +2587,7 @@ int main() {
 			retError(clean, Error_invalidState(0, "EFidiA all test failed"));
 	}
 
-	//File test for disallowed file names and hard to handle cases such as
+	//TODO: File test for disallowed file names and hard to handle cases such as
 	// "", "/", "a/./b", "a/b/../../c", "../outside", "C:/folder", "C:folder", "//virtual/file"
 	//File_resolve and File_makeRelative.
 
