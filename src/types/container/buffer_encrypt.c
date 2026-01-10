@@ -226,6 +226,7 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 
 	//Get key that's gonna be used for aes blocks
 
+	ctx->encryptionType = encrypt->type;
 	AESEncryptionContext_expandKey(encrypt->constDecrypt.key, ctx->key, ctx->encryptionType);
 
 	//Prepare ghash
@@ -257,7 +258,7 @@ static inline void AESEncryptionContext_finish(AESEncryptionContext *ctx, const 
 
 	//Add length of inputs into the message too (lengths are in bits)
 
-	AESEncryptionContextLengths lengths = (AESEncryptionContextLengths) { 0 };
+	AESEncryptionContextLengths lengths = { 0 };
 
 	if(additionalData)
 		lengths.arr[0] = U64_swapEndianness(Buffer_length(*additionalData) << 3);
