@@ -28,6 +28,7 @@
 #include "types/base/allocator.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
+#include "types/math/pack.h"
 #include "types/math/type_cast.h"
 #include "types/math/flp.h"
 #include "formats/oiBC/chimera.h"
@@ -2284,6 +2285,129 @@ int main() {
 			retError(clean, Error_invalidState(0, "FP46f6_sub failed"));
 	}
 
+	//Test pack
+
+	Log_debugLn(alloc, "Testing packing (U64_(pack/unpack/setPacked)21x3)");
+
+	{
+		U32 x = 0x1FFFFF, y = 0x0, z = 0x123456;
+		U64 packed = U64_pack21x3(x, y, z);
+
+		if (
+			U64_unpack21x3(packed, 0) != x ||
+			U64_unpack21x3(packed, 1) != y ||
+			U64_unpack21x3(packed, 2) != z
+		)
+			retError(clean, Error_invalidState(0, "U64_unpack21x3 failed"));
+
+		if (U64_unpack21x3(U64_MAX, 0) != U32_MAX || U64_unpack21x3(U64_MAX, 3) != U32_MAX)
+			retError(clean, Error_invalidState(0, "U64_unpack21x3 invalid should return U32_MAX"));
+
+		if(!U64_setPacked21x3(&packed, 1, 0xABCDE) || U64_unpack21x3(packed, 1) != 0xABCDE)
+			retError(clean, Error_invalidState(0, "U64_setPacked21x3 failed"));
+
+		if(U64_setPacked21x3(&packed, 3, 1))
+			retError(clean, Error_invalidState(0, "setPacked21x3 invalid offset should return error"));
+	}
+
+
+	Log_debugLn(alloc, "Testing packing (U64_pack20x3u4)");
+
+	{
+		U64 packed = 0;
+		U32 x = 0xFFFFF, y = 0xABCDE, z = 0x12345;
+		U8 u4 = 0xF;
+		if (!U64_pack20x3u4(&packed, x, y, z, u4))
+			retError(clean, Error_invalidState(0, "U64_pack20x3u4 failed"));
+
+		if (
+			U64_unpack20x3u4(packed, 0) != x ||
+			U64_unpack20x3u4(packed, 1) != y ||
+			U64_unpack20x3u4(packed, 2) != z ||
+			U64_unpack20x3u4(packed, 3) != u4
+		)
+			retError(clean, Error_invalidState(0, "U64_unpack20x3u4 failed"));
+
+		if (U64_unpack20x3u4(U64_MAX, 4) != U32_MAX)
+			retError(clean, Error_invalidState(0, "U64_unpack20x3u4 invalid should return U32_MAX"));
+
+		if (!U64_setPacked20x3u4(&packed, 2, 0x54321) || U64_unpack20x3u4(packed, 2) != 0x54321)
+			retError(clean, Error_invalidState(0, "U64_setPacked20x3u4 failed"));
+
+		if (U64_setPacked20x3u4(&packed, 3, 0x10))
+			retError(clean, Error_invalidState(0, "U64_setPacked20x3u4 invalid u4 should return error"));
+	}
+
+	Log_debugLn(alloc, "Testing packing (bit set)");
+
+	{
+		U32 val = 0;
+
+		if (!U32_setBit(&val, 5, true) || !U32_getBit(val, 5))
+			retError(clean, Error_invalidState(0, "U32 set/getBit failed"));
+
+		if (!U32_setBit(&val, 5, false) || U32_getBit(val, 5))
+			retError(clean, Error_invalidState(0, "U32 set/getBit failed"));
+
+		if (U32_setBit(&val, 32, true))
+			retError(clean, Error_invalidState(0, "U32 setBit invalid offset should fail"));
+	}
+
+	Log_debugLn(alloc, "Testing quaternion pack/unpack");
+
+	{
+		const QuatF32 quats[] = {
+			QuatF32_create(0.3f,	0.5f,	0.4f,	0.7f),
+			QuatF32_create(-0.3f,	0.5f,	0.4f,	0.7f),
+			QuatF32_create(0.3f,	-0.5f,	0.4f,	0.7f),
+			QuatF32_create(-0.3f,	-0.5f,	0.4f,	0.7f),
+			QuatF32_create(0.3f,	0.5f,	-0.4f,	0.7f),
+			QuatF32_create(-0.3f,	0.5f,	-0.4f,	0.7f),
+			QuatF32_create(0.3f,	-0.5f,	-0.4f,	0.7f),
+			QuatF32_create(-0.3f,	-0.5f,	-0.4f,	0.7f),
+			QuatF32_create(0.3f,	0.5f,	0.4f,	-0.7f),
+			QuatF32_create(-0.3f,	0.5f,	0.4f,	-0.7f),
+			QuatF32_create(0.3f,	-0.5f,	0.4f,	-0.7f),
+			QuatF32_create(-0.3f,	-0.5f,	0.4f,	-0.7f),
+			QuatF32_create(0.3f,	0.5f,	-0.4f,	-0.7f),
+			QuatF32_create(-0.3f,	0.5f,	-0.4f,	-0.7f),
+			QuatF32_create(0.3f,	-0.5f,	-0.4f,	-0.7f),
+			QuatF32_create(-0.3f,	-0.5f,	-0.4f,	-0.7f),
+			QuatF32_create(1, 0, 0, 0),
+			QuatF32_create(0, 1, 0, 0),
+			QuatF32_create(0, 0, 1, 0),
+			QuatF32_create(0, 0, 0, 1),
+			QuatF32_create(-1, 0, 0, 0),
+			QuatF32_create(0, -1, 0, 0),
+			QuatF32_create(0, 0, -1, 0),
+			QuatF32_create(0, 0, 0, -1)
+		};
+
+		for (U64 i = 0; i < sizeof(quats) / sizeof(quats[0]); ++i) {
+
+			QuatF32 quat = QuatF32_normalize(quats[i]);		//We need a properly normalized quat
+
+			QuatS16 q16 = QuatF32_pack(quat);
+			QuatF32 qf = QuatS16_unpack(q16);
+			QuatS16 q16b = QuatF32_pack(qf);
+			(void)q16b;
+
+			I32x4 a = QuatS16_unpackI32(q16);
+			I32x4 b = QuatS16_unpackI32(q16b);
+
+			F32x4 delta = F32x4_abs(F32x4_sub(quat, qf));
+			I32x4 deltai = I32x4_abs(I32x4_sub(a, b));
+
+			const F32 maxDelta = 6 / 32768.f;		//Due to re-normalization and floating point precision we lose some bits
+
+			if (F32x4_any(F32x4_gt(delta, F32x4_xxxx4(maxDelta))))
+				retError(clean, Error_invalidState(0, "Quat pack/unpack mismatch F32"));
+
+			if (I32x4_any(I32x4_gt(deltai, I32x4_xxxx4(3))))
+				retError(clean, Error_invalidState(0, "Quat pack/unpack mismatch I32"));
+		}
+	}
+
 	//Test ETypeId_toShortId
 
 	Log_debugLn(alloc, "Testing ETypeId_toShortId");
@@ -2431,6 +2555,8 @@ int main() {
 		if (size != (((16 + alignX - 1) / alignX) * ((16 + alignY - 1) / alignY) * ETextureFormat_getBits(fmt) + 7) >> 3)
 			retError(clean, Error_invalidState(0, "ASTC 8x8 sRGB size calculation mismatch"));
 	}
+
+	//Test EDepthStencilFormat
 
 	Log_debugLn(alloc, "Testing EDepthStencilFormat");
 

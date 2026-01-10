@@ -123,6 +123,10 @@ GET_BIT_IMPL(U8);
 
 //Compressing quaternions
 
+I32x4 QuatS16_unpackI32(QuatS16 q) {
+	return I32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
+}
+
 QuatF32 QuatS16_unpack(QuatS16 q) {
 	const F32x4 v = F32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
 	return F32x4_div(v, F32x4_xxxx4(I16_MAX));

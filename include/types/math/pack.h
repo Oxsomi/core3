@@ -51,6 +51,7 @@ typedef struct QuatS16 {
 } QuatS16;
 
 QuatF32 QuatS16_unpack(QuatS16 q);
+I32x4 QuatS16_unpackI32(QuatS16 q);
 QuatS16 QuatF32_pack(QuatF32 q);
 
 #ifdef __cplusplus
