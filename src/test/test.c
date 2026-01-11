@@ -28,6 +28,7 @@
 #include "types/base/allocator.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
+#include "types/math/rand.h"
 #include "types/math/pack.h"
 #include "types/math/type_cast.h"
 #include "types/math/flp.h"
@@ -164,6 +165,9 @@ int main() {
 	//TODO: Test ref ptr?
 	//TODO: Test allocation buffer
 	//TODO: Test buffer more
+	//TODO: File test for disallowed file names and hard to handle cases such as
+	// "", "/", "a/./b", "a/b/../../c", "../outside", "C:/folder", "C:folder", "//virtual/file"
+	//File_resolve and File_makeRelative.
 
 	//Test string to number functions
 
@@ -2408,6 +2412,26 @@ int main() {
 		}
 	}
 
+	//Unit test random
+
+	Log_debugLn(alloc, "Testing Random");
+
+	{
+		U32 seed = Random_seed(123, 456);
+		const F32 r1 = Random_sample(&seed);
+		const F32 r2 = Random_sample(&seed);
+
+		if (!(r1 >= 0 && r1 < 1 && r2 >= 0 && r2 < 1))
+			retError(clean, Error_invalidState(0, "Random out of range"));
+
+		U32 seed2 = Random_seed(123, 456);
+		const F32 r1b = Random_sample(&seed2);
+		const F32 r2b = Random_sample(&seed2);
+
+		if (seed != seed2 || r1 != r1b || r2 != r2b)
+			retError(clean, Error_invalidState(0, "Random sequence not deterministic"));
+	}
+
 	//Test ETypeId_toShortId
 
 	Log_debugLn(alloc, "Testing ETypeId_toShortId");
@@ -2712,10 +2736,6 @@ int main() {
 		if (expectedCmp != Chimera_getLastCompare(&chimera))
 			retError(clean, Error_invalidState(0, "EFidiA all test failed"));
 	}
-
-	//TODO: File test for disallowed file names and hard to handle cases such as
-	// "", "/", "a/./b", "a/b/../../c", "../outside", "C:/folder", "C:folder", "//virtual/file"
-	//File_resolve and File_makeRelative.
 
 	//
 

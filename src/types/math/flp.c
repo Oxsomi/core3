@@ -22,84 +22,7 @@
 #include "types/math/flp.h"
 #include "types/math/vec.h"
 
-U8 EFloatType_bytes(EFloatType type) {
-	return (U8)(type >> 16);
-}
-
-U8 EFloatType_exponentBits(EFloatType type) {
-	return (U8)(type >> 8);
-}
-
-U8 EFloatType_mantissaBits(EFloatType type) {
-	return (U8) type;
-}
-
-U64 EFloatType_mantissaShift(EFloatType type) {
-	(void)type;
-	return 0;
-}
-
-U64 EFloatType_exponentShift(EFloatType type) {
-	return EFloatType_mantissaShift(type) + EFloatType_mantissaBits(type);
-}
-
-U64 EFloatType_signShift(EFloatType type) {
-	return EFloatType_exponentShift(type) + EFloatType_exponentBits(type);
-}
-
-U64 EFloatType_signMask(EFloatType type) {
-	return (U64)1 << EFloatType_signShift(type);
-}
-
-U64 EFloatType_exponentMask(EFloatType type) {
-	return ((U64)1 << EFloatType_exponentBits(type)) - 1;
-}
-
-U64 EFloatType_mantissaMask(EFloatType type) {
-	return ((U64)1 << EFloatType_mantissaBits(type)) - 1;
-}
-
-Bool EFloatType_sign(EFloatType type, U64 v) {
-	return v & EFloatType_signMask(type);
-}
-
-U64 EFloatType_abs(EFloatType type, U64 v) {
-	return v &~ EFloatType_signMask(type);
-}
-
-U64 EFloatType_negate(EFloatType type, U64 v) {
-	return v ^ EFloatType_signMask(type);
-}
-
-U64 EFloatType_exponent(EFloatType type, U64 v) {
-	return (v >> EFloatType_exponentShift(type)) & EFloatType_exponentMask(type);
-}
-
-U64 EFloatType_mantissa(EFloatType type, U64 v) {
-	return (v >> EFloatType_mantissaShift(type)) & EFloatType_mantissaMask(type);
-}
-
-U64 EFloatType_isFinite(EFloatType type, U64 v) {
-	return EFloatType_exponent(type, v) != EFloatType_exponentMask(type);
-}
-
-U64 EFloatType_isDeN(EFloatType type, U64 v) {
-	return !EFloatType_exponent(type, v);
-}
-
-U64 EFloatType_isNaN(EFloatType type, U64 v) {
-	return !EFloatType_isFinite(type, v) && EFloatType_mantissa(type, v);
-}
-
-U64 EFloatType_isInf(EFloatType type, U64 v) {
-	return !EFloatType_isFinite(type, v) && !EFloatType_mantissa(type, v);
-}
-
-U64 EFloatType_isZero(EFloatType type, U64 v) {
-	return !EFloatType_abs(type, v);
-}
-
-U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {
+static inline U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {
 
 	const U8 mbit1 = EFloatType_mantissaBits(type1);
 	const U8 mbit2 = EFloatType_mantissaBits(type2);
@@ -128,7 +51,7 @@ U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *
 	return res;
 }
 
-U64 EFloatType_convertExponent(
+static inline U64 EFloatType_convertExponent(
 	EFloatType type1,
 	U64 v,
 	EFloatType type2,
@@ -343,9 +266,13 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 			if (type == EFloatType_F16 || conversionType == EFloatType_F16) {
 
+				//Technically a race condition between multiple threads, but writes the same value.
+				//Worst case it just results in multiple threads checking cpu info and then writing the same value anyways.
+				//This is better than protecting hasF16C with a SpinLock,
+				// which would be slower for the common case than just reading a U8.
 				if (hasF16C < 0) {
 					U32 cpuInfo[4];
-					Platform_getCPUId(1, cpuInfo);		//TODO: Find a cleaner way
+					Platform_getCPUId(1, cpuInfo);
 					hasF16C = (cpuInfo[2] >> 29) & 1;
 				}
 
@@ -401,44 +328,3 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 		(exponent << EFloatType_exponentShift(conversionType)) |
 		(mantissa << EFloatType_mantissaShift(conversionType));
 }
-
-#undef EFloatType_cast1
-#undef EFloatType_cast
-
-#define EFloatType_cast1(a, b)										\
-a b##_cast##a(b v) {												\
-																	\
-	U64 v64;														\
-	const void *vptr = &v;											\
-																	\
-	switch (EFloatType_bytes(EFloatType_##b)) {						\
-		case 2:		v64 = *(const U16*) vptr;		break;			\
-		case 4:		v64 = *(const U32*) vptr;		break;			\
-		case 8:		v64 = *(const U64*) vptr;		break;			\
-		default:	v64 = *(const U8*) vptr;		break;			\
-	}																\
-																	\
-	v64 = EFloatType_convert(EFloatType_##b, v64, EFloatType_##a);	\
-																	\
-	vptr = &v64;													\
-	return *(const a*)vptr;											\
-}
-
-#define EFloatType_cast(a)		\
-EFloatType_cast1(F8, a);		\
-EFloatType_cast1(F16, a);		\
-EFloatType_cast1(F32, a);		\
-EFloatType_cast1(F64, a);		\
-EFloatType_cast1(BF16, a);		\
-EFloatType_cast1(TF19, a);		\
-EFloatType_cast1(PXR24, a);		\
-EFloatType_cast1(FP24, a);
-
-EFloatType_cast(F8);
-EFloatType_cast(F16);
-EFloatType_cast(F32);
-EFloatType_cast(F64);
-EFloatType_cast(BF16);
-EFloatType_cast(TF19);
-EFloatType_cast(PXR24);
-EFloatType_cast(FP24);
