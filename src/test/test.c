@@ -35,6 +35,7 @@
 #include "formats/oiBC/chimera.h"
 #include "types/base/constants.h"
 #include "types/math/quat.h"
+#include "types/math/type_cast_safe.h"
 #include "types/base/fixed_point.h"
 #include "types/container/texture_format.h"
 
@@ -2412,7 +2413,7 @@ int main() {
 		}
 	}
 
-	//Unit test random
+	//Test random
 
 	Log_debugLn(alloc, "Testing Random");
 
@@ -2430,6 +2431,210 @@ int main() {
 
 		if (seed != seed2 || r1 != r1b || r2 != r2b)
 			retError(clean, Error_invalidState(0, "Random sequence not deterministic"));
+	}
+
+	//Test type casts
+
+	static const U32 nanBits = 0x7F800001;
+	static const U64 nanBitsd = 0x7FF0000000000001;
+
+	Log_debugLn(alloc, "Testing type_cast");
+
+	{
+		if(U16_swapEndianness(0x0001) != 0x0100)
+			retError(clean, Error_invalidState(0, "U16_swapEndianness is invalid"));
+
+		if(U32_swapEndianness(0x01020304) != 0x04030201)
+			retError(clean, Error_invalidState(0, "U32_swapEndianness is invalid"));
+
+		if(U64_swapEndianness(0x0102030405060708) != 0x0807060504030201)
+			retError(clean, Error_invalidState(0, "U64_swapEndianness is invalid"));
+
+		F32 val = 0;
+		const U32 pointFive = 0x3F000000;
+
+		if(!F32_fromU32Bits(pointFive, &val, true, NULL) || val != 0.5f)
+			retError(clean, Error_invalidState(0, "F32_fromU32Bits was invalid"));
+
+		if(U32_fromF32Bits(0.5f) != pointFive)
+			retError(clean, Error_invalidState(0, "U32_fromF32Bits was invalid"));
+
+		Error tempErr = Error_none();
+		if(F32_fromU32Bits(nanBits, &val, true, &tempErr) || tempErr.genericError != EGenericError_NaN)
+			retError(clean, Error_invalidState(0, "F32_fromU32Bits was invalid for NaNs"));
+
+		if(!F32_fromU32Bits(nanBits, &val, false, NULL) || U32_fromF32Bits(val) != nanBits)
+			retError(clean, Error_invalidState(0, "F32_fromU32Bits was invalid for NaNs with strict mode off"));
+
+		F64 vald = 0;
+		const U64 pointFived = 0x3FE0000000000000;
+
+		if(!F64_fromU64Bits(pointFived, &vald, true, NULL) || vald != 0.5f)
+			retError(clean, Error_invalidState(0, "F64_fromU64Bits was invalid"));
+
+		if (U64_fromF64Bits(0.5) != pointFived)
+			retError(clean, Error_invalidState(0, "U64_fromF64Bits was invalid"));
+
+		tempErr = Error_none();
+		if(F64_fromU64Bits(nanBitsd, &vald, true, &tempErr) || tempErr.genericError != EGenericError_NaN)
+			retError(clean, Error_invalidState(0, "F64_fromU64Bits was invalid for NaNs"));
+
+		if(!F64_fromU64Bits(nanBitsd, &vald, false, NULL) || U64_fromF64Bits(vald) != nanBitsd)
+			retError(clean, Error_invalidState(0, "F64_fromU64Bits was invalid for NaNs with strict mode off"));
+	}
+
+	Log_debugLn(alloc, "Testing safe integer casts...");
+
+	{
+		I8 r = 0;
+
+		if (!I8_fromInt(127, &r, NULL) || r != 127)
+			retError(clean, Error_invalidState(0, "I8_fromInt failed for 127u!"));
+
+		if (I8_fromInt(128, &r, NULL) || r != 127)
+			retError(clean, Error_invalidState(0, "I8_fromInt succeeded for 128!"));
+
+		if (I8_fromUInt(128, &r, NULL) || r != 127)
+			retError(clean, Error_invalidState(0, "I8_fromUInt succeeded for 128u!"));
+
+		if (!I8_fromInt(-128, &r, NULL) || r != -128)
+			retError(clean, Error_invalidState(0, "I8_fromInt failed for -128!"));
+
+		if (I8_fromInt(-129, &r, NULL) || r != -128)
+			retError(clean, Error_invalidState(0, "I8_fromInt succeeded for -129!"));
+	}
+
+	{
+		U8 r = 0;
+
+		if (!U8_fromInt(127, &r, NULL) || r != 127)
+			retError(clean, Error_invalidState(0, "U8_fromInt failed for 127u!"));
+
+		if (!U8_fromInt(128, &r, NULL) || r != 128)
+			retError(clean, Error_invalidState(0, "U8_fromInt failed for 128u!"));
+
+		if (!U8_fromUInt(255, &r, NULL) || r != 255)
+			retError(clean, Error_invalidState(0, "U8_fromInt failed for 255u!"));
+
+		if (U8_fromUInt(256, &r, NULL) || r != 255)
+			retError(clean, Error_invalidState(0, "U8_fromInt succeeded for 256u!"));
+
+		if (U8_fromInt(-1, &r, NULL) || r != 255)
+			retError(clean, Error_invalidState(0, "U8_fromInt succeeded for -1!"));
+
+		if (U8_fromInt(256, &r, NULL) || r != 255)
+			retError(clean, Error_invalidState(0, "U8_fromInt succeeded for 256!"));
+	}
+
+	Log_debugLn(alloc, "Testing float -> int casts...");
+
+	{
+		I32 r = 0;
+		if(!I32_fromFloat(123.0f, &r, NULL) || r != 123)
+			retError(clean, Error_invalidState(0, "I32_fromFloat failed for 123!"));
+
+		if(I32_fromFloat(122.5f, &r, NULL) || r != 123)			//Has to be an exact int
+			retError(clean, Error_invalidState(0, "I32_fromFloat succeeded for 122.5!"));
+
+		if(!I32_fromFloat((F32)(1 << 25), &r, NULL) || r != (F32)(1 << 25))		//Out of float 'int' bits, but no rounding
+			retError(clean, Error_invalidState(0, "I32_fromFloat failed for 1<<25!"));
+
+		F32 nan = 0;
+		gotoIfError3(clean, F32_fromU32Bits(nanBits, &nan, false, NULL));
+
+		if(I32_fromFloat(nan, &r, NULL) || r != (F32)(1 << 25))
+			retError(clean, Error_invalidState(0, "I32_fromFloat succeeded for NaN!"));
+
+		F32 inf = 0;
+		gotoIfError3(clean, F32_fromU32Bits(nanBits - 1, &inf, false, NULL));
+
+		if(I32_fromFloat(inf, &r, NULL) || r != (F32)(1 << 25))
+			retError(clean, Error_invalidState(0, "I32_fromFloat succeeded for Inf!"));
+	}
+
+	{
+		U32 r;
+
+		if (!U32_fromFloat(42.0f, &r, NULL) || r != 42)
+			retError(clean, Error_invalidState(0, "U32_fromFloat failed for 42.0f"));
+
+		if (U32_fromFloat(-1.0f, &r, NULL) || r != 42)
+			retError(clean, Error_invalidState(0, "U32_fromFloat succeeded for -1.0f"));
+
+		if (U32_fromFloat(4294967296.0f, &r, NULL) || r != 42)
+			retError(clean, Error_invalidState(0, "U32_fromFloat succeeded for 4294967296.0f"));
+	}
+
+	Log_debugLn(alloc, "Testing double -> int casts...");
+
+	{
+		I64 r = 0;
+		static const I64 valid = (I64)9007199254740991;
+
+		if (!I64_fromDouble(9007199254740991.0, &r, NULL) || r != valid)
+			retError(clean, Error_invalidState(0, "I64_fromDouble failed for 9223372036854775807"));
+
+		if (I64_fromDouble(9223372036854775808.0, &r, NULL) || r != valid)
+			retError(clean, Error_invalidState(0, "I64_fromDouble succeeded for 9223372036854775808"));
+
+		F64 nand = 0;
+		gotoIfError3(clean, F64_fromU64Bits(nanBitsd, &nand, false, NULL));
+
+		if (I64_fromDouble(nand, &r, NULL) || r != valid)
+			retError(clean, Error_invalidState(0, "I64_fromDouble succeeded for NaN"));
+	}
+
+	Log_debugLn(alloc, "Testing int -> float casts...");
+
+	{
+		F32 r;
+
+		if (!F32_fromInt(16777216, &r, NULL) || r != 16777216.0f)
+			retError(clean, Error_invalidState(0, "F32_fromInt failed for 16777216"));
+
+		if (F32_fromInt(16777217, &r, NULL) || r != 16777216.0f)
+			retError(clean, Error_invalidState(0, "F32_fromInt succeeded for 16777217 (precision loss)"));
+	}
+
+	{
+		F64 r;
+
+		if (!F64_fromInt(9007199254740992LL, &r, NULL) || r != 9007199254740992.0)
+			retError(clean, Error_invalidState(0, "F64_fromInt failed for 9007199254740992"));
+
+		if (F64_fromInt(9007199254740993LL, &r, NULL) || r != 9007199254740992.0)
+			retError(clean, Error_invalidState(0, "F64_fromInt succeeded for 9007199254740993 (precision loss)"));
+	}
+
+	Log_debugLn(alloc, "Testing float <-> double casts...");
+
+	{
+		F32 r;
+
+		if (!F32_fromDouble(1.0, &r, NULL) || r != 1.0f)
+			retError(clean, Error_invalidState(0, "F32_fromDouble failed for 1.0"));
+
+		if (F32_fromDouble(1.0 + 1e-12, &r, NULL) || r != 1.0f)
+			retError(clean, Error_invalidState(0, "F32_fromDouble succeeded for 1.0 + 1e-12"));
+
+		F64 infd = 0;
+		gotoIfError3(clean, F64_fromU64Bits(nanBitsd - 1, &infd, false, NULL));
+
+		if (F32_fromDouble(infd, &r, NULL) || r != 1.0f)
+			retError(clean, Error_invalidState(0, "F32_fromDouble succeeded for INFINITY"));
+	}
+
+	{
+		F64 r;
+
+		if (!F64_fromFloat(1.0f, &r, NULL) || r != 1.0)
+			retError(clean, Error_invalidState(0, "F64_fromFloat failed for 1.0f"));
+
+		F32 nan = 0;
+		gotoIfError3(clean, F32_fromU32Bits(nanBits, &nan, false, NULL));
+
+		if (F64_fromFloat(nan, &r, NULL) || r != 1.0)
+			retError(clean, Error_invalidState(0, "F64_fromFloat succeeded for NaN"));
 	}
 
 	//Test ETypeId_toShortId

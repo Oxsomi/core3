@@ -28,26 +28,41 @@
 
 //Conversions
 
-U64 F32_fromBits(F32 v);
-U64 F64_fromBits(F64 v);
+static inline U32 U32_fromF32Bits(F32 v) {
+	const void *vptr = &v;
+	U32 u = *(const U32*)vptr;
+	return u;
+}
 
-Error U64_fromF32Bits(F32 v, U64 *res);
-Error U64_fromF64Bits(F64 v, U64 *res);
+static inline U64 U64_fromF64Bits(F64 v) {
+	const void *vptr = &v;
+	return *(const U64*) vptr;
+}
 
-Error I8_fromUInt(U64 v, I8 *res);
-Error I8_fromInt(I64 v, I8 *res);
-Error I8_fromFloat(F32 v, I8 *res);
-Error I8_fromDouble(F64 v, I8 *res);
+#define FLP_FROMBITS(T, TInt)																			\
+static inline Bool T##_from##TInt##Bits(TInt v, T *res, Bool assertFinite, Error *e_rr) {				\
+																										\
+	Bool s_uccess = true;																				\
+																										\
+	if(!res)																							\
+		retError(clean, Error_nullPointer(1, #T "_from" #TInt "Bits()::res is required"));				\
+																										\
+	TInt bits = (TInt) v;																				\
+	const void *bitsPtr = &bits;																		\
+	T r = *(const T*) bitsPtr;																			\
+																										\
+	if(assertFinite && !T##_isValid(r))																	\
+		retError(clean, Error_NaN(0, #T "_fromBits()::v generated NaN or Inf"));						\
+																										\
+	*res = r;																							\
+clean:																									\
+	return s_uccess;																					\
+}
 
-Error I16_fromUInt(U64 v, I16 *res);
-Error I16_fromInt(I64 v, I16 *res);
-Error I16_fromFloat(F32 v, I16 *res);
-Error I16_fromDouble(F64 v, I16 *res);
+FLP_FROMBITS(F32, U32);
+FLP_FROMBITS(F64, U64);
 
-Error I32_fromUInt(U64 v, I32 *res);
-Error I32_fromInt(I64 v, I32 *res);
-Error I32_fromFloat(F32 v, I32 *res);
-Error I32_fromDouble(F64 v, I32 *res);
+#undef FLP_FROMBITS
 
 //Endianness, because sometimes it's needed
 
@@ -64,41 +79,6 @@ static inline U64 U64_swapEndianness(U64 v) {
 static inline I16 I16_swapEndianness(I16 v) { return (I16)U16_swapEndianness((U16)v); }
 static inline I32 I32_swapEndianness(I32 v) { return (I32)U32_swapEndianness((U32)v); }
 static inline I64 I64_swapEndianness(I64 v) { return (I64)U64_swapEndianness((U64)v); }
-
-Error I64_fromUInt(U64 v, I64 *res);
-Error I64_fromFloat(F32 v, I64 *res);
-Error I64_fromDouble(F64 v, I64 *res);
-
-//Cast to uints
-
-Error U8_fromUInt(U64 v, U8 *res);
-Error U8_fromInt(I64 v, U8 *res);
-Error U8_fromFloat(F32 v, U8 *res);
-Error U8_fromDouble(F64 v, U8 *res);
-
-Error U16_fromUInt(U64 v, U16 *res);
-Error U16_fromInt(I64 v, U16 *res);
-Error U16_fromFloat(F32 v, U16 *res);
-Error U16_fromDouble(F64 v, U16 *res);
-
-Error U32_fromUInt(U64 v, U32 *res);
-Error U32_fromInt(I64 v, U32 *res);
-Error U32_fromFloat(F32 v, U32 *res);
-Error U32_fromDouble(F64 v, U32 *res);
-
-Error U64_fromInt(I64 v, U64 *res);
-Error U64_fromFloat(F32 v, U64 *res);
-Error U64_fromDouble(F64 v, U64 *res);
-
-//Cast to floats
-
-Error F32_fromInt(I64 v, F32 *res);
-Error F32_fromUInt(U64 v, F32 *res);
-Error F32_fromDouble(F64 v, F32 *res);
-
-Error F64_fromInt(I64 v, F64 *res);
-Error F64_fromUInt(U64 v, F64 *res);
-Error F64_fromFloat(F32 v, F64 *res);
 
 #ifdef __cplusplus
 	}
