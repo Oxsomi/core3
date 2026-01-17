@@ -26,7 +26,7 @@
 	T res = { 0 };							\
 											\
 	for (U8 i = 0; i < N; ++i)				\
-		T##_set(&res, i, (__VA_ARGS__));	\
+		T##_setRef(&res, i, (__VA_ARGS__));	\
 											\
 	return res
 

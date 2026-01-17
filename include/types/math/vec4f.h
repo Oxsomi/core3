@@ -60,14 +60,14 @@ static inline F32 F32x4_get(F32x4 a, U8 i) {
 
 #if _PLATFORM_TYPE != PLATFORM_WINDOWS || _SIMD != SIMD_SSE
 
-	static inline F32x4 F32x4_pow(F32x4 v, F32x4 e) { NONE_OP4F(F32_pow(F32x4_get(a, i), F32x4_get(e, i))); }
+	static inline F32x4 F32x4_pow(F32x4 a, F32x4 e) { NONE_OP4F(F32_pow(F32x4_get(a, i), F32x4_get(e, i))); }
 	static inline F32x4 F32x4_loge(F32x4 a) { NONE_OP4F(F32_loge(F32x4_get(a, i))); }
 	static inline F32x4 F32x4_log10(F32x4 a) { NONE_OP4F(F32_log10(F32x4_get(a, i))); }
 	static inline F32x4 F32x4_log2(F32x4 a) { NONE_OP4F(F32_log2(F32x4_get(a, i))); }
 
-	static inline F32x4 F32x4_exp(F32x4 a) { NONE_OP4F(F32_expeInternal(F32x4_get(a, i))); }
-	static inline F32x4 F32x4_exp10(F32x4 a) { NONE_OP4F(F32_exp10Internal(F32x4_get(a, i))); }
-	static inline F32x4 F32x4_exp2(F32x4 a) { NONE_OP4F(F32_exp2Internal(F32x4_get(a, i))); }
+	static inline F32x4 F32x4_exp(F32x4 a) { NONE_OP4F(F32_expe(F32x4_get(a, i))); }
+	static inline F32x4 F32x4_exp10(F32x4 a) { NONE_OP4F(F32_exp10(F32x4_get(a, i))); }
+	static inline F32x4 F32x4_exp2(F32x4 a) { NONE_OP4F(F32_exp2(F32x4_get(a, i))); }
 
 	static inline F32x4 F32x4_acos(F32x4 a) { NONE_OP4F(F32_acos(F32x4_get(a, i))); }
 	static inline F32x4 F32x4_cos(F32x4 a) { NONE_OP4F(F32_cos(F32x4_get(a, i))); }
@@ -173,28 +173,32 @@ static inline Bool F32x4_neq4(F32x4 a, F32x4 b) { return !F32x4_eq4(a, b); }
 
 //Swizzles and shizzle
 
-static inline void F32x4_setXRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setXCopy(*a, v); }
-static inline void F32x4_setYRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setYCopy(*a, v); }
-static inline void F32x4_setZRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setZCopy(*a, v); }
-static inline void F32x4_setWRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setWCopy(*a, v); }
+#if _SIMD != SIMD_NONE
 
-static inline F32x4 F32x4_setCopy(F32x4 a, U8 i, F32 v) {
-	switch (i & 3) {
-		case 0:		return F32x4_setXCopy(a, v);
-		case 1:		return F32x4_setYCopy(a, v);
-		case 2:		return F32x4_setZCopy(a, v);
-		default:	return F32x4_setWCopy(a, v);
-	}
-}
+	static inline void F32x4_setXRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setXCopy(*a, v); }
+	static inline void F32x4_setYRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setYCopy(*a, v); }
+	static inline void F32x4_setZRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setZCopy(*a, v); }
+	static inline void F32x4_setWRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setWCopy(*a, v); }
 
-static inline void F32x4_setRef(F32x4 *a, U8 i, F32 v) {
-	switch (i & 3) {
-		case 0:		F32x4_setXRef(a, v);	break;
-		case 1:		F32x4_setYRef(a, v);	break;
-		case 2:		F32x4_setZRef(a, v);	break;
-		default:	F32x4_setWRef(a, v);
+	static inline F32x4 F32x4_setCopy(F32x4 a, U8 i, F32 v) {
+		switch (i & 3) {
+			case 0:		return F32x4_setXCopy(a, v);
+			case 1:		return F32x4_setYCopy(a, v);
+			case 2:		return F32x4_setZCopy(a, v);
+			default:	return F32x4_setWCopy(a, v);
+		}
 	}
-}
+
+	static inline void F32x4_setRef(F32x4 *a, U8 i, F32 v) {
+		switch (i & 3) {
+			case 0:		F32x4_setXRef(a, v);	break;
+			case 1:		F32x4_setYRef(a, v);	break;
+			case 2:		F32x4_setZRef(a, v);	break;
+			default:	F32x4_setWRef(a, v);
+		}
+	}
+
+#endif
 
 //Construction
 

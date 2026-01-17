@@ -21,8 +21,7 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/math.h"
-#include "types/math/vec.h"
+#include "types/base/mathi.h"
 
 void Buffer_sha256Internal(const Buffer buf, U32 *output);
 

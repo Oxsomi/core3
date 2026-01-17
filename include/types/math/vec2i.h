@@ -68,13 +68,13 @@ static inline I32x2 I32x2_xy(I32x2 a) { return a; }
 static inline I32x2 I32x2_yx(I32x2 a) { return I32x2_create2(I32x2_y(a), I32x2_x(a)); }
 static inline I32x2 I32x2_yy(I32x2 a) { return I32x2_xx2(I32x2_y(a)); }
 
-static inline void I32x2_setX(I32x2 *a, I32 v) { if (a) a->v[0] = v; }
-static inline void I32x2_setY(I32x2 *a, I32 v) { if (a) a->v[1] = v; }
+static inline void I32x2_setRefX(I32x2 *a, I32 v) { if (a) a->v[0] = v; }
+static inline void I32x2_setRefY(I32x2 *a, I32 v) { if (a) a->v[1] = v; }
 
-static inline void I32x2_set(I32x2 *a, U8 i, I32 v) {
+static inline void I32x2_setRef(I32x2 *a, U8 i, I32 v) {
 	switch (i) {
-		case 0:		I32x2_setX(a, v);	break;
-		default:	I32x2_setY(a, v);	break;
+		case 0:		I32x2_setRefX(a, v);	break;
+		default:	I32x2_setRefY(a, v);	break;
 	}
 }
 

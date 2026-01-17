@@ -22,17 +22,17 @@
 	#error Vec4i None guard was undefined, this likely indicates include of vec4i_none.h was attempted instead of vec4i.h
 #endif
 
+#include "types/base/mathi.h"
+
 //Loads
 
-static inline I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { return { { x, y, z, w } }; }
+static inline I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { I32x4 v = { { x, y, z, w } }; return v; }
 static inline I32x4 I32x4_create3(I32 x, I32 y, I32 z) { return I32x4_create4(x, y, z, 0); }
 static inline I32x4 I32x4_create2(I32 x, I32 y) { return I32x4_create4(x, y, 0, 0); }
 static inline I32x4 I32x4_create1(I32 x) { return I32x4_create4(x, 0, 0, 0); }
 
-static inline I32x4 I32x4_zero() { return I32x4_xxxx4(0); }
 static inline I32x4 I32x4_xxxx4(I32 x) { return I32x4_create4(x, x, x, x); }
-
-static inline I32x4 I32x4_fromF32x4(F32x4 a) { const void *avoid = &a; return *(const I32x4*)avoid; }
+static inline I32x4 I32x4_zero() { return I32x4_xxxx4(0); }
 
 typedef union I32x4_U64x2 {
 	I32x4 v;
@@ -54,10 +54,44 @@ static inline I32 I32x4_z(I32x4 a) { return a.v[2]; }
 static inline I32 I32x4_w(I32x4 a) { return a.v[3]; }
 
 //TODO:
-static inline I32x4 I32x4_setXCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x1); }
-static inline I32x4 I32x4_setYCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x2); }
-static inline I32x4 I32x4_setZCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x4); }
-static inline I32x4 I32x4_setWCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x8); }
+static inline I32x4 I32x4_setXCopy(I32x4 a, I32 v) { a.v[0] = v; return a; }
+static inline I32x4 I32x4_setYCopy(I32x4 a, I32 v) { a.v[1] = v; return a; }
+static inline I32x4 I32x4_setZCopy(I32x4 a, I32 v) { a.v[2] = v; return a; }
+static inline I32x4 I32x4_setWCopy(I32x4 a, I32 v) { a.v[3] = v; return a; }
+
+static inline void I32x4_setXRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(v, I32x4_y(*a), I32x4_z(*a), I32x4_w(*a)); }
+static inline void I32x4_setYRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), v, I32x4_z(*a), I32x4_w(*a)); }
+static inline void I32x4_setZRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), v, I32x4_w(*a)); }
+static inline void I32x4_setWRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), I32x4_z(*a), v); }
+
+static inline I32x4 I32x4_setCopy(I32x4 a, U8 i, I32 v) {
+	switch (i & 3) {
+		case 0:		return I32x4_setXCopy(a, v);
+		case 1:		return I32x4_setYCopy(a, v);
+		case 2:		return I32x4_setZCopy(a, v);
+		default:	return I32x4_setWCopy(a, v);
+	}
+}
+
+static inline void I32x4_setRef(I32x4 *a, U8 i, I32 v) {
+	switch (i & 3) {
+		case 0:		I32x4_setXRef(a, v);	break;
+		case 1:		I32x4_setYRef(a, v);	break;
+		case 2:		I32x4_setZRef(a, v);	break;
+		default:	I32x4_setWRef(a, v);
+	}
+}
+
+static inline I32 I32x4_get(I32x4 a, U8 i) {
+	switch (i & 3) {
+		case 0:		return I32x4_x(a);
+		case 1:		return I32x4_y(a);
+		case 2:		return I32x4_z(a);
+		default:	return I32x4_w(a);
+	}
+}
+
+static inline I32x4 I32x4_fromF32x4(F32x4 a) { NONE_OP4I((I32)a.v[i]); }
 
 //Trunc & reduce
 
@@ -207,7 +241,7 @@ static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
 
 	for (U8 i = 0; i < 4; ++i)
 		if ((xyzw >> i) & 1)
-			I32x4_set(&a, i, I32x4_get(b, i));
+			I32x4_setRef(&a, i, I32x4_get(b, i));
 
 	return a;
 }

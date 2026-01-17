@@ -20,7 +20,7 @@
 
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/vec.h"
+#include "types/math/vec4i.h"
 
 //Implemented from
 //https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf

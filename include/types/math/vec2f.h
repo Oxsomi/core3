@@ -67,13 +67,13 @@ static inline F32x2 F32x2_xy(F32x2 a) { return a; }
 static inline F32x2 F32x2_yx(F32x2 a) { return F32x2_create2(F32x2_y(a), F32x2_x(a)); }
 static inline F32x2 F32x2_yy(F32x2 a) { return F32x2_xx2(F32x2_y(a)); }
 
-static inline void F32x2_setX(F32x2 *a, F32 v) { if (a) a->v[0] = v; }
-static inline void F32x2_setY(F32x2 *a, F32 v) { if (a) a->v[1] = v; }
+static inline void F32x2_setRefX(F32x2 *a, F32 v) { if (a) a->v[0] = v; }
+static inline void F32x2_setRefY(F32x2 *a, F32 v) { if (a) a->v[1] = v; }
 
-static inline void F32x2_set(F32x2 *a, U8 i, F32 v) {
+static inline void F32x2_setRef(F32x2 *a, U8 i, F32 v) {
 	switch (i) {
-		case 0:		F32x2_setX(a, v);	break;
-		default:	F32x2_setY(a, v);	break;
+		case 0:		F32x2_setRefX(a, v);	break;
+		default:	F32x2_setRefY(a, v);	break;
 	}
 }
 
