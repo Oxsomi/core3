@@ -20,7 +20,11 @@
 
 #include "types/base/platform_types.h"
 #include "types/math/flp.h"
-#include "types/math/vec.h"
+
+#if !_FORCE_FLOAT_FALLBACK && _SIMD == SIMD_SSE
+	#include "types/math/vec4i.h"
+	#include "types/math/vec4f.h"
+#endif
 
 static inline U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {
 

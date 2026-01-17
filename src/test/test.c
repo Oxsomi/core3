@@ -34,6 +34,8 @@
 #include "types/math/flp.h"
 #include "formats/oiBC/chimera.h"
 #include "types/base/constants.h"
+#include "types/math/vec4i_swizzle.h"
+#include "types/math/endianness.h"
 #include "types/math/quat.h"
 #include "types/math/type_cast_safe.h"
 #include "types/base/fixed_point.h"
@@ -2453,34 +2455,34 @@ int main() {
 		F32 val = 0;
 		const U32 pointFive = 0x3F000000;
 
-		if(!F32_fromU32Bits(pointFive, &val, true, NULL) || val != 0.5f)
-			retError(clean, Error_invalidState(0, "F32_fromU32Bits was invalid"));
+		if(!F32_fromU32BitsSafe(pointFive, &val, true, NULL) || val != 0.5f)
+			retError(clean, Error_invalidState(0, "F32_fromU32BitsSafe was invalid"));
 
 		if(U32_fromF32Bits(0.5f) != pointFive)
 			retError(clean, Error_invalidState(0, "U32_fromF32Bits was invalid"));
 
 		Error tempErr = Error_none();
-		if(F32_fromU32Bits(nanBits, &val, true, &tempErr) || tempErr.genericError != EGenericError_NaN)
-			retError(clean, Error_invalidState(0, "F32_fromU32Bits was invalid for NaNs"));
+		if(F32_fromU32BitsSafe(nanBits, &val, true, &tempErr) || tempErr.genericError != EGenericError_NaN)
+			retError(clean, Error_invalidState(0, "F32_fromU32BitsSafe was invalid for NaNs"));
 
-		if(!F32_fromU32Bits(nanBits, &val, false, NULL) || U32_fromF32Bits(val) != nanBits)
-			retError(clean, Error_invalidState(0, "F32_fromU32Bits was invalid for NaNs with strict mode off"));
+		if(!F32_fromU32BitsSafe(nanBits, &val, false, NULL) || U32_fromF32Bits(val) != nanBits)
+			retError(clean, Error_invalidState(0, "F32_fromU32BitsSafe was invalid for NaNs with strict mode off"));
 
 		F64 vald = 0;
 		const U64 pointFived = 0x3FE0000000000000;
 
-		if(!F64_fromU64Bits(pointFived, &vald, true, NULL) || vald != 0.5f)
-			retError(clean, Error_invalidState(0, "F64_fromU64Bits was invalid"));
+		if(!F64_fromU64BitsSafe(pointFived, &vald, true, NULL) || vald != 0.5f)
+			retError(clean, Error_invalidState(0, "F64_fromU64BitsSafe was invalid"));
 
 		if (U64_fromF64Bits(0.5) != pointFived)
 			retError(clean, Error_invalidState(0, "U64_fromF64Bits was invalid"));
 
 		tempErr = Error_none();
-		if(F64_fromU64Bits(nanBitsd, &vald, true, &tempErr) || tempErr.genericError != EGenericError_NaN)
-			retError(clean, Error_invalidState(0, "F64_fromU64Bits was invalid for NaNs"));
+		if(F64_fromU64BitsSafe(nanBitsd, &vald, true, &tempErr) || tempErr.genericError != EGenericError_NaN)
+			retError(clean, Error_invalidState(0, "F64_fromU64BitsSafe was invalid for NaNs"));
 
-		if(!F64_fromU64Bits(nanBitsd, &vald, false, NULL) || U64_fromF64Bits(vald) != nanBitsd)
-			retError(clean, Error_invalidState(0, "F64_fromU64Bits was invalid for NaNs with strict mode off"));
+		if(!F64_fromU64BitsSafe(nanBitsd, &vald, false, NULL) || U64_fromF64Bits(vald) != nanBitsd)
+			retError(clean, Error_invalidState(0, "F64_fromU64BitsSafe was invalid for NaNs with strict mode off"));
 	}
 
 	Log_debugLn(alloc, "Testing safe integer casts...");
@@ -2539,14 +2541,12 @@ int main() {
 		if(!I32_fromFloat((F32)(1 << 25), &r, NULL) || r != (F32)(1 << 25))		//Out of float 'int' bits, but no rounding
 			retError(clean, Error_invalidState(0, "I32_fromFloat failed for 1<<25!"));
 
-		F32 nan = 0;
-		gotoIfError3(clean, F32_fromU32Bits(nanBits, &nan, false, NULL));
+		F32 nan = F32_fromU32Bits(nanBits);
 
 		if(I32_fromFloat(nan, &r, NULL) || r != (F32)(1 << 25))
 			retError(clean, Error_invalidState(0, "I32_fromFloat succeeded for NaN!"));
 
-		F32 inf = 0;
-		gotoIfError3(clean, F32_fromU32Bits(nanBits - 1, &inf, false, NULL));
+		F32 inf = F32_fromU32Bits(nanBits - 1);
 
 		if(I32_fromFloat(inf, &r, NULL) || r != (F32)(1 << 25))
 			retError(clean, Error_invalidState(0, "I32_fromFloat succeeded for Inf!"));
@@ -2577,8 +2577,7 @@ int main() {
 		if (I64_fromDouble(9223372036854775808.0, &r, NULL) || r != valid)
 			retError(clean, Error_invalidState(0, "I64_fromDouble succeeded for 9223372036854775808"));
 
-		F64 nand = 0;
-		gotoIfError3(clean, F64_fromU64Bits(nanBitsd, &nand, false, NULL));
+		F64 nand = F64_fromU64Bits(nanBitsd);
 
 		if (I64_fromDouble(nand, &r, NULL) || r != valid)
 			retError(clean, Error_invalidState(0, "I64_fromDouble succeeded for NaN"));
@@ -2617,8 +2616,7 @@ int main() {
 		if (F32_fromDouble(1.0 + 1e-12, &r, NULL) || r != 1.0f)
 			retError(clean, Error_invalidState(0, "F32_fromDouble succeeded for 1.0 + 1e-12"));
 
-		F64 infd = 0;
-		gotoIfError3(clean, F64_fromU64Bits(nanBitsd - 1, &infd, false, NULL));
+		F64 infd = F64_fromU64Bits(nanBitsd - 1);
 
 		if (F32_fromDouble(infd, &r, NULL) || r != 1.0f)
 			retError(clean, Error_invalidState(0, "F32_fromDouble succeeded for INFINITY"));
@@ -2630,8 +2628,7 @@ int main() {
 		if (!F64_fromFloat(1.0f, &r, NULL) || r != 1.0)
 			retError(clean, Error_invalidState(0, "F64_fromFloat failed for 1.0f"));
 
-		F32 nan = 0;
-		gotoIfError3(clean, F32_fromU32Bits(nanBits, &nan, false, NULL));
+		F32 nan = F32_fromU32Bits(nanBits);
 
 		if (F64_fromFloat(nan, &r, NULL) || r != 1.0)
 			retError(clean, Error_invalidState(0, "F64_fromFloat succeeded for NaN"));
@@ -2897,7 +2894,7 @@ int main() {
 
 		//mod
 
-		gotoIfError3(clean, F32_mod(chimera.f[4], chimera.f[0], &expected, e_rr));
+		expected = F32_mod(chimera.f[4], chimera.f[0]);
 		Chimera_stepFidiA(&chimera, EFidiA_mod);
 		if (chimera.f[4] != expected)
 			retError(clean, Error_invalidState(0, "EFidiA mod test failed"));

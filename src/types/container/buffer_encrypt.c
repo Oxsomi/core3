@@ -20,10 +20,11 @@
 
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/vec.h"
-#include "types/base/math.h"
+#include "types/math/vec4i_swizzle.h"
+#include "types/base/mathi.h"
 #include "types/base/constants.h"
 #include "types/math/type_cast.h"
+#include "types/math/endianness.h"
 
 //Explanation of algorithm; AES256 GCM + GMAC
 //https://www.alexeyshmalko.com/20200319144641/
@@ -240,7 +241,7 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 	I32x4 Y0 = *encrypt->constDecrypt.iv;
 	ctx->iv = Y0;
 
-	I32x4_setW(&Y0, I32_swapEndianness(1));
+	I32x4_setWRef(&Y0, I32_swapEndianness(1));
 
 	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
 	ctx->tag = AESEncryptionContext_initTag(encrypt->additionalData, ctx->ghashLut);
@@ -304,7 +305,7 @@ static inline void AESEncryptionContext_processBlock(
 	//Encrypt IV + blockId to use to encrypt
 
 	I32x4 ivi = ctx->iv;
-	I32x4_setW(&ivi, I32_swapEndianness((U32)i + 2));
+	I32x4_setWRef(&ivi, I32_swapEndianness((U32)i + 2));
 
 	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
 
@@ -334,7 +335,7 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *encrypt, Er
 
 	//Generate iv & context
 
-	I32x4_setW(encrypt->nonConstEncrypt.iv, 0);
+	I32x4_setWRef(encrypt->nonConstEncrypt.iv, 0);
 
 	if(encrypt->flags & EBufferEncryptionFlags_GenerateIv) {
 

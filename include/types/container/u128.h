@@ -22,6 +22,7 @@
 #include "types/base/algorithm.h"
 #include "types/base/string.h"
 #include "types/container/big_int_predeclare.h"
+#include "types/math/vec4i.h"
 
 #ifdef __cplusplus
 	extern "C" {

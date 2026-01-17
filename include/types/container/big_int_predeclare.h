@@ -20,12 +20,16 @@
 
 #pragma once
 #include "types/base/platform_types.h"
-#include "types/math/vec.h"
+
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+	#include "types/math/vec4.h"
+#endif
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef struct Error Error;
 typedef struct Allocator Allocator;
 typedef struct CharString CharString;
 

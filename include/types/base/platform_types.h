@@ -81,7 +81,7 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#error "Undetected architecture type"
 #endif
 
-#if (defined(_ENABLE_SIMD) && !_ENABLE_SIMD) || (_PLATFORM_TYPE != PLATFORM_WINDOWS)		//TODO: Fix SIMD on non windows
+#if !_ENABLE_SIMD
 	#define _SIMD SIMD_NONE
 #elif _ARCH == ARCH_ARM64
 	#define _SIMD SIMD_NONE																	//TODO: SIMD_NEON

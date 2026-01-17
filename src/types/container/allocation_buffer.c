@@ -21,7 +21,7 @@
 #include "types/container/list_impl.h"
 #include "types/container/allocation_buffer.h"
 #include "types/base/allocator.h"
-#include "types/base/math.h"
+#include "types/base/mathi.h"
 #include "types/base/constants.h"
 
 TListImpl(AllocationBufferBlock);

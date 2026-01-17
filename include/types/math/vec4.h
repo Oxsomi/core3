@@ -19,26 +19,14 @@
 */
 
 #pragma once
+#include "types/math/vec_base.h"
+#include "types/base/buffer.h"
 #include "types/base/platform_types.h"
 #include <stdalign.h>
 
-//Helper function to insert a simple non SIMD operation
-//Useful if there's no SIMD function that's faster than native
-
-#define NONE_OP_SELF_T(T, N, ...) {			\
-											\
-	T res = (T) { 0 };					  	\
-											\
-	for (U8 i = 0; i < N; ++i)			  	\
-		T##_set(&res, i, (__VA_ARGS__));	\
-											\
-	return res;							 	\
-}
-
-#define NONE_OP4I(...) NONE_OP_SELF_T(I32x4, 4, __VA_ARGS__)
-#define NONE_OP4F(...) NONE_OP_SELF_T(F32x4, 4, __VA_ARGS__)
-#define NONE_OP2I(...) NONE_OP_SELF_T(I32x2, 2, __VA_ARGS__)
-#define NONE_OP2F(...) NONE_OP_SELF_T(F32x2, 2, __VA_ARGS__)
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //Helper function to expand switch case
 
@@ -52,24 +40,18 @@
 #define FUNC_EXPAND32(offset, func, var) FUNC_EXPAND16(offset, func, var); FUNC_EXPAND16((offset) + 16, func, var)
 #define FUNC_EXPAND64(offset, func, var) FUNC_EXPAND32(offset, func, var); FUNC_EXPAND32((offset) + 32, func, var)
 
-//
-
 #if _SIMD == SIMD_NEON
+	
+	#include <arm_neon.h>
 
-	#error Compiling NEON isnt supported
+	typedef int32x4_t   I32x4;
+	typedef float32x4_t F32x4;
+
+	#error Neon not supported yet TODO: All operations and shuffle (vtbl).
 
 #elif _SIMD == SIMD_SSE
 
-	#include <immintrin.h>
-	#include <xmmintrin.h>
-	#include <smmintrin.h>
 	#include <emmintrin.h>
-	#include <nmmintrin.h>
-	#include <stdalign.h>
-
-	#ifdef __cplusplus
-		extern "C" {
-	#endif
 
 	//vec3 and vec4 can be represented using 4-element vectors,
 	//These are a lot faster than just doing them manually.
@@ -77,35 +59,12 @@
 	typedef __m128i I32x4;
 	typedef __m128  F32x4;
 
-	//vec2s are just regular memory to us, because XMM is legacy and needs a clear everytime vec ops are finished.
-	//That's not very user friendly.
-	//Unpacking 2-element vectors to 4-element vectors, doing operation and packing them again is slower than normal.
-	//This is because the latency of vector operations is bigger than 2x the normal operation.
-	//And 2x normal operation might be pipelined better.
-	//The only exceptions are expensive operations like trig operations, rounding and sqrt & rsqrt, etc..
-
-	typedef struct I32x2_t {
-		alignas(8) I32 v[2];
-	} I32x2;
-
-	typedef struct F32x2_t {
-		alignas(8) F32 v[2];
-	} F32x2;
-
-	//
-
 	#define vecShufflei(a, x, y, z, w) _mm_shuffle_epi32(a, _MM_SHUFFLE(w, z, y, x))
 	#define vecShufflef(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(w, z, y, x))
 
-	#ifdef __cplusplus
-		}
-	#endif
-
 #else
 
-	#ifdef __cplusplus
-		extern "C" {
-	#endif
+	#include <stdalign.h>
 
 	typedef struct I32x4_t {
 		alignas(16) I32 v[4];
@@ -115,35 +74,11 @@
 		alignas(16) F32 v[4];
 	} F32x4;
 
-	typedef struct I32x2_t {
-		alignas(8) I32 v[2];
-	} I32x2;
-
-	typedef struct F32x2_t {
-		alignas(8) F32 v[2];
-	} F32x2;
-
 	#define vecShufflei(a, x, y, z, w) (I32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
 	#define vecShufflef(a, x, y, z, w) (F32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
 
-	#ifdef __cplusplus
-		}
-	#endif
-
 #endif
 
-//TODO: Split this
-
-#include "types/math/vec4i.h"
-#include "types/math/vec4f.h"
-#include "types/math/vec2i.h"
-#include "types/math/vec2f.h"
-#include "types/base/buffer.h"
-
-BUFFER_OP_IMPL(I32x2);
-BUFFER_OP_IMPL(F32x2);
-//BUFFER_OP_IMPL(F64x2);		TODO:
-
-BUFFER_OP_IMPL(I32x4);
-BUFFER_OP_IMPL(F32x4);
-//BUFFER_OP_IMPL(F64x4);		TODO:
+#ifdef __cplusplus
+		}
+#endif

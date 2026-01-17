@@ -1,0 +1,242 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2025 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+#ifndef VEC4I_NONE_GUARD
+	#error Vec4i None guard was undefined, this likely indicates include of vec4i_none.h was attempted instead of vec4i.h
+#endif
+
+//Loads
+
+static inline I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { return { { x, y, z, w } }; }
+static inline I32x4 I32x4_create3(I32 x, I32 y, I32 z) { return I32x4_create4(x, y, z, 0); }
+static inline I32x4 I32x4_create2(I32 x, I32 y) { return I32x4_create4(x, y, 0, 0); }
+static inline I32x4 I32x4_create1(I32 x) { return I32x4_create4(x, 0, 0, 0); }
+
+static inline I32x4 I32x4_zero() { return I32x4_xxxx4(0); }
+static inline I32x4 I32x4_xxxx4(I32 x) { return I32x4_create4(x, x, x, x); }
+
+static inline I32x4 I32x4_fromF32x4(F32x4 a) { const void *avoid = &a; return *(const I32x4*)avoid; }
+
+typedef union I32x4_U64x2 {
+	I32x4 v;
+	U64 v2[2];
+} I32x4_U64x2;
+
+static inline I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) {
+	I32x4_U64x2 v;
+	v.v2[0] = i0;
+	v.v2[1] = i1;
+	return v.v;
+}
+
+//Swizzles
+
+static inline I32 I32x4_x(I32x4 a) { return a.v[0]; }
+static inline I32 I32x4_y(I32x4 a) { return a.v[1]; }
+static inline I32 I32x4_z(I32x4 a) { return a.v[2]; }
+static inline I32 I32x4_w(I32x4 a) { return a.v[3]; }
+
+//TODO:
+static inline I32x4 I32x4_setXCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x1); }
+static inline I32x4 I32x4_setYCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x2); }
+static inline I32x4 I32x4_setZCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x4); }
+static inline I32x4 I32x4_setWCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x8); }
+
+//Trunc & reduce
+
+static inline I32x4 I32x4_trunc2(I32x4 a) { return I32x4_create2(I32x4_x(a), I32x4_y(a)); }
+static inline I32x4 I32x4_trunc3(I32x4 a) { return I32x4_create3(I32x4_x(a), I32x4_y(a), I32x4_z(a)); }
+
+static inline I32 I32x4_reduce(I32x4 a) { return I32x4_x(a) + I32x4_y(a) + I32x4_z(a) + I32x4_w(a); }
+
+//Arithmetic
+
+static inline I32x4 I32x4_add(I32x4 a, I32x4 b) { NONE_OP4I((I32)((U32)a.v[i] + (U32)b.v[i])); }
+static inline I32x4 I32x4_sub(I32x4 a, I32x4 b) { NONE_OP4I((I32)((U32)a.v[i] - (U32)b.v[i])); }
+static inline I32x4 I32x4_mul(I32x4 a, I32x4 b) { NONE_OP4I((I32)((I64)a.v[i] * (I64)b.v[i])); }
+static inline I32x4 I32x4_div(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] / b.v[i]); }
+
+//Used for big ints
+//64-bit add but stored in 32-bit int
+//64-bit mul but fetched as 32-bit int
+
+static inline I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) {
+
+	I32x4 res = a;
+
+	for (U64 i = 0; i < 2; ++i)
+		((I64 *)&res)[i] += ((const I64*)&b)[i];
+
+	return res;
+}
+
+static inline I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b) {
+	NONE_OP4I(
+		(I32)(U32)(((U64)(U32)a.v[i & ~1] * (U32)b.v[i & ~1]) >> ((i & 1) << 5))
+	);
+}
+
+//Clamps
+
+static inline I32x4 I32x4_min(I32x4 a, I32x4 b) { NONE_OP4I((I32)I64_min(a.v[i], b.v[i])); }
+static inline I32x4 I32x4_max(I32x4 a, I32x4 b) { NONE_OP4I((I32)I64_max(a.v[i], b.v[i])); }
+
+//Comparison
+
+static inline I32x4 I32x4_eq(I32x4 a, I32x4 b)  { NONE_OP4I(a.v[i] == b.v[i]); }
+static inline I32x4 I32x4_neq(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] != b.v[i]); }
+static inline I32x4 I32x4_geq(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] >= b.v[i]); }
+static inline I32x4 I32x4_gt(I32x4 a, I32x4 b)  { NONE_OP4I(a.v[i] > b.v[i]); }
+static inline I32x4 I32x4_leq(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] <= b.v[i]); }
+static inline I32x4 I32x4_lt(I32x4 a, I32x4 b)  { NONE_OP4I(a.v[i] < b.v[i]); }
+
+//Bitwise
+
+static inline I32x4 I32x4_or(I32x4 a, I32x4 b)  { NONE_OP4I(a.v[i] | b.v[i]); }
+static inline I32x4 I32x4_and(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] & b.v[i]); }
+static inline I32x4 I32x4_andnot(I32x4 a, I32x4 b) { NONE_OP4I((~a.v[i]) & b.v[i]); }
+static inline I32x4 I32x4_xor(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] ^ b.v[i]); }
+static inline I32x4 I32x4_not(I32x4 a) { NONE_OP4I(~a.v[i]); }
+	
+static inline I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
+
+	if (!bytes)
+		return a;
+
+	if (bytes >= 16)
+		return I32x4_zero();
+
+	I32x4 result = I32x4_zero();
+	Buffer_memcpy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createRefConst(&a, sizeof(a)));
+
+	return result;
+}
+
+static inline I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
+
+	if (!bytes)
+		return a;
+
+	if (bytes >= 16)
+		return I32x4_zero();
+
+	I32x4 result = I32x4_zero();
+	Buffer_memcpy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst((U8*)&a + bytes, sizeof(a) - bytes));
+
+	return result;
+}
+
+static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) { NONE_OP4I((I32)(bits >= 32 ? 0 : (U32)a.v[i] << bits)); }
+static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) { NONE_OP4I((I32)(bits >= 32 ? 0 : (U32)a.v[i] >> bits)); }
+
+static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
+
+	if (!bits)
+		return a;
+
+	if (bits >= 64)
+		return I32x4_zero();
+
+	I32x4 res = a;
+
+	for (U64 i = 0; i < 2; ++i)
+		((U64 *)&res)[i] <<= bits;
+
+	return res;
+}
+
+static inline I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
+
+	if (!bits)
+		return a;
+
+	if (bits >= 64)
+		return I32x4_zero();
+
+	I32x4 res = a;
+
+	for (U64 i = 0; i < 2; ++i)
+		((U64 *)&res)[i] >>= bits;
+
+	return res;
+}
+
+
+//SHA256 helper functions
+
+typedef union I32x4_U8x8 {
+	I32x4 vec;
+	U8 uc[16];
+} I32x4_U8x8;
+
+static inline I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
+
+	const U8 *ua = (U8 *)&a;
+	const U8 *ub = (U8 *)&b;
+	I32x4_U8x8 c = (I32x4_U8x8){ 0 };
+
+	for (U8 i = 0; i < 16; ++i) {
+
+		if (ub[i] >> 7)
+			c.uc[i] = 0;
+
+		else c.uc[i] = ua[ub[i] & 0xF];
+	}
+
+	return c.vec;
+}
+
+static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
+
+	for (U8 i = 0; i < 4; ++i)
+		if ((xyzw >> i) & 1)
+			I32x4_set(&a, i, I32x4_get(b, i));
+
+	return a;
+}
+
+static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
+
+	switch (v) {
+
+		case 0:		return b;
+		case 1:		return I32x4_create4(I32x4_w(a), I32x4_x(b), I32x4_y(b), I32x4_z(b));
+		case 2:		return I32x4_create4(I32x4_z(a), I32x4_w(a), I32x4_x(b), I32x4_y(b));
+		case 3:		return I32x4_create4(I32x4_y(a), I32x4_z(a), I32x4_w(a), I32x4_x(b));
+
+		case 4:		return a;
+		case 5:		return I32x4_create4(0, I32x4_x(a), I32x4_y(a), I32x4_z(a));
+		case 6:		return I32x4_create4(0, 0, I32x4_x(a), I32x4_y(a));
+		case 7:		return I32x4_create4(0, 0, 0, I32x4_x(a));
+
+		default:	return I32x4_zero();
+	}
+}
+
+static inline I32x4 I32x4_swapEndianness(I32x4 v) {
+
+	v = I32x4_or(I32x4_lsh32(v, 16), I32x4_rsh32(v, 16));
+
+	const I32x4 m = I32x4_xxxx4(0x00FF00FF);
+	return I32x4_or(
+		I32x4_lsh32(I32x4_and(v, m), 8),
+		I32x4_and(I32x4_rsh32(v, 8), m)
+	);
+}

@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/math/vec.h"
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -52,14 +52,6 @@ static inline F32 Random_sample(U32 *seed) {
 
 	*seed = (1664525 * *seed + 1013904223);
 	return (F32)(*seed & 0x00FFFFFF) / (F32)(0x01000000);
-}
-
-static inline F32x2 Random_sample2(U32 *seed) {
-	return F32x2_create2(Random_sample(seed), Random_sample(seed));
-}
-
-static inline F32x4 Random_sample4(U32 *seed) {
-	return F32x4_create4(Random_sample(seed), Random_sample(seed), Random_sample(seed), Random_sample(seed));
 }
 
 #ifdef __cplusplus

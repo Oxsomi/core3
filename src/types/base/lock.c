@@ -24,7 +24,7 @@
 #include "types/base/thread.h"
 #include "types/base/error.h"
 #include "types/base/time.h"
-#include "types/base/math.h"
+#include "types/base/mathi.h"
 
 #if _ARCH == ARCH_ARM64
 	#define SHORT_SPIN 16

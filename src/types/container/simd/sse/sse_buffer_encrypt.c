@@ -18,7 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "types/math/vec.h"
+#include "types/math/vec4i.h"
+
+#include <wmmintrin.h>
 
 I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 

@@ -19,58 +19,27 @@
 */
 
 #pragma once
-#include "types/base/algorithm.h"
-#include "types/math/flp.h"
-#include "types/math/vec4.h"
-#include "types/math/vec2.h"
-#include "formats/oiBC/fidi_a.h"
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef struct Chimera {
+//Endianness, because sometimes it's needed
 
-	union {
-		F32x4 v4f[8], vf[8];
-		F32x2 v2f[8];
-	};
+static inline U16 U16_swapEndianness(U16 v) { return (v >> 8) | (v << 8); }
 
-	union {
-		I32x4 v4i[8], vi[8];
-		I32x2 v2i[8];
-	};
+static inline U32 U32_swapEndianness(U32 v) {
+	return ((U32)U16_swapEndianness((U16)v) << 16) | U16_swapEndianness((U16)(v >> 16));
+}
 
-	union {
-		F64 d[8];
-		F32 f[8];
-		F16 h[8];
-	};
+static inline U64 U64_swapEndianness(U64 v) {
+	return ((U64)U32_swapEndianness((U32)v) << 32) | U32_swapEndianness((U32)(v >> 32));
+}
 
-	union {
-
-		I64 l[8];
-		I32 i[8];
-		I16 s[8];
-		I8 b[8];
-
-		U64 u[8];
-		U32 ui[8];
-		U16 us[8];
-		U8 ub[8];
-	};
-
-	//Such as &3 = comparison 0: eq, 1: lt, 2: gt
-	//constantOffset = (>>2) & 0xFF
-	//constantCursor (>>10) & 3
-	U64 effects;
-
-	U64 padding;
-
-} Chimera;
-
-void Chimera_stepFidiA(Chimera *chim, const EFidiA op);
-ECompareResult Chimera_getLastCompare(const Chimera *chim);
+static inline I16 I16_swapEndianness(I16 v) { return (I16)U16_swapEndianness((U16)v); }
+static inline I32 I32_swapEndianness(I32 v) { return (I32)U32_swapEndianness((U32)v); }
+static inline I64 I64_swapEndianness(I64 v) { return (I64)U64_swapEndianness((U64)v); }
 
 #ifdef __cplusplus
 	}

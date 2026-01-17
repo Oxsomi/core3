@@ -19,8 +19,9 @@
 */
 
 #include "types/container/buffer.h"
-#include "types/math/vec.h"
+#include "types/math/vec4i_swizzle.h"
 #include "types/math/type_cast.h"
+#include "types/math/endianness.h"
 #include "types/base/constants.h"
 
 //SHA state
@@ -223,8 +224,8 @@ void Buffer_sha256Internal(const Buffer buf, U32 *output) {
 				state[0] = I32x4_xxyz(state[0]);
 				state[1] = I32x4_xxyz(state[1]);
 
-				I32x4_setX(&state[0], (I32)(temp1 + temp2));
-				I32x4_setX(&state[1], (I32)(state0w + temp1));
+				I32x4_setXRef(&state[0], (I32)(temp1 + temp2));
+				I32x4_setXRef(&state[1], (I32)(state0w + temp1));
 			}
 
 		//Combine two states

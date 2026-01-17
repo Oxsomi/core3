@@ -22,9 +22,9 @@
 #include "types/base/error.h"
 #include "types/base/c8.h"
 #include "types/container/buffer.h"
-#include "types/base/math.h"
-#include "types/math/vec.h"
+#include "types/base/mathi.h"
 #include "types/base/constants.h"
+#include "types/base/buffer.h"
 
 #include <string.h>
 

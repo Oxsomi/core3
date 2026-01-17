@@ -19,8 +19,9 @@
 */
 
 #include "types/math/quat.h"
+#include "types/math/vec4f_swizzle.h"
 #include "types/base/error.h"
-#include "types/base/math.h"
+#include "types/base/mathf.h"
 
 #define QUAT_IMPL(T, suffix)																							\
 																														\
@@ -41,11 +42,11 @@ T Quat##T##_z(Quat##T a) { return T##x4_z(a); }																			\
 T Quat##T##_w(Quat##T a) { return T##x4_w(a); }																			\
 T Quat##T##_get(Quat##T a, U8 i) { return T##x4_get(a, i); }															\
 																														\
-void Quat##T##_setX(Quat##T *a, T v) { T##x4_setX(a, v); }																\
-void Quat##T##_setY(Quat##T *a, T v) { T##x4_setY(a, v); }																\
-void Quat##T##_setZ(Quat##T *a, T v) { T##x4_setZ(a, v); }																\
-void Quat##T##_setW(Quat##T *a, T v) { T##x4_setW(a, v); }																\
-void Quat##T##_set(Quat##T *a, U8 i, T v) { T##x4_set(a, i, v); }														\
+void Quat##T##_setX(Quat##T *a, T v) { T##x4_setXRef(a, v); }															\
+void Quat##T##_setY(Quat##T *a, T v) { T##x4_setYRef(a, v); }															\
+void Quat##T##_setZ(Quat##T *a, T v) { T##x4_setZRef(a, v); }															\
+void Quat##T##_setW(Quat##T *a, T v) { T##x4_setWRef(a, v); }															\
+void Quat##T##_set(Quat##T *a, U8 i, T v) { T##x4_setRef(a, i, v); }													\
 																														\
 Quat##T Quat##T##_lerp(Quat##T a, Quat##T b, T perc) { return T##x4_lerp(a, b, perc); }									\
 																														\
@@ -69,8 +70,7 @@ Quat##T Quat##T##_angleAxis(T##x4 axis, T angle) {																		\
 	T##x4 cosB = T##x4_cos(axis);																						\
 	T##x4 q = T##x4_mul(cosB, T##x4_xxxx4(sinA2));																		\
 																														\
-	T##x4_setW(&q, cosA2);																								\
-	return q;																											\
+	return T##x4_setWCopy(q, cosA2);																					\
 }																														\
 																														\
 Quat##T Quat##T##_fromEuler(T##x4 pitchYawRollDeg) {																	\
@@ -174,9 +174,9 @@ Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target) {															\
 																														\
 	T leno = T##x4_len3(origin), lent = T##x4_len3(target);																\
 																														\
-	T leno2 = 0, lent2 = 0;																								\
+	T leno2 = T##_pow2(leno), lent2 = T##_pow2(lent);																	\
 																														\
-	if(!T##_pow2(leno, &leno2, NULL) || !T##_pow2(lent, &lent2, NULL))													\
+	if(!T##_isValid(leno2) || !T##_isValid(lent2))																		\
 		return Quat##T##_identity();																					\
 																														\
 	T w = T##_sqrt(leno2 * lent2) + T##x4_dot3(origin, target);															\
@@ -199,9 +199,9 @@ Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {																	\
 	if (T##_abs(cosTheta2) >= 1)																						\
 		return a;																										\
 																														\
-	T cosTheta2Pow = 0;																									\
+	T cosTheta2Pow = T##_pow2(cosTheta2);																				\
 																														\
-	if(!T##_pow2(cosTheta2, &cosTheta2Pow, NULL)) return b;																\
+	if(!T##_isValid(cosTheta2Pow)) return b;																			\
 																														\
 	T halfTheta = T##_acos(cosTheta2);																					\
 	T sinTheta2 = T##_sqrt(1 - cosTheta2Pow);																			\

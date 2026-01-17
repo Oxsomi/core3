@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/math/quat.h"
+#include "types/math/vec4f.h"
 #include "types/base/constants.h"
 
 #ifdef __cplusplus

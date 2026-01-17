@@ -19,12 +19,13 @@
 */
 
 #pragma once
-#include "types/base/math.h"
-#include "types/base/error.h"
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+typedef struct Error Error;
 
 //Cast to ints
 

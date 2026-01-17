@@ -19,13 +19,15 @@
 */
 
 #pragma once
-#include "types/math/vec.h"
+#include "types/base/constants.h"
+#include "types/base/buffer.h"
+#include "types/math/vec4.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef struct Buffer Buffer;
+typedef struct Error Error;
 typedef struct Allocator Allocator;
 
 //All these functions allocate, so Buffer_free them later

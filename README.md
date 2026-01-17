@@ -18,16 +18,15 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - AllocationBuffer for managing block allocations.
   - Buffer manipulation such as compares, copies, bit manipulation,
     - Encryption (aes256gcm), hashing (sha256, crc32c, md5), cryptographically secure random (CSPRNG).
-  - GenericList, CharString, TList (Makes Lists such as ListCharString, ListU32, etc.) and CDFList.
+  - GenericList, CharString and TList (Makes Lists such as ListCharString, ListU32, etc.).
   - Error type including stacktrace option.
   - Time utility.
   - Vectors (mathematical) such as F32x2, F32x4, I32x2, I32x4.
   - SpinLock, Atomics and Thread for multi threading purposes.
   - Log for colored and proper cross platform logging.
-  - Very simple parser and tokenizer.
   - For more info check the [documentation](docs/types.md).
-- OxC3_formats
-  - A library for reading/writing files. Currently only for BMP, DDS, WAV and oiCA/oiDL (proprietary zip-style formats), oiSB (shader buffer reflection) and oiSH (wrapping compiled shaders into one for use in different graphics APIs).
+- OxC3_formats_*
+  - Libraries for reading/writing files. Currently only for BMP, DDS, WAV and oiCA/oiDL (proprietary zip-style formats), oiSB (shader buffer reflection) and oiSH (wrapping compiled shaders into one for use in different graphics APIs).
   - For more info check the [documentation](docs/formats.md).
 - OxC3_platforms
   - For everything that's platform dependent (excluding some exceptions for OxC3_types).
@@ -43,7 +42,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Ability to create both D3D12 and Vulkan context side-by-side to allow switching API at runtime and/or better support for existing applications which might determine that at runtime.
   - For more info check the [documentation](docs/graphics_api.md).
 - OxC3_shader_compiler
-  - Abstraction layer around DXC to make it possible to statically link, execute on all target platforms and to have more reflection data. This also allows being able to find symbols in shaders, preprocess files (transform to without includes + defines) and output include info. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
+  - Abstraction layer around DXC to make it possible to statically link, execute on all target platforms and to have more reflection data. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
 - OxC3(CLI)
   - Command line tool that exposes useful functions from OxC3.
   - File manipulation:
@@ -53,7 +52,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Hash tool for files and strings (supporting sha256, crc32c, md5).
   - Random key, char, data and number generator.
   - Profile tool for testing speed of float casts, csprng, crc32c, sha256, md5 and aes256 (encryption and decryption).
-  - Shader preprocessing, viewing includes, viewing symbols and multi threaded compilation to DXIL/SPIRV.
+  - Multi threaded shader compilation from HLSL to DXIL/SPIRV.
   - Iterating graphics devices (Vulkan or Direct3D12).
   - For more info check the [documentation](docs/OxC3_tool.md).
 
@@ -87,7 +86,7 @@ One of the useful things about C is that files are incredibly easy to compile an
   - Android (**okay** support: close to full support, missing render passes and bindful).
 - Instruction sets:
   - arm64: **partial** support: no NEON yet.
-  - x64: **partial** support: Fully supported on windows, but SSE doesn't work elsewhere yet.
+  - x64: **ok** support: Fully supported on Windows, but SSE transcendentals (sin/exp/etc.) don't work efficiently elsewhere yet.
   - none: **full** support: arch independent fallback is working as normal, used when platform doesn't support full arm64 or x64.
     - Note: Turning off SIMD is **not recommended for production builds!!** and building like this for final is highly discouraged.
 - A 64-bit CPU.
@@ -104,9 +103,10 @@ git clone --recurse-submodules -j8 https://github.com/Oxsomi/core3
 
 The build command has the following syntax:
 
-- `buildCmd [Release/Debug] [EnableSIMD: True/False] [EnableTests: True/False]`
-  - EnableSIMD: If SIMD extensions should be used to accelerate vector operations or things like encryption/hashing/etc. Recommended to always keep this on, unless not possible. On for Windows, off on other platforms (not supported yet).
+- `buildCmd [Release/Debug] [EnableSIMD: True/False] [EnableTests: True/False] [Dynamic linking: True/False]`
+  - EnableSIMD: If SIMD extensions should be used to accelerate vector operations or things like encryption/hashing/etc. Recommended to always keep this on, unless not possible.
   - EnableTests: Enable the unit tests that run afterwards.
+  - DynamicLinking: Enable dynamic linking, this is only supported on desktop and allows to run multiple graphics APIs at once.
 - Extra flags can be controlled via `-o flag=Bool` such as:
   - forceVulkan: If there's a native API available on the target machine, it will attempt to use that by default. If instead it should try to use Vulkan, this flag should be set. An example is on Windows you have D3D12 and/or Vulkan; D3D12 is the default, but Vulkan can be turned on like this. Off by default.
   - enableOxC3CLI: Enable the OxC3CLI project along with the OxC3 executable. On by default.
@@ -117,10 +117,10 @@ The build command has the following syntax:
 ### Windows
 
 ```batch
-build Release True False
+build Release True True True
 ```
 
-The Windows implementation supports SSE.
+The Windows implementation supports SSE fully, dynamic linking and this will also run tests.
 
 ### Android
 
@@ -149,24 +149,24 @@ This would build only the .a files and .so files. To make an APK, it requires to
 ### Mac OS X
 
 ```c
-bash build.sh Release False False
+bash build.sh Release True True True
 ```
 
-Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
+Currently the Mac implementation doesn't support full speed SSE transcendentals (tan/exp/etc.) or NEON. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
 
 ### Linux
 
 ```c
-bash build.sh Release False
+bash build.sh Release True True True
 ```
 
-Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
+Currently the Linux build doesn't support full speed SSE transcendentals (tan/exp/etc.) or NEON. It also doesn't officially support input/Wayland support is currently quite untested.
 
 For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default.
 
 ### Other platforms
 
-Other platforms like iOS are coming in the future.
+Other platforms like iOS & xbox UWP are coming in the future.
 
 ## Graphics
 
@@ -228,7 +228,7 @@ To ship anything that uses OxC3_shader_compiler it doesn't require any additiona
 
 OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
 
-The "renderer" directory is present if dynamic linking is used. In this case, there may be 1 or more graphics APIs that are compatible and this can be useful for switching at runtime or using multiple backends at once. For example, some extensions might only be supported via Vulkan or DirectX on desktop and using both might be the only way to use them. Or one of the backends is more stable for your application but the other provides more features. It also allows more easily updating by simply updating a single dll (if the interface didn't change) or adding a new graphics API. Static linking provides benefits such as easier distribution and less overhead for API calls.
+The renderer dynamic libraries are present if dynamic linking is used. In this case, there may be 1 or more graphics APIs that are compatible and this can be useful for switching at runtime or using multiple backends at once. For example, some extensions might only be supported via Vulkan or DirectX on desktop and using both might be the only way to use them. Or one of the backends is more stable for your application but the other provides more features. It also allows more easily updating by simply updating a single dll (if the interface didn't change) or adding a new graphics API. Static linking provides benefits such as easier distribution and less overhead for API calls.
 
 ## Dependencies
 

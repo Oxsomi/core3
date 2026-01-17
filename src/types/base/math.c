@@ -18,160 +18,19 @@
 *  This is called dual licensing.
 */
 
-#include "types/base/math.h"
-#include "types/base/error.h"
-#include "types/base/constants.h"
+#include "types/base/mathf.h"
 
 #include <math.h>
 
-#undef CONST_IMPL
-#define CONST_IMPL(T, suffix)								\
-const T T##_E				= 2.718281828459045##suffix;	\
-const T T##_PI				= 3.141592653589793##suffix;	\
-const T T##_RAD_TO_DEG		= 57.2957795131##suffix;		\
-const T T##_DEG_TO_RAD		= 0.01745329251##suffix;
-
-CONST_IMPL(F32, f);
-CONST_IMPL(F64, );
-
-#define XINT_OP_IMPL(T)													\
-T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }					\
-T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }					\
-T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }	\
-T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }
-
-const U64 U64_EXP10[] = {
-	1,
-	10,
-	100,
-	1000,
-	10000,
-	100000,
-	1000000,
-	10000000,
-	100000000,
-	1000000000,
-	10000000000,
-	100000000000,
-	1000000000000,
-	10000000000000,
-	100000000000000,
-	1000000000000000,
-	10000000000000000,
-	100000000000000000,
-	1000000000000000000,
-	UINT64_C(10000000000000000000)
-};
-
-//UInts
-
-#define UINT_OP_IMPL(T)													\
-XINT_OP_IMPL(T);														\
-																		\
-T T##_pow2(T v) {														\
-	if(!v) return 0;													\
-	T res = v * v; 														\
-	return res / v != v ? T##_MAX : res;								\
-}																		\
-																		\
-T T##_exp10(T v) {														\
-																		\
-	if(v >= sizeof(U64_EXP10) / sizeof(U64_EXP10[0]))					\
-		return T##_MAX;													\
-																		\
-	U64 r = U64_EXP10[v];												\
-	return r >= (U64)T##_MAX ? T##_MAX : (T)r;							\
-}																		\
-																		\
-T T##_exp2(T v) {														\
-																		\
-	if(v >= sizeof(T) * 8 - 1)											\
-		return T##_MAX;													\
-																		\
-	return (T)1 << v;													\
-}
-
-UINT_OP_IMPL(U64);
-UINT_OP_IMPL(U32);
-UINT_OP_IMPL(U16);
-UINT_OP_IMPL(U8);
-
-//TODO: Properly check Ixx_pow
-
-#define INT_OP_IMPL(T)																		\
-XINT_OP_IMPL(T);																			\
-																							\
-T T##_abs(T v) { return v < 0 ? -v : v; }													\
-																							\
-T T##_pow2(T v) { 																			\
-	T res = v * v; 																			\
-	return res < T##_abs(v) ? T##_MAX : res;												\
-}																							\
-																							\
-T T##_exp10(T v) {																			\
-																							\
-	if(v < 0 || v >= (T)(sizeof(U64_EXP10) / sizeof(U64_EXP10[0]) - 1))						\
-		return T##_MAX;																		\
-																							\
-	I64 r = (I64) U64_EXP10[v];																\
-	return r < 0 || r >= (I64) T##_MAX ? T##_MAX : (T)r;									\
-}																							\
-																							\
-T T##_exp2(T v) {																			\
-																							\
-	if(v < 0 || v >= (T)(sizeof(T) * 8))													\
-		return T##_MAX;																		\
-																							\
-	return (T)1 << v;																		\
-}
-
-INT_OP_IMPL(I64);
-INT_OP_IMPL(I32);
-INT_OP_IMPL(I16);
-INT_OP_IMPL(I8);
-
 #define FLP_OP_IMPL(T, TInt, suffix)														\
-T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }										\
-T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }										\
-T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }						\
-T T##_saturate(T v) { return T##_clamp(v, 0, 1); }											\
 																							\
-T T##_lerp(T a, T b, T perc) { return a + (b - a) * perc; }									\
-T T##_abs(T v) { return v < 0 ? -v : v; }													\
-																							\
-Bool T##_mod(T v, T mod, T *res, Error *e_rr) { 											\
-																							\
-	Bool s_uccess = true;																	\
-																							\
-	if(!res)																				\
-		retError(clean, Error_nullPointer(1, #T "_mod()::res is required"));				\
-																							\
-	const void *vptr = &v;																	\
-																							\
-	if(!mod)																				\
-		retError(clean, Error_divideByZero(													\
-			0, *(const TInt*) vptr, 0, #T "_mod() division by zero"							\
-		));																					\
-																							\
-	T r = fmod##suffix(v, mod); 															\
-																							\
-	if(!T##_isValid(r))																		\
-		retError(clean, Error_NaN(0, #T "_mod() generated NaN or Inf"));					\
-																							\
-	*res = r;																				\
-																							\
-clean:																						\
-	return s_uccess;																		\
-}																							\
+T T##_mod(T v, T mod) { return fmod##suffix(v, mod); }										\
 																							\
 Bool T##_isNaN(T v) { return isnan(v); }													\
 Bool T##_isInf(T v) { return isinf(v); }													\
 Bool T##_isValid(T v) { return isfinite(v); }												\
 																							\
 T T##_fract(T v) { return v - T##_floor(v); }												\
-																							\
-T T##_sign(T v) { return v < 0 ? -1.##suffix : (v > 0 ? 1.##suffix : 0.##suffix); }			\
-T T##_signInc(T v) { return v < 0 ? -1.##suffix : 1.##suffix; }								\
 																							\
 T T##_sqrt(T v) { return sqrt##suffix(v); }													\
 																							\
@@ -191,46 +50,7 @@ T T##_round(T v) { return round##suffix(v); }												\
 T T##_ceil(T v) { return ceil##suffix(v); }													\
 T T##_floor(T v) { return floor##suffix(v); }												\
 																							\
-Bool T##_pow2(T v, T *res, Error *e_rr) { 													\
-																							\
-	Bool s_uccess = true;																	\
-																							\
-	if(!res)																				\
-		retError(clean, Error_nullPointer(1, #T "_pow2()::res is required"));				\
-																							\
-	*res = v * v;																			\
-																							\
-	const void *rPtr = res, *vPtr = &v;														\
-	if(!T##_isValid(*res))																	\
-		retError(clean, Error_overflow(														\
-			0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow2() generated an inf"		\
-		));																					\
-																							\
-clean:																						\
-	return s_uccess;																		\
-}																							\
-																							\
-Bool T##_pow(T v, T exp, T *res, Error *e_rr) { 											\
-																							\
-	Bool s_uccess = true;																	\
-																							\
-	T r = pow##suffix(v, exp);																\
-	const void *rPtr = &r, *vPtr = &v;														\
-																							\
-	if(!T##_isValid(r))																		\
-		retError(clean, Error_overflow(														\
-			0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow() generated an inf"			\
-		));																					\
-																							\
-	*res = r;																				\
-																							\
-clean:																						\
-	return s_uccess;																		\
-}																							\
-																							\
-Bool T##_expe(T v, T *res, Error *e_rr) { return T##_pow(T##_E, v, res, e_rr); }			\
-Bool T##_exp2(T v, T *res, Error *e_rr) { return T##_pow(2, v, res, e_rr); }				\
-Bool T##_exp10(T v, T *res, Error *e_rr) { return T##_pow(10, v, res, e_rr); }
+T T##_pow(T v, T exp) { return pow##suffix(v, exp); }
 
 FLP_OP_IMPL(F32, U32, f);
 FLP_OP_IMPL(F64, U64, );

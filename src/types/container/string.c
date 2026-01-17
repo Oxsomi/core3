@@ -23,7 +23,7 @@
 #include "types/container/list_basic_types.h"
 #include "types/base/allocator.h"
 #include "types/base/string_read.h"
-#include "types/base/math.h"
+#include "types/base/mathi.h"
 #include "types/base/c8.h"
 #include "types/base/constants.h"
 

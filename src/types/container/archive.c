@@ -24,7 +24,7 @@
 #include "types/base/constants.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/list_impl.h"
-#include "types/base/math.h"
+#include "types/base/mathi.h"
 #include "types/container/log.h"
 #include "types/container/string.h"
 #include "types/base/string_read_helper.h"

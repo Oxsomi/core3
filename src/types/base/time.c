@@ -24,7 +24,7 @@
 #include "types/base/constants.h"
 #include "types/base/string.h"
 #include "types/base/buffer.h"
-#include "types/base/math.h"
+#include "types/base/mathi.h"
 #include <time.h>
 
 #ifdef _WIN32

@@ -22,11 +22,11 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/vec.h"
+#include "types/math/vec4i_swizzle.h"
 #include "types/base/constants.h"
 #include <nmmintrin.h>
 
-#include "types/base/math.h"
+#include "types/base/mathi.h"
 
 extern const U32 SHA256_STATE[8];
 

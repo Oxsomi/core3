@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "types/base/math.h"
+#include "types/base/mathi.h"
 #include "types/base/allocator.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/string_mut_helper.h"

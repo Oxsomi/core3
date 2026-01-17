@@ -24,8 +24,7 @@
 #include "types/base/algorithm.h"
 #include "types/base/constants.h"
 #include "types/base/string.h"
-#include "types/base/math.h"
-#include "types/math/vec.h"
+#include "types/base/mathi.h"
 
 #ifdef __cplusplus
 	extern "C" {

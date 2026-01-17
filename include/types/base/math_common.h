@@ -19,59 +19,10 @@
 */
 
 #pragma once
-#include "types/base/algorithm.h"
-#include "types/math/flp.h"
-#include "types/math/vec4.h"
-#include "types/math/vec2.h"
-#include "formats/oiBC/fidi_a.h"
+#include "types/base/types.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
-
-typedef struct Chimera {
-
-	union {
-		F32x4 v4f[8], vf[8];
-		F32x2 v2f[8];
-	};
-
-	union {
-		I32x4 v4i[8], vi[8];
-		I32x2 v2i[8];
-	};
-
-	union {
-		F64 d[8];
-		F32 f[8];
-		F16 h[8];
-	};
-
-	union {
-
-		I64 l[8];
-		I32 i[8];
-		I16 s[8];
-		I8 b[8];
-
-		U64 u[8];
-		U32 ui[8];
-		U16 us[8];
-		U8 ub[8];
-	};
-
-	//Such as &3 = comparison 0: eq, 1: lt, 2: gt
-	//constantOffset = (>>2) & 0xFF
-	//constantCursor (>>10) & 3
-	U64 effects;
-
-	U64 padding;
-
-} Chimera;
-
-void Chimera_stepFidiA(Chimera *chim, const EFidiA op);
-ECompareResult Chimera_getLastCompare(const Chimera *chim);
-
-#ifdef __cplusplus
-	}
-#endif
+#define ARIT_OP(T)																					\
+static inline T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }									\
+static inline T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }									\
+static inline T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }					\
+static inline T T##_pow2(T v) { return v * v; }

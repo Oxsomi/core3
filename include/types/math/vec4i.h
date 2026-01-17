@@ -19,173 +19,172 @@
 */
 
 #pragma once
+#include "types/base/buffer.h"
+#include "types/math/vec4.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-//TODO: Error checking
+BUFFER_OP_IMPL(I32x4)
 
-F32x4 F32x4_bitsI32x4(I32x4 a);
-I32x4 I32x4_bitsF32x4(F32x4 a);
+#if _SIMD == SIMD_SSE
+	#define VEC4I_SSE_GUARD
+	#include "types/math/vec4i_sse.h"
+	#undef VEC4I_SSE_GUARD
+#elif _SIMD == SIMD_NEON
+	#error TODO: Implement SIMD NEON
+#else
+	#define VEC4I_NONE_GUARD
+	#include "types/math/vec4i_none.h"
+	#undef VEC4I_NONE_GUARD
+#endif
+
+#if _SIMD != SIMD_SSE
+	static inline I32x4 I32x4_negate(I32x4 a) { return I32x4_sub(I32x4_zero(), a); }
+	static inline I32x4 I32x4_one() { return I32x4_xxxx4(1); }
+#endif
+
+static inline I32x4 I32x4_bitsF32x4(F32x4 a) {
+	const void *aptr = &a;
+	return *(const I32x4*) aptr;
+}
+
+//Constants
+
+static inline I32x4 I32x4_two() { return I32x4_xxxx4(2); }
+static inline I32x4 I32x4_negOne() { return I32x4_xxxx4(-1); }
+static inline I32x4 I32x4_negTwo() { return I32x4_xxxx4(-2); }
 
 //Arithmetic
 
-impl I32x4 I32x4_zero();
-I32x4 I32x4_one();
-I32x4 I32x4_two();
-I32x4 I32x4_negTwo();
-I32x4 I32x4_negOne();
-impl I32x4 I32x4_xxxx4(I32 x);
+static inline I32x4 I32x4_complement(I32x4 a) { return I32x4_sub(I32x4_one(), a); }
 
-impl I32x4 I32x4_add(I32x4 a, I32x4 b);
-impl I32x4 I32x4_addI64x2(I32x4 a, I32x4 b);			//Add two U64x2s
-impl I32x4 I32x4_sub(I32x4 a, I32x4 b);
-impl I32x4 I32x4_mul(I32x4 a, I32x4 b);
-impl I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b);		//U32x4 as U64x2 * U64x2 (clear upper 32-bit)
-impl I32x4 I32x4_div(I32x4 a, I32x4 b);
+//Rotate left (<<<)
+static inline I32x4 I32x4_rol(I32x4 a, U8 bits) {
+	bits &= 31;
+	return I32x4_or(I32x4_lsh32(a, bits), I32x4_rsh32(a, 32 - bits));
+}
 
-I32x4 I32x4_complement(I32x4 a);
-I32x4 I32x4_negate(I32x4 a);
+//Rotate right (>>>)
+static inline I32x4 I32x4_ror(I32x4 a, U8 bits) {
+	bits &= 31;
+	return I32x4_or(I32x4_rsh32(a, bits), I32x4_lsh32(a, 32 - bits));
+}
 
-I32x4 I32x4_rol(I32x4 a, U8 bits);	//Rotate left (<<<)
-I32x4 I32x4_ror(I32x4 a, U8 bits);	//Rotate right (>>>)
+static inline I32x4 I32x4_pow2(I32x4 a) { return I32x4_mul(a, a); }
 
-I32x4 I32x4_pow2(I32x4 a);
+static inline I32x4 I32x4_mod(I32x4 v, I32x4 d) {				//UB for any d[x] == 0
+	I32x4 r = I32x4_sub(v, I32x4_mul(I32x4_div(v, d), d));
+	I32x4 mask = I32x4_lt(r, I32x4_zero());
+	return I32x4_add(r, I32x4_mul(mask, d));
+}
 
-I32x4 I32x4_sign(I32x4 v);			//Zero counts as signed too
-I32x4 I32x4_abs(I32x4 v);
-I32x4 I32x4_mod(I32x4 v, I32x4 d);
+static inline I32x4 I32x4_clamp(I32x4 a, I32x4 mi, I32x4 ma) { return I32x4_max(mi, I32x4_min(ma, a)); }
 
-impl I32 I32x4_reduce(I32x4 a);		//ax+ay+az+aw
+static inline I32x4 I32x4_sign(I32x4 v) {
+	return I32x4_add(
+		I32x4_mul(I32x4_lt(v, I32x4_zero()), I32x4_negTwo()),
+		I32x4_one()
+	);
+}
 
-impl I32x4 I32x4_min(I32x4 a, I32x4 b);
-impl I32x4 I32x4_max(I32x4 a, I32x4 b);
-I32x4 I32x4_clamp(I32x4 a, I32x4 mi, I32x4 ma);
+static inline I32x4 I32x4_abs(I32x4 v) { return I32x4_mul(I32x4_sign(v), v); }
 
 //Boolean
 
-Bool I32x4_all(I32x4 a);
-Bool I32x4_any(I32x4 a);
+static inline Bool I32x4_all(I32x4 a) { return I32x4_reduce(I32x4_neq(a, I32x4_zero())) == 4; }
+static inline Bool I32x4_any(I32x4 a) { return I32x4_reduce(I32x4_neq(a, I32x4_zero())); }
 
-impl I32x4 I32x4_eq(I32x4 a, I32x4 b);
-impl I32x4 I32x4_neq(I32x4 a, I32x4 b);
-impl I32x4 I32x4_geq(I32x4 a, I32x4 b);
-impl I32x4 I32x4_gt(I32x4 a, I32x4 b);
-impl I32x4 I32x4_leq(I32x4 a, I32x4 b);
-impl I32x4 I32x4_lt(I32x4 a, I32x4 b);
-
-impl I32x4 I32x4_or(I32x4 a, I32x4 b);
-impl I32x4 I32x4_and(I32x4 a, I32x4 b);
-impl I32x4 I32x4_andnot(I32x4 a, I32x4 b);		//~a & b
-impl I32x4 I32x4_xor(I32x4 a, I32x4 b);
-
-impl I32x4 I32x4_not(I32x4 a);
-
-Bool I32x4_eq4(I32x4 a, I32x4 b);
-Bool I32x4_neq4(I32x4 a, I32x4 b);
+static inline Bool I32x4_eq4(I32x4 a, I32x4 b) { return I32x4_all(I32x4_eq(a, b)); }
+static inline Bool I32x4_neq4(I32x4 a, I32x4 b) { return !I32x4_eq4(a, b); }
 
 //Swizzles and shizzle
 
-I32 I32x4_x(I32x4 a);
-I32 I32x4_y(I32x4 a);
-I32 I32x4_z(I32x4 a);
-I32 I32x4_w(I32x4 a);
-I32 I32x4_get(I32x4 a, U8 i);
+static inline void I32x4_setXRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(v, I32x4_y(*a), I32x4_z(*a), I32x4_w(*a)); }
+static inline void I32x4_setYRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), v, I32x4_z(*a), I32x4_w(*a)); }
+static inline void I32x4_setZRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), v, I32x4_w(*a)); }
+static inline void I32x4_setWRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), I32x4_z(*a), v); }
 
-void I32x4_setX(I32x4 *a, I32 v);
-void I32x4_setY(I32x4 *a, I32 v);
-void I32x4_setZ(I32x4 *a, I32 v);
-void I32x4_setW(I32x4 *a, I32 v);
-void I32x4_set(I32x4 *a, U8 i, I32 v);
+static inline I32x4 I32x4_setCopy(I32x4 a, U8 i, I32 v) {
+	switch (i & 3) {
+		case 0:		return I32x4_setXCopy(a, v);
+		case 1:		return I32x4_setYCopy(a, v);
+		case 2:		return I32x4_setZCopy(a, v);
+		default:	return I32x4_setWCopy(a, v);
+	}
+}
+
+static inline void I32x4_setRef(I32x4 *a, U8 i, I32 v) {
+	switch (i & 3) {
+		case 0:		I32x4_setXRef(a, v);	break;
+		case 1:		I32x4_setYRef(a, v);	break;
+		case 2:		I32x4_setZRef(a, v);	break;
+		default:	I32x4_setWRef(a, v);
+	}
+}
+
+static inline I32 I32x4_get(I32x4 a, U8 i) {
+	switch (i & 3) {
+		case 0:		return I32x4_x(a);
+		case 1:		return I32x4_y(a);
+		case 2:		return I32x4_z(a);
+		default:	return I32x4_w(a);
+	}
+}
+
+//Generic helper functions
+//Adapted from https://stackoverflow.com/questions/17610696/shift-a-m128i-of-n-bits
+
+static inline I32x4 I32x4_lsh128(I32x4 a, U8 bits) {
+
+	const I32x4 b = a;
+	a = I32x4_lshByte(a, 8);
+
+	if (bits >= 64)
+		return I32x4_lsh64(a, bits - 64);
+
+	a = I32x4_rsh64(a, 64 - bits);
+	return I32x4_or(I32x4_lsh64(b, bits), a);
+}
+
+static inline I32x4 I32x4_rsh128(I32x4 a, U8 bits) {
+
+	const I32x4 b = a;
+	a = I32x4_rshByte(a, 8);
+
+	if (bits >= 64)
+		return I32x4_rsh64(a, bits - 64);
+
+	a = I32x4_lsh64(a, 64 - bits);
+	return I32x4_or(I32x4_rsh64(b, bits), a);
+}
 
 //Construction
 
-impl I32x4 I32x4_create1(I32 x);
-impl I32x4 I32x4_create2(I32 x, I32 y);
-impl I32x4 I32x4_create3(I32 x, I32 y, I32 z);
-impl I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w);
+static inline I32x4 I32x4_load1(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
+	return result;
+}
 
-impl I32x4 I32x4_createFromU64x2(U64 a, U64 b);
-impl I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw);				//xyzw: 4-bit selector. x as b0, w as b3. 1 means b, 0 means 0.
-impl I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v);		//Appends a before b and shifts with v I32s and truncates.
+static inline I32x4 I32x4_load2(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
+	return result;
+}
 
-impl I32x4 I32x4_lshByte(I32x4 a, U8 bytes);	//Left shifting 8 bits per i as U128
-impl I32x4 I32x4_rshByte(I32x4 a, U8 bytes);	//Right shifting 8 bits per i as U128
+static inline I32x4 I32x4_load3(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 3), Buffer_createRefConst(arr, sizeof(I32) * 3));
+	return result;
+}
 
-impl I32x4 I32x4_lsh32(I32x4 a, U8 bits);		//Left shifting each I32 individually per bit
-impl I32x4 I32x4_rsh32(I32x4 a, U8 bits);		//Right shifting each I32 individually per bit
-
-impl I32x4 I32x4_lsh64(I32x4 a, U8 bits);		//Left shifting each I64 individually per bit
-impl I32x4 I32x4_rsh64(I32x4 a, U8 bits);		//Right shifting each I64 individually per bit
-
-I32x4 I32x4_lsh128(I32x4 a, U8 bits);
-I32x4 I32x4_rsh128(I32x4 a, U8 bits);
-
-I32x4 I32x4_load1(const void *arr);
-I32x4 I32x4_load2(const void *arr);
-I32x4 I32x4_load3(const void *arr);
-I32x4 I32x4_load4(const void *arr);
-
-I32x4 I32x4_swapEndianness(I32x4 v);
-
-//4D swizzles
-
-#define I32x4_expand4(xv, yv, zv, wv) I32x4 I32x4_##xv##yv##zv##wv(I32x4 a)
-
-#define I32x4_expand3(a, b, c)							\
-I32x4_expand4(a, b, c, x); I32x4_expand4(a, b, c, y);	\
-I32x4_expand4(a, b, c, z); I32x4_expand4(a, b, c, w)
-
-#define I32x4_expand2(a, b)								\
-I32x4_expand3(a, b, x); I32x4_expand3(a, b, y);			\
-I32x4_expand3(a, b, z); I32x4_expand3(a, b, w)
-
-#define I32x4_expand(a)									\
-I32x4_expand2(a, x); I32x4_expand2(a, y);				\
-I32x4_expand2(a, z); I32x4_expand2(a, w)
-
-I32x4_expand(x);
-I32x4_expand(y);
-I32x4_expand(z);
-I32x4_expand(w);
-
-impl I32x4 I32x4_trunc2(I32x4 a);
-impl I32x4 I32x4_trunc3(I32x4 a);
-
-//2D swizzles
-
-#define I32x2_expand2(xv, yv) I32x4 I32x4_##xv##yv##4(I32x4 a); I32x2 I32x4_##xv##yv(I32x4 a);
-
-#define I32x2_expand(a)									\
-I32x2_expand2(a, x); I32x2_expand2(a, y);				\
-I32x2_expand2(a, z); I32x2_expand2(a, w);
-
-I32x2_expand(x);
-I32x2_expand(y);
-I32x2_expand(z);
-I32x2_expand(w);
-
-//3D swizzles
-
-#define I32x3_expand3(xv, yv, zv) I32x4 I32x4_##xv##yv##zv(I32x4 a);
-
-#define I32x3_expand2(a, b)							\
-I32x3_expand3(a, b, x); I32x3_expand3(a, b, y);		\
-I32x3_expand3(a, b, z); I32x3_expand3(a, b, w);
-
-#define I32x3_expand(a)								\
-I32x3_expand2(a, x); I32x3_expand2(a, y);			\
-I32x3_expand2(a, z); I32x3_expand2(a, w);
-
-I32x3_expand(x);
-I32x3_expand(y);
-I32x3_expand(z);
-I32x3_expand(w);
-
-//Shuffling bytes
-
-I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b);		//Shuffle bytes around. Useful for changing endianness for example
+static inline I32x4 I32x4_load4(const void *arr) {
+	I32x4 result = I32x4_zero();
+	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 4), Buffer_createRefConst(arr, sizeof(I32) * 4));
+	return result;
+}
 
 #ifdef __cplusplus
 	}

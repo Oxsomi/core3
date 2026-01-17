@@ -19,8 +19,9 @@
 */
 
 #include "formats/oiBC/chimera.h"
+#include "types/math/vec4f.h"
 #include "types/base/error.h"
-#include "types/base/math.h"
+#include "types/base/mathf.h"
 
 void Chimera_swapF32(F32 *a, F32 *b) {
 	const F32 tmp = *a;
@@ -43,14 +44,6 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 	if(!chim)
 		return;
 
-	//NaN for invalid operations (all exponent bits are set, and first mantissa bit)
-
-	const U32 NaNu =
-		(((U32)EFloatType_exponentMask(EFloatType_F32) << 1) | 1) <<
-		((U32)EFloatType_exponentShift(EFloatType_F32) - 1);
-
-	const void *NaNuptr = &NaNu;
-	const F32 NaN = *(const F32*) NaNuptr;
 	const U8 reg = op & 3;					//Doesn't always operate on this register though
 
 	//Simple float and vector operations
@@ -95,10 +88,7 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 			return;
 
 		case EFidiA_mod:
-
-			if(!F32_mod(chim->f[4], chim->f[0], &chim->f[4], NULL))
-				chim->f[4] = NaN;
-
+			chim->f[4] = F32_mod(chim->f[4], chim->f[0]);
 			return;
 
 		case EFidiA_max:

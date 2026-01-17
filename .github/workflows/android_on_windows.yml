@@ -41,6 +41,8 @@ jobs:
         key: android-${{ runner.os }}-${{ hashFiles('**/packages') }}
     - name: build for debug
       run: python3 build_android.py -mode Debug
+    - name: build for debug (test fallback)
+      run: python3 build_android.py -mode Debug -simd False
     - name: build for release
       run: python3 build_android.py -mode Release
     - name: Delete non package files for cache

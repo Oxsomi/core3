@@ -20,7 +20,8 @@
 
 #include "types/base/string_read_helper.h"
 #include "types/base/algorithm.h"
-#include "types/base/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 
 Bool CharString_isValidFileName(const CharString str) {
 
@@ -857,7 +858,9 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 			if(s.ptr[0] == 'f' || s.ptr[0] == 'F') {
 
-				if (!F64_exp10(esign ? -exponent : exponent, &exponent, NULL))
+				exponent = F64_exp10(esign ? -exponent : exponent);
+
+				if (!F64_isValid(exponent))
 					return false;
 
 				const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
@@ -881,7 +884,9 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			break;
 	}
 
-	if (!F64_exp10(esign ? -exponent : exponent, &exponent, NULL))
+	exponent = F64_exp10(esign ? -exponent : exponent);
+
+	if (!F64_isValid(exponent))
 		return false;
 
 	const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
