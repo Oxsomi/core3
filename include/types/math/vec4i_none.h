@@ -266,6 +266,13 @@ static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
 
 static inline I32x4 I32x4_swapEndianness(I32x4 v) {
 
+	I32 v0 = v.v[0];		//Basically wzyx, but don't need to include it.
+	I32 v1 = v.v[1];
+	v.v[0] = v.v[3];
+	v.v[1] = v.v[2];
+	v.v[2] = v1;
+	v.v[3] = v0;
+
 	v = I32x4_or(I32x4_lsh32(v, 16), I32x4_rsh32(v, 16));
 
 	const I32x4 m = I32x4_xxxx4(0x00FF00FF);

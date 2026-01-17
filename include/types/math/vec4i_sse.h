@@ -175,9 +175,9 @@ static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
 
 static inline I32x4 I32x4_swapEndianness(I32x4 v) {
 	return _mm_shuffle_epi8(v, _mm_set_epi8(
-		12, 13, 14, 15,
-		8, 9, 10, 11,
+		0, 1, 2, 3,
 		4, 5, 6, 7,
-		0, 1, 2, 3
+		8, 9, 10, 11,
+		12, 13, 14, 15
 	));
 }
