@@ -35,7 +35,9 @@ BUFFER_OP_IMPL(F32x4);
 	#include "types/math/vec4f_sse.h"
 	#undef VEC4_SSE_GUARD
 #elif _SIMD == SIMD_NEON
-	#error TODO: Implement SIMD NEON
+	#define VEC4_NEON_GUARD
+	#include "types/math/vec4f_neon.h"
+	#undef VEC4_NEON_GUARD
 #else
 	#define VEC4_NONE_GUARD
 	#include "types/math/vec4f_none.h"
@@ -55,6 +57,35 @@ static inline F32 F32x4_get(F32x4 a, U8 i) {
 		default:	return F32x4_w(a);
 	}
 }
+
+//Swizzles and shizzle
+
+#if _SIMD != SIMD_NONE
+
+	static inline void F32x4_setXRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setXCopy(*a, v); }
+	static inline void F32x4_setYRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setYCopy(*a, v); }
+	static inline void F32x4_setZRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setZCopy(*a, v); }
+	static inline void F32x4_setWRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setWCopy(*a, v); }
+
+	static inline F32x4 F32x4_setCopy(F32x4 a, U8 i, F32 v) {
+		switch (i & 3) {
+			case 0:		return F32x4_setXCopy(a, v);
+			case 1:		return F32x4_setYCopy(a, v);
+			case 2:		return F32x4_setZCopy(a, v);
+			default:	return F32x4_setWCopy(a, v);
+		}
+	}
+
+	static inline void F32x4_setRef(F32x4 *a, U8 i, F32 v) {
+		switch (i & 3) {
+			case 0:		F32x4_setXRef(a, v);	break;
+			case 1:		F32x4_setYRef(a, v);	break;
+			case 2:		F32x4_setZRef(a, v);	break;
+			default:	F32x4_setWRef(a, v);
+		}
+	}
+
+#endif
 
 //Fallbacks for transcendentals
 
@@ -170,35 +201,6 @@ static inline Bool F32x4_any(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_z
 
 static inline Bool F32x4_eq4(F32x4 a, F32x4 b) { return F32x4_all(F32x4_eq(a, b)); }
 static inline Bool F32x4_neq4(F32x4 a, F32x4 b) { return !F32x4_eq4(a, b); }
-
-//Swizzles and shizzle
-
-#if _SIMD != SIMD_NONE
-
-	static inline void F32x4_setXRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setXCopy(*a, v); }
-	static inline void F32x4_setYRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setYCopy(*a, v); }
-	static inline void F32x4_setZRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setZCopy(*a, v); }
-	static inline void F32x4_setWRef(F32x4 *a, F32 v) { if (a) *a = F32x4_setWCopy(*a, v); }
-
-	static inline F32x4 F32x4_setCopy(F32x4 a, U8 i, F32 v) {
-		switch (i & 3) {
-			case 0:		return F32x4_setXCopy(a, v);
-			case 1:		return F32x4_setYCopy(a, v);
-			case 2:		return F32x4_setZCopy(a, v);
-			default:	return F32x4_setWCopy(a, v);
-		}
-	}
-
-	static inline void F32x4_setRef(F32x4 *a, U8 i, F32 v) {
-		switch (i & 3) {
-			case 0:		F32x4_setXRef(a, v);	break;
-			case 1:		F32x4_setYRef(a, v);	break;
-			case 2:		F32x4_setZRef(a, v);	break;
-			default:	F32x4_setWRef(a, v);
-		}
-	}
-
-#endif
 
 //Construction
 

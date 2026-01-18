@@ -44,16 +44,48 @@ clean:																											\
 		retError(clean, Error_underflow(0, toBits, (castType) type##_MIN, "CastFromI()::v is out of bounds"));	\
 )
 
+//We can't reuse CastFromU/CastFromI, since floats are a bit special:
+// U32_MAX will round to U32_MAX + 1 with a float, so the > check will actually fail for 4Gi.
+// This produces UB because (U32)f32_above_u32_max will depend on the arch.
+// On x64 this seems to work as you expect (0) but on aarch64 this seems to clamp (U32_MAX).
+// To prevent this issue, we instead compare it with >= (floatType)intLimit + 1.
+// This results in either >= 0x100, 0x10000 and with
+// float/int (due to float precision) it'll produce 4Gi + 1 = 4Gi so it'll work.
+
+#define CastFromUForF(type, toBits, floatType, ...)																\
+																												\
+	Bool s_uccess = true;																						\
+																												\
+	if(!res)																									\
+		retError(clean, Error_nullPointer(1, "CastFromUForF()::res is required"));								\
+																												\
+	__VA_ARGS__																									\
+																												\
+	if(v >= ((floatType)type##_MAX + 1))																		\
+		retError(clean, Error_overflow(0, toBits, (U64) type##_MAX, "CastFromUForF()::v out of bounds"));		\
+																												\
+	*res = (type) v;																							\
+clean:																											\
+	return s_uccess
+
+#define CastFromIForF(type, castType, toBits, floatType, ...)													\
+	CastFromUForF(type, toBits, floatType, __VA_ARGS__															\
+		if(v < type##_MIN)																						\
+			retError(clean, Error_underflow(																	\
+				0, toBits, (castType) type##_MIN, "CastFromIForF()::v is out of bounds"							\
+			));																									\
+	)
+
 #define CastFromF(type)																							\
 	const void *vptr = &v;																						\
-	CastFromI(type, type, *(const U32*)vptr,																	\
+	CastFromIForF(type, type, *(const U32*)vptr, F32,															\
 		if(v != (type)v)																						\
 			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));						\
 )
 
 #define CastFromD(type)																							\
 	const void *vptr = &v;																						\
-	CastFromI(type, type, *(const U64*)vptr,																	\
+	CastFromIForF(type, type, *(const U64*)vptr, F64,															\
 		if(v != (type)v)																						\
 			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));						\
 )

@@ -33,7 +33,9 @@ BUFFER_OP_IMPL(I32x4)
 	#include "types/math/vec4i_sse.h"
 	#undef VEC4I_SSE_GUARD
 #elif _SIMD == SIMD_NEON
-	#error TODO: Implement SIMD NEON
+	#define VEC4I_NEON_GUARD
+	#include "types/math/vec4i_neon.h"
+	#undef VEC4I_NEON_GUARD
 #else
 	#define VEC4I_NONE_GUARD
 	#include "types/math/vec4i_none.h"
@@ -55,6 +57,48 @@ static inline I32x4 I32x4_bitsF32x4(F32x4 a) {
 static inline I32x4 I32x4_two() { return I32x4_xxxx4(2); }
 static inline I32x4 I32x4_negOne() { return I32x4_xxxx4(-1); }
 static inline I32x4 I32x4_negTwo() { return I32x4_xxxx4(-2); }
+
+//Swizzles and shizzle
+
+#if _SIMD != SIMD_NONE
+
+	static inline void I32x4_setXRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(v, I32x4_y(*a), I32x4_z(*a), I32x4_w(*a)); }
+	static inline void I32x4_setYRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), v, I32x4_z(*a), I32x4_w(*a)); }
+	static inline void I32x4_setZRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), v, I32x4_w(*a)); }
+	static inline void I32x4_setWRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), I32x4_z(*a), v); }
+
+	static inline I32x4 I32x4_setCopy(I32x4 a, U8 i, I32 v) {
+		switch (i & 3) {
+			case 0:		return I32x4_setXCopy(a, v);
+			case 1:		return I32x4_setYCopy(a, v);
+			case 2:		return I32x4_setZCopy(a, v);
+			default:	return I32x4_setWCopy(a, v);
+		}
+	}
+
+	static inline void I32x4_setRef(I32x4 *a, U8 i, I32 v) {
+		switch (i & 3) {
+			case 0:		I32x4_setXRef(a, v);	break;
+			case 1:		I32x4_setYRef(a, v);	break;
+			case 2:		I32x4_setZRef(a, v);	break;
+			default:	I32x4_setWRef(a, v);
+		}
+	}
+
+	static inline I32 I32x4_get(I32x4 a, U8 i) {
+		switch (i & 3) {
+			case 0:		return I32x4_x(a);
+			case 1:		return I32x4_y(a);
+			case 2:		return I32x4_z(a);
+			default:	return I32x4_w(a);
+		}
+	}
+
+#endif
+
+#if _PLATFORM_TYPE != PLATFORM_WINDOWS || _SIMD != SIMD_SSE
+	static inline I32x4 I32x4_div(I32x4 a, I32x4 b) { NONE_OP4I(I32x4_get(a, i) / I32x4_get(b, i)); }
+#endif
 
 //Arithmetic
 
@@ -98,44 +142,6 @@ static inline Bool I32x4_any(I32x4 a) { return I32x4_reduce(I32x4_neq(a, I32x4_z
 
 static inline Bool I32x4_eq4(I32x4 a, I32x4 b) { return I32x4_all(I32x4_eq(a, b)); }
 static inline Bool I32x4_neq4(I32x4 a, I32x4 b) { return !I32x4_eq4(a, b); }
-
-//Swizzles and shizzle
-
-#if _SIMD != SIMD_NONE
-
-	static inline void I32x4_setXRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(v, I32x4_y(*a), I32x4_z(*a), I32x4_w(*a)); }
-	static inline void I32x4_setYRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), v, I32x4_z(*a), I32x4_w(*a)); }
-	static inline void I32x4_setZRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), v, I32x4_w(*a)); }
-	static inline void I32x4_setWRef(I32x4 *a, I32 v) { if (a) *a = I32x4_create4(I32x4_x(*a), I32x4_y(*a), I32x4_z(*a), v); }
-
-	static inline I32x4 I32x4_setCopy(I32x4 a, U8 i, I32 v) {
-		switch (i & 3) {
-			case 0:		return I32x4_setXCopy(a, v);
-			case 1:		return I32x4_setYCopy(a, v);
-			case 2:		return I32x4_setZCopy(a, v);
-			default:	return I32x4_setWCopy(a, v);
-		}
-	}
-
-	static inline void I32x4_setRef(I32x4 *a, U8 i, I32 v) {
-		switch (i & 3) {
-			case 0:		I32x4_setXRef(a, v);	break;
-			case 1:		I32x4_setYRef(a, v);	break;
-			case 2:		I32x4_setZRef(a, v);	break;
-			default:	I32x4_setWRef(a, v);
-		}
-	}
-
-	static inline I32 I32x4_get(I32x4 a, U8 i) {
-		switch (i & 3) {
-			case 0:		return I32x4_x(a);
-			case 1:		return I32x4_y(a);
-			case 2:		return I32x4_z(a);
-			default:	return I32x4_w(a);
-		}
-	}
-
-#endif
 
 //Generic helper functions
 //Adapted from https://stackoverflow.com/questions/17610696/shift-a-m128i-of-n-bits

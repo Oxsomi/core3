@@ -72,9 +72,7 @@ if(MSVC)
 	set(BUILD_FLAGS "/MP" "/GR" "/D_CRT_SECURE_NO_WARNINGS" "/Gy" "/W4" "/WX" "/fp:strict")
 
 	if(EnableSIMD)
-		if(ARM)
-			list(APPEND BUILD_FLAGS "/arch:ARMv7VE")	# Enable ARM arch
-		else()
+		if(NOT ARM)
 			list(APPEND BUILD_FLAGS "/d2archSSE42")		#  Require SSE4.2
 		endif()
 	endif()

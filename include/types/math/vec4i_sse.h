@@ -66,7 +66,10 @@ static inline I32 I32x4_reduce(I32x4 a) {
 static inline I32x4 I32x4_add(I32x4 a, I32x4 b) { return _mm_add_epi32(a, b); }
 static inline I32x4 I32x4_sub(I32x4 a, I32x4 b) { return _mm_sub_epi32(a, b); }
 static inline I32x4 I32x4_mul(I32x4 a, I32x4 b) { return _mm_mullo_epi32(a, b); }
-static inline I32x4 I32x4_div(I32x4 a, I32x4 b) { return _mm_div_epi32(a, b); }
+
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+	static inline I32x4 I32x4_div(I32x4 a, I32x4 b) { return _mm_div_epi32(a, b); }
+#endif
 
 static inline I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) { return _mm_add_epi64(a, b); }
 static inline I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b) { return _mm_mul_epu32(a, b); }

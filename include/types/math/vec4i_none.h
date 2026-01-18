@@ -105,7 +105,6 @@ static inline I32 I32x4_reduce(I32x4 a) { return I32x4_x(a) + I32x4_y(a) + I32x4
 static inline I32x4 I32x4_add(I32x4 a, I32x4 b) { NONE_OP4I((I32)((U32)a.v[i] + (U32)b.v[i])); }
 static inline I32x4 I32x4_sub(I32x4 a, I32x4 b) { NONE_OP4I((I32)((U32)a.v[i] - (U32)b.v[i])); }
 static inline I32x4 I32x4_mul(I32x4 a, I32x4 b) { NONE_OP4I((I32)((I64)a.v[i] * (I64)b.v[i])); }
-static inline I32x4 I32x4_div(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] / b.v[i]); }
 
 //Used for big ints
 //64-bit add but stored in 32-bit int

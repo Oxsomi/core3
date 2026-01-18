@@ -47,8 +47,6 @@
 	typedef int32x4_t   I32x4;
 	typedef float32x4_t F32x4;
 
-	#error Neon not supported yet TODO: All operations and shuffle (vtbl).
-
 #elif _SIMD == SIMD_SSE
 
 	#include <emmintrin.h>

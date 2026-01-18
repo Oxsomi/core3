@@ -84,8 +84,7 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 #if !_ENABLE_SIMD
 	#define _SIMD SIMD_NONE
 #elif _ARCH == ARCH_ARM64
-	#define _SIMD SIMD_NONE																	//TODO: SIMD_NEON
-	#warning "-- ARM NEON isn't natively supported. Falling back to non SIMD for testing purposes, PLEASE don't ship like this"
+	#define _SIMD SIMD_NEON
 #else
 	#define _SIMD SIMD_SSE
 #endif
