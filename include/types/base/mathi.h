@@ -62,10 +62,23 @@ static inline T T##_exp2(T v) {																		\
 																									\
 static inline T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }
 
-XINT_OP(U64);
-XINT_OP(U32);
-XINT_OP(U16);
-XINT_OP(U8);
+#define UINT_OP(T)																					\
+XINT_OP(T);																							\
+																									\
+static inline T T##_rol(T a, U8 bits) {																\
+	bits &= sizeof(T) * 8 - 1;																		\
+	return (a << bits) | (a >> (32 - bits));														\
+}																									\
+																									\
+static inline T T##_ror(T a, U8 bits) {																\
+	bits &= sizeof(T) * 8 - 1;																		\
+	return (a >> bits) | (a << (32 - bits));														\
+}
+
+UINT_OP(U64);
+UINT_OP(U32);
+UINT_OP(U16);
+UINT_OP(U8);
 
 //Int
 

@@ -31,15 +31,12 @@ BUFFER_OP_IMPL(I32x4)
 #if _SIMD == SIMD_SSE
 	#define VEC4I_SSE_GUARD
 	#include "types/math/vec4i_sse.h"
-	#undef VEC4I_SSE_GUARD
 #elif _SIMD == SIMD_NEON
 	#define VEC4I_NEON_GUARD
 	#include "types/math/vec4i_neon.h"
-	#undef VEC4I_NEON_GUARD
 #else
 	#define VEC4I_NONE_GUARD
 	#include "types/math/vec4i_none.h"
-	#undef VEC4I_NONE_GUARD
 #endif
 
 #if _SIMD != SIMD_SSE
@@ -149,7 +146,7 @@ static inline Bool I32x4_neq4(I32x4 a, I32x4 b) { return !I32x4_eq4(a, b); }
 static inline I32x4 I32x4_lsh128(I32x4 a, U8 bits) {
 
 	const I32x4 b = a;
-	a = I32x4_lshByte(a, 8);
+	a = I32x4_lshElements(a, 2);
 
 	if (bits >= 64)
 		return I32x4_lsh64(a, bits - 64);
@@ -161,7 +158,7 @@ static inline I32x4 I32x4_lsh128(I32x4 a, U8 bits) {
 static inline I32x4 I32x4_rsh128(I32x4 a, U8 bits) {
 
 	const I32x4 b = a;
-	a = I32x4_rshByte(a, 8);
+	a = I32x4_rshElements(a, 2);
 
 	if (bits >= 64)
 		return I32x4_rsh64(a, bits - 64);

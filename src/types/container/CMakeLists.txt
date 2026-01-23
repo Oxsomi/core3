@@ -44,8 +44,6 @@ source_group("Source Files (unix)" FILES ${typesContainerUnixSources})
 set_target_properties(OxC3_types_container PROPERTIES FOLDER Oxsomi/types)
 target_link_libraries(OxC3_types_container PUBLIC OxC3_types_base OxC3_types_math)
 
-target_compile_definitions(OxC3_types_container PUBLIC -D_ENABLE_SIMD=${SIMD})
-
 if(WIN32)
 	target_link_libraries(OxC3_types_container PUBLIC Bcrypt.lib)
 elseif(APPLE)

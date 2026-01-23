@@ -104,6 +104,7 @@ static inline Bool Buffer_isUTF16(const Buffer buf, F32 threshold) { return Buff
 
 //CRC32 Castagnoli / iSCSI polynomial (0x82f63b78) not for ethernet/zip (0xedb88320)!
 U32 Buffer_crc32c(const Buffer buf);
+U32 Buffer_crc32cFallback(const Buffer buf);		//In case of no native CRC32C, but don't manually call
 
 //Fowler-Noll-Vo-1A 64-bit (fast non HW accelerated hashes)
 
@@ -120,6 +121,7 @@ I32x4 Buffer_md5(const Buffer buf);
 //SHA256
 
 void Buffer_sha256(const Buffer buf, U32 output[8]);
+void Buffer_sha256Fallback(const Buffer buf, U32 *output);		//In case of no native SHA256, but don't manually call
 
 //Encryption
 
@@ -188,6 +190,12 @@ Bool Buffer_encrypt(const BufferEncrypt *encrypt, Error *e_rr);
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
 Bool Buffer_decrypt(const BufferEncrypt *decrypt, Error *e_rr);
+
+//Performs AES sbox in constant time (no lookup tables).
+U8 AES_sbox(U8 x);
+
+//Performs AES subWord in constant time (no lookup tables).
+U32 AES_subWord(U32 w);
 
 //Cryptographically secure random on a sized buffer
 

@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#pragma once
 #include <immintrin.h>
 #include <smmintrin.h>
 #include <tmmintrin.h>
@@ -27,14 +28,6 @@
 #endif
 
 //Loads
-
-static inline I32x4 I32x4_zero() { return _mm_setzero_si128(); }
-static inline I32x4 I32x4_xxxx4(I32 x) { return _mm_set1_epi32(x); }
-
-static inline I32x4 I32x4_create1(I32 x) { return _mm_set_epi32(0, 0, 0, x); }
-static inline I32x4 I32x4_create2(I32 x, I32 y) { return _mm_set_epi32(0, 0, y, x); }
-static inline I32x4 I32x4_create3(I32 x, I32 y, I32 z) { return _mm_set_epi32(0, z, y, x); }
-static inline I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { return _mm_set_epi32(w, z, y, x); }
 
 static inline I32x4 I32x4_fromF32x4(F32x4 a) { return _mm_cvttps_epi32(a); }
 
@@ -100,24 +93,22 @@ static inline I32x4 I32x4_andnot(I32x4 a, I32x4 b) { return _mm_andnot_si128(a, 
 static inline I32x4 I32x4_xor(I32x4 a, I32x4 b) { return _mm_xor_si128(a, b); }
 static inline I32x4 I32x4_not(I32x4 a) { return _mm_xor_si128(a, I32x4_xxxx4((I32)U32_MAX)); }
 	
-static inline I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
-	switch (bytes) {
+static inline I32x4 I32x4_lshElements(I32x4 a, U8 elementCount) {
+	switch (elementCount) {
 		case 0:		return a;
-		FUNC_EXPAND8(1, _mm_slli_si128, a);
-		FUNC_EXPAND4(9, _mm_slli_si128, a);
-		FUNC_EXPAND2(13, _mm_slli_si128, a);
-		case 15:	return _mm_slli_si128(a, 15);
+		case 1:		return _mm_slli_si128(a,  4);
+		case 2:		return _mm_slli_si128(a,  8);
+		case 3:		return _mm_slli_si128(a, 12);
 		default:	return I32x4_zero();
 	}
 }
 
-static inline I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
-	switch (bytes) {
+static inline I32x4 I32x4_rshElements(I32x4 a, U8 elementCount) {
+	switch (elementCount) {
 		case 0:		return a;
-		FUNC_EXPAND8(1, _mm_srli_si128, a);
-		FUNC_EXPAND4(9, _mm_srli_si128, a);
-		FUNC_EXPAND2(13, _mm_srli_si128, a);
-		case 15:	return _mm_srli_si128(a, 15);
+		case 1:		return _mm_srli_si128(a,  4);
+		case 2:		return _mm_srli_si128(a,  8);
+		case 3:		return _mm_srli_si128(a, 12);
 		default:	return I32x4_zero();
 	}
 }
@@ -155,24 +146,6 @@ static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
 		case 0b1100:	return _mm_blend_epi16(a, b, 0xF0);
 		case 0b1101:	return _mm_blend_epi16(a, b, 0xF3);
 		case 0b1110:	return _mm_blend_epi16(a, b, 0xFC);
-	}
-}
-
-static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
-
-	switch (v) {
-
-		case 0:		return b;
-		case 1:		return _mm_alignr_epi8(a, b, 4);
-		case 2:		return _mm_alignr_epi8(a, b, 8);
-		case 3:		return _mm_alignr_epi8(a, b, 12);
-
-		case 4:		return a;
-		case 5:		return _mm_alignr_epi8(a, b, 20);
-		case 6:		return _mm_alignr_epi8(a, b, 24);
-		case 7:		return _mm_alignr_epi8(a, b, 28);
-
-		default:	return I32x4_zero();
 	}
 }
 

@@ -20,6 +20,7 @@
 
 #include "types/base/error.h"
 #include "types/container/buffer.h"
+#include "types/math/u128.h"
 #include "types/math/vec4i_swizzle.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
@@ -35,7 +36,6 @@
 //
 //- Init key using CSPRNG if not available
 //- Init H: aes256(0, key)
-//- Init GHASH table
 //
 //- Tag: 0
 //- Foreach additional data block padded to 16-byte with 0s:
@@ -61,6 +61,61 @@ impl I32x4 AES_keyGenAssist(I32x4 a, U8 i);
 impl I32x4 AES_encodeBlock(I32x4 a, I32x4 b);
 impl I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b);
 
+//AES_subWord can be used by either NEON or NONE for encryption.
+//No lookup tables, those are unsafe.
+
+static inline U8 AES_xtime(U8 x) {
+	return (U8)((x << 1) ^ ((x >> 7) * 0x1B));
+}
+
+static inline U8 AES_gfMul(U8 a, U8 b) {
+	U8 r = 0;
+	for (int i = 0; i < 8; i++) {
+		r ^= (U8)(-(b & 1) & a);
+		a = AES_xtime(a);
+		b >>= 1;
+	}
+	return r;
+}
+
+static inline U8 AES_gfInv(U8 x) {
+	U8 x2   = AES_gfMul(x, x);
+	U8 x4   = AES_gfMul(x2, x2);
+	U8 x8   = AES_gfMul(x4, x4);	
+	U8 x16  = AES_gfMul(x8, x8);
+	U8 x32  = AES_gfMul(x16, x16);
+	U8 x64  = AES_gfMul(x32, x32);
+	U8 x128 = AES_gfMul(x64, x64);	
+	U8 x192 = AES_gfMul(x128, x64);
+	U8 x224 = AES_gfMul(x192, x32);
+	U8 x240 = AES_gfMul(x224, x16);
+	U8 x248 = AES_gfMul(x240, x8);
+	U8 x252 = AES_gfMul(x248, x4);
+	U8 x254 = AES_gfMul(x252, x2);
+	return x254;
+}
+
+static inline U8 AES_affine(U8 x) {
+	U8 y = x;
+	y ^= (x << 1) | (x >> 7);
+	y ^= (x << 2) | (x >> 6);
+	y ^= (x << 3) | (x >> 5);
+	y ^= (x << 4) | (x >> 4);
+	return y ^ 0x63;
+}
+
+U8 AES_sbox(U8 x) {
+	return AES_affine(AES_gfInv(x));
+}
+
+U32 AES_subWord(U32 w) {
+	return
+		((U32)AES_sbox((U8)(w >>  0)) <<  0) |
+		((U32)AES_sbox((U8)(w >>  8)) <<  8) |
+		((U32)AES_sbox((U8)(w >> 16)) << 16) |
+		((U32)AES_sbox((U8)(w >> 24)) << 24);
+}
+
 //The context of important AES variables.
 //And encrypting/decrypting blocks and verifying tags.
 //These functions don't do any parameter checks since they're internal helper functions
@@ -69,8 +124,6 @@ typedef struct AESEncryptionContext {
 	I32x4 key[15];
 
 	I32x4 H;
-
-	I32x4 ghashLut[17];
 
 	I32x4 EKY0;
 
@@ -92,7 +145,7 @@ static inline I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, const I32x4 im2) 
 	I32x4 im4 = im1;
 
 	for(U8 i = 0; i < 3; ++i) {
-		im4 = I32x4_lshByte(im4, 4);
+		im4 = I32x4_lshElements(im4, 1);
 		im1 = I32x4_xor(im1, im4);
 	}
 
@@ -153,8 +206,56 @@ static inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15
 	return AES_encodeBlockLast(block, k[rounds]);
 }
 
-impl void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]);
-impl I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]);
+//Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
+
+static inline I32x4 AESEncryptionContext_ghash(I32x4 a, I32x4 H) {
+
+	a = I32x4_swapEndianness(a);
+	const I32x4 b = I32x4_swapEndianness(H);
+
+	I32x4 tmp[8];
+
+	tmp[0] = I32x4_clmul64(a, b, 0x00);		//TODO: Abstract this so this can be generalized
+	tmp[3] = I32x4_xor(I32x4_clmul64(a, b, 0x10), I32x4_clmul64(a, b, 0x01));
+	tmp[2] = I32x4_clmul64(a, b, 0x11);
+
+	tmp[1] = I32x4_lshElements(tmp[3], 2);
+	tmp[3] = I32x4_rshElements(tmp[3], 2);
+
+	for(U8 i = 0; i < 2; ++i) {
+		I32x4 t = I32x4_xor(tmp[i << 1], tmp[(i << 1) + 1]);
+		tmp[i << 1] = I32x4_lsh32(t, 1);
+		tmp[4 + (i << 1)] = I32x4_rsh32(t, 31);
+	}
+
+	tmp[7] = I32x4_rshElements(tmp[4], 3);
+
+	for(U8 i = 0; i < 2; ++i)
+		tmp[6 - i] = I32x4_lshElements(tmp[6 - (i << 1)], 1);
+
+	const U8 v0[3] = { 31, 30, 25 };
+
+	for(U8 i = 0; i < 3; ++i) {
+		tmp[i << 1] = I32x4_or(tmp[i ? 2 : 0], tmp[5 + i]);
+		tmp[5 + i] = I32x4_lsh32(tmp[0], v0[i]);
+	}
+
+	for(U8 i = 0; i < 2; ++i)
+		tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
+
+	tmp[3] = I32x4_rshElements(tmp[5], 1);
+	tmp[5] = I32x4_xor(tmp[0], I32x4_lshElements(tmp[5], 3));
+
+	const U8 v1[3] = { 1, 2, 7 };
+
+	for(U8 i = 0; i < 3; ++i)
+		tmp[i] = I32x4_rsh32(tmp[5], v1[i]);
+
+	for(U8 i = 1; i < 6; ++i)
+		tmp[0] = I32x4_xor(tmp[0], tmp[i]);
+
+	return I32x4_swapEndianness(tmp[0]);
+}
 
 //Safe fetch a block (even if <16 bytes are left)
 static inline I32x4 AESEncryptionContext_fetchBlock(const void *dat, const U64 leftOver) {
@@ -172,7 +273,7 @@ static inline I32x4 AESEncryptionContext_fetchBlock(const void *dat, const U64 l
 //This could be something like sender + receiver ip address
 //This data could allow the dev to discard invalid packets for example
 //And verify that this is the data the original message was signed with
-static inline I32x4 AESEncryptionContext_initTag(const Buffer *additionalData, const I32x4 ghashLut[17]) {
+static inline I32x4 AESEncryptionContext_initTag(const Buffer *additionalData, I32x4 H) {
 
 	I32x4 tag = I32x4_zero();
 
@@ -184,7 +285,7 @@ static inline I32x4 AESEncryptionContext_initTag(const Buffer *additionalData, c
 
 	for (U64 i = 0, j = (len + 15) >> 4; i < j; ++i) {
 		const I32x4 ADi = AESEncryptionContext_fetchBlock((const I32*)ptr + ((U64)i << 2), len - (i << 4));
-		tag = AESEncryptionContext_ghash(I32x4_xor(tag, ADi), ghashLut);
+		tag = AESEncryptionContext_ghash(I32x4_xor(tag, ADi), H);
 	}
 
 	return tag;
@@ -234,8 +335,6 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 
 	ctx->H = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
 
-	AESEncryptionContext_ghashPrepare(ctx->H, ctx->ghashLut);
-
 	//Compute final tag xor
 
 	I32x4 Y0 = *encrypt->constDecrypt.iv;
@@ -244,7 +343,7 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 	I32x4_setWRef(&Y0, I32_swapEndianness(1));
 
 	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
-	ctx->tag = AESEncryptionContext_initTag(encrypt->additionalData, ctx->ghashLut);
+	ctx->tag = AESEncryptionContext_initTag(encrypt->additionalData, ctx->H);
 
 clean:
 	return s_uccess;
@@ -267,7 +366,7 @@ static inline void AESEncryptionContext_finish(AESEncryptionContext *ctx, const 
 	if(target)
 		lengths.arr[1] = U64_swapEndianness(Buffer_length(*target) << 3);
 
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths.vec), ctx->ghashLut);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths.vec), ctx->H);
 
 	//Finish up by adding the iv into the key (this is already has blockId 1 in it)
 
@@ -275,7 +374,7 @@ static inline void AESEncryptionContext_finish(AESEncryptionContext *ctx, const 
 }
 
 static inline void AESEncryptionContext_updateTag(AESEncryptionContext *ctx, const I32x4 CTi) {
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->ghashLut);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->H);
 }
 
 static inline void AESEncryptionContext_storeBlock(I32 *io, const U64 leftOver, void *v) {

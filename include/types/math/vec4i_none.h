@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#pragma once
 #ifndef VEC4I_NONE_GUARD
 	#error Vec4i None guard was undefined, this likely indicates include of vec4i_none.h was attempted instead of vec4i.h
 #endif
@@ -25,14 +26,6 @@
 #include "types/base/mathi.h"
 
 //Loads
-
-static inline I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { I32x4 v = { { x, y, z, w } }; return v; }
-static inline I32x4 I32x4_create3(I32 x, I32 y, I32 z) { return I32x4_create4(x, y, z, 0); }
-static inline I32x4 I32x4_create2(I32 x, I32 y) { return I32x4_create4(x, y, 0, 0); }
-static inline I32x4 I32x4_create1(I32 x) { return I32x4_create4(x, 0, 0, 0); }
-
-static inline I32x4 I32x4_xxxx4(I32 x) { return I32x4_create4(x, x, x, x); }
-static inline I32x4 I32x4_zero() { return I32x4_xxxx4(0); }
 
 typedef union I32x4_U64x2 {
 	I32x4 v;
@@ -148,13 +141,15 @@ static inline I32x4 I32x4_andnot(I32x4 a, I32x4 b) { NONE_OP4I((~a.v[i]) & b.v[i
 static inline I32x4 I32x4_xor(I32x4 a, I32x4 b) { NONE_OP4I(a.v[i] ^ b.v[i]); }
 static inline I32x4 I32x4_not(I32x4 a) { NONE_OP4I(~a.v[i]); }
 	
-static inline I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
+static inline I32x4 I32x4_lshElements(I32x4 a, U8 elements) {
 
-	if (!bytes)
+	if (!elements)
 		return a;
 
-	if (bytes >= 16)
+	if (elements >= 4)
 		return I32x4_zero();
+
+	const U8 bytes = elements * 4;
 
 	I32x4 result = I32x4_zero();
 	Buffer_memcpy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createRefConst(&a, sizeof(a)));
@@ -162,13 +157,15 @@ static inline I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
 	return result;
 }
 
-static inline I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
+static inline I32x4 I32x4_rshElements(I32x4 a, U8 elements) {
 
-	if (!bytes)
+	if (!elements)
 		return a;
 
-	if (bytes >= 16)
+	if(elements >= 4)
 		return I32x4_zero();
+
+	const U8 bytes = elements * 4;
 
 	I32x4 result = I32x4_zero();
 	Buffer_memcpy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst((U8*)&a + bytes, sizeof(a) - bytes));
@@ -248,18 +245,10 @@ static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
 static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
 
 	switch (v) {
-
-		case 0:		return b;
-		case 1:		return I32x4_create4(I32x4_w(a), I32x4_x(b), I32x4_y(b), I32x4_z(b));
-		case 2:		return I32x4_create4(I32x4_z(a), I32x4_w(a), I32x4_x(b), I32x4_y(b));
-		case 3:		return I32x4_create4(I32x4_y(a), I32x4_z(a), I32x4_w(a), I32x4_x(b));
-
-		case 4:		return a;
-		case 5:		return I32x4_create4(0, I32x4_x(a), I32x4_y(a), I32x4_z(a));
-		case 6:		return I32x4_create4(0, 0, I32x4_x(a), I32x4_y(a));
-		case 7:		return I32x4_create4(0, 0, 0, I32x4_x(a));
-
-		default:	return I32x4_zero();
+		default: return b;
+		case 1:  return I32x4_create4(I32x4_y(b), I32x4_z(b), I32x4_w(b), I32x4_x(a));
+		case 2:  return I32x4_create4(I32x4_z(b), I32x4_w(b), I32x4_x(a), I32x4_y(a));
+		case 3:  return I32x4_create4(I32x4_w(b), I32x4_x(a), I32x4_y(a), I32x4_z(a));
 	}
 }
 

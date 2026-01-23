@@ -22,7 +22,6 @@
 #include "types/math/vec_base.h"
 #include "types/base/buffer.h"
 #include "types/base/platform_types.h"
-#include <stdalign.h>
 
 #ifdef __cplusplus
 	extern "C" {
@@ -40,41 +39,15 @@
 #define FUNC_EXPAND32(offset, func, var) FUNC_EXPAND16(offset, func, var); FUNC_EXPAND16((offset) + 16, func, var)
 #define FUNC_EXPAND64(offset, func, var) FUNC_EXPAND32(offset, func, var); FUNC_EXPAND32((offset) + 32, func, var)
 
-#if _SIMD == SIMD_NEON
-	
-	#include <arm_neon.h>
-
-	typedef int32x4_t   I32x4;
-	typedef float32x4_t F32x4;
-
-#elif _SIMD == SIMD_SSE
-
-	#include <emmintrin.h>
-
-	//vec3 and vec4 can be represented using 4-element vectors,
-	//These are a lot faster than just doing them manually.
-
-	typedef __m128i I32x4;
-	typedef __m128  F32x4;
-
-	#define vecShufflei(a, x, y, z, w) _mm_shuffle_epi32(a, _MM_SHUFFLE(w, z, y, x))
-	#define vecShufflef(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(w, z, y, x))
-
+#if _SIMD == SIMD_SSE
+	#define VEC4_SSE_GUARD
+	#include "types/math/vec4_sse.h"
+#elif _SIMD == SIMD_NEON
+	#define VEC4_NEON_GUARD
+	#include "types/math/vec4_neon.h"
 #else
-
-	#include <stdalign.h>
-
-	typedef struct I32x4_t {
-		alignas(16) I32 v[4];
-	} I32x4;
-
-	typedef struct F32x4_t {
-		alignas(16) F32 v[4];
-	} F32x4;
-
-	#define vecShufflei(a, x, y, z, w) (I32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
-	#define vecShufflef(a, x, y, z, w) (F32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
-
+	#define VEC4_NONE_GUARD
+	#include "types/math/vec4_none.h"
 #endif
 
 #ifdef __cplusplus

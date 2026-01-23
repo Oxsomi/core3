@@ -19,11 +19,7 @@
 */
 
 #pragma once
-#include "types/base/platform_types.h"
-
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-	#include "types/math/vec4.h"
-#endif
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -70,14 +66,6 @@ Bool BigInt_createFromDec(const BigIntCreate *bigIntCreate, Error *e_rr);
 Bool BigInt_createFromString(const BigIntCreate *bigIntCreate, Error *e_rr);
 
 void BigInt_free(BigInt *a, const Allocator *allocator);
-
-//U128
-
-#if _PLATFORM_TYPE != PLATFORM_WINDOWS
-	typedef __uint128_t U128;
-#else
-	typedef I32x4 U128;
-#endif
 	
 typedef enum EIntEncoding {
 	EIntEncoding_Hex,

@@ -18,32 +18,9 @@
 *  This is called dual licensing.
 */
 
-#ifndef VEC4_NEON_GUARD
-	#error Vec4 NEON guard was undefined, this likely indicates include of vec4f_neon.h was attempted instead of vec4f.h
+#ifndef VEC4F_NEON_GUARD
+	#error Vec4f NEON guard was undefined, this likely indicates include of vec4f_neon.h was attempted instead of vec4f.h
 #endif
-
-static inline F32x4 F32x4_zero() { return vdupq_n_f32(0.0f); }
-static inline F32x4 F32x4_xxxx4(F32 x) { return vdupq_n_f32(x); }
-
-static inline F32x4 F32x4_create1(F32 x) {
-	F32x4 v = F32x4_zero();
-	return vsetq_lane_f32(x, v, 0);
-}
-
-static inline F32x4 F32x4_create2(F32 x, F32 y) {
-	F32x4 v = F32x4_create1(x);
-	return vsetq_lane_f32(y, v, 1);
-}
-
-static inline F32x4 F32x4_create3(F32 x, F32 y, F32 z) {
-	F32x4 v = F32x4_create2(x, y);
-	return vsetq_lane_f32(z, v, 2);
-}
-
-static inline F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w) {
-	F32x4 v = F32x4_create3(x, y, z);
-	return vsetq_lane_f32(w, v, 3);
-}
 
 static inline F32x4 F32x4_fromI32x4(I32x4 a) { return vcvtq_f32_s32(a); }
 
