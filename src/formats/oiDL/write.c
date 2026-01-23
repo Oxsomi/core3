@@ -227,19 +227,18 @@ Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		const U32 key[8] = { 0 };
 
-		const Bool b = Buffer_eq(
-			Buffer_createRefConst(key, sizeof(key)),
-			Buffer_createRefConst(dlFile.settings.encryptionKey, sizeof(key))
+		const Bool hasKey = Buffer_neq(
+			Buffer_createRefConst(dlFile.settings.encryptionKey, sizeof(key)),
+			Buffer_createRefConst(key, sizeof(key))
 		);
 
-		gotoIfError2(clean, Buffer_encrypt(
+		gotoIfError2(clean, Buffer_encryptAuto(
 
 			compressedOutput,
 			Buffer_createRefConst(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12),
 
 			EBufferEncryptionType_AES256GCM,
-			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
-
+			!hasKey,
 			dlFile.settings.encryptionKey,
 
 			(I32x4*)headerIt,

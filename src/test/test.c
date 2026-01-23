@@ -961,7 +961,7 @@ int main() {
 				.target = &target,
 				.additionalData = &addDat,
 				.type = EBufferEncryptionType_AES256GCM,
-				.flags = EBufferEncryptionFlags_None,
+				.flags = EBufferEncryptionFlags_StopCreateIv,
 				.nonConstEncrypt = {
 					.key = (U32*) testKeys[i].ptr,
 					.tag = &tag,
@@ -969,12 +969,12 @@ int main() {
 				}
 			};
 
-			gotoIfError3(clean, Buffer_encrypt(&encrypt, e_rr));
+			gotoIfError3(clean, Buffer_encryptAdvanced(&encrypt, e_rr));
 
 			//Check size
 
 			if (CharString_length(tmp) + 16 != CharString_length(results[i]))
-				retError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"));
+				retError(clean, Error_invalidState(3, "Buffer_encryptAdvanced returned invalid size"));
 
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
@@ -985,7 +985,7 @@ int main() {
 			);
 
 			if (I32x4_any(I32x4_neq(tag, tmpTag)))
-				retError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"));
+				retError(clean, Error_invalidState(1, "Buffer_encryptAdvanced GMAC/Tag was invalid"));
 
 			//Check result
 
@@ -995,16 +995,17 @@ int main() {
 			);
 
 			if (!b)
-				retError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"));
+				retError(clean, Error_invalidState(2, "Buffer_encryptAdvanced cyphertext was invalid"));
 
 			//Decrypt the encrypted string and verify if it decrypts to the same thing
 
-			gotoIfError3(clean, Buffer_decrypt(&encrypt, e_rr));
+			encrypt.flags = EBufferEncryptionFlags_None;
+			gotoIfError3(clean, Buffer_decryptAdvanced(&encrypt, e_rr));
 
 			//Check result
 
 			if(Buffer_neq(CharString_bufferConst(testPlainText[i]), CharString_bufferConst(tmp)))
-				gotoIfError(clean, Error_invalidState(4, "Buffer_decrypt failed"))
+				gotoIfError(clean, Error_invalidState(4, "Buffer_decryptAdvanced failed"))
 
 			CharString_free(&tmp, alloc);
 		}
@@ -1271,7 +1272,7 @@ int main() {
 				.target = &target,
 				.additionalData = &addDat,
 				.type = EBufferEncryptionType_AES128GCM,
-				.flags = EBufferEncryptionFlags_None,
+				.flags = EBufferEncryptionFlags_StopCreateIv,
 				.nonConstEncrypt = {
 					.key = (U32*) testKeys[i].ptr,
 					.tag = &tag,
@@ -1279,12 +1280,12 @@ int main() {
 				}
 			};
 
-			gotoIfError3(clean, Buffer_encrypt(&encrypt, e_rr));
+			gotoIfError3(clean, Buffer_encryptAdvanced(&encrypt, e_rr));
 
 			//Check size
 
 			if(CharString_length(tmp) + 16 != CharString_length(results[i]))
-				retError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"));
+				retError(clean, Error_invalidState(3, "Buffer_encryptAdvanced returned invalid size"));
 
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
@@ -1295,7 +1296,7 @@ int main() {
 			);
 
 			if (I32x4_any(I32x4_neq(tag, tmpTag)))
-				retError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"));
+				retError(clean, Error_invalidState(1, "Buffer_encryptAdvanced GMAC/Tag was invalid"));
 
 			//Check result
 
@@ -1305,16 +1306,17 @@ int main() {
 			);
 
 			if (!b)
-				retError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"));
+				retError(clean, Error_invalidState(2, "Buffer_encryptAdvanced cyphertext was invalid"));
 
 			//Decrypt the encrypted string and verify if it decrypts to the same thing
 
-			gotoIfError3(clean, Buffer_decrypt(&encrypt, e_rr));
+			encrypt.flags = EBufferEncryptionFlags_None;
+			gotoIfError3(clean, Buffer_decryptAdvanced(&encrypt, e_rr));
 
 			//Check result
 
 			if (Buffer_neq(CharString_bufferConst(testPlainText[i]), CharString_bufferConst(tmp)))
-				retError(clean, Error_invalidState(4, "Buffer_decrypt failed"));
+				retError(clean, Error_invalidState(4, "Buffer_decryptAdvanced failed"));
 
 			CharString_free(&tmp, alloc);
 		}

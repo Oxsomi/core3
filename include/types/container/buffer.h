@@ -123,6 +123,37 @@ void Buffer_sha256(const Buffer buf, U32 output[8]);
 
 //Encryption
 
+//AES256GCM encryption with auto generated iv.
+//Encrypt function encrypts target into target (in place).
+//Be careful about the following:
+//- Don't use the key too often (suggested <2^16 times)
+//- Don't discard iv or key if any of them are generated
+//- Don't discard tag or cut off too many bytes
+Bool Buffer_encryptAuto(
+	Buffer *target,
+	const Buffer *additionalData,
+	Bool generateKey,
+	U32 key[8],
+	I32x4 *tag,
+	I32x4 *iv,
+	Error *e_rr
+);
+
+//AES256GCM decryption.
+//Decrypt functions decrypt ciphertext from target into target (in place).
+//Will return an error if the tag can't be verified
+//Will only return decrypted result into target if the function was successful.
+//When decrypting, be sure of the following:
+//- Don't use the data if the function returns false (s_ucceeded = false)!
+Bool Buffer_decryptAuto(
+	Buffer *target,
+	const Buffer *additionalData,
+	const U32 key[8],
+	I32x4 tag,
+	I32x4 iv,
+	Error *e_rr
+);
+
 typedef enum EBufferEncryptionType {
 	EBufferEncryptionType_AES256GCM,		//Additional data; IV (96 bits), TAG (128 bits)
 	EBufferEncryptionType_AES128GCM,		//^
@@ -133,7 +164,7 @@ typedef enum EBufferEncryptionFlags {
 
 	EBufferEncryptionFlags_None			= 0,
 	EBufferEncryptionFlags_GenerateKey	= 1 << 0,
-	EBufferEncryptionFlags_GenerateIv	= 1 << 1,
+	EBufferEncryptionFlags_StopCreateIv	= 1 << 1,		//Only use if you know what you're doing, feed unique IVs here only
 
 	EBufferEncryptionFlags_Count		= 2,
 
@@ -163,31 +194,33 @@ typedef struct BufferEncrypt {
 			const I32x4 *iv;		//Iv was the 12-byte random number that was used to encrypt the data.
 		} constDecrypt;
 
-		//For Buffer_encrypt can be accessed only if the Generate flag is true.
+		//For Buffer_encryptAdvanced can be accessed only if the Generate flag is true.
 		//Tag is always generated.
 		struct NonConstEncrypt {
 			U32 *key;				//& GenerateKey: Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
 			I32x4 *tag;				//Tag is always generated if encryption type supports it (non zero).
-			I32x4 *iv;				//& GenerateIv: Iv should be random 12 bytes. Can be generated if flag is set.
+			I32x4 *iv;				//!(& StopCreateIv): Iv should be random 12 bytes. Generated unless flag is set.
 		} nonConstEncrypt;
 	};
 
 } BufferEncrypt;
 
+//Advanced encryption function, be very careful using this the wrong way.
 //Encrypt function encrypts target into target (in place).
 //Be careful about the following if iv and key are manually generated:
 //- Don't reuse iv if supplied
 //- Don't use the key too often (suggested <2^16 times)
 //- Don't discard iv or key if any of them are generated
 //- Don't discard tag or cut off too many bytes
-Bool Buffer_encrypt(const BufferEncrypt *encrypt, Error *e_rr);
+Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr);
 
+//Advanced encryption function, be very careful using this the wrong way.
 //Decrypt functions decrypt ciphertext from target into target (in place).
 //Will return an error if the tag can't be verified
 //Will only return decrypted result into target if the function was successful.
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
-Bool Buffer_decrypt(const BufferEncrypt *decrypt, Error *e_rr);
+Bool Buffer_decryptAdvanced(const BufferEncrypt *decrypt, Error *e_rr);
 
 //Cryptographically secure random on a sized buffer
 

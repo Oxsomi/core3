@@ -211,6 +211,12 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 			"AESEncryptionContext_create()::encrypt->key, iv and tag are required"
 		));
 
+	if(encrypt->additionalData && Buffer_length(*encrypt->additionalData) >= (U64_MAX >> 3))
+		retError(clean, Error_unsupportedOperation(
+			0,
+			"AESEncryptionContext_create()::->additionalData has a limit of U32_MAX  bits to avoid bit length issues in GMAC"
+		));
+
 	const U64 targetLen = Buffer_length(*encrypt->target);
 
 	//Since we have a 12-byte IV, we have a 4-byte block counter.
@@ -221,7 +227,7 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 	if(targetLen > (4 * GIBI - 3) * sizeof(I32x4))
 		retError(clean, Error_unsupportedOperation(
 			0,
-			"AESEncryptionContext_decrypt()::target has a limit of 64GB - 48 bytes to avoid block counter re-use.\n"
+			"AESEncryptionContext_create()::target has a limit of 64GB - 48 bytes to avoid block counter re-use.\n"
 			"If file size exceeds 64GB encrypt in blocks with a unique IV each 64GB block"
 		));
 
@@ -337,7 +343,7 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *encrypt, Er
 
 	I32x4_setWRef(encrypt->nonConstEncrypt.iv, 0);
 
-	if(encrypt->flags & EBufferEncryptionFlags_GenerateIv) {
+	if(!(encrypt->flags & EBufferEncryptionFlags_StopCreateIv)) {
 
 		if(!Buffer_csprng(Buffer_createRef(encrypt->nonConstEncrypt.iv, 12)))
 			retError(clean, Error_invalidState(0, "AESEncryptionContext_encrypt() couldn't generate iv"));
@@ -384,17 +390,64 @@ clean:
 	return s_uccess;
 }
 
-Bool Buffer_encrypt(const BufferEncrypt *encrypt, Error *e_rr) {
+Bool Buffer_encryptAuto(
+	Buffer *target,
+	const Buffer *additionalData,
+	Bool generateKey,
+	U32 key[8],
+	I32x4 *tag,
+	I32x4 *iv,
+	Error *e_rr
+) {
+	BufferEncrypt encrypt = (BufferEncrypt) {
+		.target = target,
+		.additionalData = additionalData,
+		.type = EBufferEncryptionType_AES256GCM,
+		.flags = generateKey ? EBufferEncryptionFlags_GenerateKey : 0,
+		.nonConstEncrypt = {
+			.key = key,
+			.tag = tag,
+			.iv = iv
+		}
+	};
+
+	return Buffer_encryptAdvanced(&encrypt, e_rr);
+}
+
+Bool Buffer_decryptAuto(
+	Buffer *target,
+	const Buffer *additionalData,
+	const U32 key[8],
+	I32x4 tag,
+	I32x4 iv,
+	Error *e_rr
+) {
+	BufferEncrypt decrypt = (BufferEncrypt) {
+		.target = target,
+		.additionalData = additionalData,
+		.type = EBufferEncryptionType_AES256GCM,
+		.flags = EBufferEncryptionFlags_None,
+		.constDecrypt = {
+			.key = key,
+			.tag = &tag,
+			.iv = &iv
+		}
+	};
+
+	return Buffer_decryptAdvanced(&decrypt, e_rr);
+}
+
+Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if(!encrypt)
-		retError(clean, Error_nullPointer(0, "Buffer_encrypt()::encrypt must be non zero"));
+		retError(clean, Error_nullPointer(0, "Buffer_encryptAdvanced()::encrypt must be non zero"));
 
 	if(encrypt->flags & EBufferEncryptionFlags_Invalid)
 		retError(clean, Error_invalidEnum(
 			3, (U64)encrypt->flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1,
-			"Buffer_encrypt()::flags are invalid"
+			"Buffer_encryptAdvanced()::flags are invalid"
 		));
 
 	gotoIfError3(clean, AESEncryptionContext_encrypt(encrypt, e_rr));
@@ -456,15 +509,15 @@ clean:
 	return s_uccess;
 }
 
-Bool Buffer_decrypt(const BufferEncrypt *decrypt, Error *e_rr) {
+Bool Buffer_decryptAdvanced(const BufferEncrypt *decrypt, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if (!decrypt)
-		retError(clean, Error_nullPointer(0, "Buffer_decrypt()::decrypt must be non zero"));
+		retError(clean, Error_nullPointer(0, "Buffer_decryptAdvanced()::decrypt must be non zero"));
 
 	if (decrypt->flags)
-		retError(clean, Error_invalidParameter(3, 0, "Buffer_encrypt()::flags are invalid"));
+		retError(clean, Error_invalidParameter(3, 0, "Buffer_decryptAdvanced()::flags are invalid"));
 
 	gotoIfError3(clean, AESEncryptionContext_decrypt(decrypt, e_rr));
 

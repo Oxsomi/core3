@@ -335,7 +335,7 @@ Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionTy
 		buf,
 		Buffer_createNull(),
 		encryptionType,
-		EBufferEncryptionFlags_GenerateIv | EBufferEncryptionFlags_GenerateKey,
+		EBufferEncryptionFlags_GenerateKey,
 		key,
 		&iv,
 		&tag

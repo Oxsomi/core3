@@ -84,14 +84,18 @@ One of the useful things about C is that files are incredibly easy to compile an
   - Linux (**partial** support: buggy window implementation, no input).
   - OS X (**partial** support: no window support or input).
   - Android (**okay** support: close to full support, missing render passes and bindful).
+  - UWP Xbox (**no** support *yet*).
+  - iOS (**no** support *yet*).
+  - Web (**no** support *yet*).
 - Instruction sets:
-  - arm64: **partial** support: no NEON yet.
-  - x64: **ok** support: Fully supported on Windows, but SSE transcendentals (sin/exp/etc.) don't work efficiently elsewhere yet.
+  - arm64: **okay** support: SSE transcendentals (sin/exp/etc.) don't work efficiently yet.
+  - x64: **decent** support: Fully supported on Windows, but SSE transcendentals (sin/exp/etc.) don't work efficiently elsewhere yet.
   - none: **full** support: arch independent fallback is working as normal, used when platform doesn't support full arm64 or x64.
-    - Note: Turning off SIMD is **not recommended for production builds!!** and building like this for final is highly discouraged.
-- A 64-bit CPU.
+  - risc-v: **no** support.
+  - wasm: **no** support *yet*.
+- A 64-bit CPU (aarch64 or x64).
   - Even though SSE4.2+ is recommended, this can be explicitly turned off.. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
-  - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
+  - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster because of SHA256 hardware. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). SSE-less build mostly exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
 
 ## Installing OxC3
 

@@ -610,14 +610,14 @@ The following functions exist for crytography or hashing purposes:
   - Error **encrypt**(Buffer additionalData, EBufferEncryptionType, EBufferEncryptionFlags, U32 *key, I32x4 *iv, I32x4 *tag)
     - Encrypts the current data ("plaintext") into the current buffer as cyphertext. If the current buffer is empty, it is still completely valid (for aes) to still call encrypt as a way to authenticate additionalData with the referenced key.
       - Authentication should store the key and iv until encryption is done to ensure it doesn't re-generate a mismatching one.
-    - Flags: GenerateKey (0), GenerateIv (1). Will use CSPRNG to generate the key and/or IV if the flags are set. Otherwise it will use supplied keys/ivs and assumes the user has properly generated them.
+    - Flags: GenerateKey (0), StopCreateIv (1). Will use CSPRNG to generate the key and/or IV if the flags are set. Otherwise it will use supplied keys/ivs and assumes the user has properly generated them.
       - Be careful about the following if iv and key are manually generated:
         - Don't reuse iv if supplied.
         - Don't use the key too often (e.g. use only <2^16 times for good measure).
         - Don't discard iv or key if any of them are generated.
         - Don't discard tag or cut off too many bytes.
     - Secret key is a `U32[4]` for AES128GCM and `U32[8]` for AES256GCM.
-    - Secret key, iv and tag are required to be valid pointers. Key will be filled if GenerateKey is true, iv will be filled if GenerateIv is true. Tag will be filled as a checksum and as mentioned before, the tag can't be reduced too many bytes (otherwise it'll be easy to generate collisions).
+    - Secret key, iv and tag are required to be valid pointers. Key will be filled if GenerateKey is true, iv will be filled if StopCreateIv is false. Tag will be filled as a checksum and as mentioned before, the tag can't be reduced too many bytes (otherwise it'll be easy to generate collisions).
     - There's a limit enforced for 4Gi - 3 AES blocks (16 bytes each or about 63 GiB). This is to ensure the IV doesn't run out of options, which would cause degradation of the encryption quality. As a fix, multiple keys can be generated for different regions of the file and decrypted separately. Very important: All different regions need their tag and iv to be authenticated one more time, otherwise a region could be replaced by an attacker.
     - When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok.
   - Error **decrypt**(Buffer additionalData, EBufferEncryptionType, const U32 *key, I32x4 tag, I32x4 iv)

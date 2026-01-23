@@ -484,7 +484,7 @@ Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		U32 key[8] = { 0 };
 
-		Bool b = Buffer_eq(
+		Bool hasKey = Buffer_neq(
 			Buffer_createRefConst(key, sizeof(key)),
 			Buffer_createRefConst(caFile.settings.encryptionKey, sizeof(key))
 		);
@@ -498,18 +498,16 @@ Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		I32x4 iv = I32x4_zero();		//Outputs
 		I32x4 tag = I32x4_zero();
 
-		gotoIfError2(clean, Buffer_encrypt(
+		gotoIfError2(clean, Buffer_encryptAuto(
 
-			toEncrypt,
-			realHeader,
+			&toEncrypt,
+			&realHeader,
 
-			EBufferEncryptionType_AES256GCM,
+			!hasKey,
+			caFile.settings.encryptionKey,
 
-			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
-			b ? NULL : caFile.settings.encryptionKey,
-
-			&iv,
-			&tag
+			&tag,
+			&iv
 		))
 
 		for(U64 i = 0; i < 3; ++i)
