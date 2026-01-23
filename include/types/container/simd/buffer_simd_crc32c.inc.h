@@ -148,7 +148,7 @@ static inline U32 Buffer_crc32cSimd(const Buffer buf) {
 	//Process remaining U64s
 
 	while (len >= sizeof(U64)) {
-		crc = SIMD_CRC32C_U64(crc, *(U64*)(void*)off);
+		crc = (U32) SIMD_CRC32C_U64(crc, *(U64*)(void*)off);
 		off += sizeof(U64);
 		len -= sizeof(U64);
 	}

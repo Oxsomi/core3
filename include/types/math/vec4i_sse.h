@@ -149,6 +149,16 @@ static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
 	}
 }
 
+static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
+	switch (v) {
+		case 0:		return b;
+		case 1:		return _mm_alignr_epi8(a, b, 4);
+		case 2:		return _mm_alignr_epi8(a, b, 8);
+		case 3:		return _mm_alignr_epi8(a, b, 12);
+		default:	return I32x4_zero();
+	}
+}
+
 static inline I32x4 I32x4_swapEndianness(I32x4 v) {
 	return _mm_shuffle_epi8(v, _mm_set_epi8(
 		0, 1, 2, 3,
