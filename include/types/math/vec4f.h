@@ -31,17 +31,14 @@
 BUFFER_OP_IMPL(F32x4);
 
 #if _SIMD == SIMD_SSE
-	#define VEC4_SSE_GUARD
+	#define VEC4F_SSE_GUARD
 	#include "types/math/vec4f_sse.h"
-	#undef VEC4_SSE_GUARD
 #elif _SIMD == SIMD_NEON
-	#define VEC4_NEON_GUARD
+	#define VEC4F_NEON_GUARD
 	#include "types/math/vec4f_neon.h"
-	#undef VEC4_NEON_GUARD
 #else
-	#define VEC4_NONE_GUARD
+	#define VEC4F_NONE_GUARD
 	#include "types/math/vec4f_none.h"
-	#undef VEC4_NONE_GUARD
 #endif
 
 static inline F32x4 F32x4_bitsI32x4(I32x4 a) {

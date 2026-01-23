@@ -23,60 +23,8 @@
 #include "types/container/buffer.h"
 #include "types/base/mathi.h"
 
-void Buffer_sha256Internal(const Buffer buf, U32 *output);
-
-//Fallback CRC32 implementation
-
-//CRC32C ported from:
-//https://github.com/rurban/smhasher/blob/master/crc32c.cpp
-
-extern const U32 CRC32C_TABLE[16][256];
-
 U32 Buffer_crc32c(const Buffer buf) {
-
-	U64 crc = U32_MAX;
-
-	const U64 bufLen = Buffer_length(buf);
-
-	if(!bufLen)
-		return (U32) crc ^ U32_MAX;
-
-	U64 len = bufLen;
-	U64 it = (U64)(void*)buf.ptr;
-	const U64 align8 = U64_min(it + len, (it + 7) & ~7);
-
-	while (it < align8) {
-		crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
-		++it;
-		--len;
-	}
-
-	while (len >= sizeof(U64) * 2) {
-
-		crc ^= *(const U64*) it;
-		const U64 next = *((const U64*) it + 1);
-
-		U64 res = 0;
-
-		for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
-			res ^= CRC32C_TABLE[15 - i][(U8)(crc >> (i * 8))];
-
-		for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
-			res ^= CRC32C_TABLE[7 - i][(U8)(next >> (i * 8))];
-
-		crc = res;
-
-		it += sizeof(U64) * 2;
-		len -= sizeof(U64) * 2;
-	}
-
-	while (len > 0) {
-		crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
-		++it;
-		--len;
-	}
-
-	return (U32)crc ^ U32_MAX;
+	return Buffer_crc32cFallback(buf);
 }
 
 void Buffer_sha256(const Buffer buf, U32 output[8]) {
@@ -84,5 +32,5 @@ void Buffer_sha256(const Buffer buf, U32 output[8]) {
 	if(!output)
 		return;
 
-	Buffer_sha256Internal(buf, output);
+	Buffer_sha256Fallback(buf, output);
 }

@@ -18,34 +18,12 @@
 *  This is called dual licensing.
 */
 
+#pragma once
 #ifndef VEC4I_NEON_GUARD
 	#error Vec4i NEON guard was undefined, this likely indicates include of vec4i_neon.h was attempted instead of vec4i.h
 #endif
 
 //Loads
-
-static inline I32x4 I32x4_zero() { return vdupq_n_s32(0); }
-static inline I32x4 I32x4_xxxx4(I32 x) { return vdupq_n_s32(x); }
-
-static inline I32x4 I32x4_create1(I32 x) {
-	I32x4 v = I32x4_zero();
-	return vsetq_lane_s32(x, v, 0);
-}
-
-static inline I32x4 I32x4_create2(I32 x, I32 y) {
-	I32x4 v = I32x4_create1(x);
-	return vsetq_lane_s32(y, v, 1);
-}
-
-static inline I32x4 I32x4_create3(I32 x, I32 y, I32 z) {
-	I32x4 v = I32x4_create2(x, y);
-	return vsetq_lane_s32(z, v, 2);
-}
-
-static inline I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) {
-	I32x4 v = I32x4_create3(x, y, z);
-	return vsetq_lane_s32(w, v, 3);
-}
 
 static inline I32x4 I32x4_fromF32x4(F32x4 a) { return vcvtq_s32_f32(vrndq_f32(a)); }
 static inline I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) {
@@ -104,12 +82,14 @@ static inline I32x4 I32x4_max(I32x4 a, I32x4 b) { return vmaxq_s32(a, b); }
 
 //Comparison
 
-static inline I32x4 I32x4_eq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vceqq_s32(a, b)); }
-static inline I32x4 I32x4_neq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vmvnq_u32(vceqq_f32(a, b))); }
-static inline I32x4 I32x4_geq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vcgeq_s32(a, b)); }
-static inline I32x4 I32x4_gt(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vcgtq_s32(a, b)); }
-static inline I32x4 I32x4_leq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vcleq_s32(a, b)); }
-static inline I32x4 I32x4_lt(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vcltq_s32(a, b)); }
+static inline I32x4 I32x4_eq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vceqq_s32(a, b), vdupq_n_s32(1))); }
+static inline I32x4 I32x4_geq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcgeq_s32(a, b), vdupq_n_s32(1))); }
+static inline I32x4 I32x4_gt(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcgtq_s32(a, b), vdupq_n_s32(1))); }
+static inline I32x4 I32x4_leq(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcleq_s32(a, b), vdupq_n_s32(1))); }
+static inline I32x4 I32x4_lt(I32x4 a, I32x4 b) { return vreinterpretq_s32_u32(vandq_s32(vcltq_s32(a, b), vdupq_n_s32(1))); }
+static inline I32x4 I32x4_neq(I32x4 a, I32x4 b) {
+	return vreinterpretq_s32_u32(vandq_s32(vmvnq_u32(vceqq_f32(a, b)), vdupq_n_s32(1)));
+}
 
 //Bitwise
 
@@ -118,81 +98,84 @@ static inline I32x4 I32x4_and(I32x4 a, I32x4 b) { return vandq_s32(a, b); }
 static inline I32x4 I32x4_andnot(I32x4 a, I32x4 b) { return vandq_s32(vmvnq_s32(a), b); }
 static inline I32x4 I32x4_xor(I32x4 a, I32x4 b) { return veorq_s32(a, b); }
 static inline I32x4 I32x4_not(I32x4 a) { return veorq_s32(a, I32x4_xxxx4(-1)); }
-	
-static inline I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
-	switch (bytes) {
+
+static inline I32x4 I32x4_lshElements(I32x4 a, U8 elements) {
+	switch (elements) {
 		case 0:		return a;
-		FUNC_EXPAND8(1, _mm_slli_si128, a);
-		FUNC_EXPAND4(9, _mm_slli_si128, a);
-		FUNC_EXPAND2(13, _mm_slli_si128, a);
-		case 15:	return _mm_slli_si128(a, 15);
+		case 1:		return vextq_s32(I32x4_zero(), a, 3);
+		case 2:		return vextq_s32(I32x4_zero(), a, 2);
+		case 3:		return vextq_s32(I32x4_zero(), a, 1);
 		default:	return I32x4_zero();
 	}
 }
 
-static inline I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
-	switch (bytes) {
+static inline I32x4 I32x4_rshElements(I32x4 a, U8 elements) {
+	switch (elements) {
 		case 0:		return a;
-		FUNC_EXPAND8(1, _mm_srli_si128, a);
-		FUNC_EXPAND4(9, _mm_srli_si128, a);
-		FUNC_EXPAND2(13, _mm_srli_si128, a);
-		case 15:	return _mm_srli_si128(a, 15);
+		case 1:		return vextq_s32(a, I32x4_zero(), 1);
+		case 2:		return vextq_s32(a, I32x4_zero(), 2);
+		case 3:		return vextq_s32(a, I32x4_zero(), 3);
 		default:	return I32x4_zero();
 	}
 }
 
-I32x4 I32x4_lsh32(I32x4 a, U8 bits);
-I32x4 I32x4_rsh32(I32x4 a, U8 bits);
-I32x4 I32x4_lsh64(I32x4 a, U8 bits);
-I32x4 I32x4_rsh64(I32x4 a, U8 bits);
+static inline I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
+	if (!bits) return a;
+	if (bits >= 32) return I32x4_zero();
+	return vshlq_u32(a, vdupq_n_s32(bits));
+}
+
+static inline I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
+	if (!bits) return a;
+	if (bits >= 32) return I32x4_zero();
+	return vshlq_u32(a, vdupq_n_s32(-(I32)bits));
+}
+
+static inline I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
+	if (!bits) return a;
+	if (bits >= 64) return I32x4_zero();
+	uint64x2_t v = vreinterpretq_u64_s32(a);
+	v = vshlq_u64(v, vdupq_n_s64(bits));
+	return vreinterpretq_s32_u64(v);
+}
+
+static inline I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
+	if (!bits) return a;
+	if (bits >= 64) return I32x4_zero();
+	uint64x2_t v = vreinterpretq_u64_s32(a);
+	v = vshlq_u64(v, vdupq_n_s64(-(I64)bits));
+	return vreinterpretq_s32_u64(v);
+}
 
 //SHA256 helper functions
 
-static inline I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) { return _mm_shuffle_epi8(a, b); }
+static inline I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
+	uint8x16_t tbl = vreinterpretq_u8_s32(a);
+	uint8x16_t idx = vreinterpretq_u8_s32(b);
+	return vreinterpretq_s32_u8(vqtbl1q_u8(tbl, idx));
+}
 
 static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
-
-	switch (xyzw & 0xF) {
-
-		default:		return a;
-		case 0b1111:	return b;
-
-		case 0b0001:	return _mm_blend_epi16(a, b, 0x03);
-		case 0b0010:	return _mm_blend_epi16(a, b, 0x0C);
-		case 0b0011:	return _mm_blend_epi16(a, b, 0x0F);
-
-		case 0b0100:	return _mm_blend_epi16(a, b, 0x30);
-		case 0b0101:	return _mm_blend_epi16(a, b, 0x33);
-		case 0b0110:	return _mm_blend_epi16(a, b, 0x3C);
-		case 0b0111:	return _mm_blend_epi16(a, b, 0x3F);
-
-		case 0b1000:	return _mm_blend_epi16(a, b, 0xC0);
-		case 0b1001:	return _mm_blend_epi16(a, b, 0xC3);
-		case 0b1010:	return _mm_blend_epi16(a, b, 0xCC);
-		case 0b1011:	return _mm_blend_epi16(a, b, 0xCF);
-
-		case 0b1100:	return _mm_blend_epi16(a, b, 0xF0);
-		case 0b1101:	return _mm_blend_epi16(a, b, 0xF3);
-		case 0b1110:	return _mm_blend_epi16(a, b, 0xFC);
-	}
+	I32x4 mask = I32x4_create4(-(xyzw & 1), -((xyzw >> 1) & 1), -((xyzw >> 2) & 1), -((xyzw >> 3) & 1));
+	return vbslq_s32(vreinterpretq_u32_s32(mask), b, a);
 }
 
 static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
 
+	uint8x16_t va = vreinterpretq_u8_s32(a);
+	uint8x16_t vb = vreinterpretq_u8_s32(b);
+
 	switch (v) {
-
-		case 0:		return b;
-		case 1:		return _mm_alignr_epi8(a, b, 4);
-		case 2:		return _mm_alignr_epi8(a, b, 8);
-		case 3:		return _mm_alignr_epi8(a, b, 12);
-
-		case 4:		return a;
-		case 5:		return _mm_alignr_epi8(a, b, 20);
-		case 6:		return _mm_alignr_epi8(a, b, 24);
-		case 7:		return _mm_alignr_epi8(a, b, 28);
-
-		default:	return I32x4_zero();
+		default:  return b;
+		case 1:   va = vextq_u8(vb, va, 4);  break;
+		case 2:   va = vextq_u8(vb, va, 8);  break;
+		case 3:   va = vextq_u8(vb, va, 12); break;
 	}
+
+	return vreinterpretq_s32_u8(va);
 }
 
-static inline I32x4 I32x4_swapEndianness(I32x4 v) { return vreinterpretq_s32_u8(vrev32q_u8(vreinterpretq_u8_s32(v))); }
+static inline I32x4 I32x4_swapEndianness(I32x4 v) {
+	v = vrev64q_s32(vreinterpretq_s32_u8(vrev32q_u8(vreinterpretq_u8_s32(v))));
+	return vextq_s32(v, v, 2);
+}

@@ -21,6 +21,7 @@
 #include "types/base/types.h"
 
 //Intel's LUT for merging 3 CRC32Cs taken from different offsets
+//This works for all architectures that support scheduling multiple instructions, even non x64 ones.
 //Reformated https://github.com/rurban/smhasher/blob/master/crc32c.cpp
 
 const U32 CRC32C_LONG_SHIFTS[4][256] = {

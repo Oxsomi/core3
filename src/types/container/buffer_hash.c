@@ -31,226 +31,173 @@ const U32 SHA256_STATE[8] = {
 	0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
 };
 
-//First 32 bits of cube roots of first 64 primes 2..311 (see amosnier/sha-2)
-
-static const U32 SHA256_K[64] = {
-	0x428A2F98, 0x71374491, 0xB5C0FBCF, 0xE9B5DBA5, 0x3956C25B, 0x59F111F1, 0x923F82A4, 0xAB1C5ED5,
-	0xD807AA98, 0x12835B01, 0x243185BE, 0x550C7DC3, 0x72BE5D74, 0x80DEB1FE, 0x9BDC06A7, 0xC19BF174,
-	0xE49B69C1, 0xEFBE4786, 0x0FC19DC6, 0x240CA1CC, 0x2DE92C6F, 0x4A7484AA, 0x5CB0A9DC, 0x76F988DA,
-	0x983E5152, 0xA831C66D, 0xB00327C8, 0xBF597FC7, 0xC6E00BF3, 0xD5A79147, 0x06CA6351, 0x14292967,
-	0x27B70A85, 0x2E1B2138, 0x4D2C6DFC, 0x53380D13, 0x650A7354, 0x766A0ABB, 0x81C2C92E, 0x92722C85,
-	0xA2BFE8A1, 0xA81A664B, 0xC24B8B70, 0xC76C51A3, 0xD192E819, 0xD6990624, 0xF40E3585, 0x106AA070,
-	0x19A4C116, 0x1E376C08, 0x2748774C, 0x34B0BCB5, 0x391C0CB3, 0x4ED8AA4A, 0x5B9CCA4F, 0x682E6FF3,
-	0x748F82EE, 0x78A5636F, 0x84C87814, 0x8CC70208, 0x90BEFFFA, 0xA4506CEB, 0xBEF9A3F7, 0xC67178F2
-};
-
-//Fallback for SHA256 if the native instruction isn't available
-//Thanks to https://codereview.stackexchange.com/questions/182812/self-contained-sha-256-implementation-in-c
-//https://github.com/amosnier/sha-2/blob/master/sha-256.c
-//https://en.wikipedia.org/wiki/SHA-2
-
-//Arm7's ror instruction aka Java's >>>; shift that maintains right side of the bits into left side
-
-static inline U32 U32_ror(const U32 v, U32 amount) {
-	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
-	return amount ? ((v >> amount) | (v << (32 - amount))) : v;
+static inline U32 sigma0(U32 x) {
+	return (U32_ror(x, 7) ^ U32_ror(x, 18)) ^ (x >> 3);
 }
 
-static inline U32 U32_rol(const U32 v, U32 amount) {
-	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
-	return amount ? ((v << amount) | (v >> (32 - amount))) : v;
+static inline U32 sigma1(U32 x) {
+	return (U32_ror(x, 17) ^ U32_ror(x, 19)) ^ (x >> 10);
 }
 
-void Buffer_sha256Internal(const Buffer buf, U32 *output) {
+static inline U32 Sigma0(U32 x) {
+	return U32_ror(x, 2) ^ U32_ror(x, 13) ^ U32_ror(x, 22);
+}
 
-	I32x4 state[2] = {
-		I32x4_load4(SHA256_STATE),
-		I32x4_load4(SHA256_STATE + 4)
-	};
+static inline U32 Sigma1(U32 x) {
+	return U32_ror(x, 6) ^ U32_ror(x, 11) ^ U32_ror(x, 25);
+}
 
-	U64 ptr = (U64)(void*) buf.ptr, len = Buffer_length(buf);
-	U8 block[64];
+static inline U32 Ch(U32 x, U32 y, U32 z) {
+	return (x & y) ^ (~x & z);
+}
 
-	Bool padded = false;
-	Bool wasPaddingBlock = false;
-	Bool wasPerfectlyAligned = false;
+static inline U32 Maj(U32 x, U32 y, U32 z) {
+	return (x & y) ^ (x & z) ^ (y & z);
+}
 
-	if(!len) {
-		wasPaddingBlock = wasPerfectlyAligned = true;
-		len = 64;
+//TODO: Replace with U32x4_add if available
+//(W0, W1, W2, W3) = a
+//(W4) = bx
+//return (W0, W1, W2, W3) + (W1, W2, W3, W4)
+static inline I32x4 I32x4_sha256msg1(I32x4 a, I32x4 b) {
+	U32 W0 = (U32) I32x4_x(a), W1 = (U32)I32x4_y(a), W2 = (U32)I32x4_z(a), W3 = (U32)I32x4_w(a);
+	U32 W4 = (U32) I32x4_x(b);
+	return I32x4_create4(
+		(I32)(W0 + sigma0(W1)),
+		(I32)(W1 + sigma0(W2)),
+		(I32)(W2 + sigma0(W3)),
+		(I32)(W3 + sigma0(W4))
+	);
+}
+
+//TODO: Replace with U32x4_add if available
+//(W14, 15) = zw(b)
+//(W16, W17) = xy(a) + sigma1(W14, 15)
+//(W18, W19) = zw(a) + sigma1(W16, W17)
+//a = (W16, W17, W18, W19)
+static inline I32x4 I32x4_sha256msg2(I32x4 i0, I32x4 i2, I32x4 i3) {
+
+	I32x4 tmp = I32x4_combineRightShift(i3, i2, 1);		//_mm_alignr_epi8(a, b, 4)
+	I32x4 msgTmp = I32x4_add(i0, tmp);
+
+	I32x4 a = msgTmp;
+	I32x4 b = i3;
+
+	U32 W14 = (U32)I32x4_z(b), W15 = (U32)I32x4_w(b);
+
+	U32 W16 = (U32)I32x4_x(a) + sigma1(W14);
+	U32 W17 = (U32)I32x4_y(a) + sigma1(W15);
+
+	return I32x4_create4(
+		(I32)W16,
+		(I32)W17,
+		(I32)((U32)I32x4_z(a) + sigma1(W16)),
+		(I32)((U32)I32x4_w(a) + sigma1(W17))
+	);
+}
+
+//Literal port from https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=sha256rnds2
+static inline I32x4 I32x4_sha256rnds2(I32x4 a, I32x4 b, I32x4 k) {
+
+	U32 A = (U32)I32x4_w(b);
+	U32 B = (U32)I32x4_z(b);
+	U32 C = (U32)I32x4_w(a);
+	U32 D = (U32)I32x4_z(a);
+
+	U32 E = (U32)I32x4_y(b);
+	U32 F = (U32)I32x4_x(b);
+	U32 G = (U32)I32x4_y(a);
+	U32 H = (U32)I32x4_x(a);
+
+	for (U8 i = 0; i < 2; ++i) {
+
+		U32 Wki = (U32)I32x4_get(k, i);
+
+		U32 T = Ch(E, F, G) + Sigma1(E) + Wki + H;
+		U32 A1 = T + Maj(A, B, C) + Sigma0(A);
+		U32 E1 = T + D;
+
+		U32 H1 = G;
+		U32 G1 = F;
+		U32 F1 = E;
+
+		U32 D1 = C;
+		U32 C1 = B;
+		U32 B1 = A;
+
+		A = A1; B = B1; C = C1; D = D1;
+		E = E1; F = F1; G = G1; H = H1;
 	}
 
-	while (len) {
+	return I32x4_create4(F, E, B, A);
+}
 
-		//We reached an unfilled block. We gotta make a block on the stack and point to it
+static inline void I32x4_sha256rnds4(I32x4 msgOriginal, I32x4 round, I32x4 *state0, I32x4 *state1) {
+	I32x4 msg = I32x4_add(msgOriginal, round);
+	*state1 = I32x4_sha256rnds2(*state1, *state0, msg);
+	msg = I32x4_zwxx(msg);														//_mm_shuffle_epi32(msg, 0xE);
+	*state0 = I32x4_sha256rnds2(*state0, *state1, msg);
+}
 
-		if (len < 64 || wasPaddingBlock) {
+#define SIMD_SHA256_LINKING
+#define SIMD_SHA256_RNDS4 I32x4_sha256rnds4
+#define SIMD_SHA256_MSG1 I32x4_sha256msg1
+#define SIMD_SHA256_MSG2 I32x4_sha256msg2
+#define SIMD_SHA256_SUFFIX(x) x##Fallback
+#include "types/container/simd/buffer_simd_sha.inc.h"
 
-			//Point to stack
+//Fallback CRC32 implementation
 
-			const U64 realLen = len;
-			const U64 realPtr = ptr;
+//CRC32C ported from:
+//https://github.com/rurban/smhasher/blob/master/crc32c.cpp
 
-			ptr = (U64)(void*) block;
-			len = 64;
-			padded = true;
+extern const U32 CRC32C_TABLE[16][256];
 
-			//Last block was padding block
-			//This means we can put the length at the end
+U32 Buffer_crc32cFallback(const Buffer buf) {
 
-			if (wasPaddingBlock) {
+	U64 crc = U32_MAX;
 
-				Buffer_unsetAllBits(Buffer_createRef(block, 64 - sizeof(U64)), NULL);
+	const U64 bufLen = Buffer_length(buf);
 
-				if(wasPerfectlyAligned)
-					block[0] = 0x80;
+	if(!bufLen)
+		return (U32) crc ^ U32_MAX;
 
-				U8 *lenPtr = block + 64 - sizeof(U64);
+	U64 len = bufLen;
+	U64 it = (U64)(void*)buf.ptr;
+	const U64 align8 = U64_min(it + len, (it + 7) & ~7);
 
-				//Keep 5 bits from the index in the block at lenPtr[7]
-				//Keep the others as big endian in [0-6]
-
-				U64 currLen = Buffer_length(buf);
-
-				lenPtr[7] = (U8)(currLen << 3);
-				currLen >>= 5;
-
-				for(U64 k = 6; k != U64_MAX; --k) {
-					lenPtr[k] = (U8) currLen;
-					currLen >>= 8;
-				}
-			}
-
-			//We reached the block with 0x80, 0x00....
-			//With possibly length in the end
-
-			else {
-
-				Buffer_memcpy(Buffer_createRef(block, 64), Buffer_createRefConst((const void*)realPtr, realLen));
-
-				*((U8*)(void*)block + realLen) = 0x80;
-
-				if(realLen <= 62)
-					Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1), NULL);
-
-				//We need one more block just to contain the length at the end
-
-				if(realLen >= 64 - sizeof(U64)) {
-					wasPaddingBlock = true;
-					len += 64;
-				}
-
-				//We can insert length in this block :)
-
-				else {
-
-					U8 *lenPtr = block + 64 - sizeof(U64);
-
-					U64 currLen = Buffer_length(buf);
-
-					//Keep 5 bits from the index in the block at lenPtr[7]
-					//Keep the others as big endian in [0-6]
-
-					lenPtr[7] = (U8)(currLen << 3);
-					currLen >>= 5;
-
-					for(U64 k = 6; k != U64_MAX; --k) {
-						lenPtr[k] = (U8) currLen;
-						currLen >>= 8;
-					}
-				}
-			}
-		}
-
-		//Store state
-
-		const I32x4 currState0 = state[0], currState1 = state[1];
-
-		//Perform SHA256
-
-		U32 w[16];
-
-		for(U64 i = 0; i < 4; ++i)
-			for (U64 j = 0; j < 16; ++j) {
-
-				//Initialize w
-
-				if(!i) {
-
-					U32 v = 0;
-
-					for(U64 k = 0; k < 4; ++k)
-						v |= ((U32)*(U8*)(void*)(ptr + (j << 2) + k)) << (24 - k * 8);
-
-					w[j] = v;
-				}
-
-				//Scramble w
-
-				else {
-
-					const U32 wj1 = w[(j + 1) & 0xF], wj14 = w[(j + 14) & 0xF];
-
-					const U32 s0 = U32_ror(wj1, 7) ^ U32_ror(wj1, 18) ^ (wj1 >> 3);
-					const U32 s1 = U32_ror(wj14, 17) ^ U32_ror(wj14, 19) ^ (wj14 >> 10);
-
-					w[j] += s0 + w[(j + 9) & 0xF] + s1;
-				}
-
-				//Calculate s1 and ch
-
-				const U32 ah4 = (U32) I32x4_x(state[1]);
-				const U32 ah5 = (U32) I32x4_y(state[1]);
-				const U32 ah6 = (U32) I32x4_z(state[1]);
-
-				const U32 s1 = U32_ror(ah4, 6) ^ U32_ror(ah4, 11) ^ U32_ror(ah4, 25);
-				const U32 ch = (ah4 & ah5) ^ (~ah4 & ah6);
-
-				//Calculate temp1 and temp2
-
-				const U32 ah0 = (U32) I32x4_x(state[0]);
-				const U32 ah1 = (U32) I32x4_y(state[0]);
-				const U32 ah2 = (U32) I32x4_z(state[0]);
-
-				const U32 temp1 = (U32) I32x4_w(state[1]) + s1 + ch + SHA256_K[(i << 4) | j] + w[j];
-				const U32 s0 = U32_ror(ah0, 2) ^ U32_ror(ah0, 13) ^ U32_ror(ah0, 22);
-				const U32 maj = (ah0 & ah1) ^ (ah0 & ah2) ^ (ah1 & ah2);
-				const U32 temp2 = s0 + maj;
-
-				//Swizzle
-
-				const U32 state0w = I32x4_w(state[0]);
-
-				state[0] = I32x4_xxyz(state[0]);
-				state[1] = I32x4_xxyz(state[1]);
-
-				I32x4_setXRef(&state[0], (I32)(temp1 + temp2));
-				I32x4_setXRef(&state[1], (I32)(state0w + temp1));
-			}
-
-		//Combine two states
-
-		state[0] = I32x4_add(state[0], currState0);
-		state[1] = I32x4_add(state[1], currState1);
-
-		//Update block pos
-
-		ptr += 64;
-		len -= 64;
-
-		//If we haven't padded and length is zero, that means we're perfectly aligned!
-		//This means we're still missing a padding U64 for the encoded length
-
-		if (!len && !padded) {
-			wasPerfectlyAligned = true;
-			wasPaddingBlock = true;
-			len = 64;
-		}
+	while (it < align8) {
+		crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+		++it;
+		--len;
 	}
 
-	//Store output
+	while (len >= sizeof(U64) * 2) {
 
-	Buffer_memcpy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createRefConst(state, sizeof(U32) * 8));
+		crc ^= *(const U64*) it;
+		const U64 next = *((const U64*) it + 1);
+
+		U64 res = 0;
+
+		for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
+			res ^= CRC32C_TABLE[15 - i][(U8)(crc >> (i * 8))];
+
+		for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
+			res ^= CRC32C_TABLE[7 - i][(U8)(next >> (i * 8))];
+
+		crc = res;
+
+		it += sizeof(U64) * 2;
+		len -= sizeof(U64) * 2;
+	}
+
+	while (len > 0) {
+		crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+		++it;
+		--len;
+	}
+
+	return (U32)crc ^ U32_MAX;
 }
 
 //Ported from https://github.com/krisprice/simd_md5/blob/master/simd_md5/md5_sse.c#L9

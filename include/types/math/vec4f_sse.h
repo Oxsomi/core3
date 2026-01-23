@@ -18,21 +18,13 @@
 *  This is called dual licensing.
 */
 
-#ifndef VEC4_SSE_GUARD
-	#error Vec4 SSE guard was undefined, this likely indicates include of vec4f_sse.h was attempted instead of vec4f.h
+#ifndef VEC4F_SSE_GUARD
+	#error Vec4f SSE guard was undefined, this likely indicates include of vec4f_sse.h was attempted instead of vec4f.h
 #endif
 
 #include <smmintrin.h>
 
 //Loads
-
-static inline F32x4 F32x4_zero() { return _mm_setzero_ps(); }
-static inline F32x4 F32x4_xxxx4(F32 x) { return _mm_set_ps1(x); }
-
-static inline F32x4 F32x4_create1(F32 x) { return _mm_set_ps(0, 0, 0, x); }
-static inline F32x4 F32x4_create2(F32 x, F32 y) { return _mm_set_ps(0, 0, y, x); }
-static inline F32x4 F32x4_create3(F32 x, F32 y, F32 z) { return _mm_set_ps(0, z, y, x); }
-static inline F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w) { return _mm_set_ps(w, z, y, x); }
 
 static inline F32x4 F32x4_fromI32x4(I32x4 a) { return _mm_cvtepi32_ps(a); }
 

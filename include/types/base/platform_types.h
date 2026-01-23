@@ -89,6 +89,10 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _SIMD SIMD_SSE
 #endif
 
+#if _PLATFORM_TYPE == PLATFORM_IOS || _PLATFORM_TYPE == PLATFORM_OSX
+	#define _CRYPTO_ALWAYS
+#endif
+
 #ifdef __cplusplus
 	extern "C" {
 #endif

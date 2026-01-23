@@ -18,17 +18,9 @@
 *  This is called dual licensing.
 */
 
-#ifndef VEC4_NONE_GUARD
-	#error Vec4 NONE guard was undefined, this likely indicates include of vec4f_none.h was attempted instead of vec4f.h
+#ifndef VEC4F_NONE_GUARD
+	#error Vec4f NONE guard was undefined, this likely indicates include of vec4f_none.h was attempted instead of vec4f.h
 #endif
-
-static inline F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w) { F32x4 v = { { x, y, z, w } }; return v; }
-static inline F32x4 F32x4_xxxx4(F32 x) { return F32x4_create4(x, x, x, x); }
-static inline F32x4 F32x4_zero() { return F32x4_xxxx4(0); }
-
-static inline F32x4 F32x4_create1(F32 x) { return F32x4_create4(x, 0, 0, 0); }
-static inline F32x4 F32x4_create2(F32 x, F32 y) { return F32x4_create4(x, y, 0, 0); }
-static inline F32x4 F32x4_create3(F32 x, F32 y, F32 z) { return F32x4_create4(x, y, z, 0); }
 
 //Swizzles
 
