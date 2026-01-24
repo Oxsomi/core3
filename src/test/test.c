@@ -35,7 +35,7 @@
 #include "formats/oiBC/chimera.h"
 #include "types/base/constants.h"
 #include "types/math/vec4i_swizzle.h"
-#include "types/math/endianness.h"
+#include "types/base/endianness.h"
 #include "types/math/quat.h"
 #include "types/math/type_cast_safe.h"
 #include "types/base/fixed_point.h"
@@ -165,7 +165,6 @@ int main() {
 	//TODO: Test math
 	//TODO: Test list
 	//TODO: Test archive
-	//TODO: Test ref ptr?
 	//TODO: Test allocation buffer
 	//TODO: Test buffer more
 	//TODO: File test for disallowed file names and hard to handle cases such as
@@ -2634,6 +2633,168 @@ int main() {
 
 		if (F64_fromFloat(nan, &r, NULL) || r != 1.0)
 			retError(clean, Error_invalidState(0, "F64_fromFloat succeeded for NaN"));
+	}
+
+	//Test Quat
+
+	Log_debugLn(alloc, "Testing QuatF32");
+
+	{
+		Log_debugLn(alloc, "Testing QuatF32's normalize, create, neq and x/y/z/w");
+
+		//Normalize
+
+		QuatF32 q = QuatF32_create(1, 2, 3, 4);
+
+		if (QuatF32_x(q) != 1 || QuatF32_y(q) != 2 || QuatF32_z(q) != 3 || QuatF32_w(q) != 4)
+			retError(clean, Error_invalidState(0, "QuatF32_create or x/y/z/w failed"));
+
+		if(QuatF32_neq(q, QuatF32_create(1, 2, 3, 4)))
+			retError(clean, Error_invalidState(0, "QuatF32_neq failed"));
+
+		QuatF32 r = QuatF32_normalize(q);
+
+		F32 invLen = 1 / F32_sqrt(F32_pow2(1) + F32_pow2(2) + F32_pow2(3) + F32_pow2(4));
+
+		if (QuatF32_neq(r, QuatF32_create(1 * invLen, 2 * invLen, 3 * invLen, 4 * invLen)))
+			retError(clean, Error_invalidState(0, "QuatF32_normalize failed"));
+
+		//Angle axis
+
+		Log_debugLn(alloc, "Testing QuatF32 angle axis");
+
+		const F32x4 axes[] = {
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 1, 1),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(1, 0, 1),
+			F32x4_create3(1, 1, 0),
+			F32x4_create3(1, 1, 1)
+		};
+
+		const U64 axisCount = sizeof(axes) / sizeof(axes[0]);
+
+		const F32 angles[] = {
+			0,
+			F32_PI * 0.5f,
+			F32_PI,
+			F32_PI * 1.5f,
+			F32_PI * 2.0f
+		};
+
+		F32 isq2 = 1 / F32_sqrt(2);
+		F32 isq3 = 1 / F32_sqrt(3);
+		F32 norm3 = isq2 * isq3;
+
+		const QuatF32 quatsAngleAxis[] = {
+
+			//angle = 0
+			QuatF32_identity(),
+			QuatF32_identity(),
+			QuatF32_identity(),
+			QuatF32_identity(),
+			QuatF32_identity(),
+			QuatF32_identity(),
+			QuatF32_identity(),
+
+			//angle = 90deg
+			QuatF32_create(0,		0,		isq2,	isq2),
+			QuatF32_create(0,		isq2,	0,		isq2),
+			QuatF32_create(0,		0.5f,	0.5f,	isq2),
+			QuatF32_create(isq2,	0,		0,		isq2),
+			QuatF32_create(0.5f,	0,		0.5f,	isq2),
+			QuatF32_create(0.5f,	0.5f,	0,		isq2),
+			QuatF32_create(norm3,	norm3,	norm3,	isq2),
+
+			//angle = 180deg
+			QuatF32_create(0,		0,		1,		0),
+			QuatF32_create(0,		1,		0,		0),
+			QuatF32_create(0,		isq2,	isq2,	0),
+			QuatF32_create(1,		0,		0,		0),
+			QuatF32_create(isq2,	0,		isq2,	0),
+			QuatF32_create(isq2,	isq2,	0,		0),
+			QuatF32_create(isq3,	isq3,	isq3,	0),
+
+			//angle = 270deg
+			QuatF32_create(0,		0,		isq2,	-isq2),
+			QuatF32_create(0,		isq2,	0,		-isq2),
+			QuatF32_create(0,		0.5f,	0.5f,	-isq2),
+			QuatF32_create(isq2,	0,		0,		-isq2),
+			QuatF32_create(0.5f,	0,		0.5f,	-isq2),
+			QuatF32_create(0.5f,	0.5f,	0,		-isq2),
+			QuatF32_create(norm3,	norm3,	norm3,	-isq2),
+
+			//angle = 360deg
+			F32x4_negate(QuatF32_identity()),
+			F32x4_negate(QuatF32_identity()),
+			F32x4_negate(QuatF32_identity()),
+			F32x4_negate(QuatF32_identity()),
+			F32x4_negate(QuatF32_identity()),
+			F32x4_negate(QuatF32_identity()),
+			F32x4_negate(QuatF32_identity()),
+		};
+
+		for (U64 i = 0; i < sizeof(quatsAngleAxis) / sizeof(quatsAngleAxis[0]); ++i) {
+
+			F32x4 axis = axes[i % axisCount];
+			F32 angle = angles[i / axisCount];
+
+			q = QuatF32_angleAxis(axis, angle);
+
+			if (QuatF32_neq(q, quatsAngleAxis[i]))
+				retError(clean, Error_invalidState((U32)i, "QuatF32_angleAxis failed"));
+		}
+
+		//From euler
+
+		Log_debugLn(alloc, "Testing QuatF32 from euler");
+
+		const F32x4 eulerAngles[] = {
+			F32x4_create3(0, 0, 0),
+			F32x4_create3(90, 0, 0),
+			F32x4_create3(0, 90, 0),
+			F32x4_create3(0, 0, 90),
+			F32x4_create3(0, 90, 90),
+			F32x4_create3(90, 90, 0),
+			F32x4_create3(90, 0, 90),
+			F32x4_create3(90, 90, 90),
+			F32x4_create3(45, 30, 60),
+			F32x4_create3(-120, 10, 270)
+		};
+
+		const QuatF32 quatsFromEuler[] = {
+			QuatF32_identity(),
+			QuatF32_create(isq2,	0,		0,		isq2),
+			QuatF32_create(0,		isq2,	0,		isq2),
+			QuatF32_create(0,		0,		isq2,	isq2),
+			QuatF32_create(0.5f,	0.5f,	0.5f,	0.5f),
+			QuatF32_create(0.5f,	0.5f,	0.5f,	0.5f),
+			QuatF32_create(0.5f,	-0.5f,	0.5f,	0.5f),
+			QuatF32_create(isq2,	0,		isq2,	0),
+			QuatF32_create(0.4396797f, 0.02226f, 0.5319757f, 0.7233174f),
+			QuatF32_create(0.6408564f, 0.579228f, 0.4055798f, -0.2988362f)
+		};
+
+		for (U64 i = 0; i < sizeof(eulerAngles) / sizeof(eulerAngles[0]); ++i) {
+
+			q = QuatF32_fromEuler(eulerAngles[i]);
+
+			if (QuatF32_neq(q, quatsFromEuler[i]))
+				retError(clean, Error_invalidState((U32)i, "QuatF32_fromEuler failed"));
+		}
+
+		Log_debugLn(alloc, "Testing QuatF32 to euler");
+
+		for (U64 i = 0; i < sizeof(quatsFromEuler) / sizeof(quatsFromEuler[0]); ++i) {
+
+			F32x4 euler = QuatF32_toEuler(quatsFromEuler[i]);
+			QuatF32 backTest = QuatF32_fromEuler(euler);
+			F32x4 euler2 = QuatF32_toEuler(backTest);		//Avoid gimbal lock issues
+
+			if (F32x4_neqApproxAdv4(euler2, euler, 2e-2f, 2e-2f))
+				retError(clean, Error_invalidState((U32)i, "QuatF32_toEuler failed"));
+		}
 	}
 
 	//Test ETypeId_toShortId

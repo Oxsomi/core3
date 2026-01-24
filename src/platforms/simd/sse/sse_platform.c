@@ -28,14 +28,14 @@ Bool Platform_checkCPUSupport() {
 		return false;
 
 	//We need to double check that our CPU supports
-	//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1 and RDRAND
+	//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1
 	//https://gist.github.com/hi2p-perim/7855506
 	//https://en.wikipedia.org/wiki/CPUID
 
 	U32 mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
 
-	//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES, RDRAND
-	U32 mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 30);
+	//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES
+	U32 mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25);
 
 	U32 cpuInfo[4];
 	Platform_getCPUId(1, cpuInfo);

@@ -193,11 +193,39 @@ static inline F32x4 F32x4_reflect3(F32x4 i, F32x4 n) {
 
 //Boolean
 
-static inline Bool F32x4_all(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_zero())) == 4; }
-static inline Bool F32x4_any(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_zero())); }
+static inline Bool F32x4_all(F32x4 a) { return F32x4_reduce(F32x4_neqExact(a, F32x4_zero())) == 4; }
+static inline Bool F32x4_any(F32x4 a) { return F32x4_reduce(F32x4_neqExact(a, F32x4_zero())); }
 
-static inline Bool F32x4_eq4(F32x4 a, F32x4 b) { return F32x4_all(F32x4_eq(a, b)); }
-static inline Bool F32x4_neq4(F32x4 a, F32x4 b) { return !F32x4_eq4(a, b); }
+//For diffs that aren't exact with floats (reasonable relEpsilon = 1e-5, absEpsilon = 1e-6)
+static inline F32x4 F32x4_epsilonDiff(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	return F32x4_max(F32x4_mul(F32x4_max(F32x4_abs(a), F32x4_abs(b)), F32x4_xxxx4(relEpsilon)), F32x4_xxxx4(absEpsilon));
+}
+static inline F32x4 F32x4_eqApproxAdv(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	F32x4 eps = F32x4_epsilonDiff(a, b, relEpsilon, absEpsilon);
+	return F32x4_leq(F32x4_abs(F32x4_sub(a, b)), eps);
+}
+
+static inline F32x4 F32x4_neqApproxAdv(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	F32x4 eps = F32x4_epsilonDiff(a, b, relEpsilon, absEpsilon);
+	return F32x4_gt(F32x4_abs(F32x4_sub(a, b)), eps);
+}
+
+static inline F32x4 F32x4_eqApprox(F32x4 a, F32x4 b) { return F32x4_eqApproxAdv(a, b, 1e-5f, 1e-6f); }
+static inline F32x4 F32x4_neqApprox(F32x4 a, F32x4 b) { return F32x4_neqApproxAdv(a, b, 1e-5f, 1e-6f); }
+
+static inline Bool F32x4_eqExact4(F32x4 a, F32x4 b) { return F32x4_all(F32x4_eqExact(a, b)); }
+static inline Bool F32x4_neqExact4(F32x4 a, F32x4 b) { return !F32x4_eqExact4(a, b); }
+
+static inline Bool F32x4_eqApprox4(F32x4 a, F32x4 b) { return F32x4_all(F32x4_eqApprox(a, b)); }
+static inline Bool F32x4_neqApprox4(F32x4 a, F32x4 b) { return !F32x4_eqApprox4(a, b); }
+
+static inline Bool F32x4_eqApproxAdv4(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	return F32x4_all(F32x4_eqApproxAdv(a, b, relEpsilon, absEpsilon));
+}
+
+static inline Bool F32x4_neqApproxAdv4(F32x4 a, F32x4 b, F32 relEpsilon, F32 absEpsilon) {
+	return !F32x4_eqApproxAdv4(a, b, relEpsilon, absEpsilon);
+}
 
 //Construction
 

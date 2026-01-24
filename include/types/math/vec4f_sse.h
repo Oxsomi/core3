@@ -112,8 +112,8 @@ static inline F32x4 F32x4_rsqrt(F32x4 a) { return _mm_rsqrt_ps(a); }
 		
 static inline F32x4 F32x4_recastI32x4Internal(F32x4 a) { return F32x4_fromI32x4(*(const I32x4*) &a); }
 static inline F32x4 F32x4_negateRecastiInternal(F32x4 a) { return F32x4_negate(F32x4_recastI32x4Internal(a)); }
-static inline F32x4 F32x4_eq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpeq_ps(a, b)); }
-static inline F32x4 F32x4_neq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpneq_ps(a, b)); }
+static inline F32x4 F32x4_eqExact(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpeq_ps(a, b)); }
+static inline F32x4 F32x4_neqExact(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpneq_ps(a, b)); }
 static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpge_ps(a, b)); }
 static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpgt_ps(a, b)); }
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmple_ps(a, b)); }

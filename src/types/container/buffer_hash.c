@@ -21,7 +21,7 @@
 #include "types/container/buffer.h"
 #include "types/math/vec4i_swizzle.h"
 #include "types/math/type_cast.h"
-#include "types/math/endianness.h"
+#include "types/base/endianness.h"
 #include "types/base/constants.h"
 
 //SHA state

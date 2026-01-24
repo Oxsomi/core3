@@ -19,59 +19,72 @@
 */
 
 #pragma once
-#include "types/math/vec4.h"
+#include "types/math/vec4f_swizzle.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-#define QUAT_FUNC(T)											\
-																\
-typedef T##x4 Quat##T;											\
-																\
-/* Simple quaternion functions */								\
-																\
-Quat##T Quat##T##_create(T x, T y, T z, T w);					\
-																\
-Quat##T Quat##T##_identity();									\
-																\
-Quat##T Quat##T##_conj(Quat##T q);								\
-Quat##T Quat##T##_normalize(Quat##T q);							\
-Quat##T Quat##T##_inverse(Quat##T q);							\
-																\
-/* Shortcuts */													\
-																\
-Bool Quat##T##_eq(Quat##T a, Quat##T b);						\
-Bool Quat##T##_neq(Quat##T a, Quat##T b);						\
-																\
-T Quat##T##_x(Quat##T a);										\
-T Quat##T##_y(Quat##T a);										\
-T Quat##T##_z(Quat##T a);										\
-T Quat##T##_w(Quat##T a);										\
-T Quat##T##_get(Quat##T a, U8 i);								\
-																\
-void Quat##T##_setX(Quat##T *a, T v);							\
-void Quat##T##_setY(Quat##T *a, T v);							\
-void Quat##T##_setZ(Quat##T *a, T v);							\
-void Quat##T##_setW(Quat##T *a, T v);							\
-void Quat##T##_set(Quat##T *a, U8 i, T v);						\
-																\
-Quat##T Quat##T##_lerp(Quat##T a, Quat##T b, T perc);			\
-																\
-/* Helper funcs */												\
-																\
-Quat##T Quat##T##_angleAxis(T##x4 axis, T angle);				\
-Quat##T Quat##T##_fromEuler(T##x4 pitchYawRollDeg);				\
-T##x4 Quat##T##_toEuler(Quat##T q);								\
-Quat##T Quat##T##_mul(Quat##T a, Quat##T b);					\
-Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target);	\
-T##x4 Quat##T##_applyToNormal(Quat##T R, T##x4 P);				\
-																\
-Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc)			\
-																\
+#define QUAT_FUNC(T, relErr, absErr)																			\
+																												\
+typedef T##x4 Quat##T;																							\
+																												\
+static inline Quat##T Quat##T##_create(T x, T y, T z, T w) { return T##x4_create4(x, y, z, w); }				\
+																												\
+static inline Quat##T Quat##T##_identity() { return Quat##T##_create(0, 0, 0, 1); }								\
+																												\
+static inline Quat##T Quat##T##_conj(Quat##T q) {																\
+		return Quat##T##_create(-T##x4_x(q), -T##x4_y(q), -T##x4_z(q), T##x4_w(q));								\
+}																												\
+static inline Quat##T Quat##T##_normalize(Quat##T q) { return T##x4_normalize4(q); }							\
+static inline Quat##T Quat##T##_inverse(Quat##T q) { return Quat##T##_normalize(Quat##T##_conj(q)); }			\
+																												\
+static inline Bool Quat##T##_eqPrecise(Quat##T a, Quat##T b) { return T##x4_eqApprox4(a, b); }					\
+static inline Bool Quat##T##_neqPrecise(Quat##T a, Quat##T b) { return T##x4_neqApprox4(a, b); }				\
+static inline Bool Quat##T##_eq(Quat##T a, Quat##T b) { return T##x4_eqApproxAdv4(a, b, relErr, absErr); }		\
+static inline Bool Quat##T##_neq(Quat##T a, Quat##T b) { return T##x4_neqApproxAdv4(a, b, relErr, absErr); }	\
+																												\
+static inline T Quat##T##_x(Quat##T a) { return T##x4_x(a); }													\
+static inline T Quat##T##_y(Quat##T a) { return T##x4_y(a); }													\
+static inline T Quat##T##_z(Quat##T a) { return T##x4_z(a); }													\
+static inline T Quat##T##_w(Quat##T a) { return T##x4_w(a); }													\
+static inline T Quat##T##_get(Quat##T a, U8 i) { return T##x4_get(a, i); }										\
+																												\
+static inline void Quat##T##_setX(Quat##T *a, T v) { T##x4_setXRef(a, v); }										\
+static inline void Quat##T##_setY(Quat##T *a, T v) { T##x4_setYRef(a, v); }										\
+static inline void Quat##T##_setZ(Quat##T *a, T v) { T##x4_setZRef(a, v); }										\
+static inline void Quat##T##_setW(Quat##T *a, T v) { T##x4_setWRef(a, v); }										\
+static inline void Quat##T##_set(Quat##T *a, U8 i, T v) { T##x4_setRef(a, i, v); }								\
+																												\
+static inline Quat##T Quat##T##_lerp(Quat##T a, Quat##T b, T perc) { return T##x4_lerp(a, b, perc); }			\
+																												\
+static inline T##x4 Quat##T##_applyToNormal(Quat##T Q, T##x4 P) {												\
+	T##x4 qXyz = T##x4_trunc3(Q);																				\
+	T##x4 t = T##x4_mul(T##x4_cross3(qXyz, P), T##x4_xxxx4(2));													\
+	return T##x4_add(P, T##x4_add(																				\
+		T##x4_mul(t, T##x4_xxxx4(T##x4_w(Q))),																	\
+		T##x4_cross3(qXyz, t)																					\
+	));																											\
+}																												\
+																												\
+/* Helper funcs */																								\
+/* For euler angle functions, we use XYZ rotation order */														\
+																												\
+Quat##T Quat##T##_angleAxis(T##x4 axis, T angle);																\
+Quat##T Quat##T##_fromEuler(T##x4 eulerXYZDeg);																	\
+T##x4 Quat##T##_toEuler(Quat##T q);																				\
+Quat##T Quat##T##_mul(Quat##T a, Quat##T b);																	\
+Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target);													\
+																												\
+Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc);															\
+																												\
+static inline T##x4 Quat##T##_forward(Quat##T q) { return Quat##T##_applyToNormal(q, T##x4_create3(0, 0, 1)); }	\
+static inline T##x4 Quat##T##_up(Quat##T q) { return Quat##T##_applyToNormal(q, T##x4_create3(0, 1, 0)); }		\
+static inline T##x4 Quat##T##_right(Quat##T q) { return Quat##T##_applyToNormal(q, T##x4_create3(1, 0, 0)); }
+
 /* Quat##T Quat##T##_fromLookRotation(T##x4 fwd, T##x4 up); */
 
-QUAT_FUNC(F32);
+QUAT_FUNC(F32, 2e-4f, 2e-2f);
 //QUAT_FUNC(F64);		TODO:
 
 #ifdef __cplusplus

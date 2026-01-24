@@ -89,10 +89,10 @@ Bool AudioDeviceRef_create(
 		.info = *info
 	};
 
-	if(F32x4_eq4(audioDev->info.up, F32x4_zero()))
+	if(F32x4_eqExact4(audioDev->info.up, F32x4_zero()))
 		audioDev->info.up = F32x4_create3(0, 1, 0);
 
-	if(F32x4_eq4(audioDev->info.forward, F32x4_zero()))
+	if(F32x4_eqExact4(audioDev->info.forward, F32x4_zero()))
 		audioDev->info.forward = F32x4_create3(0, 0, 1);
 
 	gotoIfError3(clean, AudioDevice_createExt(isDebug, audioDev, e_rr))

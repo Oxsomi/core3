@@ -25,7 +25,7 @@
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
 #include "types/math/type_cast.h"
-#include "types/math/endianness.h"
+#include "types/base/endianness.h"
 
 //Explanation of algorithm; AES256 GCM + GMAC
 //https://www.alexeyshmalko.com/20200319144641/

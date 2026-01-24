@@ -88,8 +88,8 @@ static inline F32x4 F32x4_rsqrt(F32x4 a) { NONE_OP4F(1 / F32_sqrt(a.v[i])); }
 
 //Boolean
 
-static inline F32x4 F32x4_eq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] == b.v[i])); }
-static inline F32x4 F32x4_neq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] != b.v[i])); }
+static inline F32x4 F32x4_eqExact(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] == b.v[i])); }
+static inline F32x4 F32x4_neqExact(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] != b.v[i])); }
 static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] >= b.v[i])); }
 static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] > b.v[i])); }
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { NONE_OP4F((F32)(a.v[i] <= b.v[i])); }
