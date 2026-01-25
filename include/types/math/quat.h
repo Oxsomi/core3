@@ -58,12 +58,13 @@ static inline void Quat##T##_set(Quat##T *a, U8 i, T v) { T##x4_setRef(a, i, v);
 																												\
 static inline Quat##T Quat##T##_lerp(Quat##T a, Quat##T b, T perc) { return T##x4_lerp(a, b, perc); }			\
 																												\
+/* We use a right handed system */																				\
 static inline T##x4 Quat##T##_applyToNormal(Quat##T Q, T##x4 P) {												\
 	T##x4 qXyz = T##x4_trunc3(Q);																				\
-	T##x4 t = T##x4_mul(T##x4_cross3(qXyz, P), T##x4_xxxx4(2));													\
+	T##x4 t = T##x4_mul(T##x4_cross3(P, qXyz), T##x4_xxxx4(2));													\
 	return T##x4_add(P, T##x4_add(																				\
 		T##x4_mul(t, T##x4_xxxx4(T##x4_w(Q))),																	\
-		T##x4_cross3(qXyz, t)																					\
+		T##x4_cross3(t, qXyz)																					\
 	));																											\
 }																												\
 																												\
@@ -74,13 +75,20 @@ Quat##T Quat##T##_angleAxis(T##x4 axis, T angle);																\
 Quat##T Quat##T##_fromEuler(T##x4 eulerXYZDeg);																	\
 T##x4 Quat##T##_toEuler(Quat##T q);																				\
 Quat##T Quat##T##_mul(Quat##T a, Quat##T b);																	\
-Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target);													\
+Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target, T##x4 up);										\
+Quat##T Quat##T##_fromOrientation(T##x4 right, T##x4 up, T##x4 fwd);											\
 																												\
 Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc);															\
 																												\
 static inline T##x4 Quat##T##_forward(Quat##T q) { return Quat##T##_applyToNormal(q, T##x4_create3(0, 0, 1)); }	\
 static inline T##x4 Quat##T##_up(Quat##T q) { return Quat##T##_applyToNormal(q, T##x4_create3(0, 1, 0)); }		\
-static inline T##x4 Quat##T##_right(Quat##T q) { return Quat##T##_applyToNormal(q, T##x4_create3(1, 0, 0)); }
+static inline T##x4 Quat##T##_right(Quat##T q) { return Quat##T##_applyToNormal(q, T##x4_create3(1, 0, 0)); }	\
+																												\
+static inline void Quat##T##_toOrientation(Quat##T q, T##x4 *fwd, T##x4 *up, T##x4 *right) {					\
+	if (fwd) *fwd = Quat##T##_forward(q);																		\
+	if (up) *up = Quat##T##_up(q);																				\
+	if (right) *right = Quat##T##_right(q);																		\
+}
 
 /* Quat##T Quat##T##_fromLookRotation(T##x4 fwd, T##x4 up); */
 

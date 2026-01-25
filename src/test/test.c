@@ -2784,6 +2784,8 @@ int main() {
 				retError(clean, Error_invalidState((U32)i, "QuatF32_fromEuler failed"));
 		}
 
+		//To euler
+
 		Log_debugLn(alloc, "Testing QuatF32 to euler");
 
 		for (U64 i = 0; i < sizeof(quatsFromEuler) / sizeof(quatsFromEuler[0]); ++i) {
@@ -2794,6 +2796,185 @@ int main() {
 
 			if (F32x4_neqApproxAdv4(euler2, euler, 2e-2f, 2e-2f))
 				retError(clean, Error_invalidState((U32)i, "QuatF32_toEuler failed"));
+		}
+
+		//Mul
+
+		Log_debugLn(alloc, "Testing QuatF32 mul");
+
+		const QuatF32 mulA[] = {
+			QuatF32_identity(),
+			QuatF32_create(isq2, 0, 0, isq2),		//90deg X
+			QuatF32_create(0, isq2, 0, isq2),		//90deg Y
+			QuatF32_create(0, 0, isq2, isq2),		//90deg Z
+		};
+
+		const QuatF32 mulB[] = {
+			QuatF32_create(isq2, 0, 0, isq2),		//90deg X
+			QuatF32_create(0, isq2, 0, isq2),		//90deg Y
+			QuatF32_create(0, 0, isq2, isq2),		//90deg Z
+			QuatF32_identity()
+		};
+
+		const QuatF32 expectedMul[] = {
+			QuatF32_create(isq2, 0, 0, isq2),		//X90
+			QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),	//X90 * Y90
+			QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),	//Y90 * Z90
+			QuatF32_create(0, 0, isq2, isq2)		//Z90
+		};
+
+		for (U32 i = 0; i < sizeof(expectedMul) / sizeof(expectedMul[0]); ++i) {
+
+			q = QuatF32_mul(mulA[i], mulB[i]);
+
+			if (QuatF32_neq(q, expectedMul[i]))
+				retError(clean, Error_invalidState(i, "QuatF32_mul failed"));
+		}
+
+		//Apply to normal
+
+		Log_debugLn(alloc, "Testing QuatF32 applyToNormal");
+
+		const QuatF32 applyToNormalRot[] = {
+			QuatF32_identity(),
+			QuatF32_identity(),
+			QuatF32_identity(),
+			QuatF32_create(isq2, 0, 0, isq2),		//90deg x
+			QuatF32_create(isq2, 0, 0, isq2),
+			QuatF32_create(isq2, 0, 0, isq2),
+			QuatF32_create(0, isq2, 0, isq2),		//90deg y
+			QuatF32_create(0, isq2, 0, isq2),
+			QuatF32_create(0, isq2, 0, isq2),
+			QuatF32_create(0, 0, isq2, isq2),		//90deg Z
+			QuatF32_create(0, 0, isq2, isq2),
+			QuatF32_create(0, 0, isq2, isq2)
+		};
+
+		const F32x4 applyToNormalN[] = {
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1)
+		};
+
+		const F32x4 expectedApplyToNormal[] = {
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 0, -1),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(-1, 0, 0),
+			F32x4_create3(0, -1, 0),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 0, 1)
+		};
+
+		for (U32 i = 0; i < sizeof(expectedApplyToNormal) / sizeof(expectedApplyToNormal[0]); ++i) {
+
+			F32x4 v3 = QuatF32_applyToNormal(applyToNormalRot[i], applyToNormalN[i]);
+
+			if (F32x4_neqApprox4(v3, expectedApplyToNormal[i]))
+				retError(clean, Error_invalidState(i, "QuatF32_applyToNormal failed"));
+		}
+
+		//Slerp
+
+		Log_debugLn(alloc, "Testing QuatF32 slerp");
+
+		const QuatF32 slerpA[] = {
+			QuatF32_identity(),
+			QuatF32_create(isq2, 0, 0, isq2),		//90deg X
+			QuatF32_create(0, isq2, 0, isq2),		//90deg Y
+			QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f)	//X90 *Y90
+		};
+
+		const QuatF32 slerpB[] = {
+			QuatF32_create(isq2, 0, 0, isq2),		//90deg X
+			QuatF32_create(0, isq2, 0, isq2),		//90deg Y
+			QuatF32_identity(),
+			QuatF32_create(isq2, 0, 0, isq2)		//90deg X
+		};
+
+		const QuatF32 expected50[] = {
+			QuatF32_create(0.382683f,		0,				0,		0.923879f),
+			QuatF32_create(0.408248276f,	0.408248276f,	0,		0.816496551f),
+			QuatF32_create(0,				0.382683f,		0,		0.923879f),
+			QuatF32_create(0.65f,			0.27f,			0.27f,	0.65f)
+		};
+
+		for (U64 i = 0; i < sizeof(slerpA) / sizeof(slerpA[0]); ++i) {
+
+			QuatF32 q0 = QuatF32_slerp(slerpA[i], slerpB[i], 0);
+			QuatF32 q1 = QuatF32_slerp(slerpA[i], slerpB[i], 0.5f);
+			QuatF32 q2 = QuatF32_slerp(slerpA[i], slerpB[i], 1);
+
+			if (QuatF32_neq(q0, slerpA[i]))
+				retError(clean, Error_invalidState((U32)i, "QuatF32_slerp 0 failed"));
+
+			if (QuatF32_neq(q2, slerpB[i]))
+				retError(clean, Error_invalidState((U32)i, "QuatF32_slerp 1 failed"));
+
+			if (QuatF32_neq(q1, expected50[i]))
+				retError(clean, Error_invalidState((U32)i, "QuatF32_slerp 0.5 failed"));
+		}
+
+		//Target direction
+
+		Log_debugLn(alloc, "Testing QuatF32 targetDirection");
+
+		const F32x4 targetDirFwd[] = {
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(1, 1, 0),
+			F32x4_create3(-1, 0, 1),
+			F32x4_create3(0, -1, 0),
+			F32x4_create3(1, 0, 0),
+			F32x4_create3(0, 0, -1),
+			F32x4_create3(0, 0, -1)
+		};
+
+		const F32x4 targetDirUp[] = {
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, 0, 1),
+			F32x4_create3(0, 1, 0),
+			F32x4_create3(0, -1, 0),
+			F32x4_create3(0, 1, 0)
+		};
+
+		const QuatF32 targetDirExpected[] = {
+			QuatF32_create(0,				0,				0,		1),
+			QuatF32_create(0,				-isq2,			0,		isq2),
+			QuatF32_create(0,				isq2,			isq2,	0),
+			QuatF32_create(0.27f,			-0.65f,			-0.27f,	0.65f),
+			QuatF32_create(0,				0.38f,			0,		0.93f),
+			QuatF32_create(-isq2,			0,				0,		isq2),
+			QuatF32_create(0,				-isq2,			0,		isq2),
+			QuatF32_create(1,				0,				0,		0),
+			QuatF32_create(0,				1,				0,		0)
+		};
+
+		for (U64 i = 0; i < sizeof(targetDirFwd) / sizeof(targetDirFwd[0]); ++i) {
+
+			q = QuatF32_targetDirection(F32x4_zero(), targetDirFwd[i], targetDirUp[i]);
+
+			if (QuatF32_neq(q, targetDirExpected[i]))
+				retError(clean, Error_invalidState((U32)i, "QuatF32_targetDirection failed to create"));
 		}
 	}
 

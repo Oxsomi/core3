@@ -126,29 +126,86 @@ Quat##T Quat##T##_mul(Quat##T a, Quat##T b) {																			\
 	);																													\
 }																														\
 																														\
-/* Get shortest arc quaternion from origin to target																	\
-*  https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another	\
-*/																														\
-Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target) {															\
+Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target, T##x4 up) {												\
 																														\
-	T leno = T##x4_len3(origin), lent = T##x4_len3(target);																\
-																														\
-	T leno2 = T##_pow2(leno), lent2 = T##_pow2(lent);																	\
-																														\
-	if(!T##_isValid(leno2) || !T##_isValid(lent2))																		\
+	/* fwd */																											\
+	T##x4 forward = T##x4_sub(target, origin);																			\
+	T forwardLen = T##x4_len3(forward);																					\
+	if (forwardLen < 1e-6##suffix)																						\
 		return Quat##T##_identity();																					\
 																														\
-	T w = T##_sqrt(leno2 * lent2) + T##x4_dot3(origin, target);															\
+	T invForward = 1.0##suffix / forwardLen;																			\
+	forward = T##x4_mul(forward, T##x4_xxxx4(invForward));																\
 																														\
-	T##x4 cross = T##x4_cross3(origin, target);																			\
+	/* right */																											\
+	T##x4 right = T##x4_cross3(up, forward);																			\
+	T rightLen = T##x4_len3(right);																						\
+	if (rightLen < 1e-6##suffix) {																						\
+		T##x4 tempUp = T##x4_create3(0, 1, 0);																			\
+		right = T##x4_cross3(tempUp, forward);																			\
+		rightLen = T##x4_len3(right);																					\
+		if (rightLen < 1e-6##suffix)																					\
+			right = T##x4_create3(1, 0, 0);																				\
+	}																													\
+	T invRight = 1.0##suffix / rightLen;																				\
+	right = T##x4_mul(right, T##x4_xxxx4(invRight));																	\
 																														\
-	Quat##T newQuat = Quat##T##_create(T##x4_x(cross), T##x4_y(cross), T##x4_z(cross), w);								\
-	T len = T##x4_len4(newQuat);																						\
+	/* up */																											\
+	T##x4 trueUp = T##x4_cross3(forward, right);																		\
+	return Quat##T##_fromOrientation(right, trueUp, forward);															\
+}																														\
 																														\
-	if (len < 1e-6)																										\
-		return Quat##T##_identity();																					\
+Quat##T Quat##T##_fromOrientation(T##x4 right, T##x4 trueUp, T##x4 forward) {											\
 																														\
-	return T##x4_mul(newQuat, T##x4_xxxx4(1.##suffix / len));															\
+	/* Compute the trace of the rotation matrix */																		\
+	T trace = T##x4_x(right) + T##x4_y(trueUp) + T##x4_z(forward);														\
+																														\
+	T x, y, z, w;																										\
+																														\
+	/* Case 1: trace positive */																						\
+	if (trace > 0) {																									\
+		T s = T##_sqrt(trace + 1.0##suffix) * 2.0##suffix;																\
+																														\
+		/* Off-diagonal differences for column-major matrix */															\
+		x = T##x4_y(forward) - T##x4_z(trueUp);  /* m21 - m12 */														\
+		y = T##x4_z(right) - T##x4_x(forward); /* m02 - m20 */															\
+		z = T##x4_x(trueUp) - T##x4_y(right);   /* m10 - m01 */															\
+		x /= s; y /= s; z /= s;																							\
+		w = 0.25##suffix * s;																							\
+	}																													\
+	/* Case 2: largest diagonal is m00 (right.x) */																		\
+	else if (T##x4_x(right) > T##x4_y(trueUp) && T##x4_x(right) > T##x4_z(forward)) {									\
+		T s = T##_sqrt(1.0##suffix + T##x4_x(right) - T##x4_y(trueUp) - T##x4_z(forward)) * 2.0##suffix;				\
+		T invS = 1.0##suffix / s;																						\
+																														\
+		x = 0.25##suffix * s;																							\
+		y = (T##x4_x(trueUp) + T##x4_y(right)) * invS;																	\
+		z = (T##x4_x(forward) + T##x4_z(right)) * invS;																	\
+		w = (T##x4_y(forward) - T##x4_z(trueUp)) * invS;																\
+	}																													\
+	/* Case 3: largest diagonal is m11 (trueUp.y) */																	\
+	else if (T##x4_y(trueUp) > T##x4_z(forward)) {																		\
+		T s = T##_sqrt(1.0##suffix + T##x4_y(trueUp) - T##x4_x(right) - T##x4_z(forward)) * 2.0##suffix;				\
+		T invS = 1.0##suffix / s;																						\
+																														\
+		x = (T##x4_y(right) + T##x4_x(trueUp)) * invS;																	\
+		y = 0.25##suffix * s;																							\
+		z = (T##x4_z(forward) + T##x4_y(trueUp)) * invS;																\
+		w = (T##x4_z(right) - T##x4_x(forward)) * invS;																	\
+	}																													\
+	/* Case 4: largest diagonal is m22 (forward.z) */																	\
+	else {																												\
+		T s = T##_sqrt(1.0##suffix + T##x4_z(forward) - T##x4_x(right) - T##x4_y(trueUp)) * 2.0##suffix;				\
+		T invS = 1.0##suffix / s;																						\
+																														\
+		x = (T##x4_x(forward) + T##x4_z(right)) * invS;																	\
+		y = (T##x4_y(forward) + T##x4_z(trueUp)) * invS;																\
+		z = 0.25##suffix * s;																							\
+		w = (T##x4_y(right) - T##x4_x(trueUp)) * invS;																	\
+	}																													\
+																														\
+	/* Normalize the quaternion and return */																			\
+	return Quat##T##_normalize(Quat##T##_create(x, y, z, w));															\
 }																														\
 																														\
 /* Lerp between a and b using percentage (or extrapolate if perc > 1 or < 0) */											\
@@ -156,29 +213,28 @@ Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target) {															\
  																														\
 Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {																	\
 																														\
-	T cosTheta2 = T##x4_dot4(a, b);																						\
-	if (cosTheta2 < 0) {																								\
+	a = Quat##T##_normalize(a);																							\
+	b = Quat##T##_normalize(b);																							\
+																														\
+	T cosTheta = T##x4_dot4(a, b);																						\
+	if (cosTheta < 0) {																									\
 		b = T##x4_negate(b);																							\
-		cosTheta2 = -cosTheta2;																							\
+		cosTheta = -cosTheta;																							\
 	}																													\
 																														\
-	if (cosTheta2 >= 1)																									\
+	if (cosTheta >= 1)																									\
 		return a;																										\
 																														\
-	T cosTheta2Pow = T##_pow2(cosTheta2);																				\
+	T theta = T##_acos(cosTheta);																						\
+	T sinTheta2 = T##_sqrt(1 - cosTheta * cosTheta);																	\
 																														\
-	if(!T##_isValid(cosTheta2Pow)) return b;																			\
-																														\
-	T halfTheta = T##_acos(cosTheta2);																					\
-	T sinTheta2 = T##_sqrt(1 - cosTheta2Pow);																			\
-																														\
-	if(T##_abs(sinTheta2) < 1e-3##suffix)		/* Theta 180deg isn't defined, so define as 50/50 */					\
+	if(T##_abs(sinTheta2) > 1 - 5e-4)																					\
 		return Quat##T##_normalize(T##x4_lerp(a, b, perc));																\
 																														\
 	T invSinTheta2 = 1 / sinTheta2;																						\
 																														\
-	T ratioA = T##_sin(halfTheta * (1 - perc)) * invSinTheta2;															\
-	T ratioB = T##_sin(halfTheta * perc) * invSinTheta2; 																\
+	T ratioA = T##_sin(theta * (1 - perc)) * invSinTheta2;																\
+	T ratioB = T##_sin(theta * perc) * invSinTheta2; 																	\
 																														\
 	a = T##x4_mul(a, T##x4_xxxx4(ratioA));																				\
 	b = T##x4_mul(b, T##x4_xxxx4(ratioB));																				\
@@ -187,4 +243,5 @@ Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {																	\
 }
 
 QUAT_IMPL(F32, f);
+
 //_QUAT_IMPL(F64, );

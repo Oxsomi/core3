@@ -104,11 +104,9 @@ static inline F32x4 F32x4_mul3x4(F32x4 v3, F32x4 v3x4[4]) {
 }
 
 static inline F32x4 F32x4_cross3(F32x4 a, F32x4 b) {
-	return F32x4_normalize3(
-		F32x4_sub(
-			F32x4_mul(F32x4_yzx(a), F32x4_zxy(b)),
-			F32x4_mul(F32x4_zxy(a), F32x4_yzx(b))
-		)
+	return F32x4_sub(
+		F32x4_mul(F32x4_yzx(a), F32x4_zxy(b)),
+		F32x4_mul(F32x4_zxy(a), F32x4_yzx(b))
 	);
 } 
 
