@@ -137,6 +137,10 @@ static inline F32 F32x4_sqLen2(F32x4 v) { return F32x4_dot2(v, v); }
 static inline F32 F32x4_sqLen3(F32x4 v) { return F32x4_dot3(v, v); }
 static inline F32 F32x4_sqLen4(F32x4 v) { return F32x4_dot4(v, v); }
 
+static inline F32 F32x4_len2(F32x4 v) { return F32_sqrt(F32x4_sqLen2(v)); }
+static inline F32 F32x4_len3(F32x4 v) { return F32_sqrt(F32x4_sqLen3(v)); }
+static inline F32 F32x4_len4(F32x4 v) { return F32_sqrt(F32x4_sqLen4(v)); }
+
 static inline F32x4 F32x4_normalize2(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(F32x4_xxxx4(F32x4_sqLen2(v)))); }
 static inline F32x4 F32x4_normalize3(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(F32x4_xxxx4(F32x4_sqLen3(v)))); }
 static inline F32x4 F32x4_normalize4(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(F32x4_xxxx4(F32x4_sqLen4(v)))); }
@@ -151,10 +155,6 @@ static inline F32 F32x4_satDot2(F32x4 x, F32x4 y) { return F32_saturate(F32x4_do
 static inline F32 F32x4_satDot3(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot3(x, y)); }
 static inline F32 F32x4_satDot4(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot4(x, y)); }
 
-static inline F32 F32x4_len2(F32x4 v) { return F32_sqrt(F32x4_sqLen2(v)); }
-static inline F32 F32x4_len3(F32x4 v) { return F32_sqrt(F32x4_sqLen3(v)); }
-static inline F32 F32x4_len4(F32x4 v) { return F32_sqrt(F32x4_sqLen4(v)); }
-
 static inline F32x4 F32x4_lerp(F32x4 a, F32x4 b, F32 perc) {
 	b = F32x4_sub(b, a);
 	return F32x4_add(a, F32x4_mul(b, F32x4_xxxx4(perc)));
@@ -163,7 +163,7 @@ static inline F32x4 F32x4_lerp(F32x4 a, F32x4 b, F32 perc) {
 //Texture packing
 
 static inline F32x4 F32x4_rgb8Unpack(U32 v) {
-	const F32x4 rgb8 = F32x4_floor(F32x4_div(F32x4_xxxx4((F32)v), F32x4_create3(0x10000, 0x100, 0x1)));
+	const F32x4 rgb8 = F32x4_floor(F32x4_div(F32x4_trunc3(F32x4_xxxx4((F32)v)), F32x4_create4(0x10000, 0x100, 0x1, 0x1)));
 	return F32x4_div(F32x4_floor(F32x4_mod(rgb8, F32x4_xxxx4(0x100))), F32x4_xxxx4(0xFF));
 }
 
@@ -173,11 +173,37 @@ static inline U32 F32x4_rgb8Pack(F32x4 v) {
 	return (U32)F32x4_reduce(preShift);
 }
 
-static inline F32x4 F32x4_srgb8Unpack(U32 v) {
-	return F32x4_pow2(F32x4_rgb8Unpack(v));
+//https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
+
+static inline F32x4 F32x4_srgbToLinear(F32x4 x) {
+	return F32x4_mul(x, F32x4_add(
+		F32x4_xxxx4(0.012522878f),
+		F32x4_mul(x, F32x4_add(
+			F32x4_xxxx4(0.682171111f),
+			F32x4_mul(x, F32x4_xxxx4(0.305306011f))
+		))
+	));
 }
 
-static inline U32 F32x4_srgb8Pack(F32x4 v) { return F32x4_rgb8Pack(F32x4_sqrt(v)); }
+static inline F32x4 F32x4_srgb8Unpack(U32 v) {
+	return F32x4_srgbToLinear(F32x4_rgb8Unpack(v));
+}
+
+static inline F32x4 F32x4_linearToSrgb(F32x4 x) {
+
+	F32x4 S1 = F32x4_sqrt(x);
+	F32x4 S2 = F32x4_sqrt(S1);
+	F32x4 S3 = F32x4_sqrt(S2);
+
+	S1 = F32x4_mul(S1, F32x4_xxxx4(0.662002687f));
+	S2 = F32x4_mul(S2, F32x4_xxxx4(0.684122060f));
+	S3 = F32x4_mul(S3, F32x4_xxxx4(-0.323583601f));
+	x = F32x4_mul(x, F32x4_xxxx4(-0.0225411470f));
+
+	return F32x4_add(F32x4_add(S1, S2), F32x4_add(S3, x));
+}
+
+static inline U32 F32x4_srgb8Pack(F32x4 v) { return F32x4_rgb8Pack(F32x4_linearToSrgb(v)); }
 
 //Reflect incident direction around normal
 //https://registry.khronos.org/OpenGL-Refpages/gl4/html/reflect.xhtml

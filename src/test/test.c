@@ -2655,8 +2655,9 @@ int main() {
 		QuatF32 r = QuatF32_normalize(q);
 
 		F32 invLen = 1 / F32_sqrt(F32_pow2(1) + F32_pow2(2) + F32_pow2(3) + F32_pow2(4));
+		QuatF32 norm = QuatF32_create(1 * invLen, 2 * invLen, 3 * invLen, 4 * invLen);
 
-		if (QuatF32_neq(r, QuatF32_create(1 * invLen, 2 * invLen, 3 * invLen, 4 * invLen)))
+		if (QuatF32_neq(r, norm))
 			retError(clean, Error_invalidState(0, "QuatF32_normalize failed"));
 
 		//Angle axis
@@ -2975,6 +2976,734 @@ int main() {
 
 			if (QuatF32_neq(q, targetDirExpected[i]))
 				retError(clean, Error_invalidState((U32)i, "QuatF32_targetDirection failed to create"));
+		}
+	}
+
+	//Test vectors
+
+	Log_debugLn(alloc, "Testing vectors");
+
+	//vec2
+
+	{
+		Log_debugLn(alloc, "Testing F32x2");
+
+		Log_debugLn(alloc, "Testing F32x2 create, swizzle, accessors, set/get");
+
+		{
+			F32x2 v2 = F32x2_create2(1, 2);
+			if (F32x2_x(v2) != 1 || F32x2_y(v2) != 2)
+				retError(clean, Error_invalidState(0, "F32x2_x/y failed"));
+
+			F32x2 v0  = F32x2_create1(1);
+			if (F32x2_x(v0) != 1 || F32x2_y(v0) != 0)
+				retError(clean, Error_invalidState(0, "F32x2_create1 failed"));
+
+			F32x2_setRefX(&v2, 3);
+			F32x2_setRefY(&v2, 4);
+			if (F32x2_get(v2, 0) != 3 || F32x2_get(v2, 1) != 4)
+				retError(clean, Error_invalidState(0, "F32x2_setRefX/Y or get failed"));
+
+			F32x2 xx = F32x2_xx(v2);
+			F32x2 yy = F32x2_yy(v2);
+
+			if (F32x2_x(xx) != 3 || F32x2_y(xx) != 3)
+				retError(clean, Error_invalidState(0, "F32x2_xx failed"));
+
+			if (F32x2_x(yy) != 4 || F32x2_y(yy) != 4)
+				retError(clean, Error_invalidState(0, "F32x2_yy failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 comparisons");
+
+		{
+			F32x2 a = F32x2_create2(2, 3);
+			F32x2 b = F32x2_create2(2, 4);
+
+			if (!F32x2_all(F32x2_eq(a, F32x2_create2(2, 3))))
+				retError(clean, Error_invalidState(2, "F32x2_eq failed"));
+
+			if (!F32x2_any(F32x2_neq(a, b)))
+				retError(clean, Error_invalidState(2, "F32x2_neq failed"));
+
+			if (!F32x2_all(F32x2_leq(a, b)))
+				retError(clean, Error_invalidState(2, "F32x2_leq failed"));
+
+			if (!F32x2_all(F32x2_geq(b, a)))
+				retError(clean, Error_invalidState(2, "F32x2_geq failed"));
+
+			if (!F32x2_any(F32x2_gt(b, a)))
+				retError(clean, Error_invalidState(2, "F32x2_gt failed"));
+
+			if (!F32x2_any(F32x2_lt(a, b)))
+				retError(clean, Error_invalidState(2, "F32x2_lt failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 arithmetic");
+
+		{
+			F32x2 a = F32x2_create2(1.5f, -2);
+			F32x2 b = F32x2_create2(2, 4);
+			F32x2 c = F32x2_create2(1, 2);
+
+			if (F32x2_neq2(F32x2_add(a, b), F32x2_create2(3.5f, 2)))
+				retError(clean, Error_invalidState(1, "F32x2_add failed"));
+
+			if (F32x2_neq2(F32x2_sub(a, b), F32x2_create2(-0.5f, -6)))
+				retError(clean, Error_invalidState(1, "F32x2_sub failed"));
+
+			if (F32x2_neq2(F32x2_mul(a, b), F32x2_create2(3, -8)))
+				retError(clean, Error_invalidState(1, "F32x2_mul failed"));
+
+			if (F32x2_neq2(F32x2_div(b, c), F32x2_create2(2, 2)))
+				retError(clean, Error_invalidState(1, "F32x2_div failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 length, normalize, dot, reduce");
+
+		{
+			F32x2 v2 = F32x2_create2(3, 4);
+			F32 len = F32x2_len(v2);
+			if (F32_abs(len - 5) > 1e-6f)
+				retError(clean, Error_invalidState(2, "F32x2_len failed"));
+
+			F32x2 norm = F32x2_normalize(v2);
+			if (F32_abs(F32x2_len(norm) - 1) > 1e-6f)
+				retError(clean, Error_invalidState(2, "F32x2_normalize failed"));
+
+			F32 dot = F32x2_dot(v2, v2);
+			if (F32_abs(dot - 25) > 1e-6f)
+				retError(clean, Error_invalidState(2, "F32x2_dot failed"));
+
+			F32 reduce = F32x2_reduce(v2);
+			if (F32_abs(reduce - 7) > 1e-6f)
+				retError(clean, Error_invalidState(2, "F32x2_reduce failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 min/max/clamp/saturate");
+
+		{
+			F32x2 a = F32x2_create2(1, 5);
+			F32x2 b = F32x2_create2(3, 4);
+
+			if (F32x2_neq2(F32x2_min(a, b), F32x2_create2(1, 4)))
+				retError(clean, Error_invalidState(3, "F32x2_min failed"));
+
+			if (F32x2_neq2(F32x2_max(a, b), F32x2_create2(3, 5)))
+				retError(clean, Error_invalidState(3, "F32x2_max failed"));
+
+			F32x2 clamped = F32x2_clamp(F32x2_create2(-2, 10), F32x2_negate(F32x2_one), F32x2_one);
+			if (F32x2_neq2(clamped, F32x2_create2(-1, 1)))
+				retError(clean, Error_invalidState(3, "F32x2_clamp failed"));
+
+			F32x2 sat = F32x2_saturate(F32x2_create2(2, -1));
+			if (F32x2_neq2(sat, F32x2_create2(1, 0)))
+				retError(clean, Error_invalidState(3, "F32x2_saturate failed"));
+
+			if (F32x2_neq2(F32x2_sign(F32x2_create2(-3, 4)), F32x2_create2(-1, 1)))
+				retError(clean, Error_invalidState(7, "F32x2_sign failed"));
+
+			if (F32x2_neq2(F32x2_abs(F32x2_create2(-3, 4)), F32x2_create2(3, 4)))
+				retError(clean, Error_invalidState(7, "F32x2_abs failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 neg, abs, fract, complement, inverse, pow2, reflect");
+
+		{
+			F32x2 v2 = F32x2_create2(-3.5f, 4.5f);
+
+			if (F32x2_neq2(F32x2_negate(v2), F32x2_create2(3.5f, -4.5f)))
+				retError(clean, Error_invalidState(4, "F32x2_negate failed"));
+
+			if (F32x2_neq2(F32x2_abs(v2), F32x2_create2(3.5f, 4.5f)))
+				retError(clean, Error_invalidState(4, "F32x2_abs failed"));
+
+			if (F32x2_neq2(F32x2_pow2(F32x2_create2(2, -3)), F32x2_create2(4, 9)))
+				retError(clean, Error_invalidState(4, "F32x2_pow2 failed"));
+
+			F32x2 reflected = F32x2_reflect(F32x2_create2(1, 1), F32x2_create2(0, 1));
+			if (F32x2_neq2(reflected, F32x2_create2(1, -1)))
+				retError(clean, Error_invalidState(4, "F32x2_reflect failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 mul2x2 / mul2x3");
+
+		{
+			//2x2 matrix multiply (column major assumption: [a b; c d])
+			//|1 2| * |5 6| = |17 23|
+			//|3 4|   |7 8|   |39 53|
+
+			const F32x2 mat2x2[2] = { F32x2_create2(1, 2), F32x2_create2(3, 4) };
+
+			F32x2 r0 = F32x2_mul2x2(F32x2_create2(5, 6), mat2x2);
+			F32x2 r1 = F32x2_mul2x2(F32x2_create2(7, 8), mat2x2);
+
+			if (F32x2_neq2(r0, F32x2_create2(23, 34)))
+				retError(clean, Error_invalidState(0, "F32x2_mul2x2 r0 failed"));
+
+			if (F32x2_neq2(r1, F32x2_create2(31, 46)))
+				retError(clean, Error_invalidState(0, "F32x2_mul2x2 r1 failed"));
+
+			//2x3 affine transform: (2,3,1)
+			//|1 0 5|
+			//|0 1 7|
+
+			F32x2 mat2x3[] = {
+				F32x2_create2(1, 0),
+				F32x2_create2(0, 1),
+				F32x2_create2(5, 7)
+			};
+
+			F32x2 t = F32x2_mul2x3(F32x2_create2(2, 3), mat2x3);
+
+			if (F32x2_neq2(t, F32x2_create2(7, 10)))
+				retError(clean, Error_invalidState(0, "F32x2_mul2x3 failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 sign, all, any");
+
+		{
+			F32x2 v2 = F32x2_create2(-2, 3);
+			if (F32x2_neq2(F32x2_sign(v2), F32x2_create2(-1, 1)))
+				retError(clean, Error_invalidState(1, "F32x2_sign failed"));
+
+			if (!F32x2_any(v2))
+				retError(clean, Error_invalidState(1, "F32x2_any failed"));
+
+			if (!F32x2_all(v2))
+				retError(clean, Error_invalidState(1, "F32x2_all failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 mod and fractional ops");
+
+		{
+			F32x2 v2 = F32x2_create2(5.5f, -2.25f);
+
+			if (F32x2_neq2(F32x2_mod(v2, F32x2_create2(2, 2)), F32x2_create2(1.5f, 1.75f)))
+				retError(clean, Error_invalidState(3, "F32x2_mod failed"));
+
+			if (F32x2_neq2(F32x2_fract(v2), F32x2_create2(0.5f, 0.75f)))
+				retError(clean, Error_invalidState(3, "F32x2_fract failed"));
+
+			if (F32x2_neq2(F32x2_floor(v2), F32x2_create2(5, -3)))
+				retError(clean, Error_invalidState(3, "F32x2_floor failed"));
+
+			if (F32x2_neq2(F32x2_ceil(v2), F32x2_create2(6, -2)))
+				retError(clean, Error_invalidState(3, "F32x2_ceil failed"));
+
+			if (F32x2_neq2(F32x2_round(F32x2_create2(2.4f, 2.6f)), F32x2_create2(2, 3)))
+				retError(clean, Error_invalidState(3, "F32x2_round failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x2 exponentials and logs");
+
+		{
+			F32x2 v2 = F32x2_create2(1, 2);
+
+			if (F32x2_neq2(F32x2_exp2(v2), F32x2_create2(2, 4)))
+				retError(clean, Error_invalidState(4, "F32x2_exp2 failed"));
+
+			if (F32x2_neq2(F32x2_log2(F32x2_create2(2, 4)), v2))
+				retError(clean, Error_invalidState(4, "F32x2_log2 failed"));
+
+			if (F32x2_neq2(F32x2_expe(F32x2_zero), F32x2_one))
+				retError(clean, Error_invalidState(4, "F32x2_exp failed"));
+
+			if (F32x2_neq2(F32x2_loge(F32x2_one), F32x2_zero))
+				retError(clean, Error_invalidState(4, "F32x2_log failed"));
+
+			if (F32x2_neq2(F32x2_exp10(F32x2_create2(1, 2)), F32x2_create2(10, 100)))
+				retError(clean, Error_invalidState(4, "F32x2_exp10 failed"));
+
+			if (F32x2_neq2(F32x2_log10(F32x2_create2(10, 100)), F32x2_create2(1, 2)))
+				retError(clean, Error_invalidState(4, "F32x2_log10 failed"));
+		}
+	}
+
+	{
+		Log_debugLn(alloc, "Testing I32x2");
+
+		Log_debugLn(alloc, "Testing I32x2 create, accessors, set/get");
+
+		{
+			I32x2 v2 = I32x2_create2(1, -2);
+			if (I32x2_x(v2) != 1 || I32x2_y(v2) != -2)
+				retError(clean, Error_invalidState(5, "I32x2_x/y failed"));
+
+			I32x2_setRefX(&v2, 3);
+			I32x2_setRefY(&v2, -4);
+			if (I32x2_get(v2, 0) != 3 || I32x2_get(v2, 1) != -4)
+				retError(clean, Error_invalidState(5, "I32x2_setRefX/Y or get failed"));
+
+			I32x2 yx = I32x2_yx(v2);
+			if (I32x2_x(yx) != -4 || I32x2_y(yx) != 3)
+				retError(clean, Error_invalidState(5, "I32x2_yx failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x2 comparisons");
+
+		{
+			I32x2 a = I32x2_create2(2, 5);
+			I32x2 b = I32x2_create2(3, 5);
+
+			if (!I32x2_all(I32x2_leq(a, b)))
+				retError(clean, Error_invalidState(4, "I32x2_leq failed"));
+
+			if (!I32x2_all(I32x2_geq(b, a)))
+				retError(clean, Error_invalidState(4, "I32x2_geq failed"));
+
+			if (!I32x2_eq2(I32x2_lt(a, b), I32x2_create2(1, 0)))
+				retError(clean, Error_invalidState(4, "I32x2_lt failed"));
+
+			if (!I32x2_eq2(I32x2_gt(b, a), I32x2_create2(1, 0)))
+				retError(clean, Error_invalidState(4, "I32x2_gt failed"));
+
+			if (!I32x2_eq2(a, I32x2_create2(2, 5)))
+				retError(clean, Error_invalidState(4, "I32x2_eq failed"));
+
+			if (!I32x2_neq2(a, b))
+				retError(clean, Error_invalidState(4, "I32x2_neq failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x2 arithmetic and bitwise");
+
+		{
+			I32x2 a = I32x2_create2(2, -3);
+			I32x2 b = I32x2_create2(5, 4);
+
+			if (I32x2_neq2(I32x2_add(a, b), I32x2_create2(7, 1)))
+				retError(clean, Error_invalidState(6, "I32x2_add failed"));
+
+			if (I32x2_neq2(I32x2_sub(a, b), I32x2_create2(-3, -7)))
+				retError(clean, Error_invalidState(6, "I32x2_sub failed"));
+
+			if (I32x2_neq2(I32x2_mul(a, b), I32x2_create2(10, -12)))
+				retError(clean, Error_invalidState(6, "I32x2_mul failed"));
+
+			if (I32x2_neq2(I32x2_div(b, a), I32x2_create2(2, -1)))
+				retError(clean, Error_invalidState(6, "I32x2_div failed"));
+
+			if (I32x2_neq2(I32x2_and(I32x2_create2(3, 6), I32x2_create2(5, 3)), I32x2_create2(1, 2)))
+				retError(clean, Error_invalidState(6, "I32x2_and failed"));
+
+			if (I32x2_neq2(I32x2_or(I32x2_create2(3, 6), I32x2_create2(5, 3)), I32x2_create2(7, 7)))
+				retError(clean, Error_invalidState(6, "I32x2_or failed"));
+
+			if (I32x2_neq2(I32x2_xor(I32x2_create2(3, 6), I32x2_create2(5, 3)), I32x2_create2(6, 5)))
+				retError(clean, Error_invalidState(6, "I32x2_xor failed"));
+
+			if (I32x2_neq2(I32x2_not(I32x2_create2(0, -1)), I32x2_create2(-1, 0)))
+				retError(clean, Error_invalidState(6, "I32x2_not failed"));
+
+			a = I32x2_create2(0b1100, 0b1010);
+			b = I32x2_create2(0b1010, 0b1100);
+
+			I32x2 r = I32x2_andnot(a, b);		//~a & b
+
+			if (I32x2_neq2(r, I32x2_create2(0b0010, 0b0100)))
+				retError(clean, Error_invalidState(0, "I32x2_andnot failed"));
+
+			a = I32x2_create2(1, -8);
+
+			if (I32x2_neq2(I32x2_lsh32(a, 2), I32x2_create2(4, -32)))
+				retError(clean, Error_invalidState(1, "I32x2_lsh32 failed"));
+
+			if (I32x2_neq2(I32x2_rsh32(a, 1), I32x2_create2(0, (U32)(I32)-8 >> 1)))
+				retError(clean, Error_invalidState(1, "I32x2_rsh32 failed"));
+
+			a = I32x2_create2(13, -13);
+			b = I32x2_create2(5, 5);
+
+			if (I32x2_neq2(I32x2_mod(a, b), I32x2_create2(3, 2)))
+				retError(clean, Error_invalidState(2, "I32x2_mod failed"));
+
+			a = I32x2_create2(3, 5);
+
+			if (I32x2_neq2(I32x2_pow2(a), I32x2_create2(9, 25)))
+				retError(clean, Error_invalidState(5, "I32x2_pow2 failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x2 min/max/clamp/sign/abs");
+
+		{
+			I32x2 a = I32x2_create2(3, -5);
+			I32x2 b = I32x2_create2(2, 2);
+
+			if (I32x2_neq2(I32x2_min(a, b), I32x2_create2(2, -5)))
+				retError(clean, Error_invalidState(7, "I32x2_min failed"));
+
+			if (I32x2_neq2(I32x2_max(a, b), I32x2_create2(3, 2)))
+				retError(clean, Error_invalidState(7, "I32x2_max failed"));
+
+			if (I32x2_neq2(I32x2_clamp(I32x2_create2(-1, 5), I32x2_zero, I32x2_two), I32x2_create2(0, 2)))
+				retError(clean, Error_invalidState(7, "I32x2_clamp failed"));
+
+			if (I32x2_neq2(I32x2_sign(I32x2_create2(-3, 4)), I32x2_create2(-1, 1)))
+				retError(clean, Error_invalidState(7, "I32x2_sign failed"));
+
+			if (I32x2_neq2(I32x2_abs(I32x2_create2(-3, 4)), I32x2_create2(3, 4)))
+				retError(clean, Error_invalidState(7, "I32x2_abs failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x2 swap endianness");
+
+		{
+			I32x2 a = I32x2_create2(0x11223344, 0xAABBCCDD);
+			I32x2 expected = I32x2_create2(0x44332211, 0xDDCCBBAA);
+
+			if (I32x2_neq2(I32x2_swapEndianness(a), expected))
+				retError(clean, Error_invalidState(3, "I32x2_swapEndian failed"));
+		}
+	}
+
+	//vec4
+	{
+		Log_debugLn(alloc, "Testing F32x4");
+
+		Log_debugLn(alloc, "Testing F32x4 create, swizzle, accessors, set/get");
+
+		{
+			F32x4 v4 = F32x4_create4(1, 2, 3, 4);
+			if (F32x4_x(v4) != 1 || F32x4_y(v4) != 2 || F32x4_z(v4) != 3 || F32x4_w(v4) != 4)
+				retError(clean, Error_invalidState(0, "F32x4 accessors failed"));
+
+			F32x4 v1 = F32x4_create1(5);
+			if (F32x4_x(v1) != 5 || F32x4_y(v1) != 0 || F32x4_z(v1) != 0 || F32x4_w(v1) != 0)
+				retError(clean, Error_invalidState(0, "F32x4_create1 failed"));
+
+			F32x4_setZRef(&v4, 9);
+			F32x4_setWRef(&v4, 10);
+			if (F32x4_get(v4, 2) != 9 || F32x4_get(v4, 3) != 10)
+				retError(clean, Error_invalidState(0, "F32x4_setRef/get failed"));
+
+			F32x4 xxxx = F32x4_xxxx(v4);
+			if (F32x4_x(xxxx) != 1 || F32x4_y(xxxx) != 1 || F32x4_z(xxxx) != 1 || F32x4_w(xxxx) != 1)
+				retError(clean, Error_invalidState(0, "F32x4_xxxx failed"));
+
+			F32x4 wzyx = F32x4_wzyx(v4);
+			if (F32x4_x(wzyx) != 10 || F32x4_y(wzyx) != 9 || F32x4_z(wzyx) != 2 || F32x4_w(wzyx) != 1)
+				retError(clean, Error_invalidState(0, "F32x4_wzyx failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 comparisons");
+
+		{
+			F32x4 a = F32x4_create4(1, 2, 3, 4);
+			F32x4 b = F32x4_create4(1, 3, 2, 5);
+
+			if (!F32x4_eqExact4(a, F32x4_create4(1, 2, 3, 4)))
+				retError(clean, Error_invalidState(1, "F32x4_eq failed"));
+
+			if (!F32x4_neqExact4(a, b))
+				retError(clean, Error_invalidState(1, "F32x4_neq failed"));
+
+			if (!F32x4_eqExact4(F32x4_leq(a, b), F32x4_create4(1, 1, 0, 1)))
+				retError(clean, Error_invalidState(1, "F32x4_leq failed"));
+
+			if (!F32x4_eqExact4(F32x4_gt(b, a), F32x4_create4(0, 1, 0, 1)))
+				retError(clean, Error_invalidState(1, "F32x4_gt failed"));
+
+			if (!F32x4_eqExact4(F32x4_lt(a, b), F32x4_create4(0, 1, 0, 1)))
+				retError(clean, Error_invalidState(1, "F32x4_lt failed"));
+
+			if (!F32x4_eqExact4(F32x4_geq(a, b), F32x4_create4(1, 0, 1, 0)))
+				retError(clean, Error_invalidState(1, "F32x4_geq failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 arithmetic");
+
+		{
+			F32x4 a = F32x4_create4(1, 2, 3, 4);
+			F32x4 b = F32x4_create4(5, 6, 7, 8);
+
+			if (F32x4_neqExact4(F32x4_add(a, b), F32x4_create4(6, 8, 10, 12)))
+				retError(clean, Error_invalidState(2, "F32x4_add failed"));
+
+			if (F32x4_neqExact4(F32x4_sub(b, a), F32x4_create4(4, 4, 4, 4)))
+				retError(clean, Error_invalidState(2, "F32x4_sub failed"));
+
+			if (F32x4_neqExact4(F32x4_mul(a, b), F32x4_create4(5, 12, 21, 32)))
+				retError(clean, Error_invalidState(2, "F32x4_mul failed"));
+
+			if (F32x4_neqExact4(F32x4_div(b, a), F32x4_create4(5, 3, 7.0f / 3.0f, 2)))
+				retError(clean, Error_invalidState(2, "F32x4_div failed"));
+
+			F32x4 v4 = F32x4_create4(5.5f, -2.25f, 1, 2);
+
+			if (F32x4_neqExact4(F32x4_mod(v4, F32x4_xxxx4(2)), F32x4_create4(1.5f, 1.75f, 1, 0)))
+				retError(clean, Error_invalidState(3, "F32x4_mod failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 length, normalize, dot, reduce, sqrt, lerp");
+
+		{
+			F32x4 v4 = F32x4_create4(2, 3, 6, 1);	//len^2 = 50
+			if (F32_abs(F32x4_sqLen4(v4) - 50) > 1e-6f)
+				retError(clean, Error_invalidState(3, "F32x4_len4 failed"));
+
+			if (F32_abs(F32x4_len4(F32x4_normalize4(v4)) - 1) > 1e-4f)
+				retError(clean, Error_invalidState(3, "F32x4_normalize4 failed"));
+
+			if (F32_abs(F32x4_sqLen3(v4) - 49) > 1e-6f)		//sqrt(49)
+				retError(clean, Error_invalidState(3, "F32x4_len3 failed"));
+
+			if (F32_abs(F32x4_len3(F32x4_normalize3(v4)) - 1) > 1e-4f)
+				retError(clean, Error_invalidState(3, "F32x4_normalize3 failed"));
+
+			if (F32_abs(F32x4_sqLen2(v4) - 13) > 1e-6f)
+				retError(clean, Error_invalidState(3, "F32x4_len2 failed"));
+
+			if (F32_abs(F32x4_len2(F32x4_normalize2(v4)) - 1) > 1e-4f)
+				retError(clean, Error_invalidState(3, "F32x4_normalize2 failed"));
+
+			if (F32_abs(F32x4_dot4(v4, v4) - 50) > 1e-6f)
+				retError(clean, Error_invalidState(3, "F32x4_dot4 failed"));
+
+			if (F32_abs(F32x4_dot3(v4, v4) - 49) > 1e-6f)
+				retError(clean, Error_invalidState(3, "F32x4_dot3 failed"));
+
+			if (F32_abs(F32x4_dot2(v4, v4) - 13) > 1e-6f)
+				retError(clean, Error_invalidState(3, "F32x4_dot2 failed"));
+
+			if (F32x4_satDot4(F32x4_create4(0, 1, 0, 0), F32x4_create4(0, -1, 0, 0)) < 0)
+				retError(clean, Error_invalidState(3, "F32x4_satDot4 failed"));
+
+			if(F32x4_satDot3(F32x4_create3(0, 1, 0), F32x4_create3(0, -1, 0)) < 0)
+				retError(clean, Error_invalidState(3, "F32x4_satDot3 failed"));
+
+			if(F32x4_satDot2(F32x4_create2(0, 1), F32x4_create2(0, -1)) < 0)
+				retError(clean, Error_invalidState(3, "F32x4_satDot2 failed"));
+
+			if(F32x4_neqExact4(F32x4_create3(2, 3, 6), F32x4_trunc3(v4)))
+				retError(clean, Error_invalidState(3, "F32x4_trunc3 failed"));
+
+			if(F32x4_neqExact4(F32x4_create2(2, 3), F32x4_trunc2(v4)))
+				retError(clean, Error_invalidState(3, "F32x4_trunc2 failed"));
+
+			if (F32_abs(F32x4_reduce(v4) - 12) > 1e-6f)
+				retError(clean, Error_invalidState(3, "F32x4_reduce failed"));
+
+			if (F32x4_neqExact4(F32x4_sqrt(F32x4_create4(36, 25, 16, 9)), F32x4_create4(6, 5, 4, 3)))
+				retError(clean, Error_invalidState(3, "F32x4_sqrt failed"));
+
+			F32x4 rsq = F32x4_rsqrt(F32x4_create4(36, 25, 16, 9));
+
+			if (F32x4_neqApproxAdv4(rsq, F32x4_create4(1 / 6.f, 0.2f, 0.25f, 1 / 3.f), 1e-3f, 1e-3f))
+				retError(clean, Error_invalidState(3, "F32x4_rsqrt failed"));
+
+			F32x4 b = F32x4_xxxx4(10);
+
+			if (F32x4_neqExact4(F32x4_lerp(v4, b, 0.5f), F32x4_create4(6, 6.5f, 8, 5.5f)))
+				retError(clean, Error_invalidState(3, "F32x4_lerp failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 min/max/clamp/saturate/sign/abs");
+
+		{
+			F32x4 a = F32x4_create4(-2, 0.5f, 2, 10);
+			F32x4 minv = F32x4_min(a, F32x4_zero());
+			F32x4 maxv = F32x4_max(a, F32x4_one());
+
+			if (F32x4_neqExact4(minv, F32x4_create4(-2, 0, 0, 0)))
+				retError(clean, Error_invalidState(4, "F32x4_min failed"));
+
+			if (F32x4_neqExact4(maxv, F32x4_create4(1, 1, 2, 10)))
+				retError(clean, Error_invalidState(4, "F32x4_max failed"));
+
+			if (F32x4_neqExact4(F32x4_saturate(a), F32x4_create4(0, 0.5f, 1, 1)))
+				retError(clean, Error_invalidState(4, "F32x4_saturate failed"));
+
+			if (F32x4_neqExact4(F32x4_clamp(F32x4_create4(-1, 5, 1, 2), F32x4_zero(), F32x4_two()), F32x4_create4(0, 2, 1, 2)))
+				retError(clean, Error_invalidState(7, "F32x4_clamp failed"));
+
+			if (F32x4_neqExact4(F32x4_sign(F32x4_create4(-3, 4, 0, 1)), F32x4_create4(-1, 1, 1, 1)))
+				retError(clean, Error_invalidState(7, "F32x4_sign failed"));
+
+			if (F32x4_neqExact4(F32x4_abs(F32x4_create4(-3, 4, -1, 0)), F32x4_create4(3, 4, 1, 0)))
+				retError(clean, Error_invalidState(7, "F32x4_abs failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 fract/floor/ceil/round");
+
+		{
+			F32x4 v4 = F32x4_create4(1.25f, -1.75f, 2.5f, -2.5f);
+
+			if (F32x4_neqExact4(F32x4_fract(v4), F32x4_create4(0.25f, 0.25f, 0.5f, 0.5f)))
+				retError(clean, Error_invalidState(5, "F32x4_fract failed"));
+
+			if (F32x4_neqExact4(F32x4_floor(v4), F32x4_create4(1, -2, 2, -3)))
+				retError(clean, Error_invalidState(5, "F32x4_floor failed"));
+
+			if (F32x4_neqExact4(F32x4_ceil(v4), F32x4_create4(2, -1, 3, -2)))
+				retError(clean, Error_invalidState(5, "F32x4_ceil failed"));
+
+			if (F32x4_neqExact4(F32x4_round(v4), F32x4_create4(1, -2, 2, -2)))
+				retError(clean, Error_invalidState(3, "F32x4_round failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 exponentials and logs");
+
+		{
+			F32x4 v4 = F32x4_create4(1, 2, 3, 4);
+
+			if (F32x4_neqExact4(F32x4_exp2(v4), F32x4_create4(2, 4, 8, 16)))
+				retError(clean, Error_invalidState(6, "F32x4_exp2 failed"));
+
+			if (F32x4_neqExact4(F32x4_log2(F32x4_create4(2, 4, 8, 16)), v4))
+				retError(clean, Error_invalidState(6, "F32x4_log2 failed"));
+
+			if (F32x4_neqExact4(F32x4_exp(F32x4_zero()), F32x4_one()))
+				retError(clean, Error_invalidState(4, "F32x4_exp failed"));
+
+			if (F32x4_neqExact4(F32x4_loge(F32x4_one()), F32x4_zero()))
+				retError(clean, Error_invalidState(4, "F32x4_log failed"));
+
+			if (F32x4_neqApprox4(F32x4_exp10(F32x4_create4(1, 2, 3, 4)), F32x4_create4(10, 100, 1000, 10000)))
+				retError(clean, Error_invalidState(4, "F32x4_exp10 failed"));
+
+			if (F32x4_neqApprox4(F32x4_log10(F32x4_create4(10, 100, 1000, 10000)), F32x4_create4(1, 2, 3, 4)))
+				retError(clean, Error_invalidState(4, "F32x4_log10 failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 cross3 and reflect2/reflect3");
+
+		{
+			F32x4 a = F32x4_create3(1, 2, 3);
+			F32x4 b = F32x4_create3(4, 5, 6);
+			F32x4 cross = F32x4_cross3(a, b);
+			F32x4 expect = F32x4_create3(-3, 6, -3);	//(2 * 6 - 3 * 5, 3 * 4 - 1 * 6, 1 * 5 - 2 * 4) = (-3, 6, -3)
+			if (F32x4_neqExact4(cross, expect))
+				retError(clean, Error_invalidState(6, "F32x4_cross3 failed"));
+
+			F32x4 i = F32x4_create3(1, -2, 0);
+			F32x4 n = F32x4_create3(0, 1, 0);
+			F32x4 refl2 = F32x4_reflect2(i, n);
+			if (F32x4_neqApprox4(refl2, F32x4_create3(1, 2, 0)))
+				retError(clean, Error_invalidState(6, "F32x4_reflect2 failed"));
+
+			F32x4 refl3 = F32x4_reflect3(i, n);
+			if (F32x4_neqApprox4(refl3, F32x4_create3(1, 2, 0)))
+				retError(clean, Error_invalidState(6, "F32x4_reflect3 failed"));
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 (srgb/rgba)(Pack/Unpack)");
+
+		{
+			const F32x4 valuesRGBA[] = {
+				F32x4_create4(0, 0, 0, 0),
+				F32x4_create4(0, 0, 1, 0),
+				F32x4_create4(0, 1, 0, 0),
+				F32x4_create4(0, 1, 1, 0),
+				F32x4_create4(1, 0, 0, 0),
+				F32x4_create4(1, 0, 1, 0),
+				F32x4_create4(1, 1, 0, 0),
+				F32x4_create4(1, 1, 1, 0),
+				F32x4_trunc3(F32x4_xxxx4(0.25f)),
+				F32x4_trunc3(F32x4_xxxx4(0.5f)),
+				F32x4_trunc3(F32x4_xxxx4(0.75f))
+			};
+
+			const U32 valuesRGBA8[] = {
+				0x00000000,
+				0x000000FF,
+				0x0000FF00,
+				0x0000FFFF,
+				0x00FF0000,
+				0x00FF00FF,
+				0x00FFFF00,
+				0x00FFFFFF,
+				0x003F3F3F,
+				0x007F7F7F,
+				0x00BFBFBF
+			};
+
+			for (U64 i = 0; i < sizeof(valuesRGBA) / sizeof(valuesRGBA[0]); ++i) {
+
+				U32 packed = F32x4_rgb8Pack(valuesRGBA[i]);
+				F32x4 unpacked = F32x4_rgb8Unpack(valuesRGBA8[i]);
+
+				if (packed != valuesRGBA8[i])
+					retError(clean, Error_invalidState((U32)i, "F32x4_rgb8Pack failed"));
+
+				if (F32x4_neqApproxAdv4(unpacked, valuesRGBA[i], 1e-2f, 1e-2f))
+					retError(clean, Error_invalidState((U32)i, "F32x4_rgb8Unpack failed"));
+			}
+
+			const U32 valuesSRGBA8[] = {
+				0x00000000,
+				0x000000FF,
+				0x0000FF00,
+				0x0000FFFF,
+				0x00FF0000,
+				0x00FF00FF,
+				0x00FFFF00,
+				0x00FFFFFF,
+				0x00888888,
+				0x00BBBBBB,
+				0x00E0E0E0
+			};
+
+			for (U64 i = 0; i < sizeof(valuesRGBA) / sizeof(valuesRGBA[0]); ++i) {
+
+				U32 packed = F32x4_srgb8Pack(valuesRGBA[i]);
+				F32x4 unpacked = F32x4_srgb8Unpack(valuesSRGBA8[i]);
+
+				if (packed != valuesSRGBA8[i])
+					retError(clean, Error_invalidState((U32)i, "F32x4_srgb8Pack failed"));
+
+				if (F32x4_neqApproxAdv4(unpacked, valuesRGBA[i], 1e-2f, 1e-2f))
+					retError(clean, Error_invalidState((U32)i, "F32x4_srgb8Unpack failed"));
+			}
+		}
+
+		Log_debugLn(alloc, "Testing F32x4 mul3x3 / mul4x4");
+
+		{
+			//3x3 matrix multiply test
+			//v3 = (1, 2, 3)
+			//mat3 = | 1 2 3 |
+			//       | 4 5 6 |
+			//       | 7 8 9 |
+
+			F32x4 v3 = F32x4_create3(1, 2, 3);
+			F32x4 mat3[3] = {
+				F32x4_create3(1, 4, 7),
+				F32x4_create3(2, 5, 8),
+				F32x4_create3(3, 6, 9)
+			};
+
+			F32x4 r3x3 = F32x4_mul3x3(v3, mat3);
+			if (F32x4_neqExact4(r3x3, F32x4_create3(14, 32, 50)))
+				retError(clean, Error_invalidState(6, "F32x4_mul3x3 failed"));
+
+			//v4 = (1, 2, 3, 4)
+			//mat3 = | 0 1 2 3 |
+			//       | 3 4 5 6 |
+			//       | 6 7 8 9 |
+			//       | 9 0 1 2 |
+
+			F32x4 mat4[4] = {
+				F32x4_create4(0, 3, 6, 9),
+				F32x4_create4(1, 4, 7, 0),
+				F32x4_create4(2, 5, 8, 1),
+				F32x4_create4(3, 6, 9, 2)
+			};
+
+			F32x4 r4x4 = F32x4_mul4x4(F32x4_create4(1, 2, 3, 4), mat4);
+
+			if (F32x4_neqExact4(r4x4, F32x4_create4(20, 50, 80, 20)))
+				retError(clean, Error_invalidState(6, "F32x4_mul4x4 failed"));
+
+			//v4 = (1, 2, 3, 4)
+			//mat3 = | 0 1 2 3 |
+			//       | 3 4 5 6 |
+			//       | 6 7 8 9 |
+			//       | 0 0 0 0 |
+
+			F32x4 r3x4 = F32x4_mul3x4(F32x4_create4(1, 2, 3, 4), mat4);
+
+			if (F32x4_neqExact4(r3x4, F32x4_create3(20, 50, 80)))
+				retError(clean, Error_invalidState(6, "F32x4_mul3x4 failed"));
 		}
 	}
 

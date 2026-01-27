@@ -93,14 +93,30 @@ static inline F32x4 F32x4_mul3x3(F32x4 v3, F32x4 v3x3[3]) {
 	);
 }
 
-static inline F32x4 F32x4_mul3x4(F32x4 v3, F32x4 v3x4[4]) {
-	return F32x4_add(F32x4_add(
+static inline F32x4 F32x4_mul4x4(F32x4 v4, F32x4 v4x4[4]) {
+	return F32x4_add(
 		F32x4_add(
-			F32x4_mul(v3x4[0], F32x4_xxx(v3)),
-			F32x4_mul(v3x4[1], F32x4_yyy(v3))
+			F32x4_mul(v4x4[0], F32x4_xxxx(v4)),
+			F32x4_mul(v4x4[1], F32x4_yyyy(v4))
 		),
-		F32x4_mul(v3x4[2], F32x4_zzz(v3))
-	), v3x4[3]);
+		F32x4_add(
+			F32x4_mul(v4x4[2], F32x4_zzzz(v4)),
+			F32x4_mul(v4x4[3], F32x4_wwww(v4))
+		)
+	);
+}
+
+static inline F32x4 F32x4_mul3x4(F32x4 v4, F32x4 v3x4[4]) {
+	return F32x4_add(
+		F32x4_add(
+			F32x4_mul(v3x4[0], F32x4_xxx(v4)),
+			F32x4_mul(v3x4[1], F32x4_yyy(v4))
+		),
+		F32x4_add(
+			F32x4_mul(v3x4[2], F32x4_zzz(v4)),
+			F32x4_mul(v3x4[3], F32x4_www(v4))
+		)
+	);
 }
 
 static inline F32x4 F32x4_cross3(F32x4 a, F32x4 b) {

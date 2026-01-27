@@ -106,7 +106,7 @@ static inline F32x2 F32x2_negate(F32x2 a) { return F32x2_sub(F32x2_zero, a); }
 static inline F32x2 F32x2_inverse(F32x2 a) { return F32x2_div(F32x2_one, a); }
 
 static inline F32x2 F32x2_pow2(F32x2 a) { return F32x2_mul(a, a); }
-static inline F32x2 F32x2_mod(F32x2 v, F32x2 d) { return F32x2_sub(v, F32x2_mul(F32x2_fract(F32x2_div(v, d)), d)); }
+static inline F32x2 F32x2_mod(F32x2 v, F32x2 d) { return F32x2_mul(F32x2_fract(F32x2_div(v, d)), d); }
 
 static inline F32 F32x2_reduce(F32x2 a) { return F32x2_x(a) + F32x2_y(a); }
 static inline F32 F32x2_dot(F32x2 a, F32x2 b) { return F32x2_reduce(F32x2_mul(a, b)); }
@@ -176,14 +176,14 @@ static inline F32x2 F32x2_abs(F32x2 v) { return F32x2_mul(F32x2_sign(v), v); }
 
 //Matrix
 
-static inline F32x2 F32x2_mul2x2(F32x2 v2, F32x2 v2x2[2]) {
+static inline F32x2 F32x2_mul2x2(F32x2 v2, const F32x2 v2x2[2]) {
 	return F32x2_add(
 		F32x2_mul(v2x2[0], F32x2_xx(v2)),
 		F32x2_mul(v2x2[1], F32x2_yy(v2))
 	);
 }
 
-static inline F32x2 F32x2_mul2x3(F32x2 v2, F32x2 v2x3[3]) {
+static inline F32x2 F32x2_mul2x3(F32x2 v2, const F32x2 v2x3[3]) {
 	return F32x2_add(F32x2_add(
 		F32x2_mul(v2x3[0], F32x2_xx(v2)),
 		F32x2_mul(v2x3[1], F32x2_yy(v2))
