@@ -2752,6 +2752,8 @@ int main() {
 		Log_debugLn(alloc, "Testing QuatF32 from euler");
 
 		const F32x4 eulerAngles[] = {
+			F32x4_create3(-120, 10, 270),
+			F32x4_create3(45, 30, 60),
 			F32x4_create3(0, 0, 0),
 			F32x4_create3(90, 0, 0),
 			F32x4_create3(0, 90, 0),
@@ -2759,12 +2761,12 @@ int main() {
 			F32x4_create3(0, 90, 90),
 			F32x4_create3(90, 90, 0),
 			F32x4_create3(90, 0, 90),
-			F32x4_create3(90, 90, 90),
-			F32x4_create3(45, 30, 60),
-			F32x4_create3(-120, 10, 270)
+			F32x4_create3(90, 90, 90)
 		};
 
 		const QuatF32 quatsFromEuler[] = {
+			QuatF32_create(0.6408564f, 0.579228f, 0.4055798f, -0.2988362f),
+			QuatF32_create(0.4396797f, 0.02226f, 0.5319757f, 0.7233174f),
 			QuatF32_identity(),
 			QuatF32_create(isq2,	0,		0,		isq2),
 			QuatF32_create(0,		isq2,	0,		isq2),
@@ -2773,8 +2775,6 @@ int main() {
 			QuatF32_create(0.5f,	0.5f,	0.5f,	0.5f),
 			QuatF32_create(0.5f,	-0.5f,	0.5f,	0.5f),
 			QuatF32_create(isq2,	0,		isq2,	0),
-			QuatF32_create(0.4396797f, 0.02226f, 0.5319757f, 0.7233174f),
-			QuatF32_create(0.6408564f, 0.579228f, 0.4055798f, -0.2988362f)
 		};
 
 		for (U64 i = 0; i < sizeof(eulerAngles) / sizeof(eulerAngles[0]); ++i) {
@@ -2793,10 +2793,14 @@ int main() {
 
 			F32x4 euler = QuatF32_toEuler(quatsFromEuler[i]);
 			QuatF32 backTest = QuatF32_fromEuler(euler);
-			F32x4 euler2 = QuatF32_toEuler(backTest);		//Avoid gimbal lock issues
 
-			if (F32x4_neqApproxAdv4(euler2, euler, 2e-2f, 2e-2f))
-				retError(clean, Error_invalidState((U32)i, "QuatF32_toEuler failed"));
+			F32x4 backMat[3], checkMat[3];
+			QuatF32_toOrientation(backTest, &backMat[0], &backMat[1], &backMat[2]);
+			QuatF32_toOrientation(quatsFromEuler[i], &checkMat[0], &checkMat[1], &checkMat[2]);
+
+			for (U8 j = 0; j < 3; ++j)
+				if (F32x4_neqApproxAdv4(backMat[j], checkMat[j], 2e-2f, 2e-2f))
+					retError(clean, Error_invalidState((U32)i, "QuatF32_toEuler failed"));
 		}
 
 		//Mul

@@ -67,40 +67,41 @@ Quat##T Quat##T##_fromEuler(T##x4 eulerXYZDeg) {																		\
 																														\
 T##x4 Quat##T##_toEuler(Quat##T q) {																					\
 																														\
-	T##x4 q2	= T##x4_pow2(q);																						\
+	q = Quat##T##_normalize(q);																							\
+	T qx = Quat##T##_x(q);																								\
+	T qy = Quat##T##_y(q);																								\
+	T qz = Quat##T##_z(q);																								\
+	T qw = Quat##T##_w(q);																								\
 																														\
-	T qx		= T##x4_x(q);																							\
-	T qy		= T##x4_y(q);																							\
-	T qz		= T##x4_z(q);																							\
-	T qw		= T##x4_w(q);																							\
+	/* For intrinsic XYZ: R = Rx * Ry * Rz */																			\
+	/* Extract from matrix elements */																					\
+	T r12 = 2 * (qy * qz - qw * qx);																					\
+	T r22 = 1 - 2 * (qx * qx + qy * qy);																				\
+	T r02 = 2 * (qx * qz + qw * qy);																					\
+	T r01 = 2 * (qx * qy - qw * qz);																					\
+	T r00 = 1 - 2 * (qy * qy + qz * qz);																				\
 																														\
-	T qx2		= T##x4_x(q2);																							\
-	T qy2		= T##x4_y(q2);																							\
-	T qz2		= T##x4_z(q2);																							\
+	T roll, pitch, yaw;																									\
 																														\
-	/* Calculate X-rot */																								\
+	/* Check for gimbal lock */																							\
+	if (T##_abs(r02) >= (T)0.999) {																						\
+		/* Gimbal lock: pitch = +-90deg */																				\
+		pitch = T##_signInc(r02) * T##_PI * (T)0.5;																		\
+		yaw = 0;  /* Set yaw to 0 by convention */																		\
 																														\
-	T sinX = 2 * (qw * qx - qy * qz);																					\
-	T cosX = 1 - 2 * (qx2 + qy2);																						\
-	T x = T##_atan2(sinX, cosX);																						\
+		/* Compute additional matrix elements for gimbal lock resolution */												\
+		T r10 = 2 * (qx * qy + qw * qz);																				\
+		T r11 = 1 - 2 * (qx * qx + qz * qz);																			\
 																														\
-	/* Calculate Y-rot */																								\
+		/* roll = atan2(pitch == -90deg ? -r10 : r10, r11) */															\
+		roll = T##_atan2(r10 * T##_signInc(r02), r11);																	\
+	} else {																											\
+		pitch = T##_asin(r02);																							\
+		roll = T##_atan2(-r12, r22);																					\
+		yaw = T##_atan2(-r01, r00);																						\
+	}																													\
 																														\
-	T sinY = 2 * (qw * qy + qx * qz);																					\
-	T y;																												\
-																														\
-	if (T##_abs(sinY) >= 1)		/* 90_deg if out of range */															\
-		y = T##_PI * 0.5##suffix * T##_signInc(sinY);																	\
-																														\
-	else y = T##_asin(sinY);																							\
-																														\
-	/* Calculate Z-rot */																								\
-																														\
-	T sinZ = 2 * (qw * qz - qx * qy);																					\
-	T cosZ = 1 - 2 * (qy2 + qz2);																						\
-	T z = T##_atan2(sinZ, cosZ);																						\
-																														\
-	return T##x4_mul(T##x4_create3(x, y, z), T##x4_xxxx4(T##_RAD_TO_DEG));												\
+	return T##x4_mul(T##x4_create3(roll, pitch, yaw), T##x4_xxxx4(T##_RAD_TO_DEG));										\
 }																														\
 																														\
 /* Combine two quaternions */																							\
