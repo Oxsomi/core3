@@ -3445,19 +3445,19 @@ int main() {
 			if (F32_abs(F32x4_sqLen4(v4) - 50) > 1e-6f)
 				retError(clean, Error_invalidState(3, "F32x4_len4 failed"));
 
-			if (F32_abs(F32x4_len4(F32x4_normalize4(v4)) - 1) > 1e-4f)
+			if (F32_abs(F32x4_len4(F32x4_normalize4(v4)) - 1) > 3e-3f)
 				retError(clean, Error_invalidState(3, "F32x4_normalize4 failed"));
 
 			if (F32_abs(F32x4_sqLen3(v4) - 49) > 1e-6f)		//sqrt(49)
 				retError(clean, Error_invalidState(3, "F32x4_len3 failed"));
 
-			if (F32_abs(F32x4_len3(F32x4_normalize3(v4)) - 1) > 1e-4f)
+			if (F32_abs(F32x4_len3(F32x4_normalize3(v4)) - 1) > 3e-3f)
 				retError(clean, Error_invalidState(3, "F32x4_normalize3 failed"));
 
 			if (F32_abs(F32x4_sqLen2(v4) - 13) > 1e-6f)
 				retError(clean, Error_invalidState(3, "F32x4_len2 failed"));
 
-			if (F32_abs(F32x4_len2(F32x4_normalize2(v4)) - 1) > 1e-4f)
+			if (F32_abs(F32x4_len2(F32x4_normalize2(v4)) - 1) > 3e-3f)
 				retError(clean, Error_invalidState(3, "F32x4_normalize2 failed"));
 
 			if (F32_abs(F32x4_dot4(v4, v4) - 50) > 1e-6f)

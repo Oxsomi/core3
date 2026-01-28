@@ -84,7 +84,7 @@ T##x4 Quat##T##_toEuler(Quat##T q) {																					\
 	T roll, pitch, yaw;																									\
 																														\
 	/* Check for gimbal lock */																							\
-	if (T##_abs(r02) >= (T)0.999) {																						\
+	if (T##_abs(r02) >= (T)0.996) {																						\
 		/* Gimbal lock: pitch = +-90deg */																				\
 		pitch = T##_signInc(r02) * T##_PI * (T)0.5;																		\
 		yaw = 0;  /* Set yaw to 0 by convention */																		\

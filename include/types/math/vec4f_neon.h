@@ -78,9 +78,9 @@ static inline F32x4 F32x4_rsqrt(F32x4 a) { return vrsqrteq_f32(a); }
 
 //Boolean
 		
-static inline F32x4 F32x4_recastI32x4Internal(F32x4 a) { return vreinterpretq_f32_u32(a); }
-static inline F32x4 F32x4_eq(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vceqq_f32(a, b)); }
-static inline F32x4 F32x4_neq(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vmvnq_u32(vceqq_f32(a, b))); }
+static inline F32x4 F32x4_recastI32x4Internal(F32x4 a) { return vcvtq_f32_s32(vnegq_s32(vreinterpretq_s32_u32(a))); }
+static inline F32x4 F32x4_eqExact(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vceqq_f32(a, b)); }
+static inline F32x4 F32x4_neqExact(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vmvnq_u32(vceqq_f32(a, b))); }
 static inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcgeq_f32(a, b)); }
 static inline F32x4 F32x4_gt(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcgtq_f32(a, b)); }
 static inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_recastI32x4Internal(vcleq_f32(a, b)); }
