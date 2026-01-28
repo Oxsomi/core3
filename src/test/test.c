@@ -3356,12 +3356,15 @@ int main() {
 			I32x2 expected = I32x2_create2(0x44332211, 0xDDCCBBAA);
 
 			if (I32x2_neq2(I32x2_swapEndianness(a), expected))
-				retError(clean, Error_invalidState(3, "I32x2_swapEndian failed"));
+				retError(clean, Error_invalidState(3, "I32x2_swapEndianness failed"));
 		}
 	}
 
 	//vec4
+
 	{
+		//vec4f
+
 		Log_debugLn(alloc, "Testing F32x4");
 
 		Log_debugLn(alloc, "Testing F32x4 create, swizzle, accessors, set/get");
@@ -3708,6 +3711,238 @@ int main() {
 
 			if (F32x4_neqExact4(r3x4, F32x4_create3(20, 50, 80)))
 				retError(clean, Error_invalidState(6, "F32x4_mul3x4 failed"));
+		}
+
+		//vec4i
+
+		Log_debugLn(alloc, "Testing I32x4");
+
+		Log_debugLn(alloc, "Testing I32x4 create, accessors, set/get");
+
+		{
+			I32x4 v4 = I32x4_create4(1, 2, 3, 4);
+			if (I32x4_x(v4) != 1 || I32x4_y(v4) != 2 || I32x4_z(v4) != 3 || I32x4_w(v4) != 4)
+				retError(clean, Error_invalidState(0, "I32x4 accessors failed"));
+
+			I32x4 v1 = I32x4_create1(5);
+			if (I32x4_x(v1) != 5 || I32x4_y(v1) != 0 || I32x4_z(v1) != 0 || I32x4_w(v1) != 0)
+				retError(clean, Error_invalidState(0, "I32x4_create1 failed"));
+
+			I32x4_setZRef(&v4, 9);
+			I32x4_setWRef(&v4, 10);
+			if (I32x4_get(v4, 2) != 9 || I32x4_get(v4, 3) != 10)
+				retError(clean, Error_invalidState(0, "I32x4_setRef/get failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 comparisons & masks");
+
+		{
+			I32x4 a = I32x4_create4(1, 2, 3, 4);
+			I32x4 b = I32x4_create4(1, 3, 2, 4);
+
+			if (!I32x4_eq4(a, I32x4_create4(1, 2, 3, 4)))
+				retError(clean, Error_invalidState(1, "I32x4_eq4 failed"));
+
+			if (!I32x4_neq4(a, b))
+				retError(clean, Error_invalidState(1, "I32x4_neq4 failed"));
+
+			if (!I32x4_eq4(I32x4_lt(a, b), I32x4_create4(0, 1, 0, 0)))
+				retError(clean, Error_invalidState(1, "I32x4_lt failed"));
+
+			if (!I32x4_eq4(I32x4_geq(a, b), I32x4_create4(1, 0, 1, 1)))
+				retError(clean, Error_invalidState(1, "I32x4_geq failed"));
+
+			if (!I32x4_eq4(I32x4_gt(a, b), I32x4_create4(0, 0, 1, 0)))
+				retError(clean, Error_invalidState(1, "I32x4_gt failed"));
+
+			if (!I32x4_eq4(I32x4_leq(a, b), I32x4_create4(1, 1, 0, 1)))
+				retError(clean, Error_invalidState(1, "I32x4_gt failed"));
+
+			if (!I32x4_all(I32x4_create4(1, -2, 3, 4)))
+				retError(clean, Error_invalidState(1, "I32x4_all failed"));
+
+			if (I32x4_any(I32x4_zero()))
+				retError(clean, Error_invalidState(1, "I32x4_any failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 arithmetic");
+
+		{
+			I32x4 a = I32x4_create4(1, 2, 3, 4);
+			I32x4 b = I32x4_create4(5, 6, 7, 8);
+
+			if (I32x4_neq4(I32x4_add(a, b), I32x4_create4(6, 8, 10, 12)))
+				retError(clean, Error_invalidState(2, "I32x4_add failed"));
+
+			if (I32x4_neq4(I32x4_sub(b, a), I32x4_create4(4, 4, 4, 4)))
+				retError(clean, Error_invalidState(2, "I32x4_sub failed"));
+
+			if (I32x4_neq4(I32x4_mul(a, b), I32x4_create4(5, 12, 21, 32)))
+				retError(clean, Error_invalidState(2, "I32x4_mul failed"));
+
+			I32x4 m = I32x4_mod(I32x4_create4(5, -5, 9, -9), I32x4_xxxx4(4));
+			if (I32x4_neq4(m, I32x4_create4(1, 3, 1, 3)))
+				retError(clean, Error_invalidState(2, "I32x4_mod failed"));
+
+			if (I32x4_neq4(I32x4_abs(I32x4_create4(-3, 4, -1, 0)), I32x4_create4(3, 4, 1, 0)))
+				retError(clean, Error_invalidState(2, "I32x4_abs failed"));
+
+			if (I32x4_neq4(I32x4_sign(I32x4_create4(-3, 4, 0, 1)), I32x4_create4(-1, 1, 1, 1)))
+				retError(clean, Error_invalidState(2, "I32x4_sign failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 min/max/clamp");
+
+		{
+			I32x4 a = I32x4_create4(-2, 5, 2, 10);
+
+			if (I32x4_neq4(I32x4_min(a, I32x4_zero()), I32x4_create4(-2, 0, 0, 0)))
+				retError(clean, Error_invalidState(3, "I32x4_min failed"));
+
+			if (I32x4_neq4(I32x4_max(a, I32x4_one()), I32x4_create4(1, 5, 2, 10)))
+				retError(clean, Error_invalidState(3, "I32x4_max failed"));
+
+			if (I32x4_neq4(I32x4_clamp(I32x4_create4(-1, 5, 1, 2), I32x4_zero(), I32x4_two()),
+				I32x4_create4(0, 2, 1, 2)))
+				retError(clean, Error_invalidState(3, "I32x4_clamp failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 bitwise ops");
+
+		{
+			I32x4 a = I32x4_create4(0x0F0F0F0F, 0xAAAAAAAA, 0x12345678, 0xFFFFFFFF);
+			I32x4 b = I32x4_create4(0x33333333, 0x55555555, 0x87654321, 0x0);
+
+			if (I32x4_neq4(I32x4_and(a, b), I32x4_create4(0x03030303, 0x00000000, 0x02244220, 0x0)))
+				retError(clean, Error_invalidState(4, "I32x4_and failed"));
+
+			if (I32x4_neq4(I32x4_or(a, b), I32x4_create4(0x3F3F3F3F, 0xFFFFFFFF, 0x97755779, 0xFFFFFFFF)))
+				retError(clean, Error_invalidState(4, "I32x4_or failed"));
+
+			if (I32x4_neq4(I32x4_xor(a, b), I32x4_create4(0x3C3C3C3C, 0xFFFFFFFF, 0x95511559, 0xFFFFFFFF)))
+				retError(clean, Error_invalidState(4, "I32x4_xor failed"));
+
+			if (I32x4_neq4(I32x4_not(I32x4_zero()), I32x4_create4(-1, -1, -1, -1)))
+				retError(clean, Error_invalidState(4, "I32x4_not failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 shifts and rotates");
+
+		{
+			I32x4 v4 = I32x4_create4(1, 2, 4, 8);
+
+			if (I32x4_neq4(I32x4_lsh32(v4, 1), I32x4_create4(2, 4, 8, 16)))
+				retError(clean, Error_invalidState(5, "I32x4_lsh32 failed"));
+
+			if (I32x4_neq4(I32x4_rsh32(I32x4_create4(8, 4, 2, 1), 1), I32x4_create4(4, 2, 1, 0)))
+				retError(clean, Error_invalidState(5, "I32x4_rsh32 failed"));
+
+			I32x4 rol = I32x4_rol(I32x4_create4(0x80000001, 0, 0, 0), 1);
+			if (I32x4_x(rol) != 0x00000003)
+				retError(clean, Error_invalidState(5, "I32x4_rol failed"));
+
+			I32x4 ror = I32x4_ror(I32x4_create4(0x00000003, 0, 0, 0), 1);
+			if (I32x4_x(ror) != 0x80000001)
+				retError(clean, Error_invalidState(5, "I32x4_ror failed"));
+
+			if (!I32x4_eq4(I32x4_lshElements(v4, 1), I32x4_create4(0, 1, 2, 4)))
+				retError(clean, Error_invalidState(8, "I32x4_lshElements failed"));
+
+			if (!I32x4_eq4(I32x4_rshElements(v4, 1), I32x4_create4(2, 4, 8, 0)))
+				retError(clean, Error_invalidState(8, "I32x4_rshElements failed"));
+
+			I32x4 one = I32x4_create4(0x00000001, 0, 0, 0);
+
+			I32x4 l = I32x4_lsh128(one, 32);
+			if (I32x4_x(l) != 0 || I32x4_y(l) != 1)
+				retError(clean, Error_invalidState(9, "I32x4_lsh128 failed"));
+
+			I32x4 r = I32x4_rsh128(l, 32);
+			if (!I32x4_eq4(r, one))
+				retError(clean, Error_invalidState(9, "I32x4_rsh128 failed"));
+
+			one = I32x4_create4(0x00000001, 0, 0x00000001, 0);
+
+			l = I32x4_lsh64(one, 1);
+			if (I32x4_x(l) != 2 || I32x4_z(l) != 2)
+				retError(clean, Error_invalidState(11, "I32x4_lsh64 failed"));
+
+			r = I32x4_rsh64(l, 1);
+			if (!I32x4_eq4(r, one))
+				retError(clean, Error_invalidState(11, "I32x4_rsh64 failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 reduce and trunc");
+
+		{
+			I32x4 v4 = I32x4_create4(1, 2, 3, 4);
+
+			if (I32x4_reduce(v4) != 10)
+				retError(clean, Error_invalidState(6, "I32x4_reduce failed"));
+
+			if (I32x4_neq4(I32x4_trunc3(v4), I32x4_create4(1, 2, 3, 0)))
+				retError(clean, Error_invalidState(6, "I32x4_trunc3 failed"));
+
+			if (I32x4_neq4(I32x4_trunc2(v4), I32x4_create4(1, 2, 0, 0)))
+				retError(clean, Error_invalidState(6, "I32x4_trunc2 failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 loads");
+
+		{
+			I32 vals[4] = { 7, 8, 9, 10 };
+
+			if (I32x4_neq4(I32x4_load1(vals), I32x4_create4(7, 0, 0, 0)))
+				retError(clean, Error_invalidState(7, "I32x4_load1 failed"));
+
+			if (I32x4_neq4(I32x4_load2(vals), I32x4_create4(7, 8, 0, 0)))
+				retError(clean, Error_invalidState(7, "I32x4_load2 failed"));
+
+			if (I32x4_neq4(I32x4_load3(vals), I32x4_create4(7, 8, 9, 0)))
+				retError(clean, Error_invalidState(7, "I32x4_load3 failed"));
+
+			if (I32x4_neq4(I32x4_load4(vals), I32x4_create4(7, 8, 9, 10)))
+				retError(clean, Error_invalidState(7, "I32x4_load4 failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 combineRightShift, blend and shuffleBytes");
+
+		{
+			I32x4 a = I32x4_create4(1, 2, 3, 4);
+			I32x4 b = I32x4_create4(5, 6, 7, 8);
+
+			if (!I32x4_eq4(I32x4_combineRightShift(a, b, 1), I32x4_create4(6, 7, 8, 1)))
+				retError(clean, Error_invalidState(16, "I32x4_combineRightShift failed"));
+
+			a = I32x4_create4(1, 2, 3, 4);
+			b = I32x4_create4(10, 20, 30, 40);
+
+			if (!I32x4_eq4(I32x4_blend(a, b, 0b0101), I32x4_create4(10, 2, 30, 4)))
+				retError(clean, Error_invalidState(15, "I32x4_blend failed"));
+
+			I32x4 v4 = I32x4_create4(0x11223344, 0x55667788, 0x99AABBCC, 0xDDEEFF00);
+
+			I32x4 mask = I32x4_create4(
+				0x00010203,
+				0x04050607,
+				0x08090A0B,
+				0x0C0D0E0F
+			);
+
+			I32x4 r = I32x4_shuffleBytes(v4, mask);
+
+			if (!I32x4_eq4(r, I32x4_create4(0x44332211, 0x88776655, 0xCCBBAA99, 0x00FFEEDD)))
+				retError(clean, Error_invalidState(14, "I32x4_shuffleBytes failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 swap endianness");
+
+		{
+			I32x4 a = I32x4_create4(0x11223344, 0xAABBCCDD, 0x11223344, 0xAABBCCDD);
+			I32x4 expected = I32x4_create4(0xDDCCBBAA, 0x44332211, 0xDDCCBBAA, 0x44332211);
+
+			if (I32x4_neq4(I32x4_swapEndianness(a), expected))
+				retError(clean, Error_invalidState(3, "I32x4_swapEndianness failed"));
 		}
 	}
 
