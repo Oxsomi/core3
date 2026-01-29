@@ -229,8 +229,8 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 		uint64x1_t halfa, halfb;
 		switch (imm) {
 			case 0x00: 	halfa = vget_low_u64(va);  halfb = vget_low_u64(vb);  break;
-			case 0x01: 	halfa = vget_low_u64(va);  halfb = vget_high_u64(vb); break;
-			case 0x10: 	halfa = vget_high_u64(va); halfb = vget_low_u64(vb);  break;
+			case 0x10: 	halfa = vget_low_u64(va);  halfb = vget_high_u64(vb); break;
+			case 0x01: 	halfa = vget_high_u64(va); halfb = vget_low_u64(vb);  break;
 			default:   	halfa = vget_high_u64(va); halfb = vget_high_u64(vb); break;
 		}
 
