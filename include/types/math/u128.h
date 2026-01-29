@@ -198,22 +198,27 @@ static inline U128 U128_clamp(U128 a, U128 mi, U128 ma) { return U128_max(U128_m
 //U128 U128_mod(U128 a, U128 b);
 //U128 U128_mul(U128 a, U128 b);
 
+//clmul64 and clmul64Fallback need imm to be a compile time constant, else it's UB.
+static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
+
+	U128 a = U128_createI32x4(avec);
+	U128 b = U128_createI32x4(bvec);
+
+	U64 A = (imm & 0x01) ? U128_hi(a) : U128_lo(a);
+	U64 B = (imm & 0x10) ? U128_hi(b) : U128_lo(b);
+
+	U128 r = U128_zero();
+
+	for (U8 i = 0; i < 64; ++i)
+		if ((B >> i) & 1)
+			r = U128_xor(r, U128_lsh(U128_createU64x2(A, 0), i));
+
+	return I32x4_fromU128(r);
+}
+
 #if _SIMD == SIMD_NONE
 	static inline I32x4 I32x4_clmul64(I32x4 avec, I32x4 bvec, U8 imm) {
-
-		U128 a = U128_createI32x4(avec);
-		U128 b = U128_createI32x4(bvec);
-
-		U64 A = (imm & 0x10) ? U128_hi(a) : U128_lo(a);
-		U64 B = (imm & 0x01) ? U128_hi(b) : U128_lo(b);
-	
-		U128 r = U128_zero();
-
-		for (U8 i = 0; i < 64; ++i)
-			if ((B >> i) & 1)
-				r = U128_xor(r, U128_lsh(U128_createU64x2(A, 0), i));
-
-		return I32x4_fromU128(r);
+		return I32x4_clmul64Fallback(avec, bvec, imm);
 	}
 #elif _SIMD == SIMD_NEON
 	static inline I32x4 I32x4_clmul64(I32x4 a, I32x4 b, U8 imm) {

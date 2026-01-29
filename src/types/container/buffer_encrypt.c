@@ -215,7 +215,7 @@ static inline I32x4 AESEncryptionContext_ghash(I32x4 a, I32x4 H) {
 
 	I32x4 tmp[8];
 
-	tmp[0] = I32x4_clmul64(a, b, 0x00);		//TODO: Abstract this so this can be generalized
+	tmp[0] = I32x4_clmul64(a, b, 0x00);
 	tmp[3] = I32x4_xor(I32x4_clmul64(a, b, 0x10), I32x4_clmul64(a, b, 0x01));
 	tmp[2] = I32x4_clmul64(a, b, 0x11);
 

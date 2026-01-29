@@ -3789,6 +3789,11 @@ int main() {
 
 			if (I32x4_neq4(I32x4_sign(I32x4_create4(-3, 4, 0, 1)), I32x4_create4(-1, 1, 1, 1)))
 				retError(clean, Error_invalidState(2, "I32x4_sign failed"));
+
+			I32x4 v4 = I32x4_create4(2, -3, 4, -5);
+
+			if (!I32x4_eq4(I32x4_pow2(v4), I32x4_create4(4, 9, 16, 25)))
+				retError(clean, Error_invalidState(18, "I32x4_pow2 failed"));
 		}
 
 		Log_debugLn(alloc, "Testing I32x4 min/max/clamp");
@@ -3824,6 +3829,20 @@ int main() {
 
 			if (I32x4_neq4(I32x4_not(I32x4_zero()), I32x4_create4(-1, -1, -1, -1)))
 				retError(clean, Error_invalidState(4, "I32x4_not failed"));
+
+			a = I32x4_create4(0xFFFF0000, 0xAAAAAAAA, 0x00000000, 0xFFFFFFFF);
+			b = I32x4_create4(0x12345678, 0x55555555, 0xFFFFFFFF, 0x0F0F0F0F);
+
+			// (~a) & b
+			I32x4 expect = I32x4_create4(
+				0x00005678,   // ~FFFF0000 = 0000FFFF -> & b
+				0x55555555,   // ~AAAAAAAA = 55555555 -> & b
+				0xFFFFFFFF,   // ~0 = FFFFFFFF -> & b
+				0x00000000    // ~FFFFFFFF = 0 -> & b
+			);
+
+			if (!I32x4_eq4(I32x4_andnot(a, b), expect))
+				retError(clean, Error_invalidState(19, "I32x4_andnot failed"));
 		}
 
 		Log_debugLn(alloc, "Testing I32x4 shifts and rotates");
@@ -3943,6 +3962,64 @@ int main() {
 
 			if (I32x4_neq4(I32x4_swapEndianness(a), expected))
 				retError(clean, Error_invalidState(3, "I32x4_swapEndianness failed"));
+		}
+
+		Log_debugLn(alloc, "Testing I32x4 clmul64");
+
+		{
+			I32x4 a[] = {
+				I32x4_create4(0x89ABCDEF, 0x01234567, 0x0FEDCBA9, 0x76543210),
+				I32x4_create4(0x89ABCDEF, 0x01234567, 0x0FEDCBA9, 0x76543210),
+				I32x4_create4(0, 0, 1, 0),
+				I32x4_create4(1 << 3, 0, 0, 0),
+				I32x4_create4(0b0011, 0, 0, 0),
+				I32x4_create4(2, 0, 4, 0),
+				I32x4_create4(2, 0, 4, 0),
+				I32x4_create4(2, 0, 4, 0),
+				I32x4_create4(2, 0, 4, 0),
+			};
+
+			I32x4 b[] = {
+				I32x4_create4(1, 0, 0, 0),
+				I32x4_create4(0, 0, 1, 0),
+				I32x4_create4(0x89ABCDEF, 0x01234567, 0x0FEDCBA9, 0x76543210),
+				I32x4_create4(1 << 5, 0, 0, 0),
+				I32x4_create4(0b0101, 0, 0, 0),
+				I32x4_create4(8, 0, 16, 0),
+				I32x4_create4(8, 0, 16, 0),
+				I32x4_create4(8, 0, 16, 0),
+				I32x4_create4(8, 0, 16, 0),
+			};
+
+			U8 imm[] = {
+				0x00,
+				0x10,
+				0x11,
+				0x00,
+				0x00,
+				0x00,
+				0x10,
+				0x01,
+				0x11,
+			};
+
+			I32x4 expect[] = {
+				I32x4_create4(0x89ABCDEF, 0x01234567, 0, 0),
+				I32x4_create4(0x89ABCDEF, 0x01234567, 0, 0),
+				I32x4_create4(0x0FEDCBA9, 0x76543210, 0, 0),
+				I32x4_create4(1 << 8, 0, 0, 0),
+				I32x4_create4(0b1111, 0, 0, 0),
+				I32x4_create4(16, 0, 0, 0),
+				I32x4_create4(32, 0, 0, 0),
+				I32x4_create4(32, 0, 0, 0),
+				I32x4_create4(64, 0, 0, 0),
+			};
+
+			for (U32 i = 0; i < sizeof(a) / sizeof(a[0]); ++i) {
+				I32x4 r = I32x4_clmul64(a[i], b[i], imm[i]);
+				if (!I32x4_eq4(r, expect[i]))
+					retError(clean, Error_invalidState(40, "I32x4_clmul64 failed"));
+			}
 		}
 	}
 
