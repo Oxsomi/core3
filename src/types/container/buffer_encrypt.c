@@ -123,7 +123,7 @@ typedef struct AESEncryptionContext {
 
 	I32x4 key[15];
 
-	I32x4 H;
+	I32x4 H[4];
 
 	I32x4 EKY0;
 
@@ -346,7 +346,10 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 
 	//Prepare ghash
 
-	ctx->H = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
+	ctx->H[0] = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
+	ctx->H[1] = AESEncryptionContext_ghash(ctx->H[0], ctx->H[0]);
+	ctx->H[2] = AESEncryptionContext_ghash(ctx->H[1], ctx->H[0]);
+	ctx->H[3] = AESEncryptionContext_ghash(ctx->H[2], ctx->H[0]);
 
 	//Compute final tag xor
 
@@ -356,7 +359,7 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 	I32x4_setWRef(&Y0, I32_swapEndianness(1));
 
 	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
-	ctx->tag = AESEncryptionContext_initTag(encrypt->additionalData, ctx->H);
+	ctx->tag = AESEncryptionContext_initTag(encrypt->additionalData, ctx->H[0]);
 
 clean:
 	return s_uccess;
@@ -379,20 +382,36 @@ static inline void AESEncryptionContext_finish(AESEncryptionContext *ctx, const 
 	if(target)
 		lengths.arr[1] = U64_swapEndianness(Buffer_length(*target) << 3);
 
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths.vec), ctx->H);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths.vec), ctx->H[0]);
 
 	//Finish up by adding the iv into the key (this already has blockId 1 in it)
 
 	ctx->tag = I32x4_xor(ctx->tag, ctx->EKY0);
 }
 
-static inline void AESEncryptionContext_updateTag(AESEncryptionContext *ctx, const I32x4 CTi) {
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->H);
+static inline void AESEncryptionContext_updateTagN(AESEncryptionContext *ctx, const I32x4 CTi[4], const U8 N) {
+	
+	I32x4 v[4];
+
+	v[0] = AESEncryptionContext_ghash(I32x4_xor(CTi[0], ctx->tag), ctx->H[N - 1]);
+
+	for (U8 i = 1; i < N; ++i)
+		v[i] = AESEncryptionContext_ghash(CTi[i], ctx->H[N - 1 - i]);
+
+	I32x4 t;
+
+	switch (N) {
+		default:	t = v[0];														break;
+		case 2:		t = I32x4_xor(v[0], v[1]);										break;
+		case 4:		t = I32x4_xor(I32x4_xor(v[0], v[1]), I32x4_xor(v[2], v[3]));	break;
+	}
+
+	ctx->tag = t;
 }
 
 static inline void AESEncryptionContext_updateTagTail(AESEncryptionContext *ctx, I32x4 CTi, const U8 leftOver) {
 	Buffer_unsetAllBits(Buffer_createRef(((U8*)&CTi + leftOver), 16 - leftOver), NULL);
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->H);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->H[0]);
 }
 
 static inline void AESEncryptionContext_storeBlockTail(I32 *io, const U64 leftOver, void *v) {
@@ -434,9 +453,9 @@ static inline void AESEncryptionContext_processBlockN(
 	I32x4 *io,
 	const U32 id,
 	const Bool updateTag,
-	const U32 N
+	const U8 N
 ) {
-	I32x4 v[8];
+	I32x4 v[4];
 
 	for (U32 i = 0; i < N; ++i)
 		v[i] = io[i];
@@ -454,8 +473,7 @@ static inline void AESEncryptionContext_processBlockN(
 	//Continue tag
 
 	if(updateTag)
-		for (U32 i = 0; i < N; ++i)
-			AESEncryptionContext_updateTag(ctx, v[i]);		//TODO: Proper ghash4
+		AESEncryptionContext_updateTagN(ctx, v, N);
 
 	//Store
 
@@ -483,14 +501,17 @@ static inline void AESEncryptionContext_processBlock4(
 
 //TODO: fetchBlock4, 2, tail this
 static inline void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const void *data, const U64 leftOver) {
-	AESEncryptionContext_updateTag(ctx, AESEncryptionContext_fetchBlockTail(data, leftOver));
+	I32x4 v[4];
+	v[0] = AESEncryptionContext_fetchBlockTail(data, leftOver);
+	AESEncryptionContext_updateTagN(ctx, v, 1);
 }
 
 //This ensures no expanded key, iv or anything else is leaked on the stack,
 //which might be possible to obtain after execution through for example a buffer overflow.
 static inline void AESEncryptionContext_clear(AESEncryptionContext *ctx) {
 	Buffer_unsetAllBits(Buffer_createRef(ctx->key, sizeof(ctx->key)), NULL);
-	ctx->iv = ctx->tag = ctx->EKY0 = ctx->H = I32x4_zero();
+	Buffer_unsetAllBits(Buffer_createRef(ctx->H, sizeof(ctx->H)), NULL);
+	ctx->iv = ctx->tag = ctx->EKY0 = I32x4_zero();
 	ctx->encryptionType = 0;
 }
 
