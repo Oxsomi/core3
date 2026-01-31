@@ -131,6 +131,7 @@ void Buffer_sha256Fallback(const Buffer buf, U32 *output);		//In case of no nati
 //- Don't use the key too often (suggested <2^16 times)
 //- Don't discard iv or key if any of them are generated
 //- Don't discard tag or cut off too many bytes
+//- additionalData and target must be 16-byte aligned
 Bool Buffer_encryptAuto(
 	Buffer *target,
 	const Buffer *additionalData,
@@ -147,6 +148,7 @@ Bool Buffer_encryptAuto(
 //Will only return decrypted result into target if the function was successful.
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
+//- additionalData and target must be 16-byte aligned
 Bool Buffer_decryptAuto(
 	Buffer *target,
 	const Buffer *additionalData,
@@ -177,9 +179,10 @@ typedef enum EBufferEncryptionFlags {
 typedef struct BufferEncrypt {
 
 	//"Plaintext"/"Cyphertext" aka data to encrypt/decrypt (does so in place). Leave empty to authenticate with AES.
+	//16-byte alignment required.
 	Buffer *target;
 
-	//Data that was/is supplied to verify integrity of the data.
+	//Data that was/is supplied to verify integrity of the data. 16-byte alignment required
 	const Buffer *additionalData;
 
 	//Only AES is currently supported (but both 256 and 128 is, though 128 only for legacy reasons).
@@ -214,6 +217,7 @@ typedef struct BufferEncrypt {
 //- Don't use the key too often (suggested <2^16 times)
 //- Don't discard iv or key if any of them are generated
 //- Don't discard tag or cut off too many bytes
+//- additionalData and target must be 16-byte aligned
 Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr);
 
 //Advanced encryption function, be very careful using this the wrong way.
@@ -222,6 +226,7 @@ Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr);
 //Will only return decrypted result into target if the function was successful.
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
+//- additionalData and target must be 16-byte aligned
 Bool Buffer_decryptAdvanced(const BufferEncrypt *decrypt, Error *e_rr);
 
 //Performs AES sbox in constant time (no lookup tables).

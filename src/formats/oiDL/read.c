@@ -183,6 +183,8 @@ Bool DLFile_read(
 			))
 
 		//Decrypt
+		
+		todo, we have to make sure to properly align things here...
 
 		gotoIfError2(clean, Buffer_decrypt(
 			Buffer_createRef((U8*)file.ptr, dataSize),

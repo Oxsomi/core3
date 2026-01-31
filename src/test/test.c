@@ -946,19 +946,20 @@ int main() {
 			Buffer_memcpy(Buffer_createRef(&iv, 12), Buffer_createRefConst(ivs[i], 12));
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
+			//This also implicitly aligns it, we have to do this for additionalData too, or risk misalignment
 
 			gotoIfError3(clean, CharString_createCopy(testPlainText[i], alloc, &tmp, e_rr));
+			gotoIfError3(clean, Buffer_createCopy(CharString_bufferConst(additionalData[i]), alloc, &full, e_rr));
 
 			//Encrypt plain text
 
 			I32x4 tag = I32x4_zero();
 
 			Buffer target = CharString_buffer(tmp);
-			Buffer addDat = CharString_bufferConst(additionalData[i]);
 
 			BufferEncrypt encrypt = (BufferEncrypt) {
 				.target = &target,
-				.additionalData = &addDat,
+				.additionalData = &full,
 				.type = EBufferEncryptionType_AES256GCM,
 				.flags = EBufferEncryptionFlags_StopCreateIv,
 				.nonConstEncrypt = {
@@ -1007,6 +1008,7 @@ int main() {
 				gotoIfError(clean, Error_invalidState(4, "Buffer_decryptAdvanced failed"))
 
 			CharString_free(&tmp, alloc);
+			Buffer_free(&full, alloc);
 		}
 	}
 
@@ -1257,19 +1259,20 @@ int main() {
 			Buffer_memcpy(Buffer_createRef(&iv, 12), Buffer_createRefConst(ivs[i], 12));
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
+			//This also implicitly aligns it, we have to do this for additionalData too, or risk misalignment
 
 			gotoIfError3(clean, CharString_createCopy(testPlainText[i], alloc, &tmp, e_rr));
+			gotoIfError3(clean, Buffer_createCopy(CharString_bufferConst(additionalData[i]), alloc, &full, e_rr));
 
 			//Encrypt plain text
 
 			I32x4 tag = I32x4_zero();
 
 			Buffer target = CharString_buffer(tmp);
-			Buffer addDat = CharString_bufferConst(additionalData[i]);
 
 			BufferEncrypt encrypt = (BufferEncrypt) {
 				.target = &target,
-				.additionalData = &addDat,
+				.additionalData = &full,
 				.type = EBufferEncryptionType_AES128GCM,
 				.flags = EBufferEncryptionFlags_StopCreateIv,
 				.nonConstEncrypt = {
@@ -1318,6 +1321,7 @@ int main() {
 				retError(clean, Error_invalidState(4, "Buffer_decryptAdvanced failed"));
 
 			CharString_free(&tmp, alloc);
+			Buffer_free(&full, alloc);
 		}
 	}
 
@@ -4333,7 +4337,7 @@ int main() {
 	F64 dt = (Time_now() - now) / (F64)SECOND;
 
 	Log_debugLn(alloc, "Successful unit test! After %fs", dt);
-	
+
 	goto success;
 
 clean:

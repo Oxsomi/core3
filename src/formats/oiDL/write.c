@@ -231,6 +231,8 @@ Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			Buffer_createRefConst(dlFile.settings.encryptionKey, sizeof(key)),
 			Buffer_createRefConst(key, sizeof(key))
 		);
+		
+		todo, we have to make sure to properly align things here...
 
 		gotoIfError2(clean, Buffer_encryptAuto(
 

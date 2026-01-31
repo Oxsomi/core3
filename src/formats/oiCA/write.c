@@ -498,6 +498,8 @@ Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		I32x4 iv = I32x4_zero();		//Outputs
 		I32x4 tag = I32x4_zero();
 
+		todo, we have to make sure to properly align things here...
+
 		gotoIfError2(clean, Buffer_encryptAuto(
 
 			&toEncrypt,

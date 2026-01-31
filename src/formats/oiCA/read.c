@@ -121,6 +121,8 @@ Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFil
 
 		gotoIfError2(clean, Buffer_consume(&filePtr, &iv, 12))
 		gotoIfError2(clean, Buffer_consume(&filePtr, &tag, 16))
+		
+		todo, we have to make sure to properly align things here...
 
 		gotoIfError2(clean, Buffer_decrypt(
 			filePtr,
