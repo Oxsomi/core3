@@ -46,7 +46,7 @@ Ns Time_date(const Date *date, Bool isLocalTime);
 Bool Time_getDate(Ns timestamp, Date *date, Bool isLocalTime);
 
 static inline DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
-	return (DNs)(timeStamp0 - timeStamp1);
+	return (DNs)(timeStamp1 - timeStamp0);
 }
 
 static inline F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
