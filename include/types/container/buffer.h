@@ -227,6 +227,7 @@ Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr);
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
 //- additionalData and target must be 16-byte aligned
+//- If decryption fails, it will clear the output target to ensure no sensitive data is leaked.
 Bool Buffer_decryptAdvanced(const BufferEncrypt *decrypt, Error *e_rr);
 
 //Performs AES sbox in constant time (no lookup tables).

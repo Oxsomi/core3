@@ -415,10 +415,7 @@ static inline void AESEncryptionContext_updateTagTail(AESEncryptionContext *ctx,
 }
 
 static inline void AESEncryptionContext_storeBlockTail(I32 *io, const U64 leftOver, void *v) {
-	Buffer_memcpy(
-		Buffer_createRef(io, sizeof(I32x4)),
-		Buffer_createRefConst(v, leftOver)
-	);
+	Buffer_memcpy(Buffer_createRef(io, sizeof(I32x4)), Buffer_createRefConst(v, leftOver));
 }
 
 static inline void AESEncryptionContext_processBlockTail(
@@ -426,10 +423,15 @@ static inline void AESEncryptionContext_processBlockTail(
 	I32 *io,
 	const U8 leftOver,
 	const U32 i,
-	const Bool updateTag
+	Bool isEncrypt
 ) {
 
 	I32x4 v = AESEncryptionContext_fetchBlockTail(io, leftOver);
+
+	//Update tag for the ciphertext (before decryption)
+
+	if (!isEncrypt)
+		AESEncryptionContext_updateTagTail(ctx, v, leftOver);
 
 	//Encrypt IV + blockId to use to encrypt
 
@@ -438,9 +440,9 @@ static inline void AESEncryptionContext_processBlockTail(
 
 	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
 
-	//Continue tag
+	//Update tag for the ciphertext (after encryption)
 
-	if(updateTag)
+	if (isEncrypt)
 		AESEncryptionContext_updateTagTail(ctx, v, leftOver);
 
 	//Store
@@ -452,13 +454,19 @@ static inline void AESEncryptionContext_processBlockN(
 	AESEncryptionContext *ctx,
 	I32x4 *io,
 	const U32 id,
-	const Bool updateTag,
-	const U8 N
+	const U8 N,
+	Bool isEncrypt
 ) {
+
 	I32x4 v[4];
 
 	for (U32 i = 0; i < N; ++i)
 		v[i] = io[i];
+
+	//Update tag for the ciphertext (before decryption)
+
+	if (!isEncrypt)
+		AESEncryptionContext_updateTagN(ctx, v, N);
 
 	//Encrypt IV + blockId to use to encrypt
 
@@ -470,9 +478,9 @@ static inline void AESEncryptionContext_processBlockN(
 		v[i] = I32x4_xor(v[i], AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
 	}
 
-	//Continue tag
+	//Update tag for the ciphertext (after encryption)
 
-	if(updateTag)
+	if(isEncrypt)
 		AESEncryptionContext_updateTagN(ctx, v, N);
 
 	//Store
@@ -481,22 +489,16 @@ static inline void AESEncryptionContext_processBlockN(
 		io[i] = v[i];
 }
 
-static inline void AESEncryptionContext_processBlock1(
-	AESEncryptionContext *ctx, I32x4 *io, const U32 id, const Bool updateTag
-) {
-	AESEncryptionContext_processBlockN(ctx, io, id, updateTag, 1);
+static inline void AESEncryptionContext_processBlock1(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
+	AESEncryptionContext_processBlockN(ctx, io, id, 1, isEncrypt);
 }
 
-static inline void AESEncryptionContext_processBlock2(
-	AESEncryptionContext *ctx, I32x4 *io, const U32 id, const Bool updateTag
-) {
-	AESEncryptionContext_processBlockN(ctx, io, id, updateTag, 2);
+static inline void AESEncryptionContext_processBlock2(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
+	AESEncryptionContext_processBlockN(ctx, io, id, 2, isEncrypt);
 }
 
-static inline void AESEncryptionContext_processBlock4(
-	AESEncryptionContext *ctx, I32x4 *io, const U32 id, const Bool updateTag
-) {
-	AESEncryptionContext_processBlockN(ctx, io, id, updateTag, 4);
+static inline void AESEncryptionContext_processBlock4(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
+	AESEncryptionContext_processBlockN(ctx, io, id, 4, isEncrypt);
 }
 
 //TODO: fetchBlock4, 2, tail this
@@ -515,7 +517,7 @@ static inline void AESEncryptionContext_clear(AESEncryptionContext *ctx) {
 	ctx->encryptionType = 0;
 }
 
-static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, U8 *targetPtr, U64 targetLen, Bool updateTag) {
+static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, U8 *targetPtr, U64 targetLen, Bool isEncrypt) {
 
 	//Handle blocks
 	//TODO: We might wanna multithread this if we ever get big enough data
@@ -531,7 +533,7 @@ static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, 
 			ctx,
 			(I32x4*)(targetPtr + ((U64)i << 6)),
 			i << 2,
-			updateTag
+			isEncrypt
 		);
 
 	U64 next = targetLen & ~63;
@@ -541,7 +543,7 @@ static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, 
 			ctx,
 			(I32x4*)(targetPtr + next),
 			(U32)(next >> 4),
-			updateTag
+			isEncrypt
 		);
 		next += 32;
 	}
@@ -551,7 +553,7 @@ static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, 
 			ctx,
 			(I32x4*)(targetPtr + next),
 			(U32)(next >> 4),
-			updateTag
+			isEncrypt
 		);
 		next += 16;
 	}
@@ -562,7 +564,7 @@ static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, 
 			(I32*)(targetPtr + next),
 			(U8)(targetLen & 15),
 			(U32)(targetLen >> 4),
-			updateTag
+			isEncrypt
 		);
 }
 
@@ -684,28 +686,21 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *decrypt, Er
 	U8 *targetPtr = decrypt->target->ptrNonConst;
 	const U64 targetLen = Buffer_length(*decrypt->target);
 
-	//Verify tegridy before we continue decryption. This does mean we're reading twice,
-	//but it's against the spec to start decrypting while still unsure if it's valid.
-
-	const U32 j = (U32)((targetLen + 15) >> 4);
-
-	for (U32 i = 0; i < j; ++i)
-		AESEncryptionContext_fetchAndUpdateTag(
-			&ctx,
-			(const I32*)targetPtr + ((U64)i << 2),
-			targetLen - ((U64)i << 4)
-		);
+	AESEncryptionContext_handleBlocks(&ctx, targetPtr, targetLen, false);
+	AESEncryptionContext_finish(&ctx, decrypt->additionalData, decrypt->target);
 
 	//Check if the tag is the same, if not, then it has been tempered with
 
-	AESEncryptionContext_finish(&ctx, decrypt->additionalData, decrypt->target);
+	if (I32x4_neq4(ctx.tag, *decrypt->constDecrypt.tag)) {
 
-	if(I32x4_any(I32x4_neq(ctx.tag, *decrypt->constDecrypt.tag))) {
 		AESEncryptionContext_clear(&ctx);
+
+		if(decrypt->target)
+			Buffer_unsetAllBits(*decrypt->target, NULL);
+
 		retError(clean, Error_invalidState(0, "AESEncryptionContext_decrypt() GMAC tag is invalid"));
 	}
 
-	AESEncryptionContext_handleBlocks(&ctx, targetPtr, targetLen, false);
 	AESEncryptionContext_clear(&ctx);
 
 clean:
