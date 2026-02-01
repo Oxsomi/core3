@@ -4337,6 +4337,78 @@ int main() {
 	F64 dt = (Time_now() - now) / (F64)SECOND;
 
 	Log_debugLn(alloc, "Successful unit test! After %fs", dt);
+	
+	/*
+	//Final OpenSSL tests
+
+	U8 *myData = (U8*)malloc(64 * 16384);
+	U16 sizes[6] = { 16, 64, 256, 1024, 8192, 16384 };
+
+	Buffer_csprng(Buffer_createRef(myData, 64 * 16384));
+
+	for (U64 i = 0; i < 6; ++i) {
+
+		U16 siz = sizes[i];
+		U64 count = 0;
+		Ns curr = Time_now();
+		AESEncryptionKey key = { 0 };
+		AESEncryptionContext ctx = { 0 };
+
+		gotoIfError3(clean, Buffer_aesExpertCreate(
+			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, &ctx, e_rr
+		));
+
+		while (true) {
+
+			for (U64 j = 0; j < 100; ++j) {
+				Buffer dat = Buffer_createRef(myData + ((count + j) % 64) * 16384, siz);
+				Buffer_aesExpertEncUpdate(&ctx, dat);
+			}
+
+			count += 100;
+
+			if (Time_elapsed(curr) >= (DNs)(3 * SECOND))
+				break;
+		}
+
+		Buffer_aesExpertFinalize(&ctx, 0, count * siz, I32x4_zero());
+		DNs diff = Time_elapsed(curr);
+
+		//Doing AES-256-GCM ops for 3s on 16 size blocks: 5403576 AES-256-GCM ops in 2.95s
+		Log_debugLn(alloc, "Doing AES-256-GCM ops for 3s on %"PRIu64" size blocks: %"PRIu64" AES-256-GCM ops in %fs", siz, count, (F64)diff / SECOND);
+	}
+
+
+	Buffer buf = Buffer_createNull();
+	gotoIfError3(clean, Buffer_createEmptyBytes(1 * GIBI, alloc, &buf, e_rr));
+
+	Ns t = Time_now();
+
+	U32 key[8];
+	I32x4 tag, iv;
+	gotoIfError3(clean, Buffer_encryptAuto(&buf, NULL, true, key, &tag, &iv, e_rr));
+	
+	F64 dt23 = (Time_now() - t) / (F64)SECOND;
+	Log_debugLn(alloc, "Time taken (aes256gcm enc): %fs", dt23);
+	t = Time_now();
+
+	gotoIfError3(clean, Buffer_decryptAuto(&buf, NULL, key, tag, iv, e_rr));
+
+	dt23 = (Time_now() - t) / (F64)SECOND;
+	Log_debugLn(alloc, "Time taken (aes256gcm dec): %fs", dt23);
+	t = Time_now();
+
+	Buffer empty1 = Buffer_createNull();
+	gotoIfError3(clean, Buffer_encryptAuto(&empty1, &buf, false, key, &tag, &iv, e_rr));
+
+	dt23 = (Time_now() - t) / (F64)SECOND;
+	Log_debugLn(alloc, "Time taken (aes256gcm mac): %fs", dt23);
+	t = Time_now();
+
+	Buffer_sha256(buf, key);
+
+	dt23 = (Time_now() - t) / (F64)SECOND;
+	Log_debugLn(alloc, "Time taken (sha256): %fs", dt23);*/
 
 	goto success;
 

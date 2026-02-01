@@ -145,7 +145,7 @@ Bool Buffer_encryptAuto(
 //AES256GCM decryption.
 //Decrypt functions decrypt ciphertext from target into target (in place).
 //Will return an error if the tag can't be verified
-//Will only return decrypted result into target if the function was successful.
+//Will clear decrypted result if the function was successful.
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
 //- additionalData and target must be 16-byte aligned
@@ -223,11 +223,10 @@ Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr);
 //Advanced encryption function, be very careful using this the wrong way.
 //Decrypt functions decrypt ciphertext from target into target (in place).
 //Will return an error if the tag can't be verified
-//Will only return decrypted result into target if the function was successful.
+//Will clear the target if the function was unsuccessful.
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
 //- additionalData and target must be 16-byte aligned
-//- If decryption fails, it will clear the output target to ensure no sensitive data is leaked.
 Bool Buffer_decryptAdvanced(const BufferEncrypt *decrypt, Error *e_rr);
 
 //Performs AES sbox in constant time (no lookup tables).
@@ -235,6 +234,65 @@ U8 AES_sbox(U8 x);
 
 //Performs AES subWord in constant time (no lookup tables).
 U32 AES_subWord(U32 w);
+
+//Expert AES functions; these are way more sensitive than the Auto and Advanced functions.
+//They assume that:
+//- You adhere to the basic rules of AES
+//- You init, update and finalize a context before using the result (correctly)
+//The context of important AES variables.
+//And encrypting/decrypting blocks and verifying tags.
+//These functions don't do any parameter checks since they're internal helper functions
+typedef struct AESEncryptionContext {
+
+	I32x4 key[15];
+
+	I32x4 H[4];
+
+	I32x4 EKY0;
+
+	I32x4 tag;
+
+	I32x4 iv;
+
+	EBufferEncryptionType encryptionType;
+	U32 padding[3];
+
+} AESEncryptionContext;
+
+typedef union AESEncryptionKey {
+	I32x4 aes256[2];
+	I32x4 aes128;
+	U32 u32x8[8];
+} AESEncryptionKey;
+
+//Be careful about the following:
+//- Don't use the key too often (suggested <2^16 times)
+//- Don't discard iv or key if any of them are generated
+//- Don't discard tag or cut off too many bytes
+Bool Buffer_aesExpertCreate(
+	I32x4 iv,
+	EBufferEncryptionType type,
+	AESEncryptionKey key,
+	AESEncryptionContext *ctx,
+	Error *e_rr
+);
+
+//Buffer's addr must be 16-byte aligned
+//There's a (theoretical) limit of U64_MAX / 8 bytes for all combined data.
+void Buffer_aesExpertUpdateAAD(AESEncryptionContext *ctx, Buffer data);
+
+//Buffer's addr must be 16-byte aligned
+//There's a 64GiB data limit that should be respected (needs key reroll)
+void Buffer_aesExpertEncUpdate(AESEncryptionContext *ctx, Buffer data);
+
+//Buffer's addr must be 16-byte aligned
+//There's a 64GiB data limit that should be respected (needs key reroll)
+void Buffer_aesExpertDecUpdate(AESEncryptionContext *ctx, Buffer data);
+
+//Don't use the data if the function returns false!
+//Clear or remove the generated data if encryption failed, or risk exposing sensitive data.
+//expectTag is the tag you expect. It's OK to ignore the result for encryption, since there's no valid tag yet.
+Bool Buffer_aesExpertFinalize(AESEncryptionContext *ctx, U64 aadLen, U64 dataLen, I32x4 expectTag);
 
 //Cryptographically secure random on a sized buffer
 

@@ -116,26 +116,6 @@ U32 AES_subWord(U32 w) {
 		((U32)AES_sbox((U8)(w >> 24)) << 24);
 }
 
-//The context of important AES variables.
-//And encrypting/decrypting blocks and verifying tags.
-//These functions don't do any parameter checks since they're internal helper functions
-typedef struct AESEncryptionContext {
-
-	I32x4 key[15];
-
-	I32x4 H[4];
-
-	I32x4 EKY0;
-
-	I32x4 tag;
-
-	I32x4 iv;
-
-	EBufferEncryptionType encryptionType;
-	U32 padding[3];
-
-} AESEncryptionContext;
-
 //Key expansion for AES256
 //Implemented from the official intel AES-NI paper + Additional paper by S. Gueron appendix A
 //https://link.springer.com/content/pdf/10.1007/978-3-642-03317-9_4.pdf
@@ -294,13 +274,14 @@ static inline void AESEncryptionContext_updateTagTail(AESEncryptionContext *ctx,
 //This could be something like sender + receiver ip address
 //This data could allow the dev to discard invalid packets for example
 //And verify that this is the data the original message was signed with
-static inline void AESEncryptionContext_initTag(AESEncryptionContext *ctx, const Buffer *additionalData) {
+void Buffer_aesExpertUpdateAAD(AESEncryptionContext *ctx, Buffer additionalData) {
 
-	if (!additionalData)
+	const U64 len = Buffer_length(additionalData);
+
+	if (!len)
 		return;
 
-	const U64 len = Buffer_length(*additionalData);
-	const I32x4 *ptr = (const I32x4*)additionalData->ptr;
+	const I32x4 *ptr = (const I32x4*)additionalData.ptr;
 
 	for (U64 j = 0; j < len >> 6; ++j) {
 
@@ -337,17 +318,53 @@ static inline void AESEncryptionContext_initTag(AESEncryptionContext *ctx, const
 		);
 }
 
+Bool Buffer_aesExpertCreate(
+	I32x4 iv,
+	EBufferEncryptionType type,
+	AESEncryptionKey key,
+	AESEncryptionContext *ctx,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if ((U64)type >= EBufferEncryptionType_Count)
+		retError(clean, Error_invalidEnum(
+			1, (U64)type, EBufferEncryptionType_Count, "Buffer_aesExpertCreate()::type is out of bounds"
+		));
+	
+	//Get key that's gonna be used for aes blocks
+
+	ctx->encryptionType = type;
+	AESEncryptionContext_expandKey(key.u32x8, ctx->key, ctx->encryptionType);
+
+	//Prepare ghash
+
+	ctx->H[0] = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
+	ctx->H[1] = AESEncryptionContext_ghash(ctx->H[0], ctx->H[0]);
+	ctx->H[2] = AESEncryptionContext_ghash(ctx->H[1], ctx->H[0]);
+	ctx->H[3] = AESEncryptionContext_ghash(ctx->H[2], ctx->H[0]);
+
+	//Compute final tag xor
+
+	I32x4 Y0 = iv;
+	ctx->iv = Y0;
+
+	I32x4_setWRef(&Y0, I32_swapEndianness(1));
+
+	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
+	ctx->tag = I32x4_zero();
+
+clean:
+	return s_uccess;
+}
+
 static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AESEncryptionContext *ctx, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	if (!encrypt->target)
 		retError(clean, Error_nullPointer(0, "AESEncryptionContext_create()::decrypt->target must be non zero"));
-
-	if ((U64)encrypt->type >= EBufferEncryptionType_Count)
-		retError(clean, Error_invalidEnum(
-			1, (U64)encrypt->type, EBufferEncryptionType_Count, "AESEncryptionContext_create()::encrypt->type is out of bounds"
-		));
 
 	if (Buffer_isConstRef(*encrypt->target))
 		retError(clean, Error_constData(0, 0, "AESEncryptionContext_create()::decrypt->target needs to be writable"));
@@ -388,28 +405,23 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 			"If file size exceeds 64GB encrypt in blocks with a unique IV each 64GB block"
 		));
 
-	//Get key that's gonna be used for aes blocks
+	AESEncryptionKey key;
 
-	ctx->encryptionType = encrypt->type;
-	AESEncryptionContext_expandKey(encrypt->constDecrypt.key, ctx->key, ctx->encryptionType);
+	if (encrypt->type == EBufferEncryptionType_AES256GCM)
+		Buffer_memcpy(
+			Buffer_createRef(&key, sizeof(key)),
+			Buffer_createRefConst(encrypt->constDecrypt.key, sizeof(key))
+		);
 
-	//Prepare ghash
+	else Buffer_memcpy(
+		Buffer_createRef(&key, sizeof(I32x4)),
+		Buffer_createRefConst(encrypt->constDecrypt.key, sizeof(I32x4))
+	);
 
-	ctx->H[0] = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
-	ctx->H[1] = AESEncryptionContext_ghash(ctx->H[0], ctx->H[0]);
-	ctx->H[2] = AESEncryptionContext_ghash(ctx->H[1], ctx->H[0]);
-	ctx->H[3] = AESEncryptionContext_ghash(ctx->H[2], ctx->H[0]);
+	gotoIfError3(clean, Buffer_aesExpertCreate(*encrypt->constDecrypt.iv, encrypt->type, key, ctx, e_rr));
 
-	//Compute final tag xor
-
-	I32x4 Y0 = *encrypt->constDecrypt.iv;
-	ctx->iv = Y0;
-
-	I32x4_setWRef(&Y0, I32_swapEndianness(1));
-
-	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
-	ctx->tag = I32x4_zero();
-	AESEncryptionContext_initTag(ctx, encrypt->additionalData);
+	if(encrypt->additionalData)
+		Buffer_aesExpertUpdateAAD(ctx, *encrypt->additionalData);
 
 clean:
 	return s_uccess;
@@ -420,23 +432,35 @@ typedef union AESEncryptionContextLengths {
 	U64 arr[2];
 } AESEncryptionContextLengths;
 
-static inline void AESEncryptionContext_finish(AESEncryptionContext *ctx, const Buffer *additionalData, const Buffer *target) {
+//This ensures no expanded key, iv or anything else is leaked on the stack,
+//which might be possible to obtain after execution through for example a buffer overflow.
+static inline void AESEncryptionContext_clear(AESEncryptionContext* ctx) {
+	Buffer_unsetAllBits(Buffer_createRef(ctx->key, sizeof(ctx->key)), NULL);
+	Buffer_unsetAllBits(Buffer_createRef(ctx->H, sizeof(ctx->H)), NULL);
+	ctx->iv = ctx->tag = ctx->EKY0 = I32x4_zero();
+	ctx->encryptionType = 0;
+}
+
+Bool Buffer_aesExpertFinalize(AESEncryptionContext *ctx, U64 aadLen, U64 dataLen, I32x4 expectTag) {
 
 	//Add length of inputs into the message too (lengths are in bits)
 
 	AESEncryptionContextLengths lengths = { 0 };
 
-	if(additionalData)
-		lengths.arr[0] = U64_swapEndianness(Buffer_length(*additionalData) << 3);
-
-	if(target)
-		lengths.arr[1] = U64_swapEndianness(Buffer_length(*target) << 3);
+	lengths.arr[0] = U64_swapEndianness(aadLen << 3);
+	lengths.arr[1] = U64_swapEndianness(dataLen << 3);
 
 	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths.vec), ctx->H[0]);
 
 	//Finish up by adding the iv into the key (this already has blockId 1 in it)
 
 	ctx->tag = I32x4_xor(ctx->tag, ctx->EKY0);
+
+	I32x4 tag = ctx->tag;
+	AESEncryptionContext_clear(ctx);
+	ctx->tag = tag;
+
+	return I32x4_eq4(tag, expectTag);
 }
 
 static inline void AESEncryptionContext_storeBlockTail(I32 *io, const U64 leftOver, void *v) {
@@ -526,15 +550,6 @@ static inline void AESEncryptionContext_processBlock4(AESEncryptionContext *ctx,
 	AESEncryptionContext_processBlockN(ctx, io, id, 4, isEncrypt);
 }
 
-//This ensures no expanded key, iv or anything else is leaked on the stack,
-//which might be possible to obtain after execution through for example a buffer overflow.
-static inline void AESEncryptionContext_clear(AESEncryptionContext *ctx) {
-	Buffer_unsetAllBits(Buffer_createRef(ctx->key, sizeof(ctx->key)), NULL);
-	Buffer_unsetAllBits(Buffer_createRef(ctx->H, sizeof(ctx->H)), NULL);
-	ctx->iv = ctx->tag = ctx->EKY0 = I32x4_zero();
-	ctx->encryptionType = 0;
-}
-
 static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, U8 *targetPtr, U64 targetLen, Bool isEncrypt) {
 
 	//Handle blocks
@@ -586,6 +601,14 @@ static inline void AESEncryptionContext_handleBlocks(AESEncryptionContext *ctx, 
 		);
 }
 
+void Buffer_aesExpertEncUpdate(AESEncryptionContext *ctx, Buffer data) {
+	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), true);
+}
+
+void Buffer_aesExpertDecUpdate(AESEncryptionContext *ctx, Buffer data) {
+	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), false);
+}
+
 static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *encrypt, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -611,16 +634,16 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *encrypt, Er
 	AESEncryptionContext ctx;
 	gotoIfError3(clean, AESEncryptionContext_create(encrypt, &ctx, e_rr));
 
-	U8 *targetPtr = encrypt->target->ptrNonConst;
-	const U64 targetLen = Buffer_length(*encrypt->target);
-	AESEncryptionContext_handleBlocks(&ctx, targetPtr, targetLen, true);
+	if(encrypt->target)
+		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target);
 
 	//Finish encryption by appending tag for authentication / verification that the data isn't messed with
 
-	AESEncryptionContext_finish(&ctx, encrypt->additionalData, encrypt->target);
+	U64 aadLen = encrypt->additionalData ? Buffer_length(*encrypt->additionalData) : 0;
+	U64 dataLen = encrypt->target ? Buffer_length(*encrypt->target) : 0;
+	Buffer_aesExpertFinalize(&ctx, aadLen, dataLen, I32x4_zero());
 	*encrypt->nonConstEncrypt.tag = ctx.tag;
-
-	AESEncryptionContext_clear(&ctx);
+	ctx.tag = I32x4_zero();
 
 clean:
 	return s_uccess;
@@ -701,17 +724,16 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *decrypt, Er
 	AESEncryptionContext ctx;
 	gotoIfError3(clean, AESEncryptionContext_create(decrypt, &ctx, e_rr));
 
-	U8 *targetPtr = decrypt->target->ptrNonConst;
-	const U64 targetLen = Buffer_length(*decrypt->target);
+	if(decrypt->target)
+		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target);
 
-	AESEncryptionContext_handleBlocks(&ctx, targetPtr, targetLen, false);
-	AESEncryptionContext_finish(&ctx, decrypt->additionalData, decrypt->target);
+	U64 aadLen = decrypt->additionalData ? Buffer_length(*decrypt->additionalData) : 0;
+	U64 dataLen = decrypt->target ? Buffer_length(*decrypt->target) : 0;
 
 	//Check if the tag is the same, if not, then it has been tempered with
+	if(!Buffer_aesExpertFinalize(&ctx, aadLen, dataLen, *decrypt->constDecrypt.tag)) {
 
-	if (I32x4_neq4(ctx.tag, *decrypt->constDecrypt.tag)) {
-
-		AESEncryptionContext_clear(&ctx);
+		ctx.tag = I32x4_zero();
 
 		if(decrypt->target)
 			Buffer_unsetAllBits(*decrypt->target, NULL);
@@ -719,7 +741,7 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *decrypt, Er
 		retError(clean, Error_invalidState(0, "AESEncryptionContext_decrypt() GMAC tag is invalid"));
 	}
 
-	AESEncryptionContext_clear(&ctx);
+	ctx.tag = I32x4_zero();
 
 clean:
 	return s_uccess;
