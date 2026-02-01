@@ -264,28 +264,77 @@ static inline I32x4 AESEncryptionContext_fetchBlockTail(const void *dat, const U
 	return v;
 }
 
+
+static inline void AESEncryptionContext_updateTagN(AESEncryptionContext *ctx, const I32x4 *CTi, const U8 N) {
+	
+	I32x4 v[4];
+
+	v[0] = AESEncryptionContext_ghash(I32x4_xor(CTi[0], ctx->tag), ctx->H[N - 1]);
+
+	for (U8 i = 1; i < N; ++i)
+		v[i] = AESEncryptionContext_ghash(CTi[i], ctx->H[N - 1 - i]);
+
+	I32x4 t;
+
+	switch (N) {
+		default:	t = v[0];														break;
+		case 2:		t = I32x4_xor(v[0], v[1]);										break;
+		case 4:		t = I32x4_xor(I32x4_xor(v[0], v[1]), I32x4_xor(v[2], v[3]));	break;
+	}
+
+	ctx->tag = t;
+}
+
+static inline void AESEncryptionContext_updateTagTail(AESEncryptionContext *ctx, I32x4 CTi, const U8 leftOver) {
+	Buffer_unsetAllBits(Buffer_createRef(((U8*)&CTi + leftOver), 16 - leftOver), NULL);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->H[0]);
+}
+
 //Hash in the additional data
 //This could be something like sender + receiver ip address
 //This data could allow the dev to discard invalid packets for example
 //And verify that this is the data the original message was signed with
-static inline I32x4 AESEncryptionContext_initTag(const Buffer *additionalData, I32x4 H) {
-
-	I32x4 tag = I32x4_zero();
+static inline void AESEncryptionContext_initTag(AESEncryptionContext *ctx, const Buffer *additionalData) {
 
 	if (!additionalData)
-		return tag;
+		return;
 
 	const U64 len = Buffer_length(*additionalData);
-	const U8 *ptr = additionalData->ptr;
+	const I32x4 *ptr = (const I32x4*)additionalData->ptr;
 
-	//TODO: Speed this up
+	for (U64 j = 0; j < len >> 6; ++j) {
 
-	for (U64 i = 0, j = (len + 15) >> 4; i < j; ++i) {
-		const I32x4 ADi = AESEncryptionContext_fetchBlockTail((const I32*)ptr + ((U64)i << 2), len - (i << 4));
-		tag = AESEncryptionContext_ghash(I32x4_xor(tag, ADi), H);
+		I32x4 v[4];
+
+		for (U32 i = 0; i < 4; ++i)
+			v[i] = ptr[(j << 2) | i];
+
+		AESEncryptionContext_updateTagN(ctx, v, 4);
 	}
 
-	return tag;
+	U64 next = len &~ 63;
+
+	if (next + 32 <= len) {
+
+		I32x4 v[2];
+
+		for (U32 i = 0; i < 2; ++i)
+			v[i] = ptr[(next >> 4) | i];
+
+		AESEncryptionContext_updateTagN(ctx, v, 2);
+		next += 32;
+	}
+
+	if (next + 16 <= len) {
+		I32x4 v = ptr[next >> 4];
+		AESEncryptionContext_updateTagN(ctx, &v, 1);
+		next += 16;
+	}
+
+	if (next < len)
+		AESEncryptionContext_updateTagTail(
+			ctx, AESEncryptionContext_fetchBlockTail(ptr + (next >> 4), len & 15), (U8)(len & 15)
+		);
 }
 
 static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AESEncryptionContext *ctx, Error *e_rr) {
@@ -359,7 +408,8 @@ static inline Bool AESEncryptionContext_create(const BufferEncrypt *encrypt, AES
 	I32x4_setWRef(&Y0, I32_swapEndianness(1));
 
 	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
-	ctx->tag = AESEncryptionContext_initTag(encrypt->additionalData, ctx->H[0]);
+	ctx->tag = I32x4_zero();
+	AESEncryptionContext_initTag(ctx, encrypt->additionalData);
 
 clean:
 	return s_uccess;
@@ -387,31 +437,6 @@ static inline void AESEncryptionContext_finish(AESEncryptionContext *ctx, const 
 	//Finish up by adding the iv into the key (this already has blockId 1 in it)
 
 	ctx->tag = I32x4_xor(ctx->tag, ctx->EKY0);
-}
-
-static inline void AESEncryptionContext_updateTagN(AESEncryptionContext *ctx, const I32x4 CTi[4], const U8 N) {
-	
-	I32x4 v[4];
-
-	v[0] = AESEncryptionContext_ghash(I32x4_xor(CTi[0], ctx->tag), ctx->H[N - 1]);
-
-	for (U8 i = 1; i < N; ++i)
-		v[i] = AESEncryptionContext_ghash(CTi[i], ctx->H[N - 1 - i]);
-
-	I32x4 t;
-
-	switch (N) {
-		default:	t = v[0];														break;
-		case 2:		t = I32x4_xor(v[0], v[1]);										break;
-		case 4:		t = I32x4_xor(I32x4_xor(v[0], v[1]), I32x4_xor(v[2], v[3]));	break;
-	}
-
-	ctx->tag = t;
-}
-
-static inline void AESEncryptionContext_updateTagTail(AESEncryptionContext *ctx, I32x4 CTi, const U8 leftOver) {
-	Buffer_unsetAllBits(Buffer_createRef(((U8*)&CTi + leftOver), 16 - leftOver), NULL);
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->H[0]);
 }
 
 static inline void AESEncryptionContext_storeBlockTail(I32 *io, const U64 leftOver, void *v) {
@@ -499,13 +524,6 @@ static inline void AESEncryptionContext_processBlock2(AESEncryptionContext *ctx,
 
 static inline void AESEncryptionContext_processBlock4(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
 	AESEncryptionContext_processBlockN(ctx, io, id, 4, isEncrypt);
-}
-
-//TODO: fetchBlock4, 2, tail this
-static inline void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const void *data, const U64 leftOver) {
-	I32x4 v[4];
-	v[0] = AESEncryptionContext_fetchBlockTail(data, leftOver);
-	AESEncryptionContext_updateTagN(ctx, v, 1);
 }
 
 //This ensures no expanded key, iv or anything else is leaked on the stack,
