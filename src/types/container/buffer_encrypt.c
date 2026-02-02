@@ -188,21 +188,55 @@ static inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15
 
 //Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
 
-static inline I32x4 AESEncryptionContext_ghash(I32x4 a, I32x4 H) {
+static inline I32x4 AESEncryptionContext_ghashN(I32x4 *a, const I32x4 *H, U8 N) {
 
-	a = I32x4_swapEndianness(a);
-	const I32x4 b = I32x4_swapEndianness(H);
+	for (U32 i = 0; i < N; ++i)
+		a[i] = I32x4_swapEndianness(a[i]);
+
+	I32x4 clmul00[4];
+	I32x4 clmul11[4];
+	I32x4 clmul01[4];
+	I32x4 clmul10[4];
+
+	//Looks a bit odd, but it's to allow multiple clmuls to run in parallel.
+	//Then, it'll be xored later. If we do clmulNN[i] ^= it creates a dependency, stalling everything.
+
+	for (U32 i = 0; i < N; ++i) {
+		clmul00[i] = I32x4_clmul64(a[i], H[N - 1 - i], 0x00);
+		clmul01[i] = I32x4_clmul64(a[i], H[N - 1 - i], 0x01);
+		clmul10[i] = I32x4_clmul64(a[i], H[N - 1 - i], 0x10);
+		clmul11[i] = I32x4_clmul64(a[i], H[N - 1 - i], 0x11);
+	}
+
+	if (N > 1) {
+
+		for (U32 i = 0; i < (U32)(N >> 1); ++i) {
+			U32 left = i << 1;
+			clmul00[left] = I32x4_xor(clmul00[left], clmul00[left | 1]);
+			clmul01[left] = I32x4_xor(clmul01[left], clmul01[left | 1]);
+			clmul10[left] = I32x4_xor(clmul10[left], clmul10[left | 1]);
+			clmul11[left] = I32x4_xor(clmul11[left], clmul11[left | 1]);
+		}
+
+		//If we ever want 8 blocks, we need one more reduction here.
+		if (N > 2) {
+			clmul00[0] = I32x4_xor(clmul00[0], clmul00[2]);
+			clmul01[0] = I32x4_xor(clmul01[0], clmul01[2]);
+			clmul10[0] = I32x4_xor(clmul10[0], clmul10[2]);
+			clmul11[0] = I32x4_xor(clmul11[0], clmul11[2]);
+		}
+	}
 
 	I32x4 tmp[8];
 
-	tmp[0] = I32x4_clmul64(a, b, 0x00);
-	tmp[3] = I32x4_xor(I32x4_clmul64(a, b, 0x10), I32x4_clmul64(a, b, 0x01));
-	tmp[2] = I32x4_clmul64(a, b, 0x11);
+	tmp[0] = clmul00[0];
+	tmp[3] = I32x4_xor(clmul10[0], clmul01[0]);
+	tmp[2] = clmul11[0];
 
 	tmp[1] = I32x4_lshElements(tmp[3], 2);
 	tmp[3] = I32x4_rshElements(tmp[3], 2);
 
-	for(U8 i = 0; i < 2; ++i) {
+	for (U8 i = 0; i < 2; ++i) {
 		I32x4 t = I32x4_xor(tmp[i << 1], tmp[(i << 1) + 1]);
 		tmp[i << 1] = I32x4_lsh32(t, 1);
 		tmp[4 + (i << 1)] = I32x4_rsh32(t, 31);
@@ -210,17 +244,17 @@ static inline I32x4 AESEncryptionContext_ghash(I32x4 a, I32x4 H) {
 
 	tmp[7] = I32x4_rshElements(tmp[4], 3);
 
-	for(U8 i = 0; i < 2; ++i)
+	for (U8 i = 0; i < 2; ++i)
 		tmp[6 - i] = I32x4_lshElements(tmp[6 - (i << 1)], 1);
 
 	const U8 v0[3] = { 31, 30, 25 };
 
-	for(U8 i = 0; i < 3; ++i) {
+	for (U8 i = 0; i < 3; ++i) {
 		tmp[i << 1] = I32x4_or(tmp[i ? 2 : 0], tmp[5 + i]);
 		tmp[5 + i] = I32x4_lsh32(tmp[0], v0[i]);
 	}
 
-	for(U8 i = 0; i < 2; ++i)
+	for (U8 i = 0; i < 2; ++i)
 		tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
 
 	tmp[3] = I32x4_rshElements(tmp[5], 1);
@@ -228,10 +262,10 @@ static inline I32x4 AESEncryptionContext_ghash(I32x4 a, I32x4 H) {
 
 	const U8 v1[3] = { 1, 2, 7 };
 
-	for(U8 i = 0; i < 3; ++i)
+	for (U8 i = 0; i < 3; ++i)
 		tmp[i] = I32x4_rsh32(tmp[5], v1[i]);
 
-	for(U8 i = 1; i < 6; ++i)
+	for (U8 i = 1; i < 6; ++i)
 		tmp[0] = I32x4_xor(tmp[0], tmp[i]);
 
 	return I32x4_swapEndianness(tmp[0]);
@@ -249,25 +283,18 @@ static inline void AESEncryptionContext_updateTagN(AESEncryptionContext *ctx, co
 	
 	I32x4 v[4];
 
-	v[0] = AESEncryptionContext_ghash(I32x4_xor(CTi[0], ctx->tag), ctx->H[N - 1]);
+	v[0] = I32x4_xor(CTi[0], ctx->tag);
 
 	for (U8 i = 1; i < N; ++i)
-		v[i] = AESEncryptionContext_ghash(CTi[i], ctx->H[N - 1 - i]);
+		v[i] = CTi[i];
 
-	I32x4 t;
-
-	switch (N) {
-		default:	t = v[0];														break;
-		case 2:		t = I32x4_xor(v[0], v[1]);										break;
-		case 4:		t = I32x4_xor(I32x4_xor(v[0], v[1]), I32x4_xor(v[2], v[3]));	break;
-	}
-
-	ctx->tag = t;
+	ctx->tag = AESEncryptionContext_ghashN(v, ctx->H, N);
 }
 
 static inline void AESEncryptionContext_updateTagTail(AESEncryptionContext *ctx, I32x4 CTi, const U8 leftOver) {
 	Buffer_unsetAllBits(Buffer_createRef(((U8*)&CTi + leftOver), 16 - leftOver), NULL);
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->H[0]);
+	CTi = I32x4_xor(CTi, ctx->tag);
+	ctx->tag = AESEncryptionContext_ghashN(&CTi, ctx->H, 1);
 }
 
 //Hash in the additional data
@@ -341,9 +368,20 @@ Bool Buffer_aesExpertCreate(
 	//Prepare ghash
 
 	ctx->H[0] = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
-	ctx->H[1] = AESEncryptionContext_ghash(ctx->H[0], ctx->H[0]);
-	ctx->H[2] = AESEncryptionContext_ghash(ctx->H[1], ctx->H[0]);
-	ctx->H[3] = AESEncryptionContext_ghash(ctx->H[2], ctx->H[0]);
+
+	I32x4 H0 = ctx->H[0];
+	ctx->H[0] = I32x4_swapEndianness(H0);
+	ctx->H[1] = AESEncryptionContext_ghashN(&H0, ctx->H, 1);
+
+	I32x4 H1 = ctx->H[1];
+	ctx->H[1] = I32x4_swapEndianness(H1);
+	ctx->H[2] = AESEncryptionContext_ghashN(&H1, ctx->H, 1);
+
+	I32x4 H2 = ctx->H[2];
+	ctx->H[2] = I32x4_swapEndianness(H2);
+
+	ctx->H[3] = AESEncryptionContext_ghashN(&H2, ctx->H, 1);
+	ctx->H[3] = I32x4_swapEndianness(ctx->H[3]);
 
 	//Compute final tag xor
 
@@ -450,13 +488,14 @@ Bool Buffer_aesExpertFinalize(AESEncryptionContext *ctx, U64 aadLen, U64 dataLen
 	lengths.arr[0] = U64_swapEndianness(aadLen << 3);
 	lengths.arr[1] = U64_swapEndianness(dataLen << 3);
 
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths.vec), ctx->H[0]);
+	I32x4 tag = I32x4_xor(ctx->tag, lengths.vec);
+	ctx->tag = AESEncryptionContext_ghashN(&tag, ctx->H, 1);
 
 	//Finish up by adding the iv into the key (this already has blockId 1 in it)
 
 	ctx->tag = I32x4_xor(ctx->tag, ctx->EKY0);
 
-	I32x4 tag = ctx->tag;
+	tag = ctx->tag;
 	AESEncryptionContext_clear(ctx);
 	ctx->tag = tag;
 

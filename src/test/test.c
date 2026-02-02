@@ -4338,31 +4338,33 @@ int main() {
 
 	Log_debugLn(alloc, "Successful unit test! After %fs", dt);
 	
-	/*
 	//Final OpenSSL tests
 
-	U8 *myData = (U8*)malloc(64 * 16384);
-	U16 sizes[6] = { 16, 64, 256, 1024, 8192, 16384 };
+	U8 *myData = (U8*)malloc(1024 * 65536);
+	U32 sizes[7] = { 16, 64, 256, 1024, 8192, 16384, 65536 };
 
-	Buffer_csprng(Buffer_createRef(myData, 64 * 16384));
+	Buffer_csprng(Buffer_createRef(myData, 1024 * 65536));
 
-	for (U64 i = 0; i < 6; ++i) {
+	for (U64 i = 0; i < 7; ++i) {
 
-		U16 siz = sizes[i];
+		U32 siz = sizes[i];
 		U64 count = 0;
 		Ns curr = Time_now();
 		AESEncryptionKey key = { 0 };
 		AESEncryptionContext ctx = { 0 };
-
-		gotoIfError3(clean, Buffer_aesExpertCreate(
-			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, &ctx, e_rr
-		));
+		U64 elems = (1024 * 65536) / siz;
 
 		while (true) {
 
 			for (U64 j = 0; j < 100; ++j) {
-				Buffer dat = Buffer_createRef(myData + ((count + j) % 64) * 16384, siz);
+
+				gotoIfError3(clean, Buffer_aesExpertCreate(
+					I32x4_zero(), EBufferEncryptionType_AES256GCM, key, &ctx, e_rr
+				));
+
+				Buffer dat = Buffer_createRef(myData + ((count + j) % elems) * siz, siz);
 				Buffer_aesExpertEncUpdate(&ctx, dat);
+				Buffer_aesExpertFinalize(&ctx, 0, count * siz, I32x4_zero());
 			}
 
 			count += 100;
@@ -4371,7 +4373,6 @@ int main() {
 				break;
 		}
 
-		Buffer_aesExpertFinalize(&ctx, 0, count * siz, I32x4_zero());
 		DNs diff = Time_elapsed(curr);
 
 		//Doing AES-256-GCM ops for 3s on 16 size blocks: 5403576 AES-256-GCM ops in 2.95s
@@ -4408,7 +4409,7 @@ int main() {
 	Buffer_sha256(buf, key);
 
 	dt23 = (Time_now() - t) / (F64)SECOND;
-	Log_debugLn(alloc, "Time taken (sha256): %fs", dt23);*/
+	Log_debugLn(alloc, "Time taken (sha256): %fs", dt23);
 
 	goto success;
 
