@@ -270,24 +270,33 @@ typedef union AESEncryptionKey {
 //- Don't discard iv or key if any of them are generated
 //- Don't discard tag or cut off too many bytes
 Bool Buffer_aesExpertCreate(
+
 	I32x4 iv,
 	EBufferEncryptionType type,
 	AESEncryptionKey key,
+
+	//How many bytes are handled by ghash if positive
+	// 0 means 'prefer large streams'
+	// <0 is hardcoding block size (e.g. -1, -2, -4, -8, -16)
+	I64 blockSizeHint,
+	U8 *blockSizeMax,		//Outputs block size if requested
+
 	AESEncryptionContext *ctx,
 	Error *e_rr
 );
 
 //Buffer's addr must be 16-byte aligned
 //There's a (theoretical) limit of U64_MAX / 8 bytes for all combined data.
-void Buffer_aesExpertUpdateAAD(AESEncryptionContext *ctx, Buffer data);
+//blockSizeMax: See aesExpertCreate's blockSizeHint
+void Buffer_aesExpertUpdateAAD(AESEncryptionContext *ctx, Buffer data, U8 blockSizeMax);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertEncUpdate(AESEncryptionContext *ctx, Buffer data);
+void Buffer_aesExpertEncUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertDecUpdate(AESEncryptionContext *ctx, Buffer data);
+void Buffer_aesExpertDecUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
 
 //Don't use the data if the function returns false!
 //Clear or remove the generated data if encryption failed, or risk exposing sensitive data.
