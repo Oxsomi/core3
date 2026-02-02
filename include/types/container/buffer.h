@@ -246,7 +246,7 @@ typedef struct AESEncryptionContext {
 
 	I32x4 key[15];
 
-	I32x4 H[4];
+	I32x4 H[16];
 
 	I32x4 EKY0;
 
