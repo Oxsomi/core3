@@ -720,26 +720,6 @@ static inline void AESEncryptionContext_processBlockN(
 		io[i] = v[i];
 }
 
-static inline void AESEncryptionContext_processBlock1(AESEncryptionContext *restrict ctx, I32x4 *restrict io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 1, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock2(AESEncryptionContext *restrict ctx, I32x4 *restrict io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 2, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock4(AESEncryptionContext *restrict ctx, I32x4 *restrict io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 4, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock8(AESEncryptionContext *restrict ctx, I32x4 *restrict io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 8, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock16(AESEncryptionContext *restrict ctx, I32x4 *restrict io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 16, isEncrypt);
-}
-
 static inline void AESEncryptionContext_handleBlocks(
 	AESEncryptionContext *restrict ctx,
 	U8 *restrict targetPtr,
@@ -763,10 +743,11 @@ static inline void AESEncryptionContext_handleBlocks(
 	if (blockSizeMax >= 16) {
 
 		for (U32 i = 0; i < targetLen >> 8; ++i)
-			AESEncryptionContext_processBlock16(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + ((U64)i << 8)),
 				(i << 4) + offsetInBlocks,
+				16,
 				isEncrypt
 			);
 
@@ -775,10 +756,11 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	if (blockSizeMax >= 8) {
 		while (next + 128 <= targetLen) {
-			AESEncryptionContext_processBlock8(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + next),
 				(U32)(next >> 4) + offsetInBlocks,
+				8,
 				isEncrypt
 			);
 			next += 128;
@@ -787,10 +769,11 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	if (blockSizeMax >= 4) {
 		while (next + 64 <= targetLen) {
-			AESEncryptionContext_processBlock4(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + next),
 				(U32)(next >> 4) + offsetInBlocks,
+				4,
 				isEncrypt
 			);
 			next += 64;
@@ -800,10 +783,11 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	if (blockSizeMax >= 2) {
 		while (next + 32 <= targetLen) {
-			AESEncryptionContext_processBlock2(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + next),
 				(U32)(next >> 4) + offsetInBlocks,
+				2,
 				isEncrypt
 			);
 			next += 32;
@@ -811,10 +795,11 @@ static inline void AESEncryptionContext_handleBlocks(
 	}
 
 	while (next + 16 <= targetLen) {
-		AESEncryptionContext_processBlock1(
+		AESEncryptionContext_processBlockN(
 			ctx,
 			(I32x4*)(targetPtr + next),
 			(U32)(next >> 4) + offsetInBlocks,
+			1,
 			isEncrypt
 		);
 		next += 16;
