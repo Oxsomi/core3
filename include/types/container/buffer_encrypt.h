@@ -34,13 +34,13 @@
 //- Don't discard tag or cut off too many bytes
 //- additionalData and target must be 16-byte aligned
 Bool Buffer_encryptAuto(
-	Buffer *target,
-	const Buffer *additionalData,
+	Buffer *restrict target,
+	const Buffer *restrict additionalData,
 	Bool generateKey,
-	U32 key[8],
-	I32x4 *tag,
-	I32x4 *iv,
-	Error *e_rr
+	U32 *restrict key,			//U32[8]
+	I32x4 *restrict tag,
+	I32x4 *restrict iv,
+	Error *restrict e_rr
 );
 
 //AES256GCM decryption.
@@ -51,12 +51,12 @@ Bool Buffer_encryptAuto(
 //- Don't use the data if the function returns false (s_ucceeded = false)!
 //- additionalData and target must be 16-byte aligned
 Bool Buffer_decryptAuto(
-	Buffer *target,
-	const Buffer *additionalData,
-	const U32 key[8],
+	Buffer *restrict target,
+	const Buffer *restrict additionalData,
+	const U32 *restrict key,	//U32[8]
 	I32x4 tag,
 	I32x4 iv,
-	Error *e_rr
+	Error *restrict e_rr
 );
 
 typedef enum EBufferEncryptionType {
@@ -81,10 +81,10 @@ typedef struct BufferEncrypt {
 
 	//"Plaintext"/"Cyphertext" aka data to encrypt/decrypt (does so in place). Leave empty to authenticate with AES.
 	//16-byte alignment required.
-	Buffer *target;
+	Buffer *restrict target;
 
 	//Data that was/is supplied to verify integrity of the data. 16-byte alignment required
-	const Buffer *additionalData;
+	const Buffer *restrict additionalData;
 
 	//Only AES is currently supported (but both 256 and 128 is, though 128 only for legacy reasons).
 	EBufferEncryptionType type;
@@ -95,17 +95,17 @@ typedef struct BufferEncrypt {
 	union {
 
 		struct {
-			const U32 *key;			//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
-			const I32x4 *tag;		//Tag that was generated to verify integrity of encrypted data.
-			const I32x4 *iv;		//Iv was the 12-byte random number that was used to encrypt the data.
+			const U32 *restrict key;		//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
+			const I32x4 *restrict tag;		//Tag that was generated to verify integrity of encrypted data.
+			const I32x4 *restrict iv;		//Iv was the 12-byte random number that was used to encrypt the data.
 		} constDecrypt;
 
 		//For Buffer_encryptAdvanced can be accessed only if the Generate flag is true.
 		//Tag is always generated.
 		struct NonConstEncrypt {
-			U32 *key;				//& GenerateKey: Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
-			I32x4 *tag;				//Tag is always generated if encryption type supports it (non zero).
-			I32x4 *iv;				//!(& StopCreateIv): Iv should be random 12 bytes. Generated unless flag is set.
+			U32 *restrict key;				//& GenerateKey: Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
+			I32x4 *restrict tag;			//Tag is always generated if encryption type supports it (non zero).
+			I32x4 *restrict iv;				//!(& StopCreateIv): Iv should be random 12 bytes. Generated unless flag is set.
 		} nonConstEncrypt;
 	};
 
@@ -119,7 +119,7 @@ typedef struct BufferEncrypt {
 //- Don't discard iv or key if any of them are generated
 //- Don't discard tag or cut off too many bytes
 //- additionalData and target must be 16-byte aligned
-Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr);
+Bool Buffer_encryptAdvanced(const BufferEncrypt *restrict encrypt, Error *restrict e_rr);
 
 //Advanced encryption function, be very careful using this the wrong way.
 //Decrypt functions decrypt ciphertext from target into target (in place).
@@ -128,7 +128,7 @@ Bool Buffer_encryptAdvanced(const BufferEncrypt *encrypt, Error *e_rr);
 //When decrypting, be sure of the following:
 //- Don't use the data if the function returns false (s_ucceeded = false)!
 //- additionalData and target must be 16-byte aligned
-Bool Buffer_decryptAdvanced(const BufferEncrypt *decrypt, Error *e_rr);
+Bool Buffer_decryptAdvanced(const BufferEncrypt *restrict decrypt, Error *restrict e_rr);
 
 //Expert AES functions; these are way more sensitive than the Auto and Advanced functions.
 //They assume that:
@@ -174,29 +174,29 @@ Bool Buffer_aesExpertCreate(
 	// 0 means 'prefer large streams'
 	// <0 is hardcoding block size (e.g. -1, -2, -4, -8, -16)
 	I64 blockSizeHint,
-	U8 *blockSizeMax,		//Outputs block size if requested
+	U8 *restrict blockSizeMax,		//Outputs block size if requested
 
-	AESEncryptionContext *ctx,
-	Error *e_rr
+	AESEncryptionContext *restrict ctx,
+	Error *restrict e_rr
 );
 
 //Buffer's addr must be 16-byte aligned
 //There's a (theoretical) limit of U64_MAX / 8 bytes for all combined data.
 //blockSizeMax: See aesExpertCreate's blockSizeHint
-void Buffer_aesExpertUpdateAAD(AESEncryptionContext *ctx, Buffer data, U8 blockSizeMax);
+void Buffer_aesExpertUpdateAAD(AESEncryptionContext *restrict ctx, Buffer data, U8 blockSizeMax);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertEncUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
+void Buffer_aesExpertEncUpdate(AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertDecUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
+void Buffer_aesExpertDecUpdate(AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
 
 //Don't use the data if the function returns false!
 //Clear or remove the generated data if encryption failed, or risk exposing sensitive data.
 //expectTag is the tag you expect. It's OK to ignore the result for encryption, since there's no valid tag yet.
-Bool Buffer_aesExpertFinalize(AESEncryptionContext *ctx, U64 aadLen, U64 dataLen, I32x4 expectTag);
+Bool Buffer_aesExpertFinalize(AESEncryptionContext *restrict ctx, U64 aadLen, U64 dataLen, I32x4 expectTag);
 
 #ifdef __cplusplus
 	}
