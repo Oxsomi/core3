@@ -36,20 +36,46 @@
 	#error Unsupported platform!
 #endif
 
+//Neon aes is a bit special.
+//It first does the xor before doing the shiftRows/subBytes.
+//This produces a different result, so we pass 0 as the key and do the xor afterwards.
+static inline uint8x16_t AES_block(I32x4 state) {
+	return vaeseq_u8(vreinterpretq_u8_s32(state), vdupq_n_u8(0));
+}
+
+static inline I32x4 AES_subWord4(I32x4 input) {
+    
+	//AES_block applies: ShiftRows(SubBytes(input))
+	uint8x16_t shifted = AES_block(input);
+	
+	//Undo ShiftRows using vqtbl1q_u8
+	const uint8_t invShiftRows[16] = {
+		15, 2, 5, 8, 11, 14, 1, 4, 7, 10, 13, 0, 3, 6, 9, 12
+	};
+	
+	uint8x16_t invTbl = vld1q_u8(invShiftRows);
+	return vreinterpretq_s32_u8(vqtbl1q_u8(shifted, invTbl));
+}
+
 static inline I32x4 AES_keyGenAssistInternal(I32x4 a, U8 rcon) {
 
-	U32 x1 = (U32)I32x4_y(a);
-	U32 x3 = (U32)I32x4_w(a);
+	const U64 rcon64 = (U64)rcon << 32;
 
-	U32 sx1 = AES_subWord(x1);
-	U32 sx3 = AES_subWord(x3);
+	I32x4 sx1_3 = I32x4_yyww(AES_subWord4(a));
 
-	return I32x4_create4(
-		(I32)sx1,
-		(I32)(U32_ror(sx1, 8) ^ rcon),
-		(I32)sx3,
-		(I32)(U32_ror(sx3, 8) ^ rcon)
-	);
+	//Apply U32_ror but only on .y and .w, leave .x and .z unchanged
+
+	const uint8_t ror8Yw[16] = {
+		 3,  2,  1,  0,
+		 6,  5,  4,  7,
+		11, 10,  9,  8,
+		14, 13, 12, 15
+    };
+	uint8x16_t rorTable = vld1q_u8(ror8Yw);
+	sx1_3 = vreinterpretq_s32_u8(vqtbl1q_u8(vreinterpretq_u8_s32(sx1_3), rorTable));
+
+	I32x4 res = I32x4_xor(sx1_3, I32x4_createFromU64x2(rcon64, rcon64));
+	return res;
 }
 
 I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
@@ -70,13 +96,6 @@ I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 		case 9:		return AES_keyGenAssistInternal(a, 0x1B);
 		default:	return AES_keyGenAssistInternal(a, 0x36);
 	}
-}
-
-//Neon aes is a bit special.
-//It first does the xor before doing the shiftRows/subBytes.
-//This produces a different result, so we pass 0 as the key and do the xor afterwards.
-static inline uint8x16_t AES_block(I32x4 state) {
-	return vaeseq_u8(vreinterpretq_u8_s32(state), vdupq_n_u8(0));
 }
 
 I32x4 AES_encodeBlock(I32x4 state, I32x4 rk) {

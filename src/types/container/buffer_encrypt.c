@@ -447,16 +447,34 @@ Bool Buffer_aesExpertCreate(
 					"Buffer_aesExpertCreate()::blockSizeHint must be -16, -8, -4, -2, -1 or a positive number"
 				));
 
-			if (blockSizeHint >= (I64)((8 * KIBI) * 16))
-				blockSize = 16;
+			//TODO: Find a better way of doing this
 
-			else if (blockSizeHint >= (I64)((1 * KIBI) * 16))
-				blockSize = 8;
+			#if _ARCH == ARCH_ARM64
 
-			else if (blockSizeHint >= (I64)(128 * 16))
-				blockSize = 4;
+				if (blockSizeHint >= (I64)((2 * KIBI) * 16))
+					blockSize = 16;
 
-			else blockSize = blockSizeHint >= (I64)(32 * 16) ? 2 : 1;
+				else if (blockSizeHint >= (I64)(512 * 16))
+					blockSize = 8;
+
+				else if (blockSizeHint >= (I64)(128 * 16))
+					blockSize = 4;
+
+				else blockSize = blockSizeHint >= (I64)(32 * 16) ? 2 : 1;
+
+			#else
+
+				if (blockSizeHint >= (I64)((8 * KIBI) * 16))
+					blockSize = 16;
+
+				else if (blockSizeHint >= (I64)((1 * KIBI) * 16))
+					blockSize = 8;
+
+				else if (blockSizeHint >= (I64)(128 * 16))
+					blockSize = 4;
+
+				else blockSize = blockSizeHint >= (I64)(32 * 16) ? 2 : 1;
+			#endif
 
 			break;
 
