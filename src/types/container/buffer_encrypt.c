@@ -36,38 +36,46 @@ static I8 cryptoState = -1;
 		if (cryptoState >= 0)
 			return;
 
-		//PCLMULQDQ, AES
-
-		U32 mask2 = (1 << 1) | (1 << 25);
-
 		U32 cpuInfo[4];
+
+		//Leaf 1 - AES + PCLMUL + OSXSAVE
 		Platform_getCPUId(1, cpuInfo);
 
-		if ((cpuInfo[2] & mask2) != mask2)
+		Bool hasAES = (cpuInfo[2] & (1 << 25)) != 0;
+		Bool hasPCLMUL = (cpuInfo[2] & (1 << 1)) != 0;
+		Bool hasOSXSAVE = (cpuInfo[2] & (1 << 27)) != 0;
+
+		if (!hasAES || !hasPCLMUL) {
 			cryptoState = 0;
-
-		//Extended crypto
-
-		else {
-
-			Platform_getCPUId(7, cpuInfo);
-
-			U32 mask0 = (1 << 9) | (1 << 10);		//VAES, VPCLMULQDQ
-			U32 mask1 = (1 << 5) | (1u << 31);		//AVX2, AVX512VL
-
-			if ((cpuInfo[0] & mask0) != mask0 || (cpuInfo[1] & mask1) != mask1)
-				cryptoState = 1;
-
-			else {
-
-				mask1 = 1 << 16;					//AVX512F
-
-				if((cpuInfo[1] & mask1) != mask1)
-					cryptoState = 2;
-
-				else cryptoState = 3;
-			}
+			return;
 		}
+
+		if (!hasOSXSAVE || (_xgetbv(0) & 0x6) != 0x6) {
+			cryptoState = 1;	// AES-NI only
+			return;
+		}
+
+		Platform_getCPUId(7, cpuInfo);
+
+		Bool hasAVX2 = (cpuInfo[1] & (1 << 5)) != 0;
+		Bool hasAVX512F = (cpuInfo[1] & (1 << 16)) != 0;
+		Bool hasAVX512VL = (cpuInfo[1] & (1u << 31)) != 0;
+		Bool hasVAES = (cpuInfo[2] & (1 << 9)) != 0;
+		Bool hasVPCLMUL = (cpuInfo[2] & (1 << 10)) != 0;
+
+		Bool osHasZMM = (_xgetbv(0) & 0xE0) == 0xE0;
+
+		if (hasVAES && hasVPCLMUL && hasAVX512F && hasAVX512VL && osHasZMM) {		//512-bit path
+			cryptoState = 3;
+			return;
+		}
+
+		if (hasVAES && hasVPCLMUL && hasAVX2) {		//256-bit VAES path
+			cryptoState = 2;
+			return;
+		}
+
+		cryptoState = 1;	//AES-NI only
 	}
 #else
 	void SIMD_createCryptoState() { }		//TODO: Use this for presence of crypto in the first place
@@ -255,9 +263,6 @@ static inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 *res
 
 static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *restrict H, U8 N, Bool use256) {
 
-	for (U32 i = 0; i < N; ++i)
-		a[i] = I32x4_swapEndianness(a[i]);
-
 	I32x4 clmul00_0;
 	I32x4 clmul01_0;
 	I32x4 clmul10_0;
@@ -266,81 +271,85 @@ static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *
 	#ifdef HAS_CLMUL64x2
 	
 		//cryptoState >= 2: has AVX2, AVX512VL, VAES, VPCLMULQDQ
-		if(cryptoState >= 2 && use256) {
+		if(cryptoState >= 2 && N >= 2 && use256) {
+
+			I32x8 clmul00_8[32];
+			I32x8 clmul11_8[32];
+			I32x8 clmul01_8[32];
+			I32x8 clmul10_8[32];
 	
-			I32x8 a8[16];
+			I32x8 a8[32];
 
 			const U8 N2 = N >> 1;
 
-			for (U32 i = 0; i < N2; ++i)
-				a8[i] = I32x8_create4_4(a[i << 1], a[(i << 1) | 1]);
-
-			I32x8 clmul00[16];		//TODO: Bigger block size
-			I32x8 clmul11[16];
-			I32x8 clmul01[16];
-			I32x8 clmul10[16];
+			for (U32 i = 0; i < N2; ++i) {
+				I32x8 temp = I32x8_load(&a[i << 1]);
+				a8[i] = I32x8_swapEndianness(temp);
+			}
 
 			//Looks a bit odd, but it's to allow multiple clmuls to run in parallel.
 			//Then, it'll be xored later. If we do clmulNN[i] ^= it creates a dependency, stalling everything.
 
 			for (U32 i = 0; i < N2; ++i) {
-				I32x8 Hi = I32x8_xx4(H[N - 1 - i]);
-				clmul00[i] = I32x8_clmul64(a8[i], Hi, 0x00);
-				clmul01[i] = I32x8_clmul64(a8[i], Hi, 0x01);
-				clmul10[i] = I32x8_clmul64(a8[i], Hi, 0x10);
-				clmul11[i] = I32x8_clmul64(a8[i], Hi, 0x11);
+				I32x8 Hi = I32x8_create4_4(H[N - 1 - (i << 1)], H[N - 2 - (i << 1)]);
+				clmul00_8[i] = I32x8_clmul64(a8[i], Hi, 0x00);
+				clmul01_8[i] = I32x8_clmul64(a8[i], Hi, 0x01);
+				clmul10_8[i] = I32x8_clmul64(a8[i], Hi, 0x10);
+				clmul11_8[i] = I32x8_clmul64(a8[i], Hi, 0x11);
 			}
 
 			if (N2 > 1) {
 
 				for (U32 i = 0; i < (U32)(N2 >> 1); ++i) {
 					U32 left = i << 1;
-					clmul00[left] = I32x8_xor(clmul00[left], clmul00[left | 1]);
-					clmul01[left] = I32x8_xor(clmul01[left], clmul01[left | 1]);
-					clmul10[left] = I32x8_xor(clmul10[left], clmul10[left | 1]);
-					clmul11[left] = I32x8_xor(clmul11[left], clmul11[left | 1]);
+					clmul00_8[left] = I32x8_xor(clmul00_8[left], clmul00_8[left | 1]);
+					clmul01_8[left] = I32x8_xor(clmul01_8[left], clmul01_8[left | 1]);
+					clmul10_8[left] = I32x8_xor(clmul10_8[left], clmul10_8[left | 1]);
+					clmul11_8[left] = I32x8_xor(clmul11_8[left], clmul11_8[left | 1]);
 				}
 
 				if (N2 > 2) {
 
 					for (U32 i = 0; i < (U32)(N2 >> 2); ++i) {
 						U32 left = i << 2;
-						clmul00[left] = I32x8_xor(clmul00[left], clmul00[left | 2]);
-						clmul01[left] = I32x8_xor(clmul01[left], clmul01[left | 2]);
-						clmul10[left] = I32x8_xor(clmul10[left], clmul10[left | 2]);
-						clmul11[left] = I32x8_xor(clmul11[left], clmul11[left | 2]);
+						clmul00_8[left] = I32x8_xor(clmul00_8[left], clmul00_8[left | 2]);
+						clmul01_8[left] = I32x8_xor(clmul01_8[left], clmul01_8[left | 2]);
+						clmul10_8[left] = I32x8_xor(clmul10_8[left], clmul10_8[left | 2]);
+						clmul11_8[left] = I32x8_xor(clmul11_8[left], clmul11_8[left | 2]);
 					}
 
 					if (N2 > 4) {
 
 						for (U32 i = 0; i < (U32)(N2 >> 3); ++i) {
 							U32 left = i << 3;
-							clmul00[left] = I32x8_xor(clmul00[left], clmul00[left | 4]);
-							clmul01[left] = I32x8_xor(clmul01[left], clmul01[left | 4]);
-							clmul10[left] = I32x8_xor(clmul10[left], clmul10[left | 4]);
-							clmul11[left] = I32x8_xor(clmul11[left], clmul11[left | 4]);
+							clmul00_8[left] = I32x8_xor(clmul00_8[left], clmul00_8[left | 4]);
+							clmul01_8[left] = I32x8_xor(clmul01_8[left], clmul01_8[left | 4]);
+							clmul10_8[left] = I32x8_xor(clmul10_8[left], clmul10_8[left | 4]);
+							clmul11_8[left] = I32x8_xor(clmul11_8[left], clmul11_8[left | 4]);
 						}
 
 						if (N2 > 8) {
-							clmul00[0] = I32x8_xor(clmul00[0], clmul00[8]);
-							clmul01[0] = I32x8_xor(clmul01[0], clmul01[8]);
-							clmul10[0] = I32x8_xor(clmul10[0], clmul10[8]);
-							clmul11[0] = I32x8_xor(clmul11[0], clmul11[8]);
+							clmul00_8[0] = I32x8_xor(clmul00_8[0], clmul00_8[8]);
+							clmul01_8[0] = I32x8_xor(clmul01_8[0], clmul01_8[8]);
+							clmul10_8[0] = I32x8_xor(clmul10_8[0], clmul10_8[8]);
+							clmul11_8[0] = I32x8_xor(clmul11_8[0], clmul11_8[8]);
 						}
 					}
 				}
 			}
 
-			clmul00_0 = I32x4_xor(I32x8_getI32x4(clmul00[0], 0), I32x8_getI32x4(clmul00[0], 1));
-			clmul01_0 = I32x4_xor(I32x8_getI32x4(clmul01[0], 0), I32x8_getI32x4(clmul01[0], 1));
-			clmul10_0 = I32x4_xor(I32x8_getI32x4(clmul10[0], 0), I32x8_getI32x4(clmul10[0], 1));
-			clmul11_0 = I32x4_xor(I32x8_getI32x4(clmul11[0], 0), I32x8_getI32x4(clmul11[0], 1));
-
+			clmul00_0 = I32x4_xor(I32x8_getI32x4(clmul00_8[0], 0), I32x8_getI32x4(clmul00_8[0], 1));
+			clmul01_0 = I32x4_xor(I32x8_getI32x4(clmul01_8[0], 0), I32x8_getI32x4(clmul01_8[0], 1));
+			clmul10_0 = I32x4_xor(I32x8_getI32x4(clmul10_8[0], 0), I32x8_getI32x4(clmul10_8[0], 1));
+			clmul11_0 = I32x4_xor(I32x8_getI32x4(clmul11_8[0], 0), I32x8_getI32x4(clmul11_8[0], 1));
 		} else
 
 	#endif
 
 	{
+		for (U32 i = 0; i < N; ++i)
+			a[i] = I32x4_swapEndianness(a[i]);
+
 		I32x4 clmul00[16];
 		I32x4 clmul11[16];
 		I32x4 clmul01[16];
@@ -459,7 +468,7 @@ static inline void AESEncryptionContext_updateTagN(
 	AESEncryptionContext *restrict ctx, const I32x4 *restrict CTi, const U8 N, Bool use256
 ) {
 	
-	I32x4 v[16];
+	I32x4 v[64];
 
 	v[0] = I32x4_xor(CTi[0], ctx->tag);
 
@@ -704,6 +713,8 @@ Bool Buffer_aesExpertCreate(
 			break;
 	}
 
+	blockSize = 32;		//TODO: Fix blockSize = 64
+
 	if (use256) *use256 = true;
 	if (blockSizeMax) *blockSizeMax = blockSize;
 
@@ -919,7 +930,7 @@ static inline void AESEncryptionContext_processBlockN(
 		//cryptoState >= 2: has AVX2, AVX512VL, VAES, VPCLMULQDQ
 		if(cryptoState >= 2 && N >= 2 && use256) {
 		
-			I32x8 v[32];		//TODO: Investigate bigger blocks
+			I32x8 v[32];
 			I32x8 ivi[32];
 
 			U8 N2 = N >> 1;

@@ -56,6 +56,15 @@ static inline I32x8 I32x8_clmul64(I32x8 a, I32x8 b, U8 imm) {
 	}
 }
 
+static inline I32x8 I32x8_swapEndianness(I32x8 v) {
+	return _mm256_shuffle_epi8(v, _mm256_set_epi8(
+		 0,  1,  2,  3,  4,  5,  6,  7,
+		 8,  9, 10, 11, 12, 13, 14, 15,
+		16, 17, 18, 19, 20, 21, 22, 23,
+		24, 25, 26, 27, 28, 29, 30, 31
+	));
+}
+
 #define HAS_CLMUL64x2
 #define HAS_AESx2
 
