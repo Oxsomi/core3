@@ -254,9 +254,6 @@ typedef struct AESEncryptionContext {
 
 	I32x4 iv;
 
-	EBufferEncryptionType encryptionType;
-	U32 padding[3];
-
 } AESEncryptionContext;
 
 typedef union AESEncryptionKey {
@@ -292,11 +289,23 @@ void Buffer_aesExpertUpdateAAD(AESEncryptionContext *ctx, Buffer data, U8 blockS
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertEncUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
+void Buffer_aesExpertEncUpdate(
+	AESEncryptionContext *ctx,
+	Buffer data,
+	U32 offsetInBlocks,
+	U8 blockSizeMax,
+	EBufferEncryptionType type
+);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertDecUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
+void Buffer_aesExpertDecUpdate(
+	AESEncryptionContext *ctx,
+	Buffer data,
+	U32 offsetInBlocks,
+	U8 blockSizeMax,
+	EBufferEncryptionType type
+);
 
 //Don't use the data if the function returns false!
 //Clear or remove the generated data if encryption failed, or risk exposing sensitive data.

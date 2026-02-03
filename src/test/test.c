@@ -4364,7 +4364,7 @@ int main() {
 				));
 
 				Buffer dat = Buffer_createRef(myData + ((count + j) % elems) * siz, siz);
-				Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax);
+				Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, EBufferEncryptionType_AES256GCM);
 				Buffer_aesExpertFinalize(&ctx, 0, count * siz, I32x4_zero());
 			}
 

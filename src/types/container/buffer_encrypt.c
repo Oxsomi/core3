@@ -57,9 +57,102 @@
 //For "encrypt" we use AES CTR as explained by the intel paper:
 //https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf
 
-impl I32x4 AES_keyGenAssist(I32x4 a, U8 i);
-impl I32x4 AES_encodeBlock(I32x4 a, I32x4 b);
-impl I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b);
+//Neon aes is a bit special.
+//It first does the xor before doing the shiftRows/subBytes.
+//This produces a different result, so we pass 0 as the key and do the xor afterwards.
+static inline uint8x16_t AES_block(I32x4 state) {
+	return vaeseq_u8(vreinterpretq_u8_s32(state), vdupq_n_u8(0));
+}
+
+static inline I32x4 AES_subWord4(I32x4 input) {
+
+	//AES_block applies: ShiftRows(SubBytes(input))
+	uint8x16_t shifted = AES_block(input);
+
+	//Undo ShiftRows using vqtbl1q_u8
+	const uint8_t invShiftRows[16] = {
+		15, 2, 5, 8, 11, 14, 1, 4, 7, 10, 13, 0, 3, 6, 9, 12
+	};
+
+	uint8x16_t invTbl = vld1q_u8(invShiftRows);
+	return vreinterpretq_s32_u8(vqtbl1q_u8(shifted, invTbl));
+}
+
+static inline I32x4 AES_keyGenAssistInternal(I32x4 a, U8 rcon) {
+
+	const U64 rcon64 = (U64)rcon << 32;
+
+	I32x4 sx1_3 = I32x4_yyww(AES_subWord4(a));
+
+	//Apply U32_ror but only on .y and .w, leave .x and .z unchanged
+
+	const uint8_t ror8Yw[16] = {
+		 3,  2,  1,  0,
+		 6,  5,  4,  7,
+		11, 10,  9,  8,
+		14, 13, 12, 15
+	};
+	uint8x16_t rorTable = vld1q_u8(ror8Yw);
+	sx1_3 = vreinterpretq_s32_u8(vqtbl1q_u8(vreinterpretq_u8_s32(sx1_3), rorTable));
+
+	I32x4 res = I32x4_xor(sx1_3, I32x4_createFromU64x2(rcon64, rcon64));
+	return res;
+}
+
+static inline I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
+
+	if (i >= 11)
+		return I32x4_zero();
+
+	switch (i) {
+	case 0:		return AES_keyGenAssistInternal(a, 0x00);
+	case 1:		return AES_keyGenAssistInternal(a, 0x01);
+	case 2:		return AES_keyGenAssistInternal(a, 0x02);
+	case 3:		return AES_keyGenAssistInternal(a, 0x04);
+	case 4:		return AES_keyGenAssistInternal(a, 0x08);
+	case 5:		return AES_keyGenAssistInternal(a, 0x10);
+	case 6:		return AES_keyGenAssistInternal(a, 0x20);
+	case 7:		return AES_keyGenAssistInternal(a, 0x40);
+	case 8:		return AES_keyGenAssistInternal(a, 0x80);
+	case 9:		return AES_keyGenAssistInternal(a, 0x1B);
+	default:	return AES_keyGenAssistInternal(a, 0x36);
+	}
+}
+
+static inline void AES_encodeBlock(I32x4* statesi, I32x4 rk, U8 N) {
+
+	uint8x16_t states[16];
+
+	for (U8 i = 0; i < N; ++i)
+		states[i] = vreinterpretq_u8_s32(statesi[i]);
+
+	uint8x16_t zero = vdupq_n_u8(0);
+
+	for (U8 i = 0; i < N; ++i)
+		states[i] = vaeseq_u8(states[i], zero);
+
+	for (U8 i = 0; i < N; ++i)
+		states[i] = vaesmcq_u8(states[i]);
+
+	for (U8 i = 0; i < N; ++i)
+		statesi[i] = I32x4_xor(states[i], rk);
+}
+
+static inline void AES_encodeBlockLast(I32x4* statesi, I32x4 rk, U8 N) {
+
+	uint8x16_t states[16];
+
+	for (U8 i = 0; i < N; ++i)
+		states[i] = vreinterpretq_u8_s32(statesi[i]);
+
+	uint8x16_t zero = vdupq_n_u8(0);
+
+	for (U8 i = 0; i < N; ++i)
+		states[i] = vaeseq_u8(states[i], zero);
+
+	for (U8 i = 0; i < N; ++i)
+		statesi[i] = I32x4_xor(states[i], rk);
+}
 
 //AES_subWord can be used by either NEON or NONE for encryption.
 //No lookup tables, those are unsafe.
@@ -174,16 +267,26 @@ static inline void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], c
 }
 
 //AES block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
-static inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], const EBufferEncryptionType type) {
+static inline void AESEncryptionContext_blockHash(
+	I32x4 *blocks,
+	const I32x4 k[15],
+	const EBufferEncryptionType type,
+	const U8 N
+) {
 
-	block = I32x4_xor(block, k[0]);
+	for(U8 i = 1; i < 10; ++i)
+		AES_encodeBlock(blocks, k[i], N);
 
-	const U8 rounds = type == EBufferEncryptionType_AES128GCM ? 10 : 14;
+	if (type == EBufferEncryptionType_AES256GCM) {
 
-	for(U8 i = 1; i < rounds; ++i)
-		block = AES_encodeBlock(block, k[i]);
+		for (U8 i = 10; i < 14; ++i)
+			AES_encodeBlock(blocks, k[i], N);
 
-	return AES_encodeBlockLast(block, k[rounds]);
+		AES_encodeBlockLast(blocks, k[14], N);
+		return;
+	}
+
+	AES_encodeBlockLast(blocks, k[10], N);
 }
 
 //Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
@@ -451,7 +554,7 @@ Bool Buffer_aesExpertCreate(
 
 			blockSizeHint /= 16;
 
-			#if _ARCH == ARCH_ARM64
+			#if _SIMD == SIMD_NEON
 
 				if(blockSizeHint <= 16)
 					blockSize = 1;
@@ -486,12 +589,21 @@ Bool Buffer_aesExpertCreate(
 
 	//Get key that's gonna be used for aes blocks
 
-	ctx->encryptionType = type;
-	AESEncryptionContext_expandKey(key.u32x8, ctx->key, ctx->encryptionType);
+	AESEncryptionContext_expandKey(key.u32x8, ctx->key, type);
 
 	//Prepare ghash
 
-	ctx->H[0] = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
+	ctx->H[0] = ctx->key[0];
+
+	switch (type) {
+		case EBufferEncryptionType_AES128GCM:
+			AESEncryptionContext_blockHash(ctx->H, ctx->key, EBufferEncryptionType_AES128GCM, 1);
+			break;
+		default:
+			AESEncryptionContext_blockHash(ctx->H, ctx->key, EBufferEncryptionType_AES256GCM, 1);
+			break;
+	}
+
 	ctx->H[0] = I32x4_swapEndianness(ctx->H[0]);
 
 	switch (blockSize) {
@@ -507,8 +619,17 @@ Bool Buffer_aesExpertCreate(
 	ctx->iv = Y0;
 
 	I32x4_setWRef(&Y0, I32_swapEndianness(1));
+	ctx->EKY0 = I32x4_xor(Y0, ctx->key[0]);
+	
+	switch (type) {
+		case EBufferEncryptionType_AES128GCM:
+			AESEncryptionContext_blockHash(&ctx->EKY0, ctx->key, EBufferEncryptionType_AES128GCM, 1);
+			break;
+		default:
+			AESEncryptionContext_blockHash(&ctx->EKY0, ctx->key, EBufferEncryptionType_AES256GCM, 1);
+			break;
+	}
 
-	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
 	ctx->tag = I32x4_zero();
 
 clean:
@@ -614,7 +735,6 @@ static inline void AESEncryptionContext_clear(AESEncryptionContext* ctx) {
 	Buffer_unsetAllBits(Buffer_createRef(ctx->key, sizeof(ctx->key)), NULL);
 	Buffer_unsetAllBits(Buffer_createRef(ctx->H, sizeof(ctx->H)), NULL);
 	ctx->iv = ctx->tag = ctx->EKY0 = I32x4_zero();
-	ctx->encryptionType = 0;
 }
 
 Bool Buffer_aesExpertFinalize(AESEncryptionContext *ctx, U64 aadLen, U64 dataLen, I32x4 expectTag) {
@@ -631,11 +751,9 @@ Bool Buffer_aesExpertFinalize(AESEncryptionContext *ctx, U64 aadLen, U64 dataLen
 
 	//Finish up by adding the iv into the key (this already has blockId 1 in it)
 
-	ctx->tag = I32x4_xor(ctx->tag, ctx->EKY0);
-
-	tag = ctx->tag;
+	ctx->tag = tag = I32x4_xor(ctx->tag, ctx->EKY0);
 	AESEncryptionContext_clear(ctx);
-	ctx->tag = tag;
+	ctx->tag = tag;		//Keep tag for final comparison, clean up after.
 
 	return I32x4_eq4(tag, expectTag);
 }
@@ -649,7 +767,8 @@ static inline void AESEncryptionContext_processBlockTail(
 	I32 *io,
 	const U8 leftOver,
 	const U32 i,
-	Bool isEncrypt
+	Bool isEncrypt,
+	EBufferEncryptionType type
 ) {
 
 	I32x4 v = AESEncryptionContext_fetchBlockTail(io, leftOver);
@@ -663,8 +782,18 @@ static inline void AESEncryptionContext_processBlockTail(
 
 	I32x4 ivi = ctx->iv;
 	I32x4_setWRef(&ivi, (I32)U32_swapEndianness(i + 2));
+	ivi = I32x4_xor(ivi, ctx->key[0]);
 
-	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
+	switch (type) {
+		case EBufferEncryptionType_AES128GCM:
+			AESEncryptionContext_blockHash(&ivi, ctx->key, EBufferEncryptionType_AES128GCM, 1);
+			break;
+		default:
+			AESEncryptionContext_blockHash(&ivi, ctx->key, EBufferEncryptionType_AES256GCM, 1);
+			break;
+	}
+
+	v = I32x4_xor(v, ivi);
 
 	//Update tag for the ciphertext (after encryption)
 
@@ -681,10 +810,12 @@ static inline void AESEncryptionContext_processBlockN(
 	I32x4 *io,
 	const U32 id,
 	const U8 N,
-	Bool isEncrypt
+	Bool isEncrypt,
+	EBufferEncryptionType type
 ) {
 
 	I32x4 v[16];
+	I32x4 counters[16];
 
 	for (U32 i = 0; i < N; ++i)
 		v[i] = io[i];
@@ -694,15 +825,27 @@ static inline void AESEncryptionContext_processBlockN(
 	if (!isEncrypt)
 		AESEncryptionContext_updateTagN(ctx, v, N);
 
-	//Encrypt IV + blockId to use to encrypt
+	//A loop here to free up the loop with the AESE
 
 	for (U32 i = 0; i < N; ++i) {
-
 		I32x4 ivi = ctx->iv;
 		I32x4_setWRef(&ivi, (I32)U32_swapEndianness(id + i + 2));
-
-		v[i] = I32x4_xor(v[i], AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
+		counters[i] = I32x4_xor(ivi, ctx->key[0]);
 	}
+
+	//Encrypt IV + blockId to use to encrypt
+
+	switch (type) {
+		case EBufferEncryptionType_AES128GCM:
+			AESEncryptionContext_blockHash(counters, ctx->key, EBufferEncryptionType_AES128GCM, N);
+			break;
+		default:
+			AESEncryptionContext_blockHash(counters, ctx->key, EBufferEncryptionType_AES256GCM, N);
+			break;
+	}
+
+	for(U32 i = 0; i < N; ++i)
+		v[i] = I32x4_xor(v[i], counters[i]);
 
 	//Update tag for the ciphertext (after encryption)
 
@@ -715,33 +858,14 @@ static inline void AESEncryptionContext_processBlockN(
 		io[i] = v[i];
 }
 
-static inline void AESEncryptionContext_processBlock1(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 1, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock2(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 2, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock4(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 4, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock8(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 8, isEncrypt);
-}
-
-static inline void AESEncryptionContext_processBlock16(AESEncryptionContext *ctx, I32x4 *io, const U32 id, Bool isEncrypt) {
-	AESEncryptionContext_processBlockN(ctx, io, id, 16, isEncrypt);
-}
-
 static inline void AESEncryptionContext_handleBlocks(
 	AESEncryptionContext *ctx,
 	U8 *targetPtr,
 	U64 targetLen,
 	Bool isEncrypt,
 	U32 offsetInBlocks,
-	U8 blockSizeMax
+	U8 blockSizeMax,
+	EBufferEncryptionType type
 ) {
 
 	U64 next = 0;
@@ -758,11 +882,13 @@ static inline void AESEncryptionContext_handleBlocks(
 	if (blockSizeMax >= 16) {
 
 		for (U32 i = 0; i < targetLen >> 8; ++i)
-			AESEncryptionContext_processBlock16(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + ((U64)i << 8)),
 				(i << 4) + offsetInBlocks,
-				isEncrypt
+				16,
+				isEncrypt,
+				type
 			);
 
 		next = targetLen & ~255;
@@ -770,11 +896,13 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	if (blockSizeMax >= 8) {
 		while (next + 128 <= targetLen) {
-			AESEncryptionContext_processBlock8(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + next),
 				(U32)(next >> 4) + offsetInBlocks,
-				isEncrypt
+				8,
+				isEncrypt,
+				type
 			);
 			next += 128;
 		}
@@ -782,11 +910,13 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	if (blockSizeMax >= 4) {
 		while (next + 64 <= targetLen) {
-			AESEncryptionContext_processBlock4(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + next),
 				(U32)(next >> 4) + offsetInBlocks,
-				isEncrypt
+				4,
+				isEncrypt,
+				type
 			);
 			next += 64;
 		}
@@ -795,22 +925,26 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	if (blockSizeMax >= 2) {
 		while (next + 32 <= targetLen) {
-			AESEncryptionContext_processBlock2(
+			AESEncryptionContext_processBlockN(
 				ctx,
 				(I32x4 *)(targetPtr + next),
 				(U32)(next >> 4) + offsetInBlocks,
-				isEncrypt
+				2,
+				isEncrypt,
+				type
 			);
 			next += 32;
 		}
 	}
 
 	while (next + 16 <= targetLen) {
-		AESEncryptionContext_processBlock1(
+		AESEncryptionContext_processBlockN(
 			ctx,
 			(I32x4*)(targetPtr + next),
 			(U32)(next >> 4) + offsetInBlocks,
-			isEncrypt
+			1,
+			isEncrypt,
+			type
 		);
 		next += 16;
 	}
@@ -821,16 +955,29 @@ static inline void AESEncryptionContext_handleBlocks(
 			(I32*)(targetPtr + next),
 			(U8)(targetLen & 15),
 			(U32)(targetLen >> 4) + offsetInBlocks,
-			isEncrypt
+			isEncrypt,
+			type
 		);
 }
 
-void Buffer_aesExpertEncUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax) {
-	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), true, offsetInBlocks, blockSizeMax);
+void Buffer_aesExpertEncUpdate(
+	AESEncryptionContext *ctx,
+	Buffer data,
+	U32 offsetInBlocks,
+	U8 blockSizeMax,
+	EBufferEncryptionType type
+) {
+	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), true, offsetInBlocks, blockSizeMax, type);
 }
 
-void Buffer_aesExpertDecUpdate(AESEncryptionContext *ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax) {
-	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), false, offsetInBlocks, blockSizeMax);
+void Buffer_aesExpertDecUpdate(
+	AESEncryptionContext *ctx,
+	Buffer data,
+	U32 offsetInBlocks,
+	U8 blockSizeMax,
+	EBufferEncryptionType type
+) {
+	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), false, offsetInBlocks, blockSizeMax, type);
 }
 
 static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *encrypt, Error *e_rr) {
@@ -861,11 +1008,11 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *encrypt, Er
 
 	if(encrypt->target)
 		switch (blockSizeMax) {
-			case 1:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0, 1);	break;
-			case 2:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0, 2);	break;
-			case 4:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0, 4);	break;
-			case 8:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0, 8);	break;
-			case 16:	Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0, 16);	break;
+			case 1:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0,  1, encrypt->type);	break;
+			case 2:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0,  2, encrypt->type);	break;
+			case 4:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0,  4, encrypt->type);	break;
+			case 8:		Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0,  8, encrypt->type);	break;
+			case 16:	Buffer_aesExpertEncUpdate(&ctx, *encrypt->target, 0, 16, encrypt->type);	break;
 		}
 
 	//Finish encryption by appending tag for authentication / verification that the data isn't messed with
@@ -958,11 +1105,11 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *decrypt, Er
 
 	if(decrypt->target)
 		switch (blockSizeMax) {
-			case 1:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0, 1);	break;
-			case 2:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0, 2);	break;
-			case 4:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0, 4);	break;
-			case 8:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0, 8);	break;
-			case 16:	Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0, 16);	break;
+			case 1:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0,  1, decrypt->type);	break;
+			case 2:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0,  2, decrypt->type);	break;
+			case 4:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0,  4, decrypt->type);	break;
+			case 8:		Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0,  8, decrypt->type);	break;
+			case 16:	Buffer_aesExpertDecUpdate(&ctx, *decrypt->target, 0, 16, decrypt->type);	break;
 		}
 
 	U64 aadLen = decrypt->additionalData ? Buffer_length(*decrypt->additionalData) : 0;
