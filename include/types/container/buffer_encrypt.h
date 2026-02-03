@@ -141,7 +141,7 @@ typedef struct AESEncryptionContext {
 
 	I32x4 key[15];
 
-	I32x4 H[16];
+	I32x4 H[64];
 
 	I32x4 EKY0;
 
@@ -175,6 +175,7 @@ Bool Buffer_aesExpertCreate(
 	// <0 is hardcoding block size (e.g. -1, -2, -4, -8, -16)
 	I64 blockSizeHint,
 	U8 *restrict blockSizeMax,		//Outputs block size if requested
+	Bool *restrict use256,
 
 	AESEncryptionContext *restrict ctx,
 	Error *restrict e_rr
@@ -183,15 +184,19 @@ Bool Buffer_aesExpertCreate(
 //Buffer's addr must be 16-byte aligned
 //There's a (theoretical) limit of U64_MAX / 8 bytes for all combined data.
 //blockSizeMax: See aesExpertCreate's blockSizeHint
-void Buffer_aesExpertUpdateAAD(AESEncryptionContext *restrict ctx, Buffer data, U8 blockSizeMax);
+void Buffer_aesExpertUpdateAAD(AESEncryptionContext *restrict ctx, Buffer data, U8 blockSizeMax, Bool use256);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertEncUpdate(AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
+void Buffer_aesExpertEncUpdate(
+	AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax, Bool use256
+);
 
 //Buffer's addr must be 16-byte aligned
 //There's a 64GiB data limit that should be respected (needs key reroll)
-void Buffer_aesExpertDecUpdate(AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax);
+void Buffer_aesExpertDecUpdate(
+	AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax, Bool use256
+);
 
 //Don't use the data if the function returns false!
 //Clear or remove the generated data if encryption failed, or risk exposing sensitive data.
