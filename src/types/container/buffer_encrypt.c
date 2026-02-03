@@ -449,31 +449,33 @@ Bool Buffer_aesExpertCreate(
 
 			//TODO: Find a better way of doing this
 
+			blockSizeHint /= 16;
+
 			#if _ARCH == ARCH_ARM64
 
-				if (blockSizeHint >= (I64)((2 * KIBI) * 16))
-					blockSize = 16;
+				if(blockSizeHint <= 16)
+					blockSize = 1;
 
-				else if (blockSizeHint >= (I64)(512 * 16))
+				else if(blockSizeHint <= 512)
+					blockSize = 2;
+
+				else if(blockSizeHint <= 4096)
 					blockSize = 8;
 
-				else if (blockSizeHint >= (I64)(128 * 16))
-					blockSize = 4;
-
-				else blockSize = blockSizeHint >= (I64)(32 * 16) ? 2 : 1;
-
+				else blockSize = 16;
+				
 			#else
 
-				if (blockSizeHint >= (I64)((8 * KIBI) * 16))
+				if (blockSizeHint >= (I64)(8 * KIBI))
 					blockSize = 16;
 
-				else if (blockSizeHint >= (I64)((1 * KIBI) * 16))
+				else if (blockSizeHint >= (I64)(1 * KIBI))
 					blockSize = 8;
 
-				else if (blockSizeHint >= (I64)(128 * 16))
+				else if (blockSizeHint >= 128)
 					blockSize = 4;
 
-				else blockSize = blockSizeHint >= (I64)(32 * 16) ? 2 : 1;
+				else blockSize = blockSizeHint >= 32 ? 2 : 1;
 			#endif
 
 			break;
