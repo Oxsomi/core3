@@ -19,10 +19,9 @@
 */
 
 #include "types/math/vec4i.h"
-
 #include <wmmintrin.h>
 
-I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
+static inline I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 
 	if(i >= 11)
 		return I32x4_zero();
@@ -42,5 +41,5 @@ I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 	}
 }
 
-I32x4 AES_encodeBlock(I32x4 a, I32x4 b) { return _mm_aesenc_si128(a, b); }
-I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b) { return _mm_aesenclast_si128(a, b); }
+static inline I32x4 AES_encodeBlock(I32x4 a, I32x4 b) { return _mm_aesenc_si128(a, b); }
+static inline I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b) { return _mm_aesenclast_si128(a, b); }

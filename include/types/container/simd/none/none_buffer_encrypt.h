@@ -18,8 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "types/base/error.h"
-#include "types/container/buffer.h"
+#include "types/container/buffer_encrypt.h"
 #include "types/math/vec4i.h"
 
 //Implemented from
@@ -76,7 +75,9 @@ typedef union I32x4_U8x4x4 {
 
 static inline I32x4 AES_shiftRows(I32x4 a) {
 
-	I32x4_U8x4x4 ap = (I32x4_U8x4x4) { .v = a };
+	I32x4_U8x4x4 ap;
+	ap.v = a;
+
 	I32x4_U8x4x4 res = ap;
 
 	for(U64 j = 0; j < 4; ++j)
@@ -114,7 +115,8 @@ static U8 AES_MIX_COLUMN[4][4] = {
 
 static inline I32x4 AES_mixColumns(I32x4 vvv) {
 
-	I32x4_U8x4x4 v = (I32x4_U8x4x4) { .v = vvv };
+	I32x4_U8x4x4 v;
+	v.v = vvv;
 
 	v.v4x4 = U8x4x4_transpose(&v.v4x4);
 
@@ -132,26 +134,15 @@ static inline I32x4 AES_mixColumns(I32x4 vvv) {
 	return res;
 }
 
-I32x4 AES_encodeBlock(I32x4 a, I32x4 b) {
+static inline I32x4 AES_encodeBlock(I32x4 a, I32x4 b) {
 	I32x4 t = AES_shiftRows(a);
 	t = AES_subBytes(t);
 	t = AES_mixColumns(t);
 	return I32x4_xor(t, b);
 }
 
-I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b) {
+static inline I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b) {
 	I32x4 t = AES_shiftRows(a);
 	t = AES_subBytes(t);
 	return I32x4_xor(t, b);
-}
-
-static inline I32x4 AESEncryptionContext_rsh(I32x4 v, U8 shift) {
-
-	U64 *a = (U64*) &v;
-	U64 *b = a + 1;
-
-	*a = (*a >> shift) | (*b << (64 - shift));
-	*b >>= shift;
-
-	return v;
 }

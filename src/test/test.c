@@ -21,6 +21,7 @@
 #include "types/base/time.h"
 #include "types/base/c8.h"
 #include "types/container/buffer.h"
+#include "types/container/buffer_encrypt.h"
 #include "types/container/string.h"
 #include "types/container/big_int.h"
 #include "types/container/u128.h"
@@ -4354,18 +4355,16 @@ int main() {
 		AESEncryptionContext ctx = { 0 };
 		U64 elems = (1024 * 65536) / siz;
 
+		U8 blockSizeMax = 0;
+		gotoIfError3(clean, Buffer_aesExpertCreate(
+			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, siz, &blockSizeMax, &ctx, e_rr
+		));
+
 		while (true) {
 
 			for (U64 j = 0; j < 100; ++j) {
-
-				U8 blockSizeMax = 0;
-				gotoIfError3(clean, Buffer_aesExpertCreate(
-					I32x4_zero(), EBufferEncryptionType_AES256GCM, key, siz, &blockSizeMax, &ctx, e_rr
-				));
-
 				Buffer dat = Buffer_createRef(myData + ((count + j) % elems) * siz, siz);
 				Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax);
-				Buffer_aesExpertFinalize(&ctx, 0, count * siz, I32x4_zero());
 			}
 
 			count += 100;
@@ -4374,12 +4373,13 @@ int main() {
 				break;
 		}
 
+		Buffer_aesExpertFinalize(&ctx, 0, count, I32x4_zero());
+
 		DNs diff = Time_elapsed(curr);
 
 		//Doing AES-256-GCM ops for 3s on 16 size blocks: 5403576 AES-256-GCM ops in 2.95s
 		Log_debugLn(alloc, "Doing AES-256-GCM ops for 3s on %"PRIu64" size blocks: %"PRIu64" AES-256-GCM ops in %fs", siz, count, (F64)diff / SECOND);
 	}
-
 
 	Buffer buf = Buffer_createNull();
 	gotoIfError3(clean, Buffer_createEmptyBytes(1 * GIBI, alloc, &buf, e_rr));

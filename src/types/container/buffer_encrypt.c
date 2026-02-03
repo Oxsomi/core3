@@ -19,6 +19,7 @@
 */
 
 #include "types/base/error.h"
+#include "types/container/buffer_encrypt.h"
 #include "types/container/buffer.h"
 #include "types/math/u128.h"
 #include "types/math/vec4i_swizzle.h"
@@ -56,10 +57,6 @@
 //
 //For "encrypt" we use AES CTR as explained by the intel paper:
 //https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf
-
-impl I32x4 AES_keyGenAssist(I32x4 a, U8 i);
-impl I32x4 AES_encodeBlock(I32x4 a, I32x4 b);
-impl I32x4 AES_encodeBlockLast(I32x4 a, I32x4 b);
 
 //AES_subWord can be used by either NEON or NONE for encryption.
 //No lookup tables, those are unsafe.
@@ -104,17 +101,25 @@ static inline U8 AES_affine(U8 x) {
 	return y ^ 0x63;
 }
 
-U8 AES_sbox(U8 x) {
+static inline U8 AES_sbox(U8 x) {
 	return AES_affine(AES_gfInv(x));
 }
 
-U32 AES_subWord(U32 w) {
+static inline U32 AES_subWord(U32 w) {
 	return
 		((U32)AES_sbox((U8)(w >>  0)) <<  0) |
 		((U32)AES_sbox((U8)(w >>  8)) <<  8) |
 		((U32)AES_sbox((U8)(w >> 16)) << 16) |
 		((U32)AES_sbox((U8)(w >> 24)) << 24);
 }
+
+#if _SIMD == SIMD_NEON
+	#include "types/container/simd/neon/neon_buffer_encrypt.h"
+#elif _SIMD == SIMD_SSE
+	#include "types/container/simd/sse/sse_buffer_encrypt.h"
+#else
+	#include "types/container/simd/none/none_buffer_encrypt.h"
+#endif
 
 //Key expansion for AES256
 //Implemented from the official intel AES-NI paper + Additional paper by S. Gueron appendix A

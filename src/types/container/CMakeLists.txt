@@ -17,7 +17,9 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesContainerHeaders "../../../include/types/container/*.h")
+file(GLOB typesContainerHeaders "../../../include/types/container/*.h")
+file(GLOB typesContainerHeadersSimd "../../../include/types/container/simd/*.h")
+file(GLOB typesContainerHeadersSimdTarg "../../../include/types/container/simd/${SIMD}/*.h")
 file(GLOB typesContainerSources "*.c")
 file(GLOB_RECURSE typesContainerPlatformSources "platforms/${platform}/*.c")
 file(GLOB_RECURSE typesContainerSIMDSources "simd/${simd}/*.c")
@@ -30,6 +32,8 @@ add_library(
 	OxC3_types_container
 	STATIC
 	${typesContainerHeaders}
+	${typesContainerHeadersSimd}
+	${typesContainerHeadersSimdTarg}
 	${typesContainerSources}
 	${typesContainerPlatformSources}
 	${typesContainerSIMDSources}
@@ -40,6 +44,7 @@ add_library(
 source_group("Source Files (${platform})" FILES ${typesContainerPlatformSources})
 source_group("Source Files (simd: ${simd})" FILES ${typesContainerSIMDSources})
 source_group("Source Files (unix)" FILES ${typesContainerUnixSources})
+source_group("Header Files (simd: ${simd})" FILES ${typesContainerHeadersSimdTarg})
 
 set_target_properties(OxC3_types_container PROPERTIES FOLDER Oxsomi/types)
 target_link_libraries(OxC3_types_container PUBLIC OxC3_types_base OxC3_types_math)
