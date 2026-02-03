@@ -830,11 +830,22 @@ static inline void AESEncryptionContext_handleBlocks(
 		);
 }
 
+static inline void Buffer_prefetch(Buffer data) {
+	#if _SIMD == SIMD_SSE
+		if (data.ptr) {
+			if (Buffer_length(data) > 256)
+				_mm_prefetch((const char*)data.ptr, _MM_HINT_T0);
+		}
+	#endif
+}
+
 void Buffer_aesExpertEncUpdate(AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax) {
+	Buffer_prefetch(data);
 	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), true, offsetInBlocks, blockSizeMax);
 }
 
 void Buffer_aesExpertDecUpdate(AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax) {
+	Buffer_prefetch(data);
 	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), false, offsetInBlocks, blockSizeMax);
 }
 
@@ -859,6 +870,9 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *restrict en
 		if(!Buffer_csprng(Buffer_createRef(encrypt->nonConstEncrypt.key, sizeof(U32) * len)))
 			retError(clean, Error_invalidState(1, "AESEncryptionContext_encrypt() couldn't generate key"));
 	}
+
+	if (encrypt->target)
+		Buffer_prefetch(*encrypt->target);
 
 	AESEncryptionContext ctx;
 	U8 blockSizeMax;
@@ -956,6 +970,9 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 	Bool s_uccess = true;
 
 	//Create context
+
+	if (decrypt->target)
+		Buffer_prefetch(*decrypt->target);
 
 	U8 blockSizeMax;
 	AESEncryptionContext ctx;
