@@ -4349,22 +4349,25 @@ int main() {
 	for (U64 i = 0; i < 7; ++i) {
 
 		U32 siz = sizes[i];
-		U64 count = 0;
+		U32 count = 0;
 		Ns curr = Time_now();
 		AESEncryptionKey key = { 0 };
 		AESEncryptionContext ctx = { 0 };
 		U64 elems = (1024 * 65536) / siz;
 
+		//Only setup once to avoid overhead each time, we want to measure how fast we can be while streaming.
+		//Rather than how fast independent encrypts are.
+
 		U8 blockSizeMax = 0;
 		gotoIfError3(clean, Buffer_aesExpertCreate(
-			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, siz, &blockSizeMax, &ctx, e_rr
+			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, -16, &blockSizeMax, &ctx, e_rr
 		));
 
 		while (true) {
 
-			for (U64 j = 0; j < 100; ++j) {
+			for (U32 j = 0; j < 100; ++j) {
 				Buffer dat = Buffer_createRef(myData + ((count + j) % elems) * siz, siz);
-				Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax);
+				Buffer_aesExpertEncUpdate(&ctx, dat, count + j, blockSizeMax);
 			}
 
 			count += 100;
@@ -4373,7 +4376,7 @@ int main() {
 				break;
 		}
 
-		Buffer_aesExpertFinalize(&ctx, 0, count, I32x4_zero());
+		Buffer_aesExpertFinalize(&ctx, 0, count * siz, I32x4_zero());
 
 		DNs diff = Time_elapsed(curr);
 

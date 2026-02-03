@@ -179,16 +179,16 @@ static inline void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], c
 }
 
 //AES block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
-static inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], const EBufferEncryptionType type) {
-
-	block = I32x4_xor(block, k[0]);
+static inline void AESEncryptionContext_blockHashN(I32x4 *block, U8 N, const I32x4 k[15], const EBufferEncryptionType type) {
 
 	const U8 rounds = type == EBufferEncryptionType_AES128GCM ? 10 : 14;
 
 	for(U8 i = 1; i < rounds; ++i)
-		block = AES_encodeBlock(block, k[i]);
+		for(U8 j = 0; j < N; ++j)
+			block[j] = AES_encodeBlock(block[j], k[i]);
 
-	return AES_encodeBlockLast(block, k[rounds]);
+	for (U8 j = 0; j < N; ++j)
+		block[j] = AES_encodeBlockLast(block[j], k[rounds]);
 }
 
 //Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
@@ -496,7 +496,8 @@ Bool Buffer_aesExpertCreate(
 
 	//Prepare ghash
 
-	ctx->H[0] = AESEncryptionContext_blockHash(I32x4_zero(), ctx->key, ctx->encryptionType);
+	ctx->H[0] = ctx->key[0];
+	AESEncryptionContext_blockHashN(ctx->H, 1, ctx->key, ctx->encryptionType);
 	ctx->H[0] = I32x4_swapEndianness(ctx->H[0]);
 
 	switch (blockSize) {
@@ -512,8 +513,10 @@ Bool Buffer_aesExpertCreate(
 	ctx->iv = Y0;
 
 	I32x4_setWRef(&Y0, I32_swapEndianness(1));
+	Y0 = I32x4_xor(Y0, ctx->key[0]);
 
-	ctx->EKY0 = AESEncryptionContext_blockHash(Y0, ctx->key, ctx->encryptionType);
+	ctx->EKY0 = Y0;
+	AESEncryptionContext_blockHashN(&ctx->EKY0, 1, ctx->key, ctx->encryptionType);
 	ctx->tag = I32x4_zero();
 
 clean:
@@ -668,8 +671,10 @@ static inline void AESEncryptionContext_processBlockTail(
 
 	I32x4 ivi = ctx->iv;
 	I32x4_setWRef(&ivi, (I32)U32_swapEndianness(i + 2));
+	ivi = I32x4_xor(ivi, ctx->key[0]);
 
-	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
+	AESEncryptionContext_blockHashN(&ivi, 1, ctx->key, ctx->encryptionType);
+	v = I32x4_xor(v, ivi);
 
 	//Update tag for the ciphertext (after encryption)
 
@@ -690,9 +695,21 @@ static inline void AESEncryptionContext_processBlockN(
 ) {
 
 	I32x4 v[16];
+	I32x4 w[16];
 
 	for (U32 i = 0; i < N; ++i)
 		v[i] = io[i];
+
+	I32x4 iv = ctx->iv;
+	I32x4 k = ctx->key[0];
+
+	for (U32 i = 0; i < N; ++i) {
+		I32x4 ivi = iv;
+		I32x4_setWRef(&ivi, (I32)U32_swapEndianness(id + i + 2));
+		w[i] = I32x4_xor(ivi, k);
+	}
+
+	AESEncryptionContext_blockHashN(w, N, ctx->key, ctx->encryptionType);
 
 	//Update tag for the ciphertext (before decryption)
 
@@ -702,11 +719,7 @@ static inline void AESEncryptionContext_processBlockN(
 	//Encrypt IV + blockId to use to encrypt
 
 	for (U32 i = 0; i < N; ++i) {
-
-		I32x4 ivi = ctx->iv;
-		I32x4_setWRef(&ivi, (I32)U32_swapEndianness(id + i + 2));
-
-		v[i] = I32x4_xor(v[i], AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
+		v[i] = I32x4_xor(v[i], w[i]);
 	}
 
 	//Update tag for the ciphertext (after encryption)
