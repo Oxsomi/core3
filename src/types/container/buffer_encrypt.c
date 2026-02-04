@@ -292,12 +292,12 @@ static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *
 		//cryptoState >= 3: has cmul64x2 + clmul64x4
 		if(cryptoState >= 3 && N >= 4 && (use256Or512 & 2)) {
 
-			I32x16 clmul00_16[32];
-			I32x16 clmul11_16[32];
-			I32x16 clmul01_16[32];
-			I32x16 clmul10_16[32];
+			I32x16 clmul00_16[16];
+			I32x16 clmul11_16[16];
+			I32x16 clmul01_16[16];
+			I32x16 clmul10_16[16];
 	
-			I32x16 a16[32];
+			I32x16 a16[16];
 
 			const U8 N4 = N >> 2;
 
@@ -568,7 +568,7 @@ static inline void AESEncryptionContext_updateTagN(
 	AESEncryptionContext *restrict ctx, const I32x4 *restrict CTi, const U8 N, U8 use256Or512
 ) {
 	
-	I32x4 v[128];
+	I32x4 v[64];
 
 	v[0] = I32x4_xor(CTi[0], ctx->tag);
 
@@ -598,96 +598,81 @@ void Buffer_aesExpertUpdateAADFast(AESEncryptionContext *restrict ctx, Buffer ad
 	U64 next = 0;
 	const I32x4 *restrict ptr = (const I32x4* restrict)additionalData.ptr;
 
-	{
-		if (blockSize >= 128 && (use256Or512 & 2)) {
-			while (next + 2048 <= len) {
+	if (blockSize >= 64 && use256Or512) {
+		while (next + 1024 <= len) {
 
-				I32x4 v[128];
+			I32x4 v[64];
 
-				for (U32 i = 0; i < 128; ++i)
-					v[i] = ptr[(next >> 4) | i];
+			for (U32 i = 0; i < 64; ++i)
+				v[i] = ptr[(next >> 4) | i];
 
-				AESEncryptionContext_updateTagN(ctx, v, 128, use256Or512);
-				next += 2048;
-			}
+			AESEncryptionContext_updateTagN(ctx, v, 64, use256Or512);
+			next += 1024;
 		}
+	}
 
-		if (blockSize >= 64 && use256Or512) {
-			while (next + 1024 <= len) {
+	if (blockSize >= 32 && use256Or512) {
+		while (next + 512 <= len) {
 
-				I32x4 v[64];
+			I32x4 v[32];
 
-				for (U32 i = 0; i < 64; ++i)
-					v[i] = ptr[(next >> 4) | i];
+			for (U32 i = 0; i < 32; ++i)
+				v[i] = ptr[(next >> 4) | i];
 
-				AESEncryptionContext_updateTagN(ctx, v, 64, use256Or512);
-				next += 1024;
-			}
+			AESEncryptionContext_updateTagN(ctx, v, 32, use256Or512);
+			next += 512;
 		}
+	}
 
-		if (blockSize >= 32 && use256Or512) {
-			while (next + 512 <= len) {
+	if (blockSize >= 16) {
+		while (next + 256 <= len) {
 
-				I32x4 v[32];
+			I32x4 v[16];
 
-				for (U32 i = 0; i < 32; ++i)
-					v[i] = ptr[(next >> 4) | i];
+			for (U32 i = 0; i < 16; ++i)
+				v[i] = ptr[(next >> 4) | i];
 
-				AESEncryptionContext_updateTagN(ctx, v, 32, use256Or512);
-				next += 512;
-			}
+			AESEncryptionContext_updateTagN(ctx, v, 16, use256Or512);
+			next += 256;
 		}
+	}
 
-		if (blockSize >= 16) {
-			while (next + 256 <= len) {
+	if (blockSize >= 8) {
+		while (next + 128 <= len) {
 
-				I32x4 v[16];
+			I32x4 v[8];
 
-				for (U32 i = 0; i < 16; ++i)
-					v[i] = ptr[(next >> 4) | i];
+			for (U32 i = 0; i < 8; ++i)
+				v[i] = ptr[(next >> 4) | i];
 
-				AESEncryptionContext_updateTagN(ctx, v, 16, use256Or512);
-				next += 256;
-			}
+			AESEncryptionContext_updateTagN(ctx, v, 8, use256Or512);
+			next += 128;
 		}
+	}
 
-		if (blockSize >= 8) {
-			while (next + 128 <= len) {
+	if (blockSize >= 4) {
+		while (next + 64 <= len) {
 
-				I32x4 v[8];
+			I32x4 v[4];
 
-				for (U32 i = 0; i < 8; ++i)
-					v[i] = ptr[(next >> 4) | i];
+			for (U32 i = 0; i < 4; ++i)
+				v[i] = ptr[(next >> 4) | i];
 
-				AESEncryptionContext_updateTagN(ctx, v, 8, use256Or512);
-				next += 128;
-			}
+			AESEncryptionContext_updateTagN(ctx, v, 4, use256Or512);
+			next += 64;
 		}
+	}
 
-		if (blockSize >= 4) {
-			while (next + 64 <= len) {
+	if (blockSize >= 2) {
+		while (next + 32 <= len) {
 
-				I32x4 v[4];
+			I32x4 v[2];
 
-				for (U32 i = 0; i < 4; ++i)
-					v[i] = ptr[(next >> 4) | i];
+			for (U32 i = 0; i < 2; ++i)
+				v[i] = ptr[(next >> 4) | i];
 
-				AESEncryptionContext_updateTagN(ctx, v, 4, use256Or512);
-				next += 64;
-			}
-		}
-
-		if (blockSize >= 2) {
-			while (next + 32 <= len) {
-
-				I32x4 v[2];
-
-				for (U32 i = 0; i < 2; ++i)
-					v[i] = ptr[(next >> 4) | i];
-
-				AESEncryptionContext_updateTagN(ctx, v, 2, use256Or512);
-				next += 32;
-			}
+			AESEncryptionContext_updateTagN(ctx, v, 2, use256Or512);
+			next += 32;
 		}
 	}
 
@@ -715,67 +700,13 @@ static inline void Buffer_aesExpertExpandHash(AESEncryptionContext *restrict ctx
 	}
 }
 
-//TODO: Find a better way of doing this
-
-#if _ARCH == ARCH_ARM64
-
-	U8 AES_getOptimalBatchSize(U64 totalSize, U8 *use256Or512) {
-
-		(void)use256Or512;
-
-		if(totalSize <= 16)
-			return 1;
-
-		if(blockSizeHint <= 512)
-			return 2;
-
-		if(blockSizeHint <= 4096)
-			return 8;
-
-		return 16;
-	}
-
-#else
-
-	//TODO:
-	U8 AES_getOptimalBatchSize(U64 totalSize, U8 *use256Or512) {
-
-		U8 batchSize;
-
-		if (totalSize < 32) {
-			*use256Or512 = false;
-			batchSize = 1;
-		}
-
-		else if (totalSize <= 64) {
-			batchSize = 2;
-			*use256Or512 = true;  // AVX512 helps here (+6-12%)
-		}
-		else if (totalSize <= 512) {
-			// Small-medium blocks: batch=8 sweet spot
-			batchSize = 8;
-			*use256Or512 = false;  // Avoid frequency penalty
-		}
-		else if (totalSize <= 4096) {
-			// Medium-large blocks: batch=16 optimal
-			batchSize = 16;
-			*use256Or512 = true;  // Penalty amortized
-		}
-		else {
-			// Very large blocks: batch=16 still optimal (32 gives no benefit)
-			batchSize = 32;
-			*use256Or512 = true;
-		}
-
-		return batchSize;
-	}
-#endif
-
 Bool Buffer_aesExpertCreate(
 	I32x4 iv,
 	EBufferEncryptionType type,
 	AESEncryptionKey key,
-	I64 blockSizeHint,
+	I64 streamSizeHint,
+	U64 oneTimeHint,
+	U8 use256Or512Override,
 	U8 *restrict blockSizeMax,
 	U8 *restrict use256Or512,
 	AESEncryptionContext *restrict ctx,
@@ -793,11 +724,15 @@ Bool Buffer_aesExpertCreate(
 			1, (U64)type, EBufferEncryptionType_Count, "Buffer_aesExpertCreate()::type is out of bounds"
 		));
 
-	U8 blockSize = 128;
+	//Here we detect what block size we should use and if 256-bit or 512-bit should be used if available.
 
-	switch (blockSizeHint) {
+	U8 blockSize = 64;
+	Bool detect = false;
 
-		case -128:
+	U8 use256Or512Real = use256Or512Override;
+
+	switch (streamSizeHint) {
+
 		case -64:
 		case -32:
 		case -16:
@@ -805,43 +740,47 @@ Bool Buffer_aesExpertCreate(
 		case -4:
 		case -2:
 		case -1:
-			blockSize = (U8)-blockSizeHint;
+			blockSize = (U8)-streamSizeHint;
 			break;
 
 		case 0:
-			blockSize = 64;
-			break;
-
 		default:
 
-			if(blockSizeHint < 0)
+			if(streamSizeHint < 0)
 				retError(clean, Error_invalidEnum(
-					1, (U64)-blockSizeHint, 16,
-					"Buffer_aesExpertCreate()::blockSizeHint must be -16, -8, -4, -2, -1 or a positive number"
+					1, (U64)-streamSizeHint, 16,
+					"Buffer_aesExpertCreate()::blockSizeHint must be -64, -32, -16, -8, -4, -2, -1 or a positive number"
 				));
 
-			blockSizeHint /= 16;
-			blockSize = AES_getOptimalBatchSize(blockSizeHint, use256Or512);
+			//We'll try to find the optimal size, this is mostly just the largest batch size available
+			// but might need certain crypto flags to be set properly.
+			detect = true;
+
+			if (streamSizeHint && streamSizeHint <= 64)		//Disable everything for small blocks since it has overhead
+				use256Or512Real = 0;
+
 			break;
 	}
 
-	blockSize = 128;
-	U8 use256Or512Real = 3;
-
-	if (cryptoState <= 1) {
+	if (cryptoState <= 1 || !use256Or512Real) {
 		blockSize = U8_min(blockSize, 16);
 		use256Or512Real = 0;
 	}
 
-	else if (cryptoState <= 2) {
+	else if (cryptoState <= 2 || use256Or512Real < 2) {
 		blockSize = U8_min(blockSize, 64);
 		use256Or512Real &= 1;
 	}
 
 	else {
-		blockSize = U8_min(blockSize, 128);
+		blockSize = U8_min(blockSize, 64);
 		use256Or512Real &= 3;
 	}
+
+	//TODO: oneTimeHint to determine efficient blockSize from what's available.
+
+	if (detect)
+		(void)oneTimeHint;
 
 	if (use256Or512) *use256Or512 = use256Or512Real;
 	if (blockSizeMax) *blockSizeMax = blockSize;
@@ -863,7 +802,6 @@ Bool Buffer_aesExpertCreate(
 		case 16:	Buffer_aesExpertExpandHash(ctx, 16);	break;
 		case 32:	Buffer_aesExpertExpandHash(ctx, 32);	break;
 		case 64:	Buffer_aesExpertExpandHash(ctx, 64);	break;
-		case 128:	Buffer_aesExpertExpandHash(ctx, 128);	break;
 	}
 
 	//Compute final tag xor
@@ -953,7 +891,15 @@ static inline Bool AESEncryptionContext_create(
 		));
 
 	gotoIfError3(clean, Buffer_aesExpertCreate(
-		*encrypt->constDecrypt.iv, encrypt->type, key, blockHint, blockSize, use256Or512, ctx, e_rr
+		*encrypt->constDecrypt.iv,
+		encrypt->type,
+		key,
+		0, blockHint,		//We run a one time context, so optimize for 
+		U8_MAX,
+		blockSize,
+		use256Or512,
+		ctx,
+		e_rr
 	));
 
 	if (encrypt->additionalData)
@@ -965,7 +911,6 @@ static inline Bool AESEncryptionContext_create(
 			case 16:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  16, *use256Or512);	break;
 			case 32:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  32, *use256Or512);	break;
 			case 64:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  64, *use256Or512);	break;
-			case 128:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData, 128, *use256Or512);	break;
 		}
 
 clean:
@@ -1059,8 +1004,8 @@ static inline void AESEncryptionContext_processBlockN(
 		//cryptoState >= 3: has everything needed for x2 + AVX512F
 		if(cryptoState >= 3 && N >= 4 && (use256Or512 & 2)) {
 		
-			I32x16 v[32];		//TODO: Look into bigger blocks
-			I32x16 ivi[32];
+			I32x16 v[16];
+			I32x16 ivi[16];
 
 			U8 N4 = N >> 2;
 
@@ -1186,21 +1131,7 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	//32 blocks and higher is reserved for 256-bit vectors
 
-	if (blockSizeMax >= 128 && cryptoState >= 3 && (use256Or512 & 2)) {
-		while (next + 2048 <= targetLen) {
-			AESEncryptionContext_processBlockN(
-				ctx,
-				(I32x4*)(targetPtr + next),
-				(U32)(next >> 4) + offsetInBlocks,
-				128,
-				isEncrypt,
-				use256Or512
-			);
-			next += 2048;
-		}
-	}
-
-	if (blockSizeMax >= 64 && cryptoState >= 2 && (use256Or512 & 1)) {
+	if (blockSizeMax >= 64 && cryptoState >= 2 && (use256Or512 & 1))
 		while (next + 1024 <= targetLen) {
 			AESEncryptionContext_processBlockN(
 				ctx,
@@ -1212,9 +1143,8 @@ static inline void AESEncryptionContext_handleBlocks(
 			);
 			next += 1024;
 		}
-	}
 
-	if (blockSizeMax >= 32) {
+	if (blockSizeMax >= 32)
 		while (next + 512 <= targetLen) {
 			AESEncryptionContext_processBlockN(
 				ctx,
@@ -1226,14 +1156,12 @@ static inline void AESEncryptionContext_handleBlocks(
 			);
 			next += 512;
 		}
-	}
 
 	//16 blocks at a time, this handles only fully aligned blocks.
 	//This improves performance because it allows better scheduling
 	// (16 can run in parallel, instead of being blocked every instruction)
 
-	if (blockSizeMax >= 16) {
-
+	if (blockSizeMax >= 16)
 		while (next + 256 <= targetLen) {
 			AESEncryptionContext_processBlockN(
 				ctx,
@@ -1245,9 +1173,8 @@ static inline void AESEncryptionContext_handleBlocks(
 			);
 			next += 256;
 		}
-	}
 
-	if (blockSizeMax >= 8) {
+	if (blockSizeMax >= 8)
 		while (next + 128 <= targetLen) {
 			AESEncryptionContext_processBlockN(
 				ctx,
@@ -1259,9 +1186,8 @@ static inline void AESEncryptionContext_handleBlocks(
 			);
 			next += 128;
 		}
-	}
 
-	if (blockSizeMax >= 4) {
+	if (blockSizeMax >= 4)
 		while (next + 64 <= targetLen) {
 			AESEncryptionContext_processBlockN(
 				ctx,
@@ -1273,10 +1199,9 @@ static inline void AESEncryptionContext_handleBlocks(
 			);
 			next += 64;
 		}
-	}
 
 
-	if (blockSizeMax >= 2) {
+	if (blockSizeMax >= 2)
 		while (next + 32 <= targetLen) {
 			AESEncryptionContext_processBlockN(
 				ctx,
@@ -1288,7 +1213,6 @@ static inline void AESEncryptionContext_handleBlocks(
 			);
 			next += 32;
 		}
-	}
 
 	while (next + 16 <= targetLen) {
 		AESEncryptionContext_processBlockN(
@@ -1386,7 +1310,6 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *restrict en
 			case 16:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  16, use256Or512);	break;
 			case 32:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  32, use256Or512);	break;
 			case 64:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  64, use256Or512);	break;
-			case 128:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0, 128, use256Or512);	break;
 		}
 
 	//Finish encryption by appending tag for authentication / verification that the data isn't messed with
@@ -1490,7 +1413,6 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 			case 16:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  16, use256Or512);	break;
 			case 32:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  32, use256Or512);	break;
 			case 64:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  64, use256Or512);	break;
-			case 128:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0, 128, use256Or512);	break;
 		}
 
 	U64 aadLen = decrypt->additionalData ? Buffer_length(*decrypt->additionalData) : 0;

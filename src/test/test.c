@@ -45,6 +45,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <stdio.h>
+
 Bool ourAlloc(void *allocator, U64 length, Buffer *output, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -4341,74 +4343,169 @@ int main() {
 	
 	//Final OpenSSL tests
 
-	U8 *myData = (U8*)malloc(1024 * 65536);
-	U32 sizes[7] = { 16, 64, 256, 1024, 8192, 16384, 65536 };
+	U32 sizes[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 };
+	I64 blockSizeHints[] = { -1, -2, -4, -8, -16, -32, -64, 0 };
+	U8 cryptoState[] = { 0, 1, 3 };		//Test non 256-bit, 512-bit, etc.
 
-	Buffer_csprng(Buffer_createRef(myData, 1024 * 65536));
+	CharString_free(&tmpStr, alloc);
+	gotoIfError3(clean, Buffer_createEmptyBytes(1 * GIBI, alloc, &full, e_rr));
+	Buffer_csprng(full);
 
-	for (U64 i = 0; i < 7; ++i) {
+	gotoIfError3(clean, CharString_format(
+		alloc, &tmp, e_rr, "%s,%s,%s,%s,%s,%s,%s\n",
+		"Type",
+		"Crypto state",
+		"Batch size",
+		"Total size",
+		"Count",
+		"Seconds",
+		"GiB/s"
+	));
 
-		U32 siz = sizes[i];
-		U64 count = 0;
-		Ns curr = Time_now();
-		AESEncryptionKey key = { 0 };
-		AESEncryptionContext ctx = { 0 };
-		U64 elems = (1024 * 65536) / siz;
+	for(U64 m = 0; m < 1; ++m)
+		for (U64 l = 0; l < sizeof(cryptoState) / sizeof(cryptoState[0]); ++l)
+			for (U64 k = 0; k < sizeof(blockSizeHints) / sizeof(blockSizeHints[0]); ++k)
+				for (U64 i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
 
-		U8 blockSizeMax = 0;
-		U8 use256Or512 = 3;
-		gotoIfError3(clean, Buffer_aesExpertCreate(
-			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, -128, &blockSizeMax, &use256Or512, &ctx, e_rr
-		));
+					U64 siz = sizes[i];
+					U64 count = 0;
+					Ns curr = Time_now();
+					AESEncryptionKey key = { 0 };
+					AESEncryptionContext ctx = { 0 };
+					U64 elems = Buffer_length(full) / siz;
 
-		while (true) {
+					I64 blockSizeHint = blockSizeHints[k];
+					if (!blockSizeHint)
+						blockSizeHint = siz;
 
-			for (U64 j = 0; j < 100; ++j) {
-				Buffer dat = Buffer_createRef(myData + ((count + j) % elems) * siz, siz);
-				Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, use256Or512);
-			}
+					U8 blockSizeMax = 0;
+					U8 use256Or512 = 0;
 
-			count += 100;
+					if(!m)
+						gotoIfError3(clean, Buffer_aesExpertCreate(
+							I32x4_zero(),
+							EBufferEncryptionType_AES256GCM,
+							key,
+							blockSizeHint,
+							0,
+							cryptoState[l],
+							&blockSizeMax,
+							&use256Or512,
+							&ctx,
+							e_rr
+						));
 
-			if (Time_elapsed(curr) >= (DNs)(3 * SECOND))
-				break;
-		}
+					//Override this.
 
-		Buffer_aesExpertFinalize(&ctx, 0, count, I32x4_zero());
+					if (blockSizeHints[k]) {
 
-		DNs diff = Time_elapsed(curr);
+						if (blockSizeMax < (U8)(U8)-blockSizeHint)		//Unsupported blockSize
+							break;
 
-		//Doing AES-256-GCM ops for 3s on 16 size blocks: 5403576 AES-256-GCM ops in 2.95s
-		Log_debugLn(alloc, "Doing AES-256-GCM ops for 3s on %"PRIu64" size blocks: %"PRIu64" AES-256-GCM ops in %fs", siz, count, (F64)diff / SECOND);
-	}
+						if (use256Or512 != cryptoState[l])				//Unsupported crypto state
+							break;
+					}
 
-	Buffer buf = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createEmptyBytes(1 * GIBI, alloc, &buf, e_rr));
+					if (!i)
+						Log_debugLn(
+							alloc,
+							"Starting profile for AES256GCM blockSize = %"PRIu64" (crypto: %"PRIx8", %s)",
+							(U64)-blockSizeHints[k],
+							cryptoState[l],
+							m ? "Instant encrypt" : "Streaming"
+						);
+
+					while (true) {
+
+						for (U64 j = 0; j < 256; ++j) {
+
+							if (m)
+								gotoIfError3(clean, Buffer_aesExpertCreate(
+									I32x4_zero(),
+									EBufferEncryptionType_AES256GCM,
+									key,
+									blockSizeHint,
+									siz,
+									cryptoState[l],
+									&blockSizeMax,
+									&use256Or512,
+									&ctx,
+									e_rr
+								));
+
+							Buffer dat = Buffer_createRef(full.ptrNonConst + ((count + j) % elems) * siz, siz);
+							Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, use256Or512);
+
+							if(m)
+								Buffer_aesExpertFinalize(&ctx, 0, count, I32x4_zero());
+						}
+
+						count += 256;
+
+						if (Time_elapsed(curr) >= (DNs)(SECOND * 3))
+							break;
+					}
+
+					if (!m)
+						Buffer_aesExpertFinalize(&ctx, 0, count, I32x4_zero());
+
+					DNs diff = Time_elapsed(curr);
+
+					Log_debugLn(
+						alloc,
+						"AES-256-GCM ops for 3s on %"PRIu64" byte blocks: %"PRIu64" ops in %fs (%f GiB/s)",
+						siz,
+						count,
+						(F64)diff / SECOND,
+						count * siz / ((F64)diff / SECOND) / GIBI
+					);
+
+					gotoIfError3(clean, CharString_format(
+						alloc, &tmpStr, e_rr, "%s%s,%"PRIx8",%"PRIu8",%"PRIu64",%"PRIu64",%f,%f\n",
+						tmp.ptr ? tmp.ptr : "",
+						!m ? "Streaming" : "Instant",
+						cryptoState[l],
+						blockSizeMax,
+						siz,
+						count,
+						(F64)diff / SECOND,
+						count * siz / ((F64)diff / SECOND) / GIBI
+					));
+
+					CharString_free(&tmp, alloc);
+					tmp = tmpStr;
+					tmpStr = CharString_createNull();
+				}
+
+	FILE *f = fopen("test.csv", "wb");
+	fwrite(tmp.ptr, 1, CharString_length(tmp), f);
+	CharString_free(&tmp, alloc);
+	fclose(f);
 
 	Ns t = Time_now();
 
 	U32 key[8];
 	I32x4 tag, iv;
-	gotoIfError3(clean, Buffer_encryptAuto(&buf, NULL, true, key, &tag, &iv, e_rr));
+	gotoIfError3(clean, Buffer_encryptAuto(&full, NULL, true, key, &tag, &iv, e_rr));
 	
 	F64 dt23 = (Time_now() - t) / (F64)SECOND;
 	Log_debugLn(alloc, "Time taken (aes256gcm enc): %fs", dt23);
 	t = Time_now();
 
-	gotoIfError3(clean, Buffer_decryptAuto(&buf, NULL, key, tag, iv, e_rr));
+	gotoIfError3(clean, Buffer_decryptAuto(&full, NULL, key, tag, iv, e_rr));
 
 	dt23 = (Time_now() - t) / (F64)SECOND;
 	Log_debugLn(alloc, "Time taken (aes256gcm dec): %fs", dt23);
 	t = Time_now();
 
 	Buffer empty1 = Buffer_createNull();
-	gotoIfError3(clean, Buffer_encryptAuto(&empty1, &buf, false, key, &tag, &iv, e_rr));
+	gotoIfError3(clean, Buffer_encryptAuto(&empty1, &full, false, key, &tag, &iv, e_rr));
 
 	dt23 = (Time_now() - t) / (F64)SECOND;
 	Log_debugLn(alloc, "Time taken (aes256gcm mac): %fs", dt23);
 	t = Time_now();
 
-	Buffer_sha256(buf, key);
+	Buffer_sha256(full, key);
 
 	dt23 = (Time_now() - t) / (F64)SECOND;
 	Log_debugLn(alloc, "Time taken (sha256): %fs", dt23);

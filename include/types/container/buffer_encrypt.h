@@ -144,7 +144,7 @@ typedef struct AESEncryptionContext {
 	I32x4 key[15];
 	I32x4 tag;
 
-	alignas(64) I32x4 H[128];
+	alignas(64) I32x4 H[64];
 
 	I32x4 EKY0;
 
@@ -173,8 +173,15 @@ Bool Buffer_aesExpertCreate(
 
 	//How many bytes are handled by ghash if positive
 	// 0 means 'prefer large streams'
-	// <0 is hardcoding block size (e.g. -1, -2, -4, -8, -16)
-	I64 blockSizeHint,
+	// <0 is hardcoding block size (e.g. -1, -2, -4, -8, -16, -32, -64)
+	I64 streamSizeHint,
+
+	//If the decrypt is a one time, define this to non zero.
+	//This will try to take into account the time the create takes as well (but requires streamSizeHint of >=0)
+	// while streamSizeHint assumes the create overhead is nothing since a lot of data will be streamed.
+	U64 oneTimeHint,
+
+	U8 use256Or512Override,			//Put to 0xFF to detect
 	U8 *restrict blockSizeMax,		//Outputs block size if requested
 	U8 *restrict use256Or512,
 
