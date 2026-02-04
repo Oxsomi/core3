@@ -54,8 +54,15 @@ static inline I32x4 I32x16_getI32x4(I32x16 v, U8 i) {
 	}
 }
 
-static inline I32x16 AES_encodeBlock(I32x16 a, I32x16 b) { return _mm512_aesenc_epi128(a, b); }
-static inline I32x16 AES_encodeBlockLast(I32x16 a, I32x16 b) { return _mm512_aesenclast_epi128(a, b); }
+static inline I32x8 I32x16_getI32x8(I32x16 v, U8 i) {
+	switch (i) {
+		case 1:		return _mm512_extracti32x8_epi32(v, 1);
+		default:	return _mm512_castsi512_si256(v);
+	}
+}
+
+static inline I32x16 I32x16_aesEnc(I32x16 a, I32x16 b) { return _mm512_aesenc_epi128(a, b); }
+static inline I32x16 I32x16_aesEncLast(I32x16 a, I32x16 b) { return _mm512_aesenclast_epi128(a, b); }
 
 static inline I32x16 I32x16_clmul64(I32x16 a, I32x16 b, U8 imm) {
 	switch (imm) {
@@ -65,6 +72,23 @@ static inline I32x16 I32x16_clmul64(I32x16 a, I32x16 b, U8 imm) {
 		default:	return _mm512_clmulepi64_epi128(a, b, 0x11);
 	}
 }
+
+static inline I32x16 I32x16_swapEndianness(I32x16 v) {
+	return _mm512_shuffle_epi8(v, _mm512_set_epi8(
+		 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+		16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+		32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+		48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63
+	));
+}
+
+//Swaps I32x4[4] into wzyx order, useful for hash loads.
+static inline I32x16 I32x16_wzyxI32x4(I32x16 v) {
+	return _mm512_shuffle_i32x4(v, v, _MM_SHUFFLE(0, 1, 2, 3));
+}
+
+#define HAS_CLMUL64x4
+#define HAS_AESx4
 
 #ifdef __cplusplus
 		}

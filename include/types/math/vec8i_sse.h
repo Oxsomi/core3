@@ -65,6 +65,11 @@ static inline I32x8 I32x8_swapEndianness(I32x8 v) {
 	));
 }
 
+//Swaps I32x4[2] into yx order, useful for hash loads.
+static inline I32x8 I32x8_yxI32x4(I32x8 v) {
+	return _mm256_shuffle_i32x4(v, v, _MM_SHUFFLE2(0, 1));
+}
+
 #define HAS_CLMUL64x2
 #define HAS_AESx2
 

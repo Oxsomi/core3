@@ -4356,16 +4356,16 @@ int main() {
 		U64 elems = (1024 * 65536) / siz;
 
 		U8 blockSizeMax = 0;
-		Bool use256 = false;
+		U8 use256Or512 = 3;
 		gotoIfError3(clean, Buffer_aesExpertCreate(
-			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, -64, &blockSizeMax, &use256, &ctx, e_rr
+			I32x4_zero(), EBufferEncryptionType_AES256GCM, key, -128, &blockSizeMax, &use256Or512, &ctx, e_rr
 		));
 
 		while (true) {
 
 			for (U64 j = 0; j < 100; ++j) {
 				Buffer dat = Buffer_createRef(myData + ((count + j) % elems) * siz, siz);
-				Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, use256);
+				Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, use256Or512);
 			}
 
 			count += 100;
