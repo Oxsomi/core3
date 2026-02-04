@@ -500,18 +500,16 @@ void Buffer_aesExpertUpdateAADFast(AESEncryptionContext *restrict ctx, Buffer ad
 
 	{
 		if (blockSize >= 64 && use256) {
-
-			for (U64 j = 0; j < len >> 10; ++j) {
+			while (next + 1024 <= len) {
 
 				I32x4 v[64];
 
 				for (U32 i = 0; i < 64; ++i)
-					v[i] = ptr[(j << 6) | i];
+					v[i] = ptr[(next >> 4) | i];
 
 				AESEncryptionContext_updateTagN(ctx, v, 64, use256);
+				next += 1024;
 			}
-
-			next = len & ~1023;
 		}
 
 		if (blockSize >= 32 && use256) {
@@ -713,7 +711,7 @@ Bool Buffer_aesExpertCreate(
 			break;
 	}
 
-	blockSize = 32;		//TODO: Fix blockSize = 64
+	blockSize = 64;
 
 	if (use256) *use256 = true;
 	if (blockSizeMax) *blockSizeMax = blockSize;
@@ -1017,17 +1015,17 @@ static inline void AESEncryptionContext_handleBlocks(
 
 	if (blockSizeMax >= 64 && cryptoState >= 2 && use256) {
 
-		for (U32 i = 0; i < targetLen >> 10; ++i)
+		while (next + 1024 <= targetLen) {
 			AESEncryptionContext_processBlockN(
 				ctx,
-				(I32x4*)(targetPtr + ((U64)i << 10)),
-				(i << 6) + offsetInBlocks,
+				(I32x4 *)(targetPtr + next),
+				(U32)(next >> 4) + offsetInBlocks,
 				64,
 				isEncrypt,
 				use256
 			);
-
-		next = targetLen & ~511;
+			next += 1024;
+		}
 	}
 
 	if (blockSizeMax >= 32) {
@@ -1304,6 +1302,7 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 			case 8:		Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  8, use256);	break;
 			case 16:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0, 16, use256);	break;
 			case 32:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0, 32, use256);	break;
+			case 64:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0, 64, use256);	break;
 		}
 
 	U64 aadLen = decrypt->additionalData ? Buffer_length(*decrypt->additionalData) : 0;
