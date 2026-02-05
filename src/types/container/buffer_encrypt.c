@@ -872,8 +872,9 @@ static inline void Buffer_aesExpertExpandHash(AESEncryptionContext *restrict ctx
 		I32x4 H4 = ctx->H[j + 2];		//[3] = H4, [5] = H6, [7] = H8
 
 		//This is one of the only ones that needs rshElements/lshElements which needs AVX512BW
+		//TODO: This seems to currently underperform the 256-bit version.
 
-		#ifdef HAS_CLMUL64x4
+		#if defined(HAS_CLMUL64x4) && false
 			if (cryptoState >= 4 && (use256Or512 & 2)) {
 
 				I32x16 a = I32x16_create4_4_4_4(H2, H3, H3, H4);
