@@ -4362,24 +4362,41 @@ int main() {
 		"GiB/s"
 	));
 
-	for(U64 m = 0; m < 2; ++m)
-		for (U64 l = 0; l < sizeof(cryptoState) / sizeof(cryptoState[0]); ++l)
+	for(U64 m = 1; m < 2; ++m)
+		for (U64 l = 0; l < sizeof(cryptoState) / sizeof(cryptoState[0]); ++l) {
+
+			AESEncryptionKey key = { 0 };
+			AESEncryptionContext ctx = { 0 };
+			U8 blockSizeMax = 0;
+			U8 use256Or512 = 0;
+
+			gotoIfError3(clean, Buffer_aesExpertCreate(
+				I32x4_zero(),
+				EBufferEncryptionType_AES256GCM,
+				key,
+				-64,
+				0,
+				cryptoState[l],
+				&blockSizeMax,
+				&use256Or512,
+				&ctx,
+				e_rr
+			));
+
+			if (use256Or512 != cryptoState[l])		//Unsupported
+				continue;
+
 			for (U64 k = 0; k < sizeof(blockSizeHints) / sizeof(blockSizeHints[0]); ++k)
 				for (U64 i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
 
 					U64 siz = sizes[i];
 					U64 count = 0;
 					Ns curr = Time_now();
-					AESEncryptionKey key = { 0 };
-					AESEncryptionContext ctx = { 0 };
 					U64 elems = Buffer_length(full) / siz;
 
 					I64 blockSizeHint = blockSizeHints[k];
 					if (!blockSizeHint)
 						blockSizeHint = siz;
-
-					U8 blockSizeMax = 0;
-					U8 use256Or512 = 0;
 
 					//Even if we check 'instant init' we still need to initialize to check if we are even allowed to run this.
 
@@ -4396,14 +4413,8 @@ int main() {
 						e_rr
 					));
 
-					if (blockSizeHints[k]) {
-
-						if (blockSizeMax < (U8)(U8)-blockSizeHint)		//Unsupported blockSize
-							break;
-
-						if (use256Or512 != cryptoState[l])				//Unsupported crypto state
-							break;
-					}
+					if (blockSizeHints[k] && blockSizeMax < (U8)(U8)-blockSizeHint)		//Unsupported blockSize
+						break;
 
 					if (!i)
 						Log_debugLn(
@@ -4435,7 +4446,7 @@ int main() {
 							Buffer dat = Buffer_createRef(full.ptrNonConst + ((count + j) % elems) * siz, siz);
 							Buffer_aesExpertEncUpdate(&ctx, dat, 0, blockSizeMax, use256Or512);
 
-							if(m)
+							if (m)
 								Buffer_aesExpertFinalize(&ctx, 0, count, I32x4_zero());
 						}
 
@@ -4475,6 +4486,7 @@ int main() {
 					tmp = tmpStr;
 					tmpStr = CharString_createNull();
 				}
+		}
 
 	FILE *f = fopen("test.csv", "wb");
 	fwrite(tmp.ptr, 1, CharString_length(tmp), f);
