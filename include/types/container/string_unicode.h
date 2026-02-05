@@ -28,7 +28,7 @@
 	extern "C" {
 #endif
 
-inline Bool CharString_isValidUTF8(const CharString str) {
+static inline Bool CharString_isValidUTF8(const CharString str) {
 	return Buffer_isUTF8(CharString_bufferConst(str), 1);
 }
 

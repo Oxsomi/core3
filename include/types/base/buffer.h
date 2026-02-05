@@ -57,7 +57,7 @@ static inline Buffer Buffer_createNull() {
 	return buf;
 }
 
-inline Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
+static inline Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
 
 	if (length >> 48 || !ptr || !length)
 		return Buffer_createNull();
@@ -70,7 +70,7 @@ inline Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
 
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
-inline Buffer Buffer_createRef(void *v, U64 length) {
+static inline Buffer Buffer_createRef(void *v, U64 length) {
 
 	if (!length || !v)
 		return Buffer_createNull();
@@ -84,7 +84,7 @@ inline Buffer Buffer_createRef(void *v, U64 length) {
 	return buf;
 }
 
-inline Buffer Buffer_createRefConst(const void *v, U64 length) {
+static inline Buffer Buffer_createRefConst(const void *v, U64 length) {
 
 	if (!length || !v)
 		return Buffer_createNull();

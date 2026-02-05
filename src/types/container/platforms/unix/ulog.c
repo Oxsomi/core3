@@ -30,7 +30,7 @@
 #include <stdlib.h>
 
 CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) {
-	(void) alloc; (void)err;
+	(void) alloc; (void)e_rr;
 	return CharString_createNull();
 }
 
@@ -134,7 +134,7 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 
 		printColor(lvl,
 			"%.*s%s",
-			!arg ? 0 : (int)CharString_length(arg), !arg ? "" : arg.ptr,
+			!arg ? 0 : (int)CharString_length(*arg), !arg ? "" : arg->ptr,
 			newLine
 		);
 	}

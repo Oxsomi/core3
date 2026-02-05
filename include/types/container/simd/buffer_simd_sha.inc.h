@@ -45,7 +45,7 @@
 
 extern const U32 SHA256_STATE[8];
 
-SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32 output[8])  {
+SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32 *output)  {
 
 	//Consts
 

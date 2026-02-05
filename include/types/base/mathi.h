@@ -50,20 +50,20 @@ static const U64 U64_EXP10[] = {
 
 //Uint
 
-#define XINT_OP(T)																					\
+#define XINT_OP(T, TUint)																			\
 ARIT_OP(T);																							\
 static inline T T##_exp10(T v) {																	\
-	return v >= sizeof(U64_EXP10) / sizeof(U64) ? (T)-1 : (T) U64_EXP10[v];							\
+	return (TUint)v >= (TUint)sizeof(U64_EXP10) / sizeof(U64) ? (T)-1 : (T) U64_EXP10[v];			\
 }																									\
 																									\
 static inline T T##_exp2(T v) {																		\
-	return (v < 0 || v >= (T)(sizeof(T) * 8)) ? (T)-1 : (T) ((U64)1 << v);							\
+	return (TUint)v >= (T)(sizeof(T) * 8) ? (T)-1 : (T) ((U64)1 << v);								\
 }																									\
 																									\
 static inline T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }
 
 #define UINT_OP(T)																					\
-XINT_OP(T);																							\
+XINT_OP(T, T);																						\
 																									\
 static inline T T##_rol(T a, U8 bits) {																\
 	bits &= sizeof(T) * 8 - 1;																		\
@@ -82,14 +82,14 @@ UINT_OP(U8);
 
 //Int
 
-#define INT_IOP(T)																					\
-XINT_OP(T);																							\
-static inline T T##_abs(T v) { return v < 0 ? -v : v; }		//UB for INT_MIN
+#define INT_IOP(T, TUint)																			\
+XINT_OP(T, TUint);																					\
+static inline T T##_abs(T v) { return v < 0 ? -v : v; }		/*UB for INT_MIN*/
 
-INT_IOP(I64);
-INT_IOP(I32);
-INT_IOP(I16);
-INT_IOP(I8);
+INT_IOP(I64, U64);
+INT_IOP(I32, U32);
+INT_IOP(I16, U16);
+INT_IOP(I8, U8);
 
 #undef INT_IOP
 #undef XINT_OP

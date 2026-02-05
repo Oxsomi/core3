@@ -34,7 +34,10 @@
 		#ifdef _MSC_VER
 			__cpuid(result, leaf);
 		#else
-			__get_cpuid(leaf, &result[0], &result[1], &result[2], &result[3]);
+			if(leaf == 7)
+				__get_cpuid_count(7, 0, &result[0], &result[1], &result[2], &result[3]);
+			else
+				__get_cpuid(leaf, &result[0], &result[1], &result[2], &result[3]);
 		#endif
 	}
 

@@ -21,6 +21,7 @@
 #include "types/base/thread.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
+#include "types/base/buffer.h"
 
 #include <time.h>
 #include <unistd.h>
@@ -28,7 +29,7 @@
 #include <errno.h>
 
 //Nothing to do for uthread, unlike wthread.
-void Thread_freeExt(Thread *thread) {}
+void Thread_freeExt(Thread *thread) { (void) thread; }
 
 U64 Thread_getId() { return (U64)(uintptr_t)pthread_self(); }
 
@@ -79,9 +80,6 @@ Bool Thread_create(const Allocator *alloc, ThreadCallbackFunction callback, void
 
 	Buffer buf = (Buffer) { 0 };
 	gotoIfError3(clean, alloc->alloc(alloc->ptr, sizeof(Thread), &buf, e_rr));
-
-	if (err.genericError)
-		return err;
 
 	Thread *thr = (*thread = (Thread*) buf.ptr);
 

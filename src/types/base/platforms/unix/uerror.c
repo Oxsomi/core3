@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/base/platform_types.h"
 #include "types/base/error.h"
 
 #if _PLATFORM_TYPE != PLATFORM_ANDROID

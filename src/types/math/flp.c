@@ -296,16 +296,19 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 						if(anyDouble) {
 							const F64 converted = (F64) expanded;
-							return *(const U64*)&converted;
+							const void *convertedv = &converted;
+							return *(const U64*)convertedv;
 						}
 
-						return *(const U32*)&expanded;
+						const void *expandedv = &expanded;
+						return *(const U32*)expandedv;
 					}
 
 					//Truncation to F16
 
 					else {
-						const F32 truncated = anyDouble ? (F32)*(const F64*)&v : *(const F32*)&v;
+						const void *vv = &v;
+						const F32 truncated = anyDouble ? (F32)*(const F64*)vv : *(const F32*)vv;
 						const I32x4 converted = _mm_cvtps_ph(F32x4_create1(truncated), _MM_FROUND_CUR_DIRECTION);
 						return (F16) I32x4_x(converted);
 					}

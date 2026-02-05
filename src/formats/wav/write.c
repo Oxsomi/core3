@@ -21,7 +21,6 @@
 #include "types/container/list_impl.h"
 #include "formats/wav/wav.h"
 #include "formats/wav/headers.h"
-#include "types/math/math.h"
 #include "platforms/file.h"
 
 Bool WAV_write(
