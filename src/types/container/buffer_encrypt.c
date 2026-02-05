@@ -1058,7 +1058,7 @@ Bool Buffer_aesExpertCreate(
 			use256Or512Real = 0;
 
 		//Here are the optimal sizes (1 << (N - 1)):
-		//NEO: 1, 1, 2, 2, 2, 3, 3,  4, 4, 5, 5, 5, 5 
+		//NEO: 1, 1, 2, 2, 3, 4, 5,  5, 5, 5, 5, 5, 5 
 		//
 		//SSE: 1, 2, 2, 2, 2, 3, 3,  4, 4, 5, 5, 5, 5
 		//256: 1, 1, 2, 2, 3, 4, 4,  4, 5, 5, 6, 6, 7
@@ -1070,13 +1070,13 @@ Bool Buffer_aesExpertCreate(
 				if (oneTimeHint <= 32)
 					blockSize = 1;
 
-				else if (oneTimeHint <= 256)
+				else if (oneTimeHint <= 128)
 					blockSize = 2;
 
-				else if (oneTimeHint <= 1024)
+				else if (oneTimeHint <= 256)
 					blockSize = 4;
 
-				else if (oneTimeHint <= 4096)
+				else if (oneTimeHint <= 512)
 					blockSize = 8;
 
 				else blockSize = 16;
