@@ -59,6 +59,7 @@ static I8 cryptoState = -1;
 
 		Bool hasAVX2 = (cpuInfo[1] & (1 << 5)) != 0;
 		Bool hasAVX512F = (cpuInfo[1] & (1 << 16)) != 0;
+		Bool hasAVX512BW = (cpuInfo[1] & (1 << 30)) != 0;
 		Bool hasAVX512VL = (cpuInfo[1] & (1u << 31)) != 0;
 		Bool hasVAES = (cpuInfo[2] & (1 << 9)) != 0;
 		Bool hasVPCLMUL = (cpuInfo[2] & (1 << 10)) != 0;
@@ -71,7 +72,7 @@ static I8 cryptoState = -1;
 		}
 
 		if (hasAVX512F && osHasZMM) {		//512-bit path
-			cryptoState = 3;
+			cryptoState = hasAVX512BW ? 4 : 3;
 			return;
 		}
 
@@ -279,6 +280,148 @@ static inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 *res
 #endif
 
 //Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
+
+static inline I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00, I32x4 clmulFused, I32x4 clmul11) {
+		
+	I32x4 tmp[8];
+
+	tmp[0] = clmul00;
+	tmp[3] = clmulFused;
+	tmp[2] = clmul11;
+
+	tmp[1] = I32x4_lshElements(tmp[3], 2);
+	tmp[3] = I32x4_rshElements(tmp[3], 2);
+
+	for (U8 i = 0; i < 2; ++i) {
+		I32x4 t = I32x4_xor(tmp[i << 1], tmp[(i << 1) + 1]);
+		tmp[i << 1] = I32x4_lsh32(t, 1);
+		tmp[4 + (i << 1)] = I32x4_rsh32(t, 31);
+	}
+
+	tmp[7] = I32x4_rshElements(tmp[4], 3);
+
+	for (U8 i = 0; i < 2; ++i)
+		tmp[6 - i] = I32x4_lshElements(tmp[6 - (i << 1)], 1);
+
+	const U8 v0[3] = { 31, 30, 25 };
+
+	for (U8 i = 0; i < 3; ++i) {
+		tmp[i << 1] = I32x4_or(tmp[i ? 2 : 0], tmp[5 + i]);
+		tmp[5 + i] = I32x4_lsh32(tmp[0], v0[i]);
+	}
+
+	for (U8 i = 0; i < 2; ++i)
+		tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
+
+	tmp[3] = I32x4_rshElements(tmp[5], 1);
+	tmp[5] = I32x4_xor(tmp[0], I32x4_lshElements(tmp[5], 3));
+
+	const U8 v1[3] = { 1, 2, 7 };
+
+	for (U8 i = 0; i < 3; ++i)
+		tmp[i] = I32x4_rsh32(tmp[5], v1[i]);
+
+	for (U8 i = 1; i < 6; ++i)
+		tmp[0] = I32x4_xor(tmp[0], tmp[i]);
+
+	return I32x4_swapEndianness(tmp[0]);
+}
+
+#ifdef HAS_CLMUL64x2
+	static inline I32x8 AESEncryptionContext_ghashReduceClMul2(I32x8 clmul00, I32x8 clmulFused, I32x8 clmul11) {
+		
+		I32x8 tmp[8];
+
+		tmp[0] = clmul00;
+		tmp[3] = clmulFused;
+		tmp[2] = clmul11;
+
+		tmp[1] = I32x8_lshElements(tmp[3], 2);
+		tmp[3] = I32x8_rshElements(tmp[3], 2);
+
+		for (U8 i = 0; i < 2; ++i) {
+			I32x8 t = I32x8_xor(tmp[i << 1], tmp[(i << 1) + 1]);
+			tmp[i << 1] = I32x8_lsh32(t, 1);
+			tmp[4 + (i << 1)] = I32x8_rsh32(t, 31);
+		}
+
+		tmp[7] = I32x8_rshElements(tmp[4], 3);
+
+		for (U8 i = 0; i < 2; ++i)
+			tmp[6 - i] = I32x8_lshElements(tmp[6 - (i << 1)], 1);
+
+		const U8 v0[3] = { 31, 30, 25 };
+
+		for (U8 i = 0; i < 3; ++i) {
+			tmp[i << 1] = I32x8_or(tmp[i ? 2 : 0], tmp[5 + i]);
+			tmp[5 + i] = I32x8_lsh32(tmp[0], v0[i]);
+		}
+
+		for (U8 i = 0; i < 2; ++i)
+			tmp[5] = I32x8_xor(tmp[5], tmp[6 + i]);
+
+		tmp[3] = I32x8_rshElements(tmp[5], 1);
+		tmp[5] = I32x8_xor(tmp[0], I32x8_lshElements(tmp[5], 3));
+
+		const U8 v1[3] = { 1, 2, 7 };
+
+		for (U8 i = 0; i < 3; ++i)
+			tmp[i] = I32x8_rsh32(tmp[5], v1[i]);
+
+		for (U8 i = 1; i < 6; ++i)
+			tmp[0] = I32x8_xor(tmp[0], tmp[i]);
+
+		return I32x8_swapEndianness(tmp[0]);
+	}
+#endif
+
+#ifdef HAS_CLMUL64x4
+	static inline I32x16 AESEncryptionContext_ghashReduceClMul4(I32x16 clmul00, I32x16 clmulFused, I32x16 clmul11) {
+		
+		I32x16 tmp[8];
+
+		tmp[0] = clmul00;
+		tmp[3] = clmulFused;
+		tmp[2] = clmul11;
+
+		tmp[1] = I32x16_lshElements(tmp[3], 2);
+		tmp[3] = I32x16_rshElements(tmp[3], 2);
+
+		for (U8 i = 0; i < 2; ++i) {
+			I32x16 t = I32x16_xor(tmp[i << 1], tmp[(i << 1) + 1]);
+			tmp[i << 1] = I32x16_lsh32(t, 1);
+			tmp[4 + (i << 1)] = I32x16_rsh32(t, 31);
+		}
+
+		tmp[7] = I32x16_rshElements(tmp[4], 3);
+
+		for (U8 i = 0; i < 2; ++i)
+			tmp[6 - i] = I32x16_lshElements(tmp[6 - (i << 1)], 1);
+
+		const U8 v0[3] = { 31, 30, 25 };
+
+		for (U8 i = 0; i < 3; ++i) {
+			tmp[i << 1] = I32x16_or(tmp[i ? 2 : 0], tmp[5 + i]);
+			tmp[5 + i] = I32x16_lsh32(tmp[0], v0[i]);
+		}
+
+		for (U8 i = 0; i < 2; ++i)
+			tmp[5] = I32x16_xor(tmp[5], tmp[6 + i]);
+
+		tmp[3] = I32x16_rshElements(tmp[5], 1);
+		tmp[5] = I32x16_xor(tmp[0], I32x16_lshElements(tmp[5], 3));
+
+		const U8 v1[3] = { 1, 2, 7 };
+
+		for (U8 i = 0; i < 3; ++i)
+			tmp[i] = I32x16_rsh32(tmp[5], v1[i]);
+
+		for (U8 i = 1; i < 6; ++i)
+			tmp[0] = I32x16_xor(tmp[0], tmp[i]);
+
+		return I32x16_swapEndianness(tmp[0]);
+	}
+#endif
 
 static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *restrict H, U8 N, U8 use256Or512) {
 
@@ -512,48 +655,7 @@ static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *
 		clmul11_0 = clmul11[0];
 	}
 
-	I32x4 tmp[8];
-
-	tmp[0] = clmul00_0;
-	tmp[3] = I32x4_xor(clmul10_0, clmul01_0);
-	tmp[2] = clmul11_0;
-
-	tmp[1] = I32x4_lshElements(tmp[3], 2);
-	tmp[3] = I32x4_rshElements(tmp[3], 2);
-
-	for (U8 i = 0; i < 2; ++i) {
-		I32x4 t = I32x4_xor(tmp[i << 1], tmp[(i << 1) + 1]);
-		tmp[i << 1] = I32x4_lsh32(t, 1);
-		tmp[4 + (i << 1)] = I32x4_rsh32(t, 31);
-	}
-
-	tmp[7] = I32x4_rshElements(tmp[4], 3);
-
-	for (U8 i = 0; i < 2; ++i)
-		tmp[6 - i] = I32x4_lshElements(tmp[6 - (i << 1)], 1);
-
-	const U8 v0[3] = { 31, 30, 25 };
-
-	for (U8 i = 0; i < 3; ++i) {
-		tmp[i << 1] = I32x4_or(tmp[i ? 2 : 0], tmp[5 + i]);
-		tmp[5 + i] = I32x4_lsh32(tmp[0], v0[i]);
-	}
-
-	for (U8 i = 0; i < 2; ++i)
-		tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
-
-	tmp[3] = I32x4_rshElements(tmp[5], 1);
-	tmp[5] = I32x4_xor(tmp[0], I32x4_lshElements(tmp[5], 3));
-
-	const U8 v1[3] = { 1, 2, 7 };
-
-	for (U8 i = 0; i < 3; ++i)
-		tmp[i] = I32x4_rsh32(tmp[5], v1[i]);
-
-	for (U8 i = 1; i < 6; ++i)
-		tmp[0] = I32x4_xor(tmp[0], tmp[i]);
-
-	return I32x4_swapEndianness(tmp[0]);
+	return AESEncryptionContext_ghashReduceClMul(clmul00_0, I32x4_xor(clmul01_0, clmul10_0), clmul11_0);
 }
 
 //Safe fetch a block (even if <16 bytes are left)
@@ -581,7 +683,7 @@ static inline void AESEncryptionContext_updateTagN(
 static inline void AESEncryptionContext_updateTagTail(AESEncryptionContext *restrict ctx, I32x4 CTi, const U8 leftOver) {
 	Buffer_unsetAllBits(Buffer_createRef(((U8*)&CTi + leftOver), 16 - leftOver), NULL);
 	CTi = I32x4_xor(CTi, ctx->tag);
-	ctx->tag = AESEncryptionContext_ghashN(&CTi, ctx->H, 1, false);
+	ctx->tag = AESEncryptionContext_ghashN(&CTi, ctx->H, 1, 0);
 }
 
 //Hash in the additional data
@@ -692,11 +794,174 @@ void Buffer_aesExpertUpdateAAD(AESEncryptionContext *restrict ctx, Buffer data, 
 	Buffer_aesExpertUpdateAADFast(ctx, data, blockSizeMax, use256Or512);
 }
 
-static inline void Buffer_aesExpertExpandHash(AESEncryptionContext *restrict ctx, U8 blockSizeMax) {
-	for (U8 i = 1; i < blockSizeMax; ++i) {
-		I32x4 Hi1 = I32x4_swapEndianness(ctx->H[i - 1]);
-		ctx->H[i] = AESEncryptionContext_ghashN(&Hi1, ctx->H, 1, false);
-		ctx->H[i] = I32x4_swapEndianness(ctx->H[i]);
+static inline void Buffer_aesExpertExpandHash(AESEncryptionContext *restrict ctx, U8 blockSizeMax, U8 use256Or512) {
+
+	(void) use256Or512;
+
+	//Compute H^2
+
+	I32x4 H = I32x4_swapEndianness(ctx->H[0]);
+	ctx->H[1] = AESEncryptionContext_ghashN(&H, ctx->H, 1, 0);
+	ctx->H[1] = I32x4_swapEndianness(ctx->H[1]);
+
+	if (blockSizeMax == 2)
+		return;
+
+	//Compute H^3 and H^4 which are computed by doing:
+	//ghashParallel2((H, H2), (H2, H2)) = (H3, H4)
+	//This is !NOT! the same as ghashN, as that reduces multiple blocks into one, where here we want to keep them parallel.
+	
+	#ifdef HAS_CLMUL64x2
+		if (cryptoState >= 2 && use256Or512) {
+
+			I32x8 a = I32x8_load(ctx->H);
+			I32x8 b = I32x8_xx4(ctx->H[1]);
+			I32x8 clmul01 = I32x8_clmul64(a, b, 0x01);
+			I32x8 clmul10 = I32x8_clmul64(a, b, 0x10);
+			I32x8 clmul00 = I32x8_clmul64(a, b, 0x00);
+			I32x8 clmul11 = I32x8_clmul64(a, b, 0x11);
+
+			I32x8 clmulFused = I32x8_xor(clmul01, clmul10);
+
+			a = AESEncryptionContext_ghashReduceClMul2(clmul00, clmulFused, clmul11);
+			a = I32x8_swapEndiannessI32x4(a);
+			I32x8_store(&ctx->H[2], a);
+
+		} else
+	#endif
+
+	{
+		I32x4 clmul00[2];
+		I32x4 clmul01[2];
+		I32x4 clmul10[2];
+		I32x4 clmul11[2];
+
+		I32x4 H1 = ctx->H[0];
+		I32x4 H2 = ctx->H[1];
+
+		clmul01[0] = I32x4_clmul64(H1, H2, 0x01);
+		clmul01[1] = I32x4_clmul64(H2, H2, 0x01);
+		clmul10[0] = I32x4_clmul64(H1, H2, 0x10);
+		clmul10[1] = I32x4_clmul64(H2, H2, 0x10);
+
+		clmul00[0] = I32x4_clmul64(H1, H2, 0x00);
+		clmul00[1] = I32x4_clmul64(H2, H2, 0x00);
+		clmul11[0] = I32x4_clmul64(H1, H2, 0x11);
+		clmul11[1] = I32x4_clmul64(H2, H2, 0x11);
+
+		clmul01[0] = I32x4_xor(clmul01[0], clmul10[0]);
+		clmul01[1] = I32x4_xor(clmul01[1], clmul10[1]);
+
+		ctx->H[2] = I32x4_swapEndianness(AESEncryptionContext_ghashReduceClMul(clmul00[0], clmul01[0], clmul11[0]));
+		ctx->H[3] = I32x4_swapEndianness(AESEncryptionContext_ghashReduceClMul(clmul00[1], clmul01[1], clmul11[1]));
+	}
+				
+	if (blockSizeMax == 4)
+		return;
+
+	//Compute H^5, H^6, H^7, H^8 which are computed using:
+	//ghashParallel4((H2, H3, H3, H4), (H3, H3, H4, H4)) = (H5, H6, H7, H8)
+	//ghashParallel4((H4, H5, H5, H6), (H5, H5, H6, H6)) = (H9, H10, H11, H12)
+	//ghashParallel4((H6, H7, H7, H8), (H7, H7, H8, H8)) = (H13, H14, H15, H16)
+	//It follows the same pattern for all others, so this loop is easy.
+
+	for (U8 i = 4, j = 1; i < blockSizeMax; i += 4, j += 2) {
+
+		I32x4 H2 = ctx->H[j + 0];		//[1] = H2, [3] = H4, [5] = H6
+		I32x4 H3 = ctx->H[j + 1];		//[2] = H3, [4] = H5, [6] = H7
+		I32x4 H4 = ctx->H[j + 2];		//[3] = H4, [5] = H6, [7] = H8
+
+		//This is one of the only ones that needs rshElements/lshElements which needs AVX512BW
+
+		#ifdef HAS_CLMUL64x4
+			if (cryptoState >= 4 && (use256Or512 & 2)) {
+
+				I32x16 a = I32x16_create4_4_4_4(H2, H3, H3, H4);
+				I32x16 b = I32x16_create4_4_4_4(H3, H3, H4, H4);
+				I32x16 clmul01 = I32x16_clmul64(a, b, 0x01);
+				I32x16 clmul10 = I32x16_clmul64(a, b, 0x10);
+				I32x16 clmul00 = I32x16_clmul64(a, b, 0x00);
+				I32x16 clmul11 = I32x16_clmul64(a, b, 0x11);
+
+				I32x16 clmulFused = I32x16_xor(clmul01, clmul10);
+
+				a = AESEncryptionContext_ghashReduceClMul4(clmul00, clmulFused, clmul11);
+				a = I32x16_swapEndiannessI32x4(a);
+				I32x16_store(&ctx->H[i], a);
+
+			} else
+		#endif
+
+		//Two 256-bit clmuls
+		
+		#ifdef HAS_CLMUL64x2
+			if (cryptoState >= 2 && use256Or512) {
+
+				I32x8 a0 = I32x8_create4_4(H2, H3);
+				I32x8 a1 = I32x8_create4_4(H3, H4);
+				I32x8 b0 = I32x8_xx4(H3);
+				I32x8 b1 = I32x8_xx4(H4);
+
+				I32x8 clmul01_0 = I32x8_clmul64(a0, b0, 0x01);
+				I32x8 clmul10_0 = I32x8_clmul64(a0, b0, 0x10);
+				I32x8 clmul00_0 = I32x8_clmul64(a0, b0, 0x00);
+				I32x8 clmul11_0 = I32x8_clmul64(a0, b0, 0x11);
+
+				I32x8 clmul01_1 = I32x8_clmul64(a1, b1, 0x01);
+				I32x8 clmul10_1 = I32x8_clmul64(a1, b1, 0x10);
+				I32x8 clmul00_1 = I32x8_clmul64(a1, b1, 0x00);
+				I32x8 clmul11_1 = I32x8_clmul64(a1, b1, 0x11);
+
+				I32x8 clmulFused0 = I32x8_xor(clmul01_0, clmul10_0);
+				I32x8 clmulFused1 = I32x8_xor(clmul01_1, clmul10_1);
+
+				a0 = AESEncryptionContext_ghashReduceClMul2(clmul00_0, clmulFused0, clmul11_0);
+				a1 = AESEncryptionContext_ghashReduceClMul2(clmul00_1, clmulFused1, clmul11_1);
+				a0 = I32x8_swapEndiannessI32x4(a0);
+				a1 = I32x8_swapEndiannessI32x4(a1);
+
+				I32x8_store(&ctx->H[i], a0);
+				I32x8_store(&ctx->H[i + 2], a1);
+
+			} else
+		#endif
+
+		//Four 128-bit muls
+
+		{
+			I32x4 clmul00[4];
+			I32x4 clmul01[4];
+			I32x4 clmul10[4];
+			I32x4 clmul11[4];
+
+			clmul01[0] = I32x4_clmul64(H2, H3, 0x01);
+			clmul10[0] = I32x4_clmul64(H2, H3, 0x10);
+			clmul01[1] = I32x4_clmul64(H3, H3, 0x01);
+			clmul10[1] = I32x4_clmul64(H3, H3, 0x10);
+			clmul01[2] = I32x4_clmul64(H3, H4, 0x01);
+			clmul10[2] = I32x4_clmul64(H3, H4, 0x10);
+			clmul01[3] = I32x4_clmul64(H4, H4, 0x01);
+			clmul10[3] = I32x4_clmul64(H4, H4, 0x10);
+
+			clmul00[0] = I32x4_clmul64(H2, H3, 0x00);
+			clmul11[0] = I32x4_clmul64(H2, H3, 0x11);
+			clmul00[1] = I32x4_clmul64(H3, H3, 0x00);
+			clmul11[1] = I32x4_clmul64(H3, H3, 0x11);
+			clmul00[2] = I32x4_clmul64(H3, H4, 0x00);
+			clmul11[2] = I32x4_clmul64(H3, H4, 0x11);
+			clmul00[3] = I32x4_clmul64(H4, H4, 0x00);
+			clmul11[3] = I32x4_clmul64(H4, H4, 0x11);
+
+			clmul01[0] = I32x4_xor(clmul01[0], clmul10[0]);
+			clmul01[1] = I32x4_xor(clmul01[1], clmul10[1]);
+			clmul01[2] = I32x4_xor(clmul01[2], clmul10[2]);
+			clmul01[3] = I32x4_xor(clmul01[3], clmul10[3]);
+
+			ctx->H[i + 0] = I32x4_swapEndianness(AESEncryptionContext_ghashReduceClMul(clmul00[0], clmul01[0], clmul11[0]));
+			ctx->H[i + 1] = I32x4_swapEndianness(AESEncryptionContext_ghashReduceClMul(clmul00[1], clmul01[1], clmul11[1]));
+			ctx->H[i + 2] = I32x4_swapEndianness(AESEncryptionContext_ghashReduceClMul(clmul00[2], clmul01[2], clmul11[2]));
+			ctx->H[i + 3] = I32x4_swapEndianness(AESEncryptionContext_ghashReduceClMul(clmul00[3], clmul01[3], clmul11[3]));
+		}
 	}
 }
 
@@ -731,6 +996,10 @@ Bool Buffer_aesExpertCreate(
 
 	U8 use256Or512Real = use256Or512Override;
 
+	#if _SIMD != SIMD_SSE
+		use256Or512Real = 0;
+	#endif
+
 	switch (streamSizeHint) {
 
 		case -64:
@@ -756,8 +1025,8 @@ Bool Buffer_aesExpertCreate(
 			// but might need certain crypto flags to be set properly.
 			detect = true;
 
-			if (streamSizeHint && streamSizeHint <= 64)		//Disable everything for small blocks since it has overhead
-				use256Or512Real = 0;
+			//As for the stream size hint, we always assume we want to do the most blocks we can as it has no negative effect.
+			//Though maybe NEON is different.
 
 			break;
 	}
@@ -777,10 +1046,59 @@ Bool Buffer_aesExpertCreate(
 		use256Or512Real &= 3;
 	}
 
-	//TODO: oneTimeHint to determine efficient blockSize from what's available.
+	//oneTimeHint to determine efficient blockSize from what's available.
+	//Basically we try to minimize all of the setup here, from expandKey, blockHashes, ghashes, etc.
+	//NOTE: This needs to be kept up to date probably.
 
-	if (detect)
-		(void)oneTimeHint;
+	if (detect && streamSizeHint >= 0 && oneTimeHint) {
+
+		if (oneTimeHint <= 128)		//Frequency penality for using 256-bit or 512-bit vectors
+			use256Or512Real = 0;
+
+		//Here are the optimal sizes (1 << (N - 1)):
+		//SSE: 1, 2, 2, 2, 2, 3, 3,  4, 4, 5, 5, 5, 5
+		//256: 1, 1, 2, 2, 3, 4, 4,  4, 5, 5, 6, 6, 7
+		//512: 1, 1, 2, 2, 3, 4, 4,  4, 5, 5, 6, 6, 6
+
+		if (!use256Or512Real) {
+
+			if (oneTimeHint <= 16)
+				blockSize = 1;
+
+			else if (oneTimeHint <= 256)
+				blockSize = 2;
+
+			else if (oneTimeHint <= 1024)
+				blockSize = 4;
+
+			else if (oneTimeHint <= 4096)
+				blockSize = 8;
+
+			else blockSize = 16;
+
+		} else {
+
+			if (oneTimeHint <= 32)
+				blockSize = 1;
+
+			else if(oneTimeHint <= 128)
+				blockSize = 2;
+
+			else if(oneTimeHint <= 256)
+				blockSize = 4;
+
+			else if (oneTimeHint <= 2048)
+				blockSize = 8;
+
+			else if (oneTimeHint <= 8192)
+				blockSize = 16;
+
+			else if (oneTimeHint <= 32768)
+				blockSize = 32;
+
+			else blockSize = 64;
+		}
+	}
 
 	if (use256Or512) *use256Or512 = use256Or512Real;
 	if (blockSizeMax) *blockSizeMax = blockSize;
@@ -796,12 +1114,12 @@ Bool Buffer_aesExpertCreate(
 	ctx->H[0] = I32x4_swapEndianness(ctx->H[0]);
 
 	switch (blockSize) {
-		case 2:		Buffer_aesExpertExpandHash(ctx, 2);		break;
-		case 4:		Buffer_aesExpertExpandHash(ctx, 4);		break;
-		case 8:		Buffer_aesExpertExpandHash(ctx, 8);		break;
-		case 16:	Buffer_aesExpertExpandHash(ctx, 16);	break;
-		case 32:	Buffer_aesExpertExpandHash(ctx, 32);	break;
-		case 64:	Buffer_aesExpertExpandHash(ctx, 64);	break;
+		case 2:		Buffer_aesExpertExpandHash(ctx,  2, use256Or512Real);	break;
+		case 4:		Buffer_aesExpertExpandHash(ctx,  4, use256Or512Real);	break;
+		case 8:		Buffer_aesExpertExpandHash(ctx,  8, use256Or512Real);	break;
+		case 16:	Buffer_aesExpertExpandHash(ctx, 16, use256Or512Real);	break;
+		case 32:	Buffer_aesExpertExpandHash(ctx, 32, use256Or512Real);	break;
+		case 64:	Buffer_aesExpertExpandHash(ctx, 64, use256Or512Real);	break;
 	}
 
 	//Compute final tag xor
@@ -941,7 +1259,7 @@ Bool Buffer_aesExpertFinalize(AESEncryptionContext *restrict ctx, U64 aadLen, U6
 	lengths.arr[1] = U64_swapEndianness(dataLen << 3);
 
 	I32x4 tag = I32x4_xor(ctx->tag, lengths.vec);
-	ctx->tag = AESEncryptionContext_ghashN(&tag, ctx->H, 1, false);
+	ctx->tag = AESEncryptionContext_ghashN(&tag, ctx->H, 1, 0);
 
 	//Finish up by adding the iv into the key (this already has blockId 1 in it)
 

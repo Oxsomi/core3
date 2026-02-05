@@ -4362,7 +4362,7 @@ int main() {
 		"GiB/s"
 	));
 
-	for(U64 m = 0; m < 1; ++m)
+	for(U64 m = 0; m < 2; ++m)
 		for (U64 l = 0; l < sizeof(cryptoState) / sizeof(cryptoState[0]); ++l)
 			for (U64 k = 0; k < sizeof(blockSizeHints) / sizeof(blockSizeHints[0]); ++k)
 				for (U64 i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
@@ -4381,21 +4381,20 @@ int main() {
 					U8 blockSizeMax = 0;
 					U8 use256Or512 = 0;
 
-					if(!m)
-						gotoIfError3(clean, Buffer_aesExpertCreate(
-							I32x4_zero(),
-							EBufferEncryptionType_AES256GCM,
-							key,
-							blockSizeHint,
-							0,
-							cryptoState[l],
-							&blockSizeMax,
-							&use256Or512,
-							&ctx,
-							e_rr
-						));
+					//Even if we check 'instant init' we still need to initialize to check if we are even allowed to run this.
 
-					//Override this.
+					gotoIfError3(clean, Buffer_aesExpertCreate(
+						I32x4_zero(),
+						EBufferEncryptionType_AES256GCM,
+						key,
+						blockSizeHint,
+						0,
+						cryptoState[l],
+						&blockSizeMax,
+						&use256Or512,
+						&ctx,
+						e_rr
+					));
 
 					if (blockSizeHints[k]) {
 

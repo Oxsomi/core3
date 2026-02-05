@@ -30,6 +30,7 @@
 
 typedef __m512i I32x16;
 
+static inline I32x16 I32x16_zero() { return _mm512_setzero_si512(); }
 static inline I32x16 I32x16_load(const void *addr) { return _mm512_loadu_si512(addr); }
 static inline void I32x16_store(void *addr, I32x16 v) { _mm512_storeu_si512(addr, v); }
 
@@ -44,6 +45,27 @@ static inline I32x16 I32x16_create4_4_4_4(I32x4 a, I32x4 b, I32x4 c, I32x4 d) {
 static inline I32x16 I32x16_xxxx4(I32x4 a) { return I32x16_create4_4_4_4(a, a, a, a); }
 
 static inline I32x16 I32x16_xor(I32x16 a, I32x16 b) { return _mm512_xor_si512(a, b); }
+static inline I32x16 I32x16_or(I32x16 a, I32x16 b) { return _mm512_or_si512(a, b); }
+
+static inline I32x16 I32x16_lshElements(I32x16 a, U8 elementCount) {
+	switch (elementCount) {
+		case 0:		return a;
+		case 1:		return _mm512_bslli_epi128(a, 4);
+		case 2:		return _mm512_bslli_epi128(a, 8);
+		case 3:		return _mm512_bslli_epi128(a, 12);
+		default:	return I32x16_zero();
+	}
+}
+
+static inline I32x16 I32x16_rshElements(I32x16 a, U8 elementCount) {
+	switch (elementCount) {
+		case 0:		return a;
+		case 1:		return _mm512_bsrli_epi128(a, 4);
+		case 2:		return _mm512_bsrli_epi128(a, 8);
+		case 3:		return _mm512_bsrli_epi128(a, 12);
+		default:	return I32x16_zero();
+	}
+}
 
 static inline I32x4 I32x16_getI32x4(I32x16 v, U8 i) {
 	switch (i) {
@@ -82,10 +104,22 @@ static inline I32x16 I32x16_swapEndianness(I32x16 v) {
 	));
 }
 
+static inline I32x16 I32x16_swapEndiannessI32x4(I32x16 v) {
+	return _mm512_shuffle_epi8(v, _mm512_set_epi8(
+		48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+		32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+		16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+		 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15
+	));
+}
+
 //Swaps I32x4[4] into wzyx order, useful for hash loads.
 static inline I32x16 I32x16_wzyxI32x4(I32x16 v) {
 	return _mm512_shuffle_i32x4(v, v, _MM_SHUFFLE(0, 1, 2, 3));
 }
+
+I32x16 I32x16_rsh32(I32x16 a, U8 bits);
+I32x16 I32x16_lsh32(I32x16 a, U8 bits);
 
 #define HAS_CLMUL64x4
 #define HAS_AESx4
