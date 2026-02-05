@@ -425,6 +425,8 @@ static inline I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00, I32x4 c
 
 static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *restrict H, U8 N, U8 use256Or512) {
 
+	(void)use256Or512;
+
 	I32x4 clmul00_0;
 	I32x4 clmul01_0;
 	I32x4 clmul10_0;
@@ -1057,25 +1059,43 @@ Bool Buffer_aesExpertCreate(
 			use256Or512Real = 0;
 
 		//Here are the optimal sizes (1 << (N - 1)):
+		//NEO: 1, 1, 2, 2, 2, 3, 3,  4, 4, 5, 5, 5, 5 
+		//
 		//SSE: 1, 2, 2, 2, 2, 3, 3,  4, 4, 5, 5, 5, 5
 		//256: 1, 1, 2, 2, 3, 4, 4,  4, 5, 5, 6, 6, 7
 		//512: 1, 1, 2, 2, 3, 4, 4,  4, 5, 5, 6, 6, 6
 
 		if (!use256Or512Real) {
 
-			if (oneTimeHint <= 16)
-				blockSize = 1;
+			#if _SIMD == SIMD_NEON
+				if (oneTimeHint <= 32)
+					blockSize = 1;
 
-			else if (oneTimeHint <= 256)
-				blockSize = 2;
+				else if (oneTimeHint <= 256)
+					blockSize = 2;
 
-			else if (oneTimeHint <= 1024)
-				blockSize = 4;
+				else if (oneTimeHint <= 1024)
+					blockSize = 4;
 
-			else if (oneTimeHint <= 4096)
-				blockSize = 8;
+				else if (oneTimeHint <= 4096)
+					blockSize = 8;
 
-			else blockSize = 16;
+				else blockSize = 16;
+			#else
+				if (oneTimeHint <= 16)
+					blockSize = 1;
+
+				else if (oneTimeHint <= 256)
+					blockSize = 2;
+
+				else if (oneTimeHint <= 1024)
+					blockSize = 4;
+
+				else if (oneTimeHint <= 4096)
+					blockSize = 8;
+
+				else blockSize = 16;
+			#endif
 
 		} else {
 
@@ -1317,6 +1337,8 @@ static inline void AESEncryptionContext_processBlockN(
 	Bool isEncrypt,
 	U8 use256Or512
 ) {
+	(void)use256Or512;
+
 	I32x4 iv = ctx->iv;
 
 	#ifdef HAS_AESx4
@@ -1556,6 +1578,7 @@ static inline void AESEncryptionContext_handleBlocks(
 }
 
 static inline void Buffer_prefetch(Buffer data) {
+	(void) data;
 	#if _SIMD == SIMD_SSE
 		if (data.ptr) {
 			if (Buffer_length(data) > 256)
