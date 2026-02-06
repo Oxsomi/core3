@@ -40,6 +40,18 @@ add_library(
 	${typesContainerUnixSources}
 	CMakeLists.txt
 )
+if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+	set_source_files_properties(
+		simd/buffer_encrypt_avx256.c
+		PROPERTIES
+			COMPILE_OPTIONS "-maes;-mpclmul;-mavx2"
+	)
+	set_source_files_properties(
+		simd/buffer_encrypt_avx512.c
+		PROPERTIES
+			COMPILE_OPTIONS "-mavx512f;-mavx512dq;-mavx512bw;-mvaes;-mvpclmulqdq"
+	)
+endif()
 
 source_group("Source Files (${platform})" FILES ${typesContainerPlatformSources})
 source_group("Source Files (simd: ${simd})" FILES ${typesContainerSIMDSources})
