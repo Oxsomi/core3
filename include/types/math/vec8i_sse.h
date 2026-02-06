@@ -102,8 +102,29 @@ static inline I32x8 I32x8_yxI32x4(I32x8 v) {
 	return _mm256_shuffle_i32x4(v, v, _MM_SHUFFLE2(0, 1));
 }
 
-I32x8 I32x8_rsh32(I32x8 a, U8 bits);
-I32x8 I32x8_lsh32(I32x8 a, U8 bits);
+static inline I32x8 I32x8_lsh32(I32x8 a, U8 bits) {
+	switch (bits) {
+		case 0:		return a;
+		FUNC_EXPAND16(1, _mm256_slli_epi32, a);
+		FUNC_EXPAND8(17, _mm256_slli_epi32, a);
+		FUNC_EXPAND4(25, _mm256_slli_epi32, a);
+		FUNC_EXPAND2(29, _mm256_slli_epi32, a);
+		case 31:	return _mm256_slli_epi32(a, 31);
+		default:	return I32x8_zero();
+	}
+}
+
+static inline I32x8 I32x8_rsh32(I32x8 a, U8 bits) {
+	switch (bits) {
+		case 0:		return a;
+		FUNC_EXPAND16(1, _mm256_srli_epi32, a);
+		FUNC_EXPAND8(17, _mm256_srli_epi32, a);
+		FUNC_EXPAND4(25, _mm256_srli_epi32, a);
+		FUNC_EXPAND2(29, _mm256_srli_epi32, a);
+		case 31:	return _mm256_srli_epi32(a, 31);
+		default:	return I32x8_zero();
+	}
+}
 
 #define HAS_CLMUL64x2
 #define HAS_AESx2

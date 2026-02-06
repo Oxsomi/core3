@@ -19,8 +19,6 @@
 */
 
 #include "types/math/vec4i.h"
-#include "types/math/vec8i_sse.h"
-#include "types/math/vec16i_sse.h"
 
 I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
 	switch (bits) {
@@ -69,53 +67,5 @@ I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
 		FUNC_EXPAND2(61, _mm_srli_epi64, a);
 		case 63:	return _mm_srli_epi64(a, 63);
 		default:	return I32x4_zero();
-	}
-}
-
-I32x8 I32x8_lsh32(I32x8 a, U8 bits) {
-	switch (bits) {
-		case 0:		return a;
-		FUNC_EXPAND16(1, _mm256_slli_epi32, a);
-		FUNC_EXPAND8(17, _mm256_slli_epi32, a);
-		FUNC_EXPAND4(25, _mm256_slli_epi32, a);
-		FUNC_EXPAND2(29, _mm256_slli_epi32, a);
-		case 31:	return _mm256_slli_epi32(a, 31);
-		default:	return I32x8_zero();
-	}
-}
-
-I32x8 I32x8_rsh32(I32x8 a, U8 bits) {
-	switch (bits) {
-		case 0:		return a;
-		FUNC_EXPAND16(1, _mm256_srli_epi32, a);
-		FUNC_EXPAND8(17, _mm256_srli_epi32, a);
-		FUNC_EXPAND4(25, _mm256_srli_epi32, a);
-		FUNC_EXPAND2(29, _mm256_srli_epi32, a);
-		case 31:	return _mm256_srli_epi32(a, 31);
-		default:	return I32x8_zero();
-	}
-}
-
-I32x16 I32x16_lsh32(I32x16 a, U8 bits) {
-	switch (bits) {
-		case 0:		return a;
-		FUNC_EXPAND16(1, _mm512_slli_epi32, a);
-		FUNC_EXPAND8(17, _mm512_slli_epi32, a);
-		FUNC_EXPAND4(25, _mm512_slli_epi32, a);
-		FUNC_EXPAND2(29, _mm512_slli_epi32, a);
-		case 31:	return _mm512_slli_epi32(a, 31);
-		default:	return I32x16_zero();
-	}
-}
-
-I32x16 I32x16_rsh32(I32x16 a, U8 bits) {
-	switch (bits) {
-		case 0:		return a;
-		FUNC_EXPAND16(1, _mm512_srli_epi32, a);
-		FUNC_EXPAND8(17, _mm512_srli_epi32, a);
-		FUNC_EXPAND4(25, _mm512_srli_epi32, a);
-		FUNC_EXPAND2(29, _mm512_srli_epi32, a);
-		case 31:	return _mm512_srli_epi32(a, 31);
-		default:	return I32x16_zero();
 	}
 }
