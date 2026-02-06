@@ -177,8 +177,10 @@ MIGHT_BE_UNUSED static inline U32 AES_subWord(U32 w) {
 	#include "types/container/simd/neon/neon_buffer_encrypt.h"
 #elif _SIMD == SIMD_SSE
 	#include "types/container/simd/sse/sse_buffer_encrypt.h"
-	#include "types/math/vec8i_sse.h"
-	#include "types/math/vec16i_sse.h"
+	#define HAS_AESx2
+	#define HAS_AESx4
+	#define HAS_CLMUL64x2
+	#define HAS_CLMUL64x2
 #else
 	#include "types/container/simd/none/none_buffer_encrypt.h"
 #endif

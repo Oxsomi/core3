@@ -123,8 +123,29 @@ static inline I32x16 I32x16_wzyxI32x4(I32x16 v) {
 	return _mm512_shuffle_i32x4(v, v, _MM_SHUFFLE(0, 1, 2, 3));
 }
 
-I32x16 I32x16_rsh32(I32x16 a, U8 bits);
-I32x16 I32x16_lsh32(I32x16 a, U8 bits);
+static inline I32x16 I32x16_lsh32(I32x16 a, U8 bits) {
+	switch (bits) {
+		case 0:		return a;
+		FUNC_EXPAND16(1, _mm512_slli_epi32, a);
+		FUNC_EXPAND8(17, _mm512_slli_epi32, a);
+		FUNC_EXPAND4(25, _mm512_slli_epi32, a);
+		FUNC_EXPAND2(29, _mm512_slli_epi32, a);
+		case 31:	return _mm512_slli_epi32(a, 31);
+		default:	return I32x16_zero();
+	}
+}
+
+static inline I32x16 I32x16_rsh32(I32x16 a, U8 bits) {
+	switch (bits) {
+		case 0:		return a;
+		FUNC_EXPAND16(1, _mm512_srli_epi32, a);
+		FUNC_EXPAND8(17, _mm512_srli_epi32, a);
+		FUNC_EXPAND4(25, _mm512_srli_epi32, a);
+		FUNC_EXPAND2(29, _mm512_srli_epi32, a);
+		case 31:	return _mm512_srli_epi32(a, 31);
+		default:	return I32x16_zero();
+	}
+}
 
 #define HAS_CLMUL64x4
 #define HAS_AESx4
