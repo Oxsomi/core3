@@ -57,14 +57,14 @@
 	static inline U8 U128_bitScan(U128 a) {
 		U64 arr[2] = { a & U64_MAX, a >> 64 };
 		BigInt b = { 0 };
-		BigInt_createRefConst(arr, 2, &b);
+		BigInt_createRefConst(arr, 2, &b, NULL);
 		return (U8) BigInt_bitScan(b);
 	}
 
 	static inline U8 U128_bitScanReverse(U128 a) {
 		U64 arr[2] = { a & U64_MAX, a >> 64 };
 		BigInt b = { 0 };
-		BigInt_createRefConst(arr, 2, &b);
+		BigInt_createRefConst(arr, 2, &b, NULL);
 		return (U8) BigInt_bitScanReverse(b);
 	}
 

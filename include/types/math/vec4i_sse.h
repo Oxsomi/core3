@@ -47,8 +47,8 @@ static inline I32x4 I32x4_setWCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I
 
 //Trunc & reduce
 
-static inline I32x4 I32x4_trunc2(I32x4 a) { return _mm_blend_epi32(a, I32x4_zero(), 0xC); }
-static inline I32x4 I32x4_trunc3(I32x4 a) { return _mm_blend_epi32(a, I32x4_zero(), 0x8); }
+static inline I32x4 I32x4_trunc2(I32x4 a) { return _mm_and_si128(a, _mm_set_epi32(0, 0, -1, -1)); }
+static inline I32x4 I32x4_trunc3(I32x4 a)  { return _mm_and_si128(a, _mm_set_epi32(0, -1, -1, -1)); }
 
 static inline I32 I32x4_reduce(I32x4 a) {
 	return I32x4_x(_mm_hadd_epi32(_mm_hadd_epi32(a, I32x4_zero()), I32x4_zero()));

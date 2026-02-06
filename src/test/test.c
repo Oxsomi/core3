@@ -3863,12 +3863,12 @@ int main() {
 			if (I32x4_neq4(I32x4_rsh32(I32x4_create4(8, 4, 2, 1), 1), I32x4_create4(4, 2, 1, 0)))
 				retError(clean, Error_invalidState(5, "I32x4_rsh32 failed"));
 
-			I32x4 rol = I32x4_rol(I32x4_create4(0x80000001, 0, 0, 0), 1);
+			I32x4 rol = I32x4_rol(I32x4_create4((I32)0x80000001, 0, 0, 0), 1);
 			if (I32x4_x(rol) != 0x00000003)
 				retError(clean, Error_invalidState(5, "I32x4_rol failed"));
 
 			I32x4 ror = I32x4_ror(I32x4_create4(0x00000003, 0, 0, 0), 1);
-			if (I32x4_x(ror) != 0x80000001)
+			if (I32x4_x(ror) != (I32)0x80000001)
 				retError(clean, Error_invalidState(5, "I32x4_ror failed"));
 
 			if (!I32x4_eq4(I32x4_lshElements(v4, 1), I32x4_create4(0, 1, 2, 4)))
@@ -4362,7 +4362,7 @@ int main() {
 		"GiB/s"
 	));
 
-	for(U64 m = 1; m < 2; ++m)
+	for(U64 m = 0; m < 2; ++m)
 		for (U64 l = 0; l < sizeof(cryptoState) / sizeof(cryptoState[0]); ++l) {
 
 			AESEncryptionKey key = { 0 };
@@ -4521,14 +4521,13 @@ int main() {
 	dt23 = (Time_now() - t) / (F64)SECOND;
 	Log_debugLn(alloc, "Time taken (sha256): %fs", dt23);
 
-	goto success;
-
 clean:
 
-	F64 dt2 = (Time_now() - now) / (F64)SECOND;
-	Log_errorLn(alloc, "Failed unit test (%s)... Freeing. After %fs", err.errorStr, dt2);
+	if(!s_uccess) {
+		F64 dt2 = (Time_now() - now) / (F64)SECOND;
+		Log_errorLn(alloc, "Failed unit test (%s)... Freeing. After %fs", err.errorStr, dt2);
+	}
 
-success:
 	CharString_free(&tmp, alloc);
 	CharString_free(&tmpStr, alloc);
 

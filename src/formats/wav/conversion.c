@@ -21,10 +21,10 @@
 #include "types/container/list_impl.h"
 #include "formats/wav/wav.h"
 #include "formats/wav/headers.h"
-#include "types/math/math.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "types/base/constants.h"
+#include "types/base/allocator.h"
 
 //Note: This only handles truncation, it can't handle expansion
 

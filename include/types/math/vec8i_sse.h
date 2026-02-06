@@ -26,6 +26,18 @@
 	extern "C" {
 #endif
 
+#ifndef _MSC_VER
+	#define ignoreWarningAvx2 __attribute__((target("avx2")))
+	#define ignoreWarningAvx512bw __attribute__((target("avx512bw")))
+	#define ignoreWarningVClmul64 __attribute__((target("vpclmulqdq")))
+	#define ignoreWarningAES256b __attribute__((target("avx", "vaes")))
+#else
+	#define ignoreWarningAvx2
+	#define ignoreWarningAvx512bw
+	#define ignoreWarningVClmul64
+	#define ignoreWarningAES256b
+#endif
+
 //Even though there's no real fallback for this with either NEON or NONE, they're still abstracted just in case.
 
 typedef __m256i I32x8;
@@ -33,13 +45,13 @@ typedef __m256i I32x8;
 static inline I32x8 I32x8_zero() { return _mm256_setzero_si256(); }
 static inline I32x8 I32x8_load(const void *addr) { return _mm256_loadu_si256((const I32x8*)addr); }
 static inline void I32x8_store(void *addr, I32x8 v) { _mm256_storeu_si256((I32x8*)addr, v); }
-static inline I32x8 I32x8_create4_4(I32x4 a, I32x4 b) { return _mm256_inserti128_si256(_mm256_castsi128_si256(a), b, 1); }
-static inline I32x8 I32x8_xx4(I32x4 a) { return I32x8_create4_4(a, a); }
+ignoreWarningAvx2 static inline I32x8 I32x8_create4_4(I32x4 a, I32x4 b) { return _mm256_inserti128_si256(_mm256_castsi128_si256(a), b, 1); }
+ignoreWarningAvx2 static inline I32x8 I32x8_xx4(I32x4 a) { return I32x8_create4_4(a, a); }
 
-static inline I32x8 I32x8_xor(I32x8 a, I32x8 b) { return _mm256_xor_si256(a, b); }
-static inline I32x8 I32x8_or(I32x8 a, I32x8 b) { return _mm256_or_si256(a, b); }
+ignoreWarningAvx2 static inline I32x8 I32x8_xor(I32x8 a, I32x8 b) { return _mm256_xor_si256(a, b); }
+ignoreWarningAvx2 static inline I32x8 I32x8_or(I32x8 a, I32x8 b) { return _mm256_or_si256(a, b); }
 
-static inline I32x8 I32x8_lshElements(I32x8 a, U8 elementCount) {
+ignoreWarningAvx2 static inline I32x8 I32x8_lshElements(I32x8 a, U8 elementCount) {
 	switch (elementCount) {
 		case 0:		return a;
 		case 1:		return _mm256_slli_si256(a,  4);
@@ -49,7 +61,7 @@ static inline I32x8 I32x8_lshElements(I32x8 a, U8 elementCount) {
 	}
 }
 
-static inline I32x8 I32x8_rshElements(I32x8 a, U8 elementCount) {
+ignoreWarningAvx2 static inline I32x8 I32x8_rshElements(I32x8 a, U8 elementCount) {
 	switch (elementCount) {
 		case 0:		return a;
 		case 1:		return _mm256_srli_si256(a,  4);
@@ -59,17 +71,17 @@ static inline I32x8 I32x8_rshElements(I32x8 a, U8 elementCount) {
 	}
 }
 
-static inline I32x4 I32x8_getI32x4(I32x8 v, U8 i) {
+ignoreWarningAvx2 static inline I32x4 I32x8_getI32x4(I32x8 v, U8 i) {
 	switch (i) {
 		case 1:		return _mm256_extracti128_si256(v, 1);
 		default:	return _mm256_castsi256_si128(v);
 	}
 }
 
-static inline I32x8 I32x8_aesEnc(I32x8 a, I32x8 b) { return _mm256_aesenc_epi128(a, b); }
-static inline I32x8 I32x8_aesEncLast(I32x8 a, I32x8 b) { return _mm256_aesenclast_epi128(a, b); }
+ignoreWarningAES256b static inline I32x8 I32x8_aesEnc(I32x8 a, I32x8 b) { return _mm256_aesenc_epi128(a, b); }
+ignoreWarningAES256b static inline I32x8 I32x8_aesEncLast(I32x8 a, I32x8 b) { return _mm256_aesenclast_epi128(a, b); }
 
-static inline I32x8 I32x8_clmul64(I32x8 a, I32x8 b, U8 imm) {
+ignoreWarningVClmul64 static inline I32x8 I32x8_clmul64(I32x8 a, I32x8 b, U8 imm) {
 	switch (imm) {
 		case 0x00:	return _mm256_clmulepi64_epi128(a, b, 0x00);
 		case 0x01:	return _mm256_clmulepi64_epi128(a, b, 0x01);
@@ -78,7 +90,7 @@ static inline I32x8 I32x8_clmul64(I32x8 a, I32x8 b, U8 imm) {
 	}
 }
 
-static inline I32x8 I32x8_swapEndianness(I32x8 v) {
+ignoreWarningAvx512bw static inline I32x8 I32x8_swapEndianness(I32x8 v) {
 	return _mm256_shuffle_epi8(v, _mm256_set_epi8(
 		 0,  1,  2,  3,  4,  5,  6,  7,
 		 8,  9, 10, 11, 12, 13, 14, 15,
@@ -88,7 +100,7 @@ static inline I32x8 I32x8_swapEndianness(I32x8 v) {
 }
 
 //Swap endianness only in the I32x4[2]
-static inline I32x8 I32x8_swapEndiannessI32x4(I32x8 v) {
+ignoreWarningAvx512bw static inline I32x8 I32x8_swapEndiannessI32x4(I32x8 v) {
 	return _mm256_shuffle_epi8(v, _mm256_set_epi8(
 		16, 17, 18, 19, 20, 21, 22, 23,
 		24, 25, 26, 27, 28, 29, 30, 31,
@@ -102,8 +114,8 @@ static inline I32x8 I32x8_yxI32x4(I32x8 v) {
 	return _mm256_shuffle_i32x4(v, v, _MM_SHUFFLE2(0, 1));
 }
 
-I32x8 I32x8_rsh32(I32x8 a, U8 bits);
-I32x8 I32x8_lsh32(I32x8 a, U8 bits);
+ignoreWarningAvx2 I32x8 I32x8_rsh32(I32x8 a, U8 bits);
+ignoreWarningAvx2 I32x8 I32x8_lsh32(I32x8 a, U8 bits);
 
 #define HAS_CLMUL64x2
 #define HAS_AESx2

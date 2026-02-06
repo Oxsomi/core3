@@ -121,6 +121,8 @@
 
 #else
 
+	static inline U128 U128_zero() { return (__uint128_t)0; }
+
 	static inline U128 U128_create(const void *data) {
 		U128 result = U128_zero();
 		Buffer_memcpy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst(data, sizeof(result)));
@@ -140,7 +142,6 @@
 		return data.v;
 	}
 
-	static inline U128 U128_zero() { return (__uint128_t)0; }
 	static inline U128 U128_one() { return (__uint128_t)1; }
 
 	//Bitwise
@@ -149,10 +150,10 @@
 	static inline U128 U128_or(U128 a, U128 b) { return a | b; }
 	static inline U128 U128_and(U128 a, U128 b) { return a & b; }
 
-	static inline U128_not(U128 a) { return ~a; }
+	static inline U128 U128_not(U128 a) { return ~a; }
 
-	static inline U128_lsh(U128 a, U8 x) { return a << x; }
-	static inline U128_rsh(U128 a, U8 x) { return a >> x; }
+	static inline U128 U128_lsh(U128 a, U8 x) { return a << x; }
+	static inline U128 U128_rsh(U128 a, U8 x) { return a >> x; }
 
 	//Arithmetic
 

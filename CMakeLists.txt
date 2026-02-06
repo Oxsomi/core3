@@ -94,7 +94,7 @@ else()
 		endif()
 	else()
 		if(EnableSIMD)
-			add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
+			add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mpclmul -mbmi2 -mf16c)
 		else()
 			add_compile_options(-mfpmath=sse -msse)		# Consistent float behavior
 		endif()

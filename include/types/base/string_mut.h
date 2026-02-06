@@ -47,7 +47,7 @@ CharString CharString_trim(const CharString s);		//Returns a substring ref in a 
 
 Bool CharString_transform(CharString *s, EStringTransform stringTransform);
 
-inline Bool CharString_popEndCount(CharString *s, U64 count, Error *e_rr) {
+static inline Bool CharString_popEndCount(CharString *s, U64 count, Error *e_rr) {
 	return CharString_eraseAtCount(s, s ? CharString_length(*s) - count : 0, count, e_rr);
 }
 
