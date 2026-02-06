@@ -4587,7 +4587,7 @@ int main() {
 						I32x4 tagExpect = I32x4_load4((const void*)&tagForValidation[i]);
 
 						if (I32x4_neq4(ctx.tag, tagExpect))
-							retError(clean, Error_invalidState(0, "Buffer_encryptAdvanced GMAC failed (extreme)"));
+							retError(clean, Error_invalidState(0, "Buffer_aesExpertEncUpdate GMAC failed (extreme)"));
 
 						//We only test the first 4KiB, otherwise we have to store 64KiB of test data.
 						// Tags and decrypt test should handle most of it, this is more of an extra test case.
@@ -4596,7 +4596,27 @@ int main() {
 						Buffer test1 = Buffer_createRefConst(full.ptr, U64_min(sizeof(validationData), siz));
 
 						if (Buffer_neq(test1, test))
-							retError(clean, Error_invalidState(0, "Buffer_encryptAdvanced neq failed (extreme)"));
+							retError(clean, Error_invalidState(0, "Buffer_aesExpertEncUpdate neq failed (extreme)"));
+
+						//Check additional data
+
+						gotoIfError3(clean, Buffer_aesExpertCreate(
+							I32x4_zero(),
+							EBufferEncryptionType_AES256GCM,
+							key,
+							blockSizeHint,
+							0,
+							cryptoState[l],
+							&blockSizeMax,
+							&use256Or512,
+							&ctx,
+							e_rr
+						));
+
+						Buffer_aesExpertUpdateAAD(&ctx, unit, blockSizeMax, use256Or512);
+
+						if (!Buffer_aesExpertFinalize(&ctx, 0, siz, tagExpect))
+							retError(clean, Error_invalidState(0, "Buffer_aesExpertUpdateAAD GMAC failed (extreme)"));
 
 						//Decrypt (needs reinitialize)
 
@@ -4616,7 +4636,7 @@ int main() {
 						Buffer_aesExpertDecUpdate(&ctx, unit, 0, blockSizeMax, use256Or512);
 
 						if(!Buffer_aesExpertFinalize(&ctx, 0, siz, tagExpect))
-							retError(clean, Error_invalidState(0, "Buffer_decryptAdvanced GMAC failed (extreme)"));
+							retError(clean, Error_invalidState(0, "Buffer_aesExpertDecUpdate GMAC failed (extreme)"));
 
 						//Test result
 
@@ -4624,9 +4644,10 @@ int main() {
 						gotoIfError3(clean, Buffer_unsetAllBits(newZero, e_rr));
 
 						if(Buffer_neq(unit, newZero))
-							retError(clean, Error_invalidState(0, "Buffer_decryptAdvanced neq failed (extreme)"));
+							retError(clean, Error_invalidState(0, "Buffer_aesExpertDecUpdate neq failed (extreme)"));
 
-						Buffer_csprng(full);	//Return to random and polute cache, so test is not affected
+						Buffer_csprng(unit);
+						Buffer_csprng(newZero);
 					}
 
 					Ns curr = Time_now();
