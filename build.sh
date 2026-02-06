@@ -13,36 +13,59 @@ if [ "$4" != True ] && [ "$4" != False ]; then usage; fi
 RED='\033[0;31m'
 NC='\033[0m'
 
-conan profile detect
+if [ "$(uname)" = "Darwin" ]; then
+    PROFILE=packages/conan/profiles/osx_clang
+else
+    PROFILE=packages/conan/profiles/linux_gcc
+fi
 
-if ! conan create packages/dxc -s build_type=$1 --build=missing; then
+UNAME_M=$(uname -m)
+
+case "$UNAME_M" in
+    x86_64)
+        ARCH=x64
+        CONAN_ARCH=x86_64
+        ;;
+    arm64|aarch64)
+        ARCH=aarch64
+        CONAN_ARCH=armv8
+        ;;
+    *)
+        echo "Unsupported architecture: $UNAME_M"
+        exit 1
+        ;;
+esac
+
+PROFILE="${PROFILE}_${ARCH}"
+
+if ! conan create packages/dxc --profile:build=$PROFILE --profile:host=$PROFILE -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create DXC failed${NC}\n"
 	exit 1
 fi
 
-if ! conan create packages/spirv_reflect -s build_type=$1 --build=missing; then
+if ! conan create packages/spirv_reflect --profile:build=$PROFILE --profile:host=$PROFILE -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create spirv_reflect failed${NC}\n"
 	exit 1
 fi
 
-if ! conan create packages/nvapi -s build_type=$1 --build=missing; then
+if ! conan create packages/nvapi --profile:build=$PROFILE --profile:host=$PROFILE -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create nvapi failed${NC}\n"
 	exit 1
 fi
 
-if ! conan create packages/openal_soft -s build_type=$1 --build=missing; then
+if ! conan create packages/openal_soft --profile:build=$PROFILE --profile:host=$PROFILE -s build_type=$1 --build=missing; then
 	printf "${RED}-- Conan create openal_soft failed${NC}\n"
 	exit 1
 fi
 
 if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 
-	if ! conan create packages/xdg_shell -s build_type=$1 --build=missing; then
+	if ! conan create packages/xdg_shell --profile:build=$PROFILE --profile:host=$PROFILE -s build_type=$1 --build=missing; then
 		printf "${RED}-- Conan create xdg_shell failed${NC}\n"
 		exit 1
 	fi
 	
-	if ! conan create packages/xdg_decoration -s build_type=$1 --build=missing; then
+	if ! conan create packages/xdg_decoration --profile:build=$PROFILE --profile:host=$PROFILE -s build_type=$1 --build=missing; then
 		printf "${RED}-- Conan create xdg_decoration failed${NC}\n"
 		exit 1
 	fi
@@ -61,7 +84,7 @@ else
 	platform="windows"
 fi
 
-if ! conan build . -of build/$1/$platform/$architecture -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 -o dynamicLinkingGraphics=$4 ${@:5}; then
+if ! conan build . -of build/$1/$platform/$architecture --profile:build=$PROFILE --profile:host=$PROFILE -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 -o dynamicLinkingGraphics=$4 ${@:5}; then
 	printf "${RED}-- Conan build failed${NC}\n"
 	exit 1
 fi

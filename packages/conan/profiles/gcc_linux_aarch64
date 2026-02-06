@@ -1,0 +1,7 @@
+[settings]
+os=Linux
+compiler=gcc
+compiler.cppstd=gnu17
+compiler.version=13
+compiler.libcxx=libstdc++11
+arch=aarch64

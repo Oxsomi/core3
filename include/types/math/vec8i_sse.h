@@ -30,13 +30,17 @@
 	#define ignoreWarningAvx2 __attribute__((target("avx2")))
 	#define ignoreWarningAvx512bw __attribute__((target("avx512bw")))
 	#define ignoreWarningVClmul64 __attribute__((target("vpclmulqdq")))
-	#define ignoreWarningAES256b __attribute__((target("avx", "vaes")))
+	#define ignoreWarningVAes __attribute__((target("vaes")))
+	#define ignoreWarningAvx __attribute__((target("avx")))
 #else
 	#define ignoreWarningAvx2
 	#define ignoreWarningAvx512bw
 	#define ignoreWarningVClmul64
-	#define ignoreWarningAES256b
+	#define ignoreWarningVAes
+	#define ignoreWarningAvx
 #endif
+
+#define ignoreWarningAES256b ignoreWarningVAes ignoreWarningAvx
 
 //Even though there's no real fallback for this with either NEON or NONE, they're still abstracted just in case.
 

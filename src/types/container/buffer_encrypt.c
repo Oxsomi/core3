@@ -159,7 +159,13 @@ static inline U8 AES_sbox(U8 x) {
 	return AES_affine(AES_gfInv(x));
 }
 
-static inline U32 AES_subWord(U32 w) {
+#ifndef _MSVC_VER
+	#define MIGHT_BE_UNUSED __attribute__((unused))
+#else
+	#define MIGHT_BE_UNUSED
+#endif
+
+MIGHT_BE_UNUSED static inline U32 AES_subWord(U32 w) {
 	return
 		((U32)AES_sbox((U8)(w >>  0)) <<  0) |
 		((U32)AES_sbox((U8)(w >>  8)) <<  8) |
@@ -417,7 +423,9 @@ static inline I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00, I32x4 c
 #endif
 
 #ifdef HAS_CLMUL64x4
-	ignoreWarningAvx512f static inline I32x16 AESEncryptionContext_ghashReduceClMul4(I32x16 clmul00, I32x16 clmulFused, I32x16 clmul11) {
+	MIGHT_BE_UNUSED ignoreWarningAvx512f static inline I32x16 AESEncryptionContext_ghashReduceClMul4(
+		I32x16 clmul00, I32x16 clmulFused, I32x16 clmul11
+	) {
 		
 		I32x16 tmp[8];
 
@@ -463,7 +471,9 @@ static inline I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00, I32x4 c
 		return I32x16_swapEndianness(tmp[0]);
 	}
 
-	ignoreWarningAvx512bw void AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8 N, I32x4 *restrict clmuls) {
+	ignoreWarningAvx512f ignoreWarningVClmul64 ignoreWarningAvx512bw void AESEncryptionContext_ghashN4(
+		I32x4 *restrict a, const I32x4 *restrict H, U8 N, I32x4 *restrict clmuls
+	) {
 
 		I32x16 clmul00_16[16];
 		I32x16 clmul11_16[16];
@@ -711,7 +721,7 @@ static inline void AESEncryptionContext_updateTagN(
 
 #ifdef HAS_AESx4
 
-	ignoreWarningAES512b static inline I32x16 AESEncryptionContext_blockHash4(
+	ignoreWarningAvx512f ignoreWarningVAes static inline I32x16 AESEncryptionContext_blockHash4(
 		I32x16 block, const I32x4 *restrict k/*[15]*/, const EBufferEncryptionType type
 	) {
 
@@ -725,7 +735,7 @@ static inline void AESEncryptionContext_updateTagN(
 		return I32x16_aesEncLast(block, I32x16_xxxx4(k[rounds]));
 	}
 
-	ignoreWarningAES512b void AESEncryptionContext_processBlockN4(
+	 ignoreWarningAvx512f void AESEncryptionContext_processBlockN4(
 		AESEncryptionContext *restrict ctx,
 		I32x4 *restrict io,
 		const U32 id,

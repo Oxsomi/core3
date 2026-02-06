@@ -30,14 +30,14 @@
 	#define ignoreWarningAvx512f __attribute__((target("avx512f")))
 	#define ignoreWarningAvx512bw __attribute__((target("avx512bw")))
 	#define ignoreWarningAvx512dq __attribute__((target("avx512dq")))
-	#define ignoreWarningAES512b __attribute__((target("avx512f", "vaes")))
 	#define ignoreWarningVClmul64 __attribute__((target("vpclmulqdq")))
+	#define ignoreWarningVAes __attribute__((target("vaes")))
 #else
 	#define ignoreWarningAvx512f
 	#define ignoreWarningAvx512bw
 	#define ignoreWarningAvx512dq
-	#define ignoreWarningAES512b
 	#define ignoreWarningVClmul64
+	#define ignoreWarningVAes
 #endif
 
 //Even though there's no real fallback for this with either NEON or NONE, they're still abstracted just in case.
@@ -97,8 +97,13 @@ ignoreWarningAvx512dq static inline I32x8 I32x16_getI32x8(I32x16 v, U8 i) {
 	}
 }
 
-ignoreWarningAES512b static inline I32x16 I32x16_aesEnc(I32x16 a, I32x16 b) { return _mm512_aesenc_epi128(a, b); }
-ignoreWarningAES512b static inline I32x16 I32x16_aesEncLast(I32x16 a, I32x16 b) { return _mm512_aesenclast_epi128(a, b); }
+ignoreWarningAvx512f ignoreWarningVAes static inline I32x16 I32x16_aesEnc(I32x16 a, I32x16 b) {
+	return _mm512_aesenc_epi128(a, b);
+}
+
+ignoreWarningAvx512f ignoreWarningVAes static inline I32x16 I32x16_aesEncLast(I32x16 a, I32x16 b) {
+	return _mm512_aesenclast_epi128(a, b);
+}
 
 ignoreWarningAvx512f ignoreWarningVClmul64 static inline I32x16 I32x16_clmul64(I32x16 a, I32x16 b, U8 imm) {
 	switch (imm) {
