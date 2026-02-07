@@ -4335,7 +4335,7 @@ int main() {
 	//Final OpenSSL tests
 
 	U32 sizes[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 };
-	I64 blockSizeHints[] = { -1, -2, -4, -8, -16 };
+	I64 blockSizeHints[] = { -1, -2, -4, -8, -16, 0 };
 	U8 cryptoState[] = { 0, 1, 3 };		//Test non 256-bit, 512-bit, etc.
 
 	CharString_free(&tmpStr, alloc);

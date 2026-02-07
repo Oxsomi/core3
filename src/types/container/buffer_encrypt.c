@@ -1343,16 +1343,16 @@ Bool Buffer_aesExpertCreate(
 		if (oneTimeHint <= 128)		//Frequency penality for using 256-bit or 512-bit vectors
 			use256Or512Real = 0;
 
-		/*
-		//Here are the optimal sizes (1 << (N - 1)):
-		//NEO: 1, 1, 2, 2, 3, 4, 5,  5, 5, 5, 5, 5, 5 
+		//Here are the optimal sizes:
+		//NEO: ???
 		//
-		//SSE: 1, 2, 2, 2, 2, 3, 3,  4, 4, 5, 5, 5, 5
-		//256: 1, 1, 2, 2, 3, 4, 4,  4, 5, 5, 6, 6, 7
-		//512: 1, 1, 2, 2, 3, 4, 4,  4, 5, 5, 6, 6, 6
+		//SSE: 1, 1, 2, 2, 4...
+		//256: 1, 1, 2, 2, 4, 8...
+		//512: 1, 1, 2, 2, 4, 8, 8, 16...
+
+		blockSize = oneTimeHint <= 32 ? 1 : (oneTimeHint <= 128 ? 2 : 4);
 
 		if (!use256Or512Real) {
-
 			#if _SIMD == SIMD_NEON
 				if (oneTimeHint <= 32)
 					blockSize = 1;
@@ -1367,47 +1367,15 @@ Bool Buffer_aesExpertCreate(
 					blockSize = 8;
 
 				else blockSize = 16;
-			#else
-				if (oneTimeHint <= 16)
-					blockSize = 1;
-
-				else if (oneTimeHint <= 256)
-					blockSize = 2;
-
-				else if (oneTimeHint <= 1024)
-					blockSize = 4;
-
-				else if (oneTimeHint <= 4096)
-					blockSize = 8;
-
-				else blockSize = 16;
 			#endif
+		}
 
-		} else {
+		else if(use256Or512Real & 2)
+			blockSize = oneTimeHint <= 256 ? blockSize : (oneTimeHint <= 1024 ? 8 : 16);
 
-			if (oneTimeHint <= 32)
-				blockSize = 1;
-
-			else if(oneTimeHint <= 128)
-				blockSize = 2;
-
-			else if(oneTimeHint <= 256)
-				blockSize = 4;
-
-			else if (oneTimeHint <= 2048)
-				blockSize = 8;
-
-			else if (oneTimeHint <= 8192)
-				blockSize = 16;
-
-			else if (oneTimeHint <= 32768)
-				blockSize = 32;
-
-			else blockSize = 64;
-		}*/
+		else if(use256Or512Real & 1)
+			blockSize = oneTimeHint <= 256 ? blockSize : 8;
 	}
-
-	blockSize = U8_min(blockSize, 16);
 
 	if (use256Or512) *use256Or512 = use256Or512Real;
 	if (blockSizeMax) *blockSizeMax = blockSize;
