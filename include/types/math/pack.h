@@ -141,7 +141,7 @@ static inline QuatF32 QuatS16_unpack(QuatS16 q) {
 	Bool sign = q.packed >> 63;
 
 	F32x4 v = F32x4_create4((F32)x, (F32)y, (F32)z, 0);
-	v = F32x4_div(v, F32x4_xxxx4(mask));
+	v = F32x4_div(v, F32x4_xxxx4((F32)mask));
 	v = F32x4_sub(F32x4_mul(v, F32x4_two()), F32x4_one());
 
 	F32x4_setWRef(&v, F32_max(0, F32_sqrt(1 - F32x4_sqLen3(v))) * (sign ? -1 : 1));

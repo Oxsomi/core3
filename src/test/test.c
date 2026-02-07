@@ -2409,7 +2409,7 @@ int main() {
 
 			const F32 maxDelta = 256.f / (1 << 20);		//Due to re-normalization and floating point precision we lose some bits
 
-			if (F32x4_any(F32x4_gt(delta, F32x4_xxxx4(maxDelta))))
+			if (F32x4_any(F32x4_gt(delta, F32x4_create4(maxDelta, maxDelta, maxDelta, 1 / 64.f))))
 				retError(clean, Error_invalidState(0, "Quat pack/unpack mismatch F32"));
 		}
 	}
@@ -4335,10 +4335,8 @@ int main() {
 	//Final OpenSSL tests
 
 	U32 sizes[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 };
-	//I64 blockSizeHints[] = { -1, -2, -4, -8, -16, -32, -64, 0 };
-	I64 blockSizeHints[] = { -1, -2, -4 };
-	//U8 cryptoState[] = { 0, 1, 3 };		//Test non 256-bit, 512-bit, etc.
-	U8 cryptoState[] = { 0 };
+	I64 blockSizeHints[] = { -1, -2, -4, -8, -16 };
+	U8 cryptoState[] = { 0, 1, 3 };		//Test non 256-bit, 512-bit, etc.
 
 	CharString_free(&tmpStr, alloc);
 	gotoIfError3(clean, Buffer_createUninitializedBytes(1 * GIBI, alloc, &full, e_rr));
@@ -4515,7 +4513,7 @@ int main() {
 				I32x4_zero(),
 				EBufferEncryptionType_AES256GCM,
 				key,
-				-64,
+				-16,
 				0,
 				cryptoState[l],
 				&blockSizeMax,

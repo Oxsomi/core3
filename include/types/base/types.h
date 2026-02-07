@@ -67,3 +67,11 @@ typedef I64 DNs;	//Delta Ns
 typedef char C8;
 
 typedef bool Bool;
+
+#ifndef _MSC_VER
+	#define MIGHT_BE_UNUSED __attribute__((unused))
+	#define __forceinline__ __attribute__((always_inline))
+#else
+	#define MIGHT_BE_UNUSED
+	#define __forceinline__ __forceinline
+#endif

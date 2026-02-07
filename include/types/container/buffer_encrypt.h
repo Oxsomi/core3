@@ -173,7 +173,7 @@ Bool Buffer_aesExpertCreate(
 
 	//How many bytes are handled by ghash if positive
 	// 0 means 'prefer large streams'
-	// <0 is hardcoding block size (e.g. -1, -2, -4, -8, -16, -32, -64)
+	// <0 is hardcoding block size (e.g. -1, -2, -4, -8, -16)
 	I64 streamSizeHint,
 
 	//If the decrypt is a one time, define this to non zero.
