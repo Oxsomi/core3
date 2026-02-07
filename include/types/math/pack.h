@@ -129,31 +129,36 @@ GET_BIT_OP(U8);
 //Compressing quaternions
 
 typedef struct QuatS16 {
-	I16 arr[4];
+	U64 packed;			//21x3 + sign of w
 } QuatS16;
 
-static inline I32x4 QuatS16_unpackI32(QuatS16 q) {
-	return I32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
-}
-
 static inline QuatF32 QuatS16_unpack(QuatS16 q) {
-	const F32x4 v = F32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
-	return F32x4_div(v, F32x4_xxxx4(I16_MAX));
+
+	U64 mask = (1 << 21) - 1;
+	U64 x = q.packed & mask;
+	U64 y = (q.packed >> 21) & mask;
+	U64 z = (q.packed >> 42) & mask;
+	Bool sign = q.packed >> 63;
+
+	F32x4 v = F32x4_create4((F32)x, (F32)y, (F32)z, 0);
+	v = F32x4_div(v, F32x4_xxxx4(mask));
+	v = F32x4_sub(F32x4_mul(v, F32x4_two()), F32x4_one());
+
+	F32x4_setWRef(&v, F32_max(0, F32_sqrt(1 - F32x4_sqLen3(v))) * (sign ? -1 : 1));
+	return v;
 }
 
 static inline QuatS16 QuatF32_pack(QuatF32 q) {
 
 	q = QuatF32_normalize(q);
-	const F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4(I16_MAX));
+	U64 sign = F32x4_w(q) < 0;
 
-	return (QuatS16) {
-		{
-			(I16)F32x4_x(asI16),
-			(I16)F32x4_y(asI16),
-			(I16)F32x4_z(asI16),
-			(I16)F32x4_w(asI16)
-		}
-	};
+	q = F32x4_saturate(F32x4_add(F32x4_mul(q, F32x4_xxxx4(0.5)), F32x4_xxxx4(0.5)));
+	const F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4((1 << 21) - 1));
+
+	sign <<= 63;
+
+	return (QuatS16) { sign | (U64)(F32x4_x(asI16)) | ((U64)(F32x4_y(asI16)) << 21) | ((U64)(F32x4_z(asI16)) << 42) };
 }
 
 #ifdef __cplusplus

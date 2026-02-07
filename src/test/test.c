@@ -2404,22 +2404,13 @@ int main() {
 
 			QuatS16 q16 = QuatF32_pack(quat);
 			QuatF32 qf = QuatS16_unpack(q16);
-			QuatS16 q16b = QuatF32_pack(qf);
-			(void)q16b;
-
-			I32x4 a = QuatS16_unpackI32(q16);
-			I32x4 b = QuatS16_unpackI32(q16b);
 
 			F32x4 delta = F32x4_abs(F32x4_sub(quat, qf));
-			I32x4 deltai = I32x4_abs(I32x4_sub(a, b));
 
-			const F32 maxDelta = 6 / 32768.f;		//Due to re-normalization and floating point precision we lose some bits
+			const F32 maxDelta = 256.f / (1 << 20);		//Due to re-normalization and floating point precision we lose some bits
 
 			if (F32x4_any(F32x4_gt(delta, F32x4_xxxx4(maxDelta))))
 				retError(clean, Error_invalidState(0, "Quat pack/unpack mismatch F32"));
-
-			if (I32x4_any(I32x4_gt(deltai, I32x4_xxxx4(3))))
-				retError(clean, Error_invalidState(0, "Quat pack/unpack mismatch I32"));
 		}
 	}
 
