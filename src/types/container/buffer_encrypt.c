@@ -161,8 +161,10 @@ static inline U8 AES_sbox(U8 x) {
 
 #ifndef _MSC_VER
 	#define MIGHT_BE_UNUSED __attribute__((unused))
+	#define __forceinline__ __attribute__((always_inline))
 #else
 	#define MIGHT_BE_UNUSED
+	#define __forceinline__ __forceinline
 #endif
 
 MIGHT_BE_UNUSED static inline U32 AES_subWord(U32 w) {
@@ -243,21 +245,201 @@ static inline void AESEncryptionContext_expandKey(const U32 *restrict key, I32x4
 }
 
 //AES block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
-static inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 *restrict k/*[15]*/, const EBufferEncryptionType type) {
+__forceinline__ static I32x4 AESEncryptionContext_blockHash(I32x4 a, const I32x4 *restrict k/*[15]*/, const EBufferEncryptionType type) {
 
-	block = I32x4_xor(block, k[0]);
+	a = I32x4_xor(a, k[0]);
+	a = AES_encodeBlock(a, k[1]);
+	a = AES_encodeBlock(a, k[2]);
+	a = AES_encodeBlock(a, k[3]);
+	a = AES_encodeBlock(a, k[4]);
+	a = AES_encodeBlock(a, k[5]);
+	a = AES_encodeBlock(a, k[6]);
+	a = AES_encodeBlock(a, k[7]);
+	a = AES_encodeBlock(a, k[8]);
+	a = AES_encodeBlock(a, k[9]);
 
-	const U8 rounds = type == EBufferEncryptionType_AES128GCM ? 10 : 14;
+	if (type == EBufferEncryptionType_AES256GCM) {
+		a = AES_encodeBlock(a, k[10]);
+		a = AES_encodeBlock(a, k[11]);
+		a = AES_encodeBlock(a, k[12]);
+		a = AES_encodeBlock(a, k[13]);
+		return AES_encodeBlockLast(a, k[14]);
+	}
 
-	for(U8 i = 1; i < rounds; ++i)
-		block = AES_encodeBlock(block, k[i]);
+	return AES_encodeBlockLast(a, k[10]);
+}
 
-	return AES_encodeBlockLast(block, k[rounds]);
+typedef struct I32x4x2 {
+	I32x4 a, b;
+} I32x4x2;
+
+typedef struct I32x4x3 {
+	I32x4 a, b, c;
+} I32x4x3;
+
+typedef struct I32x4x4 {
+	I32x4 a, b, c, d;
+} I32x4x4;
+
+typedef struct I32x4x5 {
+	I32x4 a, b, c, d, e;
+} I32x4x5;
+
+__forceinline__ static I32x4x2 AESEncryptionContext_blockHash2(
+	I32x4 a, I32x4 b, const I32x4 *restrict k/*[15]*/, const EBufferEncryptionType type
+) {
+
+	a = I32x4_xor(a, k[0]);
+	b = I32x4_xor(b, k[0]);
+
+	a = AES_encodeBlock(a, k[1]);
+	b = AES_encodeBlock(b, k[1]);
+
+	a = AES_encodeBlock(a, k[2]);
+	b = AES_encodeBlock(b, k[2]);
+
+	a = AES_encodeBlock(a, k[3]);
+	b = AES_encodeBlock(b, k[3]);
+
+	a = AES_encodeBlock(a, k[4]);
+	b = AES_encodeBlock(b, k[4]);
+
+	a = AES_encodeBlock(a, k[5]);
+	b = AES_encodeBlock(b, k[5]);
+
+	a = AES_encodeBlock(a, k[6]);
+	b = AES_encodeBlock(b, k[6]);
+
+	a = AES_encodeBlock(a, k[7]);
+	b = AES_encodeBlock(b, k[7]);
+
+	a = AES_encodeBlock(a, k[8]);
+	b = AES_encodeBlock(b, k[8]);
+
+	a = AES_encodeBlock(a, k[9]);
+	b = AES_encodeBlock(b, k[9]);
+
+	if (type == EBufferEncryptionType_AES256GCM) {
+
+		a = AES_encodeBlock(a, k[10]);
+		b = AES_encodeBlock(b, k[10]);
+
+		a = AES_encodeBlock(a, k[11]);
+		b = AES_encodeBlock(b, k[11]);
+
+		a = AES_encodeBlock(a, k[12]);
+		b = AES_encodeBlock(b, k[12]);
+
+		a = AES_encodeBlock(a, k[13]);
+		b = AES_encodeBlock(b, k[13]);
+
+		I32x4x2 res = { AES_encodeBlockLast(a, k[14]), AES_encodeBlockLast(b, k[14]) };
+		return res;
+	}
+
+	I32x4x2 res = { AES_encodeBlockLast(a, k[10]), AES_encodeBlockLast(b, k[10]) };
+	return res;
+}
+
+__forceinline__ static I32x4x4 AESEncryptionContext_blockHash4(
+	I32x4 a, I32x4 b, I32x4 c, I32x4 d, const I32x4 *restrict k/*[15]*/, const EBufferEncryptionType type
+) {
+
+	a = I32x4_xor(a, k[0]);
+	b = I32x4_xor(b, k[0]);
+	c = I32x4_xor(c, k[0]);
+	d = I32x4_xor(d, k[0]);
+
+	a = AES_encodeBlock(a, k[1]);
+	b = AES_encodeBlock(b, k[1]);
+	c = AES_encodeBlock(c, k[1]);
+	d = AES_encodeBlock(d, k[1]);
+
+	a = AES_encodeBlock(a, k[2]);
+	b = AES_encodeBlock(b, k[2]);
+	c = AES_encodeBlock(c, k[2]);
+	d = AES_encodeBlock(d, k[2]);
+
+	a = AES_encodeBlock(a, k[3]);
+	b = AES_encodeBlock(b, k[3]);
+	c = AES_encodeBlock(c, k[3]);
+	d = AES_encodeBlock(d, k[3]);
+
+	a = AES_encodeBlock(a, k[4]);
+	b = AES_encodeBlock(b, k[4]);
+	c = AES_encodeBlock(c, k[4]);
+	d = AES_encodeBlock(d, k[4]);
+
+	a = AES_encodeBlock(a, k[5]);
+	b = AES_encodeBlock(b, k[5]);
+	c = AES_encodeBlock(c, k[5]);
+	d = AES_encodeBlock(d, k[5]);
+
+	a = AES_encodeBlock(a, k[6]);
+	b = AES_encodeBlock(b, k[6]);
+	c = AES_encodeBlock(c, k[6]);
+	d = AES_encodeBlock(d, k[6]);
+
+	a = AES_encodeBlock(a, k[7]);
+	b = AES_encodeBlock(b, k[7]);
+	c = AES_encodeBlock(c, k[7]);
+	d = AES_encodeBlock(d, k[7]);
+
+	a = AES_encodeBlock(a, k[8]);
+	b = AES_encodeBlock(b, k[8]);
+	c = AES_encodeBlock(c, k[8]);
+	d = AES_encodeBlock(d, k[8]);
+
+	a = AES_encodeBlock(a, k[9]);
+	b = AES_encodeBlock(b, k[9]);
+	c = AES_encodeBlock(c, k[9]);
+	d = AES_encodeBlock(d, k[9]);
+
+	if (type == EBufferEncryptionType_AES256GCM) {
+
+		a = AES_encodeBlock(a, k[10]);
+		b = AES_encodeBlock(b, k[10]);
+		c = AES_encodeBlock(c, k[10]);
+		d = AES_encodeBlock(d, k[10]);
+
+		a = AES_encodeBlock(a, k[11]);
+		b = AES_encodeBlock(b, k[11]);
+		c = AES_encodeBlock(c, k[11]);
+		d = AES_encodeBlock(d, k[11]);
+
+		a = AES_encodeBlock(a, k[12]);
+		b = AES_encodeBlock(b, k[12]);
+		c = AES_encodeBlock(c, k[12]);
+		d = AES_encodeBlock(d, k[12]);
+
+		a = AES_encodeBlock(a, k[13]);
+		b = AES_encodeBlock(b, k[13]);
+		c = AES_encodeBlock(c, k[13]);
+		d = AES_encodeBlock(d, k[13]);
+
+		I32x4x4 res = {
+			AES_encodeBlockLast(a, k[14]),
+			AES_encodeBlockLast(b, k[14]),
+			AES_encodeBlockLast(c, k[14]),
+			AES_encodeBlockLast(d, k[14])
+		};
+
+		return res;
+	}
+
+	I32x4x4 res = {
+		AES_encodeBlockLast(a, k[10]),
+		AES_encodeBlockLast(b, k[10]),
+		AES_encodeBlockLast(c, k[10]),
+		AES_encodeBlockLast(d, k[10])
+	};
+
+	return res;
 }
 
 //Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
 
-static inline I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00, I32x4 clmulFused, I32x4 clmul11) {
+__forceinline__ static I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00, I32x4 clmulFused, I32x4 clmul11) {
 		
 	I32x4 tmp[8];
 
@@ -301,6 +483,447 @@ static inline I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00, I32x4 c
 		tmp[0] = I32x4_xor(tmp[0], tmp[i]);
 
 	return I32x4_swapEndianness(tmp[0]);
+}
+
+__forceinline__ static I32x4x2 AESEncryptionContext_blockHashAndGhash(
+	I32x4 a,		//ivi
+	I32x4 H,
+	I32x4 b,		//prevState
+	I32x4 tag,
+	const I32x4 *restrict k,
+	const EBufferEncryptionType type
+) {
+	//Manual interleaving because you can't trust MSVC to generate proper code unfortunately.
+
+	b = I32x4_xor(b, tag);
+	a = I32x4_xor(a, k[0]);
+
+	b = I32x4_swapEndianness(b);
+	a = AES_encodeBlock(a, k[1]);
+	a = AES_encodeBlock(a, k[2]);
+	I32x4 clmul01 = I32x4_clmul64(b, H, 0x01);
+	a = AES_encodeBlock(a, k[3]);
+	a = AES_encodeBlock(a, k[4]);
+	I32x4 clmul10 = I32x4_clmul64(b, H, 0x10);
+	a = AES_encodeBlock(a, k[5]);
+	a = AES_encodeBlock(a, k[6]);
+	I32x4 clmul00 = I32x4_clmul64(b, H, 0x00);
+	a = AES_encodeBlock(a, k[7]);
+	a = AES_encodeBlock(a, k[8]);
+	I32x4 clmul11 = I32x4_clmul64(b, H, 0x11);
+	a = AES_encodeBlock(a, k[9]);
+
+	if (type == EBufferEncryptionType_AES256GCM) {
+
+		a = AES_encodeBlock(a, k[10]);
+
+		clmul01 = I32x4_xor(clmul01, clmul10);
+		a = AES_encodeBlock(a, k[11]);
+
+		I32x4 tmp1 = I32x4_lshElements(clmul01, 2);
+		I32x4 tmp3 = I32x4_rshElements(clmul01, 2);
+		a = AES_encodeBlock(a, k[12]);
+
+		I32x4 t0 = I32x4_xor(clmul00, tmp1);
+		I32x4 t1 = I32x4_xor(clmul11, tmp3);
+		a = AES_encodeBlock(a, k[13]);
+
+		I32x4 tmp0 = I32x4_lsh32(t0, 1);
+		I32x4 tmp4 = I32x4_rsh32(t0, 31);
+		I32x4 tmp2 = I32x4_lsh32(t1, 1);
+		I32x4 tmp6 = I32x4_rsh32(t1, 31);
+		a = AES_encodeBlockLast(a, k[14]);
+
+		I32x4 tmp7 = I32x4_rshElements(tmp4, 3);
+		tmp6 = I32x4_lshElements(tmp6, 1);
+		I32x4 tmp5 = I32x4_lshElements(tmp4, 1);
+
+		tmp0 = I32x4_or(tmp0, tmp5);
+		tmp2 = I32x4_or(tmp2, tmp6);
+		tmp5 = I32x4_lsh32(tmp0, 31);
+		tmp6 = I32x4_lsh32(tmp0, 30);
+		tmp4 = I32x4_or(tmp2, tmp7);
+		tmp7 = I32x4_lsh32(tmp0, 25);
+
+		tmp5 = I32x4_xor(tmp5, tmp6);
+		tmp5 = I32x4_xor(tmp5, tmp7);
+
+		tmp6 = I32x4_lshElements(tmp5, 3);
+		tmp3 = I32x4_rshElements(tmp5, 1);
+		tmp5 = I32x4_xor(tmp0, tmp6);
+
+		tmp0 = I32x4_rsh32(tmp5, 1);
+		tmp1 = I32x4_rsh32(tmp5, 2);
+		tmp2 = I32x4_rsh32(tmp5, 7);
+
+		tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
+		tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
+		tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
+		tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+
+		b = I32x4_swapEndianness(tmp0);
+
+	} else {
+		a = AES_encodeBlockLast(a, k[10]);
+
+		clmul01 = I32x4_xor(clmul01, clmul10);
+		b = AESEncryptionContext_ghashReduceClMul(clmul00, clmul01, clmul11);
+	}
+
+	I32x4x2 ab = { a, b };
+	return ab;
+}
+
+__forceinline__ static I32x4x3 AESEncryptionContext_blockHashAndGhash2(
+	I32x4 a0,
+	I32x4 a1,
+	I32x4 H,
+	I32x4 H2,
+	I32x4 b0,
+	I32x4 b1,
+	I32x4 tag,
+	const I32x4 *restrict k,
+	const EBufferEncryptionType type
+) {
+	//Manual interleaving because you can't trust MSVC to generate proper code unfortunately.
+
+	b0 = I32x4_xor(b0, tag);
+
+	a0 = I32x4_xor(a0, k[0]);
+	a1 = I32x4_xor(a1, k[0]);
+
+	b0 = I32x4_swapEndianness(b0);
+	b1 = I32x4_swapEndianness(b1);
+
+	a0 = AES_encodeBlock(a0, k[1]);
+	a1 = AES_encodeBlock(a1, k[1]);
+
+	I32x4 clmul01_0 = I32x4_clmul64(b0, H2, 0x01);
+	I32x4 clmul10_0 = I32x4_clmul64(b0, H2, 0x10);
+	clmul01_0 = I32x4_xor(clmul01_0, clmul10_0);
+
+	a0 = AES_encodeBlock(a0, k[2]);
+	a1 = AES_encodeBlock(a1, k[2]);
+
+	I32x4 clmul01_1 = I32x4_clmul64(b1, H, 0x01);
+	I32x4 clmul10_1 = I32x4_clmul64(b1, H, 0x10);
+	clmul01_1 = I32x4_xor(clmul01_1, clmul10_1);
+
+	a0 = AES_encodeBlock(a0, k[3]);
+	a1 = AES_encodeBlock(a1, k[3]);
+
+	I32x4 clmul00_0 = I32x4_clmul64(b0, H2, 0x00);
+	I32x4 clmul00_1 = I32x4_clmul64(b1, H, 0x00);
+
+	a0 = AES_encodeBlock(a0, k[4]);
+	a1 = AES_encodeBlock(a1, k[4]);
+
+	I32x4 clmul11_0 = I32x4_clmul64(b0, H2, 0x11);
+	I32x4 clmul11_1 = I32x4_clmul64(b1, H, 0x11);
+
+	a0 = AES_encodeBlock(a0, k[5]);
+	a1 = AES_encodeBlock(a1, k[5]);
+	a0 = AES_encodeBlock(a0, k[6]);
+	a1 = AES_encodeBlock(a1, k[6]);
+
+	a0 = AES_encodeBlock(a0, k[7]);
+	a1 = AES_encodeBlock(a1, k[7]);
+	a0 = AES_encodeBlock(a0, k[8]);
+	a1 = AES_encodeBlock(a1, k[8]);
+
+	a0 = AES_encodeBlock(a0, k[9]);
+	a1 = AES_encodeBlock(a1, k[9]);
+
+	I32x4 b;
+
+	if (type == EBufferEncryptionType_AES256GCM) {
+
+		a0 = AES_encodeBlock(a0, k[10]);
+		a1 = AES_encodeBlock(a1, k[10]);
+
+		clmul01_0 = I32x4_xor(clmul01_0, clmul01_1);
+		clmul00_0 = I32x4_xor(clmul00_0, clmul00_1);
+
+		a0 = AES_encodeBlock(a0, k[11]);
+		a1 = AES_encodeBlock(a1, k[11]);
+
+		clmul11_0 = I32x4_xor(clmul11_0, clmul11_1);
+		I32x4 tmp1 = I32x4_lshElements(clmul01_0, 2);
+		a0 = AES_encodeBlock(a0, k[12]);
+		a1 = AES_encodeBlock(a1, k[12]);
+
+		I32x4 tmp3 = I32x4_rshElements(clmul01_0, 2);
+		I32x4 t0 = I32x4_xor(clmul00_0, tmp1);
+		a0 = AES_encodeBlock(a0, k[13]);
+		a1 = AES_encodeBlock(a1, k[13]);
+
+		I32x4 t1 = I32x4_xor(clmul11_0, tmp3);
+		I32x4 tmp0 = I32x4_lsh32(t0, 1);
+		I32x4 tmp4 = I32x4_rsh32(t0, 31);
+		I32x4 tmp2 = I32x4_lsh32(t1, 1);
+		a0 = AES_encodeBlockLast(a0, k[14]);
+		a1 = AES_encodeBlockLast(a1, k[14]);
+
+		I32x4 tmp6 = I32x4_rsh32(t1, 31);
+		I32x4 tmp7 = I32x4_rshElements(tmp4, 3);
+		tmp6 = I32x4_lshElements(tmp6, 1);
+		I32x4 tmp5 = I32x4_lshElements(tmp4, 1);
+
+		tmp0 = I32x4_or(tmp0, tmp5);
+		tmp2 = I32x4_or(tmp2, tmp6);
+		tmp5 = I32x4_lsh32(tmp0, 31);
+		tmp6 = I32x4_lsh32(tmp0, 30);
+		tmp4 = I32x4_or(tmp2, tmp7);
+		tmp7 = I32x4_lsh32(tmp0, 25);
+
+		tmp5 = I32x4_xor(tmp5, tmp6);
+		tmp5 = I32x4_xor(tmp5, tmp7);
+
+		tmp6 = I32x4_lshElements(tmp5, 3);
+		tmp3 = I32x4_rshElements(tmp5, 1);
+		tmp5 = I32x4_xor(tmp0, tmp6);
+
+		tmp0 = I32x4_rsh32(tmp5, 1);
+		tmp1 = I32x4_rsh32(tmp5, 2);
+		tmp2 = I32x4_rsh32(tmp5, 7);
+
+		tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
+		tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
+		tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
+		tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+
+		b = I32x4_swapEndianness(tmp0);
+
+	} else {
+
+		a0 = AES_encodeBlockLast(a0, k[10]);
+		a1 = AES_encodeBlockLast(a1, k[10]);
+
+		clmul01_0 = I32x4_xor(clmul01_0, clmul01_1);
+		clmul00_0 = I32x4_xor(clmul00_0, clmul00_1);
+		clmul11_0 = I32x4_xor(clmul11_0, clmul11_1);
+		
+		b = AESEncryptionContext_ghashReduceClMul(clmul00_0, clmul01_0, clmul11_0);
+	}
+
+	I32x4x3 abc = { a0, a1, b };
+	return abc;
+}
+
+__forceinline__ static I32x4x5 AESEncryptionContext_blockHashAndGhash4(
+	I32x4 a0,
+	I32x4 a1,
+	I32x4 a2,
+	I32x4 a3,
+	I32x4 H,
+	I32x4 H2,
+	I32x4 H3,
+	I32x4 H4,
+	I32x4 b0,
+	I32x4 b1,
+	I32x4 b2,
+	I32x4 b3,
+	I32x4 tag,
+	const I32x4 *restrict k,
+	const EBufferEncryptionType type
+) {
+	//Manual interleaving because you can't trust MSVC to generate proper code unfortunately.
+
+	b0 = I32x4_xor(b0, tag);
+
+	a0 = I32x4_xor(a0, k[0]);
+	a1 = I32x4_xor(a1, k[0]);
+	a2 = I32x4_xor(a2, k[0]);
+	a3 = I32x4_xor(a3, k[0]);
+
+	b0 = I32x4_swapEndianness(b0);
+	b1 = I32x4_swapEndianness(b1);
+	b2 = I32x4_swapEndianness(b2);
+	b3 = I32x4_swapEndianness(b3);
+
+	a0 = AES_encodeBlock(a0, k[1]);
+	a1 = AES_encodeBlock(a1, k[1]);
+
+	I32x4 clmul01_0 = I32x4_clmul64(b0, H4, 0x01);
+	I32x4 clmul10_0 = I32x4_clmul64(b0, H4, 0x10);
+	clmul01_0 = I32x4_xor(clmul01_0, clmul10_0);
+
+	a2 = AES_encodeBlock(a2, k[1]);
+	a3 = AES_encodeBlock(a3, k[1]);
+
+	I32x4 clmul01_1 = I32x4_clmul64(b1, H3, 0x01);
+	I32x4 clmul10_1 = I32x4_clmul64(b1, H3, 0x10);
+	clmul01_1 = I32x4_xor(clmul01_1, clmul10_1);
+
+	a0 = AES_encodeBlock(a0, k[2]);
+	a1 = AES_encodeBlock(a1, k[2]);
+
+	I32x4 clmul01_2 = I32x4_clmul64(b2, H2, 0x01);
+	I32x4 clmul10_2 = I32x4_clmul64(b2, H2, 0x10);
+	clmul01_2 = I32x4_xor(clmul01_2, clmul10_2);
+
+	a2 = AES_encodeBlock(a2, k[2]);
+	a3 = AES_encodeBlock(a3, k[2]);
+
+	I32x4 clmul01_3 = I32x4_clmul64(b3, H, 0x01);
+	I32x4 clmul10_3 = I32x4_clmul64(b3, H, 0x10);
+	clmul01_3 = I32x4_xor(clmul01_3, clmul10_3);
+
+	a0 = AES_encodeBlock(a0, k[3]);
+	a1 = AES_encodeBlock(a1, k[3]);
+
+	I32x4 clmul00_0 = I32x4_clmul64(b0, H4, 0x00);
+	I32x4 clmul00_1 = I32x4_clmul64(b1, H3, 0x00);
+
+	a2 = AES_encodeBlock(a2, k[3]);
+	a3 = AES_encodeBlock(a3, k[3]);
+
+	I32x4 clmul00_2 = I32x4_clmul64(b2, H2, 0x00);
+	I32x4 clmul00_3 = I32x4_clmul64(b3, H, 0x00);
+
+	a0 = AES_encodeBlock(a0, k[4]);
+	a1 = AES_encodeBlock(a1, k[4]);
+
+	I32x4 clmul11_0 = I32x4_clmul64(b0, H4, 0x11);
+	I32x4 clmul11_1 = I32x4_clmul64(b1, H3, 0x11);
+
+	a2 = AES_encodeBlock(a2, k[4]);
+	a3 = AES_encodeBlock(a3, k[4]);
+
+	I32x4 clmul11_2 = I32x4_clmul64(b2, H2, 0x11);
+	I32x4 clmul11_3 = I32x4_clmul64(b3, H, 0x11);
+
+	a0 = AES_encodeBlock(a0, k[5]);
+	a1 = AES_encodeBlock(a1, k[5]);
+	a2 = AES_encodeBlock(a2, k[5]);
+	a3 = AES_encodeBlock(a3, k[5]);
+
+	a0 = AES_encodeBlock(a0, k[6]);
+	a1 = AES_encodeBlock(a1, k[6]);
+	a2 = AES_encodeBlock(a2, k[6]);
+	a3 = AES_encodeBlock(a3, k[6]);
+
+	a0 = AES_encodeBlock(a0, k[7]);
+	a1 = AES_encodeBlock(a1, k[7]);
+	a2 = AES_encodeBlock(a2, k[7]);
+	a3 = AES_encodeBlock(a3, k[7]);
+
+	a0 = AES_encodeBlock(a0, k[8]);
+	a1 = AES_encodeBlock(a1, k[8]);
+	a2 = AES_encodeBlock(a2, k[8]);
+	a3 = AES_encodeBlock(a3, k[8]);
+
+	a0 = AES_encodeBlock(a0, k[9]);
+	a1 = AES_encodeBlock(a1, k[9]);
+	a2 = AES_encodeBlock(a2, k[9]);
+	a3 = AES_encodeBlock(a3, k[9]);
+
+	I32x4 b;
+
+	if (type == EBufferEncryptionType_AES256GCM) {
+
+		a0 = AES_encodeBlock(a0, k[10]);
+		a1 = AES_encodeBlock(a1, k[10]);
+		a2 = AES_encodeBlock(a2, k[10]);
+		a3 = AES_encodeBlock(a3, k[10]);
+
+		clmul01_0 = I32x4_xor(clmul01_0, clmul01_1);
+		clmul00_0 = I32x4_xor(clmul00_0, clmul00_1);
+		clmul01_2 = I32x4_xor(clmul01_2, clmul01_3);
+		clmul00_2 = I32x4_xor(clmul00_2, clmul00_3);
+
+		a0 = AES_encodeBlock(a0, k[11]);
+		a1 = AES_encodeBlock(a1, k[11]);
+		a2 = AES_encodeBlock(a2, k[11]);
+		a3 = AES_encodeBlock(a3, k[11]);
+
+		clmul01_0 = I32x4_xor(clmul01_0, clmul01_2);
+		clmul00_0 = I32x4_xor(clmul00_0, clmul00_2);
+		clmul11_0 = I32x4_xor(clmul11_0, clmul11_1);
+		clmul11_2 = I32x4_xor(clmul11_2, clmul11_3);
+
+		I32x4 tmp1 = I32x4_lshElements(clmul01_0, 2);
+		a0 = AES_encodeBlock(a0, k[12]);
+		a1 = AES_encodeBlock(a1, k[12]);
+
+		clmul11_0 = I32x4_xor(clmul11_0, clmul11_2);
+		I32x4 tmp3 = I32x4_rshElements(clmul01_0, 2);
+		I32x4 t0 = I32x4_xor(clmul00_0, tmp1);
+		a2 = AES_encodeBlock(a2, k[12]);
+		a3 = AES_encodeBlock(a3, k[12]);
+
+		I32x4 t1 = I32x4_xor(clmul11_0, tmp3);
+		I32x4 tmp0 = I32x4_lsh32(t0, 1);
+		I32x4 tmp4 = I32x4_rsh32(t0, 31);
+		I32x4 tmp2 = I32x4_lsh32(t1, 1);
+		a0 = AES_encodeBlock(a0, k[13]);
+		a1 = AES_encodeBlock(a1, k[13]);
+
+		I32x4 tmp6 = I32x4_rsh32(t1, 31);
+		I32x4 tmp7 = I32x4_rshElements(tmp4, 3);
+		tmp6 = I32x4_lshElements(tmp6, 1);
+		I32x4 tmp5 = I32x4_lshElements(tmp4, 1);
+		a2 = AES_encodeBlock(a2, k[13]);
+		a3 = AES_encodeBlock(a3, k[13]);
+
+		tmp0 = I32x4_or(tmp0, tmp5);
+		tmp2 = I32x4_or(tmp2, tmp6);
+		tmp5 = I32x4_lsh32(tmp0, 31);
+		tmp6 = I32x4_lsh32(tmp0, 30);
+		tmp4 = I32x4_or(tmp2, tmp7);
+		tmp7 = I32x4_lsh32(tmp0, 25);
+
+		a0 = AES_encodeBlockLast(a0, k[14]);
+		a1 = AES_encodeBlockLast(a1, k[14]);
+
+		tmp5 = I32x4_xor(tmp5, tmp6);
+		tmp5 = I32x4_xor(tmp5, tmp7);
+
+		a2 = AES_encodeBlockLast(a2, k[14]);
+		a3 = AES_encodeBlockLast(a3, k[14]);
+
+		tmp6 = I32x4_lshElements(tmp5, 3);
+		tmp3 = I32x4_rshElements(tmp5, 1);
+		tmp5 = I32x4_xor(tmp0, tmp6);
+
+		tmp0 = I32x4_rsh32(tmp5, 1);
+		tmp1 = I32x4_rsh32(tmp5, 2);
+		tmp2 = I32x4_rsh32(tmp5, 7);
+
+		tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
+		tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
+		tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
+		tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+
+		b = I32x4_swapEndianness(tmp0);
+
+	} else {
+
+		a0 = AES_encodeBlockLast(a0, k[10]);
+		a1 = AES_encodeBlockLast(a1, k[10]);
+		a2 = AES_encodeBlockLast(a2, k[10]);
+		a3 = AES_encodeBlockLast(a3, k[10]);
+
+		clmul01_0 = I32x4_xor(clmul01_0, clmul01_1);
+		clmul00_0 = I32x4_xor(clmul00_0, clmul00_1);
+		clmul11_0 = I32x4_xor(clmul11_0, clmul11_1);
+
+		clmul01_2 = I32x4_xor(clmul01_2, clmul01_3);
+		clmul00_2 = I32x4_xor(clmul00_2, clmul00_3);
+		clmul11_2 = I32x4_xor(clmul11_2, clmul11_3);
+
+		clmul01_0 = I32x4_xor(clmul01_0, clmul01_2);
+		clmul00_0 = I32x4_xor(clmul00_0, clmul00_2);
+		clmul11_0 = I32x4_xor(clmul11_0, clmul11_2);
+		
+		b = AESEncryptionContext_ghashReduceClMul(clmul00_0, clmul01_0, clmul11_0);
+	}
+
+	I32x4x5 abcde = { a0, a1, a2, a3, b };
+	return abcde;
 }
 
 #ifdef HAS_CLMUL64x2
@@ -408,6 +1031,45 @@ static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *
 	return AESEncryptionContext_ghashReduceClMul(clmuls[0], clmuls[1], clmuls[2]);
 }
 
+static inline I32x4 AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8 N, U8 use256Or512) {
+
+	(void)use256Or512;
+
+	for (U32 i = 0; i < N; ++i)
+		a[i] = I32x4_swapEndianness(a[i]);
+
+	I32x4 clmul00[4];
+	I32x4 clmulFused[4];
+	I32x4 clmul11[4];
+
+	for (U32 i = 0; i < N; ++i) {
+		I32x4 Hi = H[N - 1 - i];
+		I32x4 clmul01 = I32x4_clmul64(a[i], Hi, 0x01);
+		I32x4 clmul10 = I32x4_clmul64(a[i], Hi, 0x10);
+		clmul00[i] = I32x4_clmul64(a[i], Hi, 0x00);
+		clmul11[i] = I32x4_clmul64(a[i], Hi, 0x11);
+		clmulFused[i] = I32x4_xor(clmul01, clmul10);
+	}
+
+	if (N >= 2) {
+
+		for (U32 i = 0; i < (U32)(N >> 1); ++i) {
+			U32 left = i << 1;
+			clmul00[left] = I32x4_xor(clmul00[left], clmul00[left | 1]);
+			clmul11[left] = I32x4_xor(clmul11[left], clmul11[left | 1]);
+			clmulFused[left] = I32x4_xor(clmulFused[left], clmulFused[left | 1]);
+		}
+
+		if (N == 4) {
+			clmul00[0] = I32x4_xor(clmul00[0], clmul00[2]);
+			clmul11[0] = I32x4_xor(clmul11[0], clmul11[2]);
+			clmulFused[0] = I32x4_xor(clmulFused[0], clmulFused[2]);
+		}
+	}
+
+	return AESEncryptionContext_ghashReduceClMul(clmul00[0], clmulFused[0], clmul11[0]);
+}
+
 void AESEncryptionContext_updateTagN(
 	AESEncryptionContext *restrict ctx, const I32x4 *restrict CTi, const U8 N, U8 use256Or512
 ) {
@@ -420,6 +1082,20 @@ void AESEncryptionContext_updateTagN(
 		v[i] = CTi[i];
 
 	ctx->tag = AESEncryptionContext_ghashN(v, ctx->H, N, use256Or512);
+}
+
+void AESEncryptionContext_updateTagN4(
+	AESEncryptionContext *restrict ctx, const I32x4 *restrict CTi, const U8 N, U8 use256Or512
+) {
+	
+	I32x4 v[4];
+
+	v[0] = I32x4_xor(CTi[0], ctx->tag);
+
+	for (U8 i = 1; i < N; ++i)
+		v[i] = CTi[i];
+
+	ctx->tag = AESEncryptionContext_ghashN4(v, ctx->H, N, use256Or512);
 }
 
 #ifdef HAS_AESx2
@@ -836,6 +1512,9 @@ Bool Buffer_aesExpertCreate(
 		}
 	}
 
+	use256Or512Real = 0;
+	blockSize = U8_min(blockSize, 4);
+
 	if (use256Or512) *use256Or512 = use256Or512Real;
 	if (blockSizeMax) *blockSizeMax = blockSize;
 
@@ -1044,9 +1723,12 @@ static inline void AESEncryptionContext_processBlockTail(
 	AESEncryptionContext_storeBlockTail(io, leftOver, &v);
 }
 
+/*
 static inline void AESEncryptionContext_processBlockN(
 	AESEncryptionContext *restrict ctx,
 	I32x4 *restrict io,
+	I32x4 *restrict prevState,
+	U8 *restrict prevBlock,
 	const U32 id,
 	const U8 N,
 	Bool isEncrypt,
@@ -1072,37 +1754,56 @@ static inline void AESEncryptionContext_processBlockN(
 		}
 	#endif
 
+	//Update tag for the ciphertext
+	//prevBlock always contains the ciphertext. Either we have loaded it when decrypting or it was output by the last operation
+
+	U8 prevBlockv = *prevBlock;
+
+	if(prevBlockv != U8_MAX)
+		AESEncryptionContext_updateTagN(ctx, prevState, prevBlock, false);
+
+	//Load next block
+
 	I32x4 v[16];
 
 	for (U32 i = 0; i < N; ++i)
 		v[i] = io[i];
 
-	//Update tag for the ciphertext (before decryption)
-
-	if (!isEncrypt)
-		AESEncryptionContext_updateTagN(ctx, v, N, false);
-
-	//Encrypt IV + blockId to use to encrypt
+	//Encrypt IV + blockId and xor to get ciphertext/plaintext
 
 	for (U32 i = 0; i < N; ++i) {
 		I32x4 ivi = iv;
 		I32x4_setWRef(&ivi, (I32)U32_swapEndianness(id + i + 2));
-
 		v[i] = I32x4_xor(v[i], AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
 	}
-
-	//Update tag for the ciphertext (after encryption)
-
-	if(isEncrypt)
-		AESEncryptionContext_updateTagN(ctx, v, N, false);
 
 	//Store
 
 	for (U32 i = 0; i < N; ++i)
 		io[i] = v[i];
-}
 
-static inline void AESEncryptionContext_handleBlocks(
+	//When decrypting, we want to store the input (ciphertext)
+
+	if (!isEncrypt) {
+
+		for (U32 i = 0; i < N; ++i)
+			prevState[i] = io[i];
+
+		*prevBlock = N;
+	}
+
+	//When encrypting, we want to store the output (ciphertext)
+
+	else {
+
+		for (U32 i = 0; i < N; ++i)
+			prevState[i] = v[i];
+
+		*prevBlock = N;
+	}
+}*/
+
+__forceinline__ static void AESEncryptionContext_handleBlocks(
 	AESEncryptionContext *restrict ctx,
 	U8 *restrict targetPtr,
 	U64 targetLen,
@@ -1112,118 +1813,369 @@ static inline void AESEncryptionContext_handleBlocks(
 	U8 use256Or512
 ) {
 
-	U64 next = 0;
+	(void)use256Or512;
 
-	//Handle blocks
-	//TODO: We might wanna multithread this if we ever get big enough data
-	//		For now, we're dealing with small enough files that spinning up threads would be slower
-	//		(Without a job system)
+	if (!targetLen)
+		return;
 
-	//32 blocks and higher is reserved for 256-bit vectors
+	I32x4 *restrict next = (I32x4 *restrict)targetPtr;
+	I32x4 *restrict end = (I32x4 *restrict)(targetPtr + targetLen);		//Can be misaligned
 
-	if (blockSizeMax >= 64 && cryptoState >= 2 && use256Or512)
-		while (next + 1024 <= targetLen) {
-			AESEncryptionContext_processBlockN(
-				ctx,
-				(I32x4*)(targetPtr + next),
-				(U32)(next >> 4) + offsetInBlocks,
-				64,
-				isEncrypt,
-				use256Or512
-			);
-			next += 1024;
+	U32 counterForIv = offsetInBlocks + 2;
+	U8 prevBlock = 0;
+
+	I32x4 iv = ctx->iv;
+	
+	//Batch 4
+	
+	if(blockSizeMax > 2) {
+
+		I32x4 prevState[4];
+		I32x4 H = ctx->H[0];
+		I32x4 H2 = ctx->H[1];
+		I32x4 H3 = ctx->H[2];
+		I32x4 H4 = ctx->H[3];
+
+		//Don't waste time on a ghash that's not gonna be used
+		//I manually unrolled this and optimized the instruction order, because MSVC really can't compile well at alll.
+
+		if (next + 4 <= end) {
+
+			I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv));
+			I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 1));
+			I32x4 ivi2 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 2));
+			I32x4 ivi3 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 3));
+			counterForIv += 4;
+
+			I32x4x4 ab = AESEncryptionContext_blockHash4(ivi0, ivi1, ivi2, ivi3, ctx->key, ctx->encryptionType);
+
+			I32x4 a = I32x4_xor(ab.a, next[0]);
+			I32x4 b = I32x4_xor(ab.b, next[1]);
+			I32x4 c = I32x4_xor(ab.c, next[2]);
+			I32x4 d = I32x4_xor(ab.d, next[3]);
+
+			if (!isEncrypt) {			//Decryption, we use the input (ciphertext)
+				prevState[0] = next[0];
+				prevState[1] = next[1];
+				prevState[2] = next[2];
+				prevState[3] = next[3];
+			}
+
+			else {						//Encryption, we use the output (ciphertext)
+				prevState[0] = a;
+				prevState[1] = b;
+				prevState[2] = c;
+				prevState[3] = d;
+			}
+
+			next[0] = a;
+			next[1] = b;
+			next[2] = c;
+			next[3] = d;
+			next += 4;
+			prevBlock = 4;
 		}
 
-	if (blockSizeMax >= 32 && cryptoState >= 2 && use256Or512)
-		while (next + 512 <= targetLen) {
-			AESEncryptionContext_processBlockN(
-				ctx,
-				(I32x4*)(targetPtr + next),
-				(U32)(next >> 4) + offsetInBlocks,
-				32,
-				isEncrypt,
-				use256Or512
+		while (next + 4 <= end) {
+
+			I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv));
+			I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 1));
+			I32x4 ivi2 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 2));
+			I32x4 ivi3 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 3));
+			counterForIv += 4;
+
+			I32x4x5 ab = AESEncryptionContext_blockHashAndGhash4(
+				ivi0, ivi1, ivi2, ivi3,
+				H, H2, H3, H4,
+				prevState[0], prevState[1], prevState[2], prevState[3],
+				ctx->tag,
+				ctx->key,
+				ctx->encryptionType
 			);
-			next += 512;
+
+			ctx->tag = ab.e;
+
+			I32x4 a = I32x4_xor(ab.a, next[0]);
+			I32x4 b = I32x4_xor(ab.b, next[1]);
+			I32x4 c = I32x4_xor(ab.c, next[2]);
+			I32x4 d = I32x4_xor(ab.d, next[3]);
+
+			if (!isEncrypt) {				//Decryption, we use the input (ciphertext)
+				prevState[0] = next[0];
+				prevState[1] = next[1];
+				prevState[2] = next[2];
+				prevState[3] = next[3];
+			}
+
+			else {							//Encryption, we use the output (ciphertext)
+				prevState[0] = a;
+				prevState[1] = b;
+				prevState[2] = c;
+				prevState[3] = d;
+			}
+
+			next[0] = a;
+			next[1] = b;
+			next[2] = c;
+			next[3] = d;
+			next += 4;
+			prevBlock = 4;
 		}
 
-	//16 blocks at a time, this handles only fully aligned blocks.
-	//This improves performance because it allows better scheduling
-	// (16 can run in parallel, instead of being blocked every instruction)
+		if (prevBlock) {
 
-	if (blockSizeMax >= 16)
-		while (next + 256 <= targetLen) {
-			AESEncryptionContext_processBlockN(
-				ctx,
-				(I32x4*)(targetPtr + next),
-				(U32)(next >> 4) + offsetInBlocks,
-				16,
-				isEncrypt,
-				use256Or512
-			);
-			next += 256;
+			I32x4 a = I32x4_xor(prevState[0], ctx->tag);
+			I32x4 b = prevState[1];
+			I32x4 c = prevState[2];
+			I32x4 d = prevState[3];
+
+			a = I32x4_swapEndianness(a);
+			b = I32x4_swapEndianness(b);
+			c = I32x4_swapEndianness(c);
+			d = I32x4_swapEndianness(d);
+
+			I32x4 clmul01a = I32x4_clmul64(a, H4, 0x01);
+			I32x4 clmul10a = I32x4_clmul64(a, H4, 0x10);
+			clmul01a = I32x4_xor(clmul01a, clmul10a);
+
+			I32x4 clmul01b = I32x4_clmul64(b, H3, 0x01);
+			I32x4 clmul10b = I32x4_clmul64(b, H3, 0x10);
+			clmul01b = I32x4_xor(clmul01b, clmul10b);
+
+			I32x4 clmul01c = I32x4_clmul64(c, H2, 0x01);
+			I32x4 clmul10c = I32x4_clmul64(c, H2, 0x10);
+			clmul01c = I32x4_xor(clmul01c, clmul10c);
+
+			I32x4 clmul01d = I32x4_clmul64(d, H, 0x01);
+			I32x4 clmul10d = I32x4_clmul64(d, H, 0x10);
+			clmul01d = I32x4_xor(clmul01d, clmul10d);
+
+			I32x4 clmul00a = I32x4_clmul64(a, H4, 0x00);
+			I32x4 clmul00b = I32x4_clmul64(b, H3, 0x00);
+			I32x4 clmul00c = I32x4_clmul64(c, H2, 0x00);
+			I32x4 clmul00d = I32x4_clmul64(d, H, 0x00);
+
+			I32x4 clmul11a = I32x4_clmul64(a, H4, 0x11);
+			I32x4 clmul11b = I32x4_clmul64(b, H3, 0x11);
+			I32x4 clmul11c = I32x4_clmul64(c, H2, 0x11);
+			I32x4 clmul11d = I32x4_clmul64(d, H, 0x11);
+
+			clmul11a = I32x4_xor(clmul11a, clmul11b);
+			clmul00a = I32x4_xor(clmul00a, clmul00b);
+			clmul01a = I32x4_xor(clmul01a, clmul01b);
+
+			clmul11c = I32x4_xor(clmul11c, clmul11d);
+			clmul00c = I32x4_xor(clmul00c, clmul00d);
+			clmul01c = I32x4_xor(clmul01c, clmul01d);
+
+			clmul11a = I32x4_xor(clmul11a, clmul11c);
+			clmul00a = I32x4_xor(clmul00a, clmul00c);
+			clmul01a = I32x4_xor(clmul01a, clmul01c);
+
+			ctx->tag = AESEncryptionContext_ghashReduceClMul(clmul00a, clmul01a, clmul11a);
+			prevBlock = 0;
+		}
+	}
+	
+	//Batch 2
+	
+	if(blockSizeMax > 1) {
+
+		I32x4 prevState[2];
+		I32x4 H = ctx->H[0];
+		I32x4 H2 = ctx->H[1];
+
+		//Don't waste time on a ghash that's not gonna be used
+		//I manually unrolled this and optimized the instruction order, because MSVC really can't compile well at alll.
+
+		if (next + 2 <= end) {
+
+			I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv));
+			I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 1));
+			counterForIv += 2;
+
+			I32x4x2 ab = AESEncryptionContext_blockHash2(ivi0, ivi1, ctx->key, ctx->encryptionType);
+
+			I32x4 a = I32x4_xor(ab.a, next[0]);
+			I32x4 b = I32x4_xor(ab.b, next[1]);
+
+			if (!isEncrypt) {			//Decryption, we use the input (ciphertext)
+				prevState[0] = next[0];
+				prevState[1] = next[1];
+			}
+
+			else {						//Encryption, we use the output (ciphertext)
+				prevState[0] = a;
+				prevState[1] = b;
+			}
+
+			next[0] = a;
+			next[1] = b;
+			next += 2;
+			prevBlock = 2;
 		}
 
-	if (blockSizeMax >= 8)
-		while (next + 128 <= targetLen) {
-			AESEncryptionContext_processBlockN(
-				ctx,
-				(I32x4*)(targetPtr + next),
-				(U32)(next >> 4) + offsetInBlocks,
-				8,
-				isEncrypt,
-				use256Or512
+		while (next + 2 <= end) {
+
+			I32x4 ivi0 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv));
+			I32x4 ivi1 = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv + 1));
+			counterForIv += 2;
+
+			I32x4x3 ab = AESEncryptionContext_blockHashAndGhash2(
+				ivi0, ivi1,
+				H, H2,
+				prevState[0], prevState[1],
+				ctx->tag,
+				ctx->key,
+				ctx->encryptionType
 			);
-			next += 128;
+
+			ctx->tag = ab.c;
+
+			I32x4 a = I32x4_xor(ab.a, next[0]);
+			I32x4 b = I32x4_xor(ab.b, next[1]);
+
+			if (!isEncrypt) {				//Decryption, we use the input (ciphertext)
+				prevState[0] = next[0];
+				prevState[1] = next[1];
+			}
+
+			else {							//Encryption, we use the output (ciphertext)
+				prevState[0] = a;
+				prevState[1] = b;
+			}
+
+			next[0] = a;
+			next[1] = b;
+			next += 2;
+			prevBlock = 2;
 		}
 
-	if (blockSizeMax >= 4)
-		while (next + 64 <= targetLen) {
-			AESEncryptionContext_processBlockN(
-				ctx,
-				(I32x4*)(targetPtr + next),
-				(U32)(next >> 4) + offsetInBlocks,
-				4,
-				isEncrypt,
-				use256Or512
-			);
-			next += 64;
+		if (prevBlock) {
+
+			I32x4 a = I32x4_xor(prevState[0], ctx->tag);
+			I32x4 b = prevState[1];
+
+			a = I32x4_swapEndianness(a);
+			b = I32x4_swapEndianness(b);
+
+			I32x4 clmul01a = I32x4_clmul64(a, H2, 0x01);
+			I32x4 clmul10a = I32x4_clmul64(a, H2, 0x10);
+			clmul01a = I32x4_xor(clmul01a, clmul10a);
+
+			I32x4 clmul01b = I32x4_clmul64(b, H, 0x01);
+			I32x4 clmul10b = I32x4_clmul64(b, H, 0x10);
+			clmul01b = I32x4_xor(clmul01b, clmul10b);
+
+			I32x4 clmul00b = I32x4_clmul64(b, H, 0x00);
+			I32x4 clmul00a = I32x4_clmul64(a, H2, 0x00);
+			I32x4 clmul11b = I32x4_clmul64(b, H, 0x11);
+			I32x4 clmul11a = I32x4_clmul64(a, H2, 0x11);
+
+			clmul11a = I32x4_xor(clmul11a, clmul11b);
+			clmul00a = I32x4_xor(clmul00a, clmul00b);
+			clmul01a = I32x4_xor(clmul01a, clmul01b);
+
+			ctx->tag = AESEncryptionContext_ghashReduceClMul(clmul00a, clmul01a, clmul11a);
+			prevBlock = 0;
 		}
-
-
-	if (blockSizeMax >= 2)
-		while (next + 32 <= targetLen) {
-			AESEncryptionContext_processBlockN(
-				ctx,
-				(I32x4*)(targetPtr + next),
-				(U32)(next >> 4) + offsetInBlocks,
-				2,
-				isEncrypt,
-				use256Or512
-			);
-			next += 32;
-		}
-
-	while (next + 16 <= targetLen) {
-		AESEncryptionContext_processBlockN(
-			ctx,
-			(I32x4*)(targetPtr + next),
-			(U32)(next >> 4) + offsetInBlocks,
-			1,
-			isEncrypt,
-			false
-		);
-		next += 16;
 	}
 
-	if (next < targetLen)
-		AESEncryptionContext_processBlockTail(
-			ctx,
-			(I32*)(targetPtr + next),
-			(U8)(targetLen & 15),
-			(U32)(targetLen >> 4) + offsetInBlocks,
-			isEncrypt
-		);
+	//Batch 1
+
+	I32x4 H = ctx->H[0];
+	I32x4 prevState = I32x4_zero();
+
+	//Don't waste time on a ghash that's not gonna be used
+	//I manually unrolled this and optimized the instruction order, because MSVC really can't compile well at alll.
+
+	if (next + 1 <= end) {
+
+		I32x4 ivi = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv++));
+		I32x4 a = AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType);
+		a = I32x4_xor(a, next[0]);
+
+		if (!isEncrypt)				//Decryption, we use the input (ciphertext)
+			prevState = next[0];
+
+		else prevState = a;		//Encryption, we use the output (ciphertext)
+
+		next[0] = a;
+		++next;
+		prevBlock = 1;
+	}
+
+	while (next + 1 <= end) {
+
+		I32x4 ivi = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv++));
+		I32x4x2 ab = AESEncryptionContext_blockHashAndGhash(ivi, H, prevState, ctx->tag, ctx->key, ctx->encryptionType);
+
+		ctx->tag = ab.b;
+
+		I32x4 a = I32x4_xor(ab.a, next[0]);
+
+		if (!isEncrypt)					//Decryption, we use the input (ciphertext)
+			prevState = next[0];
+
+		else prevState = a;			//Encryption, we use the output (ciphertext)
+
+		next[0] = a;
+		++next;
+		prevBlock = 1;
+	}
+
+	//Tail (needs slower copy)
+
+	if (next != end) {
+
+		U8 leftOver = (U8)(targetLen & 15);
+
+		I32x4 a;
+		I32x4 v;
+		
+		if (prevBlock) {
+
+			I32x4 ivi = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv++));
+			I32x4x2 ab = AESEncryptionContext_blockHashAndGhash(ivi, H, prevState, ctx->tag, ctx->key, ctx->encryptionType);
+
+			ctx->tag = ab.b;
+			a = ab.a;
+
+			v = I32x4_zero();
+			Buffer_memcpy(Buffer_createRef(&v, leftOver), Buffer_createRefConst(next, leftOver));
+
+			a = I32x4_xor(a, v);
+
+		} else {
+
+			I32x4 ivi = I32x4_setWCopy(iv, (I32)U32_swapEndianness(counterForIv++));
+			a = AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType);
+
+			Buffer_memcpy(Buffer_createRef(&v, leftOver), Buffer_createRefConst(next, leftOver));
+			a = I32x4_xor(a, v);
+		}
+
+		if (!isEncrypt)					//Decryption, we use the input (ciphertext)
+			prevState = v;
+
+		else prevState = a;			//Encryption, we use the output (ciphertext)
+
+		Buffer_memcpy(Buffer_createRef(next, leftOver), Buffer_createRefConst(&a, leftOver));
+		prevBlock = 1;
+
+		Buffer_unsetAllBits(Buffer_createRef(((U8*)&prevState + leftOver), 16 - leftOver), NULL);
+	}
+
+	if (prevBlock) {
+		I32x4 b = I32x4_xor(prevState, ctx->tag);
+		b = I32x4_swapEndianness(b);
+		I32x4 clmul01 = I32x4_clmul64(b, H, 0x01);
+		I32x4 clmul10 = I32x4_clmul64(b, H, 0x10);
+		I32x4 clmul00 = I32x4_clmul64(b, H, 0x00);
+		I32x4 clmul11 = I32x4_clmul64(b, H, 0x11);
+		clmul01 = I32x4_xor(clmul01, clmul10);
+		ctx->tag = AESEncryptionContext_ghashReduceClMul(clmul00, clmul01, clmul11);
+	}
 }
 
 static inline void Buffer_prefetch(Buffer data) {
