@@ -24,63 +24,57 @@
 #include "types/math/vec8i_sse.h"
 #include "types/base/endianness.h"
 
-void AESEncryptionContext_updateTagN(
-	AESEncryptionContext *restrict ctx, const I32x4 *restrict CTi, const U8 N, U8 use256Or512
-);
+__forceinline__ static I32x8 AESEncryptionContext_ghashReduceClMul2(I32x8 clmul00, I32x8 clmulFused, I32x8 clmul11) {
 
-static inline I32x8 AESEncryptionContext_ghashReduceClMul2(I32x8 clmul00, I32x8 clmulFused, I32x8 clmul11) {
-		
-	I32x8 tmp[8];
+	I32x8 tmp1 = I32x8_lshElements(clmulFused, 2);
+	I32x8 tmp3 = I32x8_rshElements(clmulFused, 2);
 
-	tmp[0] = clmul00;
-	tmp[3] = clmulFused;
-	tmp[2] = clmul11;
+	I32x8 t0 = I32x8_xor(clmul00, tmp1);
+	I32x8 t1 = I32x8_xor(clmul11, tmp3);
 
-	tmp[1] = I32x8_lshElements(tmp[3], 2);
-	tmp[3] = I32x8_rshElements(tmp[3], 2);
+	I32x8 tmp0 = I32x8_lsh32(t0, 1);
+	I32x8 tmp4 = I32x8_rsh32(t0, 31);
+	I32x8 tmp2 = I32x8_lsh32(t1, 1);
+	I32x8 tmp6 = I32x8_rsh32(t1, 31);
 
-	for (U8 i = 0; i < 2; ++i) {
-		I32x8 t = I32x8_xor(tmp[i << 1], tmp[(i << 1) + 1]);
-		tmp[i << 1] = I32x8_lsh32(t, 1);
-		tmp[4 + (i << 1)] = I32x8_rsh32(t, 31);
-	}
+	I32x8 tmp7 = I32x8_rshElements(tmp4, 3);
+	tmp6 = I32x8_lshElements(tmp6, 1);
+	I32x8 tmp5 = I32x8_lshElements(tmp4, 1);
 
-	tmp[7] = I32x8_rshElements(tmp[4], 3);
+	tmp0 = I32x8_or(tmp0, tmp5);
+	tmp2 = I32x8_or(tmp2, tmp6);
+	tmp5 = I32x8_lsh32(tmp0, 31);
+	tmp6 = I32x8_lsh32(tmp0, 30);
+	tmp4 = I32x8_or(tmp2, tmp7);
+	tmp7 = I32x8_lsh32(tmp0, 25);
 
-	for (U8 i = 0; i < 2; ++i)
-		tmp[6 - i] = I32x8_lshElements(tmp[6 - (i << 1)], 1);
+	tmp5 = I32x8_xor(tmp5, tmp6);
+	tmp5 = I32x8_xor(tmp5, tmp7);
 
-	const U8 v0[3] = { 31, 30, 25 };
+	tmp6 = I32x8_lshElements(tmp5, 3);
+	tmp3 = I32x8_rshElements(tmp5, 1);
+	tmp5 = I32x8_xor(tmp0, tmp6);
 
-	for (U8 i = 0; i < 3; ++i) {
-		tmp[i << 1] = I32x8_or(tmp[i ? 2 : 0], tmp[5 + i]);
-		tmp[5 + i] = I32x8_lsh32(tmp[0], v0[i]);
-	}
+	tmp0 = I32x8_rsh32(tmp5, 1);
+	tmp1 = I32x8_rsh32(tmp5, 2);
+	tmp2 = I32x8_rsh32(tmp5, 7);
 
-	for (U8 i = 0; i < 2; ++i)
-		tmp[5] = I32x8_xor(tmp[5], tmp[6 + i]);
+	tmp0 = I32x8_xor(tmp0, tmp5);		//0 ^ 5
+	tmp1 = I32x8_xor(tmp1, tmp2);		//1 ^ 2
+	tmp3 = I32x8_xor(tmp3, tmp4);		//3 ^ 4
+	tmp0 = I32x8_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
+	tmp0 = I32x8_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
 
-	tmp[3] = I32x8_rshElements(tmp[5], 1);
-	tmp[5] = I32x8_xor(tmp[0], I32x8_lshElements(tmp[5], 3));
-
-	const U8 v1[3] = { 1, 2, 7 };
-
-	for (U8 i = 0; i < 3; ++i)
-		tmp[i] = I32x8_rsh32(tmp[5], v1[i]);
-
-	for (U8 i = 1; i < 6; ++i)
-		tmp[0] = I32x8_xor(tmp[0], tmp[i]);
-
-	return I32x8_swapEndianness(tmp[0]);
+	return I32x8_swapEndianness(tmp0);
 }
 
 void AESEncryptionContext_ghashN2(I32x4 *restrict a, const I32x4 *restrict H, U8 N, I32x4 *restrict clmuls) {
 
-	I32x8 clmul00_8[32];
-	I32x8 clmul11_8[32];
-	I32x8 clmulFused_8[32];
+	I32x8 clmul00_8[4];
+	I32x8 clmul11_8[4];
+	I32x8 clmulFused_8[4];
 
-	I32x8 a8[32];
+	I32x8 a8[4];
 
 	const U8 N2 = N >> 1;
 

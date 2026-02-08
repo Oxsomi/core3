@@ -29,6 +29,11 @@
 #include "types/math/type_cast.h"
 #include "types/base/endianness.h"
 
+//-1: Uninitialized
+//0: No support (No fallback yet though)
+//1: Support for AES-NI (or AESE with NEON)
+//2: Support for AES-NI, VAES, AVX2, VPCLMUL, AVX512VL, AVX512BM
+//3: Support for AES-NI, VAES, AVX2, VPCLMUL, AVX512VL, AVX512BM, AVX512F, AVX512DQ
 static I8 cryptoState = -1;
 
 #if _SIMD == SIMD_SSE
@@ -113,8 +118,12 @@ static I8 cryptoState = -1;
 //For "encrypt" we use AES CTR as explained by the intel paper:
 //https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf
 
-//AES_subWord can be used by either NEON or NONE for encryption.
+//AES_subWord can be used by as fallback for encryption.
 //No lookup tables, those are unsafe.
+//TODO: Speedup this fallback, it's made to be a reference & to be secure.
+//		Since most devices have AES-NI, no time was spent optimizing this.
+//		If you're encrypting a lot of data... goodluck and see you in 2039 (Don't use for perf critical without AES-NI support)
+//		Investigate Bitslicing, Boyar-Peralta or something like it.
 
 static inline U8 AES_xtime(U8 x) {
 	return (U8)((x << 1) ^ ((x >> 7) * 0x1B));
@@ -1000,11 +1009,11 @@ static inline I32x4 AESEncryptionContext_ghashN(I32x4 *restrict a, const I32x4 *
 	return AESEncryptionContext_ghashReduceClMul(clmuls[0], clmuls[1], clmuls[2]);
 }
 
-void AESEncryptionContext_updateTagN(
+static inline void AESEncryptionContext_updateTagN(
 	AESEncryptionContext *restrict ctx, const I32x4 *restrict CTi, const U8 N, U8 use256Or512
 ) {
 	
-	I32x4 v[64];
+	I32x4 v[16];
 
 	v[0] = I32x4_xor(CTi[0], ctx->tag);
 
@@ -1041,6 +1050,12 @@ void Buffer_aesExpertUpdateAADFast(AESEncryptionContext *restrict ctx, Buffer ad
 	U64 next = 0;
 	const I32x4 *restrict ptr = (const I32x4* restrict)additionalData.ptr;
 
+	//TODO: Re-enable this block size only for AAD (Need to update the size in ctx->H and AESEncryptionContext_updateTagN)
+	//		Would also need to update the switch case that points to Buffer_aesExpertExpandHash,
+	//		AESEncryptionContext_ghashN2 and AESEncryptionContext_ghashN4
+	//This giant block size actually helps because we have no other work to schedule unlike a real AES+GHASH pipeline.
+
+	/*
 	if (blockSize >= 64 && use256Or512) {
 		while (next + 1024 <= len) {
 
@@ -1065,7 +1080,7 @@ void Buffer_aesExpertUpdateAADFast(AESEncryptionContext *restrict ctx, Buffer ad
 			AESEncryptionContext_updateTagN(ctx, v, 32, use256Or512);
 			next += 512;
 		}
-	}
+	}*/
 
 	if (blockSize >= 16) {
 		while (next + 256 <= len) {
@@ -1313,8 +1328,7 @@ Bool Buffer_aesExpertCreate(
 			// but might need certain crypto flags to be set properly.
 			detect = true;
 
-			//As for the stream size hint, we always assume we want to do the most blocks we can as it has no negative effect.
-			//Though maybe NEON is different.
+			//As for the stream size hint, we always assume we want to do the most blocks we can as it has no negative effect
 
 			break;
 	}
@@ -1344,7 +1358,7 @@ Bool Buffer_aesExpertCreate(
 			use256Or512Real = 0;
 
 		//Here are the optimal sizes:
-		//NEO: ???
+		//NEO: 2, 2, 2, 2, 4...
 		//
 		//SSE: 1, 1, 2, 2, 4...
 		//256: 1, 1, 2, 2, 4, 8...
@@ -1354,19 +1368,7 @@ Bool Buffer_aesExpertCreate(
 
 		if (!use256Or512Real) {
 			#if _SIMD == SIMD_NEON
-				if (oneTimeHint <= 32)
-					blockSize = 1;
-
-				else if (oneTimeHint <= 128)
-					blockSize = 2;
-
-				else if (oneTimeHint <= 256)
-					blockSize = 4;
-
-				else if (oneTimeHint <= 512)
-					blockSize = 8;
-
-				else blockSize = 16;
+				blockSize = oneTimeHint <= 128 ? 2 : 4;
 			#endif
 		}
 
@@ -1395,8 +1397,6 @@ Bool Buffer_aesExpertCreate(
 		case 4:		Buffer_aesExpertExpandHash(ctx,  4, use256Or512Real);	break;
 		case 8:		Buffer_aesExpertExpandHash(ctx,  8, use256Or512Real);	break;
 		case 16:	Buffer_aesExpertExpandHash(ctx, 16, use256Or512Real);	break;
-		case 32:	Buffer_aesExpertExpandHash(ctx, 32, use256Or512Real);	break;
-		case 64:	Buffer_aesExpertExpandHash(ctx, 64, use256Or512Real);	break;
 	}
 
 	//Compute final tag xor
@@ -1504,8 +1504,6 @@ static inline Bool AESEncryptionContext_create(
 			case 4:		Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   4, *use256Or512);	break;
 			case 8:		Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   8, *use256Or512);	break;
 			case 16:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  16, *use256Or512);	break;
-			case 32:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  32, *use256Or512);	break;
-			case 64:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  64, *use256Or512);	break;
 		}
 
 clean:
@@ -2032,8 +2030,6 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *restrict en
 			case 4:		Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   4, use256Or512);	break;
 			case 8:		Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   8, use256Or512);	break;
 			case 16:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  16, use256Or512);	break;
-			case 32:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  32, use256Or512);	break;
-			case 64:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  64, use256Or512);	break;
 		}
 
 	//Finish encryption by appending tag for authentication / verification that the data isn't messed with
@@ -2135,8 +2131,6 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 			case 4:		Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   4, use256Or512);	break;
 			case 8:		Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   8, use256Or512);	break;
 			case 16:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  16, use256Or512);	break;
-			case 32:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  32, use256Or512);	break;
-			case 64:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  64, use256Or512);	break;
 		}
 
 	U64 aadLen = decrypt->additionalData ? Buffer_length(*decrypt->additionalData) : 0;
