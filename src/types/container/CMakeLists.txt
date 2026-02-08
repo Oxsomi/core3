@@ -46,12 +46,12 @@ if("${simd}" STREQUAL "sse")
 		set_source_files_properties(
 			simd/sse/buffer_encrypt_avx256.c
 			PROPERTIES
-				COMPILE_OPTIONS "-maes;-mpclmul;-mavx2;-mvaes;-mvpclmulqdq"
+				COMPILE_OPTIONS "-maes;-mpclmul;-mavx2;-mvaes;-mvpclmulqdq;-mavx512vl"
 		)
 		set_source_files_properties(
 			simd/sse/buffer_encrypt_avx512.c
 			PROPERTIES
-				COMPILE_OPTIONS "-mavx512f;-mavx512dq;-mavx512bw;-mvaes;-mvpclmulqdq"
+				COMPILE_OPTIONS "-mavx512f;-mavx512dq;-mavx512bw;-mvaes;-mvpclmulqdq;-mavx512vl"
 		)
 	endif()
 endif()

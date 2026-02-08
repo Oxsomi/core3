@@ -40,10 +40,10 @@ static inline I32 I32x4_y(I32x4 a) { return _mm_extract_epi32(a, 1); }
 static inline I32 I32x4_z(I32x4 a) { return _mm_extract_epi32(a, 2); }
 static inline I32 I32x4_w(I32x4 a) { return _mm_extract_epi32(a, 3); }
 
-static inline I32x4 I32x4_setXCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x1); }
-static inline I32x4 I32x4_setYCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x2); }
-static inline I32x4 I32x4_setZCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x4); }
-static inline I32x4 I32x4_setWCopy(I32x4 a, I32 v) { return _mm_blend_epi32(a, I32x4_xxxx4(v), 0x8); }
+static inline I32x4 I32x4_setXCopy(I32x4 a, I32 v) { return _mm_insert_epi32(a, v, 0); }
+static inline I32x4 I32x4_setYCopy(I32x4 a, I32 v) { return _mm_insert_epi32(a, v, 1); }
+static inline I32x4 I32x4_setZCopy(I32x4 a, I32 v) { return _mm_insert_epi32(a, v, 2); }
+static inline I32x4 I32x4_setWCopy(I32x4 a, I32 v) { return _mm_insert_epi32(a, v, 3); }
 
 //Trunc & reduce
 

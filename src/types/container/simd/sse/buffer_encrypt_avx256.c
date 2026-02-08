@@ -560,7 +560,7 @@ __forceinline__ static I32x8x4AndTag AESEncryptionContext_blockHashAndGhash8(
 
 void AESEncryptionContext_blocks8(
 	U32 *restrict counterForIv,
-	I32x4 **restrict next,
+	I32x4 *restrict *restrict next,
 	I32x4 *restrict end,
 	I32x4 iv,
 	I32x4 *restrict H,

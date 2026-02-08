@@ -877,7 +877,7 @@ __forceinline__ static I32x4x5 AESEncryptionContext_blockHashAndGhash4(
 	void AESEncryptionContext_ghashN2(I32x4 *restrict a, const I32x4 *restrict H, U8 N, I32x4 *restrict clmuls);
 	void AESEncryptionContext_blocks8(
 		U32 *restrict counterForIv,
-		I32x4 **restrict next,
+		I32x4 *restrict *restrict next,
 		I32x4 *restrict end,
 		I32x4 iv,
 		I32x4 *restrict H,
@@ -894,7 +894,7 @@ __forceinline__ static I32x4x5 AESEncryptionContext_blockHashAndGhash4(
 	void AESEncryptionContext_ghashN4(I32x4 *restrict a, const I32x4 *restrict H, U8 N, I32x4 *restrict clmuls);
 	void AESEncryptionContext_blocks16(
 		U32 *restrict counterForIv,
-		I32x4 **restrict next,
+		I32x4 *restrict *restrict next,
 		I32x4 *restrict end,
 		I32x4 iv,
 		I32x4 *restrict H,

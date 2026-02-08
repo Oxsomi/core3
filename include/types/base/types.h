@@ -70,7 +70,7 @@ typedef bool Bool;
 
 #ifndef _MSC_VER
 	#define MIGHT_BE_UNUSED __attribute__((unused))
-	#define __forceinline__ __attribute__((always_inline))
+	#define __forceinline__ __attribute__((always_inline)) inline
 #else
 	#define MIGHT_BE_UNUSED
 	#define __forceinline__ __forceinline
