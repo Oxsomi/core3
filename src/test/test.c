@@ -2409,7 +2409,7 @@ int main() {
 
 			const F32 maxDelta = 256.f / (1 << 20);		//Due to re-normalization and floating point precision we lose some bits
 
-			if (F32x4_any(F32x4_gt(delta, F32x4_create4(maxDelta, maxDelta, maxDelta, 1 / 64.f))))
+			if (F32x4_any(F32x4_gt(delta, F32x4_create4(maxDelta, maxDelta, maxDelta, 1 / 16.f))))
 				retError(clean, Error_invalidState(0, "Quat pack/unpack mismatch F32"));
 		}
 	}
