@@ -21,60 +21,66 @@
 #include "types/container/list_impl.h"
 #include "formats/dds/dds.h"
 #include "formats/dds/headers.h"
-#include "types/math/math.h"
 #include "types/base/constants.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 
-Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result) {
+Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubResourceData *result, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!info || !result)
-		return Error_nullPointer(!info ? 1 : 3, "DDS_read()::info and result are required");
+		retError(clean, Error_nullPointer(!info ? 1 : 3, "DDS_read()::info and result are required"));
 
 	if(result->ptr)
-		return Error_invalidParameter(3, 0, "DDS_read()::result isn't empty, potential memleak");
+		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::result isn't empty, potential memleak"));
 
 	if(Buffer_length(buf) < sizeof(DDSHeader))
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had a missing header");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had a missing header"));
+
+	if (!((U64)(const void *)buf.ptr & 3))
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alignment"));
 
 	DDSHeader header = *(const DDSHeader*) buf.ptr;
 
 	if(header.magicNumber != ddsMagic)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header magic");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header magic"));
 
 	if(header.size != sizeof(header) - sizeof(header.magicNumber))
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header size");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header size"));
 
 	if(header.format.size != sizeof(DDSPixelFormat))
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel format size");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel format size"));
 
 	if(header.format.flags &~ EDDSPixelFormatFlag_Supported)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel flag");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel flag"));
 
 	if((header.flags & EDDSFlag_Pitch) && (header.flags & EDDSFlag_LinearSize))
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid pitch or linearSize");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid pitch or linearSize"));
 
 	if(header.flags &~ EDDSFlags_Supported)
-		return Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported header flag");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported header flag"));
 
 	if(header.caps.flag1 &~ EDDSCapsFlags1_Supported)
-		return Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported capability flag1");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported capability flag1"));
 
 	if(header.caps.flag2 &~ EDDSCapsFlags2_Supported)
-		return Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported capability flag2");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported capability flag2"));
 
 	if(!header.width || !header.height)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid width or height");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid width or height"));
 
 	if(!(header.flags & EDDSFlag_Depth))
 		header.depth = 1;
 
 	if(!header.depth || !header.mips)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid depth or mips");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid depth or mips"));
 
 	U32 biggestSize2 = (U32) U64_max(U64_max(header.width, header.height), header.depth);
 	U32 mips = (U32) U64_max(1, (U64) F64_ceil(F64_log2((F64)biggestSize2)));
 
 	if(header.mips > mips)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf mip count exceeded available mip count");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf mip count exceeded available mip count"));
 
 	//Here we force DXT10 format so we don't have to handle anything else
 
@@ -89,7 +95,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 	if(useMagic && header.format.magicNumber == EDDSFormatMagic_DX10) {
 
 		if(Buffer_length(buf) < sizeof(DDSHeader) + sizeof(DDSHeaderDXT10))
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had a missing DXT10 header");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had a missing DXT10 header"));
 
 		hasDXT10 = true;
 		DDSHeaderDXT10 header10 = *(const DDSHeaderDXT10*)((const DDSHeader*) buf.ptr + 1);
@@ -99,7 +105,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		EDepthStencilFormat depthFormat = DXFormat_toDepthStencilFormat(header10.format);
 
 		if(format == ETextureFormat_Undefined && depthFormat == EDepthStencilFormat_None)
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had an unsupported OxC3 format");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an unsupported OxC3 format"));
 
 		switch (header10.dim) {
 
@@ -114,24 +120,24 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 				break;
 
 			default:
-				return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid texture type");
+				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid texture type"));
 		}
 
 		if(!header10.arraySize || (header10.arraySize > 1 && type == ETextureType_3D))
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid arraySize (either 0 or 3D[]");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid arraySize (either 0 or 3D[]"));
 
 		if(header10.miscFlag &~ EDX10Misc_Supported)
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had unsupported misc flag");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had unsupported misc flag"));
 
 		if((header.caps.flag2 & EDDSCapsFlags2_Volume) && header10.dim != EDX10Dim_3D)
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had volume flag but had invalid state");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had volume flag but had invalid state"));
 
 		if(
 			(header10.miscFlag & EDX10Misc_IsCube) && (
 				header10.dim != EDX10Dim_2D || (header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap
 			)
 		)
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had cubemap flag but had invalid state");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had cubemap flag but had invalid state"));
 
 		if(header10.miscFlag & EDX10Misc_IsCube) {
 			type = ETextureType_Cube;
@@ -139,10 +145,10 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		}
 
 		if(header10.miscFlags2 >= EDX10AlphaMode_Count)
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alpha mode");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alpha mode"));
 
 		if(depthFormat)
-			return Error_invalidParameter(0, 0, "DDS_read() depth textures aren't currently supported");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read() depth textures aren't currently supported"));
 
 		arraySize = header10.arraySize;
 	}
@@ -156,7 +162,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		if(header.caps.flag2 & EDDSCapsFlags2_Cubemap) {
 
 			if((header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap)
-				return Error_invalidParameter(0, 0, "DDS_read()::buf didn't have all cubemap bits set");
+				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf didn't have all cubemap bits set"));
 
 			type = ETextureType_Cube;
 			arraySize = 6;
@@ -165,7 +171,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		if ((header.caps.flag2 & EDDSCapsFlags2_Volume)) {
 
 			if(type != ETextureType_2D)
-				return Error_invalidParameter(0, 0, "DDS_read()::buf had both cubemap and volume bits set");
+				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had both cubemap and volume bits set"));
 
 			type = ETextureType_3D;
 		}
@@ -220,7 +226,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		}
 
 		if(formatId == ETextureFormatId_Undefined)
-			return Error_invalidParameter(0, 0, "DDS_read()::buf couldn't detect format");
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf couldn't detect format"));
 
 		format = ETextureFormatId_unpack[formatId];
 	}
@@ -230,15 +236,15 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 	//Calculate expected length, because header.pitch is not even close to being reliable.
 
 	U64 expectedLength = len;
-	U32 currW = (U32) U64_max(1, header.width >> 1);
-	U32 currH = (U32) U64_max(1, header.height >> 1);
-	U32 currL = (U32) U64_max(1, header.depth >> 1);
+	U32 currW = U32_max(1, header.width >> 1);
+	U32 currH = U32_max(1, header.height >> 1);
+	U32 currL = U32_max(1, header.depth >> 1);
 
 	for (U64 i = 1; i < header.mips; ++i) {
 		expectedLength += ETextureFormat_getSize(format, currW, currH, currL);
-		currW = (U32) U64_max(1, currW >> 1);
-		currH = (U32) U64_max(1, currH >> 1);
-		currL = (U32) U64_max(1, currL >> 1);
+		currW = U32_max(1, currW >> 1);
+		currH = U32_max(1, currH >> 1);
+		currL = U32_max(1, currL >> 1);
 	}
 
 	expectedLength *= arraySize;
@@ -246,16 +252,13 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 	U64 headerSize = sizeof(DDSHeader) + (hasDXT10 ? sizeof(DDSHeaderDXT10) : 0);
 
 	if(Buffer_length(buf) != headerSize + expectedLength)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid size");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid size"));
 
 	U64 totalSubResources = (U64)header.mips * header.depth * arraySize;
 
 	//Output parsed result
 
-	Error err = ListSubResourceData_resize(result, totalSubResources, allocator);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, ListSubResourceData_resize(result, totalSubResources, allocator, e_rr));
 
 	const U8 *ptr = buf.ptr + headerSize;
 
@@ -281,9 +284,9 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 				ptr += len;
 			}
 
-			currW = (U32) U64_max(1, currW >> 1);
-			currH = (U32) U64_max(1, currH >> 1);
-			currL = (U32) U64_max(1, currL >> 1);
+			currW = U32_max(1, currW >> 1);
+			currH = U32_max(1, currH >> 1);
+			currL = U32_max(1, currL >> 1);
 		}
 	}
 
@@ -297,5 +300,6 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		.textureFormatId = formatId
 	};
 
-	return Error_none();
+clean:
+	return s_uccess;
 }

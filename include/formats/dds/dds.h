@@ -41,17 +41,21 @@ typedef struct DDSInfo {
 	U32 w, h, l;						//Dimensions; these decrease by ~2 for each mip
 	U32 mips, layers;
 
-	ETextureFormatId textureFormatId;
-	ETextureType type;
+	TextureFormatId textureFormatId;
+	TextureType type;
+	U16 pad;
 
 } DDSInfo;
 
 TList(SubResourceData);
 
-Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buffer *result);		//buf may be reordered
-Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result);
+//buf may be sorted, so needs a non const buf
+Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *allocator, Buffer *result, Error *e_rr);
 
-Bool ListSubResourceData_freeAll(ListSubResourceData *buf, Allocator allocator);
+//Assumes buf is 4-byte aligned
+Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubResourceData *result, Error *e_rr);
+
+void ListSubResourceData_freeAll(ListSubResourceData *buf, const Allocator *allocator);
 
 #ifdef __cplusplus
 	}

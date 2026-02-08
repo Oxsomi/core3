@@ -59,6 +59,8 @@ typedef enum ETextureType {
 	ETextureType_Count
 } ETextureType;
 
+typedef U8 TextureType;
+
 typedef enum ETextureAlignment {
 	ETextureAlignment_4,
 	ETextureAlignment_5,
@@ -522,6 +524,8 @@ typedef enum ETextureFormatId {
 
 } ETextureFormatId;
 
+typedef U8 TextureFormatId;
+
 extern const C8 *ETextureFormatId_name[ETextureFormatId_Count];
 
 static const ETextureFormat ETextureFormatId_unpack[] = {
@@ -742,7 +746,7 @@ static inline DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format) {
 
 static const U8 EDepthStencilFormat_toDXFormatArr[] = { 0, 55, 40, 45, 20, 0 };
 
-DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format) {
+static inline DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format) {
 
 	if ((U64)format >= sizeof(EDepthStencilFormat_toDXFormatArr))
 		return 0;

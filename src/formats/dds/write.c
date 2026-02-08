@@ -22,6 +22,8 @@
 #include "formats/dds/dds.h"
 #include "formats/dds/headers.h"
 #include "types/base/constants.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 
 TListImpl(SubResourceData);
 
@@ -33,54 +35,59 @@ ECompareResult SubResourceData_sort(const SubResourceData *a, const SubResourceD
 	);
 }
 
-Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buffer *result) {
+Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *allocator, Buffer *result, Error *e_rr) {
 
-	if(!result || !buf.length)
-		return Error_nullPointer(!result ? 3 : 0, "DDS_write()::buf and result are required");
+	Bool s_uccess = true;
+
+	if(!buf || !buf->length || !info)
+		retError(clean, Error_nullPointer(!buf || !buf->length ? 0 : 1, "DDS_write()::buf and info are required"));
+
+	if(!result)
+		retError(clean, Error_nullPointer(!result ? 3 : 0, "DDS_write()::result is required"));
 
 	if(result->ptr)
-		return Error_invalidParameter(3, 0, "DDS_write()::result already contained data, possible memleak");
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::result already contained data, possible memleak"));
 
-	if(!info.w || !info.h || !info.l || !info.mips || !info.layers || !info.textureFormatId)
-		return Error_invalidParameter(1, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required");
+	if(!info->w || !info->h || !info->l || !info->mips || !info->layers || !info->textureFormatId)
+		retError(clean, Error_invalidParameter(1, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required"));
 
-	if(info.type >= ETextureType_Count || info.textureFormatId >= ETextureFormatId_Count)
-		return Error_invalidParameter(1, 1, "DDS_write()::info.type and textureFormatId have to be valid");
+	if(info->type >= ETextureType_Count || info->textureFormatId >= ETextureFormatId_Count)
+		retError(clean, Error_invalidParameter(1, 1, "DDS_write()::info.type and textureFormatId have to be valid"));
 
-	const U32 biggestSize2 = (U32) U64_max(U64_max(info.w, info.h), info.l);
-	const U32 mips = (U32) U64_max(1, (U64) F64_ceil(F64_log2((F64)biggestSize2)));
+	const U32 biggestSize2 = U32_max(U32_max(info->w, info->h), info->l);
+	const U32 mips = U32_max(1, (U32) F64_ceil(F64_log2((F64)biggestSize2)));
 
-	if(info.mips > mips)
-		return Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds");
+	if(info->mips > mips)
+		retError(clean, Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds"));
 
-	const U64 totalSubResources = (U64)info.mips * info.l * info.layers;
+	const U64 totalSubResources = (U64)info->mips * info->l * info->layers;
 
-	if(totalSubResources != buf.length)
-		return Error_invalidParameter(0, 0, "DDS_write()::info's subresource count and buf.length mismatched");
+	if(totalSubResources != buf->length)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info's subresource count and buf.length mismatched"));
 
-	if(info.type == ETextureType_Cube && info.layers != 6)
-		return Error_invalidParameter(0, 0, "DDS_write()::info specifies a cubemap, but no 6 faces were found");
+	if(info->type == ETextureType_Cube && info->layers != 6)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info specifies a cubemap, but no 6 faces were found"));
 
-	if(info.l > 1 && info.type != ETextureType_3D)
-		return Error_invalidParameter(0, 0, "DDS_write()::info specifies length of >1 but ETextureType_3D wasn't specified");
+	if(info->l > 1 && info->type != ETextureType_3D)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info specifies length of >1 but ETextureType_3D wasn't specified"));
 
-	if(info.layers > 1 && info.type == ETextureType_3D)
-		return Error_invalidParameter(0, 0, "DDS_write()::info specifies layers of >1 but ETextureType_3D was used");
+	if(info->layers > 1 && info->type == ETextureType_3D)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info specifies layers of >1 but ETextureType_3D was used"));
 
-	const DXFormat format = ETextureFormatId_toDXFormat(info.textureFormatId);
+	const DXFormat format = ETextureFormatId_toDXFormat(info->textureFormatId);
 
 	if(!format)
-		return Error_invalidParameter(0, 0, "DDS_write()::info.textureFormatId isn't supported as a DDS texture");
+		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info.textureFormatId isn't supported as a DDS texture"));
 
-	const ETextureFormat formatOxC = ETextureFormatId_unpack[info.textureFormatId];
+	const ETextureFormat formatOxC = ETextureFormatId_unpack[info->textureFormatId];
 	const Bool isCompressed = ETextureFormat_getIsCompressed(formatOxC);
 
 	//Calculate total size
 
-	Bool requiresDXT10 = info.layers > 1;		//Layers are a DXT10 only feature
+	Bool requiresDXT10 = info->layers > 1;		//Layers are a DXT10 only feature
 
 	if(!requiresDXT10)
-		switch (info.textureFormatId) {
+		switch (info->textureFormatId) {
 
 			//These formats are built in without DXT10
 
@@ -104,56 +111,54 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 
 	//Sort subresources to ensure we don't have missing or wrongly ordered SubResource data
 
-	ListSubResourceData_sortCustom(buf, (CompareFunction) SubResourceData_sort);
+	if (!ListSubResourceData_sortCustom(*buf, (CompareFunction)SubResourceData_sort))
+		retError(clean, Error_invalidState(0, "DDS_write()::buf couldn't be sorted"));
 
 	//Validate size of each subresource
 
-	for (U32 i = 0, l = 0; i < info.layers; ++i) {
+	for (U32 i = 0, l = 0; i < info->layers; ++i) {
 
-		U32 currW = info.w;
-		U32 currH = info.h;
-		U32 currL = info.l;
+		U32 currW = info->w;
+		U32 currH = info->h;
+		U32 currL = info->l;
 
-		for (U32 j = 0; j < info.mips; ++j) {
+		for (U32 j = 0; j < info->mips; ++j) {
 
 			const U64 len = ETextureFormat_getSize(formatOxC, currW, currH, currL);
 
 			for (U32 k = 0; k < currL; ++k) {
 
-				const SubResourceData dat = buf.ptr[l++];
+				const SubResourceData dat = buf->ptr[l++];
 
 				if(dat.layerId != i || dat.mipId != j || dat.z != k)
-					return Error_invalidParameter(0, 0, "DDS_write()::buf contained duplicate data");
+					retError(clean, Error_invalidParameter(0, 0, "DDS_write()::buf contained duplicate data"));
 
 				if(Buffer_length(dat.data) != len)
-					return Error_invalidParameter(0, 0, "DDS_write()::buf contained invalid sized data");
+					retError(clean, Error_invalidParameter(0, 0, "DDS_write()::buf contained invalid sized data"));
 
 				if(bufLen + len < bufLen)
-					return Error_overflow(0, bufLen + len, bufLen, "DDS_write() write failed, overflow!");
+					retError(clean, Error_overflow(0, bufLen + len, bufLen, "DDS_write() write failed, overflow!"));
 
 				bufLen += len;
 			}
 
-			currW = (U32) U64_max(1, currW >> 1);
-			currH = (U32) U64_max(1, currH >> 1);
-			currL = (U32) U64_max(1, currL >> 1);
+			currW = U32_max(1, currW >> 1);
+			currH = U32_max(1, currH >> 1);
+			currL = U32_max(1, currL >> 1);
 		}
 	}
 
 	U8 alignY = 1;
 	ETextureFormat_getAlignment(formatOxC, NULL, &alignY);
 
-	const U64 stride = ETextureFormat_getSize(formatOxC, info.w, alignY, 1);
+	const U64 stride = ETextureFormat_getSize(formatOxC, info->w, alignY, 1);
 
 	if(stride >> 32)
-		return Error_overflow(0, stride, U32_MAX, "DDS_write() pitch overflow");
+		retError(clean, Error_overflow(0, stride, U32_MAX, "DDS_write() pitch overflow"));
 
-	const Error err = Buffer_createUninitializedBytes(bufLen, allocator, result);
+	gotoIfError3(clean, Buffer_createUninitializedBytes(bufLen, allocator, result, e_rr));
 
-	if(err.genericError)
-		return err;
-
-	U8 *ptr = (U8*)result->ptr;
+	U8 *ptr = result->ptrNonConst;
 
 	//Write DDS Header
 
@@ -210,28 +215,27 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 
 			default: 																			break;
 		}
-
 	}
 
 	*(DDSHeader*)ptr = (DDSHeader) {
 		.magicNumber = ddsMagic,
 		.size = (U32)(sizeof(DDSHeader) - sizeof(((DDSHeader*)ptr)->magicNumber)),
 		.flags =
-			EDDSFlag_Default | (info.mips > 1 ? EDDSFlag_Mips : 0) | (info.type == ETextureType_3D ? EDDSFlag_Depth : 0) |
+			EDDSFlag_Default | (info->mips > 1 ? EDDSFlag_Mips : 0) | (info->type == ETextureType_3D ? EDDSFlag_Depth : 0) |
 			(isCompressed ? EDDSFlag_LinearSize : EDDSFlag_Pitch),
-		.width = info.w,
-		.height = info.h,
+		.width = info->w,
+		.height = info->h,
 		.pitchOrLinearSize = (U32) stride,
-		.depth = info.l,
-		.mips = info.mips,
+		.depth = info->l,
+		.mips = info->mips,
 		.format = pixelFormat,
 		.caps = (DDSCaps2) {
 			.flag1 = (EDDSCapsFlags1_Texture |
-				(info.mips > 1 ? EDDSCapsFlags1_Mips : 0) |
-				(info.type != ETextureType_2D ? EDDSCapsFlags1_Complex : 0)
+				(info->mips > 1 ? EDDSCapsFlags1_Mips : 0) |
+				(info->type != ETextureType_2D ? EDDSCapsFlags1_Complex : 0)
 			),
-			.flag2 = (info.type == ETextureType_3D ? EDDSCapsFlags2_Volume :
-				(info.type == ETextureType_Cube ? EDDSCapsFlags2_Cubemap : 0)
+			.flag2 = (info->type == ETextureType_3D ? EDDSCapsFlags2_Volume :
+				(info->type == ETextureType_Cube ? EDDSCapsFlags2_Cubemap : 0)
 			)
 		}
 	};
@@ -244,9 +248,9 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 
 		*(DDSHeaderDXT10*)ptr = (DDSHeaderDXT10) {
 			.format = format,
-			.dim = (info.type == ETextureType_3D ? EDX10Dim_3D : EDX10Dim_2D),
-			.miscFlag = (info.type == ETextureType_Cube ? EDX10Misc_IsCube : 0),
-			.arraySize = info.layers,
+			.dim = (info->type == ETextureType_3D ? EDX10Dim_3D : EDX10Dim_2D),
+			.miscFlag = (info->type == ETextureType_Cube ? EDX10Misc_IsCube : 0),
+			.arraySize = info->layers,
 			.miscFlags2 = EDX10AlphaMode_Unknown
 		};
 
@@ -255,25 +259,23 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 
 	//Write subresources
 
-	for (U64 i = 0; i < buf.length; ++i) {
-		bufLen = Buffer_length(buf.ptr[i].data);
-		Buffer_memcpy(Buffer_createRef(ptr, bufLen), buf.ptr[i].data);
+	for (U64 i = 0; i < buf->length; ++i) {
+		bufLen = Buffer_length(buf->ptr[i].data);
+		Buffer_memcpy(Buffer_createRef(ptr, bufLen), buf->ptr[i].data);
 		ptr += bufLen;
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
-Bool ListSubResourceData_freeAll(ListSubResourceData *buf, Allocator allocator) {
+void ListSubResourceData_freeAll(ListSubResourceData *buf, const Allocator *allocator) {
 
 	if(!buf)
-		return false;
-
-	Bool success = true;
+		return;
 
 	for(U64 i = 0; i < buf->length; ++i)
-		success &= Buffer_free(&buf->ptrNonConst[i].data, allocator);
+		Buffer_free(&buf->ptrNonConst[i].data, allocator);
 
-	success &= ListSubResourceData_free(buf, allocator);
-	return success;
+	ListSubResourceData_free(buf, allocator);
 }
