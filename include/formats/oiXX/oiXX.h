@@ -25,12 +25,16 @@
 	extern "C" {
 #endif
 
+typedef struct StreamCursor StreamCursor;
+
 typedef enum EXXCompressionType {
-	EXXCompressionType_None,							//--uncompressed
-	EXXCompressionType_Brotli11,						//(default)
-	EXXCompressionType_Brotli1,							//--fast-compress
+	EXXCompressionType_None,							//--uncompressed (default)
+	//EXXCompressionType_Brotli11,						//(default): Unsupported
+	//EXXCompressionType_Brotli1,						//--fast-compress
 	EXXCompressionType_Count
 } EXXCompressionType;
+
+typedef U8 XXCompressionType;		//EXXCompressionType
 
 typedef enum EXXEncryptionType {
 	EXXEncryptionType_None,								//(default)
@@ -38,16 +42,29 @@ typedef enum EXXEncryptionType {
 	EXXEncryptionType_Count
 } EXXEncryptionType;
 
+typedef U8 XXEncryptionType;		//EXXEncryptionType
+
 typedef enum EXXDataSizeType {		//Can be represented as a 2-bit array for example
 	EXXDataSizeType_U8,
 	EXXDataSizeType_U16,
 	EXXDataSizeType_U32,
-	EXXDataSizeType_U64
+	EXXDataSizeType_U64,
+	EXXDataSizeType_Count
 } EXXDataSizeType;
+
+typedef U8 XXDataSizeType;			//EXXDataSizeType
 
 static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
 Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Error *e_rr);
+Bool StreamCursor_consumeSizeType(
+	StreamCursor *cursor,
+	U64 *it,
+	EXXDataSizeType type,
+	U64 *result,
+	const Allocator *alloc,
+	Error *e_rr
+);
 
 U64 Buffer_forceReadSizeType(const U8 *ptr, EXXDataSizeType type);
 U64 Buffer_forceWriteSizeType(U8 *ptr, EXXDataSizeType type, U64 result);

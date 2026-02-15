@@ -21,48 +21,140 @@
 #include "formats/oiDL/dl_file.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/ref_ptr.h"
+#include "types/base/mathi.h"
 
-Bool DLFile_combine(DLFile a, DLFile b, Allocator alloc, DLFile *combined, Error *e_rr) {
+Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DLFile *combined, Error *e_rr) {
 
 	Bool s_uccess = true;
-	const void *aSettingsPtr = &a.settings;
-	const void *bSettingsPtr = &b.settings;
+	CharString tmpStr = CharString_createNull();
+	Buffer tmp = Buffer_createNull();
+	U64 cacheIt = 0;
 
-	for(U64 i = 0; i < 6; ++i)
+	if(!a || !b)
+		retError(clean, Error_nullPointer(!a ? 0 : 1, "DLFile_combine()::a and b are required"));
+
+	const void *aSettingsPtr = &a->settings;
+	const void *bSettingsPtr = &b->settings;
+
+	for(U64 i = 0; i < 7; ++i)
 		if(((const U64*)aSettingsPtr)[i] != ((const U64*)bSettingsPtr)[i])
-			retError(clean, Error_invalidParameter(1, 0, "DLFile_combine()::a is incompatible with b"))
+			retError(clean, Error_invalidParameter(1, 0, "DLFile_combine()::a is incompatible with b"));
 
-	gotoIfError3(clean, DLFile_create(a.settings, alloc, combined, e_rr))
+	//"Combine" cache, but keep it limited to 1 MiB
 
-	if(a.settings.dataType == EDLDataType_Ascii) {
+	U64 cacheSize = U64_min(Buffer_length(a->cache) + Buffer_length(b->cache), 4 * MIBI);
+	gotoIfError3(clean, DLFile_create(&a->settings, cacheSize, alloc, combined, e_rr));
 
-		U64 aj = a.entryStrings.length;
-		U64 j = aj + b.entryStrings.length;
-		gotoIfError2(clean, ListCharString_reserve(&combined->entryStrings, j, alloc))
+	//Merge stream ids and stream refs
 
-		for(U64 i = 0; i < j; ++i)
-			gotoIfError3(clean, DLFile_addEntryAscii(
-				combined, i < aj ? a.entryStrings.ptr[i] : b.entryStrings.ptr[i - aj], alloc, e_rr
-			))
+	U64 streamCounta = a->entryStreams.length;
+	U64 streamCount = streamCounta + b->entryStreams.length;
+	gotoIfError3(clean, ListDLEntryStream_reserve(&combined->entryStreams, streamCount, alloc, e_rr));
+
+	for (U64 i = 0; i < a->entryStreams.length; ++i) {
+
+		DLEntryStream entryStream = a->entryStreams.ptr[i];
+		combined->entryStreams.ptrNonConst[i] = entryStream;
+
+		if (entryStream.stream)
+			RefPtr_inc(entryStream.stream);
+	}
+
+	for (U64 i = 0; i < b->entryStreams.length; ++i) {
+
+		DLEntryStream entryStream = b->entryStreams.ptr[i];
+		combined->entryStreams.ptrNonConst[i + streamCounta] = entryStream;
+
+		if(entryStream.stream)
+			RefPtr_inc(entryStream.stream);
+	}
+
+	//Combine
+
+	EDLDataType dataType = a->settings.dataType;
+
+	if(dataType == EDLDataType_String) {
+
+		ListCharString entryStringsa = a->entryStrings;
+		ListCharString entryStringsb = b->entryStrings;
+
+		gotoIfError3(clean, ListCharString_reserve(
+			&combined->entryStrings, entryStringsa.length + entryStringsb.length, alloc, e_rr
+		));
+
+		U64 alen = entryStringsa.length;
+		U64 j = alen + entryStringsb.length;
+
+		for (U64 i = 0; i < j; ++i) {
+
+			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))	//Not in memory
+				continue;
+
+			CharString str = i < alen ? entryStringsa.ptr[i] : entryStringsb.ptr[i - alen];
+			U64 strl = CharString_length(str);
+
+			//Put into cache
+
+			if (strl < DLFile_smallLen && cacheIt + strl <= cacheSize) {
+
+				Buffer_memcpy(
+					Buffer_createRef(combined->cache.ptr + cacheIt, strl),
+					Buffer_createRefConst(str.ptr, strl)
+				);
+
+				tmpStr = CharString_createRefSized(combined->cache.ptr + cacheIt, strl, false);
+				cacheIt += strl;
+			}
+
+			else gotoIfError3(clean, CharString_createCopy(str, alloc, &tmpStr, e_rr));
+
+			gotoIfError3(clean, DLFile_addEntryString(combined, &tmpStr, alloc, e_rr));
+		}
 	}
 
 	else {
 
-		U64 aj = a.entryBuffers.length;
-		U64 j = aj + b.entryBuffers.length;
-		gotoIfError2(clean, ListBuffer_reserve(&combined->entryBuffers, j, alloc))
+		ListBuffer entryBuffersa = a->entryBuffers;
+		ListBuffer entryBuffersb = b->entryBuffers;
 
-		for(U64 i = 0; i < j; ++i)
-			if(a.settings.dataType == EDLDataType_Data)
-				gotoIfError3(clean, DLFile_addEntry(
-					combined, i < aj ? a.entryBuffers.ptr[i] : b.entryBuffers.ptr[i - aj], alloc, e_rr
-				))
+		gotoIfError3(clean, ListBuffer_reserve(
+			&combined->entryBuffers, entryBuffersa.length + entryBuffersb.length, alloc, e_rr
+		));
 
-			else gotoIfError3(clean, DLFile_addEntryUTF8(
-				combined, i < aj ? a.entryBuffers.ptr[i] : b.entryBuffers.ptr[i - aj], alloc, e_rr
-			))
+		U64 alen = entryBuffersa.length;
+		U64 j = alen + entryBuffersb.length;
+
+		for (U64 i = 0; i < j; ++i) {
+
+			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))	//Not in memory
+				continue;
+
+			Buffer buf = i < alen ? entryBuffersa.ptr[i] : entryBuffersb.ptr[i - alen];
+			U64 bufl = Buffer_length(buf);
+
+			//Put into cache
+
+			if (bufl < DLFile_smallLen && cacheIt + bufl <= cacheSize) {
+
+				Buffer_memcpy(
+					Buffer_createRef(combined->cache.ptr + cacheIt, bufl),
+					Buffer_createRefConst(buf.ptr, bufl)
+				);
+
+				tmp = Buffer_createRef(combined->cache.ptr + cacheIt, bufl, false);
+				cacheIt += bufl;
+			}
+
+			else gotoIfError3(clean, Buffer_createCopy(buf, alloc, &tmp, e_rr));
+
+			gotoIfError3(clean, DLFile_addEntry(combined, &tmp, alloc, e_rr));
+		}
 	}
 
 clean:
+	CharString_free(&tmpStr, alloc);
+	Buffer_free(&tmp, alloc);
 	return s_uccess;
 }

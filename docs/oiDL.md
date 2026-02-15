@@ -11,14 +11,12 @@ Commonly it's uncompressed and unencrypted since the file that contains this fil
 Just like any oiXX file it's made with the following things in mind:
 
 - Ease of read + write.
-- Better compression size than plain text or binary due to Brotli:11 compression. (TODO: Once implemented)
+- ~~Better compression size than plain text or binary due to Brotli:11 compression~~. (TODO: Once implemented)
 - Possibility of encryption using AES256-GCM.
   - Though header and entry sizes are left unencrypted (but are verified).
 - An easy spec.
 - Good security for parsing + writing.
 - Support for strings or data.
-  - UTF-8 support if needed (default is ASCII).
-    - Avoid using UTF-8 if not needed. UTF-8 will be slower to parse.
 
 ## File format spec
 
@@ -30,28 +28,27 @@ typedef enum EDLFlags {
 
 	EDLFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
 
-    EDLFlags_IsString				= 1 << 1,		//If true; string must contain valid ASCII characters (or UTF8)
-    EDLFlags_UTF8					= 1 << 2,		//ASCII (if off), otherwise UTF-8
+    EDLFlags_IsString				= 1 << 1,		//If true; string must contain valid UTF8 characters
 
-    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB
+    //Chunk size of AES for multi threading. 0 = 128KiB, 1 = 1MiB, 2 = 8MiB, 3 = 64MiB
 
-    EDLFlags_UseAESChunksA			= 1 << 3,
-    EDLFlags_UseAESChunksB			= 1 << 4,
+    EDLFlags_UseAESChunksA			= 1 << 2,
+    EDLFlags_UseAESChunksB			= 1 << 3,
 
     //If it includes DLExtraInfo
 
-    EDLFlags_HasExtendedData		= 1 << 5
+    EDLFlags_HasExtendedData		= 1 << 4
 
 } EDLFlags;
 
-typedef struct DLHeader {		//Header should always be at least 4-byte aligned
+typedef struct DLHeader {
 
-	U32 magicNumber;			//oiDL (0x4C44696F)
+	U32 magicNumber;			//oiDL (0x4C44696F); optional if a sub file
 
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major))
 	U8 flags;					//EDLFlags
 	U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
-	U8 sizeTypes;				//EXXDataSizeTypes: entryType | (uncompressedSizType << 2) | (dataType << 4) (Upper 2 bits should be empty)
+	U8 sizeTypes;				//EXXDataSizeTypes: entryType | (compressedSizType << 2) | (dataType << 4) (Upper 2 bits are empty)
 
 } DLHeader;
 
@@ -70,11 +67,11 @@ typedef struct DLExtraInfo {
 //Verify if encoding is valid (if string list is used).
 //Verify if everything's in bounds.
 //Verify if SHA256 or CRC32C is valid (if compressed).
-//Verify if uncompressedSize > compressedSize.
+//Verify if uncompressedSize < compressedSize.
 //Verify if AES256 tag is valid with supplied data (if applicable).
 //Verify if DLFile includes any invalid data.
 
-DLFile {
+DLFile {		//Must be 16-byte aligned
 
     DLHeader header;
 
@@ -87,31 +84,32 @@ DLFile {
 	EXXDataSizeType<dataSizeType>[entryCount] entries
 		with stride (sizeof(EXXDataSizeType<dataSizeType>) + header.perDataExtendedData);
 
-    if compression:
-	    EXXDataSizeType<uncompressedSizeType> uncompressedSize;
+    if compression:		//TODO: Think this through with chunking
+	    EXXDataSizeType<compressedSizeType> compressedSize;
 	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
 
     if encryption:
-    	if blockCompression:
-    		I32x4[blocks]; 		//(sum(entries) + blockSize - 1) / blockSize
-		U8[12] iv;
+		U32[3] iv;		//Only for verifying the header (e.g. entry sizes & uncompressed size)
 		I32x4 tag;
+    	U8[N] pad; /* padding to make next section 16-byte aligned */
 
     encrypt & compress the following if necessary:		//See oiXX.md
 		foreach dat in data:
-			U8[dat.size] data;		//Non null terminated. We know the size
+    		each chunkSize if encrypted:
+                 I32x4 tag			//Verifies the data, iv = rootIv ^ U64x2(chunkId, 0)
+			U8[dat.size] data;	    //Non null terminated. We know the size
 }
 ```
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer.
 
-uncompressedSizeType is only present if compression is enabled. In all other cases it should read the size from the entries by summing them.
+compressedSizeType is only present if compression is enabled. In all other cases it should read the size from the entries by summing them.
 
 Entry counts aren't compressed nor encrypted, as the sum is required to know the final size of the oiDL and not a lot can be gained by compressing it and not a lot of security is lost if you know the size of each entry. If it is important, you could embed an uncompressed/unencrypted oiDL within another oiDL (or oiCA) that does encrypt and/or compress it.
 
 The magic number in the header can only be absent if embedded in another file. An example is the file name table in an oiCA file.
 
-*Note: oiDL supports the ability to choose between 10MiB, 50MiB and 100MiB blocks for speeding up AES by multi threading. Though this is currently not supported in OxC3 (TODO:)*
+*Note: ~~oiDL supports the ability to choose between 10MiB, 50MiB and 100MiB blocks for speeding up AES by multi threading. Though this is currently not supported in OxC3 (TODO:)~~*
 *Note2: When using encryption + compression, it has to be carefully assessed if the end-user can reveal anything sensitive that isn't meant to be revealed. A good example is secret header info that the client could intercept with HTTPS (BREACH or CRIME exploits). If the attacker doesn't control the input, then compression + encryption is ok.*
 
 ## Valid ASCII/UTF8 characters

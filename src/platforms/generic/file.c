@@ -720,7 +720,7 @@ Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, Fil
 	return File_open(loc, timeout, type, create, Platform_instance->alloc, handle, e_rr);
 }
 
-void FileHandle_close(FileHandle *handle, Allocator alloc) {
+void FileHandle_close(FileHandle *handle, const Allocator *alloc) {
 
 	if(!handle)
 		return;
@@ -734,7 +734,7 @@ void FileHandle_closex(FileHandle *handle) {
 	FileHandle_close(handle, Platform_instance->alloc);
 }
 
-Bool FileHandle_write(const FileHandle *handle, Buffer buf, U64 offset, U64 length, Error *e_rr) {
+Bool FileHandle_write(const FileHandle *handle, U64 offset, U64 length, Buffer buf, Error *e_rr) {
 	
 	Bool s_uccess = true;
 

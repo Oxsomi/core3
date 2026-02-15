@@ -182,18 +182,18 @@ Bool Buffer_resize(
 	Bool s_uccess = true;
 	Buffer tmp = Buffer_createNull();
 
-	if(!buf)
-		retError(clean, Error_nullPointer(0, "Buffer_resize()::buf is required"))
+	if (!buf)
+		retError(clean, Error_nullPointer(0, "Buffer_resize()::buf is required"));
 
 	if(Buffer_isRef(*buf) && Buffer_length(*buf))
-		retError(clean, Error_invalidState(0, "Buffer_resize()::buf must not be a ref, to avoid memleaks"))
+		retError(clean, Error_invalidState(0, "Buffer_resize()::buf must not be a ref, to avoid memleaks"));
 
 	U64 prevLen = Buffer_length(*buf);
 
 	if(prevLen == newLen)
 		goto clean;
 
-	gotoIfError3(clean, Buffer_createUninitializedBytes(newLen, alloc, &tmp, e_rr))
+	gotoIfError3(clean, Buffer_createUninitializedBytes(newLen, alloc, &tmp, e_rr));
 
 	if(preserveContents) {
 

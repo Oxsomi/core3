@@ -26,6 +26,7 @@
 #include "types/container/big_int.h"
 #include "types/container/u128.h"
 #include "types/container/log.h"
+#include "types/container/memory_stream.h"
 #include "types/base/allocator.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
@@ -131,6 +132,11 @@ int main() {
 	Bool s_uccess = true;
 	CharString tmp = CharString_createNull();
 	CharString tmpStr = CharString_createNull();
+
+	MemoryStreamRef *stream = NULL;
+	MemoryStreamRef *stream1 = NULL;
+	StreamCursor cursor = (StreamCursor) { 0 };
+	StreamCursor cursor1 = (StreamCursor) { 0 };
 
 	CharString inputs[19 + EXTRA_CHECKS] = { 0 };
 
@@ -4326,6 +4332,641 @@ int main() {
 			retError(clean, Error_invalidState(0, "EFidiA all test failed"));
 	}
 
+	//MemoryStream test
+
+	Log_debugLn(alloc, "Testing MemoryStream");
+
+	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+
+	Log_debugLn(alloc, "Testing MemoryStream_create & MemoryStream_createFromBuffer");
+
+	{
+		//Empty
+
+		gotoIfError3(clean, MemoryStream_create(
+			0, EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable, &memStreamType, &stream, &err
+		));
+
+		RefPtr_dec(&stream);
+
+		//Sized
+
+		gotoIfError3(clean, MemoryStream_create(
+			1024, EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable, &memStreamType, &stream, &err
+		));
+
+		MemoryStream *memStream = RefPtr_data(stream, MemoryStream);
+
+		if (memStream->parent.size != 1024 || Buffer_length(memStream->data) != 1024)
+			retError(clean, Error_invalidState(0, "MemoryStream_create() sized failed"));
+
+		RefPtr_dec(&stream);
+
+		//From buffer (owned)
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(256, alloc, &full, &err));
+		gotoIfError3(clean, Buffer_setAllToU8(full, 0xAB, e_rr));
+
+		gotoIfError3(clean, MemoryStream_createFromBuffer(&full, EMemoryStreamFlags_None, &memStreamType, &stream, &err));
+		memStream = RefPtr_data(stream, MemoryStream);
+
+		if (full.ptr)
+			retError(clean, Error_invalidState(0, "MemoryStream_createFromBuffer() should move buffer"));
+
+		if (memStream->parent.size != 256)
+			retError(clean, Error_invalidState(0, "MemoryStream_createFromBuffer() size mismatch"));
+
+		const void *datv = memStream->data.ptr;
+		const U64 *v64 = (const U64*)datv;
+
+		for(U8 i = 0; i < 256 / 8; ++i)
+			if(v64[i] != 0xABABABABABABABAB)
+				retError(clean, Error_invalidState(0, "MemoryStream_createFromBuffer() contents mismatch"));
+
+		RefPtr_dec(&stream);
+
+		//From buffer (const)
+
+		const U8 data[100] = { 0 };
+		Buffer bufConst = Buffer_createRefConst(data, 100);
+
+		if (MemoryStream_createFromBuffer(&bufConst, EMemoryStreamFlags_IsWritable, &memStreamType, &stream, NULL))
+			retError(clean, Error_invalidState(0, "MemoryStream_createFromBuffer() should reject const buffer with writable"));
+
+		gotoIfError3(clean, MemoryStream_createFromBuffer(&bufConst, EMemoryStreamFlags_None, &memStreamType, &stream, &err));
+
+		RefPtr_dec(&stream);
+	}
+
+	Log_debugLn(alloc, "Testing MemoryStream read");
+
+	{
+		//Read
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(100, alloc, &full, &err));
+		
+		for (U8 i = 0; i < 100; ++i)
+			full.ptrNonConst[i] = i;
+
+		gotoIfError3(clean, MemoryStream_createFromBuffer(
+			&full, EMemoryStreamFlags_IsWritable, &memStreamType, &stream, &err
+		));
+
+		Stream *s = RefPtr_data(stream, Stream);
+		MemoryStream *ms = RefPtr_data(stream, MemoryStream);
+
+		U8 data[50];
+		Buffer buf2 = Buffer_createRef(data, 50);
+
+		gotoIfError3(clean, s->read(s, 10, 50, buf2, alloc, &err));
+
+		for (U8 i = 10; i < 10 + 50; ++i)
+			if(data[i - 10] != i)
+				retError(clean, Error_invalidState(0, "MemoryStream read failed"));
+
+		//Write
+
+		Log_debugLn(alloc, "Testing MemoryStream write");
+
+		for (U8 i = 0; i < 50; ++i)
+			data[i] = i;
+
+		gotoIfError3(clean, s->write(s, 10, 50, buf2, alloc, &err));
+
+		for (U8 i = 0; i < 100; ++i)
+			if (ms->data.ptr[i] != (i >= 10 && i < 10 + 50 ? (i - 10) : i))
+				retError(clean, Error_invalidState(0, "MemoryStream write failed"));
+
+		RefPtr_dec(&stream);
+	}
+
+	Log_debugLn(alloc, "Testing MemoryStream resize");
+
+	{
+		//Regular resize
+
+		gotoIfError3(clean, MemoryStream_create(
+			100, EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable, &memStreamType, &stream, &err
+		));
+
+		Stream *s = RefPtr_data(stream, Stream);
+		MemoryStream *ms = RefPtr_data(stream, MemoryStream);
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(50, alloc, &full, &err));
+
+		for (U64 i = 0; i < 50; ++i)
+			full.ptrNonConst[i] = (U8)i;
+
+		//Write beyond current size (120 + 50 = 170)
+		gotoIfError3(clean, s->write(s, 120, 50, full, alloc, &err));
+
+		if (s->size != 170)
+			retError(clean, Error_invalidState(0, "MemoryStream should have grown to 170"));
+
+		for (U8 i = 0; i < 50; ++i)
+			if (ms->data.ptr[120 + i] != i)
+				retError(clean, Error_invalidState(0, "MemoryStream write beyond offset failed"));
+
+		RefPtr_dec(&stream);
+
+		//Try to resize non resizable memory stream
+
+		gotoIfError3(clean, MemoryStream_create(100, EMemoryStreamFlags_IsWritable, &memStreamType, &stream, &err));
+		s = RefPtr_data(stream, Stream);
+
+		if(s->write(s, 120, 50, full, alloc, NULL) || s->size != 100)
+			retError(clean, Error_invalidState(0, "MemoryStream resized a non resizable stream"));
+
+		RefPtr_dec(&stream);
+		Buffer_free(&full, alloc);
+	}
+
+	Log_debugLn(alloc, "Testing MemoryStream reserve");
+
+	{
+		{
+			gotoIfError3(clean, MemoryStream_create(
+				100, EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable, &memStreamType, &stream, &err
+			));
+
+			Stream *s = RefPtr_data(stream, Stream);
+			MemoryStream *memStream = RefPtr_data(stream, MemoryStream);
+
+			//Reserve 5000 bytes
+
+			gotoIfError3(clean, s->reserve(s, 5000, alloc, &err));
+
+			if (Buffer_length(memStream->data) < 5000)
+				retError(clean, Error_invalidState(0, "Stream reserve should allocate at least 5000 bytes"));
+
+			if (s->size != 100)
+				retError(clean, Error_invalidState(0, "Stream reserve should not change stream size"));
+
+			//Write 10x 500 bytes and ensure memory stays the same
+
+			const void *memStreamAddr = memStream->data.ptr;
+
+			U8 data[500];
+			Buffer buf2 = Buffer_createRef(data, 500);
+
+			for (U64 i = 0; i < 500; ++i)
+				buf2.ptrNonConst[i] = (U8)i;
+
+			U64 capacityBefore = Buffer_length(memStream->data);
+
+			for (U64 i = 0; i < 10; ++i)
+				gotoIfError3(clean, s->write(s, i * 500, 500, buf2, alloc, &err));
+
+			U64 capacityAfter = Buffer_length(memStream->data);
+
+			if (capacityAfter != capacityBefore || memStreamAddr != memStream->data.ptr)
+				retError(clean, Error_invalidState(0, "Stream reserve should prevent reallocations"));
+
+			if (s->size != 5000)
+				retError(clean, Error_invalidState(0, "Stream size should be 5000 after 10x 500 byte writes"));
+
+			for (U64 i = 0; i < 5000; ++i)
+				if (memStream->data.ptr[i] != (U8)(i % 500))
+					retError(clean, Error_invalidState(0, "Stream_reserve() data mismatch after writes"));
+
+			RefPtr_dec(&stream);
+		}
+
+		Log_debugLn(alloc, "Testing Stream reserve on non-resizable");
+
+		{
+			gotoIfError3(clean, MemoryStream_create(100, EMemoryStreamFlags_IsWritable, &memStreamType, &stream, &err));
+
+			Stream *s = RefPtr_data(stream, Stream);
+
+			if (s->reserve(s, 5000, alloc, NULL))
+				retError(clean, Error_invalidState(0, "Stream_reserve() should fail on non-resizable stream"));
+
+			RefPtr_dec(&stream);
+		}
+
+		Log_debugLn(alloc, "Testing Stream reserve (with amount < current size)");
+
+		{
+			gotoIfError3(clean, MemoryStream_create(
+				1000, EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable, &memStreamType, &stream, &err
+			));
+
+			Stream *s = RefPtr_data(stream, Stream);
+			MemoryStream *memStream = RefPtr_data(stream, MemoryStream);
+			const void *memStreamAddr = memStream->data.ptr;
+
+			gotoIfError3(clean, s->reserve(s, 500, alloc, &err));
+
+			if (Buffer_length(memStream->data) != 1000 || memStream->data.ptr != memStreamAddr)
+				retError(clean, Error_invalidState(0, "Stream reserve should not shrink buffer"));
+
+			gotoIfError3(clean, s->reserve(s, 1000, alloc, &err));
+
+			if (Buffer_length(memStream->data) != 1000 || memStream->data.ptr != memStreamAddr)
+				retError(clean, Error_invalidState(0, "Stream_reserve() should not reallocate with same length"));
+
+			RefPtr_dec(&stream);
+		}
+	}
+
+	Log_debugLn(alloc, "Testing MemoryStream move");
+
+	{
+		U8 data[200];
+		Buffer buf2 = Buffer_createRef(data, 200);
+
+		for (U64 i = 0; i < 200; ++i)
+			buf2.ptrNonConst[i] = (U8)i;
+
+		gotoIfError3(clean, MemoryStream_createFromBuffer(&buf2, EMemoryStreamFlags_None, &memStreamType, &stream, &err));
+		gotoIfError3(clean, MemoryStream_move(&stream, &buf2, &err));
+
+		if (stream)
+			retError(clean, Error_invalidState(0, "MemoryStream_move() stream should be null"));
+
+		if (Buffer_length(buf2) != 200 || buf2.ptr != data)
+			retError(clean, Error_invalidState(0, "MemoryStream_move() buffer size or pointer mismatch"));
+
+		for (U64 i = 0; i < 200; ++i)
+			if (buf2.ptr[i] != (U8)i)
+				retError(clean, Error_invalidState(0, "MemoryStream_move() data mismatch"));
+	}
+
+	//StreamCursor test
+
+	Log_debugLn(alloc, "Testing StreamCursor");
+
+	{
+		Log_debugLn(alloc, "Testing StreamCursor create read and write mode");
+
+		//Check default writable stream (but a readonly view of it)
+
+		gotoIfError3(clean, MemoryStream_create(1024, EMemoryStreamFlags_IsWritable, &memStreamType, &stream, &err));
+
+		MemoryStream *memStream = RefPtr_data(stream, MemoryStream);
+
+		gotoIfError3(clean, StreamCursor_create((StreamRef*)stream, 0, false, alloc, &cursor, &err));
+
+		if (cursor.stream != stream)
+			retError(clean, Error_invalidState(0, "StreamCursor_create() cursor should have the right stream"));
+
+		if (Buffer_length(cursor.cacheData) != 128 * KIBI)
+			retError(clean, Error_invalidState(0, "StreamCursor_create() should have default cache size"));
+
+		if (!StreamCursor_canRead(&cursor))
+			retError(clean, Error_invalidState(0, "StreamCursor_create() should be readonly by default"));
+
+		StreamCursor_close(&cursor, alloc);
+
+		//Check writeonly stream cursor
+
+		gotoIfError3(clean, StreamCursor_create((StreamRef*)stream, 0, true, alloc, &cursor, &err));
+
+		if (!StreamCursor_canWrite(&cursor))
+			retError(clean, Error_invalidState(0, "StreamCursor_create() should be writable if enabled"));
+
+		//Check writes
+
+		Log_debugLn(alloc, "Testing StreamCursor writes (simple)");
+
+		U64 magic = 0xDEADBEEFCAFEBABE;
+		Buffer magicBuf = Buffer_createRef(&magic, sizeof(magic));
+
+		for (U64 i = 0; i < 1024 / 8; ++i) {
+			gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, i * sizeof(magic), sizeof(magic), false, alloc, e_rr));
+			++magic;
+		}
+
+		//Check if writeonly is correctly being checked
+
+		if (StreamCursor_read(&cursor, magicBuf, 0, 0, 1, false, alloc, NULL))
+			retError(clean, Error_invalidState(0, "StreamCursor_read() still executed despite being writeonly"));
+
+		//Check cache
+
+		const void *cachev = cursor.cacheData.ptr;
+		const U64 *cachev64 = (const U64*) cachev;
+
+		magic = 0xDEADBEEFCAFEBABE;
+
+		for (U64 i = 0; i < 1024 / 8; ++i)
+			if(cachev64[i] != magic + i)
+				retError(clean, Error_invalidState(0, "StreamCursor_write() didn't correctly move to cache"));
+
+		//Check flush
+
+		Log_debugLn(alloc, "Testing StreamCursor flush");
+
+		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
+		cachev = memStream->data.ptr;
+		cachev64 = (const U64*)cachev;
+
+		for (U64 i = 0; i < 1024 / 8; ++i)
+			if (cachev64[i] != magic + i)
+				retError(clean, Error_invalidState(0, "StreamCursor_write() didn't correctly move to stream"));
+
+		//Check swapping modes
+
+		Log_debugLn(alloc, "Testing StreamCursor reads");
+
+		gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
+
+		if (!StreamCursor_canRead(&cursor))
+			retError(clean, Error_invalidState(0, "StreamCursor_setReadOnly() didn't change mode to readonly"));
+
+		//Check if readonly is correctly being checked
+
+		if (StreamCursor_write(&cursor, magicBuf, 0, 0, 1, false, alloc, NULL))
+			retError(clean, Error_invalidState(0, "StreamCursor_write() still executed despite being readonly"));
+
+		//Check readbacks
+
+		for (U64 i = 0; i < 1024 / 8; ++i) {
+
+			gotoIfError3(clean, StreamCursor_read(&cursor, magicBuf, i * sizeof(magic), 0, sizeof(magic), false, alloc, e_rr));
+
+			if(magic != 0xDEADBEEFCAFEBABE + i)
+				retError(clean, Error_invalidState(0, "StreamCursor_read() failed"));
+		}
+
+		//Check read
+
+		StreamCursor_close(&cursor, alloc);
+		RefPtr_dec(&stream);
+	}
+
+	{
+		Log_debugLn(alloc, "Testing StreamCursor caching behavior");
+
+		//We check eviction here, our cursor is 32KiB and our stream is 96KiB
+		
+		gotoIfError3(clean, MemoryStream_create(96 * KIBI, EMemoryStreamFlags_IsWritable, &memStreamType, &stream, &err));
+
+		MemoryStream *memStream = RefPtr_data(stream, MemoryStream);
+
+		gotoIfError3(clean, StreamCursor_create((StreamRef*)stream, 32 * KIBI, true, alloc, &cursor, &err));
+
+		U64 magic = 0xDEADBEEFCAFEBABE;
+		Buffer magicBuf = Buffer_createRef(&magic, sizeof(magic));
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
+
+			gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, i * sizeof(magic), sizeof(magic), false, alloc, e_rr));
+			++magic;
+
+			//Check 0 and 32KiB, 64KiB writes.
+
+			if(!((i * 8) & (32 * KIBI - 1)) && (cursor.lastWriteLocation != (i + 1) * 8 || cursor.lastLocation != i * 8))
+				retError(clean, Error_invalidState(0, "StreamCursor_write() didn't correctly set lastWriteLocation/lastLocation"));
+		}
+
+		//Our stream at 0->64KiB should be available in our memory stream
+		//Our stream at 64KiB->96KiB should be available in our stream cursor
+
+		const void *cachev = memStream->data.ptr;
+		const U64 *cachev64 = (const U64*)cachev;
+		magic = 0xDEADBEEFCAFEBABE;
+
+		for (U64 i = 0; i < 64 * KIBI / 8; ++i)
+			if (cachev64[i] != magic + i)
+				retError(clean, Error_invalidState(0, "StreamCursor_write() didn't correctly work for flushed regions"));
+		
+		cachev = cursor.cacheData.ptr;
+		cachev64 = (const U64*)cachev;
+
+		for (U64 i = 0; i < 32 * KIBI / 8; ++i)
+			if (cachev64[i] != magic + 64 * KIBI / 8 + i)
+				retError(clean, Error_invalidState(0, "StreamCursor_write() didn't correctly work for region in memory"));
+
+		if(cursor.lastLocation != 64 * KIBI || cursor.lastWriteLocation != 96 * KIBI)
+			retError(clean, Error_invalidState(0, "StreamCursor_write() lastLocation and lastWriteLocation were invalid"));
+
+		gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
+
+		//Try to access the stream sequentially again
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
+
+			gotoIfError3(clean, StreamCursor_read(&cursor, magicBuf, i * sizeof(magic), 0, sizeof(magic), false, alloc, e_rr));
+			
+			if(magic != 0xDEADBEEFCAFEBABE + i)
+				retError(clean, Error_invalidState(0, "StreamCursor_read() returned invalid result"));
+
+			//Check 0 and 32KiB, 64KiB reads.
+
+			if (!((i * 8) & (32 * KIBI - 1)) && cursor.lastLocation != i * 8)
+				retError(clean, Error_invalidState(0, "StreamCursor_read() didn't correctly set lastLocation"));
+		}
+
+		//Try random access (readonly)
+
+		const U64 offsets[] = { 0, 32 * KIBI, 64 * KIBI };
+		const U64 offsetLen = sizeof(offsets) / sizeof(offsets[0]);
+
+		for (U64 i = 0; i < offsetLen; ++i) {
+
+			U64 off = offsets[i];
+
+			gotoIfError3(clean, StreamCursor_read(&cursor, magicBuf, off, 0, sizeof(magic), false, alloc, e_rr));
+
+			if (magic != 0xDEADBEEFCAFEBABE + off / 8)
+				retError(clean, Error_invalidState(0, "StreamCursor_read() returned invalid result (random)"));
+		}
+
+		//Try random access (writeonly)
+
+		gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));
+
+		for (U64 i = 0; i < offsetLen; ++i) {
+
+			U64 off = offsets[i];
+
+			magic = i;
+			gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, off, sizeof(magic), false, alloc, e_rr));
+		}
+
+		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
+		cachev = memStream->data.ptr;
+		cachev64 = (const U64*)cachev;
+
+		for (U64 i = 0; i < offsetLen; ++i)
+			if(cachev64[offsets[i] / 8] != i)
+				retError(clean, Error_invalidState(0, "StreamCursor_write() failed (random access)"));
+
+		//Ensure it's only a partial write and it didn't overwrite previous data.
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
+
+			U64 j = 0;
+
+			for (; j < offsetLen; ++j)
+				if (i * 8 == offsets[j])
+					break;
+
+			if (j != offsetLen)
+				break;
+
+			if (i * 8 != offsets[i] && cachev64[i] != 0xDEADBEEFCAFEBABE + i)
+				retError(clean, Error_invalidState(0, "StreamCursor_write() didn't correctly work for region in memory"));
+		}
+
+		//Touch only offsets 8, 32KiB+8, 64KiB+8 and see what happens; shouldn't touch offset 0 or behind
+
+		for (U64 i = 0; i < offsetLen; ++i) {
+
+			U64 off = offsets[i] + 8;
+
+			magic = i | 0x1000;
+			gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, off, sizeof(magic), false, alloc, e_rr));
+		}
+
+		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
+		for (U64 i = 0; i < offsetLen; ++i)
+			if (cachev64[offsets[i] / 8] != i)
+				retError(clean, Error_invalidState(1, "StreamCursor_write() failed (random access)"));
+
+		for (U64 i = 0; i < offsetLen; ++i)
+			if (cachev64[offsets[i] / 8 + 1] != (i | 0x1000))
+				retError(clean, Error_invalidState(2, "StreamCursor_write() failed (random access)"));
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
+
+			U64 j = 0;
+
+			for (; j < offsetLen; ++j)
+				if (i * 8 == offsets[j] || i * 8 == offsets[j] + 8)
+					break;
+
+			if (j != offsetLen)
+				break;
+
+			if (i * 8 != offsets[i] && cachev64[i] != 0xDEADBEEFCAFEBABE + i)
+				retError(clean, Error_invalidState(1, "StreamCursor_write() didn't correctly work for region in memory"));
+		}
+
+		//Buffer exceeding cache size
+
+		gotoIfError3(clean, Buffer_createEmptyBytes(96 * KIBI, alloc, &full, e_rr));
+		gotoIfError3(clean, StreamCursor_write(&cursor, full, 0, 0, 0, false, alloc, e_rr));
+
+		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
+		for(U64 i = 0; i < 96 * KIBI / 8; ++i)
+			if(cachev64[i])
+				retError(clean, Error_invalidState(1, "StreamCursor_write() didn't correctly work for large buffers"));
+
+		//Check bypass cache (doesn't need flush)
+
+		gotoIfError3(clean, Buffer_setAllToU8(full, 0xCA, e_rr));
+		gotoIfError3(clean, StreamCursor_write(&cursor, full, 0, 0, 0, true, alloc, e_rr));
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i)
+			if (cachev64[i] != 0xCACACACACACACACA)
+				retError(clean, Error_invalidState(1, "StreamCursor_write() bypass cache failed"));
+
+		Buffer_free(&full, alloc);
+
+		//Partial write to the cache
+
+		magic = 0xBABABABABABABABA;
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 0, 0, false, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 32 * KIBI - 8, 0, false, alloc, e_rr));
+
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 32 * KIBI, 0, false, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI - 8, 0, false, alloc, e_rr));
+
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI, 0, false, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 96 * KIBI - 8, 0, false, alloc, e_rr));
+
+		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
+
+			U64 writeInCache = (i * 8) & (32 * KIBI - 1);
+			U64 curr = !writeInCache || writeInCache == 32 * KIBI - 8 ? magic : 0xCACACACACACACACA;
+
+			if (cachev64[i] != curr)
+				retError(clean, Error_invalidState(1, "StreamCursor_write() didn't behave correctly with partial writes"));
+		}
+		
+		//Writes that span multiple caches
+
+		magic = 0xBADA55B17C412345;
+		U64 magicOld = magic;
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 32 * KIBI - 4, 0, false, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_write(&cursor, magicBuf, 0, 64 * KIBI - 4, 0, false, alloc, e_rr));
+		
+		if(StreamCursor_write(&cursor, magicBuf, 0, 96 * KIBI - 4, 0, false, alloc, NULL))
+			retError(clean, Error_invalidState(1, "StreamCursor_write() didn't properly guard out of bounds writes"));
+
+		gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
+
+		magic = 0;
+		gotoIfError3(clean, StreamCursor_read(&cursor, magicBuf, 32 * KIBI - 4, 0, 0, false, alloc, e_rr));
+
+		if(magic != magicOld)
+			retError(clean, Error_invalidState(1, "StreamCursor_write or read didn't work with data spanning cache blocks"));
+
+		magic = 0;
+		gotoIfError3(clean, StreamCursor_read(&cursor, magicBuf, 64 * KIBI - 4, 0, 0, false, alloc, e_rr));
+
+		if (magic != magicOld)
+			retError(clean, Error_invalidState(1, "StreamCursor_write or read didn't work with data spanning cache blocks"));
+
+		if (StreamCursor_read(&cursor, magicBuf, 96 * KIBI - 4, 0, 0, false, alloc, NULL))
+			retError(clean, Error_invalidState(1, "StreamCursor_read() didn't properly guard out of bounds reads"));
+		
+		StreamCursor_close(&cursor, alloc);
+		RefPtr_dec(&stream);
+	}
+
+	{
+		Log_debugLn(alloc, "Testing StreamCursor copyStream");
+
+		gotoIfError3(clean, MemoryStream_create(96 * KIBI, EMemoryStreamFlags_None, &memStreamType, &stream, &err));
+		gotoIfError3(clean, MemoryStream_create(96 * KIBI, EMemoryStreamFlags_IsWritable, &memStreamType, &stream1, &err));
+
+		MemoryStream *memStream = RefPtr_data(stream, MemoryStream);
+		MemoryStream *memStream1 = RefPtr_data(stream1, MemoryStream);
+		gotoIfError3(clean, Buffer_setAllToU8(memStream->data, 0xAA, e_rr));
+
+		gotoIfError3(clean, StreamCursor_create((StreamRef*)stream, 32 * KIBI, false, alloc, &cursor, &err));
+		gotoIfError3(clean, StreamCursor_create((StreamRef*)stream1, 32 * KIBI, true, alloc, &cursor1, &err));
+
+		//Copy stream test
+
+		gotoIfError3(clean, StreamCursor_copyStream(&cursor1, &cursor, 0, 0, 0, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_flush(&cursor1, alloc, e_rr));
+
+		const void *cachev = memStream1->data.ptr;
+		const U64 *cachev64 = (const U64*)cachev;
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i)
+			if (cachev64[i] != 0xAAAAAAAAAAAAAAAA)
+				retError(clean, Error_invalidState(1, "StreamCursor_copyStream() failed"));
+
+		//Test sub area
+
+		gotoIfError3(clean, Buffer_setAllToU8(memStream->data, 0xBB, e_rr));
+		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+
+		gotoIfError3(clean, StreamCursor_copyStream(&cursor1, &cursor, 48 * KIBI, 0, 0, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_flush(&cursor1, alloc, e_rr));
+
+		for (U64 i = 0; i < 96 * KIBI / 8; ++i)
+			if (cachev64[i] != (i < 48 * KIBI / 8 ? 0xBBBBBBBBBBBBBBBB : 0xAAAAAAAAAAAAAAAA))
+				retError(clean, Error_invalidState(1, "StreamCursor_copyStream() failed"));
+
+		StreamCursor_close(&cursor, alloc);
+		StreamCursor_close(&cursor1, alloc);
+		RefPtr_dec(&stream);
+		RefPtr_dec(&stream1);
+	}
+
 	//
 
 	F64 dt = (Time_now() - now) / (F64)SECOND;
@@ -4747,6 +5388,15 @@ clean:
 		F64 dt2 = (Time_now() - now) / (F64)SECOND;
 		Log_errorLn(alloc, "Failed unit test (%s)... Freeing. After %fs", err.errorStr, dt2);
 	}
+
+	StreamCursor_close(&cursor, alloc);
+	StreamCursor_close(&cursor1, alloc);
+
+	if (stream)
+		RefPtr_dec(&stream);
+
+	if (stream1)
+		RefPtr_dec(&stream1);
 
 	CharString_free(&tmp, alloc);
 	CharString_free(&tmpStr, alloc);

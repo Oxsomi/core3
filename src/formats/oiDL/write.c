@@ -20,253 +20,278 @@
 
 #include "formats/oiDL/dl_file.h"
 #include "types/container/buffer.h"
+#include "types/container/buffer_encrypt.h"
+#include "types/container/ref_ptr.h"
+#include "types/container/stream.h"
+#include "types/container/types.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
 
 //We currently don't support compression yet. But once Buffer_compress/decompress is available, it should be easy.
 
-Bool DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result, Error *e_rr) {
+Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *streamRef, U64 *startOffset, Error *e_rr) {
 
 	Bool s_uccess = true;
-	Buffer compressedOutput = Buffer_createNull();
-	Buffer uncompressedData = Buffer_createNull();
+	StreamCursor cursor = (StreamCursor) { 0 };
+	Buffer tmp = Buffer_createNull();
+	Buffer loadCache = Buffer_createNull();
 
 	if(!DLFile_isAllocated(dlFile))
-		retError(clean, Error_nullPointer(0, "DLFile_write()::dlFile is required"))
+		retError(clean, Error_nullPointer(0, "DLFile_write()::dlFile is required"));
 
-	if(!result)
-		retError(clean, Error_nullPointer(2, "DLFile_write()::result is required"))
+	if(!startOffset)
+		retError(clean, Error_nullPointer(2, "DLFile_write()::startOffset is required"));
 
-	if(result->ptr)
-		retError(clean, Error_invalidOperation(0, "DLFile_write()::result wasn't empty, might indicate memleak"))
+	if(!streamRef || streamRef->refPtrType->typeId != EContainerTypeId_Stream)
+		retError(clean, Error_nullPointer(2, "DLFile_write()::streamRef is required"));
 
-	//Get header size (excluding compressedSize + entryCount)
+	Stream *stream = RefPtr_data(streamRef, Stream);
 
-	const U64 hashSize = !dlFile.settings.compressionType ? 0 : (dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ? 32 : 4);
-	U64 headerSize = sizeof(DLHeader) + hashSize;
+	if (dlFile->settings.compressionType)		//TODO: Compression
+		retError(clean, Error_unsupportedOperation(0, "DLFile_write() doesn't support compression yet"));
 
-	if(!(dlFile.settings.flags & EDLSettingsFlags_HideMagicNumber))		//Magic number (can be hidden by parent; such as oiCA)
+	if(dlFile->settings.chunkSize && !dlFile->settings.encryptionType)
+		retError(clean, Error_unsupportedOperation(0, "DLFile_write() had chunkSize but no encryption"));
+
+	if(*startOffset & 15)
+		retError(clean, Error_unsupportedOperation(0, "DLFile_write() at misaligned startOffset is unsupported (16-byte)"));
+
+	U64 totalSize = 0, maxSize = 0;
+	U64 entryCount = DLFile_entryCount(dlFile);
+
+	if (entryCount >> 48)
+		retError(clean, Error_outOfBounds(0, entryCount, (U64)1 << 48, "DLFile_write() entryCount out of bounds"));
+
+	Bool isPartiallyLoaded = false;
+
+	for (U64 i = 0; i < entryCount; ++i) {
+
+		U64 l = DLFile_entrySize(dlFile, i);
+		maxSize = U64_max(maxSize, l);
+
+		if (!DLFile_isFullyLoaded(dlFile, i))
+			isPartiallyLoaded = true;
+
+		if (totalSize + l < totalSize)
+			retError(clean, Error_overflow(0, totalSize + l, totalSize, "DLFile_write() overflow"));
+
+		totalSize += l;
+	}
+
+	if (totalSize >> 48)
+		retError(clean, Error_outOfBounds(0, totalSize, (U64)1 << 48, "DLFile_write() totalSize out of bounds"));
+
+	U64 chunkSize = 0;
+	U8 chunkSize2 = 0;
+	EDLFlags dlFlags = EDLFlags_None;
+	Bool isEncrypted = dlFile->settings.encryptionType;
+
+	if (isEncrypted) {
+
+		if (dlFile->settings.chunkSize)
+			chunkSize = dlFile->settings.chunkSize;
+
+		//Auto detect chunk size based on total entry size.
+		//In this case:
+		//>=8MiB switches to 1MiB chunks
+		//>=64MiB switches to 8MiB chunks
+		//64MiB chunks aren't used for memory reasons.
+
+		else {
+
+			chunkSize = DLHeader_chunkSizes[0];
+
+			for (U8 i = 1; i < 3; ++i) {
+
+				if (totalSize <= 8 * DLHeader_chunkSizes[i])
+					break;
+
+				chunkSize = DLHeader_chunkSizes[i];
+			}
+		}
+
+		U8 i = 0;
+
+		for (; i < 4; ++i)
+			if (chunkSize == DLHeader_chunkSizes[i]) {
+				chunkSize2 = i;
+				break;
+			}
+
+		if (i == 4)
+			retError(clean, Error_unsupportedOperation(0, "DLFile_write() had invalid chunkSize"));
+
+		if (chunkSize2 & 1)
+			dlFlags |= EDLFlags_UseAESChunksA;
+
+		if (chunkSize2 & 2)
+			dlFlags |= EDLFlags_UseAESChunksB;
+	}
+
+	if (!chunkSize)
+		chunkSize = 32 * KIBI;
+
+	//Add the chunks
+
+	if (isEncrypted)
+		totalSize += ((totalSize + chunkSize - 1) >> DLHeader_chunkSizesShifts[chunkSize2]) * sizeof(CryptoChunk);
+
+	//Get header size
+
+	U64 headerSize = sizeof(DLHeader);
+
+	if(!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))	//Magic number (can be hidden by parent; such as oiCA)
 		headerSize += sizeof(U32);
 
 	//Get data size
 
-	U64 outputSize = 0, maxSize = 0;
-
-	for (U64 i = 0; i < DLFile_entryCount(dlFile); ++i) {
-
-		const U64 len =
-			dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(dlFile.entryBuffers.ptr[i]) :
-			CharString_length(dlFile.entryStrings.ptr[i]);
-
-		if(outputSize + len < outputSize)
-			retError(clean, Error_overflow(0, outputSize + len, outputSize, "DLFile_write() overflow"))
-
-		outputSize += len;
-		maxSize = U64_max(maxSize, len);
-	}
-
 	const EXXDataSizeType dataSizeType = EXXDataSizeType_getRequiredType(maxSize);
 	const U8 dataSizeTypeSize = SIZE_BYTE_TYPE[dataSizeType];
-	const U64 entrySizes = dataSizeTypeSize * DLFile_entryCount(dlFile);
 
-	if(entrySizes / dataSizeTypeSize != DLFile_entryCount(dlFile))
-		retError(clean, Error_overflow(0, entrySizes, entrySizes / dataSizeTypeSize, "DLFile_write() overflow (2)"))
-
-	const EXXDataSizeType entrySizeType = EXXDataSizeType_getRequiredType(DLFile_entryCount(dlFile));
+	const EXXDataSizeType entrySizeType = EXXDataSizeType_getRequiredType(entryCount);
 	headerSize += SIZE_BYTE_TYPE[entrySizeType];
 
 	const U64 entrySizesOffset = headerSize;
-	headerSize += entrySizes;
+	headerSize += dataSizeTypeSize * entryCount;
 
-	if(dlFile.settings.encryptionType)
-		headerSize += sizeof(I32x4) + 12;
-
-	const EXXDataSizeType uncompressedSizeType = EXXDataSizeType_getRequiredType(outputSize);
-
-	if(dlFile.settings.compressionType)
-		headerSize += SIZE_BYTE_TYPE[uncompressedSizeType];
-
-	if(outputSize + headerSize < outputSize)
-		retError(clean, Error_overflow(0, outputSize + headerSize, outputSize, "DLFile_write() overflow (3)"))
-
-	//Create our final uncompressed buffer
-
-	gotoIfError2(clean, Buffer_createUninitializedBytes(outputSize + headerSize, alloc, &uncompressedData))
-
-	U8 *sizes = (U8*)uncompressedData.ptrNonConst + entrySizesOffset;
-	U8 *dat = (U8*)uncompressedData.ptrNonConst + headerSize;
-
-	for (U64 i = 0; i < DLFile_entryCount(dlFile); ++i) {
-
-		const Buffer buf =
-			dlFile.settings.dataType != EDLDataType_Ascii ? dlFile.entryBuffers.ptr[i] :
-			CharString_bufferConst(dlFile.entryStrings.ptr[i]);
-
-		const U64 len = Buffer_length(buf);
-
-		Buffer_forceWriteSizeType(sizes + dataSizeTypeSize * i, dataSizeType, len);
-
-		Buffer_memcpy(Buffer_createRef(dat, len), buf);
-		dat += len;
+	if (isEncrypted) {
+		headerSize += sizeof(I32x4) + 12;		//Tag for AAD and IV
+		headerSize += (16 - ((*startOffset + headerSize) & 15)) & 15;	//Alignment
 	}
 
-	//Prepend header and hash
+	//Add to stream
 
-	U32 hash[8] = { 0 };
+	gotoIfError3(clean, Stream_reserve(stream, *startOffset + headerSize + totalSize, alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_create(streamRef, chunkSize + sizeof(CryptoChunk), true, alloc, &cursor, e_rr));
+	
+	Bool isString = dlFile->settings.dataType == EDLDataType_String;
 
-	U8 *headerIt = (U8*)uncompressedData.ptr;
+	if (isString)
+		dlFlags |= EDLFlags_IsString;
 
-	if (!(dlFile.settings.flags & EDLSettingsFlags_HideMagicNumber)) {
-		*(U32*)headerIt = DLHeader_MAGIC;
-		headerIt += sizeof(U32);
-	}
+	U64 start = *startOffset;
 
-	*((DLHeader*)headerIt) = (DLHeader) {
-
+	DLHeader header = (DLHeader) {
 		.version = EDLVersion_V1_0,
-
-		.flags = (U8) (
-
-			(
-				dlFile.settings.compressionType ? (
-					dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ? EDLFlags_UseSHA256 :
-					EDLFlags_None
-				) :
-				EDLFlags_None
-			) |
-
-			(dlFile.settings.dataType == EDLDataType_Ascii ? EDLFlags_IsString : (
-				dlFile.settings.dataType == EDLDataType_UTF8 ? EDLFlags_IsString | EDLFlags_UTF8 : EDLFlags_None
-			))
-		),
-
-		.type = (U8)((dlFile.settings.compressionType << 4) | dlFile.settings.encryptionType),
-
-		.sizeTypes =
-			(U8)EXXDataSizeType_getRequiredType(DLFile_entryCount(dlFile)) |
-			((U8)EXXDataSizeType_getRequiredType(outputSize) << 2) |
-			((U8)EXXDataSizeType_getRequiredType(maxSize) << 4)
+		.flags = (U8)dlFlags,
+		.type = (U8)dlFile->settings.encryptionType,
+		.sizeTypes = (U8)entrySizeType | ((U8)dataSizeType << 4)
 	};
 
-	headerIt += sizeof(DLHeader);
+	if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, startOffset, DLHeader_MAGIC, alloc, e_rr));
 
-	headerIt += Buffer_forceWriteSizeType(headerIt, entrySizeType, DLFile_entryCount(dlFile));
+	gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &header, sizeof(header), alloc, e_rr));
 
-	Buffer_memcpy(Buffer_createRef(headerIt, entrySizes), Buffer_createRefConst(sizes, entrySizes));
-	headerIt += entrySizes;		//Already filled
+	gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, startOffset, entryCount, entrySizeType, alloc, e_rr));
 
-	if (dlFile.settings.compressionType)
-		headerIt += Buffer_forceWriteSizeType(headerIt, uncompressedSizeType, outputSize);
-
-	//Copy empty hash
-
-	if(dlFile.settings.compressionType)
-		Buffer_memcpy(
-			Buffer_createRef(headerIt, hashSize),
-			Buffer_createRefConst(hash, hashSize)
-		);
-
-	//Hash
-
-	if(dlFile.settings.compressionType) {
-
-		//Generate hash
-
-		if (dlFile.settings.flags & EDLSettingsFlags_UseSHA256)
-			Buffer_sha256(uncompressedData, hash);
-
-		else hash[0] = Buffer_crc32c(uncompressedData);
-
-		//Copy real hash to our header
-
-		Buffer_memcpy(
-			Buffer_createRef(headerIt, hashSize),
-			Buffer_createRefConst(hash, hashSize)
-		);
-
-		headerIt += hashSize;
+	for (U64 i = 0; i < entryCount; ++i) {
+		U64 l = DLFile_entrySize(dlFile, i);
+		gotoIfError3(clean, StreamCursor_appendSizeType(&cursor, startOffset, l, dataSizeType, alloc, e_rr));
 	}
 
-	//Compress
+	//Encryption header
 
-	//U64 uncompressedSize = Buffer_length(uncompressedData) - headerSize;
+	if (isEncrypted) {
 
-	/*if (dlFile.settings.compressionType) {
-
-		//TODO: Impossible to reach for now, but implement this once it exists
-
-		if ((err = Buffer_compress(
-				uncompressedData, BufferCompressionType_Brotli11, alloc, &compressedOutput
-			)).genericError
-		) {
-			Buffer_free(&uncompressedData, alloc);
-			return err;
+		if (StreamCursor_contains(&cursor, start, *startOffset - start)) {
+			tmp = Buffer_createRefFromBuffer(cursor.cacheData, true);
+			gotoIfError3(clean, Buffer_offset(&tmp, start - cursor.lastLocation, e_rr));
 		}
 
-		Buffer_free(&uncompressedData, alloc);
+		//Slow path, because our region is out of cache, so we need to flush to stream and readback
 
-	}
+		else {
 
-	else {*/
-		compressedOutput = Buffer_createRef(
-			(U8*)uncompressedData.ptr + headerSize,
-			Buffer_length(uncompressedData) - headerSize
-		);
-	//}
+			gotoIfError3(clean, Buffer_createUninitializedBytes(*startOffset - start, alloc, &tmp, e_rr));
 
-	//Encrypt
+			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));	//Flush to make changes visible
 
-	if (dlFile.settings.encryptionType) {
+			U64 where = start;
+			gotoIfError3(clean, StreamCursor_consume(&cursor, &where, tmp.ptr, *startOffset - start, alloc, e_rr));
 
-		//TODO: Support chunks
-		//		Select no chunks if <40MiB
-		//		Select 10MiB if at least 4 threads can be kept busy.
-		//		Select 50MiB if ^ and utilization is about the same (e.g. 24 threads doing 10MiB would need 1.2GiB).
-		//		Select 100MiB if ^ (24 threads would need 2.4GiB).
+			gotoIfError3(clean, StreamCursor_setWritable(&cursor, alloc, e_rr));	//Return to writable
+		}
 
 		const U32 key[8] = { 0 };
 
 		const Bool hasKey = Buffer_neq(
-			Buffer_createRefConst(dlFile.settings.encryptionKey, sizeof(key)),
+			Buffer_createRefConst(dlFile->settings.encryptionKey, sizeof(key)),
 			Buffer_createRefConst(key, sizeof(key))
 		);
+
+		I32x4 iv = I32x4_zero(), tag = I32x4_zero();
 		
-		todo, we have to make sure to properly align things here...
+		gotoIfError3(clean, Buffer_encryptAuto(
 
-		gotoIfError2(clean, Buffer_encryptAuto(
+			NULL,
+			&tmp,
 
-			compressedOutput,
-			Buffer_createRefConst(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12),
-
-			EBufferEncryptionType_AES256GCM,
 			!hasKey,
-			dlFile.settings.encryptionKey,
+			dlFile->settings.encryptionKey,
 
-			(I32x4*)headerIt,
-			(I32x4*)((U8*)headerIt + 12)
-		))
+			&tag,
+			&iv,
+			e_rr
+		));
 
-		headerIt += 12 + sizeof(I32x4);
-		headerSize += 12 + sizeof(I32x4);
+		Buffer_free(&tmp, alloc);
+
+		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &tag, sizeof(tag), alloc, e_rr));
+
+		*startOffset = (*startOffset + 15) & ~15;		//Align to 16-byte
+
+		//We need our stream cursor to be reset to the first chunk, since we'll do the encryption in our cache.
+
+		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
 	}
 
-	//Shortcut because we didn't allocate extra memory, so our final data is already present in the buffer.
-	//No need to allocate again
+	//Contents
 
-	if (!dlFile.settings.compressionType) {
-		*result = uncompressedData;
-		goto clean;
+	if (isPartiallyLoaded)
+		gotoIfError3(clean, Buffer_createUninitializedBytes(chunkSize, alloc, &loadCache, e_rr));
+
+	for (U64 i = 0; i < entryCount; ++i) {
+
+		U64 siz = DLFile_entrySize(dlFile, i);
+		Bool isFullyLoaded = DLFile_isFullyLoaded(dlFile, i);
+		StreamCursor inputStream = (StreamCursor) { 0 };
+
+		DLEntryStream stream = dlFile->entryStreams.ptr[i];
+
+		if (!isFullyLoaded)
+			gotoIfError3(clean, StreamCursor_create(stream.stream, &loadCache, false, alloc, &inputStream, e_rr));
+
+		//No encryption it's easy, we'll just append the entire thing at once
+
+		//Copy from buffer/string
+
+		if (isFullyLoaded) {
+			const void *ptr = isString ? dlFile->entryStrings.ptr[i].ptr : dlFile->entryBuffers.ptr[i].ptr;
+			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, ptr, siz, alloc, e_rr));
+		}
+
+		//Copy from stream
+		else {
+
+			gotoIfError3(clean, StreamCursor_copyStream(
+				&cursor, &inputStream, stream.dataOff + stream.startOff, *startOffset, siz, alloc, e_rr
+			));
+
+			*startOffset += siz;
+		}
+
+		//Close, but preserve the allocation for next time
+
+		if (!isFullyLoaded)
+			gotoIfError3(clean, StreamCursor_closeAndKeepCache(&inputStream, alloc, &loadCache, e_rr));
 	}
-
-	//Compression happened, we need to merge compressed data and header.
-
-	const Buffer headerBuf = Buffer_createRefConst(uncompressedData.ptr, headerSize);
-
-	gotoIfError2(clean, Buffer_combine(headerBuf, compressedOutput, alloc, result))
-	Buffer_free(&compressedOutput, alloc);
-	Buffer_free(&uncompressedData, alloc);
 
 clean:
+	Buffer_free(&loadCache, alloc);
+	Buffer_free(&tmp, alloc);
+	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

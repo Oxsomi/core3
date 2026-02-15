@@ -47,7 +47,7 @@ Bool File_resolve(
 	ListCharString res = { 0 };
 
 	if(!isVirtual)
-		retError(clean, Error_nullPointer(!isVirtual ? 1 : 2, "File_resolve()::isVirtual is required"))
+		retError(clean, Error_nullPointer(!isVirtual ? 1 : 2, "File_resolve()::isVirtual is required"));
 
 	loc = CharString_createRefStrConst(loc);
 	absoluteDir = CharString_createRefStrConst(absoluteDir);
@@ -215,7 +215,7 @@ Bool File_resolve(
 		if (CharString_startsWithSensitive(*result, '/', 0))
 			retError(clean, Error_unsupportedOperation(
 				4, "File_resolve()::loc contained Unix path (/absolute), which is unsupported on Windows"
-			))
+			));
 
 		isAbsolute = CharString_length(*result) >= 2 && result->ptr[1] == ':';
 
@@ -237,7 +237,7 @@ Bool File_resolve(
 		)
 			retError(clean, Error_unauthorized(
 				0, "File_resolve()::loc tried to escape working directory, which is unsupported for security reasons"
-			))
+			));
 	}
 
 	//Prepend our path
@@ -259,7 +259,7 @@ Bool File_resolve(
 	if(CharString_length(*result) >= maxFilePathLimit)
 		retError(clean, Error_outOfBounds(
 			0, CharString_length(*result), maxFilePathLimit, "File_resolve()::loc resolved path is longer than max file limit"
-		))
+		));
 
 clean:
 

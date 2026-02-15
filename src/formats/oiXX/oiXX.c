@@ -20,6 +20,7 @@
 
 #include "types/base/error.h"
 #include "types/container/buffer.h"
+#include "types/container/stream.h"
 #include "formats/oiXX/oiXX.h"
 #include "types/base/constants.h"
 
@@ -39,10 +40,52 @@ Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Erro
 		case EXXDataSizeType_U64:		gotoIfError3(clean, Buffer_consume(buf, result, 8, e_rr));	break;
 		default:
 			retError(clean, Error_invalidEnum(
-				1, (U64)type, (U64)EXXDataSizeType_U64,
+				1, (U64)type, (U64)EXXDataSizeType_Count,
 				"Buffer_consumeSizeType()::type out of bounds"
 			));
 	}
+
+clean:
+	return s_uccess;
+}
+
+Bool StreamCursor_consumeSizeType(
+	StreamCursor *cursor,
+	U64 *it,
+	EXXDataSizeType type,
+	U64 *result,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if (!cursor || !it || !result)
+		retError(clean, Error_nullPointer(
+			!cursor ? 0 : (!it ? 1 : 3),
+			"StreamCursor_consumeSizeType()::cursor, it and result are required"
+		));
+
+	if ((U64)type >= (U64)EXXDataSizeType_Count)
+		retError(clean, Error_invalidEnum(
+			1, (U64)type, (U64)EXXDataSizeType_Count,
+			"StreamCursor_consumeSizeType()::type out of bounds"
+		));
+
+	*result = 0;		//This is ok, as little endian a U8 would be stored in the first bytes not the last
+
+	gotoIfError3(clean, StreamCursor_read(
+		cursor,
+		Buffer_createRef(result, sizeof(*result)),
+		*it,
+		0,
+		SIZE_BYTE_TYPE[type],
+		false,
+		alloc,
+		e_rr
+	));
+
+	*it += SIZE_BYTE_TYPE[type];
 
 clean:
 	return s_uccess;

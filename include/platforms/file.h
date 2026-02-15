@@ -22,6 +22,7 @@
 #include "types/base/types.h"
 #include "types/container/string.h"
 #include "types/container/file.h"
+#include "types/container/stream.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -65,6 +66,8 @@ typedef enum EFileOpenType {
 
 typedef U8 FileOpenType;
 
+//TODO: Make this a RefPtr
+//TODO: Make it use HANDLE* or int fd to allow reading without fseek
 typedef struct FileHandle {
 
 	void *ext;
@@ -85,10 +88,10 @@ Bool FileHandle_createRef(const FileHandle *input, FileHandle *output, Error *e_
 Bool File_open(CharString loc, Ns timeout, EFileOpenType type, Bool create, Allocator alloc, FileHandle *handle, Error *e_rr);
 Bool File_openx(CharString loc, Ns timeout, EFileOpenType type, Bool create, FileHandle *handle, Error *e_rr);
 
-void FileHandle_close(FileHandle *handle, Allocator alloc);
+void FileHandle_close(FileHandle *handle, const Allocator *alloc);
 void FileHandle_closex(FileHandle *handle);
 
-Bool FileHandle_write(const FileHandle *handle, Buffer buf, U64 offset, U64 length, Error *e_rr);
+Bool FileHandle_write(const FileHandle *handle, U64 offset, U64 length, Buffer buf, Error *e_rr);
 Bool File_write(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Allocator alloc, Error *e_rr);
 Bool File_writex(Buffer buf, CharString loc, U64 off, U64 len, Ns maxTimeout, Bool createParent, Error *e_rr);
 
@@ -107,66 +110,39 @@ Bool File_unloadVirtual(CharString loc, Error *e_rr);								//Unload a virtual 
 
 //FileStream for handling bigger files and more efficiently jumping around.
 
-typedef struct Stream Stream;
-typedef Bool (*StreamFunc)(Stream *stream, U64 offset, U64 length, Buffer buf, Allocator alloc, Error *e_rr);
-
-typedef struct Stream {
-
-	union {
-		StreamFunc read;		//Only if isReadonly
-		StreamFunc write;
-	};
-
-	FileHandle handle;			//Only valid if it's a file stream, however fileSize has to be set always
-
-	Buffer cacheData;			//Temporary cache
-
-	U64 lastLocation;
-	U64 lastWriteLocation;		//Because the stream can be bigger than the actual file
-
-	Bool isReadonly;
-	U8 padding[7];
-
-} Stream;
+typedef struct FileStream {
+	Stream parent;
+	FileHandle handle;
+} FileStream;
 
 Bool File_openStream(
-	CharString loc,
+	const CharString *loc,
 	Ns timeout,
 	EFileOpenType type,
 	Bool create,
 	U64 cache,
-	Allocator alloc,
-	Stream *output,
-	Error *e_rr
-);
-
-Bool File_openStreamx(
-	CharString loc,
-	Ns timeout,
-	EFileOpenType type,
-	Bool create,
-	U64 cache,
-	Stream *output,
+	const Allocator *alloc,
+	FileStream *output,
 	Error *e_rr
 );
 
 //Takes over FileHandle
-Bool FileHandle_openStream(FileHandle *handle, U64 cache, Allocator alloc, Stream *stream, Error *e_rr);
-Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, Stream *stream, Error *e_rr);
+Bool FileHandle_openStream(FileHandle *handle, U64 cache, const Allocator *alloc, FileStream *stream, Error *e_rr);
 
-Bool Stream_write(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr);
-Bool Stream_writeStream(Stream *stream, Stream *inputStream, U64 srcOff, U64 dstOff, U64 length, Error *e_rr);
+//Simplified functions
 
-//buf.length == 0 && length indicates; load to internal stream only
-Bool Stream_read(Stream *stream, Buffer buf, U64 srcOff, U64 dstOff, U64 length, Bool bypassCache, Error *e_rr);
+Bool File_openStreamx(
+	const CharString *loc,
+	Ns timeout,
+	EFileOpenType type,
+	Bool create,
+	U64 cache,
+	FileStream *output,
+	Error *e_rr
+);
 
-void Stream_close(Stream *stream, Allocator alloc);
-void Stream_closex(Stream *stream);
-
-//This will discard previous data, so make sure to finish writing before doing resize
-
-Bool Stream_resize(Stream *stream, U64 newBufferSize, Allocator alloc, Error *e_rr);
-Bool Stream_resizex(Stream *stream, U64 newBufferSize, Error *e_rr);
+//Takes over FileHandle
+Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, FileStream *stream, Error *e_rr);
 
 //TODO: make it more like a DirectStorage-like api
 

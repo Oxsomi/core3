@@ -750,7 +750,7 @@ Bool Archive_updateFileData(const ArchiveOptions *archive, const Buffer *data, E
 	U64 i = 0;
 
 	if(!Archive_getPath((const ArchiveOptionsConst*)archive, &entry, &i, NULL, e_rr))
-		retError(clean, Error_notFound(0, 1, "Archive_updateFileData()::path couldn't resolve to path"))
+		retError(clean, Error_notFound(0, 1, "Archive_updateFileData()::path couldn't resolve to path"));
 
 	Buffer_free(&entry.data, archive->alloc);
 	archive->archive->entries.ptrNonConst[i].data = *data;
@@ -783,8 +783,9 @@ Bool Archive_getFileDataWithConst(const ArchiveOptions *archive, Buffer *data, B
 	if(isConst)
 		*data = Buffer_createRefConst(entry.data.ptr, Buffer_length(entry.data));
 
-	else if(Buffer_isConstRef(entry.data))
-		retError(clean, Error_constData(1, 0, "Archive_getFileDataInternal()::entry.data should be writable"))
+	else if (Buffer_isConstRef(entry.data)) {
+		retError(clean, Error_constData(1, 0, "Archive_getFileDataInternal()::entry.data should be writable"));
+	}
 
 	else *data = Buffer_createRef(entry.data.ptrNonConst, Buffer_length(entry.data));
 
