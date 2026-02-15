@@ -57,11 +57,21 @@ typedef U8 XXDataSizeType;			//EXXDataSizeType
 static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
 Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Error *e_rr);
+
 Bool StreamCursor_consumeSizeType(
 	StreamCursor *cursor,
 	U64 *it,
 	EXXDataSizeType type,
 	U64 *result,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+Bool StreamCursor_appendSizeType(
+	StreamCursor *cursor,
+	U64 *it,
+	U64 v,
+	EXXDataSizeType type,
 	const Allocator *alloc,
 	Error *e_rr
 );

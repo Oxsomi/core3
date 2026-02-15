@@ -435,10 +435,11 @@ Bool StreamCursor_write(
 
 			U64 bytesToCopy = U64_min(cursorLen - dstRel, length);
 
-			Buffer_memcpy(
-				Buffer_createRef(cursor->cacheData.ptrNonConst + dstRel, bytesToCopy),
-				Buffer_createRefConst(buf.ptr + srcOff, bytesToCopy)
-			);
+			if(cursor->cacheData.ptr != buf.ptr)
+				Buffer_memcpy(
+					Buffer_createRef(cursor->cacheData.ptrNonConst + dstRel, bytesToCopy),
+					Buffer_createRefConst(buf.ptr + srcOff, bytesToCopy)
+				);
 
 			cursor->lastWriteLocation = U64_max(cursor->lastWriteLocation, dstOff + bytesToCopy);
 
@@ -499,7 +500,8 @@ Bool StreamCursor_write(
 	cursor->lastLocation = dstOff;
 	cursor->lastWriteLocation = dstOff + length;
 
-	Buffer_memcpy(cursor->cacheData, Buffer_createRef(buf.ptrNonConst + srcOff, length));
+	if(cursor->cacheData.ptr != buf.ptr)
+		Buffer_memcpy(cursor->cacheData, Buffer_createRef(buf.ptrNonConst + srcOff, length));
 
 clean:
 	return s_uccess;

@@ -38,9 +38,9 @@ static Bool MemoryStream_readInternal(
 
 	MemoryStream *memStream = (MemoryStream*)stream;
 
-	if (offset + length > Buffer_length(memStream->data))
+	if (offset + length > memStream->parent.size)
 		retError(clean, Error_outOfBounds(
-			1, offset + length, Buffer_length(memStream->data),
+			1, offset + length, memStream->parent.size,
 			"MemoryStream_readInternal() out of bounds"
 		));
 
@@ -71,7 +71,7 @@ static Bool MemoryStream_writeInternal(
 	
 	MemoryStream *memStream = (MemoryStream*)stream;
 
-	if (Buffer_isConstRef(memStream->data) || !(memStream->flags & EMemoryStreamFlags_IsWritable))
+	if (Buffer_isConstRef(memStream->data))
 		retError(clean, Error_unsupportedOperation(0, "MemoryStream_writeInternal() stream is readonly"));
 
 	if (length > Buffer_length(buf))
@@ -80,6 +80,9 @@ static Bool MemoryStream_writeInternal(
 			"MemoryStream_writeInternal() buffer too small"
 		));
 
+	if (!length)
+		length = Buffer_length(buf);
+
 	//Expand buffer if needed
 
 	U64 requiredSize = offset + length;
@@ -87,7 +90,7 @@ static Bool MemoryStream_writeInternal(
 
 	if (requiredSize > currentSize) {
 
-		if(!(memStream->flags & EMemoryStreamFlags_IsResizable) || Buffer_isRef(memStream->data))
+		if(!(memStream->parent.streamType & EStreamType_Resizable) || Buffer_isRef(memStream->data))
 			retError(clean, Error_unsupportedOperation(
 				0, "MemoryStream_writeInternal() stream is not resizable and out of bounds"
 			));
@@ -128,9 +131,9 @@ static Bool MemoryStream_reserveInternal(Stream *stream, U64 size, const Allocat
 
 	Bool s_uccess = true;
 
-	MemoryStream *memStream = (MemoryStream *)stream;
+	MemoryStream *memStream = (MemoryStream*)stream;
 
-	if (!(memStream->flags & EMemoryStreamFlags_IsResizable))
+	if (!(memStream->parent.streamType & EStreamType_Resizable))
 		retError(clean, Error_unsupportedOperation(0, "MemoryStream_reserveInternal() stream is not resizable"));
 
 	if (Buffer_isRef(memStream->data))
@@ -189,11 +192,11 @@ Bool MemoryStream_createFromBuffer(
 
 	gotoIfError3(clean, Stream_create(
 		MemoryStream_readInternal,
-		MemoryStream_writeInternal,
+		(flags & EMemoryStreamFlags_IsWritable) ? MemoryStream_writeInternal : NULL,
 		MemoryStream_reserveInternal,
 		MemoryStream_closeInternal,
 		Buffer_length(*buffer),
-		EStreamType_Memory | ((flags & EMemoryStreamFlags_IsResizable) ? EStreamType_Resizable : 0),
+		EStreamType_Memory | (flags & EMemoryStreamFlags_IsResizable ? EStreamType_Resizable : 0),
 		type,
 		memStream,
 		e_rr
@@ -202,7 +205,6 @@ Bool MemoryStream_createFromBuffer(
 	MemoryStream *stream = RefPtr_data(*memStream, MemoryStream);
 
 	stream->data = *buffer;
-	stream->flags = flags;
 	*buffer = Buffer_createNull();
 
 clean:

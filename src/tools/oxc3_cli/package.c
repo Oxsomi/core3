@@ -117,7 +117,7 @@
 	clean:
 
 		if(encryptionKey)
-			Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+			Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 		return s_uccess;
 	}

@@ -344,3 +344,10 @@ Bool Buffer_setAllToU8(const Buffer buf, U8 b8, Error *e_rr) {
 clean:
 	return s_uccess;
 }
+
+static void *(*volatile memset_secure)(void *, int, size_t) = memset;
+
+void Buffer_clearAllSecure(Buffer buf) {
+	if(buf.ptr && !Buffer_isConstRef(buf))
+		memset_secure(buf.ptrNonConst, 0, Buffer_length(buf));
+}

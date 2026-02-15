@@ -34,8 +34,6 @@ typedef enum EMemoryStreamFlags {
 typedef struct MemoryStream {
 	Stream parent;
 	Buffer data;
-	EMemoryStreamFlags flags;
-	U32 pad;
 } MemoryStream;
 
 typedef RefPtr MemoryStreamRef;

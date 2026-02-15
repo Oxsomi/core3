@@ -1518,10 +1518,12 @@ typedef union AESEncryptionContextLengths {
 //This ensures no expanded key, iv or anything else is leaked on the stack,
 //which might be possible to obtain after execution through for example a buffer overflow.
 static inline void AESEncryptionContext_clear(AESEncryptionContext *restrict ctx) {
-	Buffer_unsetAllBits(Buffer_createRef(ctx->key, sizeof(ctx->key)), NULL);
-	Buffer_unsetAllBits(Buffer_createRef(ctx->H, sizeof(ctx->H)), NULL);
-	ctx->iv = ctx->tag = ctx->EKY0 = I32x4_zero();
-	ctx->encryptionType = 0;
+	Buffer_clearAllSecure(Buffer_createRef(ctx->key, sizeof(ctx->key)));
+	Buffer_clearAllSecure(Buffer_createRef(ctx->H, sizeof(ctx->H)));
+	Buffer_clearAllSecure(Buffer_createRef(&ctx->iv, sizeof(ctx->iv)));
+	Buffer_clearAllSecure(Buffer_createRef(&ctx->tag, sizeof(ctx->tag)));
+	Buffer_clearAllSecure(Buffer_createRef(&ctx->EKY0, sizeof(ctx->EKY0)));
+	ctx->encryptionType = 0;		//Not important enough to securely clear.
 }
 
 Bool Buffer_aesExpertFinalize(AESEncryptionContext *restrict ctx, U64 aadLen, U64 dataLen, I32x4 expectTag) {
@@ -2142,7 +2144,7 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 		ctx.tag = I32x4_zero();
 
 		if(decrypt->target)
-			Buffer_unsetAllBits(*decrypt->target, NULL);
+			Buffer_clearAllSecure(*decrypt->target);
 
 		retError(clean, Error_invalidState(0, "AESEncryptionContext_decrypt() GMAC tag is invalid"));
 	}

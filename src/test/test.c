@@ -4967,6 +4967,8 @@ int main() {
 		RefPtr_dec(&stream1);
 	}
 
+	//TODO: Encryption stream
+
 	//
 
 	F64 dt = (Time_now() - now) / (F64)SECOND;

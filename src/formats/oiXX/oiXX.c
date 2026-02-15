@@ -76,10 +76,49 @@ Bool StreamCursor_consumeSizeType(
 
 	gotoIfError3(clean, StreamCursor_read(
 		cursor,
-		Buffer_createRef(result, sizeof(*result)),
+		Buffer_createRef(result, SIZE_BYTE_TYPE[type]),
 		*it,
 		0,
-		SIZE_BYTE_TYPE[type],
+		0,
+		false,
+		alloc,
+		e_rr
+	));
+
+	*it += SIZE_BYTE_TYPE[type];
+
+clean:
+	return s_uccess;
+}
+
+Bool StreamCursor_appendSizeType(
+	StreamCursor *cursor,
+	U64 *it,
+	U64 v,
+	EXXDataSizeType type,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if (!cursor || !it)
+		retError(clean, Error_nullPointer(
+			!cursor ? 0 : 1, "StreamCursor_appendSizeType()::cursor, it and result are required"
+		));
+
+	if ((U64)type >= (U64)EXXDataSizeType_Count)
+		retError(clean, Error_invalidEnum(
+			1, (U64)type, (U64)EXXDataSizeType_Count,
+			"StreamCursor_appendSizeType()::type out of bounds"
+		));
+
+	gotoIfError3(clean, StreamCursor_write(
+		cursor,
+		Buffer_createRef(&v, SIZE_BYTE_TYPE[type]),
+		0,
+		*it,
+		0,
 		false,
 		alloc,
 		e_rr

@@ -422,7 +422,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			gotoIfError3(cleanCa, CAFile_readx(buf, encryptionKey, &file, e_rr))
 
 			if(encryptionKey)
-				Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+				Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 			//Specific entry was requested
 
@@ -592,7 +592,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			gotoIfError3(cleanDl, DLFile_readx(buf, encryptionKey, false, &file, e_rr))
 
 			if(encryptionKey)
-				Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
+				Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 			U64 end = 0;
 

@@ -225,7 +225,7 @@ Bool Packager_package(
 
 clean:
 	if(settings.encryptionType)
-		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
+		Buffer_clearAllSecure(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)));
 
 	F64 dt = (F64)(Time_now() - start) / SECOND;
 

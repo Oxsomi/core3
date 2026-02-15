@@ -140,7 +140,7 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 clean:
 
 	if(encryptionKey)
-		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
+		Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
 
 	if (!s_uccess)
 		Log_errorLnx("File conversion failed!");

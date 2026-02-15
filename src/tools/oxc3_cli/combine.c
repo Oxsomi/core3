@@ -175,7 +175,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			if (!CAFile_writex(tmp[2], &buf[2], e_rr)) {
 
 				if(encryptionKey)
-					Buffer_unsetAllBits(
+					Buffer_clearAllSecure(
 						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
 					);
 
@@ -184,7 +184,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			}
 
 			if(encryptionKey)
-				Buffer_unsetAllBits(
+				Buffer_clearAllSecure(
 					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
 				);
 
@@ -225,7 +225,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			if (!DLFile_writex(tmp[2], &buf[2], e_rr)) {
 
 				if(encryptionKey)
-					Buffer_unsetAllBits(
+					Buffer_clearAllSecure(
 						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
 					);
 
@@ -234,7 +234,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			}
 
 			if(encryptionKey)
-				Buffer_unsetAllBits(
+				Buffer_clearAllSecure(
 					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
 				);
 
@@ -264,7 +264,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 clean:
 
 	if(encryptionKey)
-		Buffer_unsetAllBits(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
+		Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
 
 	for(U8 i = 0; i < sizeof(buf) / sizeof(buf[0]); ++i)
 		Buffer_freex(&buf[i]);

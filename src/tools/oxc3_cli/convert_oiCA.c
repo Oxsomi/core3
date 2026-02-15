@@ -170,7 +170,7 @@ Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Char
 
 clean:
 	if(settings.encryptionType)
-		Buffer_unsetAllBits(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)), NULL);
+		Buffer_clearAllSecure(Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)), NULL);
 
 	FileInfo_freex(&fileInfo);
 	CAFile_freex(&file);
