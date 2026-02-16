@@ -74,7 +74,7 @@ Bool CharString_eraseAtCount(CharString *s, U64 i, U64 count, Error *e_rr) {
 
 	const U64 strl = CharString_length(*s);
 
-	if (i + count > strl)
+	if (i + count > strl || i + count < i)
 		retError(clean, Error_outOfBounds(0, i + count, strl, "CharString_eraseAtCount()::i + count is out of bounds"));
 
 	Buffer_memmove(
@@ -137,6 +137,7 @@ Bool CharString_eraseAll(const CharStringReplaceErase *erase, C8 c) {
 
 	CharString *s = erase->s;
 	U64 strl = s ? CharString_length(*s) : 0;
+	U64 realStrl = strl;
 	U64 off = erase->off;
 	U64 len = erase->len;
 	EStringTransform transform = (EStringTransform) erase->caseSensitive;
@@ -161,6 +162,9 @@ Bool CharString_eraseAll(const CharStringReplaceErase *erase, C8 c) {
 
 	if (out == strl)
 		return true;
+
+	for(U64 i = strl; i < realStrl; ++i)
+		s->ptrNonConst[out++] = s->ptr[i];
 
 	s->ptrNonConst[out] = '\0';
 	s->lenAndNullTerminated = out | ((U64)1 << 63);

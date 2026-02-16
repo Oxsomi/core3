@@ -102,30 +102,6 @@ int main() {
 		return -1;
 	}
 
-	//Test timer
-
-	Log_debugLn(alloc, "Testing Time");
-
-	Ns now = Time_now();
-	TimeFormat nowStr;
-
-	Time_format(now, nowStr, false);
-
-	Ns now2 = 0;
-
-	if (!(Time_parseFormat(&now2, nowStr, false)) || now2 != now) {
-		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format is broken");
-		Log_errorLn(alloc, "%s was parsed but retrieved timestamps %"PRIu64" and %"PRIu64, nowStr, now, now2);
-		return 1;
-	}
-
-	Time_format(now, nowStr, true);
-
-	if (!(Time_parseFormat(&now2, nowStr, true)) || now2 != now) {
-		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format (local time) is broken");
-		return 2;
-	}
-
 	Buffer emp = Buffer_createNull(), full = Buffer_createNull();
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
 	Error err = Error_none(), *e_rr = &err;
@@ -139,34 +115,6 @@ int main() {
 	StreamCursor cursor1 = (StreamCursor) { 0 };
 
 	CharString inputs[19 + EXTRA_CHECKS] = { 0 };
-
-	//Test Buffer
-
-	Log_debugLn(alloc, "Testing Buffer");
-
-	gotoIfError3(clean, Buffer_createZeroBits(256, alloc, &emp, e_rr));
-	gotoIfError3(clean, Buffer_createOneBits(256, alloc, &full, e_rr));
-
-	if (Buffer_eq(emp, full))
-		retError(clean, Error_invalidOperation(0, "Buffer_eq test failed"));
-
-	gotoIfError3(clean, Buffer_bitwiseNot(emp, e_rr));
-
-	if (!Buffer_eq(emp, full))
-		retError(clean, Error_invalidOperation(1, "!Buffer_eq test failed"));
-
-	gotoIfError3(clean, Buffer_bitwiseNot(emp, e_rr));
-
-	gotoIfError3(clean, Buffer_setBitRange(emp, 9, 240, e_rr));
-	gotoIfError3(clean, Buffer_unsetBitRange(full, 9, 240, e_rr));
-
-	gotoIfError3(clean, Buffer_bitwiseNot(emp, e_rr));
-
-	if (Buffer_neq(emp, full))
-		retError(clean, Error_invalidOperation(2, "Buffer_neq test failed"));
-
-	Buffer_free(&emp, alloc);
-	Buffer_free(&full, alloc);
 
 	//TODO: Test vectors
 	//TODO: Test quaternions
@@ -563,23 +511,6 @@ int main() {
 		for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i)
 			CharString_free(&inputs[i], alloc);
 	}
-
-	//Test big endian conversions
-
-	Log_debugLn(alloc, "Testing endianness swapping");
-
-	U16 be16 = U16_swapEndianness(0x1234);
-	U32 be32 = U32_swapEndianness(0x12345678);
-	U64 be64 = U64_swapEndianness(0x123456789ABCDEF0);
-
-	if (be16 != 0x3412)
-		retError(clean, Error_invalidState(5, "Little endian to big failed on U16"));
-
-	if (be32 != 0x78563412)
-		retError(clean, Error_invalidState(6, "Little endian to big failed on U32"));
-
-	if (be64 != 0xF0DEBC9A78563412)
-		retError(clean, Error_invalidState(7, "Little endian to big failed on U64"));
 
 	//Test encryption
 
@@ -2256,54 +2187,6 @@ int main() {
 			retError(clean, Error_invalidState((U32)i, "U128_toString failed"));
 
 		CharString_free(&tmp, alloc);
-	}
-
-	//Fixed point tests
-
-	Log_debugLn(alloc, "Testing fixed point (FP37f4)");
-
-	{
-		const FP37f4 a = FP37f4_fromDouble(123.25);			//123.25
-		const FP37f4 b = FP37f4_fromDouble(0.75);			//0.75
-
-		if (FP37f4_toDouble(a) != 123.25)
-			retError(clean, Error_invalidState(0, "FP37f4_toDouble failed"));
-
-		if(a != (FP37f4)(0b0100 | (123 << 4)))				//123.25 rendered as FP37f4
-			retError(clean, Error_invalidState(0, "FP37f4_fromDouble failed"));
-
-		const FP37f4 sum = FP37f4_add(a, b);				//124.0
-
-		if (FP37f4_toDouble(sum) != 124)
-			retError(clean, Error_invalidState(0, "FP37f4_add failed"));
-
-		const FP37f4 diff = FP37f4_sub(a, b);				//122.5
-
-		if (FP37f4_toDouble(diff) != 122.5)
-			retError(clean, Error_invalidState(0, "FP37f4_sub failed"));
-	}
-
-	Log_debugLn(alloc, "Testing fixed point (FP46f6)");
-
-	{
-		const FP46f6 a = FP46f6_fromDouble(1000000.0625);	//1e6 + 1/16
-		const FP46f6 b = FP46f6_fromDouble(0.9375);			//15/16
-
-		if (FP46f6_toDouble(a) != 1000000.0625)
-			retError(clean, Error_invalidState(0, "FP46f6_toDouble failed"));
-
-		if(a != (FP46f6)(0b000100 | (1000000 << 6)))		//1000000.0625 rendered as FP46f6
-			retError(clean, Error_invalidState(0, "FP46f6_fromDouble failed"));
-
-		const FP46f6 sum = FP46f6_add(a, b);				//1000001.0
-
-		if (FP46f6_toDouble(sum) != 1000001.0)
-			retError(clean, Error_invalidState(0, "FP46f6_add failed"));
-
-		const FP46f6 diff = FP46f6_sub(a, b);				//999999.125
-
-		if (FP46f6_toDouble(diff) != 999999.125)
-			retError(clean, Error_invalidState(0, "FP46f6_sub failed"));
 	}
 
 	//Test pack
@@ -4024,21 +3907,6 @@ int main() {
 				if (!I32x4_eq4(r, expect[i]))
 					retError(clean, Error_invalidState(40, "I32x4_clmul64 failed"));
 			}
-		}
-	}
-
-	//Test ETypeId_toShortId
-
-	Log_debugLn(alloc, "Testing ETypeId_toShortId");
-
-	for (U64 i = 0; i < ETypeId_Max; ++i) {
-
-		ETypeId typeId = ETypeId_arr[i];
-		TypeIdShort shortTypeId = ETypeId_toShortId(typeId);
-
-		if (shortTypeId != i) {
-			shortTypeId = ETypeId_toShortId(typeId);
-			retError(clean, Error_invalidState((U32)i, "ETypeId_toShortId failed"));
 		}
 	}
 

@@ -47,8 +47,8 @@ if(MSVC AND ARM)
 	file(GLOB_RECURSE armAsmWin "platforms/windows/arm/*.asm")
 	target_sources(OxC3_types_base PRIVATE ${armAsmWin})
 	set_source_files_properties(
-        ${armAsmWin}
-        PROPERTY LANGUAGE ASM_MASM
+		${armAsmWin}
+		PROPERTY LANGUAGE ASM_MASM
 	)
 endif()
 
@@ -56,3 +56,20 @@ source_group("Source Files (${platform})" FILES ${typesBasePlatformSources})
 
 set_target_properties(OxC3_types_base PROPERTIES FOLDER Oxsomi/types)
 target_include_directories(OxC3_types_base PUBLIC "../../../include")
+
+if(EnableTests)
+
+	file(GLOB_RECURSE testsC "test/*.c")
+	file(GLOB_RECURSE testsH "test/*.h")
+
+	add_executable(
+		OxC3_types_base_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_base_test PUBLIC OxC3_types_base)
+	set_target_properties(OxC3_types_base_test PROPERTIES FOLDER Oxsomi/test/types)
+
+endif()
