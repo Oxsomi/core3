@@ -28,8 +28,8 @@
 #define FLP_CONSTS(T, suffix)																		\
 static const T T##_E				= 2.718281828459045##suffix;									\
 static const T T##_PI				= 3.141592653589793##suffix;									\
-static const T T##_RAD_TO_DEG		= 57.2957795131##suffix;										\
-static const T T##_DEG_TO_RAD		= 0.01745329251##suffix;
+static const T T##_RAD_TO_DEG		= 57.29577951308232##suffix;									\
+static const T T##_DEG_TO_RAD		= 0.017453292519943295##suffix;
 
 FLP_CONSTS(F32, f);
 FLP_CONSTS(F64, );
@@ -77,11 +77,11 @@ T T##_mod(T v, T mod);																				\
 																									\
 static inline T T##_sign(T v) { return v < 0 ? -1.##suffix : (v > 0 ? 1.##suffix : 0.##suffix); }	\
 static inline T T##_signInc(T v) { return v < 0 ? -1.##suffix : 1.##suffix; }						\
+static inline Bool T##_approxEq(T a, T b, T eps) { return T##_abs(a - b) <= eps; }
 
 FLP_OP(F32, f);
 FLP_OP(F64, );
 
-#undef FLP_OP
 
 #ifdef __cplusplus
 	}

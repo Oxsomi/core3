@@ -46,7 +46,15 @@ T T##_tan(T v) { return tan##suffix(v); }													\
 T T##_atan(T v) { return atan##suffix(v); }													\
 T T##_atan2(T y, T x) { return atan2##suffix(y, x); }										\
 																							\
-T T##_round(T v) { return (T)nearbyint##suffix(v); }										\
+T T##_round(T v) {																			\
+	T fl = T##_floor(v);																	\
+	T diff = v - fl;																		\
+	if (diff < 0.5##suffix) return fl;														\
+	if (diff > 0.5##suffix) return fl + 1.##suffix;											\
+	/* exactly 0.5, round to even (banker's) */												\
+	return T##_mod(fl, 2.##suffix) == 0.##suffix ? fl : fl + 1.##suffix;					\
+}																							\
+																							\
 T T##_ceil(T v) { return ceil##suffix(v); }													\
 T T##_floor(T v) { return floor##suffix(v); }												\
 																							\

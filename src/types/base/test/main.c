@@ -29,7 +29,10 @@ int main() {
 	Test_endianness(&t);
 
 	Test_fixedPoint(&t);
-	Test_math(&t);
+	Test_mathi(&t);
+	Test_mathu(&t);
+	Test_mathf(&t);
+	Test_mathd(&t);
 
 	Test_buffer(&t);
 

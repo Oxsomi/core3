@@ -45,12 +45,12 @@ static inline Bool CharString_endsWithStringSensitive(const CharString *str, con
 	return CharString_endsWithString(&strSensOff, other);
 }
 
-static inline Bool CharString_countAllSensitive(const CharString *str, C8 c, U64 off) {
+static inline U64 CharString_countAllSensitive(const CharString *str, C8 c, U64 off) {
 	CharStringSensOff strSensOff = { str, EStringCase_Sensitive, off };
 	return CharString_countAll(&strSensOff, c);
 }
 
-static inline Bool CharString_countAllStringSensitive(const CharString *str, const CharString *other, U64 off) {
+static inline U64 CharString_countAllStringSensitive(const CharString *str, const CharString *other, U64 off) {
 	CharStringSensOff strSensOff = { str, EStringCase_Sensitive, off };
 	return CharString_countAllString(&strSensOff, other);
 }
@@ -73,12 +73,12 @@ static inline Bool CharString_endsWithStringInsensitive(const CharString *str, c
 	return CharString_endsWithString(&strSensOff, other);
 }
 
-static inline Bool CharString_countAllInsensitive(const CharString *str, C8 c, U64 off) {
+static inline U64 CharString_countAllInsensitive(const CharString *str, C8 c, U64 off) {
 	CharStringSensOff strSensOff = { str, EStringCase_Insensitive, off };
 	return CharString_countAll(&strSensOff, c);
 }
 
-static inline Bool CharString_countAllStringInsensitive(const CharString *str, const CharString *other, U64 off) {
+static inline U64 CharString_countAllStringInsensitive(const CharString *str, const CharString *other, U64 off) {
 	CharStringSensOff strSensOff = { str, EStringCase_Insensitive, off };
 	return CharString_countAllString(&strSensOff, other);
 }

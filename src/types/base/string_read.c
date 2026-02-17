@@ -1013,7 +1013,7 @@ Bool CharString_isFloat(const CharString s) {
 
 Bool CharString_cut(const CharString *s, U64 offset, U64 length, CharString *result) {
 
-	if(!s || !result || result->ptr)
+	if(!s || !result || (result->ptr && !CharString_isRef(*result)))
 		return false;
 
 	const U64 strl = CharString_length(*s);

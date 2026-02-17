@@ -49,4 +49,7 @@ void Test_string(Test *test);
 void Test_stringMut(Test *test);
 void Test_stringRead(Test *test);
 void Test_buffer(Test *test);
-void Test_math(Test *test);			//TODO:
+void Test_mathi(Test *test);
+void Test_mathu(Test *test);
+void Test_mathf(Test *test);
+void Test_mathd(Test *test);
