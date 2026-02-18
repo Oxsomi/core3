@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/base/platform_types.h"
 #include "types/base/string_read.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/mathf.h"
@@ -193,23 +194,6 @@ void Test_stringRead(Test *test) {
 
 	CharString upperA = CharString_createRefCStrConst("ABC");
 	Test_assert(test, "CharString_compareInsensitive", CharString_compareInsensitive(&aStr, &upperA) == ECompareResult_Eq);
-
-	//isValidFileName
-
-	CharString validFile = CharString_createRefCStrConst("my_file.txt");
-	CharString invalidFile = CharString_createRefCStrConst("my/file.txt");
-
-	Test_assert(test, "CharString_isValidFileName", CharString_isValidFileName(validFile));
-	Test_assert(test, "CharString_isValidFileName", !CharString_isValidFileName(invalidFile));
-	Test_assert(test, "CharString_isValidFileName", !CharString_isValidFileName(empty));
-
-	//isValidFilePath
-
-	CharString validPath = CharString_createRefCStrConst("folder/my_file.txt");
-	CharString invalidPath = CharString_createRefCStrConst("folder//my_file.txt");
-
-	Test_assert(test, "CharString_isValidFilePath", CharString_isValidFilePath(validPath));
-	Test_assert(test, "CharString_isValidFilePath", !CharString_isValidFilePath(invalidPath));
 
 	//parse functions
 
@@ -428,4 +412,147 @@ void Test_stringRead(Test *test) {
 
 	Test_assert(test, "CharString_cutAfterFirstSensitive (missing)", !CharString_cutAfterFirstSensitive(&slashStr, 'z', &s));
 	Test_assert(test, "CharString_cutBeforeLastSensitive (missing)", !CharString_cutBeforeLastSensitive(&slashStr, 'z', &s));
+
+	//isValidFileName
+
+	static const C8 *validFileNames[] = {
+		"file.txt",
+		"myfile",
+		"my_file_name",
+		"file123.txt",
+		"My.File.txt",
+		"CONtrol",
+		"NULlptr.txt",
+		"PRNtscreen.pdf",
+		"AUXiliary",
+		"COM",
+		"LPT",
+		"COMBO",
+		"LPTx",
+		"COM1file",
+		"LPT1port"
+	};
+
+	static const C8 *invalidFileNames[] = {
+		"",
+		" file.txt",
+		"file.txt ",
+		"file.",
+		".",
+		"..",
+		"my/file.txt",
+		"my\\file.txt",
+		"my:file.txt",
+		"my*file.txt",
+		"my?file.txt",
+		"my\"file.txt",
+		"my<file.txt",
+		"my>file.txt",
+		"my|file.txt",
+		"CON",
+		"con",
+		"AUX",
+		"NUL",
+		"PRN",
+		"CON.txt",
+		"nul.txt",
+		"AUX.log",
+		"PRN.pdf",
+		"COM1",
+		"COM9",
+		"LPT1",
+		"LPT1.txt",
+		"com1",
+		"lpt2"
+	};
+
+	for (U64 i = 0; i < sizeof(validFileNames) / sizeof(validFileNames[0]); ++i) {
+		s = CharString_createRefCStrConst(validFileNames[i]);
+		Test_assert(test, validFileNames[i], CharString_isValidFileName(s));
+	}
+
+	for (U64 i = 0; i < sizeof(invalidFileNames) / sizeof(invalidFileNames[0]); ++i) {
+		s = CharString_createRefCStrConst(invalidFileNames[i]);
+		Test_assert(test, invalidFileNames[i][0] ? invalidFileNames[i] : "(empty)", !CharString_isValidFileName(s));
+	}
+
+	//isValidFilePath
+
+	static const C8 *validFilePaths[] = {
+		"file.txt",
+		"folder/file.txt",
+		"a/b/c/d.txt",
+		"folder\\file.txt",
+		"a/b\\c",
+		"folder/",
+		"folder\\",
+		"./file.txt",
+		"../file.txt",
+		"a/../b",
+		"//virtual/file.txt"
+	};
+
+	static const C8 *invalidFilePaths[] = {
+		"",
+		"folder//file.txt",
+		"folder/\\file.txt",
+		"folder/CON.txt",
+		"a/NUL/b",
+		"folder./file.txt",
+		"folder/LPT1.txt"
+	};
+
+	for (U64 i = 0; i < sizeof(validFilePaths) / sizeof(validFilePaths[0]); ++i) {
+		s = CharString_createRefCStrConst(validFilePaths[i]);
+		Test_assert(test, validFilePaths[i], CharString_isValidFilePath(s));
+	}
+
+	for (U64 i = 0; i < sizeof(invalidFilePaths) / sizeof(invalidFilePaths[0]); ++i) {
+		s = CharString_createRefCStrConst(invalidFilePaths[i]);
+		Test_assert(test, invalidFilePaths[i][0] ? invalidFilePaths[i] : "(empty)", !CharString_isValidFilePath(s));
+	}
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+		static const C8 *validFilePathsWin[] = {
+			"C:/folder/file.txt",
+			"C:\\folder\\file.txt"
+		};
+
+		static const C8 *invalidFilePathsWin[] = {
+			"C:folder/file.txt",
+			"0:/folder"
+		};
+
+		for (U64 i = 0; i < sizeof(validFilePathsWin) / sizeof(validFilePathsWin[0]); ++i) {
+			s = CharString_createRefCStrConst(validFilePathsWin[i]);
+			Test_assert(test, validFilePathsWin[i], CharString_isValidFilePath(s));
+		}
+
+		for (U64 i = 0; i < sizeof(invalidFilePathsWin) / sizeof(invalidFilePathsWin[0]); ++i) {
+			s = CharString_createRefCStrConst(invalidFilePathsWin[i]);
+			Test_assert(test, invalidFilePathsWin[i], !CharString_isValidFilePath(s));
+		}
+
+	#else
+
+		static const C8 *validFilePathsUnix[] = {
+			"/C/folder/file.txt"
+		};
+
+		static const C8 *invalidFilePathsUnix[] = {
+			"C:/folder/file.txt"
+		};
+
+		for (U64 i = 0; i < sizeof(validFilePathsUnix) / sizeof(validFilePathsUnix[0]); ++i) {
+			s = CharString_createRefCStrConst(validFilePathsUnix[i]);
+			Test_assert(test, validFilePathsUnix[i], CharString_isValidFilePath(s));
+		}
+
+		for (U64 i = 0; i < sizeof(invalidFilePathsUnix) / sizeof(invalidFilePathsUnix[0]); ++i) {
+			s = CharString_createRefCStrConst(invalidFilePathsUnix[i]);
+			Test_assert(test, invalidFilePathsUnix[i], !CharString_isValidFilePath(s));
+		}
+
+	#endif
 }

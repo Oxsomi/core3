@@ -116,17 +116,15 @@ int main() {
 
 	CharString inputs[19 + EXTRA_CHECKS] = { 0 };
 
-	//TODO: Test vectors
-	//TODO: Test quaternions
-	//TODO: Test string
-	//TODO: Test math
+	//TODO: Test string more
 	//TODO: Test list
 	//TODO: Test archive
 	//TODO: Test allocation buffer
 	//TODO: Test buffer more
+	//TODO: Test Encryption stream
 	//TODO: File test for disallowed file names and hard to handle cases such as
 	// "", "/", "a/./b", "a/b/../../c", "../outside", "C:/folder", "C:folder", "//virtual/file"
-	//File_resolve and File_makeRelative.
+	//TODO: File_resolve and File_makeRelative.
 
 	//Test string to number functions
 
