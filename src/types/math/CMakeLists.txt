@@ -42,3 +42,20 @@ target_compile_definitions(OxC3_types_math PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORC
 if(UNIX AND NOT APPLE)
 	target_link_libraries(OxC3_types_math PUBLIC m)
 endif()
+
+if(EnableTests)
+
+	file(GLOB testsC "test/*.c")
+	file(GLOB testsH "test/*.h")
+
+	add_executable(
+		OxC3_types_math_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_math_test PUBLIC OxC3_types_math OxC3_types_test)
+	set_target_properties(OxC3_types_math_test PROPERTIES FOLDER Oxsomi/test/types)
+
+endif()

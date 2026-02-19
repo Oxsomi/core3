@@ -21,15 +21,17 @@
 #pragma once
 #include "types/test/test.h"
 
-void Test_time(Test *test);
-void Test_typeId(Test *test);
-void Test_endianness(Test *test);
-void Test_fixedPoint(Test *test);
-void Test_string(Test *test);
-void Test_stringMut(Test *test);
-void Test_stringRead(Test *test);
-void Test_buffer(Test *test);
-void Test_mathi(Test *test);
-void Test_mathu(Test *test);
-void Test_mathf(Test *test);
-void Test_mathd(Test *test);
+void Test_flpF16(Test *test);
+void Test_flpF32(Test *test);
+void Test_flpF64(Test *test);
+void Test_flpRoundTrip(Test *test);
+void Test_floatType(Test *test);
+void Test_pack(Test *test);
+void Test_rand(Test *test);
+void Test_quat(Test *test);
+void Test_typeCast(Test *test);
+void Test_u128(Test *test);
+void Test_vec4i(Test *test);
+void Test_vec4f(Test *test);
+void Test_vec2i(Test *test);
+void Test_vec2f(Test *test);

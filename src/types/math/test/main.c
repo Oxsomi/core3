@@ -18,18 +18,32 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/test/test.h"
+#include "shared.h"
 
-void Test_time(Test *test);
-void Test_typeId(Test *test);
-void Test_endianness(Test *test);
-void Test_fixedPoint(Test *test);
-void Test_string(Test *test);
-void Test_stringMut(Test *test);
-void Test_stringRead(Test *test);
-void Test_buffer(Test *test);
-void Test_mathi(Test *test);
-void Test_mathu(Test *test);
-void Test_mathf(Test *test);
-void Test_mathd(Test *test);
+int main() {
+
+	Test t = (Test) { 0 };
+
+	Test_floatType(&t);
+	Test_flpF16(&t);
+	Test_flpF32(&t);
+	Test_flpF64(&t);
+	Test_flpRoundTrip(&t);
+
+	Test_u128(&t);
+
+	Test_quat(&t);
+	Test_vec2f(&t);
+	Test_vec2i(&t);
+
+	Test_pack(&t);
+	Test_rand(&t);
+
+	/*
+	Test_typeCast(&t);
+	Test_vec4i(&t);
+	Test_vec4f(&t);
+	Test_vec2i(&t);*/
+
+	return Test_end(&t);
+}

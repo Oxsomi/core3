@@ -59,8 +59,22 @@ target_include_directories(OxC3_types_base PUBLIC "../../../include")
 
 if(EnableTests)
 
-	file(GLOB_RECURSE testsC "test/*.c")
-	file(GLOB_RECURSE testsH "test/*.h")
+	file(GLOB typesTestHeaders "../../../include/types/test/*.h")
+	file(GLOB testsSharedC "test/shared/*.c")
+
+	add_library(
+		OxC3_types_test
+		STATIC
+		${typesTestHeaders}
+		${testsSharedC}
+		CMakeLists.txt
+	)
+
+	set_target_properties(OxC3_types_test PROPERTIES FOLDER Oxsomi/test/types)
+	target_include_directories(OxC3_types_test PUBLIC "../../../include")
+
+	file(GLOB testsC "test/*.c")
+	file(GLOB testsH "test/*.h")
 
 	add_executable(
 		OxC3_types_base_test
@@ -69,7 +83,7 @@ if(EnableTests)
 		CMakeLists.txt
 	)
 
-	target_link_libraries(OxC3_types_base_test PUBLIC OxC3_types_base)
+	target_link_libraries(OxC3_types_base_test PUBLIC OxC3_types_base OxC3_types_test)
 	set_target_properties(OxC3_types_base_test PROPERTIES FOLDER Oxsomi/test/types)
 
 endif()

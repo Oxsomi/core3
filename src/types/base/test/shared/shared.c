@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "shared.h"
+#include "types/test/test.h"
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -43,7 +43,6 @@ void Test_setModule(Test *test, const C8 *moduleName) {
 	test->currentModule = moduleName;
 	test->tests = 0;
 	test->succeeded = 0;
-	Test_print(test, "Testing");
 }
 
 int Test_end(Test *test) {

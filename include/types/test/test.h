@@ -19,17 +19,24 @@
 */
 
 #pragma once
-#include "types/test/test.h"
+#include "types/base/error.h"
 
-void Test_time(Test *test);
-void Test_typeId(Test *test);
-void Test_endianness(Test *test);
-void Test_fixedPoint(Test *test);
-void Test_string(Test *test);
-void Test_stringMut(Test *test);
-void Test_stringRead(Test *test);
-void Test_buffer(Test *test);
-void Test_mathi(Test *test);
-void Test_mathu(Test *test);
-void Test_mathf(Test *test);
-void Test_mathd(Test *test);
+typedef struct Allocator Allocator;
+
+typedef struct Test {
+	U64 tests, succeeded;
+	U64 totalTests, totalSucceeded;
+	const Allocator *alloc;
+	const C8 *currentModule;
+	Error err;
+} Test;
+
+void Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64 line, const C8 *source);
+
+#define Test_assert(test, section, ...) Test_assert2(test, section, (__VA_ARGS__), __FILE__, __LINE__, #__VA_ARGS__)
+
+void Test_print(Test *test, const C8 *str);
+
+void Test_setModule(Test *test, const C8 *moduleName);
+
+int Test_end(Test *test);
