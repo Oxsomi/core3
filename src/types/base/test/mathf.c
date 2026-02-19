@@ -163,7 +163,7 @@ void Test_mathf(Test *test) {
 
 	//isNaN / isInf / isValid
 
-	static const F32 zero = 0;
+	volatile F32 zero = 0;		//Supress errors
 
 	Test_assert(test, "F32_isNaN", F32_isNaN(0 / zero));
 	Test_assert(test, "F32_isNaN", !F32_isNaN(1));
@@ -317,7 +317,7 @@ void Test_mathd(Test *test) {
 
 	//isNaN / isInf / isValid
 
-	static const F64 zero = 0;
+	volatile F64 zero = 0;
 
 	Test_assert(test, "F64_isNaN", F64_isNaN(0 / zero));
 	Test_assert(test, "F64_isNaN", !F64_isNaN(1));

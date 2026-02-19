@@ -31,7 +31,7 @@ typedef struct Test {
 	Error err;
 } Test;
 
-void Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64 line, const C8 *source);
+Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64 line, const C8 *source);
 
 #define Test_assert(test, section, ...) Test_assert2(test, section, (__VA_ARGS__), __FILE__, __LINE__, #__VA_ARGS__)
 

@@ -18,30 +18,11 @@
 *  This is called dual licensing.
 */
 
-#include "shared.h"
+#pragma once
+#include "types/base/types.h"
 
-int main() {
+typedef struct Allocator Allocator;
+typedef struct Error Error;
+typedef struct CharString CharString;
 
-	Test t = (Test) { 0 };
-
-	Test_floatType(&t);
-	Test_flpF16(&t);
-	Test_flpF32(&t);
-	Test_flpF64(&t);
-	Test_flpRoundTrip(&t);
-
-	Test_u128(&t);
-
-	Test_quat(&t);
-	Test_vec2f(&t);
-	Test_vec2i(&t);
-	Test_vec4i(&t);
-	Test_vec4f(&t);
-
-	Test_pack(&t);
-	Test_rand(&t);
-
-	Test_typeCast(&t);
-
-	return Test_end(&t);
-}
+Bool Perf_aesThroughput(const Allocator *alloc, const CharString *outputCsv, Bool logToConsole, Error *e_rr);

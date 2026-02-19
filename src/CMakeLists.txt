@@ -32,7 +32,3 @@ add_subdirectory(audio)
 if(EnableOxC3CLI)
 	add_subdirectory(tools)
 endif()
-
-if(EnableTests)
-	add_subdirectory(test)
-endif()

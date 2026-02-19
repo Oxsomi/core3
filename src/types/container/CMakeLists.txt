@@ -71,3 +71,49 @@ elseif(APPLE)
 elseif(ANDROID)
 	target_link_libraries(OxC3_types_container PUBLIC android log)
 endif()
+
+if(EnableTests)
+
+	file(GLOB testsC "test/*.c")
+	file(GLOB testsH "test/*.h")
+
+	add_executable(
+		OxC3_types_container_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_container_test PUBLIC OxC3_types_container OxC3_types_test)
+	set_target_properties(OxC3_types_container_test PROPERTIES FOLDER Oxsomi/test/types)
+
+endif()
+
+if(EnableOxC3CLI)
+
+	file(GLOB typesContainerPerfH "../../../include/types/container/perf/*.h")
+	file(GLOB typesContainerPerfC "perf/*.c")
+
+	add_library(
+		OxC3_types_container_perf_lib STATIC
+		${typesContainerPerfH}
+		${typesContainerPerfC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_container_perf_lib PUBLIC OxC3_types_container)
+	set_target_properties(OxC3_types_container_perf_lib PROPERTIES FOLDER Oxsomi/perf)
+
+	file(GLOB testsExecC "perf/exec/*.c")
+
+	add_executable(
+		OxC3_types_container_perf
+		${testsExecC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_container_perf PUBLIC OxC3_types_container_perf_lib)
+	set_target_properties(OxC3_types_container_perf PROPERTIES FOLDER Oxsomi/perf)
+
+endif()

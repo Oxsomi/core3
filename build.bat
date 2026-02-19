@@ -52,7 +52,10 @@ REM Run tests
 if "%3" == "False" goto :eof
 
 cd build/%1/windows/%arch%/bin
-OxC3_test.exe
+OxC3_types_base_test.exe
+OxC3_types_math_test.exe
+OxC3_types_container_test.exe
+OxC3_formats_oiBC_test.exe
 ..\..\..\..\..\tools\test.bat
 
 cd ../../../../..
