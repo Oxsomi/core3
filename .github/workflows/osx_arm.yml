@@ -37,11 +37,11 @@ jobs:
         path: ~/.conan2/p
         key: ${{ runner.os }}-arm64-${{ hashFiles('**/packages') }}
     - name: build for fast check
-      run: bash build.sh Release True True False -o cliGraphics=False
+      run: python build.py -mode Release -tests True -o cliGraphics=False
     - name: build for SIMD fallback check
-      run: bash build.sh Release False True False -o cliGraphics=False
+      run: python build.py -mode Release -simd False -tests True -o cliGraphics=False
     - name: build for debug check
-      run: bash build.sh Debug True True False -o cliGraphics=False
+      run: python build.py -mode Release -tests True -o cliGraphics=False
     - name: Delete non package files for cache
       run: rm -rf ~/.conan2/p/b/*/b
     - name: Cache Build
