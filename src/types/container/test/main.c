@@ -74,6 +74,7 @@ int main() {
 
 	Test_textureFormat(&t);
 
+	Test_allocationBuffer(&t);
 	Test_bigInt(&t);
 	Test_u128(&t);
 	Test_string(&t);

@@ -31,3 +31,4 @@ void Test_crc32c(Test *test);
 void Test_md5(Test *test);
 void Test_memoryStream(Test *test);
 void Test_textureFormat(Test *test);
+void Test_allocationBuffer(Test *test);

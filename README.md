@@ -1,4 +1,4 @@
-# OxC3 (Oxsomi core 3.2.098)
+# OxC3 (Oxsomi core 3.2.099)
 | Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | x64 dynamic (Vk + Native)                                    | ARM -> Vulkan                                                | ARM -> Native API                                            | ARM dynamic (Vk + Native)                                    |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_arm.yml/badge.svg)** | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_arm.yml/badge.svg) | **![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_dynamic.yml/badge.svg)** |
@@ -6,6 +6,7 @@
 | Linux     | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A                                                          | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/linux_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm.yml/badge.svg)** | N/A                                                          | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/linux_arm_dynamic.yml/badge.svg)** |
 | Android   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A                                                          | N/A, no dynamic linking                                      | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/android_on_windows.yml/badge.svg) | N/A                                                          | N/A, no dynamic linking                                      |
 | iOS       | **TBD**                                                      | **Metal**: **TBD**                                           | N/A, no dynamic linking                                      | **TBD**                                                      | **Metal**: **TBD**                                           | N/A, no dynamic linking                                      |
+| Xbox UWP  | N/A                                                          | **D3D12**: TBD                                               | N/A                                                          | N/A                                                          | N/A                                                          | N/A                                                          |
 
 OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
@@ -17,8 +18,9 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - 128-bit and bigger unsigned ints (U128 and BigInt).
   - AllocationBuffer for managing block allocations.
   - Buffer manipulation such as compares, copies, bit manipulation,
-    - Encryption (aes256gcm), hashing (sha256, crc32c, md5), cryptographically secure random (CSPRNG).
+    - Encryption (aes256gcm, aes128gcm), hashing (sha256, crc32c, md5), cryptographically secure random (CSPRNG).
   - GenericList, CharString and TList (Makes Lists such as ListCharString, ListU32, etc.).
+  - Streams (EncryptionStream and MemoryStream).
   - Error type including stacktrace option.
   - Time utility.
   - Vectors (mathematical) such as F32x2, F32x4, I32x2, I32x4.
@@ -31,7 +33,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
 - OxC3_platforms
   - For everything that's platform dependent (excluding some exceptions for OxC3_types).
   - Helpers for default allocator to simplify OxC3_types functions that require allocators.
-  - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
+  - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking. And FileStream.
   - Virtual file system; for accessing files included into the exe, apk, etc. Which are built through CMake and conan.
   - Input devices: multiple mice and keyboards.
   - Window for physical (OS-backed) and virtual (in memory) windows.
@@ -70,6 +72,9 @@ One of the useful things about C is that files are incredibly easy to compile an
 - **OSX**:
   - If using Vulkan SDK, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1 if you need bindless rendering. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
   - llvm-objcopy for example via `brew install llvm`.
+- **Linux**:
+  - For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default.
+
 - **Android**:
   - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.
   - For Windows; msys2 or Ninja can be used to target android.
@@ -86,10 +91,13 @@ One of the useful things about C is that files are incredibly easy to compile an
   - Android (**okay** support: close to full support, missing render passes and bindful).
   - UWP Xbox (**no** support *yet*).
   - iOS (**no** support *yet*).
-  - Web (**no** support *yet*).
+  - Web (**no** support *for a while*).
+  - GDK Xbox (**won't** support anytime soon)
+  - Playstation (**won't** support anytime soon)
+  - Switch (**won't** support anytime soon)
 - Instruction sets:
-  - arm64: **okay** support: SSE transcendentals (sin/exp/etc.) don't work efficiently yet.
   - x64: **decent** support: Fully supported on Windows, but SSE transcendentals (sin/exp/etc.) don't work efficiently elsewhere yet.
+  - arm64: **okay** support: SSE transcendentals (sin/exp/etc.) don't work efficiently yet.
   - none: **full** support: arch independent fallback is working as normal, used when platform doesn't support full arm64 or x64.
   - risc-v: **no** support.
   - wasm: **no** support *yet*.
@@ -107,24 +115,16 @@ git clone --recurse-submodules -j8 https://github.com/Oxsomi/core3
 
 The build command has the following syntax:
 
-- `buildCmd [Release/Debug] [EnableSIMD: True/False] [EnableTests: True/False] [Dynamic linking: True/False]`
-  - EnableSIMD: If SIMD extensions should be used to accelerate vector operations or things like encryption/hashing/etc. Recommended to always keep this on, unless not possible.
-  - EnableTests: Enable the unit tests that run afterwards.
-  - DynamicLinking: Enable dynamic linking, this is only supported on desktop and allows to run multiple graphics APIs at once.
+- `python build.py -mode [Release/Debug/MinSizeRel/RelWithDebInfo] -simd [True/False] -tests [True/False] -dynamic_linking [True/False]`
+  - simd: If SIMD extensions should be used to accelerate vector operations or things like encryption/hashing/etc. Recommended to always keep this on, only added to easily support a new platform or to check fallback support.
+  - tests: Enable the unit tests that run afterwards.
+  - dynamic_linking: Enable dynamic linking, this is only supported on desktop and allows to run multiple graphics APIs at once.
 - Extra flags can be controlled via `-o flag=Bool` such as:
   - forceVulkan: If there's a native API available on the target machine, it will attempt to use that by default. If instead it should try to use Vulkan, this flag should be set. An example is on Windows you have D3D12 and/or Vulkan; D3D12 is the default, but Vulkan can be turned on like this. Off by default.
   - enableOxC3CLI: Enable the OxC3CLI project along with the OxC3 executable. On by default.
   - forceFloatFallback: Forces half -> float casts to use software rather than hardware. Off by default.
   - enableShaderCompiler: If the shader compiler should be included. This will take longer to build, but is useful for tools or applications that need realtime shader compilation. On by default.
   - cliGraphics: If the OxC3 CLI tool allows operations that require graphics (OxC3 graphics). This can be turned off to exclude shipping dlls required for OxC3 graphics or to allow running on headless systems.
-
-### Windows
-
-```batch
-build Release True True True
-```
-
-The Windows implementation supports SSE fully, dynamic linking and this will also run tests.
 
 ### Android
 
@@ -149,24 +149,6 @@ This would build only the .a files and .so files. To make an APK, it requires to
 `--shader_compiler` can be used to enable compiling the shader compiler, which might be useful for applications that require runtime shader generation. This is off by default to save a great deal of compile time.
 
 `--skip_build` can be used to disable building, in case a prebuilt apk could be ran or a new apk can be made.
-
-### Mac OS X
-
-```c
-bash build.sh Release True True True
-```
-
-Currently the Mac implementation doesn't support full speed SSE transcendentals (tan/exp/etc.) or NEON. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
-
-### Linux
-
-```c
-bash build.sh Release True True True
-```
-
-Currently the Linux build doesn't support full speed SSE transcendentals (tan/exp/etc.) or NEON. It also doesn't officially support input/Wayland support is currently quite untested.
-
-For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default.
 
 ### Other platforms
 
