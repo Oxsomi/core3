@@ -20,7 +20,7 @@
 
 #include "types/base/string.h"
 #include "types/container/buffer.h"
-#include "shared.h"
+#include "all.h"
 
 void Test_crc32c(Test *test) {
 

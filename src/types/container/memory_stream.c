@@ -111,8 +111,13 @@ static Bool MemoryStream_writeInternal(
 
 	//If the buffer was already reserved, we'll only need to update the size.
 
-	if (requiredSize > stream->size)
+	if (requiredSize > stream->size) {
+
+		if(offset > stream->size)
+			Buffer_unsetAllBits(Buffer_createRef(memStream->data.ptrNonConst + stream->size, offset - stream->size), NULL);
+
 		stream->size = requiredSize;
+	}
 
 	//Copy
 
@@ -229,8 +234,14 @@ Bool MemoryStream_create(
 	if (!type || !type->alloc)
 		retError(clean, Error_nullPointer(0, "MemoryStream_create()::type and type->alloc are required"));
 
-	if (size)
-		gotoIfError3(clean, Buffer_createUninitializedBytes(size, type->alloc, &buf, e_rr));
+	if (size) {
+
+		if (flags & EMemoryStreamFlags_UnsafeMemory) {
+			gotoIfError3(clean, Buffer_createUninitializedBytes(size, type->alloc, &buf, e_rr));
+		}
+
+		else gotoIfError3(clean, Buffer_createEmptyBytes(size, type->alloc, &buf, e_rr));
+	}
 
 	gotoIfError3(clean, MemoryStream_createFromBuffer(&buf, flags, type, stream, e_rr));
 

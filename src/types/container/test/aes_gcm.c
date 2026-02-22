@@ -22,7 +22,7 @@
 #include "types/math/vec4i.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/container/string.h"
-#include "shared.h"
+#include "all.h"
 
 //Shared loop used for both AES256 and AES128 test vectors.
 //Each test vector is: encrypt -> verify ciphertext + tag -> decrypt -> verify plaintext.

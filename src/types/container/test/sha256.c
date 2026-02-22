@@ -20,7 +20,7 @@
 
 #include "types/base/string.h"
 #include "types/container/string.h"
-#include "shared.h"
+#include "all.h"
 
 //https://www.di-mgt.com.au/sha_testvectors.html
 //https://www.dlitz.net/crypto/shad256-test-vectors/

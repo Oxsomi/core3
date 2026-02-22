@@ -185,6 +185,8 @@ Bool StreamCursor_closeAndKeepCache(StreamCursor *cursor, const Allocator *alloc
 			2, 0, "StreamCursor_closeAndKeepCache()::cache is non empty, indicating memleak"
 		));
 
+	gotoIfError3(clean, StreamCursor_flush(cursor, alloc, e_rr));
+
 	if (cursor) {					//Move cache data for next cursor
 		*cache = cursor->cacheData;
 		cursor->cacheData = Buffer_createNull();

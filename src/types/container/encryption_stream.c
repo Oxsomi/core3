@@ -197,6 +197,8 @@ static Bool EncryptionStream_writeInternal(
 
 		if (isPartialWrite) {
 
+			gotoIfError3(clean, StreamCursor_setReadOnly(&underlyingCursor, alloc, e_rr));
+
 			U64 readSize = actualChunkSize + sizeof(CryptoChunk);
 
 			gotoIfError3(clean, StreamCursor_read(

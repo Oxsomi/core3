@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "shared.h"
+#include "all.h"
 #include "types/base/buffer.h"
 #include "types/base/atomic.h"
 #include "types/base/allocator.h"
@@ -79,6 +79,7 @@ int main() {
 	Test_u128(&t);
 	Test_string(&t);
 	Test_memoryStream(&t);
+	Test_encryptionStream(&t);
 
 	Test_assert(&t, "Memory leak (bytes)", !AtomicI64_load(&allocBytes));
 	Test_assert(&t, "Memory leak (count)", !AtomicI64_load(&allocCounter));

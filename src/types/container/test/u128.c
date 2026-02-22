@@ -21,7 +21,7 @@
 #include "types/base/string_read_helper.h"
 #include "types/container/u128.h"
 #include "types/container/string.h"
-#include "shared.h"
+#include "all.h"
 
 static const U64 mulParams[][2] = {
 	{ 0x0123456789ABCDEF, 0xFEDCBA9876543210 },

@@ -19,7 +19,7 @@
 */
 
 #include "types/container/allocation_buffer.h"
-#include "shared.h"
+#include "all.h"
 
 static Bool Test_createAllocBuffer(Test *t, U64 size, U64 nonLinearAlignment, AllocationBuffer *ab) {
 

@@ -22,7 +22,7 @@
 #include "types/container/string.h"
 #include "types/container/big_int.h"
 #include "types/container/u128.h"
-#include "shared.h"
+#include "all.h"
 
 static const U64 mulParams[][2] = {
 	{ 0x0123456789ABCDEF, 0xFEDCBA9876543210 },

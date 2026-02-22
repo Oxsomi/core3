@@ -19,7 +19,7 @@
 */
 
 #include "types/container/texture_format.h"
-#include "shared.h"
+#include "all.h"
 
 void Test_textureFormat(Test *t) {
 

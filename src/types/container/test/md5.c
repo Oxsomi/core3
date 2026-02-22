@@ -21,7 +21,7 @@
 #include "types/math/vec4i_swizzle.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
-#include "shared.h"
+#include "all.h"
 
 //MD5
 // https://github.com/das-labor/legacy/blob/master/microcontroller-2/arm-crypto-lib/testvectors/Md5-128.unverified.test-vectors

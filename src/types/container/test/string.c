@@ -20,7 +20,7 @@
 
 #include "types/base/string_read_helper.h"
 #include "types/container/string.h"
-#include "shared.h"
+#include "all.h"
 
 void Test_stringNumbers(Test *t) {
 

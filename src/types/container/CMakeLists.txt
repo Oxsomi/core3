@@ -74,6 +74,19 @@ endif()
 
 if(EnableTests)
 
+	file(GLOB typesContainerTestfH "../../../include/types/container/test/*.h")
+	file(GLOB typesContainerTestfC "test/shared/*.c")
+
+	add_library(
+		OxC3_types_container_test_util STATIC
+		${typesContainerTestfH}
+		${typesContainerTestfC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_types_container_test_util PUBLIC OxC3_types_container OxC3_types_test)
+	set_target_properties(OxC3_types_container_test_util PROPERTIES FOLDER Oxsomi/test/types)
+
 	file(GLOB testsC "test/*.c")
 	file(GLOB testsH "test/*.h")
 
@@ -84,7 +97,7 @@ if(EnableTests)
 		CMakeLists.txt
 	)
 
-	target_link_libraries(OxC3_types_container_test PUBLIC OxC3_types_container OxC3_types_test)
+	target_link_libraries(OxC3_types_container_test PUBLIC OxC3_types_container_test_util)
 	set_target_properties(OxC3_types_container_test PROPERTIES FOLDER Oxsomi/test/types)
 
 endif()
@@ -98,7 +111,6 @@ if(EnableOxC3CLI)
 		OxC3_types_container_perf_lib STATIC
 		${typesContainerPerfH}
 		${typesContainerPerfC}
-		${testsH}
 		CMakeLists.txt
 	)
 
