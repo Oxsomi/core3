@@ -98,15 +98,21 @@ static void Test_streamReadWrite(Test *t, StreamHarness *h) {
 		src[i] = i;
 
 	if (s->write(s, 10, 50, Buffer_createRefConst(src, 50), t->alloc, &t->err)) {
+		if (s->read) {
+			U8 full[100];
 
-		Bool ok = true;
+			if (s->read(s, 0, 100, Buffer_createRef(full, 100), t->alloc, &t->err)) {
+				Bool ok = true;
 
-		for (U8 i = 0; i < 100 && ok; ++i) {
-			U8 v = 0;
-			ok = h->verify(h, stream, i, 1, &v, t) && v == (i >= 10 && i < 60 ? (U8)(i - 10) : i);
+				for (U8 i = 0; i < 100 && ok; ++i)
+					if (full[i] != (i >= 10 && i < 60 ? (U8)(i - 10) : i))
+						ok = false;
+
+				Test_assert(t, "Write [10,60) verify full buffer", ok);
+			}
+
+			else Test_assert(t, "Read full buffer after write", false);
 		}
-
-		Test_assert(t, "Write [10,60) verify full buffer", ok);
 	}
 
 	else Test_assert(t, "Write [10,60)", false);
@@ -144,34 +150,56 @@ static void Test_streamResize(Test *t, StreamHarness *h) {
 
 		Test_assert(t, "Grown to 170", s->size == 170);
 
-		//Check new, untouched and old regions
+		if (s->read) {
 
-		Bool newOk = true;
+			//Check new region [120,170)
 
-		for (U8 i = 0; i < 50 && newOk; ++i) {
-			U8 v = 0;
-			newOk = h->verify(h, stream, 120 + i, 1, &v, t) && v == i;
+			U8 newBuf[50];
+
+			if (s->read(s, 120, 50, Buffer_createRef(newBuf, 50), t->alloc, &t->err)) {
+				Bool newOk = true;
+
+				for (U8 i = 0; i < 50 && newOk; ++i)
+					if (newBuf[i] != i)
+						newOk = false;
+
+				Test_assert(t, "New region [120,170) correct", newOk);
+			}
+
+			else Test_assert(t, "Read new region [120,170)", false);
+
+			//Check original region [0,100) is still zero
+
+			U8 origBuf[100];
+
+			if (s->read(s, 0, 100, Buffer_createRef(origBuf, 100), t->alloc, &t->err)) {
+				Bool origOk = true;
+
+				for (U8 i = 0; i < 100 && origOk; ++i)
+					if (origBuf[i] != 0)
+						origOk = false;
+
+				Test_assert(t, "Original region [0,100) untouched", origOk);
+			}
+
+			else Test_assert(t, "Read original region [0,100)", false);
+
+			//Check gap [100,120) is zero-filled
+
+			U8 gapBuf[20];
+
+			if (s->read(s, 100, 20, Buffer_createRef(gapBuf, 20), t->alloc, &t->err)) {
+				Bool gapOk = true;
+
+				for (U8 i = 0; i < 20 && gapOk; ++i)
+					if (gapBuf[i] != 0)
+						gapOk = false;
+
+				Test_assert(t, "Gap [100,120) zero", gapOk);
+			}
+
+			else Test_assert(t, "Read gap [100,120)", false);
 		}
-
-		Test_assert(t, "New region [120,170) correct", newOk);
-
-		Bool origOk = true;
-
-		for (U8 i = 0; i < 100 && origOk; ++i) {
-			U8 v = 0xFF;
-			origOk = h->verify(h, stream, i, 1, &v, t) && v == 0;
-		}
-
-		Test_assert(t, "Original region [0,100) untouched", origOk);
-
-		Bool gapOk = true;
-
-		for (U8 i = 0; i < 20 && gapOk; ++i) {
-			U8 v = 0xFF;
-			gapOk = h->verify(h, stream, 100 + i, 1, &v, t) && v == 0;
-		}
-
-		Test_assert(t, "Gap [100,120) zero", gapOk);
 	}
 
 	else Test_assert(t, "Write beyond size (120 + 50 = 170)", false);
@@ -243,14 +271,21 @@ static void Test_streamReserve(Test *t, StreamHarness *h) {
 			if (ms)
 				Test_assert(t, "Reserve: no reallocation", ms->data.ptr == ptrBefore && Buffer_length(ms->data) == capBefore);
 
-			Bool dataOk = true;
+			U8     data1[5000];
+			Buffer readBuf = Buffer_createRef(data1, 5000);
 
-			for (U64 i = 0; i < 5000 && dataOk; ++i) {
-				U8 v = 0;
-				dataOk = h->verify(h, stream, i, 1, &v, t) && v == (U8)(i % 500);
+			if (s->read(s, 0, 5000, readBuf, t->alloc, &t->err)) {
+
+				Bool dataOk = true;
+
+				for (U64 i = 0; i < 5000 && dataOk; ++i)
+					if (readBuf.ptr[i] != (U8)(i % 500))
+						dataOk = false;
+
+				Test_assert(t, "Reserve: data correct", dataOk);
 			}
 
-			Test_assert(t, "Reserve: data correct", dataOk);
+			else Test_assert(t, "Reserve: read back", false);
 		}
 	}
 

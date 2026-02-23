@@ -22,6 +22,7 @@
 #include "types/container/encryption_stream.h"
 #include "types/container/memory_stream.h"
 #include "types/container/buffer.h"
+#include "types/base/mathi.h"
 #include "all.h"
 
 static const U32 encTestKey[8] = {
@@ -34,15 +35,21 @@ RefPtrType memType;
 static Bool EncStream_harnessCreate(
 	const StreamHarness *h, U64 size, Bool isResizable, RefPtr **out, Test *t
 ) {
-	(void)h; (void)isResizable;
+	(void)h;
 
 	const I32x4      rootIV  = I32x4_create4(0x11223344, 0x55667788, 0x99AABBCC, 0);
-	const U64        chunkSize = 64 * KIBI;
+	static const U8 empty[65536] = { 0 };
+	static const U64 chunkSize = sizeof(empty);
 
 	RefPtr *backing = NULL;
-	EMemoryStreamFlags flags = EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable;
+	EMemoryStreamFlags flags = EMemoryStreamFlags_IsWritable;
+	
+	U64 realSize = EncryptionStream_underlyingSize(chunkSize, size);
 
-	if (!MemoryStream_create(0, flags, &memType, &backing, &t->err)) {
+	if (isResizable)
+		flags |= EMemoryStreamFlags_IsResizable;
+
+	if (!MemoryStream_create(realSize, flags, &memType, &backing, &t->err)) {
 		Test_assert(t, "EncStream backing MemStream create", false);
 		return false;
 	}
@@ -62,27 +69,15 @@ static Bool EncStream_harnessCreate(
 
 		Stream *s = RefPtr_data(*out, Stream);
 
-		if (s->reserve && !s->reserve(s, size, t->alloc, &t->err)) {
-			Test_assert(t, "EncStream reserve initial size", false);
-			RefPtr_dec(out);
-			return false;
-		}
+		//Clear which also sets s->size without having garbage.
+		//Garbage is fine with MemoryStream but not with others like EncryptionStream
 
-		s->size = size;
-	}
-
-	return true;
-}
-
-static Bool EncStream_harnessVerify(const StreamHarness *h, RefPtr *stream, U64 offset, U64 length, U8 *dst, Test *t) {
-
-	(void)h;
-	Stream *s   = RefPtr_data(stream, Stream);
-	Buffer  buf = Buffer_createRef(dst, length);
-
-	if (!s->read(s, offset, length, buf, t->alloc, &t->err)) {
-		Test_assert(t, "EncStream_harnessVerify read", false);
-		return false;
+		for(U64 i = 0; i < size; i += chunkSize)
+			if (!s->write(s, i, U64_min(size - i, chunkSize), Buffer_createRefConst(empty, chunkSize), t->alloc, &t->err)) {
+				Test_assert(t, "EncStream write empty bytes", false);
+				RefPtr_dec(out);
+				return false;
+			}
 	}
 
 	return true;
@@ -95,11 +90,11 @@ void Test_encryptionStream(Test *t) {
 
 	StreamHarness h = {
 		.create = EncStream_harnessCreate,
-		.verify = EncStream_harnessVerify,
 		.type = &type,
 		.name = "EncryptionStream"
 	};
 
 	StreamHarness_testStream(&h, t);
 	StreamHarness_testCursor(&h, t);
+	Test_setModule(t, NULL);
 }

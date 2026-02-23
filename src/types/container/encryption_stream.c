@@ -160,9 +160,22 @@ static Bool EncryptionStream_writeInternal(
 		length = Buffer_length(buf);
 
 	U64 requiredSize = offset + length;
+	U64 prevSize = stream->size;
 
-	if (requiredSize > stream->size)
+	if (requiredSize > stream->size) {
+
+		U64 underlyingSize = EncryptionStream_underlyingSize(encStream->chunkSize, requiredSize);
+
+		Stream *underlyingStream = RefPtr_data(encStream->dataStream, Stream);
+
+		if(!(underlyingStream->streamType & EStreamType_Resizable) && underlyingSize > underlyingStream->size)
+			retError(clean, Error_outOfBounds(
+				2, length, Buffer_length(buf),
+				"EncryptionStream_writeInternal() underlying stream is too small but can't be resized"
+			));
+
 		stream->size = requiredSize;
+	}
 
 	gotoIfError3(clean, StreamCursor_createWithCache(
 		encStream->dataStream,
@@ -187,19 +200,20 @@ static Bool EncryptionStream_writeInternal(
 		U64 chunkStart = chunkId << encStream->chunkSizeShift;
 		U64 chunkEnd = U64_min((chunkId + 1) << encStream->chunkSizeShift, stream->size);
 		U64 actualChunkSize = chunkEnd - chunkStart;
+		U64 actualReadSize = U64_min(actualChunkSize, prevSize - chunkStart);
 
 		U64 underlyingOffset = chunkId * (encStream->chunkSize + sizeof(CryptoChunk)) + encStream->startOffset;
 
 		//If partial chunk write, need to read & decrypt previous data
 		Bool isPartialWrite = offsetInChunk || bytesInChunk != actualChunkSize;
 
-		Buffer chunkData = Buffer_createRef(underlyingCursor.cacheData.ptrNonConst + sizeof(CryptoChunk), actualChunkSize);
+		Buffer chunkData = Buffer_createRef(underlyingCursor.cacheData.ptrNonConst + sizeof(CryptoChunk), actualReadSize);
 
 		if (isPartialWrite) {
 
 			gotoIfError3(clean, StreamCursor_setReadOnly(&underlyingCursor, alloc, e_rr));
 
-			U64 readSize = actualChunkSize + sizeof(CryptoChunk);
+			U64 readSize = actualReadSize + sizeof(CryptoChunk);
 
 			gotoIfError3(clean, StreamCursor_read(
 				&underlyingCursor,
@@ -230,6 +244,18 @@ static Bool EncryptionStream_writeInternal(
 		}
 
 		//Modify
+
+		chunkData = Buffer_createRef(underlyingCursor.cacheData.ptrNonConst + sizeof(CryptoChunk), actualChunkSize);
+
+		if (isPartialWrite && offsetInChunk > actualReadSize)
+			Buffer_setAllToU8(
+				Buffer_createRef(
+					chunkData.ptrNonConst + actualReadSize,
+					offsetInChunk - actualReadSize
+				),
+				0,
+				NULL
+			);
 
 		Buffer_memcpy(
 			Buffer_createRef(chunkData.ptrNonConst + offsetInChunk, bytesInChunk),
@@ -267,7 +293,7 @@ static Bool EncryptionStream_writeInternal(
 			0,
 			underlyingOffset,
 			writeSize,
-			false,
+			true,			//Write through to ensure we can reuse cache next time
 			alloc,
 			e_rr
 		));
@@ -385,28 +411,12 @@ Bool EncryptionStream_create(
 	RefPtr_inc(dataStream);
 	inc = true;
 
-	U64 underlyingDataSize = underlying->size - streamOffset;
-	U64 decryptedSize = 0;
-
-	if (underlyingDataSize) {
-
-		U64 bytesPerChunk = chunkSize + sizeof(CryptoChunk);
-		U64 chunks = underlyingDataSize / bytesPerChunk;
-		U64 remainder = underlyingDataSize % bytesPerChunk;
-
-		decryptedSize = chunks * chunkSize;
-
-		if (remainder > sizeof(CryptoChunk))
-			decryptedSize += (remainder - sizeof(CryptoChunk));
-	}
-
-	// Use Stream_create to properly initialize
 	gotoIfError3(clean, Stream_create(
 		underlying->read ? EncryptionStream_readInternal : NULL,
 		underlying->write ? EncryptionStream_writeInternal : NULL,
 		underlying->reserve ? EncryptionStream_reserveInternal : NULL,
 		EncryptionStream_closeInternal,
-		decryptedSize,
+		0,
 		EStreamType_Encrypted | underlying->streamType,
 		type,
 		encStream,
@@ -415,7 +425,7 @@ Bool EncryptionStream_create(
 
 	hasStream = true;
 
-	//EncryptionStream-specific
+	//EncryptionStream specific
 
 	EncryptionStream *es = RefPtr_data(*encStream, EncryptionStream);
 

@@ -152,31 +152,12 @@ static Bool MemStream_harnessCreate(const StreamHarness *h, U64 size, Bool isRes
 	return true;
 }
 
-static Bool MemStream_harnessVerify(const StreamHarness *h, RefPtr *stream, U64 offset, U64 length, U8 *dst, Test *t) {
-
-	(void)h;
-	const MemoryStream *ms = RefPtr_data(stream, MemoryStream);
-
-	if (offset + length > Buffer_length(ms->data)) {
-		Test_assert(t, "MemStream_harnessVerify bounds", false);
-		return false;
-	}
-
-	Buffer_memcpy(
-		Buffer_createRef(dst, length),
-		Buffer_createRefConst(ms->data.ptr + offset, length)
-	);
-
-	return true;
-}
-
 void Test_memoryStream(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
 	StreamHarness h = {
 		.create = MemStream_harnessCreate,
-		.verify = MemStream_harnessVerify,
 		.type = &type,
 		.name = "MemoryStream"
 	};

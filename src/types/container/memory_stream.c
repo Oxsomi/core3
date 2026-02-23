@@ -128,8 +128,6 @@ static Bool MemoryStream_writeInternal(
 
 clean:
 	return s_uccess;
-
-
 }
 
 static Bool MemoryStream_reserveInternal(Stream *stream, U64 size, const Allocator *alloc, Error *e_rr) {

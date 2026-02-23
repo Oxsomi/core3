@@ -43,20 +43,6 @@ typedef struct StreamHarness {
 		Test   *t
 	);
 
-	//Read 'length' logical bytes at 'offset' for verification.
-	// MemoryStream     -> direct ptr read
-	// EncryptionStream -> s->read (decrypts transparently)
-	// FileStream       -> read from file
-	// NetworkStream    -> read from network
-	Bool (*verify)(
-		const struct StreamHarness *h,
-		RefPtr *stream,
-		U64    offset,
-		U64    length,
-		U8    *dst,
-		Test   *t
-	);
-
 	const RefPtrType *type;
 
 	ShortString name;

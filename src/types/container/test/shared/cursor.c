@@ -83,19 +83,25 @@ static void Test_streamCursorBasic(Test *t, StreamHarness *h) {
 	Test_assert(t, "Writes (simple)", writesOk);
 	Test_assert(t, "Writeonly rejects read", !StreamCursor_read(&cursor, magicBuf, 0, 0, 1, false, t->alloc, NULL));
 
-	//Flush; verify all 1KiB through the harness
+	//Flush; read back entire 1KiB at once and verify
 
 	if (StreamCursor_flush(&cursor, t->alloc, &t->err)) {
 
-		Bool flushOk = true;
-		magic = 0xDEADBEEFCAFEBABE;
+		if (s->read) {
+			U64 readBuf[128];
 
-		for (U64 i = 0; i < 1024 / 8 && flushOk; ++i) {
-			U64 v = 0;
-			flushOk = h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t) && v == magic + i;
+			if (s->read(s, 0, 1024, Buffer_createRef(readBuf, 1024), t->alloc, &t->err)) {
+				Bool flushOk = true;
+
+				for (U64 i = 0; i < 128 && flushOk; ++i)
+					if (readBuf[i] != 0xDEADBEEFCAFEBABE + i)
+						flushOk = false;
+
+				Test_assert(t, "Flush: all data correct", flushOk);
+			}
+
+			else Test_assert(t, "Flush: read back", false);
 		}
-
-		Test_assert(t, "Flush: all words correct", flushOk);
 	}
 
 	else Test_assert(t, "Flush", false);
@@ -152,7 +158,12 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 
 	RefPtr      *stream = NULL;
 	StreamCursor cursor = { 0 };
-	Buffer       full   = Buffer_createNull();
+
+	U64 dat[98304 / sizeof(U64)] = {0};
+	Buffer full   = Buffer_createRef(dat, sizeof(dat));
+
+	U64 dat1[98304 / sizeof(U64)] = { 0 };
+	Buffer read   = Buffer_createRef(dat1, sizeof(dat1));
 
 	if (!h->create(h, 96 * KIBI, false, &stream, t)) {
 		Test_assert(t, "Create stream", false);
@@ -193,16 +204,16 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		goto clean;
 	}
 
-	//Verify entire 96 KiB through the harness
+	//Verify entire 96 KiB
 
-	{
+	if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
+
 		Bool verifyOk = true;
-		magic = 0xDEADBEEFCAFEBABE;
+		const U64 *v64 = (const U64*)full.ptr;
 
-		for (U64 i = 0; i < 96 * KIBI / 8 && verifyOk; ++i) {
-			U64 v = 0;
-			verifyOk = h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t) && v == magic + i;
-		}
+		for (U64 i = 0; i < 96 * KIBI / 8 && verifyOk; ++i)
+			if (v64[i] != 0xDEADBEEFCAFEBABE + i)
+				verifyOk = false;
 
 		Test_assert(t, "All 96KiB correct after flush", verifyOk);
 	}
@@ -282,39 +293,29 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 			goto clean;
 		}
 
-		//Check the written slots
+		//Read back all 96KiB at once; check written slots and undisturbed locations in one pass
 
-		Bool spotOk = true;
+		if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
+			const U64 *v64 = (const U64*)full.ptr;
+			Bool spotOk = true, surroundOk = true;
 
-		for (U64 i = 0; i < offsetLen && spotOk; ++i) {
-			U64 v = 0;
-			spotOk = h->verify(h, stream, offsets[i], sizeof(U64), (U8*)&v, t) && v == i;
+			for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
+
+				U64 j = 0;
+
+				for (; j < offsetLen; ++j)
+					if (i * 8 == offsets[j])
+						break;
+
+				if (j < offsetLen) { if (v64[i] != j)                          spotOk     = false; }
+				else               { if (v64[i] != 0xDEADBEEFCAFEBABE + i)     surroundOk = false; }
+			}
+
+			Test_assert(t, "Random write: values correct",               spotOk);
+			Test_assert(t, "Random write: surrounding data undisturbed", surroundOk);
 		}
 
-		Test_assert(t, "Random write: values correct", spotOk);
-
-		//All other locations are undisturbed
-
-		Bool surroundOk = true;
-
-		for (U64 i = 0; i < 96 * KIBI / 8 && surroundOk; ++i) {
-
-			U64 j = 0;
-
-			for (; j < offsetLen; ++j)
-				if (i * 8 == offsets[j])
-					break;
-
-			if (j != offsetLen)
-				continue;
-
-			U64 v = 0;
-			surroundOk =
-				h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t) &&
-				v == 0xDEADBEEFCAFEBABE + i;
-		}
-
-		Test_assert(t, "Random write: surrounding data undisturbed", surroundOk);
+		else Test_assert(t, "Random write: read back", false);
 
 		//Write at offset + 8 must not corrupt offset + 0.
 
@@ -335,88 +336,81 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 			Test_assert(t, "offset+8: flush", false);
 			goto clean;
 		}
+		
+		if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
+			const U64 *v64 = (const U64*)full.ptr;
+			Bool base0Ok = true, base8Ok = true, restOk = true;
 
-		Bool base0Ok = true, base8Ok = true;
+			for (U64 i = 0; i < 96 * KIBI / 8; ++i) {
 
-		for (U64 i = 0; i < offsetLen; ++i) {
-			U64 v0 = 0, v8 = 0;
-			h->verify(h, stream, offsets[i],     sizeof(U64), (U8*)&v0, t);
-			h->verify(h, stream, offsets[i] + 8, sizeof(U64), (U8*)&v8, t);
-			if (v0 != i)             base0Ok = false;
-			if (v8 != (i | 0x1000)) base8Ok = false;
-		}
+				U64 j = 0;
 
-		Test_assert(t, "offset+8: base values intact", base0Ok);
-		Test_assert(t, "offset+8: +8 values correct",  base8Ok);
+				for (; j < offsetLen; ++j)
+					if (i * 8 == offsets[j] || i * 8 == offsets[j] + 8)
+						break;
 
-		//Everything else still undisturbed
-
-		Bool restOk = true;
-
-		for (U64 i = 0; i < 96 * KIBI / 8 && restOk; ++i) {
-
-			U64 j = 0;
-
-			for (; j < offsetLen; ++j)
-				if (i * 8 == offsets[j] || i * 8 == offsets[j] + 8)
-					break;
-
-			if (j != offsetLen)
-				continue;
-
-			U64 v = 0;
-			restOk = h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t)
-				&& v == 0xDEADBEEFCAFEBABE + i;
-		}
-
-		Test_assert(t, "offset+8: rest undisturbed", restOk);
-	}
-
-	// Large write (> cache) and bypass
-
-	{
-		const Bool largeAllocOk = Buffer_createEmptyBytes(96 * KIBI, t->alloc, &full, NULL);
-		Test_assert(t, "Alloc 96KiB", largeAllocOk);
-
-		if (largeAllocOk) {
-
-			if (
-				StreamCursor_write(&cursor, full, 0, 0, 0, false, t->alloc, &t->err) &&
-				StreamCursor_flush(&cursor, t->alloc, &t->err)
-			) {
-				Bool zeroOk = true;
-
-				for (U64 i = 0; i < 96 * KIBI && zeroOk; ++i) {
-					U8 v = 0xFF;
-					zeroOk = h->verify(h, stream, i, 1, &v, t) && v == 0;
+				if (j < offsetLen) {
+					if (i * 8 == offsets[j]) { if (v64[i] != j)              base0Ok = false; }
+					else                      { if (v64[i] != (j | 0x1000))  base8Ok = false; }
 				}
-
-				Test_assert(t, "Large write: zeros flushed", zeroOk);
+				else { if (v64[i] != 0xDEADBEEFCAFEBABE + i) restOk = false; }
 			}
 
-			else Test_assert(t, "Large write (> cache)", false);
-
-			//Bypass cache, write 0xCA directly
-
-			Buffer_setAllToU8(full, 0xCA, NULL);
-
-			if (StreamCursor_write(&cursor, full, 0, 0, 0, true, t->alloc, &t->err)) {
-
-				Bool bypassOk = true;
-
-				for (U64 i = 0; i < 96 * KIBI / 8 && bypassOk; ++i) {
-					U64 v = 0;
-					bypassOk =
-						h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t) &&
-						v == 0xCACACACACACACACA;
-				}
-
-				Test_assert(t, "Bypass cache write", bypassOk);
-			}
-
-			else Test_assert(t, "Bypass cache write", false);
+			Test_assert(t, "offset+8: base values intact", base0Ok);
+			Test_assert(t, "offset+8: +8 values correct",  base8Ok);
+			Test_assert(t, "offset+8: rest undisturbed",    restOk);
 		}
+
+		else Test_assert(t, "offset+8: read back", false);
 	}
+
+	//Large write (> cache) and bypass
+
+	Buffer_setAllToU8(full, 0, NULL);
+
+	if (
+		StreamCursor_write(&cursor, full, 0, 0, 0, false, t->alloc, &t->err) &&
+		StreamCursor_flush(&cursor, t->alloc, &t->err)
+	) {
+		if (s->read(s, 0, 96 * KIBI, read, t->alloc, &t->err)) {
+
+			Bool zeroOk = true;
+			const U64 *v64 = (const U64*)read.ptr;
+
+			for (U64 i = 0; i < 96 * KIBI / sizeof(U64) && zeroOk; ++i)
+				if (v64[i] != 0)
+					zeroOk = false;
+
+			Test_assert(t, "Large write: zeros flushed", zeroOk);
+		}
+
+		else Test_assert(t, "Large write: read back", false);
+	}
+
+	else Test_assert(t, "Large write (> cache)", false);
+
+	//Bypass cache, write 0xCA directly
+
+	Buffer_setAllToU8(full, 0xCA, NULL);
+
+	if (StreamCursor_write(&cursor, full, 0, 0, 0, true, t->alloc, &t->err)) {
+
+		if (s->read(s, 0, 96 * KIBI, read, t->alloc, &t->err)) {
+
+			Bool zeroOk = true;
+			const U64 *v64 = (const U64*)read.ptr;
+
+			for (U64 i = 0; i < 96 * KIBI / sizeof(U64) && zeroOk; ++i)
+				if (v64[i] != 0xCACACACACACACACA)
+					zeroOk = false;
+
+			Test_assert(t, "Large write (bypass cache): flushed", zeroOk);
+		}
+
+		else Test_assert(t, "Large write: read back", false);
+	}
+
+	else Test_assert(t, "Bypass cache write", false);
 
 	//Partial writes at cache block boundaries and boundary - 8.
 	//Background is 0xCACA… from the bypass write above.
@@ -436,16 +430,22 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 			goto clean;
 		}
 
-		Bool partialOk = true;
+		if (s->read(s, 0, 96 * KIBI, full, t->alloc, &t->err)) {
+			Bool partialOk = true;
+			const U64 *v64 = (const U64*)full.ptr;
 
-		for (U64 i = 0; i < 96 * KIBI / 8 && partialOk; ++i) {
-			const U64 off  = (i * 8) & (32 * KIBI - 1);
-			const U64 want = (!off || off == 32 * KIBI - 8) ? magic : 0xCACACACACACACACA;
-			U64 v = 0;
-			partialOk = h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t) && v == want;
+			for (U64 i = 0; i < 96 * KIBI / 8 && partialOk; ++i) {
+				const U64 off = (i * 8) & (32 * KIBI - 1);
+				const U64 want = (!off || off == 32 * KIBI - 8) ? magic : 0xCACACACACACACACA;
+
+				if (v64[i] != want)
+					partialOk = false;
+			}
+
+			Test_assert(t, "Partial writes at cache boundaries", partialOk);
 		}
 
-		Test_assert(t, "Partial writes at cache boundaries", partialOk);
+		else Test_assert(t, "Partial writes: read back", false);
 	}
 
 	//Span writes: single write straddling two cache blocks
@@ -482,7 +482,6 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 
 clean:
 	StreamCursor_close(&cursor, t->alloc);
-	Buffer_free(&full, t->alloc);
 	RefPtr_dec(&stream);
 }
 
@@ -490,26 +489,26 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 
 	Test_setModuleH(t, h, "cursorCopyStream");
 
-	RefPtr      *stream  = NULL;
-	RefPtr      *stream1 = NULL;
-	StreamCursor cursor  = { 0 };
-	StreamCursor cursor1 = { 0 };
-	Buffer       fill    = Buffer_createNull();
+	RefPtr       *stream  = NULL;
+	RefPtr       *stream1 = NULL;
+	StreamCursor cursor   = { 0 };
+	StreamCursor cursor1  = { 0 };
+	Buffer       fill     = Buffer_createNull();
 
-	if (!h->create(h, 96 * KIBI, false, &stream, t)) {
-		Test_assert(t, "Create src stream", false);
+	if (!Buffer_createEmptyBytes(96 * KIBI, t->alloc, &fill, &t->err)) {
+		Test_assert(t, "Buffer_createEmptyBytes", false);
 		return;
 	}
 
+	if (!h->create(h, 96 * KIBI, false, &stream, t)) {		//Creates zeroed stream
+		Test_assert(t, "Create src stream", false);
+		goto clean;
+	}
+
 	{
-		Stream *s = RefPtr_data(stream, Stream);
-
-		if (!s->write || !Buffer_createEmptyBytes(96 * KIBI, t->alloc, &fill, &t->err)) {
-			Test_assert(t, "Fill src alloc", false);
-			goto clean;
-		}
-
 		Buffer_setAllToU8(fill, 0xAA, NULL);
+
+		Stream *s = RefPtr_data(stream, Stream);
 
 		if (!s->write(s, 0, 0, fill, t->alloc, &t->err)) {
 			Test_assert(t, "Fill src write", false);
@@ -537,23 +536,38 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 		StreamCursor_copyStream(&cursor1, &cursor, 0, 0, 0, t->alloc, &t->err) &&
 		StreamCursor_flush(&cursor1, t->alloc, &t->err)
 	) {
-		Bool dstOk = true;
+		Stream *s0 = RefPtr_data(stream, Stream);
+		Stream *s1 = RefPtr_data(stream1, Stream);
 
-		for (U64 i = 0; i < 96 * KIBI / 8 && dstOk; ++i) {
-			U64 v = 0;
-			dstOk = h->verify(h, stream1, i * sizeof(U64), sizeof(U64), (U8*)&v, t) && v == 0xAAAAAAAAAAAAAAAA;
+		//Check dst
+
+		if (s1->read(s1, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
+			Bool dstOk = true;
+			const U64 *v64 = (const U64*)fill.ptr;
+
+			for (U64 i = 0; i < 96 * KIBI / 8 && dstOk; ++i)
+				if (v64[i] != 0xAAAAAAAAAAAAAAAA)
+					dstOk = false;
+
+			Test_assert(t, "Full copy: dst correct", dstOk);
 		}
 
-		Test_assert(t, "Full copy: dst correct", dstOk);
+		else Test_assert(t, "Full copy: dst read", false);
 
-		Bool srcOk = true;
+		//Check src
 
-		for (U64 i = 0; i < 96 * KIBI / 8 && srcOk; ++i) {
-			U64 v = 0;
-			srcOk = h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t) && v == 0xAAAAAAAAAAAAAAAA;
+		if (s0->read(s0, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
+			Bool srcOk = true;
+			const U64 *v64 = (const U64*)fill.ptr;
+
+			for (U64 i = 0; i < 96 * KIBI / 8 && srcOk; ++i)
+				if (v64[i] != 0xAAAAAAAAAAAAAAAA)
+					srcOk = false;
+
+			Test_assert(t, "Full copy: src unmodified", srcOk);
 		}
 
-		Test_assert(t, "Full copy: src unmodified", srcOk);
+		else Test_assert(t, "Full copy: src read", false);
 	}
 
 	else Test_assert(t, "Full copy", false);
@@ -581,28 +595,42 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 			StreamCursor_copyStream(&cursor1, &cursor, 48 * KIBI, 0, 0, t->alloc, &t->err) &&
 			StreamCursor_flush(&cursor1, t->alloc, &t->err)
 		) {
-			//First 48KiB must be 0xBB; second 48KiB retains 0xAA from the full copy.
 
-			Bool partialOk = true;
+			Stream *s0 = RefPtr_data(stream, Stream);
+			Stream *s1 = RefPtr_data(stream1, Stream);
 
-			for (U64 i = 0; i < 96 * KIBI / 8 && partialOk; ++i) {
-				const U64 want = i < 48 * KIBI / 8 ? 0xBBBBBBBBBBBBBBBB : 0xAAAAAAAAAAAAAAAA;
-				U64 v = 0;
-				partialOk = h->verify(h, stream1, i * sizeof(U64), sizeof(U64), (U8*)&v, t) && v == want;
+			//First 48KiB of src must be 0xBB, second 48KiB retains 0xAA from full copy
+
+			if (s1->read(s1, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
+				Bool partialOk = true;
+				const U64 *v64 = (const U64 *)fill.ptr;
+
+				for (U64 i = 0; i < 96 * KIBI / 8 && partialOk; ++i) {
+					const U64 want = i < 48 * KIBI / 8 ? 0xBBBBBBBBBBBBBBBB : 0xAAAAAAAAAAAAAAAA;
+
+					if (v64[i] != want)
+						partialOk = false;
+				}
+
+				Test_assert(t, "Partial copy (48KiB): dst correct", partialOk);
 			}
 
-			Test_assert(t, "Partial copy (48KiB): dst correct", partialOk);
+			else Test_assert(t, "Partial copy (48KiB): dst read", false);
 
-			//Src entirely 0xBB, copy must not have modified it.
+			//Src must be entirely 0xBB
 
-			Bool srcOk = true;
+			if (s0->read(s0, 0, 96 * KIBI, fill, t->alloc, &t->err)) {
+				Bool srcOk = true;
+				const U64 *v64 = (const U64 *)fill.ptr;
 
-			for (U64 i = 0; i < 96 * KIBI / 8 && srcOk; ++i) {
-				U64 v = 0;
-				srcOk = h->verify(h, stream, i * sizeof(U64), sizeof(U64), (U8*)&v, t) && v == 0xBBBBBBBBBBBBBBBB;
+				for (U64 i = 0; i < 96 * KIBI / 8 && srcOk; ++i)
+					if (v64[i] != 0xBBBBBBBBBBBBBBBB)
+						srcOk = false;
+
+				Test_assert(t, "Partial copy (48KiB): src unmodified", srcOk);
 			}
 
-			Test_assert(t, "Partial copy (48KiB): src unmodified", srcOk);
+			else Test_assert(t, "Partial copy (48KiB): src read", false);
 		}
 
 		else Test_assert(t, "Partial copy (48KiB)", false);

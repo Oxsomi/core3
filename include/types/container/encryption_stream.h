@@ -45,6 +45,17 @@ typedef struct EncryptionStream {
 
 } EncryptionStream;
 
+static inline U64 EncryptionStream_underlyingSize(U64 chunkSize, U64 size) {		//chunkSize must be base2 and not 0
+
+	U64 underlyingSize = (size / chunkSize) * (sizeof(CryptoChunk) + chunkSize);
+	U64 leftOver = size & (chunkSize - 1);
+
+	if (leftOver)
+		underlyingSize += sizeof(CryptoChunk) + leftOver;
+
+	return underlyingSize;
+}
+
 typedef RefPtr EncryptionStreamRef;
 
 RefPtrType EncryptionStream_makeType(const Allocator *alloc);
