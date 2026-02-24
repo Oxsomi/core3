@@ -1423,10 +1423,7 @@ static inline Bool AESEncryptionContext_create(
 
 	Bool s_uccess = true;
 
-	if (!encrypt->target)
-		retError(clean, Error_nullPointer(0, "AESEncryptionContext_create()::decrypt->target must be non zero"));
-
-	if (Buffer_isConstRef(*encrypt->target))
+	if (encrypt->target && Buffer_isConstRef(*encrypt->target))
 		retError(clean, Error_constData(0, 0, "AESEncryptionContext_create()::decrypt->target needs to be writable"));
 
 	if (!encrypt->constDecrypt.key || !encrypt->constDecrypt.iv || !encrypt->constDecrypt.tag)
@@ -1451,7 +1448,7 @@ static inline Bool AESEncryptionContext_create(
 			0, "AESEncryptionContext_create()::->target was misaligned, expecting 16-byte alignment"
 		));
 
-	const U64 targetLen = Buffer_length(*encrypt->target);
+	const U64 targetLen = !encrypt->target ? 0 : Buffer_length(*encrypt->target);
 
 	//Since we have a 12-byte IV, we have a 4-byte block counter.
 	//This block counter runs out in (4Gi - 3) * sizeof(Block) aka ~4Gi * 16 = ~64GiB.

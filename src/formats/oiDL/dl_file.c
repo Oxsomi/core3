@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/container/list_impl.h"
 #include "formats/oiDL/dl_file.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
@@ -28,6 +29,8 @@
 #include "types/container/types.h"
 #include "types/container/memory_stream.h"
 #include "types/base/constants.h"
+
+TListImpl(DLEntryStream);
 
 Bool DLFile_createInternal(
 	const DLSettings *settings,
@@ -103,7 +106,7 @@ void DLFile_free(DLFile *dlFile, const Allocator *alloc) {
 		return;
 
 	for (U64 i = 0; i < dlFile->entryStreams.length; ++i)
-		RefPtr_dec(&dlFile->entryStreams.ptr[i].stream);
+		RefPtr_dec(&dlFile->entryStreams.ptrNonConst[i].stream);
 
 	ListDLEntryStream_free(&dlFile->entryStreams, alloc);
 
@@ -251,7 +254,6 @@ clean:
 Bool DLFile_addEntryStream(
 	DLFile *dlFile,
 	StreamRef *stream,
-	U64 startOff,
 	U64 dataOff,
 	U64 len,
 	const Allocator *alloc,
@@ -279,13 +281,7 @@ Bool DLFile_addEntryStream(
 	RefPtr_inc(stream);
 	addRef = true;
 
-	DLEntryStream entry = (DLEntryStream) {
-		.stream = stream,
-		.startOff = startOff,
-		.dataOff = dataOff,
-		.len = len
-	};
-
+	DLEntryStream entry = (DLEntryStream) { .stream = stream, .dataOff = dataOff, .len = len };
 	gotoIfError3(clean, ListDLEntryStream_pushBack(&dlFile->entryStreams, entry, alloc, e_rr));
 
 clean:
@@ -293,7 +289,7 @@ clean:
 	if (!s_uccess) {
 
 		if (addRef)
-			RefPtr_dec(stream);
+			RefPtr_dec(&stream);
 
 		if (pushed) {
 
@@ -341,7 +337,7 @@ Bool DLFile_loadStream(
 	}
 
 	if (Buffer_length(cache)) {
-		gotoIfError3(clean, StreamCursor_createWithCache(stream.stream, &cache, false, alloc, &readCursor, e_rr));
+		gotoIfError3(clean, StreamCursor_createWithCache(stream.stream, &cache, false, &readCursor, e_rr));
 		keepCache = true;
 	}
 
@@ -350,7 +346,7 @@ Bool DLFile_loadStream(
 	gotoIfError3(clean, StreamCursor_copyStream(
 		writeCursor,
 		&readCursor,
-		stream.startOff + stream.dataOff,
+		stream.dataOff,
 		writeOffset,
 		stream.len,
 		alloc,
@@ -364,7 +360,7 @@ clean:
 		if(keepCache)
 			StreamCursor_closeAndKeepCache(&readCursor, alloc, &cache, NULL);
 
-		else StreamCursor_close(&readCursor, alloc, NULL);
+		else StreamCursor_close(&readCursor, alloc);
 	}
 
 	return s_uccess;
@@ -375,7 +371,8 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 	Bool s_uccess = true;
 
 	Buffer buf = Buffer_createNull();
-	MemoryStream memStream = (MemoryStream) { 0 };
+	MemoryStreamRef *memStreamRef = NULL;
+	const RefPtrType type = MemoryStream_makeType(alloc);		//This doesn't outlast this scope
 	StreamCursor streamCursor = (StreamCursor){ 0 };
 	
 	if (!dlFile)
@@ -384,8 +381,11 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 	if(i >= dlFile->entryStreams.length)
 		retError(clean, Error_outOfBounds(0, i, dlFile->entryStreams.length, "DLFile_loadEntry()::i out of bounds"));
 
-	gotoIfError3(clean, MemoryStream_create(DLFile_entrySize(dlFile, i), false, alloc, &memStream, e_rr));
-	gotoIfError3(clean, StreamCursor_createWithoutCache(&memStream.stream, alloc, &streamCursor, e_rr));
+	gotoIfError3(clean, MemoryStream_create(
+		DLFile_entrySize(dlFile, i), EMemoryStreamFlags_None, &type, &memStreamRef, e_rr
+	));
+
+	gotoIfError3(clean, StreamCursor_create(memStreamRef, 0, false, alloc, &streamCursor, e_rr));
 
 	gotoIfError3(clean, DLFile_loadStream(
 		dlFile,
@@ -397,7 +397,7 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 		e_rr
 	));
 
-	gotoIfError3(clean, MemoryStream_move(&memStream, &buf, e_rr));
+	gotoIfError3(clean, MemoryStream_move(&memStreamRef, &buf, e_rr));
 
 	//Move buf to entry and close the stream
 
@@ -405,8 +405,7 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 		dlFile->entryBuffers.ptrNonConst[i] = buf;
 		buf = Buffer_createNull();
 	} else {
-		CharString str = CharString_createNull();
-		gotoIfError3(clean, CharString_createFromBuffer(&buf, &str, e_rr));
+		CharString str = CharString_createRefSizedConst((const C8*)buf.ptr, Buffer_length(buf), false);
 		dlFile->entryStrings.ptrNonConst[i] = str;
 		buf = Buffer_createNull();
 	}
@@ -415,9 +414,9 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 	dlFile->entryStreams.ptrNonConst[i] = (DLEntryStream) { 0 };
 
 clean:
+	RefPtr_dec(&memStreamRef);
 	StreamCursor_close(&streamCursor, alloc);
 	Buffer_free(&buf, alloc);
-	MemoryStream_close(&memStream, alloc);
 	return s_uccess;
 }
 
@@ -435,13 +434,14 @@ Bool DLFile_createBufferList(
 	if (settings && settings->dataType != EDLDataType_Data)
 		retError(clean, Error_invalidOperation(0, "DLFile_createBufferList() is unsupported if settings.type isn't Data"));
 
-	if (!buffers || !buffers->length)
+	if (!buffers)
 		retError(clean, Error_nullPointer(0, "DLFile_createBufferList() buffers are required"));
 
 	gotoIfError3(clean, DLFile_createInternal(settings, 0, false, alloc, dlFile, e_rr));
 	allocated = true;
 
-	gotoIfError3(clean, ListDLEntryStream_resize(&dlFile->entryStreams, buffers->length, alloc, e_rr));
+	if(buffers->length)
+		gotoIfError3(clean, ListDLEntryStream_resize(&dlFile->entryStreams, buffers->length, alloc, e_rr));
 
 	dlFile->entryBuffers = *buffers;
 	*buffers = (ListBuffer) { 0 };
@@ -468,13 +468,14 @@ Bool DLFile_createStringList(
 	if (settings && settings->dataType != EDLDataType_String)
 		retError(clean, Error_invalidOperation(0, "DLFile_createStringList() is unsupported if settings.type isn't String"));
 
-	if (!strings || !strings->length)
+	if (!strings)
 		retError(clean, Error_nullPointer(0, "DLFile_createStringList() strings are required"));
 
 	gotoIfError3(clean, DLFile_createInternal(settings, 0, false, alloc, dlFile, e_rr));
 	allocated = true;
 
-	gotoIfError3(clean, ListDLEntryStream_resize(&dlFile->entryStreams, strings->length, alloc, e_rr));
+	if(strings->length)
+		gotoIfError3(clean, ListDLEntryStream_resize(&dlFile->entryStreams, strings->length, alloc, e_rr));
 
 	dlFile->entryStrings = *strings;
 	*strings = (ListCharString){ 0 };

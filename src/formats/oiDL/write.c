@@ -22,7 +22,7 @@
 #include "types/container/buffer.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/stream.h"
+#include "types/container/encryption_stream.h"
 #include "types/container/types.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
@@ -30,12 +30,21 @@
 
 //We currently don't support compression yet. But once Buffer_compress/decompress is available, it should be easy.
 
-Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *streamRef, U64 *startOffset, Error *e_rr) {
+Bool DLFile_write(
+	const DLFile *dlFile,
+	const Allocator *alloc,
+	StreamRef *streamRef,
+	const RefPtrType *encStreamType,
+	U64 *startOffset,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	StreamCursor cursor = (StreamCursor) { 0 };
+	StreamCursor inputCursor = (StreamCursor){ 0 };
 	Buffer tmp = Buffer_createNull();
 	Buffer loadCache = Buffer_createNull();
+	StreamRef *encryptionStream = NULL;
 
 	if(!DLFile_isAllocated(dlFile))
 		retError(clean, Error_nullPointer(0, "DLFile_write()::dlFile is required"));
@@ -43,7 +52,7 @@ Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *strea
 	if(!startOffset)
 		retError(clean, Error_nullPointer(2, "DLFile_write()::startOffset is required"));
 
-	if(!streamRef || streamRef->refPtrType->typeId != EContainerTypeId_Stream)
+	if(!streamRef || streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(2, "DLFile_write()::streamRef is required"));
 
 	Stream *stream = RefPtr_data(streamRef, Stream);
@@ -135,7 +144,7 @@ Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *strea
 	//Add the chunks
 
 	if (isEncrypted)
-		totalSize += ((totalSize + chunkSize - 1) >> DLHeader_chunkSizesShifts[chunkSize2]) * sizeof(CryptoChunk);
+		totalSize = EncryptionStream_underlyingSize(chunkSize, totalSize);
 
 	//Get header size
 
@@ -151,19 +160,20 @@ Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *strea
 
 	const EXXDataSizeType entrySizeType = EXXDataSizeType_getRequiredType(entryCount);
 	headerSize += SIZE_BYTE_TYPE[entrySizeType];
-
-	const U64 entrySizesOffset = headerSize;
 	headerSize += dataSizeTypeSize * entryCount;
 
 	if (isEncrypted) {
 		headerSize += sizeof(I32x4) + 12;		//Tag for AAD and IV
-		headerSize += (16 - ((*startOffset + headerSize) & 15)) & 15;	//Alignment
+		headerSize = (headerSize + 15) & ~15;
 	}
 
 	//Add to stream
 
-	gotoIfError3(clean, Stream_reserve(stream, *startOffset + headerSize + totalSize, alloc, e_rr));
-	gotoIfError3(clean, StreamCursor_create(streamRef, chunkSize + sizeof(CryptoChunk), true, alloc, &cursor, e_rr));
+	if(stream->reserve)
+		gotoIfError3(clean, stream->reserve(stream, *startOffset + headerSize + totalSize, alloc, e_rr));
+
+	U64 cursorSize = U64_max(U64_min(headerSize + totalSize, chunkSize + sizeof(CryptoChunk)), 32 * KIBI);
+	gotoIfError3(clean, StreamCursor_create(streamRef, cursorSize, true, alloc, &cursor, e_rr));
 	
 	Bool isString = dlFile->settings.dataType == EDLDataType_String;
 
@@ -195,10 +205,8 @@ Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *strea
 
 	if (isEncrypted) {
 
-		if (StreamCursor_contains(&cursor, start, *startOffset - start)) {
-			tmp = Buffer_createRefFromBuffer(cursor.cacheData, true);
-			gotoIfError3(clean, Buffer_offset(&tmp, start - cursor.lastLocation, e_rr));
-		}
+		if (StreamCursor_contains(&cursor, start, *startOffset - start))
+			tmp = Buffer_createRefConst(cursor.cacheData.ptr + (start - cursor.lastLocation), *startOffset - start);
 
 		//Slow path, because our region is out of cache, so we need to flush to stream and readback
 
@@ -209,9 +217,9 @@ Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *strea
 			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));	//Flush to make changes visible
 
 			U64 where = start;
-			gotoIfError3(clean, StreamCursor_consume(&cursor, &where, tmp.ptr, *startOffset - start, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_consume(&cursor, &where, tmp.ptrNonConst, *startOffset - start, alloc, e_rr));
 
-			gotoIfError3(clean, StreamCursor_setWritable(&cursor, alloc, e_rr));	//Return to writable
+			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));			//Return to writable
 		}
 
 		const U32 key[8] = { 0 };
@@ -226,13 +234,13 @@ Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *strea
 		gotoIfError3(clean, Buffer_encryptAuto(
 
 			NULL,
-			&tmp,
+			(const Buffer *restrict) &tmp,
 
 			!hasKey,
-			dlFile->settings.encryptionKey,
+			(U32 *restrict) dlFile->settings.encryptionKey,
 
-			&tag,
-			&iv,
+			(I32x4 *restrict) &tag,
+			(I32x4 *restrict) &iv,
 			e_rr
 		));
 
@@ -241,57 +249,76 @@ Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *strea
 		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
 		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &tag, sizeof(tag), alloc, e_rr));
 
-		*startOffset = (*startOffset + 15) & ~15;		//Align to 16-byte
+		U8 emptyBytes[16] = { 0 };
+		U64 utilized = *startOffset & 15;
+		
+		if (utilized)
+			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, emptyBytes, 16 - utilized, alloc, e_rr));
 
 		//We need our stream cursor to be reset to the first chunk, since we'll do the encryption in our cache.
 
-		gotoIfError3(clean, StreamCursor_flush(&cursor, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_closeAndKeepCache(&cursor, alloc, &loadCache, e_rr));
+
+		//Create encryption stream to virtualize our data in our real stream
+
+		gotoIfError3(clean, EncryptionStream_create(
+			streamRef, *startOffset, dlFile->settings.encryptionKey, iv, chunkSize, 0, encStreamType, &encryptionStream, e_rr
+		));
+
+		gotoIfError3(clean, StreamCursor_createWithCache(encryptionStream, &loadCache, true, &cursor, e_rr));
+
+		*startOffset = 0;		//Pretend to be at the start (we're now at the encryption stream)
 	}
 
 	//Contents
 
 	if (isPartiallyLoaded)
-		gotoIfError3(clean, Buffer_createUninitializedBytes(chunkSize, alloc, &loadCache, e_rr));
+		gotoIfError3(clean, Buffer_createUninitializedBytes(chunkSize + sizeof(CryptoChunk), alloc, &loadCache, e_rr));
+
+	StreamRef *prevStream = NULL;
 
 	for (U64 i = 0; i < entryCount; ++i) {
 
 		U64 siz = DLFile_entrySize(dlFile, i);
 		Bool isFullyLoaded = DLFile_isFullyLoaded(dlFile, i);
-		StreamCursor inputStream = (StreamCursor) { 0 };
 
-		DLEntryStream stream = dlFile->entryStreams.ptr[i];
+		DLEntryStream inputStream = dlFile->entryStreams.ptr[i];
 
-		if (!isFullyLoaded)
-			gotoIfError3(clean, StreamCursor_create(stream.stream, &loadCache, false, alloc, &inputStream, e_rr));
+		if (!isFullyLoaded && inputStream.stream != prevStream) {
 
-		//No encryption it's easy, we'll just append the entire thing at once
+			if(prevStream)
+				gotoIfError3(clean, StreamCursor_closeAndKeepCache(&inputCursor, alloc, &loadCache, e_rr));
 
-		//Copy from buffer/string
+			gotoIfError3(clean, StreamCursor_createWithCache(
+				inputStream.stream, &loadCache, false, &inputCursor, e_rr
+			));
+
+			prevStream = inputStream.stream;
+		}
 
 		if (isFullyLoaded) {
-			const void *ptr = isString ? dlFile->entryStrings.ptr[i].ptr : dlFile->entryBuffers.ptr[i].ptr;
+			const void *ptr = isString ? dlFile->entryStrings.ptr[i].ptr : (const void*)dlFile->entryBuffers.ptr[i].ptr;
 			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, ptr, siz, alloc, e_rr));
 		}
 
-		//Copy from stream
 		else {
 
 			gotoIfError3(clean, StreamCursor_copyStream(
-				&cursor, &inputStream, stream.dataOff + stream.startOff, *startOffset, siz, alloc, e_rr
+				&cursor, &inputCursor, inputStream.dataOff, *startOffset, siz, alloc, e_rr
 			));
 
 			*startOffset += siz;
 		}
-
-		//Close, but preserve the allocation for next time
-
-		if (!isFullyLoaded)
-			gotoIfError3(clean, StreamCursor_closeAndKeepCache(&inputStream, alloc, &loadCache, e_rr));
 	}
 
+	if (isEncrypted)
+		*startOffset = start + totalSize;
+
 clean:
+	RefPtr_dec(&encryptionStream);
 	Buffer_free(&loadCache, alloc);
 	Buffer_free(&tmp, alloc);
 	StreamCursor_close(&cursor, alloc);
+	StreamCursor_close(&inputCursor, alloc);
 	return s_uccess;
 }

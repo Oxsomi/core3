@@ -22,7 +22,7 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/container/stream.h"
+#include "types/container/encryption_stream.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/base/constants.h"
 #include "types/base/mathi.h"
@@ -34,6 +34,7 @@ Bool DLFile_read(
 	const U32 encryptionKey[8],
 	Bool isSubFile,
 	const Allocator *alloc,
+	const RefPtrType *encryptionStreamType,
 	DLFile *dlFile,
 	Error *e_rr
 ) {
@@ -46,6 +47,7 @@ Bool DLFile_read(
 	StreamCursor cursor = (StreamCursor) { 0 };
 	StreamCursor cursorEntry = (StreamCursor) { 0 };
 	Buffer tmp = Buffer_createNull();
+	StreamRef *dataStream = NULL;
 
 	if (!dlFile)
 		retError(clean, Error_nullPointer(2, "DLFile_read()::dlFile is required"));
@@ -77,7 +79,7 @@ Bool DLFile_read(
 	gotoIfError3(clean, StreamCursor_consume(&cursor, &streamOff, &header, sizeof(header), alloc, e_rr));
 
 	EXXDataSizeType entrySizeType = (EXXDataSizeType)(header.sizeTypes & 3);
-	EXXDataSizeType uncompressedSizeType = (EXXDataSizeType)((header.sizeTypes >> 2) & 3);
+	//EXXDataSizeType uncompressedSizeType = (EXXDataSizeType)((header.sizeTypes >> 2) & 3);
 	EXXDataSizeType dataSizeType = (EXXDataSizeType)(header.sizeTypes >> 4);
 
 	//Validate header
@@ -159,6 +161,8 @@ Bool DLFile_read(
 	if (header.flags & EDLFlags_UseAESChunksB)
 		chunkSize2 |= 2;
 
+	U64 fileStart = streamOff;
+
 	if (isEncrypted) {
 
 		U64 startHeader = startOffset;
@@ -175,10 +179,9 @@ Bool DLFile_read(
 
 		chunkSize = DLHeader_chunkSizes[chunkSize2];
 
-		U64 chunks = (dataSize + chunkSize - 1) >> DLHeader_chunkSizesShifts[chunkSize2];
-		U64 realDataSize = chunks * sizeof(CryptoChunk) + dataSize;
+		U64 realDataSize = EncryptionStream_underlyingSize(chunkSize, dataSize);
 
-		if (streamOff + dataSize >= stream->size)
+		if (streamOff + realDataSize > stream->size)
 			retError(clean, Error_outOfBounds(
 				0, streamOff + realDataSize, stream->size, "DLFile_read() doesn't contain enough data"
 			));
@@ -187,14 +190,14 @@ Bool DLFile_read(
 		//We do this so that parts of the oiDL can be decrypted rather than requiring the whole thing to be.
 		//This only happens if the oiDL can't fit neatly into the cursor's cache, otherwise we can just grab it from there.
 
-		if (StreamCursor_contains(&cursor, startHeader, endHeader - startHeader)) {
-			tmp = Buffer_createRefFromBuffer(cursor.cacheData, true);
-			gotoIfError3(clean, Buffer_offset(&tmp, startHeader - cursor.lastLocation, e_rr));
-		}
+		if (StreamCursor_contains(&cursor, startHeader, endHeader - startHeader))
+			tmp = Buffer_createRefConst(cursor.cacheData.ptr + (startHeader - cursor.lastLocation), endHeader - startHeader);
 
 		else {
 			gotoIfError3(clean, Buffer_createUninitializedBytes(endHeader - startHeader, alloc, &tmp, e_rr));
-			gotoIfError3(clean, StreamCursor_consume(&cursor, &startHeader, tmp.ptr, endHeader - startHeader, alloc, e_rr));
+			gotoIfError3(clean, StreamCursor_consume(
+				&cursor, &startHeader, tmp.ptrNonConst, endHeader - startHeader, alloc, e_rr
+			));
 		}
 
 		gotoIfError3(clean, Buffer_decryptAuto(
@@ -207,7 +210,27 @@ Bool DLFile_read(
 		));
 
 		tag = I32x4_zero();
+
+		gotoIfError3(clean, EncryptionStream_create(
+			file,
+			streamOff,
+			encryptionKey,
+			iv,
+			chunkSize,
+			dataSize,
+			encryptionStreamType,
+			&dataStream,
+			e_rr
+		));
+
+		fileStart = 0;		//We're now relative to the encryption stream
+
 		Buffer_free(&tmp, alloc);
+	}
+
+	else {
+		dataStream = file;
+		RefPtr_inc(dataStream);
 	}
 
 	//Allocate DLFile
@@ -217,7 +240,7 @@ Bool DLFile_read(
 		.encryptionType = (XXEncryptionType) (header.type & 0xF),
 		.dataType = header.flags & EDLFlags_IsString ? EDLDataType_String : EDLDataType_Data,
 		.flags = header.flags & EDLFlags_UseSHA256 ? EDLSettingsFlags_UseSHA256 : EDLSettingsFlags_None,
-		.chunkSize = chunkSize
+		.chunkSize = (U32)chunkSize
 	};
 
 	//If we have any lazy entries we will need the encryption keys for later. Copy them.
@@ -251,10 +274,7 @@ Bool DLFile_read(
 	//			chunks[N] where chunk:
 	//				I32x4 tag, U8 data[chunkSize] with iv = root iv + chunkId
 
-	U64 fileStart = streamOff;
-	U64 prevChunkTouched = U64_MAX;
 	U64 dataOff = 0;
-	U64 primaryDecryptedChunk = U64_MAX;
 
 	for (U64 i = 0, cacheOff = 0, allocCounter = 0; i < entryCount; ++i) {
 
@@ -265,25 +285,8 @@ Bool DLFile_read(
 		Bool isSmallAlloc = cacheOff < 1 * MIBI && entryLen <= DLFile_smallLen;
 		Bool isMediumAlloc = allocCounter < 4 * MIBI && entryLen <= DLFile_medLen && entryLen > DLFile_smallLen;
 
-		//When spanning multiple chunks, we will avoid the quick paths, because we'd need to handle multiple chunks.
-		//This overcomplicates the reader (which the encryption stream can do anyways) and makes it a bit slower.
-
-		if (isEncrypted) {
-
-			U64 startChunk = dataOff >> DLHeader_chunkSizesShifts[chunkSize2];
-			U64 endChunk = (dataOff + entryLen - 1) >> DLHeader_chunkSizesShifts[chunkSize2];
-
-			if (startChunk != endChunk) {
-				isSmallAlloc = false;
-				isMediumAlloc = false;
-			}
-		}
-
 		if (!isSmallAlloc && !isMediumAlloc) {
-
-			//TODO: Actually here, we need to make an encryption stream, we need to do that way before.
-
-			gotoIfError3(clean, DLFile_addEntryStream(dlFile, file, fileStart, dataOff, entryLen, alloc, e_rr));
+			gotoIfError3(clean, DLFile_addEntryStream(dlFile, dataStream, dataOff, entryLen, alloc, e_rr));
 			dataOff += entryLen;
 			continue;
 		}
@@ -291,23 +294,15 @@ Bool DLFile_read(
 		//Find seek offset
 
 		U64 readStart = fileStart + dataOff;
-		U64 chunkId = 0;
-		U64 readOff = 0;
-
-		if (isEncrypted) {
-			chunkId = dataOff >> DLHeader_chunkSizesShifts[chunkSize2];
-			readStart = fileStart + chunkId * (chunkSize + sizeof(CryptoChunk));
-			readOff = (dataOff & (chunkSize - 1)) + sizeof(CryptoChunk);
-		}
 
 		//We'll create a new cursor if our previous cursor is too small.
 		// because the previous cursor is constantly looking at entryStart + i * entryStride
 
-		Bool isInPrimaryCursor = StreamCursor_contains(&cursor, readStart, readOff + entryLen);
+		Bool isInPrimaryCursor = !isEncrypted && StreamCursor_contains(&cursor, readStart, entryLen);
 
 		if (!isInPrimaryCursor && !cursorEntry.cacheData.ptr)
 			gotoIfError3(clean, StreamCursor_create(
-				file, chunkSize + sizeof(CryptoChunk), false, alloc, &cursorEntry, e_rr
+				dataStream, chunkSize + sizeof(CryptoChunk), false, alloc, &cursorEntry, e_rr
 			));
 
 		StreamCursor *dataCursor = isInPrimaryCursor ? &cursor : &cursorEntry;
@@ -315,7 +310,7 @@ Bool DLFile_read(
 		//Allocate space somewhere, into tmp
 
 		if (isSmallAlloc) {
-			tmp = Buffer_createRefConst(dlFile->cache.ptr + cacheOff, entryLen);
+			tmp = Buffer_createRef(dlFile->cache.ptrNonConst + cacheOff, entryLen);
 			cacheOff += entryLen;
 		}
 
@@ -326,59 +321,7 @@ Bool DLFile_read(
 
 		//Load/decrypt data
 
-		if (!isEncrypted) {
-			gotoIfError3(clean, StreamCursor_read(dataCursor, tmp, readStart, 0, entryLen, false, alloc, e_rr));
-		}
-
-		else {
-
-			//Advance cursor to new block if relevant.
-
-			if (!isInPrimaryCursor) {
-				U64 readSize = sizeof(CryptoChunk) + U64_min(chunkSize, dataSize - dataOff);
-				gotoIfError3(clean, StreamCursor_read(dataCursor, Buffer_createNull(), readStart, 0, readSize, false, alloc, e_rr));
-			}
-
-			Buffer finalLoc = Buffer_createRefConst(
-				dataCursor->cacheData.ptr + (readStart - dataCursor->lastLocation) + readOff,
-				entryLen
-			);
-
-			U64 chunkStartOffset = chunkId << DLHeader_chunkSizesShifts[chunkSize2];
-			U64 chunkEndOffset = U64_min((chunkId + 1) << DLHeader_chunkSizesShifts[chunkSize2], dataSize);
-
-			//Primary cursor, decrypt if relevant, otherwise just take the decrypted data.
-			if (isInPrimaryCursor) {
-				if (primaryDecryptedChunk != chunkId) {
-
-					U64 len = chunkEndOffset - chunkStartOffset;
-					U64 readInCache = readStart - dataCursor->lastLocation;
-					Buffer data = Buffer_createRef(dataCursor->cacheData.ptrNonConst + readInCache + sizeof(CryptoChunk), len);
-
-					I32x4 tagChunk = ((const CryptoChunk*)(dataCursor->cacheData.ptr + readInCache))->tag;
-					I32x4 ivi = I32x4_xor(iv, I32x4_createFromU64x2(chunkId, 0));
-
-					gotoIfError3(clean, Buffer_decryptAuto(&data, NULL, encryptionKey, tagChunk, ivi, e_rr));
-					primaryDecryptedChunk = chunkId;
-				}
-			}
-
-			//Check if secondary cursor has it decrypted already, otherwise do it again.
-			else if(prevChunkTouched != chunkId) {
-
-				U64 len = chunkEndOffset - chunkStartOffset;
-				Buffer data = Buffer_createRef(dataCursor->cacheData.ptrNonConst + sizeof(CryptoChunk), len);
-
-				I32x4 tagChunk = ((const CryptoChunk*)dataCursor->cacheData.ptr)->tag;
-				I32x4 ivi = I32x4_xor(iv, I32x4_createFromU64x2(chunkId, 0));
-
-				gotoIfError3(clean, Buffer_decryptAuto(&data, NULL, encryptionKey, tagChunk, ivi, e_rr));
-				prevChunkTouched = chunkId;
-			}
-
-			Buffer_memcpy(tmp, finalLoc);
-		}
-
+		gotoIfError3(clean, StreamCursor_read(dataCursor, tmp, readStart, 0, entryLen, false, alloc, e_rr));
 		dataOff += entryLen;
 
 		switch(settings.dataType) {
@@ -389,7 +332,7 @@ Bool DLFile_read(
 
 			case EDLDataType_String:
 			default: {
-				CharString str = CharString_createRefSizedConst(tmp.ptr, entryLen, false);
+				CharString str = CharString_createRefSizedConst((const C8*)tmp.ptr, entryLen, false);
 				gotoIfError3(clean, DLFile_addEntryString(dlFile, &str, alloc, e_rr));
 				tmp = Buffer_createNull();
 				break;
@@ -397,10 +340,7 @@ Bool DLFile_read(
 		}
 	}
 
-	streamOff = fileStart + dataSize;
-
-	if(isEncrypted)
-		streamOff += (((dataSize + chunkSize - 1) >> DLHeader_chunkSizesShifts[chunkSize2])) * sizeof(CryptoChunk);
+	streamOff += isEncrypted ? EncryptionStream_underlyingSize(chunkSize, dataSize) : dataSize;
 
 	if(!isSubFile && streamOff != stream->size)
 		retError(clean, Error_invalidState(1, "DLFile_read() contained extra data, not allowed if it's not a subfile"));
@@ -411,6 +351,9 @@ clean:
 
 	if (!s_uccess && allocate)
 		DLFile_free(dlFile, alloc);
+
+	if (dataStream)
+		RefPtr_dec(&dataStream);
 
 	StreamCursor_close(&cursorEntry, alloc);
 	StreamCursor_close(&cursor, alloc);

@@ -100,11 +100,11 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 			if (strl < DLFile_smallLen && cacheIt + strl <= cacheSize) {
 
 				Buffer_memcpy(
-					Buffer_createRef(combined->cache.ptr + cacheIt, strl),
+					Buffer_createRef(combined->cache.ptrNonConst + cacheIt, strl),
 					Buffer_createRefConst(str.ptr, strl)
 				);
 
-				tmpStr = CharString_createRefSized(combined->cache.ptr + cacheIt, strl, false);
+				tmpStr = CharString_createRefSized((C8*)combined->cache.ptrNonConst + cacheIt, strl, false);
 				cacheIt += strl;
 			}
 
@@ -139,11 +139,11 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 			if (bufl < DLFile_smallLen && cacheIt + bufl <= cacheSize) {
 
 				Buffer_memcpy(
-					Buffer_createRef(combined->cache.ptr + cacheIt, bufl),
+					Buffer_createRef(combined->cache.ptrNonConst + cacheIt, bufl),
 					Buffer_createRefConst(buf.ptr, bufl)
 				);
 
-				tmp = Buffer_createRef(combined->cache.ptr + cacheIt, bufl, false);
+				tmp = Buffer_createRef(combined->cache.ptrNonConst + cacheIt, bufl);
 				cacheIt += bufl;
 			}
 

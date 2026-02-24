@@ -27,6 +27,7 @@
 #endif
 
 typedef struct RefPtr RefPtr;
+typedef struct RefPtrType RefPtrType;
 typedef RefPtr StreamRef;
 
 typedef enum EDLDataType {
@@ -66,7 +67,6 @@ typedef struct DLSettings {
 
 typedef struct DLEntryStream {		//So that we don't have to add a lot of refs to the same stream
 	StreamRef *stream;
-	U64 startOff;					//Offset of start in stream
 	U64 dataOff;					//Offset of data (not the real location in the stream, needs to apply chunking)
 	U64 len;
 } DLEntryStream;
@@ -181,7 +181,6 @@ Bool DLFile_addEntryString(DLFile *dlFile, CharString *entry, const Allocator *a
 Bool DLFile_addEntryStream(
 	DLFile *dlFile,
 	StreamRef *stream,
-	U64 startOff,
 	U64 dataOff,
 	U64 len,
 	const Allocator *alloc,
@@ -190,7 +189,18 @@ Bool DLFile_addEntryStream(
 
 //Important note: StreamRef at startOffset shouldn't be contained in a StreamCursor at this moment,
 // or you might risk overwriting it.
-Bool DLFile_write(const DLFile *dlFile, const Allocator *alloc, StreamRef *result, U64 *startOffset, Error *e_rr);
+Bool DLFile_write(
+	const DLFile *dlFile,
+	const Allocator *alloc,
+	StreamRef *result,
+
+	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
+	// This can outlast the DLFile if it's the stream is referenced elsewhere.
+	const RefPtrType *encryptionStreamType,
+
+	U64 *startOffset,
+	Error *e_rr
+);
 
 Bool DLFile_read(
 	StreamRef *file,
@@ -198,6 +208,11 @@ Bool DLFile_read(
 	const U32 encryptionKey[8],		//Must be NULL if no encryption, else must be valid
 	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
 	const Allocator *alloc,
+
+	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
+	// This can outlast the DLFile if it's the stream is referenced elsewhere.
+	const RefPtrType *encryptionStreamType,	
+
 	DLFile *dlFile,
 	Error *e_rr
 );

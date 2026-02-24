@@ -55,7 +55,7 @@ static Bool EncStream_harnessCreate(
 	}
 
 	Bool ok = EncryptionStream_create(
-		backing, 0, encTestKey, rootIV, chunkSize, h->type, out, &t->err
+		backing, 0, encTestKey, rootIV, chunkSize, 0, h->type, out, &t->err
 	);
 
 	RefPtr_dec(&backing);

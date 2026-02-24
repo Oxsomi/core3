@@ -26,10 +26,14 @@
 #endif
 
 typedef enum EMemoryStreamFlags {
+
 	EMemoryStreamFlags_None			= 0,
 	EMemoryStreamFlags_IsWritable	= 1 << 0,
 	EMemoryStreamFlags_IsResizable	= 1 << 1,
-	EMemoryStreamFlags_UnsafeMemory	= 1 << 2		//Disable nulling of memory
+	EMemoryStreamFlags_UnsafeMemory	= 1 << 2,		//Disable nulling of memory
+
+	EMemoryStreamFlags_WriteResize	= EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable
+
 } EMemoryStreamFlags;
 		
 typedef struct MemoryStream {

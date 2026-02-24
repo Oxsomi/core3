@@ -32,7 +32,7 @@ static void Test_memoryStreamCreate(Test *t, const RefPtrType *type) {
 
 	//Check matching size
 	
-	if (MemoryStream_create(1024, EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable, type, &stream, &t->err)) {
+	if (MemoryStream_create(1024, EMemoryStreamFlags_WriteResize, type, &stream, &t->err)) {
 		const MemoryStream *ms = RefPtr_data(stream, MemoryStream);
 		Test_assert(t, "Sized: size",          ms->parent.size == 1024);
 		Test_assert(t, "Sized: buffer length", Buffer_length(ms->data) == 1024);

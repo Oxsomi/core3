@@ -66,6 +66,7 @@ Bool EncryptionStream_create(
 	const U32 encryptionKey[8],
 	I32x4 rootIV,
 	U64 chunkSize,					//Must be power of 2
+	U64 size,						//Size of already encrypted data at streamOffset (in virtual bytes)
 	const RefPtrType *type,
 	EncryptionStreamRef **encStream,
 	Error *e_rr

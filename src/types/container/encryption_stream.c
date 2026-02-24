@@ -360,6 +360,7 @@ Bool EncryptionStream_create(
 	const U32 encryptionKey[8],
 	I32x4 rootIV,
 	U64 chunkSize,
+	U64 size,
 	const RefPtrType *type,
 	EncryptionStreamRef **encStream,
 	Error *e_rr
@@ -408,6 +409,11 @@ Bool EncryptionStream_create(
 			1, 0, "EncryptionStream_create()::streamOffset out of bounds (not at stream back)"
 		));
 
+	if(streamOffset + EncryptionStream_underlyingSize(chunkSize, size) > underlying->size)
+		retError(clean, Error_invalidParameter(
+			1, 0, "EncryptionStream_create()::streamOffset + underlyingSize out of bounds (not at stream back)"
+		));
+
 	RefPtr_inc(dataStream);
 	inc = true;
 
@@ -416,7 +422,7 @@ Bool EncryptionStream_create(
 		underlying->write ? EncryptionStream_writeInternal : NULL,
 		underlying->reserve ? EncryptionStream_reserveInternal : NULL,
 		EncryptionStream_closeInternal,
-		0,
+		size,
 		EStreamType_Encrypted | underlying->streamType,
 		type,
 		encStream,

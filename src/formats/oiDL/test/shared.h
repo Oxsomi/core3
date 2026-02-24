@@ -18,32 +18,16 @@
 *  This is called dual licensing.
 */
 
-#include "all.h"
-#include "types/container/test/basic_alloc.h"
+#pragma once
+#include "types/test/test.h"
 
-int main() {
-
-	const Allocator alloc = BasicAllocator_instance;
-
-	Test t = (Test) { 0 };
-	t.alloc = &alloc;
-
-	Test_aes128gcm(&t);
-	Test_aes256gcm(&t);
-	Test_md5(&t);
-	Test_crc32c(&t);
-	Test_sha256(&t);
-
-	Test_textureFormat(&t);
-
-	Test_allocationBuffer(&t);
-	Test_bigInt(&t);
-	Test_u128(&t);
-	Test_string(&t);
-	Test_memoryStream(&t);
-	Test_encryptionStream(&t);
-
-	BasicAllocator_checkLeakedMem(&t);
-
-	return Test_end(&t);
-}
+void Test_DLCreateFree(Test *t);
+void Test_DLAddEntries(Test *t);
+void Test_DLLoadedAt(Test *t);
+void Test_DLCreateFromList(Test *t);
+void Test_DLRoundtripPlain(Test *t);
+void Test_DLRoundtripEncrypted(Test *t);
+void Test_DLCombine(Test *t);
+void Test_DLFindLoadedString(Test *t);
+void Test_DLStreams(Test *t);
+void Test_DLStress(Test *t);
