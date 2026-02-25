@@ -382,11 +382,14 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 	if(i >= dlFile->entryStreams.length)
 		retError(clean, Error_outOfBounds(0, i, dlFile->entryStreams.length, "DLFile_loadEntry()::i out of bounds"));
 
+	if (DLFile_isFullyLoaded(dlFile, i))
+		goto clean;
+
 	gotoIfError3(clean, MemoryStream_create(
-		DLFile_entrySize(dlFile, i), EMemoryStreamFlags_None, &type, &memStreamRef, e_rr
+		DLFile_entrySize(dlFile, i), EMemoryStreamFlags_IsWritable, &type, &memStreamRef, e_rr
 	));
 
-	gotoIfError3(clean, StreamCursor_create(memStreamRef, 0, false, alloc, &streamCursor, e_rr));
+	gotoIfError3(clean, StreamCursor_create(memStreamRef, 0, true, alloc, &streamCursor, e_rr));
 
 	gotoIfError3(clean, DLFile_loadStream(
 		dlFile,
@@ -398,6 +401,7 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 		e_rr
 	));
 
+	StreamCursor_close(&streamCursor, alloc);
 	gotoIfError3(clean, MemoryStream_move(&memStreamRef, &buf, e_rr));
 
 	//Move buf to entry and close the stream

@@ -35,9 +35,9 @@ int main() {
 	Test_DLRoundtripPlain(&t);
 	Test_DLRoundtripEncrypted(&t);
 	Test_DLCombine(&t);
-	//Test_DLFindLoadedString(&t);
-	//Test_DLStreams(&t);
-	//Test_DLStress(&t);
+	Test_DLFindLoadedString(&t);
+	Test_DLStreams(&t);
+	Test_DLStress(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

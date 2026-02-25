@@ -12,6 +12,7 @@ Just like any oiXX file it's made with the following things in mind:
 
 - Ease of read + write.
 - ~~Better compression size than plain text or binary due to Brotli:11 compression~~. (TODO: Once implemented)
+- ~~Support of GPU-friendly decompression with for example G-Brotli (DirectStorage)~~ (TODO: Once implemented)
 - Possibility of encryption using AES256-GCM.
   - Though header and entry sizes are left unencrypted (but are verified).
 - An easy spec.

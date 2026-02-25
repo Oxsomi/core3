@@ -243,6 +243,9 @@ Bool DLFile_read(
 		.chunkSize = (U32)chunkSize
 	};
 
+	if (!chunkSize)
+		chunkSize = 32 * KIBI - sizeof(CryptoChunk);		//Ensure we get exactly 32 KiB cache size
+
 	//If we have any lazy entries we will need the encryption keys for later. Copy them.
 	//(Lazy entries are always possible if they span multiple chunks)
 
@@ -274,7 +277,7 @@ Bool DLFile_read(
 	//			chunks[N] where chunk:
 	//				I32x4 tag, U8 data[chunkSize] with iv = root iv + chunkId
 
-	U64 dataOff = 0;
+	U64 dataOff = fileStart;
 
 	for (U64 i = 0, cacheOff = 0, allocCounter = 0; i < entryCount; ++i) {
 
@@ -293,12 +296,10 @@ Bool DLFile_read(
 
 		//Find seek offset
 
-		U64 readStart = fileStart + dataOff;
-
 		//We'll create a new cursor if our previous cursor is too small.
 		// because the previous cursor is constantly looking at entryStart + i * entryStride
 
-		Bool isInPrimaryCursor = !isEncrypted && StreamCursor_contains(&cursor, readStart, entryLen);
+		Bool isInPrimaryCursor = !isEncrypted && StreamCursor_contains(&cursor, dataOff, entryLen);
 
 		if (!isInPrimaryCursor && !cursorEntry.cacheData.ptr)
 			gotoIfError3(clean, StreamCursor_create(
@@ -321,7 +322,7 @@ Bool DLFile_read(
 
 		//Load/decrypt data
 
-		gotoIfError3(clean, StreamCursor_read(dataCursor, tmp, readStart, 0, entryLen, false, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_read(dataCursor, tmp, dataOff, 0, entryLen, false, alloc, e_rr));
 		dataOff += entryLen;
 
 		switch(settings.dataType) {

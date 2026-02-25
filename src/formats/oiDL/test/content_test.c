@@ -511,3 +511,151 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 }
+
+void Test_DLStress(Test *t) {
+
+	Test_setModule(t, "DLFile_stress");
+
+	DLSettings sData = (DLSettings) {
+		.compressionType = EXXCompressionType_None,
+		.encryptionType  = EXXEncryptionType_None,
+		.dataType        = EDLDataType_Data
+	};
+
+	const RefPtrType memStreamType = MemoryStream_makeType(t->alloc);
+
+	{									//10k entries of 1 byte (all in cache)
+		DLFile f = { 0 }, f2 = { 0 };
+
+		if (!DLFile_create(&sData, 10000, t->alloc, &f, &t->err)) {
+			Test_assert(t, "Stress 10k: create", false);
+			goto skip10k;
+		}
+
+		Bool addOk = true;
+
+		for (int i = 0; i < 10000 && addOk; ++i) {
+			U8 b = (U8)(i & 0xFF);
+			Buffer buf = Buffer_createNull();
+			addOk =
+				Buffer_createCopy(Buffer_createRefConst(&b, 1), t->alloc, &buf, &t->err) &&
+				DLFile_addEntry(&f, &buf, t->alloc, &t->err);
+			Buffer_free(&buf, t->alloc);
+		}
+
+		Test_assert(t, "Stress 10k: add all", addOk);
+
+		if (addOk && Test_assert(
+			t, "Stress 10k: roundtrip", DLFile_testRoundtrip(&f, false, NULL, NULL, &memStreamType, t, &f2)
+		)) {
+			Test_assert(t, "Stress 10k: count", DLFile_entryCount(&f2) == 10000);
+			Bool sizeOk = true;
+
+			for (U64 i = 0; i < 10000 && sizeOk; ++i)
+				if (DLFile_entrySize(&f2, i) != 1)
+					sizeOk = false;
+
+			Test_assert(t, "Stress 10k: all sizes 1", sizeOk);
+		}
+
+	skip10k:
+		DLFile_free(&f,  t->alloc);
+		DLFile_free(&f2, t->alloc);
+	}
+
+	{									//Single 200 KiB entry, above DLFile_medLen (128 KiB), stored as stream
+		DLFile f = { 0 }, f2 = { 0 };
+		Buffer original = Buffer_createNull();
+
+		if (!DLFile_create(&sData, 0, t->alloc, &f, &t->err)) {
+			Test_assert(t, "Stress large: create", false);
+			goto skipLarge;
+		}
+
+		const U64 sz = 200 * KIBI;
+		Buffer buf = Buffer_createNull();
+
+		if (!Buffer_createUninitializedBytes(sz, t->alloc, &buf, &t->err)) {
+			Test_assert(t, "Stress large: alloc", false);
+			goto skipLarge;
+		}
+
+		for (U64 i = 0; i < sz; ++i)
+			buf.ptrNonConst[i] = (U8)(i % 251);
+
+		Buffer_createCopy(buf, t->alloc, &original, NULL);
+
+		Test_assert(t, "Stress large: add entry", DLFile_addEntry(&f, &buf, t->alloc, &t->err));
+
+		if (Test_assert(t, "Stress large: roundtrip", DLFile_testRoundtrip(&f, false, NULL, NULL, &memStreamType, t, &f2))) {
+
+			Test_assert(t, "Stress large: size", DLFile_entrySize(&f2, 0) == sz);
+			Test_assert(t, "Stress large: is file stream", !DLFile_isFullyLoaded(&f2, 0));
+
+			if (!DLFile_isFullyLoaded(&f2, 0))
+				DLFile_loadEntry(&f2, 0, t->alloc, &t->err);
+
+			Buffer out = Buffer_createNull();
+
+			if (
+				DLFile_isFullyLoaded(&f2, 0) &&
+				Test_assert(t, "Stress large: loadedBufferAt", DLFile_loadedBufferAt(&f2, 0, &out, &t->err))
+			)
+				Test_assert(t, "Stress large: content correct", Buffer_eq(out, original));
+		}
+
+	skipLarge:
+		Buffer_free(&buf,      t->alloc);
+		Buffer_free(&original, t->alloc);
+		DLFile_free(&f,  t->alloc);
+		DLFile_free(&f2, t->alloc);
+	}
+
+	//300 entries cycling through 0 B / 100 B / 33 KiB / 135 KiB
+	//Exercises small-alloc, medium-alloc and stream tiers together
+	{
+		DLFile f = { 0 }, f2 = { 0 };
+		const U64 sizes[4] = { 0, 100, 33 * KIBI, 135 * KIBI };
+
+		if (!DLFile_create(&sData, 64 * KIBI, t->alloc, &f, &t->err)) {
+			Test_assert(t, "Stress mixed: create", false);
+			goto skipMixed;
+		}
+
+		Bool addOk = true;
+
+		for (U16 i = 0; i < 300 && addOk; ++i) {
+
+			U64    sz  = sizes[i % 4];
+			Buffer buf = Buffer_createNull();
+
+			if (sz) {
+				Buffer_createUninitializedBytes(sz, t->alloc, &buf, &t->err);
+				Buffer_setAllToU8(buf, (U8)i, NULL);
+			}
+
+			addOk = DLFile_addEntry(&f, &buf, t->alloc, &t->err);
+			Buffer_free(&buf, t->alloc);
+		}
+
+		Test_assert(t, "Stress mixed: add all", addOk);
+
+		if (addOk && Test_assert(
+			t, "Stress mixed: roundtrip", DLFile_testRoundtrip(&f, false, NULL, NULL, &memStreamType, t, &f2)
+		)) {
+
+			Test_assert(t, "Stress mixed: count", DLFile_entryCount(&f2) == 300);
+			Bool sizeOk = true;
+
+			for (U16 i = 0; i < 300 && sizeOk; ++i)
+				if (DLFile_entrySize(&f2, (U64)i) != sizes[i % 4])
+					sizeOk = false;
+
+			Test_assert(t, "Stress mixed: all sizes correct", sizeOk);
+		}
+
+	skipMixed:
+		DLFile_free(&f,  t->alloc);
+		DLFile_free(&f2, t->alloc);
+	}
+}

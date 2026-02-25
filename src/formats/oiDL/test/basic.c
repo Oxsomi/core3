@@ -448,3 +448,76 @@ void Test_DLCreateFromList(Test *t) {
 		ListCharString_freeUnderlying(&list, t->alloc);
 	}
 }
+
+void Test_DLFindLoadedString(Test *t) {
+
+	Test_setModule(t, "DLFile_findLoadedString");
+
+	DLSettings sStr = (DLSettings) {
+		.compressionType = EXXCompressionType_None,
+		.encryptionType  = EXXEncryptionType_None,
+		.dataType        = EDLDataType_String
+	};
+
+	DLSettings sData = sStr;
+	sData.dataType = EDLDataType_Data;
+
+	DLFile f = { 0 };
+
+	if (!DLFile_create(&sStr, 0, t->alloc, &f, &t->err)) {
+		Test_assert(t, "DLFile_create", false);
+		goto clean;
+	}
+
+	//Apple is duplicated at 0 and 3
+	const char *words[] = { "apple", "banana", "cherry", "apple", "date" };
+
+	for (U8 i = 0; i < 5; ++i) {
+		CharString s = CharString_createNull();
+		CharString_createCopy(CharString_createRefCStrConst(words[i]), t->alloc, &s, NULL);
+		DLFile_addEntryString(&f, &s, t->alloc, &t->err);
+	}
+
+	{		//Find first cherry (2)
+		CharString needle = CharString_createRefCStrConst("cherry");
+		Test_assert(t, "find 'cherry' at 2", DLFile_findLoadedString(&f, 0, 5, &needle) == 2);
+	}
+
+	{		//Find second apple (3)
+		CharString needle = CharString_createRefCStrConst("apple");
+		Test_assert(t, "find 'apple' from 1 at 3", DLFile_findLoadedString(&f, 1, 5, &needle) == 3);
+	}
+
+	{		//No match for third apple
+		CharString needle = CharString_createRefCStrConst("apple");
+		Test_assert(t, "find 'apple' in [1,3) not found",
+			DLFile_findLoadedString(&f, 1, 3, &needle) == U64_MAX);
+	}
+
+	{		//No match
+		CharString needle = CharString_createRefCStrConst("elderberry");
+		Test_assert(t, "find absent word == U64_MAX",
+			DLFile_findLoadedString(&f, 0, 5, &needle) == U64_MAX);
+	}
+
+	{		//Wrong data type
+		DLFile fData = { 0 };
+		DLFile_create(&sData, 0, t->alloc, &fData, &t->err);
+		U8 b = 1;
+		Buffer buf = Buffer_createNull();
+		Buffer_createCopy(Buffer_createRefConst(&b, 1), t->alloc, &buf, NULL);
+		DLFile_addEntry(&fData, &buf, t->alloc, &t->err);
+		CharString needle = CharString_createRefCStrConst("x");
+		Test_assert(t, "find on Data file == U64_MAX", DLFile_findLoadedString(&fData, 0, 1, &needle) == U64_MAX);
+		DLFile_free(&fData, t->alloc);
+	}
+
+	{		//Null guard
+		CharString needle = CharString_createRefCStrConst("x");
+		Test_assert(t, "find null file == U64_MAX", DLFile_findLoadedString(NULL, 0, 5, &needle) == U64_MAX);
+		Test_assert(t, "find null needle == U64_MAX", DLFile_findLoadedString(&f, 0, 5, NULL) == U64_MAX);
+	}
+
+clean:
+	DLFile_free(&f, t->alloc);
+}
