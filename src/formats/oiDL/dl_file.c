@@ -174,7 +174,8 @@ Bool DLFile_loadedBufferAt(const DLFile *dlFile, U64 i, Buffer *buffer, Error *e
 			2, 0, "DLFile_loadedBufferAt()::buffer was already allocated, possible memleak"
 		));
 
-	*buffer = dlFile->entryBuffers.ptr[i];
+	Buffer buf = dlFile->entryBuffers.ptr[i];
+	*buffer = Buffer_createRefFromBuffer(buf, Buffer_isConstRef(buf));
 
 clean:
 	return s_uccess;

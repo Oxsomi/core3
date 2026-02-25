@@ -34,7 +34,7 @@ int main() {
 	Test_DLCreateFromList(&t);
 	Test_DLRoundtripPlain(&t);
 	Test_DLRoundtripEncrypted(&t);
-	//Test_DLCombine(&t);
+	Test_DLCombine(&t);
 	//Test_DLFindLoadedString(&t);
 	//Test_DLStreams(&t);
 	//Test_DLStress(&t);
