@@ -87,6 +87,7 @@ static Bool MemoryStream_writeInternal(
 
 	U64 requiredSize = offset + length;
 	U64 currentSize = Buffer_length(memStream->data);
+	U64 prevSize = stream->size;
 
 	if (requiredSize > currentSize) {
 
@@ -111,10 +112,10 @@ static Bool MemoryStream_writeInternal(
 
 	//If the buffer was already reserved, we'll only need to update the size.
 
-	if (requiredSize > stream->size) {
+	if (requiredSize > prevSize) {
 
-		if(offset > stream->size)
-			Buffer_unsetAllBits(Buffer_createRef(memStream->data.ptrNonConst + stream->size, offset - stream->size), NULL);
+		if(offset > prevSize)
+			Buffer_unsetAllBits(Buffer_createRef(memStream->data.ptrNonConst + prevSize, offset - prevSize), NULL);
 
 		stream->size = requiredSize;
 	}

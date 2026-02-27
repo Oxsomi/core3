@@ -120,6 +120,132 @@ void DLFile_free(DLFile *dlFile, const Allocator *alloc) {
 	*dlFile = (DLFile) { 0 };
 }
 
+Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *copy, Error *e_rr) {
+
+	Bool s_uccess = true;
+	Bool allocated = false;
+
+	if (!copy)
+		retError(clean, Error_nullPointer(2, "DLFile_createCopy()::copy is required"));
+
+	if (copy->cache.ptr || copy->entryStreams.ptr)
+		retError(clean, Error_invalidParameter(2, 0, "DLFile_createCopy()::copy isn't empty, indicating possible memleak"));
+
+	if (!dlFile)
+		goto clean;
+
+	copy->settings = dlFile->settings;
+	gotoIfError3(clean, Buffer_createCopy(dlFile->cache, alloc, &copy->cache, e_rr));
+	allocated = true;
+
+	U64 len = dlFile->entryStreams.length;
+
+	if (dlFile->settings.dataType == EDLDataType_Data) {
+
+		if(len)
+			gotoIfError3(clean, ListBuffer_resize(&copy->entryBuffers, len, alloc, e_rr));
+
+		//Move addresses from cache to copied cache if applicable
+
+		for (U64 i = 0; i < len; ++i) {
+
+			Buffer buf = dlFile->entryBuffers.ptr[i];
+
+			if (!Buffer_isRef(buf)) {		//Needs copy
+				gotoIfError3(clean, Buffer_createCopy(buf, alloc, &copy->entryBuffers.ptrNonConst[i], e_rr));
+				continue;
+			}
+
+			//Either a ref or a ref to the cache, needs move of address or just ref the same buffer
+
+			if (buf.ptr < dlFile->cache.ptr || buf.ptr >= dlFile->cache.ptr + Buffer_length(dlFile->cache)) {
+				copy->entryBuffers.ptrNonConst[i] = buf;
+				continue;
+			}
+
+			Bool isConst = Buffer_isConstRef(buf);
+			buf = Buffer_createRef(copy->cache.ptrNonConst + (buf.ptr - dlFile->cache.ptr), Buffer_length(buf));
+
+			if (isConst)
+				buf = Buffer_createRefFromBuffer(buf, true);
+
+			copy->entryBuffers.ptrNonConst[i] = buf;
+		}
+	}
+
+	else {
+
+		if(len)
+			gotoIfError3(clean, ListCharString_resize(&copy->entryStrings, len, alloc, e_rr));
+		
+		//Move addresses from cache to copied cache if applicable
+
+		for (U64 i = 0; i < len; ++i) {
+
+			CharString str = dlFile->entryStrings.ptr[i];
+
+			if (!CharString_isRef(str)) {
+				gotoIfError3(clean, CharString_createCopy(str, alloc, &copy->entryStrings.ptrNonConst[i], e_rr));
+				continue;
+			}
+
+			//Either a ref or a ref to the cache, needs move of address or just ref the same str
+
+			if (
+				(const U8*)str.ptr < dlFile->cache.ptr ||
+				(const U8*)str.ptr >= dlFile->cache.ptr + Buffer_length(dlFile->cache)
+			) {
+				copy->entryStrings.ptrNonConst[i] = str;
+				continue;
+			}
+
+			if(CharString_isConstRef(str))
+				str = CharString_createRefSizedConst(
+					(const C8*)copy->cache.ptr + ((const U8*)str.ptr - dlFile->cache.ptr),
+					CharString_length(str), CharString_isNullTerminated(str)
+				);
+
+			else str = CharString_createRefSized(
+				(C8*)copy->cache.ptrNonConst + ((const U8*)str.ptr - dlFile->cache.ptr),
+				CharString_length(str), CharString_isNullTerminated(str)
+			);
+
+			copy->entryStrings.ptrNonConst[i] = str;
+		}
+	}
+
+	gotoIfError3(clean, ListDLEntryStream_createCopy(dlFile->entryStreams, alloc, &copy->entryStreams, e_rr));
+
+	for (U64 i = 0; i < copy->entryStreams.length; ++i)
+		RefPtr_inc(copy->entryStreams.ptr[i].stream);
+
+clean:
+
+	if (!s_uccess && allocated)
+		DLFile_free(copy, alloc);
+
+	return s_uccess;
+}
+
+Bool DLFile_reserve(DLFile *dlFile, U64 reserve, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile)
+		retError(clean, Error_nullPointer(2, "DLFile_reserve()::dlFile is required"));
+	
+	gotoIfError3(clean, ListDLEntryStream_reserve(&dlFile->entryStreams, reserve, alloc, e_rr));
+
+	if (dlFile->settings.dataType == EDLDataType_Data) {
+		gotoIfError3(clean, ListBuffer_reserve(&dlFile->entryBuffers, reserve, alloc, e_rr));
+	}
+
+	else gotoIfError3(clean, ListCharString_reserve(&dlFile->entryStrings, reserve, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
 Bool DLFile_loadedStringAtConst(const DLFile *dlFile, U64 i, CharString *string, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -622,7 +748,6 @@ Bool DLFile_insertStream(DLFile *dlFile, U64 id, DLEntryStream *stream, const Al
 	}
 
 	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, *stream, alloc, e_rr));
-	RefPtr_dec(&stream->stream);		//Stream is moved
 	*stream = (DLEntryStream) { 0 };
 
 	if (dlFile->settings.dataType == EDLDataType_String) {

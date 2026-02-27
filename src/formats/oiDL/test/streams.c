@@ -195,12 +195,14 @@ void Test_DLInsertStream(Test *t) {
 		}
 
 		DLEntryStream es = {
-			.stream  = (StreamRef*) ms,
+			.stream  = ms,
 			.dataOff = 0,
 			.len     = 4
 		};
 
 		Test_assert(t, "insertStream id = 0",   DLFile_insertStream(&f, 0, &es, t->alloc, &t->err));
+		ms = NULL;
+
 		Test_assert(t, "stream zeroed out",     !es.stream);
 		Test_assert(t, "entryCount 4",          DLFile_entryCount(&f) == 4);
 
@@ -236,6 +238,8 @@ void Test_DLInsertStream(Test *t) {
 		};
 
 		Test_assert(t, "insertStream at end ok", DLFile_insertStream(&f, 2, &es, t->alloc, &t->err));
+		ms = NULL;
+
 		Test_assert(t, "entryCount 3",           DLFile_entryCount(&f) == 3);
 		Test_assert(t, "[2] len 8",              DLFile_entrySize(&f, 2) == 8);
 
@@ -265,6 +269,8 @@ void Test_DLInsertStream(Test *t) {
 		};
 
 		Test_assert(t, "insertStream id = 2",   DLFile_insertStream(&f, 2, &es, t->alloc, &t->err));
+		ms = NULL;
+
 		Test_assert(t, "entryCount 5",          DLFile_entryCount(&f) == 5);
 		Test_assert(t, "[0] len 1",             DLFile_entrySize(&f, 0) == 1);
 		Test_assert(t, "[1] len 2",             DLFile_entrySize(&f, 1) == 2);
@@ -424,6 +430,10 @@ void Test_DLRoundtripStream(Test *t) {
 		DLEntryStream es = { .stream = ms, .dataOff = 0, .len = 4 };
 
 		Bool result = DLFile_insertStream(&f, 0, &es, t->alloc, NULL);
+
+		if (result)
+			ms = NULL;
+
 		Test_assert(t, "insertStream on String file (documents behavior)", result || !result);
 
 	doneMismatch:

@@ -28,6 +28,9 @@
 Bool DLFile_create(const DLSettings *settings, U64 cacheSize, const Allocator *alloc, DLFile *dlFile, Error *e_rr);
 void DLFile_free(DLFile *dlFile, const Allocator *alloc);
 
+Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *copy, Error *e_rr);
+Bool DLFile_reserve(DLFile *dlFile, U64 reserve, const Allocator *alloc, Error *e_rr);
+
 Bool DLFile_loadedStringAtConst(const DLFile *dlFile, U64 i, CharString *string, Error *e_rr);
 Bool DLFile_loadedBufferAtConst(const DLFile *dlFile, U64 i, Buffer *buffer, Error *e_rr);
 

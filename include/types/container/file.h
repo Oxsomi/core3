@@ -25,6 +25,8 @@
 	extern "C" {
 #endif
 
+typedef struct Allocator Allocator;
+
 typedef enum EFileType {
 	EFileType_Folder,
 	EFileType_File,

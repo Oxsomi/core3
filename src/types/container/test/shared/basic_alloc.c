@@ -51,7 +51,7 @@ clean:
 
 void ourFree(void *allocator, Buffer buf) {
 	(void)allocator;
-	free((void *)buf.ptrNonConst);
+	free((void*)buf.ptrNonConst);
 	AtomicI64_dec(&allocCounter);
 	AtomicI64_sub(&allocBytes, (I64)Buffer_length(buf));
 }

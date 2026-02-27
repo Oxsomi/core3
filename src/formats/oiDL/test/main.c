@@ -30,6 +30,8 @@ int main() {
 
 	Test_DLCreateFree(&t);
 	Test_DLAddEntries(&t);
+	Test_DLCopy(&t);
+	Test_DLReserve(&t);
 	Test_DLInsertEntries(&t);
 	Test_DLRemoveEntries(&t);
 	Test_DLLoadedAt(&t);
