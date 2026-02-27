@@ -23,6 +23,7 @@
 
 void Test_DLCreateFree(Test *t);
 void Test_DLAddEntries(Test *t);
+void Test_DLInsertEntries(Test *t);
 void Test_DLRemoveEntries(Test *t);
 void Test_DLLoadedAt(Test *t);
 void Test_DLCreateFromList(Test *t);

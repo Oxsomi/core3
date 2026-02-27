@@ -21,21 +21,22 @@
 #include "formats/oiDL/interface.h"
 #include "shared.h"
 
-static const DLSettings kSettingsData = {
+const DLSettings kSettingsData = {
 	.compressionType = EXXCompressionType_None,
 	.encryptionType  = EXXEncryptionType_None,
 	.dataType        = EDLDataType_Data,
 	.flags           = EDLSettingsFlags_None
 };
 
-static const DLSettings kSettingsStr = {
+const DLSettings kSettingsStr = {
 	.compressionType = EXXCompressionType_None,
 	.encryptionType  = EXXEncryptionType_None,
 	.dataType        = EDLDataType_String,
 	.flags           = EDLSettingsFlags_None
 };
 
-static Bool buildDataFile(Test *t, DLFile *f, U64 count) {		//oiDL containing Buffers in incrementing length
+//oiDL containing Buffers in incrementing length (also referenced by add.c)
+Bool buildDataFile(Test *t, DLFile *f, U64 count) {
 
 	if (!DLFile_create(&kSettingsData, 0, t->alloc, f, &t->err))
 		return false;
@@ -58,7 +59,8 @@ static Bool buildDataFile(Test *t, DLFile *f, U64 count) {		//oiDL containing Bu
 	return true;
 }
 
-static Bool buildStringFile(Test *t, DLFile *f, U64 count) {		//oiDL containing Strings in incrementing length
+//oiDL containing Strings in incrementing length (also referenced by add.c)
+Bool buildStringFile(Test *t, DLFile *f, U64 count) {
 
 	if (!DLFile_create(&kSettingsStr, 0, t->alloc, f, &t->err))
 		return false;
