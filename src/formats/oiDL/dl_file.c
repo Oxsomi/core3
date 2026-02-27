@@ -380,7 +380,7 @@ clean:
 
 Bool DLFile_addEntryStream(
 	DLFile *dlFile,
-	StreamRef *stream,
+	StreamRef **stream,
 	U64 dataOff,
 	U64 len,
 	const Allocator *alloc,
@@ -389,13 +389,16 @@ Bool DLFile_addEntryStream(
 
 	Bool s_uccess = true;
 	Bool pushed = false;
-	Bool addRef = false;
 
 	if (!DLFile_isAllocated(dlFile))
 		retError(clean, Error_nullPointer(0, "DLFile_addEntryStream()::dlFile is required"));
 
-	if (!stream || stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (!stream || !*stream || (*stream)->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(1, "DLFile_addEntryStream()::stream is required"));
+
+	U64 siz = RefPtr_data(*stream, Stream)->size;
+	if (dataOff + len > siz)
+		retError(clean, Error_outOfBounds(3, dataOff + len, siz, "DLFile_setStream()::off + len out of bounds"));
 
 	if (dlFile->settings.dataType == EDLDataType_String) {
 		gotoIfError3(clean, ListCharString_pushBack(&dlFile->entryStrings, CharString_createNull(), alloc, e_rr));
@@ -405,26 +408,18 @@ Bool DLFile_addEntryStream(
 
 	pushed = true;
 
-	RefPtr_inc(stream);
-	addRef = true;
-
-	DLEntryStream entry = (DLEntryStream) { .stream = stream, .dataOff = dataOff, .len = len };
+	DLEntryStream entry = (DLEntryStream) { .stream = *stream, .dataOff = dataOff, .len = len };
 	gotoIfError3(clean, ListDLEntryStream_pushBack(&dlFile->entryStreams, entry, alloc, e_rr));
+	*stream = NULL;
 
 clean:
 
-	if (!s_uccess) {
+	if (!s_uccess && pushed) {
 
-		if (addRef)
-			RefPtr_dec(&stream);
+		if (dlFile->settings.dataType == EDLDataType_String)
+			ListCharString_popBack(&dlFile->entryStrings, NULL, e_rr);
 
-		if (pushed) {
-
-			if (dlFile->settings.dataType == EDLDataType_String)
-				ListCharString_popBack(&dlFile->entryStrings, NULL, e_rr);
-
-			else ListBuffer_popBack(&dlFile->entryBuffers, NULL, e_rr);
-		}
+		else ListBuffer_popBack(&dlFile->entryBuffers, NULL, e_rr);
 	}
 
 	return s_uccess;
@@ -741,8 +736,7 @@ Bool DLFile_insertStream(DLFile *dlFile, U64 id, DLEntryStream *stream, const Al
 		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_insertStream()::id out of bounds"));
 
 	if (id == dlFile->entryStreams.length) {
-		gotoIfError3(clean, DLFile_addEntryStream(dlFile, stream->stream, stream->dataOff, stream->len, alloc, e_rr));
-		RefPtr_dec(&stream->stream);		//Stream is moved
+		gotoIfError3(clean, DLFile_addEntryStream(dlFile, &stream->stream, stream->dataOff, stream->len, alloc, e_rr));
 		*stream = (DLEntryStream) { 0 };
 		goto clean;
 	}
@@ -807,6 +801,101 @@ Bool DLFile_insertEntryString(DLFile *dlFile, U64 id, CharString *str, const All
 	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, (DLEntryStream) { 0 }, alloc, e_rr));
 	gotoIfError3(clean, ListCharString_insert(&dlFile->entryStrings, id, *str, alloc, e_rr));
 	*str = CharString_createNull();
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_setEntry(DLFile *dlFile, U64 id, Buffer *entry, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile || !entry)
+		retError(clean, Error_nullPointer(!dlFile ? 0 : 2, "DLFile_setEntry()::dlFile and entry are required"));
+
+	if (id >= dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_setEntry()::id out of bounds"));
+
+	if (dlFile->settings.dataType != EDLDataType_Data)
+		retError(clean, Error_invalidState(0, "DLFile_setEntry()::dlFile incompatible dataType"));
+
+	if (dlFile->entryStreams.ptr[id].stream)
+		RefPtr_dec(&dlFile->entryStreams.ptrNonConst[id].stream);
+
+	if (Buffer_length(dlFile->entryBuffers.ptr[id]))
+		Buffer_free(&dlFile->entryBuffers.ptrNonConst[id], alloc);
+
+	dlFile->entryBuffers.ptrNonConst[id] = *entry;
+	*entry = Buffer_createNull();
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_setEntryString(DLFile *dlFile, U64 id, CharString *entry, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile || !entry)
+		retError(clean, Error_nullPointer(!dlFile ? 0 : 2, "DLFile_setEntryString()::dlFile and entry are required"));
+
+	if (id >= dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_setEntryString()::id out of bounds"));
+
+	if (dlFile->settings.dataType != EDLDataType_String)
+		retError(clean, Error_invalidState(0, "DLFile_setEntryString()::dlFile incompatible dataType"));
+
+	if (dlFile->entryStreams.ptr[id].stream)
+		RefPtr_dec(&dlFile->entryStreams.ptrNonConst[id].stream);
+
+	if (CharString_length(dlFile->entryStrings.ptr[id]))
+		CharString_free(&dlFile->entryStrings.ptrNonConst[id], alloc);
+
+	dlFile->entryStrings.ptrNonConst[id] = *entry;
+	*entry = CharString_createNull();
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_setStream(DLFile *dlFile, U64 id, StreamRef **stream, U64 dataOff, U64 len, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile || !stream)
+		retError(clean, Error_nullPointer(!dlFile ? 0 : 2, "DLFile_setStream()::dlFile and stream are required"));
+
+	if (id >= dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_setStream()::id out of bounds"));
+	
+	if (*stream) {
+
+		if ((*stream)->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+			retError(clean, Error_nullPointer(1, "DLFile_setStream() type of stream is invalid"));
+
+		U64 siz = RefPtr_data(*stream, Stream)->size;
+		if (dataOff + len > siz)
+			retError(clean, Error_outOfBounds(3, dataOff + len, siz, "DLFile_setStream()::off + len out of bounds"));
+	}
+
+	if (dlFile->entryStreams.ptr[id].stream)
+		RefPtr_dec(&dlFile->entryStreams.ptrNonConst[id].stream);
+
+	if (dlFile->settings.dataType == EDLDataType_String) {
+		if (CharString_length(dlFile->entryStrings.ptr[id]))
+			CharString_free(&dlFile->entryStrings.ptrNonConst[id], alloc);
+	} else {
+		if (Buffer_length(dlFile->entryBuffers.ptr[id]))
+			Buffer_free(&dlFile->entryBuffers.ptrNonConst[id], alloc);
+	}
+
+	dlFile->entryStreams.ptrNonConst[id] = (DLEntryStream) {
+		.stream = *stream,
+		.dataOff = dataOff,
+		.len = len
+	};
+
+	*stream = NULL;
 
 clean:
 	return s_uccess;

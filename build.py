@@ -113,6 +113,8 @@ def main():
 			"OxC3_types_math_test",
 			"OxC3_types_container_test",
 			"OxC3_formats_oiBC_test",
+			"OxC3_formats_oiDL_test",
+			"OxC3_formats_oiCA_test"
 		]
 
 		for test in tests:

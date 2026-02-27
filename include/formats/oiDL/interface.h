@@ -88,12 +88,23 @@ Bool DLFile_addEntryString(DLFile *dlFile, CharString *entry, const Allocator *a
 //Add lazy entry for large entries
 Bool DLFile_addEntryStream(
 	DLFile *dlFile,
-	StreamRef *stream,
+	StreamRef **stream,		//Moves stream ref (so the ref count doesn't need to be incremented)
 	U64 dataOff,
 	U64 len,
 	const Allocator *alloc,
 	Error *e_rr
 );
+
+//Set
+
+//Move entry into DLFile
+Bool DLFile_setEntry(DLFile *dlFile, U64 id, Buffer *entry, const Allocator *alloc, Error *e_rr);
+
+//Move entry into DLFile
+Bool DLFile_setEntryString(DLFile *dlFile, U64 id, CharString *entry, const Allocator *alloc, Error *e_rr);
+
+//Move stream into DLFile
+Bool DLFile_setStream(DLFile *dlFile, U64 id, StreamRef **stream, U64 dataOff, U64 len, const Allocator *alloc, Error *e_rr);
 
 //Remove
 

@@ -290,7 +290,9 @@ Bool DLFile_read(
 		Bool isMediumAlloc = allocCounter < 4 * MIBI && entryLen <= DLFile_medLen && entryLen > DLFile_smallLen;
 
 		if (!isSmallAlloc && !isMediumAlloc) {
-			gotoIfError3(clean, DLFile_addEntryStream(dlFile, dataStream, dataOff, entryLen, alloc, e_rr));
+			RefPtr *ptr = dataStream;
+			RefPtr_inc(ptr);
+			gotoIfError3(clean, DLFile_addEntryStream(dlFile, &ptr, dataOff, entryLen, alloc, e_rr));
 			dataOff += entryLen;
 			continue;
 		}
