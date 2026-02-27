@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/interface.h"
 #include "types/container/memory_stream.h"
 #include "shared.h"
 
@@ -79,7 +79,7 @@ void Test_DLStreams(Test *t) {
 
 		Buffer out = Buffer_createNull();
 
-		if (Test_assert(t, "loadedBufferAt ok", DLFile_loadedBufferAt(&f, 0, &out, &t->err))) {
+		if (Test_assert(t, "loadedBufferAt ok", DLFile_loadedBufferAtConst(&f, 0, &out, &t->err))) {
 			Test_assert(t, "length matches",  Buffer_length(out) == payloadLen);
 			Test_assert(t, "Content correct", Buffer_eq(out, Buffer_createRefConst(payload.ptr, payloadLen)));
 		}

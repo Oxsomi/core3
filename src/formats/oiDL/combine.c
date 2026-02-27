@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/interface.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/container/list_basic_types.h"

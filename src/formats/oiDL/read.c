@@ -18,7 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/interface.h"
+#include "formats/oiDL/headers.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
@@ -239,7 +240,7 @@ Bool DLFile_read(
 		.compressionType = (XXCompressionType) (header.type >> 4),
 		.encryptionType = (XXEncryptionType) (header.type & 0xF),
 		.dataType = header.flags & EDLFlags_IsString ? EDLDataType_String : EDLDataType_Data,
-		.flags = header.flags & EDLFlags_UseSHA256 ? EDLSettingsFlags_UseSHA256 : EDLSettingsFlags_None,
+		.flags = EDLSettingsFlags_None,
 		.chunkSize = (U32)chunkSize
 	};
 

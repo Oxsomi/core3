@@ -120,7 +120,7 @@ void DLFile_free(DLFile *dlFile, const Allocator *alloc) {
 	*dlFile = (DLFile) { 0 };
 }
 
-Bool DLFile_loadedStringAt(const DLFile *dlFile, U64 i, CharString *string, Error *e_rr) {
+Bool DLFile_loadedStringAtConst(const DLFile *dlFile, U64 i, CharString *string, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -144,13 +144,13 @@ Bool DLFile_loadedStringAt(const DLFile *dlFile, U64 i, CharString *string, Erro
 			2, 0, "DLFile_loadedStringAt()::string was already allocated, possible memleak"
 		));
 
-	*string = dlFile->entryStrings.ptr[i];
+	*string = CharString_createRefStrConst(dlFile->entryStrings.ptr[i]);
 
 clean:
 	return s_uccess;
 }
 
-Bool DLFile_loadedBufferAt(const DLFile *dlFile, U64 i, Buffer *buffer, Error *e_rr) {
+Bool DLFile_loadedBufferAtConst(const DLFile *dlFile, U64 i, Buffer *buffer, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -175,7 +175,7 @@ Bool DLFile_loadedBufferAt(const DLFile *dlFile, U64 i, Buffer *buffer, Error *e
 		));
 
 	Buffer buf = dlFile->entryBuffers.ptr[i];
-	*buffer = Buffer_createRefFromBuffer(buf, Buffer_isConstRef(buf));
+	*buffer = Buffer_createRefFromBuffer(buf, true);
 
 clean:
 	return s_uccess;
@@ -237,7 +237,7 @@ Bool DLFile_addEntryString(DLFile *dlFile, CharString *entry, const Allocator *a
 		retError(clean, Error_invalidOperation(0, "DLFile_addEntryString() is unsupported if type isn't string"));
 
 	if(!Buffer_isUTF8(CharString_bufferConst(*entry), 1))
-		retError(clean, Error_invalidParameter(1, 0, "DLFile_addEntryString()::entryBuf isn't valid string"));
+		retError(clean, Error_invalidParameter(1, 0, "DLFile_addEntryString()::entryBuf isn't a valid string"));
 
 	gotoIfError3(clean, ListCharString_pushBack(&dlFile->entryStrings, *entry, alloc, e_rr));
 	pushed = true;
@@ -524,5 +524,165 @@ clean:
 	if (allocated && !s_uccess)
 		DLFile_free(dlFile, alloc);
 
+	return s_uccess;
+}
+
+Bool DLFile_remove(DLFile *dlFile, U64 id, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!dlFile)
+		retError(clean, Error_nullPointer(0, "DLFile_remove()::dlFile is required"));
+
+	if(id >= dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_remove()::id out of bounds"));
+
+	DLEntryStream stream = dlFile->entryStreams.ptr[id];
+	RefPtr_dec(&stream.stream);
+
+	ListDLEntryStream_erase(&dlFile->entryStreams, id, NULL);
+
+	if (dlFile->settings.dataType == EDLDataType_Data) {
+		Buffer_free(&dlFile->entryBuffers.ptrNonConst[id], alloc);
+		ListBuffer_erase(&dlFile->entryBuffers, id, NULL);
+	} else {
+		CharString_free(&dlFile->entryStrings.ptrNonConst[id], alloc);
+		ListCharString_erase(&dlFile->entryStrings, id, NULL);
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_removeEntry(DLFile *dlFile, U64 id, Buffer *buf, DLEntryStream *stream, Error *e_rr) {
+	
+	Bool s_uccess = true;
+
+	if (!dlFile || !buf || !stream)
+		retError(clean, Error_nullPointer(
+			!dlFile ? 0 : (!buf ? 2 : 3), "DLFile_removeEntry()::dlFile, buf and stream are required"
+		));
+
+	if (id >= dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_removeEntry()::id out of bounds"));
+
+	if (dlFile->settings.dataType != EDLDataType_Data)
+		retError(clean, Error_invalidState(0, "DLFile_removeEntry()::dlFile incompatible dataType"));
+
+	*stream = dlFile->entryStreams.ptr[id];
+	ListDLEntryStream_erase(&dlFile->entryStreams, id, NULL);
+
+	*buf = dlFile->entryBuffers.ptrNonConst[id];
+	ListBuffer_erase(&dlFile->entryBuffers, id, NULL);
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_removeEntryString(DLFile *dlFile, U64 id, CharString *str, DLEntryStream *stream, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile || !str || !stream)
+		retError(clean, Error_nullPointer(
+			!dlFile ? 0 : (!str ? 2 : 3), "DLFile_removeEntryString()::dlFile, str and stream are required"
+		));
+
+	if (id >= dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_removeEntryString()::id out of bounds"));
+
+	if (dlFile->settings.dataType != EDLDataType_String)
+		retError(clean, Error_invalidState(0, "DLFile_removeEntryString()::dlFile incompatible dataType"));
+
+	*stream = dlFile->entryStreams.ptr[id];
+	ListDLEntryStream_erase(&dlFile->entryStreams, id, NULL);
+
+	*str = dlFile->entryStrings.ptrNonConst[id];
+	ListCharString_erase(&dlFile->entryStrings, id, NULL);
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_insertStream(DLFile *dlFile, U64 id, DLEntryStream *stream, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile || !stream)
+		retError(clean, Error_nullPointer(!dlFile ? 0 : 2, "DLFile_insertStream()::dlFile and stream are required"));
+
+	if (id > dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_insertStream()::id out of bounds"));
+
+	if (id == dlFile->entryStreams.length) {
+		gotoIfError3(clean, DLFile_addEntryStream(dlFile, stream->stream, stream->dataOff, stream->len, alloc, e_rr));
+		RefPtr_dec(&stream->stream);		//Stream is moved
+		*stream = (DLEntryStream) { 0 };
+		goto clean;
+	}
+
+	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, *stream, alloc, e_rr));
+	RefPtr_dec(&stream->stream);		//Stream is moved
+	*stream = (DLEntryStream) { 0 };
+
+	if (dlFile->settings.dataType == EDLDataType_String) {
+		gotoIfError3(clean, ListCharString_insert(&dlFile->entryStrings, id, CharString_createNull(), alloc, e_rr));
+	}
+
+	else gotoIfError3(clean, ListBuffer_insert(&dlFile->entryBuffers, id, Buffer_createNull(), alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_insertEntry(DLFile *dlFile, U64 id, Buffer *buf, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile || !buf)
+		retError(clean, Error_nullPointer(!dlFile ? 0 : 2, "DLFile_insertEntry()::dlFile and buf are required"));
+
+	if (id > dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_insertEntry()::id out of bounds"));
+
+	if (dlFile->settings.dataType != EDLDataType_Data)
+		retError(clean, Error_invalidState(0, "DLFile_insertEntry()::dlFile incompatible dataType"));
+
+	if (id == dlFile->entryStreams.length) {
+		gotoIfError3(clean, DLFile_addEntry(dlFile, buf, alloc, e_rr));
+		goto clean;
+	}
+
+	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, (DLEntryStream) { 0 }, alloc, e_rr));
+	gotoIfError3(clean, ListBuffer_insert(&dlFile->entryBuffers, id, *buf, alloc, e_rr));
+	*buf = Buffer_createNull();
+
+clean:
+	return s_uccess;
+}
+
+Bool DLFile_insertEntryString(DLFile *dlFile, U64 id, CharString *str, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!dlFile || !str)
+		retError(clean, Error_nullPointer(!dlFile ? 0 : 2, "DLFile_insertEntryString()::dlFile and str are required"));
+
+	if (id > dlFile->entryStreams.length)
+		retError(clean, Error_outOfBounds(1, id, dlFile->entryStreams.length, "DLFile_insertEntryString()::id out of bounds"));
+
+	if (dlFile->settings.dataType != EDLDataType_String)
+		retError(clean, Error_invalidState(0, "DLFile_insertEntryString()::dlFile incompatible dataType"));
+
+	if (id == dlFile->entryStreams.length) {
+		gotoIfError3(clean, DLFile_addEntryString(dlFile, str, alloc, e_rr));
+		goto clean;
+	}
+
+	gotoIfError3(clean, ListDLEntryStream_insert(&dlFile->entryStreams, id, (DLEntryStream) { 0 }, alloc, e_rr));
+	gotoIfError3(clean, ListCharString_insert(&dlFile->entryStrings, id, *str, alloc, e_rr));
+	*str = CharString_createNull();
+
+clean:
 	return s_uccess;
 }

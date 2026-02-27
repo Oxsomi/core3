@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/interface.h"
 #include "types/container/memory_stream.h"
 #include "types/container/encryption_stream.h"
 #include "types/base/string_read_helper.h"
@@ -88,7 +88,7 @@ void Test_DLRoundtripPlain(Test *t) {
 
 			Buffer out = Buffer_createNull();
 
-			if (DLFile_isFullyLoaded(&f2, 0) && DLFile_loadedBufferAt(&f2, 0, &out, &t->err))
+			if (DLFile_isFullyLoaded(&f2, 0) && DLFile_loadedBufferAtConst(&f2, 0, &out, &t->err))
 				Test_assert(t, "Single buffer: content correct", Buffer_eq(out, Buffer_createRefConst(bytes, sizeof(bytes))));
 		}
 
@@ -191,7 +191,7 @@ void Test_DLRoundtripPlain(Test *t) {
 				CharString out      = CharString_createNull();
 				CharString expected = CharString_createRefCStrConst(messages[i]);
 
-				if (!DLFile_loadedStringAt(&f2, (U64)i, &out, &t->err)) {
+				if (!DLFile_loadedStringAtConst(&f2, (U64)i, &out, &t->err)) {
 					readOk = false; break;
 				}
 
@@ -407,7 +407,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 
 			Buffer out = Buffer_createNull();
 
-			if (!DLFile_loadedBufferAt(&f2, (U64)i, &out, &t->err)) {
+			if (!DLFile_loadedBufferAtConst(&f2, (U64)i, &out, &t->err)) {
 				contentOk = false;
 				break;
 			}
@@ -599,7 +599,7 @@ void Test_DLStress(Test *t) {
 
 			if (
 				DLFile_isFullyLoaded(&f2, 0) &&
-				Test_assert(t, "Stress large: loadedBufferAt", DLFile_loadedBufferAt(&f2, 0, &out, &t->err))
+				Test_assert(t, "Stress large: loadedBufferAt", DLFile_loadedBufferAtConst(&f2, 0, &out, &t->err))
 			)
 				Test_assert(t, "Stress large: content correct", Buffer_eq(out, original));
 		}

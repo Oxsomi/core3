@@ -475,6 +475,9 @@ clean:
 
 Bool Buffer_isUnicode(const Buffer buf, F32 threshold, Bool isUTF16) {
 
+	if (!Buffer_length(buf))
+		return true;
+
 	threshold = 1 - threshold;
 
 	U64 i = 0;
