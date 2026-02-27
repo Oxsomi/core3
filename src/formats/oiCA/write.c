@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+/*
+
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "types/base/allocator.h"
@@ -442,35 +444,35 @@ Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Hash
 
-	/*if (caFile.settings.compressionType) {
-
-		if (caFile.settings.flags & ECASettingsFlags_UseSHA256)
-			Buffer_sha256(outputBuffer, hash);
-
-		else hash[0] = Buffer_crc32c(outputBuffer);
-	}
-
-	//Store hash in header before encryption or finish
-
-	if (caFile.settings.compressionType)
-		Buffer_memcpy(
-			Buffer_createRef(headerIt, sizeof(hash)),
-			Buffer_createRefConst(hash, sizeof(hash))
-		);*/
+	//if (caFile.settings.compressionType) {
+	//
+	//	if (caFile.settings.flags & ECASettingsFlags_UseSHA256)
+	//		Buffer_sha256(outputBuffer, hash);
+	//
+	//	else hash[0] = Buffer_crc32c(outputBuffer);
+	//}
+	//
+	////Store hash in header before encryption or finish
+	//
+	//if (caFile.settings.compressionType)
+	//	Buffer_memcpy(
+	//		Buffer_createRef(headerIt, sizeof(hash)),
+	//		Buffer_createRefConst(hash, sizeof(hash))
+	//	);
 
 	//Compress
 
-	/*if (caFile.settings.compressionType != EXXCompressionType_None) {				TODO:
-
-		Buffer toCompress = Buffer_createRefConst(
-			outputBuffer.ptr + realHeaderSize,
-			Buffer_length(outputBuffer) - realHeaderSize
-		);
-
-		gotoIfError(clean, Buffer_compress(toCompress, BufferCompressionType_Brotli11, alloc, &compressedOutput))
-
-		Buffer_free(&outputBuffer, alloc);
-	}*/
+	//if (caFile.settings.compressionType != EXXCompressionType_None) {				TODO:
+	//
+	//	Buffer toCompress = Buffer_createRefConst(
+	//		outputBuffer.ptr + realHeaderSize,
+	//		Buffer_length(outputBuffer) - realHeaderSize
+	//	);
+	//
+	//	gotoIfError(clean, Buffer_compress(toCompress, BufferCompressionType_Brotli11, alloc, &compressedOutput))
+	//
+	//	Buffer_free(&outputBuffer, alloc);
+	//}
 
 	//Encrypt
 
@@ -534,4 +536,6 @@ clean:
 	ListCharString_free(&files, alloc);
 	ListCharString_free(&directories, alloc);
 	return s_uccess;
-}
+}*/
+
+int test = 0;

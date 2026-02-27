@@ -22,6 +22,7 @@
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 
+/*
 Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -55,4 +56,4 @@ Bool CAFile_combine(CAFile a, CAFile b, Allocator alloc, CAFile *combined, Error
 clean:
 	Archive_free(&archive, alloc);
 	return s_uccess;
-}
+}*/

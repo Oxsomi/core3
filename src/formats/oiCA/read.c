@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+/*
+
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "types/base/allocator.h"
@@ -320,4 +322,6 @@ clean:
 	Archive_free(&archive, alloc);
 	DLFile_free(&fileNames, alloc);
 	return s_uccess;
-}
+}*/
+
+int test = 0;
