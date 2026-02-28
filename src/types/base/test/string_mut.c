@@ -54,76 +54,65 @@ void Test_stringMut(Test *test) {
 	Test_assert(test, "CharString_eraseAtCount", CharString_eraseAtCount(&str, 5, 2, &test->err));
 	Test_assert(test, "CharString_eraseAtCount (length)", CharString_length(str) == 11);
 
-	CharString tmp = CharString_createRefCStrConst("HelloWorld!");
-	Test_assert(test, "CharString_eraseAtCount (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseAtCount (value)", CharString_equalsCStringSensitive(&str, "HelloWorld!"));
 
 	//Erase at start
 
 	Test_assert(test, "CharString_eraseAtCount (front)", CharString_eraseAtCount(&str, 0, 2, &test->err));
 	Test_assert(test, "CharString_eraseAtCount (front length)", CharString_length(str) == 9);
 
-	tmp = CharString_createRefCStrConst("lloWorld!");
-	Test_assert(test, "CharString_eraseAtCount (front value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseAtCount (front value)", CharString_equalsCStringSensitive(&str, "lloWorld!"));
 
 	//Erase at end
 	
 	Test_assert(test, "CharString_eraseAtCount (end)", CharString_eraseAtCount(&str, 7, 2, &test->err));
 	Test_assert(test, "CharString_eraseAtCount (end length)", CharString_length(str) == 7);
 
-	tmp = CharString_createRefCStrConst("lloWorl");
-	Test_assert(test, "CharString_eraseAtCount (end value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseAtCount (end value)", CharString_equalsCStringSensitive(&str, "lloWorl"));
 
 	//Test popFront/popEnd/popFrontCount/popEndCount
 	
 	Test_assert(test, "CharString_popFront", CharString_popFront(&str, &test->err));
 
-	tmp = CharString_createRefCStrConst("loWorl");
-	Test_assert(test, "CharString_popFront (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_popFront (value)", CharString_equalsCStringSensitive(&str, "loWorl"));
 
 	Test_assert(test, "CharString_popEnd", CharString_popEnd(&str, &test->err));
 
-	tmp = CharString_createRefCStrConst("loWor");
-	Test_assert(test, "CharString_popEnd (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_popEnd (value)", CharString_equalsCStringSensitive(&str, "loWor"));
 
 	Test_assert(test, "CharString_popFrontCount", CharString_popFrontCount(&str, 2, &test->err));
 
-	tmp = CharString_createRefCStrConst("Wor");
-	Test_assert(test, "CharString_popFrontCount (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_popFrontCount (value)", CharString_equalsCStringSensitive(&str, "Wor"));
 
 	Test_assert(test, "CharString_popEndCount", CharString_popEndCount(&str, 2, &test->err));
 
-	tmp = CharString_createRefCStrConst("W");
-	Test_assert(test, "CharString_popEndCount (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_popEndCount (value)", CharString_equalsCStringSensitive(&str, "W"));
 
 	//Test eraseAll (character)
 
 	fillStr(buf1, "Hello, Hello, Hello!", &str);
 	Test_assert(test, "CharString_eraseAllSensitive", CharString_eraseAllSensitive(&str, 'l', 0, 0));
 
-	tmp = CharString_createRefCStrConst("Heo, Heo, Heo!");
-	Test_assert(test, "CharString_eraseAllSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseAllSensitive (value)", CharString_equalsCStringSensitive(&str, "Heo, Heo, Heo!"));
 
 	//Test eraseAll case insensitive
 
 	fillStr(buf1, "Hello, HeLLo, HELLO!", &str);
 	
 	Test_assert(test, "CharString_eraseAllInsensitive", CharString_eraseAllInsensitive(&str, 'L', 0, 0));
-	tmp = CharString_createRefCStrConst("Heo, Heo, HEO!");
-	Test_assert(test, "CharString_eraseAllInsensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseAllInsensitive (value)", CharString_equalsCStringSensitive(&str, "Heo, Heo, HEO!"));
 
 	//Test eraseFirst/eraseLast
 
 	fillStr(buf1, "abcabc", &str);
 	Test_assert(test, "CharString_eraseFirstSensitive", CharString_eraseFirstSensitive(&str, 'b', 0, 0));
 
-	tmp = CharString_createRefCStrConst("acabc");
-	Test_assert(test, "CharString_eraseFirstSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseFirstSensitive (value)", CharString_equalsCStringSensitive(&str, "acabc"));
 
 	fillStr(buf1, "abcabc", &str);
 	Test_assert(test, "CharString_eraseLastSensitive", CharString_eraseLastSensitive(&str, 'b', 0, 0));
 
-	tmp = CharString_createRefCStrConst("abcac");
-	Test_assert(test, "CharString_eraseLastSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseLastSensitive (value)", CharString_equalsCStringSensitive(&str, "abcac"));
 
 	//Test eraseAllString
 
@@ -132,8 +121,7 @@ void Test_stringMut(Test *test) {
 	
 	Test_assert(test, "CharString_eraseAllStringSensitive", CharString_eraseAllStringSensitive(&str, &hello, 0, 0));
 
-	tmp = CharString_createRefCStrConst(" World,  World!");
-	Test_assert(test, "CharString_eraseAllStringSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseAllStringSensitive (value)", CharString_equalsCStringSensitive(&str, " World,  World!"));
 
 	//Test eraseFirstString/eraseLastString
 
@@ -142,72 +130,63 @@ void Test_stringMut(Test *test) {
 	
 	Test_assert(test, "CharString_eraseFirstStringSensitive", CharString_eraseFirstStringSensitive(&str, &testStr, 0, 0));
 
-	tmp = CharString_createRefCStrConst(" test test");
-	Test_assert(test, "CharString_eraseFirstStringSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseFirstStringSensitive (value)", CharString_equalsCStringSensitive(&str, " test test"));
 
 	Test_assert(test, "CharString_eraseLastStringSensitive", CharString_eraseLastStringSensitive(&str, &testStr, 0, 0));
 
-	tmp = CharString_createRefCStrConst(" test ");
-	Test_assert(test, "CharString_eraseLastStringSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseLastStringSensitive (value)", CharString_equalsCStringSensitive(&str, " test "));
 
 	//Test erase with offset and length
 
 	fillStr(buf1, "Hello World Hello World", &str);
 	Test_assert(test, "CharString_eraseAllSensitive (range)", CharString_eraseAllSensitive(&str, 'o', 6, 11));
 
-	tmp = CharString_createRefCStrConst("Hello Wrld Hell World");
-	Test_assert(test, "CharString_eraseAllSensitive (range value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_eraseAllSensitive (range value)", CharString_equalsCStringSensitive(&str, "Hello Wrld Hell World"));
 
 	//Test replaceAll
 
 	fillStr(buf1, "aAa bbb ccc", &str);
 	Test_assert(test, "CharString_replaceAllSensitive", CharString_replaceAllSensitive(&str, 'a', 'x', 0, 0));
 
-	tmp = CharString_createRefCStrConst("xAx bbb ccc");
-	Test_assert(test, "CharString_replaceAllSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_replaceAllSensitive (value)", CharString_equalsCStringSensitive(&str, "xAx bbb ccc"));
 
 	//Test replaceAll case insensitive
 
 	fillStr(buf1, "AaA BbB CcC", &str);
 	Test_assert(test, "CharString_replaceAllInsensitive", CharString_replaceAllInsensitive(&str, 'A', 'x', 0, 0));
 
-	tmp = CharString_createRefCStrConst("xxx BbB CcC");
-	Test_assert(test, "CharString_replaceAllInsensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_replaceAllInsensitive (value)", CharString_equalsCStringSensitive(&str, "xxx BbB CcC"));
 
 	//Test replaceFirst/replaceLast
 
 	fillStr(buf1, "abcabcabc", &str);
 	Test_assert(test, "CharString_replaceFirstSensitive", CharString_replaceFirstSensitive(&str, 'b', 'x', 0, 0));
 
-	tmp = CharString_createRefCStrConst("axcabcabc");
-	Test_assert(test, "CharString_replaceFirstSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_replaceFirstSensitive (value)", CharString_equalsCStringSensitive(&str, "axcabcabc"));
 
 	Test_assert(test, "CharString_replaceLastSensitive", CharString_replaceLastSensitive(&str, 'b', 'x', 0, 0));
 
-	tmp = CharString_createRefCStrConst("axcabcaxc");
-	Test_assert(test, "CharString_replaceLastSensitive (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_replaceLastSensitive (value)", CharString_equalsCStringSensitive(&str, "axcabcaxc"));
 
 	//Test replace with range
 
 	fillStr(buf1, "aaa bbb aaa", &str);
 	Test_assert(test, "CharString_replaceAllSensitive (range)", CharString_replaceAllSensitive(&str, 'a', 'x', 4, 7));
 
-	tmp = CharString_createRefCStrConst("aaa bbb xxx");
-	Test_assert(test, "CharString_replaceAllSensitive (range value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_replaceAllSensitive (range value)", CharString_equalsCStringSensitive(&str, "aaa bbb xxx"));
 
 	//Test trim
 
 	fillStr(buf1, "  \t Hello World \n\r  ", &str);
 	CharString trimmed = CharString_trim(str);
 
-	tmp = CharString_createRefCStrConst("Hello World");
-	Test_assert(test, "CharString_trim", CharString_equalsStringSensitive(&trimmed, &tmp));
+	Test_assert(test, "CharString_trim", CharString_equalsCStringSensitive(&trimmed, "Hello World"));
 	Test_assert(test, "CharString_trim (is ref)", CharString_isRef(trimmed));
 
 	//Test trim with no whitespace
 
 	trimmed = CharString_trim(trimmed);
-	Test_assert(test, "CharString_trim (no ws)", CharString_equalsStringSensitive(&trimmed, &tmp));
+	Test_assert(test, "CharString_trim (no ws)", CharString_equalsCStringSensitive(&trimmed, "Hello World"));
 
 	//Test trim with only whitespace
 
@@ -221,23 +200,20 @@ void Test_stringMut(Test *test) {
 	fillStr(buf1, "HeLLo WoRLd!", &str);
 	Test_assert(test, "CharString_toLower", CharString_toLower(&str));
 
-	tmp = CharString_createRefCStrConst("hello world!");
-	Test_assert(test, "CharString_toLower (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_toLower (value)", CharString_equalsCStringSensitive(&str, "hello world!"));
 
 	//Test transform toUpper
 
 	Test_assert(test, "CharString_toUpper", CharString_toUpper(&str));
 
-	tmp = CharString_createRefCStrConst("HELLO WORLD!");
-	Test_assert(test, "CharString_toUpper (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_toUpper (value)", CharString_equalsCStringSensitive(&str, "HELLO WORLD!"));
 
 	//Test formatPath
 
 	fillStr(buf1, "C:\\Users\\Test\\file.txt", &str);
 	Test_assert(test, "CharString_formatPath", CharString_formatPath(&str));
 
-	tmp = CharString_createRefCStrConst("C:/Users/Test/file.txt");
-	Test_assert(test, "CharString_formatPath (value)", CharString_equalsStringSensitive(&str, &tmp));
+	Test_assert(test, "CharString_formatPath (value)", CharString_equalsCStringSensitive(&str, "C:/Users/Test/file.txt"));
 
 	//Test erase on const ref (should fail)
 

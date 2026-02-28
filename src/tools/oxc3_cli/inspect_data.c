@@ -394,10 +394,10 @@ Bool CLI_inspectData(ParsedArgs args) {
 			goto clean;
 		}
 
-		if(CharString_equalsStringInsensitive(shaderOutputMode, CharString_createRefCStrConst("DXIL")))
+		if(CharString_equalsCStringInsensitive(shaderOutputMode, "DXIL"))
 			binaryType = ESHBinaryType_DXIL;
 
-		else if(CharString_equalsStringInsensitive(shaderOutputMode, CharString_createRefCStrConst("SPV")))
+		else if(CharString_equalsCStringInsensitive(shaderOutputMode, "SPV"))
 			binaryType = ESHBinaryType_SPIRV;
 
 		else {

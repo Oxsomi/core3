@@ -148,20 +148,19 @@ Bool Buffer_bitwiseAnd(const Buffer dst, const Buffer src, Error *e_rr) BitOp(
 		gotoIfError3(clean, Buffer_unsetAllBits(Buffer_createRefConst(dst.ptrNonConst + srcLen, dstLen - srcLen), e_rr));
 )
 
-Bool Buffer_eq(const Buffer buf0, const Buffer buf1) {
+ECompareResult Buffer_cmp(const Buffer buf0, const Buffer buf1) {
 
 	if (!buf0.ptr && !buf1.ptr)
-		return true;
-
-	if (!buf0.ptr || !buf1.ptr)
-		return false;
+		return ECompareResult_Eq;
 
 	const U64 len0 = Buffer_length(buf0);
+	const U64 len1 = Buffer_length(buf1);
 
-	if(len0 != Buffer_length(buf1))
-		return false;
+	if(len0 != len1)
+		return len0 < len1 ? ECompareResult_Lt : ECompareResult_Gt;
 
-	return memcmp(buf0.ptr, buf1.ptr, len0) == 0;
+	int cmp = memcmp(buf0.ptr, buf1.ptr, len0);
+	return cmp == 0 ? ECompareResult_Eq : (cmp == -1 ? ECompareResult_Lt : ECompareResult_Gt);
 }
 
 Bool Buffer_offset(Buffer *buf, U64 length, Error *e_rr) {

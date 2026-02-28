@@ -316,16 +316,16 @@ public:
 
 				CharString tmpTmp = CharString_createNull();
 
-				if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@resources.hlsli")))
+				if(CharString_equalsCStringInsensitive(resolved, "@resources.hlsli"))
 					tmpTmp = CharString_createRefCStrConst(resources);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@types.hlsli")))
+				else if(CharString_equalsCStringInsensitive(resolved, "@types.hlsli"))
 					tmpTmp = CharString_createRefCStrConst(types);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvShaderExtnEnums.h")))
+				else if(CharString_equalsCStringInsensitive(resolved, "@nvShaderExtnEnums.h"))
 					tmpTmp = CharString_createRefCStrConst(nvShaderExtnEnums);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtnsInternal.h"))) {
+				else if(CharString_equalsCStringInsensitive(resolved, "@nvHLSLExtnsInternal.h")) {
 					
 					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
 
@@ -336,7 +336,7 @@ public:
 					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
 				}
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtns.h"))) {
+				else if(CharString_equalsStringInsensitive(resolved, "@nvHLSLExtns.h")) {
 
 					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
 

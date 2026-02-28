@@ -87,6 +87,7 @@ static inline Bool CharString_containsString(const CharStringSensOffLen *strSens
 }
 
 Bool CharString_equalsString(const CharString *s, const CharString *other, EStringCase caseSensitive);
+Bool CharString_equalsCString(const CharString *s, const C8 *literal, EStringCase caseSensitive);
 Bool CharString_equals(const CharString s, C8 c, EStringCase caseSensitive);
 
 Bool CharString_parseNyto(CharString s, U64 *result);

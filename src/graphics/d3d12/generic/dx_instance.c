@@ -457,7 +457,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device10, (void**) &device
 		);
 
-		bool independentDevices = false;
+		Bool independentDevices = false;
 
 		if(lastError == DXGI_ERROR_UNSUPPORTED)
 			lastError = instanceExt->deviceFactorySingleton->lpVtbl->CreateDevice(

@@ -147,12 +147,20 @@ static inline Bool CharString_equalsStringSensitive(const CharString *s, const C
 	return CharString_equalsString(s, other, EStringCase_Sensitive);
 }
 
+static inline Bool CharString_equalsCStringSensitive(const CharString *s, const C8 *other) {
+	return CharString_equalsCString(s, other, EStringCase_Sensitive);
+}
+
 static inline Bool CharString_equalsSensitive(const CharString s, C8 c) {
 	return CharString_equals(s, c, EStringCase_Sensitive);
 }
 
 static inline Bool CharString_equalsStringInsensitive(const CharString *s, const CharString *other) {
 	return CharString_equalsString(s, other, EStringCase_Insensitive);
+}
+
+static inline Bool CharString_equalsCStringInsensitive(const CharString *s, const C8 *other) {
+	return CharString_equalsCString(s, other, EStringCase_Insensitive);
 }
 
 static inline Bool CharString_equalsInsensitive(const CharString s, C8 c) {

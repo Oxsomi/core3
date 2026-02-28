@@ -21,19 +21,19 @@
 #include "shared.h"
 #include "formats/oiCA/ca_file.h"
 
-static const CASettings kCASettings = {
+const CASettings kCASettings = {
 	.flags           = ECASettingsFlags_None,
 	.compressionType = EXXCompressionType_None,
 	.encryptionType  = EXXEncryptionType_None
 };
 
-static const CASettings kCASettingsDate = {
+const CASettings kCASettingsDate = {
 	.flags           = ECASettingsFlags_IncludeDate,
 	.compressionType = EXXCompressionType_None,
 	.encryptionType  = EXXEncryptionType_None
 };
 
-static const CASettings kCASettingsFullDate = {
+const CASettings kCASettingsFullDate = {
 	.flags           = ECASettingsFlags_IncludeFullDate,
 	.compressionType = EXXCompressionType_None,
 	.encryptionType  = EXXEncryptionType_None

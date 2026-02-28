@@ -1028,7 +1028,7 @@ Bool Compiler_convertRegisterSPIRV(
 					shouldBeWrite = true;
 				}
 
-				if (CharString_equalsStringSensitive(typeName, CharString_createRefCStrConst("ByteAddressBuffer")))
+				if (CharString_equalsCStringSensitive(typeName, "ByteAddressBuffer"))
 					bufferType = ESHBufferType_ByteAddressBuffer;
 
 				else {
@@ -1053,7 +1053,7 @@ Bool Compiler_convertRegisterSPIRV(
 
 					//TODO: Remember counter binding for SPIRV.
 
-					else if(CharString_equalsStringSensitive(typeName, CharString_createRefCStrConst("ACSBuffer.counter")))
+					else if(CharString_equalsCStringSensitive(typeName, "ACSBuffer.counter"))
 						goto clean;
 
 					else if(CharString_startsWithStringSensitive(typeName, structuredBuffer, 0))
@@ -1649,7 +1649,7 @@ extern "C" Bool Compiler_processSPIRV(
 
 		CharString name = CharString_createRefCStrConst(entrypoint.name);
 
-		if(!isLib && !CharString_equalsStringSensitive(name, CharString_createRefCStrConst("main")))
+		if(!isLib && !CharString_equalsCStringSensitive(name, "main"))
 			retError(clean, Error_invalidState(
 				2, "Compiler_processSPIRV() with gfx/compute must have 1 entrypoint named \"main\""
 			))
@@ -1869,8 +1869,8 @@ extern "C" Bool Compiler_processSPIRV(
 				U64 semanticName = 0;
 
 				if(
-					!CharString_equalsStringInsensitive(realSemanticName, CharString_createRefCStrConst("SV_TARGET")) &&
-					!CharString_equalsStringInsensitive(realSemanticName, CharString_createRefCStrConst("TEXCOORD"))
+					!CharString_equalsCStringInsensitive(realSemanticName, "SV_TARGET") &&
+					!CharString_equalsCStringInsensitive(realSemanticName, "TEXCOORD")
 				) {
 					U64 start = isOutput ? inputSemanticCount : 0;
 					U64 end = isOutput ? strings.length : inputSemanticCount;

@@ -120,26 +120,29 @@ Bool StreamCursor_createWithCache(
 	Bool inc = false;
 
 	if (!cursor || !cache)
-		retError(clean, Error_nullPointer(!cache ? 1 : 4, "StreamCursor_create()::cursor is required"));
+		retError(clean, Error_nullPointer(!cache ? 1 : 4, "StreamCursor_createWithCache()::cursor is required"));
 
 	if(!stream || stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
-		retError(clean, Error_nullPointer(3, "StreamCursor_create()::stream is required"));
+		retError(clean, Error_nullPointer(3, "StreamCursor_createWithCache()::stream is required"));
+
+	Stream *streamPtr = RefPtr_data(stream, Stream);
+
+	if (streamPtr->streamType & EStreamType_DisableSeek)
+		retError(clean, Error_unsupportedOperation(0, "StreamCursor_createWithCache()::DisableSeek streams are not yet supported"));
 
 	RefPtr_inc(stream);
 	inc = true;
 
 	if (cursor->cacheData.ptr)
-		retError(clean, Error_invalidParameter(3, 0, "StreamCursor_create()::cursor already initialized, indicating memleak"));
+		retError(clean, Error_invalidParameter(3, 0, "StreamCursor_createWithCache()::cursor already initialized, indicating memleak"));
 
 	U64 cacheSize = Buffer_length(*cache);
 
 	if (cacheSize < 32 * KIBI)
-		retError(clean, Error_invalidParameter(3, 0, "StreamCursor_create()::cache->length too small"));
+		retError(clean, Error_invalidParameter(3, 0, "StreamCursor_createWithCache()::cache->length too small"));
 
 	if (cacheSize >> 48)
-		retError(clean, Error_invalidParameter(5, 0, "StreamCursor_create()::cacheSize too big"));
-
-	Stream *streamPtr = RefPtr_data(stream, Stream);
+		retError(clean, Error_invalidParameter(5, 0, "StreamCursor_createWithCache()::cacheSize too big"));
 
 	*cursor = (StreamCursor) {
 		.stream = stream,
@@ -638,5 +641,91 @@ Bool StreamCursor_read(
 		Buffer_memcpy(Buffer_createRef(buf.ptrNonConst + dstOff, length), cursor->cacheData);
 
 clean:
+	return s_uccess;
+}
+
+Bool Stream_compare(
+	StreamRef *a,
+	StreamRef *b,
+	U64 aOff,
+	U64 bOff,
+	U64 length,
+	U64 chunkSize,          // 0 = sensible default (e.g. 64KiB)
+	const Allocator *alloc,
+	ECompareResult *result,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+	StreamCursor aCursor = (StreamCursor) { 0 };
+	StreamCursor bCursor = (StreamCursor) { 0 };
+
+	if (!a || !b || !result)
+		retError(clean, Error_nullPointer(!a ? 0 : (!b ? 1 : 7), "Stream_compare()::a, b and result are required"));
+
+	Stream *aRaw = RefPtr_data(a, Stream);
+	Stream *bRaw = RefPtr_data(b, Stream);
+
+	if ((aRaw->streamType & EStreamType_DisableSeek) || (bRaw->streamType & EStreamType_DisableSeek))
+		retError(clean, Error_invalidOperation(0, "Stream_compare()::cannot compare non-seekable streams"));
+
+	*result = ECompareResult_Eq;
+
+	//Streams of different lengths are comparable: shorter is Lt
+
+	U64 aSize = aRaw->size;
+	U64 bSize = bRaw->size;
+
+	//Clamp to available data from offset
+
+	U64 aAvail = aOff < aSize ? aSize - aOff : 0;
+	U64 bAvail = bOff < bSize ? bSize - bOff : 0;
+
+	U64 aLen = length ? U64_min(length, aAvail) : aAvail;
+	U64 bLen = length ? U64_min(length, bAvail) : bAvail;
+
+	if (aLen != bLen) {
+		*result = aLen < bLen ? ECompareResult_Lt : ECompareResult_Gt;
+		goto clean;
+	}
+
+	if (!aLen)      //Both empty in range
+		goto clean;
+
+	gotoIfError3(clean, StreamCursor_create(a, chunkSize, false, alloc, &aCursor, e_rr));
+	gotoIfError3(clean, StreamCursor_create(b, chunkSize, false, alloc, &bCursor, e_rr));
+
+	U64 remaining = aLen;
+	U64 aIt = aOff;
+	U64 bIt = bOff;
+
+	while (remaining) {
+
+		U64 readNow = U64_min(remaining, Buffer_length(aCursor.cacheData));
+
+		//Read chunk from a into cursor cache, then directly compare against b's chunk
+
+		gotoIfError3(clean, StreamCursor_read(&aCursor, Buffer_createNull(), aIt, 0, readNow, false, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_read(&bCursor, Buffer_createNull(), bIt, 0, readNow, false, alloc, e_rr));
+
+		//Both cursors now have the chunk in cache; compare the cache windows directly
+
+		Buffer aCached = Buffer_createRefConst(aCursor.cacheData.ptr, readNow);
+		Buffer bCached = Buffer_createRefConst(bCursor.cacheData.ptr, readNow);
+
+		ECompareResult cmp = Buffer_cmp(aCached, bCached);   // or however your API spells memcmp
+
+		if (cmp != ECompareResult_Eq) {
+			*result = cmp;
+			goto clean;
+		}
+
+		aIt += readNow;
+		bIt += readNow;
+		remaining -= readNow;
+	}
+
+clean:
+	StreamCursor_close(&aCursor, alloc);
+	StreamCursor_close(&bCursor, alloc);
 	return s_uccess;
 }

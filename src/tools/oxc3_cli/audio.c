@@ -113,13 +113,13 @@ Bool CLI_audioConvert(ParsedArgs args) {
 			goto clean2;
 		}
 		
-		if(CharString_equalsStringInsensitive(str, CharString_createRefCStrConst("average")))
+		if(CharString_equalsCStringInsensitive(str, "average"))
 			splitType = ESplitType_Average;
 
-		else if(CharString_equalsStringInsensitive(str, CharString_createRefCStrConst("left")))
+		else if(CharString_equalsCStringInsensitive(str, "left"))
 			splitType = ESplitType_Left;
 
-		else if(CharString_equalsStringInsensitive(str, CharString_createRefCStrConst("right")))
+		else if(CharString_equalsCStringInsensitive(str, "right"))
 			splitType = ESplitType_Right;
 
 		else {

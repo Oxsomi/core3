@@ -128,6 +128,7 @@ void CAFile_free(CAFile *caFile, const Allocator *alloc);
 typedef U64 CAHandle;
 
 static const U64 CAHandle_Invalid = (U64)-1;
+static const CAHandle CAHandle_Root = (U64)1 << 63;
 
 static inline U64 CAHandle_getId(CAHandle handle) { return handle << 1 >> 1; }
 static inline Bool CAHandle_isFolder(CAHandle handle) { return handle >> 63; }
@@ -218,6 +219,18 @@ Buffer CAFile_getDataConst(const CAFile *caFile, CAHandle fileHandle, Bool *isVa
 //Returns ref to existing data stream (increments stream ref).
 // *streamOff is U64_MAX for invalid handles, folders or fully loaded data, otherwise is offset in the stream.
 StreamRef *CAFile_getDataStream(const CAFile *caFile, CAHandle fileHandle, U64 *streamOff);
+
+//This will compare the two files at a and b.
+// Both files have to be buffers or streams that are seekable, otherwise it'll error.
+// Keep in mind that this is a full compare, which could take very long with big files.
+// As such, this should only be used in tools that are expected to take a long time.
+Bool CAFile_dataEqual(
+	const CAFile *a, CAHandle aFile,
+	const CAFile *b, CAHandle bFile,
+	const Allocator *alloc,
+	ECompareResult *equal,
+	Error *e_rr
+);
 
 Bool CAFile_isLoaded(const CAFile *caFile, CAHandle fileHandle);			//Returns false for streams
 

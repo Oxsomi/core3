@@ -29,17 +29,33 @@ int main() {
 	t.alloc = &alloc;
 
 	Test_CACreateFree(&t);
-	//Test_DLAddEntries(&t);
-	//Test_DLInsertEntries(&t);
-	//Test_DLRemoveEntries(&t);
-	//Test_DLLoadedAt(&t);
-	//Test_DLCreateFromList(&t);
-	//Test_DLRoundtripPlain(&t);
-	//Test_DLRoundtripEncrypted(&t);
-	//Test_DLCombine(&t);
-	//Test_DLFindLoadedString(&t);
-	//Test_DLStreams(&t);
-	//Test_DLStress(&t);
+	Test_CACreateCopy(&t);
+
+	Test_CAAddFile(&t);
+	Test_CAAddFolder(&t);
+
+	Test_CARemoveFile(&t);
+	Test_CARemoveFolder(&t);
+
+	Test_CAResolve(&t);
+	Test_CAGetFullName(&t);
+
+	Test_CACounts(&t);
+	Test_CAGetInfo(&t);
+	Test_CACompare(&t);
+	Test_CACombine(&t);
+
+	Test_CARename(&t);
+	Test_CAMove(&t);
+
+	Test_CAForeach(&t);
+
+	Test_CASetTime(&t);
+	Test_CASetData(&t);
+	Test_CASetStream(&t);
+
+	Test_CAMixedTree(&t);
+	Test_CAStress(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

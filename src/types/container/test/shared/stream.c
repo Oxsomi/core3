@@ -327,11 +327,158 @@ static void Test_streamReserve(Test *t, StreamHarness *h) {
 	else Test_assert(t, "Create 1000-byte stream", false);
 }
 
+static void Test_streamCompare(Test *t, StreamHarness *h) {
+
+	Test_setModuleH(t, h, "compare");
+
+	RefPtr *streamA = NULL;
+	RefPtr *streamB = NULL;
+	ECompareResult result = ECompareResult_Eq;
+
+	//Create two identical streams
+
+	if (!h->create(h, 100, false, &streamA, t)) {
+		Test_assert(t, "Create streamA", false);
+		return;
+	}
+
+	Stream *sA = RefPtr_data(streamA, Stream);
+
+	if (sA->streamType & EStreamType_DisableSeek)		//Can't seek!
+		goto clean;
+
+	if (!h->create(h, 100, false, &streamB, t)) {
+		Test_assert(t, "Create streamB", false);
+		goto clean;
+	}
+
+	Stream *sB = RefPtr_data(streamB, Stream);
+
+	if (!sA->write || !sA->read)
+		goto clean;
+
+	U8 src[100];
+
+	for (U8 i = 0; i < 100; ++i)
+		src[i] = i;
+
+	if (!sA->write(sA, 0, 100, Buffer_createRefConst(src, 100), t->alloc, &t->err)) {
+		Test_assert(t, "Write streamA", false);
+		goto clean;
+	}
+
+	if (!sB->write(sB, 0, 100, Buffer_createRefConst(src, 100), t->alloc, &t->err)) {
+		Test_assert(t, "Write streamB", false);
+		goto clean;
+	}
+
+	//Equal streams
+
+	if (Stream_compare(streamA, streamB, 0, 0, 100, 0, t->alloc, &result, &t->err))
+		Test_assert(t, "Equal streams: Eq", result == ECompareResult_Eq);
+
+	else Test_assert(t, "Equal streams: no error", false);
+
+	//Equal subrange
+
+	if (Stream_compare(streamA, streamB, 10, 10, 50, 0, t->alloc, &result, &t->err))
+		Test_assert(t, "Equal subrange [10,60): Eq", result == ECompareResult_Eq);
+
+	else Test_assert(t, "Equal subrange: no error", false);
+
+	//Modify one byte in B and verify Gt/Lt
+
+	U8 modified = 200;
+
+	if (!sB->write(sB, 50, 1, Buffer_createRefConst(&modified, 1), t->alloc, &t->err)) {
+		Test_assert(t, "Modify streamB[50]", false);
+		goto clean;
+	}
+
+	//A[50] = 50, B[50] = 200 -> A < B
+
+	if (Stream_compare(streamA, streamB, 0, 0, 100, 0, t->alloc, &result, &t->err))
+		Test_assert(t, "A[50]=50 < B[50]=200: Lt", result == ECompareResult_Lt);
+
+	else Test_assert(t, "Modified: no error", false);
+
+	//Symmetric: B > A
+
+	if (Stream_compare(streamB, streamA, 0, 0, 100, 0, t->alloc, &result, &t->err))
+		Test_assert(t, "B[50]=200 > A[50]=50: Gt", result == ECompareResult_Gt);
+
+	else Test_assert(t, "Symmetric: no error", false);
+
+	//Subrange that doesn't include the modified byte -> still Eq
+
+	if (Stream_compare(streamA, streamB, 0, 0, 50, 0, t->alloc, &result, &t->err))
+		Test_assert(t, "Subrange [0,50) excludes diff: Eq", result == ECompareResult_Eq);
+
+	else Test_assert(t, "Subrange excluding diff: no error", false);
+
+	//Different lengths: A(100) vs B(100) but compare only 60 of A against 40 of B -> Lt (60 != 40... wait)
+	//Actually length is explicit so just compare mismatched explicit lengths via two different-sized streams
+
+	RefPtr_dec(&streamB);
+	streamB = NULL;
+
+	if (!h->create(h, 50, false, &streamB, t)) {
+		Test_assert(t, "Create smaller streamB", false);
+		goto clean;
+	}
+
+	sB = RefPtr_data(streamB, Stream);
+
+	if (sB->write)
+		sB->write(sB, 0, 50, Buffer_createRefConst(src, 50), t->alloc, &t->err);
+
+	//length = 0 means full extent from offset, A has 100 bytes, B has 50 -> A > B
+
+	if (Stream_compare(streamA, streamB, 0, 0, 0, 0, t->alloc, &result, &t->err))
+		Test_assert(t, "Longer A(100) > shorter B(50): Gt", result == ECompareResult_Gt);
+
+	else Test_assert(t, "Different sizes: no error", false);
+
+	if (Stream_compare(streamB, streamA, 0, 0, 0, 0, t->alloc, &result, &t->err))
+		Test_assert(t, "Shorter B(50) < longer A(100): Lt", result == ECompareResult_Lt);
+
+	else Test_assert(t, "Different sizes symmetric: no error", false);
+
+	//Small chunkSize to exercise multi-chunk path (chunkSize < 32KiB will be clamped by StreamCursor_create,
+	//so use a valid minimum, but we can test the chunking logic is hit by using a tiny explicit chunk)
+	//Recreate equal streams to verify chunked path gives same result
+
+	RefPtr_dec(&streamB);
+	streamB = NULL;
+
+	if (!h->create(h, 100, false, &streamB, t)) {
+		Test_assert(t, "Create streamB for chunk test", false);
+		goto clean;
+	}
+
+	sB = RefPtr_data(streamB, Stream);
+
+	if (sB->write)
+		sB->write(sB, 0, 100, Buffer_createRefConst(src, 100), t->alloc, &t->err);
+
+	//Use 32KiB (minimum valid cache), stream is only 100 bytes so single chunk but exercises the path
+
+	if (Stream_compare(streamA, streamB, 0, 0, 100, 32 * KIBI, t->alloc, &result, &t->err))
+		Test_assert(t, "Explicit chunkSize 32KiB: Eq", result == ECompareResult_Eq);
+
+	else Test_assert(t, "Explicit chunkSize: no error", false);
+
+clean:
+	RefPtr_dec(&streamA);
+	RefPtr_dec(&streamB);
+}
+
 void StreamHarness_testStream(StreamHarness *h, Test *t) {
 	Test_streamCreate(t, h);
 	Test_streamReadWrite(t, h);
 	Test_streamResize(t, h);
 	Test_streamReserve(t, h);
+	Test_streamCompare(t, h);
 }
 
 void Test_setModuleH(Test *t, StreamHarness *h, ShortString str) {

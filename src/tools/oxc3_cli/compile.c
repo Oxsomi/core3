@@ -99,11 +99,7 @@
 		if(CharString_splitSensitivex(compileMode, ',', &splits).genericError)
 			return false;
 
-		CharString modes[] = {
-			CharString_createRefCStrConst("spv"),
-			CharString_createRefCStrConst("dxil"),
-			CharString_createRefCStrConst("all")
-		};
+		const C8 *modes[] = { "spv", "dxil", "all" };
 
 		static const U64 modeCount = sizeof(modes) / sizeof(modes[0]);
 		*multipleModes = splits.length > 1;
@@ -114,7 +110,7 @@
 			Bool match = false;
 
 			for(U64 j = 0; j < modeCount; ++j)
-				if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
+				if (CharString_equalsCStringInsensitive(splits.ptr[i], modes[j])) {
 
 					if(j == modeCount - 1) {
 						compileModeU64 = (1 << ESHBinaryType_Count) - 1;
@@ -200,7 +196,7 @@
 
 			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr))
 
-			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
+			if (CharString_equalsCStringInsensitive(compileTypeStr, "compile"))
 				compileType = ECompileType_Compile;
 
 			else {

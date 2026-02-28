@@ -199,9 +199,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 
 						if (
 							cat == Operation_values[i].category &&
-							CharString_equalsStringInsensitive(
-								split.ptr[1], CharString_createRefCStrConst(Operation_values[i].name)
-							)
+							CharString_equalsCStringInsensitive(split.ptr[1], Operation_values[i].name)
 						) {
 							operation = i;
 							break;
@@ -215,11 +213,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 
 					for(U64 i = 0; i < EFormat_Invalid; ++i)
 
-						if (
-							CharString_equalsStringInsensitive(
-								split.ptr[2], CharString_createRefCStrConst(Format_values[i].name)
-							)
-						) {
+						if (CharString_equalsCStringInsensitive(split.ptr[2], Format_values[i].name)) {
 							format = i;
 							break;
 						}
@@ -266,10 +260,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
 
-		if (CharString_equalsStringInsensitive(
-			arg0,
-			CharString_createRefCStrConst(EOperationCategory_names[i - 1])
-		)) {
+		if (CharString_equalsCStringInsensitive(arg0, EOperationCategory_names[i - 1])) {
 			category = i;
 			break;
 		}
@@ -296,7 +287,7 @@ Bool CLI_execute(ListCharString argList) {
 
 		if (
 			category == Operation_values[i].category &&
-			CharString_equalsStringInsensitive(arg1, CharString_createRefCStrConst(Operation_values[i].name))
+			CharString_equalsCStringInsensitive(arg1, Operation_values[i].name)
 		) {
 			operation = i;
 			break;
@@ -319,9 +310,7 @@ Bool CLI_execute(ListCharString argList) {
 	for(U64 i = 0; i < EOperationFlags_Count; ++i)
 		for(U64 j = 2; j < argList.length; ++j)
 
-			if (CharString_equalsStringInsensitive(
-				argList.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i])
-			)) {
+			if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationFlags_names[i])) {
 
 				if ((args.flags >> i) & 1) {
 					Log_errorLnx("Duplicate flag: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
@@ -338,9 +327,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	for(U64 i = 0; i < EOperationHasParameter_CountEnum; ++i)
 		for(U64 j = 2; j < argList.length; ++j)
-			if (CharString_equalsStringInsensitive(
-				argList.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
-			)) {
+			if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationHasParameter_names[i])) {
 
 				EOperationHasParameter param = (EOperationHasParameter)(1 << i);
 
@@ -365,9 +352,7 @@ Bool CLI_execute(ListCharString argList) {
 					if (param == EOperationHasParameter_FileFormat) {
 
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
-							if (CharString_equalsStringInsensitive(
-								argList.ptr[j + 1], CharString_createRefCStrConst(Format_values[k].name)
-							)) {
+							if (CharString_equalsCStringInsensitive(argList.ptr[j + 1], Format_values[k].name)) {
 								args.format = (EFormat) k;
 								break;
 							}
@@ -428,9 +413,7 @@ Bool CLI_execute(ListCharString argList) {
 				U64 i = 0;
 
 				for (; i < EOperationHasParameter_CountEnum; ++i)
-					if (CharString_equalsStringInsensitive(
-						argList.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
-					))
+					if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationHasParameter_names[i]))
 						break;
 
 				if(i == EOperationHasParameter_CountEnum) {
@@ -448,9 +431,7 @@ Bool CLI_execute(ListCharString argList) {
 			U64 i = 0;
 
 			for (; i < EOperationFlags_Count; ++i)
-				if (CharString_equalsStringInsensitive(
-					argList.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i])
-				))
+				if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationFlags_names[i]))
 					break;
 
 			if(i == EOperationFlags_Count) {
@@ -546,40 +527,28 @@ U64 CLI_parseGraphicsAPIs(ParsedArgs args) {
 			Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan
 		);
 
-		CharString d3d12 = CharString_createRefCStrConst("d3d12");
-		CharString direct3d12 = CharString_createRefCStrConst("direct3d12");
-		CharString directx12 = CharString_createRefCStrConst("directx12");
-		CharString dx12 = CharString_createRefCStrConst("dx12");
-
-		CharString vulkan = CharString_createRefCStrConst("vulkan");
-		CharString vk = CharString_createRefCStrConst("vk");
-
-		CharString native = CharString_createRefCStrConst("native");
-		CharString def = CharString_createRefCStrConst("default");
-		CharString all = CharString_createRefCStrConst("all");
-
 		for(U64 i = 0; i < strings.length; ++i) {
 
 			CharString str = strings.ptr[i];
 
 			if(
-				CharString_equalsStringInsensitive(str, d3d12) ||
-				CharString_equalsStringInsensitive(str, directx12) ||
-				CharString_equalsStringInsensitive(str, direct3d12) ||
-				CharString_equalsStringInsensitive(str, dx12)
+				CharString_equalsCStringInsensitive(str, "d3d12") ||
+				CharString_equalsCStringInsensitive(str, "directx12") ||
+				CharString_equalsCStringInsensitive(str, "direct3d12") ||
+				CharString_equalsCStringInsensitive(str, "dx12")
 			)
 				queried |= (U64)1 << EGraphicsApi_Direct3D12;
 
 			else if(
-				CharString_equalsStringInsensitive(str, vulkan) ||
-				CharString_equalsStringInsensitive(str, vk)
+				CharString_equalsCStringInsensitive(str, "vulkan") ||
+				CharString_equalsCStringInsensitive(str, "vk")
 			)
 				queried |= (U64)1 << EGraphicsApi_Vulkan;
 
-			else if(CharString_equalsStringInsensitive(str, all))
+			else if(CharString_equalsCStringInsensitive(str, "all"))
 				queried = U32_MAX;
 
-			else if(CharString_equalsStringInsensitive(str, native) || CharString_equalsStringInsensitive(str, def))
+			else if(CharString_equalsCStringInsensitive(str, "native") || CharString_equalsCStringInsensitive(str, "def"))
 				queried |= nativeBit;
 
 			else {

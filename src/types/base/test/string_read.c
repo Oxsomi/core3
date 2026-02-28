@@ -173,14 +173,11 @@ void Test_stringRead(Test *test) {
 	//equals (string)
 
 	str = CharString_createRefCStrConst("Hello, World!");
-	CharString hello2 = CharString_createRefCStrConst("Hello, World!");
-	CharString hello3 = CharString_createRefCStrConst("hello, world!");
-	CharString hello4 = CharString_createRefCStrConst("Hello, World");
 
-	Test_assert(test, "CharString_equalsStringSensitive", CharString_equalsStringSensitive(&str, &hello2));
-	Test_assert(test, "CharString_equalsStringSensitive", !CharString_equalsStringSensitive(&str, &hello3));
-	Test_assert(test, "CharString_equalsStringSensitive", !CharString_equalsStringSensitive(&str, &hello4));
-	Test_assert(test, "CharString_equalsStringInsensitive", CharString_equalsStringInsensitive(&str, &hello3));
+	Test_assert(test, "CharString_equalsStringSensitive", CharString_equalsCStringSensitive(&str, "Hello, World!"));
+	Test_assert(test, "CharString_equalsStringSensitive", !CharString_equalsCStringSensitive(&str, "hello, world!"));
+	Test_assert(test, "CharString_equalsStringSensitive", !CharString_equalsCStringSensitive(&str, "Hello, World"));
+	Test_assert(test, "CharString_equalsStringInsensitive", CharString_equalsCStringInsensitive(&str, "hello, world!"));
 
 	//compare
 
@@ -341,17 +338,14 @@ void Test_stringRead(Test *test) {
 	CharString cutSrc = CharString_createRefCStrConst("Hello, World!");
 
 	Test_assert(test, "CharString_cut", CharString_cut(&cutSrc, 7, 5, &s));
-	CharString world2 = CharString_createRefCStrConst("World");
-	Test_assert(test, "CharString_cut", CharString_equalsStringSensitive(&s, &world2));
+	Test_assert(test, "CharString_cut", CharString_equalsCStringSensitive(&s, "World"));
 	Test_assert(test, "CharString_cut", CharString_isRef(s));
 
 	Test_assert(test, "CharString_cutEnd", CharString_cutEnd(&cutSrc, 5, &s));
-	CharString helloC = CharString_createRefCStrConst("Hello");
-	Test_assert(test, "CharString_cutEnd", CharString_equalsStringSensitive(&s, &helloC));
+	Test_assert(test, "CharString_cutEnd", CharString_equalsCStringSensitive(&s, "Hello"));
 
 	Test_assert(test, "CharString_cutBegin", CharString_cutBegin(&cutSrc, 7, &s));
-	CharString world3 = CharString_createRefCStrConst("World!");
-	Test_assert(test, "CharString_cutBegin", CharString_equalsStringSensitive(&s, &world3));
+	Test_assert(test, "CharString_cutBegin", CharString_equalsCStringSensitive(&s, "World!"));
 
 	Test_assert(test, "CharString_cut", !CharString_cut(&cutSrc, 7, 100, &s));
 	Test_assert(test, "CharString_cutBegin", !CharString_cutBegin(&cutSrc, 100, &s));
@@ -361,25 +355,21 @@ void Test_stringRead(Test *test) {
 	CharString slashStr = CharString_createRefCStrConst("a/b/c");
 
 	Test_assert(test, "CharString_cutAfterFirstSensitive", CharString_cutAfterFirstSensitive(&slashStr, '/', &s));
-	CharString aStr3 = CharString_createRefCStrConst("a");
-	Test_assert(test, "CharString_cutAfterFirstSensitive", CharString_equalsStringSensitive(&s, &aStr3));
+	Test_assert(test, "CharString_cutAfterFirstSensitive", CharString_equalsCStringSensitive(&s, "a"));
 
 	Test_assert(test, "CharString_cutAfterLastSensitive", CharString_cutAfterLastSensitive(&slashStr, '/', &s));
-	CharString abStr = CharString_createRefCStrConst("a/b");
-	Test_assert(test, "CharString_cutAfterLastSensitive", CharString_equalsStringSensitive(&s, &abStr));
+	Test_assert(test, "CharString_cutAfterLastSensitive", CharString_equalsCStringSensitive(&s, "a/b"));
 
 	Test_assert(test, "CharString_cutBeforeFirstSensitive", CharString_cutBeforeFirstSensitive(&slashStr, '/', &s));
-	CharString bcStr = CharString_createRefCStrConst("b/c");
-	Test_assert(test, "CharString_cutBeforeFirstSensitive", CharString_equalsStringSensitive(&s, &bcStr));
+	Test_assert(test, "CharString_cutBeforeFirstSensitive", CharString_equalsCStringSensitive(&s, "b/c"));
 
 	Test_assert(test, "CharString_cutBeforeLastSensitive", CharString_cutBeforeLastSensitive(&slashStr, '/', &s));
-	CharString cStr = CharString_createRefCStrConst("c");
-	Test_assert(test, "CharString_cutBeforeLastSensitive", CharString_equalsStringSensitive(&s, &cStr));
+	Test_assert(test, "CharString_cutBeforeLastSensitive", CharString_equalsCStringSensitive(&s, "c"));
 
 	CharString mixStr = CharString_createRefCStrConst("aXbXc");
 
 	Test_assert(test, "CharString_cutAfterFirstInsensitive", CharString_cutAfterFirstInsensitive(&mixStr, 'x', &s));
-	Test_assert(test, "CharString_cutAfterFirstInsensitive", CharString_equalsStringSensitive(&s, &aStr3));
+	Test_assert(test, "CharString_cutAfterFirstInsensitive", CharString_equalsCStringSensitive(&s, "a"));
 
 	//cutAfter / cutBefore (string)
 
@@ -387,26 +377,22 @@ void Test_stringRead(Test *test) {
 	CharString sep = CharString_createRefCStrConst("::");
 
 	Test_assert(test, "CharString_cutAfterFirstStringSensitive", CharString_cutAfterFirstStringSensitive(&dSls, &sep, &s));
-	CharString fooStr = CharString_createRefCStrConst("foo");
-	Test_assert(test, "CharString_cutAfterFirstStringSensitive", CharString_equalsStringSensitive(&s, &fooStr));
+	Test_assert(test, "CharString_cutAfterFirstStringSensitive", CharString_equalsCStringSensitive(&s, "foo"));
 
 	Test_assert(test, "CharString_cutAfterLastStringSensitive", CharString_cutAfterLastStringSensitive(&dSls, &sep, &s));
-	CharString fooBarStr = CharString_createRefCStrConst("foo::bar");
-	Test_assert(test, "CharString_cutAfterLastStringSensitive", CharString_equalsStringSensitive(&s, &fooBarStr));
+	Test_assert(test, "CharString_cutAfterLastStringSensitive", CharString_equalsCStringSensitive(&s, "foo::bar"));
 
 	Test_assert(test, "CharString_cutBeforeFirstStringSensitive", CharString_cutBeforeFirstStringSensitive(&dSls, &sep, &s));
-	CharString barBazStr = CharString_createRefCStrConst("bar::baz");
-	Test_assert(test, "CharString_cutBeforeFirstStringSensitive", CharString_equalsStringSensitive(&s, &barBazStr));
+	Test_assert(test, "CharString_cutBeforeFirstStringSensitive", CharString_equalsCStringSensitive(&s, "bar::baz"));
 
 	Test_assert(test, "CharString_cutBeforeLastStringSensitive", CharString_cutBeforeLastStringSensitive(&dSls, &sep, &s));
-	CharString bazStr = CharString_createRefCStrConst("baz");
-	Test_assert(test, "CharString_cutBeforeLastStringSensitive", CharString_equalsStringSensitive(&s, &bazStr));
+	Test_assert(test, "CharString_cutBeforeLastStringSensitive", CharString_equalsCStringSensitive(&s, "baz"));
 
 	Test_assert(test, "CharString_cutAfterFirstStringInsensitive", CharString_cutAfterFirstStringInsensitive(&dSls, &sep, &s));
-	Test_assert(test, "CharString_cutAfterFirstStringInsensitive", CharString_equalsStringSensitive(&s, &fooStr));
+	Test_assert(test, "CharString_cutAfterFirstStringInsensitive", CharString_equalsCStringSensitive(&s, "foo"));
 
 	Test_assert(test, "CharString_cutBeforeLastStringInsensitive", CharString_cutBeforeLastStringInsensitive(&dSls, &sep, &s));
-	Test_assert(test, "CharString_cutBeforeLastStringInsensitive", CharString_equalsStringSensitive(&s, &bazStr));
+	Test_assert(test, "CharString_cutBeforeLastStringInsensitive", CharString_equalsCStringSensitive(&s, "baz"));
 
 	//cut missing char (should fail)
 

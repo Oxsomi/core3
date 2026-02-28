@@ -41,7 +41,8 @@ typedef enum EStreamType {
 	EStreamType_ArchiveEntry	= 1 << 2,
 	EStreamType_Compressed		= 1 << 3,		//Unsupported
 	EStreamType_Encrypted		= 1 << 4,
-	EStreamType_Resizable		= 1 << 5
+	EStreamType_Resizable		= 1 << 5,
+	EStreamType_DisableSeek		= 1 << 6		//It's impossible to restart this stream (e.g. network stream)
 } EStreamType;
 
 typedef struct Stream {
@@ -162,6 +163,21 @@ Bool StreamCursor_read(
 	U64 length,
 	Bool bypassCache,
 	const Allocator *alloc,
+	Error *e_rr
+);
+
+//Expensively compare the two streams, this is only valid if both streams are seekable.
+// As otherwise reading them might cause the stream to change.
+//Avoid using this in heavy paths, as this is a full stream compare.
+Bool Stream_compare(
+	StreamRef *a,
+	StreamRef *b,
+	U64 aOff,
+	U64 bOff,
+	U64 length,
+	U64 chunkSize,          //0 = stream cursor default (e.g. 32KiB)
+	const Allocator *alloc,
+	ECompareResult *result,
 	Error *e_rr
 );
 

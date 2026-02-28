@@ -22,6 +22,7 @@
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/interface.h"
 #include "types/container/ref_ptr.h"
+#include "types/container/memory_stream.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
@@ -30,8 +31,6 @@ TListImpl(CAFolderInfo);
 TListImpl(CAFileInfo);
 
 static const U64 CAHandle_RootId = 0;
-
-static const CAHandle CAHandle_Root = (U64)1 << 63;
 
 static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64)1 << 63) | id; }
 static inline CAHandle CAHandle_makeFile(U64 id) { return id; }
@@ -198,7 +197,7 @@ void CAFile_free(CAFile *caFile, const Allocator *alloc) {
 
 static inline const CAFolderInfo *CAFile_getFolderInfoPtr(const CAFile *caFile, CAHandle handle) {
 
-	if (!caFile || !CAHandle_isFolder(handle) || CAHandle_isRoot(handle))
+	if (!caFile || !CAHandle_isFolder(handle))
 		return NULL;
 
 	U64 id = CAHandle_getId(handle);
@@ -440,7 +439,7 @@ CAHandle CAFile_resolveSubFolder(const CAFile *caFile, CAHandle parentDir, CharS
 		CAHandle handle = CAHandle_makeFolder(folder->dirOffset + i);
 		CharString name = CAFile_getName(caFile, handle);
 
-		if (CharString_equalsStringInsensitive(&name, &fileName))
+		if (CharString_equalsStringSensitive(&name, &fileName))
 			return handle;
 	}
 
@@ -462,7 +461,7 @@ CAHandle CAFile_resolveSubFile(const CAFile *caFile, CAHandle parentDir, CharStr
 		CAHandle handle = CAHandle_makeFile(folder->fileOffset + i);
 		CharString name = CAFile_getName(caFile, handle);
 
-		if (CharString_equalsStringInsensitive(&name, &fileName))
+		if (CharString_equalsStringSensitive(&name, &fileName))
 			return handle;
 	}
 
@@ -763,10 +762,33 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 	if (pid >= caFile->folders.length)
 		retError(clean, Error_outOfBounds(2, pid, caFile->folders.length, "CAFile_move()::newParent out of bounds"));
 
+	//No-op, move to self:
+
+	U64 srcId = CAHandle_getId(fileHandle);
+	U64 oldParentId =
+		CAHandle_isFile(fileHandle) ? (U64)CAFileInfo_getParent(caFile->files.ptr[srcId]) :
+		(U64)caFile->folders.ptr[srcId].parent;
+
+	if (oldParentId == pid)
+		goto clean;
+
 	//Can't move a folder into itself or a descendant
 
-	if (CAHandle_isFolder(fileHandle) && pid >= CAHandle_getId(fileHandle))
-			retError(clean, Error_invalidParameter(2, 0, "CAFile_move()::cannot move folder into itself or descendant"));
+	if (CAHandle_isFolder(fileHandle)) {
+
+		U64 cur = pid;
+
+		while (cur) {
+
+			if (cur == srcId)
+				retError(clean, Error_invalidParameter(2, 0, "CAFile_move() tried to move into sibling, illegal!"));
+
+			cur = caFile->folders.ptr[cur].parent;
+		}
+
+		if (cur == srcId)
+			retError(clean, Error_invalidParameter(2, 0, "CAFile_move() tried to move into sibling, illegal!"));
+	}
 
 	CharString name = CAFile_getName(caFile, fileHandle);
 
@@ -784,8 +806,6 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 
 	if (CAHandle_isFile(fileHandle)) {
 
-		U64 srcId = CAHandle_getId(fileHandle);
-		U16 oldParentId = CAFileInfo_getParent(caFile->files.ptr[srcId]);
 		CAFolderInfo *oldPar = &caFile->folders.ptrNonConst[oldParentId];
 		CAFolderInfo *newPar = &caFile->folders.ptrNonConst[newParentId];
 
@@ -847,14 +867,12 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 			if (f->fileOffset > srcId)
 				--f->fileOffset;
 
-			if ((U64)f->fileOffset >= dstId && i != newParentId)
+			if (i != newParentId && (U64)f->fileOffset >= dstId && i != newParentId)
 				++f->fileOffset;
 		}
 
 	} else {
 
-		U64 srcId = CAHandle_getId(fileHandle);
-		U16 oldParentId = caFile->folders.ptr[srcId].parent;
 		CAFolderInfo *oldPar = &caFile->folders.ptrNonConst[oldParentId];
 		CAFolderInfo *newPar = &caFile->folders.ptrNonConst[newParentId];
 
@@ -879,7 +897,16 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 
 		gotoIfError3(clean, ListCAFolderInfo_erase(&caFile->folders, srcId, e_rr));
 
+		if (newParentId > srcId)
+			--newParentId;
+
+		if (oldParentId > srcId)
+			--oldParentId;
+
 		gotoIfError3(clean, ListCAFolderInfo_insert(&caFile->folders, dstId, entry, alloc, e_rr));
+
+		oldPar = &caFile->folders.ptrNonConst[oldParentId];
+		newPar = &caFile->folders.ptrNonConst[newParentId];
 
 		if (tmpStreamStr.stream) {
 			gotoIfError3(clean, DLFile_insertStream(&caFile->names, dstId, &tmpStreamStr, alloc, e_rr));
@@ -905,7 +932,7 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 
 		for (U64 i = 0; i < caFile->folders.length; ++i) {
 
-			if (i == dstId)
+			if (i == dstId || i == newParentId)
 				continue;
 
 			CAFolderInfo *f = &caFile->folders.ptrNonConst[i];
@@ -1041,25 +1068,26 @@ CAHandle CAFile_add(
 
 		CAFolderInfo fi = {
 			.parent     = parentId,
-			.dirOffset  = (U16)caFile->folders.length,	//No children yet; will update on first child add
+			.dirOffset  = 0,
 			.dirCount   = 0,
 			.fileCount  = 0,
-			.fileOffset = 0								//No files yet; will update on first file add
+			.fileOffset = 0
 		};
 
 		gotoIfError3(clean, ListCAFolderInfo_insert(&caFile->folders, insertAt, fi, alloc, e_rr));
+		par = &caFile->folders.ptrNonConst[parentId];
 
 		//Folder name lives at index insertAt in the names DLFile
 
 		gotoIfError3(clean, DLFile_insertEntryString(&caFile->names, insertAt, name, alloc, e_rr));
 
-		++caFile->folders.ptrNonConst[parentId].dirCount;
+		++par->dirCount;
 
 		//Fix up all parent/dirOffset references shifted by the insert
 
 		for (U64 i = 0; i < caFile->folders.length; ++i) {
 
-			if (i == insertAt)
+			if (i == insertAt || i == parentId)
 				continue;
 
 			if (caFile->folders.ptr[i].parent >= insertAt)
@@ -1327,4 +1355,127 @@ Bool CAFile_foreach(
 	Error *e_rr
 ) {
 	return CAFile_foreachHelper(caFile, fileHandle, callback, object, recurse, alloc, e_rr);
+}
+
+Bool CAFile_dataEqual(
+	const CAFile *a, CAHandle aFile,
+	const CAFile *b, CAHandle bFile,
+	const Allocator *alloc,
+	ECompareResult *result,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+	RefPtr *aStream = NULL, *bStream = NULL;
+	U64 aOff = 0, bOff = 0;
+
+	if (!a || !b || !result)
+		retError(clean, Error_nullPointer(
+			!a ? 0 : (!b ? 2 : 5),
+			"CAFile_dataEqual()::a, b and result are required"
+		));
+
+	if (!CAHandle_isFile(aFile) || !CAHandle_isFile(bFile))
+		retError(clean, Error_invalidParameter(
+			!CAHandle_isFile(aFile) ? 1 : 3, 0,
+			"CAFile_dataEqual()::aFile and bFile must be file handles"
+		));
+
+	*result = ECompareResult_Eq;
+
+	U64 aSize = CAFile_fileSize(a, aFile);
+	U64 bSize = CAFile_fileSize(b, bFile);
+
+	if (aSize != bSize) {
+		*result = aSize < bSize ? ECompareResult_Lt : ECompareResult_Gt;
+		goto clean;
+	}
+
+	Bool aLoaded = CAFile_isLoaded(a, aFile);
+	Bool bLoaded = CAFile_isLoaded(b, bFile);
+
+	if (aLoaded && bLoaded) {
+
+		Bool aValid = false, bValid = false;
+		Buffer aData = CAFile_getDataConst(a, aFile, &aValid);
+		Buffer bData = CAFile_getDataConst(b, bFile, &bValid);
+
+		if (!aValid || !bValid)
+			retError(clean, Error_invalidState(0, "CAFile_dataEqual()::failed to get buffer data"));
+
+		U64 aLen = Buffer_length(aData);
+		U64 bLen = Buffer_length(bData);
+
+		if (aLen != bLen) {
+			*result = aLen < bLen ? ECompareResult_Lt : ECompareResult_Gt;
+			goto clean;
+		}
+
+		*result = Buffer_cmp(aData, bData);
+		goto clean;
+	}
+
+	//At least one side is a stream, normalize both to StreamRef via MemoryStream wrapper if needed
+
+	RefPtrType memType = MemoryStream_makeType(alloc);
+
+	if (aLoaded) {
+
+		Bool aValid = false;
+		Buffer aData = CAFile_getDataConst(a, aFile, &aValid);
+
+		if (!aValid)
+			retError(clean, Error_invalidState(0, "CAFile_dataEqual()::failed to get buffer for a"));
+
+		gotoIfError3(clean, MemoryStream_createFromBufferRegion(
+			aData, 0, 0, EMemoryStreamFlags_None, &memType, &aStream, e_rr
+		));
+
+		aOff = 0;
+
+		bStream = CAFile_getDataStream(b, bFile, &bOff);
+
+		if (!bStream)
+			retError(clean, Error_invalidState(0, "CAFile_dataEqual()::expected stream for b"));
+
+	} else if (bLoaded) {
+
+		Bool bValid = false;
+		Buffer bData = CAFile_getDataConst(b, bFile, &bValid);
+
+		if (!bValid)
+			retError(clean, Error_invalidState(0, "CAFile_dataEqual()::failed to get buffer for b"));
+
+		gotoIfError3(clean, MemoryStream_createFromBufferRegion(
+			bData, 0, 0, EMemoryStreamFlags_None, &memType, &bStream, e_rr
+		));
+
+		bOff = 0;
+		aStream = CAFile_getDataStream(a, aFile, &aOff);
+
+		if (!aStream)
+			retError(clean, Error_invalidState(0, "CAFile_dataEqual()::expected stream for a"));
+
+	} else {
+
+		aStream = CAFile_getDataStream(a, aFile, &aOff);
+		bStream = CAFile_getDataStream(b, bFile, &bOff);
+
+		if (!aStream || !bStream)
+			retError(clean, Error_invalidState(0, "CAFile_dataEqual()::expected streams on both sides"));
+	}
+
+	gotoIfError3(clean, Stream_compare(
+		aStream, bStream,
+		aOff, bOff,
+		CAFile_fileSize(a, aFile),
+		0,
+		alloc,
+		result,
+		e_rr
+	));
+
+clean:
+	RefPtr_dec(&aStream);
+	RefPtr_dec(&bStream);
+	return s_uccess;
 }

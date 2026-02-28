@@ -214,30 +214,27 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	Bool supportsDebug[2] = { 0 };
 
-	CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
-	CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
-
 	if(instance->flags & EGraphicsInstanceFlags_IsVerbose)
 		Log_debugLnx("Supported extensions:");
 
 	Bool supportsColorSpace = false;
 
-	CharString swapchainColorspace = CharString_createRefCStrConst("VK_EXT_swapchain_colorspace");
+	CharString swapchainColorspace = CharString_createRefCStrConst();
 
 	for(U64 i = 0; i < extensionCount; ++i) {
 
 		const C8 *name = extensions.ptr[i].extensionName;
 		CharString nameStr = CharString_createRefCStrConst(name);
 
-		if(CharString_equalsStringSensitive(nameStr, swapchainColorspace))
+		if(CharString_equalsCStringSensitive(nameStr, "VK_EXT_swapchain_colorspace"))
 			supportsColorSpace = true;
 
 		else if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-			if(CharString_equalsStringSensitive(nameStr, debugReport))
+			if(CharString_equalsCStringSensitive(nameStr, "VK_EXT_debug_report"))
 				supportsDebug[0] = true;
 
-			else if(CharString_equalsStringSensitive(nameStr, debugUtils))
+			else if(CharString_equalsCStringSensitive(nameStr, "VK_EXT_debug_utils"))
 				supportsDebug[1] = true;
 		}
 
@@ -281,9 +278,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	if (supportsColorSpace)
 		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr))
 
-	const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
-	const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
-
 	U8 hasDebugLayer = 0;
 
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug)
@@ -296,7 +290,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 				case 'n':	//validatioN
 
-					if(CharString_equalsStringSensitive(name, CharString_createRefCStrConst(vkValidation)))
+					if(CharString_equalsCStringSensitive(name, "VK_LAYER_KHRONOS_validation"))
 						hasDebugLayer |= 1;
 
 					break;
@@ -305,7 +299,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 					case 'p':	//dumP
 
-						if(CharString_equalsStringSensitive(name, CharString_createRefCStrConst(vkApiDump)))
+						if(CharString_equalsCStringSensitive(name, "VK_LAYER_LUNARG_api_dump"))
 							hasDebugLayer |= 2;
 
 						break;
@@ -324,10 +318,10 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 		Log_warnLnx("VkGraphicsInstance_create tried to enable debug layer, but no debug layer was present");
 
 	if(hasDebugLayer & 1)
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, vkValidation))
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, "VK_LAYER_KHRONOS_validation"))
 
 	if(hasDebugLayer & 2)
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, vkApiDump))
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, "VK_LAYER_LUNARG_api_dump"))
 
 	VkApplicationInfo application = (VkApplicationInfo) {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -632,9 +626,8 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			Bool found = false;
 
 			for(U64 l = 0; l < sizeof(reqExtensions); ++l)
-				if (CharString_equalsStringSensitive(
-					CharString_createRefCStrConst(reqExtensionsName[l]),
-					CharString_createRefCStrConst(name)
+				if (CharString_equalsCStringSensitive(
+					CharString_createRefCStrConst(reqExtensionsName[l]), name
 				)) {
 					reqExtensions[l] = true;
 					found = true;
@@ -645,9 +638,8 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			if (!found)
 				for(U64 l = 0; l < sizeof(optExtensions); ++l)
-					if (CharString_equalsStringSensitive(
-						CharString_createRefCStrConst(optExtensionsName[l]),
-						CharString_createRefCStrConst(name)
+					if (CharString_equalsCStringSensitive(
+						CharString_createRefCStrConst(optExtensionsName[l]), name
 					)) {
 						optExtensions[l] = true;
 						break;

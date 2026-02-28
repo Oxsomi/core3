@@ -22,6 +22,7 @@
 #include "types/base/error.h"
 #include "types/base/constants.h"
 #include "types/base/c8.h"
+#include "types/base/algorithm.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -136,7 +137,8 @@ Bool Buffer_unsetBitRange(const Buffer dst, U64 dstOff, U64 bits, Error *e_rr);
 
 //Comparison
 
-Bool Buffer_eq(const Buffer buf0, const Buffer buf1);			//Also compares size
+ECompareResult Buffer_cmp(const Buffer buf0, const Buffer buf1);
+static inline Bool Buffer_eq(const Buffer buf0, const Buffer buf1) { return Buffer_cmp(buf0, buf1) == ECompareResult_Eq; }
 static inline Bool Buffer_neq(const Buffer buf0, const Buffer buf1) { return !Buffer_eq(buf0, buf1); }
 
 //Use this instead of simply copying the Buffer to a new location

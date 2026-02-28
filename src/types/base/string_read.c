@@ -511,6 +511,16 @@ Bool CharString_equalsString(const CharString *s, const CharString *other, EStri
 	return true;
 }
 
+Bool CharString_equalsCString(const CharString *s, const C8 *literal, EStringCase caseSensitive) {
+
+	CharString lit = CharString_createNull();
+
+	if(literal)
+		lit = CharString_createRefCStrConst(literal);
+
+	return CharString_equalsString(s, &lit, caseSensitive);
+}
+
 Bool CharString_equals(const CharString s, C8 c, EStringCase caseSensitive) {
 	return CharString_length(s) == 1 && s.ptr &&
 		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) ==

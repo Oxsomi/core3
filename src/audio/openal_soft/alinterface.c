@@ -84,11 +84,10 @@ Bool AudioInterface_getDeviceInfos(
 
 	gotoIfError2(clean, CharString_splitSensitive(extensions, ' ', alloc, &strings))
 
-	CharString enumAll = CharString_createRefCStrConst("ALC_ENUMERATE_ALL_EXT");
 	Bool containsEnumAll = false;
 
 	for(U64 i = 0; i < strings.length; ++i)
-		if (CharString_equalsStringSensitive(strings.ptr[i], enumAll)) {
+		if (CharString_equalsCStringSensitive(strings.ptr[i], "ALC_ENUMERATE_ALL_EXT")) {
 			containsEnumAll = true;
 			break;
 		}
@@ -107,10 +106,6 @@ Bool AudioInterface_getDeviceInfos(
 	C8 c = 0;
 
 	U64 j = 0;
-
-	CharString debug = CharString_createRefCStrConst("ALC_EXT_debug");
-	CharString f64 = CharString_createRefCStrConst("AL_EXT_double");
-	CharString f32 = CharString_createRefCStrConst("AL_EXT_float32");
 
 	while ((c = ptr[++i]) != '\0' || !prevNull) {
 
@@ -141,13 +136,13 @@ Bool AudioInterface_getDeviceInfos(
 
 			for(U64 k = 0; k < strings.length; ++k)
 
-				if (CharString_equalsStringSensitive(strings.ptr[k], debug))
+				if (CharString_equalsCStringSensitive(strings.ptr[k], "ALC_EXT_debug"))
 					info.flags |= EAudioDeviceFlags_Debug;
 
-				else if (CharString_equalsStringSensitive(strings.ptr[k], f64))
+				else if (CharString_equalsCStringSensitive(strings.ptr[k], "AL_EXT_double"))
 					info.flags |= EAudioDeviceFlags_HasF64Ext;
 
-				else if (CharString_equalsStringSensitive(strings.ptr[k], f32))
+				else if (CharString_equalsCStringSensitive(strings.ptr[k], "AL_EXT_float32"))
 					info.flags |= EAudioDeviceFlags_HasF32Ext;
 
 			ListCharString_free(&strings, alloc);
