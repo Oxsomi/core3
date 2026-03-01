@@ -450,7 +450,7 @@ Bool EncryptionStream_create(
 
 	Buffer_memcpy(
 		Buffer_createRef(es->encryptionKey, sizeof(es->encryptionKey)),
-		Buffer_createRefConst(encryptionKey, sizeof(encryptionKey))
+		Buffer_createRefConst(encryptionKey, sizeof(es->encryptionKey))
 	);
 
 clean:

@@ -134,6 +134,9 @@ static inline U64 CAHandle_getId(CAHandle handle) { return handle << 1 >> 1; }
 static inline Bool CAHandle_isFolder(CAHandle handle) { return handle >> 63; }
 static inline Bool CAHandle_isFile(CAHandle handle) { return !CAHandle_isFolder(handle); }
 
+static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64)1 << 63) | id; }	//Unsafe, only use if you know it's a dir
+static inline CAHandle CAHandle_makeFile(U64 id) { return id; }						//Unsafe, only use if you know it's a file
+
 static inline Bool CAHandle_isRoot(CAHandle handle) {
 	return CAHandle_isFolder(handle) && !CAHandle_getId(handle);
 }
@@ -290,8 +293,24 @@ Bool CAFile_foreach(
 
 //Serialize
 
-Bool CAFile_write(const CAFile *caFile, const Allocator *alloc, Buffer *result, Error *e_rr);
-Bool CAFile_read(Buffer file, const U32 encryptionKey[8], const Allocator *alloc, CAFile *caFile, Error *e_rr);
+Bool CAFile_write(
+	const CAFile *caFile,
+	const RefPtrType *encStreamType,
+	StreamRef *result,
+	U64 *startOffset,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+Bool CAFile_read(
+	StreamRef *file,
+	const RefPtrType *encStreamType,
+	U64 startOffset,
+	const U32 encryptionKey[8],
+	const Allocator *alloc,
+	CAFile *caFile,
+	Error *e_rr
+);
 
 //Combine
 

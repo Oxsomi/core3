@@ -57,6 +57,15 @@ int main() {
 	Test_CAMixedTree(&t);
 	Test_CAStress(&t);
 
+	Test_CASerializeEmpty(&t);
+	Test_CASerializeSingleFile(&t);
+	Test_CASerializeHierarchy(&t);
+	Test_CASerializeMsDosDate(&t);
+	Test_CASerializeFullDate(&t);
+	Test_CASerializeEncrypted(&t);
+	Test_CASerializeMultipleFiles(&t);
+	Test_CASerializeStreamBacked(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 
 	return Test_end(&t);

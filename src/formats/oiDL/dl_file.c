@@ -246,6 +246,25 @@ clean:
 	return s_uccess;
 }
 
+Bool DLFile_initCache(DLFile *dlFile, U64 size, const Allocator *alloc, Error *e_rr) {
+	
+	Bool s_uccess = true;
+
+	if (!dlFile)
+		retError(clean, Error_nullPointer(2, "DLFile_initCache()::dlFile is required"));
+	
+	if(dlFile->cache.ptr)
+		retError(clean, Error_invalidState(0, "DLFile_initCache() can't be called when cache is already initialized"));
+
+	if (!size)
+		size = 1 * MIBI;
+	
+	gotoIfError3(clean, Buffer_resize(&dlFile->cache, size, false, false, alloc, e_rr));
+
+clean:
+	return s_uccess;
+}
+
 Bool DLFile_loadedStringAtConst(const DLFile *dlFile, U64 i, CharString *string, Error *e_rr) {
 
 	Bool s_uccess = true;

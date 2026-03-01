@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.099"
+	version = "0.2.100"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -94,7 +94,7 @@ class oxc3(ConanFile):
 
 	def build_requirements(self):
 		if not self.options.enableShaderCompiler:
-			self.tool_requires("oxc3/0.2.099", options = {
+			self.tool_requires("oxc3/0.2.100", options = {
 				"forceVulkan": self.options.forceVulkan,
 				"enableSIMD": self.options.enableSIMD,
 				"enableTests": False,

@@ -33,6 +33,7 @@ Bool DLFile_read(
 	StreamRef *file,
 	U64 startOffset,
 	const U32 encryptionKey[8],
+	I32x4 iv,
 	Bool isSubFile,
 	const Allocator *alloc,
 	const RefPtrType *encryptionStreamType,
@@ -43,12 +44,14 @@ Bool DLFile_read(
 	Bool s_uccess = true;
 	Bool allocate = false;
 
-	I32x4 iv = I32x4_zero();
 	I32x4 tag = I32x4_zero();
 	StreamCursor cursor = (StreamCursor) { 0 };
 	StreamCursor cursorEntry = (StreamCursor) { 0 };
 	Buffer tmp = Buffer_createNull();
 	StreamRef *dataStream = NULL;
+
+	if (!isSubFile)
+		iv = I32x4_zero();
 
 	if (!dlFile)
 		retError(clean, Error_nullPointer(2, "DLFile_read()::dlFile is required"));
@@ -171,7 +174,9 @@ Bool DLFile_read(
 
 		//Get tag and iv
 
-		gotoIfError3(clean, StreamCursor_consume(&cursor, &streamOff, &iv, 12, alloc, e_rr));
+		if (!isSubFile)
+			gotoIfError3(clean, StreamCursor_consume(&cursor, &streamOff, &iv, 12, alloc, e_rr));
+
 		gotoIfError3(clean, StreamCursor_consume(&cursor, &streamOff, &tag, sizeof(I32x4), alloc, e_rr));
 
 		//Validate remainder

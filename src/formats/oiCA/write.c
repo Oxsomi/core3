@@ -18,524 +18,295 @@
 *  This is called dual licensing.
 */
 
-/*
-
 #include "formats/oiCA/ca_file.h"
-#include "formats/oiDL/dl_file.h"
-#include "types/base/allocator.h"
-#include "types/base/error.h"
-#include "types/container/buffer.h"
+#include "formats/oiCA/headers.h"
+#include "formats/oiDL/interface.h"
+#include "types/container/stream.h"
+#include "types/container/types.h"
+#include "types/container/buffer_encrypt.h"
+#include "types/math/vec4i.h"
 #include "types/base/time.h"
-#include "types/math/math.h"
-#include "types/base/constants.h"
+#include "types/base/mathi.h"
 
 Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 
-	if(!time || !date)
+	if (!time || !date)
 		return false;
 
-	U16 year; U8 month, day, hour, minute, second;
-	const Bool b = Time_getDate(ns, &year, &month, &day, &hour, &minute, &second, NULL, false);
+	Date d = (Date) { 0 };
+	const Bool b = Time_getDate(ns, &d, false);
 
-	if(!b || year < 1980 || year > (1980 + 0x7F))
+	if (!b || d.year < 1980 || d.year >(1980 + 0x7F))
 		return false;
 
-	*time = (second >> 1) | ((U16)minute << 5) | ((U16)hour << 11);
-	*date = day | ((U16)month << 5) | ((U16)(year - 1980) << 11);
+	*time = (d.second >> 1) | ((U16)d.minute << 5) | ((U16)d.hour << 11);
+	*date = d.day | ((U16)d.month << 5) | ((U16)(d.year - 1980) << 11);
 	return true;
 }
 
-ECompareResult sortParentCountAndFileNames(CharString *a, CharString *b) {
-
-	const U64 foldersA = CharString_countAllSensitive(*a, '/', 0);
-	const U64 foldersB = CharString_countAllSensitive(*b, '/', 0);
-
-	//We wanna sort on folder count first
-	//This ensures the root dirs are always at [0,N] and their children at [N, N+M], etc.
-
-	if (foldersA < foldersB)
-		return ECompareResult_Lt;
-
-	if (foldersA > foldersB)
-		return ECompareResult_Gt;
-
-	return CharString_compareInsensitive(a, b);
-}
-
-//We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.
-
-Bool CAFile_write(CAFile caFile, Allocator alloc, Buffer *result, Error *e_rr) {
-
-	ListCharString directories = { 0 };
-	ListCharString files = { 0 };
-	DLFile dlFile = (DLFile) { 0 };
-	Buffer dlFileBuffer = Buffer_createNull();
-	Buffer outputBuffer = Buffer_createNull();
+Bool CAFile_write(
+	const CAFile *caFile,
+	const RefPtrType *encStreamType,
+	StreamRef *result,
+	U64 *startOffset,
+	const Allocator *alloc,
+	Error *e_rr
+) {
 	Bool s_uccess = true;
+	StreamCursor cursor = (StreamCursor) { 0 };
+	Buffer tmp = Buffer_createNull();
+	I32x4 iv = I32x4_zero();
 
-	if(!result)
-		retError(clean, Error_nullPointer(2, "CAFile_write()::result is required"))
-
-	if(result->ptr)
-		retError(clean, Error_invalidParameter(2, 0, "CAFile_write()::result isn't empty, might indicate memleak"))
-
-	gotoIfError2(clean, ListCharString_reserve(&directories, 128, alloc))
-	gotoIfError2(clean, ListCharString_reserve(&files, 128, alloc))
-
-	//Validate CAFile and calculate files and folders
-
-	U64 outputSize = 0;			//Excluding header, hash and DLFile
-
-	U32 hash[8] = { 0 };
-
-	U64 realHeaderSize = sizeof(CAHeader) + (
-		caFile.settings.compressionType ? (
-			caFile.settings.flags & ECASettingsFlags_UseSHA256 ? sizeof(hash) : sizeof(hash[0])
-		) : 0
-	);
-
-	U64 realHeaderSizeExEnc = realHeaderSize;
-	realHeaderSize += (caFile.settings.encryptionType ? sizeof(I32x4) + 12 : 0);
-
-	U64 baseFileHeader = (						//FileInfo, parent directory elsewhere
-		(
-			(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) ||
-			(caFile.settings.flags & ECASettingsFlags_IncludeDate)
-		) ? (caFile.settings.flags & ECASettingsFlags_IncludeFullDate ? sizeof(Ns) : sizeof(U16) * 2) : 0
-	);
-
-	U64 biggestFileSize = 0;
-
-	for (U64 i = 0; i < caFile.archive.entries.length; ++i) {
-
-		ArchiveEntry entry = caFile.archive.entries.ptr[i];
-
-		//Push back directory names. Size is not known until later.
-
-		if (entry.type == EFileType_Folder) {
-
-			gotoIfError2(clean, ListCharString_pushBack(&directories, entry.path, alloc))
-
-			if(directories.length >= U16_MAX)
-				retError(clean, Error_outOfBounds(
-					0, 0xFFFF, U16_MAX - 1, "CAFile_write() directories are limited to U16_MAX"
-				))
-
-			continue;
-		}
-
-		//Push back file names and calculate output buffer
-
-		gotoIfError2(clean, ListCharString_pushBack(&files, entry.path, alloc))
-
-		if(files.length >= U32_MAX)
-			retError(clean, Error_outOfBounds(0, files.length, U32_MAX, "CAFile_write() files are limited to U32_MAX"))
-
-		if(outputSize + Buffer_length(entry.data) < outputSize)
-			retError(clean, Error_overflow(
-				0, outputSize + Buffer_length(entry.data), outputSize, "CAFile_write() overflow"
-			))
-
-		outputSize += Buffer_length(entry.data);
-		biggestFileSize = U64_max(biggestFileSize, Buffer_length(entry.data));
-	}
-
-	U64 dirRefSize  = directories.length <= 254 ? 1 : 2;
-	U64 fileRefSize = files.length <= 65534 ? 2 : 4;
-
-	EXXDataSizeType sizeType = biggestFileSize <= U8_MAX ? EXXDataSizeType_U8 : (
-		biggestFileSize <= U16_MAX ? EXXDataSizeType_U16 : (
-			biggestFileSize <= U32_MAX ? EXXDataSizeType_U32 : EXXDataSizeType_U64
+	if (!caFile || !caFile->folders.ptr || !result || !startOffset)
+		retError(clean, Error_nullPointer(
+			!result ? 2 : (!startOffset ? 3 : 0),
+			"CAFile_write()::caFile, result and startOffset are required"
 		));
 
-	baseFileHeader += SIZE_BYTE_TYPE[sizeType];
-	baseFileHeader += dirRefSize;
+	if (!result || result->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+		retError(clean, Error_nullPointer(2, "CAFile_write()::result must be a valid StreamRef"));
 
-	//Add directories, files and directory/file count.
+	const CASettings *settings = &caFile->settings;
 
-	realHeaderSizeExEnc += dirRefSize + fileRefSize;
-	realHeaderSize += dirRefSize + fileRefSize;
+	if (settings->compressionType >= EXXCompressionType_Count)
+		retError(clean, Error_invalidParameter(0, 0, "CAFile_write()::compressionType is invalid"));
 
-	U64 fileObjLen = dirRefSize * directories.length + baseFileHeader * files.length;
+	if (settings->compressionType != EXXCompressionType_None)
+		retError(clean, Error_unsupportedOperation(0, "CAFile_write()::compressionType not supported yet"));	//TODO:
 
-	if(outputSize + fileObjLen < outputSize)
-		retError(clean, Error_overflow(0, outputSize + fileObjLen, outputSize, "CAFile_write() overflow (2)"))
+	if (settings->encryptionType >= EXXEncryptionType_Count)
+		retError(clean, Error_invalidParameter(0, 1, "CAFile_write()::encryptionType is invalid"));
 
-	outputSize += fileObjLen;
+	if (*startOffset & 15)
+		retError(clean, Error_unsupportedOperation(0, "CAFile_write() at misaligned startOffset is unsupported (16-byte)"));
 
-	//Sort directories and files to ensure our file ids are correct,
-	//This is because we have full directory names, so it automatically resolves
-	// in a way where we know where our children are (in a linear way).
-	//This sort is different than just sortString. It sorts on parent count first and then alphabetically.
-	//This allows us to not have to reorder the files down the road since they're already sorted.
+	Stream *stream = RefPtr_data(result, Stream);
 
-	if(
-		!ListCharString_sortCustom(directories, (CompareFunction) sortParentCountAndFileNames) ||
-		!ListCharString_sortCustom(files, (CompareFunction) sortParentCountAndFileNames)
-	)
-		retError(clean, Error_invalidOperation(0, "CAFile_write() couldn't sort files and/or directories"))
+	U64 dirCount  = caFile->folders.length - 1;		//-1 for root
+	U64 fileCount = caFile->files.length;
 
-	//Allocate and generate DLFile
+	if (dirCount >= U16_MAX)
+		retError(clean, Error_outOfBounds(0, dirCount,  U16_MAX, "CAFile_write()::too many directories"));
 
-	DLSettings dlSettings = (DLSettings) { .dataType = EDLDataType_Ascii };
+	if (fileCount >= U32_MAX)
+		retError(clean, Error_outOfBounds(0, fileCount, U32_MAX, "CAFile_write()::too many files"));
 
-	gotoIfError3(clean, DLFile_create(dlSettings, alloc, &dlFile, e_rr))
+	Bool dirCountLong  = dirCount  > 254;
+	Bool fileCountLong = fileCount > 65534;
 
-	for(U64 i = 0; i < directories.length; ++i) {
+	U64 dirRefSize  = dirCountLong  ? 2 : 1;
+	U64 fileRefSize = fileCountLong ? 4 : 2;
 
-		CharString dir = directories.ptr[i];
-		CharString dirName = CharString_createNull();
+	Bool hasDate         = settings->flags & ECASettingsFlags_IncludeDate;
+	Bool hasExtendedDate = settings->flags & ECASettingsFlags_IncludeFullDate;
 
-		if(!CharString_cutBeforeLastSensitive(dir, '/', &dirName))
-			dirName = CharString_createRefStrConst(dir);
+	if (hasExtendedDate)
+		hasDate = true;
 
-		gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc, e_rr))
+	U64 fileObjDateSize = !hasDate ? 0 : (hasExtendedDate ? sizeof(Ns) : sizeof(U16) * 2);
+	U64 fileObjSize     = dirRefSize + fileObjDateSize;
+
+	U16 flags =
+		(hasDate         ? ECAFlags_FilesHaveDate         : ECAFlags_None) |
+		(hasExtendedDate ? ECAFlags_FilesHaveExtendedDate : ECAFlags_None) |
+		(dirCountLong    ? ECAFlags_DirectoriesCountLong  : ECAFlags_None) |
+		(fileCountLong   ? ECAFlags_FilesCountLong        : ECAFlags_None);
+
+	Bool isEncrypted = settings->encryptionType != EXXEncryptionType_None;
+
+	//Fixed header region: CAHeader + fileCount + dirCount + directories[] + files[]
+
+	U64 headerSize =
+		sizeof(CAHeader) +
+		fileRefSize +
+		dirRefSize +
+		dirCount  * dirRefSize +
+		fileCount * fileObjSize;
+
+	if (isEncrypted)
+		headerSize += sizeof(I32x4) + 12;		//iv (12) + tag (16)
+
+	// Align to 16 bytes before DLFiles
+
+	headerSize = (headerSize + 15) & ~(U64)15;
+
+	if (stream->reserve)
+		gotoIfError3(clean, stream->reserve(stream, *startOffset + headerSize, alloc, e_rr));
+
+	U64 cursorSize = U64_max(headerSize, 32 * KIBI);
+	gotoIfError3(clean, StreamCursor_create(result, cursorSize, true, alloc, &cursor, e_rr));
+
+	U64 start = *startOffset;
+
+	//Header
+
+	CAHeader header = (CAHeader) {
+		.magicNumber = CAHeader_MAGIC,
+		.version     = (U8)ECAVersion_V1_0,
+		.type        = (U8)settings->encryptionType,
+		.flags       = flags
+	};
+
+	gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &header, sizeof(CAHeader), alloc, e_rr));
+
+	//fileCount and dirCount
+
+	if (fileCountLong) {
+		gotoIfError3(clean, StreamCursor_appendU32(&cursor, startOffset, (U32) fileCount, alloc, e_rr));
 	}
 
-	for(U64 i = 0; i < files.length; ++i) {
+	else gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, (U16) fileCount, alloc, e_rr));
 
-		CharString file = files.ptr[i];
-		CharString fileName = CharString_createNull();
-
-		if(!CharString_cutBeforeLastSensitive(file, '/', &fileName))
-			fileName = CharString_createRefStrConst(file);
-
-		gotoIfError3(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc, e_rr))
+	if (dirCountLong) {
+		gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, (U16) dirCount, alloc, e_rr));
 	}
 
-	//Complete DLFile as buffer
+	else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, startOffset, (U8) dirCount, alloc, e_rr));
 
-	dlFile.settings.flags |= EDLSettingsFlags_HideMagicNumber;				//Small optimization
+	//directories[]
+	//Folder index 0 is runtime root (no on-disk representation).
+	//On disk: root-parented = 0xFF/0xFFFF sentinel, else (parent - 1).
 
-	gotoIfError3(clean, DLFile_write(dlFile, alloc, &dlFileBuffer, e_rr))
+	for (U64 i = 1; i < caFile->folders.length; ++i) {
 
-	DLFile_free(&dlFile, alloc);
+		const CAFolderInfo *fi = &caFile->folders.ptr[i];
 
-	//Build up final output buffer
-	//DLFile
-	//CADirectory[]
-	//CAFileObject[]
-	//U8[sum(file[i].data)]
+		U16 parentDisk = fi->parent == 0 ? (dirCountLong ? (U16)0xFFFF : (U16)0xFF) : (U16)(fi->parent - 1);
 
-	if (outputSize + Buffer_length(dlFileBuffer) < outputSize)
-		retError(clean, Error_overflow(
-			0, outputSize + Buffer_length(dlFileBuffer), outputSize, "CAFile_write() overflow (3)"
-		))
-
-	outputSize += Buffer_length(dlFileBuffer);
-
-	if (outputSize + realHeaderSize < outputSize)
-		retError(clean, Error_overflow(
-			0, outputSize + realHeaderSize, outputSize, "CAFile_write() overflow (4)"
-		))
-
-	outputSize += realHeaderSize;		//Reserve space for header (even though this won't be compressed)
-
-	gotoIfError2(clean, Buffer_createUninitializedBytes(outputSize, alloc, &outputBuffer))
-
-	//Append DLFile
-
-	Buffer outputBufferIt = Buffer_createRef(
-		(U8*)outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize
-	);
-
-	gotoIfError2(clean, Buffer_appendBuffer(&outputBufferIt, dlFileBuffer))
-
-	Buffer_free(&dlFileBuffer, alloc);
-
-	//Append CADirectory[]
-
-	U8 *dirPtr = (U8*)outputBufferIt.ptr;
-
-	for (U16 i = 0; i < (U16) directories.length; ++i) {
-
-		CharString dir = directories.ptr[i];
-		U64 it = CharString_findLastSensitive(dir, '/', 0, 0);
-
-		U16 parent = U16_MAX;
-
-		//Add to parent directory
-
-		if (it != U64_MAX) {
-
-			//We need to find the real parent.
-			//Since we're sorted alphabetically, we are able to look back from our current directory
-			//If we encounter something that doesn't start with our basePath/ then we know we are missing this dir
-			//And this means we somehow messed with the input data
-
-			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
-
-			if (
-				!CharString_cut(dir, 0, it, &realParentDir) ||
-				!CharString_cut(dir, 0, it + 1, &baseDir)
-			)
-				retError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split directory name"))
-
-			for(U64 j = i - 1; j != U64_MAX; --j)
-
-				if (CharString_equalsStringInsensitive(directories.ptr[j], realParentDir)) {
-					parent = (U16) j;
-					break;
-				}
-
-			if(parent == U16_MAX)
-				retError(clean, Error_invalidState(0, "CAFile_write() couldn't find parent directory of folder"))
+		if (dirCountLong) {
+			gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, parentDisk, alloc, e_rr));
 		}
 
-		//Add directory
-
-		if (dirRefSize == 2)
-			((U16*)dirPtr)[i] = parent;
-
-		else dirPtr[i] = (U8) parent;
+		else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, startOffset, (U8)parentDisk, alloc, e_rr));
 	}
 
-	//Append CAFileObject[]
+	//files[]
 
-	U8 *fileObjectPtr = dirPtr + directories.length * dirRefSize;
-	U8 *fileDataPtrIt = fileObjectPtr + baseFileHeader * files.length;
+	for (U64 i = 0; i < caFile->files.length; ++i) {
 
-	for (U32 i = 0; i < (U32) files.length; ++i) {
+		const CAFileInfo *fi = &caFile->files.ptr[i];
+		U16 parent    = CAFileInfo_getParent(*fi);
+		Ns  timestamp = CAFileInfo_getTimestamp(*fi);
 
-		CharString file = files.ptr[i];
-		U64 it = CharString_findLastSensitive(file, '/', 0, 0);
+		U16 parentDisk = parent == 0 ? (dirCountLong ? (U16)0xFFFF : (U16)0xFF) : (U16)(parent - 1);
 
-		U16 parent = U16_MAX;
-
-		//Add to parent directory
-
-		if (it != U64_MAX) {
-
-			//We need to find the real parent.
-			//Since we're sorted alphabetically, we are able to look back from our current directory
-			//If we encounter something that doesn't start with our basePath then we know we are missing this dir
-			//And this means we somehow messed with the input data
-
-			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
-
-			if (
-				!CharString_cut(file, 0, it, &realParentDir) ||
-				!CharString_cut(file, 0, it + 1, &baseDir)
-			)
-				retError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split file name"))
-
-			for(U64 j = directories.length - 1; j != U64_MAX; --j)
-
-				if (CharString_equalsStringInsensitive(directories.ptr[j], realParentDir)) {
-					parent = (U16) j;
-					break;
-				}
-
-			if(parent == U16_MAX)
-				retError(clean, Error_invalidState(1, "CAFile_write() couldn't find parent directory of file"))
+		if (dirCountLong) {
+			gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, parentDisk, alloc, e_rr));
 		}
 
-		//Find corresponding file with name
+		else gotoIfError3(clean, StreamCursor_appendU8 (&cursor, startOffset, (U8)parentDisk, alloc, e_rr));
 
-		ArchiveEntry *entry = NULL;
+		if (hasDate) {
 
-		for(U64 j = 0; j < caFile.archive.entries.length; ++j)
-			if (CharString_equalsStringSensitive(caFile.archive.entries.ptr[j].path, file)) {
-				entry = caFile.archive.entries.ptrNonConst + j;
-				break;
-			}
-
-		if (!entry)
-			retError(clean, Error_invalidState(2, "CAFile_write() couldn't find entry by path"))
-
-		//Add file
-
-		U8 *filePtr = fileObjectPtr + baseFileHeader * i;
-
-		if (dirRefSize == 2)
-			*((U16*)filePtr) = parent;
-
-		else *filePtr = (U8) parent;
-
-		filePtr += dirRefSize;
-
-		if (
-			(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) ||
-			(caFile.settings.flags & ECASettingsFlags_IncludeDate)
-		) {
-
-			if(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) {
-				*(Ns*)filePtr = entry->timestamp;
-				filePtr += sizeof(Ns);
+			if (hasExtendedDate) {
+				gotoIfError3(clean, StreamCursor_appendU64(&cursor, startOffset, timestamp, alloc, e_rr));
 			}
 
 			else {
+				U16 date = 0, time = 0;
 
-				if (!CAFile_storeDate(entry->timestamp, (U16*)filePtr + 1, (U16*)filePtr))
-					retError(clean, Error_invalidState(
-						1, "CAFile_write() couldn't store file date, please use full date"
-					))
+				if (!CAFile_storeDate(timestamp, &time, &date))
+					retError(clean, Error_invalidState(0,
+						"CAFile_write()::couldn't store file date, please use full date"
+					));
 
-				filePtr += sizeof(U16) * 2;
+				gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, date, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_appendU16(&cursor, startOffset, time, alloc, e_rr));
 			}
 		}
-
-		Buffer_forceWriteSizeType(filePtr, sizeType, Buffer_length(entry->data));
-
-		//Append file data
-
-		Buffer_memcpy(Buffer_createRef(fileDataPtrIt, Buffer_length(entry->data)), entry->data);
-		fileDataPtrIt += Buffer_length(entry->data);
 	}
 
-	//We're done with processing files and folders
+	//Encryption header (iv + tag over the fixed header region)
 
-	U16 dirCount = (U16) directories.length;
-	U32 fileCount = (U32) files.length;
+	if (isEncrypted) {
 
-	ListCharString_free(&files, alloc);
-	ListCharString_free(&directories, alloc);
+		//Read back the header region for AAD, same fast/slow path as DLFile_write
 
-	//Generate header
+		if (StreamCursor_contains(&cursor, start, *startOffset - start))
+			tmp = Buffer_createRefConst(
+				cursor.cacheData.ptr + (start - cursor.lastLocation),
+				*startOffset - start
+			);
 
-	U8 *headerIt = (U8*)outputBuffer.ptr;
+		else {
+			gotoIfError3(clean, Buffer_createUninitializedBytes(*startOffset - start, alloc, &tmp, e_rr));
 
-	*((CAHeader*)headerIt) = (CAHeader) {
+			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
 
-		.magicNumber = CAHeader_MAGIC,
+			U64 where = start;
+			gotoIfError3(clean, StreamCursor_consume(
+				&cursor, &where, tmp.ptrNonConst, *startOffset - start, alloc, e_rr
+			));
 
-		.version = 0,		//1.0
+			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));
+		}
 
-		.flags = (U8) (
-
-			(
-				caFile.settings.compressionType ? (
-					caFile.settings.flags & ECASettingsFlags_UseSHA256 ? ECAFlags_UseSHA256 :
-					ECAFlags_None
-				) :
-				ECAFlags_None
-			) |
-
-			(caFile.settings.flags & ECASettingsFlags_IncludeDate ? ECAFlags_FilesHaveDate : ECAFlags_None) |
-
-			(
-				caFile.settings.flags & ECASettingsFlags_IncludeFullDate ?
-				ECAFlags_FilesHaveDate | ECAFlags_FilesHaveExtendedDate : ECAFlags_None
-			) |
-
-			(sizeType << ECAFlags_FileSizeType_Shift)
-		),
-
-		.type = (U8)((caFile.settings.compressionType << 4) | caFile.settings.encryptionType)
-	};
-
-	headerIt += sizeof(CAHeader);
-
-	//Append file and dir count
-
-	if (fileRefSize == 4)
-		*((U32*)headerIt) = fileCount;
-
-	else *((U16*)headerIt) = (U16) fileCount;
-
-	headerIt += fileRefSize;
-
-	if (dirRefSize == 2)
-		*((U16*)headerIt) = dirCount;
-
-	else *headerIt = (U8) dirCount;
-
-	headerIt += dirRefSize;
-
-	//Hash
-
-	//if (caFile.settings.compressionType) {
-	//
-	//	if (caFile.settings.flags & ECASettingsFlags_UseSHA256)
-	//		Buffer_sha256(outputBuffer, hash);
-	//
-	//	else hash[0] = Buffer_crc32c(outputBuffer);
-	//}
-	//
-	////Store hash in header before encryption or finish
-	//
-	//if (caFile.settings.compressionType)
-	//	Buffer_memcpy(
-	//		Buffer_createRef(headerIt, sizeof(hash)),
-	//		Buffer_createRefConst(hash, sizeof(hash))
-	//	);
-
-	//Compress
-
-	//if (caFile.settings.compressionType != EXXCompressionType_None) {				TODO:
-	//
-	//	Buffer toCompress = Buffer_createRefConst(
-	//		outputBuffer.ptr + realHeaderSize,
-	//		Buffer_length(outputBuffer) - realHeaderSize
-	//	);
-	//
-	//	gotoIfError(clean, Buffer_compress(toCompress, BufferCompressionType_Brotli11, alloc, &compressedOutput))
-	//
-	//	Buffer_free(&outputBuffer, alloc);
-	//}
-
-	//Encrypt
-
-	if (caFile.settings.encryptionType != EXXEncryptionType_None) {
-
-		//TODO: Support chunks
-		//		Select no chunks if <40MiB
-		//		Select 10MiB if at least 4 threads can be kept busy.
-		//		Select 50MiB if ^ and utilization is about the same (e.g. 24 threads doing 10MiB would need 1.2GiB).
-		//		Select 100MiB if ^ (24 threads would need 2.4GiB).
-
-		U32 key[8] = { 0 };
-
-		Bool hasKey = Buffer_neq(
-			Buffer_createRefConst(key, sizeof(key)),
-			Buffer_createRefConst(caFile.settings.encryptionKey, sizeof(key))
+		const U32 key[8] = { 0 };
+		const Bool hasKey = Buffer_neq(
+			Buffer_createRefConst(settings->encryptionKey, sizeof(key)),
+			Buffer_createRefConst(key, sizeof(key))
 		);
 
-		Buffer toEncrypt = Buffer_createRef(
-			(U8*)outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize
-		);
-
-		Buffer realHeader = Buffer_createRefConst(outputBuffer.ptr, realHeaderSizeExEnc);
-
-		I32x4 iv = I32x4_zero();		//Outputs
 		I32x4 tag = I32x4_zero();
 
-		todo, we have to make sure to properly align things here...
-
-		gotoIfError2(clean, Buffer_encryptAuto(
-
-			&toEncrypt,
-			&realHeader,
-
+		gotoIfError3(clean, Buffer_encryptAuto(
+			NULL,
+			(const Buffer *restrict) &tmp,
 			!hasKey,
-			caFile.settings.encryptionKey,
+			(U32 *restrict) settings->encryptionKey,
+			(I32x4 *restrict) &tag,
+			(I32x4 *restrict) &iv,
+			e_rr
+		));
 
-			&tag,
-			&iv
-		))
+		Buffer_free(&tmp, alloc);
 
-		for(U64 i = 0; i < 3; ++i)
-			((I32*)headerIt)[i] = ((const I32*)&iv)[i];
+		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &iv,  3 * sizeof(U32),  alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &tag, sizeof(I32x4),    alloc, e_rr));
 
-		for(U64 i = 0; i < 4; ++i)
-			((I32*)headerIt)[3 + i] = ((const I32*)&tag)[i];
-
-		iv = I32x4_zero();
 		tag = I32x4_zero();
 	}
 
-	//Prepend header and hash
+	//Pad to 16-byte alignment
 
-	*result = outputBuffer;
-	outputBuffer = Buffer_createNull();
+	{
+		U8 pad[16] = { 0 };
+		U64 utilized = *startOffset & 15;
+
+		if (utilized)
+			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, pad, 16 - utilized, alloc, e_rr));
+	}
+
+	//Flush cursor before handing off to DLFile_write so it sees the header bytes
+
+	gotoIfError3(clean, StreamCursor_closeAndKeepCache(&cursor, alloc, &tmp, e_rr));
+
+	//DLFile names
+
+	I32x4 nameIv = I32x4_xor(iv, I32x4_createFromU64x2(0, 1));
+	gotoIfError3(clean, DLFile_write(&caFile->names, alloc, result, encStreamType, nameIv, startOffset, e_rr));
+
+	//Pad to 16-byte alignment
+
+	{
+		U64 utilized = *startOffset & 15;
+
+		if (utilized) {
+			U8 pad[16] = { 0 };
+			gotoIfError3(clean, StreamCursor_createWithCache(result, &tmp, true, &cursor, e_rr));
+			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, pad, 16 - utilized, alloc, e_rr));
+			StreamCursor_close(&cursor, alloc);
+		}
+	}
+
+	//DLFile content
+
+	I32x4 contentIv = I32x4_xor(iv, I32x4_createFromU64x2(0, 2));
+	gotoIfError3(clean, DLFile_write(&caFile->content, alloc, result, encStreamType, contentIv, startOffset, e_rr));
 
 clean:
-	Buffer_free(&outputBuffer, alloc);
-	Buffer_free(&dlFileBuffer, alloc);
-	DLFile_free(&dlFile, alloc);
-	ListCharString_free(&files, alloc);
-	ListCharString_free(&directories, alloc);
+	iv = I32x4_zero();
+	StreamCursor_close(&cursor, alloc);
+	Buffer_free(&tmp, alloc);
 	return s_uccess;
-}*/
-
-int test = 0;
+}

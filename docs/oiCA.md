@@ -25,20 +25,14 @@ typedef enum ECAFlags {
 	ECAFlags_FilesHaveDate				= 1 << 0,
 	ECAFlags_FilesHaveExtendedDate		= 1 << 1,
 
-    //Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
-    //This indicates the type the biggest file size uses
-
-	ECAFlags_FileSizeType_Shift			= 2,
-	ECAFlags_FileSizeType_Mask			= 3,
-
-    ECAFlags_HasExtendedData			= 1 << 4,		//CAExtraData
+    ECAFlags_HasExtendedData			= 1 << 2,		//CAExtraData
         
     //Determines how many bytes the counter for files takes up.
     //If DirectoriesCountLong is set, it will allow up to 254 dirs, otherwise 64Ki-1.
     //If FilesCountLong is set, it will allow up to 64Ki, otherwise 4Gi.
 
-    ECAFlags_DirectoriesCountLong		= 1 << 5,
-    ECAFlags_FilesCountLong				= 1 << 6
+    ECAFlags_DirectoriesCountLong		= 1 << 3,
+    ECAFlags_FilesCountLong				= 1 << 4
 
 } ECAFlags;
 
@@ -82,7 +76,7 @@ typedef [U16,U32][!!(header.flags & ECAFlags_FilesCountLong)] CAFileId;
 
 //Pseudo code; please manually parse the members. Struct is NOT aligned.
 
-CAFileObject<FileSizeType, hasDateAndTime, isExtendedTime> {
+CAFileObject<hasDateAndTime, isExtendedTime> {
 
     CADirectoryId parent;
 
@@ -91,8 +85,6 @@ CAFileObject<FileSizeType, hasDateAndTime, isExtendedTime> {
 		    U16 date;								//Day (5b), Month (4b), Year (Since 1980-2107 (7b))
 		   	U16 time;								//Sec/2 (5b), Min (6b), Hour (5b)
 		else: Ns timestamp;							//U64; (Unix timestamp * 1e9 + ns). 1970-2553
-
-    FileSizeType size;
 };
 
 //Final file format; please manually parse the members.
@@ -122,8 +114,21 @@ CAFile {			//Must be 16-byte aligned
     CAFileObject[fileCount] files
         with stride (fileHeaderSize + header.fileExtensionSize);
     
-    U8[N] pad;	//Padding to align to 16-byte
+    if encryption:
     
+    	//Our root IV is used to generate the tag that validates the header of this CAFile,
+		// it also gets passed to the DLFiles embedded to ensure they aren't swapped around.
+		//Basically the IV for them will be rootIv ^ U64x2(0, 1) and rootIv ^ U64x2(0, 2) respectively.
+		U8[12] rootIv;
+    
+	    //This verifies the header of the oiCA and the headers of the oiDL (written after writing the DLFiles)
+    	//To prevent runtime overhead, it doesn't actually check DLFile content.
+    	//This is fine, as chunkId is contained in each iv of each DLFile's chunk and 
+	    //	the same key is verified using the oiDL header. Invalid data would error right when it's decrypted in the stream.
+		I32x4 tag;
+    
+    U8[N] pad;	//Padding to align to 16-byte
+
     //This includes the names of everything in order.
     //The names should only have characters in range [0x20, 0x7E] or a valid UTF8 sequence.
     //Excluded characters are (<>:"|?*).
@@ -147,16 +152,8 @@ CAFile {			//Must be 16-byte aligned
     
     //Must be a data list (not string list).
     //DLFile also needs to include fileCount entries. (e.g. content[fileId] = content)
+    //DLFile also doesn't include a leading magicNumber, context already implies it.
     DLFile content;
-
-    if encryption:
-		U8[12] iv;	//Unique IV from the DLFiles if encrypted
-    
-	    //This verifies the header of the oiCA and the headers of the oiDL
-    	//To prevent runtime overhead, it doesn't actually check DLFile content.
-    	//This is fine, as chunkId is contained in each iv of each DLFile's chunk and 
-	    //	the same key is verified using the oiDL header. Invalid data would error right when it's decrypted in the stream.
-		I32x4 tag;
 }
 ```
 

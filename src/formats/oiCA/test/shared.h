@@ -22,22 +22,41 @@
 #include "types/test/test.h"
 
 void Test_CACreateFree(Test *t);
+void Test_CACreateCopy(Test *t);
+
 void Test_CAAddFile(Test *t);
 void Test_CAAddFolder(Test *t);
+
 void Test_CARemoveFile(Test *t);
 void Test_CARemoveFolder(Test *t);
+
 void Test_CAResolve(Test *t);
 void Test_CAGetFullName(Test *t);
+
 void Test_CACounts(Test *t);
 void Test_CAGetInfo(Test *t);
+
 void Test_CARename(Test *t);
 void Test_CAMove(Test *t);
-void Test_CACreateCopy(Test *t);
+
 void Test_CAForeach(Test *t);
+
 void Test_CASetTime(Test *t);
 void Test_CASetStream(Test *t);
 void Test_CASetData(Test *t);
+
 void Test_CACompare(Test *t);
+
 void Test_CACombine(Test *t);
+
 void Test_CAMixedTree(Test *t);
 void Test_CAStress(Test *t);
+
+void Test_CASerializeEmpty(Test *t);
+void Test_CASerializeSingleFile(Test *t);
+void Test_CASerializeHierarchy(Test *t);
+void Test_CASerializeMsDosDate(Test *t);
+void Test_CASerializeFullDate(Test *t);
+void Test_CASerializeEncrypted(Test *t);
+void Test_CASerializeMultipleFiles(Test *t);
+void Test_CASerializeStreamBacked(Test *t);

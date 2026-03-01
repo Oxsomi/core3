@@ -90,7 +90,15 @@ DLFile {		//Must be 16-byte aligned
 	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
 
     if encryption:
-		U32[3] iv;		//Only for verifying the header (e.g. entry sizes & uncompressed size)
+    
+	    //Verifying the header and to derive chunk ivs.
+    	//Do note that when this is a subFile, the parent controls the rootIv.
+    	//This is to provide security guarantees when multiple oiDLs are embedded in an encrypted container.
+    	//In that case, the header of the container must be verified with a tag independently (before touching this oiDL)
+    	// and the rootIv shall be parent.rootIv ^ U64x2(0, 1 + N) to avoid conflicts with chunks.
+    	// (do note that N may not exceed U32_MAX - 1, since our IV is truncated to 12-bytes)
+		optional if subFile U32[3] rootIv;
+    
 		I32x4 tag;
     	U8[N] pad; /* padding to make next section 16-byte aligned */
 

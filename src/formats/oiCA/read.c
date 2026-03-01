@@ -18,310 +18,441 @@
 *  This is called dual licensing.
 */
 
-/*
-
 #include "formats/oiCA/ca_file.h"
-#include "formats/oiDL/dl_file.h"
-#include "types/base/allocator.h"
-#include "types/base/error.h"
-#include "types/container/buffer.h"
+#include "formats/oiCA/headers.h"
+#include "formats/oiDL/interface.h"
+#include "types/container/buffer_encrypt.h"
+#include "types/container/stream.h"
+#include "types/container/types.h"
+#include "types/container/list_basic_types.h"
+#include "types/math/vec4i.h"
 #include "types/base/time.h"
-#include "types/base/constants.h"
 
 Ns CAFile_loadDate(U16 time, U16 date) {
-	return Time_date(
-		1980 + (date >> 9), 1 + ((date >> 5) & 0xF), date & 0x1F,
-		time >> 11, (time >> 5) & 0x3F, (time & 0x1F) << 1, 0, false
-	);
+
+	Date d = (Date) {
+		.year = 1980 + (date >> 11),
+		.month = (date >> 5) & 0xF,
+		.day = date & 0x1F,
+		.hour = time >> 11,
+		.minute = (time >> 5) & 0x3F,
+		.second = (time & 0x1F) << 1
+	};
+
+	return Time_date(&d, false);
 }
 
-Bool CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile, Error *e_rr) {
+void DLFile_prepMoveStringRef(DLFile *src, CharString *str, DLFile *dst) {
 
+	Bool isConst = CharString_isConstRef(*str);
+	Buffer contentBuf = isConst ? CharString_bufferConst(*str) : CharString_buffer(*str);
+	U64 bufl = Buffer_length(contentBuf);
+
+	//Move directly into our pre-allocated cache buffer (we know the size from the prev DLFile load)
+	if (contentBuf.ptr >= src->cache.ptr && contentBuf.ptr < src->cache.ptr + Buffer_length(src->cache)) {
+
+		Buffer subArea = Buffer_createRef(dst->cache.ptrNonConst + (contentBuf.ptr - src->cache.ptr), bufl);
+		Buffer_memcpy(subArea, contentBuf);
+
+		*str =
+			isConst ? CharString_createRefSizedConst((const C8*)subArea.ptr, bufl, false) :
+			CharString_createRefSized((C8*)subArea.ptrNonConst, bufl, false);
+	}
+
+	//Else accept string as is
+}
+
+Bool CAFile_read(
+	StreamRef *file,
+	const RefPtrType *encStreamType,
+	U64 startOffset,
+	const U32 encryptionKey[8],
+	const Allocator *alloc,
+	CAFile *caFile,
+	Error *e_rr
+) {
 	Bool s_uccess = true;
-	Bool allocate = false;
+	Bool allocated = false;
+
+	StreamCursor cursor = (StreamCursor) { 0 };
+	Buffer tmp = Buffer_createNull();
+	ListU16 dirParents = (ListU16) { 0 };				//mem-space parent index per directory
+	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };	//packed parent + timestamp per file
+	ListU16 dirHandles = (ListU16) { 0 };				//disk index -> live handle map
+	I32x4 iv = I32x4_zero();
+	DLFile names = (DLFile) { 0 };
+	DLFile content = (DLFile) { 0 };
+
+	if (!file || file->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+		retError(clean, Error_nullPointer(0, "CAFile_read()::file must be a valid StreamRef"));
 
 	if (!caFile)
-		retError(clean, Error_nullPointer(2, "CAFile_read()::caFile is required"))
+		retError(clean, Error_nullPointer(4, "CAFile_read()::caFile is required"));
 
-	if (caFile->archive.entries.ptr)
-		retError(clean, Error_invalidParameter(2, 0, "CAFile_read()::caFile isn't empty, could indicate memleak"))
+	if (caFile->folders.ptr)
+		retError(clean, Error_invalidOperation(0, "CAFile_read()::caFile isn't empty, might indicate memleak"));
 
-	if (Buffer_length(file) < sizeof(CAHeader))
-		retError(clean, Error_outOfBounds(
-			0, sizeof(CAHeader), Buffer_length(file), "CAFile_read()::file doesn't contain header"
-		))
+	if (startOffset & 15)
+		retError(clean, Error_unsupportedOperation(0, "CAFile_read() at misaligned startOffset is unsupported (16-byte)"));
 
-	Buffer filePtr = Buffer_createRefFromBuffer(file, Buffer_isConstRef(file));
+	//Read the fixed header first with a reasonably sized cursor cache
 
-	Buffer tmpData = Buffer_createNull();
-	DLFile fileNames = (DLFile) { 0 };
-	Archive archive = (Archive) { 0 };
-	CharString tmpPath = CharString_createNull();
-	I32x4 iv = I32x4_zero(), tag = I32x4_zero();
+	gotoIfError3(clean, StreamCursor_create(file, 32 * KIBI, false, alloc, &cursor, e_rr));
 
-	gotoIfError3(clean, Archive_create(alloc, &archive, e_rr))
+	U64 readOffset = startOffset;
 
-	//Validate header
+	//CAHeader
 
 	CAHeader header;
-	gotoIfError2(clean, Buffer_consume(&filePtr, &header, sizeof(header)))
+	gotoIfError3(clean, StreamCursor_consume(&cursor, &readOffset, &header, sizeof(CAHeader), alloc, e_rr));
 
-	if(header.magicNumber != CAHeader_MAGIC)
-		retError(clean, Error_invalidParameter(0, 0, "CAFile_read()::file contained invalid header"))
+	if (header.magicNumber != CAHeader_MAGIC)
+		retError(clean, Error_invalidParameter(0, 0, "CAFile_read()::invalid magic number, not an oiCA file"));
 
-	if(header.version != ECAVersion_V1_0)
-		retError(clean, Error_invalidParameter(0, 1, "CAFile_read()::file header doesn't have correct version"))
+	if (header.version != (U8)ECAVersion_V1_0)
+		retError(clean, Error_invalidParameter(0, 1, "CAFile_read()::unsupported oiCA version"));
 
-	if(header.flags & (ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB))		//TODO: AES chunks
-		retError(clean, Error_unsupportedOperation(0, "CAFile_read() AES chunks not supported yet"))
+	if (header.type >= EXXEncryptionType_Count)
+		retError(clean, Error_invalidParameter(0, 2, "CAFile_read()::invalid encryptionType"));
 
-	if(header.type >> 4)								//TODO: Compression
-		retError(clean, Error_unsupportedOperation(1, "CAFile_read() decompression not supported yet"))
+	//Parse flags
 
-	if(header.flags & ECAFlags_UseSHA256)				//TODO: SHA256
-		retError(clean, Error_unsupportedOperation(3, "CAFile_read() SHA256 not supported yet"))
+	U16 flags = header.flags;
 
-	if((header.type & 0xF) >= EXXEncryptionType_Count)
-		retError(clean, Error_invalidParameter(0, 4, "CAFile_read() encryption type unsupported"))
+	Bool hasDate         = flags & ECAFlags_FilesHaveDate;
+	Bool hasExtendedDate = flags & ECAFlags_FilesHaveExtendedDate;
+	Bool dirCountLong    = flags & ECAFlags_DirectoriesCountLong;
+	Bool fileCountLong   = flags & ECAFlags_FilesCountLong;
 
-	//Ensure encryption key isn't provided if we're not encrypting
+	if (hasExtendedDate)
+		hasDate = true;
 
-	if(encryptionKey && !(header.type & 0xF))
-		retError(clean, Error_invalidOperation(3, "CAFile_read() encryption key provided but encryption isn't used"))
+	EXXEncryptionType encryptionType = (EXXEncryptionType) header.type;
+	Bool isEncrypted = encryptionType != EXXEncryptionType_None;
 
-	if(!encryptionKey && (header.type & 0xF))
-		retError(clean, Error_unauthorized(0, "CAFile_read() encryption key is required if encryption is used"))
+	if (isEncrypted && !encryptionKey)
+		retError(clean, Error_unauthorized(0, "CAFile_read()::encryptionKey is required for encrypted files"));
 
-	//Validate file and dir count
+	//Extended header: forwards compatibility
+	
+	U8 dirExtSize  = 0;
+	U8 fileExtSize = 0;
 
-	U32 fileCount = 0;
-	gotoIfError2(clean, Buffer_consume(&filePtr, &fileCount, header.flags & ECAFlags_FilesCountLong ? 4 : 2))
+	if (flags & ECAFlags_HasExtendedData) {
 
-	U16 dirCount = 0;
-	gotoIfError2(clean, Buffer_consume(&filePtr, &dirCount, header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1))
+		CAExtraInfo extraInfo;
+		gotoIfError3(clean, StreamCursor_consume(&cursor, &readOffset, &extraInfo, sizeof(CAExtraInfo), alloc, e_rr));
 
-	if(dirCount >= (header.flags & ECAFlags_DirectoriesCountLong ? U16_MAX : U8_MAX))
-		retError(clean, Error_invalidParameter(0, 7, "CAFile_read() directory count can't be the max bit value"))
+		dirExtSize  = extraInfo.directoryExtensionSize;
+		fileExtSize = extraInfo.fileExtensionSize;
 
-	if(fileCount >= (header.flags & ECAFlags_FilesCountLong ? U32_MAX : U16_MAX))
-		retError(clean, Error_invalidParameter(0, 8, "CAFile_read() file count can't be the max bit value"))
-
-	//Validate extended data
-
-	CAExtraInfo extra = (CAExtraInfo) { 0 };
-
-	if(header.flags & ECAFlags_HasExtendedData) {
-		gotoIfError2(clean, Buffer_consume(&filePtr, &extra, sizeof(extra)))
-		gotoIfError2(clean, Buffer_consume(&filePtr, NULL, extra.headerExtensionSize))
+		//Skip any header extension bytes we don't understand
+		readOffset += extraInfo.headerExtensionSize;
 	}
 
-	//Check for encryption
+	//fileCount and dirCount
 
-	if ((header.type & 0xF) == EXXEncryptionType_AES256GCM) {
+	U64 fileCount = 0;
+	U64 dirCount  = 0;
 
-		U64 headerLen = filePtr.ptr - file.ptr;
-
-		gotoIfError2(clean, Buffer_consume(&filePtr, &iv, 12))
-		gotoIfError2(clean, Buffer_consume(&filePtr, &tag, 16))
-		
-		todo, we have to make sure to properly align things here...
-
-		gotoIfError2(clean, Buffer_decrypt(
-			filePtr,
-			Buffer_createRefConst(file.ptr, headerLen),
-			EBufferEncryptionType_AES256GCM,
-			encryptionKey,
-			tag,
-			iv
-		))
-
-		iv = I32x4_zero();
-		tag = I32x4_zero();
+	if (fileCountLong) {
+		U32 fc = 0;
+		gotoIfError3(clean, StreamCursor_consumeU32(&cursor, &readOffset, &fc, alloc, e_rr));
+		fileCount = fc;
+	} else {
+		U16 fc = 0;
+		gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &fc, alloc, e_rr));
+		fileCount = fc;
 	}
 
-	gotoIfError3(clean, DLFile_read(filePtr, NULL, true, alloc, &fileNames, e_rr))
-	gotoIfError2(clean, Buffer_consume(&filePtr, NULL, fileNames.readLength))
+	if (dirCountLong) {
+		U16 dc = 0;
+		gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &dc, alloc, e_rr));
+		dirCount = dc;
+	} else {
+		U8 dc = 0;
+		gotoIfError3(clean, StreamCursor_consumeU8(&cursor, &readOffset, &dc, alloc, e_rr));
+		dirCount = dc;
+	}
 
-	//Validate DLFile
-	//File name validation is done when the entries are inserted into the Archive
+	if (dirCount >= U16_MAX)
+		retError(clean, Error_outOfBounds(0, dirCount, U16_MAX, "CAFile_read()::too many directories"));
 
-	if (
-		fileNames.settings.dataType != EDLDataType_Ascii ||
-		fileNames.settings.compressionType ||
-		fileNames.settings.encryptionType ||
-		fileNames.settings.flags
-	)
-		retError(clean, Error_invalidOperation(
-			0, "CAFile_read() embedded oiDL needs to be ascii without compression/encryption or flags"
-		))
+	if (fileCount >= U32_MAX)
+		retError(clean, Error_outOfBounds(0, fileCount, U32_MAX, "CAFile_read()::too many files"));
+	
+	U16 sentinelDir = dirCountLong ? (U16)0xFFFF : (U16)0xFF;
 
-	if(DLFile_entryCount(fileNames) != (U64)fileCount + dirCount)
-		retError(clean, Error_invalidState(0, "CAFile_read() embedded oiDL has mismatching name count with file count"))
+	//Pass 1: read directories[] into a ListU16 of memory-space parent indices.
+	//Actual CAFile_addFolder calls happen in pass 2, once the names DLFile is available.
 
-	//Ensure we have enough allocated for all files and directories
-
-	EXXDataSizeType sizeType = (header.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask;
-
-	U64 dirStride = header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1;
-
-	U16 rootDir = dirStride == 2 ? U16_MAX : U8_MAX;
-
-	U64 folderStride = (U64) dirStride + extra.directoryExtensionSize;
-	U64 fileStride = (U64) dirStride + SIZE_BYTE_TYPE[sizeType] + extra.fileExtensionSize;
-
-	if (header.flags & ECAFlags_FilesHaveDate)
-		fileStride += header.flags & ECAFlags_FilesHaveExtendedDate ? sizeof(U64) : sizeof(U16) * 2;
-
-	U64 fileSize = (U64)fileCount * fileStride;
-	U64 folderSize = (U64)dirCount * folderStride;
-
-	if (Buffer_length(filePtr) < fileSize + folderSize)
-		retError(clean, Error_outOfBounds(
-			0, fileSize + folderSize, Buffer_length(filePtr), "CAFile_read() files out of bounds"
-		))
-
-	//Now we can add dir to the archive
+	gotoIfError3(clean, ListU16_reserve(&dirParents, dirCount, alloc, e_rr));
 
 	for (U64 i = 0; i < dirCount; ++i) {
 
-		const U8 *diri = filePtr.ptr + folderStride * i;
+		U16 parentDisk = 0;
 
-		CharString name = fileNames.entryStrings.ptr[i];
-
-		if(!CharString_isValidFileName(name))
-			retError(clean, Error_invalidParameter(0, 0, "CAFile_read() directory has invalid name"))
-
-		gotoIfError2(clean, CharString_createCopy(name, alloc, &tmpPath))
-
-		U16 parent = dirStride == 2 ? *(const U16*)diri : *diri;
-
-		if (parent != rootDir) {
-
-			if (parent >= i)
-				retError(clean, Error_invalidOperation(1, "CAFile_read() parent directory index of folder out of bounds"))
-
-			CharString parentName = archive.entries.ptr[parent].path;
-
-			gotoIfError2(clean, CharString_insert(&tmpPath, '/', 0, alloc))
-			gotoIfError2(clean, CharString_insertString(&tmpPath, parentName, 0, alloc))
+		if (dirCountLong) {
+			gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &parentDisk, alloc, e_rr));
+		} else {
+			U8 p = 0;
+			gotoIfError3(clean, StreamCursor_consumeU8(&cursor, &readOffset, &p, alloc, e_rr));
+			parentDisk = p;
 		}
 
-		gotoIfError3(clean, Archive_addDirectory(&archive, tmpPath, alloc, e_rr))
+		if (parentDisk != sentinelDir && parentDisk >= i)
+			retError(clean, Error_invalidState(0,
+				"CAFile_read()::directory references a parent not yet defined"
+			));
 
-		tmpPath = CharString_createNull();
+		//Convert: sentinel -> 0 (root), else disk index + 1
+		U16 parentMem = (parentDisk == sentinelDir) ? 0 : (U16)(parentDisk + 1);
+		gotoIfError3(clean, ListU16_pushBack(&dirParents, parentMem, alloc, e_rr));
+
+		readOffset += dirExtSize;
 	}
 
-	//Add file
+	//Pass 1: read files[] into a ListCAFileInfo which packs parent mem-index + timestamp.
 
-	const U8 *fileIt = filePtr.ptr + folderSize;
-	gotoIfError2(clean, Buffer_offset(&filePtr, fileSize + folderSize))
+	gotoIfError3(clean, ListCAFileInfo_reserve(&fileMetas, fileCount, alloc, e_rr));
 
 	for (U64 i = 0; i < fileCount; ++i) {
 
-		const U8 *filei = fileIt + fileStride * i;
+		U16 parentDisk = 0;
 
-		CharString name = fileNames.entryStrings.ptr[(U64)i + dirCount];
-
-		if(!CharString_isValidFileName(name))
-			retError(clean, Error_invalidParameter(0, 1, "CAFile_read() file has invalid name"))
-
-		gotoIfError2(clean, CharString_createCopy(name, alloc, &tmpPath))
-
-		//Load parent
-
-		U16 parent = dirStride == 2 ? *(const U16*)filei : *filei;
-		filei += dirStride;
-
-		if (parent != rootDir) {
-
-			if (parent >= dirCount)
-				retError(clean, Error_invalidOperation(2, "CAFile_read() parent directory index of file out of bounds"))
-
-			CharString parentName = archive.entries.ptr[parent].path;
-
-			gotoIfError2(clean, CharString_insert(&tmpPath, '/', 0, alloc))
-			gotoIfError2(clean, CharString_insertString(&tmpPath, parentName, 0, alloc))
+		if (dirCountLong) {
+			gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &parentDisk, alloc, e_rr));
+		} else {
+			U8 p = 0;
+			gotoIfError3(clean, StreamCursor_consumeU8(&cursor, &readOffset, &p, alloc, e_rr));
+			parentDisk = p;
 		}
 
-		//Load timestamp
+		U16 parentMem = (parentDisk == sentinelDir) ? 0 : (U16)(parentDisk + 1);
+
+		if (parentMem > dirCount)
+			retError(clean, Error_outOfBounds(0, parentMem, dirCount + 1,
+				"CAFile_read()::file references an invalid parent folder"
+			));
 
 		Ns timestamp = 0;
 
-		if (header.flags & ECAFlags_FilesHaveDate) {
-
-			if(header.flags & ECAFlags_FilesHaveExtendedDate) {
-				timestamp = *(Ns*)filei;
-				filei += sizeof(Ns);
-			}
-
-			else {
-
-				timestamp = CAFile_loadDate(*(const U16*)(filei + 1), *(const U16*)filei);
-				filei += sizeof(U16) * 2;
-
-				if (timestamp == U64_MAX)
-					timestamp = 0;
+		if (hasDate) {
+			if (hasExtendedDate) {
+				gotoIfError3(clean, StreamCursor_consumeU64(&cursor, &readOffset, &timestamp, alloc, e_rr));
+			} else {
+				U16 date = 0, time = 0;
+				gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &date, alloc, e_rr));
+				gotoIfError3(clean, StreamCursor_consumeU16(&cursor, &readOffset, &time, alloc, e_rr));
+				timestamp = CAFile_loadDate(time, date);
 			}
 		}
 
-		//Grab data of file.
-		//This introduces a copy because Archive needs a separate alloc per file
+		readOffset += fileExtSize;
 
-		U64 bufferSize = Buffer_forceReadSizeType(filei, sizeType);
-
-		gotoIfError2(clean, Buffer_createUninitializedBytes(bufferSize, alloc, &tmpData))
-
-		const U8 *dataPtr = filePtr.ptr;
-		gotoIfError2(clean, Buffer_offset(&filePtr, bufferSize))
-
-		Buffer_memcpy(tmpData, Buffer_createRefConst(dataPtr, bufferSize));
-
-		//Move path and data to file
-
-		gotoIfError3(clean, Archive_addFile(&archive, tmpPath, &tmpData, timestamp, alloc, e_rr))
-		CharString_free(&tmpPath, alloc);
+		gotoIfError3(clean, ListCAFileInfo_pushBack(&fileMetas, CAFileInfo_create(parentMem, timestamp), alloc, e_rr));
 	}
 
-	if(Buffer_length(filePtr))
-		retError(clean, Error_invalidState(0, "CAFile_read() had leftover data after oiCA, this is illegal"))
+	//Encryption: read iv + tag, verify AAD over the fixed header region
 
-	caFile->archive = archive;
-	archive = (Archive) { 0 };
-	allocate = true;
+	if (isEncrypted) {
 
-	caFile->settings = (CASettings) {
-		.compressionType = (EXXCompressionType)(header.type >> 4),
-		.encryptionType = (EXXEncryptionType)(header.type & 0xF),
-		.flags = (
-			header.flags & ECAFlags_UseSHA256 ? ECASettingsFlags_UseSHA256 :
-			ECASettingsFlags_None
-		) | (
-			header.flags & ECAFlags_FilesHaveExtendedDate ?
-			ECASettingsFlags_IncludeFullDate | ECASettingsFlags_IncludeDate :
-			ECASettingsFlags_None
-		) | (
-			header.flags & ECAFlags_FilesHaveDate ?
-			ECASettingsFlags_IncludeDate :
-			ECASettingsFlags_None
-		)
+		gotoIfError3(clean, StreamCursor_consume(&cursor, &readOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
+
+		I32x4 tag = I32x4_zero();
+		gotoIfError3(clean, StreamCursor_consume(&cursor, &readOffset, &tag, sizeof(I32x4), alloc, e_rr));
+
+		U64 headerRegionSize = (readOffset - sizeof(I32x4) - 3 * sizeof(U32)) - startOffset;
+
+		if (StreamCursor_contains(&cursor, startOffset, headerRegionSize))
+			tmp = Buffer_createRefConst(
+				cursor.cacheData.ptr + (startOffset - cursor.lastLocation),
+				headerRegionSize
+			);
+
+		else {
+			gotoIfError3(clean, Buffer_createUninitializedBytes(headerRegionSize, alloc, &tmp, e_rr));
+			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));
+
+			U64 where = startOffset;
+			gotoIfError3(clean, StreamCursor_consume(
+				&cursor, &where, tmp.ptrNonConst, headerRegionSize, alloc, e_rr
+			));
+
+			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));
+		}
+
+		gotoIfError3(clean, Buffer_decryptAuto(NULL, &tmp, encryptionKey, tag, iv, e_rr));
+
+		tag = I32x4_zero();
+		Buffer_free(&tmp, alloc);
+	}
+
+	readOffset = (readOffset + 15) & ~15;
+	StreamCursor_close(&cursor, alloc);
+
+	//Read DLFile names and content
+
+	CASettings settings = (CASettings) {
+		.encryptionType = (EXXEncryptionType) header.type,
+		.flags =
+			(hasDate         ? ECASettingsFlags_IncludeDate     : ECASettingsFlags_None) |
+			(hasExtendedDate ? ECASettingsFlags_IncludeFullDate : ECASettingsFlags_None)
 	};
 
-	//Not copying encryption key, because you probably don't want to store it.
-	//And you already have it.
+	if (isEncrypted && encryptionKey)
+		Buffer_memcpy(
+			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
+			Buffer_createRefConst(encryptionKey, sizeof(settings.encryptionKey))
+		);
+
+	I32x4 nameIv    = I32x4_xor(iv, I32x4_createFromU64x2(0, 1));
+	I32x4 contentIv = I32x4_xor(iv, I32x4_createFromU64x2(0, 2));
+
+	gotoIfError3(clean, DLFile_read(file, readOffset, encryptionKey, nameIv, true, alloc, encStreamType, &names, e_rr));
+	readOffset = (names.readLength + 15) & ~(U64)15;
+
+	gotoIfError3(clean, DLFile_read(file, readOffset, encryptionKey, contentIv, true, alloc, encStreamType, &content, e_rr));
+
+	{
+		Stream *s = RefPtr_data(file, Stream);
+
+		if (content.readLength != s->size)
+			retError(clean, Error_invalidState(1, "CAFile_read() contained extra data after content DLFile"));
+	}
+
+	if (names.entryStreams.length != dirCount + fileCount + 1)
+		retError(clean, Error_invalidState(0,
+			"CAFile_read()::names DLFile entry count doesn't match dirCount + fileCount"
+		));
+
+	if (content.entryStreams.length != fileCount)
+		retError(clean, Error_invalidState(0,
+			"CAFile_read()::content DLFile entry count doesn't match fileCount"
+		));
+
+	if (names.settings.dataType != EDLDataType_String)
+		retError(clean, Error_invalidState(0, "CAFile_read()::names DLFile must have string type"));
+
+	if (content.settings.dataType != EDLDataType_Data)
+		retError(clean, Error_invalidState(0, "CAFile_read()::content DLFile must have data type"));
+
+	//Validate all name entries: must already be in memory (not stream-backed) and within the name size limit.
+	//Small entries are loaded into the DLFile cache by DLFile_read automatically, so if an entry is still
+	// stream-backed it means it exceeded DLFile_smallLen, which means it also exceeds CAFile_maxFileNameSize
+	// and is therefore invalid. We check both to be explicit.
+	//This can happen if we exceed 5MiB, which is rare with a max of 96 bytes per file name
+	// (54K files at max size, more realistically >327K)
+	// TODO: Fix this
+
+	for (U64 i = 0; i < dirCount + fileCount; ++i) {
+
+		if (names.entryStreams.ptr[i].stream)
+			retError(clean, Error_invalidState(0, "CAFile_read()::name entry is stream-backed; exceeds maximum name size"));
+
+		if (DLFile_entrySize(&names, i) > CAFile_maxFileNameSize)
+			retError(clean, Error_outOfBounds(0, DLFile_entrySize(&names, i), CAFile_maxFileNameSize,
+				"CAFile_read()::name entry exceeds maximum file name size"
+			));
+	}
+
+	//Pass 2: reconstruct hierarchy via CAFile_add so all parenting bookkeeping is correct.
+	//Directories are written root-to-leaf on disk, so a forward pass always resolves parents before children.
+	//dirHandles maps on-disk folder index (0-based) to a live CAHandle for parent lookups.
+
+	gotoIfError3(clean, CAFile_create(&settings, fileCount, dirCount, alloc, caFile, e_rr));
+
+	gotoIfError3(clean, DLFile_reserve(&caFile->names, fileCount + dirCount + 1, alloc, e_rr));
+	gotoIfError3(clean, DLFile_reserve(&caFile->content, fileCount, alloc, e_rr));
+
+	gotoIfError3(clean, DLFile_initCache(&caFile->names, Buffer_length(names.cache), alloc, e_rr));
+	gotoIfError3(clean, DLFile_initCache(&caFile->content, Buffer_length(content.cache), alloc, e_rr));
+
+	allocated = true;
+	gotoIfError3(clean, ListU16_reserve(&dirHandles, dirCount, alloc, e_rr));
+
+	for (U64 i = 0; i < dirCount; ++i) {
+
+		U16      parentMem    = dirParents.ptr[i];
+		CAHandle parentHandle = (parentMem == 0) ? CAHandle_Root : CAHandle_makeFolder(dirHandles.ptr[parentMem - 1]);
+
+		//We're moving this directly from our temp DLFile
+		CharString *name = &names.entryStrings.ptrNonConst[i + 1];
+
+		DLFile_prepMoveStringRef(&names, name, &caFile->names);
+
+		CAHandle handle = CAFile_addFolder(caFile, parentHandle, name, alloc, e_rr);
+
+		if (handle == CAHandle_Invalid)
+			retError(clean, Error_invalidState(0, "CAFile_read()::CAFile_addFolder failed"));
+
+		gotoIfError3(clean, ListU16_pushBack(&dirHandles, (U16)CAHandle_getId(handle), alloc, e_rr));
+	}
+
+	for (U64 i = 0; i < fileCount; ++i) {
+
+		U16      parentMem    = CAFileInfo_getParent(fileMetas.ptr[i]);
+		CAHandle parentHandle = (parentMem == 0) ? CAHandle_Root : CAHandle_makeFolder(dirHandles.ptr[parentMem - 1]);
+
+		//We're moving this directly from our temp DLFile
+		CharString *name = &names.entryStrings.ptrNonConst[dirCount + i + 1];
+
+		DLFile_prepMoveStringRef(&names, name, &caFile->names);
+
+		CAHandle fileHandle =
+			CAFile_addFile(caFile, parentHandle, name, CAFileInfo_getTimestamp(fileMetas.ptr[i]), alloc, e_rr);
+
+		if (fileHandle == CAHandle_Invalid)
+			retError(clean, Error_invalidState(0, "CAFile_read()::CAFile_addFile failed"));
+
+		//Set file data, use the stream reference directly if the entry is still stream-backed,
+		//otherwise hand over the loaded buffer. This avoids an unnecessary copy for large files.
+
+		DLEntryStream entryStream = content.entryStreams.ptr[i];
+
+		if (entryStream.stream) {
+
+			gotoIfError3(clean, CAFile_setDataStream(
+				caFile, fileHandle, alloc, &entryStream.stream, entryStream.dataOff, entryStream.len, e_rr
+			));
+
+			content.entryStreams.ptrNonConst[i] = (DLEntryStream) { 0 };		//Moved
+
+		} else {
+
+			Buffer contentBuf = content.entryBuffers.ptr[i];	//Moving it or copying depending on type
+			U64 bufl = Buffer_length(contentBuf);
+
+			//Move directly into our pre-allocated cache buffer (we know the size from the prev DLFile load)
+			if (contentBuf.ptr >= content.cache.ptr && contentBuf.ptr < content.cache.ptr + Buffer_length(content.cache)) {
+				Buffer subArea = Buffer_createRef(caFile->content.cache.ptrNonConst + (contentBuf.ptr - content.cache.ptr), bufl);
+				Buffer_memcpy(subArea, contentBuf);
+				gotoIfError3(clean, CAFile_setData(caFile, fileHandle, alloc, &subArea, e_rr));
+			}
+
+			//We can only move the real buffer if it's a dedicated allocation
+			else {
+				gotoIfError3(clean, CAFile_setData(caFile, fileHandle, alloc, &contentBuf, e_rr));
+				content.entryBuffers.ptrNonConst[i] = Buffer_createNull();
+			}
+		}
+	}
+
+	DLFile_free(&names, alloc);		//Even though all data has been moved, we still have the lists themselves.
+	DLFile_free(&content, alloc);
 
 clean:
-
 	iv = I32x4_zero();
-	tag = I32x4_zero();
+	StreamCursor_close(&cursor, alloc);
+	Buffer_free(&tmp, alloc);
+	ListU16_free(&dirParents, alloc);
+	ListCAFileInfo_free(&fileMetas, alloc);
+	ListU16_free(&dirHandles, alloc);
+	DLFile_free(&names, alloc);
+	DLFile_free(&content, alloc);
 
-	if(!s_uccess && allocate)
+	if(!s_uccess && allocated)
 		CAFile_free(caFile, alloc);
 
-	Buffer_free(&tmpData, alloc);
-	CharString_free(&tmpPath, alloc);
-	Archive_free(&archive, alloc);
-	DLFile_free(&fileNames, alloc);
 	return s_uccess;
-}*/
-
-int test = 0;
+}

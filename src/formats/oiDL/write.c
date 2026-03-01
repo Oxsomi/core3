@@ -36,6 +36,7 @@ Bool DLFile_write(
 	const Allocator *alloc,
 	StreamRef *streamRef,
 	const RefPtrType *encStreamType,
+	I32x4 iv,
 	U64 *startOffset,
 	Error *e_rr
 ) {
@@ -164,7 +165,12 @@ Bool DLFile_write(
 	headerSize += dataSizeTypeSize * entryCount;
 
 	if (isEncrypted) {
-		headerSize += sizeof(I32x4) + 12;		//Tag for AAD and IV
+
+		headerSize += sizeof(I32x4);			//Tag for AAD and IV
+
+		if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
+			headerSize += 12;		//IV only if parent doesn't manage it.
+
 		headerSize = (headerSize + 15) & ~15;
 	}
 
@@ -230,24 +236,37 @@ Bool DLFile_write(
 			Buffer_createRefConst(key, sizeof(key))
 		);
 
-		I32x4 iv = I32x4_zero(), tag = I32x4_zero();
-		
-		gotoIfError3(clean, Buffer_encryptAuto(
+		I32x4 tag = I32x4_zero();
 
-			NULL,
-			(const Buffer *restrict) &tmp,
+		EBufferEncryptionFlags encFlags = EBufferEncryptionFlags_None;
 
-			!hasKey,
-			(U32 *restrict) dlFile->settings.encryptionKey,
+		if (!hasKey)
+			encFlags |= EBufferEncryptionFlags_GenerateKey;
 
-			(I32x4 *restrict) &tag,
-			(I32x4 *restrict) &iv,
-			e_rr
-		));
+		if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
+			iv = I32x4_zero();
+
+		else encFlags |= EBufferEncryptionFlags_StopCreateIv;
+
+		BufferEncrypt encrypt = (BufferEncrypt) {
+			.target = NULL,
+			.additionalData = (const Buffer *restrict) &tmp,
+			.type = EBufferEncryptionType_AES256GCM,
+			.flags = encFlags,
+			.nonConstEncrypt = {
+				.key = (U32 *restrict) dlFile->settings.encryptionKey,
+				.tag = (I32x4 *restrict) &tag,
+				.iv = (I32x4 *restrict) &iv
+			}
+		};
+
+		gotoIfError3(clean, Buffer_encryptAdvanced(&encrypt, e_rr));
 
 		Buffer_free(&tmp, alloc);
 
-		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
+		if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
+			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &iv, 3 * sizeof(U32), alloc, e_rr));
+
 		gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, &tag, sizeof(tag), alloc, e_rr));
 
 		U8 emptyBytes[16] = { 0 };
@@ -312,8 +331,10 @@ Bool DLFile_write(
 		}
 	}
 
-	if (isEncrypted)
-		*startOffset = start + totalSize;
+	if (isEncrypted) {
+		EncryptionStream *es = RefPtr_data(encryptionStream, EncryptionStream);
+		*startOffset = es->startOffset + totalSize;
+	}
 
 clean:
 	RefPtr_dec(&encryptionStream);

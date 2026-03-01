@@ -253,9 +253,9 @@ Bool Time_getDate(Ns timestamp, Date *date, Bool isLocalTime) {
 	Bool success = false;
 
 	if(isLocalTime)
-		success = !localtime_r(&inSecs, &t);
+		success = localtime_r(&inSecs, &t);
 
-	else success = !gmtime_r(&inSecs, &t);
+	else success = gmtime_r(&inSecs, &t);
 
 	if(!success)
 		return false;

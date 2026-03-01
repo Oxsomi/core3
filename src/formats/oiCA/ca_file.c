@@ -32,9 +32,6 @@ TListImpl(CAFileInfo);
 
 static const U64 CAHandle_RootId = 0;
 
-static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64)1 << 63) | id; }
-static inline CAHandle CAHandle_makeFile(U64 id) { return id; }
-
 static inline Bool CAHandle_folderIndex(CAHandle handle, U16 *idx) {
 
 	if (!CAHandle_isFolder(handle) || !idx)
@@ -104,7 +101,8 @@ Bool CAFile_create(
 	DLSettings nameSettings = (DLSettings) {
 		.compressionType = settings->compressionType,		//TODO: Maybe allow different compression type here later
 		.encryptionType  = settings->encryptionType,
-		.dataType        = EDLDataType_String
+		.dataType        = EDLDataType_String,
+		.flags           = EDLSettingsFlags_HideMagicNumber
 	};
 
 	if (settings->encryptionType)
@@ -122,7 +120,8 @@ Bool CAFile_create(
 	DLSettings contentSettings = (DLSettings) {
 		.compressionType = settings->compressionType,
 		.encryptionType  = settings->encryptionType,
-		.dataType        = EDLDataType_Data
+		.dataType        = EDLDataType_Data,
+		.flags           = EDLSettingsFlags_HideMagicNumber
 	};
 
 	if (settings->encryptionType)

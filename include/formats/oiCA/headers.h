@@ -28,28 +28,22 @@
 //File spec (docs/oiCA.md)
 
 typedef enum ECAFlags {
-	
-	ECAFlags_None 						= 0,
+
+	ECAFlags_None = 0,
 
 	//See ECAFileObject
 
-	ECAFlags_FilesHaveDate				= 1 << 0,
-	ECAFlags_FilesHaveExtendedDate		= 1 << 1,
+	ECAFlags_FilesHaveDate = 1 << 0,
+	ECAFlags_FilesHaveExtendedDate = 1 << 1,
 
-	//Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
-	//This indicates the type the biggest file size uses
-
-	ECAFlags_FileSizeType_Shift			= 2,
-	ECAFlags_FileSizeType_Mask			= 3,
-
-	ECAFlags_HasExtendedData			= 1 << 4,		//CAExtraData
+	ECAFlags_HasExtendedData = 1 << 2,		//CAExtraData
 
 	//Determines how many bytes the counter for files takes up.
 	//If DirectoriesCountLong is set, it will allow up to 254 dirs, otherwise 64Ki-1.
 	//If FilesCountLong is set, it will allow up to 64Ki, otherwise 4Gi.
 
-	ECAFlags_DirectoriesCountLong		= 1 << 5,
-	ECAFlags_FilesCountLong				= 1 << 6
+	ECAFlags_DirectoriesCountLong = 1 << 3,
+	ECAFlags_FilesCountLong = 1 << 4
 
 } ECAFlags;
 
@@ -62,7 +56,7 @@ typedef struct CAHeader {
 	U32 magicNumber;			//oiCA (0x4143696F)
 
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)
-	U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
+	U8 type;					//EXXEncryptionType. Should be <Count (see oiXX.md).
 	U16 flags;					//ECAFlags
 
 } CAHeader;
