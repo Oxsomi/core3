@@ -251,9 +251,6 @@ void Test_CAMixedTree(Test *t) {
 
 void Test_CAStress(Test *t) {
 
-	(void)t;		//TODO:
-
-	/*
 	#define STRESS_NUM_DIRS       8
 	#define STRESS_FILES_PER_DIR  6
 	#define STRESS_TOTAL_FILES    (STRESS_NUM_DIRS * STRESS_FILES_PER_DIR)
@@ -266,6 +263,10 @@ void Test_CAStress(Test *t) {
 
 	static const C8 *fileExts[STRESS_FILES_PER_DIR] = {
 		"a.bin", "b.bin", "c.bin", "d.bin", "e.bin", "f.bin"
+	};
+
+	static const C8 *fileExtsRen[STRESS_FILES_PER_DIR] = {
+		"a0.bin", "b0.bin", "c0.bin", "d0.bin", "e0.bin", "f0.bin"
 	};
 
 	{
@@ -308,12 +309,17 @@ void Test_CAStress(Test *t) {
 		//Verify every file resolves and carries correct data + timestamp
 
 		for (U64 d = 0; d < STRESS_NUM_DIRS; ++d) {
+
+			CAHandle dir = CAFile_resolveSubFolder(&ca, CAHandle_Root, CharString_createRefCStrConst(dirNames[d]));
+
+			if (dir == CAHandle_Invalid) {
+				Test_assert(t, "stress: couldn't find dir", false);
+				continue;
+			}
+
 			for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
 
-				C8 path[64];
-				String_format(path, sizeof(path), "%s/%s", dirNames[d], fileExts[f]);	//TODO:
-
-				CAHandle h = CAFile_resolveCStr(&ca, path);
+				CAHandle h = CAFile_resolveSubFile(&ca, dir, CharString_createRefCStrConst(fileExts[f]));
 				Test_assert(t, "stress S1: resolve ok", h != CAHandle_Invalid);
 
 				if (h == CAHandle_Invalid)
@@ -332,10 +338,12 @@ void Test_CAStress(Test *t) {
 		//remove all files from "delta"
 
 		{
+			//We can assume dir as valid, since we checked before.
+			// Also, this dir handle will stay valid because we're only removing files.
+			CAHandle dir = CAFile_resolveSubFolder(&ca, CAHandle_Root, CharString_createRefCStrConst("delta"));
+
 			for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
-				C8 path[64];
-				String_format(path, sizeof(path), "delta/%s", fileExts[f]);		//TODO:
-				CAHandle hFile = CAFile_resolveCStr(&ca, path);
+				CAHandle hFile = CAFile_resolveSubFile(&ca, dir, CharString_createRefCStrConst(fileExts[f]));
 				Test_assert(t, "stress S2: pre-remove resolve", hFile != CAHandle_Invalid);
 				Test_assert(t, "stress S2: remove ok", CAFile_removeFile(&ca, hFile, t->alloc, &t->err));
 			}
@@ -347,21 +355,20 @@ void Test_CAStress(Test *t) {
 
 		for (U64 d = 0; d < STRESS_NUM_DIRS; ++d) {
 
+			CAHandle dir = CAFile_resolveSubFolder(&ca, CAHandle_Root, CharString_createRefCStrConst(dirNames[d]));
+
 			if (d == 3) {	//delta, all files removed
 
 				for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
-					C8 path[64];
-					String_format(path, sizeof(path), "delta/%s", fileExts[f]);		//TODO:
-					Test_assert(t, "stress S2: delta file gone", CAFile_resolveCStr(&ca, path) == CAHandle_Invalid);
+					CAHandle resolved = CAFile_resolveSubFile(&ca, dir, CharString_createRefCStrConst(fileExts[f]));
+					Test_assert(t, "stress S2: delta file gone", resolved == CAHandle_Invalid);
 				}
 				continue;
 			}
 
 			for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
 
-				C8 path[64];
-				String_format(path, sizeof(path), "%s/%s", dirNames[d], fileExts[f]);		//TODO:
-				CAHandle h = CAFile_resolveCStr(&ca, path);
+				CAHandle h = CAFile_resolveSubFile(&ca, dir, CharString_createRefCStrConst(fileExts[f]));
 				Test_assert(t, "stress S2: other dir resolve", h != CAHandle_Invalid);
 
 				if (h == CAHandle_Invalid)
@@ -378,61 +385,62 @@ void Test_CAStress(Test *t) {
 
 		for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
 
-			C8 srcPath[64], dstPath[64];
-			String_format(srcPath, sizeof(srcPath), "beta/%s",  fileExts[f]);
-			String_format(dstPath, sizeof(dstPath), "alpha/%s", fileExts[f]);
+			CAHandle hBeta = CAFile_resolveCStr(&ca, "beta");
+			CAHandle hAlpha = CAFile_resolveCStr(&ca, "alpha");
 
-			//Conflict: alpha already has a file with that name, rename it first
-
-			CAHandle hConflict = CAFile_resolveCStr(&ca, dstPath);
-
-			if (hConflict != CAHandle_Invalid) {
-
-				//Rename the existing alpha file to alpha/X_orig.bin
-
-				C8 newName[32];
-				String_format(newName, sizeof(newName), "%c_orig.bin", fileExts[f][0]);	//TODO:
-
-				CharString ns = CharString_createNull();
-				CharString_createCopy(CharString_createRefCStrConst(newName), t->alloc, &ns, NULL);
-				CAFile_rename(&ca, hConflict, t->alloc, &ns, NULL);
-				CharString_free(&ns, t->alloc);
+			if (hBeta == CAHandle_Invalid || hAlpha == CAHandle_Invalid) {
+				Test_assert(t, "stress: failed to get beta/alpha", false);
+				break;
 			}
+
+			CAHandle hConflict = CAFile_resolveSubFile(&ca, hBeta, CharString_createRefCStrConst(fileExts[f]));
+
+			//Rename the existing alpha file to alpha/X0.bin
+
+			CharString str = CharString_createNull();
+			CharString_createCopy(CharString_createRefCStrConst(fileExtsRen[f]), t->alloc, &str, &t->err);
+			CAFile_rename(&ca, hConflict, t->alloc, &str, NULL);
+			CharString_free(&str, t->alloc);
 
 			//Re-resolve src and destination folder after possible rename
 
-			CAHandle hSrc   = CAFile_resolve(&ca, CharString_createRefCStrConst(srcPath));
-			CAHandle hAlpha = CAFile_resolve(&ca, CharString_createRefCStrConst("alpha"));
+			CAHandle hSrc = CAFile_resolveSubFile(&ca, hBeta, CharString_createRefCStrConst(fileExtsRen[f]));
 			Test_assert(t, "stress S3: pre-move resolve", hSrc != CAHandle_Invalid);
-			Test_assert(t, "stress S3: alpha resolves",   hAlpha != CAHandle_Invalid);
 			Test_assert(t, "stress S3: move ok", CAFile_move(&ca, hSrc, hAlpha, t->alloc, &t->err));
 		}
 
 		//beta should now be empty
 
 		{
-			CAHandle hBeta = CAFile_resolve(&ca, CharString_createRefCStrConst("beta"));
+			CAHandle hBeta = CAFile_resolveCStr(&ca, "beta");
 			Test_assert(t, "stress S3: beta empty", hBeta != CAHandle_Invalid && CAFile_fileCount(&ca, hBeta, false) == 0);
 		}
 
 		//alpha should have 2 * FILES_PER_DIR files now
 
-		{
-			CAHandle hAlpha = CAFile_resolve(&ca, CharString_createRefCStrConst("alpha"));
-			Test_assert(t, "stress S3: alpha has 2x files",
-				hAlpha != CAHandle_Invalid &&
-				CAFile_fileCount(&ca, hAlpha, false) == 2 * STRESS_FILES_PER_DIR
-			);
-		}
+		CAHandle hAlpha = CAFile_resolveCStr(&ca, "alpha");
+		Test_assert(t, "stress S3: alpha has 2x files",
+			hAlpha != CAHandle_Invalid &&
+			CAFile_fileCount(&ca, hAlpha, false) == 2 * STRESS_FILES_PER_DIR
+		);
 
 		//Verify data preserved on moved beta files (now in alpha/)
 
+		CAHandle hBeta = CAFile_resolveCStr(&ca, "beta");
+
 		for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
 
-			C8 path[64];
-			String_format(path, sizeof(path), "alpha/%s", fileExts[f]);				//TODO:
-			CAHandle h = CAFile_resolve(&ca, CharString_createRefCStrConst(path));
+			CAHandle h = CAFile_resolveSubFile(&ca, hAlpha, CharString_createRefCStrConst(fileExtsRen[f]));
 			Test_assert(t, "stress S3: moved file resolve", h != CAHandle_Invalid);
+
+			CAHandle hOg = CAFile_resolveSubFile(&ca, hAlpha, CharString_createRefCStrConst(fileExts[f]));
+			Test_assert(t, "stress S3: original file resolve", hOg != CAHandle_Invalid);
+
+			CAHandle hMoved = CAFile_resolveSubFile(&ca, hBeta, CharString_createRefCStrConst(fileExts[f]));
+			Test_assert(t, "stress S3: moved file resolve", hMoved == CAHandle_Invalid);
+
+			CAHandle hMovedRenamed = CAFile_resolveSubFile(&ca, hBeta, CharString_createRefCStrConst(fileExtsRen[f]));
+			Test_assert(t, "stress S3: moved renamed file resolve", hMovedRenamed == CAHandle_Invalid);
 
 			if (h == CAHandle_Invalid)
 				continue;
@@ -447,26 +455,28 @@ void Test_CAStress(Test *t) {
 
 		//rename every remaining file in "gamma"
 
+		CAHandle hGamma = CAFile_resolveSubFolder(&ca, CAHandle_Root, CharString_createRefCStrConst("gamma"));
+
+		Test_assert(t, "stress: gamma valid", hGamma != CAHandle_Invalid);
+
 		for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
 
-			C8 oldPath[64], newNameBuf[32];
-			String_format(oldPath,    sizeof(oldPath),    "gamma/%s", fileExts[f]);		//TODO:
-			String_format(newNameBuf, sizeof(newNameBuf), "g%llu.dat", (unsigned long long)f);
-
-			CAHandle h = CAFile_resolveCStr(&ca, oldPath);
+			CAHandle h = CAFile_resolveSubFile(&ca, hGamma, CharString_createRefCStrConst(fileExts[f]));
 			Test_assert(t, "stress S4: pre-rename resolve", h != CAHandle_Invalid);
 
+			const C8 *toString = "0123456789";		//Keep STRESS_FILES_PER_DIR < 9
+			CharString currVal = CharString_createRefSizedConst(toString + f, 1, false);
+
 			CharString ns = CharString_createNull();
-			CharString_createCopy(CharString_createRefCStrConst(newNameBuf), t->alloc, &ns, NULL);
+			CharString_createCopy(currVal, t->alloc, &ns, NULL);
 			Test_assert(t, "stress S4: rename ok", CAFile_rename(&ca, h, t->alloc, &ns, &t->err));
 
 			//Old path gone, new path found
 
-			Test_assert(t, "stress S4: old gone", CAFile_resolveCStr(&ca, oldPath) == CAHandle_Invalid);
+			h = CAFile_resolveSubFile(&ca, hGamma, CharString_createRefCStrConst(fileExts[f]));
+			Test_assert(t, "stress S4: old gone", h == CAHandle_Invalid);
 
-			C8 newPath[64];
-			String_format(newPath, sizeof(newPath), "gamma/%s", newNameBuf);
-			CAHandle hNew = CAFile_resolveCStr(&ca, newPath);
+			CAHandle hNew = CAFile_resolveSubFile(&ca, hGamma, currVal);
 			Test_assert(t, "stress S4: new found", hNew != CAHandle_Invalid);
 
 			//Data survives rename
@@ -492,20 +502,21 @@ void Test_CAStress(Test *t) {
 		//Every surviving gamma file has the new name and correct data
 
 		for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
-			C8 path[64], newNameBuf[32];
-			String_format(newNameBuf, sizeof(newNameBuf), "g%llu.dat", (unsigned long long)f);	//TODO:
-			String_format(path,       sizeof(path),       "gamma/%s", newNameBuf);
-			Test_assert(t, "stress S5: gamma renamed resolve", CAFile_resolveCStr(&ca, path) != CAHandle_Invalid);
+			const C8 *toString = "0123456789";		//Keep STRESS_FILES_PER_DIR < 9
+			CharString currVal = CharString_createRefSizedConst(toString + f, 1, false);
+			CAHandle hNew = CAFile_resolveSubFile(&ca, hGamma, currVal);
+			Test_assert(t, "stress S5: gamma renamed resolve", hNew != CAHandle_Invalid);
 		}
 
 		//epsilon through theta still have all their original files + correct data
 
 		for (U64 d = 4; d < STRESS_NUM_DIRS; ++d) {
+
+			CAHandle dir = CAFile_resolveSubFolder(&ca, CAHandle_Root, CharString_createRefCStrConst(dirNames[d]));
+
 			for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
 
-				C8 path[64];
-				String_format(path, sizeof(path), "%s/%s", dirNames[d], fileExts[f]);		//TODO:
-				CAHandle h = CAFile_resolve(&ca, CharString_createRefCStrConst(path));
+				CAHandle h = CAFile_resolveSubFile(&ca, dir, CharString_createRefCStrConst(fileExts[f]));
 				Test_assert(t, "stress S5: intact dir resolve", h != CAHandle_Invalid);
 
 				if (h == CAHandle_Invalid)
@@ -524,5 +535,5 @@ void Test_CAStress(Test *t) {
 
 	#undef STRESS_NUM_DIRS
 	#undef STRESS_FILES_PER_DIR
-	#undef STRESS_TOTAL_FILES*/
+	#undef STRESS_TOTAL_FILES
 }

@@ -160,9 +160,7 @@ static Bool buildStreamFile(Test *t, DLFile *f, U64 count, const RefPtrType *typ
 
 		//addEntryStream inc-refs internally; dec our local ref after
 
-		StreamRef *sr = ms;
-
-		if (!DLFile_addEntryStream(f, &sr, 0, i + 1, t->alloc, &t->err)) {
+		if (!DLFile_addEntryStream(f, &ms, 0, i + 1, t->alloc, &t->err)) {
 			RefPtr_dec(&ms);
 			DLFile_free(f, t->alloc);
 			return false;
