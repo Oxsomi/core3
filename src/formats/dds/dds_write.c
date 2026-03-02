@@ -18,35 +18,54 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/list_impl.h"
-#include "formats/dds/dds.h"
-#include "formats/dds/headers.h"
+#include "formats/dds/dds_file.h"
+#include "formats/dds/dds_headers.h"
+#include "types/container/ref_ptr.h"
+#include "types/container/types.h"
+#include "types/container/stream.h"
+#include "types/container/buffer.h"
 #include "types/base/constants.h"
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
 
-TListImpl(SubResourceData);
-
 ECompareResult SubResourceData_sort(const SubResourceData *a, const SubResourceData *b) {
-	return a->layerId > b->layerId || (
-		(a->layerId == b->layerId && a->z > b->z) || (
-			a->layerId == b->layerId && a->z == b->z && a->mipId > b->mipId
-		)
-	);
+
+	if (a->layerId != b->layerId)
+		return a->layerId < b->layerId ? ECompareResult_Lt : ECompareResult_Gt;
+
+	if (a->z != b->z)
+		return a->z < b->z ? ECompareResult_Lt : ECompareResult_Gt;
+
+	return a->mipId < b->mipId ? ECompareResult_Lt : ECompareResult_Gt;
 }
 
-Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *allocator, Buffer *result, Error *e_rr) {
+Bool DDS_write(
+	StreamRef *streamRef,
+	U64 *streamOffset,
+	ListSubResourceData *buf,
+	const DDSInfo *info,
+	const Allocator *alloc,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
+	StreamCursor cursor = (StreamCursor) { 0 };
+	StreamCursor cursorRead = (StreamCursor) { 0 };
+	Buffer cache = Buffer_createNull();
 
 	if(!buf || !buf->length || !info)
 		retError(clean, Error_nullPointer(!buf || !buf->length ? 0 : 1, "DDS_write()::buf and info are required"));
 
-	if(!result)
-		retError(clean, Error_nullPointer(!result ? 3 : 0, "DDS_write()::result is required"));
+	if(!streamRef || !streamOffset)
+		retError(clean, Error_nullPointer(!streamRef ? 0 : 1, "DDS_write()::streamRef and streamOffset are required"));
 
-	if(result->ptr)
-		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::result already contained data, possible memleak"));
+	if(streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is of invalid type"));
+
+	Stream *stream = RefPtr_data(streamRef, Stream);
+
+	if(!stream->write)
+		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is not writable"));
 
 	if(!info->w || !info->h || !info->l || !info->mips || !info->layers || !info->textureFormatId)
 		retError(clean, Error_invalidParameter(1, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required"));
@@ -55,7 +74,7 @@ Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *a
 		retError(clean, Error_invalidParameter(1, 1, "DDS_write()::info.type and textureFormatId have to be valid"));
 
 	const U32 biggestSize2 = U32_max(U32_max(info->w, info->h), info->l);
-	const U32 mips = U32_max(1, (U32) F64_ceil(F64_log2((F64)biggestSize2)));
+	const U32 mips = U32_max(1, (U32) F64_floor(F64_log2((F64)biggestSize2)) + 1);
 
 	if(info->mips > mips)
 		retError(clean, Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds"));
@@ -124,7 +143,7 @@ Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *a
 
 		for (U32 j = 0; j < info->mips; ++j) {
 
-			const U64 len = ETextureFormat_getSize(formatOxC, currW, currH, currL);
+			const U64 len = ETextureFormat_getSize(formatOxC, currW, currH, 1);
 
 			for (U32 k = 0; k < currL; ++k) {
 
@@ -133,20 +152,22 @@ Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *a
 				if(dat.layerId != i || dat.mipId != j || dat.z != k)
 					retError(clean, Error_invalidParameter(0, 0, "DDS_write()::buf contained duplicate data"));
 
-				if(Buffer_length(dat.data) != len)
-					retError(clean, Error_invalidParameter(0, 0, "DDS_write()::buf contained invalid sized data"));
+				if(dat.streamLen != len)
+					retError(clean, Error_invalidParameter(0, 0, "DDS_write()::buf contained invalid stream length"));
 
-				if(bufLen + len < bufLen)
+				if(*streamOffset + len < *streamOffset)
 					retError(clean, Error_overflow(0, bufLen + len, bufLen, "DDS_write() write failed, overflow!"));
-
-				bufLen += len;
 			}
 
+			bufLen += len * currL;
 			currW = U32_max(1, currW >> 1);
 			currH = U32_max(1, currH >> 1);
 			currL = U32_max(1, currL >> 1);
 		}
 	}
+
+	if (stream->reserve)
+		gotoIfError3(clean, stream->reserve(stream, *streamOffset + bufLen, alloc, e_rr));
 
 	U8 alignY = 1;
 	ETextureFormat_getAlignment(formatOxC, NULL, &alignY);
@@ -156,9 +177,7 @@ Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *a
 	if(stride >> 32)
 		retError(clean, Error_overflow(0, stride, U32_MAX, "DDS_write() pitch overflow"));
 
-	gotoIfError3(clean, Buffer_createUninitializedBytes(bufLen, allocator, result, e_rr));
-
-	U8 *ptr = result->ptrNonConst;
+	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	//Write DDS Header
 
@@ -217,9 +236,9 @@ Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *a
 		}
 	}
 
-	*(DDSHeader*)ptr = (DDSHeader) {
+	DDSHeader header = (DDSHeader) {
 		.magicNumber = ddsMagic,
-		.size = (U32)(sizeof(DDSHeader) - sizeof(((DDSHeader*)ptr)->magicNumber)),
+		.size = (U32)(sizeof(DDSHeader) - sizeof(((DDSHeader*)NULL)->magicNumber)),
 		.flags =
 			EDDSFlag_Default | (info->mips > 1 ? EDDSFlag_Mips : 0) | (info->type == ETextureType_3D ? EDDSFlag_Depth : 0) |
 			(isCompressed ? EDDSFlag_LinearSize : EDDSFlag_Pitch),
@@ -240,13 +259,15 @@ Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *a
 		}
 	};
 
-	ptr += sizeof(DDSHeader);
+	Buffer headerBuf = Buffer_createRefConst(&header, sizeof(header));
+	gotoIfError3(clean, StreamCursor_write(&cursor, headerBuf, 0, *streamOffset, 0, false, alloc, e_rr));
+	*streamOffset += sizeof(DDSHeader);
 
 	//Write DDS ext header
 
 	if(requiresDXT10) {
 
-		*(DDSHeaderDXT10*)ptr = (DDSHeaderDXT10) {
+		DDSHeaderDXT10 header10 = (DDSHeaderDXT10) {
 			.format = format,
 			.dim = (info->type == ETextureType_3D ? EDX10Dim_3D : EDX10Dim_2D),
 			.miscFlag = (info->type == ETextureType_Cube ? EDX10Misc_IsCube : 0),
@@ -254,28 +275,39 @@ Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *a
 			.miscFlags2 = EDX10AlphaMode_Unknown
 		};
 
-		ptr += sizeof(DDSHeaderDXT10);
+		Buffer header10Buf = Buffer_createRefConst(&header10, sizeof(header10));
+		gotoIfError3(clean, StreamCursor_write(&cursor, header10Buf, 0, *streamOffset, 0, false, alloc, e_rr));
+		*streamOffset += sizeof(DDSHeaderDXT10);
 	}
 
 	//Write subresources
 
 	for (U64 i = 0; i < buf->length; ++i) {
-		bufLen = Buffer_length(buf->ptr[i].data);
-		Buffer_memcpy(Buffer_createRef(ptr, bufLen), buf->ptr[i].data);
-		ptr += bufLen;
+
+		bufLen = buf->ptr[i].streamLen;
+
+		if (cache.ptr) {
+			gotoIfError3(clean, StreamCursor_createWithCache(buf->ptr[i].stream, &cache, false, &cursorRead, e_rr));
+		}
+
+		else gotoIfError3(clean, StreamCursor_create(buf->ptr[i].stream, 0, false, alloc, &cursorRead, e_rr));
+
+		gotoIfError3(clean, StreamCursor_copyStream(
+			&cursor, &cursorRead,
+			buf->ptr[i].streamOff, *streamOffset,
+			bufLen,
+			alloc,
+			e_rr
+		));
+
+		gotoIfError3(clean, StreamCursor_closeAndKeepCache(&cursorRead, alloc, &cache, e_rr));
+
+		*streamOffset += bufLen;
 	}
 
 clean:
+	Buffer_free(&cache, alloc);
+	StreamCursor_close(&cursorRead, alloc);
+	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
-}
-
-void ListSubResourceData_freeAll(ListSubResourceData *buf, const Allocator *allocator) {
-
-	if(!buf)
-		return;
-
-	for(U64 i = 0; i < buf->length; ++i)
-		Buffer_free(&buf->ptrNonConst[i].data, allocator);
-
-	ListSubResourceData_free(buf, allocator);
 }

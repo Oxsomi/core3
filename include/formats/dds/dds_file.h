@@ -31,9 +31,14 @@ typedef struct Allocator Allocator;
 typedef struct Error Error;
 typedef enum EDepthStencilFormat EDepthStencilFormat;
 
+typedef struct RefPtr RefPtr;
+typedef RefPtr StreamRef;
+
 typedef struct SubResourceData {
 	U32 mipId, layerId, z, padding;
-	Buffer data;						//Either a ref to the data in the dds or a real buffer
+	StreamRef *stream;
+	U64 streamOff;
+	U64 streamLen;
 } SubResourceData;
 
 typedef struct DDSInfo {
@@ -49,13 +54,26 @@ typedef struct DDSInfo {
 
 TList(SubResourceData);
 
-//buf may be sorted, so needs a non const buf
-Bool DDS_write(ListSubResourceData *buf, const DDSInfo *info, const Allocator *allocator, Buffer *result, Error *e_rr);
+//buf's contents are sorted based on subresource index, so needs a non const buf
+Bool DDS_write(
+	StreamRef *stream,
+	U64 *streamOffset,
+	ListSubResourceData *buf,
+	const DDSInfo *info,
+	const Allocator *alloc,
+	Error *e_rr
+);
 
-//Assumes buf is 4-byte aligned
-Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubResourceData *result, Error *e_rr);
+Bool DDS_read(
+	StreamRef *stream,
+	U64 *streamOff,
+	DDSInfo *info,
+	const Allocator *alloc,
+	ListSubResourceData *result,
+	Error *e_rr
+);
 
-void ListSubResourceData_freeAll(ListSubResourceData *buf, const Allocator *allocator);
+void ListSubResourceData_freeUnderlying(ListSubResourceData *buf, const Allocator *alloc);
 
 #ifdef __cplusplus
 	}

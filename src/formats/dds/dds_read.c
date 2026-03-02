@@ -19,15 +19,26 @@
 */
 
 #include "types/container/list_impl.h"
-#include "formats/dds/dds.h"
-#include "formats/dds/headers.h"
+#include "types/container/types.h"
+#include "types/container/ref_ptr.h"
+#include "types/container/stream.h"
+#include "formats/dds/dds_file.h"
+#include "formats/dds/dds_headers.h"
 #include "types/base/constants.h"
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
 
-Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubResourceData *result, Error *e_rr) {
+Bool DDS_read(
+	StreamRef *streamRef,
+	U64 *streamOff,
+	DDSInfo *info,
+	const Allocator *alloc,
+	ListSubResourceData *result,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
+	StreamCursor cursor = (StreamCursor) { 0 };
 
 	if(!info || !result)
 		retError(clean, Error_nullPointer(!info ? 1 : 3, "DDS_read()::info and result are required"));
@@ -35,13 +46,23 @@ Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubReso
 	if(result->ptr)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::result isn't empty, potential memleak"));
 
-	if(Buffer_length(buf) < sizeof(DDSHeader))
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had a missing header"));
+	if (!streamRef || !streamOff)
+		retError(clean, Error_nullPointer(!streamRef ? 0 : 1, "DDS_read()::streamRef and streamOff are required"));
 
-	if (!((U64)(const void *)buf.ptr & 3))
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alignment"));
+	if (streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::streamRef is of invalid type"));
 
-	DDSHeader header = *(const DDSHeader*) buf.ptr;
+	Stream *stream = RefPtr_data(streamRef, Stream);
+
+	if (!stream->read)
+		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::streamRef is not readable"));
+
+	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursor, e_rr));
+
+	DDSHeader header = (DDSHeader) { 0 };
+	gotoIfError3(clean, StreamCursor_read(
+		&cursor, Buffer_createRef(&header, sizeof(header)), *streamOff, 0, 0, false, alloc, e_rr
+	));
 
 	if(header.magicNumber != ddsMagic)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header magic"));
@@ -77,7 +98,7 @@ Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubReso
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid depth or mips"));
 
 	U32 biggestSize2 = (U32) U64_max(U64_max(header.width, header.height), header.depth);
-	U32 mips = (U32) U64_max(1, (U64) F64_ceil(F64_log2((F64)biggestSize2)));
+	const U32 mips = U32_max(1, (U32) F64_floor(F64_log2((F64)biggestSize2)) + 1);
 
 	if(header.mips > mips)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf mip count exceeded available mip count"));
@@ -94,11 +115,12 @@ Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubReso
 
 	if(useMagic && header.format.magicNumber == EDDSFormatMagic_DX10) {
 
-		if(Buffer_length(buf) < sizeof(DDSHeader) + sizeof(DDSHeaderDXT10))
-			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had a missing DXT10 header"));
-
 		hasDXT10 = true;
-		DDSHeaderDXT10 header10 = *(const DDSHeaderDXT10*)((const DDSHeader*) buf.ptr + 1);
+		DDSHeaderDXT10 header10 = (DDSHeaderDXT10) { 0 };
+
+		gotoIfError3(clean, StreamCursor_read(
+			&cursor, Buffer_createRef(&header10, sizeof(header10)), *streamOff + sizeof(DDSHeader), 0, 0, false, alloc, e_rr
+		));
 
 		formatId = DXFormat_toTextureFormatId(header10.format);
 		format = ETextureFormatId_unpack[formatId];
@@ -251,16 +273,22 @@ Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubReso
 
 	U64 headerSize = sizeof(DDSHeader) + (hasDXT10 ? sizeof(DDSHeaderDXT10) : 0);
 
-	if(Buffer_length(buf) != headerSize + expectedLength)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid size"));
+	if(*streamOff + headerSize + expectedLength > stream->size)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::stream had invalid size"));
 
-	U64 totalSubResources = (U64)header.mips * header.depth * arraySize;
+	currL = header.depth;
+	U64 totalSubResources = 0;
+
+	for (U32 j = 0; j < header.mips; ++j) {
+		totalSubResources += currL;
+		currL = U32_max(1, currL >> 1);
+	}
+
+	totalSubResources *= arraySize;
 
 	//Output parsed result
 
-	gotoIfError3(clean, ListSubResourceData_resize(result, totalSubResources, allocator, e_rr));
-
-	const U8 *ptr = buf.ptr + headerSize;
+	gotoIfError3(clean, ListSubResourceData_resize(result, totalSubResources, alloc, e_rr));
 
 	for (U32 i = 0, l = 0; i < arraySize; ++i) {
 
@@ -272,16 +300,20 @@ Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubReso
 
 			for (U32 k = 0; k < currL; ++k) {
 
-				len = ETextureFormat_getSize(format, currW, currH, currL);
+				len = ETextureFormat_getSize(format, currW, currH, 1);
+
+				RefPtr_inc(streamRef);
 
 				result->ptrNonConst[l++] = (SubResourceData) {
 					.layerId = i,
 					.mipId = j,
 					.z = k,
-					.data = Buffer_createRefConst(ptr, len)
+					.stream = streamRef,
+					.streamOff = *streamOff,
+					.streamLen = len
 				};
-
-				ptr += len;
+				
+				*streamOff += len;
 			}
 
 			currW = U32_max(1, currW >> 1);
@@ -301,5 +333,6 @@ Bool DDS_read(Buffer buf, DDSInfo *info, const Allocator *allocator, ListSubReso
 	};
 
 clean:
+	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }
