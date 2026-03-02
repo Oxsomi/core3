@@ -19,8 +19,10 @@
 */
 
 #include "shared.h"
+#include "types/container/file.h"
 #include "types/base/string_read_helper.h"
-#include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_edit.h"
+#include "formats/oiCA/ca_lookup.h"
 
 extern const CASettings kCASettings;
 

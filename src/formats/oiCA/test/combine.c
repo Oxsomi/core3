@@ -20,7 +20,10 @@
 
 #include "shared.h"
 #include "types/container/memory_stream.h"
+#include "formats/oiCA/ca_combine.h"
 #include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_lookup.h"
+#include "formats/oiCA/ca_edit.h"
 
 static inline CAHandle CAFile_resolveCStr(CAFile *ca, const C8 *name) {
 	return CAFile_resolve(ca, CharString_createRefCStrConst(name));

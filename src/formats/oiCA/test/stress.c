@@ -19,7 +19,8 @@
 */
 
 #include "shared.h"
-#include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_edit.h"
+#include "formats/oiCA/ca_lookup.h"
 
 extern const CASettings kCASettings;
 

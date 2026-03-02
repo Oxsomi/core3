@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/container/file.h"
+#include "types/container/list.h"
 #include "formats/oiXX/oiXX.h"
 #include "formats/oiDL/dl_file.h"
 
@@ -104,8 +104,6 @@ typedef struct CAFile {
 	CASettings settings;		//Must remain 8-byte aligned
 } CAFile;
 
-//Create and delete
-
 Bool CAFile_create(
 	const CASettings *settings,
 	U64 reservedFiles,
@@ -119,7 +117,24 @@ Bool CAFile_createCopy(const CAFile *caFile, const Allocator *alloc, CAFile *res
 
 void CAFile_free(CAFile *caFile, const Allocator *alloc);
 
-//Getters
+Bool CAFile_write(
+	const CAFile *caFile,
+	const RefPtrType *encStreamType,
+	StreamRef *result,
+	U64 *startOffset,
+	const Allocator *alloc,
+	Error *e_rr
+);
+
+Bool CAFile_read(
+	StreamRef *file,
+	const RefPtrType *encStreamType,
+	U64 startOffset,
+	const U32 encryptionKey[8],
+	const Allocator *alloc,
+	CAFile *caFile,
+	Error *e_rr
+);
 
 //>> 63: isFolder, the rest is the handle (file or folder).
 // (U64)-1 = invalid,
@@ -141,202 +156,32 @@ static inline Bool CAHandle_isRoot(CAHandle handle) {
 	return CAHandle_isFolder(handle) && !CAHandle_getId(handle);
 }
 
-U64 CAFile_fileCount(const CAFile *caFile, CAHandle fileHandle, Bool recursive);
-U64 CAFile_dirCount(const CAFile *caFile, CAHandle fileHandle, Bool recursive);
 
-static inline U64 CAFile_fileObjectCount(const CAFile *caFile, CAHandle fileHandle, Bool recursive) {
-	return CAFile_fileCount(caFile, fileHandle, recursive) + CAFile_dirCount(caFile, fileHandle, recursive);
+static inline const CAFolderInfo *CAFile_getFolderInfoPtr(const CAFile *caFile, CAHandle handle) {
+
+	if (!caFile || !CAHandle_isFolder(handle))
+		return NULL;
+
+	U64 id = CAHandle_getId(handle);
+
+	if (id >= caFile->folders.length)
+		return NULL;
+
+	return &caFile->folders.ptr[id];
 }
 
-U64 CAFile_fileSize(const CAFile *caFile, CAHandle fileHandle);
-U64 CAFile_fileParent(const CAFile *caFile, CAHandle fileHandle);
-Ns CAFile_fileTime(const CAFile *caFile, CAHandle fileHandle);
+static inline const CAFileInfo *CAFile_getFileInfoPtr(const CAFile *caFile, CAHandle handle) {
 
-CAHandle CAFile_resolveSubFile(const CAFile *caFile, CAHandle parentDir, CharString fileName);
-CAHandle CAFile_resolveSubFolder(const CAFile *caFile, CAHandle parentDir, CharString fileName);
+	if (!caFile || !CAHandle_isFile(handle))
+		return NULL;
 
-static inline CAHandle CAFile_resolveSubObject(const CAFile *caFile, CAHandle parentDir, CharString fileName) {
+	U64 id = CAHandle_getId(handle);
 
-	CAHandle h = CAFile_resolveSubFolder(caFile, parentDir, fileName);
+	if (id >= caFile->files.length)
+		return NULL;
 
-	if (h != CAHandle_Invalid)
-		return h;
-
-	return CAFile_resolveSubFile(caFile, parentDir, fileName);
+	return &caFile->files.ptr[id];
 }
-
-CAHandle CAFile_resolveFile(const CAFile *caFile, CharString fullFileName);
-CAHandle CAFile_resolveFolder(const CAFile *caFile, CharString fullFileName);
-
-static inline CAHandle CAFile_resolve(const CAFile *caFile, CharString fullFileName) {
-
-	CAHandle h = CAFile_resolveFolder(caFile, fullFileName);
-
-	if (h != CAHandle_Invalid)
-		return h;
-
-	return CAFile_resolveFile(caFile, fullFileName);
-}
-
-static inline Bool CAFile_hasSubFile(const CAFile *caFile, CAHandle parentDir, CharString fileName) {
-	return CAFile_resolveSubFile(caFile, parentDir, fileName) != CAHandle_Invalid;
-}
-
-static inline Bool CAFile_hasSubFolder(const CAFile *caFile, CAHandle parentDir, CharString fileName) {
-	return CAFile_resolveSubFolder(caFile, parentDir, fileName) != CAHandle_Invalid;
-}
-
-static inline Bool CAFile_hasSubObject(const CAFile *caFile, CAHandle parentDir, CharString fileName) {
-	return CAFile_resolveSubObject(caFile, parentDir, fileName) != CAHandle_Invalid;
-}
-
-CAHandle CAFile_dirAt(const CAFile *caFile, CAHandle fileHandle, U64 id);
-CAHandle CAFile_fileAt(const CAFile *caFile, CAHandle fileHandle, U64 id);
-
-static inline CAHandle CAFile_fileObjectAt(const CAFile *caFile, CAHandle fileHandle, U64 id) {
-
-	U64 dirCount = CAFile_dirCount(caFile, fileHandle, false);
-
-	if (id < dirCount)
-		return CAFile_dirAt(caFile, fileHandle, id);
-
-	return CAFile_fileAt(caFile, fileHandle, id - dirCount);
-}
-
-//Get unqualified name of file.
-//Returns empty only if root or if invalid handle.
-CharString CAFile_getName(const CAFile *caFile, CAHandle handle);
-
-//Get unqualified name of file.
-//Returns empty only if root.
-Bool CAFile_getFullName(const CAFile *caFile, CAHandle handle, const Allocator *alloc, CharString *result, Error *e_rr);
-
-//Returns ref to existing data.
-// isValid is false for invalid handles, folders or streams.
-Buffer CAFile_getData(CAFile *caFile, CAHandle fileHandle, Bool *isValid);
-
-//Returns ref to existing data.
-// isValid is false for invalid handles, folders or streams.
-Buffer CAFile_getDataConst(const CAFile *caFile, CAHandle fileHandle, Bool *isValid);
-
-//Returns ref to existing data stream (increments stream ref).
-// *streamOff is U64_MAX for invalid handles, folders or fully loaded data, otherwise is offset in the stream.
-StreamRef *CAFile_getDataStream(const CAFile *caFile, CAHandle fileHandle, U64 *streamOff);
-
-//This will compare the two files at a and b.
-// Both files have to be buffers or streams that are seekable, otherwise it'll error.
-// Keep in mind that this is a full compare, which could take very long with big files.
-// As such, this should only be used in tools that are expected to take a long time.
-Bool CAFile_dataEqual(
-	const CAFile *a, CAHandle aFile,
-	const CAFile *b, CAHandle bFile,
-	const Allocator *alloc,
-	ECompareResult *equal,
-	Error *e_rr
-);
-
-Bool CAFile_isLoaded(const CAFile *caFile, CAHandle fileHandle);			//Returns false for streams
-
-//Setters
-
-Bool CAFile_setTime(CAFile *caFile, CAHandle fileHandle, Ns time, Error *e_rr);
-
-//Set data of a file, only valid if it's a file.
-// Moves 'buf' if not a ref, otherwise copies.
-Bool CAFile_setData(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, Buffer *buf, Error *e_rr);
-
-//Set data of a file to a stream, only valid if it's a file.
-// Moves stream to content (moves ref)
-Bool CAFile_setDataStream(
-	CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, StreamRef **stream, U64 off, U64 len, Error *e_rr
-);
-
-//Rename a file.
-// Moves name if not a ref, otherwise copies.
-Bool CAFile_rename(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, CharString *name, Error *e_rr);
-
-Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const Allocator *alloc, Error *e_rr);
-
-//Adding/removing
-
-CAHandle CAFile_add(
-	CAFile *caFile, CAHandle parent, CharString *name, Ns time, Bool isFile, const Allocator *alloc, Error *e_rr
-);
-
-static inline CAHandle CAFile_addFile(
-CAFile *caFile, CAHandle parent, CharString *name, Ns time, const Allocator *alloc, Error *e_rr
-) {
-	return CAFile_add(caFile, parent, name, time, true, alloc, e_rr);
-}
-
-static inline CAHandle CAFile_addFolder(
-	CAFile *caFile, CAHandle parent, CharString *name, const Allocator *alloc, Error *e_rr
-) {
-	return CAFile_add(caFile, parent, name, 0, false, alloc, e_rr);
-}
-
-Bool CAFile_removeFile(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, Error *e_rr);
-Bool CAFile_removeFolder(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, Error *e_rr);
-Bool CAFile_remove(CAFile *caFile, CAHandle fileHandle, const Allocator *alloc, Error *e_rr);
-
-Bool CAFile_getInfo(const CAFile *caFile, CAHandle handle, FileInfo *info, const Allocator *alloc, Error *e_rr);
-
-Bool CAFile_foreach(
-	const CAFile *caFile,
-	CAHandle fileHandle,
-	FileCallback callback,
-	void *object,
-	Bool recurse,
-	const Allocator *alloc,
-	Error *e_rr
-);
-
-//Serialize
-
-Bool CAFile_write(
-	const CAFile *caFile,
-	const RefPtrType *encStreamType,
-	StreamRef *result,
-	U64 *startOffset,
-	const Allocator *alloc,
-	Error *e_rr
-);
-
-Bool CAFile_read(
-	StreamRef *file,
-	const RefPtrType *encStreamType,
-	U64 startOffset,
-	const U32 encryptionKey[8],
-	const Allocator *alloc,
-	CAFile *caFile,
-	Error *e_rr
-);
-
-//Combine
-
-typedef enum EArchiveCombineMode {
-	EArchiveCombineMode_RequireSame,							//Files are only allowed to merge if same contents
-	EArchiveCombineMode_Rename,									//Try to rename the file on conflict
-	EArchiveCombineMode_AcceptA,								//First archive is leading on conflict
-	EArchiveCombineMode_AcceptB,								//Second archive is leading on conflict
-	EArchiveCombineMode_Count
-} EArchiveCombineMode;
-
-typedef enum EArchiveCombineFlags {
-	EArchiveCombineFlags_None = 0,
-	EArchiveCombineFlags_ResolveLatestTimestamp = 1 << 0,	//Resolve timestamp with latest, as long as data matches
-	EArchiveCombineFlags_ResolveAcceptLatest = 1 << 1		//Override file with latest file contents, otherwise conflict
-} EArchiveCombineFlags;
-
-Bool CAFile_combine(
-	const CAFile *a,
-	const CAFile *b,
-	EArchiveCombineMode combineMode,
-	EArchiveCombineFlags combineFlags,
-	const Allocator *alloc,
-	CAFile *combined,
-	Error *e_rr
-);
 
 #ifdef __cplusplus
 	}

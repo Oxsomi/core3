@@ -20,7 +20,9 @@
 
 #include "shared.h"
 #include "types/container/memory_stream.h"
-#include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_compare.h"
+#include "formats/oiCA/ca_props.h"
+#include "formats/oiCA/ca_edit.h"
 
 void Test_CACompare(Test *t) {
 

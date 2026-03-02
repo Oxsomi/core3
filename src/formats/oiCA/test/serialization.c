@@ -22,6 +22,8 @@
 #include "types/container/memory_stream.h"
 #include "types/container/encryption_stream.h"
 #include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_lookup.h"
+#include "formats/oiCA/ca_props.h"
 #include "types/base/time.h"
 
 CAHandle addFile(Test *t, CAFile *ca, CAHandle parent, const C8 *name, Ns time, Bool failIsSuccess);

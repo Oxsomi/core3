@@ -18,9 +18,15 @@
 *  This is called dual licensing.
 */
 
+#include "formats/oiCA/ca_combine.h"
 #include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_props.h"
+#include "formats/oiCA/ca_lookup.h"
+#include "formats/oiCA/ca_compare.h"
+#include "formats/oiCA/ca_edit.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/log.h"
+#include "types/container/file.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"

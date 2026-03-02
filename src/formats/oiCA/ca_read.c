@@ -19,7 +19,9 @@
 */
 
 #include "formats/oiCA/ca_file.h"
-#include "formats/oiCA/headers.h"
+#include "formats/oiCA/ca_headers.h"
+#include "formats/oiCA/ca_edit.h"
+#include "formats/oiCA/ca_props.h"
 #include "formats/oiDL/interface.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/container/stream.h"

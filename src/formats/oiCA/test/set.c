@@ -20,7 +20,8 @@
 
 #include "shared.h"
 #include "types/container/memory_stream.h"
-#include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_props.h"
+#include "formats/oiCA/ca_lookup.h"
 
 CAHandle addFile(Test *t, CAFile *ca, CAHandle parent, const C8 *name, Ns time, Bool failIsSuccess);
 CAHandle addFolder(Test *t, CAFile *ca, CAHandle parent, const C8 *name, Bool failIsSuccess);
