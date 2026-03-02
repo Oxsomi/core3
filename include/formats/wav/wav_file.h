@@ -20,17 +20,20 @@
 
 #pragma once
 #include "types/base/types.h"
-#include "formats/wav/headers.h"
+#include "formats/wav/wav_headers.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef struct Stream Stream;
+typedef struct RefPtr RefPtr;
+typedef RefPtr StreamRef;
+typedef struct Allocator Allocator;
+typedef struct Error Error;
 
 Bool WAV_write(
-	Stream *stream,
-	Stream *inputStream,
+	StreamRef *stream,
+	StreamRef *inputStream,
 	U64 outputStreamOffset,
 	U64 inputStreamOffset,
 	U64 streamLength,		//0 = remainder of input stream; length of output data
@@ -38,6 +41,7 @@ Bool WAV_write(
 	U32 freq,				//8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz
 	U16 stride,				//8, 16, 24 (PCM), 32, 64 (Float)
 	U64 *dataOutput,		//If NULL, will directly output the data to stream, otherwise points to the offset of the data
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -49,8 +53,7 @@ typedef struct WAVFile {
 	U64 dataStart;
 } WAVFile;
 
-Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *result, Error *e_rr);
-Bool WAV_readx(Stream *stream, U64 off, U64 len, WAVFile *result, Error *e_rr);
+Bool WAV_read(StreamRef *stream, U64 off, U64 len, const Allocator *allocator, WAVFile *result, Error *e_rr);
 
 typedef enum ESplitType {
 	ESplitType_Untouched,
@@ -76,29 +79,22 @@ typedef struct WAVConversionInfo {
 } WAVConversionInfo;
 
 Bool WAVFile_convert(
-	Stream *inputStream,
+	StreamRef *inputStream,
 	U64 srcOff,
 	U64 srcLen,
-	Stream *outputStream,
+	StreamRef *outputStream,
 	U64 dstOff,
 	WAVConversionInfo info,
 	U32 freq,				//Must match input
 	Bool writeHeader,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
-Bool WAVFile_convertx(
-	Stream *inputStream,
-	U64 srcOff,
-	U64 srcLen,
-	Stream *outputStream,
-	U64 dstOff,
-	WAVConversionInfo info,
-	U32 freq,				//Must match input
-	Bool writeHeader,
-	Error *e_rr
-);
+//Assumes correct alignment, mostly called internally
+U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i);
+
+U64 WAVFile_avg(U64 a, U64 b, U64 stride);		//Average two values (preserving encoding)
 
 #ifdef __cplusplus
 	}

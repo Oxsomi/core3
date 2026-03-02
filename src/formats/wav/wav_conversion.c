@@ -18,13 +18,17 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/list_impl.h"
-#include "formats/wav/wav.h"
-#include "formats/wav/headers.h"
-#include "platforms/file.h"
-#include "platforms/platform.h"
+#include "formats/wav/wav_file.h"
+#include "formats/wav/wav_headers.h"
+#include "types/container/buffer.h"
+#include "types/container/stream.h"
+#include "types/container/ref_ptr.h"
+#include "types/container/types.h"
 #include "types/base/constants.h"
 #include "types/base/allocator.h"
+#include "types/base/error.h"
+#include "types/base/mathf.h"
+#include "types/base/buffer.h"
 
 //Note: This only handles truncation, it can't handle expansion
 
@@ -156,24 +160,24 @@ U64 WAVFile_avg(U64 a, U64 b, U64 newStride) {
 }
 
 Bool WAVFile_convert(
-	Stream *inputStream,
+	StreamRef *inputStreamRef,
 	U64 srcOff,
 	U64 srcLen,
-	Stream *outputStream,
+	StreamRef *outputStreamRef,
 	U64 dstOff,
 	WAVConversionInfo info,
 	U32 freq,
 	Bool writeHeader,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
-	(void) alloc;
-
 	Bool s_uccess = true;
+	StreamCursor cursorWrite = (StreamCursor) { 0 };
+	StreamCursor cursorRead = (StreamCursor) { 0 };
 
-	if(!inputStream || !outputStream)
-		retError(clean, Error_nullPointer(!inputStream ? 0 : 3, "WAVFile_convert() requires inputStream and outputStream"))
+	gotoIfError3(clean, StreamCursor_create(inputStreamRef, 0, false, alloc, &cursorRead, e_rr));
+	gotoIfError3(clean, StreamCursor_create(outputStreamRef, 0, true, alloc, &cursorWrite, e_rr));
 
 	Bool stereo = info.oldByteCount >> 7;
 	U8 oldByteCount = info.oldByteCount & 0x7F;
@@ -196,21 +200,33 @@ Bool WAVFile_convert(
 	}
 
 	if(srcLen % (stereo ? oldByteCount << 1 : oldByteCount))
-		retError(clean, Error_invalidState(0, "WAVFile_convert() mismatches srcLen with bytes per block"))
+		retError(clean, Error_invalidState(0, "WAVFile_convert() mismatches srcLen with bytes per block"));
 
 	if(writeHeader) {
 
 		U64 newStreamLen = srcLen / oldBytesPerStep * info.newByteCount;
 
 		gotoIfError3(clean, WAV_write(
-			outputStream, NULL, dstOff, 0, newStreamLen, stereo && !info.splitType, freq, info.newByteCount << 3, &dstOff, e_rr
-		))
+			outputStreamRef,
+			NULL,
+			dstOff,
+			0,
+			newStreamLen,
+			stereo && !info.splitType,
+			freq,
+			info.newByteCount << 3,
+			&dstOff,
+			alloc,
+			e_rr
+		));
 	}
 
 	for(; srcOff < srcEnd; srcOff += oldBytesPerStep, dstOff += info.newByteCount) {
 
 		U8 tmp[16];
-		gotoIfError3(clean, Stream_read(inputStream, Buffer_createRef(tmp, sizeof(tmp)), srcOff, 0, oldBytesPerStep, false, e_rr))
+		gotoIfError3(clean, StreamCursor_read(
+			&cursorRead, Buffer_createRef(tmp, sizeof(tmp)), srcOff, 0, oldBytesPerStep, false, alloc, e_rr
+		));
 
 		U64 converted = WAVFile_cvt(tmp, oldByteCount, info.newByteCount, left);
 
@@ -220,34 +236,11 @@ Bool WAVFile_convert(
 		}
 
 		Buffer cvt = Buffer_createRefConst(&converted, info.newByteCount);
-		gotoIfError3(clean, Stream_write(outputStream, cvt, 0, dstOff, info.newByteCount, false, e_rr))
+		gotoIfError3(clean, StreamCursor_write(&cursorWrite, cvt, 0, dstOff, info.newByteCount, false, alloc, e_rr));
 	}
 
 clean:
+	StreamCursor_close(&cursorWrite, alloc);
+	StreamCursor_close(&cursorRead, alloc);
 	return s_uccess;
-}
-
-Bool WAVFile_convertx(
-	Stream *inputStream,
-	U64 srcOff,
-	U64 srcLen,
-	Stream *outputStream,
-	U64 dstOff,
-	WAVConversionInfo info,
-	U32 freq,				//Must match input
-	Bool writeHeader,
-	Error *e_rr
-) {
-	return WAVFile_convert(
-		inputStream,
-		srcOff,
-		srcLen,
-		outputStream,
-		dstOff,
-		info,
-		freq,				//Must match input
-		writeHeader,
-		Platform_instance->alloc,
-		e_rr
-	);
 }

@@ -18,42 +18,46 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/list_impl.h"
-#include "formats/wav/wav.h"
-#include "formats/wav/headers.h"
-#include "platforms/file.h"
-#include "platforms/platform.h"
+#include "types/container/stream.h"
+#include "formats/wav/wav_file.h"
+#include "formats/wav/wav_headers.h"
 
-Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *result, Error *e_rr) {
-
-	(void) allocator;
+Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WAVFile *result, Error *e_rr) {
 
 	Bool s_uccess = true;
+	StreamCursor cursorRead = (StreamCursor) { 0 };
 
-	if(!stream || !result)
-		retError(clean, Error_nullPointer(!stream ? 0 : 5, "WAV_read()::stream and result are required"))
+	if (!result)
+		retError(clean, Error_nullPointer(5, "WAV_read()::result is required"));
 
-	if(off >= stream->handle.fileSize)
-		retError(clean, Error_outOfBounds(0, off, stream->handle.fileSize, "WAV_read()::stream out of bounds"))
+	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursorRead, e_rr));
+
+	Stream *stream = RefPtr_data(streamRef, Stream);
+
+	if (off >= stream->size)
+		retError(clean, Error_outOfBounds(1, off, stream->size, "WAV_read()::stream out of bounds"));
 
 	if(!len)
-		len = stream->handle.fileSize - off;
+		len = stream->size - off;
 
-	if(off + len > stream->handle.fileSize)
-		retError(clean, Error_outOfBounds(1, off + len, stream->handle.fileSize, "WAV_read()::stream out of bounds"))
+	if(off + len > stream->size)
+		retError(clean, Error_outOfBounds(1, off + len, stream->size, "WAV_read()::stream out of bounds"));
 		
 	RIFFHeader header;
-	gotoIfError3(clean, Stream_read(stream, Buffer_createRef(&header, sizeof(header)), off, 0, 0, false, e_rr))
+	gotoIfError3(clean, StreamCursor_read(
+		&cursorRead, Buffer_createRef(&header, sizeof(header)), off, 0, 0, false, alloc, e_rr
+	));
+
 	off += sizeof(RIFFHeader);
 
 	if(header.section.magicNumber != RIFFHeader_magic)
-		retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid RIFF file"))
+		retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid RIFF file"));
 
 	if(header.section.size + 8 > len)
-		retError(clean, Error_outOfBounds(1, header.section.size + 8, len, "WAV_read()::section out of bounds"))
+		retError(clean, Error_outOfBounds(1, header.section.size + 8, len, "WAV_read()::section out of bounds"));
 
 	if(header.magicNumberFile != RIFFWAVHeader_magic)
-		retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid wav file"))
+		retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid wav file"));
 
 	Bool hasFmt = false;
 	Bool hasData = false;
@@ -61,21 +65,24 @@ Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *re
 	while (off < len) {
 
 		RIFFSection section;
-		gotoIfError3(clean, Stream_read(stream, Buffer_createRef(&section, sizeof(section)), off, 0, 0, false, e_rr))
+		gotoIfError3(clean, StreamCursor_read(
+			&cursorRead, Buffer_createRef(&section, sizeof(section)), off, 0, 0, false, alloc, e_rr
+		));
+
 		off += sizeof(section);
 
 		if(section.size > len - off)
-			retError(clean, Error_outOfBounds(1, section.size, len - off, "WAV_read()::section out of bounds"))
+			retError(clean, Error_outOfBounds(1, section.size, len - off, "WAV_read()::section out of bounds"));
 
 		switch(section.magicNumber) {
 
 			case RIFFFmtHeader_magic: {
 
 				if(hasFmt)
-					retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has more than one fmt section"))
+					retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has more than one fmt section"));
 
 				Buffer buf =  Buffer_createRef(&result->fmt, sizeof(result->fmt));
-				gotoIfError3(clean, Stream_read(stream, buf, off - sizeof(section), 0, 0, false, e_rr))
+				gotoIfError3(clean, StreamCursor_read(&cursorRead, buf, off - sizeof(section), 0, 0, false, alloc, e_rr));
 
 				switch (result->fmt.frequency) {
 
@@ -93,33 +100,33 @@ Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *re
 						retError(clean, Error_invalidParameter(
 							0, 0, "WAV_read() wav file has invalid frequency; must be one of "
 							"8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz"
-						))
+						));
 				}
 
 				if(result->fmt.channels < 1 || result->fmt.channels > 2)
-					retError(clean, Error_invalidState(0, "WAV_read() channel count unsupported"))
+					retError(clean, Error_invalidState(0, "WAV_read() channel count unsupported"));
 				
 				if((U64)result->fmt.frequency * result->fmt.bytesPerBlock != result->fmt.bytesPerSecond)
-					retError(clean, Error_invalidState(0, "WAV_read() bytesPerSecond is invalid"))
+					retError(clean, Error_invalidState(0, "WAV_read() bytesPerSecond is invalid"));
 				
 				if(((U64)result->fmt.channels * result->fmt.stride) >> 3 != result->fmt.bytesPerBlock)
-					retError(clean, Error_invalidState(0, "WAV_read() bytesPerBlock is invalid"))
+					retError(clean, Error_invalidState(0, "WAV_read() bytesPerBlock is invalid"));
 
 				if(
 					result->fmt.stride != 8 && result->fmt.stride != 16 && result->fmt.stride != 24 &&		//Int
 					result->fmt.stride != 32 && result->fmt.stride != 64									//Float ext
 				)
-					retError(clean, Error_invalidState(0, "WAV_read() bit count unsupported"))
+					retError(clean, Error_invalidState(0, "WAV_read() bit count unsupported"));
 
 				if(result->fmt.stride >= 32 && result->fmt.format != ERIFFAudioFormat_IEEE754)
 					retError(clean, Error_invalidState(
 						0, "WAV_read() format unsupported for 32 or 64 bit depth"
-					))
+					));
 
 				if(result->fmt.stride <= 24 && result->fmt.format != ERIFFAudioFormat_PCM)
 					retError(clean, Error_invalidState(
 						0, "WAV_read() format unsupported for 8 or 16 bit depth"
-					))
+					));
 
 				hasFmt = true;
 				break;
@@ -128,7 +135,7 @@ Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *re
 			case RIFFDataHeader_magic:
 
 				if(hasData)
-					retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has more than one fmt section"))
+					retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has more than one fmt section"));
 
 				result->dataLength = section.size;
 				result->dataStart = off;
@@ -158,24 +165,21 @@ Bool WAV_read(Stream *stream, U64 off, U64 len, Allocator allocator, WAVFile *re
 				break;
 
 			default:
-				retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid riff section"))
+				retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid riff section"));
 		}
 
 		off += section.size;
 	}
 
 	if(!hasData || !hasFmt)
-		retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has no fmt or data section"))
+		retError(clean, Error_invalidParameter(0, 0, "WAV_read() wav file has no fmt or data section"));
 
 	if(result->dataLength % result->fmt.bytesPerBlock)
 		retError(clean, Error_invalidParameter(
-			0, 0, "WAV_write() dataLength didn't match bytes per block"
-		))
+			0, 0, "WAV_read() dataLength didn't match bytes per block"
+		));
 
 clean:
+	StreamCursor_close(&cursorRead, alloc);
 	return s_uccess;
-}
-
-Bool WAV_readx(Stream *stream, U64 off, U64 len, WAVFile *result, Error *e_rr) {
-	return WAV_read(stream, off, len, Platform_instance->alloc, result, e_rr);
 }

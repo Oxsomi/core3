@@ -18,14 +18,13 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/list_impl.h"
-#include "formats/wav/wav.h"
-#include "formats/wav/headers.h"
-#include "platforms/file.h"
+#include "types/container/stream.h"
+#include "formats/wav/wav_file.h"
+#include "formats/wav/wav_headers.h"
 
 Bool WAV_write(
-	Stream *stream,
-	Stream *inputStream,
+	StreamRef *streamRef,
+	StreamRef *inputStreamRef,
 	U64 outputStreamOffset,
 	U64 inputStreamOffset,
 	U64 streamLength,
@@ -33,38 +32,41 @@ Bool WAV_write(
 	U32 freq,
 	U16 stride,
 	U64 *dataOutput,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 
-	if(!stream || stream->isReadonly)
-		retError(clean, Error_nullPointer(0, "WAV_write()::stream is required"))
+	StreamCursor cursorWrite = (StreamCursor) { 0 };
+	StreamCursor cursorRead = (StreamCursor) { 0 };
+
+	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursorWrite, e_rr));
 
 	if(!dataOutput) {
 
-		if(!inputStream || !inputStream->isReadonly)
-			retError(clean, Error_nullPointer(0, "WAV_write()::inputStream is required"))
+		gotoIfError3(clean, StreamCursor_create(inputStreamRef, 0, false, alloc, &cursorRead, e_rr));
+		Stream *inputStream = RefPtr_data(inputStreamRef, Stream);
 
-		if (inputStreamOffset >= inputStream->handle.fileSize)
+		if (inputStreamOffset >= inputStream->size)
 			retError(clean, Error_outOfBounds(
-				0, inputStreamOffset, inputStream->handle.fileSize, "WAV_write()::inputStreamOffset is out of bounds"
-			))
+				0, inputStreamOffset, inputStream->size, "WAV_write()::inputStreamOffset is out of bounds"
+			));
 
 		if(!streamLength)
-			streamLength = inputStream->handle.fileSize - inputStreamOffset;
+			streamLength = inputStream->size - inputStreamOffset;
 
-		if (inputStreamOffset + streamLength > inputStream->handle.fileSize)
+		if (inputStreamOffset + streamLength > inputStream->size)
 			retError(clean, Error_outOfBounds(
-				0, inputStreamOffset + streamLength, inputStream->handle.fileSize,
-				"WAV_write()::inputStreamOffset + streamLength is out of bounds"
-			))
+				0, inputStreamOffset + streamLength, inputStream->size,
+				"WAV_write()::inputStreamOffset + size is out of bounds"
+			));
 	}
 
 	else if(!streamLength)
 		retError(clean, Error_invalidParameter(
 			0, 0, "WAV_write() has to have a streamLength if input stream is missing"
-		))
+		));
 
 	switch (freq) {
 
@@ -82,7 +84,7 @@ Bool WAV_write(
 			retError(clean, Error_invalidParameter(
 				0, 0, "WAV_write() wav file has invalid frequency; must be one of "
 				"8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz"
-			))
+			));
 	}
 
 	switch (stride) {
@@ -91,7 +93,7 @@ Bool WAV_write(
 		default:
 			retError(clean, Error_invalidParameter(
 				0, 0, "WAV_write() wav file has invalid stride. Must be 8, 16, 24, 32 or 64"
-			))
+			));
 	}
 
 	U16 bytesPerBlock = ((isStereo ? 2 : 1) * stride) >> 3;
@@ -99,7 +101,7 @@ Bool WAV_write(
 	if(streamLength % bytesPerBlock)
 		retError(clean, Error_invalidParameter(
 			0, 0, "WAV_write() stream length didn't match bytes per block"
-		))
+		));
 
 	//RIFFHeader
 
@@ -111,15 +113,16 @@ Bool WAV_write(
 		.magicNumberFile = RIFFWAVHeader_magic
 	};
 
-	gotoIfError3(clean, Stream_write(
-		stream,
+	gotoIfError3(clean, StreamCursor_write(
+		&cursorWrite,
 		Buffer_createRefConst(&header, sizeof(header)),
 		0,
 		outputStreamOffset,
 		0,
 		false,
+		alloc,
 		e_rr
-	))
+	));
 
 	outputStreamOffset += sizeof(header);
 
@@ -142,15 +145,16 @@ Bool WAV_write(
 		.stride = stride
 	};
 
-	gotoIfError3(clean, Stream_write(
-		stream,
+	gotoIfError3(clean, StreamCursor_write(
+		&cursorWrite,
 		Buffer_createRefConst(&fmtHeader, sizeof(fmtHeader)),
 		0,
 		outputStreamOffset,
 		0,
 		false,
+		alloc,
 		e_rr
-	))
+	));
 
 	outputStreamOffset += sizeof(fmtHeader);
 
@@ -161,32 +165,37 @@ Bool WAV_write(
 		.size = (U32) streamLength
 	};
 
-	gotoIfError3(clean, Stream_write(
-		stream,
+	gotoIfError3(clean, StreamCursor_write(
+		&cursorWrite,
 		Buffer_createRefConst(&dataHeader, sizeof(dataHeader)),
 		0,
 		outputStreamOffset,
 		0,
 		false,
+		alloc,
 		e_rr
-	))
+	));
 
 	outputStreamOffset += sizeof(dataHeader);
 
 	//Data
 
-	if(!dataOutput)
-		gotoIfError3(clean, Stream_writeStream(
-			stream,
-			inputStream,
+	if (!dataOutput) {
+		gotoIfError3(clean, StreamCursor_copyStream(
+			&cursorWrite,
+			&cursorRead,
 			inputStreamOffset,
 			outputStreamOffset,
 			streamLength,
+			alloc,
 			e_rr
-		))
+		));
+	}
 
 	else *dataOutput = outputStreamOffset;
 
 clean:
+	StreamCursor_close(&cursorWrite, alloc);
+	StreamCursor_close(&cursorRead, alloc);
 	return s_uccess;
 }
