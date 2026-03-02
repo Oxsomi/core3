@@ -22,7 +22,8 @@
 #include "types/base/string_read_helper.h"
 #include "formats/oiCA/ca_edit.h"
 #include "formats/oiCA/ca_lookup.h"
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
 
 static inline U64 CAFile_computePathLen(const CAFile *caFile, CAHandle parent, U64 newNameLen, U64 *depth) {
 

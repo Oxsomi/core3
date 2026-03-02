@@ -18,7 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
+#include "formats/oiDL/dl_load.h"
 #include "types/container/memory_stream.h"
 #include "types/container/encryption_stream.h"
 #include "types/base/string_read_helper.h"

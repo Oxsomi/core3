@@ -20,7 +20,9 @@
 
 #include "types/container/ref_ptr.h"
 #include "formats/oiCA/ca_props.h"
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
+#include "formats/oiDL/dl_load.h"
 
 U64 CAFile_fileSize(const CAFile *caFile, CAHandle fileHandle) {
 	return !caFile || CAHandle_isFolder(fileHandle) ? 0 : DLFile_entrySize(&caFile->content, CAHandle_getId(fileHandle));

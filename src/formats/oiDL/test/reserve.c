@@ -18,7 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
 #include "shared.h"
 
 Bool buildDataFile(Test *t, DLFile *f, U64 count);

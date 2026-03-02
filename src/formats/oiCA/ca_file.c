@@ -20,7 +20,8 @@
 
 #include "types/container/list_impl.h"
 #include "formats/oiCA/ca_file.h"
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
 
 TListImpl(CAFolderInfo);
 TListImpl(CAFileInfo);

@@ -20,7 +20,7 @@
 
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiCA/ca_headers.h"
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
 #include "types/container/stream.h"
 #include "types/container/types.h"
 #include "types/container/buffer_encrypt.h"

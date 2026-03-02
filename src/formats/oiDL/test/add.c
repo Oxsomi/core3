@@ -18,7 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
 #include "shared.h"
 
 void Test_DLAddEntries(Test *t) {

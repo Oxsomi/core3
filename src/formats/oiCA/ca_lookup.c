@@ -20,7 +20,8 @@
 
 #include "types/base/string_read_helper.h"
 #include "formats/oiCA/ca_lookup.h"
-#include "formats/oiDL/interface.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_load.h"
 
 CharString CAFile_getName(const CAFile *caFile, CAHandle handle) {
 

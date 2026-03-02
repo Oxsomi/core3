@@ -18,8 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "formats/oiDL/interface.h"
-#include "formats/oiDL/headers.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_headers.h"
 #include "types/container/buffer.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/container/ref_ptr.h"

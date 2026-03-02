@@ -121,6 +121,48 @@ static inline U64 DLFile_entrySize(const DLFile *file, U64 i) {
 		Buffer_length(file->entryBuffers.ptr[i]);
 }
 
+Bool DLFile_create(const DLSettings *settings, U64 cacheSize, const Allocator *alloc, DLFile *dlFile, Error *e_rr);
+void DLFile_free(DLFile *dlFile, const Allocator *alloc);
+
+Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *copy, Error *e_rr);
+Bool DLFile_reserve(DLFile *dlFile, U64 reserve, const Allocator *alloc, Error *e_rr);
+
+//Init cache if it doesn't exist yet, size == 0 reserves default size.
+Bool DLFile_initCache(DLFile *dlFile, U64 size, const Allocator *alloc, Error *e_rr);
+
+//Important note: StreamRef at startOffset shouldn't be contained in a StreamCursor at this moment,
+// or you might risk overwriting it.
+Bool DLFile_write(
+	const DLFile *dlFile,
+	const Allocator *alloc,
+	StreamRef *result,
+
+	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
+	// This can outlast the DLFile if it's the stream is referenced elsewhere.
+	const RefPtrType *encryptionStreamType,
+
+	I32x4 iv,		//Unused if not a subfile or not encrypted, otherwise should contain valid unique iv
+
+	U64 *startOffset,
+	Error *e_rr
+);
+
+Bool DLFile_read(
+	StreamRef *file,
+	U64 startOffset,
+	const U32 encryptionKey[8],		//Must be NULL if no encryption, else must be valid
+	I32x4 iv,						//If it's a subFile and encrypted, needs to be the valid IV used to encrypt
+	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
+	const Allocator *alloc,
+
+	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
+	// This can outlast the DLFile if it's the stream is referenced elsewhere.
+	const RefPtrType *encryptionStreamType,	
+
+	DLFile *dlFile,
+	Error *e_rr
+);
+
 #ifdef __cplusplus
 	}
 #endif
