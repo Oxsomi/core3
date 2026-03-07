@@ -17,8 +17,6 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-set(AllowOxC3PlatformsBMP ON)
-
 file(GLOB formatsBMPHeaders "../../../include/formats/bmp/*.h")
 file(GLOB formatsBMPSources "*.c")
 
@@ -33,8 +31,20 @@ add_library(
 set_target_properties(OxC3_formats_bmp PROPERTIES FOLDER Oxsomi/formats)
 target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_types_base OxC3_types_container OxC3_formats_oiXX)
 
-if(AllowOxC3PlatformsBMP)
-	target_link_libraries(OxC3_formats_bmp PUBLIC OxC3_platforms)
-else()
-	target_compile_definitions(OxC3_formats_bmp PUBLIC -DDISALLOW_BMP_OXC3_PLATFORMS)
+if(EnableTests)
+
+	file(GLOB testsC "test/*.c")
+	file(GLOB testsH "test/*.h")
+
+	add_executable(
+		OxC3_formats_bmp_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_formats_bmp_test PUBLIC OxC3_types_container_test_util OxC3_formats_bmp)
+	set_target_properties(OxC3_formats_bmp_test PROPERTIES FOLDER Oxsomi/test/formats)
+	target_include_directories(OxC3_formats_bmp_test PUBLIC "../../../include")
+
 endif()

@@ -28,6 +28,8 @@
 typedef struct Allocator Allocator;
 typedef struct Error Error;
 typedef struct Buffer Buffer;
+typedef struct RefPtr RefPtr;
+typedef RefPtr StreamRef;
 
 typedef struct BMPInfo {
 
@@ -42,38 +44,21 @@ typedef struct BMPInfo {
 
 } BMPInfo;
 
-Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result);
-Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result);
+Bool BMP_write(
+	StreamRef *stream,
+	U64 *off,
+	const BMPInfo *info,
+	const Allocator *allocator,
+	StreamRef *inputStream,			//A stream that needs to match the input's format (info->discardAlpha ? BGR8 : BGRA8)
+	U64 inputOffset,
+	Bool inputIsFlipped,
+	Error *e_rr
+);
 
-#ifndef DISALLOW_BMP_OXC3_PLATFORMS
-	Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result);
-	Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result);
-#endif
-
-//File headers
-
-#pragma pack(push, 1)
-
-	typedef struct BMPHeader {
-		U16 fileType;
-		U32 fileSize;
-		U32 reserved;
-		U32 offsetData;
-	} BMPHeader;
-
-	typedef struct BMPInfoHeader {
-		U32 headerSize;
-		I32 width, height;
-		U16 planes, bitCount;
-		U32 compression, compressedSize;
-		I32 xPixPerM, yPixPerM;
-		U32 colorsUsed, colorsImportant;
-	} BMPInfoHeader;
-
-#pragma pack(pop)
-
-static const U16 BMP_MAGIC = 0x4D42;
-static const U32 BMP_reqHeadersSize = (U32) (sizeof(BMPHeader) + sizeof(BMPInfoHeader));
+//Read advances *off to dataOffset + dataLength, the data remains flipped in memory if isFlipped is true.
+//This requires the texture copy to copy each row individually to still allow streaming.
+//NOTE: If discardAlpha is true, the real format is BGR8, but that format doesn't exist.
+Bool BMP_read(StreamRef *stream, U64 *off, U64 *dataOffset, BMPInfo *info, const Allocator *alloc, Error *e_rr);
 
 #ifdef __cplusplus
 	}
