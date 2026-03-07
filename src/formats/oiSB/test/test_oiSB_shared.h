@@ -47,6 +47,29 @@ void Test_SBFileAddVarEmptyArrayList(Test *t);
 void Test_SBFileReadInvalidStream(Test *t);
 void Test_SBFileWriteEmpty(Test *t);
 
+void Test_ESBTypeValuesF16(Test *t);
+void Test_ESBTypeValuesI16(Test *t);
+void Test_ESBTypeValuesU16(Test *t);
+void Test_ESBTypeValuesF32(Test *t);
+void Test_ESBTypeValuesI32(Test *t);
+void Test_ESBTypeValuesU32(Test *t);
+void Test_ESBTypeValuesF64(Test *t);
+void Test_ESBTypeValuesI64(Test *t);
+void Test_ESBTypeValuesU64(Test *t);
+void Test_ESBTypeValuesF32Matrices(Test *t);
+void Test_ESBTypeValuesMatrixOtherStrides(Test *t);
+
+void Test_ESBTypeNameScalars(Test *t);
+void Test_ESBTypeNameVec2(Test *t);
+void Test_ESBTypeNameVec3(Test *t);
+void Test_ESBTypeNameVec4(Test *t);
+void Test_ESBTypeNameMatrixX2(Test *t);
+void Test_ESBTypeNameMatrixX3(Test *t);
+void Test_ESBTypeNameMatrixX4(Test *t);
+void Test_ESBTypeNameMatrixOtherStrides(Test *t);
+void Test_ESBTypeNameInvalidSlots(Test *t);
+void Test_ESBTypeNameUniqueness(Test *t);
+
 void Test_SBFileCombineFlags(Test *t);
 void Test_SBFileCombineBufferSizeMismatch(Test *t);
 void Test_SBFileCombineMissingVariable(Test *t);

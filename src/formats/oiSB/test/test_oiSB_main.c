@@ -53,6 +53,29 @@ int main() {
 	Test_SBFileReadInvalidStream(&t);
 	Test_SBFileWriteEmpty(&t);
 
+	Test_ESBTypeValuesF16(&t);
+	Test_ESBTypeValuesI16(&t);
+	Test_ESBTypeValuesU16(&t);
+	Test_ESBTypeValuesF32(&t);
+	Test_ESBTypeValuesI32(&t);
+	Test_ESBTypeValuesU32(&t);
+	Test_ESBTypeValuesF64(&t);
+	Test_ESBTypeValuesI64(&t);
+	Test_ESBTypeValuesU64(&t);
+	Test_ESBTypeValuesF32Matrices(&t);
+	Test_ESBTypeValuesMatrixOtherStrides(&t);
+
+	Test_ESBTypeNameScalars(&t);
+	Test_ESBTypeNameVec2(&t);
+	Test_ESBTypeNameVec3(&t);
+	Test_ESBTypeNameVec4(&t);
+	Test_ESBTypeNameMatrixX2(&t);
+	Test_ESBTypeNameMatrixX3(&t);
+	Test_ESBTypeNameMatrixX4(&t);
+	Test_ESBTypeNameMatrixOtherStrides(&t);
+	Test_ESBTypeNameInvalidSlots(&t);
+	Test_ESBTypeNameUniqueness(&t);
+
 	Test_SBFileCombineFlags(&t);
 	Test_SBFileCombineBufferSizeMismatch(&t);
 	Test_SBFileCombineMissingVariable(&t);
