@@ -18,27 +18,24 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/generic_list_predeclare.h"
+#include "test_types_base_shared.h"
+#include "types/base/time.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+void Test_time(Test *test) {
 
-typedef struct Buffer Buffer;
-typedef struct CharString CharString;
+	Test_setModule(test, "Time");
 
-TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
-TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
-TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+	Ns now = Time_now();
+	TimeFormat nowStr;
 
-TListDefinition(Buffer, ListBuffer);
+	Time_format(now, nowStr, false);
 
-TListDefinition(ListU8, ListListU8);
-TListDefinition(ListU16, ListListU16);
-TListDefinition(ListU32, ListListU32);
-TListDefinition(ListU64, ListListU64);
+	Ns now2 = 0;
 
-#ifdef __cplusplus
-	}
-#endif
+	Test_assert(test, "parseFormat", NULL, Time_parseFormat(&now2, nowStr, false));
+	Test_assert(test, "parseFormat", "Parsed timestamp invalid", now2 == now);
+
+	Time_format(now, nowStr, true);
+	Test_assert(test, "parseFormat (local)", NULL, Time_parseFormat(&now2, nowStr, true));
+	Test_assert(test, "parseFormat (local)", "Parsed timestamp invalid", now2 == now);
+}

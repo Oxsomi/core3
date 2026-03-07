@@ -18,27 +18,55 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/generic_list_predeclare.h"
+#include "test_oiCA_shared.h"
+#include "types/container/test/basic_alloc.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+int main() {
 
-typedef struct Buffer Buffer;
-typedef struct CharString CharString;
+	const Allocator alloc = BasicAllocator_instance;
 
-TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
-TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
-TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+	Test t = (Test) { 0 };
+	t.alloc = &alloc;
 
-TListDefinition(Buffer, ListBuffer);
+	Test_CACreateFree(&t);
+	Test_CACreateCopy(&t);
 
-TListDefinition(ListU8, ListListU8);
-TListDefinition(ListU16, ListListU16);
-TListDefinition(ListU32, ListListU32);
-TListDefinition(ListU64, ListListU64);
+	Test_CAAddFile(&t);
+	Test_CAAddFolder(&t);
 
-#ifdef __cplusplus
-	}
-#endif
+	Test_CARemoveFile(&t);
+	Test_CARemoveFolder(&t);
+
+	Test_CAResolve(&t);
+	Test_CAGetFullName(&t);
+
+	Test_CACounts(&t);
+	Test_CAGetInfo(&t);
+	Test_CACompare(&t);
+	Test_CACombine(&t);
+
+	Test_CARename(&t);
+	Test_CAMove(&t);
+
+	Test_CAForeach(&t);
+
+	Test_CASetTime(&t);
+	Test_CASetData(&t);
+	Test_CASetStream(&t);
+
+	Test_CAMixedTree(&t);
+	Test_CAStress(&t);
+
+	Test_CASerializeEmpty(&t);
+	Test_CASerializeSingleFile(&t);
+	Test_CASerializeHierarchy(&t);
+	Test_CASerializeMsDosDate(&t);
+	Test_CASerializeFullDate(&t);
+	Test_CASerializeEncrypted(&t);
+	Test_CASerializeMultipleFiles(&t);
+	Test_CASerializeStreamBacked(&t);
+
+	BasicAllocator_checkLeakedMem(&t);
+
+	return Test_end(&t);
+}

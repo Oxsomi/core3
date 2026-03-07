@@ -18,27 +18,18 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/generic_list_predeclare.h"
+#include "test_types_base_shared.h"
+#include "types/base/endianness.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+void Test_endianness(Test *test) {
 
-typedef struct Buffer Buffer;
-typedef struct CharString CharString;
+	Test_setModule(test, "Endianness");
 
-TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
-TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
-TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+	U16 be16 = U16_swapEndianness(0x1234);
+	U32 be32 = U32_swapEndianness(0x12345678);
+	U64 be64 = U64_swapEndianness(0x123456789ABCDEF0);
 
-TListDefinition(Buffer, ListBuffer);
-
-TListDefinition(ListU8, ListListU8);
-TListDefinition(ListU16, ListListU16);
-TListDefinition(ListU32, ListListU32);
-TListDefinition(ListU64, ListListU64);
-
-#ifdef __cplusplus
-	}
-#endif
+	Test_assert(test, "U16_swapEndianness", NULL, be16 == 0x3412);
+	Test_assert(test, "U32_swapEndianness", NULL, be32 == 0x78563412);
+	Test_assert(test, "U64_swapEndianness", NULL, be64 == 0xF0DEBC9A78563412);
+}

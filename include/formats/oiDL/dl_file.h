@@ -86,7 +86,6 @@ typedef struct DLFile {
 
 	Buffer cache;				//Keep small entries in here up to 1MiB, so they reference this buffer.
 	DLSettings settings;		//Keep this at 8-byte alignment!
-	U64 readLength;				//How many bytes were read for this file
 
 } DLFile;
 
@@ -149,7 +148,7 @@ Bool DLFile_write(
 
 Bool DLFile_read(
 	StreamRef *file,
-	U64 startOffset,
+	U64 *startOffset,
 	const U32 encryptionKey[8],		//Must be NULL if no encryption, else must be valid
 	I32x4 iv,						//If it's a subFile and encrypted, needs to be the valid IV used to encrypt
 	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL

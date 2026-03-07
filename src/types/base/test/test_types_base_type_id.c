@@ -18,27 +18,18 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/generic_list_predeclare.h"
+#include "test_types_base_shared.h"
+#include "types/base/type_id.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+void Test_typeId(Test *test) {
 
-typedef struct Buffer Buffer;
-typedef struct CharString CharString;
+	Test_setModule(test, "TypeId");
 
-TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
-TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
-TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+	for (U64 i = 0; i < ETypeId_Max; ++i) {
 
-TListDefinition(Buffer, ListBuffer);
+		ETypeId typeId = ETypeId_arr[i];
+		TypeIdShort shortTypeId = ETypeId_toShortId(typeId);
 
-TListDefinition(ListU8, ListListU8);
-TListDefinition(ListU16, ListListU16);
-TListDefinition(ListU32, ListListU32);
-TListDefinition(ListU64, ListListU64);
-
-#ifdef __cplusplus
+		Test_assert(test, "ETypeId_toShortId", shortTypeId == i);
 	}
-#endif
+}

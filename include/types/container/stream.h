@@ -203,6 +203,21 @@ clean:
 	return s_uccess;
 }
 
+static inline Bool StreamCursor_consumeBuffer(
+	StreamCursor *cursor,
+	U64 *it,
+	Buffer buf,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+	if (Buffer_isConstRef(buf)) {
+		if (e_rr) *e_rr = Error_constData(2, 0, "StreamCursor_consumeBuffer()::buf is readonly");
+		return false;
+	}
+
+	return StreamCursor_consume(cursor, it, buf.ptrNonConst, Buffer_length(buf), alloc, e_rr);
+}
+
 //Appends to stream/cursor at *it from v and increments *it.
 static inline Bool StreamCursor_append(
 	StreamCursor *cursor,
@@ -223,6 +238,16 @@ static inline Bool StreamCursor_append(
 
 clean:
 	return s_uccess;
+}
+
+static inline Bool StreamCursor_appendBuffer(
+	StreamCursor *cursor,
+	U64 *it,
+	Buffer buf,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+	return StreamCursor_append(cursor, it, buf.ptr, Buffer_length(buf), alloc, e_rr);
 }
 
 #define STREAM_CURSOR_OP_IMPL(T)																						\

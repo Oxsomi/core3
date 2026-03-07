@@ -19,34 +19,34 @@
 */
 
 #pragma once
-#include "formats/oiSB/variable.h"
-#include "formats/oiXX/oiXX.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiSB/sb_variable.h"
 #include "types/container/list_predeclare.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef struct RefPtr RefPtr;
+typedef RefPtr StreamRef;
+
 typedef enum ESBSettingsFlags {
 	ESBSettingsFlags_None				= 0,
 	ESBSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiSH can be 100% confidently detected otherwise
-	ESBSettingsFlags_IsUTF8				= 1 << 1,
-	ESBSettingsFlags_IsTightlyPacked	= 1 << 2,
-	ESBSettingsFlags_Invalid			= 0xFFFFFFFF << 3
+	ESBSettingsFlags_IsTightlyPacked	= 1 << 1,
+	ESBSettingsFlags_CreateNoReserve	= 1 << 2,		//Only for SBFile_create avoid reserve (when you already know the size)
+	ESBSettingsFlags_Invalid			= 0xFFFFFFFF << 2
 } ESBSettingsFlags;
 
 typedef struct SBFile {
 
-	ListCharString structNames;
-	ListCharString varNames;
+	DLFile names;				//[0, structNames - 1], [structNames, structNames + varNames - 1]
 
 	ListSBStruct structs;
 	ListSBVar vars;
 	ListListU32 arrays;
 
-	U64 readLength;				//How many bytes were read for this file
-
-	ESBSettingsFlags flags;		//flags and bufferSize are assumed to be a single U64 combined
+	ESBSettingsFlags flags;		//flags and bufferSize are assumed to be a single U64 combined (need 8-byte alignment)
 	U32 bufferSize;
 
 	U64 hash;					//Appending to the SBFile will automatically refresh this
@@ -58,21 +58,21 @@ TList(SBFile);
 Bool SBFile_create(
 	ESBSettingsFlags flags,
 	U32 bufferSize,
-	Allocator alloc,
+	const Allocator *alloc,
 	SBFile *sbFile,
 	Error *e_rr
 );
 
 Bool SBFile_createCopy(
-	SBFile src,
-	Allocator alloc,
+	const SBFile *src,
+	const Allocator *alloc,
 	SBFile *sbFile,
 	Error *e_rr
 );
 
-void SBFile_free(SBFile *shFile, Allocator alloc);
+void SBFile_free(SBFile *shFile, const Allocator *alloc);
 
-Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, Allocator alloc, Error *e_rr);
+Bool SBFile_addStruct(SBFile *sbFile, CharString *name, SBStruct sbStruct, const Allocator *alloc, Error *e_rr);
 
 Bool SBFile_addVariableAsType(
 	SBFile *sbFile,
@@ -82,7 +82,7 @@ Bool SBFile_addVariableAsType(
 	ESBType type,
 	ESBVarFlag flags,
 	ListU32 *arrays,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -94,66 +94,20 @@ Bool SBFile_addVariableAsStruct(
 	U16 structId,
 	ESBVarFlag flags,
 	ListU32 *arrays,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
-Bool SBFile_write(SBFile sbFile, Allocator alloc, Buffer *result, Error *e_rr);
-Bool SBFile_read(Buffer file, Bool isSubFile, Allocator alloc, SBFile *sbFile, Error *e_rr);
+Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *streamRef, U64 *offset, Error *e_rr);
+Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SBFile *sbFile, Error *e_rr);
 
-void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Allocator alloc);
+//Logs stringified SBFile directly
+void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecursive, const Allocator *alloc);
 
 //Doesn't work on layouts that mismatch (only order of structs/variables or some flags may vary)
-Bool SBFile_combine(SBFile a, SBFile b, Allocator alloc, SBFile *combined, Error *e_rr);
+Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SBFile *combined, Error *e_rr);
 
-void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc);
-
-#ifndef DISALLOW_SB_OXC3_PLATFORMS
-
-	Bool SBFile_createx(
-		ESBSettingsFlags flags,
-		U32 bufferSize,
-		SBFile *sbFile,
-		Error *e_rr
-	);
-
-	Bool SBFile_createCopyx(SBFile src, SBFile *dst, Error *e_rr);
-
-	void SBFile_freex(SBFile *shFile);
-
-	Bool SBFile_addStructx(SBFile *sbFile, CharString *name, SBStruct sbStruct, Error *e_rr);
-
-	Bool SBFile_addVariableAsTypex(
-		SBFile *sbFile,
-		CharString *name,
-		U32 offset,
-		U16 parentId,		//root = U16_MAX
-		ESBType type,
-		ESBVarFlag flags,
-		ListU32 *arrays,
-		Error *e_rr
-	);
-
-	Bool SBFile_addVariableAsStructx(
-		SBFile *sbFile,
-		CharString *name,
-		U32 offset,
-		U16 parentId,		//root = U16_MAX
-		U16 structId,
-		ESBVarFlag flags,
-		ListU32 *arrays,
-		Error *e_rr
-	);
-
-	Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr);
-	Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr);
-	void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive);
-
-	void ListSBFile_freeUnderlyingx(ListSBFile *files);
-
-	Bool SBFile_combinex(SBFile a, SBFile b, SBFile *combined, Error *e_rr);
-
-#endif
+void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc);
 
 //File headers
 

@@ -18,27 +18,30 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/generic_list_predeclare.h"
+#include "test_types_math_shared.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+int main() {
 
-typedef struct Buffer Buffer;
-typedef struct CharString CharString;
+	Test t = (Test) { 0 };
 
-TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
-TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
-TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+	Test_floatType(&t);
+	Test_flpF16(&t);
+	Test_flpF32(&t);
+	Test_flpF64(&t);
+	Test_flpRoundTrip(&t);
 
-TListDefinition(Buffer, ListBuffer);
+	Test_u128(&t);
 
-TListDefinition(ListU8, ListListU8);
-TListDefinition(ListU16, ListListU16);
-TListDefinition(ListU32, ListListU32);
-TListDefinition(ListU64, ListListU64);
+	Test_quat(&t);
+	Test_vec2f(&t);
+	Test_vec2i(&t);
+	Test_vec4i(&t);
+	Test_vec4f(&t);
 
-#ifdef __cplusplus
-	}
-#endif
+	Test_pack(&t);
+	Test_rand(&t);
+
+	Test_typeCast(&t);
+
+	return Test_end(&t);
+}

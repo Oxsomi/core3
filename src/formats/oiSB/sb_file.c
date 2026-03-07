@@ -18,138 +18,57 @@
 *  This is called dual licensing.
 */
 
-#ifndef DISALLOW_SB_OXC3_PLATFORMS
-	#include "platforms/ext/listx_impl.h"
-#else
-	#include "types/container/list_impl.h"
-#endif
-
-#include "types/container/log.h"
-#include "formats/oiSH/sh_file.h"
+#include "formats/oiSB/sb_file.h"
 #include "formats/oiDL/dl_file.h"
+#include "types/container/list_impl.h"
+#include "types/container/log.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/constants.h"
 
 TListImpl(SBFile);
 
-#ifndef DISALLOW_SB_OXC3_PLATFORMS
-
-	#include "platforms/platform.h"
-
-	Bool SBFile_createx(
-		ESBSettingsFlags flags,
-		U32 bufferSize,
-		SBFile *sbFile,
-		Error *e_rr
-	) {
-		return SBFile_create(flags, bufferSize, Platform_instance->alloc, sbFile, e_rr);
-	}
-
-	Bool SBFile_createCopyx(SBFile src, SBFile *dst, Error *e_rr) {
-		return SBFile_createCopy(src, Platform_instance->alloc, dst, e_rr);
-	}
-
-	void SBFile_freex(SBFile *shFile) {
-		SBFile_free(shFile, Platform_instance->alloc);
-	}
-
-	Bool SBFile_addStructx(SBFile *sbFile, CharString *name, SBStruct sbStruct, Error *e_rr) {
-		return SBFile_addStruct(sbFile, name, sbStruct, Platform_instance->alloc, e_rr);
-	}
-
-	Bool SBFile_addVariableAsTypex(
-		SBFile *sbFile,
-		CharString *name,
-		U32 offset,
-		U16 parentId,		//root = U16_MAX
-		ESBType type,
-		ESBVarFlag flags,
-		ListU32 *arrays,
-		Error *e_rr
-	) {
-		return SBFile_addVariableAsType(
-			sbFile,
-			name,
-			offset,
-			parentId,
-			type,
-			flags,
-			arrays,
-			Platform_instance->alloc,
-			e_rr
-		);
-	}
-
-	Bool SBFile_addVariableAsStructx(
-		SBFile *sbFile,
-		CharString *name,
-		U32 offset,
-		U16 parentId,		//root = U16_MAX
-		U16 structId,
-		ESBVarFlag flags,
-		ListU32 *arrays,
-		Error *e_rr
-	) {
-		return SBFile_addVariableAsStruct(
-			sbFile,
-			name,
-			offset,
-			parentId,
-			structId,
-			flags,
-			arrays,
-			Platform_instance->alloc,
-			e_rr
-		);
-	}
-
-	Bool SBFile_writex(SBFile sbFile, Buffer *result, Error *e_rr) {
-		return SBFile_write(sbFile, Platform_instance->alloc, result, e_rr);
-	}
-
-	Bool SBFile_readx(Buffer file, Bool isSubFile, SBFile *sbFile, Error *e_rr) {
-		return SBFile_read(file, isSubFile, Platform_instance->alloc, sbFile, e_rr);
-	}
-
-	void SBFile_printx(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive) {
-		SBFile_print(sbFile, indenting, parent, isRecursive, Platform_instance->alloc);
-	}
-
-	void ListSBFile_freeUnderlyingx(ListSBFile *files) {
-		ListSBFile_freeUnderlying(files, Platform_instance->alloc);
-	}
-
-	Bool SBFile_combinex(SBFile a, SBFile b, SBFile *combined, Error *e_rr) {
-		return SBFile_combine(a, b, Platform_instance->alloc, combined, e_rr);
-	}
-
-#endif
-
 Bool SBFile_create(
 	ESBSettingsFlags flags,
 	U32 bufferSize,
-	Allocator alloc,
+	const Allocator *alloc,
 	SBFile *sbFile,
 	Error *e_rr
 ) {
 	Bool s_uccess = true;
+	Bool allocated = false;
 
-	if(!sbFile)
-		retError(clean, Error_nullPointer(0, "SBFile_create()::sbFile is required"))
+	if (!sbFile)
+		retError(clean, Error_nullPointer(0, "SBFile_create()::sbFile is required"));
 
 	if(sbFile->vars.length)
-		retError(clean, Error_invalidOperation(0, "SBFile_create()::sbFile isn't empty, might indicate memleak"))
+		retError(clean, Error_invalidOperation(0, "SBFile_create()::sbFile isn't empty, might indicate memleak"));
+
+	Bool avoidReserve = flags & ESBSettingsFlags_CreateNoReserve;
+	flags &= ~ESBSettingsFlags_CreateNoReserve;
 
 	if(flags & ESBSettingsFlags_Invalid)
-		retError(clean, Error_invalidParameter(0, 0, "SBFile_create()::flags contained unsupported flag"))
+		retError(clean, Error_invalidParameter(0, 0, "SBFile_create()::flags contained unsupported flag"));
 
 	if(!bufferSize)
-		retError(clean, Error_invalidParameter(1, 0, "SBFile_create()::bufferSize is required"))
+		retError(clean, Error_invalidParameter(1, 0, "SBFile_create()::bufferSize is required"));
 
-	gotoIfError2(clean, ListSBStruct_reserve(&sbFile->structs, 16, alloc))
-	gotoIfError2(clean, ListSBVar_reserve(&sbFile->vars, 16, alloc))
-	gotoIfError2(clean, ListCharString_reserve(&sbFile->structNames, 16, alloc))
-	gotoIfError2(clean, ListCharString_reserve(&sbFile->varNames, 16, alloc))
-	gotoIfError2(clean, ListListU32_reserve(&sbFile->arrays, 16, alloc))
+	if (!avoidReserve) {
+
+		DLSettings settings = (DLSettings){
+			.compressionType = EXXCompressionType_None,
+			.encryptionType = EXXEncryptionType_None,
+			.dataType = EDLDataType_String,
+			.flags = EDLSettingsFlags_HideMagicNumber
+		};
+
+		gotoIfError3(clean, DLFile_create(&settings, KIBI, alloc, &sbFile->names, e_rr));
+		allocated = true;
+
+		gotoIfError3(clean, DLFile_reserve(&sbFile->names, 8, alloc, e_rr));
+		gotoIfError3(clean, ListSBStruct_reserve(&sbFile->structs, 4, alloc, e_rr));
+		gotoIfError3(clean, ListSBVar_reserve(&sbFile->vars, 4, alloc, e_rr));
+		gotoIfError3(clean, ListListU32_reserve(&sbFile->arrays, 2, alloc, e_rr));
+	}
 
 	sbFile->flags = flags;
 	sbFile->bufferSize = bufferSize;
@@ -158,12 +77,16 @@ Bool SBFile_create(
 	sbFile->hash = Buffer_fnv1a64Single(*(const U64*)flagsPtr, Buffer_fnv1a64Offset);
 
 clean:
+
+	if (allocated && !s_uccess)
+		SBFile_free(sbFile, alloc);
+
 	return s_uccess;
 }
 
 Bool SBFile_createCopy(
-	SBFile src,
-	Allocator alloc,
+	const SBFile *src,
+	const Allocator *alloc,
 	SBFile *sbFile,
 	Error *e_rr
 ) {
@@ -171,22 +94,21 @@ Bool SBFile_createCopy(
 	Bool s_uccess = true;
 	Bool allocated = false;
 
-	if(!sbFile)
-		retError(clean, Error_nullPointer(2, "SBFile_createCopy()::sbFile is required"))
+	if (!sbFile || !src)
+		retError(clean, Error_nullPointer(!src ? 0 : 2, "SBFile_createCopy()::sbFile and src are required"));
 
-	if(sbFile->vars.ptr)
-		retError(clean, Error_invalidParameter(2, 0, "SBFile_createCopy()::sbFile is filled, indicates memleak"))
+	if(sbFile->bufferSize)
+		retError(clean, Error_invalidParameter(2, 0, "SBFile_createCopy()::sbFile is filled, indicates memleak"));
 
+	gotoIfError3(clean, ListSBStruct_createCopy(src->structs, alloc, &sbFile->structs, e_rr));
 	allocated = true;
-	gotoIfError2(clean, ListSBStruct_createCopy(src.structs, alloc, &sbFile->structs))
-	gotoIfError2(clean, ListSBVar_createCopy(src.vars, alloc, &sbFile->vars))
-	gotoIfError2(clean, ListCharString_createCopyUnderlying(src.structNames, alloc, &sbFile->structNames))
-	gotoIfError2(clean, ListCharString_createCopyUnderlying(src.varNames, alloc, &sbFile->varNames))
-	gotoIfError3(clean, ListListU32_createCopyUnderlying(src.arrays, alloc, &sbFile->arrays, e_rr))
+	gotoIfError3(clean, ListSBVar_createCopy(src->vars, alloc, &sbFile->vars, e_rr));
+	gotoIfError3(clean, DLFile_createCopy(&src->names, alloc, &sbFile->names, e_rr));
+	gotoIfError3(clean, ListListU32_createCopyUnderlying(&src->arrays, alloc, &sbFile->arrays, e_rr));
 
-	sbFile->bufferSize = src.bufferSize;
-	sbFile->flags = src.flags;
-	sbFile->hash = src.hash;
+	sbFile->bufferSize = src->bufferSize;
+	sbFile->flags = src->flags;
+	sbFile->hash = src->hash;
 
 clean:
 
@@ -196,19 +118,18 @@ clean:
 	return s_uccess;
 }
 
-void SBFile_free(SBFile *sbFile, Allocator alloc) {
+void SBFile_free(SBFile *sbFile, const Allocator *alloc) {
 
 	if(!sbFile)
 		return;
 
 	ListSBStruct_free(&sbFile->structs, alloc);
 	ListSBVar_free(&sbFile->vars, alloc);
-	ListCharString_freeUnderlying(&sbFile->structNames, alloc);
-	ListCharString_freeUnderlying(&sbFile->varNames, alloc);
+	DLFile_free(&sbFile->names, alloc);
 	ListListU32_freeUnderlying(&sbFile->arrays, alloc);
 }
 
-void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc) {
+void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc) {
 
 	if(!files)
 		return;
@@ -219,7 +140,12 @@ void ListSBFile_freeUnderlying(ListSBFile *files, Allocator alloc) {
 	ListSBFile_free(files, alloc);
 }
 
-void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Allocator alloc) {
+void SBFile_print(const SBFile *sbFile, U64 indenting, U16 parent, Bool isRecursive, const Allocator *alloc) {
+
+	if(!sbFile) {
+		Log_debugLn(alloc, "SBFile_print() invalid sbFile");
+		return;
+	}
 
 	if(indenting >= SHORTSTRING_LEN) {
 		Log_debugLn(alloc, "SBFile_print() short string out of bounds");
@@ -230,24 +156,24 @@ void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Al
 	for(U8 i = 0; i < indenting; ++i) indent[i] = '\t';
 	indent[indenting] = '\0';
 
-	for (U64 i = 0; i < sbFile.vars.length; ++i) {
+	for (U64 i = 0; i < sbFile->vars.length; ++i) {
 
-		SBVar var = sbFile.vars.ptr[i];
+		SBVar var = sbFile->vars.ptr[i];
 
 		if(var.parentId != parent)
 			continue;
 
-		CharString varName = sbFile.varNames.ptr[i];
-		Bool isArray = var.arrayIndex != U16_MAX;
+		CharString varName = sbFile->names.entryStrings.ptr[sbFile->structs.length + i];
+		Bool isArray = var.arrayDimOrArrayId;
 
 		CharString typeName =
 			var.structId == U16_MAX ? CharString_createRefCStrConst(ESBType_name((ESBType)var.type)) :
-			sbFile.structNames.ptr[var.structId];
+			sbFile->names.entryStrings.ptr[var.structId];
 
 		SBStruct strct = (SBStruct) { 0 };
 
 		if(var.structId != U16_MAX)
-			strct = sbFile.structs.ptr[var.structId];
+			strct = sbFile->structs.ptr[var.structId];
 
 		Bool usedSPIRV = var.flags & ESBVarFlag_IsUsedVarSPIRV;
 		Bool usedDXIL = var.flags & ESBVarFlag_IsUsedVarDXIL;
@@ -273,7 +199,13 @@ void SBFile_print(SBFile sbFile, U64 indenting, U16 parent, Bool isRecursive, Al
 
 		if (isArray) {
 
-			ListU32 array = sbFile.arrays.ptr[var.arrayIndex];
+			ListU32 array = (ListU32) { 0 };
+			U32 v = var.arrayDimOrArrayId;
+			
+			if (var.arrayDimOrArrayId >> 15)
+				array = sbFile->arrays.ptr[var.arrayDimOrArrayId & (U16)I16_MAX];
+
+			else ListU32_createRefConst(&v, 1, &array, NULL);
 
 			for(U64 j = 0; j < array.length; ++j)
 				Log_debug(

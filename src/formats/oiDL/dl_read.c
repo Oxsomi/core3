@@ -32,7 +32,7 @@
 
 Bool DLFile_read(
 	StreamRef *file,
-	U64 startOffset,
+	U64 *startOffset,
 	const U32 encryptionKey[8],
 	I32x4 iv,
 	Bool isSubFile,
@@ -57,8 +57,8 @@ Bool DLFile_read(
 	if (!dlFile)
 		retError(clean, Error_nullPointer(2, "DLFile_read()::dlFile is required"));
 
-	if(!file)
-		retError(clean, Error_nullPointer(0, "DLFile_read()::file is required"));
+	if(!file || !startOffset)
+		retError(clean, Error_nullPointer(!file ? 0 : 1, "DLFile_read()::file is required"));
 
 	if(DLFile_isAllocated(dlFile))
 		retError(clean, Error_invalidOperation(0, "DLFile_read()::dlFile isn't empty, might indicate memleak"));
@@ -67,7 +67,7 @@ Bool DLFile_read(
 
 	Stream *stream = RefPtr_data(file, Stream);
 
-	U64 streamOff = startOffset;
+	U64 streamOff = *startOffset;
 
 	if (!isSubFile) {
 
@@ -170,7 +170,7 @@ Bool DLFile_read(
 
 	if (isEncrypted) {
 
-		U64 startHeader = startOffset;
+		U64 startHeader = *startOffset;
 		U64 endHeader = streamOff;
 
 		//Get tag and iv
@@ -355,7 +355,7 @@ Bool DLFile_read(
 	if(!isSubFile && streamOff != stream->size)
 		retError(clean, Error_invalidState(1, "DLFile_read() contained extra data, not allowed if it's not a subfile"));
 
-	dlFile->readLength = streamOff;
+	*startOffset = streamOff;
 
 clean:
 

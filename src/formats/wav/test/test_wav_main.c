@@ -18,27 +18,51 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/generic_list_predeclare.h"
+#include "test_wav_shared.h"
+#include "types/container/test/basic_alloc.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+int main() {
 
-typedef struct Buffer Buffer;
-typedef struct CharString CharString;
+	const Allocator alloc = BasicAllocator_instance;
 
-TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
-TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
-TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+	Test t = (Test) { 0 };
+	t.alloc = &alloc;
 
-TListDefinition(Buffer, ListBuffer);
+	Test_WAVCvtU8Identity(&t);
+	Test_WAVCvtI16Identity(&t);
+	Test_WAVCvtI16ToU8(&t);
+	Test_WAVCvtI24Identity(&t);
+	Test_WAVCvtI24ToI16(&t);
+	Test_WAVCvtF32Identity(&t);
+	Test_WAVCvtF32ToU8(&t);
+	Test_WAVCvtF32ToI16(&t);
+	Test_WAVCvtF64ToF32(&t);
+	Test_WAVCvtF64Identity(&t);
+	Test_WAVCvtIndexOffset(&t);
 
-TListDefinition(ListU8, ListListU8);
-TListDefinition(ListU16, ListListU16);
-TListDefinition(ListU32, ListListU32);
-TListDefinition(ListU64, ListListU64);
+	Test_WAVAvgU8(&t);
+	Test_WAVAvgI16(&t);
+	Test_WAVAvgF32(&t);
+	Test_WAVAvgF64(&t);
+	Test_WAVAvgI24(&t);
 
-#ifdef __cplusplus
-	}
-#endif
+	Test_WAVRoundTripStereo16(&t);
+	Test_WAVRoundTripMonoF32(&t);
+	Test_WAVRoundTripMono8(&t);
+	Test_WAVRoundTripMono64(&t);
+
+	Test_WAVWriteInvalidFreq(&t);
+	Test_WAVWriteInvalidStride(&t);
+	Test_WAVWriteUnalignedLength(&t);
+
+	Test_WAVReadInvalidMagic(&t);
+	Test_WAVReadTruncated(&t);
+
+	Test_WAVConvertStereoToMono(&t);
+	Test_WAVConvertStereoLeftOnly(&t);
+	Test_WAVConvertMisalignedSrc(&t);
+
+	BasicAllocator_checkLeakedMem(&t);
+
+	return Test_end(&t);
+}

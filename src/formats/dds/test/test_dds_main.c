@@ -18,27 +18,26 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/generic_list_predeclare.h"
+#include "test_dds_shared.h"
+#include "types/container/test/basic_alloc.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+int main() {
 
-typedef struct Buffer Buffer;
-typedef struct CharString CharString;
+	const Allocator alloc = BasicAllocator_instance;
 
-TListDefinition(U8, ListU8); TListDefinition(U16, ListU16); TListDefinition(U32, ListU32);
-TListDefinition(I8, ListI8); TListDefinition(I16, ListI16); TListDefinition(I32, ListI32); TListDefinition(I64, ListI64);
-TListDefinition(F32, ListF32); TListDefinition(F64, ListF64);
+	Test t = (Test) { 0 };
+	t.alloc = &alloc;
 
-TListDefinition(Buffer, ListBuffer);
+	Test_DDSRoundTripRGBA8(&t);
+	Test_DDSRoundTripMipChain(&t);
+	Test_DDSRoundTripCubemap(&t);
+	Test_DDSRoundTripBC5Legacy(&t);
+	Test_DDSRoundTrip3D(&t);
+	Test_DDSWriteInvalidMipCount(&t);
+	Test_DDSReadInvalidMagic(&t);
+	Test_DDSWriteSubresourceMismatch(&t);
 
-TListDefinition(ListU8, ListListU8);
-TListDefinition(ListU16, ListListU16);
-TListDefinition(ListU32, ListListU32);
-TListDefinition(ListU64, ListListU64);
+	BasicAllocator_checkLeakedMem(&t);
 
-#ifdef __cplusplus
-	}
-#endif
+	return Test_end(&t);
+}

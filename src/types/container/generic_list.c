@@ -683,9 +683,12 @@ Bool GenericList_resizeInternal(GenericList *list, U64 size, const Allocator *al
 	if(GenericList_isRef(*list) && list->length)
 		retError(clean, Error_constData(0, 0, "GenericList_resizeInternal()::list has to be managed memory"));
 
+	if (list->length == size)
+		goto clean;
+
 	if (size <= list->capacityAndRefInfo) {
 
-		if(doClear)
+		if(doClear && list->length)
 			gotoIfError3(clean, Buffer_unsetAllBits(
 				Buffer_createRef((U8*)list->ptrNonConst + list->stride * list->length, (size - list->length) * list->stride),
 				e_rr

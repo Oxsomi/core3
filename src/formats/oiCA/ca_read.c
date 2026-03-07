@@ -311,15 +311,15 @@ Bool CAFile_read(
 	I32x4 nameIv    = I32x4_xor(iv, I32x4_createFromU64x2(0, 1));
 	I32x4 contentIv = I32x4_xor(iv, I32x4_createFromU64x2(0, 2));
 
-	gotoIfError3(clean, DLFile_read(file, readOffset, encryptionKey, nameIv, true, alloc, encStreamType, &names, e_rr));
-	readOffset = (names.readLength + 15) & ~(U64)15;
+	gotoIfError3(clean, DLFile_read(file, &readOffset, encryptionKey, nameIv, true, alloc, encStreamType, &names, e_rr));
+	readOffset = (readOffset + 15) & ~(U64)15;
 
-	gotoIfError3(clean, DLFile_read(file, readOffset, encryptionKey, contentIv, true, alloc, encStreamType, &content, e_rr));
+	gotoIfError3(clean, DLFile_read(file, &readOffset, encryptionKey, contentIv, true, alloc, encStreamType, &content, e_rr));
 
 	{
 		Stream *s = RefPtr_data(file, Stream);
 
-		if (content.readLength != s->size)
+		if (readOffset != s->size)
 			retError(clean, Error_invalidState(1, "CAFile_read() contained extra data after content DLFile"));
 	}
 
