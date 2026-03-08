@@ -38,7 +38,6 @@ Bool DDS_read(
 ) {
 
 	Bool s_uccess = true;
-	StreamCursor cursor = (StreamCursor) { 0 };
 
 	if(!info || !result)
 		retError(clean, Error_nullPointer(!info ? 1 : 3, "DDS_read()::info and result are required"));
@@ -57,82 +56,87 @@ Bool DDS_read(
 	if (!stream->read)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_read()::streamRef is not readable"));
 
-	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursor, e_rr));
+	DDSHeaderMax dds;
 
-	DDSHeader header = (DDSHeader) { 0 };
-	gotoIfError3(clean, StreamCursor_read(
-		&cursor, Buffer_createRef(&header, sizeof(header)), *streamOff, 0, 0, false, alloc, e_rr
+	Bool canHaveDXT10 = stream->size >= sizeof(dds);
+
+	gotoIfError3(clean, stream->read(
+		stream,
+		*streamOff,
+		canHaveDXT10 ? sizeof(dds) : sizeof(DDSHeader),
+		Buffer_createRef(&dds, sizeof(dds)),
+		alloc,
+		e_rr
 	));
 
-	if(header.magicNumber != ddsMagic)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header magic"));
+	if(dds.header.magicNumber != ddsMagic)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid header magic"));
 
-	if(header.size != sizeof(header) - sizeof(header.magicNumber))
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header size"));
+	if(dds.header.size != sizeof(dds.header) - sizeof(dds.header.magicNumber))
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid header size"));
 
-	if(header.format.size != sizeof(DDSPixelFormat))
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel format size"));
+	if(dds.header.format.size != sizeof(DDSPixelFormat))
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid header pixel format size"));
 
-	if(header.format.flags &~ EDDSPixelFormatFlag_Supported)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel flag"));
+	if(dds.header.format.flags &~ EDDSPixelFormatFlag_Supported)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid header pixel flag"));
 
-	if((header.flags & EDDSFlag_Pitch) && (header.flags & EDDSFlag_LinearSize))
+	if((dds.header.flags & EDDSFlag_Pitch) && (dds.header.flags & EDDSFlag_LinearSize))
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid pitch or linearSize"));
 
-	if(header.flags &~ EDDSFlags_Supported)
+	if(dds.header.flags &~ EDDSFlags_Supported)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported header flag"));
 
-	if(header.caps.flag1 &~ EDDSCapsFlags1_Supported)
+	if(dds.header.caps.flag1 &~ EDDSCapsFlags1_Supported)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported capability flag1"));
 
-	if(header.caps.flag2 &~ EDDSCapsFlags2_Supported)
+	if(dds.header.caps.flag2 &~ EDDSCapsFlags2_Supported)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::flags had an unsupported capability flag2"));
 
-	if(!header.width || !header.height)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid width or height"));
+	if(!dds.header.width || !dds.header.height)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid width or height"));
 
-	if(!(header.flags & EDDSFlag_Depth))
-		header.depth = 1;
+	if(!(dds.header.flags & EDDSFlag_Depth))
+		dds.header.depth = 1;
 
-	if(!header.depth || !header.mips)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid depth or mips"));
+	if(!dds.header.depth || !dds.header.mips)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid depth or mips"));
 
-	U32 biggestSize2 = (U32) U64_max(U64_max(header.width, header.height), header.depth);
+	U32 biggestSize2 = (U32) U64_max(U64_max(dds.header.width, dds.header.height), dds.header.depth);
 	const U32 mips = U32_max(1, (U32) F64_floor(F64_log2((F64)biggestSize2)) + 1);
 
-	if(header.mips > mips)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf mip count exceeded available mip count"));
+	if(dds.header.mips > mips)
+		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds mip count exceeded available mip count"));
 
 	//Here we force DXT10 format so we don't have to handle anything else
 
-	Bool useMagic = header.format.flags & EDDSPixelFormatFlag_MagicNumber;
-	Bool hasDXT10 = false;
+	Bool useMagic = dds.header.format.flags & EDDSPixelFormatFlag_MagicNumber;
 	U32 arraySize = 1;
 
 	ETextureType type = ETextureType_2D;
 	ETextureFormatId formatId = ETextureFormatId_Undefined;
 	ETextureFormat format = ETextureFormat_Undefined;
+	Bool hasDXT10 = false;
 
-	if(useMagic && header.format.magicNumber == EDDSFormatMagic_DX10) {
+	if(useMagic && dds.header.format.magicNumber == EDDSFormatMagic_DX10) {
+
+		if(!canHaveDXT10)
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds didn't contain DXT10 even though it was requested"));
 
 		hasDXT10 = true;
-		DDSHeaderDXT10 header10 = (DDSHeaderDXT10) { 0 };
+		*streamOff += sizeof(dds);
 
-		gotoIfError3(clean, StreamCursor_read(
-			&cursor, Buffer_createRef(&header10, sizeof(header10)), *streamOff + sizeof(DDSHeader), 0, 0, false, alloc, e_rr
-		));
-
-		formatId = DXFormat_toTextureFormatId(header10.format);
+		formatId = DXFormat_toTextureFormatId(dds.header10.format);
 		format = ETextureFormatId_unpack[formatId];
-		EDepthStencilFormat depthFormat = DXFormat_toDepthStencilFormat(header10.format);
+		EDepthStencilFormat depthFormat = DXFormat_toDepthStencilFormat(dds.header10.format);
 
 		if(format == ETextureFormat_Undefined && depthFormat == EDepthStencilFormat_None)
-			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an unsupported OxC3 format"));
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an unsupported OxC3 format"));
 
-		switch (header10.dim) {
+		switch (dds.header10.dim) {
 
 			case EDX10Dim_1D:
-				header.height = 1;
+				dds.header.height = 1;
 
 			case EDX10Dim_2D:		//Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
 				break;
@@ -142,58 +146,60 @@ Bool DDS_read(
 				break;
 
 			default:
-				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid texture type"));
+				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had an invalid texture type"));
 		}
 
-		if(!header10.arraySize || (header10.arraySize > 1 && type == ETextureType_3D))
-			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid arraySize (either 0 or 3D[]"));
+		if(!dds.header10.arraySize || (dds.header10.arraySize > 1 && type == ETextureType_3D))
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had invalid arraySize (either 0 or 3D[]"));
 
-		if(header10.miscFlag &~ EDX10Misc_Supported)
-			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had unsupported misc flag"));
+		if(dds.header10.miscFlag &~ EDX10Misc_Supported)
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had unsupported misc flag"));
 
-		if((header.caps.flag2 & EDDSCapsFlags2_Volume) && header10.dim != EDX10Dim_3D)
-			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had volume flag but had invalid state"));
+		if((dds.header.caps.flag2 & EDDSCapsFlags2_Volume) && dds.header10.dim != EDX10Dim_3D)
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had volume flag but had invalid state"));
 
 		if(
-			(header10.miscFlag & EDX10Misc_IsCube) && (
-				header10.dim != EDX10Dim_2D || (header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap
+			(dds.header10.miscFlag & EDX10Misc_IsCube) && (
+				dds.header10.dim != EDX10Dim_2D || (dds.header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap
 			)
 		)
-			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had cubemap flag but had invalid state"));
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had cubemap flag but had invalid state"));
 
-		if(header10.miscFlag & EDX10Misc_IsCube) {
+		if(dds.header10.miscFlag & EDX10Misc_IsCube) {
 			type = ETextureType_Cube;
-			header10.arraySize = 6;
+			dds.header10.arraySize = 6;
 		}
 
-		if(header10.miscFlags2 >= EDX10AlphaMode_Count)
-			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alpha mode"));
+		if(dds.header10.miscFlags2 >= EDX10AlphaMode_Count)
+			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had invalid alpha mode"));
 
 		if(depthFormat)
 			retError(clean, Error_invalidParameter(0, 0, "DDS_read() depth textures aren't currently supported"));
 
-		arraySize = header10.arraySize;
+		arraySize = dds.header10.arraySize;
 	}
 
 	//DXT10 isn't present, we have to detect format, cube and volume the old way
 
 	else {
 
+		*streamOff += sizeof(dds.header);
+
 		//Detect cubemap and volume
 
-		if(header.caps.flag2 & EDDSCapsFlags2_Cubemap) {
+		if(dds.header.caps.flag2 & EDDSCapsFlags2_Cubemap) {
 
-			if((header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap)
-				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf didn't have all cubemap bits set"));
+			if((dds.header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap)
+				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds didn't have all cubemap bits set"));
 
 			type = ETextureType_Cube;
 			arraySize = 6;
 		}
 
-		if ((header.caps.flag2 & EDDSCapsFlags2_Volume)) {
+		if ((dds.header.caps.flag2 & EDDSCapsFlags2_Volume)) {
 
 			if(type != ETextureType_2D)
-				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::buf had both cubemap and volume bits set"));
+				retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds had both cubemap and volume bits set"));
 
 			type = ETextureType_3D;
 		}
@@ -205,7 +211,7 @@ Bool DDS_read(
 		//Detect from magic number
 
 		if (useMagic)
-			switch (header.format.magicNumber) {
+			switch (dds.header.format.magicNumber) {
 
 				case EDDSFormatMagic_BC4:			formatId = ETextureFormatId_BC4;		break;
 				case EDDSFormatMagic_BC4s:			formatId = ETextureFormatId_BC4s;		break;
@@ -226,23 +232,23 @@ Bool DDS_read(
 
 		//Detect from pixel format
 
-		if (!formatId && (header.format.flags & EDDSPixelFormatFlag_RGB) && header.format.rgbBitCount == 32) {
+		if (!formatId && (dds.header.format.flags & EDDSPixelFormatFlag_RGB) && dds.header.format.rgbBitCount == 32) {
 
-			if(header.format.masks[0] == U16_MAX && header.format.masks[1] == ((U32)U16_MAX << 16))
+			if(dds.header.format.masks[0] == U16_MAX && dds.header.format.masks[1] == ((U32)U16_MAX << 16))
 				formatId = ETextureFormatId_RG16;
 
 			else if(
-				header.format.masks[0] == 0x3FF &&
-				header.format.masks[1] == (0x3FF << 10) &&
-				header.format.masks[2] == (0x3FF << 20)
+				dds.header.format.masks[0] == 0x3FF &&
+				dds.header.format.masks[1] == (0x3FF << 10) &&
+				dds.header.format.masks[2] == (0x3FF << 20)
 			)
 				formatId = ETextureFormatId_BGR10A2;
 
 			else if (
-				header.format.masks[0] == U8_MAX &&
-				header.format.masks[1] == ((U32)U8_MAX << 8) &&
-				header.format.masks[2] == ((U32)U8_MAX << 16) &&
-				header.format.masks[3] == ((U32)U8_MAX << 24)
+				dds.header.format.masks[0] == U8_MAX &&
+				dds.header.format.masks[1] == ((U32)U8_MAX << 8) &&
+				dds.header.format.masks[2] == ((U32)U8_MAX << 16) &&
+				dds.header.format.masks[3] == ((U32)U8_MAX << 24)
 			)
 				formatId = ETextureFormatId_RGBA8;
 		}
@@ -253,16 +259,16 @@ Bool DDS_read(
 		format = ETextureFormatId_unpack[formatId];
 	}
 
-	U64 len = ETextureFormat_getSize(format, header.width, header.height, header.depth);
+	U64 len = ETextureFormat_getSize(format, dds.header.width, dds.header.height, dds.header.depth);
 
 	//Calculate expected length, because header.pitch is not even close to being reliable.
 
 	U64 expectedLength = len;
-	U32 currW = U32_max(1, header.width >> 1);
-	U32 currH = U32_max(1, header.height >> 1);
-	U32 currL = U32_max(1, header.depth >> 1);
+	U32 currW = U32_max(1, dds.header.width >> 1);
+	U32 currH = U32_max(1, dds.header.height >> 1);
+	U32 currL = U32_max(1, dds.header.depth >> 1);
 
-	for (U64 i = 1; i < header.mips; ++i) {
+	for (U64 i = 1; i < dds.header.mips; ++i) {
 		expectedLength += ETextureFormat_getSize(format, currW, currH, currL);
 		currW = U32_max(1, currW >> 1);
 		currH = U32_max(1, currH >> 1);
@@ -271,15 +277,13 @@ Bool DDS_read(
 
 	expectedLength *= arraySize;
 
-	U64 headerSize = sizeof(DDSHeader) + (hasDXT10 ? sizeof(DDSHeaderDXT10) : 0);
-
-	if(*streamOff + headerSize + expectedLength > stream->size)
+	if(*streamOff + expectedLength > stream->size)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_read()::stream had invalid size"));
 
-	currL = header.depth;
+	currL = dds.header.depth;
 	U64 totalSubResources = 0;
 
-	for (U32 j = 0; j < header.mips; ++j) {
+	for (U32 j = 0; j < dds.header.mips; ++j) {
 		totalSubResources += currL;
 		currL = U32_max(1, currL >> 1);
 	}
@@ -292,11 +296,11 @@ Bool DDS_read(
 
 	for (U32 i = 0, l = 0; i < arraySize; ++i) {
 
-		currW = header.width;
-		currH = header.height;
-		currL = header.depth;
+		currW = dds.header.width;
+		currH = dds.header.height;
+		currL = dds.header.depth;
 
-		for (U32 j = 0; j < header.mips; ++j) {
+		for (U32 j = 0; j < dds.header.mips; ++j) {
 
 			for (U32 k = 0; k < currL; ++k) {
 
@@ -323,16 +327,15 @@ Bool DDS_read(
 	}
 
 	*info = (DDSInfo) {
-		.w = header.width,
-		.h = header.height,
-		.l = header.depth,
-		.mips = header.mips,
+		.w = dds.header.width,
+		.h = dds.header.height,
+		.l = dds.header.depth,
+		.mips = dds.header.mips,
 		.layers = arraySize,
 		.type = type,
 		.textureFormatId = formatId
 	};
 
 clean:
-	StreamCursor_close(&cursor, alloc);
 	return s_uccess;
 }

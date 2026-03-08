@@ -155,6 +155,11 @@ typedef struct DDSHeaderDXT10 {
 	EDX10AlphaMode miscFlags2;
 } DDSHeaderDXT10;
 
+typedef struct DDSHeaderMax {
+	DDSHeader header;
+	DDSHeaderDXT10 header10;		//Not always present
+} DDSHeaderMax;
+
 static const U32 ddsMagic = C8x4('D', 'D', 'S', ' ');
 
 #ifdef __cplusplus
