@@ -54,9 +54,9 @@ static inline U32 CRC32C_shiftLong(U32 crc0) {
 		CRC32C_LONG_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_LONG_SHIFTS[3][(U8)(crc0 >> 24)];
 }
 
-static inline U32 Buffer_crc32cSimd(const Buffer buf) {
+static inline U32 Buffer_crc32cSimd(const Buffer buf, U32 prevCrc) {
 
-	U32 crc = U32_MAX;
+	U32 crc = prevCrc ^ U32_MAX;
 
 	const U64 bufLen = Buffer_length(buf);
 

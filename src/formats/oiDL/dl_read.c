@@ -63,6 +63,9 @@ Bool DLFile_read(
 	if(DLFile_isAllocated(dlFile))
 		retError(clean, Error_invalidOperation(0, "DLFile_read()::dlFile isn't empty, might indicate memleak"));
 
+	if (*startOffset & 15)
+		retError(clean, Error_unsupportedOperation(0, "DLFile_read() at misaligned startOffset is unsupported (16-byte)"));
+
 	gotoIfError3(clean, StreamCursor_create(file, 0, false, alloc, &cursor, e_rr));
 
 	Stream *stream = RefPtr_data(file, Stream);
@@ -166,7 +169,7 @@ Bool DLFile_read(
 	if (header.flags & EDLFlags_UseAESChunksB)
 		chunkSize2 |= 2;
 
-	U64 fileStart = streamOff;
+	U64 fileStart;
 
 	if (isEncrypted) {
 
@@ -236,6 +239,8 @@ Bool DLFile_read(
 	}
 
 	else {
+		streamOff = (streamOff + 15) & ~15;
+		fileStart = streamOff;
 		dataStream = file;
 		RefPtr_inc(dataStream);
 	}

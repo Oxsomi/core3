@@ -57,13 +57,12 @@ Bool CAFile_write(
 	Buffer tmp = Buffer_createNull();
 	I32x4 iv = I32x4_zero();
 
-	if (!caFile || !caFile->folders.ptr || !result || !startOffset)
+	if (!caFile || !caFile->folders.ptr || !startOffset)
 		retError(clean, Error_nullPointer(
-			!result ? 2 : (!startOffset ? 3 : 0),
-			"CAFile_write()::caFile, result and startOffset are required"
+			!result ? 2 : (!startOffset ? 3 : 0), "CAFile_write()::caFile and startOffset are required"
 		));
 
-	if (!result || result->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if (result && result->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(2, "CAFile_write()::result must be a valid StreamRef"));
 
 	const CASettings *settings = &caFile->settings;
@@ -126,9 +125,18 @@ Bool CAFile_write(
 	if (isEncrypted)
 		headerSize += sizeof(I32x4) + 12;		//iv (12) + tag (16)
 
-	// Align to 16 bytes before DLFiles
+	//Align to 16 bytes before DLFiles
 
 	headerSize = (headerSize + 15) & ~(U64)15;
+	gotoIfError3(clean, DLFile_write(&caFile->names, alloc, NULL, encStreamType, I32x4_zero(), &headerSize, e_rr));
+
+	headerSize = (headerSize + 15) & ~(U64)15;
+	gotoIfError3(clean, DLFile_write(&caFile->content, alloc, NULL, encStreamType, I32x4_zero(), &headerSize, e_rr));
+
+	if (!result) {
+		*startOffset += headerSize;
+		goto clean;
+	}
 
 	if (stream->reserve)
 		gotoIfError3(clean, stream->reserve(stream, *startOffset + headerSize, alloc, e_rr));

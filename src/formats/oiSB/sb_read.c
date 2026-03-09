@@ -46,6 +46,9 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if (!offset || !sbFile)
 		retError(clean, Error_nullPointer(!offset ? 1 : 4, "SBFile_read()::sbFile and offset are required"));
 
+	if (*offset & 15)
+		retError(clean, Error_unsupportedOperation(0, "SBFile_read() at misaligned offset is unsupported (16-byte)"));
+
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursor, e_rr));
 
 	if(sbFile->bufferSize)

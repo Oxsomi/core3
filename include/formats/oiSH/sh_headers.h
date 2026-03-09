@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "formats/oiSH/binaries.h"
+#include "formats/oiSH/sh_binaries.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -83,6 +83,10 @@ typedef struct SHHeader {
 	U16 padding;
 
 } SHHeader;
+
+typedef struct SHGroups {
+	U16 x, y, z, waveSize;
+} SHGroups;
 
 #define SHHeader_MAGIC 0x4853696F
 

@@ -19,20 +19,27 @@
 */
 
 #pragma once
-#include "formats/oiSH/binaries.h"
-#include "formats/oiSH/entries.h"
+#include "formats/oiSH/sh_binaries.h"
+#include "formats/oiSH/sh_entries.h"
+#include "types/container/string.h"
+#include "types/base/type_id.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef struct RefPtr RefPtr;
+typedef RefPtr StreamRef;
+
 #define OISH_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
+
+static U8 OISH_SHADER_MODEL_MIN = OISH_SHADER_MODEL(6, 5);		//6.5 at least
+static U8 OISH_SHADER_MODEL_MAX = OISH_SHADER_MODEL(6, 10);		//6.10 max
 
 typedef enum ESHSettingsFlags {
 	ESHSettingsFlags_None				= 0,
 	ESHSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiSH can be 100% confidently detected otherwise
-	ESHSettingsFlags_IsUTF8				= 1 << 1,		//If one of the entrypoint strings was UTF8
-	ESHSettingsFlags_Invalid			= 0xFFFFFFFF << 2
+	ESHSettingsFlags_Invalid			= 0xFFFFFFFF << 1
 } ESHSettingsFlags;
 
 typedef enum ECompilerWarning {							//Present here in case shader compiler isn't present
@@ -48,15 +55,15 @@ typedef struct SHInclude {
 
 	CharString relativePath;	//Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsli)
 
-	U32 crc32c;					//Content CRC32C. However, if it contains \\r it's removed first!
+	U32 crc32c;					//Content CRC32C. However, if it contains '\r' it's removed first!
 	U32 padding;
 
 } SHInclude;
 
 TList(SHInclude);
 
-void SHInclude_free(SHInclude *include, Allocator alloc);
-void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc);
+void SHInclude_free(SHInclude *include, const Allocator *alloc);
+void ListSHInclude_freeUnderlying(ListSHInclude *includes, const Allocator *alloc);
 
 typedef union SHValue {		//Intermediate value (can be packed heavily according to type)
 
@@ -75,12 +82,12 @@ typedef union SHValue {		//Intermediate value (can be packed heavily according t
 
 } SHValue;
 
-Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, CharString *val, Error *e_rr);
+Bool SHValue_stringify(const SHValue *value, ETypeId typeId, const Allocator *alloc, CharString *val, Error *e_rr);
 Bool SHValue_stringifyHLSL(
 	const SHValue *value,
 	ETypeId typeId,
 	EHLSLStringifyFlags flags,
-	Allocator alloc,
+	const Allocator *alloc,
 	CharString *val,
 	Error *e_rr
 );
@@ -90,8 +97,6 @@ typedef struct SHFile {
 	ListSHBinaryInfo binaries;
 	ListSHEntry entries;
 	ListSHInclude includes;
-
-	U64 readLength;				//How many bytes were read for this file
 
 	ESHSettingsFlags flags;
 
@@ -107,49 +112,32 @@ Bool SHFile_create(
 	ESHSettingsFlags flags,
 	U32 compilerVersion,
 	U32 sourceHash,
-	Allocator alloc,
+	const Allocator *alloc,
 	SHFile *shFile,
 	Error *e_rr
 );
 
-void SHFile_free(SHFile *shFile, Allocator alloc);
+void SHFile_free(SHFile *shFile, const Allocator *alloc);
 
 Bool SHFile_addBinary(
 	SHFile *shFile,
 	SHBinaryInfo *binaries,				//Moves binaries
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
-Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error *e_rr);	//Moves entry->name and binaryIds
-Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Error *e_rr);	//Moves include->name
+//Moves entry->name and binaryIds
+Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc, Error *e_rr);
 
-Bool SHFile_write(const SHFile *shFile, const Allocator *alloc, Buffer *result, Error *e_rr);
-Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, Error *e_rr);
+//Moves include->name
+Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, const Allocator *alloc, Error *e_rr);
 
-Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr);
+Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const Allocator *alloc, Error *e_rr);
+Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SHFile *shFile, Error *e_rr);
 
-void SHFile_print(SHFile a, Bool isVerbose, Allocator alloc);
+Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SHFile *combined, Error *e_rr);
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-
-	Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr);
-	void SHFile_freex(SHFile *shFile);
-
-	void SHFile_printx(SHFile a, Bool isVerbose);
-
-	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr);	//Moves entry
-	Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr);		//Moves entry->name
-	Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr);		//Moves include->relativePath
-
-	Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr);
-	Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr);
-	Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr);
-
-	void ListSHInclude_freeUnderlyingx(ListSHInclude *includes);
-	void SHInclude_freex(SHInclude *include);
-
-#endif
+void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc);
 
 #ifdef __cplusplus
 	}

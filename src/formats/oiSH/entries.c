@@ -476,7 +476,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	*binaryIdentifier = (SHBinaryIdentifier) {
 		.entrypoint = runtime->isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime->entry.name),
 		.extensions = runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0,
-		.shaderVersion = runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL(6, 5),
+		.shaderVersion = runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL_MIN,
 		.stageType = runtime->isShaderAnnotation ? ESHPipelineStage_Count : runtime->entry.stage	//Turn into lib if possible
 	};
 

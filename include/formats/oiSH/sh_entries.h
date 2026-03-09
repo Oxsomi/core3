@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "formats/oiSH/binaries.h"
+#include "formats/oiSH/sh_binaries.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -143,8 +143,8 @@ typedef struct SHBinaryInfo SHBinaryInfo;
 typedef enum ESHBinaryType ESHBinaryType;
 typedef enum ESHExtension ESHExtension;
 
-U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime);				//How many binaries are stored (compile + link)
-U32 SHEntryRuntime_getCombinationsCompiled(SHEntryRuntime runtime);		//How many binaries are compiled
+U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime);				//How many binaries are stored (compile + link)
+U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime);		//How many binaries are compiled
 
 Bool SHEntryRuntime_asBinaryInfo(
 	const SHEntryRuntime *runtime,
@@ -166,21 +166,15 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 TList(SHEntry);
 TList(SHEntryRuntime);
 
-void SHEntry_print(SHEntry entry, Bool isVerbose, Allocator alloc);
-void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc);
-void SHEntry_free(SHEntry *entry, Allocator alloc);
-const C8 *SHEntry_stageName(SHEntry entry);
-void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
-void ListSHEntry_freeUnderlying(ListSHEntry *entry, Allocator alloc);
-void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
+void SHEntry_print(SHEntry entry, Bool isVerbose, const Allocator *alloc);
+void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc);
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	void SHEntry_printx(SHEntry entry, Bool isVerbose);
-	void SHEntryRuntime_printx(SHEntryRuntime entry);
-	void SHEntry_freex(SHEntry *entry);
-	void SHEntryRuntime_freex(SHEntryRuntime *entry);
-	void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);
-#endif
+const C8 *SHEntry_stageName(const SHEntry *entry);
+
+void SHEntry_free(SHEntry *entry, const Allocator *alloc);
+void SHEntryRuntime_free(SHEntryRuntime *entry, const Allocator *alloc);
+void ListSHEntry_freeUnderlying(ListSHEntry *entry, const Allocator *alloc);
+void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, const Allocator *alloc);
 
 #ifdef __cplusplus
 	}

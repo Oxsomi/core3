@@ -52,6 +52,7 @@ int main() {
 	Test_SBFileAddVarEmptyArrayList(&t);
 	Test_SBFileReadInvalidStream(&t);
 	Test_SBFileWriteEmpty(&t);
+	Test_SBFileSizeConsistency(&t);
 
 	Test_ESBTypeValuesF16(&t);
 	Test_ESBTypeValuesI16(&t);

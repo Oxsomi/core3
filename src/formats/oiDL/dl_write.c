@@ -54,7 +54,7 @@ Bool DLFile_write(
 	if(!startOffset)
 		retError(clean, Error_nullPointer(2, "DLFile_write()::startOffset is required"));
 
-	if(!streamRef || streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(2, "DLFile_write()::streamRef is required"));
 
 	Stream *stream = RefPtr_data(streamRef, Stream);
@@ -170,16 +170,22 @@ Bool DLFile_write(
 
 		if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
 			headerSize += 12;		//IV only if parent doesn't manage it.
-
-		headerSize = (headerSize + 15) & ~15;
 	}
 
+	headerSize = (headerSize + 15) & ~15;
+
 	//Add to stream
+
+	if (!stream) {		//Handle size detection
+		*startOffset += headerSize + totalSize;
+		goto clean;
+	}
 
 	if(stream->reserve)
 		gotoIfError3(clean, stream->reserve(stream, *startOffset + headerSize + totalSize, alloc, e_rr));
 
 	U64 cursorSize = U64_max(U64_min(headerSize + totalSize, chunkSize + sizeof(CryptoChunk)), 32 * KIBI);
+
 	gotoIfError3(clean, StreamCursor_create(streamRef, cursorSize, true, alloc, &cursor, e_rr));
 	
 	Bool isString = dlFile->settings.dataType == EDLDataType_String;
@@ -288,6 +294,14 @@ Bool DLFile_write(
 		gotoIfError3(clean, StreamCursor_createWithCache(encryptionStream, &loadCache, true, &cursor, e_rr));
 
 		*startOffset = 0;		//Pretend to be at the start (we're now at the encryption stream)
+
+	} else {
+
+		U8 emptyBytes[16] = { 0 };
+		U64 utilized = *startOffset & 15;
+
+		if (utilized)
+			gotoIfError3(clean, StreamCursor_append(&cursor, startOffset, emptyBytes, 16 - utilized, alloc, e_rr));
 	}
 
 	//Contents
@@ -309,10 +323,7 @@ Bool DLFile_write(
 			if(prevStream)
 				gotoIfError3(clean, StreamCursor_closeAndKeepCache(&inputCursor, alloc, &loadCache, e_rr));
 
-			gotoIfError3(clean, StreamCursor_createWithCache(
-				inputStream.stream, &loadCache, false, &inputCursor, e_rr
-			));
-
+			gotoIfError3(clean, StreamCursor_createWithCache(inputStream.stream, &loadCache, false, &inputCursor, e_rr));
 			prevStream = inputStream.stream;
 		}
 

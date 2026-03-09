@@ -36,17 +36,19 @@ Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *strea
 	if (!sbFile || !sbFile->bufferSize)
 		retError(clean, Error_nullPointer(0, "SBFile_write()::sbFile is undefined"));
 
-	if(!streamRef || !offset)
-		retError(clean, Error_nullPointer(!streamRef ? 2 : 3, "SBFile_write()::streamRef and offset are required"));
+	if(!offset)
+		retError(clean, Error_nullPointer(!streamRef ? 2 : 3, "SBFile_write()::offset is required"));
 
-	if(streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidOperation(0, "SBFile_write()::streamRef invalid type"));
 
 	if(sbFile->arrays.length > (U16)I16_MAX)
 		retError(clean, Error_invalidOperation(0, "SBFile_write()::arrays out of bounds"));
 
+	if (*offset & 15)
+		retError(clean, Error_unsupportedOperation(0, "SBFile_write() at misaligned offset is unsupported (16-byte)"));
+
 	Stream *stream = RefPtr_data(streamRef, Stream);
-	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	//Get header size
 
@@ -63,6 +65,14 @@ Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *strea
 		headerSize += sbFile->arrays.ptr[i].length * sizeof(U32);
 
 	headerSize = (headerSize + 15) & ~15;
+
+	if (!stream) {
+		*offset += headerSize;
+		gotoIfError3(clean, DLFile_write(&sbFile->names, alloc, NULL, NULL, I32x4_zero(), offset, e_rr));
+		goto clean;
+	}
+
+	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	if (stream->reserve)
 		gotoIfError3(clean, stream->reserve(stream, *offset + headerSize, alloc, e_rr));

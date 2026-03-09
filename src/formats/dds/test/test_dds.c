@@ -28,7 +28,7 @@
 //Fills each slice with a unique byte so content can be verified after round-trip.
 //Caller must call ListSubResourceData_freeUnderlying on *subs,
 //and RefPtr_dec on *sharedStream.
-static Bool buildSubResources(
+Bool buildSubResources(
 	Test *t,
 	U32 w, U32 h, U32 depth,
 	U32 mips, U32 layers,

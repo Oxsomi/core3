@@ -18,92 +18,42 @@
 *  This is called dual licensing.
 */
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	#include "platforms/ext/listx_impl.h"
-#else
-	#include "types/container/list_impl.h"
-#endif
-
+#include "types/container/list_impl.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/container/list_basic_types.h"
 #include "types/container/log.h"
-#include "types/base/type_id.h"
 #include "types/math/flp.h"
+#include "types/base/type_id.h"
 #include "types/base/constants.h"
 
 TListImpl(SHFile);
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	
-	#include "platforms/platform.h"
+void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc) {
 
-	Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr) {
-		return SHFile_create(flags, compilerVersion, sourceHash, Platform_instance->alloc, shFile, e_rr);
-	}
-
-	void SHFile_freex(SHFile *shFile) {
-		SHFile_free(shFile, Platform_instance->alloc);
-	}
-
-	void SHFile_printx(SHFile a, Bool isVerbose) {
-		SHFile_print(a, isVerbose, Platform_instance->alloc);
-	}
-
-	Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr) {
-		return SHFile_addBinary(shFile, binaries, Platform_instance->alloc, e_rr);
-	}
-
-	Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr) {
-		return SHFile_addEntrypoint(shFile, entry, Platform_instance->alloc, e_rr);
-	}
-
-	Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr) {
-		return SHFile_addInclude(shFile, include, Platform_instance->alloc, e_rr);
-	}
-
-	Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr) {
-		return SHFile_write(shFile, Platform_instance->alloc, result, e_rr);
-	}
-
-	Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr) {
-		return SHFile_read(file, isSubFile, Platform_instance->alloc, shFile, e_rr);
-	}
-
-	Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr) {
-		return SHFile_combine(a, b, Platform_instance->alloc, combined, e_rr);
-	}
-
-	void ListSHInclude_freeUnderlyingx(ListSHInclude *includes) {
-		ListSHInclude_freeUnderlying(includes, Platform_instance->alloc);
-	}
-
-	void SHInclude_freex(SHInclude *include) {
-		SHInclude_free(include, Platform_instance->alloc);
-	}
-#endif
-
-void SHFile_print(SHFile a, Bool isVerbose, Allocator alloc) {
+	if (!a)
+		return;
 
 	Log_debugLn(
 		alloc,
 		"Source hash: %"PRIx32" and OxC3 version: %"PRIu32".%"PRIu32".%"PRIu32,
-		a.sourceHash,
-		OXC3_GET_MAJOR(a.compilerVersion),
-		OXC3_GET_MINOR(a.compilerVersion),
-		OXC3_GET_PATCH(a.compilerVersion)
+		a->sourceHash,
+		OXC3_GET_MAJOR(a->compilerVersion),
+		OXC3_GET_MINOR(a->compilerVersion),
+		OXC3_GET_PATCH(a->compilerVersion)
 	);
 
-	for(U64 i = 0; i < a.binaries.length; ++i) {
+	for(U64 i = 0; i < a->binaries.length; ++i) {
 		Log_debugLn(alloc, "SHBinaryInfo at %"PRIu64, i);
-		SHBinaryInfo_print(a.binaries.ptr[i], isVerbose, alloc);
+		SHBinaryInfo_print(&a->binaries.ptr[i], isVerbose, alloc);
 	}
 
-	for(U64 i = 0; i < a.entries.length; ++i) {
+	for(U64 i = 0; i < a->entries.length; ++i) {
 		Log_debugLn(alloc, "SHEntry at %"PRIu64, i);
-		SHEntry_print(a.entries.ptr[i], true, alloc);
+		SHEntry_print(&a->entries.ptr[i], true, alloc);
 	}
 
-	for(U64 i = 0; i < a.includes.length; ++i) {
-		SHInclude incl = a.includes.ptr[i];
+	for(U64 i = 0; i < a->includes.length; ++i) {
+		SHInclude incl = a->includes.ptr[i];
 		CharString inc = incl.relativePath;
 		Log_debugLn(alloc, "SHInclude at %"PRIu64" (%.*s %"PRIx32")", i, (int) CharString_length(inc), inc.ptr, incl.crc32c);
 	}
@@ -113,25 +63,25 @@ Bool SHFile_create(
 	ESHSettingsFlags flags,
 	U32 compilerVersion,
 	U32 sourceHash,
-	Allocator alloc,
+	const Allocator *alloc,
 	SHFile *shFile,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 
-	if(!shFile)
-		retError(clean, Error_nullPointer(0, "SHFile_create()::shFile is required"))
+	if (!shFile)
+		retError(clean, Error_nullPointer(0, "SHFile_create()::shFile is required"));
 
 	if(shFile->entries.ptr)
-		retError(clean, Error_invalidOperation(0, "SHFile_create()::shFile isn't empty, might indicate memleak"))
+		retError(clean, Error_invalidOperation(0, "SHFile_create()::shFile isn't empty, might indicate memleak"));
 
 	if(flags & ESHSettingsFlags_Invalid)
-		retError(clean, Error_invalidParameter(0, 3, "SHFile_create()::flags contained unsupported flag"))
+		retError(clean, Error_invalidParameter(0, 3, "SHFile_create()::flags contained unsupported flag"));
 
-	gotoIfError2(clean, ListSHEntry_reserve(&shFile->entries, 8, alloc))
-	gotoIfError2(clean, ListSHBinaryInfo_reserve(&shFile->binaries, 4, alloc))
-	gotoIfError2(clean, ListSHInclude_reserve(&shFile->includes, 16, alloc))
+	gotoIfError3(clean, ListSHEntry_reserve(&shFile->entries, 8, alloc, e_rr));
+	gotoIfError3(clean, ListSHBinaryInfo_reserve(&shFile->binaries, 4, alloc, e_rr));
+	gotoIfError3(clean, ListSHInclude_reserve(&shFile->includes, 16, alloc, e_rr));
 
 	shFile->flags = flags;
 	shFile->compilerVersion = compilerVersion;
@@ -141,7 +91,7 @@ clean:
 	return s_uccess;
 }
 
-void SHFile_free(SHFile *shFile, Allocator alloc) {
+void SHFile_free(SHFile *shFile, const Allocator *alloc) {
 
 	if(!shFile || !shFile->entries.ptr)
 		return;
@@ -179,14 +129,14 @@ typedef enum EStringifyFlavor {
 	EStringifyFlavor_HLSL
 } EStringifyFlavor;
 
-Bool SHValue_stringifyOne(
+static Bool SHValue_stringifyOne(
 	const SHValue *value,
 	ETypeId typeId,
 	U64 *counter,
 	U8 *localCounter,
 	EStringifyFlavor flavor,
 	EHLSLStringifyFlags flags,
-	Allocator alloc,
+	const Allocator *alloc,
 	CharString *val,
 	Error *e_rr
 ) {
@@ -194,12 +144,12 @@ Bool SHValue_stringifyOne(
 	Bool s_uccess = true;
 	CharString tmp = CharString_createNull();
 
-	if(!value)
-		retError(clean, Error_nullPointer(0, "SHValue_stringify() value is missing"))
+	if (!value)
+		retError(clean, Error_nullPointer(0, "SHValue_stringify() value is missing"));
 
 	if(*localCounter) {
-		gotoIfError2(clean, CharString_append(val, ',', alloc))
-		gotoIfError2(clean, CharString_append(val, ' ', alloc))
+		gotoIfError3(clean, CharString_append(val, ',', alloc, e_rr));
+		gotoIfError3(clean, CharString_append(val, ' ', alloc, e_rr));
 	}
 
 	U32 w = ETypeId_getWidth(typeId);
@@ -216,11 +166,18 @@ Bool SHValue_stringifyOne(
 
 	if (w == 1 && h == 1) {
 
+		CharStringCreateNumber number = (CharStringCreateNumber){
+			.leadingZeros = 0,
+			.allocator = alloc,
+			.result = &tmp
+		};
+
 		switch (type) {
 
 			default: {
 				const C8 *v = (value->vu64[0] >> *counter) & 1 ? "true" : "false";
-				gotoIfError2(clean, CharString_appendString(val, CharString_createRefCStrConst(v), alloc))
+				CharString vstr = CharString_createRefCStrConst(v);
+				gotoIfError3(clean, CharString_appendString(val, &vstr, alloc, e_rr));
 				break;
 			}
 
@@ -234,7 +191,7 @@ Bool SHValue_stringifyOne(
 					case EDataTypeStride_64:	v = value->vf64[*counter];					break;
 				}
 
-				gotoIfError2(clean, CharString_format(alloc, &tmp, "%g", v))
+				gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "%g", v));
 				break;
 			}
 
@@ -249,12 +206,11 @@ Bool SHValue_stringifyOne(
 					case EDataTypeStride_64:	vi = value->vi64[*counter];	break;
 				}
 
-				U64 v = vi < 0 ? ((~(U64)vi) + 1) : (U64)vi;
-
 				if(vi < 0)
-					gotoIfError2(clean, CharString_append(val, '-', alloc))
+					gotoIfError3(clean, CharString_append(val, '-', alloc, e_rr));
 
-				gotoIfError2(clean, CharString_createDec(v, 0, alloc, &tmp))
+				number.v = vi < 0 ? ((~(U64)vi) + 1) : (U64)vi;
+				gotoIfError3(clean, CharString_createDec(&number, e_rr));
 				break;
 			}
 
@@ -269,12 +225,13 @@ Bool SHValue_stringifyOne(
 					case EDataTypeStride_64:	v = value->vu64[*counter];	break;
 				}
 
-				gotoIfError2(clean, CharString_createDec(v, 0, alloc, &tmp))
+				number.v = v;
+				gotoIfError3(clean, CharString_createDec(&number, e_rr));
 				break;
 			}
 		}
 
-		gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
+		gotoIfError3(clean, CharString_appendString(val, &tmp, alloc, e_rr));
 		++*counter;
 		++*localCounter;
 		goto clean;
@@ -291,20 +248,20 @@ Bool SHValue_stringifyOne(
 			//float16_t3(1, 2, 3)
 			//^
 
-			gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tmp, e_rr))
-			gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
+			gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tmp, e_rr));
+			gotoIfError3(clean, CharString_appendString(val, &tmp, alloc, e_rr));
 			CharString_free(&tmp, alloc);
 		}
 
 		ETypeId single = makeTypeId(LIBRARYID_DEFAULT, 0, 1, 1, stride, type);
 
-		gotoIfError2(clean, CharString_append(val, '(', alloc))
+		gotoIfError3(clean, CharString_append(val, '(', alloc, e_rr));
 		U8 localCounteri = 0;
 
 		for(U64 i = 0; i < w; ++i)
-			gotoIfError3(clean, SHValue_stringifyOne(value, single, counter, &localCounteri, flavor, flags, alloc, val, e_rr))
+			gotoIfError3(clean, SHValue_stringifyOne(value, single, counter, &localCounteri, flavor, flags, alloc, val, e_rr));
 			
-		gotoIfError2(clean, CharString_append(val, ')', alloc))
+		gotoIfError3(clean, CharString_append(val, ')', alloc, e_rr));
 		++*localCounter;
 		goto clean;
 	}
@@ -317,51 +274,51 @@ Bool SHValue_stringifyOne(
 		//float16_t3x3(float16_t3(1, 2, 3), float16_t3(4, 5, 6), float16_t3(7, 8, 9))
 		//^
 
-		gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tmp, e_rr))
-		gotoIfError2(clean, CharString_appendString(val, tmp, alloc))
+		gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tmp, e_rr));
+		gotoIfError3(clean, CharString_appendString(val, &tmp, alloc, e_rr));
 		CharString_free(&tmp, alloc);
 	}
 	
 	ETypeId vec = makeTypeId(LIBRARYID_DEFAULT, 0, w, 1, stride, type);
 
-	gotoIfError2(clean, CharString_append(val, '(', alloc))
+	gotoIfError3(clean, CharString_append(val, '(', alloc, e_rr));
 
 	U8 localCounteri = 0;
 
 	for(U64 i = 0; i < h; ++i)
-		gotoIfError3(clean, SHValue_stringifyOne(value, vec, counter, &localCounteri, flavor, flags, alloc, val, e_rr))
+		gotoIfError3(clean, SHValue_stringifyOne(value, vec, counter, &localCounteri, flavor, flags, alloc, val, e_rr));
 			
-	gotoIfError2(clean, CharString_append(val, ')', alloc))
+	gotoIfError3(clean, CharString_append(val, ')', alloc, e_rr));
 
 clean:
 	CharString_free(&tmp, alloc);
 	return s_uccess;
 }
 
-Bool SHValue_stringifyWithFlavor(
+static inline Bool SHValue_stringifyWithFlavor(
 	const SHValue *value,
 	ETypeId typeId,
 	EStringifyFlavor flavor,
 	EHLSLStringifyFlags flags,
-	Allocator alloc,
+	const Allocator *alloc,
 	CharString *val,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 
-	if(!val || CharString_length(*val))
-		retError(clean, Error_invalidState(0, "SHValue_stringify()::val is required but should be empty"))
+	if (!val || CharString_length(*val))
+		retError(clean, Error_invalidState(0, "SHValue_stringify()::val is required but should be empty"));
 
 	U64 counter = 0;
 	U8 localCounter = 0;
-	gotoIfError3(clean, SHValue_stringifyOne(value, typeId, &counter, &localCounter, flavor, flags, alloc, val, e_rr))
+	gotoIfError3(clean, SHValue_stringifyOne(value, typeId, &counter, &localCounter, flavor, flags, alloc, val, e_rr));
 
 clean:
 	return s_uccess;
 }
 
-Bool SHValue_stringify(const SHValue *value, ETypeId typeId, Allocator alloc, CharString *val, Error *e_rr) {
+Bool SHValue_stringify(const SHValue *value, ETypeId typeId, const Allocator *alloc, CharString *val, Error *e_rr) {
 	return SHValue_stringifyWithFlavor(value, typeId, EStringifyFlavor_OxC3, 0, alloc, val, e_rr);
 }
 
@@ -369,7 +326,7 @@ Bool SHValue_stringifyHLSL(
 	const SHValue *value,
 	ETypeId typeId,
 	EHLSLStringifyFlags flags,
-	Allocator alloc,
+	const Allocator *alloc,
 	CharString *val,
 	Error *e_rr
 ) {

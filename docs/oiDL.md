@@ -100,7 +100,8 @@ DLFile {		//Must be 16-byte aligned
 		optional if subFile U32[3] rootIv;
     
 		I32x4 tag;
-    	U8[N] pad; /* padding to make next section 16-byte aligned */
+    
+    U8[N] pad; /* padding to make next section 16-byte aligned */
 
     encrypt & compress the following if necessary:		//See oiXX.md
 		foreach dat in data:

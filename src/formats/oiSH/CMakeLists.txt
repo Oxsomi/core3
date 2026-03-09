@@ -17,8 +17,6 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-set(AllowOxC3PlatformsSH ON)
-
 file(GLOB formatsSHHeaders "../../../include/formats/oiSH/*.h")
 file(GLOB formatsSHSources "*.c")
 
@@ -32,9 +30,3 @@ add_library(
 
 set_target_properties(OxC3_formats_oiSH PROPERTIES FOLDER Oxsomi/formats)
 target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiDL OxC3_formats_oiSB)
-
-if(AllowOxC3PlatformsSH)
-	target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_platforms)
-else()
-	target_compile_definitions(OxC3_formats_oiSH PUBLIC -DDISALLOW_SH_OXC3_PLATFORMS)
-endif()

@@ -57,6 +57,14 @@ int main() {
 	Test_CAMixedTree(&t);
 	Test_CAStress(&t);
 
+	Test_CAWriteSizeConsistencyEmpty(&t);
+	Test_CAWriteSizeConsistencySingleFile(&t);
+	Test_CAWriteSizeConsistencyHierarchy(&t);
+	Test_CAWriteSizeConsistencyMsDosDate(&t);
+	Test_CAWriteSizeConsistencyFullDate(&t);
+	Test_CAWriteSizeConsistencyEncrypted(&t);
+	Test_CAWriteSizeConsistencyLongDirCount(&t);
+
 	Test_CASerializeEmpty(&t);
 	Test_CASerializeSingleFile(&t);
 	Test_CASerializeHierarchy(&t);

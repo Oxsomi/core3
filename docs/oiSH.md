@@ -9,7 +9,8 @@ oSH is a single shader represented in a single or multiple binary/text format(s)
 - SPIRV
 - DXIL
 - (**unsupported for now**): AIR (Apple IR)
-- (**unsupported for now**): WGSL
+- (**unsupported**): WGSL
+- (**unsupported forever**): GLSL, HLSL, DXBC
 
 It includes the shader binary/text along with the extensions it uses, so it can easily be validated if the shader binary can be loaded by the runtime.
 
@@ -43,7 +44,7 @@ typedef struct SHHeader {		//4-byte aligned
     U16 binaryCount;			//How many unique binaries are stored
     U16 stageCount;				//How many stages reference into the binaries
 
-    U16 includeFileCount;
+    U16 includeFileCount;		//Number of (recursive) include files
     U16 semanticCount;
 
     U16 arrayDimCount;
@@ -63,7 +64,7 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_Compute,
 	ESHPipelineStage_GeometryExt,		//GeometryShader extension is required
 	ESHPipelineStage_Hull,
-	EPSHipelineStage_Domain,
+	ESHPipelineStage_Domain,
 
 	//RayPipeline extension is required
 
@@ -212,7 +213,7 @@ typedef enum ESHRegisterType {
 
 	ESHRegisterType_TypeMask			= 0xF,
 	ESHRegisterType_IsArray				= 1 << 4,	//Only valid on textures
-	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//^
+	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//Only valid on textures
 
 	//Invalid on samplers, AS and CBuffer
 	//Required on append/consume buffer
@@ -271,7 +272,10 @@ typedef struct SHRegister {
 		SHTextureFormat texture;	//Read/write textures
 	};
 
-	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
+    //Used at serialization time only, can't be used on subpass inputs
+    //0 if no array, <=32767 if 1D array, >=32768 for ND arrays or 32Ki+ 1D arrays
+	U16 arrayDimOrId;
+    
 	U16 nameId;
 
 } SHRegister;
@@ -286,11 +290,13 @@ typedef struct SHUniform {
 //Verify if everything's in bounds.
 //Verify if SHFile includes any invalid data.
 
-SHFile {
+SHFile {		//Must be 16-byte aligned
 
     SHHeader header;
+    
+    U8[N] pad;	//Padding to align to 16-byte
 
-    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
+    //No magic number, no encryption/compression (see oiDL.md).
     //strings[len - semanticCount,  len] contains semantics for inputs/outputs.
     //strings[^ - stageCount,       ^ - semanticCount] contains entrypoint names.
     //strings[^ - includeFileCount, ^ - stageCount] contains (relative) include names.
@@ -299,8 +305,10 @@ SHFile {
 	//strings[^ - uniformNameCount, ^ - registerNameCount] contains uniform names
     //strings[0,                    ^ - uniformNameCount] contains define values & names.
     DLFile strings;
+    
+    U8[N] pad;	//Padding to align to 16-byte
 
-    //No magic number, no encryption/compression/SHA256 (see oiDL.md).
+    //No magic number, no encryption/compression (see oiDL.md).
     //Each entry includes a oiSB file (see oiSB.md) that describes the shader buffer.
     //Each shader buffer has to be referenced by a register.
     //Each oiSB is a subfile, so doesn't preserve oiSB magic number.
@@ -320,12 +328,13 @@ SHFile {
     	U16 defineValues[binaryInfos[i].defineCount];		//^ [defineCount]
     
     	SHUniform uniforms[binaryInfo[i].uniformCount];
-    	U8 uniformData[
-            max(uniforms[i].bufferOffset + ETypeId_getBytes(ETypeId_arr[uniforms[i].typeId]))
-       	];
 
 	    //Name starts after all define values & define/uniform names
     	SHRegister registers[binaryInfos[i].registerCount];
+    
+    	U8 uniformData[
+            max(uniforms[i].bufferOffset + ETypeId_getBytes(ETypeId_arr[uniforms[i].typeId]))
+       	];
 
         if binary[i] has SPIRV:
             EXXDataSizeType<spirvType> spirvLength;
@@ -366,7 +375,7 @@ SHFile {
     	if closestHit, anyHit or intersection:
     	    U8 intersectionSize;
 
-	    if miss,closestHit,anyHit or intersection
+	    if miss,callable,closestHit,anyHit or intersection
    	 		U8 payloadSize;
 
     	U16 binaryIds[pipelineStages[i].binaryCount];
@@ -547,3 +556,4 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 
 1.2(.3): No major bump, no oiSH files exist in the wild yet. Added uniforms, which are like defines except they're not strings; they're a type, name and value. These are a replacement for defines and will allow the linker to take care of the shader variants rather than the defines. They're comparable to specialization constants (Vulkan) or linking library functions (DirectX). They will still store duplicate shader binaries, but will be quicker to compile.
 
+1.2(.4): No major bump, no oiSH files exist in the wild yet. Optimized allocations when reading, fixed bug with callable shaders and added binary de-duplication.

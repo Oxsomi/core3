@@ -36,3 +36,5 @@ void Test_DLCombine(Test *t);
 void Test_DLFindLoadedString(Test *t);
 void Test_DLStreams(Test *t);
 void Test_DLStress(Test *t);
+void Test_DLWriteSizeConsistency(Test *t);
+void Test_DLWriteSizeConsistencyEncrypted(Test *t);

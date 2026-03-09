@@ -134,7 +134,7 @@ Bool DLFile_initCache(DLFile *dlFile, U64 size, const Allocator *alloc, Error *e
 Bool DLFile_write(
 	const DLFile *dlFile,
 	const Allocator *alloc,
-	StreamRef *result,
+	StreamRef *result,		//Pass NULL to calculate length only (*startOffset), won't work if compression is used.
 
 	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
 	// This can outlast the DLFile if it's the stream is referenced elsewhere.

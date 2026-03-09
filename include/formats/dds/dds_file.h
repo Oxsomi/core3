@@ -57,7 +57,7 @@ TList(SubResourceData);
 //buf's contents are sorted based on subresource index, so needs a non const buf
 Bool DDS_write(
 	StreamRef *stream,
-	U64 *streamOffset,
+	U64 *streamOffset,		//Pass NULL to calculate length only (*off)
 	ListSubResourceData *buf,
 	const DDSInfo *info,
 	const Allocator *alloc,

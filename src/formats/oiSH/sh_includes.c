@@ -18,40 +18,36 @@
 *  This is called dual licensing.
 */
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	#include "platforms/ext/listx_impl.h"
-#else
-	#include "types/container/list_impl.h"
-#endif
-
+#include "types/container/list_impl.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/base/constants.h"
+#include "types/base/string_read_helper.h"
 
 TListImpl(SHInclude);
 
-Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Error *e_rr) {
+Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString tmp = (CharString) { 0 };
 
 	//Validate everything
 
-	if(!shFile || !include)
-		retError(clean, Error_nullPointer(!shFile ? 0 : 1, "SHFile_addInclude()::shFile and include are required"))
+	if (!shFile || !include)
+		retError(clean, Error_nullPointer(!shFile ? 0 : 1, "SHFile_addInclude()::shFile and include are required"));
 
 	if(!CharString_length(include->relativePath) || !include->crc32c)
-		retError(clean, Error_nullPointer(1, "SHFile_addInclude()::include->relativePath and crc32c are required"))
+		retError(clean, Error_nullPointer(1, "SHFile_addInclude()::include->relativePath and crc32c are required"));
 
 	//Avoid duplicates.
 	//Though if the CRC32C mismatches, then we have a big problem.
 
 	for(U64 i = 0; i < shFile->includes.length; ++i)
-		if(CharString_equalsStringSensitive(include->relativePath, shFile->includes.ptr[i].relativePath)) {
+		if(CharString_equalsStringSensitive(&include->relativePath, &shFile->includes.ptr[i].relativePath)) {
 
 			if(include->crc32c != shFile->includes.ptr[i].crc32c)
 				retError(clean, Error_alreadyDefined(
 					0, "SHFile_addInclude()::include was already defined, but with different CRC32C"
-				))
+				));
 
 			SHInclude_free(include, alloc);		//include is assumed to be moved, if it's not then it'd leak
 			goto clean;
@@ -60,7 +56,7 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 	if((shFile->includes.length + 1) >> 16)
 		retError(clean, Error_overflow(
 			0, shFile->includes.length, 1 << 16, "SHFile_addInclude()::shFile->includes is limited to 16-bit"
-		))
+		));
 
 	//Ensure we insert it sorted, otherwise it's not reproducible
 
@@ -73,14 +69,14 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 	//Create copy and/or move
 
 	if(CharString_isRef(include->relativePath))
-		gotoIfError2(clean, CharString_createCopy(include->relativePath, alloc, &tmp))
+		gotoIfError3(clean, CharString_createCopy(include->relativePath, alloc, &tmp, e_rr));
 
 	SHInclude tmpInclude = (SHInclude) {
 		.relativePath = CharString_isRef(include->relativePath) ? tmp : include->relativePath,
 		.crc32c = include->crc32c
 	};
 
-	gotoIfError2(clean, ListSHInclude_insert(&shFile->includes, i, tmpInclude, alloc))
+	gotoIfError3(clean, ListSHInclude_insert(&shFile->includes, i, tmpInclude, alloc, e_rr));
 	*include = (SHInclude) { 0 };
 	tmp = CharString_createNull();
 
@@ -89,7 +85,7 @@ clean:
 	return s_uccess;
 }
 
-void SHInclude_free(SHInclude *include, Allocator alloc) {
+void SHInclude_free(SHInclude *include, const Allocator *alloc) {
 
 	if(!include)
 		return;
@@ -97,7 +93,7 @@ void SHInclude_free(SHInclude *include, Allocator alloc) {
 	CharString_free(&include->relativePath, alloc);
 }
 
-void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc) {
+void ListSHInclude_freeUnderlying(ListSHInclude *includes, const Allocator *alloc) {
 
 	if(!includes)
 		return;

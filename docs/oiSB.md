@@ -96,7 +96,7 @@ typedef struct SBVar {
 //Verify if everything's in bounds.
 //Verify if SBFile includes any invalid data.
 
-SBFile {
+SBFile {		//Has to be 16-byte aligned
 
     SBHeader header;
 

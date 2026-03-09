@@ -29,3 +29,9 @@ void Test_DDSRoundTrip3D(Test *t);
 void Test_DDSWriteInvalidMipCount(Test *t);
 void Test_DDSReadInvalidMagic(Test *t);
 void Test_DDSWriteSubresourceMismatch(Test *t);
+
+void Test_DDSWriteSizeConsistencyBC5(Test *t);
+void Test_DDSWriteSizeConsistency3D(Test *t);
+void Test_DDSWriteSizeConsistencyCubemap(Test *t);
+void Test_DDSWriteSizeConsistencyMipChain(Test *t);
+void Test_DDSWriteSizeConsistencyRGBA8(Test *t);

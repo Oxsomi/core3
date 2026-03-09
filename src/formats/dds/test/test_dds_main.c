@@ -37,6 +37,12 @@ int main() {
 	Test_DDSReadInvalidMagic(&t);
 	Test_DDSWriteSubresourceMismatch(&t);
 
+	Test_DDSWriteSizeConsistencyBC5(&t);
+	Test_DDSWriteSizeConsistency3D(&t);
+	Test_DDSWriteSizeConsistencyCubemap(&t);
+	Test_DDSWriteSizeConsistencyMipChain(&t);
+	Test_DDSWriteSizeConsistencyRGBA8(&t);
+
 	BasicAllocator_checkLeakedMem(&t);
 
 	return Test_end(&t);

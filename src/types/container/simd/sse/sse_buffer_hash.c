@@ -36,8 +36,8 @@
 
 #include "types/container/simd/buffer_simd_crc32c.inc.h"
 
-U32 Buffer_crc32c(const Buffer buf) {
-	return Buffer_crc32cSimd(buf);
+U32 Buffer_crc32cChained(const Buffer buf, U32 prevCrc) {
+	return Buffer_crc32cSimd(buf, prevCrc);
 }
 
 static inline I32x4 I32x4_sha256msg2(I32x4 i0, I32x4 i2, I32x4 i3) {

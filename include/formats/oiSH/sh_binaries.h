@@ -19,14 +19,8 @@
 */
 
 #pragma once
-
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	#include "platforms/ext/listx.h"
-#else
-	#include "types/container/list.h"
-#endif
-
-#include "formats/oiSH/registers.h"
+#include "types/container/list.h"
+#include "formats/oiSH/sh_registers.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -136,13 +130,13 @@ typedef enum ESHBinaryFlags {
 	ESHBinaryFlags_HasDXIL					= 1 << 1,
 
 	//Reserved
-	//ESHBinaryFlags_HasMSL					= 1 << 2,
+	//ESHBinaryFlags_HasAIR					= 1 << 2,
 	//ESHBinaryFlags_HasWGSL				= 1 << 3
 
 	ESHBinaryFlags_HasShaderAnnotation		= 1 << 4,
 
-	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,
-	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasMSL | ESHBinaryFlags_HasWGSL
+	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,	// | ESHBinaryFlags_HasAIR
+	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasWGSL
 	ESHBinaryFlags_HasSource				= ESHBinaryFlags_HasBinary // | ESHBinaryFlags_HasText
 
 } ESHBinaryFlags;
@@ -158,7 +152,6 @@ typedef struct SHUniform {
 //Runtime SHEntry with some extra information that is used to decide how to compile
 //This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.
 //Then the SHEntry will point to the binaries instead to save space.
-
 typedef struct SHUniformRuntime {
 
 	CharString name;
@@ -173,7 +166,7 @@ typedef struct SHUniformRuntime {
 
 TList(SHUniformRuntime);
 
-void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, Allocator alloc);
+void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, const Allocator *alloc);
 
 typedef struct SHBinaryIdentifier {
 
@@ -185,8 +178,8 @@ typedef struct SHBinaryIdentifier {
 
 	//Don't change order, is used for compare (U64)
 
-	ESHExtension extensions;
-	U16 shaderVersion;			//U8 maj, minor
+	ESHExtension extensions;	//Needs 8-byte alignment
+	U16 shaderVersion;			//U8 maj, minor (need 4-byte alignment, is compared together with stageType)
 	U16 stageType;				//ESHPipelineStage
 
 } SHBinaryIdentifier;
@@ -209,16 +202,10 @@ typedef struct SHBinaryInfo {
 TList(SHBinaryIdentifier);
 TList(SHBinaryInfo);
 
-Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b);
-void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc);
-void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
-void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);
-
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	void SHBinaryInfo_printx(SHBinaryInfo binary, Bool isVerbose);
-	void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
-	void SHBinaryInfo_freex(SHBinaryInfo *info);
-#endif
+Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdentifier *b);
+void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Allocator *alloc);
+void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, const Allocator *alloc);
+void SHBinaryInfo_free(SHBinaryInfo *info, const Allocator *alloc);
 
 #ifdef __cplusplus
 	}

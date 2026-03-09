@@ -396,3 +396,129 @@ void Test_SBFileAllowSameNameInDifferentScopes(Test *t) {
 		RefPtr_dec(&archiveSr);
 	}
 }
+
+static Bool SBFile_testSizeConsistency(
+	const SBFile *sbFile,
+	const RefPtrType *memoryStreamType,
+	Test *t
+) {
+	MemoryStreamRef *ms = NULL;
+	Bool             ok = false;
+
+	U64 sizeOnly = 0;
+
+	if (!SBFile_write(sbFile, t->alloc, NULL, &sizeOnly, &t->err))
+		goto clean;
+
+	if (!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, memoryStreamType, &ms, &t->err))
+		goto clean;
+
+	U64 streamSize = 0;
+
+	if (!SBFile_write(sbFile, t->alloc, ms, &streamSize, &t->err))
+		goto clean;
+
+	ok = sizeOnly == streamSize;
+
+clean:
+	RefPtr_dec(&ms);
+	return ok;
+}
+
+void Test_SBFileSizeConsistency(Test *t) {
+
+	Test_setModule(t, "SBFile_sizeConsistency");
+
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	{									//Single F32 variable
+		SBFile sb = { 0 };
+
+		if (!SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &sb, &t->err)) {
+			Test_assert(t, "SizeConsistency F32: setup", false);
+			goto skipF32;
+		}
+
+		CharString name = CharString_createRefCStrConst("myFloat");
+		SBFile_addVariableAsType(&sb, &name, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err);
+		Test_assert(t, "SizeConsistency F32", SBFile_testSizeConsistency(&sb, &type, t));
+
+	skipF32:
+		SBFile_free(&sb, t->alloc);
+	}
+
+	{									//Multiple root variables
+		SBFile sb = { 0 };
+
+		if (!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &sb, &t->err)) {
+			Test_assert(t, "SizeConsistency multi: setup", false);
+			goto skipMulti;
+		}
+
+		CharString nameA = CharString_createRefCStrConst("a");
+		CharString nameB = CharString_createRefCStrConst("b");
+		CharString nameC = CharString_createRefCStrConst("c");
+		SBFile_addVariableAsType(&sb, &nameA, 0,  U16_MAX, ESBType_F32,   ESBVarFlag_None, NULL, t->alloc, &t->err);
+		SBFile_addVariableAsType(&sb, &nameB, 4,  U16_MAX, ESBType_I32,   ESBVarFlag_None, NULL, t->alloc, &t->err);
+		SBFile_addVariableAsType(&sb, &nameC, 16, U16_MAX, ESBType_U32x4, ESBVarFlag_None, NULL, t->alloc, &t->err);
+		Test_assert(t, "SizeConsistency multi", SBFile_testSizeConsistency(&sb, &type, t));
+
+	skipMulti:
+		SBFile_free(&sb, t->alloc);
+	}
+
+	{									//Struct with members
+		SBFile sb = { 0 };
+
+		if (!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &sb, &t->err)) {
+			Test_assert(t, "SizeConsistency struct: setup", false);
+			goto skipStruct;
+		}
+
+		SBStruct myStruct = { .stride = 32 };
+		CharString sName  = CharString_createRefCStrConst("MyStruct");
+		CharString vName  = CharString_createRefCStrConst("myVar");
+		CharString posName = CharString_createRefCStrConst("pos");
+		CharString colName = CharString_createRefCStrConst("col");
+		SBFile_addStruct(&sb, &sName, myStruct, t->alloc, &t->err);
+		SBFile_addVariableAsStruct(&sb, &vName, 0, U16_MAX, 0, ESBVarFlag_None, NULL, t->alloc, &t->err);
+		SBFile_addVariableAsType(&sb, &posName, 0,  0, ESBType_F32x4, ESBVarFlag_None, NULL, t->alloc, &t->err);
+		SBFile_addVariableAsType(&sb, &colName, 16, 0, ESBType_F32x4, ESBVarFlag_None, NULL, t->alloc, &t->err);
+		Test_assert(t, "SizeConsistency struct", SBFile_testSizeConsistency(&sb, &type, t));
+
+	skipStruct:
+		SBFile_free(&sb, t->alloc);
+	}
+
+	{									//Tightly packed flag
+		SBFile sb = { 0 };
+
+		if (!SBFile_create(ESBSettingsFlags_IsTightlyPacked, 12, t->alloc, &sb, &t->err)) {
+			Test_assert(t, "SizeConsistency tightlyPacked: setup", false);
+			goto skipPacked;
+		}
+
+		CharString name = CharString_createRefCStrConst("rgb");
+		SBFile_addVariableAsType(&sb, &name, 0, U16_MAX, ESBType_F32x3, ESBVarFlag_None, NULL, t->alloc, &t->err);
+		Test_assert(t, "SizeConsistency tightlyPacked", SBFile_testSizeConsistency(&sb, &type, t));
+
+	skipPacked:
+		SBFile_free(&sb, t->alloc);
+	}
+
+	{									//HideMagicNumber variant
+		SBFile sb = { 0 };
+
+		if (!SBFile_create(ESBSettingsFlags_HideMagicNumber, 16, t->alloc, &sb, &t->err)) {
+			Test_assert(t, "SizeConsistency hideMagic: setup", false);
+			goto skipHide;
+		}
+
+		CharString name = CharString_createRefCStrConst("v");
+		SBFile_addVariableAsType(&sb, &name, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err);
+		Test_assert(t, "SizeConsistency hideMagic", SBFile_testSizeConsistency(&sb, &type, t));
+
+	skipHide:
+		SBFile_free(&sb, t->alloc);
+	}
+}

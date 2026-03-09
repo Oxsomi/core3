@@ -153,9 +153,9 @@ static inline void I32x4_sha256rnds4(I32x4 msgOriginal, I32x4 round, I32x4 *stat
 
 extern const U32 CRC32C_TABLE[16][256];
 
-U32 Buffer_crc32cFallback(const Buffer buf) {
+U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 prevCrc) {
 
-	U64 crc = U32_MAX;
+	U64 crc = prevCrc ^ U32_MAX;
 
 	const U64 bufLen = Buffer_length(buf);
 

@@ -38,6 +38,9 @@ int main() {
 	Test_BMPPixelContentFlipped(&t);
 	Test_BMPPixelContentNoFlip(&t);
 
+	Test_BMPWriteSizeConsistency(&t);
+	Test_BMPWriteSizeConsistencyBGR8(&t);
+
 	Test_BMPWriteZeroDimensions(&t);
 	Test_BMPWriteNegativePixelsPerMetre(&t);
 	Test_BMPWriteWrongFormat(&t);

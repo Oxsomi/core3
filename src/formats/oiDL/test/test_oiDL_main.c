@@ -43,6 +43,8 @@ int main() {
 	Test_DLFindLoadedString(&t);
 	Test_DLStreams(&t);
 	Test_DLStress(&t);
+	Test_DLWriteSizeConsistency(&t);
+	Test_DLWriteSizeConsistencyEncrypted(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 

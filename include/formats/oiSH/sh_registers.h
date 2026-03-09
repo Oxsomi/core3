@@ -22,10 +22,6 @@
 #include "formats/oiSB/sb_file.h"
 #include "types/container/texture_format.h"
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	#include "platforms/ext/listx.h"
-#endif
-
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -35,7 +31,7 @@ typedef enum ESHBinaryType {
 	ESHBinaryType_SPIRV,
 	ESHBinaryType_DXIL,
 
-	//ESHBinaryType_MSL,
+	//ESHBinaryType_AIR,
 	//ESHBinaryType_WGSL,
 
 	ESHBinaryType_Count
@@ -44,7 +40,7 @@ typedef enum ESHBinaryType {
 
 typedef enum ESHBufferType {
 	ESHBufferType_ConstantBuffer,					//UBO or CBuffer
-	ESHBufferType_PushConstants,
+	ESHBufferType_PushConstants,					//Push constants or CBuffer (DXIL)
 	ESHBufferType_ByteAddressBuffer,
 	ESHBufferType_StructuredBuffer,
 	ESHBufferType_StructuredBufferAtomic,			//SBuffer + atomic counter
@@ -106,8 +102,8 @@ typedef union SHBindings {
 SHBindings SHBindings_dummy();
 
 typedef struct SHTextureFormat {	//Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
-	U8 primitive;					//Optional for readonly registers: ESHTexturePrimitive must match format approximately
-	U8 formatId;					//Optional for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
+	U8 primitive;					//Opt for readonly registers: ESHTexturePrimitive must match format approximately
+	U8 formatId;					//Opt for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
 } SHTextureFormat;
 
 typedef enum ESHRegisterType {
@@ -116,7 +112,7 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_SamplerComparisonState,
 
 	ESHRegisterType_ConstantBuffer,					//UBO or CBuffer
-	ESHRegisterType_PushConstants,
+	ESHRegisterType_PushConstants,					//Push constants or CBuffer (DXIL)
 	ESHRegisterType_ByteAddressBuffer,
 	ESHRegisterType_StructuredBuffer,
 	ESHRegisterType_StructuredBufferAtomic,			//SBuffer + atomic counter
@@ -141,7 +137,7 @@ typedef enum ESHRegisterType {
 
 	ESHRegisterType_TypeMask			= 0xF,
 	ESHRegisterType_IsArray				= 1 << 4,	//Only valid on textures
-	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//^
+	ESHRegisterType_IsCombinedSampler	= 1 << 5,	//Only valid on textures
 
 	//Invalid on samplers, AS and CBuffer
 	//Required on append/consume buffer
@@ -169,7 +165,7 @@ typedef struct SHRegister {			//Treated as U64[N + 1]
 		SHTextureFormat texture;	//Read/write textures
 	};
 
-	U16 arrayId;					//Used at serialization time only, can't be used on subpass inputs
+	U16 arrayDimOrId;				//<= 32767 represents a 1D array with a dimension, else represents an arrayId
 	U16 nameId;
 
 } SHRegister;
@@ -185,12 +181,15 @@ typedef struct SHRegisterRuntime {
 TList(SHRegister);
 TList(SHRegisterRuntime);
 
-Bool SHRegisterRuntime_hash(SHRegister reg, CharString name, ListU32 *arrays, SBFile *shaderBuffer, U64 *res, Error *e_rr);
-Bool SHRegisterRuntime_createCopy(SHRegisterRuntime reg, Allocator alloc, SHRegisterRuntime *res, Error *e_rr);
+Bool SHRegisterRuntime_hash(
+	const SHRegister *reg, const CharString *name, ListU32 *arrays, SBFile *shaderBuffer, U64 *res, Error *e_rr
+);
+
+Bool SHRegisterRuntime_createCopy(const SHRegisterRuntime *reg, const Allocator *alloc, SHRegisterRuntime *res, Error *e_rr);
 
 Bool ListSHRegisterRuntime_createCopyUnderlying(
-	ListSHRegisterRuntime orig,
-	Allocator alloc,
+	const ListSHRegisterRuntime *orig,
+	const Allocator *alloc,
 	ListSHRegisterRuntime *dst,
 	Error *e_rr
 );
@@ -204,7 +203,7 @@ Bool ListSHRegisterRuntime_addBuffer(
 	ListU32 *arrays,
 	SBFile *sbFile,
 	SHBindings bindings,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -218,7 +217,7 @@ Bool ListSHRegisterRuntime_addTexture(
 	CharString *name,
 	ListU32 *arrays,
 	SHBindings bindings,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -232,7 +231,7 @@ Bool ListSHRegisterRuntime_addRWTexture(
 	CharString *name,
 	ListU32 *arrays,
 	SHBindings bindings,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -242,7 +241,7 @@ Bool ListSHRegisterRuntime_addSubpassInput(
 	CharString *name,
 	SHBindings bindings,
 	U16 attachmentId,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -253,7 +252,7 @@ Bool ListSHRegisterRuntime_addSampler(
 	CharString *name,
 	ListU32 *arrays,
 	SHBindings bindings,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -263,91 +262,16 @@ Bool ListSHRegisterRuntime_addRegister(
 	ListU32 *arrays,
 	SHRegister reg,
 	SBFile *sbFile,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
-void SHRegister_print(SHRegister reg, U64 indenting, Bool isVerbose, Allocator alloc);
-void SHRegisterRuntime_print(SHRegisterRuntime reg, U64 indenting, Bool isVerbose, Allocator alloc);
-void ListSHRegisterRuntime_print(ListSHRegisterRuntime reg, U64 indenting, Bool isVerbose, Allocator alloc);
-void SHRegisterRuntime_free(SHRegisterRuntime *reg, Allocator alloc);
-void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, Allocator alloc);
+void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, const Allocator *alloc);
+void SHRegisterRuntime_print(const SHRegisterRuntime *reg, U64 indenting, Bool isVerbose, const Allocator *alloc);
+void ListSHRegisterRuntime_print(const ListSHRegisterRuntime *reg, U64 indenting, Bool isVerbose, const Allocator *alloc);
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-
-	void SHRegister_printx(SHRegister reg, U64 indenting, Bool isVerbose);
-	void SHRegisterRuntime_printx(SHRegisterRuntime reg, U64 indenting, Bool isVerbose);
-	void ListSHRegisterRuntime_printx(ListSHRegisterRuntime reg, U64 indenting, Bool isVerbose);
-
-	Bool ListSHRegisterRuntime_createCopyUnderlyingx(ListSHRegisterRuntime orig, ListSHRegisterRuntime *dst, Error *e_rr);
-
-	Bool ListSHRegisterRuntime_addBufferx(
-		ListSHRegisterRuntime *registers,
-		ESHBufferType registerType,
-		Bool isWrite,
-		U8 isUsedFlag,
-		CharString *name,
-		ListU32 *arrays,
-		SBFile *sbFile,
-		SHBindings bindings,
-		Error *e_rr
-	);
-
-	Bool ListSHRegisterRuntime_addTexturex(
-		ListSHRegisterRuntime *registers,
-		ESHTextureType registerType,
-		Bool isLayeredTexture,
-		Bool isCombinedSampler,
-		U8 isUsedFlag,
-		ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = none
-		CharString *name,
-		ListU32 *arrays,
-		SHBindings bindings,
-		Error *e_rr
-	);
-
-	Bool ListSHRegisterRuntime_addRWTexturex(
-		ListSHRegisterRuntime *registers,
-		ESHTextureType registerType,
-		Bool isLayeredTexture,
-		U8 isUsedFlag,
-		ESHTexturePrimitive textureFormatPrimitive,		//ESHTexturePrimitive_Count = auto detect from formatId
-		ETextureFormatId textureFormatId,				//!textureFormatId = only allowed if primitive is set
-		CharString *name,
-		ListU32 *arrays,
-		SHBindings bindings,
-		Error *e_rr
-	);
-
-	Bool ListSHRegisterRuntime_addSubpassInputx(
-		ListSHRegisterRuntime *registers,
-		U8 isUsedFlag,
-		CharString *name,
-		SHBindings bindings,
-		U16 attachmentId,
-		Error *e_rr
-	);
-
-	Bool ListSHRegisterRuntime_addSamplerx(
-		ListSHRegisterRuntime *registers,
-		U8 isUsedFlag,
-		Bool isSamplerComparisonState,
-		CharString *name,
-		ListU32 *arrays,
-		SHBindings bindings,
-		Error *e_rr
-	);
-
-	Bool ListSHRegisterRuntime_addRegisterx(
-		ListSHRegisterRuntime *registers,
-		CharString *name,
-		ListU32 *arrays,
-		SHRegister reg,
-		SBFile *sbFile,
-		Error *e_rr
-	);
-
-#endif
+void SHRegisterRuntime_free(SHRegisterRuntime *reg, const Allocator *alloc);
+void ListSHRegisterRuntime_freeUnderlying(ListSHRegisterRuntime *reg, const Allocator *alloc);
 
 #ifdef __cplusplus
 	}

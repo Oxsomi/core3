@@ -32,6 +32,9 @@ void Test_BMPRoundTripHeaderFields(Test *t);
 void Test_BMPPixelContentFlipped(Test *t);
 void Test_BMPPixelContentNoFlip(Test *t);
 
+void Test_BMPWriteSizeConsistency(Test *t);
+void Test_BMPWriteSizeConsistencyBGR8(Test *t);
+
 void Test_BMPWriteZeroDimensions(Test *t);
 void Test_BMPWriteNegativePixelsPerMetre(Test *t);
 void Test_BMPWriteWrongFormat(Test *t);

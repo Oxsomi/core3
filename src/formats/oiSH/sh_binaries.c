@@ -18,38 +18,18 @@
 *  This is called dual licensing.
 */
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-	#include "platforms/ext/listx_impl.h"
-#else
-	#include "types/container/list_impl.h"
-#endif
-
+#include "types/container/list_impl.h"
 #include "types/container/log.h"
+#include "types/container/list_basic_types.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/math/math.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/c8.h"
 #include "types/base/constants.h"
+#include "types/base/mathi.h"
 
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
 
-#ifndef DISALLOW_SH_OXC3_PLATFORMS
-
-	#include "platforms/platform.h"
-
-	void SHBinaryInfo_printx(SHBinaryInfo binary, Bool isVerbose) {
-		SHBinaryInfo_print(binary, isVerbose, Platform_instance->alloc);
-	}
-
-	void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier) {
-		SHBinaryIdentifier_free(identifier, Platform_instance->alloc);
-	}
-
-	void SHBinaryInfo_freex(SHBinaryInfo *info) {
-		SHBinaryInfo_free(info, Platform_instance->alloc);
-	}
-
-#endif
 
 const C8 *ESHBinaryType_names[ESHBinaryType_Count] = {
 	"SPV",
@@ -118,15 +98,15 @@ const C8 *ESHVendor_names[ESHVendor_Count + 1] = {
 	"Unknown"
 };
 
-Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, Error *e_rr) {
+Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 	SHBinaryInfo info = (SHBinaryInfo) { 0 };
 
 	//Validate everything
 
-	if(!shFile || !binaries)
-		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::shFile and *binaries are required"))
+	if (!shFile || !binaries)
+		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::shFile and *binaries are required"));
 
 	Bool containsBinary = false;
 
@@ -139,37 +119,37 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 	if(!containsBinary)
 		retError(clean, Error_nullPointer(
 			!shFile ? 0 : 2, "SHFile_addBinary() at least one of binaries->binaries[i] is required"
-		))
+		));
 
 	if(!binaries->vendorMask)
-		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::binaries->vendorMask is required"))
+		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::binaries->vendorMask is required"));
 
 	if(binaries->vendorMask == U16_MAX)
 		binaries->vendorMask &= (1 << ESHVendor_Count) - 1;
 
 	if(binaries->vendorMask >> ESHVendor_Count)
-		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->vendorMask out of bounds"))
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->vendorMask out of bounds"));
 
 	if(binaries->identifier.extensions >> ESHExtension_Count)
-		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.extensions out of bounds"))
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.extensions out of bounds"));
 
 	if(binaries->identifier.stageType >= ESHPipelineStage_Count)
-		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.stageType out of bounds"))
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.stageType out of bounds"));
 
 	if(binaries->identifier.defines.length & 1)
 		retError(clean, Error_invalidParameter(
 			2, 0, "SHFile_addBinary()::binaries->identifier.defines needs [defineName,defineValue][]"
-		))
+		));
 
 	if((binaries->identifier.defines.length >> 1) >= U8_MAX)
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.defines needs to be <=[defineName,defineValue][255]"
-		))
+			2, 0, "SHFile_addBinary()::binaries->identifier.defines needs to be <=[defineName,defineValue][254]"
+		));
 
 	if(binaries->identifier.uniforms.length >= U8_MAX)
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.length needs to be < 255"
-		))
+			2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.length needs to be < 254"
+		));
 
 	for (U64 i = 0; i < binaries->identifier.uniforms.length; ++i) {
 
@@ -178,59 +158,59 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		if(uniform.typeIdShort >= ETypeId_Max)
 			retError(clean, Error_invalidParameter(
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] has an invalid type"
-			))
+			));
 
 		ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
 
 		if((U32)uniform.dataOffset + ETypeId_getBytes(typeId) > binaries->identifier.uniformData.length)
 			retError(clean, Error_invalidParameter(
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] data out of bounds"
-			))
+			));
 
 		if(!CharString_length(uniform.name))
 			retError(clean, Error_invalidParameter(
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] empty name"
-			))
+			));
 
-		if(!C8_isAlpha(uniform.name.ptr[i]) && uniform.name.ptr[i] != '_')
+		if(!C8_isAlpha(uniform.name.ptr[0]) && uniform.name.ptr[0] != '_')
 			retError(clean, Error_invalidParameter(
 				2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name[0] must start with [A-Za-z_]"
-			))
+			));
 
 		for(U64 j = 1; j < CharString_length(uniform.name); ++j)
-			if(!C8_isAlphaNumeric(uniform.name.ptr[i]))
+			if(!C8_isAlphaNumeric(uniform.name.ptr[j]))
 				retError(clean, Error_invalidParameter(
 					2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name[j] must be [A-Za-z0-9_]"
-				))
+				));
 
 		for(U64 j = 0; j < i; ++j)
-			if(CharString_equalsStringSensitive(uniform.name, binaries->identifier.uniforms.ptr[j].name))
+			if(CharString_equalsStringSensitive(&uniform.name, &binaries->identifier.uniforms.ptr[j].name))
 				retError(clean, Error_invalidParameter(
 					2, 0, "SHFile_addBinary()::binaries->identifier.uniforms.ptr[i] name is a duplicate"
-				))
+				));
 	}
 
 	if(binaries->hasShaderAnnotation && CharString_length(binaries->identifier.entrypoint))
 		retError(clean, Error_invalidParameter(
 			2, 0,
 			"SHFile_addBinary()::binaries->identifier.stageType or entrypoint is only available to [[oxc::stage()]] annotation"
-		))
+		));
 
 	if(!binaries->hasShaderAnnotation && !CharString_length(binaries->identifier.entrypoint))
 		retError(clean, Error_invalidParameter(
 			2, 0, "SHFile_addBinary()::binaries->identifier.entrypoint is required for [[oxc::stage()]] annotation"
-		))
+		));
 
 	if(
-		binaries->identifier.shaderVersion < OISH_SHADER_MODEL(6, 5) ||
-		binaries->identifier.shaderVersion > OISH_SHADER_MODEL(6, 8)
+		binaries->identifier.shaderVersion < OISH_SHADER_MODEL_MIN ||
+		binaries->identifier.shaderVersion > OISH_SHADER_MODEL_MAX
 	)
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.shaderVersion is unsupported must be 6.5 -> 6.8"
-		))
+			2, 0, "SHFile_addBinary()::binaries->identifier.shaderVersion is unsupported must be 6.5 -> 6.10"
+		));
 
 	if(Buffer_length(binaries->binaries[ESHBinaryType_SPIRV]) & 3)
-		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->binaries[SPIRV] needs to be a U32[]"))
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->binaries[SPIRV] needs to be a U32[]"));
 
 	//Ensure bindless extension is correctly identified
 
@@ -286,7 +266,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 			if (j == setCounters) {
 
 				if(setCounters == 4)
-					retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 4 descriptor sets"))
+					retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 4 descriptor sets"));
 
 				sets[setCounters++] = reg.reg.bindings.arr[ESHBinaryType_SPIRV].space;
 			}
@@ -363,10 +343,10 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		U64_max(counters[Counter_RTASSPIRV], counters[Counter_RTASDXIL]) > 16 ||
 		counters[Counter_SubpassInput] > 8
 	)
-		retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 8 SubpassInputs or 16 RTASes"))
+		retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 8 SubpassInputs or 16 RTASes"));
 
 	if(counters[Counter_PushConstants] > 1)
-		retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 1 push constant"))
+		retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more than 1 push constant"));
 
 	//Ensure we don't surpass the limits
 
@@ -399,27 +379,22 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 			counters[Counter_SRV] + counters[Counter_UAV] + counters[Counter_CBV] > 1000000 ||
 			totalSPIRV > 1000000
 		)
-			retError(clean, Error_invalidState(0, "SHFile_addBinary() registers contain more resources than allowed by the oiSH spec"))
+			retError(clean, Error_invalidState(
+				0, "SHFile_addBinary() registers contain more resources than allowed by the oiSH spec"
+			));
+	
 	}
 
 	//Find binary
 
 	for(U64 i = 0; i < shFile->binaries.length; ++i)
-		if(SHBinaryIdentifier_equals(shFile->binaries.ptr[i].identifier, binaries->identifier))
-			retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() binary identifier was already defined"))
+		if(SHBinaryIdentifier_equals(&shFile->binaries.ptr[i].identifier, &binaries->identifier))
+			retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() binary identifier was already defined"));
 
 	if(shFile->binaries.length + 1 >= U16_MAX)
-		retError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "SHFile_addBinary() requires binaries to not exceed U16_MAX"))
+		retError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "SHFile_addBinary() requires binaries to not exceed U16_MAX"));
 
 	//Validate unique defines
-
-	Bool isUTF8 = false;
-
-	if(
-		CharString_length(binaries->identifier.entrypoint) &&
-		!Buffer_isAscii(CharString_bufferConst(binaries->identifier.entrypoint))
-	)
-		isUTF8 = true;
 
 	for (U64 i = 0; i < binaries->identifier.defines.length; ++i) {
 
@@ -428,13 +403,10 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		if(!CharString_length(str))
 			continue;
 
-		if(!Buffer_isAscii(CharString_bufferConst(str)))
-			isUTF8 = true;
-
 		if(i && !(i & 1))
 			for(U64 j = 0; j < (i >> 1); ++j)
-				if(CharString_equalsStringSensitive(str, binaries->identifier.defines.ptr[j << 1]))
-					retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() define already defined"))
+				if(CharString_equalsStringSensitive(&str, &binaries->identifier.defines.ptr[j << 1]))
+					retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() define already defined"));
 	}
 
 	//Start copying
@@ -451,8 +423,9 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 		Buffer *entry = &binaries->binaries[i];
 		Buffer *result = &info.binaries[i];
 
-		if(Buffer_isRef(*entry))
-			gotoIfError2(clean, Buffer_createCopy(*entry, alloc, result))
+		if (Buffer_isRef(*entry)) {
+			gotoIfError3(clean, Buffer_createCopy(*entry, alloc, result, e_rr));
+		}
 
 		else *result = *entry;
 
@@ -461,8 +434,9 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 	//Copy entrypoint
 
-	if(CharString_isRef(binaries->identifier.entrypoint))
-		gotoIfError2(clean, CharString_createCopy(binaries->identifier.entrypoint, alloc, &info.identifier.entrypoint))
+	if (CharString_isRef(binaries->identifier.entrypoint)) {
+		gotoIfError3(clean, CharString_createCopy(binaries->identifier.entrypoint, alloc, &info.identifier.entrypoint, e_rr));
+	}
 
 	else info.identifier.entrypoint = binaries->identifier.entrypoint;
 
@@ -472,10 +446,11 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 	if(binaries->identifier.defines.length) {
 
-		if(ListCharString_isRef(binaries->identifier.defines))
-			gotoIfError2(clean, ListCharString_createCopyUnderlying(
-				binaries->identifier.defines, alloc, &info.identifier.defines
-			))
+		if (ListCharString_isRef(binaries->identifier.defines)) {
+			gotoIfError3(clean, ListCharString_createCopyUnderlying(
+				&binaries->identifier.defines, alloc, &info.identifier.defines, e_rr
+			));
+		}
 
 		else {
 
@@ -490,7 +465,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 					continue;
 
 				*define = CharString_createNull();
-				gotoIfError2(clean, CharString_createCopy(defineOld, alloc, define))		//Allocate real data
+				gotoIfError3(clean, CharString_createCopy(defineOld, alloc, define, e_rr));		//Allocate real data
 			}
 		}
 	}
@@ -504,19 +479,21 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 			ListU8_isRef(binaries->identifier.uniformData)
 		) {
 
-			gotoIfError2(clean, ListU8_createCopy(binaries->identifier.uniformData, alloc, &info.identifier.uniformData))
+			gotoIfError3(clean, ListU8_createCopy(
+				binaries->identifier.uniformData, alloc, &info.identifier.uniformData, e_rr
+			));
 
-			gotoIfError2(clean, ListSHUniformRuntime_createCopy(
-				binaries->identifier.uniforms, alloc, &info.identifier.uniforms
-			))
+			gotoIfError3(clean, ListSHUniformRuntime_createCopy(
+				binaries->identifier.uniforms, alloc, &info.identifier.uniforms, e_rr
+			));
 
 			for(U64 i = 0; i < binaries->identifier.uniforms.length; ++i)
 				info.identifier.uniforms.ptrNonConst[i].name = CharString_createNull();
 
 			for(U64 i = 0; i < info.identifier.uniforms.length; ++i)
-				gotoIfError2(clean, CharString_createCopy(
-					binaries->identifier.uniforms.ptr[i].name, alloc, &info.identifier.uniforms.ptrNonConst[i].name
-				))
+				gotoIfError3(clean, CharString_createCopy(
+					binaries->identifier.uniforms.ptr[i].name, alloc, &info.identifier.uniforms.ptrNonConst[i].name, e_rr
+				));
 
 		} else {
 
@@ -533,7 +510,7 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 					continue;
 
 				*uniform = CharString_createNull();
-				gotoIfError2(clean, CharString_createCopy(uniformOld, alloc, uniform))		//Allocate real data
+				gotoIfError3(clean, CharString_createCopy(uniformOld, alloc, uniform, e_rr));		//Allocate real data
 			}
 		}
 	}
@@ -542,10 +519,11 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 	if(binaries->registers.length) {
 
-		if(ListSHRegisterRuntime_isRef(binaries->registers))
+		if (ListSHRegisterRuntime_isRef(binaries->registers)) {
 			gotoIfError3(clean, ListSHRegisterRuntime_createCopyUnderlying(
-				binaries->registers, alloc, &info.registers, e_rr
-			))
+				&binaries->registers, alloc, &info.registers, e_rr
+			));
+		}
 
 		else {
 			info.registers = binaries->registers;
@@ -555,14 +533,11 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, E
 
 	//Finalize
 
-	if(isUTF8)
-		shFile->flags |= ESHSettingsFlags_IsUTF8;
-
 	info.vendorMask = binaries->vendorMask;
 	info.hasShaderAnnotation = binaries->hasShaderAnnotation;
 	info.dormantExtensions = binaries->dormantExtensions;
 
-	gotoIfError2(clean, ListSHBinaryInfo_pushBack(&shFile->binaries, info, alloc))
+	gotoIfError3(clean, ListSHBinaryInfo_pushBack(&shFile->binaries, info, alloc, e_rr));
 	*binaries = info = (SHBinaryInfo) { 0 };
 
 clean:
@@ -570,45 +545,48 @@ clean:
 	return s_uccess;
 }
 
-Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
+Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdentifier *b) {
+
+	if (!a || !b)
+		return a == b;
 
 	//Bindless is not something that is turned on manually, but automatically.
 	//SPIRV and DXIL "bindless" differ, they don't get specified by oxc annotations.
 	//As such, they could disagree on if bindless is required or not.
 	//If they're merged, bindless will be required for both.
-	//Another reason is SPIRV might strip resources that are kept in dxil with -fhlsl-unused-resources=comkeep-all
+	//Another reason is SPIRV might strip resources that are kept in dxil with -fhlsl-unused-resources=keep-all
 
 	ESHExtension toIgnore = ESHExtension_Bindless | ESHExtension_UnboundArraySize;
 
-	ESHExtension extensionsA = a.extensions & ~toIgnore;
-	ESHExtension extensionsB = b.extensions &~ toIgnore;
+	ESHExtension extensionsA = a->extensions & ~toIgnore;
+	ESHExtension extensionsB = b->extensions &~ toIgnore;
 
 	if(
 		extensionsA != extensionsB ||
-		*(const U32*)&a.shaderVersion != *(const U32*)&b.shaderVersion ||
-		a.defines.length != b.defines.length ||
-		a.uniforms.length != b.uniforms.length ||
-		!CharString_equalsStringSensitive(a.entrypoint, b.entrypoint)
+		*(const U32*)&a->shaderVersion != *(const U32*)&b->shaderVersion ||
+		a->defines.length != b->defines.length ||
+		a->uniforms.length != b->uniforms.length ||
+		!CharString_equalsStringSensitive(&a->entrypoint, &b->entrypoint)
 	)
 		return false;
 
 	//Split up RT compile from other compiles, since RT will enable access to RTAS and other functionality.
 	//(Though by enabling inline RT you can still access this)
 
-	if((a.stageType == ESHPipelineStage_RtStartExt) != (b.stageType == ESHPipelineStage_RtStartExt))
+	if((a->stageType == ESHPipelineStage_RtStartExt) != (b->stageType == ESHPipelineStage_RtStartExt))
 		return false;
 
-	for(U64 i = 0; i < a.defines.length; ++i)
-		if(!CharString_equalsStringSensitive(a.defines.ptr[i], b.defines.ptr[i]))
+	for(U64 i = 0; i < a->defines.length; ++i)
+		if(!CharString_equalsStringSensitive(&a->defines.ptr[i], &b->defines.ptr[i]))
 			return false;
 
-	for (U64 i = 0; i < a.uniforms.length; ++i) {
+	for (U64 i = 0; i < a->uniforms.length; ++i) {
 		
-		SHUniformRuntime ai = a.uniforms.ptr[i];
-		SHUniformRuntime bi = b.uniforms.ptr[i];
+		SHUniformRuntime ai = a->uniforms.ptr[i];
+		SHUniformRuntime bi = b->uniforms.ptr[i];
 		
 		if (
-			!CharString_equalsStringSensitive(ai.name, bi.name) ||
+			!CharString_equalsStringSensitive(&ai.name, &bi.name) ||
 			ai.typeIdShort != bi.typeIdShort
 		)
 			return false;
@@ -616,8 +594,8 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 		U64 len = ETypeId_getBytes(ETypeId_arr[ai.typeIdShort]);
 
 		if (!Buffer_eq(
-			Buffer_createRefConst(a.uniformData.ptr + ai.dataOffset, len),
-			Buffer_createRefConst(b.uniformData.ptr + bi.dataOffset, len)
+			Buffer_createRefConst(a->uniformData.ptr + ai.dataOffset, len),
+			Buffer_createRefConst(b->uniformData.ptr + bi.dataOffset, len)
 		))
 			return false;
 	}
@@ -625,24 +603,27 @@ Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
 	return true;
 }
 
-void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc) {
+void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Allocator *alloc) {
 
-	if(binary.hasShaderAnnotation)
+	if (!binary)
+		return;
+
+	if(binary->hasShaderAnnotation)
 		Log_debugLn(alloc, "SH Binary (lib file)");
 
 	else {
-		CharString entrypoint = binary.identifier.entrypoint;
-		const C8 *name = SHEntry_stageNames[binary.identifier.stageType];
+		CharString entrypoint = binary->identifier.entrypoint;
+		const C8 *name = SHEntry_stageNames[binary->identifier.stageType];
 		Log_debugLn(alloc, "SH Binary (%s): %.*s", name, (int) CharString_length(entrypoint), entrypoint.ptr);
 	}
 
-	U16 shaderVersion = binary.identifier.shaderVersion;
+	U16 shaderVersion = binary->identifier.shaderVersion;
 
-	if (isVerbose || (shaderVersion != OISH_SHADER_MODEL(6, 5)))
+	if (isVerbose || (shaderVersion != OISH_SHADER_MODEL_MIN))
 		Log_debugLn(alloc, "\t[[oxc::model(\"%"PRIu8".%"PRIu8"\")]]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
 
-	ESHExtension activeExt = (binary.identifier.extensions &~ binary.dormantExtensions) & ESHExtension_All;
-	ESHExtension exts = binary.identifier.extensions;
+	ESHExtension activeExt = (binary->identifier.extensions &~ binary->dormantExtensions) & ESHExtension_All;
+	ESHExtension exts = binary->identifier.extensions;
 
 	if (!exts) {
 		if(isVerbose)
@@ -684,7 +665,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc) {
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
-	ListCharString defines = binary.identifier.defines;
+	ListCharString defines = binary->identifier.defines;
 
 	if (!(defines.length / 2)) {
 		if(isVerbose)
@@ -716,7 +697,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc) {
 		Log_debug(alloc, ELogOptions_NewLine, ")]]");
 	}
 
-	ListSHUniformRuntime uniforms = binary.identifier.uniforms;
+	ListSHUniformRuntime uniforms = binary->identifier.uniforms;
 
 	if (!uniforms.length) {
 		if(isVerbose)
@@ -743,7 +724,7 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc) {
 			SHValue value = (SHValue) { 0 };
 			Buffer_memcpy(
 				Buffer_createRef(&value, sizeof(value)),
-				Buffer_createRefConst(binary.identifier.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId))
+				Buffer_createRefConst(binary->identifier.uniformData.ptr + uniform.dataOffset, ETypeId_getBytes(typeId))
 			);
 
 			if(!SHValue_stringify(&value, typeId, alloc, &tmp1, NULL))
@@ -768,25 +749,25 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Bool isVerbose, Allocator alloc) {
 
 	U16 mask = (1 << ESHVendor_Count) - 1;
 
-	if ((binary.vendorMask & mask) == mask) {
+	if ((binary->vendorMask & mask) == mask) {
 		if (isVerbose)
 			Log_debugLn(alloc, "\t[[oxc::vendor()]] //(any vendor)");
 	}
 
 	else for(U64 i = 0; i < ESHVendor_Count; ++i)
-		if((binary.vendorMask >> i) & 1)
+		if((binary->vendorMask >> i) & 1)
 			Log_debugLn(alloc, "\t[[oxc::vendor(\"%s\")]]", ESHVendor_names[i]);
 
 	Log_debugLn(alloc, "\tBinaries:");
 
 	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
-		if(Buffer_length(binary.binaries[i]))
-			Log_debugLn(alloc, "\t\t%s: %"PRIu64, ESHBinaryType_names[i], Buffer_length(binary.binaries[i]));
+		if(Buffer_length(binary->binaries[i]))
+			Log_debugLn(alloc, "\t\t%s: %"PRIu64, ESHBinaryType_names[i], Buffer_length(binary->binaries[i]));
 
-	ListSHRegisterRuntime_print(binary.registers, 1, isVerbose, alloc);
+	ListSHRegisterRuntime_print(&binary->registers, 1, isVerbose, alloc);
 }
 
-void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc) {
+void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, const Allocator *alloc) {
 
 	if(!identifier)
 		return;
@@ -797,7 +778,7 @@ void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc) {
 	ListU8_free(&identifier->uniformData, alloc);
 }
 
-void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc) {
+void SHBinaryInfo_free(SHBinaryInfo *info, const Allocator *alloc) {
 
 	if(!info)
 		return;

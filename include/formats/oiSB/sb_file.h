@@ -98,7 +98,14 @@ Bool SBFile_addVariableAsStruct(
 	Error *e_rr
 );
 
-Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *streamRef, U64 *offset, Error *e_rr);
+Bool SBFile_write(
+	const SBFile *sbFile,
+	const Allocator *alloc,
+	StreamRef *streamRef,	//Pass NULL to calculate length only (*offset)
+	U64 *offset,
+	Error *e_rr
+);
+
 Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Allocator *alloc, SBFile *sbFile, Error *e_rr);
 
 //Logs stringified SBFile directly

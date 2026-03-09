@@ -56,15 +56,15 @@ Bool DDS_write(
 	if(!buf || !buf->length || !info)
 		retError(clean, Error_nullPointer(!buf || !buf->length ? 0 : 1, "DDS_write()::buf and info are required"));
 
-	if(!streamRef || !streamOffset)
-		retError(clean, Error_nullPointer(!streamRef ? 0 : 1, "DDS_write()::streamRef and streamOffset are required"));
+	if(!streamOffset)
+		retError(clean, Error_nullPointer(1, "DDS_write()::streamOffset are required"));
 
-	if(streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
+	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is of invalid type"));
 
 	Stream *stream = RefPtr_data(streamRef, Stream);
 
-	if(!stream->write)
+	if(stream && !stream->write)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is not writable"));
 
 	if(!info->w || !info->h || !info->l || !info->mips || !info->layers || !info->textureFormatId)
@@ -164,6 +164,11 @@ Bool DDS_write(
 			currH = U32_max(1, currH >> 1);
 			currL = U32_max(1, currL >> 1);
 		}
+	}
+
+	if (!streamRef) {
+		*streamOffset += bufLen;
+		goto clean;
 	}
 
 	if (stream->reserve)

@@ -45,7 +45,7 @@ typedef struct BMPInfo {
 } BMPInfo;
 
 Bool BMP_write(
-	StreamRef *stream,
+	StreamRef *stream,				//Pass NULL to calculate length only (*off)
 	U64 *off,
 	const BMPInfo *info,
 	const Allocator *allocator,

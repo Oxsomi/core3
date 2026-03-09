@@ -52,6 +52,14 @@ void Test_CACombine(Test *t);
 void Test_CAMixedTree(Test *t);
 void Test_CAStress(Test *t);
 
+void Test_CAWriteSizeConsistencyEmpty(Test *t);
+void Test_CAWriteSizeConsistencySingleFile(Test *t);
+void Test_CAWriteSizeConsistencyHierarchy(Test *t);
+void Test_CAWriteSizeConsistencyMsDosDate(Test *t);
+void Test_CAWriteSizeConsistencyFullDate(Test *t);
+void Test_CAWriteSizeConsistencyEncrypted(Test *t);
+void Test_CAWriteSizeConsistencyLongDirCount(Test *t);
+
 void Test_CASerializeEmpty(Test *t);
 void Test_CASerializeSingleFile(Test *t);
 void Test_CASerializeHierarchy(Test *t);

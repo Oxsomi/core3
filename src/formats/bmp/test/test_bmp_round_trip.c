@@ -525,3 +525,97 @@ void Test_BMPPixelContentFlipped(Test *t) {
 		RefPtr_dec(&archiveSr);
 	}
 }
+
+//Verify that BMP_write with a null streamRef produces the same size as an actual write.
+void Test_BMPWriteSizeConsistency(Test *t) {
+
+	Test_setModule(t, "BMP write: null-stream size matches real write");
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	{
+		StreamRef *dataSr    = NULL;
+		StreamRef *archiveSr = NULL;
+
+		BMPInfo writeInfo = {
+			.w               = 4,
+			.h               = 4,
+			.isFlipped       = true,
+			.textureFormatId = ETextureFormatId_BGRA8,
+			.discardAlpha    = false
+		};
+
+		if (!makePixelStream(t, 4, 4, false, &dataSr, &type)) {
+			Test_assert(t, "make pixel stream size", false);
+			goto doneSizeConsistency;
+		}
+
+		//Null-stream pass: get predicted size
+		U64 predictedSize = 0;
+		Test_assert(t, "null write succeeds",
+			BMP_write(NULL, &predictedSize, &writeInfo, t->alloc, dataSr, 0, true, &t->err)
+		);
+
+		//Real write pass
+		if (!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &archiveSr, &t->err)) {
+			Test_assert(t, "create archive size", false);
+			goto doneSizeConsistency;
+		}
+
+		U64 realSize = 0;
+		Test_assert(t, "real write succeeds",
+			BMP_write(archiveSr, &realSize, &writeInfo, t->alloc, dataSr, 0, true, &t->err)
+		);
+
+		Test_assert(t, "null size == real size", predictedSize == realSize);
+
+	doneSizeConsistency:
+		RefPtr_dec(&dataSr);
+		RefPtr_dec(&archiveSr);
+	}
+}
+
+//Same check for BGR8 (discardAlpha = true, different stride calculation).
+void Test_BMPWriteSizeConsistencyBGR8(Test *t) {
+
+	Test_setModule(t, "BMP write: null-stream size matches real write (BGR8)");
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+
+	{
+		StreamRef *dataSr    = NULL;
+		StreamRef *archiveSr = NULL;
+
+		BMPInfo writeInfo = {
+			.w               = 3,
+			.h               = 3,
+			.isFlipped       = true,
+			.textureFormatId = ETextureFormatId_BGRA8,
+			.discardAlpha    = true
+		};
+
+		if (!makePixelStream(t, 3, 3, true, &dataSr, &type)) {
+			Test_assert(t, "make BGR8 size stream", false);
+			goto doneBGR8Size;
+		}
+
+		U64 predictedSize = 0;
+		Test_assert(t, "BGR8 null write succeeds",
+			BMP_write(NULL, &predictedSize, &writeInfo, t->alloc, dataSr, 0, true, &t->err)
+		);
+
+		if (!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &archiveSr, &t->err)) {
+			Test_assert(t, "create BGR8 archive size", false);
+			goto doneBGR8Size;
+		}
+
+		U64 realSize = 0;
+		Test_assert(t, "BGR8 real write succeeds",
+			BMP_write(archiveSr, &realSize, &writeInfo, t->alloc, dataSr, 0, true, &t->err)
+		);
+
+		Test_assert(t, "BGR8 null size == real size", predictedSize == realSize);
+
+	doneBGR8Size:
+		RefPtr_dec(&dataSr);
+		RefPtr_dec(&archiveSr);
+	}
+}

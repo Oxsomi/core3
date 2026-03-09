@@ -47,6 +47,8 @@ void Test_SBFileAddVarEmptyArrayList(Test *t);
 void Test_SBFileReadInvalidStream(Test *t);
 void Test_SBFileWriteEmpty(Test *t);
 
+void Test_SBFileSizeConsistency(Test *t);
+
 void Test_ESBTypeValuesF16(Test *t);
 void Test_ESBTypeValuesI16(Test *t);
 void Test_ESBTypeValuesU16(Test *t);

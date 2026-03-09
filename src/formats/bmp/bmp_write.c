@@ -65,16 +65,21 @@ Bool BMP_write(
 			1, 3, "BMP_write()::textureFormatId is only supported for BGRA8 currently"
 		));
 
+	const U64 pixelStride = info->discardAlpha ? 3 : 4;
+	const U64 stride = ((U64)info->w * pixelStride + 3) & ~3;		//Every line needs to be 4-byte aligned
+
+	U64 expectedLen = stride * info->h;
+
+	if (!streamRef) {
+		*off += expectedLen + sizeof(BMPHeadersCombined);
+		goto clean;
+	}
+
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 	gotoIfError3(clean, StreamCursor_create(inputStreamRef, 0, false, alloc, &cursorInput, e_rr));
 
 	Stream *stream = RefPtr_data(streamRef, Stream);
 	Stream *inputStream = RefPtr_data(inputStreamRef, Stream);
-
-	const U64 pixelStride = info->discardAlpha ? 3 : 4;
-	const U64 stride = ((U64)info->w * pixelStride + 3) & ~3;		//Every line needs to be 4-byte aligned
-
-	U64 expectedLen = stride * info->h;
 
 	if(inputOffset + expectedLen > inputStream->size)
 		retError(clean, Error_outOfBounds(1, inputOffset + expectedLen, inputStream->size, "BMP_write()::off out of bounds"));
