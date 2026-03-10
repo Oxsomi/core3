@@ -389,7 +389,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	for (U64 i = 0; i < shaderBufferList.length; ++i) {
 
 		U64 currOffset = shaderBufferSizes;
-		gotoIfError3(clean, SBFile_write(&shaderBufferList.ptr[i], alloc, &memoryStream, &shaderBufferSizes, e_rr));
+		gotoIfError3(clean, SBFile_write(&shaderBufferList.ptr[i], alloc, memoryStream, &shaderBufferSizes, e_rr));
 
 		if (i + 1 != shaderBufferList.length)
 			shaderBufferSizes = (shaderBufferSizes + 15) & ~15;
@@ -465,13 +465,13 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	*offset = (*offset + sizeof(header) - hdrOff + 15) & ~15;
 
-	gotoIfError3(clean, DLFile_write(&strings, alloc, stream, NULL, I32x4_zero(), offset, e_rr));
+	gotoIfError3(clean, DLFile_write(&strings, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
 	*offset = (*offset + 15) & ~15;
-	gotoIfError3(clean, DLFile_write(&shaderBuffers, alloc, stream, NULL, I32x4_zero(), offset, e_rr));
+	gotoIfError3(clean, DLFile_write(&shaderBuffers, alloc, streamRef, NULL, I32x4_zero(), offset, e_rr));
 
 	//Easy contents of SHFile (relatively static sized)
 
-	gotoIfError3(clean, StreamCursor_create(stream, 0, true, alloc, &cursor, e_rr));
+	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 
 	U64 entries = shFile->entries.length;
 
@@ -743,14 +743,14 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	U32 hash = Buffer_crc32c(tmp);
 	Buffer_free(&tmp, alloc);
 
-	gotoIfError3(clean, StreamCursor_setWritable(&cursor, alloc, e_rr));
+	gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));
 
 	U64 hashLoc = headerStart + offsetof(SHHeader, hash);
 	gotoIfError3(clean, StreamCursor_appendU32(&cursor, &hashLoc, hash, alloc, e_rr));
 
 clean:
 	StreamCursor_close(&cursor, alloc);
-	RefPtr_dec(&memoryStream, alloc);
+	RefPtr_dec(&memoryStream);
 	ListSBFile_free(&shaderBufferList, alloc);
 	ListListU32_free(&arrays, alloc);			//Doesn't need freeUnderlying, it's all references
 	DLFile_free(&shaderBuffers, alloc);

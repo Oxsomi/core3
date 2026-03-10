@@ -68,8 +68,6 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	if (*offset & 15)
 		retError(clean, Error_unsupportedOperation(0, "SHFile_read() at misaligned offset is unsupported (16-byte)"));
 
-	U64 fileStart = *offset;
-
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursor, e_rr));
 
 	if (!isSubFile) {		//Magic
@@ -215,7 +213,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 				1, "SHFile_read() binary not marked as shader annotation but had no valid stageType"
 			));
 
-		if (binary.shaderModel < OISH_SHADER_MODEL_MIN || binary.shaderModel > OISH_SHADER_MODEL_MAX)
+		if (binary.shaderModel < OISH_SHADER_MODEL_MIN8 || binary.shaderModel > OISH_SHADER_MODEL_MAX8)
 			retError(clean, Error_invalidState(1, "SHFile_read() binary had invalid shaderModel"));
 
 		if (binary.extensions >> ESHExtension_Count)
@@ -319,7 +317,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 		gotoIfError3(clean, ListU8_resize(&binaryInfo.identifier.uniformData, maxOff, alloc, e_rr));
 
 		gotoIfError3(clean, StreamCursor_consumeBuffer(
-			&cursor, offset, ListU8_buffer(binaryInfo.identifier.uniformData), maxOff, alloc, e_rr
+			&cursor, offset, ListU8_buffer(binaryInfo.identifier.uniformData), alloc, e_rr
 		));
 
 		gotoIfError3(clean, ListSHUniformRuntime_resize(&binaryInfo.identifier.uniforms, binary.uniformCount, alloc, e_rr));
@@ -533,7 +531,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 				entry.groupZ   = groups.z;
 				entry.waveSize = groups.waveSize;
 
-				if (entry.waveSize && (entry.stage == ESHPipelineStage_MeshExt || entry.stage == ESHPipelineStage_TaskExt))
+				if (entry.waveSize && entry.stage != ESHPipelineStage_Compute && entry.stage != ESHPipelineStage_WorkgraphExt)
 					retError(clean, Error_invalidParameter(
 						0, 0, "SHFile_read() waveSize not supported by mesh or task shader"
 					));

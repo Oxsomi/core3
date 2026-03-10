@@ -166,7 +166,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 TList(SHEntry);
 TList(SHEntryRuntime);
 
-void SHEntry_print(SHEntry entry, Bool isVerbose, const Allocator *alloc);
+void SHEntry_print(const SHEntry *entry, Bool isVerbose, const Allocator *alloc);
 void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc);
 
 const C8 *SHEntry_stageName(const SHEntry *entry);

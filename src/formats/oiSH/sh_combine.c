@@ -19,69 +19,71 @@
 */
 
 #include "formats/oiSH/sh_file.h"
+#include "types/container/buffer.h"
+#include "types/container/list_basic_types.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
-#include "types/container/buffer.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
 #include "types/base/constants.h"
+#include "types/base/string_read_helper.h"
 
-Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr) {
-
-	//Flags can only merge UTF8 safely, compilerVersion, sourceHash and HideMagicNumber have to match.
+Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SHFile *combined, Error *e_rr) {
 
 	Bool s_uccess = true;
-	Bool isUTF8 = (a.flags & ESHSettingsFlags_IsUTF8) || (b.flags & ESHSettingsFlags_IsUTF8);
 	ListU16 remappedBinaries = (ListU16) { 0 };
 	ListU16 tmpBins = (ListU16) { 0 };
 	SHRegisterRuntime tmpReg = (SHRegisterRuntime) { 0 };
 	ListSHRegisterRuntime registers = (ListSHRegisterRuntime) { 0 };
 
-	if((a.flags & ESHSettingsFlags_HideMagicNumber) != (b.flags & ESHSettingsFlags_HideMagicNumber))
-		retError(clean, Error_invalidState(0, "SHFile_combine()::a and b have different flags: HideMagicNumber"))
+	if(!a || !b)
+		retError(clean, Error_nullPointer(0, "SHFile_combine()::a and b are required"));
 
-	if(a.compilerVersion != b.compilerVersion || a.sourceHash != b.sourceHash)
-		retError(clean, Error_invalidState(0, "SHFile_combine()::a and b have mismatching sourceHash or compilerVersion"))
+	if (a->flags != b->flags)
+		retError(clean, Error_invalidState(0, "SHFile_combine()::a and b have different flags"));
+
+	if(a->compilerVersion != b->compilerVersion || a->sourceHash != b->sourceHash)
+		retError(clean, Error_invalidState(0, "SHFile_combine()::a and b have mismatching sourceHash or compilerVersion"));
 
 	gotoIfError3(clean, SHFile_create(
-		a.flags | (isUTF8 ? ESHSettingsFlags_IsUTF8 : 0),
-		a.compilerVersion,
-		a.sourceHash,
+		a->flags,
+		a->compilerVersion,
+		a->sourceHash,
 		alloc,
 		combined,
 		e_rr
-	))
+	));
 
-	gotoIfError2(clean, ListSHInclude_reserve(&combined->includes, a.includes.length + b.includes.length, alloc))
-	gotoIfError2(clean, ListSHBinaryInfo_reserve(&combined->binaries, a.binaries.length + b.binaries.length, alloc))
-	gotoIfError2(clean, ListSHEntry_reserve(&combined->entries, a.entries.length + b.entries.length, alloc))
+	gotoIfError3(clean, ListSHInclude_reserve(&combined->includes, a->includes.length + b->includes.length, alloc, e_rr));
+	gotoIfError3(clean, ListSHBinaryInfo_reserve(&combined->binaries, a->binaries.length + b->binaries.length, alloc, e_rr));
+	gotoIfError3(clean, ListSHEntry_reserve(&combined->entries, a->entries.length + b->entries.length, alloc, e_rr));
 
 	//Includes can be safely combined
 
-	for(U64 i = 0; i < a.includes.length + b.includes.length; ++i) {
+	for(U64 i = 0; i < a->includes.length + b->includes.length; ++i) {
 
-		SHInclude src = i < a.includes.length ? a.includes.ptr[i] : b.includes.ptr[i - a.includes.length];
+		SHInclude src = i < a->includes.length ? a->includes.ptr[i] : b->includes.ptr[i - a->includes.length];
 
 		SHInclude include = (SHInclude) {
 			.relativePath = CharString_createRefStrConst(src.relativePath),
 			.crc32c = src.crc32c
 		};
 
-		gotoIfError3(clean, SHFile_addInclude(combined, &include, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addInclude(combined, &include, alloc, e_rr));
 	}
 
 	//Try to merge binaries if possible
 
-	gotoIfError2(clean, ListU16_resize(&remappedBinaries, b.binaries.length, alloc))
+	gotoIfError3(clean, ListU16_resize(&remappedBinaries, b->binaries.length, alloc, e_rr));
 
-	for (U64 i = 0; i < a.binaries.length; ++i) {
+	for (U64 i = 0; i < a->binaries.length; ++i) {
 
 		U64 j = 0;
 
-		for (; j < b.binaries.length; ++j)
-			if(SHBinaryIdentifier_equals(a.binaries.ptr[i].identifier, b.binaries.ptr[j].identifier))
+		for (; j < b->binaries.length; ++j)
+			if(SHBinaryIdentifier_equals(&a->binaries.ptr[i].identifier, &b->binaries.ptr[j].identifier))
 				break;
 
-		SHBinaryInfo ai = a.binaries.ptr[i];
+		SHBinaryInfo ai = a->binaries.ptr[i];
 
 		SHBinaryInfo c = (SHBinaryInfo) {
 			.identifier = (SHBinaryIdentifier) {
@@ -104,7 +106,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		//Couldn't find a match, can add the easy way
 		//TODO: Old binaries to new binary id
 
-		if (j == b.binaries.length)
+		if (j == b->binaries.length)
 			for(U8 k = 0; k < ESHBinaryType_Count; ++k)
 				c.binaries[k] = Buffer_createRefFromBuffer(ai.binaries[k], true);
 
@@ -112,7 +114,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		else {
 
-			SHBinaryInfo bi = b.binaries.ptr[j];
+			SHBinaryInfo bi = b->binaries.ptr[j];
 
 			//Bindless and unbound array size need to be manually combined.
 			c.identifier.extensions |= bi.identifier.extensions;
@@ -122,7 +124,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			if(ai.vendorMask != bi.vendorMask || ai.hasShaderAnnotation != bi.hasShaderAnnotation)
 				retError(clean, Error_invalidState(
 					(U32) i, "SHFile_combine()::a and b have binary with mismatching vendorMask or hasShaderAnnotation"
-				))
+				));
 
 			for(U8 k = 0; k < ESHBinaryType_Count; ++k)
 
@@ -131,7 +133,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 						retError(clean, Error_invalidState(
 							(U32) i,
 							"SHFile_combine()::a and b have binary of same ESHBinaryType that didn't have the same contents"
-						))
+						));
 				}
 
 				else if(Buffer_length(ai.binaries[k]))
@@ -146,7 +148,9 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 			//Combine registers
 
-			gotoIfError2(clean, ListSHRegisterRuntime_reserve(&registers, bi.registers.length + ai.registers.length, alloc))
+			gotoIfError3(clean, ListSHRegisterRuntime_reserve(
+				&registers, bi.registers.length + ai.registers.length, alloc, e_rr
+			));
 
 			//Match registers that were already found
 
@@ -156,14 +160,14 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 				U64 l = 0;
 				for(; l < bi.registers.length; ++l)
-					if(CharString_equalsStringSensitive(bi.registers.ptr[l].name, rega.name))
+					if(CharString_equalsStringSensitive(&bi.registers.ptr[l].name, &rega.name))
 						break;
 
 				//Not found
 
 				if (l == bi.registers.length || rega.hash == bi.registers.ptr[l].hash) {
-					gotoIfError3(clean, SHRegisterRuntime_createCopy(c.registers.ptr[k], alloc, &tmpReg, e_rr))
-					gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+					gotoIfError3(clean, SHRegisterRuntime_createCopy(&c.registers.ptr[k], alloc, &tmpReg, e_rr));
+					gotoIfError3(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc, e_rr));
 					tmpReg = (SHRegisterRuntime) { 0 };
 					continue;
 				}
@@ -173,16 +177,16 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				SHRegisterRuntime regb = bi.registers.ptr[l];
 
 				if((!!rega.shaderBuffer.vars.ptr) != (!!regb.shaderBuffer.vars.ptr))
-					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching shader buffers"))
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching shader buffers"));
 
 				if(rega.shaderBuffer.vars.ptr)
 					gotoIfError3(clean, SBFile_combine(
-						rega.shaderBuffer, regb.shaderBuffer, alloc, &tmpReg.shaderBuffer, e_rr
-					))
+						&rega.shaderBuffer, &regb.shaderBuffer, alloc, &tmpReg.shaderBuffer, e_rr
+					));
 
 				//Copy name
 
-				gotoIfError2(clean, CharString_createCopy(rega.name, alloc, &tmpReg.name))
+				gotoIfError3(clean, CharString_createCopy(rega.name, alloc, &tmpReg.name, e_rr));
 
 				//Merge array
 
@@ -205,15 +209,16 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 					if(dimsA != dimsB)
 						retError(clean, Error_invalidState(
 							0, "SHFile_combine() register has mismatching array flattened size"
-						))
+						));
 
 					//In this case, we have to point arrayId to B's array.
 					//This is called unflattening ([9] -> [3][3] for example).
 
-					if (arrayB.length != 1)
-						gotoIfError2(clean, ListU32_createCopy(arrayB, alloc, &tmpReg.arrays))
+					if (arrayB.length != 1) {
+						gotoIfError3(clean, ListU32_createCopy(arrayB, alloc, &tmpReg.arrays, e_rr));
+					}
 
-					else gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
+					else gotoIfError3(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays, e_rr));
 				}
 
 				//Ensure they're the same size
@@ -221,13 +226,13 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				else {
 
 					if(arrayA.length != arrayB.length)
-						retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array dimensions"))
+						retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array dimensions"));
 
 					for(U64 m = 0; m < arrayA.length; ++m)
 						if(arrayA.ptr[m] != arrayB.ptr[m])
-							retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array count"))
+							retError(clean, Error_invalidState(0, "SHFile_combine() variable has mismatching array count"));
 
-					gotoIfError2(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays))
+					gotoIfError3(clean, ListU32_createCopy(arrayA, alloc, &tmpReg.arrays, e_rr));
 				}
 
 				//Merge register
@@ -246,13 +251,19 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				Bool isCmpSamplerB = regb.reg.registerType == ESHRegisterType_SamplerComparisonState;
 				Bool isSamplerB = regb.reg.registerType == ESHRegisterType_Sampler || isCmpSamplerB;
 
-				if(regb.reg.registerType == ESHRegisterType_PushConstants && rega.reg.registerType == ESHRegisterType_ConstantBuffer)
+				if(
+					regb.reg.registerType == ESHRegisterType_PushConstants &&
+					rega.reg.registerType == ESHRegisterType_ConstantBuffer
+				)
 					merged.registerType = ESHRegisterType_PushConstants;
 
 				if(merged.registerType == ESHRegisterType_PushConstants && (
-					regb.reg.registerType != ESHRegisterType_PushConstants && rega.reg.registerType != ESHRegisterType_ConstantBuffer
+					regb.reg.registerType != ESHRegisterType_PushConstants &&
+					rega.reg.registerType != ESHRegisterType_ConstantBuffer
 				))
-					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types (expected push constants)"))
+					retError(clean, Error_invalidState(
+						0, "SHFile_combine() has mismatching register types (expected push constants)"
+					));
 
 				if(
 					(isSamplerA != isSamplerB) &&
@@ -260,12 +271,13 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 					(rega.reg.registerType &~ ESHRegisterType_IsCombinedSampler) !=
 					(regb.reg.registerType &~ ESHRegisterType_IsCombinedSampler)
 				)
-					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"))
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register types"));
 
 				if(isCmpSamplerB)
 					merged.registerType = ESHRegisterType_SamplerComparisonState;
 
-				else merged.registerType = rega.reg.registerType | (regb.reg.registerType & ESHRegisterType_IsCombinedSampler);
+				else merged.registerType =
+					rega.reg.registerType | (regb.reg.registerType & ESHRegisterType_IsCombinedSampler);
 
 				//Merge bindings
 
@@ -277,7 +289,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 					if (bindingA != U64_MAX && bindingB != U64_MAX) {
 
 						if(bindingA != bindingB)
-							retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register bindings"))
+							retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching register bindings"));
 
 						continue;
 					}
@@ -294,7 +306,7 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 					rega.reg.registerType == ESHRegisterType_SubpassInput &&
 					rega.reg.inputAttachmentId != regb.reg.inputAttachmentId
 				)
-					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching input attachment id"))
+					retError(clean, Error_invalidState(0, "SHFile_combine() has mismatching input attachment id"));
 
 				//Merge texture info
 
@@ -310,10 +322,10 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 					if (hasTexturePrimitiveA && hasTexturePrimitiveB) {
 
 						if(rega.reg.texture.primitive != regb.reg.texture.primitive)
-							retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"))
+							retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"));
 
 						if(rega.reg.texture.formatId && rega.reg.texture.formatId != regb.reg.texture.formatId)
-							retError(clean, Error_invalidState(0, "SHFile_combine() texture format ids are incompatible"))
+							retError(clean, Error_invalidState(0, "SHFile_combine() texture format ids are incompatible"));
 					}
 
 					//One of the two has texture format, make sure they're compatible
@@ -325,18 +337,20 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 						if (!hasTexturePrimitiveA && !hasTexturePrimitiveB) {
 
 							if(rega.reg.texture.primitive != regb.reg.texture.primitive)
-								retError(clean, Error_invalidState(0, "SHFile_combine() texture primitives are incompatible"))
+								retError(clean, Error_invalidState(
+									0, "SHFile_combine() texture primitives are incompatible"
+								));
 
 							if(rega.reg.texture.formatId != regb.reg.texture.formatId)
-								retError(clean, Error_invalidState(0, "SHFile_combine() texture formatId are incompatible"))
+								retError(clean, Error_invalidState(0, "SHFile_combine() texture formatId are incompatible"));
 						}
 
 						else {
 
-							tmpReg.reg.texture.primitive =
+							merged.texture.primitive =
 								hasTexturePrimitiveA ? rega.reg.texture.primitive : regb.reg.texture.primitive;
 
-							tmpReg.reg.texture.formatId =
+							merged.texture.formatId =
 								!hasTexturePrimitiveA ? rega.reg.texture.formatId : regb.reg.texture.formatId;
 						}
 					}
@@ -347,15 +361,15 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 				tmpReg.reg = merged;
 
 				gotoIfError3(clean, SHRegisterRuntime_hash(
-					tmpReg.reg,
-					tmpReg.name,
+					&tmpReg.reg,
+					&tmpReg.name,
 					tmpReg.arrays.length ? &tmpReg.arrays : NULL,
 					tmpReg.shaderBuffer.vars.ptr ? &tmpReg.shaderBuffer : NULL,
 					&tmpReg.hash,
 					e_rr
-				))
+				));
 
-				gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+				gotoIfError3(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc, e_rr));
 				tmpReg = (SHRegisterRuntime) { 0 };
 			}
 
@@ -367,14 +381,14 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 				U64 l = 0;
 				for(; l < ai.registers.length; ++l)
-					if(CharString_equalsStringSensitive(ai.registers.ptr[l].name, regb.name))
+					if(CharString_equalsStringSensitive(&ai.registers.ptr[l].name, &regb.name))
 						break;
 
 				//Not found
 
 				if (l == ai.registers.length) {
-					gotoIfError3(clean, SHRegisterRuntime_createCopy(regb, alloc, &tmpReg, e_rr))
-					gotoIfError2(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc))
+					gotoIfError3(clean, SHRegisterRuntime_createCopy(&regb, alloc, &tmpReg, e_rr));
+					gotoIfError3(clean, ListSHRegisterRuntime_pushBack(&registers, tmpReg, alloc, e_rr));
 					tmpReg = (SHRegisterRuntime) { 0 };
 					continue;
 				}
@@ -384,29 +398,31 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		if(registers.length)
 			c.registers = registers;
 
-		gotoIfError3(clean, SHFile_addBinary(combined, &c, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addBinary(combined, &c, alloc, e_rr));
 		registers = (ListSHRegisterRuntime) { 0 };
 	}
 
 	//Insert binaries from b that weren't found in a
 
-	for (U64 i = 0; i < b.binaries.length; ++i) {
+	for (U64 i = 0; i < b->binaries.length; ++i) {
 
 		U64 j = 0;
 
-		for (; j < a.binaries.length; ++j)
-			if(SHBinaryIdentifier_equals(b.binaries.ptr[i].identifier, a.binaries.ptr[j].identifier))
+		for (; j < a->binaries.length; ++j)
+			if(SHBinaryIdentifier_equals(&b->binaries.ptr[i].identifier, &a->binaries.ptr[j].identifier))
 				break;
 
-		if(j != a.binaries.length)
+		if(j != a->binaries.length)
 			continue;
 
-		SHBinaryInfo bi = b.binaries.ptr[i];
+		SHBinaryInfo bi = b->binaries.ptr[i];
 
 		SHBinaryInfo c = (SHBinaryInfo) {
 			.identifier = (SHBinaryIdentifier) {
 				.defines = ListCharString_createRefFromList(bi.identifier.defines),
-				.entrypoint = CharString_createRefStrConst(bi.identifier.entrypoint)
+				.entrypoint = CharString_createRefStrConst(bi.identifier.entrypoint),
+				.uniformData = ListU8_createRefFromList(bi.identifier.uniformData),
+				.uniforms = ListSHUniformRuntime_createRefFromList(bi.identifier.uniforms)
 			},
 			.registers = ListSHRegisterRuntime_createRefFromList(bi.registers),
 			.dormantExtensions = bi.dormantExtensions,
@@ -419,34 +435,34 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 
 		*(U64*)extPtrDst = *(const U64*)extPtrSrc;
 
-		gotoIfError3(clean, SHFile_addBinary(combined, &c, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addBinary(combined, &c, alloc, e_rr));
 		remappedBinaries.ptrNonConst[i] = (U16) (combined->binaries.length - 1);
 	}
 
 	//Merge and remap entries (remappedBinaries for b, no change for a)
 
-	for (U64 i = 0; i < a.entries.length; ++i) {
+	for (U64 i = 0; i < a->entries.length; ++i) {
 
-		SHEntry entry = a.entries.ptr[i], entryi = entry;
+		SHEntry entry = a->entries.ptr[i], entryi = entry;
 
 		entry.name = CharString_createRefStrConst(entry.name);
 		entry.binaryIds = (ListU16) { 0 };
 
 		U64 j = 0;
 
-		for (; j < b.entries.length; ++j)
-			if(CharString_equalsStringSensitive(entryi.name, b.entries.ptr[j].name))
+		for (; j < b->entries.length; ++j)
+			if(CharString_equalsStringSensitive(&entryi.name, &b->entries.ptr[j].name))
 				break;
 
 		//No duplicate, we can accept a
 
-		if (j == b.entries.length) {
-			entry.binaryIds = ListU16_createRefFromList(a.entries.ptr[i].binaryIds);
-			gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
+		if (j == b->entries.length) {
+			entry.binaryIds = ListU16_createRefFromList(a->entries.ptr[i].binaryIds);
+			gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr));
 			continue;
 		}
 
-		SHEntry entryj = a.entries.ptr[j];
+		SHEntry entryj = b->entries.ptr[j];
 
 		//Make sure the two have identical data
 
@@ -458,13 +474,13 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		if(*(const U16*)cmpA0 != *(const U16*)cmpB0)
 			retError(clean, Error_invalidState(
 				(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching entry or semantics"
-			))
+			));
 
 		for(U64 k = 0; k < 9; ++k)
 			if(((const U64*)cmpA)[k] != ((const U64*)cmpB)[k])
 				retError(clean, Error_invalidState(
 					(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
-				))
+				));
 
 		U8 waveSizeTypei = entryi.waveSize >> 4 ? 2 : (entryi.waveSize ? 1 : 0);
 		U8 waveSizeTypej = entryj.waveSize >> 4 ? 2 : (entryj.waveSize ? 1 : 0);
@@ -475,15 +491,15 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		)
 			retError(clean, Error_invalidState(
 				(U32) i, "SHFile_combine()::a and b have mismatching waveSize"
-			))
+			));
 
 		entry.waveSize = U16_max(entryi.waveSize, entryj.waveSize);
 
 		//Combine the binaryIds.
 		//a stays unmodified, but b needs to be remapped first
 
-		gotoIfError2(clean, ListU16_createCopy(a.entries.ptr[i].binaryIds, alloc, &tmpBins))
-		ListU16 binaryIdsb = b.entries.ptr[j].binaryIds;
+		gotoIfError3(clean, ListU16_createCopy(a->entries.ptr[i].binaryIds, alloc, &tmpBins, e_rr));
+		ListU16 binaryIdsb = b->entries.ptr[j].binaryIds;
 
 		for(U64 k = 0; k < binaryIdsb.length; ++k) {
 
@@ -492,51 +508,51 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 			if(ListU16_contains(tmpBins, binaryId, 0, NULL))
 				continue;
 
-			gotoIfError2(clean, ListU16_pushBack(&tmpBins, binaryId, alloc))
+			gotoIfError3(clean, ListU16_pushBack(&tmpBins, binaryId, alloc, e_rr));
 		}
 
-		if(entry.semanticNames.length != entryi.semanticNames.length)
+		if(entryj.semanticNames.length != entryi.semanticNames.length)
 			retError(clean, Error_invalidState(
 				(U32) i, "SHFile_combine()::a and b have mismatching semanticNames"
-			))
+			));
 
 		for(U64 k = 0; k < entry.semanticNames.length; ++k)
-			if(!CharString_equalsStringInsensitive(entry.semanticNames.ptr[k], entryj.semanticNames.ptr[k]))
+			if(!CharString_equalsStringInsensitive(&entry.semanticNames.ptr[k], &entryj.semanticNames.ptr[k]))
 				retError(clean, Error_invalidState(
 					(U32) i, "SHFile_combine()::a and b have mismatching semanticNames[k]"
-				))
+				));
 
 		entry.semanticNames = ListCharString_createRefFromList(entry.semanticNames);
 		entry.binaryIds = tmpBins;
-		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr));
 		tmpBins = (ListU16) { 0 };
 	}
 
 	//Add b binaries that don't exist, these need some remapping
 
-	for (U64 i = 0; i < b.entries.length; ++i) {
+	for (U64 i = 0; i < b->entries.length; ++i) {
 
-		SHEntry entry = b.entries.ptr[i];
+		SHEntry entry = b->entries.ptr[i];
 		entry.name = CharString_createRefStrConst(entry.name);
 		entry.binaryIds = (ListU16) { 0 };
 
 		U64 j = 0;
 
-		for (; j < a.entries.length; ++j)
-			if(CharString_equalsStringSensitive(b.entries.ptr[i].name, a.entries.ptr[j].name))
+		for (; j < a->entries.length; ++j)
+			if(CharString_equalsStringSensitive(&b->entries.ptr[i].name, &a->entries.ptr[j].name))
 				break;
 
-		if(j != a.entries.length)		//Skip already handled ones
+		if(j != a->entries.length)		//Skip already handled ones
 			continue;
 
-		ListU16 binaryIdsb = b.entries.ptr[i].binaryIds;
-		gotoIfError2(clean, ListU16_resize(&tmpBins, binaryIdsb.length, alloc))
+		ListU16 binaryIdsb = b->entries.ptr[i].binaryIds;
+		gotoIfError3(clean, ListU16_resize(&tmpBins, binaryIdsb.length, alloc, e_rr));
 
 		for(U64 k = 0; k < binaryIdsb.length; ++k)
 			tmpBins.ptrNonConst[k] = remappedBinaries.ptr[binaryIdsb.ptr[k]];
 
 		entry.binaryIds = tmpBins;
-		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
+		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr));
 		tmpBins = (ListU16) { 0 };
 	}
 
