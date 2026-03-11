@@ -531,6 +531,34 @@ clean:
 	return s_uccess;
 }
 
+Bool SHEntry_equals(const SHEntry *a, const SHEntry *b) {
+
+	if (!a || !b)
+		return a == b;
+
+	for (U64 k = 0; k < sizeof(a->compatible) / sizeof(a->compatible[0]); ++k)
+		if (a->compatible[k] != b->compatible[k])
+			return false;
+
+	for (U64 k = 0; k < sizeof(a->equal) / sizeof(a->equal[0]); ++k)
+		if (a->equal[k] != b->equal[k])
+			return false;
+
+	Bool eq =
+		CharString_equalsStringSensitive(&a->name, &b->name) &&
+		ListU16_eq(a->binaryIds, b->binaryIds) &&
+		a->semanticNames.length == b->semanticNames.length;
+
+	if (!eq)
+		return false;
+
+	for (U64 i = 0; i < a->semanticNames.length; ++i)
+		if (!CharString_equalsStringSensitive(&a->semanticNames.ptr[i], &b->semanticNames.ptr[i]))
+			return false;
+
+	return true;
+}
+
 void SHEntry_print(const SHEntry *shEntry, Bool isVerbose, const Allocator *alloc) {
 
 	if (!shEntry)

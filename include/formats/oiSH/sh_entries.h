@@ -70,45 +70,60 @@ typedef struct SHEntry {
 
 	CharString name;
 
-	ListU16 binaryIds;					//Reference SHBinaryInfo
+	ListU16 binaryIds;							//Reference SHBinaryInfo
 
-	//Don't change order
-
-	SHPipelineStage stage;
-	U8 uniqueInputSemantics;
-	U16 waveSize;						//U4[4] req, min, max, preferSize: each U4 is in range [0, 9]. 0 = 0, 3 = 8, etc.
-
-	U16 groupX, groupY;					//Present for compute, workgraph, task and mesh shaders
-
-	U16 groupZ;
-	U8 intersectionSize, payloadSize;	//Raytracing payload sizes
-
-	U16 idOrPadding;					//Sometimes is used to store id in an array
-	U16 padding;
-
-	//Verification for linking and PSO compatibility (graphics only)
+	ListCharString semanticNames;				//Unique semantics; outputs start at [uniqueInputSemantics], inputs at 0
 
 	union {
-		U64 inputsU64[2];
-		U8 inputs[16];					//ESBType, but ESBMatrix_N1
+
+		U64 equal[1];							//This compare can be done in addition to compatible to know exact equality
+
+		struct {
+			U16 waveSize;						//U4[4] req, min, max, preferSize: each U4 is in range [0, 9]
+			U16 reserved0[3];					//Only use if property that might need unique comparison
+		};
 	};
 
 	union {
-		U64 outputsU64[2];
-		U8 outputs[16];					//ESBType, but ESBMatrix_N1
-	};
 
-	union {
-		U64 inputSemanticNamesU64[2];
-		U8 inputSemanticNames[16];		//(U4 semanticId, semanticName)[]
-	};
+		U64 compatible[10];						//This compare can be done to know if they're compatible
 
-	union {
-		U64 outputSemanticNamesU64[2];
-		U8 outputSemanticNames[16];		//(U4 semanticId, semanticName)[]
-	};
+		struct {
 
-	ListCharString semanticNames;		//Unique semantics; outputs start at [uniqueInputSemantics], inputs at 0
+			U16 groupX, groupY;					//Present for compute, workgraph, task and mesh shaders
+
+			U16 groupZ;
+			U8 intersectionSize, payloadSize;	//Raytracing payload sizes
+
+			SHPipelineStage stage;
+			U8 uniqueInputSemantics;
+			U16 idOrPadding;					//Sometimes is used to store id in an array
+
+			U32 reserved1;
+
+			//Verification for linking and PSO compatibility (graphics only)
+
+			union {
+				U64 inputsU64[2];
+				U8 inputs[16];					//ESBType, but ESBMatrix_N1
+			};
+
+			union {
+				U64 outputsU64[2];
+				U8 outputs[16];					//ESBType, but ESBMatrix_N1
+			};
+
+			union {
+				U64 inputSemanticNamesU64[2];
+				U8 inputSemanticNames[16];		//(U4 semanticId, semanticName)[]
+			};
+
+			union {
+				U64 outputSemanticNamesU64[2];
+				U8 outputSemanticNames[16];		//(U4 semanticId, semanticName)[]
+			};
+		};
+	};
 
 } SHEntry;
 
@@ -165,6 +180,8 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 TList(SHEntry);
 TList(SHEntryRuntime);
+
+Bool SHEntry_equals(const SHEntry *entryA, const SHEntry *entryB);
 
 void SHEntry_print(const SHEntry *entry, Bool isVerbose, const Allocator *alloc);
 void SHEntryRuntime_print(const SHEntryRuntime *entry, const Allocator *alloc);

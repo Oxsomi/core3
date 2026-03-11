@@ -159,7 +159,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	U64 totalArrayElements = 0;
 
-	for (U8 i = 0; i < header.arrayDimCount; ++i) {
+	for (U32 i = 0; i < header.arrayDimCount; ++i) {
 
 		U8 arrayDim = arrayDims[i];
 
@@ -177,7 +177,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	{
 		const U32 *arrayCount = (const U32*) arraysBuf.ptr;
 
-		for (U8 i = 0; i < header.arrayDimCount; ++i) {
+		for (U32 i = 0; i < header.arrayDimCount; ++i) {
 			gotoIfError3(clean, ListU32_createRefConst(arrayCount, arrayDims[i], &arrays.ptrNonConst[i], e_rr));
 			arrayCount += arrayDims[i];
 		}
@@ -196,7 +196,21 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	U64 registerNameStart   = includeNameStart - header.registerNameCount;
 	U64 uniformNameStart    = registerNameStart - header.uniformNameCount;
 
+	//Add includes
+
+	gotoIfError3(clean, ListSHInclude_reserve(&shFile->includes, header.includeFileCount, alloc, e_rr));
+
+	for (U32 i = 0; i < header.includeFileCount; ++i) {
+
+		SHInclude inc = (SHInclude) { 0 };
+		inc.crc32c = includeFileCrc32c[i];
+		inc.relativePath = CharString_createRefStrConst(strings.entryStrings.ptr[includeNameStart + i]);
+
+		gotoIfError3(clean, SHFile_addInclude(shFile, &inc, alloc, e_rr));
+	}
+
 	//Parse binaries
+
 	for (U64 j = 0; j < header.binaryCount; ++j) {
 
 		BinaryInfoFixedSize binary = fixedBinaryInfo[j];

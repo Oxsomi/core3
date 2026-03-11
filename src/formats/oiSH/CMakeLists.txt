@@ -30,3 +30,21 @@ add_library(
 
 set_target_properties(OxC3_formats_oiSH PROPERTIES FOLDER Oxsomi/formats)
 target_link_libraries(OxC3_formats_oiSH PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_formats_oiDL OxC3_formats_oiSB)
+
+if(EnableTests)
+
+	file(GLOB testsC "test/*.c")
+	file(GLOB testsH "test/*.h")
+
+	add_executable(
+		OxC3_formats_oiSH_test
+		${testsC}
+		${testsH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_formats_oiSH_test PUBLIC OxC3_types_container_test_util OxC3_formats_oiSH)
+	set_target_properties(OxC3_formats_oiSH_test PROPERTIES FOLDER Oxsomi/test/formats)
+	target_include_directories(OxC3_formats_oiSH_test PUBLIC "../../../include")
+
+endif()

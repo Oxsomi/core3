@@ -115,6 +115,12 @@ clean:
 }
 
 Bool Buffer_createUninitializedBytes(U64 length, const Allocator *alloc, Buffer *result, Error *e_rr) {
+
+	if (!length && result) {
+		*result = Buffer_createNull();
+		return true;
+	}
+
 	return Buffer_allocBitsInternal(length >> 61 ? U64_MAX : length << 3, alloc, result, e_rr);
 }
 

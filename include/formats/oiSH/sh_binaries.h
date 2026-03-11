@@ -202,7 +202,13 @@ typedef struct SHBinaryInfo {
 TList(SHBinaryIdentifier);
 TList(SHBinaryInfo);
 
+//This comparison is laxer than you'd expect, to allow Bindless/UnboundArraySize to be compatible and RT stages too.
+//This mechanism is relied on by the shader compiler to merge compatible compiles (and SH combine).
 Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdentifier *b);
+
+//This compare has to compare binaries, only use for when it's necessary such as unit tests.
+Bool SHBinaryInfo_equalsExact(const SHBinaryInfo *a, const SHBinaryInfo *b);
+
 void SHBinaryInfo_print(const SHBinaryInfo *binary, Bool isVerbose, const Allocator *alloc);
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, const Allocator *alloc);
 void SHBinaryInfo_free(SHBinaryInfo *info, const Allocator *alloc);

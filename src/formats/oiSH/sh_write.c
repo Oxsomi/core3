@@ -452,7 +452,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 		}
 	};
 
-	U64 hdrOff = !(shFile->flags & ESHSettingsFlags_HideMagicNumber) ? sizeof(U32) : 0;
+	U64 hdrOff = (shFile->flags & ESHSettingsFlags_HideMagicNumber) ? sizeof(U32) : 0;
 
 	gotoIfError3(clean, stream->write(		//Rawdog this, we can't pass StreamCursor to DLFile yet
 		stream,

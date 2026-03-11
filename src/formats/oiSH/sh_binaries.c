@@ -561,19 +561,29 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 	ESHExtension extensionsA = a->extensions & ~toIgnore;
 	ESHExtension extensionsB = b->extensions &~ toIgnore;
 
+	ESHPipelineStage stageA = a->stageType;
+	ESHPipelineStage stageB = b->stageType;
+
+	if (stageA >= ESHPipelineStage_RtStartExt && stageA <= ESHPipelineStage_RtEndExt)
+		stageA = ESHPipelineStage_RtStartExt;
+
+	if (stageB >= ESHPipelineStage_RtStartExt && stageB <= ESHPipelineStage_RtEndExt)
+		stageB = ESHPipelineStage_RtStartExt;
+
 	if(
 		extensionsA != extensionsB ||
-		*(const U32*)&a->shaderVersion != *(const U32*)&b->shaderVersion ||
+		a->shaderVersion != b->shaderVersion ||
 		a->defines.length != b->defines.length ||
 		a->uniforms.length != b->uniforms.length ||
-		!CharString_equalsStringSensitive(&a->entrypoint, &b->entrypoint)
+		!CharString_equalsStringSensitive(&a->entrypoint, &b->entrypoint) ||
+		stageA != stageB
 	)
 		return false;
 
 	//Split up RT compile from other compiles, since RT will enable access to RTAS and other functionality.
 	//(Though by enabling inline RT you can still access this)
 
-	if((a->stageType == ESHPipelineStage_RtStartExt) != (b->stageType == ESHPipelineStage_RtStartExt))
+	if((stageA == ESHPipelineStage_RtStartExt) != (stageB == ESHPipelineStage_RtStartExt))
 		return false;
 
 	for(U64 i = 0; i < a->defines.length; ++i)
@@ -599,6 +609,38 @@ Bool SHBinaryIdentifier_equals(const SHBinaryIdentifier *a, const SHBinaryIdenti
 		))
 			return false;
 	}
+
+	return true;
+}
+
+Bool SHBinaryInfo_equalsExact(const SHBinaryInfo *a, const SHBinaryInfo *b) {
+
+	if (!a || !b)
+		return a == b;
+
+	if (!SHBinaryIdentifier_equals(&a->identifier, &b->identifier))
+		return false;
+
+	//SHBinaryIdentifier is lax with comparisons, check the header's comment.
+
+	if(a->identifier.stageType != b->identifier.stageType || a->identifier.extensions != b->identifier.extensions)
+		return false;
+
+	if (
+		a->registers.length != b->registers.length ||
+		a->dormantExtensions != b->dormantExtensions ||
+		a->vendorMask != b->vendorMask ||
+		a->hasShaderAnnotation != b->hasShaderAnnotation
+	)
+		return false;
+
+	for (U64 i = 0; i < a->registers.length; ++i)
+		if (a->registers.ptr[i].hash != b->registers.ptr[i].hash)
+			return false;
+
+	for (U8 i = 0; i < ESHBinaryType_Count; ++i)
+		if (Buffer_neq(a->binaries[i], b->binaries[i]))
+			return false;
 
 	return true;
 }

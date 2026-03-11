@@ -129,11 +129,14 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			for(U8 k = 0; k < ESHBinaryType_Count; ++k)
 
 				if(Buffer_length(ai.binaries[k]) && Buffer_length(bi.binaries[k])) {
+
 					if(Buffer_neq(ai.binaries[k], bi.binaries[k]))
 						retError(clean, Error_invalidState(
 							(U32) i,
 							"SHFile_combine()::a and b have binary of same ESHBinaryType that didn't have the same contents"
 						));
+
+					c.binaries[k] = Buffer_createRefFromBuffer(ai.binaries[k], true);
 				}
 
 				else if(Buffer_length(ai.binaries[k]))
@@ -430,6 +433,9 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			.hasShaderAnnotation = bi.hasShaderAnnotation
 		};
 
+		for (U8 k = 0; k < ESHBinaryType_Count; ++k)
+			c.binaries[k] = Buffer_createRefFromBuffer(bi.binaries[k], true);
+
 		const void *extPtrSrc = &bi.identifier.extensions;
 		void *extPtrDst = &c.identifier.extensions;
 
@@ -466,18 +472,8 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 		//Make sure the two have identical data
 
-		const void *cmpA0 = &entryi.stage;
-		const void *cmpB0 = &entryj.stage;
-		const void *cmpA = &entryi.groupX;
-		const void *cmpB = &entryj.groupX;
-
-		if(*(const U16*)cmpA0 != *(const U16*)cmpB0)
-			retError(clean, Error_invalidState(
-				(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching entry or semantics"
-			));
-
-		for(U64 k = 0; k < 9; ++k)
-			if(((const U64*)cmpA)[k] != ((const U64*)cmpB)[k])
+		for(U64 k = 0; k < sizeof(entryi.compatible) / sizeof(entryi.compatible[0]); ++k)
+			if(entryi.compatible[k] != entryj.compatible[k])
 				retError(clean, Error_invalidState(
 					(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
 				));
