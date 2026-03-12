@@ -66,6 +66,8 @@ void Test_SHFileAddEntryInvalidStage(Test *t);
 void Test_SHFileAddEntryEmptyName(Test *t);
 void Test_SHFileAddEntryNullGuards(Test *t);
 void Test_SHFileEntryAndBinaryLinked(Test *t);
+void Test_SHFileCombineBinaryIdRemapping(Test *t);
+void Test_SHFileCombineRegistersMerged(Test *t);
 
 void Test_SHFileAddBinNullGuards(Test *t);
 void Test_SHFileAddBinNoBinaryData(Test *t);
@@ -111,6 +113,7 @@ void Test_SHFileCombineEntryGroupMismatch(Test *t);
 void Test_SHFileCombineMergesSPIRVAndDXIL(Test *t);
 void Test_SHFileCombineEquivalentToSequential(Test *t);
 void Test_SHFileCombineIncludesMatchSequential(Test *t);
+void Test_SHFileCombineConflictingBinaryContents(Test *t);
 
 void Test_SHFileRoundTripBasic(Test *t);
 void Test_SHFileRoundTripInclude(Test *t);
@@ -123,6 +126,13 @@ void Test_SHFileRoundTripDefines(Test *t);
 void Test_SHFileRoundTripArrayRegisters(Test *t);
 void Test_SHFileRoundTripSemanticNames(Test *t);
 void Test_SHFileRoundTripShaderBufferInRegister(Test *t);
+
+void Test_SHFileRegisterAddConstantBuffer(Test *t);
+void Test_SHFileRegisterAddByteAddressBuffer(Test *t);
+void Test_SHFileRegisterAddStructuredBuffer(Test *t);
+void Test_SHFileRegisterAddAccelerationStructure(Test *t);
+void Test_SHFileRegisterBufferWriteFlagRejections(Test *t);
+void Test_SHFileRegisterConstantBufferSizeLimit(Test *t);
 
 static inline Bool Test_SHFileCreate(Test *t, SHFile *sh) {
 	return SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, 0xCAFE, t->alloc, sh, &t->err);

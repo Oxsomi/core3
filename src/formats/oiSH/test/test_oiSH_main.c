@@ -116,6 +116,9 @@ int main() {
 	Test_SHFileCombineMergesSPIRVAndDXIL(&t);
 	Test_SHFileCombineEquivalentToSequential(&t);
 	Test_SHFileCombineIncludesMatchSequential(&t);
+	Test_SHFileCombineConflictingBinaryContents(&t);
+	Test_SHFileCombineBinaryIdRemapping(&t);
+	Test_SHFileCombineRegistersMerged(&t);
 
 	Test_SHFileRoundTripBasic(&t);
 	Test_SHFileRoundTripInclude(&t);
@@ -128,6 +131,12 @@ int main() {
 	Test_SHFileRoundTripArrayRegisters(&t);
 	Test_SHFileRoundTripSemanticNames(&t);
 	Test_SHFileRoundTripShaderBufferInRegister(&t);
+	Test_SHFileRegisterAddConstantBuffer(&t);
+	Test_SHFileRegisterAddByteAddressBuffer(&t);
+	Test_SHFileRegisterAddStructuredBuffer(&t);
+	Test_SHFileRegisterAddAccelerationStructure(&t);
+	Test_SHFileRegisterBufferWriteFlagRejections(&t);
+	Test_SHFileRegisterConstantBufferSizeLimit(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

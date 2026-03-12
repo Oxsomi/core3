@@ -290,3 +290,251 @@ void Test_SHFileRegisterStoredInBinary(Test *t) {
 
 	SHFile_free(&sh, t->alloc);
 }
+
+static SBFile makeCBufferSBFile(Test *t) {
+
+	SBFile sb = { 0 };
+	if (!SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &sb, &t->err)) {
+		Test_assert(t, "makeCBufferSBFile: create", false);
+		return sb;
+	}
+
+	CharString nameA = CharString_createRefCStrConst("time");
+	CharString nameB = CharString_createRefCStrConst("pad");
+
+	if (
+		!SBFile_addVariableAsType(&sb, &nameA, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err) ||
+		!SBFile_addVariableAsType(&sb, &nameB, 4, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)
+	) {
+		Test_assert(t, "makeCBufferSBFile: addVar", false);
+		SBFile_free(&sb, t->alloc);
+		return (SBFile) { 0 };
+	}
+
+	return sb;
+}
+
+static SBFile makeTightSBFile(Test *t) {
+
+	SBFile sb = { 0 };
+	if (!SBFile_create(ESBSettingsFlags_IsTightlyPacked, 8, t->alloc, &sb, &t->err)) {
+		Test_assert(t, "makeTightSBFile: create", false);
+		return sb;
+	}
+
+	CharString nameA = CharString_createRefCStrConst("x");
+	CharString nameB = CharString_createRefCStrConst("y");
+
+	if (
+		!SBFile_addVariableAsType(&sb, &nameA, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err) ||
+		!SBFile_addVariableAsType(&sb, &nameB, 4, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)
+	) {
+		Test_assert(t, "makeTightSBFile: addVar", false);
+		SBFile_free(&sb, t->alloc);
+		return (SBFile) { 0 };
+	}
+
+	return sb;
+}
+
+static SBFile makeCBufferSBFileOfSize(U32 size, Test *t) {
+
+	SBFile sb = { 0 };
+	if (!SBFile_create(ESBSettingsFlags_None, size, t->alloc, &sb, &t->err)) {
+		Test_assert(t, "makeCBufferSBFileOfSize: create", false);
+		return sb;
+	}
+
+	CharString name = CharString_createRefCStrConst("data");
+	if (!SBFile_addVariableAsType(&sb, &name, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, &t->err)) {
+		Test_assert(t, "makeCBufferSBFileOfSize: addVar", false);
+		SBFile_free(&sb, t->alloc);
+		return (SBFile) { 0 };
+	}
+
+	return sb;
+}
+void Test_SHFileRegisterAddConstantBuffer(Test *t) {
+
+	Test_setModule(t, "SHFile register: add ConstantBuffer accepted, type and write flag correct");
+
+	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SBFile cbSB = makeCBufferSBFile(t);
+	CharString name = CharString_createRefCStrConst("MyCB");
+	SHBindings b = makeSPIRVBinding(0, 0);
+
+	Test_assert(t, "add CB",
+		ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_ConstantBuffer, false, 0x1,
+			&name, NULL, &cbSB, b, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "count 1", info.registers.length == 1);
+	Test_assert(t, "type is ConstantBuffer",
+		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_ConstantBuffer
+	);
+
+	Test_assert(t, "not write",
+		!(info.registers.ptr[0].reg.registerType & ESHRegisterType_IsWrite)
+	);
+
+	SBFile_free(&cbSB, t->alloc);
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
+void Test_SHFileRegisterAddByteAddressBuffer(Test *t) {
+
+	Test_setModule(t, "SHFile register: add ByteAddressBuffer (read and write variants)");
+
+	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	CharString n1 = CharString_createRefCStrConst("myBAB");
+	SHBindings b1 = makeSPIRVBinding(0, 0);
+
+	Test_assert(t, "add BAB read",
+		ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_ByteAddressBuffer, false, 0x1,
+			&n1, NULL, NULL, b1, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "count 1", info.registers.length == 1);
+	Test_assert(t, "BAB not write",
+		!(info.registers.ptr[0].reg.registerType & ESHRegisterType_IsWrite)
+	);
+
+	CharString n2 = CharString_createRefCStrConst("myRWBAB");
+	SHBindings b2 = makeSPIRVBinding(0, 1);
+	Test_assert(t, "add BAB write",
+		ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_ByteAddressBuffer, true, 0x1,
+			&n2, NULL, NULL, b2, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "count 2", info.registers.length == 2);
+	Test_assert(t, "RW BAB write flag set",
+		info.registers.ptr[1].reg.registerType & ESHRegisterType_IsWrite
+	);
+
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
+void Test_SHFileRegisterAddStructuredBuffer(Test *t) {
+
+	Test_setModule(t, "SHFile register: add StructuredBuffer and RWStructuredBuffer accepted");
+
+	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SBFile sbRead = makeTightSBFile(t);
+	CharString n1 = CharString_createRefCStrConst("mySB");
+	SHBindings b1 = makeSPIRVBinding(0, 0);
+
+	Test_assert(t, "add SB read",
+		ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_StructuredBuffer, false, 0x1,
+			&n1, NULL, &sbRead, b1, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "count 1", info.registers.length == 1);
+	Test_assert(t, "SB type",
+		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_StructuredBuffer
+	);
+
+	SBFile sbWrite = makeTightSBFile(t);
+	CharString n2 = CharString_createRefCStrConst("myRWSB");
+	SHBindings b2 = makeSPIRVBinding(0, 1);
+	Test_assert(t, "add RW SB",
+		ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_StructuredBuffer, true, 0x1,
+			&n2, NULL, &sbWrite, b2, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "count 2", info.registers.length == 2);
+	Test_assert(t, "RW SB write flag set",
+		info.registers.ptr[1].reg.registerType & ESHRegisterType_IsWrite
+	);
+
+	SBFile_free(&sbRead,  t->alloc);
+	SBFile_free(&sbWrite, t->alloc);
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
+void Test_SHFileRegisterAddAccelerationStructure(Test *t) {
+
+	Test_setModule(t, "SHFile register: add AccelerationStructure accepted; write flag rejected");
+
+	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	CharString n1 = CharString_createRefCStrConst("myTLAS");
+	SHBindings b1 = makeSPIRVBinding(0, 0);
+
+	Test_assert(t, "AS read accepted",
+		ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_AccelerationStructure, false, 0x1,
+			&n1, NULL, NULL, b1, t->alloc, &t->err
+		)
+	);
+
+	Test_assert(t, "count 1", info.registers.length == 1);
+	Test_assert(t, "AS type",
+		(info.registers.ptr[0].reg.registerType & ESHRegisterType_TypeMask) == ESHRegisterType_AccelerationStructure
+	);
+
+	CharString n2 = CharString_createRefCStrConst("myRWTLAS");
+	SHBindings b2 = makeSPIRVBinding(0, 1);
+
+	Test_assert(t, "AS write rejected",
+		!ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_AccelerationStructure, true, 0x1,
+			&n2, NULL, NULL, b2, t->alloc, NULL
+		)
+	);
+
+	Test_assert(t, "still count 1", info.registers.length == 1);
+
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
+void Test_SHFileRegisterBufferWriteFlagRejections(Test *t) {
+
+	Test_setModule(t, "SHFile register: ConstantBuffer and PushConstants reject isWrite");
+
+	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SBFile cbSB = makeCBufferSBFile(t);
+	CharString name = CharString_createRefCStrConst("badCB");
+	SHBindings b = makeSPIRVBinding(0, 0);
+
+	Test_assert(t, "CB + write rejected",
+		!ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_ConstantBuffer, true, 0x1,
+			&name, NULL, &cbSB, b, t->alloc, NULL
+		)
+	);
+
+	Test_assert(t, "count still 0", info.registers.length == 0);
+
+	SBFile_free(&cbSB, t->alloc);
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
+
+void Test_SHFileRegisterConstantBufferSizeLimit(Test *t) {
+
+	Test_setModule(t, "SHFile register: ConstantBuffer exceeding 64 KiB rejected");
+
+	SHBinaryInfo info = makeBinaryInfo(ESHPipelineStage_Compute, "csMain", false);
+	SBFile bigCB = makeCBufferSBFileOfSize(64 * 1024 + 4, t);
+	CharString name = CharString_createRefCStrConst("tooBig");
+	SHBindings b = makeSPIRVBinding(0, 0);
+
+	Test_assert(t, "oversized CB rejected",
+		!ListSHRegisterRuntime_addBuffer(
+			&info.registers, ESHBufferType_ConstantBuffer, false, 0x1,
+			&name, NULL, &bigCB, b, t->alloc, NULL
+		)
+	);
+
+	Test_assert(t, "count still 0", info.registers.length == 0);
+	SBFile_free(&bigCB, t->alloc);
+	ListSHRegisterRuntime_freeUnderlying(&info.registers, t->alloc);
+}
