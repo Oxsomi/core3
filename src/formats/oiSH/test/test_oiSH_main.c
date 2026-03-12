@@ -124,6 +124,10 @@ int main() {
 	Test_SHFileRoundTripRTStages(&t);
 	Test_SHFileRoundTripMultipleBinaries(&t);
 	Test_SHFileRoundTripRegisterSurvives(&t);
+	Test_SHFileRoundTripDefines(&t);
+	Test_SHFileRoundTripArrayRegisters(&t);
+	Test_SHFileRoundTripSemanticNames(&t);
+	Test_SHFileRoundTripShaderBufferInRegister(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
 	return Test_end(&t);

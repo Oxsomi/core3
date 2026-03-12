@@ -105,6 +105,9 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 			1, entry->stage, ESHPipelineStage_Count, "SHFile_addEntrypoint()::entry->stage invalid enum"
 		));
 
+	if(!entry->binaryIds.length)
+		retError(clean, Error_nullPointer(1, "SHFile_addEntrypoint()::entry->binaryIds must have at least 1 value"));
+
 	for(U64 i = 0; i < entry->binaryIds.length; ++i)
 		if(entry->binaryIds.ptr[i] >= shFile->binaries.length)
 			retError(clean, Error_outOfBounds(

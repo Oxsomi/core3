@@ -119,6 +119,10 @@ void Test_SHFileRoundTripComputeGroupSize(Test *t);
 void Test_SHFileRoundTripRTStages(Test *t);
 void Test_SHFileRoundTripMultipleBinaries(Test *t);
 void Test_SHFileRoundTripRegisterSurvives(Test *t);
+void Test_SHFileRoundTripDefines(Test *t);
+void Test_SHFileRoundTripArrayRegisters(Test *t);
+void Test_SHFileRoundTripSemanticNames(Test *t);
+void Test_SHFileRoundTripShaderBufferInRegister(Test *t);
 
 static inline Bool Test_SHFileCreate(Test *t, SHFile *sh) {
 	return SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, 0xCAFE, t->alloc, sh, &t->err);
@@ -159,12 +163,22 @@ static inline SHBinaryInfo makeBinaryInfo(
 	return info;
 }
 
-static inline Bool addComputeEntry(SHFile *sh, const C8 *name, U16 gx, U16 gy, U16 gz, Test *t, Bool ignoreErr) {
+static inline Bool addComputeEntry(
+	SHFile *sh,
+	const C8 *name,
+	U16 gx,
+	U16 gy,
+	U16 gz,
+	Test *t,
+	Bool ignoreErr,
+	const U16 *id
+) {
 	SHEntry e = (SHEntry) { 0 };
 	e.name = CharString_createRefCStrConst(name);
 	e.stage = ESHPipelineStage_Compute;
 	e.groupX = gx;
 	e.groupY = gy;
 	e.groupZ = gz;
+	e.binaryIds = (ListU16) { .ptr = id, .length = id ? 1 : 0, .capacityAndRefInfo = U64_MAX };
 	return SHFile_addEntrypoint(sh, &e, t->alloc, ignoreErr ? NULL : &t->err);
 }

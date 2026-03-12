@@ -105,7 +105,7 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	*offset = (*offset + 15) & ~15;		//Align 16-byte
 
-	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, alloc, NULL, &dlFile, e_rr));
+	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &dlFile, e_rr));
 
 	U64 stringCount = (U64)header.structs + header.vars;
 

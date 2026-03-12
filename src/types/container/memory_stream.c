@@ -197,7 +197,7 @@ Bool MemoryStream_createFromBuffer(
 	gotoIfError3(clean, Stream_create(
 		MemoryStream_readInternal,
 		(flags & EMemoryStreamFlags_IsWritable) ? MemoryStream_writeInternal : NULL,
-		MemoryStream_reserveInternal,
+		(flags & EMemoryStreamFlags_IsResizable) ? MemoryStream_reserveInternal : NULL,
 		MemoryStream_closeInternal,
 		Buffer_length(*buffer),
 		EStreamType_Memory | (flags & EMemoryStreamFlags_IsResizable ? EStreamType_Resizable : 0),

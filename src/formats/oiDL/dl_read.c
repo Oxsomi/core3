@@ -36,6 +36,7 @@ Bool DLFile_read(
 	const U32 encryptionKey[8],
 	I32x4 iv,
 	Bool isSubFile,
+	Bool forceKeepInStreams,
 	const Allocator *alloc,
 	const RefPtrType *encryptionStreamType,
 	DLFile *dlFile,
@@ -300,7 +301,7 @@ Bool DLFile_read(
 		Bool isSmallAlloc = cacheOff < 1 * MIBI && entryLen <= DLFile_smallLen;
 		Bool isMediumAlloc = allocCounter < 4 * MIBI && entryLen <= DLFile_medLen && entryLen > DLFile_smallLen;
 
-		if (!isSmallAlloc && !isMediumAlloc) {
+		if ((!isSmallAlloc && !isMediumAlloc) || forceKeepInStreams) {
 			RefPtr *ptr = dataStream;
 			RefPtr_inc(ptr);
 			gotoIfError3(clean, DLFile_addEntryStream(dlFile, &ptr, dataOff, entryLen, alloc, e_rr));

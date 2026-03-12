@@ -98,7 +98,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	//Read DLFile (strings)
 
-	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, alloc, NULL, &strings, e_rr));
+	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &strings, e_rr));
 
 	U64 minEntryBuffers =
 		(U64)header.stageCount +
@@ -121,7 +121,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	//Read DLFile (shader buffers)
 
-	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, alloc, NULL, &shaderBuffers, e_rr));
+	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, true, alloc, NULL, &shaderBuffers, e_rr));
 
 	if (
 		shaderBuffers.settings.dataType != EDLDataType_Data ||
@@ -130,12 +130,20 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	)
 		retError(clean, Error_invalidParameter(0, 1, "SHFile_read() shaderBuffers didn't match expectations"));
 
-	gotoIfError3(clean, ListSBFile_resize(&parsedShaderBuffers, shaderBuffers.entryBuffers.length, alloc, e_rr));
+	gotoIfError3(clean, ListSBFile_resize(&parsedShaderBuffers, shaderBuffers.entryStreams.length, alloc, e_rr));
 
-	for (U64 i = 0; i < shaderBuffers.entryBuffers.length; ++i)
+	for (U64 i = 0; i < shaderBuffers.entryStreams.length; ++i) {
+
+		DLEntryStream stream = shaderBuffers.entryStreams.ptr[i];
+		U64 oldDataOff = stream.dataOff;
+
 		gotoIfError3(clean, SBFile_read(
-			streamRef, offset, true, alloc, &parsedShaderBuffers.ptrNonConst[i], e_rr
+			stream.stream, &stream.dataOff, true, alloc, &parsedShaderBuffers.ptrNonConst[i], e_rr
 		));
+
+		if (stream.len != (stream.dataOff - oldDataOff))
+			retError(clean, Error_invalidOperation(0, "SHFile_read() read SBFile was malformed"));
+	}
 
 	//Read static sized data
 
@@ -385,7 +393,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 			ListU32 arr = (ListU32) { 0 };
 
-			if (reg->registerType & ESHRegisterType_IsArray) {
+			if (reg->arrayDimOrId) {
 
 				if (reg->arrayDimOrId & 0x8000) {
 

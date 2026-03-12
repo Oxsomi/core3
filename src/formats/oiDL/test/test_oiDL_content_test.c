@@ -49,7 +49,7 @@ static Bool DLFile_testRoundtrip(
 		goto clean;
 
 	U64 readOff = 0;
-	ok = DLFile_read(ms, &readOff, encryptionKey, I32x4_zero(), isSubFile, t->alloc, encStreamType, out, &t->err);
+	ok = DLFile_read(ms, &readOff, encryptionKey, I32x4_zero(), isSubFile, false, t->alloc, encStreamType, out, &t->err);
 
 clean:
 	RefPtr_dec(&ms);
@@ -262,14 +262,17 @@ void Test_DLRoundtripPlain(Test *t) {
 		}
 
 		U64 readOff = 0;
-		Test_assert(t, "SubFile: read as subfile", DLFile_read(ms, &readOff, NULL, iv, true, t->alloc, NULL, &f2, &t->err));
+		Test_assert(t, "SubFile: read as subfile", DLFile_read(
+			ms, &readOff, NULL, iv, true, false, t->alloc, NULL, &f2, &t->err
+		));
+
 		Test_assert(t, "SubFile: entryCount 1", DLFile_entryCount(&f2) == 1);
 		Test_assert(t, "SubFile: entrySize[0] 1", DLFile_entrySize(&f2, 0) == 1);
 
 		readOff = 0;
 		Test_assert(
 			t, "SubFile: non-subfile read fails without magic",
-			!DLFile_read(ms, &readOff, NULL, iv, false, t->alloc, NULL, &f3, NULL)
+			!DLFile_read(ms, &readOff, NULL, iv, false, false, t->alloc, NULL, &f3, NULL)
 		);
 
 	cleanSubFile:
@@ -282,7 +285,7 @@ void Test_DLRoundtripPlain(Test *t) {
 
 	{						//Reading null stream fails safely
 		DLFile f = { 0 };
-		Test_assert(t, "read null stream fails", !DLFile_read(NULL, 0, NULL, iv, false, t->alloc, NULL, &f, NULL));
+		Test_assert(t, "read null stream fails", !DLFile_read(NULL, 0, NULL, iv, false, false, t->alloc, NULL, &f, NULL));
 	}
 
 	{						//Reading into already-allocated dlFile fails
@@ -300,7 +303,7 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_create(&sData, 0, t->alloc, &g, &t->err);
 		U64 readOff = 0;
 		Test_assert(
-			t, "Read into allocated dlFile fails", !DLFile_read(ms, &readOff, NULL, iv, false, t->alloc, NULL, &g, NULL)
+			t, "Read into allocated dlFile fails", !DLFile_read(ms, &readOff, NULL, iv, false, false, t->alloc, NULL, &g, NULL)
 		);
 
 		Buffer_free(&buf, t->alloc);
@@ -325,7 +328,9 @@ void Test_DLRoundtripPlain(Test *t) {
 			}
 
 			U64 readOff = 0;
-			Test_assert(t, "read bad magic fails", !DLFile_read(ms, &readOff, NULL, iv, false, t->alloc, NULL, &f, NULL));
+			Test_assert(t, "read bad magic fails", !DLFile_read(
+				ms, &readOff, NULL, iv, false, false, t->alloc, NULL, &f, NULL
+			));
 		}
 
 		RefPtr_dec(&ms);
@@ -399,7 +404,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 
 			if (!Test_assert(
 				t, "Encrypted: read back",
-				DLFile_read(ms, &readOff, goodKey, iv, false, t->alloc, &encStreamType, &f2, &t->err)
+				DLFile_read(ms, &readOff, goodKey, iv, false, false, t->alloc, &encStreamType, &f2, &t->err)
 			))
 				goto cleanEnc;
 		}
@@ -454,7 +459,9 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		DLFile_write(&f, t->alloc, ms, &encStreamType, iv, &off, &t->err);
 		U64 readOff = 0;
 		Test_assert(
-			t, "Wrong key: read fails", !DLFile_read(ms, &readOff, badKey, iv, false, t->alloc, &encStreamType, &f2, NULL)
+			t, "Wrong key: read fails", !DLFile_read(
+				ms, &readOff, badKey, iv, false, false, t->alloc, &encStreamType, &f2, NULL
+			)
 		);
 
 		Buffer_free(&buf, t->alloc);
@@ -478,7 +485,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		U64 readOff = 0;
 		Test_assert(
 			t, "Encrypted + null key: read fails",
-			!DLFile_read(ms, &readOff, NULL, iv, false, t->alloc, &encStreamType, &f2, NULL)
+			!DLFile_read(ms, &readOff, NULL, iv, false, false, t->alloc, &encStreamType, &f2, NULL)
 		);
 
 		Buffer_free(&buf, t->alloc);
@@ -510,7 +517,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		U64 readOff = 0;
 		Test_assert(
 			t, "Unencrypted + key supplied: read fails",
-			!DLFile_read(ms, &readOff, goodKey, iv, false, t->alloc, &encStreamType, &f2, NULL)
+			!DLFile_read(ms, &readOff, goodKey, iv, false, false, t->alloc, &encStreamType, &f2, NULL)
 		);
 
 		Buffer_free(&buf, t->alloc);

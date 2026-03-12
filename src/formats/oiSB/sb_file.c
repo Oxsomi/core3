@@ -70,11 +70,14 @@ Bool SBFile_create(
 		gotoIfError3(clean, ListListU32_reserve(&sbFile->arrays, 2, alloc, e_rr));
 	}
 
-	sbFile->flags = flags;
+	ESBSettingsFlags flagsReal = flags;
+	sbFile->flags = flags &~ ESBSettingsFlags_HideMagicNumber;
 	sbFile->bufferSize = bufferSize;
 
 	const void *flagsPtr = &sbFile->flags;
 	sbFile->hash = Buffer_fnv1a64Single(*(const U64*)flagsPtr, Buffer_fnv1a64Offset);
+
+	sbFile->flags = flagsReal;		//We don't want HideMagicNumber to influence hash
 
 clean:
 

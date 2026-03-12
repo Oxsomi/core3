@@ -152,6 +152,7 @@ Bool DLFile_read(
 	const U32 encryptionKey[8],		//Must be NULL if no encryption, else must be valid
 	I32x4 iv,						//If it's a subFile and encrypted, needs to be the valid IV used to encrypt
 	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
+	Bool forceKeepInStreams,		//Useful to pass around streams and not deal with buffers/strings
 	const Allocator *alloc,
 
 	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
