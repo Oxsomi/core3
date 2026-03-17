@@ -18,17 +18,16 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "audio/interface.h"
-#include "audio/device.h"
+#include "types/container/list_impl.h"
+#include "audio/audio_interface.h"
+#include "audio/audio_device.h"
 #include "audio/openal_soft/openal_soft.h"
+#include "types/container/log.h"
+#include "types/container/string_helper.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
-#include "platforms/ext/stringx.h"
-#include "types/container/string.h"
 #include "types/base/constants.h"
-
-#include "platforms/log.h"
 
 //Audio interface data itself is mostly unused for OpenAL, because we don't have any functions we need to load.
 //Maybe in the future with extensions.
@@ -42,11 +41,11 @@ Bool AudioInterface_createExt(AudioInterface *interf, Error *e_rr) {
 
 	ALCint maj = 1, min = 1;
 
-	AL_PROCESS_ERROR(NULL, alcGetIntegerv(NULL, ALC_MAJOR_VERSION, 1, &maj))
-	AL_PROCESS_ERROR(NULL, alcGetIntegerv(NULL, ALC_MINOR_VERSION, 1, &min))
+	ALC_PROCESS_ERROR(NULL, alcGetIntegerv(NULL, ALC_MAJOR_VERSION, 1, &maj));
+	ALC_PROCESS_ERROR(NULL, alcGetIntegerv(NULL, ALC_MINOR_VERSION, 1, &min));
 
 	if(maj < 0 || min < 0 || (maj >> 10) || (min >> 10))
-		retError(clean, Error_invalidState(0, "AudioInterface_createExt() OpenAL version is invalid"))
+		retError(clean, Error_invalidState(0, "AudioInterface_createExt() OpenAL version is invalid"));
 
 	*interf = (AudioInterface) {
 		.api = EAudioApi_OpenAL,
@@ -57,13 +56,14 @@ clean:
 	return s_uccess;
 }
 
-void AudioInterface_freeExt(AudioInterface *interf, Allocator alloc) {
+void AudioInterface_freeExt(AudioInterface *interf, const Allocator *alloc) {
 	(void) interf; (void) alloc;
+	//Nothing to clean.
 }
 
 Bool AudioInterface_getDeviceInfos(
 	const AudioInterface *interf,
-	Allocator alloc,
+	const Allocator *alloc,
 	ListAudioDeviceInfo *infos,
 	Error *e_rr
 ) {
@@ -75,27 +75,36 @@ Bool AudioInterface_getDeviceInfos(
 	const ALCchar *extensionsStr = NULL;
 	ALCdevice *device = NULL;
 
-	ListConstC8 devices = (ListConstC8) { 0 };
 	ListCharString strings = (ListCharString) { 0 };
 
-	AL_PROCESS_ERROR(NULL, extensionsStr = alcGetString(NULL, ALC_EXTENSIONS))
+	ALC_PROCESS_ERROR(NULL, extensionsStr = alcGetString(NULL, ALC_EXTENSIONS));
 
 	CharString extensions = CharString_createRefCStrConst(extensionsStr);
 
-	gotoIfError2(clean, CharString_splitSensitive(extensions, ' ', alloc, &strings))
+	CharStringSplit split = (CharStringSplit) {
+		.s = &extensions,
+		.allocator = alloc,
+		.result = &strings
+	};
+
+	gotoIfError3(clean, CharString_splitSensitive(&split, ' ', e_rr));
 
 	Bool containsEnumAll = false;
 
 	for(U64 i = 0; i < strings.length; ++i)
-		if (CharString_equalsCStringSensitive(strings.ptr[i], "ALC_ENUMERATE_ALL_EXT")) {
+		if (CharString_equalsCStringSensitive(&strings.ptr[i], "ALC_ENUMERATE_ALL_EXT")) {
 			containsEnumAll = true;
 			break;
 		}
 
-	if(containsEnumAll)
-		AL_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER))
+	if (containsEnumAll) {
+		ALC_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER));
+	}
 
-	else AL_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER))
+	else ALC_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER));
+
+	const C8 *mainOutput = NULL;
+	ALC_PROCESS_ERROR(NULL, mainOutput = alcGetString(NULL, ALC_DEFAULT_ALL_DEVICES_SPECIFIER));
 
 	ListCharString_free(&strings, alloc);
 
@@ -116,42 +125,44 @@ Bool AudioInterface_getDeviceInfos(
 			CharString str = CharString_createRefSizedConst(ptr + prev, i - prev, true);
 			prev = i + 1;
 
-			if (CharString_length(str) >= 255) {
-				Log_warnLn(alloc, "OpenAL: Skipping device \"%s\", strings are limited to 256", str.ptr);
-				++j;
-				continue;
-			}
+			if (CharString_length(str) > 95)
+				Log_warnLn(alloc, "OpenAL: truncating device name \"%s\", strings are limited to 95", str.ptr);
 
-			AL_PROCESS_ERROR(NULL, device = alcOpenDevice(str.ptr))
-			AL_PROCESS_ERROR(device, extensionsStr = alcGetString(device, ALC_EXTENSIONS))
+			//We have to open and close a device to query its extensions
+
+			ALC_PROCESS_ERROR(NULL, device = alcOpenDevice(str.ptr));
+			ALC_PROCESS_ERROR(device, extensionsStr = alcGetString(device, ALC_EXTENSIONS));
 
 			extensions = CharString_createRefCStrConst(extensionsStr);
 
-			gotoIfError2(clean, CharString_splitSensitive(extensions, ' ', alloc, &strings))
+			gotoIfError3(clean, CharString_splitSensitive(&split, ' ', e_rr));
 			
-			AudioDeviceInfo info = (AudioDeviceInfo) {
-				.id = j,
-				.flags = !j ? EAudioDeviceFlags_MainOutput : 0
-			};
+			AudioDeviceInfo info = (AudioDeviceInfo) { .id = j };
+
+			if (CharString_equalsCStringSensitive(&str, mainOutput) || (!mainOutput && !i))
+				info.flags |= EAudioDeviceFlags_MainOutput;
 
 			for(U64 k = 0; k < strings.length; ++k)
 
-				if (CharString_equalsCStringSensitive(strings.ptr[k], "ALC_EXT_debug"))
+				if (CharString_equalsCStringSensitive(&strings.ptr[k], "ALC_EXT_debug"))
 					info.flags |= EAudioDeviceFlags_Debug;
 
-				else if (CharString_equalsCStringSensitive(strings.ptr[k], "AL_EXT_double"))
+				else if (CharString_equalsCStringSensitive(&strings.ptr[k], "AL_EXT_double"))
 					info.flags |= EAudioDeviceFlags_HasF64Ext;
 
-				else if (CharString_equalsCStringSensitive(strings.ptr[k], "AL_EXT_float32"))
+				else if (CharString_equalsCStringSensitive(&strings.ptr[k], "AL_EXT_float32"))
 					info.flags |= EAudioDeviceFlags_HasF32Ext;
 
 			ListCharString_free(&strings, alloc);
 
 			Buffer_memcpy(Buffer_createRef(info.name, sizeof(info.name)), CharString_bufferConst(str));
 
-			gotoIfError2(clean, ListAudioDeviceInfo_pushBack(infos, info, alloc))
+			if (CharString_length(str) > 95)
+				info.name[95] = '\0';
 
-			AL_PROCESS_ERROR(device, alcCloseDevice(device))
+			gotoIfError3(clean, ListAudioDeviceInfo_pushBack(infos, info, alloc, e_rr));
+
+			ALC_PROCESS_ERROR(device, alcCloseDevice(device));
 			device = NULL;
 			++j;
 		}
@@ -163,6 +174,5 @@ clean:
 		alcCloseDevice(device);
 
 	ListCharString_free(&strings, alloc);
-	ListConstC8_free(&devices, alloc);
 	return s_uccess;
 }

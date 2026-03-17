@@ -78,8 +78,8 @@ Bool BMP_write(
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, true, alloc, &cursor, e_rr));
 	gotoIfError3(clean, StreamCursor_create(inputStreamRef, 0, false, alloc, &cursorInput, e_rr));
 
-	Stream *stream = RefPtr_data(streamRef, Stream);
-	Stream *inputStream = RefPtr_data(inputStreamRef, Stream);
+	OxStream *stream = RefPtr_data(streamRef, OxStream);
+	OxStream *inputStream = RefPtr_data(inputStreamRef, OxStream);
 
 	if(inputOffset + expectedLen > inputStream->size)
 		retError(clean, Error_outOfBounds(1, inputOffset + expectedLen, inputStream->size, "BMP_write()::off out of bounds"));

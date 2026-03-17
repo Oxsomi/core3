@@ -26,10 +26,10 @@
 #include "types/container/buffer_encrypt.h"
 #include "types/container/buffer.h"
 
-//Implement Stream's functions
+//Implement OxStream's functions
 
 static Bool EncryptionStream_readInternal(		//Decrypt
-	Stream *stream,
+	OxStream *stream,
 	U64 offset,
 	U64 length,
 	Buffer buf,
@@ -136,7 +136,7 @@ clean:
 }
 
 static Bool EncryptionStream_writeInternal(
-	Stream *stream,
+	OxStream *stream,
 	U64 offset,
 	U64 length,
 	Buffer buf,
@@ -166,7 +166,7 @@ static Bool EncryptionStream_writeInternal(
 
 		U64 underlyingSize = EncryptionStream_underlyingSize(encStream->chunkSize, requiredSize);
 
-		Stream *underlyingStream = RefPtr_data(encStream->dataStream, Stream);
+		OxStream *underlyingStream = RefPtr_data(encStream->dataStream, OxStream);
 
 		if(!(underlyingStream->streamType & EStreamType_Resizable) && underlyingSize > underlyingStream->size)
 			retError(clean, Error_outOfBounds(
@@ -310,7 +310,7 @@ clean:
 	return s_uccess;
 }
 
-static void EncryptionStream_closeInternal(Stream *stream, const Allocator *alloc) {
+static void EncryptionStream_closeInternal(OxStream *stream, const Allocator *alloc) {
 
 	(void)alloc;
 
@@ -324,7 +324,7 @@ static void EncryptionStream_closeInternal(Stream *stream, const Allocator *allo
 }
 
 static Bool EncryptionStream_reserveInternal(
-	Stream *stream,
+	OxStream *stream,
 	U64 size,
 	const Allocator *alloc,
 	Error *e_rr
@@ -332,7 +332,7 @@ static Bool EncryptionStream_reserveInternal(
 	Bool s_uccess = true;
 
 	EncryptionStream *encStream = (EncryptionStream*)stream;
-	Stream *underlying = RefPtr_data(encStream->dataStream, Stream);
+	OxStream *underlying = RefPtr_data(encStream->dataStream, OxStream);
 
 	if (!underlying->reserve)
 		retError(clean, Error_unsupportedOperation(0, "EncryptionStream_reserveInternal()::underlying stream doesn't support reserve"));
@@ -351,7 +351,7 @@ clean:
 //Public encryption stream functions
 
 RefPtrType EncryptionStream_makeType(const Allocator *alloc) {
-	return Stream_inheritType(alloc, sizeof(EncryptionStream) - sizeof(Stream));
+	return Stream_inheritType(alloc, sizeof(EncryptionStream) - sizeof(OxStream));
 }
 
 Bool EncryptionStream_create(
@@ -402,7 +402,7 @@ Bool EncryptionStream_create(
 	if (!chunkSizeShift || chunkSize != ((U64)1 << chunkSizeShift))
 		retError(clean, Error_invalidParameter(4, 0, "EncryptionStream_create()::chunkSize invalid"));
 
-	Stream *underlying = RefPtr_data(dataStream, Stream);
+	OxStream *underlying = RefPtr_data(dataStream, OxStream);
 
 	if (streamOffset > underlying->size)
 		retError(clean, Error_invalidParameter(

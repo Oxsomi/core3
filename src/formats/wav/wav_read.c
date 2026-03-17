@@ -32,7 +32,7 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursorRead, e_rr));
 
-	Stream *stream = RefPtr_data(streamRef, Stream);
+	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	if (off >= stream->size)
 		retError(clean, Error_outOfBounds(1, off, stream->size, "WAV_read()::stream out of bounds"));

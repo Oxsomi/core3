@@ -322,7 +322,7 @@ Bool CAFile_read(
 	));
 
 	{
-		Stream *s = RefPtr_data(file, Stream);
+		OxStream *s = RefPtr_data(file, OxStream);
 
 		if (readOffset != s->size)
 			retError(clean, Error_invalidState(1, "CAFile_read() contained extra data after content DLFile"));

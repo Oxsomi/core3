@@ -45,7 +45,7 @@ static Bool makePixelStream(
 	if (!MemoryStream_create(total, EMemoryStreamFlags_IsWritable, type, &sr, &t->err))
 		return false;
 
-	Stream *stream = RefPtr_data(sr, Stream);
+	OxStream *stream = RefPtr_data(sr, OxStream);
 
 	for (U32 y = 0; y < h; ++y) {
 		for (U32 x = 0; x < w; ++x) {
@@ -332,7 +332,7 @@ void Test_BMPRoundTripHeaderFields(Test *t) {
 
 		//Read the raw header back from the stream
 		BMPHeadersCombined hdr = { 0 };
-		Stream *s = RefPtr_data(archiveSr, Stream);
+		OxStream *s = RefPtr_data(archiveSr, OxStream);
 		Test_assert(t, "read raw header",
 			s->read(s, 0, sizeof(hdr), Buffer_createRef(&hdr, sizeof(hdr)), t->alloc, &t->err)
 		);
@@ -394,7 +394,7 @@ void Test_BMPRoundTripPixelDensity(Test *t) {
 //it against the expected pattern from makePixelStream for the given original source row.
 //makePixelStream pattern: B=(U8)x, G=(U8)origRow, R=(U8)(x+origRow), A=0xFF.
 static Bool checkPixel(
-	Stream *s,
+	OxStream *s,
 	U64 dataOffset,
 	U32 x,
 	U32 outRow,
@@ -455,7 +455,7 @@ void Test_BMPPixelContentNoFlip(Test *t) {
 			goto doneNoFlip;
 		}
 
-		Stream *s = RefPtr_data(archiveSr, Stream);
+		OxStream *s = RefPtr_data(archiveSr, OxStream);
 		Bool allMatch = true;
 
 		for (U32 y = 0; y < h && allMatch; ++y)
@@ -509,7 +509,7 @@ void Test_BMPPixelContentFlipped(Test *t) {
 			goto doneFlipContent;
 		}
 
-		Stream *s = RefPtr_data(archiveSr, Stream);
+		OxStream *s = RefPtr_data(archiveSr, OxStream);
 		Bool allMatch = true;
 
 		for (U32 y = 0; y < h && allMatch; ++y)

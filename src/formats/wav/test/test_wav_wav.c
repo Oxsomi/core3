@@ -221,7 +221,7 @@ static Bool makeSampleStream(
 		return false;
 
 	if (samples) {
-		Stream *s = RefPtr_data(*sr, Stream);
+		OxStream *s = RefPtr_data(*sr, OxStream);
 		s->write(s, 0, totalBytes, Buffer_createRefConst(samples, totalBytes), t->alloc, &t->err);
 	}
 
@@ -495,7 +495,7 @@ doneInvalidMagic:
 	RefPtr_dec(&sr);
 }
 
-//Stream too small to hold even a RIFFSection
+//OxStream too small to hold even a RIFFSection
 void Test_WAVReadTruncated(Test *t) {
 	Test_setModule(t, "WAV_read: truncated stream rejected");
 	const RefPtrType type = MemoryStream_makeType(t->alloc);

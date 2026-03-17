@@ -39,3 +39,22 @@ Bool alProcessError(ALenum error, Error *e_rr) {
 
 	return !err;
 }
+
+Bool alcProcessError(ALCenum error, Error *e_rr) {
+
+	const C8 *err;
+
+	switch(error) {
+		case ALC_INVALID_DEVICE:	err = "OpenAL: Invalid device.";				break;
+		case ALC_INVALID_CONTEXT:	err = "OpenAL: Invalid context.";				break;
+		case ALC_INVALID_ENUM:		err = "OpenAL: Invalid parameter.";				break;
+		case ALC_INVALID_VALUE:		err = "OpenAL: Invalid enum parameter value.";	break;
+		case ALC_OUT_OF_MEMORY:		err = "OpenAL: Unable to allocate memory.";		break;
+		default:					err = NULL;										break;
+	}
+
+	if(err && e_rr)
+		*e_rr = Error_invalidState(0, err);
+
+	return !err;
+}

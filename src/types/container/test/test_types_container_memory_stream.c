@@ -44,7 +44,7 @@ static void Test_memoryStreamCreate(Test *t, const RefPtrType *type) {
 	//Ensure write func is NULL for readonly
 	
 	if (MemoryStream_create(256, EMemoryStreamFlags_None, type, &stream, &t->err)) {
-		const Stream *s = RefPtr_data(stream, Stream);
+		const OxStream *s = RefPtr_data(stream, OxStream);
 		Test_assert(t, "Readonly: write fn is NULL", !s->write);
 		RefPtr_dec(&stream);
 	}
@@ -117,7 +117,7 @@ static void Test_memoryStreamMove(Test *t, const RefPtrType *type) {
 	}
 
 	if (MemoryStream_move(&stream, &buf2, &t->err)) {
-		Test_assert(t, "Stream is null after move", !stream);
+		Test_assert(t, "OxStream is null after move", !stream);
 		Test_assert(t, "Buffer length preserved",   Buffer_length(buf2) == 200);
 		Test_assert(t, "Buffer pointer preserved",  buf2.ptr == data);
 

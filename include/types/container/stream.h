@@ -29,11 +29,11 @@
 
 typedef struct Allocator Allocator;
 
-typedef struct Stream Stream;
-typedef Bool (*StreamFunc)(Stream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr);
+typedef struct OxStream OxStream;
+typedef Bool (*StreamFunc)(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr);
 
-typedef Bool (*StreamReserveFunc)(Stream *stream, U64 length, const Allocator *alloc, Error *e_rr);
-typedef void (*StreamCloseFunc)(Stream *stream, const Allocator *alloc);
+typedef Bool (*StreamReserveFunc)(OxStream *stream, U64 length, const Allocator *alloc, Error *e_rr);
+typedef void (*StreamCloseFunc)(OxStream *stream, const Allocator *alloc);
 
 typedef enum EStreamType {
 	EStreamType_Memory			= 1 << 0,
@@ -45,14 +45,14 @@ typedef enum EStreamType {
 	EStreamType_DisableSeek		= 1 << 6		//It's impossible to restart this stream (e.g. network stream)
 } EStreamType;
 
-typedef struct Stream {
+typedef struct OxStream {
 	StreamFunc read;
 	StreamFunc write;
 	StreamReserveFunc reserve;
 	StreamCloseFunc close;
 	U64 size;
 	U64 streamType;			//EStreamType, except extendible
-} Stream;
+} OxStream;
 
 typedef RefPtr StreamRef;
 
@@ -271,17 +271,6 @@ STREAM_CURSOR_OP_IMPL(I8);
 
 STREAM_CURSOR_OP_IMPL(F64);
 STREAM_CURSOR_OP_IMPL(F32);
-
-/* TODO: Requires chunking, important: each chunk stores iv + tag and iv is unique.
-*	Include chunkId per chunk into additional data to ensure no chunk reordering.
-*	Root (header) defines chunk count and final file size and stores the AAD with the chunk count.
-*	Load into cache first, then decrypt and verify. If fail, clear buffer.
-*	Also allows >64GiB files as long as cache data size <= 64GiB.
-typedef struct EncryptedStream {
-	Stream parent;
-	U32 key[8];
-} EncryptedStream;
-*/
 
 #ifdef __cplusplus
 	}

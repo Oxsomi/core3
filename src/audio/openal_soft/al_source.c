@@ -18,16 +18,17 @@
 *  This is called dual licensing.
 */
 
-#include "audio/source.h"
-#include "audio/device.h"
-#include "audio/stream.h"
+#include "audio/audio_source.h"
+#include "audio/audio_device.h"
+#include "audio/audio_stream.h"
 #include "audio/openal_soft/openal_soft.h"
 #include "types/container/ref_ptr.h"
+#include "types/math/vec4f.h"
 #include "types/base/error.h"
 
 U32 AudioSource_sizeExt = (U32) sizeof(ALAudioSource);
 
-Bool AudioSource_createExt(AudioSource *source, Allocator alloc, Error *e_rr) {
+Bool AudioSource_createExt(AudioSource *source, const Allocator *alloc, Error *e_rr) {
 
 	(void) alloc;
 
@@ -35,16 +36,16 @@ Bool AudioSource_createExt(AudioSource *source, Allocator alloc, Error *e_rr) {
 	ALAudioDevice *deviceExt = AudioDevice_ext(AudioDeviceRef_ptr(source->device), AL);
 	ALAudioSource *sourceExt = AudioSource_ext(source, AL);
 
-	AL_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context))
-	AL_PROCESS_ERROR(deviceExt->device, alGenSources(1, &sourceExt->source))
-	AL_PROCESS_ERROR(deviceExt->device, alSourcei(sourceExt->source, AL_LOOPING, AL_FALSE))
+	ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
+	AL_PROCESS_ERROR(alGenSources(1, &sourceExt->source));
+	AL_PROCESS_ERROR(alSourcei(sourceExt->source, AL_LOOPING, AL_FALSE));
 	sourceExt->isInitialized = true;
 
 clean:
 	return s_uccess;
 };
 
-void AudioSource_freeExt(AudioSource *source, Allocator alloc) {
+void AudioSource_freeExt(AudioSource *source, const Allocator *alloc) {
 	
 	(void) alloc;
 
@@ -54,8 +55,8 @@ void AudioSource_freeExt(AudioSource *source, Allocator alloc) {
 	Bool s_uccess = true;
 
 	if(sourceExt->isInitialized) {
-		AL_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context))
-		AL_PROCESS_ERROR(deviceExt->device, alDeleteSources(1, &sourceExt->source))
+		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
+		AL_PROCESS_ERROR(alDeleteSources(1, &sourceExt->source));
 		sourceExt->isInitialized = false;
 	}
 
@@ -63,7 +64,7 @@ clean:
 	return;
 }
 
-void alSource3fv(ALuint id, ALenum e, F32x4 v) {
+static inline void alSource3fv(ALuint id, ALenum e, F32x4 v) {
 	alSource3f(id, e, F32x4_x(v), F32x4_y(v), F32x4_z(v));
 }
 
@@ -75,21 +76,21 @@ Bool AudioSource_update(AudioSource *source, Error *e_rr) {
 	ALAudioSource *sourceExt = AudioSource_ext(source, AL);
 
 	if((source->dirtyMask & 3) || (source->spatialAudio && (source->dirtyMask & 12)))
-		AL_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context))
+		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
 
 	if(source->dirtyMask & 1)
-		AL_PROCESS_ERROR(deviceExt->device, alSourcef(sourceExt->source, AL_GAIN, source->modifier.gain))
+		AL_PROCESS_ERROR(alSourcef(sourceExt->source, AL_GAIN, source->modifier.gain));
 
 	if(source->dirtyMask & 2)
-		AL_PROCESS_ERROR(deviceExt->device, alSourcef(sourceExt->source, AL_PITCH, source->modifier.pitch))
+		AL_PROCESS_ERROR(alSourcef(sourceExt->source, AL_PITCH, source->modifier.pitch));
 
 	if (source->spatialAudio) {
 
 		if(source->dirtyMask & 4)
-			AL_PROCESS_ERROR(deviceExt->device, alSource3fv(sourceExt->source, AL_POSITION, source->point.pos))
+			AL_PROCESS_ERROR(alSource3fv(sourceExt->source, AL_POSITION, source->point.pos));
 
 		if(source->dirtyMask & 8)
-			AL_PROCESS_ERROR(deviceExt->device, alSource3fv(sourceExt->source, AL_VELOCITY, source->point.velocity))
+			AL_PROCESS_ERROR(alSource3fv(sourceExt->source, AL_VELOCITY, source->point.velocity));
 	}
 
 	source->dirtyMask = 0;

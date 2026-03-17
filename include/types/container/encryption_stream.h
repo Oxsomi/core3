@@ -27,7 +27,7 @@
 		
 typedef struct EncryptionStream {
 
-	Stream parent;
+	OxStream parent;
 
 	StreamRef *dataStream;		//The physical stream represented by this virtual one.
 	U64 startOffset;

@@ -19,18 +19,16 @@
 */
 
 #pragma once
-#include "types/container/string.h"
-#include "platforms/file.h"
+#include "types/container/ref_ptr.h"
+#include "types/container/stream.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef struct RefPtr RefPtr;
 typedef struct Error Error;
 typedef struct Allocator Allocator;
-
-typedef RefPtr AudioStreamRef;
+typedef struct CharString CharString;
 
 typedef struct AudioStreamInfo AudioStreamInfo;
 
@@ -74,7 +72,7 @@ U8 EAudioStreamFormat_getSize(EAudioStreamFormat format);
 typedef struct AudioStreamInfo {
 
 	F32 pitch;
-	U8 padding;
+	U8 dataLengthHi8;
 	Bool flattenSound;			//Force stereo sound into mono, required for 3D spatial audio if stereo
 	AudioStreamFormat format;	//The format in the stream
 	Bool isLoop;
@@ -84,14 +82,18 @@ typedef struct AudioStreamInfo {
 	U64 dataStart;
 
 	U32 sampleRate;
-	U32 dataLength;
+	U32 dataLengthLo32;
 
 	U32 streamLength;			//0 = bytesPerSecond, else must be >=64KiB
 	U32 bytesPerSecond;
 
-	Stream stream;
+	StreamRef *stream;
 
 } AudioStreamInfo;
+
+static inline U64 AudioStreamInfo_dataLength(const AudioStreamInfo *info) {
+	return info ? (info->dataLengthLo32 | ((U64)info->dataLengthHi8 << 32)) : 0;
+}
 
 typedef RefPtr AudioDeviceRef;
 
@@ -109,63 +111,44 @@ typedef struct AudioStream {
 	AudioStreamFormat format;	//The real format that the device is reading. Stereo to mono and/or F32/F64/U24 -> U16
 	U8 padding[2];
 
-	U64 padding0;
-
 } AudioStream;
 
 typedef RefPtr AudioStreamRef;
 
-#define AudioStream_ext(ptr, T) (!ptr ? NULL : (T##AudioStream*)(ptr + 1))		//impl
-#define AudioStreamRef_ptr(ptr) RefPtr_data(ptr, AudioStream)
+static inline AudioStream *AudioStreamRef_ptr(AudioStreamRef *ptr) { return RefPtr_data(ptr, AudioStream); }
+static inline void *AudioStream_extVoid(AudioStream *src) { return !src ? NULL : (src + 1); }
 
-void AudioStreamRef_dec(AudioStreamRef **stream);
-Error AudioStreamRef_inc(AudioStreamRef *stream);
+#define AudioStream_ext(ptr, T) (T##AudioStream*)(AudioStream_extVoid(ptr))
 
-typedef RefPtr AudioDeviceRef;
+RefPtrType AudioStream_makeType(const Allocator *alloc);
 
 Bool AudioDeviceRef_createStream(
 	AudioDeviceRef *device,
-	AudioStreamInfo *info,
+	AudioStreamInfo *info,				//Takes ownership of info
 	Ns startOffset,
-	Allocator alloc,
+	const Allocator *alloc,
+	const RefPtrType *type,
 	AudioStreamRef **stream,
 	Error *e_rr
 );
 
-Bool AudioDeviceRef_createStreamx(
+Bool AudioDeviceRef_createFromFile(		//Detect stream by stream file header (currently only wav supported)
 	AudioDeviceRef *device,
-	AudioStreamInfo *info,
-	Ns startOffset,
-	AudioStreamRef **stream,
-	Error *e_rr
-);
-
-Bool AudioDeviceRef_createFileStream(
-	AudioDeviceRef *device,
-	CharString path,
+	StreamRef *inputStream,
+	U64 inputStreamOffset,
 	Bool isLoop,
 	Ns startOffset,
 	F32 pitch,
-	Allocator alloc,
-	AudioStreamRef **stream,
-	Error *e_rr
-);
-
-Bool AudioDeviceRef_createFileStreamx(
-	AudioDeviceRef *device,
-	CharString path,
-	Bool isLoop,
-	Ns startOffset,
-	F32 pitch,
+	const Allocator *alloc,
+	const RefPtrType *type,
 	AudioStreamRef **stream,
 	Error *e_rr
 );
 
 Bool AudioStreamRef_seekTime(AudioStreamRef *stream, Ns offset, Error *e_rr);
 
-Bool AudioStreamRef_play(AudioStreamRef *stream, Allocator alloc, Error *e_rr);
+Bool AudioStreamRef_play(AudioStreamRef *stream, const Allocator *alloc, Error *e_rr);
 Bool AudioStreamRef_stop(AudioStreamRef *stream, Error *e_rr);
-Bool AudioStreamRef_playx(AudioStreamRef *stream, Error *e_rr);
 
 #ifdef __cplusplus
 	}

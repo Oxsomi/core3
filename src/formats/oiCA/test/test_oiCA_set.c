@@ -182,7 +182,7 @@ void Test_CASetStream(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	//Stream: set then read back
+	//OxStream: set then read back
 
 	{
 		CAFile ca   = { 0 };
@@ -242,7 +242,7 @@ void Test_CASetStream(Test *t) {
 
 		MemoryStream_create(8, EMemoryStreamFlags_None, &type, &sr, NULL);
 		Test_assert(t, "stream OOB fails", !CAFile_setDataStream(&ca, hf, t->alloc, &sr, 4, 8, NULL));
-		Test_assert(t, "sr not consumed", sr != NULL);		//Stream must not be consumed on failure
+		Test_assert(t, "sr not consumed", sr != NULL);		//OxStream must not be consumed on failure
 		RefPtr_dec(&sr);
 
 		//setDataStream: folder handle must fail
@@ -264,7 +264,7 @@ void Test_CASetStream(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	//Stream survives copy (independent refcount, not shared pointer)
+	//OxStream survives copy (independent refcount, not shared pointer)
 
 	{
 		CAFile src  = { 0 };

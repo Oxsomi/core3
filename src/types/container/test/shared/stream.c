@@ -38,7 +38,7 @@ static void Test_streamCreate(Test *t, StreamHarness *h) {
 	//Sized
 
 	if (h->create(h, 1024, false, &stream, t)) {
-		const Stream *s = RefPtr_data(stream, Stream);
+		const OxStream *s = RefPtr_data(stream, OxStream);
 		Test_assert(t, "Sized: size", s->size == 1024);
 		RefPtr_dec(&stream);
 	}
@@ -57,7 +57,7 @@ static void Test_streamReadWrite(Test *t, StreamHarness *h) {
 		return;
 	}
 
-	Stream *s = RefPtr_data(stream, Stream);
+	OxStream *s = RefPtr_data(stream, OxStream);
 
 	if (!s->write)
 		goto clean;
@@ -132,7 +132,7 @@ static void Test_streamResize(Test *t, StreamHarness *h) {
 		return;
 	}
 
-	Stream *s = RefPtr_data(stream, Stream);
+	OxStream *s = RefPtr_data(stream, OxStream);
 
 	if (!s->write) {
 		RefPtr_dec(&stream);
@@ -209,7 +209,7 @@ static void Test_streamResize(Test *t, StreamHarness *h) {
 	//Non-resizable: write beyond end rejected
 
 	if (h->create(h, 100, false, &stream, t)) {
-		s = RefPtr_data(stream, Stream);
+		s = RefPtr_data(stream, OxStream);
 		Test_assert(t, "Non-resizable: rejected",     !s->write(s, 120, 50, Buffer_createRefConst(src, 50), t->alloc, NULL));
 		Test_assert(t, "Non-resizable: size unchanged", s->size == 100);
 		RefPtr_dec(&stream);
@@ -229,7 +229,7 @@ static void Test_streamReserve(Test *t, StreamHarness *h) {
 		return;
 	}
 
-	Stream *s = RefPtr_data(stream, Stream);
+	OxStream *s = RefPtr_data(stream, OxStream);
 	Bool isMemoryStream = s->streamType == EStreamType_Memory;
 
 	if (!s->reserve) {
@@ -296,8 +296,8 @@ static void Test_streamReserve(Test *t, StreamHarness *h) {
 	//Non-resizable must reject reserve
 
 	if (h->create(h, 100, false, &stream, t)) {
-		s = RefPtr_data(stream, Stream);
-		Test_assert(t, "Non-resizable: reserve rejected", !s->reserve(s, 5000, t->alloc, NULL));
+		s = RefPtr_data(stream, OxStream);
+		Test_assert(t, "Non-resizable: reserve rejected", !s->reserve);
 		RefPtr_dec(&stream);
 	}
 
@@ -306,7 +306,7 @@ static void Test_streamReserve(Test *t, StreamHarness *h) {
 	//Reserve <= current size must not shrink
 
 	if (h->create(h, 1000, true, &stream, t)) {
-		s = RefPtr_data(stream, Stream);
+		s = RefPtr_data(stream, OxStream);
 
 		//For MemoryStream: pointer must not change
 
@@ -342,7 +342,7 @@ static void Test_streamCompare(Test *t, StreamHarness *h) {
 		return;
 	}
 
-	Stream *sA = RefPtr_data(streamA, Stream);
+	OxStream *sA = RefPtr_data(streamA, OxStream);
 
 	if (sA->streamType & EStreamType_DisableSeek)		//Can't seek!
 		goto clean;
@@ -352,7 +352,7 @@ static void Test_streamCompare(Test *t, StreamHarness *h) {
 		goto clean;
 	}
 
-	Stream *sB = RefPtr_data(streamB, Stream);
+	OxStream *sB = RefPtr_data(streamB, OxStream);
 
 	if (!sA->write || !sA->read)
 		goto clean;
@@ -427,7 +427,7 @@ static void Test_streamCompare(Test *t, StreamHarness *h) {
 		goto clean;
 	}
 
-	sB = RefPtr_data(streamB, Stream);
+	sB = RefPtr_data(streamB, OxStream);
 
 	if (sB->write)
 		sB->write(sB, 0, 50, Buffer_createRefConst(src, 50), t->alloc, &t->err);
@@ -456,7 +456,7 @@ static void Test_streamCompare(Test *t, StreamHarness *h) {
 		goto clean;
 	}
 
-	sB = RefPtr_data(streamB, Stream);
+	sB = RefPtr_data(streamB, OxStream);
 
 	if (sB->write)
 		sB->write(sB, 0, 100, Buffer_createRefConst(src, 100), t->alloc, &t->err);

@@ -48,7 +48,7 @@ Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *strea
 	if (*offset & 15)
 		retError(clean, Error_unsupportedOperation(0, "SBFile_write() at misaligned offset is unsupported (16-byte)"));
 
-	Stream *stream = RefPtr_data(streamRef, Stream);
+	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	//Get header size
 

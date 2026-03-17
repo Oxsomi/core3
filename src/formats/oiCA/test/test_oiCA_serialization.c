@@ -540,7 +540,7 @@ void Test_CASerializeStreamBacked(Test *t) {
 			goto doneStreamBacked;
 		}
 
-		Stream *dataStreamUnderlying = RefPtr_data(dataStream, Stream);
+		OxStream *dataStreamUnderlying = RefPtr_data(dataStream, OxStream);
 
 		//Write payload into the stream
 

@@ -23,7 +23,7 @@
 #include "types/container/types.h"
 #include "types/base/mathi.h"
 
-void Stream_close(Stream *stream, const Allocator *alloc) {
+void Stream_close(OxStream *stream, const Allocator *alloc) {
 
 	if (!stream)
 		return;
@@ -31,17 +31,17 @@ void Stream_close(Stream *stream, const Allocator *alloc) {
 	if (stream->close)
 		stream->close(stream, alloc);
 
-	*stream = (Stream) { 0 };
+	*stream = (OxStream) { 0 };
 }
 
 RefPtrType Stream_inheritType(const Allocator *alloc, U32 extraSize) {
 
-	if (sizeof(Stream) + extraSize >= U32_MAX)
+	if (sizeof(OxStream) + extraSize >= U32_MAX)
 		return (RefPtrType) { 0 };
 
 	return (RefPtrType) {
 		.typeId = (ETypeId)EContainerTypeId_Stream,
-		.length = (U32)(sizeof(Stream) + extraSize),
+		.length = (U32)(sizeof(OxStream) + extraSize),
 		.alloc = alloc,
 		.free = (ObjectFreeFunc) Stream_close
 	};
@@ -64,15 +64,20 @@ Bool Stream_create(
 	if ((!write && !read) || !streamRef)
 		retError(clean, Error_nullPointer(!streamRef ? 5 : 0, "Stream_create()::stream and read or write are required"));
 
-	if(!type || type->typeId != (ETypeId)EContainerTypeId_Stream)
-		retError(clean, Error_nullPointer(4, "Stream_create()::type is required (StreamRef)"));
+	if (
+		!type ||
+		type->typeId != (ETypeId)EContainerTypeId_Stream ||
+		type->length < sizeof(OxStream) ||
+		type->free != (ObjectFreeFunc)Stream_close
+	)
+		retError(clean, Error_invalidParameter(4, 0, "Stream_create()::type is invalid"));
 
 	if (streamSize >> 48)
 		retError(clean, Error_invalidParameter(5, 0, "Stream_create()::streamSize too big"));
 
 	gotoIfError3(clean, RefPtr_create(type, streamRef, e_rr));
 
-	*RefPtr_data(*streamRef, Stream) = (Stream) {
+	*RefPtr_data(*streamRef, OxStream) = (OxStream) {
 		.read = read,
 		.write = write,
 		.reserve = reserve,
@@ -125,7 +130,7 @@ Bool StreamCursor_createWithCache(
 	if(!stream || stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(3, "StreamCursor_createWithCache()::stream is required"));
 
-	Stream *streamPtr = RefPtr_data(stream, Stream);
+	OxStream *streamPtr = RefPtr_data(stream, OxStream);
 
 	if (streamPtr->streamType & EStreamType_DisableSeek)
 		retError(clean, Error_unsupportedOperation(0, "StreamCursor_createWithCache()::DisableSeek streams are not yet supported"));
@@ -208,7 +213,7 @@ Bool StreamCursor_flush(StreamCursor *cursor, const Allocator *alloc, Error *e_r
 	if (!cursor)
 		retError(clean, Error_nullPointer(0, "StreamCursor_flush()::cursor is required"));
 	
-	Stream *stream = RefPtr_data(cursor->stream, Stream);
+	OxStream *stream = RefPtr_data(cursor->stream, OxStream);
 
 	if (!stream || cursor->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "StreamCursor_flush()::input/output->stream is required"));
@@ -318,8 +323,8 @@ Bool StreamCursor_copyStream(
 	if (!output || !input)
 		retError(clean, Error_nullPointer(!output ? 0 : 1, "StreamCursor_copyStream()::input and output are required"));
 
-	Stream *streamIn = RefPtr_data(input->stream, Stream);
-	Stream *streamOut = RefPtr_data(output->stream, Stream);
+	OxStream *streamIn = RefPtr_data(input->stream, OxStream);
+	OxStream *streamOut = RefPtr_data(output->stream, OxStream);
 
 	if (
 		!streamIn || !streamOut ||
@@ -394,7 +399,7 @@ Bool StreamCursor_write(
 	if (!cursor)
 		retError(clean, Error_nullPointer(0, "StreamCursor_write()::cursor is required"));
 
-	Stream *stream = RefPtr_data(cursor->stream, Stream);
+	OxStream *stream = RefPtr_data(cursor->stream, OxStream);
 
 	if (!stream || cursor->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream || !stream->write)
 		retError(clean, Error_nullPointer(0, "StreamCursor_write()::cursor->stream is required"));
@@ -528,7 +533,7 @@ Bool StreamCursor_read(
 	if (!cursor)
 		retError(clean, Error_nullPointer(0, "StreamCursor_read()::cursor is required"));
 
-	Stream *stream = RefPtr_data(cursor->stream, Stream);
+	OxStream *stream = RefPtr_data(cursor->stream, OxStream);
 
 	if (!stream || cursor->stream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream || !stream->read)
 		retError(clean, Error_nullPointer(0, "StreamCursor_read()::cursor->stream is required"));
@@ -662,8 +667,8 @@ Bool Stream_compare(
 	if (!a || !b || !result)
 		retError(clean, Error_nullPointer(!a ? 0 : (!b ? 1 : 7), "Stream_compare()::a, b and result are required"));
 
-	Stream *aRaw = RefPtr_data(a, Stream);
-	Stream *bRaw = RefPtr_data(b, Stream);
+	OxStream *aRaw = RefPtr_data(a, OxStream);
+	OxStream *bRaw = RefPtr_data(b, OxStream);
 
 	if ((aRaw->streamType & EStreamType_DisableSeek) || (bRaw->streamType & EStreamType_DisableSeek))
 		retError(clean, Error_invalidOperation(0, "Stream_compare()::cannot compare non-seekable streams"));

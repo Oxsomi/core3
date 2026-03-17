@@ -246,8 +246,8 @@ Bool CLI_audioConvert(ParsedArgs args) {
 				Bool s_uccess = true;
 				Error err = Error_none(), *e_rr = &err;
 				WAVFile wav = (WAVFile) { 0 };
-				Stream outputStream = (Stream) { 0 };
-				Stream inputStream = (Stream) { 0 };
+				OxStream outputStream = (OxStream) { 0 };
+				OxStream inputStream = (OxStream) { 0 };
 
 				Log_debugLnx("CLI_audioConvert() converting \"%.*s\"", (int) CharString_length(input), input.ptr);
 

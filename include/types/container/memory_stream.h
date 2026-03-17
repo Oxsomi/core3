@@ -37,7 +37,7 @@ typedef enum EMemoryStreamFlags {
 } EMemoryStreamFlags;
 		
 typedef struct MemoryStream {
-	Stream parent;
+	OxStream parent;
 	Buffer data;
 } MemoryStream;
 

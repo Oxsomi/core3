@@ -111,7 +111,7 @@ Bool File_unloadVirtual(CharString loc, Error *e_rr);								//Unload a virtual 
 //FileStream for handling bigger files and more efficiently jumping around.
 
 typedef struct FileStream {
-	Stream parent;
+	OxStream parent;
 	FileHandle handle;
 } FileStream;
 

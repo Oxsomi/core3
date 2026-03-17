@@ -46,7 +46,7 @@ Bool WAV_write(
 	if(!dataOutput) {
 
 		gotoIfError3(clean, StreamCursor_create(inputStreamRef, 0, false, alloc, &cursorRead, e_rr));
-		Stream *inputStream = RefPtr_data(inputStreamRef, Stream);
+		OxStream *inputStream = RefPtr_data(inputStreamRef, OxStream);
 
 		if (inputStreamOffset >= inputStream->size)
 			retError(clean, Error_outOfBounds(

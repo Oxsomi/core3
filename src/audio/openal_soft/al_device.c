@@ -19,17 +19,18 @@
 */
 
 #include "audio/openal_soft/openal_soft.h"
-#include "audio/device.h"
+#include "audio/audio_device.h"
+#include "types/math/vec4f.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 
 U32 AudioDevice_sizeExt = sizeof(ALAudioDevice);
 
-void alListener3fv(ALenum e, F32x4 v) {
+static inline void alListener3fv(ALenum e, F32x4 v) {
 	alListener3f(e, F32x4_x(v), F32x4_y(v), F32x4_z(v));
 }
 
-void alListener3f2v(ALenum e, F32x4 a, F32x4 b) {
+static inline void alListener3f2v(ALenum e, F32x4 a, F32x4 b) {
 
 	F32 v[6] = {
 		F32x4_x(a), F32x4_y(a), F32x4_z(a),
@@ -47,17 +48,20 @@ Bool AudioDevice_updateListenerTransformExt(AudioDevice *dev, Error *e_rr) {
 	
 	U8 dirtyMask = dev->pendingDirtyMask;
 
-	if(dirtyMask & 15)
-		AL_PROCESS_ERROR(devExt->device, alcMakeContextCurrent(devExt->context))
+	if (dirtyMask & 31)
+		ALC_PROCESS_ERROR(devExt->device, alcMakeContextCurrent(devExt->context));
 
 	if(dirtyMask & 1)
-		AL_PROCESS_ERROR(devExt->device, alListener3fv(AL_POSITION, dev->info.position))
+		AL_PROCESS_ERROR(alListener3fv(AL_POSITION, dev->info.position));
 
 	if(dirtyMask & 6)
-		AL_PROCESS_ERROR(devExt->device, alListener3f2v(AL_ORIENTATION, dev->info.forward, dev->info.up))
+		AL_PROCESS_ERROR(alListener3f2v(AL_ORIENTATION, dev->info.forward, dev->info.up));
 
 	if(dirtyMask & 8)
-		AL_PROCESS_ERROR(devExt->device, alListener3fv(AL_VELOCITY, dev->info.velocity))
+		AL_PROCESS_ERROR(alListener3fv(AL_VELOCITY, dev->info.velocity));
+
+	if (dirtyMask & 16)
+		AL_PROCESS_ERROR(alListenerf(AL_GAIN, dev->info.gain));
 
 	dev->pendingDirtyMask = 0;
 
@@ -70,18 +74,18 @@ Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr) {
 	Bool s_uccess = true;
 	ALAudioDevice *devExt = AudioDevice_ext(dev, AL);
 
-	AL_PROCESS_ERROR(NULL, devExt->device = alcOpenDevice(dev->info.name))
+	ALC_PROCESS_ERROR(NULL, devExt->device = alcOpenDevice(dev->info.name));
 
 	ALCint ints[] = { ALC_CONTEXT_FLAGS_EXT, isDebug ? ALC_CONTEXT_DEBUG_BIT_EXT : 0, 0, 0 };
 
-	AL_PROCESS_ERROR(devExt->device, devExt->context = alcCreateContext(devExt->device, ints))
+	ALC_PROCESS_ERROR(devExt->device, devExt->context = alcCreateContext(devExt->device, ints));
 	dev->pendingDirtyMask = 0xF;
 
 clean:
 	return s_uccess;
 }
 
-void AudioDevice_freeExt(AudioDevice *dev, Allocator alloc) {
+void AudioDevice_freeExt(AudioDevice *dev, const Allocator *alloc) {
 
 	(void) alloc;
 

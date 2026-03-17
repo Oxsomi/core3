@@ -35,7 +35,7 @@ static void Test_streamCursorBasic(Test *t, StreamHarness *h) {
 		return;
 	}
 
-	Stream *s = RefPtr_data(stream, Stream);
+	OxStream *s = RefPtr_data(stream, OxStream);
 
 	// Default (readonly) cursor, tests stream ref, default cache size, canRead flag.
 
@@ -170,7 +170,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 		return;
 	}
 
-	Stream *s = RefPtr_data(stream, Stream);
+	OxStream *s = RefPtr_data(stream, OxStream);
 
 	if (!s->write || !s->read)
 		goto clean;
@@ -413,7 +413,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 	else Test_assert(t, "Bypass cache write", false);
 
 	//Partial writes at cache block boundaries and boundary - 8.
-	//Background is 0xCACA… from the bypass write above.
+	//Background is 0xCACAï¿½ from the bypass write above.
 
 	{
 		magic = 0xBABABABABABABABA;
@@ -508,7 +508,7 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 	{
 		Buffer_setAllToU8(fill, 0xAA, NULL);
 
-		Stream *s = RefPtr_data(stream, Stream);
+		OxStream *s = RefPtr_data(stream, OxStream);
 
 		if (!s->write(s, 0, 0, fill, t->alloc, &t->err)) {
 			Test_assert(t, "Fill src write", false);
@@ -536,8 +536,8 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 		StreamCursor_copyStream(&cursor1, &cursor, 0, 0, 0, t->alloc, &t->err) &&
 		StreamCursor_flush(&cursor1, t->alloc, &t->err)
 	) {
-		Stream *s0 = RefPtr_data(stream, Stream);
-		Stream *s1 = RefPtr_data(stream1, Stream);
+		OxStream *s0 = RefPtr_data(stream, OxStream);
+		OxStream *s1 = RefPtr_data(stream1, OxStream);
 
 		//Check dst
 
@@ -575,7 +575,7 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 	//Partial copy: copy first 48 KiB only
 
 	{
-		Stream *s = RefPtr_data(stream, Stream);
+		OxStream *s = RefPtr_data(stream, OxStream);
 		Buffer_setAllToU8(fill, 0xBB, NULL);
 
 		if (!s->write(s, 0, 0, fill, t->alloc, &t->err)) {
@@ -596,8 +596,8 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 			StreamCursor_flush(&cursor1, t->alloc, &t->err)
 		) {
 
-			Stream *s0 = RefPtr_data(stream, Stream);
-			Stream *s1 = RefPtr_data(stream1, Stream);
+			OxStream *s0 = RefPtr_data(stream, OxStream);
+			OxStream *s1 = RefPtr_data(stream1, OxStream);
 
 			//First 48KiB of src must be 0xBB, second 48KiB retains 0xAA from full copy
 

@@ -23,10 +23,10 @@
 #include "types/container/types.h"
 #include "types/base/mathi.h"
 
-//Implement Stream's functions
+//Implement OxStream's functions
 
 static Bool MemoryStream_readInternal(
-	Stream *stream,
+	OxStream *stream,
 	U64 offset,
 	U64 length,
 	Buffer buf,
@@ -60,7 +60,7 @@ clean:
 }
 
 static Bool MemoryStream_writeInternal(
-	Stream *stream,
+	OxStream *stream,
 	U64 offset,
 	U64 length,
 	Buffer buf,
@@ -131,7 +131,7 @@ clean:
 	return s_uccess;
 }
 
-static Bool MemoryStream_reserveInternal(Stream *stream, U64 size, const Allocator *alloc, Error *e_rr) {
+static Bool MemoryStream_reserveInternal(OxStream *stream, U64 size, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -166,7 +166,7 @@ clean:
 	return s_uccess;
 }
 
-static void MemoryStream_closeInternal(Stream *stream, const Allocator *alloc) {
+static void MemoryStream_closeInternal(OxStream *stream, const Allocator *alloc) {
 	Buffer_free(&((MemoryStream*)stream)->data, alloc);
 }
 
@@ -216,7 +216,7 @@ clean:
 }
 
 RefPtrType MemoryStream_makeType(const Allocator *alloc) {
-	return Stream_inheritType(alloc, sizeof(MemoryStream) - sizeof(Stream));
+	return Stream_inheritType(alloc, sizeof(MemoryStream) - sizeof(OxStream));
 }
 
 Bool MemoryStream_create(

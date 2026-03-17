@@ -18,48 +18,50 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "audio/interface.h"
-#include "audio/device.h"
+#include "types/container/list_impl.h"
+#include "audio/audio_interface.h"
+#include "audio/audio_device.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"
-#include "platforms/platform.h"
 #include "types/base/constants.h"
 
-const C8 *EAudioApi_name[EAudioApi_Count] = {
-	"OpenAL"
-};
-
-void AudioInterfaceRef_dec(AudioInterfaceRef **interf) { RefPtr_dec(interf); }
-
-Error AudioInterfaceRef_inc(AudioInterfaceRef *interf) {
-	return !RefPtr_inc(interf) ?
-		Error_invalidOperation(0, "AudioInterfaceRef_inc()::interf is invalid") : Error_none();
-}
+const C8 *EAudioApi_name[EAudioApi_Count] = { "OpenAL" };
 
 impl extern U32 AudioInterface_sizeExt;
 impl Bool AudioInterface_createExt(AudioInterface *interf, Error *e_rr);
-impl void AudioInterface_freeExt(AudioInterface *interf, Allocator alloc);
+impl void AudioInterface_freeExt(AudioInterface *interf, const Allocator *alloc);
 
-Bool AudioInterface_create(AudioInterfaceRef **interf, Allocator alloc, Error *e_rr) {
+RefPtrType AudioInterface_makeType(const Allocator *alloc) {
+	return (RefPtrType) {
+		.typeId = (ETypeId)EAudioTypeId_AudioInterface,
+		.length = (U32)(sizeof(AudioInterface) + AudioInterface_sizeExt),
+		.alloc = alloc,
+		.free = (ObjectFreeFunc)AudioInterface_freeExt
+	};
+}
+
+Bool AudioInterface_create(AudioInterfaceRef **interf, const Allocator *alloc, const RefPtrType *type, Error *e_rr) {
 
 	Bool s_uccess = true;
 	Bool allocated = false;
 
-	gotoIfError2(clean, RefPtr_create(
-		(U32)(sizeof(AudioInterface) + AudioInterface_sizeExt),
-		alloc,
-		(ObjectFreeFunc) AudioInterface_freeExt,
-		(ETypeId) EAudioTypeId_AudioInterface,
-		interf
-	))
+	if(
+		!type ||
+		type->typeId != (ETypeId)EAudioTypeId_AudioInterface ||
+		type->length != (U32)(sizeof(AudioInterface) + AudioInterface_sizeExt) ||
+		type->free != (ObjectFreeFunc)AudioInterface_freeExt ||
+		type->alloc != alloc
+	)
+		retError(clean, Error_invalidParameter(4, 0, "AudioInterface_create()::type is invalid"));
+
+	gotoIfError3(clean, RefPtr_create(type, interf, e_rr));
 
 	*AudioInterfaceRef_ptr(*interf) = (AudioInterface) {
 		.api = EAudioApi_Count
 	};
 
 	allocated = true;
-	gotoIfError3(clean, AudioInterface_createExt(AudioInterfaceRef_ptr(*interf), e_rr))
+	gotoIfError3(clean, AudioInterface_createExt(AudioInterfaceRef_ptr(*interf), e_rr));
 
 clean:
 
@@ -72,7 +74,7 @@ clean:
 Bool AudioInterface_getPreferredDevice(
 	const AudioInterface *interf,
 	EAudioDeviceFlags requiredCapabilities,
-	Allocator alloc,
+	const Allocator *alloc,
 	AudioDeviceInfo *deviceInfo,
 	Error *e_rr
 ) {
@@ -80,10 +82,10 @@ Bool AudioInterface_getPreferredDevice(
 	Bool s_uccess = true;
 	ListAudioDeviceInfo devices = (ListAudioDeviceInfo) { 0 };
 
-	if(!deviceInfo)
-		retError(clean, Error_nullPointer(0, "AudioInterface_getPreferredDevice()::deviceInfo is required"))
+	if (!deviceInfo)
+		retError(clean, Error_nullPointer(0, "AudioInterface_getPreferredDevice()::deviceInfo is required"));
 
-	gotoIfError3(clean, AudioInterface_getDeviceInfos(interf, alloc, &devices, e_rr))
+	gotoIfError3(clean, AudioInterface_getDeviceInfos(interf, alloc, &devices, e_rr));
 
 	U64 firstSupported = U64_MAX;
 
@@ -102,33 +104,14 @@ Bool AudioInterface_getPreferredDevice(
 		firstSupported = i;
 	}
 
-	if(firstSupported == U64_MAX)
-		retError(clean, Error_invalidState(0, "AudioInterface_getPreferredDevice() no device with req capabilities found"))
+	if (firstSupported == U64_MAX)
+		retError(clean, Error_invalidState(
+			0, "AudioInterface_getPreferredDevice() no device with req capabilities found"
+		));
 
 	*deviceInfo = devices.ptr[firstSupported];
 
 clean:
 	ListAudioDeviceInfo_free(&devices, alloc);
 	return s_uccess;
-}
-
-Bool AudioInterface_createx(AudioInterfaceRef **interf, Error *e_rr) {
-	return AudioInterface_create(interf, Platform_instance->alloc, e_rr);
-}
-
-Bool AudioInterface_getDeviceInfosx(
-	const AudioInterface *interf,
-	ListAudioDeviceInfo *infos,
-	Error *e_rr
-) {
-	return AudioInterface_getDeviceInfos(interf, Platform_instance->alloc, infos, e_rr);
-}
-
-Bool AudioInterface_getPreferredDevicex(
-	const AudioInterface *interf,
-	EAudioDeviceFlags requiredCapabilities,
-	AudioDeviceInfo *deviceInfo,
-	Error *e_rr
-) {
-	return AudioInterface_getPreferredDevice(interf, requiredCapabilities, Platform_instance->alloc, deviceInfo, e_rr);
 }

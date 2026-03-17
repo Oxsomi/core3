@@ -19,6 +19,7 @@
 */
 
 #pragma once
+#include "types/container/ref_ptr.h"
 #include "types/base/types.h"
 #include "types/base/type_id.h"
 
@@ -27,10 +28,10 @@
 #endif
 
 typedef enum EAudioTypeId {
-	EAudioTypeId_AudioInterface			= makeObjectId(0x1C34, 0, 0),
-	EAudioTypeId_AudioDevice			= makeObjectId(0x1C34, 1, 0),
-	EAudioTypeId_AudioStream			= makeObjectId(0x1C34, 2, 0),
-	EAudioTypeId_AudioSource			= makeObjectId(0x1C34, 3, 0)
+	EAudioTypeId_AudioInterface			= makeObjectId(0x1C35, 0, 0),
+	EAudioTypeId_AudioDevice			= makeObjectId(0x1C35, 1, 0),
+	EAudioTypeId_AudioStream			= makeObjectId(0x1C35, 2, 0),
+	EAudioTypeId_AudioSource			= makeObjectId(0x1C35, 3, 0)
 } EAudioTypeId;
 
 typedef enum EAudioApi {
@@ -43,31 +44,30 @@ extern const C8 *EAudioApi_name[EAudioApi_Count];
 typedef struct AudioInterface {
 	EAudioApi api;
 	U32 apiVersion;		//OXC3_MAKE_VERSION
-	U64 padding;		//Just in case next allocation has to be 16-byte aligned
+	U64 padding;		//Ensures ext data (immediately following RefPtr) is 16-byte aligned regardless of implementation
 } AudioInterface;
 
 typedef struct Allocator Allocator;
 typedef struct Error Error;
 
-typedef struct RefPtr RefPtr;
 typedef RefPtr AudioInterfaceRef;
 
 typedef struct ListAudioDeviceInfo ListAudioDeviceInfo;
 typedef enum EAudioDeviceFlags EAudioDeviceFlags;
 typedef struct AudioDeviceInfo AudioDeviceInfo;
 
-#define AudioInterface_ext(ptr, T) (!ptr ? NULL : (T##AudioInterface*)(ptr + 1))		//impl
-#define AudioInterfaceRef_ptr(ptr) RefPtr_data(ptr, AudioInterface)
+static inline AudioInterface *AudioInterfaceRef_ptr(AudioInterfaceRef *ptr) { return RefPtr_data(ptr, AudioInterface); }
+static inline void *AudioInterface_extVoid(AudioInterface *interf) { return !interf ? NULL : (interf + 1); }
 
-void AudioInterfaceRef_dec(AudioInterfaceRef **interf);
-Error AudioInterfaceRef_inc(AudioInterfaceRef *interf);
+#define AudioInterface_ext(ptr, T) (T##AudioInterface*)(AudioInterface_extVoid(ptr))
 
-Bool AudioInterface_create(AudioInterfaceRef **interf, Allocator alloc, Error *e_rr);
-Bool AudioInterface_createx(AudioInterfaceRef **interf, Error *e_rr);
+RefPtrType AudioInterface_makeType(const Allocator *alloc);
+
+Bool AudioInterface_create(AudioInterfaceRef **interf, const Allocator *alloc, const RefPtrType *type, Error *e_rr);
 
 impl Bool AudioInterface_getDeviceInfos(
 	const AudioInterface *interf,
-	Allocator alloc,
+	const Allocator *alloc,
 	ListAudioDeviceInfo *infos,
 	Error *e_rr
 );
@@ -75,20 +75,7 @@ impl Bool AudioInterface_getDeviceInfos(
 Bool AudioInterface_getPreferredDevice(
 	const AudioInterface *interf,
 	EAudioDeviceFlags requiredCapabilities,
-	Allocator alloc,
-	AudioDeviceInfo *deviceInfo,
-	Error *e_rr
-);
-
-Bool AudioInterface_getDeviceInfosx(
-	const AudioInterface *interf,
-	ListAudioDeviceInfo *infos,
-	Error *e_rr
-);
-
-Bool AudioInterface_getPreferredDevicex(
-	const AudioInterface *interf,
-	EAudioDeviceFlags requiredCapabilities,
+	const Allocator *alloc,
 	AudioDeviceInfo *deviceInfo,
 	Error *e_rr
 );

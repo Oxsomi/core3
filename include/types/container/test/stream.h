@@ -30,7 +30,7 @@ typedef struct RefPtr RefPtr;
 typedef struct RefPtrType RefPtrType;
 typedef struct Test Test;
 
-//Extra abstraction over Stream that allows us to easily unit test different types of streams.
+//Extra abstraction over OxStream that allows us to easily unit test different types of streams.
 typedef struct StreamHarness {
 
 	//Create a writable stream of exactly 'size' logical bytes.

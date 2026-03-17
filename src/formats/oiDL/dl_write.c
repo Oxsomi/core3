@@ -57,7 +57,7 @@ Bool DLFile_write(
 	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(2, "DLFile_write()::streamRef is required"));
 
-	Stream *stream = RefPtr_data(streamRef, Stream);
+	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	if (dlFile->settings.compressionType)		//TODO: Compression
 		retError(clean, Error_unsupportedOperation(0, "DLFile_write() doesn't support compression yet"));

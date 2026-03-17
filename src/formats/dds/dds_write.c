@@ -62,7 +62,7 @@ Bool DDS_write(
 	if(streamRef && streamRef->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is of invalid type"));
 
-	Stream *stream = RefPtr_data(streamRef, Stream);
+	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	if(stream && !stream->write)
 		retError(clean, Error_invalidParameter(3, 0, "DDS_write()::streamRef is not writable"));

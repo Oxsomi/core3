@@ -71,7 +71,7 @@ static Bool makeRawBMPStream(
 	if (!MemoryStream_create(totalSize, EMemoryStreamFlags_IsWritable, type, &stream, &t->err))
 		return false;
 
-	Stream *s = RefPtr_data(stream, Stream);
+	OxStream *s = RefPtr_data(stream, OxStream);
 
 	if (!s->write(s, 0, sizeof(hdr), Buffer_createRefConst(&hdr, sizeof(hdr)), t->alloc, &t->err)) {
 		RefPtr_dec(&stream);
@@ -206,7 +206,7 @@ void Test_BMPReadInvalidMagic(Test *t) {
 
 		//Corrupt the magic
 		U16 badMagic = 0x0000;
-		Stream *s = RefPtr_data(sr, Stream);
+		OxStream *s = RefPtr_data(sr, OxStream);
 		s->write(s, 0, sizeof(badMagic), Buffer_createRefConst(&badMagic, sizeof(badMagic)), t->alloc, NULL);
 
 		U64 off = 0;
@@ -236,7 +236,7 @@ void Test_BMPReadZeroWidth(Test *t) {
 
 		//Write width = 0 into the info header (offset of width field = 14 + 4 = 18)
 		I32 zero = 0;
-		Stream *s = RefPtr_data(sr, Stream);
+		OxStream *s = RefPtr_data(sr, OxStream);
 		s->write(
 			s,
 			offsetof(BMPHeadersCombined, info.width),
@@ -272,7 +272,7 @@ void Test_BMPReadZeroHeight(Test *t) {
 		}
 
 		I32 zero = 0;
-		Stream *s = RefPtr_data(sr, Stream);
+		OxStream *s = RefPtr_data(sr, OxStream);
 		s->write(
 			s,
 			offsetof(BMPHeadersCombined, info.height),
@@ -308,7 +308,7 @@ void Test_BMPReadUnsupportedBitCount(Test *t) {
 		}
 
 		U16 bpp8 = 8;
-		Stream *s = RefPtr_data(sr, Stream);
+		OxStream *s = RefPtr_data(sr, OxStream);
 		s->write(
 			s,
 			offsetof(BMPHeadersCombined, info.bitCount),
@@ -344,7 +344,7 @@ void Test_BMPReadUnsupportedCompression(Test *t) {
 		}
 
 		U32 rle8 = 1;
-		Stream *s = RefPtr_data(sr, Stream);
+		OxStream *s = RefPtr_data(sr, OxStream);
 		s->write(
 			s,
 			offsetof(BMPHeadersCombined, info.compression),
@@ -381,7 +381,7 @@ void Test_BMPReadUnsupportedCompressionRLE4(Test *t) {
 		}
 
 		U32 rle4 = 2;
-		Stream *s = RefPtr_data(sr, Stream);
+		OxStream *s = RefPtr_data(sr, OxStream);
 		s->write(
 			s,
 			offsetof(BMPHeadersCombined, info.compression),

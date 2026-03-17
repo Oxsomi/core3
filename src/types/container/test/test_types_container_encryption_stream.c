@@ -67,7 +67,7 @@ static Bool EncStream_harnessCreate(
 
 	if (size) {
 
-		Stream *s = RefPtr_data(*out, Stream);
+		OxStream *s = RefPtr_data(*out, OxStream);
 
 		//Clear which also sets s->size without having garbage.
 		//Garbage is fine with MemoryStream but not with others like EncryptionStream

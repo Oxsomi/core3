@@ -69,7 +69,7 @@ Bool DLFile_read(
 
 	gotoIfError3(clean, StreamCursor_create(file, 0, false, alloc, &cursor, e_rr));
 
-	Stream *stream = RefPtr_data(file, Stream);
+	OxStream *stream = RefPtr_data(file, OxStream);
 
 	U64 streamOff = *startOffset;
 

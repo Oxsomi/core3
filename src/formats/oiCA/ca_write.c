@@ -79,7 +79,7 @@ Bool CAFile_write(
 	if (*startOffset & 15)
 		retError(clean, Error_unsupportedOperation(0, "CAFile_write() at misaligned startOffset is unsupported (16-byte)"));
 
-	Stream *stream = RefPtr_data(result, Stream);
+	OxStream *stream = RefPtr_data(result, OxStream);
 
 	U64 dirCount  = caFile->folders.length - 1;		//-1 for root
 	U64 fileCount = caFile->files.length;

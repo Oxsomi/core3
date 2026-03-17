@@ -100,7 +100,7 @@ Bool DLFile_addEntryStream(
 	if (!stream || !*stream || (*stream)->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(1, "DLFile_addEntryStream()::stream is required"));
 
-	U64 siz = RefPtr_data(*stream, Stream)->size;
+	U64 siz = RefPtr_data(*stream, OxStream)->size;
 	if (dataOff + len > siz)
 		retError(clean, Error_outOfBounds(3, dataOff + len, siz, "DLFile_setStream()::off + len out of bounds"));
 
@@ -354,7 +354,7 @@ Bool DLFile_setStream(DLFile *dlFile, U64 id, StreamRef **stream, U64 dataOff, U
 		if ((*stream)->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 			retError(clean, Error_nullPointer(1, "DLFile_setStream() type of stream is invalid"));
 
-		U64 siz = RefPtr_data(*stream, Stream)->size;
+		U64 siz = RefPtr_data(*stream, OxStream)->size;
 		if (dataOff + len > siz)
 			retError(clean, Error_outOfBounds(3, dataOff + len, siz, "DLFile_setStream()::off + len out of bounds"));
 	}

@@ -40,4 +40,34 @@ source_group("Source Files (openal_soft)" FILES ${apiPlatformSources})
 source_group("Header Files (openal_soft)" FILES ${apiPlatformIncludes})
 
 set_target_properties(OxC3_audio PROPERTIES FOLDER Oxsomi)
-target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms openal_soft::openal_soft OxC3_formats_wav)
+target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container openal_soft::openal_soft OxC3_formats_wav)
+
+if(EnableTests)
+
+	file(GLOB testsInterfaceC "test/interface/*.c")
+	file(GLOB testsInterfaceH "test/interface/*.h")
+
+	add_executable(
+		OxC3_audio_interface_test
+		${testsInterfaceC}
+		${testsInterfaceH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_audio_interface_test PUBLIC OxC3_audio OxC3_types_container_test_util)
+	set_target_properties(OxC3_audio_interface_test PROPERTIES FOLDER Oxsomi/test/audio)
+
+	# file(GLOB testsFunctionalC "test/functional/*.c")
+	# file(GLOB testsFunctionalH "test/functional/*.h")
+	# 
+	# add_executable(
+	# 	OxC3_audio_functional_test
+	# 	${testsFunctionalC}
+	# 	${testsFunctionalH}
+	# 	CMakeLists.txt
+	# )
+	# 
+	# target_link_libraries(OxC3_audio_functional_test PUBLIC OxC3_audio)
+	# set_target_properties(OxC3_audio_functional_test PROPERTIES FOLDER Oxsomi/test/audio)
+
+endif()

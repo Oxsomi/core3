@@ -42,7 +42,7 @@ Bool BMP_read(StreamRef *streamRef, U64 *off, U64 *dataOffset, BMPInfo *info, co
 	if(streamRef->refPtrType->typeId != (ETypeId) EContainerTypeId_Stream)
 		retError(clean, Error_invalidParameter(0, 0, "BMP_read()::stream needs to be the right type"));
 
-	Stream *stream = RefPtr_data(streamRef, Stream);
+	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
 	if(!stream->read)
 		retError(clean, Error_invalidParameter(1, 0, "BMP_read()::stream needs to be readable"));

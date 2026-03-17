@@ -27,7 +27,7 @@
 #include "types/base/allocator.h"
 #include "types/base/constants.h"
 
-static inline Bool FileStream_read(Stream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
+static inline Bool FileStream_read(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
 	
 	Bool s_uccess = true;
 
@@ -42,7 +42,7 @@ clean:
 	return s_uccess;
 }
 
-static inline Bool FileStream_write(Stream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
+static inline Bool FileStream_write(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
 	
 	Bool s_uccess = true;
 
@@ -57,7 +57,7 @@ clean:
 	return s_uccess;
 }
 
-static inline void FileStream_close(Stream *stream, const Allocator *alloc) {
+static inline void FileStream_close(OxStream *stream, const Allocator *alloc) {
 	FileHandle_close(&((FileStream*)stream)->handle, alloc);
 }
 
