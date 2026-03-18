@@ -1,0 +1,4 @@
+Thanks to freesound for these CC0 sounds to test on:
+
+long: 848395__solarpsychedelic__eldritch-rumbles-120-bpm
+short: 848383__riippumattog__old-man-cough

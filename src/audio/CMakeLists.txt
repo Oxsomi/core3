@@ -57,17 +57,17 @@ if(EnableTests)
 	target_link_libraries(OxC3_audio_interface_test PUBLIC OxC3_audio OxC3_types_container_test_util)
 	set_target_properties(OxC3_audio_interface_test PROPERTIES FOLDER Oxsomi/test/audio)
 
-	# file(GLOB testsFunctionalC "test/functional/*.c")
-	# file(GLOB testsFunctionalH "test/functional/*.h")
-	# 
-	# add_executable(
-	# 	OxC3_audio_functional_test
-	# 	${testsFunctionalC}
-	# 	${testsFunctionalH}
-	# 	CMakeLists.txt
-	# )
-	# 
-	# target_link_libraries(OxC3_audio_functional_test PUBLIC OxC3_audio)
-	# set_target_properties(OxC3_audio_functional_test PROPERTIES FOLDER Oxsomi/test/audio)
+	file(GLOB testsFunctionalC "test/functional/*.c")
+	file(GLOB testsFunctionalH "test/functional/*.h")
+
+	add_executable(
+		OxC3_audio_functional_test
+		${testsFunctionalC}
+		${testsFunctionalH}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_audio_functional_test PUBLIC OxC3_audio OxC3_types_container_test_util)
+	set_target_properties(OxC3_audio_functional_test PROPERTIES FOLDER Oxsomi/test/audio)
 
 endif()

@@ -64,6 +64,14 @@ typedef struct RIFFFmtHeader {
 
 } RIFFFmtHeader;
 
+typedef struct RIFFFmtExtended {
+	U16 cbSize;
+	U16 bitsPerSample;
+	U16 samplesPerBlock;
+	U16 padding;
+	U32 guid0;
+} RIFFFmtExtended;
+
 typedef RIFFSection RIFFDataHeader;		//"data" (RIFFDataHeader_magic)
 
 #define RIFFHeader_magic	 C8x4('R', 'I', 'F', 'F')

@@ -198,11 +198,12 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 	Bool isFallback = stream->info.format != stream->format;
 
+	U64 maxLen = Buffer_length(streamExt->tmpCvt);
+
 	//Always use tmpCvt as the cursor cache; tmp is the final output for fallback/loop paths
 	gotoIfError3(clean, StreamCursor_createWithCache(stream->info.stream, &streamExt->tmpCvt, true, &cursor, e_rr));
 
 	U32 queued = 0;
-	U64 maxLen = Buffer_length(streamExt->tmp);
 
 	U8 ogStride = EAudioStreamFormat_getStrideBytes(stream->info.format);
 	U8 newStride = EAudioStreamFormat_getStrideBytes(stream->format);
@@ -223,6 +224,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 		if (stream->info.isLoop || isFallback) {
 
 			U64 filled = 0;
+			U64 consumed = 0;
 
 			void *tmp = (void*)streamExt->tmp.ptr;
 			U8 *tmp8 = (U8*)tmp;
@@ -255,6 +257,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 						}
 					}
 
+					consumed += len;
 					filled += (blocks / inputStep) * newStride;
 				}
 
@@ -267,13 +270,14 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 					);
 
 					filled += len;
+					consumed += len;
 				}
 
 				U64 dataLength = AudioStreamInfo_dataLength(&stream->info);
 				stream->streamOffset = (stream->streamOffset + len) % dataLength;
-				len = U64_min(dataLength - stream->streamOffset, maxLen - filled);
+				len = U64_min(dataLength - stream->streamOffset, maxLen - consumed);
 
-				if (filled < maxLen) {
+				if (consumed < maxLen) {
 
 					if (!stream->info.isLoop) {
 						finishedLoop = true;

@@ -115,8 +115,12 @@ def main():
 			"OxC3_formats_oiBC_test",
 			"OxC3_formats_oiDL_test",
 			"OxC3_formats_oiCA_test",
+			"OxC3_formats_oiSB_test",
+			"OxC3_formats_oiSH_test",
 			"OxC3_formats_dds_test",
-			"OxC3_formats_wav_test"
+			"OxC3_formats_wav_test",
+			"OxC3_formats_bmp_test",
+			"OxC3_audio_interface_test"
 		]
 
 		for test in tests:

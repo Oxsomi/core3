@@ -118,6 +118,63 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 				)
 					retError(clean, Error_invalidState(0, "WAV_read() bit count unsupported"));
 
+				if (result->fmt.format == 0xFFFE) {		//Extended
+					
+					if(result->fmt.section.size < sizeof(RIFFFmtHeader) + sizeof(RIFFFmtExtended))
+						retError(clean, Error_invalidState(0, "WAV_read() is of unexpected size"));
+
+					RIFFFmtExtended ext;
+					buf = Buffer_createRef(&ext, sizeof(ext));
+					U64 extOff = off - sizeof(section) + sizeof(RIFFFmtHeader);
+					gotoIfError3(clean, StreamCursor_read(&cursorRead, buf, extOff, 0, 0, false, alloc, e_rr));
+
+					if (ext.cbSize != 22)
+						retError(clean, Error_invalidState(0, "WAV_read() ext is malformed"));
+
+					if (ext.bitsPerSample > result->fmt.stride)
+						retError(clean, Error_invalidState(0, "WAV_read() bitsPerSample is larger than stride"));
+
+					if (
+						ext.bitsPerSample != 8 &&
+						ext.bitsPerSample != 16 &&
+						ext.bitsPerSample != 24 &&
+						ext.bitsPerSample != 32 &&
+						ext.bitsPerSample != 64
+					)
+						retError(clean, Error_invalidParameter(0, 0, "WAV_read() unsupported ext bits per sample"));
+
+					static const U8 expectedGuidSuffix[12] = {
+						0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71
+					};
+
+					U8 realSuffix[12];		//U32 is in the header because it's easier that way, this is the rest
+					buf = Buffer_createRef(realSuffix, sizeof(realSuffix));
+					gotoIfError3(clean, StreamCursor_read(
+						&cursorRead, buf, extOff + sizeof(ext), 0, 0, false, alloc, e_rr
+					));
+
+					Buffer cmp = Buffer_createRefConst(expectedGuidSuffix, sizeof(expectedGuidSuffix));
+
+					if(Buffer_neq(buf, cmp))
+						retError(clean, Error_invalidParameter(0, 0, "WAV_read() unsupported GUID"));
+
+					switch (ext.guid0) {
+
+						case 1:  //KSDATAFORMAT_SUBTYPE_PCM
+							result->fmt.format = ERIFFAudioFormat_PCM;
+							break;
+
+						case 3:  //KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+							result->fmt.format = ERIFFAudioFormat_IEEE754;
+							break;
+
+						default:
+							retError(clean, Error_invalidParameter(
+								0, 0, "WAV_read() unsupported WAVE_FORMAT_EXTENSIBLE subformat"
+							));
+					}
+				}
+
 				if(result->fmt.stride >= 32 && result->fmt.format != ERIFFAudioFormat_IEEE754)
 					retError(clean, Error_invalidState(
 						0, "WAV_read() format unsupported for 32 or 64 bit depth"
