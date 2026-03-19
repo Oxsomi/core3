@@ -225,7 +225,7 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 				retError(clean, Error_invalidParameter(0, 0, "WAV_read() invalid riff section"));
 		}
 
-		off += section.size;
+		off += (section.size + 1) & ~1;
 	}
 
 	if(!hasData || !hasFmt)

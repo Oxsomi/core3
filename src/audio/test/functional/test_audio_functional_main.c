@@ -199,26 +199,26 @@ static const C8 *shortTracks[] = {
 	"short_24b_mono.wav",
 	"short_24b_stereo.wav",
 	//"short_32b_mono.wav",		TODO:
-	//"short_32b_stereo.wav",
-	//"short_32f_mono.wav",
-	//"short_32f_stereo.wav",
-	//"short_64f_mono.wav",
-	//"short_64f_stereo.wav"
+	//"short_32b_stereo.wav",	TODO:
+	"short_32f_mono.wav",
+	"short_32f_stereo.wav",
+	"short_64f_mono.wav",
+	"short_64f_stereo.wav"
 };
 
 static const C8 *longTracks[] = {
-	//"long_8b_mono.wav",		TODO:
+	"long_8b_mono.wav",
 	"long_8b_stereo.wav",
 	"long_16b_mono.wav",
 	"long_16b_stereo.wav",
-	//"long_24b_mono.wav",		TODO:
+	"long_24b_mono.wav",
 	"long_24b_stereo.wav",
 	//"long_32b_mono.wav",		TODO:
-	//"long_32b_stereo.wav",
-	//"long_32f_mono.wav",
-	//"long_32f_stereo.wav",
-	//"long_64f_mono.wav",
-	//"long_64f_stereo.wav"
+	//"long_32b_stereo.wav",	TODO:
+	"long_32f_mono.wav",
+	"long_32f_stereo.wav",
+	"long_64f_mono.wav",
+	"long_64f_stereo.wav"
 };
 
 void Test_audioPlayOnce(AudioFuncCtx *ctx, const C8 *path) {
@@ -277,7 +277,7 @@ fail:
 clean:
 	RefPtr_dec(&as);
 	RefPtr_dec(&fs);
-}
+}*/
 
 //Seek test
 
@@ -289,60 +289,93 @@ void Test_audioSeekMidTrack(AudioFuncCtx *ctx) {
 	FileStreamRef *fs = NULL;
 	AudioStreamRef *as = NULL;
 
-	if (!openWav(ctx, "test/audio/mono16_long.wav", false, &fs, &as, &err)) goto fail;
+	if (!openWav(ctx, "long_64f_stereo.wav", false, &fs, &as, ctx->types, &err))
+		goto fail;
 
 	Ns midPoint = AudioStreamRef_ptr(as)->info.duration / 2;
-	if (!AudioStreamRef_seekTime(as, midPoint, &err)) goto fail;
-	if (!AudioStreamRef_play(as, ctx->alloc, &err)) goto fail;
-	if (!AudioDeviceRef_wait(ctx->device, false, ctx->alloc, &err)) goto fail;
+	if (!AudioStreamRef_seekTime(as, midPoint, &err))
+		goto fail;
+
+	if (!AudioStreamRef_play(as, ctx->alloc, &err))
+		goto fail;
+
+	if (!AudioDeviceRef_wait(ctx->device, false, ctx->alloc, &err))
+		goto fail;
 
 	Log_debugLn(ctx->alloc, "  PASS");
 	goto clean;
 
 fail:
-	Log_errorLn(ctx->alloc, "  FAIL: %s", err.msg);
+	Error_print(ctx->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 clean:
 	RefPtr_dec(&as); RefPtr_dec(&fs);
 }
 
-//-- Gain sweep
-//   Play a looping track while stepping gain down then back up.
-//   Audibly should fade out then fade in.
+//Gain sweep
+//Play a looping track while stepping gain down then back up.
+//Audibly should fade out then fade in.
 
 void Test_audioSourceGainSweep(AudioFuncCtx *ctx) {
 
-	Log_debugLn(ctx->alloc, "TEST: gain sweep 1.0->0.1->1.0 -- audibly fades out then in");
+	Log_debugLn(ctx->alloc, "TEST: gain sweep 1.0->0.1->1.0, audibly fades out then in");
 
 	Error err = Error_none();
 	FileStreamRef *fs = NULL;
 	AudioStreamRef *as = NULL;
 	AudioSourceRef *source = NULL;
 
-	if (!openWav(ctx, "test/audio/mono16_short.wav", true, &fs, &as, &err)) goto fail;
+	if (!openWav(ctx, "long_64f_stereo.wav", true, &fs, &as, ctx->types, &err))
+		goto fail;
 
 	AudioModifier modifier = (AudioModifier){ .gain = 1 };
 	RefPtrType sourceType = AudioSource_makeType(ctx->alloc);
-	if (!AudioDeviceRef_createSource(ctx->device, as, modifier, ctx->alloc, &sourceType, &source, &err)) goto fail;
-	if (!AudioStreamRef_play(as, ctx->alloc, &err)) goto fail;
+	if (!AudioDeviceRef_createSource(ctx->device, as, modifier, ctx->alloc, &sourceType, &source, &err))
+		goto fail;
+
+	if (!AudioStreamRef_play(as, ctx->alloc, &err))
+		goto fail;
+
+	//Gain done through listener
 
 	F32 gains[] = { 1.0f, 0.75f, 0.5f, 0.25f, 0.1f, 0.25f, 0.5f, 0.75f, 1.0f };
 	for (U64 i = 0; i < 9; ++i) {
-		if (!AudioSourceRef_updateGain(source, gains[i], ctx->alloc, &err)) goto fail;
-		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err)) goto fail;
-		Thread_sleep(300 * MU);		//300ms per step
+
+		if (!AudioDeviceRef_updateListenerGain(ctx->device, gains[i], &err))
+			goto fail;
+
+		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err))
+			goto fail;
+
+		Thread_sleep(500 * MS);
 	}
 
-	if (!AudioStreamRef_stop(as, &err)) goto fail;
+	//Gain done through source
+	//TODO: Fix this
+
+	for (U64 i = 0; i < 9; ++i) {
+
+		if (!AudioSourceRef_updateGain(source, gains[i], ctx->alloc, &err))
+			goto fail;
+
+		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err))
+			goto fail;
+
+		Thread_sleep(500 * MS);
+	}
+
+	if (!AudioDeviceRef_wait(ctx->device, false, ctx->alloc, &err))
+		goto fail;
 
 	Log_debugLn(ctx->alloc, "  PASS");
 	goto clean;
 
 fail:
-	Log_errorLn(ctx->alloc, "  FAIL: %s", err.msg);
+	Error_print(ctx->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 clean:
 	RefPtr_dec(&source); RefPtr_dec(&as); RefPtr_dec(&fs);
 }
 
+/*
 //-- Spatial sweep
 //   Move source from left to right while playing, listener at origin.
 //   Audibly should pan from left to right.
@@ -481,31 +514,15 @@ int main() {
 	}
 
 	//Loop each long track once
-	for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i) {
+	for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
 		Test_audioPlayLoop(&ctx, longTracks[i], 2);
-		Thread_sleep(SECOND);
-	}
 
-	Test_audioMono64fShort(&ctx);		TEST_GAP();
-	Test_audioStereo64fShort(&ctx);		TEST_GAP();
-
-	//Long tracks (no extra gap needed, they're long enough already)
-	Test_audioMono16BitLong(&ctx);
-	Test_audioStereo16BitLong(&ctx);
-
-	//Loops (loop count determines duration, gap after stop)
-	Test_audioLoopMono16BitShort(&ctx);		TEST_GAP();
-	Test_audioLoopStereo16BitShort(&ctx);	TEST_GAP();
-	Test_audioLoopMono24BitShort(&ctx);		TEST_GAP();
-	Test_audioLoopMono32fShort(&ctx);		TEST_GAP();
-
-	//Seek (plays second half of track, gap after)
-	Test_audioSeekMidTrack(&ctx);	TEST_GAP();
-
-	//Sweeps have their own internal sleeps between steps, gap after each
-	Test_audioSourceGainSweep(&ctx);		TEST_GAP();
 	Test_audioSourceSpatialSweep(&ctx);		TEST_GAP();
 	Test_audioListenerPositionSweep(&ctx);*/
+
+	//Seek (plays second half of track, gap after)
+	Test_audioSeekMidTrack(&ctx);
+	Test_audioSourceGainSweep(&ctx);
 
 #undef TEST_GAP
 
