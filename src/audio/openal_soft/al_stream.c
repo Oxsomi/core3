@@ -103,7 +103,7 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 	//Must be done by the stream itself
 	AL_PROCESS_ERROR(alSourcei(streamExt->source, AL_LOOPING, AL_FALSE));
 
-	AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, 1 /* TODO: Set this to 0 again */));
+	AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, 0));		//Muted, AudioSource has to take control
 	AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_PITCH, stream->info.pitch));
 
 	//Buffer to handle things like mono -> stereo, reverse, looping, etc.

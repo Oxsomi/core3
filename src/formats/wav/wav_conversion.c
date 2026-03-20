@@ -146,12 +146,8 @@ U64 WAVFile_avg(U64 a, U64 b, U64 newStride) {
 			return (v - I24_MAX) & U24_MAX;
 		}
 
-		case 2: {
-			a = (U16)(a + (U16)I16_MAX);		//Same as sign cast
-			b = (U16)(b + (U16)I16_MAX);
-			U64 v = (a + b) / 2;
-			return (U16)(v - (U16)I16_MAX);
-		}
+		case 2:
+			return (U64)(I16)(((I32)(I16)a + (I32)(I16)b) / 2);
 
 		case 1:
 		default:

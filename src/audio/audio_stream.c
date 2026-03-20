@@ -286,6 +286,7 @@ Bool AudioDeviceRef_createFromFile(
 	Bool isLoop,
 	Ns startOffset,
 	F32 pitch,
+	Bool flattenSound,
 	const Allocator *alloc,
 	const RefPtrType *type,
 	AudioStreamRef **outStream,
@@ -315,6 +316,7 @@ Bool AudioDeviceRef_createFromFile(
 	streamInfo.stream = inputStream;
 	streamInfo.pitch = !pitch ? 1 : pitch;
 	streamInfo.isLoop = isLoop;
+	streamInfo.flattenSound = flattenSound;
 
 	switch (magic) {
 

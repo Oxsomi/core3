@@ -36,10 +36,22 @@ Bool AudioSource_createExt(AudioSource *source, const Allocator *alloc, Error *e
 	ALAudioDevice *deviceExt = AudioDevice_ext(AudioDeviceRef_ptr(source->device), AL);
 	ALAudioSource *sourceExt = AudioSource_ext(source, AL);
 
-	ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
-	AL_PROCESS_ERROR(alGenSources(1, &sourceExt->source));
-	AL_PROCESS_ERROR(alSourcei(sourceExt->source, AL_LOOPING, AL_FALSE));
-	sourceExt->isInitialized = true;
+	//If there's a stream present then we have to take over the stream.
+	//This is because streams have an offset so different pitches and different time offsets can't be instantiated.
+	//So instead, our AudioSource will basically be taking control of the audio stream.
+
+	if (source->stream) {
+		ALAudioStream *streamExt = AudioStream_ext(RefPtr_data(source->stream, AudioStream), AL);
+		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
+		AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, 1));		//We're back
+	}
+
+	else {
+		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
+		AL_PROCESS_ERROR(alGenSources(1, &sourceExt->source));
+		AL_PROCESS_ERROR(alSourcei(sourceExt->source, AL_LOOPING, AL_FALSE));
+		sourceExt->isInitialized = true;
+	}
 
 clean:
 	return s_uccess;
@@ -54,7 +66,14 @@ void AudioSource_freeExt(AudioSource *source, const Allocator *alloc) {
 	Error *e_rr = NULL;
 	Bool s_uccess = true;
 
-	if(sourceExt->isInitialized) {
+	//Return to silent, in case we still have a ref laying around and another audio source will use it
+	if (source->stream) {
+		ALAudioStream *streamExt = AudioStream_ext(RefPtr_data(source->stream, AudioStream), AL);
+		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
+		AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, 0));
+	}
+	
+	else if(sourceExt->isInitialized) {
 		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
 		AL_PROCESS_ERROR(alDeleteSources(1, &sourceExt->source));
 		sourceExt->isInitialized = false;
@@ -78,19 +97,26 @@ Bool AudioSource_update(AudioSource *source, Error *e_rr) {
 	if((source->dirtyMask & 3) || (source->spatialAudio && (source->dirtyMask & 12)))
 		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
 
+	ALuint sourceId = sourceExt->source;
+
+	if (source->stream) {
+		ALAudioStream *streamExt = AudioStream_ext(RefPtr_data(source->stream, AudioStream), AL);
+		sourceId = streamExt->source;
+	}
+
 	if(source->dirtyMask & 1)
-		AL_PROCESS_ERROR(alSourcef(sourceExt->source, AL_GAIN, source->modifier.gain));
+		AL_PROCESS_ERROR(alSourcef(sourceId, AL_GAIN, source->modifier.gain));
 
 	if(source->dirtyMask & 2)
-		AL_PROCESS_ERROR(alSourcef(sourceExt->source, AL_PITCH, source->modifier.pitch));
+		AL_PROCESS_ERROR(alSourcef(sourceId, AL_PITCH, source->modifier.pitch));
 
 	if (source->spatialAudio) {
 
 		if(source->dirtyMask & 4)
-			AL_PROCESS_ERROR(alSource3fv(sourceExt->source, AL_POSITION, source->point.pos));
+			AL_PROCESS_ERROR(alSource3fv(sourceId, AL_POSITION, source->point.pos));
 
 		if(source->dirtyMask & 8)
-			AL_PROCESS_ERROR(alSource3fv(sourceExt->source, AL_VELOCITY, source->point.velocity));
+			AL_PROCESS_ERROR(alSource3fv(sourceId, AL_VELOCITY, source->point.velocity));
 	}
 
 	source->dirtyMask = 0;

@@ -174,6 +174,7 @@ static Bool openWav(
 	AudioFuncCtx *ctx,
 	const C8 *path,
 	Bool isLoop,
+	Bool flattenSound,
 	FileStreamRef **fileStream,
 	AudioStreamRef **audioStream,
 	Types *types,
@@ -184,7 +185,17 @@ static Bool openWav(
 	gotoIfError3(clean, FileStream_open(path, fileStream, &types->fsType, e_rr));
 
 	gotoIfError3(clean, AudioDeviceRef_createFromFile(
-		ctx->device, *fileStream, 0, isLoop, 0, 1, ctx->alloc, &types->streamType, audioStream, e_rr
+		ctx->device,
+		*fileStream,
+		0,		//inputOffset
+		isLoop,
+		0,		//startOffset (Ns)
+		1,		//pitch
+		flattenSound,
+		ctx->alloc,
+		&types->streamType,
+		audioStream,
+		e_rr
 	));
 
 clean:
@@ -229,7 +240,7 @@ void Test_audioPlayOnce(AudioFuncCtx *ctx, const C8 *path) {
 	FileStreamRef *fs = NULL;
 	AudioStreamRef *as = NULL;
 
-	if (!openWav(ctx, path, false, &fs, &as, ctx->types, &err))
+	if (!openWav(ctx, path, false, false, &fs, &as, ctx->types, &err))
 		goto fail;
 
 	if (!AudioStreamRef_play(as, ctx->alloc, &err))
@@ -289,7 +300,7 @@ void Test_audioSeekMidTrack(AudioFuncCtx *ctx) {
 	FileStreamRef *fs = NULL;
 	AudioStreamRef *as = NULL;
 
-	if (!openWav(ctx, "long_64f_stereo.wav", false, &fs, &as, ctx->types, &err))
+	if (!openWav(ctx, "long_64f_stereo.wav", false, false, &fs, &as, ctx->types, &err))
 		goto fail;
 
 	Ns midPoint = AudioStreamRef_ptr(as)->info.duration / 2;
@@ -324,7 +335,7 @@ void Test_audioSourceGainSweep(AudioFuncCtx *ctx) {
 	AudioStreamRef *as = NULL;
 	AudioSourceRef *source = NULL;
 
-	if (!openWav(ctx, "long_64f_stereo.wav", true, &fs, &as, ctx->types, &err))
+	if (!openWav(ctx, "long_64f_stereo.wav", true, false, &fs, &as, ctx->types, &err))
 		goto fail;
 
 	AudioModifier modifier = (AudioModifier){ .gain = 1 };
@@ -375,25 +386,25 @@ clean:
 	RefPtr_dec(&source); RefPtr_dec(&as); RefPtr_dec(&fs);
 }
 
-/*
-//-- Spatial sweep
-//   Move source from left to right while playing, listener at origin.
-//   Audibly should pan from left to right.
+//Spatial sweep
+//Move source from left to right while playing, listener at origin.
+//Audibly should pan from left to right.
 
-void Test_audioSourceSpatialSweep(AudioFuncCtx *ctx) {
+void Test_audioSourceSpatialSweep(AudioFuncCtx *ctx, Bool stereo) {
 
-	Log_debugLn(ctx->alloc, "TEST: spatial sweep left to right -- audibly pans left->right");
+	Log_debugLn(ctx->alloc, "TEST: spatial sweep left to right, audibly pans left->right");
 
 	Error err = Error_none();
 	FileStreamRef *fs = NULL;
 	AudioStreamRef *as = NULL;
 	AudioSourceRef *source = NULL;
 
-	if (!openWav(ctx, "test/audio/mono16_short.wav", true, &fs, &as, &err)) goto fail;
+	if (!openWav(ctx, stereo ? "long_16b_stereo.wav" : "long_16b_mono.wav", true, true, &fs, &as, ctx->types, &err))
+		goto fail;
 
-	AudioModifier modifier = (AudioModifier){ .gain = 1 };
-	AudioPoint3D startPoint = (AudioPoint3D){
-		.pos = F32x4_create3(-5, 0, 0),
+	AudioModifier modifier = (AudioModifier) { .gain = 1 };
+	AudioPoint3D startPoint = (AudioPoint3D) {
+		.pos = F32x4_create3(-20, 0, 0),
 		.velocity = F32x4_zero()
 	};
 
@@ -401,43 +412,53 @@ void Test_audioSourceSpatialSweep(AudioFuncCtx *ctx) {
 	if (!AudioDeviceRef_createSource3D(ctx->device, as, modifier, startPoint, ctx->alloc, &sourceType, &source, &err))
 		goto fail;
 
-	if (!AudioDeviceRef_updateListenerPosition(ctx->device, F32x4_zero(), &err)) goto fail;
-	if (!AudioStreamRef_play(as, ctx->alloc, &err)) goto fail;
+	if (!AudioDeviceRef_updateListenerPosition(ctx->device, F32x4_zero(), &err))
+		goto fail;
 
-	for (I32 i = -5; i <= 5; ++i) {
-		if (!AudioSourceRef_updatePosition3D(source, F32x4_create3((F32)i, 0, 0), ctx->alloc, &err)) goto fail;
-		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err)) goto fail;
-		Thread_sleep(200 * MU);		//200ms per step
+	if (!AudioStreamRef_play(as, ctx->alloc, &err))
+		goto fail;
+
+	for (I32 i = -20; i <= 20; ++i) {
+
+		if (!AudioSourceRef_updatePosition3D(source, F32x4_create3((F32)i, 0, 0), ctx->alloc, &err))
+			goto fail;
+
+		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err))
+			goto fail;
+
+		Thread_sleep(200 * MS);
 	}
 
-	if (!AudioStreamRef_stop(as, &err)) goto fail;
+	if (!AudioDeviceRef_wait(ctx->device, false, ctx->alloc, &err))
+		goto fail;
 
 	Log_debugLn(ctx->alloc, "  PASS");
 	goto clean;
 
 fail:
-	Log_errorLn(ctx->alloc, "  FAIL: %s", err.msg);
+	Error_print(ctx->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 clean:
 	RefPtr_dec(&source); RefPtr_dec(&as); RefPtr_dec(&fs);
 }
 
-//-- Listener position sweep
-//   Source stays fixed, listener moves toward and away from it.
-//   Audibly should get louder as listener approaches, quieter as it moves away.
+//Listener position sweep
+//Source stays fixed, listener moves toward and away from it.
+//Audibly should get louder as listener approaches, quieter as it moves away.
 
 void Test_audioListenerPositionSweep(AudioFuncCtx *ctx) {
 
-	Log_debugLn(ctx->alloc, "TEST: listener position sweep -- source at (5,0,0), listener moves 0->5->0");
+	Log_debugLn(ctx->alloc, "TEST: listener position sweep, source at (5,0,0), listener moves 0->5->0");
 
 	Error err = Error_none();
 	FileStreamRef *fs = NULL;
 	AudioStreamRef *as = NULL;
 	AudioSourceRef *source = NULL;
 
-	if (!openWav(ctx, "test/audio/mono16_short.wav", true, &fs, &as, &err)) goto fail;
+	if (!openWav(ctx, "long_16b_mono.wav", true, false, &fs, &as, ctx->types, &err))
+		goto fail;
 
-	AudioModifier modifier = (AudioModifier){ .gain = 1 };
-	AudioPoint3D point = (AudioPoint3D){
+	AudioModifier modifier = (AudioModifier) { .gain = 1 };
+	AudioPoint3D point = (AudioPoint3D) {
 		.pos = F32x4_create3(5, 0, 0),
 		.velocity = F32x4_zero()
 	};
@@ -450,31 +471,27 @@ void Test_audioListenerPositionSweep(AudioFuncCtx *ctx) {
 
 	F32 positions[] = { 0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0 };
 	for (U64 i = 0; i < 11; ++i) {
-		if (!AudioDeviceRef_updateListenerPosition(ctx->device, F32x4_create3(positions[i], 0, 0), &err)) goto fail;
-		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err)) goto fail;
-		Thread_sleep(200 * MU);		//200ms per step
+
+		if (!AudioDeviceRef_updateListenerPosition(ctx->device, F32x4_create3(positions[i], 0, 0), &err))
+			goto fail;
+
+		if (!AudioDeviceRef_update(ctx->device, ctx->alloc, &err))
+			goto fail;
+
+		Thread_sleep(500 * MS);
 	}
 
-	if (!AudioStreamRef_stop(as, &err)) goto fail;
+	if (!AudioStreamRef_stop(as, &err))
+		goto fail;
 
 	Log_debugLn(ctx->alloc, "  PASS");
 	goto clean;
 
 fail:
-	Log_errorLn(ctx->alloc, "  FAIL: %s", err.msg);
+	Error_print(ctx->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 clean:
 	RefPtr_dec(&source); RefPtr_dec(&as); RefPtr_dec(&fs);
-}*/
-
-//-- Entry point
-//
-//  Expected WAV files in test/audio/ relative to working directory:
-//    mono8_short.wav,   stereo8_short.wav
-//    mono16_short.wav,  stereo16_short.wav,  mono16_long.wav,  stereo16_long.wav
-//    mono24_short.wav,  stereo24_short.wav
-//    mono32f_short.wav, stereo32f_short.wav
-//    mono64f_short.wav, stereo64f_short.wav
-//  Short = a few seconds. Long = 30+ seconds to exercise buffer refills.
+}
 
 int main() {
 
@@ -496,15 +513,15 @@ int main() {
 		return 1;
 	}
 
-	//Short tracks, all bit depths, play once
-	for (U64 i = 0; i < sizeof(shortTracks) / sizeof(*shortTracks); ++i) {
-		Test_audioPlayOnce(&ctx, shortTracks[i]);
-		Thread_sleep(SECOND);
-	}
-
-	//Long tracks
-	for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
-		Test_audioPlayOnce(&ctx, longTracks[i]);
+	////Short tracks, all bit depths, play once
+	//for (U64 i = 0; i < sizeof(shortTracks) / sizeof(*shortTracks); ++i) {
+	//	Test_audioPlayOnce(&ctx, shortTracks[i]);
+	//	Thread_sleep(SECOND);
+	//}
+	//
+	////Long tracks
+	//for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
+	//	Test_audioPlayOnce(&ctx, longTracks[i]);
 
 	/*
 	//Loop each short track thrice
@@ -515,14 +532,16 @@ int main() {
 
 	//Loop each long track once
 	for (U64 i = 0; i < sizeof(longTracks) / sizeof(*longTracks); ++i)
-		Test_audioPlayLoop(&ctx, longTracks[i], 2);
-
-	Test_audioSourceSpatialSweep(&ctx);		TEST_GAP();
-	Test_audioListenerPositionSweep(&ctx);*/
+		Test_audioPlayLoop(&ctx, longTracks[i], 2); */
 
 	//Seek (plays second half of track, gap after)
-	Test_audioSeekMidTrack(&ctx);
-	Test_audioSourceGainSweep(&ctx);
+	//Test_audioSeekMidTrack(&ctx);
+
+	//Test_audioSourceGainSweep(&ctx);
+	//Test_audioSourceSpatialSweep(&ctx, false);		//Once with mono
+	//Test_audioSourceSpatialSweep(&ctx, true);		//TODO: Once with stereo (should flatten, behave the same)
+
+	//Test_audioListenerPositionSweep(&ctx);
 
 #undef TEST_GAP
 

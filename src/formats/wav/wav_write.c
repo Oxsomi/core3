@@ -108,7 +108,7 @@ Bool WAV_write(
 	RIFFHeader header = (RIFFHeader) {
 		.section = (RIFFSection) {
 			.magicNumber = RIFFHeader_magic,
-			.size = (U32) (sizeof(U32) + sizeof(RIFFFmtHeader) + sizeof(RIFFDataHeader) + streamLength)
+			.size = (U32) (sizeof(U32) + sizeof(RIFFFmtHeader) + sizeof(RIFFDataHeader) + streamLength + (streamLength & 1))
 		},
 		.magicNumberFile = RIFFWAVHeader_magic
 	};
@@ -181,6 +181,7 @@ Bool WAV_write(
 	//Data
 
 	if (!dataOutput) {
+
 		gotoIfError3(clean, StreamCursor_copyStream(
 			&cursorWrite,
 			&cursorRead,
@@ -190,6 +191,9 @@ Bool WAV_write(
 			alloc,
 			e_rr
 		));
+
+		if (streamLength & 1)
+			gotoIfError3(clean, StreamCursor_appendU8(&cursorWrite, &streamLength, 0, alloc, e_rr));
 	}
 
 	else *dataOutput = outputStreamOffset;

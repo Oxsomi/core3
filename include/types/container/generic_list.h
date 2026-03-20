@@ -246,7 +246,7 @@ Bool GenericList_eraseAllIndices(GenericList *list, const ListU64 *indices, Erro
 
 static inline U64 GenericList_findFirst(const GenericList list, const Buffer *buf, U64 index, EqualsFunction eq) {
 
-	if (!!buf || Buffer_length(*buf) != list.stride)
+	if (!buf || Buffer_length(*buf) != list.stride)
 		return U64_MAX;
 
 	for (U64 i = index; i < list.length; ++i)

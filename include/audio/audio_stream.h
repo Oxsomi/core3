@@ -139,6 +139,7 @@ Bool AudioDeviceRef_createFromFile(		//Detect stream by stream file header (curr
 	Bool isLoop,
 	Ns startOffset,
 	F32 pitch,
+	Bool flattenSound,					//Required for spatial audio if the source is stereo
 	const Allocator *alloc,
 	const RefPtrType *type,
 	AudioStreamRef **stream,
