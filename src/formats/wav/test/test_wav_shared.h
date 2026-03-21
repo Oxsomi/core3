@@ -54,3 +54,13 @@ void Test_WAVReadTruncated(Test *t);
 void Test_WAVConvertStereoToMono(Test *t);
 void Test_WAVConvertStereoLeftOnly(Test *t);
 void Test_WAVConvertMisalignedSrc(Test *t);
+
+void Test_WAVCvtI32Identity(Test *t);
+void Test_WAVCvtI32ToI16(Test *t);
+void Test_WAVCvtI32ToI24(Test *t);
+void Test_WAVCvtI32ToF32(Test *t);
+void Test_WAVAvgI32(Test *t);
+void Test_WAVRoundTripMonoPCM32(Test *t);
+void Test_WAVRoundTripStereoPCM32(Test *t);
+void Test_WAVConvertPCM32ToF32(Test *t);
+void Test_WAVConvertStereoPCM32ToMono(Test *t);

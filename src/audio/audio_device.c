@@ -113,7 +113,7 @@ clean:
 void AudioDeviceInfo_print(AudioDeviceInfo info, const Allocator *alloc) {
 	Log_debugLn(
 		alloc,
-		"%"PRIu64": %s (debug: %s, mainOutput: %s, F32: %s, F64: %s, U24: %s, U32 %s)",
+		"%"PRIu64": %s (debug: %s, mainOutput: %s, F32: %s, F64: %s, U24: %s, U32: %s)",
 		info.id,
 		info.name,
 		info.flags & EAudioDeviceFlags_Debug ? "true" : "false",

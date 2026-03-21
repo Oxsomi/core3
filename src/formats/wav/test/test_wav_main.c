@@ -24,10 +24,10 @@
 int main() {
 
 	const Allocator alloc = BasicAllocator_instance;
-
-	Test t = (Test) { 0 };
+	Test t = (Test){ 0 };
 	t.alloc = &alloc;
 
+	//WAVFile_cvt
 	Test_WAVCvtU8Identity(&t);
 	Test_WAVCvtI16Identity(&t);
 	Test_WAVCvtI16ToU8(&t);
@@ -39,30 +39,43 @@ int main() {
 	Test_WAVCvtF64ToF32(&t);
 	Test_WAVCvtF64Identity(&t);
 	Test_WAVCvtIndexOffset(&t);
+	Test_WAVCvtI32Identity(&t);
+	Test_WAVCvtI32ToI16(&t);
+	Test_WAVCvtI32ToI24(&t);
+	Test_WAVCvtI32ToF32(&t);
 
+	//WAVFile_avg
 	Test_WAVAvgU8(&t);
 	Test_WAVAvgI16(&t);
 	Test_WAVAvgF32(&t);
 	Test_WAVAvgF64(&t);
 	Test_WAVAvgI24(&t);
+	Test_WAVAvgI32(&t);
 
+	//WAV round-trips
 	Test_WAVRoundTripStereo16(&t);
 	Test_WAVRoundTripMonoF32(&t);
 	Test_WAVRoundTripMono8(&t);
 	Test_WAVRoundTripMono64(&t);
+	Test_WAVRoundTripMonoPCM32(&t);
+	Test_WAVRoundTripStereoPCM32(&t);
 
+	//WAV_write error cases
 	Test_WAVWriteInvalidFreq(&t);
 	Test_WAVWriteInvalidStride(&t);
 	Test_WAVWriteUnalignedLength(&t);
 
+	//WAV_read error cases
 	Test_WAVReadInvalidMagic(&t);
 	Test_WAVReadTruncated(&t);
 
+	//WAVFile_convert
 	Test_WAVConvertStereoToMono(&t);
 	Test_WAVConvertStereoLeftOnly(&t);
 	Test_WAVConvertMisalignedSrc(&t);
+	Test_WAVConvertPCM32ToF32(&t);
+	Test_WAVConvertStereoPCM32ToMono(&t);
 
 	BasicAllocator_checkLeakedMem(&t);
-
 	return Test_end(&t);
 }
