@@ -39,7 +39,8 @@ Bool WAV_write(
 	U64 streamLength,		//0 = remainder of input stream; length of output data
 	Bool isStereo,
 	U32 freq,				//8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz
-	U16 stride,				//8, 16, 24 (PCM), 32, 64 (Float)
+	U16 stride,				//8, 16, 24 (PCM), 32 (PCM or Float), 64 (Float)
+	Bool isPcm,				//To distinguish 32-bit
 	U64 *dataOutput,		//If NULL, will directly output the data to stream, otherwise points to the offset of the data
 	const Allocator *alloc,
 	Error *e_rr
@@ -73,9 +74,9 @@ typedef U8 AudioFormat;
 
 typedef struct WAVConversionInfo {
 	AudioFormat format;
-	SplitType splitType;		//Only possible if isStereo
-	U8 oldByteCount;			//Upper bit indicates 'isStereo'
-	U8 newByteCount;
+	SplitType splitType;		//Only possible if isStereo, bit below: pcm
+	U8 oldByteCountStereoPcm;	//Upper bit indicates 'isStereo', bit below: pcm
+	U8 newByteCountStereoPcm;
 } WAVConversionInfo;
 
 Bool WAVFile_convert(
@@ -91,10 +92,11 @@ Bool WAVFile_convert(
 	Error *e_rr
 );
 
-//Assumes correct alignment, mostly called internally
-U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i);
+//Assumes correct alignment, mostly called internally, 'pcm' is only used to distinguish ambiguous formats
+U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i, Bool pcm, Bool newPcm);
 
-U64 WAVFile_avg(U64 a, U64 b, U64 stride);		//Average two values (preserving encoding)
+//Average two values (preserving encoding), 'pcm' is only used to distinguish ambiguous formats
+U64 WAVFile_avg(U64 a, U64 b, U64 stride, Bool pcm);
 
 #ifdef __cplusplus
 	}

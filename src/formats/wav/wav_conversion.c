@@ -32,10 +32,11 @@
 
 //Note: This only handles truncation, it can't handle expansion
 
-U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i) {
+U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i, Bool pcm, Bool newPcm) {
 
 	const U8  *cvt8  = (const U8*)  cvt;
 	const U16 *cvt16 = (const U16*) cvt;
+	const U32 *cvt32pcm = (const U32*) cvt;
 	const F32 *cvt32 = (const F32*) cvt;
 	const F64 *cvt64 = (const F64*) cvt;
 
@@ -54,6 +55,28 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i) {
 			return (U8)(cvt8[i + 2] + 0x7F);		//Unsigned normalization
 
 		case 4:	{
+
+			if (pcm) {
+
+				if (newStride == 4 && !newPcm) {
+					F32 f = (F32)(I32)cvt32pcm[i] / (F32)I32_MAX;
+					const void *fv = (const void*)&f;
+					return *(const U32*)fv;
+				}
+
+				else if (newStride == 4)
+					return cvt32pcm[i];
+
+				else if (newStride == 3) {
+					i *= 4;
+					return cvt8[i + 1] | ((U32)cvt8[i + 2] << 8) | ((U32)cvt8[i + 3] << 16);
+				}
+
+				else if (newStride == 2)
+					return cvt16[(i << 1) | 1];
+
+				return (U8)(cvt8[(i << 2) | 3] + 0x7F);
+			}
 
 			F32 clamped = F32_clamp(cvt32[i], -1, 1);
 			F32 normalized = clamped * 0.5f + 0.5f;
@@ -120,7 +143,7 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i) {
 	}
 }
 
-U64 WAVFile_avg(U64 a, U64 b, U64 newStride) {
+U64 WAVFile_avg(U64 a, U64 b, U64 newStride, Bool pcm) {
 
 	const void *av = (const void*)&a;
 	const void *bv = (const void*)&b;
@@ -128,6 +151,14 @@ U64 WAVFile_avg(U64 a, U64 b, U64 newStride) {
 	switch (newStride) {
 
 		case 4: {
+
+			if (pcm) {
+				a = (a + I32_MAX) & U32_MAX;		//Same as sign cast
+				b = (b + I32_MAX) & U32_MAX;
+				U64 v = (a + b) / 2;
+				return (v - I32_MAX) & U32_MAX;
+			}
+
 			F32 avg = (*(const F32*)av + *(const F32*)bv) / 2;
 			const void *avgv = (const void*)&avg;
 			return *(const U32*)avgv;
@@ -175,8 +206,12 @@ Bool WAVFile_convert(
 	gotoIfError3(clean, StreamCursor_create(inputStreamRef, 0, false, alloc, &cursorRead, e_rr));
 	gotoIfError3(clean, StreamCursor_create(outputStreamRef, 0, true, alloc, &cursorWrite, e_rr));
 
-	Bool stereo = info.oldByteCount >> 7;
-	U8 oldByteCount = info.oldByteCount & 0x7F;
+	Bool stereo = info.oldByteCountStereoPcm >> 7;
+	Bool pcm = info.oldByteCountStereoPcm & (1 << 6);
+	U8 oldByteCount = info.oldByteCountStereoPcm & 0x3F;
+
+	Bool newPcm = info.newByteCountStereoPcm & (1 << 6);
+	U8 newByteCount = info.newByteCountStereoPcm & 0x3F;
 
 	U8 oldBytesPerStep = oldByteCount;
 
@@ -200,7 +235,7 @@ Bool WAVFile_convert(
 
 	if(writeHeader) {
 
-		U64 newStreamLen = srcLen / oldBytesPerStep * info.newByteCount;
+		U64 newStreamLen = srcLen / oldBytesPerStep * newByteCount;
 
 		gotoIfError3(clean, WAV_write(
 			outputStreamRef,
@@ -210,29 +245,30 @@ Bool WAVFile_convert(
 			newStreamLen,
 			stereo && !info.splitType,
 			freq,
-			info.newByteCount << 3,
+			newByteCount << 3,
+			newPcm,
 			&dstOff,
 			alloc,
 			e_rr
 		));
 	}
 
-	for(; srcOff < srcEnd; srcOff += oldBytesPerStep, dstOff += info.newByteCount) {
+	for(; srcOff < srcEnd; srcOff += oldBytesPerStep, dstOff += newByteCount) {
 
 		U8 tmp[16];
 		gotoIfError3(clean, StreamCursor_read(
 			&cursorRead, Buffer_createRef(tmp, sizeof(tmp)), srcOff, 0, oldBytesPerStep, false, alloc, e_rr
 		));
 
-		U64 converted = WAVFile_cvt(tmp, oldByteCount, info.newByteCount, left);
+		U64 converted = WAVFile_cvt(tmp, oldByteCount, newByteCount, left, pcm, newPcm);
 
 		if (right != left) {
-			U64 convertedRight = WAVFile_cvt(tmp, oldByteCount, info.newByteCount, right);
-			converted = WAVFile_avg(converted, convertedRight, info.newByteCount);
+			U64 convertedRight = WAVFile_cvt(tmp, oldByteCount, newByteCount, right, pcm, newPcm);
+			converted = WAVFile_avg(converted, convertedRight, newByteCount, newPcm);
 		}
 
-		Buffer cvt = Buffer_createRefConst(&converted, info.newByteCount);
-		gotoIfError3(clean, StreamCursor_write(&cursorWrite, cvt, 0, dstOff, info.newByteCount, false, alloc, e_rr));
+		Buffer cvt = Buffer_createRefConst(&converted, newByteCount);
+		gotoIfError3(clean, StreamCursor_write(&cursorWrite, cvt, 0, dstOff, newByteCount, false, alloc, e_rr));
 	}
 
 clean:

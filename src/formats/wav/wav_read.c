@@ -175,9 +175,9 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 					}
 				}
 
-				if(result->fmt.stride >= 32 && result->fmt.format != ERIFFAudioFormat_IEEE754)
+				if(result->fmt.stride > 32 && result->fmt.format != ERIFFAudioFormat_IEEE754)
 					retError(clean, Error_invalidState(
-						0, "WAV_read() format unsupported for 32 or 64 bit depth"
+						0, "WAV_read() PCM format unsupported for 64 bit depth"
 					));
 
 				if(result->fmt.stride <= 24 && result->fmt.format != ERIFFAudioFormat_PCM)

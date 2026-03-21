@@ -29,22 +29,6 @@
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
-U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format) {
-	return (U8)(format & 1) + 1;
-}
-
-U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format) {
-
-	if((format >> 1) > 3)	//U24
-		return 3;
-
-	return 1 << (U8)(format >> 1);
-}
-
-U8 EAudioStreamFormat_getSize(EAudioStreamFormat format) {
-	return EAudioStreamFormat_getChannels(format) * EAudioStreamFormat_getStrideBytes(format);
-}
-
 Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -341,7 +325,13 @@ Bool AudioDeviceRef_createFromFile(
 			if(file.fmt.stride == 24)
 				format = file.fmt.channels == 2 ? EAudioStreamFormat_Stereo24Ext : EAudioStreamFormat_Mono24Ext;
 
-			else format = (AudioStreamFormat) EAudioStreamFormat_create(file.fmt.channels, file.fmt.stride >> 3);
+			else {
+
+				if(file.fmt.stride == 32 && file.fmt.format == ERIFFAudioFormat_PCM)
+					format = file.fmt.channels == 2 ? EAudioStreamFormat_Stereo32Ext : EAudioStreamFormat_Mono32Ext;
+
+				else format = (AudioStreamFormat) EAudioStreamFormat_create(file.fmt.channels, file.fmt.stride >> 3);
+			}
 
 			streamInfo.flags4_format4 |= format << 4;
 

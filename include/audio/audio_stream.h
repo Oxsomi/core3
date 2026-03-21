@@ -33,9 +33,11 @@ typedef struct CharString CharString;
 typedef struct AudioStreamInfo AudioStreamInfo;
 
 //Stride bytes has one exception; stride of 5 corresponds with 24-bit, as this is common but will have to be remapped.
-//Otherwise it's 2^n, 0 = 1B (8b), 1 = 2B (16b), 2 = 4 (32b), 3 = 8 (64b). 4 = 3 (24b).
+//Otherwise it's 2^n, 0 = 1B (8b), 1 = 2B (16b), 2 = 4 (32b), 3 = 8 (64b). 4 = 3 (24b), 5 = 4 (32b, PCM).
 
-#define EAudioStreamFormat_remapStride(x) ((x) == 1 ? 0 : ((x) == 2 ? 1 : ((x) == 4 ? 2 : ((x) == 3 ? 4 : 3))))
+#define EAudioStreamFormat_remapStride(x) \
+	((x) == 1 ? 0 : ((x) == 2 ? 1 : ((x) == 4 ? 2 : ((x) == 3 || (x) == 5 ? 4 : 3))))
+
 #define EAudioStreamFormat_create(channels, strideBytes) \
 	((EAudioStreamFormat_remapStride(strideBytes) << 1) | ((channels - 1) & 1))
 
@@ -56,18 +58,39 @@ typedef enum EAudioStreamFormat {		//1b channels, 2b (1 << x = strideBytes), 4 b
 	EAudioStreamFormat_Mono64fExt,
 	EAudioStreamFormat_Stereo64fExt,
 
-	EAudioStreamFormat_Mono24Ext,
-	EAudioStreamFormat_Stereo24Ext,
+	EAudioStreamFormat_Mono24Ext,				//PCM24 mono
+	EAudioStreamFormat_Stereo24Ext,				//PCM24 stereo
 
-	EAudioStreamFormat_Count
+	EAudioStreamFormat_Mono32Ext,				//PCM32 mono
+	EAudioStreamFormat_Stereo32Ext,				//PCM32 stereo
+
+	EAudioStreamFormat_Count,
+
+	EAudioStreamFormat_FloatStart	= EAudioStreamFormat_Mono32fExt,
+	EAudioStreamFormat_FloatEnd		= EAudioStreamFormat_Stereo64fExt
 
 } EAudioStreamFormat;
 
 typedef U8 AudioStreamFormat;
 
-U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format);
-U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format);
-U8 EAudioStreamFormat_getSize(EAudioStreamFormat format);
+static inline U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format) {
+	return (U8)(format & 1) + 1;
+}
+
+static inline U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format) {
+
+	if ((format >> 1) > 4)	//U32
+		return 4;
+
+	if ((format >> 1) == 4)	//U24
+		return 3;
+
+	return 1 << (U8)(format >> 1);
+}
+
+static inline U8 EAudioStreamFormat_getSize(EAudioStreamFormat format) {
+	return EAudioStreamFormat_getChannels(format) * EAudioStreamFormat_getStrideBytes(format);
+}
 
 typedef enum EAudioStreamInfoFlags {			//4-bit flags
 	EAudioStreamInfoFlags_None			= 0,

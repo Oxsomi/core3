@@ -52,9 +52,21 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 	U8 stride = EAudioStreamFormat_getStrideBytes(ogFormat);
 	Bool fallback = false;
 
+	Bool pcm = !(ogFormat >= EAudioStreamFormat_FloatStart && ogFormat <= EAudioStreamFormat_FloatEnd);
+
 	switch (stride) {
+
 		case 3:		fallback = !(device->info.flags & EAudioDeviceFlags_HasU24Ext);		break;
-		case 4:		fallback = !(device->info.flags & EAudioDeviceFlags_HasF32Ext);		break;
+
+		case 4:
+
+			if(pcm)
+				fallback = !(device->info.flags & EAudioDeviceFlags_HasU32Ext);
+
+			else fallback = !(device->info.flags & EAudioDeviceFlags_HasF32Ext);
+
+			break;
+
 		case 8:		fallback = !(device->info.flags & EAudioDeviceFlags_HasF64Ext);		break;
 		default:																		break;
 	}
@@ -252,6 +264,8 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 	U8 inputStep = changeChannels ? 2 : 1;
 
 	Bool isLoop = AudioStreamInfo_isLoop(&stream->info);
+	Bool ogPcm = !(ogFormat >= EAudioStreamFormat_FloatStart && ogFormat <= EAudioStreamFormat_FloatEnd);
+	Bool newPcm = !(stream->format >= EAudioStreamFormat_FloatStart && stream->format <= EAudioStreamFormat_FloatEnd);
 
 	for (U32 i = 0; i < freeBufferCount; ++i) {
 
@@ -287,10 +301,15 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 					for (U64 j = 0, k = filled / newStride; j < blocks; j += inputStep, ++k) {
 
-						U64 result = WAVFile_cvt(src, ogStride, newStride, j);
+						U64 result = WAVFile_cvt(src, ogStride, newStride, j, ogPcm, newPcm);
 
 						if (changeChannels)
-							result = WAVFile_avg(result, WAVFile_cvt(src, ogStride, newStride, j + 1), newStride);
+							result = WAVFile_avg(
+								result,
+								WAVFile_cvt(src, ogStride, newStride, j + 1, ogPcm, newPcm),
+								newStride,
+								newPcm
+							);
 
 						switch (newStride) {
 							default:	tmp16[k] = (U16)result;	break;

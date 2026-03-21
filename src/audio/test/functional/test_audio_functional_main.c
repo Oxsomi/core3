@@ -223,8 +223,8 @@ static const C8 *shortTracks[] = {
 	"short_16b_stereo.wav",
 	"short_24b_mono.wav",
 	"short_24b_stereo.wav",
-	//"short_32b_mono.wav",		TODO:
-	//"short_32b_stereo.wav",	TODO:
+	"short_32b_mono.wav",
+	"short_32b_stereo.wav",
 	"short_32f_mono.wav",
 	"short_32f_stereo.wav",
 	"short_64f_mono.wav",
@@ -238,8 +238,8 @@ static const C8 *longTracks[] = {
 	"long_16b_stereo.wav",
 	"long_24b_mono.wav",
 	"long_24b_stereo.wav",
-	//"long_32b_mono.wav",		TODO:
-	//"long_32b_stereo.wav",	TODO:
+	"long_32b_mono.wav",
+	"long_32b_stereo.wav",
 	"long_32f_mono.wav",
 	"long_32f_stereo.wav",
 	"long_64f_mono.wav",

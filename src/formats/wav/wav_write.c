@@ -31,6 +31,7 @@ Bool WAV_write(
 	Bool isStereo,
 	U32 freq,
 	U16 stride,
+	Bool isPcm,
 	U64 *dataOutput,
 	const Allocator *alloc,
 	Error *e_rr
@@ -88,8 +89,28 @@ Bool WAV_write(
 	}
 
 	switch (stride) {
-		case 8: case 16: case 24: case 32: case 64:
+
+		case 8: case 16: case 24:
+
+			if(!isPcm)
+				retError(clean, Error_invalidParameter(
+					0, 0, "WAV_write() wav file doesn't understand 8, 16 or 24-bit floats"
+				));
+
 			break;
+
+		case 32:		//PCM and float both supported
+			break;
+
+		case 64:
+
+			if (isPcm)
+				retError(clean, Error_invalidParameter(
+					0, 0, "WAV_write() wav file doesn't understand 64-bit PCM"
+				));
+
+			break;
+
 		default:
 			retError(clean, Error_invalidParameter(
 				0, 0, "WAV_write() wav file has invalid stride. Must be 8, 16, 24, 32 or 64"
@@ -135,7 +156,7 @@ Bool WAV_write(
 			.size = (U32)(sizeof(RIFFFmtHeader) - sizeof(RIFFSection))
 		},
 	
-		.format = stride > 24 ? ERIFFAudioFormat_IEEE754 : ERIFFAudioFormat_PCM,
+		.format = !isPcm ? ERIFFAudioFormat_IEEE754 : ERIFFAudioFormat_PCM,
 		.channels = isStereo ? 2 : 1,
 
 		.frequency = freq,
