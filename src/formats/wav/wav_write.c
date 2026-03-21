@@ -213,8 +213,10 @@ Bool WAV_write(
 			e_rr
 		));
 
-		if (streamLength & 1)
-			gotoIfError3(clean, StreamCursor_appendU8(&cursorWrite, &streamLength, 0, alloc, e_rr));
+		if (streamLength & 1) {
+			U64 writeOff = outputStreamOffset + streamLength;
+			gotoIfError3(clean, StreamCursor_appendU8(&cursorWrite, &writeOff, 0, alloc, e_rr));
+		}
 	}
 
 	else *dataOutput = outputStreamOffset;

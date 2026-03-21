@@ -918,3 +918,135 @@ doneSterPCM32:
 	RefPtr_dec(&inputSr);
 	RefPtr_dec(&outputSr);
 }
+
+//WAV_read: WAVE_FORMAT_EXTENSIBLE
+//Hand-crafted extensible WAV: 44100Hz, stereo, 24-bit valid in 32-bit container, 8 bytes of data (2 stereo frames).
+//Verifies that WAV_read correctly parses the extensible fmt chunk and extracts bitsPerSample as the real stride.
+
+void Test_WAVReadExtended(Test *t) {
+ 
+	Test_setModule(t, "WAV_read: WAVE_FORMAT_EXTENSIBLE stereo 24-in-32");
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+ 
+	StreamRef *sr = NULL;
+ 
+	//Layout:
+	//  RIFFHeader       12 bytes  (RIFF + size + WAVE)
+	//  fmt  chunk       48 bytes  (RIFFSection=8, WAVEFORMATEX body=16, cbSize=2, ext body=22)
+	//  data chunk        8 bytes  (RIFFSection=8) + 8 bytes data = 16 bytes
+	//  Total            76 bytes, RIFF size = 76 - 8 = 68
+ 
+	//44100Hz stereo 32-bit container: bytesPerBlock = 8, bytesPerSec = 44100*8 = 352800
+	//RIFF size = 4(WAVE) + 48(fmt) + 8(data hdr) + 8(data) = 68
+ 
+	static const U8 wav[] = {
+ 
+		//RIFFHeader (12 bytes)
+		'R','I','F','F',
+		68, 0, 0, 0,			//RIFF size = 68
+		'W','A','V','E',
+ 
+		//fmt chunk: RIFFSection (8 bytes)
+		'f','m','t',' ',
+		40, 0, 0, 0,			//fmt chunk body size = 40
+ 
+		//WAVEFORMATEX body (16 bytes)
+		0xFE, 0xFF,				//wFormatTag = WAVE_FORMAT_EXTENSIBLE (0xFFFE little-endian)
+		2, 0,					//nChannels = 2
+		0x44, 0xAC, 0, 0,		//nSamplesPerSec = 44100 (0xAC44)
+		0x20, 0x62, 0x05, 0x00,	//nAvgBytesPerSec = 352800
+		8, 0,					//nBlockAlign = 8
+		32, 0,					//wBitsPerSample = 32 (container)
+ 
+		//cbSize + extension body (24 bytes)
+		22, 0,					//cbSize = 22
+		24, 0,					//wValidBitsPerSample = 24
+		4, 0, 0, 0,				//dwChannelMask = SPEAKER_FRONT_CENTER (0x4) -- stereo would be 0x3
+		1, 0, 0, 0,				//SubFormat Data1 = 0x00000001 (PCM)
+		0x00, 0x00,				//Data2 = 0x0000
+		0x10, 0x00,				//Data3 = 0x0010 (little-endian)
+		0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71,	//Data4
+ 
+		//data chunk (8 + 8 bytes)
+		'd','a','t','a',
+		8, 0, 0, 0,				//data size = 8
+ 
+		//2 stereo frames of 32-bit PCM (8 bytes)
+		0x00, 0x00, 0x00, 0x12,	//frame 0 left
+		0x00, 0x00, 0x00, 0x34	//frame 0 right
+	};
+ 
+	if (!makeSampleStream(t, wav, sizeof(wav), &type, &sr)) {
+		Test_assert(t, "build extensible stream", false);
+		goto doneExtended;
+	}
+ 
+	{
+		WAVFile result = { 0 };
+		Test_assert(t, "WAV_read extensible succeeds", WAV_read(sr, 0, 0, t->alloc, &result, &t->err));
+		Test_assert(t, "ext channels",   result.fmt.channels  == 2);
+		Test_assert(t, "ext stride",     result.fmt.stride    == 32);		//bitsPerSample, not container
+		Test_assert(t, "ext freq",       result.fmt.frequency == 44100);
+		Test_assert(t, "ext format PCM", result.fmt.format    == ERIFFAudioFormat_PCM);
+		Test_assert(t, "ext dataLen",    result.dataLength    == 8);
+		Test_assert(t, "ext dataStart",  result.dataStart     >  0);
+	}
+ 
+doneExtended:
+	RefPtr_dec(&sr);
+}
+
+//WAV_write / WAV_read: odd-length data chunk gets a padding byte.
+//Uses 1 sample of mono 8-bit (1 byte of data), odd length, so a 0x00 pad byte must follow.
+//WAV_read must correctly parse this without the padding byte being counted as data.
+ 
+void Test_WAVOddLengthPadding(Test *t) {
+ 
+	Test_setModule(t, "WAV odd-length: padding byte written and read correctly");
+	const RefPtrType type = MemoryStream_makeType(t->alloc);
+ 
+	StreamRef *inputSr   = NULL;
+	StreamRef *archiveSr = NULL;
+ 
+	//1 byte of mono 8-bit data -- odd, so WAV_write must append a padding byte
+	U8 sample[1] = { 0xAB };
+ 
+	if (!makeSampleStream(t, sample, 1, &type, &inputSr)) {
+		Test_assert(t, "build 1-byte stream", false);
+		goto doneOdd;
+	}
+ 
+	if (!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &type, &archiveSr, &t->err)) {
+		Test_assert(t, "create archive stream", false);
+		goto doneOdd;
+	}
+
+	Bool wavWriteSuccess = WAV_write(archiveSr, inputSr, 0, 0, 1, false, 44100, 8, true, NULL, t->alloc, &t->err);
+ 
+	Test_assert(t, "WAV_write 1-byte succeeds", wavWriteSuccess);
+ 
+	if(wavWriteSuccess) {
+
+		//Stream size should be: 12 (RIFFHeader) + 24 (fmt) + 8 (data hdr) + 1 (data) + 1 (pad) = 46
+		OxStream *s = RefPtr_data(archiveSr, OxStream);
+		Test_assert(t, "stream size includes pad byte", s->size == 46);
+ 
+		//Padding byte must be 0x00
+		MemoryStream *ms  = RefPtr_data(archiveSr, MemoryStream);
+		Test_assert(t, "pad byte is 0x00", ms->data.ptr[45] == 0x00);
+ 
+		//WAV_read must parse cleanly and report dataLength=1, not 2
+		WAVFile result = { 0 };
+		Test_assert(t, "WAV_read odd-length succeeds", WAV_read(archiveSr, 0, 0, t->alloc, &result, &t->err));
+		Test_assert(t, "odd dataLength == 1", result.dataLength == 1);
+		Test_assert(t, "odd channels == 1",   result.fmt.channels == 1);
+		Test_assert(t, "odd stride == 8",     result.fmt.stride   == 8);
+ 
+		//Verify the sample byte is at the right offset and correct value
+		Test_assert(t, "sample byte correct", ms->data.ptr[result.dataStart] == 0xAB);
+	}
+ 
+doneOdd:
+	RefPtr_dec(&inputSr);
+	RefPtr_dec(&archiveSr);
+}

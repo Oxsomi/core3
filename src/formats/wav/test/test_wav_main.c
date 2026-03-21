@@ -69,6 +69,12 @@ int main() {
 	Test_WAVReadInvalidMagic(&t);
 	Test_WAVReadTruncated(&t);
 
+	//WAV_read extensible header
+	Test_WAVReadExtended(&t);
+
+	//WAV odd-length padding
+	Test_WAVOddLengthPadding(&t);
+
 	//WAVFile_convert
 	Test_WAVConvertStereoToMono(&t);
 	Test_WAVConvertStereoLeftOnly(&t);

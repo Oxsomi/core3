@@ -64,3 +64,6 @@ void Test_WAVRoundTripMonoPCM32(Test *t);
 void Test_WAVRoundTripStereoPCM32(Test *t);
 void Test_WAVConvertPCM32ToF32(Test *t);
 void Test_WAVConvertStereoPCM32ToMono(Test *t);
+
+void Test_WAVReadExtended(Test *t);
+void Test_WAVOddLengthPadding(Test *t);
