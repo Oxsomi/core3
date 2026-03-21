@@ -64,12 +64,12 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 	if(fallback)
 		format = EAudioStreamFormat_Mono16 + (format & 1);
 
-	stream->format = format;
-
 	Bool flatten = AudioStreamInfo_flattenSound(&stream->info);
 
 	if(flatten)			//Get rid of stereo
 		format &=~ 1;
+
+	stream->format = format;
 
 	#ifndef NDEBUG
 		if(stream->format != ogFormat)

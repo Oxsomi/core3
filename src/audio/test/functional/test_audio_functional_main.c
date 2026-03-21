@@ -817,7 +817,7 @@ int main() {
 
 	//Spatial sweeps
 	Test_audioSourceSpatialSweep(&ctx, false);	//Mono
-	//Test_audioSourceSpatialSweep(&ctx, true);	//Stereo with flattenSound TODO: Fix this one
+	Test_audioSourceSpatialSweep(&ctx, true);	//Stereo with flattenSound
 
 	//Listener sweeps
 	Test_audioListenerPositionSweep(&ctx);
