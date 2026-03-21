@@ -370,8 +370,7 @@ void Test_audioSourceStereoSpatialRejected(Test *t) {
 	);
 
 	AudioStreamInfo info = (AudioStreamInfo) {
-		.format = EAudioStreamFormat_Stereo16,
-		.flattenSound = false,
+		.flags4_format4 = EAudioStreamFormat_Stereo16 << 4,
 		.sampleRate = 44100,
 		.bytesPerSecond = 44100 * 4,
 		.dataLengthLo32 = sizeof(silence),

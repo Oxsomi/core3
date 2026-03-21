@@ -39,7 +39,7 @@ typedef struct AudioStreamInfo AudioStreamInfo;
 #define EAudioStreamFormat_create(channels, strideBytes) \
 	((EAudioStreamFormat_remapStride(strideBytes) << 1) | ((channels - 1) & 1))
 
-typedef enum EAudioStreamFormat {		//1b channels, 2b (1 << x = strideBytes)
+typedef enum EAudioStreamFormat {		//1b channels, 2b (1 << x = strideBytes), 4 bit max.
 
 	EAudioStreamFormat_Mono8,
 	EAudioStreamFormat_Stereo8,
@@ -69,13 +69,18 @@ U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format);
 U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format);
 U8 EAudioStreamFormat_getSize(EAudioStreamFormat format);
 
+typedef enum EAudioStreamInfoFlags {			//4-bit flags
+	EAudioStreamInfoFlags_None			= 0,
+	EAudioStreamInfoFlags_IsLoop		= 1 << 0,
+	EAudioStreamInfoFlags_FlattenSound	= 1 << 1	//Force stereo sound into mono, required for 3D spatial audio if stereo
+} EAudioStreamInfoFlags;
+
 typedef struct AudioStreamInfo {
 
 	F32 pitch;
 	U8 dataLengthHi8;
-	Bool flattenSound;			//Force stereo sound into mono, required for 3D spatial audio if stereo
-	AudioStreamFormat format;	//The format in the stream
-	Bool isLoop;
+	U8 flags4_format4;			//EAudioStreamInfoFlags, AudioStreamFormat
+	U16 loops;					//0: infinite, otherwise how many times a loop is permitted for a stream
 
 	Ns duration;
 
@@ -90,6 +95,26 @@ typedef struct AudioStreamInfo {
 	StreamRef *stream;
 
 } AudioStreamInfo;
+
+static inline EAudioStreamInfoFlags AudioStreamInfo_flags(const AudioStreamInfo *info) {
+	return info ? (info->flags4_format4 & 0xF) : EAudioStreamInfoFlags_None;
+}
+
+static inline EAudioStreamFormat AudioStreamInfo_format(const AudioStreamInfo *info) {
+	return info ? (info->flags4_format4 >> 4) : EAudioStreamFormat_Count;
+}
+
+static inline Bool AudioStreamInfo_isLoop(const AudioStreamInfo *info) {
+	return info && (info->flags4_format4 & EAudioStreamInfoFlags_IsLoop);
+}
+
+static inline Bool AudioStreamInfo_isInfiniteLoop(const AudioStreamInfo *info) {
+	return info && (info->flags4_format4 & EAudioStreamInfoFlags_IsLoop) && !info->loops;
+}
+
+static inline Bool AudioStreamInfo_flattenSound(const AudioStreamInfo *info) {
+	return info && (info->flags4_format4 & EAudioStreamInfoFlags_FlattenSound);
+}
 
 static inline U64 AudioStreamInfo_dataLength(const AudioStreamInfo *info) {
 	return info ? (info->dataLengthLo32 | ((U64)info->dataLengthHi8 << 32)) : 0;
@@ -136,7 +161,7 @@ Bool AudioDeviceRef_createFromFile(		//Detect stream by stream file header (curr
 	AudioDeviceRef *device,
 	StreamRef *inputStream,
 	U64 inputStreamOffset,
-	Bool isLoop,
+	U16 loops,							//0 = infinite loops, 1 = normal, else how many times it will loop
 	Ns startOffset,
 	F32 pitch,
 	Bool flattenSound,					//Required for spatial audio if the source is stereo

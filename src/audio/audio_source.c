@@ -95,10 +95,10 @@ Bool AudioDeviceRef_createSourceGeneric(
 			1, 0, "AudioDeviceRef_createSourceGeneric() specifying pitch is only allowed for AudioBuffer sources"
 		));
 
-	if(!modifier.gain)
-		modifier.gain = 1;
+	Bool flattenSound = AudioStreamInfo_flattenSound(&stream->info);
+	EAudioStreamFormat format = AudioStreamInfo_format(&stream->info);
 
-	if(spatialAudio && !stream->info.flattenSound && EAudioStreamFormat_getChannels(stream->info.format) != 1)
+	if(spatialAudio && !flattenSound && EAudioStreamFormat_getChannels(format) != 1)
 		retError(clean, Error_invalidParameter(
 			1, 0,
 			"AudioDeviceRef_createSourceGeneric() stereo + spatial audio is unsupported.\n"

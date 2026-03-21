@@ -48,8 +48,8 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 
 	//This is the format that the implementation understands, that we have to translate to first.
 
-	EAudioStreamFormat format = stream->info.format;
-	U8 stride = EAudioStreamFormat_getStrideBytes(stream->info.format);
+	EAudioStreamFormat ogFormat = AudioStreamInfo_format(&stream->info);
+	U8 stride = EAudioStreamFormat_getStrideBytes(ogFormat);
 	Bool fallback = false;
 
 	switch (stride) {
@@ -59,16 +59,20 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 		default:																		break;
 	}
 
+	EAudioStreamFormat format = ogFormat;
+
 	if(fallback)
-		format = EAudioStreamFormat_Mono16 + (stream->info.format & 1);
+		format = EAudioStreamFormat_Mono16 + (format & 1);
 
 	stream->format = format;
 
-	if(stream->info.flattenSound)	//Get rid of stereo
+	Bool flatten = AudioStreamInfo_flattenSound(&stream->info);
+
+	if(flatten)			//Get rid of stereo
 		format &=~ 1;
 
 	#ifndef NDEBUG
-		if(stream->format != stream->info.format)
+		if(stream->format != ogFormat)
 			Log_performanceLn(alloc, "AudioStream: Converting non native format to supported format at runtime");
 	#endif
 	
@@ -121,11 +125,31 @@ clean:
 	return s_uccess;
 }
 
+Bool AudioStream_playExt(AudioStream *stream, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ALAudioStream *streamExt = AudioStream_ext(stream, AL);
+	AL_PROCESS_ERROR(alSourcePlay(streamExt->source));
+
+clean:
+	return s_uccess;
+}
+
 Bool AudioStream_stopExt(AudioStream *stream, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ALAudioStream *streamExt = AudioStream_ext(stream, AL);
-	AL_PROCESS_ERROR(alSourcePause(streamExt->source));
+	AL_PROCESS_ERROR(alSourceStop(streamExt->source));
+
+	ALint queued = 0;
+	AL_PROCESS_ERROR(alGetSourcei(streamExt->source, AL_BUFFERS_QUEUED, &queued));
+
+	if (queued) {
+		ALuint tmp[ALAudioStream_bufferCount];
+		AL_PROCESS_ERROR(alSourceUnqueueBuffers(streamExt->source, queued, tmp));
+	}
+
+	streamExt->filledStream = false;
 
 clean:
 	return s_uccess;
@@ -139,8 +163,16 @@ void AudioStream_freeExt(AudioStream *stream, const Allocator *alloc) {
 	ALAudioStream *streamExt = AudioStream_ext(stream, AL);
 
 	if (stream->isPlaying) {
+
 		alSourceStop(streamExt->source);
-		alSourceUnqueueBuffers(streamExt->source, ALAudioStream_bufferCount, streamExt->buffer);
+
+		ALint queued = 0;
+		alGetSourcei(streamExt->source, AL_BUFFERS_QUEUED, &queued);
+
+		if (queued) {
+			ALuint tmp[ALAudioStream_bufferCount];
+			alSourceUnqueueBuffers(streamExt->source, queued, tmp);
+		}
 	}
 
 	Buffer_free(&streamExt->tmp, alloc);
@@ -196,7 +228,14 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 	if (!freeBufferCount)
 		goto clean;
 
-	Bool isFallback = stream->info.format != stream->format;
+	Bool finished = stream->loops >= stream->info.loops;
+	Bool isInfiniteLoop = AudioStreamInfo_isInfiniteLoop(&stream->info);
+
+	if (finished && !isInfiniteLoop)
+		goto clean;
+
+	EAudioStreamFormat ogFormat = AudioStreamInfo_format(&stream->info);
+	Bool isFallback = ogFormat != stream->format;
 
 	U64 maxLen = Buffer_length(streamExt->tmpCvt);
 
@@ -205,12 +244,14 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 	U32 queued = 0;
 
-	U8 ogStride = EAudioStreamFormat_getStrideBytes(stream->info.format);
+	U8 ogStride = EAudioStreamFormat_getStrideBytes(ogFormat);
 	U8 newStride = EAudioStreamFormat_getStrideBytes(stream->format);
-	U8 ogChannels = EAudioStreamFormat_getChannels(stream->info.format);
+	U8 ogChannels = EAudioStreamFormat_getChannels(ogFormat);
 	U8 newChannels = EAudioStreamFormat_getChannels(stream->format);
 	Bool changeChannels = ogChannels != newChannels;
 	U8 inputStep = changeChannels ? 2 : 1;
+
+	Bool isLoop = AudioStreamInfo_isLoop(&stream->info);
 
 	for (U32 i = 0; i < freeBufferCount; ++i) {
 
@@ -218,10 +259,10 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 		U64 len = U64_min(AudioStreamInfo_dataLength(&stream->info) - stream->streamOffset, maxLen);
 
-		if (!len && !stream->info.isLoop)
+		if (!len && !isLoop)
 			break;
 
-		if (stream->info.isLoop || isFallback) {
+		if (isLoop || isFallback) {
 
 			U64 filled = 0;
 			U64 consumed = 0;
@@ -232,7 +273,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 			Bool finishedLoop = false;
 
-			while (stream->info.isLoop || !stream->loops) {
+			while (isLoop || !stream->loops) {
 
 				U64 seekPos = stream->streamOffset + stream->info.dataStart;
 				gotoIfError3(clean, StreamCursor_read(&cursor, Buffer_createNull(), seekPos, 0, len, false, alloc, e_rr));
@@ -279,7 +320,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 				if (consumed < maxLen) {
 
-					if (!stream->info.isLoop) {
+					if (!isLoop || (stream->info.loops && stream->loops + 1 >= stream->info.loops)) {
 						finishedLoop = true;
 						++stream->loops;
 						break;
@@ -301,7 +342,7 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 
 			++queued;
 
-			if (finishedLoop && !stream->info.isLoop)
+			if (finishedLoop && !isInfiniteLoop)
 				break;
 
 			continue;

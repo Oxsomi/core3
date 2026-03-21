@@ -43,7 +43,7 @@ Bool AudioSource_createExt(AudioSource *source, const Allocator *alloc, Error *e
 	if (source->stream) {
 		ALAudioStream *streamExt = AudioStream_ext(RefPtr_data(source->stream, AudioStream), AL);
 		ALC_PROCESS_ERROR(deviceExt->device, alcMakeContextCurrent(deviceExt->context));
-		AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, 1));		//We're back
+		AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, source->modifier.gain));		//We're back
 	}
 
 	else {

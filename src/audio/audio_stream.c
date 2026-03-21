@@ -59,7 +59,7 @@ Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) 
 
 	stream->timeOffset = offset;
 
-	U64 stride = EAudioStreamFormat_getSize(stream->info.format);
+	U64 stride = EAudioStreamFormat_getSize(AudioStreamInfo_format(&stream->info));
 
 	U64 streamOffset = offset / SECOND * stream->info.bytesPerSecond;
 	streamOffset += (Ns)((offset % SECOND) * (stream->info.bytesPerSecond / (F64)SECOND));
@@ -69,6 +69,8 @@ Bool AudioStreamRef_seekTime(AudioStreamRef *streamRef, Ns offset, Error *e_rr) 
 clean:
 	return s_uccess;
 }
+
+impl Bool AudioStream_playExt(AudioStream *stream, Error *e_rr);
 
 Bool AudioStreamRef_play(AudioStreamRef *streamRef, const Allocator *alloc, Error *e_rr) {
 
@@ -91,6 +93,7 @@ Bool AudioStreamRef_play(AudioStreamRef *streamRef, const Allocator *alloc, Erro
 		goto clean;
 
 	gotoIfError3(clean, ListWeakRefPtr_pushBack(&dev->streams, streamRef, alloc, e_rr));
+	gotoIfError3(clean, AudioStream_playExt(stream, e_rr));
 	stream->isPlaying = true;
 
 clean:
@@ -130,6 +133,7 @@ Bool AudioStreamRef_stop(AudioStreamRef *streamRef, Error *e_rr) {
 
 	gotoIfError3(clean, AudioStream_stopExt(stream, e_rr));
 	stream->isPlaying = false;
+	stream->loops = 0;
 
 clean:
 
@@ -209,12 +213,14 @@ Bool AudioDeviceRef_createStream(
 			1, 0, "AudioDeviceRef_createStream()::info.sampleRate and bytesPerSecond are required"
 		));
 
-	if(info->format >= EAudioStreamFormat_Count)
+	EAudioStreamFormat format = AudioStreamInfo_format(info);
+
+	if(format >= EAudioStreamFormat_Count)
 		retError(clean, Error_outOfBounds(
-			0, info->format, EAudioStreamFormat_Count, "AudioDeviceRef_createStream()::info->formatId is invalid"
+			0, format, EAudioStreamFormat_Count, "AudioDeviceRef_createStream()::info->formatId is invalid"
 		));
 	
-	U8 bytesPerBlock = EAudioStreamFormat_getSize(info->format);
+	U8 bytesPerBlock = EAudioStreamFormat_getSize(format);
 
 	if((U64)info->sampleRate * bytesPerBlock != info->bytesPerSecond)
 		retError(clean, Error_invalidParameter(
@@ -283,7 +289,7 @@ Bool AudioDeviceRef_createFromFile(
 	AudioDeviceRef *device,
 	StreamRef *inputStream,
 	U64 inputStreamOffset,
-	Bool isLoop,
+	U16 loops,
 	Ns startOffset,
 	F32 pitch,
 	Bool flattenSound,
@@ -315,8 +321,10 @@ Bool AudioDeviceRef_createFromFile(
 
 	streamInfo.stream = inputStream;
 	streamInfo.pitch = !pitch ? 1 : pitch;
-	streamInfo.isLoop = isLoop;
-	streamInfo.flattenSound = flattenSound;
+	streamInfo.loops = loops;
+	streamInfo.flags4_format4 =
+		(loops != 1 ? EAudioStreamInfoFlags_IsLoop : EAudioStreamInfoFlags_None) |
+		(flattenSound ? EAudioStreamInfoFlags_FlattenSound : EAudioStreamInfoFlags_None);
 
 	switch (magic) {
 
@@ -328,10 +336,14 @@ Bool AudioDeviceRef_createFromFile(
 			U64 seconds = file.dataLength / file.fmt.bytesPerSecond;
 			F64 nanos = (F64)(file.dataLength % file.fmt.bytesPerSecond) / ((F64)file.fmt.bytesPerSecond / SECOND);
 
-			if(file.fmt.stride == 24)
-				streamInfo.format = file.fmt.channels == 2 ? EAudioStreamFormat_Stereo24Ext : EAudioStreamFormat_Mono24Ext;
+			EAudioStreamFormat format;
 
-			else streamInfo.format = (AudioStreamFormat) EAudioStreamFormat_create(file.fmt.channels, file.fmt.stride >> 3);
+			if(file.fmt.stride == 24)
+				format = file.fmt.channels == 2 ? EAudioStreamFormat_Stereo24Ext : EAudioStreamFormat_Mono24Ext;
+
+			else format = (AudioStreamFormat) EAudioStreamFormat_create(file.fmt.channels, file.fmt.stride >> 3);
+
+			streamInfo.flags4_format4 |= format << 4;
 
 			streamInfo.duration = seconds * SECOND + (U64) nanos;
 			streamInfo.sampleRate = file.fmt.frequency;

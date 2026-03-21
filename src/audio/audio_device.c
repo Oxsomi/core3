@@ -251,14 +251,16 @@ Bool AudioDeviceRef_wait(AudioDeviceRef *devRef, Bool waitForLoopingStream, cons
 
 			AudioStream *stream = AudioStreamRef_ptr(dev->streams.ptr[i]);
 
+			Bool isInfiniteLoop = AudioStreamInfo_isInfiniteLoop(&stream->info);
+
 			//Infinite loop until the stream is manually paused somewhere
 
-			if (stream->info.isLoop && stream->isPlaying && waitForLoopingStream) {
+			if (isInfiniteLoop && stream->isPlaying && waitForLoopingStream) {
 				anyPlayingResource = true;
 				break;
 			}
 
-			if (!stream->info.isLoop && stream->isPlaying) {
+			if (!isInfiniteLoop && stream->isPlaying) {
 				anyPlayingResource = true;
 				break;
 			}
