@@ -53,7 +53,7 @@ namespace oxc {
 			release();
 		}
 
-		static inline c::Bool acquire(c::SpinLock &lock, AcquiredLock &acqLock, c::Ns maxWait = c::U64_MAX) noexcept {
+		[[nodiscard]] static inline c::Bool acquire(c::SpinLock &lock, AcquiredLock &acqLock, c::Ns maxWait = c::U64_MAX) noexcept {
 
 			c::ELockAcquire acq = SpinLock_lock(&lock, maxWait);
 
@@ -64,7 +64,7 @@ namespace oxc {
 			return true;
 		}
 
-		inline c::Bool lockedForThread() const {
+		[[nodiscard]] inline c::Bool lockedForThread() const {
 			return SpinLock_isLockedForThread(lock);
 		}
 
@@ -98,7 +98,7 @@ namespace oxc {
 		Lock(Lock&&) = delete;
 		Lock &operator=(Lock&&) = delete;
 
-		inline c::Bool acquire(AcquiredLock &acqLock, c::Ns maxWait = c::U64_MAX) noexcept {
+		[[nodiscard]] inline c::Bool acquire(AcquiredLock &acqLock, c::Ns maxWait = c::U64_MAX) noexcept {
 			return AcquiredLock::acquire(spinLock, acqLock, maxWait);
 		}
 	};

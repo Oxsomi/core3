@@ -41,7 +41,13 @@ U64 Thread_getId() { return GetCurrentThreadId(); }
 Bool Thread_sleep(Ns ns) {
 
 	const LARGE_INTEGER ft = (LARGE_INTEGER) { .QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100) };
-	const HANDLE timer = CreateWaitableTimerW(NULL, TRUE, NULL);
+	
+	const HANDLE timer = CreateWaitableTimerExW(
+			NULL,
+			NULL,
+			CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+			TIMER_ALL_ACCESS
+	);
 
 	if(!timer)
 		return false;

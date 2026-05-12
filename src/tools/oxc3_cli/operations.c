@@ -34,7 +34,7 @@ Bool CLI_info(ParsedArgs args) {
 		"Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)"
 		"%s",
 
-		(U32) (OXC3_MAJOR + 3),
+		(U32) OXC3_MAJOR,
 		(U32) OXC3_MINOR,
 		(U32) OXC3_PATCH,
 

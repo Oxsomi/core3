@@ -35,7 +35,7 @@ typedef struct Buffer {
 		U8 *ptrNonConst;		//Requires !Buffer_isConstRef(buf)
 	};
 
-	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
+	U64 lengthAndRefBits;		//refBits: [ b63 isRef, b62 isConst ]. Length should be max 48 bits
 
 } Buffer;
 

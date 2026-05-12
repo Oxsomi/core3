@@ -37,7 +37,7 @@ typedef struct Thread {
 
 impl U64 Thread_getId();					//Current thread id
 
-impl Bool Thread_sleep(Ns ns);				//Can be in a different time unit. Ex. on Windows it's rounded up to ms
+impl Bool Thread_sleep(Ns ns);                         //Can be in a different time unit. Ex. on Windows it's rounded up to 100ns
 
 impl Bool Thread_create(
 	const Allocator *alloc,

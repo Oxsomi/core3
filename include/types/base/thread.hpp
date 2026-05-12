@@ -65,14 +65,14 @@ namespace oxc {
 
 		void join() { if(thread) Thread_wait(thread); }
 		
-		static c::Error init(Thread &thread, const c::Allocator *alloc, c::ThreadCallbackFunction callback, void *obj) noexcept {
+		[[nodiscard]] static c::Error init(Thread &thread, const c::Allocator *alloc, c::ThreadCallbackFunction callback, void *obj) noexcept {
 			thread.release();
 			thread.alloc = alloc;
 			return Thread_create(alloc, callback, obj, &thread.thread);
 		}
 
-		static c::U64 getId() { return c::Thread_getId(); }
-		static c::Bool sleep(c::Ns ns) { return c::Thread_sleep(ns); }
+		[[nodiscard]] static c::U64 getId() { return c::Thread_getId(); }
+		[[nodiscard]] static c::Bool sleep(c::Ns ns) { return c::Thread_sleep(ns); }
 	};
 }
 
