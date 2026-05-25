@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/vec2f.h
+
 #pragma once
 #include "types/base/buffer.h"
 #include "types/base/mathf.h"

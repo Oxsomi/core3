@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiCA/ca_file.h
+
 #pragma once
 #include "types/container/list.h"
 #include "formats/oiXX/oiXX.h"
@@ -103,6 +105,8 @@ typedef struct CAFile {
 	ListCAFileInfo files;
 	CASettings settings;		//Must remain 8-byte aligned
 } CAFile;
+
+TList(CAFile);
 
 Bool CAFile_create(
 	const CASettings *settings,

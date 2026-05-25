@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//audio/openal_soft/al_stream.c
+
 #include "types/container/list_impl.h"
 #include "audio/audio_stream.h"
 #include "audio/audio_device.h"

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/android/OxC3Activity.java
+
 package net.osomi.nativeactivity;
 
 import android.content.pm.ActivityInfo;

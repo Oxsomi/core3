@@ -18,22 +18,20 @@
 *  This is called dual licensing.
 */
 
+//platforms/keyboard.c
+
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
 #include "types/base/error.h"
 
-#define KEY(name)																						\
-	if ((err = InputDevice_createButton(*result, EKey_##name, "EKey_" #name, &res)).genericError) {		\
-		InputDevice_free(result);																		\
-		return err;																						\
-	}
+#define KEY(name) gotoIfError3(clean, InputDevice_createButton(result, EKey_##name, "EKey_" #name, &res, e_rr))
 
-Error Keyboard_create(Keyboard *result) {
+Bool Keyboard_create(Keyboard *result, const Allocator *alloc, Error *e_rr) {
 
-	Error err = InputDevice_create(EKey_Count, 0, EInputDeviceType_Keyboard, result);
+	Bool s_uccess = InputDevice_create(EKey_Count, 0, EInputDeviceType_Keyboard, result, alloc, e_rr);
 
-	if(err.genericError)
-		return err;
+	if(!s_uccess)
+		return false;
 
 	InputHandle res = 0;
 
@@ -77,5 +75,10 @@ Error Keyboard_create(Keyboard *result) {
 	KEY(Slash);			KEY(Backtick);		KEY(Semicolon);		KEY(LBracket);		KEY(RBracket);
 	KEY(Backslash);		KEY(Quote);
 
-	return Error_none();
+clean:
+
+	if(!s_uccess)
+		InputDevice_free(result, alloc);
+
+	return s_uccess;
 }

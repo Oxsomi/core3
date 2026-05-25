@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/pack.h
+
 #pragma once
 #include "types/math/quat.h"
 #include "types/math/vec4f.h"

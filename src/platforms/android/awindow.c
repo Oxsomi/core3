@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/android/awindow.c
+
 #include "platforms/ext/listx_impl.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
@@ -519,13 +521,12 @@ Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat fo
 	return format == EWindowFormat_RGBA8;	//TODO: HDR
 }
 
-Bool WindowManager_freePhysical(Window *w) {
+void WindowManager_freePhysical(Window *w) {
 	(void) w;
 	struct android_app *app = (struct android_app*) Platform_instance->data;
 	app->userData = NULL;
 	app->onAppCmd = NULL;
 	app->onInputEvent = NULL;
-	return true;
 }
 
 Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {

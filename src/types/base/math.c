@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/math.c
+
 #include "types/base/mathf.h"
 
 #include <math.h>

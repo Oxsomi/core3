@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/buffer_hash.c
+
 #include "types/container/buffer.h"
 #include "types/math/vec4i_swizzle.h"
 #include "types/math/type_cast.h"

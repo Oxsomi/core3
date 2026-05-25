@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/platform_types.hpp
+
 #pragma once
 #include "types/base/types.h"
 #include <assert.h>

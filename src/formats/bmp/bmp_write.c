@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/bmp/bmp_write.c
+
 #include "formats/bmp/bmp_file.h"
 #include "formats/bmp/bmp_headers.h"
 #include "types/container/texture_format.h"

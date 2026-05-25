@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/simd/buffer_simd_crc32c.inc.h
+
 //Implementation of hardware CRC32C but ported back to C and restructured a bit
 //https://github.com/rurban/smhasher/blob/master/crc32c.cpp
 //All _mm_crc32_x have been replaced to use SIMD_CRC32C(x) to keep it portable across different architectures

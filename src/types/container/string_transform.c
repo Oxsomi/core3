@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/string_transform.c
+
 #include "types/container/list_impl.h"
 #include "types/container/string.h"
 #include "types/base/string_read.h"

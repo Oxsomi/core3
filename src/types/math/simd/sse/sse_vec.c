@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/simd/sse/sse_vec.c
+
 #include "types/math/vec4i.h"
 
 I32x4 I32x4_lsh32(I32x4 a, U8 bits) {

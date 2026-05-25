@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/time.c
+
 #include "types/base/platform_types.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"

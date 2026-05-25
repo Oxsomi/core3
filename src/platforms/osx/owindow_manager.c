@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/osx/owindow_manager.c
+
 #include "platforms/window_manager.h"
 #include "types/base/error.h"
 

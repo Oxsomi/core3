@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/bmp/bmp_file.h
+
 #pragma once
 #include "types/base/types.h"
 

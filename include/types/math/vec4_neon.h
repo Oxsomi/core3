@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/vec4_neon.h
+
 #pragma once
 #ifndef VEC4_NEON_GUARD
 	#error Vec4 NEON guard was undefined, this likely indicates include of vec4_neon.h was attempted instead of vec4.h

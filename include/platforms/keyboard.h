@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/keyboard.h
+
 #pragma once
 #include "types/base/types.h"
 
@@ -28,6 +30,7 @@
 typedef struct InputDevice Keyboard;
 typedef struct CharString CharString;
 typedef struct Error Error;
+typedef struct Allocator Allocator;
 
 //EKey is remapped using scan codes for QWERTY iso layout (https://kbdlayout.info/kbdusx)
 // The main part of the keyboard uses scan codes, but the following don't:
@@ -91,13 +94,13 @@ typedef enum EKeyboardFlags {
 	EKeyboardFlags_Count
 } EKeyboardFlags;
 
-Error Keyboard_create(Keyboard *result);
+Bool Keyboard_create(Keyboard *result, const Allocator *alloc, Error *e_rr);
 
 //Remap key to unicode codepoint using current language. This is only for debugging keyboard mappings and GUI elements.
 //For text boxes, use the typeChar callback of Window; this handles OS-level input such as IME (Japanese) and emojis.
 //If there's no remap available it will return an empty string.
-//Make sure to free this.
-impl CharString Keyboard_remap(const Keyboard *keyboard, EKey key);
+//The resulting string is only valid while the Keyboard is alive.
+impl Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr);
 
 #ifdef __cplusplus
 	}

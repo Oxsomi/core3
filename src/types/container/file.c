@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/file.c
+
 #include "types/base/mathi.h"
 #include "types/base/allocator.h"
 #include "types/base/string_read_helper.h"
@@ -29,14 +31,11 @@
 #include "types/base/c8.h"
 #include "types/base/constants.h"
 
-//We enforce this consistently even on Linux to try and reproduce errors that might occur on Windows with long paths.
-#define MAX_WINDOWS_PATH 260
-
 Bool File_resolve(
-	CharString loc,
+	const CharString *locPtr,
 	Bool *isVirtual,
 	U64 maxFilePathLimit,
-	CharString absoluteDir,
+	const CharString *absoluteDirPtr,
 	const Allocator *alloc,
 	CharString *result,
 	Error *e_rr
@@ -46,11 +45,11 @@ Bool File_resolve(
 	Bool allocate = false;
 	ListCharString res = { 0 };
 
-	if(!isVirtual)
-		retError(clean, Error_nullPointer(!isVirtual ? 1 : 2, "File_resolve()::isVirtual is required"));
+	if(!locPtr || !isVirtual || !absoluteDirPtr)
+		retError(clean, Error_nullPointer(!locPtr ? 0 : (!isVirtual ? 1 : 3), "File_resolve()::isVirtual is required"));
 
-	loc = CharString_createRefStrConst(loc);
-	absoluteDir = CharString_createRefStrConst(absoluteDir);
+	CharString loc = CharString_createRefStrConst(*locPtr);
+	CharString absoluteDir = CharString_createRefStrConst(*absoluteDirPtr);
 
 	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')					//myTest/ <--
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;
@@ -250,10 +249,14 @@ Bool File_resolve(
 	//Since we're going to use this in file operations, we want to have a null terminator
 
 	if(!maxFilePathLimit)
-		maxFilePathLimit = MAX_WINDOWS_PATH;
+		maxFilePathLimit = MAX_OXC_PATH;
 
-	#ifdef _WIN32
-		maxFilePathLimit = U64_min(MAX_WINDOWS_PATH, maxFilePathLimit);
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		maxFilePathLimit = U64_min(32767, maxFilePathLimit);
+	#elif _PLATFORM_TYPE == PLATFORM_IOS || _PLATFORM_TYPE == PLATFORM_OSX
+		maxFilePathLimit = U64_min(1023, maxFilePathLimit);
+	#else
+		maxFilePathLimit = U64_min(4095, maxFilePathLimit);
 	#endif
 
 	if(CharString_length(*result) >= maxFilePathLimit)
@@ -293,8 +296,8 @@ Bool File_makeRelative(
 
 	U64 absDirLen = CharString_length(absoluteDir);
 
-	gotoIfError3(clean, File_resolve(base, &isVirtualBase, maxFilePathLimit, absoluteDir, alloc, &resolvedBase, e_rr));
-	gotoIfError3(clean, File_resolve(subFile, &isVirtualSub, maxFilePathLimit, absoluteDir, alloc, &resolvedSubFile, e_rr));
+	gotoIfError3(clean, File_resolve(&base, &isVirtualBase, maxFilePathLimit, &absoluteDir, alloc, &resolvedBase, e_rr));
+	gotoIfError3(clean, File_resolve(&subFile, &isVirtualSub, maxFilePathLimit, &absoluteDir, alloc, &resolvedSubFile, e_rr));
 
 	if(isVirtualBase != isVirtualSub)
 		retError(clean, Error_invalidParameter(

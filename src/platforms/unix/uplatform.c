@@ -18,13 +18,13 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/unix/uplatform.c
+
+#include "types/container/list_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "types/container/string.h"
 #include "types/base/atomic.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/archivex.h"
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -59,23 +59,26 @@ Bool Platform_initExt(Error *e_rr) {
 
 	//Get work directory; since Android doesn't have a working directory, it will work as following:
 	//appDir = internal app dir
-	//work dir = external app dir
+	//workDir = external app dir
 
 	#if _PLATFORM_TYPE != PLATFORM_ANDROID
 
 		#define PATH_MAX 256
 		C8 cwd[PATH_MAX + 1];
 		if (!getcwd(cwd, sizeof(cwd)))
-			retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"))
+			retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"));
 
-		gotoIfError2(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance->workDirectory))
-		gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
+		gotoIfError3(clean, CharString_createCopy(
+			Platform_instance->alloc, CharString_createRefCStrConst(cwd), &Platform_instance->workDirectory, e_rr
+		));
+
+		gotoIfError3(clean, CharString_append(Platform_instance->alloc, &Platform_instance->workDirectory, '/', e_rr));
 
 	#endif
 
 	//Initialize Linux/OSX dependent as well as app dir path
 
-	gotoIfError3(clean, Platform_initUnixExt(e_rr))
+	gotoIfError3(clean, Platform_initUnixExt(e_rr));
 	
 	//Make default path
 

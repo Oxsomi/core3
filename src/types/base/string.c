@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/string.c
+
 #include "types/base/string.h"
 #include "types/base/algorithm.h"
 

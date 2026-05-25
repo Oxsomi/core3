@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/test/test_types_container_aes_gcm.c
+
 #include "test_types_container_shared.h"
 #include "types/base/mathi.h"
 #include "types/math/vec4i.h"
@@ -360,7 +362,7 @@ void Test_aesValidation(Test *t) {
 }
 
 //Test vectors 13-16: https://luca-giuzzi.unibs.it/corsi/Support/papers-cryptography/gcm-spec.pdf
-//Test vectors 2.1.2 – 2.8.2: https://www.ieee802.org/1/files/public/docs2011/bn-randall-test-vectors-0511-v1.pdf
+//Test vectors 2.1.2 ï¿½ 2.8.2: https://www.ieee802.org/1/files/public/docs2011/bn-randall-test-vectors-0511-v1.pdf
 
 void Test_aes256gcm(Test *t) {
 

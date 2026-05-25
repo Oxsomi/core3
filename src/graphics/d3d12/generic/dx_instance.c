@@ -213,7 +213,7 @@ setup:
 	if (!File_resolve(
 		CharString_createRefCStrConst("./D3D12/"),
 		&isVirtual,
-		MAX_PATH,
+		0,
 		Platform_instance->appDirectory,
 		Platform_instance->alloc,
 		&locationD3D12,

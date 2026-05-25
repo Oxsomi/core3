@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/bmp/test/test_bmp_round_trip.c
+
 #include "test_bmp_shared.h"
 #include "formats/bmp/bmp_file.h"
 #include "formats/bmp/bmp_headers.h"

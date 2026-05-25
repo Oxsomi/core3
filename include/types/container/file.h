@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/file.h
+
 #pragma once
 #include "types/base/string.h"
 
@@ -49,13 +51,15 @@ typedef struct FileInfo {
 	U64 fileSize;
 } FileInfo;
 
-typedef Bool (*FileCallback)(const FileInfo*, void*, Error*);
+typedef Bool (*FileCallback)(const FileInfo*, void*, const Allocator*, Error*);
+
+#define MAX_OXC_PATH 1023	//Safest path across all platforms (Apple, Windows, Linux-based)
 
 Bool File_resolve(
-	CharString loc,
+	const CharString *loc,
 	Bool *isVirtual,
 	U64 maxFilePathLimit,
-	CharString absoluteDir,
+	const CharString *absoluteDir,
 	const Allocator *alloc,
 	CharString *result,
 	Error *e_rr

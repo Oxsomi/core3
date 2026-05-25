@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/buffer_crc_lut.c
+
 #include "types/base/types.h"
 
 const U32 CRC32C_TABLE[16][256] = {

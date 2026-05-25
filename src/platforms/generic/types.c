@@ -18,20 +18,8 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/container/string.h"
+#include "platforms/types.h"
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
-
-typedef enum ELogLevel ELogLevel;
-typedef enum ELogOptions ELogOptions;
-typedef struct Error Error;
-
-void Error_printx(Error err, ELogLevel logLevel, ELogOptions options);
-void Error_printLnx(Error err);
-
-#ifdef __cplusplus
-	}
-#endif
+EPlatformsTypeId EPlatformTypeId_all[EPlatformsTypeId_Count] = {
+	EPlatformsTypeId_FileHandle
+};

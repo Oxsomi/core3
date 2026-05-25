@@ -18,21 +18,22 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/window_manager.c
+
+#include "types/container/list_impl.h"
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "types/base/thread.h"
 #include "platforms/input_device.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/math/vec2i.h"
+#include "types/base/string.h"
+#include "types/base/thread.h"
 #include "types/base/time.h"
-#include "types/container/string.h"
 #include "types/base/constants.h"
 
 TListNamedImpl(ListWindowPtr);
 
-const U32 WindowManager_magic = (U32)'W' | ((U32)'I' << 8) | ((U32)'N' << 16) | ((U32)'D' << 24);
+const U32 WindowManager_magic = C8x4('W', 'I', 'N', 'D');
 
 impl Bool WindowManager_createNative(WindowManager *w, Error *e_rr);
 impl Bool WindowManager_freeNative(WindowManager *w);
@@ -40,12 +41,13 @@ impl Bool WindowManager_freeNative(WindowManager *w);
 Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize, WindowManager *manager, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool allocated = false;
 	Buffer extendedData = Buffer_createNull();
 
 	if (!manager)
-		retError(clean, Error_nullPointer(2, "WindowManager_create()::manager is required"))
+		retError(clean, Error_nullPointer(2, "WindowManager_create()::manager is required"));
 
-	gotoIfError2(clean, Buffer_createEmptyBytesx(extendedDataSize, &extendedData))
+	gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
 
 	*manager = (WindowManager) {
 		.isActive = WindowManager_magic,
@@ -54,12 +56,19 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize
 		.extendedData = extendedData
 	};
 
-	gotoIfError3(clean, WindowManager_createNative(manager, e_rr))
+	gotoIfError3(clean, WindowManager_createNative(manager, e_rr));
+	allocated = true;
 
 	if(callbacks.onCreate)
-		callbacks.onCreate(manager);
+		gotoIfError3(clean, callbacks.onCreate(manager, e_rr));
 
 clean:
+
+	if(!s_uccess && allocated) {
+		manager->callbacks.onDestroy = NULL;		//onCreate hasn't succeeded, so don't call onDestroy.
+		WindowManager_free(manager);
+	}
+
 	return s_uccess;
 }
 
@@ -67,13 +76,13 @@ Bool WindowManager_isAccessible(const WindowManager *manager) {
 	return manager && manager->isActive == WindowManager_magic && manager->owningThread == Thread_getId();
 }
 
-Bool WindowManager_free(WindowManager *manager) {
+void WindowManager_free(WindowManager *manager) {
 
 	if(!manager || manager->isActive != WindowManager_magic)
-		return true;
+		return;
 
 	if(manager->owningThread != Thread_getId())
-		return false;
+		return;
 
 	if(manager->callbacks.onDestroy)
 		manager->callbacks.onDestroy(manager);
@@ -83,17 +92,16 @@ Bool WindowManager_free(WindowManager *manager) {
 	for(U64 i = 0; i < manager->windows.length; ++i)
 		WindowManager_freeWindow(manager, &manager->windows.ptrNonConst[i]);
 
-	ListWindowPtr_freex(&manager->windows);
-	Buffer_freex(&manager->extendedData);
+	ListWindowPtr_free(&manager->windows, Platform_instance->alloc);
+	Buffer_free(&manager->extendedData, Platform_instance->alloc);
 
 	WindowManager_freeNative(manager);
-	Buffer_freex(&manager->platformData);
-	return true;
+	Buffer_free(&manager->platformData, Platform_instance->alloc);
 }
 
 Bool WindowManager_adaptSizes(I32x2 *size, I32x2 *minSize, I32x2 *maxSize, Error *e_rr);
 
-impl Bool WindowManager_freePhysical(Window *w);
+impl void WindowManager_freePhysical(Window *w);
 impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr);
 
 Bool WindowManager_createWindow(
@@ -127,28 +135,28 @@ Bool WindowManager_createWindow(
 	if(!result)
 		retError(clean, Error_nullPointer(
 			!result ? 4 : 2, "WindowManager_createWindow()::result and callbacks.onDraw are required"
-		))
+		));
 
 	if(!WindowManager_isAccessible(manager))
 		retError(clean, Error_invalidOperation(
 			0, "WindowManager_createWindow() manager is NULL or inaccessible to current thread"
-		))
+		));
 
 	if(*result)
 		retError(clean, Error_invalidOperation(
 			1, "WindowManager_createWindow()::*result is not NULL, indicates possible memleak"
-		))
+		));
 
-	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
+	if(I32x2_any(I32x2_leq(size, I32x2_zero)))
 		retError(clean, Error_outOfBounds(
 			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size),
 			"WindowManager_createWindow()::size[i] must be >0"
-		))
+		));
 
 	if(CharString_length(title) >= 260)
 		retError(clean, Error_outOfBounds(
 			7, 260, 260, "WindowManager_createWindow()::title can't exceed 260 chars"
-		))
+		));
 
 	switch (format) {
 
@@ -157,7 +165,7 @@ Bool WindowManager_createWindow(
 			#if _PLATFORM_TYPE != PLATFORM_ANDROID
 				retError(clean, Error_invalidOperation(
 					1, "WindowManager_createWindow()::RGBA8 is unsupported "
-				))
+				));
 			#endif
 
 		case EWindowFormat_BGRA8:
@@ -174,25 +182,27 @@ Bool WindowManager_createWindow(
 			retError(clean, Error_invalidEnum(
 				3, (U64) format, 0,
 				"WindowManager_createWindow()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
-			))
+			));
 	}
 
 	//Ensure the sizes are valid
 
-	gotoIfError3(clean, WindowManager_adaptSizes(&size, &minSize, &maxSize, e_rr))
+	gotoIfError3(clean, WindowManager_adaptSizes(&size, &minSize, &maxSize, e_rr));
 
 	if((type == EWindowType_Virtual) || (hint & EWindowHint_ProvideCPUBuffer))
-		gotoIfError2(clean, Buffer_createEmptyBytesx(
+		gotoIfError3(clean, Buffer_createEmptyBytes(
 			ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size), 1),
-			&cpuVisibleBuffer
-		))
+			Platform_instance->alloc,
+			&cpuVisibleBuffer,
+			e_rr
+		));
 
-	gotoIfError2(clean, Buffer_createEmptyBytesx(extendedDataSize, &extendedData))
-	gotoIfError2(clean, CharString_createCopyx(title, &titleCopy))
-	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(Window), &tmpWindow))
+	gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
+	gotoIfError3(clean, CharString_createCopy(title, Platform_instance->alloc, &titleCopy, e_rr));
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(Window), Platform_instance->alloc, &tmpWindow, e_rr));
 
 	Window *w = (Window*) tmpWindow.ptr;
-	gotoIfError2(clean, ListWindowPtr_pushBackx(&manager->windows, w))
+	gotoIfError3(clean, ListWindowPtr_pushBack(&manager->windows, w, Platform_instance->alloc, e_rr));
 
 	*w = (Window) {
 
@@ -216,7 +226,7 @@ Bool WindowManager_createWindow(
 	};
 
 	if (type == EWindowType_Physical)
-		gotoIfError3(clean, WindowManager_createWindowPhysical(w, e_rr))
+		gotoIfError3(clean, WindowManager_createWindowPhysical(w, e_rr));
 
 	*result = w;
 
@@ -225,12 +235,12 @@ clean:
 	if(!s_uccess) {
 
 		if(pushed)
-			ListWindowPtr_popBack(&manager->windows, NULL);
+			ListWindowPtr_popBack(&manager->windows, NULL, NULL);
 
-		Buffer_freex(&tmpWindow);
-		Buffer_freex(&extendedData);
-		Buffer_freex(&cpuVisibleBuffer);
-		CharString_freex(&titleCopy);
+		Buffer_free(&tmpWindow, Platform_instance->alloc);
+		Buffer_free(&extendedData, Platform_instance->alloc);
+		Buffer_free(&cpuVisibleBuffer, Platform_instance->alloc);
+		CharString_free(&titleCopy, Platform_instance->alloc);
 	}
 
 	return s_uccess;
@@ -238,10 +248,12 @@ clean:
 
 impl void WindowManager_updateExt(WindowManager *manager);
 
-Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
+Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_rr) {
 
-	if(!manager)
-		return false;
+	Bool s_uccess = true;
+
+	if(!WindowManager_isAccessible(manager))
+		retError(clean, Error_invalidOperation(0, "WindowManager_step() manager is NULL or inaccessible to current thread"));
 
 	//Update all windows first
 
@@ -286,7 +298,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
 
 		w->lastUpdate = now;
 
-		if(requireDraw && w->callbacks.onDraw)			//Virtual
+		if(requireDraw && w->callbacks.onDraw)			//Virtual or non Windows
 			w->callbacks.onDraw(w);
 
 		if (w->flags & EWindowFlags_ShouldTerminate)	//Just in case the window closed now
@@ -312,7 +324,8 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate) {
 
 	manager->lastUpdate = now;
 
-	return true;
+clean:
+	return s_uccess;
 }
 
 Bool WindowManager_wait(WindowManager *manager, Error *e_rr) {
@@ -322,10 +335,10 @@ Bool WindowManager_wait(WindowManager *manager, Error *e_rr) {
 	if(!WindowManager_isAccessible(manager))
 		retError(clean, Error_invalidOperation(
 			0, "WindowManager_wait() manager is NULL or inaccessible to current thread"
-		))
+		));
 
 	while(manager->windows.length)
-		WindowManager_step(manager, NULL);
+		gotoIfError3(clean, WindowManager_step(manager, NULL, e_rr));
 
 clean:
 	return s_uccess;
@@ -338,7 +351,7 @@ Bool WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep, Er
 	if(!sizep || !minSizep || !maxSizep)
 		retError(clean, Error_nullPointer(
 			!sizep ? 0 : (!minSizep ? 1 : 2), "WindowManager_adaptSizes() requires sizep, minSizep and maxSizep"
-		))
+		));
 
 	const I32x2 size = *sizep;
 	I32x2 minSize = *minSizep;
@@ -346,29 +359,29 @@ Bool WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep, Er
 
 	//Verify size
 
-	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
-		retError(clean, Error_invalidParameter(2, 0, "WindowManager_adaptSizes()::*sizep should be >0"))
+	if(I32x2_any(I32x2_leq(size, I32x2_zero)))
+		retError(clean, Error_invalidParameter(2, 0, "WindowManager_adaptSizes()::*sizep should be >0"));
 
 	//Verify min size. By default should be 360p+.
 	//Can't go below EResolution_SD.
 
-	if(I32x2_any(I32x2_eq(minSize, I32x2_zero())))
+	if(I32x2_any(I32x2_eq(minSize, I32x2_zero)))
 		minSize = EResolution_get(EResolution_360);
 
-	if(I32x2_any(I32x2_lt(minSize, EResolution_get(EResolution_SD))) || I32x2_any(I32x2_lt(minSize, I32x2_zero())))
+	if(I32x2_any(I32x2_lt(minSize, EResolution_get(EResolution_SD))) || I32x2_any(I32x2_lt(minSize, I32x2_zero)))
 		retError(clean, Error_invalidParameter(
 			3, 0, "WindowManager_adaptSizes()::*minSizep should be >=240p (0 = 640x360, >=426x240)"
-		))
+		));
 
 	//Graphics APIs generally limit the resolution to 16Ki or 32Ki, so let's ensure the window can't get bigger than that
 
-	if(I32x2_any(I32x2_eq(maxSize, I32x2_zero())))
+	if(I32x2_any(I32x2_eq(maxSize, I32x2_zero)))
 		maxSize = I32x2_xx2(16384);
 
-	if(I32x2_any(I32x2_gt(maxSize, I32x2_xx2(16384))) || I32x2_any(I32x2_lt(maxSize, I32x2_zero())))
+	if(I32x2_any(I32x2_gt(maxSize, I32x2_xx2(16384))) || I32x2_any(I32x2_lt(maxSize, I32x2_zero)))
 		retError(clean, Error_invalidParameter(
 			4, 0, "WindowManager_adaptSizes()::*maxSizep should be >=0 && <16384"
-		))
+		));
 
 	*minSizep = minSize;
 	*maxSizep = maxSize;
@@ -378,42 +391,39 @@ clean:
 	return s_uccess;
 }
 
-Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
+void WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
 	if(!w || !*w)
-		return false;
+		return;
 
 	Window *win = *w;
 
 	if(!WindowManager_isAccessible(win->owner))
-		return false;
+		return;
 
 	//Ensure our window safely exits
 
 	if(win->flags & EWindowFlags_IsActive && win->callbacks.onDestroy)
 		win->callbacks.onDestroy(win);
 
-	Buffer_freex(&win->cpuVisibleBuffer);
-	Buffer_freex(&win->extendedData);
-	CharString_freex(&win->title);
+	Buffer_free(&win->cpuVisibleBuffer, Platform_instance->alloc);
+	Buffer_free(&win->extendedData, Platform_instance->alloc);
+	CharString_free(&win->title, Platform_instance->alloc);
 
 	ListInputDevice *devices = &win->devices;
 
 	for(U64 i = 0; i < devices->length; ++i)
-		InputDevice_free(&devices->ptrNonConst[i]);
+		InputDevice_free(&devices->ptrNonConst[i], Platform_instance->alloc);
 
-	ListInputDevice_freex(devices);
-	ListMonitor_freex(&win->monitors);
-
-	Bool b = true;
+	ListInputDevice_free(devices, Platform_instance->alloc);
+	ListMonitor_free(&win->monitors, Platform_instance->alloc);
 
 	if(win->type == EWindowType_Physical)
-		b = WindowManager_freePhysical(win);
+		WindowManager_freePhysical(win);
 
 	Buffer windowBuf = Buffer_createManagedPtr(win, sizeof(*win));
 
-	ListWindowPtr_eraseFirst(&manager->windows, win, 0, NULL);
-	Buffer_freex(&windowBuf);
+	ListWindowPtr_eraseFirst(&manager->windows, win, 0, NULL, NULL);
+	Buffer_free(&windowBuf, Platform_instance->alloc);
 	*w = NULL;
-	return b;
 }

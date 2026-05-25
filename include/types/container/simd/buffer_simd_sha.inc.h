@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/simd/buffer_simd_sha.inc.h
+
 //SHA256
 //Ported + cleaned up from https://github.com/noloader/SHA-Intrinsics/blob/master/sha256-x86.c
 

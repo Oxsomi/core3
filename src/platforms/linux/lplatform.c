@@ -18,14 +18,16 @@
 *  This is called dual licensing.
 */
 
+//platforms/linux/lplatform.c
+
 #define _FILE_OFFSET_BITS 64
 #define _LARGEFILE64_SOURCE
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
 #include "platforms/log.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string.h"
 #include "types/base/thread.h"
 #include "types/base/error.h"
 
@@ -49,7 +51,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	I32 exeNameLen = readlink("/proc/self/exe", exeName, sizeof(exeName) - 1);
 
 	if(exeNameLen < 0)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find out executable name"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find out executable name"));
 
 	exeName[exeNameLen] = '\0';
 
@@ -63,11 +65,11 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		}
 
 	if(!containedSlash)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"));
 
 	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
 
-	gotoIfError2(clean, CharString_createCopyx(appDir, &Platform_instance->appDirectory))
+	gotoIfError3(clean, CharString_createCopy(Platform_instance->alloc, appDir, &Platform_instance->appDirectory, e_rr));
 
 	//Try to open the main executable within 1s, if it fails we can't init
 
@@ -76,13 +78,13 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	for(; i < 1000 && (fd = open(exeName, O_RDONLY)) < 0; ++i) {
 
 		if(errno != EINTR)
-			retError(clean, Error_stderr(0, "Platform_initUnixExt() open failed on executable"))
+			retError(clean, Error_stderr(0, "Platform_initUnixExt() open failed on executable"));
 
 		Thread_sleep(MS);
 	}
 
 	if(i == 1000)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"));
 
 	//Grab file data
 
@@ -90,7 +92,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	ptr = (C8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
 	if(ptr == (const C8*) MAP_FAILED)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"));
 
 	//Read sections
 
@@ -110,13 +112,15 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		sectionName.ptr += sizeof("packages");		//sizeof includes null terminator so no need for packages/
 		sectionName.lenAndNullTerminated -= sizeof("packages");
 
-		gotoIfError2(clean, CharString_createCopyx(sectionName, &tmpStr))
+		gotoIfError3(clean, CharString_createCopy(Platform_instance->alloc, sectionName, &tmpStr, e_rr));
 
 		VirtualSection section = (VirtualSection) { .path = tmpStr };
 		section.lenExt = shdr[i].sh_size;
 		section.dataExt = ptr + shdr[i].sh_offset;
 
-		gotoIfError2(clean, ListVirtualSection_pushBackx(&Platform_instance->virtualSections, section))
+		gotoIfError3(clean, ListVirtualSection_pushBack(
+			Platform_instance->alloc, &Platform_instance->virtualSections, section, e_rr
+		));
 
 		tmpStr = CharString_createNull();
 		anySection = true;
@@ -142,7 +146,7 @@ clean:
 	if(ptr)
 		munmap(ptr, fileSize);
 
-	CharString_freex(&tmpStr);
+	CharString_free(Platform_instance->alloc, &tmpStr);
 	return s_uccess;
 }
 
@@ -153,8 +157,14 @@ void Platform_cleanupUnixExt() {
 	}
 }
 
-CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
-	(void) key; (void) keyboard;
-	return CharString_createNull();			//TODO: 
+Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
+
+	(void) key; (void) keyboard; (void) alloc; (void) result;
+
+	Bool s_uccess = true;
+	retError(clean, Error_unimplemented(0, "Keyboard_remap() unimplemented on linux for now"));		//TODO:
+
+clean:
+	return s_uccess;
 }
 

@@ -18,29 +18,19 @@
 *  This is called dual licensing.
 */
 
+//platforms/window.h
+
 #pragma once
-#include "types/container/list.h"
-#include "types/base/error.h"
-#include "types/container/texture_format.h"
 #include "platforms/input_device.h"
 #include "platforms/monitor.h"
+#include "types/math/vec2i.h"
+#include "types/container/list.h"
+#include "types/container/texture_format.h"
+#include "types/base/error.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-//There are three types of windows;
-//Physical windows, virtual windows and extended.
-//
-//A physical window is optional to support by the runtime and how many can be created is limited.
-//Android for example would allow only 1 window, while Windows would allow for N windows.
-//A server would have 0 windows.
-//
-//A virtual window is basically just a render target and can always be used.
-//It can be created as a fallback if no API is present, but has to be manually written to.
-//
-//An extended window is a special type of native window that is only applicable to a different API.
-//An example here is an OpenXR window.
 
 //A hint is only used as a *hint* to the impl.
 //The runtime is allowed to ignore this if it's not applicable.
@@ -99,13 +89,22 @@ typedef enum EResolution {
 	EResolution_16K						= _RESOLUTION(15360, 8640)
 } EResolution;
 
-I32x2 EResolution_get(EResolution r);
-EResolution EResolution_create(I32x2 v);
+
+static inline I32x2 EResolution_get(EResolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
+
+static inline EResolution EResolution_create(I32x2 v) {
+
+	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero, I32x2_xx2(U16_MAX)), v))
+		return EResolution_Undefined;
+
+	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
+}
 
 //Window callbacks
 
 typedef struct Window Window;
 
+typedef Bool (*WindowErroringCallback)(Window*, Error*);
 typedef void (*WindowCallback)(Window*);
 typedef void (*WindowUpdateCallback)(Window*, F64);
 typedef void (*WindowDeviceCallback)(Window*, InputDevice*);
@@ -120,7 +119,8 @@ typedef void (*WindowLoadCallback)(Window*, Buffer buf);
 typedef void (*WindowSaveCallback)(Window*, Buffer *buf);
 
 typedef struct WindowCallbacks {
-	WindowCallback onCreate, onDestroy, onDraw, onResize, onWindowMove, onMonitorChange, onUpdateFocus, onUpdateOrientation;
+	WindowErroringCallback onCreate, onResize;
+	WindowCallback onDestroy, onDraw, onWindowMove, onMonitorChange, onUpdateFocus, onUpdateOrientation;
 	WindowCallback onCursorMove;
 	WindowUpdateCallback onUpdate;
 	WindowDeviceCallback onDeviceAdd, onDeviceRemove;
@@ -133,12 +133,25 @@ typedef struct WindowCallbacks {
 
 //Window itself
 
+//There are three types of windows;
+//Physical windows, virtual windows and extended.
+//
+//A physical window is optional to support by the runtime and how many can be created is limited.
+//Android for example would allow only 1 window, while Windows would allow for N windows.
+//A server would have 0 windows.
+//
+//A virtual window is basically just a render target and can always be used.
+//It can be created as a fallback if no API is present, but has to be manually written to.
+//
+//An extended window is a special type of native window that is only applicable to a different API.
+//An example here is an OpenXR window.
 typedef enum EWindowType {
 
 	EWindowType_Physical,			//Native window of the underlying platform
 	EWindowType_Virtual,			//Non-native window, such as headless rendering
 	//EWindowType_ExtendedOpenXR,	//Extended physical window; for use with OpenXR
 	//EWindowType_External,			//Externally managed window, manually calling the necessary functions
+	//EWindowType_ExternalGlfw,		//TODO: Interop with other libraries like glfw for ease of integration
 
 	EWindowType_Count,
 	EWindowType_Extended = EWindowType_Virtual + 1
@@ -220,17 +233,24 @@ impl Bool Window_presentPhysical(Window *w, Error *e_rr);
 //Should be called if virtual or EWindowHint_ProvideCPUBuffer
 
 Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSize, Error *e_rr);
-Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, Error *e_rr);
+Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout, const Allocator *alloc, Error *e_rr);
 
 //Simple helper functions
 
-Bool Window_isMinimized(const Window *w);
-Bool Window_isFocussed(const Window *w);
-Bool Window_isFullScreen(const Window *w);
+static inline Bool Window_isMinimized(const Window *w) { return w && w->flags & EWindowFlags_IsMinimized; }
+static inline Bool Window_isFocussed(const Window *w) { return w && w->flags & EWindowFlags_IsFocussed; }
+static inline Bool Window_isFullScreen(const Window *w) { return w && w->flags & EWindowFlags_IsFullscreen; }
 
-Bool Window_doesAllowFullScreen(const Window *w);
+static inline Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindowHint_AllowFullscreen; }
 
-Bool Window_terminate(Window *w);
+static inline Bool Window_terminate(Window *w) {
+
+	if(!w)
+		return false;
+
+	w->flags |= EWindowFlags_ShouldTerminate;		//Mark thread for destroy
+	return true;
+}
 
 #ifdef __cplusplus
 	}

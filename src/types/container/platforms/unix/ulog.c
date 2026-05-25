@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/platforms/unix/ulog.c
+
 #include "types/container/log.h"
 #include "types/base/thread.h"
 #include "types/base/time.h"

@@ -18,11 +18,13 @@
 *  This is called dual licensing.
 */
 
+//platforms/android/awindow_manager.c
+
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
-#include "types/base/error.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "types/base/error.h"
 #include "types/base/thread.h"
 
 #include <android_native_app_glue.h>

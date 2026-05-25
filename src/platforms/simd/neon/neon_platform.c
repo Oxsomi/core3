@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -18,17 +18,16 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/base/thread.h"
+//platforms/simd/neon/neon_platform.c
 
-#ifdef __cplusplus
-	extern "C" {
-#endif
+#include "platforms/platform.h"
 
-Error Thread_createx(ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
-Bool Thread_freex(Thread **thread);
-Error Thread_waitAndCleanupx(Thread **thread);
+Bool Platform_checkCPUSupport() { 
+	
+	U16 v = 1;
 
-#ifdef __cplusplus
-	}
-#endif
+	if(!*(const U8*)&v)		//Little endian only
+		return false;
+	
+	return true;
+}

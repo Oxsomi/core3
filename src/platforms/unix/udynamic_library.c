@@ -18,16 +18,19 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/unix/udynamic_library.c
+
 #include "platforms/dynamic_library.h"
-#include "platforms/ext/stringx.h"
-#include "types/container/string.h"
+#include "platforms/file.h"
+#include "platforms/platform.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 
 #include <dlfcn.h>
 
 Bool DynamicLibrary_isValidPath(CharString str) {
-	return CharString_endsWithStringInsensitive(str, CharString_createRefCStrConst(".so"), 0);
+	const CharString so = CharString_createRefCStrConst(".so");
+	return CharString_endsWithStringInsensitive(&str, &so, 0);
 }
 
 #ifdef SUPPORTS_DYNAMIC_LINKING
@@ -38,27 +41,28 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 		CharString loc = CharString_createNull();
 
 		if(!dynamicLib)
-			retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"));
 
 		if(*dynamicLib)
-			retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
+			retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"));
 
 		Bool isVirtual = false;
 
-		if(isAppDir)
+		if(isAppDir) {
 			gotoIfError3(clean, File_resolve(
-				str, &isVirtual, 260, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
-			))
+				str, &isVirtual, 0, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+			));
+		}
 
 		else gotoIfError3(clean, File_resolve(
-			str, &isVirtual, 260, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
-		))
+			str, &isVirtual, 0, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
+		));
 
 		if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
-			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"));
 
 	clean:
-		CharString_freex(&loc);
+		CharString_free(Platform_instance->alloc, &loc);
 		return s_uccess;
 	}
 
@@ -68,16 +72,16 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 		CharString tmp = CharString_createNull();
 
 		if(!dynamicLib || !ptr)
-			retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"))
+			retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"));
 
 		if(!CharString_isNullTerminated(str))
-			gotoIfError2(clean, CharString_createCopyx(str, &tmp))
+			gotoIfError3(clean, CharString_createCopy(Platform_instance->alloc, str, &tmp, e_rr));
 
 		if(!(*ptr = dlsym(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr)))
-			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"))
+			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"));
 
 	clean:
-		CharString_freex(&tmp);
+		CharString_free(Platform_instance->alloc, &tmp);
 		return s_uccess;
 	}
 

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiCA/ca_lookup.c
+
 #include "types/base/string_read_helper.h"
 #include "formats/oiCA/ca_lookup.h"
 #include "formats/oiDL/dl_file.h"
@@ -327,7 +329,7 @@ static Bool CAFile_foreachHelper(
 		FileInfo info = { 0 };
 		gotoIfError3(clean, CAFile_getInfo(caFile, child, &info, alloc, e_rr));
 
-		Bool cont = callback(&info, object, e_rr);
+		Bool cont = callback(&info, object, alloc, e_rr);
 		FileInfo_free(&info, alloc);
 
 		if (!cont || (e_rr && e_rr->genericError))
@@ -346,7 +348,7 @@ static Bool CAFile_foreachHelper(
 		FileInfo info = { 0 };
 		gotoIfError3(clean, CAFile_getInfo(caFile, child, &info, alloc, e_rr));
 
-		Bool cont = callback(&info, object, e_rr);
+		Bool cont = callback(&info, object, alloc, e_rr);
 		FileInfo_free(&info, alloc);
 
 		if (!cont || (e_rr && e_rr->genericError))

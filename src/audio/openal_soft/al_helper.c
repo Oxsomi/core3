@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//audio/openal_soft/al_helper.c
+
 #include "audio/openal_soft/openal_soft.h"
 #include "types/base/error.h"
 

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/stream.c
+
 #include "types/container/stream.h"
 #include "types/container/buffer.h"
 #include "types/container/types.h"

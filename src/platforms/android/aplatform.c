@@ -18,13 +18,15 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/errorx.h"
+//platforms/android/aplatform.c
+
+#include "types/container/list_impl.h"
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
 #include "platforms/log.h"
+#include "types/container/string.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 
 #include <android/asset_manager.h>
@@ -51,14 +53,14 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	CharString internal = CharString_createRefCStrConst(activity->internalDataPath);
 	CharString external = CharString_createRefCStrConst(activity->externalDataPath);
 
-	gotoIfError2(clean, CharString_createCopyx(internal, &Platform_instance->appDirectory))
-	gotoIfError2(clean, CharString_createCopyx(external, &Platform_instance->workDirectory))
+	gotoIfError3(clean, CharString_createCopy(internal, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr));
+	gotoIfError3(clean, CharString_createCopy(external, Platform_instance->alloc, &Platform_instance->workDirectory, e_rr));
 
 	if(!CharString_endsWithSensitive(Platform_instance->appDirectory, '/', 0))
-		gotoIfError2(clean, CharString_appendx(&Platform_instance->appDirectory, '/'))
+		gotoIfError3(clean, CharString_append(&Platform_instance->appDirectory, '/', Platform_instance->alloc, e_rr));
 
 	if(!CharString_endsWithSensitive(Platform_instance->workDirectory, '/', 0))
-		gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
+		gotoIfError3(clean, CharString_append(&Platform_instance->workDirectory, '/', Platform_instance->alloc, e_rr));
 
 	//Foreach file, load archive entry
 	//We applied a hack here; the NDK has a longstanding issue where getNextFileName will exclude directories.
@@ -77,8 +79,9 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	else while ((nameSection = AAssetDir_getNextFileName(dir)) != NULL) {
 
 		CharString sectionName = CharString_createRefCStrConst(nameSection);
+		CharString section = CharString_createRefCStrConst("section_");
 
-		if(!CharString_startsWithStringSensitive(sectionName, CharString_createRefCStrConst("section_"), 0))
+		if(!CharString_startsWithStringSensitive(sectionName, &section, 0))
 			continue;
 
 		//Now we can open the section directly and find the files through there
@@ -86,45 +89,52 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		sectionName.ptr += sizeof("section");		//sizeof includes null terminator so no need for section_
 		sectionName.lenAndNullTerminated -= sizeof("section");
 
-		gotoIfError2(clean, CharString_createCopyx(sectionName, &tmpStr))
-		gotoIfError2(clean, CharString_insertStringx(&tmpStr, CharString_createRefCStrConst("packages/"), 0))
+		gotoIfError3(clean, CharString_createCopy(sectionName, Platform_instance->alloc, &tmpStr, e_rr));
+
+		CharString packages = CharString_createRefCStrConst("packages/");
+		gotoIfError3(clean, CharString_insertString(&tmpStr, packages, 0, Platform_instance->alloc, e_rr));
 
 		subDir = AAssetManager_openDir(assetManager, tmpStr.ptr);
 
 		if(!subDir)
-			retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed, couldn't opendir"))
+			retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed, couldn't opendir"));
 
 		//Go through subsection
 
 		while ((nameSubSection = AAssetDir_getNextFileName(subDir)) != NULL) {
 
-			gotoIfError2(clean, CharString_createCopyx(tmpStr, &tmpStr1))
-			gotoIfError2(clean, CharString_appendx(&tmpStr1, '/'))
-			gotoIfError2(clean, CharString_appendStringx(&tmpStr1, CharString_createRefCStrConst(nameSubSection)))
+			CharString subSectStr = CharString_createRefCStrConst(nameSubSection);
+
+			gotoIfError3(clean, CharString_createCopy(tmpStr, Platform_instance->alloc, &tmpStr1, e_rr));
+			gotoIfError3(clean, CharString_append(&tmpStr1, '/', Platform_instance->alloc, e_rr));
+			gotoIfError3(clean, CharString_appendString(&tmpStr1, &subSectStr, Platform_instance->alloc, e_rr));
 			
-			gotoIfError2(clean, CharString_createCopyx(sectionName, &tmpStr2))
-			gotoIfError2(clean, CharString_appendx(&tmpStr2, '/'))
-			gotoIfError2(clean, CharString_appendStringx(&tmpStr2, CharString_createRefCStrConst(nameSubSection)))
+			gotoIfError3(clean, CharString_createCopy(sectionName, Platform_instance->alloc, &tmpStr2, e_rr));
+			gotoIfError3(clean, CharString_append(&tmpStr2, '/', Platform_instance->alloc, e_rr));
+			gotoIfError3(clean, CharString_appendString(&tmpStr2, &subSectStr, Platform_instance->alloc, e_rr));
 
 			if(CharString_endsWithStringInsensitive(tmpStr2, CharString_createRefCStrConst(".oiCA"), 0))
-				gotoIfError2(clean, CharString_popEndCount(&tmpStr2, sizeof("oiCA")))	//sizeof("oiCA") == 5
+				gotoIfError3(clean, CharString_popEndCount(&tmpStr2, sizeof("oiCA"), e_rr));	//sizeof("oiCA") == 5
 
 			asset = AAssetManager_open(assetManager, tmpStr1.ptr, AASSET_MODE_STREAMING);
 
 			if(!asset)
-				retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed, couldn't open asset"))
+				retError(clean, Error_invalidState(0, "Platform_initUnixExt() failed, couldn't open asset"));
 
 			VirtualSection section = (VirtualSection) { .path = tmpStr2 };
 			section.lenExt = AAsset_getLength64(asset);
 
-			gotoIfError2(clean, ListVirtualSection_pushBackx(&Platform_instance->virtualSections, section))
+			gotoIfError3(clean, ListVirtualSection_pushBack(
+				Platform_instance->alloc, &Platform_instance->virtualSections, section
+			));
+
 			tmpStr2 = CharString_createNull();
 			AAsset_close(asset);
 			asset = NULL;
-			CharString_freex(&tmpStr1);
+			CharString_free(&tmpStr1, Platform_instance->alloc);
 		}
 
-		CharString_freex(&tmpStr);
+		CharString_free(&tmpStr, Platform_instance->alloc);
 		AAssetDir_close(subDir);
 		subDir = NULL;
 	}
@@ -132,35 +142,42 @@ Bool Platform_initUnixExt(Error *e_rr) {
 clean:
 
 	if(!s_uccess) {
-		Log_errorLnx("Couldn't initialize app, encountered issue");
-		if(e_rr) Error_printLnx(*e_rr);
+		Log_errorLnx("Couldn't initialize app, encountered an issue");
+		if(e_rr) Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
 	}
 	
 	if(asset) AAsset_close(asset);
 	if(subDir) AAssetDir_close(subDir);
 	if(dir) AAssetDir_close(dir);
-	CharString_freex(&tmpStr);
-	CharString_freex(&tmpStr1);
-	CharString_freex(&tmpStr2);
+	CharString_free(&tmpStr, Platform_instance->alloc);
+	CharString_free(&tmpStr1, Platform_instance->alloc);
+	CharString_free(&tmpStr2, Platform_instance->alloc);
 	return s_uccess;
 }
 
 void Platform_cleanupUnixExt() { }
 
-CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
+Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!keyboard || key >= keyboard->buttons)
-		return CharString_createNull();
+		retError(clean, Error_nullPointer(0, "Keyboard_remap()::keyboard is NULL, or key out of bounds"));
+
+	if(!result)
+		retError(clean, Error_nullPointer(3, "Keyboard_remap()::result is required"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(3, 0, "Keyboard_remap()::result is non empty, indicating possible memleak"));
 
 	//There's no better way to remap keys on Android that is safe for different localizations,
 	//Because nobody is crazy enough to use keyboards on Android.
 	//+ sizeof(EKey) == substr("EKey_".size())
 
-	CharString oldStr = CharString_createRefCStrConst(InputDevice_getButton(*keyboard, key)->name + sizeof("EKey"));
+	*result = CharString_createRefCStrConst(InputDevice_getButton(*keyboard, key)->name + sizeof("EKey"));
 
-	CharString str = CharString_createNull();
-	CharString_createCopyx(oldStr, &str);
-	return str;
+clean:
+	return s_uccess;
 }
 
 Bool Platform_setKeyboardVisible(Bool isVisible) {
@@ -178,15 +195,15 @@ Bool Platform_setKeyboardVisible(Bool isVisible) {
 		attached = true;
 	}
 
-    jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
+	jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
 
 	if(!cls)
-		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"))
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"));
 
 	jmethodID methodId = (*env)->GetMethodID(env, cls, "toggleKeyboard", "(Z)V");
 
 	if (!methodId)
-		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.toggleKeyboard"))
+		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity.toggleKeyboard"));
 
 	(*env)->CallVoidMethod(env, app->activity->clazz, methodId, isVisible);
 
@@ -196,7 +213,7 @@ clean:
 		(*env)->DeleteLocalRef(env, cls);
 
 	if(!s_uccess)
-		Error_printLnx(err);
+		Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
 
 	if(attached)
 		(*vm)->DetachCurrentThread(vm);

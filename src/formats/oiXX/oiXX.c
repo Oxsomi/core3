@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiXX/oiXX.c
+
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/container/stream.h"

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/vec2.h
+
 #pragma once
 #include "types/base/types.h"
 #include <stdalign.h>

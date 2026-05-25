@@ -18,7 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/osx/owindow.c
+
+#include "types/container/list_impl.h"
 #include "types/container/buffer.h"
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
@@ -28,12 +30,14 @@
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
 #include "platforms/monitor.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
 #include "types/base/time.h"
 
-Error OWindow_initSize(Window *w, I32x2 size) { (void)w; (void)size; return Error_none(); }
+Bool OWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
+	(void)w; (void)size; (void) e_rr;
+	retError(clean, Error_unimplemented(0, "OWindow_initSize() is unimplemented"));		//TODO:
+clean:
+	return true;
+}
 
 /*
 void OWindow_updateMonitors(Window *w) {
@@ -798,7 +802,7 @@ Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat fo
 	return format == EWindowFormat_BGRA8;
 }
 
-Bool WindowManager_freePhysical(Window *w) {
+void WindowManager_freePhysical(Window *w) {
 
 	if(w->nativeData)
 		DeleteObject((HGDIOBJ) w->nativeData);
@@ -809,8 +813,6 @@ Bool WindowManager_freePhysical(Window *w) {
 
 	if(w->nativeHandle)
 		DestroyWindow(w->nativeHandle);
-
-	return true;
 }*/
 
 Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
@@ -819,7 +821,7 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel || w->type != EWindowType_Physical)
-		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"))
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"));
 
 	//CharString copy = CharString_createNull();
 	//id wrapped;
@@ -836,10 +838,10 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
 	Bool s_uccess = true;
 	if(!w || !I32x2_any(w->size) || w->type != EWindowType_Physical)
-		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"));
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		retError(clean, Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"))
+		retError(clean, Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"));
 
 	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
 

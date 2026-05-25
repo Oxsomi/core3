@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/simd/none/none_platform.c
+
 #include "platforms/platform.h"
 
 Bool Platform_checkCPUSupport() { 

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiDL/test/test_oiDL_reserve.c
+
 #include "test_oiDL_shared.h"
 #include "formats/oiDL/dl_file.h"
 #include "formats/oiDL/dl_entry.h"
@@ -41,7 +43,7 @@ void Test_DLReserve(Test *t) {
 
 		Test_assert(t, "reserve 8 ok", DLFile_reserve(&f, 8, t->alloc, &t->err));
 
-		//Fill all 8 reserved slots — none must fail due to allocation
+		//Fill all 8 reserved slots ï¿½ none must fail due to allocation
 
 		for (U64 i = 0; i < 8; ++i) {
 			U8 val = (U8)i;

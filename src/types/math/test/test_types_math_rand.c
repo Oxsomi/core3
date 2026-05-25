@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/test/test_types_math_rand.c
+
 #include "test_types_math_shared.h"
 #include "types/math/rand.h"
 

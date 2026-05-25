@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/string_unicode.c
+
 #include "types/container/string.h"
 #include "types/container/list_basic_types.h"
 
@@ -121,10 +123,21 @@ Bool CharString_toUTF16(const CharString s, const Allocator *allocator, ListU16 
 	Bool alloc = false;
 
 	const U64 len = CharString_length(s);
-	gotoIfError3(clean, ListU16_reserve(arr, len + 1, allocator, e_rr));
-	alloc = true;
 
-	const Buffer buf0 = ListU16_allocatedBuffer(*arr);
+	if(!arr)
+		retError(clean, Error_nullPointer(0, "CharString_toUTF16()::arr is required"));
+
+	Bool isRef = arr->length && ListU16_isRef(*arr);
+
+	if(!isRef) {
+		gotoIfError3(clean, ListU16_reserve(arr, len + 1, allocator, e_rr));
+		alloc = true;
+	}
+
+	else if(ListU16_isConstRef(*arr))
+		retError(clean, Error_constData(0, 0, "CharString_toUTF16()::arr should be writable"));
+
+	const Buffer buf0 = isRef ? ListU16_buffer(*arr) : ListU16_allocatedBuffer(*arr);
 	const Buffer buf = CharString_bufferConst(s);
 	UnicodeCodePointInfo codepoint = { 0 };
 
@@ -142,6 +155,9 @@ Bool CharString_toUTF16(const CharString s, const Allocator *allocator, ListU16 
 		gotoIfError3(clean, Buffer_writeAsUTF16(buf0, j, codepoint.index, &codepoint.bytes, e_rr));
 		j += codepoint.bytes;
 	}
+
+	if(j + 2 > Buffer_length(buf0))
+		retError(clean, Error_outOfBounds(0, j + 1, Buffer_length(buf0), "CharString_toUTF16() no space for null terminator"));
 
 	arr->ptrNonConst[j / 2] = 0;
 	arr->length = j / 2 + 1;

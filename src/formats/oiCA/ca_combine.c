@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiCA/ca_combine.c
+
 #include "formats/oiCA/ca_combine.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiCA/ca_props.h"
@@ -76,7 +78,7 @@ clean:
 	return s_uccess;
 }
 
-static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_rr) {
+static Bool CAFile_combineCallback(const FileInfo *info, void *object, const Allocator *alloc, Error *e_rr) {
 
 	CAFileCombine *ctx = (CAFileCombine*)object;
 
@@ -116,7 +118,7 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 			retError(clean, Error_invalidState(0, "CAFile_combine()::parent folder missing during insert"));
 
 		CharString nameCopy = CharString_createNull();
-		gotoIfError3(clean, CharString_createCopy(name, ctx->alloc, &nameCopy, e_rr));
+		gotoIfError3(clean, CharString_createCopy(name, alloc, &nameCopy, e_rr));
 
 		CAHandle newHandle = CAFile_add(
 			ctx->combined,
@@ -124,17 +126,17 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 			&nameCopy,
 			isFolder ? 0 : info->timestamp,
 			!isFolder,
-			ctx->alloc,
+			alloc,
 			e_rr
 		);
 
 		if (newHandle == CAHandle_Invalid) {
-			CharString_free(&nameCopy, ctx->alloc);
+			CharString_free(&nameCopy, alloc);
 			retError(clean, Error_invalidState(0, "CAFile_combine()::failed to insert entry"));
 		}
 
 		if (!isFolder)
-			gotoIfError3(clean, CAFile_copyDataFromB(ctx->b, bHandle, ctx->combined, newHandle, ctx->alloc, e_rr));
+			gotoIfError3(clean, CAFile_copyDataFromB(ctx->b, bHandle, ctx->combined, newHandle, alloc, e_rr));
 
 		goto clean;
 	}
@@ -152,7 +154,7 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 	Bool conflict = false;
 
 	ECompareResult dataEq = ECompareResult_Eq;
-	gotoIfError3(clean, CAFile_dataEqual(ctx->combined, aHandle, ctx->b, bHandle, ctx->alloc, &dataEq, e_rr));
+	gotoIfError3(clean, CAFile_dataEqual(ctx->combined, aHandle, ctx->b, bHandle, alloc, &dataEq, e_rr));
 	Bool dataSame = dataEq == ECompareResult_Eq;
 
 	if (!timeSame) {
@@ -166,7 +168,7 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 
 				else if (bTime > aTime)
 					gotoIfError3(clean, CAFile_copyDataFromB(
-						ctx->b, bHandle, ctx->combined, aHandle, ctx->alloc, e_rr
+						ctx->b, bHandle, ctx->combined, aHandle, alloc, e_rr
 					));
 
 				//else a is newer, no-op
@@ -200,7 +202,7 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 			break;
 
 		case EArchiveCombineMode_AcceptB:
-			gotoIfError3(clean, CAFile_copyDataFromB(ctx->b, bHandle, ctx->combined, aHandle, ctx->alloc, e_rr));
+			gotoIfError3(clean, CAFile_copyDataFromB(ctx->b, bHandle, ctx->combined, aHandle, alloc, e_rr));
 			gotoIfError3(clean, CAFile_setTime(ctx->combined, aHandle, bTime, e_rr));
 			break;
 
@@ -268,11 +270,11 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 			}
 
 			do {
-				CharString_free(&renamed, ctx->alloc);
+				CharString_free(&renamed, alloc);
 				++counter;
 
 				gotoIfError3(clean, CharString_format(
-					ctx->alloc, &renamed, e_rr, "%.*s-%"PRIu64"%.*s",
+					alloc, &renamed, e_rr, "%.*s-%"PRIu64"%.*s",
 					(int)CharString_length(baseName), baseName.ptr,
 					counter,
 					(int)CharString_length(extension), extension.ptr
@@ -281,7 +283,7 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 			} while (CAFile_hasSubObject(ctx->combined, parent, renamed));
 
 			CAHandle newHandle = CAFile_add(
-				ctx->combined, parent, &renamed, bTime, true, ctx->alloc, e_rr
+				ctx->combined, parent, &renamed, bTime, true, alloc, e_rr
 			);
 
 			renamed = CharString_createNull();  //ownership transferred
@@ -289,13 +291,13 @@ static Bool CAFile_combineCallback(const FileInfo *info, void *object, Error *e_
 			if (newHandle == CAHandle_Invalid)
 				retError(clean, Error_invalidState(0, "CAFile_combine()::rename insert failed"));
 
-			gotoIfError3(clean, CAFile_copyDataFromB(ctx->b, bHandle, ctx->combined, newHandle, ctx->alloc, e_rr));
+			gotoIfError3(clean, CAFile_copyDataFromB(ctx->b, bHandle, ctx->combined, newHandle, alloc, e_rr));
 			break;
 		}
 	}
 
 clean:
-	CharString_free(&renamed, ctx->alloc);
+	CharString_free(&renamed, alloc);
 
 	if (!s_uccess)
 		ctx->s_uccess = false;

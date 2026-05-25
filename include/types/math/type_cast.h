@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/type_cast.h
+
 #pragma once
 #include "types/base/mathf.h"
 #include "types/base/error.h"

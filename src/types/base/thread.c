@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/thread.c
+
 #include "types/base/thread.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"

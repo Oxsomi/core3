@@ -18,14 +18,17 @@
 *  This is called dual licensing.
 */
 
+//types/container/platforms/windows/wlog.c
+
 #include "types/container/string.h"
 #include "types/container/log.h"
-#include "types/base/thread.h"
-#include "types/base/time.h"
-#include "types/base/string_mut.h"
+#include "types/container/file.h"
 #include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/string_unicode.h"
+#include "types/base/thread.h"
+#include "types/base/time.h"
+#include "types/base/string_mut.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/base/lock.h"
@@ -77,172 +80,151 @@ void Log_printCapturedStackTraceCustom(
 	ELogLevel lvl,
 	ELogOptions opt
 ) {
-
-	if(!stackTrace)
-		return;
-
-	if(lvl >= ELogLevel_Count)
+	if(!stackTrace || lvl >= ELogLevel_Count)
 		return;
 
 	const CharString outOfStackSize = CharString_createRefCStrConst("DEV ERROR: Maximum stackSize exceeded, truncating!");
-
 	if(stackSize > STACKTRACE_SIZE)
 		Log_log(alloc, lvl, opt, &outOfStackSize);
 
 	CapturedStackTrace captured[STACKTRACE_SIZE] = { 0 };
-
-	U64 i = 0;
-
-	//Init symbols if not initialized yet.
+	U64 captureCount = 0;
 
 	Bool hasSymbols = false;
 	HANDLE process = GetCurrentProcess();
 
 	ELockAcquire acq = SpinLock_lock(&LogInitLock, 1 * MS);
+	if(acq >= ELockAcquire_Success) {
 
-	if (acq >= ELockAcquire_Success) {
-		
-		if (LogInitStatus < 0)
-			LogInitStatus = (I8) SymInitialize(process, NULL, TRUE);
+		if(LogInitStatus < 0)
+			LogInitStatus = (I8)SymInitialize(process, NULL, TRUE);
 
 		hasSymbols = LogInitStatus;
 
-		if (acq == ELockAcquire_Acquired)
+		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(&LogInitLock);
 	}
 
 	CharString tmp = CharString_createNull();
-
 	Bool anySymbol = false;
+	Bool allocFailed = false;
 
-	if(hasSymbols)
-		for (
-			;
+	if(hasSymbols) {
+		for(
+			U64 i = 0;
 			i < stackSize && i < STACKTRACE_SIZE &&
 			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC;
 			++i
 		) {
-
-			const U64 addr = (U64) stackTrace[i];
+			const U64 addr = (U64)stackTrace[i];
 
 			//Get module name
-
-			const U64 moduleBase = SymGetModuleBase(process, addr);
-
-			wchar_t modulePath[MAX_PATH + 1] = { 0 };
-			if (!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_PATH))
+			const U64 moduleBase = SymGetModuleBase64(process, addr);
+			wchar_t modulePath[MAX_OXC_PATH + 1] = { 0 };
+			if(!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_OXC_PATH))
 				continue;
 
 			anySymbol = true;
 
-			U32 symbolData[(sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1 + 3) &~ 3] = { 0 };
-
+			//Get symbol name, stored in a stack buffer, must be copied before end of iteration
+			U32 symbolData[(sizeof(IMAGEHLP_SYMBOL64) + MAX_OXC_PATH + 1 + 3) &~ 3] = { 0 };
 			PIMAGEHLP_SYMBOL64 symbol = (PIMAGEHLP_SYMBOL64)symbolData;
-			symbol->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
-			symbol->MaxNameLength = MAX_PATH;
+			symbol->SizeOfStruct  = sizeof(IMAGEHLP_SYMBOL64);
+			symbol->MaxNameLength = MAX_OXC_PATH;
 
-			C8 *symbolName = symbol->Name;
-
-			if (!SymGetSymFromAddr64(process, addr, NULL, symbol))
+			if(!SymGetSymFromAddr64(process, addr, NULL, symbol))
 				continue;
 
-			DWORD offset = 0;
-			IMAGEHLP_LINE64 line = { 0 };
-			line.SizeOfStruct = sizeof(line);
+			DWORD lineOffset = 0;
+			IMAGEHLP_LINEW64 line = { .SizeOfStruct = sizeof(IMAGEHLP_LINEW64) };
+			SymGetLineFromAddrW64(process, addr, &lineOffset, &line);	//Can fail, line stays zeroed
 
-			SymGetLineFromAddr64(process, addr, &offset, &line);	//Can fail, meaning that line is null
+			CapturedStackTrace *capture = &captured[captureCount];
 
-			if (line.FileName && strlen(line.FileName) > MAX_PATH)
-				continue;
+			//Copy symbol name, it lives in symbolData which goes out of scope
 
-			CapturedStackTrace *capture = captured + i;
-			capture->sym = CharString_createRefAuto(symbolName, MAX_PATH);
+			CharString symRef = CharString_createRefAuto(symbol->Name, MAX_OXC_PATH);
+			CharString_formatPath(&symRef);
 
-			CharString_formatPath(&capture->sym);
+			if(!CharString_createCopy(symRef, alloc, &capture->sym, NULL)) {
+				allocFailed = true;
+				break;
+			}
+
+			//Copy module & file path, UTF-16 to UTF-8
+
+			if(modulePath[0])
+				if(!CharString_createFromUTF16((const U16*)modulePath, MAX_OXC_PATH, alloc, &capture->mod, NULL)) {
+					allocFailed = true;
+					break;
+				}
 
 			if(line.FileName)
-				capture->fil = CharString_createRefAutoConst(line.FileName, MAX_PATH);
-
-			//Copy strings to heap, since they'll go out of scope
-
-			Bool s_uccess = true;
-
-			if (modulePath[0])
-				gotoIfError3(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod, NULL));
-
-			if(CharString_length(capture->sym)) {
-				gotoIfError3(cleanup, CharString_createCopy(capture->sym, alloc, &tmp, NULL));
-				capture->sym = tmp;
-				tmp = CharString_createNull();
-			}
-
-			if(CharString_length(capture->fil)) {
-				gotoIfError3(cleanup, CharString_createCopy(capture->fil, alloc, &tmp, NULL));
-				capture->fil = tmp;
-				tmp = CharString_createNull();
-			}
+				if(!CharString_createFromUTF16((const U16*)line.FileName, MAX_OXC_PATH, alloc, &capture->fil, NULL)) {
+					allocFailed = true;
+					break;
+				}
 
 			capture->lin = line.LineNumber;
-			continue;
-
-			//Cleanup the stack if we can't move anything to heap anymore
-
-		cleanup:
-
-			for (U64 j = 0; j <= i; ++j) {
-				CharString_free(&captured[j].fil, alloc);
-				CharString_free(&captured[j].sym, alloc);
-				CharString_free(&captured[j].mod, alloc);
-			}
-
-			const CharString failedPrintStack = CharString_createRefCStrConst("Failed to print stacktrace:");
-			Log_log(alloc, lvl, opt, &failedPrintStack);
-			return;
+			++captureCount;
 		}
+	}
+
+	if(allocFailed) {
+
+		//Free whatever we managed to capture
+		for(U64 j = 0; j < captureCount; ++j) {
+			CharString_free(&captured[j].fil, alloc);
+			CharString_free(&captured[j].sym, alloc);
+			CharString_free(&captured[j].mod, alloc);
+		}
+
+		const CharString failedPrintStack = CharString_createRefCStrConst("Failed to print stacktrace:");
+		Log_log(alloc, lvl, opt, &failedPrintStack);
+		return;
+	}
 
 	opt |= ELogOptions_NoBreak | ELogOptions_NewLine;
 
-	const CharString stackTraceMsg = CharString_createRefCStrConst("Stacktrace:");
+	const CharString stackTraceMsg    = CharString_createRefCStrConst("Stacktrace:");
 	const CharString stackTraceNoSyms = CharString_createRefCStrConst("Stacktrace: (No symbols)");
 
-	if(hasSymbols && anySymbol)
-		Log_log(alloc, lvl, opt, &stackTraceMsg);
-
-	else Log_log(alloc, lvl, opt, &stackTraceNoSyms);
+	Log_log(alloc, lvl, opt, hasSymbols && anySymbol ? &stackTraceMsg : &stackTraceNoSyms);
 
 	Bool panic = false;
 
-	U64 stackCount = i;
-	i = 0;
-
-	for (; i < stackCount; ++i) {
-
+	for(U64 i = 0; i < captureCount; ++i) {
 		CapturedStackTrace capture = captured[i];
 
+		Error formatErr = Error_none();
+
 		if(!CharString_length(capture.sym))
-			panic |= !CharString_format(alloc, &tmp, NULL, "%p\n", stackTrace[i]);
+			CharString_format(alloc, &tmp, &formatErr, "%p\n", stackTrace[i]);
 
 		else if(capture.lin)
-			panic |= !CharString_format(alloc, &tmp, NULL,
+			CharString_format(alloc, &tmp, &formatErr,
 				"%p: %.*s!%.*s (%.*s, Line %"PRIu32")\n",
 				stackTrace[i],
-				(int) CharString_length(capture.mod), capture.mod.ptr,
-				(int) CharString_length(capture.sym), capture.sym.ptr,
-				(int) CharString_length(capture.fil), capture.fil.ptr,
+				(int)CharString_length(capture.mod), capture.mod.ptr,
+				(int)CharString_length(capture.sym), capture.sym.ptr,
+				(int)CharString_length(capture.fil), capture.fil.ptr,
 				capture.lin
 			);
 
-		else panic |= !CharString_format(alloc, &tmp, NULL,
-			"%p: %.*s!%.*s\n",
-			stackTrace[i],
-			(int) CharString_length(capture.mod), capture.mod.ptr,
-			(int) CharString_length(capture.sym), capture.sym.ptr
-		);
+		else
+			CharString_format(alloc, &tmp, &formatErr,
+				"%p: %.*s!%.*s\n",
+				stackTrace[i],
+				(int)CharString_length(capture.mod), capture.mod.ptr,
+				(int)CharString_length(capture.sym), capture.sym.ptr
+			);
 
-		Log_log(alloc, lvl, opt &~ ELogOptions_Default, &tmp);
-		CharString_free(&tmp, alloc);
-
-		//We now don't need the strings anymore
+		if(formatErr.genericError)
+			panic = true;
+		else {
+			Log_log(alloc, lvl, opt &~ ELogOptions_Default, &tmp);
+			CharString_free(&tmp, alloc);
+		}
 
 		CharString_free(&capture.fil, alloc);
 		CharString_free(&capture.sym, alloc);
@@ -250,7 +232,6 @@ void Log_printCapturedStackTraceCustom(
 	}
 
 	const CharString panicMsg = CharString_createRefCStrConst("PANIC: Failed to format one of the stacktraces");
-
 	if(panic)
 		Log_log(alloc, lvl, opt, &panicMsg);
 }
@@ -416,13 +397,13 @@ skipConsole:
 
 CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) {
 
-	if(!FAILED(e_rr->paramValue0))
+	if(e_rr->paramValue0 == ERROR_SUCCESS)
 		return CharString_createNull();
 
 	wchar_t *lpBuffer = NULL;
 
 	const DWORD f = FormatMessageW(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 		NULL,
 		(DWORD) e_rr->paramValue0,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),

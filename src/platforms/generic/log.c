@@ -18,66 +18,56 @@
 *  This is called dual licensing.
 */
 
+//platforms/log.c
+
 #include "platforms/log.h"
-#include "platforms/ext/stringx.h"
+#include "platforms/platform.h"
 #include "types/container/string.h"
-#include "types/math/math.h"
 #include "types/base/constants.h"
 
 #include <stdlib.h>
 
-void Log_printStackTracex(U8 skip, ELogLevel lvl, ELogOptions options) {
-	Log_printStackTrace(Platform_instance->alloc, skip + 1 == 0 ? U8_MAX : skip + 1, lvl, options);
-}
-
-void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTraceCustom(Platform_instance->alloc, stackTrace, stackSize, lvl, options);
-}
-
-void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
-	Log_log(Platform_instance->alloc, lvl, options, arg);
-}
-
-#define Log_level(lvl) 													\
-																		\
-	if(!format)															\
-		return;															\
-																		\
-	CharString res = CharString_createNull();							\
-																		\
-	va_list arg1;														\
-	va_start(arg1, format);												\
-	Error err = CharString_formatVariadic(alloc, &res, format, arg1);	\
-	va_end(arg1);														\
-																		\
-	if(!err.genericError)												\
-		Log_log(alloc, lvl, opt, res);									\
-																		\
+#define Log_level(lvl) 															\
+																				\
+	if(!format)																	\
+		return;																	\
+																				\
+	CharString res = CharString_createNull();									\
+																				\
+	va_list arg1;																\
+	va_start(arg1, format);														\
+	Error err = Error_none();													\
+	Bool s_uccess = CharString_formatVariadic(alloc, &res, &err, format, arg1);	\
+	va_end(arg1);																\
+																				\
+	if(!s_uccess)																\
+		Log_log(alloc, lvl, opt, &res);											\
+																				\
 	CharString_free(&res, alloc)
 
 //Default allocator. Sometimes they can't be safely used
 
 void Log_logFormatx(ELogLevel level, ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance->alloc;
+	const Allocator *alloc = Platform_instance->alloc;
 	Log_level(level);
 }
 
 void Log_debugx(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance->alloc;
+	const Allocator *alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Debug);
 }
 
 void Log_performancex(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance->alloc;
+	const Allocator *alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Performance);
 }
 
 void Log_warnx(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance->alloc;
+	const Allocator *alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Warn);
 }
 
 void Log_errorx(ELogOptions opt, const C8 *format, ...) {
-	const Allocator alloc = Platform_instance->alloc;
+	const Allocator *alloc = Platform_instance->alloc;
 	Log_level(ELogLevel_Error);
 }

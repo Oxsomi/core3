@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/wav/wav_write.c
+
 #include "types/container/stream.h"
 #include "formats/wav/wav_file.h"
 #include "formats/wav/wav_headers.h"

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiCA/ca_file.c
+
 #include "types/container/list_impl.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
@@ -25,6 +27,7 @@
 
 TListImpl(CAFolderInfo);
 TListImpl(CAFileInfo);
+TListImpl(CAFile);
 
 Bool CAFile_create(
 	const CASettings *settings,

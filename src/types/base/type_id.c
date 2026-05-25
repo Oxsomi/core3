@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/type_id.c
+
 #include "types/base/type_id.h"
 
 TypeIdShort ETypeId_toShortId(ETypeId typeId) {

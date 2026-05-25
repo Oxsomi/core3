@@ -18,13 +18,14 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/osx/oplatform.c
+
+#include "types/container/list_impl.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
 #include "types/base/atomic.h"
-#include "platforms/log.h"
-#include "platforms/ext/stringx.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -37,15 +38,15 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	//Get exe name
 
 	Bool s_uccess = true;
-	C8 exeName[256];
-	U32 exeNameLen = 255;
+	C8 exeName[1024];
+	U32 exeNameLen = 1023;
 	CharString tmpStr = CharString_createNull();
 	I32 fd = -1;
 	C8 *ptr = NULL;
 	U64 fileSize = 0;
 
-  	if (_NSGetExecutablePath(exeName, &exeNameLen) != 0)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() exePath exceeds maximum"))
+	if (_NSGetExecutablePath(exeName, &exeNameLen) != 0)
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() exePath exceeds maximum"));
 
 	exeName[exeNameLen] = '\0';
 
@@ -59,10 +60,10 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		}
 
 	if(!containedSlash)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() couldn't find app base path"));
 
 	CharString appDir = CharString_createRefSizedConst(exeName, (U64)exeNameLen, false);
-	gotoIfError2(clean, CharString_createCopyx(appDir, &Platform_instance->appDirectory))
+	gotoIfError3(clean, CharString_createCopyx(appDir, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr));
 
 	//Try to open the main executable within 1s, if it fails we can't init
 
@@ -71,13 +72,13 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	for(; i < 1000 && (fd = open(exeName, O_RDONLY)) < 0; ++i) {
 
 		if(errno != EINTR)
-			retError(clean, Error_stderr(0, "Platform_initUnixExt() open failed on executable"))
+			retError(clean, Error_stderr(0, "Platform_initUnixExt() open failed on executable"));
 
 		Thread_sleep(MS);
 	}
 
 	if(i == 1000)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be opened in time"));
 
 	//Grab file data
 
@@ -85,7 +86,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 	ptr = (C8*) mmap(NULL, fileSize, PROT_READ, MAP_SHARED, fd, 0);
 
 	if(ptr == (const C8*) MAP_FAILED)
-		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"))
+		retError(clean, Error_invalidState(0, "Platform_initUnixExt() executable couldn't be mapped"));
 
 	//Read sections
 
@@ -95,31 +96,35 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 	for (U32 i = 0; i < header->ncmds; i++) {
 
-        if (lc->cmd == LC_SEGMENT_64) {
+		if (lc->cmd == LC_SEGMENT_64) {
 
-            const struct segment_command_64 *seg = (const struct segment_command_64*) lc;
-            const struct section_64 *sec = (const struct section_64*)((const C8*)seg + sizeof(struct segment_command_64));
+			const struct segment_command_64 *seg = (const struct segment_command_64*) lc;
+			const struct section_64 *sec = (const struct section_64*)((const C8*)seg + sizeof(struct segment_command_64));
 
-            for (U32 j = 0; j < seg->nsects; j++) {
+			for (U32 j = 0; j < seg->nsects; j++) {
 
 				if(seg->segname[0] != '@')		//Packages are marked with @ in front
 					continue;
 
-				gotoIfError2(clean, CharString_formatx(&tmpStr, "%s/%s", seg->segname + 1, sec[j].sectname))
+				gotoIfError3(clean, CharString_format(
+					Platform_instance->alloc, &tmpStr, e_rr, "%s/%s", seg->segname + 1, sec[j].sectname
+				));
 
 				VirtualSection section = (VirtualSection) { .path = tmpStr };
 				section.lenExt = sec[j].size;
 				section.dataExt = ptr + sec[j].offset;
 
-				gotoIfError2(clean, ListVirtualSection_pushBackx(&Platform_instance->virtualSections, section))
+				gotoIfError3(clean, ListVirtualSection_pushBack(
+					&Platform_instance->virtualSections, section, Platform_instance->alloc, e_rr
+				));
 
 				tmpStr = CharString_createNull();
 				anySection = true;
 			}
-        }
+		}
 
-        lc = (const struct load_command*)((const C8*)lc + lc->cmdsize);
-    }
+		lc = (const struct load_command*)((const C8*)lc + lc->cmdsize);
+	}
 
 	//Keep file open until end of program.
 	//Unless there's no need (when there's no sections present).
@@ -141,7 +146,7 @@ clean:
 	if(ptr)
 		munmap(ptr, fileSize);
 
-	CharString_freex(&tmpStr);
+	CharString_free(&tmpStr, Platform_instance->alloc);
 	return s_uccess;
 }
 

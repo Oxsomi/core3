@@ -18,13 +18,15 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/windows/wwindow_manager.c
+
+#include "types/container/list_impl.h"
+#include "types/container/list_basic_types.h"
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/errorx.h"
 #include "platforms/log.h"
+#include "types/container/log.h"
 #include "types/base/error.h"
 
 #define UNICODE
@@ -35,45 +37,93 @@
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
+typedef struct WndClassExExW {
+	WNDCLASSEXW wnd;
+	HICON icon, iconSm;
+} WndClassExExW;
+
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	Bool s_uccess = true;
-	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(WNDCLASSEXW), &w->platformData))
 
-	WNDCLASSEXW *wc = (WNDCLASSEXW*) w->platformData.ptr;
+	HANDLE hIcon = NULL, hIconSm = NULL;
+
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(WndClassExExW), Platform_instance->alloc, &w->platformData, e_rr));
+
+	WndClassExExW *wc = (WndClassExExW*) w->platformData.ptr;
 
 	const HINSTANCE mainModule = Platform_instance->data;
 
-	*wc = (WNDCLASSEXW) {
+	hIcon = LoadImageW(mainModule, L"LOGO", IMAGE_ICON, 32, 32, 0);
+
+	if (!hIcon) {
+
+		Log_warnLnx("LoadIconW for the LOGO failed, falling back to default...");
+
+		if((hIcon = LoadIconW(NULL, IDI_APPLICATION)) == NULL)
+			retError(clean, Error_platformError(0, GetLastError(), "LoadIconW fallback failed"));
+	}
+
+	else hIconSm = LoadImageW(mainModule, L"LOGO", IMAGE_ICON, 16, 16, 0);
+
+	HANDLE hCursor = NULL;
+	if((hCursor = LoadCursorW(NULL, IDC_ARROW)) == NULL)
+		retError(clean, Error_platformError(0, GetLastError(), "LoadCursorW failed for standard cursor"));
+
+	wc->wnd = (WNDCLASSEXW) {
 
 		.style = CS_HREDRAW | CS_VREDRAW,
 		.lpfnWndProc = WWindow_onCallback,
 		.hInstance = mainModule,
 
-		.hIcon = (HICON)LoadImageW(mainModule, L"LOGO", IMAGE_ICON, 32, 32, 0),
-		.hIconSm = (HICON)LoadImageW(mainModule, L"LOGO", IMAGE_ICON, 16, 16, 0),
+		.hIcon = (HICON) hIcon,
+		.hIconSm = (HICON) (hIconSm ? hIconSm : hIcon),
 
-		.hCursor = LoadCursorW(NULL, IDC_ARROW),
+		.hCursor = (HCURSOR) hCursor,
 
 		.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH),
 
 		.lpszClassName = L"OxC3: Oxsomi core 3",
-		.cbSize = sizeof(*wc),
+		.cbSize = sizeof(WNDCLASSEXW),
 		.cbWndExtra = sizeof(void*),
 	};
 
-	if (!RegisterClassExW(wc))
+	if (!RegisterClassExW(&wc->wnd)) {
+		wc->wnd.hInstance = NULL;
 		retError(clean, Error_platformError(
 			0, GetLastError(), "WindowManager_createNative() RegisterClassEx failed"
-		))
+		));
+	}
+
+	wc->icon = (HICON) hIcon;
+	wc->iconSm = (HICON) hIconSm;
+	hIcon = NULL;
+	hIconSm = NULL;
 
 clean:
+
+	if(hIconSm)
+		DestroyIcon((HICON)hIconSm);
+
+	if(hIcon)
+		DestroyIcon((HICON)hIcon);
+
 	return s_uccess;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
-	const WNDCLASSEXW* wc = (const WNDCLASSEXW*)w->platformData.ptr;
-	UnregisterClassW(wc->lpszClassName, wc->hInstance);
+
+	const WndClassExExW *wc = (const WndClassExExW*)w->platformData.ptr;
+
+	if(wc->wnd.hInstance)
+		UnregisterClassW(wc->wnd.lpszClassName, wc->wnd.hInstance);
+
+	if(wc->iconSm)
+		DestroyIcon(wc->iconSm);
+
+	if(wc->icon)
+		DestroyIcon(wc->icon);
+
 	return true;
 }
 
@@ -86,7 +136,9 @@ void WindowManager_updateExt(WindowManager *manager) {
 	Bool s_uccess = true;
 
 	if (manager->windows.length > 256) {
-		gotoIfError3(clean, ListU64_resizex(&seenWindowsLarge, (manager->windows.length + 63) >> 6, e_rr));
+		gotoIfError3(clean, ListU64_resize(
+			&seenWindowsLarge, (manager->windows.length + 63) >> 6, Platform_instance->alloc, e_rr
+		));
 	}
 
 	else gotoIfError3(clean, ListU64_createRefConst(seenWindows, 4, &seenWindowsLarge, e_rr));
@@ -124,6 +176,6 @@ void WindowManager_updateExt(WindowManager *manager) {
 	}
 
 clean:
-	ListU64_freex(&seenWindowsLarge);
-	Error_printLnx(err);
+	ListU64_free(&seenWindowsLarge, Platform_instance->alloc);
+	Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_NewLine);
 }

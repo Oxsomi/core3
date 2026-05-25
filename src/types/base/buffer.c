@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/buffer.c
+
 #include "types/base/buffer.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"

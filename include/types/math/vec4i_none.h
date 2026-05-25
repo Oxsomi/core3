@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/vec4i_none.h
+
 #pragma once
 #ifndef VEC4I_NONE_GUARD
 	#error Vec4i None guard was undefined, this likely indicates include of vec4i_none.h was attempted instead of vec4i.h

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiSH/sh_read.c
+
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiSH/sh_headers.h"
 #include "formats/oiDL/dl_file.h"

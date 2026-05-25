@@ -18,12 +18,16 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/windows/wplatform.c
+
+#include "types/container/list_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/keyboard.h"
-#include "types/container/string.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string_unicode.h"
+#include "types/container/file.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
 #include "types/base/constants.h"
 
 #define UNICODE
@@ -60,25 +64,25 @@ BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sec
 	mod; unused;
 
 	CharString str = CharString_createNull();
-	Error err = Error_none();
-	gotoIfError(clean, CharString_createFromUTF16x((const U16*)name, U64_MAX, &str))
+	Bool s_uccess = true;
+	gotoIfError3(clean, CharString_createFromUTF16((const U16*)name, MAX_OXC_PATH, Platform_instance->alloc, &str, NULL));
 
-	if(CharString_countAllSensitive(str, '/', 0) != 1)
+	if(CharString_countAllSensitive(&str, '/', 0) != 1)
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
 
 	else {
 		const VirtualSection section = (VirtualSection) { .path = str };
-		gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section))
+		gotoIfError3(clean, ListVirtualSection_pushBack(sections->sections, section, Platform_instance->alloc, NULL));
 	}
 
 clean:
 
-	if(err.genericError) {
+	if(!s_uccess) {
 		sections->b = true;			//Signal that we failed
-		CharString_freex(&str);
+		CharString_free(&str, Platform_instance->alloc);
 	}
 
-	return !err.genericError;
+	return s_uccess;
 }
 
 void *Platform_getDataImpl(void *ptr) {
@@ -92,13 +96,11 @@ Bool Platform_initExt(Error *e_rr) {
 
 	//Init app dir
 
-	wchar_t buff[MAX_PATH + 1];
-	U32 chars = GetModuleFileNameW(NULL, buff, MAX_PATH);
+	wchar_t buff[MAX_OXC_PATH + 1];
+	U32 chars = GetModuleFileNameW(NULL, buff, MAX_OXC_PATH);
 
-	if(!chars || chars >= MAX_PATH)
-		retError(clean, Error_platformError(
-			0, GetLastError(), "Platform_initExt() GetModuleFileName failed"
-		))
+	if(!chars || chars >= MAX_OXC_PATH)
+		retError(clean, Error_platformError(0, GetLastError(), "Platform_initExt() GetModuleFileName failed"));
 
 	buff[chars] = 0;
 
@@ -119,28 +121,30 @@ Bool Platform_initExt(Error *e_rr) {
 	}
 
 	if(lastSlash == U64_MAX)
-		retError(clean, Error_invalidState(0, "Platform_initExt() couldn't find exe name"))
+		retError(clean, Error_invalidState(0, "Platform_initExt() couldn't find exe name"));
 
 	buff[lastSlash + 1] = '\0';
-	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, lastSlash + 1, &Platform_instance->appDirectory))
+	gotoIfError3(clean, CharString_createFromUTF16(
+		(const U16*)buff, lastSlash + 1, Platform_instance->alloc, &Platform_instance->appDirectory, e_rr
+	));
 
 	SetDllDirectoryW(buff);
 
 	//Init working dir
 
-	chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
+	chars = GetCurrentDirectoryW(MAX_OXC_PATH + 1, buff);
 
-	if(!chars || chars >= MAX_PATH)
-		retError(clean, Error_platformError(
-			0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
-		))
+	if(!chars || chars >= MAX_OXC_PATH)
+		retError(clean, Error_platformError(0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"));
 
 	buff[chars] = 0;
 
-	gotoIfError2(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance->workDirectory))
+	gotoIfError3(clean, CharString_createFromUTF16(
+		(const U16*)buff, chars, Platform_instance->alloc, &Platform_instance->workDirectory, e_rr
+	));
 
 	CharString_replaceAllSensitive(&Platform_instance->workDirectory, '\\', '/', 0, 0);
-	gotoIfError2(clean, CharString_appendx(&Platform_instance->workDirectory, '/'))
+	gotoIfError3(clean, CharString_append(&Platform_instance->workDirectory, '/', Platform_instance->alloc, e_rr));
 
 	//Make default path
 
@@ -159,22 +163,29 @@ Bool Platform_initExt(Error *e_rr) {
 	)) {
 
 		//Enum resource names also fails if we don't have any resources.
-		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
+		//To counter this, enumerateFiles sets b if the reason it returned false was because of the function.
 
 		if(files.b)
-			retError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"))
+			retError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"));
 	}
 
 clean:
 	return s_uccess;
 }
 
-CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
+Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
 
 	(void) keyboard;
 
+	Bool s_uccess = true;
 	U32 vkey = 0, scanCode = 0;
 	const C8 *raw = NULL;
+
+	if(!result)
+		retError(clean, Error_nullPointer(3, "Keyboard_remap()::result is required"));
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(3, 0, "Keyboard_remap()::result is non empty, indicating memleak"));
 
 	switch(key) {
 
@@ -324,8 +335,10 @@ CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
 		default:				break;
 	}
 
-	if(raw)
-		return CharString_createRefCStrConst(raw);
+	if(raw) {
+		*result = CharString_createRefCStrConst(raw);
+		goto clean;
+	}
 
 	if(!scanCode && vkey)
 		scanCode = MapVirtualKeyExW(vkey, MAPVK_VK_TO_VSC_EX, 0);
@@ -348,19 +361,18 @@ CharString Keyboard_remap(const Keyboard *keyboard, EKey key) {
 	}
 
 	if(!scanCode)
-		return CharString_createNull();
+		retError(clean, Error_notFound(0, 0, "Keyboard_remap() scancode not found"));
 
 	wchar_t name[32];
 	I32 res = GetKeyNameTextW(scanCode << 16, name, sizeof(name));
 
 	if(res > 0) {
-
-		CharString tmp = CharString_createNull();
-		Error err = CharString_createFromUTF16x((const U16*)name, res, &tmp);
-
-		if(!err.genericError)
-			return tmp;
+		gotoIfError3(clean, CharString_createFromUTF16((const U16*)name, res, alloc, result, e_rr));
+		goto clean;
 	}
 
-	return CharString_createNull();
+	retError(clean, Error_notFound(0, 0, "Keyboard_remap() key not found"));
+
+clean:
+	return s_uccess;
 }

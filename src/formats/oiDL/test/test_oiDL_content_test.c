@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiDL/test/test_oiDL_content_test.c
+
 #include "test_oiDL_shared.h"
 #include "formats/oiDL/dl_file.h"
 #include "formats/oiDL/dl_entry.h"
@@ -101,7 +103,7 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_free(&f2,  t->alloc);
 	}
 
-	{									//200 buffers of varying size (0 – 256 bytes)
+	{									//200 buffers of varying size (0 ï¿½ 256 bytes)
 		DLFile f = { 0 }, f2 = { 0 };
 
 		if (!DLFile_create(&sData, 0, t->alloc, &f, &t->err)) {

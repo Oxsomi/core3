@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiSB/sb_variable.c
+
 #include "formats/oiDL/dl_entry.h"
 #include "formats/oiSB/sb_file.h"
 #include "types/container/list_impl.h"

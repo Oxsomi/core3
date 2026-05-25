@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/texture_format.c
+
 #include "types/container/texture_format.h"
 
 const C8 *ETextureFormatId_name[ETextureFormatId_Count] = {

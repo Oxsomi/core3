@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/bmp/test/test_bmp_main.c
+
 #include "test_bmp_shared.h"
 #include "types/container/test/basic_alloc.h"
 

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/buffer_crc_lut_long_tables.c
+
 #include "types/base/types.h"
 
 //Intel's LUT for merging 3 CRC32Cs taken from different offsets

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/string_helper.h
+
 #pragma once
 #include "types/container/string.h"
 

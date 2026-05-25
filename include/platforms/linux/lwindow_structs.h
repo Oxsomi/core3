@@ -17,6 +17,9 @@
 *  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 *  This is called dual licensing.
 */
+
+//platforms/linux/lwindow_structs.h
+
 #pragma once
 #include "types/base/types.h"
 #include <wayland-client.h>

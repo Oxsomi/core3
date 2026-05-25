@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/platform_types.c
+
 #include "types/base/platform_types.h"
 
 #if _ARCH == ARCH_X86_64

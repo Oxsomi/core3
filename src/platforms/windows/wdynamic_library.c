@@ -18,10 +18,15 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+//platforms/windows/wdynamic_library.c
+
 #include "platforms/dynamic_library.h"
-#include "platforms/ext/stringx.h"
-#include "types/container/string.h"
+#include "platforms/file.h"
+#include "platforms/platform.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/string_unicode.h"
+#include "types/base/string.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 
 #define UNICODE
@@ -32,41 +37,44 @@
 #include <libloaderapi.h>
 
 Bool DynamicLibrary_isValidPath(CharString str) {
-	return CharString_endsWithStringInsensitive(str, CharString_createRefCStrConst(".dll"), 0);
+	const CharString dll = CharString_createRefCStrConst(".dll");
+	return CharString_endsWithStringInsensitive(&str, &dll, 0);
 }
+
+Bool CharString_toLongPath(wchar_t *buf, const CharString *str, Error *e_rr);
 
 Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr) {
 
 	Bool s_uccess = true;
-	ListU16 utf16 = (ListU16) { 0 };
 	CharString loc = CharString_createNull();
+	wchar_t path[MAX_OXC_PATH + 1];
 
 	if(!dynamicLib)
-		retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"))
+		retError(clean, Error_invalidState(0, "DynamicLibrary_load()::dynamicLib is required"));
 
 	if(*dynamicLib)
-		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"))
+		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_load()::dynamicLib was already set, indicates memleak"));
 
 	Bool isVirtual = false;
 
-	if(isAppDir)
+	if(isAppDir) {
 		gotoIfError3(clean, File_resolve(
-			str, &isVirtual, MAX_PATH, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
-		))
+			&str, &isVirtual, 0, &Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+		));
+	}
 
 	else gotoIfError3(clean, File_resolve(
-		str, &isVirtual, MAX_PATH, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
-	))
+		&str, &isVirtual, 0, &Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
+	));
 
-	gotoIfError2(clean, CharString_toUTF16x(loc, &utf16))
+	gotoIfError3(clean, CharString_toLongPath(path, &loc, e_rr));
 
-	*dynamicLib = (void*)LoadLibraryW(utf16.ptr);
+	*dynamicLib = (void*)LoadLibraryW(path);
 	if(!*dynamicLib)
-		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() LoadLibrary failed"))
+		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() LoadLibrary failed"));
 
 clean:
-	ListU16_freex(&utf16);
-	CharString_freex(&loc);
+	CharString_free(&loc, Platform_instance->alloc);
 	return s_uccess;
 }
 
@@ -76,18 +84,18 @@ Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void *
 	CharString tmp = CharString_createNull();
 
 	if(!dynamicLib || !ptr)
-		retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"))
+		retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"));
 
 	if(!CharString_isNullTerminated(str))
-		gotoIfError2(clean, CharString_createCopyx(str, &tmp))
+		gotoIfError3(clean, CharString_createCopy(str, Platform_instance->alloc, &tmp, e_rr));
 
 	*ptr = (void*)GetProcAddress(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr);
 
 	if(!*ptr)
-		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() GetProcAddress failed"))
+		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_load() GetProcAddress failed"));
 
 clean:
-	CharString_freex(&tmp);
+	CharString_free(&tmp, Platform_instance->alloc);
 	return s_uccess;
 }
 

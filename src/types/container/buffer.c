@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/buffer.c
+
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"

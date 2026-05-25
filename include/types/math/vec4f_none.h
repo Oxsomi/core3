@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/vec4f_none.h
+
 #ifndef VEC4F_NONE_GUARD
 	#error Vec4f NONE guard was undefined, this likely indicates include of vec4f_none.h was attempted instead of vec4f.h
 #endif

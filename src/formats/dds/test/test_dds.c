@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/dds/test/test_dds.c
+
 #include "test_dds_shared.h"
 #include "types/container/memory_stream.h"
 #include "types/base/mathi.h"

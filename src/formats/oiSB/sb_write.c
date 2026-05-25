@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiSB/sb_write.c
+
 #include "formats/oiSB/sb_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "types/container/ref_ptr.h"

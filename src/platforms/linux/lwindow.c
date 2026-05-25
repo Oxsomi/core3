@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/linux/lwindow.c
+
 #include "platforms/ext/listx_impl.h"
 #include "types/container/buffer.h"
 #include "platforms/window.h"
@@ -219,12 +221,12 @@ Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat fo
 	return format == EWindowFormat_BGRA8;
 }
 
-Bool WindowManager_freePhysical(Window *w) {
+void WindowManager_freePhysical(Window *w) {
 
 	LWindow *lwin = (LWindow*) w->nativeData;
 
 	if(!lwin)
-		return true;
+		return;
 
 	if(lwin->topLevel)
 		xdg_toplevel_destroy(lwin->topLevel);
@@ -248,7 +250,6 @@ Bool WindowManager_freePhysical(Window *w) {
 	Buffer_freex(&buf);
 
 	w->nativeData = NULL;
-	return true;
 }
 
 Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {

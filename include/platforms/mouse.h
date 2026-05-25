@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/mouse.h
+
 #pragma once
 #include "types/base/types.h"
 
@@ -27,6 +29,7 @@
 
 typedef struct Error Error;
 typedef struct InputDevice Mouse;
+typedef struct Allocator Allocator;
 
 typedef enum EMouseActions {
 
@@ -61,7 +64,7 @@ typedef enum EMouseFlag {
 	EMouseFlag_None
 } EMouseFlag;
 
-Error Mouse_create(Mouse *result);
+Bool Mouse_create(Mouse *result, const Allocator *alloc, Error *e_rr);
 
 #ifdef __cplusplus
 	}

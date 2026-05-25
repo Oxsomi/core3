@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/simd/sse/sse_platform.c
+
 #include "platforms/platform.h"
 
 Bool Platform_checkCPUSupport() {
@@ -44,8 +46,6 @@ Bool Platform_checkCPUSupport() {
 	Platform_getCPUId(7, cpuInfo1);
 
 	U32 mask1_1 = 1 << 3;				//BMI1
-
-	//Unsupported CPU
 
 	return (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
 }

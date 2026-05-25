@@ -18,16 +18,22 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/buffer.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/log.h"
-#include "platforms/platform.h"
+#pragma once
+#include "types/base/type_id.h"
 
-void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
-	Error_print(Platform_instance->alloc, err, logLevel, options);
-}
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
-void Error_printLnx(Error err) {
-	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-}
+//ETypeId but for platform types.
+
+typedef enum EPlatformsTypeId {
+	EPlatformsTypeId_FileHandle		= makeObjectId(0x1C32,  0, 0),
+	EPlatformsTypeId_Count			= 1
+} EPlatformsTypeId;
+
+extern EPlatformsTypeId EPlatformsTypeId_all[EPlatformsTypeId_Count];
+
+#ifdef __cplusplus
+	}
+#endif

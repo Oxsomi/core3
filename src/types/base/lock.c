@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/lock.c
+
 #include "types/base/platform_types.h"
 #include "types/base/lock.h"
 #include "types/base/constants.h"

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/input_device.h
+
 #pragma once
 #include "types/base/types.h"
 #include "types/container/string.h"
@@ -92,80 +94,198 @@ typedef struct InputDevice {
 
 //Initializing a device
 
-Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result);
-
-Error InputDevice_createButton(
-	InputDevice dev,
-	U16 localHandle,
-	const C8 *keyName,			//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
-	InputHandle *result
+Bool InputDevice_create(
+	U16 buttons,
+	U16 axes,
+	EInputDeviceType type,
+	InputDevice *result,
+	const Allocator *alloc,
+	Error *e_rr
 );
 
-Error InputDevice_createAxis(
-	InputDevice dev,
+Bool InputDevice_createButton(
+	InputDevice *dev,
+	U16 localHandle,
+	const C8 *keyName,			//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
+	InputHandle *result,
+	Error *e_rr
+);
+
+Bool InputDevice_createAxis(
+	InputDevice *dev,
 	U16 localHandle,
 	const C8 *axisName,			//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
 	F32 deadZone,
 	Bool resetOnInputLoss,
-	InputHandle *result
+	InputHandle *result,
+	Error *e_rr
 );
 
-Bool InputDevice_free(InputDevice *dev);
+void InputDevice_free(InputDevice *dev, const Allocator *alloc);
 
-InputButton *InputDevice_getButton(InputDevice dev, U16 localHandle);
-InputAxis *InputDevice_getAxis(InputDevice dev, U16 localHandle);
+static inline InputButton *InputDevice_getButton(const InputDevice *dev, U16 localHandle) {
+	return !dev || localHandle >= dev->buttons ? NULL :
+		(InputButton*)((InputAxis*) dev->handles.ptr + dev->axes) + localHandle;
+}
+
+static inline InputAxis *InputDevice_getAxis(const InputDevice *dev, U16 localHandle) {
+	return !dev || localHandle >= dev->axes ? NULL : (InputAxis*) dev->handles.ptr + localHandle;
+}
 
 //Simple helpers
 
-U32 InputDevice_getHandles(InputDevice d);
+static inline U32 InputDevice_getHandles(const InputDevice *d) { return !d ? 0 : (U32)d->axes + d->buttons; }
 
-InputHandle InputDevice_invalidHandle();
+static inline InputHandle InputDevice_invalidHandle() { return (InputHandle) U64_MAX; }
 
-Bool InputDevice_isValidHandle(InputDevice d, InputHandle handle);
-Bool InputDevice_isAxis(InputDevice d, InputHandle handle);
-Bool InputDevice_isButton(InputDevice d, InputHandle handle);
+static inline Bool InputDevice_isValidHandle(const InputDevice *d, InputHandle handle) { return d && handle < InputDevice_getHandles(d); }
 
-InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type);
-U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle);
+static inline Bool InputDevice_isAxis(const InputDevice *d, InputHandle handle) { return d && handle < d->axes; }
+
+static inline Bool InputDevice_isButton(const InputDevice *d, InputHandle handle) {
+	return d && !InputDevice_isAxis(d, handle) && handle < (U32)d->axes + d->buttons;
+}
+
+static inline InputHandle InputDevice_createHandle(const InputDevice *d, U16 localHandle, EInputType type) {
+	return d ? InputDevice_invalidHandle() : localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d->axes);
+}
+
+static inline U16 InputDevice_getLocalHandle(const InputDevice *d, InputHandle handle) {
+	return !d ? U16_MAX : (U16)(handle - (InputDevice_isAxis(d, handle) ? 0 : d->axes));
+}
 
 //Getting previous/current states
 
-Bool InputDevice_hasFlag(InputDevice d, U8 flag);
+static inline Bool InputDevice_hasFlag(const InputDevice *d, U8 flag) {
 
-EInputState InputDevice_getState(InputDevice d, InputHandle handle);
+	if(!d || flag >= 32)
+		return false;
 
-Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle);
-Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle);
+	return (d->flags >> flag) & 1;
+}
 
-F32 InputDevice_getDeltaAxis(InputDevice d, InputHandle handle);
-F32 InputDevice_getCurrentAxis(InputDevice d, InputHandle handle);
-F32 InputDevice_getPreviousAxis(InputDevice d, InputHandle handle);
+static inline F32 *InputDevice_getAxisValue(const InputDevice *dev, U16 localHandle, Bool isCurrent) {
+	return !dev || localHandle >= dev->axes ? NULL : (F32*)dev->states.ptrNonConst + ((U64)localHandle << 1) + isCurrent;
+}
 
-Bool InputDevice_isDown(InputDevice d, InputHandle handle);
-Bool InputDevice_isUp(InputDevice d, InputHandle handle);
-Bool InputDevice_isReleased(InputDevice d, InputHandle handle);
-Bool InputDevice_isPressed(InputDevice d, InputHandle handle);
+static inline BitRef InputDevice_getButtonValue(const InputDevice *dev, U16 localHandle, Bool isCurrent) {
+
+	if(!dev || localHandle >= dev->buttons)
+		return (BitRef) { 0 };
+
+	const U64 bitOff = ((U32)localHandle << 1) + isCurrent;
+	U8 *off = dev->states.ptrNonConst + dev->axes * 2 * sizeof(F32) + (bitOff >> 3);
+
+	return (BitRef) { .ptr = off, .off = (bitOff & 7) };
+}
+
+static inline EInputState InputDevice_getState(const InputDevice *d, InputHandle handle) {
+
+	if(!d || d->type == EInputDeviceType_Undefined || !InputDevice_isButton(d, handle))
+		return EInputState_Up;
+
+	U16 i = InputDevice_getLocalHandle(d, handle);
+	BitRef old = InputDevice_getButtonValue(d, i, false);
+
+	return (EInputState)((*old.ptr >> old.off) & 3);
+}
+
+static inline Bool InputDevice_getCurrentState(const InputDevice *d, InputHandle handle) {
+	return InputDevice_getState(d, handle) & EInputState_Curr;
+}
+
+static inline Bool InputDevice_getPreviousState(const InputDevice *d, InputHandle handle) {
+	return InputDevice_getState(d, handle) & EInputState_Prev;
+}
+
+static inline F32 InputDevice_getCurrentAxis(const InputDevice *d, InputHandle handle) {
+	return !d || d->type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 :
+		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), true);
+}
+
+static inline F32 InputDevice_getPreviousAxis(const InputDevice *d, InputHandle handle) {
+	return !d || d->type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 :
+		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), false);
+}
+
+static inline F32 InputDevice_getDeltaAxis(const InputDevice *d, InputHandle handle) {
+	return InputDevice_getCurrentAxis(d, handle) - InputDevice_getPreviousAxis(d, handle);
+}
+
+static inline Bool InputDevice_isDown(const InputDevice *d, InputHandle handle) {
+	return InputDevice_getState(d, handle) == EInputState_Down;
+}
+
+static inline Bool InputDevice_isUp(const InputDevice *d, InputHandle handle) {
+	return InputDevice_getState(d, handle) == EInputState_Up;
+}
+
+static inline Bool InputDevice_isReleased(const InputDevice *d, InputHandle handle) {
+	return InputDevice_getState(d, handle) == EInputState_Released;
+}
+
+static inline Bool InputDevice_isPressed(const InputDevice *d, InputHandle handle) {
+	return InputDevice_getState(d, handle) == EInputState_Pressed;
+}
 
 //For serialization and stuff like that
 
-InputHandle InputDevice_getHandle(InputDevice d, CharString name);
-CharString InputDevice_getName(InputDevice d, InputHandle handle);
+InputHandle InputDevice_getHandle(const InputDevice *d, CharString name);
+CharString InputDevice_getName(const InputDevice *d, InputHandle handle);
 
-F32 InputDevice_getDeadZone(InputDevice d, InputHandle handle);
+static inline F32 InputDevice_getDeadZone(const InputDevice *d, InputHandle handle) {
+	return !d || d->type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 :
+		InputDevice_getAxis(d, InputDevice_getLocalHandle(d, handle))->deadZone;
+}
 
 //This should only be handled by platform updating the input device
 //First the platform should call markUpdate, then it should start setting new values
 //Platform should also unset current axis if focus is lost
 
-Bool InputDevice_setCurrentState(InputDevice d, InputHandle handle, Bool v);
-Bool InputDevice_setCurrentAxis(InputDevice d, InputHandle handle, F32 v);
+//This should only be handled by platform updating the input device
 
-void InputDevice_markUpdate(InputDevice d);
+static inline Bool InputDevice_setCurrentState(InputDevice *d, InputHandle handle, Bool v) {
 
-Bool InputDevice_setFlag(InputDevice *d, U8 flag);
-Bool InputDevice_resetFlag(InputDevice *d, U8 flag);
+	if(!d || d->type == EInputDeviceType_Undefined || !InputDevice_isButton(d, handle))
+		return false;
 
-Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value);
+	const BitRef b = InputDevice_getButtonValue(d, InputDevice_getLocalHandle(d, handle), true);
+	BitRef_setTo(b, v);
+	return true;
+}
+
+static inline Bool InputDevice_setCurrentAxis(InputDevice *d, InputHandle handle, F32 v) {
+
+	if(!d || d->type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle))
+		return false;
+
+	*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), true) = v;
+	return true;
+}
+
+void InputDevice_markUpdate(InputDevice *d);
+
+static inline Bool InputDevice_setFlag(InputDevice *d, U8 flag) {
+
+	if(flag >= 32 || !d)
+		return false;
+
+	d->flags |= (U32)1 << flag;
+	return true;
+}
+
+static inline Bool InputDevice_resetFlag(InputDevice *d, U8 flag) {
+
+	if(flag >= 32 || !d)
+		return false;
+
+	d->flags &= ~((U32)1 << flag);
+	return true;
+}
+
+static inline Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value) {
+	return value ? InputDevice_setFlag(d, flag) : InputDevice_resetFlag(d, flag);
+}
 
 #ifdef __cplusplus
 	}

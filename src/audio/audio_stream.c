@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//audio/audio_stream.c
+
 #include "audio/audio_stream.h"
 #include "audio/audio_interface.h"
 #include "audio/audio_device.h"

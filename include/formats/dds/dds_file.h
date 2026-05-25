@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/dds/dds_file.h
+
 #pragma once
 #include "types/base/types.h"
 #include "types/container/list.h"

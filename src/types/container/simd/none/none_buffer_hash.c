@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/simd/none/none_buffer_hash.c
+
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiSH/sh_entries.c
+
 #include "formats/oiSH/sh_file.h"
 #include "types/container/list_impl.h"
 #include "types/container/log.h"

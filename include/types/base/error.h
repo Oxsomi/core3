@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/error.h
+
 #pragma once
 #include "types/base/types.h"
 

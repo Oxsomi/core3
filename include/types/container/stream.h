@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/stream.h
+
 #pragma once
 #include "types/math/vec4.h"
 #include "types/base/buffer.h"

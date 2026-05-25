@@ -18,11 +18,14 @@
 *  This is called dual licensing.
 */
 
+//platforms/platform.h
+
 #pragma once
+#include "formats/oiCA/ca_file.h"
+#include "types/container/string.h"
 #include "types/base/platform_types.h"
 #include "types/base/string.h"
 #include "types/base/lock.h"
-#include "types/container/generic_list_predeclare.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -30,7 +33,7 @@
 
 typedef struct Allocator Allocator;
 typedef struct Thread Thread;
-typedef struct Archive Archive;
+typedef struct CAFile CAFile;
 
 typedef struct VirtualSection {
 
@@ -38,15 +41,13 @@ typedef struct VirtualSection {
 
 	const void *dataExt;	//Information about how to load the virtual file
 
-	Bool loaded;
-	U8 padding[7];
+	U64 loadedAndId;		//(loaded << 63) | id (0 indicates not loaded)
 
 	U64 lenExt;				//Dependent on platform if it contains the length of the section
 
 } VirtualSection;
 
-TListDefinition(Archive, ListArchive);
-TListDefinition(VirtualSection, ListVirtualSection);
+TList(VirtualSection);
 
 typedef struct Platform {
 
@@ -65,7 +66,7 @@ typedef struct Platform {
 	SpinLock virtualSectionsLock;
 
 	ListVirtualSection virtualSections;
-	ListArchive archives;
+	ListCAFile archives;
 
 	void *data;
 
@@ -74,9 +75,9 @@ typedef struct Platform {
 
 } Platform;
 
-extern Platform *Platform_instance;
+extern Platform *Platform_instance;		//DLLs that call this need to also call Platform_create or get the same pointer passed.
 
-Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir);
+Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir, Error *e_rr);
 
 impl void Platform_cleanupExt();
 impl Bool Platform_initExt(Error *e_rr);
@@ -109,7 +110,7 @@ impl void *Platform_getDataImpl(void *ptr);
 
 //Call this on allocate to make sure the platform's allocator tracks allocations
 
-Error Platform_onAllocate(void *ptr, U64 length);
+Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr);
 Bool Platform_onFree(void *ptr, U64 length);
 
 //Default allocator

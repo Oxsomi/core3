@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/string_read.c
+
 #include "types/base/string_read_helper.h"
 #include "types/base/algorithm.h"
 #include "types/base/mathi.h"
@@ -80,9 +82,9 @@ Bool CharString_isValidFileName(const CharString str) {
 	if (strl && str.ptr[strl - 1] == '.')
 		return false;
 
-	//If string is not empty then it's a valid string
+	//If string is not empty (and less than 256 chars) then it's a valid file name
 
-	return strl;
+	return strl && strl < 256;
 }
 
 //We support valid file names or ., .. in file path parts.

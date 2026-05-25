@@ -18,8 +18,10 @@
 *  This is called dual licensing.
 */
 
+//platforms/monitor.h
+
 #pragma once
-#include "types/math/vec.h"
+#include "types/math/vec2.h"
 
 #ifdef __cplusplus
 	extern "C" {

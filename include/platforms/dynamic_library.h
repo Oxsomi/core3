@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/dynamic_library.h
+
 #pragma once
 #include "types/base/platform_types.h"
 #include "types/container/string.h"

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/error.c
+
 #include "types/base/error.h"
 #include "types/container/string.h"
 #include "types/container/log.h"

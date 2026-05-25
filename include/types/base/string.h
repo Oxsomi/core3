@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/string.h
+
 #pragma once
 #include "types/base/buffer.h"
 #include "types/base/constants.h"

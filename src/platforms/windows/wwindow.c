@@ -18,8 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "types/container/buffer.h"
+//platforms/windows/wwindow.c
+
+#include "types/container/list_impl.h"
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
@@ -27,11 +28,11 @@
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string_unicode.h"
+#include "types/container/list_basic_types.h"
+#include "types/base/mathf.h"
 #include "types/base/time.h"
-#include "types/math/math.h"
 #include "types/base/constants.h"
 
 #include <stdlib.h>
@@ -59,7 +60,6 @@ Bool WWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	}
 
 	HDC screen = NULL;
-	Error err = Error_none(), *e_rr = &err;
 	Bool s_uccess = true;
 
 	if(w->hint & EWindowHint_ProvideCPUBuffer) {
@@ -67,7 +67,7 @@ Bool WWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		screen = GetDC(w->nativeHandle);
 
 		if(!screen)
-			gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"))
+			retError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
 
 		//TODO: Support something other than RGBA8
 
@@ -84,7 +84,7 @@ Bool WWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 
 		w->nativeData = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, NULL, 0);
 
-		if (!screen)
+		if (!w->nativeData)
 			retError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
 
 		//Manually set it to be a reference
@@ -141,14 +141,14 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 					for (U16 j = 0; j < dev->buttons; ++j) {
 
-						InputHandle handle = InputDevice_createHandle(*dev, j, EInputType_Button);
+						InputHandle handle = InputDevice_createHandle(dev, j, EInputType_Button);
 
-						EInputState prevState = InputDevice_getState(*dev, handle);
+						EInputState prevState = InputDevice_getState(dev, handle);
 
 						if(prevState & EInputState_Curr) {
 
-							InputDevice_setCurrentState(*dev, handle, false);
-							EInputState newState = InputDevice_getState(*dev, handle);
+							InputDevice_setCurrentState(dev, handle, false);
+							EInputState newState = InputDevice_getState(dev, handle);
 
 							if(prevState != newState && w->callbacks.onDeviceButton)
 								w->callbacks.onDeviceButton(w, dev, handle, false);
@@ -159,18 +159,18 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 					for (U16 j = 0; j < dev->axes; ++j) {
 
-						InputAxis axis = *InputDevice_getAxis(*dev, j);
+						InputAxis axis = *InputDevice_getAxis(dev, j);
 
 						if(!axis.resetOnInputLoss)
 							continue;
 
-						InputHandle handle = InputDevice_createHandle(*dev, j, EInputType_Axis);
+						InputHandle handle = InputDevice_createHandle(dev, j, EInputType_Axis);
 
-						F32 prevStatef = InputDevice_getCurrentAxis(*dev, handle);
+						F32 prevStatef = InputDevice_getCurrentAxis(dev, handle);
 
 						if (prevStatef) {
 
-							InputDevice_setCurrentAxis(*dev, handle, 0);
+							InputDevice_setCurrentAxis(dev, handle, 0);
 
 							if(w->callbacks.onDeviceAxis)
 								w->callbacks.onDeviceAxis(w, dev, handle, 0);
@@ -210,7 +210,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			//First char
 
 			else if (wParam < 0xDC00) {				//Cache for final char
-				((U16*)buf.ptr)[0] = (U16)wParam;
+				((U16*)buf.ptrNonConst)[0] = (U16)wParam;
 				clearBuffer = false;
 			}
 
@@ -218,12 +218,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			else if(wParam < 0xE000 && buf.ptr[0]) {
 
-				((U16*)buf.ptr)[1] = (U16)wParam;
+				((U16*)buf.ptrNonConst)[1] = (U16)wParam;
 
 				//Now it's time to translate this from UTF16
 
 				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
-				if (!Buffer_readAsUTF16(buf, 0, &codepoint).genericError)
+				if (Buffer_readAsUTF16(buf, 0, &codepoint, NULL))
 					typed = codepoint.index;
 			}
 
@@ -232,10 +232,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Translate to UTF8
 
 				U8 bytes = 0;
-				Error err = Buffer_writeAsUTF8(buf, 0, typed, &bytes);
+				Bool success = Buffer_writeAsUTF8(buf, 0, typed, &bytes, NULL);
 				((C8*)buf.ptr)[bytes] = '\0';
 
-				if(!err.genericError)
+				if(success)
 					w->callbacks.onTypeChar(w, CharString_createRefSizedConst((const C8*)buf.ptr, bytes, true));
 			}
 
@@ -250,7 +250,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			RAWINPUT raw;
 			U32 rawSiz = (U32) sizeof(raw);
 			if (!GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) &raw, &rawSiz, sizeof(RAWINPUTHEADER))) {
-				Error_printLnx(Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"));
+				Error err = Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed");
+				Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 				break;
 			}
 
@@ -439,10 +440,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Send keys through interface and update input device
 
-				EInputState prevState = InputDevice_getState(*dev, handle);
+				EInputState prevState = InputDevice_getState(dev, handle);
 
-				InputDevice_setCurrentState(*dev, handle, isKeyDown);
-				EInputState newState = InputDevice_getState(*dev, handle);
+				InputDevice_setCurrentState(dev, handle, isKeyDown);
+				EInputState newState = InputDevice_getState(dev, handle);
 
 				if(prevState != newState && w->callbacks.onDeviceButton)
 					w->callbacks.onDeviceButton(w, dev, handle, isKeyDown);
@@ -464,7 +465,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					U64 j = i == 1 ? 2 : (i == 2 ? 1 : i);
 
 					InputHandle handle = (InputHandle) (EMouseButton_Left + j);
-					InputDevice_setCurrentState(*dev, handle, isDown);
+					InputDevice_setCurrentState(dev, handle, isDown);
 
 					if (w->callbacks.onDeviceButton)
 						w->callbacks.onDeviceButton(w, dev, handle, isDown);
@@ -473,7 +474,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
 
 					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_X, delta);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_X, delta);
 
 					if (w->callbacks.onDeviceAxis)
 						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, delta);
@@ -482,29 +483,27 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
 
 					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_Y, delta);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_Y, delta);
 
 					if (w->callbacks.onDeviceAxis)
 						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, delta);
 				}
 
-				F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_RX);
-				F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_RY);
+				F32 prevX = InputDevice_getCurrentAxis(dev, EMouseAxis_RX);
+				F32 prevY = InputDevice_getCurrentAxis(dev, EMouseAxis_RY);
 
 				F32 nextX, nextY;
 
 				if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
 
-					F32 prevAbsX = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp0);
-					F32 prevAbsY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp1);
+					F32 prevAbsX = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp0);
+					F32 prevAbsY = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp1);
 
 					nextX = F32_clamp((F32) (mouseDat.lLastX - prevAbsX), -1, 1);
 					nextY = F32_clamp((F32) (mouseDat.lLastY - prevAbsY), -1, 1);
 
-					//These temp axes don't need a callback and are only for 
-
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp0, (F32) mouseDat.lLastX);
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp1, (F32) mouseDat.lLastY);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp0, (F32) mouseDat.lLastX);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp1, (F32) mouseDat.lLastY);
 
 				} else {
 					nextX = (F32) mouseDat.lLastX;
@@ -523,7 +522,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (nextX != prevX) {
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_RX, nextX);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_RX, nextX);
 
 					if (w->callbacks.onDeviceAxis)
 						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RX, nextX);
@@ -531,7 +530,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (nextY != prevY) {
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_RY, nextY);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_RY, nextY);
 
 					if (w->callbacks.onDeviceAxis)
 						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_RY, nextY);
@@ -552,14 +551,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			deviceInfo.cbSize = size;
 
 			if (!GetRawInputDeviceInfoW((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
-
-				Error_printx(
-					Error_platformError(
-						0, GetLastError(), "WWindow_onCallback() GetRawInputDeviceInfo failed"
-					),
-					ELogLevel_Error, ELogOptions_Default
-				);
-
+				Error err = Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputDeviceInfo failed");
+				Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 				break;
 			}
 
@@ -570,31 +563,25 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			if (isAdded) {
 
-				Error err;
+				Bool s_uccess = true;
+				Error err = Error_none(), *e_rr = &err;
+
 				Bool isKeyboard = deviceInfo.dwType == RIM_TYPEKEYBOARD;
+				Bool pushed = false;
 
 				//Create input device
 
 				InputDevice device = (InputDevice) { 0 };
 
 				if (isKeyboard) {
-
-					if ((err = Keyboard_create((Keyboard*) &device)).genericError) {
-						Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-						break;
-					}
+					gotoIfError3(clean, Keyboard_create((Keyboard*) &device, Platform_instance->alloc, e_rr));
 				}
 
-				else if ((err = Mouse_create((Mouse*) &device)).genericError) {
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-					break;
-				}
+				else gotoIfError3(clean, Mouse_create((Mouse*) &device, Platform_instance->alloc, e_rr));
 
-				if((err = Buffer_createUninitializedBytesx(sizeof(HANDLE), &device.dataExt)).genericError) {
-					InputDevice_free(&device);
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-					break;
-				}
+				gotoIfError3(clean, Buffer_createUninitializedBytes(
+					sizeof(HANDLE), Platform_instance->alloc, &device.dataExt, e_rr
+				));
 
 				RAWINPUTDEVICE rawDevice = (RAWINPUTDEVICE) {
 					0x01,								//Perhaps 0xD for touchscreen at some point			TODO:
@@ -615,22 +602,16 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Our list isn't big enough, we need to resize
 
-				Bool pushed = false;
-
 				if(dev == end) {
 
 					//If it fails, we can't create a new device
 
-					err = ListInputDevice_pushBackx(&w->devices, (InputDevice) { 0 });
+					gotoIfError3(clean, ListInputDevice_pushBack(
+						&w->devices, (InputDevice) { 0 }, Platform_instance->alloc, e_rr
+					));
+
 					dev = ListInputDevice_last(w->devices);
 					pushed = true;
-
-					if(err.genericError) {
-						Buffer_freex(&device.dataExt);
-						InputDevice_free(&device);
-						Log_errorx(ELogOptions_Default, "Couldn't register device");
-						break;
-					}
 
 					//After this, our dev and end pointers are valid still
 					//Because our list didn't reallocate, it just changed size
@@ -638,22 +619,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Register device
 
-				if (!RegisterRawInputDevices(&rawDevice, 1, sizeof(RAWINPUTDEVICE))) {
-
-					Error_printx(
-						Error_platformError(0, GetLastError(), "WWindow_onCallback() RegisterRawInputDevices failed"),
-						ELogLevel_Error, ELogOptions_Default
-					);
-
-					if(pushed)
-						ListInputDevice_popBack(&w->devices, NULL);
-
-					Buffer_freex(&device.dataExt);
-					InputDevice_free(&device);
-
-					Log_errorx(ELogOptions_Default, "Couldn't create raw input device");
-					break;
-				}
+				if (!RegisterRawInputDevices(&rawDevice, 1, sizeof(RAWINPUTDEVICE)))
+					retError(clean, Error_platformError(0, GetLastError(), "WWindow_onCallback() RegisterRawInputDevices failed"));
 
 				//Store device and call callback
 
@@ -662,6 +629,19 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (w->callbacks.onDeviceAdd)
 					w->callbacks.onDeviceAdd(w, dev);
+
+			clean:
+
+				Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
+				if(!s_uccess) {
+
+					if(pushed)
+						ListInputDevice_popBack(&w->devices, NULL, NULL);
+
+					Buffer_free(&device.dataExt, Platform_instance->alloc);
+					InputDevice_free(&device, Platform_instance->alloc);
+				}
 
 			} else {
 
@@ -684,21 +664,20 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Cleanup our device
 
-				InputDevice_free(ours);
+				InputDevice_free(ours, Platform_instance->alloc);
 
 				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
 				//This is to keep the list as small as possible because we might be looping over it at some point
 				//We can of course have devices that aren't initialized in between valid ones,
-				//because our list isn't contiguous
+				//because our list isn't contiguous (to not invalidate handles)
 
 				if(ours == end - 1)
 					while(
 						w->devices.length &&
 						ListInputDevice_last(w->devices)->type == EInputDeviceType_Undefined
 					)
-						if((ListInputDevice_popBack(&w->devices, NULL)).genericError)
+						if(!ListInputDevice_popBack(&w->devices, NULL, NULL))
 							break;
-
 			}
 
 			return 0;
@@ -721,7 +700,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			InputDevice *dend = ListInputDevice_end(w->devices);
 
 			for(; dit != dend; ++dit)
-				InputDevice_markUpdate(*dit);
+				InputDevice_markUpdate(dit);
 
 			const Ns now = Time_now();
 
@@ -738,7 +717,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			//Call update on all other windows and window manager
 
 			if (w->flags & EWindowFlags_IsMoving)
-				WindowManager_step(w->owner, w);
+				WindowManager_step(w->owner, w, NULL);
 
 			return 0;
 		}
@@ -779,21 +758,21 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			Bool newState = w->flags & EWindowFlags_IsMinimized;
 
 			if (
-				(I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize)) &&
+				(I32x2_any(I32x2_leq(newSize, I32x2_zero)) || I32x2_eq2(w->size, newSize)) &&
 				prevState == newState
 			)
 				break;
 
 			w->size = newSize;
-			Error err = WWindow_initSize(w, w->size);
+			Error err = Error_none();
 
-			if(err.genericError)
-				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+			if(!WWindow_initSize(w, w->size, &err))
+				Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 			WWindow_updateMonitors(w);
 
-			if (w->callbacks.onResize)
-				w->callbacks.onResize(w);
+			if (w->callbacks.onResize && !w->callbacks.onResize(w, &err))
+				Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 			break;
 		}
@@ -828,15 +807,13 @@ Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat fo
 	return format == EWindowFormat_BGRA8;
 }
 
-Bool WindowManager_freePhysical(Window *w) {
+void WindowManager_freePhysical(Window *w) {
 
 	if(w->nativeData)
 		DeleteObject((HGDIOBJ) w->nativeData);
 
 	if(w->nativeHandle)
 		DestroyWindow(w->nativeHandle);
-
-	return true;
 }
 
 Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
@@ -850,18 +827,18 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		));
 
-	if (titlel >= MAX_PATH)
+	if (titlel >= 260)
 		retError(clean, Error_outOfBounds(
-			1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters"
+			1, titlel, 260, "Window_updatePhysicalTitle()::title must be less than 260 characters"
 		));
 
-	gotoIfError3(clean, CharString_toUTF16x(title, &name, e_rr));
+	gotoIfError3(clean, CharString_toUTF16(title, Platform_instance->alloc, &name, e_rr));
 
 	if(!SetWindowTextW(w->nativeHandle, name.ptr))
 		retError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"));
 
 clean:
-	ListU16_freex(&name);
+	ListU16_free(&name, Platform_instance->alloc);
 	return s_uccess;
 }
 
@@ -870,12 +847,12 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 	Bool s_uccess = true;
 
 	if(!w || !I32x2_any(w->size) || w->type != EWindowType_Physical)
-		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
+		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"));
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
 		retError(clean, Error_unsupportedOperation(
 			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
-		))
+		));
 
 	DWORD style = WS_VISIBLE;
 
@@ -900,10 +877,7 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
 	else style |= WS_POPUP;
 
-	I32x2 newSize = I32x2_create2(
-		GetSystemMetrics(SM_CXSCREEN),
-		GetSystemMetrics(SM_CYSCREEN)
-	);
+	I32x2 newSize = I32x2_create2(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 
 	SetWindowLongPtrW(w->nativeHandle, GWL_STYLE, style);
 
@@ -933,15 +907,15 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	HDC hdcBmp = 0;
 
 	if(!w || !I32x2_any(w->size))
-		retError(clean, Error_nullPointer(0, "Window_presentPhysical()::w is required"))
+		retError(clean, Error_nullPointer(0, "Window_presentPhysical()::w is required"));
 
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
-		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"))
+		retError(clean, Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"));
 
 	hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
-		retError(clean, Error_platformError(0, GetLastError(), "Window_presentPhysical() BeginPaint failed"))
+		retError(clean, Error_platformError(0, GetLastError(), "Window_presentPhysical() BeginPaint failed"));
 
 	hdcBmp = CreateCompatibleDC(hdc);
 
@@ -964,7 +938,7 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 cleanup:
 
-	const HRESULT res = GetLastError();
+	const DWORD res = GetLastError();
 
 	if(oldBmp)
 		SelectObject(hdc, oldBmp);
@@ -975,7 +949,7 @@ cleanup:
 	EndPaint(w->nativeHandle, &ps);
 
 	if(errId)
-		retError(clean, Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call"))
+		retError(clean, Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call"));
 
 clean:
 	return s_uccess;
@@ -987,6 +961,8 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	const WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
 	const HINSTANCE mainModule = Platform_instance->data;
+	HWND nativeWindow = NULL;
+	Bool touched = false;
 	Bool s_uccess = true;
 
 	DWORD style = WS_VISIBLE;
@@ -1010,32 +986,35 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	for (U8 i = 0; i < 2; ++i)
 		if (isFullScreen || (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i)))
-			I32x2_set(&size, i, I32x2_get(maxSize, i));
+			I32x2_setRef(&size, i, I32x2_get(maxSize, i));
 
 	//Our strings are UTF8, but windows wants UTF16
 
 	ListU16 tmp = (ListU16) { 0 };
-	gotoIfError3(clean, CharString_toUTF16x(w->title, &tmp, e_rr));
+	gotoIfError3(clean, CharString_toUTF16(w->title, Platform_instance->alloc, &tmp, e_rr));
 
-	const HWND nativeWindow = CreateWindowExW(
+	nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
 		I32x2_x(position), I32x2_y(position),
 		I32x2_x(size), I32x2_y(size),
 		NULL, NULL, mainModule, NULL
 	);
 
-	if(!nativeWindow) {
-		const HRESULT hr = GetLastError();
-		retError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"))
-	}
+	if(!nativeWindow)
+		retError(clean, Error_platformError(1, GetLastError(), "WindowManager_createWindowPhysical() CreateWindowEx failed"));
 
 	//Get real size and position
 
 	RECT r = (RECT) { 0 };
-	GetClientRect(nativeWindow, &r);
+
+	if(!GetClientRect(nativeWindow, &r))
+		retError(clean, Error_platformError(1, GetLastError(), "WindowManager_createWindowPhysical() GetClientRect failed"));
+
 	w->size = I32x2_create2(r.right - r.left, r.bottom - r.top);
 
-	GetWindowRect(nativeWindow, &r);
+	if(!GetWindowRect(nativeWindow, &r))
+		retError(clean, Error_platformError(1, GetLastError(), "WindowManager_createWindowPhysical() GetWindowRect failed"));
+
 	w->offset = I32x2_create2(r.left, r.top);
 
 	//Alloc cpu visible buffer if needed
@@ -1044,10 +1023,11 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Lock for when we are updating this window
 
-	gotoIfError3(clean, ListInputDevice_reservex(&w->devices,  16, e_rr));
-	gotoIfError3(clean, ListMonitor_reservex(&w->monitors, 16, e_rr));
+	gotoIfError3(clean, ListInputDevice_reserve(&w->devices, 16, Platform_instance->alloc, e_rr));
+	gotoIfError3(clean, ListMonitor_reserve(&w->monitors, 16, Platform_instance->alloc, e_rr));
 
 	w->nativeHandle = nativeWindow;
+	touched = true;
 
 	//Bind our window
 
@@ -1076,21 +1056,44 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	};
 
 	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
-		retError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"))
+		retError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
 
 	//Finalize
 	
 	w->flags |= EWindowFlags_IsActive;
 
 	if(w->callbacks.onCreate)
-		w->callbacks.onCreate(w);
+		gotoIfError3(clean, w->callbacks.onCreate(w, e_rr));
 		
 	w->flags |= EWindowFlags_IsFinalized;
 
 	if(w->callbacks.onResize)
-		w->callbacks.onResize(w);
+		gotoIfError3(clean, w->callbacks.onResize(w, e_rr));
 
 clean:
-	ListU16_freex(&tmp);
+
+	if(!s_uccess) {
+
+		if((w->flags & EWindowFlags_IsActive) && w->callbacks.onDestroy)
+			w->callbacks.onDestroy(w);
+
+		ListInputDevice_free(&w->devices, Platform_instance->alloc);
+		ListMonitor_free(&w->monitors, Platform_instance->alloc);
+
+		if (w->nativeData) {
+			DeleteObject((HGDIOBJ) w->nativeData);
+			w->nativeData = NULL;
+		}
+
+		if(touched && w->nativeHandle) {
+			DestroyWindow(w->nativeHandle);
+			w->nativeHandle = NULL;
+		}
+
+		if(!touched && nativeWindow)
+			DestroyWindow(nativeWindow);
+	}
+
+	ListU16_free(&tmp, Platform_instance->alloc);
 	return s_uccess;
 }

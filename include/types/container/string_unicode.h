@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/string_unicode.h
+
 #pragma once
 #include "types/container/string.h"
 #include "types/container/list_predeclare.h"
@@ -39,7 +41,9 @@ Bool CharString_createFromUTF32(const U32 *ptr, U64 limit, const Allocator *allo
 
 //Interop between wide strings. Converts UTF8 to UTF16 or UTF32
 
+//Allows passing a ref to do it inline, as long as the ref is big enough.
 Bool CharString_toUTF16(const CharString s, const Allocator *allocator, ListU16 *arr, Error *e_rr);
+
 Bool CharString_toUTF32(const CharString s, const Allocator *allocator, ListU32 *arr, Error *e_rr);
 
 //TODO: Bool CharString_setCodepointAt(const CharString str, U64 index, U32 codepoint, Error *e_rr);

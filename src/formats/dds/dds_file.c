@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/dds/dds_file.c
+
 #include "types/container/list_impl.h"
 #include "types/container/ref_ptr.h"
 #include "formats/dds/dds_file.h"

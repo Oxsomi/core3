@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/simd/neon/neon_buffer_encrypt.c
+
 #include "types/base/types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -42,9 +44,9 @@ void AES_checkSupport(I8 *hasAES256) {
 		#elif _PLATFORM_TYPE == PLATFORM_IOS ||  _PLATFORM_TYPE == PLATFORM_OSX
 			*hasAES256 = 1;		//Apple says they support this always
 		#elif defined(HWCAP_AES)
-			*hasSHA256 = getauxval(AT_HWCAP) & HWCAP_AES;
+			*hasAES256 = getauxval(AT_HWCAP) & HWCAP_AES;
 		#else
-			*hasSHA256 = 0;
+			*hasAES256 = 0;
 		#endif
 	}
 }

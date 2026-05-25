@@ -18,17 +18,20 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/ext/archivex.h"
+//platforms/platform.c
+
+#include "types/container/list_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "formats/oiCA/ca_file.h"
+#include "types/base/allocator.h"
 #include "types/base/thread.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
 #include "types/base/constants.h"
 
 #include <signal.h>
 #include <stdlib.h>
+
+TListImpl(VirtualSection);
 
 //Error handling
 
@@ -48,11 +51,13 @@ void sigFunc(int signal) {
 	//Outputting to console is not technically allowed by the Windows docs
 	//If this signal is triggered from the wrong thread it might cause stackoverflow,
 	//but what are you gonna do? Crash again?
-	//For debugging purposed however, this is very useful
+	//For debugging purposes however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
-	Log_printStackTracex(1, ELogLevel_Error, ELogOptions_Default);
-	Log_logx(ELogLevel_Error, ELogOptions_Default, CharString_createRefCStrConst(msg));
+	CharString msgStr = CharString_createRefCStrConst(msg);
+
+	Log_printStackTrace(Platform_instance->alloc, 1, ELogLevel_Error, ELogOptions_Default);
+	Log_log(Platform_instance->alloc, ELogLevel_Error, ELogOptions_Default, &msgStr);
 	exit(signal);
 }
 
@@ -71,73 +76,75 @@ TList(DebugAllocation);
 TListImpl(DebugAllocation);
 
 Allocator Allocator_allocationsAllocator;
-ListDebugAllocation Allocator_allocations;						//TODO: Use hashmap here!
+Allocator Allocator_trackedAllocator;
+ListDebugAllocation Allocator_allocations;			//TODO: Use hashmap here!
 SpinLock Allocator_lock;							//Multi threading safety
 
 //Allocation
 
-Error Platform_allocNoTracking(void *allocator, U64 length, Buffer *output) {
+Bool Platform_allocNoTracking(void *allocator, U64 length, Buffer *output, Error *e_rr) {
 
-	(void)allocator;
+	Bool s_uccess = true;
 
 	if(!output)
-		return Error_nullPointer(2, "allocCallbackNoCheck()::output is required");
+		retError(clean, Error_nullPointer(2, "allocCallbackNoCheck()::output is required"));
 
 	void *ptr = Platform_allocate(allocator, length);
 
 	if(!ptr)
-		return Error_outOfMemory(0, "allocCallbackNoCheck() malloc failed");
+		retError(clean, Error_outOfMemory(0, "allocCallbackNoCheck() malloc failed"));
 
 	*output = Buffer_createManagedPtr(ptr, length);
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-Bool Platform_freeNoTracking(void *allocator, Buffer buf) {
-	(void)allocator;
+void Platform_freeNoTracking(void *allocator, Buffer buf) {
 	Platform_free(allocator, buf.ptrNonConst, Buffer_length(buf));
-	return true;
 }
 
 //Normal allocator
 
-Error Platform_allocTracked(void *allocator, U64 length, Buffer *output) {
+Bool Platform_allocTracked(void *allocator, U64 length, Buffer *output, Error *e_rr) {
 
-	(void) allocator;
+	Bool s_uccess = true;
+	Bool allocated = false;
+	void *ptr = NULL;
 
 	if(!output)
-		return Error_nullPointer(2, "allocCallback()::output is required");
+		retError(clean, Error_nullPointer(2, "allocCallback()::output is required"));
 
-	void *ptr = Platform_allocate(allocator, length);
+	ptr = Platform_allocate(allocator, length);
+	allocated = true;
 
 	if(!ptr)
-		return Error_outOfMemory(0, "allocCallback() malloc failed");
+		retError(clean, Error_outOfMemory(0, "allocCallback() malloc failed"));
 
-	const Error err = Platform_onAllocate(ptr, length);
-
-	if (err.genericError) {
-		free(ptr);
-		return err;
-	}
+	gotoIfError3(clean, Platform_onAllocate(ptr, length, e_rr));
 
 	*output = Buffer_createManagedPtr(ptr, length);
-	return Error_none();
+clean:
+
+	if(!s_uccess && allocated)
+		Platform_free(allocator, ptr, length);
+
+	return s_uccess;
 }
 
-Bool Platform_freeTracked(void *allocator, Buffer buf) {
+void Platform_freeTracked(void *allocator, Buffer buf) {
 
 	(void) allocator;
 
-	const Bool canFree = Platform_onFree(buf.ptrNonConst, Buffer_length(buf));
-
-	if(canFree)
+	if(Platform_onFree(buf.ptrNonConst, Buffer_length(buf)))
 		Platform_free(allocator, buf.ptrNonConst, Buffer_length(buf));
-
-	return canFree;
 }
 
-Error Platform_onAllocate(void *ptr, U64 length) {
+Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 
-	(void)ptr;
+	Bool s_uccess = true;
+	ELockAcquire acq = ELockAcquire_Invalid;
+	(void)ptr; (void) e_rr;
 
 	AtomicI64_add(&Allocator_memoryAllocationCount, 1);
 	AtomicI64_add(&Allocator_memoryAllocationSize, length);
@@ -150,22 +157,25 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 
 		Error_captureStackTrace(captured.stack, STACKTRACE_SIZE, 1);
 
-		const ELockAcquire acq = SpinLock_lock(&Allocator_lock, U64_MAX);
+		acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
-		if(acq < ELockAcquire_Success)
-			return Error_invalidState(0, "allocCallback() allocator lock failed to acquire");			//Should never happen
+		if(acq < ELockAcquire_Success)		//Should never happen
+			retError(clean, Error_invalidState(0, "Platform_onAllocate() allocator lock failed to acquire"));
 
-		const Error err = ListDebugAllocation_pushBack(&Allocator_allocations, captured, Allocator_allocationsAllocator);
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&Allocator_lock);
-
-		if(err.genericError)
-			return err;
+		gotoIfError3(clean, ListDebugAllocation_pushBack(
+			&Allocator_allocations, captured, &Allocator_allocationsAllocator, e_rr
+		));
 
 	#endif
 
-	return Error_none();
+	goto clean;
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&Allocator_lock);
+
+	return s_uccess;
 }
 
 Bool Platform_onFree(void *ptr, U64 len) {
@@ -176,14 +186,17 @@ Bool Platform_onFree(void *ptr, U64 len) {
 	//If not, warn here and return false
 
 	ELockAcquire acq = ELockAcquire_Invalid;
-	Bool success = true;
+	Error *e_rr = NULL;
+	Bool s_uccess = true;
 
 	#ifndef NDEBUG
 
 		acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
-		if(acq < ELockAcquire_Success)
-			return false;
+		if(acq < ELockAcquire_Success) {
+			Log_errorLn(&Allocator_allocationsAllocator, "Platform_onFree Allocator_lock failed");
+			retError(clean, Error_invalidState(0, "Platform_onFree() allocator lock failed to acquire"));
+		}
 
 		U64 i = 0;
 
@@ -196,7 +209,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 				if(len != captured->length) {
 
 					Log_errorLn(
-						Allocator_allocationsAllocator,
+						&Allocator_allocationsAllocator,
 						"Allocation at %p was allocated with length %"PRIu64" but freed with length %"PRIu64"!",
 						ptr, captured->length, len
 					);
@@ -206,21 +219,30 @@ Bool Platform_onFree(void *ptr, U64 len) {
 
 				break;
 			}
+
+			//Overlapping range, but likely by accident! Log it, but refuse to track it.
+
+			else if ((U64)ptr >= captured->location && (U64)ptr < captured->location + captured->length)
+				Log_errorLn(
+					&Allocator_allocationsAllocator,
+					"Allocation at %p with length %"PRIu64" collides with free at %p with length %"PRIu64" this is invalid!",
+					captured->location, captured->length, ptr, len
+				);
 		}
 
 		if(i == Allocator_allocations.length) {
 
 			Log_errorLn(
-				Allocator_allocationsAllocator,
+				&Allocator_allocationsAllocator,
 				"Allocation that was freed at %p with length %"PRIu64" was not found in the allocation list!",
 				ptr, len
 			);
 
-			success = false;
+			s_uccess = false;
 			goto clean;
 		}
 
-		ListDebugAllocation_erase(&Allocator_allocations, i);
+		ListDebugAllocation_erase(&Allocator_allocations, i, NULL);
 
 		if (acq == ELockAcquire_Acquired) {
 			SpinLock_unlock(&Allocator_lock);
@@ -241,25 +263,32 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&Allocator_lock);
 
-	return success;
+	return s_uccess;
 }
 
 void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
 	(void) offset; (void) length; (void) minAllocationSize;
 
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool s_uccess = true;
+	Error *e_rr = NULL;
+	(void) s_uccess;
+
 	#ifndef NDEBUG
 
-		const ELockAcquire acq = SpinLock_lock(&Allocator_lock, U64_MAX);
+		acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
-		if(acq < ELockAcquire_Success)
-			return;
+		if(acq < ELockAcquire_Success) {
+			Log_errorLn(&Allocator_allocationsAllocator, "Platform_printAllocations Allocator_lock failed");
+			retError(clean, Error_invalidState(0, "Platform_printAllocations() allocator lock failed to acquire"));
+		}
 
 		if(!length)
 			length = Allocator_allocations.length;
 
 		Log_debugLn(
-			Allocator_allocationsAllocator, "Showing up to %"PRIu64" allocations starting at offset %"PRIu64"", length, offset
+			&Allocator_allocationsAllocator, "Showing up to %"PRIu64" allocations starting at offset %"PRIu64"", length, offset
 		);
 
 		U64 capturedLength = 0;
@@ -272,24 +301,27 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 				continue;
 
 			Log_debugLn(
-				Allocator_allocationsAllocator,
+				&Allocator_allocationsAllocator,
 				"Allocation %"PRIu64" at %p with length %"PRIu64" allocated at:",
 				i, captured->location, captured->length
 			);
 
 			Log_printCapturedStackTrace(
-				Allocator_allocationsAllocator, captured->stack, ELogLevel_Debug, ELogOptions_Default
+				&Allocator_allocationsAllocator, captured->stack, ELogLevel_Debug, ELogOptions_Default
 			);
 
 			capturedLength += captured->length;
 		}
 
-		Log_debugLn(Allocator_allocationsAllocator, "Showed %"PRIu64" bytes of allocations", capturedLength);
-
-		if(acq == ELockAcquire_Acquired)
-			SpinLock_unlock(&Allocator_lock);
+		Log_debugLn(&Allocator_allocationsAllocator, "Showed %"PRIu64" bytes of allocations", capturedLength);
 
 	#endif
+
+	goto clean;
+
+clean:
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&Allocator_lock);
 }
 
 void Allocator_reportLeaks() {
@@ -299,7 +331,7 @@ void Allocator_reportLeaks() {
 
 	if (memCount || memSize) {
 
-		Log_warnLn(Allocator_allocationsAllocator, "Leaked %"PRIu64" bytes in %"PRIu64" allocations.", memSize, memCount);
+		Log_warnLn(&Allocator_allocationsAllocator, "Leaked %"PRIu64" bytes in %"PRIu64" allocations.", memSize, memCount);
 
 		#ifndef NDEBUG
 			Platform_printAllocations(0, 8, 0);
@@ -311,24 +343,23 @@ void Allocator_reportLeaks() {
 
 Platform *Platform_instance = 0, platformInstance = { 0 };
 
-Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir) {
+Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir, Error *e_rr) {
 
+	Bool s_uccess = true;
 	const Bool isSupported = Platform_checkCPUSupport();
 
 	if(!isSupported)
-		return Error_unsupportedOperation(
-			0,
-			"Platform_create() failed: Unsupported CPU. The following extensions are required: "
-			"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
-		);
+		retError(clean, Error_unsupportedOperation(
+			0, "Platform_create() failed: Unsupported CPU. Please look at the minimum requirements to run OxC3"
+		));
 
 	if(Platform_instance)
-		return Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
+		retError(clean, Error_invalidOperation(0, "Platform_create() failed, platform was already initialized"));
 
 	if(cmdArgc && !cmdArgs)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			!cmdArgc ? 0 : 1, 0, "Platform_create()::cmdArgs are required when cmdArgc is set"
-		);
+		));
 
 	#ifndef _NO_SIGNAL_HANDLING
 		signal(SIGABRT, sigFunc);
@@ -344,13 +375,14 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		.free = Platform_freeNoTracking
 	};
 
-	#ifndef NDEBUG
-		{
-			const Error err = ListDebugAllocation_reserve(&Allocator_allocations, 256, Allocator_allocationsAllocator);
+	Allocator_trackedAllocator = (Allocator) {
+		.ptr = allocator,
+		.alloc = Platform_allocTracked,
+		.free = Platform_freeTracked
+	};
 
-			if(err.genericError)
-				return err;
-		}
+	#ifndef NDEBUG
+		gotoIfError3(clean, ListDebugAllocation_reserve(&Allocator_allocations, 256, &Allocator_allocationsAllocator, e_rr));
 	#endif
 
 	Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
@@ -359,20 +391,14 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	*Platform_instance = (Platform) {
 		.platformType = _PLATFORM_TYPE,
 		.data = data,
-		.alloc = (Allocator) {
-			.free = Platform_freeTracked,
-			.alloc = Platform_allocTracked,
-			.ptr = allocator
-		}
+		.alloc = &Allocator_trackedAllocator
 	};
-
-	Error err = Error_none();
 
 	ListCharString sl = (ListCharString) { 0 };
 
 	if(cmdArgc > 1) {
 
-		gotoIfError(clean, ListCharString_createx(cmdArgc - 1, &sl));
+		gotoIfError3(clean, ListCharString_create(cmdArgc - 1, Platform_instance->alloc, &sl, e_rr));
 
 		//If we're passed invalid cmdArg this could be a problem
 		//But that'd happen anyways
@@ -384,15 +410,14 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	Platform_instance->args = sl;
 	Platform_instance->useWorkingDir = useWorkingDir;
 
-	if(!Platform_initExt(&err))
-		goto clean;
+	gotoIfError3(clean, Platform_initExt(e_rr));
 
 clean:
 
-	if(err.genericError)
+	if(!s_uccess)
 		Platform_cleanup();
 
-	return err;
+	return s_uccess;
 }
 
 void Platform_cleanup() {
@@ -400,30 +425,27 @@ void Platform_cleanup() {
 	if(!Platform_instance)
 		return;
 
-	CharString_freex(&Platform_instance->workDirectory);
-	CharString_freex(&Platform_instance->appDirectory);
-	ListCharString_freex(&Platform_instance->args);
+	CharString_free(&Platform_instance->workDirectory, Platform_instance->alloc);
+	CharString_free(&Platform_instance->appDirectory, Platform_instance->alloc);
+	ListCharString_free(&Platform_instance->args, Platform_instance->alloc);
 
 	SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 
 	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 		VirtualSection *sect = &Platform_instance->virtualSections.ptrNonConst[i];
-		CharString_freex(&sect->path);
-		Archive_freex(&sect->loadedData);
+		CharString_free(&sect->path, Platform_instance->alloc);
+		CAFile_free(&Platform_instance->archives.ptrNonConst[i], Platform_instance->alloc);
 	}
 
-	ListVirtualSection_freex(&Platform_instance->virtualSections);
+	ListCAFile_free(&Platform_instance->archives, Platform_instance->alloc);
+	ListVirtualSection_free(&Platform_instance->virtualSections, Platform_instance->alloc);
 
 	Allocator_reportLeaks();
 
-	ListDebugAllocation_free(&Allocator_allocations, Allocator_allocationsAllocator);
+	ListDebugAllocation_free(&Allocator_allocations, &Allocator_allocationsAllocator);
 
 	Platform_cleanupExt();
 
 	*Platform_instance = (Platform) { 0 };
 	Platform_instance = NULL;
-}
-
-void Log_printCapturedStackTracex(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTrace(Platform_instance->alloc, stackTrace, lvl, options);
 }

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/vec4_sse.h
+
 #pragma once
 #ifndef VEC4_SSE_GUARD
 	#error Vec4 SSE guard was undefined, this likely indicates include of vec4_sse.h was attempted instead of vec4.h

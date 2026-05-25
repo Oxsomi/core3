@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/android/afile.c
+
 #include "types/base/error.h"
 #include "types/container/string.h"
 #include "types/container/buffer.h"

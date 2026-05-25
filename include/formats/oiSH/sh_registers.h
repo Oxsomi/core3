@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiSH/sh_registers.h
+
 #pragma once
 #include "formats/oiSB/sb_file.h"
 #include "types/container/texture_format.h"

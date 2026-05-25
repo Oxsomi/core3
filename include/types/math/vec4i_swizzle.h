@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/math/vec4i_swizzle.h
+
 #pragma once
 #include "types/math/vec4i.h"
 #include "types/math/vec_cvt.h"

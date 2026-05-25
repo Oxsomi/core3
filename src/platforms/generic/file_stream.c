@@ -18,17 +18,24 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx.h"
-#include "platforms/ext/bufferx.h"
+//platforms/file_stream.c
+
 #include "platforms/file.h"
 #include "platforms/platform.h"
-#include "types/container/buffer.h"
+#include "types/base/buffer.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/base/constants.h"
 
-static inline Bool FileStream_read(OxStream *stream, U64 offset, U64 length, Buffer buf, const Allocator *alloc, Error *e_rr) {
-	
+static Bool FileStream_read(
+	OxStream *stream,
+	U64 offset,
+	U64 length,
+	Buffer buf,
+	const Allocator *alloc,
+	Error *e_rr
+) {
+
 	Bool s_uccess = true;
 
 	if(!stream)
@@ -36,7 +43,7 @@ static inline Bool FileStream_read(OxStream *stream, U64 offset, U64 length, Buf
 
 	(void) alloc;
 
-	gotoIfError3(clean, FileHandle_read(&((FileStream*)stream)->handle, offset, length, buf, e_rr));
+	gotoIfError3(clean, FileHandleRef_read(((FileStream*)stream)->handle, offset, length, &buf, e_rr));
 
 clean:
 	return s_uccess;
@@ -51,14 +58,19 @@ static inline Bool FileStream_write(OxStream *stream, U64 offset, U64 length, Bu
 
 	(void) alloc;
 
-	gotoIfError3(clean, FileHandle_write(&((FileStream*)stream)->handle, offset, length, buf, e_rr));
+	gotoIfError3(clean, FileHandleRef_write(((FileStream*)stream)->handle, offset, length, &buf, e_rr));
 
 clean:
 	return s_uccess;
 }
 
-static inline void FileStream_close(OxStream *stream, const Allocator *alloc) {
-	FileHandle_close(&((FileStream*)stream)->handle, alloc);
+static void FileStream_close(OxStream *stream, const Allocator *alloc) {
+	(void) alloc;
+	RefPtr_dec(&((FileStream*)stream)->handle);
+}
+
+RefPtrType FileStream_makeType(const Allocator *alloc) {
+	return Stream_inheritType(alloc, sizeof(FileStream) - sizeof(OxStream));
 }
 
 Bool File_openStream(
@@ -66,89 +78,62 @@ Bool File_openStream(
 	Ns timeout,
 	EFileOpenType type,
 	Bool create,
-	U64 cache,
-	const Allocator *alloc,
-	FileStream *stream,
+	const RefPtrType *fileHandleType,
+	const RefPtrType *streamType,
+	StreamRef **stream,
 	Error *e_rr
 ) {
-
 	Bool s_uccess = true;
-	Bool allocated = false;
+	FileHandleRef *handle = NULL;
 
-	if(!loc || !stream)
-		retError(clean, Error_nullPointer(!loc ? 0 : 6, "File_openStream()::loc and stream are required"));
-
-	gotoIfError3(clean, File_open(*loc, timeout, type, create, alloc, &stream->handle, e_rr));
-	allocated = true;
-
-	Bool read = type == EFileOpenType_Read;		//TODO: Readwrite
-	Bool write = type == EFileOpenType_Write;
-
-	gotoIfError3(clean, Stream_create(
-		read ? FileStream_read : NULL,
-		write ? FileStream_write : NULL,
-		FileStream_close,
-		cache,
-		stream->handle.fileSize,
-		alloc,
-		&stream->parent,
-		e_rr
-	));
+	gotoIfError3(clean, File_open(loc, timeout, type, create, fileHandleType, &handle, e_rr));
+	gotoIfError3(clean, FileHandle_openStream(&handle, streamType, stream, e_rr));
 
 clean:
-
-	if(allocated && !s_uccess)
-		FileHandle_close(&stream->handle, alloc);
-
+	RefPtr_dec(&handle);
 	return s_uccess;
 }
 
-Bool FileHandle_openStream(FileHandle *handle, U64 cache, const Allocator *alloc, FileStream *stream, Error *e_rr) {
-
+Bool FileHandle_openStream(
+	FileHandleRef **handle,
+	const RefPtrType *streamType,
+	StreamRef **stream,
+	Error *e_rr
+) {
 	Bool s_uccess = true;
 
-	if(!handle || !handle->ext || !stream)
-		retError(clean, Error_nullPointer(
-			!handle || !handle->ext ? 0 : 5, "FileHandle_openStream()::handle and stream are required"
-		));
+	if(!handle || !*handle)
+		retError(clean, Error_nullPointer(0, "FileHandle_openStream()::handle is required"));
 
-	if(stream->handle.ext)
-		retError(clean, Error_invalidParameter(5, 0, "FileHandle_openStream()::stream already defined, might be a memleak"));
+	if(!stream)
+		retError(clean, Error_nullPointer(3, "FileHandle_openStream()::stream is required"));
 
-	FileOpenType access = handle->type;
-	Bool read = access == EFileOpenType_Read;		//TODO: Readwrite
-	Bool write = access == EFileOpenType_Write;
+	if(*stream)
+		retError(clean, Error_invalidOperation(0, "FileHandle_openStream()::stream already defined, might be a memleak"));
+
+	const FileHandle *fh = RefPtr_data(*handle, FileHandle);
+	U8 type = (U8)(fh->fileSizeType >> 62);
+	Bool isRead  = type & 1;
+	Bool isWrite = type & 2;
+	U64 fileSize = fh->fileSizeType & ~((U64)3 << 62);
 
 	gotoIfError3(clean, Stream_create(
-		read ? FileStream_read : NULL,
-		write ? FileStream_write : NULL,
+		isRead  ? FileStream_read  : NULL,
+		isWrite ? FileStream_write : NULL,
+		NULL,						// reserve
 		FileStream_close,
-		cache,
-		handle->fileSize,
-		alloc,
-		&stream->parent,
+		fileSize,
+		EStreamType_File,
+		streamType,
+		stream,
 		e_rr
 	));
 
-	stream->handle = *handle;
-	*handle = (FileHandle) { 0 };
+	//Transfer handle ownership into the FileStream, caller's ref becomes NULL
+	FileStream *fs = RefPtr_data(*stream, FileStream);
+	fs->handle = *handle;
+	*handle = NULL;
 
 clean:
 	return s_uccess;
-}
-
-Bool File_openStreamx(
-	const CharString *loc,
-	Ns timeout,
-	EFileOpenType type,
-	Bool create,
-	U64 cache,
-	FileStream *output,
-	Error *e_rr
-) {
-	return File_openStream(loc, timeout, type, create, cache, Platform_instance->alloc, output, e_rr);
-}
-
-Bool FileHandle_openStreamx(FileHandle *handle, U64 cache, FileStream *stream, Error *e_rr) {
-	return FileHandle_openStream(handle, cache, Platform_instance->alloc, stream, e_rr);
 }

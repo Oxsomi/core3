@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiCA/ca_read.c
+
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiCA/ca_headers.h"
 #include "formats/oiCA/ca_edit.h"
@@ -350,7 +352,6 @@ Bool CAFile_read(
 	// and is therefore invalid. We check both to be explicit.
 	//This can happen if we exceed 5MiB, which is rare with a max of 96 bytes per file name
 	// (54K files at max size, more realistically >327K)
-	// TODO: Fix this
 
 	for (U64 i = 0; i < dirCount + fileCount; ++i) {
 

@@ -18,9 +18,11 @@
 *  This is called dual licensing.
 */
 
+//platforms/window_manager.h
+
 #pragma once
 #include "types/container/list.h"
-#include "types/math/vec.h"
+#include "types/math/vec2.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -40,11 +42,13 @@ extern const U32 WindowManager_magic;
 
 typedef struct WindowManager WindowManager;
 
+typedef Bool (*WindowManagerCreateCallback)(WindowManager*, Error*);
 typedef void (*WindowManagerCallback)(WindowManager*);
 typedef void (*WindowManagerUpdateCallback)(WindowManager*, F64);
 
 typedef struct WindowManagerCallbacks {
-	WindowManagerCallback onCreate, onDestroy, onDraw;
+	WindowManagerCreateCallback onCreate;
+	WindowManagerCallback onDestroy, onDraw;
 	WindowManagerUpdateCallback onUpdate;
 } WindowManagerCallbacks;
 
@@ -68,9 +72,11 @@ typedef struct WindowManager {
 
 Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedData, WindowManager *manager, Error *e_rr);
 Bool WindowManager_isAccessible(const WindowManager *manager);
-Bool WindowManager_free(WindowManager *manager);
+void WindowManager_free(WindowManager *manager);
 
-Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate);		//If forcingUpdate window is set, won't update that
+//If forcingUpdate window is set, won't update that
+Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_rr);
+
 Bool WindowManager_wait(WindowManager *manager, Error *e_rr);
 
 impl Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format);
@@ -95,7 +101,7 @@ Bool WindowManager_createWindow(
 	Error *e_rr
 );
 
-Bool WindowManager_freeWindow(WindowManager *manager, Window **w);
+void WindowManager_freeWindow(WindowManager *manager, Window **w);
 
 #ifdef __cplusplus
 	}
