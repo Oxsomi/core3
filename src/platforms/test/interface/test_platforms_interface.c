@@ -1,0 +1,773 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//platforms/test/interface/test_platform_interface.c
+//
+//Platform interface (non-functional) unit tests.
+//
+//What is covered:
+//  1. WindowManager   – lifecycle, magic, thread ownership
+//  2. Window          – create / destroy (virtual), flags, format support
+//  3. InputDevice     – keyboard + mouse creation, handle logic, state machine,
+//                       axis values, flag helpers
+//  4. File (physical) – add/has/getInfo/write/read/rename/move/remove, round-trip
+//  5. File (virtual)  – load section embedded via add_virtual_files,
+//                       has / getInfo / read / foreach / unload
+//  6. DynamicLibrary  – path validation (+ load/free when SUPPORTS_DYNAMIC_LINKING)
+//
+//Run in CI, no display, no human interaction required.
+
+#include "platforms/platform.h"
+#include "platforms/window_manager.h"
+#include "platforms/window.h"
+#include "platforms/keyboard.h"
+#include "platforms/mouse.h"
+#include "platforms/file.h"
+#include "platforms/dynamic_library.h"
+#include "types/test/test.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/container/memory_stream.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/error.h"
+#include "types/base/thread.h"
+
+//Tmp physical path used for File tests (relative to working dir)
+static const char *testDir         = "platform_test_tmp";
+static const char *testFile        = "platform_test_tmp/data.bin";
+static const char *testFileRenamed = "data_renamed.bin";
+static const char *testFile2       = "platform_test_tmp/move_src.bin";
+static const char *testMoveDir     = "platform_test_tmp/subdir";
+
+//Virtual section name registered by CMake
+static const char *vSection     = "//OxC3_platforms_interface_test/testdata";
+static const char *vFileHello   = "//OxC3_platforms_interface_test/testdata/hello.txt";
+static const char *vFileSub     = "//OxC3_platforms_interface_test/testdata/sub/world.txt";
+
+// ── 1. WindowManager lifecycle ────────────────────────────────────────────────
+
+static void Test_platformsWindowManager(Test *t) {
+
+    Test_setModule(t, "WindowManager");
+
+    Error err = Error_none();
+    WindowManager mgr = (WindowManager) { 0 };
+
+    //Create with null callbacks is valid (no onCreate)
+    WindowManagerCallbacks cbs = (WindowManagerCallbacks) { 0 };
+    Test_assert(t, "create", WindowManager_create(cbs, 0, &mgr, &err));
+    Test_assert(t, "isActive", mgr.isActive == WindowManager_magic);
+    Test_assert(t, "isAccessible", WindowManager_isAccessible(&mgr));
+    Test_assert(t, "owningThread set", mgr.owningThread == Thread_getId());
+
+    //Double-free must not crash (implementation should guard)
+    WindowManager_free(&mgr);
+    Test_assert(t, "notAccessibleAfterFree", !WindowManager_isAccessible(&mgr));
+
+    //Null guard
+    Test_assert(t, "nullNotAccessible", !WindowManager_isAccessible(NULL));
+}
+
+// ── 2. Window create / destroy (virtual) ─────────────────────────────────────
+
+static void Test_platformsWindowVirtual(Test *t) {
+
+    Test_setModule(t, "Window/Virtual");
+
+    Error err = Error_none();
+    WindowManager mgr = (WindowManager) { 0 };
+    Window *w = NULL;
+
+    WindowManagerCallbacks cbs = (WindowManagerCallbacks) { 0 };
+    if (!Test_assert(t, "WindowManager_create", WindowManager_create(cbs, 0, &mgr, &err)))
+        goto clean;
+
+    //Create a virtual window (headless, always supported)
+    WindowCallbacks wcbs = (WindowCallbacks) { 0 };
+    CharString title = CharString_createRefCStrConst("InterfaceTestWindow");
+    I32x2 pos     = I32x2_create2(0, 0);
+    I32x2 size    = EResolution_get(EResolution_SD);
+    I32x2 minSize = EResolution_get(EResolution_SD);
+    I32x2 maxSize = I32x2_create2(4096, 4096);
+
+    Test_assert(t, "createVirtual", WindowManager_createWindow(
+        &mgr, EWindowType_Virtual, pos, size, minSize, maxSize,
+        EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &err
+    ));
+
+    Test_assert(t, "windowNotNull", w != NULL);
+    Test_assert(t, "typeVirtual",   w && w->type == EWindowType_Virtual);
+    Test_assert(t, "sizeW",  w && I32x2_x(w->size) == I32x2_x(EResolution_get(EResolution_SD)));
+    Test_assert(t, "sizeH",  w && I32x2_y(w->size) == I32x2_y(EResolution_get(EResolution_SD)));
+    Test_assert(t, "owner",  w && w->owner == &mgr);
+
+    //Flags: not minimized, not fullscreen at creation
+    Test_assert(t, "notMinimized",   !Window_isMinimized(w));
+    Test_assert(t, "notFullscreen",  !Window_isFullScreen(w));
+
+    //Terminate flag helper
+    Test_assert(t, "terminate", Window_terminate(w));
+    Test_assert(t, "shouldTerminate", w && (w->flags & EWindowFlags_ShouldTerminate));
+
+    //Free window and manager
+    WindowManager_freeWindow(&mgr, &w);
+    Test_assert(t, "windowNullAfterFree", w == NULL);
+
+clean:
+    if (w) WindowManager_freeWindow(&mgr, &w);
+    WindowManager_free(&mgr);
+}
+
+// ── 3a. InputDevice – Keyboard ────────────────────────────────────────────────
+
+static void Test_platformsKeyboard(Test *t) {
+
+    Test_setModule(t, "InputDevice/Keyboard");
+
+    Error err = Error_none();
+    Keyboard kb = (Keyboard) { 0 };
+    const Allocator *alloc = Platform_instance->alloc;
+
+    if (!Test_assert(t, "create", Keyboard_create(&kb, alloc, &err)))
+        goto clean;
+
+    Test_assert(t, "type", kb.type == EInputDeviceType_Keyboard);
+    Test_assert(t, "buttonCount", kb.buttons == EKey_Count);
+    Test_assert(t, "axisCount",   kb.axes == 0);
+
+    //Build a handle for EKey_A
+    InputHandle hA = InputDevice_createHandle(&kb, (U16)EKey_A, EInputType_Button);
+    Test_assert(t, "validHandle",  InputDevice_isValidHandle(&kb, hA));
+    Test_assert(t, "isButton",     InputDevice_isButton(&kb, hA));
+    Test_assert(t, "notAxis",      !InputDevice_isAxis(&kb, hA));
+
+    //Initial state must be Up
+    Test_assert(t, "initialUp",    InputDevice_isUp(&kb, hA));
+    Test_assert(t, "notDown",      !InputDevice_isDown(&kb, hA));
+
+    //Simulate a press cycle: markUpdate -> setCurrentState(true) -> markUpdate -> setCurrentState(false)
+    InputDevice_markUpdate(&kb);
+    Test_assert(t, "setPress",     InputDevice_setCurrentState(&kb, hA, true));
+    //After setting current but before next markUpdate the state should be Pressed
+    //(prev=0/Up, curr=1) -> EInputState_Pressed
+    Test_assert(t, "statePressed", InputDevice_isPressed(&kb, hA));
+
+    InputDevice_markUpdate(&kb);
+    //prev=1, curr=1 -> Down
+    Test_assert(t, "stateDown",    InputDevice_isDown(&kb, hA));
+
+    InputDevice_markUpdate(&kb);
+    Test_assert(t, "setRelease",   InputDevice_setCurrentState(&kb, hA, false));
+    //prev=1, curr=0 -> Released
+    Test_assert(t, "stateReleased", InputDevice_isReleased(&kb, hA));
+
+    InputDevice_markUpdate(&kb);
+    //prev=0, curr=0 -> Up
+    Test_assert(t, "stateUp",      InputDevice_isUp(&kb, hA));
+
+    //Invalid handle guards
+    InputHandle bad = InputDevice_invalidHandle();
+    Test_assert(t, "invalidHandle", !InputDevice_isValidHandle(&kb, bad));
+    Test_assert(t, "stateInvalid",  InputDevice_getState(&kb, bad) == EInputState_Up);
+
+    //Flags
+    Test_assert(t, "setFlag",   InputDevice_setFlag(&kb, EKeyboardFlags_Caps));
+    Test_assert(t, "hasFlag",   InputDevice_hasFlag(&kb, EKeyboardFlags_Caps));
+    Test_assert(t, "resetFlag", InputDevice_resetFlag(&kb, EKeyboardFlags_Caps));
+    Test_assert(t, "notFlag",   !InputDevice_hasFlag(&kb, EKeyboardFlags_Caps));
+
+clean:
+    InputDevice_free(&kb, alloc);
+}
+
+// ── 3b. InputDevice – Mouse ───────────────────────────────────────────────────
+
+static void Test_platformsMouse(Test *t) {
+
+    Test_setModule(t, "InputDevice/Mouse");
+
+    Error err = Error_none();
+    Mouse ms = (Mouse) { 0 };
+    const Allocator *alloc = Platform_instance->alloc;
+
+    if (!Test_assert(t, "create", Mouse_create(&ms, alloc, &err)))
+        goto clean;
+
+    Test_assert(t, "type",        ms.type == EInputDeviceType_Mouse);
+    Test_assert(t, "axisCount",   ms.axes  == EMouseAxis_Count);
+    Test_assert(t, "buttonCount", ms.buttons == EMouseButton_Count);
+
+    //Axis handle
+    InputHandle hRX = InputDevice_createHandle(&ms, EMouseAxis_RX - EMouseAxis_Begin, EInputType_Axis);
+    Test_assert(t, "validAxisHandle", InputDevice_isValidHandle(&ms, hRX));
+    Test_assert(t, "isAxis",          InputDevice_isAxis(&ms, hRX));
+
+    //Initial axis value is 0
+    Test_assert(t, "initAxisZero", InputDevice_getCurrentAxis(&ms, hRX) == 0.f);
+
+    //Set + read axis
+    Test_assert(t, "setAxis", InputDevice_setCurrentAxis(&ms, hRX, 0.75f));
+    Test_assert(t, "getAxis", InputDevice_getCurrentAxis(&ms, hRX) == 0.75f);
+
+    InputDevice_markUpdate(&ms);
+    //After markUpdate, previous = 0.75, current still 0.75 (not reset because resetOnInputLoss depends on axis)
+    Test_assert(t, "prevAxis", InputDevice_getPreviousAxis(&ms, hRX) == 0.75f);
+
+    //Delta should be 0 (curr == prev)
+    Test_assert(t, "deltaZero", InputDevice_getDeltaAxis(&ms, hRX) == 0.f);
+
+    //Button, left click
+    InputHandle hLeft = InputDevice_createHandle(&ms, EMouseButton_Left - EMouseAxis_End, EInputType_Button);
+    Test_assert(t, "leftIsButton", InputDevice_isButton(&ms, hLeft));
+
+    InputDevice_markUpdate(&ms);
+    InputDevice_setCurrentState(&ms, hLeft, true);
+    Test_assert(t, "leftPressed", InputDevice_isPressed(&ms, hLeft));
+
+clean:
+    InputDevice_free(&ms, alloc);
+}
+
+// ── 3c. InputDevice – name/handle serialization round-trip ───────────────────
+
+static void Test_keySerialization(Test *t) {
+
+    Test_setModule(t, "InputDevice/Serialization");
+
+    Error err = Error_none();
+    const Allocator *alloc = Platform_instance->alloc;
+    Keyboard kb = (Keyboard) { 0 };
+
+    if (!Test_assert(t, "create", Keyboard_create(&kb, alloc, &err)))
+        goto clean;
+
+    //Build handles for a few well-known keys
+
+    InputHandle hA     = InputDevice_createHandle(&kb, (U16)EKey_A,      EInputType_Button);
+    InputHandle hSpace = InputDevice_createHandle(&kb, (U16)EKey_Space,  EInputType_Button);
+    InputHandle hF1    = InputDevice_createHandle(&kb, (U16)EKey_F1,     EInputType_Button);
+
+    CharString nameA     = InputDevice_getName(&kb, hA);
+    CharString nameSpace = InputDevice_getName(&kb, hSpace);
+    CharString nameF1    = InputDevice_getName(&kb, hF1);
+
+    CharString expectA     = CharString_createRefCStrConst("EKey_A");
+    CharString expectSpace = CharString_createRefCStrConst("EKey_Space");
+    CharString expectF1    = CharString_createRefCStrConst("EKey_F1");
+
+    Test_assert(t, "nameA",     CharString_equalsStringSensitive(&nameA, &expectA));
+    Test_assert(t, "nameSpace", CharString_equalsStringSensitive(&nameSpace, &expectSpace));
+    Test_assert(t, "nameF1",    CharString_equalsStringSensitive(&nameF1, &expectF1));
+
+    //getHandle(getName(h)) must recover the original handle, the serialization contract
+    InputHandle rA     = InputDevice_getHandle(&kb, nameA);
+    InputHandle rSpace = InputDevice_getHandle(&kb, nameSpace);
+    InputHandle rF1    = InputDevice_getHandle(&kb, nameF1);
+
+    Test_assert(t, "roundtripA",     rA     == hA);
+    Test_assert(t, "roundtripSpace", rSpace == hSpace);
+    Test_assert(t, "roundtripF1",    rF1    == hF1);
+
+    //Unknown name must return the invalid sentinel
+    CharString unknown = CharString_createRefCStrConst("EKey_ThisDoesNotExist");
+    Test_assert(t, "unknownInvalid", InputDevice_getHandle(&kb, unknown) == InputDevice_invalidHandle());
+
+    //Invalid handle must return an empty name
+    CharString badName = InputDevice_getName(&kb, InputDevice_invalidHandle());
+    Test_assert(t, "invalidHandleName", !CharString_length(badName));
+
+clean:
+    InputDevice_free(&kb, alloc);
+}
+
+// ── 3d. InputDevice – dead zone + setFlagTo ───────────────────────────────────
+
+static void Test_mouseExtras(Test *t) {
+
+    Test_setModule(t, "InputDevice/Extras");
+
+    Error err = Error_none();
+    const Allocator *alloc = Platform_instance->alloc;
+    Mouse ms = (Mouse) { 0 };
+
+    if (!Test_assert(t, "create", Mouse_create(&ms, alloc, &err)))
+        goto clean;
+
+    //Dead zone is stored per-axis and retrieved through the public helper
+    InputHandle hRX = InputDevice_createHandle(&ms, (U16)(EMouseAxis_RX - EMouseAxis_Begin), EInputType_Axis);
+
+    //The mouse axis was registered with some dead zone (may be 0.0); just
+    //verify the call doesn't crash and returns a finite value.
+    F32 dz = InputDevice_getDeadZone(&ms, hRX);
+    Test_assert(t, "deadZoneFinite", dz >= 0.f && dz <= 1.f);
+
+    //getDeadZone on a button handle must return 0
+    InputHandle hLeft = InputDevice_createHandle(&ms, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+    Test_assert(t, "buttonDeadZeroFalse",
+        InputDevice_getDeadZone(&ms, hLeft) == 0.f);
+
+    //getDeadZone on invalid handle must return 0
+    Test_assert(t, "invalidDeadZero", InputDevice_getDeadZone(&ms, InputDevice_invalidHandle()) == 0.f);
+
+    // setFlagTo: set then clear via the combined helper
+    Test_assert(t, "setFlagToTrue", InputDevice_setFlagTo(&ms, 0, true));
+    Test_assert(t, "hasFlagAfterSetTrue", InputDevice_hasFlag(&ms, 0));
+
+    Test_assert(t, "setFlagToFalse", InputDevice_setFlagTo(&ms, 0, false));
+    Test_assert(t, "noFlagAfterSetFalse", !InputDevice_hasFlag(&ms, 0));
+
+    //Out-of-range flag must fail gracefully (flag >= 32)
+    Test_assert(t, "flagOOB_setFails",  !InputDevice_setFlag(&ms, 32));
+    Test_assert(t, "flagOOB_hasFalse",  !InputDevice_hasFlag(&ms, 32));
+
+clean:
+    InputDevice_free(&ms, alloc);
+}
+
+// ── 4a. File (physical) ────────────────────────────────────────────────────────
+
+static void Test_platformsFilePhysical(Test *t) {
+
+    Test_setModule(t, "File/Physical");
+
+    Error err = Error_none();
+    const Allocator *alloc = Platform_instance->alloc;
+
+    CharString dir       = CharString_createRefCStrConst(testDir);
+    CharString filePath  = CharString_createRefCStrConst(testFile);
+    CharString file2Path = CharString_createRefCStrConst(testFile2);
+    CharString moveDir   = CharString_createRefCStrConst(testMoveDir);
+    CharString renamed   = CharString_createRefCStrConst(testFileRenamed);
+
+    Buffer writeBuf = Buffer_createNull();
+    Buffer readBuf  = Buffer_createNull();
+    FileInfo info   = (FileInfo) { 0 };
+    RefPtrType fhType = FileHandle_makeType(alloc);
+
+    //Clean up from any previous failed run
+    File_remove(&dir, 1 * SECOND, alloc, NULL);
+
+    //Create directory
+    Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, alloc, &err));
+    Test_assert(t, "hasDir", File_hasFolder(&dir, alloc));
+
+    //Create file
+    Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, alloc, &err));
+    Test_assert(t, "hasFile", File_hasFile(&filePath, alloc));
+
+    //getInfo
+    Test_assert(t, "getInfo",      File_getInfo(&filePath, &info, alloc, &err));
+    Test_assert(t, "infoType",     info.type == EFileType_File);
+    Test_assert(t, "infoSizeZero", info.fileSize == 0);
+    FileInfo_free(&info, alloc);
+
+    //Write
+    const C8 *msg = "OxC3 platform test data";
+    U64 msgLen = 23;
+    writeBuf = Buffer_createRefConst((const U8*)msg, msgLen);
+    Test_assert(t, "write",          File_write(&writeBuf, &filePath, 0, 0, 50 * MS, false, &fhType, &err));
+
+    //Read back
+    Test_assert(t, "read",        File_read(&filePath, 50 * MS, 0, 0, &fhType, &readBuf, &err));
+    Test_assert(t, "readLength",  Buffer_length(readBuf) == msgLen);
+    Test_assert(t, "readContent", Buffer_eq(writeBuf, Buffer_createRefConst((const U8*)msg, msgLen)));
+    Buffer_free(&readBuf, alloc);
+
+    //getInfo after write
+    Test_assert(t, "getInfoAfterWrite", File_getInfo(&filePath, &info, alloc, &err));
+    Test_assert(t, "infoSizeAfterWrite", info.fileSize == msgLen);
+    FileInfo_free(&info, alloc);
+
+    //rename
+    Test_assert(t, "rename", File_rename(&filePath, &renamed, 50 * MS, alloc, &err));
+    CharString renamedPath = CharString_createNull();
+    CharString_format(alloc, &renamedPath, NULL, "%s/%s", testDir, testFileRenamed);
+    Test_assert(t, "hasRenamed",    File_hasFile(&renamedPath, alloc));
+    Test_assert(t, "origGone",      !File_hasFile(&filePath, alloc));
+    CharString_free(&renamedPath, alloc);
+
+    //move (put file2 into subdir)
+    Test_assert(t, "addMoveDir", File_add(&moveDir, EFileType_Folder, false, alloc, &err));
+    Test_assert(t, "addFile2",   File_add(&file2Path, EFileType_File, false, alloc, &err));
+    Test_assert(t, "move",       File_move(&file2Path, &moveDir, 50 * MS, alloc, &err));
+    Test_assert(t, "file2Gone",  !File_hasFile(&file2Path, alloc));
+
+    //queryFileObjectCount
+    U64 count = 0;
+    Test_assert(t, "queryCount", File_queryFileObjectCountAll(&dir, true, &count, alloc, &err));
+    // After operations: dir contains subdir (folder), file2 inside subdir, and renamedFile -> at least 3
+    Test_assert(t, "countAtLeast3", count >= 3);
+
+    //remove directory recursively
+    Test_assert(t, "removeDir",  File_remove(&dir, 50 * MS, alloc, &err));
+    Test_assert(t, "dirGone",    !File_has(&dir, alloc));
+
+    goto clean;
+
+clean:
+    Buffer_free(&readBuf, alloc);
+    FileInfo_free(&info, alloc);
+    File_remove(&dir, 1 * SECOND, alloc, NULL);   // best-effort cleanup
+}
+
+// ── 4b. File – FileHandle direct API + ref-count leak check ──────────────────
+
+static void Test_fileHandle(Test* t) {
+
+    Test_setModule(t, "File/HandleDirect");
+
+    Error err = Error_none();
+    const Allocator *alloc = Platform_instance->alloc;
+    RefPtrType fhType = FileHandle_makeType(alloc);
+
+    CharString dir = CharString_createRefCStrConst("platform_test_handle_tmp");
+    CharString filePath = CharString_createRefCStrConst("platform_test_handle_tmp/direct.bin");
+
+    FileHandleRef *handle = NULL;
+    FileHandleRef* roHandle = NULL;
+    Buffer writeBuf = Buffer_createNull();
+    Buffer readBuf = Buffer_createNull();
+
+    //Clean up from any previous run
+    File_remove(&dir, 1 * SECOND, alloc, NULL);
+
+    //Create directory + file
+
+    if (!Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, alloc, &err)))
+            goto clean;
+
+    if (!Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, alloc, &err)))
+        goto clean;
+
+    //Write via handle
+    U64 allocsBefore = Platform_getActiveAllocations(0);
+
+    if (!Test_assert(t, "open_write", File_open(
+        &filePath, 50 * MS, EFileOpenType_Write, false, &fhType, &handle, &err
+    )))
+        goto clean;
+
+    //One allocation for the RefPtr should now be live
+    Test_assert(t, "allocRises", Platform_getActiveAllocations(0) > allocsBefore);
+
+    const C8 *payload = "DirectHandleTest";
+    U64 payloadLen = 16;
+    writeBuf = Buffer_createRefConst((const U8*)payload, payloadLen);
+
+    Test_assert(t, "write", FileHandleRef_write(handle, 0, payloadLen, &writeBuf, &err));
+
+    //Write to read-only handle must fail
+
+    Test_assert(t, "open_read", !File_open(
+        &filePath, 50 * MS, EFileOpenType_Read, false, &fhType, &roHandle, NULL
+    ));
+
+    Test_assert(t, "writeToROFails", !FileHandleRef_write(roHandle, 0, payloadLen, &writeBuf, NULL));
+    RefPtr_dec(&roHandle);
+
+    //Close the write handle
+    RefPtr_dec(&handle);
+    Test_assert(t, "handleNullAfterDec", handle == NULL);
+
+    //After dec the allocation must have been released
+    Test_assert(t, "allocRestored", Platform_getActiveAllocations(0) <= allocsBefore);
+
+    //read via handle
+    if (!Test_assert(t, "open_read2", File_open(
+            &filePath, 5 * SECOND, EFileOpenType_Read, false, &fhType, &handle, &err
+    )))
+        goto clean;
+
+    const FileHandle *fh = RefPtr_data(handle, FileHandle);
+    U64 fileSize = FileHandle_fileSize(fh);
+    Test_assert(t, "fileSizeMatch", fileSize == payloadLen);
+
+    Test_assert(t, "createReadBuf", Buffer_createUninitializedBytes(fileSize, alloc, &readBuf, &err));
+
+    Test_assert(t, "read", FileHandleRef_read(handle, 0, fileSize, &readBuf, &err));
+
+    Test_assert(t, "contentMatch", Buffer_eq(
+        readBuf, Buffer_createRefConst((const U8*)payload, payloadLen)
+    ));
+
+    //Read past EOF must fail
+    Buffer extra = Buffer_createNull();
+    Buffer_createUninitializedBytes(1, alloc, &extra, &err);
+    Test_assert(t, "readOOB", !FileHandleRef_read(handle, fileSize, 1, &extra, NULL));
+    Buffer_free(&extra, alloc);
+
+    RefPtr_dec(&handle);
+
+    //ReadWrite handle
+    FileHandleRef* rwHandle = NULL;
+    if (!Test_assert(t, "open_rw", File_open(
+        &filePath, 5 * SECOND, EFileOpenType_ReadWrite, false, &fhType, &rwHandle, &err
+    )))
+        goto clean;
+
+    Test_assert(t, "rwIsRead", EFileHandle_isRead(RefPtr_data(rwHandle, FileHandle)));
+    Test_assert(t, "rwIsWrite", EFileHandle_isWrite(RefPtr_data(rwHandle, FileHandle)));
+    RefPtr_dec(&rwHandle);
+
+    //Final leak check
+    Test_assert(t, "noLeakAfterAll",
+        Platform_getActiveAllocations(0) <= allocsBefore + 1);
+
+clean:
+    if (handle)   RefPtr_dec(&handle);
+    if (roHandle) RefPtr_dec(&roHandle);
+    Buffer_free(&writeBuf, alloc);
+    Buffer_free(&readBuf, alloc);
+    File_remove(&dir, 5 * SECOND, alloc, NULL);
+}
+
+// ── 5. File (virtual) ─────────────────────────────────────────────────────────
+
+static void Test_platformsFileVirtual(Test *t) {
+
+    Test_setModule(t, "File/Virtual");
+
+    Error err = Error_none();
+    const Allocator *alloc = Platform_instance->alloc;
+
+    CharString secPath   = CharString_createRefCStrConst(vSection);
+    CharString helloPath = CharString_createRefCStrConst(vFileHello);
+    CharString subPath   = CharString_createRefCStrConst(vFileSub);
+
+    Buffer readBuf = Buffer_createNull();
+    FileInfo info  = (FileInfo) { 0 };
+
+    const RefPtrType memStreamType = MemoryStream_makeType(alloc);
+    RefPtrType fhType = FileHandle_makeType(alloc);
+
+    //The section is embedded into the binary by CMake; load it.
+    //(MemoryStream and EncStream RefPtrTypes are needed; obtain from platform)
+    //For the test we pass NULL encryption key (test data is unencrypted).
+    Test_assert(t, "loadVirtual", File_loadVirtual(&secPath, &memStreamType, NULL, NULL, alloc, &err));
+
+    Test_assert(t, "isLoaded", File_isVirtualLoaded(&secPath, alloc, &err));
+
+    //has
+    Test_assert(t, "hasHello", File_has(&helloPath, alloc));
+    Test_assert(t, "hasSub",   File_has(&subPath,   alloc));
+
+    //getInfo on a virtual file
+    Test_assert(t, "getInfoHello", File_getInfo(&helloPath, &info, alloc, &err));
+    Test_assert(t, "infoIsFile",   info.type == EFileType_File);
+    Test_assert(t, "infoSizePos",  info.fileSize > 0);
+    FileInfo_free(&info, alloc);
+
+    //getInfo on virtual folder
+    Test_assert(t, "getInfoSection", File_getInfo(&secPath, &info, alloc, &err));
+    Test_assert(t, "infoIsFolder",   info.type == EFileType_Folder);
+    FileInfo_free(&info, alloc);
+
+    //read hello.txt
+    
+    //Virtual reads use File_read which dispatches to File_readVirtual internally
+    Test_assert(t, "readHello", File_read(&helloPath, 50 * MS, 0, 0, &fhType, &readBuf, &err));
+    Test_assert(t, "readNonEmpty", Buffer_length(readBuf) > 0);
+    //Content must contain "Hello"
+    CharString content = CharString_createRefSizedConst((const C8*)readBuf.ptr, Buffer_length(readBuf), false);
+
+    const CharString hello = CharString_createRefCStrConst("Hello");
+    Test_assert(t, "helloContent", CharString_containsStringSensitive(&content, &hello, 0, 0));
+    Buffer_free(&readBuf, alloc);
+
+    //foreach
+    U64 count = 0;
+    Test_assert(t, "queryVirtualCount", File_queryFileObjectCountAll(&secPath, true, &count, alloc, &err));
+    Test_assert(t, "atLeast2", count >= 2);   // hello.txt + sub/world.txt
+
+    //unload
+    Test_assert(t, "unload", File_unloadVirtual(&secPath, alloc, &err));
+    Test_assert(t, "notLoaded", !File_isVirtualLoaded(&secPath, alloc, NULL));
+
+    goto clean;
+
+clean:
+    Buffer_free(&readBuf, alloc);
+    FileInfo_free(&info, alloc);
+    File_unloadVirtual(&secPath, alloc, NULL);
+}
+
+// ── 6. DynamicLibrary ─────────────────────────────────────────────────────────
+
+//TODO: Change this to something we manually generate, because we can't just load these paths.
+//      They get resolved to relative to the working directory or app directory.
+static void Test_dynamicLibrary(Test *t) {
+
+    (void) t;
+
+#ifdef SUPPORTS_DYNAMIC_LINKING
+
+    Test_setModule(t, "DynamicLibrary");
+
+    Error err = Error_none();
+
+    //isValidPath: empty string should be invalid
+    CharString empty = CharString_createRefCStrConst("");
+    Test_assert(t, "emptyInvalid", !DynamicLibrary_isValidPath(empty));
+
+    //A totally bogus path
+    CharString bogus = CharString_createRefCStrConst("not_a_real_library_xyz");
+    Test_assert(t, "bogusInvalid", !DynamicLibrary_isValidPath(bogus));
+
+    //Load the dummy library we've generated
+
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+    CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dll");
+#elif _PLATFORM_TYPE == PLATFORM_OSX
+    CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dylib");
+#else
+    CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.so");
+#endif
+
+    DynamicLibrary dl = NULL;
+    Test_assert(t, "load", DynamicLibrary_load(rtLib, true, &dl, &err));
+    Test_assert(t, "nonNull", dl != NULL);
+
+    //Load a known symbol that exists in all C runtimes
+    void *sym0 = NULL, *sym1 = NULL, *symFail = NULL;
+    CharString symName0 = CharString_createRefCStrConst("Test_foo");
+    CharString symName1 = CharString_createRefCStrConst("Test_bar");
+    CharString symNameFail = CharString_createRefCStrConst("Test_foobar");
+
+    Test_assert(t, "loadSymbol0", DynamicLibrary_loadSymbol(dl, symName0, &sym0, &err));
+    Test_assert(t, "loadSymbol1", DynamicLibrary_loadSymbol(dl, symName1, &sym1, &err));
+    Test_assert(t, "loadSymbolFail", !DynamicLibrary_loadSymbol(dl, symNameFail, &symFail, NULL));
+    Test_assert(t, "symNonNull0", sym0 != NULL);
+    Test_assert(t, "symNonNull1", sym1 != NULL);
+    Test_assert(t, "symNullFail", symFail == NULL);
+
+    DynamicLibrary_free(dl);
+
+    //Loading a non-existent library should fail gracefully
+    DynamicLibrary dl2 = NULL;
+    CharString noLib = CharString_createRefCStrConst("does_not_exist_oxc3_test.dll");
+    Test_assert(t, "loadFails", !DynamicLibrary_load(noLib, false, &dl2, NULL));
+    Test_assert(t, "dl2Null", dl2 == NULL);
+
+#endif
+}
+
+// ── 7. EResolution helpers ───────────────────────────────────────────────────
+
+static void Test_resolution(Test *t) {
+
+    Test_setModule(t, "EResolution");
+
+    //get -> create round-trip for common named resolutions
+    typedef struct { EResolution r; I32 w; I32 h; } Case;
+    static const Case cases[] = {
+        { EResolution_HD,  1280, 720  },
+        { EResolution_FHD, 1920, 1080 },
+        { EResolution_QHD, 2560, 1440 },
+        { EResolution_UHD, 3840, 2160 },
+    };
+
+    for (U32 i = 0; i < 4; ++i) {
+        I32x2 v = EResolution_get(cases[i].r);
+        Test_assert(t, "getW", I32x2_x(v) == cases[i].w);
+        Test_assert(t, "getH", I32x2_y(v) == cases[i].h);
+
+        EResolution back = EResolution_create(v);
+        Test_assert(t, "roundtrip", back == cases[i].r);
+    }
+
+    //Undefined round-trips to Undefined
+    I32x2 zero = I32x2_zero;
+
+    //0x0 is not a named resolution but create should not crash
+    //(it may return Undefined or EResolution_create(0,0), just must not crash)
+    (void) EResolution_create(zero);
+
+    //Out-of-range (> U16_MAX) must return Undefined
+    I32x2 huge = I32x2_create2(70000, 70000);
+    Test_assert(t, "oobUndefined", EResolution_create(huge) == EResolution_Undefined);
+}
+
+// ── 8. Window null-guard + terminate edge cases ──────────────────────────────
+
+static void Test_windowNullguards(Test *t) {
+
+    Test_setModule(t, "Window/NullGuards");
+
+    //All helpers must return false/0 on NULL without crashing
+    Test_assert(t, "isMinNull",         !Window_isMinimized(NULL));
+    Test_assert(t, "isFocNull",         !Window_isFocussed(NULL));
+    Test_assert(t, "isFSNull",          !Window_isFullScreen(NULL));
+    Test_assert(t, "allowFSNull",       !Window_doesAllowFullScreen(NULL));
+    Test_assert(t, "terminateNull",     !Window_terminate(NULL));
+
+    //WindowManager_isAccessible on NULL
+    Test_assert(t, "mgrNullFalse",      !WindowManager_isAccessible(NULL));
+
+    //InputDevice helpers on NULL
+    Test_assert(t, "idHandlesNull",     InputDevice_getHandles(NULL) == 0);
+    Test_assert(t, "idIsAxisNull",      !InputDevice_isAxis(NULL, 0));
+    Test_assert(t, "idIsButtonNull",    !InputDevice_isButton(NULL, 0));
+    Test_assert(t, "idGetStateNull",    InputDevice_getState(NULL, 0) == EInputState_Up);
+    Test_assert(t, "idGetAxisNull",     InputDevice_getCurrentAxis(NULL, 0) == 0.f);
+    Test_assert(t, "idGetPrevAxisNull", InputDevice_getPreviousAxis(NULL, 0) == 0.f);
+    Test_assert(t, "idDeadZoneNull",    InputDevice_getDeadZone(NULL, 0) == 0.f);
+    Test_assert(t, "idHasFlagNull",     !InputDevice_hasFlag(NULL, 0));
+    Test_assert(t, "idSetFlagNull",     !InputDevice_setFlag(NULL, 0));
+    Test_assert(t, "idResetFlagNull",   !InputDevice_resetFlag(NULL, 0));
+}
+
+// ── entry point ───────────────────────────────────────────────────────────────
+
+Platform_defineEntrypoint() {
+
+    Error err = Error_none();
+    if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
+        // Can't even set up the platform , hard fail
+        Platform_return(1);
+    }
+
+    Test t = (Test) { .alloc = Platform_instance->alloc };
+
+    U64 allocsBefore = Platform_getActiveAllocations(0);
+
+    Test_platformsWindowManager(&t);
+    Test_platformsWindowVirtual(&t);
+
+    Test_platformsKeyboard(&t);
+    Test_platformsMouse(&t);
+    Test_keySerialization(&t);
+    Test_mouseExtras(&t);
+
+    Test_platformsFilePhysical(&t);
+    Test_fileHandle(&t);
+    Test_platformsFileVirtual(&t);
+
+    Test_dynamicLibrary(&t);
+
+    Test_resolution(&t);
+    Test_windowNullguards(&t);
+
+    U64 allocsAfter = Platform_getActiveAllocations(0);
+    Test_assert(&t, "NoLeaks", allocsAfter <= allocsBefore);
+
+    int result = Test_end(&t);
+    Platform_cleanup();
+    Platform_return(result);
+}

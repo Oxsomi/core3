@@ -188,7 +188,7 @@ static Bool File_removeDirRecursivePhysical(const wchar_t *path, Ns *maxTimeout,
 		if(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 
 			gotoIfError3(clean, File_removeDirRecursivePhysical(child, maxTimeout, e_rr));
-			Bool res = RemoveDirectoryW(child);
+			Bool res = false;
 			FILE_RETRY_LOOP(*maxTimeout, (res = RemoveDirectoryW(child)) == false);
 
 			if(!res)
@@ -196,7 +196,7 @@ static Bool File_removeDirRecursivePhysical(const wchar_t *path, Ns *maxTimeout,
 
 		} else {
 
-			Bool res = DeleteFileW(child);
+			Bool res = false;
 			FILE_RETRY_LOOP(*maxTimeout, (res = DeleteFileW(child)) == false);
 
 			if(!res)
@@ -229,7 +229,7 @@ Bool File_removePhysical(const CharString *str, Ns maxTimeout, const Allocator *
 
 		gotoIfError3(clean, File_removeDirRecursivePhysical(buf, &maxTimeout, e_rr));
 
-		Bool res = RemoveDirectoryW(buf);
+		Bool res = false;
 		FILE_RETRY_LOOP(maxTimeout, (res = RemoveDirectoryW(buf)) == false);
 
 		if(!res)
@@ -237,7 +237,7 @@ Bool File_removePhysical(const CharString *str, Ns maxTimeout, const Allocator *
 
 	} else {
 
-		Bool res = DeleteFileW(buf);
+		Bool res = false;
 		FILE_RETRY_LOOP(maxTimeout, (res = DeleteFileW(buf)) == false);
 
 		if(!res)
@@ -271,7 +271,7 @@ Bool File_renamePhysical(
 	gotoIfError3(clean, CharString_toLongPath(wSrc, loc, e_rr));
 	gotoIfError3(clean, CharString_toLongPath(wDst, &dest, e_rr));
  
-	Bool res = MoveFileExW(wSrc, wDst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+	Bool res = false;
 	FILE_RETRY_LOOP(maxTimeout, (res = MoveFileExW(wSrc, wDst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) == false);
  
 	if(!res)
@@ -296,7 +296,7 @@ Bool File_movePhysical(
 	gotoIfError3(clean, CharString_toLongPath(wSrc, loc, e_rr));
 	gotoIfError3(clean, CharString_toLongPath(wDst, dest, e_rr));
  
-	Bool res = MoveFileExW(wSrc, wDst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
+	Bool res = false;
 
 	FILE_RETRY_LOOP(maxTimeout, (res = MoveFileExW(
 		wSrc, wDst, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH
@@ -521,8 +521,7 @@ Bool File_foreach(
 
 			CharString_free(&tmp2, alloc);
 
-			EFileAccess access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY
-				? EFileAccess_Read : EFileAccess_ReadWrite;
+			EFileAccess access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? EFileAccess_Read : EFileAccess_ReadWrite;
 
 			if(dat.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 

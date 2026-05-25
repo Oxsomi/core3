@@ -63,3 +63,38 @@ elseif(UNIX AND NOT APPLE)
 	find_package(xdg_decoration REQUIRED)
 	target_link_libraries(OxC3_platforms PUBLIC xdg_shell::xdg_shell xdg_decoration::xdg_decoration)
 endif()
+
+if(EnableTests)
+
+	file(GLOB testsDylibC "test/dylib/*.c")
+	add_library(OxC3_platforms_interface_dylib_test SHARED
+		${testsDylibC}
+		CMakeLists.txt
+	)
+	
+	target_link_libraries(OxC3_platforms_interface_dylib_test PUBLIC OxC3_platforms)
+
+	# include(../../cmake/oxc3.cmake)
+	file(GLOB testsInterfaceC "test/interface/*.c")
+
+	add_executable(
+		OxC3_platforms_interface_test
+		${testsInterfaceC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_platforms_interface_test PUBLIC OxC3_platforms OxC3_types_test OxC3_platforms_interface_dylib_test)
+	set_target_properties(OxC3_platforms_interface_test PROPERTIES FOLDER Oxsomi/test/platforms)
+	
+	# TODO: OxC3_package
+	# add_virtual_files(
+	# 	TARGET  OxC3_platforms_interface_test
+	# 	NAME    testdata
+	# 	ROOT    ${CMAKE_CURRENT_SOURCE_DIR}/test/interface/res       # contains hello.txt + sub/world.txt
+	# 	SELF    ${CMAKE_CURRENT_SOURCE_DIR}/test/interface
+	# 	FORCE_PACKAGER
+	# )
+	# 
+	# apply_dependencies(OxC3_platforms_interface_test)
+
+endif()

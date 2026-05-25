@@ -212,13 +212,13 @@ static Bool countFileType(const FileInfo *info, FileCounter *counter, const Allo
 
 	if (!counter->useType) {
 		++counter->counter;
-		return false;
+		return true;
 	}
 
 	if(info->type == counter->type)
 		++counter->counter;
 
-	return false;
+	return true;
 }
 
 Bool File_queryFileObjectCount(
@@ -265,7 +265,6 @@ clean:
 Bool File_queryFileObjectCountAll(const CharString *loc, Bool isRecursive, U64 *res, const Allocator *alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
-	CharString resolved = CharString_createNull();
 
 	if(!loc || !res)
 		retError(clean, Error_nullPointer(!loc ? 0 : 2, "File_queryFileObjectCountAll()::res is required"));
@@ -283,18 +282,16 @@ Bool File_queryFileObjectCountAll(const CharString *loc, Bool isRecursive, U64 *
 		goto clean;
 	}
 
-	gotoIfError3(clean, File_resolve(
-		loc, &isVirtual, 0, &Platform_instance->defaultDir, alloc, &resolved, e_rr
-	));
-
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { 0 };
-	gotoIfError3(clean, File_foreach(loc, false, (FileCallback) countFileType, &counter, isRecursive, alloc, e_rr));
+	gotoIfError3(clean, File_foreach(
+		loc, !Platform_instance->useWorkingDir, (FileCallback) countFileType, &counter, isRecursive, alloc, e_rr
+	));
+
 	*res = counter.counter;
 
 clean:
-	CharString_free(&resolved, alloc);
 	return s_uccess;
 }
 
@@ -328,15 +325,15 @@ Bool File_add(
 	}
 
 	{
-		CharString relResolved = resolved;
-		if(!CharString_eraseFirstStringInsensitive(&relResolved, &Platform_instance->defaultDir, 0, 0))
+		if(!CharString_startsWithStringInsensitive(&resolved, &Platform_instance->defaultDir, 0))
 			retError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."));
 
 		const CharStringSplit split = (CharStringSplit) {
-			.s = &relResolved,
+			.s = &resolved,
 			.allocator = alloc,
 			.result = &str
 		};
+
 		gotoIfError3(clean, CharString_splitSensitive(&split, '/', e_rr));
 	}
 
@@ -358,8 +355,12 @@ Bool File_add(
 		C8 prev = *end;
 		*end = '\0';
 
+		const C8 *start = str.ptr[0].ptr;
+
+		CharString section = CharString_createRefSizedConst(start, end - start, false);
+
 		Error errTmp = Error_none();
-		Bool exists = File_getInfo(&str.ptr[i - 1], &info, alloc, &errTmp);
+		Bool exists = File_getInfo(&section, &info, alloc, &errTmp);
 		EFileType parentType = info.type;
 		FileInfo_free(&info, alloc);
 
@@ -457,6 +458,7 @@ Bool File_move(const CharString *loc, const CharString *directoryName, Ns maxTim
 
 	CharString resolved = CharString_createNull();
 	CharString resolvedDir = CharString_createNull();
+	CharString resolvedDest = CharString_createNull();
 	Bool s_uccess = true;
 
 	if(!loc || !CharString_isValidFilePath(*loc))
@@ -493,7 +495,6 @@ Bool File_move(const CharString *loc, const CharString *directoryName, Ns maxTim
 	if(!CharString_cutBeforeLastSensitive(&resolved, '/', &fileName))
 		fileName = resolved;
 
-	CharString resolvedDest = CharString_createNull();
 	gotoIfError3(clean, CharString_format(
 		alloc, &resolvedDest, e_rr, "%.*s/%.*s",
 		CharString_length(resolvedDir), resolvedDir.ptr,

@@ -120,7 +120,8 @@ def main():
 			"OxC3_formats_dds_test",
 			"OxC3_formats_wav_test",
 			"OxC3_formats_bmp_test",
-			"OxC3_audio_interface_test"
+			"OxC3_audio_interface_test",
+			"OxC3_platforms_interface_test"
 		]
 
 		for test in tests:

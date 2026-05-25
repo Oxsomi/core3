@@ -47,7 +47,8 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize
 	if (!manager)
 		retError(clean, Error_nullPointer(2, "WindowManager_create()::manager is required"));
 
-	gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
+	if(extendedDataSize)
+		gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
 
 	*manager = (WindowManager) {
 		.isActive = WindowManager_magic,
@@ -197,7 +198,9 @@ Bool WindowManager_createWindow(
 			e_rr
 		));
 
-	gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
+	if(extendedDataSize)
+		gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
+
 	gotoIfError3(clean, CharString_createCopy(title, Platform_instance->alloc, &titleCopy, e_rr));
 	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(Window), Platform_instance->alloc, &tmpWindow, e_rr));
 

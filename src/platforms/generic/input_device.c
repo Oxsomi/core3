@@ -136,7 +136,7 @@ void InputDevice_free(InputDevice *dev, const Allocator *alloc) {
 
 CharString InputDevice_getName(const InputDevice *d, InputHandle handle) {
 
-	if(!d || d->type == EInputDeviceType_Undefined)
+	if(!d || d->type == EInputDeviceType_Undefined || handle >= InputDevice_getHandles(d))
 		return CharString_createNull();
 
 	const U16 localHandle = InputDevice_getLocalHandle(d, handle);

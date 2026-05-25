@@ -122,6 +122,9 @@ impl void Platform_free(void *allocator, void *ptr, U64 length);
 
 void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize);
 
+//Get active allocations (to detect leaks) minAllocationSize is only respected in Debug mode.
+U64 Platform_getActiveAllocations(U64 minAllocationSize);
+
 #ifdef __cplusplus
 	}
 #endif

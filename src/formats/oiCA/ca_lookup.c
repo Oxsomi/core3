@@ -329,10 +329,10 @@ static Bool CAFile_foreachHelper(
 		FileInfo info = { 0 };
 		gotoIfError3(clean, CAFile_getInfo(caFile, child, &info, alloc, e_rr));
 
-		Bool cont = callback(&info, object, alloc, e_rr);
+		Bool success = callback(&info, object, alloc, e_rr);
 		FileInfo_free(&info, alloc);
 
-		if (!cont || (e_rr && e_rr->genericError))
+		if (!success || (e_rr && e_rr->genericError))
 			goto clean;
 
 		if (recurse)
@@ -348,10 +348,10 @@ static Bool CAFile_foreachHelper(
 		FileInfo info = { 0 };
 		gotoIfError3(clean, CAFile_getInfo(caFile, child, &info, alloc, e_rr));
 
-		Bool cont = callback(&info, object, alloc, e_rr);
+		Bool success = callback(&info, object, alloc, e_rr);
 		FileInfo_free(&info, alloc);
 
-		if (!cont || (e_rr && e_rr->genericError))
+		if (!success || (e_rr && e_rr->genericError))
 			goto clean;
 	}
 

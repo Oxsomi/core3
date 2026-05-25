@@ -57,7 +57,7 @@
 
 static I8 hasCRC32 = -1;
 
-U32 Buffer_crc32c(const Buffer buf) {
+U32 Buffer_crc32cChained(const Buffer buf, U32 prevCrc) {
 
 	//Check if CRC32C is present
 	
@@ -77,9 +77,9 @@ U32 Buffer_crc32c(const Buffer buf) {
 	}
 
 	if (!hasCRC32)
-		return Buffer_crc32cFallback(buf);
+		return Buffer_crc32cFallbackChained(buf, prevCrc);
 
-	return Buffer_crc32cSimd(buf);
+	return Buffer_crc32cSimd(buf, prevCrc);
 }
 
 static inline void I32x4_sha256rnds4(I32x4 msgOriginal, I32x4 round, I32x4 *state0, I32x4 *state1) {

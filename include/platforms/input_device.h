@@ -31,12 +31,12 @@
 typedef enum EInputState {
 
 	EInputState_Up,
-	EInputState_Pressed,
 	EInputState_Released,
+	EInputState_Pressed,
 	EInputState_Down,
 
-	EInputState_Curr = 1 << 0,
-	EInputState_Prev = 1 << 1
+	EInputState_Prev = 1 << 0,
+	EInputState_Curr = 1 << 1
 
 } EInputState;
 
@@ -147,7 +147,7 @@ static inline Bool InputDevice_isButton(const InputDevice *d, InputHandle handle
 }
 
 static inline InputHandle InputDevice_createHandle(const InputDevice *d, U16 localHandle, EInputType type) {
-	return d ? InputDevice_invalidHandle() : localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d->axes);
+	return !d ? InputDevice_invalidHandle() : localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d->axes);
 }
 
 static inline U16 InputDevice_getLocalHandle(const InputDevice *d, InputHandle handle) {

@@ -189,6 +189,8 @@ Bool Platform_onFree(void *ptr, U64 len) {
 	Error *e_rr = NULL;
 	Bool s_uccess = true;
 
+	(void)e_rr;
+
 	#ifndef NDEBUG
 
 		acq = SpinLock_lock(&Allocator_lock, U64_MAX);
@@ -273,7 +275,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 	ELockAcquire acq = ELockAcquire_Invalid;
 	Bool s_uccess = true;
 	Error *e_rr = NULL;
-	(void) s_uccess;
+	(void) s_uccess; (void)e_rr;
 
 	#ifndef NDEBUG
 
@@ -322,6 +324,46 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&Allocator_lock);
+}
+
+U64 Platform_getActiveAllocations(U64 minAllocationSize) {
+	
+	(void)minAllocationSize;
+
+	U64 active = 0;
+
+	Bool s_uccess = true;
+	Error *e_rr = NULL;
+	(void) s_uccess; (void)e_rr;
+
+	ELockAcquire acq = SpinLock_lock(&Allocator_lock, U64_MAX);
+
+	if (acq < ELockAcquire_Success) {
+		Log_errorLn(&Allocator_allocationsAllocator, "Platform_getActiveAllocations Allocator_lock failed");
+		retError(clean, Error_invalidState(0, "Platform_getActiveAllocations() allocator lock failed to acquire"));
+	}
+
+	#ifndef NDEBUG
+
+		for (U64 i = 0; i < Allocator_allocations.length; ++i) {
+
+			const DebugAllocation* captured = &Allocator_allocations.ptrNonConst[i];
+
+			if (captured->length < minAllocationSize)
+				continue;
+
+			++active;
+		}
+
+	#else
+		active = AtomicI64_add(&Allocator_memoryAllocationCount, 0);
+	#endif
+
+clean:
+	if(acq == ELockAcquire_Acquired)
+		SpinLock_unlock(&Allocator_lock);
+
+	return active;
 }
 
 void Allocator_reportLeaks() {
