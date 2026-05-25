@@ -355,7 +355,7 @@ Bool File_openPhysical(
  
 	*fileHandle = (FileHandle) {
 		.ext          = (void*)h,
-		.fileSizeType = ((U64)isWrite << 63) | ((U64)isRead << 62) | fileSize
+		.fileSizeType = FileHandle_makeFileSizeType(fileSize, EFileOpenType_create(isRead, isWrite))
 	};
  
 clean:

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//platforms/generic/types.c
+
 #include "platforms/types.h"
 
 EPlatformsTypeId EPlatformTypeId_all[EPlatformsTypeId_Count] = {

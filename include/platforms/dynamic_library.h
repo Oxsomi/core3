@@ -30,9 +30,7 @@ typedef void *DynamicLibrary;
 //In which case, only isValidPath will be defined.
 //It can be checked via SUPPORTS_DYNAMIC_LINKING.
 
-#if _PLATFORM_TYPE != PLATFORM_ANDROID
-	#define SUPPORTS_DYNAMIC_LINKING
-#endif
+#define SUPPORTS_DYNAMIC_LINKING
 
 impl Bool DynamicLibrary_isValidPath(CharString str);
 
@@ -42,7 +40,7 @@ impl Bool DynamicLibrary_isValidPath(CharString str);
 	impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
 #endif
 
-#ifdef _MSVC_TRADITIONAL
+#ifdef _MSC_VER
 	#define EXPORT_SYMBOL __declspec(dllexport)
 	#define IMPORT_SYMBOL __declspec(dllimport)
 #else

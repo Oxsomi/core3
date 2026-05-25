@@ -136,7 +136,7 @@ static inline InputAxis *InputDevice_getAxis(const InputDevice *dev, U16 localHa
 
 static inline U32 InputDevice_getHandles(const InputDevice *d) { return !d ? 0 : (U32)d->axes + d->buttons; }
 
-static inline InputHandle InputDevice_invalidHandle() { return (InputHandle) U64_MAX; }
+static inline InputHandle InputDevice_invalidHandle() { return (InputHandle) U32_MAX; }
 
 static inline Bool InputDevice_isValidHandle(const InputDevice *d, InputHandle handle) { return d && handle < InputDevice_getHandles(d); }
 

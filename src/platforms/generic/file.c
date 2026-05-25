@@ -592,7 +592,7 @@ Bool FileHandleRef_write(FileHandleRef *handleRef, U64 offset, U64 length, const
 	if(!handle->ext)
 		retError(clean, Error_invalidOperation(0, "FileHandleRef_write()::handle is not open"));
 
-	if(!(handle->fileSizeType >> 63))
+	if(!EFileHandle_isWrite(handle))
 		retError(clean, Error_invalidOperation(1, "FileHandleRef_write()::handle is not opened for writing"));
 
 	if(!length)
@@ -625,13 +625,13 @@ Bool FileHandleRef_read(const FileHandleRef *handleRef, U64 off, U64 len, Buffer
 	if(!handle->ext)
 		retError(clean, Error_invalidOperation(0, "FileHandleRef_read()::handle is not open"));
 
-	if(!((handle->fileSizeType >> 62) & 1))
+	if(!EFileHandle_isRead(handle))
 		retError(clean, Error_invalidOperation(1, "FileHandleRef_read()::handle is not opened for reading"));
 
 	if(Buffer_isConstRef(*output))
 		retError(clean, Error_invalidOperation(2, "FileHandleRef_read()::output must be writable"));
 
-	U64 fileSize = handle->fileSizeType & ~((U64)3 << 62);
+	U64 fileSize = FileHandle_fileSize(handle);
 
 	if(!fileSize && !off && !len)		//Empty files exist too
 		goto clean;
@@ -723,7 +723,7 @@ Bool File_read(
 
 	{
 		const FileHandle *fh = RefPtr_data(handle, FileHandle);
-		U64 fileSize = fh->fileSizeType & ~((U64)3 << 62);
+		U64 fileSize = FileHandle_fileSize(fh);
 
 		if(!fileSize && !off && !len)		//Empty files exist too
 			goto clean;

@@ -115,12 +115,48 @@ typedef enum EFileOpenType {
 	EFileOpenType_ReadWrite
 } EFileOpenType;
 
+static inline EFileOpenType EFileOpenType_create(Bool read, Bool write) {
+	return read && write ? EFileOpenType_ReadWrite : (write ? EFileOpenType_Write : EFileOpenType_Read);
+}
+
+static inline Bool EFileOpenType_isRead(EFileOpenType type) {
+	return type == EFileOpenType_Read || type == EFileOpenType_ReadWrite;
+}
+
+static inline Bool EFileOpenType_isWrite(EFileOpenType type) {
+	return type == EFileOpenType_Write || type == EFileOpenType_ReadWrite;
+}
+
 typedef U8 FileOpenType;
 
 typedef struct FileHandle {
 	void *ext;						//HANDLE or int (fd)
-	U64 fileSizeType;				//((read | 1, write | 2) << 62) | fileSize
+	U64 fileSizeType;				//(EFileOpenType << 62) | fileSize
 } FileHandle;
+
+static inline U64 FileHandle_makeFileSizeType(U64 fileSize, EFileOpenType type) {
+
+	if((fileSize >> 62) || (U64)type > (U64)EFileOpenType_ReadWrite) 
+		return U64_MAX;
+
+	return fileSize | ((U64)type << 62);
+}
+
+static inline U64 FileHandle_fileSize(const FileHandle *handle) { return handle ? handle->fileSizeType << 2 >> 2 : 0; }
+
+static inline EFileOpenType FileHandle_fileType(const FileHandle *handle) {
+	return handle ? handle->fileSizeType >> 62 : EFileOpenType_Read;
+}
+
+static inline Bool EFileHandle_isRead(const FileHandle *handle) {
+	EFileOpenType openType = FileHandle_fileType(handle);
+	return handle && EFileOpenType_isRead(openType);
+}
+
+static inline Bool EFileHandle_isWrite(const FileHandle *handle) {
+	EFileOpenType openType = FileHandle_fileType(handle);
+	return handle && EFileOpenType_isWrite(openType);
+}
 
 typedef struct RefPtr RefPtr;
 typedef struct RefPtrType RefPtrType;

@@ -112,10 +112,10 @@ Bool FileHandle_openStream(
 		retError(clean, Error_invalidOperation(0, "FileHandle_openStream()::stream already defined, might be a memleak"));
 
 	const FileHandle *fh = RefPtr_data(*handle, FileHandle);
-	U8 type = (U8)(fh->fileSizeType >> 62);
-	Bool isRead  = type & 1;
-	Bool isWrite = type & 2;
-	U64 fileSize = fh->fileSizeType & ~((U64)3 << 62);
+	EFileOpenType type = FileHandle_fileType(fh);
+	Bool isRead  = EFileOpenType_isRead(type);
+	Bool isWrite = EFileOpenType_isWrite(type);
+	U64 fileSize = FileHandle_fileSize(fh);
 
 	gotoIfError3(clean, Stream_create(
 		isRead  ? FileStream_read  : NULL,
