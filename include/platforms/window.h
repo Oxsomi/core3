@@ -214,7 +214,7 @@ typedef struct Window {
 
 	Buffer extendedData;
 
-	U64 padding2;
+	U32 defaultMouseId, defaultKeyboardId;
 
 	//Temporary data such as input buffer
 

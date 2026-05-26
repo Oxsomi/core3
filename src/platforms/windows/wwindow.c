@@ -264,11 +264,34 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			InputDevice *end = ListInputDevice_end(w->devices);
 
 			for(; dev != end; ++dev)
-				if(*(HANDLE*) dev->dataExt.ptr == data->header.hDevice)
+				if(dev->dataExt.ptr && *(HANDLE*) dev->dataExt.ptr == data->header.hDevice)
 					break;
 
-			if(!data->header.hDevice || dev == end)
-				goto cleanup;
+			//hDevice is actually NULL when there's no HID representing this event.
+			//This can happen in multiple cases:
+			//- Touchpad
+			//- SendKeys (unit testing)
+			//- Accessibility; e.g. On screen keyboard
+			//- Remote desktop / VM
+			//- Tablet windows perhaps?
+			//In that case, we default to the builtin keyboard/mouse.
+
+			if (!data->header.hDevice || dev == end) {
+
+				switch (raw.header.dwType) {
+
+					case RIM_TYPEKEYBOARD:
+						dev = w->devices.ptrNonConst + w->defaultKeyboardId;
+						break;
+
+					case RIM_TYPEMOUSE:
+						dev = w->devices.ptrNonConst + w->defaultMouseId;
+						break;
+
+					default:
+						goto cleanup;
+				}
+			}
 
 			if (dev->type == EInputDeviceType_Keyboard) {
 
@@ -338,7 +361,81 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 							break;
 						}
 
-						switch (keyboardDat.MakeCode) {
+						//VKey is used; on screen keyboard or SendKeys.
+						if (!keyboardDat.MakeCode && keyboardDat.VKey) {
+
+							if (keyboardDat.VKey >= 'A' && keyboardDat.VKey <= 'Z') {
+								handle = EKey_A + (keyboardDat.VKey - 'A');
+								break;
+							}
+
+							if (keyboardDat.VKey >= '0' && keyboardDat.VKey <= '9') {
+								handle = EKey_0 + (keyboardDat.VKey - '0');
+								break;
+							}
+
+							if (keyboardDat.VKey >= VK_F1 && keyboardDat.VKey <= VK_F12) {
+								handle = EKey_F1 + (keyboardDat.VKey - VK_F1);
+								break;
+							}
+
+							switch (keyboardDat.VKey) {
+
+								//Navigation / editing
+
+								case VK_ESCAPE:		handle = EKey_Escape;		break;
+								case VK_TAB:		handle = EKey_Tab;			break;
+								case VK_SPACE:		handle = EKey_Space;		break;
+								case VK_BACK:		handle = EKey_Backspace;	break;
+
+								//Modifiers (ambiguous but OK fallback)
+
+								case VK_SHIFT:
+								case VK_LSHIFT:
+									handle = EKey_LShift;
+									break;
+
+								case VK_RSHIFT:		handle = EKey_RShift;		break;
+
+								case VK_CONTROL:
+								case VK_LCONTROL:
+									handle = EKey_LCtrl;
+									break;
+
+								case VK_RCONTROL:	handle = EKey_RCtrl;		break;
+
+								case VK_MENU:
+								case VK_LMENU:
+									handle = EKey_LAlt;
+									break;
+
+								case VK_RMENU:		handle = EKey_RAlt;			break;
+
+								//Lock keys
+
+								case VK_CAPITAL:	handle = EKey_Caps;			break;
+
+								//OEM / punctuation
+
+								case VK_OEM_1:		handle = EKey_Semicolon;	break; // ;
+								case VK_OEM_2:		handle = EKey_Slash;		break; // /
+								case VK_OEM_3:		handle = EKey_Backtick;		break; // `
+								case VK_OEM_4:		handle = EKey_LBracket;		break; // [
+								case VK_OEM_5:		handle = EKey_Backslash;	break; // \ 
+								case VK_OEM_6:		handle = EKey_RBracket;		break; // ]
+								case VK_OEM_7:		handle = EKey_Quote;		break; // '
+
+								case VK_OEM_PLUS:	handle = EKey_Equals;		break;
+								case VK_OEM_MINUS:	handle = EKey_Minus;		break;
+								case VK_OEM_COMMA:	handle = EKey_Comma;		break;
+								case VK_OEM_PERIOD: handle = EKey_Period;		break;
+
+								default:
+									goto cleanup;
+							}
+						}
+
+						else switch (keyboardDat.MakeCode) {
 
 							//Row 0
 
@@ -651,7 +748,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				InputDevice *end = ListInputDevice_end(w->devices);
 
 				for(; ours != end; ++ours)
-					if(*(HANDLE*) ours->dataExt.ptr == (HANDLE) lParam)
+					if(ours->dataExt.ptr && *(HANDLE*) ours->dataExt.ptr == (HANDLE) lParam)
 						break;
 
 				if(ours == end)		//Unrecognized device
@@ -964,6 +1061,8 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	HWND nativeWindow = NULL;
 	Bool touched = false;
 	Bool s_uccess = true;
+	Keyboard builtinKeyboard = (Keyboard) { 0 };
+	Mouse builtinMouse = (Mouse) { 0 };
 
 	DWORD style = WS_VISIBLE;
 
@@ -1025,6 +1124,16 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	gotoIfError3(clean, ListInputDevice_reserve(&w->devices, 16, Platform_instance->alloc, e_rr));
 	gotoIfError3(clean, ListMonitor_reserve(&w->monitors, 16, Platform_instance->alloc, e_rr));
+
+	w->defaultKeyboardId = (U32) w->devices.length;
+	gotoIfError3(clean, Keyboard_create(&builtinKeyboard, Platform_instance->alloc, e_rr));
+	gotoIfError3(clean, ListInputDevice_pushBack(&w->devices, builtinKeyboard, Platform_instance->alloc, e_rr));
+	builtinKeyboard = (Keyboard) { 0 };
+
+	w->defaultMouseId = (U32)w->devices.length;
+	gotoIfError3(clean, Mouse_create(&builtinMouse, Platform_instance->alloc, e_rr));
+	gotoIfError3(clean, ListInputDevice_pushBack(&w->devices, builtinMouse, Platform_instance->alloc, e_rr));
+	builtinMouse = (Mouse) { 0 };
 
 	w->nativeHandle = nativeWindow;
 	touched = true;
@@ -1094,6 +1203,8 @@ clean:
 			DestroyWindow(nativeWindow);
 	}
 
+	InputDevice_free(&builtinKeyboard, Platform_instance->alloc);
+	InputDevice_free(&builtinMouse, Platform_instance->alloc);
 	ListU16_free(&tmp, Platform_instance->alloc);
 	return s_uccess;
 }

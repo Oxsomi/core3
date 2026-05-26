@@ -190,7 +190,7 @@ Bool WindowManager_createWindow(
 
 	gotoIfError3(clean, WindowManager_adaptSizes(&size, &minSize, &maxSize, e_rr));
 
-	if((type == EWindowType_Virtual) || (hint & EWindowHint_ProvideCPUBuffer))
+	if(type == EWindowType_Virtual)
 		gotoIfError3(clean, Buffer_createEmptyBytes(
 			ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size), 1),
 			Platform_instance->alloc,

@@ -66,6 +66,21 @@ endif()
 
 if(EnableTests)
 
+	# Functional test is standalone, but can't be run by CI, needs someone to manually re-run and approve.
+
+	file(GLOB testsFunctionalC "test/functional/*.c")
+
+	add_executable(
+		OxC3_platforms_functional_test
+		${testsFunctionalC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_platforms_functional_test PUBLIC OxC3_platforms OxC3_types_test)
+	set_target_properties(OxC3_platforms_functional_test PROPERTIES FOLDER Oxsomi/test/platforms)
+
+	# Interface test needs a dummy dylib, virtual files and interface test
+
 	file(GLOB testsDylibC "test/dylib/*.c")
 	add_library(OxC3_platforms_interface_dylib_test SHARED
 		${testsDylibC}

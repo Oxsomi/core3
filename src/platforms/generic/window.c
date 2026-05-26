@@ -80,6 +80,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 	if (linSiz >= oldLen) {
 		const U64 toAllocate = linSiz * 5 / 4;
+		neo = Buffer_createNull();
 		gotoIfError3(clean, Buffer_createUninitializedBytes(toAllocate, Platform_instance->alloc, &neo, e_rr));
 		resize = true;
 	}
@@ -88,6 +89,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 	else if (oldLen > linSiz * 3 / 2) {
 		const U64 toAllocate = linSiz * 5 / 4;
+		neo = Buffer_createNull();
 		gotoIfError3(clean, Buffer_createUninitializedBytes(toAllocate, Platform_instance->alloc, &neo, e_rr));
 		resize = true;
 	}
