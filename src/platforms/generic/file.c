@@ -387,7 +387,11 @@ Bool File_add(
 		C8 *end = CharString_end(str.ptr[i]);
 		C8 prev = *end;
 		*end = '\0';
-		gotoIfError3(clean, File_addPhysical(&str.ptr[i], false, alloc, e_rr));
+
+		const C8 *start = str.ptr[0].ptr;
+		CharString section = CharString_createRefSizedConst(start, end - start, false);
+
+		gotoIfError3(clean, File_addPhysical(&section, false, alloc, e_rr));
 		*end = prev;
 	}
 

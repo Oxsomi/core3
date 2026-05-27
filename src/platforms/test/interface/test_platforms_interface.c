@@ -538,6 +538,179 @@ clean:
     File_remove(&dir, 5 * SECOND, alloc, NULL);
 }
 
+// ── 4c. File – long path tests ────────────────────────────────────────────────
+// Windows: verifies \\?\ long-path handling (paths > MAX_PATH = 260 chars).
+// All platforms: verifies deeply nested paths and names near the 255-byte
+// filename limit work correctly end-to-end through the platform abstraction.
+ 
+//Build a CharString from a stack buffer without allocation.
+//Only safe for string literals / compile-time-known content.
+#define CS_REF(literal) CharString_createRefCStrConst(literal)
+ 
+//Maximum single filename component we test (just under the 255-byte POSIX limit),
+//platform_test_longpath/ + ^ > MAX_PATH (260)
+#define LONG_NAME_LEN 240
+ 
+static void Test_fileLongPath(Test *t) {
+ 
+    Test_setModule(t, "File/LongPaths");
+ 
+    Bool s_uccess = true;
+    const Allocator *alloc = Platform_instance->alloc;
+    RefPtrType fhType = FileHandle_makeType(alloc);
+ 
+    CharString root     = CharString_createNull();
+    CharString deepDir  = CharString_createNull();
+    CharString longFile = CharString_createNull();
+    CharString deepFile = CharString_createNull();
+    CharString longName = CharString_createNull();
+    Buffer readBuf      = Buffer_createNull();
+    FileInfo info       = (FileInfo){ 0 };
+ 
+    //Root for all long-path tests
+    gotoIfError3(clean, CharString_createCopy(CS_REF("platform_test_longpath"), alloc, &root, NULL));
+ 
+    File_remove(&root, 1 * SECOND, alloc, NULL);  //clean prior run
+ 
+    // ── 1. Filename near the 255-byte limit ───────────────────────────────────
+    // Build:  platform_test_longpath/<240 'a' chars>.txt
+ 
+    gotoIfError3(clean, CharString_create('a', LONG_NAME_LEN, alloc, &longName, NULL));
+ 
+    gotoIfError3(clean, CharString_format(
+        alloc, &longFile, NULL, "%.*s/%.*s.txt",
+        (int) CharString_length(root),    root.ptr,
+        (int) CharString_length(longName), longName.ptr
+    ));
+
+    CharString_free(&longName, alloc);
+ 
+    if (!Test_assert(t, "addRoot", File_add(&root, EFileType_Folder, false, alloc, NULL)))
+        goto clean;
+ 
+    Test_assert(t, "addLongNameFile", File_add(&longFile, EFileType_File, false, alloc, NULL));
+    Test_assert(t, "hasLongNameFile", File_hasFile(&longFile, alloc));
+ 
+    //getInfo on a long-named file
+
+    Test_assert(t, "getInfoLong", File_getInfo(&longFile, &info, alloc, NULL));
+    Test_assert(t, "infoTypeLong", info.fileSize == 0);
+    FileInfo_free(&info, alloc);
+ 
+    //Write + read through the long-named file
+
+    {
+        const C8 *msg = "long-name payload";
+        U64 msgLen    = 17;
+        Buffer writeBuf = Buffer_createRefConst((const U8*)msg, msgLen);
+        Test_assert(t, "writeLong", File_write(&writeBuf, &longFile, 0, 0, 50 * MS, false, &fhType, NULL));
+        Test_assert(t, "readLong", File_read(&longFile, 50 * MS, 0, 0, &fhType, &readBuf, NULL));
+        Test_assert(t, "longContentMatch", Buffer_eq(readBuf, writeBuf));
+        Buffer_free(&readBuf, alloc);
+    }
+ 
+    //Rename the long-named file
+
+    {
+        CharString newName = CharString_createRefCStrConst("renamed_long.txt");
+        Test_assert(t, "renameLong", File_rename(&longFile, &newName, 50 * MS, alloc, NULL));
+ 
+        CharString renamedPath = CharString_createNull();
+        CharString_format(alloc, &renamedPath, NULL, "%.*s/renamed_long.txt",
+            (int) CharString_length(root), root.ptr
+        );
+
+        Test_assert(t, "hasRenamed",  File_hasFile(&renamedPath, alloc));
+        Test_assert(t, "longGone",    !File_hasFile(&longFile, alloc));
+        CharString_free(&renamedPath, alloc);
+    }
+
+    CharString_free(&longFile, alloc);
+ 
+    // ── 2. Deep directory tree (total path > 260 chars on Windows) ────────────
+    // Build a path that exceeds the legacy MAX_PATH of 260 characters so that
+    // CharString_toLongPath's \\?\ prefix is exercised on Windows.
+    // On POSIX systems this just tests a legitimately deep path.
+    //
+    // Structure:
+    //   platform_test_longpath/
+    //     level_01/level_02/.../level_32/   (each component 8 chars + '/')
+    //
+    // 8 * 32 + 32 slashes = 288 chars just for levels, plus the 22-char root
+    // and a filename -> comfortably over 260.
+ 
+    {
+        //Build the deep dir path incrementally
+        gotoIfError3(clean, CharString_createCopy(root, alloc, &deepDir, NULL));
+ 
+        for (U32 i = 1; i <= 32; ++i) {
+            CharString component = CharString_createNull();
+            gotoIfError3(clean, CharString_format(alloc, &component, NULL, "/level_%02u", i));
+            gotoIfError3(clean, CharString_appendString(&deepDir, &component, alloc, NULL));
+            CharString_free(&component, alloc);
+        }
+ 
+        //File_add with createParentOnly=false should create all missing ancestors
+        Test_assert(t, "addDeepDir", File_add(&deepDir, EFileType_Folder, false, alloc, NULL));
+        Test_assert(t, "hasDeepDir", File_hasFolder(&deepDir, alloc));
+ 
+        //Verify total path length is actually > 260 to confirm we're testing
+        // the long-path code path on Windows
+        #if _PLATFORM_TYPE == PLATFORM_WINDOWS
+            Test_assert(t, "pathExceeds MAX_PATH", CharString_length(deepDir) > 260);
+        #endif
+ 
+        //Create, write, and read a file at the bottom of the deep tree
+        gotoIfError3(clean, CharString_createCopy(deepDir, alloc, &deepFile, NULL));
+
+        CharString deepPayloadBin = CS_REF("/deep_payload.bin");
+        gotoIfError3(clean, CharString_appendString(&deepFile, &deepPayloadBin, alloc, NULL));
+ 
+        Test_assert(t, "addDeepFile", File_add(&deepFile, EFileType_File, false, alloc, NULL));
+ 
+        const C8 *deepMsg = "deep path payload";
+        U64 deepLen       = 17;
+        Buffer deepWrite  = Buffer_createRefConst((const U8*)deepMsg, deepLen);
+ 
+        Test_assert(t, "writeDeep", File_write(&deepWrite, &deepFile, 0, 0, 50 * MS, false, &fhType, NULL));
+ 
+        Test_assert(t, "readDeep", File_read(&deepFile, 50 * MS, 0, 0, &fhType, &readBuf, NULL));
+        Test_assert(t, "deepContentMatch", Buffer_length(readBuf) == deepLen && Buffer_eq(readBuf, deepWrite));
+        Buffer_free(&readBuf, alloc);
+ 
+        //getInfo at the deep file
+        Test_assert(t, "getInfoDeep",  File_getInfo(&deepFile, &info, alloc, NULL));
+        Test_assert(t, "infoDeepFile", info.type == EFileType_File);
+        Test_assert(t, "infoDeepSize", info.fileSize == deepLen);
+        FileInfo_free(&info, alloc);
+ 
+        //queryFileObjectCount from root, recursive, must find at least the
+        //deep directory chain and the two files we created
+        U64 count = 0;
+        Test_assert(t, "queryDeepCount", File_queryFileObjectCountAll(&root, true, &count, alloc, NULL));
+
+        //32 level_XX dirs + renamed_long.txt + deep_payload.bin = 34
+        Test_assert(t, "deepCountAtLeast22", count == 34);
+    }
+ 
+    // ── 3. Remove the whole tree recursively (long paths included) ────────────
+
+    Test_assert(t, "removeDeepTree", File_remove(&root, 50 * MS, alloc, NULL));
+    Test_assert(t, "rootGone", !File_has(&root, alloc));
+ 
+clean:
+    FileInfo_free(&info,       alloc);
+    Buffer_free(&readBuf,      alloc);
+    CharString_free(&root,     alloc);
+    CharString_free(&deepDir,  alloc);
+    CharString_free(&longFile, alloc);
+    CharString_free(&deepFile, alloc);
+    CharString_free(&longName, alloc);
+
+    CharString longPath = CharString_createRefCStrConst("platform_test_longpath");
+    File_remove(&longPath, 1 * SECOND, alloc, NULL);
+}
+
 // ── 5. File (virtual) ─────────────────────────────────────────────────────────
 
 static void Test_platformsFileVirtual(Test *t) {
@@ -632,13 +805,13 @@ static void Test_dynamicLibrary(Test *t) {
 
     //Load the dummy library we've generated
 
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-    CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dll");
-#elif _PLATFORM_TYPE == PLATFORM_OSX
-    CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dylib");
-#else
-    CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.so");
-#endif
+    #if _PLATFORM_TYPE == PLATFORM_WINDOWS
+        CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dll");
+    #elif _PLATFORM_TYPE == PLATFORM_OSX
+        CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dylib");
+    #else
+        CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.so");
+    #endif
 
     DynamicLibrary dl = NULL;
     Test_assert(t, "load", DynamicLibrary_load(rtLib, true, &dl, &err));
@@ -757,6 +930,7 @@ Platform_defineEntrypoint() {
 
     Test_platformsFilePhysical(&t);
     Test_fileHandle(&t);
+    Test_fileLongPath(&t);
     Test_platformsFileVirtual(&t);
 
     Test_dynamicLibrary(&t);

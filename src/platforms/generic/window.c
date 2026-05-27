@@ -242,9 +242,10 @@ Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTim
 	));
 
 	Buffer buf = Buffer_createRefFromBuffer(w->cpuVisibleBuffer, true);
+	U64 len = Buffer_length(buf);
 	gotoIfError3(clean, MemoryStream_createFromBuffer(&buf, EMemoryStreamFlags_None, &memStreamType, &memStream, e_rr));
 
-	SubResourceData subResource = (SubResourceData) { .stream = memStream, .streamLen = Buffer_length(buf) };
+	SubResourceData subResource = (SubResourceData) { .stream = memStream, .streamLen = len };
 	ListSubResourceData resources = (ListSubResourceData) { 0 };
 	gotoIfError3(clean, ListSubResourceData_createRefConst(&subResource, 1, &resources, e_rr));
 

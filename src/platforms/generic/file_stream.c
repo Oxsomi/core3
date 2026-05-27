@@ -120,10 +120,10 @@ Bool FileHandle_openStream(
 	gotoIfError3(clean, Stream_create(
 		isRead  ? FileStream_read  : NULL,
 		isWrite ? FileStream_write : NULL,
-		NULL,						// reserve
+		NULL,						//reserve
 		FileStream_close,
 		fileSize,
-		EStreamType_File,
+		EStreamType_File | (isWrite ? EStreamType_Resizable : 0),
 		streamType,
 		stream,
 		e_rr

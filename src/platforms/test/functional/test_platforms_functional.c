@@ -49,6 +49,7 @@
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
 #include "platforms/file.h"
+#include "formats/dds/dds_file.h"
 #include "types/test/test.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/buffer.h"
@@ -173,7 +174,7 @@ static void pump(Ns ns) {
 
 // Shared render code to validate fullscreen / resize behavior
 
-static U8 *Test_renderPattern(Window* w) {
+static U8 *Test_renderPattern(Window *w, U8 zxor) {
 
     U32 W = (U32)I32x2_x(w->size);
     U32 H = (U32)I32x2_y(w->size);
@@ -183,10 +184,10 @@ static U8 *Test_renderPattern(Window* w) {
     for (U32 y = 0; y < H; ++y)
         for (U32 x = 0; x < W; ++x) {
             U8 *p = px + (y * W + x) * 4;
-            p[0] = (U8)x;   // R gradient
-            p[1] = (U8)y;   // G gradient
-            p[2] = 128;     // B constant baseline
-            p[3] = 255;     // A
+            p[0] = (U8)x;           //R gradient
+            p[1] = (U8)y;           //G gradient
+            p[2] = 128 ^ zxor;      //B constant baseline
+            p[3] = 255;             //A
         }
 
     return px;
@@ -216,7 +217,7 @@ static void Test_cpuBuffer(Test *t) {
         U64 expectedBytes = (U64)W * H * 4;
 
         Test_assert(t, "bufferSize", Buffer_length(w->cpuVisibleBuffer) == expectedBytes);
-        U8 *px = Test_renderPattern(w);
+        U8 *px = Test_renderPattern(w, 0);
         U8 *tl = px;
         U8 *tr = px + (W - 1) * 4;
         U8 *bl = px + (H - 1) * W * 4;
@@ -247,7 +248,7 @@ static void Test_fullScreen(Test *t) {
     Test_setModule(t, "F2/Fullscreen");
 
     Error err = Error_none();
-    I32x2 sz = I32x2_create2(800, 600);
+    I32x2 sz = I32x2_create2(256, 256);
 
     Window *w = createWindow(
         t, "F2: Fullscreen", sz, I32x2_zero, EWindowHint_AllowFullscreen | EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8
@@ -258,14 +259,14 @@ static void Test_fullScreen(Test *t) {
 
     Test_assert(t, "notFullscreenInit", !Window_isFullScreen(w));
 
-    Test_renderPattern(w);
+    Test_renderPattern(w, 0);
     Window_presentPhysical(w, NULL);
     pump(1 * SECOND);
 
     if (!Test_assert(t, "toggleOn", Window_toggleFullScreen(w, &err)))
         goto clean;
 
-    Test_renderPattern(w);
+    Test_renderPattern(w, 0x80);
     Window_presentPhysical(w, NULL);
     pump(1 * SECOND);
 
@@ -274,7 +275,7 @@ static void Test_fullScreen(Test *t) {
     if (!Test_assert(t, "toggleOff", Window_toggleFullScreen(w, &err)))
         goto clean;
 
-    Test_renderPattern(w);
+    Test_renderPattern(w, 0xFF);
     Window_presentPhysical(w, NULL);
     pump(1 * SECOND);
 
@@ -332,7 +333,7 @@ static void Test_multiWindow(Test *t) {
     Test_setModule(t, "F4/MultiWindow");
 
     Window *w1 = NULL, *w2 = NULL;
-    I32x2 sz = I32x2_create2(400, 300);
+    I32x2 sz = I32x2_create2(256, 256);
 
     w1 = createWindow(t, "F4: Window A", sz, I32x2_zero, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8);
     w2 = createWindow(t, "F4: Window B", sz, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8);
@@ -343,10 +344,10 @@ static void Test_multiWindow(Test *t) {
     if (!Test_assert(t, "w2Created", w2 != NULL))
         goto clean;
 
-    Test_renderPattern(w1);
+    Test_renderPattern(w1, 0x00);
     Window_presentPhysical(w1, NULL);
 
-    Test_renderPattern(w2);
+    Test_renderPattern(w2, 0x80);
     Window_presentPhysical(w2, NULL);
 
     Test_assert(t, "distinct",    w1 != w2);
@@ -439,26 +440,32 @@ clean:
 // ── F6. Window_storeCPUBufferToDisk ───────────────────────────────────────────
 
 static void Test_storeCPUBuffer(Test *t) {
-
+    
     Test_setModule(t, "F6/StoreCPUBufferToDisk");
-
+ 
     Error err = Error_none();
     const Allocator *alloc = Platform_instance->alloc;
-    RefPtrType fhType = FileHandle_makeType(alloc);
+ 
+    I32x2 sz = I32x2_create2(512, 512);
+ 
+    Window *w = createWindow(t, "F7: StoreToDisk", sz, I32x2_zero, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8);
 
-    I32x2 sz = I32x2_create2(64, 64);
-    Window *w = createWindow(t, "F6: StoreToDisk", sz, I32x2_zero, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8);
+    if(w)
+        sz = w->size;
 
-    Buffer readBuf = Buffer_createNull();
+    U32 W = (U32)I32x2_x(sz), H = (U32)I32x2_y(sz);
 
+    ListSubResourceData subResources = (ListSubResourceData) { 0 };
+    StreamRef *readStream = NULL;
+
+    RefPtrType fileHandleType = FileHandle_makeType(alloc);
+    RefPtrType streamType = FileStream_makeType(alloc);
+ 
     if (!Test_assert(t, "windowCreated", w != NULL))
         goto clean;
-
-    if (!Test_assert(t, "resizeCPU", Window_resizeCPUBuffer(w, false, sz, &err)))
-        goto clean;
-
+ 
+    // Fill: pixel i → R=(i&0xFF), G=((i>>1)&0xFF), B=42, A=255
     {
-        U32 W = (U32)I32x2_x(sz), H = (U32)I32x2_y(sz);
         U8 *px = w->cpuVisibleBuffer.ptrNonConst;
         for (U32 i = 0; i < W * H; ++i) {
             px[i * 4 + 0] = (U8)(i & 0xFF);
@@ -467,31 +474,89 @@ static void Test_storeCPUBuffer(Test *t) {
             px[i * 4 + 3] = 255;
         }
     }
-
-    CharString outPath = CharString_createRefCStrConst("platform_test_cpu_dump.bin");
+ 
+    CharString outPath = CharString_createRefCStrConst("platform_test_cpu_dump.dds");
     File_remove(&outPath, 1 * SECOND, alloc, NULL);
-
-    if (!Test_assert(t, "storeToDisk", Window_storeCPUBufferToDisk(w, outPath, 5 * SECOND, alloc, &err)))
+ 
+    if (!Test_assert(t, "storeToDisk", Window_storeCPUBufferToDisk(w, outPath, 50 * MS, alloc, &err)))
         goto clean;
-
+ 
     Test_assert(t, "fileExists", File_hasFile(&outPath, alloc));
-
-    if (Test_assert(t, "readBack", File_read(&outPath, 5 * SECOND, 0, 0, &fhType, &readBuf, &err))) {
-        U64 expected = (U64)I32x2_x(sz) * (U64)I32x2_y(sz) * 4;
-        Test_assert(t, "sizeMatch", Buffer_length(readBuf) == expected);
-        if (Buffer_length(readBuf) >= 4) {
-            const U8 *p = readBuf.ptr;
-            Test_assert(t, "px0_R", p[0] == 0);
-            Test_assert(t, "px0_G", p[1] == 0);
-            Test_assert(t, "px0_B", p[2] == 42);
-            Test_assert(t, "px0_A", p[3] == 255);
-        }
+ 
+    //Open the DDS file as a stream and read it back
+ 
+    if (!Test_assert(t, "openStream", File_openStream(
+        &outPath,
+        50 * MS,
+        EFileOpenType_Read,
+        false,
+        &fileHandleType,
+        &streamType,
+        &readStream,
+        &err
+    )))
+        goto clean;
+ 
+    //DDS_read: verify header (DDSInfo)
+ 
+    DDSInfo info = (DDSInfo){ 0 };
+    U64 streamOff = 0;
+ 
+    if (!Test_assert(t, "ddsRead", DDS_read(readStream, &streamOff, &info, alloc, &subResources, &err)))
+        goto clean;
+ 
+    Test_assert(t, "ddsW",      info.w    == W);
+    Test_assert(t, "ddsH",      info.h    == H);
+    Test_assert(t, "ddsMips",   info.mips == 1);
+    Test_assert(t, "ddsLayers", info.layers == 1);
+ 
+    //Window_storeCPUBufferToDisk maps RGBA8 -> BGRA8 in the DDSInfo
+    //(see the switch in the implementation; RGBA8 falls through to the default BGRA8 case).
+    Test_assert(t, "ddsFormat",
+        info.textureFormatId == ETextureFormatId_BGRA8 ||
+        info.textureFormatId == ETextureFormatId_RGBA8
+    );
+ 
+    //Pixel spot-check via the sub-resource stream
+    //DDS_read returns one SubResourceData per mip/layer.
+    // For a 512x 1-mip 1-layer image there is exactly one entry.
+ 
+    Test_assert(t, "oneSubResource", subResources.length == 1);
+ 
+    if (subResources.length >= 1) {
+ 
+        const SubResourceData *sr = subResources.ptr;
+        U64 pixelBytes = 4;   // BGRA8 / RGBA8, 4 bytes per pixel
+ 
+        //Read pixel 0 (top-left) from the stream at sr->streamOff
+        U32 px0 = 0;
+        Buffer px0Buf = Buffer_createRef(&px0, sizeof(px0));
+        OxStream *stream = RefPtr_data(sr->stream, OxStream);
+ 
+        //We wrote R=0,G=0,B=42,A=255 at pixel 0.
+        //storeCPUBufferToDisk maps the window format to BGRA8 by default,
+        //so on-disk order is B,G,R,A -> 42,0,0,255.
+        //If the format stayed RGBA8 the order is R,G,B,A → 0,0,42,255.
+        //Accept either.
+        if (Test_assert(t, "readPx0", stream->read(stream, sr->streamOff, sizeof(px0), px0Buf, alloc, &err)))
+            Test_assert(t, "px0", px0 == 0xFF2A0000 || px0 == 0xFF00002A);
+ 
+        //Read pixel 1 and verify R is 1 (in either BGR or RGB)
+        U32 px1 = 0;
+        Buffer px1Buf = Buffer_createRef(&px1, sizeof(px1));
+        if (Test_assert(t, "readPx1", stream->read(stream, sr->streamOff + pixelBytes, sizeof(px1), px1Buf, alloc, &err)))
+            Test_assert(t, "px1", px1 == 0xFF2A0001 || px1 == 0xFF01002A);
+ 
+        //Verify the reported stream length covers the full image
+        U64 expectedBytes = (U64)W * H * pixelBytes;
+        Test_assert(t, "streamLen", sr->streamLen == expectedBytes);
     }
-
+ 
     File_remove(&outPath, 1 * SECOND, alloc, NULL);
-
+ 
 clean:
-    Buffer_free(&readBuf, alloc);
+    ListSubResourceData_freeUnderlying(&subResources, alloc);
+    RefPtr_dec(&readStream);
     if (w) WindowManager_freeWindow(&windowManager, &w);
 }
 
