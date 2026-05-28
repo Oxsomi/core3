@@ -187,6 +187,12 @@ Bool File_resolve(
 	//If we have nothing left, we get current work/app directory
 
 	if(!fakeSplitLen) {
+
+		if (isVirtual) {
+			CharString_free(result, alloc);		//Release temp result
+			goto clean;
+		}
+
 		CharString_free(result, alloc);		//Release temp result
 		gotoIfError3(clean, CharString_createCopy(absoluteDir, alloc, result, e_rr));
 		goto clean;

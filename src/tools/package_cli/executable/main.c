@@ -18,14 +18,12 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+#include "tools/package_cli/packager.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
-#include "platforms/ext/errorx.h"
-#include "formats/oiSH/sh_file.h"
-#include "tools/package_cli/packager.h"
 
 #ifdef CLI_SHADER_COMPILER
+	#include "formats/oiSH/sh_file.h"
 	#include "shader_compiler/compiler.h"
 #endif
 
@@ -33,56 +31,66 @@ Platform_defineEntrypoint() {
 
 	int status = 0;
 	(void) status;
-	Error err = Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true);
+	Bool s_uccess = Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, NULL);
 
-	if(err.genericError)		//Can't print
+	if(!s_uccess)		//Can't print
 		Platform_return(-2);
 
 	ListCharString args = Platform_instance->args;
 
-	if (args.length < 2 || args.length > 3) {
-		Log_debugLnx("Invalid arguments: Expected OxC3_package input output (optional: includeDir)");
-		goto clean;
-	}
+	#ifdef PACKAGE_SIMPLE
+		if (args.length != 2) {
+			Log_debugLnx("Invalid arguments: Expected OxC3_package_simple input output");
+			goto clean;
+		}
+	#else
+		if (args.length < 2 || args.length > 3) {
+			Log_debugLnx("Invalid arguments: Expected OxC3_package input output (optional: includeDir)");
+			goto clean;
+		}
+	#endif
 
-	ECompilerWarning warnings = (ECompilerWarning) 0;
-	U64 compileModeU64 = 0;
+	CompilerWarning warnings = (CompilerWarning) 0;
+	U32 compileMode = 0;
 	Bool multipleModes = false;
 
 	#ifdef CLI_SHADER_COMPILER
 
 		warnings = ECompilerWarning_BufferPadding | ECompilerWarning_UnusedRegisters;
 
-		compileModeU64 = 1 << ESHBinaryType_SPIRV;
+		compileMode = 1 << ESHBinaryType_SPIRV;
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 			#ifdef GRAPHICS_API_DYNAMIC		//Both DXIL and SPIRV
 				multipleModes = true;
-				compileModeU64 |= 1 << ESHBinaryType_DXIL;
+				compileMode |= 1 << ESHBinaryType_DXIL;
 			#elif !defined(FORCE_VULKAN)	//DXIL only
-				compileModeU64 = 1 << ESHBinaryType_DXIL;
+		compileMode = 1 << ESHBinaryType_DXIL;
 			#endif
 		#endif
 
 	#endif
 
-	if (!Packager_package(
-		args.ptr[0],
-		args.ptr[1],
-		NULL,
-		multipleModes,
-		compileModeU64,
-		1,	//TODO: Platform_getThreads(),
-		args.length == 3 ? args.ptr[2] : CharString_createNull(),
-		true,
-		warnings,
-		true,
-		false,
-		false,
-		Platform_instance->alloc,
-		&err
-	)) {
+	PackageSettings packageSettings = (PackageSettings) {
+		.input = args.ptr[0],
+		.output = args.ptr[1],
+		.encryptionKey = NULL,
+		.multipleModes = multipleModes,
+		.compileMode = compileMode,
+		.threadCount = 1,	//TODO: Platform_getThreads(),
+		.includeDir = args.length == 3 ? args.ptr[2] : CharString_createNull(),
+		.merge = true,
+		.extraWarnings = warnings,
+		.enableLogging = true,
+		.isDebug = false,
+		.ignoreEmptyFiles = false
+	};
+
+	Error err = Error_none();
+
+	if (!Packager_package(&packageSettings, Platform_instance->alloc, &err)) {
 		status = -1;
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 		goto clean;
 	}
 

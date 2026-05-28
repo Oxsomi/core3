@@ -57,9 +57,9 @@ static const char *testFile2       = "platform_test_tmp/move_src.bin";
 static const char *testMoveDir     = "platform_test_tmp/subdir";
 
 //Virtual section name registered by CMake
-static const char *vSection     = "//OxC3_platforms_interface_test/testdata";
-static const char *vFileHello   = "//OxC3_platforms_interface_test/testdata/hello.txt";
-static const char *vFileSub     = "//OxC3_platforms_interface_test/testdata/sub/world.txt";
+static const char *vSection     = "//OxC3_plinttst/testdata";
+static const char *vFileHello   = "//OxC3_plinttst/testdata/hello.txt";
+static const char *vFileSub     = "//OxC3_plinttst/testdata/sub/world.txt";
 
 // ── 1. WindowManager lifecycle ────────────────────────────────────────────────
 
@@ -67,12 +67,11 @@ static void Test_platformsWindowManager(Test *t) {
 
     Test_setModule(t, "WindowManager");
 
-    Error err = Error_none();
     WindowManager mgr = (WindowManager) { 0 };
 
     //Create with null callbacks is valid (no onCreate)
     WindowManagerCallbacks cbs = (WindowManagerCallbacks) { 0 };
-    Test_assert(t, "create", WindowManager_create(cbs, 0, &mgr, &err));
+    Test_assert(t, "create", WindowManager_create(cbs, 0, &mgr, &t->err));
     Test_assert(t, "isActive", mgr.isActive == WindowManager_magic);
     Test_assert(t, "isAccessible", WindowManager_isAccessible(&mgr));
     Test_assert(t, "owningThread set", mgr.owningThread == Thread_getId());
@@ -91,12 +90,11 @@ static void Test_platformsWindowVirtual(Test *t) {
 
     Test_setModule(t, "Window/Virtual");
 
-    Error err = Error_none();
     WindowManager mgr = (WindowManager) { 0 };
     Window *w = NULL;
 
     WindowManagerCallbacks cbs = (WindowManagerCallbacks) { 0 };
-    if (!Test_assert(t, "WindowManager_create", WindowManager_create(cbs, 0, &mgr, &err)))
+    if (!Test_assert(t, "WindowManager_create", WindowManager_create(cbs, 0, &mgr, &t->err)))
         goto clean;
 
     //Create a virtual window (headless, always supported)
@@ -109,7 +107,7 @@ static void Test_platformsWindowVirtual(Test *t) {
 
     Test_assert(t, "createVirtual", WindowManager_createWindow(
         &mgr, EWindowType_Virtual, pos, size, minSize, maxSize,
-        EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &err
+        EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &t->err
     ));
 
     Test_assert(t, "windowNotNull", w != NULL);
@@ -141,11 +139,9 @@ static void Test_platformsKeyboard(Test *t) {
 
     Test_setModule(t, "InputDevice/Keyboard");
 
-    Error err = Error_none();
     Keyboard kb = (Keyboard) { 0 };
-    const Allocator *alloc = Platform_instance->alloc;
 
-    if (!Test_assert(t, "create", Keyboard_create(&kb, alloc, &err)))
+    if (!Test_assert(t, "create", Keyboard_create(&kb, t->alloc, &t->err)))
         goto clean;
 
     Test_assert(t, "type", kb.type == EInputDeviceType_Keyboard);
@@ -194,7 +190,7 @@ static void Test_platformsKeyboard(Test *t) {
     Test_assert(t, "notFlag",   !InputDevice_hasFlag(&kb, EKeyboardFlags_Caps));
 
 clean:
-    InputDevice_free(&kb, alloc);
+    InputDevice_free(&kb, t->alloc);
 }
 
 // ── 3b. InputDevice – Mouse ───────────────────────────────────────────────────
@@ -203,11 +199,9 @@ static void Test_platformsMouse(Test *t) {
 
     Test_setModule(t, "InputDevice/Mouse");
 
-    Error err = Error_none();
     Mouse ms = (Mouse) { 0 };
-    const Allocator *alloc = Platform_instance->alloc;
 
-    if (!Test_assert(t, "create", Mouse_create(&ms, alloc, &err)))
+    if (!Test_assert(t, "create", Mouse_create(&ms, t->alloc, &t->err)))
         goto clean;
 
     Test_assert(t, "type",        ms.type == EInputDeviceType_Mouse);
@@ -242,7 +236,7 @@ static void Test_platformsMouse(Test *t) {
     Test_assert(t, "leftPressed", InputDevice_isPressed(&ms, hLeft));
 
 clean:
-    InputDevice_free(&ms, alloc);
+    InputDevice_free(&ms, t->alloc);
 }
 
 // ── 3c. InputDevice – name/handle serialization round-trip ───────────────────
@@ -251,11 +245,9 @@ static void Test_keySerialization(Test *t) {
 
     Test_setModule(t, "InputDevice/Serialization");
 
-    Error err = Error_none();
-    const Allocator *alloc = Platform_instance->alloc;
     Keyboard kb = (Keyboard) { 0 };
 
-    if (!Test_assert(t, "create", Keyboard_create(&kb, alloc, &err)))
+    if (!Test_assert(t, "create", Keyboard_create(&kb, t->alloc, &t->err)))
         goto clean;
 
     //Build handles for a few well-known keys
@@ -294,7 +286,7 @@ static void Test_keySerialization(Test *t) {
     Test_assert(t, "invalidHandleName", !CharString_length(badName));
 
 clean:
-    InputDevice_free(&kb, alloc);
+    InputDevice_free(&kb, t->alloc);
 }
 
 // ── 3d. InputDevice – dead zone + setFlagTo ───────────────────────────────────
@@ -303,11 +295,9 @@ static void Test_mouseExtras(Test *t) {
 
     Test_setModule(t, "InputDevice/Extras");
 
-    Error err = Error_none();
-    const Allocator *alloc = Platform_instance->alloc;
     Mouse ms = (Mouse) { 0 };
 
-    if (!Test_assert(t, "create", Mouse_create(&ms, alloc, &err)))
+    if (!Test_assert(t, "create", Mouse_create(&ms, t->alloc, &t->err)))
         goto clean;
 
     //Dead zone is stored per-axis and retrieved through the public helper
@@ -320,8 +310,7 @@ static void Test_mouseExtras(Test *t) {
 
     //getDeadZone on a button handle must return 0
     InputHandle hLeft = InputDevice_createHandle(&ms, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
-    Test_assert(t, "buttonDeadZeroFalse",
-        InputDevice_getDeadZone(&ms, hLeft) == 0.f);
+    Test_assert(t, "buttonDeadZeroFalse", InputDevice_getDeadZone(&ms, hLeft) == 0.f);
 
     //getDeadZone on invalid handle must return 0
     Test_assert(t, "invalidDeadZero", InputDevice_getDeadZone(&ms, InputDevice_invalidHandle()) == 0.f);
@@ -338,7 +327,7 @@ static void Test_mouseExtras(Test *t) {
     Test_assert(t, "flagOOB_hasFalse",  !InputDevice_hasFlag(&ms, 32));
 
 clean:
-    InputDevice_free(&ms, alloc);
+    InputDevice_free(&ms, t->alloc);
 }
 
 // ── 4a. File (physical) ────────────────────────────────────────────────────────
@@ -346,9 +335,6 @@ clean:
 static void Test_platformsFilePhysical(Test *t) {
 
     Test_setModule(t, "File/Physical");
-
-    Error err = Error_none();
-    const Allocator *alloc = Platform_instance->alloc;
 
     CharString dir       = CharString_createRefCStrConst(testDir);
     CharString filePath  = CharString_createRefCStrConst(testFile);
@@ -359,72 +345,72 @@ static void Test_platformsFilePhysical(Test *t) {
     Buffer writeBuf = Buffer_createNull();
     Buffer readBuf  = Buffer_createNull();
     FileInfo info   = (FileInfo) { 0 };
-    RefPtrType fhType = FileHandle_makeType(alloc);
+    RefPtrType fhType = FileHandle_makeType(t->alloc);
 
     //Clean up from any previous failed run
-    File_remove(&dir, 1 * SECOND, alloc, NULL);
+    File_remove(&dir, 1 * SECOND, t->alloc, NULL);
 
     //Create directory
-    Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, alloc, &err));
-    Test_assert(t, "hasDir", File_hasFolder(&dir, alloc));
+    Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err));
+    Test_assert(t, "hasDir", File_hasFolder(&dir, t->alloc));
 
     //Create file
-    Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, alloc, &err));
-    Test_assert(t, "hasFile", File_hasFile(&filePath, alloc));
+    Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, t->alloc, &t->err));
+    Test_assert(t, "hasFile", File_hasFile(&filePath, t->alloc));
 
     //getInfo
-    Test_assert(t, "getInfo",      File_getInfo(&filePath, &info, alloc, &err));
+    Test_assert(t, "getInfo",      File_getInfo(&filePath, &info, t->alloc, &t->err));
     Test_assert(t, "infoType",     info.type == EFileType_File);
     Test_assert(t, "infoSizeZero", info.fileSize == 0);
-    FileInfo_free(&info, alloc);
+    FileInfo_free(&info, t->alloc);
 
     //Write
     const C8 *msg = "OxC3 platform test data";
     U64 msgLen = 23;
     writeBuf = Buffer_createRefConst((const U8*)msg, msgLen);
-    Test_assert(t, "write",          File_write(&writeBuf, &filePath, 0, 0, 50 * MS, false, &fhType, &err));
+    Test_assert(t, "write",          File_write(&writeBuf, &filePath, 0, 0, 50 * MS, false, &fhType, &t->err));
 
     //Read back
-    Test_assert(t, "read",        File_read(&filePath, 50 * MS, 0, 0, &fhType, &readBuf, &err));
+    Test_assert(t, "read",        File_read(&filePath, 50 * MS, 0, 0, &fhType, &readBuf, &t->err));
     Test_assert(t, "readLength",  Buffer_length(readBuf) == msgLen);
     Test_assert(t, "readContent", Buffer_eq(writeBuf, Buffer_createRefConst((const U8*)msg, msgLen)));
-    Buffer_free(&readBuf, alloc);
+    Buffer_free(&readBuf, t->alloc);
 
     //getInfo after write
-    Test_assert(t, "getInfoAfterWrite", File_getInfo(&filePath, &info, alloc, &err));
+    Test_assert(t, "getInfoAfterWrite", File_getInfo(&filePath, &info, t->alloc, &t->err));
     Test_assert(t, "infoSizeAfterWrite", info.fileSize == msgLen);
-    FileInfo_free(&info, alloc);
+    FileInfo_free(&info, t->alloc);
 
     //rename
-    Test_assert(t, "rename", File_rename(&filePath, &renamed, 50 * MS, alloc, &err));
+    Test_assert(t, "rename", File_rename(&filePath, &renamed, 50 * MS, t->alloc, &t->err));
     CharString renamedPath = CharString_createNull();
-    CharString_format(alloc, &renamedPath, NULL, "%s/%s", testDir, testFileRenamed);
-    Test_assert(t, "hasRenamed",    File_hasFile(&renamedPath, alloc));
-    Test_assert(t, "origGone",      !File_hasFile(&filePath, alloc));
-    CharString_free(&renamedPath, alloc);
+    Test_assert(t, "format",        CharString_format(t->alloc, &renamedPath, &t->err, "%s/%s", testDir, testFileRenamed));
+    Test_assert(t, "hasRenamed",    File_hasFile(&renamedPath, t->alloc));
+    Test_assert(t, "origGone",      !File_hasFile(&filePath, t->alloc));
+    CharString_free(&renamedPath, t->alloc);
 
     //move (put file2 into subdir)
-    Test_assert(t, "addMoveDir", File_add(&moveDir, EFileType_Folder, false, alloc, &err));
-    Test_assert(t, "addFile2",   File_add(&file2Path, EFileType_File, false, alloc, &err));
-    Test_assert(t, "move",       File_move(&file2Path, &moveDir, 50 * MS, alloc, &err));
-    Test_assert(t, "file2Gone",  !File_hasFile(&file2Path, alloc));
+    Test_assert(t, "addMoveDir", File_add(&moveDir, EFileType_Folder, false, t->alloc, &t->err));
+	Test_assert(t, "addFile2",   File_add(&file2Path, EFileType_File, false, t->alloc, &t->err));
+    Test_assert(t, "move",       File_move(&file2Path, &moveDir, 50 * MS, t->alloc, &t->err));
+    Test_assert(t, "file2Gone",  !File_hasFile(&file2Path, t->alloc));
 
     //queryFileObjectCount
     U64 count = 0;
-    Test_assert(t, "queryCount", File_queryFileObjectCountAll(&dir, true, &count, alloc, &err));
+    Test_assert(t, "queryCount", File_queryFileObjectCountAll(&dir, true, &count, t->alloc, &t->err));
     // After operations: dir contains subdir (folder), file2 inside subdir, and renamedFile -> at least 3
     Test_assert(t, "countAtLeast3", count >= 3);
 
     //remove directory recursively
-    Test_assert(t, "removeDir",  File_remove(&dir, 50 * MS, alloc, &err));
-    Test_assert(t, "dirGone",    !File_has(&dir, alloc));
+    Test_assert(t, "removeDir",  File_remove(&dir, 50 * MS, t->alloc, &t->err));
+    Test_assert(t, "dirGone",    !File_has(&dir, t->alloc));
 
     goto clean;
 
 clean:
-    Buffer_free(&readBuf, alloc);
-    FileInfo_free(&info, alloc);
-    File_remove(&dir, 1 * SECOND, alloc, NULL);   // best-effort cleanup
+    Buffer_free(&readBuf, t->alloc);
+    FileInfo_free(&info, t->alloc);
+    File_remove(&dir, 1 * SECOND, t->alloc, NULL);   // best-effort cleanup
 }
 
 // ── 4b. File – FileHandle direct API + ref-count leak check ──────────────────
@@ -433,9 +419,7 @@ static void Test_fileHandle(Test* t) {
 
     Test_setModule(t, "File/HandleDirect");
 
-    Error err = Error_none();
-    const Allocator *alloc = Platform_instance->alloc;
-    RefPtrType fhType = FileHandle_makeType(alloc);
+    RefPtrType fhType = FileHandle_makeType(t->alloc);
 
     CharString dir = CharString_createRefCStrConst("platform_test_handle_tmp");
     CharString filePath = CharString_createRefCStrConst("platform_test_handle_tmp/direct.bin");
@@ -446,22 +430,20 @@ static void Test_fileHandle(Test* t) {
     Buffer readBuf = Buffer_createNull();
 
     //Clean up from any previous run
-    File_remove(&dir, 1 * SECOND, alloc, NULL);
+    File_remove(&dir, 1 * SECOND, t->alloc, NULL);
 
     //Create directory + file
 
-    if (!Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, alloc, &err)))
+    if (!Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err)))
             goto clean;
 
-    if (!Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, alloc, &err)))
+    if (!Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, t->alloc, &t->err)))
         goto clean;
 
     //Write via handle
     U64 allocsBefore = Platform_getActiveAllocations(0);
 
-    if (!Test_assert(t, "open_write", File_open(
-        &filePath, 50 * MS, EFileOpenType_Write, false, &fhType, &handle, &err
-    )))
+    if (!Test_assert(t, "open_write", File_open(&filePath, 50 * MS, EFileOpenType_Write, false, &fhType, &handle, &t->err)))
         goto clean;
 
     //One allocation for the RefPtr should now be live
@@ -471,7 +453,7 @@ static void Test_fileHandle(Test* t) {
     U64 payloadLen = 16;
     writeBuf = Buffer_createRefConst((const U8*)payload, payloadLen);
 
-    Test_assert(t, "write", FileHandleRef_write(handle, 0, payloadLen, &writeBuf, &err));
+    Test_assert(t, "write", FileHandleRef_write(handle, 0, payloadLen, &writeBuf, &t->err));
 
     //Write to read-only handle must fail
 
@@ -490,35 +472,31 @@ static void Test_fileHandle(Test* t) {
     Test_assert(t, "allocRestored", Platform_getActiveAllocations(0) <= allocsBefore);
 
     //read via handle
-    if (!Test_assert(t, "open_read2", File_open(
-            &filePath, 5 * SECOND, EFileOpenType_Read, false, &fhType, &handle, &err
-    )))
+    if (!Test_assert(t, "open_read2", File_open(&filePath, 5 * SECOND, EFileOpenType_Read, false, &fhType, &handle, &t->err)))
         goto clean;
 
     const FileHandle *fh = RefPtr_data(handle, FileHandle);
     U64 fileSize = FileHandle_fileSize(fh);
     Test_assert(t, "fileSizeMatch", fileSize == payloadLen);
 
-    Test_assert(t, "createReadBuf", Buffer_createUninitializedBytes(fileSize, alloc, &readBuf, &err));
+    Test_assert(t, "createReadBuf", Buffer_createUninitializedBytes(fileSize, t->alloc, &readBuf, &t->err));
 
-    Test_assert(t, "read", FileHandleRef_read(handle, 0, fileSize, &readBuf, &err));
+    Test_assert(t, "read", FileHandleRef_read(handle, 0, fileSize, &readBuf, &t->err));
 
-    Test_assert(t, "contentMatch", Buffer_eq(
-        readBuf, Buffer_createRefConst((const U8*)payload, payloadLen)
-    ));
+    Test_assert(t, "contentMatch", Buffer_eq(readBuf, Buffer_createRefConst((const U8*)payload, payloadLen)));
 
     //Read past EOF must fail
     Buffer extra = Buffer_createNull();
-    Buffer_createUninitializedBytes(1, alloc, &extra, &err);
+    Buffer_createUninitializedBytes(1, t->alloc, &extra, &t->err);
     Test_assert(t, "readOOB", !FileHandleRef_read(handle, fileSize, 1, &extra, NULL));
-    Buffer_free(&extra, alloc);
+    Buffer_free(&extra, t->alloc);
 
     RefPtr_dec(&handle);
 
     //ReadWrite handle
     FileHandleRef* rwHandle = NULL;
     if (!Test_assert(t, "open_rw", File_open(
-        &filePath, 5 * SECOND, EFileOpenType_ReadWrite, false, &fhType, &rwHandle, &err
+        &filePath, 5 * SECOND, EFileOpenType_ReadWrite, false, &fhType, &rwHandle, &t->err
     )))
         goto clean;
 
@@ -533,9 +511,9 @@ static void Test_fileHandle(Test* t) {
 clean:
     if (handle)   RefPtr_dec(&handle);
     if (roHandle) RefPtr_dec(&roHandle);
-    Buffer_free(&writeBuf, alloc);
-    Buffer_free(&readBuf, alloc);
-    File_remove(&dir, 5 * SECOND, alloc, NULL);
+    Buffer_free(&writeBuf, t->alloc);
+    Buffer_free(&readBuf, t->alloc);
+    File_remove(&dir, 5 * SECOND, t->alloc, NULL);
 }
 
 // ── 4c. File – long path tests ────────────────────────────────────────────────
@@ -556,8 +534,7 @@ static void Test_fileLongPath(Test *t) {
     Test_setModule(t, "File/LongPaths");
  
     Bool s_uccess = true;
-    const Allocator *alloc = Platform_instance->alloc;
-    RefPtrType fhType = FileHandle_makeType(alloc);
+    RefPtrType fhType = FileHandle_makeType(t->alloc);
  
     CharString root     = CharString_createNull();
     CharString deepDir  = CharString_createNull();
@@ -568,34 +545,34 @@ static void Test_fileLongPath(Test *t) {
     FileInfo info       = (FileInfo){ 0 };
  
     //Root for all long-path tests
-    gotoIfError3(clean, CharString_createCopy(CS_REF("platform_test_longpath"), alloc, &root, NULL));
+    gotoIfError3(clean, CharString_createCopy(CS_REF("platform_test_longpath"), t->alloc, &root, &t->err));
  
-    File_remove(&root, 1 * SECOND, alloc, NULL);  //clean prior run
+    File_remove(&root, 1 * SECOND, t->alloc, NULL);  //clean prior run
  
     // ── 1. Filename near the 255-byte limit ───────────────────────────────────
     // Build:  platform_test_longpath/<240 'a' chars>.txt
  
-    gotoIfError3(clean, CharString_create('a', LONG_NAME_LEN, alloc, &longName, NULL));
+    gotoIfError3(clean, CharString_create('a', LONG_NAME_LEN, t->alloc, &longName, NULL));
  
     gotoIfError3(clean, CharString_format(
-        alloc, &longFile, NULL, "%.*s/%.*s.txt",
+		t->alloc, &longFile, NULL, "%.*s/%.*s.txt",
         (int) CharString_length(root),    root.ptr,
         (int) CharString_length(longName), longName.ptr
     ));
 
-    CharString_free(&longName, alloc);
+    CharString_free(&longName, t->alloc);
  
-    if (!Test_assert(t, "addRoot", File_add(&root, EFileType_Folder, false, alloc, NULL)))
+    if (!Test_assert(t, "addRoot", File_add(&root, EFileType_Folder, false, t->alloc, &t->err)))
         goto clean;
  
-    Test_assert(t, "addLongNameFile", File_add(&longFile, EFileType_File, false, alloc, NULL));
-    Test_assert(t, "hasLongNameFile", File_hasFile(&longFile, alloc));
+    Test_assert(t, "addLongNameFile", File_add(&longFile, EFileType_File, false, t->alloc, &t->err));
+    Test_assert(t, "hasLongNameFile", File_hasFile(&longFile, t->alloc));
  
     //getInfo on a long-named file
 
-    Test_assert(t, "getInfoLong", File_getInfo(&longFile, &info, alloc, NULL));
+    Test_assert(t, "getInfoLong", File_getInfo(&longFile, &info, t->alloc, &t->err));
     Test_assert(t, "infoTypeLong", info.fileSize == 0);
-    FileInfo_free(&info, alloc);
+    FileInfo_free(&info, t->alloc);
  
     //Write + read through the long-named file
 
@@ -603,29 +580,29 @@ static void Test_fileLongPath(Test *t) {
         const C8 *msg = "long-name payload";
         U64 msgLen    = 17;
         Buffer writeBuf = Buffer_createRefConst((const U8*)msg, msgLen);
-        Test_assert(t, "writeLong", File_write(&writeBuf, &longFile, 0, 0, 50 * MS, false, &fhType, NULL));
-        Test_assert(t, "readLong", File_read(&longFile, 50 * MS, 0, 0, &fhType, &readBuf, NULL));
+        Test_assert(t, "writeLong", File_write(&writeBuf, &longFile, 0, 0, 50 * MS, false, &fhType, &t->err));
+        Test_assert(t, "readLong", File_read(&longFile, 50 * MS, 0, 0, &fhType, &readBuf, &t->err));
         Test_assert(t, "longContentMatch", Buffer_eq(readBuf, writeBuf));
-        Buffer_free(&readBuf, alloc);
+        Buffer_free(&readBuf, t->alloc);
     }
  
     //Rename the long-named file
 
     {
         CharString newName = CharString_createRefCStrConst("renamed_long.txt");
-        Test_assert(t, "renameLong", File_rename(&longFile, &newName, 50 * MS, alloc, NULL));
+        Test_assert(t, "renameLong", File_rename(&longFile, &newName, 50 * MS, t->alloc, &t->err));
  
         CharString renamedPath = CharString_createNull();
-        CharString_format(alloc, &renamedPath, NULL, "%.*s/renamed_long.txt",
+        Test_assert(t, "format", CharString_format(t->alloc, &renamedPath, &t->err, "%.*s/renamed_long.txt",
             (int) CharString_length(root), root.ptr
-        );
+        ));
 
-        Test_assert(t, "hasRenamed",  File_hasFile(&renamedPath, alloc));
-        Test_assert(t, "longGone",    !File_hasFile(&longFile, alloc));
-        CharString_free(&renamedPath, alloc);
+        Test_assert(t, "hasRenamed",  File_hasFile(&renamedPath, t->alloc));
+        Test_assert(t, "longGone",    !File_hasFile(&longFile, t->alloc));
+        CharString_free(&renamedPath, t->alloc);
     }
 
-    CharString_free(&longFile, alloc);
+    CharString_free(&longFile, t->alloc);
  
     // ── 2. Deep directory tree (total path > 260 chars on Windows) ────────────
     // Build a path that exceeds the legacy MAX_PATH of 260 characters so that
@@ -641,18 +618,18 @@ static void Test_fileLongPath(Test *t) {
  
     {
         //Build the deep dir path incrementally
-        gotoIfError3(clean, CharString_createCopy(root, alloc, &deepDir, NULL));
+        gotoIfError3(clean, CharString_createCopy(root, t->alloc, &deepDir, &t->err));
  
         for (U32 i = 1; i <= 32; ++i) {
             CharString component = CharString_createNull();
-            gotoIfError3(clean, CharString_format(alloc, &component, NULL, "/level_%02u", i));
-            gotoIfError3(clean, CharString_appendString(&deepDir, &component, alloc, NULL));
-            CharString_free(&component, alloc);
+            gotoIfError3(clean, CharString_format(t->alloc, &component, &t->err, "/level_%02u", i));
+            gotoIfError3(clean, CharString_appendString(&deepDir, &component, t->alloc, &t->err));
+            CharString_free(&component, t->alloc);
         }
  
         //File_add with createParentOnly=false should create all missing ancestors
-        Test_assert(t, "addDeepDir", File_add(&deepDir, EFileType_Folder, false, alloc, NULL));
-        Test_assert(t, "hasDeepDir", File_hasFolder(&deepDir, alloc));
+        Test_assert(t, "addDeepDir", File_add(&deepDir, EFileType_Folder, false, t->alloc, &t->err));
+        Test_assert(t, "hasDeepDir", File_hasFolder(&deepDir, t->alloc));
  
         //Verify total path length is actually > 260 to confirm we're testing
         // the long-path code path on Windows
@@ -661,33 +638,33 @@ static void Test_fileLongPath(Test *t) {
         #endif
  
         //Create, write, and read a file at the bottom of the deep tree
-        gotoIfError3(clean, CharString_createCopy(deepDir, alloc, &deepFile, NULL));
+        gotoIfError3(clean, CharString_createCopy(deepDir, t->alloc, &deepFile, NULL));
 
         CharString deepPayloadBin = CS_REF("/deep_payload.bin");
-        gotoIfError3(clean, CharString_appendString(&deepFile, &deepPayloadBin, alloc, NULL));
+        gotoIfError3(clean, CharString_appendString(&deepFile, &deepPayloadBin, t->alloc, NULL));
  
-        Test_assert(t, "addDeepFile", File_add(&deepFile, EFileType_File, false, alloc, NULL));
+        Test_assert(t, "addDeepFile", File_add(&deepFile, EFileType_File, false, t->alloc, &t->err));
  
         const C8 *deepMsg = "deep path payload";
         U64 deepLen       = 17;
         Buffer deepWrite  = Buffer_createRefConst((const U8*)deepMsg, deepLen);
  
-        Test_assert(t, "writeDeep", File_write(&deepWrite, &deepFile, 0, 0, 50 * MS, false, &fhType, NULL));
+        Test_assert(t, "writeDeep", File_write(&deepWrite, &deepFile, 0, 0, 50 * MS, false, &fhType, &t->err));
  
-        Test_assert(t, "readDeep", File_read(&deepFile, 50 * MS, 0, 0, &fhType, &readBuf, NULL));
+        Test_assert(t, "readDeep", File_read(&deepFile, 50 * MS, 0, 0, &fhType, &readBuf, &t->err));
         Test_assert(t, "deepContentMatch", Buffer_length(readBuf) == deepLen && Buffer_eq(readBuf, deepWrite));
-        Buffer_free(&readBuf, alloc);
+        Buffer_free(&readBuf, t->alloc);
  
         //getInfo at the deep file
-        Test_assert(t, "getInfoDeep",  File_getInfo(&deepFile, &info, alloc, NULL));
+        Test_assert(t, "getInfoDeep",  File_getInfo(&deepFile, &info, t->alloc, &t->err));
         Test_assert(t, "infoDeepFile", info.type == EFileType_File);
         Test_assert(t, "infoDeepSize", info.fileSize == deepLen);
-        FileInfo_free(&info, alloc);
+        FileInfo_free(&info, t->alloc);
  
         //queryFileObjectCount from root, recursive, must find at least the
         //deep directory chain and the two files we created
         U64 count = 0;
-        Test_assert(t, "queryDeepCount", File_queryFileObjectCountAll(&root, true, &count, alloc, NULL));
+        Test_assert(t, "queryDeepCount", File_queryFileObjectCountAll(&root, true, &count, t->alloc, &t->err));
 
         //32 level_XX dirs + renamed_long.txt + deep_payload.bin = 34
         Test_assert(t, "deepCountAtLeast22", count == 34);
@@ -695,20 +672,148 @@ static void Test_fileLongPath(Test *t) {
  
     // ── 3. Remove the whole tree recursively (long paths included) ────────────
 
-    Test_assert(t, "removeDeepTree", File_remove(&root, 50 * MS, alloc, NULL));
-    Test_assert(t, "rootGone", !File_has(&root, alloc));
+    Test_assert(t, "removeDeepTree", File_remove(&root, 50 * MS, t->alloc, &t->err));
+    Test_assert(t, "rootGone", !File_has(&root, t->alloc));
  
 clean:
-    FileInfo_free(&info,       alloc);
-    Buffer_free(&readBuf,      alloc);
-    CharString_free(&root,     alloc);
-    CharString_free(&deepDir,  alloc);
-    CharString_free(&longFile, alloc);
-    CharString_free(&deepFile, alloc);
-    CharString_free(&longName, alloc);
+    FileInfo_free(&info,       t->alloc);
+    Buffer_free(&readBuf,      t->alloc);
+    CharString_free(&root,     t->alloc);
+    CharString_free(&deepDir,  t->alloc);
+    CharString_free(&longFile, t->alloc);
+    CharString_free(&deepFile, t->alloc);
+    CharString_free(&longName, t->alloc);
 
     CharString longPath = CharString_createRefCStrConst("platform_test_longpath");
-    File_remove(&longPath, 1 * SECOND, alloc, NULL);
+    File_remove(&longPath, 1 * SECOND, t->alloc, NULL);
+}
+
+// ── 4d. File – Empty & Overlapping Ranges ────────────────────────────────────
+
+static void Test_fileEdgeCases(Test *t) {
+
+    Test_setModule(t, "File/EdgeCases");
+
+    RefPtrType fhType = FileHandle_makeType(t->alloc);
+    CharString dir = CharString_createRefCStrConst("platform_test_edge");
+    CharString filePath = CharString_createRefCStrConst("platform_test_edge/overlap.bin");
+    Buffer readBuf = Buffer_createNull();
+
+    File_remove(&dir, 50 * MS, t->alloc, NULL);
+    Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err));
+    Test_assert(t, "addFile", File_add(&filePath, EFileType_File, false, t->alloc, &t->err));
+
+    //1. Empty file read/write
+    Test_assert(t, "writeEmpty", File_write(&readBuf, &filePath, 0, 0, 50 * MS, false, &fhType, &t->err));
+    Test_assert(t, "readEmpty", File_read(&filePath, 50 * MS, 0, 0, &fhType, &readBuf, &t->err));
+    Test_assert(t, "emptyLenZero", Buffer_length(readBuf) == 0);
+    Buffer_free(&readBuf, t->alloc);
+
+    //2. Overlapping read/write
+    const C8 *payload = "0123456789";
+    Buffer writeBuf = Buffer_createRefConst(payload, 10);
+    Test_assert(t, "write10", File_write(&writeBuf, &filePath, 0, 0, 50 * MS, false, &fhType, &t->err));
+
+    //Read 5 bytes starting at offset 3 ("34567")
+    Test_assert(t, "readOverlap", File_read(&filePath, 50 * MS, 3, 5, &fhType, &readBuf, &t->err));
+    Test_assert(t, "overlapLen", Buffer_length(readBuf) == 5);
+    Test_assert(t, "overlapContent", Buffer_eq(readBuf, Buffer_createRefConst("34567", 5)));
+    Buffer_free(&readBuf, t->alloc);
+
+    //Cleanup
+    File_remove(&dir, 50 * MS, t->alloc, NULL);
+}
+
+// ── 4e. File – Case Sensitivity & UTF-8 Paths ────────────────────────────────
+
+static void Test_fileCaseAndUtf8(Test *t) {
+
+    Test_setModule(t, "File/CaseUtf8");
+
+    CharString dir = CharString_createRefCStrConst("platform_test_caseutf8");
+    File_remove(&dir, 50 * MS, t->alloc, NULL);
+    Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err));
+
+    //1. Case sensitivity
+    CharString upperFile = CharString_createRefCStrConst("platform_test_caseutf8/FOO.TXT");
+    CharString lowerFile = CharString_createRefCStrConst("platform_test_caseutf8/foo.txt");
+    Test_assert(t, "addUpper", File_add(&upperFile, EFileType_File, false, t->alloc, &t->err));
+
+    #if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+        //Windows/macOS: case-insensitive by default
+        Test_assert(t, "hasLower", File_hasFile(&lowerFile, t->alloc));
+    #else
+        //Linux/Android: case-sensitive
+        Test_assert(t, "notHasLower", !File_hasFile(&lowerFile, t->alloc));
+    #endif
+
+    //2. UTF-8 path (rocket emoji = 0xF0 0x9F 0x9A 0x80)
+    //Constructed programmatically to avoid source-encoding issues
+	CharString utf8File = CharString_createRefCStrConst(u8"platform_test_caseutf8/test_\U0001F680.txt");
+    Test_assert(t, "addUtf8", File_add(&utf8File, EFileType_File, false, t->alloc, &t->err));
+    Test_assert(t, "hasUtf8", File_hasFile(&utf8File, t->alloc));
+
+    File_remove(&dir, 50 * MS, t->alloc, NULL);
+}
+
+// ── 4f. File – Repeated Open/Close Cycle ─────────────────────────────────────
+
+static void Test_fileRepeatedOpenClose(Test *t) {
+
+    Test_setModule(t, "File/RepeatedOpenClose");
+
+    RefPtrType fhType = FileHandle_makeType(t->alloc);
+    CharString dir = CharString_createRefCStrConst("platform_test_cycle");
+    CharString filePath = CharString_createRefCStrConst("platform_test_cycle/cycle.bin");
+
+    File_remove(&dir, 50 * MS, t->alloc, NULL);
+    Test_assert(t, "addDir", File_add(&dir, EFileType_Folder, false, t->alloc, &t->err));
+
+    //Helper to track active allocations across cycles
+    U64 allocsBase = Platform_getActiveAllocations(0);
+
+    for (U32 cycle = 0; cycle < 4; ++cycle) {
+
+        U32 isWrite = (cycle % 2) == 0; // W, R, W, R
+
+        const C8 *payload = isWrite ? "WRITE_CYCLE_42" : "READ_VERIFY";
+        U64 payloadLen = isWrite ? 14 : 13;
+
+        FileHandleRef *handle = NULL;
+        Buffer buf = Buffer_createNull();
+
+        //Open
+        EFileOpenType openType = isWrite ? EFileOpenType_Write : EFileOpenType_Read;
+        Test_assert(t, "open", File_open(&filePath, 50 * MS, openType, false, &fhType, &handle, &t->err));
+        Test_assert(t, "handleValid", handle != NULL);
+
+        if (isWrite) {
+            buf = Buffer_createRefConst(payload, payloadLen);
+            Test_assert(t, "write", FileHandleRef_write(handle, 0, payloadLen, &buf, &t->err));
+        } else {
+            const FileHandle *fh = RefPtr_data(handle, FileHandle);
+            U64 fileSize = FileHandle_fileSize(fh);
+            Test_assert(t, "createReadBuf", Buffer_createUninitializedBytes(fileSize, t->alloc, &buf, &t->err));
+            Test_assert(t, "read", FileHandleRef_read(handle, 0, fileSize, &buf, &t->err));
+            Test_assert(t, "readLen", Buffer_length(buf) == fileSize);
+
+            //Verify content matches last write
+
+            Test_assert(t, "contentMatch",
+                fileSize == 14 && Buffer_eq(buf, Buffer_createRefConst("WRITE_CYCLE_42", 14)));
+        }
+
+        //Close & cleanup
+        RefPtr_dec(&handle);
+        Test_assert(t, "handleNulled", handle == NULL);
+        Buffer_free(&buf, t->alloc);
+
+        //Leak check mid-cycle
+        Test_assert(t, "noLeakCycle", Platform_getActiveAllocations(0) <= allocsBase + 2);
+    }
+
+    //Final cleanup
+    File_remove(&dir, 50 * MS, t->alloc, NULL);
 }
 
 // ── 5. File (virtual) ─────────────────────────────────────────────────────────
@@ -781,10 +886,62 @@ clean:
     File_unloadVirtual(&secPath, alloc, NULL);
 }
 
+// ── 5a. Virtual – Double load, operations on root, library or section  ────────────────────────────
+
+static void Test_virtualEdgeCases(Test *t) {
+
+	Test_setModule(t, "Virtual/EdgeCases");
+
+	const RefPtrType memStreamType = MemoryStream_makeType(t->alloc);
+	CharString vRoot   = CharString_createRefCStrConst("//.");
+	CharString libRoot = CharString_createRefCStrConst("//OxC3_plinttst");
+	CharString sec     = CharString_createRefCStrConst("//OxC3_plinttst/testdata");
+	CharString child   = CharString_createRefCStrConst("//OxC3_plinttst/testdata/hello.txt");
+
+	//1. Load at section level (baseline)
+	Test_assert(t, "loadSec", File_loadVirtual(&sec, &memStreamType, NULL, NULL, t->alloc, &t->err));
+	Test_assert(t, "secLoaded", File_isVirtualLoaded(&sec, t->alloc, NULL));
+	Test_assert(t, "childExists", File_hasFile(&child, t->alloc));
+
+	//2. Unload section, then load at library level
+	Test_assert(t, "unloadSec", File_unloadVirtual(&sec, t->alloc, NULL));
+	Test_assert(t, "secGone", !File_isVirtualLoaded(&sec, t->alloc, NULL));
+
+	Test_assert(t, "loadLib", File_loadVirtual(&libRoot, &memStreamType, NULL, NULL, t->alloc, &t->err));
+	Test_assert(t, "libLoaded", File_isVirtualLoaded(&libRoot, t->alloc, NULL));
+
+	//Library load should expose all children
+	Test_assert(t, "childViaLib", File_hasFile(&child, t->alloc));
+
+	//3. Unload library level -> should cascade to children
+	Test_assert(t, "unloadLib", File_unloadVirtual(&libRoot, t->alloc, NULL));
+	Test_assert(t, "libGone", !File_isVirtualLoaded(&libRoot, t->alloc, NULL));
+	Test_assert(t, "childGoneAfterLibUnload", !File_has(&child, t->alloc));
+	Test_assert(t, "secGoneAfterLibUnload", !File_has(&sec, t->alloc));
+
+	//4. Load at virtual root level (if supported)
+	Test_assert(t, "loadRoot", File_loadVirtual(&vRoot, &memStreamType, NULL, NULL, t->alloc, &t->err));
+	Test_assert(t, "rootLoaded", File_isVirtualLoaded(&vRoot, t->alloc, NULL));
+
+	//Root load should expose all library namespaces
+	Test_assert(t, "libVisibleFromRoot", File_hasFolder(&libRoot, t->alloc));
+	Test_assert(t, "childFromRoot", File_hasFile(&child, t->alloc));
+
+	//Unload root -> should clear everything
+
+	Test_assert(t, "unloadRoot", File_unloadVirtual(&vRoot, t->alloc, NULL));
+	Test_assert(t, "rootGone", !File_isVirtualLoaded(&vRoot, t->alloc, NULL));
+	Test_assert(t, "libGoneAfterRootUnload", !File_has(&libRoot, t->alloc));
+	Test_assert(t, "childGoneAfterRootUnload", !File_has(&child, t->alloc));
+
+	//5. Final state: root always exists, nothing leaked
+	Test_assert(t, "rootAlwaysExists", File_hasFolder(&vRoot, t->alloc));
+	U64 count = 0;
+	Test_assert(t, "rootEmpty", File_queryFileObjectCountAll(&vRoot, true, &count, t->alloc, &t->err) && count == 0);
+}
+
 // ── 6. DynamicLibrary ─────────────────────────────────────────────────────────
 
-//TODO: Change this to something we manually generate, because we can't just load these paths.
-//      They get resolved to relative to the working directory or app directory.
 static void Test_dynamicLibrary(Test *t) {
 
     (void) t;
@@ -931,14 +1088,28 @@ Platform_defineEntrypoint() {
     Test_platformsFilePhysical(&t);
     Test_fileHandle(&t);
     Test_fileLongPath(&t);
+	Test_fileEdgeCases(&t);
+	Test_fileCaseAndUtf8(&t);
+	Test_fileRepeatedOpenClose(&t);
+
     Test_platformsFileVirtual(&t);
+	Test_virtualEdgeCases(&t);
 
     Test_dynamicLibrary(&t);
 
     Test_resolution(&t);
     Test_windowNullguards(&t);
 
-    U64 allocsAfter = Platform_getActiveAllocations(0);
+	//We might have instantiated a list with some capacity, make sure we get rid of it so the counter doesn't false positive.
+
+	for(U64 i = 0; i < Platform_instance->archives.length; ++i)
+		CAFile_free(&Platform_instance->archives.ptrNonConst[i], Platform_instance->alloc);
+
+	ListCAFile_free(&Platform_instance->archives, Platform_instance->alloc);
+
+	U64 allocsAfter = Platform_getActiveAllocations(0);
+
+	Test_setModule(&t, NULL);
     Test_assert(&t, "NoLeaks", allocsAfter <= allocsBefore);
 
     int result = Test_end(&t);

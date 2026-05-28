@@ -565,8 +565,14 @@ Bool File_open(
 	Bool isVirtual = false;
 	gotoIfError3(clean, File_resolve(loc, &isVirtual, 0, &Platform_instance->defaultDir, ptrType->alloc, &resolved, e_rr));
 
-	if(type >= EFileOpenType_Write && create)
-		gotoIfError3(clean, File_add(&resolved, EFileType_File, false, ptrType->alloc, e_rr));
+	if(type >= EFileOpenType_Write && create) {
+
+		Error err = Error_none();
+		Bool success = File_add(&resolved, EFileType_File, false, ptrType->alloc, &err);
+
+		if(!success && err.genericError != EGenericError_AlreadyDefined)
+			retError(clean, err);
+	}
 
 	gotoIfError3(clean, RefPtr_create(ptrType, handle, e_rr));
 	created = true;
@@ -779,17 +785,17 @@ Bool File_virtualOp(
 	const CharString function = CharString_createRefCStrConst("function/");
 	const CharString network = CharString_createRefCStrConst("network/");
 
-	if (CharString_startsWithStringInsensitive(&resolved, &access, 2)) {
+	if (CharString_startsWithStringInsensitive(&resolved, &access, 0)) {
 		//TODO: Allow //access folder
 		retError(clean, Error_unimplemented(0, "File_virtualOp()::loc //access/ not supported yet"));
 	}
 
-	if (CharString_startsWithStringInsensitive(&resolved, &function, 2)) {
+	if (CharString_startsWithStringInsensitive(&resolved, &function, 0)) {
 		//TODO: Allow //function folder (user callbacks)
 		retError(clean, Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet"));
 	}
 
-	if (CharString_startsWithStringInsensitive(&resolved, &network, 2)) {
+	if (CharString_startsWithStringInsensitive(&resolved, &network, 0)) {
 		//TODO: Allow //network folder (access to \\ on windows)
 		retError(clean, Error_unimplemented(1, "File_virtualOp()::loc //network/ not supported yet"));
 	}
@@ -848,15 +854,22 @@ Bool File_resolveVirtual(
 	for(U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 		const VirtualSection *sec = Platform_instance->virtualSections.ptr + i;
 
-		// Exact match on section root, it's a folder, no subPath
-		if(CharString_equalsStringInsensitive(&locLower, &sec->path))
+		//Exact match on section root, it's a folder, no subPath
+		if(CharString_equalsStringInsensitive(&locLower, &sec->path)) {
+			*section = sec;
 			goto clean;
+		}
 
-		// loc is a parent directory of this section, it's a folder, no subPath
-		if(CharString_startsWithStringInsensitive(&sec->path, &locSlash, 0))
-			goto clean;
+		//loc is a parent directory of this section, it's a folder, no subPath
+		if(CharString_startsWithStringInsensitive(&sec->path, &locSlash, 0)) {
 
-		// loc is inside this section, return subPath relative to section
+			if(sec->loadedAndId)
+				goto clean;
+
+			continue;
+		}
+
+		//loc is inside this section, return subPath relative to section
 		CharString_free(&secSlash, alloc);
 		gotoIfError3(clean, CharString_createCopy(sec->path, alloc, &secSlash, e_rr));
 		gotoIfError3(clean, CharString_append(&secSlash, '/', alloc, e_rr));
@@ -893,7 +906,7 @@ Bool File_readVirtualInternal(Buffer *output, const CharString *loc, const Alloc
 
 	gotoIfError3(clean, File_resolveVirtual(loc, &subPath, &section, alloc, e_rr));
 
-	if(!section)
+	if(!section || !subPath.ptr)
 		retError(clean, Error_invalidOperation(0, "File_readVirtualInternal() loc is a virtual folder, not a file"));
 
 	if(!section->loadedAndId)
@@ -1336,7 +1349,7 @@ clean:
 
 Bool File_isVirtualLoaded(const CharString *loc, const Allocator *alloc, Error *e_rr) {
 	FileLoadVirtual virt = (FileLoadVirtual) { 0 };
-	return File_loadVirtualInternal1(&virt, loc, false, NULL, NULL, alloc, e_rr);
+	return File_virtualOp(loc, 1 * MS, (VirtualFileFunc) File_loadVirtualInternal, &virt, false, alloc, e_rr);
 }
 
 Bool File_loadVirtual(

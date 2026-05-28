@@ -21,8 +21,9 @@
 //formats/oiDL/dl_file.h
 
 #pragma once
-#include "formats/oiXX/oiXX.h"
+#include "types/container/string.h"
 #include "types/container/list_predeclare.h"
+#include "formats/oiXX/oiXX.h"
 
 #ifdef __cplusplus
 	extern "C" {

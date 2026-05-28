@@ -19,31 +19,40 @@
 */
 
 #pragma once
-#include "types/container/string.h"
+#include "types/base/string.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
-typedef enum ECompilerWarning ECompilerWarning;
+typedef U8 CompilerWarning;
 typedef struct Allocator Allocator;
+typedef struct CharString CharString;
 
-Bool Packager_package(
-	CharString input,
-	CharString output,
-	const U32 encryptionKey[8],		//Pass NULL to disable AES256GCM
-	Bool multipleModes,
-	U64 compileModeU64,
-	U64 threadCount,
-	CharString includeDir,
-	Bool merge,
-	ECompilerWarning extraWarnings,
-	Bool enableLogging,
-	Bool isDebug,
-	Bool ignoreEmptyFiles,
-	Allocator alloc,
-	Error *e_rr
-);
+typedef struct PackageSettings {
+
+	CharString input;
+	CharString output;
+
+	const U32 (*encryptionKey)[8];		//Pass NULL to disable AES256GCM
+
+	U32 compileMode;
+	U32 threadCount;
+
+	CharString includeDir;
+
+	CompilerWarning extraWarnings;
+	Bool merge;
+	Bool enableLogging;
+	Bool isDebug;
+
+	Bool ignoreEmptyFiles;
+	Bool multipleModes;
+	U8 pad[2];
+
+} PackageSettings;
+
+Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, Error *e_rr);
 
 #ifdef __cplusplus
 	}

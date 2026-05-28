@@ -21,13 +21,16 @@
 //formats/oiXX/oiXX.h
 
 #pragma once
-#include "types/container/string.h"
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
 typedef struct StreamCursor StreamCursor;
+typedef struct Buffer Buffer;
+typedef struct Error Error;
+typedef struct Allocator Allocator;
 
 typedef enum EXXCompressionType {
 	EXXCompressionType_None,							//--uncompressed (default)

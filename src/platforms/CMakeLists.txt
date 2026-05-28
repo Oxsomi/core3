@@ -89,27 +89,26 @@ if(EnableTests)
 	
 	target_link_libraries(OxC3_platforms_interface_dylib_test PUBLIC OxC3_platforms)
 
-	# include(../../cmake/oxc3.cmake)
+	include(../../cmake/oxc3.cmake)
 	file(GLOB testsInterfaceC "test/interface/*.c")
 
 	add_executable(
-		OxC3_platforms_interface_test
+		OxC3_plinttst
 		${testsInterfaceC}
 		CMakeLists.txt
 	)
 
-	target_link_libraries(OxC3_platforms_interface_test PUBLIC OxC3_platforms OxC3_types_test OxC3_platforms_interface_dylib_test)
-	set_target_properties(OxC3_platforms_interface_test PROPERTIES FOLDER Oxsomi/test/platforms)
+	target_link_libraries(OxC3_plinttst PUBLIC OxC3_platforms OxC3_types_test OxC3_platforms_interface_dylib_test)
+	set_target_properties(OxC3_plinttst PROPERTIES FOLDER Oxsomi/test/platforms)
 	
-	# TODO: OxC3_package
-	# add_virtual_files(
-	# 	TARGET  OxC3_platforms_interface_test
-	# 	NAME    testdata
-	# 	ROOT    ${CMAKE_CURRENT_SOURCE_DIR}/test/interface/res       # contains hello.txt + sub/world.txt
-	# 	SELF    ${CMAKE_CURRENT_SOURCE_DIR}/test/interface
-	# 	FORCE_PACKAGER
-	# )
-	# 
-	# apply_dependencies(OxC3_platforms_interface_test)
+	add_virtual_files(
+		TARGET  OxC3_plinttst
+		NAME    testdata
+		ROOT    ${CMAKE_CURRENT_SOURCE_DIR}/test/interface/res       # contains hello.txt + sub/world.txt
+		SELF    ${CMAKE_CURRENT_SOURCE_DIR}/../..
+		FORCE_PACKAGER
+	)
+	
+	apply_dependencies(OxC3_plinttst)
 
 endif()

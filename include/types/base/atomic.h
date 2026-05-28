@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/atomic.h
+
 #pragma once
 #include "types/base/constants.h"
 #include "types/base/platform_types.h"

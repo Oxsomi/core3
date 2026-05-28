@@ -18,7 +18,6 @@
 *  This is called dual licensing.
 */
 
-
 //types/container/test/test_types_container_allocation_buffer.c
 
 #include "test_types_container_shared.h"

@@ -67,8 +67,10 @@ BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sec
 	Bool s_uccess = true;
 	gotoIfError3(clean, CharString_createFromUTF16((const U16*)name, MAX_OXC_PATH, Platform_instance->alloc, &str, NULL));
 
-	if(CharString_countAllSensitive(&str, '/', 0) != 1)
+	if(CharString_countAllSensitive(&str, '/', 0) != 1) {
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
+		CharString_free(&str, Platform_instance->alloc);
+	}
 
 	else {
 		const VirtualSection section = (VirtualSection) { .path = str };

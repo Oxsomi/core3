@@ -74,7 +74,7 @@ static Bool windowManagerReady = false;
 static Bool setup(Test *t) {
 
     WindowManagerCallbacks cbs = (WindowManagerCallbacks) { 0 };
-    if (!WindowManager_create(cbs, 0, &windowManager, NULL)) {
+    if (!WindowManager_create(cbs, 0, &windowManager, &t->err)) {
         Test_print(t, "WindowManager_create failed, skipping functional tests");
         return false;
     }
@@ -107,14 +107,14 @@ static Window *createWindow(
 
     Bool s_uccess = WindowManager_createWindow(
         &windowManager, EWindowType_Physical, pos, size, minSize, maxSize,
-        hint, title, (WindowCallbacks) { 0 }, fmt, 0, &w, NULL
+        hint, title, (WindowCallbacks) { 0 }, fmt, 0, &w, &t->err
     );
 
     if (!s_uccess) {
 
         s_uccess = WindowManager_createWindow(
             &windowManager, EWindowType_Virtual, pos, size, minSize, maxSize,
-            hint, title, (WindowCallbacks) { 0 }, fmt, 0, &w, NULL
+            hint, title, (WindowCallbacks) { 0 }, fmt, 0, &w, &t->err
         );
 
         if (s_uccess)
@@ -142,14 +142,14 @@ static Window *createWindowCallback(
 
     Bool s_uccess = WindowManager_createWindow(
         &windowManager, EWindowType_Physical, pos, size, minSize, maxSize,
-        hint, title, cbs, fmt, 0, &w, NULL
+        hint, title, cbs, fmt, 0, &w, &t->err
     );
 
     if (!s_uccess) {
 
         s_uccess = WindowManager_createWindow(
             &windowManager, EWindowType_Virtual, pos, size, minSize, maxSize,
-            hint, title, cbs, fmt, 0, &w, NULL
+            hint, title, cbs, fmt, 0, &w, &t->err
         );
 
         if (s_uccess)
@@ -172,7 +172,7 @@ static void pump(Ns ns) {
     }
 }
 
-// Shared render code to validate fullscreen / resize behavior
+//Shared render code to validate fullscreen / resize behavior
 
 static U8 *Test_renderPattern(Window *w, U8 zxor) {
 
@@ -199,7 +199,6 @@ static void Test_cpuBuffer(Test *t) {
 
     Test_setModule(t, "F1/CPUBuffer");
 
-    Error err = Error_none();
     I32x2 sz = I32x2_create2(256, 256);
 
     Window *w = createWindow(t, "F1: CPU Buffer", sz, I32x2_zero, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8);
@@ -208,7 +207,7 @@ static void Test_cpuBuffer(Test *t) {
         goto clean;
 
     sz = w->size;
-    if (!Test_assert(t, "resizeCPU", Window_resizeCPUBuffer(w, false, sz, &err)))
+    if (!Test_assert(t, "resizeCPU", Window_resizeCPUBuffer(w, false, sz, &t->err)))
         goto clean;
 
     {
@@ -234,7 +233,7 @@ static void Test_cpuBuffer(Test *t) {
         Test_assert(t, "botRight_G", br[1] == (U8)(H - 1));
     }
 
-    Window_presentPhysical(w, NULL);
+    Test_assert(t, "present", Window_presentPhysical(w, &t->err));
     pump(VISUAL_HOLD_NS);
 
 clean:
@@ -247,7 +246,6 @@ static void Test_fullScreen(Test *t) {
 
     Test_setModule(t, "F2/Fullscreen");
 
-    Error err = Error_none();
     I32x2 sz = I32x2_create2(256, 256);
 
     Window *w = createWindow(
@@ -260,23 +258,23 @@ static void Test_fullScreen(Test *t) {
     Test_assert(t, "notFullscreenInit", !Window_isFullScreen(w));
 
     Test_renderPattern(w, 0);
-    Window_presentPhysical(w, NULL);
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
     pump(1 * SECOND);
 
-    if (!Test_assert(t, "toggleOn", Window_toggleFullScreen(w, &err)))
+    if (!Test_assert(t, "toggleOn", Window_toggleFullScreen(w, &t->err)))
         goto clean;
 
     Test_renderPattern(w, 0x80);
-    Window_presentPhysical(w, NULL);
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
     pump(1 * SECOND);
 
     Test_assert(t, "isFullscreen", Window_isFullScreen(w));
 
-    if (!Test_assert(t, "toggleOff", Window_toggleFullScreen(w, &err)))
+    if (!Test_assert(t, "toggleOff", Window_toggleFullScreen(w, &t->err)))
         goto clean;
 
     Test_renderPattern(w, 0xFF);
-    Window_presentPhysical(w, NULL);
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
     pump(1 * SECOND);
 
     Test_assert(t, "notFullscreenAgain", !Window_isFullScreen(w));
@@ -302,7 +300,7 @@ static void Test_resize(Test *t) {
     WindowManager_createWindow(
         &windowManager, EWindowType_Virtual, pos, sz, minSize, maxSize,
         EWindowHint_None, title, (WindowCallbacks) { 0 },
-        EWindowFormat_AutoRGBA8, 0, &w, NULL
+        EWindowFormat_AutoRGBA8, 0, &w, &t->err
     );
 
     if (!Test_assert(t, "windowCreated", w != NULL))
@@ -314,7 +312,7 @@ static void Test_resize(Test *t) {
     Test_assert(t, "maxW",  I32x2_x(w->maxSize) == 1920);
 
     I32x2 newSz = I32x2_create2(512, 384);
-    if (!Test_assert(t, "resizeCPU", Window_resizeCPUBuffer(w, false, newSz, NULL)))
+    if (!Test_assert(t, "resizeCPU", Window_resizeCPUBuffer(w, false, newSz, &t->err)))
         goto clean;
 
     Test_assert(t, "newW", I32x2_x(w->size) == 512);
@@ -345,10 +343,10 @@ static void Test_multiWindow(Test *t) {
         goto clean;
 
     Test_renderPattern(w1, 0x00);
-    Window_presentPhysical(w1, NULL);
+	Test_assert(t, "present", Window_presentPhysical(w1, &t->err));
 
     Test_renderPattern(w2, 0x80);
-    Window_presentPhysical(w2, NULL);
+	Test_assert(t, "present", Window_presentPhysical(w2, &t->err));
 
     Test_assert(t, "distinct",    w1 != w2);
     Test_assert(t, "sameOwner",   w1->owner == w2->owner);
@@ -391,7 +389,7 @@ static void Test_keyboard(Test *t) {
 
     Bool s_uccess = WindowManager_createWindow(
         &windowManager, EWindowType_Physical, pos, sz, minSize, maxSize,
-        EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, NULL
+        EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &t->err
     );
 
     if (!s_uccess) {
@@ -443,12 +441,11 @@ static void Test_storeCPUBuffer(Test *t) {
     
     Test_setModule(t, "F6/StoreCPUBufferToDisk");
  
-    Error err = Error_none();
     const Allocator *alloc = Platform_instance->alloc;
  
     I32x2 sz = I32x2_create2(512, 512);
  
-    Window *w = createWindow(t, "F7: StoreToDisk", sz, I32x2_zero, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8);
+    Window *w = createWindow(t, "F6: StoreToDisk", sz, I32x2_zero, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8);
 
     if(w)
         sz = w->size;
@@ -478,7 +475,7 @@ static void Test_storeCPUBuffer(Test *t) {
     CharString outPath = CharString_createRefCStrConst("platform_test_cpu_dump.dds");
     File_remove(&outPath, 1 * SECOND, alloc, NULL);
  
-    if (!Test_assert(t, "storeToDisk", Window_storeCPUBufferToDisk(w, outPath, 50 * MS, alloc, &err)))
+    if (!Test_assert(t, "storeToDisk", Window_storeCPUBufferToDisk(w, outPath, 50 * MS, alloc, &t->err)))
         goto clean;
  
     Test_assert(t, "fileExists", File_hasFile(&outPath, alloc));
@@ -493,7 +490,7 @@ static void Test_storeCPUBuffer(Test *t) {
         &fileHandleType,
         &streamType,
         &readStream,
-        &err
+        &t->err
     )))
         goto clean;
  
@@ -502,7 +499,7 @@ static void Test_storeCPUBuffer(Test *t) {
     DDSInfo info = (DDSInfo){ 0 };
     U64 streamOff = 0;
  
-    if (!Test_assert(t, "ddsRead", DDS_read(readStream, &streamOff, &info, alloc, &subResources, &err)))
+    if (!Test_assert(t, "ddsRead", DDS_read(readStream, &streamOff, &info, alloc, &subResources, &t->err)))
         goto clean;
  
     Test_assert(t, "ddsW",      info.w    == W);
@@ -538,13 +535,13 @@ static void Test_storeCPUBuffer(Test *t) {
         //so on-disk order is B,G,R,A -> 42,0,0,255.
         //If the format stayed RGBA8 the order is R,G,B,A → 0,0,42,255.
         //Accept either.
-        if (Test_assert(t, "readPx0", stream->read(stream, sr->streamOff, sizeof(px0), px0Buf, alloc, &err)))
+        if (Test_assert(t, "readPx0", stream->read(stream, sr->streamOff, sizeof(px0), px0Buf, alloc, &t->err)))
             Test_assert(t, "px0", px0 == 0xFF2A0000 || px0 == 0xFF00002A);
  
         //Read pixel 1 and verify R is 1 (in either BGR or RGB)
         U32 px1 = 0;
         Buffer px1Buf = Buffer_createRef(&px1, sizeof(px1));
-        if (Test_assert(t, "readPx1", stream->read(stream, sr->streamOff + pixelBytes, sizeof(px1), px1Buf, alloc, &err)))
+        if (Test_assert(t, "readPx1", stream->read(stream, sr->streamOff + pixelBytes, sizeof(px1), px1Buf, alloc, &t->err)))
             Test_assert(t, "px1", px1 == 0xFF2A0001 || px1 == 0xFF01002A);
  
         //Verify the reported stream length covers the full image
@@ -595,8 +592,12 @@ clean:
 static volatile Bool leftClicked = false;
 
 static void onMouseButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
+
     (void)w;
-    if (dev->type != EInputDeviceType_Mouse || !down) return;
+
+    if (dev->type != EInputDeviceType_Mouse || !down)
+		return;
+
     U16 local = InputDevice_getLocalHandle(dev, h);
     if (local == (U16)(EMouseButton_Left - EMouseAxis_End))
         leftClicked = true;
@@ -604,7 +605,7 @@ static void onMouseButton(Window *w, InputDevice *dev, InputHandle h, Bool down)
 
 static void Test_mouse(Test *t) {
 
-    Test_setModule(t, "F9/Mouse/OS");
+    Test_setModule(t, "F8/Mouse/OS");
 
     Window *w = NULL;
 
@@ -619,7 +620,7 @@ static void Test_mouse(Test *t) {
 
     Bool s_uccess =WindowManager_createWindow(
         &windowManager, EWindowType_Physical, pos, sz, minSize, maxSize,
-        EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, NULL
+        EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &t->err
     );
 
     if (!s_uccess) {
@@ -765,8 +766,6 @@ static void Test_typeChar(Test *t) {
 
     Test_setModule(t, "F10/TypeChar");
 
-    const Allocator *alloc = Platform_instance->alloc;
-
     typedText  = CharString_createNull();
 
     WindowCallbacks wcbs = (WindowCallbacks) { 0 };
@@ -846,7 +845,7 @@ static void Test_typeChar(Test *t) {
             else Test_assert(t, "syntheticHello", syntheticOK);
 
             //Reset for interactive round
-            CharString_free(&typedText, alloc);
+            CharString_free(&typedText, t->alloc);
             typedText = CharString_createNull();
         }
     #else
@@ -875,7 +874,7 @@ static void Test_typeChar(Test *t) {
     Test_assert(t, "operatorHello", gotHello);
 
 clean:
-    CharString_free(&typedText, alloc);
+    CharString_free(&typedText, t->alloc);
     if (w) WindowManager_freeWindow(&windowManager, &w);
 }
 

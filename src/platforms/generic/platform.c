@@ -476,8 +476,10 @@ void Platform_cleanup() {
 	for (U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 		VirtualSection *sect = &Platform_instance->virtualSections.ptrNonConst[i];
 		CharString_free(&sect->path, Platform_instance->alloc);
-		CAFile_free(&Platform_instance->archives.ptrNonConst[i], Platform_instance->alloc);
 	}
+
+	for(U64 i = 0; i < Platform_instance->archives.length; ++i)
+		CAFile_free(&Platform_instance->archives.ptrNonConst[i], Platform_instance->alloc);
 
 	ListCAFile_free(&Platform_instance->archives, Platform_instance->alloc);
 	ListVirtualSection_free(&Platform_instance->virtualSections, Platform_instance->alloc);

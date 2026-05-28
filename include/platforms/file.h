@@ -192,7 +192,7 @@ Bool File_read(
 	Ns maxTimeout,
 	U64 off,
 	U64 len,
-	const RefPtrType *alloc,
+	const RefPtrType *fileHandleType,
 	Buffer *output,
 	Error *e_rr
 );

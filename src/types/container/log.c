@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/container/log.c
+
 #include "types/container/log.h"
 #include "types/container/string.h"
 #include "types/base/allocator.h"

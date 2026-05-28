@@ -33,16 +33,15 @@ typedef struct ForeachCollector {
 	CharString paths[64];
 	U64        count;
 	U64        stopAfter;	//Stop after this many callbacks (0 = never)
-	const Allocator *alloc;
 } ForeachCollector;
 
-static Bool foreachCb(const FileInfo *info, void *obj, Error *e_rr) {
+static Bool foreachCb(const FileInfo *info, void *obj, const Allocator *alloc, Error *e_rr) {
 
 	(void)e_rr;
 
 	ForeachCollector *c = (ForeachCollector *)obj;
 
-	if (c->count < 64 && !CharString_createCopy(info->path, c->alloc, &c->paths[c->count], e_rr))
+	if (c->count < 64 && !CharString_createCopy(info->path, alloc, &c->paths[c->count], e_rr))
 		return false;
 
 	++c->count;
@@ -73,7 +72,6 @@ void Test_CAForeach(Test *t) {
 		CAHandle root = CAHandle_Root;
 
 		ForeachCollector r = { 0 };
-		r.alloc = t->alloc;
 
 		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
 			Test_assert(t, "Create ca for foreach", false);
@@ -95,7 +93,6 @@ void Test_CAForeach(Test *t) {
 		//Non-recursive from root: only immediate children (a/ and root_file.txt)
 
 		ForeachCollector empty = { 0 };
-		empty.alloc = t->alloc;
 
 		Test_assert(t, "foreach non-recurse ok", CAFile_foreach(&ca, root, foreachCb, &r, false, t->alloc, &t->err));
 		Test_assert(t, "nr count == 2",    r.count == 2);

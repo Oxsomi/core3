@@ -629,11 +629,9 @@ Bool File_loadVirtualInternal1(
 		if(!allowLoad)
 			retError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
 
-		// Load from Windows resource
-		wchar_t wbuf[WIN_PATH_MAX];
-		gotoIfError3(clean, CharString_toLongPath(wbuf, &section->path, e_rr));
-
-		HRSRC hrsrc = FindResourceW(NULL, wbuf, RT_RCDATA);
+		//Load from Windows resource
+		
+		HRSRC hrsrc = FindResourceA(NULL, section->path.ptr, MAKEINTRESOURCEA(10));
 		if(!hrsrc)
 			retError(clean, Error_notFound(0, 1, "File_loadVirtualInternal1() FindResource failed"));
 

@@ -183,12 +183,20 @@ macro(add_virtual_files)
 	endif()
 
 	# Add processed file as a file
+
+	# Packaging can be done through the following ways:
+	# OxC3_package_simple; Only processes using dependencies below platforms (formats, types).
+	#						This excludes shader compilation and graphics dependencies.
+	# OxC3_package; Full process to package a file (including shader compilation, not graphics).
+	# OxC3; Full executable with all functionality.
 	
 	if(_ARGS_FORCE_PACKAGER)
-		if(NOT TARGET OxC3_package)
-			find_program(OXC3_PACKAGE OxC3_package REQUIRED)
-		else()
+		if(TARGET OxC3_package)
 			set(OXC3_PACKAGE OxC3_package)
+		elseif(TARGET OxC3_package_simple)
+			set(OXC3_PACKAGE OxC3_package_simple)
+		else()
+			find_program(OXC3_PACKAGE OxC3_package REQUIRED)
 		endif()
 	else()
 		if(NOT TARGET OxC3)
