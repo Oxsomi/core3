@@ -78,7 +78,7 @@ void Test_SHFileRegisterDuplicateNameRejected(Test *t) {
 	CharString n1 = CharString_createRefCStrConst("myBuf");
 	SHBindings  b1 = makeSPIRVBinding(0, 0);
 	CharString n2 = CharString_createRefCStrConst("myBuf");
-	SHBindings  b2 = makeSPIRVBinding(0, 1);	//different binding, same name
+	SHBindings  b2 = makeSPIRVBinding(0, 1);    //different binding, same name
 
 	Test_assert(t, "first ok",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x1, false, &n1, NULL, b1, t->alloc, NULL)
@@ -99,7 +99,7 @@ void Test_SHFileRegisterDuplicateSPIRVBindingRejected(Test *t) {
 
 	CharString n1 = CharString_createRefCStrConst("sampA");
 	CharString n2 = CharString_createRefCStrConst("sampB");
-	SHBindings  b  = makeSPIRVBinding(0, 0);	//same set + binding for both
+	SHBindings  b  = makeSPIRVBinding(0, 0);    //same set + binding for both
 
 	Test_assert(t, "first ok",
 		ListSHRegisterRuntime_addSampler(&info.registers, 0x1, false, &n1, NULL, b, t->alloc, NULL)
@@ -124,8 +124,8 @@ void Test_SHFileRegisterAddTexture(Test *t) {
 		ListSHRegisterRuntime_addTexture(
 			&info.registers,
 			ESHTextureType_Texture2D,
-			false,	//not array
-			false,	//not combined sampler
+			false,    //not array
+			false,    //not combined sampler
 			0x1,
 			ESHTexturePrimitive_Float | ESHTexturePrimitive_Component4,
 			&name, NULL, b, t->alloc, &t->err
@@ -158,7 +158,7 @@ void Test_SHFileRegisterAddRWTexture(Test *t) {
 			ESHTextureType_Texture2D,
 			false,
 			0x1,
-			ESHTexturePrimitive_Count,	/* auto-detect from format */
+			ESHTexturePrimitive_Count,    /* auto-detect from format */
 			ETextureFormatId_RGBA8,
 			&name, NULL, b, t->alloc, &t->err
 		));

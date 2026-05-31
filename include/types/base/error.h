@@ -39,7 +39,7 @@ typedef enum EGenericError {
 	EGenericError_OutOfMemory,
 	EGenericError_OutOfBounds,
 	EGenericError_NullPointer,
-	EGenericError_Unauthorized,			//For example if the local permissions or remote server disallow it
+	EGenericError_Unauthorized,            //For example if the local permissions or remote server disallow it
 	EGenericError_NotFound,
 	EGenericError_DivideByZero,
 	EGenericError_Overflow,
@@ -51,11 +51,11 @@ typedef enum EGenericError {
 	EGenericError_InvalidCast,
 	EGenericError_InvalidState,
 	EGenericError_RateLimit,
-	EGenericError_LoopLimit,				//If the platform decides that loop limit is reached, this will be thrown
+	EGenericError_LoopLimit,                //If the platform decides that loop limit is reached, this will be thrown
 	EGenericError_AlreadyDefined,
 	EGenericError_UnsupportedOperation,
 	EGenericError_TimedOut,
-	EGenericError_ConstData,			//If an operation is done on data that is supposed to be const
+	EGenericError_ConstData,            //If an operation is done on data that is supposed to be const
 	EGenericError_PlatformError,
 	EGenericError_Unimplemented,
 	EGenericError_Stderr
@@ -101,32 +101,32 @@ typedef struct Error {
 //Migration error handling, building towards returning Bool success and optional Error.
 //Interop with functions that return Error.
 
-#define gotoIfError2(x, ...) {		\
-	Error tempErr = __VA_ARGS__;	\
-	if(tempErr.genericError) {		\
-		s_uccess = false;			\
-		if(e_rr) *e_rr = tempErr;	\
-		goto x;						\
-	}								\
+#define gotoIfError2(x, ...) {        \
+	Error tempErr = __VA_ARGS__;    \
+	if(tempErr.genericError) {        \
+		s_uccess = false;            \
+		if(e_rr) *e_rr = tempErr;    \
+		goto x;                        \
+	}                                \
 }
 
 //Functions with new error handling; returning Bool and optional error.
 //(void) 0 is a trick to require a ; after the statement
 
-#define gotoIfError3(x, ...) {		\
-	if(!(__VA_ARGS__)) {			\
-		s_uccess = false;			\
-		goto x;						\
-	}								\
+#define gotoIfError3(x, ...) {        \
+	if(!(__VA_ARGS__)) {            \
+		s_uccess = false;            \
+		goto x;                        \
+	}                                \
 } (void) 0
 
-#define retError(x, ...) {			\
-	if(e_rr) *e_rr = __VA_ARGS__;	\
-	s_uccess = false;				\
-	goto x;							\
+#define retError(x, ...) {            \
+	if(e_rr) *e_rr = __VA_ARGS__;    \
+	s_uccess = false;                \
+	goto x;                            \
 } (void) 0
 
-impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);	//May fail if (stackSize + skip + 1 > 128)
+impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);    //May fail if (stackSize + skip + 1 > 128)
 void Error_fillStackTrace(Error *err);
 
 #define Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err

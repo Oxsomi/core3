@@ -104,7 +104,7 @@ Bool StreamCursor_create(
 	Bool s_uccess = true;
 	Buffer buf = Buffer_createNull();
 
-	if (!cacheSize)					//Default cache size 128KiB
+	if (!cacheSize)                    //Default cache size 128KiB
 		cacheSize = 128 * KIBI;
 
 	gotoIfError3(clean, Buffer_createUninitializedBytes(cacheSize, alloc, &buf, e_rr));
@@ -197,7 +197,7 @@ Bool StreamCursor_closeAndKeepCache(StreamCursor *cursor, const Allocator *alloc
 
 	gotoIfError3(clean, StreamCursor_flush(cursor, alloc, e_rr));
 
-	if (cursor) {					//Move cache data for next cursor
+	if (cursor) {                    //Move cache data for next cursor
 		*cache = cursor->cacheData;
 		cursor->cacheData = Buffer_createNull();
 	}

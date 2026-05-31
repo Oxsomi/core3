@@ -35,7 +35,7 @@
 		//Parse encryption key
 
 		U32 encryptionKeyV[8] = { 0 };
-		U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+		U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
 

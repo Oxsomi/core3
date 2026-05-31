@@ -45,7 +45,7 @@ Bool CharString_eraseString(const CharStringReplaceErase *erase, const CharStrin
 Bool CharString_replaceAll(const CharStringReplaceErase *replace, C8 c, C8 v);
 Bool CharString_replace(const CharStringReplaceErase *replace, C8 c, C8 v, Bool isFirst);
 
-CharString CharString_trim(const CharString s);		//Returns a substring ref in a string
+CharString CharString_trim(const CharString s);        //Returns a substring ref in a string
 
 Bool CharString_transform(CharString *s, EStringTransform stringTransform);
 

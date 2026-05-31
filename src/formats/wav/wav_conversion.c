@@ -44,7 +44,7 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i, Bool pcm, Boo
 
 	switch (ogStride) {
 
-		case 3:			//Skip first byte(s) to avoid the least significant byte(s)
+		case 3:            //Skip first byte(s) to avoid the least significant byte(s)
 
 			i *= 3;
 
@@ -54,9 +54,9 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i, Bool pcm, Boo
 			else if(newStride == 2)
 				return cvt8[i + 1] | ((U16)cvt8[i + 2] << 8);
 
-			return (U8)(cvt8[i + 2] + 0x7F);		//Unsigned normalization
+			return (U8)(cvt8[i + 2] + 0x7F);        //Unsigned normalization
 
-		case 4:	{
+		case 4:    {
 
 			if (pcm) {
 
@@ -102,7 +102,7 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i, Bool pcm, Boo
 			}
 		}
 
-		case 8:	{
+		case 8:    {
 
 			F64 clamped = F64_clamp(cvt64[i], -1, 1);
 			F64 normalized = clamped * 0.5 + 0.5;
@@ -138,7 +138,7 @@ U64 WAVFile_cvt(const void *cvt, U8 ogStride, U8 newStride, U64 i, Bool pcm, Boo
 			if(newStride == 2)
 				return cvt16[i];
 
-			return (U8) (cvt8[(i << 1) | 1] + 0x7F);		//Unsigned normalization
+			return (U8) (cvt8[(i << 1) | 1] + 0x7F);        //Unsigned normalization
 
 		case 1:
 			return cvt8[i];
@@ -155,7 +155,7 @@ U64 WAVFile_avg(U64 a, U64 b, U64 newStride, Bool pcm) {
 		case 4: {
 
 			if (pcm) {
-				a = (a + I32_MAX) & U32_MAX;		//Same as sign cast
+				a = (a + I32_MAX) & U32_MAX;        //Same as sign cast
 				b = (b + I32_MAX) & U32_MAX;
 				U64 v = (a + b) / 2;
 				return (v - I32_MAX) & U32_MAX;
@@ -173,7 +173,7 @@ U64 WAVFile_avg(U64 a, U64 b, U64 newStride, Bool pcm) {
 		}
 
 		case 3: {
-			a = (a + I24_MAX) & U24_MAX;		//Same as sign cast
+			a = (a + I24_MAX) & U24_MAX;        //Same as sign cast
 			b = (b + I24_MAX) & U24_MAX;
 			U64 v = (a + b) / 2;
 			return (v - I24_MAX) & U24_MAX;
@@ -226,9 +226,9 @@ Bool WAVFile_convert(
 
 	if(info.splitType) {
 		switch (info.splitType) {
-			default:										break;
-			case ESplitType_Right:		right = left = 1;	break;
-			case ESplitType_Average:	right = 1;			break;
+			default:                                        break;
+			case ESplitType_Right:        right = left = 1;    break;
+			case ESplitType_Average:    right = 1;            break;
 		}
 	}
 

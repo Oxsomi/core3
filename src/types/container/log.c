@@ -40,20 +40,20 @@ void Log_printStackTrace(const Allocator *alloc, U8 skip, ELogLevel lvl, ELogOpt
 	Log_printCapturedStackTrace(alloc, stackTrace, lvl, options);
 }
 
-#define Log_level(lvl) 															\
+#define Log_level(lvl)                                                             \
 																				\
-	if(!format)																	\
-		return;																	\
+	if(!format)                                                                    \
+		return;                                                                    \
 																				\
-	CharString res = CharString_createNull();									\
+	CharString res = CharString_createNull();                                    \
 																				\
-	va_list arg1;																\
-	va_start(arg1, format);														\
-	Bool s_uccess = CharString_formatVariadic(alloc, &res, NULL, format, arg1);	\
-	va_end(arg1);																\
+	va_list arg1;                                                                \
+	va_start(arg1, format);                                                        \
+	Bool s_uccess = CharString_formatVariadic(alloc, &res, NULL, format, arg1);    \
+	va_end(arg1);                                                                \
 																				\
-	if(s_uccess)																\
-		Log_log(alloc, lvl, opt, &res);											\
+	if(s_uccess)                                                                \
+		Log_log(alloc, lvl, opt, &res);                                            \
 																				\
 	CharString_free(&res, alloc);
 

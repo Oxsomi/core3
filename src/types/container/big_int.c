@@ -206,10 +206,10 @@ Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding t
 		U8 v = 0;
 
 		switch (type) {
-			default:				v = C8_hex(textPtr[i]);		break;
-			case EIntEncoding_Bin:	v = C8_bin(textPtr[i]);		break;
-			case EIntEncoding_Oct:	v = C8_oct(textPtr[i]);		break;
-			case EIntEncoding_Nyto:	v = C8_nyto(textPtr[i]);	break;
+			default:                v = C8_hex(textPtr[i]);        break;
+			case EIntEncoding_Bin:    v = C8_bin(textPtr[i]);        break;
+			case EIntEncoding_Oct:    v = C8_oct(textPtr[i]);        break;
+			case EIntEncoding_Nyto:    v = C8_nyto(textPtr[i]);    break;
 		}
 
 		if(v == U8_MAX)
@@ -217,8 +217,8 @@ Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding t
 
 		switch (type) {
 
-			default:				((U8*)big->data)[j >> 1] |= v << (countPerChar * (j & 1));	break;
-			case EIntEncoding_Bin:	((U8*)big->data)[j >> 3] |= v << (countPerChar * (j & 7));	break;
+			default:                ((U8*)big->data)[j >> 1] |= v << (countPerChar * (j & 1));    break;
+			case EIntEncoding_Bin:    ((U8*)big->data)[j >> 3] |= v << (countPerChar * (j & 7));    break;
 
 			case EIntEncoding_Nyto:
 			case EIntEncoding_Oct: {
@@ -254,7 +254,7 @@ Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding t
 		}
 	}
 
-	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
+	if(bitCount & 63) {        //Fix last U64 to handle out of bounds
 
 		if (big->data[big->length - 1] >> (bitCount & 63))
 			retError(clean, Error_outOfBounds(
@@ -325,7 +325,7 @@ Bool BigInt_createFromDec(const BigIntCreate *bigIntCreate, Error *e_rr) {
 			retError(clean, Error_invalidParameter(1, 0, "BigInt_createFromBase2Type()::bitCount is out of bounds (>16320)"));
 	}
 
-	if(estBitCount > 0xFF * 64 + 1)			//+1 to align to base10
+	if(estBitCount > 0xFF * 64 + 1)            //+1 to align to base10
 		retError(clean, Error_outOfMemory(0, "BigInt_createFromBase2Type() estBitCount is out of bounds (>16321)"));
 
 	alloc = bigIntCreate->alloc;
@@ -338,7 +338,7 @@ Bool BigInt_createFromDec(const BigIntCreate *bigIntCreate, Error *e_rr) {
 	gotoIfError3(clean, BigInt_create(bitCount, alloc, &multiplier, e_rr));
 	gotoIfError3(clean, BigInt_create(bitCount, alloc, &temp, e_rr));
 
-	((U64*)multiplier.data)[0] = 1;		//Multiplier
+	((U64*)multiplier.data)[0] = 1;        //Multiplier
 
 	for (U64 i = textl - 1; i != U64_MAX; --i) {
 
@@ -364,7 +364,7 @@ Bool BigInt_createFromDec(const BigIntCreate *bigIntCreate, Error *e_rr) {
 		gotoIfError3(clean, BigInt_mul(&multiplier, temp, alloc, e_rr));
 	}
 
-	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
+	if(bitCount & 63) {        //Fix last U64 to handle out of bounds
 
 		if (big->data[big->length - 1] >> (bitCount & 63))
 			retError(clean, Error_outOfBounds(
@@ -466,11 +466,11 @@ Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr) {
 			const U64 prevMul = mul;
 			mul += (U64) aptr[x] * bptr[y];
 
-			if(mul < prevMul && i + 2 < digitsA) {			//Overflow in our overflow.
+			if(mul < prevMul && i + 2 < digitsA) {            //Overflow in our overflow.
 
 				U64 j = i + 2, v = 0;
 
-				do {										//Keep on adding overflow
+				do {                                        //Keep on adding overflow
 					v = ++dst[j++];
 				} while(!v && j < digitsA);
 			}
@@ -483,11 +483,11 @@ Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr) {
 			const U64 prev = dst[i + 1];
 			dst[i + 1] += (U32) (mul >> 32);
 
-			if (dst[i + 1] < prev && i + 2 < digitsA) {		//Overflow in our overflow.
+			if (dst[i + 1] < prev && i + 2 < digitsA) {        //Overflow in our overflow.
 
 				U64 j = i + 2, v = 0;
 
-				do {										//Keep on adding overflow
+				do {                                        //Keep on adding overflow
 					v = ++dst[j++];
 				} while(!v && j < digitsA);
 			}
@@ -731,10 +731,10 @@ Bool BigInt_base2(const BigIntStringify *stringify, EIntEncoding type, BigInt b,
 			continue;
 
 		switch(type) {
-			default:				resultPtr[i - j] = C8_createHex((U8)v);		break;
-			case EIntEncoding_Bin:	resultPtr[i - j] = C8_createBin((U8)v);		break;
-			case EIntEncoding_Oct:	resultPtr[i - j] = C8_createOct((U8)v);		break;
-			case EIntEncoding_Nyto:	resultPtr[i - j] = C8_createNyto((U8)v);	break;
+			default:                resultPtr[i - j] = C8_createHex((U8)v);        break;
+			case EIntEncoding_Bin:    resultPtr[i - j] = C8_createBin((U8)v);        break;
+			case EIntEncoding_Oct:    resultPtr[i - j] = C8_createOct((U8)v);        break;
+			case EIntEncoding_Nyto:    resultPtr[i - j] = C8_createNyto((U8)v);    break;
 		}
 
 		firstLoc = j + 1;

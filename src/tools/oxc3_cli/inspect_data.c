@@ -52,7 +52,7 @@ Bool collectArchiveEntries(FileInfo info, ListCharString *arg, Error *e_rr) {
 	gotoIfError3(clean, CharString_createCopyx(info.path, &tmp, e_rr));
 	gotoIfError3(clean, ListCharString_pushBackx(arg, tmp, e_rr));
 
-	tmp = CharString_createNull();		//Belongs to list now
+	tmp = CharString_createNull();        //Belongs to list now
 
 clean:
 	CharString_freex(&tmp);
@@ -247,7 +247,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 		))
 
 		CharString_freex(&tmp);
-		madeFile = false;			//We successfully wrote, so keep it from deleting the folder
+		madeFile = false;            //We successfully wrote, so keep it from deleting the folder
 		s_uccess = true;
 
 		goto clean;
@@ -339,7 +339,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 	//Parse encryption key
 
 	U32 encryptionKeyV[8] = { 0 };
-	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+	U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
@@ -548,7 +548,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					retError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"));
 
 				gotoIfError3(cleanCa, CharString_createDecx(v, 3, &tmp, e_rr));
- 				gotoIfError3(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1, e_rr));
+				 gotoIfError3(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1, e_rr));
 				gotoIfError3(cleanCa, CharString_appendx(&tmp, ':', e_rr));
 				gotoIfError3(cleanCa, CharString_appendx(&tmp, ' ', e_rr));
 				gotoIfError3(cleanCa, CharString_appendStringx(&tmp, &tmp1, e_rr));
@@ -849,7 +849,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			SBFile file = (SBFile) { 0 };
 			gotoIfError3(cleanSb, SBFile_readx(buf, false, &file, e_rr))
 
-			SBFile_printx(file, 0, U16_MAX, true);		//TODO: parent
+			SBFile_printx(file, 0, U16_MAX, true);        //TODO: parent
 
 		cleanSb:
 

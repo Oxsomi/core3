@@ -52,7 +52,7 @@ Buffer CAFile_getDataConst(const CAFile *caFile, CAHandle fileHandle, Bool *isVa
 // *streamOff is U64_MAX for invalid handles, folders or fully loaded data, otherwise is offset in the stream.
 StreamRef *CAFile_getDataStream(const CAFile *caFile, CAHandle fileHandle, U64 *streamOff);
 
-Bool CAFile_isLoaded(const CAFile *caFile, CAHandle fileHandle);			//Returns false for streams
+Bool CAFile_isLoaded(const CAFile *caFile, CAHandle fileHandle);            //Returns false for streams
 
 //Setters
 

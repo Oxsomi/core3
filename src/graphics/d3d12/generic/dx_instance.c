@@ -38,9 +38,9 @@
 #include "types/base/constants.h"
 
 #include <dxgi1_6.h>
-#include <d3d11.h>			//AMD AGS needs it...
+#include <d3d11.h>            //AMD AGS needs it...
 
-#if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64	//TODO: Enable for arm later
+#if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64    //TODO: Enable for arm later
 	#include <nvapi.h>
 	#define USE_NVAPI
 #endif
@@ -56,7 +56,7 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	.blas = sizeof(DxBLAS),
 	.tlas = sizeof(DxTLAS),
 	.pipeline = sizeof(DxPipeline),
-	.sampler = 16,		//Doesn't exist
+	.sampler = 16,        //Doesn't exist
 	.buffer = sizeof(DxDeviceBuffer),
 	.image = sizeof(DxUnifiedTexture),
 	.swapchain = sizeof(DxSwapchain),
@@ -338,7 +338,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Dx);
 	ListIDXGIAdapter4 adapters = (ListIDXGIAdapter4) { 0 };
 	ListGraphicsDeviceInfo tempInfos = (ListGraphicsDeviceInfo) { 0 };
-	ID3D12Device10 *device = NULL;		//Temporary device, we need to know
+	ID3D12Device10 *device = NULL;        //Temporary device, we need to know
 	CharString tmp = CharString_createNull();
 
 	//Get all possible adapters
@@ -371,10 +371,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 	//Pre-filter, this removes duplicate devices that get generated because of virtual displays (RDP).
 	//The reason why we want to filter this:
-	//	Even though this is a valid D3D12 device, the LUID is not real.
-	//	This would mean no other device can interop if it were to be selected (CUDA, Vulkan, etc.).
-	//	It shows as multiple devices, which might give the indication of having multiple physical devices
-	//		(e.g. 2 of the same GPU).
+	//    Even though this is a valid D3D12 device, the LUID is not real.
+	//    This would mean no other device can interop if it were to be selected (CUDA, Vulkan, etc.).
+	//    It shows as multiple devices, which might give the indication of having multiple physical devices
+	//        (e.g. 2 of the same GPU).
 
 	for(U64 i = 0; i < adapters.length; ++i) {
 
@@ -432,15 +432,15 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsVendorId vendorId = EGraphicsVendorId_Unknown;
 
 		switch(desc.VendorId) {
-			case EGraphicsVendorPCIE_NV:	vendorId = EGraphicsVendorId_NV;		break;
-			case EGraphicsVendorPCIE_AMD:	vendorId = EGraphicsVendorId_AMD;		break;
-			case EGraphicsVendorPCIE_ARM:	vendorId = EGraphicsVendorId_ARM;		break;
+			case EGraphicsVendorPCIE_NV:    vendorId = EGraphicsVendorId_NV;        break;
+			case EGraphicsVendorPCIE_AMD:    vendorId = EGraphicsVendorId_AMD;        break;
+			case EGraphicsVendorPCIE_ARM:    vendorId = EGraphicsVendorId_ARM;        break;
 			case EGraphicsVendorPCIE_QCOM2:
-			case EGraphicsVendorPCIE_QCOM:	vendorId = EGraphicsVendorId_QCOM;		break;
-			case EGraphicsVendorPCIE_INTC:	vendorId = EGraphicsVendorId_INTC;		break;
-			case EGraphicsVendorPCIE_IMGT:	vendorId = EGraphicsVendorId_IMGT;		break;
-			case EGraphicsVendorPCIE_MSFT:	vendorId = EGraphicsVendorId_MSFT;		break;
-			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, desc.VendorId);	break;
+			case EGraphicsVendorPCIE_QCOM:    vendorId = EGraphicsVendorId_QCOM;        break;
+			case EGraphicsVendorPCIE_INTC:    vendorId = EGraphicsVendorId_INTC;        break;
+			case EGraphicsVendorPCIE_IMGT:    vendorId = EGraphicsVendorId_IMGT;        break;
+			case EGraphicsVendorPCIE_MSFT:    vendorId = EGraphicsVendorId_MSFT;        break;
+			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, desc.VendorId);    break;
 		}
 
 		//Grab properties
@@ -638,14 +638,14 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
 
-		rootSig.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;	//Nice way of querying..
+		rootSig.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;    //Nice way of querying..
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ROOT_SIGNATURE, &rootSig, sizeof(rootSig)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required root signature 1.1", i);
 			goto next;
 		}
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...
+		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;        //Nice way of querying DirectX...
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required shader model (6.5)", i);
 			goto next;
@@ -911,7 +911,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 				k += digits + 1;
 				digits = min < 10 ? 1 : (min < 100 ? 2 : (min < 1000 ? 3 : (min < 10000 ? 4 : 5)));
 
-				if(vendorId == EGraphicsVendorId_INTC)		//INTC is xxx.yyyy most likely. For safety only minor digits > 4
+				if(vendorId == EGraphicsVendorId_INTC)        //INTC is xxx.yyyy most likely. For safety only minor digits > 4
 					digits = U64_max(4, digits);
 
 				for (U16 j = 0; j < digits; ++j) {
@@ -947,7 +947,7 @@ clean:
 		ListGraphicsDeviceInfo_freex(&tempInfos);
 
 	if(device)
-		device->lpVtbl->Release(device);		//Release device. We might re-create, but we can't pass it around
+		device->lpVtbl->Release(device);        //Release device. We might re-create, but we can't pass it around
 
 	for(U64 i = 0; i < adapters.length; ++i)
 		adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);

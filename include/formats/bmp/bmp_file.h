@@ -37,9 +37,9 @@ typedef struct BMPInfo {
 
 	U32 w, h;
 
-	Bool isFlipped;			//Flipped only on pre-load or write time. After load it will allocate
-	U8 textureFormatId;		//ETextureFormatId
-	Bool discardAlpha;		//Allows storing RGBA8 as RGB8, at the runtime cost of re-allocation and copying
+	Bool isFlipped;            //Flipped only on pre-load or write time. After load it will allocate
+	U8 textureFormatId;        //ETextureFormatId
+	Bool discardAlpha;        //Allows storing RGBA8 as RGB8, at the runtime cost of re-allocation and copying
 	U8 padding;
 
 	I32 xPixPerM, yPixPerM;
@@ -47,11 +47,11 @@ typedef struct BMPInfo {
 } BMPInfo;
 
 Bool BMP_write(
-	StreamRef *stream,				//Pass NULL to calculate length only (*off)
+	StreamRef *stream,                //Pass NULL to calculate length only (*off)
 	U64 *off,
 	const BMPInfo *info,
 	const Allocator *allocator,
-	StreamRef *inputStream,			//A stream that needs to match the input's format (info->discardAlpha ? BGR8 : BGRA8)
+	StreamRef *inputStream,            //A stream that needs to match the input's format (info->discardAlpha ? BGR8 : BGRA8)
 	U64 inputOffset,
 	Bool inputIsFlipped,
 	Error *e_rr

@@ -35,9 +35,9 @@
 //The descriptor index addresses what binding it's in (indirectly).
 //
 //[[vk::image_format("Unknown")]]
-//Texture2D test[128];					//Binding id = 0, bindless type index: 1
-//Texture2D test2;						//Binding id = 1, bindless type index: N/A
-//Texture2D test2[63];					//Binding id = 2, bindless type index: 2
+//Texture2D test[128];                    //Binding id = 0, bindless type index: 1
+//Texture2D test2;                        //Binding id = 1, bindless type index: N/A
+//Texture2D test2[63];                    //Binding id = 2, bindless type index: 2
 //
 //As stated above, only descriptor arrays are considered to be a bindless type, there can only be 15 bindless arrays.
 //Bindless type index 0 is reserved as invalid and U21_MAX indicates InvalidAllocation.
@@ -53,14 +53,14 @@ typedef U32 BindlessDescriptor;
 typedef enum ESHRegisterType ESHRegisterType;
 
 static const BindlessDescriptor BindlessDescriptor_InvalidAllocation = (1 << 21) - 1;
-static const BindlessDescriptor BindlessDescriptor_None	= 0;
+static const BindlessDescriptor BindlessDescriptor_None    = 0;
 
 Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	GraphicsDeviceRef *device,
-	DescriptorTableRef *descTable,		//Can be NULL in case the device has a default bindless table
+	DescriptorTableRef *descTable,        //Can be NULL in case the device has a default bindless table
 	ESHRegisterType type,
-	U32 strideOrLength,					//For structured/storage buffers
-	Bool maintainRef,					//Only if the resource isn't in charge of managing the descriptor
+	U32 strideOrLength,                    //For structured/storage buffers
+	Bool maintainRef,                    //Only if the resource isn't in charge of managing the descriptor
 	Descriptor desc,
 	BindlessDescriptor *descriptorHandle,
 	Error *e_rr
@@ -68,7 +68,7 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 
 Bool GraphicsDeviceRef_freeDescriptorBindless(
 	GraphicsDeviceRef *device,
-	DescriptorTableRef *descTable,		//Can be NULL in case the device has a default bindless table
+	DescriptorTableRef *descTable,        //Can be NULL in case the device has a default bindless table
 	BindlessDescriptor descriptor,
 	Error *e_rr
 );

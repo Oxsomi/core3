@@ -98,7 +98,7 @@ Bool DLFile_read(
 	if(header.version != EDLVersion_V1_0)
 		retError(clean, Error_invalidParameter(0, 1, "DLFile_read() header.version is invalid"));
 
-	if(header.type >> 4)								//TODO: Compression
+	if(header.type >> 4)                                //TODO: Compression
 		retError(clean, Error_unsupportedOperation(1, "DLFile_read() compression not supported yet"));
 
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
@@ -161,7 +161,7 @@ Bool DLFile_read(
 
 	//Decrypt
 
-	U64 chunkSize = 0;			//No chunkSize by default (32KiB for stream cursors)
+	U64 chunkSize = 0;            //No chunkSize by default (32KiB for stream cursors)
 	Bool isEncrypted = header.type & 0xF;
 
 	U8 chunkSize2 = 0;
@@ -214,7 +214,7 @@ Bool DLFile_read(
 		}
 
 		gotoIfError3(clean, Buffer_decryptAuto(
-			NULL,				//Instead of decrypting on the fly, we only validate AAD
+			NULL,                //Instead of decrypting on the fly, we only validate AAD
 			&tmp,
 			encryptionKey,
 			tag,
@@ -236,7 +236,7 @@ Bool DLFile_read(
 			e_rr
 		));
 
-		fileStart = 0;		//We're now relative to the encryption stream
+		fileStart = 0;        //We're now relative to the encryption stream
 
 		Buffer_free(&tmp, alloc);
 	}
@@ -259,7 +259,7 @@ Bool DLFile_read(
 	};
 
 	if (!chunkSize)
-		chunkSize = 32 * KIBI - sizeof(CryptoChunk);		//Ensure we get exactly 32 KiB cache size
+		chunkSize = 32 * KIBI - sizeof(CryptoChunk);        //Ensure we get exactly 32 KiB cache size
 
 	//If we have any lazy entries we will need the encryption keys for later. Copy them.
 	//(Lazy entries are always possible if they span multiple chunks)
@@ -288,9 +288,9 @@ Bool DLFile_read(
 	allocate = true;
 
 	//Per entry
-	//Either:	(U8 entries[])[N] or
-	//			chunks[N] where chunk:
-	//				I32x4 tag, U8 data[chunkSize] with iv = root iv + chunkId
+	//Either:    (U8 entries[])[N] or
+	//            chunks[N] where chunk:
+	//                I32x4 tag, U8 data[chunkSize] with iv = root iv + chunkId
 
 	U64 dataOff = fileStart;
 

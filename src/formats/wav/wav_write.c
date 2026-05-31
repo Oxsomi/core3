@@ -101,7 +101,7 @@ Bool WAV_write(
 
 			break;
 
-		case 32:		//PCM and float both supported
+		case 32:        //PCM and float both supported
 			break;
 
 		case 64:

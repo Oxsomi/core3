@@ -67,8 +67,8 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 
 		//Grab start of random name
 
-		C8 base[] = "/wl_shm";	//sizeof includes null terminator, so no -
-		C8 randomName[] = "/wl_shm-XXXXXXXXXXX";		//64-bit number as Nyto
+		C8 base[] = "/wl_shm";    //sizeof includes null terminator, so no -
+		C8 randomName[] = "/wl_shm-XXXXXXXXXXX";        //64-bit number as Nyto
 		U64 rand = 0;
 
 		if(!Buffer_csprng(Buffer_createRef(&rand, sizeof(rand))))
@@ -154,7 +154,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		w->cpuVisibleBuffer.ptr = lwin->mainBufferPtr;
 		w->cpuVisibleBuffer.lengthAndRefBits = stride | ((U64)1 << 63);
 
-		backBuffer = NULL;	
+		backBuffer = NULL;    
 	}
 
 clean:
@@ -364,7 +364,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	Buffer buf = Buffer_createNull();
 	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(LWindow), &buf))
-	w->nativeData = (void*) buf.ptr;		//LWindow
+	w->nativeData = (void*) buf.ptr;        //LWindow
 
 	LWindow *lwin = (LWindow*) buf.ptr;
 	lwin->surface = xdg_wm_base_get_xdg_surface(manager->xdgWmBase, surface);

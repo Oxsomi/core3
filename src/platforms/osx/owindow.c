@@ -34,7 +34,7 @@
 
 Bool OWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	(void)w; (void)size; (void) e_rr;
-	retError(clean, Error_unimplemented(0, "OWindow_initSize() is unimplemented"));		//TODO:
+	retError(clean, Error_unimplemented(0, "OWindow_initSize() is unimplemented"));        //TODO:
 clean:
 	return true;
 }
@@ -205,7 +205,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			//First char
 
-			else if (wParam < 0xDC00) {				//Cache for final char
+			else if (wParam < 0xDC00) {                //Cache for final char
 				((U16*)buf.ptr)[0] = (U16)wParam;
 				clearBuffer = false;
 			}
@@ -236,7 +236,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			}
 
 			if(clearBuffer)
-				((C8*)buf.ptr)[0] = '\0';		//Clear buffer
+				((C8*)buf.ptr)[0] = '\0';        //Clear buffer
 
 			break;
 		}
@@ -298,41 +298,41 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				switch (keyboardDat.VKey) {
 
-					case VK_SNAPSHOT:			handle = EKey_PrintScreen;		break;
-					case VK_SCROLL:				handle = EKey_ScrollLock;		break;
-					case VK_NUMLOCK:			handle = EKey_NumLock;			break;
-					case VK_PAUSE:				handle = EKey_Pause;			break;
-					case VK_INSERT:				handle = EKey_Insert;			break;
-					case VK_HOME:				handle = EKey_Home;				break;
-					case VK_PRIOR:				handle = EKey_PageUp;			break;
-					case VK_NEXT:				handle = EKey_PageDown;			break;
-					case VK_DELETE:				handle = EKey_Delete;			break;
-					case VK_END:				handle = EKey_End;				break;
+					case VK_SNAPSHOT:            handle = EKey_PrintScreen;        break;
+					case VK_SCROLL:                handle = EKey_ScrollLock;        break;
+					case VK_NUMLOCK:            handle = EKey_NumLock;            break;
+					case VK_PAUSE:                handle = EKey_Pause;            break;
+					case VK_INSERT:                handle = EKey_Insert;            break;
+					case VK_HOME:                handle = EKey_Home;                break;
+					case VK_PRIOR:                handle = EKey_PageUp;            break;
+					case VK_NEXT:                handle = EKey_PageDown;            break;
+					case VK_DELETE:                handle = EKey_Delete;            break;
+					case VK_END:                handle = EKey_End;                break;
 
-					case VK_UP:					handle = EKey_Up;				break;
-					case VK_LEFT:				handle = EKey_Left;				break;
-					case VK_DOWN:				handle = EKey_Down;				break;
-					case VK_RIGHT:				handle = EKey_Right;			break;
+					case VK_UP:                    handle = EKey_Up;                break;
+					case VK_LEFT:                handle = EKey_Left;                break;
+					case VK_DOWN:                handle = EKey_Down;                break;
+					case VK_RIGHT:                handle = EKey_Right;            break;
 
-					case VK_BROWSER_BACK:		handle = EKey_Back;				break;
-					case VK_BROWSER_FORWARD:	handle = EKey_Forward;			break;
-					case VK_SLEEP:				handle = EKey_Sleep;			break;
-					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;			break;
-					case VK_BROWSER_SEARCH:		handle = EKey_Search;			break;
-					case VK_VOLUME_MUTE:		handle = EKey_Mute;				break;
-					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;		break;
-					case VK_VOLUME_UP:			handle = EKey_VolumeUp;			break;
-					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;				break;
-					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;			break;
-					case VK_CLEAR:				handle = EKey_Clear;			break;
-					case VK_RETURN:				handle = EKey_Enter;			break;
-					case VK_HELP:				handle = EKey_Help;				break;
+					case VK_BROWSER_BACK:        handle = EKey_Back;                break;
+					case VK_BROWSER_FORWARD:    handle = EKey_Forward;            break;
+					case VK_SLEEP:                handle = EKey_Sleep;            break;
+					case VK_BROWSER_REFRESH:    handle = EKey_Refresh;            break;
+					case VK_BROWSER_SEARCH:        handle = EKey_Search;            break;
+					case VK_VOLUME_MUTE:        handle = EKey_Mute;                break;
+					case VK_VOLUME_DOWN:        handle = EKey_VolumeDown;        break;
+					case VK_VOLUME_UP:            handle = EKey_VolumeUp;            break;
+					case VK_MEDIA_NEXT_TRACK:    handle = EKey_Skip;                break;
+					case VK_MEDIA_PREV_TRACK:    handle = EKey_Previous;            break;
+					case VK_CLEAR:                handle = EKey_Clear;            break;
+					case VK_RETURN:                handle = EKey_Enter;            break;
+					case VK_HELP:                handle = EKey_Help;                break;
 
-					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
-					case VK_ADD:				handle = EKey_NumpadAdd;		break;
-					case VK_DECIMAL:			handle = EKey_NumpadDot;		break;
-					case VK_DIVIDE:				handle = EKey_NumpadDiv;		break;
-					case VK_SUBTRACT:			handle = EKey_NumpadSub;		break;
+					case VK_MULTIPLY:            handle = EKey_NumpadMul;        break;
+					case VK_ADD:                handle = EKey_NumpadAdd;        break;
+					case VK_DECIMAL:            handle = EKey_NumpadDot;        break;
+					case VK_DIVIDE:                handle = EKey_NumpadDiv;        break;
+					case VK_SUBTRACT:            handle = EKey_NumpadSub;        break;
 
 					default:
 
@@ -345,92 +345,92 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 							//Row 0
 
-							case 0x01:					handle = EKey_Escape;		break;
+							case 0x01:                    handle = EKey_Escape;        break;
 
-							case 0x3B:					handle = EKey_F1;			break;
-							case 0x3C:					handle = EKey_F2;			break;
-							case 0x3D:					handle = EKey_F3;			break;
-							case 0x3E:					handle = EKey_F4;			break;
-							case 0x3F:					handle = EKey_F5;			break;
-							case 0x40:					handle = EKey_F6;			break;
-							case 0x41:					handle = EKey_F7;			break;
-							case 0x42:					handle = EKey_F8;			break;
-							case 0x43:					handle = EKey_F9;			break;
-							case 0x44:					handle = EKey_F10;			break;
-							case 0x57:					handle = EKey_F11;			break;
-							case 0x58:					handle = EKey_F12;			break;
+							case 0x3B:                    handle = EKey_F1;            break;
+							case 0x3C:                    handle = EKey_F2;            break;
+							case 0x3D:                    handle = EKey_F3;            break;
+							case 0x3E:                    handle = EKey_F4;            break;
+							case 0x3F:                    handle = EKey_F5;            break;
+							case 0x40:                    handle = EKey_F6;            break;
+							case 0x41:                    handle = EKey_F7;            break;
+							case 0x42:                    handle = EKey_F8;            break;
+							case 0x43:                    handle = EKey_F9;            break;
+							case 0x44:                    handle = EKey_F10;            break;
+							case 0x57:                    handle = EKey_F11;            break;
+							case 0x58:                    handle = EKey_F12;            break;
 
 							//Row 1
 
-							case 0x29:					handle = EKey_Backtick;		break;
+							case 0x29:                    handle = EKey_Backtick;        break;
 
 							case 0x02: case 0x03: case 0x04: case 0x05: case 0x06: case 0x07: case 0x08: case 0x09: case 0x0A:
 								handle = EKey_1 + (keyboardDat.MakeCode - 2);
 								break;
 
-							case 0xB:					handle = EKey_0;			break;
-							case 0xC:					handle = EKey_Minus;		break;
-							case 0xD:					handle = EKey_Equals;		break;
-							case 0xE:					handle = EKey_Backspace;	break;
+							case 0xB:                    handle = EKey_0;            break;
+							case 0xC:                    handle = EKey_Minus;        break;
+							case 0xD:                    handle = EKey_Equals;        break;
+							case 0xE:                    handle = EKey_Backspace;    break;
 
 							//Row 2
 
-							case 0x0F:					handle = EKey_Tab;			break;
-							case 0x10:					handle = EKey_Q;			break;
-							case 0x11:					handle = EKey_W;			break;
-							case 0x12:					handle = EKey_E;			break;
-							case 0x13:					handle = EKey_R;			break;
-							case 0x14:					handle = EKey_T;			break;
-							case 0x15:					handle = EKey_Y;			break;
-							case 0x16:					handle = EKey_U;			break;
-							case 0x17:					handle = EKey_I;			break;
-							case 0x18:					handle = EKey_O;			break;
-							case 0x19:					handle = EKey_P;			break;
-							case 0x1A:					handle = EKey_LBracket;		break;
-							case 0x1B:					handle = EKey_RBracket;		break;
+							case 0x0F:                    handle = EKey_Tab;            break;
+							case 0x10:                    handle = EKey_Q;            break;
+							case 0x11:                    handle = EKey_W;            break;
+							case 0x12:                    handle = EKey_E;            break;
+							case 0x13:                    handle = EKey_R;            break;
+							case 0x14:                    handle = EKey_T;            break;
+							case 0x15:                    handle = EKey_Y;            break;
+							case 0x16:                    handle = EKey_U;            break;
+							case 0x17:                    handle = EKey_I;            break;
+							case 0x18:                    handle = EKey_O;            break;
+							case 0x19:                    handle = EKey_P;            break;
+							case 0x1A:                    handle = EKey_LBracket;        break;
+							case 0x1B:                    handle = EKey_RBracket;        break;
 
 							//Row 3
 
-							case 0x3A:					handle = EKey_Caps;			break;
-							case 0x1E:					handle = EKey_A;			break;
-							case 0x1F:					handle = EKey_S;			break;
-							case 0x20:					handle = EKey_D;			break;
-							case 0x21:					handle = EKey_F;			break;
-							case 0x22:					handle = EKey_G;			break;
-							case 0x23:					handle = EKey_H;			break;
-							case 0x24:					handle = EKey_J;			break;
-							case 0x25:					handle = EKey_K;			break;
-							case 0x26:					handle = EKey_L;			break;
-							case 0x27:					handle = EKey_Semicolon;	break;
-							case 0x28:					handle = EKey_Quote;		break;
-							case 0x2B:					handle = EKey_Backslash;	break;
+							case 0x3A:                    handle = EKey_Caps;            break;
+							case 0x1E:                    handle = EKey_A;            break;
+							case 0x1F:                    handle = EKey_S;            break;
+							case 0x20:                    handle = EKey_D;            break;
+							case 0x21:                    handle = EKey_F;            break;
+							case 0x22:                    handle = EKey_G;            break;
+							case 0x23:                    handle = EKey_H;            break;
+							case 0x24:                    handle = EKey_J;            break;
+							case 0x25:                    handle = EKey_K;            break;
+							case 0x26:                    handle = EKey_L;            break;
+							case 0x27:                    handle = EKey_Semicolon;    break;
+							case 0x28:                    handle = EKey_Quote;        break;
+							case 0x2B:                    handle = EKey_Backslash;    break;
 
 							//Row 4
 
-							case 0x2A:					handle = EKey_LShift;		break;
-							case 0x56:					handle = EKey_Bar;			break;
-							case 0x2C:					handle = EKey_Z;			break;
-							case 0x2D:					handle = EKey_X;			break;
-							case 0x2E:					handle = EKey_C;			break;
-							case 0x2F:					handle = EKey_V;			break;
-							case 0x30:					handle = EKey_B;			break;
-							case 0x31:					handle = EKey_N;			break;
-							case 0x32:					handle = EKey_M;			break;
-							case 0x33:					handle = EKey_Comma;		break;
-							case 0x34:					handle = EKey_Period;		break;
-							case 0x35:					handle = EKey_Slash;		break;
-							case 0x36:					handle = EKey_RShift;		break;
+							case 0x2A:                    handle = EKey_LShift;        break;
+							case 0x56:                    handle = EKey_Bar;            break;
+							case 0x2C:                    handle = EKey_Z;            break;
+							case 0x2D:                    handle = EKey_X;            break;
+							case 0x2E:                    handle = EKey_C;            break;
+							case 0x2F:                    handle = EKey_V;            break;
+							case 0x30:                    handle = EKey_B;            break;
+							case 0x31:                    handle = EKey_N;            break;
+							case 0x32:                    handle = EKey_M;            break;
+							case 0x33:                    handle = EKey_Comma;        break;
+							case 0x34:                    handle = EKey_Period;        break;
+							case 0x35:                    handle = EKey_Slash;        break;
+							case 0x36:                    handle = EKey_RShift;        break;
 
 							//Row 5
 
-							case 0x1D:					handle = EKey_LCtrl;		break;
-							case 0xE05B:				handle = EKey_LMenu;		break;
-							case 0x38:					handle = EKey_LAlt;			break;
-							case 0x39:					handle = EKey_Space;		break;
-							case 0xE038:				handle = EKey_RAlt;			break;
-							case 0xE05C:				handle = EKey_RMenu;		break;
-							case 0xE05D:				handle = EKey_Options;		break;
-							case 0xE01D:				handle = EKey_RCtrl;		break;
+							case 0x1D:                    handle = EKey_LCtrl;        break;
+							case 0xE05B:                handle = EKey_LMenu;        break;
+							case 0x38:                    handle = EKey_LAlt;            break;
+							case 0x39:                    handle = EKey_Space;        break;
+							case 0xE038:                handle = EKey_RAlt;            break;
+							case 0xE05C:                handle = EKey_RMenu;        break;
+							case 0xE05D:                handle = EKey_Options;        break;
+							case 0xE01D:                handle = EKey_RCtrl;        break;
 
 							//Unknown key
 
@@ -552,7 +552,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				break;
 			}
 
-			if(deviceInfo.dwType == RIM_TYPEHID)		//Irrelevant for us for now
+			if(deviceInfo.dwType == RIM_TYPEHID)        //Irrelevant for us for now
 				break;
 
 			Error err;
@@ -587,8 +587,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				}
 
 				RAWINPUTDEVICE rawDevice = (RAWINPUTDEVICE) {
-					0x01,								//Perhaps 0xD for touchscreen at some point			TODO:
-					(U16)(isKeyboard ? 0x06 : 0x02),	//0x4-0x05 for game controllers in the future		TODO:
+					0x01,                                //Perhaps 0xD for touchscreen at some point            TODO:
+					(U16)(isKeyboard ? 0x06 : 0x02),    //0x4-0x05 for game controllers in the future        TODO:
 					0x0,
 					hwnd
 				};
@@ -664,7 +664,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(*(HANDLE*) ours->dataExt.ptr == (HANDLE) lParam)
 						break;
 
-				if(ours == end)		//Unrecognized device
+				if(ours == end)        //Unrecognized device
 					break;
 
 				//Notify our removal
@@ -796,8 +796,8 @@ Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat fo
 	manager;
 
 	//TODO: HDR support; ColorSpace
-	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
-	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1
+	//    https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
+	//    https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1
 
 	return format == EWindowFormat_BGRA8;
 }
@@ -827,7 +827,7 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	//id wrapped;
 	//gotoIfError2(clean, ObjC_wrapString(title, &copy, &wrapped))
 
-	//ObjC_sendVoidPtr(w->nativeHandle, selSetTitle(), wrapped);		TODO:
+	//ObjC_sendVoidPtr(w->nativeHandle, selSetTitle(), wrapped);        TODO:
 
 clean:
 	//CharString_freex(&copy);
@@ -850,7 +850,7 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 
 	else w->flags &= ~EWindowFlags_IsFullscreen;
 
-	//ObjC_sendId((id)w->nativeHandle, selToggleFullScreen());		TODO:
+	//ObjC_sendId((id)w->nativeHandle, selToggleFullScreen());        TODO:
 
 clean:
 	return s_uccess;

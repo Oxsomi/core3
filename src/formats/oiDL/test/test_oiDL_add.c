@@ -175,7 +175,7 @@ void Test_DLInsertEntry(Test *t) {
 			}                                                                               \
 		} while(0)
 
-	{						//Insert at front (id = 0) shifts existing entries right
+	{                        //Insert at front (id = 0) shifts existing entries right
 		DLFile f = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -204,7 +204,7 @@ void Test_DLInsertEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Insert in middle
+	{                        //Insert in middle
 		DLFile f = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -232,7 +232,7 @@ void Test_DLInsertEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Insert at end (id == length) acts as append
+	{                        //Insert at end (id == length) acts as append
 		DLFile f = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -257,7 +257,7 @@ void Test_DLInsertEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Insert into empty file at id = 0
+	{                        //Insert into empty file at id = 0
 		DLFile f = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -282,7 +282,7 @@ void Test_DLInsertEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//OOB (id > length) fails
+	{                        //OOB (id > length) fails
 		DLFile f = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -306,7 +306,7 @@ void Test_DLInsertEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Type mismatch: String file
+	{                        //Type mismatch: String file
 		DLFile f = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -329,7 +329,7 @@ void Test_DLInsertEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Null guards
+	{                        //Null guards
 		DLFile f = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -353,7 +353,7 @@ void Test_DLInsertEntryString(Test *t) {
 
 	Test_setModule(t, "DLFile_insertEntryString");
 
-	{						//Insert at front shifts existing entries
+	{                        //Insert at front shifts existing entries
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -380,7 +380,7 @@ void Test_DLInsertEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Insert in middle
+	{                        //Insert in middle
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -406,7 +406,7 @@ void Test_DLInsertEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Insert at end acts as append
+	{                        //Insert at end acts as append
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -429,7 +429,7 @@ void Test_DLInsertEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//OOB fails
+	{                        //OOB fails
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -448,7 +448,7 @@ void Test_DLInsertEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Type mismatch: Data file
+	{                        //Type mismatch: Data file
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -465,7 +465,7 @@ void Test_DLInsertEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Null guards
+	{                        //Null guards
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -489,7 +489,7 @@ void Test_DLRemoveInsertRoundtrip(Test *t) {
 
 	Test_setModule(t, "DLFile_removeInsertRoundtrip");
 
-	{						//Data: remove middle then re-insert at same position
+	{                        //Data: remove middle then re-insert at same position
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 4)) {
@@ -519,7 +519,7 @@ void Test_DLRemoveInsertRoundtrip(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//String: remove first then re-insert at front
+	{                        //String: remove first then re-insert at front
 		DLFile f = { 0 };
 
 		if (!buildStringFile(t, &f, 3)) {
@@ -546,7 +546,7 @@ void Test_DLRemoveInsertRoundtrip(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Multiple removes followed by multiple inserts
+	{                        //Multiple removes followed by multiple inserts
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 5)) {

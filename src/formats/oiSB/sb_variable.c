@@ -33,25 +33,25 @@ TListImpl(SBVar);
 #define EMPTY4 "", "", "", ""
 #define EXPAND4(a, x, x1) #a #x1 #x, #a "x2" #x, #a "x3" #x, #a "x4" #x
 
-#define EXPAND4x4(...)							 \
-	EMPTY4,										 \
-	EMPTY4,										 \
-	EMPTY4,										 \
-	EMPTY4,										 \
+#define EXPAND4x4(...)                             \
+	EMPTY4,                                         \
+	EMPTY4,                                         \
+	EMPTY4,                                         \
+	EMPTY4,                                         \
 												 \
-	EMPTY4,										 \
-	EXPAND4(F16, __VA_ARGS__),					 \
-	EXPAND4(I16, __VA_ARGS__),					 \
-	EXPAND4(U16, __VA_ARGS__),					 \
+	EMPTY4,                                         \
+	EXPAND4(F16, __VA_ARGS__),                     \
+	EXPAND4(I16, __VA_ARGS__),                     \
+	EXPAND4(U16, __VA_ARGS__),                     \
 												 \
-	EMPTY4,										 \
-	EXPAND4(F32, __VA_ARGS__),					 \
-	EXPAND4(I32, __VA_ARGS__),					 \
-	EXPAND4(U32, __VA_ARGS__),					 \
+	EMPTY4,                                         \
+	EXPAND4(F32, __VA_ARGS__),                     \
+	EXPAND4(I32, __VA_ARGS__),                     \
+	EXPAND4(U32, __VA_ARGS__),                     \
 												 \
-	EMPTY4,										 \
-	EXPAND4(F64, __VA_ARGS__),					 \
-	EXPAND4(I64, __VA_ARGS__),					 \
+	EMPTY4,                                         \
+	EXPAND4(F64, __VA_ARGS__),                     \
+	EXPAND4(I64, __VA_ARGS__),                     \
 	EXPAND4(U64, __VA_ARGS__)
 
 const C8 *ESBType_names[] = {
@@ -117,8 +117,8 @@ clean:
 
 void SBVar_applyHash(U64 *hashRes, SBVar var, CharString name) {
 
-	const void *structId = &var.structId;				//Interpreted as a U64 and U32
-	const U32 *structIdU32 = (const U32*) structId;		//[] = (structId, arrayIndex), offset, (type, flags, parentId)
+	const void *structId = &var.structId;                //Interpreted as a U64 and U32
+	const U32 *structIdU32 = (const U32*) structId;        //[] = (structId, arrayIndex), offset, (type, flags, parentId)
 
 	U64 hash = *hashRes;
 	hash = Buffer_fnv1a64Single(structIdU32[0] | ((U64)structIdU32[1] << 32), hash);

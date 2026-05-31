@@ -43,7 +43,7 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	FileInfo info = (FileInfo) { 0 };
 
-	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+	U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
 
 	Error err = Error_none(), *e_rr = &err;
 

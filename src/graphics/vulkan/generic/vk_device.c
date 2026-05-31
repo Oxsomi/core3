@@ -45,12 +45,12 @@ TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
 
-#define bindNextVkStruct(T, condition, ...)	\
-	T tmp##T = __VA_ARGS__;				\
+#define bindNextVkStruct(T, condition, ...)    \
+	T tmp##T = __VA_ARGS__;                \
 										\
-	if(condition) {						\
-		*currPNext = &tmp##T;			\
-		currPNext = &tmp##T.pNext;		\
+	if(condition) {                        \
+		*currPNext = &tmp##T;            \
+		currPNext = &tmp##T.pNext;        \
 	}
 
 TList(VkDeviceQueueCreateInfo);
@@ -63,14 +63,14 @@ TListImpl(VkDescriptorImageInfo);
 TListImpl(VkAccelerationStructureKHR);
 TListImpl(VkDescriptorTableRange);
 
-#define getVkFunctionDevice(label, function, result) {											\
+#define getVkFunctionDevice(label, function, result) {                                            \
 																								\
-	PFN_vkVoidFunction v = vkGetDeviceProcAddr(deviceExt->device, #function); 					\
+	PFN_vkVoidFunction v = vkGetDeviceProcAddr(deviceExt->device, #function);                     \
 																								\
-	if(!v)																						\
-		gotoIfError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"))		\
+	if(!v)                                                                                        \
+		gotoIfError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"))        \
 																								\
-	*(void**)&result = (void*) v;																\
+	*(void**)&result = (void*) v;                                                                \
 }
 
 Error VK_WRAP_FUNC(GraphicsDevice_init)(
@@ -320,7 +320,7 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	deviceExt->framesInFlight = device->framesInFlight;		//Copy so it's known at delete
+	deviceExt->framesInFlight = device->framesInFlight;        //Copy so it's known at delete
 
 	ListConstC8 extensions = (ListConstC8) { 0 };
 	ListVkDeviceQueueCreateInfo queues = (ListVkDeviceQueueCreateInfo) { 0 };
@@ -352,28 +352,28 @@ Error VK_WRAP_FUNC(GraphicsDevice_init)(
 
 		switch (i) {
 
-			case EOptExtensions_PerfQuery:					on = featEx & EVkGraphicsFeatures_PerfQuery;			break;
-			case EOptExtensions_RayPipeline:				on = feat & EGraphicsFeatures_RayPipeline;				break;
-			case EOptExtensions_RayQuery:					on = feat & EGraphicsFeatures_RayQuery;					break;
-			case EOptExtensions_RayAcceleration:			on = feat & EGraphicsFeatures_Raytracing;				break;
-			case EOptExtensions_RayMotionBlur:				on = feat & EGraphicsFeatures_RayMotionBlur;			break;
-			case EOptExtensions_RayReorder:					on = feat & EGraphicsFeatures_RayReorder;				break;
-			case EOptExtensions_MeshShader:					on = feat & EGraphicsFeatures_MeshShader;				break;
-			case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_VariableRateShading;		break;
-			case EOptExtensions_DynamicRendering:			on = feat & EGraphicsFeatures_DirectRendering;			break;
-			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
-			case EOptExtensions_AtomicF32:					on = types & EGraphicsDataTypes_AtomicF32;				break;
-			case EOptExtensions_DeferredHostOperations:		on = feat & EGraphicsFeatures_Raytracing;				break;
-			case EOptExtensions_RaytracingValidation:		on = feat & EGraphicsFeatures_RayValidation;			break;
-			case EOptExtensions_ComputeDeriv:				on = feat & EGraphicsFeatures_ComputeDeriv;				break;
-			case EOptExtensions_Maintenance4:				on = featEx & EVkGraphicsFeatures_Maintenance4;			break;
-			case EOptExtensions_BufferDeviceAddress:		on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;	break;
-			case EOptExtensions_Bindless:					on = feat & EGraphicsFeatures_Bindless;					break;
-			case EOptExtensions_DriverProperties:			on = featEx & EVkGraphicsFeatures_DriverProperties;		break;
-			case EOptExtensions_AtomicI64:					on = types & EGraphicsDataTypes_AtomicI64;				break;
-			case EOptExtensions_F16:						on = types & EGraphicsDataTypes_F16;					break;
-			case EOptExtensions_MultiDrawIndirectCount:		on = feat & EGraphicsFeatures_MultiDrawIndirectCount;	break;
-			case EOptExtensions_MemoryBudget:				on = featEx & EVkGraphicsFeatures_MemoryBudget;			break;
+			case EOptExtensions_PerfQuery:                    on = featEx & EVkGraphicsFeatures_PerfQuery;            break;
+			case EOptExtensions_RayPipeline:                on = feat & EGraphicsFeatures_RayPipeline;                break;
+			case EOptExtensions_RayQuery:                    on = feat & EGraphicsFeatures_RayQuery;                    break;
+			case EOptExtensions_RayAcceleration:            on = feat & EGraphicsFeatures_Raytracing;                break;
+			case EOptExtensions_RayMotionBlur:                on = feat & EGraphicsFeatures_RayMotionBlur;            break;
+			case EOptExtensions_RayReorder:                    on = feat & EGraphicsFeatures_RayReorder;                break;
+			case EOptExtensions_MeshShader:                    on = feat & EGraphicsFeatures_MeshShader;                break;
+			case EOptExtensions_VariableRateShading:        on = feat & EGraphicsFeatures_VariableRateShading;        break;
+			case EOptExtensions_DynamicRendering:            on = feat & EGraphicsFeatures_DirectRendering;            break;
+			case EOptExtensions_RayMicromapOpacity:            on = feat & EGraphicsFeatures_RayMicromapOpacity;        break;
+			case EOptExtensions_AtomicF32:                    on = types & EGraphicsDataTypes_AtomicF32;                break;
+			case EOptExtensions_DeferredHostOperations:        on = feat & EGraphicsFeatures_Raytracing;                break;
+			case EOptExtensions_RaytracingValidation:        on = feat & EGraphicsFeatures_RayValidation;            break;
+			case EOptExtensions_ComputeDeriv:                on = feat & EGraphicsFeatures_ComputeDeriv;                break;
+			case EOptExtensions_Maintenance4:                on = featEx & EVkGraphicsFeatures_Maintenance4;            break;
+			case EOptExtensions_BufferDeviceAddress:        on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;    break;
+			case EOptExtensions_Bindless:                    on = feat & EGraphicsFeatures_Bindless;                    break;
+			case EOptExtensions_DriverProperties:            on = featEx & EVkGraphicsFeatures_DriverProperties;        break;
+			case EOptExtensions_AtomicI64:                    on = types & EGraphicsDataTypes_AtomicI64;                break;
+			case EOptExtensions_F16:                        on = types & EGraphicsDataTypes_F16;                    break;
+			case EOptExtensions_MultiDrawIndirectCount:        on = feat & EGraphicsFeatures_MultiDrawIndirectCount;    break;
+			case EOptExtensions_MemoryBudget:                on = featEx & EVkGraphicsFeatures_MemoryBudget;            break;
 
 			default:
 				continue;
@@ -802,7 +802,7 @@ Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
 	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
 
 		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
-		heap.flags &= 1;														//OOB
+		heap.flags &= 1;                                                        //OOB
 
 		//Ignore 256MB to allow AMD APU to work.
 		if (heap.size > deviceExt->maxHeapSizes[heap.flags] && heap.size > 256 * MIBI) {
@@ -811,14 +811,14 @@ Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt) {
 		}
 	}
 
-	if (!deviceExt->maxHeapSizes[0]) {			//If there's only local heaps then we know we're on mobile. Use local heap.
+	if (!deviceExt->maxHeapSizes[0]) {            //If there's only local heaps then we know we're on mobile. Use local heap.
 		deviceExt->maxHeapSizes[0] = deviceExt->maxHeapSizes[1];
 		deviceExt->heapIds[0] = deviceExt->heapIds[1];
 		deviceExt->hasDistinctMemory = false;
 		deviceExt->hasOnlyLocalMemory = true;
 	}
 
-	else if (!deviceExt->maxHeapSizes[1]) {		//If there's only host heaps then we know we're on AMD APU. Use host heap.
+	else if (!deviceExt->maxHeapSizes[1]) {        //If there's only host heaps then we know we're on AMD APU. Use host heap.
 		deviceExt->maxHeapSizes[1] = deviceExt->maxHeapSizes[0];
 		deviceExt->heapIds[1] = deviceExt->heapIds[0];
 		deviceExt->hasDistinctMemory = false;

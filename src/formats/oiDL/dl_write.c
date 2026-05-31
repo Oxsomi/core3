@@ -61,7 +61,7 @@ Bool DLFile_write(
 
 	OxStream *stream = RefPtr_data(streamRef, OxStream);
 
-	if (dlFile->settings.compressionType)		//TODO: Compression
+	if (dlFile->settings.compressionType)        //TODO: Compression
 		retError(clean, Error_unsupportedOperation(0, "DLFile_write() doesn't support compression yet"));
 
 	if(dlFile->settings.chunkSize && !dlFile->settings.encryptionType)
@@ -154,7 +154,7 @@ Bool DLFile_write(
 
 	U64 headerSize = sizeof(DLHeader);
 
-	if(!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))	//Magic number (can be hidden by parent; such as oiCA)
+	if(!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))    //Magic number (can be hidden by parent; such as oiCA)
 		headerSize += sizeof(U32);
 
 	//Get data size
@@ -168,17 +168,17 @@ Bool DLFile_write(
 
 	if (isEncrypted) {
 
-		headerSize += sizeof(I32x4);			//Tag for AAD and IV
+		headerSize += sizeof(I32x4);            //Tag for AAD and IV
 
 		if (!(dlFile->settings.flags & EDLSettingsFlags_HideMagicNumber))
-			headerSize += 12;		//IV only if parent doesn't manage it.
+			headerSize += 12;        //IV only if parent doesn't manage it.
 	}
 
 	headerSize = (headerSize + 15) & ~15;
 
 	//Add to stream
 
-	if (!stream) {		//Handle size detection
+	if (!stream) {        //Handle size detection
 		*startOffset += headerSize + totalSize;
 		goto clean;
 	}
@@ -229,12 +229,12 @@ Bool DLFile_write(
 
 			gotoIfError3(clean, Buffer_createUninitializedBytes(*startOffset - start, alloc, &tmp, e_rr));
 
-			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));	//Flush to make changes visible
+			gotoIfError3(clean, StreamCursor_setReadOnly(&cursor, alloc, e_rr));    //Flush to make changes visible
 
 			U64 where = start;
 			gotoIfError3(clean, StreamCursor_consume(&cursor, &where, tmp.ptrNonConst, *startOffset - start, alloc, e_rr));
 
-			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));			//Return to writable
+			gotoIfError3(clean, StreamCursor_setWritable(&cursor, e_rr));            //Return to writable
 		}
 
 		const U32 key[8] = { 0 };
@@ -295,7 +295,7 @@ Bool DLFile_write(
 
 		gotoIfError3(clean, StreamCursor_createWithCache(encryptionStream, &loadCache, true, &cursor, e_rr));
 
-		*startOffset = 0;		//Pretend to be at the start (we're now at the encryption stream)
+		*startOffset = 0;        //Pretend to be at the start (we're now at the encryption stream)
 
 	} else {
 

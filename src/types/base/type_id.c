@@ -31,12 +31,12 @@ TypeIdShort ETypeId_toShortId(ETypeId typeId) {
 	switch (type) {
 
 		case EDataType_Char:
-		default:								return 0;
+		default:                                return 0;
 
-		case EDataType_Bool:	offsetId = 0;	break;
-		case EDataType_Int:		offsetId = 1;	break;
-		case EDataType_UInt:	offsetId = 5;	break;
-		case EDataType_Float:	offsetId = 9;	break;
+		case EDataType_Bool:    offsetId = 0;    break;
+		case EDataType_Int:        offsetId = 1;    break;
+		case EDataType_UInt:    offsetId = 5;    break;
+		case EDataType_Float:    offsetId = 9;    break;
 	}
 
 	EDataTypeStride strid = ETypeId_getDataTypeStride(typeId);
@@ -53,11 +53,11 @@ TypeIdShort ETypeId_toShortId(ETypeId typeId) {
 			switch (strid) {
 				
 				default:
-				case EDataTypeStride_8:		return (TypeIdShort) -1;
+				case EDataTypeStride_8:        return (TypeIdShort) -1;
 
-				case EDataTypeStride_16:					break;
-				case EDataTypeStride_32:	++localOff;		break;
-				case EDataTypeStride_64:	localOff += 2;	break;
+				case EDataTypeStride_16:                    break;
+				case EDataTypeStride_32:    ++localOff;        break;
+				case EDataTypeStride_64:    localOff += 2;    break;
 			}
 
 			localStride = 3;
@@ -67,11 +67,11 @@ TypeIdShort ETypeId_toShortId(ETypeId typeId) {
 		case EDataType_Int:
 
 			switch (strid) {
-				default:				return (TypeIdShort)-1;
-				case EDataTypeStride_8:					break;
-				case EDataTypeStride_16:	++localOff;		break;
-				case EDataTypeStride_32:	localOff += 2;	break;
-				case EDataTypeStride_64:	localOff += 3;	break;
+				default:                return (TypeIdShort)-1;
+				case EDataTypeStride_8:                    break;
+				case EDataTypeStride_16:    ++localOff;        break;
+				case EDataTypeStride_32:    localOff += 2;    break;
+				case EDataTypeStride_64:    localOff += 3;    break;
 			}
 
 			localStride = 4;
@@ -84,11 +84,11 @@ TypeIdShort ETypeId_toShortId(ETypeId typeId) {
 	U8 h = ETypeId_getHeight(typeId);
 
 	if (w == 1 && h == 1)
-		return 1 + offsetId + localOff;		//C8 starts at 0
+		return 1 + offsetId + localOff;        //C8 starts at 0
 
 	U8 base = 1 + stride;
 
-	if (h == 1)						//Skip vectors and C8, offset with stride 3 and add width (starting 2)
+	if (h == 1)                        //Skip vectors and C8, offset with stride 3 and add width (starting 2)
 		return base + offsetId * 3 + (w - 2) * localStride + localOff;
 
 	base += stride * 3 + offsetId * 4 * 3;

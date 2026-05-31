@@ -25,7 +25,7 @@
 #include "types/container/list.h"
 #include "types/math/vec.h"
 
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS		//For fallback to query memory usage
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS        //For fallback to query memory usage
 	#define UNICODE
 	#define WIN32_LEAN_AND_MEAN
 	#define NOMINMAX
@@ -38,11 +38,11 @@ typedef RefPtr PipelineRef;
 
 typedef enum EVkCommandQueue {
 
-	EVkCommandQueue_Copy,					//Queue for dedicated host -> device copies
+	EVkCommandQueue_Copy,                    //Queue for dedicated host -> device copies
 	EVkCommandQueue_Compute,
 	EVkCommandQueue_Graphics,
 
-	//EVkCommandQueue_VideoDecode,			//TODO:
+	//EVkCommandQueue_VideoDecode,            //TODO:
 	//EVkCommandQueue_VideoEncode
 
 	EVkCommandQueue_Count
@@ -53,8 +53,8 @@ typedef struct VkCommandQueue {
 
 	VkQueue queue;
 
-	U32 queueId;					//Queue family
-	U32 resolvedQueueId;			//Index into command pool array for that queue
+	U32 queueId;                    //Queue family
+	U32 resolvedQueueId;            //Index into command pool array for that queue
 
 	EVkCommandQueue type;
 	U32 pad;
@@ -66,7 +66,7 @@ typedef enum EDescriptorSetType {
 	EDescriptorSetType_Sampler,
 	EDescriptorSetType_Resources,
 	EDescriptorSetType_CBuffer0,
-	EDescriptorSetType_CBuffer1,		//Versioning
+	EDescriptorSetType_CBuffer1,        //Versioning
 	EDescriptorSetType_CBuffer2,
 
 	EDescriptorSetType_Count,
@@ -88,9 +88,9 @@ TList(VkPipelineStageFlags);
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
-	VkCommandQueue queues[EVkCommandQueue_Count];		//Don't have to be unique queues! Indexed by EVkCommandQueue
+	VkCommandQueue queues[EVkCommandQueue_Count];        //Don't have to be unique queues! Indexed by EVkCommandQueue
 
-	U32 uniqueQueues[EVkCommandQueue_Count];			//Queue families ([resolvedQueues], indexed through resolvedId)
+	U32 uniqueQueues[EVkCommandQueue_Count];            //Queue families ([resolvedQueues], indexed through resolvedId)
 
 	U32 resolvedQueues;
 
@@ -226,7 +226,7 @@ typedef struct VkGraphicsDevice {
 	Bool hasOnlyLocalMemory;
 	U8 padding1[6];
 	
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS		//For fallback to query memory usage
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS        //For fallback to query memory usage
 		IDXGIAdapter3 *dxgiAdapter;
 	#else
 		U64 padding2;
@@ -236,8 +236,8 @@ typedef struct VkGraphicsDevice {
 
 typedef struct VkCommandBufferState {
 
-	RefPtr *tempPipelines[EPipelineType_Count];		//Pipelines that were set via command, but not bound yet
-	RefPtr *pipelines[EPipelineType_Count];			//Currently bound pipelines
+	RefPtr *tempPipelines[EPipelineType_Count];        //Pipelines that were set via command, but not bound yet
+	RefPtr *pipelines[EPipelineType_Count];            //Currently bound pipelines
 
 	F32x4 blendConstants, tempBlendConstants;
 
@@ -278,7 +278,7 @@ typedef struct VkDescriptorTableRange {
 	};
 
 	ListU32 views;
-	ListU32 newViews;		//Temp data for new view ids
+	ListU32 newViews;        //Temp data for new view ids
 
 } VkDescriptorTableRange;
 

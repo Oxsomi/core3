@@ -579,7 +579,7 @@ Bool CharString_parseNyto(CharString s, U64 *result) {
 		if (v == U8_MAX)
 			return false;
 
-		if(j == ((U64)1 << (10 * 6)) && v >= (1 << 4))		//We have 4 bits left
+		if(j == ((U64)1 << (10 * 6)) && v >= (1 << 4))        //We have 4 bits left
 			return false;
 
 		*result |= j * v;
@@ -636,7 +636,7 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 		if (v == U8_MAX)
 			return false;
 
-		if(j == ((U64)1 << (21 * 3)) && v > 1)		//Out of value
+		if(j == ((U64)1 << (21 * 3)) && v > 1)        //Out of value
 			return false;
 
 		*result |= (U64)v << j;
@@ -688,7 +688,7 @@ Bool CharString_parseDec(const CharString s, U64 *result) {
 		if (v == U8_MAX)
 			return false;
 
-		if(j == (U64) 1e19 && v > 1)		//Out of value
+		if(j == (U64) 1e19 && v > 1)        //Out of value
 			return false;
 
 		*result += j * v;
@@ -709,10 +709,10 @@ Bool CharString_parseDecSigned(CharString s, I64 *result) {
 	if(!b)
 		return false;
 
-	if (!neg && *result == I64_MIN)			//Int min is the same as 63 bit max + 1
+	if (!neg && *result == I64_MIN)            //Int min is the same as 63 bit max + 1
 		return true;
 
-	if (*(U64*)result >> 63)				//Guard against int overflow
+	if (*(U64*)result >> 63)                //Guard against int overflow
 		return false;
 
 	if(neg)
@@ -932,14 +932,14 @@ Bool CharString_parseU64(const CharString s, U64 *result) {
 			//For clarity, we even pass 08 and 09, so they can error.
 			//Otherwise it's inconsistent behavior
 
-			case '0':	case '1':	case '2':	case '3':	case '4':
-			case '5':	case '6':	case '7':	case '8':	case '9':
-			case 'O':	case 'o':
+			case '0':    case '1':    case '2':    case '3':    case '4':
+			case '5':    case '6':    case '7':    case '8':    case '9':
+			case 'O':    case 'o':
 				return CharString_parseOct(s, result);
 
-			case 'B':	case 'b':	return CharString_parseBin(s, result);
-			case 'X':	case 'x':	return CharString_parseHex(s, result);
-			case 'N':	case 'n':	return CharString_parseNyto(s, result);
+			case 'B':    case 'b':    return CharString_parseBin(s, result);
+			case 'X':    case 'x':    return CharString_parseHex(s, result);
+			case 'N':    case 'n':    return CharString_parseNyto(s, result);
 		}
 
 	return CharString_parseDec(s, result);
@@ -972,14 +972,14 @@ Bool CharString_isFloat(const CharString s) {
 		else if(!C8_isDec(s.ptr[i]))
 			return false;
 
-	if (i == strl)				//It's just an int
+	if (i == strl)                //It's just an int
 		return true;
 
 	//Validate fraction
 
 	if (s.ptr[i] == '.') {
 
-		if (++i == strl)		//It's just an int
+		if (++i == strl)        //It's just an int
 			return true;
 
 		//Check for int until e/E
@@ -993,7 +993,7 @@ Bool CharString_isFloat(const CharString s) {
 				return false;
 	}
 
-	if (i == strl)				//It's just [-+]?[0-9]*[.]?[0-9]*
+	if (i == strl)                //It's just [-+]?[0-9]*[.]?[0-9]*
 		return true;
 
 	//Validate exponent
@@ -1097,7 +1097,7 @@ Bool CharString_cutBefore(const CharStringCut *cut, C8 c, Bool isFirst) {
 	if (found == U64_MAX)
 		return false;
 
-	++found;	//The end of the occurence is the begin of the next string
+	++found;    //The end of the occurence is the begin of the next string
 	return CharString_cut(cut->s, found, 0, cut->result);
 }
 
@@ -1112,6 +1112,6 @@ Bool CharString_cutBeforeString(const CharStringCut *cut, const CharString *othe
 	if (found == U64_MAX)
 		return false;
 
-	found += CharString_length(*other);	//The end of the occurence is the begin of the next string
+	found += CharString_length(*other);    //The end of the occurence is the begin of the next string
 	return CharString_cut(cut->s, found, 0, cut->result);
 }

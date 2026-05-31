@@ -54,7 +54,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 	if(!deviceExt->hasDistinctMemory && !deviceExt->hasOnlyLocalMemory)
 		all &=~ local;
 
-	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
+	VkMemoryPropertyFlags properties[3] = {            //Contains local if force cpu sided is turned off
 		host | coherent,
 		host,
 		0
@@ -92,7 +92,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 				break;
 			}
 
-		if(!propertyId)		//Stop if the most ideal property is found
+		if(!propertyId)        //Stop if the most ideal property is found
 			break;
 	}
 	if (memoryId == U32_MAX)
@@ -157,7 +157,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	Bool isDedicated = dedicated.requiresDedicatedAllocation;
 	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2000;
 
-	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)	//Ensure everything gets placed in cpu space
+	if(allocator->device->info.type != EGraphicsDeviceType_Dedicated)    //Ensure everything gets placed in cpu space
 		cpuSided = true;
 
 	//Log_debugLnx("Searching for %"PRIu64" bytes", memReq.size);
@@ -190,7 +190,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 								!!(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ? "cpu sided" :
 								"resourceType"
 							)
-						)		
+						)        
 					)
 				);*/
 
@@ -199,7 +199,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 			U64 tempAlignment = memReq.alignment;
 
-			if(!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))		//Adhere to memory requirements
+			if(!(blocki->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))        //Adhere to memory requirements
 				tempAlignment = U64_max(deviceExt->atomSize, tempAlignment);
 
 			const U8 *alloc = NULL;

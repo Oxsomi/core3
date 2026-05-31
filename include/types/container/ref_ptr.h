@@ -54,7 +54,7 @@ TListNamed(RefPtr*, ListRefPtr);
 Bool RefPtr_create(const RefPtrType *type, RefPtr **result, Error *e_rr);
 
 Bool RefPtr_inc(RefPtr *ptr);
-void RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
+void RefPtr_dec(RefPtr **ptr);    //Clears pointer if it's gone
 
 #define RefPtr_data(dat, T) (!(dat) ? NULL : (T*)((dat) + 1))
 

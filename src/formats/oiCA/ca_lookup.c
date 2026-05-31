@@ -69,7 +69,7 @@ Bool CAFile_getFullName(
 		retError(clean, Error_invalidParameter(1, 0, "CAFile_getFullName()::handle is invalid"));
 
 	if (CAHandle_isRoot(handle))
-		goto clean;		//Empty string for root
+		goto clean;        //Empty string for root
 
 	//Walk up to root collecting handles, then build string in reverse
 
@@ -80,7 +80,7 @@ Bool CAFile_getFullName(
 	while (!CAHandle_isRoot(cur) && cur != CAHandle_Invalid) {
 
 		if (depth)
-			++length;		//Separator
+			++length;        //Separator
 
 		if (depth >= CAFile_maxRecursionSize)
 			retError(clean, Error_overflow(0, depth, CAFile_maxRecursionSize, "CAFile_getFullName()::path too deep"));

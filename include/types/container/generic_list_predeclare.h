@@ -27,19 +27,19 @@
 	extern "C" {
 #endif
 
-#define TListDefinition(T, Name) typedef T Name##_Type; typedef struct Name {											\
+#define TListDefinition(T, Name) typedef T Name##_Type; typedef struct Name {                                            \
 																														\
-	union {																												\
-		const Name##_Type *ptr;																							\
-		Name##_Type *ptrNonConst;		/* check if !const first */														\
-	};																													\
+	union {                                                                                                                \
+		const Name##_Type *ptr;                                                                                            \
+		Name##_Type *ptrNonConst;        /* check if !const first */                                                        \
+	};                                                                                                                    \
 																														\
-	U64 length;																											\
-	U64 capacityAndRefInfo;																								\
+	U64 length;                                                                                                            \
+	U64 capacityAndRefInfo;                                                                                                \
 																														\
 } Name
 
-TListDefinition(U64, ListU64);		//Used by _find and _eraseAllIndices
+TListDefinition(U64, ListU64);        //Used by _find and _eraseAllIndices
 TListDefinition(void, ListVoid);
 
 typedef struct GenericList GenericList;

@@ -38,13 +38,13 @@ typedef Bool (*StreamReserveFunc)(OxStream *stream, U64 length, const Allocator 
 typedef void (*StreamCloseFunc)(OxStream *stream, const Allocator *alloc);
 
 typedef enum EStreamType {
-	EStreamType_Memory			= 1 << 0,
-	EStreamType_File			= 1 << 1,
-	EStreamType_ArchiveEntry	= 1 << 2,
-	EStreamType_Compressed		= 1 << 3,		//Unsupported
-	EStreamType_Encrypted		= 1 << 4,
-	EStreamType_Resizable		= 1 << 5,
-	EStreamType_DisableSeek		= 1 << 6		//It's impossible to restart this stream (e.g. network stream)
+	EStreamType_Memory            = 1 << 0,
+	EStreamType_File            = 1 << 1,
+	EStreamType_ArchiveEntry    = 1 << 2,
+	EStreamType_Compressed        = 1 << 3,        //Unsupported
+	EStreamType_Encrypted        = 1 << 4,
+	EStreamType_Resizable        = 1 << 5,
+	EStreamType_DisableSeek        = 1 << 6        //It's impossible to restart this stream (e.g. network stream)
 } EStreamType;
 
 typedef struct OxStream {
@@ -53,7 +53,7 @@ typedef struct OxStream {
 	StreamReserveFunc reserve;
 	StreamCloseFunc close;
 	U64 size;
-	U64 streamType;			//EStreamType, except extendible
+	U64 streamType;            //EStreamType, except extendible
 } OxStream;
 
 typedef RefPtr StreamRef;
@@ -62,18 +62,18 @@ typedef struct StreamCursor {
 
 	StreamRef *stream;
 
-	Buffer cacheData;			//Temporary cache
+	Buffer cacheData;            //Temporary cache
 
-	U64 lastLocation;			//Last location the cache was fetched from
-	U64 lastWriteLocation;		//If writable only, TODO: Maybe lastReadLocation to allow switching mode? (reduce overhead)
+	U64 lastLocation;            //Last location the cache was fetched from
+	U64 lastWriteLocation;        //If writable only, TODO: Maybe lastReadLocation to allow switching mode? (reduce overhead)
 
-	Bool readOnly;				//Only allowed to read or write once at a time
+	Bool readOnly;                //Only allowed to read or write once at a time
 	Bool allowRead, allowWrite;
 	U8 pad[7];
 
 } StreamCursor;
 
-typedef struct CryptoChunk {		//chunkId can be computed, iv is also computed from root iv + chunkId.
+typedef struct CryptoChunk {        //chunkId can be computed, iv is also computed from root iv + chunkId.
 	I32x4 tag;
 } CryptoChunk;
 
@@ -96,7 +96,7 @@ Bool Stream_create(
 	StreamCloseFunc close,
 	U64 streamSize,
 	EStreamType streamType,
-	const RefPtrType *type,		//Also passes the allocator
+	const RefPtrType *type,        //Also passes the allocator
 	StreamRef **stream,
 	Error *e_rr
 );
@@ -104,7 +104,7 @@ Bool Stream_create(
 Bool StreamCursor_create(
 	StreamRef *stream,
 	U64 cacheSize,
-	Bool writeOnly,				//By default a RW stream is readonly, needs to be made writeOnly
+	Bool writeOnly,                //By default a RW stream is readonly, needs to be made writeOnly
 	const Allocator *alloc,
 	StreamCursor *cursor,
 	Error *e_rr
@@ -112,8 +112,8 @@ Bool StreamCursor_create(
 
 Bool StreamCursor_createWithCache(
 	StreamRef *stream,
-	Buffer *cache,				//Takes ownership of cache
-	Bool writeOnly,				//By default a RW stream is readonly, needs to be made writeOnly
+	Buffer *cache,                //Takes ownership of cache
+	Bool writeOnly,                //By default a RW stream is readonly, needs to be made writeOnly
 	StreamCursor *cursor,
 	Error *e_rr
 );
@@ -140,7 +140,7 @@ Bool StreamCursor_copyStream(
 	StreamCursor *input,
 	U64 srcOff,
 	U64 dstOff,
-	U64 length,				//length = 0: all remaining bytes from src
+	U64 length,                //length = 0: all remaining bytes from src
 	const Allocator *alloc,
 	Error *e_rr
 );
@@ -252,13 +252,13 @@ static inline Bool StreamCursor_appendBuffer(
 	return StreamCursor_append(cursor, it, buf.ptr, Buffer_length(buf), alloc, e_rr);
 }
 
-#define STREAM_CURSOR_OP_IMPL(T)																						\
-static inline Bool StreamCursor_consume##T(StreamCursor *cursor, U64 *it, T *t, const Allocator *alloc, Error *e_rr) {	\
-	return StreamCursor_consume(cursor, it, t, sizeof(T), alloc, e_rr);													\
-}																														\
+#define STREAM_CURSOR_OP_IMPL(T)                                                                                        \
+static inline Bool StreamCursor_consume##T(StreamCursor *cursor, U64 *it, T *t, const Allocator *alloc, Error *e_rr) {    \
+	return StreamCursor_consume(cursor, it, t, sizeof(T), alloc, e_rr);                                                    \
+}                                                                                                                        \
 																														\
-static inline Bool StreamCursor_append##T(StreamCursor *cursor, U64 *it, T t, const Allocator *alloc, Error *e_rr) {	\
-	return StreamCursor_append(cursor, it, &t, sizeof(T), alloc, e_rr);													\
+static inline Bool StreamCursor_append##T(StreamCursor *cursor, U64 *it, T t, const Allocator *alloc, Error *e_rr) {    \
+	return StreamCursor_append(cursor, it, &t, sizeof(T), alloc, e_rr);                                                    \
 }
 
 STREAM_CURSOR_OP_IMPL(U64);

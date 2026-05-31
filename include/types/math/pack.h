@@ -34,7 +34,7 @@
 static inline U64 U64_pack21x3(U32 x, U32 y, U32 z) {
 
 	if ((x >> 21) || (y >> 21) || (z >> 21))
-		return U64_MAX;									//Returns U64_MAX on invalid
+		return U64_MAX;                                    //Returns U64_MAX on invalid
 
 	return x | ((U64)y << 21) | ((U64)z << 42);
 }
@@ -51,7 +51,7 @@ static inline Bool U64_pack20x3u4(U64 *dst, U32 x, U32 y, U32 z, U8 u4) {
 static inline U32 U64_unpack21x3(U64 packed, U8 off) {
 
 	if ((packed >> 63) || (off >= 3))
-		return U32_MAX;									//Returns U32_MAX on invalid
+		return U32_MAX;                                    //Returns U32_MAX on invalid
 
 	return (U32)((packed >> (21 * off)) & ((1 << 21) - 1));
 }
@@ -59,7 +59,7 @@ static inline U32 U64_unpack21x3(U64 packed, U8 off) {
 static inline U32 U64_unpack20x3u4(U64 packed, U8 off) {
 
 	if (off > 3)
-		return U32_MAX;									//Returns U32_MAX on invalid
+		return U32_MAX;                                    //Returns U32_MAX on invalid
 
 	if (off == 3)
 		return packed >> 60;
@@ -83,8 +83,8 @@ static inline Bool U64_setPacked20x3u4(U64 *packed, U8 off, U32 v) {
 		return false;
 
 	off *= 20;
-	*packed &= ~((U64)((1 << 20) - 1) << off);		//Reset bits
-	*packed |= (U64)v << off;						//Set bits
+	*packed &= ~((U64)((1 << 20) - 1) << off);        //Reset bits
+	*packed |= (U64)v << off;                        //Set bits
 	return true;
 }
 
@@ -94,33 +94,33 @@ static inline Bool U64_setPacked21x3(U64 *packed, U8 off, U32 v) {
 		return false;
 
 	off *= 21;
-	*packed &= ~((U64)((1 << 21) - 1) << off);		//Reset bits
-	*packed |= (U64)v << off;						//Set bits
+	*packed &= ~((U64)((1 << 21) - 1) << off);        //Reset bits
+	*packed |= (U64)v << off;                        //Set bits
 	return true;
 }
 
-#define GET_BIT_OP(T)										\
-static inline Bool T##_getBit(T packed, U8 off) {			\
+#define GET_BIT_OP(T)                                        \
+static inline Bool T##_getBit(T packed, U8 off) {            \
 															\
-	if (off >= sizeof(T) * 8)								\
-		return false;										\
+	if (off >= sizeof(T) * 8)                                \
+		return false;                                        \
 															\
-	return (packed >> off) & 1;								\
-}															\
+	return (packed >> off) & 1;                                \
+}                                                            \
 															\
-static inline Bool T##_setBit(T *packed, U8 off, Bool b) {	\
+static inline Bool T##_setBit(T *packed, U8 off, Bool b) {    \
 															\
-	if (off >= sizeof(T) * 8)								\
-		return false;										\
+	if (off >= sizeof(T) * 8)                                \
+		return false;                                        \
 															\
-	T shift = (T)1 << off;									\
+	T shift = (T)1 << off;                                    \
 															\
-	if (b)													\
-		*packed |= shift;									\
+	if (b)                                                    \
+		*packed |= shift;                                    \
 															\
-	else *packed &= ~shift;									\
+	else *packed &= ~shift;                                    \
 															\
-	return true;											\
+	return true;                                            \
 }
 
 GET_BIT_OP(U64);
@@ -131,7 +131,7 @@ GET_BIT_OP(U8);
 //Compressing quaternions
 
 typedef struct QuatS16 {
-	U64 packed;			//21x3 + sign of w
+	U64 packed;            //21x3 + sign of w
 } QuatS16;
 
 static inline QuatF32 QuatS16_unpack(QuatS16 q) {

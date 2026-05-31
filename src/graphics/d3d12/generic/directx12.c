@@ -31,14 +31,14 @@ TListImpl(ID3D12PipelineState);
 
 D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op) {
 	switch(op) {
-		default:				return D3D12_COMPARISON_FUNC_NEVER;
-		case ECompareOp_Lt:		return D3D12_COMPARISON_FUNC_LESS;
-		case ECompareOp_Eq:		return D3D12_COMPARISON_FUNC_EQUAL;
-		case ECompareOp_Leq:	return D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		case ECompareOp_Gt:		return D3D12_COMPARISON_FUNC_GREATER;
-		case ECompareOp_Neq:	return D3D12_COMPARISON_FUNC_NOT_EQUAL;
-		case ECompareOp_Geq:	return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-		case ECompareOp_Always:	return D3D12_COMPARISON_FUNC_ALWAYS;
+		default:                return D3D12_COMPARISON_FUNC_NEVER;
+		case ECompareOp_Lt:        return D3D12_COMPARISON_FUNC_LESS;
+		case ECompareOp_Eq:        return D3D12_COMPARISON_FUNC_EQUAL;
+		case ECompareOp_Leq:    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+		case ECompareOp_Gt:        return D3D12_COMPARISON_FUNC_GREATER;
+		case ECompareOp_Neq:    return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+		case ECompareOp_Geq:    return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+		case ECompareOp_Always:    return D3D12_COMPARISON_FUNC_ALWAYS;
 	}
 }
 

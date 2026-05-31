@@ -57,7 +57,7 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"PAQ",
 	"MESHTASKTEXDERIV",
 	"WRITEMSTEXTURE",
-	"BINDLESS",				//Unused, bindless is automatically turned on when it's detected
+	"BINDLESS",                //Unused, bindless is automatically turned on when it's detected
 	"UNBOUNDARRAYSIZE",
 	"SUBGROUPOPERATIONS"
 };
@@ -307,8 +307,8 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 				break;
 				
 			case ESHRegisterType_PushConstants:
-				if(hasDXIL)	 counters[Counter_CBV] += regs;
-				counters[Counter_PushConstants] += regs;		//SPV is the only one that can make type push constants
+				if(hasDXIL)     counters[Counter_CBV] += regs;
+				counters[Counter_PushConstants] += regs;        //SPV is the only one that can make type push constants
 				break;
 
 			case ESHRegisterType_ByteAddressBuffer:
@@ -463,11 +463,11 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 				CharString *define = &info.identifier.defines.ptrNonConst[i], defineOld = *define;
 
-				if(!CharString_isRef(defineOld))		//It's already moved
+				if(!CharString_isRef(defineOld))        //It's already moved
 					continue;
 
 				*define = CharString_createNull();
-				gotoIfError3(clean, CharString_createCopy(defineOld, alloc, define, e_rr));		//Allocate real data
+				gotoIfError3(clean, CharString_createCopy(defineOld, alloc, define, e_rr));        //Allocate real data
 			}
 		}
 	}
@@ -508,11 +508,11 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 
 				CharString *uniform = &info.identifier.uniforms.ptrNonConst[i].name, uniformOld = *uniform;
 
-				if(!CharString_isRef(uniformOld))		//It's already moved
+				if(!CharString_isRef(uniformOld))        //It's already moved
 					continue;
 
 				*uniform = CharString_createNull();
-				gotoIfError3(clean, CharString_createCopy(uniformOld, alloc, uniform, e_rr));		//Allocate real data
+				gotoIfError3(clean, CharString_createCopy(uniformOld, alloc, uniform, e_rr));        //Allocate real data
 			}
 		}
 	}

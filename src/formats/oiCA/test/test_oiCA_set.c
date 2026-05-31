@@ -122,7 +122,7 @@ void Test_CASetTime(Test *t) {
 			goto doneSetTime;
 		}
 
-		Ns ts = (Ns)1234567 * MS;		//Must be expressible in the 48-bit ms field
+		Ns ts = (Ns)1234567 * MS;        //Must be expressible in the 48-bit ms field
 		CAHandle hf = addFile(t, &ca, root, "timed.txt", ts, false);
 
 		Test_assert(t, "initial time preserved", CAFile_fileTime(&ca, hf) == ts);
@@ -244,7 +244,7 @@ void Test_CASetStream(Test *t) {
 
 		MemoryStream_create(8, EMemoryStreamFlags_None, &type, &sr, NULL);
 		Test_assert(t, "stream OOB fails", !CAFile_setDataStream(&ca, hf, t->alloc, &sr, 4, 8, NULL));
-		Test_assert(t, "sr not consumed", sr != NULL);		//OxStream must not be consumed on failure
+		Test_assert(t, "sr not consumed", sr != NULL);        //OxStream must not be consumed on failure
 		RefPtr_dec(&sr);
 
 		//setDataStream: folder handle must fail
@@ -319,7 +319,7 @@ void Test_CASetStream(Test *t) {
 		Test_assert(t, "src still stream-backed", !CAFile_isLoaded(&src, hf));
 		Test_assert(t, "copy now buffer-backed",   CAFile_isLoaded(&copy, hfCopy));
 
-		RefPtr_dec(&copyStream);	//Release the ref obtained above
+		RefPtr_dec(&copyStream);    //Release the ref obtained above
 
 	doneStreamCopy:
 		RefPtr_dec(&sr);

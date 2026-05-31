@@ -70,24 +70,24 @@ clean:
 	return s_uccess;
 }
 
-#define InputDeviceCreate(EInputType) 																		\
+#define InputDeviceCreate(EInputType)                                                                         \
 																											\
-	if(!d || d->type == EInputDeviceType_Undefined)															\
-		retError(clean, Error_invalidOperation(0, "InputDeviceCreate()::d.type is undefined"));				\
+	if(!d || d->type == EInputDeviceType_Undefined)                                                            \
+		retError(clean, Error_invalidOperation(0, "InputDeviceCreate()::d.type is undefined"));                \
 																											\
-	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);								\
+	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);                                \
 																											\
-	if(!res)																								\
-		retError(clean, Error_nullPointer(4, "InputDeviceCreate()::res is required"));						\
+	if(!res)                                                                                                \
+		retError(clean, Error_nullPointer(4, "InputDeviceCreate()::res is required"));                        \
 																											\
-	if(!inputType)																							\
-		retError(clean, Error_nullPointer(0, "InputDeviceCreate() localHandle wasn't found"));				\
+	if(!inputType)                                                                                            \
+		retError(clean, Error_nullPointer(0, "InputDeviceCreate() localHandle wasn't found"));                \
 																											\
-	if(inputType->name)																						\
-		retError(clean, Error_alreadyDefined(0, "InputDeviceCreate() localHandle was already defined"));	\
+	if(inputType->name)                                                                                        \
+		retError(clean, Error_alreadyDefined(0, "InputDeviceCreate() localHandle was already defined"));    \
 																											\
-	if(!name)																								\
-		retError(clean, Error_invalidParameter(2, 0, "InputDeviceCreate()::keyName is required"));			\
+	if(!name)                                                                                                \
+		retError(clean, Error_invalidParameter(2, 0, "InputDeviceCreate()::keyName is required"));            \
 																											\
 	inputType->name = name
 
@@ -189,7 +189,7 @@ void InputDevice_markUpdate(InputDevice *d) {
 
 		const BitRef old = InputDevice_getButtonValue(d, i, false);
 		BitRef neo = old;
-		++neo.off;						//Allowed since we're always aligned
+		++neo.off;                        //Allowed since we're always aligned
 
 		BitRef_setTo(old, BitRef_get(neo));
 	}

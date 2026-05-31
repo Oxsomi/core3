@@ -55,25 +55,25 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 
 //Clear, append, begin and end
 
-#define CommandListRef_validate(v)																				\
+#define CommandListRef_validate(v)                                                                                \
 																												\
-	if(!(v) || (v)->typeId != (ETypeId)EGraphicsTypeId_CommandList)												\
-		return Error_nullPointer(0, "CommandListRef_validate() cmdlist is invalid");							\
+	if(!(v) || (v)->typeId != (ETypeId)EGraphicsTypeId_CommandList)                                                \
+		return Error_nullPointer(0, "CommandListRef_validate() cmdlist is invalid");                            \
 																												\
-	CommandList *commandList = CommandListRef_ptr(v);															\
+	CommandList *commandList = CommandListRef_ptr(v);                                                            \
 																												\
-	if(!SpinLock_isLockedForThread(&commandList->lock))															\
-		return Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked");						\
+	if(!SpinLock_isLockedForThread(&commandList->lock))                                                            \
+		return Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked");                        \
 																												\
-	if(commandList->state != ECommandListState_Open)															\
+	if(commandList->state != ECommandListState_Open)                                                            \
 		return Error_invalidOperation(1, "CommandListRef_validate() cmdlist isn't open")
 
-#define CommandListRef_validateScope(v, label)																	\
+#define CommandListRef_validateScope(v, label)                                                                    \
 																												\
-	CommandListRef_validate(v);																					\
-	Error err = Error_none();																					\
+	CommandListRef_validate(v);                                                                                    \
+	Error err = Error_none();                                                                                    \
 																												\
-	if(!(commandList->tempStateFlags & ECommandStateFlags_HasScope))											\
+	if(!(commandList->tempStateFlags & ECommandStateFlags_HasScope))                                            \
 		gotoIfError(label, Error_invalidOperation(0, "CommandListRef_validateScope() scope isn't open"))
 
 Error CommandListRef_clear(CommandListRef *commandListRef) {
@@ -115,7 +115,7 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 	commandList->state = ECommandListState_Open;
 	gotoIfError(clean, doClear ? CommandListRef_clear(commandListRef) : Error_none())
 
-	if (!doClear) {		//Reacquire swapchains to ensure versions are the same
+	if (!doClear) {        //Reacquire swapchains to ensure versions are the same
 
 		for (U64 i = 0; i < commandList->activeSwapchains.length; ++i ) {
 
@@ -163,9 +163,9 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 
 		const TransitionInternal *transitions = &commandList->transitions.ptrNonConst[i];
 
-		if(!ListRefPtr_contains(commandList->resources, transitions->resource, 0, NULL)) {				//TODO: hashSet
+		if(!ListRefPtr_contains(commandList->resources, transitions->resource, 0, NULL)) {                //TODO: hashSet
 
-			if(RefPtr_inc(transitions->resource))		//CommandList will keep resource alive.
+			if(RefPtr_inc(transitions->resource))        //CommandList will keep resource alive.
 				gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, transitions->resource))
 		}
 	}
@@ -240,16 +240,16 @@ Error CommandList_validateGraphicsPipeline(
 }
 
 Bool CommandListRef_imageRangeConflicts(RefPtr *image1, ImageRange range1, RefPtr *image2, ImageRange range2) {
-	(void)range2; (void)range1;		//TODO:
+	(void)range2; (void)range1;        //TODO:
 	return image1 == image2;
 }
 
 Bool CommandListRef_bufferRangeConflicts(RefPtr *buffer1, BufferRange range1, RefPtr *buffer2, BufferRange range2) {
-	(void)range2; (void)range1;		//TODO:
+	(void)range2; (void)range1;        //TODO:
 	return buffer1 == buffer2;
 }
 
-Bool CommandListRef_resourceConflicts(RefPtr *res1, RefPtr *res2) {		//TLAS, BLAS, etc.
+Bool CommandListRef_resourceConflicts(RefPtr *res1, RefPtr *res2) {        //TLAS, BLAS, etc.
 	return res1 == res2;
 }
 
@@ -632,7 +632,7 @@ Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValueU
 
 	CommandListRef_validateScope(commandListRef, clean)
 
-	U64 stencilValue[2] = { stencilValueU8, 0 };		//Has to be padded to 16-byte
+	U64 stencilValue[2] = { stencilValueU8, 0 };        //Has to be padded to 16-byte
 	gotoIfError(clean, CommandList_append(
 		commandList, ECommandOp_SetStencil, Buffer_createRefConst(stencilValue, sizeof(stencilValue)), 0
 	))
@@ -806,7 +806,7 @@ Error CommandListRef_copyImageRegions(
 
 		//Validate levelId
 
-		if(clearImage.dstLevelId || clearImage.srcLevelId)		//TODO: Allow levels
+		if(clearImage.dstLevelId || clearImage.srcLevelId)        //TODO: Allow levels
 			gotoIfError(clean, Error_invalidParameter(
 				1, 6, "CommandListRef_copyImage()::regions[i].src/dstLevelId is out of bounds"
 			))
@@ -818,7 +818,7 @@ Error CommandListRef_copyImageRegions(
 
 	//TODO: Ensure there's no overlapping src and dst region
 	//if(src == dst)
-	//	;
+	//    ;
 
 	//Add transitions
 
@@ -928,7 +928,7 @@ Error CommandListRef_startScope(
 			1, transitions.length, U32_MAX, "CommandListRef_startScope()::transitions.length > U32_MAX"
 		))
 
-	if(commandList->tempStateFlags & ECommandStateFlags_HasScope)		//No nested scopes
+	if(commandList->tempStateFlags & ECommandStateFlags_HasScope)        //No nested scopes
 		gotoIfError(clean, Error_invalidOperation(
 			0, "CommandListRef_startScope() scope is already present. Nested scopes are unsupported"
 		))
@@ -956,9 +956,9 @@ Error CommandListRef_startScope(
 			resource = DeviceBufferRef_ptr(res)->resource;
 
 		else if(isSampler)
-			resource = (GraphicsResource) { .device = SamplerRef_ptr(res)->device };		//Only device is required here
+			resource = (GraphicsResource) { .device = SamplerRef_ptr(res)->device };        //Only device is required here
 
-		else if (res->typeId == (ETypeId) EGraphicsTypeId_TLASExt) {						//Get device and mark as readonly
+		else if (res->typeId == (ETypeId) EGraphicsTypeId_TLASExt) {                        //Get device and mark as readonly
 
 			TLAS *tlas = TLASRef_ptr(res);
 
@@ -982,7 +982,7 @@ Error CommandListRef_startScope(
 			};
 		}
 
-		else if (res->typeId == (ETypeId) EGraphicsTypeId_BLASExt)							//Get device and mark as readonly
+		else if (res->typeId == (ETypeId) EGraphicsTypeId_BLASExt)                            //Get device and mark as readonly
 			resource = (GraphicsResource) {
 				.device = BLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead
 			};
@@ -1053,12 +1053,12 @@ Error CommandListRef_startScope(
 
 		CommandScopeDependency dep = deps.ptr[j];
 
-		if(dep.type == ECommandScopeDependencyType_Unconditional)		//Don't care
+		if(dep.type == ECommandScopeDependencyType_Unconditional)        //Don't care
 			continue;
 
 		Bool found = false;
 
-		for (U64 i = 0; i < commandList->activeScopes.length; ++i) {	//TODO: HashSet
+		for (U64 i = 0; i < commandList->activeScopes.length; ++i) {    //TODO: HashSet
 
 			CommandScope scope = commandList->activeScopes.ptr[i];
 
@@ -1099,7 +1099,7 @@ Error CommandListRef_endScope(CommandListRef *commandListRef) {
 	//Check if scope has to be hidden.
 
 	if(
-		(commandList->tempStateFlags & ECommandStateFlags_InvalidState) ||			//Hide scope
+		(commandList->tempStateFlags & ECommandStateFlags_InvalidState) ||            //Hide scope
 		!(commandList->tempStateFlags & ECommandStateFlags_HasModifyOp)
 	) {
 		//Pretend the last commands didn't happen
@@ -1189,14 +1189,14 @@ Error CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pi
 	else if(type == EPipelineType_RaytracingExt)
 		op = ECommandOp_SetRaytracingPipelineExt;
 
-	PipelineRef *commandOp[2] = { pipelineRef, NULL };		//Padding to 16-byte
+	PipelineRef *commandOp[2] = { pipelineRef, NULL };        //Padding to 16-byte
 
 	gotoIfError(clean, CommandList_append(
 		commandList, op, Buffer_createRefConst(commandOp, sizeof(commandOp)), 0
 	))
 
-	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0, NULL)) {						//TODO: hashSet
-		RefPtr_inc(pipelineRef);		//CommandList will keep resource alive.
+	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0, NULL)) {                        //TODO: hashSet
+		RefPtr_inc(pipelineRef);        //CommandList will keep resource alive.
 		gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, pipelineRef))
 	}
 
@@ -1342,7 +1342,7 @@ clean:
 
 Error CommandListRef_draw(CommandListRef *commandListRef, DrawCmd draw) {
 
-	if(!draw.count || !draw.instanceCount)		//No-op
+	if(!draw.count || !draw.instanceCount)        //No-op
 		return Error_none();
 
 	if(draw.vertexOffset >> 31)
@@ -2084,7 +2084,7 @@ Error CommandListRef_startRenderExt(
 		if(info.resolveImage) {
 
 			transition.resource = info.resolveImage;
-			transition.range = (ResourceRange) { 0 };				//TODO: Range for resolveImage
+			transition.range = (ResourceRange) { 0 };                //TODO: Range for resolveImage
 			transition.type = ETransitionType_ResolveTargetWrite;
 
 			if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
@@ -2171,7 +2171,7 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 	CommandListRef_validateScope(commandListRef, clean)
 
 	U64 len = sizeof(color) + CharString_length(name) + 1;
-	len = (len + 15) &~ 15;										//Align to 16-byte to not mess up next instruction alignment
+	len = (len + 15) &~ 15;                                        //Align to 16-byte to not mess up next instruction alignment
 
 	gotoIfError(clean, Buffer_createUninitializedBytesx(len, &buf))
 

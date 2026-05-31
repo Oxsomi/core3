@@ -97,7 +97,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 		Bool s_uccess = true;
 
-		if(GraphicsInterface_instance)		//Already initialized
+		if(GraphicsInterface_instance)        //Already initialized
 			goto clean;
 
 		GraphicsInterface_instance = &graphicsInterfaceInstance;

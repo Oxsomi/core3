@@ -34,20 +34,20 @@ typedef struct RefPtrType RefPtrType;
 typedef RefPtr StreamRef;
 
 typedef enum EDLDataType {
-	EDLDataType_Data,									//(default, Buffer)
-	EDLDataType_String,									//--string (CharString)
+	EDLDataType_Data,                                    //(default, Buffer)
+	EDLDataType_String,                                    //--string (CharString)
 	EDLDataType_Count
 } EDLDataType;
 
-typedef U8 DLDataType;			//EDLDataType
+typedef U8 DLDataType;            //EDLDataType
 
 typedef enum EDLSettingsFlags {
-	EDLSettingsFlags_None				= 0,
-	EDLSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiDL can be 100% confidently detected otherwise
-	EDLSettingsFlags_Invalid			= 0xFE
+	EDLSettingsFlags_None                = 0,
+	EDLSettingsFlags_HideMagicNumber    = 1 << 0,        //Only valid if the oiDL can be 100% confidently detected otherwise
+	EDLSettingsFlags_Invalid            = 0xFE
 } EDLSettingsFlags;
 
-typedef U8 DLSettingsFlags;		//EDLSettingsFlags
+typedef U8 DLSettingsFlags;        //EDLSettingsFlags
 
 typedef struct DLSettings {
 
@@ -57,19 +57,19 @@ typedef struct DLSettings {
 	XXEncryptionType encryptionType;
 	DLDataType dataType;
 	DLSettingsFlags flags;
-	U32 chunkSize;				//0 = default
+	U32 chunkSize;                //0 = default
 
 	U32 encryptionKey[8];
-	U32 iv[3];					//This is readonly, write will always generate new one.
+	U32 iv[3];                    //This is readonly, write will always generate new one.
 	U32 padding;
 
 } DLSettings;
 
 //Check docs/oiDL.md for the file spec
 
-typedef struct DLEntryStream {		//So that we don't have to add a lot of refs to the same stream
+typedef struct DLEntryStream {        //So that we don't have to add a lot of refs to the same stream
 	StreamRef *stream;
-	U64 dataOff;					//Offset of data (not the real location in the stream, needs to apply chunking)
+	U64 dataOff;                    //Offset of data (not the real location in the stream, needs to apply chunking)
 	U64 len;
 } DLEntryStream;
 
@@ -85,10 +85,10 @@ typedef struct DLFile {
 		ListCharString entryStrings;
 	};
 
-	ListDLEntryStream entryStreams;	//Needs to be equal to the size of entryBuffers or entryString
+	ListDLEntryStream entryStreams;    //Needs to be equal to the size of entryBuffers or entryString
 
-	Buffer cache;				//Keep small entries in here up to 1MiB, so they reference this buffer.
-	DLSettings settings;		//Keep this at 8-byte alignment!
+	Buffer cache;                //Keep small entries in here up to 1MiB, so they reference this buffer.
+	DLSettings settings;        //Keep this at 8-byte alignment!
 
 } DLFile;
 
@@ -137,13 +137,13 @@ Bool DLFile_initCache(DLFile *dlFile, U64 size, const Allocator *alloc, Error *e
 Bool DLFile_write(
 	const DLFile *dlFile,
 	const Allocator *alloc,
-	StreamRef *result,		//Pass NULL to calculate length only (*startOffset), won't work if compression is used.
+	StreamRef *result,        //Pass NULL to calculate length only (*startOffset), won't work if compression is used.
 
 	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
 	// This can outlast the DLFile if it's the stream is referenced elsewhere.
 	const RefPtrType *encryptionStreamType,
 
-	I32x4 iv,		//Unused if not a subfile or not encrypted, otherwise should contain valid unique iv
+	I32x4 iv,        //Unused if not a subfile or not encrypted, otherwise should contain valid unique iv
 
 	U64 *startOffset,
 	Error *e_rr
@@ -152,15 +152,15 @@ Bool DLFile_write(
 Bool DLFile_read(
 	StreamRef *file,
 	U64 *startOffset,
-	const U32 encryptionKey[8],		//Must be NULL if no encryption, else must be valid
-	I32x4 iv,						//If it's a subFile and encrypted, needs to be the valid IV used to encrypt
-	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
-	Bool forceKeepInStreams,		//Useful to pass around streams and not deal with buffers/strings
+	const U32 encryptionKey[8],        //Must be NULL if no encryption, else must be valid
+	I32x4 iv,                        //If it's a subFile and encrypted, needs to be the valid IV used to encrypt
+	Bool isSubFile,                    //Sets HideMagicNumber flag and allows leftover data after the oiDL
+	Bool forceKeepInStreams,        //Useful to pass around streams and not deal with buffers/strings
 	const Allocator *alloc,
 
 	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
 	// This can outlast the DLFile if it's the stream is referenced elsewhere.
-	const RefPtrType *encryptionStreamType,	
+	const RefPtrType *encryptionStreamType,    
 
 	DLFile *dlFile,
 	Error *e_rr

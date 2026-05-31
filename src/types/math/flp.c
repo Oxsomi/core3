@@ -44,15 +44,15 @@ static inline U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType
 	const U64 discardedMantissa = mantissa & (((U64)1 << (mbit1 - mbit2)) - 1);
 	const U64 halfMantissa = (U64)1 << (mbit1 - mbit2 - 1);
 
-	U8 round = discardedMantissa > halfMantissa;	//Yes, rounding for some reason ignores 0.5 and only works >0.5
+	U8 round = discardedMantissa > halfMantissa;    //Yes, rounding for some reason ignores 0.5 and only works >0.5
 
-	if (!EFloatType_isFinite(type1, v))				//Rounding is only for real numbers
+	if (!EFloatType_isFinite(type1, v))                //Rounding is only for real numbers
 		round = 0;
 
 	const U64 res = (shiftedMantissa + round) & EFloatType_mantissaMask(type2);
 
 	if (!res && round)
-		*carry = true;		//Increments exponent
+		*carry = true;        //Increments exponent
 
 	return res;
 }
@@ -192,7 +192,7 @@ static inline U64 EFloatType_convertExponent(
 
 		const U64 missingBits = (U64)-cvt;
 
-		if (missingBits > mbit2) {		//Collapse to zero
+		if (missingBits > mbit2) {        //Collapse to zero
 			*convertedMantissa = 0;
 			return 0;
 		}
@@ -211,9 +211,9 @@ static inline U64 EFloatType_convertExponent(
 
 		const U64 round = mantissaDiscarded > mantissaDiscardHalf;
 
-		m >>= mantissaDiscardShift;					//Correct to correct exponent
-		m |= (U64)1 << (mbit2 - missingBits - 1);	//Shift the 1.x into the DeN
-		m += round;									//Ensure correct rounding
+		m >>= mantissaDiscardShift;                    //Correct to correct exponent
+		m |= (U64)1 << (mbit2 - missingBits - 1);    //Shift the 1.x into the DeN
+		m += round;                                    //Ensure correct rounding
 
 		//Special case; round causes exponent to increment
 

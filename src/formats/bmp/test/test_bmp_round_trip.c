@@ -370,7 +370,7 @@ void Test_BMPRoundTripPixelDensity(Test *t) {
 			.isFlipped       = true,
 			.textureFormatId = ETextureFormatId_BGRA8,
 			.discardAlpha    = false,
-			.xPixPerM        = 2835,	//72 DPI in px/m
+			.xPixPerM        = 2835,    //72 DPI in px/m
 			.yPixPerM        = 2835
 		};
 
@@ -495,7 +495,7 @@ void Test_BMPPixelContentFlipped(Test *t) {
 		BMPInfo writeInfo = {
 			.w               = w,
 			.h               = h,
-			.isFlipped       = true,		//output: bottom-up
+			.isFlipped       = true,        //output: bottom-up
 			.textureFormatId = ETextureFormatId_BGRA8,
 			.discardAlpha    = false
 		};

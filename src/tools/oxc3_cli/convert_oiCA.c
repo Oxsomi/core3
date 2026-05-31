@@ -111,8 +111,8 @@ Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Char
 	if(args.flags & EOperationFlags_Uncompressed)
 		settings.compressionType = EXXCompressionType_None;
 
-	//else if(args.flags & EOperationFlags_FastCompress)				TODO:
-	//	settings.compressionType = ECACompressionType_Brotli1;
+	//else if(args.flags & EOperationFlags_FastCompress)                TODO:
+	//    settings.compressionType = ECACompressionType_Brotli1;
 
 	//Copying encryption key
 

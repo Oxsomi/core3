@@ -205,7 +205,7 @@ Bool CharString_eraseAllString(const CharStringReplaceErase *erase, const CharSt
 			}
 
 		if (match) {
-			i += otherl - 1;	//-1 because we increment by 1 every time
+			i += otherl - 1;    //-1 because we increment by 1 every time
 			continue;
 		}
 
@@ -304,7 +304,7 @@ CharString CharString_trim(const CharString s) {
 			break;
 		}
 
-	++last;		//We wanna include the last character that's non whitespace too
+	++last;        //We wanna include the last character that's non whitespace too
 
 	const Bool isNullTerm = CharString_isNullTerminated(s) && last == strl;
 

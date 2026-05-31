@@ -24,12 +24,12 @@
 #include "platforms/input_device.h"
 #include "types/base/error.h"
 
-#define BUTTON(name) gotoIfError3(clean, InputDevice_createButton(												\
-		result, EMouseButton_##name  - EMouseButton_Begin, "EMouseButton_" #name, &res, e_rr					\
+#define BUTTON(name) gotoIfError3(clean, InputDevice_createButton(                                                \
+		result, EMouseButton_##name  - EMouseButton_Begin, "EMouseButton_" #name, &res, e_rr                    \
 	))
 
-#define AXIS(name, resetOnUnfocus) gotoIfError3(clean, InputDevice_createAxis(									\
-		result, EMouseAxis_##name - EMouseAxis_Begin, "EMouseAxis_" #name, 0, resetOnUnfocus, &res, e_rr		\
+#define AXIS(name, resetOnUnfocus) gotoIfError3(clean, InputDevice_createAxis(                                    \
+		result, EMouseAxis_##name - EMouseAxis_Begin, "EMouseAxis_" #name, 0, resetOnUnfocus, &res, e_rr        \
 	))
 
 Bool Mouse_create(Mouse *result, const Allocator *alloc, Error *e_rr) {
@@ -41,12 +41,12 @@ Bool Mouse_create(Mouse *result, const Allocator *alloc, Error *e_rr) {
 
 	InputHandle res = 0;
 
-	BUTTON(Left);				BUTTON(Middle);			BUTTON(Right);
-	BUTTON(Back);				BUTTON(Forward);
+	BUTTON(Left);                BUTTON(Middle);            BUTTON(Right);
+	BUTTON(Back);                BUTTON(Forward);
 
-	AXIS(RX, false);			AXIS(RY, false);
-	AXIS(ScrollWheel_X, true);	AXIS(ScrollWheel_Y, true);
-	AXIS(Temp0, false);			AXIS(Temp1, false);
+	AXIS(RX, false);            AXIS(RY, false);
+	AXIS(ScrollWheel_X, true);    AXIS(ScrollWheel_Y, true);
+	AXIS(Temp0, false);            AXIS(Temp1, false);
 
 clean:
 

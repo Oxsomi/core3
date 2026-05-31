@@ -47,16 +47,16 @@ Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInf
 	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
 
 	switch (attachment.resolveMode) {
-		default:						result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
-		case EMSAAResolveMode_Min:		result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;		break;
-		case EMSAAResolveMode_Max:		result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;		break;
+		default:                        result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;    break;
+		case EMSAAResolveMode_Min:        result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;        break;
+		case EMSAAResolveMode_Max:        result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;        break;
 	}
 
 	U32 viewId = U32_MAX;
 	VkImageView view = NULL;
 
 	Descriptor descriptor = (Descriptor) { .resource = attachment.resolveImage };
-	ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+	ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
 
 	if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL))
 		return false;
@@ -279,7 +279,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				VkImageView view = NULL;
 
 				Descriptor descriptor = (Descriptor) { .resource = attachmentsj->image };
-				ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
 				
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView color at ECommandOp_StartRenderingExt, this is problematic!");
@@ -340,7 +340,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				VkImageView view = NULL;
 
 				Descriptor descriptor = (Descriptor) { .resource = startRender->depthStencil };
-				ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
 				
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView depth at ECommandOp_StartRenderingExt, this is problematic!");
@@ -393,7 +393,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.texture = (TextureDescriptorRange) { .planeId = 1 }
 				};
 
-				ESHRegisterType registerType = ESHRegisterType_Texture2D;		//TODO: Add support for other resources
+				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
 
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView stencil at ECommandOp_StartRenderingExt, this is problematic!");
@@ -783,18 +783,18 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
 
-				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
+				if(transition.type == ETransitionType_KeepAlive)        //TODO: Residency management
 					continue;
 
 				VkPipelineStageFlags2 pipelineStage = 0;
 
 				switch (transition.stage) {
 
-					default:																						break;
-					case EPipelineStage_Compute:		pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;		break;
-					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
-					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
-					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+					default:                                                                                        break;
+					case EPipelineStage_Compute:        pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;        break;
+					case EPipelineStage_Vertex:            pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;        break;
+					case EPipelineStage_Pixel:            pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;    break;
+					case EPipelineStage_GeometryExt:    pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;    break;
 
 					case EPipelineStage_Hull:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
@@ -867,7 +867,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-				if(transition.stage == EPipelineStage_RTASBuild)	//RTASBuild inputs/outputs are AS read/write
+				if(transition.stage == EPipelineStage_RTASBuild)    //RTASBuild inputs/outputs are AS read/write
 					access =
 						isShaderRead ? VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR :
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
@@ -891,7 +891,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 							break;
 
-						case ETransitionType_ResolveTargetWrite:		//No distinction in Vulkan
+						case ETransitionType_ResolveTargetWrite:        //No distinction in Vulkan
 						case ETransitionType_RenderTargetWrite:
 
 							pipelineStage =
@@ -954,7 +954,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					const UnifiedTexture utex = TextureRef_getUnifiedTexture(transition.resource, NULL);
 					VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Vk, 0);
 
-					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
+					VkImageSubresourceRange range = (VkImageSubresourceRange) {        //TODO:
 						.aspectMask = isDepthStencil ? 0 : VK_IMAGE_ASPECT_COLOR_BIT,
 						.levelCount = 1,
 						.layerCount = 1
@@ -993,7 +993,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						pipelineStage,
 						access,
 						graphicsQueueId,
-						0,						//TODO: range
+						0,                        //TODO: range
 						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
 						&dependency
@@ -1036,7 +1036,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
 
-			if(!instanceExt->cmdDebugMarkerInsert)		//No debug markers
+			if(!instanceExt->cmdDebugMarkerInsert)        //No debug markers
 				break;
 
 			if(op == ECommandOp_AddMarkerDebugExt)

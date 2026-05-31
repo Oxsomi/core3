@@ -65,8 +65,8 @@ void CompileError_free(CompileError *err, Allocator alloc) {
 
 ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b) {
 
-	if(!a)	return ECompareResult_Lt;
-	if(!b)	return ECompareResult_Gt;
+	if(!a)    return ECompareResult_Lt;
+	if(!b)    return ECompareResult_Gt;
 
 	return a->counter < b->counter || (a->counter == b->counter && a->crc32c < b->crc32c);
 }
@@ -286,9 +286,9 @@ const C8 *ignoredWarnings[] = {
 
 	//Our compiler oxc:: annotations
 
-	"unknown attribute '",		//Starts with
+	"unknown attribute '",        //Starts with
 
-	"unknown attribute 'stage' ignored [-Wunknown-attributes]",		//Equals
+	"unknown attribute 'stage' ignored [-Wunknown-attributes]",        //Equals
 	"unknown attribute 'model' ignored [-Wunknown-attributes]",
 	"unknown attribute 'uniforms' ignored [-Wunknown-attributes]",
 	"unknown attribute 'defines' ignored [-Wunknown-attributes]",
@@ -374,7 +374,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	U64 prevOff = U64_MAX;
 
 	CharString file = CharString_createNull();
-	CharString errorStart = CharString_createNull();		//First line of the error
+	CharString errorStart = CharString_createNull();        //First line of the error
 	U64 lineId = 0;
 	U64 lineOff = 0;
 	Bool ignoreNextWarning = false;
@@ -438,7 +438,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 			//We skip unrecognized errors, to prevent accidentally parsing code that contains the words "error:"
 			//a:5: error:
-			//	 ^
+			//     ^
 
 			if(
 				nextProblem < 5 ||
@@ -471,11 +471,11 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 				num += dec * multiplier;
 				multiplier *= 10;
 
-				if(num >> 32)		//Out of bounds
+				if(num >> 32)        //Out of bounds
 					retError(clean, Error_invalidState(0, "Compiler_parseErrors() num is limited to U32"))
 			}
 
-			if(it == U64_MAX || it == 0)	//Invalid, skip
+			if(it == U64_MAX || it == 0)    //Invalid, skip
 				goto next;
 
 			U64 secondNum = num;
@@ -511,7 +511,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 					num += dec * multiplier;
 					multiplier *= 10;
 
-					if(num >> 32)		//Out of bounds
+					if(num >> 32)        //Out of bounds
 						retError(clean, Error_invalidState(1, "Compiler_parseErrors() lineId is limited to U32"))
 				}
 			}
@@ -521,7 +521,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 			if (hasSecondNum) {
 
-				if(secondNum >> 16)		//Out of U16
+				if(secondNum >> 16)        //Out of U16
 					retError(clean, Error_invalidState(1, "Compiler_parseErrors() charId is limited to U16"))
 
 				lineId = (U32) num;
@@ -883,28 +883,28 @@ clean:
 }
 
 Bool Compiler_processSPIRV(
-	Buffer *result,						//Required; input & output SPIRV (will be optimized)
-	ListSHRegisterRuntime *registers,	//Required; Output registers
+	Buffer *result,                        //Required; input & output SPIRV (will be optimized)
+	ListSHRegisterRuntime *registers,    //Required; Output registers
 	Bool isDebug,
 	SHBinaryIdentifier toCompile,
-	SpinLock *lock,						//If not NULL will be used before writing into entries
-	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
+	SpinLock *lock,                        //If not NULL will be used before writing into entries
+	ListSHEntryRuntime entries,            //Array contains the current buffer's reflection for the entry and compatibility checks
 	Bool isLibTarget,
-	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	ESHExtension *demotions,            //Required; specifies which extensions aren't used (useful for demoting unused ones)
 	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
 );
 
 Bool Compiler_processDXIL(
-	Compiler compiler,					//To be able to get reflection data
-	Buffer *result,						//Required; input & output DXIL
-	ListSHRegisterRuntime *registers,	//Required; Output registers
+	Compiler compiler,                    //To be able to get reflection data
+	Buffer *result,                        //Required; input & output DXIL
+	ListSHRegisterRuntime *registers,    //Required; Output registers
 	Bool isDebug,
 	SHBinaryIdentifier toCompile,
-	SpinLock *lock,						//If not NULL will be used before writing into entries
-	ListSHEntryRuntime entries,			//Array contains the current buffer's reflection for the entry and compatibility checks
-	ESHExtension *demotions,			//Required; specifies which extensions aren't used (useful for demoting unused ones)
+	SpinLock *lock,                        //If not NULL will be used before writing into entries
+	ListSHEntryRuntime entries,            //Array contains the current buffer's reflection for the entry and compatibility checks
+	ESHExtension *demotions,            //Required; specifies which extensions aren't used (useful for demoting unused ones)
 	ListCompileError *errors,
 	Allocator alloc,
 	Error *e_rr
@@ -956,29 +956,29 @@ clean:
 
 Bool Compiler_linkSPIRV(
 	Compiler compiler,
-	ListBuffer inputs,					//Input SPIRV(s); library data
-	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
-	Buffer uniformData,					//Contents of the current compilation
-	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
-	ESHPipelineStage stage,				//Whether or not to be a final executable (ESHPipelineStage_Count = keep library)
+	ListBuffer inputs,                    //Input SPIRV(s); library data
+	ListSHUniformRuntime uniforms,        //Uniform descriptions (to index uniformData and to link)
+	Buffer uniformData,                    //Contents of the current compilation
+	CharString entrypoint,                //Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	ESHPipelineStage stage,                //Whether or not to be a final executable (ESHPipelineStage_Count = keep library)
 	ESHExtension exts,
 	ListCompileError *errors,
-	Buffer *result,						//Output SPIRV: Either library or specialized binary (PS/GS/CS/etc.)
+	Buffer *result,                        //Output SPIRV: Either library or specialized binary (PS/GS/CS/etc.)
 	Allocator alloc,
 	Error *e_rr
 );
 
 Bool Compiler_linkDXIL(
 	Compiler compiler,
-	ListBuffer inputs,					//Input DXIL(s); library data
-	ListSHUniformRuntime uniforms,		//Uniform descriptions (to index uniformData and to link)
-	Buffer uniformData,					//Contents of the current compilation
-	CharString entrypoint,				//Entrypoint specialization (empty = keep as lib, otherwise specialize)
-	U16 shaderVersion,					//U8 maj, minor
+	ListBuffer inputs,                    //Input DXIL(s); library data
+	ListSHUniformRuntime uniforms,        //Uniform descriptions (to index uniformData and to link)
+	Buffer uniformData,                    //Contents of the current compilation
+	CharString entrypoint,                //Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	U16 shaderVersion,                    //U8 maj, minor
 	ESHPipelineStage stageType,
 	ESHExtension exts,
 	ListCompileError *errors,
-	Buffer *result,						//Output DXIL: Either library or specialized binary (PS/GS/CS/etc.)
+	Buffer *result,                        //Output DXIL: Either library or specialized binary (PS/GS/CS/etc.)
 	Allocator alloc,
 	Error *e_rr
 );

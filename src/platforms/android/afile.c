@@ -47,7 +47,7 @@ Bool File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool a
 	gotoIfError2(clean, CharString_createCopyx(loc, &isChild))
 
 	if(CharString_length(isChild))
-		gotoIfError2(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
+		gotoIfError2(clean, CharString_appendx(&isChild, '/'))        //Don't append to root
 
 	acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 

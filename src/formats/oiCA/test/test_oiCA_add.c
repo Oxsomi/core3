@@ -60,7 +60,7 @@ void Test_CAAddFile(Test *t) {
 	
 	Test_setModule(t, "CAFile_addFile");
 
-	{						//Single file added to root
+	{                        //Single file added to root
 		CAFile ca = { 0 };
 		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
 			Test_assert(t, "Create ca for addFile", false);
@@ -83,7 +83,7 @@ void Test_CAAddFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Multiple files maintain insertion order
+	{                            //Multiple files maintain insertion order
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -118,7 +118,7 @@ void Test_CAAddFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Duplicate name in same folder must fail
+	{                            //Duplicate name in same folder must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -137,7 +137,7 @@ void Test_CAAddFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Names differing only in case are distinct (resolution is case-sensitive)
+	{                            //Names differing only in case are distinct (resolution is case-sensitive)
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -167,7 +167,7 @@ void Test_CAAddFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Name containing path separator must fail
+	{                            //Name containing path separator must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -186,7 +186,7 @@ void Test_CAAddFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{						//Null caFile / null name must fail
+	{                        //Null caFile / null name must fail
 		CAFile ca = { 0 };
 		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
 			Test_assert(t, "Create ca for null guards", false);
@@ -208,7 +208,7 @@ void Test_CAAddFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Parent must be a folder handle; passing a file handle must fail
+	{                            //Parent must be a folder handle; passing a file handle must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -233,7 +233,7 @@ void Test_CAAddFolder(Test *t) {
 
 	Test_setModule(t, "CAFile_addFolder");
 
-	{							//Single subfolder added to root
+	{                            //Single subfolder added to root
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -246,7 +246,7 @@ void Test_CAAddFolder(Test *t) {
 
 		Test_assert(t, "addFolder ok",           hd != CAHandle_Invalid);
 		Test_assert(t, "isFolder",               CAHandle_isFolder(hd));
-		Test_assert(t, "folders.length 2",       ca.folders.length == 2);	//root + src
+		Test_assert(t, "folders.length 2",       ca.folders.length == 2);    //root + src
 		Test_assert(t, "dirCount root 1",        CAFile_dirCount(&ca, root, false) == 1);
 		Test_assert(t, "fileCount root 0",       CAFile_fileCount(&ca, root, false) == 0);
 
@@ -257,7 +257,7 @@ void Test_CAAddFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Nested folders: root -> a -> b -> c
+	{                            //Nested folders: root -> a -> b -> c
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -290,7 +290,7 @@ void Test_CAAddFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Multiple sibling folders maintain insertion order
+	{                            //Multiple sibling folders maintain insertion order
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -312,7 +312,7 @@ void Test_CAAddFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Duplicate folder name must fail
+	{                            //Duplicate folder name must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -331,7 +331,7 @@ void Test_CAAddFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Name with path separator must fail for folders too
+	{                            //Name with path separator must fail for folders too
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 

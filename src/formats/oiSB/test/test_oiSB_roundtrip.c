@@ -433,7 +433,7 @@ void Test_SBFileSizeConsistency(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	{									//Single F32 variable
+	{                                    //Single F32 variable
 		SBFile sb = { 0 };
 
 		if (!SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &sb, &t->err)) {
@@ -449,7 +449,7 @@ void Test_SBFileSizeConsistency(Test *t) {
 		SBFile_free(&sb, t->alloc);
 	}
 
-	{									//Multiple root variables
+	{                                    //Multiple root variables
 		SBFile sb = { 0 };
 
 		if (!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &sb, &t->err)) {
@@ -469,7 +469,7 @@ void Test_SBFileSizeConsistency(Test *t) {
 		SBFile_free(&sb, t->alloc);
 	}
 
-	{									//Struct with members
+	{                                    //Struct with members
 		SBFile sb = { 0 };
 
 		if (!SBFile_create(ESBSettingsFlags_None, 32, t->alloc, &sb, &t->err)) {
@@ -492,7 +492,7 @@ void Test_SBFileSizeConsistency(Test *t) {
 		SBFile_free(&sb, t->alloc);
 	}
 
-	{									//Tightly packed flag
+	{                                    //Tightly packed flag
 		SBFile sb = { 0 };
 
 		if (!SBFile_create(ESBSettingsFlags_IsTightlyPacked, 12, t->alloc, &sb, &t->err)) {
@@ -508,7 +508,7 @@ void Test_SBFileSizeConsistency(Test *t) {
 		SBFile_free(&sb, t->alloc);
 	}
 
-	{									//HideMagicNumber variant
+	{                                    //HideMagicNumber variant
 		SBFile sb = { 0 };
 
 		if (!SBFile_create(ESBSettingsFlags_HideMagicNumber, 16, t->alloc, &sb, &t->err)) {

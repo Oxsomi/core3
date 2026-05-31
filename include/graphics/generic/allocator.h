@@ -34,22 +34,22 @@ typedef enum EResourceType EResourceType;
 
 typedef struct DeviceMemoryBlock {
 
-	AllocationBuffer allocations;	//Can be absent if dedicated
+	AllocationBuffer allocations;    //Can be absent if dedicated
 
-	U32 typeExt;					//Resource flags
+	U32 typeExt;                    //Resource flags
 
 	Bool isDedicated;
 	Bool isActive;
-	U16 allocationTypeExt;			//Allocation type flags (e.g. host visible)
+	U16 allocationTypeExt;            //Allocation type flags (e.g. host visible)
 
-	U8 *mappedMemoryExt;			//Not always available, can be done on a resource basis
+	U8 *mappedMemoryExt;            //Not always available, can be done on a resource basis
 
-	void *ext;						//Extended data (Can also be NULL if dedicated on some apis)
+	void *ext;                        //Extended data (Can also be NULL if dedicated on some apis)
 
 	#ifndef NDEBUG
-		void *stackTrace[16];		//Tracking memleaks if Debug flag is on
+		void *stackTrace[16];        //Tracking memleaks if Debug flag is on
 	#else
-		void *stackTrace[4];		//Callstack might still be needed for leaks if Debug flag for gfx instance
+		void *stackTrace[4];        //Callstack might still be needed for leaks if Debug flag for gfx instance
 	#endif
 
 } DeviceMemoryBlock;

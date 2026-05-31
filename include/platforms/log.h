@@ -42,11 +42,11 @@ void Log_performancex(ELogOptions options, const C8 *format, ...);
 void Log_warnx(ELogOptions options, const C8 *format, ...);
 void Log_errorx(ELogOptions options, const C8 *format, ...);
 
-#define Log_formatLnx(level, ...)	Log_logFormatx(level, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_debugLnx(...)			Log_debugx(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_performanceLnx(...)		Log_performancex(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_warnLnx(...)			Log_warnx(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_errorLnx(...)			Log_errorx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_formatLnx(level, ...)    Log_logFormatx(level, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_debugLnx(...)            Log_debugx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_performanceLnx(...)        Log_performancex(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_warnLnx(...)            Log_warnx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_errorLnx(...)            Log_errorx(ELogOptions_NewLine, __VA_ARGS__)
 
 #ifdef __cplusplus
 	}

@@ -81,17 +81,17 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 				}
 
 				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-				rtv.Texture2D = (D3D12_TEX2D_RTV) { 0 };								//No mip and plane slice
+				rtv.Texture2D = (D3D12_TEX2D_RTV) { 0 };                                //No mip and plane slice
 				break;
 
 			case ETextureType_Cube:
 				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-				rtv.Texture2DArray = (D3D12_TEX2D_ARRAY_RTV) { .ArraySize = 6 };		//No mip, array off and plane slice
+				rtv.Texture2DArray = (D3D12_TEX2D_ARRAY_RTV) { .ArraySize = 6 };        //No mip, array off and plane slice
 				break;
 
 			case ETextureType_3D:
 				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
-				rtv.Texture3D = (D3D12_TEX3D_RTV) { .WSize = tex.length };				//No mip and array offset
+				rtv.Texture3D = (D3D12_TEX3D_RTV) { .WSize = tex.length };                //No mip and array offset
 				break;
 		}
 	}
@@ -147,17 +147,17 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 				}
 
 				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-				dsv.Texture2D = (D3D12_TEX2D_DSV) { 0 };							//No mip
+				dsv.Texture2D = (D3D12_TEX2D_DSV) { 0 };                            //No mip
 				break;
 
 			case ETextureType_Cube:
 				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-				dsv.Texture2DArray = (D3D12_TEX2D_ARRAY_DSV) { .ArraySize = 6 };			//No mip or array off
+				dsv.Texture2DArray = (D3D12_TEX2D_ARRAY_DSV) { .ArraySize = 6 };            //No mip or array off
 				break;
 
 			case ETextureType_3D:
 				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-				dsv.Texture2DArray = (D3D12_TEX2D_ARRAY_DSV) { .ArraySize = tex.length };	//No mip and array offset
+				dsv.Texture2DArray = (D3D12_TEX2D_ARRAY_DSV) { .ArraySize = tex.length };    //No mip and array offset
 				break;
 		}
 	}
@@ -284,11 +284,11 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				D3D12_BOX srcBox = (D3D12_BOX) {
 					.left   = image.srcX,
-					.top	= image.srcY,
+					.top    = image.srcY,
 					.front  = image.srcZ,
 					.right  = image.srcX + image.width,
-					.bottom	= image.srcY + image.height,
-					.back	= image.srcZ + image.length
+					.bottom    = image.srcY + image.height,
+					.back    = image.srcZ + image.length
 				};
 
 				for(U8 j = planeOffset; j < planeOffset + planes; ++j) {
@@ -381,7 +381,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					D3D12_DISCARD_REGION region = (D3D12_DISCARD_REGION) {
 						.NumRects = hasRect ? 1 : 0,
 						.pRects = hasRect ? &rect : NULL,
-						.FirstSubresource = 0,				//TODO:
+						.FirstSubresource = 0,                //TODO:
 						.NumSubresources = 1
 					};
 
@@ -424,8 +424,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 				D3D12_DISCARD_REGION region = (D3D12_DISCARD_REGION) {
 					.NumRects = hasRect ? 1 : 0,
 					.pRects = hasRect ? &rect : NULL,
-					.FirstSubresource = 0,		//TODO: Ensure all are valid
-					.NumSubresources = 1		//TODO: ^
+					.FirstSubresource = 0,        //TODO: Ensure all are valid
+					.NumSubresources = 1        //TODO: ^
 				};
 
 				Bool preserveDepth = startRender->flags & EStartRenderFlags_PreserveDepth;
@@ -506,7 +506,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 				ImageAndRange input = temp->boundTargets[i == count ? 8 : i];
 				ImageAndRange output = temp->resolveTargets[i == count ? 8 : i];
 
-				if(!input.image || !output.image)		//Only there if it's really required
+				if(!input.image || !output.image)        //Only there if it's really required
 					continue;
 
 				//Discard destination and transition to correct state
@@ -521,8 +521,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 					D3D12_DISCARD_REGION region = (D3D12_DISCARD_REGION) {
 						.NumRects = hasRect ? 1 : 0,
 						.pRects = hasRect ? &rect : NULL,
-						.FirstSubresource = 0,		//TODO: Ensure all are valid
-						.NumSubresources = 1		//TODO: ^
+						.FirstSubresource = 0,        //TODO: Ensure all are valid
+						.NumSubresources = 1        //TODO: ^
 					};
 
 					buffer->lpVtbl->DiscardResource(buffer, resolveExt->image, &region);
@@ -533,12 +533,12 @@ void DX_WRAP_FUNC(CommandList_process)(
 						.NumPlanes = 1
 					};
 
-					if (i == count) {		//Depth stencil
+					if (i == count) {        //Depth stencil
 
-						if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)				//Take both planes (depth & stencil)
+						if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)                //Take both planes (depth & stencil)
 							++range.NumPlanes;
 
-						else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)		//Take only the stencil plane
+						else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take only the stencil plane
 							++range.FirstPlane;
 					}
 
@@ -567,12 +567,12 @@ void DX_WRAP_FUNC(CommandList_process)(
 					.NumPlanes = 1
 				};
 
-				if (i == count) {		//Depth stencil
+				if (i == count) {        //Depth stencil
 
-					if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)				//Take both planes (depth & stencil)
+					if(utex.depthFormat != EDepthStencilFormat_S8X24Ext)                //Take both planes (depth & stencil)
 						++range.NumPlanes;
 
-					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)		//Take only the stencil plane
+					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)        //Take only the stencil plane
 						++range.FirstPlane;
 				}
 
@@ -601,7 +601,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 				ImageAndRange input = temp->boundTargets[i == count ? 8 : i];
 				ImageAndRange output = temp->resolveTargets[i == count ? 8 : i];
 
-				if(!input.image || !output.image)		//Only there if it's really required
+				if(!input.image || !output.image)        //Only there if it's really required
 					continue;
 
 				const DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(input.image, Dx, 0);
@@ -703,19 +703,19 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			else switch(graphicsShader->topologyMode) {
 
-				default:								topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;			break;
-				case ETopologyMode_TriangleStrip:		topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;		break;
+				default:                                topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;            break;
+				case ETopologyMode_TriangleStrip:        topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;        break;
 
-				case ETopologyMode_LineList:			topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;				break;
-				case ETopologyMode_LineStrip:			topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;			break;
+				case ETopologyMode_LineList:            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;                break;
+				case ETopologyMode_LineStrip:            topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;            break;
 
-				case ETopologyMode_PointList:			topology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;			break;
+				case ETopologyMode_PointList:            topology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;            break;
 
-				case ETopologyMode_TriangleListAdj:		topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ;		break;
-				case ETopologyMode_TriangleStripAdj:	topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;	break;
+				case ETopologyMode_TriangleListAdj:        topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ;        break;
+				case ETopologyMode_TriangleStripAdj:    topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;    break;
 
-				case ETopologyMode_LineListAdj:			topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ;			break;
-				case ETopologyMode_LineStripAdj:		topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;		break;
+				case ETopologyMode_LineListAdj:            topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ;            break;
+				case ETopologyMode_LineStripAdj:        topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;        break;
 			}
 
 			if (temp->boundPrimitiveTopology != topology) {
@@ -1016,17 +1016,17 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
 
-				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
+				if(transition.type == ETransitionType_KeepAlive)        //TODO: Residency management
 					continue;
 
 				D3D12_BARRIER_SYNC pipelineStage = 0;
 
 				switch (transition.stage) {
 
-					default:																						break;
-					case EPipelineStage_Compute:		pipelineStage = D3D12_BARRIER_SYNC_COMPUTE_SHADING;			break;
-					case EPipelineStage_Vertex:			pipelineStage = D3D12_BARRIER_SYNC_VERTEX_SHADING;			break;
-					case EPipelineStage_Pixel:			pipelineStage = D3D12_BARRIER_SYNC_PIXEL_SHADING;			break;
+					default:                                                                                        break;
+					case EPipelineStage_Compute:        pipelineStage = D3D12_BARRIER_SYNC_COMPUTE_SHADING;            break;
+					case EPipelineStage_Vertex:            pipelineStage = D3D12_BARRIER_SYNC_VERTEX_SHADING;            break;
+					case EPipelineStage_Pixel:            pipelineStage = D3D12_BARRIER_SYNC_PIXEL_SHADING;            break;
 
 					case EPipelineStage_GeometryExt:
 					case EPipelineStage_Domain:
@@ -1116,7 +1116,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 							break;
 
-						case ETransitionType_ResolveTargetWrite:		//We handle a 'secret' transition after (needs discard first)
+						case ETransitionType_ResolveTargetWrite:        //We handle a 'secret' transition after (needs discard first)
 						case ETransitionType_Clear:
 							pipelineStage = D3D12_BARRIER_SYNC_RENDER_TARGET;
 							access = D3D12_BARRIER_ACCESS_RENDER_TARGET;
@@ -1161,7 +1161,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					UnifiedTexture unif = TextureRef_getUnifiedTexture(transition.resource, NULL);
 					DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Dx, 0);
 
-					D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {		//TODO:
+					D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {        //TODO:
 						.NumMipLevels = 1,
 						.NumArraySlices = 1,
 						.NumPlanes = 1
@@ -1233,7 +1233,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 			U64 encoded[62] = { 0 };
 			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x008 : 0x002) << 10;
 			encoded[1] = 0xFF000000 | (*(const U32*)&reduc);
-			encoded[2] = ((U64)8 << 55) | ((U64)1 << 54);		//Address alignment = 8 and indicate "ansi"
+			encoded[2] = ((U64)8 << 55) | ((U64)1 << 54);        //Address alignment = 8 and indicate "ansi"
 
 			const U32 strLen = (U32) CharString_calcStrLen(
 				(const C8*)data + sizeof(F32x4),

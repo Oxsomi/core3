@@ -443,7 +443,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, false, (const U8**) &location);
 
-			if(temp.genericError && location == defaultLocation)		//Something else went wrong
+			if(temp.genericError && location == defaultLocation)        //Something else went wrong
 				gotoIfError(clean, temp)
 
 			//We re-create the staging buffer to fit the new allocation.
@@ -524,7 +524,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-				gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
+				gotoIfError(clean, VkDeviceBuffer_transition(                        //Ensure resource is transitioned
 					stagingExt,
 					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -536,7 +536,7 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				))
 
 				RefPtr_inc(device->staging);
-				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))        //Add to in flight
 			}
 	
 			if(dependency.bufferMemoryBarrierCount)

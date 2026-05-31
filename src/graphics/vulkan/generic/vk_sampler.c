@@ -37,20 +37,20 @@ void VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
 VkSamplerAddressMode mapVkAddressMode(ESamplerAddressMode addressMode) {
 	switch (addressMode) {
-		case ESamplerAddressMode_MirrorRepeat:		return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-		case ESamplerAddressMode_ClampToEdge:		return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		case ESamplerAddressMode_ClampToBorder:		return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-		default:									return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		case ESamplerAddressMode_MirrorRepeat:        return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+		case ESamplerAddressMode_ClampToEdge:        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		case ESamplerAddressMode_ClampToBorder:        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		default:                                    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	}
 }
 
 VkBorderColor mapVkBorderColor(ESamplerBorderColor borderColor) {
 	switch (borderColor) {
-		case ESamplerBorderColor_OpaqueBlackFloat:		return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-		case ESamplerBorderColor_OpaqueBlackInt:		return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		case ESamplerBorderColor_OpaqueWhiteFloat:		return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		case ESamplerBorderColor_OpaqueWhiteInt:		return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
-		default:										return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+		case ESamplerBorderColor_OpaqueBlackFloat:        return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+		case ESamplerBorderColor_OpaqueBlackInt:        return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		case ESamplerBorderColor_OpaqueWhiteFloat:        return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		case ESamplerBorderColor_OpaqueWhiteInt:        return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
+		default:                                        return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 	}
 }
 

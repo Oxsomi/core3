@@ -68,28 +68,28 @@ static inline I32x4 I32x4_negTwo() { return I32x4_xxxx4(-2); }
 
 	static inline I32x4 I32x4_setCopy(I32x4 a, U8 i, I32 v) {
 		switch (i & 3) {
-			case 0:		return I32x4_setXCopy(a, v);
-			case 1:		return I32x4_setYCopy(a, v);
-			case 2:		return I32x4_setZCopy(a, v);
-			default:	return I32x4_setWCopy(a, v);
+			case 0:        return I32x4_setXCopy(a, v);
+			case 1:        return I32x4_setYCopy(a, v);
+			case 2:        return I32x4_setZCopy(a, v);
+			default:    return I32x4_setWCopy(a, v);
 		}
 	}
 
 	static inline void I32x4_setRef(I32x4 *a, U8 i, I32 v) {
 		switch (i & 3) {
-			case 0:		I32x4_setXRef(a, v);	break;
-			case 1:		I32x4_setYRef(a, v);	break;
-			case 2:		I32x4_setZRef(a, v);	break;
-			default:	I32x4_setWRef(a, v);
+			case 0:        I32x4_setXRef(a, v);    break;
+			case 1:        I32x4_setYRef(a, v);    break;
+			case 2:        I32x4_setZRef(a, v);    break;
+			default:    I32x4_setWRef(a, v);
 		}
 	}
 
 	static inline I32 I32x4_get(I32x4 a, U8 i) {
 		switch (i & 3) {
-			case 0:		return I32x4_x(a);
-			case 1:		return I32x4_y(a);
-			case 2:		return I32x4_z(a);
-			default:	return I32x4_w(a);
+			case 0:        return I32x4_x(a);
+			case 1:        return I32x4_y(a);
+			case 2:        return I32x4_z(a);
+			default:    return I32x4_w(a);
 		}
 	}
 
@@ -117,7 +117,7 @@ static inline I32x4 I32x4_ror(I32x4 a, U8 bits) {
 
 static inline I32x4 I32x4_pow2(I32x4 a) { return I32x4_mul(a, a); }
 
-static inline I32x4 I32x4_mod(I32x4 v, I32x4 d) {				//UB for any d[x] == 0
+static inline I32x4 I32x4_mod(I32x4 v, I32x4 d) {                //UB for any d[x] == 0
 	I32x4 r = I32x4_sub(v, I32x4_mul(I32x4_div(v, d), d));
 	I32x4 mask = I32x4_lt(r, I32x4_zero());
 	return I32x4_add(r, I32x4_mul(mask, d));

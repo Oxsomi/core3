@@ -111,7 +111,7 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_setAllToU8", Buffer_setAllToU8(buf, 0xAA, &test->err));
 	Test_assert(test, "Buffer_setAllToU8", Buffer_setAllToU8(buf1, 0x55, &test->err));
 
-	Test_assert(test, "Buffer_bitwiseAnd", Buffer_bitwiseAnd(buf, buf1, &test->err));	//0xAA & 0x55 = 0x00
+	Test_assert(test, "Buffer_bitwiseAnd", Buffer_bitwiseAnd(buf, buf1, &test->err));    //0xAA & 0x55 = 0x00
 
 	for (i = 0; i < 256 / 8; ++i)
 		if (dat[i])
@@ -136,8 +136,8 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_memcpy", Buffer_setAllToU8(buf, 0xCD, &test->err));
 
 	Buffer_memcpy(
-		Buffer_createRef(dat1 + 4, 16),		//Into dat1[4], dat1[5]
-		Buffer_createRefConst(dat + 2, 16)	//Copy dat[2], dat[3]
+		Buffer_createRef(dat1 + 4, 16),        //Into dat1[4], dat1[5]
+		Buffer_createRefConst(dat + 2, 16)    //Copy dat[2], dat[3]
 	);
 
 	for (i = 0; i < 4; ++i)
@@ -267,5 +267,5 @@ void Test_buffer(Test *test) {
 	Test_assert(test, "Buffer_offset (value)", val == 6);
 
 	Test_assert(test, "Buffer_offset (bounds)", !Buffer_offset(&offsetBuf, 1000, NULL));
-	Test_assert(test, "Buffer_offset (owned)", !Buffer_offset(&fakeBuf, 8, NULL));		//Should fail on owned buffer
+	Test_assert(test, "Buffer_offset (owned)", !Buffer_offset(&fakeBuf, 8, NULL));        //Should fail on owned buffer
 }

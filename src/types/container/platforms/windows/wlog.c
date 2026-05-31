@@ -64,10 +64,10 @@ typedef struct CapturedStackTrace {
 } CapturedStackTrace;
 
 static const WORD COLORS[] = {
-	2,	//green
-	3,	//cyan
-	14,	//yellow
-	4	//red
+	2,    //green
+	3,    //cyan
+	14,    //yellow
+	4    //red
 };
 
 SpinLock LogInitLock = { 0 };
@@ -137,7 +137,7 @@ void Log_printCapturedStackTraceCustom(
 
 			DWORD lineOffset = 0;
 			IMAGEHLP_LINEW64 line = { .SizeOfStruct = sizeof(IMAGEHLP_LINEW64) };
-			SymGetLineFromAddrW64(process, addr, &lineOffset, &line);	//Can fail, line stays zeroed
+			SymGetLineFromAddrW64(process, addr, &lineOffset, &line);    //Can fail, line stays zeroed
 
 			CapturedStackTrace *capture = &captured[captureCount];
 

@@ -56,7 +56,7 @@ Bool SBFile_write(const SBFile *sbFile, const Allocator *alloc, StreamRef *strea
 
 	U64 headerSize = sizeof(SBHeader);
 
-	if(!(sbFile->flags & ESBSettingsFlags_HideMagicNumber))		//Magic number (can be hidden by parent; such as oiSH)
+	if(!(sbFile->flags & ESBSettingsFlags_HideMagicNumber))        //Magic number (can be hidden by parent; such as oiSH)
 		headerSize += sizeof(U32);
 
 	headerSize += ListSBStruct_bytes(sbFile->structs);

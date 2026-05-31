@@ -57,7 +57,7 @@ static inline I32x4 AES_keyGenAssistInternal(I32x4 a, U8 rcon) {
 		 6,  5,  4,  7,
 		11, 10,  9,  8,
 		14, 13, 12, 15
-    };
+	};
 	uint8x16_t rorTable = vld1q_u8(ror8Yw);
 	sx1_3 = vreinterpretq_s32_u8(vqtbl1q_u8(vreinterpretq_u8_s32(sx1_3), rorTable));
 
@@ -71,23 +71,23 @@ static inline I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 		return I32x4_zero();
 
 	switch (i) {
-		case 0:		return AES_keyGenAssistInternal(a, 0x00);
-		case 1:		return AES_keyGenAssistInternal(a, 0x01);
-		case 2:		return AES_keyGenAssistInternal(a, 0x02);
-		case 3:		return AES_keyGenAssistInternal(a, 0x04);
-		case 4:		return AES_keyGenAssistInternal(a, 0x08);
-		case 5:		return AES_keyGenAssistInternal(a, 0x10);
-		case 6:		return AES_keyGenAssistInternal(a, 0x20);
-		case 7:		return AES_keyGenAssistInternal(a, 0x40);
-		case 8:		return AES_keyGenAssistInternal(a, 0x80);
-		case 9:		return AES_keyGenAssistInternal(a, 0x1B);
-		default:	return AES_keyGenAssistInternal(a, 0x36);
+		case 0:        return AES_keyGenAssistInternal(a, 0x00);
+		case 1:        return AES_keyGenAssistInternal(a, 0x01);
+		case 2:        return AES_keyGenAssistInternal(a, 0x02);
+		case 3:        return AES_keyGenAssistInternal(a, 0x04);
+		case 4:        return AES_keyGenAssistInternal(a, 0x08);
+		case 5:        return AES_keyGenAssistInternal(a, 0x10);
+		case 6:        return AES_keyGenAssistInternal(a, 0x20);
+		case 7:        return AES_keyGenAssistInternal(a, 0x40);
+		case 8:        return AES_keyGenAssistInternal(a, 0x80);
+		case 9:        return AES_keyGenAssistInternal(a, 0x1B);
+		default:    return AES_keyGenAssistInternal(a, 0x36);
 	}
 }
 
 static inline I32x4 AES_encodeBlock(I32x4 state, I32x4 rk) {
 	uint8x16_t block = AES_block(state);
-	block = vaesmcq_u8(block);		//mixColumns
+	block = vaesmcq_u8(block);        //mixColumns
 	return I32x4_xor(block, rk);
 }
 

@@ -145,9 +145,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		switch (stage->stageType) {
 
-			default:								shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;			break;
-			case EPipelineStage_ClosestHitExt:		shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;		break;
-			case EPipelineStage_IntersectionExt:	shaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;		break;
+			default:                                shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;            break;
+			case EPipelineStage_ClosestHitExt:        shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;        break;
+			case EPipelineStage_IntersectionExt:    shaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;        break;
 
 			case EPipelineStage_MissExt:
 				shaderStage = VK_SHADER_STAGE_MISS_BIT_KHR;
@@ -180,7 +180,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 				.intersectionShader = VK_SHADER_UNUSED_KHR
 			};
 
-		if(stage->binaryId == U32_MAX)		//Invalid shaders get skipped
+		if(stage->binaryId == U32_MAX)        //Invalid shaders get skipped
 			continue;
 
 		U16 entrypointId = (U16) stage->binaryId;
@@ -297,7 +297,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 				PipelineStage stage = pipeline->stages.ptr[k];
 
-				if (stage.groupId != groupId)		//TODO: Better search
+				if (stage.groupId != groupId)        //TODO: Better search
 					continue;
 
 				groupId = hitGroupCount;

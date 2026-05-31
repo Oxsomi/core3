@@ -44,7 +44,7 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 	if(!chim)
 		return;
 
-	const U8 reg = op & 3;					//Doesn't always operate on this register though
+	const U8 reg = op & 3;                    //Doesn't always operate on this register though
 
 	//Simple float and vector operations
 

@@ -40,7 +40,7 @@ Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 	VkBLAS *blasExt = BLAS_ext(blas, Vk);
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "VkBLAS_init()::serialized not supported yet");		//TODO:
+		return Error_unsupportedOperation(0, "VkBLAS_init()::serialized not supported yet");        //TODO:
 
 	Error err = Error_none();
 	U64 primitives = 0;
@@ -51,7 +51,7 @@ Error VK_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 	switch (type) {
 
 		case EBLASConstructionType_Serialized:
-			primitives = Buffer_length(blas->cpuData) / 12;		//Conservative estimate
+			primitives = Buffer_length(blas->cpuData) / 12;        //Conservative estimate
 			break;
 
 		case EBLASConstructionType_Procedural:
@@ -237,7 +237,7 @@ Error VK_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	Error err = Error_none();
 
-	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
+	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return Error_none();
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &blasExt->range;

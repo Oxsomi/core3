@@ -59,7 +59,7 @@ ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime) {
 		const I64 tid = (I64) Thread_getId();
 		I64 prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
 
-		if(prevValue == tid)		//Already locked
+		if(prevValue == tid)        //Already locked
 			return ELockAcquire_AlreadyLocked;
 
 		if(prevValue == 0)

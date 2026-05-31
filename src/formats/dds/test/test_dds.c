@@ -83,7 +83,7 @@ Bool buildSubResources(
 
 				if (!ListSubResourceData_pushBack(subs, sub, t->alloc, &t->err)) {
 					RefPtr_dec(&sr);
-					RefPtr_dec(&sr);	//undo the inc above
+					RefPtr_dec(&sr);    //undo the inc above
 					return false;
 				}
 
@@ -96,7 +96,7 @@ Bool buildSubResources(
 		}
 	}
 
-	*sharedStream = sr;	//caller owns the base ref
+	*sharedStream = sr;    //caller owns the base ref
 	return true;
 }
 
@@ -150,7 +150,7 @@ void Test_DDSRoundTripRGBA8(Test *t) {
 		const ETextureFormatId fmtId = ETextureFormatId_RGBA8;
 
 		DDSInfo info = { .w = 4, .h = 4, .l = 1, .mips = 1, .layers = 1,
-		                 .type = ETextureType_2D, .textureFormatId = fmtId };
+						 .type = ETextureType_2D, .textureFormatId = fmtId };
 
 		if (!buildSubResources(t, 4, 4, 1, 1, 1, fmtId, &dataSr, &subs, &type)) {
 			Test_assert(t, "build RGBA8", false);
@@ -202,7 +202,7 @@ void Test_DDSRoundTripMipChain(Test *t) {
 		const U32 W = 8, H = 8, numMips = 4;
 
 		DDSInfo info = { .w = W, .h = H, .l = 1, .mips = numMips, .layers = 1,
-		                 .type = ETextureType_2D, .textureFormatId = fmtId };
+						 .type = ETextureType_2D, .textureFormatId = fmtId };
 
 		if (!buildSubResources(t, W, H, 1, numMips, 1, fmtId, &dataSr, &subs, &type)) {
 			Test_assert(t, "build mip chain", false);
@@ -249,7 +249,7 @@ void Test_DDSRoundTripCubemap(Test *t) {
 		const ETextureFormat   fmt   = ETextureFormatId_unpack[fmtId];
 
 		DDSInfo info = { .w = 4, .h = 4, .l = 1, .mips = 1, .layers = 6,
-		                 .type = ETextureType_Cube, .textureFormatId = fmtId };
+						 .type = ETextureType_Cube, .textureFormatId = fmtId };
 
 		if (!buildSubResources(t, 4, 4, 1, 1, 6, fmtId, &dataSr, &subs, &type)) {
 			Test_assert(t, "build cubemap", false);
@@ -295,7 +295,7 @@ void Test_DDSRoundTripBC5Legacy(Test *t) {
 		const ETextureFormatId fmtId = ETextureFormatId_BC5;
 
 		DDSInfo info = { .w = 4, .h = 4, .l = 1, .mips = 1, .layers = 1,
-		                 .type = ETextureType_2D, .textureFormatId = fmtId };
+						 .type = ETextureType_2D, .textureFormatId = fmtId };
 
 		if (!buildSubResources(t, 4, 4, 1, 1, 1, fmtId, &dataSr, &subs, &type)) {
 			Test_assert(t, "build BC5", false);
@@ -334,7 +334,7 @@ void Test_DDSRoundTrip3D(Test *t) {
 		const U32 W = 4, H = 4, L = 4;
 
 		DDSInfo info = { .w = W, .h = H, .l = L, .mips = 1, .layers = 1,
-		                 .type = ETextureType_3D, .textureFormatId = fmtId };
+						 .type = ETextureType_3D, .textureFormatId = fmtId };
 
 		if (!buildSubResources(t, W, H, L, 1, 1, fmtId, &dataSr, &subs, &type)) {
 			Test_assert(t, "build 3D", false);
@@ -377,7 +377,7 @@ void Test_DDSWriteInvalidMipCount(Test *t) {
 		ListSubResourceData subs = { 0 };
 
 		const ETextureFormatId fmtId   = ETextureFormatId_RGBA8;
-		const U32 claimedMips = 5;	//4x4 only supports 3 mips
+		const U32 claimedMips = 5;    //4x4 only supports 3 mips
 
 		//Build subresources matching the claimed (invalid) mip count so write gets past the count check
 		//and hits the mip validation
@@ -394,7 +394,7 @@ void Test_DDSWriteInvalidMipCount(Test *t) {
 
 		U64 off = 0;
 		DDSInfo info = { .w = 4, .h = 4, .l = 1, .mips = claimedMips, .layers = 1,
-		                 .type = ETextureType_2D, .textureFormatId = fmtId };
+						 .type = ETextureType_2D, .textureFormatId = fmtId };
 
 		Test_assert(t, "write bad mip count fails", !DDS_write(archiveSr, &off, &subs, &info, t->alloc, NULL));
 
@@ -462,7 +462,7 @@ void Test_DDSWriteSubresourceMismatch(Test *t) {
 		//info claims 2 mips but subs only has 1 entry
 
 		DDSInfo info = { .w = 4, .h = 4, .l = 1, .mips = 2, .layers = 1,
-		                 .type = ETextureType_2D, .textureFormatId = fmtId };
+						 .type = ETextureType_2D, .textureFormatId = fmtId };
 
 		Test_assert(t, "write mismatch fails", !DDS_write(archiveSr, &off, &subs, &info, t->alloc, NULL));
 

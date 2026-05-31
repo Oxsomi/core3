@@ -40,12 +40,12 @@ void sigFunc(int signal) {
 	const C8 *msg = "Undefined instruction";
 
 	switch (signal) {
-		case SIGABRT:	msg = "Abort was called";					break;
-		case SIGFPE:	msg = "Floating point error occurred";		break;
-		case SIGILL:	msg = "Illegal instruction";				break;
-		case SIGINT:	msg = "Interrupt was called";				break;
-		case SIGSEGV:	msg = "Segfault";							break;
-		case SIGTERM:	msg = "Terminate was called";				break;
+		case SIGABRT:    msg = "Abort was called";                    break;
+		case SIGFPE:    msg = "Floating point error occurred";        break;
+		case SIGILL:    msg = "Illegal instruction";                break;
+		case SIGINT:    msg = "Interrupt was called";                break;
+		case SIGSEGV:    msg = "Segfault";                            break;
+		case SIGTERM:    msg = "Terminate was called";                break;
 	}
 
 	//Outputting to console is not technically allowed by the Windows docs
@@ -77,8 +77,8 @@ TListImpl(DebugAllocation);
 
 Allocator Allocator_allocationsAllocator;
 Allocator Allocator_trackedAllocator;
-ListDebugAllocation Allocator_allocations;			//TODO: Use hashmap here!
-SpinLock Allocator_lock;							//Multi threading safety
+ListDebugAllocation Allocator_allocations;            //TODO: Use hashmap here!
+SpinLock Allocator_lock;                            //Multi threading safety
 
 //Allocation
 
@@ -159,7 +159,7 @@ Bool Platform_onAllocate(void *ptr, U64 length, Error *e_rr) {
 
 		acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
-		if(acq < ELockAcquire_Success)		//Should never happen
+		if(acq < ELockAcquire_Success)        //Should never happen
 			retError(clean, Error_invalidState(0, "Platform_onAllocate() allocator lock failed to acquire"));
 
 		gotoIfError3(clean, ListDebugAllocation_pushBack(
@@ -216,7 +216,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 						ptr, captured->length, len
 					);
 
-					break;		//Still erase it, but reluctantly
+					break;        //Still erase it, but reluctantly
 				}
 
 				break;
@@ -405,9 +405,9 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 
 	#ifndef _NO_SIGNAL_HANDLING
 		signal(SIGABRT, sigFunc);
-		signal(SIGFPE,	sigFunc);
-		signal(SIGILL,	sigFunc);
-		signal(SIGINT,	sigFunc);
+		signal(SIGFPE,    sigFunc);
+		signal(SIGILL,    sigFunc);
+		signal(SIGINT,    sigFunc);
 		signal(SIGSEGV, sigFunc);
 		signal(SIGTERM, sigFunc);
 	#endif

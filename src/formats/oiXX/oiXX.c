@@ -33,13 +33,13 @@ Bool Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result, Erro
 	if(!buf || !result)
 		retError(clean, Error_nullPointer(!buf ? 0 : 2, "Buffer_consumeSizeType()::buf and result are required"));
 
-	*result = 0;		//This is ok, as little endian a U8 would be stored in the first bytes not the last
+	*result = 0;        //This is ok, as little endian a U8 would be stored in the first bytes not the last
 
 	switch (type) {
-		case EXXDataSizeType_U8:		gotoIfError3(clean, Buffer_consume(buf, result, 1, e_rr));	break;
-		case EXXDataSizeType_U16:		gotoIfError3(clean, Buffer_consume(buf, result, 2, e_rr));	break;
-		case EXXDataSizeType_U32:		gotoIfError3(clean, Buffer_consume(buf, result, 4, e_rr));	break;
-		case EXXDataSizeType_U64:		gotoIfError3(clean, Buffer_consume(buf, result, 8, e_rr));	break;
+		case EXXDataSizeType_U8:        gotoIfError3(clean, Buffer_consume(buf, result, 1, e_rr));    break;
+		case EXXDataSizeType_U16:        gotoIfError3(clean, Buffer_consume(buf, result, 2, e_rr));    break;
+		case EXXDataSizeType_U32:        gotoIfError3(clean, Buffer_consume(buf, result, 4, e_rr));    break;
+		case EXXDataSizeType_U64:        gotoIfError3(clean, Buffer_consume(buf, result, 8, e_rr));    break;
 		default:
 			retError(clean, Error_invalidEnum(
 				1, (U64)type, (U64)EXXDataSizeType_Count,
@@ -74,7 +74,7 @@ Bool StreamCursor_consumeSizeType(
 			"StreamCursor_consumeSizeType()::type out of bounds"
 		));
 
-	*result = 0;		//This is ok, as little endian a U8 would be stored in the first bytes not the last
+	*result = 0;        //This is ok, as little endian a U8 would be stored in the first bytes not the last
 
 	gotoIfError3(clean, StreamCursor_read(
 		cursor,
@@ -138,11 +138,11 @@ U64 Buffer_forceReadSizeType(const U8 *ptr, EXXDataSizeType type) {
 		return 0;
 
 	switch (type) {
-		case EXXDataSizeType_U8:		return *ptr;
-		case EXXDataSizeType_U16:		return Buffer_readU16(Buffer_createRefConst(ptr, sizeof(U16)), 0, NULL, NULL);
-		case EXXDataSizeType_U32:		return Buffer_readU32(Buffer_createRefConst(ptr, sizeof(U32)), 0, NULL, NULL);
-		case EXXDataSizeType_U64:		return Buffer_readU64(Buffer_createRefConst(ptr, sizeof(U64)), 0, NULL, NULL);
-		default:						return 0;
+		case EXXDataSizeType_U8:        return *ptr;
+		case EXXDataSizeType_U16:        return Buffer_readU16(Buffer_createRefConst(ptr, sizeof(U16)), 0, NULL, NULL);
+		case EXXDataSizeType_U32:        return Buffer_readU32(Buffer_createRefConst(ptr, sizeof(U32)), 0, NULL, NULL);
+		case EXXDataSizeType_U64:        return Buffer_readU64(Buffer_createRefConst(ptr, sizeof(U64)), 0, NULL, NULL);
+		default:                        return 0;
 	}
 }
 

@@ -58,7 +58,7 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 
 	switch (stride) {
 
-		case 3:		fallback = !(device->info.flags & EAudioDeviceFlags_HasU24Ext);		break;
+		case 3:        fallback = !(device->info.flags & EAudioDeviceFlags_HasU24Ext);        break;
 
 		case 4:
 
@@ -69,8 +69,8 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 
 			break;
 
-		case 8:		fallback = !(device->info.flags & EAudioDeviceFlags_HasF64Ext);		break;
-		default:																		break;
+		case 8:        fallback = !(device->info.flags & EAudioDeviceFlags_HasF64Ext);        break;
+		default:                                                                        break;
 	}
 
 	EAudioStreamFormat format = ogFormat;
@@ -80,7 +80,7 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 
 	Bool flatten = AudioStreamInfo_flattenSound(&stream->info);
 
-	if(flatten)			//Get rid of stereo
+	if(flatten)            //Get rid of stereo
 		format &=~ 1;
 
 	stream->format = format;
@@ -94,17 +94,17 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 
 	switch (format) {
 	
-		case EAudioStreamFormat_Mono8:			fmt = AL_FORMAT_MONO8;				break;
-		case EAudioStreamFormat_Stereo8:		fmt = AL_FORMAT_STEREO8;			break;
+		case EAudioStreamFormat_Mono8:            fmt = AL_FORMAT_MONO8;                break;
+		case EAudioStreamFormat_Stereo8:        fmt = AL_FORMAT_STEREO8;            break;
 
-		case EAudioStreamFormat_Mono16:			fmt = AL_FORMAT_MONO16;				break;
-		case EAudioStreamFormat_Stereo16:		fmt = AL_FORMAT_STEREO16;			break;
+		case EAudioStreamFormat_Mono16:            fmt = AL_FORMAT_MONO16;                break;
+		case EAudioStreamFormat_Stereo16:        fmt = AL_FORMAT_STEREO16;            break;
 
-		case EAudioStreamFormat_Mono32fExt:		fmt = AL_FORMAT_MONO_FLOAT32;		break;
-		case EAudioStreamFormat_Stereo32fExt:	fmt = AL_FORMAT_STEREO_FLOAT32;		break;
+		case EAudioStreamFormat_Mono32fExt:        fmt = AL_FORMAT_MONO_FLOAT32;        break;
+		case EAudioStreamFormat_Stereo32fExt:    fmt = AL_FORMAT_STEREO_FLOAT32;        break;
 
-		case EAudioStreamFormat_Mono64fExt:		fmt = AL_FORMAT_MONO_DOUBLE_EXT;	break;
-		case EAudioStreamFormat_Stereo64fExt:	fmt = AL_FORMAT_STEREO_DOUBLE_EXT;	break;
+		case EAudioStreamFormat_Mono64fExt:        fmt = AL_FORMAT_MONO_DOUBLE_EXT;    break;
+		case EAudioStreamFormat_Stereo64fExt:    fmt = AL_FORMAT_STEREO_DOUBLE_EXT;    break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(0, "AudioStream_createExt() unsupported format"));
@@ -121,7 +121,7 @@ Bool AudioStream_createExt(AudioStream *stream, const Allocator *alloc, Error *e
 	//Must be done by the stream itself
 	AL_PROCESS_ERROR(alSourcei(streamExt->source, AL_LOOPING, AL_FALSE));
 
-	AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, 0));		//Muted, AudioSource has to take control
+	AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_GAIN, 0));        //Muted, AudioSource has to take control
 	AL_PROCESS_ERROR(alSourcef(streamExt->source, AL_PITCH, stream->info.pitch));
 
 	//Buffer to handle things like mono -> stereo, reverse, looping, etc.
@@ -314,8 +314,8 @@ Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, 
 							);
 
 						switch (newStride) {
-							default:	tmp16[k] = (U16)result;	break;
-							case 1:		tmp8[k] = (U8)result;	break;
+							default:    tmp16[k] = (U16)result;    break;
+							case 1:        tmp8[k] = (U8)result;    break;
 						}
 					}
 

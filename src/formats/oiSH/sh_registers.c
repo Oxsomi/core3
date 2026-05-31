@@ -39,10 +39,10 @@ ESHTexturePrimitive ESHTexturePrimitive_fromTextureFormat(ETextureFormat format)
 
 	switch(prim) {
 
-		default:						return 0xFF;
-		case ETexturePrimitive_UInt:	return res | ESHTexturePrimitive_UInt;
-		case ETexturePrimitive_SInt:	return res | ESHTexturePrimitive_SInt;
-		case ETexturePrimitive_SNorm:	return res | ESHTexturePrimitive_SNorm;
+		default:                        return 0xFF;
+		case ETexturePrimitive_UInt:    return res | ESHTexturePrimitive_UInt;
+		case ETexturePrimitive_SInt:    return res | ESHTexturePrimitive_SInt;
+		case ETexturePrimitive_SNorm:    return res | ESHTexturePrimitive_SNorm;
 
 		case ETexturePrimitive_Compressed:
 		case ETexturePrimitive_Float:
@@ -372,13 +372,13 @@ Bool ListSHRegisterRuntime_createCopyUnderlying(
 	gotoIfError3(clean, ListSHRegisterRuntime_createCopy(*orig, alloc, dst, e_rr));
 	didAlloc = true;
 
-	for(U64 i = 0; i < orig->length; ++i) {			//Ensure we don't accidentally free something we shouldn't
+	for(U64 i = 0; i < orig->length; ++i) {            //Ensure we don't accidentally free something we shouldn't
 		dst->ptrNonConst[i].arrays = (ListU32) { 0 };
 		dst->ptrNonConst[i].name = CharString_createNull();
 		dst->ptrNonConst[i].shaderBuffer = (SBFile) { 0 };
 	}
 
-	for(U64 i = 0; i < orig->length; ++i) {			//Copy
+	for(U64 i = 0; i < orig->length; ++i) {            //Copy
 		gotoIfError3(clean, ListU32_createCopy(orig->ptr[i].arrays, alloc, &dst->ptrNonConst[i].arrays, e_rr));
 		gotoIfError3(clean, CharString_createCopy(orig->ptr[i].name, alloc, &dst->ptrNonConst[i].name, e_rr));
 		gotoIfError3(clean, SBFile_createCopy(&orig->ptr[i].shaderBuffer, alloc, &dst->ptrNonConst[i].shaderBuffer, e_rr));
@@ -562,10 +562,10 @@ Bool ListSHRegisterRuntime_addTextureBase(
 
 		switch (texPrim) {
 
-			case ETexturePrimitive_UInt:	primitive = ESHTexturePrimitive_UInt;		break;
-			case ETexturePrimitive_SInt:	primitive = ESHTexturePrimitive_SInt;		break;
-			case ETexturePrimitive_UNorm:	primitive = ESHTexturePrimitive_UNorm;		break;
-			case ETexturePrimitive_SNorm:	primitive = ESHTexturePrimitive_SNorm;		break;
+			case ETexturePrimitive_UInt:    primitive = ESHTexturePrimitive_UInt;        break;
+			case ETexturePrimitive_SInt:    primitive = ESHTexturePrimitive_SInt;        break;
+			case ETexturePrimitive_UNorm:    primitive = ESHTexturePrimitive_UNorm;        break;
+			case ETexturePrimitive_SNorm:    primitive = ESHTexturePrimitive_SNorm;        break;
 
 			case ETexturePrimitive_Float:
 				primitive = ESHTexturePrimitive_Float;
@@ -580,10 +580,10 @@ Bool ListSHRegisterRuntime_addTextureBase(
 		}
 
 		switch (channels) {
-			case 1:		primitive |= ESHTexturePrimitive_Component1;	break;
-			case 2:		primitive |= ESHTexturePrimitive_Component2;	break;
-			case 3:		primitive |= ESHTexturePrimitive_Component3;	break;
-			case 4:		primitive |= ESHTexturePrimitive_Component4;	break;
+			case 1:        primitive |= ESHTexturePrimitive_Component1;    break;
+			case 2:        primitive |= ESHTexturePrimitive_Component2;    break;
+			case 3:        primitive |= ESHTexturePrimitive_Component3;    break;
+			case 4:        primitive |= ESHTexturePrimitive_Component4;    break;
 			default:
 				retError(clean, Error_invalidState(
 					0, "ListSHRegisterRuntime_addRWTexture() texture format is incompatible"
@@ -966,11 +966,11 @@ void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, cons
 			Log_debugLn(alloc, "%sinput_attachment_index = %"PRIu8, indent, reg->inputAttachmentId);
 			break;
 
-		case ESHRegisterType_Sampler:					Log_debugLn(alloc, "%sSamplerState", indent);					 break;
-		case ESHRegisterType_SamplerComparisonState:	Log_debugLn(alloc, "%sSamplerComparisonState", indent);			 break;
-		case ESHRegisterType_ConstantBuffer:			Log_debugLn(alloc, "%sConstantBuffer", indent);					 break;
-		case ESHRegisterType_PushConstants:				Log_debugLn(alloc, "%sPushConstants", indent);					 break;
-		case ESHRegisterType_AccelerationStructure:		Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
+		case ESHRegisterType_Sampler:                    Log_debugLn(alloc, "%sSamplerState", indent);                     break;
+		case ESHRegisterType_SamplerComparisonState:    Log_debugLn(alloc, "%sSamplerComparisonState", indent);             break;
+		case ESHRegisterType_ConstantBuffer:            Log_debugLn(alloc, "%sConstantBuffer", indent);                     break;
+		case ESHRegisterType_PushConstants:                Log_debugLn(alloc, "%sPushConstants", indent);                     break;
+		case ESHRegisterType_AccelerationStructure:        Log_debugLn(alloc, "%sRaytracingAccelerationStructure", indent); break;
 
 		case ESHRegisterType_ByteAddressBuffer:
 			Log_debugLn(alloc, "%s%sByteAddressBuffer", indent, reg->registerType & ESHRegisterType_IsWrite ? "RW" : "");
@@ -998,11 +998,11 @@ void SHRegister_print(const SHRegister *reg, U64 indenting, Bool isVerbose, cons
 
 			switch(reg->registerType & ESHRegisterType_TypeMask) {
 
-				case ESHRegisterType_Texture2D:						break;
-				case ESHRegisterType_Texture1D:		dim = "1D";		break;
-				case ESHRegisterType_Texture3D:		dim = "3D";		break;
-				case ESHRegisterType_TextureCube:	dim = "Cube";	break;
-				case ESHRegisterType_Texture2DMS:	dim = "2DMS";	break;
+				case ESHRegisterType_Texture2D:                        break;
+				case ESHRegisterType_Texture1D:        dim = "1D";        break;
+				case ESHRegisterType_Texture3D:        dim = "3D";        break;
+				case ESHRegisterType_TextureCube:    dim = "Cube";    break;
+				case ESHRegisterType_Texture2DMS:    dim = "2DMS";    break;
 			}
 
 			Log_debugLn(

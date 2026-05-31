@@ -115,12 +115,12 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 					retError(clean, Error_invalidState(0, "WAV_read() bytesPerBlock is invalid"));
 
 				if(
-					result->fmt.stride != 8 && result->fmt.stride != 16 && result->fmt.stride != 24 &&		//Int
-					result->fmt.stride != 32 && result->fmt.stride != 64									//Float ext
+					result->fmt.stride != 8 && result->fmt.stride != 16 && result->fmt.stride != 24 &&        //Int
+					result->fmt.stride != 32 && result->fmt.stride != 64                                    //Float ext
 				)
 					retError(clean, Error_invalidState(0, "WAV_read() bit count unsupported"));
 
-				if (result->fmt.format == 0xFFFE) {		//Extended
+				if (result->fmt.format == 0xFFFE) {        //Extended
 					
 					if(result->fmt.section.size < sizeof(RIFFFmtHeader) + sizeof(RIFFFmtExtended))
 						retError(clean, Error_invalidState(0, "WAV_read() is of unexpected size"));
@@ -149,7 +149,7 @@ Bool WAV_read(StreamRef *streamRef, U64 off, U64 len, const Allocator *alloc, WA
 						0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71
 					};
 
-					U8 realSuffix[12];		//U32 is in the header because it's easier that way, this is the rest
+					U8 realSuffix[12];        //U32 is in the header because it's easier that way, this is the rest
 					buf = Buffer_createRef(realSuffix, sizeof(realSuffix));
 					gotoIfError3(clean, StreamCursor_read(
 						&cursorRead, buf, extOff + sizeof(ext), 0, 0, false, alloc, e_rr

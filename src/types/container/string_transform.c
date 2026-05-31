@@ -300,7 +300,7 @@ Bool CharString_replaceString(const CharStringReplace2 *replace, Bool isFirst, E
 
 	if (replacel < searchl) {
 
-		const U64 diff = searchl - replacel;	//How much we have to shrink
+		const U64 diff = searchl - replacel;    //How much we have to shrink
 
 		//Copy our data over first
 

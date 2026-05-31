@@ -46,7 +46,7 @@ static inline U64 CAFile_computePathLen(const CAFile *caFile, CAHandle parent, U
 		if (!segLen)
 			break;
 
-		total += segLen + 1;	//+1 for '/'
+		total += segLen + 1;    //+1 for '/'
 
 		const CAFolderInfo *fi = CAFile_getFolderInfoPtr(caFile, cur);
 
@@ -172,7 +172,7 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 	if (CAFile_hasSubObject(caFile, newParent, name))
 		retError(clean, Error_alreadyDefined(0, "CAFile_move()::name already exists in destination"));
 
-	U16 newParentId = (U16)CAHandle_getId(newParent);	//0 = root
+	U16 newParentId = (U16)CAHandle_getId(newParent);    //0 = root
 
 	if (CAHandle_isFile(fileHandle)) {
 
@@ -185,7 +185,7 @@ Bool CAFile_move(CAFile *caFile, CAHandle fileHandle, CAHandle newParent, const 
 			newPar->fileCount ? newPar->fileOffset + newPar->fileCount :
 			caFile->files.length - 1;
 
-		if (dstId > srcId)		//If moving forward in the array, account for the removal shifting dst
+		if (dstId > srcId)        //If moving forward in the array, account for the removal shifting dst
 			--dstId;
 
 		//Physically move the entry
@@ -380,7 +380,7 @@ CAHandle CAFile_add(
 	if (CAFile_hasSubObject(caFile, parent, *name))
 		retError(clean, Error_alreadyDefined(0, "CAFile_add()::name already exists in parent"));
 
-	U16 parentId = (U16)CAHandle_getId(parent);		//0 = root
+	U16 parentId = (U16)CAHandle_getId(parent);        //0 = root
 
 	if (isFile) {
 

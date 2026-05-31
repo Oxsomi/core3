@@ -79,7 +79,7 @@ Bool SBFile_create(
 	const void *flagsPtr = &sbFile->flags;
 	sbFile->hash = Buffer_fnv1a64Single(*(const U64*)flagsPtr, Buffer_fnv1a64Offset);
 
-	sbFile->flags = flagsReal;		//We don't want HideMagicNumber to influence hash
+	sbFile->flags = flagsReal;        //We don't want HideMagicNumber to influence hash
 
 clean:
 

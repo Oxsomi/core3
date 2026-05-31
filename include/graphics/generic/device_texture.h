@@ -35,7 +35,7 @@ typedef struct DeviceTexture {
 	Bool isPendingFullCopy, isPending, isFirstFrame;
 	U8 pad0[13];
 
-	Buffer cpuData;											//If not cpu backed this will free post upload
+	Buffer cpuData;                                            //If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
 
@@ -55,9 +55,9 @@ Error GraphicsDeviceRef_createTexture(
 	ETextureType type,
 	ETextureFormatId format,
 	EGraphicsResourceFlag flag,
-	U16 width,					//<= 16384
-	U16 height,					//^
-	U16 length,					//<= 256
+	U16 width,                    //<= 16384
+	U16 height,                    //^
+	U16 length,                    //<= 256
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,

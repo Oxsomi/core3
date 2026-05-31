@@ -102,26 +102,26 @@ Bool CharString_parseOct(CharString s, U64 *result);
 Bool CharString_parseBin(CharString s, U64 *result);
 Bool CharString_parseU64(const CharString s, U64 *result);
 
-#define CharString_matchesPattern(testFunc, ...)								\
+#define CharString_matchesPattern(testFunc, ...)                                \
 																				\
-	U64 strl = CharString_length(s);											\
-	__VA_ARGS__;																\
+	U64 strl = CharString_length(s);                                            \
+	__VA_ARGS__;                                                                \
 																				\
-	for(U64 i = start; i < strl; ++i)											\
-		if(!testFunc(s.ptr[i]))													\
-			return false;														\
+	for(U64 i = start; i < strl; ++i)                                            \
+		if(!testFunc(s.ptr[i]))                                                    \
+			return false;                                                        \
 																				\
 	return strl > start;
 
-#define CharString_matchesPatternNum(testFunc, num)								\
+#define CharString_matchesPatternNum(testFunc, num)                                \
 																				\
-	CharString other = CharString_createRefCStrConst(num);						\
-	CharString_matchesPattern(													\
-		testFunc,																\
-		CharStringSensOff strSensOff = { &s, EStringCase_Insensitive, 0 };		\
-		U64 start = CharString_startsWithString(								\
-			&strSensOff, &other													\
-		) ? CharString_length(other) : 0										\
+	CharString other = CharString_createRefCStrConst(num);                        \
+	CharString_matchesPattern(                                                    \
+		testFunc,                                                                \
+		CharStringSensOff strSensOff = { &s, EStringCase_Insensitive, 0 };        \
+		U64 start = CharString_startsWithString(                                \
+			&strSensOff, &other                                                    \
+		) ? CharString_length(other) : 0                                        \
 	)
 
 //[0-9A-Za-z_$]+
@@ -173,7 +173,7 @@ static inline Bool CharString_isUnsignedNumber(const CharString s) {
 
 #undef CharString_matchesPattern
 
-Bool CharString_isFloat(const CharString s);			//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+Bool CharString_isFloat(const CharString s);            //Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 
 //Cut will return a reference into the current string to avoid copies
 

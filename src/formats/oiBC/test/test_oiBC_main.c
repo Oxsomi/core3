@@ -72,7 +72,7 @@ void Test_chimera(Test *t) {
 		ECompareResult expectedCmp =
 			chimera.f[4] < chimera.f[i] ? ECompareResult_Lt :
 			chimera.f[4] > chimera.f[i] ? ECompareResult_Gt :
-			                              ECompareResult_Eq;
+										  ECompareResult_Eq;
 
 		Chimera_stepFidiA(&chimera, EFidiA_cmp(i));
 		Test_assert(t, "cmp", expectedCmp == Chimera_getLastCompare(&chimera));

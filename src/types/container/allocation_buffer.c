@@ -62,7 +62,7 @@ Bool AllocationBuffer_create(const AllocationBufferCreate *create, Bool isVirtua
 clean:
 
 	if (alloc && !s_uccess) {
-		Buffer_free(&create->allocationBuffer->buffer, alloc);		//Ignores if !ptr
+		Buffer_free(&create->allocationBuffer->buffer, alloc);        //Ignores if !ptr
 		*create->allocationBuffer = (AllocationBuffer){ 0 };
 	}
 
@@ -104,7 +104,7 @@ void AllocationBuffer_free(AllocationBuffer *allocationBuffer, const Allocator *
 	if (!allocationBuffer)
 		return;
 
-	Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
+	Buffer_free(&allocationBuffer->buffer, alloc);        //Ignores if !ptr
 	ListAllocationBufferBlock_free(&allocationBuffer->allocations, alloc);
 	*allocationBuffer = (AllocationBuffer) { 0 };
 }
@@ -165,7 +165,7 @@ Bool AllocationBuffer_allocateAndFillBlock(const AllocationBufferAllocate *alloc
 
 clean:
 
-	if (!s_uccess && ptr != defaultPtr)		//Touch pointer so it can be checked if blocks are all gone or not.
+	if (!s_uccess && ptr != defaultPtr)        //Touch pointer so it can be checked if blocks are all gone or not.
 		*result = NULL;
 
 	return s_uccess;
@@ -378,7 +378,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 		}
 	}
 
-	*result = NULL;					//Write null so out of memory can be detected
+	*result = NULL;                    //Write null so out of memory can be detected
 	retError(clean, Error_outOfMemory(0, "AllocationBuffer_allocateBlock() out of memory"));
 
 clean:
@@ -406,7 +406,7 @@ void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 		if (!AllocationBufferBlock_isSame(*p, allocationBuffer->buffer.ptr, ptr))
 			continue;
 
-		p->startAndNonLinearAndFree |= (U64)1 << 63;		//Free up
+		p->startAndNonLinearAndFree |= (U64)1 << 63;        //Free up
 		U64 self = i;
 
 		//Merge freed right blocks until they're gone

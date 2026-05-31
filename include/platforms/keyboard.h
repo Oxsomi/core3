@@ -49,39 +49,39 @@ typedef enum EKey {
 	EKey_K, EKey_L, EKey_M, EKey_N, EKey_O, EKey_P, EKey_Q, EKey_R, EKey_S, EKey_T,
 	EKey_U, EKey_V, EKey_W, EKey_X, EKey_Y, EKey_Z,
 
-	EKey_Backspace,		EKey_Space,			EKey_Tab,
+	EKey_Backspace,        EKey_Space,            EKey_Tab,
 
-	EKey_LShift,		EKey_LCtrl,			EKey_LAlt,			EKey_LMenu,
-	EKey_RShift,		EKey_RCtrl,			EKey_RAlt,			EKey_RMenu,
+	EKey_LShift,        EKey_LCtrl,            EKey_LAlt,            EKey_LMenu,
+	EKey_RShift,        EKey_RCtrl,            EKey_RAlt,            EKey_RMenu,
 
-	EKey_Pause,			EKey_Caps,			EKey_Escape,		EKey_PageUp,
-	EKey_PageDown,		EKey_End,			EKey_Home,			EKey_PrintScreen,
-	EKey_Insert,		EKey_Enter,			EKey_Delete,		EKey_NumLock,		EKey_ScrollLock,
+	EKey_Pause,            EKey_Caps,            EKey_Escape,        EKey_PageUp,
+	EKey_PageDown,        EKey_End,            EKey_Home,            EKey_PrintScreen,
+	EKey_Insert,        EKey_Enter,            EKey_Delete,        EKey_NumLock,        EKey_ScrollLock,
 
-	EKey_Back,			EKey_Forward,		EKey_Sleep,			EKey_Refresh,		EKey_Search,
-	EKey_Mute,			EKey_VolumeDown,	EKey_VolumeUp,		EKey_Skip,			EKey_Previous,
-	EKey_Clear,			EKey_Help,
+	EKey_Back,            EKey_Forward,        EKey_Sleep,            EKey_Refresh,        EKey_Search,
+	EKey_Mute,            EKey_VolumeDown,    EKey_VolumeUp,        EKey_Skip,            EKey_Previous,
+	EKey_Clear,            EKey_Help,
 
-	EKey_Left,			EKey_Up,			EKey_Right,			EKey_Down,
+	EKey_Left,            EKey_Up,            EKey_Right,            EKey_Down,
 
 	EKey_Numpad0,
-	EKey_Numpad1,		EKey_Numpad2,		EKey_Numpad3,
-	EKey_Numpad4,		EKey_Numpad5,		EKey_Numpad6,
-	EKey_Numpad7,		EKey_Numpad8,		EKey_Numpad9,
+	EKey_Numpad1,        EKey_Numpad2,        EKey_Numpad3,
+	EKey_Numpad4,        EKey_Numpad5,        EKey_Numpad6,
+	EKey_Numpad7,        EKey_Numpad8,        EKey_Numpad9,
 
-	EKey_NumpadMul,		EKey_NumpadAdd,		EKey_NumpadDot,
-	EKey_NumpadDiv,		EKey_NumpadSub,
+	EKey_NumpadMul,        EKey_NumpadAdd,        EKey_NumpadDot,
+	EKey_NumpadDiv,        EKey_NumpadSub,
 
-	EKey_F1,			EKey_F2,			EKey_F3,			EKey_F4,			EKey_F5,
-	EKey_F6,			EKey_F7,			EKey_F8,			EKey_F9,			EKey_F10,
-	EKey_F11,			EKey_F12,
+	EKey_F1,            EKey_F2,            EKey_F3,            EKey_F4,            EKey_F5,
+	EKey_F6,            EKey_F7,            EKey_F8,            EKey_F9,            EKey_F10,
+	EKey_F11,            EKey_F12,
 
-	EKey_Bar,			//Scancode 56 (right half of shift if there's another key there)
-	EKey_Options,		//Scancode E05D (left of ctrl)
+	EKey_Bar,            //Scancode 56 (right half of shift if there's another key there)
+	EKey_Options,        //Scancode E05D (left of ctrl)
 
-	EKey_Equals,		EKey_Comma,			EKey_Minus,			EKey_Period,
-	EKey_Slash,			EKey_Backtick,		EKey_Semicolon,		EKey_LBracket,		EKey_RBracket,
-	EKey_Backslash,		EKey_Quote,
+	EKey_Equals,        EKey_Comma,            EKey_Minus,            EKey_Period,
+	EKey_Slash,            EKey_Backtick,        EKey_Semicolon,        EKey_LBracket,        EKey_RBracket,
+	EKey_Backslash,        EKey_Quote,
 
 	EKey_Count
 

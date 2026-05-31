@@ -92,9 +92,9 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		switch(window->format) {
 
-			default:						format = DXGI_FORMAT_B8G8R8A8_UNORM;		break;
-			case EWindowFormat_RGBA16f:		format = DXGI_FORMAT_R16G16B16A16_FLOAT;	break;
-			case EWindowFormat_BGR10A2:		format = DXGI_FORMAT_R10G10B10A2_UNORM;		break;
+			default:                        format = DXGI_FORMAT_B8G8R8A8_UNORM;        break;
+			case EWindowFormat_RGBA16f:        format = DXGI_FORMAT_R16G16B16A16_FLOAT;    break;
+			case EWindowFormat_BGR10A2:        format = DXGI_FORMAT_R10G10B10A2_UNORM;        break;
 
 			case EWindowFormat_RGBA32f:
 				gotoIfError(clean, Error_unsupportedOperation(

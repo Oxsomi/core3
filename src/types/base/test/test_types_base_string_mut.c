@@ -35,7 +35,7 @@ static inline void fillStr(LongString lstr, const C8 *cstr, CharString *str) {
 	CharString str2 = {
 		.ptr = lstr,
 		.lenAndNullTerminated = CharString_length(newStr),
-		.capacityAndRefInfo = sizeof(LongString) - 1			//Pretend to be owned, doesn't matter, no free used.
+		.capacityAndRefInfo = sizeof(LongString) - 1            //Pretend to be owned, doesn't matter, no free used.
 	};
 
 	*str = str2;

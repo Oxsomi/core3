@@ -31,9 +31,9 @@
 typedef struct CharString CharString;
 
 typedef enum EDescriptorHeapFlags {
-	EDescriptorHeapFlags_None					= 0,
-	EDescriptorHeapFlags_AllowBindless			= 1 << 0,		//Required to use bindless
-	EDescriptorHeapFlags_InternalWeakDeviceRef	= 1 << 1
+	EDescriptorHeapFlags_None                    = 0,
+	EDescriptorHeapFlags_AllowBindless            = 1 << 0,        //Required to use bindless
+	EDescriptorHeapFlags_InternalWeakDeviceRef    = 1 << 1
 } EDescriptorHeapFlags;
 
 typedef struct DescriptorHeapInfo {
@@ -72,7 +72,7 @@ typedef struct DescriptorHeap {
 
 } DescriptorHeap;
 
-#define DescriptorHeap_ext(ptr, T) (!ptr ? NULL : (T##DescriptorHeap*)(ptr + 1))		//impl
+#define DescriptorHeap_ext(ptr, T) (!ptr ? NULL : (T##DescriptorHeap*)(ptr + 1))        //impl
 #define DescriptorHeapRef_ptr(ptr) RefPtr_data(ptr, DescriptorHeap)
 
 void DescriptorHeapRef_dec(DescriptorHeapRef **heap);

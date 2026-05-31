@@ -41,7 +41,7 @@ Bool Buffer_encryptAuto(
 	Buffer *restrict target,
 	const Buffer *restrict additionalData,
 	Bool generateKey,
-	U32 *restrict key,			//U32[8]
+	U32 *restrict key,            //U32[8]
 	I32x4 *restrict tag,
 	I32x4 *restrict iv,
 	Error *restrict e_rr
@@ -57,27 +57,27 @@ Bool Buffer_encryptAuto(
 Bool Buffer_decryptAuto(
 	Buffer *restrict target,
 	const Buffer *restrict additionalData,
-	const U32 *restrict key,	//U32[8]
+	const U32 *restrict key,    //U32[8]
 	I32x4 tag,
 	I32x4 iv,
 	Error *restrict e_rr
 );
 
 typedef enum EBufferEncryptionType {
-	EBufferEncryptionType_AES256GCM,		//Additional data; IV (96 bits), TAG (128 bits)
-	EBufferEncryptionType_AES128GCM,		//^
+	EBufferEncryptionType_AES256GCM,        //Additional data; IV (96 bits), TAG (128 bits)
+	EBufferEncryptionType_AES128GCM,        //^
 	EBufferEncryptionType_Count
 } EBufferEncryptionType;
 
 typedef enum EBufferEncryptionFlags {
 
-	EBufferEncryptionFlags_None			= 0,
-	EBufferEncryptionFlags_GenerateKey	= 1 << 0,
-	EBufferEncryptionFlags_StopCreateIv	= 1 << 1,		//Only use if you know what you're doing, feed unique IVs here only
+	EBufferEncryptionFlags_None            = 0,
+	EBufferEncryptionFlags_GenerateKey    = 1 << 0,
+	EBufferEncryptionFlags_StopCreateIv    = 1 << 1,        //Only use if you know what you're doing, feed unique IVs here only
 
-	EBufferEncryptionFlags_Count		= 2,
+	EBufferEncryptionFlags_Count        = 2,
 
-	EBufferEncryptionFlags_Invalid		= 0xFFFFFFFF << EBufferEncryptionFlags_Count
+	EBufferEncryptionFlags_Invalid        = 0xFFFFFFFF << EBufferEncryptionFlags_Count
 
 } EBufferEncryptionFlags;
 
@@ -99,17 +99,17 @@ typedef struct BufferEncrypt {
 	union {
 
 		struct {
-			const U32 *restrict key;		//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
-			const I32x4 *restrict tag;		//Tag that was generated to verify integrity of encrypted data.
-			const I32x4 *restrict iv;		//Iv was the 12-byte random number that was used to encrypt the data.
+			const U32 *restrict key;        //Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
+			const I32x4 *restrict tag;        //Tag that was generated to verify integrity of encrypted data.
+			const I32x4 *restrict iv;        //Iv was the 12-byte random number that was used to encrypt the data.
 		} constDecrypt;
 
 		//For Buffer_encryptAdvanced can be accessed only if the Generate flag is true.
 		//Tag is always generated.
 		struct NonConstEncrypt {
-			U32 *restrict key;				//& GenerateKey: Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
-			I32x4 *restrict tag;			//Tag is always generated if encryption type supports it (non zero).
-			I32x4 *restrict iv;				//!(& StopCreateIv): Iv should be random 12 bytes. Generated unless flag is set.
+			U32 *restrict key;                //& GenerateKey: Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4]).
+			I32x4 *restrict tag;            //Tag is always generated if encryption type supports it (non zero).
+			I32x4 *restrict iv;                //!(& StopCreateIv): Iv should be random 12 bytes. Generated unless flag is set.
 		} nonConstEncrypt;
 	};
 
@@ -183,8 +183,8 @@ Bool Buffer_aesExpertCreate(
 	// while streamSizeHint assumes the create overhead is nothing since a lot of data will be streamed.
 	U64 oneTimeHint,
 
-	U8 use256Or512Override,			//Put to 0xFF to detect
-	U8 *restrict blockSizeMax,		//Outputs block size if requested
+	U8 use256Or512Override,            //Put to 0xFF to detect
+	U8 *restrict blockSizeMax,        //Outputs block size if requested
 	U8 *restrict use256Or512,
 
 	AESEncryptionContext *restrict ctx,

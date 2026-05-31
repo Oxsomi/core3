@@ -157,14 +157,14 @@ VkBool32 onDebugReport(
 	return VK_FALSE;
 }
 
-#define getVkFunction(label, function, result) {												\
+#define getVkFunction(label, function, result) {                                                \
 																								\
-	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 			\
+	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function);             \
 																								\
-	if(!v)																						\
-		gotoIfError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"))		\
+	if(!v)                                                                                        \
+		gotoIfError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"))        \
 																								\
-	*(void**)&result = (void*) v;																\
+	*(void**)&result = (void*) v;                                                                \
 }
 
 TList(VkExtensionProperties);
@@ -288,7 +288,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 			
 			switch(len ? name.ptr[len - 1] : ' ') {
 
-				case 'n':	//validatioN
+				case 'n':    //validatioN
 
 					if(CharString_equalsCStringSensitive(name, "VK_LAYER_KHRONOS_validation"))
 						hasDebugLayer |= 1;
@@ -297,7 +297,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 				#ifdef _GRAPHICS_VERBOSE_DEBUGGING
 
-					case 'p':	//dumP
+					case 'p':    //dumP
 
 						if(CharString_equalsCStringSensitive(name, "VK_LAYER_LUNARG_api_dump"))
 							hasDebugLayer |= 2;
@@ -522,18 +522,18 @@ const C8 *optExtensionsName[] = {
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
 
-#define getDeviceProperties(Condition, StructName, Name, StructType)			\
-	StructName Name = (StructName) { .sType = StructType };						\
-	if(Condition) {																\
-		*propertiesNext = &Name;												\
-		propertiesNext = &Name.pNext;											\
+#define getDeviceProperties(Condition, StructName, Name, StructType)            \
+	StructName Name = (StructName) { .sType = StructType };                        \
+	if(Condition) {                                                                \
+		*propertiesNext = &Name;                                                \
+		propertiesNext = &Name.pNext;                                            \
 	}
 
-#define getDeviceFeatures(Condition, StructName, Name, StructType)				\
-	StructName Name = (StructName) { .sType = StructType };						\
-	if(Condition) {																\
-		*featuresNext = &Name;													\
-		featuresNext = &Name.pNext;												\
+#define getDeviceFeatures(Condition, StructName, Name, StructType)                \
+	StructName Name = (StructName) { .sType = StructType };                        \
+	if(Condition) {                                                                \
+		*featuresNext = &Name;                                                    \
+		featuresNext = &Name.pNext;                                                \
 	}
 
 TList(VkPhysicalDevice);
@@ -810,7 +810,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV
 		)
 
-		#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME		//Prevent failing for older SDK versions
+		#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME        //Prevent failing for older SDK versions
 			getDeviceFeatures(
 				optExtensions[EOptExtensions_ComputeDeriv],
 				VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR,
@@ -1046,11 +1046,11 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsDeviceType type = EGraphicsDeviceType_Other;
 
 		switch (properties.deviceType) {
-			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:		type = EGraphicsDeviceType_Dedicated;	break;
-			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:	type = EGraphicsDeviceType_Integrated;	break;
-			case VK_PHYSICAL_DEVICE_TYPE_CPU:				type = EGraphicsDeviceType_CPU;			break;
-			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:		type = EGraphicsDeviceType_Simulated;	break;
-			default:																				break;
+			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:        type = EGraphicsDeviceType_Dedicated;    break;
+			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:    type = EGraphicsDeviceType_Integrated;    break;
+			case VK_PHYSICAL_DEVICE_TYPE_CPU:                type = EGraphicsDeviceType_CPU;            break;
+			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:        type = EGraphicsDeviceType_Simulated;    break;
+			default:                                                                                break;
 		}
 
 		//Vendor
@@ -1058,16 +1058,16 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		EGraphicsVendorId vendor = EGraphicsVendorId_Unknown;
 
 		switch (properties.vendorID) {
-			case EGraphicsVendorPCIE_NV:					vendor = EGraphicsVendorId_NV;			break;
-			case EGraphicsVendorPCIE_AMD:					vendor = EGraphicsVendorId_AMD;			break;
-			case EGraphicsVendorPCIE_ARM:					vendor = EGraphicsVendorId_ARM;			break;
-			case EGraphicsVendorPCIE_QCOM:					vendor = EGraphicsVendorId_QCOM;		break;
-			case EGraphicsVendorPCIE_INTC:					vendor = EGraphicsVendorId_INTC;		break;
-			case EGraphicsVendorPCIE_IMGT:					vendor = EGraphicsVendorId_IMGT;		break;
-			case EGraphicsVendorPCIE_APPL:					vendor = EGraphicsVendorId_APPL;		break;
-			case EGraphicsVendorPCIE_SMSG:					vendor = EGraphicsVendorId_SMSG;		break;
-			case EGraphicsVendorPCIE_HWEI:					vendor = EGraphicsVendorId_HWEI;		break;
-			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, properties.vendorID);				break;
+			case EGraphicsVendorPCIE_NV:                    vendor = EGraphicsVendorId_NV;            break;
+			case EGraphicsVendorPCIE_AMD:                    vendor = EGraphicsVendorId_AMD;            break;
+			case EGraphicsVendorPCIE_ARM:                    vendor = EGraphicsVendorId_ARM;            break;
+			case EGraphicsVendorPCIE_QCOM:                    vendor = EGraphicsVendorId_QCOM;        break;
+			case EGraphicsVendorPCIE_INTC:                    vendor = EGraphicsVendorId_INTC;        break;
+			case EGraphicsVendorPCIE_IMGT:                    vendor = EGraphicsVendorId_IMGT;        break;
+			case EGraphicsVendorPCIE_APPL:                    vendor = EGraphicsVendorId_APPL;        break;
+			case EGraphicsVendorPCIE_SMSG:                    vendor = EGraphicsVendorId_SMSG;        break;
+			case EGraphicsVendorPCIE_HWEI:                    vendor = EGraphicsVendorId_HWEI;        break;
+			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, properties.vendorID);                break;
 		}
 
 		//Capabilities

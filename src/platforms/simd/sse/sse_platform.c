@@ -26,7 +26,7 @@ Bool Platform_checkCPUSupport() {
 
 	U16 v = 1;
 
-	if(!*(const U8*)&v)		//Little endian only
+	if(!*(const U8*)&v)        //Little endian only
 		return false;
 
 	//We need to double check that our CPU supports
@@ -34,7 +34,7 @@ Bool Platform_checkCPUSupport() {
 	//https://gist.github.com/hi2p-perim/7855506
 	//https://en.wikipedia.org/wiki/CPUID
 
-	U32 mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
+	U32 mask3 = (1 << 25) | (1 << 26);                                        //SSE, SSE2
 
 	//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES
 	U32 mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25);
@@ -45,7 +45,7 @@ Bool Platform_checkCPUSupport() {
 	U32 cpuInfo1[4];
 	Platform_getCPUId(7, cpuInfo1);
 
-	U32 mask1_1 = 1 << 3;				//BMI1
+	U32 mask1_1 = 1 << 3;                //BMI1
 
 	return (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
 }

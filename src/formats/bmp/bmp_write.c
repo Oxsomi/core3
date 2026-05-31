@@ -68,7 +68,7 @@ Bool BMP_write(
 		));
 
 	const U64 pixelStride = info->discardAlpha ? 3 : 4;
-	const U64 stride = ((U64)info->w * pixelStride + 3) & ~3;		//Every line needs to be 4-byte aligned
+	const U64 stride = ((U64)info->w * pixelStride + 3) & ~3;        //Every line needs to be 4-byte aligned
 
 	U64 expectedLen = stride * info->h;
 

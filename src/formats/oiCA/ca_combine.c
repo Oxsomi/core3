@@ -39,7 +39,7 @@ typedef struct CAFileCombine {
 	CAFile               *combined;
 	EArchiveCombineMode  mode;
 	EArchiveCombineFlags flags;
-	const Allocator	     *alloc;
+	const Allocator         *alloc;
 	Error                *e_rr;
 	Bool                 s_uccess;
 } CAFileCombine;
@@ -338,12 +338,12 @@ Bool CAFile_combine(
 	allocate = true;
 
 	CAFileCombine ctx = {
-		.b		 = b,
+		.b         = b,
 		.combined  = combined,
-		.mode	  = combineMode,
-		.flags	 = combineFlags,
-		.alloc	 = alloc,
-		.e_rr	  = e_rr,
+		.mode      = combineMode,
+		.flags     = combineFlags,
+		.alloc     = alloc,
+		.e_rr      = e_rr,
 		.s_uccess  = true
 	};
 

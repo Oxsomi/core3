@@ -90,8 +90,8 @@ Bool CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Char
 	if(args.flags & EOperationFlags_Uncompressed)
 		settings.compressionType = EXXCompressionType_None;
 
-	//else if(args.flags & EOperationFlags_FastCompress)				TODO:
-	//	settings.compressionType = EXXCompressionType_Brotli1;
+	//else if(args.flags & EOperationFlags_FastCompress)                TODO:
+	//    settings.compressionType = EXXCompressionType_Brotli1;
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
@@ -163,7 +163,7 @@ Bool CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Char
 		Buffer ref = Buffer_createRefConst(&buf, sizeof(buf));
 		gotoIfError3(clean, ListBuffer_pushBackx(&buffers, ref, e_rr));
 
-		buf = Buffer_createNull();		//Ensure we don't free twice.
+		buf = Buffer_createNull();        //Ensure we don't free twice.
 	}
 
 	else {

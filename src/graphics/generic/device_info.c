@@ -294,10 +294,10 @@ Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETe
 		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_BCn;
 
 	switch (format) {
-		case ETextureFormat_RGB32f:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32f;
-		case ETextureFormat_RGB32i:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32i;
-		case ETextureFormat_RGB32u:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32u;
-		default:						return true;
+		case ETextureFormat_RGB32f:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32f;
+		case ETextureFormat_RGB32i:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32i;
+		case ETextureFormat_RGB32u:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32u;
+		default:                        return true;
 	}
 }
 
@@ -317,9 +317,9 @@ Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
 	switch(format) {
-		case EDepthStencilFormat_D24S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
-		case EDepthStencilFormat_D32S8X24Ext:	return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
-		case EDepthStencilFormat_S8X24Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
-		default:								return true;
+		case EDepthStencilFormat_D24S8Ext:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
+		case EDepthStencilFormat_D32S8X24Ext:    return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
+		case EDepthStencilFormat_S8X24Ext:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
+		default:                                return true;
 	}
 }

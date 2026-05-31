@@ -93,7 +93,7 @@ namespace oxc {
 	public:
 
 		Lock(): spinLock{ 0 } {}
-		~Lock() = default;		//Avoid acquiring a lock past their lifetime.
+		~Lock() = default;        //Avoid acquiring a lock past their lifetime.
 
 		Lock(const Lock&) = delete;
 		Lock &operator=(const Lock&) = delete;

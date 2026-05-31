@@ -100,7 +100,7 @@ Buffer CAFile_getData(CAFile *caFile, CAHandle fileHandle, Bool *isValid) {
 
 	Buffer buf = Buffer_createNull();
 
-	if (!DLFile_loadedBufferAtConst(&caFile->content, id, &buf, NULL))		//TODO: Non const?
+	if (!DLFile_loadedBufferAtConst(&caFile->content, id, &buf, NULL))        //TODO: Non const?
 		return Buffer_createNull();
 
 	if (isValid)

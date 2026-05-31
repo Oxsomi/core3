@@ -44,7 +44,7 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 Bool DLFile_loadStream(
 	const DLFile *dlFile,
 	U64 i,
-	Buffer cache,					//Pass empty buffer for default
+	Buffer cache,                    //Pass empty buffer for default
 	StreamCursor *writeCursor,
 	U64 writeOffset,
 	const Allocator *alloc,

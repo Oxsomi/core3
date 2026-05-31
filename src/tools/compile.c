@@ -52,7 +52,7 @@
 		if(ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &str).genericError)
 			return false;
 
-		if(CharString_endsWithSensitive(str, '%', 0)) {					//-threads 50%
+		if(CharString_endsWithSensitive(str, '%', 0)) {                    //-threads 50%
 
 			CharString number = CharString_createRefSizedConst(str.ptr, CharString_length(str) - 1, false);
 			F64 num = 0;

@@ -43,12 +43,12 @@ typedef struct GenericList {
 
 	union {
 		const void *ptr;
-		void *ptrNonConst;		//Check if !const first
+		void *ptrNonConst;        //Check if !const first
 	};
 
 	U64 stride;
 	U64 length;
-	U64 capacityAndRefInfo;		//If capacityAndRefInfo is 0 or U64_MAX, it indicates a ref
+	U64 capacityAndRefInfo;        //If capacityAndRefInfo is 0 or U64_MAX, it indicates a ref
 
 } GenericList;
 
@@ -413,20 +413,20 @@ void GenericList_free(GenericList *result, const Allocator *allocator);
 
 //TList template helper
 
-#define TListWrapModifying(Name, ...) {																					\
+#define TListWrapModifying(Name, ...) {                                                                                    \
 																														\
-	Bool s_uccess = true;																								\
+	Bool s_uccess = true;                                                                                                \
 																														\
-	if(!l)																												\
-		retError(clean, Error_nullPointer(0, #Name " TListWrapNullCheck::l is required"));								\
+	if(!l)                                                                                                                \
+		retError(clean, Error_nullPointer(0, #Name " TListWrapNullCheck::l is required"));                                \
 																														\
-	GenericList list = Name##_toList(*l);																				\
-	__VA_ARGS__;																										\
+	GenericList list = Name##_toList(*l);                                                                                \
+	__VA_ARGS__;                                                                                                        \
 																														\
-	*l = (Name) { 0 };																									\
-	gotoIfError3(clean, Name##_fromList(list, l, e_rr));																\
-clean:																													\
-	return s_uccess;																									\
+	*l = (Name) { 0 };                                                                                                    \
+	gotoIfError3(clean, Name##_fromList(list, l, e_rr));                                                                \
+clean:                                                                                                                    \
+	return s_uccess;                                                                                                    \
 }
 
 #ifdef __cplusplus

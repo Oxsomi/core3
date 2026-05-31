@@ -132,8 +132,8 @@ Bool File_queryFileObjectCountAllVirtual(
 //Physical implementations
 //These all assume we pass them a null terminated string that has been fully resolved.
 //These make their way directly to the OS. They'll be limited to 1023 for portability reasons.
-//	Windows: \\?\ need to be fully resolved; \\?\C:\programming\test (not //?/C:/test or //?C:test)
-//	Unix:    Null terminated string
+//    Windows: \\?\ need to be fully resolved; \\?\C:\programming\test (not //?/C:/test or //?C:test)
+//    Unix:    Null terminated string
 
 impl Bool File_getInfoPhysical(const CharString *str, FileInfo *info, const Allocator *alloc, Error *e_rr);
 impl Bool File_addPhysical(const CharString *str, Bool isFile, const Allocator *alloc, Error *e_rr);
@@ -644,7 +644,7 @@ Bool FileHandleRef_read(const FileHandleRef *handleRef, U64 off, U64 len, Buffer
 
 	U64 fileSize = FileHandle_fileSize(handle);
 
-	if(!fileSize && !off && !len)		//Empty files exist too
+	if(!fileSize && !off && !len)        //Empty files exist too
 		goto clean;
 
 	if(off >= fileSize)
@@ -736,7 +736,7 @@ Bool File_read(
 		const FileHandle *fh = RefPtr_data(handle, FileHandle);
 		U64 fileSize = FileHandle_fileSize(fh);
 
-		if(!fileSize && !off && !len)		//Empty files exist too
+		if(!fileSize && !off && !len)        //Empty files exist too
 			goto clean;
 
 		if(off >= fileSize)
@@ -828,8 +828,8 @@ Bool File_resolveVirtual(
 ) {
 	Bool s_uccess = true;
 	CharString locLower  = CharString_createNull();
-	CharString locSlash  = CharString_createNull();		//locLower + trailing /
-	CharString secSlash  = CharString_createNull();		//section->path + trailing /
+	CharString locSlash  = CharString_createNull();        //locLower + trailing /
+	CharString secSlash  = CharString_createNull();        //section->path + trailing /
 
 	if(!loc || !subPath || !section)
 		retError(clean, Error_nullPointer(!loc ? 0 : (!subPath ? 2 : 3), "File_resolveVirtual()::loc is required"));
@@ -1314,7 +1314,7 @@ Bool File_unloadVirtualInternal(void *userData, const CharString *loc, const All
 	gotoIfError3(clean, CharString_createCopy(*loc, alloc, &isChild, e_rr));
 
 	if(CharString_length(isChild))
-		gotoIfError3(clean, CharString_append(&isChild, '/', alloc, e_rr));		//Don't append to root
+		gotoIfError3(clean, CharString_append(&isChild, '/', alloc, e_rr));        //Don't append to root
 
 	acq = SpinLock_lock(&Platform_instance->virtualSectionsLock, U64_MAX);
 

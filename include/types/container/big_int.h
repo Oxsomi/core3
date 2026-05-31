@@ -50,9 +50,9 @@ static inline Bool BigInt_createFromNyto(const BigIntCreate *bigIntCreate, Error
 
 //Arithmetic
 
-Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr);	//Multiply on self and keep bit count
-Bool BigInt_add(BigInt *a, BigInt b);											//Add on self and keep bit count
-Bool BigInt_sub(BigInt *a, BigInt b);											//Subtract on self and keep bit count
+Bool BigInt_mul(BigInt *a, BigInt b, const Allocator *allocator, Error *e_rr);    //Multiply on self and keep bit count
+Bool BigInt_add(BigInt *a, BigInt b);                                            //Add on self and keep bit count
+Bool BigInt_sub(BigInt *a, BigInt b);                                            //Subtract on self and keep bit count
 
 //Bool BigInt_mod(BigInt *a, BigInt b);
 //Bool BigInt_div(BigInt *a, BigInt b);
@@ -147,7 +147,7 @@ static inline BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma) { return B
 
 //Helpers
 
-Bool BigInt_resize(BigInt *a, U8 newSize, const Allocator *alloc, Error *e_rr);	//newSize in U64s
+Bool BigInt_resize(BigInt *a, U8 newSize, const Allocator *alloc, Error *e_rr);    //newSize in U64s
 
 //Set all bits to b, resize if allowResize
 Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, const Allocator *alloc, Error *e_rr);

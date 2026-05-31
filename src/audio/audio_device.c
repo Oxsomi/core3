@@ -134,8 +134,8 @@ impl Bool AudioSource_update(AudioSource *source, Error *e_rr);
 impl Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, Error *e_rr);
 
 //TODO: On step: gotoIfError3(clean, AudioDeviceRef_updateListenerTransformExt(dev, dirtyMask, e_rr))
-//				 then reset dirtyMask
-//		Also call dirty sources
+//                 then reset dirtyMask
+//        Also call dirty sources
 
 Bool AudioDeviceRef_updateListenerTransform(
 	AudioDeviceRef *devRef,
@@ -269,13 +269,13 @@ Bool AudioDeviceRef_wait(AudioDeviceRef *devRef, Bool waitForLoopingStream, cons
 			}
 		}
 
-		if(!anyPlayingResource)		//Done
+		if(!anyPlayingResource)        //Done
 			goto clean;
 			
 		SpinLock_unlock(&dev->pendingUpdateLock);
 		acq = ELockAcquire_Invalid;
 
-		Ns targetTime = 100 * MU;			//Avoid looping too aggressively
+		Ns targetTime = 100 * MU;            //Avoid looping too aggressively
 		Ns diff = Time_now() - lastTime;
 
 		if(diff < targetTime)

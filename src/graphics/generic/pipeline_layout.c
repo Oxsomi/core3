@@ -115,10 +115,10 @@ Error GraphicsDeviceRef_createPipelineLayout(
 	U32 uniqueSets[4];
 	U8 setCounter = 0;
 
-	if(info.pushConstants.count)	//Push constants take 1 DWORD each
+	if(info.pushConstants.count)    //Push constants take 1 DWORD each
 		dwords += info.pushConstants.constantBufferSize >> 2;
 
-	if (info.pushDescriptors) {		//Push descriptors take 2 DWORDs each
+	if (info.pushDescriptors) {        //Push descriptors take 2 DWORDs each
 
 		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.pushDescriptors);
 
@@ -147,7 +147,7 @@ Error GraphicsDeviceRef_createPipelineLayout(
 					1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants overlaps with push descriptors"
 				);
 
-			if(isVulkan) {		//Grab sets of binding, DescriptorLayout already protects these to be <=4
+			if(isVulkan) {        //Grab sets of binding, DescriptorLayout already protects these to be <=4
 
 				U8 j = 0;
 
@@ -163,7 +163,7 @@ Error GraphicsDeviceRef_createPipelineLayout(
 
 	U8 setCounterPushDesc = setCounter;
 
-	if (info.bindings) {			//Descriptor tables take 1 DWORD each
+	if (info.bindings) {            //Descriptor tables take 1 DWORD each
 
 		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.bindings);
 
@@ -180,7 +180,7 @@ Error GraphicsDeviceRef_createPipelineLayout(
 
 			DescriptorBinding bind = layout->info.bindings.ptr[i];
 
-			if(isVulkan) {		//If we run out of sets or have an overlapping, we have a problem
+			if(isVulkan) {        //If we run out of sets or have an overlapping, we have a problem
 
 				U8 j = 0;
 

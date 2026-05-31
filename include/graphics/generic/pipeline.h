@@ -37,7 +37,7 @@ typedef RefPtr PipelineLayoutRef;
 
 typedef struct PipelineGraphicsInfo {
 
-	VertexBindingLayout vertexLayout;		//Can be empty if pipeline generates all vertices itself
+	VertexBindingLayout vertexLayout;        //Can be empty if pipeline generates all vertices itself
 
 	Rasterizer rasterizer;
 
@@ -48,24 +48,24 @@ typedef struct PipelineGraphicsInfo {
 	TopologyMode topologyMode;
 	U16 padding;
 
-	U32 subPass;							//When renderPass is used
+	U32 subPass;                            //When renderPass is used
 
-	U32 patchControlPoints;					//Only if TessellationShader feature is enabled.
-	F32 msaaMinSampleShading;				//MSAA quality improvement (but extra perf overhead), set to > 0 to enable
+	U32 patchControlPoints;                    //Only if TessellationShader feature is enabled.
+	F32 msaaMinSampleShading;                //MSAA quality improvement (but extra perf overhead), set to > 0 to enable
 
 	//One of these can be used but not together.
 
 	//If DirectRendering is on (used in between start render).
 	//Otherwise, this is ignored.
 
-	U8 attachmentFormatsExt[8];				//ETextureFormatId
+	U8 attachmentFormatsExt[8];                //ETextureFormatId
 
 	U32 attachmentCountExt;
 	EDepthStencilFormat depthFormatExt;
 
 	//If DirectRendering is off (used in between start render pass).
 
-	RefPtr *renderPass;						//Required only if DirectRendering is not on.
+	RefPtr *renderPass;                        //Required only if DirectRendering is not on.
 
 } PipelineGraphicsInfo;
 
@@ -73,31 +73,31 @@ typedef struct PipelineGraphicsInfo {
 
 typedef enum EPipelineRaytracingFlags {
 
-	EPipelineRaytracingFlags_SkipTriangles			= 1 << 0,
-	EPipelineRaytracingFlags_SkipAABBs				= 1 << 1,
+	EPipelineRaytracingFlags_SkipTriangles            = 1 << 0,
+	EPipelineRaytracingFlags_SkipAABBs                = 1 << 1,
 
-	EPipelineRaytracingFlags_AllowMotionBlurExt		= 1 << 2,		//Requires feature RayMotionBlur
+	EPipelineRaytracingFlags_AllowMotionBlurExt        = 1 << 2,        //Requires feature RayMotionBlur
 
 	//Disallowing null shaders in stages.
 	//This is extra validation, but might also signal to the API that access to all stages are safe.
 
-	EPipelineRaytracingFlags_NoNullAnyHit			= 1 << 3,
-	EPipelineRaytracingFlags_NoNullClosestHit		= 1 << 4,
-	EPipelineRaytracingFlags_NoNullMiss				= 1 << 5,
-	EPipelineRaytracingFlags_NoNullIntersection		= 1 << 6,
+	EPipelineRaytracingFlags_NoNullAnyHit            = 1 << 3,
+	EPipelineRaytracingFlags_NoNullClosestHit        = 1 << 4,
+	EPipelineRaytracingFlags_NoNullMiss                = 1 << 5,
+	EPipelineRaytracingFlags_NoNullIntersection        = 1 << 6,
 
-	EPipelineRaytracingFlags_Count					= 7,
+	EPipelineRaytracingFlags_Count                    = 7,
 
-	EPipelineRaytracingFlags_Default				= EPipelineRaytracingFlags_SkipAABBs,
+	EPipelineRaytracingFlags_Default                = EPipelineRaytracingFlags_SkipAABBs,
 
-	EPipelineRaytracingFlags_DefaultStrict			=
+	EPipelineRaytracingFlags_DefaultStrict            =
 		EPipelineRaytracingFlags_SkipAABBs | EPipelineRaytracingFlags_NoNullClosestHit | EPipelineRaytracingFlags_NoNullMiss
 
 } EPipelineRaytracingFlags;
 
 typedef enum EPipelineFlags {
-	EPipelineFlags_None								= 0,
-	EPipelineFlags_InternalWeakDeviceRef			= 1 << 0		//Internal use only
+	EPipelineFlags_None                                = 0,
+	EPipelineFlags_InternalWeakDeviceRef            = 1 << 0        //Internal use only
 } EPipelineFlags;
 
 typedef struct PipelineRaytracingGroup {
@@ -114,15 +114,15 @@ TList(PipelineRaytracingGroup);
 
 typedef struct PipelineRaytracingInfo {
 
-	U8 flags;								//EPipelineRaytracingFlags
-	U8 maxRecursionDepth;					//1 or 2. For multiple bounces, use for loop in raygen shader.
+	U8 flags;                                //EPipelineRaytracingFlags
+	U8 maxRecursionDepth;                    //1 or 2. For multiple bounces, use for loop in raygen shader.
 	U16 pad0[3];
 
 	//Only valid after construction
 
 	ListPipelineRaytracingGroup groups;
 
-	DeviceBufferRef *shaderBindingTable;	//Auto generated SBT
+	DeviceBufferRef *shaderBindingTable;    //Auto generated SBT
 
 	//Layout: [ hits (groupCount), misses (missCount), raygens (raygenCount), callables (callableCount) ]
 
@@ -149,7 +149,7 @@ typedef struct Pipeline {
 
 typedef RefPtr PipelineRef;
 
-#define Pipeline_ext(ptr, T) (!(ptr) ? NULL : (T##Pipeline*)(ptr + 1))		//impl
+#define Pipeline_ext(ptr, T) (!(ptr) ? NULL : (T##Pipeline*)(ptr + 1))        //impl
 #define PipelineRef_ptr(ptr) RefPtr_data(ptr, Pipeline)
 
 void *Pipeline_infoOffset(Pipeline *ref);
@@ -172,16 +172,16 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
 	CharString entrypointName,
-	ListCharString defines,						//[ key, value ][]
-	ESHExtension disallow,						//Extensions that should be disallowed (only find with extension disabled)
-	ESHExtension require						//Extensions that should be required (only find with extension enabled)
+	ListCharString defines,                        //[ key, value ][]
+	ESHExtension disallow,                        //Extensions that should be disallowed (only find with extension disabled)
+	ESHExtension require                        //Extensions that should be required (only find with extension enabled)
 );
 
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
 	SHFile shaderBinary,
-	CharString name,							//Temporary name for debugging
-	U32 entryId,								//Identifier from getFirstShaderEntry
+	CharString name,                            //Temporary name for debugging
+	U32 entryId,                                //Identifier from getFirstShaderEntry
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
@@ -191,9 +191,9 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 Bool GraphicsDeviceRef_createPipelineGraphics(
 	GraphicsDeviceRef *deviceRef,
 	ListSHFile shaderBinary,
-	ListPipelineStage *stages,					//Will be moved
+	ListPipelineStage *stages,                    //Will be moved
 	PipelineGraphicsInfo info,
-	CharString name,							//Temporary name for debugging
+	CharString name,                            //Temporary name for debugging
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipelines,
@@ -203,11 +203,11 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 //stages, groups will be freed
 Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	GraphicsDeviceRef *deviceRef,
-	ListPipelineStage *stages,					//Will be moved
+	ListPipelineStage *stages,                    //Will be moved
 	ListSHFile binaries,
-	ListPipelineRaytracingGroup *groups,		//Will be moved
+	ListPipelineRaytracingGroup *groups,        //Will be moved
 	PipelineRaytracingInfo info,
-	CharString name,							//Temporary name for debugging
+	CharString name,                            //Temporary name for debugging
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,

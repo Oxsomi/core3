@@ -35,7 +35,7 @@ void Test_CARemoveFile(Test *t) {
 
 	Test_setModule(t, "CAFile_removeFile");
 
-	{							//Remove middle file, remaining files must shift and stay resolvable
+	{                            //Remove middle file, remaining files must shift and stay resolvable
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -68,7 +68,7 @@ void Test_CARemoveFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Remove first file, second becomes index 0
+	{                            //Remove first file, second becomes index 0
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -89,7 +89,7 @@ void Test_CARemoveFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Remove last file
+	{                            //Remove last file
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -111,7 +111,7 @@ void Test_CARemoveFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Remove only file, folder becomes empty, fileOffset resets to 0
+	{                            //Remove only file, folder becomes empty, fileOffset resets to 0
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -131,7 +131,7 @@ void Test_CARemoveFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Remove file, fileOffsets in sibling folders must be adjusted
+	{                            //Remove file, fileOffsets in sibling folders must be adjusted
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -168,7 +168,7 @@ void Test_CARemoveFile(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Removing a folder handle via removeFile must fail
+	{                            //Removing a folder handle via removeFile must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -190,7 +190,7 @@ void Test_CARemoveFolder(Test *t) {
 
 	Test_setModule(t, "CAFile_removeFolder");
 
-	{							//Remove empty leaf folder
+	{                            //Remove empty leaf folder
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -209,7 +209,7 @@ void Test_CARemoveFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Remove folder that has only subdirs (no files at any level)
+	{                            //Remove folder that has only subdirs (no files at any level)
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -233,7 +233,7 @@ void Test_CARemoveFolder(Test *t) {
 	}
 
 
-	{							//Remove non-empty folder recursively, all contents gone
+	{                            //Remove non-empty folder recursively, all contents gone
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -255,7 +255,7 @@ void Test_CARemoveFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Removing root must fail
+	{                            //Removing root must fail
 		CAFile ca   = { 0 };
 
 		if (!CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err)) {
@@ -269,7 +269,7 @@ void Test_CARemoveFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//CAFile_remove on non-empty folder (without recursion) must fail
+	{                            //CAFile_remove on non-empty folder (without recursion) must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -287,7 +287,7 @@ void Test_CARemoveFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Remove folder, sibling folder dirOffset must be adjusted
+	{                            //Remove folder, sibling folder dirOffset must be adjusted
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -305,7 +305,7 @@ void Test_CARemoveFolder(Test *t) {
 		//Remove A; B and C must shift down and still be resolvable
 
 		Test_assert(t, "remove A ok",            CAFile_removeFolder(&ca, hA, t->alloc, &t->err));
-		Test_assert(t, "folders.length 3",       ca.folders.length == 3);		//root + B + C
+		Test_assert(t, "folders.length 3",       ca.folders.length == 3);        //root + B + C
 
 		CharString pathB = CharString_createRefCStrConst("B");
 		CharString pathC = CharString_createRefCStrConst("C");
@@ -321,7 +321,7 @@ void Test_CARemoveFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Remove a folder that contains files; verify recursive fileObjectCount after removal
+	{                            //Remove a folder that contains files; verify recursive fileObjectCount after removal
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 

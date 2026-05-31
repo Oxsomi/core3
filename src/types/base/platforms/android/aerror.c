@@ -28,7 +28,7 @@
 
 typedef struct Backtrace {
 	void **current, **end;
-    U64 skip;
+	U64 skip;
 } Backtrace;
 
 _Unwind_Reason_Code unwindCallback(struct _Unwind_Context *context, Backtrace *state) {
@@ -38,8 +38,8 @@ _Unwind_Reason_Code unwindCallback(struct _Unwind_Context *context, Backtrace *s
 	if (state->current == state->end)
 		return _URC_END_OF_STACK;
 
-    if(state->skip)
-        --state->skip;
+	if(state->skip)
+		--state->skip;
 
 	else *state->current++ = (void*)pc;
 
@@ -51,16 +51,16 @@ _Unwind_Reason_Code unwindCallback(struct _Unwind_Context *context, Backtrace *s
 
 void Error_captureStackTrace(void **stack, U8 stackSize, U8 skipTmp) {
 
-    if(!stack || !stackSize) {
-        return;
+	if(!stack || !stackSize) {
+		return;
 	}
 
 	Backtrace backtrace = (Backtrace) {
-        .current = stack,
-        .end = stack + stackSize,
-        .skip = (U64) skipTmp + 1
-    };
-    
+		.current = stack,
+		.end = stack + stackSize,
+		.skip = (U64) skipTmp + 1
+	};
+	
 	_Unwind_Backtrace((_Unwind_Trace_Fn)unwindCallback, &backtrace);
 
 	I32 count = backtrace.current - stack;

@@ -90,26 +90,26 @@ static inline Bool Buffer_isUTF16(const Buffer buf, F32 threshold) { return Buff
 //What hash & encryption functions are good for:
 //
 //argon2id (Unsupported):
-//	Passwords (limit size (not too low) to avoid DDOS and use pepper if applicable)			TODO:
-//	https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
-//	https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+//    Passwords (limit size (not too low) to avoid DDOS and use pepper if applicable)            TODO:
+//    https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+//    https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
 //
 //hash/crc32c: Hashmaps / performance critical hashing /
-//	fast data integrity (encryption checksum / compression) when *NOT* dealing with adversaries
+//    fast data integrity (encryption checksum / compression) when *NOT* dealing with adversaries
 //
 //hash/sha256: data integrity (encryption checksum / compression) when dealing with adversaries
 //
 //encryption/aes256: If you want to recover data that is essential (NOT PASSWORDS) but needs a key
 //
 //For more info:
-//	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+//    https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
 
 //CRC32 Castagnoli / iSCSI polynomial (0x82f63b78) not for ethernet/zip (0xedb88320)!
 U32 Buffer_crc32cChained(const Buffer buf, U32 crcPrev);
 
-U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 crcPrev);		//In case of no native CRC32C, but don't manually call
+U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 crcPrev);        //In case of no native CRC32C, but don't manually call
 
-static inline U32 Buffer_crc32cFallback(const Buffer buf) {		//In case of no native CRC32C, but don't manually call
+static inline U32 Buffer_crc32cFallback(const Buffer buf) {        //In case of no native CRC32C, but don't manually call
 	return Buffer_crc32cFallbackChained(buf, 0);
 }
 
@@ -123,7 +123,7 @@ static const U64 Buffer_fnv1a64Offset = 0xCBF29CE484222325;
 static const U64 Buffer_fnv1a64Prime = 0x00000100000001B3;
 
 U64 Buffer_fnv1a64Single(U64 a, U64 hash);
-U64 Buffer_fnv1a64(const Buffer buf, U64 hash);		//Put hash as Buffer_fnv1a64Offset if none
+U64 Buffer_fnv1a64(const Buffer buf, U64 hash);        //Put hash as Buffer_fnv1a64Offset if none
 
 //MD5
 
@@ -132,7 +132,7 @@ I32x4 Buffer_md5(const Buffer buf);
 //SHA256
 
 void Buffer_sha256(const Buffer buf, U32 output[8]);
-void Buffer_sha256Fallback(const Buffer buf, U32 *output);		//In case of no native SHA256, but don't manually call
+void Buffer_sha256Fallback(const Buffer buf, U32 *output);        //In case of no native SHA256, but don't manually call
 
 //Cryptographically secure random on a sized buffer
 
@@ -151,7 +151,7 @@ typedef enum EBufferCompressionHint {
 	EBufferCompressionHint_None,
 	EBufferCompressionHint_UTF8,
 	EBufferCompressionHint_Font,
-	EBufferCompressionHint_Count	//Auto detect
+	EBufferCompressionHint_Count    //Auto detect
 } EBufferCompressionHint;
 
 typedef struct BufferCompress {

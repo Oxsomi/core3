@@ -47,10 +47,10 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 
 	switch (graphicsTypeId) {
 
-		default:								return NULL;
-		case EGraphicsTypeId_DeviceTexture:		return &DeviceTextureRef_ptr(tex)->base;
-		case EGraphicsTypeId_RenderTexture:		return RenderTextureRef_ptr(tex);
-		case EGraphicsTypeId_DepthStencil:		return DepthStencilRef_ptr(tex);
+		default:                                return NULL;
+		case EGraphicsTypeId_DeviceTexture:        return &DeviceTextureRef_ptr(tex)->base;
+		case EGraphicsTypeId_RenderTexture:        return RenderTextureRef_ptr(tex);
+		case EGraphicsTypeId_DepthStencil:        return DepthStencilRef_ptr(tex);
 
 		case EGraphicsTypeId_Swapchain: {
 
@@ -84,12 +84,12 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 
 UnifiedTextureImage *TextureRef_getImageIntern(TextureRef *ref, U32 subResource, U8 imageId) {
 
-	UnifiedTexture *tex = TextureRef_getUnifiedTextureIntern(ref, NULL);	//No lock is required, imageCount stays the same
+	UnifiedTexture *tex = TextureRef_getUnifiedTextureIntern(ref, NULL);    //No lock is required, imageCount stays the same
 
 	if(!tex || imageId >= tex->images)
 		return NULL;
 
-	if(subResource)				//TODO: subResource
+	if(subResource)                //TODO: subResource
 		return NULL;
 
 	return (UnifiedTextureImage*)((U8*)tex + sizeof(*tex) + sizeof(UnifiedTextureImage) * imageId);
@@ -141,12 +141,12 @@ UnifiedTextureImage TextureRef_getCurrImage(TextureRef *ref, U32 subResource) {
 
 void *TextureRef_getImgExt(TextureRef *ref, U32 subResource, U8 imageId) {
 
-	UnifiedTexture *tex = TextureRef_getUnifiedTextureIntern(ref, NULL);	//No lock is required, imageCount stays the same
+	UnifiedTexture *tex = TextureRef_getUnifiedTextureIntern(ref, NULL);    //No lock is required, imageCount stays the same
 
 	if(!tex || imageId >= tex->images)
 		return NULL;
 
-	if(subResource)				//TODO: subResource
+	if(subResource)                //TODO: subResource
 		return NULL;
 
 	return (UnifiedTextureImage*)(
@@ -330,7 +330,7 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 	if(texture.levels > 1)
 		return Error_invalidParameter(
 			2, 0, "UnifiedTexture_create()::texturePtr->levels > 1 isn't supported yet"
-		);		//TODO:
+		);        //TODO:
 
 	if(texture.width > 16384 || texture.height > 16384 || texture.length > 256)
 		return Error_invalidParameter(
@@ -347,7 +347,7 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 	if(texture.type != ETextureType_2D)
 		return Error_invalidParameter(
 			1, 0, "UnifiedTexture_create()::texturePtr->type only supports 2D for now"
-		);		//TODO:
+		);        //TODO:
 
 	if(texture.sampleCount == EMSAASamples_x2Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x))
 		return Error_unsupportedOperation(

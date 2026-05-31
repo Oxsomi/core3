@@ -100,7 +100,7 @@ void Test_typeCastDoubleToInt(Test *test) {
 
 	Test_setModule(test, "double -> int");
 
-	static const I64 maxExact = (I64)9007199254740991;	//2^53 - 1, last exactly representable integer in F64
+	static const I64 maxExact = (I64)9007199254740991;    //2^53 - 1, last exactly representable integer in F64
 
 	I64 i64 = 0;
 	Test_assert(test, "I64_fromDouble",      I64_fromDouble(9007199254740991.0, &i64, NULL) && i64 == maxExact);

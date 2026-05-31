@@ -37,16 +37,16 @@
 // If a non linear buffer is next to a linear buffer it needs to introduce this extra padding.
 
 typedef struct AllocationBufferBlock {
-	U64 startAndNonLinearAndFree;	//1 bit isFree, 1 bit isNonLinear, 62 bit start
+	U64 startAndNonLinearAndFree;    //1 bit isFree, 1 bit isNonLinear, 62 bit start
 	U64 end, alignment;
 } AllocationBufferBlock;
 
 TList(AllocationBufferBlock);
 
 typedef struct AllocationBuffer {
-	Buffer buffer;							//Our data buffer
+	Buffer buffer;                            //Our data buffer
 	ListAllocationBufferBlock allocations;
-	U64 nonLinearAlignment;					//Padding between linear and non linear allocations
+	U64 nonLinearAlignment;                    //Padding between linear and non linear allocations
 } AllocationBuffer;
 
 typedef struct AllocationBufferCreate {
@@ -61,7 +61,7 @@ Bool AllocationBuffer_createRefFromRegion(const AllocationBufferCreate *create, 
 
 void AllocationBuffer_free(AllocationBuffer *allocationBuffer, const Allocator *alloc);
 void AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr);
-void AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer);						//Frees all blocks
+void AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer);                        //Frees all blocks
 
 //If !allocationBuffer->buffer.ptr the pointer shouldn't be de-referenced, it's just for offset tracking.
 //Result doesn't get touched if validation of arguments failed or if out of memory is triggered by the list.

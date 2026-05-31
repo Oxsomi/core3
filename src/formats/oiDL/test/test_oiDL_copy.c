@@ -105,7 +105,7 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 	//(matching what DLFile_read produces for small entries) so the test has no
 	// dependency on the serialization path.
 
-	{							//Data: copy must re-base cache refs, freeing the source must not corrupt the copy
+	{                            //Data: copy must re-base cache refs, freeing the source must not corrupt the copy
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 
@@ -145,7 +145,7 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 		DLFile_free(&copy, t->alloc);
 	}
 
-	{							//String: copy must re-base CharString refs, freeing source must not corrupt the copy
+	{                            //String: copy must re-base CharString refs, freeing source must not corrupt the copy
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 
@@ -227,7 +227,7 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 		DLFile_free(&copy, t->alloc);
 	}
 
-	{							//Copy-of-copy: rebasing must be applied fresh at each generation
+	{                            //Copy-of-copy: rebasing must be applied fresh at each generation
 		DLFile src   = { 0 };
 		DLFile copy1 = { 0 };
 		DLFile copy2 = { 0 };
@@ -265,7 +265,7 @@ void Test_DLCreateCopyCacheRefs(Test *t) {
 		DLFile_free(&copy2, t->alloc);
 	}
 
-	{							//Mutating the copy must not disturb the source's cache refs
+	{                            //Mutating the copy must not disturb the source's cache refs
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 
@@ -296,7 +296,7 @@ void Test_DLCreateCopyPlain(Test *t) {
 	
 	Test_setModule(t, "DLFile_createCopy");
 
-	{							//Data file: copy preserves entry count and sizes
+	{                            //Data file: copy preserves entry count and sizes
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 
@@ -322,7 +322,7 @@ void Test_DLCreateCopyPlain(Test *t) {
 		DLFile_free(&copy, t->alloc);
 	}
 
-	{							//String file: copy preserves entry count and sizes
+	{                            //String file: copy preserves entry count and sizes
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 
@@ -342,7 +342,7 @@ void Test_DLCreateCopyPlain(Test *t) {
 		DLFile_free(&copy, t->alloc);
 	}
 
-	{							//Copy of empty file succeeds and yields an empty file
+	{                            //Copy of empty file succeeds and yields an empty file
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 
@@ -359,7 +359,7 @@ void Test_DLCreateCopyPlain(Test *t) {
 		DLFile_free(&copy, t->alloc);
 	}
 
-	{							//Settings are preserved in the copy
+	{                            //Settings are preserved in the copy
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 
@@ -378,14 +378,14 @@ void Test_DLCreateCopyPlain(Test *t) {
 		DLFile_free(&copy, t->alloc);
 	}
 
-	{							//Null source (dlFile == NULL): must return empty/zeroed copy
+	{                            //Null source (dlFile == NULL): must return empty/zeroed copy
 		DLFile copy = { 0 };
 		Test_assert(t, "createCopy null src ok", DLFile_createCopy(NULL, t->alloc, &copy, NULL));
 		Test_assert(t, "copy entryCount 0",      DLFile_entryCount(&copy) == 0);
 		DLFile_free(&copy, t->alloc);
 	}
 
-	{							//Null copy pointer: must fail gracefully
+	{                            //Null copy pointer: must fail gracefully
 		DLFile src = { 0 };
 
 		if (!buildDataFile(t, &src, 1)) {
@@ -399,7 +399,7 @@ void Test_DLCreateCopyPlain(Test *t) {
 		DLFile_free(&src, t->alloc);
 	}
 
-	{							//Non-empty copy destination: must fail to prevent memory leak
+	{                            //Non-empty copy destination: must fail to prevent memory leak
 		DLFile src  = { 0 };
 		DLFile copy = { 0 };
 

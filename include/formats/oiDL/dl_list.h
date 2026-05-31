@@ -39,7 +39,7 @@ typedef struct ListDLEntryStream ListDLEntryStream;
 
 Bool DLFile_createBufferList(
 	const DLSettings *settings,
-	ListBuffer *buffers,			//Moves ListBuffer to DLFile, clears ListBuffer after.
+	ListBuffer *buffers,            //Moves ListBuffer to DLFile, clears ListBuffer after.
 	const Allocator *alloc,
 	DLFile *dlFile,
 	Error *e_rr
@@ -47,7 +47,7 @@ Bool DLFile_createBufferList(
 
 Bool DLFile_createStringList(
 	const DLSettings *settings,
-	ListCharString *strings,		//Moves ListBuffer to DLFile, clears ListBuffer after.
+	ListCharString *strings,        //Moves ListBuffer to DLFile, clears ListBuffer after.
 	const Allocator *alloc,
 	DLFile *dlFile,
 	Error *e_rr
@@ -55,7 +55,7 @@ Bool DLFile_createStringList(
 
 Bool DLFile_createStreamList(
 	const DLSettings *settings,
-	ListDLEntryStream *streams,		//Moves ListBuffer to DLFile, clears ListBuffer after.
+	ListDLEntryStream *streams,        //Moves ListBuffer to DLFile, clears ListBuffer after.
 	const Allocator *alloc,
 	DLFile *dlFile,
 	Error *e_rr

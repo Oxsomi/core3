@@ -33,23 +33,23 @@ typedef struct Error Error;
 typedef struct Allocator Allocator;
 
 typedef enum EXXCompressionType {
-	EXXCompressionType_None,							//--uncompressed (default)
-	//EXXCompressionType_Brotli11,						//(default): Unsupported
-	//EXXCompressionType_Brotli1,						//--fast-compress
+	EXXCompressionType_None,                            //--uncompressed (default)
+	//EXXCompressionType_Brotli11,                        //(default): Unsupported
+	//EXXCompressionType_Brotli1,                        //--fast-compress
 	EXXCompressionType_Count
 } EXXCompressionType;
 
-typedef U8 XXCompressionType;		//EXXCompressionType
+typedef U8 XXCompressionType;        //EXXCompressionType
 
 typedef enum EXXEncryptionType {
-	EXXEncryptionType_None,								//(default)
-	EXXEncryptionType_AES256GCM,						//--aes <32-byte key (in hex or nyto)>
+	EXXEncryptionType_None,                                //(default)
+	EXXEncryptionType_AES256GCM,                        //--aes <32-byte key (in hex or nyto)>
 	EXXEncryptionType_Count
 } EXXEncryptionType;
 
-typedef U8 XXEncryptionType;		//EXXEncryptionType
+typedef U8 XXEncryptionType;        //EXXEncryptionType
 
-typedef enum EXXDataSizeType {		//Can be represented as a 2-bit array for example
+typedef enum EXXDataSizeType {        //Can be represented as a 2-bit array for example
 	EXXDataSizeType_U8,
 	EXXDataSizeType_U16,
 	EXXDataSizeType_U32,
@@ -57,7 +57,7 @@ typedef enum EXXDataSizeType {		//Can be represented as a 2-bit array for exampl
 	EXXDataSizeType_Count
 } EXXDataSizeType;
 
-typedef U8 XXDataSizeType;			//EXXDataSizeType
+typedef U8 XXDataSizeType;            //EXXDataSizeType
 
 static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 

@@ -30,39 +30,39 @@
 
 typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
-typedef RefPtr GraphicsResourceRef;			//UnifiedTexture or DeviceTexture. This isn't a RefPtr<GraphicsResource>
+typedef RefPtr GraphicsResourceRef;            //UnifiedTexture or DeviceTexture. This isn't a RefPtr<GraphicsResource>
 
 typedef struct GraphicsDevice GraphicsDevice;
 
 typedef enum EGraphicsResourceFlag {
 
-	EGraphicsResourceFlag_None						= 0,
+	EGraphicsResourceFlag_None                        = 0,
 
-	EGraphicsResourceFlag_ShaderRead				= 1 << 0,		//Can be read by shaders; excluding constant buffers
-	EGraphicsResourceFlag_ShaderWrite				= 1 << 1,		//Can be written by shaders
-	EGraphicsResourceFlag_ExposeBindlessRead		= 1 << 2,		//Expose descriptor(s) to bindless DescriptorTable (read)
-	EGraphicsResourceFlag_ExposeBindlessWrite		= 1 << 3,		//Expose descriptor(s) to bindless DescriptorTable (RW)
+	EGraphicsResourceFlag_ShaderRead                = 1 << 0,        //Can be read by shaders; excluding constant buffers
+	EGraphicsResourceFlag_ShaderWrite                = 1 << 1,        //Can be written by shaders
+	EGraphicsResourceFlag_ExposeBindlessRead        = 1 << 2,        //Expose descriptor(s) to bindless DescriptorTable (read)
+	EGraphicsResourceFlag_ExposeBindlessWrite        = 1 << 3,        //Expose descriptor(s) to bindless DescriptorTable (RW)
 
-	EGraphicsResourceFlag_InternalWeakDeviceRef		= 1 << 4,		//Only for internal use in device
+	EGraphicsResourceFlag_InternalWeakDeviceRef        = 1 << 4,        //Only for internal use in device
 
-	EGraphicsResourceFlag_CPUBacked					= 1 << 5,		//Keep a CPU side copy texture for read/write operations
-	EGraphicsResourceFlag_CPUAllocatedBit			= 1 << 6,		//Keep entirely on CPU
+	EGraphicsResourceFlag_CPUBacked                    = 1 << 5,        //Keep a CPU side copy texture for read/write operations
+	EGraphicsResourceFlag_CPUAllocatedBit            = 1 << 6,        //Keep entirely on CPU
 
-	EGraphicsResourceFlag_CPUAllocated				= EGraphicsResourceFlag_CPUBacked | EGraphicsResourceFlag_CPUAllocatedBit,
+	EGraphicsResourceFlag_CPUAllocated                = EGraphicsResourceFlag_CPUBacked | EGraphicsResourceFlag_CPUAllocatedBit,
 
-	EGraphicsResourceFlag_ShaderRWBindful			=
+	EGraphicsResourceFlag_ShaderRWBindful            =
 		EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ShaderWrite,
 
-	EGraphicsResourceFlag_ShaderReadBindless		=
+	EGraphicsResourceFlag_ShaderReadBindless        =
 		EGraphicsResourceFlag_ShaderRead | EGraphicsResourceFlag_ExposeBindlessRead,
 
-	EGraphicsResourceFlag_ExposeBindless			=
+	EGraphicsResourceFlag_ExposeBindless            =
 	EGraphicsResourceFlag_ExposeBindlessRead | EGraphicsResourceFlag_ExposeBindlessWrite,
 
-	EGraphicsResourceFlag_ShaderWriteBindless		=
+	EGraphicsResourceFlag_ShaderWriteBindless        =
 		EGraphicsResourceFlag_ShaderWrite | EGraphicsResourceFlag_ExposeBindlessWrite,
 
-	EGraphicsResourceFlag_ShaderRWBindless			=
+	EGraphicsResourceFlag_ShaderRWBindless            =
 		EGraphicsResourceFlag_ShaderWriteBindless | EGraphicsResourceFlag_ShaderReadBindless,
 
 } EGraphicsResourceFlag;
@@ -71,9 +71,9 @@ typedef U16 GraphicsResourceFlag;
 
 typedef enum EResourceType {
 	EResourceType_Undefined,
-	EResourceType_DeviceTexture,					//Texture only copyable (no RTV, DSV or UAV)
-	EResourceType_RenderTargetOrDepthStencil,		//Also depth stencil
-	EResourceType_DeviceBuffer,						//Any buffer type
+	EResourceType_DeviceTexture,                    //Texture only copyable (no RTV, DSV or UAV)
+	EResourceType_RenderTargetOrDepthStencil,        //Also depth stencil
+	EResourceType_DeviceBuffer,                        //Any buffer type
 	EResourceType_Swapchain,
 	EResourceType_Count
 } EResourceType;
@@ -93,8 +93,8 @@ typedef struct TextureRange {
 } TextureRange;
 
 typedef struct ImageRange {
-	U32 levelId;		//Set to U32_MAX to indicate all levels, otherwise indicates specific index.
-	U32 layerId;		//Set to U32_MAX to indicate all layers, otherwise indicates specific index.
+	U32 levelId;        //Set to U32_MAX to indicate all levels, otherwise indicates specific index.
+	U32 layerId;        //Set to U32_MAX to indicate all layers, otherwise indicates specific index.
 } ImageRange;
 
 typedef union ResourceRange {
@@ -113,7 +113,7 @@ typedef union DevicePendingRange {
 
 typedef struct DeviceResourceVersion {
 
-	RefPtr *resource;		//SwapchainRef
+	RefPtr *resource;        //SwapchainRef
 	U64 version;
 
 	I32x2 size;
@@ -126,29 +126,29 @@ TList(DeviceResourceVersion);
 
 //Correct usage of this "base class":
 //ChildObject -> GraphicsResource -> NextResource -> ExtStruct
-//Example:	DeviceTexture -> GraphicsResource -> UnifiedTexture -> XXManagedImage[N] (e.g. VkManagedImage)
-//			DeviceBuffer -> GraphicsResource -> DeviceBufferExt
+//Example:    DeviceTexture -> GraphicsResource -> UnifiedTexture -> XXManagedImage[N] (e.g. VkManagedImage)
+//            DeviceBuffer -> GraphicsResource -> DeviceBufferExt
 typedef struct GraphicsResource {
 
 	GraphicsDeviceRef *device;
 
-	U64 size;								//CPU sized visible memory size
+	U64 size;                                //CPU sized visible memory size
 
 	U64 blockOffset;
 
 	U32 blockId;
 
 	GraphicsResourceFlag flags;
-	U8 type;								//EResourceType
+	U8 type;                                //EResourceType
 	Bool allocated;
 
-	void *mappedMemoryExt;					//API specific memory range. Don't write/read from this address
+	void *mappedMemoryExt;                    //API specific memory range. Don't write/read from this address
 
-	void *debugExt;							//Debug information
+	void *debugExt;                            //Debug information
 
-	U64 deviceAddress;						//Contains the memory address on the device if available (otherwise 0)
+	U64 deviceAddress;                        //Contains the memory address on the device if available (otherwise 0)
 
-	U64 padding;							//Padding to 16-byte to allow next element to have vectors
+	U64 padding;                            //Padding to 16-byte to allow next element to have vectors
 
 } GraphicsResource;
 

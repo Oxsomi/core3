@@ -344,7 +344,7 @@ static void Test_streamCompare(Test *t, StreamHarness *h) {
 
 	OxStream *sA = RefPtr_data(streamA, OxStream);
 
-	if (sA->streamType & EStreamType_DisableSeek)		//Can't seek!
+	if (sA->streamType & EStreamType_DisableSeek)        //Can't seek!
 		goto clean;
 
 	if (!h->create(h, 100, false, &streamB, t)) {
@@ -483,7 +483,7 @@ void StreamHarness_testStream(StreamHarness *h, Test *t) {
 
 void Test_setModuleH(Test *t, StreamHarness *h, ShortString str) {
 
-	Test_setModule(t, NULL);		//End last, before overwriting
+	Test_setModule(t, NULL);        //End last, before overwriting
 
 	U64 baseLen = CharString_calcStrLen(h->name, sizeof(ShortString));
 	Buffer_memcpy(

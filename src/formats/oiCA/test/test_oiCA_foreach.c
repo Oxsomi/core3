@@ -32,7 +32,7 @@ CAHandle addFolder(Test *t, CAFile *ca, CAHandle parent, const C8 *name, Bool fa
 typedef struct ForeachCollector {
 	CharString paths[64];
 	U64        count;
-	U64        stopAfter;	//Stop after this many callbacks (0 = never)
+	U64        stopAfter;    //Stop after this many callbacks (0 = never)
 } ForeachCollector;
 
 static Bool foreachCb(const FileInfo *info, void *obj, const Allocator *alloc, Error *e_rr) {

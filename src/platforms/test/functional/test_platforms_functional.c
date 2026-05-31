@@ -878,6 +878,58 @@ clean:
     if (w) WindowManager_freeWindow(&windowManager, &w);
 }
 
+// ── F11. Input – Focus Lost Reset ─────────────────────────────────────────────
+
+static volatile Bool focusResetTriggered = false;
+
+static void onButtonReset(Window *w, InputDevice *dev, InputHandle h, Bool down) {
+	(void)w; (void)dev; (void) h;
+	if (!down) focusResetTriggered = true; //Reset callback fired
+}
+
+static void Test_focusReset(Test *t) {
+
+	(void) t;
+
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+		Test_setModule(t, "F11/FocusReset");
+
+		WindowCallbacks cbs = (WindowCallbacks){0};
+		cbs.onDeviceButton = onButtonReset;
+
+		Window *w = createWindowCallback(
+			t, "F11: FocusReset",
+			I32x2_zero, I32x2_create2(300, 300),
+			EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8,
+			cbs
+		);
+
+		Test_assert(t, "F11/FocusReset", w);
+
+		if (w) {
+
+			//Simulate a key press
+
+			Keyboard *kb = (Keyboard*) &w->devices.ptrNonConst[w->defaultKeyboardId];	//Assuming keyboard is first
+			InputHandle hEsc = InputDevice_createHandle(kb, EKey_Escape, EInputType_Button);
+			InputDevice_setCurrentState(kb, hEsc, true);
+
+			//Force focus loss via OS
+			SendMessageW((HWND)w->nativeHandle, WM_KILLFOCUS, 0, 0);
+			WindowManager_step(&windowManager, NULL, NULL);
+
+			Test_assert(t, "resetTriggered", focusResetTriggered);
+			Test_assert(t, "stateCleared", !InputDevice_getCurrentState(kb, hEsc));
+
+			WindowManager_freeWindow(&windowManager, &w);
+		}
+
+		WindowManager_free(&windowManager);
+
+	#endif
+}
+
 // ── entry point ───────────────────────────────────────────────────────────────
 
 Platform_defineEntrypoint() {
@@ -904,6 +956,7 @@ Platform_defineEntrypoint() {
     Test_mouse(&t);
     Test_focusMinimize(&t);
     Test_typeChar(&t);
+	Test_focusReset(&t);
 
 done:
     shutdown();

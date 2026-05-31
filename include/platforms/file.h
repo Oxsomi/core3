@@ -110,8 +110,8 @@ static inline Bool File_hasFolder(const CharString *loc, const Allocator *alloc)
 }
 
 typedef enum EFileOpenType {
-	EFileOpenType_Read,				//Read only
-	EFileOpenType_Write,			//E.g. ios::ate or wb
+	EFileOpenType_Read,                //Read only
+	EFileOpenType_Write,            //E.g. ios::ate or wb
 	EFileOpenType_ReadWrite
 } EFileOpenType;
 
@@ -130,8 +130,8 @@ static inline Bool EFileOpenType_isWrite(EFileOpenType type) {
 typedef U8 FileOpenType;
 
 typedef struct FileHandle {
-	void *ext;						//HANDLE or int (fd)
-	U64 fileSizeType;				//(EFileOpenType << 62) | fileSize
+	void *ext;                        //HANDLE or int (fd)
+	U64 fileSizeType;                //(EFileOpenType << 62) | fileSize
 } FileHandle;
 
 static inline U64 FileHandle_makeFileSizeType(U64 fileSize, EFileOpenType type) {
@@ -214,8 +214,8 @@ Bool File_loadVirtual(
 	Error *e_rr
 );
 
-Bool File_isVirtualLoaded(const CharString *loc, const Allocator *alloc, Error *e_rr);	//Check if a virtual section is loaded
-Bool File_unloadVirtual(const CharString *loc, const Allocator *alloc, Error *e_rr);	//Unload a virtual section
+Bool File_isVirtualLoaded(const CharString *loc, const Allocator *alloc, Error *e_rr);    //Check if a virtual section is loaded
+Bool File_unloadVirtual(const CharString *loc, const Allocator *alloc, Error *e_rr);    //Unload a virtual section
 
 //FileStream for handling bigger files and more efficiently jumping around.
 

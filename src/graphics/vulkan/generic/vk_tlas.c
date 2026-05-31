@@ -46,7 +46,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet");		//TODO:
+		return Error_unsupportedOperation(0, "VkTLAS_init()::serialized not supported yet");        //TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = tlas->base.isMotionBlurExt ? sizeof(TLASInstanceMotion) : sizeof(TLASInstanceStatic);
@@ -54,7 +54,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	if (tlas->useDeviceMemory)
 		instancesU64 = tlas->deviceData.len / stride;
 
-	else instancesU64 = tlas->cpuInstancesStatic.length;		//Both static and motion length are at the same loc
+	else instancesU64 = tlas->cpuInstancesStatic.length;        //Both static and motion length are at the same loc
 
 	if(instancesU64 >> 24)
 		gotoIfError(clean, Error_outOfBounds(
@@ -98,7 +98,7 @@ Error VK_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 			Buffer_memcpy(
 				Buffer_createRef(mem, stride * instancesU64),
-				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)	//static, motion same pos
+				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)    //static, motion same pos
 			);
 
 			//We have to transform the CPU-sided buffer to a GPU buffer address
@@ -282,7 +282,7 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
-	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
+	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return Error_none();
 
 	const VkAccelerationStructureBuildRangeInfoKHR *range = &tlasExt->range;
@@ -311,7 +311,7 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
 
-		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->base.tempScratchBuffer);
 
 		else tlas->base.tempScratchBuffer = NULL;
@@ -321,7 +321,7 @@ Error VK_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
 
-		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->tempInstanceBuffer);
 
 		else tlas->tempInstanceBuffer = NULL;

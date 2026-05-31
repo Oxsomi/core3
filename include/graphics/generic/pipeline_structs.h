@@ -37,7 +37,7 @@ typedef enum EPipelineStage {
 	EPipelineStage_Vertex,
 	EPipelineStage_Pixel,
 	EPipelineStage_Compute,
-	EPipelineStage_GeometryExt,			//Query graphics feature GeometryShader
+	EPipelineStage_GeometryExt,            //Query graphics feature GeometryShader
 	EPipelineStage_Hull,
 	EPipelineStage_Domain,
 
@@ -57,7 +57,7 @@ typedef enum EPipelineStage {
 
 	EPipelineStage_Count,
 
-	EPipelineStage_RTASBuild = 0x100		//Only for use in transitions at RTAS build stage
+	EPipelineStage_RTASBuild = 0x100        //Only for use in transitions at RTAS build stage
 
 } EPipelineStage;
 
@@ -71,10 +71,10 @@ typedef enum ECullMode {
 } ECullMode;
 
 typedef enum ERasterizerFlags {
-	ERasterizerFlags_IsClockWise			= 1 << 0,		//Winding order
-	ERasterizerFlags_IsWireframeExt			= 1 << 1,		//Fill mode (only available with wireframe extension)
-	ERasterizerFlags_EnableDepthClamp		= 1 << 2,
-	ERasterizerFlags_EnableDepthBias		= 1 << 3
+	ERasterizerFlags_IsClockWise            = 1 << 0,        //Winding order
+	ERasterizerFlags_IsWireframeExt            = 1 << 1,        //Fill mode (only available with wireframe extension)
+	ERasterizerFlags_EnableDepthClamp        = 1 << 2,
+	ERasterizerFlags_EnableDepthBias        = 1 << 3
 } ERasterizerFlags;
 
 typedef enum ECompareOp {
@@ -107,11 +107,11 @@ typedef U8 StencilOp;
 
 typedef enum EDepthStencilFlags {
 
-	EDepthStencilFlags_DepthTest		= 1 << 0,
-	EDepthStencilFlags_DepthWriteBit	= 1 << 1,		//Use DepthWrite instead.
-	EDepthStencilFlags_StencilTest		= 1 << 2,
+	EDepthStencilFlags_DepthTest        = 1 << 0,
+	EDepthStencilFlags_DepthWriteBit    = 1 << 1,        //Use DepthWrite instead.
+	EDepthStencilFlags_StencilTest        = 1 << 2,
 
-	EDepthStencilFlags_DepthWrite		= EDepthStencilFlags_DepthTest | EDepthStencilFlags_DepthWriteBit
+	EDepthStencilFlags_DepthWrite        = EDepthStencilFlags_DepthTest | EDepthStencilFlags_DepthWriteBit
 
 } EDepthStencilFlags;
 
@@ -185,23 +185,23 @@ typedef U8 BlendOp;
 
 typedef enum EWriteMask {
 
-	EWriteMask_R	= 1 << 0,
-	EWriteMask_G	= 1 << 1,
-	EWriteMask_B	= 1 << 2,
-	EWriteMask_A	= 1 << 3,
+	EWriteMask_R    = 1 << 0,
+	EWriteMask_G    = 1 << 1,
+	EWriteMask_B    = 1 << 2,
+	EWriteMask_A    = 1 << 3,
 
-	EWriteMask_All	= 0xF,
-	EWriteMask_RGBA	= 0xF,
-	EWriteMask_RGB	= 0x7,
-	EWriteMask_RG	= 0x3
+	EWriteMask_All    = 0xF,
+	EWriteMask_RGBA    = 0xF,
+	EWriteMask_RGB    = 0x7,
+	EWriteMask_RG    = 0x3
 
 } EWriteMask;
 
 typedef enum EMSAASamples {
-	EMSAASamples_Off,		//Turn off MSAA ("x1")
-	EMSAASamples_x2Ext,		//Query MSAA2x data types from device
-	EMSAASamples_x4,		//4x Always supported
-	EMSAASamples_x8Ext,		//Query MSAA8x data types from device
+	EMSAASamples_Off,        //Turn off MSAA ("x1")
+	EMSAASamples_x2Ext,        //Query MSAA2x data types from device
+	EMSAASamples_x4,        //4x Always supported
+	EMSAASamples_x8Ext,        //Query MSAA8x data types from device
 	EMSAASamples_Count
 } EMSAASamples;
 
@@ -231,21 +231,21 @@ typedef U8 TopologyMode;
 
 typedef struct PipelineStage {
 
-	EPipelineStage stageType;	//Runtime only
-	U32 binaryId;				//For non compute indicates offset in SHFile (contains both binaryId and entryId)
+	EPipelineStage stageType;    //Runtime only
+	U32 binaryId;                //For non compute indicates offset in SHFile (contains both binaryId and entryId)
 
-	U32 localShaderId;			//RT only at runtime
-	U32 groupId;				//RT only at runtime
+	U32 localShaderId;            //RT only at runtime
+	U32 groupId;                //RT only at runtime
 
-	U16 shFileId;				//For non compute, indicates SHFile id
+	U16 shFileId;                //For non compute, indicates SHFile id
 	U16 padding;
 
 } PipelineStage;
 
 typedef struct Rasterizer {
 
-	U16 cullMode;				//ECullMode
-	U16 flags;					//ERasterizerFlags
+	U16 cullMode;                //ECullMode
+	U16 flags;                    //ERasterizerFlags
 	F32 depthBiasClamp;
 	I32 depthBiasConstantFactor;
 	F32 depthBiasSlopeFactor;
@@ -278,20 +278,20 @@ typedef struct BlendState {
 
 	ELogicOpExt logicOpExt;
 
-	U8 writeMask[8];						//EWriteMask
+	U8 writeMask[8];                        //EWriteMask
 
 	BlendStateAttachment attachments[8];
 
 } BlendState;
 
 typedef struct VertexAttribute {
-	U16 offset11;						//11-bit offset
-	U8 bufferId4;						//4-bit buffer id
-	U8 format;							//ETextureFormatId (must be no compression!)
+	U16 offset11;                        //11-bit offset
+	U8 bufferId4;                        //4-bit buffer id
+	U8 format;                            //ETextureFormatId (must be no compression!)
 } VertexAttribute;
 
 typedef struct VertexBindingLayout {
-	U16 bufferStrides12_isInstance1[16];	//<=2048
+	U16 bufferStrides12_isInstance1[16];    //<=2048
 	VertexAttribute attributes[16];
 } VertexBindingLayout;
 

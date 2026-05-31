@@ -51,7 +51,7 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, const Allocator *allo
 					0, "SHFile_addInclude()::include was already defined, but with different CRC32C"
 				));
 
-			SHInclude_free(include, alloc);		//include is assumed to be moved, if it's not then it'd leak
+			SHInclude_free(include, alloc);        //include is assumed to be moved, if it's not then it'd leak
 			goto clean;
 		}
 

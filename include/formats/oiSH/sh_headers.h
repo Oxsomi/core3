@@ -31,23 +31,23 @@
 
 typedef enum ESHVersion {
 	ESHVersion_Undefined,
-	ESHVersion_V0_1,		//Unsupported
-	ESHVersion_V1_2			//Current
+	ESHVersion_V0_1,        //Unsupported
+	ESHVersion_V1_2            //Current
 } ESHVersion;
 
 typedef struct BinaryInfoFixedSize {
 
-	U8 shaderModel;				//U4 major, minor
-	U8 entrypointType;			//ESHPipelineStage: See entrypointType section in oiSH.md
-	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
+	U8 shaderModel;                //U4 major, minor
+	U8 entrypointType;            //ESHPipelineStage: See entrypointType section in oiSH.md
+	U16 entrypoint;                //U16_MAX if library, otherwise index into stageNames
 
-	U16 vendorMask;				//Bitset of ESHVendor
+	U16 vendorMask;                //Bitset of ESHVendor
 	U8 defineCount;
-	U8 binaryFlags;				//ESHBinaryFlags
+	U8 binaryFlags;                //ESHBinaryFlags
 
-	ESHExtension extensions;	//&~ dormantExt = used extensions, this is what the shader was compiled with
+	ESHExtension extensions;    //&~ dormantExt = used extensions, this is what the shader was compiled with
 
-	ESHExtension dormantExt;	//Dormant extensions (not detected in final executable)
+	ESHExtension dormantExt;    //Dormant extensions (not detected in final executable)
 
 	U16 registerCount;
 	U8 uniformCount;
@@ -56,26 +56,26 @@ typedef struct BinaryInfoFixedSize {
 } BinaryInfoFixedSize;
 
 typedef struct EntryInfoFixedSize {
-	U8 pipelineStage;			//ESHPipelineStage
-	U8 binaryCount;				//How many binaries this entrypoint references
+	U8 pipelineStage;            //ESHPipelineStage
+	U8 binaryCount;                //How many binaries this entrypoint references
 } EntryInfoFixedSize;
 
 typedef struct SHHeader {
 
 	U32 compilerVersion;
 
-	U32 hash;					//CRC32C of contents starting at SHHeader::version
+	U32 hash;                    //CRC32C of contents starting at SHHeader::version
 
-	U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty
+	U32 sourceHash;                //CRC32C of source(s), for determining if it's dirty
 
 	U16 uniqueDefines;
-	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-	U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
+	U8 version;                    //major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
+	U8 sizeTypes;                //Every 2 bits size type of spirv, dxil
 
-	U16 binaryCount;			//How many unique binaries are stored
-	U16 stageCount;				//How many stages reference into the binaries
+	U16 binaryCount;            //How many unique binaries are stored
+	U16 stageCount;                //How many stages reference into the binaries
 
-	U16 includeFileCount;		//Number of (recursive) include files
+	U16 includeFileCount;        //Number of (recursive) include files
 	U16 semanticCount;
 
 	U16 arrayDimCount;

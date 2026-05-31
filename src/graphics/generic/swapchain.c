@@ -79,11 +79,11 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	ETextureFormatId textureFormatId = 0;
 
 	switch (newFormat) {
-		case EWindowFormat_BGRA8:		textureFormatId = ETextureFormatId_BGRA8;		break;
-		case EWindowFormat_RGBA8:		textureFormatId = ETextureFormatId_RGBA8;		break;
-		case EWindowFormat_BGR10A2:		textureFormatId = ETextureFormatId_BGR10A2;		break;
-		case EWindowFormat_RGBA16f:		textureFormatId = ETextureFormatId_RGBA16f;		break;
-		case EWindowFormat_RGBA32f:		textureFormatId = ETextureFormatId_RGBA32f;		break;
+		case EWindowFormat_BGRA8:        textureFormatId = ETextureFormatId_BGRA8;        break;
+		case EWindowFormat_RGBA8:        textureFormatId = ETextureFormatId_RGBA8;        break;
+		case EWindowFormat_BGR10A2:        textureFormatId = ETextureFormatId_BGR10A2;        break;
+		case EWindowFormat_RGBA16f:        textureFormatId = ETextureFormatId_RGBA16f;        break;
+		case EWindowFormat_RGBA32f:        textureFormatId = ETextureFormatId_RGBA32f;        break;
 		default:
 			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"))
 	}
@@ -98,7 +98,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	//Otherwise, we properly resize
 
 	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef))
-	gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title))		//Re-create views
+	gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title))        //Re-create views
 	++swapchain->versionId;
 
 	swapchain->base.textureFormatId = (U8) textureFormatId;
@@ -154,11 +154,11 @@ Error GraphicsDeviceRef_createSwapchain(
 	ETextureFormatId formatId = ETextureFormatId_BGRA8;
 
 	switch (info.window->format) {
-		case EWindowFormat_BGRA8:		formatId = ETextureFormatId_BGRA8;		break;
-		case EWindowFormat_RGBA8:		formatId = ETextureFormatId_RGBA8;		break;
-		case EWindowFormat_BGR10A2:		formatId = ETextureFormatId_BGR10A2;	break;
-		case EWindowFormat_RGBA16f:		formatId = ETextureFormatId_RGBA16f;	break;
-		case EWindowFormat_RGBA32f:		formatId = ETextureFormatId_RGBA32f;	break;
+		case EWindowFormat_BGRA8:        formatId = ETextureFormatId_BGRA8;        break;
+		case EWindowFormat_RGBA8:        formatId = ETextureFormatId_RGBA8;        break;
+		case EWindowFormat_BGR10A2:        formatId = ETextureFormatId_BGR10A2;    break;
+		case EWindowFormat_RGBA16f:        formatId = ETextureFormatId_RGBA16f;    break;
+		case EWindowFormat_RGBA32f:        formatId = ETextureFormatId_RGBA32f;    break;
 		default:
 			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"))
 	}
@@ -180,18 +180,18 @@ Error GraphicsDeviceRef_createSwapchain(
 		.height = (U16) I32x2_y(info.window->size),
 		.length = 1,
 		.levels = 1,
-		.images = 3,		//Probably there are 3 images, but it's possible impl changes this later (up to 5), don't assume
+		.images = 3,        //Probably there are 3 images, but it's possible impl changes this later (up to 5), don't assume
 		.maxImages = SWAPCHAIN_MAX_IMAGES
 	};
 
 	if(!swapchain->info.presentModePriorities[0]) {
 		#if _PLATFORM_TYPE != PLATFORM_ANDROID
-			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;		//Priority is to be low latency
+			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;        //Priority is to be low latency
 			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
 			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_FifoRelaxed;
 			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_Fifo;
 		#else
-			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;			//Priority is to conserve power
+			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;            //Priority is to conserve power
 			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
 			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Mailbox;
 			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_Immediate;

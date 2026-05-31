@@ -26,8 +26,8 @@
 #endif
 
 typedef enum EPipelineLayoutFlags {
-	EPipelineLayoutFlags_None						= 0,
-	EPipelineLayoutFlags_InternalWeakDeviceRef		= 1 << 1
+	EPipelineLayoutFlags_None                        = 0,
+	EPipelineLayoutFlags_InternalWeakDeviceRef        = 1 << 1
 } EPipelineLayoutFlags;
 
 typedef RefPtr DescriptorLayoutRef;
@@ -52,7 +52,7 @@ typedef struct PipelineLayout {
 	PipelineLayoutInfo info;
 } PipelineLayout;
 
-#define PipelineLayout_ext(ptr, T) (!ptr ? NULL : (T##PipelineLayout*)(ptr + 1))		//impl
+#define PipelineLayout_ext(ptr, T) (!ptr ? NULL : (T##PipelineLayout*)(ptr + 1))        //impl
 #define PipelineLayoutRef_ptr(ptr) RefPtr_data(ptr, PipelineLayout)
 
 void PipelineLayoutRef_dec(PipelineLayoutRef **layout);
@@ -60,7 +60,7 @@ Error PipelineLayoutRef_inc(PipelineLayoutRef *layout);
 
 Error GraphicsDeviceRef_createPipelineLayout(
 	GraphicsDeviceRef *dev,
-	PipelineLayoutInfo info,		//Moves info
+	PipelineLayoutInfo info,        //Moves info
 	CharString name,
 	PipelineLayoutRef **layout
 );

@@ -122,11 +122,11 @@ typedef struct CharStringFind {
 Bool CharString_findAll(const CharStringFind *find, C8 c, EStringCase caseSensitive, Error *e_rr);
 Bool CharString_findAllString(const CharStringFind *find, const CharString *other, EStringCase caseSensitive, Error *e_rr);
 
-U64 CharString_unicodeCodepoints(const CharString str);		//Returns U64_MAX if invalid codepoints were detected
-U64 CharString_hash(const CharString s);					//Hash of content, for maps only (not for cryptography purposes)
+U64 CharString_unicodeCodepoints(const CharString str);        //Returns U64_MAX if invalid codepoints were detected
+U64 CharString_hash(const CharString s);                    //Hash of content, for maps only (not for cryptography purposes)
 
-CharString CharString_getFilePath(CharString *str);			//Formats on string first to ensure it's proper
-CharString CharString_getBasePath(CharString *str);			//Formats on string first to ensure it's proper
+CharString CharString_getFilePath(CharString *str);            //Formats on string first to ensure it's proper
+CharString CharString_getBasePath(CharString *str);            //Formats on string first to ensure it's proper
 
 //TODO: Regex
 
@@ -165,11 +165,11 @@ Bool CharString_format(const Allocator *alloc, CharString *result, Error *e_rr, 
 Bool CharString_createFromETypeId(ETypeId type, const Allocator *alloc, CharString *result, Error *e_rr);
 
 typedef enum EHLSLStringifyFlags {
-	EHLSLStringifyFlags_None			= 0,
-	EHLSLStringifyFlags_Has16Bit		= 1 << 0,
-	EHLSLStringifyFlags_HasF64			= 1 << 1,
-	EHLSLStringifyFlags_HasI64			= 1 << 2,
-	EHLSLStringifyFlags_IsStrict		= 1 << 3		//Deny 'soft' promotion (e.g. 16-bit becomes 32-bit) if not present
+	EHLSLStringifyFlags_None            = 0,
+	EHLSLStringifyFlags_Has16Bit        = 1 << 0,
+	EHLSLStringifyFlags_HasF64            = 1 << 1,
+	EHLSLStringifyFlags_HasI64            = 1 << 2,
+	EHLSLStringifyFlags_IsStrict        = 1 << 3        //Deny 'soft' promotion (e.g. 16-bit becomes 32-bit) if not present
 } EHLSLStringifyFlags;
 
 Bool CharString_createFromETypeIdHLSL(

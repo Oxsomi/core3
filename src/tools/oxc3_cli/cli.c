@@ -139,7 +139,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	else format = (Format) {
 		.optionalParameters = opVal.optionalParameters,
 		.requiredParameters = opVal.requiredParameters,
-		.operationFlags		= opVal.operationFlags
+		.operationFlags        = opVal.operationFlags
 	};
 
 	if(format.requiredParameters | format.optionalParameters) {
@@ -318,7 +318,7 @@ Bool CLI_execute(ListCharString argList) {
 				}
 
 				args.flags |= (EOperationFlags)(1 << i);
-				continue;			//Don't break, find duplicate arguments
+				continue;            //Don't break, find duplicate arguments
 			}
 
 	//Grab all params
@@ -374,8 +374,8 @@ Bool CLI_execute(ListCharString argList) {
 					gotoIfError(clean, ListCharString_pushBackx(&args.args, argList.ptr[j + 1]))
 				}
 
-				++j;			//Skip next argument
-				continue;		//Don't break, we wanna detect duplicates!
+				++j;            //Skip next argument
+				continue;        //Don't break, we wanna detect duplicates!
 			}
 
 	//Check if format is supported
@@ -462,13 +462,13 @@ Bool CLI_execute(ListCharString argList) {
 		format = (Format) {
 			.optionalParameters = op.optionalParameters,
 			.requiredParameters = op.requiredParameters,
-			.operationFlags		= op.operationFlags
+			.operationFlags        = op.operationFlags
 		};
 	}
 
 	EOperationHasParameter reqParam = format.requiredParameters;
 	EOperationHasParameter optParam = format.optionalParameters;
-	EOperationFlags opFlags			= format.operationFlags;
+	EOperationFlags opFlags            = format.operationFlags;
 
 	//It must have all required params
 

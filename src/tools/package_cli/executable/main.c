@@ -33,7 +33,7 @@ Platform_defineEntrypoint() {
 	(void) status;
 	Bool s_uccess = Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, NULL);
 
-	if(!s_uccess)		//Can't print
+	if(!s_uccess)        //Can't print
 		Platform_return(-2);
 
 	ListCharString args = Platform_instance->args;
@@ -61,10 +61,10 @@ Platform_defineEntrypoint() {
 		compileMode = 1 << ESHBinaryType_SPIRV;
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			#ifdef GRAPHICS_API_DYNAMIC		//Both DXIL and SPIRV
+			#ifdef GRAPHICS_API_DYNAMIC        //Both DXIL and SPIRV
 				multipleModes = true;
 				compileMode |= 1 << ESHBinaryType_DXIL;
-			#elif !defined(FORCE_VULKAN)	//DXIL only
+			#elif !defined(FORCE_VULKAN)    //DXIL only
 		compileMode = 1 << ESHBinaryType_DXIL;
 			#endif
 		#endif
@@ -77,7 +77,7 @@ Platform_defineEntrypoint() {
 		.encryptionKey = NULL,
 		.multipleModes = multipleModes,
 		.compileMode = compileMode,
-		.threadCount = 1,	//TODO: Platform_getThreads(),
+		.threadCount = 1,    //TODO: Platform_getThreads(),
 		.includeDir = args.length == 3 ? args.ptr[2] : CharString_createNull(),
 		.merge = true,
 		.extraWarnings = warnings,

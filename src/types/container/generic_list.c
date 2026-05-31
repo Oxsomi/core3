@@ -58,7 +58,7 @@ Bool GenericList_create(U64 length, U64 stride, const Allocator *allocator, Gene
 	if (result->ptr)
 		retError(clean, Error_invalidOperation(0, "GenericList_create()::result wasn't empty, which might indicate memleak"));
 
-	if(!length && stride) {		//Keep the list empty
+	if(!length && stride) {        //Keep the list empty
 		*result = GenericList_createEmpty(stride);
 		goto clean;
 	}
@@ -417,7 +417,7 @@ Bool GenericList_swap(GenericList l, U64 i, U64 j, Error *e_rr) {
 
 	const U64 stride = l.stride;
 
-	if(stride > 1024 || !stride)		//Current limitation, because we don't allocate.
+	if(stride > 1024 || !stride)        //Current limitation, because we don't allocate.
 		retError(clean, Error_invalidParameter(0, 0, "GenericList_swap()::l must be a stride of max 1024 (and >0)"));
 
 	const U64 len = l.length;
@@ -560,7 +560,7 @@ Bool GenericList_insert(GenericList *list, U64 index, const Buffer *buf, const A
 	if(!(list->length + 1))
 		retError(clean, Error_overflow(0, 0, U64_MAX, "GenericList_insert() overflow"));
 
-	if (index == list->length) {		//Push back
+	if (index == list->length) {        //Push back
 
 		gotoIfError3(clean, GenericList_resizeInternal(list, list->length + 1, allocator, false, e_rr));
 
@@ -806,7 +806,7 @@ static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction
 
 		for (; k < j; ++k) {
 
-			if (func(t, tsorted + k * list.stride) != ECompareResult_Lt)		//!isLess
+			if (func(t, tsorted + k * list.stride) != ECompareResult_Lt)        //!isLess
 				continue;
 
 			//Move to the right
@@ -832,9 +832,9 @@ static inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction
 	return true;
 }
 
-#define TGenericList_tsort(T)																		\
-ECompareResult sort##T(const T *a, const T *b) {													\
-	return *a < *b ? ECompareResult_Lt : (*a > *b ? ECompareResult_Gt : ECompareResult_Eq);			\
+#define TGenericList_tsort(T)                                                                        \
+ECompareResult sort##T(const T *a, const T *b) {                                                    \
+	return *a < *b ? ECompareResult_Lt : (*a > *b ? ECompareResult_Gt : ECompareResult_Eq);            \
 }
 
 #define TGenericList_sorts(f) f(U64); f(I64); f(U32); f(I32); f(U16); f(I16); f(U8); f(I8); f(F32); f(F64);
@@ -849,7 +849,7 @@ TGenericList_sorts(TGenericList_tsort);
 
 static inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, CompareFunction f) {
 
-	U8 tmp[1024 * 2];		//We only support max of 1024 stride lists. We don't want to allocate
+	U8 tmp[1024 * 2];        //We only support max of 1024 stride lists. We don't want to allocate
 
 	Buffer_memcpy(
 		Buffer_createRef(tmp, list.stride),
@@ -894,7 +894,7 @@ static Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, Compa
 
 		const U64 pivot = GenericList_qpartition(list, begin, end, f);
 
-		if (pivot == U64_MAX)		//Does return a modified array, but it's not fully sorted
+		if (pivot == U64_MAX)        //Does return a modified array, but it's not fully sorted
 			return false;
 
 		if ((I64)pivot - begin <= (I64)end - (pivot + 1)) {
@@ -919,7 +919,7 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 	if(list.length <= 1)
 		return true;
 
-	if(list.stride > 1024)			//Current limitation, because we don't allocate.
+	if(list.stride > 1024)            //Current limitation, because we don't allocate.
 		return false;
 
 	if(GenericList_isConstRef(list))
@@ -931,8 +931,8 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 	return GenericList_qsort(list, f);
 }
 
-#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) {	\
-	return GenericList_sortCustom(l, (CompareFunction) sort##T); 		\
+#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) {    \
+	return GenericList_sortCustom(l, (CompareFunction) sort##T);         \
 }
 
 TGenericList_sorts(TGenericList_sort);
@@ -947,7 +947,7 @@ static inline ECompareResult GenericList_compareStringInsensitive(const CharStri
 
 Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
 
-	if(list.stride != sizeof(CharString))		//We don't know the real type, but at least it's a check
+	if(list.stride != sizeof(CharString))        //We don't know the real type, but at least it's a check
 		return false;
 
 	return

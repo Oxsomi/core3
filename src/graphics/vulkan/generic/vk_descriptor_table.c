@@ -64,7 +64,7 @@ void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
 
 			if (!refCnt) {
 				deviceExt->destroyImageView(deviceExt->device, texExt->views.ptr[viewId].view, NULL);
-				texExt->views.ptrNonConst[viewId].view = NULL;		//Can't pop it, others might reference beyond this
+				texExt->views.ptrNonConst[viewId].view = NULL;        //Can't pop it, others might reference beyond this
 			}
 
 			break;
@@ -314,7 +314,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	U32 newViewId = 0;
 
 	//Note: even though d.resource is properly guarded everywhere, it can only be used with robustness.
-	//		This extension is poorly supported everywhere, so can't use that. Maybe some day.
+	//        This extension is poorly supported everywhere, so can't use that. Maybe some day.
 
 	switch (type) {
 
@@ -496,7 +496,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			descriptor.descriptorType = isWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 			descriptor.pImageInfo = img;
 
-			allocatedNewViews = false;		//Success, no need to free the views
+			allocatedNewViews = false;        //Success, no need to free the views
 
 			for(U64 i = 0; i < darr.length; ++i)
 				tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = newViews[i];
@@ -504,7 +504,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			break;
 		}
 
-		case ESHRegisterType_SubpassInput:				//Doesn't do anything
+		case ESHRegisterType_SubpassInput:                //Doesn't do anything
 		case ESHRegisterType_PushConstants:
 		default:
 			descriptor.descriptorCount = 0;
@@ -516,7 +516,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 clean:
 		
-	if (allocatedNewViews) {		//Release temporary views if invalid
+	if (allocatedNewViews) {        //Release temporary views if invalid
 
 		U32 *newViews = darr.length > 1 ? range->newViews.ptrNonConst : &newViewId;
 

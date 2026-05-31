@@ -58,7 +58,7 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 
 		U64 i = 0;
 
-		for(; i < stackSize && stackTrace[i]; ++i)		//Find end
+		for(; i < stackSize && stackTrace[i]; ++i)        //Find end
 			;
 
 		C8 **symbols = backtrace_symbols((void* const *)stackTrace, i);
@@ -78,23 +78,23 @@ CharString Error_formatPlatformError(const Allocator *alloc, const Error *e_rr) 
 	#define FONT_GREEN  "\e[1;32m"
 	#define FONT_CYAN   "\e[1;36m"
 	#define FONT_YELLOW "\e[1;33m"
-	#define FONT_RED	"\e[1;31m"
+	#define FONT_RED    "\e[1;31m"
 	#define FONT_RESET  "\e[1;0m"
 
-	#define printColor(lvl, str, ...)																	\
-		switch(lvl) {																					\
-			default:					printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);		break;	\
-			case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);		break;	\
-			case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);		break;	\
-			case ELogLevel_Error:		printf(FONT_RED	str FONT_RESET, __VA_ARGS__);		break;	\
+	#define printColor(lvl, str, ...)                                                                    \
+		switch(lvl) {                                                                                    \
+			default:                    printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);        break;    \
+			case ELogLevel_Performance:    printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);        break;    \
+			case ELogLevel_Warn:        printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);        break;    \
+			case ELogLevel_Error:        printf(FONT_RED    str FONT_RESET, __VA_ARGS__);        break;    \
 		}
 
-	#define printColorSimple(lvl, str)																	\
-		switch(lvl) {																					\
-			default:					printf(FONT_GREEN  str FONT_RESET);		break;					\
-			case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET);		break;					\
-			case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET);		break;					\
-			case ELogLevel_Error:		printf(FONT_RED	str FONT_RESET);		break;					\
+	#define printColorSimple(lvl, str)                                                                    \
+		switch(lvl) {                                                                                    \
+			default:                    printf(FONT_GREEN  str FONT_RESET);        break;                    \
+			case ELogLevel_Performance:    printf(FONT_CYAN   str FONT_RESET);        break;                    \
+			case ELogLevel_Warn:        printf(FONT_YELLOW str FONT_RESET);        break;                    \
+			case ELogLevel_Error:        printf(FONT_RED    str FONT_RESET);        break;                    \
 		}
 
 	void Log_log(const Allocator *alloc, ELogLevel lvl, ELogOptions options, const CharString *arg) {

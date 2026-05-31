@@ -42,7 +42,7 @@ void AES_checkSupport(I8 *hasAES256) {
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 			*hasAES256 = !!IsProcessorFeaturePresent(PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE);
 		#elif _PLATFORM_TYPE == PLATFORM_IOS ||  _PLATFORM_TYPE == PLATFORM_OSX
-			*hasAES256 = 1;		//Apple says they support this always
+			*hasAES256 = 1;        //Apple says they support this always
 		#elif defined(HWCAP_AES)
 			*hasAES256 = getauxval(AT_HWCAP) & HWCAP_AES;
 		#else

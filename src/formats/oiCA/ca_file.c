@@ -49,7 +49,7 @@ Bool CAFile_create(
 		retError(clean, Error_invalidParameter(0, 0, "CAFile_create()::settings.compressionType is invalid"));
 
 	if (settings->compressionType > EXXCompressionType_None)
-		retError(clean, Error_unsupportedOperation(0, "CAFile_create() compression not supported yet"));		//TODO:
+		retError(clean, Error_unsupportedOperation(0, "CAFile_create() compression not supported yet"));        //TODO:
 
 	if (settings->flags & ECASettingsFlags_Invalid)
 		retError(clean, Error_invalidParameter(0, 0, "CAFile_create()::settings->flags contains invalid flags"));
@@ -68,7 +68,7 @@ Bool CAFile_create(
 	//Names
 
 	DLSettings nameSettings = (DLSettings) {
-		.compressionType = settings->compressionType,		//TODO: Maybe allow different compression type here later
+		.compressionType = settings->compressionType,        //TODO: Maybe allow different compression type here later
 		.encryptionType  = settings->encryptionType,
 		.dataType        = EDLDataType_String,
 		.flags           = EDLSettingsFlags_HideMagicNumber

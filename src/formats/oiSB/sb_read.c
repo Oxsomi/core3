@@ -105,7 +105,7 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 	gotoIfError3(clean, ListU32_resize(&arrays, total, alloc, e_rr));
 	gotoIfError3(clean, StreamCursor_consumeBuffer(&cursor, offset, ListU32_buffer(arrays), alloc, e_rr));
 
-	*offset = (*offset + 15) & ~15;		//Align 16-byte
+	*offset = (*offset + 15) & ~15;        //Align 16-byte
 
 	gotoIfError3(clean, DLFile_read(streamRef, offset, NULL, I32x4_zero(), true, false, alloc, NULL, &dlFile, e_rr));
 
@@ -139,7 +139,7 @@ Bool SBFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			));
 
 		U8 arrayCount = 0;
-		U32 tmp[32];	//Worst case array
+		U32 tmp[32];    //Worst case array
 
 		if(vari.arrayDimOrArrayId >> 15) {
 

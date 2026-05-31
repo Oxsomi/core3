@@ -101,8 +101,8 @@ static Bool FileStream_open(
 
 	gotoIfError3(clean, Stream_create(
 		FileStream_read,
-		NULL,		//write
-		NULL,		//reserve
+		NULL,        //write
+		NULL,        //reserve
 		FileStream_close,
 		size,
 		EStreamType_File,
@@ -113,7 +113,7 @@ static Bool FileStream_open(
 
 	FileStream *fs = RefPtr_data(*outRef, FileStream);
 	fs->f = f;
-	f = NULL;	//Ownership transferred
+	f = NULL;    //Ownership transferred
 
 clean:
 	if (f)
@@ -186,7 +186,7 @@ static Bool openWav(
 	Bool flattenSound,
 	FileStreamRef **fileStream,
 	AudioStreamRef **audioStream,
-	AudioSourceRef **source,		//Required -- pass your own AudioSourceRef*, gets a default gain=1 source
+	AudioSourceRef **source,        //Required -- pass your own AudioSourceRef*, gets a default gain=1 source
 	Error *e_rr
 ) {
 	Bool s_uccess = true;
@@ -196,10 +196,10 @@ static Bool openWav(
 	gotoIfError3(clean, AudioDeviceRef_createFromFile(
 		ctx->device,
 		*fileStream,
-		0,				//inputOffset
+		0,                //inputOffset
 		loops,
-		0,				//startOffset (Ns)
-		1,				//pitch
+		0,                //startOffset (Ns)
+		1,                //pitch
 		flattenSound,
 		ctx->alloc,
 		&ctx->types->streamType,
@@ -605,7 +605,7 @@ void Test_audioDoppler(AudioFuncCtx *ctx) {
 	AudioModifier modifier = (AudioModifier) { .gain = 1 };
 	AudioPoint3D point = (AudioPoint3D) {
 		.pos = F32x4_create3(0, 0, 2),
-		.velocity = F32x4_create3(0, 0, -50)	//Approaching
+		.velocity = F32x4_create3(0, 0, -50)    //Approaching
 	};
 
 	if (!AudioDeviceRef_createSource3D(ctx->device, as, modifier, point, ctx->alloc, &ctx->types->sourceType, &source, &err))
@@ -818,8 +818,8 @@ int main() {
 	Test_audioGainZero(&ctx);
 
 	//Spatial sweeps
-	Test_audioSourceSpatialSweep(&ctx, false);	//Mono
-	Test_audioSourceSpatialSweep(&ctx, true);	//Stereo with flattenSound
+	Test_audioSourceSpatialSweep(&ctx, false);    //Mono
+	Test_audioSourceSpatialSweep(&ctx, true);    //Stereo with flattenSound
 
 	//Listener sweeps
 	Test_audioListenerPositionSweep(&ctx);

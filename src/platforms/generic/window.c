@@ -158,7 +158,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 
 					//Copy part
 
-					Buffer_memmove(dst, src);		//Automatically truncates src
+					Buffer_memmove(dst, src);        //Automatically truncates src
 
 					//Jump backwards
 
@@ -174,7 +174,7 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 				if (!i && !resize)
 					continue;
 
-				Buffer_memmove(dst, src);		//Automatically truncates src
+				Buffer_memmove(dst, src);        //Automatically truncates src
 				dst.ptr += rowSiz;
 				src.ptr += rowSizOld;
 			}
@@ -231,10 +231,10 @@ Bool Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTim
 	};
 
 	switch (w->format) {
-		default:						info.textureFormatId = ETextureFormatId_BGRA8;		break;
-		case EWindowFormat_BGR10A2:		info.textureFormatId = ETextureFormatId_BGR10A2;	break;
-		case EWindowFormat_RGBA16f:		info.textureFormatId = ETextureFormatId_RGBA16f;	break;
-		case EWindowFormat_RGBA32f:		info.textureFormatId = ETextureFormatId_RGBA32f;	break;
+		default:                        info.textureFormatId = ETextureFormatId_BGRA8;        break;
+		case EWindowFormat_BGR10A2:        info.textureFormatId = ETextureFormatId_BGR10A2;    break;
+		case EWindowFormat_RGBA16f:        info.textureFormatId = ETextureFormatId_RGBA16f;    break;
+		case EWindowFormat_RGBA32f:        info.textureFormatId = ETextureFormatId_RGBA32f;    break;
 	}
 
 	gotoIfError3(clean, File_openStream(

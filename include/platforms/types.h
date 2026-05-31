@@ -28,8 +28,8 @@
 //ETypeId but for platform types.
 
 typedef enum EPlatformsTypeId {
-	EPlatformsTypeId_FileHandle		= makeObjectId(0x1C32,  0, 0),
-	EPlatformsTypeId_Count			= 1
+	EPlatformsTypeId_FileHandle        = makeObjectId(0x1C32,  0, 0),
+	EPlatformsTypeId_Count            = 1
 } EPlatformsTypeId;
 
 extern EPlatformsTypeId EPlatformsTypeId_all[EPlatformsTypeId_Count];

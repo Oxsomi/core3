@@ -112,13 +112,13 @@ void Test_SBFileCombineMissingVariable(Test *t) {
 		SBFile combined = { 0 };
 
 		if (!SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &a, &t->err) ||
-		    !SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &b, &t->err)) {
+			!SBFile_create(ESBSettingsFlags_None, 16, t->alloc, &b, &t->err)) {
 			Test_assert(t, "create a and b", false);
 			goto doneMissingVar;
 		}
 
 		CharString nameA = CharString_createRefCStrConst("x");
-		CharString nameB = CharString_createRefCStrConst("y");	//Different name, won't be found in a
+		CharString nameB = CharString_createRefCStrConst("y");    //Different name, won't be found in a
 		SBFile_addVariableAsType(&a, &nameA, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, NULL);
 		SBFile_addVariableAsType(&b, &nameB, 0, U16_MAX, ESBType_F32, ESBVarFlag_None, NULL, t->alloc, NULL);
 

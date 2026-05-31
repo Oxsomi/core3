@@ -102,9 +102,9 @@ static inline I32x4 AES_subBytes(I32x4 a) {
 
 static inline U8 AES_g2_8(U8 v, U8 mul) {
 	switch (mul) {
-		case 2:		return (v << 1) ^ ((v >> 7) * 0x1B);
-		case 3:		return v ^ AES_g2_8(v, 2);
-		default:	return v;
+		case 2:        return (v << 1) ^ ((v >> 7) * 0x1B);
+		case 3:        return v ^ AES_g2_8(v, 2);
+		default:    return v;
 	}
 }
 

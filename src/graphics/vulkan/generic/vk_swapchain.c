@@ -172,7 +172,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	
 	switch (capabilities.currentTransform) {
 
-		case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:		//Avoid compositor
+		case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:    case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:        //Avoid compositor
 			size = I32x2_yx(size);
 			break;
 
@@ -203,7 +203,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
 
-	U32 requestedImages = SWAPCHAIN_VERSIONING;		//Don't use the already requested images, since we might get a different image count
+	U32 requestedImages = SWAPCHAIN_VERSIONING;        //Don't use the already requested images, since we might get a different image count
 
 	if(capabilities.minImageCount > requestedImages)
 		++requestedImages;
@@ -224,10 +224,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	if(swapchain->requiresManualComposite)
 		switch (capabilities.currentTransform) {
-			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	expectOrientation = 90;		break;
-			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	expectOrientation = 180;	break;
-			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	expectOrientation = 270;	break;
-			default:										expectOrientation = 0;		break;
+			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:    expectOrientation = 90;        break;
+			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:    expectOrientation = 180;    break;
+			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:    expectOrientation = 270;    break;
+			default:                                        expectOrientation = 0;        break;
 		}
 
 	if(window->orientation != expectOrientation) {
@@ -266,10 +266,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 		switch(modei) {
 
-			default:																							break;
-			case VK_PRESENT_MODE_IMMEDIATE_KHR:		supports[ESwapchainPresentMode_Immediate - 1] = true;		break;
-			case VK_PRESENT_MODE_FIFO_KHR:			supports[ESwapchainPresentMode_Fifo - 1] = true;			break;
-			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:	supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;		break;
+			default:                                                                                            break;
+			case VK_PRESENT_MODE_IMMEDIATE_KHR:        supports[ESwapchainPresentMode_Immediate - 1] = true;        break;
+			case VK_PRESENT_MODE_FIFO_KHR:            supports[ESwapchainPresentMode_Fifo - 1] = true;            break;
+			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:    supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;        break;
 
 			//Mailbox can allocate additional images on Android,
 			//we don't want to deal with versioning 4x.
@@ -294,11 +294,11 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			swapchain->presentMode = mode;
 
 			switch(mode) {
-				default:																						break;
-				case ESwapchainPresentMode_Immediate:		presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;		break;
-				case ESwapchainPresentMode_Fifo:			presentMode = VK_PRESENT_MODE_FIFO_KHR;				break;
-				case ESwapchainPresentMode_FifoRelaxed:		presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;		break;
-				case ESwapchainPresentMode_Mailbox:			presentMode = VK_PRESENT_MODE_MAILBOX_KHR;			break;
+				default:                                                                                        break;
+				case ESwapchainPresentMode_Immediate:        presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;        break;
+				case ESwapchainPresentMode_Fifo:            presentMode = VK_PRESENT_MODE_FIFO_KHR;                break;
+				case ESwapchainPresentMode_FifoRelaxed:        presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;        break;
+				case ESwapchainPresentMode_Mailbox:            presentMode = VK_PRESENT_MODE_MAILBOX_KHR;            break;
 			}
 
 			break;
@@ -400,7 +400,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 
 	//Get images
 
-	VkImage vkImages[SWAPCHAIN_MAX_IMAGES];		//Temp alloc, we only allow up to 5 images.
+	VkImage vkImages[SWAPCHAIN_MAX_IMAGES];        //Temp alloc, we only allow up to 5 images.
 
 	gotoIfError(clean, checkVkError(deviceExt->getSwapchainImages(
 		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages

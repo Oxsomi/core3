@@ -188,10 +188,10 @@ Bool CharString_toUTF32(const CharString s, const Allocator *allocator, ListU32 
 
 	for (U64 i = 0; i < len; ) {
 
-		gotoIfError3(clean, Buffer_readAsUTF8(buf, i, &codepoint, e_rr));	//Read as UTF8 encoding
+		gotoIfError3(clean, Buffer_readAsUTF8(buf, i, &codepoint, e_rr));    //Read as UTF8 encoding
 		i += codepoint.bytes;
 
-		buf0[j++] = codepoint.index;										//Write as UTF32 encoding
+		buf0[j++] = codepoint.index;                                        //Write as UTF32 encoding
 	}
 
 	arr->ptrNonConst[j] = 0;

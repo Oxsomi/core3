@@ -54,14 +54,14 @@ typedef struct LWindow {
 	struct xdg_toplevel *topLevel;
 
 	struct wl_shm_pool *backBuffer;
-	struct wl_buffer *buffers[2];	//Double buffering
+	struct wl_buffer *buffers[2];    //Double buffering
 
 	U8 *mainBufferPtr;
 
 	U32 pixelStride;
 	U16 height;
 	U8 heightHi8;
-	U8 backBufferId;				//0 or 1
+	U8 backBufferId;                //0 or 1
 
 	I32 fileDescriptor;
 	U32 padding;

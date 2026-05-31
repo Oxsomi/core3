@@ -52,31 +52,31 @@ static const U64 U64_EXP10[] = {
 
 //Uint
 
-#define XINT_OP(T, TUint, TLimit, TSigned)															\
-ARIT_OP(T);																							\
-static inline T T##_exp10(T v) {																	\
-	return																							\
-		(TUint)v >= (TUint)sizeof(U64_EXP10) / sizeof(U64) || U64_EXP10[v] >= (TLimit) ?			\
-		(T)-1 : (T) U64_EXP10[v];																	\
-}																									\
+#define XINT_OP(T, TUint, TLimit, TSigned)                                                            \
+ARIT_OP(T);                                                                                            \
+static inline T T##_exp10(T v) {                                                                    \
+	return                                                                                            \
+		(TUint)v >= (TUint)sizeof(U64_EXP10) / sizeof(U64) || U64_EXP10[v] >= (TLimit) ?            \
+		(T)-1 : (T) U64_EXP10[v];                                                                    \
+}                                                                                                    \
 																									\
-static inline T T##_exp2(T v) {																		\
-	return (TUint)v >= (T)(sizeof(T) * 8 - TSigned) ? (T)-1 : (T) ((U64)1 << v);					\
-}																									\
+static inline T T##_exp2(T v) {                                                                        \
+	return (TUint)v >= (T)(sizeof(T) * 8 - TSigned) ? (T)-1 : (T) ((U64)1 << v);                    \
+}                                                                                                    \
 																									\
 static inline T T##_safeDiv(T a, T b) { return b == 0 ? 0 : a / b; }
 
-#define UINT_OP(T)																					\
-XINT_OP(T, T, (U64)(T)-1, 0);																		\
+#define UINT_OP(T)                                                                                    \
+XINT_OP(T, T, (U64)(T)-1, 0);                                                                        \
 																									\
-static inline T T##_rol(T a, U8 bits) {																\
-	bits &= sizeof(T) * 8 - 1;																		\
-	return (a << bits) | (a >> (sizeof(T) * 8 - bits));												\
-}																									\
+static inline T T##_rol(T a, U8 bits) {                                                                \
+	bits &= sizeof(T) * 8 - 1;                                                                        \
+	return (a << bits) | (a >> (sizeof(T) * 8 - bits));                                                \
+}                                                                                                    \
 																									\
-static inline T T##_ror(T a, U8 bits) {																\
-	bits &= sizeof(T) * 8 - 1;																		\
-	return (a >> bits) | (a << (sizeof(T) * 8 - bits));												\
+static inline T T##_ror(T a, U8 bits) {                                                                \
+	bits &= sizeof(T) * 8 - 1;                                                                        \
+	return (a >> bits) | (a << (sizeof(T) * 8 - bits));                                                \
 }
 
 UINT_OP(U64);
@@ -86,9 +86,9 @@ UINT_OP(U8);
 
 //Int
 
-#define INT_IOP(T, TUint)																			\
-XINT_OP(T, TUint, (U64)1 << (sizeof(T) * 8 - 1), 1);												\
-static inline T T##_abs(T v) { return v < 0 ? -v : v; }		/*UB for INT_MIN*/
+#define INT_IOP(T, TUint)                                                                            \
+XINT_OP(T, TUint, (U64)1 << (sizeof(T) * 8 - 1), 1);                                                \
+static inline T T##_abs(T v) { return v < 0 ? -v : v; }        /*UB for INT_MIN*/
 
 INT_IOP(I64, U64);
 INT_IOP(I32, U32);

@@ -35,7 +35,7 @@
 #include "types/base/constants.h"
 
 typedef struct VersionString {
-	C8 v[5];		//XX.Y
+	C8 v[5];        //XX.Y
 } VersionString;
 
 VersionString VersionCharString_get(U8 version) {
@@ -62,8 +62,8 @@ void XXFile_printType(U8 type) {
 		const C8 *typeStr = "Unrecognized";
 
 		switch (type >> 4) {
-			case EXXCompressionType_Brotli11:	typeStr = "Brotli:11";		break;
-			case EXXCompressionType_Brotli1:	typeStr = "Brotli:1";		break;
+			case EXXCompressionType_Brotli11:    typeStr = "Brotli:11";        break;
+			case EXXCompressionType_Brotli1:    typeStr = "Brotli:1";        break;
 		}
 
 		Log_debugLnx("Compression type: %s.", typeStr);
@@ -119,10 +119,10 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 	switch (*(const U32*)buf.ptr) {
 
-		case CAHeader_MAGIC:	reqLen = sizeof(CAHeader);					break;
-		case DLHeader_MAGIC:	reqLen = sizeof(DLHeader) + sizeof(U32);	break;
-		case SHHeader_MAGIC:	reqLen = sizeof(SHHeader) + sizeof(U32);	break;
-		case SBHeader_MAGIC:	reqLen = sizeof(SBHeader) + sizeof(U32);	break;
+		case CAHeader_MAGIC:    reqLen = sizeof(CAHeader);                    break;
+		case DLHeader_MAGIC:    reqLen = sizeof(DLHeader) + sizeof(U32);    break;
+		case SHHeader_MAGIC:    reqLen = sizeof(SHHeader) + sizeof(U32);    break;
+		case SBHeader_MAGIC:    reqLen = sizeof(SBHeader) + sizeof(U32);    break;
 		default:
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;

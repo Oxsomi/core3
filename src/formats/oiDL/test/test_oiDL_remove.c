@@ -91,7 +91,7 @@ void Test_DLRemove(Test *t) {
 
 	Test_setModule(t, "DLFile_remove");
 
-	{						//Remove first, validate shift
+	{                        //Remove first, validate shift
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 3)) {
@@ -111,7 +111,7 @@ void Test_DLRemove(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Remove last
+	{                        //Remove last
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 3)) {
@@ -128,7 +128,7 @@ void Test_DLRemove(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Remove 1st of 4
+	{                        //Remove 1st of 4
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 4)) {
@@ -146,7 +146,7 @@ void Test_DLRemove(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Remove the only one remaining
+	{                        //Remove the only one remaining
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 1)) {
@@ -161,7 +161,7 @@ void Test_DLRemove(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Remove string from string file
+	{                        //Remove string from string file
 		DLFile f = { 0 };
 
 		if (!buildStringFile(t, &f, 3)) {
@@ -178,7 +178,7 @@ void Test_DLRemove(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Out of bounds
+	{                        //Out of bounds
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 2)) {
@@ -201,7 +201,7 @@ void Test_DLRemoveEntry(Test *t) {
 
 	Test_setModule(t, "DLFile_removeEntry");
 
-	{						//Remove middle and return buffer
+	{                        //Remove middle and return buffer
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 3)) {
@@ -225,7 +225,7 @@ void Test_DLRemoveEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Remove last
+	{                        //Remove last
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 2)) {
@@ -239,7 +239,7 @@ void Test_DLRemoveEntry(Test *t) {
 		Test_assert(t, "removeEntry id = 0 ok", DLFile_removeEntry(&f, 0, &out, &stream, &t->err));
 		Test_assert(t, "entryCount 1",          DLFile_entryCount(&f) == 1);
 		Test_assert(t, "Returned buf length 1", Buffer_length(out) == 0);
-		Test_assert(t, "[0] now 1",				DLFile_entrySize(&f, 0) == 1);
+		Test_assert(t, "[0] now 1",                DLFile_entrySize(&f, 0) == 1);
 
 		Buffer_free(&out, t->alloc);
 
@@ -247,7 +247,7 @@ void Test_DLRemoveEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{					//Out of bounds
+	{                    //Out of bounds
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 1)) {
@@ -265,7 +265,7 @@ void Test_DLRemoveEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{					//Type mismatch
+	{                    //Type mismatch
 		DLFile f = { 0 };
 
 		if (!buildStringFile(t, &f, 1)) {
@@ -283,7 +283,7 @@ void Test_DLRemoveEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{					//Null guards
+	{                    //Null guards
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 1)) {
@@ -307,7 +307,7 @@ void Test_DLRemoveEntryString(Test *t) {
 
 	Test_setModule(t, "DLFile_removeEntryString");
 
-	{						//Move last
+	{                        //Move last
 		DLFile f = { 0 };
 
 		if (!buildStringFile(t, &f, 3)) {
@@ -331,7 +331,7 @@ void Test_DLRemoveEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//OOB
+	{                        //OOB
 		DLFile f = { 0 };
 
 		if (!buildStringFile(t, &f, 2)) {
@@ -349,7 +349,7 @@ void Test_DLRemoveEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Type mismatch (data)
+	{                        //Type mismatch (data)
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 1)) {
@@ -367,7 +367,7 @@ void Test_DLRemoveEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Null guards
+	{                        //Null guards
 		DLFile f = { 0 };
 
 		if (!buildStringFile(t, &f, 1)) {

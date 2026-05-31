@@ -206,12 +206,12 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			};
 
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left		= x,
-				.top		= y,
-				.front		= z,
-				.right		= x + w,
-				.bottom		= y + h,
-				.back		= z + l
+				.left        = x,
+				.top        = y,
+				.front        = z,
+				.right        = x + w,
+				.bottom        = y + h,
+				.back        = z + l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
@@ -219,7 +219,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				&dst,
 				x, y, z,
 				&src,
-				texture->isPendingFullCopy ? NULL : &srcBox		//Unaligned textures have a GPUBV bug in SDK version 613
+				texture->isPendingFullCopy ? NULL : &srcBox        //Unaligned textures have a GPUBV bug in SDK version 613
 			);
 		}
 
@@ -242,7 +242,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			stagingBuffer, allocRange, compressed ? 16 : 4, false, (const U8**) &location
 		);
 
-		if(temp.genericError && location == defaultLocation)		//Something major went wrong
+		if(temp.genericError && location == defaultLocation)        //Something major went wrong
 			gotoIfError(clean, temp)
 
 		//We re-create the staging buffer to fit the new allocation.
@@ -314,7 +314,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-				gotoIfError(clean, DxDeviceBuffer_transition(						//Ensure resource is transitioned
+				gotoIfError(clean, DxDeviceBuffer_transition(                        //Ensure resource is transitioned
 					stagingExt,
 					D3D12_BARRIER_SYNC_COPY,
 					D3D12_BARRIER_ACCESS_COPY_SOURCE,
@@ -323,7 +323,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				))
 
 				RefPtr_inc(device->staging);
-				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))        //Add to in flight
 			}
 
 			D3D12_BARRIER_SUBRESOURCE_RANGE range2 = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
@@ -382,12 +382,12 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			};
 
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left		= x,
-				.top		= y,
-				.front		= z,
-				.right		= x + w,
-				.bottom		= y + h,
-				.back		= z + l
+				.left        = x,
+				.top        = y,
+				.front        = z,
+				.right        = x + w,
+				.bottom        = y + h,
+				.back        = z + l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
@@ -395,7 +395,7 @@ Error DX_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 				&dst,
 				x, y, z,
 				&src,
-				texture->isPendingFullCopy ? NULL : &srcBox		//Unaligned textures have a GPUBV bug in SDK version 613
+				texture->isPendingFullCopy ? NULL : &srcBox        //Unaligned textures have a GPUBV bug in SDK version 613
 			);
 		}
 	}

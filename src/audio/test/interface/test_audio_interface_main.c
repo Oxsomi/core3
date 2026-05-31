@@ -228,7 +228,7 @@ void Test_audioDeviceCreateDebug(Test *t) {
  
 	if (!(info.flags & EAudioDeviceFlags_Debug)) {
 		RefPtr_dec(&interf);
-		return;		//Skip: debug extension not available
+		return;        //Skip: debug extension not available
 	}
  
 	RefPtrType devType = AudioDevice_makeType(t->alloc);

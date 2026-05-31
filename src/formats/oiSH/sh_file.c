@@ -188,24 +188,24 @@ static Bool SHValue_stringifyOne(
 				F64 v;
 
 				switch (stride) {
-					default:					v = F16_castF64(value->vu16[*counter]);		break;
-					case EDataTypeStride_32:	v = value->vf32[*counter];					break;
-					case EDataTypeStride_64:	v = value->vf64[*counter];					break;
+					default:                    v = F16_castF64(value->vu16[*counter]);        break;
+					case EDataTypeStride_32:    v = value->vf32[*counter];                    break;
+					case EDataTypeStride_64:    v = value->vf64[*counter];                    break;
 				}
 
 				gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "%g", v));
 				break;
 			}
 
-			case EDataType_Int:	{
+			case EDataType_Int:    {
 				
 				I64 vi;
 
 				switch (stride) {
-					default:					vi = value->vi8[*counter];	break;
-					case EDataTypeStride_16:	vi = value->vi16[*counter];	break;
-					case EDataTypeStride_32:	vi = value->vi32[*counter];	break;
-					case EDataTypeStride_64:	vi = value->vi64[*counter];	break;
+					default:                    vi = value->vi8[*counter];    break;
+					case EDataTypeStride_16:    vi = value->vi16[*counter];    break;
+					case EDataTypeStride_32:    vi = value->vi32[*counter];    break;
+					case EDataTypeStride_64:    vi = value->vi64[*counter];    break;
 				}
 
 				if(vi < 0)
@@ -221,10 +221,10 @@ static Bool SHValue_stringifyOne(
 				U64 v;
 
 				switch (stride) {
-					default:					v = value->vu8[*counter];	break;
-					case EDataTypeStride_16:	v = value->vu16[*counter];	break;
-					case EDataTypeStride_32:	v = value->vu32[*counter];	break;
-					case EDataTypeStride_64:	v = value->vu64[*counter];	break;
+					default:                    v = value->vu8[*counter];    break;
+					case EDataTypeStride_16:    v = value->vu16[*counter];    break;
+					case EDataTypeStride_32:    v = value->vu32[*counter];    break;
+					case EDataTypeStride_64:    v = value->vu64[*counter];    break;
 				}
 
 				number.v = v;

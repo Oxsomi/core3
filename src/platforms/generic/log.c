@@ -27,21 +27,21 @@
 
 #include <stdlib.h>
 
-#define Log_level(lvl) 															\
+#define Log_level(lvl)                                                             \
 																				\
-	if(!format)																	\
-		return;																	\
+	if(!format)                                                                    \
+		return;                                                                    \
 																				\
-	CharString res = CharString_createNull();									\
+	CharString res = CharString_createNull();                                    \
 																				\
-	va_list arg1;																\
-	va_start(arg1, format);														\
-	Error err = Error_none();													\
-	Bool s_uccess = CharString_formatVariadic(alloc, &res, &err, format, arg1);	\
-	va_end(arg1);																\
+	va_list arg1;                                                                \
+	va_start(arg1, format);                                                        \
+	Error err = Error_none();                                                    \
+	Bool s_uccess = CharString_formatVariadic(alloc, &res, &err, format, arg1);    \
+	va_end(arg1);                                                                \
 																				\
-	if(!s_uccess)																\
-		Log_log(alloc, lvl, opt, &res);											\
+	if(!s_uccess)                                                                \
+		Log_log(alloc, lvl, opt, &res);                                            \
 																				\
 	CharString_free(&res, alloc)
 

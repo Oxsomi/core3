@@ -47,7 +47,7 @@ typedef enum ELockAcquire {
 	ELockAcquire_Acquired = 0,
 	ELockAcquire_AlreadyLocked = 1,
 
-	ELockAcquire_Success = 0			//Anything geq this is success
+	ELockAcquire_Success = 0            //Anything geq this is success
 
 } ELockAcquire;
 

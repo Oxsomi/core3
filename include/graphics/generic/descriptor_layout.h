@@ -33,13 +33,13 @@ typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EDescriptorLayoutFlags {
 
-	EDescriptorLayoutFlags_None						= 0,
-	EDescriptorLayoutFlags_AllowBindlessOnArrays	= 1 << 0,		//Required to use bindless, only enables bindless on desc[]
-	EDescriptorLayoutFlags_AllowBindlessEverywhere	= 1 << 1,		//Potentially slower, will assume all registers are dynamic
-	EDescriptorLayoutFlags_InternalWeakDeviceRef	= 1 << 2,
-	EDescriptorLayoutFlags_HasPushDescriptors		= 1 << 3,		//Push descriptor set, no other descriptors allowed
+	EDescriptorLayoutFlags_None                        = 0,
+	EDescriptorLayoutFlags_AllowBindlessOnArrays    = 1 << 0,        //Required to use bindless, only enables bindless on desc[]
+	EDescriptorLayoutFlags_AllowBindlessEverywhere    = 1 << 1,        //Potentially slower, will assume all registers are dynamic
+	EDescriptorLayoutFlags_InternalWeakDeviceRef    = 1 << 2,
+	EDescriptorLayoutFlags_HasPushDescriptors        = 1 << 3,        //Push descriptor set, no other descriptors allowed
 
-	EDescriptorLayoutFlags_AllowBindlessAny			=
+	EDescriptorLayoutFlags_AllowBindlessAny            =
 		EDescriptorLayoutFlags_AllowBindlessOnArrays | EDescriptorLayoutFlags_AllowBindlessEverywhere
 
 } EDescriptorLayoutFlags;
@@ -54,7 +54,7 @@ typedef struct DescriptorBinding {
 
 	SHBinding binding;
 
-	U32 visibility;			//Bit mask of ESHPipelineStage
+	U32 visibility;            //Bit mask of ESHPipelineStage
 
 	union {
 		U32 structedBufferStride;
@@ -88,26 +88,26 @@ typedef struct DescriptorLayoutInfo {
 
 typedef enum EDetectDescriptorLayoutFlags {
 
-	EDetectDescriptorLayoutFlags_None					= 0,
+	EDetectDescriptorLayoutFlags_None                    = 0,
 
 	//These should only be used if the contents are so frequently changing that allocating a descriptor set makes no sense.
 	//For example a copy image or mip map shader, otherwise use None.
 	//These only apply on non arrays, since those could be used for bindless for example.
 	//Samplers need static samplers, doesn't work with push descriptors.
 
-	EDetectDescriptorLayoutFlags_AssumePushConstants	= 1 << 0,		//First buffer (<128 bytes) receives a push constant
-	EDetectDescriptorLayoutFlags_AssumePushDescriptors	= 1 << 1		//Assume non push constant buffer as push descriptors
+	EDetectDescriptorLayoutFlags_AssumePushConstants    = 1 << 0,        //First buffer (<128 bytes) receives a push constant
+	EDetectDescriptorLayoutFlags_AssumePushDescriptors    = 1 << 1        //Assume non push constant buffer as push descriptors
 
 } EDetectDescriptorLayoutFlags;
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	GraphicsDeviceRef *dev,
 	SHFile tmpBinary,
-	ListU32 entrypoints,				//U32 (U16 entryId, binaryId)
+	ListU32 entrypoints,                //U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,		//Empty if no push descriptors or if AssumePushConstants
-	CharString pushConstantName,		//Empty if no push constants or AssumePushConstants
+	ListCharString pushDescriptors,        //Empty if no push descriptors or if AssumePushConstants
+	CharString pushConstantName,        //Empty if no push constants or AssumePushConstants
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
 	DescriptorLayoutInfo *pushDescriptorInfo,
@@ -117,11 +117,11 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 Bool GraphicsDeviceRef_detectLayoutFromEntry(
 	GraphicsDeviceRef *dev,
 	SHFile binary,
-	U32 entrypoint,						//U32 (U16 entryId, binaryId)
+	U32 entrypoint,                        //U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,		//Empty if no push descriptors or if AssumePushDescriptors
-	CharString pushConstantName,		//Empty if no push constants or AssumePushConstants
+	ListCharString pushDescriptors,        //Empty if no push descriptors or if AssumePushDescriptors
+	CharString pushConstantName,        //Empty if no push constants or AssumePushConstants
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
 	DescriptorLayoutInfo *pushDescriptorInfo,
@@ -139,14 +139,14 @@ typedef struct DescriptorLayout {
 	DescriptorLayoutInfo info;
 
 	ListU16 bindlessTypeToBinding;
-	ListU8 bindingToBindlessType;		//U8_MAX indicates "none"
+	ListU8 bindingToBindlessType;        //U8_MAX indicates "none"
 
 	Bool anySampler, anyResource;
 	U8 padding[14];
 
 } DescriptorLayout;
 
-#define DescriptorLayout_ext(ptr, T) (!ptr ? NULL : (T##DescriptorLayout*)(ptr + 1))		//impl
+#define DescriptorLayout_ext(ptr, T) (!ptr ? NULL : (T##DescriptorLayout*)(ptr + 1))        //impl
 #define DescriptorLayoutRef_ptr(ptr) RefPtr_data(ptr, DescriptorLayout)
 
 void DescriptorLayoutRef_dec(DescriptorLayoutRef **layout);
@@ -154,7 +154,7 @@ Error DescriptorLayoutRef_inc(DescriptorLayoutRef *layout);
 
 Error GraphicsDeviceRef_createDescriptorLayout(
 	GraphicsDeviceRef *dev,
-	DescriptorLayoutInfo *info,		//Moves info
+	DescriptorLayoutInfo *info,        //Moves info
 	CharString name,
 	DescriptorLayoutRef **layout
 );

@@ -25,7 +25,7 @@ typedef struct Window Window;
 typedef struct VkGraphicsInstance VkGraphicsInstance;
 
 typedef struct VkSwapchain {
-	VkSurfaceKHR surface;			//Platform's surface implementation
+	VkSurfaceKHR surface;            //Platform's surface implementation
 	VkSwapchainKHR swapchain;
 	ListVkSemaphore semaphores;
 	VkSurfaceFormatKHR format;

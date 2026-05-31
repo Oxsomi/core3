@@ -540,7 +540,7 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 			if(CharString_equalsStringSensitive(&b->entries.ptr[i].name, &a->entries.ptr[j].name))
 				break;
 
-		if(j != a->entries.length)		//Skip already handled ones
+		if(j != a->entries.length)        //Skip already handled ones
 			continue;
 
 		ListU16 binaryIdsb = b->entries.ptr[i].binaryIds;

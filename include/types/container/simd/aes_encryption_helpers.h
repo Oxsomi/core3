@@ -61,11 +61,11 @@ __forceinline__ static I32x4 AESEncryptionContext_ghashReduceClMul(I32x4 clmul00
 	tmp1 = I32x4_rsh32(tmp5, 2);
 	tmp2 = I32x4_rsh32(tmp5, 7);
 
-	tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
-	tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
-	tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
-	tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
-	tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+	tmp0 = I32x4_xor(tmp0, tmp5);        //0 ^ 5
+	tmp1 = I32x4_xor(tmp1, tmp2);        //1 ^ 2
+	tmp3 = I32x4_xor(tmp3, tmp4);        //3 ^ 4
+	tmp0 = I32x4_xor(tmp0, tmp1);        //0 ^ 1 ^ 2 ^ 5
+	tmp0 = I32x4_xor(tmp0, tmp3);        //0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
 
 	return I32x4_swapEndianness(tmp0);
 }

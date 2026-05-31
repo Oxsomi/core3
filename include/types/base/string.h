@@ -39,8 +39,8 @@ typedef enum ECompareResult ECompareResult;
 //There are four/five types of strings:
 //
 //Stack strings (or heap if you manually allocate it there):
-//	ShortString; 31 chars max (includes null terminator)
-//	LongString; 63 char max (includes null terminator)
+//    ShortString; 31 chars max (includes null terminator)
+//    LongString; 63 char max (includes null terminator)
 //
 //CharString; A string that goes on the heap (or wherever the allocator tells it to go)
 //CharString(Ref); A reference to an already allocated string (CharString with capacity 0)
@@ -51,12 +51,12 @@ typedef enum ECompareResult ECompareResult;
 typedef struct CharString {
 
 	union {
-		const C8 *ptr;				//This is non const if not a const ref, but for safety this is const (cast away if not).
-		C8 *ptrNonConst;			//Only use if !isConstRef
+		const C8 *ptr;                //This is non const if not a const ref, but for safety this is const (cast away if not).
+		C8 *ptrNonConst;            //Only use if !isConstRef
 	};
 
-	U64 lenAndNullTerminated;		//First bit contains if it's null terminated or not. Length excludes null terminator.
-	U64 capacityAndRefInfo;			//capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
+	U64 lenAndNullTerminated;        //First bit contains if it's null terminated or not. Length excludes null terminator.
+	U64 capacityAndRefInfo;            //capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
 
 } CharString;
 
@@ -68,7 +68,7 @@ typedef struct CharString {
 typedef C8 ShortString[SHORTSTRING_LEN];
 typedef C8 LongString[LONGSTRING_LEN];
 
-CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
+CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize);        //Auto detect end (up to maxSize chars)
 CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated);
 
 //Simple helper functions
@@ -165,7 +165,7 @@ static inline CharString CharString_createRefCStrConst(const C8 *ptr) {
 //Auto detect end (up to maxSize chars)
 static inline CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) {
 	CharString str = CharString_createRefAutoConst(ptr, maxSize);
-	str.capacityAndRefInfo = 0;		//Flag as mutable
+	str.capacityAndRefInfo = 0;        //Flag as mutable
 	return str;
 }
 
@@ -175,7 +175,7 @@ static inline CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) {
 
 static inline CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
 	CharString str = CharString_createRefSizedConst(ptr, size, isNullTerminated);
-	str.capacityAndRefInfo = 0;		//Flag as mutable
+	str.capacityAndRefInfo = 0;        //Flag as mutable
 	return str;
 }
 
@@ -205,14 +205,14 @@ static inline Bool CharString_clear(CharString *str) {
 	if(!str || CharString_isRef(*str))
 		return false;
 
-	if(CharString_isNullTerminated(*str))					//If null terminated, we want to keep it null terminated
+	if(CharString_isNullTerminated(*str))                    //If null terminated, we want to keep it null terminated
 		str->ptrNonConst[0] = '\0';
 
-	str->lenAndNullTerminated &= ~(((U64)1 << 63) - 1);		//Clear size
+	str->lenAndNullTerminated &= ~(((U64)1 << 63) - 1);        //Clear size
 	return true;
 }
 
-static inline CharString CharString_newLine() {			//Always \n since all OSes can handle that nowadays
+static inline CharString CharString_newLine() {            //Always \n since all OSes can handle that nowadays
 	return CharString_createRefCStrConst("\n");
 }
 

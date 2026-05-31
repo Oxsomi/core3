@@ -106,9 +106,9 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 	U32 dataTypeCheck = 0;
 
 	switch (info.msaa) {
-		case EMSAASamples_x2Ext:	dataTypeCheck = EGraphicsDataTypes_MSAA2x;	break;
-		case EMSAASamples_x8Ext:	dataTypeCheck = EGraphicsDataTypes_MSAA8x;	break;
-		default:																break;
+		case EMSAASamples_x2Ext:    dataTypeCheck = EGraphicsDataTypes_MSAA2x;    break;
+		case EMSAASamples_x8Ext:    dataTypeCheck = EGraphicsDataTypes_MSAA8x;    break;
+		default:                                                                break;
 	}
 
 	if(dataTypeCheck && !(device->info.capabilities.dataTypes & dataTypeCheck))
@@ -479,11 +479,11 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 		switch(entry.stage) {
 
-			case ESHPipelineStage_Vertex:		stage->stageType = EPipelineStage_Vertex;			break;
-			case ESHPipelineStage_Pixel:		stage->stageType = EPipelineStage_Pixel;			break;
-			case ESHPipelineStage_GeometryExt:	stage->stageType = EPipelineStage_GeometryExt;		break;
-			case ESHPipelineStage_Hull:			stage->stageType = EPipelineStage_Hull;				break;
-			case ESHPipelineStage_Domain:		stage->stageType = EPipelineStage_Domain;			break;
+			case ESHPipelineStage_Vertex:        stage->stageType = EPipelineStage_Vertex;            break;
+			case ESHPipelineStage_Pixel:        stage->stageType = EPipelineStage_Pixel;            break;
+			case ESHPipelineStage_GeometryExt:    stage->stageType = EPipelineStage_GeometryExt;        break;
+			case ESHPipelineStage_Hull:            stage->stageType = EPipelineStage_Hull;                break;
+			case ESHPipelineStage_Domain:        stage->stageType = EPipelineStage_Domain;            break;
 
 			//TODO: Mesh and task shaders
 

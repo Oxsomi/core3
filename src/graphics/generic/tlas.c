@@ -129,9 +129,9 @@ TListImpl(TLASInstanceStatic);
 
 TLASInstanceData *TLASInstanceMotion_getDataInternal(TLASInstanceMotion *mot) {
 	switch (mot->type) {
-		default:							return &mot->staticInst.data;
-		case ETLASInstanceType_Matrix:		return &mot->matrixInst.data;
-		case ETLASInstanceType_SRT:			return &mot->srtInst.data;
+		default:                            return &mot->staticInst.data;
+		case ETLASInstanceType_Matrix:        return &mot->matrixInst.data;
+		case ETLASInstanceType_SRT:            return &mot->srtInst.data;
 	}
 }
 
@@ -310,7 +310,7 @@ Error GraphicsDeviceRef_createTLAS(
 
 		else {
 
-			U64 length = tlas.cpuInstancesMotion.length;		//instancesMotion and instancesStatic are at the same loc
+			U64 length = tlas.cpuInstancesMotion.length;        //instancesMotion and instancesStatic are at the same loc
 
 			if(!length)
 				return Error_invalidOperation(10, "GraphicsDeviceRef_createTLAS() is missing instance list");
@@ -400,7 +400,7 @@ Error GraphicsDeviceRef_createTLAS(
 
 			//Add refs to BLASes
 
-			U64 length = tlas.cpuInstancesMotion.length;		//instancesMotion and instancesStatic are at the same loc
+			U64 length = tlas.cpuInstancesMotion.length;        //instancesMotion and instancesStatic are at the same loc
 
 			Bool invalidData = false;
 
@@ -475,7 +475,7 @@ clean:
 Error GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,					//If specified, indicates refit
+	TLASRef *parent,                    //If specified, indicates refit
 	ListTLASInstanceStatic instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
@@ -553,11 +553,11 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 // GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas
 //) {
 //
-//	TLAS tlasInfo = (TLAS) {
-//		.base = (RTAS) { .asConstructionType = (U8) ETLASConstructionType_Serialized, },
-//		.cpuData = cache,
-//		.disallowBindlessDescriptor = disallowBindlessDescriptor
-//	};
+//    TLAS tlasInfo = (TLAS) {
+//        .base = (RTAS) { .asConstructionType = (U8) ETLASConstructionType_Serialized, },
+//        .cpuData = cache,
+//        .disallowBindlessDescriptor = disallowBindlessDescriptor
+//    };
 //
-//	return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+//    return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
 //}

@@ -129,8 +129,8 @@ void Test_SHFileAddBinShaderVersionOutOfRange(Test *t) {
 
 	SHBinaryInfo low  = makeBinaryInfo(ESHPipelineStage_Compute, "lo", false);
 	SHBinaryInfo high = makeBinaryInfo(ESHPipelineStage_Compute, "hi", false);
-	low.identifier.shaderVersion  = OISH_SHADER_MODEL(5, 0);	//below MIN
-	high.identifier.shaderVersion = OISH_SHADER_MODEL(7, 0);	//above MAX
+	low.identifier.shaderVersion  = OISH_SHADER_MODEL(5, 0);    //below MIN
+	high.identifier.shaderVersion = OISH_SHADER_MODEL(7, 0);    //above MAX
 
 	Test_assert(t, "below MIN rejected", !SHFile_addBinary(&sh, &low,  t->alloc, NULL));
 	Test_assert(t, "above MAX rejected", !SHFile_addBinary(&sh, &high, t->alloc, NULL));
@@ -209,7 +209,7 @@ void Test_SHFileAddBinOddDefinesRejected(Test *t) {
 	CharString strs[3] = {
 		CharString_createRefCStrConst("FOO"),
 		CharString_createRefCStrConst("1"),
-		CharString_createRefCStrConst("BAR")	//no value -> odd count
+		CharString_createRefCStrConst("BAR")    //no value -> odd count
 	};
 
 	Test_assert(t, "createRef", ListCharString_createRefConst(strs, 3, &info.identifier.defines, &t->err));

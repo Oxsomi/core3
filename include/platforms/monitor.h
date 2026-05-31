@@ -30,10 +30,10 @@
 //Monitor
 
 typedef enum EMonitorOrientation {
-	EMonitorOrientation_Landscape			= 0,
-	EMonitorOrientation_Portrait			= 90,
-	EMonitorOrientation_FlippedLandscape	= 180,
-	EMonitorOrientation_FlippedPortrait		= 270
+	EMonitorOrientation_Landscape            = 0,
+	EMonitorOrientation_Portrait            = 90,
+	EMonitorOrientation_FlippedLandscape    = 180,
+	EMonitorOrientation_FlippedPortrait        = 270
 } EMonitorOrientation;
 
 //A monitor is something a physical window is displayed on.

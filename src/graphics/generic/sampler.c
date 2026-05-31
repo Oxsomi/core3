@@ -117,7 +117,7 @@ Error GraphicsDeviceRef_createSampler(
 		);
 
 	if(!info.maxLod)
-		info.maxLod = F32_castF16(65504.f);		//Set to F16 max
+		info.maxLod = F32_castF16(65504.f);        //Set to F16 max
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(Sampler) + GraphicsDeviceRef_getObjectSizes(dev)->sampler),

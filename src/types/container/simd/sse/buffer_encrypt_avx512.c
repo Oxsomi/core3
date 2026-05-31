@@ -62,11 +62,11 @@ __forceinline__ static I32x16 AESEncryptionContext_ghashReduceClMul4(I32x16 clmu
 	tmp1 = I32x16_rsh32(tmp5, 2);
 	tmp2 = I32x16_rsh32(tmp5, 7);
 
-	tmp0 = I32x16_xor(tmp0, tmp5);		//0 ^ 5
-	tmp1 = I32x16_xor(tmp1, tmp2);		//1 ^ 2
-	tmp3 = I32x16_xor(tmp3, tmp4);		//3 ^ 4
-	tmp0 = I32x16_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
-	tmp0 = I32x16_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+	tmp0 = I32x16_xor(tmp0, tmp5);        //0 ^ 5
+	tmp1 = I32x16_xor(tmp1, tmp2);        //1 ^ 2
+	tmp3 = I32x16_xor(tmp3, tmp4);        //3 ^ 4
+	tmp0 = I32x16_xor(tmp0, tmp1);        //0 ^ 1 ^ 2 ^ 5
+	tmp0 = I32x16_xor(tmp0, tmp3);        //0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
 
 	return I32x16_swapEndianness(tmp0);
 }
@@ -487,11 +487,11 @@ __forceinline__ static I32x16x4AndTag AESEncryptionContext_blockHashAndGhash16(
 		tmp1 = I32x4_rsh32(tmp5, 2);
 		tmp2 = I32x4_rsh32(tmp5, 7);
 
-		tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
-		tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
-		tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
-		tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
-		tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp5);        //0 ^ 5
+		tmp1 = I32x4_xor(tmp1, tmp2);        //1 ^ 2
+		tmp3 = I32x4_xor(tmp3, tmp4);        //3 ^ 4
+		tmp0 = I32x4_xor(tmp0, tmp1);        //0 ^ 1 ^ 2 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp3);        //0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
 
 		b = I32x4_swapEndianness(tmp0);
 
@@ -595,14 +595,14 @@ void AESEncryptionContext_blocks16(
 		I32x16 c = I32x16_xor(ab.c, datc);
 		I32x16 d = I32x16_xor(ab.d, datd);
 
-		if (!isEncrypt) {			//Decryption, we use the input (ciphertext)
+		if (!isEncrypt) {            //Decryption, we use the input (ciphertext)
 			prevState[0] = data;
 			prevState[1] = datb;
 			prevState[2] = datc;
 			prevState[3] = datd;
 		}
 
-		else {						//Encryption, we use the output (ciphertext)
+		else {                        //Encryption, we use the output (ciphertext)
 			prevState[0] = a;
 			prevState[1] = b;
 			prevState[2] = c;
@@ -672,14 +672,14 @@ void AESEncryptionContext_blocks16(
 		I32x16 c = I32x16_xor(ab.c, datc);
 		I32x16 d = I32x16_xor(ab.d, datd);
 
-		if (!isEncrypt) {				//Decryption, we use the input (ciphertext)
+		if (!isEncrypt) {                //Decryption, we use the input (ciphertext)
 			prevState[0] = data;
 			prevState[1] = datb;
 			prevState[2] = datc;
 			prevState[3] = datd;
 		}
 
-		else {							//Encryption, we use the output (ciphertext)
+		else {                            //Encryption, we use the output (ciphertext)
 			prevState[0] = a;
 			prevState[1] = b;
 			prevState[2] = c;

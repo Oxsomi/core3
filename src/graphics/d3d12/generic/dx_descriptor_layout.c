@@ -55,7 +55,7 @@ D3D12_DESCRIPTOR_RANGE_TYPE dxGetDescriptorType(ESHRegisterType regType) {
 		case ESHRegisterType_AccelerationStructure:
 			return D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 
-		case ESHRegisterType_SubpassInput:		//Doesn't exist in D3D12
+		case ESHRegisterType_SubpassInput:        //Doesn't exist in D3D12
 			return (D3D12_DESCRIPTOR_RANGE_TYPE) -1;
 
 		default:
@@ -75,7 +75,7 @@ D3D12_DESCRIPTOR_RANGE_TYPE dxGetDescriptorType(ESHRegisterType regType) {
 
 typedef struct SortingKey {
 	const DescriptorBinding *binding;
-	U32 mergedCount;						//Useful to allow merging later
+	U32 mergedCount;                        //Useful to allow merging later
 	U32 padding;
 } SortingKey;
 
@@ -101,14 +101,14 @@ ECompareResult SortingKey_compare(const SortingKey *aKey, const SortingKey *bKey
 
 D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 a) {
 	switch (a) {
-		case 1 << ESHPipelineStage_Vertex:		return D3D12_SHADER_VISIBILITY_VERTEX;
-		case 1 << ESHPipelineStage_Pixel:		return D3D12_SHADER_VISIBILITY_PIXEL;
-		case 1 << ESHPipelineStage_Hull:		return D3D12_SHADER_VISIBILITY_HULL;
-		case 1 << ESHPipelineStage_Domain:		return D3D12_SHADER_VISIBILITY_DOMAIN;
-		case 1 << ESHPipelineStage_GeometryExt:	return D3D12_SHADER_VISIBILITY_GEOMETRY;
-		case 1 << ESHPipelineStage_MeshExt:		return D3D12_SHADER_VISIBILITY_MESH;
-		case 1 << ESHPipelineStage_TaskExt:		return D3D12_SHADER_VISIBILITY_AMPLIFICATION;
-		default:								return D3D12_SHADER_VISIBILITY_ALL;
+		case 1 << ESHPipelineStage_Vertex:        return D3D12_SHADER_VISIBILITY_VERTEX;
+		case 1 << ESHPipelineStage_Pixel:        return D3D12_SHADER_VISIBILITY_PIXEL;
+		case 1 << ESHPipelineStage_Hull:        return D3D12_SHADER_VISIBILITY_HULL;
+		case 1 << ESHPipelineStage_Domain:        return D3D12_SHADER_VISIBILITY_DOMAIN;
+		case 1 << ESHPipelineStage_GeometryExt:    return D3D12_SHADER_VISIBILITY_GEOMETRY;
+		case 1 << ESHPipelineStage_MeshExt:        return D3D12_SHADER_VISIBILITY_MESH;
+		case 1 << ESHPipelineStage_TaskExt:        return D3D12_SHADER_VISIBILITY_AMPLIFICATION;
+		default:                                return D3D12_SHADER_VISIBILITY_ALL;
 	}
 }
 
@@ -132,7 +132,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	gotoIfError(clean, ListSortingKey_reservex(&sortedList, info.bindings.length))
 	gotoIfError(clean, ListU8_resizex(&layoutExt->rootParamOffsets, info.bindings.length))
-	gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_reservex(&layoutExt->rootParams, 4))	//Sampler, resource, NV, pad
+	gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_reservex(&layoutExt->rootParams, 4))    //Sampler, resource, NV, pad
 
 	//Sort by set and merge shaders that allow it and check we only have 4 sets bound
 
@@ -147,7 +147,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		const DescriptorBinding *binding = &info.bindings.ptr[i];
 
-		if(isPushDescriptors) {		//Root param instead
+		if(isPushDescriptors) {        //Root param instead
 
 			layoutExt->rootParamOffsets.ptrNonConst[i] = (U8) layoutExt->rootParams.length;
 
@@ -197,7 +197,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			visibility2 |= binding->visibility;
 
-			if(samplerParam == U8_MAX) {		//Reserve root param
+			if(samplerParam == U8_MAX) {        //Reserve root param
 				samplerParam = (U8) layoutExt->rootParams.length;
 				gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) { 0 }))
 			}
@@ -209,7 +209,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			visibility1 |= binding->visibility;
 
-			if(resourceParam == U8_MAX) {		//Reserve root param
+			if(resourceParam == U8_MAX) {        //Reserve root param
 				resourceParam = (U8) layoutExt->rootParams.length;
 				gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) { 0 }))
 			}

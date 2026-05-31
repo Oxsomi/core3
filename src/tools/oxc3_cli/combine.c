@@ -41,7 +41,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 	Buffer buf[3] = { 0 };
-	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+	U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
 
 	if (args.parameters & EOperationHasParameter_SplitBy) {
 		Log_debugLnx("CLI_fileCombine() failed, -split can't be used");

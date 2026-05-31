@@ -97,7 +97,7 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetPhysicalDeviceSurfaceSupportKHR getPhysicalDeviceSurfaceSupport;
 
 	PFN_vkGetPhysicalDeviceQueueFamilyProperties getPhysicalDeviceQueueFamilyProperties;
-	void *createSurfaceExt;									//Android, windows, etc.
+	void *createSurfaceExt;                                    //Android, windows, etc.
 
 	PFN_vkDestroySurfaceKHR destroySurface;
 

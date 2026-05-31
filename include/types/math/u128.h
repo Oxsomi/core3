@@ -231,10 +231,10 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 
 		uint64x1_t halfa, halfb;
 		switch (imm) {
-			case 0x00: 	halfa = vget_low_u64(va);  halfb = vget_low_u64(vb);  break;
-			case 0x10: 	halfa = vget_low_u64(va);  halfb = vget_high_u64(vb); break;
-			case 0x01: 	halfa = vget_high_u64(va); halfb = vget_low_u64(vb);  break;
-			default:   	halfa = vget_high_u64(va); halfb = vget_high_u64(vb); break;
+			case 0x00:     halfa = vget_low_u64(va);  halfb = vget_low_u64(vb);  break;
+			case 0x10:     halfa = vget_low_u64(va);  halfb = vget_high_u64(vb); break;
+			case 0x01:     halfa = vget_high_u64(va); halfb = vget_low_u64(vb);  break;
+			default:       halfa = vget_high_u64(va); halfb = vget_high_u64(vb); break;
 		}
 
 		return vreinterpretq_s32_p128(vmull_p64(vreinterpret_u64_p64(halfa), vreinterpret_u64_p64(halfb)));
@@ -242,10 +242,10 @@ static inline I32x4 I32x4_clmul64Fallback(I32x4 avec, I32x4 bvec, U8 imm) {
 #else
 	static inline I32x4 I32x4_clmul64(I32x4 a, I32x4 b, U8 imm) {
 		switch(imm) {
-			case 0x00:	return _mm_clmulepi64_si128(a, b, 0x00);
-			case 0x01:	return _mm_clmulepi64_si128(a, b, 0x01);
-			case 0x10:	return _mm_clmulepi64_si128(a, b, 0x10);
-			default:	return _mm_clmulepi64_si128(a, b, 0x11);
+			case 0x00:    return _mm_clmulepi64_si128(a, b, 0x00);
+			case 0x01:    return _mm_clmulepi64_si128(a, b, 0x01);
+			case 0x10:    return _mm_clmulepi64_si128(a, b, 0x10);
+			default:    return _mm_clmulepi64_si128(a, b, 0x11);
 		}
 	}
 #endif

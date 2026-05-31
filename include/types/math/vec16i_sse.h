@@ -51,37 +51,37 @@ static inline I32x16 I32x16_or(I32x16 a, I32x16 b) { return _mm512_or_si512(a, b
 
 static inline I32x16 I32x16_lshElements(I32x16 a, U8 elementCount) {
 	switch (elementCount) {
-		case 0:		return a;
-		case 1:		return _mm512_bslli_epi128(a, 4);
-		case 2:		return _mm512_bslli_epi128(a, 8);
-		case 3:		return _mm512_bslli_epi128(a, 12);
-		default:	return I32x16_zero();
+		case 0:        return a;
+		case 1:        return _mm512_bslli_epi128(a, 4);
+		case 2:        return _mm512_bslli_epi128(a, 8);
+		case 3:        return _mm512_bslli_epi128(a, 12);
+		default:    return I32x16_zero();
 	}
 }
 
 static inline I32x16 I32x16_rshElements(I32x16 a, U8 elementCount) {
 	switch (elementCount) {
-		case 0:		return a;
-		case 1:		return _mm512_bsrli_epi128(a, 4);
-		case 2:		return _mm512_bsrli_epi128(a, 8);
-		case 3:		return _mm512_bsrli_epi128(a, 12);
-		default:	return I32x16_zero();
+		case 0:        return a;
+		case 1:        return _mm512_bsrli_epi128(a, 4);
+		case 2:        return _mm512_bsrli_epi128(a, 8);
+		case 3:        return _mm512_bsrli_epi128(a, 12);
+		default:    return I32x16_zero();
 	}
 }
 
 static inline I32x4 I32x16_getI32x4(I32x16 v, U8 i) {
 	switch (i) {
-		case 1:		return _mm512_extracti32x4_epi32(v, 1);
-		case 2:		return _mm512_extracti32x4_epi32(v, 2);
-		case 3:		return _mm512_extracti32x4_epi32(v, 3);
-		default:	return _mm512_castsi512_si128(v);
+		case 1:        return _mm512_extracti32x4_epi32(v, 1);
+		case 2:        return _mm512_extracti32x4_epi32(v, 2);
+		case 3:        return _mm512_extracti32x4_epi32(v, 3);
+		default:    return _mm512_castsi512_si128(v);
 	}
 }
 
 static inline I32x8 I32x16_getI32x8(I32x16 v, U8 i) {
 	switch (i) {
-		case 1:		return _mm512_extracti32x8_epi32(v, 1);
-		default:	return _mm512_castsi512_si256(v);
+		case 1:        return _mm512_extracti32x8_epi32(v, 1);
+		default:    return _mm512_castsi512_si256(v);
 	}
 }
 
@@ -95,10 +95,10 @@ static inline I32x16 I32x16_aesEncLast(I32x16 a, I32x16 b) {
 
 static inline I32x16 I32x16_clmul64(I32x16 a, I32x16 b, U8 imm) {
 	switch (imm) {
-		case 0x00:	return _mm512_clmulepi64_epi128(a, b, 0x00);
-		case 0x01:	return _mm512_clmulepi64_epi128(a, b, 0x01);
-		case 0x10:	return _mm512_clmulepi64_epi128(a, b, 0x10);
-		default:	return _mm512_clmulepi64_epi128(a, b, 0x11);
+		case 0x00:    return _mm512_clmulepi64_epi128(a, b, 0x00);
+		case 0x01:    return _mm512_clmulepi64_epi128(a, b, 0x01);
+		case 0x10:    return _mm512_clmulepi64_epi128(a, b, 0x10);
+		default:    return _mm512_clmulepi64_epi128(a, b, 0x11);
 	}
 }
 
@@ -127,25 +127,25 @@ static inline I32x16 I32x16_wzyxI32x4(I32x16 v) {
 
 static inline I32x16 I32x16_lsh32(I32x16 a, U8 bits) {
 	switch (bits) {
-		case 0:		return a;
+		case 0:        return a;
 		FUNC_EXPAND16(1, _mm512_slli_epi32, a);
 		FUNC_EXPAND8(17, _mm512_slli_epi32, a);
 		FUNC_EXPAND4(25, _mm512_slli_epi32, a);
 		FUNC_EXPAND2(29, _mm512_slli_epi32, a);
-		case 31:	return _mm512_slli_epi32(a, 31);
-		default:	return I32x16_zero();
+		case 31:    return _mm512_slli_epi32(a, 31);
+		default:    return I32x16_zero();
 	}
 }
 
 static inline I32x16 I32x16_rsh32(I32x16 a, U8 bits) {
 	switch (bits) {
-		case 0:		return a;
+		case 0:        return a;
 		FUNC_EXPAND16(1, _mm512_srli_epi32, a);
 		FUNC_EXPAND8(17, _mm512_srli_epi32, a);
 		FUNC_EXPAND4(25, _mm512_srli_epi32, a);
 		FUNC_EXPAND2(29, _mm512_srli_epi32, a);
-		case 31:	return _mm512_srli_epi32(a, 31);
-		default:	return I32x16_zero();
+		case 31:    return _mm512_srli_epi32(a, 31);
+		default:    return I32x16_zero();
 	}
 }
 

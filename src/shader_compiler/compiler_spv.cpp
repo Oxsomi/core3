@@ -94,10 +94,10 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 
 	switch(numeric.scalar.width) {
 
-		case  8:	stride = ESBStride_X8;		break;
-		case 16:	stride = ESBStride_X16;		break;
-		case 32:	stride = ESBStride_X32;		break;
-		case 64:	stride = ESBStride_X64;		break;
+		case  8:    stride = ESBStride_X8;        break;
+		case 16:    stride = ESBStride_X16;        break;
+		case 32:    stride = ESBStride_X32;        break;
+		case 64:    stride = ESBStride_X64;        break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
@@ -108,11 +108,11 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 	switch(numeric.matrix.column_count ? numeric.matrix.column_count : numeric.vector.component_count) {
 
 		case 0:
-		case 1:		vector = ESBVector_N1;		break;
+		case 1:        vector = ESBVector_N1;        break;
 
-		case 2:		vector = ESBVector_N2;		break;
-		case 3:		vector = ESBVector_N3;		break;
-		case 4:		vector = ESBVector_N4;		break;
+		case 2:        vector = ESBVector_N2;        break;
+		case 3:        vector = ESBVector_N3;        break;
+		case 4:        vector = ESBVector_N4;        break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
@@ -123,11 +123,11 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 	switch(numeric.matrix.row_count) {
 
 		case 0:
-		case 1:		matrix = ESBMatrix_N1;		break;
+		case 1:        matrix = ESBMatrix_N1;        break;
 
-		case 2:		matrix = ESBMatrix_N2;		break;
-		case 3:		matrix = ESBMatrix_N3;		break;
-		case 4:		matrix = ESBMatrix_N4;		break;
+		case 2:        matrix = ESBMatrix_N2;        break;
+		case 3:        matrix = ESBMatrix_N3;        break;
+		case 4:        matrix = ESBMatrix_N4;        break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
@@ -520,53 +520,53 @@ Bool SpvReflectFormatToESBType(SpvReflectFormat format, ESBType *type, Error *e_
 
 	switch (format) {
 
-		case SPV_REFLECT_FORMAT_R16_UINT:				*type = ESBType_U16;		break;
-		case SPV_REFLECT_FORMAT_R16_SINT:				*type = ESBType_I16;		break;
-		case SPV_REFLECT_FORMAT_R16_SFLOAT:				*type = ESBType_F16;		break;
+		case SPV_REFLECT_FORMAT_R16_UINT:                *type = ESBType_U16;        break;
+		case SPV_REFLECT_FORMAT_R16_SINT:                *type = ESBType_I16;        break;
+		case SPV_REFLECT_FORMAT_R16_SFLOAT:                *type = ESBType_F16;        break;
 
-		case SPV_REFLECT_FORMAT_R16G16_UINT:			*type = ESBType_U16x2;		break;
-		case SPV_REFLECT_FORMAT_R16G16_SINT:			*type = ESBType_I16x2;		break;
-		case SPV_REFLECT_FORMAT_R16G16_SFLOAT:			*type = ESBType_F16x2;		break;
+		case SPV_REFLECT_FORMAT_R16G16_UINT:            *type = ESBType_U16x2;        break;
+		case SPV_REFLECT_FORMAT_R16G16_SINT:            *type = ESBType_I16x2;        break;
+		case SPV_REFLECT_FORMAT_R16G16_SFLOAT:            *type = ESBType_F16x2;        break;
 
-		case SPV_REFLECT_FORMAT_R16G16B16_UINT:			*type = ESBType_U16x3;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16_SINT:			*type = ESBType_I16x3;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16_SFLOAT:		*type = ESBType_F16x3;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16_UINT:            *type = ESBType_U16x3;        break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SINT:            *type = ESBType_I16x3;        break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SFLOAT:        *type = ESBType_F16x3;        break;
 
-		case SPV_REFLECT_FORMAT_R16G16B16A16_UINT:		*type = ESBType_U16x4;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16A16_SINT:		*type = ESBType_I16x4;		break;
-		case SPV_REFLECT_FORMAT_R16G16B16A16_SFLOAT:	*type = ESBType_F16x4;		break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_UINT:        *type = ESBType_U16x4;        break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SINT:        *type = ESBType_I16x4;        break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SFLOAT:    *type = ESBType_F16x4;        break;
 
-		case SPV_REFLECT_FORMAT_R32_UINT:				*type = ESBType_U32;		break;
-		case SPV_REFLECT_FORMAT_R32_SINT:				*type = ESBType_I32;		break;
-		case SPV_REFLECT_FORMAT_R32_SFLOAT:				*type = ESBType_F32;		break;
+		case SPV_REFLECT_FORMAT_R32_UINT:                *type = ESBType_U32;        break;
+		case SPV_REFLECT_FORMAT_R32_SINT:                *type = ESBType_I32;        break;
+		case SPV_REFLECT_FORMAT_R32_SFLOAT:                *type = ESBType_F32;        break;
 
-		case SPV_REFLECT_FORMAT_R32G32_UINT:			*type = ESBType_U32x2;		break;
-		case SPV_REFLECT_FORMAT_R32G32_SINT:			*type = ESBType_I32x2;		break;
-		case SPV_REFLECT_FORMAT_R32G32_SFLOAT:			*type = ESBType_F32x2;		break;
+		case SPV_REFLECT_FORMAT_R32G32_UINT:            *type = ESBType_U32x2;        break;
+		case SPV_REFLECT_FORMAT_R32G32_SINT:            *type = ESBType_I32x2;        break;
+		case SPV_REFLECT_FORMAT_R32G32_SFLOAT:            *type = ESBType_F32x2;        break;
 
-		case SPV_REFLECT_FORMAT_R32G32B32_UINT:			*type = ESBType_U32x3;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32_SINT:			*type = ESBType_I32x3;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:		*type = ESBType_F32x3;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32_UINT:            *type = ESBType_U32x3;        break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SINT:            *type = ESBType_I32x3;        break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:        *type = ESBType_F32x3;        break;
 
-		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:		*type = ESBType_U32x4;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:		*type = ESBType_I32x4;		break;
-		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:	*type = ESBType_F32x4;		break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:        *type = ESBType_U32x4;        break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:        *type = ESBType_I32x4;        break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:    *type = ESBType_F32x4;        break;
 
-		case SPV_REFLECT_FORMAT_R64_UINT:				*type = ESBType_U64;		break;
-		case SPV_REFLECT_FORMAT_R64_SINT:				*type = ESBType_I64;		break;
-		case SPV_REFLECT_FORMAT_R64_SFLOAT:				*type = ESBType_F64;		break;
+		case SPV_REFLECT_FORMAT_R64_UINT:                *type = ESBType_U64;        break;
+		case SPV_REFLECT_FORMAT_R64_SINT:                *type = ESBType_I64;        break;
+		case SPV_REFLECT_FORMAT_R64_SFLOAT:                *type = ESBType_F64;        break;
 
-		case SPV_REFLECT_FORMAT_R64G64_UINT:			*type = ESBType_U64x2;		break;
-		case SPV_REFLECT_FORMAT_R64G64_SINT:			*type = ESBType_I64x2;		break;
-		case SPV_REFLECT_FORMAT_R64G64_SFLOAT:			*type = ESBType_F64x2;		break;
+		case SPV_REFLECT_FORMAT_R64G64_UINT:            *type = ESBType_U64x2;        break;
+		case SPV_REFLECT_FORMAT_R64G64_SINT:            *type = ESBType_I64x2;        break;
+		case SPV_REFLECT_FORMAT_R64G64_SFLOAT:            *type = ESBType_F64x2;        break;
 
-		case SPV_REFLECT_FORMAT_R64G64B64_UINT:			*type = ESBType_U64x3;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64_SINT:			*type = ESBType_I64x3;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64_SFLOAT:		*type = ESBType_F64x3;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64_UINT:            *type = ESBType_U64x3;        break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SINT:            *type = ESBType_I64x3;        break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SFLOAT:        *type = ESBType_F64x3;        break;
 
-		case SPV_REFLECT_FORMAT_R64G64B64A64_UINT:		*type = ESBType_U64x4;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64A64_SINT:		*type = ESBType_I64x4;		break;
-		case SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT:	*type = ESBType_F64x4;		break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_UINT:        *type = ESBType_U64x4;        break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SINT:        *type = ESBType_I64x4;        break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT:    *type = ESBType_F64x4;        break;
 
 		default:
 			retError(clean, Error_invalidState(
@@ -916,7 +916,7 @@ Bool Compiler_convertRegisterSPIRV(
 		"Compiler_convertShaderBufferSPIRV() does compares in U64[3] of binding->block.numeric, but size changed"
 	);
 
-	U64 numericTraitsU64[3];		//Fixes alignment
+	U64 numericTraitsU64[3];        //Fixes alignment
 	Buffer_memcpy(
 		Buffer_createRef(numericTraitsU64, sizeof(numericTraitsU64)),
 		Buffer_createRefConst(&binding->block.numeric, sizeof(binding->block.numeric))
@@ -1198,7 +1198,7 @@ Bool Compiler_convertRegisterSPIRV(
 		}
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-			Log_errorLn(alloc, "Unsupported combined image sampler");		//TODO:
+			Log_errorLn(alloc, "Unsupported combined image sampler");        //TODO:
 			retError(clean, Error_invalidState(1, "Compiler_convertRegisterSPIRV() combined image samplers not supported yet"))
 			break;
 
@@ -1251,10 +1251,10 @@ Bool Compiler_convertRegisterSPIRV(
 
 			else switch(binding->image.dim) {
 
-				case SpvDim1D:				reqDepth = 1;	type = ESHTextureType_Texture1D;	break;
-				case SpvDim2D:				reqDepth = 2;	type = ESHTextureType_Texture2D;	break;
-				case SpvDim3D:				reqDepth = 3;	type = ESHTextureType_Texture3D;	break;
-				case SpvDimCube:			reqDepth = 3;	type = ESHTextureType_TextureCube;	break;
+				case SpvDim1D:                reqDepth = 1;    type = ESHTextureType_Texture1D;    break;
+				case SpvDim2D:                reqDepth = 2;    type = ESHTextureType_Texture2D;    break;
+				case SpvDim3D:                reqDepth = 3;    type = ESHTextureType_Texture3D;    break;
+				case SpvDimCube:            reqDepth = 3;    type = ESHTextureType_TextureCube;    break;
 
 				case SpvDimRect:
 				case SpvDimBuffer:
@@ -1291,44 +1291,44 @@ Bool Compiler_convertRegisterSPIRV(
 
 				switch (binding->image.image_format) {
 
-					case SpvImageFormatRgba32f:		formatId = ETextureFormatId_RGBA32f;	break;
-					case SpvImageFormatRgba16f:		formatId = ETextureFormatId_RGBA16f;	break;
-					case SpvImageFormatR32f:		formatId = ETextureFormatId_R32f;		break;
-					case SpvImageFormatRgba8:		formatId = ETextureFormatId_RGBA8;		break;
-					case SpvImageFormatRgba8Snorm:	formatId = ETextureFormatId_RGBA8s;		break;
-					case SpvImageFormatRg32f:		formatId = ETextureFormatId_RG32f;		break;
-					case SpvImageFormatRg16f:		formatId = ETextureFormatId_RG16f;		break;
-					case SpvImageFormatR16f:		formatId = ETextureFormatId_R16f;		break;
-					case SpvImageFormatRgba16:		formatId = ETextureFormatId_RGBA16;		break;
-					case SpvImageFormatRgb10A2:		formatId = ETextureFormatId_BGR10A2;	break;
-					case SpvImageFormatRg16:		formatId = ETextureFormatId_RG16;		break;
-					case SpvImageFormatRg8:			formatId = ETextureFormatId_RG8;		break;
-					case SpvImageFormatR16:			formatId = ETextureFormatId_R16;		break;
-					case SpvImageFormatR8:			formatId = ETextureFormatId_R8;			break;
-					case SpvImageFormatRgba16Snorm:	formatId = ETextureFormatId_RGBA16s;	break;
-					case SpvImageFormatRg16Snorm:	formatId = ETextureFormatId_RG16s;		break;
-					case SpvImageFormatRg8Snorm:	formatId = ETextureFormatId_RG8s;		break;
-					case SpvImageFormatR16Snorm:	formatId = ETextureFormatId_R16s;		break;
-					case SpvImageFormatR8Snorm:		formatId = ETextureFormatId_R8s;		break;
-					case SpvImageFormatRgba32i:		formatId = ETextureFormatId_RGBA32i;	break;
-					case SpvImageFormatRgba16i:		formatId = ETextureFormatId_RGBA16i;	break;
-					case SpvImageFormatRgba8i:		formatId = ETextureFormatId_RGBA8i;		break;
-					case SpvImageFormatR32i:		formatId = ETextureFormatId_R32i;		break;
-					case SpvImageFormatRg32i:		formatId = ETextureFormatId_RG32i;		break;
-					case SpvImageFormatRg16i:		formatId = ETextureFormatId_RG16i;		break;
-					case SpvImageFormatRg8i:		formatId = ETextureFormatId_RG8i;		break;
-					case SpvImageFormatR16i:		formatId = ETextureFormatId_R16i;		break;
-					case SpvImageFormatR8i:			formatId = ETextureFormatId_R8i;		break;
-					case SpvImageFormatRgba32ui:	formatId = ETextureFormatId_RGBA32u;	break;
-					case SpvImageFormatRgba16ui:	formatId = ETextureFormatId_RGBA16u;	break;
-					case SpvImageFormatRgba8ui:		formatId = ETextureFormatId_RGBA8u;		break;
-					case SpvImageFormatR32ui:		formatId = ETextureFormatId_R32u;		break;
-					case SpvImageFormatRg32ui:		formatId = ETextureFormatId_RG32u;		break;
-					case SpvImageFormatRg16ui:		formatId = ETextureFormatId_RG16u;		break;
-					case SpvImageFormatRg8ui:		formatId = ETextureFormatId_RG8u;		break;
-					case SpvImageFormatR16ui:		formatId = ETextureFormatId_R16u;		break;
-					case SpvImageFormatR8ui:		formatId = ETextureFormatId_R8u;		break;
-					case SpvImageFormatUnknown:												break;
+					case SpvImageFormatRgba32f:        formatId = ETextureFormatId_RGBA32f;    break;
+					case SpvImageFormatRgba16f:        formatId = ETextureFormatId_RGBA16f;    break;
+					case SpvImageFormatR32f:        formatId = ETextureFormatId_R32f;        break;
+					case SpvImageFormatRgba8:        formatId = ETextureFormatId_RGBA8;        break;
+					case SpvImageFormatRgba8Snorm:    formatId = ETextureFormatId_RGBA8s;        break;
+					case SpvImageFormatRg32f:        formatId = ETextureFormatId_RG32f;        break;
+					case SpvImageFormatRg16f:        formatId = ETextureFormatId_RG16f;        break;
+					case SpvImageFormatR16f:        formatId = ETextureFormatId_R16f;        break;
+					case SpvImageFormatRgba16:        formatId = ETextureFormatId_RGBA16;        break;
+					case SpvImageFormatRgb10A2:        formatId = ETextureFormatId_BGR10A2;    break;
+					case SpvImageFormatRg16:        formatId = ETextureFormatId_RG16;        break;
+					case SpvImageFormatRg8:            formatId = ETextureFormatId_RG8;        break;
+					case SpvImageFormatR16:            formatId = ETextureFormatId_R16;        break;
+					case SpvImageFormatR8:            formatId = ETextureFormatId_R8;            break;
+					case SpvImageFormatRgba16Snorm:    formatId = ETextureFormatId_RGBA16s;    break;
+					case SpvImageFormatRg16Snorm:    formatId = ETextureFormatId_RG16s;        break;
+					case SpvImageFormatRg8Snorm:    formatId = ETextureFormatId_RG8s;        break;
+					case SpvImageFormatR16Snorm:    formatId = ETextureFormatId_R16s;        break;
+					case SpvImageFormatR8Snorm:        formatId = ETextureFormatId_R8s;        break;
+					case SpvImageFormatRgba32i:        formatId = ETextureFormatId_RGBA32i;    break;
+					case SpvImageFormatRgba16i:        formatId = ETextureFormatId_RGBA16i;    break;
+					case SpvImageFormatRgba8i:        formatId = ETextureFormatId_RGBA8i;        break;
+					case SpvImageFormatR32i:        formatId = ETextureFormatId_R32i;        break;
+					case SpvImageFormatRg32i:        formatId = ETextureFormatId_RG32i;        break;
+					case SpvImageFormatRg16i:        formatId = ETextureFormatId_RG16i;        break;
+					case SpvImageFormatRg8i:        formatId = ETextureFormatId_RG8i;        break;
+					case SpvImageFormatR16i:        formatId = ETextureFormatId_R16i;        break;
+					case SpvImageFormatR8i:            formatId = ETextureFormatId_R8i;        break;
+					case SpvImageFormatRgba32ui:    formatId = ETextureFormatId_RGBA32u;    break;
+					case SpvImageFormatRgba16ui:    formatId = ETextureFormatId_RGBA16u;    break;
+					case SpvImageFormatRgba8ui:        formatId = ETextureFormatId_RGBA8u;        break;
+					case SpvImageFormatR32ui:        formatId = ETextureFormatId_R32u;        break;
+					case SpvImageFormatRg32ui:        formatId = ETextureFormatId_RG32u;        break;
+					case SpvImageFormatRg16ui:        formatId = ETextureFormatId_RG16u;        break;
+					case SpvImageFormatRg8ui:        formatId = ETextureFormatId_RG8u;        break;
+					case SpvImageFormatR16ui:        formatId = ETextureFormatId_R16u;        break;
+					case SpvImageFormatR8ui:        formatId = ETextureFormatId_R8u;        break;
+					case SpvImageFormatUnknown:                                                break;
 
 					default:
 					case SpvImageFormatRgb10a2ui:
@@ -1694,9 +1694,9 @@ extern "C" Bool Compiler_processSPIRV(
 			case SpvExecutionModelGLCompute: {
 
 				switch (entrypoint.spirv_execution_model) {
-					case SpvExecutionModelMeshEXT:	stage = ESHPipelineStage_MeshExt;	break;
-					case SpvExecutionModelTaskEXT:	stage = ESHPipelineStage_TaskExt;	break;
-					default:						stage = ESHPipelineStage_Compute;	break;
+					case SpvExecutionModelMeshEXT:    stage = ESHPipelineStage_MeshExt;    break;
+					case SpvExecutionModelTaskEXT:    stage = ESHPipelineStage_TaskExt;    break;
+					default:                        stage = ESHPipelineStage_Compute;    break;
 
 				}
 
@@ -1707,12 +1707,12 @@ extern "C" Bool Compiler_processSPIRV(
 				break;
 			}
 
-			case SpvExecutionModelRayGenerationKHR:			stage = ESHPipelineStage_RaygenExt;		break;
-			case SpvExecutionModelVertex:					stage = ESHPipelineStage_Vertex;		break;
-			case SpvExecutionModelFragment:					stage = ESHPipelineStage_Pixel;			break;
-			case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;	break;
-			case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;			break;
-			case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;		break;
+			case SpvExecutionModelRayGenerationKHR:            stage = ESHPipelineStage_RaygenExt;        break;
+			case SpvExecutionModelVertex:                    stage = ESHPipelineStage_Vertex;        break;
+			case SpvExecutionModelFragment:                    stage = ESHPipelineStage_Pixel;            break;
+			case SpvExecutionModelGeometry:                    stage = ESHPipelineStage_GeometryExt;    break;
+			case SpvExecutionModelTessellationControl:        stage = ESHPipelineStage_Hull;            break;
+			case SpvExecutionModelTessellationEvaluation:    stage = ESHPipelineStage_Domain;        break;
 
 			default:
 				retError(clean, Error_invalidState(
@@ -1802,7 +1802,7 @@ extern "C" Bool Compiler_processSPIRV(
 					isOutput ? entrypoint.output_variables[j - entrypoint.input_variable_count] :
 					entrypoint.input_variables[j];
 
-				if(input->built_in != (SpvBuiltIn)-1)		//We don't care about builtins
+				if(input->built_in != (SpvBuiltIn)-1)        //We don't care about builtins
 					continue;
 
 				ESBType *inputType = isOutput ? outputs : inputs;
@@ -1999,7 +1999,7 @@ extern "C" Bool Compiler_processSPIRV(
 		if (!isDebug)
 			optimizer.RegisterPass(spvtools::CreateStripDebugInfoPass()).RegisterPass(spvtools::CreateStripReflectInfoPass());
 
-		if ((U64)resultPtr & 3) {		//Fix alignment
+		if ((U64)resultPtr & 3) {        //Fix alignment
 			copied.resize(binLen >> 2);
 			Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
 			resultPtr = copied.data();
@@ -2048,7 +2048,7 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharStrin
 	)
 		retError(clean, Error_invalidState(0, "Compiler_createDisassembly() SPIRV is invalid"))
 
-	if ((U64)resultPtr & 3) {		//Fix alignment
+	if ((U64)resultPtr & 3) {        //Fix alignment
 		copied.resize(binLen >> 2);
 		Buffer_memcpy(Buffer_createRef(copied.data(), binLen), Buffer_createRefConst(resultPtr, binLen));
 		resultPtr = copied.data();
@@ -2082,7 +2082,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
 	SpvReflectShaderModule spvMod{};
-	Bool alreadyContainsLib = false;	//Avoid re-inserting uniqueEntrypoint of lib
+	Bool alreadyContainsLib = false;    //Avoid re-inserting uniqueEntrypoint of lib
 	
 	if(
 		binLen < 0x8 ||
@@ -2108,26 +2108,26 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 		switch (entrypoint.spirv_execution_model) {
 
-			case SpvExecutionModelRayGenerationKHR:			stage = ESHPipelineStage_RaygenExt;			break;
-			case SpvExecutionModelIntersectionKHR:			stage = ESHPipelineStage_IntersectionExt;	break;
-			case SpvExecutionModelAnyHitKHR:				stage = ESHPipelineStage_AnyHitExt;			break;
-			case SpvExecutionModelClosestHitKHR:			stage = ESHPipelineStage_ClosestHitExt;		break;
-			case SpvExecutionModelMissKHR:					stage = ESHPipelineStage_MissExt;			break;
-			case SpvExecutionModelCallableKHR:				stage = ESHPipelineStage_CallableExt;		break;
+			case SpvExecutionModelRayGenerationKHR:            stage = ESHPipelineStage_RaygenExt;            break;
+			case SpvExecutionModelIntersectionKHR:            stage = ESHPipelineStage_IntersectionExt;    break;
+			case SpvExecutionModelAnyHitKHR:                stage = ESHPipelineStage_AnyHitExt;            break;
+			case SpvExecutionModelClosestHitKHR:            stage = ESHPipelineStage_ClosestHitExt;        break;
+			case SpvExecutionModelMissKHR:                    stage = ESHPipelineStage_MissExt;            break;
+			case SpvExecutionModelCallableKHR:                stage = ESHPipelineStage_CallableExt;        break;
 
-			case SpvExecutionModelVertex:					stage = ESHPipelineStage_Vertex;			break;
-			case SpvExecutionModelFragment:					stage = ESHPipelineStage_Pixel;				break;
-			case SpvExecutionModelGeometry:					stage = ESHPipelineStage_GeometryExt;		break;
-			case SpvExecutionModelTessellationControl:		stage = ESHPipelineStage_Hull;				break;
-			case SpvExecutionModelTessellationEvaluation:	stage = ESHPipelineStage_Domain;			break;
+			case SpvExecutionModelVertex:                    stage = ESHPipelineStage_Vertex;            break;
+			case SpvExecutionModelFragment:                    stage = ESHPipelineStage_Pixel;                break;
+			case SpvExecutionModelGeometry:                    stage = ESHPipelineStage_GeometryExt;        break;
+			case SpvExecutionModelTessellationControl:        stage = ESHPipelineStage_Hull;                break;
+			case SpvExecutionModelTessellationEvaluation:    stage = ESHPipelineStage_Domain;            break;
 		
-			case SpvExecutionModelGLCompute:				stage = ESHPipelineStage_Compute;			break;
+			case SpvExecutionModelGLCompute:                stage = ESHPipelineStage_Compute;            break;
 
 			case SpvExecutionModelTaskEXT:
-			case SpvExecutionModelTaskNV:					stage = ESHPipelineStage_TaskExt;			break;
+			case SpvExecutionModelTaskNV:                    stage = ESHPipelineStage_TaskExt;            break;
 
 			case SpvExecutionModelMeshEXT:
-			case SpvExecutionModelMeshNV:					stage = ESHPipelineStage_MeshExt;			break;
+			case SpvExecutionModelMeshNV:                    stage = ESHPipelineStage_MeshExt;            break;
 
 			default:
 				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsSPIRV() had an invalid shader type"))
@@ -2176,59 +2176,59 @@ clean:
 * 
 class StripAllButOneEntryPointPass : public spvtools::opt::Pass {
 public:
-    explicit StripAllButOneEntryPointPass(const std::string& keep_entry_point)
-        : keep_entry_name_(keep_entry_point) {}
+	explicit StripAllButOneEntryPointPass(const std::string& keep_entry_point)
+		: keep_entry_name_(keep_entry_point) {}
 
-    const char* name() const override { return "strip-all-but-one-entry-point"; }
+	const char* name() const override { return "strip-all-but-one-entry-point"; }
 
-    Status Process() override {
-        using namespace spvtools::opt;
+	Status Process() override {
+		using namespace spvtools::opt;
 
-        auto* module = get_module();
-        auto* ctx = context();
+		auto* module = get_module();
+		auto* ctx = context();
 
-        // Step 1: Find entry point instruction to keep
-        Instruction* target_entry = nullptr;
-        for (auto& entry : module->entry_points()) {
-            std::string name = reinterpret_cast<const char*>(entry.GetInOperand(2).words.data());
-            if (name == keep_entry_name_) {
-                target_entry = &entry;
-                break;
-            }
-        }
+		// Step 1: Find entry point instruction to keep
+		Instruction* target_entry = nullptr;
+		for (auto& entry : module->entry_points()) {
+			std::string name = reinterpret_cast<const char*>(entry.GetInOperand(2).words.data());
+			if (name == keep_entry_name_) {
+				target_entry = &entry;
+				break;
+			}
+		}
 
-        if (!target_entry) {
-            std::cerr << "Entry point \"" << keep_entry_name_ << "\" not found.\n";
-            return Status::SuccessWithoutChange;
-        }
+		if (!target_entry) {
+			std::cerr << "Entry point \"" << keep_entry_name_ << "\" not found.\n";
+			return Status::SuccessWithoutChange;
+		}
 
-        // Step 2: Remove all other entry points
-        std::vector<Instruction*> to_remove;
-        for (auto& entry : module->entry_points()) {
-            if (&entry != target_entry) {
-                to_remove.push_back(&entry);
-            }
-        }
+		// Step 2: Remove all other entry points
+		std::vector<Instruction*> to_remove;
+		for (auto& entry : module->entry_points()) {
+			if (&entry != target_entry) {
+				to_remove.push_back(&entry);
+			}
+		}
 
-        // Remove all non-matching entry points
-        for (auto* ep : to_remove) {
-            ctx->KillNamesAndDecorates(ep);
-            ctx->module()->RemoveEntryPoint(ep);
-        }
+		// Remove all non-matching entry points
+		for (auto* ep : to_remove) {
+			ctx->KillNamesAndDecorates(ep);
+			ctx->module()->RemoveEntryPoint(ep);
+		}
 
-        // Step 3: Now safely rename the retained entry point to "main"
-        uint32_t string_id = ctx->get_feature_mgr()->GetStringId("main");
-        target_entry->SetInOperand(2, {string_id});
+		// Step 3: Now safely rename the retained entry point to "main"
+		uint32_t string_id = ctx->get_feature_mgr()->GetStringId("main");
+		target_entry->SetInOperand(2, {string_id});
 
-        return Status::SuccessWithChange;
-    }
+		return Status::SuccessWithChange;
+	}
 
 private:
-    std::string keep_entry_name_;
+	std::string keep_entry_name_;
 };
 
 spvtools::opt::PassToken CreateStripAllButOneEntryPointPass(const std::string& name) {
-    return spvtools::opt::PassToken(std::make_unique<StripAllButOneEntryPointPass>(name));
+	return spvtools::opt::PassToken(std::make_unique<StripAllButOneEntryPointPass>(name));
 }*/
 
 extern "C" Bool Compiler_linkSPIRV(
@@ -2291,7 +2291,7 @@ extern "C" Bool Compiler_linkSPIRV(
 		
 		//TODO:
 		//if (needsEntrypointStrip)
-		//	opt.RegisterPass(spvtools::CreateStripAllButOneEntryPointPass(as string entrypoint));		//Entrypoint strip
+		//    opt.RegisterPass(spvtools::CreateStripAllButOneEntryPointPass(as string entrypoint));        //Entrypoint strip
 
 		//Resolve spec constants to real constants
 
@@ -2328,7 +2328,7 @@ extern "C" Bool Compiler_linkSPIRV(
 
 				Bool is64 = dts == EDataTypeStride_64;
 
-				U32 stride16 = is64 ? 4 : (is16 ? 1 : 2);		//width in U16s
+				U32 stride16 = is64 ? 4 : (is16 ? 1 : 2);        //width in U16s
 				uniformMap[i].resize((width * height * stride16 + 1) >> 1);
 
 				//Copy into uniformMap; normally this is quite straightforward.
@@ -2345,16 +2345,16 @@ extern "C" Bool Compiler_linkSPIRV(
 				if (isBool || isX8 || (!is16 && isX16))
 					for (U64 j = 0; j < width * height; ++j) {
 
-						if (is16)						//Expand 8-bit to 16-bit
+						if (is16)                        //Expand 8-bit to 16-bit
 							asU16[j] = inputAsU8[j];
 
-						else if (isX8)					//Expand 8-bit to 32-bit
+						else if (isX8)                    //Expand 8-bit to 32-bit
 							asU32[j] = inputAsU8[j];
 
-						else if (isBool)				//Expand B1 to 32-bit
+						else if (isBool)                //Expand B1 to 32-bit
 							asU32[j] = (inputAsU16[0] >> j) & 1;
 
-						else asU32[j] = inputAsU16[j];	//Expand 16-bit to 32-bit
+						else asU32[j] = inputAsU16[j];    //Expand 16-bit to 32-bit
 					}
 
 				else Buffer_memcpy(

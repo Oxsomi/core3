@@ -75,7 +75,7 @@ I32 APlatform_getDeviceOrientation() {
 		attached = true;
 	}
 
-    jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
+	jclass cls = (*env)->GetObjectClass(env, app->activity->clazz);
 
 	if(!cls)
 		retError(clean, Error_invalidState(0, "Couldn't find OxC3Activity"))
@@ -125,7 +125,7 @@ void AWindow_onAppCmd(struct android_app *app, I32 cmd) {
 
 				switch(orientation) {
 
-					case 90:	case 270: {		//Ensure we maintain "no rotation", we'll do it ourselves
+					case 90:    case 270: {        //Ensure we maintain "no rotation", we'll do it ourselves
 						I32 tmp = width;
 						width = height;
 						height = tmp;
@@ -265,77 +265,77 @@ EKey AWindow_mapKey(I32 keyCode) {
 		case AKEYCODE_F7: case AKEYCODE_F8: case AKEYCODE_F9: case AKEYCODE_F10: case AKEYCODE_F11: case AKEYCODE_F12:
 			return EKey_F1 + (keyCode - AKEYCODE_F1);
 
-		case AKEYCODE_SCREENSHOT:		return EKey_PrintScreen;
-		case AKEYCODE_DEL:				return EKey_Backspace;
-		case AKEYCODE_SPACE:			return EKey_Space;
-		case AKEYCODE_TAB:				return EKey_Tab;
+		case AKEYCODE_SCREENSHOT:        return EKey_PrintScreen;
+		case AKEYCODE_DEL:                return EKey_Backspace;
+		case AKEYCODE_SPACE:            return EKey_Space;
+		case AKEYCODE_TAB:                return EKey_Tab;
 
-		case AKEYCODE_SHIFT_LEFT:		return EKey_LShift;
-		case AKEYCODE_SHIFT_RIGHT:		return EKey_RShift;
-		case AKEYCODE_ALT_LEFT:			return EKey_LAlt;
-		case AKEYCODE_ALT_RIGHT:		return EKey_RAlt;
-		case AKEYCODE_CTRL_LEFT:		return EKey_LCtrl;
-		case AKEYCODE_CTRL_RIGHT:		return EKey_RCtrl;
-		case AKEYCODE_META_LEFT:		return EKey_LMenu;
-		case AKEYCODE_META_RIGHT:		return EKey_RMenu;
+		case AKEYCODE_SHIFT_LEFT:        return EKey_LShift;
+		case AKEYCODE_SHIFT_RIGHT:        return EKey_RShift;
+		case AKEYCODE_ALT_LEFT:            return EKey_LAlt;
+		case AKEYCODE_ALT_RIGHT:        return EKey_RAlt;
+		case AKEYCODE_CTRL_LEFT:        return EKey_LCtrl;
+		case AKEYCODE_CTRL_RIGHT:        return EKey_RCtrl;
+		case AKEYCODE_META_LEFT:        return EKey_LMenu;
+		case AKEYCODE_META_RIGHT:        return EKey_RMenu;
 
-		case AKEYCODE_CAPS_LOCK:		return EKey_Caps;
-		case AKEYCODE_SCROLL_LOCK:		return EKey_ScrollLock;
-		case AKEYCODE_NUM_LOCK:			return EKey_NumLock;
+		case AKEYCODE_CAPS_LOCK:        return EKey_Caps;
+		case AKEYCODE_SCROLL_LOCK:        return EKey_ScrollLock;
+		case AKEYCODE_NUM_LOCK:            return EKey_NumLock;
 
-		case AKEYCODE_COMMA:			return EKey_Comma;
-		case AKEYCODE_MINUS:			return EKey_Minus;
-		case AKEYCODE_EQUALS:			return EKey_Equals;
-		case AKEYCODE_PERIOD:			return EKey_Period;
-		case AKEYCODE_REFRESH:			return EKey_Refresh;
-		case AKEYCODE_MOVE_HOME:		return EKey_Home;
-		case AKEYCODE_MOVE_END:		 	return EKey_End;
-		case AKEYCODE_ENTER:			return EKey_Enter;
-		case AKEYCODE_GRAVE:			return EKey_Backtick;
-		case AKEYCODE_BACKSLASH:		return EKey_Backslash;
-		case AKEYCODE_SEMICOLON:		return EKey_Semicolon;
-		case AKEYCODE_APOSTROPHE:		return EKey_Quote;
-		case AKEYCODE_SLASH:			return EKey_Slash;
+		case AKEYCODE_COMMA:            return EKey_Comma;
+		case AKEYCODE_MINUS:            return EKey_Minus;
+		case AKEYCODE_EQUALS:            return EKey_Equals;
+		case AKEYCODE_PERIOD:            return EKey_Period;
+		case AKEYCODE_REFRESH:            return EKey_Refresh;
+		case AKEYCODE_MOVE_HOME:        return EKey_Home;
+		case AKEYCODE_MOVE_END:             return EKey_End;
+		case AKEYCODE_ENTER:            return EKey_Enter;
+		case AKEYCODE_GRAVE:            return EKey_Backtick;
+		case AKEYCODE_BACKSLASH:        return EKey_Backslash;
+		case AKEYCODE_SEMICOLON:        return EKey_Semicolon;
+		case AKEYCODE_APOSTROPHE:        return EKey_Quote;
+		case AKEYCODE_SLASH:            return EKey_Slash;
 
-		case AKEYCODE_LEFT_BRACKET:		return EKey_LBracket;
-		case AKEYCODE_RIGHT_BRACKET:	return EKey_RBracket;
+		case AKEYCODE_LEFT_BRACKET:        return EKey_LBracket;
+		case AKEYCODE_RIGHT_BRACKET:    return EKey_RBracket;
 
-		case AKEYCODE_NUMPAD_DIVIDE:	return EKey_NumpadDiv;
+		case AKEYCODE_NUMPAD_DIVIDE:    return EKey_NumpadDiv;
 		case AKEYCODE_NUMPAD_MULTIPLY:  return EKey_NumpadMul;
 		case AKEYCODE_NUMPAD_SUBTRACT:  return EKey_NumpadSub;
-		case AKEYCODE_NUMPAD_ADD:		return EKey_NumpadAdd;
+		case AKEYCODE_NUMPAD_ADD:        return EKey_NumpadAdd;
 
-		case AKEYCODE_NUMPAD_DOT:		return EKey_NumpadDot;
-		case AKEYCODE_NUMPAD_COMMA:		return EKey_NumpadDot;
+		case AKEYCODE_NUMPAD_DOT:        return EKey_NumpadDot;
+		case AKEYCODE_NUMPAD_COMMA:        return EKey_NumpadDot;
 
-		case AKEYCODE_VOLUME_UP:		return EKey_VolumeUp;
-		case AKEYCODE_VOLUME_DOWN:		return EKey_VolumeDown;
+		case AKEYCODE_VOLUME_UP:        return EKey_VolumeUp;
+		case AKEYCODE_VOLUME_DOWN:        return EKey_VolumeDown;
 
-		case AKEYCODE_PAGE_UP:			return EKey_PageUp;
-		case AKEYCODE_PAGE_DOWN:		return EKey_PageDown;
+		case AKEYCODE_PAGE_UP:            return EKey_PageUp;
+		case AKEYCODE_PAGE_DOWN:        return EKey_PageDown;
 		
-		case AKEYCODE_VOLUME_MUTE:		return EKey_Mute;
-		case AKEYCODE_CLEAR:			return EKey_Clear;
-		case AKEYCODE_ESCAPE:			return EKey_Escape;
-		case AKEYCODE_INSERT:			return EKey_Insert;
+		case AKEYCODE_VOLUME_MUTE:        return EKey_Mute;
+		case AKEYCODE_CLEAR:            return EKey_Clear;
+		case AKEYCODE_ESCAPE:            return EKey_Escape;
+		case AKEYCODE_INSERT:            return EKey_Insert;
 		case AKEYCODE_MEDIA_PLAY_PAUSE: return EKey_Pause;
-		case AKEYCODE_FORWARD_DEL:		return EKey_Delete;
+		case AKEYCODE_FORWARD_DEL:        return EKey_Delete;
 
-		case AKEYCODE_SLEEP:			return EKey_Sleep;
-		case AKEYCODE_HELP:				return EKey_Help;
-		case AKEYCODE_SEARCH:			return EKey_Search;
-		case AKEYCODE_MENU:			 	return EKey_Options;
+		case AKEYCODE_SLEEP:            return EKey_Sleep;
+		case AKEYCODE_HELP:                return EKey_Help;
+		case AKEYCODE_SEARCH:            return EKey_Search;
+		case AKEYCODE_MENU:                 return EKey_Options;
 
-		case AKEYCODE_DPAD_DOWN:		return EKey_Down;
-		case AKEYCODE_DPAD_UP:			return EKey_Up;
-		case AKEYCODE_DPAD_LEFT:		return EKey_Left;
-		case AKEYCODE_DPAD_RIGHT:		return EKey_Right;
+		case AKEYCODE_DPAD_DOWN:        return EKey_Down;
+		case AKEYCODE_DPAD_UP:            return EKey_Up;
+		case AKEYCODE_DPAD_LEFT:        return EKey_Left;
+		case AKEYCODE_DPAD_RIGHT:        return EKey_Right;
 
-		case AKEYCODE_BACK:			 	return EKey_Back;
-		case AKEYCODE_FORWARD:		 	return EKey_Forward;
+		case AKEYCODE_BACK:                 return EKey_Back;
+		case AKEYCODE_FORWARD:             return EKey_Forward;
 
-		case AKEYCODE_MEDIA_NEXT:		return EKey_Skip;
-		case AKEYCODE_MEDIA_PREVIOUS:	return EKey_Previous;
+		case AKEYCODE_MEDIA_NEXT:        return EKey_Skip;
+		case AKEYCODE_MEDIA_PREVIOUS:    return EKey_Previous;
 	}
 }
 
@@ -462,7 +462,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 				} else if(
 					action == AMOTION_EVENT_ACTION_DOWN ||
-  					action == AMOTION_EVENT_ACTION_UP
+					  action == AMOTION_EVENT_ACTION_UP
 				) {
 					
 					InputHandle handle = EMouseButton_Left;
@@ -489,8 +489,8 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 			if (mappedKey != EKey_Count) {
 
 				InputDevice *dev = keyboard;
-        
-				U32 flags = 0;		//TODO: Caps, numlock, scroll lock
+		
+				U32 flags = 0;        //TODO: Caps, numlock, scroll lock
 				
 				dev->flags = flags;
 
@@ -518,7 +518,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format) {
 	(void) manager;
-	return format == EWindowFormat_RGBA8;	//TODO: HDR
+	return format == EWindowFormat_RGBA8;    //TODO: HDR
 }
 
 void WindowManager_freePhysical(Window *w) {

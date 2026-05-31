@@ -260,7 +260,7 @@ void Test_SBFileAddVarEmptyArrayList(Test *t) {
 			goto doneEmptyArr;
 		}
 
-		ListU32 emptyArr = { 0 };	//length == 0
+		ListU32 emptyArr = { 0 };    //length == 0
 		CharString name = CharString_createRefCStrConst("v");
 
 		Test_assert(t, "empty arrays list fails",

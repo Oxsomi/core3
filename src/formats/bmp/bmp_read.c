@@ -78,7 +78,7 @@ Bool BMP_read(StreamRef *streamRef, U64 *off, U64 *dataOffset, BMPInfo *info, co
 		));
 
 	U64 pixelStride = bmp.info.bitCount >> 3;
-	U64 stride = ((U64)bmp.info.width * pixelStride + 3) & ~3;		//Every line needs to be 4-byte aligned
+	U64 stride = ((U64)bmp.info.width * pixelStride + 3) & ~3;        //Every line needs to be 4-byte aligned
 
 	U64 expectedLength = stride * bmp.info.height;
 

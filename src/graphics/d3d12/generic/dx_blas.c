@@ -29,7 +29,7 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "types/base/constants.h"
 
-void DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; }		//No-op
+void DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; }        //No-op
 
 Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 
@@ -42,7 +42,7 @@ Error DX_WRAP_FUNC(BLAS_init)(BLAS *blas) {
 	CharString tmp = CharString_createNull();
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12BLAS_init()::serialized not supported yet"))		//TODO:
+		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12BLAS_init()::serialized not supported yet"))        //TODO:
 
 	U64 primitives = 0;
 	EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
@@ -199,7 +199,7 @@ Error DX_WRAP_FUNC(BLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	DxBLAS *blasExt = BLAS_ext(blas, Dx);
 	Error err = Error_none();
 
-	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
+	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return Error_none();
 
 	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(blas->base.asBuffer)->resource.deviceAddress;

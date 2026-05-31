@@ -48,13 +48,13 @@ static inline I32x2 I32x2_create1(I32 x) { return I32x2_create2(x, 0); }
 
 static inline I32x2 I32x2_xx2(I32 x) { return I32x2_create2(x, x); }
 
-static inline I32x2 I32x2_load1(const void *arr) {		//Misaligned load 1 I32
+static inline I32x2 I32x2_load1(const void *arr) {        //Misaligned load 1 I32
 	I32x2 result = I32x2_zero;
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32)), Buffer_createRefConst(arr, sizeof(I32)));
 	return result;
 }
 
-static inline I32x2 I32x2_load2(const void *arr) {		//Misaligned load 2 I32s
+static inline I32x2 I32x2_load2(const void *arr) {        //Misaligned load 2 I32s
 	I32x2 result = I32x2_zero;
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(I32) * 2), Buffer_createRefConst(arr, sizeof(I32) * 2));
 	return result;
@@ -75,15 +75,15 @@ static inline void I32x2_setRefY(I32x2 *a, I32 v) { if (a) a->v[1] = v; }
 
 static inline void I32x2_setRef(I32x2 *a, U8 i, I32 v) {
 	switch (i) {
-		case 0:		I32x2_setRefX(a, v);	break;
-		default:	I32x2_setRefY(a, v);	break;
+		case 0:        I32x2_setRefX(a, v);    break;
+		default:    I32x2_setRefY(a, v);    break;
 	}
 }
 
 static inline I32 I32x2_get(I32x2 a, U8 i) {
 	switch (i) {
-		case 0:		return I32x2_x(a);
-		default:	return I32x2_y(a);
+		case 0:        return I32x2_x(a);
+		default:    return I32x2_y(a);
 	}
 }
 
@@ -92,7 +92,7 @@ static inline I32 I32x2_get(I32x2 a, U8 i) {
 static inline I32x2 I32x2_add(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] + b.v[i]); }
 static inline I32x2 I32x2_sub(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] - b.v[i]); }
 static inline I32x2 I32x2_mul(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] * b.v[i]); }
-static inline I32x2 I32x2_div(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] / b.v[i]); }		//Undefined if any b[x] == 0
+static inline I32x2 I32x2_div(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] / b.v[i]); }        //Undefined if any b[x] == 0
 
 static inline I32x2 I32x2_complement(I32x2 a) { return I32x2_sub(I32x2_one, a); }
 static inline I32x2 I32x2_negate(I32x2 a) { return I32x2_sub(I32x2_zero, a); }
@@ -143,7 +143,7 @@ static inline I32x2 I32x2_bitsF32x2(F32x2 a) {
 //Arithmetic
 
 static inline I32x2 I32x2_abs(I32x2 v) { return I32x2_mul(I32x2_sign(v), v); }
-static inline I32x2 I32x2_mod(I32x2 v, I32x2 d) {				//UB for any d[x] == 0
+static inline I32x2 I32x2_mod(I32x2 v, I32x2 d) {                //UB for any d[x] == 0
 	I32x2 r = I32x2_sub(v, I32x2_mul(I32x2_div(v, d), d));
 	I32x2 mask = I32x2_lt(r, I32x2_zero);
 	return I32x2_add(r, I32x2_mul(mask, d));
@@ -154,7 +154,7 @@ static inline I32x2 I32x2_mod(I32x2 v, I32x2 d) {				//UB for any d[x] == 0
 static inline I32x2 I32x2_or(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] | b.v[i]); }
 static inline I32x2 I32x2_and(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] & b.v[i]); }
 static inline I32x2 I32x2_xor(I32x2 a, I32x2 b) { NONE_OP2I(a.v[i] ^ b.v[i]); }
-static inline I32x2 I32x2_andnot(I32x2 a, I32x2 b) { NONE_OP2I(~a.v[i] & b.v[i]); }		//~a & b
+static inline I32x2 I32x2_andnot(I32x2 a, I32x2 b) { NONE_OP2I(~a.v[i] & b.v[i]); }        //~a & b
 static inline I32x2 I32x2_not(I32x2 a) { NONE_OP2I(~a.v[i]); }
 
 static inline I32x2 I32x2_lsh32(I32x2 a, U8 bits) { return I32x2_create2(I32x2_x(a) << bits, I32x2_y(a) << bits); }

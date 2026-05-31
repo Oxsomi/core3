@@ -154,7 +154,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 		for(U64 k = 0; k < floatTypes; ++k)
 			for(U64 j = 0; j < floatTypes; ++j) {
 
-				if(j == k)		//No profile needed
+				if(j == k)        //No profile needed
 					continue;
 
 				const Ns then = Time_now();

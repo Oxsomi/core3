@@ -29,8 +29,8 @@
 
 //These are Pseudo RNG (PRNG), don't use these for critical uses!
 //More info:
-//	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#secure-random-number-generation
-//	https://github.com/TeamWisp/WispRenderer/blob/master/resources/shaders/rand_util.hlsl
+//    https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#secure-random-number-generation
+//    https://github.com/TeamWisp/WispRenderer/blob/master/resources/shaders/rand_util.hlsl
 
 static inline U32 Random_seed(U32 val0, U32 val1) {
 

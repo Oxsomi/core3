@@ -36,32 +36,32 @@ typedef RefPtr StreamRef;
 #define OISH_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
 #define OISH_SHADER_MODEL8(maj, min) ((U8)((min) | ((maj) << 4)))
 
-static U16 OISH_SHADER_MODEL_MIN = OISH_SHADER_MODEL(6, 5);		//6.5 at least
-static U16 OISH_SHADER_MODEL_MAX = OISH_SHADER_MODEL(6, 10);	//6.10 max
+static U16 OISH_SHADER_MODEL_MIN = OISH_SHADER_MODEL(6, 5);        //6.5 at least
+static U16 OISH_SHADER_MODEL_MAX = OISH_SHADER_MODEL(6, 10);    //6.10 max
 
-static U8 OISH_SHADER_MODEL_MIN8 = OISH_SHADER_MODEL8(6, 5);	//6.5 at least
-static U8 OISH_SHADER_MODEL_MAX8 = OISH_SHADER_MODEL8(6, 10);	//6.10 max
+static U8 OISH_SHADER_MODEL_MIN8 = OISH_SHADER_MODEL8(6, 5);    //6.5 at least
+static U8 OISH_SHADER_MODEL_MAX8 = OISH_SHADER_MODEL8(6, 10);    //6.10 max
 
 typedef enum ESHSettingsFlags {
-	ESHSettingsFlags_None				= 0,
-	ESHSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiSH can be 100% confidently detected otherwise
-	ESHSettingsFlags_Invalid			= 0xFFFFFFFF << 1
+	ESHSettingsFlags_None                = 0,
+	ESHSettingsFlags_HideMagicNumber    = 1 << 0,        //Only valid if the oiSH can be 100% confidently detected otherwise
+	ESHSettingsFlags_Invalid            = 0xFFFFFFFF << 1
 } ESHSettingsFlags;
 
-typedef enum ECompilerWarning {							//Present here in case shader compiler isn't present
-	ECompilerWarning_None				= 0,
-	ECompilerWarning_UnusedRegisters	= 1 << 0,
-	ECompilerWarning_UnusedConstants	= 1 << 1,
-	ECompilerWarning_BufferPadding		= 1 << 2
+typedef enum ECompilerWarning {                            //Present here in case shader compiler isn't present
+	ECompilerWarning_None                = 0,
+	ECompilerWarning_UnusedRegisters    = 1 << 0,
+	ECompilerWarning_UnusedConstants    = 1 << 1,
+	ECompilerWarning_BufferPadding        = 1 << 2
 } ECompilerWarning;
 
 //Check docs/oiSH.md for the file spec
 
 typedef struct SHInclude {
 
-	CharString relativePath;	//Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsli)
+	CharString relativePath;    //Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsli)
 
-	U32 crc32c;					//Content CRC32C. However, if it contains '\r' it's removed first!
+	U32 crc32c;                    //Content CRC32C. However, if it contains '\r' it's removed first!
 	U32 padding;
 
 } SHInclude;
@@ -71,7 +71,7 @@ TList(SHInclude);
 void SHInclude_free(SHInclude *include, const Allocator *alloc);
 void ListSHInclude_freeUnderlying(ListSHInclude *includes, const Allocator *alloc);
 
-typedef union SHValue {		//Intermediate value (can be packed heavily according to type)
+typedef union SHValue {        //Intermediate value (can be packed heavily according to type)
 
 	U64 vu64[16];
 	U32 vu32[16];
@@ -106,9 +106,9 @@ typedef struct SHFile {
 
 	ESHSettingsFlags flags;
 
-	U32 compilerVersion;		//OxC3 compiler version
+	U32 compilerVersion;        //OxC3 compiler version
 
-	U32 sourceHash;				//CRC32C of sources
+	U32 sourceHash;                //CRC32C of sources
 
 } SHFile;
 
@@ -127,7 +127,7 @@ void SHFile_free(SHFile *shFile, const Allocator *alloc);
 
 Bool SHFile_addBinary(
 	SHFile *shFile,
-	SHBinaryInfo *binaries,				//Moves binaries
+	SHBinaryInfo *binaries,                //Moves binaries
 	const Allocator *alloc,
 	Error *e_rr
 );

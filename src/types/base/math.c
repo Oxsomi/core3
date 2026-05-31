@@ -24,41 +24,41 @@
 
 #include <math.h>
 
-#define FLP_OP_IMPL(T, TInt, suffix)														\
+#define FLP_OP_IMPL(T, TInt, suffix)                                                        \
 																							\
-T T##_mod(T v, T mod) { return fmod##suffix(v, mod); }										\
+T T##_mod(T v, T mod) { return fmod##suffix(v, mod); }                                        \
 																							\
-Bool T##_isNaN(T v) { return isnan(v); }													\
-Bool T##_isInf(T v) { return isinf(v); }													\
-Bool T##_isValid(T v) { return isfinite(v); }												\
+Bool T##_isNaN(T v) { return isnan(v); }                                                    \
+Bool T##_isInf(T v) { return isinf(v); }                                                    \
+Bool T##_isValid(T v) { return isfinite(v); }                                                \
 																							\
-T T##_fract(T v) { return v - T##_floor(v); }												\
+T T##_fract(T v) { return v - T##_floor(v); }                                                \
 																							\
-T T##_sqrt(T v) { return sqrt##suffix(v); }													\
+T T##_sqrt(T v) { return sqrt##suffix(v); }                                                    \
 																							\
-T T##_log10(T v) { return log10##suffix(v); }												\
-T T##_loge(T v) { return log##suffix(v); }													\
-T T##_log2(T v) { return log2##suffix(v); }													\
+T T##_log10(T v) { return log10##suffix(v); }                                                \
+T T##_loge(T v) { return log##suffix(v); }                                                    \
+T T##_log2(T v) { return log2##suffix(v); }                                                    \
 																							\
-T T##_asin(T v) { return asin##suffix(v); }													\
-T T##_sin(T v) { return sin##suffix(v); }													\
-T T##_cos(T v) { return cos##suffix(v); }													\
-T T##_acos(T v) { return acos##suffix(v); }													\
-T T##_tan(T v) { return tan##suffix(v); }													\
-T T##_atan(T v) { return atan##suffix(v); }													\
-T T##_atan2(T y, T x) { return atan2##suffix(y, x); }										\
+T T##_asin(T v) { return asin##suffix(v); }                                                    \
+T T##_sin(T v) { return sin##suffix(v); }                                                    \
+T T##_cos(T v) { return cos##suffix(v); }                                                    \
+T T##_acos(T v) { return acos##suffix(v); }                                                    \
+T T##_tan(T v) { return tan##suffix(v); }                                                    \
+T T##_atan(T v) { return atan##suffix(v); }                                                    \
+T T##_atan2(T y, T x) { return atan2##suffix(y, x); }                                        \
 																							\
-T T##_round(T v) {																			\
-	T fl = T##_floor(v);																	\
-	T diff = v - fl;																		\
-	if (diff < 0.5##suffix) return fl;														\
-	if (diff > 0.5##suffix) return fl + 1.##suffix;											\
-	/* exactly 0.5, round to even (banker's) */												\
-	return T##_mod(fl, 2.##suffix) == 0.##suffix ? fl : fl + 1.##suffix;					\
-}																							\
+T T##_round(T v) {                                                                            \
+	T fl = T##_floor(v);                                                                    \
+	T diff = v - fl;                                                                        \
+	if (diff < 0.5##suffix) return fl;                                                        \
+	if (diff > 0.5##suffix) return fl + 1.##suffix;                                            \
+	/* exactly 0.5, round to even (banker's) */                                                \
+	return T##_mod(fl, 2.##suffix) == 0.##suffix ? fl : fl + 1.##suffix;                    \
+}                                                                                            \
 																							\
-T T##_ceil(T v) { return ceil##suffix(v); }													\
-T T##_floor(T v) { return floor##suffix(v); }												\
+T T##_ceil(T v) { return ceil##suffix(v); }                                                    \
+T T##_floor(T v) { return floor##suffix(v); }                                                \
 																							\
 T T##_pow(T v, T exp) { return pow##suffix(v, exp); }
 

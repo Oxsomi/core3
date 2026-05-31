@@ -31,12 +31,12 @@
 
 typedef enum ECASettingsFlags {
 
-	ECASettingsFlags_None				= 0,
-	ECASettingsFlags_IncludeDate		= 1 << 0,			//--date
-	ECASettingsFlags_IncludeFullDate	= 1 << 1,			//--full-date (automatically sets --date)
+	ECASettingsFlags_None                = 0,
+	ECASettingsFlags_IncludeDate        = 1 << 0,            //--date
+	ECASettingsFlags_IncludeFullDate    = 1 << 1,            //--full-date (automatically sets --date)
 
-	ECASettingsFlags_Invalid			= 0xFFFFFFFF << 2,
-	ECASettingsFlags_DateFlags			= ECASettingsFlags_IncludeDate | ECASettingsFlags_IncludeFullDate
+	ECASettingsFlags_Invalid            = 0xFFFFFFFF << 2,
+	ECASettingsFlags_DateFlags            = ECASettingsFlags_IncludeDate | ECASettingsFlags_IncludeFullDate
 
 } ECASettingsFlags;
 
@@ -64,7 +64,7 @@ typedef struct CAFolderInfo {
 TList(CAFolderInfo);
 
 typedef struct CAFileInfo {
-	U64 parentTimestamp;	//16 : 48 (timestamp in ms)
+	U64 parentTimestamp;    //16 : 48 (timestamp in ms)
 } CAFileInfo;
 
 TList(CAFileInfo);
@@ -94,16 +94,16 @@ static inline Ns CAFileInfo_getTimestamp(CAFileInfo info) {
 
 static const U32 CAFile_maxFilePathSize = 192;
 static const U32 CAFile_maxFileNameSize = 96;
-static const U32 CAFile_maxRecursionSize = 128;		//Must match chainSize (walking file parents)
+static const U32 CAFile_maxRecursionSize = 128;        //Must match chainSize (walking file parents)
 
 //Check docs/oiCA.md for the file spec
 
 typedef struct CAFile {
 	DLFile names;
 	DLFile content;
-	ListCAFolderInfo folders;	//0th is reserved as root folder
+	ListCAFolderInfo folders;    //0th is reserved as root folder
 	ListCAFileInfo files;
-	CASettings settings;		//Must remain 8-byte aligned
+	CASettings settings;        //Must remain 8-byte aligned
 } CAFile;
 
 TList(CAFile);
@@ -153,8 +153,8 @@ static inline U64 CAHandle_getId(CAHandle handle) { return handle << 1 >> 1; }
 static inline Bool CAHandle_isFolder(CAHandle handle) { return handle >> 63; }
 static inline Bool CAHandle_isFile(CAHandle handle) { return !CAHandle_isFolder(handle); }
 
-static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64)1 << 63) | id; }	//Unsafe, only use if you know it's a dir
-static inline CAHandle CAHandle_makeFile(U64 id) { return id; }						//Unsafe, only use if you know it's a file
+static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64)1 << 63) | id; }    //Unsafe, only use if you know it's a dir
+static inline CAHandle CAHandle_makeFile(U64 id) { return id; }                        //Unsafe, only use if you know it's a file
 
 static inline Bool CAHandle_isRoot(CAHandle handle) {
 	return CAHandle_isFolder(handle) && !CAHandle_getId(handle);

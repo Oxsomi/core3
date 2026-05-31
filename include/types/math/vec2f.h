@@ -47,13 +47,13 @@ static inline F32x2 F32x2_create1(F32 x) { return F32x2_create2(x, 0); }
 
 static inline F32x2 F32x2_xx2(F32 x) { return F32x2_create2(x, x); }
 
-static inline F32x2 F32x2_load1(const void *arr) {		//Misaligned load 1 F32
+static inline F32x2 F32x2_load1(const void *arr) {        //Misaligned load 1 F32
 	F32x2 result = F32x2_zero;
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32)), Buffer_createRefConst(arr, sizeof(F32)));
 	return result;
 }
 
-static inline F32x2 F32x2_load2(const void *arr) {		//Misaligned load 2 F32s
+static inline F32x2 F32x2_load2(const void *arr) {        //Misaligned load 2 F32s
 	F32x2 result = F32x2_zero;
 	if (arr) Buffer_memcpy(Buffer_createRef(&result, sizeof(F32) * 2), Buffer_createRefConst(arr, sizeof(F32) * 2));
 	return result;
@@ -74,15 +74,15 @@ static inline void F32x2_setRefY(F32x2 *a, F32 v) { if (a) a->v[1] = v; }
 
 static inline void F32x2_setRef(F32x2 *a, U8 i, F32 v) {
 	switch (i) {
-		case 0:		F32x2_setRefX(a, v);	break;
-		default:	F32x2_setRefY(a, v);	break;
+		case 0:        F32x2_setRefX(a, v);    break;
+		default:    F32x2_setRefY(a, v);    break;
 	}
 }
 
 static inline F32 F32x2_get(F32x2 a, U8 i) {
 	switch (i) {
-		case 0:		return F32x2_x(a);
-		default:	return F32x2_y(a);
+		case 0:        return F32x2_x(a);
+		default:    return F32x2_y(a);
 	}
 }
 

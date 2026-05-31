@@ -54,30 +54,30 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 	const I32x4 MASK = I32x4_createFromU64x2(0x0405060700010203, 0x0C0D0E0F08090A0B);
 
 	const I32x4 ROUNDS[16] = {
-		I32x4_createFromU64x2(0x71374491428A2F98, 0xE9B5DBA5B5C0FBCF),		//0-3
-		I32x4_createFromU64x2(0x59F111F13956C25B, 0xAB1C5ED5923F82A4),		//4-7
-		I32x4_createFromU64x2(0x12835B01D807AA98, 0x550C7DC3243185BE),		//8-11
-		I32x4_createFromU64x2(0x80DEB1FE72BE5D74, 0xC19BF1749BDC06A7),		//12-15
-		I32x4_createFromU64x2(0xEFBE4786E49B69C1, 0x240CA1CC0FC19DC6),		//16-19
-		I32x4_createFromU64x2(0x4A7484AA2DE92C6F, 0x76F988DA5CB0A9DC),		//20-23
-		I32x4_createFromU64x2(0xA831C66D983E5152, 0xBF597FC7B00327C8),		//24-27
-		I32x4_createFromU64x2(0xD5A79147C6E00BF3, 0x1429296706CA6351),		//28-31
-		I32x4_createFromU64x2(0x2E1B213827B70A85, 0x53380D134D2C6DFC),		//32-35
-		I32x4_createFromU64x2(0x766A0ABB650A7354, 0x92722C8581C2C92E),		//36-39
-		I32x4_createFromU64x2(0xA81A664BA2BFE8A1, 0xC76C51A3C24B8B70),		//40-43
-		I32x4_createFromU64x2(0xD6990624D192E819, 0x106AA070F40E3585),		//44-47
-		I32x4_createFromU64x2(0x1E376C0819A4C116, 0x34B0BCB52748774C),		//48-51
-		I32x4_createFromU64x2(0x4ED8AA4A391C0CB3, 0x682E6FF35B9CCA4F),		//52-55
-		I32x4_createFromU64x2(0x78A5636F748F82EE, 0x8CC7020884C87814),		//56-59
-		I32x4_createFromU64x2(0xA4506CEB90BEFFFA, 0xC67178F2BEF9A3F7)		//60-63
+		I32x4_createFromU64x2(0x71374491428A2F98, 0xE9B5DBA5B5C0FBCF),        //0-3
+		I32x4_createFromU64x2(0x59F111F13956C25B, 0xAB1C5ED5923F82A4),        //4-7
+		I32x4_createFromU64x2(0x12835B01D807AA98, 0x550C7DC3243185BE),        //8-11
+		I32x4_createFromU64x2(0x80DEB1FE72BE5D74, 0xC19BF1749BDC06A7),        //12-15
+		I32x4_createFromU64x2(0xEFBE4786E49B69C1, 0x240CA1CC0FC19DC6),        //16-19
+		I32x4_createFromU64x2(0x4A7484AA2DE92C6F, 0x76F988DA5CB0A9DC),        //20-23
+		I32x4_createFromU64x2(0xA831C66D983E5152, 0xBF597FC7B00327C8),        //24-27
+		I32x4_createFromU64x2(0xD5A79147C6E00BF3, 0x1429296706CA6351),        //28-31
+		I32x4_createFromU64x2(0x2E1B213827B70A85, 0x53380D134D2C6DFC),        //32-35
+		I32x4_createFromU64x2(0x766A0ABB650A7354, 0x92722C8581C2C92E),        //36-39
+		I32x4_createFromU64x2(0xA81A664BA2BFE8A1, 0xC76C51A3C24B8B70),        //40-43
+		I32x4_createFromU64x2(0xD6990624D192E819, 0x106AA070F40E3585),        //44-47
+		I32x4_createFromU64x2(0x1E376C0819A4C116, 0x34B0BCB52748774C),        //48-51
+		I32x4_createFromU64x2(0x4ED8AA4A391C0CB3, 0x682E6FF35B9CCA4F),        //52-55
+		I32x4_createFromU64x2(0x78A5636F748F82EE, 0x8CC7020884C87814),        //56-59
+		I32x4_createFromU64x2(0xA4506CEB90BEFFFA, 0xC67178F2BEF9A3F7)        //60-63
 	};
 
 	//Initialize state
 
-	I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_STATE));				//_mm_shuffle_epi32(tmp, 0xB1)
-	I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_STATE + 4));		//_mm_shuffle_epi32(state1, 0x1B)
-	I32x4 state0 =	I32x4_combineRightShift(tmp, state1, 2);					//_mm_alignr_epi8(tmp, state1, 8);
-	state1 = I32x4_blend(state1, tmp, 0b1100);									//_mm_blend_epi16(state1, tmp, 0xF0)
+	I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_STATE));                //_mm_shuffle_epi32(tmp, 0xB1)
+	I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_STATE + 4));        //_mm_shuffle_epi32(state1, 0x1B)
+	I32x4 state0 =    I32x4_combineRightShift(tmp, state1, 2);                    //_mm_alignr_epi8(tmp, state1, 8);
+	state1 = I32x4_blend(state1, tmp, 0b1100);                                    //_mm_blend_epi16(state1, tmp, 0xF0)
 
 	//64-byte blocks
 
@@ -233,10 +233,10 @@ SIMD_SHA256_LINKING void SIMD_SHA256_SUFFIX(Buffer_sha256)(const Buffer buf, U32
 
 	//Post process
 
-	tmp = I32x4_wzyx(state0);							//_mm_shuffle_epi32(state0, 0x1B)
-	state1 = I32x4_yxwz(state1);						//_mm_shuffle_epi32(state1, 0xB1)
-	state0 = I32x4_blend(tmp, state1, 0b1100);			//_mm_blend_epi16(tmp, state1, 0xF0);
-	state1 = I32x4_combineRightShift(state1, tmp, 2);	//_mm_alignr_epi8(a, b, 2)
+	tmp = I32x4_wzyx(state0);                            //_mm_shuffle_epi32(state0, 0x1B)
+	state1 = I32x4_yxwz(state1);                        //_mm_shuffle_epi32(state1, 0xB1)
+	state0 = I32x4_blend(tmp, state1, 0b1100);            //_mm_blend_epi16(tmp, state1, 0xF0);
+	state1 = I32x4_combineRightShift(state1, tmp, 2);    //_mm_alignr_epi8(a, b, 2)
 
 	//Store output
 

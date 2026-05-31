@@ -43,7 +43,7 @@ typedef struct AudioStreamInfo AudioStreamInfo;
 #define EAudioStreamFormat_create(channels, strideBytes) \
 	((EAudioStreamFormat_remapStride(strideBytes) << 1) | ((channels - 1) & 1))
 
-typedef enum EAudioStreamFormat {		//1b channels, 2b (1 << x = strideBytes), 4 bit max.
+typedef enum EAudioStreamFormat {        //1b channels, 2b (1 << x = strideBytes), 4 bit max.
 
 	EAudioStreamFormat_Mono8,
 	EAudioStreamFormat_Stereo8,
@@ -60,16 +60,16 @@ typedef enum EAudioStreamFormat {		//1b channels, 2b (1 << x = strideBytes), 4 b
 	EAudioStreamFormat_Mono64fExt,
 	EAudioStreamFormat_Stereo64fExt,
 
-	EAudioStreamFormat_Mono24Ext,				//PCM24 mono
-	EAudioStreamFormat_Stereo24Ext,				//PCM24 stereo
+	EAudioStreamFormat_Mono24Ext,                //PCM24 mono
+	EAudioStreamFormat_Stereo24Ext,                //PCM24 stereo
 
-	EAudioStreamFormat_Mono32Ext,				//PCM32 mono
-	EAudioStreamFormat_Stereo32Ext,				//PCM32 stereo
+	EAudioStreamFormat_Mono32Ext,                //PCM32 mono
+	EAudioStreamFormat_Stereo32Ext,                //PCM32 stereo
 
 	EAudioStreamFormat_Count,
 
-	EAudioStreamFormat_FloatStart	= EAudioStreamFormat_Mono32fExt,
-	EAudioStreamFormat_FloatEnd		= EAudioStreamFormat_Stereo64fExt
+	EAudioStreamFormat_FloatStart    = EAudioStreamFormat_Mono32fExt,
+	EAudioStreamFormat_FloatEnd        = EAudioStreamFormat_Stereo64fExt
 
 } EAudioStreamFormat;
 
@@ -81,10 +81,10 @@ static inline U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format) {
 
 static inline U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format) {
 
-	if ((format >> 1) > 4)	//U32
+	if ((format >> 1) > 4)    //U32
 		return 4;
 
-	if ((format >> 1) == 4)	//U24
+	if ((format >> 1) == 4)    //U24
 		return 3;
 
 	return 1 << (U8)(format >> 1);
@@ -94,18 +94,18 @@ static inline U8 EAudioStreamFormat_getSize(EAudioStreamFormat format) {
 	return EAudioStreamFormat_getChannels(format) * EAudioStreamFormat_getStrideBytes(format);
 }
 
-typedef enum EAudioStreamInfoFlags {			//4-bit flags
-	EAudioStreamInfoFlags_None			= 0,
-	EAudioStreamInfoFlags_IsLoop		= 1 << 0,
-	EAudioStreamInfoFlags_FlattenSound	= 1 << 1	//Force stereo sound into mono, required for 3D spatial audio if stereo
+typedef enum EAudioStreamInfoFlags {            //4-bit flags
+	EAudioStreamInfoFlags_None            = 0,
+	EAudioStreamInfoFlags_IsLoop        = 1 << 0,
+	EAudioStreamInfoFlags_FlattenSound    = 1 << 1    //Force stereo sound into mono, required for 3D spatial audio if stereo
 } EAudioStreamInfoFlags;
 
 typedef struct AudioStreamInfo {
 
 	F32 pitch;
 	U8 dataLengthHi8;
-	U8 flags4_format4;			//EAudioStreamInfoFlags, AudioStreamFormat
-	U16 loops;					//0: infinite, otherwise how many times a loop is permitted for a stream
+	U8 flags4_format4;            //EAudioStreamInfoFlags, AudioStreamFormat
+	U16 loops;                    //0: infinite, otherwise how many times a loop is permitted for a stream
 
 	Ns duration;
 
@@ -114,7 +114,7 @@ typedef struct AudioStreamInfo {
 	U32 sampleRate;
 	U32 dataLengthLo32;
 
-	U32 streamLength;			//0 = bytesPerSecond, else must be >=64KiB
+	U32 streamLength;            //0 = bytesPerSecond, else must be >=64KiB
 	U32 bytesPerSecond;
 
 	StreamRef *stream;
@@ -154,11 +154,11 @@ typedef struct AudioStream {
 	AudioStreamInfo info;
 
 	U64 streamOffset;
-	Ns timeOffset;				//[0, duration], only knows the one on start, since the streamOffset is always ahead
+	Ns timeOffset;                //[0, duration], only knows the one on start, since the streamOffset is always ahead
 
-	U32 loops;					//How many times the stream has looped, stops at 1 if !isLoop
+	U32 loops;                    //How many times the stream has looped, stops at 1 if !isLoop
 	Bool isPlaying;
-	AudioStreamFormat format;	//The real format that the device is reading. Stereo to mono and/or F32/F64/U24 -> U16
+	AudioStreamFormat format;    //The real format that the device is reading. Stereo to mono and/or F32/F64/U24 -> U16
 	U8 padding[2];
 
 } AudioStream;
@@ -174,7 +174,7 @@ RefPtrType AudioStream_makeType(const Allocator *alloc);
 
 Bool AudioDeviceRef_createStream(
 	AudioDeviceRef *device,
-	AudioStreamInfo *info,				//Takes ownership of info
+	AudioStreamInfo *info,                //Takes ownership of info
 	Ns startOffset,
 	const Allocator *alloc,
 	const RefPtrType *type,
@@ -182,14 +182,14 @@ Bool AudioDeviceRef_createStream(
 	Error *e_rr
 );
 
-Bool AudioDeviceRef_createFromFile(		//Detect stream by stream file header (currently only wav supported)
+Bool AudioDeviceRef_createFromFile(        //Detect stream by stream file header (currently only wav supported)
 	AudioDeviceRef *device,
 	StreamRef *inputStream,
 	U64 inputStreamOffset,
-	U16 loops,							//0 = infinite loops, 1 = normal, else how many times it will loop
+	U16 loops,                            //0 = infinite loops, 1 = normal, else how many times it will loop
 	Ns startOffset,
 	F32 pitch,
-	Bool flattenSound,					//Required for spatial audio if the source is stereo
+	Bool flattenSound,                    //Required for spatial audio if the source is stereo
 	const Allocator *alloc,
 	const RefPtrType *type,
 	AudioStreamRef **stream,

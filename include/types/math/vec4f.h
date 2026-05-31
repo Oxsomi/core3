@@ -50,10 +50,10 @@ static inline F32x4 F32x4_bitsI32x4(I32x4 a) {
 
 static inline F32 F32x4_get(F32x4 a, U8 i) {
 	switch (i & 3) {
-		case 0:		return F32x4_x(a);
-		case 1:		return F32x4_y(a);
-		case 2:		return F32x4_z(a);
-		default:	return F32x4_w(a);
+		case 0:        return F32x4_x(a);
+		case 1:        return F32x4_y(a);
+		case 2:        return F32x4_z(a);
+		default:    return F32x4_w(a);
 	}
 }
 
@@ -68,19 +68,19 @@ static inline F32 F32x4_get(F32x4 a, U8 i) {
 
 	static inline F32x4 F32x4_setCopy(F32x4 a, U8 i, F32 v) {
 		switch (i & 3) {
-			case 0:		return F32x4_setXCopy(a, v);
-			case 1:		return F32x4_setYCopy(a, v);
-			case 2:		return F32x4_setZCopy(a, v);
-			default:	return F32x4_setWCopy(a, v);
+			case 0:        return F32x4_setXCopy(a, v);
+			case 1:        return F32x4_setYCopy(a, v);
+			case 2:        return F32x4_setZCopy(a, v);
+			default:    return F32x4_setWCopy(a, v);
 		}
 	}
 
 	static inline void F32x4_setRef(F32x4 *a, U8 i, F32 v) {
 		switch (i & 3) {
-			case 0:		F32x4_setXRef(a, v);	break;
-			case 1:		F32x4_setYRef(a, v);	break;
-			case 2:		F32x4_setZRef(a, v);	break;
-			default:	F32x4_setWRef(a, v);
+			case 0:        F32x4_setXRef(a, v);    break;
+			case 1:        F32x4_setYRef(a, v);    break;
+			case 2:        F32x4_setZRef(a, v);    break;
+			default:    F32x4_setWRef(a, v);
 		}
 	}
 

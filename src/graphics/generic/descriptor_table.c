@@ -253,7 +253,7 @@ Error DescriptorHeapRef_createDescriptorTable(
 
 		U64 j = bindings.ptr[i].count;
 
-		if(j <= 1)		//Uses the DescriptorTableBindingSingle saving a lot of allocations
+		if(j <= 1)        //Uses the DescriptorTableBindingSingle saving a lot of allocations
 			continue;
 
 		DescriptorTableBindingMultiple *multiple = &table->bindings.ptrNonConst[i].multiple;
@@ -361,7 +361,7 @@ Bool DescriptorTable_loseRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 	for(U64 i = 0; i < table->resources.length; ++i)
 		if (table->resources.ptr[i].resource == ref) {
 
-			if (!--table->resources.ptrNonConst[i].count) {		//Decrease refCount and decrease ref if last ref
+			if (!--table->resources.ptrNonConst[i].count) {        //Decrease refCount and decrease ref if last ref
 				RefPtr_dec(&ref);
 				gotoIfError2(clean, ListDescriptorTableResourceRef_erase(&table->resources, i))
 			}
@@ -732,7 +732,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if (type == ESHRegisterType_StorageBuffer || type == ESHRegisterType_StorageBufferAtomic)
 					retError(clean, Error_invalidParameter(
-						3, 0, "DescriptorTableRef_setDescriptors() storage buffer isn't supported yet"		//TODO:
+						3, 0, "DescriptorTableRef_setDescriptors() storage buffer isn't supported yet"        //TODO:
 					))
 
 				break;
@@ -1253,12 +1253,12 @@ Bool DescriptorTableRef_findBindlessRegister(
 
 		//Write textures need to match format somewhat;
 		//For DXIL the rules are as follows:
-		//	float textures are all implicitly castable (snorm, unorm, float) -> float
-		//	uint/int/float textures aren't
+		//    float textures are all implicitly castable (snorm, unorm, float) -> float
+		//    uint/int/float textures aren't
 		//For SPIRV the rules are as follows:
-		//	Unknown allows anything
-		//	Otherwise the format needs to match 1:1
-		//	However, since we're relying on reading a descriptor at a certain place, we can't reuse.
+		//    Unknown allows anything
+		//    Otherwise the format needs to match 1:1
+		//    However, since we're relying on reading a descriptor at a certain place, we can't reuse.
 		// 
 		//Read textures are simpler;
 		//DXIL all textures are typeless.
@@ -1362,10 +1362,10 @@ Bool DescriptorTableRef_allocDescriptor(
 
 	//Quick search, we perform per 2 U128, since there's no U64 version yet.
 	//TODO: This could be sped up by having a reduction bitset, for example:
-	//		isFree0
-	//		isFree00 isFree01
-	//		isFree000 isFree001 isFree010 isFree011
-	//		etc.
+	//        isFree0
+	//        isFree00 isFree01
+	//        isFree000 isFree001 isFree010 isFree011
+	//        etc.
 
 	ListU64 activeList = binding->multiple.activeList;
 	U64 foundId = activeList.length;

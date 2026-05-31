@@ -59,18 +59,18 @@ void onDebugReport(
 	const C8 *categoryStr = "Undefined";
 
 	switch(category) {
-		default:																					break;
-		case D3D12_MESSAGE_CATEGORY_APPLICATION_DEFINED:	categoryStr = "Application defined";	break;
-		case D3D12_MESSAGE_CATEGORY_MISCELLANEOUS:			categoryStr = "Misc";					break;
-		case D3D12_MESSAGE_CATEGORY_INITIALIZATION:			categoryStr = "Initialization";			break;
-		case D3D12_MESSAGE_CATEGORY_CLEANUP:				categoryStr = "Cleanup";				break;
-		case D3D12_MESSAGE_CATEGORY_COMPILATION:			categoryStr = "Compilation";			break;
-		case D3D12_MESSAGE_CATEGORY_STATE_CREATION:			categoryStr = "State creation";			break;
-		case D3D12_MESSAGE_CATEGORY_STATE_SETTING:			categoryStr = "State setting";			break;
-		case D3D12_MESSAGE_CATEGORY_STATE_GETTING:			categoryStr = "State getting";			break;
-		case D3D12_MESSAGE_CATEGORY_RESOURCE_MANIPULATION:	categoryStr = "Resource manipulation";	break;
-		case D3D12_MESSAGE_CATEGORY_EXECUTION:				categoryStr = "Execution";				break;
-		case D3D12_MESSAGE_CATEGORY_SHADER:					categoryStr = "Shader";					break;
+		default:                                                                                    break;
+		case D3D12_MESSAGE_CATEGORY_APPLICATION_DEFINED:    categoryStr = "Application defined";    break;
+		case D3D12_MESSAGE_CATEGORY_MISCELLANEOUS:            categoryStr = "Misc";                    break;
+		case D3D12_MESSAGE_CATEGORY_INITIALIZATION:            categoryStr = "Initialization";            break;
+		case D3D12_MESSAGE_CATEGORY_CLEANUP:                categoryStr = "Cleanup";                break;
+		case D3D12_MESSAGE_CATEGORY_COMPILATION:            categoryStr = "Compilation";            break;
+		case D3D12_MESSAGE_CATEGORY_STATE_CREATION:            categoryStr = "State creation";            break;
+		case D3D12_MESSAGE_CATEGORY_STATE_SETTING:            categoryStr = "State setting";            break;
+		case D3D12_MESSAGE_CATEGORY_STATE_GETTING:            categoryStr = "State getting";            break;
+		case D3D12_MESSAGE_CATEGORY_RESOURCE_MANIPULATION:    categoryStr = "Resource manipulation";    break;
+		case D3D12_MESSAGE_CATEGORY_EXECUTION:                categoryStr = "Execution";                break;
+		case D3D12_MESSAGE_CATEGORY_SHADER:                    categoryStr = "Shader";                    break;
 	}
 
 	switch(severity) {
@@ -227,7 +227,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 			D3D12_MESSAGE_ID hide[] = {
 				D3D12_MESSAGE_ID_CREATEDEVICE_DEBUG_LAYER_STARTUP_OPTIONS,
 				D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
-				D3D12_MESSAGE_ID_CREATERESOURCE_INVALIDALIGNMENT	//To check if we allow small alignment
+				D3D12_MESSAGE_ID_CREATERESOURCE_INVALIDALIGNMENT    //To check if we allow small alignment
 			};
 
 			D3D12_INFO_QUEUE_FILTER filter = (D3D12_INFO_QUEUE_FILTER) {
@@ -289,7 +289,7 @@ Error DX_WRAP_FUNC(GraphicsDevice_init)(
 		#endif
 	}
 
-	static const U32 nvExtSlot = 99999;		//space and u slot
+	static const U32 nvExtSlot = 99999;        //space and u slot
 
 	#if _ARCH == ARCH_X86_64
 

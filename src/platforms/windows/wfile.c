@@ -22,6 +22,7 @@
 
 #include "platforms/file.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
 #include "formats/oiCA/ca_file.h"
 #include "types/container/string_unicode.h"
 #include "types/container/list_basic_types.h"
@@ -41,7 +42,7 @@
 #include <Windows.h>
 #include <stdio.h>
 
-#define WIN_PATH_MAX (1024 + 4)		// 1023 usable + null + \\?\
+#define WIN_PATH_MAX (1024 + 4)        // 1023 usable + null + \\?\
  
 //UTF-8 -> UTF-16, / -> \, prepend \\?\ (assumes that buf is WIN_PATH_MAX)
 Bool CharString_toLongPath(wchar_t *buf, const CharString *str, Error *e_rr) {
@@ -72,14 +73,14 @@ static Ns Ns_fromFileTime(FILETIME ft) {
 }
 
 //Helper: retry loop
-#define FILE_RETRY_LOOP(maxTimeout, expr)											\
-	{																				\
-		Ns _maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);				\
-		while((expr) && maxTimeout) {												\
-			Thread_sleep(_maxTimeoutTry);											\
-			if(maxTimeout <= _maxTimeoutTry) { maxTimeout = 0; break; }				\
-			maxTimeout -= _maxTimeoutTry;											\
-		}																			\
+#define FILE_RETRY_LOOP(maxTimeout, expr)                                            \
+	{                                                                                \
+		Ns _maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);                \
+		while((expr) && maxTimeout) {                                                \
+			Thread_sleep(_maxTimeoutTry);                                            \
+			if(maxTimeout <= _maxTimeoutTry) { maxTimeout = 0; break; }                \
+			maxTimeout -= _maxTimeoutTry;                                            \
+		}                                                                            \
 	}
 
 Bool File_getInfoPhysical(const CharString *str, FileInfo *info, const Allocator *alloc, Error *e_rr) {
@@ -327,7 +328,7 @@ Bool File_openPhysical(
 	Bool isWrite = type == EFileOpenType_Write || type == EFileOpenType_ReadWrite;
  
 	DWORD access   = (isRead  ? GENERIC_READ  : 0) | (isWrite ? GENERIC_WRITE : 0);
-	DWORD share    = isRead && !isWrite ? FILE_SHARE_READ : 0;	//no sharing for writable
+	DWORD share    = isRead && !isWrite ? FILE_SHARE_READ : 0;    //no sharing for writable
 	DWORD creation = isWrite ? (isRead ? OPEN_ALWAYS : CREATE_ALWAYS) : OPEN_EXISTING;
  
 	HANDLE h = CreateFileW(buf, access, share, NULL, creation, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -377,7 +378,7 @@ Bool FileHandle_writePhysical(FileHandle *handle, U64 offset, U64 length, const 
  
 	while(remaining) {
 
-		DWORD toWrite = (DWORD)U64_min(remaining, 64 * MIBI);		//64MB chunks
+		DWORD toWrite = (DWORD)U64_min(remaining, 64 * MIBI);        //64MB chunks
 		DWORD wrote = 0;
 		OVERLAPPED ov = { 0 };
 		ov.Offset     = (DWORD)(currentOffset & U32_MAX);
@@ -409,7 +410,7 @@ Bool FileHandle_readPhysical(FileHandle *handle, U64 offset, U64 length, Buffer 
  
 	while(remaining) {
 
-		DWORD toRead = (DWORD) U64_min(remaining, 64 * MIBI);		//64MB chunks
+		DWORD toRead = (DWORD) U64_min(remaining, 64 * MIBI);        //64MB chunks
 		DWORD got = 0;
 		OVERLAPPED ov = { 0 };
 		ov.Offset     = (DWORD)(currentOffset & U32_MAX);
@@ -518,6 +519,15 @@ Bool File_foreach(
 			gotoIfError3(clean, CharString_createCopy(resolvedNoStar, alloc, &tmp, e_rr));
 			gotoIfError3(clean, CharString_createFromUTF16(dat.cFileName, MAX_OXC_PATH, alloc, &tmp2, e_rr));
 			gotoIfError3(clean, CharString_appendString(&tmp, &tmp2, alloc, e_rr));
+
+			if(CharString_length(tmp) > MAX_OXC_PATH) {
+
+				Log_warnLn(alloc, "File_foreach()::path out of bounds (%.*s). Skipping...",
+					(int) CharString_length(tmp), tmp.ptr
+				);
+
+				continue;
+			}
 
 			CharString_free(&tmp2, alloc);
 

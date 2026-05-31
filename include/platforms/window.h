@@ -36,38 +36,38 @@
 //The runtime is allowed to ignore this if it's not applicable.
 typedef enum EWindowHint {
 
-	EWindowHint_AllowFullscreen			= 1 << 0,
-	EWindowHint_DisableResize			= 1 << 1,
-	EWindowHint_ForceFullscreen			= 1 << 2,
-	EWindowHint_AllowBackgroundUpdates	= 1 << 3,
-	EWindowHint_ProvideCPUBuffer		= 1 << 4,	//We write from CPU. Useful for physical windows CPU accessible
+	EWindowHint_AllowFullscreen            = 1 << 0,
+	EWindowHint_DisableResize            = 1 << 1,
+	EWindowHint_ForceFullscreen            = 1 << 2,
+	EWindowHint_AllowBackgroundUpdates    = 1 << 3,
+	EWindowHint_ProvideCPUBuffer        = 1 << 4,    //We write from CPU. Useful for physical windows CPU accessible
 
-	EWindowHint_None					= 0,
-	EWindowHint_Default					= EWindowHint_AllowFullscreen
+	EWindowHint_None                    = 0,
+	EWindowHint_Default                    = EWindowHint_AllowFullscreen
 
 } EWindowHint;
 
 //Subset of formats that can be used for windows
 //These formats are dependent on the platform too. It's very possible they're not available.
 typedef enum EWindowFormat {
-	EWindowFormat_AutoRGBA8				= 0,							//BGRA8 or RGBA8, depending on platform
-	EWindowFormat_BGRA8					= ETextureFormat_BGRA8,			//Most common format
-	EWindowFormat_RGBA8					= ETextureFormat_RGBA8,			//Also common on non desktop
-	EWindowFormat_BGR10A2				= ETextureFormat_BGR10A2,
-	EWindowFormat_RGBA16f				= ETextureFormat_RGBA16f,
-	EWindowFormat_RGBA32f				= ETextureFormat_RGBA32f		//Rarely supported (only CPU)
+	EWindowFormat_AutoRGBA8                = 0,                            //BGRA8 or RGBA8, depending on platform
+	EWindowFormat_BGRA8                    = ETextureFormat_BGRA8,            //Most common format
+	EWindowFormat_RGBA8                    = ETextureFormat_RGBA8,            //Also common on non desktop
+	EWindowFormat_BGR10A2                = ETextureFormat_BGR10A2,
+	EWindowFormat_RGBA16f                = ETextureFormat_RGBA16f,
+	EWindowFormat_RGBA32f                = ETextureFormat_RGBA32f        //Rarely supported (only CPU)
 } EWindowFormat;
 
 //Window flags are set by the implementation
 typedef enum EWindowFlags {
-	EWindowFlags_None					= 0,
-	EWindowFlags_IsFocussed				= 1 << 0,
-	EWindowFlags_IsMinimized			= 1 << 1,
-	EWindowFlags_IsFullscreen			= 1 << 2,
-	EWindowFlags_IsActive				= 1 << 3,
-	EWindowFlags_ShouldTerminate		= 1 << 4,
-	EWindowFlags_IsMoving				= 1 << 5,		//Move or resize
-	EWindowFlags_IsFinalized			= 1 << 6		//Ready to receive events
+	EWindowFlags_None                    = 0,
+	EWindowFlags_IsFocussed                = 1 << 0,
+	EWindowFlags_IsMinimized            = 1 << 1,
+	EWindowFlags_IsFullscreen            = 1 << 2,
+	EWindowFlags_IsActive                = 1 << 3,
+	EWindowFlags_ShouldTerminate        = 1 << 4,
+	EWindowFlags_IsMoving                = 1 << 5,        //Move or resize
+	EWindowFlags_IsFinalized            = 1 << 6        //Ready to receive events
 } EWindowFlags;
 
 #define _RESOLUTION(w, h) (w << 16) | h
@@ -75,18 +75,18 @@ typedef enum EWindowFlags {
 //Commonly used resolutions
 typedef enum EResolution {
 	EResolution_Undefined,
-	EResolution_SD						= _RESOLUTION(426, 240),
-	EResolution_360						= _RESOLUTION(640, 360),
-	EResolution_VGA						= _RESOLUTION(640, 480),
-	EResolution_480						= _RESOLUTION(854, 480),
-	EResolution_WideScreen				= _RESOLUTION(1280, 544),
-	EResolution_HD						= _RESOLUTION(1280, 720),
-	EResolution_FWideScreen				= _RESOLUTION(1920, 816),
-	EResolution_FHD						= _RESOLUTION(1920, 1080),
-	EResolution_QHD						= _RESOLUTION(2560, 1440),
-	EResolution_UHD						= _RESOLUTION(3840, 2160),
-	EResolution_8K						= _RESOLUTION(7680, 4320),
-	EResolution_16K						= _RESOLUTION(15360, 8640)
+	EResolution_SD                        = _RESOLUTION(426, 240),
+	EResolution_360                        = _RESOLUTION(640, 360),
+	EResolution_VGA                        = _RESOLUTION(640, 480),
+	EResolution_480                        = _RESOLUTION(854, 480),
+	EResolution_WideScreen                = _RESOLUTION(1280, 544),
+	EResolution_HD                        = _RESOLUTION(1280, 720),
+	EResolution_FWideScreen                = _RESOLUTION(1920, 816),
+	EResolution_FHD                        = _RESOLUTION(1920, 1080),
+	EResolution_QHD                        = _RESOLUTION(2560, 1440),
+	EResolution_UHD                        = _RESOLUTION(3840, 2160),
+	EResolution_8K                        = _RESOLUTION(7680, 4320),
+	EResolution_16K                        = _RESOLUTION(15360, 8640)
 } EResolution;
 
 
@@ -147,11 +147,11 @@ typedef struct WindowCallbacks {
 //An example here is an OpenXR window.
 typedef enum EWindowType {
 
-	EWindowType_Physical,			//Native window of the underlying platform
-	EWindowType_Virtual,			//Non-native window, such as headless rendering
-	//EWindowType_ExtendedOpenXR,	//Extended physical window; for use with OpenXR
-	//EWindowType_External,			//Externally managed window, manually calling the necessary functions
-	//EWindowType_ExternalGlfw,		//TODO: Interop with other libraries like glfw for ease of integration
+	EWindowType_Physical,            //Native window of the underlying platform
+	EWindowType_Virtual,            //Non-native window, such as headless rendering
+	//EWindowType_ExtendedOpenXR,    //Extended physical window; for use with OpenXR
+	//EWindowType_External,            //Externally managed window, manually calling the necessary functions
+	//EWindowType_ExternalGlfw,        //TODO: Interop with other libraries like glfw for ease of integration
 
 	EWindowType_Count,
 	EWindowType_Extended = EWindowType_Virtual + 1
@@ -167,10 +167,10 @@ TList(InputDevice);
 TList(Monitor);
 
 typedef enum EWindowOrientation {
-	EWindowOrientation_Landscape			= 0,
-	EWindowOrientation_Portrait				= 90,
-	EWindowOrientation_FlippedLandscape		= 180,
-	EWindowOrientation_FlippedPortrait		= 270
+	EWindowOrientation_Landscape            = 0,
+	EWindowOrientation_Portrait                = 90,
+	EWindowOrientation_FlippedLandscape        = 180,
+	EWindowOrientation_FlippedPortrait        = 270
 } EWindowOrientation;
 
 typedef U16 WindowOrientation;
@@ -181,7 +181,7 @@ typedef struct Window {
 
 	WindowHint hint;
 	WindowType type;
-	Bool requireResize;			//Can be set by for example the graphics API to indicate a resize should be performed
+	Bool requireResize;            //Can be set by for example the graphics API to indicate a resize should be performed
 
 	WindowOrientation orientation;
 	U16 padding1;
@@ -192,7 +192,7 @@ typedef struct Window {
 	I32x2 offset, size;
 	I32x2 minSize, maxSize;
 
-	I32x2 prevSize;				//For full screen toggle
+	I32x2 prevSize;                //For full screen toggle
 	I32x2 cursor;
 
 	Buffer cpuVisibleBuffer;
@@ -248,7 +248,7 @@ static inline Bool Window_terminate(Window *w) {
 	if(!w)
 		return false;
 
-	w->flags |= EWindowFlags_ShouldTerminate;		//Mark thread for destroy
+	w->flags |= EWindowFlags_ShouldTerminate;        //Mark thread for destroy
 	return true;
 }
 

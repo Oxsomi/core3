@@ -45,29 +45,29 @@ void Test_CACreateFree(Test *t) {
 	
 	Test_setModule(t, "CAFile_createFree");
 
-	{						//Basic create + free
+	{                        //Basic create + free
 		CAFile ca = { 0 };
 		Test_assert(t, "Create ok",               CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err));
 
-		Test_assert(t, "folders.length 1",        ca.folders.length == 1);		//Root folder
+		Test_assert(t, "folders.length 1",        ca.folders.length == 1);        //Root folder
 		Test_assert(t, "files.length 0",          ca.files.length   == 0);
 
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{						//IncludeDate flag accepted
+	{                        //IncludeDate flag accepted
 		CAFile ca = { 0 };
 		Test_assert(t, "Create IncludeDate ok",   CAFile_create(&kCASettingsDate, 0, 0, t->alloc, &ca, &t->err));
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{						//IncludeFullDate flag accepted
+	{                        //IncludeFullDate flag accepted
 		CAFile ca = { 0 };
 		Test_assert(t, "Create IncludeFullDate ok", CAFile_create(&kCASettingsFullDate, 0, 0, t->alloc, &ca, &t->err));
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{						//Double create should fail
+	{                        //Double create should fail
 		CAFile ca = { 0 };
 		Test_assert(t, "First create",            CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, &t->err));
 		Test_assert(t, "Double-create fails",     !CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, NULL));
@@ -83,21 +83,21 @@ void Test_CACreateFree(Test *t) {
 		Test_assert(t, "Null settings fails",     !CAFile_create(NULL, 0, 0, t->alloc, &ca, NULL));
 	}
 
-	{						//Invalid flags rejected
+	{                        //Invalid flags rejected
 		CASettings bad = kCASettings;
 		bad.flags = ECASettingsFlags_Invalid;
 		CAFile ca = { 0 };
 		Test_assert(t, "Invalid flags fails",     !CAFile_create(&bad, 0, 0, t->alloc, &ca, NULL));
 	}
 
-	{						//Invalid compression type rejected
+	{                        //Invalid compression type rejected
 		CASettings bad = kCASettings;
 		bad.compressionType = (EXXCompressionType)0xFF;
 		CAFile ca = { 0 };
 		Test_assert(t, "Bad compressionType",     !CAFile_create(&bad, 0, 0, t->alloc, &ca, NULL));
 	}
 
-	{						//Invalid encryption type rejected
+	{                        //Invalid encryption type rejected
 		CASettings bad = kCASettings;
 		bad.encryptionType = (EXXEncryptionType)0xFF;
 		CAFile ca = { 0 };
@@ -106,16 +106,16 @@ void Test_CACreateFree(Test *t) {
 
 	//Check free
 
-	CAFile_free(NULL, t->alloc);				//Free null is safe
+	CAFile_free(NULL, t->alloc);                //Free null is safe
 	Test_assert(t, "Free NULL safe", true);
 
-	{						//Free of unallocated struct must not crash
+	{                        //Free of unallocated struct must not crash
 		CAFile ca = { 0 };
 		CAFile_free(&ca, t->alloc);
 		Test_assert(t, "Free unallocated safe", true);
 	}
 
-	{						//Free must zero the struct
+	{                        //Free must zero the struct
 		CAFile ca = { 0 };
 		CAFile_create(&kCASettings, 0, 0, t->alloc, &ca, NULL);
 		CAFile_free(&ca, t->alloc);

@@ -79,7 +79,7 @@ const C8 *nvHLSLExtnsInternal2 =
 
 typedef class IncludeHandler IncludeHandler;
 
-typedef struct CompilerInterfaces {		//Also defined in compiler_dxil
+typedef struct CompilerInterfaces {        //Also defined in compiler_dxil
 	IDxcUtils *utils;
 	IDxcCompiler3 *compiler;
 	IncludeHandler *includeHandler;
@@ -92,7 +92,7 @@ class IncludeHandler : public IDxcIncludeHandler {
 	ListIncludedFile includedFiles{};
 	ListU64 isPresent{};
 	Allocator alloc;
-	U64 counter{};			//Unique file counter in the current file
+	U64 counter{};            //Unique file counter in the current file
 
 public:
 
@@ -182,7 +182,7 @@ public:
 
 			Bool validCache = true;
 
-			if(!isBuiltin) {		//Builtins don't exist on disk, so they can't really be hot reloaded
+			if(!isBuiltin) {        //Builtins don't exist on disk, so they can't really be hot reloaded
 
 				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
 
@@ -415,7 +415,7 @@ public:
 		return E_NOINTERFACE;
 	}
 
-	ULONG STDMETHODCALLTYPE AddRef() override {	return 0; }
+	ULONG STDMETHODCALLTYPE AddRef() override {    return 0; }
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
@@ -427,7 +427,7 @@ Bool Compiler_setup(Error *e_rr) {
 	Bool s_uccess = true;
 	ELockAcquire acq = SpinLock_lock(&lockThread, 0);
 
-	if (acq >= ELockAcquire_Success) {		//First to lock is first to initialize
+	if (acq >= ELockAcquire_Success) {        //First to lock is first to initialize
 
 		if(!hasInitialized) {
 
@@ -626,40 +626,40 @@ clean:
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
-	#define Compiler_defineStrings																		\
-		ListU16 tempStrUTF16 = ListU16{};																\
-		ListListU16 stringsUTF16 = ListListU16{};														\
+	#define Compiler_defineStrings                                                                        \
+		ListU16 tempStrUTF16 = ListU16{};                                                                \
+		ListListU16 stringsUTF16 = ListListU16{};                                                        \
 		ListU16PtrConst strings = ListU16PtrConst{}
 
-	#define Compiler_freeStrings																		\
-		ListU16_free(&tempStrUTF16, alloc);																\
-		ListListU16_freeUnderlying(&stringsUTF16, alloc);												\
+	#define Compiler_freeStrings                                                                        \
+		ListU16_free(&tempStrUTF16, alloc);                                                                \
+		ListListU16_freeUnderlying(&stringsUTF16, alloc);                                                \
 		ListU16PtrConst_free(&strings, alloc)
 
-	#define Compiler_convertToWString(strs, label) 														\
-		for(U64 ii = 0; ii < strs.length; ++ii) {														\
-			gotoIfError2(label, CharString_toUTF16(strs.ptr[ii], alloc, &tempStrUTF16))					\
-			gotoIfError2(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, alloc))			\
-			gotoIfError2(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc))				\
-			tempStrUTF16 = ListU16{};																	\
+	#define Compiler_convertToWString(strs, label)                                                         \
+		for(U64 ii = 0; ii < strs.length; ++ii) {                                                        \
+			gotoIfError2(label, CharString_toUTF16(strs.ptr[ii], alloc, &tempStrUTF16))                    \
+			gotoIfError2(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, alloc))            \
+			gotoIfError2(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc))                \
+			tempStrUTF16 = ListU16{};                                                                    \
 		}
 #else
-	#define Compiler_defineStrings																		\
-		ListU32 tempStrUTF32 = ListU32{};																\
-		ListListU32 stringsUTF32 = ListListU32{};														\
+	#define Compiler_defineStrings                                                                        \
+		ListU32 tempStrUTF32 = ListU32{};                                                                \
+		ListListU32 stringsUTF32 = ListListU32{};                                                        \
 		ListU32PtrConst strings = ListU32PtrConst{}
 
-	#define Compiler_freeStrings																		\
-		ListU32_free(&tempStrUTF32, alloc);																\
-		ListListU32_freeUnderlying(&stringsUTF32, alloc);												\
+	#define Compiler_freeStrings                                                                        \
+		ListU32_free(&tempStrUTF32, alloc);                                                                \
+		ListListU32_freeUnderlying(&stringsUTF32, alloc);                                                \
 		ListU32PtrConst_free(&strings, alloc)
 
-	#define Compiler_convertToWString(strs, label) 														\
-		for(U64 ii = 0; ii < strs.length; ++ii) {														\
-			gotoIfError2(label, CharString_toUTF32(strs.ptr[ii], alloc, &tempStrUTF32))					\
-			gotoIfError2(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, alloc))			\
-			gotoIfError2(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc))				\
-			tempStrUTF32 = ListU32{};																	\
+	#define Compiler_convertToWString(strs, label)                                                         \
+		for(U64 ii = 0; ii < strs.length; ++ii) {                                                        \
+			gotoIfError2(label, CharString_toUTF32(strs.ptr[ii], alloc, &tempStrUTF32))                    \
+			gotoIfError2(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, alloc))            \
+			gotoIfError2(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc))                \
+			tempStrUTF32 = ListU32{};                                                                    \
 		}
 #endif
 
@@ -719,7 +719,7 @@ Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler
 	files = includeHandler->getIncludedFiles();
 
 	for(U64 i = 0, j = 0; i < files.length; ++i)
-		if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
+		if (files.ptr[i].includeInfo.counter) {        //Exclude inactive includes
 
 			IncludeInfo copy = files.ptr[i].includeInfo;
 			gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
@@ -932,7 +932,7 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
 
-	if(!didInit && s_uccess)		//Avoid memleak
+	if(!didInit && s_uccess)        //Avoid memleak
 		ListCharString_freeUnderlying(uniqueSemantics, alloc);
 
 	return s_uccess;
@@ -958,7 +958,7 @@ Bool Compiler_compile(
 	CharString tempStr1 = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
 	CharString tmpFile = CharString_createNull();
-	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
+	ListCharString stringsUTF8 = ListCharString{};        //One day, Microsoft will fix their stuff, I hope.
 
 	Bool requiresLink = toCompile.uniforms.length || (settings.isLib && settings.containsGfxOrComp);
 
@@ -980,7 +980,7 @@ Bool Compiler_compile(
 
 	try {
 
-		interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
+		interfaces->includeHandler->reset();        //Ensure we don't reuse stale caches
 
 		result->isSuccess = false;
 
@@ -1393,78 +1393,78 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 		default:
 			break;
 
-		case C8x4('v', 'e', 'r', 't'):		//vertex
+		case C8x4('v', 'e', 'r', 't'):        //vertex
 
 			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('e', 'x'))
 				return ESHPipelineStage_Vertex;
 
 			break;
 
-		case C8x4('d', 'o', 'm', 'a'):		//domain
+		case C8x4('d', 'o', 'm', 'a'):        //domain
 
 			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 'n'))
 				return ESHPipelineStage_Domain;
 
 			break;
 
-		case C8x4('p', 'i', 'x', 'e'):		//pixel
+		case C8x4('p', 'i', 'x', 'e'):        //pixel
 
 			if(stageNameLen == 5 && stageName.ptr[4] == 'l')
 				return ESHPipelineStage_Pixel;
 
 			break;
 
-		case C8x4('g', 'e', 'o', 'm'):		//geometry
+		case C8x4('g', 'e', 'o', 'm'):        //geometry
 
 			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('e', 't', 'r', 'y'))
 				return ESHPipelineStage_GeometryExt;
 
 			break;
 
-		case C8x4('c', 'o', 'm', 'p'):		//compute
+		case C8x4('c', 'o', 'm', 'p'):        //compute
 
 			if(stageNameLen == 7 && Buffer_readU32(buf, 3, NULL) == C8x4('p', 'u', 't', 'e'))
 				return ESHPipelineStage_Compute;
 
 			break;
 
-		case C8x4('n', 'o', 'd', 'e'):		//node
-			if(stageNameLen == 4)			return ESHPipelineStage_WorkgraphExt;
+		case C8x4('n', 'o', 'd', 'e'):        //node
+			if(stageNameLen == 4)            return ESHPipelineStage_WorkgraphExt;
 			break;
 
-		case C8x4('m', 'e', 's', 'h'):		//mesh
-			if(stageNameLen == 4)			return ESHPipelineStage_MeshExt;
+		case C8x4('m', 'e', 's', 'h'):        //mesh
+			if(stageNameLen == 4)            return ESHPipelineStage_MeshExt;
 			break;
 
-		case C8x4('t', 'a', 's', 'k'):		//task
-			if(stageNameLen == 4)			return ESHPipelineStage_TaskExt;
+		case C8x4('t', 'a', 's', 'k'):        //task
+			if(stageNameLen == 4)            return ESHPipelineStage_TaskExt;
 			break;
 
-		case C8x4('h', 'u', 'l', 'l'):		//hull
-			if(stageNameLen == 4)			return ESHPipelineStage_Hull;
+		case C8x4('h', 'u', 'l', 'l'):        //hull
+			if(stageNameLen == 4)            return ESHPipelineStage_Hull;
 			break;
 
 		//Raytracing
 
-		case C8x4('m', 'i', 's', 's'):		//miss
-			if(stageNameLen == 4)			return ESHPipelineStage_MissExt;
+		case C8x4('m', 'i', 's', 's'):        //miss
+			if(stageNameLen == 4)            return ESHPipelineStage_MissExt;
 			break;
 
-		case C8x4('a', 'n', 'y', 'h'):		//anyhit
+		case C8x4('a', 'n', 'y', 'h'):        //anyhit
 
 			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 't'))
 				return ESHPipelineStage_AnyHitExt;
 
 			break;
 
-		case C8x4('c', 'l', 'o', 's'):		//closesthit
+		case C8x4('c', 'l', 'o', 's'):        //closesthit
 
 			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't'))
 				return ESHPipelineStage_ClosestHitExt;
 
 			break;
 
-		case C8x4('r', 'a', 'y', 'g'):		//raygeneration
+		case C8x4('r', 'a', 'y', 'g'):        //raygeneration
 
 			if(
 				stageNameLen == 13 &&
@@ -1475,7 +1475,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 			break;
 
-		case C8x4('i', 'n', 't', 'e'):		//intersection
+		case C8x4('i', 'n', 't', 'e'):        //intersection
 
 			if(stageNameLen == 12 && Buffer_readU64(buf, 4, NULL) == C8x8('r', 's', 'e', 'c', 't', 'i', 'o', 'n'))
 				return ESHPipelineStage_IntersectionExt;
@@ -1496,26 +1496,26 @@ ESHVendor Compiler_parseVendor(CharString vendor) {
 		default:
 			return ESHVendor_Count;
 
-		case 2:		//NV
+		case 2:        //NV
 			return Buffer_readU16(buf, 0, NULL) == C8x2('N', 'V') ? ESHVendor_NV : ESHVendor_Count;
 
-		case 3:		//AMD, ARM
+		case 3:        //AMD, ARM
 			switch (Buffer_readU16(buf, 0, NULL)) {
-				default:				return ESHVendor_Count;
-				case C8x2('A', 'M'):	return vendor.ptr[2] == 'D' ? ESHVendor_AMD : ESHVendor_Count;
-				case C8x2('A', 'R'):	return vendor.ptr[2] == 'M' ? ESHVendor_ARM : ESHVendor_Count;
+				default:                return ESHVendor_Count;
+				case C8x2('A', 'M'):    return vendor.ptr[2] == 'D' ? ESHVendor_AMD : ESHVendor_Count;
+				case C8x2('A', 'R'):    return vendor.ptr[2] == 'M' ? ESHVendor_ARM : ESHVendor_Count;
 			}
 
-		case 4:		//QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI
+		case 4:        //QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI
 			switch (Buffer_readU32(buf, 0, NULL)) {
-				default:							return ESHVendor_Count;
-				case C8x4('Q', 'C', 'O', 'M'):		return ESHVendor_QCOM;
-				case C8x4('I', 'N', 'T', 'C'):		return ESHVendor_INTC;
-				case C8x4('I', 'M', 'G', 'T'):		return ESHVendor_IMGT;
-				case C8x4('M', 'S', 'F', 'T'):		return ESHVendor_MSFT;
-				case C8x4('A', 'P', 'P', 'L'):		return ESHVendor_APPL;
-				case C8x4('S', 'M', 'S', 'G'):		return ESHVendor_SMSG;
-				case C8x4('H', 'W', 'E', 'I'):		return ESHVendor_HWEI;
+				default:                            return ESHVendor_Count;
+				case C8x4('Q', 'C', 'O', 'M'):        return ESHVendor_QCOM;
+				case C8x4('I', 'N', 'T', 'C'):        return ESHVendor_INTC;
+				case C8x4('I', 'M', 'G', 'T'):        return ESHVendor_IMGT;
+				case C8x4('M', 'S', 'F', 'T'):        return ESHVendor_MSFT;
+				case C8x4('A', 'P', 'P', 'L'):        return ESHVendor_APPL;
+				case C8x4('S', 'M', 'S', 'G'):        return ESHVendor_SMSG;
+				case C8x4('H', 'W', 'E', 'I'):        return ESHVendor_HWEI;
 			}
 	}
 }
@@ -1528,33 +1528,33 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 	switch (c8x2) {
 
-		case C8x2('F', '6'):	//F64
-			if(stageNameLen == 3 && extensionName.ptr[2] == '4')	return ESHExtension_F64;
+		case C8x2('F', '6'):    //F64
+			if(stageNameLen == 3 && extensionName.ptr[2] == '4')    return ESHExtension_F64;
 			break;
 
-		case C8x2('I', '6'):	//I64
-			if(stageNameLen == 3 && extensionName.ptr[2] == '4')	return ESHExtension_I64;
+		case C8x2('I', '6'):    //I64
+			if(stageNameLen == 3 && extensionName.ptr[2] == '4')    return ESHExtension_I64;
 			break;
 
-		case C8x2('P', 'A'):	//PAQ
-			if(stageNameLen == 3 && extensionName.ptr[2] == 'Q')	return ESHExtension_PAQ;
+		case C8x2('P', 'A'):    //PAQ
+			if(stageNameLen == 3 && extensionName.ptr[2] == 'Q')    return ESHExtension_PAQ;
 			break;
 
-		case C8x2('1', '6'):	//16BitTypes
+		case C8x2('1', '6'):    //16BitTypes
 
 			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('B', 'i', 't', 'T', 'y', 'p', 'e', 's'))
 				return ESHExtension_16BitTypes;
 
 			break;
 
-		case C8x2('M', 'u'):	//Multiview
+		case C8x2('M', 'u'):    //Multiview
 
 			if(stageNameLen == 9 && Buffer_readU64(buf, 1, NULL) == C8x8('u', 'l', 't', 'i', 'v', 'i', 'e', 'w'))
 				return ESHExtension_Multiview;
 
 			break;
 
-		case C8x2('C', 'o'):	//ComputeDeriv
+		case C8x2('C', 'o'):    //ComputeDeriv
 
 			if(
 				stageNameLen == 12 &&
@@ -1588,20 +1588,20 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('A', 't'):	//AtomicI64, AtomicF32, AtomicF64
+		case C8x2('A', 't'):    //AtomicI64, AtomicF32, AtomicF64
 
 			if(stageNameLen == 9)
 				switch (Buffer_readU64(buf, 1, NULL)) {
-					case C8x8('t', 'o', 'm', 'i', 'c', 'I', '6', '4'):		return ESHExtension_AtomicI64;
-					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '3', '2'):		return ESHExtension_AtomicF32;
-					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '6', '4'):		return ESHExtension_AtomicF64;
+					case C8x8('t', 'o', 'm', 'i', 'c', 'I', '6', '4'):        return ESHExtension_AtomicI64;
+					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '3', '2'):        return ESHExtension_AtomicF32;
+					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '6', '4'):        return ESHExtension_AtomicF64;
 				}
 
 			break;
 
-		case C8x2('S', 'u'):	//SubgroupArithmetic, SubgroupShuffle, SubgroupOperations
+		case C8x2('S', 'u'):    //SubgroupArithmetic, SubgroupShuffle, SubgroupOperations
 
-			if(stageNameLen == 15) {			//SubgroupShuffle
+			if(stageNameLen == 15) {            //SubgroupShuffle
 				if(
 					Buffer_readU64(buf, 0, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
 					Buffer_readU64(buf, 7, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
@@ -1609,7 +1609,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 					return ESHExtension_SubgroupShuffle;
 			}
 
-			else if (stageNameLen == 18) {		//SubgroupArithmetic, SubgroupOperations
+			else if (stageNameLen == 18) {        //SubgroupArithmetic, SubgroupOperations
 
 				if(
 					Buffer_readU64(buf,  2, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
@@ -1627,7 +1627,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('R', 'a'):	//RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder
+		case C8x2('R', 'a'):    //RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder
 
 			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
 				return ESHExtension_RayQuery;
@@ -1635,7 +1635,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			else if(stageNameLen >= 10)
 				switch (Buffer_readU64(buf, 2, NULL)) {
 
-					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):		//RayMicromapOpacity
+					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):        //RayMicromapOpacity
 
 						if(
 							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
@@ -1645,14 +1645,14 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 						break;
 
-					case C8x8('y', 'M', 'o', 't', 'i', 'o', 'n', 'B'):		//RayMotionBlur
+					case C8x8('y', 'M', 'o', 't', 'i', 'o', 'n', 'B'):        //RayMotionBlur
 
 						if(stageNameLen == 13 && Buffer_readU32(buf, 10, NULL) == C8x4('B', 'l', 'u', 'r'))
 							return ESHExtension_RayMotionBlur;
 
 						break;
 
-					case C8x8('y', 'R', 'e', 'o', 'r', 'd', 'e', 'r'):		//RayReorder
+					case C8x8('y', 'R', 'e', 'o', 'r', 'd', 'e', 'r'):        //RayReorder
 
 						if(stageNameLen == 10)
 							return ESHExtension_RayReorder;
@@ -2016,7 +2016,7 @@ Bool Compiler_parseShaderAnnot(
 
 	Bool s_uccess = true;
 
-	if (!annot.IsBuiltin)	//not [shader("")]
+	if (!annot.IsBuiltin)    //not [shader("")]
 		goto clean;
 
 	c8x4 = Buffer_readU32(buf, 0, NULL);
@@ -2044,7 +2044,7 @@ Bool Compiler_parseStageAnnot(SHEntryRuntime &entry, CharString functionName, co
 	Bool s_uccess = true;
 
 	//[[oxc::stage("vertex")]]
-	//	          ^
+	//              ^
 
 	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr))
 
@@ -2552,10 +2552,10 @@ Bool Compiler_parseValue(
 					))
 
 				switch(bits) {
-					default:	value->vu8[dstOff] = (U8) res;		break;
-					case 16:	value->vu16[dstOff] = (U16) res;	break;
-					case 32:	value->vu32[dstOff] = (U32) res;	break;
-					case 64:	value->vu64[dstOff] = res;			break;
+					default:    value->vu8[dstOff] = (U8) res;        break;
+					case 16:    value->vu16[dstOff] = (U16) res;    break;
+					case 32:    value->vu32[dstOff] = (U32) res;    break;
+					case 64:    value->vu64[dstOff] = res;            break;
 				}
 
 				++dstOff;
@@ -2601,10 +2601,10 @@ Bool Compiler_parseValue(
 					))
 
 				switch(bits) {
-					default:	value->vi8[dstOff]  = (I8) res;		break;
-					case 16:	value->vi16[dstOff] = (I16) res;	break;
-					case 32:	value->vi32[dstOff] = (I32) res;	break;
-					case 64:	value->vi64[dstOff] = res;			break;
+					default:    value->vi8[dstOff]  = (I8) res;        break;
+					case 16:    value->vi16[dstOff] = (I16) res;    break;
+					case 32:    value->vi32[dstOff] = (I32) res;    break;
+					case 64:    value->vi64[dstOff] = res;            break;
 				}
 
 				++dstOff;
@@ -2782,7 +2782,7 @@ Bool Compiler_registerUniform(
 	++str;
 
 	//type name = value;
-	//			  ^
+	//              ^
 
 	gotoIfError3(clean, Compiler_parseValue(&value, dstOff, typeId, str, e_rr))
 
@@ -2833,7 +2833,7 @@ Bool Compiler_registerUniform(
 		Buffer_createRefConst(&value, valLen)
 	);
 
-	tmp = CharString_createNull();		//Moved
+	tmp = CharString_createNull();        //Moved
 
 clean:
 	CharString_free(&tmp, alloc);
@@ -2888,20 +2888,20 @@ Bool Compiler_parseUniformsAnnot(SHEntryRuntime &entry, const C8 *&str, Allocato
 
 	//oxc::uniforms ( B1 x = true, U32 y = 1 )
 	//oxc::uniforms ( B1 x = true )
-	//				  ^
+	//                  ^
 
 	gotoIfError3(clean, Compiler_registerUniform(entry, str, alloc, e_rr));
 	uniformCount = 1;
 
 	//[[oxc::uniforms(U32 x = 21, B1 y = false)]]
 	//[[oxc::uniforms(U32 x = 21)]]
-	//							^
+	//                            ^
 
 	while(true) {
 
 		//oxc::uniforms(U32 x = 21 , B1 y = false)
 		//oxc::uniforms(U32 x = 21 )
-		//						  ^
+		//                          ^
 
 		if (!Compiler_skipWhitespace(str))
 			retError(clean, Error_invalidState(0, "Compiler_parseUniformsAnnot() uniforms annotation ended unexpectedly"));
@@ -2909,7 +2909,7 @@ Bool Compiler_parseUniformsAnnot(SHEntryRuntime &entry, const C8 *&str, Allocato
 		//oxc::uniforms(U32 x = 21, B1 y = false) abc
 		//oxc::uniforms(U32 x = 21, B1 y = false)
 		//oxc::uniforms(U32 x = 21)
-		//						  ^^            ^^
+		//                          ^^            ^^
 
 		if (str[0] == ')') {
 
@@ -2924,7 +2924,7 @@ Bool Compiler_parseUniformsAnnot(SHEntryRuntime &entry, const C8 *&str, Allocato
 		}
 
 		//oxc::uniforms(U32 x = 21, B1 y = false)
-		//						  ^
+		//                          ^
 
 		if (*str != ',')
 			retError(clean, Error_invalidState(0, "Compiler_parseUniformsAnnot() uniforms annotation expected ,"));
@@ -2932,7 +2932,7 @@ Bool Compiler_parseUniformsAnnot(SHEntryRuntime &entry, const C8 *&str, Allocato
 		++str;
 
 		//oxc::uniforms(U32 x = 21, B1 y = false)
-		//						   ^
+		//                           ^
 
 		gotoIfError3(clean, Compiler_registerUniform(entry, str, alloc, e_rr));
 		++uniformCount;
@@ -2991,7 +2991,7 @@ Bool Compiler_parseOxcAnnot(
 
 	annotLen = annotEnd - str;
 
-	if (annotLen < 5 || annotLen > 9)	//Skip unknown
+	if (annotLen < 5 || annotLen > 9)    //Skip unknown
 		goto clean;
 
 	buf = Buffer_createRefConst(str, annotLen);
@@ -2999,10 +2999,10 @@ Bool Compiler_parseOxcAnnot(
 
 	switch (c8x4) {
 
-	case C8x4('s', 't', 'a', 'g'):		//oxc::stage()
+	case C8x4('s', 't', 'a', 'g'):        //oxc::stage()
 
 		//[[oxc::stage("vertex")]]
-		//	   ^
+		//       ^
 		if (annotLen == 5 && str[4] == 'e') {
 			str += 5;
 			gotoIfError3(clean, Compiler_parseStageAnnot(entry, functionName, str, alloc, e_rr));
@@ -3010,10 +3010,10 @@ Bool Compiler_parseOxcAnnot(
 
 		goto clean;
 
-	case C8x4('m', 'o', 'd', 'e'):		//oxc::model()
+	case C8x4('m', 'o', 'd', 'e'):        //oxc::model()
 
 		//[[oxc::model("6.8")]]
-		//	   ^
+		//       ^
 		if (annotLen == 5 && str[4] == 'l') {
 			str += 5;
 			gotoIfError3(clean, Compiler_parseModelAnnot(entry, str, alloc, e_rr));
@@ -3021,10 +3021,10 @@ Bool Compiler_parseOxcAnnot(
 
 		break;
 
-	case C8x4('v', 'e', 'n', 'd'):		//oxc::vendor()
+	case C8x4('v', 'e', 'n', 'd'):        //oxc::vendor()
 
 		//[[oxc::vendor("NV", "AMD")]]
-		//	   ^
+		//       ^
 		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('o', 'r')) {
 			str += 6;
 			gotoIfError3(clean, Compiler_parseVendorAnnot(entry, str, e_rr));
@@ -3032,11 +3032,11 @@ Bool Compiler_parseOxcAnnot(
 
 		break;
 
-	case C8x4('d', 'e', 'f', 'i'):		//oxc::defines()
+	case C8x4('d', 'e', 'f', 'i'):        //oxc::defines()
 
 		//[[oxc::defines("X", "Y", "Z")]]
 		//[[oxc::defines("X" = "123", "Y" = "ABC")]]
-		//		 ^
+		//         ^
 		if (annotLen == 7 && Buffer_readU16(buf, 4, NULL) == C8x2('n', 'e') && buf.ptr[6] == 's') {
 			str += 7;
 			gotoIfError3(clean, Compiler_parseDefinesAnnot(entry, str, alloc, e_rr));
@@ -3044,11 +3044,11 @@ Bool Compiler_parseOxcAnnot(
 
 		break;
 
-	case C8x4('u', 'n', 'i', 'f'):		//oxc::uniforms()
+	case C8x4('u', 'n', 'i', 'f'):        //oxc::uniforms()
 
 		//[[oxc::uniforms(U8x4 x = (1, 2, 3, 4))]]
 		//[[oxc::uniforms(B1 b = true)]]
-		//		 ^
+		//         ^
 		if (annotLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('o', 'r', 'm', 's')) {
 			str += 8;
 			gotoIfError3(clean, Compiler_parseUniformsAnnot(entry, str, alloc, e_rr));
@@ -3056,10 +3056,10 @@ Bool Compiler_parseOxcAnnot(
 
 		break;
 
-	case C8x4('e', 'x', 't', 'e'):		//oxc::extension()
+	case C8x4('e', 'x', 't', 'e'):        //oxc::extension()
 
 		//[[oxc::extension()]]
-		//	   ^
+		//       ^
 		if (
 			annotLen == 9 &&
 			Buffer_readU64(buf, 1, NULL) == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
@@ -3100,7 +3100,7 @@ Bool Compiler_parseAnnot(
 
 	annotLen = annotEnd - str;
 
-	if (annotLen != 3 && annotLen != 6)	//Ignore non oxc and shader annots
+	if (annotLen != 3 && annotLen != 6)    //Ignore non oxc and shader annots
 		goto clean;
 
 	//[shader()]
@@ -3111,7 +3111,7 @@ Bool Compiler_parseAnnot(
 		goto clean;
 	}
 
-	if (annot.IsBuiltin)	//not [[oxc::]]
+	if (annot.IsBuiltin)    //not [[oxc::]]
 		goto clean;
 
 	//[[oxc::defines()]]
@@ -3120,7 +3120,7 @@ Bool Compiler_parseAnnot(
 	//[[oxc::model()]]
 	//[[oxc::stage()]]
 	//[[oxc::uniforms()]]
-	//	^
+	//    ^
 
 	gotoIfError3(clean, Compiler_parseOxcAnnot(funcName, str, annotLen, entry, alloc, e_rr))
 
@@ -3156,7 +3156,7 @@ Bool Compiler_parse(
 	D3D12_HLSL_REFLECTION_DESC reflDesc;
 	HRESULT hr = S_OK;
 
-	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
+	ListCharString stringsUTF8 = ListCharString{};        //One day, Microsoft will fix their stuff, I hope.
 	Compiler_defineStrings;
 
 	if (!result)
@@ -3201,7 +3201,7 @@ Bool Compiler_parse(
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
 
 	//if (settings.outputType == ESHBinaryType_SPIRV)
-	//	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
+	//    gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
 
 	//We will pretend that all extensions are enabled, this will avoid parser errors when extensions are used.
 
@@ -3239,7 +3239,7 @@ Bool Compiler_parse(
 
 	Compiler_convertToWString(stringsUTF8, clean);
 
-	interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
+	interfaces->includeHandler->reset();        //Ensure we don't reuse stale caches
 
 	hr = interfaces->reflector->FromSource(
 		source,

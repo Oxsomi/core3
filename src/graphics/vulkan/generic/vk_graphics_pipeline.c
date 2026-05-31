@@ -49,37 +49,37 @@ TList(VkPipelineShaderStageCreateInfo);
 
 VkCompareOp mapVkCompareOp(ECompareOp op) {
 	switch (op) {
-		case ECompareOp_Gt:						return VK_COMPARE_OP_GREATER;
-		case ECompareOp_Geq:					return VK_COMPARE_OP_GREATER_OR_EQUAL;
-		case ECompareOp_Eq:						return VK_COMPARE_OP_EQUAL;
-		case ECompareOp_Neq:					return VK_COMPARE_OP_NOT_EQUAL;
-		case ECompareOp_Leq:					return VK_COMPARE_OP_LESS_OR_EQUAL;
-		case ECompareOp_Lt:						return VK_COMPARE_OP_LESS;
-		case ECompareOp_Always:					return VK_COMPARE_OP_ALWAYS;
-		default:								return VK_COMPARE_OP_NEVER;
+		case ECompareOp_Gt:                        return VK_COMPARE_OP_GREATER;
+		case ECompareOp_Geq:                    return VK_COMPARE_OP_GREATER_OR_EQUAL;
+		case ECompareOp_Eq:                        return VK_COMPARE_OP_EQUAL;
+		case ECompareOp_Neq:                    return VK_COMPARE_OP_NOT_EQUAL;
+		case ECompareOp_Leq:                    return VK_COMPARE_OP_LESS_OR_EQUAL;
+		case ECompareOp_Lt:                        return VK_COMPARE_OP_LESS;
+		case ECompareOp_Always:                    return VK_COMPARE_OP_ALWAYS;
+		default:                                return VK_COMPARE_OP_NEVER;
 	}
 }
 
 VkStencilOp mapVkStencilOp(EStencilOp op) {
 	switch (op) {
-		default:								return VK_STENCIL_OP_KEEP;
-		case EStencilOp_Zero:					return VK_STENCIL_OP_ZERO;
-		case EStencilOp_Replace:				return VK_STENCIL_OP_REPLACE;
-		case EStencilOp_IncClamp:				return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-		case EStencilOp_DecClamp:				return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-		case EStencilOp_Invert:					return VK_STENCIL_OP_INVERT;
-		case EStencilOp_IncWrap:				return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-		case EStencilOp_DecWrap:				return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+		default:                                return VK_STENCIL_OP_KEEP;
+		case EStencilOp_Zero:                    return VK_STENCIL_OP_ZERO;
+		case EStencilOp_Replace:                return VK_STENCIL_OP_REPLACE;
+		case EStencilOp_IncClamp:                return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+		case EStencilOp_DecClamp:                return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+		case EStencilOp_Invert:                    return VK_STENCIL_OP_INVERT;
+		case EStencilOp_IncWrap:                return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+		case EStencilOp_DecWrap:                return VK_STENCIL_OP_DECREMENT_AND_WRAP;
 	}
 }
 
 VkBlendOp mapVkBlendOp(EBlendOp op) {
 	switch (op) {
-		default:								return VK_BLEND_OP_ADD;
-		case EBlendOp_Subtract:					return VK_BLEND_OP_SUBTRACT;
-		case EBlendOp_ReverseSubtract:			return VK_BLEND_OP_REVERSE_SUBTRACT;
-		case EBlendOp_Min:						return VK_BLEND_OP_MIN;
-		case EBlendOp_Max:						return VK_BLEND_OP_MAX;
+		default:                                return VK_BLEND_OP_ADD;
+		case EBlendOp_Subtract:                    return VK_BLEND_OP_SUBTRACT;
+		case EBlendOp_ReverseSubtract:            return VK_BLEND_OP_REVERSE_SUBTRACT;
+		case EBlendOp_Min:                        return VK_BLEND_OP_MIN;
+		case EBlendOp_Max:                        return VK_BLEND_OP_MAX;
 	}
 }
 
@@ -87,26 +87,26 @@ VkBlendFactor mapVkBlend(EBlend op) {
 
 	switch (op) {
 
-		default:								return VK_BLEND_FACTOR_ZERO;
-		case EBlend_One:						return VK_BLEND_FACTOR_ONE;
-		case EBlend_SrcColor:					return VK_BLEND_FACTOR_SRC_COLOR;
-		case EBlend_InvSrcColor:				return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-		case EBlend_DstColor:					return VK_BLEND_FACTOR_DST_COLOR;
-		case EBlend_InvDstColor:				return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-		case EBlend_SrcAlpha:					return VK_BLEND_FACTOR_SRC_ALPHA;
-		case EBlend_InvSrcAlpha:				return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-		case EBlend_DstAlpha:					return VK_BLEND_FACTOR_DST_ALPHA;
-		case EBlend_InvDstAlpha:				return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-		case EBlend_BlendFactor:				return VK_BLEND_FACTOR_CONSTANT_COLOR;
-		case EBlend_InvBlendFactor:				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-		case EBlend_AlphaFactor:				return VK_BLEND_FACTOR_CONSTANT_ALPHA;
-		case EBlend_InvAlphaFactor:				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
-		case EBlend_SrcAlphaSat:				return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+		default:                                return VK_BLEND_FACTOR_ZERO;
+		case EBlend_One:                        return VK_BLEND_FACTOR_ONE;
+		case EBlend_SrcColor:                    return VK_BLEND_FACTOR_SRC_COLOR;
+		case EBlend_InvSrcColor:                return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+		case EBlend_DstColor:                    return VK_BLEND_FACTOR_DST_COLOR;
+		case EBlend_InvDstColor:                return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+		case EBlend_SrcAlpha:                    return VK_BLEND_FACTOR_SRC_ALPHA;
+		case EBlend_InvSrcAlpha:                return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		case EBlend_DstAlpha:                    return VK_BLEND_FACTOR_DST_ALPHA;
+		case EBlend_InvDstAlpha:                return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+		case EBlend_BlendFactor:                return VK_BLEND_FACTOR_CONSTANT_COLOR;
+		case EBlend_InvBlendFactor:                return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+		case EBlend_AlphaFactor:                return VK_BLEND_FACTOR_CONSTANT_ALPHA;
+		case EBlend_InvAlphaFactor:                return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+		case EBlend_SrcAlphaSat:                return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
 
-		case EBlend_Src1ColorExt:				return VK_BLEND_FACTOR_SRC1_COLOR;
-		case EBlend_Src1AlphaExt:				return VK_BLEND_FACTOR_SRC1_ALPHA;
-		case EBlend_InvSrc1ColorExt:			return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
-		case EBlend_InvSrc1AlphaExt:			return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+		case EBlend_Src1ColorExt:                return VK_BLEND_FACTOR_SRC1_COLOR;
+		case EBlend_Src1AlphaExt:                return VK_BLEND_FACTOR_SRC1_ALPHA;
+		case EBlend_InvSrc1ColorExt:            return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
+		case EBlend_InvSrc1AlphaExt:            return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
 	}
 }
 
@@ -172,23 +172,23 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	VkLogicOp logicOp = 0;
 
 	switch (info->blendState.logicOpExt) {
-		default:																break;
-		case ELogicOpExt_Clear:			logicOp = VK_LOGIC_OP_CLEAR;			break;
-		case ELogicOpExt_Set:			logicOp = VK_LOGIC_OP_SET;				break;
-		case ELogicOpExt_Copy:			logicOp = VK_LOGIC_OP_COPY;				break;
-		case ELogicOpExt_CopyInvert:	logicOp = VK_LOGIC_OP_COPY_INVERTED;	break;
-		case ELogicOpExt_None:			logicOp = VK_LOGIC_OP_NO_OP;			break;
-		case ELogicOpExt_Invert:		logicOp = VK_LOGIC_OP_INVERT;			break;
-		case ELogicOpExt_And:			logicOp = VK_LOGIC_OP_AND;				break;
-		case ELogicOpExt_Nand:			logicOp = VK_LOGIC_OP_NAND;				break;
-		case ELogicOpExt_Or:			logicOp = VK_LOGIC_OP_OR;				break;
-		case ELogicOpExt_Nor:			logicOp = VK_LOGIC_OP_NOR;				break;
-		case ELogicOpExt_Xor:			logicOp = VK_LOGIC_OP_XOR;				break;
-		case ELogicOpExt_Equiv:			logicOp = VK_LOGIC_OP_EQUIVALENT;		break;
-		case ELogicOpExt_AndReverse:	logicOp = VK_LOGIC_OP_AND_REVERSE;		break;
-		case ELogicOpExt_AndInvert:		logicOp = VK_LOGIC_OP_AND_INVERTED;		break;
-		case ELogicOpExt_OrReverse:		logicOp = VK_LOGIC_OP_OR_REVERSE;		break;
-		case ELogicOpExt_OrInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;		break;
+		default:                                                                break;
+		case ELogicOpExt_Clear:            logicOp = VK_LOGIC_OP_CLEAR;            break;
+		case ELogicOpExt_Set:            logicOp = VK_LOGIC_OP_SET;                break;
+		case ELogicOpExt_Copy:            logicOp = VK_LOGIC_OP_COPY;                break;
+		case ELogicOpExt_CopyInvert:    logicOp = VK_LOGIC_OP_COPY_INVERTED;    break;
+		case ELogicOpExt_None:            logicOp = VK_LOGIC_OP_NO_OP;            break;
+		case ELogicOpExt_Invert:        logicOp = VK_LOGIC_OP_INVERT;            break;
+		case ELogicOpExt_And:            logicOp = VK_LOGIC_OP_AND;                break;
+		case ELogicOpExt_Nand:            logicOp = VK_LOGIC_OP_NAND;                break;
+		case ELogicOpExt_Or:            logicOp = VK_LOGIC_OP_OR;                break;
+		case ELogicOpExt_Nor:            logicOp = VK_LOGIC_OP_NOR;                break;
+		case ELogicOpExt_Xor:            logicOp = VK_LOGIC_OP_XOR;                break;
+		case ELogicOpExt_Equiv:            logicOp = VK_LOGIC_OP_EQUIVALENT;        break;
+		case ELogicOpExt_AndReverse:    logicOp = VK_LOGIC_OP_AND_REVERSE;        break;
+		case ELogicOpExt_AndInvert:        logicOp = VK_LOGIC_OP_AND_INVERTED;        break;
+		case ELogicOpExt_OrReverse:        logicOp = VK_LOGIC_OP_OR_REVERSE;        break;
+		case ELogicOpExt_OrInvert:        logicOp = VK_LOGIC_OP_OR_INVERTED;        break;
 	}
 
 	VkPipelineColorBlendStateCreateInfo blendState = (VkPipelineColorBlendStateCreateInfo) {
@@ -205,13 +205,13 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	switch (info->topologyMode) {
 
-		default:								topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;		break;
-		case ETopologyMode_TriangleStrip:		topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;	break;
+		default:                                topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;        break;
+		case ETopologyMode_TriangleStrip:        topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;    break;
 
-		case ETopologyMode_LineList:			topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;			break;
-		case ETopologyMode_LineStrip:			topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;		break;
+		case ETopologyMode_LineList:            topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;            break;
+		case ETopologyMode_LineStrip:            topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;        break;
 
-		case ETopologyMode_PointList:			topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;		break;
+		case ETopologyMode_PointList:            topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;        break;
 
 		case ETopologyMode_TriangleListAdj:
 			topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
@@ -248,11 +248,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		PipelineStage stage = pipeline->stages.ptr[j];
 
 		switch (stage.stageType) {
-			default:							stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
-			case EPipelineStage_Pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
-			case EPipelineStage_GeometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
-			case EPipelineStage_Hull:			stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
-			case EPipelineStage_Domain:			stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
+			default:                            stageBit = VK_SHADER_STAGE_VERTEX_BIT;                        break;
+			case EPipelineStage_Pixel:            stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;                    break;
+			case EPipelineStage_GeometryExt:    stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;                    break;
+			case EPipelineStage_Hull:            stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;        break;
+			case EPipelineStage_Domain:            stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;        break;
 		}
 
 		if(CharString_length(name))
@@ -406,9 +406,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 		switch (info->rasterizer.cullMode) {
 
-			case ECullMode_Back:	cullMode = VK_CULL_MODE_BACK_BIT;	break;
-			case ECullMode_Front:	cullMode = VK_CULL_MODE_FRONT_BIT;	break;
-			default:				cullMode = VK_CULL_MODE_NONE;		break;
+			case ECullMode_Back:    cullMode = VK_CULL_MODE_BACK_BIT;    break;
+			case ECullMode_Front:    cullMode = VK_CULL_MODE_FRONT_BIT;    break;
+			default:                cullMode = VK_CULL_MODE_NONE;        break;
 		}
 
 		VkFrontFace windingOrder =

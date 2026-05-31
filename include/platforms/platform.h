@@ -39,11 +39,11 @@ typedef struct VirtualSection {
 
 	CharString path;
 
-	const void *dataExt;	//Information about how to load the virtual file
+	const void *dataExt;    //Information about how to load the virtual file
 
-	U64 loadedAndId;		//(loaded << 63) | id (0 indicates not loaded)
+	U64 loadedAndId;        //(loaded << 63) | id (0 indicates not loaded)
 
-	U64 lenExt;				//Dependent on platform if it contains the length of the section
+	U64 lenExt;                //Dependent on platform if it contains the length of the section
 
 } VirtualSection;
 
@@ -53,13 +53,13 @@ typedef struct Platform {
 
 	EPlatform platformType;
 
-	Bool useWorkingDir;		//TODO: Find a better solution for this for dlls
+	Bool useWorkingDir;        //TODO: Find a better solution for this for dlls
 	U8 pad1[3];
 
 	ListCharString args;
-	CharString defaultDir;				//Either workDir or appDir based on 'useWorkingDir'
-	CharString workDirectory;			//Contains a trailing slash to make file stuff easier
-	CharString appDirectory;			//Installation location if useWorkingDir, otherwise same as workDirectory
+	CharString defaultDir;                //Either workDir or appDir based on 'useWorkingDir'
+	CharString workDirectory;            //Contains a trailing slash to make file stuff easier
+	CharString appDirectory;            //Installation location if useWorkingDir, otherwise same as workDirectory
 
 	const Allocator *alloc;
 
@@ -70,26 +70,26 @@ typedef struct Platform {
 
 	void *data;
 
-	void *data1;						//If present can contain the executable file
+	void *data1;                        //If present can contain the executable file
 	U64 size1;
 
 } Platform;
 
-extern Platform *Platform_instance;		//DLLs that call this need to also call Platform_create or get the same pointer passed.
+extern Platform *Platform_instance;        //DLLs that call this need to also call Platform_create or get the same pointer passed.
 
 Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator, Bool useWorkingDir, Error *e_rr);
 
 impl void Platform_cleanupExt();
 impl Bool Platform_initExt(Error *e_rr);
 
-impl Bool Platform_checkCPUSupport();								//SIMD dependent: SSE, None, NEON
+impl Bool Platform_checkCPUSupport();                                //SIMD dependent: SSE, None, NEON
 impl U64 Platform_getThreads();
 
 //If the device has an on screen keyboard (e.g. Android) you need to call this before handling text input.
 //Also make sure to hide it later with isVisible=false to avoid having a keyboard taking up half of your screen.
 impl Bool Platform_setKeyboardVisible(Bool isVisible);
 
-void Platform_cleanup();			//Call on exit
+void Platform_cleanup();            //Call on exit
 
 impl void *Platform_getDataImpl(void *ptr);
 

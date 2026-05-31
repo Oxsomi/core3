@@ -58,7 +58,7 @@ static I8 cryptoState = -1;
 		}
 
 		if (!hasOSXSave || (_xgetbv(0) & 0x6) != 0x6) {
-			cryptoState = 1;	// AES-NI only
+			cryptoState = 1;    // AES-NI only
 			return;
 		}
 
@@ -75,19 +75,19 @@ static I8 cryptoState = -1;
 		Bool osHasZMM = (_xgetbv(0) & 0xE0) == 0xE0;
 
 		if (!(hasVAES && hasAVX2 && hasVPCLMUL && hasAVX512VL && osHasZMM && hasAVX512BW)) {
-			cryptoState = 1;				//AES-NI only
+			cryptoState = 1;                //AES-NI only
 			return;
 		}
 
 		if (hasAVX512F && hasAVX512DQ) {
-			cryptoState = 3;				//512-bit path
+			cryptoState = 3;                //512-bit path
 			return;
 		}
 
-		cryptoState = 2;					//256-bit VAES path
+		cryptoState = 2;                    //256-bit VAES path
 	}
 #else
-	void SIMD_createCryptoState() { }		//TODO: Use this for presence of crypto in the first place
+	void SIMD_createCryptoState() { }        //TODO: Use this for presence of crypto in the first place
 #endif
 
 //Explanation of algorithm; AES256 GCM + GMAC
@@ -102,15 +102,15 @@ static I8 cryptoState = -1;
 //
 //- Tag: 0
 //- Foreach additional data block padded to 16-byte with 0s:
-//	- tag = GHASH(tag XOR additional data block)
+//    - tag = GHASH(tag XOR additional data block)
 //
 //- IV (Initial vector) = Generate CSPRNG of 12-bytes (if not provided)
 //- Store iv in result
 //
 //- Foreach plaindata block at i padded to 16-byte with 0s:
-//	- Eki = encrypt(IV append U32BE(i + 2))
-//	- store (cyphertext[i] = plainText[i] XOR Eki) in result
-//	- tag = GHASH(tag XOR cyphertext[i])
+//    - Eki = encrypt(IV append U32BE(i + 2))
+//    - store (cyphertext[i] = plainText[i] XOR Eki) in result
+//    - tag = GHASH(tag XOR cyphertext[i])
 //
 //- tag = GHASH(combine(U64BE(additionalDataBits), U64BE(plainTextBits)) XOR tag)
 //- tag = tag XOR aes256(IV with U32BE(1) appended)
@@ -123,9 +123,9 @@ static I8 cryptoState = -1;
 //AES_subWord can be used by as fallback for encryption.
 //No lookup tables, those are unsafe.
 //TODO: Speedup this fallback, it's made to be a reference & to be secure.
-//		Since most devices have AES-NI, no time was spent optimizing this.
-//		If you're encrypting a lot of data... goodluck and see you in 2039 (Don't use for perf critical without AES-NI support)
-//		Investigate Bitslicing, Boyar-Peralta or something like it.
+//        Since most devices have AES-NI, no time was spent optimizing this.
+//        If you're encrypting a lot of data... goodluck and see you in 2039 (Don't use for perf critical without AES-NI support)
+//        Investigate Bitslicing, Boyar-Peralta or something like it.
 
 static inline U8 AES_xtime(U8 x) {
 	return (U8)((x << 1) ^ ((x >> 7) * 0x1B));
@@ -144,11 +144,11 @@ static inline U8 AES_gfMul(U8 a, U8 b) {
 static inline U8 AES_gfInv(U8 x) {
 	U8 x2   = AES_gfMul(x, x);
 	U8 x4   = AES_gfMul(x2, x2);
-	U8 x8   = AES_gfMul(x4, x4);	
+	U8 x8   = AES_gfMul(x4, x4);    
 	U8 x16  = AES_gfMul(x8, x8);
 	U8 x32  = AES_gfMul(x16, x16);
 	U8 x64  = AES_gfMul(x32, x32);
-	U8 x128 = AES_gfMul(x64, x64);	
+	U8 x128 = AES_gfMul(x64, x64);    
 	U8 x192 = AES_gfMul(x128, x64);
 	U8 x224 = AES_gfMul(x192, x32);
 	U8 x240 = AES_gfMul(x224, x16);
@@ -444,9 +444,9 @@ __forceinline__ static I32x4x4 AESEncryptionContext_blockHash4(
 }
 
 __forceinline__ static I32x4x2 AESEncryptionContext_blockHashAndGhash(
-	I32x4 a,		//ivi
+	I32x4 a,        //ivi
 	I32x4 H,
-	I32x4 b,		//prevState
+	I32x4 b,        //prevState
 	I32x4 tag,
 	const I32x4 *restrict k,
 	const EBufferEncryptionType type
@@ -514,11 +514,11 @@ __forceinline__ static I32x4x2 AESEncryptionContext_blockHashAndGhash(
 		tmp1 = I32x4_rsh32(tmp5, 2);
 		tmp2 = I32x4_rsh32(tmp5, 7);
 
-		tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
-		tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
-		tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
-		tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
-		tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp5);        //0 ^ 5
+		tmp1 = I32x4_xor(tmp1, tmp2);        //1 ^ 2
+		tmp3 = I32x4_xor(tmp3, tmp4);        //3 ^ 4
+		tmp0 = I32x4_xor(tmp0, tmp1);        //0 ^ 1 ^ 2 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp3);        //0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
 
 		b = I32x4_swapEndianness(tmp0);
 
@@ -646,11 +646,11 @@ __forceinline__ static I32x4x3 AESEncryptionContext_blockHashAndGhash2(
 		tmp1 = I32x4_rsh32(tmp5, 2);
 		tmp2 = I32x4_rsh32(tmp5, 7);
 
-		tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
-		tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
-		tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
-		tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
-		tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp5);        //0 ^ 5
+		tmp1 = I32x4_xor(tmp1, tmp2);        //1 ^ 2
+		tmp3 = I32x4_xor(tmp3, tmp4);        //3 ^ 4
+		tmp0 = I32x4_xor(tmp0, tmp1);        //0 ^ 1 ^ 2 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp3);        //0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
 
 		b = I32x4_swapEndianness(tmp0);
 
@@ -850,11 +850,11 @@ __forceinline__ static I32x4x5 AESEncryptionContext_blockHashAndGhash4(
 		tmp1 = I32x4_rsh32(tmp5, 2);
 		tmp2 = I32x4_rsh32(tmp5, 7);
 
-		tmp0 = I32x4_xor(tmp0, tmp5);		//0 ^ 5
-		tmp1 = I32x4_xor(tmp1, tmp2);		//1 ^ 2
-		tmp3 = I32x4_xor(tmp3, tmp4);		//3 ^ 4
-		tmp0 = I32x4_xor(tmp0, tmp1);		//0 ^ 1 ^ 2 ^ 5
-		tmp0 = I32x4_xor(tmp0, tmp3);		//0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp5);        //0 ^ 5
+		tmp1 = I32x4_xor(tmp1, tmp2);        //1 ^ 2
+		tmp3 = I32x4_xor(tmp3, tmp4);        //3 ^ 4
+		tmp0 = I32x4_xor(tmp0, tmp1);        //0 ^ 1 ^ 2 ^ 5
+		tmp0 = I32x4_xor(tmp0, tmp3);        //0 ^ 1 ^ 2 ^ 3 ^ 4 ^ 5
 
 		b = I32x4_swapEndianness(tmp0);
 
@@ -1053,8 +1053,8 @@ void Buffer_aesExpertUpdateAADFast(AESEncryptionContext *restrict ctx, Buffer ad
 	const I32x4 *restrict ptr = (const I32x4* restrict)additionalData.ptr;
 
 	//TODO: Re-enable this block size only for AAD (Need to update the size in ctx->H and AESEncryptionContext_updateTagN)
-	//		Would also need to update the switch case that points to Buffer_aesExpertExpandHash,
-	//		AESEncryptionContext_ghashN2 and AESEncryptionContext_ghashN4
+	//        Would also need to update the switch case that points to Buffer_aesExpertExpandHash,
+	//        AESEncryptionContext_ghashN2 and AESEncryptionContext_ghashN4
 	//This giant block size actually helps because we have no other work to schedule unlike a real AES+GHASH pipeline.
 
 	/*
@@ -1212,9 +1212,9 @@ static inline void Buffer_aesExpertExpandHash(AESEncryptionContext *restrict ctx
 
 	for (U8 i = 4, j = 1; i < blockSizeMax; i += 4, j += 2) {
 
-		I32x4 H2 = ctx->H[j + 0];		//[1] = H2, [3] = H4, [5] = H6
-		I32x4 H3 = ctx->H[j + 1];		//[2] = H3, [4] = H5, [6] = H7
-		I32x4 H4 = ctx->H[j + 2];		//[3] = H4, [5] = H6, [7] = H8
+		I32x4 H2 = ctx->H[j + 0];        //[1] = H2, [3] = H4, [5] = H6
+		I32x4 H3 = ctx->H[j + 1];        //[2] = H3, [4] = H5, [6] = H7
+		I32x4 H4 = ctx->H[j + 2];        //[3] = H4, [5] = H6, [7] = H8
 
 		//This is one of the only ones that needs rshElements/lshElements which needs AVX512BW
 		//TODO: This seems to currently underperform the 256-bit version.
@@ -1356,7 +1356,7 @@ Bool Buffer_aesExpertCreate(
 
 	if (detect && streamSizeHint >= 0 && oneTimeHint) {
 
-		if (oneTimeHint <= 128)		//Frequency penality for using 256-bit or 512-bit vectors
+		if (oneTimeHint <= 128)        //Frequency penality for using 256-bit or 512-bit vectors
 			use256Or512Real = 0;
 
 		//Here are the optimal sizes:
@@ -1395,10 +1395,10 @@ Bool Buffer_aesExpertCreate(
 	ctx->H[0] = I32x4_swapEndianness(ctx->H[0]);
 
 	switch (blockSize) {
-		case 2:		Buffer_aesExpertExpandHash(ctx,  2, use256Or512Real);	break;
-		case 4:		Buffer_aesExpertExpandHash(ctx,  4, use256Or512Real);	break;
-		case 8:		Buffer_aesExpertExpandHash(ctx,  8, use256Or512Real);	break;
-		case 16:	Buffer_aesExpertExpandHash(ctx, 16, use256Or512Real);	break;
+		case 2:        Buffer_aesExpertExpandHash(ctx,  2, use256Or512Real);    break;
+		case 4:        Buffer_aesExpertExpandHash(ctx,  4, use256Or512Real);    break;
+		case 8:        Buffer_aesExpertExpandHash(ctx,  8, use256Or512Real);    break;
+		case 16:    Buffer_aesExpertExpandHash(ctx, 16, use256Or512Real);    break;
 	}
 
 	//Compute final tag xor
@@ -1488,7 +1488,7 @@ static inline Bool AESEncryptionContext_create(
 		*encrypt->constDecrypt.iv,
 		encrypt->type,
 		key,
-		0, blockHint,		//We run a one time context, so optimize for 
+		0, blockHint,        //We run a one time context, so optimize for 
 		U8_MAX,
 		blockSize,
 		use256Or512,
@@ -1498,11 +1498,11 @@ static inline Bool AESEncryptionContext_create(
 
 	if (encrypt->additionalData)
 		switch (*blockSize) {
-			case 1:		Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   1, *use256Or512);	break;
-			case 2:		Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   2, *use256Or512);	break;
-			case 4:		Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   4, *use256Or512);	break;
-			case 8:		Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   8, *use256Or512);	break;
-			case 16:	Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  16, *use256Or512);	break;
+			case 1:        Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   1, *use256Or512);    break;
+			case 2:        Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   2, *use256Or512);    break;
+			case 4:        Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   4, *use256Or512);    break;
+			case 8:        Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,   8, *use256Or512);    break;
+			case 16:    Buffer_aesExpertUpdateAADFast(ctx, *encrypt->additionalData,  16, *use256Or512);    break;
 		}
 
 clean:
@@ -1522,7 +1522,7 @@ static inline void AESEncryptionContext_clear(AESEncryptionContext *restrict ctx
 	Buffer_clearAllSecure(Buffer_createRef(&ctx->iv, sizeof(ctx->iv)));
 	Buffer_clearAllSecure(Buffer_createRef(&ctx->tag, sizeof(ctx->tag)));
 	Buffer_clearAllSecure(Buffer_createRef(&ctx->EKY0, sizeof(ctx->EKY0)));
-	ctx->encryptionType = 0;		//Not important enough to securely clear.
+	ctx->encryptionType = 0;        //Not important enough to securely clear.
 }
 
 Bool Buffer_aesExpertFinalize(AESEncryptionContext *restrict ctx, U64 aadLen, U64 dataLen, I32x4 expectTag) {
@@ -1564,7 +1564,7 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 		return;
 
 	I32x4 *restrict next = (I32x4 *restrict)targetPtr;
-	I32x4 *restrict end = (I32x4 *restrict)(targetPtr + targetLen);		//Can be misaligned
+	I32x4 *restrict end = (I32x4 *restrict)(targetPtr + targetLen);        //Can be misaligned
 
 	U32 counterForIv = offsetInBlocks + 2;
 
@@ -1619,14 +1619,14 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 			I32x4 c = I32x4_xor(ab.c, next[2]);
 			I32x4 d = I32x4_xor(ab.d, next[3]);
 
-			if (!isEncrypt) {			//Decryption, we use the input (ciphertext)
+			if (!isEncrypt) {            //Decryption, we use the input (ciphertext)
 				prevState[0] = next[0];
 				prevState[1] = next[1];
 				prevState[2] = next[2];
 				prevState[3] = next[3];
 			}
 
-			else {						//Encryption, we use the output (ciphertext)
+			else {                        //Encryption, we use the output (ciphertext)
 				prevState[0] = a;
 				prevState[1] = b;
 				prevState[2] = c;
@@ -1666,14 +1666,14 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 			I32x4 c = I32x4_xor(ab.c, next[2]);
 			I32x4 d = I32x4_xor(ab.d, next[3]);
 
-			if (!isEncrypt) {				//Decryption, we use the input (ciphertext)
+			if (!isEncrypt) {                //Decryption, we use the input (ciphertext)
 				prevState[0] = next[0];
 				prevState[1] = next[1];
 				prevState[2] = next[2];
 				prevState[3] = next[3];
 			}
 
-			else {							//Encryption, we use the output (ciphertext)
+			else {                            //Encryption, we use the output (ciphertext)
 				prevState[0] = a;
 				prevState[1] = b;
 				prevState[2] = c;
@@ -1769,12 +1769,12 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 			I32x4 a = I32x4_xor(ab.a, next[0]);
 			I32x4 b = I32x4_xor(ab.b, next[1]);
 
-			if (!isEncrypt) {			//Decryption, we use the input (ciphertext)
+			if (!isEncrypt) {            //Decryption, we use the input (ciphertext)
 				prevState[0] = next[0];
 				prevState[1] = next[1];
 			}
 
-			else {						//Encryption, we use the output (ciphertext)
+			else {                        //Encryption, we use the output (ciphertext)
 				prevState[0] = a;
 				prevState[1] = b;
 			}
@@ -1806,12 +1806,12 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 			I32x4 a = I32x4_xor(ab.a, next[0]);
 			I32x4 b = I32x4_xor(ab.b, next[1]);
 
-			if (!isEncrypt) {				//Decryption, we use the input (ciphertext)
+			if (!isEncrypt) {                //Decryption, we use the input (ciphertext)
 				prevState[0] = next[0];
 				prevState[1] = next[1];
 			}
 
-			else {							//Encryption, we use the output (ciphertext)
+			else {                            //Encryption, we use the output (ciphertext)
 				prevState[0] = a;
 				prevState[1] = b;
 			}
@@ -1871,10 +1871,10 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 		I32x4 a = AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType);
 		a = I32x4_xor(a, next[0]);
 
-		if (!isEncrypt)				//Decryption, we use the input (ciphertext)
+		if (!isEncrypt)                //Decryption, we use the input (ciphertext)
 			prevState = next[0];
 
-		else prevState = a;		//Encryption, we use the output (ciphertext)
+		else prevState = a;        //Encryption, we use the output (ciphertext)
 
 		next[0] = a;
 		++next;
@@ -1891,10 +1891,10 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 
 			a = I32x4_xor(ab.a, next[0]);
 
-			if (!isEncrypt)					//Decryption, we use the input (ciphertext)
+			if (!isEncrypt)                    //Decryption, we use the input (ciphertext)
 				prevState = next[0];
 
-			else prevState = a;			//Encryption, we use the output (ciphertext)
+			else prevState = a;            //Encryption, we use the output (ciphertext)
 
 			next[0] = a;
 			++next;
@@ -1935,10 +1935,10 @@ __forceinline__ static void AESEncryptionContext_handleBlocks(
 			a = I32x4_xor(a, v);
 		}
 
-		if (!isEncrypt)					//Decryption, we use the input (ciphertext)
+		if (!isEncrypt)                    //Decryption, we use the input (ciphertext)
 			prevState = v;
 
-		else prevState = a;			//Encryption, we use the output (ciphertext)
+		else prevState = a;            //Encryption, we use the output (ciphertext)
 
 		Buffer_memcpy(Buffer_createRef(next, leftOver), Buffer_createRefConst(&a, leftOver));
 		prevBlock = 1;
@@ -2026,11 +2026,11 @@ static inline Bool AESEncryptionContext_encrypt(const BufferEncrypt *restrict en
 
 	if(encrypt->target)
 		switch (blockSizeMax) {
-			case 1:		Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   1, use256Or512);	break;
-			case 2:		Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   2, use256Or512);	break;
-			case 4:		Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   4, use256Or512);	break;
-			case 8:		Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   8, use256Or512);	break;
-			case 16:	Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  16, use256Or512);	break;
+			case 1:        Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   1, use256Or512);    break;
+			case 2:        Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   2, use256Or512);    break;
+			case 4:        Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   4, use256Or512);    break;
+			case 8:        Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,   8, use256Or512);    break;
+			case 16:    Buffer_aesExpertEncUpdateFast(&ctx, *encrypt->target, 0,  16, use256Or512);    break;
 		}
 
 	//Finish encryption by appending tag for authentication / verification that the data isn't messed with
@@ -2127,11 +2127,11 @@ static inline Bool AESEncryptionContext_decrypt(const BufferEncrypt *restrict de
 
 	if(decrypt->target)
 		switch (blockSizeMax) {
-			case 1:		Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   1, use256Or512);	break;
-			case 2:		Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   2, use256Or512);	break;
-			case 4:		Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   4, use256Or512);	break;
-			case 8:		Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   8, use256Or512);	break;
-			case 16:	Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  16, use256Or512);	break;
+			case 1:        Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   1, use256Or512);    break;
+			case 2:        Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   2, use256Or512);    break;
+			case 4:        Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   4, use256Or512);    break;
+			case 8:        Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,   8, use256Or512);    break;
+			case 16:    Buffer_aesExpertDecUpdateFast(&ctx, *decrypt->target, 0,  16, use256Or512);    break;
 		}
 
 	U64 aadLen = decrypt->additionalData ? Buffer_length(*decrypt->additionalData) : 0;

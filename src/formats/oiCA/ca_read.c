@@ -80,9 +80,9 @@ Bool CAFile_read(
 
 	StreamCursor cursor = (StreamCursor) { 0 };
 	Buffer tmp = Buffer_createNull();
-	ListU16 dirParents = (ListU16) { 0 };				//mem-space parent index per directory
-	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };	//packed parent + timestamp per file
-	ListU16 dirHandles = (ListU16) { 0 };				//disk index -> live handle map
+	ListU16 dirParents = (ListU16) { 0 };                //mem-space parent index per directory
+	ListCAFileInfo fileMetas = (ListCAFileInfo) { 0 };    //packed parent + timestamp per file
+	ListU16 dirHandles = (ListU16) { 0 };                //disk index -> live handle map
 	I32x4 iv = I32x4_zero();
 	DLFile names = (DLFile) { 0 };
 	DLFile content = (DLFile) { 0 };
@@ -424,11 +424,11 @@ Bool CAFile_read(
 				caFile, fileHandle, alloc, &entryStream.stream, entryStream.dataOff, entryStream.len, e_rr
 			));
 
-			content.entryStreams.ptrNonConst[i] = (DLEntryStream) { 0 };		//Moved
+			content.entryStreams.ptrNonConst[i] = (DLEntryStream) { 0 };        //Moved
 
 		} else {
 
-			Buffer contentBuf = content.entryBuffers.ptr[i];	//Moving it or copying depending on type
+			Buffer contentBuf = content.entryBuffers.ptr[i];    //Moving it or copying depending on type
 			U64 bufl = Buffer_length(contentBuf);
 
 			//Move directly into our pre-allocated cache buffer (we know the size from the prev DLFile load)
@@ -446,7 +446,7 @@ Bool CAFile_read(
 		}
 	}
 
-	DLFile_free(&names, alloc);		//Even though all data has been moved, we still have the lists themselves.
+	DLFile_free(&names, alloc);        //Even though all data has been moved, we still have the lists themselves.
 	DLFile_free(&content, alloc);
 
 clean:

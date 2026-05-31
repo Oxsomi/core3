@@ -108,35 +108,35 @@ clean:
 	return s_uccess;
 }
 
-#define BitOp(x, dst, src, ...) {																	\
+#define BitOp(x, dst, src, ...) {                                                                    \
 																									\
-	Bool s_uccess = true;																			\
+	Bool s_uccess = true;                                                                            \
 																									\
-	if(!dst.ptr || !src.ptr)																		\
-		retError(clean, Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required"));	\
+	if(!dst.ptr || !src.ptr)                                                                        \
+		retError(clean, Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required"));    \
 																									\
-	if(Buffer_isConstRef(dst))																		\
-		retError(clean, Error_constData(0, 0, "BitOp::dst should be writable"));					\
+	if(Buffer_isConstRef(dst))                                                                        \
+		retError(clean, Error_constData(0, 0, "BitOp::dst should be writable"));                    \
 																									\
-	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);									\
-	U64 l = dstLen <= srcLen ? dstLen : srcLen;														\
+	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);                                    \
+	U64 l = dstLen <= srcLen ? dstLen : srcLen;                                                        \
 																									\
-	if(!((U64)dst.ptr & 7) && !((U64)src.ptr & 7)) {												\
+	if(!((U64)dst.ptr & 7) && !((U64)src.ptr & 7)) {                                                \
 																									\
-		for(U64 i = 0, j = l >> 3; i < j; ++i)														\
-			*((U64*)dst.ptrNonConst + i) x *((const U64*)src.ptr + i);								\
+		for(U64 i = 0, j = l >> 3; i < j; ++i)                                                        \
+			*((U64*)dst.ptrNonConst + i) x *((const U64*)src.ptr + i);                                \
 																									\
-		for (U64 i = l >> 3 << 3; i < l; ++i)														\
-			dst.ptrNonConst[i] x src.ptr[i];														\
-	}																								\
+		for (U64 i = l >> 3 << 3; i < l; ++i)                                                        \
+			dst.ptrNonConst[i] x src.ptr[i];                                                        \
+	}                                                                                                \
 																									\
-	else for(U8 i = 0; i < l; ++i)																	\
-		dst.ptrNonConst[i] x src.ptr[i];															\
+	else for(U8 i = 0; i < l; ++i)                                                                    \
+		dst.ptrNonConst[i] x src.ptr[i];                                                            \
 																									\
-	__VA_ARGS__																						\
+	__VA_ARGS__                                                                                        \
 																									\
-clean:																								\
-	return s_uccess;																				\
+clean:                                                                                                \
+	return s_uccess;                                                                                \
 }
 
 //TODO: Optimize this
@@ -175,7 +175,7 @@ Bool Buffer_offset(Buffer *buf, U64 length, Error *e_rr) {
 	if(!buf || !buf->ptr)
 		retError(clean, Error_nullPointer(0, "Buffer_offset()::buf and buf->ptr are required"));
 
-	if(!Buffer_isRef(*buf))								//Ensure we don't accidentally call this and leak memory
+	if(!Buffer_isRef(*buf))                                //Ensure we don't accidentally call this and leak memory
 		retError(clean, Error_invalidOperation(0, "Buffer_offset() can only be called on a ref"));
 
 	const U64 bufLen = Buffer_length(*buf);
@@ -207,7 +207,7 @@ Bool Buffer_appendBuffer(Buffer *buf, const Buffer append, Error *e_rr) {
 	if(!append.ptr)
 		retError(clean, Error_nullPointer(1, "Buffer_appendBuffer()::append is required"));
 
-	if(buf && Buffer_isConstRef(*buf))					//We need write access
+	if(buf && Buffer_isConstRef(*buf))                    //We need write access
 		retError(clean, Error_constData(0, 0, "Buffer_appendBuffer()::buf should be writable"));
 
 	U8 *ptr = buf->ptrNonConst;

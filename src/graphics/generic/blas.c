@@ -319,7 +319,7 @@ Error GraphicsDeviceRef_createBLASExt(
 			.flagsExt = (U8) blasFlags,
 			.parent = parent
 		},
-		.positionFormatId =	(U8) positionFormat,
+		.positionFormatId =    (U8) positionFormat,
 		.indexFormatId = (U8) indexFormat,
 		.positionBufferStride = positionBufferStride,
 		.positionOffset = positionOffset,
@@ -390,10 +390,10 @@ Error GraphicsDeviceRef_createBLASProceduralExt(
 
 //Error GraphicsDeviceRef_createBLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, BLASRef **blas) {
 //
-//	BLAS blasInfo = (BLAS) {
-//		.base = (RTAS) { .asConstructionType = (U8) EBLASConstructionType_Serialized, },
-//		.cpuData = cache
-//	};
+//    BLAS blasInfo = (BLAS) {
+//        .base = (RTAS) { .asConstructionType = (U8) EBLASConstructionType_Serialized, },
+//        .cpuData = cache
+//    };
 //
-//	return GraphicsDeviceRef_createBLAS(dev, blasInfo, name, blas);
+//    return GraphicsDeviceRef_createBLAS(dev, blasInfo, name, blas);
 //}

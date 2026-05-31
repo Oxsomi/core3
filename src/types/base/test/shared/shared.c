@@ -27,7 +27,7 @@ static inline const C8 *Test_prefix(Test *test) {
 }
 
 void Test_print(Test *test, const C8 *str) {
-	printf("-- %s: %s\n", Test_prefix(test), str);			//No access to Log, that's in container
+	printf("-- %s: %s\n", Test_prefix(test), str);            //No access to Log, that's in container
 }
 
 void Test_setModule(Test *test, const C8 *moduleName) {

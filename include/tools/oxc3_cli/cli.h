@@ -67,7 +67,7 @@ Bool CLI_helpOperation(ParsedArgs args);
 Bool CLI_inspectHeader(ParsedArgs args);
 Bool CLI_inspectData(ParsedArgs args);
 
-U64 CLI_parseGraphicsAPIs(ParsedArgs args);		//U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
+U64 CLI_parseGraphicsAPIs(ParsedArgs args);        //U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
 
 #ifdef CLI_SHADER_COMPILER
 

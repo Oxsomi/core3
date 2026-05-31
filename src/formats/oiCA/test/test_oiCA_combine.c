@@ -36,7 +36,7 @@ static Bool addFile(
 	const C8 *name,
 	const void *data,
 	U64 dataLen,
-	CAHandle parent,		//Set to CAHandle_Root by default
+	CAHandle parent,        //Set to CAHandle_Root by default
 	CAHandle *handle,
 	Test *t
 ) {
@@ -240,7 +240,7 @@ void Test_CACombine(Test *t) {
 
 	CAFile_free(&c, t->alloc);
 
-	CAFile_free(&ca, t->alloc);		//Last use of ca, cb in this state
+	CAFile_free(&ca, t->alloc);        //Last use of ca, cb in this state
 	CAFile_free(&cb, t->alloc);
 
 	//Test 8: ResolveLatestTimestamp, same data different timestamps -> keep latest
@@ -349,7 +349,7 @@ void Test_CACombine(Test *t) {
 		CAFile_free(&c, t->alloc);
 	}
 
-	CAFile_free(&ca, t->alloc);		//Last use of ca, cb in this state
+	CAFile_free(&ca, t->alloc);        //Last use of ca, cb in this state
 	CAFile_free(&cb, t->alloc);
 
 	//Test 10: folder merging

@@ -49,8 +49,8 @@ typedef struct DxUnifiedTexture {
 //The closest thing we can map is a DXGI factory that's used to query adapters
 
 typedef enum EDxGraphicsInstanceFlags {
-	EDxGraphicsInstanceFlags_HasNVApi		= 1 << 0,
-	EDxGraphicsInstanceFlags_HasAMDAgs		= 1 << 1
+	EDxGraphicsInstanceFlags_HasNVApi        = 1 << 0,
+	EDxGraphicsInstanceFlags_HasAMDAgs        = 1 << 1
 } EDxGraphicsInstanceFlags;
 
 typedef struct AGSContext AGSContext;
@@ -77,8 +77,8 @@ typedef struct DxGraphicsInstance {
 } DxGraphicsInstance;
 
 typedef enum EDxBlockFlags {
-	EDxBlockFlags_None				= 0,
-	EDxBlockFlags_IsDedicated		= 1 << 0
+	EDxBlockFlags_None                = 0,
+	EDxBlockFlags_IsDedicated        = 1 << 0
 } EDxBlockFlags;
 
 typedef struct DxBlockRequirements {
@@ -95,11 +95,11 @@ typedef enum ECompareOp ECompareOp;
 typedef union DxPipeline {
 
 	struct {
-		ID3D12StateObject *stateObject;					//For anything else (RTPSO, workgraphs, mesh shaders, etc.)
+		ID3D12StateObject *stateObject;                    //For anything else (RTPSO, workgraphs, mesh shaders, etc.)
 		ID3D12StateObjectProperties *stateObjectProps;
 	};
 
-	ID3D12PipelineState *pso;							//For graphics & compute shaders
+	ID3D12PipelineState *pso;                            //For graphics & compute shaders
 
 } DxPipeline;
 

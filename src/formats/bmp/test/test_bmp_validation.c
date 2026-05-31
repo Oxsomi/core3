@@ -56,7 +56,7 @@ static Bool makeRawBMPStream(
 		.info = {
 			.headerSize      = sizeof(BMPInfoHeader),
 			.width           = (I32)w,
-			.height          = (I32)h,		//positive -> isFlipped=true
+			.height          = (I32)h,        //positive -> isFlipped=true
 			.planes          = 1,
 			.bitCount        = 32,
 			.compression     = 0,

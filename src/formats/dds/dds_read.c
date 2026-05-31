@@ -140,7 +140,7 @@ Bool DDS_read(
 			case EDX10Dim_1D:
 				dds.header.height = 1;
 
-			case EDX10Dim_2D:		//Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
+			case EDX10Dim_2D:        //Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
 				break;
 
 			case EDX10Dim_3D:
@@ -215,21 +215,21 @@ Bool DDS_read(
 		if (useMagic)
 			switch (dds.header.format.magicNumber) {
 
-				case EDDSFormatMagic_BC4:			formatId = ETextureFormatId_BC4;		break;
-				case EDDSFormatMagic_BC4s:			formatId = ETextureFormatId_BC4s;		break;
-				case EDDSFormatMagic_BC5:			formatId = ETextureFormatId_BC5;		break;
-				case EDDSFormatMagic_BC5s:			formatId = ETextureFormatId_BC5s;		break;
+				case EDDSFormatMagic_BC4:            formatId = ETextureFormatId_BC4;        break;
+				case EDDSFormatMagic_BC4s:            formatId = ETextureFormatId_BC4s;        break;
+				case EDDSFormatMagic_BC5:            formatId = ETextureFormatId_BC5;        break;
+				case EDDSFormatMagic_BC5s:            formatId = ETextureFormatId_BC5s;        break;
 
-				case EDDSFormatMagic_RGBA16:		formatId = ETextureFormatId_RGBA16;		break;
-				case EDDSFormatMagic_RGBA16s:		formatId = ETextureFormatId_RGBA16s;	break;
+				case EDDSFormatMagic_RGBA16:        formatId = ETextureFormatId_RGBA16;        break;
+				case EDDSFormatMagic_RGBA16s:        formatId = ETextureFormatId_RGBA16s;    break;
 
-				case EDDSFormatMagic_R16f:			formatId = ETextureFormatId_R16f;		break;
-				case EDDSFormatMagic_RG16f:			formatId = ETextureFormatId_RG16f;		break;
-				case EDDSFormatMagic_RGBA16f:		formatId = ETextureFormatId_RGBA16f;	break;
+				case EDDSFormatMagic_R16f:            formatId = ETextureFormatId_R16f;        break;
+				case EDDSFormatMagic_RG16f:            formatId = ETextureFormatId_RG16f;        break;
+				case EDDSFormatMagic_RGBA16f:        formatId = ETextureFormatId_RGBA16f;    break;
 
-				case EDDSFormatMagic_R32f:			formatId = ETextureFormatId_R32f;		break;
-				case EDDSFormatMagic_RG32f:			formatId = ETextureFormatId_RG32f;		break;
-				case EDDSFormatMagic_RGBA32f:		formatId = ETextureFormatId_RGBA32f;	break;
+				case EDDSFormatMagic_R32f:            formatId = ETextureFormatId_R32f;        break;
+				case EDDSFormatMagic_RG32f:            formatId = ETextureFormatId_RG32f;        break;
+				case EDDSFormatMagic_RGBA32f:        formatId = ETextureFormatId_RGBA32f;    break;
 			}
 
 		//Detect from pixel format

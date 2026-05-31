@@ -30,18 +30,18 @@
 typedef RefPtr BLASRef;
 
 typedef enum ETLASInstanceFlag {
-	ETLASInstanceFlag_None						= 0,
-	ETLASInstanceFlag_DisableCulling			= 1 << 0,		//Culling is force disabled for the BLAS
-	ETLASInstanceFlag_CCW						= 1 << 1,		//Reverse winding order for the BLAS
-	ETLASInstanceFlag_ForceDisableAnyHit		= 1 << 2,		//Force anyHit off for the BLAS
-	ETLASInstanceFlag_ForceEnableAnyHit			= 1 << 3,		//Force anyHit on for the BLAS
-	ETLASInstanceFlag_Count						= 4,
-	ETLASInstanceFlag_Default					= ETLASInstanceFlag_DisableCulling | ETLASInstanceFlag_ForceDisableAnyHit
+	ETLASInstanceFlag_None                        = 0,
+	ETLASInstanceFlag_DisableCulling            = 1 << 0,        //Culling is force disabled for the BLAS
+	ETLASInstanceFlag_CCW                        = 1 << 1,        //Reverse winding order for the BLAS
+	ETLASInstanceFlag_ForceDisableAnyHit        = 1 << 2,        //Force anyHit off for the BLAS
+	ETLASInstanceFlag_ForceEnableAnyHit            = 1 << 3,        //Force anyHit on for the BLAS
+	ETLASInstanceFlag_Count                        = 4,
+	ETLASInstanceFlag_Default                    = ETLASInstanceFlag_DisableCulling | ETLASInstanceFlag_ForceDisableAnyHit
 } ETLASInstanceFlag;
 
 typedef enum ETLASConstructionType {
-	ETLASConstructionType_Instances,	//deviceData, cpuInstancesMotion or cpuInstancesStatic contains valid data
-	ETLASConstructionType_Serialized,	//cpuData contains serialized data from a previously created AS
+	ETLASConstructionType_Instances,    //deviceData, cpuInstancesMotion or cpuInstancesStatic contains valid data
+	ETLASConstructionType_Serialized,    //cpuData contains serialized data from a previously created AS
 	ETLASConstructionType_Count
 } ETLASConstructionType;
 
@@ -49,20 +49,20 @@ typedef F32 TLASTransform[3][4];
 
 typedef struct TLASInstanceData {
 
-	U32 instanceId24_mask8;				//InstanceID(): shader-specific instance id AND 8-bit mask to allow disabling per ray
-	U32 sbtOffset24_flags8;				//Shader binding table offset AND 8-bit ETLASInstanceFlag
+	U32 instanceId24_mask8;                //InstanceID(): shader-specific instance id AND 8-bit mask to allow disabling per ray
+	U32 sbtOffset24_flags8;                //Shader binding table offset AND 8-bit ETLASInstanceFlag
 
-	union {								//Set any of these two to NULL to hide the instance
-		BLASRef *blasCpu;				//Only if created from the CPU
-		U64 blasDeviceAddress;			//Otherwise on the device, it should set this to the BLAS's address
+	union {                                //Set any of these two to NULL to hide the instance
+		BLASRef *blasCpu;                //Only if created from the CPU
+		U64 blasDeviceAddress;            //Otherwise on the device, it should set this to the BLAS's address
 	};
 
 } TLASInstanceData;
 
 typedef enum ETLASInstanceType {
-	ETLASInstanceType_Static,			//TLASInstanceStatic
-	ETLASInstanceType_Matrix,			//TLASInstanceMatrix
-	ETLASInstanceType_SRT,				//TLASInstanceSRT
+	ETLASInstanceType_Static,            //TLASInstanceStatic
+	ETLASInstanceType_Matrix,            //TLASInstanceMatrix
+	ETLASInstanceType_SRT,                //TLASInstanceSRT
 	ETLASInstanceType_Count
 } ETLASInstanceType;
 
@@ -82,7 +82,7 @@ typedef struct TLASTransformSRT {
 	F32 sx, a, b;
 	F32 pvx, sy, c;
 	F32 pvy, sz, pvz;
-	F32 q0, q1, q2, q3;		//QuatF32 (but doesn't properly align)
+	F32 q0, q1, q2, q3;        //QuatF32 (but doesn't properly align)
 	F32 tx, ty, tz;
 
 } TLASTransformSRT;
@@ -126,9 +126,9 @@ typedef struct TLASInstanceMotion {
 	U32 padding;
 
 	union {
-		TLASInstanceSRT srtInst;					//ETLASInstanceMotionType_SRT
-		TLASInstanceMatrixMotion matrixInst;		//ETLASInstanceMotionType_Matrix
-		TLASInstanceStatic staticInst;				//ETLASInstanceMotionType_Static
+		TLASInstanceSRT srtInst;                    //ETLASInstanceMotionType_SRT
+		TLASInstanceMatrixMotion matrixInst;        //ETLASInstanceMotionType_Matrix
+		TLASInstanceStatic staticInst;                //ETLASInstanceMotionType_Static
 	};
 
 } TLASInstanceMotion;
@@ -155,7 +155,7 @@ typedef struct TLAS {
 
 	BindlessDescriptor handle;
 
-	DeviceBufferRef *tempInstanceBuffer;		//If cpuInstanceMotion or cpuInstancesStatic, temp upload heap
+	DeviceBufferRef *tempInstanceBuffer;        //If cpuInstanceMotion or cpuInstancesStatic, temp upload heap
 
 	union {
 
@@ -177,7 +177,7 @@ typedef struct TLAS {
 
 typedef RefPtr TLASRef;
 
-#define TLAS_ext(ptr, T) (!ptr ? NULL : (T##TLAS*)(ptr + 1))		//impl
+#define TLAS_ext(ptr, T) (!ptr ? NULL : (T##TLAS*)(ptr + 1))        //impl
 #define TLASRef_ptr(ptr) RefPtr_data(ptr, TLAS)
 
 void TLASRef_dec(TLASRef **tlas);
@@ -192,7 +192,7 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result);
 Error GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,					//If specified, indicates refit
+	TLASRef *parent,                    //If specified, indicates refit
 	ListTLASInstanceStatic instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
@@ -203,7 +203,7 @@ Error GraphicsDeviceRef_createTLASExt(
 Error GraphicsDeviceRef_createTLASMotionExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	TLASRef *parent,					//If specified, indicates refit
+	TLASRef *parent,                    //If specified, indicates refit
 	ListTLASInstanceMotion instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
@@ -214,9 +214,9 @@ Error GraphicsDeviceRef_createTLASMotionExt(
 Error GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	Bool isMotionBlurExt,				//Requires extension
-	TLASRef *parent,					//If specified, indicates refit
-	DeviceData instancesDevice,			//Instances on the GPU, should be sized correctly
+	Bool isMotionBlurExt,                //Requires extension
+	TLASRef *parent,                    //If specified, indicates refit
+	DeviceData instancesDevice,            //Instances on the GPU, should be sized correctly
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
@@ -224,7 +224,7 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 );
 
 //Error GraphicsDeviceRef_createTLASFromCacheExt(
-//	GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas
+//    GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas
 //);
 
 #ifdef __cplusplus

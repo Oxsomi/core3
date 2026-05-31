@@ -63,7 +63,7 @@ Error DX_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 				samplers += b.count;
 				break;
 
-			case ESHRegisterType_SubpassInput:		//Non existent
+			case ESHRegisterType_SubpassInput:        //Non existent
 				break;
 
 			default:
@@ -83,10 +83,10 @@ clean:
 
 D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
 	switch (addressMode) {
-		case ESamplerAddressMode_MirrorRepeat:		return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-		case ESamplerAddressMode_ClampToEdge:		return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		case ESamplerAddressMode_ClampToBorder:		return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		default:									return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		case ESamplerAddressMode_MirrorRepeat:        return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+		case ESamplerAddressMode_ClampToEdge:        return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		case ESamplerAddressMode_ClampToBorder:        return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		default:                                    return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	}
 }
 
@@ -269,12 +269,12 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 							break;
 
 						default:
-							break;		//Already null initialized
+							break;        //Already null initialized
 					}
 
 					if(sinfo.enableComparison) {
 						samplerView.ComparisonFunc = mapDxCompareOp(sinfo.comparisonFunction);
-						samplerView.Filter |= 0x80;		//Signal we want comparison sampler
+						samplerView.Filter |= 0x80;        //Signal we want comparison sampler
 					}
 				}
 
@@ -447,8 +447,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 					switch(tex.depthFormat) {
 
 						default:
-						case EDepthStencilFormat_D32:			dxFormat = DXGI_FORMAT_R32_FLOAT;	break;
-						case EDepthStencilFormat_D16:			dxFormat = DXGI_FORMAT_R16_UNORM;	break;
+						case EDepthStencilFormat_D32:            dxFormat = DXGI_FORMAT_R32_FLOAT;    break;
+						case EDepthStencilFormat_D16:            dxFormat = DXGI_FORMAT_R16_UNORM;    break;
 
 						case EDepthStencilFormat_D32S8X24Ext:
 							dxFormat = d.texture.planeId ? DXGI_FORMAT_X32_TYPELESS_G8X24_UINT : DXGI_FORMAT_R32_FLOAT;
@@ -597,7 +597,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 			case ESHRegisterType_StorageBuffer:
 			case ESHRegisterType_StorageBufferAtomic:
-			case ESHRegisterType_SubpassInput:				//Doesn't do anything
+			case ESHRegisterType_SubpassInput:                //Doesn't do anything
 			default:
 				break;
 		}

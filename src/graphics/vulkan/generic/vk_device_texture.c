@@ -192,7 +192,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			&dependency
 		))
 
-		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
+		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {        //TODO: Add range
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.levelCount = 1,
 			.layerCount = 1
@@ -242,7 +242,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			stagingBuffer, allocRange, compressed ? 16 : 4, false, (const U8**) &location
 		);
 
-		if(temp.genericError && location == defaultLocation)		//Something major went wrong
+		if(temp.genericError && location == defaultLocation)        //Something major went wrong
 			gotoIfError(clean, temp)
 
 		//We re-create the staging buffer to fit the new allocation.
@@ -343,7 +343,7 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 
 		if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-			gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
+			gotoIfError(clean, VkDeviceBuffer_transition(                        //Ensure resource is transitioned
 				stagingExt,
 				VK_PIPELINE_STAGE_2_COPY_BIT,
 				VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -355,10 +355,10 @@ Error VK_WRAP_FUNC(DeviceTextureRef_flush)(void *commandBufferExt, GraphicsDevic
 			))
 
 			RefPtr_inc(device->staging);
-			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))        //Add to in flight
 		}
 
-		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
+		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {        //TODO: Add range
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.levelCount = 1,
 			.layerCount = 1

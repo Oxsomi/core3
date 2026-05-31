@@ -23,28 +23,28 @@
 
 #if _PLATFORM_TYPE != PLATFORM_ANDROID
 
-    #include <execinfo.h>
+	#include <execinfo.h>
 
-    void Error_captureStackTrace(void **stack, U8 stackSize, U8 skipTmp) {
+	void Error_captureStackTrace(void **stack, U8 stackSize, U8 skipTmp) {
 
-        if(!stack || !stackSize)
-            return;
+		if(!stack || !stackSize)
+			return;
 
-        void *tmpStack[128];
-        I32 count = backtrace(tmpStack, 128);
+		void *tmpStack[128];
+		I32 count = backtrace(tmpStack, 128);
 
-        if(count <= 0 || ((U64)stackSize + skipTmp + 1) > 128) {
-            stack[0] = NULL;
-            return;
-        }
+		if(count <= 0 || ((U64)stackSize + skipTmp + 1) > 128) {
+			stack[0] = NULL;
+			return;
+		}
 
-        U64 j = (U64)skipTmp + 1;
+		U64 j = (U64)skipTmp + 1;
 
-        for(U64 i = j; i < 128 && i < (U32) count && i < j + stackSize; ++i)
-            stack[i - j] = tmpStack[i];
+		for(U64 i = j; i < 128 && i < (U32) count && i < j + stackSize; ++i)
+			stack[i - j] = tmpStack[i];
 
-        if(count - j < stackSize)
-            stack[count - j] = NULL;
-    }
+		if(count - j < stackSize)
+			stack[count - j] = NULL;
+	}
 
 #endif

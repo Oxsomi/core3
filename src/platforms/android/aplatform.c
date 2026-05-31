@@ -86,7 +86,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 
 		//Now we can open the section directly and find the files through there
 
-		sectionName.ptr += sizeof("section");		//sizeof includes null terminator so no need for section_
+		sectionName.ptr += sizeof("section");        //sizeof includes null terminator so no need for section_
 		sectionName.lenAndNullTerminated -= sizeof("section");
 
 		gotoIfError3(clean, CharString_createCopy(sectionName, Platform_instance->alloc, &tmpStr, e_rr));
@@ -114,7 +114,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 			gotoIfError3(clean, CharString_appendString(&tmpStr2, &subSectStr, Platform_instance->alloc, e_rr));
 
 			if(CharString_endsWithStringInsensitive(tmpStr2, CharString_createRefCStrConst(".oiCA"), 0))
-				gotoIfError3(clean, CharString_popEndCount(&tmpStr2, sizeof("oiCA"), e_rr));	//sizeof("oiCA") == 5
+				gotoIfError3(clean, CharString_popEndCount(&tmpStr2, sizeof("oiCA"), e_rr));    //sizeof("oiCA") == 5
 
 			asset = AAssetManager_open(assetManager, tmpStr1.ptr, AASSET_MODE_STREAMING);
 

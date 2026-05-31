@@ -23,8 +23,8 @@
 #pragma once
 #include "types/base/types.h"
 
-#define ARIT_OP(T)																					\
-static inline T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }									\
-static inline T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }									\
-static inline T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }					\
+#define ARIT_OP(T)                                                                                    \
+static inline T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }                                    \
+static inline T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }                                    \
+static inline T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }                    \
 static inline T T##_pow2(T v) { return v * v; }

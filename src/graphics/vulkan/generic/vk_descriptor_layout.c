@@ -59,9 +59,9 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
 		case ESHRegisterType_StorageBufferAtomic:
 			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
-		case ESHRegisterType_ConstantBuffer:			return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		case ESHRegisterType_AccelerationStructure:		return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-		case ESHRegisterType_SubpassInput:				return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		case ESHRegisterType_ConstantBuffer:            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		case ESHRegisterType_AccelerationStructure:        return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		case ESHRegisterType_SubpassInput:                return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 
 		default:
 		case ESHRegisterType_Texture1D:

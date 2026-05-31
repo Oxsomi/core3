@@ -51,24 +51,24 @@ static inline F64 F64_fromU64Bits(U64 v) {
 	return *(const F64*) vptr;
 }
 
-#define FLP_FROMBITS(T, TInt)																			\
-static inline Bool T##_from##TInt##BitsSafe(TInt v, T *res, Bool assertFinite, Error *e_rr) {			\
+#define FLP_FROMBITS(T, TInt)                                                                            \
+static inline Bool T##_from##TInt##BitsSafe(TInt v, T *res, Bool assertFinite, Error *e_rr) {            \
 																										\
-	Bool s_uccess = true;																				\
+	Bool s_uccess = true;                                                                                \
 																										\
-	if(!res)																							\
-		retError(clean, Error_nullPointer(1, #T "_from" #TInt "Bits()::res is required"));				\
+	if(!res)                                                                                            \
+		retError(clean, Error_nullPointer(1, #T "_from" #TInt "Bits()::res is required"));                \
 																										\
-	TInt bits = (TInt) v;																				\
-	const void *bitsPtr = &bits;																		\
-	T r = *(const T*) bitsPtr;																			\
+	TInt bits = (TInt) v;                                                                                \
+	const void *bitsPtr = &bits;                                                                        \
+	T r = *(const T*) bitsPtr;                                                                            \
 																										\
-	if(assertFinite && !T##_isValid(r))																	\
-		retError(clean, Error_NaN(0, #T "_fromBits()::v generated NaN or Inf"));						\
+	if(assertFinite && !T##_isValid(r))                                                                    \
+		retError(clean, Error_NaN(0, #T "_fromBits()::v generated NaN or Inf"));                        \
 																										\
-	*res = r;																							\
-clean:																									\
-	return s_uccess;																					\
+	*res = r;                                                                                            \
+clean:                                                                                                    \
+	return s_uccess;                                                                                    \
 }
 
 FLP_FROMBITS(F32, U32);

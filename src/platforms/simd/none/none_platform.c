@@ -26,7 +26,7 @@ Bool Platform_checkCPUSupport() {
 	
 	U16 v = 1;
 
-	if(!*(const U8*)&v)		//Little endian only
+	if(!*(const U8*)&v)        //Little endian only
 		return false;
 	
 	return true;

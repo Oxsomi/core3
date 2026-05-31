@@ -91,17 +91,17 @@ static inline void I32x4_sha256rnds4(I32x4 msgOriginal, I32x4 round, I32x4 *stat
 
 	uint32x4_t abcd = vreinterpretq_u32_s32(I32x4_create2_2(I32x4_wz(b), I32x4_wz(a)));
 	uint32x4_t efgh = vreinterpretq_u32_s32(I32x4_create2_2(I32x4_yx(b), I32x4_yx(a)));
-    
+	
 	uint32x4_t wk = vreinterpretq_u32_s32(msg);
-    
+	
 	uint32x4_t abcdNew = vsha256hq_u32(abcd, efgh, wk);
 	uint32x4_t efghNew = vsha256h2q_u32(efgh, abcd, wk);
 
 	I32x4 abcdNewi = vreinterpretq_s32_u32(abcdNew);
 	I32x4 efghNewi = vreinterpretq_s32_u32(efghNew);
 
-    I32x4 resultB = I32x4_create2_2(I32x4_yx(efghNewi), I32x4_yx(abcdNewi));
-    I32x4 resultA = I32x4_create2_2(I32x4_wz(efghNewi), I32x4_wz(abcdNewi));
+	I32x4 resultB = I32x4_create2_2(I32x4_yx(efghNewi), I32x4_yx(abcdNewi));
+	I32x4 resultA = I32x4_create2_2(I32x4_wz(efghNewi), I32x4_wz(abcdNewi));
 
 	*state0 = resultB;
 	*state1 = resultA;

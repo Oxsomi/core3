@@ -33,19 +33,19 @@ typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EDeviceBufferUsage {
 
-	EDeviceBufferUsage_None					= 0,
+	EDeviceBufferUsage_None                    = 0,
 
-	EDeviceBufferUsage_Vertex				= 1 << 0,		//Allow for use as vertex buffer
-	EDeviceBufferUsage_Index				= 1 << 1,		//Allow for use as index buffer
-	EDeviceBufferUsage_Indirect				= 1 << 2,		//Allow for use in indirect draw/dispatch calls
-	EDeviceBufferUsage_Uniform				= 1 << 3,		//Allow use as a UBO/constant buffer
+	EDeviceBufferUsage_Vertex                = 1 << 0,        //Allow for use as vertex buffer
+	EDeviceBufferUsage_Index                = 1 << 1,        //Allow for use as index buffer
+	EDeviceBufferUsage_Indirect                = 1 << 2,        //Allow for use in indirect draw/dispatch calls
+	EDeviceBufferUsage_Uniform                = 1 << 3,        //Allow use as a UBO/constant buffer
 
 	//Raytracing types (internal)
 
-	EDeviceBufferUsage_ScratchExt			= 1 << 4,		//Allow for internal use as scratch buffer
-	EDeviceBufferUsage_ASExt				= 1 << 5,		//Allow for internal use as acceleration structure
-	EDeviceBufferUsage_ASReadExt			= 1 << 6,		//Allow buffer to be read by AS creation
-	EDeviceBufferUsage_SBTExt				= 1 << 7		//Allow for internal use as shader binding table
+	EDeviceBufferUsage_ScratchExt            = 1 << 4,        //Allow for internal use as scratch buffer
+	EDeviceBufferUsage_ASExt                = 1 << 5,        //Allow for internal use as acceleration structure
+	EDeviceBufferUsage_ASReadExt            = 1 << 6,        //Allow buffer to be read by AS creation
+	EDeviceBufferUsage_SBTExt                = 1 << 7        //Allow for internal use as shader binding table
 
 } EDeviceBufferUsage;
 
@@ -69,7 +69,7 @@ typedef struct DeviceBuffer {
 
 	DescriptorTableRef *bindlessDescriptorTable;
 
-	Buffer cpuData;							//Null if not cpu backed & uploaded. If not cpu backed this will free post upload
+	Buffer cpuData;                            //Null if not cpu backed & uploaded. If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
 
@@ -82,7 +82,7 @@ typedef struct DeviceBuffer {
 //TODO: Ability to query allocation size (inc alignment)
 //TODO: Ability to say resource won't need upload / or only clear.
 
-#define DeviceBuffer_ext(ptr, T) (!ptr ? NULL : (T##DeviceBuffer*)(ptr + 1))		//impl
+#define DeviceBuffer_ext(ptr, T) (!ptr ? NULL : (T##DeviceBuffer*)(ptr + 1))        //impl
 #define DeviceBufferRef_ptr(ptr) RefPtr_data(ptr, DeviceBuffer)
 
 void DeviceBufferRef_dec(DeviceBufferRef **buffer);
@@ -90,7 +90,7 @@ Error DeviceBufferRef_inc(DeviceBufferRef *buffer);
 
 //Create empty buffer or initialized with data.
 //Initializing to non-zero isn't free due to copies.
-//	Initializing to non-zero will move the buffer to created DeviceBuffer, unless it's a ref (then it will create a new one)
+//    Initializing to non-zero will move the buffer to created DeviceBuffer, unless it's a ref (then it will create a new one)
 
 Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,

@@ -204,7 +204,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			if(reg.reg.registerType == ESHRegisterType_PushConstants && binaryType == ESHBinaryType_SPIRV)
 				validBinding = (reg.reg.isUsedFlag >> binaryType) & 1;
 
-			if(!validBinding)	//Doesn't exist in current binary type
+			if(!validBinding)    //Doesn't exist in current binary type
 				continue;
 
 			U8 regType = getDxilRegisterType(reg.reg.registerType);
@@ -264,7 +264,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			};
 
 			if(hasStrideOrLen)
-				binding.data = reg.shaderBuffer.bufferSize;		//Same as setting structuredBufferSize/constantBufferSize
+				binding.data = reg.shaderBuffer.bufferSize;        //Same as setting structuredBufferSize/constantBufferSize
 
 			else if(isTexture)
 				binding.textureFormat = reg.reg.texture;
@@ -299,7 +299,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			if((detectFlags & EDetectDescriptorLayoutFlags_AssumePushDescriptors) && count == 1 && !isSampler)
 				isPushDescriptor = true;
 
-			else for(U64 k = 0; k < pushDescriptors.length; ++k)		//TODO: Hash
+			else for(U64 k = 0; k < pushDescriptors.length; ++k)        //TODO: Hash
 				if (CharString_equalsStringSensitive(reg.name, pushDescriptors.ptr[k])) {
 
 					if(isSampler)

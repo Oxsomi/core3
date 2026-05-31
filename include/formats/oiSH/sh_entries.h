@@ -32,7 +32,7 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_Vertex,
 	ESHPipelineStage_Pixel,
 	ESHPipelineStage_Compute,
-	ESHPipelineStage_GeometryExt,		//GeometryShader extension is required
+	ESHPipelineStage_GeometryExt,        //GeometryShader extension is required
 	ESHPipelineStage_Hull,
 	ESHPipelineStage_Domain,
 
@@ -72,34 +72,34 @@ typedef struct SHEntry {
 
 	CharString name;
 
-	ListU16 binaryIds;							//Reference SHBinaryInfo
+	ListU16 binaryIds;                            //Reference SHBinaryInfo
 
-	ListCharString semanticNames;				//Unique semantics; outputs start at [uniqueInputSemantics], inputs at 0
+	ListCharString semanticNames;                //Unique semantics; outputs start at [uniqueInputSemantics], inputs at 0
 
 	union {
 
-		U64 equal[1];							//This compare can be done in addition to compatible to know exact equality
+		U64 equal[1];                            //This compare can be done in addition to compatible to know exact equality
 
 		struct {
-			U16 waveSize;						//U4[4] req, min, max, preferSize: each U4 is in range [0, 9]
-			U16 reserved0[3];					//Only use if property that might need unique comparison
+			U16 waveSize;                        //U4[4] req, min, max, preferSize: each U4 is in range [0, 9]
+			U16 reserved0[3];                    //Only use if property that might need unique comparison
 		};
 	};
 
 	union {
 
-		U64 compatible[10];						//This compare can be done to know if they're compatible
+		U64 compatible[10];                        //This compare can be done to know if they're compatible
 
 		struct {
 
-			U16 groupX, groupY;					//Present for compute, workgraph, task and mesh shaders
+			U16 groupX, groupY;                    //Present for compute, workgraph, task and mesh shaders
 
 			U16 groupZ;
-			U8 intersectionSize, payloadSize;	//Raytracing payload sizes
+			U8 intersectionSize, payloadSize;    //Raytracing payload sizes
 
 			SHPipelineStage stage;
 			U8 uniqueInputSemantics;
-			U16 idOrPadding;					//Sometimes is used to store id in an array
+			U16 idOrPadding;                    //Sometimes is used to store id in an array
 
 			U32 reserved1;
 
@@ -107,22 +107,22 @@ typedef struct SHEntry {
 
 			union {
 				U64 inputsU64[2];
-				U8 inputs[16];					//ESBType, but ESBMatrix_N1
+				U8 inputs[16];                    //ESBType, but ESBMatrix_N1
 			};
 
 			union {
 				U64 outputsU64[2];
-				U8 outputs[16];					//ESBType, but ESBMatrix_N1
+				U8 outputs[16];                    //ESBType, but ESBMatrix_N1
 			};
 
 			union {
 				U64 inputSemanticNamesU64[2];
-				U8 inputSemanticNames[16];		//(U4 semanticId, semanticName)[]
+				U8 inputSemanticNames[16];        //(U4 semanticId, semanticName)[]
 			};
 
 			union {
 				U64 outputSemanticNamesU64[2];
-				U8 outputSemanticNames[16];		//(U4 semanticId, semanticName)[]
+				U8 outputSemanticNames[16];        //(U4 semanticId, semanticName)[]
 			};
 		};
 	};
@@ -136,22 +136,22 @@ typedef struct SHEntryRuntime {
 	SHEntry entry;
 
 	U16 vendorMask;
-	Bool isShaderAnnotation;			//Switches [shader("string")] and [[oxc::stage("string")]]
-	U8 isInitializedFlags;				//1 = init, 2 = init oxc::uniforms
+	Bool isShaderAnnotation;            //Switches [shader("string")] and [[oxc::stage("string")]]
+	U8 isInitializedFlags;                //1 = init, 2 = init oxc::uniforms
 
 	Bool isRt;
 	Bool containsGfxOrComp;
-	U16 uniformStride;					//How many bytes all uniforms combined take
+	U16 uniformStride;                    //How many bytes all uniforms combined take
 
-	ListU32 extensions;					//Explicitly enabled extensions (ESHExtension[])
+	ListU32 extensions;                    //Explicitly enabled extensions (ESHExtension[])
 
-	ListU16 shaderVersions;				//U16: U8 major, minor;		If not defined will default.
+	ListU16 shaderVersions;                //U16: U8 major, minor;        If not defined will default.
 
-	ListCharString defineNameValues;	//[defineName, defineValue][]
-	ListU8 definesPerCompilation;		//How many defines are relevant for each compilation
+	ListCharString defineNameValues;    //[defineName, defineValue][]
+	ListU8 definesPerCompilation;        //How many defines are relevant for each compilation
 
-	ListSHUniformRuntime uniforms;		//Uniforms used in the compilation unit; offset indexes into uniformData
-	ListU8 uniformData;					//(U8[uniformStride])[uniforms.length]
+	ListSHUniformRuntime uniforms;        //Uniforms used in the compilation unit; offset indexes into uniformData
+	ListU8 uniformData;                    //(U8[uniformStride])[uniforms.length]
 
 } SHEntryRuntime;
 
@@ -160,8 +160,8 @@ typedef struct SHBinaryInfo SHBinaryInfo;
 typedef enum ESHBinaryType ESHBinaryType;
 typedef enum ESHExtension ESHExtension;
 
-U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime);				//How many binaries are stored (compile + link)
-U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime);		//How many binaries are compiled
+U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime);                //How many binaries are stored (compile + link)
+U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime);        //How many binaries are compiled
 
 Bool SHEntryRuntime_asBinaryInfo(
 	const SHEntryRuntime *runtime,

@@ -66,7 +66,7 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize
 clean:
 
 	if(!s_uccess && allocated) {
-		manager->callbacks.onDestroy = NULL;		//onCreate hasn't succeeded, so don't call onDestroy.
+		manager->callbacks.onDestroy = NULL;        //onCreate hasn't succeeded, so don't call onDestroy.
 		WindowManager_free(manager);
 	}
 
@@ -264,10 +264,10 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 
 		Window *w = ListWindowPtr_at(manager->windows, i);
 
-		if(w == forcingUpdate)	//Has already been processed
+		if(w == forcingUpdate)    //Has already been processed
 			continue;
 
-		if(!(w->flags & EWindowFlags_IsFinalized))	//Window not ready yet, wait until ready
+		if(!(w->flags & EWindowFlags_IsFinalized))    //Window not ready yet, wait until ready
 			continue;
 
 		//Update interface
@@ -288,7 +288,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 					InputDevice_markUpdate(*dit);
 			}
 
-			requireDraw = true;							//We are in charge of the draw in non Windows systems
+			requireDraw = true;                            //We are in charge of the draw in non Windows systems
 
 		#endif
 
@@ -301,10 +301,10 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 
 		w->lastUpdate = now;
 
-		if(requireDraw && w->callbacks.onDraw)			//Virtual or non Windows
+		if(requireDraw && w->callbacks.onDraw)            //Virtual or non Windows
 			w->callbacks.onDraw(w);
 
-		if (w->flags & EWindowFlags_ShouldTerminate)	//Just in case the window closed now
+		if (w->flags & EWindowFlags_ShouldTerminate)    //Just in case the window closed now
 			WindowManager_freeWindow(manager, &w);
 	}
 

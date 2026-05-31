@@ -53,7 +53,7 @@ static inline Bool Buffer_allocBitsInternal(U64 length, const Allocator *alloc, 
 			2, 0, "Buffer_allocBitsInternal()::result->ptr is non zero, could indicate memleak"
 		));
 
-	length = (length + 7) >> 3;	//Align to bytes
+	length = (length + 7) >> 3;    //Align to bytes
 	gotoIfError3(clean, alloc->alloc(alloc->ptr, length, result, e_rr));
 
 clean:
@@ -356,8 +356,8 @@ Bool Buffer_writeAsUTF8(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 
 		if(bytes)
 			*bytes = 2;
 
-		buf.ptrNonConst[i]		= 0xC0 | (U8)(codepoint >> 6);
-		buf.ptrNonConst[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]        = 0xC0 | (U8)(codepoint >> 6);
+		buf.ptrNonConst[i + 1]    = 0x80 | (U8)(codepoint & 0x3F);
 		goto clean;
 	}
 
@@ -369,9 +369,9 @@ Bool Buffer_writeAsUTF8(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 
 		if(bytes)
 			*bytes = 3;
 
-		buf.ptrNonConst[i]		= 0xE0 | (U8)(codepoint >> 12);
-		buf.ptrNonConst[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		buf.ptrNonConst[i + 2]	= 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]        = 0xE0 | (U8)(codepoint >> 12);
+		buf.ptrNonConst[i + 1]    = 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		buf.ptrNonConst[i + 2]    = 0x80 | (U8)(codepoint & 0x3F);
 		goto clean;
 	}
 
@@ -383,10 +383,10 @@ Bool Buffer_writeAsUTF8(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 
 		if(bytes)
 			*bytes = 4;
 
-		buf.ptrNonConst[i]		= 0xF0 | (U8)(codepoint >> 18);
-		buf.ptrNonConst[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
-		buf.ptrNonConst[i + 2]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		buf.ptrNonConst[i + 3]	= 0x80 | (U8)(codepoint & 0x3F);
+		buf.ptrNonConst[i]        = 0xF0 | (U8)(codepoint >> 18);
+		buf.ptrNonConst[i + 1]    = 0x80 | (U8)((codepoint >> 12) & 0x3F);
+		buf.ptrNonConst[i + 2]    = 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		buf.ptrNonConst[i + 3]    = 0x80 | (U8)(codepoint & 0x3F);
 		goto clean;
 	}
 
@@ -468,7 +468,7 @@ Bool Buffer_writeAsUTF16(const Buffer buf, U64 i, UnicodeCodePoint codepoint, U8
 		if(bytes)
 			*bytes = 4;
 
-		Buffer_writeU16(buf, i, 	0xD800 | (U16)(codepoint >> 10), NULL);
+		Buffer_writeU16(buf, i,     0xD800 | (U16)(codepoint >> 10), NULL);
 		Buffer_writeU16(buf, i + 2, 0xDC00 | (U16)(codepoint & 1023), NULL);
 		goto clean;
 	}

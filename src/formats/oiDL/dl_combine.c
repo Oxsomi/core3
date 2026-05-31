@@ -93,7 +93,7 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 
 		for (U64 i = 0; i < j; ++i) {
 
-			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))	//Not in memory
+			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))    //Not in memory
 				continue;
 
 			CharString str = i < alen ? entryStringsa.ptr[i] : entryStringsb.ptr[i - alen];
@@ -132,7 +132,7 @@ Bool DLFile_combine(const DLFile *a, const DLFile *b, const Allocator *alloc, DL
 
 		for (U64 i = 0; i < j; ++i) {
 
-			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))	//Not in memory
+			if (!DLFile_isFullyLoaded(i < alen ? a : b, i < alen ? i : i - alen))    //Not in memory
 				continue;
 
 			Buffer buf = i < alen ? entryBuffersa.ptr[i] : entryBuffersb.ptr[i - alen];

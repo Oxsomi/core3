@@ -81,7 +81,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(utex->resource.device);
 
-	if(texture->isPendingFullCopy)		//Already has a full pending change, so no need to check anything.
+	if(texture->isPendingFullCopy)        //Already has a full pending change, so no need to check anything.
 		goto clean;
 
 	if(
@@ -106,7 +106,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	U8 alignX = 4, alignY = 4, alignZ = 4;
 	U8 realAlignX = 1, realAlignY = 1;
 
-	if (ETextureFormat_getAlignment(format, &alignX, &alignY)) {		//Ensure alignment is respected later on
+	if (ETextureFormat_getAlignment(format, &alignX, &alignY)) {        //Ensure alignment is respected later on
 		realAlignX = alignX;
 		realAlignY = alignY;
 	}
@@ -317,11 +317,11 @@ Error GraphicsDeviceRef_createTexture(
 	gotoIfError(clean, UnifiedTexture_create(*tex, bindlessDescriptorTable, name))
 
 	if(Buffer_isRef(*dat)) {
-		gotoIfError(clean, Buffer_createEmptyBytesx(texSize, &texture->cpuData))		//Temporary if not CPUBacked
+		gotoIfError(clean, Buffer_createEmptyBytesx(texSize, &texture->cpuData))        //Temporary if not CPUBacked
 		Buffer_memcpy(texture->cpuData, *dat);
 	}
 
-	else {									//Move
+	else {                                    //Move
 		texture->cpuData = *dat;
 		*dat = Buffer_createNull();
 	}

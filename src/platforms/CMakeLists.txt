@@ -12,7 +12,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program. If not, see https://github.com/Oxsomi/rt_core/blob/main/LICENSE.
+# along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 # Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
@@ -88,6 +88,7 @@ if(EnableTests)
 	)
 	
 	target_link_libraries(OxC3_platforms_interface_dylib_test PUBLIC OxC3_platforms)
+	set_target_properties(OxC3_platforms_interface_dylib_test PROPERTIES FOLDER Oxsomi/test/platforms)
 
 	include(../../cmake/oxc3.cmake)
 	file(GLOB testsInterfaceC "test/interface/*.c")

@@ -33,25 +33,25 @@ typedef struct RefPtr RefPtr;
 typedef RefPtr StreamRef;
 
 typedef enum ESBSettingsFlags {
-	ESBSettingsFlags_None				= 0,
-	ESBSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiSH can be 100% confidently detected otherwise
-	ESBSettingsFlags_IsTightlyPacked	= 1 << 1,
-	ESBSettingsFlags_CreateNoReserve	= 1 << 2,		//Only for SBFile_create avoid reserve (when you already know the size)
-	ESBSettingsFlags_Invalid			= 0xFFFFFFFF << 2
+	ESBSettingsFlags_None                = 0,
+	ESBSettingsFlags_HideMagicNumber    = 1 << 0,        //Only valid if the oiSH can be 100% confidently detected otherwise
+	ESBSettingsFlags_IsTightlyPacked    = 1 << 1,
+	ESBSettingsFlags_CreateNoReserve    = 1 << 2,        //Only for SBFile_create avoid reserve (when you already know the size)
+	ESBSettingsFlags_Invalid            = 0xFFFFFFFF << 2
 } ESBSettingsFlags;
 
 typedef struct SBFile {
 
-	DLFile names;				//[0, structNames - 1], [structNames, structNames + varNames - 1]
+	DLFile names;                //[0, structNames - 1], [structNames, structNames + varNames - 1]
 
 	ListSBStruct structs;
 	ListSBVar vars;
 	ListListU32 arrays;
 
-	ESBSettingsFlags flags;		//flags and bufferSize are assumed to be a single U64 combined (need 8-byte alignment)
+	ESBSettingsFlags flags;        //flags and bufferSize are assumed to be a single U64 combined (need 8-byte alignment)
 	U32 bufferSize;
 
-	U64 hash;					//Appending to the SBFile will automatically refresh this
+	U64 hash;                    //Appending to the SBFile will automatically refresh this
 
 } SBFile;
 
@@ -80,7 +80,7 @@ Bool SBFile_addVariableAsType(
 	SBFile *sbFile,
 	CharString *name,
 	U32 offset,
-	U16 parentId,		//root = U16_MAX
+	U16 parentId,        //root = U16_MAX
 	ESBType type,
 	ESBVarFlag flags,
 	ListU32 *arrays,
@@ -92,7 +92,7 @@ Bool SBFile_addVariableAsStruct(
 	SBFile *sbFile,
 	CharString *name,
 	U32 offset,
-	U16 parentId,		//root = U16_MAX
+	U16 parentId,        //root = U16_MAX
 	U16 structId,
 	ESBVarFlag flags,
 	ListU32 *arrays,
@@ -103,7 +103,7 @@ Bool SBFile_addVariableAsStruct(
 Bool SBFile_write(
 	const SBFile *sbFile,
 	const Allocator *alloc,
-	StreamRef *streamRef,	//Pass NULL to calculate length only (*offset)
+	StreamRef *streamRef,    //Pass NULL to calculate length only (*offset)
 	U64 *offset,
 	Error *e_rr
 );
@@ -124,20 +124,20 @@ void ListSBFile_freeUnderlying(ListSBFile *files, const Allocator *alloc);
 
 typedef enum ESBVersion {
 	ESBVersion_Undefined,
-	ESBVersion_V0_1,		//Unsupported
-	ESBVersion_V1_2			//Current
+	ESBVersion_V0_1,        //Unsupported
+	ESBVersion_V1_2            //Current
 } ESBVersion;
 
 typedef enum ESBFlag {
-	ESBFlag_None				= 0,
-	ESBFlag_IsTightlyPacked		= 1 << 0,
-	ESBFlag_Unsupported			= 0xFFFFFFFF << 1
+	ESBFlag_None                = 0,
+	ESBFlag_IsTightlyPacked        = 1 << 0,
+	ESBFlag_Unsupported            = 0xFFFFFFFF << 1
 } ESBFlag;
 
 typedef struct SBHeader {
 
-	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-	U8 flags;					//ESBFlag
+	U8 version;                    //major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
+	U8 flags;                    //ESBFlag
 	U16 arrays;
 
 	U16 structs;

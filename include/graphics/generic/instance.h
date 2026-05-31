@@ -36,8 +36,8 @@ typedef struct GraphicsApplicationInfo {
 #define GRAPHICS_API_D3D12 1
 
 typedef enum EGraphicsApi {
-	EGraphicsApi_Vulkan			= GRAPHICS_API_VULKAN,
-	EGraphicsApi_Direct3D12		= GRAPHICS_API_D3D12,
+	EGraphicsApi_Vulkan            = GRAPHICS_API_VULKAN,
+	EGraphicsApi_Direct3D12        = GRAPHICS_API_D3D12,
 	//EGraphicsApi_Metal,
 	//EGraphicsApi_WebGPU,
 	EGraphicsApi_Count
@@ -46,11 +46,11 @@ typedef enum EGraphicsApi {
 extern const C8 *EGraphicsApi_name[EGraphicsApi_Count];
 
 typedef enum EGraphicsInstanceFlags {
-	EGraphicsInstanceFlags_None				= 0,
-	EGraphicsInstanceFlags_IsDebug			= 1 << 0,
-	EGraphicsInstanceFlags_IsVerbose		= 1 << 1,
-	EGraphicsInstanceFlags_DisableDebug		= 1 << 2,
-	EGraphicsInstanceFlags_DisableGPUBV		= 1 << 3	//Disable GPU based validation (but keep other debugging)
+	EGraphicsInstanceFlags_None                = 0,
+	EGraphicsInstanceFlags_IsDebug            = 1 << 0,
+	EGraphicsInstanceFlags_IsVerbose        = 1 << 1,
+	EGraphicsInstanceFlags_DisableDebug        = 1 << 2,
+	EGraphicsInstanceFlags_DisableGPUBV        = 1 << 3    //Disable GPU based validation (but keep other debugging)
 } EGraphicsInstanceFlags;
 
 typedef struct GraphicsInstance {
@@ -68,18 +68,18 @@ typedef struct GraphicsInstance {
 typedef RefPtr GraphicsInstanceRef;
 typedef struct ListGraphicsDeviceInfo ListGraphicsDeviceInfo;
 
-#define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))		//impl
+#define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))        //impl
 #define GraphicsInstanceRef_ptr(ptr) RefPtr_data(ptr, GraphicsInstance)
 
 void GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
-Bool GraphicsInterface_create(Error *e_rr);				//Prepare interface to query info about supported APIs
+Bool GraphicsInterface_create(Error *e_rr);                //Prepare interface to query info about supported APIs
 Bool GraphicsInterface_supportsApi(EGraphicsApi api);
 
 Error GraphicsInstance_create(
 	GraphicsApplicationInfo info,
-	EGraphicsApi api,									//EGraphicsApi_Count = Default
+	EGraphicsApi api,                                    //EGraphicsApi_Count = Default
 	EGraphicsInstanceFlags flags,
 	GraphicsInstanceRef **inst
 );

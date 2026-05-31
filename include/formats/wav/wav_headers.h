@@ -34,35 +34,35 @@
 // https://exiftool.org/TagNames/RIFF.html
 
 typedef struct RIFFSection {
-	U32 magicNumber;					//E.g. "RIFF" (RIFFHeader_magic)
-	U32 size;							//Size excluding RIFFSection
+	U32 magicNumber;                    //E.g. "RIFF" (RIFFHeader_magic)
+	U32 size;                            //Size excluding RIFFSection
 } RIFFSection;
 
 typedef struct RIFFHeader {
-	RIFFSection section;				//"RIFF"
-	U32 magicNumberFile;				//E.g. "WAVE" (RIFFWAVHeader_magic)
+	RIFFSection section;                //"RIFF"
+	U32 magicNumberFile;                //E.g. "WAVE" (RIFFWAVHeader_magic)
 } RIFFHeader;
 
 typedef enum ERIFFAudioFormat {
-	ERIFFAudioFormat_PCM		= 1,	//Ints (U8, U16)
-	ERIFFAudioFormat_IEEE754	= 3		//Floats (F32, F64)
+	ERIFFAudioFormat_PCM        = 1,    //Ints (U8, U16)
+	ERIFFAudioFormat_IEEE754    = 3        //Floats (F32, F64)
 } ERIFFAudioFormat;
 
-typedef U16 RIFFAudioFormatType;		//ERIFFAudioFormat
+typedef U16 RIFFAudioFormatType;        //ERIFFAudioFormat
 
 typedef struct RIFFFmtHeader {
 
-	RIFFSection section;				//"fmt " (RIFFFmtHeader_magic)
+	RIFFSection section;                //"fmt " (RIFFFmtHeader_magic)
 
 	RIFFAudioFormatType format;
 	U16 channels;
 
-	U32 frequency;						//Hz (/ second)
+	U32 frequency;                        //Hz (/ second)
 
-	U32 bytesPerSecond;					//frequency * bytesPerBlock
+	U32 bytesPerSecond;                    //frequency * bytesPerBlock
 
-	U16 bytesPerBlock;					//(channels * bitsPerSample) >> 3
-	U16 stride;							//8, 16, 24, 32 or 64
+	U16 bytesPerBlock;                    //(channels * bitsPerSample) >> 3
+	U16 stride;                            //8, 16, 24, 32 or 64
 
 } RIFFFmtHeader;
 
@@ -74,9 +74,9 @@ typedef struct RIFFFmtExtended {
 	U32 guid0;
 } RIFFFmtExtended;
 
-typedef RIFFSection RIFFDataHeader;		//"data" (RIFFDataHeader_magic)
+typedef RIFFSection RIFFDataHeader;        //"data" (RIFFDataHeader_magic)
 
-#define RIFFHeader_magic	 C8x4('R', 'I', 'F', 'F')
+#define RIFFHeader_magic     C8x4('R', 'I', 'F', 'F')
 #define RIFFWAVHeader_magic  C8x4('W', 'A', 'V', 'E')
 #define RIFFFmtHeader_magic  C8x4('f', 'm', 't', ' ')
 #define RIFFDataHeader_magic C8x4('d', 'a', 't', 'a')

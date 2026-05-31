@@ -34,18 +34,18 @@ typedef RefPtr PipelineRef;
 
 typedef enum EDxCommandQueue {
 
-	EDxCommandQueue_Copy,					//Queue for dedicated host -> device copies
+	EDxCommandQueue_Copy,                    //Queue for dedicated host -> device copies
 	EDxCommandQueue_Compute,
 	EDxCommandQueue_Graphics,
 
-	//EDxCommandQueue_VideoDecode,			//TODO:
+	//EDxCommandQueue_VideoDecode,            //TODO:
 	//EDxCommandQueue_VideoEncode
 
 	EDxCommandQueue_Count
 
 } EDxCommandQueue;
 
-typedef struct D3D12DispatchRaysIndirect {		//Intermediate, this one is created from a more sparse version
+typedef struct D3D12DispatchRaysIndirect {        //Intermediate, this one is created from a more sparse version
 	D3D12_DISPATCH_RAYS_DESC desc;
 	U32 padding[5];
 } D3D12DispatchRaysIndirect;
@@ -60,8 +60,8 @@ typedef struct DxCommandQueue {
 } DxCommandQueue;
 
 typedef enum ECPUDescriptorHeapType {
-	ECPUDescriptorHeapType_DSV,			//Depth stencils
-	ECPUDescriptorHeapType_RTV,			//Render targets
+	ECPUDescriptorHeapType_DSV,            //Depth stencils
+	ECPUDescriptorHeapType_RTV,            //Render targets
 	ECPUDescriptorHeapType_Count
 } ECPUDescriptorHeapType;
 
@@ -116,8 +116,8 @@ typedef struct DxPipelineLayout {
 } DxPipelineLayout;
 
 typedef struct DxDescriptorTable {
-	U64 allocationLocations[2];		//Resources, samplers
-	U64 allocationSizes[2];			//Resources, samplers
+	U64 allocationLocations[2];        //Resources, samplers
+	U64 allocationSizes[2];            //Resources, samplers
 } DxDescriptorTable;
 
 Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table);
@@ -140,7 +140,7 @@ typedef struct DxGraphicsDevice {
 
 	ID3D12DeviceConfiguration1 *deviceConfig;
 
-	DxCommandQueue queues[EDxCommandQueue_Count];		//Don't have to be unique queues! Indexed by EVkCommandQueue
+	DxCommandQueue queues[EDxCommandQueue_Count];        //Don't have to be unique queues! Indexed by EVkCommandQueue
 
 	//3D as 1D flat List: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
 	ListDxCommandAllocator commandPools;
@@ -165,11 +165,11 @@ typedef struct DxGraphicsDevice {
 
 typedef struct DxCommandBufferState {
 
-	RefPtr *tempPipelines[EPipelineType_Count];		//Pipelines that were set via command, but not bound yet
+	RefPtr *tempPipelines[EPipelineType_Count];        //Pipelines that were set via command, but not bound yet
 	RefPtr *pipeline;
 
-	ImageAndRange boundTargets[9];					//All 8 RTVs and DSV
-	ImageAndRange resolveTargets[9];				//Dst MSAA targets
+	ImageAndRange boundTargets[9];                    //All 8 RTVs and DSV
+	ImageAndRange resolveTargets[9];                //Dst MSAA targets
 
 	F32x4 blendConstants, tempBlendConstants;
 
@@ -178,11 +178,11 @@ typedef struct DxCommandBufferState {
 	U8 inRender;
 
 	U16 scopeCounter;
-	U8 colorCount;									//If inRender, how many colors are bound (upper mask = has depth)
+	U8 colorCount;                                    //If inRender, how many colors are bound (upper mask = has depth)
 	U8 anyResolve;
 
-	I32x2 size;										//If inRender,	defines current size
-	I32x2 offset;									//^				defines offset
+	I32x2 size;                                        //If inRender,    defines current size
+	I32x2 offset;                                    //^                defines offset
 
 	DxCommandBuffer *buffer;
 

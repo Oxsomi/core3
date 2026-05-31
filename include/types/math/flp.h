@@ -23,7 +23,7 @@
 #pragma once
 #include "types/base/types.h"
 
-#define EFloatType_make(exponentBits, mantissaBits, bytes)			\
+#define EFloatType_make(exponentBits, mantissaBits, bytes)            \
 	(((bytes) << 16) | ((exponentBits) << 8) | ((mantissaBits) << 0))
 
 #ifdef __cplusplus
@@ -32,17 +32,17 @@
 
 typedef enum EFloatType {
 
-	EFloatType_F8			= EFloatType_make( 4,   3,  1),
-	EFloatType_F16			= EFloatType_make( 5,  10,  2),
-	EFloatType_F32			= EFloatType_make( 8,  23,  4),
-	EFloatType_F64			= EFloatType_make(11,  52,  8),
-	//EFloatType_Quadruple	= EFloatType_make(15, 112, 16),
-	//EFloatType_Octuple	= EFloatType_make(19, 236, 32),
+	EFloatType_F8            = EFloatType_make( 4,   3,  1),
+	EFloatType_F16            = EFloatType_make( 5,  10,  2),
+	EFloatType_F32            = EFloatType_make( 8,  23,  4),
+	EFloatType_F64            = EFloatType_make(11,  52,  8),
+	//EFloatType_Quadruple    = EFloatType_make(15, 112, 16),
+	//EFloatType_Octuple    = EFloatType_make(19, 236, 32),
 
-	EFloatType_BF16			= EFloatType_make( 8,   7,  2),			//BFloat
-	EFloatType_TF19			= EFloatType_make( 8,  10,  4),			//TensorFloat
-	EFloatType_PXR24		= EFloatType_make( 8,  15,  4),
-	EFloatType_FP24			= EFloatType_make( 7,  16,  4)
+	EFloatType_BF16            = EFloatType_make( 8,   7,  2),            //BFloat
+	EFloatType_TF19            = EFloatType_make( 8,  10,  4),            //TensorFloat
+	EFloatType_PXR24        = EFloatType_make( 8,  15,  4),
+	EFloatType_FP24            = EFloatType_make( 7,  16,  4)
 
 } EFloatType;
 
@@ -75,11 +75,11 @@ static inline U64 EFloatType_signMask(EFloatType type) {
 	return (U64)1 << EFloatType_signShift(type);
 }
 
-static inline U64 EFloatType_exponentMask(EFloatType type) {			//Not shifted
+static inline U64 EFloatType_exponentMask(EFloatType type) {            //Not shifted
 	return ((U64)1 << EFloatType_exponentBits(type)) - 1;
 }
 
-static inline U64 EFloatType_mantissaMask(EFloatType type) {			//Not shifted
+static inline U64 EFloatType_mantissaMask(EFloatType type) {            //Not shifted
 	return ((U64)1 << EFloatType_mantissaBits(type)) - 1;
 }
 
@@ -134,33 +134,33 @@ typedef U32 TF19;
 typedef U32 PXR24;
 typedef U32 FP24;
 
-#define EFloatType_cast1(a, b)										\
-static inline a b##_cast##a(b v) {									\
+#define EFloatType_cast1(a, b)                                        \
+static inline a b##_cast##a(b v) {                                    \
 																	\
-	U64 v64;														\
-	const void *vptr = &v;											\
+	U64 v64;                                                        \
+	const void *vptr = &v;                                            \
 																	\
-	switch (EFloatType_bytes(EFloatType_##b)) {						\
-		case 2:		v64 = *(const U16*) vptr;		break;			\
-		case 4:		v64 = *(const U32*) vptr;		break;			\
-		case 8:		v64 = *(const U64*) vptr;		break;			\
-		default:	v64 = *(const U8*) vptr;		break;			\
-	}																\
+	switch (EFloatType_bytes(EFloatType_##b)) {                        \
+		case 2:        v64 = *(const U16*) vptr;        break;            \
+		case 4:        v64 = *(const U32*) vptr;        break;            \
+		case 8:        v64 = *(const U64*) vptr;        break;            \
+		default:    v64 = *(const U8*) vptr;        break;            \
+	}                                                                \
 																	\
-	v64 = EFloatType_convert(EFloatType_##b, v64, EFloatType_##a);	\
+	v64 = EFloatType_convert(EFloatType_##b, v64, EFloatType_##a);    \
 																	\
-	vptr = &v64;													\
-	return *(const a*)vptr;											\
+	vptr = &v64;                                                    \
+	return *(const a*)vptr;                                            \
 }
 
-#define EFloatType_cast(a)		\
-EFloatType_cast1(F8, a);		\
-EFloatType_cast1(F16, a);		\
-EFloatType_cast1(F32, a);		\
-EFloatType_cast1(F64, a);		\
-EFloatType_cast1(BF16, a);		\
-EFloatType_cast1(TF19, a);		\
-EFloatType_cast1(PXR24, a);		\
+#define EFloatType_cast(a)        \
+EFloatType_cast1(F8, a);        \
+EFloatType_cast1(F16, a);        \
+EFloatType_cast1(F32, a);        \
+EFloatType_cast1(F64, a);        \
+EFloatType_cast1(BF16, a);        \
+EFloatType_cast1(TF19, a);        \
+EFloatType_cast1(PXR24, a);        \
 EFloatType_cast1(FP24, a);
 
 EFloatType_cast(F8);

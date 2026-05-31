@@ -117,13 +117,13 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			dxFormat = DXGI_FORMAT_R32G32B32A32_TYPELESS;
 			break;
 
-		case ETextureFormatId_BGR10A2:								dxFormat = DXGI_FORMAT_R10G10B10A2_TYPELESS;	break;
-		case ETextureFormatId_BC6H:									dxFormat = DXGI_FORMAT_BC6H_TYPELESS;			break;
+		case ETextureFormatId_BGR10A2:                                dxFormat = DXGI_FORMAT_R10G10B10A2_TYPELESS;    break;
+		case ETextureFormatId_BC6H:                                    dxFormat = DXGI_FORMAT_BC6H_TYPELESS;            break;
 
-		case ETextureFormatId_BC4:	case ETextureFormatId_BC4s:		dxFormat = DXGI_FORMAT_BC4_TYPELESS;			break;
-		case ETextureFormatId_BC5:	case ETextureFormatId_BC5s:		dxFormat = DXGI_FORMAT_BC5_TYPELESS;			break;
+		case ETextureFormatId_BC4:    case ETextureFormatId_BC4s:        dxFormat = DXGI_FORMAT_BC4_TYPELESS;            break;
+		case ETextureFormatId_BC5:    case ETextureFormatId_BC5s:        dxFormat = DXGI_FORMAT_BC5_TYPELESS;            break;
 
-		case ETextureFormatId_BC7: case ETextureFormatId_BC7_sRGB:	dxFormat = DXGI_FORMAT_BC7_TYPELESS;			break;
+		case ETextureFormatId_BC7: case ETextureFormatId_BC7_sRGB:    dxFormat = DXGI_FORMAT_BC7_TYPELESS;            break;
 
 		default:
 			return Error_unsupportedOperation(0, "UnifiedTexture_create() was called with unsupported texture format");
@@ -229,7 +229,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			DeviceMemoryBlock block = (DeviceMemoryBlock) {
 				.isActive = true,
 				.typeExt = (U32) allocInfo.Alignment,
-				.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
+				.allocationTypeExt = !cpuSided,        //Don't share dedicated and non dedicated allocations
 				.isDedicated = true
 			};
 

@@ -130,12 +130,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			))
 
 		switch (entry.stage) {
-			case ESHPipelineStage_AnyHitExt:		stagePtr->stageType = EPipelineStage_AnyHitExt;			break;
-			case ESHPipelineStage_ClosestHitExt:	stagePtr->stageType = EPipelineStage_ClosestHitExt;		break;
-			case ESHPipelineStage_MissExt:			stagePtr->stageType = EPipelineStage_MissExt;			break;
-			case ESHPipelineStage_IntersectionExt:	stagePtr->stageType = EPipelineStage_IntersectionExt;	break;
-			case ESHPipelineStage_CallableExt:		stagePtr->stageType = EPipelineStage_CallableExt;		break;
-			default:								stagePtr->stageType = EPipelineStage_RaygenExt;			break;
+			case ESHPipelineStage_AnyHitExt:        stagePtr->stageType = EPipelineStage_AnyHitExt;            break;
+			case ESHPipelineStage_ClosestHitExt:    stagePtr->stageType = EPipelineStage_ClosestHitExt;        break;
+			case ESHPipelineStage_MissExt:            stagePtr->stageType = EPipelineStage_MissExt;            break;
+			case ESHPipelineStage_IntersectionExt:    stagePtr->stageType = EPipelineStage_IntersectionExt;    break;
+			case ESHPipelineStage_CallableExt:        stagePtr->stageType = EPipelineStage_CallableExt;        break;
+			default:                                stagePtr->stageType = EPipelineStage_RaygenExt;            break;
 		}
 
 		if(

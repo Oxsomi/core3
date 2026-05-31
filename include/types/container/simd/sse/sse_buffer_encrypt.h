@@ -29,17 +29,17 @@ static inline I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 		return I32x4_zero();
 
 	switch (i) {
-		case 0:		return _mm_aeskeygenassist_si128(a, 0x00);
-		case 1:		return _mm_aeskeygenassist_si128(a, 0x01);
-		case 2:		return _mm_aeskeygenassist_si128(a, 0x02);
-		case 3:		return _mm_aeskeygenassist_si128(a, 0x04);
-		case 4:		return _mm_aeskeygenassist_si128(a, 0x08);
-		case 5:		return _mm_aeskeygenassist_si128(a, 0x10);
-		case 6:		return _mm_aeskeygenassist_si128(a, 0x20);
-		case 7:		return _mm_aeskeygenassist_si128(a, 0x40);
-		case 8:		return _mm_aeskeygenassist_si128(a, 0x80);
-		case 9:		return _mm_aeskeygenassist_si128(a, 0x1B);
-		default:	return _mm_aeskeygenassist_si128(a, 0x36);
+		case 0:        return _mm_aeskeygenassist_si128(a, 0x00);
+		case 1:        return _mm_aeskeygenassist_si128(a, 0x01);
+		case 2:        return _mm_aeskeygenassist_si128(a, 0x02);
+		case 3:        return _mm_aeskeygenassist_si128(a, 0x04);
+		case 4:        return _mm_aeskeygenassist_si128(a, 0x08);
+		case 5:        return _mm_aeskeygenassist_si128(a, 0x10);
+		case 6:        return _mm_aeskeygenassist_si128(a, 0x20);
+		case 7:        return _mm_aeskeygenassist_si128(a, 0x40);
+		case 8:        return _mm_aeskeygenassist_si128(a, 0x80);
+		case 9:        return _mm_aeskeygenassist_si128(a, 0x1B);
+		default:    return _mm_aeskeygenassist_si128(a, 0x36);
 	}
 }
 

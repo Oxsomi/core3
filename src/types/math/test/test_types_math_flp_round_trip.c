@@ -31,16 +31,16 @@ void Test_flpRoundTrip(Test *test) {
 	//F32 -> F64 -> F32 should be lossless for finite normals
 
 	static const U32 normals[] = {
-		0x3F800000,		//1
-		0x3F000000,		//0.5
-		0x40000000,		//2
-		0x42F60000,		//123
-		0x7F7FFFFF,		//Float max
-		0x00800000,		//Smallest non-DeN
-		0x80000000,		//-0
-		0x00000000,		//+0
-		0xFF800000,		//-Inf
-		0x7F800000,		//+Inf
+		0x3F800000,        //1
+		0x3F000000,        //0.5
+		0x40000000,        //2
+		0x42F60000,        //123
+		0x7F7FFFFF,        //Float max
+		0x00800000,        //Smallest non-DeN
+		0x80000000,        //-0
+		0x00000000,        //+0
+		0xFF800000,        //-Inf
+		0x7F800000,        //+Inf
 	};
 
 	for (U64 i = 0; i < sizeof(normals) / sizeof(normals[0]); ++i) {
@@ -52,13 +52,13 @@ void Test_flpRoundTrip(Test *test) {
 	//F16 -> F32 -> F16 and F16 -> F64 -> F16 for values that fit cleanly
 
 	static const F16 f16normals[] = {
-		0x3C00,		//1
-		0x3800,		//0.5
-		0x4000,		//2
-		0x57B0,		//123
-		0x7BFF,		//Float max
-		0x7C00,		//Inf
-		0x0000,		//0
+		0x3C00,        //1
+		0x3800,        //0.5
+		0x4000,        //2
+		0x57B0,        //123
+		0x7BFF,        //Float max
+		0x7C00,        //Inf
+		0x0000,        //0
 	};
 
 	for (U64 i = 0; i < sizeof(f16normals) / sizeof(f16normals[0]); ++i) {

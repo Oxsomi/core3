@@ -31,7 +31,7 @@ typedef struct EncryptionStream {
 
 	OxStream parent;
 
-	StreamRef *dataStream;		//The physical stream represented by this virtual one.
+	StreamRef *dataStream;        //The physical stream represented by this virtual one.
 	U64 startOffset;
 
 	U32 encryptionKey[8];
@@ -43,11 +43,11 @@ typedef struct EncryptionStream {
 	U8 chunkSizeShift;
 	U8 pad[7];
 
-	Buffer internalCache;		//sizeof(CryptoChunk) + chunkSize
+	Buffer internalCache;        //sizeof(CryptoChunk) + chunkSize
 
 } EncryptionStream;
 
-static inline U64 EncryptionStream_underlyingSize(U64 chunkSize, U64 size) {		//chunkSize must be base2 and not 0
+static inline U64 EncryptionStream_underlyingSize(U64 chunkSize, U64 size) {        //chunkSize must be base2 and not 0
 
 	U64 underlyingSize = (size / chunkSize) * (sizeof(CryptoChunk) + chunkSize);
 	U64 leftOver = size & (chunkSize - 1);
@@ -64,11 +64,11 @@ RefPtrType EncryptionStream_makeType(const Allocator *alloc);
 
 Bool EncryptionStream_create(
 	StreamRef *dataStream,
-	U64 streamOffset,				//Must be 16 byte aligned
+	U64 streamOffset,                //Must be 16 byte aligned
 	const U32 encryptionKey[8],
 	I32x4 rootIV,
-	U64 chunkSize,					//Must be power of 2
-	U64 size,						//Size of already encrypted data at streamOffset (in virtual bytes)
+	U64 chunkSize,                    //Must be power of 2
+	U64 size,                        //Size of already encrypted data at streamOffset (in virtual bytes)
 	const RefPtrType *type,
 	EncryptionStreamRef **encStream,
 	Error *e_rr

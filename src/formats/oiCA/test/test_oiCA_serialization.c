@@ -296,7 +296,7 @@ void Test_CASerializeFullDate(Test *t) {
 			goto doneFullDate;
 		}
 
-		Ns ts = (Ns)946681200 * SECOND + 123 * MS;		//We can only store up to MSI
+		Ns ts = (Ns)946681200 * SECOND + 123 * MS;        //We can only store up to MSI
 
 		addFile(t, &ca, CAHandle_Root, "precise.txt", ts, false);
 
@@ -345,7 +345,7 @@ void Test_CASerializeEncrypted(Test *t) {
 			goto doneEncCorrect;
 		}
 
-		const U8 secret[] = { 0x53, 0x65, 0x63, 0x72, 0x65, 0x74 };	//"Secret"
+		const U8 secret[] = { 0x53, 0x65, 0x63, 0x72, 0x65, 0x74 };    //"Secret"
 
 		CAHandle hf = addFile(t, &ca, CAHandle_Root, "secret.bin", 0, false);
 		Buffer buf = Buffer_createNull();

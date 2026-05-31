@@ -38,10 +38,10 @@ typedef RefPtr DescriptorTableRef;
 
 typedef struct CBufferData {
 
-	U32 frameId;					//Can loop back to 0 after U32_MAX!
-	F32 time;						//Time since launch of app
-	F32 deltaTime;					//deltaTime since last frame.
-	U32 swapchainCount;				//How many swapchains are present (will insert ids into appData)
+	U32 frameId;                    //Can loop back to 0 after U32_MAX!
+	F32 time;                        //Time since launch of app
+	F32 deltaTime;                    //deltaTime since last frame.
+	U32 swapchainCount;                //How many swapchains are present (will insert ids into appData)
 
 	U32 swapchains[2 * 16];
 
@@ -52,21 +52,21 @@ typedef struct CBufferData {
 TListNamed(SpinLock*, ListSpinLockPtr);
 
 typedef enum EGraphicsDeviceFlags {
-	EGraphicsDeviceFlags_None			= 0,
-	EGraphicsDeviceFlags_IsVerbose		= 1 << 0,	//Device creation is verbose
-	EGraphicsDeviceFlags_IsDebug		= 1 << 1,	//Debug features such as API/RT validation, debug marker/names
-	EGraphicsDeviceFlags_DisableRt		= 1 << 2,	//Don't allow raytracing to be enabled (might reduce driver overhead)
-	EGraphicsDeviceFlags_DisableDebug	= 1 << 3	//Force disable debugging even on debug mode. NDEBUG is leading otherwise
+	EGraphicsDeviceFlags_None            = 0,
+	EGraphicsDeviceFlags_IsVerbose        = 1 << 0,    //Device creation is verbose
+	EGraphicsDeviceFlags_IsDebug        = 1 << 1,    //Debug features such as API/RT validation, debug marker/names
+	EGraphicsDeviceFlags_DisableRt        = 1 << 2,    //Don't allow raytracing to be enabled (might reduce driver overhead)
+	EGraphicsDeviceFlags_DisableDebug    = 1 << 3    //Force disable debugging even on debug mode. NDEBUG is leading otherwise
 } EGraphicsDeviceFlags;
 
 typedef enum EGraphicsBufferingMode {
-	EGraphicsBufferingMode_Default,		//Defaults to device preferred; e.g. 2 on mobile, 3 on desktop
+	EGraphicsBufferingMode_Default,        //Defaults to device preferred; e.g. 2 on mobile, 3 on desktop
 	EGraphicsBufferingMode_Default2,
-	EGraphicsBufferingMode_Double,		//2 frames in flight (less latency, less memory usage)
-	EGraphicsBufferingMode_Triple		//3 frames in flight (more latency, but more performant)
+	EGraphicsBufferingMode_Double,        //2 frames in flight (less latency, less memory usage)
+	EGraphicsBufferingMode_Triple        //3 frames in flight (more latency, but more performant)
 } EGraphicsBufferingMode;
 
-#define MAX_FRAMES_IN_FLIGHT 3			//Don't touch
+#define MAX_FRAMES_IN_FLIGHT 3            //Don't touch
 
 typedef struct GraphicsDevice {
 
@@ -79,23 +79,23 @@ typedef struct GraphicsDevice {
 	EGraphicsDeviceFlags flags;
 	U16 pad0;
 	U8 framesInFlight;
-	U8 fifId;				//(submitId - 1) % FRAMES_IN_FLIGHT
+	U8 fifId;                //(submitId - 1) % FRAMES_IN_FLIGHT
 
 	Ns lastSubmit;
 
-	Ns firstSubmit;											//Start of time
+	Ns firstSubmit;                                            //Start of time
 
-	ListWeakRefPtr pendingResources;						//Resources pending copy from CPU to device next submit
+	ListWeakRefPtr pendingResources;                        //Resources pending copy from CPU to device next submit
 
-	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];		//Resources in flight, TODO: HashMap
+	ListRefPtr resourcesInFlight[MAX_FRAMES_IN_FLIGHT];        //Resources in flight, TODO: HashMap
 
-	SpinLock lock;											//Lock for submission and marking resources dirty
+	SpinLock lock;                                            //Lock for submission and marking resources dirty
 
 	DeviceMemoryAllocator allocator;
 
 	//Staging allocations and buffers that are used to transmit/receive data from the device
 
-	DeviceBufferRef *staging;								//Staging buffer split by FRAMES_IN_FLIGHT
+	DeviceBufferRef *staging;                                //Staging buffer split by FRAMES_IN_FLIGHT
 	AllocationBuffer stagingAllocations[MAX_FRAMES_IN_FLIGHT];
 
 	//Graphics constants (globals) accessible by all shaders
@@ -106,16 +106,16 @@ typedef struct GraphicsDevice {
 
 	ListSpinLockPtr currentLocks;
 
-	U64 pendingBytes;							//For determining if it's time to flush or to resize staging buffer
+	U64 pendingBytes;                            //For determining if it's time to flush or to resize staging buffer
 
-	U64 flushThreshold;							//When the pending bytes are too much and the device should flush
+	U64 flushThreshold;                            //When the pending bytes are too much and the device should flush
 
-	U64 pendingPrimitives;						//For determining if it's time to flush because of BLAS creation
-	U64 flushThresholdPrimitives;				//When the pending primitives are too much and the device should flush
+	U64 pendingPrimitives;                        //For determining if it's time to flush because of BLAS creation
+	U64 flushThresholdPrimitives;                //When the pending primitives are too much and the device should flush
 
-	U64 blockSizeCpu, blockSizeGpu;				//Block sizes for memory allocator
+	U64 blockSizeCpu, blockSizeGpu;                //Block sizes for memory allocator
 
-	PipelineRef *copyShaders[2];				//[0]: copy single, [1]: copy single, rotated
+	PipelineRef *copyShaders[2];                //[0]: copy single, [1]: copy single, rotated
 	DescriptorLayoutRef *copyDescLayout;
 	DescriptorLayoutRef *copyDescPushDesc;
 	PipelineLayoutRef *copyPipelineLayout;
@@ -133,7 +133,7 @@ typedef RefPtr GraphicsDeviceRef;
 typedef struct SHBinaryInfo SHBinaryInfo;
 typedef struct SHEntry SHEntry;
 
-#define GraphicsDevice_ext(ptr, T) (!ptr ? NULL : (T##GraphicsDevice*)(ptr + 1))		//impl
+#define GraphicsDevice_ext(ptr, T) (!ptr ? NULL : (T##GraphicsDevice*)(ptr + 1))        //impl
 #define GraphicsDeviceRef_ptr(ptr) RefPtr_data(ptr, GraphicsDevice)
 
 void GraphicsDeviceRef_dec(GraphicsDeviceRef **device);

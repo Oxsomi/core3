@@ -41,7 +41,7 @@ void Test_DLCreateFree(Test *t) {
 
 	//Must succeed
 
-	{						//Data
+	{                        //Data
 		DLFile f = { 0 };
 		Test_assert(t, "Create Data",    DLFile_create(&s, 0, t->alloc, &f, &t->err));
 		Test_assert(t, "IsAllocated",    DLFile_isAllocated(&f));
@@ -50,7 +50,7 @@ void Test_DLCreateFree(Test *t) {
 		Test_assert(t, "Free clears",    !DLFile_isAllocated(&f));
 	}
 
-	{						//String
+	{                        //String
 		DLFile f = { 0 };
 		s.dataType = EDLDataType_String;
 		Test_assert(t, "Create String+cache", DLFile_create(&s, 65536, t->alloc, &f, &t->err));
@@ -61,7 +61,7 @@ void Test_DLCreateFree(Test *t) {
 
 	//Must fail
 
-	{						//Double create
+	{                        //Double create
 		DLFile f = { 0 };
 		Test_assert(t, "Create first",        DLFile_create(&s, 0, t->alloc, &f, NULL));
 		Test_assert(t, "Double-create fails", !DLFile_create(&s, 0, t->alloc, &f, NULL));
@@ -70,38 +70,38 @@ void Test_DLCreateFree(Test *t) {
 
 	Test_assert(t, "Null dlFile", !DLFile_create(&s, 0, t->alloc, NULL, NULL));
 
-	{						//Invalid compression type
+	{                        //Invalid compression type
 		DLSettings bad = s;
 		bad.compressionType = (XXCompressionType)0xFF;
 		DLFile f = { 0 };
 		Test_assert(t, "Bad compressionType", !DLFile_create(&bad, 0, t->alloc, &f, NULL));
 	}
 
-	{						//Invalid encryptionType 
+	{                        //Invalid encryptionType 
 		DLSettings bad = s;
 		bad.encryptionType = (XXEncryptionType)0xFF;
 		DLFile f = { 0 };
 		Test_assert(t, "Bad encryptionType", !DLFile_create(&bad, 0, t->alloc, &f, NULL));
 	}
 
-	{						//Invalid data type
+	{                        //Invalid data type
 		DLSettings bad = s;
 		bad.dataType = (DLDataType)0xFF;
 		DLFile f = { 0 };
 		Test_assert(t, "Bad dataType", !DLFile_create(&bad, 0, t->alloc, &f, NULL));
 	}
 
-	{						//Invalid flags
+	{                        //Invalid flags
 		DLSettings bad = s;
 		bad.flags = EDLSettingsFlags_Invalid;
 		DLFile f = { 0 };
 		Test_assert(t, "Bad flags", !DLFile_create(&bad, 0, t->alloc, &f, NULL));
 	}
 
-	DLFile_free(NULL, t->alloc);		//Hopefully doesn't crash
+	DLFile_free(NULL, t->alloc);        //Hopefully doesn't crash
 	Test_assert(t, "Free NULL safe", true);
 
-	{						//Empty DLFile free
+	{                        //Empty DLFile free
 		DLFile f = { 0 };
 		DLFile_free(&f, t->alloc);
 		Test_assert(t, "Free unallocated safe", true);
@@ -232,7 +232,7 @@ void Test_DLCreateFromList(Test *t) {
 	DLSettings sStr = sData;
 	sStr.dataType = EDLDataType_String;
 
-	{								//createBufferList: valid
+	{                                //createBufferList: valid
 		ListBuffer list = { 0 };
 		Bool setupOk = true;
 
@@ -260,14 +260,14 @@ void Test_DLCreateFromList(Test *t) {
 		}
 	}
 
-	{								//createBufferList: empty list
+	{                                //createBufferList: empty list
 		ListBuffer empty = { 0 };
 		DLFile f = { 0 };
 		Test_assert(t, "createBufferList empty", DLFile_createBufferList(&sData, &empty, t->alloc, &f, &t->err));
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//createStringList: wrong dataType in settings rejected
+	{                                    //createStringList: wrong dataType in settings rejected
 		ListBuffer list = { 0 };
 		U8 b = 1;
 		Buffer buf = Buffer_createNull();
@@ -278,7 +278,7 @@ void Test_DLCreateFromList(Test *t) {
 		ListBuffer_freeUnderlying(&list, t->alloc);
 	}
 
-	{									//createStringList: valid
+	{                                    //createStringList: valid
 		static const char *words[] = { "alpha", "beta", "gamma", "delta", "epsilon" };
 		ListCharString list = { 0 };
 		Bool setupOk = true;
@@ -306,14 +306,14 @@ void Test_DLCreateFromList(Test *t) {
 		}
 	}
 
-	{									//createStringList: empty list
+	{                                    //createStringList: empty list
 		ListCharString empty = { 0 };
 		DLFile f = { 0 };
 		Test_assert(t, "createStringList empty", DLFile_createStringList(&sStr, &empty, t->alloc, &f, &t->err));
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//createStringList: wrong dataType in settings rejected
+	{                                    //createStringList: wrong dataType in settings rejected
 		ListCharString list = { 0 };
 		CharString str = CharString_createNull();
 		CharString_createCopy(CharString_createRefCStrConst("x"), t->alloc, &str, NULL);
@@ -353,29 +353,29 @@ void Test_DLFindLoadedString(Test *t) {
 		DLFile_addEntryString(&f, &s, t->alloc, &t->err);
 	}
 
-	{		//Find first cherry (2)
+	{        //Find first cherry (2)
 		CharString needle = CharString_createRefCStrConst("cherry");
 		Test_assert(t, "find 'cherry' at 2", DLFile_findLoadedString(&f, 0, 5, &needle) == 2);
 	}
 
-	{		//Find second apple (3)
+	{        //Find second apple (3)
 		CharString needle = CharString_createRefCStrConst("apple");
 		Test_assert(t, "find 'apple' from 1 at 3", DLFile_findLoadedString(&f, 1, 5, &needle) == 3);
 	}
 
-	{		//No match for third apple
+	{        //No match for third apple
 		CharString needle = CharString_createRefCStrConst("apple");
 		Test_assert(t, "find 'apple' in [1,3) not found",
 			DLFile_findLoadedString(&f, 1, 3, &needle) == U64_MAX);
 	}
 
-	{		//No match
+	{        //No match
 		CharString needle = CharString_createRefCStrConst("elderberry");
 		Test_assert(t, "find absent word == U64_MAX",
 			DLFile_findLoadedString(&f, 0, 5, &needle) == U64_MAX);
 	}
 
-	{		//Wrong data type
+	{        //Wrong data type
 		DLFile fData = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &fData, &t->err);
 		U8 b = 1;
@@ -387,7 +387,7 @@ void Test_DLFindLoadedString(Test *t) {
 		DLFile_free(&fData, t->alloc);
 	}
 
-	{		//Null guard
+	{        //Null guard
 		CharString needle = CharString_createRefCStrConst("x");
 		Test_assert(t, "find null file == U64_MAX", DLFile_findLoadedString(NULL, 0, 5, &needle) == U64_MAX);
 		Test_assert(t, "find null needle == U64_MAX", DLFile_findLoadedString(&f, 0, 5, NULL) == U64_MAX);

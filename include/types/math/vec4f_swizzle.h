@@ -30,19 +30,19 @@
 
 //4D Swizzles
 
-#define F32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)											\
+#define F32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)                                            \
 static inline F32x4 F32x4_##xv##yv##zv##wv(F32x4 a) { return vecShufflef(a, x0, y0, z0, w0); }
 
-#define F32x4_expand3(...)																		\
-F32x4_expand4(__VA_ARGS__, x, 0); F32x4_expand4(__VA_ARGS__, y, 1);								\
+#define F32x4_expand3(...)                                                                        \
+F32x4_expand4(__VA_ARGS__, x, 0); F32x4_expand4(__VA_ARGS__, y, 1);                                \
 F32x4_expand4(__VA_ARGS__, z, 2); F32x4_expand4(__VA_ARGS__, w, 3);
 
-#define F32x4_expand2(...)																		\
-F32x4_expand3(__VA_ARGS__, x, 0); F32x4_expand3(__VA_ARGS__, y, 1);								\
+#define F32x4_expand2(...)                                                                        \
+F32x4_expand3(__VA_ARGS__, x, 0); F32x4_expand3(__VA_ARGS__, y, 1);                                \
 F32x4_expand3(__VA_ARGS__, z, 2); F32x4_expand3(__VA_ARGS__, w, 3);
 
-#define F32x4_expand(...)																		\
-F32x4_expand2(__VA_ARGS__, x, 0); F32x4_expand2(__VA_ARGS__, y, 1);								\
+#define F32x4_expand(...)                                                                        \
+F32x4_expand2(__VA_ARGS__, x, 0); F32x4_expand2(__VA_ARGS__, y, 1);                                \
 F32x4_expand2(__VA_ARGS__, z, 2); F32x4_expand2(__VA_ARGS__, w, 3);
 
 F32x4_expand(x, 0);
@@ -52,15 +52,15 @@ F32x4_expand(w, 3);
 
 //3D swizzles
 
-#define F32x3_expand3(xv, yv, zv)																\
+#define F32x3_expand3(xv, yv, zv)                                                                \
 static inline F32x4 F32x4_##xv##yv##zv(F32x4 a) { return F32x4_trunc3(F32x4_##xv##yv##zv##x(a)); }
 
-#define F32x3_expand2(...)																		\
-F32x3_expand3(__VA_ARGS__, x); F32x3_expand3(__VA_ARGS__, y); 									\
+#define F32x3_expand2(...)                                                                        \
+F32x3_expand3(__VA_ARGS__, x); F32x3_expand3(__VA_ARGS__, y);                                     \
 F32x3_expand3(__VA_ARGS__, z); F32x3_expand3(__VA_ARGS__, w);
 
-#define F32x3_expand(...)																		\
-F32x3_expand2(__VA_ARGS__, x); F32x3_expand2(__VA_ARGS__, y);									\
+#define F32x3_expand(...)                                                                        \
+F32x3_expand2(__VA_ARGS__, x); F32x3_expand2(__VA_ARGS__, y);                                    \
 F32x3_expand2(__VA_ARGS__, z); F32x3_expand2(__VA_ARGS__, w);
 
 F32x3_expand(x);
@@ -70,12 +70,12 @@ F32x3_expand(w);
 
 //2D swizzles
 
-#define F32x2_expand2(xv, yv)																	\
-static inline F32x4 F32x4_##xv##yv##4(F32x4 a) { return F32x4_trunc2(F32x4_##xv##yv##xx(a)); }	\
+#define F32x2_expand2(xv, yv)                                                                    \
+static inline F32x4 F32x4_##xv##yv##4(F32x4 a) { return F32x4_trunc2(F32x4_##xv##yv##xx(a)); }    \
 static inline F32x2 F32x4_##xv##yv(F32x4 a) { return F32x2_fromF32x4(F32x4_##xv##yv##xx(a)); }
 
-#define F32x2_expand(...)																		\
-F32x2_expand2(__VA_ARGS__, x); F32x2_expand2(__VA_ARGS__, y);									\
+#define F32x2_expand(...)                                                                        \
+F32x2_expand2(__VA_ARGS__, x); F32x2_expand2(__VA_ARGS__, y);                                    \
 F32x2_expand2(__VA_ARGS__, z); F32x2_expand2(__VA_ARGS__, w);
 
 F32x2_expand(x);

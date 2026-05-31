@@ -61,7 +61,7 @@ Error DxDeviceBuffer_transition(
 		.AccessBefore = buffer->lastAccess,
 		.AccessAfter = access,
 		.pResource = buffer->buffer,
-		.Size = UINT64_MAX			//Sized barrier not allowed
+		.Size = UINT64_MAX            //Sized barrier not allowed
 	};
 
 	const Error err = ListD3D12_BUFFER_BARRIER_pushBackx(bufferBarriers, bufferBarrier);
@@ -154,7 +154,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, Devic
 		block = (DeviceMemoryBlock) {
 			.isActive = true,
 			.typeExt = (U32) allocInfo.Alignment,
-			.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
+			.allocationTypeExt = !cpuSided,        //Don't share dedicated and non dedicated allocations
 			.isDedicated = true
 		};
 
@@ -456,7 +456,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, false, (const U8**) &location);
 
-			if(temp.genericError && location == defaultLocation)		//Something else went wrong
+			if(temp.genericError && location == defaultLocation)        //Something else went wrong
 				gotoIfError(clean, temp)
 
 			//We re-create the staging buffer to fit the new allocation.
@@ -506,7 +506,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 
 				if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-					gotoIfError(clean, DxDeviceBuffer_transition(						//Ensure resource is transitioned
+					gotoIfError(clean, DxDeviceBuffer_transition(                        //Ensure resource is transitioned
 						stagingExt,
 						D3D12_BARRIER_SYNC_COPY,
 						D3D12_BARRIER_ACCESS_COPY_SOURCE,
@@ -515,7 +515,7 @@ Error DX_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 					))
 
 					RefPtr_inc(device->staging);
-					gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+					gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))        //Add to in flight
 				}
 
 				if(dependency.NumBarriers) {

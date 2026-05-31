@@ -38,7 +38,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	ELockAcquire acq = SpinLock_lock(&allocator->lock, U64_MAX);
 
 	if (acq < ELockAcquire_Success)
-		return false;		//Can't free.
+		return false;        //Can't free.
 
 	Bool s_uccess = true;
 	Error *e_rr = NULL;
@@ -70,7 +70,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 
 clean:
 
-	if(acq == ELockAcquire_Acquired)	//Only release if it wasn't already active
+	if(acq == ELockAcquire_Acquired)    //Only release if it wasn't already active
 		SpinLock_unlock(&allocator->lock);
 
 	return s_uccess;

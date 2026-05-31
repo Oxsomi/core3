@@ -31,7 +31,7 @@
 
 typedef enum ESBPrimitive {
 	ESBPrimitive_Invalid,
-	ESBPrimitive_Float,		//Float, unorm, snorm
+	ESBPrimitive_Float,        //Float, unorm, snorm
 	ESBPrimitive_Int,
 	ESBPrimitive_UInt
 } ESBPrimitive;
@@ -43,7 +43,7 @@ typedef enum ESBVector {
 	ESBVector_N4
 } ESBVector;
 
-typedef enum ESBMatrix {	//How many vectors are stored. So float4x3 in HLSL = F32x3x4 in OxC3
+typedef enum ESBMatrix {    //How many vectors are stored. So float4x3 in HLSL = F32x3x4 in OxC3
 	ESBMatrix_N1,
 	ESBMatrix_N2,
 	ESBMatrix_N3,
@@ -51,30 +51,30 @@ typedef enum ESBMatrix {	//How many vectors are stored. So float4x3 in HLSL = F3
 } ESBMatrix;
 
 typedef enum ESBStride {
-	ESBStride_X8,			//This one is currently unused, but might be available in the future
+	ESBStride_X8,            //This one is currently unused, but might be available in the future
 	ESBStride_X16,
 	ESBStride_X32,
 	ESBStride_X64
 } ESBStride;
 
 #define ESBType_create(stride, prim, vec, mat) (((mat) << 6) | ((stride) << 4) | ((prim) << 2) | (vec))
-#define ESBType_createN(stride, prim, name, H, suffix, suffix1)												\
-	ESBType_##name##suffix1##suffix  = ESBType_create(stride, prim, ESBVector_N1, H),						\
-	ESBType_##name##x2##suffix       = ESBType_create(stride, prim, ESBVector_N2, H),						\
-	ESBType_##name##x3##suffix       = ESBType_create(stride, prim, ESBVector_N3, H),						\
+#define ESBType_createN(stride, prim, name, H, suffix, suffix1)                                                \
+	ESBType_##name##suffix1##suffix  = ESBType_create(stride, prim, ESBVector_N1, H),                        \
+	ESBType_##name##x2##suffix       = ESBType_create(stride, prim, ESBVector_N2, H),                        \
+	ESBType_##name##x3##suffix       = ESBType_create(stride, prim, ESBVector_N3, H),                        \
 	ESBType_##name##x4##suffix       = ESBType_create(stride, prim, ESBVector_N4, H)
 
-#define ESBType_createVec(dim, suffix0, suffix1) 															\
-	ESBType_createN(ESBStride_X16, ESBPrimitive_Float, F16, dim, suffix0, suffix1),							\
-	ESBType_createN(ESBStride_X16, ESBPrimitive_Int, I16, dim, suffix0, suffix1),							\
-	ESBType_createN(ESBStride_X16, ESBPrimitive_UInt, U16, dim, suffix0, suffix1),							\
+#define ESBType_createVec(dim, suffix0, suffix1)                                                             \
+	ESBType_createN(ESBStride_X16, ESBPrimitive_Float, F16, dim, suffix0, suffix1),                            \
+	ESBType_createN(ESBStride_X16, ESBPrimitive_Int, I16, dim, suffix0, suffix1),                            \
+	ESBType_createN(ESBStride_X16, ESBPrimitive_UInt, U16, dim, suffix0, suffix1),                            \
 																											\
-	ESBType_createN(ESBStride_X32, ESBPrimitive_Float, F32, dim, suffix0, suffix1),							\
-	ESBType_createN(ESBStride_X32, ESBPrimitive_Int, I32, dim, suffix0, suffix1),							\
-	ESBType_createN(ESBStride_X32, ESBPrimitive_UInt, U32, dim, suffix0, suffix1),							\
+	ESBType_createN(ESBStride_X32, ESBPrimitive_Float, F32, dim, suffix0, suffix1),                            \
+	ESBType_createN(ESBStride_X32, ESBPrimitive_Int, I32, dim, suffix0, suffix1),                            \
+	ESBType_createN(ESBStride_X32, ESBPrimitive_UInt, U32, dim, suffix0, suffix1),                            \
 																											\
-	ESBType_createN(ESBStride_X64, ESBPrimitive_Float, F64, dim, suffix0, suffix1),							\
-	ESBType_createN(ESBStride_X64, ESBPrimitive_Int, I64, dim, suffix0, suffix1),							\
+	ESBType_createN(ESBStride_X64, ESBPrimitive_Float, F64, dim, suffix0, suffix1),                            \
+	ESBType_createN(ESBStride_X64, ESBPrimitive_Int, I64, dim, suffix0, suffix1),                            \
 	ESBType_createN(ESBStride_X64, ESBPrimitive_UInt, U64, dim, suffix0, suffix1)
 
 typedef enum ESBType {
@@ -121,22 +121,22 @@ typedef struct SBStruct {
 } SBStruct;
 
 typedef enum ESBVarFlag {
-	ESBVarFlag_None				= 0,
-	ESBVarFlag_IsUsedVarSPIRV	= 1 << 0,		//Variable is used by shader (SPIRV)
-	ESBVarFlag_IsUsedVarDXIL	= 1 << 1,		//Variable is used by shader (DXIL)
-	ESBVarFlag_Invalid			= 0xFFFFFFFF << 2
+	ESBVarFlag_None                = 0,
+	ESBVarFlag_IsUsedVarSPIRV    = 1 << 0,        //Variable is used by shader (SPIRV)
+	ESBVarFlag_IsUsedVarDXIL    = 1 << 1,        //Variable is used by shader (DXIL)
+	ESBVarFlag_Invalid            = 0xFFFFFFFF << 2
 } ESBVarFlag;
 
-typedef struct SBVar {		//Is seen as a U32[3] for hashing
+typedef struct SBVar {        //Is seen as a U32[3] for hashing
 
-	U16 structId;			//If not U16_MAX, ESBType needs to be 0 and this should be a valid struct
-	U16 arrayDimOrArrayId;	//<= 32767: array dimension, otherwise arrayId (& 0x7FFF)
+	U16 structId;            //If not U16_MAX, ESBType needs to be 0 and this should be a valid struct
+	U16 arrayDimOrArrayId;    //<= 32767: array dimension, otherwise arrayId (& 0x7FFF)
 
 	U32 offset;
 
-	U8 type;				//ESBType if structId == U16_MAX
-	U8 flags;				//ESBStructVarFlag
-	U16 parentId;			//root = U16_MAX
+	U8 type;                //ESBType if structId == U16_MAX
+	U8 flags;                //ESBStructVarFlag
+	U16 parentId;            //root = U16_MAX
 
 } SBVar;
 

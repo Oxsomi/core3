@@ -37,7 +37,7 @@ typedef struct Thread {
 	void *nativeHandle, *objectHandle;
 } Thread;
 
-impl U64 Thread_getId();					//Current thread id
+impl U64 Thread_getId();                    //Current thread id
 
 impl Bool Thread_sleep(Ns ns);                         //Can be in a different time unit. Ex. on Windows it's rounded up to 100ns
 

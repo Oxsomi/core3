@@ -52,7 +52,7 @@ Bool DLFile_createInternal(
 		retError(clean, Error_invalidParameter(0, 0, "DLFile_create()::settings.compressionType is invalid"));
 
 	if(settings->compressionType != EXXCompressionType_None)
-		retError(clean, Error_invalidOperation(0, "DLFile_create() compression not supported yet"));		//TODO:
+		retError(clean, Error_invalidOperation(0, "DLFile_create() compression not supported yet"));        //TODO:
 
 	if(settings->encryptionType >= EXXEncryptionType_Count)
 		retError(clean, Error_invalidParameter(0, 1, "DLFile_create()::settings.encryptionType is invalid"));
@@ -63,7 +63,7 @@ Bool DLFile_createInternal(
 	if(settings->flags & EDLSettingsFlags_Invalid)
 		retError(clean, Error_invalidParameter(0, 3, "DLFile_create()::settings.flags contained unsupported flag"));
 
-	dlFile->entryBuffers = (ListBuffer) { 0 };		//ListBuffer and ListCharString are same size
+	dlFile->entryBuffers = (ListBuffer) { 0 };        //ListBuffer and ListCharString are same size
 
 	if (cacheSize) {
 		gotoIfError3(clean, Buffer_createUninitializedBytes(cacheSize, alloc, &dlFile->cache, e_rr));
@@ -149,7 +149,7 @@ Bool DLFile_createCopy(const DLFile *dlFile, const Allocator *alloc, DLFile *cop
 
 			Buffer buf = dlFile->entryBuffers.ptr[i];
 
-			if (!Buffer_isRef(buf)) {		//Needs copy
+			if (!Buffer_isRef(buf)) {        //Needs copy
 				gotoIfError3(clean, Buffer_createCopy(buf, alloc, &copy->entryBuffers.ptrNonConst[i], e_rr));
 				continue;
 			}

@@ -52,7 +52,7 @@ typedef struct ShaderFileRecursion {
 
 } ShaderFileRecursion;
 
-const C8 *oiSHCombineSuffix = ".oiSH";		//Suffix when oiSH is combined
+const C8 *oiSHCombineSuffix = ".oiSH";        //Suffix when oiSH is combined
 
 const C8 *oiSHSuffixes[] = {
 	".spv.oiSH",
@@ -296,8 +296,8 @@ Bool Compiler_getUniqueCompiles(
 		SHEntryRuntime runtime = runtimeEntries.ptr[i];
 
 		//Note: Since compiled combinations excludes uniforms, it'll "compile" for uniformId 0 which will later be
-		//		explicitly linked for the real uniform information.
-		//		This means the compiler will only do 1 compile step, but multiple linking steps for the uniforms.
+		//        explicitly linked for the real uniform information.
+		//        This means the compiler will only do 1 compile step, but multiple linking steps for the uniforms.
 
 		for (U64 j = 0; j < SHEntryRuntime_getCombinationsCompiled(runtime); ++j) {
 
@@ -312,7 +312,7 @@ Bool Compiler_getUniqueCompiles(
 			U64 k = 0;
 
 			for(; k < identifiers.length; ++k)
-				if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))		//TODO: This one should combine compilations if isShaderAnnotation
+				if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))        //TODO: This one should combine compilations if isShaderAnnotation
 					break;
 
 			//When it's new, we gotta remember the binary identifier for reuse.
@@ -477,7 +477,7 @@ Bool Compiler_compileShaderSingle(
 		.containsGfxOrComp = isGfxOrComp,
 		.format = ECompilerFormat_HLSL,
 		.outputType = binaryType,
-		.infoAboutIncludes = true,		//Required to supply oiSH info about includes
+		.infoAboutIncludes = true,        //Required to supply oiSH info about includes
 		.includeDir = includeDir
 	};
 
@@ -723,7 +723,7 @@ Bool Compiler_getLinkEntries(
 		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
 		//However, if you have a mix of extensions and defines, then some entrypoints might not need to be linked again.
 		//Example: raygen with both SER and no SER. This would only be linked once per compilation, but any other shaders should exclude this.
-		//			(We don't want to have 2x hit shaders included while only raygen needs these compilations)
+		//            (We don't want to have 2x hit shaders included while only raygen needs these compilations)
 
 		//Check extensions
 
@@ -737,7 +737,7 @@ Bool Compiler_getLinkEntries(
 				break;
 			}
 
-		if (!containsExtension)			//Extension not found
+		if (!containsExtension)            //Extension not found
 			continue;
 
 		//Check shader versions
@@ -752,7 +752,7 @@ Bool Compiler_getLinkEntries(
 				break;
 			}
 
-		if (!containsShaderVersion)		//Shader model not found
+		if (!containsShaderVersion)        //Shader model not found
 			continue;
 
 		//Check defines
@@ -767,7 +767,7 @@ Bool Compiler_getLinkEntries(
 			ListCharString tmp = (ListCharString) { 0 };
 			gotoIfError2(clean, ListCharString_createRefConst(entry.defineNameValues.ptr + (l << 1), m << 1, &tmp))
 
-			Bool eq = tmp.length == ident.defines.length;		//TODO: ListCharString_equalsUnderlying
+			Bool eq = tmp.length == ident.defines.length;        //TODO: ListCharString_equalsUnderlying
 
 			if (eq)
 				for (U64 n = 0; n < tmp.length; ++n)
@@ -785,7 +785,7 @@ Bool Compiler_getLinkEntries(
 			l += m;
 		}
 
-		if (!containsDefines)			//Defines not found
+		if (!containsDefines)            //Defines not found
 			continue;
 
 		//Go through all uniforms defined by the runtime, since there may be multiple
@@ -854,7 +854,7 @@ Bool Compiler_getLinkEntries(
 			}
 
 			gotoIfError2(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, alloc))
-			tmpEntries = (ListU16) { 0 };	//Moved
+			tmpEntries = (ListU16) { 0 };    //Moved
 			freeLinkEntries = true;
 		}
 	}
@@ -897,10 +897,10 @@ typedef struct CompilerJobScheduler {
 	ListCompileResult *compileResultsTemp;
 
 	SpinLock *lock;
-	U64 *counter;						//This one is to acquire job ids
-	U64 *completedCounter;				//This one is to signal jobs that are done
-	U64 *counterCompiledBinaries;		//How many binaries have been compiled
-	U64 *counterLinkedBinaries;			//How many binaries have been linked
+	U64 *counter;                        //This one is to acquire job ids
+	U64 *completedCounter;                //This one is to signal jobs that are done
+	U64 *counterCompiledBinaries;        //How many binaries have been compiled
+	U64 *counterLinkedBinaries;            //How many binaries have been linked
 	U64 *threadCounter;
 	Bool *success;
 
@@ -1211,7 +1211,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 
 		if(*job->counterCompiledBinaries == job->shEntryIdsIntermediate->length) {
 
-			if(acq == ELockAcquire_Acquired)		//Release lock to prevent deadlock
+			if(acq == ELockAcquire_Acquired)        //Release lock to prevent deadlock
 				SpinLock_unlock(job->lock);
 
 			acq = ELockAcquire_Invalid;
@@ -1226,7 +1226,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 		U64 ourNext = job->shEntryIdsIntermediate->ptr[ourJobId];
 
 		U32 ourOldJobId = ourNext >> 32;
-		ListSHEntryRuntime entries = job->shEntries->ptr[ourOldJobId];		//Grab entries as shEntries can be modified
+		ListSHEntryRuntime entries = job->shEntries->ptr[ourOldJobId];        //Grab entries as shEntries can be modified
 
 		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(job->lock);
@@ -1310,7 +1310,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 
 		if(*job->counterLinkedBinaries == job->shEntryIdsIntermediate1->length) {
 
-			if(acq == ELockAcquire_Acquired)		//Release lock to prevent deadlock
+			if(acq == ELockAcquire_Acquired)        //Release lock to prevent deadlock
 				SpinLock_unlock(job->lock);
 
 			acq = ELockAcquire_Invalid;
@@ -1320,7 +1320,7 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 		}
 
 		U64 ourJobId = (*job->counterLinkedBinaries)++;
-		U64 ourNext = job->shEntryIdsIntermediate1->ptr[ourJobId];		//((U64)lastJobId << 32) | (U32)linkId
+		U64 ourNext = job->shEntryIdsIntermediate1->ptr[ourJobId];        //((U64)lastJobId << 32) | (U32)linkId
 
 		U32 compileJobId = (U32)(ourNext >> 32);
 		U32 linkEntryId = (U32)ourNext;
@@ -1384,12 +1384,12 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 				U16 currentCombinationId = linkEntry.combinationId;
 
 				binaryIdentifier = (SHBinaryIdentifier) { 0 };
-				SHEntryRuntime_asBinaryIdentifier(		//TODO: error handling
+				SHEntryRuntime_asBinaryIdentifier(        //TODO: error handling
 					&entry, currentCombinationId, &binaryIdentifier, NULL
 				);
 
 				ListBuffer inputs = (ListBuffer) { 0 };
-				ListBuffer_createRefConst(&result.binary, 1, &inputs);	//TODO: Error handling
+				ListBuffer_createRefConst(&result.binary, 1, &inputs);    //TODO: Error handling
 
 				CompilerEntrypoint entrypoint = (CompilerEntrypoint) { 0 };
 							
@@ -1408,16 +1408,16 @@ void Compiler_compileJob(CompilerJobScheduler *job) {
 
 					//TODO: Error handling
 					//if (l == uniqueEntrypoints.length)
-					//	retError(clean, Error_invalidState(
-					//		0,
-					//		"Compiler_compileShaders() somehow an entrypointId was referenced by a linkEntry "
-					//		"that doesn't exist"
-					//	));
+					//    retError(clean, Error_invalidState(
+					//        0,
+					//        "Compiler_compileShaders() somehow an entrypointId was referenced by a linkEntry "
+					//        "that doesn't exist"
+					//    ));
 
 					entrypoint = uniqueEntrypoints.ptr[l];
 				}
 
-				else entrypoint.stage = ESHPipelineStage_Count;		//Mark as lib
+				else entrypoint.stage = ESHPipelineStage_Count;        //Mark as lib
 
 				tmp.type = ECompileResultType_Binary;
 				if (!Compiler_linkSingle(
@@ -1478,7 +1478,7 @@ Bool Compiler_registerShaderBinary(
 	ESHBinaryType compileMode,
 	CharString sourceFile,
 	const SHEntryRuntime *runtimeEntry,
-	const SHBinaryIdentifier *binaryIdentifier,		//Make sure this binary identifier only contains references
+	const SHBinaryIdentifier *binaryIdentifier,        //Make sure this binary identifier only contains references
 	Allocator alloc,
 	Error *e_rr
 ) {
@@ -1695,7 +1695,7 @@ Bool Compiler_getTargetsFromFile(
 
 		gotoIfError2(clean, ListCharString_pushBack(allFiles, input, alloc))
 
-		gotoIfError2(clean, ListCharString_pushBack(allOutputs, tempStr, alloc))		//Moved here
+		gotoIfError2(clean, ListCharString_pushBack(allOutputs, tempStr, alloc))        //Moved here
 		tempStr = CharString_createNull();
 
 		gotoIfError2(clean, ListU8_pushBack(allCompileModes, i, alloc))
@@ -1774,12 +1774,12 @@ Bool Compiler_compileShaders(
 	ListCompiler compilers = (ListCompiler) { 0 };
 	ListListSHEntryRuntime shEntries = (ListListSHEntryRuntime) { 0 };
 
-	ListU64 shEntryIdsIntermediate = (ListU64) { 0 };					//Precompile
-	ListU64 shEntryIdsIntermediate1 = (ListU64) { 0 };					//Pre-link
-	ListU64 shEntryIds = (ListU64) { 0 };								//Post-link
+	ListU64 shEntryIdsIntermediate = (ListU64) { 0 };                    //Precompile
+	ListU64 shEntryIdsIntermediate1 = (ListU64) { 0 };                    //Pre-link
+	ListU64 shEntryIds = (ListU64) { 0 };                                //Post-link
 	ListU64 shEntryIdsSorted = (ListU64) { 0 };
-	ListCompileResult compileResults = (ListCompileResult) { 0 };		//Post-link
-	ListCompileResult compileResultsTemp = (ListCompileResult) { 0 };	//Pre-link
+	ListCompileResult compileResults = (ListCompileResult) { 0 };        //Post-link
+	ListCompileResult compileResultsTemp = (ListCompileResult) { 0 };    //Pre-link
 	CompileResult tempResult = (CompileResult) { 0 };
 	CompileResult tempResult2 = (CompileResult) { 0 };
 
@@ -1812,7 +1812,7 @@ Bool Compiler_compileShaders(
 
 	if (threadCount > 1) {
 
-		threadCount = 1;		//No support yet, test TODO: Remove
+		threadCount = 1;        //No support yet, test TODO: Remove
 
 		U64 counter = 0;
 		U64 threadCounter = 0;
@@ -1906,7 +1906,7 @@ Bool Compiler_compileShaders(
 					previous = tmp;
 				}
 
-				else errorInPrevious = false;		//Reset error report
+				else errorInPrevious = false;        //Reset error report
 
 				if(
 					lastJobId + 1 == allOutputs.length ||
@@ -1932,7 +1932,7 @@ Bool Compiler_compileShaders(
 
 						if(allBuffers) {
 							allBuffers->ptrNonConst[lastJobId] = temp;
-							temp = Buffer_createNull();		//Moved
+							temp = Buffer_createNull();        //Moved
 						}
 
 						else {
@@ -2191,7 +2191,7 @@ Bool Compiler_compileShaders(
 							entry = uniqueEntrypoints.ptr[l];
 						}
 
-						else entry.stage = ESHPipelineStage_Count;		//Mark as lib
+						else entry.stage = ESHPipelineStage_Count;        //Mark as lib
 							
 						tempResult2.type = ECompileResultType_Binary;
 
@@ -2262,7 +2262,7 @@ Bool Compiler_compileShaders(
 						e_rr
 					))
 
-					for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)		//Link runtime entry to binary
+					for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)        //Link runtime entry to binary
 						gotoIfError2(clean, ListU32_pushBack(
 							&binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc
 						))
@@ -2300,7 +2300,7 @@ Bool Compiler_compileShaders(
 					previous = tmp;
 				}
 
-				else errorInPrevious = false;		//Reset error report
+				else errorInPrevious = false;        //Reset error report
 
 				if(
 					i + 1 == allOutputs.length ||
@@ -2326,7 +2326,7 @@ Bool Compiler_compileShaders(
 
 						if(allBuffers) {
 							allBuffers->ptrNonConst[i] = temp;
-							temp = Buffer_createNull();		//Moved
+							temp = Buffer_createNull();        //Moved
 						}
 
 						else {

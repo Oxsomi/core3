@@ -28,24 +28,24 @@
 
 typedef RefPtr GraphicsDeviceRef;
 
-typedef RefPtr RTASRef;		//BLASRef or TLASRef
+typedef RefPtr RTASRef;        //BLASRef or TLASRef
 
 typedef enum ERTASBuildFlags {
 
-	ERTASBuildFlags_None					= 0,
+	ERTASBuildFlags_None                    = 0,
 
-	ERTASBuildFlags_AllowUpdate				= 1 << 0,		//Allow updates using "refitting" (skeletal animations, etc.)
-	ERTASBuildFlags_AllowCompaction			= 1 << 1,		//Allow to reduce memory used after compact command
-	ERTASBuildFlags_FastTrace				= 1 << 2,		//Prefer optimizing longer / longer builds for better RT perf
-	ERTASBuildFlags_FastBuild				= 1 << 3,		//Prefer fast builds over longer builds (might be worse RT perf)
-	ERTASBuildFlags_MinimizeMemory			= 1 << 4,		//Ensure both scratch and output mem is reduced (slower builds)
+	ERTASBuildFlags_AllowUpdate                = 1 << 0,        //Allow updates using "refitting" (skeletal animations, etc.)
+	ERTASBuildFlags_AllowCompaction            = 1 << 1,        //Allow to reduce memory used after compact command
+	ERTASBuildFlags_FastTrace                = 1 << 2,        //Prefer optimizing longer / longer builds for better RT perf
+	ERTASBuildFlags_FastBuild                = 1 << 3,        //Prefer fast builds over longer builds (might be worse RT perf)
+	ERTASBuildFlags_MinimizeMemory            = 1 << 4,        //Ensure both scratch and output mem is reduced (slower builds)
 
-	ERTASBuildFlags_IsUpdate				= 1 << 5,		//If the current update is a refit (requires parent AS to be set)
+	ERTASBuildFlags_IsUpdate                = 1 << 5,        //If the current update is a refit (requires parent AS to be set)
 
-	ERTASBuildFlags_Count					= 6,
+	ERTASBuildFlags_Count                    = 6,
 
-	ERTASBuildFlags_DefaultTLAS				= ERTASBuildFlags_FastBuild,
-	ERTASBuildFlags_DefaultBLAS				= ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction
+	ERTASBuildFlags_DefaultTLAS                = ERTASBuildFlags_FastBuild,
+	ERTASBuildFlags_DefaultBLAS                = ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction
 
 } ERTASBuildFlags;
 
@@ -54,26 +54,26 @@ typedef struct RTAS {
 	GraphicsDeviceRef *device;
 
 	U8 padding0[2];
-	Bool isMotionBlurExt;					//If active, this will make a motion blur AS
-	Bool isCompleted;						//If this is active, we know the RTAS is already done
+	Bool isMotionBlurExt;                    //If active, this will make a motion blur AS
+	Bool isCompleted;                        //If this is active, we know the RTAS is already done
 
 	U8 padding1;
-	U8 flags;								//ERTASBuildFlags
-	U8 flagsExt;							//For BLAS; EBLASFlag
-	U8 asConstructionType;					//ETLASConstructionType or EBlasConstructionType
+	U8 flags;                                //ERTASBuildFlags
+	U8 flagsExt;                            //For BLAS; EBLASFlag
+	U8 asConstructionType;                    //ETLASConstructionType or EBlasConstructionType
 
-	RTASRef *parent;						//Only if Updated / this is a refit
+	RTASRef *parent;                        //Only if Updated / this is a refit
 
-	DeviceBufferRef *asBuffer;				//The acceleration structure as a buffer
-	DeviceBufferRef *tempScratchBuffer;		//Not required, but might include scratch buffer for temp build memory
+	DeviceBufferRef *asBuffer;                //The acceleration structure as a buffer
+	DeviceBufferRef *tempScratchBuffer;        //Not required, but might include scratch buffer for temp build memory
 
-	CharString name;						//Debug name
+	CharString name;                        //Debug name
 
-	SpinLock lock;							//Before reading on CPU; for example for refitting
+	SpinLock lock;                            //Before reading on CPU; for example for refitting
 
 } RTAS;
 
-Error RTAS_validateDeviceBuffer(DeviceData *bufPtr);		//Check if buffer is accessible by RTAS (BLAS/TLAS)
+Error RTAS_validateDeviceBuffer(DeviceData *bufPtr);        //Check if buffer is accessible by RTAS (BLAS/TLAS)
 
 #ifdef __cplusplus
 	}

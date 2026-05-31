@@ -40,14 +40,14 @@ typedef enum ESamplerFilterMode {
 	ESamplerFilterMode_LinearMinMipNearestMag,
 	ESamplerFilterMode_Linear,
 
-	ESamplerFilterMode_None				= 0,
+	ESamplerFilterMode_None                = 0,
 
-	ESamplerFilterMode_LinearMag		= 1 << 0,
-	ESamplerFilterMode_LinearMin		= 1 << 1,
-	ESamplerFilterMode_LinearMip		= 1 << 2,
+	ESamplerFilterMode_LinearMag        = 1 << 0,
+	ESamplerFilterMode_LinearMin        = 1 << 1,
+	ESamplerFilterMode_LinearMip        = 1 << 2,
 
-	ESamplerFilterMode_PropertyCount	= 3,
-	ESamplerFilterMode_All				= (1 << ESamplerFilterMode_PropertyCount) - 1
+	ESamplerFilterMode_PropertyCount    = 3,
+	ESamplerFilterMode_All                = (1 << ESamplerFilterMode_PropertyCount) - 1
 
 } ESamplerFilterMode;
 
@@ -60,22 +60,22 @@ typedef enum ESamplerAddressMode {
 } ESamplerAddressMode;
 
 typedef enum ESamplerBorderColor {
-	ESamplerBorderColor_TransparentBlack,		//0.xxxx
-	ESamplerBorderColor_OpaqueBlackFloat,		//0.xxx, 1.f
-	ESamplerBorderColor_OpaqueBlackInt,			//0.xxx, 1
-	ESamplerBorderColor_OpaqueWhiteFloat,		//1.f.xxxx
-	ESamplerBorderColor_OpaqueWhiteInt,			//1.xxxx
+	ESamplerBorderColor_TransparentBlack,        //0.xxxx
+	ESamplerBorderColor_OpaqueBlackFloat,        //0.xxx, 1.f
+	ESamplerBorderColor_OpaqueBlackInt,            //0.xxx, 1
+	ESamplerBorderColor_OpaqueWhiteFloat,        //1.f.xxxx
+	ESamplerBorderColor_OpaqueWhiteInt,            //1.xxxx
 	ESamplerBorderColor_Count
 } ESamplerBorderColor;
 
 typedef struct SamplerInfo {
 
-	U8 filter;							//ESamplerFilterMode
-	U8 addressU, addressV, addressW;	//ESamplerAddressMode[3] (3 bits each)
+	U8 filter;                            //ESamplerFilterMode
+	U8 addressU, addressV, addressW;    //ESamplerAddressMode[3] (3 bits each)
 
-	U8 aniso;							//0-16
-	U8 borderColor;						//ESamplerBorderColor
-	U8 comparisonFunction;				//ECompareOp
+	U8 aniso;                            //0-16
+	U8 borderColor;                        //ESamplerBorderColor
+	U8 comparisonFunction;                //ECompareOp
 	Bool enableComparison;
 
 	F16 mipBias, minLod, maxLod;
@@ -99,7 +99,7 @@ typedef struct Sampler {
 
 } Sampler;
 
-#define Sampler_ext(ptr, T) (!ptr ? NULL : (T##Sampler*)(ptr + 1))		//impl
+#define Sampler_ext(ptr, T) (!ptr ? NULL : (T##Sampler*)(ptr + 1))        //impl
 #define SamplerRef_ptr(ptr) RefPtr_data(ptr, Sampler)
 
 void SamplerRef_dec(SamplerRef **sampler);
@@ -108,7 +108,7 @@ Error SamplerRef_inc(SamplerRef *sampler);
 Error GraphicsDeviceRef_createSampler(
 	GraphicsDeviceRef *dev,
 	SamplerInfo info,
-	Bool disallowBindlessDescriptor,				//Won't try to allocate into bindlessDescriptorTable or device's default
+	Bool disallowBindlessDescriptor,                //Won't try to allocate into bindlessDescriptorTable or device's default
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	SamplerRef **sampler

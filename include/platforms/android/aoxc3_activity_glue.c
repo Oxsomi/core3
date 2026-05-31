@@ -30,12 +30,12 @@ Java_net_osomi_nativeactivity_OxC3Activity_onTypeChar(JNIEnv *env, jclass clazz,
 
 	(void) clazz;
 
-    const C8 *nativeString = (*env)->GetStringUTFChars(env, input, NULL);
-    
+	const C8 *nativeString = (*env)->GetStringUTFChars(env, input, NULL);
+	
 	Window *window = (Window*)((struct android_app*)Platform_instance->data)->userData;
 
 	if(window->callbacks.onTypeChar)
 		window->callbacks.onTypeChar(window, CharString_createRefCStrConst(nativeString));
 
-    (*env)->ReleaseStringUTFChars(env, input, nativeString);
+	(*env)->ReleaseStringUTFChars(env, input, nativeString);
 }

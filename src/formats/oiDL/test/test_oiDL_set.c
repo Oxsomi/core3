@@ -35,7 +35,7 @@ void Test_DLSetEntry(Test *t) {
 
 	Test_setModule(t, "DLFile_setEntry");
 
-	{							//Replace an existing entry with a larger buffer
+	{                            //Replace an existing entry with a larger buffer
 		DLFile f   = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -66,7 +66,7 @@ void Test_DLSetEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Replace with an empty (zero-length) buffer, effectively clears the entry
+	{                            //Replace with an empty (zero-length) buffer, effectively clears the entry
 		DLFile f   = { 0 };
 		Buffer empty = Buffer_createNull();
 
@@ -84,7 +84,7 @@ void Test_DLSetEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Set at index 0 (first entry)
+	{                            //Set at index 0 (first entry)
 		DLFile f   = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -109,7 +109,7 @@ void Test_DLSetEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Set at last valid index
+	{                            //Set at last valid index
 		DLFile f   = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -133,7 +133,7 @@ void Test_DLSetEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Set replaces a previously-set entry (double set at same id)
+	{                            //Set replaces a previously-set entry (double set at same id)
 		DLFile f    = { 0 };
 		Buffer buf1 = Buffer_createNull();
 		Buffer buf2 = Buffer_createNull();
@@ -165,7 +165,7 @@ void Test_DLSetEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//OOB id must fail
+	{                            //OOB id must fail
 		DLFile f   = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -185,7 +185,7 @@ void Test_DLSetEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Type mismatch: String file
+	{                            //Type mismatch: String file
 		DLFile f   = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -204,7 +204,7 @@ void Test_DLSetEntry(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Null guards
+	{                            //Null guards
 		DLFile f   = { 0 };
 		Buffer buf = Buffer_createNull();
 
@@ -229,7 +229,7 @@ void Test_DLSetEntryString(Test *t) {
 
 	Test_setModule(t, "DLFile_setEntryString");
 
-	{						//Replace an existing string entry with a longer string
+	{                        //Replace an existing string entry with a longer string
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -258,7 +258,7 @@ void Test_DLSetEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Replace with an empty string, clears the entry
+	{                        //Replace with an empty string, clears the entry
 		DLFile f = { 0 };
 		CharString empty = CharString_createNull();
 
@@ -275,7 +275,7 @@ void Test_DLSetEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Unicode (UTF-8) replacement
+	{                        //Unicode (UTF-8) replacement
 		DLFile f = { 0 };
 		CharString uni = CharString_createNull();
 
@@ -299,7 +299,7 @@ void Test_DLSetEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Double set at same index
+	{                            //Double set at same index
 		DLFile f  = { 0 };
 		CharString s1 = CharString_createNull();
 		CharString s2 = CharString_createNull();
@@ -323,7 +323,7 @@ void Test_DLSetEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//OOB id must fail
+	{                        //OOB id must fail
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -342,7 +342,7 @@ void Test_DLSetEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Type mismatch: Data file
+	{                        //Type mismatch: Data file
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -359,7 +359,7 @@ void Test_DLSetEntryString(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Null guards
+	{                        //Null guards
 		DLFile f = { 0 };
 		CharString s = CharString_createNull();
 
@@ -385,7 +385,7 @@ void Test_DLSetStream(Test *t) {
 
 	const RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	{							//Set a stream entry on a Data file
+	{                            //Set a stream entry on a Data file
 		DLFile f      = { 0 };
 		StreamRef *sr = NULL;
 
@@ -414,7 +414,7 @@ void Test_DLSetStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Set a stream entry on a String file
+	{                            //Set a stream entry on a String file
 		DLFile f      = { 0 };
 		StreamRef *srStr = NULL;
 
@@ -438,7 +438,7 @@ void Test_DLSetStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//Set stream replaces a previously-loaded buffer
+	{                            //Set stream replaces a previously-loaded buffer
 		DLFile f      = { 0 };
 		StreamRef *sr = NULL;
 
@@ -463,7 +463,7 @@ void Test_DLSetStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{								//Set stream then replace again with a second stream
+	{                                //Set stream then replace again with a second stream
 		DLFile f       = { 0 };
 		StreamRef *sr1 = NULL;
 		StreamRef *sr2 = NULL;
@@ -494,9 +494,9 @@ void Test_DLSetStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//NULL stream pointer clears the entry back to no-stream / zero-length
+	{                            //NULL stream pointer clears the entry back to no-stream / zero-length
 		DLFile f      = { 0 };
-		StreamRef *sr = NULL;	//Passing sr == NULL means "clear"
+		StreamRef *sr = NULL;    //Passing sr == NULL means "clear"
 
 		if (!buildDataFile(t, &f, 2)) {
 			Test_assert(t, "Setup for setStream null stream", false);
@@ -512,7 +512,7 @@ void Test_DLSetStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{							//OOB id must fail
+	{                            //OOB id must fail
 		DLFile f      = { 0 };
 		StreamRef *sr = NULL;
 
@@ -535,7 +535,7 @@ void Test_DLSetStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{								//dataOff + len out of bounds within the stream must fail
+	{                                //dataOff + len out of bounds within the stream must fail
 		DLFile f      = { 0 };
 		StreamRef *sr = NULL;
 
@@ -557,7 +557,7 @@ void Test_DLSetStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{								//Null guards
+	{                                //Null guards
 		DLFile f      = { 0 };
 		StreamRef *sr = NULL;
 

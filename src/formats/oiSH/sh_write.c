@@ -44,8 +44,8 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	DLFile strings = (DLFile){ 0 };
 
 	DLFile shaderBuffers = (DLFile) { 0 };
-	ListListU32 arrays = (ListListU32) { 0 };			//Only contains references
-	ListSBFile shaderBufferList = (ListSBFile) { 0 };	//Only contains references
+	ListListU32 arrays = (ListListU32) { 0 };            //Only contains references
+	ListSBFile shaderBufferList = (ListSBFile) { 0 };    //Only contains references
 
 	StreamCursor cursor = (StreamCursor) { 0 };
 
@@ -74,7 +74,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	U64 hdrSize = sizeof(SHHeader);
 
-	if(!(shFile->flags & ESHSettingsFlags_HideMagicNumber))		//Magic number (can be hidden by parent; such as oiSC)
+	if(!(shFile->flags & ESHSettingsFlags_HideMagicNumber))        //Magic number (can be hidden by parent; such as oiSC)
 		hdrSize += sizeof(U32);
 
 	hdrSize = (hdrSize + 15) & ~15;
@@ -290,7 +290,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			default: {
 
-				dataSize += sizeof(U8) * 2;		//U8 inputsAvail, outputsAvail;
+				dataSize += sizeof(U8) * 2;        //U8 inputsAvail, outputsAvail;
 
 				U8 inputs = 0, outputs = 0;
 
@@ -322,7 +322,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 			case ESHPipelineStage_Compute:
 			case ESHPipelineStage_WorkgraphExt:
-				dataSize += sizeof(U16) * 4;			//group x, y, z, waveSize
+				dataSize += sizeof(U16) * 4;            //group x, y, z, waveSize
 				break;
 
 			case ESHPipelineStage_RaygenExt:
@@ -331,12 +331,12 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			case ESHPipelineStage_ClosestHitExt:
 			case ESHPipelineStage_AnyHitExt:
 			case ESHPipelineStage_IntersectionExt:
-				dataSize += sizeof(U8);				//intersectionSize
+				dataSize += sizeof(U8);                //intersectionSize
 				// fallthrough
 
 			case ESHPipelineStage_CallableExt:
 			case ESHPipelineStage_MissExt:
-				dataSize += sizeof(U8);				//payloadSize
+				dataSize += sizeof(U8);                //payloadSize
 				break;
 		}
 
@@ -369,7 +369,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 	//We can't fully solve allocations, since DLFile needs to reference the exact size of each DLFile.
 	//Since each SBFile needs to be 16-byte aligned, we pad to 16 byte except the last entry.
 
-	U64 shaderBufferSizes = 0;		//Works because we're 16-byte aligned for this DLFile
+	U64 shaderBufferSizes = 0;        //Works because we're 16-byte aligned for this DLFile
 
 	for (U64 i = 0; i < shaderBufferList.length; ++i) {
 
@@ -439,7 +439,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 		.magic = SHHeader_MAGIC,
 		.header = (SHHeader) {
 			.compilerVersion = shFile->compilerVersion,
-			.hash = 0,		//Computed afterwards
+			.hash = 0,        //Computed afterwards
 			.sourceHash = shFile->sourceHash,
 			.uniqueDefines = (U16) defineValStart,
 			.version = ESHVersion_V1_2,
@@ -456,7 +456,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 
 	U64 hdrOff = (shFile->flags & ESHSettingsFlags_HideMagicNumber) ? sizeof(U32) : 0;
 
-	gotoIfError3(clean, stream->write(		//Rawdog this, we can't pass StreamCursor to DLFile yet
+	gotoIfError3(clean, stream->write(        //Rawdog this, we can't pass StreamCursor to DLFile yet
 		stream,
 		*offset,
 		sizeof(header) - hdrOff,
@@ -491,7 +491,7 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 				binaryFlags |= 1 << j;
 
 		U64 entryStart = strings.entryBuffers.length - uniqueSemantics - entries;
-		U64 entrypoint = entryStart + U16_MAX;		//Indicate no entry
+		U64 entrypoint = entryStart + U16_MAX;        //Indicate no entry
 
 		if (!binary.hasShaderAnnotation) {
 
@@ -754,7 +754,7 @@ clean:
 	StreamCursor_close(&cursor, alloc);
 	RefPtr_dec(&memoryStream);
 	ListSBFile_free(&shaderBufferList, alloc);
-	ListListU32_free(&arrays, alloc);			//Doesn't need freeUnderlying, it's all references
+	ListListU32_free(&arrays, alloc);            //Doesn't need freeUnderlying, it's all references
 	DLFile_free(&shaderBuffers, alloc);
 	DLFile_free(&strings, alloc);
 	Buffer_free(&tmp, alloc);

@@ -76,7 +76,7 @@ void GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	for(U64 i = 0; i < 2; ++i)
 		RefPtr_dec(&device->copyShaders[i]);
 
-	RefPtr_dec(&device->copyPipelineLayout);		//Even though it's 'ref counted' it's internal so destruction order matters
+	RefPtr_dec(&device->copyPipelineLayout);        //Even though it's 'ref counted' it's internal so destruction order matters
 	RefPtr_dec(&device->copyDescLayout);
 	RefPtr_dec(&device->copyDescPushDesc);
 	RefPtr_dec(&device->defaultDescriptorTable);
@@ -245,40 +245,40 @@ clean:
 
 typedef enum EDescriptorTypeCount {
 
-	EDescriptorTypeCount_Texture2D			= 131072,
-	EDescriptorTypeCount_TextureCube		= 32768,
-	EDescriptorTypeCount_Texture3D			= 32768,
+	EDescriptorTypeCount_Texture2D            = 131072,
+	EDescriptorTypeCount_TextureCube        = 32768,
+	EDescriptorTypeCount_Texture3D            = 32768,
 
-	EDescriptorTypeCount_Buffer				= 131072,
-	EDescriptorTypeCount_RWBuffer			= 131072,
+	EDescriptorTypeCount_Buffer                = 131072,
+	EDescriptorTypeCount_RWBuffer            = 131072,
 
-	EDescriptorTypeCount_RWTexture3D		= 32768,
-	EDescriptorTypeCount_RWTexture3Di		= 8192,
-	EDescriptorTypeCount_RWTexture3Du		= 8192,
-	EDescriptorTypeCount_RWTexture2D		= 131072,
-	EDescriptorTypeCount_RWTexture2Di		= 16384,
-	EDescriptorTypeCount_RWTexture2Du		= 16384,
+	EDescriptorTypeCount_RWTexture3D        = 32768,
+	EDescriptorTypeCount_RWTexture3Di        = 8192,
+	EDescriptorTypeCount_RWTexture3Du        = 8192,
+	EDescriptorTypeCount_RWTexture2D        = 131072,
+	EDescriptorTypeCount_RWTexture2Di        = 16384,
+	EDescriptorTypeCount_RWTexture2Du        = 16384,
 
-	EDescriptorTypeCount_Sampler			= 1024,
-	EDescriptorTypeCount_TLASExt			= 16,
+	EDescriptorTypeCount_Sampler            = 1024,
+	EDescriptorTypeCount_TLASExt            = 16,
 
 	//DirectX bindings
 
-	EDescriptorTypeOffset_Texture2D			= 0,
-	EDescriptorTypeOffset_TextureCube		= EDescriptorTypeOffset_Texture2D + EDescriptorTypeCount_Texture2D,
-	EDescriptorTypeOffset_Texture3D			= EDescriptorTypeOffset_TextureCube + EDescriptorTypeCount_TextureCube,
-	EDescriptorTypeOffset_Buffer			= EDescriptorTypeOffset_Texture3D + EDescriptorTypeCount_Texture3D,
-	EDescriptorTypeOffset_TLASExt			= EDescriptorTypeOffset_Buffer + EDescriptorTypeCount_Buffer,
+	EDescriptorTypeOffset_Texture2D            = 0,
+	EDescriptorTypeOffset_TextureCube        = EDescriptorTypeOffset_Texture2D + EDescriptorTypeCount_Texture2D,
+	EDescriptorTypeOffset_Texture3D            = EDescriptorTypeOffset_TextureCube + EDescriptorTypeCount_TextureCube,
+	EDescriptorTypeOffset_Buffer            = EDescriptorTypeOffset_Texture3D + EDescriptorTypeCount_Texture3D,
+	EDescriptorTypeOffset_TLASExt            = EDescriptorTypeOffset_Buffer + EDescriptorTypeCount_Buffer,
 
-	EDescriptorTypeOffset_RWBuffer			= 0,
-	EDescriptorTypeOffset_RWTexture3D		= EDescriptorTypeOffset_RWBuffer + EDescriptorTypeCount_RWBuffer,
-	EDescriptorTypeOffset_RWTexture3Di		= EDescriptorTypeOffset_RWTexture3D + EDescriptorTypeCount_RWTexture3D,
-	EDescriptorTypeOffset_RWTexture3Du		= EDescriptorTypeOffset_RWTexture3Di + EDescriptorTypeCount_RWTexture3Di,
-	EDescriptorTypeOffset_RWTexture2D		= EDescriptorTypeOffset_RWTexture3Du + EDescriptorTypeCount_RWTexture3Du,
-	EDescriptorTypeOffset_RWTexture2Di		= EDescriptorTypeOffset_RWTexture2D + EDescriptorTypeCount_RWTexture2D,
-	EDescriptorTypeOffset_RWTexture2Du		= EDescriptorTypeOffset_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
+	EDescriptorTypeOffset_RWBuffer            = 0,
+	EDescriptorTypeOffset_RWTexture3D        = EDescriptorTypeOffset_RWBuffer + EDescriptorTypeCount_RWBuffer,
+	EDescriptorTypeOffset_RWTexture3Di        = EDescriptorTypeOffset_RWTexture3D + EDescriptorTypeCount_RWTexture3D,
+	EDescriptorTypeOffset_RWTexture3Du        = EDescriptorTypeOffset_RWTexture3Di + EDescriptorTypeCount_RWTexture3Di,
+	EDescriptorTypeOffset_RWTexture2D        = EDescriptorTypeOffset_RWTexture3Du + EDescriptorTypeCount_RWTexture3Du,
+	EDescriptorTypeOffset_RWTexture2Di        = EDescriptorTypeOffset_RWTexture2D + EDescriptorTypeCount_RWTexture2D,
+	EDescriptorTypeOffset_RWTexture2Du        = EDescriptorTypeOffset_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
 
-	EDescriptorTypeOffset_Sampler			= 0,
+	EDescriptorTypeOffset_Sampler            = 0,
 
 	EDescriptorTypeCount_Buffers =
 		EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer,
@@ -341,12 +341,12 @@ Error GraphicsDeviceRef_create(
 
 	if(device->flags & EGraphicsDeviceFlags_DisableRt)
 		device->info.capabilities.features &=~ (
-			EGraphicsFeatures_Raytracing				|
-			EGraphicsFeatures_RayPipeline				|
-			EGraphicsFeatures_RayQuery					|
-			EGraphicsFeatures_RayMicromapOpacity		|
-			EGraphicsFeatures_RayMotionBlur				|
-			EGraphicsFeatures_RayReorder				|
+			EGraphicsFeatures_Raytracing                |
+			EGraphicsFeatures_RayPipeline                |
+			EGraphicsFeatures_RayQuery                    |
+			EGraphicsFeatures_RayMicromapOpacity        |
+			EGraphicsFeatures_RayMotionBlur                |
+			EGraphicsFeatures_RayReorder                |
 			EGraphicsFeatures_RayValidation
 		);
 
@@ -634,16 +634,16 @@ Error GraphicsDeviceRef_create(
 		cpuHeapSize / 5
 	);
 
-	device->flushThresholdPrimitives = 20 * MIBI / 3;		//20M vertices per frame limit
+	device->flushThresholdPrimitives = 20 * MIBI / 3;        //20M vertices per frame limit
 
 	//Block sizes based on memory of each device (CPU or GPU):
 	// 0 -  6GB ("4GB"):   64MB
 	// 6 - 12GB ("8GB"):  128MB
 	//12 - 24GB ("16GB"): 256MB
-	//24GB+ 	("32GB"): 512MB
+	//24GB+     ("32GB"): 512MB
 	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would 
 
-	if (!isDistinct) {		//Assume 50/50 split to take a conservative block size approach
+	if (!isDistinct) {        //Assume 50/50 split to take a conservative block size approach
 		cpuHeapSize >>= 1;
 		gpuHeapSize >>= 1;
 	}
@@ -656,8 +656,8 @@ Error GraphicsDeviceRef_create(
 	//Allocate staging buffer.
 	//For block size 256MiB: 64 MiB / NBuffering (2 or 3) = 32MiB or 21.333 MiB per frame.
 	//For block size 64MiB: 16 MiB / NBuffering (2 or 3) = 8MiB or 5.3 MiB per frame.
-	//	This block size is generally used in very memory limited systems (such as Android devices)
-	//	that generally use shared mem (so won't push much over staging buffer).
+	//    This block size is generally used in very memory limited systems (such as Android devices)
+	//    that generally use shared mem (so won't push much over staging buffer).
 	//If out of mem this will grow to be bigger.
 	//But it's only used for "small" allocations (< 25% of staging buffer)
 	//If a lot of these larger allocations are found it will resize the staging buffer to try to encompass it too.
@@ -705,46 +705,46 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	EDxGraphicsFeatures featuresDx = EDxGraphicsFeatures_None;
 	EGraphicsDataTypes dataTypes = EGraphicsDataTypes_None;
 
-	if(extensions & ESHExtension_SubgroupOperations)		features |= EGraphicsFeatures_SubgroupOperations;
-	if(extensions & ESHExtension_SubgroupArithmetic)		features |= EGraphicsFeatures_SubgroupArithmetic;
-	if(extensions & ESHExtension_SubgroupShuffle)			features |= EGraphicsFeatures_SubgroupShuffle;
+	if(extensions & ESHExtension_SubgroupOperations)        features |= EGraphicsFeatures_SubgroupOperations;
+	if(extensions & ESHExtension_SubgroupArithmetic)        features |= EGraphicsFeatures_SubgroupArithmetic;
+	if(extensions & ESHExtension_SubgroupShuffle)            features |= EGraphicsFeatures_SubgroupShuffle;
 
-	if(extensions & ESHExtension_Multiview)					features |= EGraphicsFeatures_Multiview;
+	if(extensions & ESHExtension_Multiview)                    features |= EGraphicsFeatures_Multiview;
 
-	if(extensions & ESHExtension_RayQuery)					features |= EGraphicsFeatures_RayQuery;
-	if(extensions & ESHExtension_RayMicromapOpacity)		features |= EGraphicsFeatures_RayMicromapOpacity;
-	if(extensions & ESHExtension_RayMotionBlur)				features |= EGraphicsFeatures_RayMotionBlur;
-	if(extensions & ESHExtension_RayReorder)				features |= EGraphicsFeatures_RayReorder;
+	if(extensions & ESHExtension_RayQuery)                    features |= EGraphicsFeatures_RayQuery;
+	if(extensions & ESHExtension_RayMicromapOpacity)        features |= EGraphicsFeatures_RayMicromapOpacity;
+	if(extensions & ESHExtension_RayMotionBlur)                features |= EGraphicsFeatures_RayMotionBlur;
+	if(extensions & ESHExtension_RayReorder)                features |= EGraphicsFeatures_RayReorder;
 
-	if(extensions & ESHExtension_ComputeDeriv)				features |= EGraphicsFeatures_ComputeDeriv;
-	if(extensions & ESHExtension_MeshTaskTexDeriv)			features |= EGraphicsFeatures_MeshTaskTexDeriv;
+	if(extensions & ESHExtension_ComputeDeriv)                features |= EGraphicsFeatures_ComputeDeriv;
+	if(extensions & ESHExtension_MeshTaskTexDeriv)            features |= EGraphicsFeatures_MeshTaskTexDeriv;
 
-	if(extensions & ESHExtension_WriteMSTexture)			features |= EGraphicsFeatures_WriteMSTexture;
+	if(extensions & ESHExtension_WriteMSTexture)            features |= EGraphicsFeatures_WriteMSTexture;
 
-	if(extensions & ESHExtension_Bindless)					features |= EGraphicsFeatures_Bindless;
+	if(extensions & ESHExtension_Bindless)                    features |= EGraphicsFeatures_Bindless;
 
-	if(extensions & ESHExtension_F64)						dataTypes |= EGraphicsDataTypes_F64;
-	if(extensions & ESHExtension_I64)						dataTypes |= EGraphicsDataTypes_I64;
+	if(extensions & ESHExtension_F64)                        dataTypes |= EGraphicsDataTypes_F64;
+	if(extensions & ESHExtension_I64)                        dataTypes |= EGraphicsDataTypes_I64;
 
-	if(extensions & ESHExtension_16BitTypes)				dataTypes |= EGraphicsDataTypes_I16 | EGraphicsDataTypes_F16;
+	if(extensions & ESHExtension_16BitTypes)                dataTypes |= EGraphicsDataTypes_I16 | EGraphicsDataTypes_F16;
 
-	if(extensions & ESHExtension_AtomicI64)					dataTypes |= EGraphicsDataTypes_AtomicI64;
-	if(extensions & ESHExtension_AtomicF32)					dataTypes |= EGraphicsDataTypes_AtomicF32;
-	if(extensions & ESHExtension_AtomicF64)					dataTypes |= EGraphicsDataTypes_AtomicF64;
+	if(extensions & ESHExtension_AtomicI64)                    dataTypes |= EGraphicsDataTypes_AtomicI64;
+	if(extensions & ESHExtension_AtomicF32)                    dataTypes |= EGraphicsDataTypes_AtomicF32;
+	if(extensions & ESHExtension_AtomicF64)                    dataTypes |= EGraphicsDataTypes_AtomicF64;
 
-	if(extensions & ESHExtension_PAQ)						featuresDx |= EDxGraphicsFeatures_PAQ;
+	if(extensions & ESHExtension_PAQ)                        featuresDx |= EDxGraphicsFeatures_PAQ;
 
-	if ((bin.identifier.shaderVersion >> 8) == 6)			//Check shader model compatibility
+	if ((bin.identifier.shaderVersion >> 8) == 6)            //Check shader model compatibility
 		switch ((U8) bin.identifier.shaderVersion) {
-			case 6:											featuresDx |= EDxGraphicsFeatures_SM6_6;	break;
-			case 7:											featuresDx |= EDxGraphicsFeatures_SM6_7;	break;
-			case 8:											featuresDx |= EDxGraphicsFeatures_SM6_8;	break;
-			case 9:											featuresDx |= EDxGraphicsFeatures_SM6_9;	break;
-			default:																					break;
+			case 6:                                            featuresDx |= EDxGraphicsFeatures_SM6_6;    break;
+			case 7:                                            featuresDx |= EDxGraphicsFeatures_SM6_7;    break;
+			case 8:                                            featuresDx |= EDxGraphicsFeatures_SM6_8;    break;
+			case 9:                                            featuresDx |= EDxGraphicsFeatures_SM6_9;    break;
+			default:                                                                                    break;
 		}
 
-	if(entry.waveSize >> 4)									featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
-	else if(entry.waveSize)									featuresDx |= EDxGraphicsFeatures_WaveSize;
+	if(entry.waveSize >> 4)                                    featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
+	else if(entry.waveSize)                                    featuresDx |= EDxGraphicsFeatures_WaveSize;
 
 	if((device->info.capabilities.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"))
@@ -901,7 +901,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 	Error err;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	newSize = (((newSize + 2) / 3 + 4095) &~ 4095) * 3;			//Align to ensure we never get incompatible staging buffers
+	newSize = (((newSize + 2) / 3 + 4095) &~ 4095) * 3;            //Align to ensure we never get incompatible staging buffers
 
 	if (device->staging) {
 

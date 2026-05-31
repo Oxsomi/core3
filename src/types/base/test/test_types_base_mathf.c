@@ -163,7 +163,7 @@ void Test_mathf(Test *test) {
 
 	//isNaN / isInf / isValid
 
-	volatile F32 zero = 0;		//Supress errors
+	volatile F32 zero = 0;        //Supress errors
 
 	Test_assert(test, "F32_isNaN", F32_isNaN(0 / zero));
 	Test_assert(test, "F32_isNaN", !F32_isNaN(1));

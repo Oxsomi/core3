@@ -37,7 +37,7 @@ typedef enum EFileType {
 } EFileType;
 
 typedef enum EFileAccess {
-	EFileAccess_None,			//Invalid, never returned
+	EFileAccess_None,            //Invalid, never returned
 	EFileAccess_Read,
 	EFileAccess_Write,
 	EFileAccess_ReadWrite
@@ -46,14 +46,14 @@ typedef enum EFileAccess {
 typedef struct FileInfo {
 	EFileType type;
 	EFileAccess access;
-	Ns timestamp;		//In units that the file system supports. Normally that unit is seconds.
+	Ns timestamp;        //In units that the file system supports. Normally that unit is seconds.
 	CharString path;
 	U64 fileSize;
 } FileInfo;
 
 typedef Bool (*FileCallback)(const FileInfo*, void*, const Allocator*, Error*);
 
-#define MAX_OXC_PATH 1023	//Safest path across all platforms (Apple, Windows, Linux-based)
+#define MAX_OXC_PATH 1023    //Safest path across all platforms (Apple, Windows, Linux-based)
 
 Bool File_resolve(
 	const CharString *loc,
@@ -66,9 +66,9 @@ Bool File_resolve(
 );
 
 Bool File_makeRelative(
-	const CharString absoluteDir,		//Can't escape absoluteDir with baseFolder or subFile. Must end with /
-	const CharString base,				//File in which the parent is located (e.g. myFolder/test.txt)
-	const CharString subFile,			//File to made relative to the parent of base (e.g. myOtherFolder/test.txt)
+	const CharString absoluteDir,        //Can't escape absoluteDir with baseFolder or subFile. Must end with /
+	const CharString base,                //File in which the parent is located (e.g. myFolder/test.txt)
+	const CharString subFile,            //File to made relative to the parent of base (e.g. myOtherFolder/test.txt)
 	U64 maxFilePathLimit,
 	const Allocator *alloc,
 	CharString *result,

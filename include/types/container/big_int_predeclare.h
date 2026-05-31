@@ -37,22 +37,22 @@ typedef struct CharString CharString;
 typedef struct BigInt {
 
 	union {
-		const U64 *data;	//Aligned
-		U64 *dataNonConst;	//Only if !isConst
+		const U64 *data;    //Aligned
+		U64 *dataNonConst;    //Only if !isConst
 	};
 
 	Bool isConst;
 	Bool isRef;
-	U8 length;		//In U64s
+	U8 length;        //In U64s
 	U8 pad;
 
 } BigInt;
 
 static inline BigInt BigInt_createNull() { BigInt bi = { 0 }; return bi; }
 
-Bool BigInt_create(U16 bitCount, const Allocator *allocator, BigInt *big, Error *e_rr);		//Aligns bitCount to 64.
-Bool BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr);					//ref U64 ptr[ptrCount]
-Bool BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr);			//const ref U64 ptr[ptrCount]
+Bool BigInt_create(U16 bitCount, const Allocator *allocator, BigInt *big, Error *e_rr);        //Aligns bitCount to 64.
+Bool BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr);                    //ref U64 ptr[ptrCount]
+Bool BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big, Error *e_rr);            //const ref U64 ptr[ptrCount]
 Bool BigInt_createCopy(BigInt *a, const Allocator *alloc, BigInt *b, Error *e_rr);
 
 //bitCount set to 0 indicates "auto".
@@ -75,7 +75,7 @@ typedef enum EIntEncoding {
 	EIntEncoding_Oct,
 	EIntEncoding_Nyto,
 	EIntEncoding_Count,
-	EIntEncoding_Base2End = EIntEncoding_Count		//TODO: If dec is added, keep this in mind!
+	EIntEncoding_Base2End = EIntEncoding_Count        //TODO: If dec is added, keep this in mind!
 } EIntEncoding;
 
 Bool BigInt_createFromBase2Type(const BigIntCreate *bigIntCreate, EIntEncoding type, Error *e_rr);

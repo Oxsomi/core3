@@ -71,7 +71,7 @@ void Test_DLWriteSizeConsistency(Test *t) {
 	DLSettings sStr = sData;
 	sStr.dataType = EDLDataType_String;
 
-	{									//Single buffer entry
+	{                                    //Single buffer entry
 		DLFile f = { 0 };
 		const U8 bytes[] = { 0x11, 0x22, 0x33 };
 		Buffer buf = Buffer_createNull();
@@ -86,7 +86,7 @@ void Test_DLWriteSizeConsistency(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//10 string entries
+	{                                    //10 string entries
 		DLFile f = { 0 };
 
 		if (!DLFile_create(&sStr, 0, t->alloc, &f, &t->err)) {
@@ -116,14 +116,14 @@ void Test_DLWriteSizeConsistency(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//Empty DLFile
+	{                                    //Empty DLFile
 		DLFile f = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &f, &t->err);
 		Test_assert(t, "SizeConsistency empty", DLFile_testSizeConsistency(&f, NULL, &memStreamType, t));
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//HideMagicNumber variant
+	{                                    //HideMagicNumber variant
 		DLSettings sHide = sData;
 		sHide.flags |= EDLSettingsFlags_HideMagicNumber;
 		DLFile f = { 0 };
@@ -166,7 +166,7 @@ void Test_DLWriteSizeConsistencyEncrypted(Test *t) {
 	DLSettings sEncHide = sEnc;
 	sEncHide.flags |= EDLSettingsFlags_HideMagicNumber;
 
-	{									//Single buffer entry
+	{                                    //Single buffer entry
 		DLFile f = { 0 };
 		const U8 bytes[] = { 0x11, 0x22, 0x33 };
 		Buffer buf = Buffer_createNull();
@@ -181,7 +181,7 @@ void Test_DLWriteSizeConsistencyEncrypted(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//10 string entries
+	{                                    //10 string entries
 		DLFile f = { 0 };
 
 		if (!DLFile_create(&sStr, 0, t->alloc, &f, &t->err)) {
@@ -208,14 +208,14 @@ void Test_DLWriteSizeConsistencyEncrypted(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//Empty DLFile
+	{                                    //Empty DLFile
 		DLFile f = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &f, &t->err);
 		Test_assert(t, "SizeConsistency empty", DLFile_testSizeConsistency(&f, NULL, &memStreamType, t));
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//HideMagicNumber variant
+	{                                    //HideMagicNumber variant
 		DLSettings sHide = sData;
 		sHide.flags |= EDLSettingsFlags_HideMagicNumber;
 		DLFile f = { 0 };
@@ -229,7 +229,7 @@ void Test_DLWriteSizeConsistencyEncrypted(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//Encrypted, with magic number
+	{                                    //Encrypted, with magic number
 		DLFile f = { 0 };
 
 		if (!DLFile_create(&sEnc, 0, t->alloc, &f, &t->err)) {
@@ -256,7 +256,7 @@ void Test_DLWriteSizeConsistencyEncrypted(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{									//Encrypted, HideMagicNumber (IV managed by parent)
+	{                                    //Encrypted, HideMagicNumber (IV managed by parent)
 		DLFile f = { 0 };
 
 		if (!DLFile_create(&sEncHide, 0, t->alloc, &f, &t->err)) {

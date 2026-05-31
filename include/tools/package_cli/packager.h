@@ -34,7 +34,7 @@ typedef struct PackageSettings {
 	CharString input;
 	CharString output;
 
-	const U32 (*encryptionKey)[8];		//Pass NULL to disable AES256GCM
+	const U32 (*encryptionKey)[8];        //Pass NULL to disable AES256GCM
 
 	U32 compileMode;
 	U32 threadCount;

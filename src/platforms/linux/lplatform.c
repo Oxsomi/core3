@@ -109,7 +109,7 @@ Bool Platform_initUnixExt(Error *e_rr) {
 		if(!CharString_startsWithStringSensitive(sectionName, CharString_createRefCStrConst("packages/"), 0))
 			continue;
 
-		sectionName.ptr += sizeof("packages");		//sizeof includes null terminator so no need for packages/
+		sectionName.ptr += sizeof("packages");        //sizeof includes null terminator so no need for packages/
 		sectionName.lenAndNullTerminated -= sizeof("packages");
 
 		gotoIfError3(clean, CharString_createCopy(Platform_instance->alloc, sectionName, &tmpStr, e_rr));
@@ -162,7 +162,7 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 	(void) key; (void) keyboard; (void) alloc; (void) result;
 
 	Bool s_uccess = true;
-	retError(clean, Error_unimplemented(0, "Keyboard_remap() unimplemented on linux for now"));		//TODO:
+	retError(clean, Error_unimplemented(0, "Keyboard_remap() unimplemented on linux for now"));        //TODO:
 
 clean:
 	return s_uccess;

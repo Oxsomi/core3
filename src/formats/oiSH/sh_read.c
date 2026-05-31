@@ -72,7 +72,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	gotoIfError3(clean, StreamCursor_create(streamRef, 0, false, alloc, &cursor, e_rr));
 
-	if (!isSubFile) {		//Magic
+	if (!isSubFile) {        //Magic
 
 		U32 magic = 0;
 		gotoIfError3(clean, StreamCursor_consume(&cursor, offset, &magic, sizeof(magic), alloc, e_rr));

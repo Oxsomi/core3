@@ -36,18 +36,18 @@ typedef struct CommandList {
 
 	GraphicsDeviceRef *device;
 
-	Buffer data;									//Data for all commands
+	Buffer data;                                    //Data for all commands
 	ListCommandOpInfo commandOps;
-	ListRefPtr resources;							//Resources used by this command list (TODO: HashSet<RefPtr*>)
+	ListRefPtr resources;                            //Resources used by this command list (TODO: HashSet<RefPtr*>)
 
-	ListTransitionInternal transitions;				//Transitions that are pending
-	ListCommandScope activeScopes;					//Scopes that were successfully inserted
+	ListTransitionInternal transitions;                //Transitions that are pending
+	ListCommandScope activeScopes;                    //Scopes that were successfully inserted
 
 	U8 padding0[3];
 	Bool allowResize;
 	ECommandListState state;
 
-	SpinLock lock;									//Begin locks this, end unlocks this.
+	SpinLock lock;                                    //Begin locks this, end unlocks this.
 
 	U64 next;
 
@@ -57,7 +57,7 @@ typedef struct CommandList {
 
 	ImageAndRange boundImages[8];
 
-	U16 tempStateFlags;								//ECommandStateFlags
+	U16 tempStateFlags;                                //ECommandStateFlags
 	U8 debugRegionStack;
 	U8 boundImageCount;
 	U32 lastCommandId;
@@ -74,13 +74,13 @@ typedef struct CommandList {
 
 	ListTransitionInternal pendingTransitions;
 
-	ListDeviceResourceVersion activeSwapchains;		//Locks swapchain when it's first inserted
+	ListDeviceResourceVersion activeSwapchains;        //Locks swapchain when it's first inserted
 
 } CommandList;
 
 typedef RefPtr CommandListRef;
 
-#define CommandList_ext(ptr, T) (!ptr ? NULL : (T##CommandList*)(ptr + 1))		//impl
+#define CommandList_ext(ptr, T) (!ptr ? NULL : (T##CommandList*)(ptr + 1))        //impl
 #define CommandListRef_ptr(ptr) RefPtr_data(ptr, CommandList)
 
 void CommandListRef_dec(CommandListRef **cmd);

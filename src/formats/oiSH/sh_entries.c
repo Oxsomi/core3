@@ -64,15 +64,15 @@ const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage) {
 	const C8 *targetPrefix = "lib";
 
 	switch (stage) {
-		default:													break;
-		case ESHPipelineStage_Vertex:		targetPrefix = "vs";	break;
-		case ESHPipelineStage_Pixel:		targetPrefix = "ps";	break;
-		case ESHPipelineStage_Compute:		targetPrefix = "cs";	break;
-		case ESHPipelineStage_GeometryExt:	targetPrefix = "gs";	break;
-		case ESHPipelineStage_Hull:			targetPrefix = "hs";	break;
-		case ESHPipelineStage_Domain:		targetPrefix = "ds";	break;
-		case ESHPipelineStage_MeshExt:		targetPrefix = "ms";	break;
-		case ESHPipelineStage_TaskExt:		targetPrefix = "as";	break;
+		default:                                                    break;
+		case ESHPipelineStage_Vertex:        targetPrefix = "vs";    break;
+		case ESHPipelineStage_Pixel:        targetPrefix = "ps";    break;
+		case ESHPipelineStage_Compute:        targetPrefix = "cs";    break;
+		case ESHPipelineStage_GeometryExt:    targetPrefix = "gs";    break;
+		case ESHPipelineStage_Hull:            targetPrefix = "hs";    break;
+		case ESHPipelineStage_Domain:        targetPrefix = "ds";    break;
+		case ESHPipelineStage_MeshExt:        targetPrefix = "ms";    break;
+		case ESHPipelineStage_TaskExt:        targetPrefix = "as";    break;
 	}
 
 	return targetPrefix;
@@ -324,7 +324,7 @@ Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, const Allocator *alloc
 		if(entry->inputSemanticNames[i])
 			retError(clean, Error_invalidState(0, "SHFile_addEntrypoint() input semantic defined but not present"));
 
-	for(U8 i = 0; i < 16; ++i)		//Avoid overlap between input and output semantics
+	for(U8 i = 0; i < 16; ++i)        //Avoid overlap between input and output semantics
 		presentMask[i] = 0;
 
 	Bool anyOutputSemanticName = entry->outputSemanticNamesU64[0] | entry->outputSemanticNamesU64[1];
@@ -465,7 +465,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 
 		.extensions = runtime->extensions.length ? runtime->extensions.ptr[extensionId] : 0,
 		.shaderVersion = runtime->shaderVersions.length ? runtime->shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL_MIN,
-		.stageType = runtime->isShaderAnnotation ? ESHPipelineStage_Count : runtime->entry.stage	//Turn into lib if possible
+		.stageType = runtime->isShaderAnnotation ? ESHPipelineStage_Count : runtime->entry.stage    //Turn into lib if possible
 	};
 
 	//Only combine raytracing shaders, since they don't have different configs

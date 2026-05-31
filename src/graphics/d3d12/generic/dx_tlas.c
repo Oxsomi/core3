@@ -30,7 +30,7 @@
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/direct3d12.h"
 
-void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; }		//No-op
+void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; }        //No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
 Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
@@ -44,7 +44,7 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	CharString tmp = CharString_createNull();
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12TLAS_init()::serialized not supported yet"))		//TODO:
+		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12TLAS_init()::serialized not supported yet"))        //TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = sizeof(TLASInstanceStatic);
@@ -194,7 +194,7 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	TLAS *tlas = TLASRef_ptr(pending);
 	DxTLAS *tlasExt = TLAS_ext(tlas, Dx);
 
-	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
+	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
 		return Error_none();
 
 	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
@@ -229,7 +229,7 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
 
-		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->base.tempScratchBuffer);
 
 		else tlas->base.tempScratchBuffer = NULL;
@@ -239,7 +239,7 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
 
-		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)		//Maintain reference, rather than clear
+		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->tempInstanceBuffer);
 
 		else tlas->tempInstanceBuffer = NULL;

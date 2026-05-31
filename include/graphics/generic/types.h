@@ -29,33 +29,33 @@
 
 typedef enum EGraphicsTypeId {
 
-	EGraphicsTypeId_GraphicsInstance			= makeObjectId(0x1C34,  0, 0),
-	EGraphicsTypeId_GraphicsDevice				= makeObjectId(0x1C34,  1, 0),
+	EGraphicsTypeId_GraphicsInstance            = makeObjectId(0x1C34,  0, 0),
+	EGraphicsTypeId_GraphicsDevice                = makeObjectId(0x1C34,  1, 0),
 
-	EGraphicsTypeId_Swapchain					= makeObjectId(0x1C34,  2, 0),
-	EGraphicsTypeId_CommandList					= makeObjectId(0x1C34,  3, 0),
+	EGraphicsTypeId_Swapchain                    = makeObjectId(0x1C34,  2, 0),
+	EGraphicsTypeId_CommandList                    = makeObjectId(0x1C34,  3, 0),
 
-	EGraphicsTypeId_RenderTexture				= makeObjectId(0x1C34,  4, 0),
-	EGraphicsTypeId_RenderPass					= makeObjectId(0x1C34,  5, 0),
+	EGraphicsTypeId_RenderTexture                = makeObjectId(0x1C34,  4, 0),
+	EGraphicsTypeId_RenderPass                    = makeObjectId(0x1C34,  5, 0),
 
-	EGraphicsTypeId_DeviceTexture				= makeObjectId(0x1C34,  6, 0),
-	EGraphicsTypeId_DeviceBuffer				= makeObjectId(0x1C34,  7, 0),
-	EGraphicsTypeId_Pipeline					= makeObjectId(0x1C34,  8, 0),
-	EGraphicsTypeId_Sampler						= makeObjectId(0x1C34,  9, 0),
+	EGraphicsTypeId_DeviceTexture                = makeObjectId(0x1C34,  6, 0),
+	EGraphicsTypeId_DeviceBuffer                = makeObjectId(0x1C34,  7, 0),
+	EGraphicsTypeId_Pipeline                    = makeObjectId(0x1C34,  8, 0),
+	EGraphicsTypeId_Sampler                        = makeObjectId(0x1C34,  9, 0),
 
-	EGraphicsTypeId_DepthStencil				= makeObjectId(0x1C34, 10, 0),
+	EGraphicsTypeId_DepthStencil                = makeObjectId(0x1C34, 10, 0),
 
-	EGraphicsTypeId_DescriptorLayout			= makeObjectId(0x1C34, 11, 0),
-	EGraphicsTypeId_PipelineLayout				= makeObjectId(0x1C34, 12, 0),
-	EGraphicsTypeId_DescriptorTable				= makeObjectId(0x1C34, 13, 0),
-	EGraphicsTypeId_DescriptorHeap				= makeObjectId(0x1C34, 14, 0),
+	EGraphicsTypeId_DescriptorLayout            = makeObjectId(0x1C34, 11, 0),
+	EGraphicsTypeId_PipelineLayout                = makeObjectId(0x1C34, 12, 0),
+	EGraphicsTypeId_DescriptorTable                = makeObjectId(0x1C34, 13, 0),
+	EGraphicsTypeId_DescriptorHeap                = makeObjectId(0x1C34, 14, 0),
 
 	//Requires EGraphicsFeatures_Raytracing
 
-	EGraphicsTypeId_BLASExt						= makeObjectId(0x1C34, 15, 0),
-	EGraphicsTypeId_TLASExt						= makeObjectId(0x1C34, 16, 0),
+	EGraphicsTypeId_BLASExt                        = makeObjectId(0x1C34, 15, 0),
+	EGraphicsTypeId_TLASExt                        = makeObjectId(0x1C34, 16, 0),
 
-	EGraphicsTypeId_Count						= 17
+	EGraphicsTypeId_Count                        = 17
 
 } EGraphicsTypeId;
 

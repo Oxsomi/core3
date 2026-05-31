@@ -29,23 +29,23 @@ void Test_flpF32(Test *test) {
 	Test_setModule(test, "F32_castF64");
 
 	static const U32 expansionTests[] = {
-		0x7FFFFFFF,		//NaN
-		0x00000000,		//0
-		0x7F800000,		//Inf
-		0x7F800001,		//Another NaN
-		0x00000003,		//DeN
-		0x00020000,		//DeN that tests bit comparison in expansion function
-		0x00000001,		//Smallest DeN
-		0x007FFFFF,		//Biggest DeN
-		0x00800000,		//Smallest non DeN
-		0x7F7FFFFF,		//Float max
-		0x3F800000,		//1
-		0x3F000000,		//0.5
-		0x40000000,		//2
-		0x42F60000,		//123
-		0x3F9D70A4,		//1.23
-		0x3F7FFFFF,		//Almost 1
-		0x00000015		//DeN that was failing in the tests
+		0x7FFFFFFF,        //NaN
+		0x00000000,        //0
+		0x7F800000,        //Inf
+		0x7F800001,        //Another NaN
+		0x00000003,        //DeN
+		0x00020000,        //DeN that tests bit comparison in expansion function
+		0x00000001,        //Smallest DeN
+		0x007FFFFF,        //Biggest DeN
+		0x00800000,        //Smallest non DeN
+		0x7F7FFFFF,        //Float max
+		0x3F800000,        //1
+		0x3F000000,        //0.5
+		0x40000000,        //2
+		0x42F60000,        //123
+		0x3F9D70A4,        //1.23
+		0x3F7FFFFF,        //Almost 1
+		0x00000015        //DeN that was failing in the tests
 	};
 
 	for (U64 i = 0; i < sizeof(expansionTests) / sizeof(expansionTests[0]); ++i) {

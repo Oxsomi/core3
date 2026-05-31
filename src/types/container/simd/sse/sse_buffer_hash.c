@@ -43,7 +43,7 @@ U32 Buffer_crc32cChained(const Buffer buf, U32 prevCrc) {
 }
 
 static inline I32x4 I32x4_sha256msg2(I32x4 i0, I32x4 i2, I32x4 i3) {
-	I32x4 tmp = I32x4_combineRightShift(i3, i2, 1);		//_mm_alignr_epi8(a, b, 4)
+	I32x4 tmp = I32x4_combineRightShift(i3, i2, 1);        //_mm_alignr_epi8(a, b, 4)
 	I32x4 msgTmp = I32x4_add(i0, tmp);
 	I32x4 a = msgTmp;
 	I32x4 b = i3;
@@ -53,7 +53,7 @@ static inline I32x4 I32x4_sha256msg2(I32x4 i0, I32x4 i2, I32x4 i3) {
 static inline void I32x4_sha256rnds4(I32x4 msgOriginal, I32x4 round, I32x4 *state0, I32x4 *state1) {
 	I32x4 msg = I32x4_add(msgOriginal, round);
 	*state1 = _mm_sha256rnds2_epu32(*state1, *state0, msg);
-	msg = I32x4_zwxx(msg);														//_mm_shuffle_epi32(msg, 0xE);
+	msg = I32x4_zwxx(msg);                                                        //_mm_shuffle_epi32(msg, 0xE);
 	*state0 = _mm_sha256rnds2_epu32(*state0, *state1, msg);
 }
 
@@ -74,7 +74,7 @@ void Buffer_sha256(const Buffer buf, U32 output[8]) {
 
 	if(hasSHA256 < 0) {
 		U32 cpuInfo1[4];
-		Platform_getCPUId(7, cpuInfo1);		//TODO: Find a cleaner way
+		Platform_getCPUId(7, cpuInfo1);        //TODO: Find a cleaner way
 		hasSHA256 = (cpuInfo1[1] >> 29) & 1;
 	}
 

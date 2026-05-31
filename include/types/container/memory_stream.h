@@ -29,12 +29,12 @@
 
 typedef enum EMemoryStreamFlags {
 
-	EMemoryStreamFlags_None			= 0,
-	EMemoryStreamFlags_IsWritable	= 1 << 0,
-	EMemoryStreamFlags_IsResizable	= 1 << 1,
-	EMemoryStreamFlags_UnsafeMemory	= 1 << 2,		//Disable nulling of memory
+	EMemoryStreamFlags_None            = 0,
+	EMemoryStreamFlags_IsWritable    = 1 << 0,
+	EMemoryStreamFlags_IsResizable    = 1 << 1,
+	EMemoryStreamFlags_UnsafeMemory    = 1 << 2,        //Disable nulling of memory
 
-	EMemoryStreamFlags_WriteResize	= EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable
+	EMemoryStreamFlags_WriteResize    = EMemoryStreamFlags_IsWritable | EMemoryStreamFlags_IsResizable
 
 } EMemoryStreamFlags;
 		
@@ -51,7 +51,7 @@ RefPtrType MemoryStream_makeType(const Allocator *alloc);
 Bool MemoryStream_create(
 	U64 size,
 	EMemoryStreamFlags flags,
-	const RefPtrType *type,			//MemoryStream_makeType(alloc)
+	const RefPtrType *type,            //MemoryStream_makeType(alloc)
 	MemoryStreamRef **stream,
 	Error *e_rr
 );
@@ -60,7 +60,7 @@ Bool MemoryStream_create(
 Bool MemoryStream_createFromBuffer(
 	Buffer *buffer,
 	EMemoryStreamFlags flags,
-	const RefPtrType *type,			//MemoryStream_makeType(alloc)
+	const RefPtrType *type,            //MemoryStream_makeType(alloc)
 	MemoryStreamRef **stream,
 	Error *e_rr
 );
@@ -73,7 +73,7 @@ Bool MemoryStream_createFromBufferRegion(
 	U64 offset,
 	U64 length,
 	EMemoryStreamFlags flags,
-	const RefPtrType *type,			//MemoryStream_makeType(alloc)
+	const RefPtrType *type,            //MemoryStream_makeType(alloc)
 	MemoryStreamRef **stream,
 	Error *e_rr
 );

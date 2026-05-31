@@ -45,7 +45,7 @@ typedef enum EInputType {
 	EInputType_Axis
 } EInputType;
 
-typedef U32 InputHandle;		//Don't serialize this, because input devices can change it. Use the name instead.
+typedef U32 InputHandle;        //Don't serialize this, because input devices can change it. Use the name instead.
 
 typedef struct InputButton {
 	const C8 *name;
@@ -106,7 +106,7 @@ Bool InputDevice_create(
 Bool InputDevice_createButton(
 	InputDevice *dev,
 	U16 localHandle,
-	const C8 *keyName,			//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
+	const C8 *keyName,            //The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
 	InputHandle *result,
 	Error *e_rr
 );
@@ -114,7 +114,7 @@ Bool InputDevice_createButton(
 Bool InputDevice_createAxis(
 	InputDevice *dev,
 	U16 localHandle,
-	const C8 *axisName,			//The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
+	const C8 *axisName,            //The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
 	F32 deadZone,
 	Bool resetOnInputLoss,
 	InputHandle *result,

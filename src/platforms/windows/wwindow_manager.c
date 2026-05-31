@@ -167,7 +167,7 @@ void WindowManager_updateExt(WindowManager *manager) {
 				}
 			}
 
-			if(duplicatePaint)		//Ensure our manager draw/update happens too for next frame
+			if(duplicatePaint)        //Ensure our manager draw/update happens too for next frame
 				break;
 		}
 

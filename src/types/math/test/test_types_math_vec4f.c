@@ -71,7 +71,7 @@ void Test_vec4f(Test *test) {
 
 	//Length, normalize, dot, reduce, sqrt, lerp
 
-	v4 = F32x4_create4(2, 3, 6, 1);	//sqLen4=50, sqLen3=49, sqLen2=13
+	v4 = F32x4_create4(2, 3, 6, 1);    //sqLen4=50, sqLen3=49, sqLen2=13
 	Test_assert(test, "F32x4_sqLen4",     F32_abs(F32x4_sqLen4(v4) - 50) <= 1e-6f);
 	Test_assert(test, "F32x4_sqLen3",     F32_abs(F32x4_sqLen3(v4) - 49) <= 1e-6f);
 	Test_assert(test, "F32x4_sqLen2",     F32_abs(F32x4_sqLen2(v4) - 13) <= 1e-6f);

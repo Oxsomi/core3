@@ -67,8 +67,8 @@ void Test_floatType(Test *test) {
 
 	//sign / abs / negate on a known F32
 
-	const U64 negOne32 = 0xBF800000;		//-1
-	const U64 posOne32 = 0x3F800000;		//+1
+	const U64 negOne32 = 0xBF800000;        //-1
+	const U64 posOne32 = 0x3F800000;        //+1
 
 	Test_assert(test, "F32 sign",          EFloatType_sign(EFloatType_F32, negOne32));
 	Test_assert(test, "F32 sign",          !EFloatType_sign(EFloatType_F32, posOne32));

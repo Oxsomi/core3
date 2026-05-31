@@ -103,7 +103,7 @@ void Test_CAMove(Test *t) {
 
 	Test_setModule(t, "CAFile_move");
 
-	{							//Move file from one folder to another
+	{                            //Move file from one folder to another
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -136,7 +136,7 @@ void Test_CAMove(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Move subfolder into another folder
+	{                            //Move subfolder into another folder
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -165,7 +165,7 @@ void Test_CAMove(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Move non-empty folder (with files) into a non-empty destination
+	{                            //Move non-empty folder (with files) into a non-empty destination
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -203,7 +203,7 @@ void Test_CAMove(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Move to same parent is legal (no-op structurally) and must not crash
+	{                            //Move to same parent is legal (no-op structurally) and must not crash
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -221,7 +221,7 @@ void Test_CAMove(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Name collision in destination must fail
+	{                            //Name collision in destination must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -242,7 +242,7 @@ void Test_CAMove(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Moving root must fail
+	{                            //Moving root must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -258,7 +258,7 @@ void Test_CAMove(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Moving a folder into itself must fail
+	{                            //Moving a folder into itself must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 
@@ -274,7 +274,7 @@ void Test_CAMove(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-	{							//Moving a folder into one of its own descendants must fail
+	{                            //Moving a folder into one of its own descendants must fail
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;
 

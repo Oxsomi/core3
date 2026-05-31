@@ -39,7 +39,7 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
 	Bool forceCpuSided = *cpuSided;
 
-	if(!isGpu || hasReBAR)			//Force shared allocations if not dedicated or if ReBAR is available
+	if(!isGpu || hasReBAR)            //Force shared allocations if not dedicated or if ReBAR is available
 		*cpuSided = true;
 	
 	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
@@ -48,7 +48,7 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 			.MemoryPoolPreference = isGpu && hasReBAR ? D3D12_MEMORY_POOL_L1 : D3D12_MEMORY_POOL_L0,
 			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
-		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED,		//Equal to vulkan behavior, clear manually
+		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED,        //Equal to vulkan behavior, clear manually
 		.Alignment = alignment
 	};
 
@@ -67,7 +67,7 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 				heapDesc.Flags |= D3D12_HEAP_FLAG_DENY_BUFFERS | D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES;
 				break;
 
-			default:		//Used for committed allocations
+			default:        //Used for committed allocations
 				break;
 		}
 
@@ -148,7 +148,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			block->isDedicated ||
 			!!(block->allocationTypeExt & 1) != !cpuSided ||
 			(block->allocationTypeExt >> 1) != heapType ||
-			block->typeExt != req.alignment						//Alignment is baked into heap
+			block->typeExt != req.alignment                        //Alignment is baked into heap
 		)
 			continue;
 
@@ -211,8 +211,8 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	DeviceMemoryBlock block = (DeviceMemoryBlock) {
 		.isActive = true,
-		.typeExt = req.alignment,								//Only place things with the same alignment in this block
-		.allocationTypeExt = (!cpuSided) | (heapType << 1),		//Don't share GPU mem and CPU mem or heap sharing if no support
+		.typeExt = req.alignment,                                //Only place things with the same alignment in this block
+		.allocationTypeExt = (!cpuSided) | (heapType << 1),        //Don't share GPU mem and CPU mem or heap sharing if no support
 		.isDedicated = false,
 		.ext = heap
 	};

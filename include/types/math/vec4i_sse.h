@@ -97,21 +97,21 @@ static inline I32x4 I32x4_not(I32x4 a) { return _mm_xor_si128(a, I32x4_xxxx4((I3
 	
 static inline I32x4 I32x4_lshElements(I32x4 a, U8 elementCount) {
 	switch (elementCount) {
-		case 0:		return a;
-		case 1:		return _mm_slli_si128(a,  4);
-		case 2:		return _mm_slli_si128(a,  8);
-		case 3:		return _mm_slli_si128(a, 12);
-		default:	return I32x4_zero();
+		case 0:        return a;
+		case 1:        return _mm_slli_si128(a,  4);
+		case 2:        return _mm_slli_si128(a,  8);
+		case 3:        return _mm_slli_si128(a, 12);
+		default:    return I32x4_zero();
 	}
 }
 
 static inline I32x4 I32x4_rshElements(I32x4 a, U8 elementCount) {
 	switch (elementCount) {
-		case 0:		return a;
-		case 1:		return _mm_srli_si128(a,  4);
-		case 2:		return _mm_srli_si128(a,  8);
-		case 3:		return _mm_srli_si128(a, 12);
-		default:	return I32x4_zero();
+		case 0:        return a;
+		case 1:        return _mm_srli_si128(a,  4);
+		case 2:        return _mm_srli_si128(a,  8);
+		case 3:        return _mm_srli_si128(a, 12);
+		default:    return I32x4_zero();
 	}
 }
 
@@ -128,36 +128,36 @@ static inline I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
 
 	switch (xyzw & 0xF) {
 
-		default:		return a;
-		case 0b1111:	return b;
+		default:        return a;
+		case 0b1111:    return b;
 
-		case 0b0001:	return _mm_blend_epi16(a, b, 0x03);
-		case 0b0010:	return _mm_blend_epi16(a, b, 0x0C);
-		case 0b0011:	return _mm_blend_epi16(a, b, 0x0F);
+		case 0b0001:    return _mm_blend_epi16(a, b, 0x03);
+		case 0b0010:    return _mm_blend_epi16(a, b, 0x0C);
+		case 0b0011:    return _mm_blend_epi16(a, b, 0x0F);
 
-		case 0b0100:	return _mm_blend_epi16(a, b, 0x30);
-		case 0b0101:	return _mm_blend_epi16(a, b, 0x33);
-		case 0b0110:	return _mm_blend_epi16(a, b, 0x3C);
-		case 0b0111:	return _mm_blend_epi16(a, b, 0x3F);
+		case 0b0100:    return _mm_blend_epi16(a, b, 0x30);
+		case 0b0101:    return _mm_blend_epi16(a, b, 0x33);
+		case 0b0110:    return _mm_blend_epi16(a, b, 0x3C);
+		case 0b0111:    return _mm_blend_epi16(a, b, 0x3F);
 
-		case 0b1000:	return _mm_blend_epi16(a, b, 0xC0);
-		case 0b1001:	return _mm_blend_epi16(a, b, 0xC3);
-		case 0b1010:	return _mm_blend_epi16(a, b, 0xCC);
-		case 0b1011:	return _mm_blend_epi16(a, b, 0xCF);
+		case 0b1000:    return _mm_blend_epi16(a, b, 0xC0);
+		case 0b1001:    return _mm_blend_epi16(a, b, 0xC3);
+		case 0b1010:    return _mm_blend_epi16(a, b, 0xCC);
+		case 0b1011:    return _mm_blend_epi16(a, b, 0xCF);
 
-		case 0b1100:	return _mm_blend_epi16(a, b, 0xF0);
-		case 0b1101:	return _mm_blend_epi16(a, b, 0xF3);
-		case 0b1110:	return _mm_blend_epi16(a, b, 0xFC);
+		case 0b1100:    return _mm_blend_epi16(a, b, 0xF0);
+		case 0b1101:    return _mm_blend_epi16(a, b, 0xF3);
+		case 0b1110:    return _mm_blend_epi16(a, b, 0xFC);
 	}
 }
 
 static inline I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
 	switch (v) {
-		case 0:		return b;
-		case 1:		return _mm_alignr_epi8(a, b, 4);
-		case 2:		return _mm_alignr_epi8(a, b, 8);
-		case 3:		return _mm_alignr_epi8(a, b, 12);
-		default:	return I32x4_zero();
+		case 0:        return b;
+		case 1:        return _mm_alignr_epi8(a, b, 4);
+		case 2:        return _mm_alignr_epi8(a, b, 8);
+		case 3:        return _mm_alignr_epi8(a, b, 12);
+		default:    return I32x4_zero();
 	}
 }
 

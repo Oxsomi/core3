@@ -106,16 +106,16 @@ Bool Compiler_convertWaveSizeParam(U32 threads, U8 *threadsShort, Error *e_rr) {
 	Bool s_uccess = true;
 
 	switch (threads) {
-		case 0:			*threadsShort = 0;		break;
-		case 1:			*threadsShort = 1;		break;
-		case 2:			*threadsShort = 2;		break;
-		case 4:			*threadsShort = 3;		break;
-		case 8:			*threadsShort = 4;		break;
-		case 16:		*threadsShort = 5;		break;
-		case 32:		*threadsShort = 6;		break;
-		case 64:		*threadsShort = 7;		break;
-		case 128:		*threadsShort = 8;		break;
-		case 256:		*threadsShort = 9;		break;
+		case 0:            *threadsShort = 0;        break;
+		case 1:            *threadsShort = 1;        break;
+		case 2:            *threadsShort = 2;        break;
+		case 4:            *threadsShort = 3;        break;
+		case 8:            *threadsShort = 4;        break;
+		case 16:        *threadsShort = 5;        break;
+		case 32:        *threadsShort = 6;        break;
+		case 64:        *threadsShort = 7;        break;
+		case 128:        *threadsShort = 8;        break;
+		case 256:        *threadsShort = 9;        break;
 		default:
 			retError(clean, Error_invalidParameter(threads, 0, "Compiler_convertWaveSizeParam()::threads is invalid"))
 	}
@@ -146,7 +146,7 @@ Bool Compiler_convertWaveSize(
 		waveSizeMinTmp = 4;
 
 	if(!waveSizeRecommendedTmp)
-		waveSizeRecommendedTmp = (waveSizeMinTmp + waveSizeMaxTmp) / 2;		//Not base2, but don't care
+		waveSizeRecommendedTmp = (waveSizeMinTmp + waveSizeMaxTmp) / 2;        //Not base2, but don't care
 
 	if(
 		U32_min(waveSizeMinTmp, U32_min(waveSizeMaxTmp, waveSizeRecommendedTmp)) < 4 ||
@@ -209,20 +209,20 @@ Bool Compiler_convertMemberDXIL(
 
 		switch (typeDesc.Type) {
 
-			case D3D_SVT_DOUBLE:	stride = ESBStride_X64;		prim = ESBPrimitive_Float;		break;
-			case D3D_SVT_FLOAT:		stride = ESBStride_X32;		prim = ESBPrimitive_Float;		break;
-			case D3D_SVT_FLOAT16:	stride = ESBStride_X16;		prim = ESBPrimitive_Float;		break;
+			case D3D_SVT_DOUBLE:    stride = ESBStride_X64;        prim = ESBPrimitive_Float;        break;
+			case D3D_SVT_FLOAT:        stride = ESBStride_X32;        prim = ESBPrimitive_Float;        break;
+			case D3D_SVT_FLOAT16:    stride = ESBStride_X16;        prim = ESBPrimitive_Float;        break;
 
-			case D3D_SVT_UINT8:		stride = ESBStride_X8;		prim = ESBPrimitive_UInt;		break;
-			case D3D_SVT_UINT16:	stride = ESBStride_X16;		prim = ESBPrimitive_UInt;		break;
+			case D3D_SVT_UINT8:        stride = ESBStride_X8;        prim = ESBPrimitive_UInt;        break;
+			case D3D_SVT_UINT16:    stride = ESBStride_X16;        prim = ESBPrimitive_UInt;        break;
 
 			case D3D_SVT_BOOL:
-			case D3D_SVT_UINT:		stride = ESBStride_X32;		prim = ESBPrimitive_UInt;		break;
-			case D3D_SVT_UINT64:	stride = ESBStride_X64;		prim = ESBPrimitive_UInt;		break;
+			case D3D_SVT_UINT:        stride = ESBStride_X32;        prim = ESBPrimitive_UInt;        break;
+			case D3D_SVT_UINT64:    stride = ESBStride_X64;        prim = ESBPrimitive_UInt;        break;
 
-			case D3D_SVT_INT16:		stride = ESBStride_X16;		prim = ESBPrimitive_Int;		break;
-			case D3D_SVT_INT:		stride = ESBStride_X32;		prim = ESBPrimitive_Int;		break;
-			case D3D_SVT_INT64:		stride = ESBStride_X64;		prim = ESBPrimitive_Int;		break;
+			case D3D_SVT_INT16:        stride = ESBStride_X16;        prim = ESBPrimitive_Int;        break;
+			case D3D_SVT_INT:        stride = ESBStride_X32;        prim = ESBPrimitive_Int;        break;
+			case D3D_SVT_INT64:        stride = ESBStride_X64;        prim = ESBPrimitive_Int;        break;
 
 			default:
 				retError(clean, Error_invalidState(
@@ -238,10 +238,10 @@ Bool Compiler_convertMemberDXIL(
 
 		switch(typeDesc.Columns) {
 
-			case 1:		vector = ESBVector_N1;		break;
-			case 2:		vector = ESBVector_N2;		break;
-			case 3:		vector = ESBVector_N3;		break;
-			case 4:		vector = ESBVector_N4;		break;
+			case 1:        vector = ESBVector_N1;        break;
+			case 2:        vector = ESBVector_N2;        break;
+			case 3:        vector = ESBVector_N3;        break;
+			case 4:        vector = ESBVector_N4;        break;
 
 			default:
 				retError(clean, Error_unsupportedOperation(
@@ -252,11 +252,11 @@ Bool Compiler_convertMemberDXIL(
 		switch(typeDesc.Rows) {
 
 			case 0:
-			case 1:		matrix = ESBMatrix_N1;		break;
+			case 1:        matrix = ESBMatrix_N1;        break;
 
-			case 2:		matrix = ESBMatrix_N2;		break;
-			case 3:		matrix = ESBMatrix_N3;		break;
-			case 4:		matrix = ESBMatrix_N4;		break;
+			case 2:        matrix = ESBMatrix_N2;        break;
+			case 3:        matrix = ESBMatrix_N3;        break;
+			case 4:        matrix = ESBMatrix_N4;        break;
 
 			default:
 				retError(clean, Error_unsupportedOperation(
@@ -483,7 +483,7 @@ Bool Compiler_convertShaderBufferDXIL(
 
 		//We found a ConstantBuffer, we'll do two things:
 		// - Pretend we have 1 + inner variable count variables.
-		//		This will allow us to validate the root node and variables.
+		//        This will allow us to validate the root node and variables.
 		// - Ignore the root node for the actual contents, it's only for validation.
 
 		if (typeDesc.Class == D3D_SVC_STRUCT && CharString_equalsStringSensitive(varName, name)) {
@@ -671,11 +671,11 @@ Bool Compiler_convertRegisterDXIL(
 
 		switch (input->ReturnType) {
 
-			case D3D_RETURN_TYPE_UNORM:		prim = ESHTexturePrimitive_UNorm;	break;
-			case D3D_RETURN_TYPE_SNORM:		prim = ESHTexturePrimitive_SNorm;	break;
-			case D3D_RETURN_TYPE_UINT:		prim = ESHTexturePrimitive_UInt;	break;
-			case D3D_RETURN_TYPE_SINT:		prim = ESHTexturePrimitive_SInt;	break;
-			case D3D_RETURN_TYPE_FLOAT:		prim = ESHTexturePrimitive_Float;	break;
+			case D3D_RETURN_TYPE_UNORM:        prim = ESHTexturePrimitive_UNorm;    break;
+			case D3D_RETURN_TYPE_SNORM:        prim = ESHTexturePrimitive_SNorm;    break;
+			case D3D_RETURN_TYPE_UINT:        prim = ESHTexturePrimitive_UInt;    break;
+			case D3D_RETURN_TYPE_SINT:        prim = ESHTexturePrimitive_SInt;    break;
+			case D3D_RETURN_TYPE_FLOAT:        prim = ESHTexturePrimitive_Float;    break;
 
 			default:
 				retError(clean, Error_invalidState(
@@ -813,7 +813,7 @@ Bool Compiler_convertRegisterDXIL(
 
 			if(!isWriteTexture)
 				retError(clean, Error_invalidState(
-					0, "Compiler_convertRegisterDXIL() RWBuffer is unsupported"		//TODO:?
+					0, "Compiler_convertRegisterDXIL() RWBuffer is unsupported"        //TODO:?
 				))
 
 			switch(registerType) {
@@ -959,12 +959,12 @@ Bool Compiler_convertRegisterDXIL(
 
 			break;
 
-		case D3D_SIT_UAV_APPEND_STRUCTURED:		//Append and consume are always reported as SBuffer with atomic counter
+		case D3D_SIT_UAV_APPEND_STRUCTURED:        //Append and consume are always reported as SBuffer with atomic counter
 		case D3D_SIT_UAV_CONSUME_STRUCTURED:
 
 		case D3D_SIT_TBUFFER:
 		case D3D_SIT_UAV_FEEDBACKTEXTURE:
-			retError(clean, Error_unsupportedOperation(0, "Compiler_convertRegisterDXIL() unsupported input type"))		//TODO:
+			retError(clean, Error_unsupportedOperation(0, "Compiler_convertRegisterDXIL() unsupported input type"))        //TODO:
 
 		default:
 			retError(clean, Error_invalidState(0, "Compiler_convertRegisterDXIL() unknown input type"))
@@ -1145,7 +1145,7 @@ extern "C" Bool Compiler_processDXIL(
 			if(hasGroupSize)
 				gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr))
 
-			ESBType inputs[16] = {};		//TODO:
+			ESBType inputs[16] = {};        //TODO:
 			ESBType outputs[16] = {};
 			U8 uniqueInputSemantics = 0;
 			ListCharString uniqueSemantics = ListCharString{};
@@ -1155,7 +1155,7 @@ extern "C" Bool Compiler_processDXIL(
 			if(!funcDesc0.Name)
 				retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained no library name"))
 
-			for (U32 j = 0; j < funcDesc0.ConstantBuffers; ++j) {		//Validate buffers
+			for (U32 j = 0; j < funcDesc0.ConstantBuffers; ++j) {        //Validate buffers
 
 				ID3D12ShaderReflectionConstantBuffer *constantBuffer = funcRefl->GetConstantBufferByIndex(j);
 				D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
@@ -1195,7 +1195,7 @@ extern "C" Bool Compiler_processDXIL(
 
 			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
 
-			if (funcDesc0.Name[0] == '\x1') {	//Mangled
+			if (funcDesc0.Name[0] == '\x1') {    //Mangled
 
 				U64 firstAt = CharString_findFirstSensitive(demangled, '@', 2, 0);
 
@@ -1306,7 +1306,7 @@ extern "C" Bool Compiler_processDXIL(
 						0, "Compiler_processDXIL() unique semantic name out of bounds"
 					))
 
-				if(k == end) {	//Not found, so insert
+				if(k == end) {    //Not found, so insert
 
 					gotoIfError2(clean, ListCharString_insert(
 						&strings, k, CharString_createRefCStrConst(signature.SemanticName), alloc
@@ -1331,17 +1331,17 @@ extern "C" Bool Compiler_processDXIL(
 
 			switch (signature.ComponentType) {
 
-				case  D3D_REGISTER_COMPONENT_FLOAT16:	prim = ESBPrimitive_Float;	stride = ESBStride_X16;		break;
-				case  D3D_REGISTER_COMPONENT_UINT16:	prim = ESBPrimitive_UInt;	stride = ESBStride_X16;		break;
-				case  D3D_REGISTER_COMPONENT_SINT16:	prim = ESBPrimitive_Int;	stride = ESBStride_X16;		break;
+				case  D3D_REGISTER_COMPONENT_FLOAT16:    prim = ESBPrimitive_Float;    stride = ESBStride_X16;        break;
+				case  D3D_REGISTER_COMPONENT_UINT16:    prim = ESBPrimitive_UInt;    stride = ESBStride_X16;        break;
+				case  D3D_REGISTER_COMPONENT_SINT16:    prim = ESBPrimitive_Int;    stride = ESBStride_X16;        break;
 
-				case  D3D_REGISTER_COMPONENT_FLOAT32:	prim = ESBPrimitive_Float;	stride = ESBStride_X32;		break;
-				case  D3D_REGISTER_COMPONENT_UINT32:	prim = ESBPrimitive_UInt;	stride = ESBStride_X32;		break;
-				case  D3D_REGISTER_COMPONENT_SINT32:	prim = ESBPrimitive_Int;	stride = ESBStride_X32;		break;
+				case  D3D_REGISTER_COMPONENT_FLOAT32:    prim = ESBPrimitive_Float;    stride = ESBStride_X32;        break;
+				case  D3D_REGISTER_COMPONENT_UINT32:    prim = ESBPrimitive_UInt;    stride = ESBStride_X32;        break;
+				case  D3D_REGISTER_COMPONENT_SINT32:    prim = ESBPrimitive_Int;    stride = ESBStride_X32;        break;
 
-				case  D3D_REGISTER_COMPONENT_FLOAT64:	prim = ESBPrimitive_Float;	stride = ESBStride_X64;		break;
-				case  D3D_REGISTER_COMPONENT_UINT64:	prim = ESBPrimitive_UInt;	stride = ESBStride_X64;		break;
-				case  D3D_REGISTER_COMPONENT_SINT64:	prim = ESBPrimitive_Int;	stride = ESBStride_X64;		break;
+				case  D3D_REGISTER_COMPONENT_FLOAT64:    prim = ESBPrimitive_Float;    stride = ESBStride_X64;        break;
+				case  D3D_REGISTER_COMPONENT_UINT64:    prim = ESBPrimitive_UInt;    stride = ESBStride_X64;        break;
+				case  D3D_REGISTER_COMPONENT_SINT64:    prim = ESBPrimitive_Int;    stride = ESBStride_X64;        break;
 				default:
 					retError(clean, Error_invalidState(
 						0, "Compiler_processDXIL() invalid component type; expected one of F32, U32 or I32"
@@ -1351,10 +1351,10 @@ extern "C" Bool Compiler_processDXIL(
 			ESBVector vec = ESBVector_N1;
 
 			switch (signature.Mask) {
-				case  1:	vec = ESBVector_N1;		break;
-				case  3:	vec = ESBVector_N2;		break;
-				case  7:	vec = ESBVector_N3;		break;
-				case 15:	vec = ESBVector_N4;		break;
+				case  1:    vec = ESBVector_N1;        break;
+				case  3:    vec = ESBVector_N2;        break;
+				case  7:    vec = ESBVector_N3;        break;
+				case 15:    vec = ESBVector_N4;        break;
 				default:
 					retError(clean, Error_invalidState(
 						0, "Compiler_processDXIL() invalid signature mask; expected one of 1,3,7,15"
@@ -1373,7 +1373,7 @@ extern "C" Bool Compiler_processDXIL(
 			inputTypes[(*counter)++] = type;
 		}
 
-		for (U32 j = 0; j < refl.ConstantBuffers; ++j) {		//Validate buffers
+		for (U32 j = 0; j < refl.ConstantBuffers; ++j) {        //Validate buffers
 
 			ID3D12ShaderReflectionConstantBuffer *constantBuffer = dxilRefl->GetConstantBufferByIndex(j);
 			D3D12_SHADER_BUFFER_DESC constantBufferDesc{};
@@ -1474,7 +1474,7 @@ extern "C" Bool Compiler_processDXIL(
 	if(
 		Buffer_length(*result) <= 0x14 ||
 		Buffer_readU32(*result, 0, NULL) != C8x4('D', 'X', 'B', 'C') ||
-		I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero())		//Unsigned
+		I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero())        //Unsigned
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"))
 
@@ -1573,7 +1573,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler.interfaces;
 
 	Bool freeEp = false;
-	Bool alreadyContainsLib = false;	//Avoid re-inserting uniqueEntrypoint of lib
+	Bool alreadyContainsLib = false;    //Avoid re-inserting uniqueEntrypoint of lib
 	D3D12_LIBRARY_DESC desc;
 
 	if(!interfaces)
@@ -1612,26 +1612,26 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 		const C8 *name = funcDesc.Name;
 
-		ESHPipelineStage stage = ESHPipelineStage_Count;		//Lib
+		ESHPipelineStage stage = ESHPipelineStage_Count;        //Lib
 
 		switch (funcDesc1.ShaderType) {
 
-			case D3D12_SHVER_RAY_GENERATION_SHADER:	stage = ESHPipelineStage_RaygenExt;			break;
-			case D3D12_SHVER_INTERSECTION_SHADER:	stage = ESHPipelineStage_IntersectionExt;	break;
-			case D3D12_SHVER_ANY_HIT_SHADER:		stage = ESHPipelineStage_AnyHitExt;			break;
-			case D3D12_SHVER_CLOSEST_HIT_SHADER:	stage = ESHPipelineStage_ClosestHitExt;		break;
-			case D3D12_SHVER_MISS_SHADER:			stage = ESHPipelineStage_MissExt;			break;
-			case D3D12_SHVER_CALLABLE_SHADER:		stage = ESHPipelineStage_CallableExt;		break;
-			case D3D12_SHVER_NODE_SHADER:			stage = ESHPipelineStage_WorkgraphExt;		break;
+			case D3D12_SHVER_RAY_GENERATION_SHADER:    stage = ESHPipelineStage_RaygenExt;            break;
+			case D3D12_SHVER_INTERSECTION_SHADER:    stage = ESHPipelineStage_IntersectionExt;    break;
+			case D3D12_SHVER_ANY_HIT_SHADER:        stage = ESHPipelineStage_AnyHitExt;            break;
+			case D3D12_SHVER_CLOSEST_HIT_SHADER:    stage = ESHPipelineStage_ClosestHitExt;        break;
+			case D3D12_SHVER_MISS_SHADER:            stage = ESHPipelineStage_MissExt;            break;
+			case D3D12_SHVER_CALLABLE_SHADER:        stage = ESHPipelineStage_CallableExt;        break;
+			case D3D12_SHVER_NODE_SHADER:            stage = ESHPipelineStage_WorkgraphExt;        break;
 
-			case D3D12_SHVER_PIXEL_SHADER:			stage = ESHPipelineStage_Pixel;				break;
-			case D3D12_SHVER_VERTEX_SHADER:			stage = ESHPipelineStage_Vertex;			break;
-			case D3D12_SHVER_GEOMETRY_SHADER:		stage = ESHPipelineStage_GeometryExt;		break;
-			case D3D12_SHVER_HULL_SHADER:			stage = ESHPipelineStage_Hull;				break;
-			case D3D12_SHVER_DOMAIN_SHADER:			stage = ESHPipelineStage_Domain;			break;
-			case D3D12_SHVER_COMPUTE_SHADER:		stage = ESHPipelineStage_Compute;			break;
-			case D3D12_SHVER_MESH_SHADER:			stage = ESHPipelineStage_MeshExt;			break;
-			case D3D12_SHVER_AMPLIFICATION_SHADER:	stage = ESHPipelineStage_TaskExt;			break;
+			case D3D12_SHVER_PIXEL_SHADER:            stage = ESHPipelineStage_Pixel;                break;
+			case D3D12_SHVER_VERTEX_SHADER:            stage = ESHPipelineStage_Vertex;            break;
+			case D3D12_SHVER_GEOMETRY_SHADER:        stage = ESHPipelineStage_GeometryExt;        break;
+			case D3D12_SHVER_HULL_SHADER:            stage = ESHPipelineStage_Hull;                break;
+			case D3D12_SHVER_DOMAIN_SHADER:            stage = ESHPipelineStage_Domain;            break;
+			case D3D12_SHVER_COMPUTE_SHADER:        stage = ESHPipelineStage_Compute;            break;
+			case D3D12_SHVER_MESH_SHADER:            stage = ESHPipelineStage_MeshExt;            break;
+			case D3D12_SHVER_AMPLIFICATION_SHADER:    stage = ESHPipelineStage_TaskExt;            break;
 
 			default:
 				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() had an invalid shader type"))
@@ -1666,7 +1666,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 			CharString nameStr = CharString_createRefCStrConst(name);
 			U64 questionMark = CharString_findFirstSensitive(nameStr, '?', 0, 0);
 
-			if (questionMark != U64_MAX) {		//Mangled name
+			if (questionMark != U64_MAX) {        //Mangled name
 
 				U64 atAt = CharString_findFirstSensitive(nameStr, '@', questionMark + 1, 0);
 
@@ -1737,7 +1737,7 @@ extern "C" Bool Compiler_linkDXIL(
 
 	Bool isShaderAnnotation =
 		(stageType >= ESHPipelineStage_RtStartExt && stageType >= ESHPipelineStage_RtEndExt) ||
-		stageType >= ESHPipelineStage_Count ||			//Maintain lib linking
+		stageType >= ESHPipelineStage_Count ||            //Maintain lib linking
 		stageType == ESHPipelineStage_WorkgraphExt;
 
 	Bool hasErrors = false;
@@ -1910,7 +1910,7 @@ extern "C" Bool Compiler_linkDXIL(
 			tmpWStr = ListU32{};
 		#endif
 
-		temp = NULL;		//Moved
+		temp = NULL;        //Moved
 	}
 
 	//Turn inputs into UTF16/UTF32

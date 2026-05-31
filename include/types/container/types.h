@@ -30,8 +30,8 @@
 //ETypeId but for container objects.
 
 typedef enum EContainerTypeId {
-	EContainerTypeId_Stream		= makeObjectId(0x1C31,  0, 0),
-	EContainerTypeId_Count		= 1
+	EContainerTypeId_Stream        = makeObjectId(0x1C31,  0, 0),
+	EContainerTypeId_Count        = 1
 } EContainerTypeId;
 
 #ifdef __cplusplus

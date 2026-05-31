@@ -360,7 +360,7 @@ void Test_CAStress(Test *t) {
 
 			CAHandle dir = CAFile_resolveSubFolder(&ca, CAHandle_Root, CharString_createRefCStrConst(dirNames[d]));
 
-			if (d == 3) {	//delta, all files removed
+			if (d == 3) {    //delta, all files removed
 
 				for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
 					CAHandle resolved = CAFile_resolveSubFile(&ca, dir, CharString_createRefCStrConst(fileExts[f]));
@@ -467,7 +467,7 @@ void Test_CAStress(Test *t) {
 			CAHandle h = CAFile_resolveSubFile(&ca, hGamma, CharString_createRefCStrConst(fileExts[f]));
 			Test_assert(t, "stress S4: pre-rename resolve", h != CAHandle_Invalid);
 
-			const C8 *toString = "0123456789";		//Keep STRESS_FILES_PER_DIR < 9
+			const C8 *toString = "0123456789";        //Keep STRESS_FILES_PER_DIR < 9
 			CharString currVal = CharString_createRefSizedConst(toString + f, 1, false);
 
 			CharString ns = CharString_createNull();
@@ -505,7 +505,7 @@ void Test_CAStress(Test *t) {
 		//Every surviving gamma file has the new name and correct data
 
 		for (U64 f = 0; f < STRESS_FILES_PER_DIR; ++f) {
-			const C8 *toString = "0123456789";		//Keep STRESS_FILES_PER_DIR < 9
+			const C8 *toString = "0123456789";        //Keep STRESS_FILES_PER_DIR < 9
 			CharString currVal = CharString_createRefSizedConst(toString + f, 1, false);
 			CAHandle hNew = CAFile_resolveSubFile(&ca, hGamma, currVal);
 			Test_assert(t, "stress S5: gamma renamed resolve", hNew != CAHandle_Invalid);

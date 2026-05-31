@@ -613,11 +613,11 @@ void Test_SHFileRoundTripSemanticNames(Test *t) {
 	e.uniqueInputSemantics = 2;
 
 	//inputSemanticNames[slot] = (nameIndex+1) << 4 | semanticIndex
-	e.inputSemanticNames[0] = (1 << 4) | 0;	//POSITION[0]
-	e.inputSemanticNames[1] = (2 << 4) | 0;	//TEXCOORD[0]
+	e.inputSemanticNames[0] = (1 << 4) | 0;    //POSITION[0]
+	e.inputSemanticNames[1] = (2 << 4) | 0;    //TEXCOORD[0]
 
 	//outputSemanticNames[slot]: nameIndex is relative to uniqueInputSemantics
-	e.outputSemanticNames[0] = (1 << 4) | 0;	//SV_POSITION[0]
+	e.outputSemanticNames[0] = (1 << 4) | 0;    //SV_POSITION[0]
 
 	U16 bid = 0;
 	Test_assert(t, "createRef", ListU16_createRefConst(&bid, 1, &e.binaryIds, &t->err));

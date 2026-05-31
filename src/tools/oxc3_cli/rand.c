@@ -78,7 +78,7 @@ Bool CLI_rand(ParsedArgs args) {
 		}
 	}
 
-	U64 b = 0;		//Unused except rand num
+	U64 b = 0;        //Unused except rand num
 
 	if (args.parameters & EOperationHasParameter_Bit) {
 
@@ -139,12 +139,12 @@ Bool CLI_rand(ParsedArgs args) {
 				retError(clean, Error_invalidParameter(0, 0, "CLI_rand() Invalid argument. Can only pick one base."))
 			}
 
-			bytesToGenerate *= 8;		//Better probability distribution
+			bytesToGenerate *= 8;        //Better probability distribution
 			break;
 		}
 
 		case EOperation_RandChar:
-			bytesToGenerate *= 8;		//Better probability distribution
+			bytesToGenerate *= 8;        //Better probability distribution
 			break;
 
 		default:
@@ -160,10 +160,10 @@ Bool CLI_rand(ParsedArgs args) {
 
 		switch (outputAsBase) {
 
-			case 2:		maxLen = b;					break;
-			case 8:		maxLen = (b + 2) / 3;		break;
-			case 16:	maxLen = (b + 3) >> 2;		break;
-			case 64:	maxLen = (b + 5) / 6;		break;
+			case 2:        maxLen = b;                    break;
+			case 8:        maxLen = (b + 2) / 3;        break;
+			case 16:    maxLen = (b + 3) >> 2;        break;
+			case 64:    maxLen = (b + 5) / 6;        break;
 
 			default: {
 
@@ -176,7 +176,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 				F64 f = (F64)((U64)1 << U64_min(63, b));
 
-				if(b == 64)		//Shift by 64 is illegal ofc
+				if(b == 64)        //Shift by 64 is illegal ofc
 					f *= 2;
 
 				maxLen = (U64) F64_ceil(F64_log10(f));
@@ -189,7 +189,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 		else l = maxLen;
 
-		bytesToGenerate = l * 8;		//Better probability distribution
+		bytesToGenerate = l * 8;        //Better probability distribution
 	}
 
 	//Buffer
@@ -343,9 +343,9 @@ Bool CLI_rand(ParsedArgs args) {
 
 						if(!k && b)
 							switch (outputAsBase) {
-								case 8:		if(b % 3) v &= (1 << (b % 3)) - 1;		break;
-								case 16:	if(b % 4) v &= (1 << (b % 4)) - 1;		break;
-								case 64:	if(b % 6) v &= (1 << (b % 6)) - 1;		break;
+								case 8:        if(b % 3) v &= (1 << (b % 3)) - 1;        break;
+								case 16:    if(b % 4) v &= (1 << (b % 4)) - 1;        break;
+								case 64:    if(b % 6) v &= (1 << (b % 6)) - 1;        break;
 							}
 
 						gotoIfError2(clean, CharString_appendx(&outputString, options.ptr[v]))

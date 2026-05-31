@@ -45,7 +45,7 @@ typedef struct SubResourceData {
 
 typedef struct DDSInfo {
 
-	U32 w, h, l;						//Dimensions; these decrease by ~2 for each mip
+	U32 w, h, l;                        //Dimensions; these decrease by ~2 for each mip
 	U32 mips, layers;
 
 	TextureFormatId textureFormatId;
@@ -59,7 +59,7 @@ TList(SubResourceData);
 //buf's contents are sorted based on subresource index, so needs a non const buf
 Bool DDS_write(
 	StreamRef *stream,
-	U64 *streamOffset,		//Pass NULL to calculate length only (*off)
+	U64 *streamOffset,        //Pass NULL to calculate length only (*off)
 	ListSubResourceData *buf,
 	const DDSInfo *info,
 	const Allocator *alloc,

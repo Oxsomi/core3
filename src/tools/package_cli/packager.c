@@ -163,7 +163,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 			settings->enableLogging,
 			alloc,
 			NULL,
-			NULL,		//Don't write to output, write to Buffer[] instead
+			NULL,        //Don't write to output, write to Buffer[] instead
 			&allFiles,
 			&allShaderText,
 			&allOutputs,
@@ -219,7 +219,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 				gotoIfError3(clean, CAFile_addFile(&archive, allOutputs.ptr[i], &allBuffers.ptrNonConst[i], 0, alloc, e_rr));
 			} else {
 
-				if(															//Merged binaries contain empty buffers
+				if(                                                            //Merged binaries contain empty buffers
 					settings->merge &&
 					i + 1 != allOutputs.length &&
 					CharString_equalsStringSensitive(&allOutputs.ptr[i], &allOutputs.ptr[i + 1])

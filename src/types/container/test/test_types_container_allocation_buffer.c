@@ -157,7 +157,7 @@ void Test_allocationBufferFreeAndReuse(Test *t) {
 
 	const U8 *a = Test_allocFromAllocBuffer(t, "Alloc a", &ab, 128, 1, false);
 	const U8 *b = Test_allocFromAllocBuffer(t, "Alloc b", &ab, 128, 1, false);
-	const U8 *c = Test_allocFromAllocBuffer(t, "Alloc c", &ab, 256, 1, false);		//Force take up the rest of the buffer
+	const U8 *c = Test_allocFromAllocBuffer(t, "Alloc c", &ab, 256, 1, false);        //Force take up the rest of the buffer
 
 	if (a && b && c) {
 
@@ -248,7 +248,7 @@ void Test_allocationBufferOutOfMemory(Test *t) {
 
 	Test_allocFromAllocBuffer(t, "Fill", &ab, 128, 1, false);
 
-	const AllocationBufferAllocate spec = {		//No more space
+	const AllocationBufferAllocate spec = {        //No more space
 		.allocationBuffer    = &ab,
 		.alignment           = 1,
 		.isNonLinearResource = false,
@@ -275,7 +275,7 @@ void Test_allocationBufferFragmentedOOM(Test *t) {
 	if (!Test_createAllocBuffer(t, 512, 0, &ab))
 		return;
 
-	const U8 *ptrs[8] = { 0 };		//8 allocations of 64 to fill 512 bytes
+	const U8 *ptrs[8] = { 0 };        //8 allocations of 64 to fill 512 bytes
 
 	for (U64 i = 0; i < 8; ++i)
 		ptrs[i] = Test_allocFromAllocBuffer(t, "Fill", &ab, 64, 1, false);
@@ -293,7 +293,7 @@ void Test_allocationBufferFragmentedOOM(Test *t) {
 	for (U64 i = 0; i < ab.allocations.length; ++i)
 		mask |= (U64)!Block_isFree(ab.allocations.ptr[i]) << i;
 
-	Test_assert(t, "Fragmented state", ab.allocations.ptr[0].startAndNonLinearAndFree == 0x40);		//First block got popped
+	Test_assert(t, "Fragmented state", ab.allocations.ptr[0].startAndNonLinearAndFree == 0x40);        //First block got popped
 	Test_assert(t, "Fragmented state", mask == 0b1010101);
 
 	//128-byte allocation must fail, no space left.
@@ -539,7 +539,7 @@ void Test_allocationBufferAllocateAndFill(Test *t) {
 	AllocationBuffer_free(&ab, t->alloc);
 }
 
-void Test_allocationBufferMerge(Test *t) {		//Freeing adjacent blocks must collapse them into a single merged block
+void Test_allocationBufferMerge(Test *t) {        //Freeing adjacent blocks must collapse them into a single merged block
 
 	Test_setModule(t, "AllocationBuffer merge");
 

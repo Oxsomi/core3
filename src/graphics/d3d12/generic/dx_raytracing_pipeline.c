@@ -90,7 +90,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	gotoIfError2(clean, ListD3D12_STATE_SUBOBJECT_resizex(&stateObjects, 3 + hitGroups.length + libraries.length))
 	gotoIfError2(clean, ListU32_resizex(&binaryOffset, libraries.length))
 
-	U64 groupNameStart = stageCount * 2;		//Only if group size > stageCount, otherwise reuses strings
+	U64 groupNameStart = stageCount * 2;        //Only if group size > stageCount, otherwise reuses strings
 	U64 strings = groupNameStart + (I64)stageCount;
 
 	gotoIfError2(clean, ListListU16_resizex(&nameArr, strings))
@@ -179,19 +179,19 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		if(stage->stageType == EPipelineStage_MissExt) {
 			stage->localShaderId = pipelineRt->missCount;
-			stage->groupId = pipelineRt->missCount + groupCount;				//Resolve later
+			stage->groupId = pipelineRt->missCount + groupCount;                //Resolve later
 			++pipelineRt->missCount;
 		}
 
 		else if(stage->stageType == EPipelineStage_RaygenExt) {
 			stage->localShaderId = pipelineRt->raygenCount;
-			stage->groupId = pipelineRt->raygenCount + groupCount;				//Resolve later
+			stage->groupId = pipelineRt->raygenCount + groupCount;                //Resolve later
 			++pipelineRt->raygenCount;
 		}
 
 		else if(stage->stageType == EPipelineStage_CallableExt) {
 			stage->localShaderId = pipelineRt->callableCount;
-			stage->groupId = pipelineRt->callableCount + groupCount;			//Resolve later
+			stage->groupId = pipelineRt->callableCount + groupCount;            //Resolve later
 			++pipelineRt->callableCount;
 		}
 	}
@@ -207,7 +207,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		lib->pExports = exportDescs.ptr + tempCounter;
 
 		tempCounter += lib->NumExports;
-		lib->NumExports = 0;		//Reset for next iteration
+		lib->NumExports = 0;        //Reset for next iteration
 	}
 
 	//Resolve stage exports

@@ -51,10 +51,10 @@ Bool File_resolve(
 	CharString loc = CharString_createRefStrConst(*locPtr);
 	CharString absoluteDir = CharString_createRefStrConst(*absoluteDirPtr);
 
-	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')					//myTest/ <--
+	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')                    //myTest/ <--
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;
 
-	if(CharString_getAt(absoluteDir, CharString_length(absoluteDir) - 1) == '/')	//base/ <--
+	if(CharString_getAt(absoluteDir, CharString_length(absoluteDir) - 1) == '/')    //base/ <--
 		absoluteDir.lenAndNullTerminated = CharString_length(absoluteDir) - 1;
 
 	U64 abDirLen = CharString_length(absoluteDir);
@@ -132,9 +132,9 @@ Bool File_resolve(
 			//Move to left
 
 			for (U64 k = fakeSplitLen - 1; k > i; --k)
-				res.ptrNonConst[k - 1] = res.ptr[k];			//This is OK, we're dealing with refs from split
+				res.ptrNonConst[k - 1] = res.ptr[k];            //This is OK, we're dealing with refs from split
 
-			--i;			//Ensure we keep track of the removed element
+			--i;            //Ensure we keep track of the removed element
 			--fakeSplitLen;
 			continue;
 		}
@@ -149,9 +149,9 @@ Bool File_resolve(
 				));
 
 			for (U64 k = i - 1; k < fakeSplitLen - 2; ++k)
-				res.ptrNonConst[k] = res.ptr[k + 2];			//This is OK, we're dealing with refs from split
+				res.ptrNonConst[k] = res.ptr[k + 2];            //This is OK, we're dealing with refs from split
 
-			i -= 2;												//Ensure we keep track of the removed element
+			i -= 2;                                                //Ensure we keep track of the removed element
 			fakeSplitLen -= 2;
 			continue;
 		}
@@ -189,11 +189,11 @@ Bool File_resolve(
 	if(!fakeSplitLen) {
 
 		if (isVirtual) {
-			CharString_free(result, alloc);		//Release temp result
+			CharString_free(result, alloc);        //Release temp result
 			goto clean;
 		}
 
-		CharString_free(result, alloc);		//Release temp result
+		CharString_free(result, alloc);        //Release temp result
 		gotoIfError3(clean, CharString_createCopy(absoluteDir, alloc, result, e_rr));
 		goto clean;
 	}
@@ -206,7 +206,7 @@ Bool File_resolve(
 	const ListCharStringConcat concat = { .arr = &tmpList, .alloc = alloc, .result = &tmp };
 	gotoIfError3(clean, ListCharString_concat(&concat, '/', e_rr));
 
-	CharString_free(result, alloc);		//This can't be done before concat, because the string is still in use.
+	CharString_free(result, alloc);        //This can't be done before concat, because the string is still in use.
 	*result = tmp;
 
 	ListCharString_free(&res, alloc);
@@ -215,7 +215,7 @@ Bool File_resolve(
 
 	Bool isAbsolute = false;
 
-	#ifdef _WIN32	//Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
+	#ifdef _WIN32    //Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
 
 		if (CharString_startsWithSensitive(*result, '/', 0))
 			retError(clean, Error_unsupportedOperation(
@@ -224,7 +224,7 @@ Bool File_resolve(
 
 		isAbsolute = CharString_length(*result) >= 2 && result->ptr[1] == ':';
 
-	#else			//Starts with / if absolute
+	#else            //Starts with / if absolute
 		isAbsolute = CharString_startsWithSensitive(*result, '/', 0);
 	#endif
 
@@ -252,20 +252,9 @@ Bool File_resolve(
 		gotoIfError3(clean, CharString_insertString(result, &absoluteDir, 0, alloc, e_rr));
 	}
 
-	//Since we're going to use this in file operations, we want to have a null terminator
+	//Ensure we can use stack allocated strings for example since we know the max size.
 
-	if(!maxFilePathLimit)
-		maxFilePathLimit = MAX_OXC_PATH;
-
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		maxFilePathLimit = U64_min(32767, maxFilePathLimit);
-	#elif _PLATFORM_TYPE == PLATFORM_IOS || _PLATFORM_TYPE == PLATFORM_OSX
-		maxFilePathLimit = U64_min(1023, maxFilePathLimit);
-	#else
-		maxFilePathLimit = U64_min(4095, maxFilePathLimit);
-	#endif
-
-	if(CharString_length(*result) >= maxFilePathLimit)
+	if(CharString_length(*result) > MAX_OXC_PATH)
 		retError(clean, Error_outOfBounds(
 			0, CharString_length(*result), maxFilePathLimit, "File_resolve()::loc resolved path is longer than max file limit"
 		));
@@ -315,11 +304,11 @@ Bool File_makeRelative(
 	CharString_cut(&resolvedBase, absDirLen, 0, &baseAbsDir);
 	CharString_cut(&resolvedSubFile, absDirLen, 0, &subFileAbsDir);
 
-	U64 it		= 0;
-	U64 baseLen	= CharString_length(baseAbsDir);
-	U64 subLen	= CharString_length(subFileAbsDir);
+	U64 it        = 0;
+	U64 baseLen    = CharString_length(baseAbsDir);
+	U64 subLen    = CharString_length(subFileAbsDir);
 
-	U64 commonEnd = 0;	//Index of last character in common
+	U64 commonEnd = 0;    //Index of last character in common
 
 	//Find all common folders
 

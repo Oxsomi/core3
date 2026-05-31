@@ -291,7 +291,7 @@ Bool AudioDeviceRef_createFromFile(
 	U32 magic = 0;
 
 	if (pitch < 0)
-		retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() negative pitch not supported yet"));	//TODO:
+		retError(clean, Error_invalidState(0, "AudioDeviceRef_createFileStream() negative pitch not supported yet"));    //TODO:
 
 	if (!inputStream || inputStream->refPtrType->typeId != (ETypeId)EContainerTypeId_Stream)
 		retError(clean, Error_nullPointer(0, "AudioDeviceRef_createFileStream()::inputStream is required"));
@@ -341,7 +341,7 @@ Bool AudioDeviceRef_createFromFile(
 			streamInfo.sampleRate = file.fmt.frequency;
 			streamInfo.dataStart = file.dataStart + inputStreamOffset;
 			streamInfo.dataLengthLo32 = file.dataLength;
-			streamInfo.dataLengthHi8 = 0;					//Standard WAV is 32-bit (for now)
+			streamInfo.dataLengthHi8 = 0;                    //Standard WAV is 32-bit (for now)
 			streamInfo.bytesPerSecond = file.fmt.bytesPerSecond;
 			break;
 		}

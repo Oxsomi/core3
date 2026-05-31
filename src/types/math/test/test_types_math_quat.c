@@ -81,31 +81,31 @@ void Test_quatAngleAxis(Test *test) {
 		QuatF32_identity(),
 
 		//angle = 90deg
-		QuatF32_create(0,		0,		isq2,	isq2),
-		QuatF32_create(0,		isq2,	0,		isq2),
-		QuatF32_create(0,		0.5f,	0.5f,	isq2),
-		QuatF32_create(isq2,	0,		0,		isq2),
-		QuatF32_create(0.5f,	0,		0.5f,	isq2),
-		QuatF32_create(0.5f,	0.5f,	0,		isq2),
-		QuatF32_create(norm3,	norm3,	norm3,	isq2),
+		QuatF32_create(0,        0,        isq2,    isq2),
+		QuatF32_create(0,        isq2,    0,        isq2),
+		QuatF32_create(0,        0.5f,    0.5f,    isq2),
+		QuatF32_create(isq2,    0,        0,        isq2),
+		QuatF32_create(0.5f,    0,        0.5f,    isq2),
+		QuatF32_create(0.5f,    0.5f,    0,        isq2),
+		QuatF32_create(norm3,    norm3,    norm3,    isq2),
 
 		//angle = 180deg
-		QuatF32_create(0,		0,		1,		0),
-		QuatF32_create(0,		1,		0,		0),
-		QuatF32_create(0,		isq2,	isq2,	0),
-		QuatF32_create(1,		0,		0,		0),
-		QuatF32_create(isq2,	0,		isq2,	0),
-		QuatF32_create(isq2,	isq2,	0,		0),
-		QuatF32_create(isq3,	isq3,	isq3,	0),
+		QuatF32_create(0,        0,        1,        0),
+		QuatF32_create(0,        1,        0,        0),
+		QuatF32_create(0,        isq2,    isq2,    0),
+		QuatF32_create(1,        0,        0,        0),
+		QuatF32_create(isq2,    0,        isq2,    0),
+		QuatF32_create(isq2,    isq2,    0,        0),
+		QuatF32_create(isq3,    isq3,    isq3,    0),
 
 		//angle = 270deg
-		QuatF32_create(0,		0,		isq2,	-isq2),
-		QuatF32_create(0,		isq2,	0,		-isq2),
-		QuatF32_create(0,		0.5f,	0.5f,	-isq2),
-		QuatF32_create(isq2,	0,		0,		-isq2),
-		QuatF32_create(0.5f,	0,		0.5f,	-isq2),
-		QuatF32_create(0.5f,	0.5f,	0,		-isq2),
-		QuatF32_create(norm3,	norm3,	norm3,	-isq2),
+		QuatF32_create(0,        0,        isq2,    -isq2),
+		QuatF32_create(0,        isq2,    0,        -isq2),
+		QuatF32_create(0,        0.5f,    0.5f,    -isq2),
+		QuatF32_create(isq2,    0,        0,        -isq2),
+		QuatF32_create(0.5f,    0,        0.5f,    -isq2),
+		QuatF32_create(0.5f,    0.5f,    0,        -isq2),
+		QuatF32_create(norm3,    norm3,    norm3,    -isq2),
 
 		//angle = 360deg
 		F32x4_negate(QuatF32_identity()),
@@ -200,23 +200,23 @@ void Test_quatMul(Test *test) {
 
 	const QuatF32 mulA[] = {
 		QuatF32_identity(),
-		QuatF32_create(isq2, 0,    0,    isq2),		//90deg X
-		QuatF32_create(0,    isq2, 0,    isq2),		//90deg Y
-		QuatF32_create(0,    0,    isq2, isq2),		//90deg Z
+		QuatF32_create(isq2, 0,    0,    isq2),        //90deg X
+		QuatF32_create(0,    isq2, 0,    isq2),        //90deg Y
+		QuatF32_create(0,    0,    isq2, isq2),        //90deg Z
 	};
 
 	const QuatF32 mulB[] = {
-		QuatF32_create(isq2, 0,    0,    isq2),		//90deg X
-		QuatF32_create(0,    isq2, 0,    isq2),		//90deg Y
-		QuatF32_create(0,    0,    isq2, isq2),		//90deg Z
+		QuatF32_create(isq2, 0,    0,    isq2),        //90deg X
+		QuatF32_create(0,    isq2, 0,    isq2),        //90deg Y
+		QuatF32_create(0,    0,    isq2, isq2),        //90deg Z
 		QuatF32_identity(),
 	};
 
 	const QuatF32 expected[] = {
-		QuatF32_create(isq2, 0,    0,    isq2),		//identity * X90 = X90
-		QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),		//X90 * Y90
-		QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),		//Y90 * Z90
-		QuatF32_create(0,    0,    isq2, isq2),		//Z90 * identity = Z90
+		QuatF32_create(isq2, 0,    0,    isq2),        //identity * X90 = X90
+		QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),        //X90 * Y90
+		QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),        //Y90 * Z90
+		QuatF32_create(0,    0,    isq2, isq2),        //Z90 * identity = Z90
 	};
 
 	for (U32 i = 0; i < sizeof(expected) / sizeof(expected[0]); ++i)
@@ -231,16 +231,16 @@ void Test_quatApplyToNormal(Test *test) {
 	const F32 isq2 = 1.0f / F32_sqrt(2);
 
 	const QuatF32 rots[] = {
-		QuatF32_identity(),							//identity x3
+		QuatF32_identity(),                            //identity x3
 		QuatF32_identity(),
 		QuatF32_identity(),
-		QuatF32_create(isq2, 0,    0,    isq2),		//90deg X x3
+		QuatF32_create(isq2, 0,    0,    isq2),        //90deg X x3
 		QuatF32_create(isq2, 0,    0,    isq2),
 		QuatF32_create(isq2, 0,    0,    isq2),
-		QuatF32_create(0,    isq2, 0,    isq2),		//90deg Y x3
+		QuatF32_create(0,    isq2, 0,    isq2),        //90deg Y x3
 		QuatF32_create(0,    isq2, 0,    isq2),
 		QuatF32_create(0,    isq2, 0,    isq2),
-		QuatF32_create(0,    0,    isq2, isq2),		//90deg Z x3
+		QuatF32_create(0,    0,    isq2, isq2),        //90deg Z x3
 		QuatF32_create(0,    0,    isq2, isq2),
 		QuatF32_create(0,    0,    isq2, isq2),
 	};
@@ -253,10 +253,10 @@ void Test_quatApplyToNormal(Test *test) {
 	};
 
 	const F32x4 expected[] = {
-		F32x4_create3( 1,  0,  0), F32x4_create3(0,  1,  0), F32x4_create3( 0,  0,  1),	//identity
-		F32x4_create3( 1,  0,  0), F32x4_create3(0,  0, -1), F32x4_create3( 0,  1,  0),	//90deg X
-		F32x4_create3( 0,  0,  1), F32x4_create3(0,  1,  0), F32x4_create3(-1,  0,  0),	//90deg Y
-		F32x4_create3( 0, -1,  0), F32x4_create3(1,  0,  0), F32x4_create3( 0,  0,  1),	//90deg Z
+		F32x4_create3( 1,  0,  0), F32x4_create3(0,  1,  0), F32x4_create3( 0,  0,  1),    //identity
+		F32x4_create3( 1,  0,  0), F32x4_create3(0,  0, -1), F32x4_create3( 0,  1,  0),    //90deg X
+		F32x4_create3( 0,  0,  1), F32x4_create3(0,  1,  0), F32x4_create3(-1,  0,  0),    //90deg Y
+		F32x4_create3( 0, -1,  0), F32x4_create3(1,  0,  0), F32x4_create3( 0,  0,  1),    //90deg Z
 	};
 
 	for (U32 i = 0; i < sizeof(expected) / sizeof(expected[0]); ++i)
@@ -272,16 +272,16 @@ void Test_quatSlerp(Test *test) {
 
 	const QuatF32 slerpA[] = {
 		QuatF32_identity(),
-		QuatF32_create(isq2, 0,    0,    isq2),		//90deg X
-		QuatF32_create(0,    isq2, 0,    isq2),		//90deg Y
-		QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),		//X90 * Y90
+		QuatF32_create(isq2, 0,    0,    isq2),        //90deg X
+		QuatF32_create(0,    isq2, 0,    isq2),        //90deg Y
+		QuatF32_create(0.5f, 0.5f, 0.5f, 0.5f),        //X90 * Y90
 	};
 
 	const QuatF32 slerpB[] = {
-		QuatF32_create(isq2, 0,    0,    isq2),		//90deg X
-		QuatF32_create(0,    isq2, 0,    isq2),		//90deg Y
+		QuatF32_create(isq2, 0,    0,    isq2),        //90deg X
+		QuatF32_create(0,    isq2, 0,    isq2),        //90deg Y
 		QuatF32_identity(),
-		QuatF32_create(isq2, 0,    0,    isq2),		//90deg X
+		QuatF32_create(isq2, 0,    0,    isq2),        //90deg X
 	};
 
 	const QuatF32 expected50[] = {

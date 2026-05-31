@@ -74,7 +74,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 
 		U64 j = 0, k = a->structs.length;
 
-		for (; j < k; ++j) {		//TODO: HashMap
+		for (; j < k; ++j) {        //TODO: HashMap
 
 			j = DLFile_findLoadedString(&a->names, j, a->structs.length, &b->names.entryStrings.ptr[i]);
 
@@ -114,7 +114,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 		{
 			U64 j = a->structs.length, k = j + a->vars.length;
 
-			for (; j < k; ++j) {		//TODO: HashMap
+			for (; j < k; ++j) {        //TODO: HashMap
 
 				j = DLFile_findLoadedString(&a->names, j, a->vars.length, &b->names.entryStrings.ptr[i]);
 

@@ -79,7 +79,7 @@ static inline I32x4 I32x4_sha256msg1(I32x4 a, I32x4 b) {
 //a = (W16, W17, W18, W19)
 static inline I32x4 I32x4_sha256msg2(I32x4 i0, I32x4 i2, I32x4 i3) {
 
-	I32x4 tmp = I32x4_combineRightShift(i3, i2, 1);		//_mm_alignr_epi8(a, b, 4)
+	I32x4 tmp = I32x4_combineRightShift(i3, i2, 1);        //_mm_alignr_epi8(a, b, 4)
 	I32x4 msgTmp = I32x4_add(i0, tmp);
 
 	I32x4 a = msgTmp;
@@ -137,7 +137,7 @@ static inline I32x4 I32x4_sha256rnds2(I32x4 a, I32x4 b, I32x4 k) {
 static inline void I32x4_sha256rnds4(I32x4 msgOriginal, I32x4 round, I32x4 *state0, I32x4 *state1) {
 	I32x4 msg = I32x4_add(msgOriginal, round);
 	*state1 = I32x4_sha256rnds2(*state1, *state0, msg);
-	msg = I32x4_zwxx(msg);														//_mm_shuffle_epi32(msg, 0xE);
+	msg = I32x4_zwxx(msg);                                                        //_mm_shuffle_epi32(msg, 0xE);
 	*state0 = I32x4_sha256rnds2(*state0, *state1, msg);
 }
 
@@ -181,10 +181,10 @@ U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 prevCrc) {
 
 		U64 res = 0;
 
-		for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
+		for(U64 i = 0; i < sizeof(U64); ++i)        //Compiler will unroll for us
 			res ^= CRC32C_TABLE[15 - i][(U8)(crc >> (i * 8))];
 
-		for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
+		for(U64 i = 0; i < sizeof(U64); ++i)        //Compiler will unroll for us
 			res ^= CRC32C_TABLE[7 - i][(U8)(next >> (i * 8))];
 
 		crc = res;
@@ -204,12 +204,12 @@ U32 Buffer_crc32cFallbackChained(const Buffer buf, U32 prevCrc) {
 
 //Ported from https://github.com/krisprice/simd_md5/blob/master/simd_md5/md5_sse.c#L9
 //But removed SIMD, since it was incredibly (and I can't stress this enough!) badly done. Found locally that:
-//	Their SIMD version does 1GiB in 52s (Debug) and 22s (Release)
-//	My non-SIMD version does 1GiB in 12s (Debug) and 4s (Release).
-//	It is clear that due to the data dependencies in MD5, it's just not a good fit for SSE.
-//	Moving to and from SIMD registers and wasting cycles computing data that is duplicated makes no sense.
-//	The only way is if we compute multiple MD5 hashes of different data at the same time.
-//	Or if we could split up in blocks (impossible with MD5).
+//    Their SIMD version does 1GiB in 52s (Debug) and 22s (Release)
+//    My non-SIMD version does 1GiB in 12s (Debug) and 4s (Release).
+//    It is clear that due to the data dependencies in MD5, it's just not a good fit for SSE.
+//    Moving to and from SIMD registers and wasting cycles computing data that is duplicated makes no sense.
+//    The only way is if we compute multiple MD5 hashes of different data at the same time.
+//    Or if we could split up in blocks (impossible with MD5).
 
 //This is layed out as constants per step per round.
 //As each step per round has their different constants.
@@ -240,10 +240,10 @@ static const U8 MD5_rotateLeft[][4] = {
 };
 
 static const U8 MD5_offsets[][16] = {
-	{ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },		//i
-	{ 1,  6, 11,  0,  5, 10, 15,  4,  9, 14,  3,  8, 13,  2,  7, 12 },		//(1 + 5 * i) & 15
-	{ 5,  8, 11, 14,  1,  4,  7, 10, 13,  0,  3,  6,  9, 12, 15,  2 },		//(5 + 3 * i) & 15
-	{ 0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9 }		//(0 + 7 * i) & 15
+	{ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },        //i
+	{ 1,  6, 11,  0,  5, 10, 15,  4,  9, 14,  3,  8, 13,  2,  7, 12 },        //(1 + 5 * i) & 15
+	{ 5,  8, 11, 14,  1,  4,  7, 10, 13,  0,  3,  6,  9, 12, 15,  2 },        //(5 + 3 * i) & 15
+	{ 0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9 }        //(0 + 7 * i) & 15
 };
 
 typedef union MD5State {
@@ -275,10 +275,10 @@ static inline void MD5State_update(MD5State *stateOut, const Buffer buf) {
 			U32 e;
 
 			switch (j) {
-				case 0:		e = (b & c) | ((~b) & d);	break;
-				case 1:		e = (b & d) | ((~d) & c);	break;
-				case 2:		e = b ^ c ^ d;				break;
-				default:	e = c ^ (b | (~d));			break;
+				case 0:        e = (b & c) | ((~b) & d);    break;
+				case 1:        e = (b & d) | ((~d) & c);    break;
+				case 2:        e = b ^ c ^ d;                break;
+				default:    e = c ^ (b | (~d));            break;
 			}
 
 			a = a + e + f;

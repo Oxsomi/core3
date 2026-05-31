@@ -33,7 +33,7 @@ CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
 	return (CharString) {
 		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
 		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
+		.capacityAndRefInfo = U64_MAX        //Flag as const
 	};
 }
 
@@ -42,7 +42,7 @@ CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTe
 	if (!ptr || (size >> 48))
 		return CharString_createNull();
 
-	if (isNullTerminated && ptr[size])	//Invalid!
+	if (isNullTerminated && ptr[size])    //Invalid!
 		return CharString_createNull();
 
 	if (!isNullTerminated && size) {
@@ -56,6 +56,6 @@ CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTe
 	return (CharString) {
 		.lenAndNullTerminated = size | ((U64)isNullTerminated << 63),
 		.ptr = ptr,
-		.capacityAndRefInfo = U64_MAX		//Flag as const
+		.capacityAndRefInfo = U64_MAX        //Flag as const
 	};
 }

@@ -49,7 +49,7 @@ Bool DLFile_addEntryString(DLFile *dlFile, CharString *entry, const Allocator *a
 //Add lazy entry for large entries
 Bool DLFile_addEntryStream(
 	DLFile *dlFile,
-	StreamRef **stream,		//Moves stream ref (so the ref count doesn't need to be incremented)
+	StreamRef **stream,        //Moves stream ref (so the ref count doesn't need to be incremented)
 	U64 dataOff,
 	U64 len,
 	const Allocator *alloc,

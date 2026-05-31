@@ -90,8 +90,8 @@ static inline void setNum(TimeFormat format, I64 offset, U64 length, U64 v) {
 }
 
 const C8 FORMAT_STR[] = "0000-00-00T00:00:00.000000000Z";
-const U8 OFFSETS[] =	{ 0, 5, 8, 11, 14, 17, 20 };
-const U8 SIZES[] =		{ 4, 2, 2,  2,  2,  2, 9 };
+const U8 OFFSETS[] =    { 0, 5, 8, 11, 14, 17, 20 };
+const U8 SIZES[] =        { 4, 2, 2,  2,  2,  2, 9 };
 
 void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 
@@ -168,20 +168,20 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 			if (curr > U16_MAX)
 				return false;
 
-			if (currSep && curr > U8_MAX)			//Everything but year is 8-bit
+			if (currSep && curr > U8_MAX)            //Everything but year is 8-bit
 				return false;
 		}
 
 		switch (currSep) {
 
-			case 0:		date.year = (U16) curr;		break;
-			case 1:		date.month = (U8) curr;		break;
-			case 2:		date.day = (U8) curr;		break;
-			case 3:		date.hour = (U8) curr;		break;
-			case 4:		date.minute = (U8) curr;	break;
-			case 5:		date.second = (U8) curr;	break;
+			case 0:        date.year = (U16) curr;        break;
+			case 1:        date.month = (U8) curr;        break;
+			case 2:        date.day = (U8) curr;        break;
+			case 3:        date.hour = (U8) curr;        break;
+			case 4:        date.minute = (U8) curr;    break;
+			case 5:        date.second = (U8) curr;    break;
 
-			case 6: {	//Nanoseconds
+			case 6: {    //Nanoseconds
 
 				const int dif = (int)(i - prevI);
 
@@ -236,7 +236,7 @@ Ns Time_date(const Date *date, Bool isLocalTime) {
 	};
 
 	if(isLocalTime)
-		tm.tm_isdst = -1;		//Lookup if daylight savings time is active
+		tm.tm_isdst = -1;        //Lookup if daylight savings time is active
 
 	const time_t ts = isLocalTime ? mktime(&tm) : timegm(&tm);
 

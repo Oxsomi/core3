@@ -73,7 +73,7 @@ Bool CAFile_write(
 		retError(clean, Error_invalidParameter(0, 0, "CAFile_write()::compressionType is invalid"));
 
 	if (settings->compressionType != EXXCompressionType_None)
-		retError(clean, Error_unsupportedOperation(0, "CAFile_write()::compressionType not supported yet"));	//TODO:
+		retError(clean, Error_unsupportedOperation(0, "CAFile_write()::compressionType not supported yet"));    //TODO:
 
 	if (settings->encryptionType >= EXXEncryptionType_Count)
 		retError(clean, Error_invalidParameter(0, 1, "CAFile_write()::encryptionType is invalid"));
@@ -83,7 +83,7 @@ Bool CAFile_write(
 
 	OxStream *stream = RefPtr_data(result, OxStream);
 
-	U64 dirCount  = caFile->folders.length - 1;		//-1 for root
+	U64 dirCount  = caFile->folders.length - 1;        //-1 for root
 	U64 fileCount = caFile->files.length;
 
 	if (dirCount >= U16_MAX)
@@ -125,7 +125,7 @@ Bool CAFile_write(
 		fileCount * fileObjSize;
 
 	if (isEncrypted)
-		headerSize += sizeof(I32x4) + 12;		//iv (12) + tag (16)
+		headerSize += sizeof(I32x4) + 12;        //iv (12) + tag (16)
 
 	//Align to 16 bytes before DLFiles
 

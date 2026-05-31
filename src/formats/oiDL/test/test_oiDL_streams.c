@@ -38,7 +38,7 @@ void Test_DLStreamAdd(Test *t) {
 
 	RefPtrType memType = MemoryStream_makeType(t->alloc);
 
-	{										//addEntryStream + loadEntry
+	{                                        //addEntryStream + loadEntry
 		DLFile           f       = { 0 };
 		MemoryStreamRef *ms      = NULL;
 		Buffer           payload = Buffer_createNull();
@@ -63,7 +63,7 @@ void Test_DLStreamAdd(Test *t) {
 			goto cleanStream;
 		}
 
-		{								//Write the known payload into the MemoryStream
+		{                                //Write the known payload into the MemoryStream
 			StreamCursor sc = { 0 };
 
 			if (StreamCursor_create(ms, 0, true, t->alloc, &sc, &t->err)) {
@@ -94,21 +94,21 @@ void Test_DLStreamAdd(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//addEntryStream: null stream pointer rejected
+	{                        //addEntryStream: null stream pointer rejected
 		DLFile f = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &f, &t->err);
 		Test_assert(t, "addEntryStream null stream fails", !DLFile_addEntryStream(&f, NULL, 0, 64, t->alloc, NULL));
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//loadEntry: out-of-bounds index fails
+	{                        //loadEntry: out-of-bounds index fails
 		DLFile f = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &f, &t->err);
 		Test_assert(t, "loadEntry OOB fails", !DLFile_loadEntry(&f, 0, t->alloc, NULL));
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//loadEntry: already-loaded entry is a no-op and returns success
+	{                        //loadEntry: already-loaded entry is a no-op and returns success
 		DLFile f = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &f, &t->err);
 		U8 b = 0x11;
@@ -182,7 +182,7 @@ void Test_DLInsertStream(Test *t) {
 
 	RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	{							//insertStream at front shifts existing stream entries
+	{                            //insertStream at front shifts existing stream entries
 		DLFile f = { 0 };
 		MemoryStreamRef *ms = NULL;
 
@@ -219,7 +219,7 @@ void Test_DLInsertStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//insertStream at end acts as append
+	{                        //insertStream at end acts as append
 		DLFile f = { 0 };
 		MemoryStreamRef *ms = NULL;
 
@@ -250,7 +250,7 @@ void Test_DLInsertStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//insertStream in middle preserves surrounding entries
+	{                        //insertStream in middle preserves surrounding entries
 		DLFile f = { 0 };
 		MemoryStreamRef *ms = NULL;
 
@@ -285,7 +285,7 @@ void Test_DLInsertStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//OOB fails
+	{                        //OOB fails
 		DLFile f = { 0 };
 		MemoryStreamRef *ms = NULL;
 
@@ -309,7 +309,7 @@ void Test_DLInsertStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Null guards
+	{                        //Null guards
 		DLFile f = { 0 };
 		MemoryStreamRef *ms = NULL;
 
@@ -342,7 +342,7 @@ void Test_DLRoundtripStream(Test *t) {
 
 	RefPtrType type = MemoryStream_makeType(t->alloc);
 
-	{						//removeEntry returns the correct DLEntryStream metadata
+	{                        //removeEntry returns the correct DLEntryStream metadata
 		DLFile f = { 0 };
 
 		if (!buildStreamFile(t, &f, 3, &type)) {
@@ -377,7 +377,7 @@ void Test_DLRoundtripStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//DLFile_remove drops the refcount: stream is sole-owned by DLFile
+	{                        //DLFile_remove drops the refcount: stream is sole-owned by DLFile
 		DLFile f = { 0 };
 		MemoryStreamRef *ms = NULL;
 
@@ -396,8 +396,8 @@ void Test_DLRoundtripStream(Test *t) {
 
 		if (!DLFile_addEntryStream(&f, &sr, 0, 4, t->alloc, &t->err)) {
 			Test_assert(t, "addEntryStream refcount", false);
-			RefPtr_dec(&ms);		//extra ref
-			RefPtr_dec(&ms);		//our ref
+			RefPtr_dec(&ms);        //extra ref
+			RefPtr_dec(&ms);        //our ref
 			goto doneRefCount;
 		}
 
@@ -416,7 +416,7 @@ void Test_DLRoundtripStream(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//insertStream into a String file fails (type mismatch)
+	{                        //insertStream into a String file fails (type mismatch)
 		DLFile f = { 0 };
 		MemoryStreamRef *ms = NULL;
 

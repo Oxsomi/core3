@@ -40,7 +40,7 @@ void Test_DLCombine(Test *t) {
 	DLSettings sStr = sData;
 	sStr.dataType = EDLDataType_String;
 
-	{			//Buffer combine: 3 + 5 = 8 entries
+	{            //Buffer combine: 3 + 5 = 8 entries
 		DLFile a = { 0 }, b = { 0 }, c = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &a, &t->err);
 		DLFile_create(&sData, 0, t->alloc, &b, &t->err);
@@ -96,7 +96,7 @@ void Test_DLCombine(Test *t) {
 		DLFile_free(&c, t->alloc);
 	}
 
-	{			//String combine: 2 + 3 = 5
+	{            //String combine: 2 + 3 = 5
 		DLFile a = { 0 }, b = { 0 }, c = { 0 };
 		const C8 *wa[] = { "hello", "world" };
 		const C8 *wb[] = { "foo", "bar", "baz" };
@@ -136,7 +136,7 @@ void Test_DLCombine(Test *t) {
 		DLFile_free(&c, t->alloc);
 	}
 
-	{			//Incompatible settings (Data vs String) must fail
+	{            //Incompatible settings (Data vs String) must fail
 		DLFile a = { 0 }, b = { 0 }, c = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &a, &t->err);
 		DLFile_create(&sStr,  0, t->alloc, &b, &t->err);
@@ -157,7 +157,7 @@ void Test_DLCombine(Test *t) {
 		DLFile_free(&b, t->alloc);
 	}
 
-	{			//Null input guards
+	{            //Null input guards
 		DLFile a = { 0 }, c = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &a, &t->err);
 		Test_assert(t, "combine null a fails", !DLFile_combine(NULL, &a, t->alloc, &c, NULL));

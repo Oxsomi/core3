@@ -65,7 +65,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
 
-	if(buffer->isPendingFullCopy)		//Already has a full pending change, so no need to check anything.
+	if(buffer->isPendingFullCopy)        //Already has a full pending change, so no need to check anything.
 		goto clean;
 
 	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
@@ -283,7 +283,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, buf->resource.flags & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
 
 	if(allocate) {
-		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))		//Temporary if not CPUBacked
+		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))        //Temporary if not CPUBacked
 		gotoIfError(clean, DeviceBufferRef_markDirty(*ref, 0, 0))
 	}
 
@@ -374,7 +374,7 @@ Error GraphicsDeviceRef_createBufferData(
 	if(Buffer_isRef(*dat))
 		Buffer_memcpy(buffer->cpuData, *dat);
 
-	else {							//Move
+	else {                            //Move
 		buffer->cpuData = *dat;
 		*dat = Buffer_createNull();
 	}

@@ -691,7 +691,7 @@ void Test_WAVConvertStereoToMono(Test *t) {
 			.format                = EAudioFormat_WAV,
 			.splitType             = ESplitType_Average,
 			.oldByteCountStereoPcm = (1 << 7) | (1 << 6) | 2,
-			.newByteCountStereoPcm = (1 << 6) | 2			//mono, isPcm=1, byteCount=2
+			.newByteCountStereoPcm = (1 << 6) | 2            //mono, isPcm=1, byteCount=2
 		};
 
 		Bool ok = WAVFile_convert(inputSr, 0, srcLen, outputSr, 0, info, 44100, true, t->alloc, &t->err);
@@ -945,37 +945,37 @@ void Test_WAVReadExtended(Test *t) {
  
 		//RIFFHeader (12 bytes)
 		'R','I','F','F',
-		68, 0, 0, 0,			//RIFF size = 68
+		68, 0, 0, 0,            //RIFF size = 68
 		'W','A','V','E',
  
 		//fmt chunk: RIFFSection (8 bytes)
 		'f','m','t',' ',
-		40, 0, 0, 0,			//fmt chunk body size = 40
+		40, 0, 0, 0,            //fmt chunk body size = 40
  
 		//WAVEFORMATEX body (16 bytes)
-		0xFE, 0xFF,				//wFormatTag = WAVE_FORMAT_EXTENSIBLE (0xFFFE little-endian)
-		2, 0,					//nChannels = 2
-		0x44, 0xAC, 0, 0,		//nSamplesPerSec = 44100 (0xAC44)
-		0x20, 0x62, 0x05, 0x00,	//nAvgBytesPerSec = 352800
-		8, 0,					//nBlockAlign = 8
-		32, 0,					//wBitsPerSample = 32 (container)
+		0xFE, 0xFF,                //wFormatTag = WAVE_FORMAT_EXTENSIBLE (0xFFFE little-endian)
+		2, 0,                    //nChannels = 2
+		0x44, 0xAC, 0, 0,        //nSamplesPerSec = 44100 (0xAC44)
+		0x20, 0x62, 0x05, 0x00,    //nAvgBytesPerSec = 352800
+		8, 0,                    //nBlockAlign = 8
+		32, 0,                    //wBitsPerSample = 32 (container)
  
 		//cbSize + extension body (24 bytes)
-		22, 0,					//cbSize = 22
-		24, 0,					//wValidBitsPerSample = 24
-		4, 0, 0, 0,				//dwChannelMask = SPEAKER_FRONT_CENTER (0x4) -- stereo would be 0x3
-		1, 0, 0, 0,				//SubFormat Data1 = 0x00000001 (PCM)
-		0x00, 0x00,				//Data2 = 0x0000
-		0x10, 0x00,				//Data3 = 0x0010 (little-endian)
-		0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71,	//Data4
+		22, 0,                    //cbSize = 22
+		24, 0,                    //wValidBitsPerSample = 24
+		4, 0, 0, 0,                //dwChannelMask = SPEAKER_FRONT_CENTER (0x4) -- stereo would be 0x3
+		1, 0, 0, 0,                //SubFormat Data1 = 0x00000001 (PCM)
+		0x00, 0x00,                //Data2 = 0x0000
+		0x10, 0x00,                //Data3 = 0x0010 (little-endian)
+		0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71,    //Data4
  
 		//data chunk (8 + 8 bytes)
 		'd','a','t','a',
-		8, 0, 0, 0,				//data size = 8
+		8, 0, 0, 0,                //data size = 8
  
 		//2 stereo frames of 32-bit PCM (8 bytes)
-		0x00, 0x00, 0x00, 0x12,	//frame 0 left
-		0x00, 0x00, 0x00, 0x34	//frame 0 right
+		0x00, 0x00, 0x00, 0x12,    //frame 0 left
+		0x00, 0x00, 0x00, 0x34    //frame 0 right
 	};
  
 	if (!makeSampleStream(t, wav, sizeof(wav), &type, &sr)) {
@@ -987,7 +987,7 @@ void Test_WAVReadExtended(Test *t) {
 		WAVFile result = { 0 };
 		Test_assert(t, "WAV_read extensible succeeds", WAV_read(sr, 0, 0, t->alloc, &result, &t->err));
 		Test_assert(t, "ext channels",   result.fmt.channels  == 2);
-		Test_assert(t, "ext stride",     result.fmt.stride    == 32);		//bitsPerSample, not container
+		Test_assert(t, "ext stride",     result.fmt.stride    == 32);        //bitsPerSample, not container
 		Test_assert(t, "ext freq",       result.fmt.frequency == 44100);
 		Test_assert(t, "ext format PCM", result.fmt.format    == ERIFFAudioFormat_PCM);
 		Test_assert(t, "ext dataLen",    result.dataLength    == 8);

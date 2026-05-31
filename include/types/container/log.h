@@ -41,14 +41,14 @@ typedef enum ELogLevel {
 
 typedef enum ELogOptions {
 
-	ELogOptions_None		= 0,
+	ELogOptions_None        = 0,
 
-	ELogOptions_Timestamp	= 1 << 0,
-	ELogOptions_NewLine		= 1 << 1,
-	ELogOptions_Thread		= 1 << 2,
-	ELogOptions_NoBreak		= 1 << 3,		//No debug break
+	ELogOptions_Timestamp    = 1 << 0,
+	ELogOptions_NewLine        = 1 << 1,
+	ELogOptions_Thread        = 1 << 2,
+	ELogOptions_NoBreak        = 1 << 3,        //No debug break
 
-	ELogOptions_Default		= ELogOptions_Timestamp | ELogOptions_NewLine | ELogOptions_Thread
+	ELogOptions_Default        = ELogOptions_Timestamp | ELogOptions_NewLine | ELogOptions_Thread
 
 } ELogOptions;
 
@@ -80,11 +80,11 @@ void Log_error(const Allocator *alloc, ELogOptions options, const C8 *format, ..
 
 void Error_print(const Allocator *alloc, const Error *e_rr, ELogLevel logLevel, ELogOptions options);
 
-#define Log_logFormatLn(alloc, lvl, ...)	Log_logFormat(alloc, lvl, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_debugLn(alloc, ...)				Log_debug(alloc, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_performanceLn(alloc, ...)		Log_performance(alloc, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_warnLn(alloc, ...)				Log_warn(alloc, ELogOptions_NewLine, __VA_ARGS__)
-#define Log_errorLn(alloc, ...)				Log_error(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_logFormatLn(alloc, lvl, ...)    Log_logFormat(alloc, lvl, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_debugLn(alloc, ...)                Log_debug(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_performanceLn(alloc, ...)        Log_performance(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_warnLn(alloc, ...)                Log_warn(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_errorLn(alloc, ...)                Log_error(alloc, ELogOptions_NewLine, __VA_ARGS__)
 
 #ifdef __cplusplus
 	}

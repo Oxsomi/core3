@@ -22,7 +22,6 @@
 
 #pragma once
 #include "types/base/types.h"
-#include <assert.h>
 
 typedef U32 EPlatform;
 
@@ -57,9 +56,9 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _PLATFORM_TYPE PLATFORM_WEB
 #elif __APPLE__
 	#include <TargetConditionals.h>
-	#if																	\
-	(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) ||					\
-	(defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR) ||	\
+	#if                                                                    \
+	(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) ||                    \
+	(defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR) ||    \
 	(defined(TARGET_OS_EMBEDDED) && TARGET_OS_EMBEDDED)
 		#define _PLATFORM_TYPE PLATFORM_IOS
 	#elif defined(TARGET_OS_MAC) && TARGET_OS_MAC

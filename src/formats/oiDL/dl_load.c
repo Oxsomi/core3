@@ -42,7 +42,7 @@ Bool DLFile_loadedStringAtConst(const DLFile *dlFile, U64 i, CharString *string,
 	if(dlFile->entryStreams.ptr[i].stream)
 		retError(clean, Error_invalidState(0, "DLFile_loadedStringAt()::dlFile entry[i] isn't loaded"));
 
-	if (!string)		//Success, to allow valid checking of string ids
+	if (!string)        //Success, to allow valid checking of string ids
 		goto clean;
 
 	if(string->ptr)
@@ -72,7 +72,7 @@ Bool DLFile_loadedBufferAtConst(const DLFile *dlFile, U64 i, Buffer *buffer, Err
 	if (dlFile->entryStreams.ptr[i].stream)
 		retError(clean, Error_invalidState(0, "DLFile_loadedBufferAt()::dlFile entry[i] isn't loaded"));
 
-	if (!buffer)		//Success, to allow valid checking of buffer ids
+	if (!buffer)        //Success, to allow valid checking of buffer ids
 		goto clean;
 
 	if(buffer->ptr)
@@ -170,7 +170,7 @@ Bool DLFile_loadEntry(const DLFile *dlFile, U64 i, const Allocator *alloc, Error
 
 	Buffer buf = Buffer_createNull();
 	MemoryStreamRef *memStreamRef = NULL;
-	const RefPtrType type = MemoryStream_makeType(alloc);		//This doesn't outlast this scope
+	const RefPtrType type = MemoryStream_makeType(alloc);        //This doesn't outlast this scope
 	StreamCursor streamCursor = (StreamCursor){ 0 };
 	
 	if (!dlFile)

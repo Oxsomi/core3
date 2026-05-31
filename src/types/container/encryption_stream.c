@@ -30,7 +30,7 @@
 
 //Implement OxStream's functions
 
-static Bool EncryptionStream_readInternal(		//Decrypt
+static Bool EncryptionStream_readInternal(        //Decrypt
 	OxStream *stream,
 	U64 offset,
 	U64 length,
@@ -295,7 +295,7 @@ static Bool EncryptionStream_writeInternal(
 			0,
 			underlyingOffset,
 			writeSize,
-			true,			//Write through to ensure we can reuse cache next time
+			true,            //Write through to ensure we can reuse cache next time
 			alloc,
 			e_rr
 		));
