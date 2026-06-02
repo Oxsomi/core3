@@ -32,10 +32,10 @@ typedef struct Allocator Allocator;
 typedef struct Error Error;
 
 typedef enum EArchiveCombineMode {
-	EArchiveCombineMode_RequireSame,                            //Files are only allowed to merge if same contents
-	EArchiveCombineMode_Rename,                                    //Try to rename the file on conflict
-	EArchiveCombineMode_AcceptA,                                //First archive is leading on conflict
-	EArchiveCombineMode_AcceptB,                                //Second archive is leading on conflict
+	EArchiveCombineMode_RequireSame,                         //Files are only allowed to merge if same contents
+	EArchiveCombineMode_Rename,                              //Try to rename the file on conflict
+	EArchiveCombineMode_AcceptA,                             //First archive is leading on conflict
+	EArchiveCombineMode_AcceptB,                             //Second archive is leading on conflict
 	EArchiveCombineMode_Count
 } EArchiveCombineMode;
 

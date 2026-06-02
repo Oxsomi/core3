@@ -30,7 +30,7 @@
 #endif
 
 typedef enum EAudioTypeId {
-	EAudioTypeId_AudioInterface            = makeObjectId(0x1C35, 0, 0),
+	EAudioTypeId_AudioInterface         = makeObjectId(0x1C35, 0, 0),
 	EAudioTypeId_AudioDevice            = makeObjectId(0x1C35, 1, 0),
 	EAudioTypeId_AudioStream            = makeObjectId(0x1C35, 2, 0),
 	EAudioTypeId_AudioSource            = makeObjectId(0x1C35, 3, 0)
@@ -46,7 +46,7 @@ extern const C8 *EAudioApi_name[EAudioApi_Count];
 typedef struct AudioInterface {
 	EAudioApi api;
 	U32 apiVersion;        //OXC3_MAKE_VERSION
-	U64 padding;        //Ensures ext data (immediately following RefPtr) is 16-byte aligned regardless of implementation
+	U64 padding;           //Ensures ext data (immediately following RefPtr) is 16-byte aligned regardless of implementation
 } AudioInterface;
 
 typedef struct Allocator Allocator;

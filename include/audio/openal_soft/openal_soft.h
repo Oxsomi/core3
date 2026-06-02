@@ -34,21 +34,21 @@ typedef struct ALAudioInterface {
 
 typedef struct ALAudioDevice {
 	ALCdevice *device;
-	ALCcontext *context;        //Context is thread safe, so no need for multiple
+	ALCcontext *context;           //Context is thread safe, so no need for multiple
 } ALAudioDevice;
 
-#define ALAudioStream_bufferCount (4)
-#define ALAudioStream_bufferSize (65536)
+#define ALAudioStream_bufferCount 4
+#define ALAudioStream_bufferSize 65536
 
 typedef struct ALAudioStream {
 
 	Buffer tmp;        //Buffer with temporary stream data
-	Buffer tmpCvt;    //Buffer with temporary convert data (likely bigger than tmp if fallback format)
+	Buffer tmpCvt;     //Buffer with temporary convert data (likely bigger than tmp if fallback format)
 
 	//4 separate streams to ensure we always have one that isn't in use
 	ALuint buffer[ALAudioStream_bufferCount];
 
-	Bool initializedBuffers;    //Since buffer handles of 0 are still valid
+	Bool initializedBuffers;      //Since buffer handles of 0 are still valid
 	Bool filledStream;
 	Bool initializedSource;
 	U8 padding;
@@ -67,7 +67,7 @@ typedef struct ALAudioSource {
 Bool alProcessError(ALenum error, Error *e_rr);
 Bool alcProcessError(ALCenum error, Error *e_rr);
 
-#define AL_PROCESS_ERROR(...) {                                            \
+#define AL_PROCESS_ERROR(...) {                                         \
 	__VA_ARGS__;                                                        \
 	gotoIfError3(clean, alProcessError(alGetError(), e_rr));            \
 } (void) 0

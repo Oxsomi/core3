@@ -27,7 +27,7 @@
 
 //reg is a 2-bit register.
 
-#define FidiA_unwrapReg(T, prefix)                        \
+#define FidiA_unwrapReg(T, prefix)                       \
 	EFidiA_##T##_##prefix##0 = EFidiA_##T(0),            \
 	EFidiA_##T##_##prefix##1 = EFidiA_##T(1),            \
 	EFidiA_##T##_##prefix##2 = EFidiA_##T(2),            \
@@ -53,70 +53,70 @@
 
 #define EFidiA_expandx40(T, a, b, c)         \
 											 \
-	/* Line 0x00 - 0x0F */                     \
+	/* Line 0x00 - 0x0F */                   \
 											 \
-	FidiA_unwrapReg(add##T, f##T),             \
-	FidiA_unwrapReg(sub##T, f##T),             \
-	FidiA_unwrapReg(mul##T, f##T),             \
+	FidiA_unwrapReg(add##T, f##T),           \
+	FidiA_unwrapReg(sub##T, f##T),           \
+	FidiA_unwrapReg(mul##T, f##T),           \
 											 \
-	EFidiA_div##T,                             \
-	EFidiA_mod##T,                             \
-	EFidiA_isfinite##T,                         \
+	EFidiA_div##T,                           \
+	EFidiA_mod##T,                           \
+	EFidiA_isfinite##T,                      \
 	EFidiA_isnan##T,                         \
 											 \
-	/* Line 0x10 - 0x1F */                     \
+	/* Line 0x10 - 0x1F */                   \
 											 \
 	FidiA_unwrapReg(swap##T, f),             \
-	FidiA_unwrapReg(cmp##T, f),                 \
+	FidiA_unwrapReg(cmp##T, f),              \
 	FidiA_unwrapReg(load##T, f),             \
 											 \
-	EFidiA_max##T,                             \
-	EFidiA_min##T,                             \
-	EFidiA_##a,                                 \
-	EFidiA_##b,                                 \
+	EFidiA_max##T,                           \
+	EFidiA_min##T,                           \
+	EFidiA_##a,                              \
+	EFidiA_##b,                              \
 											 \
-	/* Line 0x20 - 0x2F */                     \
+	/* Line 0x20 - 0x2F */                   \
 											 \
-	EFidiA_negate##T,                         \
-	EFidiA_abs##T,                             \
-	EFidiA_inverse##T,                         \
-	EFidiA_sign##T,                             \
+	EFidiA_negate##T,                        \
+	EFidiA_abs##T,                           \
+	EFidiA_inverse##T,                       \
+	EFidiA_sign##T,                          \
 											 \
-	EFidiA_ceil##T,                             \
+	EFidiA_ceil##T,                          \
 	EFidiA_floor##T,                         \
 	EFidiA_round##T,                         \
 	EFidiA_fract##T,                         \
 											 \
-	EFidiA_sqrt##T,                             \
-	EFidiA_pow2##T,                             \
+	EFidiA_sqrt##T,                          \
+	EFidiA_pow2##T,                          \
 											 \
-	EFidiA_loge##T,                             \
-	EFidiA_log2##T,                             \
+	EFidiA_loge##T,                          \
+	EFidiA_log2##T,                          \
 	EFidiA_log10##T,                         \
-	EFidiA_exp##T,                             \
-	EFidiA_exp2##T,                             \
+	EFidiA_exp##T,                           \
+	EFidiA_exp2##T,                          \
 	EFidiA_exp10##T,                         \
 											 \
-	/* Line 0x30 - 0x3F */                     \
+	/* Line 0x30 - 0x3F */                   \
 											 \
-	EFidiA_sin##T,                             \
-	EFidiA_cos##T,                             \
-	EFidiA_tan##T,                             \
+	EFidiA_sin##T,                           \
+	EFidiA_cos##T,                           \
+	EFidiA_tan##T,                           \
 											 \
-	EFidiA_asin##T,                             \
-	EFidiA_acos##T,                             \
-	EFidiA_atan##T,                             \
+	EFidiA_asin##T,                          \
+	EFidiA_acos##T,                          \
+	EFidiA_atan##T,                          \
 	EFidiA_atan2##T,                         \
 											 \
-	EFidiA_sat##T,                             \
+	EFidiA_sat##T,                           \
 	EFidiA_clamp##T,                         \
-	EFidiA_lerp##T,                             \
-	EFidiA_zero##T,                             \
-	EFidiA_pow##T,                             \
+	EFidiA_lerp##T,                          \
+	EFidiA_zero##T,                          \
+	EFidiA_pow##T,                           \
 											 \
-	EFidiA_##c##etX##T,                         \
-	EFidiA_##c##etY##T,                         \
-	EFidiA_##c##etZ##T,                         \
+	EFidiA_##c##etX##T,                      \
+	EFidiA_##c##etY##T,                      \
+	EFidiA_##c##etZ##T,                      \
 	EFidiA_##c##etW##T
 
 typedef enum EFidiA {                        //U8

@@ -28,8 +28,8 @@
 
 typedef enum EBCSettingsFlags {
 	EBCSettingsFlags_None                = 0,
-	EBCSettingsFlags_UseSHA256            = 1 << 0,
-	EBCSettingsFlags_Invalid            = 0xFFFFFFFF << 1
+	EBCSettingsFlags_UseSHA256           = 1 << 0,
+	EBCSettingsFlags_Invalid             = 0xFFFFFFFF << 1
 } EBCSettingsFlags;
 
 typedef struct BCSettings {
@@ -76,25 +76,26 @@ typedef enum EBCFlags {
 	//Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
 	//This indicates the type for compression size if available.
 
-	EBCFlags_CompressedSizeType_Shift    = 3,
-	EBCFlags_CompressedSizeType_Mask    = 3,
+	EBCFlags_CompressedSizeType_Shift     = 3,
+	EBCFlags_CompressedSizeType_Mask      = 3,
 
-	EBCFlags_CompressedSizeType_MaskShifted    = EBCFlags_CompressedSizeType_Mask << EBCFlags_CompressedSizeType_Shift,
+	EBCFlags_CompressedSizeType_MaskShifted =
+		EBCFlags_CompressedSizeType_Mask << EBCFlags_CompressedSizeType_Shift,
 
 	//If it includes Fidi A,B, Gida or Leon binaries.
 	//Must include at least one.
 
 	EBCFlags_FidiA                        = 1 << 5,
 	EBCFlags_FidiB                        = 1 << 6,
-	EBCFlags_Gida                        = 1 << 7,
-	EBCFlags_Leon                        = 1 << 8,
+	EBCFlags_Gida                         = 1 << 7,
+	EBCFlags_Leon                         = 1 << 8,
 
 	//Helpers
 
-	EBCFlags_AESChunkMask                = EBCFlags_UseAESChunksA | EBCFlags_UseAESChunksB,
+	EBCFlags_AESChunkMask                 = EBCFlags_UseAESChunksA | EBCFlags_UseAESChunksB,
 	EBCFlags_AESChunkShift                = 1,
 
-	EBCFlags_NonFlagTypes                = EBCFlags_AESChunkMask | EBCFlags_CompressedSizeType_MaskShifted
+	EBCFlags_NonFlagTypes                 = EBCFlags_AESChunkMask | EBCFlags_CompressedSizeType_MaskShifted
 
 } EBCFlags;
 
@@ -102,8 +103,8 @@ typedef struct BCHeader {
 
 	U32 magicNumber;                //oiXX format, magicNumber here is oiBC (0x4342696F)
 
-	U16 versionId;                    //major.minor (%10 = minor, /10 = major (+1 to get real major)
-	U16 flags;                        //EBCFlags
+	U16 versionId;                  //major.minor (%10 = minor, /10 = major (+1 to get real major)
+	U16 flags;                      //EBCFlags
 
 	U8 type;                        //(compressionType << 4) | encryptionType
 	U8 padding[3];

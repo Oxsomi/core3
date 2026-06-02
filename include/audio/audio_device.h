@@ -33,8 +33,8 @@ typedef struct Error Error;
 typedef RefPtr AudioInterfaceRef;
 
 typedef enum EAudioDeviceFlags {
-	EAudioDeviceFlags_None            = 0,
-	EAudioDeviceFlags_MainOutput    = 1 << 0,
+	EAudioDeviceFlags_None             = 0,
+	EAudioDeviceFlags_MainOutput       = 1 << 0,
 	EAudioDeviceFlags_Debug            = 1 << 1,
 	EAudioDeviceFlags_HasF32Ext        = 1 << 2,
 	EAudioDeviceFlags_HasF64Ext        = 1 << 3,
@@ -52,7 +52,7 @@ typedef struct AudioDeviceInfo {
 	F32x4 velocity;
 
 	U64 id;
-	void *ext;                    //External handle from underlying API
+	void *ext;                         //External handle from underlying API
 
 	EAudioDeviceFlags flags;
 	F32 gain;

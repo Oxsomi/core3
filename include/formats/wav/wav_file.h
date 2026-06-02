@@ -41,9 +41,9 @@ Bool WAV_write(
 	U64 streamLength,        //0 = remainder of input stream; length of output data
 	Bool isStereo,
 	U32 freq,                //8KHz, 11.025KHz, 22.05KHz, 32KHz, 44.1KHz, 48KHz, 96KHz, 192KHz
-	U16 stride,                //8, 16, 24 (PCM), 32 (PCM or Float), 64 (Float)
-	Bool isPcm,                //To distinguish 32-bit
-	U64 *dataOutput,        //If NULL, will directly output the data to stream, otherwise points to the offset of the data
+	U16 stride,              //8, 16, 24 (PCM), 32 (PCM or Float), 64 (Float)
+	Bool isPcm,              //To distinguish 32-bit
+	U64 *dataOutput,         //If NULL, will directly output the data to stream, otherwise points to the offset of the data
 	const Allocator *alloc,
 	Error *e_rr
 );
@@ -76,7 +76,7 @@ typedef U8 AudioFormat;
 
 typedef struct WAVConversionInfo {
 	AudioFormat format;
-	SplitType splitType;        //Only possible if isStereo, bit below: pcm
+	SplitType splitType;         //Only possible if isStereo, bit below: pcm
 	U8 oldByteCountStereoPcm;    //Upper bit indicates 'isStereo', bit below: pcm
 	U8 newByteCountStereoPcm;
 } WAVConversionInfo;
@@ -88,7 +88,7 @@ Bool WAVFile_convert(
 	StreamRef *outputStream,
 	U64 dstOff,
 	WAVConversionInfo info,
-	U32 freq,                //Must match input
+	U32 freq,                    //Must match input
 	Bool writeHeader,
 	const Allocator *alloc,
 	Error *e_rr

@@ -41,11 +41,11 @@ typedef enum ESHBinaryType {
 } ESHBinaryType;
 
 typedef enum ESHBufferType {
-	ESHBufferType_ConstantBuffer,                    //UBO or CBuffer
+	ESHBufferType_ConstantBuffer,                   //UBO or CBuffer
 	ESHBufferType_PushConstants,                    //Push constants or CBuffer (DXIL)
 	ESHBufferType_ByteAddressBuffer,
 	ESHBufferType_StructuredBuffer,
-	ESHBufferType_StructuredBufferAtomic,            //SBuffer + atomic counter
+	ESHBufferType_StructuredBufferAtomic,           //SBuffer + atomic counter
 	ESHBufferType_StorageBuffer,
 	ESHBufferType_StorageBufferAtomic,
 	ESHBufferType_AccelerationStructure,
@@ -71,7 +71,7 @@ typedef enum ESHTexturePrimitive {
 	ESHTexturePrimitive_Double,
 	ESHTexturePrimitive_Count,
 
-	ESHTexturePrimitive_TypeMask        = 0x0F,
+	ESHTexturePrimitive_TypeMask          = 0x0F,
 
 	ESHTexturePrimitive_ComponentShift    = 4,
 
@@ -80,7 +80,7 @@ typedef enum ESHTexturePrimitive {
 	ESHTexturePrimitive_Component3        = 0x20,        //RGB
 	ESHTexturePrimitive_Component4        = 0x30,        //RGBA
 
-	ESHTexturePrimitive_CountAll        = 0x40,
+	ESHTexturePrimitive_CountAll          = 0x40,
 
 	ESHTexturePrimitive_Unused            = 0xC0
 
@@ -103,9 +103,9 @@ typedef union SHBindings {
 
 SHBindings SHBindings_dummy();
 
-typedef struct SHTextureFormat {    //Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
-	U8 primitive;                    //Opt for readonly registers: ESHTexturePrimitive must match format approximately
-	U8 formatId;                    //Opt for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
+typedef struct SHTextureFormat {      //Primitive is set for DXIL always and formatId is only for SPIRV (only when RW)
+	U8 primitive;                     //Opt for readonly registers: ESHTexturePrimitive must match format approximately
+	U8 formatId;                      //Opt for write registers: ETextureFormatId Must match formatPrimitive and uncompressed
 } SHTextureFormat;
 
 typedef enum ESHRegisterType {
@@ -114,7 +114,7 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_SamplerComparisonState,
 
 	ESHRegisterType_ConstantBuffer,                    //UBO or CBuffer
-	ESHRegisterType_PushConstants,                    //Push constants or CBuffer (DXIL)
+	ESHRegisterType_PushConstants,                     //Push constants or CBuffer (DXIL)
 	ESHRegisterType_ByteAddressBuffer,
 	ESHRegisterType_StructuredBuffer,
 	ESHRegisterType_StructuredBufferAtomic,            //SBuffer + atomic counter
@@ -132,21 +132,21 @@ typedef enum ESHRegisterType {
 	ESHRegisterType_Count,
 
 	ESHRegisterType_BufferStart            = ESHRegisterType_ConstantBuffer,
-	ESHRegisterType_BufferEnd            = ESHRegisterType_AccelerationStructure,
+	ESHRegisterType_BufferEnd              = ESHRegisterType_AccelerationStructure,
 
-	ESHRegisterType_TextureStart        = ESHRegisterType_Texture1D,
-	ESHRegisterType_TextureEnd            = ESHRegisterType_SubpassInput,        //>= to see if real texture, > means 'texture'-like
+	ESHRegisterType_TextureStart           = ESHRegisterType_Texture1D,
+	ESHRegisterType_TextureEnd             = ESHRegisterType_SubpassInput, //>= to see if real texture, > means 'texture'-like
 
-	ESHRegisterType_TypeMask            = 0xF,
+	ESHRegisterType_TypeMask               = 0xF,
 	ESHRegisterType_IsArray                = 1 << 4,    //Only valid on textures
-	ESHRegisterType_IsCombinedSampler    = 1 << 5,    //Only valid on textures
+	ESHRegisterType_IsCombinedSampler      = 1 << 5,    //Only valid on textures
 
 	//Invalid on samplers, AS and CBuffer
 	//Required on append/consume buffer
 	//Valid on everything else (textures and various buffers)
 	ESHRegisterType_IsWrite                = 1 << 6,
 
-	ESHRegisterType_Masks                =
+	ESHRegisterType_Masks                  =
 		ESHRegisterType_IsArray | ESHRegisterType_IsCombinedSampler | ESHRegisterType_IsWrite
 
 } ESHRegisterType;
@@ -155,19 +155,19 @@ typedef U8 SHRegisterType;
 
 typedef struct SHRegister {            //Treated as U64[N + 1]
 
-	SHBindings bindings;            //Treated as U64[N]
+	SHBindings bindings;               //Treated as U64[N]
 
 	SHRegisterType registerType;
-	U8 isUsedFlag;                    //Per ESHBinaryType if the register is used
+	U8 isUsedFlag;                     //Per ESHBinaryType if the register is used
 
 	union {
-		U16 padding;                //Used for samplers, (RW)BAB or AS (should be 0)
+		U16 padding;                   //Used for samplers, (RW)BAB or AS (should be 0)
 		U16 shaderBufferId;            //Used only at serialization (Buffer registers only)
-		U16 inputAttachmentId;        //U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
-		SHTextureFormat texture;    //Read/write textures
+		U16 inputAttachmentId;         //U16_MAX indicates "nothing", otherwise <7, only valid for SubpassInput
+		SHTextureFormat texture;       //Read/write textures
 	};
 
-	U16 arrayDimOrId;                //<= 32767 represents a 1D array with a dimension, else represents an arrayId
+	U16 arrayDimOrId;                  //<= 32767 represents a 1D array with a dimension, else represents an arrayId
 	U16 nameId;
 
 } SHRegister;
@@ -177,7 +177,7 @@ typedef struct SHRegisterRuntime {
 	CharString name;
 	ListU32 arrays;
 	SBFile shaderBuffer;
-	U64 hash;                        //Only for identical, not for compatible!
+	U64 hash;                          //Only for identical, not for compatible!
 } SHRegisterRuntime;
 
 TList(SHRegister);
@@ -229,7 +229,7 @@ Bool ListSHRegisterRuntime_addRWTexture(
 	Bool isLayeredTexture,
 	U8 isUsedFlag,
 	ESHTexturePrimitive textureFormatPrimitive,        //ESHTexturePrimitive_Count = auto detect from formatId
-	ETextureFormatId textureFormatId,                //!textureFormatId = only allowed if primitive is set
+	ETextureFormatId textureFormatId,                  //!textureFormatId = only allowed if primitive is set
 	CharString *name,
 	ListU32 *arrays,
 	SHBindings bindings,

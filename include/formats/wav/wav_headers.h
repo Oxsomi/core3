@@ -35,7 +35,7 @@
 
 typedef struct RIFFSection {
 	U32 magicNumber;                    //E.g. "RIFF" (RIFFHeader_magic)
-	U32 size;                            //Size excluding RIFFSection
+	U32 size;                           //Size excluding RIFFSection
 } RIFFSection;
 
 typedef struct RIFFHeader {
@@ -45,7 +45,7 @@ typedef struct RIFFHeader {
 
 typedef enum ERIFFAudioFormat {
 	ERIFFAudioFormat_PCM        = 1,    //Ints (U8, U16)
-	ERIFFAudioFormat_IEEE754    = 3        //Floats (F32, F64)
+	ERIFFAudioFormat_IEEE754    = 3     //Floats (F32, F64)
 } ERIFFAudioFormat;
 
 typedef U16 RIFFAudioFormatType;        //ERIFFAudioFormat
@@ -57,12 +57,12 @@ typedef struct RIFFFmtHeader {
 	RIFFAudioFormatType format;
 	U16 channels;
 
-	U32 frequency;                        //Hz (/ second)
+	U32 frequency;                      //Hz (/ second)
 
-	U32 bytesPerSecond;                    //frequency * bytesPerBlock
+	U32 bytesPerSecond;                 //frequency * bytesPerBlock
 
-	U16 bytesPerBlock;                    //(channels * bitsPerSample) >> 3
-	U16 stride;                            //8, 16, 24, 32 or 64
+	U16 bytesPerBlock;                  //(channels * bitsPerSample) >> 3
+	U16 stride;                         //8, 16, 24, 32 or 64
 
 } RIFFFmtHeader;
 

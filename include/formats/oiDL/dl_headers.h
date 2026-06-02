@@ -37,7 +37,7 @@ typedef U8 DLVersion;        //EDLVersion
 
 typedef enum EDLFlags {
 
-	EDLFlags_None                     = 0,
+	EDLFlags_None                    = 0,
 
 	EDLFlags_Reserved                = 1 << 0,        //Reserved: [CRC32C,SHA256][v] if compressed and not encrypted
 
@@ -45,23 +45,23 @@ typedef enum EDLFlags {
 
 	//Chunk size of AES for multi threading. 0 = 128KiB, 1 = 1MiB, 2 = 8MiB, 3 = 64MiB
 
-	EDLFlags_UseAESChunksA            = 1 << 2,
-	EDLFlags_UseAESChunksB            = 1 << 3,
+	EDLFlags_UseAESChunksA           = 1 << 2,
+	EDLFlags_UseAESChunksB           = 1 << 3,
 
-	EDLFlags_HasExtendedData        = 1 << 4,        //Extended data
+	EDLFlags_HasExtendedData         = 1 << 4,        //Extended data
 
 	EDLFlags_AESChunkMask            = EDLFlags_UseAESChunksA | EDLFlags_UseAESChunksB,
-	EDLFlags_AESChunkShift            = 2
+	EDLFlags_AESChunkShift           = 2
 
 } EDLFlags;
 
 typedef U8 DLFlags;            //EDLFlags
 
 typedef struct DLHeader {
-	DLVersion version;        //major.minor (%10 = minor, /10 = major (+1 to get real major))
+	DLVersion version;         //major.minor (%10 = minor, /10 = major (+1 to get real major))
 	DLFlags flags;
-	U8 type;                //(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
-	U8 sizeTypes;            //EXXDataSizeTypes: entryType | (uncompressedSizType << 2) | (dataType << 4) (must be < (1 << 6)).
+	U8 type;                   //(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
+	U8 sizeTypes;              //EXXDataSizeTypes: entryType | (uncompressedSizType << 2) | (dataType << 4) (< (1 << 6)).
 } DLHeader;
 
 static const U32 DLHeader_chunkSizes[] = { 131072, 1048576, 8388608, 67108864 };
@@ -74,7 +74,7 @@ typedef struct DLExtraInfo {
 	U32 extendedMagicNumber;
 
 	U16 extendedHeader;            //If extensions want to add extra data to the header
-	U16 perEntryExtendedData;    //What to store per entry besides a DataSizeType
+	U16 perEntryExtendedData;      //What to store per entry besides a DataSizeType
 
 } DLExtraInfo;
 

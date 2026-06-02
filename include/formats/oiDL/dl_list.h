@@ -55,7 +55,7 @@ Bool DLFile_createStringList(
 
 Bool DLFile_createStreamList(
 	const DLSettings *settings,
-	ListDLEntryStream *streams,        //Moves ListBuffer to DLFile, clears ListBuffer after.
+	ListDLEntryStream *streams,     //Moves ListBuffer to DLFile, clears ListBuffer after.
 	const Allocator *alloc,
 	DLFile *dlFile,
 	Error *e_rr

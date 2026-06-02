@@ -36,40 +36,40 @@ typedef enum ESHExtension {
 
 	//These losely map to EGraphicsDataTypes in OxC3 graphics
 
-	ESHExtension_F64                        = 1 << 0,
-	ESHExtension_I64                        = 1 << 1,
-	ESHExtension_16BitTypes                    = 1 << 2,        //I16, F16
+	ESHExtension_F64                         = 1 << 0,
+	ESHExtension_I64                         = 1 << 1,
+	ESHExtension_16BitTypes                  = 1 << 2,        //I16, F16
 
-	ESHExtension_AtomicI64                    = 1 << 3,
-	ESHExtension_AtomicF32                    = 1 << 4,
-	ESHExtension_AtomicF64                    = 1 << 5,
+	ESHExtension_AtomicI64                   = 1 << 3,
+	ESHExtension_AtomicF32                   = 1 << 4,
+	ESHExtension_AtomicF64                   = 1 << 5,
 
 	//Some of them are present in EGraphicsFeatures in OxC3 graphics
 
-	ESHExtension_SubgroupArithmetic            = 1 << 6,
-	ESHExtension_SubgroupShuffle            = 1 << 7,
+	ESHExtension_SubgroupArithmetic          = 1 << 6,
+	ESHExtension_SubgroupShuffle             = 1 << 7,
 
 	ESHExtension_RayQuery                    = 1 << 8,
-	ESHExtension_RayMicromapOpacity            = 1 << 9,
+	ESHExtension_RayMicromapOpacity          = 1 << 9,
 	ESHExtension_Reserved                    = 1 << 10,
-	ESHExtension_RayMotionBlur                = 1 << 11,
-	ESHExtension_RayReorder                    = 1 << 12,
+	ESHExtension_RayMotionBlur               = 1 << 11,
+	ESHExtension_RayReorder                  = 1 << 12,
 
-	ESHExtension_Multiview                    = 1 << 13,
+	ESHExtension_Multiview                   = 1 << 13,
 	ESHExtension_ComputeDeriv                = 1 << 14,
 
-	ESHExtension_PAQ                        = 1 << 15,        //Payload access qualifiers
+	ESHExtension_PAQ                         = 1 << 15,        //Payload access qualifiers
 
 	ESHExtension_MeshTaskTexDeriv            = 1 << 16,
 
-	ESHExtension_WriteMSTexture                = 1 << 17,
+	ESHExtension_WriteMSTexture              = 1 << 17,
 
 	ESHExtension_Bindless                    = 1 << 18,
 	ESHExtension_UnboundArraySize            = 1 << 19,
 
-	ESHExtension_SubgroupOperations            = 1 << 20,
+	ESHExtension_SubgroupOperations          = 1 << 20,
 
-	ESHExtension_DxilNative =                                //Extensions that can be found from DXIL natively
+	ESHExtension_DxilNative =                                  //Extensions that can be found from DXIL natively
 		ESHExtension_RayQuery |
 		ESHExtension_16BitTypes |
 		ESHExtension_I64 |
@@ -80,7 +80,7 @@ typedef enum ESHExtension {
 		ESHExtension_WriteMSTexture |
 		ESHExtension_SubgroupOperations,
 
-	ESHExtension_SpirvNative =                                //Extensions that map directly to SPIRV capabilities
+	ESHExtension_SpirvNative =                                 //Extensions that map directly to SPIRV capabilities
 		ESHExtension_RayMicromapOpacity |
 		ESHExtension_RayQuery |
 		ESHExtension_RayMotionBlur |
@@ -98,9 +98,9 @@ typedef enum ESHExtension {
 		ESHExtension_ComputeDeriv |
 		ESHExtension_WriteMSTexture,
 
-	ESHExtension_Count                        = 21,
+	ESHExtension_Count                       = 21,
 
-	ESHExtension_All                        = (1 << ESHExtension_Count) - 1
+	ESHExtension_All                         = (1 << ESHExtension_Count) - 1
 
 } ESHExtension;
 
@@ -128,14 +128,14 @@ typedef enum ESHBinaryFlags {
 	//What type of binaries it includes
 	//Must be one at least
 
-	ESHBinaryFlags_HasSPIRV                    = 1 << 0,
-	ESHBinaryFlags_HasDXIL                    = 1 << 1,
+	ESHBinaryFlags_HasSPIRV                 = 1 << 0,
+	ESHBinaryFlags_HasDXIL                  = 1 << 1,
 
 	//Reserved
-	//ESHBinaryFlags_HasAIR                    = 1 << 2,
+	//ESHBinaryFlags_HasAIR                 = 1 << 2,
 	//ESHBinaryFlags_HasWGSL                = 1 << 3
 
-	ESHBinaryFlags_HasShaderAnnotation        = 1 << 4,
+	ESHBinaryFlags_HasShaderAnnotation      = 1 << 4,
 
 	ESHBinaryFlags_HasBinary                = ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,    // | ESHBinaryFlags_HasAIR
 	//ESHBinaryFlags_HasText                = ESHBinaryFlags_HasWGSL
@@ -172,7 +172,7 @@ void ListSHUniformRuntime_freeUnderlying(ListSHUniformRuntime *uniforms, const A
 
 typedef struct SHBinaryIdentifier {
 
-	CharString entrypoint;        //If it's not a lib, this defines the entrypoint to compile with
+	CharString entrypoint;         //If it's not a lib, this defines the entrypoint to compile with
 	ListCharString defines;        //[defineName, defineValue][]
 
 	ListSHUniformRuntime uniforms;
@@ -180,9 +180,9 @@ typedef struct SHBinaryIdentifier {
 
 	//Don't change order, is used for compare (U64)
 
-	ESHExtension extensions;    //Needs 8-byte alignment
-	U16 shaderVersion;            //U8 maj, minor (need 4-byte alignment, is compared together with stageType)
-	U16 stageType;                //ESHPipelineStage
+	ESHExtension extensions;       //Needs 8-byte alignment
+	U16 shaderVersion;             //U8 maj, minor (need 4-byte alignment, is compared together with stageType)
+	U16 stageType;                 //ESHPipelineStage
 
 } SHBinaryIdentifier;
 
@@ -194,7 +194,7 @@ typedef struct SHBinaryInfo {
 
 	ESHExtension dormantExtensions;
 	U16 vendorMask;
-	Bool hasShaderAnnotation;    //If [shader("")] is used rather than [[oxc::stage("")]]
+	Bool hasShaderAnnotation;      //If [shader("")] is used rather than [[oxc::stage("")]]
 	U8 padding[1];
 
 	Buffer binaries[ESHBinaryType_Count];

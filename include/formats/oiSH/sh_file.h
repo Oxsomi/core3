@@ -36,30 +36,30 @@ typedef RefPtr StreamRef;
 #define OISH_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
 #define OISH_SHADER_MODEL8(maj, min) ((U8)((min) | ((maj) << 4)))
 
-static U16 OISH_SHADER_MODEL_MIN = OISH_SHADER_MODEL(6, 5);        //6.5 at least
+static U16 OISH_SHADER_MODEL_MIN = OISH_SHADER_MODEL(6, 5);     //6.5 at least
 static U16 OISH_SHADER_MODEL_MAX = OISH_SHADER_MODEL(6, 10);    //6.10 max
 
 static U8 OISH_SHADER_MODEL_MIN8 = OISH_SHADER_MODEL8(6, 5);    //6.5 at least
-static U8 OISH_SHADER_MODEL_MAX8 = OISH_SHADER_MODEL8(6, 10);    //6.10 max
+static U8 OISH_SHADER_MODEL_MAX8 = OISH_SHADER_MODEL8(6, 10);   //6.10 max
 
 typedef enum ESHSettingsFlags {
-	ESHSettingsFlags_None                = 0,
-	ESHSettingsFlags_HideMagicNumber    = 1 << 0,        //Only valid if the oiSH can be 100% confidently detected otherwise
+	ESHSettingsFlags_None               = 0,
+	ESHSettingsFlags_HideMagicNumber    = 1 << 0,          //Only valid if the oiSH can be 100% confidently detected otherwise
 	ESHSettingsFlags_Invalid            = 0xFFFFFFFF << 1
 } ESHSettingsFlags;
 
 typedef enum ECompilerWarning {                            //Present here in case shader compiler isn't present
-	ECompilerWarning_None                = 0,
+	ECompilerWarning_None               = 0,
 	ECompilerWarning_UnusedRegisters    = 1 << 0,
 	ECompilerWarning_UnusedConstants    = 1 << 1,
-	ECompilerWarning_BufferPadding        = 1 << 2
+	ECompilerWarning_BufferPadding      = 1 << 2
 } ECompilerWarning;
 
 //Check docs/oiSH.md for the file spec
 
 typedef struct SHInclude {
 
-	CharString relativePath;    //Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsli)
+	CharString relativePath;       //Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsli)
 
 	U32 crc32c;                    //Content CRC32C. However, if it contains '\r' it's removed first!
 	U32 padding;
@@ -108,7 +108,7 @@ typedef struct SHFile {
 
 	U32 compilerVersion;        //OxC3 compiler version
 
-	U32 sourceHash;                //CRC32C of sources
+	U32 sourceHash;             //CRC32C of sources
 
 } SHFile;
 

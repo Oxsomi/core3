@@ -31,34 +31,34 @@
 
 typedef enum ECAFlags {
 
-	ECAFlags_None = 0,
+	ECAFlags_None                  = 0,
 
 	//See ECAFileObject
 
-	ECAFlags_FilesHaveDate = 1 << 0,
+	ECAFlags_FilesHaveDate         = 1 << 0,
 	ECAFlags_FilesHaveExtendedDate = 1 << 1,
 
-	ECAFlags_HasExtendedData = 1 << 2,        //CAExtraData
+	ECAFlags_HasExtendedData       = 1 << 2,        //CAExtraData
 
 	//Determines how many bytes the counter for files takes up.
 	//If DirectoriesCountLong is set, it will allow up to 254 dirs, otherwise 64Ki-1.
 	//If FilesCountLong is set, it will allow up to 64Ki, otherwise 4Gi.
 
-	ECAFlags_DirectoriesCountLong = 1 << 3,
-	ECAFlags_FilesCountLong = 1 << 4
+	ECAFlags_DirectoriesCountLong  = 1 << 3,
+	ECAFlags_FilesCountLong        = 1 << 4
 
 } ECAFlags;
 
 typedef enum ECAVersion {
-	ECAVersion_V1_0                //Current version
+	ECAVersion_V1_0               //Current version
 } ECAVersion;
 
 typedef struct CAHeader {
 
-	U32 magicNumber;            //oiCA (0x4143696F)
+	U32 magicNumber;              //oiCA (0x4143696F)
 
-	U8 version;                    //major.minor (%10 = minor, /10 = major (+1 to get real major)
-	U8 type;                    //EXXEncryptionType. Should be <Count (see oiXX.md).
+	U8 version;                   //major.minor (%10 = minor, /10 = major (+1 to get real major)
+	U8 type;                      //EXXEncryptionType. Should be <Count (see oiXX.md).
 	U16 flags;                    //ECAFlags
 
 } CAHeader;
@@ -70,10 +70,10 @@ typedef struct CAExtraInfo {
 
 	U32 extendedMagicNumber;
 
-	U16 headerExtensionSize;        //To skip extended data size.
+	U16 headerExtensionSize;      //To skip extended data size.
 
-	U8 directoryExtensionSize;        //To skip directory extended data.
-	U8 fileExtensionSize;            //To skip file extended data
+	U8 directoryExtensionSize;    //To skip directory extended data.
+	U8 fileExtensionSize;         //To skip file extended data
 
 } CAExtraInfo;
 
@@ -81,7 +81,7 @@ typedef struct CAExtraInfo {
 //Important is to verify if there are no wrong indices.
 //Small is used if there are <254 folders, Large is used when there are more.
 
-typedef U16 CADirectoryIdLarge;    //0xFFFF for root directory, else id of parent directory (can't >=self)
+typedef U16 CADirectoryIdLarge;   //0xFFFF for root directory, else id of parent directory (can't >=self)
 typedef U8 CADirectoryIdSmall;    //0xFF for root directory, else id of parent directory (can't >=self)
 
 typedef U32 CAFileIdLarge;        //Points to a file (not a directory) up to 0xFFFFFFFF

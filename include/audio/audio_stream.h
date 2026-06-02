@@ -60,15 +60,15 @@ typedef enum EAudioStreamFormat {        //1b channels, 2b (1 << x = strideBytes
 	EAudioStreamFormat_Mono64fExt,
 	EAudioStreamFormat_Stereo64fExt,
 
-	EAudioStreamFormat_Mono24Ext,                //PCM24 mono
+	EAudioStreamFormat_Mono24Ext,                  //PCM24 mono
 	EAudioStreamFormat_Stereo24Ext,                //PCM24 stereo
 
-	EAudioStreamFormat_Mono32Ext,                //PCM32 mono
+	EAudioStreamFormat_Mono32Ext,                  //PCM32 mono
 	EAudioStreamFormat_Stereo32Ext,                //PCM32 stereo
 
 	EAudioStreamFormat_Count,
 
-	EAudioStreamFormat_FloatStart    = EAudioStreamFormat_Mono32fExt,
+	EAudioStreamFormat_FloatStart      = EAudioStreamFormat_Mono32fExt,
 	EAudioStreamFormat_FloatEnd        = EAudioStreamFormat_Stereo64fExt
 
 } EAudioStreamFormat;
@@ -81,7 +81,7 @@ static inline U8 EAudioStreamFormat_getChannels(EAudioStreamFormat format) {
 
 static inline U8 EAudioStreamFormat_getStrideBytes(EAudioStreamFormat format) {
 
-	if ((format >> 1) > 4)    //U32
+	if ((format >> 1) > 4)     //U32
 		return 4;
 
 	if ((format >> 1) == 4)    //U24
@@ -94,7 +94,7 @@ static inline U8 EAudioStreamFormat_getSize(EAudioStreamFormat format) {
 	return EAudioStreamFormat_getChannels(format) * EAudioStreamFormat_getStrideBytes(format);
 }
 
-typedef enum EAudioStreamInfoFlags {            //4-bit flags
+typedef enum EAudioStreamInfoFlags {                  //4-bit flags
 	EAudioStreamInfoFlags_None            = 0,
 	EAudioStreamInfoFlags_IsLoop        = 1 << 0,
 	EAudioStreamInfoFlags_FlattenSound    = 1 << 1    //Force stereo sound into mono, required for 3D spatial audio if stereo
@@ -158,7 +158,7 @@ typedef struct AudioStream {
 
 	U32 loops;                    //How many times the stream has looped, stops at 1 if !isLoop
 	Bool isPlaying;
-	AudioStreamFormat format;    //The real format that the device is reading. Stereo to mono and/or F32/F64/U24 -> U16
+	AudioStreamFormat format;     //The real format that the device is reading. Stereo to mono and/or F32/F64/U24 -> U16
 	U8 padding[2];
 
 } AudioStream;
@@ -182,7 +182,7 @@ Bool AudioDeviceRef_createStream(
 	Error *e_rr
 );
 
-Bool AudioDeviceRef_createFromFile(        //Detect stream by stream file header (currently only wav supported)
+Bool AudioDeviceRef_createFromFile(       //Detect stream by stream file header (currently only wav supported)
 	AudioDeviceRef *device,
 	StreamRef *inputStream,
 	U64 inputStreamOffset,

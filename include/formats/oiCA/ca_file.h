@@ -101,7 +101,7 @@ static const U32 CAFile_maxRecursionSize = 128;        //Must match chainSize (w
 typedef struct CAFile {
 	DLFile names;
 	DLFile content;
-	ListCAFolderInfo folders;    //0th is reserved as root folder
+	ListCAFolderInfo folders;   //0th is reserved as root folder
 	ListCAFileInfo files;
 	CASettings settings;        //Must remain 8-byte aligned
 } CAFile;
@@ -154,7 +154,7 @@ static inline Bool CAHandle_isFolder(CAHandle handle) { return handle >> 63; }
 static inline Bool CAHandle_isFile(CAHandle handle) { return !CAHandle_isFolder(handle); }
 
 static inline CAHandle CAHandle_makeFolder(U64 id) { return ((U64)1 << 63) | id; }    //Unsafe, only use if you know it's a dir
-static inline CAHandle CAHandle_makeFile(U64 id) { return id; }                        //Unsafe, only use if you know it's a file
+static inline CAHandle CAHandle_makeFile(U64 id) { return id; }                       //Unsafe, only use if you know it's a file
 
 static inline Bool CAHandle_isRoot(CAHandle handle) {
 	return CAHandle_isFolder(handle) && !CAHandle_getId(handle);
