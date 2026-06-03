@@ -23,7 +23,7 @@
 #include "test_oiSB_shared.h"
 #include "formats/oiSB/sb_file.h"
 #include "types/container/memory_stream.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/base/string_read_helper.h"
 
 //Helper: write then read back an SBFile, returns false on any failure.
@@ -122,9 +122,17 @@ void Test_SBFileRoundTripMultipleVars(Test *t) {
 		CharString nameB = CharString_createRefCStrConst("b");
 		CharString nameC = CharString_createRefCStrConst("c");
 
-		Test_assert(t, "add F32",   SBFile_addVariableAsType(&sb, &nameA, 0,  U16_MAX, ESBType_F32,   ESBVarFlag_None, NULL, t->alloc, &t->err));
-		Test_assert(t, "add I32",   SBFile_addVariableAsType(&sb, &nameB, 4,  U16_MAX, ESBType_I32,   ESBVarFlag_None, NULL, t->alloc, &t->err));
-		Test_assert(t, "add U32x4", SBFile_addVariableAsType(&sb, &nameC, 16, U16_MAX, ESBType_U32x4, ESBVarFlag_None, NULL, t->alloc, &t->err));
+		Test_assert(t, "add F32",   SBFile_addVariableAsType(
+			&sb, &nameA, 0,  U16_MAX, ESBType_F32,   ESBVarFlag_None, NULL, t->alloc, &t->err
+		));
+
+		Test_assert(t, "add I32",   SBFile_addVariableAsType(
+			&sb, &nameB, 4,  U16_MAX, ESBType_I32,   ESBVarFlag_None, NULL, t->alloc, &t->err
+		));
+
+		Test_assert(t, "add U32x4", SBFile_addVariableAsType(
+			&sb, &nameC, 16, U16_MAX, ESBType_U32x4, ESBVarFlag_None, NULL, t->alloc, &t->err
+		));
 
 		Test_assert(t, "multi round-trip", sbRoundTrip(t, &sb, &archiveSr, &result, &type));
 
@@ -182,8 +190,14 @@ void Test_SBFileRoundTripStruct(Test *t) {
 		//Add members (parentId = 0, which is the index of myVar in vars)
 		CharString posName = CharString_createRefCStrConst("pos");
 		CharString colName = CharString_createRefCStrConst("col");
-		Test_assert(t, "add pos", SBFile_addVariableAsType(&sb, &posName, 0,  0, ESBType_F32x4, ESBVarFlag_None, NULL, t->alloc, &t->err));
-		Test_assert(t, "add col", SBFile_addVariableAsType(&sb, &colName, 16, 0, ESBType_F32x4, ESBVarFlag_None, NULL, t->alloc, &t->err));
+
+		Test_assert(t, "add pos", SBFile_addVariableAsType(
+			&sb, &posName, 0,  0, ESBType_F32x4, ESBVarFlag_None, NULL, t->alloc, &t->err
+		));
+
+		Test_assert(t, "add col", SBFile_addVariableAsType(
+			&sb, &colName, 16, 0, ESBType_F32x4, ESBVarFlag_None, NULL, t->alloc, &t->err
+		));
 
 		Test_assert(t, "struct round-trip", sbRoundTrip(t, &sb, &archiveSr, &result, &type));
 

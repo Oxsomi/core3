@@ -25,12 +25,12 @@
 #include "types/container/buffer.h"
 #include "types/container/stream.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/types.h"
+#include "types/container/container_types.h"
 #include "types/base/constants.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"
 #include "types/base/mathf.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 
 //Note: This only handles truncation, it can't handle expansion
 

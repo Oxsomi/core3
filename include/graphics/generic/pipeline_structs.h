@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/pipeline_structs.h
+
 #pragma once
 #include "types/base/types.h"
 
@@ -50,10 +52,10 @@ typedef enum EPipelineStage {
 	EPipelineStage_AnyHitExt,
 	EPipelineStage_IntersectionExt,
 
-	EPipelineStage_RtStart = EPipelineStage_RaygenExt,
-	EPipelineStage_RtEnd = EPipelineStage_IntersectionExt,
+	EPipelineStage_RtStart    = EPipelineStage_RaygenExt,
+	EPipelineStage_RtEnd      = EPipelineStage_IntersectionExt,
 	EPipelineStage_RtHitStart = EPipelineStage_ClosestHitExt,
-	EPipelineStage_RtHitEnd = EPipelineStage_IntersectionExt,
+	EPipelineStage_RtHitEnd   = EPipelineStage_IntersectionExt,
 
 	EPipelineStage_Count,
 
@@ -72,8 +74,8 @@ typedef enum ECullMode {
 
 typedef enum ERasterizerFlags {
 	ERasterizerFlags_IsClockWise            = 1 << 0,        //Winding order
-	ERasterizerFlags_IsWireframeExt            = 1 << 1,        //Fill mode (only available with wireframe extension)
-	ERasterizerFlags_EnableDepthClamp        = 1 << 2,
+	ERasterizerFlags_IsWireframeExt         = 1 << 1,        //Fill mode (only available with wireframe extension)
+	ERasterizerFlags_EnableDepthClamp       = 1 << 2,
 	ERasterizerFlags_EnableDepthBias        = 1 << 3
 } ERasterizerFlags;
 
@@ -109,9 +111,9 @@ typedef enum EDepthStencilFlags {
 
 	EDepthStencilFlags_DepthTest        = 1 << 0,
 	EDepthStencilFlags_DepthWriteBit    = 1 << 1,        //Use DepthWrite instead.
-	EDepthStencilFlags_StencilTest        = 1 << 2,
+	EDepthStencilFlags_StencilTest      = 1 << 2,
 
-	EDepthStencilFlags_DepthWrite        = EDepthStencilFlags_DepthTest | EDepthStencilFlags_DepthWriteBit
+	EDepthStencilFlags_DepthWrite       = EDepthStencilFlags_DepthTest | EDepthStencilFlags_DepthWriteBit
 
 } EDepthStencilFlags;
 
@@ -190,18 +192,18 @@ typedef enum EWriteMask {
 	EWriteMask_B    = 1 << 2,
 	EWriteMask_A    = 1 << 3,
 
-	EWriteMask_All    = 0xF,
-	EWriteMask_RGBA    = 0xF,
-	EWriteMask_RGB    = 0x7,
-	EWriteMask_RG    = 0x3
+	EWriteMask_All  = 0xF,
+	EWriteMask_RGBA = 0xF,
+	EWriteMask_RGB  = 0x7,
+	EWriteMask_RG   = 0x3
 
 } EWriteMask;
 
 typedef enum EMSAASamples {
-	EMSAASamples_Off,        //Turn off MSAA ("x1")
-	EMSAASamples_x2Ext,        //Query MSAA2x data types from device
+	EMSAASamples_Off,       //Turn off MSAA ("x1")
+	EMSAASamples_x2Ext,     //Query MSAA2x data types from device
 	EMSAASamples_x4,        //4x Always supported
-	EMSAASamples_x8Ext,        //Query MSAA8x data types from device
+	EMSAASamples_x8Ext,     //Query MSAA8x data types from device
 	EMSAASamples_Count
 } EMSAASamples;
 
@@ -234,8 +236,8 @@ typedef struct PipelineStage {
 	EPipelineStage stageType;    //Runtime only
 	U32 binaryId;                //For non compute indicates offset in SHFile (contains both binaryId and entryId)
 
-	U32 localShaderId;            //RT only at runtime
-	U32 groupId;                //RT only at runtime
+	U32 localShaderId;           //RT only at runtime
+	U32 groupId;                 //RT only at runtime
 
 	U16 shFileId;                //For non compute, indicates SHFile id
 	U16 padding;
@@ -245,7 +247,7 @@ typedef struct PipelineStage {
 typedef struct Rasterizer {
 
 	U16 cullMode;                //ECullMode
-	U16 flags;                    //ERasterizerFlags
+	U16 flags;                   //ERasterizerFlags
 	F32 depthBiasClamp;
 	I32 depthBiasConstantFactor;
 	F32 depthBiasSlopeFactor;
@@ -278,7 +280,7 @@ typedef struct BlendState {
 
 	ELogicOpExt logicOpExt;
 
-	U8 writeMask[8];                        //EWriteMask
+	U8 writeMask[8];                     //EWriteMask
 
 	BlendStateAttachment attachments[8];
 
@@ -287,11 +289,11 @@ typedef struct BlendState {
 typedef struct VertexAttribute {
 	U16 offset11;                        //11-bit offset
 	U8 bufferId4;                        //4-bit buffer id
-	U8 format;                            //ETextureFormatId (must be no compression!)
+	U8 format;                           //ETextureFormatId (must be no compression!)
 } VertexAttribute;
 
 typedef struct VertexBindingLayout {
-	U16 bufferStrides12_isInstance1[16];    //<=2048
+	U16 bufferStrides12_isInstance1[16]; //<=2048
 	VertexAttribute attributes[16];
 } VertexBindingLayout;
 

@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//types/base/platform_types.hpp
+//types/base/platform_types.h
 
 #pragma once
 #include "types/base/types.h"

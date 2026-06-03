@@ -18,10 +18,12 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/cli.c
+
 #include "platforms/ext/listx_impl.h"
 #include "types/container/string.h"
 #include "types/base/error.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "graphics/generic/instance.h"

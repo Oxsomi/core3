@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_command_list.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
@@ -36,7 +38,7 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
 #include "formats/oiSH/registers.h"

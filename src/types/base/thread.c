@@ -23,7 +23,7 @@
 #include "types/base/thread.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/container/buffer.h"
 
 impl void Thread_freeExt(Thread *thread);

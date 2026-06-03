@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/descriptor_table.h
+
 #pragma once
 #include "types/base/types.h"
 #include "types/base/error.h"
@@ -34,7 +36,7 @@ typedef struct CharString CharString;
 
 typedef enum EDescriptorTableFlags {
 	EDescriptorTableFlags_None                        = 0,
-	EDescriptorTableFlags_InternalWeakDeviceRef        = 1 << 0
+	EDescriptorTableFlags_InternalWeakDeviceRef       = 1 << 0
 } EDescriptorTableFlags;
 
 typedef U8 DescriptorTableFlags;
@@ -105,14 +107,14 @@ TList(DescriptorStackTrace);
 
 typedef struct DescriptorTableBindingMultiple {
 
-	ListU64 activeList;            //Quicker than indexing descriptors
+	ListU64 activeList;         //Quicker than indexing descriptors
 	ListU64 maintainRef;        //If the resource affects ListDescriptorTableResourceRef in DescriptorTable
 	ListWeakRefPtr resources;
 	ListDescriptorStackTrace stackTraces;
 
 	union {
 		ListBufferDescriptorRange buffers;
-		ListTextureDescriptorRange textures;        //This is 3x less mem than buffer descs
+		ListTextureDescriptorRange textures;       //This is 3x less mem than buffer descs
 	};
 
 } DescriptorTableBindingMultiple;
@@ -160,7 +162,7 @@ typedef struct DescriptorTable {
 	Bool acquiredAtomic;
 	U8 padding[6];
 
-	SpinLock lock;                                    //To access resources
+	SpinLock lock;                                   //To access resources
 
 	ListDescriptorTableResourceRef resources;        //All resources that are bound by the table
 	ListDescriptorTableBinding bindings;
@@ -205,7 +207,7 @@ U32 Descriptor_counterOffset(Descriptor d);
 
 Bool DescriptorTableRef_setDescriptors(
 	DescriptorTableRef *table,
-	U64 bindId,                //ListDescriptorBinding[i]
+	U64 bindId,             //ListDescriptorBinding[i]
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
 	ListDescriptor d,
@@ -214,7 +216,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 Bool DescriptorTableRef_unsetDescriptors(
 	DescriptorTableRef *table,
-	U64 bindId,                //ListDescriptorBinding[i]
+	U64 bindId,             //ListDescriptorBinding[i]
 	U64 arrayId,            //arrayId into descriptor
 	U64 count,
 	Error *e_rr
@@ -222,7 +224,7 @@ Bool DescriptorTableRef_unsetDescriptors(
 
 Bool DescriptorTableRef_setDescriptor(
 	DescriptorTableRef *table,
-	U64 bindId,                //ListDescriptorBinding[i]
+	U64 bindId,             //ListDescriptorBinding[i]
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
 	Descriptor d,
@@ -231,8 +233,8 @@ Bool DescriptorTableRef_setDescriptor(
 
 Bool DescriptorTableRef_allocDescriptor(
 	DescriptorTableRef *table,
-	U64 bindId,                //ListDescriptorBinding[i]
-	U64 *arrayId,            //outputs arrayId into descriptor if success
+	U64 bindId,             //ListDescriptorBinding[i]
+	U64 *arrayId,           //outputs arrayId into descriptor if success
 	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
@@ -243,11 +245,11 @@ Bool DescriptorTableRef_allocDescriptor(
 Bool DescriptorTableRef_findBindlessRegister(
 	DescriptorTableRef *table,
 	ESHRegisterType type,
-	U32 strideOrLength,        //Used to find a resource of this size (can be 0)
+	U32 strideOrLength,     //Used to find a resource of this size (can be 0)
 	U16 *bindId,
 	U8 *bindlessTypeId,
 	RefPtr *resource,
-	U8 planeId,                //Useful for depth buffer (stencil read)
+	U8 planeId,             //Useful for depth buffer (stencil read)
 	Error *e_rr
 );
 
@@ -257,10 +259,10 @@ Bool DescriptorTableRef_findBindlessRegister(
 Bool DescriptorTableRef_allocDescriptorBindless(
 	DescriptorTableRef *table,
 	ESHRegisterType type,
-	U32 strideOrLength,        //Used to find a resource of this size (can be 0)
+	U32 strideOrLength,     //Used to find a resource of this size (can be 0)
 	U16 *bindId,            //ListDescriptorBinding[i]
-	U8 *bindlessTypeId,        //Index for bindless handle
-	U64 *arrayId,            //outputs arrayId into descriptor if success
+	U8 *bindlessTypeId,     //Index for bindless handle
+	U64 *arrayId,           //outputs arrayId into descriptor if success
 	Bool maintainRef,
 	Descriptor d,
 	Error *e_rr
@@ -298,7 +300,7 @@ Bool DescriptorTableRef_unsetDescriptorsByName(
 Bool DescriptorTableRef_allocDescriptorByName(
 	DescriptorTableRef *table,
 	CharString registerName,
-	U64 *arrayId,            //outputs arrayId into descriptor if success
+	U64 *arrayId,           //outputs arrayId into descriptor if success
 	Descriptor d,
 	Error *e_rr
 );

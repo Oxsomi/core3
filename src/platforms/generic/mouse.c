@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//platforms/mouse.c
+//platforms/generic/mouse.c
 
 #include "platforms/mouse.h"
 #include "platforms/input_device.h"

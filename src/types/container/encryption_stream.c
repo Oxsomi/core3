@@ -24,7 +24,7 @@
 #include "types/base/mathf.h"
 #include "types/math/vec4i.h"
 #include "types/container/encryption_stream.h"
-#include "types/container/types.h"
+#include "types/container/container_types.h"
 #include "types/container/buffer_encrypt.h"
 #include "types/container/buffer.h"
 
@@ -337,7 +337,9 @@ static Bool EncryptionStream_reserveInternal(
 	OxStream *underlying = RefPtr_data(encStream->dataStream, OxStream);
 
 	if (!underlying->reserve)
-		retError(clean, Error_unsupportedOperation(0, "EncryptionStream_reserveInternal()::underlying stream doesn't support reserve"));
+		retError(clean, Error_unsupportedOperation(
+			0, "EncryptionStream_reserveInternal()::underlying stream doesn't support reserve"
+		));
 
 	//Calculate how much space we need in underlying stream
 

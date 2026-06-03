@@ -18,13 +18,15 @@
 *  This is called dual licensing.
 */
 
+//tools/package_cli/packager.c
+
 #include "tools/package_cli/packager.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "formats/oiCA/ca_edit.h"
 #include "formats/oiCA/ca_lookup.h"
 #include "types/container/list_basic_types.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/container/buffer.h"
 #include "types/container/encryption_stream.h"
 #include "types/container/log.h"
@@ -233,7 +235,9 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 	//Convert to CAFile and write to file
 
-	gotoIfError3(clean, File_openStream(&settings->output, 50 * MS, EFileOpenType_Write, true, &fileHandleType, &streamType, &stream, e_rr));
+	gotoIfError3(clean, File_openStream(
+		&settings->output, 50 * MS, EFileOpenType_Write, true, &fileHandleType, &streamType, &stream, e_rr
+	));
 
 	U64 startOffset = 0;
 	gotoIfError3(clean, CAFile_write(&archive, &encStreamType, stream, &startOffset, alloc, e_rr));

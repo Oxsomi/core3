@@ -21,7 +21,7 @@
 //types/math/vec2f.h
 
 #pragma once
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/base/mathf.h"
 #include "types/math/vec_base.h"
 #include "types/math/vec2.h"

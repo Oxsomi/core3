@@ -18,11 +18,11 @@
 *  This is called dual licensing.
 */
 
-//platforms/file_stream.c
+//platforms/generic/file_stream.c
 
 #include "platforms/file.h"
 #include "platforms/platform.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
 #include "types/base/constants.h"

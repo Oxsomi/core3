@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/command_list.h
+
 #pragma once
 #include "graphics/generic/command_structs.h"
 #include "graphics/generic/pipeline_structs.h"
@@ -36,18 +38,18 @@ typedef struct CommandList {
 
 	GraphicsDeviceRef *device;
 
-	Buffer data;                                    //Data for all commands
+	Buffer data;                                       //Data for all commands
 	ListCommandOpInfo commandOps;
-	ListRefPtr resources;                            //Resources used by this command list (TODO: HashSet<RefPtr*>)
+	ListRefPtr resources;                              //Resources used by this command list (TODO: HashSet<RefPtr*>)
 
 	ListTransitionInternal transitions;                //Transitions that are pending
-	ListCommandScope activeScopes;                    //Scopes that were successfully inserted
+	ListCommandScope activeScopes;                     //Scopes that were successfully inserted
 
 	U8 padding0[3];
 	Bool allowResize;
 	ECommandListState state;
 
-	SpinLock lock;                                    //Begin locks this, end unlocks this.
+	SpinLock lock;                                     //Begin locks this, end unlocks this.
 
 	U64 next;
 

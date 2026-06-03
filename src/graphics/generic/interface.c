@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/interface.c
+
 #ifdef GRAPHICS_API_DYNAMIC
 	#include "formats/oiSH/sh_file.h"
 	#include "graphics/generic/blas.h"
@@ -31,7 +33,7 @@
 	#include "graphics/generic/pipeline_layout.h"
 	#include "graphics/generic/command_list.h"
 	#include "platforms/file.h"
-	#include "platforms/log.h"
+	#include "platforms/logx.h"
 	#include "platforms/dynamic_library.h"
 	#include "platforms/platform.h"
 #endif

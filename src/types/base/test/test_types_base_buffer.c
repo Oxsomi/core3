@@ -18,8 +18,10 @@
 *  This is called dual licensing.
 */
 
+//types/base/test/test_types_base_buffer.c
+
 #include "test_types_base_shared.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 
 void Test_buffer(Test *test) {
 

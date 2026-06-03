@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/texture.c
+
 #include "platforms/ext/listx.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/texture.h"
@@ -28,7 +30,7 @@
 #include "graphics/generic/resource.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/descriptor_table.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "types/container/string.h"
 #include "formats/oiSH/registers.h"

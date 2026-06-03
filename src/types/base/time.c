@@ -24,8 +24,8 @@
 #include "types/base/time.h"
 #include "types/base/c8.h"
 #include "types/base/constants.h"
-#include "types/base/string.h"
-#include "types/base/buffer.h"
+#include "types/base/string_base.h"
+#include "types/base/buffer_base.h"
 #include "types/base/mathi.h"
 #include <time.h>
 

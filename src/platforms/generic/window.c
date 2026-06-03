@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//platforms/window.c
+//platforms/generic/window.c
 
 #include "types/container/list_impl.h"
 #include "platforms/window.h"

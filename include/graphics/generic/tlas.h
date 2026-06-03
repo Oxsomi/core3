@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/tlas.h
+
 #pragma once
 #include "graphics/generic/acceleration_structure.h"
 #include "graphics/generic/device_buffer.h"
@@ -30,17 +32,17 @@
 typedef RefPtr BLASRef;
 
 typedef enum ETLASInstanceFlag {
-	ETLASInstanceFlag_None                        = 0,
+	ETLASInstanceFlag_None                      = 0,
 	ETLASInstanceFlag_DisableCulling            = 1 << 0,        //Culling is force disabled for the BLAS
-	ETLASInstanceFlag_CCW                        = 1 << 1,        //Reverse winding order for the BLAS
+	ETLASInstanceFlag_CCW                       = 1 << 1,        //Reverse winding order for the BLAS
 	ETLASInstanceFlag_ForceDisableAnyHit        = 1 << 2,        //Force anyHit off for the BLAS
-	ETLASInstanceFlag_ForceEnableAnyHit            = 1 << 3,        //Force anyHit on for the BLAS
-	ETLASInstanceFlag_Count                        = 4,
-	ETLASInstanceFlag_Default                    = ETLASInstanceFlag_DisableCulling | ETLASInstanceFlag_ForceDisableAnyHit
+	ETLASInstanceFlag_ForceEnableAnyHit         = 1 << 3,        //Force anyHit on for the BLAS
+	ETLASInstanceFlag_Count                     = 4,
+	ETLASInstanceFlag_Default                   = ETLASInstanceFlag_DisableCulling | ETLASInstanceFlag_ForceDisableAnyHit
 } ETLASInstanceFlag;
 
 typedef enum ETLASConstructionType {
-	ETLASConstructionType_Instances,    //deviceData, cpuInstancesMotion or cpuInstancesStatic contains valid data
+	ETLASConstructionType_Instances,     //deviceData, cpuInstancesMotion or cpuInstancesStatic contains valid data
 	ETLASConstructionType_Serialized,    //cpuData contains serialized data from a previously created AS
 	ETLASConstructionType_Count
 } ETLASConstructionType;
@@ -49,12 +51,12 @@ typedef F32 TLASTransform[3][4];
 
 typedef struct TLASInstanceData {
 
-	U32 instanceId24_mask8;                //InstanceID(): shader-specific instance id AND 8-bit mask to allow disabling per ray
-	U32 sbtOffset24_flags8;                //Shader binding table offset AND 8-bit ETLASInstanceFlag
+	U32 instanceId24_mask8;              //InstanceID(): shader-specific instance id AND 8-bit mask to allow disabling per ray
+	U32 sbtOffset24_flags8;              //Shader binding table offset AND 8-bit ETLASInstanceFlag
 
-	union {                                //Set any of these two to NULL to hide the instance
+	union {                              //Set any of these two to NULL to hide the instance
 		BLASRef *blasCpu;                //Only if created from the CPU
-		U64 blasDeviceAddress;            //Otherwise on the device, it should set this to the BLAS's address
+		U64 blasDeviceAddress;           //Otherwise on the device, it should set this to the BLAS's address
 	};
 
 } TLASInstanceData;
@@ -62,7 +64,7 @@ typedef struct TLASInstanceData {
 typedef enum ETLASInstanceType {
 	ETLASInstanceType_Static,            //TLASInstanceStatic
 	ETLASInstanceType_Matrix,            //TLASInstanceMatrix
-	ETLASInstanceType_SRT,                //TLASInstanceSRT
+	ETLASInstanceType_SRT,               //TLASInstanceSRT
 	ETLASInstanceType_Count
 } ETLASInstanceType;
 
@@ -128,7 +130,7 @@ typedef struct TLASInstanceMotion {
 	union {
 		TLASInstanceSRT srtInst;                    //ETLASInstanceMotionType_SRT
 		TLASInstanceMatrixMotion matrixInst;        //ETLASInstanceMotionType_Matrix
-		TLASInstanceStatic staticInst;                //ETLASInstanceMotionType_Static
+		TLASInstanceStatic staticInst;              //ETLASInstanceMotionType_Static
 	};
 
 } TLASInstanceMotion;
@@ -214,9 +216,9 @@ Error GraphicsDeviceRef_createTLASMotionExt(
 Error GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
-	Bool isMotionBlurExt,                //Requires extension
+	Bool isMotionBlurExt,               //Requires extension
 	TLASRef *parent,                    //If specified, indicates refit
-	DeviceData instancesDevice,            //Instances on the GPU, should be sized correctly
+	DeviceData instancesDevice,         //Instances on the GPU, should be sized correctly
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,

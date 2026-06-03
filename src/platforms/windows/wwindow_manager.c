@@ -25,7 +25,7 @@
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/log.h"
 #include "types/base/error.h"
 

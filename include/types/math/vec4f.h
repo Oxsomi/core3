@@ -21,7 +21,7 @@
 //types/math/vec4f.h
 
 #pragma once
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/base/mathf.h"
 #include "types/math/vec4.h"
 #include "types/math/type_cast.h"
@@ -34,13 +34,13 @@ BUFFER_OP_IMPL(F32x4);
 
 #if _SIMD == SIMD_SSE
 	#define VEC4F_SSE_GUARD
-	#include "types/math/vec4f_sse.h"
+	#include "types/math/vec4f_sse.inc.h"
 #elif _SIMD == SIMD_NEON
 	#define VEC4F_NEON_GUARD
-	#include "types/math/vec4f_neon.h"
+	#include "types/math/vec4f_neon.inc.h"
 #else
 	#define VEC4F_NONE_GUARD
-	#include "types/math/vec4f_none.h"
+	#include "types/math/vec4f_none.inc.h"
 #endif
 
 static inline F32x4 F32x4_bitsI32x4(I32x4 a) {

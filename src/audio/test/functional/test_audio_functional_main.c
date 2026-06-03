@@ -434,7 +434,9 @@ clean:
 
 void Test_audioSourceSpatialSweep(AudioFuncCtx *ctx, Bool stereo) {
 
-	Log_debugLn(ctx->alloc, "TEST: spatial sweep left to right, audibly pans left->right (%s)", stereo ? "stereo+flatten" : "mono");
+	Log_debugLn(ctx->alloc,
+		"TEST: spatial sweep left to right, audibly pans left->right (%s)", stereo ? "stereo+flatten" : "mono"
+	);
 
 	Error err = Error_none();
 	FileStreamRef *fs = NULL;

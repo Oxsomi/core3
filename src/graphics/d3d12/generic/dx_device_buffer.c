@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_device_buffer.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
@@ -28,7 +30,7 @@
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/stringx.h"
 #include "types/base/constants.h"
 

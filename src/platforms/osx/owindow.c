@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
@@ -821,7 +821,9 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 	U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel || w->type != EWindowType_Physical)
-		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"));
+		retError(clean, Error_nullPointer(
+			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
+		));
 
 	//CharString copy = CharString_createNull();
 	//id wrapped;
@@ -841,7 +843,9 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"));
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		retError(clean, Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"));
+		retError(clean, Error_unsupportedOperation(
+			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
+		));
 
 	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
 

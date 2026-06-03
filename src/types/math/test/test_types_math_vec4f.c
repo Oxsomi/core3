@@ -22,7 +22,7 @@
 
 #include "test_types_math_shared.h"
 #include "types/math/vec4f_swizzle.h"
-#include "types/math/u128.h"
+#include "types/math/u128_base.h"
 
 void Test_vec4f(Test *test) {
 

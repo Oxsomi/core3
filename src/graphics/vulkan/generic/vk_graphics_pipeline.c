@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_graphics_pipeline.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
@@ -390,7 +392,6 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.minDepthBounds = 1,
 			.maxDepthBounds = 0
 		};
-
 
 	//Rasterizer
 

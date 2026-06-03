@@ -151,8 +151,7 @@ Bool WindowManager_freeNative(WindowManager *w) {
 	return true;
 }
 
-void WindowManager_updateExt(WindowManager *manager) { 
+void WindowManager_updateExt(WindowManager *manager) {
 	LWindowManager *lmanager = (LWindowManager*)manager->platformData.ptr;
 	wl_display_dispatch_pending(lmanager->display);
 }
-

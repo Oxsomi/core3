@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/descriptor_layout.h
+
 #pragma once
 #include "platforms/ext/listx.h"
 #include "types/base/error.h"
@@ -33,13 +35,13 @@ typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EDescriptorLayoutFlags {
 
-	EDescriptorLayoutFlags_None                        = 0,
+	EDescriptorLayoutFlags_None                     = 0,
 	EDescriptorLayoutFlags_AllowBindlessOnArrays    = 1 << 0,        //Required to use bindless, only enables bindless on desc[]
-	EDescriptorLayoutFlags_AllowBindlessEverywhere    = 1 << 1,        //Potentially slower, will assume all registers are dynamic
+	EDescriptorLayoutFlags_AllowBindlessEverywhere  = 1 << 1,        //Potentially slower, will assume all registers are dynamic
 	EDescriptorLayoutFlags_InternalWeakDeviceRef    = 1 << 2,
-	EDescriptorLayoutFlags_HasPushDescriptors        = 1 << 3,        //Push descriptor set, no other descriptors allowed
+	EDescriptorLayoutFlags_HasPushDescriptors       = 1 << 3,        //Push descriptor set, no other descriptors allowed
 
-	EDescriptorLayoutFlags_AllowBindlessAny            =
+	EDescriptorLayoutFlags_AllowBindlessAny         =
 		EDescriptorLayoutFlags_AllowBindlessOnArrays | EDescriptorLayoutFlags_AllowBindlessEverywhere
 
 } EDescriptorLayoutFlags;
@@ -95,8 +97,8 @@ typedef enum EDetectDescriptorLayoutFlags {
 	//These only apply on non arrays, since those could be used for bindless for example.
 	//Samplers need static samplers, doesn't work with push descriptors.
 
-	EDetectDescriptorLayoutFlags_AssumePushConstants    = 1 << 0,        //First buffer (<128 bytes) receives a push constant
-	EDetectDescriptorLayoutFlags_AssumePushDescriptors    = 1 << 1        //Assume non push constant buffer as push descriptors
+	EDetectDescriptorLayoutFlags_AssumePushConstants     = 1 << 0,        //First buffer (<128 bytes) receives a push constant
+	EDetectDescriptorLayoutFlags_AssumePushDescriptors   = 1 << 1        //Assume non push constant buffer as push descriptors
 
 } EDetectDescriptorLayoutFlags;
 
@@ -106,7 +108,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	ListU32 entrypoints,                //U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,        //Empty if no push descriptors or if AssumePushConstants
+	ListCharString pushDescriptors,     //Empty if no push descriptors or if AssumePushConstants
 	CharString pushConstantName,        //Empty if no push constants or AssumePushConstants
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
@@ -117,10 +119,10 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 Bool GraphicsDeviceRef_detectLayoutFromEntry(
 	GraphicsDeviceRef *dev,
 	SHFile binary,
-	U32 entrypoint,                        //U32 (U16 entryId, binaryId)
+	U32 entrypoint,                     //U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,        //Empty if no push descriptors or if AssumePushDescriptors
+	ListCharString pushDescriptors,     //Empty if no push descriptors or if AssumePushDescriptors
 	CharString pushConstantName,        //Empty if no push constants or AssumePushConstants
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,

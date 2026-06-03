@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/combine.c
+
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
@@ -26,7 +28,7 @@
 #include "types/base/string_read.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"

@@ -58,7 +58,6 @@ clean:
 	return ok;
 }
 
-
 void Test_DLRoundtripPlain(Test *t) {
 
 	Test_setModule(t, "DLFile_roundtripPlain");
@@ -76,7 +75,7 @@ void Test_DLRoundtripPlain(Test *t) {
 	DLSettings sStr = sData;
 	sStr.dataType = EDLDataType_String;
 
-	{									//Single buffer
+	{                                   //Single buffer
 		DLFile f = { 0 }, f2 = { 0 };
 		const U8 bytes[] = { 0x11, 0x22, 0x33, 0x44, 0x55 };
 		Buffer buf = Buffer_createNull();
@@ -103,7 +102,7 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_free(&f2,  t->alloc);
 	}
 
-	{									//200 buffers of varying size (0 � 256 bytes)
+	{                                   //200 buffers of varying size (0 - 256 bytes)
 		DLFile f = { 0 }, f2 = { 0 };
 
 		if (!DLFile_create(&sData, 0, t->alloc, &f, &t->err)) {
@@ -160,7 +159,7 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 
-	{						//20 strings
+	{                                   //20 strings
 		DLFile f = { 0 }, f2 = { 0 };
 
 		if (!DLFile_create(&sStr, 0, t->alloc, &f, &t->err)) {
@@ -213,7 +212,7 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 
-	{						//10 empty (zero-length) buffer entries
+	{                                   //10 empty (zero-length) buffer entries
 		DLFile f = { 0 }, f2 = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &f, &t->err);
 
@@ -239,7 +238,7 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 
-	{						//HideMagicNumber / isSubFile mode (like in oiCA)
+	{                                   //HideMagicNumber / isSubFile mode (like in oiCA)
 		DLFile f = { 0 }, f2 = { 0 }, f3 = { 0 };
 		DLSettings sHide = sData;
 		sHide.flags |= EDLSettingsFlags_HideMagicNumber;
@@ -285,12 +284,12 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_free(&f3, t->alloc);
 	}
 
-	{						//Reading null stream fails safely
+	{                                   //Reading null stream fails safely
 		DLFile f = { 0 };
 		Test_assert(t, "read null stream fails", !DLFile_read(NULL, 0, NULL, iv, false, false, t->alloc, NULL, &f, NULL));
 	}
 
-	{						//Reading into already-allocated dlFile fails
+	{                                   //Reading into already-allocated dlFile fails
 		DLFile f = { 0 }, g = { 0 };
 		DLFile_create(&sData, 0, t->alloc, &f, &t->err);
 		U8 b = 1;
@@ -314,7 +313,7 @@ void Test_DLRoundtripPlain(Test *t) {
 		DLFile_free(&g, t->alloc);
 	}
 
-	{						//Read: bad magic number fails
+	{                                   //Read: bad magic number fails
 		DLFile f = { 0 };
 		U8 garbage[32];
 		Buffer_setAllToU8(Buffer_createRef(garbage, 32), 0xBB, NULL);
@@ -366,7 +365,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		Buffer_createRefConst(goodKey, sizeof(goodKey))
 	);
 
-	{									//5x 32 byte buffers
+	{                                   //5x 32 byte buffers
 		DLFile f = { 0 }, f2 = { 0 };
 
 		if (!DLFile_create(&s, 0, t->alloc, &f, &t->err)) {
@@ -447,7 +446,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 
-	{									//Wrong key must fail
+	{                                   //Wrong key must fail
 		DLFile f = { 0 }, f2 = { 0 };
 		DLFile_create(&s, 0, t->alloc, &f, &t->err);
 		U8 b = 0x55;
@@ -472,7 +471,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 
-	{									//Encrypted file, null key supplied, must fail
+	{                                   //Encrypted file, null key supplied, must fail
 		DLFile f = { 0 }, f2 = { 0 };
 		DLFile_create(&s, 0, t->alloc, &f, &t->err);
 		U8 b = 0x77;
@@ -496,7 +495,7 @@ void Test_DLRoundtripEncrypted(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 
-	{								//Unencrypted file, key supplied, must fail
+	{                                   //Unencrypted file, key supplied, must fail
 		DLSettings sPlain = s;
 		sPlain.encryptionType = EXXEncryptionType_None;
 		Buffer_setAllToU8(
@@ -541,7 +540,7 @@ void Test_DLStress(Test *t) {
 
 	const RefPtrType memStreamType = MemoryStream_makeType(t->alloc);
 
-	{									//10k entries of 1 byte (all in cache)
+	{                                   //10k entries of 1 byte (all in cache)
 		DLFile f = { 0 }, f2 = { 0 };
 
 		if (!DLFile_create(&sData, 10000, t->alloc, &f, &t->err)) {
@@ -580,7 +579,7 @@ void Test_DLStress(Test *t) {
 		DLFile_free(&f2, t->alloc);
 	}
 
-	{									//Single 200 KiB entry, above DLFile_medLen (128 KiB), stored as stream
+	{                                   //Single 200 KiB entry, above DLFile_medLen (128 KiB), stored as stream
 		DLFile f = { 0 }, f2 = { 0 };
 		Buffer original = Buffer_createNull();
 

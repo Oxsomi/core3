@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/directx12.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/device_buffer.h"

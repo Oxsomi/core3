@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/device_buffer.h
+
 #pragma once
 #include "types/base/lock.h"
 #include "graphics/generic/device.h"
@@ -33,19 +35,19 @@ typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EDeviceBufferUsage {
 
-	EDeviceBufferUsage_None                    = 0,
+	EDeviceBufferUsage_None                 = 0,
 
-	EDeviceBufferUsage_Vertex                = 1 << 0,        //Allow for use as vertex buffer
+	EDeviceBufferUsage_Vertex               = 1 << 0,        //Allow for use as vertex buffer
 	EDeviceBufferUsage_Index                = 1 << 1,        //Allow for use as index buffer
-	EDeviceBufferUsage_Indirect                = 1 << 2,        //Allow for use in indirect draw/dispatch calls
-	EDeviceBufferUsage_Uniform                = 1 << 3,        //Allow use as a UBO/constant buffer
+	EDeviceBufferUsage_Indirect             = 1 << 2,        //Allow for use in indirect draw/dispatch calls
+	EDeviceBufferUsage_Uniform              = 1 << 3,        //Allow use as a UBO/constant buffer
 
 	//Raytracing types (internal)
 
-	EDeviceBufferUsage_ScratchExt            = 1 << 4,        //Allow for internal use as scratch buffer
+	EDeviceBufferUsage_ScratchExt           = 1 << 4,        //Allow for internal use as scratch buffer
 	EDeviceBufferUsage_ASExt                = 1 << 5,        //Allow for internal use as acceleration structure
 	EDeviceBufferUsage_ASReadExt            = 1 << 6,        //Allow buffer to be read by AS creation
-	EDeviceBufferUsage_SBTExt                = 1 << 7        //Allow for internal use as shader binding table
+	EDeviceBufferUsage_SBTExt               = 1 << 7         //Allow for internal use as shader binding table
 
 } EDeviceBufferUsage;
 

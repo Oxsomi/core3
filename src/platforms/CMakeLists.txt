@@ -111,5 +111,6 @@ if(EnableTests)
 	)
 	
 	apply_dependencies(OxC3_plinttst)
+	add_test(NAME OxC3_plinttst COMMAND OxC3_plinttst)
 
 endif()

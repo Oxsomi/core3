@@ -24,7 +24,7 @@
 #include "types/container/buffer_encrypt.h"
 #include "types/container/buffer.h"
 #include "types/container/simd/aes_encryption_helpers.h"
-#include "types/math/u128.h"
+#include "types/math/u128_base.h"
 #include "types/math/vec4i_swizzle.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
@@ -124,7 +124,8 @@ static I8 cryptoState = -1;
 //No lookup tables, those are unsafe.
 //TODO: Speedup this fallback, it's made to be a reference & to be secure.
 //        Since most devices have AES-NI, no time was spent optimizing this.
-//        If you're encrypting a lot of data... goodluck and see you in 2039 (Don't use for perf critical without AES-NI support)
+//        If you're encrypting a lot of data... goodluck and see you in 2039
+//          (Don't use for perf critical without AES-NI support)
 //        Investigate Bitslicing, Boyar-Peralta or something like it.
 
 static inline U8 AES_xtime(U8 x) {
@@ -144,11 +145,11 @@ static inline U8 AES_gfMul(U8 a, U8 b) {
 static inline U8 AES_gfInv(U8 x) {
 	U8 x2   = AES_gfMul(x, x);
 	U8 x4   = AES_gfMul(x2, x2);
-	U8 x8   = AES_gfMul(x4, x4);    
+	U8 x8   = AES_gfMul(x4, x4);
 	U8 x16  = AES_gfMul(x8, x8);
 	U8 x32  = AES_gfMul(x16, x16);
 	U8 x64  = AES_gfMul(x32, x32);
-	U8 x128 = AES_gfMul(x64, x64);    
+	U8 x128 = AES_gfMul(x64, x64);
 	U8 x192 = AES_gfMul(x128, x64);
 	U8 x224 = AES_gfMul(x192, x32);
 	U8 x240 = AES_gfMul(x224, x16);
@@ -180,15 +181,15 @@ MIGHT_BE_UNUSED static inline U32 AES_subWord(U32 w) {
 }
 
 #if _SIMD == SIMD_NEON
-	#include "types/container/simd/neon/neon_buffer_encrypt.h"
+	#include "types/container/simd/neon/neon_buffer_encrypt.inc.h"
 #elif _SIMD == SIMD_SSE
-	#include "types/container/simd/sse/sse_buffer_encrypt.h"
+	#include "types/container/simd/sse/sse_buffer_encrypt.inc.h"
 	#define HAS_AESx2
 	#define HAS_AESx4
 	#define HAS_CLMUL64x2
 	#define HAS_CLMUL64x4
 #else
-	#include "types/container/simd/none/none_buffer_encrypt.h"
+	#include "types/container/simd/none/none_buffer_encrypt.inc.h"
 #endif
 
 //Key expansion for AES256
@@ -251,7 +252,11 @@ static inline void AESEncryptionContext_expandKey(
 }
 
 //AES block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
-__forceinline__ static I32x4 AESEncryptionContext_blockHash(I32x4 a, const I32x4 *restrict k/*[15]*/, const EBufferEncryptionType type) {
+__forceinline__ static I32x4 AESEncryptionContext_blockHash(
+	I32x4 a,
+	const I32x4 *restrict k/*[15]*/,
+	const EBufferEncryptionType type
+) {
 
 	a = I32x4_xor(a, k[0]);
 	a = AES_encodeBlock(a, k[1]);
@@ -1488,7 +1493,7 @@ static inline Bool AESEncryptionContext_create(
 		*encrypt->constDecrypt.iv,
 		encrypt->type,
 		key,
-		0, blockHint,        //We run a one time context, so optimize for 
+		0, blockHint,
 		U8_MAX,
 		blockSize,
 		use256Or512,
@@ -1972,14 +1977,18 @@ static inline void Buffer_aesExpertEncUpdateFast(
 	AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax, U8 use256Or512
 ) {
 	Buffer_prefetch(data);
-	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), true, offsetInBlocks, blockSizeMax, use256Or512);
+	AESEncryptionContext_handleBlocks(
+		ctx, data.ptrNonConst, Buffer_length(data), true, offsetInBlocks, blockSizeMax, use256Or512
+	);
 }
 
 static inline void Buffer_aesExpertDecUpdateFast(
 	AESEncryptionContext *restrict ctx, Buffer data, U32 offsetInBlocks, U8 blockSizeMax, U8 use256Or512
 ) {
 	Buffer_prefetch(data);
-	AESEncryptionContext_handleBlocks(ctx, data.ptrNonConst, Buffer_length(data), false, offsetInBlocks, blockSizeMax, use256Or512);
+	AESEncryptionContext_handleBlocks(
+		ctx, data.ptrNonConst, Buffer_length(data), false, offsetInBlocks, blockSizeMax, use256Or512
+	);
 }
 
 void Buffer_aesExpertEncUpdate(

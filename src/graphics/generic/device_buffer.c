@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/device_buffer.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
@@ -25,7 +27,7 @@
 #include "graphics/generic/descriptor_table.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
 #include "formats/oiSH/registers.h"
@@ -75,7 +77,6 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	if(!count)
 		count = bufLen - offset;
-
 
 	U64 start = offset &~ 255;
 	U64 end = U64_min((offset + count + 255) &~ 255, bufLen);
@@ -280,7 +281,9 @@ Error GraphicsDeviceRef_createBufferIntern(
 		buf->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
-	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, buf->resource.flags & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
+	gotoIfError(clean, ListDevicePendingRange_reservex(
+		&buf->pendingChanges, buf->resource.flags & EGraphicsResourceFlag_CPUBacked ? 16 : 1
+	))
 
 	if(allocate) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))        //Temporary if not CPUBacked

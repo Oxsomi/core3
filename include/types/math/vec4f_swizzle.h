@@ -126,7 +126,7 @@ static inline F32x4 F32x4_cross3(F32x4 a, F32x4 b) {
 		F32x4_mul(F32x4_yzx(a), F32x4_zxy(b)),
 		F32x4_mul(F32x4_zxy(a), F32x4_yzx(b))
 	);
-} 
+}
 
 #ifdef __cplusplus
 	}

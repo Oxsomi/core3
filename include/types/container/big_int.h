@@ -25,7 +25,7 @@
 #include "types/base/c8.h"
 #include "types/base/algorithm.h"
 #include "types/base/constants.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/base/mathi.h"
 
 #ifdef __cplusplus

@@ -18,11 +18,13 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/operations.c
+
 #include "tools/oxc3_cli/cli.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 
 Bool CLI_info(ParsedArgs args) {
 

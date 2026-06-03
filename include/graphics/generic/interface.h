@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/interface.h
+
 #pragma once
 #include "types/base/types.h"
 #include "types/base/lock.h"
@@ -149,7 +151,10 @@ typedef struct GraphicsObjectSizes {
 
 	//DescriptorLayout
 
-	typedef Error (*GraphicsDeviceRef_createDescriptorLayoutImpl)(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
+	typedef Error (*GraphicsDeviceRef_createDescriptorLayoutImpl)(
+		GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name
+	);
+
 	typedef void (*DescriptorLayout_freeImpl)(DescriptorLayout *layout, Allocator alloc);
 
 	//PipelineLayout
@@ -237,10 +242,10 @@ typedef struct GraphicsObjectSizes {
 
 	typedef struct GraphicsInterfaceTable {
 
-		EGraphicsApi                                    api;
-		U32                                                padding;
+		EGraphicsApi                                     api;
+		U32                                              padding;
 
-		GraphicsObjectSizes                                objectSizes;
+		GraphicsObjectSizes                              objectSizes;
 
 		BLAS_initImpl                                    blasInit;
 		BLASRef_flushImpl                                blasFlush;
@@ -251,52 +256,52 @@ typedef struct GraphicsObjectSizes {
 		TLAS_freeImpl                                    tlasFree;
 
 		GraphicsDevice_createPipelineGraphicsImpl        pipelineCreateGraphics;
-		GraphicsDevice_createPipelineComputeImpl        pipelineCreateCompute;
-		GraphicsDevice_createPipelineRaytracingImpl        pipelineCreateRt;
+		GraphicsDevice_createPipelineComputeImpl         pipelineCreateCompute;
+		GraphicsDevice_createPipelineRaytracingImpl      pipelineCreateRt;
 		Pipeline_freeImpl                                pipelineFree;
 
-		GraphicsDeviceRef_createSamplerImpl                samplerCreate;
-		Sampler_freeImpl                                samplerFree;
+		GraphicsDeviceRef_createSamplerImpl              samplerCreate;
+		Sampler_freeImpl                                 samplerFree;
 
-		GraphicsDeviceRef_createBufferImpl                bufferCreate;
+		GraphicsDeviceRef_createBufferImpl               bufferCreate;
 		DeviceBufferRef_flushImpl                        bufferFlush;
 		DeviceBuffer_freeImpl                            bufferFree;
 
 		UnifiedTexture_createImpl                        textureCreate;
-		DeviceTextureRef_flushImpl                        textureFlush;
-		UnifiedTexture_freeImpl                            textureFree;
+		DeviceTextureRef_flushImpl                       textureFlush;
+		UnifiedTexture_freeImpl                          textureFree;
 
 		GraphicsDeviceRef_createSwapchainImpl            swapchainCreate;
-		Swapchain_freeImpl                                swapchainFree;
+		Swapchain_freeImpl                               swapchainFree;
 
-		GraphicsDeviceRef_createDescriptorLayoutImpl    descriptorLayoutCreate;
+		GraphicsDeviceRef_createDescriptorLayoutImpl     descriptorLayoutCreate;
 		DescriptorLayout_freeImpl                        descriptorLayoutFree;
 
-		GraphicsDeviceRef_createPipelineLayoutImpl        pipelineLayoutCreate;
-		PipelineLayout_freeImpl                            pipelineLayoutFree;
+		GraphicsDeviceRef_createPipelineLayoutImpl       pipelineLayoutCreate;
+		PipelineLayout_freeImpl                          pipelineLayoutFree;
 
-		DescriptorHeap_createDescriptorTableImpl        descriptorTableCreate;
-		DescriptorTable_freeImpl                        descriptorTableFree;
-		DescriptorTable_setDescriptorsImpl                descriptorTableSet;
-		DescriptorTable_unsetDescriptorsImpl            descriptorTableUnset;
+		DescriptorHeap_createDescriptorTableImpl         descriptorTableCreate;
+		DescriptorTable_freeImpl                         descriptorTableFree;
+		DescriptorTable_setDescriptorsImpl               descriptorTableSet;
+		DescriptorTable_unsetDescriptorsImpl             descriptorTableUnset;
 
-		GraphicsDeviceRef_createDescriptorHeapImpl        descriptorHeapCreate;
-		DescriptorHeap_freeImpl                            descriptorHeapFree;
+		GraphicsDeviceRef_createDescriptorHeapImpl       descriptorHeapCreate;
+		DescriptorHeap_freeImpl                          descriptorHeapFree;
 
-		DeviceMemoryAllocator_allocateImpl                memoryAllocate;
-		DeviceMemoryAllocator_freeAllocationImpl        memoryFree;
+		DeviceMemoryAllocator_allocateImpl               memoryAllocate;
+		DeviceMemoryAllocator_freeAllocationImpl         memoryFree;
 
-		GraphicsDevice_initImpl                            deviceInit;
-		GraphicsDeviceRef_waitImpl                        deviceWait;
-		GraphicsDevice_freeImpl                            deviceFree;
+		GraphicsDevice_initImpl                          deviceInit;
+		GraphicsDeviceRef_waitImpl                       deviceWait;
+		GraphicsDevice_freeImpl                          deviceFree;
 		GraphicsDevice_submitCommandsImpl                deviceSubmitCommands;
-		GraphicsDevice_getMemoryBudgetImpl                deviceGetMemoryBudget;
+		GraphicsDevice_getMemoryBudgetImpl               deviceGetMemoryBudget;
 
-		CommandList_processImpl                            commandListProcess;
+		CommandList_processImpl                          commandListProcess;
 
-		GraphicsInstance_createImpl                        instanceCreate;
+		GraphicsInstance_createImpl                      instanceCreate;
 		GraphicsInstance_freeImpl                        instanceFree;
-		GraphicsInstance_getDeviceInfosImpl                instanceGetDevices;
+		GraphicsInstance_getDeviceInfosImpl              instanceGetDevices;
 
 	} GraphicsInterfaceTable;
 
@@ -433,7 +438,7 @@ Error DeviceMemoryAllocator_allocateExt(
 	U32 *blockId,
 	U64 *blockOffset,
 	EResourceType resourceType,
-	CharString objectName,                        //Name of the object that allocates (for dedicated allocations)
+	CharString objectName,              //Name of the object that allocates (for dedicated allocations)
 	DeviceMemoryBlock *resultBlock
 );
 

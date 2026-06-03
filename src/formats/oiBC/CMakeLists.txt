@@ -45,5 +45,6 @@ if(EnableTests)
 
 	target_link_libraries(OxC3_formats_oiBC_test PUBLIC OxC3_formats_oiBC OxC3_types_test)
 	set_target_properties(OxC3_formats_oiBC_test PROPERTIES FOLDER Oxsomi/test/formats)
+	add_test(NAME OxC3_formats_oiBC_test COMMAND OxC3_formats_oiBC_test)
 
 endif()

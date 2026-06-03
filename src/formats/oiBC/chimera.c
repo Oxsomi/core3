@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiBC/chimera.c
+
 #include "formats/oiBC/chimera.h"
 #include "types/math/vec4f.h"
 #include "types/base/error.h"
@@ -119,7 +121,6 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 
 		//Trig, some arithmetic, rounding and some misc ops
 		//All operating on hardcoded registers, such as Af, f0, f1 and Afv.
-
 
 		//More advanced vector operations as well as control flow
 	}

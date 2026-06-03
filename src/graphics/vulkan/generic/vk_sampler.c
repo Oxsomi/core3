@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_sampler.c
+
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"

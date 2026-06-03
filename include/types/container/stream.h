@@ -22,7 +22,7 @@
 
 #pragma once
 #include "types/math/vec4.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus

@@ -32,7 +32,6 @@
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
 
-
 const C8 *ESHBinaryType_names[ESHBinaryType_Count] = {
 	"SPV",
 	"DXIL"
@@ -319,7 +318,6 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 				if(hasSPIRV) counters[Counter_SSBO] += regs;
 				if(hasDXIL)  counters[regType & ESHRegisterType_IsWrite ? Counter_UAV : Counter_SRV] += regs;
 				break;
-
 
 			case ESHRegisterType_Texture1D:
 			case ESHRegisterType_Texture2D:

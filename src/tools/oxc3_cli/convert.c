@@ -18,14 +18,16 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/convert.c
+
 #include "tools/oxc3_cli/cli.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/container/buffer.h"
 #include "types/base/string_read.h"
 #include "types/base/string_read_helper.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/file.h"
 #include "types/base/constants.h"

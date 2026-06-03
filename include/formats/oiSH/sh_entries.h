@@ -160,8 +160,8 @@ typedef struct SHBinaryInfo SHBinaryInfo;
 typedef enum ESHBinaryType ESHBinaryType;
 typedef enum ESHExtension ESHExtension;
 
-U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime);                //How many binaries are stored (compile + link)
-U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime);        //How many binaries are compiled
+U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime);             //How many binaries are stored (compile + link)
+U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime);     //How many binaries are compiled
 
 Bool SHEntryRuntime_asBinaryInfo(
 	const SHEntryRuntime *runtime,

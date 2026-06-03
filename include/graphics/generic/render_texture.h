@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/render_texture.h
+
 #pragma once
 #include "types/math/vec.h"
 #include "types/container/ref_ptr.h"

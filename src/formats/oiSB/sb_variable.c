@@ -33,25 +33,25 @@ TListImpl(SBVar);
 #define EMPTY4 "", "", "", ""
 #define EXPAND4(a, x, x1) #a #x1 #x, #a "x2" #x, #a "x3" #x, #a "x4" #x
 
-#define EXPAND4x4(...)                             \
+#define EXPAND4x4(...)                              \
 	EMPTY4,                                         \
 	EMPTY4,                                         \
 	EMPTY4,                                         \
 	EMPTY4,                                         \
-												 \
+													\
 	EMPTY4,                                         \
-	EXPAND4(F16, __VA_ARGS__),                     \
-	EXPAND4(I16, __VA_ARGS__),                     \
-	EXPAND4(U16, __VA_ARGS__),                     \
-												 \
+	EXPAND4(F16, __VA_ARGS__),                      \
+	EXPAND4(I16, __VA_ARGS__),                      \
+	EXPAND4(U16, __VA_ARGS__),                      \
+													\
 	EMPTY4,                                         \
-	EXPAND4(F32, __VA_ARGS__),                     \
-	EXPAND4(I32, __VA_ARGS__),                     \
-	EXPAND4(U32, __VA_ARGS__),                     \
-												 \
+	EXPAND4(F32, __VA_ARGS__),                      \
+	EXPAND4(I32, __VA_ARGS__),                      \
+	EXPAND4(U32, __VA_ARGS__),                      \
+													\
 	EMPTY4,                                         \
-	EXPAND4(F64, __VA_ARGS__),                     \
-	EXPAND4(I64, __VA_ARGS__),                     \
+	EXPAND4(F64, __VA_ARGS__),                      \
+	EXPAND4(I64, __VA_ARGS__),                      \
 	EXPAND4(U64, __VA_ARGS__)
 
 const C8 *ESBType_names[] = {

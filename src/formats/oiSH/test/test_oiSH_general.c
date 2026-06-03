@@ -22,7 +22,7 @@
 
 #include "test_oiSH_shared.h"
 #include "types/container/list_basic_types.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/base/string_read_helper.h"
 
 static inline Bool cmpstr(const C8 *a, const C8 *b) {

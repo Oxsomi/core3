@@ -26,7 +26,7 @@
 #include "types/container/list_impl.h"
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/base/thread.h"
 #include "types/base/error.h"
@@ -167,4 +167,3 @@ Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, 
 clean:
 	return s_uccess;
 }
-

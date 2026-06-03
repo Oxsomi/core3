@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//shader_compiler/compiler_helper.c
+
 #include "platforms/ext/listx_impl.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
@@ -311,8 +313,8 @@ Bool Compiler_getUniqueCompiles(
 
 			U64 k = 0;
 
-			for(; k < identifiers.length; ++k)
-				if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))        //TODO: This one should combine compilations if isShaderAnnotation
+			for(; k < identifiers.length; ++k)    //TODO: This one should combine compilations if isShaderAnnotation
+				if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))
 					break;
 
 			//When it's new, we gotta remember the binary identifier for reuse.
@@ -501,7 +503,7 @@ clean:
 
 	s_uccess &= dest && dest->isSuccess;
 
-	if(enableLogging) 
+	if(enableLogging)
 		Compiler_logStatus(binaryType, "Compile", inputPath, runtimeEntryId, combinationId, alloc, s_uccess);
 		
 	Error_print(alloc, errTemp, ELogLevel_Error, ELogOptions_Default);
@@ -643,7 +645,6 @@ void ListLinkEntry_freeUnderlying(ListLinkEntry* entries, Allocator alloc) {
 	ListLinkEntry_free(entries, alloc);
 }
 
-
 Bool Compiler_getLinkEntries(
 	Compiler compiler,
 	const ListSHEntryRuntime *runtimeEntries,
@@ -722,7 +723,8 @@ Bool Compiler_getLinkEntries(
 		//Ensure we're actually present for what we're currently compiling and that we do really need linking (otherwise skip)
 		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
 		//However, if you have a mix of extensions and defines, then some entrypoints might not need to be linked again.
-		//Example: raygen with both SER and no SER. This would only be linked once per compilation, but any other shaders should exclude this.
+		//Example: raygen with both SER and no SER. This would only be linked once per compilation,
+		//            but any other shaders should exclude this.
 		//            (We don't want to have 2x hit shaders included while only raygen needs these compilations)
 
 		//Check extensions
@@ -2166,7 +2168,7 @@ Bool Compiler_compileShaders(
 
 					if(isShaderAnnotation) {
 
-						CompilerEntrypoint entry = (CompilerEntrypoint) { 0 }; 
+						CompilerEntrypoint entry = (CompilerEntrypoint) { 0 };
 							
 						if (linkEntry.entrypointId != U16_MAX) {
 

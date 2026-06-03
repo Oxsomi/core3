@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_instance.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
@@ -29,7 +31,7 @@
 #include "graphics/generic/device_info.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/dynamic_library.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
@@ -210,7 +212,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	gotoIfError(clean, ListConstC8_reservex(&enabledExtensions, extensionCount))
 
 	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)))
-	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)))
+	gotoIfError(clean, checkVkError(
+		instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)
+	))
 
 	Bool supportsDebug[2] = { 0 };
 
@@ -595,7 +599,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)))
 		gotoIfError(clean, ListVkExtensionProperties_resizex(&temp4, extensionCount))
-		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)))
+		gotoIfError(clean, checkVkError(
+			instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)
+		))
 
 		//Log device for debugging
 

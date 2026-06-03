@@ -23,7 +23,7 @@
 #include "test_oiSB_shared.h"
 #include "formats/oiSB/sb_file.h"
 #include "types/container/list_basic_types.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 
 //SBFile_combine merges two files with the same layout but different use flags.
 void Test_SBFileCombineFlags(Test *t) {

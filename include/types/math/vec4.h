@@ -22,7 +22,7 @@
 
 #pragma once
 #include "types/math/vec_base.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/base/platform_types.h"
 
 #ifdef __cplusplus
@@ -43,13 +43,13 @@
 
 #if _SIMD == SIMD_SSE
 	#define VEC4_SSE_GUARD
-	#include "types/math/vec4_sse.h"
+	#include "types/math/vec4_sse.inc.h"
 #elif _SIMD == SIMD_NEON
 	#define VEC4_NEON_GUARD
-	#include "types/math/vec4_neon.h"
+	#include "types/math/vec4_neon.inc.h"
 #else
 	#define VEC4_NONE_GUARD
-	#include "types/math/vec4_none.h"
+	#include "types/math/vec4_none.inc.h"
 #endif
 
 #ifdef __cplusplus

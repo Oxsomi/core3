@@ -23,7 +23,7 @@
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/base/error.h"
 #include "types/base/thread.h"
 

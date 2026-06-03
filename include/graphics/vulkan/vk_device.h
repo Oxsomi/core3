@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/vk_device.h
+
 #pragma once
 #include "types/base/platform_types.h"
 #include "graphics/vulkan/vulkan.h"
@@ -25,7 +27,7 @@
 #include "types/container/list.h"
 #include "types/math/vec.h"
 
-#if _PLATFORM_TYPE == PLATFORM_WINDOWS        //For fallback to query memory usage
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS       //For fallback to query memory usage
 	#define UNICODE
 	#define WIN32_LEAN_AND_MEAN
 	#define NOMINMAX
@@ -42,7 +44,7 @@ typedef enum EVkCommandQueue {
 	EVkCommandQueue_Compute,
 	EVkCommandQueue_Graphics,
 
-	//EVkCommandQueue_VideoDecode,            //TODO:
+	//EVkCommandQueue_VideoDecode,           //TODO:
 	//EVkCommandQueue_VideoEncode
 
 	EVkCommandQueue_Count
@@ -66,7 +68,7 @@ typedef enum EDescriptorSetType {
 	EDescriptorSetType_Sampler,
 	EDescriptorSetType_Resources,
 	EDescriptorSetType_CBuffer0,
-	EDescriptorSetType_CBuffer1,        //Versioning
+	EDescriptorSetType_CBuffer1,    //Versioning
 	EDescriptorSetType_CBuffer2,
 
 	EDescriptorSetType_Count,
@@ -88,7 +90,7 @@ TList(VkPipelineStageFlags);
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
-	VkCommandQueue queues[EVkCommandQueue_Count];        //Don't have to be unique queues! Indexed by EVkCommandQueue
+	VkCommandQueue queues[EVkCommandQueue_Count];       //Don't have to be unique queues! Indexed by EVkCommandQueue
 
 	U32 uniqueQueues[EVkCommandQueue_Count];            //Queue families ([resolvedQueues], indexed through resolvedId)
 
@@ -236,8 +238,8 @@ typedef struct VkGraphicsDevice {
 
 typedef struct VkCommandBufferState {
 
-	RefPtr *tempPipelines[EPipelineType_Count];        //Pipelines that were set via command, but not bound yet
-	RefPtr *pipelines[EPipelineType_Count];            //Currently bound pipelines
+	RefPtr *tempPipelines[EPipelineType_Count];   //Pipelines that were set via command, but not bound yet
+	RefPtr *pipelines[EPipelineType_Count];       //Currently bound pipelines
 
 	F32x4 blendConstants, tempBlendConstants;
 

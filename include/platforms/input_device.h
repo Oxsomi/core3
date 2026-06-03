@@ -114,7 +114,7 @@ Bool InputDevice_createButton(
 Bool InputDevice_createAxis(
 	InputDevice *dev,
 	U16 localHandle,
-	const C8 *axisName,            //The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
+	const C8 *axisName,           //The alphaNumeric name (e.g. EKey_1). Should be present until destroy.
 	F32 deadZone,
 	Bool resetOnInputLoss,
 	InputHandle *result,
@@ -138,7 +138,9 @@ static inline U32 InputDevice_getHandles(const InputDevice *d) { return !d ? 0 :
 
 static inline InputHandle InputDevice_invalidHandle() { return (InputHandle) U32_MAX; }
 
-static inline Bool InputDevice_isValidHandle(const InputDevice *d, InputHandle handle) { return d && handle < InputDevice_getHandles(d); }
+static inline Bool InputDevice_isValidHandle(const InputDevice *d, InputHandle handle) {
+	return d && handle < InputDevice_getHandles(d);
+}
 
 static inline Bool InputDevice_isAxis(const InputDevice *d, InputHandle handle) { return d && handle < d->axes; }
 

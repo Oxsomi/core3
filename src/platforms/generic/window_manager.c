@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//platforms/window_manager.c
+//platforms/generic/window_manager.c
 
 #include "types/container/list_impl.h"
 #include "platforms/window_manager.h"
@@ -26,7 +26,7 @@
 #include "platforms/platform.h"
 #include "platforms/input_device.h"
 #include "types/math/vec2i.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/base/thread.h"
 #include "types/base/time.h"
 #include "types/base/constants.h"

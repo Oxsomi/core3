@@ -18,11 +18,13 @@
 *  This is called dual licensing.
 */
 
+//shader_compiler/compiler.cpp
+
 #include "platforms/ext/listx_impl.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "shader_compiler/compiler.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/container/log.h"
 #include "types/base/c8.h"
 #include "types/math/flp.h"
@@ -927,7 +929,6 @@ Bool Compiler_finalizeEntrypoint(
 				))
 	}
 
-
 clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
@@ -1641,7 +1642,6 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
 						)
 							return ESHExtension_RayMicromapOpacity;
-
 
 						break;
 
@@ -2868,7 +2868,7 @@ Bool Compiler_parseUniformsAnnot(SHEntryRuntime &entry, const C8 *&str, Allocato
 
 		++str;
 
-		//oxc::uniforms ( ) 
+		//oxc::uniforms ( )
 		//oxc::uniforms ( ) abc
 		//                 ^^
 

@@ -24,7 +24,7 @@
 #include "formats/oiDL/dl_entry.h"
 #include "types/base/error.h"
 #include "types/base/allocator.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/mathi.h"

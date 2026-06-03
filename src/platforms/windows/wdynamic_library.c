@@ -25,7 +25,7 @@
 #include "platforms/platform.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/string_unicode.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 

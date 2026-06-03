@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/sampler.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/sampler.h"
@@ -27,7 +29,7 @@
 #include "graphics/generic/bindless_descriptor.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/string.h"
 #include "formats/oiSH/registers.h"
 

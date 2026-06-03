@@ -99,6 +99,7 @@ if(EnableTests)
 
 	target_link_libraries(OxC3_types_container_test PUBLIC OxC3_types_container_test_util)
 	set_target_properties(OxC3_types_container_test PROPERTIES FOLDER Oxsomi/test/types)
+	add_test(NAME OxC3_types_container_test COMMAND OxC3_types_container_test)
 
 endif()
 

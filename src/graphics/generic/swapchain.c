@@ -18,12 +18,14 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/swapchain.c
+
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "platforms/window.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"

@@ -147,7 +147,12 @@ static inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, con
 	return ptr == start + blockStart || ptr == start + aligned;
 }
 
-Bool AllocationBuffer_allocateAndFillBlock(const AllocationBufferAllocate *allocate, const Buffer data, U8 **result, Error *e_rr) {
+Bool AllocationBuffer_allocateAndFillBlock(
+	const AllocationBufferAllocate *allocate,
+	const Buffer data,
+	U8 **result,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	const U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
@@ -211,7 +216,7 @@ Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U6
 
 	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
-		const AllocationBufferBlock v = (AllocationBufferBlock) { 
+		const AllocationBufferBlock v = (AllocationBufferBlock) {
 			.startAndNonLinearAndFree = (U64)isNonLinearResource << 62,
 			.end = size,
 			.alignment = alignment

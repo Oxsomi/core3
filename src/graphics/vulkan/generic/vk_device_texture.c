@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_device_texture.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/device_buffer.h"

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/vk_instance.h
+
 #pragma once
 #include "types/base/platform_types.h"
 #include "graphics/vulkan/vulkan.h"
@@ -97,8 +99,8 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetPhysicalDeviceSurfaceSupportKHR getPhysicalDeviceSurfaceSupport;
 
 	PFN_vkGetPhysicalDeviceQueueFamilyProperties getPhysicalDeviceQueueFamilyProperties;
-	void *createSurfaceExt;                                    //Android, windows, etc.
 
+	void *createSurfaceExt;  //Android, windows, etc.
 	PFN_vkDestroySurfaceKHR destroySurface;
 
 	PFN_vkGetPhysicalDeviceMemoryProperties2 getPhysicalDeviceMemoryProperties2;

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/vulkan.h
+
 #pragma once
 #include "types/container/list.h"
 #include "graphics/generic/device_buffer.h"
@@ -31,20 +33,20 @@
 	#define VK_WRAP_FUNC(name) Vk##name
 #endif
 
-#define VkAccessFlagBits2_WRITE (                            \
-	VK_ACCESS_2_SHADER_WRITE_BIT |                            \
+#define VkAccessFlagBits2_WRITE (                           \
+	VK_ACCESS_2_SHADER_WRITE_BIT |                          \
 	VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |                \
 	VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |        \
 	VK_ACCESS_2_TRANSFER_WRITE_BIT |                        \
 	VK_ACCESS_2_HOST_WRITE_BIT |                            \
-	VK_ACCESS_2_MEMORY_WRITE_BIT |                            \
-	VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT_KHR |                \
+	VK_ACCESS_2_MEMORY_WRITE_BIT |                          \
+	VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT_KHR |              \
 	VK_ACCESS_2_VIDEO_DECODE_WRITE_BIT_KHR |                \
 	VK_ACCESS_2_VIDEO_ENCODE_WRITE_BIT_KHR |                \
-	VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT |            \
-	VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT_EXT |    \
-	VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_NV |            \
-	VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |        \
+	VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT |          \
+	VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT_EXT |  \
+	VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_NV |           \
+	VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |      \
 	VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT |                    \
 	VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV)
 

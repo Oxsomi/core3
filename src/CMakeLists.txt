@@ -33,7 +33,4 @@ endif()
 
 add_subdirectory(graphics)
 add_subdirectory(audio)
-
-if(EnableOxC3CLI)
-	add_subdirectory(tools)
-endif()
+add_subdirectory(tools)

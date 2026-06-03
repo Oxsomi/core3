@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/descriptor_heap.h
+
 #pragma once
 #include "types/base/types.h"
 #include "types/base/error.h"
@@ -31,7 +33,7 @@
 typedef struct CharString CharString;
 
 typedef enum EDescriptorHeapFlags {
-	EDescriptorHeapFlags_None                    = 0,
+	EDescriptorHeapFlags_None                     = 0,
 	EDescriptorHeapFlags_AllowBindless            = 1 << 0,        //Required to use bindless
 	EDescriptorHeapFlags_InternalWeakDeviceRef    = 1 << 1
 } EDescriptorHeapFlags;

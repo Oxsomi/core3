@@ -21,7 +21,7 @@
 //types/container/simd/sse/buffer_encrypt_avx256.c
 
 #include "types/container/buffer_encrypt.h"
-#include "types/container/simd/sse/sse_buffer_encrypt.h"
+#include "types/container/simd/sse/sse_buffer_encrypt.inc.h"
 #include "types/container/simd/aes_encryption_helpers.h"
 #include "types/math/vec8i_sse.h"
 #include "types/base/endianness.h"

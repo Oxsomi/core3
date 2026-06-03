@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_device.c
+
 #define INITGUID
 #include <guiddef.h>
 #include "types/base/platform_types.h"
@@ -37,7 +39,7 @@
 #include "graphics/generic/pipeline_layout.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/math/math.h"
 #include "types/base/thread.h"
 #include "types/base/constants.h"

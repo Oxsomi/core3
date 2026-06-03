@@ -18,13 +18,15 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/pipeline_layout.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/string.h"
 
 void PipelineLayoutRef_dec(PipelineLayoutRef **layout) { RefPtr_dec(layout); }

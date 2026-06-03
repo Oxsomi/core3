@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vulkan.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
@@ -69,7 +71,6 @@ Error checkVkError(VkResult result) {
 			return Error_invalidState(4, "checkVkError() out of date");
 		case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
 			return Error_invalidState(5, "checkVkError() native window in use");
-
 
 		case VK_ERROR_INCOMPATIBLE_DRIVER:
 			return Error_unsupportedOperation(0, "checkVkError() incompatible driver");

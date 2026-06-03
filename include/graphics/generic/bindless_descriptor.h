@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/bindless_descriptor.h
+
 #pragma once
 #include "types/container/list.h"
 #include "types/math/vec.h"
@@ -59,8 +61,8 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	GraphicsDeviceRef *device,
 	DescriptorTableRef *descTable,        //Can be NULL in case the device has a default bindless table
 	ESHRegisterType type,
-	U32 strideOrLength,                    //For structured/storage buffers
-	Bool maintainRef,                    //Only if the resource isn't in charge of managing the descriptor
+	U32 strideOrLength,                   //For structured/storage buffers
+	Bool maintainRef,                     //Only if the resource isn't in charge of managing the descriptor
 	Descriptor desc,
 	BindlessDescriptor *descriptorHandle,
 	Error *e_rr

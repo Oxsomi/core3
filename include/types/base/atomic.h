@@ -53,12 +53,12 @@ impl static inline I64 AtomicI64_and(AtomicI64 *ptr, I64 value);
 impl static inline I64 AtomicI64_or(AtomicI64 *ptr, I64 value);
 impl static inline I64 AtomicI64_load(AtomicI64 *ptr);
 impl static inline I64 AtomicI64_store(AtomicI64 *ptr, I64 value);
-impl static inline I64 AtomicI64_cmpStore(AtomicI64 *ptr, I64 compare, I64 value);        //If value in atomic is compare set to value
+impl static inline I64 AtomicI64_cmpStore(AtomicI64 *ptr, I64 compare, I64 value);
 
 //Return state of atomic before adding value.
 
 impl static inline I64 AtomicI64_add(AtomicI64 *ptr, I64 value);
-impl static inline I64 AtomicI64_sub(AtomicI64 *ptr, I64 value);        //I64 = I64_MIN becomes NO-OP (only fetches, doesn't increment)
+impl static inline I64 AtomicI64_sub(AtomicI64 *ptr, I64 value);     //I64 = I64_MIN becomes NO-OP (only fetches)
 
 //Return state of atomic after adding value.
 

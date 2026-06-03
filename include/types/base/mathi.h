@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//types/base/mathi.hpp
+//types/base/mathi.h
 
 #pragma once
 #include "types/base/math_common.h"

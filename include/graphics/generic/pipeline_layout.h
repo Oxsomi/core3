@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/pipeline_layout.h
+
 #pragma once
 #include "graphics/generic/descriptor_layout.h"
 
@@ -27,7 +29,7 @@
 
 typedef enum EPipelineLayoutFlags {
 	EPipelineLayoutFlags_None                        = 0,
-	EPipelineLayoutFlags_InternalWeakDeviceRef        = 1 << 1
+	EPipelineLayoutFlags_InternalWeakDeviceRef       = 1 << 1
 } EPipelineLayoutFlags;
 
 typedef RefPtr DescriptorLayoutRef;

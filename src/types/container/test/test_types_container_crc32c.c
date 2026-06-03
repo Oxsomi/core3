@@ -21,7 +21,7 @@
 //types/container/test/test_types_container_crc32c.c
 
 #include "test_types_container_shared.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/container/buffer.h"
 
 void Test_crc32c(Test *test) {

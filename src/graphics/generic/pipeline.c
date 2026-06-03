@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/pipeline.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
@@ -28,7 +30,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/base/constants.h"
 

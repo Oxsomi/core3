@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/compute_pipeline.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
@@ -26,7 +28,7 @@
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
 
 Bool GraphicsDeviceRef_createPipelineCompute(

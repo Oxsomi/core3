@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/descriptor_table.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_table.h"
@@ -28,7 +30,7 @@
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/container/big_int.h"
 #include "types/math/math.h"
@@ -497,7 +499,7 @@ clean:
 
 Bool Descriptor_eq(Descriptor a, DescriptorTableBindingSingle b, ESHRegisterType type) {
 
-	if (a.resource != b.resource) 
+	if (a.resource != b.resource)
 		return false;
 
 	static_assert(
@@ -1259,7 +1261,7 @@ Bool DescriptorTableRef_findBindlessRegister(
 		//    Unknown allows anything
 		//    Otherwise the format needs to match 1:1
 		//    However, since we're relying on reading a descriptor at a certain place, we can't reuse.
-		// 
+		//
 		//Read textures are simpler;
 		//DXIL all textures are typeless.
 		//SPIRV: Unknown allows anything, otherwise match 1:1

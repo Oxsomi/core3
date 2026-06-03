@@ -18,8 +18,10 @@
 *  This is called dual licensing.
 */
 
+//tools/package_cli/packager.h
+
 #pragma once
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 
 #ifdef __cplusplus
 	extern "C" {

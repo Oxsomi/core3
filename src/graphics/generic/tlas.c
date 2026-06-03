@@ -18,12 +18,14 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/tlas.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/bindless_descriptor.h"

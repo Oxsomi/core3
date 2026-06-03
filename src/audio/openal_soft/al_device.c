@@ -71,7 +71,7 @@ clean:
 	return s_uccess;
 }
 
-Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr) { 
+Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ALAudioDevice *devExt = AudioDevice_ext(dev, AL);

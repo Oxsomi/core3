@@ -21,7 +21,7 @@
 //types/math/vec4i.h
 
 #pragma once
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/math/vec4.h"
 
 #ifdef __cplusplus
@@ -32,13 +32,13 @@ BUFFER_OP_IMPL(I32x4)
 
 #if _SIMD == SIMD_SSE
 	#define VEC4I_SSE_GUARD
-	#include "types/math/vec4i_sse.h"
+	#include "types/math/vec4i_sse.inc.h"
 #elif _SIMD == SIMD_NEON
 	#define VEC4I_NEON_GUARD
-	#include "types/math/vec4i_neon.h"
+	#include "types/math/vec4i_neon.inc.h"
 #else
 	#define VEC4I_NONE_GUARD
-	#include "types/math/vec4i_none.h"
+	#include "types/math/vec4i_none.inc.h"
 #endif
 
 #if _SIMD != SIMD_SSE

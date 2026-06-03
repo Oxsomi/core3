@@ -22,7 +22,7 @@
 
 #pragma once
 #include "types/container/string.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/container/stream.h"
 #include "types/base/types.h"
 
@@ -136,7 +136,7 @@ typedef struct FileHandle {
 
 static inline U64 FileHandle_makeFileSizeType(U64 fileSize, EFileOpenType type) {
 
-	if((fileSize >> 62) || (U64)type > (U64)EFileOpenType_ReadWrite) 
+	if((fileSize >> 62) || (U64)type > (U64)EFileOpenType_ReadWrite)
 		return U64_MAX;
 
 	return fileSize | ((U64)type << 62);
@@ -208,13 +208,13 @@ typedef struct FileLoadVirtual {
 Bool File_loadVirtual(
 	const CharString *loc,
 	const RefPtrType *memoryStreamType,
-	const RefPtrType *encStreamType, 
+	const RefPtrType *encStreamType,
 	const U32 encryptionKey[8],
 	const Allocator *alloc,
 	Error *e_rr
 );
 
-Bool File_isVirtualLoaded(const CharString *loc, const Allocator *alloc, Error *e_rr);    //Check if a virtual section is loaded
+Bool File_isVirtualLoaded(const CharString *loc, const Allocator *alloc, Error *e_rr);  //Check if a virtual section is loaded
 Bool File_unloadVirtual(const CharString *loc, const Allocator *alloc, Error *e_rr);    //Unload a virtual section
 
 //FileStream for handling bigger files and more efficiently jumping around.

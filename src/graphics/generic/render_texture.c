@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/render_texture.c
+
 #include "graphics/generic/interface.h"
 #include "graphics/generic/render_texture.h"
 #include "graphics/generic/device.h"

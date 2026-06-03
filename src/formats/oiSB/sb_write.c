@@ -23,7 +23,7 @@
 #include "formats/oiSB/sb_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/types.h"
+#include "types/container/container_types.h"
 #include "types/container/stream.h"
 #include "types/container/list_basic_types.h"
 #include "types/base/error.h"

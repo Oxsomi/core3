@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//shader_compiler/compiler.h
+
 #pragma once
 #include "formats/oiSH/sh_file.h"
 
@@ -52,10 +54,10 @@ typedef struct CompilerSettings {
 	ECompilerFormat format;
 	ESHBinaryType outputType;
 
-	CharString includeDir;        //Optional extra includeDir to search for
+	CharString includeDir;      //Optional extra includeDir to search for
 
 	Bool debug;
-	Bool infoAboutIncludes;        //Saves extra include info, useful for debugging includes or hot shader reload
+	Bool infoAboutIncludes;     //Saves extra include info, useful for debugging includes or hot shader reload
 	Bool isLib;
 	Bool containsGfxOrComp;
 	Bool isRt;
@@ -71,10 +73,10 @@ typedef enum ECompileErrorType {
 
 typedef struct CompileError {
 
-	U32 compileIndex;        //Compile index. % ESHBinaryType_Count = binaryType, / ESHBinaryType = i of strings[i]
+	U32 compileIndex;           //Compile index. % ESHBinaryType_Count = binaryType, / ESHBinaryType = i of strings[i]
 
 	U16 lineId;
-	U8 typeLineId;            //ECompileErrorType in the top bit and lineId upper 7 bits
+	U8 typeLineId;              //ECompileErrorType in the top bit and lineId upper 7 bits
 	U8 lineOffset;
 
 	CharString error;
@@ -122,7 +124,7 @@ typedef struct CompileResult {
 
 	ListCompileError compileErrors;
 
-	ESHExtension demotion;        //Compile result can signal "extension not found" to demote final binary
+	ESHExtension demotion;      //Compile result can signal "extension not found" to demote final binary
 
 	Bool isSuccess;
 	Bool infoAboutIncludes;
@@ -190,7 +192,7 @@ Bool Compiler_disassemble(Compiler comp, ESHBinaryType type, Buffer buf, Allocat
 Bool Compiler_getUniqueEntrypoints(
 	Compiler compiler,
 	ESHBinaryType binaryType,
-	Buffer binary,                                    //Must be a lib
+	Buffer binary,                                   //Must be a lib
 	Bool showAll,                                    //true: show all entrypoints, false: only show targets to link
 	ListCompilerEntrypoint *uniqueEntrypoints,
 	Allocator alloc,
@@ -200,15 +202,15 @@ Bool Compiler_getUniqueEntrypoints(
 //Convert assembly (SPIRV and DXIL) to oiSH by using the assembly
 
 Bool Compiler_process(
-	Compiler compiler,                    //To be able to get reflection data
+	Compiler compiler,                  //To be able to get reflection data
 	ESHBinaryType type,
-	Buffer *result,                        //Required; input & output binary
-	ListSHRegisterRuntime *registers,    //Required; Output registers
+	Buffer *result,                     //Required; input & output binary
+	ListSHRegisterRuntime *registers,   //Required; Output registers
 	Bool isDebug,
 	SHBinaryIdentifier toCompile,
-	SpinLock *lock,                        //If not NULL will be used before writing into entries
-	ListSHEntryRuntime entries,            //Array contains the current buffer's reflection for the entry and compatibility checks
-	Bool isLib,                            //If input file was compiled as lib
+	SpinLock *lock,                     //If not NULL will be used before writing into entries
+	ListSHEntryRuntime entries,         //Array contains the current buffer's reflection for the entry and compatibility checks
+	Bool isLib,                         //If input file was compiled as lib
 	ESHExtension *demotions,            //Required; specifies which extensions aren't used (useful for demoting unused ones)
 	ListCompileError *errors,
 	Allocator alloc,
@@ -218,33 +220,33 @@ Bool Compiler_process(
 Bool Compiler_link(
 	Compiler compiler,
 	ESHBinaryType type,
-	ListBuffer inputs,                    //Input binary/binaries
-	ListSHUniformRuntime uniforms,        //Uniform descriptions (to index uniformData and to link)
-	Buffer uniformData,                    //Contents of the current compilation
-	CharString entrypoint,                //Entrypoint specialization (empty = keep as lib, otherwise specialize)
-	U16 shaderVersion,                    //U8 maj, minor
+	ListBuffer inputs,                  //Input binary/binaries
+	ListSHUniformRuntime uniforms,      //Uniform descriptions (to index uniformData and to link)
+	Buffer uniformData,                 //Contents of the current compilation
+	CharString entrypoint,              //Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	U16 shaderVersion,                  //U8 maj, minor
 	ESHPipelineStage stageType,
 	ESHExtension exts,
 	ListCompileError *errors,
-	Buffer *result,                        //Output binary: Either library or specialized binary (PS/GS/CS/etc.)
+	Buffer *result,                     //Output binary: Either library or specialized binary (PS/GS/CS/etc.)
 	Allocator alloc,
 	Error *e_rr
 );
 
-Bool Compiler_finalizeEntrypoint(        //Push reflection data into final entrypoint
-	U32 localSize[3],                    //If compute-adj (workgraph, mesh shaders too) the local size per group
-	U8 payloadSize,                        //If miss/hit/callable, the payload size that gets transmitted (bytes)
-	U8 intersectSize,                    //If intersection/hit shader, size of intersection attributes (generally 8 bytes)
-	U16 waveSize,                        //4 pairs of log2(thread) + 1 where 0 = none. req, min, max, rec
-	ESBType inputs[16],                    //Input types for graphics shaders
+Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entrypoint
+	U32 localSize[3],                   //If compute-adj (workgraph, mesh shaders too) the local size per group
+	U8 payloadSize,                     //If miss/hit/callable, the payload size that gets transmitted (bytes)
+	U8 intersectSize,                   //If intersection/hit shader, size of intersection attributes (generally 8 bytes)
+	U16 waveSize,                       //4 pairs of log2(thread) + 1 where 0 = none. req, min, max, rec
+	ESBType inputs[16],                 //Input types for graphics shaders
 	ESBType outputs[16],                //Output types for graphics shaders
 	U8 uniqueInputSemantics,            //How many unique semantic names there are
 	ListCharString *uniqueSemantics,    //All semantic names; e.g. NORMAL. Excluding TEXCOORD or SV_TARGET
-	U8 inputSemantics[16],                //U4 each; semanticId and uniqueSemanticOff (0 = TEXCOORD or SV_TARGET)
-	U8 outputSemantics[16],                //^ but for output semantics for graphics shaders
-	CharString entryName,                //Can be empty in case of RT shaders
-	SpinLock *lock,                        //If not NULL will be used before writing/validating against previous entry
-	ListSHEntryRuntime entries,            //Array contains the current buffer's reflection for the entry and compatibility checks
+	U8 inputSemantics[16],              //U4 each; semanticId and uniqueSemanticOff (0 = TEXCOORD or SV_TARGET)
+	U8 outputSemantics[16],             //^ but for output semantics for graphics shaders
+	CharString entryName,               //Can be empty in case of RT shaders
+	SpinLock *lock,                     //If not NULL will be used before writing/validating against previous entry
+	ListSHEntryRuntime entries,         //Array contains the current buffer's reflection for the entry and compatibility checks
 	Allocator alloc,
 	Error *e_rr
 );
@@ -271,8 +273,8 @@ Bool Compiler_parse(
 );
 
 typedef enum ECompileBinaryTypes {
-	ECompileBinaryTypes_Shader,            //Shader binary
-	ECompileBinaryTypes_Reflection,        //Reflection file for HLSL
+	ECompileBinaryTypes_Shader,           //Shader binary
+	ECompileBinaryTypes_Reflection,       //Reflection file for HLSL
 	ECompileBinaryTypes_Debugging,        //Debugging file such as a PDB for HLSL
 	ECompileBinaryTypes_Count
 } ECompileBinaryTypes;
@@ -296,7 +298,7 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 //Simplied compiler workflow, this is what the CLI calls too; it automatically handles threading and other things.
 
 typedef enum ECompileType {
-	ECompileType_Compile            //Compile all shaders into an oiSH file for consumption
+	ECompileType_Compile              //Compile all shaders into an oiSH file for consumption
 } ECompileType;
 
 Bool Compiler_getTargetsFromFile(
@@ -307,12 +309,12 @@ Bool Compiler_getTargetsFromFile(
 	Bool combineFlag,
 	Bool enableLogging,
 	Allocator alloc,
-	Bool *isFolder,                    //Optional (out); if the input is a folder or not
-	CharString *output,                //Optional; the output directory. If NULL, will output file names only (relative to none)
-	ListCharString *allFiles,        //Fully resolved file names (may contain duplicates per compile mode)
+	Bool *isFolder,                   //Optional (out); if the input is a folder or not
+	CharString *output,               //Optional; the output directory. If NULL, will output file names only (relative to none)
+	ListCharString *allFiles,         //Fully resolved file names (may contain duplicates per compile mode)
 	ListCharString *allShaderText,    //Per file name: Input shader files
-	ListCharString *allOutputs,        //Per file name: Output shader file names
-	ListU8 *allCompileModes            //Per file name: ESHBinaryType
+	ListCharString *allOutputs,       //Per file name: Output shader file names
+	ListU8 *allCompileModes           //Per file name: ESHBinaryType
 );
 
 Bool Compiler_compileShaders(
@@ -328,7 +330,7 @@ Bool Compiler_compileShaders(
 	CharString includeDir,            //Optional
 	Bool enableLogging,
 	Allocator alloc,
-	ListBuffer *allBuffers,            //Optional: buffer outputs (if NULL, outputs to file)
+	ListBuffer *allBuffers,           //Optional: buffer outputs (if NULL, outputs to file)
 	Error *e_rr
 );
 

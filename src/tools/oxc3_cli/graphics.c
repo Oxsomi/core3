@@ -18,12 +18,14 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/graphics.c
+
 #include "platforms/ext/listx_impl.h"
 #include "tools/oxc3_cli/cli.h"
 #include "types/base/error.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/base/constants.h"
 
 #ifdef CLI_GRAPHICS

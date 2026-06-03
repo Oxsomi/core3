@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/inspect_data.c
+
 #include "platforms/ext/listx.h"
 #include "types/base/c8.h"
 #include "types/math/math.h"
@@ -34,7 +36,7 @@
 #include "platforms/ext/archivex.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/file.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "tools/oxc3_cli/cli.h"
 #include "types/base/constants.h"
 
@@ -548,7 +550,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					retError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"));
 
 				gotoIfError3(cleanCa, CharString_createDecx(v, 3, &tmp, e_rr));
-				 gotoIfError3(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1, e_rr));
+				gotoIfError3(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1, e_rr));
 				gotoIfError3(cleanCa, CharString_appendx(&tmp, ':', e_rr));
 				gotoIfError3(cleanCa, CharString_appendx(&tmp, ' ', e_rr));
 				gotoIfError3(cleanCa, CharString_appendStringx(&tmp, &tmp1, e_rr));

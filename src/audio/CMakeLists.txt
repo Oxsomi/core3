@@ -56,6 +56,7 @@ if(EnableTests)
 
 	target_link_libraries(OxC3_audio_interface_test PUBLIC OxC3_audio OxC3_types_container_test_util)
 	set_target_properties(OxC3_audio_interface_test PROPERTIES FOLDER Oxsomi/test/audio)
+	add_test(NAME OxC3_audio_interface_test COMMAND OxC3_audio_interface_test)
 
 	file(GLOB testsFunctionalC "test/functional/*.c")
 	file(GLOB testsFunctionalH "test/functional/*.h")

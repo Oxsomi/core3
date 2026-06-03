@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//platforms/keyboard.c
+//platforms/generic/keyboard.c
 
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"

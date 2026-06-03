@@ -24,7 +24,7 @@
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
@@ -421,7 +421,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 								case VK_OEM_2:        handle = EKey_Slash;        break; // /
 								case VK_OEM_3:        handle = EKey_Backtick;        break; // `
 								case VK_OEM_4:        handle = EKey_LBracket;        break; // [
-								case VK_OEM_5:        handle = EKey_Backslash;    break; // \ 
+								case VK_OEM_5:        handle = EKey_Backslash;    break; // "\"
 								case VK_OEM_6:        handle = EKey_RBracket;        break; // ]
 								case VK_OEM_7:        handle = EKey_Quote;        break; // '
 

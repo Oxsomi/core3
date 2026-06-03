@@ -213,7 +213,7 @@ Quat##T Quat##T##_fromOrientation(T##x4 right, T##x4 trueUp, T##x4 forward) {   
 																														\
 /* Lerp between a and b using percentage (or extrapolate if perc > 1 or < 0) */                                            \
 /*  https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm */                        \
-																														 \
+																														\
 Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {                                                                    \
 																														\
 	a = Quat##T##_normalize(a);                                                                                            \

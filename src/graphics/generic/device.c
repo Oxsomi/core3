@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/device.c
+
 #include "platforms/ext/listx_impl.h"
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
@@ -36,7 +38,7 @@
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/pipeline.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
 #include "platforms/ext/ref_ptrx.h"
@@ -641,7 +643,7 @@ Error GraphicsDeviceRef_create(
 	// 6 - 12GB ("8GB"):  128MB
 	//12 - 24GB ("16GB"): 256MB
 	//24GB+     ("32GB"): 512MB
-	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would 
+	//E.g. Memory allocated CPU visible with a dGPU with 32GB available would use 512MB chunks
 
 	if (!isDistinct) {        //Assume 50/50 split to take a conservative block size approach
 		cpuHeapSize >>= 1;
@@ -740,7 +742,8 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 			case 7:                                            featuresDx |= EDxGraphicsFeatures_SM6_7;    break;
 			case 8:                                            featuresDx |= EDxGraphicsFeatures_SM6_8;    break;
 			case 9:                                            featuresDx |= EDxGraphicsFeatures_SM6_9;    break;
-			default:                                                                                    break;
+			case 10:                                           featuresDx |= EDxGraphicsFeatures_SM6_10;   break;
+			default:                                                                                       break;
 		}
 
 	if(entry.waveSize >> 4)                                    featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;

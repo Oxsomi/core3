@@ -22,7 +22,7 @@
 
 #include "types/container/stream.h"
 #include "types/container/buffer.h"
-#include "types/container/types.h"
+#include "types/container/container_types.h"
 #include "types/base/mathi.h"
 
 void Stream_close(OxStream *stream, const Allocator *alloc) {
@@ -141,7 +141,9 @@ Bool StreamCursor_createWithCache(
 	inc = true;
 
 	if (cursor->cacheData.ptr)
-		retError(clean, Error_invalidParameter(3, 0, "StreamCursor_createWithCache()::cursor already initialized, indicating memleak"));
+		retError(clean, Error_invalidParameter(
+			3, 0, "StreamCursor_createWithCache()::cursor already initialized, indicating memleak"
+		));
 
 	U64 cacheSize = Buffer_length(*cache);
 

@@ -22,7 +22,7 @@
 
 #include "types/container/string.h"
 #include "types/container/log.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/string_unicode.h"

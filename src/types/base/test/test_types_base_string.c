@@ -18,8 +18,10 @@
 *  This is called dual licensing.
 */
 
+//types/base/test/test_types_base_string.c
+
 #include "test_types_base_shared.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 
 void Test_string(Test *test) {
 

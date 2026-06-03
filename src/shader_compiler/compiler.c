@@ -18,10 +18,12 @@
 *  This is called dual licensing.
 */
 
+//shader_compiler/compiler.c
+
 #include "platforms/ext/listx_impl.h"
 #include "shader_compiler/compiler.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/formatx.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
@@ -866,7 +868,7 @@ Bool Compiler_disassemble(Compiler comp, ESHBinaryType type, Buffer buf, Allocat
 
 	switch (type) {
 
-		case ESHBinaryType_SPIRV: 
+		case ESHBinaryType_SPIRV:
 			gotoIfError3(clean, Compiler_disassembleSPIRV(buf, alloc, result, e_rr))
 			break;
 
@@ -930,7 +932,7 @@ Bool Compiler_process(
 
 	switch (type) {
 
-		case ESHBinaryType_SPIRV: 
+		case ESHBinaryType_SPIRV:
 
 			gotoIfError3(clean, Compiler_processSPIRV(
 				result, registers, isDebug, toCompile, lock, entries, isLib, demotions, errors, alloc, e_rr
@@ -1006,7 +1008,7 @@ Bool Compiler_link(
 
 	switch (type) {
 
-		case ESHBinaryType_SPIRV: 
+		case ESHBinaryType_SPIRV:
 
 			gotoIfError3(clean, Compiler_linkSPIRV(
 				compiler, inputs, uniforms, uniformData, entrypoint, stageType, exts, errors, result, alloc, e_rr
@@ -1041,4 +1043,3 @@ void ListCompilerEntrypoint_freeUnderlying(ListCompilerEntrypoint *entry, Alloca
 
 	ListCompilerEntrypoint_free(entry, alloc);
 }
-

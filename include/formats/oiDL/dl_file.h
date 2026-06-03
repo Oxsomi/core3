@@ -160,7 +160,7 @@ Bool DLFile_read(
 
 	//NULL if not encrypted, otherwise must be valid for the DLFile's stream lifetime
 	// This can outlast the DLFile if it's the stream is referenced elsewhere.
-	const RefPtrType *encryptionStreamType,    
+	const RefPtrType *encryptionStreamType,
 
 	DLFile *dlFile,
 	Error *e_rr

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/inspect_header.c
+
 #include "platforms/ext/listx.h"
 #include "types/base/error.h"
 #include "types/math/math.h"
@@ -26,7 +28,7 @@
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiDL/dl_file.h"
 #include "formats/oiSH/headers.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/file.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -166,7 +168,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			Log_debugLnx(
 				"With %"PRIu16" binaries, %"PRIu16" stages, %"PRIu16" defines, "
-				"%"PRIu16" stored semantics, %"PRIu16" includes, %"PRIu16" arrayDimCount, %"PRIu16" registerNameCount and " 
+				"%"PRIu16" stored semantics, %"PRIu16" includes, %"PRIu16" arrayDimCount, %"PRIu16" registerNameCount and "
 				"%"PRIu16" uniformNameCount",
 				shHeader.binaryCount,
 				shHeader.stageCount,

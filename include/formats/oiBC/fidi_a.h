@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiBC/fidi_a.h
+
 #pragma once
 #include "types/base/types.h"
 
@@ -51,75 +53,75 @@
 
 //Constant opcodes
 
-#define EFidiA_expandx40(T, a, b, c)         \
-											 \
-	/* Line 0x00 - 0x0F */                   \
-											 \
-	FidiA_unwrapReg(add##T, f##T),           \
-	FidiA_unwrapReg(sub##T, f##T),           \
-	FidiA_unwrapReg(mul##T, f##T),           \
-											 \
-	EFidiA_div##T,                           \
-	EFidiA_mod##T,                           \
-	EFidiA_isfinite##T,                      \
-	EFidiA_isnan##T,                         \
-											 \
-	/* Line 0x10 - 0x1F */                   \
-											 \
-	FidiA_unwrapReg(swap##T, f),             \
-	FidiA_unwrapReg(cmp##T, f),              \
-	FidiA_unwrapReg(load##T, f),             \
-											 \
-	EFidiA_max##T,                           \
-	EFidiA_min##T,                           \
-	EFidiA_##a,                              \
-	EFidiA_##b,                              \
-											 \
-	/* Line 0x20 - 0x2F */                   \
-											 \
-	EFidiA_negate##T,                        \
-	EFidiA_abs##T,                           \
-	EFidiA_inverse##T,                       \
-	EFidiA_sign##T,                          \
-											 \
-	EFidiA_ceil##T,                          \
-	EFidiA_floor##T,                         \
-	EFidiA_round##T,                         \
-	EFidiA_fract##T,                         \
-											 \
-	EFidiA_sqrt##T,                          \
-	EFidiA_pow2##T,                          \
-											 \
-	EFidiA_loge##T,                          \
-	EFidiA_log2##T,                          \
-	EFidiA_log10##T,                         \
-	EFidiA_exp##T,                           \
-	EFidiA_exp2##T,                          \
-	EFidiA_exp10##T,                         \
-											 \
-	/* Line 0x30 - 0x3F */                   \
-											 \
-	EFidiA_sin##T,                           \
-	EFidiA_cos##T,                           \
-	EFidiA_tan##T,                           \
-											 \
-	EFidiA_asin##T,                          \
-	EFidiA_acos##T,                          \
-	EFidiA_atan##T,                          \
-	EFidiA_atan2##T,                         \
-											 \
-	EFidiA_sat##T,                           \
-	EFidiA_clamp##T,                         \
-	EFidiA_lerp##T,                          \
-	EFidiA_zero##T,                          \
-	EFidiA_pow##T,                           \
-											 \
-	EFidiA_##c##etX##T,                      \
-	EFidiA_##c##etY##T,                      \
-	EFidiA_##c##etZ##T,                      \
+#define EFidiA_expandx40(T, a, b, c)        \
+											\
+	/* Line 0x00 - 0x0F */                  \
+											\
+	FidiA_unwrapReg(add##T, f##T),          \
+	FidiA_unwrapReg(sub##T, f##T),          \
+	FidiA_unwrapReg(mul##T, f##T),          \
+											\
+	EFidiA_div##T,                          \
+	EFidiA_mod##T,                          \
+	EFidiA_isfinite##T,                     \
+	EFidiA_isnan##T,                        \
+											\
+	/* Line 0x10 - 0x1F */                  \
+											\
+	FidiA_unwrapReg(swap##T, f),            \
+	FidiA_unwrapReg(cmp##T, f),             \
+	FidiA_unwrapReg(load##T, f),            \
+											\
+	EFidiA_max##T,                          \
+	EFidiA_min##T,                          \
+	EFidiA_##a,                             \
+	EFidiA_##b,                             \
+											\
+	/* Line 0x20 - 0x2F */                  \
+											\
+	EFidiA_negate##T,                       \
+	EFidiA_abs##T,                          \
+	EFidiA_inverse##T,                      \
+	EFidiA_sign##T,                         \
+											\
+	EFidiA_ceil##T,                         \
+	EFidiA_floor##T,                        \
+	EFidiA_round##T,                        \
+	EFidiA_fract##T,                        \
+											\
+	EFidiA_sqrt##T,                         \
+	EFidiA_pow2##T,                         \
+											\
+	EFidiA_loge##T,                         \
+	EFidiA_log2##T,                         \
+	EFidiA_log10##T,                        \
+	EFidiA_exp##T,                          \
+	EFidiA_exp2##T,                         \
+	EFidiA_exp10##T,                        \
+											\
+	/* Line 0x30 - 0x3F */                  \
+											\
+	EFidiA_sin##T,                          \
+	EFidiA_cos##T,                          \
+	EFidiA_tan##T,                          \
+											\
+	EFidiA_asin##T,                         \
+	EFidiA_acos##T,                         \
+	EFidiA_atan##T,                         \
+	EFidiA_atan2##T,                        \
+											\
+	EFidiA_sat##T,                          \
+	EFidiA_clamp##T,                        \
+	EFidiA_lerp##T,                         \
+	EFidiA_zero##T,                         \
+	EFidiA_pow##T,                          \
+											\
+	EFidiA_##c##etX##T,                     \
+	EFidiA_##c##etY##T,                     \
+	EFidiA_##c##etZ##T,                     \
 	EFidiA_##c##etW##T
 
-typedef enum EFidiA {                        //U8
+typedef enum EFidiA {                       //U8
 	EFidiA_expandx40(, anyFv, allFv, g),
 	EFidiA_expandx40(v, or, and, s)
 } EFidiA;

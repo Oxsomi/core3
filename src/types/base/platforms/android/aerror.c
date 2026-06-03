@@ -19,6 +19,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/platforms/android/aerror.c
+
 #include "types/base/error.h"
 
 //Comparable to https://stackoverflow.com/questions/8115192/android-ndk-getting-the-backtrace

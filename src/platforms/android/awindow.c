@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/keyboard.h"
@@ -444,7 +444,9 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 					Bool backward = buttonState & AMOTION_EVENT_BUTTON_BACK;
 
 					Bool states[5] = { primary, secondary, tertiary, forward, backward };
-					EMouseActions buttons[5] = { EMouseButton_Left, EMouseButton_Right, EMouseButton_Middle, EMouseButton_Forward, EMouseButton_Back };
+					EMouseActions buttons[5] = {
+						EMouseButton_Left, EMouseButton_Right, EMouseButton_Middle, EMouseButton_Forward, EMouseButton_Back
+					};
 
 					for(U64 i = 0; i < 5; ++i) {
 
@@ -462,7 +464,7 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 
 				} else if(
 					action == AMOTION_EVENT_ACTION_DOWN ||
-					  action == AMOTION_EVENT_ACTION_UP
+					action == AMOTION_EVENT_ACTION_UP
 				) {
 					
 					InputHandle handle = EMouseButton_Left;
@@ -552,7 +554,9 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		retError(clean, Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"))
+		retError(clean, Error_unsupportedOperation(
+			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
+		))
 
 	//Fullscreen is a no-op, this is handled by the OS, not our app
 

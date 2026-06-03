@@ -77,7 +77,7 @@ void Test_DLCreateFree(Test *t) {
 		Test_assert(t, "Bad compressionType", !DLFile_create(&bad, 0, t->alloc, &f, NULL));
 	}
 
-	{                        //Invalid encryptionType 
+	{                        //Invalid encryptionType
 		DLSettings bad = s;
 		bad.encryptionType = (XXEncryptionType)0xFF;
 		DLFile f = { 0 };

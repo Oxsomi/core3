@@ -18,10 +18,12 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/device_info.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/pipeline_structs.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "graphics/generic/instance.h"
 #include "types/math/type_cast.h"
@@ -255,6 +257,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EDxGraphicsFeatures_SM6_9)
 				Log_debugLnx("\t\tShader model 6.9");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_SM6_10)
+				Log_debugLnx("\t\tShader model 6.10");
 		}
 
 		else if(api == EGraphicsApi_Vulkan) {

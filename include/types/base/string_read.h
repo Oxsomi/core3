@@ -21,7 +21,7 @@
 //types/base/string_read.h
 
 #pragma once
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/base/algorithm.h"
 
 #ifdef __cplusplus

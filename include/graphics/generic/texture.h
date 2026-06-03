@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/texture.h
+
 #pragma once
 #include "graphics/generic/resource.h"
 #include "types/math/vec.h"
@@ -40,27 +42,27 @@ typedef struct UnifiedTextureImage {
 } UnifiedTextureImage;
 
 //UnifiedTexture (GraphicsResource, etc.), UnifiedTextureImage[N], UnifiedTextureImageExt_size[N]
-typedef struct UnifiedTexture {                //Base texture definition, should be at end of struct! (No padding allowed after!)
+typedef struct UnifiedTexture {                //Base texture definition, should be at end of struct! (No padding after!)
 
 	GraphicsResource resource;
 
 	U8 textureFormatId;                        //ETextureFormatId, Undefined for DepthStencil
 	U8 sampleCount;                            //EMSAASamples
 	U8 depthFormat;                            //Only accessible for DepthStencil, otherwise None
-	U8 type;                                //ETextureType
+	U8 type;                                   //ETextureType
 
 	U16 width, height, length;
 	U8 levels, images;
 
 	U8 padding[10];
-	U8 maxImages;                            //If 0, uses images, otherwise the amount of images to the next struct
+	U8 maxImages;                              //If 0, uses images, otherwise the amount of images to the next struct
 	U8 currentImageId;
 
 	DescriptorTableRef *bindlessDescriptorTable;
 
 } UnifiedTexture;
 
-typedef RefPtr TextureRef;                    //DeviceTexture, RenderTexture, DepthStencil, Swapchain
+typedef RefPtr TextureRef;                     //DeviceTexture, RenderTexture, DepthStencil, Swapchain
 
 //TODO: Ability to query allocation size (inc alignment)
 

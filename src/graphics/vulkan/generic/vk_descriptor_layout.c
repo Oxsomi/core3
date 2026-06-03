@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_descriptor_layout.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
@@ -26,7 +28,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "formats/oiSH/entries.h"
 #include "types/base/constants.h"
 

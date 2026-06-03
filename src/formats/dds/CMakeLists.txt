@@ -48,5 +48,6 @@ if(EnableTests)
 	target_link_libraries(OxC3_formats_dds_test PUBLIC OxC3_types_container_test_util OxC3_formats_dds)
 	set_target_properties(OxC3_formats_dds_test PROPERTIES FOLDER Oxsomi/test/formats)
 	target_include_directories(OxC3_formats_dds_test PUBLIC "../../../include")
+	add_test(NAME OxC3_formats_dds_test COMMAND OxC3_formats_dds_test)
 
 endif()

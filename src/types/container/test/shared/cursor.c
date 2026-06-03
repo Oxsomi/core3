@@ -18,7 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "types/container/test/stream.h"
+//types/container/test/shared/cursor.c
+
+#include "types/container/test/stream_harness.h"
 #include "types/container/stream.h"
 #include "types/container/buffer.h"
 #include "types/test/test.h"
@@ -413,7 +415,7 @@ static void Test_streamCursorCaching(Test *t, StreamHarness *h) {
 	else Test_assert(t, "Bypass cache write", false);
 
 	//Partial writes at cache block boundaries and boundary - 8.
-	//Background is 0xCACA� from the bypass write above.
+	//Background is 0xCACA from the bypass write above.
 
 	{
 		magic = 0xBABABABABABABABA;
@@ -500,7 +502,7 @@ static void Test_streamCursorCopyStream(Test *t, StreamHarness *h) {
 		return;
 	}
 
-	if (!h->create(h, 96 * KIBI, false, &stream, t)) {		//Creates zeroed stream
+	if (!h->create(h, 96 * KIBI, false, &stream, t)) {    //Creates zeroed stream
 		Test_assert(t, "Create src stream", false);
 		goto clean;
 	}

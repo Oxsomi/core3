@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/command_list.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/command_list.h"
@@ -31,7 +33,7 @@
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "types/container/string.h"
 #include "types/container/texture_format.h"
@@ -1801,7 +1803,7 @@ Error CommandListRef_startRenderExt(
 
 		//Swapchain needs to maintain version, so CommandList can be invalidated on resize
 
-		 if(version.resource && !ListDeviceResourceVersion_contains(commandList->activeSwapchains, version, 0, NULL))
+		if(version.resource && !ListDeviceResourceVersion_contains(commandList->activeSwapchains, version, 0, NULL))
 			gotoIfError(clean, ListDeviceResourceVersion_pushBackx(&commandList->activeSwapchains, version))
 
 		//TODO: Properly validate this

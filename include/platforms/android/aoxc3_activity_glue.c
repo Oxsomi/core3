@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//platforms/android/aoxc3_activity_glue.h
+//platforms/android/aoxc3_activity_glue.c
 
 #include "platforms/platform.h"
 #include "platforms/window.h"

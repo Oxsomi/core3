@@ -41,9 +41,14 @@ typedef enum EMouseActions {
 
 	EMouseAxis_Begin,
 
-	EMouseAxis_RX = EMouseAxis_Begin, EMouseAxis_RY,
-	EMouseAxis_ScrollWheel_X, EMouseAxis_ScrollWheel_Y,
-	EMouseAxis_Temp0, EMouseAxis_Temp1,
+	EMouseAxis_RX = EMouseAxis_Begin,
+	EMouseAxis_RY,
+
+	EMouseAxis_ScrollWheel_X,
+	EMouseAxis_ScrollWheel_Y,
+
+	EMouseAxis_Temp0,
+	EMouseAxis_Temp1,
 
 	EMouseAxis_End,
 	EMouseAxis_Count = EMouseAxis_End - EMouseAxis_Begin,
@@ -52,8 +57,11 @@ typedef enum EMouseActions {
 
 	EMouseButton_Begin = EMouseAxis_End,
 
-	EMouseButton_Left = EMouseButton_Begin, EMouseButton_Middle, EMouseButton_Right,
-	EMouseButton_Back, EMouseButton_Forward,
+	EMouseButton_Left = EMouseButton_Begin,
+	EMouseButton_Middle,
+	EMouseButton_Right,
+	EMouseButton_Back,
+	EMouseButton_Forward,
 
 	EMouseButton_End,
 	EMouseButton_Count = EMouseButton_End - EMouseButton_Begin,

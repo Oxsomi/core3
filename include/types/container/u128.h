@@ -22,7 +22,7 @@
 
 #pragma once
 #include "types/container/big_int_predeclare.h"
-#include "types/math/u128.h"
+#include "types/math/u128_base.h"
 
 #ifdef __cplusplus
 	extern "C" {

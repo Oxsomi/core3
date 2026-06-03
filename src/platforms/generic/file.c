@@ -18,11 +18,11 @@
 *  This is called dual licensing.
 */
 
-//platforms/file.c
+//platforms/generic/file.c
 
 #include "platforms/file.h"
 #include "platforms/platform.h"
-#include "platforms/types.h"
+#include "platforms/platforms_types.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiCA/ca_lookup.h"
 #include "formats/oiCA/ca_props.h"
@@ -37,7 +37,6 @@
 #include "types/base/constants.h"
 
 #include <stdio.h>
-#include <sys/stat.h>
 
 //Private file functions
 
@@ -1355,7 +1354,7 @@ Bool File_isVirtualLoaded(const CharString *loc, const Allocator *alloc, Error *
 Bool File_loadVirtual(
 	const CharString *loc,
 	const RefPtrType *memoryStreamType,
-	const RefPtrType *encStreamType, 
+	const RefPtrType *encStreamType,
 	const U32 encryptionKey[8],
 	const Allocator *alloc,
 	Error *e_rr

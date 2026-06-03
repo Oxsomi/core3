@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_descriptor_heap.c
+
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -54,7 +56,9 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 	U32 counter = 0;
 
 	if(info.maxAccelerationStructures)
-		poolSizes[counter++] = (VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, info.maxAccelerationStructures };
+		poolSizes[counter++] = (VkDescriptorPoolSize) {
+			VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, info.maxAccelerationStructures
+		};
 
 	if(info.maxSamplers)
 		poolSizes[counter++] = (VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLER, info.maxSamplers };

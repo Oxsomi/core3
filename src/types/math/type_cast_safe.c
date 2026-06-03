@@ -27,23 +27,23 @@
 
 #define CastFromU(type, toBits, ...)                                                                            \
 																												\
-	Bool s_uccess = true;                                                                                        \
+	Bool s_uccess = true;                                                                                       \
 																												\
 	if(!res)                                                                                                    \
-		retError(clean, Error_nullPointer(1, "CastFromU()::res is required"));                                    \
+		retError(clean, Error_nullPointer(1, "CastFromU()::res is required"));                                  \
 																												\
-	__VA_ARGS__                                                                                                    \
+	__VA_ARGS__                                                                                                 \
 																												\
-	if(v > type##_MAX)                                                                                            \
-		retError(clean, Error_overflow(0, toBits, (U64) type##_MAX, "CastFromU()::v out of bounds"));            \
+	if(v > type##_MAX)                                                                                          \
+		retError(clean, Error_overflow(0, toBits, (U64) type##_MAX, "CastFromU()::v out of bounds"));           \
 																												\
 	*res = (type) v;                                                                                            \
-clean:                                                                                                            \
+clean:                                                                                                          \
 	return s_uccess
 
-#define CastFromI(type, castType, toBits, ...) CastFromU(type, toBits, __VA_ARGS__                                 \
-	if(v < type##_MIN)                                                                                            \
-		retError(clean, Error_underflow(0, toBits, (castType) type##_MIN, "CastFromI()::v is out of bounds"));    \
+#define CastFromI(type, castType, toBits, ...) CastFromU(type, toBits, __VA_ARGS__                              \
+	if(v < type##_MIN)                                                                                          \
+		retError(clean, Error_underflow(0, toBits, (castType) type##_MIN, "CastFromI()::v is out of bounds"));  \
 )
 
 //We can't reuse CastFromU/CastFromI, since floats are a bit special:
@@ -54,60 +54,60 @@ clean:                                                                          
 // This results in either >= 0x100, 0x10000 and with
 // float/int (due to float precision) it'll produce 4Gi + 1 = 4Gi so it'll work.
 
-#define CastFromUForF(type, toBits, floatType, ...)                                                                \
+#define CastFromUForF(type, toBits, floatType, ...)                                                             \
 																												\
-	Bool s_uccess = true;                                                                                        \
+	Bool s_uccess = true;                                                                                       \
 																												\
 	if(!res)                                                                                                    \
-		retError(clean, Error_nullPointer(1, "CastFromUForF()::res is required"));                                \
+		retError(clean, Error_nullPointer(1, "CastFromUForF()::res is required"));                              \
 																												\
-	__VA_ARGS__                                                                                                    \
+	__VA_ARGS__                                                                                                 \
 																												\
 	if(v >= ((floatType)type##_MAX + 1))                                                                        \
-		retError(clean, Error_overflow(0, toBits, (U64) type##_MAX, "CastFromUForF()::v out of bounds"));        \
+		retError(clean, Error_overflow(0, toBits, (U64) type##_MAX, "CastFromUForF()::v out of bounds"));       \
 																												\
 	*res = (type) v;                                                                                            \
-clean:                                                                                                            \
+clean:                                                                                                          \
 	return s_uccess
 
-#define CastFromIForF(type, castType, toBits, floatType, ...)                                                    \
-	CastFromUForF(type, toBits, floatType, __VA_ARGS__                                                            \
-		if(v < type##_MIN)                                                                                        \
+#define CastFromIForF(type, castType, toBits, floatType, ...)                                                   \
+	CastFromUForF(type, toBits, floatType, __VA_ARGS__                                                          \
+		if(v < type##_MIN)                                                                                      \
 			retError(clean, Error_underflow(                                                                    \
-				0, toBits, (castType) type##_MIN, "CastFromIForF()::v is out of bounds"                            \
-			));                                                                                                    \
+				0, toBits, (castType) type##_MIN, "CastFromIForF()::v is out of bounds"                         \
+			));                                                                                                 \
 	)
 
-#define CastFromF(type)                                                                                            \
-	const void *vptr = &v;                                                                                        \
-	CastFromIForF(type, type, *(const U32*)vptr, F32,                                                            \
+#define CastFromF(type)                                                                                         \
+	const void *vptr = &v;                                                                                      \
+	CastFromIForF(type, type, *(const U32*)vptr, F32,                                                           \
 		if(v != (type)v)                                                                                        \
-			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));                        \
+			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));                     \
 )
 
-#define CastFromD(type)                                                                                            \
-	const void *vptr = &v;                                                                                        \
-	CastFromIForF(type, type, *(const U64*)vptr, F64,                                                            \
+#define CastFromD(type)                                                                                         \
+	const void *vptr = &v;                                                                                      \
+	CastFromIForF(type, type, *(const U64*)vptr, F64,                                                           \
 		if(v != (type)v)                                                                                        \
-			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));                        \
+			retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));                     \
 )
 
-#define ITOF(T, TUint)                                                                                            \
-Bool T##_fromUInt(U64 v, T *res, Error *e_rr){                                                                    \
+#define ITOF(T, TUint)                                                                                          \
+Bool T##_fromUInt(U64 v, T *res, Error *e_rr){                                                                  \
 																												\
-	Bool s_uccess = true;                                                                                        \
+	Bool s_uccess = true;                                                                                       \
 																												\
 	if(!res)                                                                                                    \
-		retError(clean, Error_nullPointer(1, #T "_fromUInt()::res is required"));                                \
+		retError(clean, Error_nullPointer(1, #T "_fromUInt()::res is required"));                               \
 																												\
 	if(v > (U64)T##_MAX)                                                                                        \
-		retError(clean, Error_overflow(0, (U64)v, (U64) T##_MAX, #T "_fromUInt()::v out of bounds"));            \
+		retError(clean, Error_overflow(0, (U64)v, (U64) T##_MAX, #T "_fromUInt()::v out of bounds"));           \
 																												\
-	*res = (T) v;                                                                                                \
-clean:                                                                                                            \
+	*res = (T) v;                                                                                               \
+clean:                                                                                                          \
 	return s_uccess;                                                                                            \
-}                                                                                                                \
-Bool T##_fromInt(I64 v, T *res, Error *e_rr) { CastFromI(T, TUint, (U64)v); }                                    \
+}                                                                                                               \
+Bool T##_fromInt(I64 v, T *res, Error *e_rr) { CastFromI(T, TUint, (U64)v); }                                   \
 Bool T##_fromFloat(F32 v, T *res, Error *e_rr) { CastFromF(T); }                                                \
 Bool T##_fromDouble(F64 v, T *res, Error *e_rr) { CastFromD(T); }
 
@@ -136,9 +136,9 @@ Bool I64_fromDouble(F64 v, I64 *res, Error *e_rr) { CastFromD(I64); }
 //Cast to uints
 
 #define _UTOF(T)                                                                                                \
-Bool T##_fromUInt(U64 v, T *res, Error *e_rr) { CastFromU(T, (U64)v); }                                            \
-Bool T##_fromInt(I64 v, T *res, Error *e_rr) { CastFromI(T, T, (U64)v); }                                        \
-Bool T##_fromFloat(F32 v, T *res, Error *e_rr) { CastFromF(T); }                                                 \
+Bool T##_fromUInt(U64 v, T *res, Error *e_rr) { CastFromU(T, (U64)v); }                                         \
+Bool T##_fromInt(I64 v, T *res, Error *e_rr) { CastFromI(T, T, (U64)v); }                                       \
+Bool T##_fromFloat(F32 v, T *res, Error *e_rr) { CastFromF(T); }                                                \
 Bool T##_fromDouble(F64 v, T *res, Error *e_rr) { CastFromD(T); }
 
 _UTOF(U8);
@@ -164,21 +164,21 @@ clean:
 
 #define CastToFloatType(T, PrevType)                                                        \
 																							\
-	Bool s_uccess = true;                                                                    \
+	Bool s_uccess = true;                                                                   \
 																							\
 	if(!res)                                                                                \
-		retError(clean, Error_nullPointer(1, "CastTo()::res is required"));                    \
+		retError(clean, Error_nullPointer(1, "CastTo()::res is required"));                 \
 																							\
 	T r = (T) v;                                                                            \
 																							\
-	if(!T##_isValid(r))                                                                        \
-		retError(clean, Error_NaN(0, "CastTo()::res truncated to NaN or Inf"));                \
+	if(!T##_isValid(r))                                                                     \
+		retError(clean, Error_NaN(0, "CastTo()::res truncated to NaN or Inf"));             \
 																							\
 	if((PrevType)r != v)                                                                    \
-		retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));        \
+		retError(clean, Error_notFound(0, 0, "CastTo()::res didn't properly resolve"));     \
 																							\
-	*res = r;                                                                                \
-clean:                                                                                        \
+	*res = r;                                                                               \
+clean:                                                                                      \
 	return s_uccess
 
 Bool F32_fromInt(I64 v, F32 *res, Error *e_rr) { CastToFloatType(F32, I64); }

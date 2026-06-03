@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/descriptor_heap.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_heap.h"

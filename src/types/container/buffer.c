@@ -26,7 +26,7 @@
 #include "types/container/buffer.h"
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 
 #include <string.h>
 

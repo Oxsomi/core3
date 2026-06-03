@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/instance.h
+
 #pragma once
 #include "types/container/string.h"
 #include "types/container/ref_ptr.h"
@@ -46,11 +48,11 @@ typedef enum EGraphicsApi {
 extern const C8 *EGraphicsApi_name[EGraphicsApi_Count];
 
 typedef enum EGraphicsInstanceFlags {
-	EGraphicsInstanceFlags_None                = 0,
-	EGraphicsInstanceFlags_IsDebug            = 1 << 0,
-	EGraphicsInstanceFlags_IsVerbose        = 1 << 1,
-	EGraphicsInstanceFlags_DisableDebug        = 1 << 2,
-	EGraphicsInstanceFlags_DisableGPUBV        = 1 << 3    //Disable GPU based validation (but keep other debugging)
+	EGraphicsInstanceFlags_None              = 0,
+	EGraphicsInstanceFlags_IsDebug           = 1 << 0,
+	EGraphicsInstanceFlags_IsVerbose         = 1 << 1,
+	EGraphicsInstanceFlags_DisableDebug      = 1 << 2,
+	EGraphicsInstanceFlags_DisableGPUBV      = 1 << 3    //Disable GPU based validation (but keep other debugging)
 } EGraphicsInstanceFlags;
 
 typedef struct GraphicsInstance {
@@ -74,7 +76,7 @@ typedef struct ListGraphicsDeviceInfo ListGraphicsDeviceInfo;
 void GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
-Bool GraphicsInterface_create(Error *e_rr);                //Prepare interface to query info about supported APIs
+Bool GraphicsInterface_create(Error *e_rr);              //Prepare interface to query info about supported APIs
 Bool GraphicsInterface_supportsApi(EGraphicsApi api);
 
 Error GraphicsInstance_create(

@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/resource.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/resource.h"
 #include "graphics/generic/allocator.h"

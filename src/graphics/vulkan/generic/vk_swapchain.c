@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_swapchain.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
@@ -28,7 +30,7 @@
 #include "platforms/window.h"
 #include "platforms/monitor.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -203,7 +205,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
 		))
 
-	U32 requestedImages = SWAPCHAIN_VERSIONING;        //Don't use the already requested images, since we might get a different image count
+	//Don't use the already requested images, since we might get a different image count
+	U32 requestedImages = SWAPCHAIN_VERSIONING;
 
 	if(capabilities.minImageCount > requestedImages)
 		++requestedImages;

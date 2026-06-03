@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//types/container/simd/aes_encryption_helper.h
+//types/container/simd/aes_encryption_helpers.h
 
 #pragma once
 #include "types/math/vec4i.h"

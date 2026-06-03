@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_compute_pipeline.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
@@ -28,7 +30,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/buffer.h"

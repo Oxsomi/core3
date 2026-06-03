@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_allocator.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/allocator.h"
 #include "graphics/d3d12/dx_device.h"
@@ -27,7 +29,7 @@
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/base/error.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
@@ -185,7 +187,7 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	heapDesc.SizeInBytes = realBlockSize;
 	
 	U64 usedMem = DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(allocator->device, !cpuSided);
-	U64 maxAlloc = 
+	U64 maxAlloc =
 		cpuSided ? allocator->device->info.capabilities.sharedMemory :
 		allocator->device->info.capabilities.dedicatedMemory;
 

@@ -21,7 +21,7 @@
 //types/math/vec2i.h
 
 #pragma once
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/base/mathi.h"
 #include "types/base/endianness.h"
 #include "types/math/vec_base.h"

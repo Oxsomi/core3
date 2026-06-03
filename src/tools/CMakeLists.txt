@@ -12,9 +12,21 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program. If not, see https://github.com/Oxsomi/rt_core/blob/main/LICENSE.
+# along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 # Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-add_subdirectory(oxc3_cli)
+find_package(Python3)
+
+add_custom_target(check_style ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "-- Running OxC3 style check..."
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/check_style.py ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "OxC3 style check"
+    VERBATIM
+)
+
+if(EnableOxC3CLI)
+    add_subdirectory(oxc3_cli)
+endif()

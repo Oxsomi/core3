@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//types/base/math_common.hpp
+//types/base/math_common.h
 
 #pragma once
 #include "types/base/types.h"

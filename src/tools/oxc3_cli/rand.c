@@ -18,13 +18,15 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/rand.c
+
 #include "tools/oxc3_cli/cli.h"
 #include "types/container/string.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"
 #include "types/math/math.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/file.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"

@@ -22,7 +22,7 @@
 
 #include "types/container/memory_stream.h"
 #include "types/container/buffer.h"
-#include "types/container/types.h"
+#include "types/container/container_types.h"
 #include "types/base/mathi.h"
 
 //Implement OxStream's functions

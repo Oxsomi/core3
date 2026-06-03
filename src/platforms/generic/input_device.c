@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//platforms/input_device.c
+//platforms/generic/input_device.c
 
 #include "platforms/input_device.h"
 #include "types/container/string.h"

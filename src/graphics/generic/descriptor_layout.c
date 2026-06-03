@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/descriptor_layout.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_layout.h"
@@ -247,7 +249,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			ESHRegisterType regType4 = reg.reg.registerType & ESHRegisterType_TypeMask;
 			Bool isCBuffer = regType4 == ESHRegisterType_ConstantBuffer;
 
-			Bool hasStrideOrLen = 
+			Bool hasStrideOrLen =
 				isCBuffer ||
 				reg.reg.registerType == ESHRegisterType_PushConstants ||
 				regType4 == ESHRegisterType_StructuredBuffer ||
@@ -277,7 +279,10 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 				if(
 					isPushConstants ||
-					((detectFlags & EDetectDescriptorLayoutFlags_AssumePushConstants) && !CharString_length(pushConstantName) && reg.shaderBuffer.bufferSize <= 128) ||
+					(
+						(detectFlags & EDetectDescriptorLayoutFlags_AssumePushConstants) &&
+						!CharString_length(pushConstantName) && reg.shaderBuffer.bufferSize <= 128
+					) ||
 					CharString_equalsStringSensitive(reg.name, pushConstantName)
 				) {
 					
@@ -310,7 +315,6 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 					isPushDescriptor = true;
 					break;
 				}
-
 
 			if(isPushDescriptor) {
 
@@ -493,7 +497,10 @@ Error GraphicsDeviceRef_createDescriptorLayout(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if((info->flags & EDescriptorLayoutFlags_AllowBindlessAny) && !(device->info.capabilities.features & EGraphicsFeatures_Bindless))
+	if(
+		(info->flags & EDescriptorLayoutFlags_AllowBindlessAny) &&
+		!(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+	)
 		return Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorLayout()::info.flags can't include bindless if bindless feature is missing"
 		);

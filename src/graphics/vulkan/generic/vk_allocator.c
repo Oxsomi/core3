@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_allocator.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/allocator.h"
 #include "graphics/vulkan/vk_device.h"
@@ -28,7 +30,7 @@
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/base/error.h"
 #include "types/math/math.h"
 #include "types/container/string.h"
@@ -190,7 +192,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 								!!(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ? "cpu sided" :
 								"resourceType"
 							)
-						)        
+						)
 					)
 				);*/
 
@@ -257,7 +259,7 @@ Error VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	};
 
 	U64 usedMem = VK_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(allocator->device, !cpuSided);
-	U64 maxAlloc = 
+	U64 maxAlloc =
 		cpuSided ? allocator->device->info.capabilities.sharedMemory :
 		allocator->device->info.capabilities.dedicatedMemory;
 

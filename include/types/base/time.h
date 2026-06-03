@@ -21,7 +21,7 @@
 //types/base/time.h
 
 #pragma once
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 
 #ifdef __cplusplus
 	extern "C" {

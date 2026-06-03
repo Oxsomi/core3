@@ -105,34 +105,6 @@ def main():
 
 	if args.tests == "True":
 
-		bin_dir = os.path.join(build_dir, "bin")
-		ext     = ".exe" if system == "Windows" else ""
-
-		tests = [
-			"OxC3_types_base_test",
-			"OxC3_types_math_test",
-			"OxC3_types_container_test",
-			"OxC3_formats_oiBC_test",
-			"OxC3_formats_oiDL_test",
-			"OxC3_formats_oiCA_test",
-			"OxC3_formats_oiSB_test",
-			"OxC3_formats_oiSH_test",
-			"OxC3_formats_dds_test",
-			"OxC3_formats_wav_test",
-			"OxC3_formats_bmp_test",
-			"OxC3_audio_interface_test",
-			"OxC3_plinttst"				# Platform interface test
-		]
-
-		for test in tests:
-
-			path = os.path.join(bin_dir, test + ext)
-
-			if system == "Windows":
-				path = path.replace("/", "\\");
-
-			run(path)
-		
 		path = "tools/test.py"
 
 		if system == "Windows":

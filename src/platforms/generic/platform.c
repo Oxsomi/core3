@@ -18,11 +18,11 @@
 *  This is called dual licensing.
 */
 
-//platforms/platform.c
+//platforms/generic/platform.c
 
 #include "types/container/list_impl.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "formats/oiCA/ca_file.h"
 #include "types/base/allocator.h"
 #include "types/base/thread.h"

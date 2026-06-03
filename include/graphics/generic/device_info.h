@@ -18,8 +18,10 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/device_info.h
+
 #pragma once
-#include "graphics/generic/types.h"
+#include "graphics/generic/graphics_types.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -51,11 +53,11 @@ typedef enum EGraphicsVendorId {
 } EGraphicsVendorId;
 
 typedef enum EGraphicsVendorPCIE {
-	EGraphicsVendorPCIE_NV        = 0x10DE,
-	EGraphicsVendorPCIE_AMD        = 0x1002,
-	EGraphicsVendorPCIE_ARM        = 0x13B5,
+	EGraphicsVendorPCIE_NV      = 0x10DE,
+	EGraphicsVendorPCIE_AMD     = 0x1002,
+	EGraphicsVendorPCIE_ARM     = 0x13B5,
 	EGraphicsVendorPCIE_QCOM    = 0x5143,
-	EGraphicsVendorPCIE_QCOM2    = 0x4D4F4351,
+	EGraphicsVendorPCIE_QCOM2   = 0x4D4F4351,
 	EGraphicsVendorPCIE_INTC    = 0x8086,
 	EGraphicsVendorPCIE_IMGT    = 0x1010,
 	EGraphicsVendorPCIE_MSFT    = 0x1414,
@@ -84,35 +86,36 @@ typedef enum EDxGraphicsFeatures {
 	EDxGraphicsFeatures_None                    = 0,
 
 	EDxGraphicsFeatures_WriteBufferImmediate    = 1 << 0,
-	EDxGraphicsFeatures_ReBAR                    = 1 << 1,
-	EDxGraphicsFeatures_HardwareCopyQueue        = 1 << 2,
+	EDxGraphicsFeatures_ReBAR                   = 1 << 1,
+	EDxGraphicsFeatures_HardwareCopyQueue       = 1 << 2,
 	EDxGraphicsFeatures_WaveSize                = 1 << 3,
-	EDxGraphicsFeatures_WaveSizeMinMax            = 1 << 4,
-	EDxGraphicsFeatures_PAQ                        = 1 << 5,
-	EDxGraphicsFeatures_ReportReBARWrites        = 1 << 6,        //A tool is attached and requires marking updates to ReBAR
+	EDxGraphicsFeatures_WaveSizeMinMax          = 1 << 4,
+	EDxGraphicsFeatures_PAQ                     = 1 << 5,
+	EDxGraphicsFeatures_ReportReBARWrites       = 1 << 6,        //A tool is attached and requires marking updates to ReBAR
 
-	EDxGraphicsFeatures_TightAlignment            = 1 << 7,
-	EDxGraphicsFeatures_AllowCombineHeaps        = 1 << 8,        //Some devices don't (Arc alchemist, <= Nv Pascal)
+	EDxGraphicsFeatures_TightAlignment          = 1 << 7,
+	EDxGraphicsFeatures_AllowCombineHeaps       = 1 << 8,        //Some devices don't (Arc alchemist, <= Nv Pascal)
 
-	EDxGraphicsFeatures_RGBX32fMSAA                = 1 << 9,        //3 and 4 element float MSAA
+	EDxGraphicsFeatures_RGBX32fMSAA             = 1 << 9,        //3 and 4 element float MSAA
 
-	EDxGraphicsFeatures_IndependentDevices        = 1 << 10,
+	EDxGraphicsFeatures_IndependentDevices      = 1 << 10,
 
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 
-	EDxGraphicsFeatures_SM6_6                    = 1 << 16,        //Last bits are for shader model
-	EDxGraphicsFeatures_SM6_7                    = 1 << 17,
-	EDxGraphicsFeatures_SM6_8                    = 1 << 18,
-	EDxGraphicsFeatures_SM6_9                    = 1 << 19
+	EDxGraphicsFeatures_SM6_6                   = 1 << 16,        //Last bits are for shader model
+	EDxGraphicsFeatures_SM6_7                   = 1 << 17,
+	EDxGraphicsFeatures_SM6_8                   = 1 << 18,
+	EDxGraphicsFeatures_SM6_9                   = 1 << 19,
+	EDxGraphicsFeatures_SM6_10                  = 1 << 20
 
 } EDxGraphicsFeatures;
 
 //If api type is Vulkan
 
 typedef enum EVkGraphicsFeatures {
-	EVkGraphicsFeatures_PerfQuery                = 1 << 0,
+	EVkGraphicsFeatures_PerfQuery               = 1 << 0,
 	EVkGraphicsFeatures_Maintenance4            = 1 << 1,
-	EVkGraphicsFeatures_BufferDeviceAddress        = 1 << 2,
+	EVkGraphicsFeatures_BufferDeviceAddress     = 1 << 2,
 	EVkGraphicsFeatures_DriverProperties        = 1 << 3,
 	EVkGraphicsFeatures_MemoryBudget            = 1 << 4
 } EVkGraphicsFeatures;
@@ -121,16 +124,16 @@ typedef enum EVkGraphicsFeatures {
 
 typedef enum EGraphicsFeatures {
 
-	EGraphicsFeatures_None                        = 0,
+	EGraphicsFeatures_None                      = 0,
 
 	//When this is turned on, the device doesn't benefit from tiled rendering.
 	//This is false for mobile devices only or some chips such as QCOM on windows.
 	//On desktop and various dedicated GPUs this is always true.
 	//If this is false, you have to use render passes.
 
-	EGraphicsFeatures_DirectRendering            = 1 << 0,
+	EGraphicsFeatures_DirectRendering           = 1 << 0,
 
-	EGraphicsFeatures_VariableRateShading        = 1 << 1,
+	EGraphicsFeatures_VariableRateShading       = 1 << 1,
 
 	EGraphicsFeatures_MultiDrawIndirectCount    = 1 << 2,
 
@@ -138,38 +141,38 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_GeometryShader            = 1 << 4,
 
 	EGraphicsFeatures_SubgroupArithmetic        = 1 << 5,        //Non prefix arithmetic operations
-	EGraphicsFeatures_SubgroupShuffle            = 1 << 6,
+	EGraphicsFeatures_SubgroupShuffle           = 1 << 6,
 
-	EGraphicsFeatures_Multiview                    = 1 << 7,
+	EGraphicsFeatures_Multiview                 = 1 << 7,
 
 	//Raytracing extensions
 
 	EGraphicsFeatures_Raytracing                = 1 << 8,        //Requires RayPipeline or RayQuery
-	EGraphicsFeatures_RayPipeline                = 1 << 9,
-	EGraphicsFeatures_RayQuery                    = 1 << 10,
+	EGraphicsFeatures_RayPipeline               = 1 << 9,
+	EGraphicsFeatures_RayQuery                  = 1 << 10,
 	EGraphicsFeatures_RayMicromapOpacity        = 1 << 11,
-	EGraphicsFeatures_RayMotionBlur                = 1 << 12,
+	EGraphicsFeatures_RayMotionBlur             = 1 << 12,
 	EGraphicsFeatures_RayReorder                = 1 << 13,
-	EGraphicsFeatures_RayValidation                = 1 << 14,        //Debugging for raytracing validation
+	EGraphicsFeatures_RayValidation             = 1 << 14,        //Debugging for raytracing validation
 
 	//LUID for sharing devices
 
-	EGraphicsFeatures_LUID                        = 1 << 15,
+	EGraphicsFeatures_LUID                      = 1 << 15,
 
 	//Other features
 
-	EGraphicsFeatures_Wireframe                    = 1 << 16,
-	EGraphicsFeatures_LogicOp                    = 1 << 17,
-	EGraphicsFeatures_DualSrcBlend                = 1 << 18,
+	EGraphicsFeatures_Wireframe                 = 1 << 16,
+	EGraphicsFeatures_LogicOp                   = 1 << 17,
+	EGraphicsFeatures_DualSrcBlend              = 1 << 18,
 
 	EGraphicsFeatures_Workgraphs                = 1 << 19,
-	EGraphicsFeatures_SwapchainCompute            = 1 << 20,        //isComputeExt in createSwapchain is supported
+	EGraphicsFeatures_SwapchainCompute          = 1 << 20,        //isComputeExt in createSwapchain is supported
 
-	EGraphicsFeatures_ComputeDeriv                = 1 << 21,        //Compute derivatives (ddx/ddy)
-	EGraphicsFeatures_MeshTaskTexDeriv            = 1 << 22,        //Compute derivatives in mesh/task shaders
+	EGraphicsFeatures_ComputeDeriv              = 1 << 21,        //Compute derivatives (ddx/ddy)
+	EGraphicsFeatures_MeshTaskTexDeriv          = 1 << 22,        //Compute derivatives in mesh/task shaders
 
 	EGraphicsFeatures_WriteMSTexture            = 1 << 23,        //image2DMS or RWTexture2DMS
-	EGraphicsFeatures_Bindless                    = 1 << 24,
+	EGraphicsFeatures_Bindless                  = 1 << 24,
 
 	EGraphicsFeatures_SubgroupOperations        = 1 << 25
 
@@ -181,14 +184,14 @@ typedef enum EGraphicsFeatures2 {
 
 typedef enum EGraphicsDataTypes {
 
-	EGraphicsDataTypes_None                        = 0,
+	EGraphicsDataTypes_None                     = 0,
 
 	//What operations are available on native data types
 
-	EGraphicsDataTypes_F64                        = 1 << 0,
-	EGraphicsDataTypes_I64                        = 1 << 1,
-	EGraphicsDataTypes_F16                        = 1 << 2,
-	EGraphicsDataTypes_I16                        = 1 << 3,
+	EGraphicsDataTypes_F64                      = 1 << 0,
+	EGraphicsDataTypes_I64                      = 1 << 1,
+	EGraphicsDataTypes_F16                      = 1 << 2,
+	EGraphicsDataTypes_I16                      = 1 << 3,
 
 	EGraphicsDataTypes_AtomicI64                = 1 << 4,
 	EGraphicsDataTypes_AtomicF32                = 1 << 5,
@@ -197,24 +200,24 @@ typedef enum EGraphicsDataTypes {
 	//What texture formats are available
 	//These can be both supported.
 
-	EGraphicsDataTypes_ASTC                        = 1 << 7,            //If false, BCn has to be supported
-	EGraphicsDataTypes_BCn                        = 1 << 8,            //If false, ASTC has to be supported
+	EGraphicsDataTypes_ASTC                     = 1 << 7,            //If false, BCn has to be supported
+	EGraphicsDataTypes_BCn                      = 1 << 8,            //If false, ASTC has to be supported
 
 	//If render targets can have MSAA8x or 2x.
 
-	EGraphicsDataTypes_MSAA2x                    = 1 << 9,
-	EGraphicsDataTypes_MSAA8x                    = 1 << 10,
+	EGraphicsDataTypes_MSAA2x                   = 1 << 9,
+	EGraphicsDataTypes_MSAA8x                   = 1 << 10,
 
 	//Formats for use other than just vertex buffer usage
 
-	EGraphicsDataTypes_RGB32f                    = 1 << 11,
-	EGraphicsDataTypes_RGB32i                    = 1 << 12,
-	EGraphicsDataTypes_RGB32u                    = 1 << 13,
+	EGraphicsDataTypes_RGB32f                   = 1 << 11,
+	EGraphicsDataTypes_RGB32i                   = 1 << 12,
+	EGraphicsDataTypes_RGB32u                   = 1 << 13,
 
 	//Depth stencil
 
 	EGraphicsDataTypes_D24S8                    = 1 << 14,
-	EGraphicsDataTypes_S8                        = 1 << 15,
+	EGraphicsDataTypes_S8                       = 1 << 15,
 
 	EGraphicsDataTypes_D32S8                    = 1 << 16
 
@@ -232,7 +235,7 @@ typedef struct GraphicsDeviceCapabilities {
 
 	U64 dedicatedMemory;            //Memory accessible directly to the device
 
-	U64 sharedMemory;                //Memory accessible through the CPU (can be equal to dedicatedMemory if iGPU or CPU)
+	U64 sharedMemory;               //Memory accessible through the CPU (can be equal to dedicatedMemory if iGPU or CPU)
 
 	U64 maxBufferSize;
 	U64 maxAllocationSize;
@@ -244,7 +247,7 @@ typedef struct GraphicsDeviceCapabilities {
 typedef struct GraphicsDeviceInfo {
 
 	C8 name[256];
-	C8 driverInfo[256];        //Can be empty if unsupported
+	C8 driverInfo[256];             //Can be empty if unsupported
 
 	EGraphicsDeviceType type;
 	EGraphicsVendorId vendor;
@@ -253,9 +256,9 @@ typedef struct GraphicsDeviceInfo {
 
 	GraphicsDeviceCapabilities capabilities;
 
-	U64 luid;                //Check SupportsLUID
+	U64 luid;                       //Check SupportsLUID
 
-	U64 uuid[2];            //If UUIDs aren't supported, uuid[0] will be luid and uuid[1] will be 0
+	U64 uuid[2];                    //If UUIDs aren't supported, uuid[0] will be luid and uuid[1] will be 0
 
 	void *ext;
 

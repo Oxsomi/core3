@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/sampler.h
+
 #pragma once
 #include "types/base/types.h"
 #include "types/math/flp.h"
@@ -40,14 +42,14 @@ typedef enum ESamplerFilterMode {
 	ESamplerFilterMode_LinearMinMipNearestMag,
 	ESamplerFilterMode_Linear,
 
-	ESamplerFilterMode_None                = 0,
+	ESamplerFilterMode_None             = 0,
 
 	ESamplerFilterMode_LinearMag        = 1 << 0,
 	ESamplerFilterMode_LinearMin        = 1 << 1,
 	ESamplerFilterMode_LinearMip        = 1 << 2,
 
 	ESamplerFilterMode_PropertyCount    = 3,
-	ESamplerFilterMode_All                = (1 << ESamplerFilterMode_PropertyCount) - 1
+	ESamplerFilterMode_All              = (1 << ESamplerFilterMode_PropertyCount) - 1
 
 } ESamplerFilterMode;
 
@@ -62,19 +64,19 @@ typedef enum ESamplerAddressMode {
 typedef enum ESamplerBorderColor {
 	ESamplerBorderColor_TransparentBlack,        //0.xxxx
 	ESamplerBorderColor_OpaqueBlackFloat,        //0.xxx, 1.f
-	ESamplerBorderColor_OpaqueBlackInt,            //0.xxx, 1
+	ESamplerBorderColor_OpaqueBlackInt,          //0.xxx, 1
 	ESamplerBorderColor_OpaqueWhiteFloat,        //1.f.xxxx
-	ESamplerBorderColor_OpaqueWhiteInt,            //1.xxxx
+	ESamplerBorderColor_OpaqueWhiteInt,          //1.xxxx
 	ESamplerBorderColor_Count
 } ESamplerBorderColor;
 
 typedef struct SamplerInfo {
 
 	U8 filter;                            //ESamplerFilterMode
-	U8 addressU, addressV, addressW;    //ESamplerAddressMode[3] (3 bits each)
+	U8 addressU, addressV, addressW;      //ESamplerAddressMode[3] (3 bits each)
 
-	U8 aniso;                            //0-16
-	U8 borderColor;                        //ESamplerBorderColor
+	U8 aniso;                             //0-16
+	U8 borderColor;                       //ESamplerBorderColor
 	U8 comparisonFunction;                //ECompareOp
 	Bool enableComparison;
 

@@ -21,7 +21,7 @@
 //formats/oiCA/ca_lookup.h
 
 #pragma once
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "formats/oiCA/ca_props.h"
 
 #ifdef __cplusplus

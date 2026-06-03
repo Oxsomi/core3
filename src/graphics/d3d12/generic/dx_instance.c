@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_instance.c
+
 #include "platforms/ext/listx_impl.h"
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
@@ -29,7 +31,7 @@
 #include "graphics/generic/device_info.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/dynamic_library.h"
 #include "types/base/platform_types.h"
 #include "types/base/error.h"
@@ -668,6 +670,10 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_9;
 		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
 			caps.featuresExt |= EDxGraphicsFeatures_SM6_9;
+
+		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_10;
+		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+			caps.featuresExt |= EDxGraphicsFeatures_SM6_10;
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);

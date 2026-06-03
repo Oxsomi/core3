@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_command_list.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
@@ -34,7 +36,7 @@
 #include "graphics/d3d12/dx_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
 
@@ -681,7 +683,6 @@ void DX_WRAP_FUNC(CommandList_process)(
 				temp->stencilRef = temp->tempStencilRef;
 				buffer->lpVtbl->OMSetStencilRef(buffer, temp->stencilRef);
 			}
-
 
 			//Bind pipeline
 

@@ -24,7 +24,7 @@
 #include "types/container/list.h"
 #include "types/container/buffer.h"
 #include "types/base/type_id.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 
 #include <stdarg.h>
 

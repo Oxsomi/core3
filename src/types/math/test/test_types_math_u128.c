@@ -21,7 +21,7 @@
 //types/math/test/test_types_math_u128.c
 
 #include "test_types_math_shared.h"
-#include "types/math/u128.h"
+#include "types/math/u128_base.h"
 
 static const U64 mulParams[][2] = {
 	{ 0x0123456789ABCDEF, 0xFEDCBA9876543210 },
@@ -92,7 +92,6 @@ void Test_u128Lsh(Test *test) {
 	Test_setModule(test, "U128_lsh");
 
 	const U128 allOnes = U128_createU64x2(U64_MAX, U64_MAX);
-
 
 	for (U8 n = 1; n <= 127; ++n) {
 

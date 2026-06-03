@@ -22,10 +22,10 @@
 
 #include "types/container/list_impl.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/keyboard.h"
 #include "types/container/string_unicode.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/string_mut_helper.h"
 #include "types/base/constants.h"

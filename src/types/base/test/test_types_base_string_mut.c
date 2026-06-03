@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//types/base/test/test_types_base_string_mut.c
+
 #include "test_types_base_shared.h"
 #include "types/base/string_mut.h"
 #include "types/base/string_mut_helper.h"
@@ -141,7 +143,9 @@ void Test_stringMut(Test *test) {
 	fillStr(buf1, "Hello World Hello World", &str);
 	Test_assert(test, "CharString_eraseAllSensitive (range)", CharString_eraseAllSensitive(&str, 'o', 6, 11));
 
-	Test_assert(test, "CharString_eraseAllSensitive (range value)", CharString_equalsCStringSensitive(&str, "Hello Wrld Hell World"));
+	Test_assert(test, "CharString_eraseAllSensitive (range value)", CharString_equalsCStringSensitive(
+		&str, "Hello Wrld Hell World"
+	));
 
 	//Test replaceAll
 

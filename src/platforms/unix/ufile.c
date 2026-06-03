@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 
 #include <dirent.h>
 #include <stdio.h>

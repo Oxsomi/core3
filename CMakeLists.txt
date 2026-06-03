@@ -133,6 +133,7 @@ endif()
 
 if(EnableTests)
 	message("-- Enabling OxC3 unit tests (-DEnableTests=On)")
+	enable_testing()
 else()
 	message("-- Disabling OxC3 unit tests (-DEnableTests=Off)")
 endif()

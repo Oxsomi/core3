@@ -18,13 +18,15 @@
 *  This is called dual licensing.
 */
 
+//tools/compile.c
+
 #include "platforms/ext/listx_impl.h"
 #include "types/container/buffer.h"
 #include "types/base/thread.h"
 #include "types/math/math.h"
 #include "types/base/time.h"
 #include "platforms/file.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"

@@ -33,7 +33,7 @@ void Test_DLReserve(Test *t) {
 
 	Test_setModule(t, "DLFile_reserve");
 
-	{						//Reserve on a fresh Data file: addEntry calls should not reallocate
+	{                       //Reserve on a fresh Data file: addEntry calls should not reallocate
 		DLFile f = { 0 };
 
 		if (!DLFile_create(&kSettingsData, 0, t->alloc, &f, &t->err)) {
@@ -43,7 +43,7 @@ void Test_DLReserve(Test *t) {
 
 		Test_assert(t, "reserve 8 ok", DLFile_reserve(&f, 8, t->alloc, &t->err));
 
-		//Fill all 8 reserved slots � none must fail due to allocation
+		//Fill all 8 reserved slots, none must fail due to allocation
 
 		for (U64 i = 0; i < 8; ++i) {
 			U8 val = (U8)i;
@@ -63,7 +63,7 @@ void Test_DLReserve(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Reserve on a fresh String file
+	{                       //Reserve on a fresh String file
 		DLFile f = { 0 };
 
 		if (!DLFile_create(&kSettingsStr, 0, t->alloc, &f, &t->err)) {
@@ -90,7 +90,7 @@ void Test_DLReserve(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Reserve(0) on an empty file is a no-op and must succeed
+	{                       //Reserve(0) on an empty file is a no-op and must succeed
 		DLFile f = { 0 };
 
 		if (!DLFile_create(&kSettingsData, 0, t->alloc, &f, &t->err)) {
@@ -105,7 +105,7 @@ void Test_DLReserve(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Reserve on an already-populated file must not lose existing entries
+	{                       //Reserve on an already-populated file must not lose existing entries
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 3)) {
@@ -123,7 +123,7 @@ void Test_DLReserve(Test *t) {
 		DLFile_free(&f, t->alloc);
 	}
 
-	{						//Reserve smaller than current count must not truncate
+	{                       //Reserve smaller than current count must not truncate
 		DLFile f = { 0 };
 
 		if (!buildDataFile(t, &f, 5)) {

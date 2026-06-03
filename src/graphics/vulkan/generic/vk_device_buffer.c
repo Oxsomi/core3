@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_device_buffer.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
@@ -30,7 +32,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/math/math.h"
 #include "types/base/constants.h"
 
@@ -85,7 +87,6 @@ Error VkDeviceBuffer_transition(
 
 	return Error_none();
 }
-
 
 void VK_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 
@@ -472,7 +473,6 @@ Error VK_WRAP_FUNC(DeviceBufferRef_flush)(void *commandBufferExt, GraphicsDevice
 				SpinLock_unlock(&device->allocator.lock);
 
 			acq = ELockAcquire_Invalid;
-
 
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 

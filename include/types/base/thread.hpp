@@ -67,7 +67,12 @@ namespace oxc {
 
 		void join() { if(thread) Thread_wait(thread); }
 		
-		[[nodiscard]] static c::Error init(Thread &thread, const c::Allocator *alloc, c::ThreadCallbackFunction callback, void *obj) noexcept {
+		[[nodiscard]] static c::Error init(
+			Thread &thread,
+			const c::Allocator *alloc,
+			c::ThreadCallbackFunction callback,
+			void *obj
+		) noexcept {
 			thread.release();
 			thread.alloc = alloc;
 			return Thread_create(alloc, callback, obj, &thread.thread);
@@ -77,4 +82,3 @@ namespace oxc {
 		[[nodiscard]] static c::Bool sleep(c::Ns ns) { return c::Thread_sleep(ns); }
 	};
 }
-

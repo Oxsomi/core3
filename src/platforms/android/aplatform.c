@@ -24,7 +24,7 @@
 #include "platforms/platform.h"
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"

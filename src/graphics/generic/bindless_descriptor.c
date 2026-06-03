@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/bindless_descriptor.c
+
 #include "platforms/ext/listx.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/device.h"

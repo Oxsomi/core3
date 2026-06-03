@@ -58,23 +58,23 @@ typedef enum ESBStride {
 } ESBStride;
 
 #define ESBType_create(stride, prim, vec, mat) (((mat) << 6) | ((stride) << 4) | ((prim) << 2) | (vec))
-#define ESBType_createN(stride, prim, name, H, suffix, suffix1)                                              \
-	ESBType_##name##suffix1##suffix  = ESBType_create(stride, prim, ESBVector_N1, H),                        \
-	ESBType_##name##x2##suffix       = ESBType_create(stride, prim, ESBVector_N2, H),                        \
-	ESBType_##name##x3##suffix       = ESBType_create(stride, prim, ESBVector_N3, H),                        \
+#define ESBType_createN(stride, prim, name, H, suffix, suffix1)                                             \
+	ESBType_##name##suffix1##suffix  = ESBType_create(stride, prim, ESBVector_N1, H),                       \
+	ESBType_##name##x2##suffix       = ESBType_create(stride, prim, ESBVector_N2, H),                       \
+	ESBType_##name##x3##suffix       = ESBType_create(stride, prim, ESBVector_N3, H),                       \
 	ESBType_##name##x4##suffix       = ESBType_create(stride, prim, ESBVector_N4, H)
 
-#define ESBType_createVec(dim, suffix0, suffix1)                                                             \
-	ESBType_createN(ESBStride_X16, ESBPrimitive_Float, F16, dim, suffix0, suffix1),                          \
-	ESBType_createN(ESBStride_X16, ESBPrimitive_Int, I16, dim, suffix0, suffix1),                            \
-	ESBType_createN(ESBStride_X16, ESBPrimitive_UInt, U16, dim, suffix0, suffix1),                           \
-																											 \
-	ESBType_createN(ESBStride_X32, ESBPrimitive_Float, F32, dim, suffix0, suffix1),                          \
-	ESBType_createN(ESBStride_X32, ESBPrimitive_Int, I32, dim, suffix0, suffix1),                            \
-	ESBType_createN(ESBStride_X32, ESBPrimitive_UInt, U32, dim, suffix0, suffix1),                           \
-																											 \
-	ESBType_createN(ESBStride_X64, ESBPrimitive_Float, F64, dim, suffix0, suffix1),                          \
-	ESBType_createN(ESBStride_X64, ESBPrimitive_Int, I64, dim, suffix0, suffix1),                            \
+#define ESBType_createVec(dim, suffix0, suffix1)                                                            \
+	ESBType_createN(ESBStride_X16, ESBPrimitive_Float, F16, dim, suffix0, suffix1),                         \
+	ESBType_createN(ESBStride_X16, ESBPrimitive_Int, I16, dim, suffix0, suffix1),                           \
+	ESBType_createN(ESBStride_X16, ESBPrimitive_UInt, U16, dim, suffix0, suffix1),                          \
+																											\
+	ESBType_createN(ESBStride_X32, ESBPrimitive_Float, F32, dim, suffix0, suffix1),                         \
+	ESBType_createN(ESBStride_X32, ESBPrimitive_Int, I32, dim, suffix0, suffix1),                           \
+	ESBType_createN(ESBStride_X32, ESBPrimitive_UInt, U32, dim, suffix0, suffix1),                          \
+																											\
+	ESBType_createN(ESBStride_X64, ESBPrimitive_Float, F64, dim, suffix0, suffix1),                         \
+	ESBType_createN(ESBStride_X64, ESBPrimitive_Int, I64, dim, suffix0, suffix1),                           \
 	ESBType_createN(ESBStride_X64, ESBPrimitive_UInt, U64, dim, suffix0, suffix1)
 
 typedef enum ESBType {

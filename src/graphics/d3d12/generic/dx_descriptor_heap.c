@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_descriptor_heap.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device.h"

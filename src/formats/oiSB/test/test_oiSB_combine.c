@@ -23,7 +23,7 @@
 #include "test_oiSB_shared.h"
 #include "formats/oiSB/sb_file.h"
 #include "types/container/memory_stream.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 
 //Adding a duplicate variable name in the same parent scope must fail.
 void Test_SBFileAddDuplicateVarName(Test *t) {

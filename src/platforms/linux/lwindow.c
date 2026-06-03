@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
@@ -154,7 +154,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		w->cpuVisibleBuffer.ptr = lwin->mainBufferPtr;
 		w->cpuVisibleBuffer.lengthAndRefBits = stride | ((U64)1 << 63);
 
-		backBuffer = NULL;    
+		backBuffer = NULL;
 	}
 
 clean:
@@ -285,7 +285,9 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 		retError(clean, Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required"))
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		retError(clean, Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"))
+		retError(clean, Error_unsupportedOperation(
+			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
+		))
 
 	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
 

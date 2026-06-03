@@ -70,8 +70,6 @@ Error Brotli_compress(
 
 	//TODO: Literal cost mask?
 
-
-
 clean:
 
 	AllocationBuffer_free(&ringBuffer, allocator);

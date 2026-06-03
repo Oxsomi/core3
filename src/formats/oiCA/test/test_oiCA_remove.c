@@ -232,7 +232,6 @@ void Test_CARemoveFolder(Test *t) {
 		CAFile_free(&ca, t->alloc);
 	}
 
-
 	{                            //Remove non-empty folder recursively, all contents gone
 		CAFile ca   = { 0 };
 		CAHandle root = CAHandle_Root;

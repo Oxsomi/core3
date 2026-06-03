@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_texture.c
+
 #include "platforms/ext/listx.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
@@ -28,7 +30,7 @@
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "types/base/constants.h"
 

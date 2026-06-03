@@ -25,7 +25,7 @@
 #include "types/container/texture_format.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/types.h"
+#include "types/container/container_types.h"
 #include "types/container/stream.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"

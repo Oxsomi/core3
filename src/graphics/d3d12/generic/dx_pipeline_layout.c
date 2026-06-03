@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_pipeline_layout.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
@@ -26,7 +28,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "formats/oiSH/entries.h"
 
 void DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {

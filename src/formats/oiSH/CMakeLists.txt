@@ -46,5 +46,6 @@ if(EnableTests)
 	target_link_libraries(OxC3_formats_oiSH_test PUBLIC OxC3_types_container_test_util OxC3_formats_oiSH)
 	set_target_properties(OxC3_formats_oiSH_test PROPERTIES FOLDER Oxsomi/test/formats)
 	target_include_directories(OxC3_formats_oiSH_test PUBLIC "../../../include")
+	add_test(NAME OxC3_formats_oiSH_test COMMAND OxC3_formats_oiSH_test)
 
 endif()

@@ -160,7 +160,6 @@ static inline Bool CAHandle_isRoot(CAHandle handle) {
 	return CAHandle_isFolder(handle) && !CAHandle_getId(handle);
 }
 
-
 static inline const CAFolderInfo *CAFile_getFolderInfoPtr(const CAFile *caFile, CAHandle handle) {
 
 	if (!caFile || !CAHandle_isFolder(handle))

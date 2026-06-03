@@ -22,7 +22,7 @@
 
 #include "test_oiSB_shared.h"
 #include "formats/oiSB/sb_file.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/base/string_read_helper.h"
 
 //ESBType_create(stride, prim, vec, mat) = (mat << 6) | (stride << 4) | (prim << 2) | vec

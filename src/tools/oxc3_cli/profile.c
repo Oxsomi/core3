@@ -18,12 +18,14 @@
 *  This is called dual licensing.
 */
 
+//tools/oxc3_cli/profile.c
+
 #include "tools/oxc3_cli/cli.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/base/time.h"
 #include "types/math/flp.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
 #include "types/base/constants.h"

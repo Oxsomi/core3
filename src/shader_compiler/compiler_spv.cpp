@@ -18,11 +18,13 @@
 *  This is called dual licensing.
 */
 
+//shader_compiler/compiler_spv.cpp
+
 #include "platforms/ext/listx_impl.h"
 #include "types/base/allocator.h"
 #include "types/base/c8.h"
 #include "types/container/buffer.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "shader_compiler/compiler.h"
 #include "types/base/constants.h"
 #include "optimizer.hpp"
@@ -1474,8 +1476,6 @@ clean:
 	return s_uccess;
 }
 
-
-
 void Compiler_spvToolsCallback(
 	spv_message_level_t level,
 	const C8 *source,
@@ -2135,7 +2135,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 		Bool insertPlain = false;
 
-		if(showAll) 
+		if(showAll)
 			insertPlain = true;
 
 		else {
@@ -2173,7 +2173,7 @@ clean:
 
 /*
 * TODO: This is ChatGPT coded, probably garbage, test and compare carefully!
-* 
+*
 class StripAllButOneEntryPointPass : public spvtools::opt::Pass {
 public:
 	explicit StripAllButOneEntryPointPass(const std::string& keep_entry_point)

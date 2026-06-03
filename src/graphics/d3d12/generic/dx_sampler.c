@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/d3d12/generic/dx_sampler.c
+
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/descriptor_heap.h"

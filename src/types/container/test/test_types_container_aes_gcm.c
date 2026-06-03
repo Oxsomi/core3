@@ -307,7 +307,7 @@ void Test_aesValidation(Test *t) {
 		if (!aesCreateCtx(t, "aesCreateCtx test", -16, cryptoState[l], key, &ctx, &blockSizeMax, &use256Or512))
 			continue;
 
-		if (use256Or512 != cryptoState[l])		//Hardware doesn't support this
+		if (use256Or512 != cryptoState[l])   //Hardware doesn't support this
 			continue;
 
 		for (U64 i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
@@ -362,7 +362,7 @@ void Test_aesValidation(Test *t) {
 }
 
 //Test vectors 13-16: https://luca-giuzzi.unibs.it/corsi/Support/papers-cryptography/gcm-spec.pdf
-//Test vectors 2.1.2 � 2.8.2: https://www.ieee802.org/1/files/public/docs2011/bn-randall-test-vectors-0511-v1.pdf
+//Test vectors 2.1.2, 2.8.2: https://www.ieee802.org/1/files/public/docs2011/bn-randall-test-vectors-0511-v1.pdf
 
 void Test_aes256gcm(Test *t) {
 

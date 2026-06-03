@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiBC/chimera.h
+
 #pragma once
 #include "types/base/algorithm.h"
 #include "types/math/flp.h"

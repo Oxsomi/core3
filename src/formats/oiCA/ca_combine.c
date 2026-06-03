@@ -28,7 +28,7 @@
 #include "formats/oiCA/ca_edit.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/log.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/allocator.h"
 #include "types/base/error.h"

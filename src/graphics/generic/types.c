@@ -18,7 +18,9 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/types.h"
+//graphics/generic/types.c
+
+#include "graphics/generic/graphics_types.h"
 
 EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 

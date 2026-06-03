@@ -22,7 +22,7 @@
 
 #pragma once
 #include "types/container/list.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -75,7 +75,12 @@ typedef struct AllocationBufferAllocate {
 } AllocationBufferAllocate;
 
 Bool AllocationBuffer_allocateBlock(const AllocationBufferAllocate *allocate, U64 size, const U8 **result, Error *e_rr);
-Bool AllocationBuffer_allocateAndFillBlock(const AllocationBufferAllocate *allocate, const Buffer data, U8 **result, Error *e_rr);
+Bool AllocationBuffer_allocateAndFillBlock(
+	const AllocationBufferAllocate *allocate,
+	const Buffer data,
+	U8 **result,
+	Error *e_rr
+);
 
 #ifdef __cplusplus
 	}

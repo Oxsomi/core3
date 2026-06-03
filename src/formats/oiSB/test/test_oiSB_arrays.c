@@ -24,7 +24,7 @@
 #include "formats/oiSB/sb_file.h"
 #include "types/container/memory_stream.h"
 #include "types/container/list_basic_types.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 
 extern Bool sbRoundTrip(Test *t, const SBFile *src, StreamRef **archiveSr, SBFile *result, const RefPtrType *type);
 

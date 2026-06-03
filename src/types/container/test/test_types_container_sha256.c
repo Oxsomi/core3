@@ -21,7 +21,7 @@
 //types/container/test/test_types_container_sha256.c
 
 #include "test_types_container_shared.h"
-#include "types/base/string.h"
+#include "types/base/string_base.h"
 #include "types/container/string.h"
 
 //https://www.di-mgt.com.au/sha_testvectors.html

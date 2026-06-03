@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//formats/oiBC/test/test_oiBC_main.c
+
 #include "types/test/test.h"
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
@@ -69,10 +71,9 @@ void Test_chimera(Test *t) {
 
 		//cmp
 
-		ECompareResult expectedCmp =
-			chimera.f[4] < chimera.f[i] ? ECompareResult_Lt :
-			chimera.f[4] > chimera.f[i] ? ECompareResult_Gt :
-										  ECompareResult_Eq;
+		ECompareResult expectedCmp = chimera.f[4] < chimera.f[i] ? ECompareResult_Lt : (
+			chimera.f[4] > chimera.f[i] ? ECompareResult_Gt : ECompareResult_Eq
+		);
 
 		Chimera_stepFidiA(&chimera, EFidiA_cmp(i));
 		Test_assert(t, "cmp", expectedCmp == Chimera_getLastCompare(&chimera));

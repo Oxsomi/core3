@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 *  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 *  This is called dual licensing.
 */
+
+//graphics/vulkan/osx/ovk_swapchain.c
 
 #define VK_USE_PLATFORM_MACOS_MVK
 #include "graphics/generic/device.h"

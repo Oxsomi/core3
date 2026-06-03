@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//types/base/mathf.hpp
+//types/base/mathf.h
 
 #pragma once
 #include "types/base/math_common.h"
@@ -83,7 +83,6 @@ static inline Bool T##_approxEq(T a, T b, T eps) { return T##_abs(a - b) <= eps;
 
 FLP_OP(F32, f);
 FLP_OP(F64, );
-
 
 #ifdef __cplusplus
 	}

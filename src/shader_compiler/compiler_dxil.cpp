@@ -18,16 +18,18 @@
 *  This is called dual licensing.
 */
 
+//shader_compiler/compiler_dxil.cpp
+
 #include "platforms/ext/listx_impl.h"
 #include "shader_compiler/compiler.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/base/error.h"
 #include "types/base/c8.h"
 #include "types/container/buffer.h"
 #include "types/base/allocator.h"
-#include "types/container/file.h"
+#include "types/container/file_base.h"
 #include "types/math/math.h"
 #include "types/base/constants.h"
 #include "formats/oiSB/sb_file.h"
@@ -1478,7 +1480,6 @@ extern "C" Bool Compiler_processDXIL(
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"))
 
-
 clean:
 
 	ListCharString_freeUnderlying(&strings, alloc);
@@ -1639,7 +1640,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 		Bool insertPlain = false;
 
-		if(showAll) 
+		if(showAll)
 			insertPlain = true;
 
 		else {

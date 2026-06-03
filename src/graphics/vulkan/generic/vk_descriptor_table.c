@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/vulkan/generic/vk_descriptor_table.c
+
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
@@ -32,7 +34,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/log.h"
+#include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/base/constants.h"
 
@@ -252,7 +254,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_unsetDescriptors)(
 	if(!(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd))
 		return true;
 
-	for(U64 i = 0; i < count; ++i) 
+	for(U64 i = 0; i < count; ++i)
 		VkDescriptorTable_loseRef(table, bindId, arrayId + i);
 
 	return true;

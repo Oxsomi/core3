@@ -235,6 +235,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
+	//5x
 
 	ETextureFormat_ASTC_5x4            = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_4,
@@ -246,7 +247,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
-
 	ETextureFormat_ASTC_5x5            = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_5,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
@@ -257,6 +257,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
+	//6x
 
 	ETextureFormat_ASTC_6x5            = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_5,
@@ -268,7 +269,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
-
 	ETextureFormat_ASTC_6x6            = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_6,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
@@ -279,6 +279,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
+	//8x
 
 	ETextureFormat_ASTC_8x5            = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_5,
@@ -290,7 +291,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
-
 	ETextureFormat_ASTC_8x6            = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_6,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
@@ -300,7 +300,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_6,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
-
 
 	ETextureFormat_ASTC_8x8            = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_8,
@@ -312,6 +311,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
+	//10x
 
 	ETextureFormat_ASTC_10x5        = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_5,
@@ -323,7 +323,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
-
 	ETextureFormat_ASTC_10x6        = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_6,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
@@ -333,7 +332,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_6,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
-
 
 	ETextureFormat_ASTC_10x8        = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_8,
@@ -345,7 +343,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
-
 	ETextureFormat_ASTC_10x10        = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_10,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
@@ -356,6 +353,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
+	//12x
 
 	ETextureFormat_ASTC_12x10        = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_10,
@@ -366,7 +364,6 @@ typedef enum ETextureFormat {
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_10,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
-
 
 	ETextureFormat_ASTC_12x12        = _ETextureFormatCompressed(
 		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_12,

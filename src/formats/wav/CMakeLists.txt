@@ -46,6 +46,7 @@ if(EnableTests)
 	target_link_libraries(OxC3_formats_wav_test PUBLIC OxC3_types_container_test_util OxC3_formats_wav)
 	set_target_properties(OxC3_formats_wav_test PROPERTIES FOLDER Oxsomi/test/formats)
 	target_include_directories(OxC3_formats_wav_test PUBLIC "../../../include")
+	add_test(NAME OxC3_formats_wav_test COMMAND OxC3_formats_wav_test)
 
 endif()
 

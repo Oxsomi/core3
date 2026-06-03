@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+//graphics/generic/swapchain.h
+
 #pragma once
 #include "types/math/vec.h"
 #include "types/container/ref_ptr.h"
@@ -36,9 +38,9 @@ typedef enum EWindowFormat EWindowFormat;
 typedef enum ESwapchainPresentMode {
 	ESwapchainPresentMode_None,
 	ESwapchainPresentMode_Immediate,            //Low latency apps (shooters, etc.): Allows tearing for less latency
-	ESwapchainPresentMode_Mailbox,                //High performance apps (games): Pops oldest image while continuing
-	ESwapchainPresentMode_Fifo,                    //Best quality & low power: Always presents images in order (no dropped frames)
-	ESwapchainPresentMode_FifoRelaxed,            //^ but if vblank is missed continue with the next (can allow tearing)
+	ESwapchainPresentMode_Mailbox,              //High performance apps (games): Pops oldest image while continuing
+	ESwapchainPresentMode_Fifo,                 //Best quality & low power: Always presents images in order (no dropped frames)
+	ESwapchainPresentMode_FifoRelaxed,          //^ but if vblank is missed continue with the next (can allow tearing)
 	ESwapchainPresentMode_Count
 } ESwapchainPresentMode;
 
@@ -70,7 +72,7 @@ typedef struct Swapchain {
 	//This is set by the implementation, can't be manually turned off.
 	Bool requiresManualComposite;
 	U8 padding;
-	U16 orientation;            //Orientation the swapchain was previously created with
+	U16 orientation;              //Orientation the swapchain was previously created with
 
 	U64 versionId;                //Everytime this swapchain changes format or is resized this will increase.
 

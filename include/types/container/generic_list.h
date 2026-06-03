@@ -22,7 +22,7 @@
 
 #pragma once
 #include "types/container/generic_list_predeclare.h"
-#include "types/base/buffer.h"
+#include "types/base/buffer_base.h"
 #include "types/base/c8.h"
 #include "types/base/algorithm.h"
 
@@ -323,7 +323,13 @@ static inline Bool GenericList_eraseFirst(GenericList *list, const Buffer *buf, 
 	return GenericList_eraseFirstLast(list, buf, offset, eq, true, e_rr);
 }
 
-static inline Bool GenericList_eraseAll(GenericList *list, const Buffer *buf, const Allocator *allocator, EqualsFunction eq, Error *e_rr) {
+static inline Bool GenericList_eraseAll(
+	GenericList *list,
+	const Buffer *buf,
+	const Allocator *allocator,
+	EqualsFunction eq,
+	Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	ListU64 indices = { 0 };

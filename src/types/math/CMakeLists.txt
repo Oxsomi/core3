@@ -57,5 +57,6 @@ if(EnableTests)
 
 	target_link_libraries(OxC3_types_math_test PUBLIC OxC3_types_math OxC3_types_test)
 	set_target_properties(OxC3_types_math_test PROPERTIES FOLDER Oxsomi/test/types)
+	add_test(NAME OxC3_types_math_test COMMAND OxC3_types_math_test)
 
 endif()

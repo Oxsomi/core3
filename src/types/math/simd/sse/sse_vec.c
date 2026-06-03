@@ -24,7 +24,7 @@
 
 I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
 	switch (bits) {
-		case 0:        return a;
+		case 0:     return a;
 		FUNC_EXPAND16(1, _mm_slli_epi32, a);
 		FUNC_EXPAND8(17, _mm_slli_epi32, a);
 		FUNC_EXPAND4(25, _mm_slli_epi32, a);
@@ -36,7 +36,7 @@ I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
 
 I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
 	switch (bits) {
-		case 0:        return a;
+		case 0:     return a;
 		FUNC_EXPAND16(1, _mm_srli_epi32, a);
 		FUNC_EXPAND8(17, _mm_srli_epi32, a);
 		FUNC_EXPAND4(25, _mm_srli_epi32, a);
@@ -48,7 +48,7 @@ I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
 
 I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
 	switch (bits) {
-		case 0:        return a;
+		case 0:     return a;
 		FUNC_EXPAND32(1, _mm_slli_epi64, a);
 		FUNC_EXPAND16(33, _mm_slli_epi64, a);
 		FUNC_EXPAND8(49, _mm_slli_epi64, a);
@@ -61,7 +61,7 @@ I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
 
 I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
 	switch (bits) {
-		case 0:        return a;
+		case 0:     return a;
 		FUNC_EXPAND32(1, _mm_srli_epi64, a);
 		FUNC_EXPAND16(33, _mm_srli_epi64, a);
 		FUNC_EXPAND8(49, _mm_srli_epi64, a);

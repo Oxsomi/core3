@@ -23,7 +23,7 @@
 #include "formats/dds/dds_file.h"
 #include "formats/dds/dds_headers.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/types.h"
+#include "types/container/container_types.h"
 #include "types/container/stream.h"
 #include "types/container/buffer.h"
 #include "types/base/constants.h"
@@ -90,7 +90,9 @@ Bool DDS_write(
 		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info specifies a cubemap, but no 6 faces were found"));
 
 	if(info->l > 1 && info->type != ETextureType_3D)
-		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info specifies length of >1 but ETextureType_3D wasn't specified"));
+		retError(clean, Error_invalidParameter(
+			0, 0, "DDS_write()::info specifies length of >1 but ETextureType_3D wasn't specified"
+		));
 
 	if(info->layers > 1 && info->type == ETextureType_3D)
 		retError(clean, Error_invalidParameter(0, 0, "DDS_write()::info specifies layers of >1 but ETextureType_3D was used"));
