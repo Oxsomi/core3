@@ -18,10 +18,14 @@
 # This is called dual licensing.
 
 import argparse
+import hashlib
+import json
 import os
 import sys
 import platform
 import subprocess
+
+HASH_CACHE_FILE = ".dep_hashes.json"
 
 def run(cmd, **kwargs):
 	result = subprocess.run(cmd, shell=True, **kwargs)
@@ -29,14 +33,55 @@ def run(cmd, **kwargs):
 		print(f"-- Command failed: {cmd}", file=sys.stderr)
 		sys.exit(result.returncode)
 
+def hash_package(package_path, profile_path, mode):
+	h = hashlib.sha256()
+	h.update(mode.encode())
+
+	if os.path.isfile(profile_path):
+		with open(profile_path, "rb") as f:
+			h.update(f.read())
+
+	for root, _, files in os.walk(package_path):
+		for fname in sorted(files):
+			fpath = os.path.join(root, fname)
+			h.update(fpath.encode())
+			with open(fpath, "rb") as f:
+				h.update(f.read())
+
+	return h.hexdigest()
+
+def load_hash_cache():
+	if os.path.isfile(HASH_CACHE_FILE):
+		with open(HASH_CACHE_FILE, "r") as f:
+			return json.load(f)
+	return {}
+
+def save_hash_cache(cache):
+	with open(HASH_CACHE_FILE, "w") as f:
+		json.dump(cache, f, indent=2)
+
+def conan_create_if_changed(package_path, profile, mode, profile_args, cache):
+	key          = f"{package_path}::{mode}"
+	current_hash = hash_package(package_path, profile, mode)
+
+	if cache.get(key) == current_hash:
+		print(f"-- Skipping {package_path} ({mode}), unchanged")
+		return
+
+	run(f"conan create {package_path} {profile_args} -s build_type={mode} --build=missing")
+
+	cache[key] = current_hash
+
 def main():
 
 	parser = argparse.ArgumentParser(description="Build OxC3 for the host platform")
 
-	parser.add_argument("-mode", type=str, default="Release", choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"], help="Build type")
+	parser.add_argument("-mode", type=str, default=None, choices=["Release", "Debug", "RelWithDebInfo", "MinSizeRel"], help="Build type (optional on Windows; defaults to all configs)")
 	parser.add_argument("-simd",            type=str, default="True",  choices=["True", "False"], help="Enable SIMD")
 	parser.add_argument("-tests",           type=str, default="False", choices=["True", "False"], help="Enable tests")
 	parser.add_argument("-dynamic_linking", type=str, default="False", choices=["True", "False"], help="Dynamic linking graphics")
+
+	parser.add_argument("--force_deps", action="store_true", help="Ignore hash cache and rebuild all dependencies")
 
 	args, remainder = parser.parse_known_args()
 
@@ -55,60 +100,106 @@ def main():
 		print(f"Unsupported architecture: {machine}", file=sys.stderr)
 		sys.exit(1)
 
+	# On non-Windows, mode is required
+
+	if system != "Windows" and args.mode is None:
+		print("-- Error: -mode is required on non-Windows platforms", file=sys.stderr)
+		sys.exit(1)
+
 	# Select conan profile and platform name
 
 	if system == "Windows":
-		profile  = f"packages/conan/profiles/windows_msvc_{arch}_{args.mode}"
+		profile_base  = f"packages/conan/profiles/windows_msvc_{arch}"
 		platform_name = "windows"
 	elif system == "Darwin":
-		profile  = f"packages/conan/profiles/osx_clang_{arch}"
+		profile_base  = f"packages/conan/profiles/osx_clang_{arch}"
 		platform_name = "osx"
 	else:
-		profile  = f"packages/conan/profiles/linux_gcc_{arch}"
+		profile_base  = f"packages/conan/profiles/linux_gcc_{arch}"
 		platform_name = "linux"
 
-	profile_args = f"--profile:build={profile} --profile:host={profile}"
-	mode_arg     = f"-s build_type={args.mode}"
-	build_dir    = f"build/{args.mode}/{platform_name}/{arch}"
+	# On Windows the profile is per-mode (MSVC debug/release CRT differs),
+	# on other platforms the same profile covers all modes.
 
-	# Build dependencies
+	def profile_for_mode(mode):
+		if system == "Windows":
+			return f"{profile_base}_{mode}"
+		return profile_base
+
+	def profile_args_for_mode(mode):
+		p = profile_for_mode(mode)
+		return f"--profile:build={p} --profile:host={p}"
+
+	# Decide which modes to build deps for
+
+	all_modes = ["Release", "Debug", "RelWithDebInfo", "MinSizeRel"]
 
 	if system == "Windows":
-		run(f"conan create packages/agility_sdk  {profile_args} {mode_arg} --build=missing")
-		run(f"conan create packages/amd_ags      {profile_args} {mode_arg} --build=missing")
+		dep_modes   = all_modes if args.mode is None else [args.mode]
+		build_dir   = f"build/{platform_name}/{arch}"
+		build_mode_arg = ""                                        # VS picks config at build time
+	else:
+		dep_modes   = [args.mode]
+		build_dir   = f"build/{args.mode}/{platform_name}/{arch}"
+		build_mode_arg = f"-s build_type={args.mode}"
 
-	run(f"conan create packages/nvapi        {profile_args} {mode_arg} --build=missing")
-	run(f"conan create packages/spirv_reflect {profile_args} {mode_arg} --build=missing")
-	run(f"conan create packages/dxc          {profile_args} {mode_arg} --build=missing")
-	run(f"conan create packages/openal_soft  {profile_args} {mode_arg} --build=missing")
+	# Build dependencies (skipped when hash unchanged)
+	
+	if args.force_deps and os.path.isfile(HASH_CACHE_FILE):
+		os.remove(HASH_CACHE_FILE)
 
-	if system == "Linux":
-		run(f"conan create packages/xdg_shell      {profile_args} {mode_arg} --build=missing")
-		run(f"conan create packages/xdg_decoration {profile_args} {mode_arg} --build=missing")
+	cache = load_hash_cache()
 
-	# Build project
+	for mode in dep_modes:
+		pa = profile_args_for_mode(mode)
 
-	extra = " ".join(remainder)
+		if system == "Windows":
+			conan_create_if_changed("packages/agility_sdk",    profile_for_mode(mode), mode, pa, cache)
+			conan_create_if_changed("packages/amd_ags",        profile_for_mode(mode), mode, pa, cache)
 
-	run(
-		f"conan build . "
-		f"-of {build_dir} "
-		f"{profile_args} "
-		f"{mode_arg} "
-		f"-o enableSIMD={args.simd} "
-		f"-o enableTests={args.tests} "
-		f"-o dynamicLinkingGraphics={args.dynamic_linking} "
-		f"{extra}"
-	)
+		conan_create_if_changed("packages/nvapi",              profile_for_mode(mode), mode, pa, cache)
+		conan_create_if_changed("packages/spirv_reflect",      profile_for_mode(mode), mode, pa, cache)
+		conan_create_if_changed("packages/dxc",                profile_for_mode(mode), mode, pa, cache)
+		conan_create_if_changed("packages/openal_soft",        profile_for_mode(mode), mode, pa, cache)
+
+		if system == "Linux":
+			conan_create_if_changed("packages/xdg_shell",      profile_for_mode(mode), mode, pa, cache)
+			conan_create_if_changed("packages/xdg_decoration", profile_for_mode(mode), mode, pa, cache)
+
+	save_hash_cache(cache)
+
+	# Build project, use the mode that was requested, or Release as the
+	# Conan install step for a multi-config VS project (VS itself builds all configs)
+
+	extra            = " ".join(remainder)
+
+	build_modes = all_modes if (system == "Windows" and args.mode is None) else [args.mode or "Release"]
+
+	for mode in build_modes:
+		pa = profile_args_for_mode(mode)
+		mode_arg = f"-s build_type={mode}"
+		run(
+			f"conan build . "
+			f"-of {build_dir} "
+			f"{pa} "
+			f"{mode_arg} "
+			f"-o enableSIMD={args.simd} "
+			f"-o enableTests={args.tests} "
+			f"-o dynamicLinkingGraphics={args.dynamic_linking} "
+			f"{extra}"
+		)
 
 	# Run tests
 
 	if args.tests == "True":
 
+		test_mode = args.mode if args.mode is not None else "Release"
+		run(f"ctest --test-dir {build_dir} -C {test_mode} --output-on-failure", cwd=os.getcwd())
+
 		path = "tools/test.py"
 
 		if system == "Windows":
-			path = path.replace("/", "\\");
+			path = path.replace("/", "\\")
 
 		run(rf"python {path}", cwd=os.getcwd())
 

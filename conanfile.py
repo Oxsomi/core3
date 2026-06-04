@@ -67,7 +67,10 @@ class oxc3(ConanFile):
 		tc.cache_variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
 		tc.cache_variables["CLIGraphics"] = self.options.cliGraphics
 		tc.cache_variables["DynamicLinkingGraphics"] = self.options.dynamicLinkingGraphics
-		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
+
+		if not self.settings.os == "Windows":
+			tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
+
 		tc.generate()
 
 	def source(self):
@@ -133,7 +136,7 @@ class oxc3(ConanFile):
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
 			self.requires("vulkan_validation_layers/2025.01.25")
 
-		self.requires("openal_soft/2025.01.24")
+		self.requires("openal_soft/2026.06.04")
 
 	def package(self):
 

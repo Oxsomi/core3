@@ -112,8 +112,13 @@ function(apply_dependencies target)
 	if(WIN32)
 		get_property(res2 TARGET ${target} PROPERTY RESOURCE_LIST_RC)
 		if(NOT "${res2}" STREQUAL "")
-			file(WRITE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc" ${res2})
-			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
+			set(_rc_file "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/${target}.rc")
+			file(GENERATE
+				OUTPUT "${_rc_file}"
+				CONTENT "${res2}"
+			)
+			set_source_files_properties("${_rc_file}" PROPERTIES GENERATED TRUE)
+			target_sources(${target} PRIVATE "${_rc_file}")
 		endif()
 	endif()
 
@@ -218,7 +223,12 @@ macro(add_virtual_files)
 		set(platform linux)
 	endif()
 
-	set(RuntimeOutputDir "${_ARGS_SELF}/build/${platform}")
+		
+	if(NOT CMAKE_CONFIGURATION_TYPES)
+		set(RuntimeOutputDir "${_ARGS_SELF}/build/${platform}")
+	else()
+		set(RuntimeOutputDir "${_ARGS_SELF}/build/$<CONFIG>/${platform}")
+	endif()
 
 	if(_ARGS_FORCE_PACKAGER)
 

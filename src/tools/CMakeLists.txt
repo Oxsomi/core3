@@ -21,12 +21,15 @@ find_package(Python3)
 
 add_custom_target(check_style ALL
     COMMAND ${CMAKE_COMMAND} -E echo "-- Running OxC3 style check..."
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/src/tools/check_style.py ${CMAKE_SOURCE_DIR}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_style.py ${CMAKE_SOURCE_DIR} --no-todo-report
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "OxC3 style check"
     VERBATIM
 )
 
-if(EnableOxC3CLI)
-    add_subdirectory(oxc3_cli)
-endif()
+set_target_properties(check_style PROPERTIES FOLDER Oxsomi/tools)
+
+# TODO:
+# if(EnableOxC3CLI)
+#     add_subdirectory(oxc3_cli)
+# endif()

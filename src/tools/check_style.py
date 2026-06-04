@@ -18,6 +18,7 @@
 #       or inside a src/.../windows directory
 #   14. POSIX headers (<unistd.h> <pthread.h> etc.) only inside
 #       src/.../unix directories
+#   15. No unmerged Git conflict markers (<<<<<<< / ======= / >>>>>>>)
 #
 # Banned symbols (with per-path allow-lists):
 #   B1.  malloc / free / realloc / calloc
@@ -398,9 +399,12 @@ def check_file_path_comment(lines: list[str], rel: str) -> str | None:
     return None
 
 
-_BARE_BRACE_SEMI = re.compile(r'^\s*\}\s*;\s*$')
-_ABS_INCLUDE     = re.compile(r'^\s*#\s*include\s+"(/[^"]+)"')
-_TODO_RE         = re.compile(r'\b(TODO|FIXME|HACK|NOTE|XXX)\b', re.IGNORECASE)
+_BARE_BRACE_SEMI    = re.compile(r'^\s*\}\s*;\s*$')
+_ABS_INCLUDE        = re.compile(r'^\s*#\s*include\s+"(/[^"]+)"')
+_TODO_RE            = re.compile(r'\b(TODO|FIXME|HACK|NOTE|XXX)\b', re.IGNORECASE)
+# Exactly 7 '<', '=' or '>' at the start of a line (Git conflict markers).
+# The lookahead ensures '=======' is not a substring of a longer run.
+_CONFLICT_MARKER_RE = re.compile(r'^(<{7}|>{7}|={7})(?= |$)')
 
 # ---------------------------------------------------------------------------
 # Per-file checker
@@ -536,6 +540,12 @@ def check_file(
                         f"a unix/ directory"
                     ):
                         return violations, todos
+
+    # ── 15. Unmerged Git conflict markers ────────────────────────────────
+    for lineno, line in enumerate(lines, start=1):
+        if _CONFLICT_MARKER_RE.match(line):
+            if add(f"  line {lineno}: unmerged Git conflict marker '{line[:7]}'"):
+                return violations, todos
 
     # Pre-compute which banned-symbol rules apply to this file
     active_rules = [
@@ -788,6 +798,10 @@ def scan(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+
+    if sys.stdout.encoding.lower() != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
+
     parser = argparse.ArgumentParser(
         description=(
             "OxC3 source style checker, line length, indentation, UTF-8, "
