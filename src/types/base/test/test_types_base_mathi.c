@@ -66,11 +66,11 @@ void Test_mathu(Test *test) {
 	//U64
 
 	Test_assert(test, "U64_exp10", U64_exp10(0) == 1);
-	Test_assert(test, "U64_exp10", U64_exp10(19) == 10000000000000000000);
+	Test_assert(test, "U64_exp10", U64_exp10(19) == UINT64_C(10000000000000000000));
 	Test_assert(test, "U64_exp10", U64_exp10(20) == (U64)-1);
 
 	Test_assert(test, "U64_exp2", U64_exp2(0) == 1);
-	Test_assert(test, "U64_exp2", U64_exp2(63) == 0x8000000000000000);
+	Test_assert(test, "U64_exp2", U64_exp2(63) == UINT64_C(0x8000000000000000));
 	Test_assert(test, "U64_exp2", U64_exp2(64) == (U64)-1);
 
 	Test_assert(test, "U64_safeDiv", U64_safeDiv(100, 10) == 10);

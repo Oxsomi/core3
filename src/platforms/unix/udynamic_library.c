@@ -50,19 +50,19 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 
 		if(isAppDir) {
 			gotoIfError3(clean, File_resolve(
-				str, &isVirtual, 0, Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
+				&str, &isVirtual, 0, &Platform_instance->appDirectory, Platform_instance->alloc, &loc, e_rr
 			));
 		}
 
 		else gotoIfError3(clean, File_resolve(
-			str, &isVirtual, 0, Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
+			&str, &isVirtual, 0, &Platform_instance->workDirectory, Platform_instance->alloc, &loc, e_rr
 		));
 
 		if(!(*dynamicLib = dlopen(loc.ptr, RTLD_LAZY)))
 			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlopen failed"));
 
 	clean:
-		CharString_free(Platform_instance->alloc, &loc);
+		CharString_free(&loc, Platform_instance->alloc);
 		return s_uccess;
 	}
 
@@ -75,13 +75,13 @@ Bool DynamicLibrary_isValidPath(CharString str) {
 			retError(clean, Error_invalidState(!dynamicLib ? 0 : 2, "DynamicLibrary_load()::dynamicLib and ptr are required"));
 
 		if(!CharString_isNullTerminated(str))
-			gotoIfError3(clean, CharString_createCopy(Platform_instance->alloc, str, &tmp, e_rr));
+			gotoIfError3(clean, CharString_createCopy(str, Platform_instance->alloc, &tmp, e_rr));
 
 		if(!(*ptr = dlsym(dynamicLib, tmp.ptr ? tmp.ptr : str.ptr)))
 			retError(clean, Error_invalidState(0, "DynamicLibrary_load() dlsym failed"));
 
 	clean:
-		CharString_free(Platform_instance->alloc, &tmp);
+		CharString_free(&tmp, Platform_instance->alloc);
 		return s_uccess;
 	}
 

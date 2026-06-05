@@ -27,6 +27,8 @@
 #include "types/base/string_base.h"
 #include "types/container/perf/container_perf.h"
 
+#include <stdlib.h>
+
 static AtomicI64 allocCounter = { 0 };
 static AtomicI64 allocBytes = { 0 };
 

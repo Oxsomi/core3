@@ -31,7 +31,7 @@ void Test_endianness(Test *test) {
 	U32 be32 = U32_swapEndianness(0x12345678);
 	U64 be64 = U64_swapEndianness(0x123456789ABCDEF0);
 
-	Test_assert(test, "U16_swapEndianness", NULL, be16 == 0x3412);
-	Test_assert(test, "U32_swapEndianness", NULL, be32 == 0x78563412);
-	Test_assert(test, "U64_swapEndianness", NULL, be64 == 0xF0DEBC9A78563412);
+	Test_assert(test, "U16_swapEndianness", be16 == 0x3412);
+	Test_assert(test, "U32_swapEndianness", be32 == 0x78563412);
+	Test_assert(test, "U64_swapEndianness", be64 == 0xF0DEBC9A78563412);
 }

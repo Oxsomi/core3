@@ -483,7 +483,7 @@ void StreamHarness_testStream(StreamHarness *h, Test *t) {
 	Test_streamCompare(t, h);
 }
 
-void Test_setModuleH(Test *t, StreamHarness *h, ShortString str) {
+void Test_setModuleH(Test *t, StreamHarness *h, const C8 *str) {
 
 	Test_setModule(t, NULL);        //End last, before overwriting
 

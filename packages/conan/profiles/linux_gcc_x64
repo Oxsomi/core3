@@ -2,6 +2,7 @@
 os=Linux
 compiler=gcc
 compiler.cppstd=gnu17
+compiler.cstd=gnu17
 compiler.version=13
 compiler.libcxx=libstdc++11
 arch=x86_64

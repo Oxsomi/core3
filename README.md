@@ -73,7 +73,7 @@ One of the useful things about C is that files are incredibly easy to compile an
   - If using Vulkan SDK, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1 if you need bindless rendering. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
   - llvm-objcopy for example via `brew install llvm`.
 - **Linux**:
-  - For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default.
+  - For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default. You also want xkbcommon as well `sudo apt install libxkbcommon-dev -y`.
 
 - **Android**:
   - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.

@@ -75,10 +75,10 @@ static Ns Ns_fromFileTime(FILETIME ft) {
 //Helper: retry loop
 #define FILE_RETRY_LOOP(maxTimeout, expr)                                            \
 	{                                                                                \
-		Ns _maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);                \
+		Ns _maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);              \
 		while((expr) && maxTimeout) {                                                \
 			Thread_sleep(_maxTimeoutTry);                                            \
-			if(maxTimeout <= _maxTimeoutTry) { maxTimeout = 0; break; }                \
+			if(maxTimeout <= _maxTimeoutTry) { maxTimeout = 0; break; }              \
 			maxTimeout -= _maxTimeoutTry;                                            \
 		}                                                                            \
 	}
@@ -184,7 +184,10 @@ static Bool File_removeDirRecursivePhysical(const wchar_t *path, Ns *maxTimeout,
  
 		//Build full child path
 		wchar_t child[WIN_PATH_MAX];
-		_snwprintf(child, WIN_PATH_MAX, L"%ls\\%ls", path, ffd.cFileName);
+		if(_snwprintf(child, WIN_PATH_MAX, L"%ls\\%ls", path, ffd.cFileName) >= WIN_PATH_MAX - 1) {
+			Log_warnLnx("File_foreach()::path out of bounds. Skipping...");
+			continue;
+		}
  
 		if(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 

@@ -31,14 +31,14 @@ void Test_fixedPoint(Test *test) {
 		const FP37f4 a = FP37f4_fromDouble(123.25);            //123.25
 		const FP37f4 b = FP37f4_fromDouble(0.75);            //0.75
 
-		Test_assert(test, "FP37f4_fromDouble", NULL, a == (FP37f4)(0b0100 | (123 << 4)));
-		Test_assert(test, "FP37f4_toDouble", NULL, FP37f4_toDouble(a) == 123.25);
+		Test_assert(test, "FP37f4_fromDouble", a == (FP37f4)(0b0100 | (123 << 4)));
+		Test_assert(test, "FP37f4_toDouble", FP37f4_toDouble(a) == 123.25);
 
 		const FP37f4 sum = FP37f4_add(a, b);                //124.0
-		Test_assert(test, "FP37f4_add", NULL, FP37f4_toDouble(sum) == 124);
+		Test_assert(test, "FP37f4_add", FP37f4_toDouble(sum) == 124);
 
 		const FP37f4 diff = FP37f4_sub(a, b);                //122.5
-		Test_assert(test, "FP37f4_sub", NULL, FP37f4_toDouble(diff) == 122.5);
+		Test_assert(test, "FP37f4_sub", FP37f4_toDouble(diff) == 122.5);
 	}
 
 	Test_setModule(test, "FP46f6 (fixed point)");
@@ -47,13 +47,13 @@ void Test_fixedPoint(Test *test) {
 		const FP46f6 a = FP46f6_fromDouble(1000000.0625);    //1e6 + 1/16
 		const FP46f6 b = FP46f6_fromDouble(0.9375);            //15/16
 
-		Test_assert(test, "FP46f6_fromDouble", NULL, a == (FP46f6)(0b000100 | (1000000 << 6)));
-		Test_assert(test, "FP46f6_toDouble", NULL, FP46f6_toDouble(a) == 1000000.0625);
+		Test_assert(test, "FP46f6_fromDouble", a == (FP46f6)(0b000100 | (1000000 << 6)));
+		Test_assert(test, "FP46f6_toDouble", FP46f6_toDouble(a) == 1000000.0625);
 
 		const FP46f6 sum = FP46f6_add(a, b);                //1000001.0
-		Test_assert(test, "FP46f6_add", NULL, FP46f6_toDouble(sum) == 1000001.0);
+		Test_assert(test, "FP46f6_add", FP46f6_toDouble(sum) == 1000001.0);
 
 		const FP46f6 diff = FP46f6_sub(a, b);                //999999.125
-		Test_assert(test, "FP46f6_sub", NULL, FP46f6_toDouble(diff) == 999999.125);
+		Test_assert(test, "FP46f6_sub", FP46f6_toDouble(diff) == 999999.125);
 	}
 }

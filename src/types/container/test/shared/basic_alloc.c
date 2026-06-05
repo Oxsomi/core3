@@ -26,6 +26,8 @@
 #include "types/base/atomic.h"
 #include "types/base/allocator.h"
 
+#include <stdlib.h>
+
 static AtomicI64 allocCounter = { 0 };
 static AtomicI64 allocBytes = { 0 };
 

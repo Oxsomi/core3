@@ -227,8 +227,6 @@ void Test_CASetStream(Test *t) {
 
 		//setDataStream with offset + length subset
 
-		U8 streamData2[16];
-		for (U64 i = 0; i < 16; ++i) streamData2[i] = (U8)(i * 2);
 		MemoryStream_create(16, EMemoryStreamFlags_None, &type, &sr, NULL);
 		Test_assert(t, "setDataStream subset ok", CAFile_setDataStream(&ca, hf, t->alloc, &sr, 4, 8, &t->err));
 		RefPtr_dec(&sr);

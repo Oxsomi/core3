@@ -53,7 +53,7 @@ typedef struct StreamHarness {
 
 } StreamHarness;
 
-void Test_setModuleH(Test *t, StreamHarness *h, ShortString str);
+void Test_setModuleH(Test *t, StreamHarness *h, const C8 *str);		//str = ShortString (limit of 31)
 
 void StreamHarness_testStream(StreamHarness *h, Test *t);
 void StreamHarness_testCursor(StreamHarness *h, Test *t);

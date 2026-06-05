@@ -34,10 +34,10 @@ void Test_time(Test *test) {
 
 	Ns now2 = 0;
 
-	Test_assert(test, "parseFormat", NULL, Time_parseFormat(&now2, nowStr, false));
-	Test_assert(test, "parseFormat", "Parsed timestamp invalid", now2 == now);
+	Test_assert(test, "parseFormat", Time_parseFormat(&now2, nowStr, false));
+	Test_assert(test, "parseFormat validity", now2 == now);
 
 	Time_format(now, nowStr, true);
-	Test_assert(test, "parseFormat (local)", NULL, Time_parseFormat(&now2, nowStr, true));
-	Test_assert(test, "parseFormat (local)", "Parsed timestamp invalid", now2 == now);
+	Test_assert(test, "parseFormat (local)", Time_parseFormat(&now2, nowStr, true));
+	Test_assert(test, "parseFormat validity (local)", now2 == now);
 }

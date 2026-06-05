@@ -41,6 +41,7 @@ typedef enum EWindowHint {
 	EWindowHint_ForceFullscreen          = 1 << 2,
 	EWindowHint_AllowBackgroundUpdates   = 1 << 3,
 	EWindowHint_ProvideCPUBuffer         = 1 << 4,    //We write from CPU. Useful for physical windows CPU accessible
+	EWindowHint_NoBorder                 = 1 << 5,
 
 	EWindowHint_None                     = 0,
 	EWindowHint_Default                  = EWindowHint_AllowFullscreen

@@ -35,6 +35,10 @@ typedef U32 EPlatform;
 #define PLATFORM_IOS 5
 #define PLATFORM_OSX 6
 
+#if _PLATFORM_TYPE != PLATFORM_WINDOWS
+	#include <assert.h>
+#endif
+
 //Platform and arch stuff
 
 #define SIMD_NONE 0

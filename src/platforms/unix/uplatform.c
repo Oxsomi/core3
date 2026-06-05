@@ -20,10 +20,9 @@
 
 //platforms/unix/uplatform.c
 
-#include "types/container/list_impl.h"
 #include "platforms/platform.h"
-#include "platforms/logx.h"
 #include "types/container/string.h"
+#include "types/container/file_base.h"
 #include "types/base/atomic.h"
 
 #include <unistd.h>
@@ -63,16 +62,15 @@ Bool Platform_initExt(Error *e_rr) {
 
 	#if _PLATFORM_TYPE != PLATFORM_ANDROID
 
-		#define PATH_MAX 256
-		C8 cwd[PATH_MAX + 1];
+		C8 cwd[MAX_OXC_PATH + 1];
 		if (!getcwd(cwd, sizeof(cwd)))
 			retError(clean, Error_stderr(0, "Platform_initExt() getcwd failed"));
 
 		gotoIfError3(clean, CharString_createCopy(
-			Platform_instance->alloc, CharString_createRefCStrConst(cwd), &Platform_instance->workDirectory, e_rr
+			CharString_createRefCStrConst(cwd), Platform_instance->alloc, &Platform_instance->workDirectory, e_rr
 		));
 
-		gotoIfError3(clean, CharString_append(Platform_instance->alloc, &Platform_instance->workDirectory, '/', e_rr));
+		gotoIfError3(clean, CharString_append(&Platform_instance->workDirectory, '/', Platform_instance->alloc, e_rr));
 
 	#endif
 

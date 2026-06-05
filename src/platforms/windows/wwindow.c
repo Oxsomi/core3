@@ -963,8 +963,9 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 	}
 
 	const Bool isFullScreen = w->flags & EWindowFlags_IsFullscreen;
+	const Bool borderless = w->hint & EWindowHint_NoBorder;
 
-	if(!isFullScreen) {
+	if(!isFullScreen && !borderless) {
 
 		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 
@@ -1067,8 +1068,9 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	DWORD style = WS_VISIBLE;
 
 	const Bool isFullScreen = w->hint & EWindowHint_ForceFullscreen;
+	const Bool borderless = w->hint & EWindowHint_NoBorder;
 
-	if(!isFullScreen) {
+	if(!isFullScreen && !borderless) {
 
 		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 

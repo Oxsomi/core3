@@ -36,11 +36,11 @@ typedef RefPtr StreamRef;
 #define OISH_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
 #define OISH_SHADER_MODEL8(maj, min) ((U8)((min) | ((maj) << 4)))
 
-static U16 OISH_SHADER_MODEL_MIN = OISH_SHADER_MODEL(6, 5);     //6.5 at least
-static U16 OISH_SHADER_MODEL_MAX = OISH_SHADER_MODEL(6, 10);    //6.10 max
+static const U16 OISH_SHADER_MODEL_MIN = OISH_SHADER_MODEL(6, 5);     //6.5 at least
+static const U16 OISH_SHADER_MODEL_MAX = OISH_SHADER_MODEL(6, 10);    //6.10 max
 
-static U8 OISH_SHADER_MODEL_MIN8 = OISH_SHADER_MODEL8(6, 5);    //6.5 at least
-static U8 OISH_SHADER_MODEL_MAX8 = OISH_SHADER_MODEL8(6, 10);   //6.10 max
+static const U8 OISH_SHADER_MODEL_MIN8 = OISH_SHADER_MODEL8(6, 5);    //6.5 at least
+static const U8 OISH_SHADER_MODEL_MAX8 = OISH_SHADER_MODEL8(6, 10);   //6.10 max
 
 typedef enum ESHSettingsFlags {
 	ESHSettingsFlags_None               = 0,

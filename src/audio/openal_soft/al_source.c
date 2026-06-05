@@ -82,7 +82,7 @@ void AudioSource_freeExt(AudioSource *source, const Allocator *alloc) {
 	}
 
 clean:
-	return;
+	(void) s_uccess;
 }
 
 static inline void alSource3fv(ALuint id, ALenum e, F32x4 v) {

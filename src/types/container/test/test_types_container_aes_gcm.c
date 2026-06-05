@@ -107,7 +107,6 @@ static void runAesVectors(
 
 static const U32 sizes[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 };
 static const U8  cryptoState[] = { 0, 1, 3 };
-static const I64 blockSizeHints[] = { -1, -2, -4, -8, -16, 0 };
 
 //Expected GMAC tags for each batch size (0 input, 0 key, 0 IV).
 static const U32 tagForValidation[][4] = {

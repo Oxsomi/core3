@@ -21,11 +21,11 @@
 //platforms/linux/lwindow_manager.c
 
 #include "platforms/window_manager.h"
-#include "types/base/error.h"
-#include "types/container/string.h"
-#include "types/container/buffer.h"
-#include "platforms/ext/bufferx.h"
+#include "platforms/platform.h"
 #include "platforms/linux/lwindow_structs.h"
+#include "types/container/buffer.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/error.h"
 
 void LWindowManager_isAlive(void *data, struct xdg_wm_base *base, U32 serial) {
 	(void) data;
@@ -44,37 +44,62 @@ void LWindowManager_register(
 
 	LWindowManager *data = (LWindowManager*) dataVoid;
 
-	if(CharString_equalsStringSensitive(CharString_createRefCStrConst(wl_compositor_interface.name), inter)) {
-		data->compositor = wl_registry_bind(registry, id, &wl_compositor_interface, 4);
+	const CharString wlCompositorName    = CharString_createRefCStrConst(wl_compositor_interface.name);
+	const CharString wlShmName           = CharString_createRefCStrConst(wl_shm_interface.name);
+	const CharString xdgWmBaseName       = CharString_createRefCStrConst(xdg_wm_base_interface.name);
+	const CharString zxdgDecorationName  = CharString_createRefCStrConst(zxdg_decoration_manager_v1_interface.name);
+	const CharString wlSeatName          = CharString_createRefCStrConst(wl_seat_interface.name);
+	const CharString wlOutputName        = CharString_createRefCStrConst(wl_output_interface.name);
+	const CharString wlSubcompositorName = CharString_createRefCStrConst(wl_subcompositor_interface.name);
+
+	if(CharString_equalsStringSensitive(&wlCompositorName, &inter)) {
+		data->compositor   = wl_registry_bind(registry, id, &wl_compositor_interface, 4);
 		data->compositorId = id;
 	}
 
-	else if(CharString_equalsStringSensitive(CharString_createRefCStrConst(wl_shm_interface.name), inter)) {
-		data->shm = wl_registry_bind(registry, id, &wl_shm_interface, 1);
+	else if(CharString_equalsStringSensitive(&wlShmName, &inter)) {
+		data->shm   = wl_registry_bind(registry, id, &wl_shm_interface, 1);
 		data->shmId = id;
 	}
 
-	else if(CharString_equalsStringSensitive(CharString_createRefCStrConst(xdg_wm_base_interface.name), inter)) {
-
-		data->xdgWmBase = wl_registry_bind(registry, id, &xdg_wm_base_interface, 1);
+	else if(CharString_equalsStringSensitive(&xdgWmBaseName, &inter)) {
+		data->xdgWmBase   = wl_registry_bind(registry, id, &xdg_wm_base_interface, 1);
 		data->xdgWmBaseId = id;
 
 		data->xdgListener = (struct xdg_wm_base_listener) { .ping = LWindowManager_isAlive };
 		xdg_wm_base_add_listener(data->xdgWmBase, &data->xdgListener, NULL);
 	}
 
-	else if(CharString_equalsStringSensitive(
-		CharString_createRefCStrConst(zxdg_decoration_manager_v1_interface.name), inter
-	)) {
-		data->xdgDeco = wl_registry_bind(registry, id, &zxdg_decoration_manager_v1_interface, 1);
+	else if(CharString_equalsStringSensitive(&zxdgDecorationName, &inter)) {
+		data->xdgDeco   = wl_registry_bind(registry, id, &zxdg_decoration_manager_v1_interface, 1);
 		data->xdgDecoId = id;
+	}
+
+	else if(CharString_equalsStringSensitive(&wlSubcompositorName, &inter)) {
+		data->subcompositor   = wl_registry_bind(registry, id, &wl_subcompositor_interface, 1);
+		data->subcompositorId = id;
+	}
+
+	else if(CharString_equalsStringSensitive(&wlSeatName, &inter)) {
+		data->seat   = wl_registry_bind(registry, id, &wl_seat_interface, 5);
+		data->seatId = id;
+	}
+
+	else if(CharString_equalsStringSensitive(&wlOutputName, &inter)) {
+		for(U32 i = 0; i < LWINDOW_MAX_OUTPUTS; ++i) {
+			if(data->outputs[i])
+				continue;
+
+			data->outputs[i]   = wl_registry_bind(registry, id, &wl_output_interface, 2);
+			data->outputIds[i] = id;
+			break;
+		}
 	}
 }
 
 void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32 id) {
 
 	LWindowManager *data = (LWindowManager*) dataVoid;
-
 	(void) registry;
 
 	if(id == data->compositorId)
@@ -88,27 +113,44 @@ void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32
 
 	else if(id == data->xdgDecoId)
 		data->xdgDeco = NULL;
+
+	else if(id == data->subcompositorId)
+		data->subcompositor = NULL;
+
+	else if(id == data->seatId) {
+		data->seat   = NULL;
+		data->seatId = 0;
+	}
+
+	else for(U32 i = 0; i < LWINDOW_MAX_OUTPUTS; ++i) {
+		if(data->outputIds[i] == id) {
+			wl_output_destroy(data->outputs[i]);
+			data->outputs[i]   = NULL;
+			data->outputIds[i] = 0;
+			break;
+		}
+	}
 }
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	Bool s_uccess = true;
-	gotoIfError2(clean, Buffer_createEmptyBytesx(sizeof(LWindowManager), &w->platformData))
+	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(LWindowManager), Platform_instance->alloc, &w->platformData, e_rr));
 
-	LWindowManager *manager = (LWindowManager*)w->platformData.ptr;
-	manager->display = wl_display_connect(NULL);
-	manager->compositorId = U64_MAX;
+	LWindowManager *manager  = (LWindowManager*)w->platformData.ptr;
+	manager->display         = wl_display_connect(NULL);
+	manager->compositorId    = U64_MAX;
 
 	if(!manager->display)
-		retError(clean, Error_stderr(0, "WindowManager_createNative() couldn't connect to display"))
+		retError(clean, Error_stderr(0, "WindowManager_createNative() couldn't connect to display"));
 
 	manager->registry = wl_display_get_registry(manager->display);
 
 	if(!manager->registry)
-		retError(clean, Error_invalidState(0, "WindowManager_createNative() couldn't get registry"))
+		retError(clean, Error_invalidState(0, "WindowManager_createNative() couldn't get registry"));
 
 	manager->listener = (struct wl_registry_listener) {
-		.global = LWindowManager_register,
+		.global        = LWindowManager_register,
 		.global_remove = LWindowManager_unregister
 	};
 
@@ -118,7 +160,16 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	wl_display_roundtrip(manager->display);
 
 	if(!manager->compositor || !manager->shm || !manager->xdgWmBase)
-		retError(clean, Error_invalidState(0, "WindowManager_createNative() couldn't get compositor, shm or xdg"))
+		retError(clean, Error_invalidState(0, "WindowManager_createNative() couldn't get compositor, shm or xdg"));
+
+	//wl_subcompositor is needed for CSD bar on compositors without SSD support.
+	//Not fatal, if it's missing and SSD is also missing, windows will just be undecorated.
+
+	if(!manager->subcompositor)
+		Log_warnLn("WindowManager_createNative(): no wl_subcompositor, CSD unavailable if SSD is also absent");
+
+	if(!manager->seat)
+		Log_warnLn("WindowManager_createNative(): no wl_seat found, input will be unavailable");
 
 clean:
 	return s_uccess;
@@ -128,15 +179,25 @@ Bool WindowManager_freeNative(WindowManager *w) {
 
 	LWindowManager *manager = (LWindowManager*)w->platformData.ptr;
 
+	if(manager->seat)
+		wl_seat_destroy(manager->seat);
+
+	for(U32 i = 0; i < LWINDOW_MAX_OUTPUTS; ++i)
+		if(manager->outputs[i])
+			wl_output_destroy(manager->outputs[i]);
+
+	if(manager->subcompositor)
+		wl_subcompositor_destroy(manager->subcompositor);
+
 	if(manager->xdgWmBase)
 		xdg_wm_base_destroy(manager->xdgWmBase);
 
-	if (manager->shm)
+	if(manager->shm)
 		wl_shm_destroy(manager->shm);
 
-	if (manager->compositor)
+	if(manager->compositor)
 		wl_compositor_destroy(manager->compositor);
-		
+
 	if(manager->xdgDeco)
 		zxdg_decoration_manager_v1_destroy(manager->xdgDeco);
 
@@ -152,6 +213,10 @@ Bool WindowManager_freeNative(WindowManager *w) {
 }
 
 void WindowManager_updateExt(WindowManager *manager) {
+
 	LWindowManager *lmanager = (LWindowManager*)manager->platformData.ptr;
+
+	//Flush outgoing requests before dispatching incoming events.
+	wl_display_flush(lmanager->display);
 	wl_display_dispatch_pending(lmanager->display);
 }

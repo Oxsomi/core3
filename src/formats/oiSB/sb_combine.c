@@ -217,7 +217,7 @@ Bool SBFile_combine(const SBFile *a, const SBFile *b, const Allocator *alloc, SB
 
 				gotoIfError3(clean, ListU32_createCopy(arrayB, alloc, &tmp, e_rr));
 
-				if(combined->arrays.length + 1 >= I16_MAX)
+				if(combined->arrays.length + 1 >= (U16)I16_MAX)
 					retError(clean, Error_invalidState(0, "SBFile_combine() combined arrays exceeded 32768"));
 
 				combined->vars.ptrNonConst[oldId].arrayDimOrArrayId = ((U16) combined->arrays.length) | 0x8000;

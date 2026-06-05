@@ -154,6 +154,7 @@ BANNED_SYMBOLS: list[dict] = [
             "src/types/container/platforms/unix/ulog.c",
             "src/types/base/test/shared/shared.c",
             "src/types/container/string.c",
+            "src/platforms/unix/ufile.c"
         ),
     },
     # B4, assert
@@ -211,7 +212,9 @@ BANNED_SYMBOLS: list[dict] = [
     {
         "pattern": re.compile(r'\b(strcmp|strstr)\s*\('),
         "message": "'{}', use CharString_equalsStringSensitive or Buffer_cmp on CharString_bufferConst",
-        "allow_paths": (),
+        "allow_paths": (
+            "src/platforms/unix/ufile.c"
+        ),
     },
     # B13, C time functions
     {

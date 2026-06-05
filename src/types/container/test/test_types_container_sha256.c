@@ -69,9 +69,9 @@ void Test_sha256(Test *t) {
 	Buffer_setAllToU8(Buffer_createRef(data9, sizeof(data9)), 0x55, NULL);
 
 	CharString inputs[] = {
-		{ 0 },
+		{ { 0 }, 0, 0 },
 		CharString_createRefCStrConst("abc"),
-		{ 0 },
+		{ { 0 }, 0, 0 },
 		CharString_createRefSizedConst(
 			"\xDE\x18\x89\x41\xA3\x37\x5D\x3A\x8A\x06\x1E\x67\x57\x6E\x92\x6D",
 			16, true),
@@ -90,18 +90,18 @@ void Test_sha256(Test *t) {
 		CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"),
 		CharString_createRefSizedConst("\xBD", 1, true),
 		CharString_createRefSizedConst("\xC9\x8C\x8E\x55", 4, true),
-		{ 0 },
-		{ 0 },
-		{ 0 },
-		{ 0 },
-		{ 0 },
-		{ 0 },
-		{ 0 },
+		{ { 0 }, 0, 0 },
+		{ { 0 }, 0, 0 },
+		{ { 0 }, 0, 0 },
+		{ { 0 }, 0, 0 },
+		{ { 0 }, 0, 0 },
+		{ { 0 }, 0, 0 },
+		{ { 0 }, 0, 0 },
 		#ifdef EXTRA_CHECKS
-			{ 0 },
-			{ 0 },
-			{ 0 },
-			{ 0 },
+			{ { 0 }, 0, 0 },
+			{ { 0 }, 0, 0 },
+			{ { 0 }, 0, 0 },
+			{ { 0 }, 0, 0 },
 		#endif
 	};
 

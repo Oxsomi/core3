@@ -118,14 +118,12 @@ Bool DDS_read(
 	ETextureType type = ETextureType_2D;
 	ETextureFormatId formatId = ETextureFormatId_Undefined;
 	ETextureFormat format = ETextureFormat_Undefined;
-	Bool hasDXT10 = false;
 
 	if(useMagic && dds.header.format.magicNumber == EDDSFormatMagic_DX10) {
 
 		if(!canHaveDXT10)
 			retError(clean, Error_invalidParameter(0, 0, "DDS_read()::dds didn't contain DXT10 even though it was requested"));
 
-		hasDXT10 = true;
 		*streamOff += sizeof(dds);
 
 		formatId = DXFormat_toTextureFormatId(dds.header10.format);
