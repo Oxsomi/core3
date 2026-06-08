@@ -42,6 +42,10 @@ if(ANDROID)
 	target_sources(OxC3_types_base PRIVATE ${typesBaseAndroidSources})
 endif()
 
+if(UNIX AND NOT APPLE)
+	target_link_libraries(OxC3_types_base PUBLIC m)
+endif()
+
 if(MSVC AND ARM)
 	enable_language(ASM_MARMASM)
 	file(GLOB_RECURSE armAsmWin "platforms/windows/arm/*.asm")

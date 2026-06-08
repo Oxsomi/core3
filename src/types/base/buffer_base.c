@@ -162,7 +162,7 @@ ECompareResult Buffer_cmp(const Buffer buf0, const Buffer buf1) {
 		return len0 < len1 ? ECompareResult_Lt : ECompareResult_Gt;
 
 	int cmp = memcmp(buf0.ptr, buf1.ptr, len0);
-	return cmp == 0 ? ECompareResult_Eq : (cmp == -1 ? ECompareResult_Lt : ECompareResult_Gt);
+	return cmp == 0 ? ECompareResult_Eq : (cmp < 0? ECompareResult_Lt : ECompareResult_Gt);
 }
 
 Bool Buffer_offset(Buffer *buf, U64 length, Error *e_rr) {

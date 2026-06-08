@@ -44,7 +44,7 @@ typedef struct Monitor {
 
 	I32x2 offsetPixels, sizePixels;
 	I32x2 offsetR, offsetG;
-	I32x2 offsetB, sizeInches;
+	I32x2 offsetB, sizeMm;
 
 	EMonitorOrientation orientation;
 	F32 gamma, contrast, refreshRate;

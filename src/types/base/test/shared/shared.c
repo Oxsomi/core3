@@ -73,7 +73,7 @@ Bool Test_assert2(Test *test, const C8 *section, Bool value, const C8 *file, U64
 	}
 
 	else printf(
-		"-- %s (%s): Failed at %s::%"PRIu64" (%s)\n",
+		"-- %s (%s): Failed at %s:%"PRIu64" (%s)\n",
 		Test_prefix(test),
 		!section ? "???" : section,
 		!file ? "???" : file,

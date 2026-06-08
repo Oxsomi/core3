@@ -140,11 +140,6 @@ void AudioStream_free(AudioStream *stream, const Allocator *alloc) {
 
 	AudioStream_freeExt(stream, alloc);
 
-	OxStream *underlyingStream = RefPtr_data(stream->info.stream, OxStream);
-
-	if(underlyingStream)
-		underlyingStream->close(underlyingStream, alloc);
-
 	//Ensure stream isn't updated next time
 
 	AudioStreamRef *streamRef = (AudioStreamRef*)stream - 1;
@@ -163,6 +158,7 @@ void AudioStream_free(AudioStream *stream, const Allocator *alloc) {
 			SpinLock_unlock(&dev->pendingUpdateLock);
 	}
 
+	RefPtr_dec(&stream->info.stream);
 	RefPtr_dec(&stream->device);
 }
 

@@ -37,6 +37,11 @@
 
 #include <stdio.h>
 
+#ifdef AUDIO_TEST_DEBUG
+	#include "platforms/platform.h"
+	#include "types/container/log.h"
+#endif
+
 //Minimal fopen-backed OxStream (can't use OxC3_platforms)
 //Follows the same pattern as MemoryStream: OxStream is the base,
 //FileStream embeds it as 'parent' and appends its own data after.
@@ -788,6 +793,12 @@ int main() {
 	Types types;
 	Types_create(&types, alloc);
 	ctx.types = &types;
+
+	#ifdef AUDIO_TEST_DEBUG
+		if(!Platform_create(0, NULL, NULL, NULL, false, NULL))
+			Log_errorLn(alloc, "Couldn't create platform for debug utils");
+		else Log_debugLn(alloc, "Created platform for debug utils");
+	#endif
 
 	if (!AudioFuncCtx_create(&ctx, alloc, &err)) {
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);

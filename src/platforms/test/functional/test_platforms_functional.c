@@ -927,6 +927,10 @@ static void Test_focusReset(Test *t) {
 
 		WindowManager_free(&windowManager);
 
+	#else
+
+		(void) onButtonReset;
+
 	#endif
 }
 

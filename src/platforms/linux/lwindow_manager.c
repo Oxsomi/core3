@@ -22,6 +22,7 @@
 
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
+#include "platforms/logx.h"
 #include "platforms/linux/lwindow_structs.h"
 #include "types/container/buffer.h"
 #include "types/base/string_read_helper.h"
@@ -31,7 +32,69 @@ void LWindowManager_isAlive(void *data, struct xdg_wm_base *base, U32 serial) {
 	(void) data;
 	xdg_wm_base_pong(base, serial);
 }
-
+ 
+//wl_output geometry event, fires once per output on connect, and on change.
+//Gives us the output's position in global compositor space, physical size in mm,
+// and transform (orientation). The pixel mode dimensions come from the mode event
+static void LOutput_geometry(
+	void *data,
+	struct wl_output *output,
+	I32 x, I32 y,
+	I32 mmWidth, I32 mmHeight,
+	I32 subpixel,
+	const C8 *make, const C8 *model,
+	I32 transform
+) {
+	(void) output; (void) subpixel; (void) make; (void) model;
+	LOutputInfo *info = (LOutputInfo*) data;
+	info->x         = x;
+	info->y         = y;
+	info->mmWidth   = mmWidth;
+	info->mmHeight  = mmHeight;
+	info->transform = transform;
+}
+ 
+//wl_output mode event, fires for each supported mode; the one with WL_OUTPUT_MODE_CURRENT
+// set is the active resolution and refresh rate
+static void LOutput_mode(
+	void *data,
+	struct wl_output *output,
+	U32 flags,
+	I32 width, I32 height,
+	I32 refresh
+) {
+	(void) output;
+ 
+	if(!(flags & WL_OUTPUT_MODE_CURRENT))
+		return;
+ 
+	LOutputInfo *info    = (LOutputInfo*) data;
+	info->pixelWidth  = width;
+	info->pixelHeight = height;
+	info->refreshRate = refresh;   // mHz
+}
+ 
+//done event, compositor signals it has finished sending all properties for this output.
+// Nothing to do here; we've already updated info in-place
+static void LOutput_done(void *data, struct wl_output *output) {
+	(void) data; (void) output;
+}
+ 
+//scale event, integer HiDPI scale factor (e.g. 2 for 200% scaling).
+// Stored for future use; not wired into Monitor yet.
+static void LOutput_scale(void *data, struct wl_output *output, I32 factor) {
+	(void) output;
+	LOutputInfo *info = (LOutputInfo*) data;
+	info->scale = factor;
+}
+ 
+static const struct wl_output_listener LOutput_listener = {
+	.geometry = LOutput_geometry,
+	.mode     = LOutput_mode,
+	.done     = LOutput_done,
+	.scale    = LOutput_scale,
+};
+ 
 void LWindowManager_register(
 	void *dataVoid,
 	struct wl_registry *registry,
@@ -89,12 +152,18 @@ void LWindowManager_register(
 		for(U32 i = 0; i < LWINDOW_MAX_OUTPUTS; ++i) {
 			if(data->outputs[i])
 				continue;
-
+ 
 			data->outputs[i]   = wl_registry_bind(registry, id, &wl_output_interface, 2);
 			data->outputIds[i] = id;
+ 
+			//Clear the info slot and wire the listener so geometry/mode/done
+			// events populate it before the first window is created.
+			data->outputInfo[i] = (LOutputInfo) { .scale = 1 };
+			wl_output_add_listener(data->outputs[i], &LOutput_listener, &data->outputInfo[i]);
 			break;
 		}
 	}
+
 }
 
 void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32 id) {
@@ -127,6 +196,7 @@ void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32
 			wl_output_destroy(data->outputs[i]);
 			data->outputs[i]   = NULL;
 			data->outputIds[i] = 0;
+			data->outputInfo[i] = (LOutputInfo) { 0 };
 			break;
 		}
 	}
@@ -166,10 +236,10 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	//Not fatal, if it's missing and SSD is also missing, windows will just be undecorated.
 
 	if(!manager->subcompositor)
-		Log_warnLn("WindowManager_createNative(): no wl_subcompositor, CSD unavailable if SSD is also absent");
+		Log_warnLnx("WindowManager_createNative(): no wl_subcompositor, CSD unavailable if SSD is also absent");
 
 	if(!manager->seat)
-		Log_warnLn("WindowManager_createNative(): no wl_seat found, input will be unavailable");
+		Log_warnLnx("WindowManager_createNative(): no wl_seat found, input will be unavailable");
 
 clean:
 	return s_uccess;

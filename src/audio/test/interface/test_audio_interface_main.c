@@ -28,6 +28,11 @@
 #include "types/container/memory_stream.h"
 #include "types/test/test.h"
 
+#ifdef AUDIO_TEST_DEBUG
+	#include "platforms/platform.h"
+	#include "types/container/log.h"
+#endif
+
 typedef struct AudioIfCtx {
 	AudioInterfaceRef *interf;
 	AudioDeviceRef *device;
@@ -195,9 +200,10 @@ void Test_audioDeviceCreateDestroy(Test *t) {
 	AudioInterfaceRef *interf = NULL;
 	AudioDeviceRef *device = NULL;
 	AudioDeviceInfo info = (AudioDeviceInfo) { 0 };
- 
+
 	RefPtrType ifType = AudioInterface_makeType(t->alloc);
 	Test_assert(t, "create interface", AudioInterface_create(&interf, t->alloc, &ifType, &err));
+
 	Test_assert(t, "get preferred device",
 		AudioInterface_getPreferredDevice(AudioInterfaceRef_ptr(interf), EAudioDeviceFlags_None, t->alloc, &info, &err)
 	);
@@ -205,7 +211,7 @@ void Test_audioDeviceCreateDestroy(Test *t) {
 	RefPtrType devType = AudioDevice_makeType(t->alloc);
 	Test_assert(t, "create device", AudioDeviceRef_create(interf, &info, false, t->alloc, &devType, &device, &err));
 	Test_assert(t, "device non-null", device != NULL);
- 
+
 	RefPtr_dec(&device);
 	Test_assert(t, "device freed", device == NULL);
 	RefPtr_dec(&interf);
@@ -233,6 +239,7 @@ void Test_audioDeviceCreateDebug(Test *t) {
  
 	RefPtrType devType = AudioDevice_makeType(t->alloc);
 	Test_assert(t, "create debug device", AudioDeviceRef_create(interf, &info, true, t->alloc, &devType, &device, &err));
+
 	Test_assert(t, "debug device non-null", device != NULL);
  
 	RefPtr_dec(&device);
@@ -371,6 +378,8 @@ void Test_audioSourceStereoSpatialRejected(Test *t) {
 		MemoryStream_createFromBufferRegion(silenceBuf, 0, 4, EMemoryStreamFlags_None, &memType, &memStream, &err)
 	);
 
+	RefPtr_inc(memStream);
+
 	AudioStreamInfo info = (AudioStreamInfo) {
 		.flags4_format4 = EAudioStreamFormat_Stereo16 << 4,
 		.sampleRate = 44100,
@@ -402,6 +411,7 @@ void Test_audioSourceStereoSpatialRejected(Test *t) {
 
 	RefPtr_dec(&audioStream);
 	RefPtr_dec(&memStream);
+	RefPtr_dec(&info.stream);
 	AudioIfCtx_free(&ctx);
 }
 
@@ -459,6 +469,12 @@ int main() {
 
 	Test t = (Test) { 0 };
 	t.alloc = &alloc;
+
+	#ifdef AUDIO_TEST_DEBUG
+		if(!Platform_create(0, NULL, NULL, NULL, false, NULL))
+			Log_errorLn(&alloc, "Couldn't create platform for debug utils");
+		else Log_debugLn(&alloc, "Created platform for debug utils");
+	#endif
 
 	Test_audioInterfaceCreateDestroy(&t);
 	Test_audioInterfaceDoubleDecSafe(&t);

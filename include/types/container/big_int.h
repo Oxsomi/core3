@@ -176,46 +176,6 @@ static inline Buffer BigInt_buffer(BigInt b) {
 
 static inline Buffer BigInt_bufferConst(BigInt b) { return Buffer_createRefConst(b.data, BigInt_byteCount(b)); }
 
-//Find highest bit that was on. Returns U16_MAX if 0
-static inline U16 BigInt_bitScan(BigInt a) {
-
-	for (U64 i = a.length - 1; i != U64_MAX; --i) {
-
-		const U64 v = a.data[i];
-		if (!v) continue;
-
-		#if defined(_MSC_VER)
-			unsigned long index = 0;
-			_BitScanReverse64(&index, v);
-			return (U16)(i * 64 + index);
-		#else
-			return (U16)(i * 64 + 63 - __builtin_clzll(v));
-		#endif
-	}
-
-	return U16_MAX;
-}
-
-//Starts at the first bit rather than the last
-static inline U16 BigInt_bitScanReverse(BigInt a) {
-
-	for (U64 i = 0; i < a.length; ++i) {
-		
-		const U64 v = a.data[i];
-		if (!v) continue;
-
-		#if defined(_MSC_VER)
-			unsigned long index = 0;
-			_BitScanForward64(&index, v);
-			return (U16)(i * 64 + index);
-		#else
-			return (U16)(i * 64 + __builtin_ctzll(v));
-		#endif
-	}
-
-	return U16_MAX;
-}
-
 static inline Bool BigInt_isBase2(BigInt a) {
 	return a.length && BigInt_bitScan(a) == BigInt_bitScanReverse(a);
 }

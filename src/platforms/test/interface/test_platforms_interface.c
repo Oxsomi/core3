@@ -454,17 +454,18 @@ static void Test_fileHandle(Test* t) {
 	writeBuf = Buffer_createRefConst((const U8*)payload, payloadLen);
 
 	Test_assert(t, "write", FileHandleRef_write(handle, 0, payloadLen, &writeBuf, &t->err));
+	RefPtr_dec(&handle);
 
 	//Write to read-only handle must fail
 
-	Test_assert(t, "open_read", !File_open(
-		&filePath, 50 * MS, EFileOpenType_Read, false, &fhType, &roHandle, NULL
+	Test_assert(t, "open_read", File_open(
+		&filePath, 50 * MS, EFileOpenType_Read, false, &fhType, &roHandle, &t->err
 	));
 
 	Test_assert(t, "writeToROFails", !FileHandleRef_write(roHandle, 0, payloadLen, &writeBuf, NULL));
 	RefPtr_dec(&roHandle);
 
-	//Close the write handle
+	//Close the read handle
 	RefPtr_dec(&handle);
 	Test_assert(t, "handleNullAfterDec", handle == NULL);
 
@@ -676,6 +677,8 @@ static void Test_fileLongPath(Test *t) {
 	Test_assert(t, "rootGone", !File_has(&root, t->alloc));
  
 clean:
+	(void) s_uccess;
+
 	FileInfo_free(&info,       t->alloc);
 	Buffer_free(&readBuf,      t->alloc);
 	CharString_free(&root,     t->alloc);
@@ -965,9 +968,9 @@ static void Test_dynamicLibrary(Test *t) {
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dll");
 	#elif _PLATFORM_TYPE == PLATFORM_OSX
-		CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.dylib");
+		CharString rtLib = CharString_createRefCStrConst("libOxC3_platforms_interface_dylib_test.dylib");
 	#else
-		CharString rtLib = CharString_createRefCStrConst("OxC3_platforms_interface_dylib_test.so");
+		CharString rtLib = CharString_createRefCStrConst("libOxC3_platforms_interface_dylib_test.so");
 	#endif
 
 	DynamicLibrary dl = NULL;

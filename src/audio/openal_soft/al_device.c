@@ -78,10 +78,31 @@ Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr) {
 
 	ALC_PROCESS_ERROR(NULL, devExt->device = alcOpenDevice(dev->info.name));
 
-	ALCint ints[] = { ALC_CONTEXT_FLAGS_EXT, isDebug ? ALC_CONTEXT_DEBUG_BIT_EXT : 0, 0, 0 };
+	if (!devExt->device)
+		retError(clean, Error_invalidState(0, "AudioDevice_createExt() alcOpenDevice returned NULL"));
+
+	//ALC_CONTEXT_FLAGS_EXT is only valid if ALC_EXT_debug is present on this device.
+	// Even if enumeration flagged it, verify here before passing the attribute.
+	Bool hasDebugExt = isDebug && alcIsExtensionPresent(devExt->device, "ALC_EXT_debug") == ALC_TRUE;
+
+	if (isDebug && !hasDebugExt)
+		retError(clean, Error_invalidState(
+			0, "AudioDevice_createExt() debug requested but ALC_EXT_debug not available on device"
+		));
+
+	ALCint ints[] = {
+		hasDebugExt ? ALC_CONTEXT_FLAGS_EXT : 0,
+		hasDebugExt ? ALC_CONTEXT_DEBUG_BIT_EXT : 0,
+		0, 0
+	};
 
 	ALC_PROCESS_ERROR(devExt->device, devExt->context = alcCreateContext(devExt->device, ints));
-	dev->pendingDirtyMask = 0xF;
+
+	if (!devExt->context)
+		retError(clean, Error_invalidState(0, "AudioDevice_createExt() alcCreateContext returned NULL"));
+
+	ALC_PROCESS_ERROR(devExt->device, alcMakeContextCurrent(devExt->context));
+	dev->pendingDirtyMask = 0x1F;
 
 clean:
 	return s_uccess;

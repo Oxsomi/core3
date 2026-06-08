@@ -721,7 +721,7 @@ Bool Stream_compare(
 		Buffer aCached = Buffer_createRefConst(aCursor.cacheData.ptr, readNow);
 		Buffer bCached = Buffer_createRefConst(bCursor.cacheData.ptr, readNow);
 
-		ECompareResult cmp = Buffer_cmp(aCached, bCached);   // or however your API spells memcmp
+		ECompareResult cmp = Buffer_cmp(aCached, bCached);
 
 		if (cmp != ECompareResult_Eq) {
 			*result = cmp;

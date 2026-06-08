@@ -285,7 +285,7 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 				InputDevice *dend = ListInputDevice_end(w->devices);
 
 				for(; dit != dend; ++dit)
-					InputDevice_markUpdate(*dit);
+					InputDevice_markUpdate(dit);
 			}
 
 			requireDraw = true;                            //We are in charge of the draw in non Windows systems

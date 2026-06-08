@@ -37,6 +37,20 @@ class openal_soft(ConanFile):
 		tc = CMakeToolchain(self)
 		tc.cppstd = "20"
 
+		if self.settings.os == "Linux":
+			tc.cache_variables["ALSOFT_BACKEND_ALSA"]      = True
+			tc.cache_variables["ALSOFT_BACKEND_PIPEWIRE"]  = True
+			tc.cache_variables["ALSOFT_BACKEND_OSS"]       = False
+			tc.cache_variables["ALSOFT_BACKEND_WAVE"]      = False
+		elif self.settings.os == "Windows":
+			tc.cache_variables["ALSOFT_BACKEND_WASAPI"]    = True
+			tc.cache_variables["ALSOFT_BACKEND_DSOUND"]    = True
+			tc.cache_variables["ALSOFT_BACKEND_WINMM"]     = False
+			tc.cache_variables["ALSOFT_BACKEND_WAVE"]      = False
+		elif self.settings.os == "Macos":
+			tc.cache_variables["ALSOFT_BACKEND_COREAUDIO"] = True
+			tc.cache_variables["ALSOFT_BACKEND_WAVE"]      = False
+
 		# On Windows the VS generator is already multi-config by default;
 		# overriding CMAKE_CONFIGURATION_TYPES would collapse it to a single config.
 		# On single-config generators (Ninja, Makefiles) we must pin the build type.
@@ -44,6 +58,10 @@ class openal_soft(ConanFile):
 			tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 
 		tc.generate()
+
+	def system_requirements(self):
+		if self.settings.os == "Linux":
+			self.run("sudo apt-get install -y libasound2-dev libpipewire-0.3-dev", ignore_errors=True)
 
 	def source(self):
 		git = Git(self)

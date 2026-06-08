@@ -42,6 +42,13 @@ source_group("Header Files (openal_soft)" FILES ${apiPlatformIncludes})
 set_target_properties(OxC3_audio PROPERTIES FOLDER Oxsomi)
 target_link_libraries(OxC3_audio PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container openal_soft::openal_soft OxC3_formats_wav)
 
+set(AUDIO_TEST_DEBUG OFF)
+
+if(AUDIO_TEST_DEBUG)
+	target_link_libraries(OxC3_audio PUBLIC OxC3_platforms)
+	target_compile_definitions(OxC3_audio PUBLIC AUDIO_TEST_DEBUG)
+endif()
+
 if(EnableTests)
 
 	file(GLOB testsInterfaceC "test/interface/*.c")

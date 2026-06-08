@@ -164,7 +164,9 @@ Bool AudioInterface_getDeviceInfos(
 
 			gotoIfError3(clean, ListAudioDeviceInfo_pushBack(infos, info, alloc, e_rr));
 
-			ALC_PROCESS_ERROR(device, alcCloseDevice(device));
+			if (alcCloseDevice(device) != ALC_TRUE)
+				retError(clean, Error_invalidState(0, "AudioInterface_getDeviceInfos() alcCloseDevice failed"));
+
 			device = NULL;
 			++j;
 		}

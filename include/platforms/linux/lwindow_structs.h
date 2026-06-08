@@ -37,6 +37,19 @@
 #define LWINDOW_DECOR_BTN_W  46    // width of each min/max/close button
 #define LWINDOW_DECOR_BTN_H  LWINDOW_DECOR_HEIGHT
 
+typedef struct LOutputInfo {
+ 
+	I32 x, y;              //position in compositor global space (for subpixel rendering)
+	I16 mmWidth, mmHeight; //physical size in mm
+	I32 transform;         //wl_output_transform enum value -> EMonitorOrientation
+ 
+	I32 pixelWidth, pixelHeight;
+	I32 refreshRate;       //mHz (divide by 1000 to get Hz as F32)
+ 
+	I32 scale;             //HiDPI factor, default 1
+ 
+} LOutputInfo;
+
 typedef struct LWindowManager {
 
 	struct wl_registry_listener  listener;
@@ -62,6 +75,7 @@ typedef struct LWindowManager {
 	//Output / monitor tracking
 	struct wl_output *outputs[LWINDOW_MAX_OUTPUTS];
 	U32               outputIds[LWINDOW_MAX_OUTPUTS];
+	LOutputInfo       outputInfo[LWINDOW_MAX_OUTPUTS];
 
 } LWindowManager;
 
@@ -116,7 +130,22 @@ typedef struct LWindow {
 	//Decoration listener (needed to handle compositor downgrade SSD->CSD)
 	struct zxdg_toplevel_decoration_v1         *decoration;
 	struct zxdg_toplevel_decoration_v1_listener decorationListener;
+ 
+	//Keyboard input
+	struct wl_keyboard      *keyboard;
+	struct xkb_context      *xkbContext;
+	struct xkb_state        *xkbState;
+ 
+	//Bar pointer (only non-NULL when barSurface is active)
+	struct wl_pointer       *barPointer;
+ 
+	//Outputs this surface is currently on (set by wl_surface enter/leave events).
+	//Used to filter LWindow_updateMonitors to only the active outputs.
 
+	U32 activeOutputIds[LWINDOW_MAX_OUTPUTS];
+	U32 activeOutputCount;
+	U32 pad2;
+ 
 	Window *parent;
 
 } LWindow;

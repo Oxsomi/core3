@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/base/types.h"
+#include "types/base/constants.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -90,6 +91,46 @@ Bool BigInt_base2(const BigIntStringify *stringify, EIntEncoding type, BigInt b,
 
 //Exists for the whole purpose of non base2 (like dec)
 Bool BigInt_toString(const BigIntStringify *stringify, EIntEncoding encoding, BigInt b, Error *e_rr);
+
+//Find highest bit that was on. Returns U16_MAX if 0
+static inline U16 BigInt_bitScan(BigInt a) {
+
+	for (U64 i = a.length - 1; i != U64_MAX; --i) {
+
+		const U64 v = a.data[i];
+		if (!v) continue;
+
+		#if defined(_MSC_VER)
+			unsigned long index = 0;
+			_BitScanReverse64(&index, v);
+			return (U16)(i * 64 + index);
+		#else
+			return (U16)(i * 64 + 63 - __builtin_clzll(v));
+		#endif
+	}
+
+	return U16_MAX;
+}
+
+//Starts at the first bit rather than the last
+static inline U16 BigInt_bitScanReverse(BigInt a) {
+
+	for (U64 i = 0; i < a.length; ++i) {
+		
+		const U64 v = a.data[i];
+		if (!v) continue;
+
+		#if defined(_MSC_VER)
+			unsigned long index = 0;
+			_BitScanForward64(&index, v);
+			return (U16)(i * 64 + index);
+		#else
+			return (U16)(i * 64 + __builtin_ctzll(v));
+		#endif
+	}
+
+	return U16_MAX;
+}
 
 #ifdef __cplusplus
 	}

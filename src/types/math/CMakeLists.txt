@@ -39,10 +39,6 @@ target_link_libraries(OxC3_types_math PUBLIC OxC3_types_base)
 
 target_compile_definitions(OxC3_types_math PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
 
-if(UNIX AND NOT APPLE)
-	target_link_libraries(OxC3_types_math PUBLIC m)
-endif()
-
 if(EnableTests)
 
 	file(GLOB testsC "test/*.c")
