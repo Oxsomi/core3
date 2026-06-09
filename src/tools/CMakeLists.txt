@@ -29,7 +29,6 @@ add_custom_target(check_style ALL
 
 set_target_properties(check_style PROPERTIES FOLDER Oxsomi/tools)
 
-# TODO:
-# if(EnableOxC3CLI)
-#     add_subdirectory(oxc3_cli)
-# endif()
+if(EnableOxC3CLI)
+    add_subdirectory(oxc3_cli)
+endif()

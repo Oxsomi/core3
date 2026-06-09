@@ -99,7 +99,7 @@ static BOOL WWindow_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lPar
  
 void WWindow_updateMonitors(Window *w) {
  
-	ListMonitor_clear(&w->monitors);
+	ListMonitor_clear(&w->monitors, NULL);
  
 	//Enumerate only the monitors the window currently overlaps.
 	//Passing the window's HWND clips enumeration to intersecting monitors.

@@ -194,7 +194,11 @@ def main():
 	if args.tests == "True":
 
 		test_mode = args.mode if args.mode is not None else "Release"
-		run(f"ctest --test-dir {build_dir}/build/{test_mode} -C {test_mode} --output-on-failure", cwd=os.getcwd())
+
+		if system != "Windows":
+			run(f"ctest --test-dir {build_dir}/build/{test_mode} -C {test_mode} --output-on-failure", cwd=os.getcwd())
+		else:
+			run(f"ctest --test-dir {build_dir}/build -C {test_mode} --output-on-failure", cwd=os.getcwd())
 
 		path = "tools/test.py"
 

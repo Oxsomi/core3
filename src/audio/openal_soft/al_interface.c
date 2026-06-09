@@ -107,31 +107,10 @@ Bool AudioInterface_getDeviceInfos(
 
 	ListCharString_free(&strings, alloc);
 
-	device = alcOpenDevice(NULL);
-	alcGetError(device);
+	const C8 *mainOutput = NULL;
+	ALC_PROCESS_ERROR(NULL, mainOutput = alcGetString(NULL, ALC_DEFAULT_ALL_DEVICES_SPECIFIER));
 
-	C8 defaultName[96] = { 0 };
-	CharString defaultNameStr = CharString_createNull();
-
-	if (device) {
-
-		const ALCchar *localName = alcGetString(device, ALC_ALL_DEVICES_SPECIFIER);
-		alcGetError(device);
-
-		if(localName) {
-
-			Buffer_memcpy(
-				Buffer_createRef(defaultName, sizeof(defaultName)),
-				CharString_bufferConst(CharString_createRefCStrConst(localName))
-			);
-
-			defaultNameStr = CharString_createRefCStrConst(defaultName);
-			Log_debugLn(alloc, "OpenAL: default audio device: %s", defaultName);
-		}
-
-		alcCloseDevice(device);
-		device = NULL;
-	}
+	CharString defaultNameStr = CharString_createRefCStrConst(mainOutput);
 
 	const C8 *ptr = devicesStr;
 
@@ -174,8 +153,6 @@ Bool AudioInterface_getDeviceInfos(
 			gotoIfError3(clean, CharString_splitSensitive(&split, ' ', e_rr));
 			
 			AudioDeviceInfo info = (AudioDeviceInfo) { .id = j };
-
-			Log_debugLn(alloc, "OpenAL: comparing %s with %s", defaultName, str.ptr);
 
 			if (defaultNameStr.ptr && CharString_equalsCStringSensitive(&defaultNameStr, str.ptr)) {
 				info.flags |= EAudioDeviceFlags_MainOutput;

@@ -148,36 +148,17 @@ class dxc(ConanFile):
 		# Windows uses more complicated setups
 		else:
 
-			lib_dbg_src = os.path.join(self.build_folder, "lib/Debug")
-			dbg_lib_src = os.path.join(self.build_folder, "Debug/lib")
-			bin_dbg_src = os.path.join(self.build_folder, "bin/Debug")
+			# Copy libs
 
-			copy(self, "*.lib", lib_dbg_src, lib_dst)
-			copy(self, "*.lib", dbg_lib_src, lib_dst)
-			copy(self, "*.pdb", lib_dbg_src, lib_dst)
-			copy(self, "*.pdb", dbg_lib_src, lib_dst)
-			copy(self, "*.exp", lib_dbg_src, lib_dst)
-			copy(self, "*.exp", dbg_lib_src, lib_dst)
-
-			if os.path.isfile(lib_dst):
-				for filename in os.listdir(lib_dst):
-					f = os.path.join(lib_dst, filename)
-					if os.path.isfile(f):
-						offset = f.rfind(".")
-						rename(self, f, f[:offset] + "d." + f[offset+1:])
-
-			# Copy release libs
-
-			lib_rel_src = os.path.join(self.build_folder, "lib/Release")
-			rel_lib_src = os.path.join(self.build_folder, "Release/lib")
-			bin_rel_src = os.path.join(self.build_folder, "bin/Release")
-
-			copy(self, "*.lib", lib_rel_src, lib_dst)
-			copy(self, "*.lib", rel_lib_src, lib_dst)
-			copy(self, "*.pdb", lib_rel_src, lib_dst)
-			copy(self, "*.pdb", rel_lib_src, lib_dst)
-			copy(self, "*.exp", lib_rel_src, lib_dst)
-			copy(self, "*.exp", rel_lib_src, lib_dst)
+			for config in ["Debug", "Release", "MinSizeRel", "RelWithDebInfo"]:
+				lib_cfg_src = os.path.join(self.build_folder, f"lib/{config}")
+				alt_lib_cfg_src = os.path.join(self.build_folder, f"{config}/lib")
+				copy(self, "*.lib", lib_cfg_src, lib_dst)
+				copy(self, "*.lib", alt_lib_cfg_src, lib_dst)
+				copy(self, "*.pdb", lib_cfg_src, lib_dst)
+				copy(self, "*.pdb", alt_lib_cfg_src, lib_dst)
+				copy(self, "*.exp", lib_cfg_src, lib_dst)
+				copy(self, "*.exp", alt_lib_cfg_src, lib_dst)
 
 	def package_info(self):
 

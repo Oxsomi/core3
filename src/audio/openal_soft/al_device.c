@@ -102,6 +102,7 @@ Bool AudioDevice_createExt(Bool isDebug, AudioDevice *dev, Error *e_rr) {
 		retError(clean, Error_invalidState(0, "AudioDevice_createExt() alcCreateContext returned NULL"));
 
 	ALC_PROCESS_ERROR(devExt->device, alcMakeContextCurrent(devExt->context));
+	dev->info.gain = 1.f;
 	dev->pendingDirtyMask = 0x1F;
 
 clean:
