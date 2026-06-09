@@ -59,10 +59,6 @@ class openal_soft(ConanFile):
 
 		tc.generate()
 
-	def system_requirements(self):
-		if self.settings.os == "Linux":
-			self.run("sudo apt-get install -y libasound2-dev libpipewire-0.3-dev", ignore_errors=True)
-
 	def source(self):
 		git = Git(self)
 		git.clone(url=self.conan_data["sources"][self.version]["url"])

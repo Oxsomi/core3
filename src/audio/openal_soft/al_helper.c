@@ -28,11 +28,11 @@ Bool alProcessError(ALenum error, Error *e_rr) {
 	const C8 *err;
 
 	switch(error) {
-		case AL_INVALID_NAME:        err = "OpenAL: Invalid name parameter.";        break;
-		case AL_INVALID_ENUM:        err = "OpenAL: Invalid parameter.";                break;
-		case AL_INVALID_VALUE:        err = "OpenAL: Invalid enum parameter value.";    break;
-		case AL_INVALID_OPERATION:    err = "OpenAL: Illegal call.";                    break;
-		case AL_OUT_OF_MEMORY:        err = "OpenAL: Unable to allocate memory.";        break;
+		case AL_INVALID_NAME:       err = "OpenAL: Invalid name parameter.";        break;
+		case AL_INVALID_ENUM:       err = "OpenAL: Invalid parameter.";                break;
+		case AL_INVALID_VALUE:      err = "OpenAL: Invalid enum parameter value.";    break;
+		case AL_INVALID_OPERATION:  err = "OpenAL: Illegal call.";                    break;
+		case AL_OUT_OF_MEMORY:      err = "OpenAL: Unable to allocate memory.";        break;
 		default:                    err = NULL;                                break;
 	}
 
@@ -48,10 +48,10 @@ Bool alcProcessError(ALCenum error, Error *e_rr) {
 
 	switch(error) {
 		case ALC_INVALID_DEVICE:    err = "OpenAL: Invalid device.";                break;
-		case ALC_INVALID_CONTEXT:    err = "OpenAL: Invalid context.";                break;
-		case ALC_INVALID_ENUM:        err = "OpenAL: Invalid parameter.";                break;
-		case ALC_INVALID_VALUE:        err = "OpenAL: Invalid enum parameter value.";    break;
-		case ALC_OUT_OF_MEMORY:        err = "OpenAL: Unable to allocate memory.";        break;
+		case ALC_INVALID_CONTEXT:   err = "OpenAL: Invalid context.";                break;
+		case ALC_INVALID_ENUM:      err = "OpenAL: Invalid parameter.";                break;
+		case ALC_INVALID_VALUE:     err = "OpenAL: Invalid enum parameter value.";    break;
+		case ALC_OUT_OF_MEMORY:     err = "OpenAL: Unable to allocate memory.";        break;
 		default:                    err = NULL;                                        break;
 	}
 

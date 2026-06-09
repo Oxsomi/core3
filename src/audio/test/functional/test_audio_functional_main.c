@@ -212,6 +212,8 @@ static Bool openWav(
 		e_rr
 	));
 
+	*fileStream = NULL;
+
 	if (source) {
 		AudioModifier modifier = (AudioModifier){ .gain = 1 };
 		gotoIfError3(clean, AudioDeviceRef_createSource(

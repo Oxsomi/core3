@@ -204,8 +204,6 @@ void AudioStream_freeExt(AudioStream *stream, const Allocator *alloc) {
 
 Bool AudioStream_update(AudioStream *stream, U64 index, const Allocator *alloc, Error *e_rr) {
 
-	(void)alloc;
-
 	Bool s_uccess = true;
 	ALAudioStream *streamExt = AudioStream_ext(stream, AL);
 

@@ -105,10 +105,33 @@ Bool AudioInterface_getDeviceInfos(
 
 	else ALC_PROCESS_ERROR(NULL, devicesStr = alcGetString(NULL, ALC_CAPTURE_DEVICE_SPECIFIER));
 
-	const C8 *mainOutput = NULL;
-	ALC_PROCESS_ERROR(NULL, mainOutput = alcGetString(NULL, ALC_DEFAULT_ALL_DEVICES_SPECIFIER));
-
 	ListCharString_free(&strings, alloc);
+
+	device = alcOpenDevice(NULL);
+	alcGetError(device);
+
+	C8 defaultName[96] = { 0 };
+	CharString defaultNameStr = CharString_createNull();
+
+	if (device) {
+
+		const ALCchar *localName = alcGetString(device, ALC_ALL_DEVICES_SPECIFIER);
+		alcGetError(device);
+
+		if(localName) {
+
+			Buffer_memcpy(
+				Buffer_createRef(defaultName, sizeof(defaultName)),
+				CharString_bufferConst(CharString_createRefCStrConst(localName))
+			);
+
+			defaultNameStr = CharString_createRefCStrConst(defaultName);
+			Log_debugLn(alloc, "OpenAL: default audio device: %s", defaultName);
+		}
+
+		alcCloseDevice(device);
+		device = NULL;
+	}
 
 	const C8 *ptr = devicesStr;
 
@@ -117,6 +140,8 @@ Bool AudioInterface_getDeviceInfos(
 	C8 c = 0;
 
 	U64 j = 0;
+
+	Bool hasMain = false;
 
 	while ((c = ptr[++i]) != '\0' || !prevNull) {
 
@@ -132,7 +157,16 @@ Bool AudioInterface_getDeviceInfos(
 
 			//We have to open and close a device to query its extensions
 
-			ALC_PROCESS_ERROR(NULL, device = alcOpenDevice(str.ptr));
+			device = alcOpenDevice(str.ptr);
+			alcGetError(NULL);
+
+			Log_debugLn(alloc, "OpenAL Device: %s", str.ptr);
+
+			if(!device) {
+				Log_debugLn(alloc, "OpenAL: Skipped %s", str.ptr);
+				continue;
+			}
+
 			ALC_PROCESS_ERROR(device, extensionsStr = alcGetString(device, ALC_EXTENSIONS));
 
 			extensions = CharString_createRefCStrConst(extensionsStr);
@@ -141,8 +175,17 @@ Bool AudioInterface_getDeviceInfos(
 			
 			AudioDeviceInfo info = (AudioDeviceInfo) { .id = j };
 
-			if (CharString_equalsCStringSensitive(&str, mainOutput) || (!mainOutput && !i))
+			Log_debugLn(alloc, "OpenAL: comparing %s with %s", defaultName, str.ptr);
+
+			if (defaultNameStr.ptr && CharString_equalsCStringSensitive(&defaultNameStr, str.ptr)) {
 				info.flags |= EAudioDeviceFlags_MainOutput;
+				hasMain = true;
+			}
+				
+			else if (!defaultNameStr.ptr && !j) {
+				info.flags |= EAudioDeviceFlags_MainOutput;
+				hasMain = true;
+			}
 
 			for(U64 k = 0; k < strings.length; ++k)
 
@@ -171,6 +214,9 @@ Bool AudioInterface_getDeviceInfos(
 			++j;
 		}
 	}
+
+	if(!hasMain && infos->length)
+		infos->ptrNonConst[0].flags |= EAudioDeviceFlags_MainOutput;
 
 clean:
 

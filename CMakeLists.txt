@@ -109,7 +109,12 @@ else()
 	endif()
 
 	# Fix for certain GCC versions misbehaving with struct copies.
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "14.0")
+	# (Yes, I did run into this, but it seems fixed in 14.3, 13.4)
+	if(
+		CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+		CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "14.1" AND
+		CMAKE_CXX_COMPILER_VERSION VERSION_LESS_EQUAL "14.2"
+	)
 		add_compile_options(-mprefer-vector-width=128)
 	endif()
 
