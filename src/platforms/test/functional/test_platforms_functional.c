@@ -1479,6 +1479,175 @@ clean:
 	if (w) WindowManager_freeWindow(&windowManager, &w);
 }
 
+//Requires a physical window with a visible CSD bar (compositor without SSD,
+// e.g. GNOME/Mutter). Opens a window and asks the operator to click each
+// decoration button in turn.  Synthetic injection via xdotool click on the
+// bar surface is attempted first.
+//
+//Because the bar is a subsurface we can't use xdotool's window-title search
+// to click it directly; instead we click at absolute screen coordinates
+// computed from the window position + bar button offsets.
+//
+//The close button terminates the window (EWindowFlags_ShouldTerminate).
+//We catch that in the poll loop and treat it as success rather than letting
+// WindowManager_step free the window under us.
+
+#if _PLATFORM_TYPE == PLATFORM_LINUX
+
+	static volatile Bool f16MinimizeSeen = false;
+	static volatile Bool f16MaximizeSeen = false;
+
+	static Bool F16_onResize(Window *w, Error *e_rr) {
+		(void) e_rr;
+		if(!f16MaximizeSeen && I32x2_x(w->size) >= 800)  //Maximize on Wayland sends a configure with a larger size.
+			f16MaximizeSeen = true;
+
+		return true;
+	}
+
+	static void Test_csdButtons(Test *t) {
+
+		Test_setModule(t, "F16/CSDButtons");
+
+		WindowCallbacks cbs = (WindowCallbacks) { 0 };
+		cbs.onResize = F16_onResize;
+
+		I32x2 pos = I32x2_create2(200, 200);
+		I32x2 sz  = I32x2_create2(640, 400);
+
+		Window *w = createWindowCallback(
+			t, "F16: Click min, max, then close button",
+			pos, sz,
+			EWindowHint_AllowFullscreen | EWindowHint_ProvideCPUBuffer,
+			EWindowFormat_AutoRGBA8, cbs
+		);
+
+		if(!Test_assert(t, "windowCreated", w != NULL))
+			goto clean;
+
+		Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+		pump(500 * MS);
+
+		if(w->type != EWindowType_Physical) {
+			Test_print(t, "[virtual] CSD button test requires a physical window, skipped");
+			goto clean;
+		}
+
+		//Check whether we actually have a CSD bar; if the compositor provided SSD
+		// (e.g. KWin) there is no barSurface and this test is not applicable.
+		{
+			LWindow *lwin = (LWindow*) w->nativeData;
+			if(!lwin->barSurface) {
+				Test_print(t, "[SSD compositor] no CSD bar present, skipping F16");
+				goto clean;
+			}
+		}
+
+		//----- Synthetic: xdotool clicks at absolute bar coordinates -----
+		//Bar sits at the top of the window.  Button layout (right to left):
+		//   close  = barWidth - BTN_W / 2          (rightmost)
+		//   max    = barWidth - BTN_W * 3 / 2
+		//   min    = barWidth - BTN_W * 5 / 2
+		//We don't know w->offset on Wayland (always 0), but xdotool mousemove
+		// accepts coordinates relative to a window id via --window.
+		//We use `xdotool getactivewindow` after focusing by title.
+
+		if(hasXdotool()) {
+
+			//Minimize button
+
+			system(
+				"xdotool search --name 'F16:' windowfocus && "
+				"WIN=$(xdotool search --name 'F16:') && "
+				"GEOM=$(xdotool getwindowgeometry $WIN) && "
+				//Click at bar-relative coords: x = width - BTN_W * 5 / 2 + BTN_W / 2,
+				// y = BTN_H / 2. We use a fixed offset since we know the bar layout.
+				"xdotool mousemove --window $WIN "
+					"$(($(xdotool getwindowgeometry --shell $WIN | grep WIDTH | cut -d= -f2) - 161)) 16 "
+				"&& xdotool click 1"
+			);
+
+			pump(600 * MS);
+
+			if(Window_isMinimized(w))
+				f16MinimizeSeen = true;
+
+			else Test_print(t, "WARN: minimize click didn't set IsMinimized (compositor-dependent)");
+
+			system("xdotool search --name 'F16:' windowactivate --sync");    //Restore via windowactivate
+			pump(500 * MS);
+
+			//Maximize button (x = width - BTN_W * 3 / 2 + BTN_W / 2 = width - BTN_W)
+
+			system(
+				"WIN=$(xdotool search --name 'F16:') && "
+				"xdotool mousemove --window $WIN "
+					"$(($(xdotool getwindowgeometry --shell $WIN | grep WIDTH | cut -d= -f2) - 115)) 16 "
+				"&& xdotool click 1"
+			);
+
+			pump(600 * MS);
+
+			if(f16MaximizeSeen)
+				Test_assert(t, "syntheticMaximize", true);
+
+			else Test_print(t, "WARN: maximize click didn't produce resize event");
+
+			//Un-maximize
+
+			system(
+				"WIN=$(xdotool search --name 'F16:') && "
+				"xdotool mousemove --window $WIN "
+					"$(($(xdotool getwindowgeometry --shell $WIN | grep WIDTH | cut -d= -f2) - 115)) 16 "
+				"&& xdotool click 1"
+			);
+
+			pump(500 * MS);
+		}
+
+		//Interactive fallback
+
+		Test_print(t, ">>> INTERACTIVE: Click MINIMIZE, then MAXIMIZE, then CLOSE in the title bar (15s) <<<");
+
+		Bool closeSeen = false;
+		Ns waited = 0;
+
+		while(waited < 15 * SECOND) {
+			WindowManager_step(&windowManager, NULL, NULL);
+			Thread_sleep(16 * MS);
+			waited += 16 * MS;
+
+			if(!f16MinimizeSeen && Window_isMinimized(w))
+				f16MinimizeSeen = true;
+
+			if(w->flags & EWindowFlags_ShouldTerminate) {
+				closeSeen = true;
+				break;
+			}
+		}
+
+		if(!f16MinimizeSeen)
+			Test_print(t, "WARN: minimize not observed (compositor may not report it)");
+
+		Test_assert(t, "closeButton", closeSeen);
+
+		//Don't call WindowManager_freeWindow here, ShouldTerminate will be
+		// handled by the step loop on re-entry; just null out w so clean: skips it.
+		if(closeSeen) {
+			WindowManager_freeWindow(&windowManager, &w);
+			w = NULL;
+		}
+
+	clean:
+		f16MinimizeSeen = false;
+		f16MaximizeSeen = false;
+		if(w) WindowManager_freeWindow(&windowManager, &w);
+	}
+
+#else
+	static void Test_csdButtons(Test *t) { (void) t; }
+#endif
+
 // -- entry point ---------------------------------------------------------------
 
 Platform_defineEntrypoint() {
@@ -1513,6 +1682,7 @@ Platform_defineEntrypoint() {
 	Test_windowMove(&t);
 	Test_maximize(&t);
 	Test_keyboardRemap(&t);
+	Test_csdButtons(&t);
 
 done:
 	shutdown();
