@@ -21,12 +21,14 @@
 //platforms/linux/lwindow_manager.c
 
 #include "platforms/window_manager.h"
+#include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "platforms/linux/lwindow_structs.h"
 #include "types/container/buffer.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
+#include "types/base/time.h"
 
 void LWindowManager_isAlive(void *data, struct xdg_wm_base *base, U32 serial) {
 	(void) data;
@@ -45,13 +47,14 @@ static void LOutput_geometry(
 	const C8 *make, const C8 *model,
 	I32 transform
 ) {
-	(void) output; (void) subpixel; (void) make; (void) model;
+	(void) output; (void) make; (void) model;
 	LOutputInfo *info = (LOutputInfo*) data;
 	info->x         = x;
 	info->y         = y;
 	info->mmWidth   = mmWidth;
 	info->mmHeight  = mmHeight;
 	info->transform = transform;
+	info->subpixel  = subpixel;
 }
  
 //wl_output mode event, fires for each supported mode; the one with WL_OUTPUT_MODE_CURRENT
@@ -68,9 +71,9 @@ static void LOutput_mode(
 	if(!(flags & WL_OUTPUT_MODE_CURRENT))
 		return;
  
-	LOutputInfo *info    = (LOutputInfo*) data;
-	info->pixelWidth  = width;
-	info->pixelHeight = height;
+	LOutputInfo *info = (LOutputInfo*) data;
+	info->pixelWidth  = (U16)width;
+	info->pixelHeight = (U16)height;
 	info->refreshRate = refresh;   // mHz
 }
  
@@ -287,6 +290,43 @@ void WindowManager_updateExt(WindowManager *manager) {
 	LWindowManager *lmanager = (LWindowManager*)manager->platformData.ptr;
 
 	//Flush outgoing requests before dispatching incoming events.
+
 	wl_display_flush(lmanager->display);
-	wl_display_dispatch_pending(lmanager->display);
+	wl_display_roundtrip(lmanager->display);
+
+	//Drive onUpdate + onDraw for every active window, matching WM_PAINT
+	// behaviour on Windows. Without this, windows with no Wayland events
+	// pending never render.
+
+	for(U64 i = 0; i < manager->windows.length; ++i) {
+
+		Window *w = manager->windows.ptrNonConst[i];
+
+		if(!w || !(w->flags & EWindowFlags_IsActive))
+			continue;
+
+		if(
+			!(w->hint & EWindowHint_AllowBackgroundUpdates) &&
+			(w->flags & EWindowFlags_IsMinimized)
+		)
+			continue;
+
+		InputDevice *dit  = ListInputDevice_begin(w->devices);
+		InputDevice *dend = ListInputDevice_end(w->devices);
+
+		for(; dit != dend; ++dit)
+			InputDevice_markUpdate(dit);
+
+		const Ns now = Time_now();
+
+		if(w->callbacks.onUpdate) {
+			const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+			w->callbacks.onUpdate(w, dt);
+		}
+
+		w->lastUpdate = now;
+
+		if(w->callbacks.onDraw)
+			w->callbacks.onDraw(w);
+	}
 }

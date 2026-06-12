@@ -88,6 +88,7 @@ static BOOL WWindow_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lPar
 		.sizeMm       = sizeMm,
 		.refreshRate  = refreshRate,
 		.orientation  = orientation,
+		// TODO: Base offsetR, offsetG, offsetB on orientation and BGR or RGB
 	};
  
 	Error err = Error_none();
@@ -970,7 +971,7 @@ void WindowManager_freePhysical(Window *w) {
 		DestroyWindow(w->nativeHandle);
 }
 
-Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
+Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 
 	Bool s_uccess = true;
 	ListU16 name = (ListU16) { 0 };

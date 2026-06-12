@@ -1,4 +1,4 @@
-# OxC3 (Oxsomi core 3.2.100)
+# OxC3 (Oxsomi core 3.2.101)
 | Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | x64 dynamic (Vk + Native)                                    | ARM -> Vulkan                                                | ARM -> Native API                                            | ARM dynamic (Vk + Native)                                    |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | Windows   | ![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | ![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_dynamic.yml/badge.svg) | **![vulkan](https://github.com/Oxsomi/core3/actions/workflows/windows_arm.yml/badge.svg)** | **D3D12**: ![d3d12](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12_arm.yml/badge.svg) | **![dynamic](https://github.com/Oxsomi/core3/actions/workflows/windows_arm_dynamic.yml/badge.svg)** |
@@ -74,6 +74,7 @@ One of the useful things about C is that files are incredibly easy to compile an
   - llvm-objcopy for example via `brew install llvm`.
 - **Linux**:
   - For window support, Wayland is used (along with wayland-scanner to generate the XDG header/source files) and so it has to be installed via `sudo apt install libwayland-dev -y`. Along with this, you might want to enable Wayland if you're on Ubuntu if it's not enabled by default. You also want xkbcommon as well `sudo apt install libxkbcommon-dev -y`, as well as something openal can build with on linux such as `sudo apt install libasound2-dev libpipewire-0.3-dev -y`.
+  - For testing the window backend specifically (OxC3_platforms_functional_test), you should `sudo apt-install xdotool -y` so that it can simulate events without user interaction (as an alternative to Windows's SendInput).
 
 - **Android**:
   - Install the SDK and NDK for your API target and set ANDROID_SDK and ANDROID_NDK environment variables to the right paths.

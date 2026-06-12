@@ -39,7 +39,6 @@ typedef enum EMonitorOrientation {
 //A monitor is something a physical window is displayed on.
 //The window can know this to handle monitor specific processing,
 //such as subpixel rendering.
-
 typedef struct Monitor {
 
 	I32x2 offsetPixels, sizePixels;

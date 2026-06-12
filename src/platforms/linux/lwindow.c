@@ -390,13 +390,37 @@ static void LWindow_pointerEnterBar(
 	void *data, struct wl_pointer *ptr, U32 serial,
 	struct wl_surface *surface, wl_fixed_t sx, wl_fixed_t sy
 ) {
-	(void) ptr; (void) serial; (void) surface;
+	(void) ptr; (void) serial;
 	Window  *w    = (Window*) data;
 	LWindow *lwin = (LWindow*) w->nativeData;
-	lwin->pointerX     = wl_fixed_to_int(sx);
-	lwin->pointerY     = wl_fixed_to_int(sy);
-	lwin->pointerInBar = true;
-	LWindow_redrawBar(w);
+
+	lwin->pointerCurrentSurface = surface;
+
+	if(surface == lwin->barSurface) {
+		lwin->pointerX     = wl_fixed_to_int(sx);
+		lwin->pointerY     = wl_fixed_to_int(sy);
+		Bool wasInBar      = lwin->pointerInBar;
+		lwin->pointerInBar = true;
+		if(!wasInBar) LWindow_redrawBar(w);   //Entering bar: always redraw once
+		return;
+	}
+
+	//Entering the main surface: seed absolute position, zero relative axes.
+
+	if(surface == (struct wl_surface*)w->nativeHandle && w->devices.length > w->defaultMouseId) {
+
+		InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+		InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
+		InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
+		InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
+		InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+
+		InputDevice_setCurrentAxis(mouse, hAbsX, (F32)wl_fixed_to_int(sx));
+		InputDevice_setCurrentAxis(mouse, hAbsY, (F32)wl_fixed_to_int(sy));
+		InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
+		InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
+	}
 }
 
 static void LWindow_pointerLeaveBar(
@@ -405,8 +429,13 @@ static void LWindow_pointerLeaveBar(
 	(void) ptr; (void) serial; (void) surface;
 	Window  *w    = (Window*) data;
 	LWindow *lwin = (LWindow*) w->nativeData;
-	lwin->pointerInBar = false;
-	LWindow_redrawBar(w);
+
+	lwin->pointerCurrentSurface = NULL;
+
+	if(lwin->pointerInBar) {
+		lwin->pointerInBar = false;
+		LWindow_redrawBar(w);   //Leaving bar: redraw once to clear hover
+	}
 }
 
 static void LWindow_pointerMotionBar(
@@ -415,13 +444,90 @@ static void LWindow_pointerMotionBar(
 	(void) ptr; (void) time;
 	Window  *w    = (Window*) data;
 	LWindow *lwin = (LWindow*) w->nativeData;
+
+	//Bar surface: zone-change-only redraw
+
+	if(lwin->pointerCurrentSurface == lwin->barSurface) {
+
+		I32 nx = wl_fixed_to_int(sx);
+		I32 ny = wl_fixed_to_int(sy);
+
+		if(nx == lwin->pointerX && ny == lwin->pointerY)
+			return;
+
+		I32 closeX = (I32)lwin->barWidth - LWINDOW_DECOR_BTN_W;
+		I32 maxX   = closeX              - LWINDOW_DECOR_BTN_W;
+		I32 minX   = maxX                - LWINDOW_DECOR_BTN_W;
+
+		I32 oldZone = lwin->pointerX >= closeX ? 3 : (
+			lwin->pointerX >= maxX ? 2 : (
+				lwin->pointerX >= minX ? 1 : 0
+			)
+		);
+
+		I32 newZone = nx >= closeX ? 3 : (
+			nx >= maxX ? 2 : (
+				nx >= minX ? 1 : 0
+			)
+		);
+
+		lwin->pointerX = nx;
+		lwin->pointerY = ny;
+
+		if(newZone != oldZone)
+			LWindow_redrawBar(w);
+
+		return;
+	}
+
+	//Main content surface: update mouse device axes
+
+	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
+		return;
+
+	if(w->devices.length <= w->defaultMouseId)
+		return;
+
+	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
 	I32 nx = wl_fixed_to_int(sx);
 	I32 ny = wl_fixed_to_int(sy);
 
-	if(nx != lwin->pointerX || ny != lwin->pointerY) {
-		lwin->pointerX = nx;
-		lwin->pointerY = ny;
-		LWindow_redrawBar(w);
+	//Absolute position -> Temp0 (X), Temp1 (Y)
+
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0,        EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1,        EInputType_Axis);
+
+	//Relative direction -> RX, RY
+
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,           EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,           EInputType_Axis);
+
+	F32 prevAbsX = InputDevice_getCurrentAxis(mouse, hAbsX);
+	F32 prevAbsY = InputDevice_getCurrentAxis(mouse, hAbsY);
+
+	F32 newAbsX = (F32)nx;
+	F32 newAbsY = (F32)ny;
+
+	F32 relX = newAbsX - prevAbsX;
+	F32 relY = newAbsY - prevAbsY;
+
+	InputDevice_setCurrentAxis(mouse, hAbsX, newAbsX);
+	InputDevice_setCurrentAxis(mouse, hAbsY, newAbsY);
+	InputDevice_setCurrentAxis(mouse, hRelX, relX);
+	InputDevice_setCurrentAxis(mouse, hRelY, relY);
+
+	if(w->callbacks.onDeviceAxis) {
+
+		if(newAbsX != prevAbsX) {
+			w->callbacks.onDeviceAxis(w, mouse, hAbsX, newAbsX);
+			w->callbacks.onDeviceAxis(w, mouse, hRelX, relX);
+		}
+
+		if(newAbsY != prevAbsY) {
+			w->callbacks.onDeviceAxis(w, mouse, hAbsY, newAbsY);
+			w->callbacks.onDeviceAxis(w, mouse, hRelY, relY);
+		}
 	}
 }
 
@@ -430,38 +536,95 @@ static void LWindow_pointerButtonBar(
 	U32 button, U32 state
 ) {
 	(void) ptr; (void) time;
-
-	if(state != WL_POINTER_BUTTON_STATE_PRESSED || button != BTN_LEFT)
-		return;
-
 	Window  *w    = (Window*) data;
 	LWindow *lwin = (LWindow*) w->nativeData;
 
-	if(!lwin->pointerInBar)
+	Bool pressed = state == WL_POINTER_BUTTON_STATE_PRESSED;
+
+	//Bar surface: handle CSD buttons
+
+	if(lwin->pointerCurrentSurface == lwin->barSurface && pressed && button == BTN_LEFT) {
+
+		LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
+		I32 x      = lwin->pointerX;
+		I32 closeX = (I32)lwin->barWidth - LWINDOW_DECOR_BTN_W;
+		I32 maxX   = closeX              - LWINDOW_DECOR_BTN_W;
+		I32 minX   = maxX                - LWINDOW_DECOR_BTN_W;
+
+		if(x >= closeX)
+			w->flags |= EWindowFlags_ShouldTerminate;
+
+		else if(x >= maxX) {
+			if(w->hint & EWindowHint_AllowFullscreen)
+				Window_toggleFullScreen(w, NULL);
+		}
+
+		else if(x >= minX)
+			xdg_toplevel_set_minimized(lwin->topLevel);
+
+		else xdg_toplevel_move(lwin->topLevel, manager->seat, serial);
+
 		return;
-
-	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
-	I32 x      = lwin->pointerX;
-	I32 closeX = (I32)lwin->barWidth  - LWINDOW_DECOR_BTN_W;
-	I32 maxX   = closeX               - LWINDOW_DECOR_BTN_W;
-	I32 minX   = maxX                 - LWINDOW_DECOR_BTN_W;
-
-	if(x >= closeX)
-		w->flags |= EWindowFlags_ShouldTerminate;
-
-	else if(x >= maxX) {
-		if(w->hint & EWindowHint_AllowFullscreen)
-			Window_toggleFullScreen(w, NULL);
 	}
 
-	else if(x >= minX)
-		xdg_toplevel_set_minimized(lwin->topLevel);
+	//Main content surface: forward to Mouse InputDevice
 
-	else xdg_toplevel_move(lwin->topLevel, manager->seat, serial);
+	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
+		return;
+
+	if(w->devices.length <= w->defaultMouseId)
+		return;
+
+	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+	//Map linux BTN_ codes to EMouseButton.
+	// EMouseButton values start after EMouseAxis_End; mirror the Windows mapping.
+	EMouseActions mb;
+	switch(button) {
+		case BTN_LEFT:    mb = EMouseButton_Left;    break;
+		case BTN_RIGHT:   mb = EMouseButton_Right;   break;
+		case BTN_MIDDLE:  mb = EMouseButton_Middle;  break;
+		case BTN_FORWARD: mb = EMouseButton_Forward; break;
+		case BTN_BACK:    mb = EMouseButton_Back;    break;
+		default:         return;
+	}
+
+	InputHandle handle = InputDevice_createHandle(mouse, (U16)(mb - EMouseAxis_End), EInputType_Button);
+
+	EInputState prev = InputDevice_getState(mouse, handle);
+	InputDevice_setCurrentState(mouse, handle, pressed);
+	EInputState next = InputDevice_getState(mouse, handle);
+
+	if(prev != next && w->callbacks.onDeviceButton)
+		w->callbacks.onDeviceButton(w, mouse, handle, pressed);
 }
 
-static void LWindow_pointerAxisBar(void *d, struct wl_pointer *p, U32 t, U32 a, wl_fixed_t v) {
-	(void)d; (void)p; (void)t; (void)a; (void)v;
+static void LWindow_pointerAxisBar(
+	void *data, struct wl_pointer *ptr, U32 time, U32 axis, wl_fixed_t value
+) {
+	(void) ptr; (void) time;
+	Window  *w    = (Window*) data;
+	LWindow *lwin = (LWindow*) w->nativeData;
+
+	//Bar surface: ignore scroll
+
+	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
+		return;
+
+	if(w->devices.length <= w->defaultMouseId)
+		return;
+
+	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+	EMouseActions scrollAxis = axis == WL_POINTER_AXIS_VERTICAL_SCROLL ? EMouseAxis_ScrollWheel_Y : EMouseAxis_ScrollWheel_X;
+
+	InputHandle handle = InputDevice_createHandle(mouse, (U16)scrollAxis, EInputType_Axis);
+
+	F32 delta = (F32)wl_fixed_to_double(value);
+	InputDevice_setCurrentAxis(mouse, handle, delta);
+
+	if(w->callbacks.onDeviceAxis)
+		w->callbacks.onDeviceAxis(w, mouse, handle, delta);
 }
 
 //Required stubs for wl_seat version 5, missing entries might cause NULL-dispatch crashes
@@ -599,144 +762,146 @@ static void LWindow_kbLeave(
 		w->callbacks.onUpdateFocus(w);
 }
 
-// Map an xkb keysym to our EKey. Only covers what Keyboard_remap covers on Windows.
-static InputHandle LWindow_xkbSymToKey(xkb_keysym_t sym) {
+static InputHandle LWindow_scancodeToKey(U32 sc) {
+	switch(sc) {
 
-	switch(sym) {
+		//Row 0
+		case KEY_ESC:        return EKey_Escape;
 
-		//Function keys
+		case KEY_F1:         return EKey_F1;
+		case KEY_F2:         return EKey_F2;
+		case KEY_F3:         return EKey_F3;
+		case KEY_F4:         return EKey_F4;
+		case KEY_F5:         return EKey_F5;
+		case KEY_F6:         return EKey_F6;
+		case KEY_F7:         return EKey_F7;
+		case KEY_F8:         return EKey_F8;
+		case KEY_F9:         return EKey_F9;
+		case KEY_F10:        return EKey_F10;
+		case KEY_F11:        return EKey_F11;
+		case KEY_F12:        return EKey_F12;
 
-		case XKB_KEY_F1:  return EKey_F1;  case XKB_KEY_F2:  return EKey_F2;
-		case XKB_KEY_F3:  return EKey_F3;  case XKB_KEY_F4:  return EKey_F4;
-		case XKB_KEY_F5:  return EKey_F5;  case XKB_KEY_F6:  return EKey_F6;
-		case XKB_KEY_F7:  return EKey_F7;  case XKB_KEY_F8:  return EKey_F8;
-		case XKB_KEY_F9:  return EKey_F9;  case XKB_KEY_F10: return EKey_F10;
-		case XKB_KEY_F11: return EKey_F11; case XKB_KEY_F12: return EKey_F12;
-
-		//Navigation
-
-		case XKB_KEY_Escape:      return EKey_Escape;
-		case XKB_KEY_Tab:         return EKey_Tab;
-		case XKB_KEY_BackSpace:   return EKey_Backspace;
-		case XKB_KEY_Return:      return EKey_Enter;
-		case XKB_KEY_space:       return EKey_Space;
-		case XKB_KEY_Insert:      return EKey_Insert;
-		case XKB_KEY_Delete:      return EKey_Delete;
-		case XKB_KEY_Home:        return EKey_Home;
-		case XKB_KEY_End:         return EKey_End;
-		case XKB_KEY_Page_Up:     return EKey_PageUp;
-		case XKB_KEY_Page_Down:   return EKey_PageDown;
-		case XKB_KEY_Up:          return EKey_Up;
-		case XKB_KEY_Down:        return EKey_Down;
-		case XKB_KEY_Left:        return EKey_Left;
-		case XKB_KEY_Right:       return EKey_Right;
-		case XKB_KEY_Print:       return EKey_PrintScreen;
-		case XKB_KEY_Scroll_Lock: return EKey_ScrollLock;
-		case XKB_KEY_Num_Lock:    return EKey_NumLock;
-		case XKB_KEY_Pause:       return EKey_Pause;
-		case XKB_KEY_Help:        return EKey_Help;
-		case XKB_KEY_Clear:       return EKey_Clear;
-
-		//Modifiers
-
-		case XKB_KEY_Shift_L:     return EKey_LShift;
-		case XKB_KEY_Shift_R:     return EKey_RShift;
-		case XKB_KEY_Control_L:   return EKey_LCtrl;
-		case XKB_KEY_Control_R:   return EKey_RCtrl;
-		case XKB_KEY_Alt_L:       return EKey_LAlt;
-		case XKB_KEY_Alt_R:       return EKey_RAlt;
-		case XKB_KEY_Super_L:     return EKey_LMenu;
-		case XKB_KEY_Super_R:     return EKey_RMenu;
-		case XKB_KEY_Menu:        return EKey_Options;
-		case XKB_KEY_Caps_Lock:   return EKey_Caps;
-
-		//Row 1 digits
-
-		case XKB_KEY_grave:       return EKey_Backtick;
-		case XKB_KEY_1:           return EKey_1;
-		case XKB_KEY_2:           return EKey_2;
-		case XKB_KEY_3:           return EKey_3;
-		case XKB_KEY_4:           return EKey_4;
-		case XKB_KEY_5:           return EKey_5;
-		case XKB_KEY_6:           return EKey_6;
-		case XKB_KEY_7:           return EKey_7;
-		case XKB_KEY_8:           return EKey_8;
-		case XKB_KEY_9:           return EKey_9;
-		case XKB_KEY_0:           return EKey_0;
-		case XKB_KEY_minus:       return EKey_Minus;
-		case XKB_KEY_equal:       return EKey_Equals;
+		//Row 1
+		case KEY_GRAVE:      return EKey_Backtick;
+		case KEY_1:          return EKey_1;
+		case KEY_2:          return EKey_2;
+		case KEY_3:          return EKey_3;
+		case KEY_4:          return EKey_4;
+		case KEY_5:          return EKey_5;
+		case KEY_6:          return EKey_6;
+		case KEY_7:          return EKey_7;
+		case KEY_8:          return EKey_8;
+		case KEY_9:          return EKey_9;
+		case KEY_0:          return EKey_0;
+		case KEY_MINUS:      return EKey_Minus;
+		case KEY_EQUAL:      return EKey_Equals;
+		case KEY_BACKSPACE:  return EKey_Backspace;
 
 		//Row 2
-
-		case XKB_KEY_q: case XKB_KEY_Q: return EKey_Q;
-		case XKB_KEY_w: case XKB_KEY_W: return EKey_W;
-		case XKB_KEY_e: case XKB_KEY_E: return EKey_E;
-		case XKB_KEY_r: case XKB_KEY_R: return EKey_R;
-		case XKB_KEY_t: case XKB_KEY_T: return EKey_T;
-		case XKB_KEY_y: case XKB_KEY_Y: return EKey_Y;
-		case XKB_KEY_u: case XKB_KEY_U: return EKey_U;
-		case XKB_KEY_i: case XKB_KEY_I: return EKey_I;
-		case XKB_KEY_o: case XKB_KEY_O: return EKey_O;
-		case XKB_KEY_p: case XKB_KEY_P: return EKey_P;
-
-		case XKB_KEY_bracketleft:       return EKey_LBracket;
-		case XKB_KEY_bracketright:      return EKey_RBracket;
+		case KEY_TAB:        return EKey_Tab;
+		case KEY_Q:          return EKey_Q;
+		case KEY_W:          return EKey_W;
+		case KEY_E:          return EKey_E;
+		case KEY_R:          return EKey_R;
+		case KEY_T:          return EKey_T;
+		case KEY_Y:          return EKey_Y;
+		case KEY_U:          return EKey_U;
+		case KEY_I:          return EKey_I;
+		case KEY_O:          return EKey_O;
+		case KEY_P:          return EKey_P;
+		case KEY_LEFTBRACE:  return EKey_LBracket;
+		case KEY_RIGHTBRACE: return EKey_RBracket;
 
 		//Row 3
-
-		case XKB_KEY_a: case XKB_KEY_A: return EKey_A;
-		case XKB_KEY_s: case XKB_KEY_S: return EKey_S;
-		case XKB_KEY_d: case XKB_KEY_D: return EKey_D;
-		case XKB_KEY_f: case XKB_KEY_F: return EKey_F;
-		case XKB_KEY_g: case XKB_KEY_G: return EKey_G;
-		case XKB_KEY_h: case XKB_KEY_H: return EKey_H;
-		case XKB_KEY_j: case XKB_KEY_J: return EKey_J;
-		case XKB_KEY_k: case XKB_KEY_K: return EKey_K;
-		case XKB_KEY_l: case XKB_KEY_L: return EKey_L;
-		case XKB_KEY_semicolon:         return EKey_Semicolon;
-		case XKB_KEY_apostrophe:        return EKey_Quote;
-		case XKB_KEY_backslash:         return EKey_Backslash;
+		case KEY_CAPSLOCK:   return EKey_Caps;
+		case KEY_A:          return EKey_A;
+		case KEY_S:          return EKey_S;
+		case KEY_D:          return EKey_D;
+		case KEY_F:          return EKey_F;
+		case KEY_G:          return EKey_G;
+		case KEY_H:          return EKey_H;
+		case KEY_J:          return EKey_J;
+		case KEY_K:          return EKey_K;
+		case KEY_L:          return EKey_L;
+		case KEY_SEMICOLON:  return EKey_Semicolon;
+		case KEY_APOSTROPHE: return EKey_Quote;
+		case KEY_BACKSLASH:  return EKey_Backslash;
+		case KEY_ENTER:      return EKey_Enter;
 
 		//Row 4
+		case KEY_LEFTSHIFT:  return EKey_LShift;
+		case KEY_102ND:      return EKey_Bar;
+		case KEY_Z:          return EKey_Z;
+		case KEY_X:          return EKey_X;
+		case KEY_C:          return EKey_C;
+		case KEY_V:          return EKey_V;
+		case KEY_B:          return EKey_B;
+		case KEY_N:          return EKey_N;
+		case KEY_M:          return EKey_M;
+		case KEY_COMMA:      return EKey_Comma;
+		case KEY_DOT:        return EKey_Period;
+		case KEY_SLASH:      return EKey_Slash;
+		case KEY_RIGHTSHIFT: return EKey_RShift;
 
-		case XKB_KEY_z: case XKB_KEY_Z: return EKey_Z;
-		case XKB_KEY_x: case XKB_KEY_X: return EKey_X;
-		case XKB_KEY_c: case XKB_KEY_C: return EKey_C;
-		case XKB_KEY_v: case XKB_KEY_V: return EKey_V;
-		case XKB_KEY_b: case XKB_KEY_B: return EKey_B;
-		case XKB_KEY_n: case XKB_KEY_N: return EKey_N;
-		case XKB_KEY_m: case XKB_KEY_M: return EKey_M;
-		case XKB_KEY_comma:             return EKey_Comma;
-		case XKB_KEY_period:            return EKey_Period;
-		case XKB_KEY_slash:             return EKey_Slash;
-		case XKB_KEY_bar:               return EKey_Bar;
+		//Row 5
+		case KEY_LEFTCTRL:   return EKey_LCtrl;
+		case KEY_LEFTMETA:   return EKey_LMenu;
+		case KEY_LEFTALT:    return EKey_LAlt;
+		case KEY_SPACE:      return EKey_Space;
+		case KEY_RIGHTALT:   return EKey_RAlt;
+		case KEY_RIGHTMETA:  return EKey_RMenu;
+		case KEY_COMPOSE:    return EKey_Options;
+		case KEY_RIGHTCTRL:  return EKey_RCtrl;
+
+		//Navigation cluster
+		case KEY_SYSRQ:      return EKey_PrintScreen;
+		case KEY_SCROLLLOCK: return EKey_ScrollLock;
+		case KEY_PAUSE:      return EKey_Pause;
+		case KEY_INSERT:     return EKey_Insert;
+		case KEY_HOME:       return EKey_Home;
+		case KEY_PAGEUP:     return EKey_PageUp;
+		case KEY_DELETE:     return EKey_Delete;
+		case KEY_END:        return EKey_End;
+		case KEY_PAGEDOWN:   return EKey_PageDown;
+
+		//Arrow keys
+		case KEY_UP:         return EKey_Up;
+		case KEY_LEFT:       return EKey_Left;
+		case KEY_DOWN:       return EKey_Down;
+		case KEY_RIGHT:      return EKey_Right;
 
 		//Numpad
-
-		case XKB_KEY_KP_0: return EKey_Numpad0; case XKB_KEY_KP_1: return EKey_Numpad1;
-		case XKB_KEY_KP_2: return EKey_Numpad2; case XKB_KEY_KP_3: return EKey_Numpad3;
-		case XKB_KEY_KP_4: return EKey_Numpad4; case XKB_KEY_KP_5: return EKey_Numpad5;
-		case XKB_KEY_KP_6: return EKey_Numpad6; case XKB_KEY_KP_7: return EKey_Numpad7;
-		case XKB_KEY_KP_8: return EKey_Numpad8; case XKB_KEY_KP_9: return EKey_Numpad9;
-		
-		case XKB_KEY_KP_Multiply: return EKey_NumpadMul;
-		case XKB_KEY_KP_Add:      return EKey_NumpadAdd;
-		case XKB_KEY_KP_Decimal:  return EKey_NumpadDot;
-		case XKB_KEY_KP_Divide:   return EKey_NumpadDiv;
-		case XKB_KEY_KP_Subtract: return EKey_NumpadSub;
+		case KEY_NUMLOCK:    return EKey_NumLock;
+		case KEY_KP0:        return EKey_Numpad0;
+		case KEY_KP1:        return EKey_Numpad1;
+		case KEY_KP2:        return EKey_Numpad2;
+		case KEY_KP3:        return EKey_Numpad3;
+		case KEY_KP4:        return EKey_Numpad4;
+		case KEY_KP5:        return EKey_Numpad5;
+		case KEY_KP6:        return EKey_Numpad6;
+		case KEY_KP7:        return EKey_Numpad7;
+		case KEY_KP8:        return EKey_Numpad8;
+		case KEY_KP9:        return EKey_Numpad9;
+		case KEY_KPASTERISK: return EKey_NumpadMul;
+		case KEY_KPPLUS:     return EKey_NumpadAdd;
+		case KEY_KPDOT:      return EKey_NumpadDot;
+		case KEY_KPSLASH:    return EKey_NumpadDiv;
+		case KEY_KPMINUS:    return EKey_NumpadSub;
+		case KEY_KPENTER:    return EKey_Enter;
 
 		//Media / browser
-
-		case XKB_KEY_XF86Back:             return EKey_Back;
-		case XKB_KEY_XF86Forward:          return EKey_Forward;
-		case XKB_KEY_XF86Sleep:            return EKey_Sleep;
-		case XKB_KEY_XF86Reload:           return EKey_Refresh;
-		case XKB_KEY_XF86Search:           return EKey_Search;
-		case XKB_KEY_XF86AudioMute:        return EKey_Mute;
-		case XKB_KEY_XF86AudioLowerVolume: return EKey_VolumeDown;
-		case XKB_KEY_XF86AudioRaiseVolume: return EKey_VolumeUp;
-		case XKB_KEY_XF86AudioNext:        return EKey_Skip;
-		case XKB_KEY_XF86AudioPrev:        return EKey_Previous;
+		case KEY_BACK:          return EKey_Back;
+		case KEY_FORWARD:       return EKey_Forward;
+		case KEY_SLEEP:         return EKey_Sleep;
+		case KEY_REFRESH:       return EKey_Refresh;
+		case KEY_SEARCH:        return EKey_Search;
+		case KEY_MUTE:          return EKey_Mute;
+		case KEY_VOLUMEDOWN:    return EKey_VolumeDown;
+		case KEY_VOLUMEUP:      return EKey_VolumeUp;
+		case KEY_NEXTSONG:      return EKey_Skip;
+		case KEY_PREVIOUSSONG:  return EKey_Previous;
+		case KEY_HELP:          return EKey_Help;
+		case KEY_CLEAR:         return EKey_Clear;
 
 		default: return InputDevice_invalidHandle();
 	}
@@ -757,6 +922,9 @@ static void LWindow_kbKey(
 	xkb_keycode_t keycode = key + 8;    //xkb keycode is evdev + 8
 	Bool isDown = keyState == WL_KEYBOARD_KEY_STATE_PRESSED;
 
+	if(!w->devices.ptr)
+		return;
+
 	InputDevice *dev = w->devices.ptrNonConst + w->defaultKeyboardId;   //Builtin keyboard
 
 	U32 flags =
@@ -765,9 +933,7 @@ static void LWindow_kbKey(
 
 	dev->flags = flags;
 
-	//Map to EKey via the first keysym for this key in the current layout
-	xkb_keysym_t sym = xkb_state_key_get_one_sym(lwin->xkbState, keycode);
-	InputHandle handle = LWindow_xkbSymToKey(sym);
+	InputHandle handle = LWindow_scancodeToKey(key);
 
 	if(InputDevice_isValidHandle(dev, handle)) {
 
@@ -1002,10 +1168,50 @@ void LWindow_updateMonitors(Window *w) {
 			continue;
  
 		const LOutputInfo *info = &manager->outputInfo[i];
+
+		//Map Wayland wl_output_subpixel to per-channel pixel offsets.
+		//All-zero means subpixel rendering is disabled (unknown or no layout).
+		//Horizontal: offsets are along X. Vertical: along Y.
+		//RGB order: R is at -1, G at 0, B at 1 (offset in that direction).
+		//BGR order: R is at 1, G at 0, B at -1.
+		I32x2 spR = I32x2_zero, spG = I32x2_zero, spB = I32x2_zero;
+
+		switch (info->subpixel) {
+
+			case WL_OUTPUT_SUBPIXEL_HORIZONTAL_RGB:
+				spR = I32x2_create2(-1, 0);
+				spG = I32x2_create2(0,  0);
+				spB = I32x2_create2(1,  0);
+				break;
+
+			case WL_OUTPUT_SUBPIXEL_HORIZONTAL_BGR:
+				spR = I32x2_create2(1,  0);
+				spG = I32x2_create2(0,  0);
+				spB = I32x2_create2(-1, 0);
+				break;
+
+			case WL_OUTPUT_SUBPIXEL_VERTICAL_RGB:
+				spR = I32x2_create2(0, -1);
+				spG = I32x2_create2(0, 0);
+				spB = I32x2_create2(0, 1);
+				break;
+
+			case WL_OUTPUT_SUBPIXEL_VERTICAL_BGR:
+				spR = I32x2_create2(0, 1);
+				spG = I32x2_create2(0, 0);
+				spB = I32x2_create2(0, -1);
+				break;
+
+			default:   //WL_OUTPUT_SUBPIXEL_UNKNOWN / WL_OUTPUT_SUBPIXEL_NONE
+				break;
+		}
  
 		Monitor m = (Monitor) {
 			.offsetPixels = I32x2_create2(info->x,          info->y),
 			.sizePixels   = I32x2_create2(info->pixelWidth, info->pixelHeight),
+			.offsetR      = spR,
+			.offsetG      = spG,
+			.offsetB      = spB,
 			.sizeMm       = I32x2_create2(info->mmWidth,    info->mmHeight),
 			.refreshRate  = info->refreshRate > 0 ? (F32)info->refreshRate / 1000.f : 0.f,
 			.orientation  = (EMonitorOrientation) info->transform,
@@ -1030,6 +1236,7 @@ static void LWindow_updateSize(
 	(void) xdg_toplevel;
 
 	Window *w = (Window*) data;
+	LWindow *lwin  = (LWindow*) w->nativeData;
 
 	//Parse the states array to track minimized and suspended flags,
 	// matching the EWindowFlags_IsMinimized gate on Windows (WM_SIZE/SIZE_MINIMIZED)
@@ -1069,7 +1276,8 @@ static void LWindow_updateSize(
 
 	//Skip geometry update while minimized or suspended, matching the
 	// EWindowHint_AllowBackgroundUpdates gate on Windows
-	Bool skip = (isMinimized || isSuspended) && !(w->hint & EWindowHint_AllowBackgroundUpdates);
+
+	Bool skip = lwin->configured && (isMinimized || isSuspended) && !(w->hint & EWindowHint_AllowBackgroundUpdates);
 
 	Bool stateChanged = isMinimized != prevMinimized;
 
@@ -1085,18 +1293,27 @@ static void LWindow_updateSize(
 
 	//0x0 = compositor defers to client
 
+	lwin->configured = true;
+
 	if(width  <= 0) width  = I32x2_x(w->size) ? I32x2_x(w->size) : 1280;
 	if(height <= 0) height = I32x2_y(w->size) ? I32x2_y(w->size) : 720;
 
-	I32x2 newSize = I32x2_create2(width, height);
+	I32      barH   = lwin->barSurface ? LWINDOW_DECOR_HEIGHT : 0;
 
-	if(I32x2_eq2(w->size, newSize) && !stateChanged)
+	//Height from the compositor is content-only (we negotiated it that way via
+	// xdg_surface_set_window_geometry which excluded the bar).
+	//Keep w->size as content-only for consistency with cpuVisibleBuffer.
+	I32x2 newContentSize = I32x2_create2(width, height);
+
+	if(I32x2_eq2(w->size, newContentSize) && !stateChanged)
 		return;
 
-	w->size = newSize;
+	//Pass total size (content + bar) into LWindow_initSize so it can correctly
+	// allocate the shm pool for content and position the bar subsurface.
+	I32x2 totalSize = I32x2_create2(width, height + barH);
 
 	Error err = Error_none();
-	if(!LWindow_initSize(w, w->size, &err))
+	if(!LWindow_initSize(w, totalSize, &err))
 		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 	LWindow_updateMonitors(w);
@@ -1166,7 +1383,7 @@ void WindowManager_freePhysical(Window *w) {
 	w->nativeHandle = NULL;
 }
 
-Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
+Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CharString copy = CharString_createNull();
@@ -1176,18 +1393,21 @@ Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) 
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		));
 
-	if(!CharString_isNullTerminated(title))
-		gotoIfError3(clean, CharString_createCopy(title, Platform_instance->alloc, &copy, e_rr));
+	gotoIfError3(clean, CharString_createCopy(title, Platform_instance->alloc, &copy, e_rr));
 
 	LWindow *lwin = (LWindow*) w->nativeData;
 	struct wl_surface *surface = (struct wl_surface*) w->nativeHandle;
 
-	xdg_toplevel_set_title(lwin->topLevel, copy.ptr ? copy.ptr : title.ptr);
-	xdg_toplevel_set_app_id(lwin->topLevel, copy.ptr ? copy.ptr : title.ptr);
+	CharString_free(&w->title, Platform_instance->alloc);
+	w->title = copy;
+	copy = CharString_createNull();
+
+	xdg_toplevel_set_title(lwin->topLevel, w->title.ptr);
+	xdg_toplevel_set_app_id(lwin->topLevel, w->title.ptr);
+
 	wl_surface_commit(surface);
 
-	//Redraw CSD bar with updated title if present
-	LWindow_redrawBar((Window*)(uintptr_t)w);
+	LWindow_redrawBar((Window*)(uintptr_t)w);     //Redraw CSD bar with updated title if present
 
 clean:
 	CharString_free(&copy, Platform_instance->alloc);
@@ -1330,6 +1550,7 @@ static void LWindow_surfaceLeave(void *data, struct wl_surface *surface, struct 
 	//Remove from active set (swap with last)
 	for(U32 i = 0; i < lwin->activeOutputCount; ++i) {
 		if(lwin->activeOutputIds[i] == id) {
+			lwin->activeOutputIds[i] = lwin->activeOutputIds[lwin->activeOutputCount - 1];
 			--lwin->activeOutputCount;
 			LWindow_updateMonitors(w);
 			return;
@@ -1417,15 +1638,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	//DisableResize: enforce by setting min == max, matching Windows WS_SIZEBOX absence.
 
 	{
-		Bool noBorder = w->hint & EWindowHint_NoBorder;
-
-		I32x2 minSize = I32x2_zero;
-
-		if(!noBorder && !manager->xdgDeco)
-			minSize = I32x2_create2(3 * LWINDOW_DECOR_BTN_W, LWINDOW_DECOR_HEIGHT + 1);
-
-		minSize = I32x2_max(w->minSize, minSize);
-
+		I32x2 minSize = w->minSize;
 		I32x2 maxSize = w->maxSize;
 
 		if(w->hint & EWindowHint_DisableResize)

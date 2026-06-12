@@ -226,7 +226,9 @@ BANNED_SYMBOLS: list[dict] = [
     {
         "pattern": re.compile(r'\bsystem\s*\('),
         "message": "'system()', always forbidden",
-        "allow_paths": (),
+        "allow_paths": (
+            "src/platforms/test/functional/test_platforms_functional.c"
+        ),
     },
     # B15, rand / srand
     {

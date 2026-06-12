@@ -815,7 +815,7 @@ void WindowManager_freePhysical(Window *w) {
 		DestroyWindow(w->nativeHandle);
 }*/
 
-Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
+Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 
 	Bool s_uccess = true;
 	U64 titlel = CharString_length(title);

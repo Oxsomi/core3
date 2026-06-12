@@ -531,7 +531,7 @@ void WindowManager_freePhysical(Window *w) {
 	app->onInputEvent = NULL;
 }
 
-Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr) {
+Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 
 	Bool s_uccess = true;
 

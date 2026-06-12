@@ -224,7 +224,7 @@ typedef struct Window {
 
 //Implementation dependent aka physical windows
 
-impl Bool Window_updatePhysicalTitle(const Window *w, CharString title, Error *e_rr);
+impl Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr);
 impl Bool Window_toggleFullScreen(Window *w, Error *e_rr);
 impl Bool Window_presentPhysical(Window *w, Error *e_rr);
 

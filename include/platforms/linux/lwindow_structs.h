@@ -43,10 +43,11 @@ typedef struct LOutputInfo {
 	I16 mmWidth, mmHeight; //physical size in mm
 	I32 transform;         //wl_output_transform enum value -> EMonitorOrientation
  
-	I32 pixelWidth, pixelHeight;
+	U16 pixelWidth, pixelHeight;
 	I32 refreshRate;       //mHz (divide by 1000 to get Hz as F32)
  
 	I32 scale;             //HiDPI factor, default 1
+	I32 subpixel;
  
 } LOutputInfo;
 
@@ -125,7 +126,8 @@ typedef struct LWindow {
 	//Pointer state for bar hit testing (in bar surface local coordinates)
 	I32  pointerX, pointerY;
 	Bool pointerInBar;
-	U8   pad1[3];
+	Bool configured;           //For first time init
+	U8   pad1[2];
 
 	//Decoration listener (needed to handle compositor downgrade SSD->CSD)
 	struct zxdg_toplevel_decoration_v1         *decoration;
@@ -138,7 +140,12 @@ typedef struct LWindow {
  
 	//Bar pointer (only non-NULL when barSurface is active)
 	struct wl_pointer       *barPointer;
- 
+
+	//Which surface the seat pointer is currently inside:
+	// NULL = outside all our surfaces, lwin->barSurface = inside bar,
+	// w->nativeHandle = inside main content surface.
+	struct wl_surface       *pointerCurrentSurface;
+
 	//Outputs this surface is currently on (set by wl_surface enter/leave events).
 	//Used to filter LWindow_updateMonitors to only the active outputs.
 
