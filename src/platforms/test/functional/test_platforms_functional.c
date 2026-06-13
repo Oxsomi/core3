@@ -20,27 +20,27 @@
 
 //platforms/test/functional/test_platforms_functional.c
 
-// Platform functional tests.
+//Platform functional tests.
 //
-// These tests require a windowing system and, for the OS-layer input section,
+//These tests require a windowing system and, for the OS-layer input section,
 // a human operator.  They are NOT intended for headless CI.
 //
-// What is covered:
-//   F1.  CPU buffer -> screen       (draw a colour gradient, verify buffer content)
-//   F2.  Fullscreen toggle          (requires EWindowHint_AllowFullscreen)
-//   F3.  Window resize / min + max enforcement
-//   F4.  Multi-window               (if the platform allows more than one physical window)
-//   F5. Keyboard input, OS layer   (interactive: operator presses ESC)
-//   F6.  Window_storeCPUBufferToDisk
-//   F7.  Window_updatePhysicalTitle
-//   F8.  Mouse, OS layer            (interactive: operator left-clicks)
-//   F9.  Focus / minimize cycle     (EWindowFlags_IsMinimized + EWindowFlags_IsFocussed)
-//   F10. onTypeChar callback        (interactive: operator types "Hello")
+//What is covered:
+//  F1.  CPU buffer -> screen       (draw a colour gradient, verify buffer content)
+//  F2.  Fullscreen toggle          (requires EWindowHint_AllowFullscreen)
+//  F3.  Window resize / min + max enforcement
+//  F4.  Multi-window               (if the platform allows more than one physical window)
+//  F5. Keyboard input, OS layer   (interactive: operator presses ESC)
+//  F6.  Window_storeCPUBufferToDisk
+//  F7.  Window_updatePhysicalTitle
+//  F8.  Mouse, OS layer            (interactive: operator left-clicks)
+//  F9.  Focus / minimize cycle     (EWindowFlags_IsMinimized + EWindowFlags_IsFocussed)
+//  F10. onTypeChar callback        (interactive: operator types "Hello  world)
 //
-// For tests that require visual inspection (F1, F2, F3, F4, F7, F9) the window
+//For tests that require visual inspection (F1, F2, F3, F4, F7, F9) the window
 // stays open for VISUAL_HOLD_NS so a human can look.
 //
-// Tests that require a physical window fall back to a virtual window on
+//Tests that require a physical window fall back to a virtual window on
 // platforms that don't support physical windows (e.g. headless servers).
 
 #include "platforms/platform.h"
@@ -849,9 +849,9 @@ clean:
 
 // -- F10. onTypeChar callback --------------------------------------------------
 //
-// Opens a window and waits for the operator to type the word "Hello" (5 chars).
+// Opens a window and waits for the operator to type the word "Hello world" (11 chars).
 // The onTypeChar callback accumulates each CharString fragment; we concatenate
-// them and check the result contains "Hello".
+// them and check the result contains "Hello world".
 //
 // On Windows a synthetic round-trip is attempted first via SendInput VK codes
 // (Shift+H, e, l, l, o) so the test is not purely interactive.
@@ -881,7 +881,7 @@ static void Test_typeChar(Test *t) {
 	I32x2 sz  = I32x2_create2(640, 100);
 
 	Window *w = createWindowCallback(
-		t, "F10: Type \"Hello\" to pass", pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, wcbs
+		t, "F10: Type \"Hello world\" to pass", pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, wcbs
 	);
 
 	if (!Test_assert(t, "windowCreated", w != NULL))
@@ -897,7 +897,7 @@ static void Test_typeChar(Test *t) {
 		goto clean;
 	}
 
-	const CharString hello = CharString_createRefCStrConst("Hello");
+	const CharString hello = CharString_createRefCStrConst("Hello world");
 
 	// -- Synthetic injection (Windows) ----------------------------------------
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -915,9 +915,15 @@ static void Test_typeChar(Test *t) {
 				{ 'L', false },
 				{ 'L', false },
 				{ 'O', false },
+				{ ' ', false  },
+				{ 'W', false },
+				{ 'O', false },
+				{ 'R', false },
+				{ 'L', false },
+				{ 'D', false }
 			};
 
-			for (U32 i = 0; i < 5; ++i) {
+			for (U64 i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
 
 				INPUT inputs[4] = { 0 };
 				U32 count = 0;
@@ -967,13 +973,13 @@ static void Test_typeChar(Test *t) {
 
 			//SetForegroundWindow equivalent via xdotool, then type
 
-			system("xdotool search --name 'F10: Type' windowfocus type --clearmodifiers 'Hello'");
+			system("xdotool search --name 'F10: Type' windowfocus type --clearmodifiers 'Hello world'");
 			pump(300 * MS);
 
 			Bool syntheticOK = CharString_containsStringSensitive(&typedText, &hello, 0, 0);
 
 			if (!syntheticOK)
-				Test_print(t, "WARN: xdotool type didn't produce 'Hello', may be layout-dependent");
+				Test_print(t, "WARN: xdotool type didn't produce 'Hello world', may be layout-dependent");
 
 			else Test_assert(t, "syntheticHello", syntheticOK);
 
@@ -988,7 +994,7 @@ static void Test_typeChar(Test *t) {
 	#endif
 
 	// -- Interactive -----------------------------------------------------------
-	Test_print(t, ">>> INTERACTIVE: Click the window and type \"Hello\" (8s timeout) <<<");
+	Test_print(t, ">>> INTERACTIVE: Click the window and type \"Hello world\" (8s timeout) <<<");
 
 	Ns waited = 0;
 	while (waited < 8 * SECOND) {
@@ -996,7 +1002,8 @@ static void Test_typeChar(Test *t) {
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 
-		//Pass as soon as "Hello" appears anywhere in the accumulated text
+		//Pass as soon as "Hello world" appears anywhere in the accumulated text
+		// Hint to user: If simulating azerty on a qwerty keyboard, type "Hello zorld".
 		if (CharString_containsStringSensitive(&typedText, &hello, 0, 0))
 			break;
 	}
@@ -1004,7 +1011,7 @@ static void Test_typeChar(Test *t) {
 	Bool gotHello = CharString_containsStringSensitive(&typedText, &hello, 0, 0);
 
 	if (!gotHello)
-		Test_print(t, "WARN: 'Hello' not received within timeout");
+		Test_print(t, "WARN: 'Hello world' not received within timeout");
 
 	Test_assert(t, "operatorHello", gotHello);
 
@@ -2263,19 +2270,19 @@ Platform_defineEntrypoint() {
 	//Test_fullScreen(&t);     //TODO: Crashes
 	//Test_resize(&t);         //TODO: Broken
 	(void) Test_multiWindow;//(&t);
-	(void) Test_keyboard;//(&t);
+	Test_keyboard(&t);
 	(void) Test_storeCPUBuffer;//(&t);
 	(void) Test_updateTitle;//(&t);
 	(void) Test_mouse;//(&t);
 	(void) Test_focusMinimize;//(&t);
-	(void) Test_typeChar;//(&t);
+	Test_typeChar(&t);
 	(void) Test_focusReset;//(&t);
 	(void) Test_monitorInfo;//(&t);
 	(void) Test_windowMove;//(&t);
 	(void) Test_maximize;//(&t);
-	(void) Test_keyboardRemap;//(&t);
+	Test_keyboardRemap(&t);
 	(void) Test_csdButtons;//(&t);
-	Test_minMaxSize(&t);
+	(void) Test_minMaxSize;//(&t);
 	(void) Test_mouseDraw;//(&t);
 	(void) Test_scrollWheel;//(&t);
 

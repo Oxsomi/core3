@@ -1804,6 +1804,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	w->defaultKeyboardId = (U32) w->devices.length;
 	gotoIfError3(clean, Keyboard_create(&builtinKeyboard, Platform_instance->alloc, e_rr));
+	builtinKeyboard.dataExt = Buffer_createRefConst(lwin, sizeof(LWindow));    //Identification
 	gotoIfError3(clean, ListInputDevice_pushBack(&w->devices, builtinKeyboard, Platform_instance->alloc, e_rr));
 	builtinKeyboard = (Keyboard) { 0 };
 

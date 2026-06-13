@@ -25,6 +25,8 @@
 
 #include "types/container/list_impl.h"
 #include "platforms/platform.h"
+#include "platforms/window.h"
+#include "platforms/linux/lwindow_structs.h"
 #include "platforms/keyboard.h"
 #include "types/container/string.h"
 #include "types/container/file_base.h"
@@ -162,185 +164,151 @@ void Platform_cleanupUnixExt() {
 	}
 }
 
-// XKB keycode = Linux evdev keycode + 8
-#define XKB(k) ((xkb_keycode_t)((k) + 8))
-#define XKB_INVALID ((xkb_keycode_t)0)
-
-static const xkb_keycode_t EKey_toXKB[EKey_Count] = {
-	/* EKey_0 */            XKB(KEY_0),
-	/* EKey_1 */            XKB(KEY_1),
-	/* EKey_2 */            XKB(KEY_2),
-	/* EKey_3 */            XKB(KEY_3),
-	/* EKey_4 */            XKB(KEY_4),
-	/* EKey_5 */            XKB(KEY_5),
-	/* EKey_6 */            XKB(KEY_6),
-	/* EKey_7 */            XKB(KEY_7),
-	/* EKey_8 */            XKB(KEY_8),
-	/* EKey_9 */            XKB(KEY_9),
-	/* EKey_A */            XKB(KEY_A),
-	/* EKey_B */            XKB(KEY_B),
-	/* EKey_C */            XKB(KEY_C),
-	/* EKey_D */            XKB(KEY_D),
-	/* EKey_E */            XKB(KEY_E),
-	/* EKey_F */            XKB(KEY_F),
-	/* EKey_G */            XKB(KEY_G),
-	/* EKey_H */            XKB(KEY_H),
-	/* EKey_I */            XKB(KEY_I),
-	/* EKey_J */            XKB(KEY_J),
-	/* EKey_K */            XKB(KEY_K),
-	/* EKey_L */            XKB(KEY_L),
-	/* EKey_M */            XKB(KEY_M),
-	/* EKey_N */            XKB(KEY_N),
-	/* EKey_O */            XKB(KEY_O),
-	/* EKey_P */            XKB(KEY_P),
-	/* EKey_Q */            XKB(KEY_Q),
-	/* EKey_R */            XKB(KEY_R),
-	/* EKey_S */            XKB(KEY_S),
-	/* EKey_T */            XKB(KEY_T),
-	/* EKey_U */            XKB(KEY_U),
-	/* EKey_V */            XKB(KEY_V),
-	/* EKey_W */            XKB(KEY_W),
-	/* EKey_X */            XKB(KEY_X),
-	/* EKey_Y */            XKB(KEY_Y),
-	/* EKey_Z */            XKB(KEY_Z),
-	/* EKey_Backspace */    XKB(KEY_BACKSPACE),
-	/* EKey_Space */        XKB(KEY_SPACE),
-	/* EKey_Tab */          XKB(KEY_TAB),
-	/* EKey_LShift */       XKB(KEY_LEFTSHIFT),
-	/* EKey_LCtrl */        XKB(KEY_LEFTCTRL),
-	/* EKey_LAlt */         XKB(KEY_LEFTALT),
-	/* EKey_LMenu */        XKB(KEY_LEFTMETA),
-	/* EKey_RShift */       XKB(KEY_RIGHTSHIFT),
-	/* EKey_RCtrl */        XKB(KEY_RIGHTCTRL),
-	/* EKey_RAlt */         XKB(KEY_RIGHTALT),
-	/* EKey_RMenu */        XKB(KEY_RIGHTMETA),
-	/* EKey_Pause */        XKB(KEY_PAUSE),
-	/* EKey_Caps */         XKB(KEY_CAPSLOCK),
-	/* EKey_Escape */       XKB(KEY_ESC),
-	/* EKey_PageUp */       XKB(KEY_PAGEUP),
-	/* EKey_PageDown */     XKB(KEY_PAGEDOWN),
-	/* EKey_End */          XKB(KEY_END),
-	/* EKey_Home */         XKB(KEY_HOME),
-	/* EKey_PrintScreen */  XKB(KEY_SYSRQ),
-	/* EKey_Insert */       XKB(KEY_INSERT),
-	/* EKey_Enter */        XKB(KEY_ENTER),
-	/* EKey_Delete */       XKB(KEY_DELETE),
-	/* EKey_NumLock */      XKB(KEY_NUMLOCK),
-	/* EKey_ScrollLock */   XKB(KEY_SCROLLLOCK),
-	/* EKey_Back */         XKB(KEY_BACK),
-	/* EKey_Forward */      XKB(KEY_FORWARD),
-	/* EKey_Sleep */        XKB(KEY_SLEEP),
-	/* EKey_Refresh */      XKB(KEY_REFRESH),
-	/* EKey_Search */       XKB(KEY_SEARCH),
-	/* EKey_Mute */         XKB(KEY_MUTE),
-	/* EKey_VolumeDown */   XKB(KEY_VOLUMEDOWN),
-	/* EKey_VolumeUp */     XKB(KEY_VOLUMEUP),
-	/* EKey_Skip */         XKB(KEY_NEXTSONG),
-	/* EKey_Previous */     XKB(KEY_PREVIOUSSONG),
-	/* EKey_Clear */        XKB(KEY_CLEAR),
-	/* EKey_Help */         XKB(KEY_HELP),
-	/* EKey_Left */         XKB(KEY_LEFT),
-	/* EKey_Up */           XKB(KEY_UP),
-	/* EKey_Right */        XKB(KEY_RIGHT),
-	/* EKey_Down */         XKB(KEY_DOWN),
-	/* EKey_Numpad0 */      XKB(KEY_KP0),
-	/* EKey_Numpad1 */      XKB(KEY_KP1),
-	/* EKey_Numpad2 */      XKB(KEY_KP2),
-	/* EKey_Numpad3 */      XKB(KEY_KP3),
-	/* EKey_Numpad4 */      XKB(KEY_KP4),
-	/* EKey_Numpad5 */      XKB(KEY_KP5),
-	/* EKey_Numpad6 */      XKB(KEY_KP6),
-	/* EKey_Numpad7 */      XKB(KEY_KP7),
-	/* EKey_Numpad8 */      XKB(KEY_KP8),
-	/* EKey_Numpad9 */      XKB(KEY_KP9),
-	/* EKey_NumpadMul */    XKB(KEY_KPASTERISK),
-	/* EKey_NumpadAdd */    XKB(KEY_KPPLUS),
-	/* EKey_NumpadDot */    XKB(KEY_KPDOT),
-	/* EKey_NumpadDiv */    XKB(KEY_KPSLASH),
-	/* EKey_NumpadSub */    XKB(KEY_KPMINUS),
-	/* EKey_F1 */           XKB(KEY_F1),
-	/* EKey_F2 */           XKB(KEY_F2),
-	/* EKey_F3 */           XKB(KEY_F3),
-	/* EKey_F4 */           XKB(KEY_F4),
-	/* EKey_F5 */           XKB(KEY_F5),
-	/* EKey_F6 */           XKB(KEY_F6),
-	/* EKey_F7 */           XKB(KEY_F7),
-	/* EKey_F8 */           XKB(KEY_F8),
-	/* EKey_F9 */           XKB(KEY_F9),
-	/* EKey_F10 */          XKB(KEY_F10),
-	/* EKey_F11 */          XKB(KEY_F11),
-	/* EKey_F12 */          XKB(KEY_F12),
-	/* EKey_Bar */          XKB(KEY_102ND),
-	/* EKey_Options */      XKB(KEY_COMPOSE),
-	/* EKey_Equals */       XKB(KEY_EQUAL),
-	/* EKey_Comma */        XKB(KEY_COMMA),
-	/* EKey_Minus */        XKB(KEY_MINUS),
-	/* EKey_Period */       XKB(KEY_DOT),
-	/* EKey_Slash */        XKB(KEY_SLASH),
-	/* EKey_Backtick */     XKB(KEY_GRAVE),
-	/* EKey_Semicolon */    XKB(KEY_SEMICOLON),
-	/* EKey_LBracket */     XKB(KEY_LEFTBRACE),
-	/* EKey_RBracket */     XKB(KEY_RIGHTBRACE),
-	/* EKey_Backslash */    XKB(KEY_BACKSLASH),
-	/* EKey_Quote */        XKB(KEY_APOSTROPHE),
+static const U16 EKey_toScanCode[EKey_Count] = {
+	/* EKey_0 */            KEY_0,
+	/* EKey_1 */            KEY_1,
+	/* EKey_2 */            KEY_2,
+	/* EKey_3 */            KEY_3,
+	/* EKey_4 */            KEY_4,
+	/* EKey_5 */            KEY_5,
+	/* EKey_6 */            KEY_6,
+	/* EKey_7 */            KEY_7,
+	/* EKey_8 */            KEY_8,
+	/* EKey_9 */            KEY_9,
+	/* EKey_A */            KEY_A,
+	/* EKey_B */            KEY_B,
+	/* EKey_C */            KEY_C,
+	/* EKey_D */            KEY_D,
+	/* EKey_E */            KEY_E,
+	/* EKey_F */            KEY_F,
+	/* EKey_G */            KEY_G,
+	/* EKey_H */            KEY_H,
+	/* EKey_I */            KEY_I,
+	/* EKey_J */            KEY_J,
+	/* EKey_K */            KEY_K,
+	/* EKey_L */            KEY_L,
+	/* EKey_M */            KEY_M,
+	/* EKey_N */            KEY_N,
+	/* EKey_O */            KEY_O,
+	/* EKey_P */            KEY_P,
+	/* EKey_Q */            KEY_Q,
+	/* EKey_R */            KEY_R,
+	/* EKey_S */            KEY_S,
+	/* EKey_T */            KEY_T,
+	/* EKey_U */            KEY_U,
+	/* EKey_V */            KEY_V,
+	/* EKey_W */            KEY_W,
+	/* EKey_X */            KEY_X,
+	/* EKey_Y */            KEY_Y,
+	/* EKey_Z */            KEY_Z,
+	/* EKey_Backspace */    KEY_BACKSPACE,
+	/* EKey_Space */        KEY_SPACE,
+	/* EKey_Tab */          KEY_TAB,
+	/* EKey_LShift */       KEY_LEFTSHIFT,
+	/* EKey_LCtrl */        KEY_LEFTCTRL,
+	/* EKey_LAlt */         KEY_LEFTALT,
+	/* EKey_LMenu */        KEY_LEFTMETA,
+	/* EKey_RShift */       KEY_RIGHTSHIFT,
+	/* EKey_RCtrl */        KEY_RIGHTCTRL,
+	/* EKey_RAlt */         KEY_RIGHTALT,
+	/* EKey_RMenu */        KEY_RIGHTMETA,
+	/* EKey_Pause */        KEY_PAUSE,
+	/* EKey_Caps */         KEY_CAPSLOCK,
+	/* EKey_Escape */       KEY_ESC,
+	/* EKey_PageUp */       KEY_PAGEUP,
+	/* EKey_PageDown */     KEY_PAGEDOWN,
+	/* EKey_End */          KEY_END,
+	/* EKey_Home */         KEY_HOME,
+	/* EKey_PrintScreen */  KEY_SYSRQ,
+	/* EKey_Insert */       KEY_INSERT,
+	/* EKey_Enter */        KEY_ENTER,
+	/* EKey_Delete */       KEY_DELETE,
+	/* EKey_NumLock */      KEY_NUMLOCK,
+	/* EKey_ScrollLock */   KEY_SCROLLLOCK,
+	/* EKey_Back */         KEY_BACK,
+	/* EKey_Forward */      KEY_FORWARD,
+	/* EKey_Sleep */        KEY_SLEEP,
+	/* EKey_Refresh */      KEY_REFRESH,
+	/* EKey_Search */       KEY_SEARCH,
+	/* EKey_Mute */         KEY_MUTE,
+	/* EKey_VolumeDown */   KEY_VOLUMEDOWN,
+	/* EKey_VolumeUp */     KEY_VOLUMEUP,
+	/* EKey_Skip */         KEY_NEXTSONG,
+	/* EKey_Previous */     KEY_PREVIOUSSONG,
+	/* EKey_Clear */        KEY_CLEAR,
+	/* EKey_Help */         KEY_HELP,
+	/* EKey_Left */         KEY_LEFT,
+	/* EKey_Up */           KEY_UP,
+	/* EKey_Right */        KEY_RIGHT,
+	/* EKey_Down */         KEY_DOWN,
+	/* EKey_Numpad0 */      KEY_KP0,
+	/* EKey_Numpad1 */      KEY_KP1,
+	/* EKey_Numpad2 */      KEY_KP2,
+	/* EKey_Numpad3 */      KEY_KP3,
+	/* EKey_Numpad4 */      KEY_KP4,
+	/* EKey_Numpad5 */      KEY_KP5,
+	/* EKey_Numpad6 */      KEY_KP6,
+	/* EKey_Numpad7 */      KEY_KP7,
+	/* EKey_Numpad8 */      KEY_KP8,
+	/* EKey_Numpad9 */      KEY_KP9,
+	/* EKey_NumpadMul */    KEY_KPASTERISK,
+	/* EKey_NumpadAdd */    KEY_KPPLUS,
+	/* EKey_NumpadDot */    KEY_KPDOT,
+	/* EKey_NumpadDiv */    KEY_KPSLASH,
+	/* EKey_NumpadSub */    KEY_KPMINUS,
+	/* EKey_F1 */           KEY_F1,
+	/* EKey_F2 */           KEY_F2,
+	/* EKey_F3 */           KEY_F3,
+	/* EKey_F4 */           KEY_F4,
+	/* EKey_F5 */           KEY_F5,
+	/* EKey_F6 */           KEY_F6,
+	/* EKey_F7 */           KEY_F7,
+	/* EKey_F8 */           KEY_F8,
+	/* EKey_F9 */           KEY_F9,
+	/* EKey_F10 */          KEY_F10,
+	/* EKey_F11 */          KEY_F11,
+	/* EKey_F12 */          KEY_F12,
+	/* EKey_Bar */          KEY_102ND,
+	/* EKey_Options */      KEY_COMPOSE,
+	/* EKey_Equals */       KEY_EQUAL,
+	/* EKey_Comma */        KEY_COMMA,
+	/* EKey_Minus */        KEY_MINUS,
+	/* EKey_Period */       KEY_DOT,
+	/* EKey_Slash */        KEY_SLASH,
+	/* EKey_Backtick */     KEY_GRAVE,
+	/* EKey_Semicolon */    KEY_SEMICOLON,
+	/* EKey_LBracket */     KEY_LEFTBRACE,
+	/* EKey_RBracket */     KEY_RIGHTBRACE,
+	/* EKey_Backslash */    KEY_BACKSLASH,
+	/* EKey_Quote */        KEY_APOSTROPHE
 };
-
-#undef XKB
 
 Bool Keyboard_remap(const Keyboard *keyboard, EKey key, const Allocator *alloc, CharString *result, Error *e_rr) {
 
 	(void)keyboard;
 	Bool s_uccess = true;
 
-	struct xkb_context *ctx   = NULL;
-	struct xkb_keymap *keymap = NULL;
-	xkb_keycode_t keycode;
-	const xkb_keysym_t *syms  = NULL;
-	xkb_keysym_t sym;
-	C8 buf[64];
-	Bool gotUtf8 = false;
-	int nsyms, len;
-
 	if((U32)key >= EKey_Count)
 		retError(clean, Error_outOfBounds(0, (U64)key, EKey_Count, "Keyboard_remap() key out of range"));
 
-	keycode = EKey_toXKB[key];
+	U16 scanCode = EKey_toScanCode[key];
 
-	ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-	if(!ctx)
-		retError(clean, Error_outOfMemory(0, "Keyboard_remap() xkb_context_new failed"));
+	if(!keyboard->dataExt.ptr)
+		retError(clean, Error_invalidOperation(0, "Keyboard_remap() called on InputDevice without owner (Window)"));
 
-	keymap = xkb_keymap_new_from_names(ctx, NULL, XKB_KEYMAP_COMPILE_NO_FLAGS);
-	if(!keymap)
-		retError(clean, Error_invalidState(0, "Keyboard_remap() xkb_keymap_new_from_names failed"));
+	struct xkb_state *xkbState = ((LWindow*)(keyboard->dataExt.ptr))->xkbState;
 
-	nsyms = xkb_keymap_key_get_syms_by_level(keymap, keycode, 0, 0, &syms);
+	if(!xkbState)
+		retError(clean, Error_invalidOperation(0, "Keyboard_remap() called on Window without xkbState"));
 
-	if(nsyms <= 0 || !syms)
-		retError(clean, Error_notFound(0, 0, "Keyboard_remap() no keysym for key"));
+	C8 utf8[8] = { 0 };
+	I32 len = xkb_state_key_get_utf8(xkbState, (xkb_keycode_t)(scanCode + 8), utf8, sizeof(utf8) - 1);
 
-	sym = syms[0];
+	if(len <= 0 || !utf8[0])
+		retError(clean, Error_notFound(0, 0, "Keyboard_remap() couldn't be translated"));
 
-	if(sym != XKB_KEY_NoSymbol) {
-		len = xkb_keysym_to_utf8(sym, buf, sizeof(buf));
-		if(len > 1) {
-			buf[len] = '\0';
-			gotUtf8 = true;
-		}
-	}
-
-	if(!gotUtf8) {
-		len = xkb_keysym_get_name(sym, buf, sizeof(buf));
-		if(len <= 0)
-			retError(clean, Error_notFound(1, 0, "Keyboard_remap() xkb_keysym_get_name failed"));
-
-		buf[len] = '\0';
-	}
-
-	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(buf), alloc, result, e_rr));
+	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(utf8), alloc, result, e_rr));
 
 clean:
-	if(keymap) xkb_keymap_unref(keymap);
-	if(ctx)    xkb_context_unref(ctx);
 	return s_uccess;
 }
