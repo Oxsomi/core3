@@ -1247,86 +1247,32 @@ clean:
 	return s_uccess;
 }
 
+Bool WindowManager_updateMonitorsExt(
+	LWindowManager *lmanager,
+	ListMonitor *monitors,
+	const U32 *activeIds,
+	U32 activeCount,
+	Error *e_rr
+);
+
 void LWindow_updateMonitors(Window *w) {
  
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 	LWindow        *lwin    = (LWindow*) w->nativeData;
-	ListMonitor_clear(&w->monitors, NULL);
- 
-	for(U32 i = 0; i < LWINDOW_MAX_OUTPUTS; ++i) {
- 
-		if(!manager->outputs[i])
-			continue;
- 
-		//Only include outputs this surface is currently on.
-		// (Populated by wl_surface enter/leave events.)
-		//Before the first enter event fires we fall back to all outputs so
-		// the initial onMonitorChange call after creation isn't empty
-		Bool active = lwin->activeOutputCount == 0;   //fallback: none tracked yet
- 
-		for(U32 j = 0; j < lwin->activeOutputCount && !active; ++j)
-			active = lwin->activeOutputIds[j] == manager->outputIds[i];
- 
-		if(!active)
-			continue;
- 
-		const LOutputInfo *info = &manager->outputInfo[i];
 
-		//Map Wayland wl_output_subpixel to per-channel pixel offsets.
-		//All-zero means subpixel rendering is disabled (unknown or no layout).
-		//Horizontal: offsets are along X. Vertical: along Y.
-		//RGB order: R is at -1, G at 0, B at 1 (offset in that direction).
-		//BGR order: R is at 1, G at 0, B at -1.
-		I32x2 spR = I32x2_zero, spG = I32x2_zero, spB = I32x2_zero;
+	const U32 *ids   = lwin->activeOutputCount ? lwin->activeOutputIds : NULL;
+	U32        count = lwin->activeOutputCount  ? lwin->activeOutputCount : 0;
 
-		switch (info->subpixel) {
-
-			case WL_OUTPUT_SUBPIXEL_HORIZONTAL_RGB:
-				spR = I32x2_create2(-1, 0);
-				spG = I32x2_create2(0,  0);
-				spB = I32x2_create2(1,  0);
-				break;
-
-			case WL_OUTPUT_SUBPIXEL_HORIZONTAL_BGR:
-				spR = I32x2_create2(1,  0);
-				spG = I32x2_create2(0,  0);
-				spB = I32x2_create2(-1, 0);
-				break;
-
-			case WL_OUTPUT_SUBPIXEL_VERTICAL_RGB:
-				spR = I32x2_create2(0, -1);
-				spG = I32x2_create2(0, 0);
-				spB = I32x2_create2(0, 1);
-				break;
-
-			case WL_OUTPUT_SUBPIXEL_VERTICAL_BGR:
-				spR = I32x2_create2(0, 1);
-				spG = I32x2_create2(0, 0);
-				spB = I32x2_create2(0, -1);
-				break;
-
-			default:   //WL_OUTPUT_SUBPIXEL_UNKNOWN / WL_OUTPUT_SUBPIXEL_NONE
-				break;
-		}
- 
-		Monitor m = (Monitor) {
-			.offsetPixels = I32x2_create2(info->x,          info->y),
-			.sizePixels   = I32x2_create2(info->pixelWidth, info->pixelHeight),
-			.offsetR      = spR,
-			.offsetG      = spG,
-			.offsetB      = spB,
-			.sizeMm       = I32x2_create2(info->mmWidth,    info->mmHeight),
-			.refreshRate  = info->refreshRate > 0 ? (F32)info->refreshRate / 1000.f : 0.f,
-			.orientation  = (EMonitorOrientation) info->transform,
-		};
- 
-		Error err =  Error_none();
-		if(!ListMonitor_pushBack(&w->monitors, m, Platform_instance->alloc, &err))
-			Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+	Error err = Error_none();
+	if(!WindowManager_updateMonitorsExt(manager, &w->monitors, ids, count, &err)) {
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+		return;
 	}
- 
+
 	if(w->callbacks.onMonitorChange)
 		w->callbacks.onMonitorChange(w);
+
+	w->owner->monitorsDirty = true;
 }
 
 static void LWindow_updateSize(

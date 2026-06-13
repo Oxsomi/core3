@@ -21,6 +21,7 @@
 //platforms/monitor.h
 
 #pragma once
+#include "types/container/list.h"
 #include "types/math/vec2.h"
 
 #ifdef __cplusplus
@@ -49,6 +50,8 @@ typedef struct Monitor {
 	F32 gamma, contrast, refreshRate;
 
 } Monitor;
+
+TList(Monitor);
 
 #ifdef __cplusplus
 	}

@@ -208,6 +208,110 @@ void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32
 	}
 }
 
+static inline Monitor LOutputInfo_toMonitor(const LOutputInfo *info) {
+
+	//Map Wayland wl_output_subpixel to per-channel pixel offsets.
+	//All-zero means subpixel rendering is disabled (unknown or no layout).
+	//Horizontal: offsets are along X. Vertical: along Y.
+	//RGB order: R is at -1, G at 0, B at 1 (offset in that direction).
+	//BGR order: R is at 1, G at 0, B at -1.
+	I32x2 spR = I32x2_zero, spG = I32x2_zero, spB = I32x2_zero;
+
+	switch (info->subpixel) {
+
+		case WL_OUTPUT_SUBPIXEL_HORIZONTAL_RGB:
+			spR = I32x2_create2(-1, 0);
+			spG = I32x2_create2(0,  0);
+			spB = I32x2_create2(1,  0);
+			break;
+
+		case WL_OUTPUT_SUBPIXEL_HORIZONTAL_BGR:
+			spR = I32x2_create2(1,  0);
+			spG = I32x2_create2(0,  0);
+			spB = I32x2_create2(-1, 0);
+			break;
+
+		case WL_OUTPUT_SUBPIXEL_VERTICAL_RGB:
+			spR = I32x2_create2(0, -1);
+			spG = I32x2_create2(0, 0);
+			spB = I32x2_create2(0, 1);
+			break;
+
+		case WL_OUTPUT_SUBPIXEL_VERTICAL_BGR:
+			spR = I32x2_create2(0, 1);
+			spG = I32x2_create2(0, 0);
+			spB = I32x2_create2(0, -1);
+			break;
+
+		default:   //WL_OUTPUT_SUBPIXEL_UNKNOWN / WL_OUTPUT_SUBPIXEL_NONE
+			break;
+	}
+
+	return (Monitor) {
+		.offsetPixels = I32x2_create2(info->x,          info->y),
+		.sizePixels   = I32x2_create2(info->pixelWidth, info->pixelHeight),
+		.offsetR      = spR,
+		.offsetG      = spG,
+		.offsetB      = spB,
+		.sizeMm       = I32x2_create2(info->mmWidth,    info->mmHeight),
+		.refreshRate  = info->refreshRate > 0 ? (F32)info->refreshRate / 1000.f : 0.f,
+		.orientation  = (EMonitorOrientation) info->transform,
+	};
+}
+
+Bool WindowManager_updateMonitorsExt(
+	LWindowManager *lmanager,
+	ListMonitor *monitors,
+	const U32 *activeIds,
+	U32 activeCount,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	ListMonitor_clear(monitors, NULL);
+
+	for(U32 i = 0; i < LWINDOW_MAX_OUTPUTS; ++i) {
+
+		if(!lmanager->outputs[i])
+			continue;
+
+		if(activeIds) {
+			
+			Bool found = false;
+
+			for(U32 j = 0; j < activeCount && !found; ++j)
+				found = activeIds[j] == lmanager->outputIds[i];
+
+			if(!found)
+				continue;
+		}
+
+		Monitor m = LOutputInfo_toMonitor(&lmanager->outputInfo[i]);
+		gotoIfError3(clean, ListMonitor_pushBack(monitors, m, Platform_instance->alloc, e_rr));
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!wm)
+		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
+
+	LWindowManager *lmanager = (LWindowManager*)wm->platformData.ptr;
+
+	gotoIfError3(clean, WindowManager_updateMonitorsExt(lmanager, &wm->monitors, NULL, 0, e_rr));
+
+	if(wm->callbacks.onMonitorChange)
+		wm->callbacks.onMonitorChange(wm);
+
+clean:
+	return s_uccess;
+}
+
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -311,6 +415,8 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	if(!manager->cursorSurface)
 		Log_warnLnx("WindowManager_createNative(): could not create cursor surface");
 
+	gotoIfError3(clean, WindowManager_updateMonitors(w, e_rr));
+
 clean:
 	return s_uccess;
 }
@@ -366,6 +472,16 @@ void WindowManager_updateExt(WindowManager *manager) {
 
 	wl_display_flush(lmanager->display);
 	wl_display_roundtrip(lmanager->display);
+
+	//Fire manager-level callback once if any window updated its monitors
+	if(manager->monitorsDirty) {
+
+		manager->monitorsDirty = false;
+
+		Error err = Error_none();
+		if(!WindowManager_updateMonitors(manager, &err))
+			Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
+	}
 
 	//Drive onUpdate + onDraw for every active window, matching WM_PAINT
 	// behaviour on Windows. Without this, windows with no Wayland events

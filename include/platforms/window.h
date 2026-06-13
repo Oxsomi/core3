@@ -164,7 +164,6 @@ typedef U16 WindowHint;
 typedef struct WindowManager WindowManager;
 
 TList(InputDevice);
-TList(Monitor);
 
 typedef enum EWindowOrientation {
 	EWindowOrientation_Landscape            = 0,

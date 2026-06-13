@@ -94,6 +94,7 @@ void WindowManager_free(WindowManager *manager) {
 		WindowManager_freeWindow(manager, &manager->windows.ptrNonConst[i]);
 
 	ListWindowPtr_free(&manager->windows, Platform_instance->alloc);
+	ListMonitor_free(&manager->monitors, Platform_instance->alloc);
 	Buffer_free(&manager->extendedData, Platform_instance->alloc);
 
 	WindowManager_freeNative(manager);
@@ -250,6 +251,7 @@ clean:
 }
 
 impl void WindowManager_updateExt(WindowManager *manager);
+impl Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr);
 
 Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_rr) {
 

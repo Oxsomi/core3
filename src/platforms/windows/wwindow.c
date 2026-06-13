@@ -43,71 +43,29 @@
 #define NOMINMAX
 #include <Windows.h>
 
-//Callback passed to EnumDisplayMonitors. Called once per monitor the window
-// overlaps. Populates w->monitors with geometry, refresh rate, and orientation
-static BOOL WWindow_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lParam) {
-
-	(void) hdc; (void) rect;
-	Window *w = (Window*) lParam;
- 
-	MONITORINFOEXW info = (MONITORINFOEXW) { .cbSize = sizeof(MONITORINFOEXW) };
- 
-	if(!GetMonitorInfoW(hmon, (MONITORINFO*) &info))
-		return TRUE;   //skip this monitor but continue enumeration
- 
-	DEVMODEW dm = (DEVMODEW) { .dmSize = sizeof(DEVMODEW) };
-	F32 refreshRate = 0.f;
-	EMonitorOrientation orientation = EMonitorOrientation_Landscape;
- 
-	if(EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
-		refreshRate = dm.dmDisplayFrequency > 1 ? (F32)dm.dmDisplayFrequency : 0.f;
- 
-		switch(dm.dmDisplayOrientation) {
-			case DMDO_DEFAULT: orientation = EMonitorOrientation_Landscape;         break;
-			case DMDO_90:      orientation = EMonitorOrientation_Portrait;          break;
-			case DMDO_180:     orientation = EMonitorOrientation_FlippedLandscape;  break;
-			case DMDO_270:     orientation = EMonitorOrientation_FlippedPortrait;   break;
-		}
-	}
- 
-	//Physical size in mm via GetDeviceCaps, requires a DC for the monitor.
-	//We open a temporary DC on the device name for this.
-	I32x2 sizeMm = I32x2_zero;
-	HDC mdc = CreateDCW(L"DISPLAY", info.szDevice, NULL, NULL);
- 
-	if(mdc) {
-		sizeMm = I32x2_create2(GetDeviceCaps(mdc, HORZSIZE), GetDeviceCaps(mdc, VERTSIZE));
-		DeleteDC(mdc);
-	}
- 
-	const RECT *work = &info.rcMonitor;
- 
-	Monitor m = (Monitor) {
-		.offsetPixels = I32x2_create2(work->left,                work->top),
-		.sizePixels   = I32x2_create2(work->right  - work->left, work->bottom - work->top),
-		.sizeMm       = sizeMm,
-		.refreshRate  = refreshRate,
-		.orientation  = orientation,
-		// TODO: Base offsetR, offsetG, offsetB on orientation and BGR or RGB
-	};
- 
-	Error err = Error_none();
-	if(!ListMonitor_pushBack(&w->monitors, m, Platform_instance->alloc, &err))
-		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
- 
-	return TRUE;   //continue enumeration
-}
+Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error *e_rr)
  
 void WWindow_updateMonitors(Window *w) {
  
-	ListMonitor_clear(&w->monitors, NULL);
- 
-	//Enumerate only the monitors the window currently overlaps.
-	//Passing the window's HWND clips enumeration to intersecting monitors.
-	EnumDisplayMonitors(NULL, NULL, WWindow_enumMonitor, (LPARAM) w);
- 
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	if(!w)
+		retError(clean, Error_nullPointer(0, "WWindow_updateMonitors()::w is required"));
+
+	RECT rc;
+	GetWindowRect(w->nativeHandle, &rc);
+
+	gotoIfError3(clean, WindowManager_updateMonitorsExt(&w->monitors, &rc, e_rr));
+
 	if(w->callbacks.onMonitorChange)
 		w->callbacks.onMonitorChange(w);
+
+	w->owner->monitorsDirty = true;
+	return;
+
+clean:
+	Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }
 
 Bool WWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
@@ -1231,6 +1189,8 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	//Finalize
 	
 	w->flags |= EWindowFlags_IsActive;
+
+	WWindow_updateMonitors(w);
 
 	if(w->callbacks.onCreate)
 		gotoIfError3(clean, w->callbacks.onCreate(w, e_rr));

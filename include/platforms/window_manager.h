@@ -23,6 +23,7 @@
 #pragma once
 #include "types/container/list.h"
 #include "types/math/vec2.h"
+#include "platforms/monitor.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -48,7 +49,7 @@ typedef void (*WindowManagerUpdateCallback)(WindowManager*, F64);
 
 typedef struct WindowManagerCallbacks {
 	WindowManagerCreateCallback onCreate;
-	WindowManagerCallback onDestroy, onDraw;
+	WindowManagerCallback onDestroy, onDraw, onMonitorChange;
 	WindowManagerUpdateCallback onUpdate;
 } WindowManagerCallbacks;
 
@@ -56,9 +57,11 @@ typedef struct WindowManager {
 
 	U64 owningThread;        //Only one thread can own a window manager at a time
 	U32 isActive;            //WindowManager_magic if active
-	U32 padding;
+	Bool monitorsDirty;
+	U8 pad[3];
 
 	ListWindowPtr windows;
+	ListMonitor monitors;
 
 	WindowManagerCallbacks callbacks;
 

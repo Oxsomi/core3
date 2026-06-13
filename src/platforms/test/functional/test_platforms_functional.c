@@ -1131,52 +1131,60 @@ static void Test_monitorInfo(Test *t) {
 	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
 	pump(300 * MS);
 
-	Test_assert(t, "hasMonitor",   w->monitors.length >= 1);
+	Test_assert(t, "hasMonitor (manager)",  w->owner->monitors.length >= 1);
+	Test_assert(t, "hasMonitor (window)",   w->monitors.length >= 1);
 
-	for (U64 i = 0; i < w->monitors.length; ++i) {
+	for(U64 j = 0; j < 2; ++j) {
 
-		const Monitor *m = &w->monitors.ptr[i];
-		Test_assert(t, "monitorW",       I32x2_x(m->sizePixels) > 0);
-		Test_assert(t, "monitorH",       I32x2_y(m->sizePixels) > 0);
-		Test_assert(t, "refreshRate",    m->refreshRate > 0.f);
+		ListMonitor monitors = j ? w->owner->monitors : w->monitors;
 
-		//Print for operator to visually verify
-		Test_print(t, "Monitor info (verify matches your display settings):");
+		Test_print(t, j ? "WindowManager" : "Window");
 
-		#define REMAP_OFF_XY(x, y) (((x) + 1) | (((y) + 1) << 2))
+		for (U64 i = 0; i < monitors.length; ++i) {
 
-		#define REMAP_RGB_OFF(r, g, b) (                  \
-			REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) |        \
-			(REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) << 4) | \
-			(REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) << 8)   \
-		)
+			const Monitor *m = &monitors.ptr[i];
+			Test_assert(t, "monitorW & H",   I32x2_all(m->sizePixels));
+			Test_assert(t, "refreshRate",    m->refreshRate > 0.f);
 
-		U16 rgb16 = REMAP_RGB_OFF(m->offsetR, m->offsetG, m->offsetB);
+			//Print for operator to visually verify
 
-		const C8 *spName = "None";
+			Test_print(t, "Monitor info (verify matches your display settings):");
 
-		if(rgb16 == REMAP_RGB_OFF(I32x2_create2(-1, 0), I32x2_create2(0, 0), I32x2_create2(1, 0)))
-			spName = "Horizontal RGB";
+			#define REMAP_OFF_XY(x, y) (((x) + 1) | (((y) + 1) << 2))
 
-		else if(rgb16 == REMAP_RGB_OFF(I32x2_create2(1, 0), I32x2_create2(0, 0), I32x2_create2(-1, 0)))
-			spName = "Horizontal BGR";
+			#define REMAP_RGB_OFF(r, g, b) (                  \
+				REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) |        \
+				(REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) << 4) | \
+				(REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) << 8)   \
+			)
 
-		else if(rgb16 == REMAP_RGB_OFF(I32x2_create2(0, 1), I32x2_create2(0, 0), I32x2_create2(0, -1)))
-			spName = "Vertical RGB";
+			U16 rgb16 = REMAP_RGB_OFF(m->offsetR, m->offsetG, m->offsetB);
 
-		else if(rgb16 == REMAP_RGB_OFF(I32x2_create2(0, -1), I32x2_create2(0, 0), I32x2_create2(0, 1)))
-			spName = "Vertical BGR";
+			const C8 *spName = "None";
 
-		Log_debugLn(Platform_instance->alloc,
-			"-- Monitor %"PRIu64": %"PRIi32"x%"PRIi32" @ %.1f Hz, offset (%"PRIi32",%"PRIi32"), size %"PRIi32"x%"PRIi32" mm\n"
-			"--- Subpixel: %s",
-			(U64)i,
-			I32x2_x(m->sizePixels), I32x2_y(m->sizePixels),
-			m->refreshRate,
-			I32x2_x(m->offsetPixels), I32x2_y(m->offsetPixels),
-			I32x2_x(m->sizeMm), I32x2_y(m->sizeMm),
-			spName
-		);
+			if(rgb16 == REMAP_RGB_OFF(I32x2_create2(-1, 0), I32x2_create2(0, 0), I32x2_create2(1, 0)))
+				spName = "Horizontal RGB";
+
+			else if(rgb16 == REMAP_RGB_OFF(I32x2_create2(1, 0), I32x2_create2(0, 0), I32x2_create2(-1, 0)))
+				spName = "Horizontal BGR";
+
+			else if(rgb16 == REMAP_RGB_OFF(I32x2_create2(0, 1), I32x2_create2(0, 0), I32x2_create2(0, -1)))
+				spName = "Vertical RGB";
+
+			else if(rgb16 == REMAP_RGB_OFF(I32x2_create2(0, -1), I32x2_create2(0, 0), I32x2_create2(0, 1)))
+				spName = "Vertical BGR";
+
+			Log_debugLn(Platform_instance->alloc,
+				"-- Monitor %"PRIu64": %"PRIi32"x%"PRIi32" @ %.1f Hz, offset (%"PRIi32",%"PRIi32"), size %"PRIi32"x%"PRIi32" mm\n"
+				"--- Subpixel: %s",
+				(U64)i,
+				I32x2_x(m->sizePixels), I32x2_y(m->sizePixels),
+				m->refreshRate,
+				I32x2_x(m->offsetPixels), I32x2_y(m->offsetPixels),
+				I32x2_x(m->sizeMm), I32x2_y(m->sizeMm),
+				spName
+			);
+		}
 	}
 
 	Test_print(t, ">>> INTERACTIVE: Verify monitor count and resolution match your system (5s) <<<");
@@ -2270,17 +2278,17 @@ Platform_defineEntrypoint() {
 	//Test_fullScreen(&t);     //TODO: Crashes
 	//Test_resize(&t);         //TODO: Broken
 	(void) Test_multiWindow;//(&t);
-	Test_keyboard(&t);
+	(void) Test_keyboard;//(&t);
 	(void) Test_storeCPUBuffer;//(&t);
 	(void) Test_updateTitle;//(&t);
 	(void) Test_mouse;//(&t);
 	(void) Test_focusMinimize;//(&t);
-	Test_typeChar(&t);
+	(void) Test_typeChar;//(&t);
 	(void) Test_focusReset;//(&t);
-	(void) Test_monitorInfo;//(&t);
+	Test_monitorInfo(&t);
 	(void) Test_windowMove;//(&t);
 	(void) Test_maximize;//(&t);
-	Test_keyboardRemap(&t);
+	(void) Test_keyboardRemap;//(&t);
 	(void) Test_csdButtons;//(&t);
 	(void) Test_minMaxSize;//(&t);
 	(void) Test_mouseDraw;//(&t);
