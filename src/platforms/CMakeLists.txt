@@ -61,7 +61,7 @@ elseif(ANDROID)
 elseif(UNIX AND NOT APPLE)
 	find_package(xdg_shell REQUIRED)
 	find_package(xdg_decoration REQUIRED)
-	target_link_libraries(OxC3_platforms PUBLIC xdg_shell::xdg_shell xdg_decoration::xdg_decoration xkbcommon)
+	target_link_libraries(OxC3_platforms PUBLIC xdg_shell::xdg_shell xdg_decoration::xdg_decoration xkbcommon wayland-cursor)
 endif()
 
 if(EnableTests)

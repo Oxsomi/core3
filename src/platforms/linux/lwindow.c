@@ -37,6 +37,7 @@
 #include <unistd.h>
 #include <linux/input-event-codes.h>
 #include <xkbcommon/xkbcommon.h>
+#include <wayland-cursor.h>
 
 static Bool LWindow_openShmFd(U64 size, I32 *fdOut, Error *e_rr) {
 
@@ -386,6 +387,79 @@ clean:
 	return s_uccess;
 }
 
+static U32 LWindow_edgeIndex(U32 edge) {
+	switch(edge) {
+		case XDG_TOPLEVEL_RESIZE_EDGE_TOP:          return 1;
+		case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM:       return 2;
+		case XDG_TOPLEVEL_RESIZE_EDGE_LEFT:         return 3;
+		case XDG_TOPLEVEL_RESIZE_EDGE_RIGHT:        return 4;
+		case XDG_TOPLEVEL_RESIZE_EDGE_TOP_LEFT:     return 5;
+		case XDG_TOPLEVEL_RESIZE_EDGE_TOP_RIGHT:    return 6;
+		case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_LEFT:  return 7;
+		case XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT: return 8;
+		default:                                    return 0;
+	}
+}
+
+static void LWindow_updateCursor(Window *w, U32 resizeEdge) {
+
+	LWindow        *lwin    = (LWindow*)w->nativeData;
+	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
+
+	if(!lwin->barPointer || !manager->cursorSurface)
+		return;
+
+	U32 idx = LWindow_edgeIndex(resizeEdge);
+	struct wl_cursor *cursor = manager->cursors[idx];
+
+	if(!cursor)
+		cursor = manager->cursors[0];
+
+	if(!cursor || !cursor->image_count)
+		return;
+
+	struct wl_cursor_image *image  = cursor->images[0];
+	struct wl_buffer       *buffer = wl_cursor_image_get_buffer(image);
+
+	if(!buffer)
+		return;
+
+	wl_pointer_set_cursor(
+		lwin->barPointer,
+		lwin->lastPointerSerial,
+		manager->cursorSurface,
+		(I32)image->hotspot_x,
+		(I32)image->hotspot_y
+	);
+
+	wl_surface_attach(manager->cursorSurface, buffer, 0, 0);
+	wl_surface_damage_buffer(manager->cursorSurface, 0, 0, I32_MAX, I32_MAX);
+	wl_surface_commit(manager->cursorSurface);
+}
+
+static U32 LWindow_resizeEdge(const Window *w, I32 x, I32 y) {
+
+	I32 W = I32x2_x(w->size);
+	I32 H = I32x2_y(w->size);
+	I32 B = LWINDOW_RESIZE_BORDER;
+
+	Bool left   = x <  B;
+	Bool right  = x >= W - B;
+	Bool top    = y <  B;
+	Bool bottom = y >= H - B;
+
+	if(top    && left)  return XDG_TOPLEVEL_RESIZE_EDGE_TOP_LEFT;
+	if(top    && right) return XDG_TOPLEVEL_RESIZE_EDGE_TOP_RIGHT;
+	if(bottom && left)  return XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_LEFT;
+	if(bottom && right) return XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM_RIGHT;
+	if(top)             return XDG_TOPLEVEL_RESIZE_EDGE_TOP;
+	if(bottom)          return XDG_TOPLEVEL_RESIZE_EDGE_BOTTOM;
+	if(left)            return XDG_TOPLEVEL_RESIZE_EDGE_LEFT;
+	if(right)           return XDG_TOPLEVEL_RESIZE_EDGE_RIGHT;
+
+	return XDG_TOPLEVEL_RESIZE_EDGE_NONE;
+}
+
 static void LWindow_pointerEnterBar(
 	void *data, struct wl_pointer *ptr, U32 serial,
 	struct wl_surface *surface, wl_fixed_t sx, wl_fixed_t sy
@@ -407,19 +481,28 @@ static void LWindow_pointerEnterBar(
 
 	//Entering the main surface: seed absolute position, zero relative axes.
 
-	if(surface == (struct wl_surface*)w->nativeHandle && w->devices.length > w->defaultMouseId) {
+	if(surface == (struct wl_surface*)w->nativeHandle) {
 
-		InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+		lwin->contentPointerX = wl_fixed_to_int(sx);
+		lwin->contentPointerY = wl_fixed_to_int(sy);
 
-		InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
-		InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
-		InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
-		InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+		U32 edge = LWindow_resizeEdge(w, lwin->contentPointerX, lwin->contentPointerY);
+		LWindow_updateCursor(w, edge);
 
-		InputDevice_setCurrentAxis(mouse, hAbsX, (F32)wl_fixed_to_int(sx));
-		InputDevice_setCurrentAxis(mouse, hAbsY, (F32)wl_fixed_to_int(sy));
-		InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
-		InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
+		if(w->devices.length > w->defaultMouseId) {
+
+			InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+			InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_X, EInputType_Axis);
+			InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Y, EInputType_Axis);
+			InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
+			InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+
+			InputDevice_setCurrentAxis(mouse, hAbsX, (F32)wl_fixed_to_int(sx));
+			InputDevice_setCurrentAxis(mouse, hAbsY, (F32)wl_fixed_to_int(sy));
+			InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
+			InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
+		}
 	}
 }
 
@@ -434,8 +517,11 @@ static void LWindow_pointerLeaveBar(
 
 	if(lwin->pointerInBar) {
 		lwin->pointerInBar = false;
-		LWindow_redrawBar(w);   //Leaving bar: redraw once to clear hover
+		LWindow_redrawBar(w);
 	}
+
+	if(surface == (struct wl_surface*)w->nativeHandle)
+		LWindow_updateCursor(w, XDG_TOPLEVEL_RESIZE_EDGE_NONE);
 }
 
 static void LWindow_pointerMotionBar(
@@ -485,23 +571,26 @@ static void LWindow_pointerMotionBar(
 	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
 		return;
 
+	I32 nx = wl_fixed_to_int(sx);
+	I32 ny = wl_fixed_to_int(sy);
+
+	lwin->contentPointerX = nx;
+	lwin->contentPointerY = ny;
+
 	if(w->devices.length <= w->defaultMouseId)
 		return;
 
 	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
 
-	I32 nx = wl_fixed_to_int(sx);
-	I32 ny = wl_fixed_to_int(sy);
+	//Absolute position -> X, Y
 
-	//Absolute position -> Temp0 (X), Temp1 (Y)
-
-	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0,        EInputType_Axis);
-	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1,        EInputType_Axis);
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_X,        EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Y,        EInputType_Axis);
 
 	//Relative direction -> RX, RY
 
-	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,           EInputType_Axis);
-	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,           EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,       EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,       EInputType_Axis);
 
 	F32 prevAbsX = InputDevice_getCurrentAxis(mouse, hAbsX);
 	F32 prevAbsY = InputDevice_getCurrentAxis(mouse, hAbsY);
@@ -516,6 +605,9 @@ static void LWindow_pointerMotionBar(
 	InputDevice_setCurrentAxis(mouse, hAbsY, newAbsY);
 	InputDevice_setCurrentAxis(mouse, hRelX, relX);
 	InputDevice_setCurrentAxis(mouse, hRelY, relY);
+
+	U32 edge = LWindow_resizeEdge(w, nx, ny);
+	LWindow_updateCursor(w, edge);
 
 	if(w->callbacks.onDeviceAxis) {
 
@@ -571,6 +663,17 @@ static void LWindow_pointerButtonBar(
 
 	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
 		return;
+
+	if(pressed && button == BTN_LEFT && !(w->hint & EWindowHint_DisableResize)) {
+
+		U32 edge = LWindow_resizeEdge(w, lwin->contentPointerX, lwin->contentPointerY);
+
+		if(edge != XDG_TOPLEVEL_RESIZE_EDGE_NONE) {
+			LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
+			xdg_toplevel_resize(lwin->topLevel, manager->seat, serial, edge);
+			return;
+		}
+	}
 
 	if(w->devices.length <= w->defaultMouseId)
 		return;

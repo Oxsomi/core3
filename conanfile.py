@@ -211,7 +211,7 @@ class oxc3(ConanFile):
 			self.cpp_info.frameworks = [ "Security", "CoreFoundation", "ApplicationServices", "AppKit" ]
 
 		else:
-			self.cpp_info.system_libs = [ "m", "xkbcommon" ]
+			self.cpp_info.system_libs = [ "m", "xkbcommon", "wayland-cursor" ]
 
 		vulkan = False
 

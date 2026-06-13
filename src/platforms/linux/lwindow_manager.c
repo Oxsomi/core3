@@ -30,6 +30,9 @@
 #include "types/base/error.h"
 #include "types/base/time.h"
 
+#include <stdlib.h>
+#include <wayland-cursor.h>
+
 void LWindowManager_isAlive(void *data, struct xdg_wm_base *base, U32 serial) {
 	(void) data;
 	xdg_wm_base_pong(base, serial);
@@ -244,6 +247,70 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	if(!manager->seat)
 		Log_warnLnx("WindowManager_createNative(): no wl_seat found, input will be unavailable");
 
+	//Read cursor size from environment; default 24.
+	U64 cursorSize = 24;
+	const C8 *sizeEnv = getenv("XCURSOR_SIZE");
+	CharString sizeStr = CharString_createRefCStrConst(sizeEnv);
+
+	if(CharString_length(sizeStr))
+		CharString_parseDec(sizeStr, &cursorSize);
+
+	const C8 *themeName = getenv("XCURSOR_THEME");
+	manager->cursorTheme = wl_cursor_theme_load(themeName, cursorSize, manager->shm);
+
+	if(!manager->cursorTheme)     //Fallback
+		manager->cursorTheme = wl_cursor_theme_load(NULL, (I32) (cursorSize & (U64)I32_MAX), manager->shm);
+
+	if(!manager->cursorTheme)
+		Log_warnLnx("WindowManager_createNative(): could not load cursor theme, cursors will be hidden");
+
+	//Pre-load the nine cursor shapes we need.
+	//Index mapping: 0=default, 1-8=resize edges matching XDG_TOPLEVEL_RESIZE_EDGE_*.
+	//XDG edge values: NONE=0, TOP=1, BOTTOM=2, LEFT=4, RIGHT=8,
+	//                 TOP_LEFT=5, TOP_RIGHT=9, BOTTOM_LEFT=6, BOTTOM_RIGHT=10
+	//We pack them by a small local index (see LWindow_edgeIndex).
+	static const C8 *cursorNames[9] = {
+		"left_ptr",         //0: default / interior
+		"n-resize",         //1: top
+		"s-resize",         //2: bottom
+		"w-resize",         //3: left
+		"e-resize",         //4: right
+		"nw-resize",        //5: top-left
+		"ne-resize",        //6: top-right
+		"sw-resize",        //7: bottom-left
+		"se-resize",        //8: bottom-right
+	};
+
+	if(manager->cursorTheme)
+		for(U32 i = 0; i < 9; ++i) {
+
+			manager->cursors[i] = wl_cursor_theme_get_cursor(
+				manager->cursorTheme, cursorNames[i]
+			);
+
+			if(!manager->cursors[i] && i > 0) {
+
+				static const C8 *legacyNames[9] = {
+					NULL,
+					"top_side",           "bottom_side",
+					"left_side",          "right_side",
+					"top_left_corner",    "top_right_corner",
+					"bottom_left_corner", "bottom_right_corner",
+				};
+
+				manager->cursors[i] = wl_cursor_theme_get_cursor(
+					manager->cursorTheme, legacyNames[i]
+				);
+			}
+		}
+
+	//Create the shared cursor surface.
+
+	manager->cursorSurface = wl_compositor_create_surface(manager->compositor);
+
+	if(!manager->cursorSurface)
+		Log_warnLnx("WindowManager_createNative(): could not create cursor surface");
+
 clean:
 	return s_uccess;
 }
@@ -251,6 +318,12 @@ clean:
 Bool WindowManager_freeNative(WindowManager *w) {
 
 	LWindowManager *manager = (LWindowManager*)w->platformData.ptr;
+
+	if(manager->cursorSurface)
+		wl_surface_destroy(manager->cursorSurface);
+
+	if(manager->cursorTheme)
+		wl_cursor_theme_destroy(manager->cursorTheme);
 
 	if(manager->seat)
 		wl_seat_destroy(manager->seat);

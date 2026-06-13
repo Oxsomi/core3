@@ -369,14 +369,14 @@ I32 AWindow_onInput(struct android_app *app, AInputEvent *event){
 					F32 x = AMotionEvent_getRawX(event, 0);
 					F32 y = AMotionEvent_getRawY(event, 0);
 
-					F32 prevAbsX = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp0);
-					F32 prevAbsY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp1);
+					F32 prevAbsX = InputDevice_getCurrentAxis(*dev, EMouseAxis_X);
+					F32 prevAbsY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Y);
 
 					F32 nextX = F32_ceil(F32_clamp((F32) (x - prevAbsX), -1, 1));
 					F32 nextY = F32_ceil(F32_clamp((F32) (y - prevAbsY), -1, 1));
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp0, x);
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp1, y);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_X, x);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Y, y);
 
 					I32x2 oldCursor = w->cursor;
 					w->cursor = I32x2_create2(x, y);

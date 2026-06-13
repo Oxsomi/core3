@@ -651,16 +651,17 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
 
-					F32 prevAbsX = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp0);
-					F32 prevAbsY = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp1);
+					F32 prevAbsX = InputDevice_getCurrentAxis(dev, EMouseAxis_X);
+					F32 prevAbsY = InputDevice_getCurrentAxis(dev, EMouseAxis_Y);
 
 					nextX = F32_clamp((F32) (mouseDat.lLastX - prevAbsX), -1, 1);
 					nextY = F32_clamp((F32) (mouseDat.lLastY - prevAbsY), -1, 1);
 
-					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp0, (F32) mouseDat.lLastX);
-					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp1, (F32) mouseDat.lLastY);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_X, (F32) mouseDat.lLastX);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_Y, (F32) mouseDat.lLastY);
 
 				} else {
+					//TODO: Construct EMouseAxis_X, Y
 					nextX = (F32) mouseDat.lLastX;
 					nextY = (F32) mouseDat.lLastY;
 				}

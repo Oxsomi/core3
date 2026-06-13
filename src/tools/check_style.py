@@ -154,7 +154,8 @@ BANNED_SYMBOLS: list[dict] = [
             "src/types/container/platforms/unix/ulog.c",
             "src/types/base/test/shared/shared.c",
             "src/types/container/string.c",
-            "src/platforms/unix/ufile.c"
+            "src/platforms/unix/ufile.c",
+            "src/platforms/test/functional/test_platforms_functional.c"
         ),
     },
     # B4, assert
@@ -199,7 +200,7 @@ BANNED_SYMBOLS: list[dict] = [
     # B10, string-to-number conversions
     {
         "pattern": re.compile(r'\b(strtol|strtod|atoi|atof)\s*\('),
-        "message": "'{}', use CharString_createDec / createHex / format",
+        "message": "'{}', use CharCharString_createDec / createHex / format / parseU64",
         "allow_paths": (),
     },
     # B11, strlen

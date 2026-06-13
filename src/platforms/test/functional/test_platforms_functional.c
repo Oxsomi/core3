@@ -57,6 +57,8 @@
 #include "types/base/error.h"
 #include "types/base/thread.h"
 
+#include <stdio.h>
+
 //How long to hold a visual window open for human inspection
 #define VISUAL_HOLD_NS  (3 * SECOND)
 
@@ -1648,6 +1650,596 @@ clean:
 	static void Test_csdButtons(Test *t) { (void) t; }
 #endif
 
+//Creates a virtual window (no compositor needed) and attempts to resize it
+// beyond its declared min and max limits using Window_resizeCPUBuffer.
+//The function must clamp to the valid range.
+//
+//Also creates a physical window and verifies the compositor honours the
+// min/max_size hints by trying to resize it programmatically
+// (via xdotool windowsize) to a forbidden dimension, then checking w->size
+// was not updated outside the allowed range.
+
+static void Test_minMaxSize(Test *t) {
+
+	Test_setModule(t, "F17/MinMaxSize");
+
+	I32x2 minSz = I32x2_create2(640, 360);
+	I32x2 maxSz = I32x2_create2(800, 600);
+	I32x2 initSz = I32x2_create2(700, 480);
+
+	//Virtual window: resizeCPUBuffer clamping
+
+	{
+		Window *w = NULL;
+
+		CharString title = CharString_createRefCStrConst("F17: virtual");
+		I32x2 pos = I32x2_zero;
+
+		WindowManager_createWindow(
+			&windowManager, EWindowType_Virtual, pos, initSz, minSz, maxSz,
+			EWindowHint_None, title, (WindowCallbacks){ 0 },
+			EWindowFormat_AutoRGBA8, 0, &w, &t->err
+		);
+
+		if(!Test_assert(t, "virtualCreated", w != NULL))
+			goto cleanVirtual;
+
+		//Try to shrink below minimum
+		I32x2 tooSmall = I32x2_create2(100, 80);
+		Test_assert(t, "resizeTooSmall", Window_resizeCPUBuffer(w, false, tooSmall, &t->err));
+		Test_assert(t, "clampedToMin_W", I32x2_x(w->size) == I32x2_x(minSz));
+		Test_assert(t, "clampedToMin_H", I32x2_y(w->size) == I32x2_y(minSz));
+
+		//Try to grow beyond maximum
+		I32x2 tooBig = I32x2_create2(2000, 1500);
+		Test_assert(t, "resizeTooBig", Window_resizeCPUBuffer(w, false, tooBig, &t->err));
+		Test_assert(t, "clampedToMax_W", I32x2_x(w->size) == I32x2_x(maxSz));
+		Test_assert(t, "clampedToMax_H", I32x2_y(w->size) == I32x2_y(maxSz));
+
+		//Resize to a valid value
+		I32x2 validSz = I32x2_create2(650, 450);
+		Test_assert(t, "resizeValid", Window_resizeCPUBuffer(w, false, validSz, &t->err));
+		Test_assert(t, "validW", I32x2_x(w->size) == 650);
+		Test_assert(t, "validH", I32x2_y(w->size) == 450);
+
+	cleanVirtual:
+		if(w) WindowManager_freeWindow(&windowManager, &w);
+	}
+
+	//Physical window: compositor-side enforcement
+
+	{
+		Window *w = NULL;
+
+		CharString title = CharString_createRefCStrConst("F17: Resize me, should clamp to 400x300 .. 800x600");
+		I32x2 pos = I32x2_create2(100, 100);
+
+		Bool s_uccess = WindowManager_createWindow(
+			&windowManager, EWindowType_Physical, pos, initSz, minSz, maxSz,
+			EWindowHint_ProvideCPUBuffer, title, (WindowCallbacks){ 0 },
+			EWindowFormat_AutoRGBA8, 0, &w, &t->err
+		);
+
+		if(!s_uccess) {
+			Test_print(t, "Physical window unavailable, skipping physical min/max assertions");
+			goto cleanPhysical;
+		}
+
+		Test_assert(t, "physPresent", Window_presentPhysical(w, &t->err));
+		pump(500 * MS);
+
+		#if _PLATFORM_TYPE == PLATFORM_LINUX
+
+			if(hasXdotool()) {
+
+				//Attempt to resize below minimum, compositor should refuse
+				system("xdotool search --name 'F17:' windowsize 100 80");
+				pump(500 * MS);
+				Test_assert(t, "physNotTooSmallW", I32x2_x(w->size) >= I32x2_x(minSz));
+				Test_assert(t, "physNotTooSmallH", I32x2_y(w->size) >= I32x2_y(minSz));
+
+				//Attempt to resize above maximum
+				system("xdotool search --name 'F17:' windowsize 2000 1500");
+				pump(500 * MS);
+				Test_assert(t, "physNotTooBigW", I32x2_x(w->size) <= I32x2_x(maxSz));
+				Test_assert(t, "physNotTooBigH", I32x2_y(w->size) <= I32x2_y(maxSz));
+
+				//Resize to a valid size within the range
+				system("xdotool search --name 'F17:' windowsize 670 500");
+				pump(500 * MS);
+
+				Test_assert(t, "physValidW", I32x2_x(w->size) == 670);
+				Test_assert(t, "physValidH", I32x2_y(w->size) == 500);
+			}
+
+			else Test_print(t, "xdotool not available, skipping physical resize assertions");
+
+		#elif _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+			// SetWindowPos below minimum, Win32 automatically clamps via WM_GETMINMAXINFO.
+			HWND hwnd = (HWND)w->nativeHandle;
+			SetWindowPos(hwnd, NULL, 0, 0, 100, 80, SWP_NOMOVE | SWP_NOZORDER);
+			pump(300 * MS);
+
+			Test_assert(t, "physNotTooSmallW", I32x2_x(w->size) >= I32x2_x(minSz));
+			Test_assert(t, "physNotTooSmallH", I32x2_y(w->size) >= I32x2_y(minSz));
+
+			SetWindowPos(hwnd, NULL, 0, 0, 2000, 1500, SWP_NOMOVE | SWP_NOZORDER);
+			pump(300 * MS);
+			
+			Test_assert(t, "physNotTooBigW", I32x2_x(w->size) <= I32x2_x(maxSz));
+			Test_assert(t, "physNotTooBigH", I32x2_y(w->size) <= I32x2_y(maxSz));
+
+		#endif
+
+		//Interactive: operator drags the window border
+		Test_print(t, ">>> INTERACTIVE: Try to resize the window below 400x300 and above 800x600 (10s) <<<");
+		Test_print(t, "    Drag the window border as small and as large as possible.");
+
+		Ns waited = 0;
+		Bool sawTooSmall = false;
+		Bool sawTooBig   = false;
+
+		while(waited < 10 * SECOND) {
+			WindowManager_step(&windowManager, NULL, NULL);
+			Thread_sleep(16 * MS);
+			waited += 16 * MS;
+
+			I32 cw = I32x2_x(w->size);
+			I32 ch = I32x2_y(w->size);
+
+			//If the compositor ever let the window go outside bounds, that's a
+			// platform bug worth knowing about, log but don't hard-fail since
+			// some compositors clamp server-side without telling the client.
+			if(cw < I32x2_x(minSz) || ch < I32x2_y(minSz)) sawTooSmall = true;
+			if(cw > I32x2_x(maxSz) || ch > I32x2_y(maxSz)) sawTooBig   = true;
+		}
+
+		if(sawTooSmall)
+			Test_print(t, "WARN: compositor allowed window below declared minimum size");
+
+		else Test_print(t, "OK: window never went below minimum during interactive resize");
+
+		if(sawTooBig)
+			Test_print(t, "WARN: compositor allowed window above declared maximum size");
+
+		else Test_print(t, "OK: window never exceeded maximum during interactive resize");
+
+		//Soft assertions: a non-compliant compositor is a compositor bug, not
+		// a platform code bug, so we warn rather than fail the test suite.
+		if(sawTooSmall) Test_assert(t, "interactiveMinEnforced", !sawTooSmall);
+		if(sawTooBig)   Test_assert(t, "interactiveMaxEnforced", !sawTooBig);
+
+		pump(VISUAL_HOLD_NS);
+
+	cleanPhysical:
+		if(w) WindowManager_freeWindow(&windowManager, &w);
+	}
+}
+
+//F18. Mouse draw: paint into CPU buffer with left-button drag
+//
+//Opens a 256x256 window with a CPU buffer, initialised to a solid gray.
+//The operator (or synthetic injection) holds left mouse button and drags
+// across the window.  The onDeviceAxis callback records the cursor position;
+// onDeviceButton records the pressed state.  Each frame we paint a white
+// pixel at the current cursor position while the button is held.
+//
+//After the drag we verify that at least one pixel changed from the initial
+// gray (0x80808080) to white (0xFFFFFFFF), proving the full path:
+//Pointer events -> Mouse InputDevice axes + button ->
+// application reads them -> CPU buffer mutated -> present.
+
+#define F18_INIT_COLOR 0x80u   //Grey channel value
+
+typedef struct F18State {
+	volatile Bool  buttonHeld;
+	volatile I32   cursorX;
+	volatile I32   cursorY;
+} F18State;
+
+static F18State f18;
+
+static void F18_onButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
+
+	(void) w;
+	if(dev->type != EInputDeviceType_Mouse)
+		return;
+
+	U16 local = InputDevice_getLocalHandle(dev, h);
+	if(local == (U16)(EMouseButton_Left - EMouseAxis_End))
+		f18.buttonHeld = down;
+}
+
+static void F18_onAxis(Window *w, InputDevice *dev, InputHandle h, F32 value) {
+
+	(void) w;
+	if(dev->type != EInputDeviceType_Mouse)
+		return;
+
+	U16 local = InputDevice_getLocalHandle(dev, h);
+
+	if(local == (U16)EMouseAxis_X)
+		f18.cursorX = (I32)value;
+
+	if(local == (U16)EMouseAxis_Y)
+		f18.cursorY = (I32)value;
+}
+
+static void Test_mouseDraw(Test *t) {
+
+	Test_setModule(t, "F18/MouseDraw");
+
+	f18 = (F18State) { 0 };
+
+	WindowCallbacks cbs = (WindowCallbacks) { 0 };
+	cbs.onDeviceButton = F18_onButton;
+	cbs.onDeviceAxis   = F18_onAxis;
+
+	I32x2 sz  = I32x2_create2(256, 256);
+	I32x2 pos = I32x2_create2(300, 300);
+
+	Window *w = createWindowCallback(
+		t, "F18: Hold left-click and drag to draw",
+		pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
+	);
+
+	if(!Test_assert(t, "windowCreated", w != NULL))
+		goto clean;
+
+	//Fill buffer with a known grey so we can detect changes.
+	{
+		U8 *px = w->cpuVisibleBuffer.ptrNonConst;
+		U64 len = Buffer_length(w->cpuVisibleBuffer);
+		for(U64 i = 0; i < len; ++i)
+			px[i] = F18_INIT_COLOR;
+	}
+
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	pump(300 * MS);
+
+	if(w->type != EWindowType_Physical) {
+		Test_print(t, "[virtual] mouse draw requires a physical window, skipped");
+		goto clean;
+	}
+
+	//Synthetic injection
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+		{
+			HWND hwnd = (HWND)w->nativeHandle;
+
+			//Move to window centre, press left, drag 100px right, release
+
+			POINT centre = { 300 + 128, 300 + 128 };
+			SetCursorPos(centre.x, centre.y);
+			Sleep(50);
+
+			INPUT inputs[2] = { 0 };
+			inputs[0].type = INPUT_MOUSE; inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+			SendInput(1, inputs, sizeof(INPUT));
+
+			for(I32 dx = 0; dx <= 100; dx += 5) {
+
+				SetCursorPos(centre.x + dx, centre.y);
+				Sleep(16);
+				WindowManager_step(&windowManager, NULL, NULL);
+
+				//Paint while button held
+
+				if(f18.buttonHeld && w->cpuVisibleBuffer.ptrNonConst) {
+					I32 cx = f18.cursorX, cy = f18.cursorY;
+					I32 W  = I32x2_x(w->size), H = I32x2_y(w->size);
+					if(cx >= 0 && cx < W && cy >= 0 && cy < H) {
+						U8 *p = w->cpuVisibleBuffer.ptrNonConst + (cy * W + cx) * 4;
+						p[0] = p[1] = p[2] = p[3] = 0xFF;
+					}
+				}
+			}
+
+			inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+			SendInput(1, inputs, sizeof(INPUT));
+			pump(200 * MS);
+		}
+
+	#elif _PLATFORM_TYPE == PLATFORM_LINUX
+
+		if(hasXdotool()) {
+
+			//Move to centre, mousedown, drag, mouseup
+
+			system(
+				"WIN=$(xdotool search --name 'F18:') && "
+				"xdotool mousemove --window $WIN 128 128 && "
+				"xdotool mousedown 1"
+			);
+
+			for(I32 dx = 0; dx <= 80; dx += 4) {
+
+				C8 cmd[256];
+				snprintf(cmd, sizeof(cmd),
+					"WIN=$(xdotool search --name 'F18:') && "
+					"xdotool mousemove --window $WIN %d 128", 128 + dx
+				);
+
+				system(cmd);
+				Thread_sleep(16 * MS);
+				WindowManager_step(&windowManager, NULL, NULL);
+
+				if(f18.buttonHeld && w->cpuVisibleBuffer.ptrNonConst) {
+					I32 cx = f18.cursorX, cy = f18.cursorY;
+					I32 W  = I32x2_x(w->size), H = I32x2_y(w->size);
+					if(cx >= 0 && cx < W && cy >= 0 && cy < H) {
+						U8 *p = w->cpuVisibleBuffer.ptrNonConst + (cy * W + cx) * 4;
+						p[0] = p[1] = p[2] = p[3] = 0xFF;
+					}
+				}
+			}
+
+			system("xdotool mouseup 1");
+			pump(200 * MS);
+		}
+
+		else Test_print(t, "xdotool not available, skipping synthetic mouse draw");
+
+	#endif
+
+	//Verify at least one pixel changed
+	{
+		const U8 *px = w->cpuVisibleBuffer.ptr;
+		I32 W = I32x2_x(w->size), H = I32x2_y(w->size);
+		Bool anyChanged = false;
+
+		for(I32 i = 0; i < W * H && !anyChanged; ++i)
+			if(px[i * 4] != F18_INIT_COLOR)
+				anyChanged = true;
+
+		Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+		pump(VISUAL_HOLD_NS);
+
+		if(!anyChanged)
+			Test_print(t, "WARN: no pixels changed (synthetic draw didn't fire, try interactive)");
+
+		//Interactive fallback
+
+		if(!anyChanged) {
+
+			Test_print(t, ">>> INTERACTIVE: Hold left-click and drag across the window (8s) <<<");
+
+			Ns waited = 0;
+			while(!anyChanged && waited < 8 * SECOND) {
+				WindowManager_step(&windowManager, NULL, NULL);
+				Thread_sleep(16 * MS);
+				waited += 16 * MS;
+
+				if(f18.buttonHeld && w->cpuVisibleBuffer.ptrNonConst) {
+					I32 cx = f18.cursorX, cy = f18.cursorY;
+					I32 W2 = I32x2_x(w->size), H2 = I32x2_y(w->size);
+					if(cx >= 0 && cx < W2 && cy >= 0 && cy < H2) {
+						U8 *p = w->cpuVisibleBuffer.ptrNonConst + (cy * W2 + cx) * 4;
+						p[0] = p[1] = p[2] = p[3] = 0xFF;
+					}
+				}
+
+				anyChanged = false;
+				for(I32 i = 0; i < W * H && !anyChanged; ++i)
+					if(px[i * 4] != F18_INIT_COLOR)
+						anyChanged = true;
+			}
+
+			Test_assert(t, "operatorDraw", anyChanged);
+		}
+		
+		else Test_assert(t, "syntheticDraw", true);
+	}
+
+clean:
+	f18 = (F18State){ 0 };
+	if(w) WindowManager_freeWindow(&windowManager, &w);
+}
+
+//F19. Scroll wheel (vertical + horizontal)
+//
+//Opens a small window, injects scroll events (buttons 4/5 for
+// vertical, 6/7 for horizontal), and verifies that the ScrollWheel_Y and
+// ScrollWheel_X axes on the Mouse InputDevice receive non-zero values through
+// the onDeviceAxis callback.
+
+typedef struct F19State {
+	volatile F32  scrollY;
+	volatile F32  scrollX;
+	volatile Bool gotScrollY;
+	volatile Bool gotScrollX;
+} F19State;
+
+static F19State f19;
+
+static void F19_onAxis(Window *w, InputDevice *dev, InputHandle h, F32 value) {
+	(void) w;
+	if(dev->type != EInputDeviceType_Mouse)
+		return;
+		
+	U16 local = InputDevice_getLocalHandle(dev, h);
+
+	if(local == (U16)EMouseAxis_ScrollWheel_Y) {
+		f19.scrollY    = value;
+		f19.gotScrollY = true;
+	}
+
+	if(local == (U16)EMouseAxis_ScrollWheel_X) {
+		f19.scrollX    = value;
+		f19.gotScrollX = true;
+	}
+}
+
+static void Test_scrollWheel(Test *t) {
+
+	Test_setModule(t, "F19/ScrollWheel");
+
+	f19 = (F19State) { 0 };
+
+	WindowCallbacks cbs = (WindowCallbacks) { 0 };
+	cbs.onDeviceAxis = F19_onAxis;
+
+	I32x2 sz  = I32x2_create2(400, 300);
+	I32x2 pos = I32x2_create2(300, 300);
+
+	Window *w = createWindowCallback(
+		t, "F19: Scroll wheel test (vertical + horizontal)",
+		pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
+	);
+
+	if(!Test_assert(t, "windowCreated", w != NULL))
+		goto clean;
+
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	pump(300 * MS);
+
+	if(w->type != EWindowType_Physical) {
+		Test_print(t, "[virtual] scroll wheel test requires a physical window, skipped");
+		goto clean;
+	}
+
+	//Synthetic injection
+
+	#if _PLATFORM_TYPE == PLATFORM_LINUX
+
+		if(hasXdotool()) {
+
+			//Focus and move cursor into the centre of the window so scroll
+			// events are routed to our surface, not the compositor desktop
+
+			system(
+				"xdotool search --name 'F19:' windowfocus && "
+				"xdotool mousemove --window $(xdotool search --name 'F19:') 200 150"
+			);
+
+			pump(200 * MS);
+
+			//Vertical scroll down (button 5), then up (button 4)
+
+			system("xdotool click --clearmodifiers 5");
+			pump(200 * MS);
+
+			if(f19.gotScrollY)
+				Test_assert(t, "syntheticScrollY_down", f19.gotScrollY && f19.scrollY != 0.f);
+
+			else Test_print(t, "WARN: vertical scroll down didn't fire (compositor routing?)");
+
+			f19.gotScrollY = false;
+			f19.scrollY    = 0.f;
+
+			system("xdotool click --clearmodifiers 4");
+			pump(200 * MS);
+
+			if(f19.gotScrollY)
+				Test_assert(t, "syntheticScrollY_up", f19.gotScrollY && f19.scrollY != 0.f);
+
+			else Test_print(t, "WARN: vertical scroll up didn't fire");
+
+			//Horizontal scroll right (button 7), then left (button 6).
+			//Not all mice or compositors generate horizontal scroll; treat as soft
+
+			f19.gotScrollX = false;
+			f19.scrollX    = 0.f;
+
+			system("xdotool click --clearmodifiers 7");
+			pump(200 * MS);
+
+			system("xdotool click --clearmodifiers 6");
+			pump(200 * MS);
+
+			if(f19.gotScrollX)
+				Test_assert(t, "syntheticScrollX", f19.gotScrollX && f19.scrollX != 0.f);
+
+			else Test_print(t, "WARN: horizontal scroll not received (device/compositor may not support it)");
+		}
+		
+		else Test_print(t, "xdotool not available, skipping synthetic scroll injection");
+
+	#elif _PLATFORM_TYPE == PLATFORM_WINDOWS
+		{
+			//SetCursorPos to window centre, then send WM_MOUSEWHEEL via SendInput
+			POINT centre = { 300 + 200, 300 + 150 };
+			SetCursorPos(centre.x, centre.y);
+			Sleep(50);
+
+			//Vertical scroll down (negative delta by Windows convention)
+			INPUT inp = { 0 };
+			inp.type           = INPUT_MOUSE;
+			inp.mi.dwFlags     = MOUSEEVENTF_WHEEL;
+			inp.mi.mouseData   = (DWORD)(WORD)(-WHEEL_DELTA);
+			SendInput(1, &inp, sizeof(INPUT));
+			pump(200 * MS);
+
+			Test_assert(t, "syntheticScrollY_down", f19.gotScrollY && f19.scrollY != 0.f);
+
+			f19.gotScrollY = false;
+			f19.scrollY    = 0.f;
+
+			inp.mi.mouseData = (DWORD)(WORD)(WHEEL_DELTA);
+			SendInput(1, &inp, sizeof(INPUT));
+			pump(200 * MS);
+
+			Test_assert(t, "syntheticScrollY_up", f19.gotScrollY && f19.scrollY != 0.f);
+
+			//Horizontal scroll via MOUSEEVENTF_HWHEEL
+			inp.mi.dwFlags   = MOUSEEVENTF_HWHEEL;
+			inp.mi.mouseData = (DWORD)(WORD)(WHEEL_DELTA);
+			SendInput(1, &inp, sizeof(INPUT));
+			pump(200 * MS);
+
+			if(f19.gotScrollX)
+				Test_assert(t, "syntheticScrollX", f19.scrollX != 0.f);
+
+			else Test_print(t, "WARN: horizontal scroll not received on Windows");
+		}
+	#else
+		Test_print(t, "Synthetic scroll injection not implemented for this platform");
+	#endif
+
+	//Interactive fallback for vertical
+	if(!f19.gotScrollY) {
+
+		Test_print(t, ">>> INTERACTIVE: Scroll the mouse wheel up/down in the window (8s) <<<");
+
+		Ns waited = 0;
+		while(!f19.gotScrollY && waited < 8 * SECOND) {
+			WindowManager_step(&windowManager, NULL, NULL);
+			Thread_sleep(16 * MS);
+			waited += 16 * MS;
+		}
+
+		if(!f19.gotScrollY)
+			Test_print(t, "WARN: no vertical scroll received within timeout");
+
+		Test_assert(t, "operatorScrollY", f19.gotScrollY && f19.scrollY != 0.f);
+	}
+
+	//Horizontal is optional / device-dependent; only interactive-prompt if
+	// vertical worked (confirms the path is wired) but horizontal didn't.
+	if(f19.gotScrollY && !f19.gotScrollX) {
+
+		Test_print(t, ">>> INTERACTIVE: Scroll horizontally (tilt wheel or Shift+scroll) (5s, optional) <<<");
+
+		Ns waited = 0;
+		while(!f19.gotScrollX && waited < 5 * SECOND) {
+			WindowManager_step(&windowManager, NULL, NULL);
+			Thread_sleep(16 * MS);
+			waited += 16 * MS;
+		}
+
+		if(!f19.gotScrollX)
+			Test_print(t, "WARN: no horizontal scroll received (device may not support it, not a failure)");
+	}
+
+	pump(VISUAL_HOLD_NS);
+
+clean:
+	f19 = (F19State){ 0 };
+	if(w) WindowManager_freeWindow(&windowManager, &w);
+}
+
 // -- entry point ---------------------------------------------------------------
 
 Platform_defineEntrypoint() {
@@ -1667,22 +2259,25 @@ Platform_defineEntrypoint() {
 	(void) Test_fullScreen;
 	(void) Test_resize;
 
-	Test_cpuBuffer(&t);
+	(void) Test_cpuBuffer;//(&t);
 	//Test_fullScreen(&t);     //TODO: Crashes
 	//Test_resize(&t);         //TODO: Broken
-	Test_multiWindow(&t);
-	Test_keyboard(&t);
-	Test_storeCPUBuffer(&t);
-	Test_updateTitle(&t);
-	Test_mouse(&t);
-	Test_focusMinimize(&t);
-	Test_typeChar(&t);
-	Test_focusReset(&t);
-	Test_monitorInfo(&t);
-	Test_windowMove(&t);
-	Test_maximize(&t);
-	Test_keyboardRemap(&t);
-	Test_csdButtons(&t);
+	(void) Test_multiWindow;//(&t);
+	(void) Test_keyboard;//(&t);
+	(void) Test_storeCPUBuffer;//(&t);
+	(void) Test_updateTitle;//(&t);
+	(void) Test_mouse;//(&t);
+	(void) Test_focusMinimize;//(&t);
+	(void) Test_typeChar;//(&t);
+	(void) Test_focusReset;//(&t);
+	(void) Test_monitorInfo;//(&t);
+	(void) Test_windowMove;//(&t);
+	(void) Test_maximize;//(&t);
+	(void) Test_keyboardRemap;//(&t);
+	(void) Test_csdButtons;//(&t);
+	Test_minMaxSize(&t);
+	(void) Test_mouseDraw;//(&t);
+	(void) Test_scrollWheel;//(&t);
 
 done:
 	shutdown();

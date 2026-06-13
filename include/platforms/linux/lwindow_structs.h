@@ -37,6 +37,10 @@
 #define LWINDOW_DECOR_BTN_W  46    // width of each min/max/close button
 #define LWINDOW_DECOR_BTN_H  LWINDOW_DECOR_HEIGHT
 
+//Width in pixels of the interactive resize border around the content surface.
+//Must be large enough to be easily grabbed but not so large it eats content
+#define LWINDOW_RESIZE_BORDER  6
+
 typedef struct LOutputInfo {
  
 	I32 x, y;              //position in compositor global space (for subpixel rendering)
@@ -62,11 +66,15 @@ typedef struct LWindowManager {
 	struct wl_shm              *shm;
 	struct xdg_wm_base         *xdgWmBase;
 	struct zxdg_decoration_manager_v1 *xdgDeco;
-	struct wl_subcompositor    *subcompositor;   //for CSD bar subsurface
+	struct wl_subcompositor    *subcompositor;   //For CSD bar subsurface
 
 	U32 compositorId,    shmId;
 	U32 xdgWmBaseId,     xdgDecoId;
 	U32 subcompositorId, subcompositorPad;
+
+	struct wl_cursor_theme *cursorTheme;
+	struct wl_cursor       *cursors[9];          //One per resize edge + default
+	struct wl_surface      *cursorSurface;
 
 	//Input seat
 	struct wl_seat *seat;
@@ -99,6 +107,9 @@ typedef struct LWindow {
 	//Frame callback pacing
 	struct wl_callback *frameCallback;
 	Bool                frameReady;
+	U8 pad[3];
+
+	U32   lastPointerSerial;
 
 	U8  *mainBufferPtr;
 	U32  pixelStride;
@@ -119,12 +130,13 @@ typedef struct LWindow {
 	struct wl_shm_pool   *barPool;
 	struct wl_buffer     *barBuffer;
 	Bool                  barBufferBusy;
-	U8                    pad[7];
+	U8                    pad0[7];
 	U32                  *barPixels;       //CPU mapped, always writable
 	U32                   barWidth;        //track to detect horizontal resize
 
 	//Pointer state for bar hit testing (in bar surface local coordinates)
 	I32  pointerX, pointerY;
+	I32  contentPointerX, contentPointerY;
 	Bool pointerInBar;
 	Bool configured;           //For first time init
 	U8   pad1[2];

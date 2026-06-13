@@ -47,8 +47,8 @@ typedef enum EMouseActions {
 	EMouseAxis_ScrollWheel_X,
 	EMouseAxis_ScrollWheel_Y,
 
-	EMouseAxis_Temp0,
-	EMouseAxis_Temp1,
+	EMouseAxis_X,
+	EMouseAxis_Y,
 
 	EMouseAxis_End,
 	EMouseAxis_Count = EMouseAxis_End - EMouseAxis_Begin,

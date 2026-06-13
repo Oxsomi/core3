@@ -53,6 +53,8 @@ Bool Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz, Error *e_rr)
 		retError(clean, Error_invalidParameter(
 			0, 0, "Window_resizeCPUBuffer()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
 		));
+	
+	newSiz = I32x2_clamp(newSiz, w->minSize, w->maxSize);
 
 	if(I32x2_eq2(w->size, newSiz))
 		goto clean;
