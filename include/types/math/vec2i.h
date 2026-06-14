@@ -75,14 +75,14 @@ static inline void I32x2_setRefY(I32x2 *a, I32 v) { if (a) a->v[1] = v; }
 
 static inline void I32x2_setRef(I32x2 *a, U8 i, I32 v) {
 	switch (i) {
-		case 0:        I32x2_setRefX(a, v);    break;
+		case 0:     I32x2_setRefX(a, v);    break;
 		default:    I32x2_setRefY(a, v);    break;
 	}
 }
 
 static inline I32 I32x2_get(I32x2 a, U8 i) {
 	switch (i) {
-		case 0:        return I32x2_x(a);
+		case 0:     return I32x2_x(a);
 		default:    return I32x2_y(a);
 	}
 }
@@ -100,6 +100,7 @@ static inline I32x2 I32x2_negate(I32x2 a) { return I32x2_sub(I32x2_zero, a); }
 static inline I32x2 I32x2_pow2(I32x2 a) { return I32x2_mul(a, a); }
 
 static inline I32 I32x2_reduce(I32x2 a) { return I32x2_x(a) + I32x2_y(a); }
+static inline I32 I32x2_dot(I32x2 a, I32x2 b) { return I32x2_reduce(I32x2_mul(a, b)); }
 
 //Clamp
 

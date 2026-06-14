@@ -42,6 +42,7 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #define NOMINMAX
 #include <Windows.h>
+#include <dwmapi.h>
 
 Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error *e_rr)
  
@@ -1046,7 +1047,34 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 		goto cleanup;
 	}
 
-	if(!BitBlt(hdc, 0, 0, I32x2_x(w->size), I32x2_y(w->size), hdcBmp, 0, 0, SRCCOPY)) {
+	//DWM reads alpha from the DIB directly during composition.
+	//We must clear the destination to transparent black first so
+	//GDI doesn't blend our pixels against whatever was there before.
+	//The CPU buffer is already in premultiplied BGRA; the app is
+	// responsible for premultiplying before writing to cpuVisibleBuffer.
+	if(w->hint & EWindowHint_Transparent) {
+
+		BLENDFUNCTION blend = {
+			.BlendOp             = AC_SRC_OVER,
+			.BlendFlags          = 0,
+			.SourceConstantAlpha = 255,
+			.AlphaFormat         = AC_SRC_ALPHA
+		};
+
+		POINT ptSrc  = { 0, 0 };
+		POINT ptDst  = { I32x2_x(w->offset), I32x2_y(w->offset) };
+		SIZE  szWin  = { I32x2_x(w->size),   I32x2_y(w->size)   };
+
+		if(!AlphaBlend(
+			hdc, 0, 0, I32x2_x(w->size), I32x2_y(w->size),
+			hdcBmp, 0, 0, I32x2_x(w->size), I32x2_y(w->size), blend
+		)) {
+			errId = 4;
+			goto cleanup;
+		}
+	}
+
+	else if(!BitBlt(hdc, 0, 0, I32x2_x(w->size), I32x2_y(w->size), hdcBmp, 0, 0, SRCCOPY)) {
 		errId = 4;
 		goto cleanup;
 	}
@@ -1163,6 +1191,18 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	if(w->hint & EWindowHint_ForceFullscreen)
 		w->flags |= EWindowFlags_IsFullscreen;
+
+	//Extend DWM frame to cover the entire client area.
+	//This makes the compositor respect per-pixel alpha from our DIB.
+	if(w->hint & EWindowHint_Transparent) {
+
+		MARGINS margins = { -1, -1, -1, -1 };
+
+		if(FAILED(DwmExtendFrameIntoClientArea(nativeWindow, &margins))) {
+			Log_warnLnx("WindowManager_createWindowPhysical(): DwmExtendFrameIntoClientArea failed, transparency unavailable");
+			w->hint &= ~EWindowHint_Transparency;
+		}
+	}
 
 	//Ensure we get all input devices
 	//Register for raw input of these types

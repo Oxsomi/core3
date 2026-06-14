@@ -1201,7 +1201,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 				lwin->backBuffer,
 				(I32)(stride * height * i),
 				(I32)width, (I32)height, (I32)stride,
-				WL_SHM_FORMAT_XRGB8888
+				w->hint & EWindowHint_Transparency ? WL_SHM_FORMAT_ARGB8888 : WL_SHM_FORMAT_XRGB8888
 			);
 
 			if(!lwin->buffers[i])

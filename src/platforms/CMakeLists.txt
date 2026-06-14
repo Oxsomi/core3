@@ -54,7 +54,9 @@ target_link_libraries(
 	OxC3_formats_oiXX OxC3_formats_oiCA OxC3_formats_oiDL OxC3_formats_dds
 )
 
-if(APPLE)
+if(WIN32)
+	target_link_libraries(OxC3_platforms PUBLIC dwmapi)
+elseif(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
 elseif(ANDROID)
 	target_include_directories(OxC3_platforms PUBLIC "${ANDROID_NDK}/sources/android/native_app_glue")

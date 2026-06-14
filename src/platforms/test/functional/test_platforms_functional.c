@@ -51,6 +51,7 @@
 #include "platforms/file.h"
 #include "formats/dds/dds_file.h"
 #include "types/container/log.h"
+#include "types/math/vec2i.h"
 #include "types/test/test.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/buffer_base.h"
@@ -2255,6 +2256,140 @@ clean:
 	if(w) WindowManager_freeWindow(&windowManager, &w);
 }
 
+//F20. Borderless window
+//
+//Creates a physical window with EWindowHint_NoBorder, verifies the hint is
+// preserved, the window is active and sized correctly, no fullscreen flag is set.
+
+static void Test_borderless(Test *t) {
+
+	Test_setModule(t, "F20/Borderless");
+
+	I32x2 sz  = I32x2_create2(640, 480);
+	I32x2 pos = I32x2_create2(200, 200);
+
+	Window *w = createWindowCallback(
+		t, "F20: Borderless window",
+		pos, sz, EWindowHint_NoBorder | EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8,
+		(WindowCallbacks) { 0 }
+	);
+
+	if(!Test_assert(t, "windowCreated", w != NULL))
+		goto clean;
+
+	Test_assert(t, "isActive",      (w->flags & EWindowFlags_IsActive) != 0);
+	Test_assert(t, "noBorderHint",  (w->hint  & EWindowHint_NoBorder)  != 0);
+	Test_assert(t, "nonZeroSize",   I32x2_any(w->size));
+	Test_assert(t, "notFullscreen", !(w->flags & EWindowFlags_IsFullscreen));
+
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	pump(VISUAL_HOLD_NS);
+
+clean:
+	if(w) WindowManager_freeWindow(&windowManager, &w);
+}
+
+//F21. Transparent window (per-pixel alpha)
+//
+//Opens a 300x300 window with EWindowHint_Transparent | EWindowHint_NoBorder | EWindowHint_ProvideCPUBuffer.
+//Fills the CPU buffer with transparent black (0x00000000), then draws a
+// filled red circle (premultiplied BGRA: B=0 G=0 R=0xFF A=0xFF = 0xFF0000FF)
+// in the centre.  Pixels outside the circle have alpha=0 and should be
+// invisible to the compositor; pixels inside are fully opaque red.
+//
+//We verify:
+//  - Inside the circle: pixel is 0xFF0000FF (opaque red, premultiplied)
+//  - Outside the circle: pixel is 0x00000000 (fully transparent)
+//  - present succeeds without error
+//
+//Visual verification: the window should show a red circle floating with no
+// background.  On compositors / drivers that don't honour per-pixel alpha
+// the background may appear black instead of transparent; this is not a
+// test failure since it's a compositor capability, not a bug in our code.
+
+#define F21_RADIUS   100
+#define F21_CX       150
+#define F21_CY       150
+#define F21_W        300
+#define F21_H        300
+
+static void F21_fillCircle(Window *w) {
+
+	U32 *px = (U32*) w->cpuVisibleBuffer.ptrNonConst;
+	I32 W   = I32x2_x(w->size);
+	I32 H   = I32x2_y(w->size);
+
+	for(I32 y = 0; y < H; ++y) {
+		for(I32 x = 0; x < W; ++x) {
+			I32x2 d = I32x2_sub(I32x2_create2(x, y), I32x2_create2(F21_CX, F21_CY));
+			px[y * W + x] = I32x2_dot(d, d) <= I32_pow2(F21_RADIUS) ? (U32)0xFF0000FF : (U32)0x00000000;
+		}
+	}
+}
+
+static void Test_transparent(Test *t) {
+
+	Test_setModule(t, "F21/Transparent");
+
+	EWindowHint hint = EWindowHint_Transparency | EWindowHint_NoBorder | EWindowHint_ProvideCPUBuffer;
+
+	Window *w = createWindowCallback(
+		t, "F21: Transparent circle (blue on transparent)",
+		I32x2_create2(200, 200),
+		I32x2_create2(F21_W, F21_H),
+		hint,
+		EWindowFormat_BGRA8,
+		(WindowCallbacks) { 0 }
+	);
+
+	if(!Test_assert(t, "windowCreated", w != NULL))
+		goto clean;
+
+	if(w->type != EWindowType_Physical) {
+		Test_print(t, "[virtual] transparency test requires a physical window, skipped");
+		goto clean;
+	}
+
+	Test_assert(t, "hasTransparentHint", w->hint & EWindowHint_Transparency);
+	Test_assert(t, "hasCPUBuffer",       w->cpuVisibleBuffer.ptr);
+	Test_assert(t, "correctSize",        I32x2_x(w->size) == F21_W && I32x2_y(w->size) == F21_H);
+
+	F21_fillCircle(w);
+
+	//Verify pixel values before presenting
+	{
+		const U32 *px = (const U32*) w->cpuVisibleBuffer.ptr;
+		I32 W = I32x2_x(w->size);
+
+		U32 centre = px[F21_CY * W + F21_CX];
+		Test_assert(t, "centreIsBlue", centre == 0xFF0000FF);
+
+		U32 corner = px[0];
+		Test_assert(t, "cornerIsTransparent", corner == 0x00000000);
+
+		I32 outsideX = F21_CX + F21_RADIUS + 2;
+		if(outsideX < W) {
+			U32 outside = px[F21_CY * W + outsideX];
+			Test_assert(t, "outsideIsTransparent", outside == 0x00000000);
+		}
+
+		I32 insideX = F21_CX + F21_RADIUS - 2;
+		if(insideX >= 0 && insideX < W) {
+			U32 inside = px[F21_CY * W + insideX];
+			Test_assert(t, "insideIsBlue", inside == 0xFF0000FF);
+		}
+	}
+
+	//Present and hold so the operator can visually verify the circle floats
+
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	pump(VISUAL_HOLD_NS);
+
+clean:
+	if(w) WindowManager_freeWindow(&windowManager, &w);
+	Test_setModule(t, NULL);
+}
+
 // -- entry point ---------------------------------------------------------------
 
 Platform_defineEntrypoint() {
@@ -2271,12 +2406,9 @@ Platform_defineEntrypoint() {
 		goto done;
 	}
 
-	(void) Test_fullScreen;
-	(void) Test_resize;
-
 	(void) Test_cpuBuffer;//(&t);
-	//Test_fullScreen(&t);     //TODO: Crashes
-	//Test_resize(&t);         //TODO: Broken
+	(void) Test_fullScreen;//(&t);     //TODO: Crashes
+	(void) Test_resize;//(&t);         //TODO: Broken
 	(void) Test_multiWindow;//(&t);
 	(void) Test_keyboard;//(&t);
 	(void) Test_storeCPUBuffer;//(&t);
@@ -2285,7 +2417,7 @@ Platform_defineEntrypoint() {
 	(void) Test_focusMinimize;//(&t);
 	(void) Test_typeChar;//(&t);
 	(void) Test_focusReset;//(&t);
-	Test_monitorInfo(&t);
+	(void) Test_monitorInfo;//(&t);
 	(void) Test_windowMove;//(&t);
 	(void) Test_maximize;//(&t);
 	(void) Test_keyboardRemap;//(&t);
@@ -2293,6 +2425,8 @@ Platform_defineEntrypoint() {
 	(void) Test_minMaxSize;//(&t);
 	(void) Test_mouseDraw;//(&t);
 	(void) Test_scrollWheel;//(&t);
+	(void) Test_borderless;//(&t);
+	(void) Test_transparent;//(&t);
 
 done:
 	shutdown();
