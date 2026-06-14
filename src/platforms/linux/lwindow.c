@@ -1227,6 +1227,8 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		w->cpuVisibleBuffer.lengthAndRefBits = (stride * height) | ((U64)1 << 63);
 	}
 
+	w->size = I32x2_create2(totalWidth, contentHeight);
+
 clean:
 	if(!s_uccess) {
 

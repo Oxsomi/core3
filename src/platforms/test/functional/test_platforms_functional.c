@@ -286,15 +286,16 @@ static void Test_fullScreen(Test *t) {
 	if (!Test_assert(t, "toggleOn", Window_toggleFullScreen(w, &t->err)))
 		goto clean;
 
+	pump(1 * SECOND);
 	Test_renderPattern(w, 0x80);
 	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
-	pump(1 * SECOND);
 
 	Test_assert(t, "isFullscreen", Window_isFullScreen(w));
 
 	if (!Test_assert(t, "toggleOff", Window_toggleFullScreen(w, &t->err)))
 		goto clean;
 
+	pump(1 * SECOND);
 	Test_renderPattern(w, 0xFF);
 	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
 	pump(1 * SECOND);
@@ -2407,8 +2408,8 @@ Platform_defineEntrypoint() {
 	}
 
 	(void) Test_cpuBuffer;//(&t);
-	(void) Test_fullScreen;//(&t);     //TODO: Crashes
-	(void) Test_resize;//(&t);         //TODO: Broken
+	(void) Test_fullScreen;//(&t);
+	Test_resize(&t);         //TODO: Broken
 	(void) Test_multiWindow;//(&t);
 	(void) Test_keyboard;//(&t);
 	(void) Test_storeCPUBuffer;//(&t);
