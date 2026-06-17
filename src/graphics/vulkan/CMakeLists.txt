@@ -76,26 +76,4 @@ set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
 
 source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
 
-if(NOT "${platform}" STREQUAL "osx")
-	target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/include")
-	target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/lib")
-endif()
-
-if(WIN32)
-	target_link_libraries(${TARGET_NAME} PUBLIC vulkan-1)
-elseif("${platform}" STREQUAL "osx")
-
-	if(EXISTS "$ENV{VULKAN_SDK}/macOS/include")
-		target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/macOS/include")
-		target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/macOS/lib")
-	else()
-		target_include_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/include")
-		target_link_directories(${TARGET_NAME} PUBLIC "$ENV{VULKAN_SDK}/lib")
-	endif()
-
-	target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
-
-else()
-	target_link_libraries(${TARGET_NAME} PUBLIC vulkan)
-endif()
-
+target_link_libraries(${TARGET_NAME} PUBLIC Vulkan::Vulkan)
