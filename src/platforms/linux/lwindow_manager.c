@@ -318,7 +318,13 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(LWindowManager), Platform_instance->alloc, &w->platformData, e_rr));
 
 	LWindowManager *manager  = (LWindowManager*)w->platformData.ptr;
-	manager->display         = wl_display_connect(NULL);
+
+	const C8 *waylandDisplay = getenv("WAYLAND_DISPLAY");
+
+	if(!waylandDisplay)
+		waylandDisplay = getenv("GAMESCOPE_WAYLAND_DISPLAY");
+
+	manager->display         = wl_display_connect(waylandDisplay);
 	manager->compositorId    = U64_MAX;
 
 	if(!manager->display)
