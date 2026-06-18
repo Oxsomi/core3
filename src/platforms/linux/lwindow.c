@@ -410,6 +410,7 @@ static void LWindow_updateCursor(Window *w, U32 resizeEdge) {
 		return;
 
 	U32 idx = LWindow_edgeIndex(resizeEdge);
+
 	struct wl_cursor *cursor = manager->cursors[idx];
 
 	if(!cursor)
@@ -441,6 +442,7 @@ static U32 LWindow_resizeEdge(const Window *w, I32 x, I32 y) {
 
 	I32 W = I32x2_x(w->size);
 	I32 H = I32x2_y(w->size);
+
 	I32 B = LWINDOW_RESIZE_BORDER;
 
 	Bool left   = x <  B;
@@ -468,6 +470,7 @@ static void LWindow_pointerEnterBar(
 	Window  *w    = (Window*) data;
 	LWindow *lwin = (LWindow*) w->nativeData;
 
+	lwin->lastPointerSerial     = serial;
 	lwin->pointerCurrentSurface = surface;
 
 	if(surface == lwin->barSurface) {
@@ -476,6 +479,7 @@ static void LWindow_pointerEnterBar(
 		Bool wasInBar      = lwin->pointerInBar;
 		lwin->pointerInBar = true;
 		if(!wasInBar) LWindow_redrawBar(w);   //Entering bar: always redraw once
+		LWindow_updateCursor(w, XDG_TOPLEVEL_RESIZE_EDGE_NONE);
 		return;
 	}
 
@@ -1127,15 +1131,9 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	//Resize the bar whenever the window width changes.
 	gotoIfError3(clean, LWindow_initBar(w, (U32)totalWidth, e_rr));
 
-	//The content height excludes the decoration bar.
-	//When using SSD or NoBorder the bar is zero-height from our perspective.
-	I32 contentHeight = lwin->barSurface ? totalHeight - LWINDOW_DECOR_HEIGHT : totalHeight;
-
-	if(contentHeight <= 0)
-		contentHeight = 1;
-
 	//Tell the compositor the full visible extent of the window (including bar).
 	//Used for snap, shadows, and maximize geometry, must cover the whole surface.
+
 	xdg_surface_set_window_geometry(lwin->surface, 0, 0, totalWidth, totalHeight);
 
 	if(w->hint & EWindowHint_ProvideCPUBuffer) {
@@ -1143,7 +1141,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		struct wl_shm *shm = ((LWindowManager*)w->owner->platformData.ptr)->shm;
 
 		U32 width  = (U32) totalWidth;
-		U32 height = (U32) contentHeight;
+		U32 height = (U32) totalHeight;
 
 		U64 stride   = (U64)width * 4;
 		U64 poolSize = stride * height * LWINDOW_BUFFER_COUNT;
@@ -1227,7 +1225,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 		w->cpuVisibleBuffer.lengthAndRefBits = (stride * height) | ((U64)1 << 63);
 	}
 
-	w->size = I32x2_create2(totalWidth, contentHeight);
+	w->size = I32x2_create2(totalWidth, totalHeight);
 
 clean:
 	if(!s_uccess) {
@@ -1346,25 +1344,19 @@ static void LWindow_updateSize(
 
 	lwin->configured = true;
 
+	if(height && lwin->barSurface)
+		height -= LWINDOW_DECOR_HEIGHT;
+
 	if(width  <= 0) width  = I32x2_x(w->size) ? I32x2_x(w->size) : 1280;
 	if(height <= 0) height = I32x2_y(w->size) ? I32x2_y(w->size) : 720;
 
-	I32      barH   = lwin->barSurface ? LWINDOW_DECOR_HEIGHT : 0;
-
-	//Height from the compositor is content-only (we negotiated it that way via
-	// xdg_surface_set_window_geometry which excluded the bar).
-	//Keep w->size as content-only for consistency with cpuVisibleBuffer.
 	I32x2 newContentSize = I32x2_create2(width, height);
 
 	if(I32x2_eq2(w->size, newContentSize) && !stateChanged)
 		return;
 
-	//Pass total size (content + bar) into LWindow_initSize so it can correctly
-	// allocate the shm pool for content and position the bar subsurface.
-	I32x2 totalSize = I32x2_create2(width, height + barH);
-
 	Error err = Error_none();
-	if(!LWindow_initSize(w, totalSize, &err))
+	if(!LWindow_initSize(w, I32x2_create2(width, height), &err))
 		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 	LWindow_updateMonitors(w);
@@ -1738,7 +1730,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 			if(!lwin->barSubsurface)
 				retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() bar subsurface failed"));
 
-			wl_subsurface_set_position(lwin->barSubsurface, 0, 0);
+			wl_subsurface_set_position(lwin->barSubsurface, 0, -LWINDOW_DECOR_HEIGHT);
 			wl_subsurface_place_above(lwin->barSubsurface, surface);
 			wl_subsurface_set_desync(lwin->barSubsurface);
 		}

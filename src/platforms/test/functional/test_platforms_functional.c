@@ -306,18 +306,18 @@ clean:
 	if (w) WindowManager_freeWindow(&windowManager, &w);
 }
 
-// -- F3. Resize / min+max enforcement -----------------------------------------
+// -- F3a. Resize / min+max enforcement -----------------------------------------
 
-static void Test_resize(Test *t) {
+static void Test_resizeVirtual(Test *t) {
 
-	Test_setModule(t, "F3/Resize");
+	Test_setModule(t, "F3a/ResizeVirtual");
 
 	I32x2 sz    = I32x2_create2(640, 480);
 	I32x2 minSize = EResolution_get(EResolution_SD);
 	I32x2 maxSize = I32x2_create2(1920, 1080);
 	Window *w   = NULL;
 
-	CharString title = CharString_createRefCStrConst("F3: Resize");
+	CharString title = CharString_createRefCStrConst("F3a: ResizeVirtual");
 	I32x2 pos = I32x2_create2(50, 50);
 
 	WindowManager_createWindow(
@@ -340,8 +340,6 @@ static void Test_resize(Test *t) {
 
 	Test_assert(t, "newW", I32x2_x(w->size) == 512);
 	Test_assert(t, "newH", I32x2_y(w->size) == 384);
-
-	pump(VISUAL_HOLD_NS);
 
 clean:
 	if (w) WindowManager_freeWindow(&windowManager, &w);
@@ -714,7 +712,7 @@ static void Test_mouse(Test *t) {
 
 		if (hasXdotool()) {
 
-			system("xdotool search --name 'F9: Left-click anywhere to pass' windowfocus click 1");
+			system("xdotool search --name 'F8: Left-click anywhere to pass' windowfocus click 1");
 
 			Ns waited = 0;
 
@@ -2311,7 +2309,7 @@ clean:
 #define F21_RADIUS   100
 #define F21_CX       150
 #define F21_CY       150
-#define F21_W        300
+#define F21_W        426
 #define F21_H        300
 
 static void F21_fillCircle(Window *w) {
@@ -2407,27 +2405,28 @@ Platform_defineEntrypoint() {
 		goto done;
 	}
 
-	(void) Test_cpuBuffer;//(&t);
-	(void) Test_fullScreen;//(&t);
-	Test_resize(&t);         //TODO: Broken
-	(void) Test_multiWindow;//(&t);
-	(void) Test_keyboard;//(&t);
-	(void) Test_storeCPUBuffer;//(&t);
-	(void) Test_updateTitle;//(&t);
-	(void) Test_mouse;//(&t);
-	(void) Test_focusMinimize;//(&t);
-	(void) Test_typeChar;//(&t);
-	(void) Test_focusReset;//(&t);
-	(void) Test_monitorInfo;//(&t);
-	(void) Test_windowMove;//(&t);
-	(void) Test_maximize;//(&t);
-	(void) Test_keyboardRemap;//(&t);
-	(void) Test_csdButtons;//(&t);
-	(void) Test_minMaxSize;//(&t);
-	(void) Test_mouseDraw;//(&t);
-	(void) Test_scrollWheel;//(&t);
-	(void) Test_borderless;//(&t);
-	(void) Test_transparent;//(&t);
+	Test_cpuBuffer(&t);
+	Test_fullScreen(&t);
+	Test_resizeVirtual(&t);
+	//Test_resizePhysical(&t); TODO:
+	Test_multiWindow(&t);
+	Test_keyboard(&t);
+	Test_storeCPUBuffer(&t);
+	Test_updateTitle(&t);
+	Test_mouse(&t);
+	Test_focusMinimize(&t);
+	Test_typeChar(&t);
+	Test_focusReset(&t);
+	Test_monitorInfo(&t);
+	Test_windowMove(&t);
+	Test_maximize(&t);
+	Test_keyboardRemap(&t);
+	Test_csdButtons(&t);
+	Test_minMaxSize(&t);
+	Test_mouseDraw(&t);
+	Test_scrollWheel(&t);
+	Test_borderless(&t);
+	Test_transparent(&t);
 
 done:
 	shutdown();
