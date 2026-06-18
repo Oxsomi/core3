@@ -17,21 +17,23 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
+find_package(Vulkan QUIET)
+
 set(graphicsAllowD3D12 OFF)
 set(graphicsAllowVk OFF)
 
 if(WIN32)
 	if(DynamicLinkingGraphics)
 		set(graphicsAllowD3D12 ON)
-		if(DEFINED ENV{VULKAN_SDK})
+		if(Vulkan_FOUND)
 			set(graphicsAllowVk ON)
 		endif()
 	elseif(NOT ForceVulkan)
 		set(graphicsAllowD3D12 ON)
-	elseif(DEFINED ENV{VULKAN_SDK})
+	elseif(Vulkan_FOUND)
 		set(graphicsAllowVk ON)
 	endif()
-elseif(DEFINED ENV{VULKAN_SDK})
+elseif(Vulkan_FOUND)
 	set(graphicsAllowVk ON)
 endif()
 
