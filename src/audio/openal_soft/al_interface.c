@@ -177,6 +177,25 @@ Bool AudioInterface_getDeviceInfos(
 
 			ListCharString_free(&strings, alloc);
 
+			//Prevent duplicates
+
+			Bool isDuplicate = false;
+
+			for (U64 k = 0; k < infos->length; ++k) {
+				if (CharString_equalsCStringSensitive(&str, infos->ptr[k].name)) {
+					isDuplicate = true;
+					break;
+				}
+			}
+
+			if (isDuplicate) {
+				alcCloseDevice(device);
+				device = NULL;
+				continue;
+			}
+
+			//Add device
+
 			Buffer_memcpy(Buffer_createRef(info.name, sizeof(info.name)), CharString_bufferConst(str));
 
 			if (CharString_length(str) > 95)

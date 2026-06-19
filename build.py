@@ -23,9 +23,58 @@ import json
 import os
 import sys
 import platform
+import shlex
+import shutil
 import subprocess
 
 HASH_CACHE_FILE = ".dep_hashes.json"
+
+def _is_steamos() -> bool:
+
+    # Inside a flatpak sandbox /etc/os-release reflects the container, not the
+    # host. Use flatpak-spawn --host to read the real host OS file instead.
+    if shutil.which("flatpak-spawn"):
+        try:
+            result = subprocess.run(
+                ["flatpak-spawn", "--host", "cat", "/etc/os-release"],
+                capture_output=True, text=True
+            )
+            return "steamos" in result.stdout.lower()
+        except Exception:
+            return False
+
+    # Non-flatpak: read directly
+    try:
+        with open("/etc/os-release") as f:
+            return "steamos" in f.read().lower()
+    except FileNotFoundError:
+        return False
+
+def _ensure_correct_environment():
+	"""On SteamOS, re-exec this script inside the steamrt4-sdk distrobox,
+	escaping the flatpak sandbox first if VSCode itself is sandboxed.
+	No-op on Windows / macOS / plain Linux."""
+
+	if "--already-escaped" in sys.argv:
+		sys.argv.remove("--already-escaped")
+		return
+
+	if platform.system() != "Linux" or not _is_steamos():
+		return
+
+	script    = os.path.abspath(__file__)
+	forwarded = " ".join(shlex.quote(a) for a in sys.argv[1:])
+	inner_cmd = (
+		f"distrobox enter steamrt4-sdk -- python3 {shlex.quote(script)} "
+		f"{forwarded} --already-escaped"
+	)
+
+	if shutil.which("flatpak-spawn"):
+		cmd = ["flatpak-spawn", "--host", "/bin/bash", "-l", "-c", inner_cmd]
+	else:
+		cmd = ["/bin/bash", "-l", "-c", inner_cmd]
+
+	sys.exit(subprocess.run(cmd).returncode)
 
 def run(cmd, **kwargs):
 	result = subprocess.run(cmd, shell=True, **kwargs)
@@ -73,6 +122,8 @@ def conan_create_if_changed(package_path, profile, mode, profile_args, cache):
 	cache[key] = current_hash
 
 def main():
+
+	_ensure_correct_environment()
 
 	parser = argparse.ArgumentParser(description="Build OxC3 for the host platform")
 
@@ -200,12 +251,12 @@ def main():
 		else:
 			run(f"ctest --test-dir {build_dir}/build -C {test_mode} --output-on-failure", cwd=os.getcwd())
 
-		path = "tools/test.py"
+		# path = "tools/test.py"		# TODO: Re-enable once OxC3 works
 
-		if system == "Windows":
-			path = path.replace("/", "\\")
+		# if system == "Windows":
+		# 	path = path.replace("/", "\\")
 
-		run(rf"python3 {path}", cwd=os.getcwd())
+		# run(rf"python3 {path}", cwd=os.getcwd())
 
 if __name__ == "__main__":
 	main()

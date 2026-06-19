@@ -107,7 +107,8 @@ typedef struct LWindow {
 	//Frame callback pacing
 	struct wl_callback *frameCallback;
 	Bool                frameReady;
-	U8 pad[3];
+	Bool                hadCompositorSize;
+	U8 pad[2];
 
 	U32   lastPointerSerial;
 

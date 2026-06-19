@@ -301,6 +301,9 @@ Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
 	if(!wm)
 		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
 
+	if(!wm->platformData.ptr)     //No monitors for virtual windows
+		goto clean;
+
 	LWindowManager *lmanager = (LWindowManager*)wm->platformData.ptr;
 
 	gotoIfError3(clean, WindowManager_updateMonitorsExt(lmanager, &wm->monitors, NULL, 0, e_rr));
@@ -312,19 +315,28 @@ clean:
 	return s_uccess;
 }
 
+Bool WindowManager_freeNative(WindowManager *w);
+
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool alloc = false;
+
 	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(LWindowManager), Platform_instance->alloc, &w->platformData, e_rr));
+	alloc = true;
 
 	LWindowManager *manager  = (LWindowManager*)w->platformData.ptr;
 
-	const C8 *waylandDisplay = getenv("WAYLAND_DISPLAY");
+	const C8 *waylandDisplay = getenv("GAMESCOPE_WAYLAND_DISPLAY");
+
+	if(waylandDisplay)
+		w->isSingleWindow = true;
 
 	if(!waylandDisplay)
-		waylandDisplay = getenv("GAMESCOPE_WAYLAND_DISPLAY");
+		waylandDisplay = getenv("WAYLAND_DISPLAY");
 
 	manager->display         = wl_display_connect(waylandDisplay);
+
 	manager->compositorId    = U64_MAX;
 
 	if(!manager->display)
@@ -421,15 +433,22 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 	if(!manager->cursorSurface)
 		Log_warnLnx("WindowManager_createNative(): could not create cursor surface");
 
-	gotoIfError3(clean, WindowManager_updateMonitors(w, e_rr));
-
 clean:
+
+	if(!s_uccess && alloc) {
+		WindowManager_freeNative(w);
+		Buffer_free(&w->platformData, Platform_instance->alloc);
+	}
+
 	return s_uccess;
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
 
 	LWindowManager *manager = (LWindowManager*)w->platformData.ptr;
+
+	if(!manager)
+		goto clean;
 
 	if(manager->cursorSurface)
 		wl_surface_destroy(manager->cursorSurface);
@@ -467,6 +486,7 @@ Bool WindowManager_freeNative(WindowManager *w) {
 		wl_display_disconnect(manager->display);
 	}
 
+clean:
 	return true;
 }
 
@@ -476,8 +496,10 @@ void WindowManager_updateExt(WindowManager *manager) {
 
 	//Flush outgoing requests before dispatching incoming events.
 
-	wl_display_flush(lmanager->display);
-	wl_display_roundtrip(lmanager->display);
+	if(lmanager) {
+		wl_display_flush(lmanager->display);
+		wl_display_roundtrip(lmanager->display);
+	}
 
 	//Fire manager-level callback once if any window updated its monitors
 	if(manager->monitorsDirty) {

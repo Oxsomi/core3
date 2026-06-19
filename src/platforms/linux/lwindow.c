@@ -330,8 +330,13 @@ static Bool LWindow_initBar(Window *w, U32 width, Error *e_rr) {
 	LWindow        *lwin    = (LWindow*)w->nativeData;
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 
-	if(!lwin->barSurface || lwin->barWidth == width)
+	if(!lwin->barSurface)
 		goto clean;
+
+	if(lwin->barWidth == width) {
+		LWindow_redrawBar(w);  //Re-attach + damage + commit the existing buffer
+		goto clean;
+	}
 
 	U64 barSize = (U64)width * LWINDOW_DECOR_HEIGHT * 4;
 
@@ -1309,9 +1314,16 @@ static void LWindow_updateSize(
 		}
 	}
 
-	//A 0x0 configure with no active states means the compositor has minimized us
+	//Track whether compositor ever gave us a real size
 
-	if(!width && !height && !isMaximized && !isFullscreen && !isSuspended)
+	if(width > 0 && height > 0)
+		lwin->hadCompositorSize = true;
+
+	//Only infer minimized from 0x0 if compositor previously told us a real size.
+	//Nested compositors like gamescope send 0x0 repeatedly meaning "deferred to client",
+	// not "minimized".
+
+	if(!width && !height && !isMaximized && !isFullscreen && !isSuspended && lwin->configured && lwin->hadCompositorSize)
 		isMinimized = true;
 
 	Bool prevMinimized = w->flags & EWindowFlags_IsMinimized;
@@ -1326,9 +1338,9 @@ static void LWindow_updateSize(
 	//Skip geometry update while minimized or suspended, matching the
 	// EWindowHint_AllowBackgroundUpdates gate on Windows
 
-	Bool skip = lwin->configured && (isMinimized || isSuspended) && !(w->hint & EWindowHint_AllowBackgroundUpdates);
+	Bool skip = (isMinimized || isSuspended) && !(w->hint & EWindowHint_AllowBackgroundUpdates);
 
-	Bool stateChanged = isMinimized != prevMinimized;
+	Bool stateChanged = isMinimized != prevMinimized || !lwin->configured;
 
 	if(skip) {
 		//Still notify if the minimized state changed.
@@ -1344,7 +1356,7 @@ static void LWindow_updateSize(
 
 	lwin->configured = true;
 
-	if(height && lwin->barSurface)
+	if(height && lwin->barSurface && !isFullscreen)
 		height -= LWINDOW_DECOR_HEIGHT;
 
 	if(width  <= 0) width  = I32x2_x(w->size) ? I32x2_x(w->size) : 1280;
@@ -1475,12 +1487,21 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 	// w->prevSize is not needed on Wayland; the compositor restores geometry
 
 	if(w->flags & EWindowFlags_IsFullscreen) {
+
 		w->flags &= ~EWindowFlags_IsFullscreen;
 		xdg_toplevel_unset_fullscreen(lwin->topLevel);
+
+		if(lwin->barSurface)
+			wl_subsurface_set_desync(lwin->barSubsurface);
+
 	} else {
+
 		w->prevSize = w->size;   //Kept for cross-platform consistency; not used to restore
 		w->flags |= EWindowFlags_IsFullscreen;
 		xdg_toplevel_set_fullscreen(lwin->topLevel, NULL);
+
+		if(lwin->barSurface)
+			wl_subsurface_set_sync(lwin->barSubsurface);
 	}
 
 clean:
@@ -1520,13 +1541,16 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 		retError(clean, Error_invalidState(0, "Window_presentPhysical() all buffers held by compositor"));
 
 	struct wl_surface *surface = (struct wl_surface*) w->nativeHandle;
-	U32 height = lwin->height | ((U32) lwin->heightHi8 << 16);
-	U64 stride = (U64) lwin->pixelStride * height;
 
 	lwin->bufferBusy[chosen] = true;
 
 	wl_surface_attach(surface, lwin->buffers[chosen], 0, 0);
 	wl_surface_damage_buffer(surface, 0, 0, I32_MAX, I32_MAX);
+
+	if(lwin->frameCallback) {
+		wl_callback_destroy(lwin->frameCallback);
+		lwin->frameCallback = NULL;
+	}
 
 	lwin->frameCallback = wl_surface_frame(surface);
 	wl_callback_add_listener(lwin->frameCallback, &LWindow_frameListener, w);
@@ -1534,6 +1558,10 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	wl_surface_commit(surface);
 
 	lwin->backBufferId      = (U8)((chosen + 1) % LWINDOW_BUFFER_COUNT);
+
+	U32 height = lwin->height | ((U32) lwin->heightHi8 << 16);
+	U64 stride = (U64) lwin->pixelStride * height;
+
 	w->cpuVisibleBuffer.ptr = lwin->mainBufferPtr + stride * lwin->backBufferId;
 
 clean:
@@ -1624,6 +1652,11 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	for(U8 i = 0; i < 2; ++i)
 		if(!I32x2_get(size, i))
 			I32x2_setRef(&size, i, I32x2_get(defSize, i));
+
+	if(w->owner->isSingleWindow && w->owner->monitors.length == 1 && I32x2_all(w->owner->monitors.ptr[0].sizePixels))
+		size = w->owner->monitors.ptr[0].sizePixels;
+
+	w->size = size;
 
 	LWindowManager       *manager    = (LWindowManager*)w->owner->platformData.ptr;
 	struct wl_compositor *compositor = manager->compositor;
@@ -1762,12 +1795,10 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 		//Pointer for the CSD bar, only needed when we have a bar surface
 
-		if(lwin->barSurface) {
-			struct wl_pointer *pointer = wl_seat_get_pointer(manager->seat);
-			if(pointer) {
-				lwin->barPointer = pointer;
-				wl_pointer_add_listener(pointer, &LWindow_barPointerListener, w);
-			}
+		struct wl_pointer *pointer = wl_seat_get_pointer(manager->seat);
+		if(pointer) {
+			lwin->barPointer = pointer;
+			wl_pointer_add_listener(pointer, &LWindow_barPointerListener, w);
 		}
 	}
 
@@ -1775,6 +1806,18 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 		gotoIfError3(clean, Window_toggleFullScreen(w, e_rr));
 
 	gotoIfError3(clean, Window_updatePhysicalTitle(w, w->title, e_rr));
+
+	//In case of no monitors, we will try copying the window manager's monitors.
+	//This can happen if there's only 1 window available (e.g. SteamOS).
+
+	if(!w->monitors.length) {
+
+		gotoIfError3(clean, ListMonitor_resize(&w->monitors, w->owner->monitors.length, Platform_instance->alloc, e_rr));
+		gotoIfError3(clean, ListMonitor_copy(w->owner->monitors, 0, w->monitors, 0, w->monitors.length, e_rr));
+
+		if(w->callbacks.onMonitorChange)
+			w->callbacks.onMonitorChange(w);
+	}
 
 	//Initial configure round-trip, triggers LWindow_updateSize -> LWindow_initSize,
 	// which also allocates the bar buffer via LWindow_initBar

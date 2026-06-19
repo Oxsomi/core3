@@ -24,6 +24,7 @@
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
+#include "platforms/logx.h"
 #include "platforms/input_device.h"
 #include "types/math/vec2i.h"
 #include "types/base/string_base.h"
@@ -37,6 +38,8 @@ const U32 WindowManager_magic = C8x4('W', 'I', 'N', 'D');
 
 impl Bool WindowManager_createNative(WindowManager *w, Error *e_rr);
 impl Bool WindowManager_freeNative(WindowManager *w);
+
+impl Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr);
 
 Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize, WindowManager *manager, Error *e_rr) {
 
@@ -57,8 +60,14 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize
 		.extendedData = extendedData
 	};
 
-	gotoIfError3(clean, WindowManager_createNative(manager, e_rr));
+	if(!WindowManager_createNative(manager, NULL))
+		Log_warnLnx(
+			"WindowManager_createNative failed, indicating a possible headless instance. Physical windows will be unavailable"
+		);
+
 	allocated = true;
+
+	gotoIfError3(clean, WindowManager_updateMonitors(manager, e_rr));
 
 	if(callbacks.onCreate)
 		gotoIfError3(clean, callbacks.onCreate(manager, e_rr));
@@ -191,12 +200,17 @@ Bool WindowManager_createWindow(
 
 	gotoIfError3(clean, WindowManager_adaptSizes(&size, &minSize, &maxSize, e_rr));
 
-	if(type == EWindowType_Virtual)
+	if(type == EWindowType_Virtual) {
 		gotoIfError3(clean, Buffer_createEmptyBytes(
 			ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size), 1),
 			Platform_instance->alloc,
 			&cpuVisibleBuffer,
 			e_rr
+		));
+	}
+	else if(!manager->platformData.ptr)
+		retError(clean, Error_unsupportedOperation(
+			0, "WindowManager_createWindow() can't create a physical window if createNative failed (headless)"
 		));
 
 	if(extendedDataSize)
@@ -251,7 +265,6 @@ clean:
 }
 
 impl void WindowManager_updateExt(WindowManager *manager);
-impl Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr);
 
 Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_rr) {
 

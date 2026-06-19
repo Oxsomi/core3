@@ -24,6 +24,7 @@
 #include "audio/audio_interface.h"
 #include "audio/audio_device.h"
 #include "types/container/ref_ptr.h"
+#include "types/container/log.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
@@ -114,6 +115,10 @@ Bool AudioInterface_getPreferredDevice(
 	*deviceInfo = devices.ptr[firstSupported];
 
 clean:
+
+	if(s_uccess)
+		Log_debugLn(alloc, "-- Audio: Default device: %s\n", deviceInfo->name);
+
 	ListAudioDeviceInfo_free(&devices, alloc);
 	return s_uccess;
 }

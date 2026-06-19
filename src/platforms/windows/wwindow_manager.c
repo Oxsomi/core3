@@ -46,10 +46,12 @@ typedef struct WndClassExExW {
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	Bool s_uccess = true;
+	Bool alloc = false;
 
 	HANDLE hIcon = NULL, hIconSm = NULL;
 
 	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(WndClassExExW), Platform_instance->alloc, &w->platformData, e_rr));
+	alloc = true;
 
 	WndClassExExW *wc = (WndClassExExW*) w->platformData.ptr;
 
@@ -96,20 +98,23 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 		));
 	}
 
-	gotoIfError3(clean, WindowManager_updateMonitors(w, e_rr));
-
 	wc->icon = (HICON) hIcon;
 	wc->iconSm = (HICON) hIconSm;
-	hIcon = NULL;
-	hIconSm = NULL;
 
 clean:
 
-	if(hIconSm)
-		DestroyIcon((HICON)hIconSm);
+	if(!s_uccess) {
 
-	if(hIcon)
-		DestroyIcon((HICON)hIcon);
+		if(alloc)
+			Buffer_free(&w->platformData, Platform_instance->alloc);
+
+		if(hIconSm)
+			DestroyIcon((HICON)hIconSm);
+
+		if(hIcon)
+			DestroyIcon((HICON)hIcon);
+
+	}
 
 	return s_uccess;
 }
@@ -117,6 +122,9 @@ clean:
 Bool WindowManager_freeNative(WindowManager *w) {
 
 	const WndClassExExW *wc = (const WndClassExExW*)w->platformData.ptr;
+
+	if(!wc)
+		goto clean;
 
 	if(wc->wnd.hInstance)
 		UnregisterClassW(wc->wnd.lpszClassName, wc->wnd.hInstance);
@@ -320,6 +328,9 @@ Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
 
 	if(!wm)
 		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
+
+	if(!wm->platformData.ptr)     //No monitors for virtual windows
+		goto clean;
 
 	gotoIfError3(clean, WindowManager_updateMonitorsExt(&wm->monitors, NULL, e_rr));
 

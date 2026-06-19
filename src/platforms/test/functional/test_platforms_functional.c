@@ -125,6 +125,8 @@ static Window *createWindow(
 
 	if (!s_uccess) {
 
+		t->err = Error_none();
+
 		s_uccess = WindowManager_createWindow(
 			&windowManager, EWindowType_Virtual, pos, size, minSize, maxSize,
 			hint, title, (WindowCallbacks) { 0 }, fmt, 0, &w, &t->err
@@ -135,6 +137,14 @@ static Window *createWindow(
 	}
 
 	return w;
+}
+
+void present(Test *t, Window *w) {
+
+	if(w->type != EWindowType_Physical)
+		return;
+
+	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
 }
 
 //Same as createWindow but accepts a custom WindowCallbacks.
@@ -223,39 +233,35 @@ static void Test_cpuBuffer(Test *t) {
 		goto clean;
 
 	sz = w->size;
-	if (!Test_assert(t, "resizeCPU", Window_resizeCPUBuffer(w, false, sz, &t->err)))
+
+	U32 W = (U32)I32x2_x(sz);
+	U32 H = (U32)I32x2_y(sz);
+	U64 expectedBytes = (U64)W * H * 4;
+
+	Test_assert(t, "bufferSize", Buffer_length(w->cpuVisibleBuffer) == expectedBytes);
+	U8 *px = Test_renderPattern(w, 0);
+
+	Test_assert(t, "has px", px);
+
+	if(!px)
 		goto clean;
 
-	{
-		U32 W = (U32)I32x2_x(sz);
-		U32 H = (U32)I32x2_y(sz);
-		U64 expectedBytes = (U64)W * H * 4;
+	U8 *tl = px;
+	U8 *tr = px + (W - 1) * 4;
+	U8 *bl = px + (H - 1) * W * 4;
+	U8 *br = px + ((H - 1) * W + (W - 1)) * 4;
 
-		Test_assert(t, "bufferSize", Buffer_length(w->cpuVisibleBuffer) == expectedBytes);
-		U8 *px = Test_renderPattern(w, 0);
+	Test_assert(t, "topLeft_R",  tl[0] == 0);
+	Test_assert(t, "topLeft_G",  tl[1] == 0);
+	Test_assert(t, "topLeft_B",  tl[2] == 128);
+	Test_assert(t, "topRight_R", tr[0] == (U8)(W - 1));
+	Test_assert(t, "topRight_G", tr[1] == 0);
+	Test_assert(t, "botLeft_R",  bl[0] == 0);
+	Test_assert(t, "botLeft_G",  bl[1] == (U8)(H - 1));
+	Test_assert(t, "botRight_R", br[0] == (U8)(W - 1));
+	Test_assert(t, "botRight_G", br[1] == (U8)(H - 1));
+	present(t, w);
 
-		Test_assert(t, "has px", px);
-
-		if(!px)
-			goto clean;
-
-		U8 *tl = px;
-		U8 *tr = px + (W - 1) * 4;
-		U8 *bl = px + (H - 1) * W * 4;
-		U8 *br = px + ((H - 1) * W + (W - 1)) * 4;
-
-		Test_assert(t, "topLeft_R",  tl[0] == 0);
-		Test_assert(t, "topLeft_G",  tl[1] == 0);
-		Test_assert(t, "topLeft_B",  tl[2] == 128);
-		Test_assert(t, "topRight_R", tr[0] == (U8)(W - 1));
-		Test_assert(t, "topRight_G", tr[1] == 0);
-		Test_assert(t, "botLeft_R",  bl[0] == 0);
-		Test_assert(t, "botLeft_G",  bl[1] == (U8)(H - 1));
-		Test_assert(t, "botRight_R", br[0] == (U8)(W - 1));
-		Test_assert(t, "botRight_G", br[1] == (U8)(H - 1));
-	}
-
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
 	pump(VISUAL_HOLD_NS);
 
 clean:
@@ -280,7 +286,7 @@ static void Test_fullScreen(Test *t) {
 	Test_assert(t, "notFullscreenInit", !Window_isFullScreen(w));
 
 	Test_renderPattern(w, 0);
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(1 * SECOND);
 
 	if (!Test_assert(t, "toggleOn", Window_toggleFullScreen(w, &t->err)))
@@ -288,7 +294,7 @@ static void Test_fullScreen(Test *t) {
 
 	pump(1 * SECOND);
 	Test_renderPattern(w, 0x80);
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 
 	Test_assert(t, "isFullscreen", Window_isFullScreen(w));
 
@@ -297,7 +303,7 @@ static void Test_fullScreen(Test *t) {
 
 	pump(1 * SECOND);
 	Test_renderPattern(w, 0xFF);
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(1 * SECOND);
 
 	Test_assert(t, "notFullscreenAgain", !Window_isFullScreen(w));
@@ -364,10 +370,10 @@ static void Test_multiWindow(Test *t) {
 		goto clean;
 
 	Test_renderPattern(w1, 0x00);
-	Test_assert(t, "present", Window_presentPhysical(w1, &t->err));
+	present(t, w1);
 
 	Test_renderPattern(w2, 0x80);
-	Test_assert(t, "present", Window_presentPhysical(w2, &t->err));
+	present(t, w2);
 
 	Test_assert(t, "distinct",    w1 != w2);
 	Test_assert(t, "sameOwner",   w1->owner == w2->owner);
@@ -418,7 +424,7 @@ static void Test_keyboard(Test *t) {
 		goto clean;
 	}
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 	
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -530,7 +536,7 @@ static void Test_storeCPUBuffer(Test *t) {
 	if (!Test_assert(t, "storeToDisk", Window_storeCPUBufferToDisk(w, outPath, 50 * MS, alloc, &t->err)))
 		goto clean;
  
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(VISUAL_HOLD_NS);
 
 	Test_assert(t, "fileExists", File_hasFile(&outPath, alloc));
@@ -626,7 +632,7 @@ static void Test_updateTitle(Test *t) {
 	if (!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	CharString t2 = CharString_createRefCStrConst("F7: Title, updated (check me)");
@@ -684,7 +690,7 @@ static void Test_mouse(Test *t) {
 		goto clean;
 	}
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -778,7 +784,7 @@ static void Test_focusMinimize(Test *t) {
 
 	//Initial state: not minimized
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	Test_assert(t, "notMinimizedInit", !Window_isMinimized(w));
@@ -832,7 +838,7 @@ static void Test_focusMinimize(Test *t) {
 		}
 	#endif
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(500 * MS);
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_LINUX
@@ -887,7 +893,7 @@ static void Test_typeChar(Test *t) {
 	if (!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
 	
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	Bool isPhysical = w->type == EWindowType_Physical;
@@ -1048,7 +1054,7 @@ static void Test_focusReset(Test *t) {
 		if (!Test_assert(t, "windowCreated", w != NULL))
 			goto clean;
 	
-		Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+		present(t, w);
 		pump(300 * MS);
 
 		if (w->type != EWindowType_Physical) {
@@ -1128,7 +1134,10 @@ static void Test_monitorInfo(Test *t) {
 	if (!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	if(!w->owner->platformData.ptr)   //Headless runs don't actually have monitors
+		goto clean;
+
+	present(t, w);
 	pump(300 * MS);
 
 	Test_assert(t, "hasMonitor (manager)",  w->owner->monitors.length >= 1);
@@ -1227,7 +1236,7 @@ static void Test_windowMove(Test *t) {
 	if (!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	if (w->monitors.length < 1) {
@@ -1304,7 +1313,7 @@ static void Test_maximize(Test *t) {
 	if (!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	if (w->type != EWindowType_Physical) {
@@ -1413,7 +1422,7 @@ static void Test_keyboardRemap(Test *t) {
 	if (!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
 	
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	if (w->type != EWindowType_Physical) {
@@ -1542,7 +1551,7 @@ clean:
 		if(!Test_assert(t, "windowCreated", w != NULL))
 			goto clean;
 
-		Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+		present(t, w);
 		pump(500 * MS);
 
 		if(w->type != EWindowType_Physical) {
@@ -1740,7 +1749,7 @@ static void Test_minMaxSize(Test *t) {
 			goto cleanPhysical;
 		}
 
-		Test_assert(t, "physPresent", Window_presentPhysical(w, &t->err));
+		present(t, w);
 		pump(500 * MS);
 
 		#if _PLATFORM_TYPE == PLATFORM_LINUX
@@ -1910,7 +1919,7 @@ static void Test_mouseDraw(Test *t) {
 			px[i] = F18_INIT_COLOR;
 	}
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	if(w->type != EWindowType_Physical) {
@@ -2009,7 +2018,7 @@ static void Test_mouseDraw(Test *t) {
 			if(px[i * 4] != F18_INIT_COLOR)
 				anyChanged = true;
 
-		Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+		present(t, w);
 		pump(VISUAL_HOLD_NS);
 
 		if(!anyChanged)
@@ -2107,7 +2116,7 @@ static void Test_scrollWheel(Test *t) {
 	if(!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(300 * MS);
 
 	if(w->type != EWindowType_Physical) {
@@ -2281,7 +2290,7 @@ static void Test_borderless(Test *t) {
 	Test_assert(t, "nonZeroSize",   I32x2_any(w->size));
 	Test_assert(t, "notFullscreen", !(w->flags & EWindowFlags_IsFullscreen));
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(VISUAL_HOLD_NS);
 
 clean:
@@ -2381,7 +2390,7 @@ static void Test_transparent(Test *t) {
 
 	//Present and hold so the operator can visually verify the circle floats
 
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
+	present(t, w);
 	pump(VISUAL_HOLD_NS);
 
 clean:

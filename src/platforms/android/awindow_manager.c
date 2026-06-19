@@ -32,7 +32,8 @@
 void *Platform_getDataImpl(void *ptr) { (void) ptr; return (struct android_app*) Platform_instance->data; }
 
 Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
-	(void) w; (void) e_rr;
+	(void) e_rr;
+	w->isSingleWindow = true;
 	return true;
 }
 

@@ -58,7 +58,8 @@ typedef struct WindowManager {
 	U64 owningThread;        //Only one thread can own a window manager at a time
 	U32 isActive;            //WindowManager_magic if active
 	Bool monitorsDirty;
-	U8 pad[3];
+	Bool isSingleWindow;     //The WindowManager only supports 1 window; such as Android, iOS, console, steamOS
+	U8 pad[2];
 
 	ListWindowPtr windows;
 	ListMonitor monitors;
@@ -69,7 +70,7 @@ typedef struct WindowManager {
 
 	Ns lastUpdate;
 
-	Buffer platformData;
+	Buffer platformData;     //Can be empty if createNative failed (no physical window support available)
 
 } WindowManager;
 

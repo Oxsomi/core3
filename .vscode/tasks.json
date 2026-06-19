@@ -5,6 +5,9 @@
             "label": "build",
             "type": "process",
             "command": "python3",
+            "windows": {
+                "command": "python"
+            },
             "args": [
                 "${workspaceFolder}/build.py",
                 "-mode", "Debug",
@@ -22,6 +25,36 @@
             "options": {
                 "cwd": "${workspaceFolder}"
             }
+        },
+        {
+            "label": "launch-gdbserver",
+            "type": "process",
+            "command": "flatpak-spawn",
+            "args": [
+                "--host",
+                "/bin/bash", "-l", "-c",
+                "gamescope -- env WAYLAND_DEBUG=1 gdbserver localhost:2345 ${workspaceFolder}/build/Debug/linux/x64/bin/OxC3_platforms_functional_test"
+            ],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".*",
+                    "endsPattern": ".*Listening on port 2345.*"
+                }
+            }
+        },
+        {
+            "label": "build and launch",
+            "dependsOn": ["build", "launch-gdbserver"],
+            "dependsOrder": "sequence"
         }
     ]
 }
