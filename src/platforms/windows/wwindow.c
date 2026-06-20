@@ -44,8 +44,8 @@
 #include <Windows.h>
 #include <dwmapi.h>
 
-Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error *e_rr)
- 
+Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error *e_rr);
+
 void WWindow_updateMonitors(Window *w) {
  
 	Bool s_uccess = true;
@@ -588,19 +588,19 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
 
 					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_X, delta);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_Y, delta);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, delta);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, delta);
 				}
 
 				if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
 
 					F32 delta = (F32)(I16)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_Y, delta);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_ScrollWheel_X, delta);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, delta);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, delta);
 				}
 
 				F32 prevX = InputDevice_getCurrentAxis(dev, EMouseAxis_RX);
@@ -848,11 +848,20 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 		case WM_GETMINMAXINFO: {
 
 			MINMAXINFO *lpMMI = (MINMAXINFO*) lParam;
-			lpMMI->ptMinTrackSize.x = I32x2_x(w->minSize);
-			lpMMI->ptMinTrackSize.y = I32x2_y(w->minSize);
+			const DWORD style = (DWORD) GetWindowLongPtrW(hwnd, GWL_STYLE);
+			const DWORD exStyle = (DWORD) GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
 
-			lpMMI->ptMaxTrackSize.x = I32x2_x(w->maxSize);
-			lpMMI->ptMaxTrackSize.y = I32x2_y(w->maxSize);
+			RECT minR = { 0, 0, I32x2_x(w->minSize), I32x2_y(w->minSize) };
+			AdjustWindowRectEx(&minR, style, FALSE, exStyle);
+			lpMMI->ptMinTrackSize.x = minR.right - minR.left;
+			lpMMI->ptMinTrackSize.y = minR.bottom - minR.top;
+
+			if (I32x2_any(w->maxSize)) {    // only if a hard maximum is set
+				RECT maxR = { 0, 0, I32x2_x(w->maxSize), I32x2_y(w->maxSize) };
+				AdjustWindowRectEx(&maxR, style, FALSE, exStyle);
+				lpMMI->ptMaxTrackSize.x = maxR.right - maxR.left;
+				lpMMI->ptMaxTrackSize.y = maxR.bottom - maxR.top;
+			}
 
 			break;
 		}
@@ -871,18 +880,22 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			else w->flags &= ~EWindowFlags_IsMinimized;
 
 			Bool newState = w->flags & EWindowFlags_IsMinimized;
+			Bool validSize = !I32x2_any(I32x2_leq(newSize, I32x2_zero));
+			const Bool sizeChanged = validSize && !I32x2_eq2(w->size, newSize);
+			const Bool stateChanged = prevState != newState;
 
-			if (
-				(I32x2_any(I32x2_leq(newSize, I32x2_zero)) || I32x2_eq2(w->size, newSize)) &&
-				prevState == newState
-			)
+			if (!sizeChanged && !stateChanged)
 				break;
 
-			w->size = newSize;
 			Error err = Error_none();
 
-			if(!WWindow_initSize(w, w->size, &err))
-				Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+			if (validSize) {
+
+				w->size = newSize;
+
+				if (!WWindow_initSize(w, w->size, &err))
+					Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+			}
 
 			WWindow_updateMonitors(w);
 
@@ -1052,7 +1065,7 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	//GDI doesn't blend our pixels against whatever was there before.
 	//The CPU buffer is already in premultiplied BGRA; the app is
 	// responsible for premultiplying before writing to cpuVisibleBuffer.
-	if(w->hint & EWindowHint_Transparent) {
+	if(w->hint & EWindowHint_Transparency) {
 
 		BLENDFUNCTION blend = {
 			.BlendOp             = AC_SRC_OVER,
@@ -1060,10 +1073,6 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 			.SourceConstantAlpha = 255,
 			.AlphaFormat         = AC_SRC_ALPHA
 		};
-
-		POINT ptSrc  = { 0, 0 };
-		POINT ptDst  = { I32x2_x(w->offset), I32x2_y(w->offset) };
-		SIZE  szWin  = { I32x2_x(w->size),   I32x2_y(w->size)   };
 
 		if(!AlphaBlend(
 			hdc, 0, 0, I32x2_x(w->size), I32x2_y(w->size),
@@ -1139,10 +1148,14 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	ListU16 tmp = (ListU16) { 0 };
 	gotoIfError3(clean, CharString_toUTF16(w->title, Platform_instance->alloc, &tmp, e_rr));
 
+	RECT adjRect = { 0, 0, I32x2_x(size), I32x2_y(size) };
+	AdjustWindowRectEx(&adjRect, style, FALSE, WS_EX_APPWINDOW);
+
 	nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
 		I32x2_x(position), I32x2_y(position),
-		I32x2_x(size), I32x2_y(size),
+		adjRect.right - adjRect.left,
+		adjRect.bottom - adjRect.top,
 		NULL, NULL, mainModule, NULL
 	);
 
@@ -1194,7 +1207,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 
 	//Extend DWM frame to cover the entire client area.
 	//This makes the compositor respect per-pixel alpha from our DIB.
-	if(w->hint & EWindowHint_Transparent) {
+	if(w->hint & EWindowHint_Transparency) {
 
 		MARGINS margins = { -1, -1, -1, -1 };
 

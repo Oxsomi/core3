@@ -55,7 +55,7 @@ target_link_libraries(
 )
 
 if(WIN32)
-	target_link_libraries(OxC3_platforms PUBLIC dwmapi)
+	target_link_libraries(OxC3_platforms PUBLIC dwmapi dwrite Msimg32)
 elseif(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
 elseif(ANDROID)

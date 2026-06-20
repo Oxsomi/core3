@@ -1167,7 +1167,7 @@ static void Test_monitorInfo(Test *t) {
 				(REMAP_OFF_XY(I32x2_x(r), I32x2_y(r)) << 8)   \
 			)
 
-			U16 rgb16 = REMAP_RGB_OFF(m->offsetR, m->offsetG, m->offsetB);
+			U16 rgb16 = (U16)REMAP_RGB_OFF(m->offsetR, m->offsetG, m->offsetB);
 
 			const C8 *spName = "None";
 
@@ -1931,8 +1931,6 @@ static void Test_mouseDraw(Test *t) {
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 		{
-			HWND hwnd = (HWND)w->nativeHandle;
-
 			//Move to window centre, press left, drag 100px right, release
 
 			POINT centre = { 300 + 128, 300 + 128 };

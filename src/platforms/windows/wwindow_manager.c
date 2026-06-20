@@ -34,7 +34,52 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #define NOMINMAX
 #include <Windows.h>
-#include <dwrite.h>
+
+//Tiny wrapper to get IDWrite into C;
+// Since the contract of IDWriteFactory & IDWriteRenderParams are frozen, we can assume this will remain safe.
+
+typedef enum DWRITE_PIXEL_GEOMETRY {
+	DWRITE_PIXEL_GEOMETRY_FLAT,
+	DWRITE_PIXEL_GEOMETRY_RGB,
+	DWRITE_PIXEL_GEOMETRY_BGR
+} DWRITE_PIXEL_GEOMETRY;
+
+typedef enum DWRITE_FACTORY_TYPE {
+	DWRITE_FACTORY_TYPE_SHARED,
+	DWRITE_FACTORY_TYPE_ISOLATED
+} DWRITE_FACTORY_TYPE;
+
+typedef struct IUnknownVtbl {
+	HRESULT (STDMETHODCALLTYPE *QueryInterface)(void*, REFIID, void**);
+	ULONG (STDMETHODCALLTYPE *AddRef)(void*);
+	ULONG (STDMETHODCALLTYPE *Release)(void*);
+} IUnknownVtbl;
+
+typedef struct IDWriteRenderingParamsVtbl {
+	IUnknownVtbl base;
+	void *GetGamma;
+	void *GetEnhancedContrast;
+	void *GetClearTypeLevel;
+	DWRITE_PIXEL_GEOMETRY (STDMETHODCALLTYPE *GetPixelGeometry)(void*);
+} IDWriteRenderingParamsVtbl;
+
+typedef struct IDWriteFactoryVtbl {
+	IUnknownVtbl base;
+	void *GetSystemFontCollection, *CreateCustomFontCollection, *RegisterFontCollectionLoader, *UnregisterFontCollectionLoader;
+	void *CreateFontFileReference, *CreateCustomFontFileReference, *CreateFontFace, *CreateRenderingParams;
+	HRESULT (STDMETHODCALLTYPE *CreateMonitorRenderingParams)(void*, HMONITOR, void**);
+} IDWriteFactoryVtbl;
+
+typedef struct IDWriteRenderingParamsC { IDWriteRenderingParamsVtbl *lpVtbl; } IDWriteRenderingParamsC;
+typedef struct IDWriteFactoryC  { IDWriteFactoryVtbl *lpVtbl; } IDWriteFactoryC;
+
+extern HRESULT WINAPI DWriteCreateFactory(DWRITE_FACTORY_TYPE factoryType, REFIID iid, void **factory);
+
+static const IID IID_IDWriteFactory_C = {
+	0xb859ee5a, 0xd838, 0x4b5b, { 0xa2, 0xe8, 0x1a, 0xdc, 0x7d, 0x93, 0xdb, 0x48 }
+};
+
+//WindowManager implementation
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -135,7 +180,155 @@ Bool WindowManager_freeNative(WindowManager *w) {
 	if(wc->icon)
 		DestroyIcon(wc->icon);
 
+clean:
 	return true;
+}
+
+static I32x2 rotateOffset(I32x2 p, EMonitorOrientation o) {
+	switch (o) {
+		default:
+		case EMonitorOrientation_Landscape:          return p;
+		case EMonitorOrientation_Portrait:           return I32x2_create2(I32x2_y(p), I32x2_x(p));
+		case EMonitorOrientation_FlippedLandscape:   return I32x2_create2(-I32x2_x(p), I32x2_y(p));
+		case EMonitorOrientation_FlippedPortrait:    return I32x2_create2(I32x2_y(p), -I32x2_x(p));
+	}
+}
+
+typedef struct DataEnumDisplayMonitors {
+	IDWriteFactoryC *factory;
+	ListMonitor *monitors;
+} DataEnumDisplayMonitors;
+
+//Callback passed to EnumDisplayMonitors. Called once per monitor the WWindow
+// overlaps (or all monitors when called from WindowManager).
+//Populates w->monitors with geometry, refresh rate, and orientation
+BOOL WWindowManager_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lParam) {
+
+	(void) hdc; (void) rect;
+	DataEnumDisplayMonitors *dat = (DataEnumDisplayMonitors*) lParam;
+ 
+	MONITORINFOEXW info = (MONITORINFOEXW) { .cbSize = sizeof(MONITORINFOEXW) };
+ 
+	if(!GetMonitorInfoW(hmon, (MONITORINFO*) &info))
+		return TRUE;   //Skip this monitor but continue enumeration
+ 
+	DEVMODEW dm = (DEVMODEW) { .dmSize = sizeof(DEVMODEW) };
+	F32 refreshRate = 0.f;
+	EMonitorOrientation orientation = EMonitorOrientation_Landscape;
+ 
+	if(EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
+		refreshRate = dm.dmDisplayFrequency > 1 ? (F32)dm.dmDisplayFrequency : 0.f;
+ 
+		switch(dm.dmDisplayOrientation) {
+			case DMDO_DEFAULT: orientation = EMonitorOrientation_Landscape;         break;
+			case DMDO_90:      orientation = EMonitorOrientation_Portrait;          break;
+			case DMDO_180:     orientation = EMonitorOrientation_FlippedLandscape;  break;
+			case DMDO_270:     orientation = EMonitorOrientation_FlippedPortrait;   break;
+		}
+	}
+ 
+	//Physical size in mm via GetDeviceCaps, requires a DC for the monitor.
+	//We open a temporary DC on the device name for this.
+	I32x2 sizeMm = I32x2_zero;
+	HDC mdc = CreateDCW(L"DISPLAY", info.szDevice, NULL, NULL);
+ 
+	if(mdc) {
+		sizeMm = I32x2_create2(GetDeviceCaps(mdc, HORZSIZE), GetDeviceCaps(mdc, VERTSIZE));
+		DeleteDC(mdc);
+	}
+ 
+	const RECT *work = &info.rcMonitor;
+
+	I32x2 offsetR = I32x2_zero;
+	I32x2 offsetG = I32x2_zero;
+	I32x2 offsetB = I32x2_zero;
+
+	IDWriteRenderingParamsC *params = NULL;
+	DWRITE_PIXEL_GEOMETRY geometry = DWRITE_PIXEL_GEOMETRY_FLAT;
+
+	if (SUCCEEDED(((IDWriteFactoryC*)dat->factory)->lpVtbl->CreateMonitorRenderingParams(
+		dat->factory, hmon, (void**)&params
+	))) {
+		geometry = params->lpVtbl->GetPixelGeometry(params);
+		params->lpVtbl->base.Release(params);
+	}
+
+	switch (geometry) {
+
+		case DWRITE_PIXEL_GEOMETRY_RGB:
+			offsetR = I32x2_create2(-1, 0);
+			offsetG = I32x2_create2( 0, 0);
+			offsetB = I32x2_create2( 1, 0);
+			break;
+
+		case DWRITE_PIXEL_GEOMETRY_BGR:
+			offsetR = I32x2_create2( 1, 0);
+			offsetG = I32x2_create2( 0, 0);
+			offsetB = I32x2_create2(-1, 0);
+			break;
+
+		default:
+			break;
+	}
+ 
+	Monitor m = (Monitor) {
+		.offsetPixels = I32x2_create2(work->left,                work->top),
+		.sizePixels   = I32x2_create2(work->right  - work->left, work->bottom - work->top),
+		.offsetR      = rotateOffset(offsetR, orientation),
+		.offsetG      = rotateOffset(offsetG, orientation),
+		.offsetB      = rotateOffset(offsetB, orientation),
+		.sizeMm       = sizeMm,
+		.refreshRate  = refreshRate,
+		.orientation  = orientation
+	};
+ 
+	Error err = Error_none();
+	if(!ListMonitor_pushBack(dat->monitors, m, Platform_instance->alloc, &err))
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+ 
+	return TRUE;   //continue enumeration
+}
+
+//Called from WWindow with a clip rect (or through WindowManager without one)
+Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error *e_rr) {
+
+	Bool s_uccess = true;
+	IDWriteFactoryC *factory = NULL;
+
+	ListMonitor_clear(monitors, NULL);
+
+	HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory_C, (void**)&factory);
+
+	if (FAILED(hr))
+		retError(clean, Error_platformError(0, GetLastError(), "WindowManager_updateMonitors() failed to create factory"));
+
+	DataEnumDisplayMonitors data = (DataEnumDisplayMonitors) { .factory = factory, .monitors = monitors };
+
+	if (!EnumDisplayMonitors(NULL, clip, WWindowManager_enumMonitor, (LPARAM)&data))
+		retError(clean, Error_platformError(0, GetLastError(), "WindowManager_updateMonitors() failed to EnumDisplayMonitors"));
+
+clean:
+	if (factory) ((IDWriteFactoryC *)factory)->lpVtbl->base.Release(factory);
+	return s_uccess;
+}
+
+Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if (!wm)
+		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
+
+	if (!wm->platformData.ptr)     //No monitors for virtual windows
+		goto clean;
+
+	gotoIfError3(clean, WindowManager_updateMonitorsExt(&wm->monitors, NULL, e_rr));
+
+	if (wm->callbacks.onMonitorChange)
+		wm->callbacks.onMonitorChange(wm);
+
+clean:
+	return s_uccess;
 }
 
 void WindowManager_updateExt(WindowManager *manager) {
@@ -194,149 +387,4 @@ void WindowManager_updateExt(WindowManager *manager) {
 clean:
 	ListU64_free(&seenWindowsLarge, Platform_instance->alloc);
 	Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_NewLine);
-}
-
-static I32x2 rotateOffset(I32x2 p, EMonitorOrientation o) {
-	switch (o) {
-		default:
-		case EMonitorOrientation_Landscape:          return p;
-		case EMonitorOrientation_Portrait:           return I32x2_create2(p.y, p.x);
-		case EMonitorOrientation_FlippedLandscape:   return I32x2_create2(-p.x, p.y);
-		case EMonitorOrientation_FlippedPortrait:    return I32x2_create2(p.y, -p.x);
-	}
-}
-
-typedef struct DataEnumDisplayMonitors {
-	IDWriteFactory *factory;
-	ListMonitor *monitors;
-} DataEnumDisplayMonitors;
-
-//Callback passed to EnumDisplayMonitors. Called once per monitor the WWindow
-// overlaps (or all monitors when called from WindowManager).
-//Populates w->monitors with geometry, refresh rate, and orientation
-BOOL WWindowManager_enumMonitor(HMONITOR hmon, HDC hdc, LPRECT rect, LPARAM lParam) {
-
-	(void) hdc; (void) rect;
-	DataEnumDisplayMonitors *dat = (DataEnumDisplayMonitors*) lParam;
- 
-	MONITORINFOEXW info = (MONITORINFOEXW) { .cbSize = sizeof(MONITORINFOEXW) };
- 
-	if(!GetMonitorInfoW(hmon, (MONITORINFO*) &info))
-		return TRUE;   //Skip this monitor but continue enumeration
- 
-	DEVMODEW dm = (DEVMODEW) { .dmSize = sizeof(DEVMODEW) };
-	F32 refreshRate = 0.f;
-	EMonitorOrientation orientation = EMonitorOrientation_Landscape;
- 
-	if(EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &dm)) {
-		refreshRate = dm.dmDisplayFrequency > 1 ? (F32)dm.dmDisplayFrequency : 0.f;
- 
-		switch(dm.dmDisplayOrientation) {
-			case DMDO_DEFAULT: orientation = EMonitorOrientation_Landscape;         break;
-			case DMDO_90:      orientation = EMonitorOrientation_Portrait;          break;
-			case DMDO_180:     orientation = EMonitorOrientation_FlippedLandscape;  break;
-			case DMDO_270:     orientation = EMonitorOrientation_FlippedPortrait;   break;
-		}
-	}
- 
-	//Physical size in mm via GetDeviceCaps, requires a DC for the monitor.
-	//We open a temporary DC on the device name for this.
-	I32x2 sizeMm = I32x2_zero;
-	HDC mdc = CreateDCW(L"DISPLAY", info.szDevice, NULL, NULL);
- 
-	if(mdc) {
-		sizeMm = I32x2_create2(GetDeviceCaps(mdc, HORZSIZE), GetDeviceCaps(mdc, VERTSIZE));
-		DeleteDC(mdc);
-	}
- 
-	const RECT *work = &info.rcMonitor;
-
-	I32x2 offsetR = I32x2_zero;
-	I32x2 offsetG = I32x2_zero;
-	I32x2 offsetB = I32x2_zero;
-
-	IDWriteRenderingParams *params = NULL;
-	DWRITE_PIXEL_GEOMETRY geometry = DWRITE_PIXEL_GEOMETRY_FLAT;
-
-	if (SUCCEEDED(dat->factory->CreateMonitorRenderingParams(hmon, &params))) {
-		geometry = params->GetPixelGeometry();
-		params->Release();
-	}
-
-	switch (geometry) {
-
-		case DWRITE_PIXEL_GEOMETRY_RGB:
-			offsetR = I32x2_create2(-1, 0);
-			offsetG = I32x2_create2( 0, 0);
-			offsetB = I32x2_create2( 1, 0);
-			break;
-
-		case DWRITE_PIXEL_GEOMETRY_BGR:
-			offsetR = I32x2_create2( 1, 0);
-			offsetG = I32x2_create2( 0, 0);
-			offsetB = I32x2_create2(-1, 0);
-			break;
-
-		default:
-			break;
-	}
- 
-	Monitor m = (Monitor) {
-		.offsetPixels = I32x2_create2(work->left,                work->top),
-		.sizePixels   = I32x2_create2(work->right  - work->left, work->bottom - work->top),
-		.offsetR      = rotateOffset(offsetR, orientation),
-		.offsetG      = rotateOffset(offsetG, orientation),
-		.offsetB      = rotateOffset(offsetB, orientation),
-		.sizeMm       = sizeMm,
-		.refreshRate  = refreshRate,
-		.orientation  = orientation
-	};
- 
-	Error err = Error_none();
-	if(!ListMonitor_pushBack(dat->monitors, m, Platform_instance->alloc, &err))
-		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
- 
-	return TRUE;   //continue enumeration
-}
-
-//Called from WWindow with a clip rect
-Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error *e_rr) {
-
-	Bool s_uccess = true;
-	IDWriteFactory *factory = NULL;
-
-	ListMonitor_clear(monitors, NULL);
-
-	HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, &IID_IDWriteFactory, (IUnknown**)&factory);
-
-	if(FAILED(hr))
-		retError(clean, Error_platformError(0, GetLastError(), "WindowManager_updateMonitors() failed to create factory"));
-
-	DataEnumDisplayMonitors data = (DataEnumDisplayMonitors) { .factory = factory, .monitors = monitors };
-
-	if(!EnumDisplayMonitors(NULL, clip, WWindowManager_enumMonitor, (LPARAM) &data))
-		retError(clean, Error_platformError(0, GetLastError(), "WindowManager_updateMonitors() failed to EnumDisplayMonitors"));
-
-clean:
-	if(factory) IDWriteFactory_Release(factory);
-	return s_uccess;
-}
-
-Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr) {
-
-	Bool s_uccess = true;
-
-	if(!wm)
-		retError(clean, Error_nullPointer(0, "WindowManager_updateMonitors()::wm is required"));
-
-	if(!wm->platformData.ptr)     //No monitors for virtual windows
-		goto clean;
-
-	gotoIfError3(clean, WindowManager_updateMonitorsExt(&wm->monitors, NULL, e_rr));
-
-	if(wm->callbacks.onMonitorChange)
-		wm->callbacks.onMonitorChange(wm);
-
-clean:
-	return s_uccess;
 }
