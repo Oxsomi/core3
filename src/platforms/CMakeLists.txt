@@ -69,11 +69,13 @@ endif()
 if(EnableTests)
 
 	# Functional test is standalone, but can't be run by CI, needs someone to manually re-run and approve.
-
+	
+	file(GLOB testsFunctionalH "test/functional/*.h")
 	file(GLOB testsFunctionalC "test/functional/*.c")
 
 	add_executable(
 		OxC3_platforms_functional_test
+		${testsFunctionalH}
 		${testsFunctionalC}
 		CMakeLists.txt
 	)
