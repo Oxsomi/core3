@@ -545,5 +545,8 @@ void WindowManager_updateExt(WindowManager *manager) {
 
 		if(w->callbacks.onDraw)
 			w->callbacks.onDraw(w);
+
+		if (w->hint & EWindowHint_ProvideCPUBuffer)
+			Window_presentPhysical(w, NULL);
 	}
 }

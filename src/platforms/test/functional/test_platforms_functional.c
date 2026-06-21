@@ -60,4 +60,3 @@ done:
 	Platform_cleanup();
 	Platform_return(result);
 }
-

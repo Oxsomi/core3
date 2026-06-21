@@ -155,7 +155,7 @@ BANNED_SYMBOLS: list[dict] = [
             "src/types/base/test/shared/shared.c",
             "src/types/container/string.c",
             "src/platforms/unix/ufile.c",
-            "src/platforms/test/functional/test_platforms_functional.c"
+            "src/platforms/test/functional/test_platforms_functional_input.c"
         ),
     },
     # B4, assert

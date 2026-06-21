@@ -43,6 +43,7 @@
 	#include <Windows.h>
 #elif _PLATFORM_TYPE == PLATFORM_LINUX
 	#include <stdlib.h>
+	#include <stdio.h>
 	#include "platforms/linux/lwindow_structs.h"
 	Bool hasXdotool();
 #endif
@@ -710,7 +711,7 @@ static void F18_onDraw(Window *w) {
 
 	if (cx >= 0 && cx < W && cy >= 0 && cy < H) {
 		U32 *p = (U32*)(w->cpuVisibleBuffer.ptrNonConst + (cy * W + cx) * 4);
-		*p = 0xFFFF00FF;		//In any layout this will be easily visible (ABGR, RGBA)
+		*p = 0xFFFF00FF;            //In any layout this will be easily visible (ABGR, RGBA)
 	}
 }
 

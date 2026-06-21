@@ -41,7 +41,7 @@ Bool Test_functionalSetup(Test *t) {
 	return true;
 }
 
-void Test_functionalShutdown(void) {
+void Test_functionalShutdown() {
 	if (windowManagerReady) {
 		WindowManager_free(&windowManager);
 		windowManagerReady = false;
@@ -50,7 +50,7 @@ void Test_functionalShutdown(void) {
 
 #if _PLATFORM_TYPE == PLATFORM_LINUX
 	#include <stdlib.h>
-	Bool hasXdotool(void) {
+	Bool hasXdotool() {
 		return system("which xdotool > /dev/null 2>&1") == 0;
 	}
 #endif

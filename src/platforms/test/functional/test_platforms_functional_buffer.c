@@ -40,6 +40,7 @@
 typedef struct F1State {
 	volatile Bool drawn;
 	U8 zxor;
+	Test *t;
 } F1State;
 
 static F1State f1;
@@ -51,7 +52,10 @@ static void F1_onDraw(Window *w) {
 
 	U8 *px = w->cpuVisibleBuffer.ptrNonConst;
 
-	if (!px)
+	if (f1.t && !Test_assert(f1.t, "has px", px != NULL))
+		return;
+
+	if(!px)
 		return;
 
 	for (U32 y = 0; y < H; ++y)
@@ -63,7 +67,25 @@ static void F1_onDraw(Window *w) {
 			p[3] = 255;                    //A
 		}
 
+	U8 *tl = px;
+	U8 *tr = px + (W - 1) * 4;
+	U8 *bl = px + (H - 1) * W * 4;
+	U8 *br = px + ((H - 1) * W + (W - 1)) * 4;
+
+	if(f1.t) {
+		Test_assert(f1.t, "topLeft_R",  tl[0] == 0);
+		Test_assert(f1.t, "topLeft_G",  tl[1] == 0);
+		Test_assert(f1.t, "topLeft_B",  tl[2] == (128 ^ f1.zxor));
+		Test_assert(f1.t, "topRight_R", tr[0] == (U8)(W - 1));
+		Test_assert(f1.t, "topRight_G", tr[1] == 0);
+		Test_assert(f1.t, "botLeft_R",  bl[0] == 0);
+		Test_assert(f1.t, "botLeft_G",  bl[1] == (U8)(H - 1));
+		Test_assert(f1.t, "botRight_R", br[0] == (U8)(W - 1));
+		Test_assert(f1.t, "botRight_G", br[1] == (U8)(H - 1));
+	}
+
 	f1.drawn = true;
+	f1.t = NULL;         //Only check the results once.
 }
 
 static Bool waitForDraw(volatile Bool *drawn, Ns timeout) {
@@ -83,13 +105,16 @@ static void Test_cpuBuffer(Test *t) {
 	Test_setModule(t, "F1/CPUBuffer");
 
 	f1 = (F1State) { 0 };
+	f1.t = t;
 
 	WindowCallbacks cbs = (WindowCallbacks){ 0 };
 	cbs.onDraw = F1_onDraw;
 
 	I32x2 sz = I32x2_create2(256, 256);
 
-	Window *w = createWindowCallback(t, "F1: CPU Buffer", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs);
+	Window *w = createWindowCallback(
+		t, "F1: CPU Buffer", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
+	);
 
 	if (!Test_assert(t, "windowCreated", w != NULL))
 		goto clean;
@@ -108,27 +133,6 @@ static void Test_cpuBuffer(Test *t) {
 		Test_assert(t, "onDrawFired", waitForDraw(&f1.drawn, 1 * SECOND));
 
 	else F1_onDraw(w);   //Virtual windows have no paint loop to drive onDraw; call directly.
-
-	U8 *px = w->cpuVisibleBuffer.ptrNonConst;
-	Test_assert(t, "has px", px != NULL);
-
-	if (!px)
-		goto clean;
-
-	U8 *tl = px;
-	U8 *tr = px + (W - 1) * 4;
-	U8 *bl = px + (H - 1) * W * 4;
-	U8 *br = px + ((H - 1) * W + (W - 1)) * 4;
-
-	Test_assert(t, "topLeft_R",  tl[0] == 0);
-	Test_assert(t, "topLeft_G",  tl[1] == 0);
-	Test_assert(t, "topLeft_B",  tl[2] == 128);
-	Test_assert(t, "topRight_R", tr[0] == (U8)(W - 1));
-	Test_assert(t, "topRight_G", tr[1] == 0);
-	Test_assert(t, "botLeft_R",  bl[0] == 0);
-	Test_assert(t, "botLeft_G",  bl[1] == (U8)(H - 1));
-	Test_assert(t, "botRight_R", br[0] == (U8)(W - 1));
-	Test_assert(t, "botRight_G", br[1] == (U8)(H - 1));
 
 	pump(VISUAL_HOLD_NS);
 
@@ -171,7 +175,7 @@ static void Test_storeCPUBuffer(Test *t) {
 
 	Test_setModule(t, "F6/StoreCPUBufferToDisk");
 
-	f6 = (F6State){ 0 };
+	f6 = (F6State) { 0 };
 
 	const Allocator *alloc = Platform_instance->alloc;
 
@@ -180,7 +184,9 @@ static void Test_storeCPUBuffer(Test *t) {
 	WindowCallbacks cbs = (WindowCallbacks){ 0 };
 	cbs.onDraw = F6_onDraw;
 
-	Window *w = createWindowCallback(t, "F6: StoreToDisk", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs);
+	Window *w = createWindowCallback(
+		t, "F6: StoreToDisk", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
+	);
 
 	if (w)
 		sz = w->size;

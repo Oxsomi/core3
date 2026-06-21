@@ -636,6 +636,10 @@ clean:
 // min/max_size hints by trying to resize it programmatically
 // to a forbidden dimension, then checking w->size was not updated outside the allowed range.
 
+static PatternState f17;
+
+static void F17_onDraw(Window *w) { Pattern_onDraw(w, &f17); }
+
 static void Test_minMaxSize(Test *t) {
 
 	Test_setModule(t, "F17/MinMaxSize");
@@ -654,7 +658,7 @@ static void Test_minMaxSize(Test *t) {
 
 		WindowManager_createWindow(
 			&windowManager, EWindowType_Virtual, pos, initSz, minSz, maxSz,
-			EWindowHint_None, title, (WindowCallbacks){ 0 },
+			EWindowHint_None, title, (WindowCallbacks) { 0 },
 			EWindowFormat_AutoRGBA8, 0, &w, &t->err
 		);
 
@@ -691,9 +695,14 @@ static void Test_minMaxSize(Test *t) {
 		CharString title = CharString_createRefCStrConst("F17: Resize me, should clamp to 400x300 .. 800x600");
 		I32x2 pos = I32x2_create2(100, 100);
 
+		WindowCallbacks callbacks = (WindowCallbacks) { 0 };
+		callbacks.onDraw = F17_onDraw;
+
+		f17 = (PatternState) { 0 };
+
 		Bool s_uccess = WindowManager_createWindow(
 			&windowManager, EWindowType_Physical, pos, initSz, minSz, maxSz,
-			EWindowHint_ProvideCPUBuffer, title, (WindowCallbacks){ 0 },
+			EWindowHint_ProvideCPUBuffer, title, callbacks,
 			EWindowFormat_AutoRGBA8, 0, &w, &t->err
 		);
 

@@ -416,6 +416,9 @@ static void LWindow_updateCursor(Window *w, U32 resizeEdge) {
 
 	U32 idx = LWindow_edgeIndex(resizeEdge);
 
+	if (w->flags & EWindowFlags_IsFullscreen)     //Avoid showing the resizing cursor when on fullscreen
+		idx = 0;
+
 	struct wl_cursor *cursor = manager->cursors[idx];
 
 	if(!cursor)
@@ -585,7 +588,7 @@ static void LWindow_pointerMotionBar(
 	I32 nx = wl_fixed_to_int(sx);
 	I32 ny = wl_fixed_to_int(sy);
 
-	win->cursor = I32x2_create(nx, ny);
+	w->cursor = I32x2_create2(nx, ny);
 
 	lwin->contentPointerX = nx;
 	lwin->contentPointerY = ny;
@@ -1142,8 +1145,17 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 
 	//Tell the compositor the full visible extent of the window (including bar).
 	//Used for snap, shadows, and maximize geometry, must cover the whole surface.
+	//The CSD bar subsurface sits LWINDOW_DECOR_HEIGHT px *above* the content
+	// surface's origin (see wl_subsurface_set_position at creation), so the
+	// geometry's y-origin and height must include that region or the compositor's
+	// maximize / fullscreen-restore / interactive-resize anchoring will be off by
+	// the bar height (and drift further with every subsequent resize configure).
 
-	xdg_surface_set_window_geometry(lwin->surface, 0, 0, totalWidth, totalHeight);
+	Bool hasBar = lwin->barSurface && !(w->flags & EWindowFlags_IsFullscreen);
+	I32  geomY  = hasBar ? -(I32)LWINDOW_DECOR_HEIGHT : 0;
+	I32  geomH  = totalHeight + (hasBar ? (I32)LWINDOW_DECOR_HEIGHT : 0);
+
+	xdg_surface_set_window_geometry(lwin->surface, 0, geomY, totalWidth, geomH);
 
 	if(w->hint & EWindowHint_ProvideCPUBuffer) {
 
@@ -1374,6 +1386,8 @@ static void LWindow_updateSize(
 	Error err = Error_none();
 	if(!LWindow_initSize(w, I32x2_create2(width, height), &err))
 		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	else lwin->frameReady = true;
 
 	LWindow_updateMonitors(w);
 

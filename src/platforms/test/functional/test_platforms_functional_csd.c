@@ -30,10 +30,14 @@
 
 	#include "platforms/window_manager.h"
 	#include "platforms/linux/lwindow_structs.h"
+	#include "types/test/test.h"
+	#include "types/base/thread.h"
 	#include <stdlib.h>
 
 	static volatile Bool f16MinimizeSeen = false;
 	static volatile Bool f16MaximizeSeen = false;
+
+	Bool hasXdotool();
 
 	static Bool F16_onResize(Window *w, Error *e_rr) {
 		(void) e_rr;
