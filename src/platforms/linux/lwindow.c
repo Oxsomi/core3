@@ -416,7 +416,7 @@ static void LWindow_updateCursor(Window *w, U32 resizeEdge) {
 
 	U32 idx = LWindow_edgeIndex(resizeEdge);
 
-	if (w->flags & EWindowFlags_IsFullscreen)     //Avoid showing the resizing cursor when on fullscreen
+	if (w->flags & (EWindowFlags_IsFullscreen | EWindowFlags_IsMaximized))
 		idx = 0;
 
 	struct wl_cursor *cursor = manager->cursors[idx];
@@ -663,8 +663,13 @@ static void LWindow_pointerButtonBar(
 			w->flags |= EWindowFlags_ShouldTerminate;
 
 		else if(x >= maxX) {
-			if(w->hint & EWindowHint_AllowFullscreen)
-				Window_toggleFullScreen(w, NULL);
+			if(!(w->hint & EWindowHint_DisableResize)) {
+
+				if(w->flags & EWindowFlags_IsMaximized)
+					xdg_toplevel_unset_maximized(lwin->topLevel);
+				else
+					xdg_toplevel_set_maximized(lwin->topLevel);
+			}
 		}
 
 		else if(x >= minX)
@@ -680,7 +685,11 @@ static void LWindow_pointerButtonBar(
 	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
 		return;
 
-	if(pressed && button == BTN_LEFT && !(w->hint & EWindowHint_DisableResize)) {
+	if(
+		pressed && button == BTN_LEFT &&
+		!(w->hint & EWindowHint_DisableResize) &&
+		!(w->flags & (EWindowFlags_IsFullscreen | EWindowFlags_IsMaximized))
+	) {
 
 		U32 edge = LWindow_resizeEdge(w, lwin->contentPointerX, lwin->contentPointerY);
 
@@ -1346,6 +1355,9 @@ static void LWindow_updateSize(
 
 	if(isMinimized) w->flags |=  EWindowFlags_IsMinimized;
 	else            w->flags &= ~EWindowFlags_IsMinimized;
+
+	if(isMaximized) w->flags |=  EWindowFlags_IsMaximized;
+	else            w->flags &= ~EWindowFlags_IsMaximized;
 
 	//Sync fullscreen flag with compositor state
 	if(isFullscreen) w->flags |=  EWindowFlags_IsFullscreen;

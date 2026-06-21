@@ -379,11 +379,6 @@ void WindowManager_updateExt(WindowManager *manager) {
 		DispatchMessageW(&msg);
 	}
 
-	if(manager->monitorsDirty) {
-		manager->monitorsDirty = false;
-		gotoIfError3(clean, WindowManager_updateMonitors(manager, e_rr));
-	}
-
 clean:
 	ListU64_free(&seenWindowsLarge, Platform_instance->alloc);
 	Error_print(Platform_instance->alloc, e_rr, ELogLevel_Error, ELogOptions_NewLine);

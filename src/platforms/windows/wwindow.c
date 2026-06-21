@@ -892,6 +892,11 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			else w->flags &= ~EWindowFlags_IsMinimized;
 
+			if (wParam == SIZE_MAXIMIZED)
+				w->flags |= EWindowFlags_IsMaximized;
+
+			else w->flags &= ~EWindowFlags_IsMaximized;
+
 			Bool newState = w->flags & EWindowFlags_IsMinimized;
 			Bool validSize = !I32x2_any(I32x2_leq(newSize, I32x2_zero));
 			const Bool sizeChanged = validSize && !I32x2_eq2(w->size, newSize);

@@ -494,59 +494,8 @@ void WindowManager_updateExt(WindowManager *manager) {
 
 	LWindowManager *lmanager = (LWindowManager*)manager->platformData.ptr;
 
-	//Flush outgoing requests before dispatching incoming events.
-
 	if(lmanager) {
 		wl_display_flush(lmanager->display);
 		wl_display_roundtrip(lmanager->display);
-	}
-
-	//Fire manager-level callback once if any window updated its monitors
-	if(manager->monitorsDirty) {
-
-		manager->monitorsDirty = false;
-
-		Error err = Error_none();
-		if(!WindowManager_updateMonitors(manager, &err))
-			Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
-	}
-
-	//Drive onUpdate + onDraw for every active window, matching WM_PAINT
-	// behaviour on Windows. Without this, windows with no Wayland events
-	// pending never render.
-
-	for(U64 i = 0; i < manager->windows.length; ++i) {
-
-		Window *w = manager->windows.ptrNonConst[i];
-
-		if(!w || !(w->flags & EWindowFlags_IsActive))
-			continue;
-
-		if(
-			!(w->hint & EWindowHint_AllowBackgroundUpdates) &&
-			(w->flags & EWindowFlags_IsMinimized)
-		)
-			continue;
-
-		InputDevice *dit  = ListInputDevice_begin(w->devices);
-		InputDevice *dend = ListInputDevice_end(w->devices);
-
-		for(; dit != dend; ++dit)
-			InputDevice_markUpdate(dit);
-
-		const Ns now = Time_now();
-
-		if(w->callbacks.onUpdate) {
-			const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
-			w->callbacks.onUpdate(w, dt);
-		}
-
-		w->lastUpdate = now;
-
-		if(w->callbacks.onDraw)
-			w->callbacks.onDraw(w);
-
-		if (w->hint & EWindowHint_ProvideCPUBuffer)
-			Window_presentPhysical(w, NULL);
 	}
 }

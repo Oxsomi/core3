@@ -307,17 +307,25 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 
 		#endif
 
-		const Ns now = Time_now();
+		Bool isBackground = (w->flags & EWindowFlags_IsMinimized) && !(w->hint & EWindowHint_AllowBackgroundUpdates);
 
-		if (w->callbacks.onUpdate) {
-			const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
-			w->callbacks.onUpdate(w, dt);
+		if(!isBackground) {
+
+			const Ns now = Time_now();
+
+			if (w->callbacks.onUpdate) {
+				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+				w->callbacks.onUpdate(w, dt);
+			}
+
+			w->lastUpdate = now;
+
+			if(requireDraw && w->callbacks.onDraw)          //Virtual or non Windows
+				w->callbacks.onDraw(w);
+
+			if(requireDraw && w->type == EWindowType_Physical && (w->hint & EWindowHint_ProvideCPUBuffer))
+				Window_presentPhysical(w, NULL);
 		}
-
-		w->lastUpdate = now;
-
-		if(requireDraw && w->callbacks.onDraw)            //Virtual or non Windows
-			w->callbacks.onDraw(w);
 
 		if (w->flags & EWindowFlags_ShouldTerminate)    //Just in case the window closed now
 			WindowManager_freeWindow(manager, &w);
@@ -327,6 +335,15 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 
 	if(!forcingUpdate)
 		WindowManager_updateExt(manager);
+
+	if(manager->monitorsDirty) {
+
+		manager->monitorsDirty = false;
+
+		Error err = Error_none();
+		if(!WindowManager_updateMonitors(manager, &err))
+			Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
+	}
 
 	//Finally, we can notify manager that we're ready for draws/updates
 
