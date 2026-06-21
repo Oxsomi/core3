@@ -684,8 +684,6 @@ clean:
 
 typedef struct F18State {
 	volatile Bool  buttonHeld;
-	volatile I32   cursorX;
-	volatile I32   cursorY;
 } F18State;
 
 static F18State f18;
@@ -701,27 +699,13 @@ static void F18_onButton(Window *w, InputDevice *dev, InputHandle h, Bool down) 
 		f18.buttonHeld = down;
 }
 
-static void F18_onAxis(Window *w, InputDevice *dev, InputHandle h, F32 value) {
-
-	(void)w;
-	if (dev->type != EInputDeviceType_Mouse)
-		return;
-
-	U16 local = InputDevice_getLocalHandle(dev, h);
-
-	if (local == (U16)EMouseAxis_X)
-		f18.cursorX = (I32)value;
-
-	if (local == (U16)EMouseAxis_Y)
-		f18.cursorY = (I32)value;
-}
-
 static void F18_onDraw(Window *w) {
 
 	if (!f18.buttonHeld || !w->cpuVisibleBuffer.ptrNonConst)
 		return;
 
-	I32 cx = f18.cursorX, cy = f18.cursorY;
+	I32 cx = I32x2_x(w->cursor);
+	I32 cy = I32x2_y(w->cursor);
 	I32 W = I32x2_x(w->size), H = I32x2_y(w->size);
 
 	if (cx >= 0 && cx < W && cy >= 0 && cy < H) {
@@ -754,7 +738,6 @@ static void Test_mouseDraw(Test *t) {
 
 	WindowCallbacks cbs = (WindowCallbacks){ 0 };
 	cbs.onDeviceButton = F18_onButton;
-	cbs.onDeviceAxis = F18_onAxis;
 	cbs.onDraw = F18_onDraw;
 
 	I32x2 sz = I32x2_create2(256, 256);

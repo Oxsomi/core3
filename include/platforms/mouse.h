@@ -47,8 +47,8 @@ typedef enum EMouseActions {
 	EMouseAxis_ScrollWheel_X,
 	EMouseAxis_ScrollWheel_Y,
 
-	EMouseAxis_X,
-	EMouseAxis_Y,
+	EMouseAxis_Temp0,		//These are only meant are temporary storage, for example to compute RX/RY. Use Window->cursor instead.
+	EMouseAxis_Temp1,
 
 	EMouseAxis_End,
 	EMouseAxis_Count = EMouseAxis_End - EMouseAxis_Begin,

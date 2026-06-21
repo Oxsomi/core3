@@ -46,7 +46,7 @@ Bool Mouse_create(Mouse *result, const Allocator *alloc, Error *e_rr) {
 
 	AXIS(RX, false);             AXIS(RY, false);
 	AXIS(ScrollWheel_X, true);   AXIS(ScrollWheel_Y, true);
-	AXIS(X, false);              AXIS(Y, false);
+	AXIS(Temp0, false);          AXIS(Temp1, false);
 
 clean:
 

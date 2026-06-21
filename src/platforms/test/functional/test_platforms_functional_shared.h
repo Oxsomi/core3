@@ -88,6 +88,9 @@ void present(Test *t, Window *w);
 //and double up on pumping that the loop is already doing itself.
 void presentQuiet(Window *w);
 
+//Invalidate window's surface to force a WM_PAINT (No-op on non Windows).
+void invalidateForRepaint(Window *w);
+
 //Pump the window manager for up to `ns` nanoseconds.
 void pump(Ns ns);
 

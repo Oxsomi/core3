@@ -84,8 +84,6 @@ static void Pattern_onDraw(Window *w, PatternState *ps) {
 // sure onDraw actually ran with the *current* zxor before we move on
 static Bool Pattern_waitForDraw(volatile Bool *drawn, Ns timeout) {
 
-	*drawn = false;
-
 	Ns waited = 0;
 	while (!*drawn && waited < timeout) {
 		WindowManager_step(&windowManager, NULL, NULL);
@@ -100,12 +98,13 @@ static Bool Pattern_waitForDraw(volatile Bool *drawn, Ns timeout) {
 // on virtual windows, which have no paint loop to drive it).
 static void presentAndDraw(Test *t, Window *w, PatternState *ps, void (*onDraw)(Window*)) {
 
-	present(t, w);
-
-	if (w->type == EWindowType_Physical)
+	if (w->type == EWindowType_Physical) {
+		ps->drawn = false;          //reset BEFORE the trigger
+		invalidateForRepaint(w);    //WM_PAINT will onDraw + auto-present
 		Test_assert(t, "onDrawFired", Pattern_waitForDraw(&ps->drawn, 1 * SECOND));
-
-	else onDraw(w);
+	} else {
+		onDraw(w);
+	}
 }
 
 // -- F2. Fullscreen toggle -----------------------------------------------------

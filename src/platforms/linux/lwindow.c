@@ -502,13 +502,15 @@ static void LWindow_pointerEnterBar(
 
 			InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
 
-			InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_X, EInputType_Axis);
-			InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Y, EInputType_Axis);
+			InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
+			InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
 			InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
 			InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
 
-			InputDevice_setCurrentAxis(mouse, hAbsX, (F32)wl_fixed_to_int(sx));
-			InputDevice_setCurrentAxis(mouse, hAbsY, (F32)wl_fixed_to_int(sy));
+			w->cursor = I32x2_create2(wl_fixed_to_int(sx), wl_fixed_to_int(sy));
+			
+			InputDevice_setCurrentAxis(mouse, hAbsX, (F32) I32x2_x(w->cursor));
+			InputDevice_setCurrentAxis(mouse, hAbsY, (F32) I32x2_y(w->cursor));
 			InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
 			InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
 		}
@@ -583,6 +585,8 @@ static void LWindow_pointerMotionBar(
 	I32 nx = wl_fixed_to_int(sx);
 	I32 ny = wl_fixed_to_int(sy);
 
+	win->cursor = I32x2_create(nx, ny);
+
 	lwin->contentPointerX = nx;
 	lwin->contentPointerY = ny;
 
@@ -593,8 +597,8 @@ static void LWindow_pointerMotionBar(
 
 	//Absolute position -> X, Y
 
-	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_X,        EInputType_Axis);
-	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Y,        EInputType_Axis);
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0,    EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1,    EInputType_Axis);
 
 	//Relative direction -> RX, RY
 

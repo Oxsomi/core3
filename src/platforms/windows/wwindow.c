@@ -610,17 +610,16 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
 
-					F32 prevAbsX = InputDevice_getCurrentAxis(dev, EMouseAxis_X);
-					F32 prevAbsY = InputDevice_getCurrentAxis(dev, EMouseAxis_Y);
+					F32 prevAbsX = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp0);
+					F32 prevAbsY = InputDevice_getCurrentAxis(dev, EMouseAxis_Temp1);
 
 					nextX = F32_clamp((F32) (mouseDat.lLastX - prevAbsX), -1, 1);
 					nextY = F32_clamp((F32) (mouseDat.lLastY - prevAbsY), -1, 1);
 
-					InputDevice_setCurrentAxis(dev, EMouseAxis_X, (F32) mouseDat.lLastX);
-					InputDevice_setCurrentAxis(dev, EMouseAxis_Y, (F32) mouseDat.lLastY);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp0, (F32) mouseDat.lLastX);
+					InputDevice_setCurrentAxis(dev, EMouseAxis_Temp1, (F32) mouseDat.lLastY);
 
 				} else {
-					//TODO: Construct EMouseAxis_X, Y
 					nextX = (F32) mouseDat.lLastX;
 					nextY = (F32) mouseDat.lLastY;
 				}
@@ -655,6 +654,17 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 		cleanup:
 			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
 			return lr;
+		}
+
+		case WM_MOUSEMOVE: {
+
+			I32x2 oldCursor = w->cursor;
+			w->cursor = I32x2_create2((I32)(I16)LOWORD(lParam), (I32)(I16)HIWORD(lParam));
+
+			if (w->callbacks.onCursorMove && I32x2_neq2(oldCursor, w->cursor))
+				w->callbacks.onCursorMove(w);
+
+			break;
 		}
 
 		//TODO: Handle capture cursor
@@ -828,6 +838,9 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			if(w->callbacks.onDraw)
 				w->callbacks.onDraw(w);
+
+			if (w->hint & EWindowHint_ProvideCPUBuffer)
+				Window_presentPhysical(w, NULL);
 
 			//Call update on all other windows and window manager
 

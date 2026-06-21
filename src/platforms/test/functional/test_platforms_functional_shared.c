@@ -127,12 +127,12 @@ void pump(Ns ns) {
 	// color, etc) don't reliably produce one. Explicitly invalidating before
 	// every present is what guarantees onDraw -> presentPhysical actually
 	// see a non-empty paint rect every time, instead of only "most of the time".
-	static void invalidateForRepaint(Window *w) {
+	void invalidateForRepaint(Window *w) {
 		InvalidateRect((HWND) w->nativeHandle, NULL, FALSE);
 	}
 
 #else
-	static void invalidateForRepaint(Window *w) { (void) w; }
+	void invalidateForRepaint(Window *w) { (void) w; }
 #endif
 
 void presentQuiet(Window *w) {

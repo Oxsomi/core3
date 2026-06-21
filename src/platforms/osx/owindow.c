@@ -490,8 +490,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, delta);
 				}
 
-				F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_X);
-				F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Y);
+				F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp0);
+				F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Temp1);
 
 				F32 nextX, nextY;
 
@@ -513,18 +513,18 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (nextX != prevX) {
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_X, nextX);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp0, nextX);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_X, nextX);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_Temp0, nextX);
 				}
 
 				if (nextY != prevY) {
 
-					InputDevice_setCurrentAxis(*dev, EMouseAxis_Y, nextY);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Temp1, nextY);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_Y, nextY);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_Temp1, nextY);
 				}
 			}
 

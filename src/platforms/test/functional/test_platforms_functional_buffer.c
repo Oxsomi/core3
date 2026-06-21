@@ -68,8 +68,6 @@ static void F1_onDraw(Window *w) {
 
 static Bool waitForDraw(volatile Bool *drawn, Ns timeout) {
 
-	*drawn = false;
-
 	Ns waited = 0;
 	while (!*drawn && waited < timeout) {
 		WindowManager_step(&windowManager, NULL, NULL);
