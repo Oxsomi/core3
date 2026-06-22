@@ -531,34 +531,27 @@ static void Test_focusReset(Test *t) {
 
 		#elif _PLATFORM_TYPE == PLATFORM_LINUX
 
-			if (hasXdotool()) {
-
-				//Press and hold a key via xdotool so the platform layer records it as down.
-				//Then steal focus, LWindow_kbLeave should fire and clear all button states.
-				//We inject at the Wayland level rather than via InputDevice directly, so the
-				// state actually enters through the real event path.
-
-				system("xdotool search --name 'F11:' windowfocus key --clearmodifiers Escape");
-				pump(200 * MS);
-
-				Keyboard *kb = (Keyboard *)&w->devices.ptrNonConst[w->defaultKeyboardId];
+			{
+				Keyboard *kb = (Keyboard*)&w->devices.ptrNonConst[w->defaultKeyboardId];
 				InputHandle hEsc = InputDevice_createHandle(kb, EKey_Escape, EInputType_Button);
 
+				//Set state directly, matching the Windows path.
+				//F5 covers OS-level key injection; this test is about focus-loss reset only.
+				InputDevice_setCurrentState(kb, hEsc, true);
 				Test_assert(t, "stateSet", InputDevice_getCurrentState(kb, hEsc));
 
-				//Now steal focus by activating a different window (the desktop / root)
-				system("xdotool key super");   //tap Super to shift focus away
-				pump(300 * MS);
+				//Minimize triggers a compositor wl_keyboard::leave event which
+				//LWindow_kbLeave handles, clearing all held keys and firing onDeviceButton.
 
-				//After focus loss all keys should be cleared by LWindow_kbLeave
-				Test_assert(t, "stateCleared", !InputDevice_getCurrentState(kb, hEsc));
+				LWindow *lwin = WindowExt(w, LWindow);
+				LWindowManager *manager = (LWindowManager *)w->owner->platformData.ptr;
+				xdg_toplevel_set_minimized(lwin->topLevel);
+				wl_display_flush(manager->display);
+				pump(400 * MS);
 
-				//focusResetTriggered is set by the onDeviceButton(down=false) callback
-				//which LWindow_kbLeave fires for every previously-down key
-				Test_assert(t, "resetTriggered", focusResetTriggered);
+				Test_assert(t, "stateCleared",   !InputDevice_getCurrentState(kb, hEsc));
+				Test_assert(t, "resetTriggered",  focusResetTriggered);
 			}
-
-			else Test_print(t, "xdotool not available, skipping synthetic focus-reset injection");
 
 		#endif
 
@@ -1032,58 +1025,9 @@ static void Test_scrollWheel(Test *t) {
 
 	#if _PLATFORM_TYPE == PLATFORM_LINUX
 
-		if (hasXdotool()) {
-
-			//Focus and move cursor into the centre of the window so scroll
-			// events are routed to our surface, not the compositor desktop
-
-			system(
-				"xdotool search --name 'F19:' windowfocus && "
-				"xdotool mousemove --window $(xdotool search --name 'F19:') 200 150"
-			);
-
-			pump(200 * MS);
-
-			//Vertical scroll down (button 5), then up (button 4)
-
-			system("xdotool click --clearmodifiers 5");
-			pump(200 * MS);
-
-			if (f19.gotScrollY)
-				Test_assert(t, "syntheticScrollY_down", f19.gotScrollY && f19.scrollY != 0.f);
-
-			else Test_print(t, "WARN: vertical scroll down didn't fire (compositor routing?)");
-
-			f19.gotScrollY = false;
-			f19.scrollY = 0.f;
-
-			system("xdotool click --clearmodifiers 4");
-			pump(200 * MS);
-
-			if (f19.gotScrollY)
-				Test_assert(t, "syntheticScrollY_up", f19.gotScrollY && f19.scrollY != 0.f);
-
-			else Test_print(t, "WARN: vertical scroll up didn't fire");
-
-			//Horizontal scroll right (button 7), then left (button 6).
-			//Not all mice or compositors generate horizontal scroll; treat as soft
-
-			f19.gotScrollX = false;
-			f19.scrollX = 0.f;
-
-			system("xdotool click --clearmodifiers 7");
-			pump(200 * MS);
-
-			system("xdotool click --clearmodifiers 6");
-			pump(200 * MS);
-
-			if (f19.gotScrollX)
-				Test_assert(t, "syntheticScrollX", f19.gotScrollX && f19.scrollX != 0.f);
-
-			else Test_print(t, "WARN: horizontal scroll not received (device/compositor may not support it)");
-		}
-
-		else Test_print(t, "xdotool not available, skipping synthetic scroll injection");
+		//xdotool pointer injection uses the X11 XTEST extension and does not
+		// reach native Wayland surfaces. Scroll testing is interactive-only on Linux.
+		Test_print(t, "Native Wayland: synthetic scroll injection unavailable, interactive-only");
 
 	#elif _PLATFORM_TYPE == PLATFORM_WINDOWS
 		{
