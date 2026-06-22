@@ -44,6 +44,8 @@
 #include <Windows.h>
 #include <dwmapi.h>
 
+U32 Window_extSize = 0;
+
 Bool WindowManager_updateMonitorsExt(ListMonitor *monitors, LPCRECT clip, Error *e_rr);
 
 void WWindow_updateMonitors(Window *w) {
@@ -958,8 +960,13 @@ void WindowManager_freePhysical(Window *w) {
 	if(w->nativeData)
 		DeleteObject((HGDIOBJ) w->nativeData);
 
-	if(w->nativeHandle)
+	if(w->nativeHandle) {
+		SetWindowLongPtrW(w->nativeHandle, 0, 0);
 		DestroyWindow(w->nativeHandle);
+	}
+
+	w->nativeHandle = NULL;
+	w->nativeData = NULL;
 }
 
 Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
@@ -972,6 +979,11 @@ Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 		retError(clean, Error_nullPointer(
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		));
+
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
 
 	if (titlel >= 260)
 		retError(clean, Error_outOfBounds(
@@ -999,6 +1011,11 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(
 			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
 		));
+
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
 
 	DWORD style = WS_VISIBLE;
 
@@ -1287,6 +1304,7 @@ clean:
 		}
 
 		if(touched && w->nativeHandle) {
+			SetWindowLongPtrW(w->nativeHandle, 0, 0);
 			DestroyWindow(w->nativeHandle);
 			w->nativeHandle = NULL;
 		}

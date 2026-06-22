@@ -32,6 +32,8 @@
 #include "platforms/monitor.h"
 #include "types/base/time.h"
 
+U32 Window_extSize = 0;
+
 Bool OWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	(void)w; (void)size; (void) e_rr;
 	retError(clean, Error_unimplemented(0, "OWindow_initSize() is unimplemented"));        //TODO:
@@ -825,6 +827,11 @@ Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		));
 
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
+
 	//CharString copy = CharString_createNull();
 	//id wrapped;
 	//gotoIfError2(clean, ObjC_wrapString(title, &copy, &wrapped))
@@ -846,6 +853,11 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(
 			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
 		));
+
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
 
 	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
 

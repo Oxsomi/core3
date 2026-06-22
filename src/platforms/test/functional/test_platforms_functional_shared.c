@@ -55,7 +55,7 @@ void Test_functionalShutdown() {
 	}
 #endif
 
-Window *createWindow(
+WindowRef *createWindow(
 	Test *t,
 	const C8 *titleStr,
 	I32x2 size,
@@ -66,7 +66,7 @@ Window *createWindow(
 	return createWindowCallback(t, titleStr, pos, size, hint, fmt, (WindowCallbacks) { 0 });
 }
 
-Window *createWindowCallback(
+WindowRef *createWindowCallback(
 	Test *t,
 	const C8 *titleStr,
 	I32x2 pos,
@@ -75,7 +75,7 @@ Window *createWindowCallback(
 	EWindowFormat fmt,
 	WindowCallbacks cbs
 ) {
-	Window *w = NULL;
+	WindowRef *wRef = NULL;
 
 	CharString title = CharString_createRefCStrConst(titleStr);
 	I32x2 minSize = EResolution_get(EResolution_SD);
@@ -83,7 +83,7 @@ Window *createWindowCallback(
 
 	Bool s_uccess = WindowManager_createWindow(
 		&windowManager, EWindowType_Physical, pos, size, minSize, maxSize,
-		hint, title, cbs, fmt, 0, &w, &t->err
+		hint, title, cbs, fmt, 0, &wRef, &t->err
 	);
 
 	if (!s_uccess) {
@@ -92,24 +92,36 @@ Window *createWindowCallback(
 
 		s_uccess = WindowManager_createWindow(
 			&windowManager, EWindowType_Virtual, pos, size, minSize, maxSize,
-			hint, title, cbs, fmt, 0, &w, &t->err
+			hint, title, cbs, fmt, 0, &wRef, &t->err
 		);
 
 		if (s_uccess)
 			Test_print(t, "[fallback] using virtual window");
 	}
 
-	return w;
+	return wRef;
 }
 
 void pump(Ns ns) {
-	if (!windowManagerReady) return;
+
+	if (!windowManagerReady)
+		return;
+
 	Ns deadline = ns;
+
 	while (deadline > 0) {
+
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Ns step = 16 * MS;
 		Thread_sleep(step);
-		if (deadline <= step) break;
+		
+		if (deadline <= step)
+			break;
+
 		deadline -= step;
 	}
 }
@@ -132,7 +144,7 @@ void pump(Ns ns) {
 	}
 
 #else
-	void invalidateForRepaint(Window *w) { (void) w; }
+	void presentQuiet(Window *w) { (void) w; }
 #endif
 
 void presentQuiet(Window *w) {

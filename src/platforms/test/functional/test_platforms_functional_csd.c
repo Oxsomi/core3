@@ -57,16 +57,17 @@
 		I32x2 pos = I32x2_create2(200, 200);
 		I32x2 sz  = I32x2_create2(640, 400);
 
-		Window *w = createWindowCallback(
+		WindowRef *wRef = createWindowCallback(
 			t, "F16: Click min, max, then close button",
 			pos, sz,
 			EWindowHint_AllowFullscreen | EWindowHint_ProvideCPUBuffer,
 			EWindowFormat_AutoRGBA8, cbs
 		);
 
-		if(!Test_assert(t, "windowCreated", w != NULL))
+		if(!Test_assert(t, "windowCreated", wRef != NULL))
 			goto clean;
 
+		Window *w = RefPtr_data(wRef, Window);
 		present(t, w);
 		pump(500 * MS);
 
@@ -78,7 +79,7 @@
 		//Check whether we actually have a CSD bar; if the compositor provided SSD
 		// (e.g. KWin) there is no barSurface and this test is not applicable.
 		{
-			LWindow *lwin = (LWindow*) w->nativeData;
+			LWindow *lwin = WindowExt(w, LWindow);
 			if(!lwin->barSurface) {
 				Test_print(t, "[SSD compositor] no CSD bar present, skipping F16");
 				goto clean;
@@ -155,7 +156,12 @@
 		Ns waited = 0;
 
 		while(waited < 15 * SECOND) {
+			
 			WindowManager_step(&windowManager, NULL, NULL);
+
+			if(!windowManager.windows.length)
+				break;
+
 			Thread_sleep(16 * MS);
 			waited += 16 * MS;
 
@@ -173,17 +179,10 @@
 
 		Test_assert(t, "closeButton", closeSeen);
 
-		//Don't call WindowManager_freeWindow here, ShouldTerminate will be
-		// handled by the step loop on re-entry; just null out w so clean: skips it.
-		if(closeSeen) {
-			WindowManager_freeWindow(&windowManager, &w);
-			w = NULL;
-		}
-
 	clean:
 		f16MinimizeSeen = false;
 		f16MaximizeSeen = false;
-		if(w) WindowManager_freeWindow(&windowManager, &w);
+		RefPtr_dec(&wRef);
 	}
 
 #else

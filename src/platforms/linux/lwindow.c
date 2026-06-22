@@ -39,6 +39,8 @@
 #include <xkbcommon/xkbcommon.h>
 #include <wayland-cursor.h>
 
+U32 Window_extSize = sizeof(LWindow);
+
 static Bool LWindow_openShmFd(U64 size, I32 *fdOut, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -108,7 +110,7 @@ static const struct wl_buffer_listener LWindow_bufferListener = {
 static void LWindow_frameCallback(void *data, struct wl_callback *cb, U32 time) {
 	(void) time;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	wl_callback_destroy(cb);
 	lwin->frameCallback = NULL;
@@ -276,7 +278,7 @@ static void LDecor_drawString(U32 *px, U32 stride4, I32 x, I32 y, const C8 *str,
 
 static void LWindow_redrawBar(Window *w) {
 
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	if(!lwin->barSurface || !lwin->barPixels)
 		return;
@@ -327,7 +329,7 @@ static Bool LWindow_initBar(Window *w, U32 width, Error *e_rr) {
 	Bool s_uccess = true;
 	I32  fd       = -1;
 
-	LWindow        *lwin    = (LWindow*)w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 
 	if(!lwin->barSurface)
@@ -408,7 +410,7 @@ static U32 LWindow_edgeIndex(U32 edge) {
 
 static void LWindow_updateCursor(Window *w, U32 resizeEdge) {
 
-	LWindow        *lwin    = (LWindow*)w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 
 	if(!lwin->barPointer || !manager->cursorSurface)
@@ -476,7 +478,7 @@ static void LWindow_pointerEnterBar(
 ) {
 	(void) ptr; (void) serial;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	lwin->lastPointerSerial     = serial;
 	lwin->pointerCurrentSurface = surface;
@@ -525,7 +527,7 @@ static void LWindow_pointerLeaveBar(
 ) {
 	(void) ptr; (void) serial; (void) surface;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	lwin->pointerCurrentSurface = NULL;
 
@@ -543,7 +545,7 @@ static void LWindow_pointerMotionBar(
 ) {
 	(void) ptr; (void) time;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	//Bar surface: zone-change-only redraw
 
@@ -645,7 +647,7 @@ static void LWindow_pointerButtonBar(
 ) {
 	(void) ptr; (void) time;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	Bool pressed = state == WL_POINTER_BUTTON_STATE_PRESSED;
 
@@ -732,7 +734,7 @@ static void LWindow_pointerAxisBar(
 ) {
 	(void) ptr; (void) time;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	//Bar surface: ignore scroll
 
@@ -791,7 +793,7 @@ static void LWindow_kbKeymap(
 ) {
 	(void) kb;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	if(format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
 		close(fd);
@@ -1042,7 +1044,7 @@ static void LWindow_kbKey(
 	(void) kb; (void) serial; (void) time;
 
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	if(!lwin->xkbState)
 		return;
@@ -1094,7 +1096,7 @@ static void LWindow_kbModifiers(
 ) {
 	(void) kb; (void) serial;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	if(lwin->xkbState)
 		xkb_state_update_mask(lwin->xkbState, modsDepressed, modsLatched, modsLocked, 0, 0, group);
@@ -1121,7 +1123,7 @@ static void LWindow_decorConfigure(
 ) {
 	(void) deco;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	if(mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE && !lwin->barSurface) {
 
@@ -1145,7 +1147,7 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 	I32  fd          = -1;
 	U64  buffersCreated = 0;
 
-	LWindow *lwin  = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 	I32 totalWidth  = I32x2_x(size);
 	I32 totalHeight = I32x2_y(size);
 
@@ -1260,13 +1262,11 @@ Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 clean:
 	if(!s_uccess) {
 
-		if(w->nativeData) {
-			LWindow *l2 = (LWindow*) w->nativeData;
-			for(U64 i = 0; i < buffersCreated; ++i) {
-				if(l2->buffers[i]) {
-					wl_buffer_destroy(l2->buffers[i]);
-					l2->buffers[i] = NULL;
-				}
+		LWindow *l2 = WindowExt(w, LWindow);
+		for(U64 i = 0; i < buffersCreated; ++i) {
+			if(l2->buffers[i]) {
+				wl_buffer_destroy(l2->buffers[i]);
+				l2->buffers[i] = NULL;
 			}
 		}
 
@@ -1288,7 +1288,7 @@ Bool WindowManager_updateMonitorsExt(
 void LWindow_updateMonitors(Window *w) {
  
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
-	LWindow        *lwin    = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	const U32 *ids   = lwin->activeOutputCount ? lwin->activeOutputIds : NULL;
 	U32        count = lwin->activeOutputCount  ? lwin->activeOutputCount : 0;
@@ -1315,7 +1315,7 @@ static void LWindow_updateSize(
 	(void) xdg_toplevel;
 
 	Window *w = (Window*) data;
-	LWindow *lwin  = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	//Parse the states array to track minimized and suspended flags,
 	// matching the EWindowFlags_IsMinimized gate on Windows (WM_SIZE/SIZE_MINIMIZED)
@@ -1421,7 +1421,7 @@ Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat fo
 
 void WindowManager_freePhysical(Window *w) {
 
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	if(!lwin)
 		return;
@@ -1429,7 +1429,7 @@ void WindowManager_freePhysical(Window *w) {
 	//Drain pending events so in-flight callbacks (e.g. frame callback) complete
 	// and dereference lwin before we free it.
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
-	if(manager && manager->display)
+	if(w->nativeHandle && manager && manager->display)
 		wl_display_roundtrip(manager->display);
 
 	if(lwin->keyboard)      wl_keyboard_destroy(lwin->keyboard);
@@ -1461,11 +1461,9 @@ void WindowManager_freePhysical(Window *w) {
 	if(w->nativeHandle)           wl_surface_destroy((struct wl_surface*) w->nativeHandle);
 	if(lwin->fileDescriptor >= 0) close(lwin->fileDescriptor);
 
-	Buffer buf = Buffer_createManagedPtr(lwin, sizeof(*lwin));
-	Buffer_free(&buf, Platform_instance->alloc);
-
-	w->nativeData   = NULL;
 	w->nativeHandle = NULL;
+
+	*lwin = (LWindow) { 0 };
 }
 
 Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
@@ -1478,9 +1476,14 @@ Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		));
 
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
+
 	gotoIfError3(clean, CharString_createCopy(title, Platform_instance->alloc, &copy, e_rr));
 
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 	struct wl_surface *surface = (struct wl_surface*) w->nativeHandle;
 
 	CharString_free(&w->title, Platform_instance->alloc);
@@ -1511,7 +1514,12 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
 		));
 
-	LWindow *lwin = (LWindow*) w->nativeData;
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
+
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	//Compositor will send a configure with the pre-fullscreen size.
 	// w->prevSize is not needed on Wayland; the compositor restores geometry
@@ -1550,7 +1558,7 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 			0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer"
 		));
 
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
 
 	if(!lwin->frameReady)
 		goto clean;
@@ -1602,7 +1610,7 @@ clean:
 static void LWindow_surfaceEnter(void *data, struct wl_surface *surface, struct wl_output *output) {
 	(void) surface;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
  
 	//Find the output id from the manager's table
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
@@ -1633,7 +1641,7 @@ static void LWindow_surfaceEnter(void *data, struct wl_surface *surface, struct 
 static void LWindow_surfaceLeave(void *data, struct wl_surface *surface, struct wl_output *output) {
 	(void) surface;
 	Window  *w    = (Window*) data;
-	LWindow *lwin = (LWindow*) w->nativeData;
+	LWindow *lwin = WindowExt(w, LWindow);
  
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 	U32 id = 0;
@@ -1707,11 +1715,7 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	wl_surface_add_listener(surface, &LWindow_surfaceListener, w);
 
 	//Allocate LWindow
-	Buffer buf = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(LWindow), Platform_instance->alloc, &buf, e_rr));
-	w->nativeData = (void*) buf.ptr;
-
-	LWindow *lwin        = (LWindow*) buf.ptr;
+	LWindow *lwin = WindowExt(w, LWindow);
 	lwin->fileDescriptor = -1;
 	lwin->frameReady     = true;
 
@@ -1888,10 +1892,7 @@ clean:
 		ListInputDevice_free(&w->devices, Platform_instance->alloc);
 		ListMonitor_free(&w->monitors, Platform_instance->alloc);
 
-		//WindowManager_freePhysical handles Wayland object teardown and the
-		//LWindow allocation; call it only if nativeData was set.
-
-		if(w->nativeData)
+		if(w->type == EWindowType_Physical)
 			WindowManager_freePhysical(w);
 
 		else if(w->nativeHandle) {

@@ -34,6 +34,8 @@
 #include <android_native_app_glue.h>
 #include <android/configuration.h>
 
+U32 Window_extSize = 0;
+
 void AWindow_onUpdateSize(Window *w) {
 
 	if(
@@ -540,6 +542,11 @@ Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr) {
 			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
 		))
 
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
+
 	//Title of the window is handled by activity name instead
 
 clean:
@@ -557,6 +564,11 @@ Bool Window_toggleFullScreen(Window *w, Error *e_rr) {
 		retError(clean, Error_unsupportedOperation(
 			0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off"
 		))
+
+	if(!(w->flags & EWindowFlags_IsActive)) {
+		Log_warnLnx("Window_updatePhysicalTitle()::w triggered on inactive window. Ignored");
+		goto clean;
+	}
 
 	//Fullscreen is a no-op, this is handled by the OS, not our app
 

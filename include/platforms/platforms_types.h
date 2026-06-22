@@ -31,7 +31,8 @@
 
 typedef enum EPlatformsTypeId {
 	EPlatformsTypeId_FileHandle        = makeObjectId(0x1C32,  0, 0),
-	EPlatformsTypeId_Count             = 1
+	EPlatformsTypeId_Window            = makeObjectId(0x1C32,  0, 1),
+	EPlatformsTypeId_Count             = 2
 } EPlatformsTypeId;
 
 extern EPlatformsTypeId EPlatformsTypeId_all[EPlatformsTypeId_Count];

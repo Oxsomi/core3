@@ -65,7 +65,7 @@ static void Test_keyboard(Test *t) {
 
 	Test_setModule(t, "F5/Keyboard");
 
-	Window *w = NULL;
+	WindowRef *wRef = NULL;
 
 	WindowCallbacks wcbs = (WindowCallbacks) { 0 };
 	wcbs.onDeviceButton = onDeviceButton;
@@ -78,7 +78,7 @@ static void Test_keyboard(Test *t) {
 
 	Bool s_uccess = WindowManager_createWindow(
 		&windowManager, EWindowType_Physical, pos, sz, minSize, maxSize,
-		EWindowHint_ProvideCPUBuffer, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &t->err
+		EWindowHint_ProvideCPUBuffer, title, wcbs, EWindowFormat_AutoRGBA8, 0, &wRef, &t->err
 	);
 
 	if (!s_uccess) {
@@ -86,6 +86,7 @@ static void Test_keyboard(Test *t) {
 		goto clean;
 	}
 
+	Window *w = RefPtr_data(wRef, Window);
 	present(t, w);
 	pump(300 * MS);
 
@@ -100,7 +101,12 @@ static void Test_keyboard(Test *t) {
 
 			Ns waited = 0;
 			while (!escPressed && waited < 1 * SECOND) {
+
 				WindowManager_step(&windowManager, NULL, NULL);
+
+				if(!windowManager.windows.length)
+					break;
+
 				Thread_sleep(16 * MS);
 				waited += 16 * MS;
 			}
@@ -119,7 +125,12 @@ static void Test_keyboard(Test *t) {
 			Ns waited = 0;
 
 			while (!escPressed && waited < 1 * SECOND) {
+
 				WindowManager_step(&windowManager, NULL, NULL);
+
+				if(!windowManager.windows.length)
+					break;
+
 				Thread_sleep(16 * MS);
 				waited += 16 * MS;
 			}
@@ -141,7 +152,12 @@ static void Test_keyboard(Test *t) {
 	Test_print(t, ">>> INTERACTIVE: Press ESC in the window (5s timeout) <<<");
 	Ns waited = 0;
 	while (!escPressed && waited < 5 * SECOND) {
+
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
@@ -152,7 +168,7 @@ static void Test_keyboard(Test *t) {
 	Test_assert(t, "operatorESC", escPressed);
 
 clean:
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F8. Mouse - OS layer (interactive) ---------------------------------------
@@ -175,7 +191,7 @@ static void Test_mouse(Test *t) {
 
 	Test_setModule(t, "F8/Mouse/OS");
 
-	Window *w = NULL;
+	WindowRef *wRef = NULL;
 
 	WindowCallbacks wcbs = (WindowCallbacks){ 0 };
 	wcbs.onDeviceButton = onMouseButton;
@@ -188,7 +204,7 @@ static void Test_mouse(Test *t) {
 
 	Bool s_uccess = WindowManager_createWindow(
 		&windowManager, EWindowType_Physical, pos, sz, minSize, maxSize,
-		EWindowHint_ProvideCPUBuffer, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &t->err
+		EWindowHint_ProvideCPUBuffer, title, wcbs, EWindowFormat_AutoRGBA8, 0, &wRef, &t->err
 	);
 
 	if (!s_uccess) {
@@ -196,6 +212,7 @@ static void Test_mouse(Test *t) {
 		goto clean;
 	}
 
+	Window *w = RefPtr_data(wRef, Window);
 	present(t, w);
 	pump(300 * MS);
 
@@ -212,7 +229,12 @@ static void Test_mouse(Test *t) {
 
 			Ns waited = 0;
 			while (!leftClicked && waited < 1 * SECOND) {
+
 				WindowManager_step(&windowManager, NULL, NULL);
+
+				if(!windowManager.windows.length)
+					break;
+
 				Thread_sleep(16 * MS);
 				waited += 16 * MS;
 			}
@@ -229,7 +251,12 @@ static void Test_mouse(Test *t) {
 			Ns waited = 0;
 
 			while (!leftClicked && waited < 1 * SECOND) {
+
 				WindowManager_step(&windowManager, NULL, NULL);
+
+				if(!windowManager.windows.length)
+					break;
+
 				Thread_sleep(16 * MS);
 				waited += 16 * MS;
 			}
@@ -251,7 +278,12 @@ static void Test_mouse(Test *t) {
 	Test_print(t, ">>> INTERACTIVE: Left-click anywhere in the window (5s timeout) <<<");
 	Ns waited = 0;
 	while (!leftClicked && waited < 5 * SECOND) {
+
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
@@ -262,7 +294,7 @@ static void Test_mouse(Test *t) {
 	Test_assert(t, "operatorClick", leftClicked);
 
 clean:
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F10. onTypeChar callback --------------------------------------------------
@@ -297,13 +329,14 @@ static void Test_typeChar(Test *t) {
 	I32x2 pos = I32x2_create2(200, 500);
 	I32x2 sz = I32x2_create2(640, 100);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F10: Type \"Hello world\" to pass", pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, wcbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	present(t, w);
 	pump(300 * MS);
 
@@ -415,7 +448,12 @@ static void Test_typeChar(Test *t) {
 
 	Ns waited = 0;
 	while (waited < 8 * SECOND) {
+
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 
@@ -434,7 +472,7 @@ static void Test_typeChar(Test *t) {
 
 clean:
 	CharString_free(&typedText, t->alloc);
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F11. Input - Focus Lost Reset ---------------------------------------------
@@ -455,16 +493,17 @@ static void Test_focusReset(Test *t) {
 		WindowCallbacks cbs = (WindowCallbacks) { 0 };
 		cbs.onDeviceButton = onButtonReset;
 
-		Window *w = createWindowCallback(
+		WindowRef *wRef = createWindowCallback(
 			t, "F11: FocusReset",
 			I32x2_create2(200, 200), I32x2_create2(300, 300),
 			EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8,
 			cbs
 		);
 
-		if (!Test_assert(t, "windowCreated", w != NULL))
+		if (!Test_assert(t, "windowCreated", wRef != NULL))
 			goto clean;
 
+		Window *w = RefPtr_data(wRef, Window);
 		present(t, w);
 		pump(300 * MS);
 
@@ -525,7 +564,7 @@ static void Test_focusReset(Test *t) {
 
 	clean:
 		focusResetTriggered = false;
-		if (w) WindowManager_freeWindow(&windowManager, &w);
+		RefPtr_dec(&wRef);
 
 	#else
 		(void)onButtonReset;
@@ -572,15 +611,16 @@ static void Test_keyboardRemap(Test *t) {
 	WindowCallbacks cbs = (WindowCallbacks) { 0 };
 	cbs.onDeviceButton = F15_onDeviceButton;
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F15: Keyboard remap",
 		I32x2_create2(200, 600), I32x2_create2(640, 100),
 		EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	present(t, w);
 	pump(300 * MS);
 
@@ -648,7 +688,12 @@ static void Test_keyboardRemap(Test *t) {
 	Ns  waited = 0;
 
 	while ((f15_pressed & allBits) != allBits && waited < 10 * SECOND) {
+		
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
@@ -662,7 +707,7 @@ static void Test_keyboardRemap(Test *t) {
 
 clean:
 	f15_pressed = 0;
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F18. Mouse draw: paint into CPU buffer with left-button drag -------------
@@ -684,8 +729,49 @@ clean:
 #define F18_INIT_COLOR 0x80u   //Grey channel value
 
 typedef struct F18State {
-	volatile Bool  buttonHeld;
+	volatile Bool buttonHeld;
+	I32x2         points[1024];   //Recorded cursor positions while dragging
+	U32           pointCount;
 } F18State;
+
+static void F18_onDraw(Window *w) {
+
+	if (!w->cpuVisibleBuffer.ptrNonConst)
+		return;
+
+	I32 W = I32x2_x(w->size), H = I32x2_y(w->size);
+
+	if (f18.buttonHeld && f18.pointCount < (U32)(sizeof(f18.points) / sizeof(f18.points[0]))) {
+
+		I32x2 p = w->cursor;
+		Bool dup = f18.pointCount && I32x2_eq2(f18.points[f18.pointCount - 1], p);
+
+		if(!dup)
+			f18.points[f18.pointCount++] = p;
+	}
+
+	//Re-establish a known background every frame -- a buffer we haven't
+	//drawn into yet (LWINDOW_BUFFER_COUNT rotation, or a fresh allocation
+	//from a resize) isn't guaranteed to already be grey -- then replay every
+	//recorded point on top, clipped to the *current* size. This keeps every
+	//presented buffer identical regardless of rotation, and stays correct
+	//across a resize since out-of-bounds points are just skipped.
+
+	U8 *px = w->cpuVisibleBuffer.ptrNonConst;
+	U64 len = Buffer_length(w->cpuVisibleBuffer);
+
+	for (U64 i = 0; i < len; ++i)
+		px[i] = F18_INIT_COLOR;
+
+	for (U32 i = 0; i < f18.pointCount; ++i) {
+
+		I32 cx = I32x2_x(f18.points[i]);
+		I32 cy = I32x2_y(f18.points[i]);
+
+		if (cx >= 0 && cx < W && cy >= 0 && cy < H)
+			*(U32*)(px + (cy * W + cx) * 4) = 0xFFFF00FF;
+	}
+}
 
 static F18State f18;
 
@@ -700,28 +786,17 @@ static void F18_onButton(Window *w, InputDevice *dev, InputHandle h, Bool down) 
 		f18.buttonHeld = down;
 }
 
-static void F18_onDraw(Window *w) {
-
-	if (!f18.buttonHeld || !w->cpuVisibleBuffer.ptrNonConst)
-		return;
-
-	I32 cx = I32x2_x(w->cursor);
-	I32 cy = I32x2_y(w->cursor);
-	I32 W = I32x2_x(w->size), H = I32x2_y(w->size);
-
-	if (cx >= 0 && cx < W && cy >= 0 && cy < H) {
-		U32 *p = (U32*)(w->cpuVisibleBuffer.ptrNonConst + (cy * W + cx) * 4);
-		*p = 0xFFFF00FF;            //In any layout this will be easily visible (ABGR, RGBA)
-	}
-}
-
 //Drive the window manager for 'ns', presenting on every step while the button
 // is held so onDraw gets to paint each new cursor position along the drag.
 static void F18_pumpAndPaint(Window *w, Ns ns) {
 
 	Ns waited = 0;
 	while (waited < ns) {
+
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
 
 		if (f18.buttonHeld)
 			presentQuiet(w);
@@ -744,13 +819,15 @@ static void Test_mouseDraw(Test *t) {
 	I32x2 sz = I32x2_create2(256, 256);
 	I32x2 pos = I32x2_create2(300, 300);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F18: Hold left-click and drag to draw",
 		pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
+
+	Window *w = RefPtr_data(wRef, Window);
 
 	//Fill buffer with a known grey so we can detect changes.
 	{
@@ -788,6 +865,9 @@ static void Test_mouseDraw(Test *t) {
 				Sleep(16);
 				WindowManager_step(&windowManager, NULL, NULL);
 
+				if(!windowManager.windows.length)
+					break;
+
 				if (f18.buttonHeld)
 					presentQuiet(w);
 			}
@@ -821,6 +901,9 @@ static void Test_mouseDraw(Test *t) {
 				Thread_sleep(16 * MS);
 				WindowManager_step(&windowManager, NULL, NULL);
 
+				if(!windowManager.windows.length)
+					break;
+
 				if (f18.buttonHeld)
 					presentQuiet(w);
 			}
@@ -836,6 +919,10 @@ static void Test_mouseDraw(Test *t) {
 	//Verify at least one pixel changed
 	{
 		const U8 *px = w->cpuVisibleBuffer.ptr;
+
+		if(!px)
+			goto clean;
+
 		I32 W = I32x2_x(w->size), H = I32x2_y(w->size);
 		Bool anyChanged = false;
 
@@ -845,6 +932,9 @@ static void Test_mouseDraw(Test *t) {
 
 		present(t, w);
 		pump(VISUAL_HOLD_NS);
+
+		if(!px)
+			goto clean;
 
 		if (!anyChanged)
 			Test_print(t, "WARN: no pixels changed (synthetic draw didn't fire, try interactive)");
@@ -870,7 +960,7 @@ static void Test_mouseDraw(Test *t) {
 
 clean:
 	f18 = (F18State) { 0 };
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F19. Scroll wheel (vertical + horizontal) ---------------------------------
@@ -921,14 +1011,15 @@ static void Test_scrollWheel(Test *t) {
 	I32x2 sz = I32x2_create2(400, 300);
 	I32x2 pos = I32x2_create2(300, 300);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F19: Scroll wheel test (vertical + horizontal)",
 		pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	present(t, w);
 	pump(300 * MS);
 
@@ -1042,7 +1133,12 @@ static void Test_scrollWheel(Test *t) {
 
 		Ns waited = 0;
 		while (!f19.gotScrollY && waited < 8 * SECOND) {
+
 			WindowManager_step(&windowManager, NULL, NULL);
+
+			if(!windowManager.windows.length)
+				break;
+
 			Thread_sleep(16 * MS);
 			waited += 16 * MS;
 		}
@@ -1061,7 +1157,12 @@ static void Test_scrollWheel(Test *t) {
 
 		Ns waited = 0;
 		while (!f19.gotScrollX && waited < 5 * SECOND) {
+
 			WindowManager_step(&windowManager, NULL, NULL);
+
+			if(!windowManager.windows.length)
+				break;
+
 			Thread_sleep(16 * MS);
 			waited += 16 * MS;
 		}
@@ -1073,8 +1174,8 @@ static void Test_scrollWheel(Test *t) {
 	pump(VISUAL_HOLD_NS);
 
 clean:
-	f19 = (F19State){ 0 };
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	f19 = (F19State) { 0 };
+	RefPtr_dec(&wRef);
 }
 
 void Test_functionalInput(Test *t) {

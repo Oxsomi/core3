@@ -91,7 +91,7 @@ static void Test_platformsWindowVirtual(Test *t) {
 	Test_setModule(t, "Window/Virtual");
 
 	WindowManager mgr = (WindowManager) { 0 };
-	Window *w = NULL;
+	WindowRef *wRef = NULL;
 
 	WindowManagerCallbacks cbs = (WindowManagerCallbacks) { 0 };
 	if (!Test_assert(t, "WindowManager_create", WindowManager_create(cbs, 0, &mgr, &t->err)))
@@ -107,9 +107,10 @@ static void Test_platformsWindowVirtual(Test *t) {
 
 	Test_assert(t, "createVirtual", WindowManager_createWindow(
 		&mgr, EWindowType_Virtual, pos, size, minSize, maxSize,
-		EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &w, &t->err
+		EWindowHint_None, title, wcbs, EWindowFormat_AutoRGBA8, 0, &wRef, &t->err
 	));
 
+	Window *w = RefPtr_data(wRef, Window);
 	Test_assert(t, "windowNotNull", w != NULL);
 	Test_assert(t, "typeVirtual",   w && w->type == EWindowType_Virtual);
 	Test_assert(t, "sizeW",  w && I32x2_x(w->size) == I32x2_x(EResolution_get(EResolution_SD)));
@@ -125,11 +126,11 @@ static void Test_platformsWindowVirtual(Test *t) {
 	Test_assert(t, "shouldTerminate", w && (w->flags & EWindowFlags_ShouldTerminate));
 
 	//Free window and manager
-	WindowManager_freeWindow(&mgr, &w);
-	Test_assert(t, "windowNullAfterFree", w == NULL);
+	RefPtr_dec(&wRef);
+	Test_assert(t, "windowNullAfterFree", wRef == NULL);
 
 clean:
-	if (w) WindowManager_freeWindow(&mgr, &w);
+	RefPtr_dec(&wRef);
 	WindowManager_free(&mgr);
 }
 

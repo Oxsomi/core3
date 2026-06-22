@@ -357,7 +357,7 @@ void WindowManager_updateExt(WindowManager *manager) {
 
 			for(U64 i = 0; i < manager->windows.length; ++i) {
 
-				Window *w = manager->windows.ptr[i];
+				Window *w = RefPtr_data(manager->windows.ptr[i], Window);
 
 				if (msg.hwnd == w->nativeHandle && w->type == EWindowType_Physical) {
 

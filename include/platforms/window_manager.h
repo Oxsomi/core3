@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/container/list.h"
+#include "types/container/ref_ptr.h"
 #include "types/math/vec2.h"
 #include "platforms/monitor.h"
 
@@ -29,9 +30,11 @@
 	extern "C" {
 #endif
 
+typedef struct RefPtr RefPtr;
+typedef RefPtr WindowRef;
 typedef struct Window Window;
 
-TListNamed(Window*, ListWindowPtr);
+TListNamed(WindowRef*, ListWindowPtr);
 
 typedef struct CharString CharString;
 typedef struct WindowCallbacks WindowCallbacks;
@@ -61,7 +64,7 @@ typedef struct WindowManager {
 	Bool isSingleWindow;     //The WindowManager only supports 1 window; such as Android, iOS, console, steamOS
 	U8 pad[2];
 
-	ListWindowPtr windows;
+	ListWindowPtr windows;   //Weak ref ptrs to Window. Only the user maintains strong references to the Window they create.
 	ListMonitor monitors;
 
 	WindowManagerCallbacks callbacks;
@@ -71,6 +74,9 @@ typedef struct WindowManager {
 	Ns lastUpdate;
 
 	Buffer platformData;     //Can be empty if createNative failed (no physical window support available)
+
+	RefPtrType windowTypePhysical;
+	RefPtrType windowTypeVirtual;
 
 } WindowManager;
 
@@ -101,11 +107,9 @@ Bool WindowManager_createWindow(
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	U64 extendedData,
-	Window **result,
+	WindowRef **result,
 	Error *e_rr
 );
-
-void WindowManager_freeWindow(WindowManager *manager, Window **w);
 
 #ifdef __cplusplus
 	}

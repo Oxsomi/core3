@@ -47,7 +47,7 @@ Bool Test_functionalSetup(Test *t);
 void Test_functionalShutdown();
 
 //Try to open a physical window; fall back to virtual if unavailable.
-Window *createWindow(
+WindowRef *createWindow(
 	Test *t,
 	const C8 *titleStr,
 	I32x2 size,
@@ -57,7 +57,7 @@ Window *createWindow(
 );
 
 //Same as createWindow but accepts a custom WindowCallbacks (e.g. onDraw).
-Window *createWindowCallback(
+WindowRef *createWindowCallback(
 	Test *t,
 	const C8 *titleStr,
 	I32x2 pos,

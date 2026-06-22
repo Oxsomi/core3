@@ -25,6 +25,7 @@
 #include "platforms/monitor.h"
 #include "types/math/vec2i.h"
 #include "types/container/list.h"
+#include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
 #include "types/base/error.h"
 
@@ -105,6 +106,7 @@ static inline EResolution EResolution_create(I32x2 v) {
 //Window callbacks
 
 typedef struct Window Window;
+typedef RefPtr WindowRef;
 
 typedef Bool (*WindowErroringCallback)(Window*, Error*);
 typedef void (*WindowCallback)(Window*);
@@ -228,6 +230,17 @@ typedef struct Window {
 impl Bool Window_updatePhysicalTitle(Window *w, CharString title, Error *e_rr);
 impl Bool Window_toggleFullScreen(Window *w, Error *e_rr);
 impl Bool Window_presentPhysical(Window *w, Error *e_rr);
+
+static inline void *Window_ext(Window *w) {
+	return w && w->type == EWindowType_Physical ? (void*)(w + 1) : NULL;
+}
+
+static inline void *WindowRef_ext(WindowRef *ref) {
+	return Window_ext(RefPtr_data(ref, Window));
+}
+
+#define WindowExt(w, T) ((T*)Window_ext(w))
+#define WindowRefExt(ref, T) ((T*)WindowRef_ext(ref))
 
 //Virtual windows
 

@@ -24,8 +24,10 @@
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
+#include "platforms/platforms_types.h"
 #include "platforms/logx.h"
 #include "platforms/input_device.h"
+#include "types/container/ref_ptr.h"
 #include "types/math/vec2i.h"
 #include "types/base/string_base.h"
 #include "types/base/thread.h"
@@ -40,6 +42,10 @@ impl Bool WindowManager_createNative(WindowManager *w, Error *e_rr);
 impl Bool WindowManager_freeNative(WindowManager *w);
 
 impl Bool WindowManager_updateMonitors(WindowManager *wm, Error *e_rr);
+
+void Window_free(Window *ptr, const Allocator *allocator);
+
+extern U32 Window_extSize;
 
 Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize, WindowManager *manager, Error *e_rr) {
 
@@ -57,7 +63,19 @@ Bool WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize
 		.isActive = WindowManager_magic,
 		.owningThread = Thread_getId(),
 		.callbacks = callbacks,
-		.extendedData = extendedData
+		.extendedData = extendedData,
+		.windowTypePhysical = (RefPtrType) {
+			.typeId = (ETypeId) EPlatformsTypeId_Window,
+			.length = sizeof(Window) + Window_extSize,
+			.alloc = Platform_instance->alloc,
+			.free = (ObjectFreeFunc) Window_free
+		},
+		.windowTypeVirtual = (RefPtrType) {
+			.typeId = (ETypeId) EPlatformsTypeId_Window,
+			.length = sizeof(Window),
+			.alloc = Platform_instance->alloc,
+			.free = (ObjectFreeFunc) Window_free
+		}
 	};
 
 	if(!WindowManager_createNative(manager, NULL))
@@ -99,8 +117,18 @@ void WindowManager_free(WindowManager *manager) {
 
 	manager->isActive = 0;
 
-	for(U64 i = 0; i < manager->windows.length; ++i)
-		WindowManager_freeWindow(manager, &manager->windows.ptrNonConst[i]);
+	if(manager->windows.length)
+		Log_errorLnx("WindowManager shut down with window refs leaked. Trying its best to clean up, could cause corruption!");
+
+	for(U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
+
+		RefPtr *ref = manager->windows.ptrNonConst[i];
+
+		while(AtomicI64_load(&ref->refCount) > 0) {
+			RefPtr *tmp = ref;
+			RefPtr_dec(&tmp);    //Deleting the Window will also remove it from manager->windows
+		}
+	}
 
 	ListWindowPtr_free(&manager->windows, Platform_instance->alloc);
 	ListMonitor_free(&manager->monitors, Platform_instance->alloc);
@@ -114,6 +142,52 @@ Bool WindowManager_adaptSizes(I32x2 *size, I32x2 *minSize, I32x2 *maxSize, Error
 
 impl void WindowManager_freePhysical(Window *w);
 impl Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr);
+
+//Forgetting a window will erase it from the manager if relevant and will free the physical surface.
+// Everything else will stay 'valid' until the last WindowRef is dropped, but the window is effectively gone.
+// This is to allow the WindowRef to say alive for checking (e.g. IsActive) until the app is done with it.
+void WindowManager_forgetWindow(WindowManager *manager, WindowRef *wRef) {
+
+	ListWindowPtr_eraseFirst(&manager->windows, wRef, 0, NULL, NULL);
+
+	Window *w = RefPtr_data(wRef, Window);
+
+	if(w->flags & EWindowFlags_IsActive) {
+
+		if(w->callbacks.onDestroy)
+			w->callbacks.onDestroy(w);
+
+		if(w->type == EWindowType_Physical)
+			WindowManager_freePhysical(w);
+
+		if(w->hint & EWindowHint_ProvideCPUBuffer)
+			Buffer_free(&w->cpuVisibleBuffer, Platform_instance->alloc);
+
+		w->flags &= ~EWindowFlags_IsActive;
+	}
+}
+
+void Window_free(Window *w, const Allocator *alloc) {
+
+	if(!WindowManager_isAccessible(w->owner)) {
+		Log_warnLnx("WindowManager tried to free Window but it didn't have access");
+		return;
+	}
+
+	WindowManager_forgetWindow(w->owner, (WindowRef*)w - 1);     //User can drop Window before WindowManager does
+
+	Buffer_free(&w->cpuVisibleBuffer, alloc);
+	Buffer_free(&w->extendedData, alloc);
+	CharString_free(&w->title, alloc);
+
+	ListInputDevice *devices = &w->devices;
+
+	for(U64 i = 0; i < devices->length; ++i)
+		InputDevice_free(&devices->ptrNonConst[i], alloc);
+
+	ListInputDevice_free(devices, alloc);
+	ListMonitor_free(&w->monitors, alloc);
+}
 
 Bool WindowManager_createWindow(
 
@@ -131,17 +205,16 @@ Bool WindowManager_createWindow(
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	U64 extendedDataSize,
-	Window **result,
+	WindowRef **result,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
-	Bool pushed = false;
+	Bool alloc = false;
 
 	Buffer cpuVisibleBuffer = Buffer_createNull();
 	Buffer extendedData = Buffer_createNull();
 	CharString titleCopy = CharString_createNull();
-	Buffer tmpWindow = Buffer_createNull();
 
 	if(!result)
 		retError(clean, Error_nullPointer(
@@ -208,6 +281,7 @@ Bool WindowManager_createWindow(
 			e_rr
 		));
 	}
+
 	else if(!manager->platformData.ptr)
 		retError(clean, Error_unsupportedOperation(
 			0, "WindowManager_createWindow() can't create a physical window if createNative failed (headless)"
@@ -217,10 +291,17 @@ Bool WindowManager_createWindow(
 		gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
 
 	gotoIfError3(clean, CharString_createCopy(title, Platform_instance->alloc, &titleCopy, e_rr));
-	gotoIfError3(clean, Buffer_createEmptyBytes(sizeof(Window), Platform_instance->alloc, &tmpWindow, e_rr));
 
-	Window *w = (Window*) tmpWindow.ptr;
-	gotoIfError3(clean, ListWindowPtr_pushBack(&manager->windows, w, Platform_instance->alloc, e_rr));
+	gotoIfError3(clean, RefPtr_create(
+		type == EWindowType_Virtual ? &manager->windowTypeVirtual : &manager->windowTypePhysical,
+		result,
+		e_rr
+	));
+
+	alloc = true;
+
+	Window *w = RefPtr_data(*result, Window);
+	gotoIfError3(clean, ListWindowPtr_pushBack(&manager->windows, *result, Platform_instance->alloc, e_rr));
 
 	*w = (Window) {
 
@@ -243,23 +324,21 @@ Bool WindowManager_createWindow(
 		.extendedData = extendedData
 	};
 
+	extendedData = Buffer_createNull();
+	cpuVisibleBuffer = Buffer_createNull();
+	titleCopy = CharString_createNull();
+
 	if (type == EWindowType_Physical)
 		gotoIfError3(clean, WindowManager_createWindowPhysical(w, e_rr));
 
-	*result = w;
-
 clean:
 
-	if(!s_uccess) {
+	if(alloc && !s_uccess)
+		RefPtr_dec(result);
 
-		if(pushed)
-			ListWindowPtr_popBack(&manager->windows, NULL, NULL);
-
-		Buffer_free(&tmpWindow, Platform_instance->alloc);
-		Buffer_free(&extendedData, Platform_instance->alloc);
-		Buffer_free(&cpuVisibleBuffer, Platform_instance->alloc);
-		CharString_free(&titleCopy, Platform_instance->alloc);
-	}
+	Buffer_free(&extendedData, Platform_instance->alloc);
+	Buffer_free(&cpuVisibleBuffer, Platform_instance->alloc);
+	CharString_free(&titleCopy, Platform_instance->alloc);
 
 	return s_uccess;
 }
@@ -277,7 +356,8 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 
 	for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
 
-		Window *w = ListWindowPtr_at(manager->windows, i);
+		WindowRef *wref = ListWindowPtr_at(manager->windows, i);
+		Window *w = RefPtr_data(wref, Window);
 
 		if(w == forcingUpdate)    //Has already been processed
 			continue;
@@ -327,8 +407,8 @@ Bool WindowManager_step(WindowManager *manager, Window *forcingUpdate, Error *e_
 				Window_presentPhysical(w, NULL);
 		}
 
-		if (w->flags & EWindowFlags_ShouldTerminate)    //Just in case the window closed now
-			WindowManager_freeWindow(manager, &w);
+		if (w->flags & EWindowFlags_ShouldTerminate)    //Just in case the window closed now, pop the window
+			WindowManager_forgetWindow(manager, wref);  //refs still remain valid until user close them or WindowManager closes
 	}
 
 	//Then run window manager update; this polls all events (only used if it's not called by WM_PAINT)
@@ -424,41 +504,4 @@ Bool WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep, Er
 
 clean:
 	return s_uccess;
-}
-
-void WindowManager_freeWindow(WindowManager *manager, Window **w) {
-
-	if(!w || !*w)
-		return;
-
-	Window *win = *w;
-
-	if(!WindowManager_isAccessible(win->owner))
-		return;
-
-	//Ensure our window safely exits
-
-	if(win->flags & EWindowFlags_IsActive && win->callbacks.onDestroy)
-		win->callbacks.onDestroy(win);
-
-	Buffer_free(&win->cpuVisibleBuffer, Platform_instance->alloc);
-	Buffer_free(&win->extendedData, Platform_instance->alloc);
-	CharString_free(&win->title, Platform_instance->alloc);
-
-	ListInputDevice *devices = &win->devices;
-
-	for(U64 i = 0; i < devices->length; ++i)
-		InputDevice_free(&devices->ptrNonConst[i], Platform_instance->alloc);
-
-	ListInputDevice_free(devices, Platform_instance->alloc);
-	ListMonitor_free(&win->monitors, Platform_instance->alloc);
-
-	if(win->type == EWindowType_Physical)
-		WindowManager_freePhysical(win);
-
-	Buffer windowBuf = Buffer_createManagedPtr(win, sizeof(*win));
-
-	ListWindowPtr_eraseFirst(&manager->windows, win, 0, NULL, NULL);
-	Buffer_free(&windowBuf, Platform_instance->alloc);
-	*w = NULL;
 }

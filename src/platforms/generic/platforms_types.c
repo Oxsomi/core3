@@ -23,5 +23,6 @@
 #include "platforms/platforms_types.h"
 
 EPlatformsTypeId EPlatformTypeId_all[EPlatformsTypeId_Count] = {
-	EPlatformsTypeId_FileHandle
+	EPlatformsTypeId_FileHandle,
+	EPlatformsTypeId_Window
 };

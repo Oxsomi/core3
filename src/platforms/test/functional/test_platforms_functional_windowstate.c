@@ -86,7 +86,12 @@ static Bool Pattern_waitForDraw(volatile Bool *drawn, Ns timeout) {
 
 	Ns waited = 0;
 	while (!*drawn && waited < timeout) {
+
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
@@ -124,14 +129,15 @@ static void Test_fullScreen(Test *t) {
 
 	I32x2 sz = I32x2_create2(256, 256);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F2: Fullscreen", I32x2_zero, sz,
 		EWindowHint_AllowFullscreen | EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	Test_assert(t, "notFullscreenInit", !Window_isFullScreen(w));
 
 	f2.zxor = 0;
@@ -159,7 +165,7 @@ static void Test_fullScreen(Test *t) {
 
 clean:
 	f2 = (PatternState) { 0 };
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F3a. Resize / min+max enforcement -----------------------------------------
@@ -171,7 +177,7 @@ static void Test_resizeVirtual(Test *t) {
 	I32x2 sz    = I32x2_create2(640, 480);
 	I32x2 minSize = EResolution_get(EResolution_SD);
 	I32x2 maxSize = I32x2_create2(1920, 1080);
-	Window *w   = NULL;
+	WindowRef *wRef = NULL;
 
 	CharString title = CharString_createRefCStrConst("F3a: ResizeVirtual");
 	I32x2 pos = I32x2_create2(50, 50);
@@ -179,12 +185,13 @@ static void Test_resizeVirtual(Test *t) {
 	WindowManager_createWindow(
 		&windowManager, EWindowType_Virtual, pos, sz, minSize, maxSize,
 		EWindowHint_None, title, (WindowCallbacks) { 0 },
-		EWindowFormat_AutoRGBA8, 0, &w, &t->err
+		EWindowFormat_AutoRGBA8, 0, &wRef, &t->err
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	Test_assert(t, "initW", I32x2_x(w->size) == 640);
 	Test_assert(t, "initH", I32x2_y(w->size) == 480);
 	Test_assert(t, "minW",  I32x2_x(w->minSize) == I32x2_x(EResolution_get(EResolution_SD)));
@@ -198,7 +205,7 @@ static void Test_resizeVirtual(Test *t) {
 	Test_assert(t, "newH", I32x2_y(w->size) == 384);
 
 clean:
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F4. Multi-window ----------------------------------------------------------
@@ -221,17 +228,20 @@ static void Test_multiWindow(Test *t) {
 	WindowCallbacks cbsB = (WindowCallbacks) { 0 };
 	cbsB.onDraw = F4_onDrawB;
 
-	Window *w1 = NULL, *w2 = NULL;
+	WindowRef *w1Ref = NULL, *w2Ref = NULL;
 	I32x2 sz = I32x2_create2(256, 256);
 
-	w1 = createWindowCallback(t, "F4: Window A", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbsA);
-	w2 = createWindowCallback(t, "F4: Window B", sz, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbsB);
+	w1Ref = createWindowCallback(t, "F4: Window A", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbsA);
+	w2Ref = createWindowCallback(t, "F4: Window B", sz, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbsB);
 
-	if (!Test_assert(t, "w1Created", w1 != NULL))
+	if (!Test_assert(t, "w1Created", w1Ref != NULL))
 		goto clean;
 
-	if (!Test_assert(t, "w2Created", w2 != NULL))
+	if (!Test_assert(t, "w2Created", w2Ref != NULL))
 		goto clean;
+
+	Window *w1 = RefPtr_data(w1Ref, Window);
+	Window *w2 = RefPtr_data(w2Ref, Window);
 
 	presentAndDraw(t, w1, &f4a, F4_onDrawA);
 	presentAndDraw(t, w2, &f4b, F4_onDrawB);
@@ -245,8 +255,8 @@ static void Test_multiWindow(Test *t) {
 clean:
 	f4a = (PatternState) { 0 };
 	f4b = (PatternState) { 0 };
-	if (w1) WindowManager_freeWindow(&windowManager, &w1);
-	if (w2) WindowManager_freeWindow(&windowManager, &w2);
+	RefPtr_dec(&w1Ref);
+	RefPtr_dec(&w2Ref);
 }
 
 // -- F9. Focus / minimize cycle -----------------------------------------------
@@ -274,16 +284,17 @@ static void Test_focusMinimize(Test *t) {
 
 	I32x2 sz = I32x2_create2(640, 200);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F9: Minimize / restore, watch me", I32x2_zero, sz,
 		EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
 	//Initial state: not minimized
 
+	Window *w = RefPtr_data(wRef, Window);
 	presentAndDraw(t, w, &f9, F9_onDraw);
 	pump(300 * MS);
 
@@ -304,7 +315,7 @@ static void Test_focusMinimize(Test *t) {
 		ShowWindow((HWND)w->nativeHandle, SW_MINIMIZE);
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
 		{
-			LWindow        *lwin    = (LWindow*) w->nativeData;
+			LWindow *lwin = WindowExt(w, LWindow);
 			LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 			xdg_toplevel_set_minimized(lwin->topLevel);
 			wl_display_flush(manager->display);
@@ -351,7 +362,7 @@ static void Test_focusMinimize(Test *t) {
 
 clean:
 	f9 = (PatternState) { 0 };
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F12. Monitor info ---------------------------------------------------------
@@ -361,13 +372,15 @@ static void Test_monitorInfo(Test *t) {
 	Test_setModule(t, "F12/MonitorInfo");
 
 	I32x2 sz = I32x2_create2(320, 240);
-	Window *w = createWindow(
+	WindowRef *wRef = createWindow(
 		t, "F12: Monitor info - check console output",
 		sz, I32x2_zero, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
+
+	Window *w = RefPtr_data(wRef, Window);
 
 	if(!w->owner->platformData.ptr)   //Headless runs don't actually have monitors
 		goto clean;
@@ -435,7 +448,7 @@ static void Test_monitorInfo(Test *t) {
 	pump(5 * SECOND);
 
 clean:
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F13. Window move (drag to second monitor) ---------------------------------
@@ -465,13 +478,15 @@ static void Test_windowMove(Test *t) {
 	I32x2 sz  = I32x2_create2(320, 240);
 	I32x2 pos = I32x2_create2(100, 100);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F13: Drag me to a second monitor",
 		pos, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
+
+	Window *w = RefPtr_data(wRef, Window);
 
 	present(t, w);
 	pump(300 * MS);
@@ -519,7 +534,12 @@ static void Test_windowMove(Test *t) {
 
 	Ns waited = 0;
 	while (!movedToSecondMonitor && waited < 10 * SECOND) {
+
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
@@ -531,7 +551,7 @@ static void Test_windowMove(Test *t) {
 	pump(VISUAL_HOLD_NS);
 
 clean:
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F14. Maximize / restore ----------------------------------------------------
@@ -551,16 +571,17 @@ static void Test_maximize(Test *t) {
 
 	I32x2 sz = I32x2_create2(640, 480);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F14: Maximize / restore, watch me",
 		I32x2_zero, sz,
 		EWindowHint_AllowFullscreen | EWindowHint_ProvideCPUBuffer,
 		EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	presentAndDraw(t, w, &f14, F14_onDraw);
 	pump(300 * MS);
 
@@ -577,7 +598,7 @@ static void Test_maximize(Test *t) {
 		ShowWindow((HWND)w->nativeHandle, SW_MAXIMIZE);
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
 		{
-			LWindow *lwin = (LWindow*) w->nativeData;
+			LWindow *lwin = WindowExt(w, LWindow);
 			xdg_toplevel_set_maximized(lwin->topLevel);
 			wl_display_flush(((LWindowManager*)w->owner->platformData.ptr)->display);
 		}
@@ -602,9 +623,12 @@ static void Test_maximize(Test *t) {
 		ShowWindow((HWND)w->nativeHandle, SW_RESTORE);
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
 		{
-			LWindow *lwin = (LWindow*) w->nativeData;
-			xdg_toplevel_unset_maximized(lwin->topLevel);
-			wl_display_flush(((LWindowManager*)w->owner->platformData.ptr)->display);
+			LWindow *lwin = WindowExt(w, LWindow);
+			
+			if(lwin->topLevel) {
+				xdg_toplevel_unset_maximized(lwin->topLevel);
+				wl_display_flush(((LWindowManager*)w->owner->platformData.ptr)->display);
+			}
 		}
 	#endif
 
@@ -623,7 +647,7 @@ static void Test_maximize(Test *t) {
 
 clean:
 	f14 = (PatternState) { 0 };
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F17. Min/max size enforcement ---------------------------------------------
@@ -651,7 +675,7 @@ static void Test_minMaxSize(Test *t) {
 	//Virtual window: resizeCPUBuffer clamping
 
 	{
-		Window *w = NULL;
+		WindowRef *wRef = NULL;
 
 		CharString title = CharString_createRefCStrConst("F17: virtual");
 		I32x2 pos = I32x2_zero;
@@ -659,11 +683,13 @@ static void Test_minMaxSize(Test *t) {
 		WindowManager_createWindow(
 			&windowManager, EWindowType_Virtual, pos, initSz, minSz, maxSz,
 			EWindowHint_None, title, (WindowCallbacks) { 0 },
-			EWindowFormat_AutoRGBA8, 0, &w, &t->err
+			EWindowFormat_AutoRGBA8, 0, &wRef, &t->err
 		);
 
-		if(!Test_assert(t, "virtualCreated", w != NULL))
+		if(!Test_assert(t, "virtualCreated", wRef != NULL))
 			goto cleanVirtual;
+
+		Window *w = RefPtr_data(wRef, Window);
 
 		//Try to shrink below minimum
 		I32x2 tooSmall = I32x2_create2(100, 80);
@@ -684,13 +710,13 @@ static void Test_minMaxSize(Test *t) {
 		Test_assert(t, "validH", I32x2_y(w->size) == 450);
 
 	cleanVirtual:
-		if(w) WindowManager_freeWindow(&windowManager, &w);
+		RefPtr_dec(&wRef);
 	}
 
 	//Physical window: compositor-side enforcement
 
 	{
-		Window *w = NULL;
+		WindowRef *wRef = NULL;
 
 		CharString title = CharString_createRefCStrConst("F17: Resize me, should clamp to 400x300 .. 800x600");
 		I32x2 pos = I32x2_create2(100, 100);
@@ -703,13 +729,15 @@ static void Test_minMaxSize(Test *t) {
 		Bool s_uccess = WindowManager_createWindow(
 			&windowManager, EWindowType_Physical, pos, initSz, minSz, maxSz,
 			EWindowHint_ProvideCPUBuffer, title, callbacks,
-			EWindowFormat_AutoRGBA8, 0, &w, &t->err
+			EWindowFormat_AutoRGBA8, 0, &wRef, &t->err
 		);
 
 		if(!s_uccess) {
 			Test_print(t, "Physical window unavailable, skipping physical min/max assertions");
 			goto cleanPhysical;
 		}
+
+		Window *w = RefPtr_data(wRef, Window);
 
 		present(t, w);
 		pump(500 * MS);
@@ -767,7 +795,12 @@ static void Test_minMaxSize(Test *t) {
 		Bool sawTooBig   = false;
 
 		while(waited < 10 * SECOND) {
+			
 			WindowManager_step(&windowManager, NULL, NULL);
+
+			if(!windowManager.windows.length)
+				break;
+
 			Thread_sleep(16 * MS);
 			waited += 16 * MS;
 
@@ -799,7 +832,7 @@ static void Test_minMaxSize(Test *t) {
 		pump(VISUAL_HOLD_NS);
 
 	cleanPhysical:
-		if(w) WindowManager_freeWindow(&windowManager, &w);
+		RefPtr_dec(&wRef);
 	}
 }
 
@@ -821,14 +854,15 @@ static void Test_borderless(Test *t) {
 	I32x2 sz  = I32x2_create2(640, 480);
 	I32x2 pos = I32x2_create2(200, 200);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F20: Borderless window",
 		pos, sz, EWindowHint_NoBorder | EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if(!Test_assert(t, "windowCreated", w != NULL))
+	if(!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	Test_assert(t, "isActive",      (w->flags & EWindowFlags_IsActive) != 0);
 	Test_assert(t, "noBorderHint",  (w->hint  & EWindowHint_NoBorder)  != 0);
 	Test_assert(t, "nonZeroSize",   I32x2_any(w->size));
@@ -839,7 +873,7 @@ static void Test_borderless(Test *t) {
 
 clean:
 	f20 = (PatternState) { 0 };
-	if(w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F21. Transparent window (per-pixel alpha) ---------------------------------
@@ -905,7 +939,7 @@ static void Test_transparent(Test *t) {
 	WindowCallbacks cbs = (WindowCallbacks) { 0 };
 	cbs.onDraw = F21_onDraw;
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F21: Transparent circle",
 		I32x2_create2(200, 200),
 		I32x2_create2(F21_W, F21_H),
@@ -914,8 +948,10 @@ static void Test_transparent(Test *t) {
 		cbs
 	);
 
-	if(!Test_assert(t, "windowCreated", w != NULL))
+	if(!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
+
+	Window *w = RefPtr_data(wRef, Window);
 
 	if(w->type != EWindowType_Physical) {
 		Test_print(t, "[virtual] transparency test requires a physical window, skipped");
@@ -959,7 +995,7 @@ static void Test_transparent(Test *t) {
 
 clean:
 	f21 = (F21State) { 0 };
-	if(w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 void Test_functionalWindowState(Test *t) {

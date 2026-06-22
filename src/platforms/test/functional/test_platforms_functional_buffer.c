@@ -92,7 +92,12 @@ static Bool waitForDraw(volatile Bool *drawn, Ns timeout) {
 
 	Ns waited = 0;
 	while (!*drawn && waited < timeout) {
+		
 		WindowManager_step(&windowManager, NULL, NULL);
+
+		if(!windowManager.windows.length)
+			break;
+
 		Thread_sleep(16 * MS);
 		waited += 16 * MS;
 	}
@@ -112,13 +117,14 @@ static void Test_cpuBuffer(Test *t) {
 
 	I32x2 sz = I32x2_create2(256, 256);
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F1: CPU Buffer", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
 
-	if (!Test_assert(t, "windowCreated", w != NULL))
+	if (!Test_assert(t, "windowCreated", wRef != NULL))
 		goto clean;
 
+	Window *w = RefPtr_data(wRef, Window);
 	sz = w->size;
 
 	U32 W = (U32) I32x2_x(sz);
@@ -137,7 +143,7 @@ static void Test_cpuBuffer(Test *t) {
 	pump(VISUAL_HOLD_NS);
 
 clean:
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 // -- F6. Window_storeCPUBufferToDisk -------------------------------------------
@@ -184,9 +190,11 @@ static void Test_storeCPUBuffer(Test *t) {
 	WindowCallbacks cbs = (WindowCallbacks){ 0 };
 	cbs.onDraw = F6_onDraw;
 
-	Window *w = createWindowCallback(
+	WindowRef *wRef = createWindowCallback(
 		t, "F6: StoreToDisk", I32x2_zero, sz, EWindowHint_ProvideCPUBuffer, EWindowFormat_AutoRGBA8, cbs
 	);
+
+	Window *w = RefPtr_data(wRef, Window);
 
 	if (w)
 		sz = w->size;
@@ -295,7 +303,7 @@ static void Test_storeCPUBuffer(Test *t) {
 clean:
 	ListSubResourceData_freeUnderlying(&subResources, alloc);
 	RefPtr_dec(&readStream);
-	if (w) WindowManager_freeWindow(&windowManager, &w);
+	RefPtr_dec(&wRef);
 }
 
 void Test_functionalBuffer(Test *t) {
