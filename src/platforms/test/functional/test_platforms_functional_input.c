@@ -734,6 +734,8 @@ typedef struct F18State {
 	U32           pointCount;
 } F18State;
 
+static F18State f18;
+
 static void F18_onDraw(Window *w) {
 
 	if (!w->cpuVisibleBuffer.ptrNonConst)
@@ -772,8 +774,6 @@ static void F18_onDraw(Window *w) {
 			*(U32*)(px + (cy * W + cx) * 4) = 0xFFFF00FF;
 	}
 }
-
-static F18State f18;
 
 static void F18_onButton(Window *w, InputDevice *dev, InputHandle h, Bool down) {
 

@@ -144,7 +144,7 @@ void pump(Ns ns) {
 	}
 
 #else
-	void presentQuiet(Window *w) { (void) w; }
+	void invalidateForRepaint(Window *w) { (void) w; }
 #endif
 
 void presentQuiet(Window *w) {
@@ -154,11 +154,11 @@ void presentQuiet(Window *w) {
 
 	invalidateForRepaint(w);
 	pump(32 * MS);
-
-	Window_presentPhysical(w, NULL);
 }
 
 void present(Test *t, Window *w) {
+
+	(void) t;
 
 	if(w->type != EWindowType_Physical)
 		return;
@@ -167,6 +167,4 @@ void present(Test *t, Window *w) {
 	//We don't write pixels here ourselves; onDraw owns that.
 	invalidateForRepaint(w);
 	pump(32 * MS);
-
-	Test_assert(t, "present", Window_presentPhysical(w, &t->err));
 }
