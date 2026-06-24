@@ -116,34 +116,15 @@ static void Test_keyboard(Test *t) {
 
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
 
-		if (hasXdotool()) {
-
-			//Focus the window by its title, then send the key
-
-			system("xdotool search --name 'F5b: Press ESC to pass' windowfocus key Escape");
-
-			Ns waited = 0;
-
-			while (!escPressed && waited < 1 * SECOND) {
-
-				WindowManager_step(&windowManager, NULL, NULL);
-
-				if(!windowManager.windows.length)
-					break;
-
-				Thread_sleep(16 * MS);
-				waited += 16 * MS;
-			}
-
-			if (escPressed)
-				Test_assert(t, "syntheticESC", true);
-
-			else Test_print(t, "WARN: xdotool ESC injection didn't fire within timeout");
-
-			escPressed = false;
-		}
-
-		else Test_print(t, "xdotool not available, skipping synthetic ESC injection");
+		// Wayland has no reliable cross-process input injection mechanism:
+		// - xdotool uses X11 XTest, which cannot reach native Wayland surfaces
+		// - zwp_virtual_keyboard_v1 is compositor-specific; not supported on GNOME/Mutter
+		// - /dev/uinput requires the user to be in the 'input' group
+		// Synthetic injection is therefore skipped on Linux; the interactive
+		// section below is the authoritative test for this platform.
+		Test_print(t,
+			"Synthetic input injection not supported on Wayland without elevated privileges or compositor-specific extensions"
+		);
 
 	#else
 		Test_print(t, "SendInput not available on this platform, skipping synthetic OS injection");
@@ -419,25 +400,10 @@ static void Test_typeChar(Test *t) {
 
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
 
-		if (hasXdotool()) {
-
-			//SetForegroundWindow equivalent via xdotool, then type
-
-			system("xdotool search --name 'F10: Type' windowfocus type --clearmodifiers 'Hello world'");
-			pump(300 * MS);
-
-			Bool syntheticOK = CharString_containsStringSensitive(&typedText, &hello, 0, 0);
-
-			if (!syntheticOK)
-				Test_print(t, "WARN: xdotool type didn't produce 'Hello world', may be layout-dependent");
-
-			else Test_assert(t, "syntheticHello", syntheticOK);
-
-			CharString_free(&typedText, t->alloc);
-			typedText = CharString_createNull();
-		}
-
-		else Test_print(t, "xdotool not available, skipping synthetic typeChar injection");
+		//Wayland has no input injection (see Test_keyboard)
+		Test_print(t,
+			"Synthetic input injection not supported on Wayland without elevated privileges or compositor-specific extensions"
+		);
 
 	#else
 		Test_print(t, "Synthetic typeChar injection not implemented for this platform");

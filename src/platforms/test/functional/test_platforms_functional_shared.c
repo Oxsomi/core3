@@ -49,10 +49,13 @@ void Test_functionalShutdown() {
 }
 
 #if _PLATFORM_TYPE == PLATFORM_LINUX
+
 	#include <stdlib.h>
+
 	Bool hasXdotool() {
 		return system("which xdotool > /dev/null 2>&1") == 0;
 	}
+
 #endif
 
 WindowRef *createWindow(
