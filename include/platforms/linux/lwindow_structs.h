@@ -140,10 +140,6 @@ typedef struct LWindow {
 	Bool configured;           //For first time init
 	U8   pad1[2];
 
-	//Decoration listener (needed to handle compositor downgrade SSD->CSD)
-	struct zxdg_toplevel_decoration_v1         *decoration;
-	struct zxdg_toplevel_decoration_v1_listener decorationListener;
- 
 	//Keyboard input
 	struct wl_keyboard      *keyboard;
 	struct xkb_context      *xkbContext;

@@ -1360,7 +1360,7 @@ static void LWindow_updateSize(
 
 	lwin->configured = true;
 
-	if(height && lwin->barSurface && !isFullscreen)
+	if(height >= (I32)LWINDOW_DECOR_HEIGHT && lwin->barSurface && !isFullscreen)
 		height -= LWINDOW_DECOR_HEIGHT;
 
 	if(width  <= 0) width  = I32x2_x(w->size) ? I32x2_x(w->size) : 1280;
@@ -1368,11 +1368,17 @@ static void LWindow_updateSize(
 
 	I32x2 newContentSize = I32x2_create2(width, height);
 
+	//xdg_toplevel maximize/tiling are allowed by protocol to exceed min/max size hints.
+	//Clamp here so CSD maximize matches the Windows backend (which clamps via WM_GETMINMAXINFO).
+	//Fullscreen is intentionally exempt.
+	if(!isFullscreen && !w->owner->isSingleWindow)
+		newContentSize = I32x2_clamp(newContentSize, w->minSize, w->maxSize);
+
 	if(I32x2_eq2(w->size, newContentSize) && !stateChanged)
 		return;
 
 	Error err = Error_none();
-	if(!LWindow_initSize(w, I32x2_create2(width, height), &err))
+	if(!LWindow_initSize(w, newContentSize, &err))
 		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
 	else lwin->frameReady = true;
@@ -1423,7 +1429,6 @@ void WindowManager_freePhysical(Window *w) {
 	if(lwin->xkbState)      xkb_state_unref(lwin->xkbState);
 	if(lwin->xkbContext)    xkb_context_unref(lwin->xkbContext);
 	if(lwin->frameCallback) wl_callback_destroy(lwin->frameCallback);
-	if(lwin->decoration)    zxdg_toplevel_decoration_v1_destroy(lwin->decoration);
 	if(lwin->topLevel)      xdg_toplevel_destroy(lwin->topLevel);
 	if(lwin->surface)       xdg_surface_destroy(lwin->surface);
 	if(lwin->backBuffer)    wl_shm_pool_destroy(lwin->backBuffer);

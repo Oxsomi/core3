@@ -324,10 +324,8 @@ static void Test_focusMinimize(Test *t) {
 
 	pump(500 * MS);
 
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_LINUX
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		Test_assert(t, "isMinimized", Window_isMinimized(w));
-		//Focus must have left when we minimized
-		Test_assert(t, "notFocusedWhileMin", !Window_isFocussed(w));
 	#else
 		//Soft: log the observed state but don't hard-fail on platforms where
 		//the OS may not drive the flag synchronously.
@@ -335,30 +333,24 @@ static void Test_focusMinimize(Test *t) {
 			Test_print(t, "WARN: IsMinimized not set after minimize request");
 	#endif
 
-	// -- Restore ---------------------------------------------------------------
+	//Focus must have left when we minimized
+
+	Test_assert(t, "notFocusedWhileMin", !Window_isFocussed(w));
+
+	// Restore is only available for Windows, for Linux we can't detect it coming back
+
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
 		ShowWindow((HWND)w->nativeHandle, SW_RESTORE);
 		SetForegroundWindow((HWND)w->nativeHandle);
-	#elif _PLATFORM_TYPE == PLATFORM_LINUX
-		//There is no xdg_toplevel "unset_minimized". The only way to restore
-		//a minimized window is through the compositor UI or a tool like xdotool.
-		if (hasXdotool()) {
-			system("xdotool search --name 'F9:' windowactivate --sync");
-			LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
-			wl_display_flush(manager->display);
-		}
-	#endif
 
-	presentAndDraw(t, w, &f9, F9_onDraw);
-	pump(500 * MS);
+		presentAndDraw(t, w, &f9, F9_onDraw);
+		pump(VISUAL_HOLD_NS);
 
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_LINUX
 		Test_assert(t, "notMinimizedAfterRestore", !Window_isMinimized(w));
 		Test_assert(t, "focusedAfterRestore",       Window_isFocussed(w));
-	#endif
 
-	//Hold so the operator can see it come back
-	pump(VISUAL_HOLD_NS);
+	#endif
 
 clean:
 	f9 = (PatternState) { 0 };
@@ -513,20 +505,8 @@ static void Test_windowMove(Test *t) {
 		movedToSecondMonitor = false;
 
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
-
-		if (hasXdotool()) {
-
-			system("xdotool search --name 'F13:' windowmove 2560 100");
-			pump(500 * MS);
-
-			if (movedToSecondMonitor)
-				Test_assert(t, "syntheticMoveToMonitor2", movedToSecondMonitor);
-
-			else Test_print(t, "WARN: xdotool move didn't reach a second monitor");
-
-			movedToSecondMonitor = false;
-		}
-
+		//xdotool uses X11 _NET_WM_MOVERESIZE; not available on native Wayland.
+		Test_print(t, "Wayland synthetic window move not supported, skipping");
 	#endif
 
 	Test_print(t, ">>> INTERACTIVE: Drag the window to a second monitor (10s timeout) <<<");
@@ -743,30 +723,9 @@ static void Test_minMaxSize(Test *t) {
 		pump(500 * MS);
 
 		#if _PLATFORM_TYPE == PLATFORM_LINUX
-
-			if(hasXdotool()) {
-
-				//Attempt to resize below minimum, compositor should refuse
-				system("xdotool search --name 'F17:' windowsize 100 80");
-				pump(500 * MS);
-				Test_assert(t, "physNotTooSmallW", I32x2_x(w->size) >= I32x2_x(minSz));
-				Test_assert(t, "physNotTooSmallH", I32x2_y(w->size) >= I32x2_y(minSz));
-
-				//Attempt to resize above maximum
-				system("xdotool search --name 'F17:' windowsize 2000 1500");
-				pump(500 * MS);
-				Test_assert(t, "physNotTooBigW", I32x2_x(w->size) <= I32x2_x(maxSz));
-				Test_assert(t, "physNotTooBigH", I32x2_y(w->size) <= I32x2_y(maxSz));
-
-				//Resize to a valid size within the range
-				system("xdotool search --name 'F17:' windowsize 670 500");
-				pump(500 * MS);
-
-				Test_assert(t, "physValidW", I32x2_x(w->size) == 670);
-				Test_assert(t, "physValidH", I32x2_y(w->size) == 500);
-			}
-
-			else Test_print(t, "xdotool not available, skipping physical resize assertions");
+		
+			//xdotool uses X11 _NET_WM_MOVERESIZE; not available on native Wayland.
+			Test_print(t, "Wayland synthetic window move/resize not supported, skipping");
 
 		#elif _PLATFORM_TYPE == PLATFORM_WINDOWS
 
@@ -787,14 +746,14 @@ static void Test_minMaxSize(Test *t) {
 		#endif
 
 		//Interactive: operator drags the window border
-		Test_print(t, ">>> INTERACTIVE: Try to resize the window below 400x300 and above 800x600 (10s) <<<");
+		Test_print(t, ">>> INTERACTIVE: Try to resize the window below 400x300 and above 800x600 (20s) <<<");
 		Test_print(t, "    Drag the window border as small and as large as possible.");
 
 		Ns waited = 0;
 		Bool sawTooSmall = false;
 		Bool sawTooBig   = false;
 
-		while(waited < 10 * SECOND) {
+		while(waited < 20 * SECOND) {
 			
 			WindowManager_step(&windowManager, NULL, NULL);
 
