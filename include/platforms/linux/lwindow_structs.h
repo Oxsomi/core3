@@ -65,12 +65,10 @@ typedef struct LWindowManager {
 	struct wl_compositor       *compositor;
 	struct wl_shm              *shm;
 	struct xdg_wm_base         *xdgWmBase;
-	struct zxdg_decoration_manager_v1 *xdgDeco;
 	struct wl_subcompositor    *subcompositor;   //For CSD bar subsurface
 
 	U32 compositorId,    shmId;
-	U32 xdgWmBaseId,     xdgDecoId;
-	U32 subcompositorId, subcompositorPad;
+	U32 xdgWmBaseId,     subcompositorId;
 
 	struct wl_cursor_theme *cursorTheme;
 	struct wl_cursor       *cursors[9];          //One per resize edge + default

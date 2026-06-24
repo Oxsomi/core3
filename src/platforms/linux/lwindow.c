@@ -1116,30 +1116,6 @@ static const struct wl_keyboard_listener LWindow_kbListener = {
 	.repeat_info = LWindow_kbRepeatInfo,
 };
 
-static void LWindow_decorConfigure(
-	void *data,
-	struct zxdg_toplevel_decoration_v1 *deco,
-	U32 mode
-) {
-	(void) deco;
-	Window  *w    = (Window*) data;
-	LWindow *lwin = WindowExt(w, LWindow);
-
-	if(mode == ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE && !lwin->barSurface) {
-
-		//Compositor downgraded us to CSD after we requested SSD.
-		//This is rare but must be handled.
-
-		Log_warnLnx("LWindow_decorConfigure(): compositor downgraded to CSD, bar will be created");
-
-		// TODO: trigger deferred bar creation via LWindow_createBarSurface(w)
-	}
-}
-
-static const struct zxdg_toplevel_decoration_v1_listener LWindow_decorListener = {
-	.configure = LWindow_decorConfigure
-};
-
 Bool LWindow_initSize(Window *w, I32x2 size, Error *e_rr) {
 
 	Bool s_uccess    = true;
@@ -1762,45 +1738,23 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	//NoBorder: skip entirely, no SSD request, no CSD bar.
 	//Otherwise: try SSD first; fall back to CSD subsurface on compositors without it
 
-	if(!(w->hint & EWindowHint_NoBorder)) {
+	if(!(w->hint & EWindowHint_NoBorder) && manager->subcompositor) {
 
-		Bool useCSD = true;
+		lwin->barSurface = wl_compositor_create_surface(compositor);
 
-		if(manager->xdgDeco) {
+		if(!lwin->barSurface)
+			retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() bar surface failed"));
 
-			lwin->decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(manager->xdgDeco, lwin->topLevel);
+		lwin->barSubsurface = wl_subcompositor_get_subsurface(
+			manager->subcompositor, lwin->barSurface, surface
+		);
 
-			lwin->decorationListener = LWindow_decorListener;
-			zxdg_toplevel_decoration_v1_add_listener(lwin->decoration, &lwin->decorationListener, w);
-			zxdg_toplevel_decoration_v1_set_mode(lwin->decoration, ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+		if(!lwin->barSubsurface)
+			retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() bar subsurface failed"));
 
-			//TODO:!!!!
-
-			// One roundtrip so the compositor can respond to our SSD request.
-			wl_display_roundtrip(manager->display);
-
-			// Assume SSD was accepted; LWindow_decorConfigure overrides if not.
-			useCSD = false;
-		}
-
-		if(useCSD && manager->subcompositor) {
-
-			lwin->barSurface = wl_compositor_create_surface(compositor);
-
-			if(!lwin->barSurface)
-				retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() bar surface failed"));
-
-			lwin->barSubsurface = wl_subcompositor_get_subsurface(
-				manager->subcompositor, lwin->barSurface, surface
-			);
-
-			if(!lwin->barSubsurface)
-				retError(clean, Error_invalidState(0, "WindowManager_createWindowPhysical() bar subsurface failed"));
-
-			wl_subsurface_set_position(lwin->barSubsurface, 0, -LWINDOW_DECOR_HEIGHT);
-			wl_subsurface_place_above(lwin->barSubsurface, surface);
-			wl_subsurface_set_desync(lwin->barSubsurface);
-		}
+		wl_subsurface_set_position(lwin->barSubsurface, 0, -LWINDOW_DECOR_HEIGHT);
+		wl_subsurface_place_above(lwin->barSubsurface, surface);
+		wl_subsurface_set_desync(lwin->barSubsurface);
 	}
 
 	//Register built-in keyboard and mouse devices, matching Windows which always
@@ -1856,8 +1810,8 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	//Initial configure round-trip, triggers LWindow_updateSize -> LWindow_initSize,
 	// which also allocates the bar buffer via LWindow_initBar
 
-	wl_display_roundtrip(manager->display);
 	wl_surface_commit(surface);
+	wl_display_roundtrip(manager->display);
 
 	//Arm first frame callback
 

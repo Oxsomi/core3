@@ -116,7 +116,6 @@ void LWindowManager_register(
 	const CharString wlCompositorName    = CharString_createRefCStrConst(wl_compositor_interface.name);
 	const CharString wlShmName           = CharString_createRefCStrConst(wl_shm_interface.name);
 	const CharString xdgWmBaseName       = CharString_createRefCStrConst(xdg_wm_base_interface.name);
-	const CharString zxdgDecorationName  = CharString_createRefCStrConst(zxdg_decoration_manager_v1_interface.name);
 	const CharString wlSeatName          = CharString_createRefCStrConst(wl_seat_interface.name);
 	const CharString wlOutputName        = CharString_createRefCStrConst(wl_output_interface.name);
 	const CharString wlSubcompositorName = CharString_createRefCStrConst(wl_subcompositor_interface.name);
@@ -137,11 +136,6 @@ void LWindowManager_register(
 
 		data->xdgListener = (struct xdg_wm_base_listener) { .ping = LWindowManager_isAlive };
 		xdg_wm_base_add_listener(data->xdgWmBase, &data->xdgListener, NULL);
-	}
-
-	else if(CharString_equalsStringSensitive(&zxdgDecorationName, &inter)) {
-		data->xdgDeco   = wl_registry_bind(registry, id, &zxdg_decoration_manager_v1_interface, 1);
-		data->xdgDecoId = id;
 	}
 
 	else if(CharString_equalsStringSensitive(&wlSubcompositorName, &inter)) {
@@ -185,9 +179,6 @@ void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32
 
 	else if(id == data->xdgWmBaseId)
 		data->xdgWmBase = NULL;
-
-	else if(id == data->xdgDecoId)
-		data->xdgDeco = NULL;
 
 	else if(id == data->subcompositorId)
 		data->subcompositor = NULL;
@@ -474,9 +465,6 @@ Bool WindowManager_freeNative(WindowManager *w) {
 
 	if(manager->compositor)
 		wl_compositor_destroy(manager->compositor);
-
-	if(manager->xdgDeco)
-		zxdg_decoration_manager_v1_destroy(manager->xdgDeco);
 
 	if(manager->registry)
 		wl_registry_destroy(manager->registry);
