@@ -38,6 +38,7 @@
 	static volatile Bool f16MaximizeSeen = false;
 
 	Bool hasXdotool();
+	Bool isSingleWindow();
 
 	static Bool F16_onResize(Window *w, Error *e_rr) {
 		(void) e_rr;
@@ -50,6 +51,11 @@
 	void Test_functionalCSD(Test *t) {
 
 		Test_setModule(t, "F16/CSDButtons");
+
+		if(isSingleWindow()) {
+			Test_print(t, "Skipped. Device is single window");
+			return;
+		}
 
 		WindowCallbacks cbs = (WindowCallbacks) { 0 };
 		cbs.onResize = F16_onResize;

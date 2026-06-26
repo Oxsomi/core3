@@ -282,10 +282,22 @@ Bool WindowManager_createWindow(
 		));
 	}
 
-	else if(!manager->platformData.ptr)
-		retError(clean, Error_unsupportedOperation(
-			0, "WindowManager_createWindow() can't create a physical window if createNative failed (headless)"
-		));
+	else if(type == EWindowType_Physical) {
+
+		if(!manager->platformData.ptr)
+			retError(clean, Error_unsupportedOperation(
+				0, "WindowManager_createWindow() can't create a physical window if createNative failed (headless)"
+			));
+
+		if(manager->isSingleWindow && (hint & (EWindowHint_NoBorder | EWindowHint_Transparency | EWindowHint_DisableResize))) {
+			hint &= ~(EWindowHint_NoBorder | EWindowHint_Transparency | EWindowHint_DisableResize);
+			Log_warnLnx(
+				"WindowManager_createWindow() Physical window was created with unsupported flags;"
+				" borderless, transparent or disableResize.\n"
+				"The underlying system only supports one window at a time, so these hints are ignored."
+			);
+		}
+	}
 
 	if(extendedDataSize)
 		gotoIfError3(clean, Buffer_createEmptyBytes(extendedDataSize, Platform_instance->alloc, &extendedData, e_rr));
@@ -299,6 +311,15 @@ Bool WindowManager_createWindow(
 	));
 
 	alloc = true;
+
+	if(manager->isSingleWindow && type == EWindowType_Physical)
+		for(U64 i = 0; i < manager->windows.length; ++i)
+			if(RefPtr_data(manager->windows.ptr[i], Window)->type == EWindowType_Physical)
+				retError(clean, Error_invalidOperation(
+					0,
+					"WindowManager_createWindow() attempted to create a physical window, but there was already one present. "
+					"This is not allowed on single window systems."
+				));
 
 	Window *w = RefPtr_data(*result, Window);
 	gotoIfError3(clean, ListWindowPtr_pushBack(&manager->windows, *result, Platform_instance->alloc, e_rr));

@@ -47,6 +47,8 @@
 	Bool hasXdotool();
 #endif
 
+Bool isSingleWindow();
+
 // -- Shared pattern-draw used by F2/F4/F9/F14/F20: a simple onDraw gradient ----
 //
 //All of these tests just need "draw *something* distinguishable, and prove that
@@ -121,6 +123,11 @@ static void F2_onDraw(Window *w) { Pattern_onDraw(w, &f2); }
 static void Test_fullScreen(Test *t) {
 
 	Test_setModule(t, "F2/Fullscreen");
+
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
 
 	f2 = (PatternState) { 0 };
 
@@ -219,6 +226,11 @@ static void Test_multiWindow(Test *t) {
 
 	Test_setModule(t, "F4/MultiWindow");
 
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
+
 	f4a = (PatternState) { .zxor = 0x00 };
 	f4b = (PatternState) { .zxor = 0x80 };
 
@@ -276,6 +288,11 @@ static void F9_onDraw(Window *w) { Pattern_onDraw(w, &f9); }
 static void Test_focusMinimize(Test *t) {
 
 	Test_setModule(t, "F9/FocusMinimize");
+
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
 
 	f9 = (PatternState) { 0 };
 
@@ -464,6 +481,11 @@ static void Test_windowMove(Test *t) {
 
 	Test_setModule(t, "F13/WindowMove");
 
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
+
 	WindowCallbacks cbs = (WindowCallbacks) { 0 };
 	cbs.onMonitorChange = onMonitorChange;
 
@@ -543,6 +565,11 @@ static void F14_onDraw(Window *w) { Pattern_onDraw(w, &f14); }
 static void Test_maximize(Test *t) {
 
 	Test_setModule(t, "F14/Maximize");
+
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
 
 	f14 = (PatternState) { 0 };
 
@@ -647,6 +674,11 @@ static void F17_onDraw(Window *w) { Pattern_onDraw(w, &f17); }
 static void Test_minMaxSize(Test *t) {
 
 	Test_setModule(t, "F17/MinMaxSize");
+
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
 
 	I32x2 minSz = I32x2_create2(640, 360);
 	I32x2 maxSz = I32x2_create2(800, 600);
@@ -805,6 +837,11 @@ static void Test_borderless(Test *t) {
 
 	Test_setModule(t, "F20/Borderless");
 
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
+
 	f20 = (PatternState) { 0 };
 
 	WindowCallbacks cbs = (WindowCallbacks) { 0 };
@@ -890,6 +927,11 @@ static void F21_onDraw(Window *w) {
 static void Test_transparent(Test *t) {
 
 	Test_setModule(t, "F21/Transparent");
+
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
 
 	f21 = (F21State) { 0 };
 

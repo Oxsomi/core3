@@ -48,6 +48,8 @@
 	Bool hasXdotool();
 #endif
 
+Bool isSingleWindow();
+
 // -- F5. Keyboard - OS layer (interactive) -----------------------------------
 
 static volatile Bool escPressed = false;
@@ -225,7 +227,7 @@ static void Test_mouse(Test *t) {
 
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
 
-		if (hasXdotool()) {
+		if (!isSingleWindow() && hasXdotool()) {
 
 			system("xdotool search --name 'F8: Left-click anywhere to pass' windowfocus click 1");
 
@@ -453,6 +455,11 @@ static void onButtonReset(Window *w, InputDevice *dev, InputHandle h, Bool down)
 static void Test_focusReset(Test *t) {
 
 	Test_setModule(t, "F11/FocusReset");
+
+	if(isSingleWindow()) {
+		Test_print(t, "Skipped. Device is single window");
+		return;
+	}
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS || _PLATFORM_TYPE == PLATFORM_LINUX
 
@@ -838,7 +845,7 @@ static void Test_mouseDraw(Test *t) {
 
 	#elif _PLATFORM_TYPE == PLATFORM_LINUX
 
-		if (hasXdotool()) {
+		if (!isSingleWindow() && hasXdotool()) {
 
 			//Move to centre, mousedown, drag, mouseup
 
@@ -905,6 +912,9 @@ static void Test_mouseDraw(Test *t) {
 			Test_print(t, ">>> INTERACTIVE: Hold left-click and drag across the window (8s) <<<");
 
 			F18_pumpAndPaint(w, 8 * SECOND);
+
+			if(!windowManager.windows.length)
+				goto clean;
 
 			anyChanged = false;
 			for (I32 i = 0; i < W * H && !anyChanged; ++i)

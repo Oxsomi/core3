@@ -158,7 +158,9 @@ typedef struct LWindow {
 
 	U32 activeOutputIds[LWINDOW_MAX_OUTPUTS];
 	U32 activeOutputCount;
-	U32 pad2;
+	
+	I32 primaryTouchId;
+	struct wl_touch *touch;
  
 	Window *parent;
 

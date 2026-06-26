@@ -33,7 +33,7 @@
             "args": [
                 "--host",
                 "/bin/bash", "-l", "-c",
-                "gamescope -- env WAYLAND_DEBUG=1 gdbserver localhost:2345 ${workspaceFolder}/build/Debug/linux/x64/bin/OxC3_platforms_functional_test"
+                "gamescope -- gdbserver localhost:2345 ${workspaceFolder}/build/Debug/linux/x64/bin/OxC3_platforms_functional_test"
             ],
             "isBackground": true,
             "presentation": {

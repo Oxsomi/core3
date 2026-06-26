@@ -413,7 +413,7 @@ static void LWindow_updateCursor(Window *w, U32 resizeEdge) {
 	LWindow *lwin = WindowExt(w, LWindow);
 	LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 
-	if(!lwin->barPointer || !manager->cursorSurface)
+	if(!lwin->barPointer || !lwin->barSurface || !manager->cursorSurface)
 		return;
 
 	U32 idx = LWindow_edgeIndex(resizeEdge);
@@ -536,8 +536,40 @@ static void LWindow_pointerLeaveBar(
 		LWindow_redrawBar(w);
 	}
 
-	if(surface == (struct wl_surface*)w->nativeHandle)
+	if(surface == (struct wl_surface*)w->nativeHandle) {
+
 		LWindow_updateCursor(w, XDG_TOPLEVEL_RESIZE_EDGE_NONE);
+
+		//Pointer has left the surface; no further motion events are coming.
+		//Settle RX/RY back to zero, same reasoning as touch-up/cancel above
+
+		if(w->devices.length > w->defaultMouseId) {
+
+			InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+			InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX, EInputType_Axis);
+			InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY, EInputType_Axis);
+
+			F32 prevRelX = InputDevice_getCurrentAxis(mouse, hRelX);
+			F32 prevRelY = InputDevice_getCurrentAxis(mouse, hRelY);
+
+			if(prevRelX != 0.f) {
+
+				InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
+
+				if(w->callbacks.onDeviceAxis)
+					w->callbacks.onDeviceAxis(w, mouse, hRelX, 0.f);
+			}
+
+			if(prevRelY != 0.f) {
+				
+				InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
+
+				if(w->callbacks.onDeviceAxis)
+					w->callbacks.onDeviceAxis(w, mouse, hRelY, 0.f);
+			}
+		}
+	}
 }
 
 static void LWindow_pointerMotionBar(
@@ -549,7 +581,7 @@ static void LWindow_pointerMotionBar(
 
 	//Bar surface: zone-change-only redraw
 
-	if(lwin->pointerCurrentSurface == lwin->barSurface) {
+	if(lwin->barSurface && lwin->pointerCurrentSurface == lwin->barSurface) {
 
 		I32 nx = wl_fixed_to_int(sx);
 		I32 ny = wl_fixed_to_int(sy);
@@ -584,7 +616,7 @@ static void LWindow_pointerMotionBar(
 
 	//Main content surface: update mouse device axes
 
-	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
+	if(lwin->pointerCurrentSurface && lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
 		return;
 
 	I32 nx = wl_fixed_to_int(sx);
@@ -653,7 +685,7 @@ static void LWindow_pointerButtonBar(
 
 	//Bar surface: handle CSD buttons
 
-	if(lwin->pointerCurrentSurface == lwin->barSurface && pressed && button == BTN_LEFT) {
+	if(lwin->barSurface && lwin->pointerCurrentSurface == lwin->barSurface && pressed && button == BTN_LEFT) {
 
 		LWindowManager *manager = (LWindowManager*)w->owner->platformData.ptr;
 		I32 x      = lwin->pointerX;
@@ -684,11 +716,12 @@ static void LWindow_pointerButtonBar(
 
 	//Main content surface: forward to Mouse InputDevice
 
-	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
+	if(lwin->pointerCurrentSurface && lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
 		return;
 
 	if(
 		pressed && button == BTN_LEFT &&
+		lwin->pointerCurrentSurface == (struct wl_surface*)w->nativeHandle &&
 		!(w->hint & EWindowHint_DisableResize) &&
 		!(w->flags & (EWindowFlags_IsFullscreen | EWindowFlags_IsMaximized))
 	) {
@@ -738,7 +771,7 @@ static void LWindow_pointerAxisBar(
 
 	//Bar surface: ignore scroll
 
-	if(lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
+	if(lwin->pointerCurrentSurface && lwin->pointerCurrentSurface != (struct wl_surface*)w->nativeHandle)
 		return;
 
 	if(w->devices.length <= w->defaultMouseId)
@@ -774,6 +807,217 @@ static void LWindow_pointerAxisStopBar(void *d, struct wl_pointer *p, U32 t, U32
 static void LWindow_pointerAxisDiscreteBar(void *d, struct wl_pointer *p, U32 a, I32 v) {
 	(void)d; (void)p; (void)a; (void)v;
 }
+
+static void LWindow_touchDown(
+	void *data, struct wl_touch *touch, U32 serial, U32 time,
+	struct wl_surface *surface, I32 id, wl_fixed_t x, wl_fixed_t y
+) {
+	(void) touch; (void) serial; (void) time;
+
+	Window  *w    = (Window*) data;
+	LWindow *lwin = WindowExt(w, LWindow);
+
+	if(surface != (struct wl_surface*)w->nativeHandle || lwin->primaryTouchId != -1)
+		return;   //Only the first finger drives the mouse-equivalent for now
+
+	lwin->primaryTouchId = id;
+
+	I32 nx = wl_fixed_to_int(x), ny = wl_fixed_to_int(y);
+	w->cursor = I32x2_create2(nx, ny);
+	lwin->contentPointerX = nx;
+	lwin->contentPointerY = ny;
+
+	if(w->devices.length <= w->defaultMouseId)
+		return;
+
+	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+	//Fresh contact point: seed absolute position, zero relative axes, same as
+	// LWindow_pointerEnterBar does for a pointer entering the surface. There is no
+	// "previous position" yet, so RX/RY must not carry over a stale delta from
+	// mouse motion or a different finger's last move
+
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+
+	InputDevice_setCurrentAxis(mouse, hAbsX, (F32)nx);
+	InputDevice_setCurrentAxis(mouse, hAbsY, (F32)ny);
+	InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
+	InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
+
+	//Note: no onDeviceAxis callbacks here, deliberately, same as pointerEnterBar.
+	//Where the finger first lands isn't reportable motion, just the tracking baseline.
+
+	InputHandle hBtn = InputDevice_createHandle(mouse, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+
+	InputDevice_setCurrentState(mouse, hBtn, true);
+
+	if(w->callbacks.onDeviceButton)
+		w->callbacks.onDeviceButton(w, mouse, hBtn, true);
+}
+
+static void LWindow_touchUp(void *data, struct wl_touch *touch, U32 serial, U32 time, I32 id) {
+
+	(void) touch; (void) serial; (void) time;
+
+	Window  *w    = (Window*) data;
+	LWindow *lwin = WindowExt(w, LWindow);
+
+	if(lwin->primaryTouchId != id)
+		return;
+
+	lwin->primaryTouchId = -1;
+
+	if(w->devices.length <= w->defaultMouseId)
+		return;
+
+	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+	//Contact has ended; no further motion events will arrive for this finger.
+	//Settle RX/RY back to zero so nothing reads a stale "still moving" delta,
+	// and report the change, same as any other axis update. Abs (Temp0/Temp1) is
+	// left untouched: "last known position" stays meaningful after lift-off
+
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX, EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY, EInputType_Axis);
+
+	F32 prevRelX = InputDevice_getCurrentAxis(mouse, hRelX);
+	F32 prevRelY = InputDevice_getCurrentAxis(mouse, hRelY);
+
+	if(prevRelX != 0.f) {
+
+		InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
+
+		if(w->callbacks.onDeviceAxis)
+			w->callbacks.onDeviceAxis(w, mouse, hRelX, 0.f);
+	}
+
+	if(prevRelY != 0.f) {
+
+		InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
+
+		if(w->callbacks.onDeviceAxis)
+			w->callbacks.onDeviceAxis(w, mouse, hRelY, 0.f);
+	}
+
+	InputHandle hBtn = InputDevice_createHandle(mouse, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+
+	InputDevice_setCurrentState(mouse, hBtn, false);
+
+	if(w->callbacks.onDeviceButton)
+		w->callbacks.onDeviceButton(w, mouse, hBtn, false);
+}
+
+static void LWindow_touchMotion(void *data, struct wl_touch *touch, U32 time, I32 id, wl_fixed_t x, wl_fixed_t y) {
+
+	(void) touch; (void) time;
+
+	Window  *w    = (Window*) data;
+	LWindow *lwin = WindowExt(w, LWindow);
+
+	if(lwin->primaryTouchId != id)
+		return;
+
+	I32 nx = wl_fixed_to_int(x), ny = wl_fixed_to_int(y);
+	w->cursor = I32x2_create2(nx, ny);
+	lwin->contentPointerX = nx;
+	lwin->contentPointerY = ny;
+
+	if(w->devices.length <= w->defaultMouseId)
+		return;
+
+	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+	InputHandle hAbsX = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp0, EInputType_Axis);
+	InputHandle hAbsY = InputDevice_createHandle(mouse, (U16)EMouseAxis_Temp1, EInputType_Axis);
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX,    EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY,    EInputType_Axis);
+
+	F32 prevAbsX = InputDevice_getCurrentAxis(mouse, hAbsX);
+	F32 prevAbsY = InputDevice_getCurrentAxis(mouse, hAbsY);
+	F32 relX = (F32)nx - prevAbsX, relY = (F32)ny - prevAbsY;
+
+	InputDevice_setCurrentAxis(mouse, hAbsX, (F32)nx);
+	InputDevice_setCurrentAxis(mouse, hAbsY, (F32)ny);
+	InputDevice_setCurrentAxis(mouse, hRelX, relX);
+	InputDevice_setCurrentAxis(mouse, hRelY, relY);
+
+	if(w->callbacks.onDeviceAxis) {
+
+		if(relX != 0.f) {
+			w->callbacks.onDeviceAxis(w, mouse, hAbsX, (F32)nx);
+			w->callbacks.onDeviceAxis(w, mouse, hRelX, relX);
+		}
+
+		if(relY != 0.f) {
+			w->callbacks.onDeviceAxis(w, mouse, hAbsY, (F32)ny);
+			w->callbacks.onDeviceAxis(w, mouse, hRelY, relY);
+		}
+	}
+}
+
+static void LWindow_touchFrame(void *d, struct wl_touch *t) { (void)d; (void)t; }
+
+static void LWindow_touchCancel(void *data, struct wl_touch *touch) {
+
+	(void) touch;
+
+	Window  *w    = (Window*) data;
+	LWindow *lwin = WindowExt(w, LWindow);
+
+	if(lwin->primaryTouchId == -1)
+		return;
+
+	lwin->primaryTouchId = -1;
+
+	if(w->devices.length <= w->defaultMouseId)
+		return;
+
+	InputDevice *mouse = &w->devices.ptrNonConst[w->defaultMouseId];
+
+	//Same "contact has ended" settle-and-report as touchUp, cancel is just a
+	// different trigger for the same semantics (e.g. compositor took the touch
+	// sequence away mid-gesture, such as for a gesture or focus change).
+
+	InputHandle hRelX = InputDevice_createHandle(mouse, (U16)EMouseAxis_RX, EInputType_Axis);
+	InputHandle hRelY = InputDevice_createHandle(mouse, (U16)EMouseAxis_RY, EInputType_Axis);
+
+	F32 prevRelX = InputDevice_getCurrentAxis(mouse, hRelX);
+	F32 prevRelY = InputDevice_getCurrentAxis(mouse, hRelY);
+
+	if(prevRelX != 0.f) {
+
+		InputDevice_setCurrentAxis(mouse, hRelX, 0.f);
+
+		if(w->callbacks.onDeviceAxis)
+			w->callbacks.onDeviceAxis(w, mouse, hRelX, 0.f);
+	}
+
+	if(prevRelY != 0.f) {
+
+		InputDevice_setCurrentAxis(mouse, hRelY, 0.f);
+
+		if(w->callbacks.onDeviceAxis)
+			w->callbacks.onDeviceAxis(w, mouse, hRelY, 0.f);
+	}
+
+	InputHandle hBtn = InputDevice_createHandle(mouse, (U16)(EMouseButton_Left - EMouseAxis_End), EInputType_Button);
+
+	InputDevice_setCurrentState(mouse, hBtn, false);
+
+	if(w->callbacks.onDeviceButton)
+		w->callbacks.onDeviceButton(w, mouse, hBtn, false);
+}
+
+static const struct wl_touch_listener LWindow_touchListener = {
+	.down   = LWindow_touchDown,
+	.up     = LWindow_touchUp,
+	.motion = LWindow_touchMotion,
+	.frame  = LWindow_touchFrame,
+	.cancel = LWindow_touchCancel,
+};
 
 static const struct wl_pointer_listener LWindow_barPointerListener = {
 	.enter         = LWindow_pointerEnterBar,
@@ -1051,6 +1295,10 @@ static void LWindow_kbKey(
 
 	xkb_keycode_t keycode = key + 8;    //xkb keycode is evdev + 8
 	Bool isDown = keyState == WL_KEYBOARD_KEY_STATE_PRESSED;
+
+	//Keep modifier tracking self-consistent with the key stream itself,
+	// instead of relying solely on a possibly-delayed wl_keyboard::modifiers event. (SteamOS specific)
+	xkb_state_update_key(lwin->xkbState, keycode, isDown ? XKB_KEY_DOWN : XKB_KEY_UP);
 
 	if(!w->devices.ptr)
 		return;
@@ -1415,6 +1663,7 @@ void WindowManager_freePhysical(Window *w) {
 		wl_display_roundtrip(manager->display);
 
 	if(lwin->keyboard)      wl_keyboard_destroy(lwin->keyboard);
+	if(lwin->touch)         wl_touch_destroy(lwin->touch);
 	if(lwin->barPointer)    wl_pointer_destroy(lwin->barPointer);
 	if(lwin->barBuffer)     wl_buffer_destroy(lwin->barBuffer);
 	if(lwin->barPixels)     munmap(lwin->barPixels, (U64)lwin->barWidth * LWINDOW_DECOR_HEIGHT * 4);
@@ -1563,6 +1812,22 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 	lwin->bufferBusy[chosen] = true;
 
+	U32 height = lwin->height | ((U32) lwin->heightHi8 << 16);
+	U64 stride = (U64) lwin->pixelStride * height;
+
+	//Force Gamescope to treat this as a new buffer (see ValveSoftware/gamescope#1749:
+	// wl_shm buffers aren't re-uploaded on repeat commits of the same buffer object).
+	if(lwin->buffers[chosen]) {
+		wl_buffer_destroy(lwin->buffers[chosen]);
+		lwin->buffers[chosen] = wl_shm_pool_create_buffer(
+			lwin->backBuffer,
+			(I32)(stride * chosen),
+			(I32)lwin->pixelStride / 4, (I32)height, (I32)lwin->pixelStride,
+			w->hint & EWindowHint_Transparency ? WL_SHM_FORMAT_ARGB8888 : WL_SHM_FORMAT_XRGB8888
+		);
+		wl_buffer_add_listener(lwin->buffers[chosen], &LWindow_bufferListener, lwin);
+	}
+
 	wl_surface_attach(surface, lwin->buffers[chosen], 0, 0);
 	wl_surface_damage_buffer(surface, 0, 0, I32_MAX, I32_MAX);
 
@@ -1577,9 +1842,6 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 	wl_surface_commit(surface);
 
 	lwin->backBufferId      = (U8)((chosen + 1) % LWINDOW_BUFFER_COUNT);
-
-	U32 height = lwin->height | ((U32) lwin->heightHi8 << 16);
-	U64 stride = (U64) lwin->pixelStride * height;
 
 	w->cpuVisibleBuffer.ptr = lwin->mainBufferPtr + stride * lwin->backBufferId;
 
@@ -1786,12 +2048,17 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 		if(lwin->keyboard)
 			wl_keyboard_add_listener(lwin->keyboard, &LWindow_kbListener, w);
 
-		//Pointer for the CSD bar, only needed when we have a bar surface
-
 		struct wl_pointer *pointer = wl_seat_get_pointer(manager->seat);
 		if(pointer) {
 			lwin->barPointer = pointer;
 			wl_pointer_add_listener(pointer, &LWindow_barPointerListener, w);
+		}
+
+		struct wl_touch *touch = wl_seat_get_touch(manager->seat);
+		if(touch) {
+			lwin->touch = touch;
+			lwin->primaryTouchId = -1;
+			wl_touch_add_listener(touch, &LWindow_touchListener, w);
 		}
 	}
 

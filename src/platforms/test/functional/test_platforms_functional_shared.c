@@ -58,6 +58,10 @@ void Test_functionalShutdown() {
 
 #endif
 
+Bool isSingleWindow() {
+	return windowManager.isSingleWindow;
+}
+
 WindowRef *createWindow(
 	Test *t,
 	const C8 *titleStr,
