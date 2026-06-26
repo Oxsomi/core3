@@ -1,0 +1,67 @@
+name: SteamOS CI
+
+on: [push]
+
+jobs:
+
+  build:
+
+    name: SteamOS (sniper) build
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk:latest
+
+    steps:
+
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
+
+    - name: Restore cached
+      id: cache-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.conan2/p
+        key: steamos-${{ hashFiles('**/packages') }}
+
+    - name: build for fast check
+      run: python3 build.py -mode Release -tests True -o cliGraphics=False
+
+    - name: build for SIMD fallback check
+      run: python3 build.py -mode Release -simd False -tests True -o cliGraphics=False
+
+    - name: build for debug check
+      run: python3 build.py -mode Debug -tests True -o cliGraphics=False
+
+    - name: Delete non package files for cache
+      run: rm -rf ~/.conan2/p/b/*/b
+
+    - name: Cache Build
+      id: cache-build
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.conan2/p
+        key: steamos-${{ hashFiles('**/packages') }}
+
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.3'
+        bundler-cache: true
+
+    - name: Send Webhook Notification
+      if: always()
+      env:
+        JOB_STATUS: ${{ job.status }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        HOOK_OS_NAME: steamos-streamrt4-x64-static
+        WORKFLOW_NAME: ${{ github.workflow }}
+      run: |
+        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
+        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+      shell: bash
