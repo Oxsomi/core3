@@ -1,4 +1,4 @@
-name: C/C++ CI
+name: Linux Vulkan dynamic ARM64
 
 on: [push]
 

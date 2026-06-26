@@ -1,4 +1,4 @@
-name: SteamOS CI
+name: SteamOS
 
 on: [push]
 
@@ -20,8 +20,10 @@ jobs:
         submodules: recursive
 
     - name: Install Conan
-      id: conan
-      uses: turtlebrowser/get-conan@main
+      run: |
+        apt-get update -y
+        apt-get install -y python3-pip
+        pip3 install conan
 
     - name: Restore cached
       id: cache-restore
