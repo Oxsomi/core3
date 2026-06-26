@@ -6,7 +6,7 @@ jobs:
 
   build:
 
-    name: SteamOS (sniper) build
+    name: SteamOS (steamrt4) build
 
     runs-on: ubuntu-latest
 

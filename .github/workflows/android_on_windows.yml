@@ -7,7 +7,6 @@ jobs:
     name: Android build on windows
     runs-on: windows-2022
     env:
-      VULKAN_SDK: C:\VulkanSDK\
       ANDROID_SDK: C:\Android\android-sdk
       ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
     steps:
@@ -16,8 +15,9 @@ jobs:
         submodules: recursive
     - uses: seanmiddleditch/gha-setup-ninja@master
     - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@main
+      uses: humbletim/install-vulkan-sdk@v1.2
       with:
+        version: 1.4.309.0
         cache: true
     - name: Install Conan
       id: conan
