@@ -1,4 +1,4 @@
-name: Linux Vulkan X64
+name: Linux Vulkan x64
 
 on: [push]
 
@@ -37,6 +37,7 @@ jobs:
     - name: Delete non package files for cache
       run: rm -rf ~/.conan2/p/b/*/b
     - name: Cache Build
+      if: always()
       id: cache-build
       uses: actions/cache/save@v4
       with:

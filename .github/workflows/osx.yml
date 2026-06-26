@@ -5,7 +5,7 @@ on: [push]
 jobs:
   build:
     name: OSX build
-    runs-on: macos-13
+    runs-on: macos-26
     steps:
     - uses: actions/checkout@v4
       with:
@@ -45,6 +45,7 @@ jobs:
     - name: Delete non package files for cache
       run: rm -rf ~/.conan2/p/b/*/b
     - name: Cache Build
+      if: always()
       id: cache-build
       uses: actions/cache/save@v4
       with:

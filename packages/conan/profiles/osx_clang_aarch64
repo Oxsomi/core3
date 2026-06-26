@@ -4,4 +4,4 @@ compiler=clang
 compiler.cppstd=gnu17
 compiler.version=18
 compiler.libcxx=libc++
-arch=aarch64
+arch=armv8

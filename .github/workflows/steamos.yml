@@ -45,6 +45,7 @@ jobs:
       run: rm -rf ~/.conan2/p/b/*/b
 
     - name: Cache Build
+      if: always()
       id: cache-build
       uses: actions/cache/save@v4
       with:

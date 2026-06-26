@@ -738,7 +738,7 @@ def scan(
         # Prune hidden directories (.git, .cache, .vscode, etc.) so they
         # are never recursed into.  Modifying dirs[:] in-place is the
         # os.walk-documented way to control recursion.
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'build']
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'build' and d != 'VULKAN_SDK']
         for fname in filenames:
             ext = os.path.splitext(fname)[1].lower()
             if ext not in ALL_EXTENSIONS:

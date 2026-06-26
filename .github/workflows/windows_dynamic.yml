@@ -35,6 +35,7 @@ jobs:
     - name: Delete non package files for cache
       run: bash -c "rm -rf ~/.conan2/p/b/*/b"
     - name: Cache Build
+      if: always()
       id: cache-build
       uses: actions/cache/save@v4
       with:
