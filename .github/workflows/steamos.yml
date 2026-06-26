@@ -23,7 +23,7 @@ jobs:
       run: |
         apt-get update -y
         apt-get install -y python3-pip
-        pip3 install conan
+        pip3 install conan --break-system-packages
 
     - name: Restore cached
       id: cache-restore
