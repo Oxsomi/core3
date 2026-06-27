@@ -93,18 +93,11 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, generatorValid
 def main():
 
 	# Check environment
-
-	if not "VULKAN_SDK" in os.environ:
-		print("Vulkan SDK not found", file=sys.stderr)
-		return
-
-	if not "ANDROID_SDK" in os.environ:
-		print("Android SDK not found", file=sys.stderr)
-		return
-
-	if not "ANDROID_NDK" in os.environ:
-		print("Android NDK not found", file=sys.stderr)
-		return
+	
+	for var in ("VULKAN_SDK", "ANDROID_SDK", "ANDROID_NDK"):
+		if var not in os.environ:
+			print(f"{var} not found", file=sys.stderr)
+			sys.exit(1)
 
 	# Build command line args
 

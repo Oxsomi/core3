@@ -67,7 +67,7 @@ jobs:
       # ── Vulkan SDK ─────────────────────────────────────────────────────────
       # Windows/macOS: prebuilt tarball via humbletim action
       - name: Install Vulkan SDK (Windows / macOS)
-        if: inputs.vulkan && (inputs.os == 'windows' || inputs.os == 'macos')
+        if: inputs.vulkan && (inputs.os == 'windows' || inputs.os == 'macos' || input.runner == 'windows-2022')
         uses: humbletim/install-vulkan-sdk@v1.2
         with:
           version: 1.4.309.0
@@ -82,7 +82,7 @@ jobs:
             libvulkan-dev \
             glslang-tools \
             spirv-tools \
-            vulkan-validationlayers-dev
+            vulkan-utility-libraries-dev
 
       # ── Conan ──────────────────────────────────────────────────────────────
       - name: Install Conan
