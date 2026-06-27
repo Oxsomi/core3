@@ -47,8 +47,7 @@
 		#ifdef __clang__
 			#define CPU_PAUSE() __builtin_arm_yield()
 		#else
-        	#include <arm_acle.h>
-			#define CPU_PAUSE() __yield()
+			#define CPU_PAUSE() __asm__ __volatile__("yield")
 		#endif
 	#else
 		#define CPU_PAUSE() __builtin_ia32_pause()
