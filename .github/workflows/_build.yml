@@ -67,7 +67,7 @@ jobs:
       # ── Vulkan SDK ─────────────────────────────────────────────────────────
       # Windows/macOS: prebuilt tarball via humbletim action
       - name: Install Vulkan SDK (Windows / macOS)
-        if: inputs.vulkan && (inputs.os == 'windows' || inputs.os == 'macos' || input.runner == 'windows-2022')
+        if: inputs.vulkan && (inputs.os == 'windows' || inputs.os == 'macos' || startsWith(inputs.runner, 'windows'))
         uses: humbletim/install-vulkan-sdk@v1.2
         with:
           version: 1.4.309.0
@@ -75,7 +75,7 @@ jobs:
 
       # Linux: apt, works on x64 and ARM64 equally, no prebuilt arch mismatch
       - name: Install Vulkan SDK (Linux)
-        if: inputs.vulkan && inputs.os == 'linux'
+        if: inputs.vulkan && (inputs.os == 'linux' || startsWith(inputs.runner, 'ubuntu'))
         run: |
           sudo apt-get update
           sudo apt-get install -y \
