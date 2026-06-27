@@ -91,11 +91,18 @@ jobs:
 
       # SteamOS container doesn't have pip by default
       - name: Install Conan (SteamOS)
-        if: (inputs.os == 'linux' || inputs.os == 'steamos')
+        if: inputs.os == 'steamos'
         run: |
           apt-get update -y
           apt-get install -y python3-pip
           pip3 install conan --break-system-packages
+
+      - name: Install Conan (Linux)
+        if: inputs.os == 'linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y python3-pip
+          sudo pip3 install conan --break-system-packages
 
       # ── Linux platform deps ────────────────────────────────────────────────
       - name: Install Wayland deps
