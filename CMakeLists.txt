@@ -49,7 +49,7 @@ set(DynamicLinkingGraphics OFF CACHE BOOL "Turn on/off OxC3 graphics dynamic lin
 
 # Set general compile options
 
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "ARM64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "armv8" OR ${ANDROID_ABI} MATCHES "arm64-v8a")
+if("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "ARM64|armv8" OR "${ANDROID_ABI}" MATCHES "arm64-v8a")
 	message("-- Enabling ARM specific optimizations")
 	set(ARM ON)
 	set(target "arm64")

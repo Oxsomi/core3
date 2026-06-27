@@ -22,12 +22,11 @@ jobs:
       run: conan profile detect
     - name: Install wayland
       run: sudo apt-get update; sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev
-    - name: Restore cached
-      id: cache-restore
-      uses: actions/cache/restore@v4
+    - name: Cache Build
+      uses: actions/cache@v4
       with:
         path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/packages') }}
     - name: build for fast check
       run: python build.py -mode Release -tests True -dynamic_linking True -o cliGraphics=False
     - name: build for SIMD fallback check
@@ -36,13 +35,6 @@ jobs:
       run: python build.py -mode Release -tests True -dynamic_linking True -o cliGraphics=False
     - name: Delete non package files for cache
       run: rm -rf ~/.conan2/p/b/*/b
-    - name: Cache Build
-      if: always()
-      id: cache-build
-      uses: actions/cache/save@v4
-      with:
-        path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ hashFiles('**/packages') }}
     - uses: ruby/setup-ruby@v1
       with:
         ruby-version: '3.3'

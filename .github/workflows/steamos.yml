@@ -25,12 +25,11 @@ jobs:
         apt-get install -y python3-pip
         pip3 install conan --break-system-packages
 
-    - name: Restore cached
-      id: cache-restore
-      uses: actions/cache/restore@v4
+    - name: Cache Build
+      uses: actions/cache@v4
       with:
         path: ~/.conan2/p
-        key: steamos-${{ hashFiles('**/packages') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/packages') }}
 
     - name: build for fast check
       run: python3 build.py -mode Release -tests True -o cliGraphics=False
@@ -43,14 +42,6 @@ jobs:
 
     - name: Delete non package files for cache
       run: rm -rf ~/.conan2/p/b/*/b
-
-    - name: Cache Build
-      if: always()
-      id: cache-build
-      uses: actions/cache/save@v4
-      with:
-        path: ~/.conan2/p
-        key: steamos-${{ hashFiles('**/packages') }}
 
     - uses: ruby/setup-ruby@v1
       with:
