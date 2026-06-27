@@ -44,7 +44,12 @@
 	#include <sched.h>
 	#define THREAD_YIELD() sched_yield()
 	#if _ARCH == ARCH_ARM64
-		#define CPU_PAUSE() __builtin_arm_yield()
+		#ifdef __clang__
+			#define CPU_PAUSE() __builtin_arm_yield()
+		#else
+        	#include <arm_acle.h>
+			#define CPU_PAUSE() __yield()
+		#endif
 	#else
 		#define CPU_PAUSE() __builtin_ia32_pause()
 	#endif
