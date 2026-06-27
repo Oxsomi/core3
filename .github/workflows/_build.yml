@@ -1,0 +1,201 @@
+name: _build (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        type: string
+        required: true
+      runner:
+        type: string
+        required: true
+      os:
+        type: string
+        required: true
+      container:
+        type: string
+        required: false
+        default: ''
+      vulkan:
+        type: boolean
+        required: false
+        default: false
+      build_flags:
+        type: string
+        required: false
+        default: ''
+      python_cmd:
+        type: string
+        required: false
+        default: python
+      setup_python:
+        type: boolean
+        required: false
+        default: false
+      python_version:
+        type: string
+        required: false
+        default: ''
+      hook_name:
+        type: string
+        required: true
+    secrets:
+      WEBHOOK_URL:
+        required: true
+
+jobs:
+  build:
+    name: ${{ inputs.name }}
+    runs-on: ${{ inputs.runner }}
+    container: ${{ inputs.container }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # ── Python setup (only where the runner doesn't ship the right version) ──
+      - uses: actions/setup-python@v5
+        if: inputs.setup_python
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      # ── Ninja (Android only) ───────────────────────────────────────────────
+      - uses: seanmiddleditch/gha-setup-ninja@master
+        if: inputs.os == 'android'
+
+      # ── Vulkan SDK ─────────────────────────────────────────────────────────
+      # Windows/macOS: prebuilt tarball via humbletim action
+      - name: Install Vulkan SDK (Windows / macOS)
+        if: inputs.vulkan && (inputs.os == 'windows' || inputs.os == 'macos')
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      # Linux: apt, works on x64 and ARM64 equally, no prebuilt arch mismatch
+      - name: Install Vulkan SDK (Linux)
+        if: inputs.vulkan && inputs.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libvulkan-dev \
+            glslang-tools \
+            spirv-tools \
+            vulkan-validationlayers-dev
+
+      # ── Conan ──────────────────────────────────────────────────────────────
+      - name: Install Conan
+        if: (inputs.os != 'linux' && inputs.os != 'steamos')
+        uses: turtlebrowser/get-conan@main
+
+      # SteamOS container doesn't have pip by default
+      - name: Install Conan (SteamOS)
+        if: (inputs.os == 'linux' || inputs.os == 'steamos')
+        run: |
+          apt-get update -y
+          apt-get install -y python3-pip
+          pip3 install conan --break-system-packages
+
+      # ── Linux platform deps ────────────────────────────────────────────────
+      - name: Install Wayland deps
+        if: inputs.os == 'linux'
+        run: sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev
+
+      # ── macOS platform deps ────────────────────────────────────────────────
+      - name: Set up Homebrew
+        if: inputs.os == 'macos'
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Setup LLVM
+        if: inputs.os == 'macos'
+        uses: ZhongRuoyu/setup-llvm@v0
+        with:
+          llvm-version: 17
+
+      # ── Android platform deps ──────────────────────────────────────────────
+      - name: Set up JDK 17
+        if: inputs.os == 'android'
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        if: inputs.os == 'android'
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Android NDK
+        if: inputs.os == 'android'
+        run: sdkmanager "platforms;android-29" "ndk;29.0.13113456"
+
+      - name: Setup msys2
+        if: inputs.os == 'android'
+        uses: msys2/setup-msys2@v2
+
+      # ── Conan package cache ────────────────────────────────────────────────
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: ${{ inputs.os }}-${{ inputs.runner }}-${{ hashFiles('**/conanfile.py', '**/conanfile.txt') }}
+
+      # ── Build: Android ─────────────────────────────────────────────────────
+      - name: Build Android Debug
+        if: inputs.os == 'android'
+        env:
+          ANDROID_SDK: C:\Android\android-sdk
+          ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug
+
+      - name: Build Android Debug (SIMD fallback)
+        if: inputs.os == 'android'
+        env:
+          ANDROID_SDK: C:\Android\android-sdk
+          ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
+        run: ${{ inputs.python_cmd }} build_android.py -mode Debug -simd False
+
+      - name: Build Android Release
+        if: inputs.os == 'android'
+        env:
+          ANDROID_SDK: C:\Android\android-sdk
+          ANDROID_NDK: C:\Android\android-sdk\ndk\29.0.13113456
+        run: ${{ inputs.python_cmd }} build_android.py -mode Release
+
+      # ── Build: everything else ─────────────────────────────────────────────
+      - name: Build Release
+        if: inputs.os != 'android'
+        run: ${{ inputs.python_cmd }} build.py -mode Release -tests True ${{ inputs.build_flags }}
+
+      - name: Build Release (SIMD fallback)
+        if: inputs.os != 'android'
+        run: ${{ inputs.python_cmd }} build.py -mode Release -simd False -tests True ${{ inputs.build_flags }}
+
+      - name: Build Debug
+        if: inputs.os != 'android'
+        run: ${{ inputs.python_cmd }} build.py -mode Debug -tests True ${{ inputs.build_flags }}
+
+      # ── Cleanup before cache save ──────────────────────────────────────────
+      - name: Prune Conan build dirs
+        if: always()
+        shell: bash
+        run: rm -rf ~/.conan2/p/b/*/b
+
+      # ── Discord notification ───────────────────────────────────────────────
+      - uses: ruby/setup-ruby@v1
+        if: always()
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Send Webhook Notification
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          HOOK_OS_NAME: ${{ inputs.hook_name }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+        run: |
+          git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
+          bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL

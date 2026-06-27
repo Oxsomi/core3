@@ -1,61 +1,19 @@
-name: SteamOS
-
+name: SteamOS x64 static
 on: [push]
 
 jobs:
-
   build:
-
-    name: SteamOS (steamrt4) build
-
-    runs-on: ubuntu-latest
-
-    container:
-      image: registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk:latest
-
-    steps:
-
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-
-    - name: Install Conan
-      run: |
-        apt-get update -y
-        apt-get install -y python3-pip
-        pip3 install conan --break-system-packages
-
-    - name: Cache Build
-      uses: actions/cache@v4
-      with:
-        path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/packages') }}
-
-    - name: build for fast check
-      run: python3 build.py -mode Release -tests True -o cliGraphics=False
-
-    - name: build for SIMD fallback check
-      run: python3 build.py -mode Release -simd False -tests True -o cliGraphics=False
-
-    - name: build for debug check
-      run: python3 build.py -mode Debug -tests True -o cliGraphics=False
-
-    - name: Delete non package files for cache
-      run: rm -rf ~/.conan2/p/b/*/b
-
-    - uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: '3.3'
-        bundler-cache: true
-
-    - name: Send Webhook Notification
-      if: always()
-      env:
-        JOB_STATUS: ${{ job.status }}
-        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        HOOK_OS_NAME: steamos-streamrt4-x64-static
-        WORKFLOW_NAME: ${{ github.workflow }}
-      run: |
-        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
-        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
-      shell: bash
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: SteamOS x64 static
+      runner: ubuntu-latest
+      os: steamos
+      vulkan: false
+      build_flags: '-o cliGraphics=False'
+      python_cmd: python3
+      setup_python: false
+      python_version: ''
+      hook_name: steamos-steamrt4-x64-static
+      container: 'registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk:latest'
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

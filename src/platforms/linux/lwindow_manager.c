@@ -328,7 +328,7 @@ Bool WindowManager_createNative(WindowManager *w, Error *e_rr) {
 
 	manager->display         = wl_display_connect(waylandDisplay);
 
-	manager->compositorId    = U64_MAX;
+	manager->compositorId    = U32_MAX;
 
 	if(!manager->display)
 		retError(clean, Error_stderr(0, "WindowManager_createNative() couldn't connect to display"));

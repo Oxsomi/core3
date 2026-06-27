@@ -1,60 +1,18 @@
-name: OSX Vulkan x64
-
+name: macOS x64 Vulkan static
 on: [push]
 
 jobs:
   build:
-    name: OSX build
-    runs-on: macos-26
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.2
-      with:
-        version: 1.4.309.0
-        cache: true
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-    - name: Install Conan
-      id: conan
-      uses: turtlebrowser/get-conan@main
-    - name: Set up Homebrew
-      id: set-up-homebrew
-      uses: Homebrew/actions/setup-homebrew@master
-    - name: Setup LLVM
-      uses: ZhongRuoyu/setup-llvm@v0
-      with:
-        llvm-version: 17
-    - name: Configure conan
-      run: conan profile detect
-    - name: Cache Build
-      uses: actions/cache@v4
-      with:
-        path: ~/.conan2/p
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/packages') }}
-    - name: build for fast check
-      run: python build.py -mode Release -tests True -o cliGraphics=False
-    - name: build for SIMD fallback check
-      run: python build.py -mode Release -simd False -tests True -o cliGraphics=False
-    - name: build for debug check
-      run: python build.py -mode Release -tests True -o cliGraphics=False
-    - name: Delete non package files for cache
-      run: rm -rf ~/.conan2/p/b/*/b
-    - uses: ruby/setup-ruby@v1
-      with:
-        ruby-version: '3.3'
-        bundler-cache: true
-    - name: Send Webhook Notification
-      if: always()
-      env:
-        JOB_STATUS: ${{ job.status }}
-        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        HOOK_OS_NAME: ${{ runner.os }}-x64-static
-        WORKFLOW_NAME: ${{ github.workflow }}
-      run: |
-        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
-        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
-      shell: bash
+    uses: ./.github/workflows/_build.yml
+    with:
+      name: macOS x64 Vulkan static
+      runner: macos-26
+      os: macos
+      vulkan: true
+      build_flags: '-o cliGraphics=False'
+      python_cmd: python
+      setup_python: true
+      python_version: '3.10'
+      hook_name: macOS-x64-static
+    secrets:
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
