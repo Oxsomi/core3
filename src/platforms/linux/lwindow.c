@@ -1817,14 +1817,21 @@ Bool Window_presentPhysical(Window *w, Error *e_rr) {
 
 	//Force Gamescope to treat this as a new buffer (see ValveSoftware/gamescope#1749:
 	// wl_shm buffers aren't re-uploaded on repeat commits of the same buffer object).
-	if(lwin->buffers[chosen]) {
-		wl_buffer_destroy(lwin->buffers[chosen]);
+	if(w->owner->isSingleWindow) {
+
+		if(lwin->buffers[chosen])
+			wl_buffer_destroy(lwin->buffers[chosen]);
+
 		lwin->buffers[chosen] = wl_shm_pool_create_buffer(
 			lwin->backBuffer,
 			(I32)(stride * chosen),
 			(I32)lwin->pixelStride / 4, (I32)height, (I32)lwin->pixelStride,
 			w->hint & EWindowHint_Transparency ? WL_SHM_FORMAT_ARGB8888 : WL_SHM_FORMAT_XRGB8888
 		);
+
+		if(!lwin->buffers[chosen])
+			retError(clean, Error_invalidState(0, "Window_presentPhysical() failed to create buffer!"));
+
 		wl_buffer_add_listener(lwin->buffers[chosen], &LWindow_bufferListener, lwin);
 	}
 
@@ -2044,21 +2051,31 @@ Bool WindowManager_createWindowPhysical(Window *w, Error *e_rr) {
 	//Wire keyboard listener on the seat so we receive key events and text input
 
 	if(manager->seat) {
-		lwin->keyboard = wl_seat_get_keyboard(manager->seat);
-		if(lwin->keyboard)
-			wl_keyboard_add_listener(lwin->keyboard, &LWindow_kbListener, w);
+		
+		if((manager->seatCapabilities & WL_SEAT_CAPABILITY_KEYBOARD)) {
 
-		struct wl_pointer *pointer = wl_seat_get_pointer(manager->seat);
-		if(pointer) {
-			lwin->barPointer = pointer;
-			wl_pointer_add_listener(pointer, &LWindow_barPointerListener, w);
+			lwin->keyboard = wl_seat_get_keyboard(manager->seat);
+
+			if(lwin->keyboard)
+				wl_keyboard_add_listener(lwin->keyboard, &LWindow_kbListener, w);
 		}
 
-		struct wl_touch *touch = wl_seat_get_touch(manager->seat);
-		if(touch) {
-			lwin->touch = touch;
-			lwin->primaryTouchId = -1;
-			wl_touch_add_listener(touch, &LWindow_touchListener, w);
+		if((manager->seatCapabilities & WL_SEAT_CAPABILITY_POINTER)) {
+
+			struct wl_pointer *pointer = wl_seat_get_pointer(manager->seat);
+			if(pointer) {
+				lwin->barPointer = pointer;
+				wl_pointer_add_listener(pointer, &LWindow_barPointerListener, w);
+			}
+		}
+
+		if((manager->seatCapabilities & WL_SEAT_CAPABILITY_TOUCH)) {
+			struct wl_touch *touch = wl_seat_get_touch(manager->seat);
+			if(touch) {
+				lwin->touch = touch;
+				lwin->primaryTouchId = -1;
+				wl_touch_add_listener(touch, &LWindow_touchListener, w);
+			}
 		}
 	}
 

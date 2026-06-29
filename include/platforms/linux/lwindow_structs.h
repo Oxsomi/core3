@@ -77,7 +77,7 @@ typedef struct LWindowManager {
 	//Input seat
 	struct wl_seat *seat;
 	U32             seatId;
-	U32             seatPad;
+	U32             seatCapabilities;
 
 	//Output / monitor tracking
 	struct wl_output *outputs[LWINDOW_MAX_OUTPUTS];

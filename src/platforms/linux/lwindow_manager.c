@@ -100,6 +100,22 @@ static const struct wl_output_listener LOutput_listener = {
 	.done     = LOutput_done,
 	.scale    = LOutput_scale,
 };
+
+static void LWindowManager_seatCapabilities(
+	void *data, struct wl_seat *seat, U32 capabilities
+) {
+	(void) seat;
+	((LWindowManager*)data)->seatCapabilities = capabilities;
+}
+
+static void LWindowManager_seatName(void *data, struct wl_seat *seat, const C8 *name) {
+	(void)data; (void)seat; (void)name;
+}
+
+static const struct wl_seat_listener LWindowManager_seatListener = {
+	.capabilities = LWindowManager_seatCapabilities,
+	.name         = LWindowManager_seatName
+};
  
 void LWindowManager_register(
 	void *dataVoid,
@@ -146,6 +162,7 @@ void LWindowManager_register(
 	else if(CharString_equalsStringSensitive(&wlSeatName, &inter)) {
 		data->seat   = wl_registry_bind(registry, id, &wl_seat_interface, 5);
 		data->seatId = id;
+		wl_seat_add_listener(data->seat, &LWindowManager_seatListener, data);
 	}
 
 	else if(CharString_equalsStringSensitive(&wlOutputName, &inter)) {
@@ -163,7 +180,6 @@ void LWindowManager_register(
 			break;
 		}
 	}
-
 }
 
 void LWindowManager_unregister(void *dataVoid, struct wl_registry *registry, U32 id) {
