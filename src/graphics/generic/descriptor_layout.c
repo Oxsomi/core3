@@ -46,7 +46,7 @@ U8 getDxilRegisterType(ESHRegisterType type) {
 }
 
 Bool DescriptorBinding_overlaps(
-	DescriptorBinding binding,
+	const DescriptorBinding *binding,
 	ESHRegisterType regType,
 	SHBinding b,
 	U32 bcount,
@@ -79,12 +79,12 @@ Bool DescriptorBinding_overlaps(
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	GraphicsDeviceRef *dev,
-	SHFile binary,
-	ListU32 entrypoints,
+	const SHFile *binary,
+	const ListU32 *entrypoints,
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,
-	CharString pushConstantName,
+	const ListCharString *pushDescriptors,
+	const CharString *pushConstantName,
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
 	DescriptorLayoutInfo *pushDescriptorInfo,
@@ -384,12 +384,12 @@ clean:
 
 Bool GraphicsDeviceRef_detectLayoutFromEntry(
 	GraphicsDeviceRef *dev,
-	SHFile binary,
+	const SHFile *binary,
 	U32 entrypoint,
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,
-	CharString pushConstantName,
+	const ListCharString *pushDescriptors,
+	const CharString *pushConstantName,
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
 	DescriptorLayoutInfo *pushDescriptorInfo,

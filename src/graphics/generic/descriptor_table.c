@@ -325,19 +325,19 @@ Descriptor Descriptor_buffer(
 Descriptor Descriptor_tlas(TLASRef *tlas) { return (Descriptor) { .resource = tlas }; }
 Descriptor Descriptor_sampler(SamplerRef *sampler) { return (Descriptor) { .resource = sampler }; }
 
-U64 Descriptor_startBuffer(Descriptor d) {
+U64 Descriptor_startBuffer(const Descriptor *d) {
 	return d.buffer.startRegionAndCounterOffset.region48 << 16 >> 16;
 }
 
-U64 Descriptor_endBuffer(Descriptor d) {
+U64 Descriptor_endBuffer(const Descriptor *d) {
 	return d.buffer.endRegionAndCounterOffset.region48 << 16 >> 16;
 }
 
-U64 Descriptor_bufferLength(Descriptor d) {
+U64 Descriptor_bufferLength(const Descriptor *d) {
 	return Descriptor_endBuffer(d) - Descriptor_startBuffer(d);
 }
 
-U32 Descriptor_counterOffset(Descriptor d) {
+U32 Descriptor_counterOffset(const Descriptor* d) {
 	return
 		d.buffer.startRegionAndCounterOffset.counter16.counterOffset16 |
 		((U32)d.buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
@@ -500,7 +500,7 @@ clean:
 	return s_uccess;
 }
 
-Bool Descriptor_eq(Descriptor a, DescriptorTableBindingSingle b, ESHRegisterType type) {
+Bool Descriptor_eq(const Descriptor *a, const DescriptorTableBindingSingle *b, ESHRegisterType type) {
 
 	if (a.resource != b.resource)
 		return false;
@@ -532,7 +532,7 @@ Bool DescriptorTableRef_setDescriptors(
 	U64 bindId,
 	U64 arrayId,
 	Bool maintainRef,
-	ListDescriptor darr,
+	const ListDescriptor *darr,
 	Error *e_rr
 ) {
 
@@ -1058,7 +1058,7 @@ Bool DescriptorTableRef_setDescriptor(
 	U64 bindId,
 	U64 arrayId,
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 ) {
 
@@ -1091,7 +1091,7 @@ Bool DescriptorTableRef_setDescriptorByName(
 	CharString registerName,
 	U64 arrayId,
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 ) {
 
@@ -1113,7 +1113,7 @@ Bool DescriptorTableRef_setDescriptorsByName(
 	CharString registerName,
 	U64 arrayId,
 	Bool maintainRef,
-	ListDescriptor d,
+	const ListDescriptor *d,
 	Error *e_rr
 ) {
 
@@ -1146,6 +1146,28 @@ Bool DescriptorTableRef_unsetDescriptorsByName(
 		retError(clean, Error_notFound(0, 1, "DescriptorTableRef_unsetDescriptorsByName register not found"));
 
 	gotoIfError3(clean, DescriptorTableRef_unsetDescriptors(table, binding, arrayId, count, e_rr));
+
+clean:
+	return s_uccess;
+}
+
+Bool DescriptorTableRef_allocDescriptorByName(
+	DescriptorTableRef *table,
+	CharString registerName,
+	U64 *arrayId,           //outputs arrayId into descriptor if success
+	Bool maintainRef,
+	const Descriptor *d,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	U64 binding = DescriptorTableRef_resolveRegisterName(table, registerName);
+
+	if (binding == U64_MAX)
+		retError(clean, Error_notFound(0, 1, "DescriptorTableRef_unsetDescriptorsByName register not found"));
+
+	gotoIfError3(clean, DescriptorTableRef_allocDescriptor(table, binding, arrayId, maintainRef, d, e_rr));
 
 clean:
 	return s_uccess;
@@ -1337,7 +1359,7 @@ Bool DescriptorTableRef_allocDescriptor(
 	U64 bindId,
 	U64 *arrayId,
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 ) {
 
@@ -1425,7 +1447,7 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 	U8 *bindlessTypeId,
 	U64 *arrayId,
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 ) {
 

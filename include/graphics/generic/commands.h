@@ -61,13 +61,11 @@ Bool CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd c
 TList(CopyImageRegion);
 
 Bool CommandListRef_copyImageRegions(
-	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ListCopyImageRegion regions,
-	Error *e_rr
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ListCopyImageRegion regions, Error *e_rr
 );
 
 Bool CommandListRef_copyImage(
-	CommandListRef *commandList, RefPtr *src, RefPtr *dst, CopyImageRegion region,
-	Error *e_rr
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, CopyImageRegion region, Error *e_rr
 );
 
 //Draw calls and dispatches

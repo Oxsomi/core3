@@ -34,13 +34,18 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 
 	Bool s_uccess = true;
 
+	Swapchain *swapchain = NULL;
+	ELockAcquire acqSwapchain = ELockAcquire_Invalid;
+
 	if(!swapchainRef || swapchainRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
 		retError(clean, Error_nullPointer(0, "Swapchain_resize()::swapchain is required"));
 
-	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
+	swapchain = SwapchainRef_ptr(swapchainRef);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->base.resource.device);
 
-	if(SpinLock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
+	acqSwapchain = SpinLock_lock(&swapchain->lock, U64_MAX);
+
+	if(acqSwapchain != ELockAcquire_Acquired)
 		retError(clean, Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain"));
 
 	//Check if swapchain was in flight. If yes, warn that the user has to flush manually
@@ -107,7 +112,7 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 
 clean:
 
-	if(acq == ELockAcquire_Acquired)
+	if(acqSwapchain == ELockAcquire_Acquired)
 		SpinLock_unlock(&swapchain->lock);
 
 	return s_uccess;

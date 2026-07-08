@@ -47,10 +47,15 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 	Bool s_uccess = true;
 	const Allocator *alloc = tex ? GraphicsDeviceRef_getAlloc(DeviceTextureRef_ptr(tex)->base.resource.device) : NULL;
 
+	DeviceTexture *texture = NULL;
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq0 = ELockAcquire_Invalid;
+	ELockAcquire acq1 = ELockAcquire_Invalid;
+
 	if(!tex || tex->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceTexture)
 		retError(clean, Error_nullPointer(0, "DeviceTextureRef_markDirty()::tex is required"));
 
-	DeviceTexture *texture = DeviceTextureRef_ptr(tex);
+	texture = DeviceTextureRef_ptr(tex);
 	UnifiedTexture *utex = &texture->base;
 
 	//Check range
@@ -70,14 +75,12 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 			3, z + l, utex->length, "DeviceTextureRef_markDirty()::z+l out of bounds"
 		));
 
-	ELockAcquire acq0 = SpinLock_lock(&texture->lock, U64_MAX);
+	acq0 = SpinLock_lock(&texture->lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(1, "DeviceTextureRef_markDirty() couldn't acquire texture lock"));
 
-	ELockAcquire acq1 = ELockAcquire_Invalid;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(utex->resource.device);
+	device = GraphicsDeviceRef_ptr(utex->resource.device);
 
 	if(texture->isPendingFullCopy)        //Already has a full pending change, so no need to check anything.
 		goto clean;

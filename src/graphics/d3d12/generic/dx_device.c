@@ -39,6 +39,7 @@
 #include "graphics/generic/pipeline_layout.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "types/base/mathi.h"
 #include "types/base/mathf.h"
@@ -487,13 +488,13 @@ void DX_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 		for(U64 i = 0; i < deviceExt->commandPools.length; ++i) {
 
-			const DxCommandAllocator alloc = deviceExt->commandPools.ptr[i];
+			const DxCommandAllocator commandAlloc = deviceExt->commandPools.ptr[i];
 
-			if(alloc.cmd)
-				alloc.cmd->lpVtbl->Release(alloc.cmd);
+			if(commandAlloc.cmd)
+				commandAlloc.cmd->lpVtbl->Release(commandAlloc.cmd);
 
-			if(alloc.pool)
-				alloc.pool->lpVtbl->Release(alloc.pool);
+			if(commandAlloc.pool)
+				commandAlloc.pool->lpVtbl->Release(commandAlloc.pool);
 		}
 
 		if(deviceExt->commitSemaphore)

@@ -22,15 +22,14 @@
 
 #pragma once
 #include "types/base/types.h"
-#include "types/base/error.h"
 #include "types/base/atomic.h"
-#include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
 typedef struct CharString CharString;
+typedef struct Error Error;
 
 typedef enum EDescriptorHeapFlags {
 	EDescriptorHeapFlags_None                     = 0,
@@ -60,6 +59,7 @@ typedef struct DescriptorHeapInfo {
 
 } DescriptorHeapInfo;
 
+typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DescriptorHeapRef;
 
@@ -79,7 +79,7 @@ typedef struct DescriptorHeap {
 
 Bool GraphicsDeviceRef_createDescriptorHeap(
 	GraphicsDeviceRef *dev,
-	DescriptorHeapInfo info,
+	const DescriptorHeapInfo *info,
 	CharString name,
 	DescriptorHeapRef **heap,
 	Error *e_rr

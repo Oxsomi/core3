@@ -22,8 +22,6 @@
 
 #pragma once
 #include "types/base/types.h"
-#include "types/base/error.h"
-#include "types/base/atomic.h"
 #include "types/base/lock.h"
 #include "types/container/ref_ptr.h"
 #include "graphics/generic/resource.h"
@@ -33,6 +31,7 @@
 #endif
 
 typedef struct CharString CharString;
+typedef struct Error Error;
 
 typedef enum EDescriptorTableFlags {
 	EDescriptorTableFlags_None                        = 0,
@@ -193,10 +192,10 @@ Descriptor Descriptor_buffer(
 Descriptor Descriptor_tlas(TLASRef *tlas);
 Descriptor Descriptor_sampler(SamplerRef *sampler);
 
-U64 Descriptor_startBuffer(Descriptor d);
-U64 Descriptor_endBuffer(Descriptor d);
-U64 Descriptor_bufferLength(Descriptor d);
-U32 Descriptor_counterOffset(Descriptor d);
+U64 Descriptor_startBuffer(const Descriptor *d);
+U64 Descriptor_endBuffer(const Descriptor *d);
+U64 Descriptor_bufferLength(const Descriptor *d);
+U32 Descriptor_counterOffset(const Descriptor *d);
 
 //Note: When setting descriptors, ensure all descriptors are valid (e.g. resource != NULL)
 //        not all implementations support null descriptors, as such, setting all descriptors in a range to NULL
@@ -208,7 +207,7 @@ Bool DescriptorTableRef_setDescriptors(
 	U64 bindId,             //ListDescriptorBinding[i]
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
-	ListDescriptor d,
+	const ListDescriptor *d,
 	Error *e_rr
 );
 
@@ -225,7 +224,7 @@ Bool DescriptorTableRef_setDescriptor(
 	U64 bindId,             //ListDescriptorBinding[i]
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 );
 
@@ -234,7 +233,7 @@ Bool DescriptorTableRef_allocDescriptor(
 	U64 bindId,             //ListDescriptorBinding[i]
 	U64 *arrayId,           //outputs arrayId into descriptor if success
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 );
 
@@ -262,7 +261,7 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 	U8 *bindlessTypeId,     //Index for bindless handle
 	U64 *arrayId,           //outputs arrayId into descriptor if success
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 );
 
@@ -274,7 +273,7 @@ Bool DescriptorTableRef_setDescriptorByName(
 	CharString registerName,
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
-	Descriptor d,
+	const Descriptor *d,
 	Error *e_rr
 );
 
@@ -283,7 +282,7 @@ Bool DescriptorTableRef_setDescriptorsByName(
 	CharString registerName,
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
-	ListDescriptor d,
+	const ListDescriptor *d,
 	Error *e_rr
 );
 
@@ -299,7 +298,8 @@ Bool DescriptorTableRef_allocDescriptorByName(
 	DescriptorTableRef *table,
 	CharString registerName,
 	U64 *arrayId,           //outputs arrayId into descriptor if success
-	Descriptor d,
+	Bool maintainRef,
+	const Descriptor *d,
 	Error *e_rr
 );
 

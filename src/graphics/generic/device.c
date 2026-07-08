@@ -970,6 +970,9 @@ Bool GraphicsDeviceRef_submitCommands(
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
+	GraphicsDevice *device = NULL;
+	SpinLock *lockPtr = NULL;
+
 	//Validation
 
 	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
@@ -990,9 +993,9 @@ Bool GraphicsDeviceRef_submitCommands(
 			3, 0, "GraphicsDeviceRef_submitCommands()::appData is limited to 368 bytes"
 		));
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	device = GraphicsDeviceRef_ptr(deviceRef);
 
-	SpinLock *lockPtr = &device->lock;
+	lockPtr = &device->lock;
 	ELockAcquire acq = SpinLock_lock(lockPtr, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
@@ -1194,10 +1197,14 @@ clean:
 	if(lockPtr)
 		SpinLock_unlock(lockPtr);
 
-	for(U64 i = 0; i < device->currentLocks.length; ++i)
-		SpinLock_unlock(device->currentLocks.ptrNonConst[i]);
+	if (device) {
 
-	ListSpinLockPtr_clear(&device->currentLocks, e_rr);
+		for(U64 i = 0; i < device->currentLocks.length; ++i)
+			SpinLock_unlock(device->currentLocks.ptrNonConst[i]);
+
+		ListSpinLockPtr_clear(&device->currentLocks, e_rr);
+	}
+
 	return s_uccess;
 }
 
@@ -1218,12 +1225,15 @@ Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr) {
 
 	Bool s_uccess = true;
 
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq = ELockAcquire_Invalid;
+
 	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_wait()::deviceRef is required"));
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	device = GraphicsDeviceRef_ptr(deviceRef);
 
-	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
+	acq = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired"));
@@ -1254,9 +1264,7 @@ clean:
 		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
-}
-
-const Allocator *GraphicsDevice_getAlloc(const GraphicsDevice *device) {
+}const Allocator *GraphicsDevice_getAlloc(const GraphicsDevice *device) {
 	return device ? GraphicsInstanceRef_ptr(device->instance)->alloc : NULL;
 }
 

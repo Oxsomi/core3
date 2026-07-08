@@ -22,15 +22,16 @@
 
 #pragma once
 #include "types/container/list.h"
-#include "types/base/error.h"
-#include "types/container/ref_ptr.h"
-#include "formats/oiSH/sh_registers.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef struct Error Error;
 typedef struct SHFile SHFile;
+typedef struct RefPtr RefPtr;
+typedef enum ESHRegisterType ESHRegisterType;
+
 typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EDescriptorLayoutFlags {
@@ -68,7 +69,7 @@ typedef struct DescriptorBinding {
 } DescriptorBinding;
 
 Bool DescriptorBinding_overlaps(
-	DescriptorBinding binding,
+	const DescriptorBinding *binding,
 	ESHRegisterType regType,
 	SHBinding b,
 	U32 bcount,
@@ -97,19 +98,19 @@ typedef enum EDetectDescriptorLayoutFlags {
 	//These only apply on non arrays, since those could be used for bindless for example.
 	//Samplers need static samplers, doesn't work with push descriptors.
 
-	EDetectDescriptorLayoutFlags_AssumePushConstants     = 1 << 0,        //First buffer (<128 bytes) receives a push constant
+	EDetectDescriptorLayoutFlags_AssumePushConstants     = 1 << 0,       //First buffer (<128 bytes) receives a push constant
 	EDetectDescriptorLayoutFlags_AssumePushDescriptors   = 1 << 1        //Assume non push constant buffer as push descriptors
 
 } EDetectDescriptorLayoutFlags;
 
 Bool GraphicsDeviceRef_detectLayoutFromEntries(
 	GraphicsDeviceRef *dev,
-	SHFile tmpBinary,
-	ListU32 entrypoints,                //U32 (U16 entryId, binaryId)
+	const SHFile *tmpBinary,
+	const ListU32 *entrypoints,                //U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,     //Empty if no push descriptors or if AssumePushConstants
-	CharString pushConstantName,        //Empty if no push constants or AssumePushConstants
+	const ListCharString *pushDescriptors,     //Empty if no push descriptors or if AssumePushConstants
+	const CharString *pushConstantName,        //Empty if no push constants or AssumePushConstants
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
 	DescriptorLayoutInfo *pushDescriptorInfo,
@@ -118,12 +119,12 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 Bool GraphicsDeviceRef_detectLayoutFromEntry(
 	GraphicsDeviceRef *dev,
-	SHFile binary,
-	U32 entrypoint,                     //U32 (U16 entryId, binaryId)
+	const SHFile *binary,
+	U32 entrypoint,                            //U32 (U16 entryId, binaryId)
 	EDescriptorLayoutFlags flags,
 	EDetectDescriptorLayoutFlags detectFlags,
-	ListCharString pushDescriptors,     //Empty if no push descriptors or if AssumePushDescriptors
-	CharString pushConstantName,        //Empty if no push constants or AssumePushConstants
+	const ListCharString *pushDescriptors,     //Empty if no push descriptors or if AssumePushDescriptors
+	const CharString *pushConstantName,        //Empty if no push constants or AssumePushConstants
 	DescriptorBinding *pushConstantOut,
 	DescriptorLayoutInfo *info,
 	DescriptorLayoutInfo *pushDescriptorInfo,

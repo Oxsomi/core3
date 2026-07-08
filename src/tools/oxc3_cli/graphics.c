@@ -38,6 +38,8 @@
 
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
+		const Allocator *alloc = Platform_instance->alloc;
+		RefPtrType instanceType = (RefPtrType) { 0 };        //Must outlive the instance
 		GraphicsInstanceRef *instanceRef = NULL;
 		GraphicsDeviceRef *deviceRef = NULL;
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
@@ -66,17 +68,22 @@
 				continue;
 			}
 			
-			gotoIfError2(clean, GraphicsInstance_create(
+			instanceType = GraphicsInstance_makeType(api, alloc);
+
+			gotoIfError3(clean, GraphicsInstance_create(
 				(GraphicsApplicationInfo) {
 					.name = CharString_createRefCStrConst("OxC3 CLI"),
 					.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 				},
 				api,
 				EGraphicsInstanceFlags_None,
-				&instanceRef
+				alloc,
+				&instanceType,
+				&instanceRef,
+				e_rr
 			))
 
-			gotoIfError2(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos))
+			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr))
 			
 			U64 entry = 0;
 
@@ -111,23 +118,23 @@
 
 			for (U64 i = entry; i < entry + count; ++i) {
 
-				gotoIfError2(clean, GraphicsDeviceRef_create(
-					instanceRef, &infos.ptr[i], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef
+				gotoIfError3(clean, GraphicsDeviceRef_create(
+					instanceRef, &infos.ptr[i], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef, e_rr
 				))
 				
-				GraphicsDeviceRef_dec(&deviceRef);
+				RefPtr_dec(&deviceRef);
 				Log_debugLnx("Create device success %"PRIu64" (%s)", i, EGraphicsApi_name[api]);
 			}
 
-			ListGraphicsDeviceInfo_freex(&infos);
-			GraphicsInstanceRef_dec(&instanceRef);
+			ListGraphicsDeviceInfo_free(&infos, alloc);
+			RefPtr_dec(&instanceRef);
 		}
 
 	clean:
-		ListGraphicsDeviceInfo_freex(&infos);
-		GraphicsInstanceRef_dec(&instanceRef);
-		GraphicsDeviceRef_dec(&deviceRef);
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+		ListGraphicsDeviceInfo_free(&infos, alloc);
+		RefPtr_dec(&instanceRef);
+		RefPtr_dec(&deviceRef);
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 		return s_uccess;
 	}
 
@@ -135,6 +142,8 @@
 
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
+		const Allocator *alloc = Platform_instance->alloc;
+		RefPtrType instanceType = (RefPtrType) { 0 };        //Must outlive the instance
 		GraphicsInstanceRef *instanceRef = NULL;
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 		ListCharString strings = (ListCharString) { 0 };
@@ -163,17 +172,22 @@
 				continue;
 			}
 
-			gotoIfError2(clean, GraphicsInstance_create(
+			instanceType = GraphicsInstance_makeType(api, alloc);
+
+			gotoIfError3(clean, GraphicsInstance_create(
 				(GraphicsApplicationInfo) {
 					.name = CharString_createRefCStrConst("OxC3 CLI"),
 					.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 				},
 				api,
 				EGraphicsInstanceFlags_None,
-				&instanceRef
+				alloc,
+				&instanceType,
+				&instanceRef,
+				e_rr
 			))
 
-			gotoIfError2(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos))
+			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr))
 
 			//If entry or length is there, we will print full info
 
@@ -223,15 +237,15 @@
 					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], args.flags & EOperationFlags_Verbose);
 			}
 
-			ListGraphicsDeviceInfo_freex(&infos);
-			GraphicsInstanceRef_dec(&instanceRef);
+			ListGraphicsDeviceInfo_free(&infos, alloc);
+			RefPtr_dec(&instanceRef);
 		}
 
 	clean:
-		ListCharString_freex(&strings);
-		ListGraphicsDeviceInfo_freex(&infos);
-		GraphicsInstanceRef_dec(&instanceRef);
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+		ListCharString_freeUnderlying(&strings, alloc);
+		ListGraphicsDeviceInfo_free(&infos, alloc);
+		RefPtr_dec(&instanceRef);
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 		return s_uccess;
 	}
 

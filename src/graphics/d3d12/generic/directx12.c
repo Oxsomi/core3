@@ -121,6 +121,9 @@ Bool dxCheck(HRESULT result, Error *e_rr) {
 		default:
 			retError(clean, Error_unsupportedOperation(3, "dxCheck() has unknown error"));
 	}
+
+clean:
+	return s_uccess;
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data) {

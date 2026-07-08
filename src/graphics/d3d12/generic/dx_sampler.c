@@ -31,6 +31,6 @@ void DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void)sampler; }
 Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr) {
 
 	Bool s_uccess = true;
-	(void)name; (void) dev; (void) sampler;
+	(void)name; (void) dev; (void) sampler; (void) e_rr;
 	return s_uccess;
 }

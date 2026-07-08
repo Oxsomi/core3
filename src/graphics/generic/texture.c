@@ -32,6 +32,7 @@
 #include "graphics/generic/descriptor_table.h"
 #include "platforms/logx.h"
 #include "types/container/texture_format.h"
+#include "types/math/vec2i.h"
 #include "types/container/string.h"
 #include "formats/oiSH/sh_registers.h"
 #include "types/base/constants.h"

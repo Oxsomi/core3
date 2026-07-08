@@ -21,20 +21,23 @@
 //graphics/generic/depth_stencil.h
 
 #pragma once
-#include "types/container/ref_ptr.h"
-#include "graphics/generic/pipeline_structs.h"
-#include "graphics/generic/texture.h"
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 
+typedef struct UnifiedTexture UnifiedTexture;
 typedef UnifiedTexture DepthStencil;
 
 typedef RefPtr DepthStencilRef;
 typedef RefPtr DescriptorTableRef;
+
+typedef enum EMSAASamples EMSAASamples;
+typedef enum EDepthStencilFormat EDepthStencilFormat;
 
 #define DepthStencilRef_ptr(ptr) RefPtr_data(ptr, DepthStencil)
 

@@ -25,7 +25,6 @@
 
 #include "types/container/list.h"
 #include "types/container/string.h"
-#include "graphics/generic/device_buffer.h"
 #include "d3d12.h"
 
 #ifndef GRAPHICS_API_DYNAMIC
@@ -115,6 +114,8 @@ typedef struct DxTLAS {
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
 	U64 padding;
 } DxTLAS;
+
+typedef struct DeviceData DeviceData;
 
 static const U32 raytracingShaderIdSize = 32;
 static const U32 raytracingShaderAlignment = 64;

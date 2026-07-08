@@ -35,6 +35,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "types/container/buffer.h"
+#include "types/math/vec4i_swizzle.h"
 #include "types/container/log.h"
 #include "platforms/logx.h"
 #include "types/container/buffer.h"
@@ -680,7 +681,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 			//Bind blend constants and/or stencil ref
 
-			if (F32x4_neq4(temp->tempBlendConstants, temp->blendConstants)) {
+			if (F32x4_neqExact4(temp->tempBlendConstants, temp->blendConstants)) {
 				temp->blendConstants = temp->tempBlendConstants;
 				buffer->lpVtbl->OMSetBlendFactor(buffer, (const float*) &temp->blendConstants);
 			}

@@ -32,6 +32,7 @@
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "platforms/platform.h"
+#include "types/container/file_base.h"
 #include "platforms/logx.h"
 #include "platforms/dynamic_library.h"
 #include "types/base/platform_types.h"
@@ -44,6 +45,11 @@
 #include <dxgi1_6.h>
 #include <d3d11.h>            //AMD AGS needs it...
 #include "types/container/string_unicode.h"
+
+//D3D_SHADER_MODEL_6_10 isn't present in every Agility SDK header yet; define it if missing.
+#ifndef D3D_SHADER_MODEL_6_10
+	#define D3D_SHADER_MODEL_6_10 ((D3D_SHADER_MODEL) 0x6a)
+#endif
 
 #if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64    //TODO: Enable for arm later
 	#include <nvapi.h>
@@ -418,14 +424,14 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 				if (isVirtuali) {
 					adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);
-					ListIDXGIAdapter4_erase(&adapters, i);
+					ListIDXGIAdapter4_erase(&adapters, i, NULL);
 					--i;
 					break;
 				}
 
 				if (isVirtualj) {
 					adapters.ptr[j]->lpVtbl->Release(adapters.ptr[j]);
-					ListIDXGIAdapter4_erase(&adapters, j);
+					ListIDXGIAdapter4_erase(&adapters, j, NULL);
 					--i;
 					break;
 				}
@@ -832,7 +838,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		//Fully converted type
 
-		gotoIfError3(clean, ListGraphicsDeviceInfo_resize(&tempInfos, tempInfos.length + 1, (Allocator){ 0 }, e_rr));
+		gotoIfError3(clean, ListGraphicsDeviceInfo_resize(&tempInfos, tempInfos.length + 1, alloc, e_rr));
 
 		GraphicsDeviceInfo *info = tempInfos.ptrNonConst + tempInfos.length - 1;
 

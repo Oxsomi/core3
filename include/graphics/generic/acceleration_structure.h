@@ -21,14 +21,17 @@
 //graphics/generic/acceleration_structure.h
 
 #pragma once
-#include "graphics/generic/device_buffer.h"
 #include "types/container/string.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
+typedef RefPtr DeviceBufferRef;
+
+typedef struct DeviceData DeviceData;
 
 typedef RefPtr RTASRef;        //BLASRef or TLASRef
 

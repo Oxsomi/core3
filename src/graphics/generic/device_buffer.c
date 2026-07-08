@@ -41,10 +41,15 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 	Bool s_uccess = true;
 	const Allocator *alloc = buf ? GraphicsDeviceRef_getAlloc(DeviceBufferRef_ptr(buf)->resource.device) : NULL;
 
+	DeviceBuffer *buffer = NULL;
+	GraphicsDevice *device = NULL;
+	ELockAcquire acq0 = ELockAcquire_Invalid;
+	ELockAcquire acq1 = ELockAcquire_Invalid;
+
 	if(!buf || buf->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
 		retError(clean, Error_nullPointer(0, "DeviceBufferRef_markDirty()::buf is required"));
 
-	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);
+	buffer = DeviceBufferRef_ptr(buf);
 	U64 bufLen = buffer->resource.size;
 
 	//Check range
@@ -54,14 +59,12 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 			1, offset + count, bufLen, "DeviceBufferRef_markDirty()::offset+count out of bounds"
 		));
 
-	ELockAcquire acq0 = SpinLock_lock(&buffer->lock, U64_MAX);
+	acq0 = SpinLock_lock(&buffer->lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
 		retError(clean, Error_invalidOperation(1, "DeviceBufferRef_markDirty() couldn't acquire buffer lock"));
 
-	ELockAcquire acq1 = ELockAcquire_Invalid;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
+	device = GraphicsDeviceRef_ptr(buffer->resource.device);
 
 	if(buffer->isPendingFullCopy)        //Already has a full pending change, so no need to check anything.
 		goto clean;

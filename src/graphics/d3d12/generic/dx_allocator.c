@@ -149,14 +149,14 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	for(U64 i = 0; i < allocator->blocks.length; ++i) {
 
-		DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[i];
+		DeviceMemoryBlock *blocki = &allocator->blocks.ptrNonConst[i];
 
 		if(
-			!block->ext ||
-			block->isDedicated ||
-			!!(block->allocationTypeExt & 1) != !cpuSided ||
-			(block->allocationTypeExt >> 1) != heapType ||
-			block->typeExt != req.alignment                        //Alignment is baked into heap
+			!blocki->ext ||
+			blocki->isDedicated ||
+			!!(blocki->allocationTypeExt & 1) != !cpuSided ||
+			(blocki->allocationTypeExt >> 1) != heapType ||
+			blocki->typeExt != req.alignment                        //Alignment is baked into heap
 		)
 			continue;
 
@@ -165,7 +165,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 		Bool didAllocate = AllocationBuffer_allocateBlock(
 			&(AllocationBufferAllocate) {
-				.allocationBuffer = &block->allocations,
+				.allocationBuffer = &blocki->allocations,
 				.alignment = req.alignment,
 				.isNonLinearResource = false,
 				.alloc = alloc
@@ -190,7 +190,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 		*blockId = (U32) i;
 		*blockOffset = (U64) allocated;
-		*resultBlock = *block;
+		*resultBlock = *blocki;
 		goto clean;
 	}
 

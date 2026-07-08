@@ -25,7 +25,7 @@
 #include "graphics/generic/command_list.h"
 #include "types/container/list.h"
 #include "types/math/vec4.h"
-#include "types/container/list_basic_types.h"
+#include "types/container/list_predeclare.h"
 
 #ifdef __cplusplus
 	extern "C" {

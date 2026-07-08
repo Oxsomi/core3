@@ -54,10 +54,12 @@ TListImpl(CopyImageRegion);
 
 #define CommandListRef_validate(v)                                                                                \
 																												\
+	CommandList *commandList = NULL;                                                                            \
+																												\
 	if(!(v) || (v)->refPtrType->typeId != (ETypeId)EGraphicsTypeId_CommandList)                                                \
 		retError(clean, Error_nullPointer(0, "CommandListRef_validate() cmdlist is invalid"));                            \
 																												\
-	CommandList *commandList = CommandListRef_ptr(v);                                                            \
+	commandList = CommandListRef_ptr(v);                                                                        \
 																												\
 	if(!SpinLock_isLockedForThread(&commandList->lock))                                                            \
 		retError(clean, Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked"));                        \
@@ -97,11 +99,12 @@ clean:
 Bool CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lockTimeout, Error *e_rr) {
 
 	Bool s_uccess = true;
+	CommandList *commandList = NULL;
 
 	if(!commandListRef || commandListRef->refPtrType->typeId != (ETypeId)EGraphicsTypeId_CommandList)
 		retError(clean, Error_nullPointer(0, "CommandListRef_begin()::commandListRef invalid"));
 
-	CommandList *commandList = CommandListRef_ptr(commandListRef);
+	commandList = CommandListRef_ptr(commandListRef);
 
 	if(SpinLock_lock(&commandList->lock, lockTimeout) != ELockAcquire_Acquired)
 		retError(clean, Error_invalidOperation(0, "CommandListRef_begin() couldn't acquire lock"));
@@ -135,7 +138,7 @@ Bool CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lock
 
 clean:
 
-	if(!s_uccess) {
+	if(!s_uccess && commandList) {
 
 		ListDeviceResourceVersion_clear(&commandList->activeSwapchains, e_rr);
 
@@ -173,10 +176,12 @@ Bool CommandListRef_end(CommandListRef *commandListRef, Error *e_rr) {
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->state = ECommandListState_Invalid;
 
-	SpinLock_unlock(&commandList->lock);
+	if(commandList)
+		SpinLock_unlock(&commandList->lock);
+
 	return s_uccess;
 }
 
@@ -637,7 +642,7 @@ Bool CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset,
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -667,7 +672,7 @@ Bool CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValueU8
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -684,7 +689,7 @@ Bool CommandListRef_setBlendConstants(CommandListRef *commandListRef, F32x4 blen
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -751,7 +756,7 @@ Bool CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageCm
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	Buffer_free(&buf, alloc);
@@ -873,7 +878,7 @@ Bool CommandListRef_copyImageRegions(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	Buffer_free(&buf, alloc);
@@ -895,7 +900,7 @@ Bool CommandListRef_copyImage(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -927,7 +932,7 @@ Bool CommandListRef_clearImageu(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1119,7 +1124,7 @@ Bool CommandListRef_startScope(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags = ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1186,17 +1191,20 @@ Bool CommandListRef_endScope(CommandListRef *commandListRef, Error *e_rr) {
 
 clean:
 
-	for(U64 i = 0; i < EPipelineType_Count; ++i)
-		commandList->pipeline[i] = NULL;
+	if (commandList) {
 
-	ListTransitionInternal_clear(&commandList->pendingTransitions, e_rr);
+		for(U64 i = 0; i < EPipelineType_Count; ++i)
+			commandList->pipeline[i] = NULL;
 
-	commandList->tempStateFlags = 0;
-	commandList->debugRegionStack = 0;
-	commandList->currentSize = I32x2_zero;
+		ListTransitionInternal_clear(&commandList->pendingTransitions, e_rr);
 
-	if(!s_uccess)
-		commandList->state = ECommandListState_Invalid;
+		commandList->tempStateFlags = 0;
+		commandList->debugRegionStack = 0;
+		commandList->currentSize = I32x2_zero;
+
+		if(!s_uccess)
+			commandList->state = ECommandListState_Invalid;
+	}
 
 	return s_uccess;
 }
@@ -1243,7 +1251,7 @@ Bool CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pip
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1343,7 +1351,7 @@ Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, SetPrimi
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1381,7 +1389,7 @@ Bool CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, EComman
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1477,7 +1485,7 @@ Bool CommandListRef_dispatch(CommandListRef *commandListRef, DispatchCmd dispatc
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1534,7 +1542,7 @@ Bool CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRays
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1620,7 +1628,7 @@ Bool CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuffe
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1703,7 +1711,7 @@ Bool CommandListRef_drawIndirect(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1757,7 +1765,7 @@ Bool CommandListRef_drawIndirectCountExt(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -1819,7 +1827,7 @@ Bool CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas,
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -2208,7 +2216,7 @@ clean:
 	if(toRelease)
 		SpinLock_unlock(toRelease);
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	Buffer_free(&command, alloc);
@@ -2237,7 +2245,7 @@ Bool CommandListRef_endRenderExt(CommandListRef *commandListRef, Error *e_rr) {
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -2271,7 +2279,7 @@ Bool CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Cha
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	Buffer_free(&buf, alloc);
@@ -2301,7 +2309,7 @@ Bool CommandListRef_startRegionDebugExt(CommandListRef *commandListRef, F32x4 co
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;
@@ -2322,7 +2330,7 @@ Bool CommandListRef_endRegionDebugExt(CommandListRef *commandListRef, Error *e_r
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && commandList)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	return s_uccess;

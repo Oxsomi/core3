@@ -152,8 +152,10 @@ Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *ta
 			lock = &heapExt->locks[i];
 			acq = SpinLock_lock(lock, 1 * SECOND);
 
-			if(acq < ELockAcquire_Success)
-				retError(clean, Error_invalidState(0, "DxDescriptorHeap_freeTable couldn't lock"));
+			if(acq < ELockAcquire_Success) {        //No e_rr here; only used from the free path
+				s_uccess = false;
+				goto clean;
+			}
 
 			AllocationBuffer_freeBlock(&heapExt->allocators[i], (const U8*) (const void*) table->allocationLocations[i]);
 

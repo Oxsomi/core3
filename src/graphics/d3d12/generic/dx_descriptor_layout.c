@@ -232,7 +232,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			layoutExt->rootParamOffsets.ptrNonConst[i] = resourceParam;
 		}
 
-		gotoIfError3(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { binding }, (Allocator) { 0 }, e_rr));
+		gotoIfError3(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { binding }, alloc, e_rr));
 	}
 
 	if(!ListSortingKey_sortCustom(sortedList, (CompareFunction) SortingKey_compare))

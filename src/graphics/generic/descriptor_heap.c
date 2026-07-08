@@ -41,7 +41,7 @@ void DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc) {
 
 Bool GraphicsDeviceRef_createDescriptorHeap(
 	GraphicsDeviceRef *dev,
-	DescriptorHeapInfo info,
+	const DescriptorHeapInfo *info,
 	CharString name,
 	DescriptorHeapRef **heapRef,
 	Error *e_rr
