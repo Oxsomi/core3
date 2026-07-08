@@ -24,12 +24,12 @@
 #ifdef GRAPHICS_API_DYNAMIC
 
 	void  VkBLAS_free(BLAS *blas);
-	Error VkBLAS_init(BLAS *blas);
-	Error VkBLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
+	Bool VkBLAS_init(BLAS *blas, Error *e_rr);
+	Bool VkBLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);
 
 	void  VkTLAS_free(TLAS *tlas);
-	Error VkTLAS_init(TLAS *tlas);
-	Error VkTLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
+	Bool VkTLAS_init(TLAS *tlas, Error *e_rr);
+	Bool VkTLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending, Error *e_rr);
 
 	//Pipeline
 
@@ -60,39 +60,39 @@
 		Error *e_rr
 	);
 
-	void VkPipeline_free(Pipeline *pipeline, Allocator alloc);
+	void VkPipeline_free(Pipeline *pipeline, const Allocator *alloc);
 
 	//Sampler
 
-	Error VkGraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
+	Bool VkGraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr);
 	void  VkSampler_free(Sampler *sampler);
 
 	//Device buffer
 
-	Error VkGraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
+	Bool VkGraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name, Error *e_rr);
 	void  VkDeviceBuffer_free(DeviceBuffer *buffer);
-	Error VkDeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
+	Bool VkDeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending, Error *e_rr);
 
 	//Device texture
 
-	Error VkUnifiedTexture_create(TextureRef *textureRef, CharString name);
-	Error VkDeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
+	Bool VkUnifiedTexture_create(TextureRef *textureRef, CharString name, Error *e_rr);
+	Bool VkDeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr);
 	void  VkUnifiedTexture_free(TextureRef *textureRef);
 
 	//Swapchain
 
-	Error VkGraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
-	void  VkSwapchain_free(Swapchain *data, Allocator alloc);
+	Bool VkGraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainRef *swapchain, Error *e_rr);
+	void  VkSwapchain_free(Swapchain *data, const Allocator *alloc);
 
 	//DescriptorHeap
 
-	Error VkGraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name);
-	void VkDescriptorHeap_free(DescriptorHeap *heap, Allocator alloc);
+	Bool VkGraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name, Error *e_rr);
+	void VkDescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc);
 
 	//DescriptorTable
 
-	Error VkDescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name);
-	void VkDescriptorTable_free(DescriptorTable *table, Allocator alloc);
+	Bool VkDescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name, Error *e_rr);
+	void VkDescriptorTable_free(DescriptorTable *table, const Allocator *alloc);
 
 	Bool VkDescriptorTable_setDescriptors(
 		DescriptorTable *table,
@@ -112,18 +112,23 @@
 
 	//DescriptorLayout
 
-	Error VkGraphicsDeviceRef_createDescriptorLayout(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name);
-	void VkDescriptorLayout_free(DescriptorLayout *layout, Allocator alloc);
+	Bool VkGraphicsDeviceRef_createDescriptorLayout(
+		GraphicsDeviceRef *dev,
+		DescriptorLayout *layout,
+		CharString name,
+		Error *e_rr
+	);
+	void VkDescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc);
 
 	//PipelineLayout
 
-	Error VkGraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name);
-	void VkPipelineLayout_free(PipelineLayout *layout, Allocator alloc);
+	Bool VkGraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name, Error *e_rr);
+	void VkPipelineLayout_free(PipelineLayout *layout, const Allocator *alloc);
 
 	//Allocator
 
 	//Needs explicit lock, because allocator is accessed after.
-	Error VkDeviceMemoryAllocator_allocate(
+	Bool VkDeviceMemoryAllocator_allocate(
 		DeviceMemoryAllocator *allocator,
 		void *requirementsExt,
 		Bool cpuSided,
@@ -131,30 +136,33 @@
 		U64 *blockOffset,
 		EResourceType resourceType,
 		CharString objectName,                //Name of the object that allocates (for dedicated allocations)
-		DeviceMemoryBlock *resultBlock
+		DeviceMemoryBlock *resultBlock,
+		Error *e_rr
 	);
 
 	Bool VkDeviceMemoryAllocator_freeAllocation(GraphicsDevice *device, void *ext);
 
 	//Device
 
-	Error VkGraphicsDevice_init(
+	Bool VkGraphicsDevice_init(
 		const GraphicsInstance *instance,
 		const GraphicsDeviceInfo *deviceInfo,
-		GraphicsDeviceRef **deviceRef
+		GraphicsDeviceRef **deviceRef,
+		Error *e_rr
 	);
 
 	U64 VkGraphicsDevice_getMemoryBudget(GraphicsDevice *device, Bool isDeviceLocal);
 
 	void VkGraphicsDevice_free(const GraphicsInstance *instance, void *ext);
 
-	Error VkGraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
+	Bool VkGraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
 
-	Error VkGraphicsDevice_submitCommands(
+	Bool VkGraphicsDevice_submitCommands(
 		GraphicsDeviceRef *deviceRef,
 		ListCommandListRef commandLists,
 		ListSwapchainRef swapchains,
-		CBufferData data
+		CBufferData data,
+		Error *e_rr
 	);
 
 	void VkCommandList_process(
@@ -167,8 +175,8 @@
 
 	//Interface
 
-	Error VkGraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
-	void  VkGraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
-	Error VkGraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
+	Bool VkGraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr);
+	void  VkGraphicsInstance_free(GraphicsInstance *inst, const Allocator *alloc);
+	Bool VkGraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr);
 
 #endif

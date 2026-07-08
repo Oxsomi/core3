@@ -20,25 +20,19 @@
 
 //graphics/generic/device_texture.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/pipeline_structs.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
 #include "types/container/texture_format.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/container/string.h"
 #include "types/base/constants.h"
-
-void DeviceTextureRef_dec(DeviceTextureRef **texture) { RefPtr_dec(texture); }
-
-Error DeviceTextureRef_inc(DeviceTextureRef *texture) {
-	return !RefPtr_inc(texture) ?
-		Error_invalidOperation(0, "DeviceTextureRef_inc()::texture is required") : Error_none();
-}
 
 U16 alignDown(U16 x, U16 alignment) {
 	return x / alignment * alignment;
@@ -48,10 +42,13 @@ U16 alignUp(U16 x, U16 alignment) {
 	return (x + alignment - 1) / alignment * alignment;
 }
 
-Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l) {
+Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l, Error *e_rr) {
 
-	if(!tex || tex->typeId != (ETypeId) EGraphicsTypeId_DeviceTexture)
-		return Error_nullPointer(0, "DeviceTextureRef_markDirty()::tex is required");
+	Bool s_uccess = true;
+	const Allocator *alloc = tex ? GraphicsDeviceRef_getAlloc(DeviceTextureRef_ptr(tex)->base.resource.device) : NULL;
+
+	if(!tex || tex->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceTexture)
+		retError(clean, Error_nullPointer(0, "DeviceTextureRef_markDirty()::tex is required"));
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(tex);
 	UnifiedTexture *utex = &texture->base;
@@ -59,26 +56,25 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	//Check range
 
 	if(x >= utex->width || x + w > utex->width)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			1, x + w, utex->width, "DeviceTextureRef_markDirty()::x+w out of bounds"
-		);
+		));
 
 	if(y >= utex->height || y + h > utex->height)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			2, y + h, utex->height, "DeviceTextureRef_markDirty()::y+h out of bounds"
-		);
+		));
 
 	if(z >= utex->length || z + l > utex->length)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			3, z + l, utex->length, "DeviceTextureRef_markDirty()::z+l out of bounds"
-		);
+		));
 
 	ELockAcquire acq0 = SpinLock_lock(&texture->lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
-		return Error_invalidOperation(1, "DeviceTextureRef_markDirty() couldn't acquire texture lock");
+		retError(clean, Error_invalidOperation(1, "DeviceTextureRef_markDirty() couldn't acquire texture lock"));
 
-	Error err = Error_none();
 	ELockAcquire acq1 = ELockAcquire_Invalid;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(utex->resource.device);
@@ -90,9 +86,8 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 		!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked) &&
 		!(texture->isFirstFrame && !x && !y && !z && !w && !h && !l)
 	)
-		gotoIfError(clean, Error_invalidOperation(
-			2, "DeviceTextureRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"
-		))
+		retError(clean, Error_invalidOperation(
+			2, "DeviceTextureRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"));
 
 	if(!w)
 		w = utex->width - x;
@@ -129,7 +124,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	Bool shouldPush = false;
 
 	if(fullRange) {
-		gotoIfError(clean, ListDevicePendingRange_clear(&texture->pendingChanges))
+		gotoIfError3(clean, ListDevicePendingRange_clear(&texture->pendingChanges, e_rr));
 		texture->isPendingFullCopy = true;
 		shouldPush = true;
 	}
@@ -182,7 +177,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 							end[j] = (U16) U64_max(end[j], last.texture.endRange[j]);
 						}
 
-						gotoIfError(clean, ListDevicePendingRange_erase(&texture->pendingChanges, lastMatch))
+						gotoIfError3(clean, ListDevicePendingRange_erase(&texture->pendingChanges, lastMatch, e_rr));
 					}
 
 					lastMatch = i;
@@ -198,9 +193,8 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	if (shouldPush) {
 
 		if((texture->pendingChanges.length + 1) >> 32)
-			gotoIfError(clean, Error_outOfBounds(
-				0, U32_MAX, U32_MAX, "DeviceTextureRef_markDirty() texture pendingRanges is limited to U32_MAX"
-			))
+			retError(clean, Error_outOfBounds(
+				0, U32_MAX, U32_MAX, "DeviceTextureRef_markDirty() texture pendingRanges is limited to U32_MAX"));
 
 		DevicePendingRange change = (DevicePendingRange) { .texture = {
 			.startRange = { x, y, z },
@@ -208,7 +202,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 			.levelId = 0
 		}};
 
-		gotoIfError(clean, ListDevicePendingRange_pushBackx(&texture->pendingChanges, change))
+		gotoIfError3(clean, ListDevicePendingRange_pushBack(&texture->pendingChanges, change, alloc, e_rr));
 	}
 
 	//Tell the device that on next submit it should handle copies from
@@ -221,9 +215,9 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	acq1 = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "DeviceTextureRef_markDirty() couldn't lock device"))
+		retError(clean, Error_invalidState(0, "DeviceTextureRef_markDirty() couldn't lock device"));
 
-	gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingResources, tex))
+	gotoIfError3(clean, ListWeakRefPtr_pushBack(&device->pendingResources, tex, alloc, e_rr));
 
 clean:
 
@@ -233,12 +227,12 @@ clean:
 	if(acq0 == ELockAcquire_Acquired)
 		SpinLock_unlock(&texture->lock);
 
-	return err;
+	return s_uccess;
 }
 
-void DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
+void DeviceTexture_free(DeviceTexture *texture, const Allocator *alloc) {
 
-	(void)allocator;
+	(void)alloc;
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)texture - sizeof(RefPtr));
 
@@ -247,11 +241,11 @@ void DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 	//Log_debugLnx("Destroy: DeviceTexture (%p)", texture);
 
 	UnifiedTexture_free(refPtr);
-	Buffer_freex(&texture->cpuData);
-	ListDevicePendingRange_freex(&texture->pendingChanges);
+	Buffer_free(&texture->cpuData, alloc);
+	ListDevicePendingRange_free(&texture->pendingChanges, alloc);
 }
 
-Error GraphicsDeviceRef_createTexture(
+Bool GraphicsDeviceRef_createTexture(
 	GraphicsDeviceRef *dev,
 	ETextureType type,
 	ETextureFormatId formatId,
@@ -262,37 +256,33 @@ Error GraphicsDeviceRef_createTexture(
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
-	DeviceTextureRef **tex
+	DeviceTextureRef **tex,
+	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+
 	if(!formatId || formatId >= ETextureFormatId_Count)
-		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createTexture()::format is invalid");
+		retError(clean, Error_invalidParameter(2, 0, "GraphicsDeviceRef_createTexture()::format is invalid"));
 
 	if(flag & EGraphicsResourceFlag_ShaderWrite)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			2, 0, "GraphicsDeviceRef_createTexture()::flag ShaderWrite is disallowed on DeviceTexture"
-		);
+		));
 
 	const ETextureFormat format = ETextureFormatId_unpack[formatId];
 	const U64 texSize = ETextureFormat_getSize(format, width, height, length);
 
 	if(texSize == U64_MAX || !dat || Buffer_length(*dat) != texSize)
-		return Error_nullPointer(
+		retError(clean, Error_nullPointer(
 			3, "GraphicsDeviceRef_createTexture()::dat must match expected texture size and alignment"
-		);
+		));
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(DeviceTexture) + GraphicsDeviceRef_getObjectSizes(dev)->image + sizeof(UnifiedTextureImage)),
-		(ObjectFreeFunc) DeviceTexture_free,
-		(ETypeId) EGraphicsTypeId_DeviceTexture,
-		tex
-	);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->deviceTexture, tex, e_rr));
 
 	if(!(flag & EGraphicsResourceFlag_InternalWeakDeviceRef))
-		gotoIfError(clean, GraphicsDeviceRef_inc(dev))
+		gotoIfError3(clean, RefPtr_inc(dev));
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(*tex);
 
@@ -316,10 +306,11 @@ Error GraphicsDeviceRef_createTexture(
 		.isFirstFrame = true
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*tex, bindlessDescriptorTable, name))
+	gotoIfError3(clean, UnifiedTexture_create(*tex, bindlessDescriptorTable, name, e_rr));
 
 	if(Buffer_isRef(*dat)) {
-		gotoIfError(clean, Buffer_createEmptyBytesx(texSize, &texture->cpuData))        //Temporary if not CPUBacked
+		//Temporary if not CPUBacked
+		gotoIfError3(clean, Buffer_createEmptyBytes(texSize, alloc, &texture->cpuData, e_rr));
 		Buffer_memcpy(texture->cpuData, *dat);
 	}
 
@@ -328,16 +319,16 @@ Error GraphicsDeviceRef_createTexture(
 		*dat = Buffer_createNull();
 	}
 
-	gotoIfError(clean, ListDevicePendingRange_reservex(
+	gotoIfError3(clean, ListDevicePendingRange_reserve(
 		&texture->pendingChanges, flag & EGraphicsResourceFlag_CPUBacked ? 16 : 1
-	))
+	, alloc, e_rr));
 
-	gotoIfError(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0))
+	gotoIfError3(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0, e_rr));
 
 clean:
 
-	if(err.genericError)
-		DeviceTextureRef_dec(tex);
+	if(!s_uccess)
+		RefPtr_dec(tex);
 
-	return err;
+	return s_uccess;
 }

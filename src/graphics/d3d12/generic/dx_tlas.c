@@ -20,8 +20,8 @@
 
 //graphics/d3d12/generic/dx_tlas.c
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/list_impl.h"
+#include "types/container/string.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/tlas.h"
@@ -35,18 +35,20 @@
 void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; }        //No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
-Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
+Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = tlas ? GraphicsDeviceRef_getAlloc(tlas->base.device) : NULL;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	DxTLAS *tlasExt = TLAS_ext(tlas, Dx);
 
-	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12TLAS_init()::serialized not supported yet"))        //TODO:
+		retError(clean, Error_unsupportedOperation(0, "D3D12TLAS_init()::serialized not supported yet"));        //TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = sizeof(TLASInstanceStatic);
@@ -57,9 +59,8 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 	else instancesU64 = tlas->cpuInstancesStatic.length;
 
 	if(instancesU64 >> 24)
-		gotoIfError(clean, Error_outOfBounds(
-			0, instancesU64, 1 << 24, "D3D12TLAS_init() only instance count of <U24_MAX is supported"
-		))
+		retError(clean, Error_outOfBounds(
+			0, instancesU64, 1 << 24, "D3D12TLAS_init() only instance count of <U24_MAX is supported"));
 
 	//Convert to DXR dependent version
 
@@ -100,21 +101,25 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 		if (!tlas->useDeviceMemory) {
 
-			gotoIfError(clean, CharString_formatx(
-				&tmp, "%.*s instances buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
-			))
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&tmp,
+				e_rr,
+				"%.*s instances buffer",
+				CharString_length(tlas->base.name),
+				tlas->base.name.ptr
+			));
 
-			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 				tlas->base.device,
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocated,
 				NULL,
 				tmp,
 				stride * instancesU64,
-				&tlas->tempInstanceBuffer
-			))
+				&tlas->tempInstanceBuffer, e_rr));
 
-			CharString_freex(&tmp);
+			CharString_free(&tmp, alloc);
 
 			Buffer cpuDat = DeviceBufferRef_ptr(tlas->tempInstanceBuffer)->cpuData;
 			Buffer_memcpy(
@@ -156,36 +161,42 @@ Error DX_WRAP_FUNC(TLAS_init)(TLAS *tlas) {
 
 	//Allocate scratch and final buffer
 
-	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 		tlas->base.device,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		NULL,
 		tlas->base.name,
 		sizes.ResultDataMaxSizeInBytes,
-		&tlas->base.asBuffer
-	))
+		&tlas->base.asBuffer, e_rr));
 
-	gotoIfError(clean, CharString_formatx(
-		&tmp, "%.*s scratch buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
-	))
+	gotoIfError3(clean, CharString_format(
+		alloc,
+		&tmp,
+		e_rr,
+		"%.*s scratch buffer",
+		CharString_length(tlas->base.name),
+		tlas->base.name.ptr
+	));
 
-	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 		tlas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
 		tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
-		&tlas->base.tempScratchBuffer
-	))
+		&tlas->base.tempScratchBuffer, e_rr));
 
 clean:
-	CharString_freex(&tmp);
-	return err;
+	CharString_free(&tmp, alloc);
+	return s_uccess;
 }
 
-Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
+Bool DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
@@ -197,7 +208,7 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	DxTLAS *tlasExt = TLAS_ext(tlas, Dx);
 
 	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))        //Done
-		return Error_none();
+		return s_uccess;
 
 	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
 
@@ -213,23 +224,21 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	}
 
 	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
-	
+
 	//Add as flight (keep alive extra)
 
-	Error err = Error_none();
-
 	if(!ListRefPtr_contains(*currentFlight, pending, 0, NULL)) {
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, pending, alloc, e_rr));
 		RefPtr_inc(pending);
 	}
-	
+
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 	//We do the same thing on the tempInstances, since it's CPU mem only
 
 	if(!ListRefPtr_contains(*currentFlight, tlas->base.tempScratchBuffer, 0, NULL)) {
 
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tlas->base.tempScratchBuffer, alloc, e_rr));
 
 		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->base.tempScratchBuffer);
@@ -239,7 +248,7 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 
 	if(tlas->tempInstanceBuffer && !ListRefPtr_contains(*currentFlight, tlas->tempInstanceBuffer, 0, NULL)) {
 
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+		gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, tlas->tempInstanceBuffer, alloc, e_rr));
 
 		if(tlas->base.flags & ERTASBuildFlags_AllowUpdate)        //Maintain reference, rather than clear
 			RefPtr_inc(tlas->tempInstanceBuffer);
@@ -250,5 +259,5 @@ Error DX_WRAP_FUNC(TLASRef_flush)(void *commandBufferExt, GraphicsDeviceRef *dev
 	tlas->base.isCompleted = true;
 
 clean:
-	return err;
+	return s_uccess;
 }

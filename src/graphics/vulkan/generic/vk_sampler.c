@@ -56,9 +56,9 @@ VkBorderColor mapVkBorderColor(ESamplerBorderColor borderColor) {
 	}
 }
 
-Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -97,7 +97,7 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 		.borderColor = mapVkBorderColor(sinfo.borderColor)
 	};
 
-	gotoIfError(clean, checkVkError(deviceExt->createSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)))
+	gotoIfError3(clean, checkVkError(deviceExt->createSampler(deviceExt->device, &samplerInfo, NULL, samplerExt), e_rr));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
@@ -108,9 +108,9 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Samp
 			.objectHandle = (U64) *samplerExt
 		};
 
-		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 	}
 
 clean:
-	return err;
+	return s_uccess;
 }

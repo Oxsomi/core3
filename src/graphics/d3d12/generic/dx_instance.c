@@ -20,7 +20,7 @@
 
 //graphics/d3d12/generic/dx_instance.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
@@ -29,18 +29,21 @@
 #include "graphics/d3d12/dx_swapchain.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "platforms/dynamic_library.h"
 #include "types/base/platform_types.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/base/constants.h"
 
 #include <dxgi1_6.h>
 #include <d3d11.h>            //AMD AGS needs it...
+#include "types/container/string_unicode.h"
 
 #if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64    //TODO: Enable for arm later
 	#include <nvapi.h>
@@ -143,9 +146,7 @@ GraphicsObjectSizes DxGraphicsObjectSizes = {
 	}
 #endif
 
-void DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc) {
-
-	(void)alloc;
+void DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, const Allocator *alloc) {
 
 	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(data, Dx);
 
@@ -168,8 +169,8 @@ void DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 			agsDeInitialize(instanceExt->agsContext);
 	#endif
 
-	CharString_freex(&instanceExt->nvDriverVersion);
-	CharString_freex(&instanceExt->amdDriverVersion);
+	CharString_free(&instanceExt->nvDriverVersion, alloc);
+	CharString_free(&instanceExt->amdDriverVersion, alloc);
 
 	if(instanceExt->factory)
 		instanceExt->factory->lpVtbl->Release(instanceExt->factory);
@@ -184,7 +185,10 @@ void DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, Allocator alloc
 		instanceExt->deviceFactorySingleton->lpVtbl->Release(instanceExt->deviceFactorySingleton);
 }
 
-Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
+Bool DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = instanceRef && *instanceRef ? GraphicsInstanceRef_ptr(*instanceRef)->alloc : NULL;
 
 	(void)info;
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
@@ -205,64 +209,62 @@ Error DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 		else goto setup;
 
-	Error err = dxCheck(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->factory));
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, dxCheck(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->factory), e_rr));
 
 setup:
 
-	if (!File_resolve(
-		CharString_createRefCStrConst("./D3D12/"),
+	const CharString d3d12Dir = CharString_createRefCStrConst("./D3D12/");
+
+	gotoIfError3(clean, File_resolve(
+		&d3d12Dir,
 		&isVirtual,
 		0,
-		Platform_instance->appDirectory,
-		Platform_instance->alloc,
+		&Platform_instance->appDirectory,
+		alloc,
 		&locationD3D12,
-		&err
-	))
-		goto clean;
+		e_rr
+	));
 
-	gotoIfError(clean, dxCheck(D3D12GetInterface(
+	gotoIfError3(clean, dxCheck(D3D12GetInterface(
 		&CLSID_D3D12SDKConfiguration, &IID_ID3D12SDKConfiguration1, (void**) &instanceExt->config
-	)))
+	), e_rr));
 
-	gotoIfError(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
+	gotoIfError3(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
 		instanceExt->config,
 		D3D12_SDK_VERSION, locationD3D12.ptr,
 		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactoryNoSingleton
-	)))
+	), e_rr));
 
-	gotoIfError(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->SetFlags(
+	gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->SetFlags(
 		instanceExt->deviceFactoryNoSingleton, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
-	)))
+	), e_rr));
 
-	gotoIfError(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
+	gotoIfError3(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
 		instanceExt->config,
 		D3D12_SDK_VERSION, locationD3D12.ptr,
 		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactorySingleton
-	)))
+	), e_rr));
 
-	gotoIfError(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->SetFlags(
+	gotoIfError3(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->SetFlags(
 		instanceExt->deviceFactorySingleton, D3D12_DEVICE_FACTORY_FLAG_ALLOW_RETURNING_EXISTING_DEVICE
-	)))
+	), e_rr));
 
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-		gotoIfError(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->GetConfigurationInterface(
+		gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->GetConfigurationInterface(
 			instanceExt->deviceFactoryNoSingleton, &CLSID_D3D12Debug,
 			&IID_ID3D12Debug1, (void**) &instanceExt->debug1NoSingleton
-		)))
+		), e_rr));
 
 		instanceExt->debug1NoSingleton->lpVtbl->EnableDebugLayer(instanceExt->debug1NoSingleton);
 
 		if(!(instance->flags & EGraphicsInstanceFlags_DisableGPUBV))
 			instanceExt->debug1NoSingleton->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1NoSingleton, true);
 
-		gotoIfError(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->GetConfigurationInterface(
+		gotoIfError3(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->GetConfigurationInterface(
 			instanceExt->deviceFactorySingleton, &CLSID_D3D12Debug,
 			&IID_ID3D12Debug1, (void**) &instanceExt->debug1Singleton
-		)))
+		), e_rr));
 
 		instanceExt->debug1Singleton->lpVtbl->EnableDebugLayer(instanceExt->debug1Singleton);
 
@@ -288,9 +290,16 @@ setup:
 				instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
 			}
 
-			else gotoIfError(clean, CharString_formatx(
-				&instanceExt->nvDriverVersion, "%"PRIu32".%"PRIu32, driverVersion / 100, driverVersion % 100
-			))
+			else {
+				gotoIfError3(clean, CharString_format(
+					alloc,
+					&instanceExt->nvDriverVersion,
+					e_rr,
+					"%"PRIu32".%"PRIu32,
+					driverVersion / 100,
+					driverVersion % 100
+				));
+			}
 		}
 
 	#endif
@@ -306,9 +315,12 @@ setup:
 
 			instanceExt->flags |= EDxGraphicsInstanceFlags_HasAMDAgs;
 
-			gotoIfError(clean, CharString_createCopyx(
-				CharString_createRefCStrConst(gpuInfo.radeonSoftwareVersion), &instanceExt->amdDriverVersion
-			))
+			gotoIfError3(clean, CharString_createCopy(
+				CharString_createRefCStrConst(gpuInfo.radeonSoftwareVersion),
+				alloc,
+				&instanceExt->amdDriverVersion,
+				e_rr
+			));
 
 			if(CharString_length(instanceExt->amdDriverVersion) >= 256) {
 				Log_warnLnx("D3D12GraphicsInstance_create() AMD AGS initialize failed, version string is too long");
@@ -323,19 +335,25 @@ setup:
 	instance->apiVersion = D3D12_SDK_VERSION;
 
 clean:
-	CharString_freex(&locationD3D12);
-	return err;
+	CharString_free(&locationD3D12, alloc);
+	return s_uccess;
 }
 
-Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
+Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = inst ? inst->alloc : NULL;
 
 	if(!inst || !result)
-		return Error_nullPointer(!inst ? 0 : 2, "D3D12GraphicsInstance_getDeviceInfos()::inst and result are required");
+		retError(clean, Error_nullPointer(
+			!inst ? 0 : 2,
+			"D3D12GraphicsInstance_getDeviceInfos()::inst and result are required"
+		));
 
 	if(result->ptr)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "D3D12GraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
-		);
+		));
 
 	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Dx);
 	ListIDXGIAdapter4 adapters = (ListIDXGIAdapter4) { 0 };
@@ -345,31 +363,29 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 	//Get all possible adapters
 
-	Error err = Error_none();
-
 	{
 		HRESULT hr;
 		U32 adapterId = 0;
 
 		do {
 
-			gotoIfError(clean, ListIDXGIAdapter4_resizex(&adapters, adapters.length + 1))
+			gotoIfError3(clean, ListIDXGIAdapter4_resize(&adapters, adapters.length + 1, alloc, e_rr));
 			hr = instanceExt->factory->lpVtbl->EnumAdapters1(
 				instanceExt->factory, adapterId, (IDXGIAdapter1**)&adapters.ptrNonConst[adapterId]
 			);
 
 			if(FAILED(hr))
-				gotoIfError(clean, ListIDXGIAdapter4_resizex(&adapters, adapters.length - 1))
+				gotoIfError3(clean, ListIDXGIAdapter4_resize(&adapters, adapters.length - 1, alloc, e_rr));
 
 			++adapterId;
 
 		} while(SUCCEEDED(hr));
 
 		if(hr != DXGI_ERROR_NOT_FOUND)
-			gotoIfError(clean, dxCheck(hr))
+			gotoIfError3(clean, dxCheck(hr, e_rr));
 	}
 
-	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&tempInfos, adapters.length))
+	gotoIfError3(clean, ListGraphicsDeviceInfo_reserve(&tempInfos, adapters.length, alloc, e_rr));
 
 	//Pre-filter, this removes duplicate devices that get generated because of virtual displays (RDP).
 	//The reason why we want to filter this:
@@ -381,12 +397,12 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 	for(U64 i = 0; i < adapters.length; ++i) {
 
 		DXGI_ADAPTER_DESC3 desci = (DXGI_ADAPTER_DESC3) { 0 };
-		gotoIfError(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desci)))
+		gotoIfError3(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desci), e_rr));
 
 		for(U64 j = 0; j < i; ++j) {
 
 			DXGI_ADAPTER_DESC3 descj = (DXGI_ADAPTER_DESC3) { 0 };
-			gotoIfError(clean, dxCheck(adapters.ptr[j]->lpVtbl->GetDesc3(adapters.ptr[j], &descj)))
+			gotoIfError3(clean, dxCheck(adapters.ptr[j]->lpVtbl->GetDesc3(adapters.ptr[j], &descj), e_rr));
 
 			//Duplicate, this is generally a virtual display
 
@@ -422,7 +438,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 	for(U64 i = 0; i < adapters.length; ++i) {
 
 		DXGI_ADAPTER_DESC3 desc = (DXGI_ADAPTER_DESC3) { 0 };
-		gotoIfError(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desc)))
+		gotoIfError3(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desc), e_rr));
 
 		//Fences are required for D3D12
 
@@ -816,7 +832,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Fully converted type
 
-		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&tempInfos, tempInfos.length + 1, (Allocator){ 0 }))
+		gotoIfError3(clean, ListGraphicsDeviceInfo_resize(&tempInfos, tempInfos.length + 1, (Allocator){ 0 }, e_rr));
 
 		GraphicsDeviceInfo *info = tempInfos.ptrNonConst + tempInfos.length - 1;
 
@@ -829,7 +845,7 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 			.uuid = { luid, 0 }
 		};
 
-		gotoIfError(clean, CharString_createFromUTF16x(desc.Description, 128, &tmp));
+		gotoIfError3(clean, CharString_createFromUTF16(desc.Description, 128, alloc, &tmp, e_rr));
 
 		Buffer_memcpy(
 			Buffer_createRef(info->name, sizeof(info->name)),
@@ -943,14 +959,14 @@ Error DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 	}
 
 	if(!tempInfos.length)
-		gotoIfError(clean, Error_unsupportedOperation(0, "D3D12GraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
+		retError(clean, Error_unsupportedOperation(0, "D3D12GraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
 
 	*result = tempInfos;
 
 clean:
 
-	if(err.genericError)
-		ListGraphicsDeviceInfo_freex(&tempInfos);
+	if(!s_uccess)
+		ListGraphicsDeviceInfo_free(&tempInfos, alloc);
 
 	if(device)
 		device->lpVtbl->Release(device);        //Release device. We might re-create, but we can't pass it around
@@ -958,7 +974,7 @@ clean:
 	for(U64 i = 0; i < adapters.length; ++i)
 		adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);
 
-	CharString_freex(&tmp);
-	ListIDXGIAdapter4_freex(&adapters);
-	return err;
+	CharString_free(&tmp, alloc);
+	ListIDXGIAdapter4_free(&adapters, alloc);
+	return s_uccess;
 }

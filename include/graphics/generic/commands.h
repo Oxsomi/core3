@@ -27,29 +27,29 @@
 	extern "C" {
 #endif
 
-Error CommandListRef_clear(CommandListRef *commandList);
-Error CommandListRef_begin(CommandListRef *commandList, Bool doClear, U64 lockTimeout);
-Error CommandListRef_end(CommandListRef *commandList);
+Bool CommandListRef_clear(CommandListRef *commandList, Error *e_rr);
+Bool CommandListRef_begin(CommandListRef *commandList, Bool doClear, U64 lockTimeout, Error *e_rr);
+Bool CommandListRef_end(CommandListRef *commandList, Error *e_rr);
 
-Error CommandListRef_setViewport(CommandListRef *commandList, I32x2 offset, I32x2 size);
-Error CommandListRef_setScissor(CommandListRef *commandList, I32x2 offset, I32x2 size);
-Error CommandListRef_setViewportAndScissor(CommandListRef *commandList, I32x2 offset, I32x2 size);
+Bool CommandListRef_setViewport(CommandListRef *commandList, I32x2 offset, I32x2 size, Error *e_rr);
+Bool CommandListRef_setScissor(CommandListRef *commandList, I32x2 offset, I32x2 size, Error *e_rr);
+Bool CommandListRef_setViewportAndScissor(CommandListRef *commandList, I32x2 offset, I32x2 size, Error *e_rr);
 
-Error CommandListRef_setStencil(CommandListRef *commandList, U8 stencilValue);
-Error CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendConstants);
+Bool CommandListRef_setStencil(CommandListRef *commandList, U8 stencilValue, Error *e_rr);
+Bool CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendConstants, Error *e_rr);
 
 //Setting clear parameters and clearing render texture
 
 //Clear entire resource or subresource.
 //SwapchainRef or RenderTargetRef
 
-Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, ImageRange range, RefPtr *image);
-Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange range, RefPtr *image);
-Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4], ImageRange range, RefPtr *image);
+Bool CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, ImageRange range, RefPtr *image, Error *e_rr);
+Bool CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange range, RefPtr *image, Error *e_rr);
+Bool CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4], ImageRange range, RefPtr *image, Error *e_rr);
 
 TList(ClearImageCmd);
 
-Error CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd clearImages);
+Bool CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd clearImages, Error *e_rr);
 
 //Copy image
 //Only allowed on SwapchainRef, RenderTargetRef, DeviceTextureRef and DepthStencilRef.
@@ -60,12 +60,14 @@ Error CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd 
 
 TList(CopyImageRegion);
 
-Error CommandListRef_copyImageRegions(
-	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ListCopyImageRegion regions
+Bool CommandListRef_copyImageRegions(
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ListCopyImageRegion regions,
+	Error *e_rr
 );
 
-Error CommandListRef_copyImage(
-	CommandListRef *commandList, RefPtr *src, RefPtr *dst, CopyImageRegion region
+Bool CommandListRef_copyImage(
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, CopyImageRegion region,
+	Error *e_rr
 );
 
 //Draw calls and dispatches
@@ -73,103 +75,116 @@ Error CommandListRef_copyImage(
 TList(Transition);
 TList(CommandScopeDependency);
 
-Error CommandListRef_startScope(
+Bool CommandListRef_startScope(
 	CommandListRef *commandList,
 	ListTransition transitions,
 	U32 id,
-	ListCommandScopeDependency dependencies
+	ListCommandScopeDependency dependencies,
+	Error *e_rr
 );
 
-Error CommandListRef_endScope(CommandListRef *commandList);
+Bool CommandListRef_endScope(CommandListRef *commandList, Error *e_rr);
 
-Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline, EPipelineType type);
-Error CommandListRef_setComputePipeline(CommandListRef *commandList, PipelineRef *pipeline);
-Error CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRef *pipeline);
-Error CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineRef *pipeline);
+Bool CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline, EPipelineType type, Error *e_rr);
+Bool CommandListRef_setComputePipeline(CommandListRef *commandList, PipelineRef *pipeline, Error *e_rr);
+Bool CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRef *pipeline, Error *e_rr);
+Bool CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineRef *pipeline, Error *e_rr);
 
-Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, SetPrimitiveBuffersCmd buffers);
+Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, SetPrimitiveBuffersCmd buffers, Error *e_rr);
 
-Error CommandListRef_draw(CommandListRef *commandList, DrawCmd draw);
+Bool CommandListRef_draw(CommandListRef *commandList, DrawCmd draw, Error *e_rr);
 
-Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount);
-Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount);
+Bool CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount, Error *e_rr);
+Bool CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount, Error *e_rr);
 
-Error CommandListRef_drawIndexedAdv(
+Bool CommandListRef_drawIndexedAdv(
 	CommandListRef *commandList,
 	U32 indexCount,
 	U32 instanceCount,
 	U32 indexOffset,
 	U32 instanceOffset,
-	U32 vertexOffset
+	U32 vertexOffset,
+	Error *e_rr
 );
 
-Error CommandListRef_drawUnindexedAdv(
+Bool CommandListRef_drawUnindexedAdv(
 	CommandListRef *commandList,
 	U32 vertexCount,
 	U32 instanceCount,
 	U32 vertexOffset,
-	U32 instanceOffset
+	U32 instanceOffset,
+	Error *e_rr
 );
 
-Error CommandListRef_drawIndirect(
+Bool CommandListRef_drawIndirect(
 	CommandListRef *commandList,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
 	U32 drawCalls,
-	Bool indexed
+	Bool indexed,
+	Error *e_rr
 );
 
-Error CommandListRef_drawIndirectCountExt(
+Bool CommandListRef_drawIndirectCountExt(
 	CommandListRef *commandList,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
 	DeviceBufferRef *countBuffer,
 	U64 countOffset,
 	U32 maxDrawCalls,
-	Bool indexed
+	Bool indexed,
+	Error *e_rr
 );
 
-Error CommandListRef_dispatch(CommandListRef *commandList, DispatchCmd dispatch);
-Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX);
-Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY);
-Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ);
+Bool CommandListRef_dispatch(CommandListRef *commandList, DispatchCmd dispatch, Error *e_rr);
+Bool CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX, Error *e_rr);
+Bool CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY, Error *e_rr);
+Bool CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ, Error *e_rr);
 
-Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset);
+Bool CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset, Error *e_rr);
 
 //RayPipeline feature
 
-Error CommandListRef_dispatchRaysExt(CommandListRef *commandList, DispatchRaysExt dispatchRays);
-Error CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX);
-Error CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY);
-Error CommandListRef_dispatch3DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY, U32 raysZ);
+Bool CommandListRef_dispatchRaysExt(CommandListRef *commandList, DispatchRaysExt dispatchRays, Error *e_rr);
+Bool CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, Error *e_rr);
+Bool CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY, Error *e_rr);
+Bool CommandListRef_dispatch3DRaysExt(
+	CommandListRef *commandList,
+	U32 raygenLocalId,
+	U32 raysX,
+	U32 raysY,
+	U32 raysZ,
+	Error *e_rr
+);
 
 //Raytracing feature
 
 typedef RefPtr TLASRef;
 typedef RefPtr BLASRef;
 
-Error CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas);
-Error CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas);
+Bool CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas, Error *e_rr);
+Bool CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas, Error *e_rr);
 
 //DynamicRendering feature
 
 TList(AttachmentInfo);
 
-Error CommandListRef_startRenderExt(
+Bool CommandListRef_startRenderExt(
 	CommandListRef *commandList,
 	I32x2 offset,
 	I32x2 size,
 	ListAttachmentInfo colors,
-	DepthStencilAttachmentInfo depthStencil
+	DepthStencilAttachmentInfo depthStencil,
+	Error *e_rr
 );
 
-Error CommandListRef_endRenderExt(CommandListRef *commandList);
+Bool CommandListRef_endRenderExt(CommandListRef *commandList, Error *e_rr);
 
 //DebugMarkers feature
 
-Error CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
-Error CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
-Error CommandListRef_endRegionDebugExt(CommandListRef *commandList);
+Bool CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name, Error *e_rr);
+Bool CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name, Error *e_rr);
+Bool CommandListRef_endRegionDebugExt(CommandListRef *commandList, Error *e_rr);
 
 #ifdef __cplusplus
 	}

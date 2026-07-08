@@ -23,6 +23,7 @@
 #pragma once
 #include "types/container/string.h"
 #include "types/container/ref_ptr.h"
+#include "types/base/allocator.h"
 #include "graphics/generic/device_info.h"
 
 #ifdef __cplusplus
@@ -55,6 +56,17 @@ typedef enum EGraphicsInstanceFlags {
 	EGraphicsInstanceFlags_DisableGPUBV      = 1 << 3    //Disable GPU based validation (but keep other debugging)
 } EGraphicsInstanceFlags;
 
+//RefPtrTypes of every object kind the instance (and its devices) can create.
+//These are stored here because the RefPtrType must stay alive for as long as any RefPtr created with it.
+//The lengths depend on the api's ext sizes, the allocator is the one the instance was created with.
+
+typedef struct GraphicsObjectTypes {
+	RefPtrType device, buffer, deviceTexture, renderTexture, depthStencil, swapchain;
+	RefPtrType pipeline, sampler, blas, tlas;
+	RefPtrType descriptorLayout, descriptorTable, descriptorHeap, pipelineLayout;
+	RefPtrType commandList;
+} GraphicsObjectTypes;
+
 typedef struct GraphicsInstance {
 
 	GraphicsApplicationInfo application;
@@ -65,6 +77,10 @@ typedef struct GraphicsInstance {
 	EGraphicsInstanceFlags flags;
 	U32 padding;
 
+	const Allocator *alloc;             //Allocator all graphics objects of this instance are created with
+
+	GraphicsObjectTypes types;
+
 } GraphicsInstance;
 
 typedef RefPtr GraphicsInstanceRef;
@@ -73,32 +89,41 @@ typedef struct ListGraphicsDeviceInfo ListGraphicsDeviceInfo;
 #define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))        //impl
 #define GraphicsInstanceRef_ptr(ptr) RefPtr_data(ptr, GraphicsInstance)
 
-void GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
-Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
-
 Bool GraphicsInterface_create(Error *e_rr);              //Prepare interface to query info about supported APIs
 Bool GraphicsInterface_supportsApi(EGraphicsApi api);
 
-Error GraphicsInstance_create(
+//Resolves EGraphicsApi_Count into the default api of the current platform
+EGraphicsApi EGraphicsApi_resolve(EGraphicsApi api);
+
+//Make the RefPtrType used to allocate the GraphicsInstance itself.
+//The result must stay alive for as long as the instance does (see RefPtr_create).
+//GraphicsInterface_create() must have been called before for a valid result (object sizes).
+RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc);
+
+Bool GraphicsInstance_create(
 	GraphicsApplicationInfo info,
 	EGraphicsApi api,                                    //EGraphicsApi_Count = Default
 	EGraphicsInstanceFlags flags,
-	GraphicsInstanceRef **inst
+	const Allocator *alloc,                              //Must match type->alloc
+	const RefPtrType *type,                              //GraphicsInstance_makeType (must outlive instance)
+	GraphicsInstanceRef **inst,
+	Error *e_rr
 );
 
-Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
+Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr);
 
 TList(GraphicsDeviceInfo);
 
 static const U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
 static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
 
-Error GraphicsInstance_getPreferredDevice(
+Bool GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	GraphicsDeviceInfo *deviceInfo
+	GraphicsDeviceInfo *deviceInfo,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

@@ -20,14 +20,15 @@
 
 //graphics/generic/device_info.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "graphics/generic/instance.h"
 #include "types/math/type_cast.h"
-#include "formats/oiSH/binaries.h"
+#include "formats/oiSH/sh_binaries.h"
+#include "types/base/endianness.h"
 
 void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
 
@@ -38,8 +39,7 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
 		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\n\t"
 		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64"\n\t"
-		"Vendor: %s",
-		api == EGraphicsApi_Direct3D12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
+		"Vendor: %s", api == EGraphicsApi_Direct3D12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
 		deviceInfo->capabilities.sharedMemory,

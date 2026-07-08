@@ -20,7 +20,7 @@
 
 //graphics/generic/bindless_descriptor.c
 
-#include "platforms/ext/listx.h"
+#include "types/container/list.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/descriptor_layout.h"
@@ -53,7 +53,7 @@ Bool BindlessDescriptor_isValid(GraphicsDeviceRef *deviceRef, DescriptorTableRef
 	if(!handle)
 		return true;
 
-	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return false;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -61,7 +61,7 @@ Bool BindlessDescriptor_isValid(GraphicsDeviceRef *deviceRef, DescriptorTableRef
 	if(!descTableRef)
 		descTableRef = device->defaultDescriptorTable;
 
-	if(!descTableRef || descTableRef->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(!descTableRef || descTableRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
 		return false;
 
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(descTableRef);
@@ -89,15 +89,16 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 ) {
 
 	Bool s_uccess = true;
+
 	U16 bindId = U16_MAX;
 	U64 arrayId = U64_MAX;
 	U8 bindlessTypeId = 0;
 
-	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_allocateDescriptorBindless() deviceRef is required"))
+	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_allocateDescriptorBindless() deviceRef is required"));
 
 	if(!descriptorHandle)
-		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_allocateDescriptorBindless() descriptorHandle is required"))
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_allocateDescriptorBindless() descriptorHandle is required"));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
@@ -106,12 +107,12 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 
 	gotoIfError3(clean, DescriptorTableRef_allocDescriptorBindless(
 		descTableRef, type, strideOrLength, &bindId, &bindlessTypeId, &arrayId, maintainRef, desc, e_rr
-	))
+	));
 
 	*descriptorHandle = (((BindlessDescriptor) bindlessTypeId + 1) << 17) | (BindlessDescriptor) arrayId;
 
 	if(*descriptorHandle == BindlessDescriptor_InvalidAllocation)
-		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_allocateDescriptorBindless() can't make descriptor handle"))
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_allocateDescriptorBindless() can't make descriptor handle"));
 
 clean:
 
@@ -133,19 +134,19 @@ Bool GraphicsDeviceRef_freeDescriptorBindless(
 	if(!descriptor)
 		goto clean;
 
-	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_freeDescriptorBindless() deviceRef is required"))
-		
+	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_freeDescriptorBindless() deviceRef is required"));
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	if(!descTableRef)
 		descTableRef = device->defaultDescriptorTable;
 
-	if(!descTableRef || descTableRef->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+	if(!descTableRef || descTableRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(
 			0, "GraphicsDeviceRef_freeDescriptorBindless() descriptor table is missing or invalid"
-		))
-		
+		));
+
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(descTableRef);
 	DescriptorLayout *layout = DescriptorLayoutRef_ptr(tablePtr->layout);
 
@@ -153,10 +154,10 @@ Bool GraphicsDeviceRef_freeDescriptorBindless(
 	U8 typeId = BindlessDescriptor_getBindlessType(descriptor);
 
 	if(!typeId || typeId > layout->bindlessTypeToBinding.length)
-		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_freeDescriptorBindless() invalid descriptor type"))
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_freeDescriptorBindless() invalid descriptor type"));
 
 	U16 bindId = layout->bindlessTypeToBinding.ptr[typeId - 1];
-	gotoIfError3(clean, DescriptorTableRef_unsetDescriptors(descTableRef, bindId, arrayId, 1, e_rr))
+	gotoIfError3(clean, DescriptorTableRef_unsetDescriptors(descTableRef, bindId, arrayId, 1, e_rr));
 
 clean:
 	return s_uccess;

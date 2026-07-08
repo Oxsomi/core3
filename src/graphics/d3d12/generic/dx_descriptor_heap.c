@@ -20,17 +20,17 @@
 
 //graphics/d3d12/generic/dx_descriptor_heap.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/base/constants.h"
 
-void DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
+void DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, const Allocator *alloc) {
 
 	(void) alloc;
 
@@ -42,13 +42,19 @@ void DX_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
 	if(heapExt->resourcesHeap.heap)
 		heapExt->resourcesHeap.heap->lpVtbl->Release(heapExt->resourcesHeap.heap);
 
-	AllocationBuffer_freex(&heapExt->allocators[0]);
-	AllocationBuffer_freex(&heapExt->allocators[1]);
+	AllocationBuffer_free(&heapExt->allocators[0], alloc);
+	AllocationBuffer_free(&heapExt->allocators[1], alloc);
 }
 
-Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name) {
+Bool DX_WRAP_FUNC(
+	GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *dev,
+	DescriptorHeap *heap,
+	CharString name,
+	Error *e_rr
+) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -71,13 +77,27 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 		};
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name))
-			gotoIfError(clean, CharString_formatx(&tmpName, "%.*s resources heap", (int) CharString_length(name), name.ptr))
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&tmpName,
+				e_rr,
+				"%.*s resources heap",
+				(int) CharString_length(name),
+				name.ptr
+			));
 
-		gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
-			deviceExt, heapDesc, &tmpName, &heapExt->resourcesHeap, true
-		))
+		gotoIfError3(clean, DxGraphicsDevice_createDescriptorHeapSingle(
+			deviceExt, heapDesc, &tmpName, &heapExt->resourcesHeap, true, alloc, e_rr));
 
-		gotoIfError(clean, AllocationBuffer_createx(srvCbvUav, true, 1, &heapExt->allocators[0]))
+		gotoIfError3(clean, AllocationBuffer_create(
+			&(AllocationBufferCreate) {
+				.size = srvCbvUav,
+				.nonLinearAlignment = 1,
+				.alloc = alloc,
+				.allocationBuffer = &heapExt->allocators[0]
+			},
+			true, e_rr
+		));
 	}
 
 	if (info.maxSamplers) {
@@ -89,25 +109,40 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 		};
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name))
-			gotoIfError(clean, CharString_formatx(&tmpName, "%.*s sampler heap", (int) CharString_length(name), name.ptr))
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&tmpName,
+				e_rr,
+				"%.*s sampler heap",
+				(int) CharString_length(name),
+				name.ptr
+			));
 
-		gotoIfError(clean, DxGraphicsDevice_createDescriptorHeapSingle(
-			deviceExt, heapDesc, &tmpName, &heapExt->samplerHeap, true
-		))
-		
-		gotoIfError(clean, AllocationBuffer_createx(info.maxSamplers, true, 1, &heapExt->allocators[1]))
+		gotoIfError3(clean, DxGraphicsDevice_createDescriptorHeapSingle(
+			deviceExt, heapDesc, &tmpName, &heapExt->samplerHeap, true, alloc, e_rr));
+
+		gotoIfError3(clean, AllocationBuffer_create(
+			&(AllocationBufferCreate) {
+				.size = info.maxSamplers,
+				.nonLinearAlignment = 1,
+				.alloc = alloc,
+				.allocationBuffer = &heapExt->allocators[1]
+			},
+			true, e_rr
+		));
 	}
 
 clean:
-	CharString_freex(&tmpName);
-	return err;
+	CharString_free(&tmpName, alloc);
+	return s_uccess;
 }
 
 Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table) {
-	
+
+	Bool s_uccess = true;
+
 	SpinLock *lock = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
-	Error err = Error_none();
 
 	//Free CBV/SRV/UAV and sampler ranges
 
@@ -118,7 +153,7 @@ Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *ta
 			acq = SpinLock_lock(lock, 1 * SECOND);
 
 			if(acq < ELockAcquire_Success)
-				gotoIfError(clean, Error_invalidState(0, "DxDescriptorHeap_freeTable couldn't lock"))
+				retError(clean, Error_invalidState(0, "DxDescriptorHeap_freeTable couldn't lock"));
 
 			AllocationBuffer_freeBlock(&heapExt->allocators[i], (const U8*) (const void*) table->allocationLocations[i]);
 
@@ -135,14 +170,15 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
 
-	return !err.genericError;
+	return s_uccess;
 }
 
-Error DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table) {
+Bool DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	SpinLock *lock = NULL;
 	ELockAcquire acq = ELockAcquire_Invalid;
-	Error err = Error_none();
 
 	U64 ranges[2] = { table->allocationSizes[0], table->allocationSizes[1] };
 	table->allocationSizes[1] = table->allocationSizes[0] = 0;
@@ -156,10 +192,18 @@ Error DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *
 			acq = SpinLock_lock(lock, 1 * SECOND);
 
 			if(acq < ELockAcquire_Success)
-				gotoIfError(clean, Error_invalidState(0, "DxDescriptorHeap_allocTable couldn't lock"))
+				retError(clean, Error_invalidState(0, "DxDescriptorHeap_allocTable couldn't lock"));
 
 			const U8 *loc = NULL;
-			gotoIfError(clean, AllocationBuffer_allocateBlockx(&heapExt->allocators[i], ranges[i], 1, false, &loc))
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(
+				&(AllocationBufferAllocate) {
+					.allocationBuffer = &heapExt->allocators[i],
+					.alignment = 1,
+					.isNonLinearResource = false,
+					.alloc = alloc
+				},
+				ranges[i], &loc, e_rr
+			));
 
 			table->allocationLocations[i] = (U64) (const void*) loc;
 			table->allocationSizes[i] = ranges[i];
@@ -175,5 +219,5 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(lock);
 
-	return err;
+	return s_uccess;
 }

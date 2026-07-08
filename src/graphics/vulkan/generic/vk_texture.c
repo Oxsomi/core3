@@ -20,7 +20,7 @@
 
 //graphics/vulkan/generic/vk_texture.c
 
-#include "platforms/ext/listx.h"
+#include "types/container/list.h"
 #include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vulkan.h"
@@ -29,9 +29,9 @@
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string.h"
 #include "types/container/texture_format.h"
-#include "formats/oiSH/registers.h"
+#include "formats/oiSH/sh_registers.h"
 #include "types/base/constants.h"
 
 void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
@@ -40,6 +40,7 @@ void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(utex.resource.device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const Allocator *alloc = GraphicsDevice_getAlloc(device);
 
 	for(U8 i = 0; i < utex.images; ++i) {
 
@@ -48,7 +49,7 @@ void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 		for (U64 j = 0; j < image->views.length; ++j)
 			deviceExt->destroyImageView(deviceExt->device, image->views.ptr[i].view, NULL);
 
-		ListVkImageViewMapping_freex(&image->views);
+		ListVkImageViewMapping_free(&image->views, alloc);
 
 		if(image->image && utex.resource.type != EResourceType_Swapchain)
 			deviceExt->destroyImage(deviceExt->device, image->image, NULL);
@@ -57,13 +58,16 @@ void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name) {
+Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = textureRef ?
+		GraphicsDeviceRef_getAlloc(TextureRef_getUnifiedTexture(textureRef, NULL).resource.device) : NULL;
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 
 	//Prepare temporary free-ables and extended data.
 
-	Error err = Error_none();
 	CharString temp = CharString_createNull();
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(texture->resource.device);
@@ -123,7 +127,10 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		//TODO: versioned image
 
 		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, 0);
-		gotoIfError(clean, checkVkError(deviceExt->createImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)))
+		gotoIfError3(clean, checkVkError(
+			deviceExt->createImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image),
+			e_rr
+		));
 
 		VkImageMemoryRequirementsInfo2 imageReq = (VkImageMemoryRequirementsInfo2) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
@@ -134,7 +141,7 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 
 		DeviceMemoryBlock block;
 
-		gotoIfError(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
+		gotoIfError3(clean, VK_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			&device->allocator,
 			&requirements,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
@@ -142,14 +149,13 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			&texture->resource.blockOffset,
 			texture->resource.type,
 			name,
-			&block
-		))
+			&block, e_rr));
 
 		texture->resource.allocated = true;
 
-		gotoIfError(clean, checkVkError(deviceExt->bindImageMemory(
+		gotoIfError3(clean, checkVkError(deviceExt->bindImageMemory(
 			deviceExt->device, managedImageExt->image, (VkDeviceMemory) block.ext, texture->resource.blockOffset
-		)))
+		), e_rr));
 	}
 
 	for(U8 i = 0; i < texture->images; ++i) {
@@ -165,16 +171,16 @@ Error VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				.objectHandle =  (U64) managedImageExt->image
 			};
 
-			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
+			gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 		}
 	}
 
 clean:
-	CharString_freex(&temp);
-	return err;
+	CharString_free(&temp, alloc);
+	return s_uccess;
 }
 
-Error VkUnifiedTexture_transition(
+Bool VkUnifiedTexture_transition(
 	VkUnifiedTexture *imageExt,
 	VkPipelineStageFlags2 stage,
 	VkAccessFlagBits2 access,
@@ -182,15 +188,19 @@ Error VkUnifiedTexture_transition(
 	U32 graphicsQueueId,
 	const VkImageSubresourceRange *range,
 	ListVkImageMemoryBarrier2 *imageBarriers,
-	VkDependencyInfo *dependency
+	VkDependencyInfo *dependency,
+	const Allocator *alloc,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
 
 	//Avoid duplicate barriers except in one case:
 	//Barriers for write->write, which always need to be inserted in-between two calls.
 	//Otherwise, it's not synchronized correctly.
 
 	if(imageExt->lastStage == stage && imageExt->lastAccess == access && !(access & VkAccessFlagBits2_WRITE))
-		return Error_none();
+		return s_uccess;
 
 	//Handle image barrier
 
@@ -214,10 +224,7 @@ Error VkUnifiedTexture_transition(
 		.subresourceRange = *range
 	};
 
-	const Error err = ListVkImageMemoryBarrier2_pushBackx(imageBarriers, imageBarrier);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, ListVkImageMemoryBarrier2_pushBack(imageBarriers, imageBarrier, alloc, e_rr));
 
 	imageExt->lastLayout = imageBarrier.newLayout;
 	imageExt->lastStage = imageBarrier.dstStageMask;
@@ -226,13 +233,18 @@ Error VkUnifiedTexture_transition(
 	dependency->pImageMemoryBarriers = imageBarriers->ptr;
 	dependency->imageMemoryBarrierCount = (U32) imageBarriers->length;
 
-	return Error_none();
+clean:
+	return s_uccess;
 }
 
 Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *view, U32 *viewIdOutput, Error *e_rr) {
 
+	Bool s_uccess = true;
+
 	if(!d.resource)
 		return false;
+
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(TextureRef_getUnifiedTexture(d.resource, NULL).resource.device);
 
 	if(!d.texture.arrayCount)
 		d.texture.arrayCount = 1;
@@ -240,7 +252,6 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 	if(!d.texture.mipCount)
 		d.texture.mipCount = 1;
 
-	Bool s_uccess = true;
 	VkImageView tmp = NULL;
 
 	UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
@@ -333,7 +344,7 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 			break;
 	}
 
-	gotoIfError2(clean, checkVkError(deviceExt->createImageView(deviceExt->device, &viewCreate, NULL, &tmp)))
+	gotoIfError3(clean, checkVkError(deviceExt->createImageView(deviceExt->device, &viewCreate, NULL, &tmp), e_rr));
 
 		//Deposit the tmp into our list of views and ensure we don't free it without a reason
 
@@ -344,7 +355,9 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 	};
 
 	if(firstEmptyViewId == U32_MAX)
-		gotoIfError2(clean, ListVkImageViewMapping_pushBackx(&texExt->views, mapping))
+	{
+		gotoIfError3(clean, ListVkImageViewMapping_pushBack(&texExt->views, mapping, alloc, e_rr));
+	}
 
 	else {
 		texExt->views.ptrNonConst[firstEmptyViewId] = mapping;

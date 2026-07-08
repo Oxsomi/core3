@@ -20,7 +20,7 @@
 
 //graphics/d3d12/generic/dx_command_list.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/command_list.h"
@@ -34,13 +34,14 @@
 #include "graphics/generic/blas.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/errorx.h"
+#include "types/container/buffer.h"
+#include "types/container/log.h"
 #include "platforms/logx.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
 
-#include "types/math/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 
 //RTVs and DSVs are temporary in DirectX.
 
@@ -179,6 +180,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 	const U8 *data,
 	void *commandListExt
 ) {
+
+	//CommandList_process can't fail upward; errors are printed and the op is skipped.
+
+	Bool s_uccess = true;
+	Error err = Error_none();
+	Error *e_rr = &err;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	(void) commandList;
 
@@ -544,22 +552,21 @@ void DX_WRAP_FUNC(CommandList_process)(
 							++range.FirstPlane;
 					}
 
-					Error err = DxUnifiedTexture_transition(
+					if(!DxUnifiedTexture_transition(
 						imageExt,
 						D3D12_BARRIER_SYNC_RESOLVE,
 						D3D12_BARRIER_ACCESS_RESOLVE_DEST,
 						D3D12_BARRIER_LAYOUT_RESOLVE_DEST,
 						&range,
 						&deviceExt->imageTransitions,
-						&deps
-					);
-
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+						&deps, alloc, e_rr
+					))
+						Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
 				}
 
 				//Transition both source and destination;
 				//Source wasn't transitioned, but destination was only transitioned for discard
-				
+
 				const UnifiedTexture utex = TextureRef_getUnifiedTexture(input.image, NULL);
 				DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(input.image, Dx, 0);
 
@@ -578,23 +585,22 @@ void DX_WRAP_FUNC(CommandList_process)(
 						++range.FirstPlane;
 				}
 
-				Error err = DxUnifiedTexture_transition(
+				if(!DxUnifiedTexture_transition(
 					imageExt,
 					D3D12_BARRIER_SYNC_RESOLVE,
 					D3D12_BARRIER_ACCESS_RESOLVE_SOURCE,
 					D3D12_BARRIER_LAYOUT_RESOLVE_SOURCE,
 					&range,
 					&deviceExt->imageTransitions,
-					&deps
-				);
-
-				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+					&deps, alloc, e_rr
+				))
+					Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
 			}
 
 			if(deps.NumBarriers)
 				buffer->lpVtbl->Barrier(buffer, 1, &deps);
 
-			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
+			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
 
 			//Resolve
 
@@ -902,11 +908,17 @@ void DX_WRAP_FUNC(CommandList_process)(
 		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
 
 		case ECommandOp_UpdateBLASExt:
-			DX_WRAP_FUNC(BLASRef_flush)(temp, deviceRef, *(BLASRef**)data);
+
+			if(!(DX_WRAP_FUNC(BLASRef_flush))(temp, deviceRef, *(BLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
 			break;
 
 		case ECommandOp_UpdateTLASExt:
-			DX_WRAP_FUNC(TLASRef_flush)(temp, deviceRef, *(TLASRef**)data);
+
+			if(!(DX_WRAP_FUNC(TLASRef_flush))(temp, deviceRef, *(TLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
 			break;
 
 		//case ECommandOp_DispatchRaysIndirect:
@@ -1011,8 +1023,6 @@ void DX_WRAP_FUNC(CommandList_process)(
 			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
-			Error err = Error_none();
-
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
@@ -1050,13 +1060,13 @@ void DX_WRAP_FUNC(CommandList_process)(
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
-				Bool isTLAS = transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
+				Bool isTLAS = transition.resource->refPtrType->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
 
-				if (isTLAS || transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
+				if (isTLAS || transition.resource->refPtrType->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
 
 					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
 
-					gotoIfError(nextTransition, DxDeviceBuffer_transition(
+					gotoIfError3(nextTransition, DxDeviceBuffer_transition(
 
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Dx),
 
@@ -1068,8 +1078,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 
 						&deviceExt->bufferTransitions,
-						&dep[1]
-					))
+						&dep[1], alloc, e_rr));
 
 					continue;
 				}
@@ -1171,7 +1180,7 @@ void DX_WRAP_FUNC(CommandList_process)(
 					if(isDepthStencil && unif.depthFormat >= EDepthStencilFormat_StencilStart)
 						++range.NumPlanes;
 
-					gotoIfError(nextTransition, DxUnifiedTexture_transition(
+					gotoIfError3(nextTransition, DxUnifiedTexture_transition(
 
 						imageExt,
 						pipelineStage,
@@ -1180,27 +1189,25 @@ void DX_WRAP_FUNC(CommandList_process)(
 						&range,
 
 						&deviceExt->imageTransitions,
-						&dep[0]
-					))
+						&dep[0], alloc, e_rr));
 				}
 
 				else {
 
 					DeviceBuffer *devBuffer = DeviceBufferRef_ptr(transition.resource);
 
-					gotoIfError(nextTransition, DxDeviceBuffer_transition(
+					gotoIfError3(nextTransition, DxDeviceBuffer_transition(
 						DeviceBuffer_ext(devBuffer, Dx),
 						pipelineStage,
 						access,
 						&deviceExt->bufferTransitions,
-						&dep[1]
-					))
+						&dep[1], alloc, e_rr));
 				}
 
 			nextTransition:
 
-				if(err.genericError)
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+				if(!s_uccess)
+					Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 			}
 
 			if(dep[0].NumBarriers || dep[1].NumBarriers)
@@ -1210,8 +1217,8 @@ void DX_WRAP_FUNC(CommandList_process)(
 					dep[0].NumBarriers ? &dep[0] : &dep[1]
 				);
 
-			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
-			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions, e_rr);
 			break;
 		}
 

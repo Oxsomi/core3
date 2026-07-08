@@ -20,7 +20,7 @@
 
 //graphics/vulkan/generic/vk_graphics_pipeline.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
@@ -29,8 +29,8 @@
 #include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
 #include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/string.h"
@@ -38,13 +38,15 @@
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
-Error createShaderModule(
+Bool createShaderModule(
 	Buffer buf,
 	VkShaderModule *mod,
 	VkGraphicsDevice *device,
 	VkGraphicsInstance *instance,
 	CharString name,
-	EPipelineStage stage
+	EPipelineStage stage,
+	const Allocator *alloc,
+	Error *e_rr
 );
 
 TList(VkPipelineShaderStageCreateInfo);
@@ -120,15 +122,17 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDevice_getAlloc(device);
+
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 	VkPipeline pipelineHandle = NULL;
-	Bool s_uccess = true;
 	CharString temp = CharString_createNull();
 	ListVkPipelineShaderStageCreateInfo stages = (ListVkPipelineShaderStageCreateInfo) { 0 };
 	VkGraphicsPipelineCreateInfo currentInfo = (VkGraphicsPipelineCreateInfo) { 0 };
 
-	gotoIfError2(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, pipeline->stages.length))
+	gotoIfError3(clean, ListVkPipelineShaderStageCreateInfo_resize(&stages, pipeline->stages.length, alloc, e_rr));
 
 	const PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
 
@@ -258,7 +262,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		}
 
 		if(CharString_length(name))
-			gotoIfError2(clean, CharString_formatx(&temp, "%.*s binary %"PRIu64, (int) CharString_length(name), name.ptr, j))
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&temp,
+				e_rr,
+				"%.*s binary %"PRIu64,
+				(int) CharString_length(name),
+				name.ptr,
+				j
+			));
 
 		U16 entrypointId = (U16) stage.binaryId;
 		U16 binaryId = (U16) (stage.binaryId >> 16);
@@ -269,16 +281,15 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 		VkShaderModule module = NULL;
 
-		gotoIfError2(clean, createShaderModule(
+		gotoIfError3(clean, createShaderModule(
 			buf.binaries[ESHBinaryType_SPIRV],
 			&module,
 			deviceExt,
 			instanceExt,
 			temp,
-			stage.stageType
-		))
+			stage.stageType, alloc, e_rr));
 
-		CharString_freex(&temp);
+		CharString_free(&temp, alloc);
 
 		stages.ptrNonConst[j] = (VkPipelineShaderStageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -540,19 +551,19 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
 
-	gotoIfError2(clean, checkVkError(deviceExt->createGraphicsPipelines(
+	gotoIfError3(clean, checkVkError(deviceExt->createGraphicsPipelines(
 		deviceExt->device,
 		NULL,
 		1,
 		&currentInfo,
 		NULL,
 		&pipelineHandle
-	)))
+	), e_rr));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && CharString_length(name)) {
 
 		if(!CharString_isNullTerminated(name))
-			gotoIfError2(clean, CharString_createCopyx(name, &temp))
+			gotoIfError3(clean, CharString_createCopy(name, alloc, &temp, e_rr));
 
 		VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -561,8 +572,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.pObjectName = temp.ptr ? temp.ptr : name.ptr
 		};
 
-		gotoIfError2(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-		CharString_freex(&temp);
+		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2), e_rr));
+		CharString_free(&temp, alloc);
 	}
 
 	*Pipeline_ext(pipeline, Vk) = pipelineHandle;
@@ -582,8 +593,8 @@ clean:
 				deviceExt->destroyShaderModule(deviceExt->device, mod, NULL);
 		}
 
-	CharString_freex(&temp);
-	ListVkPipelineShaderStageCreateInfo_freex(&stages);
+	CharString_free(&temp, alloc);
+	ListVkPipelineShaderStageCreateInfo_free(&stages, alloc);
 
 	return s_uccess;
 }

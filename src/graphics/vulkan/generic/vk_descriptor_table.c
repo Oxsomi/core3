@@ -20,7 +20,7 @@
 
 //graphics/vulkan/generic/vk_descriptor_table.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/descriptor_layout.h"
@@ -33,12 +33,14 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string.h"
 #include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/base/constants.h"
 
 void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
+
+	Bool s_uccess = true;
 
 	if(!resource)
 		return;
@@ -49,10 +51,9 @@ void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
 	SpinLock *lock = &texExt->lock;
 	ELockAcquire acq = SpinLock_lock(lock, 1 * SECOND);
 	Error *e_rr = NULL;
-	Bool s_uccess = true;
 
 	if(acq < ELockAcquire_Success)
-		retError(clean, Error_invalidState(0, "VkDescriptor_loseRef() couldn't acquire lock"))
+		retError(clean, Error_invalidState(0, "VkDescriptor_loseRef() couldn't acquire lock"));
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(tex.resource.device), Vk);
 
@@ -100,7 +101,7 @@ void VkDescriptorTable_loseRef(DescriptorTable *table, U64 i, U64 j) {
 	}
 }
 
-void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc) {
+void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, const Allocator *alloc) {
 
 	(void) alloc;
 
@@ -125,16 +126,16 @@ void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc)
 		ESHRegisterType type = layout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
 
 		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
-			ListVkDescriptorImageInfo_freex(&range->updateImages);
+			ListVkDescriptorImageInfo_free(&range->updateImages, alloc);
 
 		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
-			ListVkDescriptorBufferInfo_freex(&range->updateBuffers);
+			ListVkDescriptorBufferInfo_free(&range->updateBuffers, alloc);
 
 		else if(type == ESHRegisterType_AccelerationStructure)
-			ListVkAccelerationStructureKHR_freex(&range->tlases);
+			ListVkAccelerationStructureKHR_free(&range->tlases, alloc);
 
 		else if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
-			ListVkDescriptorImageInfo_freex(&range->updateImages);
+			ListVkDescriptorImageInfo_free(&range->updateImages, alloc);
 
 		for(U64 j = 0; j < range->views.length; ++j) {
 
@@ -144,16 +145,23 @@ void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc)
 				VkDescriptorTable_loseRef(table, i, j);
 		}
 
-		ListU32_freex(&range->views);
-		ListU32_freex(&range->newViews);
+		ListU32_free(&range->views, alloc);
+		ListU32_free(&range->newViews, alloc);
 	}
 
-	ListVkDescriptorTableRange_freex(&tableExt->ranges);
+	ListVkDescriptorTableRange_free(&tableExt->ranges, alloc);
 }
 
-Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heapRef, DescriptorTable *table, CharString name) {
+Bool VK_WRAP_FUNC(
+	DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heapRef,
+	DescriptorTable *table,
+	CharString name,
+	Error *e_rr
+) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
+	const Allocator *alloc = heapRef ? GraphicsDeviceRef_getAlloc(DescriptorHeapRef_ptr(heapRef)->device) : NULL;
+
 	CharString tmpName = CharString_createNull();
 
 	const DescriptorHeap *heap = DescriptorHeapRef_ptr(heapRef);
@@ -166,7 +174,7 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 	VkDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Vk);
 
 	U32 count = 1;
-	
+
 	for(; count < 4 && layoutExt->layouts[count]; ++count)
 		;
 
@@ -177,15 +185,20 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 		.pSetLayouts = layoutExt->layouts
 	};
 
-	gotoIfError(clean, checkVkError(deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, tableExt->sets)))
-	gotoIfError(clean, ListVkDescriptorTableRange_resizex(&tableExt->ranges, layout->info.bindings.length))
+	gotoIfError3(clean, checkVkError(deviceExt->allocateDescriptorSets(deviceExt->device, &allocInfo, tableExt->sets), e_rr));
+	gotoIfError3(clean, ListVkDescriptorTableRange_resize(&tableExt->ranges, layout->info.bindings.length, alloc, e_rr));
 
 	for (U64 i = 0; i < tableExt->ranges.length; ++i) {
 
 		ESHRegisterType type = layout->info.bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
 
 		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
-			gotoIfError(clean, ListU32_resizex(&tableExt->ranges.ptrNonConst[i].views, layout->info.bindings.ptr[i].count))
+			gotoIfError3(clean, ListU32_resize(
+				&tableExt->ranges.ptrNonConst[i].views,
+				layout->info.bindings.ptr[i].count,
+				alloc,
+				e_rr
+			));
 	}
 
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
@@ -193,7 +206,15 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 	for (U8 i = 0; i < count; ++i)
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
-			gotoIfError(clean, CharString_formatx(&tmpName, "%.*s set %"PRIu8, (int) CharString_length(name), name.ptr, i))
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&tmpName,
+				e_rr,
+				"%.*s set %"PRIu8,
+				(int) CharString_length(name),
+				name.ptr,
+				i
+			));
 
 			const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -202,8 +223,8 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 				.objectHandle = (U64) tableExt->sets[i]
 			};
 
-			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
-			CharString_freex(&tmpName);
+			gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
+			CharString_free(&tmpName, alloc);
 		}
 
 	//Prepare bind command(s)
@@ -211,8 +232,8 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 
 	U32 sets[4] = { layoutExt->setIds[0], layoutExt->setIds[1], layoutExt->setIds[2], layoutExt->setIds[3] };
 	ListU32 sortSets = (ListU32) { 0 };
-	gotoIfError(clean, ListU32_createRef(sets, count, &sortSets))
-	ListU32_sort(sortSets);
+	gotoIfError3(clean, ListU32_createRef(sets, count, &sortSets, e_rr));
+	GenericList_sortU32(ListU32_toList(sortSets));
 
 	U32 prevSetId = U32_MAX;
 
@@ -232,8 +253,8 @@ Error VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 	}
 
 clean:
-	CharString_freex(&tmpName);
-	return err;
+	CharString_free(&tmpName, alloc);
+	return s_uccess;
 }
 
 Bool VK_WRAP_FUNC(DescriptorTable_unsetDescriptors)(
@@ -268,7 +289,10 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
+
 	const DescriptorHeap *heap = DescriptorHeapRef_ptr(table->parent);
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(heap->device);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(heap->device), Vk);
 
 	VkDescriptorTable *tableExt = DescriptorTable_ext(table, Vk);
@@ -290,8 +314,6 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			set = tableExt->sets[i];
 			break;
 		}
-
-	Bool s_uccess = true;
 
 	VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -323,14 +345,14 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_ConstantBuffer: {
 
 			if(darr.length > 1)
-				gotoIfError2(clean, ListVkDescriptorBufferInfo_resizex(&range->updateBuffers, darr.length))
+				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr.length, alloc, e_rr));
 
 			VkDescriptorBufferInfo *buf = darr.length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
 
 			for(U64 i = 0; i < darr.length; ++i) {
 
 				Descriptor d = darr.ptr[i];
-				
+
 				if(d.resource && !Descriptor_endBuffer(d)) {
 					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
 					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
@@ -355,7 +377,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_SamplerComparisonState: {
 
 			if(darr.length > 1)
-				gotoIfError2(clean, ListVkDescriptorImageInfo_resizex(&range->updateImages, darr.length))
+				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr.length, alloc, e_rr));
 
 			VkDescriptorImageInfo *img = darr.length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
 
@@ -377,7 +399,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_AccelerationStructure: {
 
 			if(darr.length > 1)
-				gotoIfError2(clean, ListVkAccelerationStructureKHR_resizex(&range->tlases, darr.length))
+				gotoIfError3(clean, ListVkAccelerationStructureKHR_resize(&range->tlases, darr.length, alloc, e_rr));
 
 			VkAccelerationStructureKHR *tlas = darr.length > 1 ? range->tlases.ptrNonConst : &tmpDesc.tlas;
 
@@ -406,14 +428,14 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_StructuredBufferAtomic: {
 
 			if(darr.length > 1)
-				gotoIfError2(clean, ListVkDescriptorBufferInfo_resizex(&range->updateBuffers, darr.length))
+				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr.length, alloc, e_rr));
 
 			VkDescriptorBufferInfo *buf = darr.length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
 
 			for(U64 i = 0; i < darr.length; ++i) {
 
 				Descriptor d = darr.ptr[i];
-				
+
 				if(d.resource && !Descriptor_endBuffer(d)) {
 					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
 					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
@@ -422,7 +444,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				if(d.buffer.counter)
 					retError(clean, Error_unimplemented(
 						0, "DescriptorTable_setDescriptor: No support for vulkan atomic storage buffers yet"
-					))
+					));
 
 				if (d.resource)
 					buf[i] = (VkDescriptorBufferInfo) {
@@ -446,8 +468,8 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_Texture2DMS: {
 
 			if(darr.length > 1) {
-				gotoIfError2(clean, ListVkDescriptorImageInfo_resizex(&range->updateImages, darr.length))
-				gotoIfError2(clean, ListU32_resizex(&range->newViews, darr.length))
+				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr.length, alloc, e_rr));
+				gotoIfError3(clean, ListU32_resize(&range->newViews, darr.length, alloc, e_rr));
 			}
 
 			VkDescriptorImageInfo *img = darr.length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
@@ -482,7 +504,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				}
 
 				VkImageView view = NULL;
-				gotoIfError3(clean, VkUnifiedTexture_getView(d, binding.registerType, &view, &newViews[i], e_rr))
+				gotoIfError3(clean, VkUnifiedTexture_getView(d, binding.registerType, &view, &newViews[i], e_rr));
 
 				//Turn view into descriptor
 
@@ -494,7 +516,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 				else img[i] = (VkDescriptorImageInfo) { 0 };
 			}
-			
+
 			descriptor.descriptorType = isWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 			descriptor.pImageInfo = img;
 
@@ -517,7 +539,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		deviceExt->updateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
 
 clean:
-		
+
 	if (allocatedNewViews) {        //Release temporary views if invalid
 
 		U32 *newViews = darr.length > 1 ? range->newViews.ptrNonConst : &newViewId;
@@ -570,6 +592,6 @@ clean:
 		}
 	}
 
-	CharString_freex(&temp);
+	CharString_free(&temp, alloc);
 	return s_uccess;
 }

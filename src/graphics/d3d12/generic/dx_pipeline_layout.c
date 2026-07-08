@@ -20,18 +20,19 @@
 
 //graphics/d3d12/generic/dx_pipeline_layout.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string.h"
 #include "platforms/logx.h"
-#include "formats/oiSH/entries.h"
+#include "formats/oiSH/sh_entries.h"
+#include "types/container/string_unicode.h"
 
-void DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
+void DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, const Allocator *alloc) {
 
 	(void) alloc;
 
@@ -43,15 +44,18 @@ void DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) 
 
 D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 a);
 
-Error DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	GraphicsDeviceRef *dev,
 	PipelineLayout *layout,
-	CharString name
+	CharString name,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
 	ListU16 nameUtf16 = (ListU16) { 0 };
 	ListD3D12_ROOT_PARAMETER1 rootParams = (ListD3D12_ROOT_PARAMETER1) { 0 };
-	Error err = Error_none();
 	DxPipelineLayout *layoutExt = PipelineLayout_ext(layout, Dx);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -127,7 +131,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 			++count;
 		}
 
-		gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_resizex(&rootParams, count))
+		gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_resize(&rootParams, count, alloc, e_rr));
 		count = 0;
 
 		rootSig.Desc_1_1.NumParameters = (U32) rootParams.length;
@@ -153,35 +157,37 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 			rootParams.ptrNonConst[count++] = pushConstants;
 	}
 
-	err = dxCheck(deviceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(
+	if(!dxCheck(deviceExt->deviceConfig->lpVtbl->SerializeVersionedRootSignature(
 		deviceExt->deviceConfig, &rootSig, &rootSigBlob, &errBlob
-	));
-
-	if(err.genericError) {
+	), e_rr)) {
 
 		if(errBlob && (device->flags & EGraphicsDeviceFlags_IsDebug))
 			Log_errorLnx(
 				"D3D12: Create root signature failed: %s", (const C8*) errBlob->lpVtbl->GetBufferPointer(errBlob)
 			);
 
+		s_uccess = false;
 		goto clean;
 	}
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateRootSignature(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateRootSignature(
 		deviceExt->device,
 		0, rootSigBlob->lpVtbl->GetBufferPointer(rootSigBlob), rootSigBlob->lpVtbl->GetBufferSize(rootSigBlob),
 		&IID_ID3D12RootSignature, (void**) &layoutExt->rootSig
-	)))
+	), e_rr));
 
 	if (CharString_length(name) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
-		gotoIfError(clean, CharString_toUTF16x(name, &nameUtf16))
-		gotoIfError(clean, dxCheck(layoutExt->rootSig->lpVtbl->SetName(layoutExt->rootSig, (const wchar_t*) nameUtf16.ptr)))
+		gotoIfError3(clean, CharString_toUTF16(name, alloc, &nameUtf16, e_rr));
+		gotoIfError3(clean, dxCheck(
+			layoutExt->rootSig->lpVtbl->SetName(layoutExt->rootSig, (const wchar_t*) nameUtf16.ptr),
+			e_rr
+		));
 	}
 
 clean:
-	ListD3D12_ROOT_PARAMETER1_freex(&rootParams);
-	ListU16_freex(&nameUtf16);
+	ListD3D12_ROOT_PARAMETER1_free(&rootParams, alloc);
+	ListU16_free(&nameUtf16, alloc);
 	if(rootSigBlob) rootSigBlob->lpVtbl->Release(rootSigBlob);
 	if(errBlob) errBlob->lpVtbl->Release(errBlob);
-	return err;
+	return s_uccess;
 }

@@ -81,9 +81,6 @@ typedef RefPtr BLASRef;
 #define BLAS_ext(ptr, T) (!ptr ? NULL : (T##BLAS*)(ptr + 1))        //impl
 #define BLASRef_ptr(ptr) RefPtr_data(ptr, BLAS)
 
-void BLASRef_dec(BLASRef **blas);
-Error BLASRef_inc(BLASRef *blas);
-
 //Creating BLASes;
 //If cpu memory is used:
 //    It internally allocates a staging buffer to build from.
@@ -95,7 +92,7 @@ Error BLASRef_inc(BLASRef *blas);
 
 //Creating BLAS from triangle geometry
 
-Error GraphicsDeviceRef_createBLASExt(
+Bool GraphicsDeviceRef_createBLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	EBLASFlag blasFlags,
@@ -107,10 +104,11 @@ Error GraphicsDeviceRef_createBLASExt(
 	DeviceData indexBuffer,             //Optional if indexFormat == Undefined
 	BLASRef *parent,                    //If specified, indicates refit
 	CharString name,
-	BLASRef **blas
+	BLASRef **blas,
+	Error *e_rr
 );
 
-Error GraphicsDeviceRef_createBLASUnindexedExt(
+Bool GraphicsDeviceRef_createBLASUnindexedExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	EBLASFlag blasFlags,
@@ -120,12 +118,13 @@ Error GraphicsDeviceRef_createBLASUnindexedExt(
 	DeviceData positionBuffer,          //Required
 	BLASRef *parent,                    //If specified, indicates refit
 	CharString name,
-	BLASRef **blas
+	BLASRef **blas,
+	Error *e_rr
 );
 
 //Creating BLAS from AABBs
 
-Error GraphicsDeviceRef_createBLASProceduralExt(
+Bool GraphicsDeviceRef_createBLASProceduralExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	EBLASFlag blasFlags,
@@ -134,7 +133,8 @@ Error GraphicsDeviceRef_createBLASProceduralExt(
 	DeviceData buffer,                  //Required
 	BLASRef *parent,                    //If specified, indicates refit
 	CharString name,
-	BLASRef **blas
+	BLASRef **blas,
+	Error *e_rr
 );
 
 //Creating BLAS from cache TODO:

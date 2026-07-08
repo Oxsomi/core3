@@ -20,11 +20,11 @@
 
 //graphics/generic/device_allocator.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
-#include "graphics/generic/allocator.h"
+#include "graphics/generic/device_allocator.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/bufferx.h"
+#include "types/container/buffer.h"
 #include "platforms/logx.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
@@ -34,6 +34,10 @@ TListImpl(DeviceMemoryBlock);
 
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset) {
 
+	const Allocator *alloc = allocator ? GraphicsDevice_getAlloc(allocator->device) : NULL;
+
+	Bool s_uccess = true;
+
 	if(!allocator)
 		return false;
 
@@ -42,24 +46,23 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	if (acq < ELockAcquire_Success)
 		return false;        //Can't free.
 
-	Bool s_uccess = true;
 	Error *e_rr = NULL;
 
 	if(blockId >= allocator->blocks.length)
 		retError(clean, Error_outOfBounds(
 			1, blockId, allocator->blocks.length, "DeviceMemoryAllocator_freeAllocation() blockId out of bounds"
-		))
+		));
 
 	DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[blockId];
 
-	gotoIfError3(clean, AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset))
+	AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset);
 
 	if (!block->allocations.allocations.length) {
-		
+
 		if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_debugLnx("-- Graphics: Freeing block %"PRIu32, blockId);
 
-		AllocationBuffer_freex(&block->allocations);
+		AllocationBuffer_free(&block->allocations, alloc);
 		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext);
 		block->ext = NULL;
 		block->mappedMemoryExt = NULL;
@@ -68,7 +71,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 
 	if(blockId + 1 == allocator->blocks.length)
 		while(allocator->blocks.length && !ListDeviceMemoryBlock_last(allocator->blocks)->isActive)
-			ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL);
+			ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL, e_rr);
 
 clean:
 

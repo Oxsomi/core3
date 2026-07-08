@@ -123,7 +123,7 @@ TList(D3D12_TEXTURE_BARRIER);
 TList(D3D12_BUFFER_BARRIER);
 TList(ID3D12PipelineState);
 
-Error dxCheck(HRESULT result);
+Bool dxCheck(HRESULT result, Error *e_rr);
 
 D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 
@@ -134,14 +134,16 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 
 //Transitions entire resource rather than sub-resources
 
-Error DxUnifiedTexture_transition(
+Bool DxUnifiedTexture_transition(
 	DxUnifiedTexture *image,
 	D3D12_BARRIER_SYNC sync,
 	D3D12_BARRIER_ACCESS access,
 	D3D12_BARRIER_LAYOUT layout,
 	const D3D12_BARRIER_SUBRESOURCE_RANGE *range,
 	ListD3D12_TEXTURE_BARRIER *imageBarriers,
-	D3D12_BARRIER_GROUP *dependency
+	D3D12_BARRIER_GROUP *dependency,
+	const Allocator *alloc,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

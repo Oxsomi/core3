@@ -57,14 +57,12 @@ typedef struct PipelineLayout {
 #define PipelineLayout_ext(ptr, T) (!ptr ? NULL : (T##PipelineLayout*)(ptr + 1))        //impl
 #define PipelineLayoutRef_ptr(ptr) RefPtr_data(ptr, PipelineLayout)
 
-void PipelineLayoutRef_dec(PipelineLayoutRef **layout);
-Error PipelineLayoutRef_inc(PipelineLayoutRef *layout);
-
-Error GraphicsDeviceRef_createPipelineLayout(
+Bool GraphicsDeviceRef_createPipelineLayout(
 	GraphicsDeviceRef *dev,
 	PipelineLayoutInfo info,        //Moves info
 	CharString name,
-	PipelineLayoutRef **layout
+	PipelineLayoutRef **layout,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

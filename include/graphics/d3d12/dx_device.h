@@ -24,7 +24,8 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/command_list.h"
 #include "types/container/list.h"
-#include "types/math/vec.h"
+#include "types/math/vec4.h"
+#include "types/container/list_basic_types.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -123,7 +124,7 @@ typedef struct DxDescriptorTable {
 } DxDescriptorTable;
 
 Bool DxDescriptorHeap_freeTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table);
-Error DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table);
+Bool DxDescriptorHeap_allocTable(DxDescriptorHeap *heapExt, DxDescriptorTable *table, const Allocator *alloc, Error *e_rr);
 
 typedef enum EExecuteIndirectCommand {
 	EExecuteIndirectCommand_Dispatch,
@@ -195,14 +196,16 @@ typedef struct DxCommandBufferState {
 
 } DxCommandBufferState;
 
-Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer);
+Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer, Error *e_rr);
 
-Error DxGraphicsDevice_createDescriptorHeapSingle(
+Bool DxGraphicsDevice_createDescriptorHeapSingle(
 	DxGraphicsDevice *deviceExt,
 	D3D12_DESCRIPTOR_HEAP_DESC desc,
 	CharString *name,
 	DxDescriptorHeapSingle *heap,
-	Bool reqGpuHandle
+	Bool reqGpuHandle,
+	const Allocator *alloc,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

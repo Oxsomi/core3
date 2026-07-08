@@ -20,40 +20,43 @@
 
 //graphics/generic/rtas.c
 
-#include "platforms/ext/listx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/list.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
 #include "graphics/generic/acceleration_structure.h"
 #include "graphics/generic/device_buffer.h"
 #include "types/container/buffer.h"
 
-Error RTAS_validateDeviceBuffer(DeviceData *bufPtr) {
+Bool RTAS_validateDeviceBuffer(DeviceData *bufPtr, Error *e_rr) {
 
-	if(!bufPtr || !bufPtr->buffer || bufPtr->buffer->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
-		return Error_nullPointer(0, "BLAS_validateDeviceBuffer()::bufPtr/bufPtr->buffer is required");
+	Bool s_uccess = true;
+
+	if(!bufPtr || !bufPtr->buffer || bufPtr->buffer->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
+		retError(clean, Error_nullPointer(0, "BLAS_validateDeviceBuffer()::bufPtr/bufPtr->buffer is required"));
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(bufPtr->buffer);
 	U64 totalLen = buf->resource.size;
 
 	if(bufPtr->offset >= totalLen)
-		return Error_nullPointer(0, "BLAS_validateDeviceBuffer()::bufPtr->offset out of bounds");
+		retError(clean, Error_nullPointer(0, "BLAS_validateDeviceBuffer()::bufPtr->offset out of bounds"));
 
 	if(!bufPtr->len)
 		bufPtr->len = totalLen - bufPtr->offset;
 
 	if(bufPtr->offset >> 48 || bufPtr->len >> 48)
-		return Error_unsupportedOperation(1, "BLAS_validateDeviceBuffer()::buf.len or offset out of bounds");
+		retError(clean, Error_unsupportedOperation(1, "BLAS_validateDeviceBuffer()::buf.len or offset out of bounds"));
 
 	U64 len = bufPtr->offset + bufPtr->len;
 
 	if(len > totalLen)
-		return Error_invalidParameter(1, 0, "BLAS_validateDeviceBuffer()::buf is out of bounds");
+		retError(clean, Error_invalidParameter(1, 0, "BLAS_validateDeviceBuffer()::buf is out of bounds"));
 
 	if(!(buf->usage & EDeviceBufferUsage_ASReadExt))
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "BLAS_validateDeviceBuffer()::buf usage ASReadExt is required for BLAS create"
-		);
+		));
 
-	return Error_none();
+clean:
+	return s_uccess;
 }

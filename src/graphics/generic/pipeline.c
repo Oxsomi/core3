@@ -20,33 +20,24 @@
 
 //graphics/generic/pipeline.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
+#include "types/base/string_read.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_buffer.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/errorx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "types/container/log.h"
 #include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/base/constants.h"
 
 const C8 *EPipelineStage_names[] = {
-	"vertex",
-	"pixel",
-	"compute",
-	"geometry",
-	"hull",
-	"domain",
-	"raygeneration",
-	"callable",
-	"miss",
-	"closesthit",
-	"anyhit",
-	"intersection"
+	"vertex", "pixel", "compute", "geometry", "hull", "domain", "raygeneration", "callable", "miss", "closesthit",
+	"anyhit", "intersection"
 };
 
 TListImpl(PipelineStage);
@@ -59,14 +50,7 @@ void *Pipeline_infoOffset(Pipeline *pipeline) {
 	return (U8*)(pipeline + 1) + GraphicsDeviceRef_getObjectSizes(pipeline->device)->pipeline;
 }
 
-void PipelineRef_dec(PipelineRef **pipeline) { RefPtr_dec(pipeline); }
-
-Error PipelineRef_inc(PipelineRef *pipeline) {
-	return !RefPtr_inc(pipeline) ?
-		Error_invalidOperation(0, "PipelineRef_inc()::pipeline invalid") : Error_none();
-}
-
-void Pipeline_free(Pipeline *pipeline, Allocator alloc) {
+void Pipeline_free(Pipeline *pipeline, const Allocator *alloc) {
 
 	Pipeline_freeExt(pipeline, alloc);
 
@@ -74,15 +58,15 @@ void Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 
 	if (pipeline->type == EPipelineType_RaytracingExt) {
 		PipelineRaytracingInfo *info = Pipeline_info(pipeline, PipelineRaytracingInfo);
-		ListPipelineRaytracingGroup_freex(&info->groups);
-		DeviceBufferRef_dec(&info->shaderBindingTable);
+		ListPipelineRaytracingGroup_free(&info->groups, alloc);
+		RefPtr_dec(&info->shaderBindingTable);
 	}
 
-	ListPipelineStage_freex(&pipeline->stages);
+	ListPipelineStage_free(&pipeline->stages, alloc);
 
 	if(!(pipeline->flags & EPipelineFlags_InternalWeakDeviceRef)) {
-		PipelineLayoutRef_dec(&pipeline->layout);
-		GraphicsDeviceRef_dec(&pipeline->device);
+		RefPtr_dec(&pipeline->layout);
+		RefPtr_dec(&pipeline->device);
 	}
 }
 
@@ -95,17 +79,15 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	ESHExtension require
 ) {
 
-	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return U32_MAX;
 
 	for (U64 i = 0; i < shaderBinary.entries.length; ++i) {
 
 		SHEntry entry = shaderBinary.entries.ptr[i];
 
-		if(!CharString_equalsStringSensitive(entry.name, entrypointName))
+		if(!CharString_equalsString(&entry.name, &entrypointName, EStringCase_Sensitive))
 			continue;
-
-		Error err = Error_none();
 
 		for (U64 j = 0; j < entry.binaryIds.length; ++j) {
 
@@ -128,8 +110,12 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 				for (U64 l = 0; l < defines.length / 2; ++l) {
 
 					if (
-						!CharString_equalsStringSensitive(defines.ptr[l << 1], defines2.ptr[l << 1]) ||
-						!CharString_equalsStringSensitive(defines.ptr[(l << 1) | 1], defines2.ptr[(l << 1) | 1])
+						!CharString_equalsString(&(defines.ptr[l << 1]), &(defines2.ptr[l << 1]), EStringCase_Sensitive) ||
+						!CharString_equalsString(
+							&(defines.ptr[(l << 1) | 1]),
+							&(defines2.ptr[(l << 1) | 1]),
+							EStringCase_Sensitive
+						)
 					)
 						continue;
 
@@ -150,14 +136,17 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			if((binInfo.identifier.extensions & disallow) || (binInfo.identifier.extensions & require) != require)
 				continue;
-				
-			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, &err))
+
+			Error err = Error_none();
+
+			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, &err)) {
+				Error_print(GraphicsDeviceRef_getAlloc(deviceRef), &err, ELogLevel_Error, ELogOptions_NewLine);
 				continue;
+			}
 
 			return (U16)i | ((U16)j << 16);
 		}
 
-		Error_printLnx(err);
 		return U32_MAX;
 	}
 

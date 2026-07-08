@@ -23,24 +23,17 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
 #include "types/base/error.h"
 #include "types/container/string.h"
 
-void DepthStencilRef_dec(DepthStencilRef **depth) { RefPtr_dec(depth); }
-
-Error DepthStencilRef_inc(DepthStencilRef *depth) {
-	return !RefPtr_inc(depth) ?
-		Error_invalidOperation(0, "DepthStencilRef_inc()::depth is invalid") : Error_none();
-}
-
-void GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, Allocator alloc) {
+void GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, const Allocator *alloc) {
 	(void)alloc;
 	UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
 }
 
-Error GraphicsDeviceRef_createDepthStencil(
+Bool GraphicsDeviceRef_createDepthStencil(
 	GraphicsDeviceRef *deviceRef,
 	U16 width,
 	U16 height,
@@ -49,20 +42,15 @@ Error GraphicsDeviceRef_createDepthStencil(
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	DepthStencilRef **depthStencilRef
+	DepthStencilRef **depthStencilRef,
+	Error *e_rr
 ) {
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(DepthStencil) + GraphicsDeviceRef_getObjectSizes(deviceRef)->image + sizeof(UnifiedTextureImage)),
-		(ObjectFreeFunc) GraphicsDevice_freeDepthStencil,
-		(ETypeId) EGraphicsTypeId_DepthStencil,
-		depthStencilRef
-	);
+	Bool s_uccess = true;
 
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->depthStencil, depthStencilRef, e_rr));
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef))
+	gotoIfError3(clean, RefPtr_inc(deviceRef));
 
 	*DepthStencilRef_ptr(*depthStencilRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -80,12 +68,12 @@ Error GraphicsDeviceRef_createDepthStencil(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, bindlessDescriptorTable, name))
+	gotoIfError3(clean, UnifiedTexture_create(*depthStencilRef, bindlessDescriptorTable, name, e_rr));
 
 clean:
 
-	if(err.genericError)
-		DepthStencilRef_dec(depthStencilRef);
+	if(!s_uccess)
+		RefPtr_dec(depthStencilRef);
 
-	return err;
+	return s_uccess;
 }

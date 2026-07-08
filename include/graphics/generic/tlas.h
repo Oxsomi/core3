@@ -182,16 +182,13 @@ typedef RefPtr TLASRef;
 #define TLAS_ext(ptr, T) (!ptr ? NULL : (T##TLAS*)(ptr + 1))        //impl
 #define TLASRef_ptr(ptr) RefPtr_data(ptr, TLAS)
 
-void TLASRef_dec(TLASRef **tlas);
-Error TLASRef_inc(TLASRef *tlas);
-
 Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result);
 
 //Creating TLASes;
 //The changes are queued until the graphics device submits the next commands.
 //If the TLAS is deleted before submitting any commands then it won't be filled with anything.
 
-Error GraphicsDeviceRef_createTLASExt(
+Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,                    //If specified, indicates refit
@@ -199,10 +196,11 @@ Error GraphicsDeviceRef_createTLASExt(
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	TLASRef **tlas
+	TLASRef **tlas,
+	Error *e_rr
 );
 
-Error GraphicsDeviceRef_createTLASMotionExt(
+Bool GraphicsDeviceRef_createTLASMotionExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,                    //If specified, indicates refit
@@ -210,10 +208,11 @@ Error GraphicsDeviceRef_createTLASMotionExt(
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	TLASRef **tlas
+	TLASRef **tlas,
+	Error *e_rr
 );
 
-Error GraphicsDeviceRef_createTLASDeviceExt(
+Bool GraphicsDeviceRef_createTLASDeviceExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	Bool isMotionBlurExt,               //Requires extension
@@ -222,7 +221,8 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	TLASRef **tlas
+	TLASRef **tlas,
+	Error *e_rr
 );
 
 //Error GraphicsDeviceRef_createTLASFromCacheExt(

@@ -104,16 +104,14 @@ typedef struct Sampler {
 #define Sampler_ext(ptr, T) (!ptr ? NULL : (T##Sampler*)(ptr + 1))        //impl
 #define SamplerRef_ptr(ptr) RefPtr_data(ptr, Sampler)
 
-void SamplerRef_dec(SamplerRef **sampler);
-Error SamplerRef_inc(SamplerRef *sampler);
-
-Error GraphicsDeviceRef_createSampler(
+Bool GraphicsDeviceRef_createSampler(
 	GraphicsDeviceRef *dev,
 	SamplerInfo info,
 	Bool disallowBindlessDescriptor,                //Won't try to allocate into bindlessDescriptorTable or device's default
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	SamplerRef **sampler
+	SamplerRef **sampler,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

@@ -20,7 +20,7 @@
 
 //graphics/d3d12/generic/dx_descriptor_table.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/descriptor_layout.h"
@@ -32,20 +32,26 @@
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string.h"
 #include "types/container/string.h"
 
-void DX_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, Allocator alloc) {
+void DX_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, const Allocator *alloc) {
 	(void) alloc;
 	DxDescriptorHeap *heapExt = DescriptorHeap_ext(DescriptorHeapRef_ptr(table->parent), Dx);
 	DxDescriptorHeap_freeTable(heapExt, DescriptorTable_ext(table, Dx));
 }
 
-Error DX_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap, DescriptorTable *table, CharString name) {
+Bool DX_WRAP_FUNC(
+	DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap,
+	DescriptorTable *table,
+	CharString name,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(DescriptorHeapRef_ptr(heap)->device);
 
 	(void) name;
-
-	Error err = Error_none();
 
 	DxDescriptorHeap *heapExt = DescriptorHeap_ext(DescriptorHeapRef_ptr(heap), Dx);
 	DxDescriptorTable *tableExt = DescriptorTable_ext(table, Dx);
@@ -77,10 +83,10 @@ Error DX_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap
 	tableExt->allocationSizes[0] = srvCbvUav;
 	tableExt->allocationSizes[1] = samplers;
 
-	gotoIfError(clean, DxDescriptorHeap_allocTable(heapExt, tableExt))
+	gotoIfError3(clean, DxDescriptorHeap_allocTable(heapExt, tableExt, alloc, e_rr));
 
 clean:
-	return err;
+	return s_uccess;
 }
 
 D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
@@ -334,7 +340,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				DxDeviceBuffer *deviceBuffer = d.resource ? DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Dx) : NULL;
 
 				if (isWrite) {
-			
+
 					D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) {
 						.Format = DXGI_FORMAT_R32_TYPELESS,
 						.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
@@ -374,7 +380,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heapPtrRes + heapIncRes * offsetCbvSrvUav++ }
 					);
 				}
-		
+
 				break;
 			}
 
@@ -385,7 +391,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				U32 reflStride = binding.structedBufferStride;
 
 				if (isWrite) {
-			
+
 					D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) {
 						.Format = DXGI_FORMAT_UNKNOWN,
 						.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
@@ -426,7 +432,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heapPtrRes + heapIncRes * offsetCbvSrvUav++ }
 					);
 				}
-		
+
 				break;
 			}
 

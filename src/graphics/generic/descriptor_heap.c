@@ -20,21 +20,14 @@
 
 //graphics/generic/descriptor_heap.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/ref_ptr.h"
 #include "types/container/string.h"
 
-void DescriptorHeapRef_dec(DescriptorHeapRef **heap) { RefPtr_dec(heap); }
-
-Error DescriptorHeapRef_inc(DescriptorHeapRef *heap) {
-	return !RefPtr_inc(heap) ?
-		Error_invalidOperation(0, "DescriptorHeapRef_inc()::heap is required") : Error_none();
-}
-
-void DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc) {
+void DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc) {
 
 	(void)alloc;
 
@@ -43,69 +36,64 @@ void DescriptorHeap_free(DescriptorHeap *heap, Allocator alloc) {
 	DescriptorHeap_freeExt(heap, alloc);
 
 	if(!(heap->info.flags & EDescriptorHeapFlags_InternalWeakDeviceRef))
-		GraphicsDeviceRef_dec(&heap->device);
+		RefPtr_dec(&heap->device);
 }
 
-Error GraphicsDeviceRef_createDescriptorHeap(
+Bool GraphicsDeviceRef_createDescriptorHeap(
 	GraphicsDeviceRef *dev,
 	DescriptorHeapInfo info,
 	CharString name,
-	DescriptorHeapRef **heapRef
+	DescriptorHeapRef **heapRef,
+	Error *e_rr
 ) {
 
-	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		return Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorHeap()::dev is required");
+	Bool s_uccess = true;
+
+	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorHeap()::dev is required"));
 
 	U64 srvCbvUav =
 		(U64) info.maxAccelerationStructures + info.maxTextures + info.maxConstantBuffers +
 		info.maxTexturesRW + info.maxBuffersRW;
 
 	if(srvCbvUav > 1000000)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			0, srvCbvUav, 1000000,
 			"GraphicsDeviceRef_createDescriptorHeap()::info must not exceed over 1M descriptors (CBV, UAV, SRV)"
-		);
+		));
 
 	if(info.maxSamplers > 2048)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			0, info.maxSamplers, 2048,
 			"GraphicsDeviceRef_createDescriptorHeap()::info must not exceed over 2048 samplers"
-		);
+		));
 
 	if(!srvCbvUav && !info.maxSamplers)
-		return Error_invalidOperation(
+		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info contains no valid descriptors"
-		);
+		));
 
 	if(!info.maxDescriptorTables)
-		return Error_invalidOperation(
+		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info contains maxDescriptorTables of 0"
-		);
+		));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
 	if((info.flags & EDescriptorHeapFlags_AllowBindless) && !(device->info.capabilities.features & EGraphicsFeatures_Bindless))
-		return Error_invalidOperation(
+		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info.flags can't include bindless if bindless feature is missing"
-		);
+		));
 
 	if(info.maxAccelerationStructures && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
-		return Error_invalidOperation(
+		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info.maxAccelerationStructures can't be >0 if raytracing is missing"
-		);
+		));
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(DescriptorHeap) + GraphicsDeviceRef_getObjectSizes(dev)->descriptorHeap),
-		(ObjectFreeFunc) DescriptorHeap_free,
-		(ETypeId) EGraphicsTypeId_DescriptorHeap,
-		heapRef
-	);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->descriptorHeap, heapRef, e_rr));
 
 	if(!(info.flags & EDescriptorHeapFlags_InternalWeakDeviceRef))
-		gotoIfError(clean, GraphicsDeviceRef_inc(dev))
+		gotoIfError3(clean, RefPtr_inc(dev));
 
 	DescriptorHeap *heap = DescriptorHeapRef_ptr(*heapRef);
 
@@ -113,12 +101,12 @@ Error GraphicsDeviceRef_createDescriptorHeap(
 
 	*heap = (DescriptorHeap) { .device = dev, .info = info };
 
-	gotoIfError(clean, GraphicsDeviceRef_createDescriptorHeapExt(dev, heap, name))
+	gotoIfError3(clean, GraphicsDeviceRef_createDescriptorHeapExt(dev, heap, name, e_rr));
 
 clean:
 
-	if(err.genericError)
-		DescriptorHeapRef_dec(heapRef);
+	if(!s_uccess)
+		RefPtr_dec(heapRef);
 
-	return err;
+	return s_uccess;
 }

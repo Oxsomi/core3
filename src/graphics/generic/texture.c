@@ -20,7 +20,7 @@
 
 //graphics/generic/texture.c
 
-#include "platforms/ext/listx.h"
+#include "types/container/list.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_texture.h"
@@ -33,7 +33,7 @@
 #include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "types/container/string.h"
-#include "formats/oiSH/registers.h"
+#include "formats/oiSH/sh_registers.h"
 #include "types/base/constants.h"
 
 //Specifying DeviceResourceVersion* will force lock the resource to get the texture format, size and version id.
@@ -45,7 +45,7 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 	if(version)
 		*version = (DeviceResourceVersion) { 0 };
 
-	EGraphicsTypeId graphicsTypeId = (EGraphicsTypeId)(tex ? tex->typeId : ETypeId_Undefined);
+	EGraphicsTypeId graphicsTypeId = (EGraphicsTypeId)(tex ? tex->refPtrType->typeId : ETypeId_Undefined);
 
 	switch (graphicsTypeId) {
 
@@ -204,10 +204,15 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource) {
 }
 
 Bool TextureRef_isTexture(RefPtr *tex) { return TextureRef_getUnifiedTexture(tex, NULL).resource.device; }
-Bool TextureRef_isDepthStencil(TextureRef *tex) { return tex && tex->typeId == (ETypeId) EGraphicsTypeId_DepthStencil; }
+Bool TextureRef_isDepthStencil(TextureRef *tex) {
+	return tex && tex->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DepthStencil;
+}
 
 Bool TextureRef_isRenderTargetWritable(TextureRef *tex) {
-	return tex && (tex->typeId == (ETypeId) EGraphicsTypeId_RenderTexture || tex->typeId == (ETypeId) EGraphicsTypeId_Swapchain);
+	return tex && (
+		tex->refPtrType->typeId == (ETypeId) EGraphicsTypeId_RenderTexture ||
+		tex->refPtrType->typeId == (ETypeId) EGraphicsTypeId_Swapchain
+	);
 }
 
 void UnifiedTexture_free(TextureRef *textureRef) {
@@ -225,7 +230,7 @@ void UnifiedTexture_free(TextureRef *textureRef) {
 			for(U8 i = 0; i < texture->images; ++i) {
 				GraphicsDeviceRef_freeDescriptorBindless(device, texture->bindlessDescriptorTable, img[i].readHandle, NULL);
 				GraphicsDeviceRef_freeDescriptorBindless(device, texture->bindlessDescriptorTable, img[i].writeHandle, NULL);
-				DescriptorTableRef_dec(&texture->bindlessDescriptorTable);
+				RefPtr_dec(&texture->bindlessDescriptorTable);
 			}
 	}
 
@@ -235,68 +240,84 @@ void UnifiedTexture_free(TextureRef *textureRef) {
 	texture->resource = (GraphicsResource) { 0 };
 }
 
-Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name) {
+Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	UnifiedTexture *texturePtr = TextureRef_getUnifiedTextureIntern(ref, NULL);
 
 	if(!texturePtr)
-		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr is required");
+		retError(clean, Error_nullPointer(0, "UnifiedTexture_create()::texturePtr is required"));
 
 	const UnifiedTexture texture = *texturePtr;
 
 	if(texture.resource.allocated)
-		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr contains initialized resource, possible memleak");
+		retError(clean, Error_nullPointer(
+			0,
+			"UnifiedTexture_create()::texturePtr contains initialized resource, possible memleak"
+		));
 
-	if(!texture.resource.device || texture.resource.device->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
-		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->resource.device is required");
+	if(!texture.resource.device || texture.resource.device->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->resource.device is required"));
 
 	if(bindlessDescriptorTable && !(texture.resource.flags & EGraphicsResourceFlag_ExposeBindless))
-		return Error_invalidState(0, "UnifiedTexture_create() bindlessDescriptorTable is set, but disallowed");
+		retError(clean, Error_invalidState(0, "UnifiedTexture_create() bindlessDescriptorTable is set, but disallowed"));
 
-	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
-		return Error_nullPointer(0, "UnifiedTexture_create()::bindlessDescriptorTable should be valid if non NULL");
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		retError(clean, Error_nullPointer(0, "UnifiedTexture_create()::bindlessDescriptorTable should be valid if non NULL"));
 
 	if ((texture.resource.flags & EGraphicsResourceFlag_ExposeBindless) && !bindlessDescriptorTable)
 		bindlessDescriptorTable = GraphicsDeviceRef_ptr(texture.resource.device)->defaultDescriptorTable;
 
 	if(!bindlessDescriptorTable && (texture.resource.flags & EGraphicsResourceFlag_ExposeBindless))
-		return Error_invalidState(0, "UnifiedTexture_create() can't expose resource for bindless without bindless");
+		retError(clean, Error_invalidState(0, "UnifiedTexture_create() can't expose resource for bindless without bindless"));
 
 	if(!texture.depthFormat && !texture.textureFormatId)
-		return Error_nullPointer(0, "UnifiedTexture_create()::texturePtr->depthFormat or textureFormatId is required");
+		retError(clean, Error_nullPointer(
+			0,
+			"UnifiedTexture_create()::texturePtr->depthFormat or textureFormatId is required"
+		));
 
 	if(texture.textureFormatId && texture.textureFormatId >= ETextureFormatId_Count)
-		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->textureFormatId is invalid");
+		retError(clean, Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->textureFormatId is invalid"));
 
 	if(texture.depthFormat && texture.depthFormat >= EDepthStencilFormat_Count)
-		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->depthFormat is required");
+		retError(clean, Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->depthFormat is required"));
 
 	if(texture.sampleCount >= EMSAASamples_Count)
-		return Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->sampleCount is invalid");
+		retError(clean, Error_invalidParameter(2, 0, "UnifiedTexture_create()::texturePtr->sampleCount is invalid"));
 
 	if(texture.sampleCount && texture.levels > 1)
-		return Error_invalidParameter(2, 0, "UnifiedTexture_create() MSAA textures can't have mips");
+		retError(clean, Error_invalidParameter(2, 0, "UnifiedTexture_create() MSAA textures can't have mips"));
 
 	if(texture.type >= ETextureType_Count)
-		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->type is invalid");
+		retError(clean, Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->type is invalid"));
 
 	if(texture.resource.type == EResourceType_DeviceTexture && texture.sampleCount)
-		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture");
+		retError(clean, Error_invalidParameter(
+			1,
+			0,
+			"UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture"
+		));
 
 	if (texture.resource.type == EResourceType_Swapchain) {
 		if(texture.images < 3 || texture.images > 5)
-			return Error_invalidParameter(
+			retError(clean, Error_invalidParameter(
 				1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 3-5 swapchains"
-			);
+			));
 	}
 
 	else if(texture.images != 1)
-		return Error_invalidParameter(1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 1 swapchains");
+		retError(clean, Error_invalidParameter(
+			1,
+			0,
+			"UnifiedTexture_create()::texturePtr->images is only allowed to be 1 swapchains"
+		));
 
 	if(texture.resource.flags & EGraphicsResourceFlag_CPUAllocated && texture.resource.type != EResourceType_DeviceTexture)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "UnifiedTexture_create()::texturePtr->flags CPU flags are only allowed for DeviceTexture"
-		);
+		));
 
 	GraphicsDeviceRef *deviceRef = texture.resource.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -309,83 +330,80 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 		if(texture.resource.type == EResourceType_DeviceTexture) {
 
 			if(!GraphicsDeviceInfo_supportsFormat(info, format))
-				return Error_invalidParameter(2, 0, "UnifiedTexture_create() format is unsupported");
+				retError(clean, Error_invalidParameter(2, 0, "UnifiedTexture_create() format is unsupported"));
 		}
 
 		else if(!GraphicsDeviceInfo_supportsRenderTextureFormat(info, format))
-			return Error_invalidParameter(
+			retError(clean, Error_invalidParameter(
 				2, 0, "UnifiedTexture_create() format is unsupported as render texture"
-			);
+			));
 	}
 
 	else if(!GraphicsDeviceInfo_supportsDepthStencilFormat(info, (EDepthStencilFormat) texture.depthFormat))
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			2, 0, "UnifiedTexture_create() depthFormat is unsupported as depth texture"
-		);
+		));
 
 	if(!texture.width || !texture.height || !texture.length || !texture.levels)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			!texture.width ? 5 : (!texture.height ? 6 : (!texture.length ? 7 : 8)), 0,
 			"UnifiedTexture_create()::texturePtr->width, height, depth and levels are required"
-		);
+		));
 
 	if(texture.levels > 1)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			2, 0, "UnifiedTexture_create()::texturePtr->levels > 1 isn't supported yet"
-		);        //TODO:
+		));        //TODO:
 
 	if(texture.width > 16384 || texture.height > 16384 || texture.length > 256)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			texture.width > 16384 ? 5 : (texture.height > 16384 ? 6 : 7), 0,
 			"UnifiedTexture_create()::texturePtr->width, height and or length exceed limit "
 			"(16384, 16384 and 256 respectively)"
-		);
+		));
 
 	if(texture.length > 1 && texture.type != ETextureType_3D)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			7, 0, "UnifiedTexture_create()::texturePtr->length can't be non zero if type isn't 3D"
-		);
+		));
 
 	if(texture.type != ETextureType_2D)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "UnifiedTexture_create()::texturePtr->type only supports 2D for now"
-		);        //TODO:
+		));        //TODO:
 
 	if(texture.sampleCount == EMSAASamples_x2Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x))
-		return Error_unsupportedOperation(
+		retError(clean, Error_unsupportedOperation(
 			1, "UnifiedTexture_create()::texturePtr->sampleCount MSAA2x is unsupported"
-		);
+		));
 
 	if(texture.sampleCount == EMSAASamples_x8Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA8x))
-		return Error_unsupportedOperation(
+		retError(clean, Error_unsupportedOperation(
 			2, "UnifiedTexture_create()::texturePtr->sampleCount MSAA8x is unsupported"
-		);
+		));
 
 	if(
 		texture.sampleCount && (texture.resource.flags & EGraphicsResourceFlag_ShaderWrite) &&
 		!(device->info.capabilities.features & EGraphicsFeatures_WriteMSTexture)
 	)
-		return Error_unsupportedOperation(
+		retError(clean, Error_unsupportedOperation(
 			4,
 			"UnifiedTexture_create()::texturePtr->sampleCount isn't allowed when ShaderWrite is enabled, "
 			"but the feature isn't enabled"
-		);
+		));
 
 	if(bindlessDescriptorTable) {
 
 		if(!RefPtr_inc(bindlessDescriptorTable))
-			return Error_invalidState(0, "UnifiedTexture_create()::bindlessDescriptorTable was invalid");
+			retError(clean, Error_invalidState(0, "UnifiedTexture_create()::bindlessDescriptorTable was invalid"));
 
 		texturePtr->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
 	//Create resource
-	
-	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
-	Error err = UnifiedTexture_createExt(ref, name);
 
-	if(err.genericError)
-		return err;
+	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
+	gotoIfError3(clean, UnifiedTexture_createExt(ref, name, e_rr));
 
 	//Allocate in descriptors
 
@@ -407,11 +425,13 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 					false,
 					Descriptor_texture(ref, 0, 0, 0, i, 0, 0),
 					&img->readHandle,
-					&err
+					e_rr
 				)
-			)
-				return err;
-				
+			) {
+				s_uccess = false;
+				goto clean;
+			}
+
 			if(
 				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
 				!GraphicsDeviceRef_allocateDescriptorBindless(
@@ -423,12 +443,15 @@ Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescrip
 					false,
 					Descriptor_texture(ref, 0, 0, 0, i, 0, 0),
 					&img->writeHandle,
-					&err
+					e_rr
 				)
-			)
-				return err;
+			) {
+				s_uccess = false;
+				goto clean;
+			}
 		}
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }

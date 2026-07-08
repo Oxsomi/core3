@@ -20,15 +20,15 @@
 
 //graphics/vulkan/generic/vk_pipeline.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
 #include "platforms/logx.h"
 #include "types/container/string.h"
 #include "types/base/error.h"
@@ -37,26 +37,30 @@
 TList(VkPipelineShaderStageCreateInfo);
 TListImpl(VkPipelineShaderStageCreateInfo);
 
-Error createShaderModule(
+Bool createShaderModule(
 	Buffer buf,
 	VkShaderModule *mod,
 	VkGraphicsDevice *device,
 	VkGraphicsInstance *instanceExt,
 	CharString name,
-	EPipelineStage stage
+	EPipelineStage stage,
+	const Allocator *alloc,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
 
 	(void)stage;
 
 	if(Buffer_length(buf) >> 32)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			0, Buffer_length(buf), U32_MAX, "createShaderModule()::buf.length is limited to U32_MAX"
-		);
+		));
 
 	if(!Buffer_length(buf) || Buffer_length(buf) % sizeof(U32))
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			0, 0, "createShaderModule()::buf.length must be in U32s when SPIR-V is used"
-		);
+		));
 
 	VkShaderModuleCreateInfo info = (VkShaderModuleCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -64,11 +68,9 @@ Error createShaderModule(
 		.pCode = (const U32*) buf.ptr
 	};
 
-	Error err = checkVkError(device->createShaderModule(device->device, &info, NULL, mod));
 	CharString temp = CharString_createNull();
 
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, checkVkError(device->createShaderModule(device->device, &info, NULL, mod), e_rr));
 
 	const GraphicsDevice *baseDevice = (const GraphicsDevice*)device - 1;
 
@@ -76,10 +78,15 @@ Error createShaderModule(
 
 		const Bool isRt = stage >= EPipelineStage_RtStart && stage <= EPipelineStage_RtEnd;
 
-		gotoIfError(clean, CharString_formatx(
-			&temp, "Shader module (\"%.*s\": %s)",
-			CharString_length(name), name.ptr, isRt ? "Raytracing" : EPipelineStage_names[stage]
-		))
+		gotoIfError3(clean, CharString_format(
+			alloc,
+			&temp,
+			e_rr,
+			"Shader module (\"%.*s\": %s)",
+			CharString_length(name),
+			name.ptr,
+			isRt ? "Raytracing" : EPipelineStage_names[stage]
+		));
 
 		const VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -88,24 +95,24 @@ Error createShaderModule(
 			.pObjectName = temp.ptr
 		};
 
-		gotoIfError(clean, checkVkError(instanceExt->debugSetName(device->device, &debugName2)))
+		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(device->device, &debugName2), e_rr));
 	}
 
 	goto clean;
 
 clean:
 
-	CharString_freex(&temp);
+	CharString_free(&temp, alloc);
 
-	if (err.genericError)
+	if (!s_uccess)
 		device->destroyShaderModule(device->device, *mod, NULL);
 
-	return err;
+	return s_uccess;
 }
 
-void VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
+void VK_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 
-	(void)allocator;
+	(void)alloc;
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);

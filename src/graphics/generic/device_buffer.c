@@ -20,32 +20,29 @@
 
 //graphics/generic/device_buffer.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/descriptor_table.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/container/string.h"
-#include "formats/oiSH/registers.h"
+#include "formats/oiSH/sh_registers.h"
 #include "types/base/constants.h"
 
 TListImpl(DevicePendingRange);
 
-void DeviceBufferRef_dec(DeviceBufferRef **buffer) { RefPtr_dec(buffer); }
+Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Error *e_rr) {
 
-Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
-	return !RefPtr_inc(buffer) ?
-		Error_invalidOperation(0, "DeviceBufferRef_inc()::buffer is required") : Error_none();
-}
+	Bool s_uccess = true;
+	const Allocator *alloc = buf ? GraphicsDeviceRef_getAlloc(DeviceBufferRef_ptr(buf)->resource.device) : NULL;
 
-Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
-
-	if(!buf || buf->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
-		return Error_nullPointer(0, "DeviceBufferRef_markDirty()::buf is required");
+	if(!buf || buf->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
+		retError(clean, Error_nullPointer(0, "DeviceBufferRef_markDirty()::buf is required"));
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);
 	U64 bufLen = buffer->resource.size;
@@ -53,16 +50,15 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	//Check range
 
 	if(offset >= bufLen || offset + count > bufLen)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			1, offset + count, bufLen, "DeviceBufferRef_markDirty()::offset+count out of bounds"
-		);
+		));
 
 	ELockAcquire acq0 = SpinLock_lock(&buffer->lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
-		return Error_invalidOperation(1, "DeviceBufferRef_markDirty() couldn't acquire buffer lock");
+		retError(clean, Error_invalidOperation(1, "DeviceBufferRef_markDirty() couldn't acquire buffer lock"));
 
-	Error err = Error_none();
 	ELockAcquire acq1 = ELockAcquire_Invalid;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
@@ -71,9 +67,8 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 		goto clean;
 
 	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
-		gotoIfError(clean, Error_invalidOperation(
-			2, "DeviceBufferRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"
-		))
+		retError(clean, Error_invalidOperation(
+			2, "DeviceBufferRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"));
 
 	if(!count)
 		count = bufLen - offset;
@@ -88,7 +83,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	Bool shouldPush = false;
 
 	if(fullRange) {
-		gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges))
+		gotoIfError3(clean, ListDevicePendingRange_clear(&buffer->pendingChanges, e_rr));
 		buffer->isPendingFullCopy = true;
 		shouldPush = true;
 	}
@@ -121,7 +116,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 						DevicePendingRange last = buffer->pendingChanges.ptr[lastMatch];
 						pending->buffer.startRange = U64_min(pending->buffer.startRange, last.buffer.startRange);
 						pending->buffer.endRange = U64_max(pending->buffer.endRange, last.buffer.endRange);
-						gotoIfError(clean, ListDevicePendingRange_erase(&buffer->pendingChanges, lastMatch))
+						gotoIfError3(clean, ListDevicePendingRange_erase(&buffer->pendingChanges, lastMatch, e_rr));
 					}
 
 					lastMatch = i;
@@ -137,12 +132,11 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	if (shouldPush) {
 
 		if((buffer->pendingChanges.length + 1) >> 32)
-			gotoIfError(clean, Error_outOfBounds(
-				0, U32_MAX, U32_MAX, "DeviceBufferRef_markDirty() buffer pendingRanges is limited to U32_MAX"
-			))
+			retError(clean, Error_outOfBounds(
+				0, U32_MAX, U32_MAX, "DeviceBufferRef_markDirty() buffer pendingRanges is limited to U32_MAX"));
 
 		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
-		gotoIfError(clean, ListDevicePendingRange_pushBackx(&buffer->pendingChanges, change))
+		gotoIfError3(clean, ListDevicePendingRange_pushBack(&buffer->pendingChanges, change, alloc, e_rr));
 	}
 
 	//Tell the device that on next submit it should handle copies from
@@ -155,9 +149,9 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	acq1 = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"))
+		retError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"));
 
-	gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingResources, buf))
+	gotoIfError3(clean, ListWeakRefPtr_pushBack(&device->pendingResources, buf, alloc, e_rr));
 
 clean:
 
@@ -167,17 +161,17 @@ clean:
 	if(acq0 == ELockAcquire_Acquired)
 		SpinLock_unlock(&buffer->lock);
 
-	return err;
+	return s_uccess;
 }
 
-void DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
+void DeviceBuffer_free(DeviceBuffer *buffer, const Allocator *alloc) {
 
-	(void)allocator;
+	(void)alloc;
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
 	SpinLock_lock(&buffer->lock, U64_MAX);
-		
+
 	//Log_debugLnx("Destroy: DeviceBuffer (%p)", buffer);
 
 	GraphicsDeviceRef *device = buffer->resource.device;
@@ -185,16 +179,16 @@ void DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 	if(buffer->bindlessDescriptorTable) {
 		GraphicsDeviceRef_freeDescriptorBindless(device, buffer->bindlessDescriptorTable, buffer->readHandle, NULL);
 		GraphicsDeviceRef_freeDescriptorBindless(device, buffer->bindlessDescriptorTable, buffer->writeHandle, NULL);
-		DescriptorTableRef_dec(&buffer->bindlessDescriptorTable);
+		RefPtr_dec(&buffer->bindlessDescriptorTable);
 	}
 
 	DeviceBuffer_freeExt(buffer);
 	GraphicsResource_free(&buffer->resource, refPtr);
-	Buffer_freex(&buffer->cpuData);
-	ListDevicePendingRange_freex(&buffer->pendingChanges);
+	Buffer_free(&buffer->cpuData, alloc);
+	ListDevicePendingRange_free(&buffer->pendingChanges, alloc);
 }
 
-Error GraphicsDeviceRef_createBufferIntern(
+Bool GraphicsDeviceRef_createBufferIntern(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
@@ -202,66 +196,57 @@ Error GraphicsDeviceRef_createBufferIntern(
 	CharString name,
 	U64 len,
 	Bool allocate,
-	DeviceBufferRef **ref
+	DeviceBufferRef **ref,
+	Error *e_rr
 ) {
-	Error err = RefPtr_createx(
-		(U32)(sizeof(DeviceBuffer) + GraphicsDeviceRef_getObjectSizes(dev)->buffer),
-		(ObjectFreeFunc) DeviceBuffer_free,
-		(ETypeId) EGraphicsTypeId_DeviceBuffer,
-		ref
-	);
 
-	if(err.genericError)
-		return err;
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->buffer, ref, e_rr));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"))
+	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"));
 
 	if(bindlessDescriptorTable && !(resourceFlags & EGraphicsResourceFlag_ExposeBindless))
-		gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createBufferIntern() bindlessDescriptorTable is set, but disallowed"
-		))
+		retError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createBufferIntern() bindlessDescriptorTable is set, but disallowed"));
 
-	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
-		gotoIfError(clean, Error_nullPointer(
-			0, "GraphicsDeviceRef_createBufferIntern()::bindlessDescriptorTable should be valid if non NULL"
-		))
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		retError(clean, Error_nullPointer(
+			0, "GraphicsDeviceRef_createBufferIntern()::bindlessDescriptorTable should be valid if non NULL"));
 
 	if ((resourceFlags & EGraphicsResourceFlag_ExposeBindless) && !bindlessDescriptorTable)
 		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
 
 	if(!bindlessDescriptorTable && (resourceFlags & EGraphicsResourceFlag_ExposeBindless))
-		gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createBufferIntern() can't expose resource for bindless without bindless"
-		))
+		retError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createBufferIntern() can't expose resource for bindless without bindless"));
 
 	if((usage & EDeviceBufferUsage_ScratchExt) && (usage != EDeviceBufferUsage_ScratchExt))
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"))
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"));
 
 	if((usage & EDeviceBufferUsage_ASExt) && (resourceFlags || usage != EDeviceBufferUsage_ASExt))
-		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"))
+		retError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"));
 
 	if((usage & EDeviceBufferUsage_SBTExt) && (resourceFlags || usage != EDeviceBufferUsage_SBTExt))
-		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid SBT usage/flags"))
+		retError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid SBT usage/flags"));
 
 	Bool isRTBufferType = usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt);
 
 	if (isRTBufferType && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
-		gotoIfError(clean, Error_invalidState(
-			2, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
-		))
-		
+		retError(clean, Error_invalidState(
+			2, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"));
+
 	//Log_debugLnx("Create: DeviceBuffer %.*s (%p)", (int) CharString_length(name), name.ptr, DeviceBufferRef_ptr(*ref));
 
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
-		gotoIfError(clean, GraphicsDeviceRef_inc(dev))
+		gotoIfError3(clean, RefPtr_inc(dev));
 
 	if(len > device->info.capabilities.maxBufferSize)
-		gotoIfError(clean, Error_invalidState(
-			2, "GraphicsDeviceRef_createBufferIntern() buffer length exceeds maxBufferSize"
-		))
+		retError(clean, Error_invalidState(
+			2, "GraphicsDeviceRef_createBufferIntern() buffer length exceeds maxBufferSize"));
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(*ref);
 
@@ -277,20 +262,21 @@ Error GraphicsDeviceRef_createBufferIntern(
 	};
 
 	if(bindlessDescriptorTable) {
-		gotoIfError(clean, DescriptorTableRef_inc(bindlessDescriptorTable))
+		gotoIfError3(clean, RefPtr_inc(bindlessDescriptorTable));
 		buf->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
-	gotoIfError(clean, ListDevicePendingRange_reservex(
+	gotoIfError3(clean, ListDevicePendingRange_reserve(
 		&buf->pendingChanges, buf->resource.flags & EGraphicsResourceFlag_CPUBacked ? 16 : 1
-	))
+	, alloc, e_rr));
 
 	if(allocate) {
-		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))        //Temporary if not CPUBacked
-		gotoIfError(clean, DeviceBufferRef_markDirty(*ref, 0, 0))
+		//Temporary if not CPUBacked
+		gotoIfError3(clean, Buffer_createEmptyBytes(buf->resource.size, alloc, &buf->cpuData, e_rr));
+		gotoIfError3(clean, DeviceBufferRef_markDirty(*ref, 0, 0, e_rr));
 	}
 
-	gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buf, name))
+	gotoIfError3(clean, GraphicsDeviceRef_createBufferExt(dev, buf, name, e_rr));
 
 	//Create descriptor
 	//TODO: Allow creation as StructuredBuffer
@@ -305,7 +291,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			false,
 			Descriptor_buffer(*ref, 0, 0, NULL, 0),
 			&buf->readHandle,
-			&err
+			e_rr
 		)
 	)
 		goto clean;
@@ -320,56 +306,57 @@ Error GraphicsDeviceRef_createBufferIntern(
 			false,
 			Descriptor_buffer(*ref, 0, 0, NULL, 0),
 			&buf->writeHandle,
-			&err
+			e_rr
 		)
 	)
 		goto clean;
 
 clean:
 
-	if(err.genericError)
-		DeviceBufferRef_dec(ref);
+	if(!s_uccess)
+		RefPtr_dec(ref);
 
-	return err;
+	return s_uccess;
 }
 
-Error GraphicsDeviceRef_createBuffer(
+Bool GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
-	DeviceBufferRef **buf
+	DeviceBufferRef **buf,
+	Error *e_rr
 ) {
 	return GraphicsDeviceRef_createBufferIntern(
 		dev, usage, resourceFlags, bindlessDescriptorTable, name, len, resourceFlags & EGraphicsResourceFlag_CPUBacked, buf
-	);
+	, e_rr);
 }
 
-Error GraphicsDeviceRef_createBufferData(
+Bool GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag flags,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
-	DeviceBufferRef **buf
+	DeviceBufferRef **buf,
+	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
+
 	if(!dat)
-		return Error_nullPointer(4, "GraphicsDeviceRef_createBufferData()::dat is required");
+		retError(clean, Error_nullPointer(4, "GraphicsDeviceRef_createBufferData()::dat is required"));
 
-	Error err = GraphicsDeviceRef_createBufferIntern(
-		dev, usage, flags, bindlessDescriptorTable, name, Buffer_length(*dat), Buffer_isRef(*dat), buf
-	);
+	gotoIfError3(clean, GraphicsDeviceRef_createBufferIntern(
+		dev, usage, flags, bindlessDescriptorTable, name, Buffer_length(*dat), Buffer_isRef(*dat), buf, e_rr));
 
-	if(err.genericError)
-		return err;
-
-	if ((err = DeviceBufferRef_markDirty(*buf, 0, 0)).genericError) {
-		DeviceBufferRef_dec(buf);
-		return err;
+	if (!DeviceBufferRef_markDirty(*buf, 0, 0, e_rr)) {
+		RefPtr_dec(buf);
+		s_uccess = false;
+		goto clean;
 	}
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
@@ -382,5 +369,6 @@ Error GraphicsDeviceRef_createBufferData(
 		*dat = Buffer_createNull();
 	}
 
-	return Error_none();
+clean:
+	return s_uccess;
 }

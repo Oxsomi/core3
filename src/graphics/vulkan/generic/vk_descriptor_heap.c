@@ -27,7 +27,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
 
-void VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
+void VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, const Allocator *alloc) {
 
 	(void) alloc;
 
@@ -39,9 +39,14 @@ void VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, Allocator alloc) {
 		deviceExt->destroyDescriptorPool(deviceExt->device, heapExt->pool, NULL);
 }
 
-Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name) {
+Bool VK_WRAP_FUNC(
+	GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *dev,
+	DescriptorHeap *heap,
+	CharString name,
+	Error *e_rr
+) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -91,7 +96,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 		.pPoolSizes = poolSizes
 	};
 
-	gotoIfError(clean, checkVkError(deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &heapExt->pool)))
+	gotoIfError3(clean, checkVkError(
+		deviceExt->createDescriptorPool(deviceExt->device, &poolInfo, NULL, &heapExt->pool),
+		e_rr
+	));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
@@ -102,9 +110,9 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *de
 			.objectHandle = (U64) heapExt->pool
 		};
 
-		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 	}
 
 clean:
-	return err;
+	return s_uccess;
 }

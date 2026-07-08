@@ -30,7 +30,7 @@ typedef struct VkDeviceBuffer {
 	U64 padding;
 } VkDeviceBuffer;
 
-Error VkDeviceBuffer_transition(
+Bool VkDeviceBuffer_transition(
 	VkDeviceBuffer *buffer,
 	VkPipelineStageFlags2 stage,
 	VkAccessFlagBits2 access,
@@ -38,5 +38,7 @@ Error VkDeviceBuffer_transition(
 	U64 offset,
 	U64 size,
 	ListVkBufferMemoryBarrier2 *bufferBarriers,
-	VkDependencyInfo *dependency
+	VkDependencyInfo *dependency,
+	const Allocator *alloc,
+	Error *e_rr
 );

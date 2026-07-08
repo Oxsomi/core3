@@ -172,15 +172,13 @@ typedef struct DescriptorTable {
 #define DescriptorTable_ext(ptr, T) (!ptr ? NULL : (T##DescriptorTable*)(ptr + 1))        //impl
 #define DescriptorTableRef_ptr(ptr) RefPtr_data(ptr, DescriptorTable)
 
-void DescriptorTableRef_dec(DescriptorTableRef **table);
-Error DescriptorTableRef_inc(DescriptorTableRef *table);
-
-Error DescriptorHeapRef_createDescriptorTable(
+Bool DescriptorHeapRef_createDescriptorTable(
 	DescriptorHeapRef *parent,
 	DescriptorLayoutRef *layout,
 	EDescriptorTableFlags flags,
 	CharString name,
-	DescriptorTableRef **table
+	DescriptorTableRef **table,
+	Error *e_rr
 );
 
 Descriptor Descriptor_texture(

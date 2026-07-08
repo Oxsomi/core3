@@ -20,7 +20,7 @@
 
 //graphics/vulkan/generic/vk_pipeline_layout.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
@@ -28,11 +28,11 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string.h"
 #include "platforms/logx.h"
-#include "formats/oiSH/entries.h"
+#include "formats/oiSH/sh_entries.h"
 
-void VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) {
+void VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, const Allocator *alloc) {
 
 	(void) alloc;
 
@@ -43,13 +43,16 @@ void VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, Allocator alloc) 
 		device->destroyPipelineLayout(device->device, *layoutExt, NULL);
 }
 
-Error VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	GraphicsDeviceRef *dev,
 	PipelineLayout *layout,
-	CharString name
+	CharString name,
+	Error *e_rr
 ) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+
 	CharString tmpName = CharString_createNull();
 	VkPipelineLayout *layoutExt = PipelineLayout_ext(layout, Vk);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
@@ -98,12 +101,12 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 		create.pPushConstantRanges = &pushConstants;
 	}
 
-	gotoIfError(clean, checkVkError(deviceExt->createPipelineLayout(deviceExt->device, &create, NULL, layoutExt)))
-	
+	gotoIfError3(clean, checkVkError(deviceExt->createPipelineLayout(deviceExt->device, &create, NULL, layoutExt), e_rr));
+
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
 		if(!CharString_isNullTerminated(name))
-			gotoIfError(clean, CharString_createCopyx(name, &tmpName))
+			gotoIfError3(clean, CharString_createCopy(name, alloc, &tmpName, e_rr));
 
 		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -112,10 +115,10 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 			.objectHandle = (U64) *layoutExt
 		};
 
-		gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
 	}
 
 clean:
-	CharString_freex(&tmpName);
-	return err;
+	CharString_free(&tmpName, alloc);
+	return s_uccess;
 }

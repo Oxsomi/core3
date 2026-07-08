@@ -20,51 +20,61 @@
 
 //graphics/generic/instance.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "types/base/platform_types.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "graphics/generic/device_buffer.h"
+#include "graphics/generic/device_texture.h"
+#include "graphics/generic/render_texture.h"
+#include "graphics/generic/depth_stencil.h"
+#include "graphics/generic/swapchain.h"
+#include "graphics/generic/pipeline.h"
+#include "graphics/generic/sampler.h"
+#include "graphics/generic/blas.h"
+#include "graphics/generic/tlas.h"
+#include "graphics/generic/descriptor_layout.h"
+#include "graphics/generic/descriptor_table.h"
+#include "graphics/generic/descriptor_heap.h"
+#include "graphics/generic/pipeline_layout.h"
+#include "graphics/generic/command_list.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
 TListImpl(GraphicsDeviceInfo);
 
 const C8 *EGraphicsApi_name[EGraphicsApi_Count] = {
-	"Vulkan",
-	"D3D12"
+	"Vulkan", "D3D12"
 };
 
-void GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) { RefPtr_dec(inst); }
-
-Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
-	return !RefPtr_inc(inst) ?
-		Error_invalidOperation(0, "GraphicsInstanceRef_inc()::inst is required") : Error_none();
-}
-
-Error GraphicsInstance_getPreferredDevice(
+Bool GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	GraphicsDeviceInfo *deviceInfo
+	GraphicsDeviceInfo *deviceInfo,
+	Error *e_rr
 ) {
 
-	if(!deviceInfo)
-		return Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required");
-
-	if(deviceInfo->name[0])
-		return Error_invalidParameter(
-			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
-		);
+	Bool s_uccess = true;
 
 	ListGraphicsDeviceInfo tmp = (ListGraphicsDeviceInfo) { 0 };
-	Error err = GraphicsInstance_getDeviceInfosExt(inst, &tmp);
 
-	if(err.genericError)
-		return err;
+	if(!inst)
+		retError(clean, Error_nullPointer(0, "GraphicsInstance_getPreferredDevice()::inst is required"));
+
+	if(!deviceInfo)
+		retError(clean, Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required"));
+
+	if(deviceInfo->name[0])
+		retError(clean, Error_invalidParameter(
+			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
+		));
+
+	gotoIfError3(clean, GraphicsInstance_getDeviceInfosExt(inst, &tmp, e_rr));
 
 	U64 preferredDedicated = 0;
 	U64 preferredNonDedicated = 0;
@@ -124,14 +134,14 @@ Error GraphicsInstance_getPreferredDevice(
 	}
 
 	if(!hasAny)
-		gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"))
+		retError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"));
 
 	const U64 picked = hasDedicated ? preferredDedicated : (hasIntegrated ? preferredIntegrated : preferredNonDedicated);
 	*deviceInfo = tmp.ptr[picked];
 
 clean:
-	ListGraphicsDeviceInfo_freex(&tmp);
-	return err;
+	ListGraphicsDeviceInfo_free(&tmp, inst ? inst->alloc : NULL);
+	return s_uccess;
 }
 
 Bool GraphicsInterface_create(Error *e_rr) {
@@ -142,15 +152,7 @@ Bool GraphicsInterface_supportsApi(EGraphicsApi api) {
 	return GraphicsInterface_supports(api);
 }
 
-Error GraphicsInstance_create(
-	GraphicsApplicationInfo info,
-	EGraphicsApi api,
-	EGraphicsInstanceFlags flags,
-	GraphicsInstanceRef **instanceRef
-) {
-
-	Error err = Error_none();
-	Bool initRefPtr = false;
+EGraphicsApi EGraphicsApi_resolve(EGraphicsApi api) {
 
 	if (api >= EGraphicsApi_Count) {
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
@@ -160,34 +162,230 @@ Error GraphicsInstance_create(
 		#endif
 	}
 
-	gotoIfError(clean, RefPtr_createx(
-		(U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance),
-		(ObjectFreeFunc) GraphicsInstance_freeExt,
-		(ETypeId) EGraphicsTypeId_GraphicsInstance,
-		instanceRef
-	))
+	return api;
+}
 
+RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc) {
+
+	api = EGraphicsApi_resolve(api);
+
+	return (RefPtrType) {
+		.typeId = (ETypeId) EGraphicsTypeId_GraphicsInstance,
+		.length = (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance),
+		.alloc = alloc,
+		.free = (ObjectFreeFunc) GraphicsInstance_freeExt
+	};
+}
+
+//Free functions of the graphics objects; only used as the ObjectFreeFunc of their RefPtrType.
+//These are intentionally not exposed in the public headers, use RefPtr_dec instead.
+
+void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc);
+void DeviceBuffer_free(DeviceBuffer *buffer, const Allocator *alloc);
+void DeviceTexture_free(DeviceTexture *texture, const Allocator *alloc);
+void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, const Allocator *alloc);
+void GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, const Allocator *alloc);
+void Swapchain_free(Swapchain *swapchain, const Allocator *alloc);
+void Pipeline_free(Pipeline *pipeline, const Allocator *alloc);
+void Sampler_free(Sampler *sampler, const Allocator *alloc);
+void BLAS_free(BLAS *blas, const Allocator *alloc);
+void TLAS_free(TLAS *tlas, const Allocator *alloc);
+void DescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc);
+void DescriptorTable_free(DescriptorTable *table, const Allocator *alloc);
+void DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc);
+void PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc);
+void CommandList_free(CommandList *cmd, const Allocator *alloc);
+
+//Fills the RefPtrTypes of all objects that can be created through this instance (or its devices).
+//They live in the GraphicsInstance so they're guaranteed to outlive the objects created with them,
+//since every graphics object holds a reference to the device and the device to the instance.
+
+static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, const Allocator *alloc) {
+
+	const GraphicsObjectSizes *sizes = GraphicsInterface_getObjectSizes(api);
+	const U64 imageSize = sizes->image + sizeof(UnifiedTextureImage);
+
+	return (GraphicsObjectTypes) {
+
+		.device = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_GraphicsDevice,
+			.length = (U32)(sizeof(GraphicsDevice) + sizes->device),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) GraphicsDevice_free
+		},
+
+		.buffer = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_DeviceBuffer,
+			.length = (U32)(sizeof(DeviceBuffer) + sizes->buffer),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) DeviceBuffer_free
+		},
+
+		.deviceTexture = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_DeviceTexture,
+			.length = (U32)(sizeof(DeviceTexture) + imageSize),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) DeviceTexture_free
+		},
+
+		.renderTexture = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_RenderTexture,
+			.length = (U32)(sizeof(RenderTexture) + imageSize),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) GraphicsDevice_freeRenderTexture
+		},
+
+		.depthStencil = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_DepthStencil,
+			.length = (U32)(sizeof(DepthStencil) + imageSize),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) GraphicsDevice_freeDepthStencil
+		},
+
+		.swapchain = (RefPtrType) {
+
+			//On some platforms the images we get back != the images we request.
+			//Even though we request 3, we might get 5 even.
+			//https://github.com/googlesamples/vulkan-basic-samples/issues/24#issuecomment-442626040
+			//Unfortunately we still have to allocate up to (48 + 16) * 2 = 128 bytes extra, not too bad though.
+
+			.typeId = (ETypeId) EGraphicsTypeId_Swapchain,
+			.length = (U32)(sizeof(Swapchain) + imageSize * SWAPCHAIN_MAX_IMAGES + sizes->swapchain),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) Swapchain_free
+		},
+
+		.pipeline = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_Pipeline,
+			.length = (U32)(sizeof(Pipeline) + sizes->pipeline),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) Pipeline_free
+		},
+
+		.sampler = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_Sampler,
+			.length = (U32)(sizeof(Sampler) + sizes->sampler),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) Sampler_free
+		},
+
+		.blas = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_BLASExt,
+			.length = (U32)(sizeof(BLAS) + sizes->blas),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) BLAS_free
+		},
+
+		.tlas = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_TLASExt,
+			.length = (U32)(sizeof(TLAS) + sizes->tlas),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) TLAS_free
+		},
+
+		.descriptorLayout = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_DescriptorLayout,
+			.length = (U32)(sizeof(DescriptorLayout) + sizes->descriptorLayout),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) DescriptorLayout_free
+		},
+
+		.descriptorTable = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_DescriptorTable,
+			.length = (U32)(sizeof(DescriptorTable) + sizes->descriptorTable),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) DescriptorTable_free
+		},
+
+		.descriptorHeap = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_DescriptorHeap,
+			.length = (U32)(sizeof(DescriptorHeap) + sizes->descriptorHeap),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) DescriptorHeap_free
+		},
+
+		.pipelineLayout = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_PipelineLayout,
+			.length = (U32)(sizeof(PipelineLayout) + sizes->pipelineLayout),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) PipelineLayout_free
+		},
+
+		.commandList = (RefPtrType) {
+			.typeId = (ETypeId) EGraphicsTypeId_CommandList,
+			.length = (U32) sizeof(CommandList),
+			.alloc = alloc,
+			.free = (ObjectFreeFunc) CommandList_free
+		}
+	};
+}
+
+Bool GraphicsInstance_create(
+	GraphicsApplicationInfo info,
+	EGraphicsApi api,
+	EGraphicsInstanceFlags flags,
+	const Allocator *alloc,
+	const RefPtrType *type,
+	GraphicsInstanceRef **instanceRef,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	Bool initRefPtr = false;
+
+	api = EGraphicsApi_resolve(api);
+
+	if(
+		!type ||
+		type->typeId != (ETypeId) EGraphicsTypeId_GraphicsInstance ||
+		type->length != (U32)(sizeof(GraphicsInstance) + GraphicsInterface_getObjectSizes(api)->instance) ||
+		type->free != (ObjectFreeFunc) GraphicsInstance_freeExt ||
+		type->alloc != alloc
+	)
+		retError(clean, Error_invalidParameter(
+			4, 0, "GraphicsInstance_create()::type is invalid, use GraphicsInstance_makeType with a matching api and alloc"
+		));
+
+	gotoIfError3(clean, RefPtr_create(type, instanceRef, e_rr));
 	initRefPtr = true;
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 
-	*instance = (GraphicsInstance) { .application = info, .api = api, .flags = flags };
+	*instance = (GraphicsInstance) {
+		.application = info,
+		.api = api,
+		.flags = flags,
+		.alloc = alloc,
+		.types = GraphicsInstance_makeObjectTypes(api, alloc)
+	};
 
 	#ifndef NDEBUG
 		if(!(flags & EGraphicsInstanceFlags_DisableDebug))
 			instance->flags |= EGraphicsInstanceFlags_IsDebug;
 	#endif
 
-	gotoIfError(clean, GraphicsInstance_createExt(info, instanceRef));
+	gotoIfError3(clean, GraphicsInstance_createExt(info, instanceRef, e_rr));
 
 clean:
 
-	if(err.genericError && initRefPtr)
-		GraphicsInstanceRef_dec(instanceRef);
+	if(!s_uccess && initRefPtr)
+		RefPtr_dec(instanceRef);
 
-	return err;
+	return s_uccess;
 }
 
-Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos) {
-	return GraphicsInstance_getDeviceInfosExt(inst, infos);
+Bool GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!inst || !infos)
+		retError(clean, Error_nullPointer(
+			!inst ? 0 : 1, "GraphicsInstance_getDeviceInfos()::inst and infos are required"
+		));
+
+	gotoIfError3(clean, GraphicsInstance_getDeviceInfosExt(inst, infos, e_rr));
+
+clean:
+	return s_uccess;
 }

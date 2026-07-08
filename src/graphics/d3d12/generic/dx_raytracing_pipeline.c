@@ -20,22 +20,24 @@
 
 //graphics/d3d12/generic/dx_raytracing_pipeline.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
 #include "types/base/error.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/base/constants.h"
+#include "types/container/string_unicode.h"
 
 TList(D3D12_STATE_SUBOBJECT);
 TList(D3D12_DXIL_LIBRARY_DESC);
@@ -61,6 +63,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 ) {
 
 	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -82,20 +85,20 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	U32 binaryCount = (U32) binaryIndices.length;
 	U32 groupCount = (U32) pipelineRt->groups.length;
 
-	gotoIfError2(clean, Buffer_createEmptyBytesx(raytracingShaderAlignment * stageCount, &shaderTable))
+	gotoIfError3(clean, Buffer_createEmptyBytes(raytracingShaderAlignment * stageCount, alloc, &shaderTable, e_rr));
 
 	//Reserve mem
 
-	gotoIfError2(clean, ListD3D12_HIT_GROUP_DESC_resizex(&hitGroups, groupCount))
-	gotoIfError2(clean, ListD3D12_DXIL_LIBRARY_DESC_resizex(&libraries, binaryCount))
-	gotoIfError2(clean, ListD3D12_EXPORT_DESC_resizex(&exportDescs, stageCount))
-	gotoIfError2(clean, ListD3D12_STATE_SUBOBJECT_resizex(&stateObjects, 3 + hitGroups.length + libraries.length))
-	gotoIfError2(clean, ListU32_resizex(&binaryOffset, libraries.length))
+	gotoIfError3(clean, ListD3D12_HIT_GROUP_DESC_resize(&hitGroups, groupCount, alloc, e_rr));
+	gotoIfError3(clean, ListD3D12_DXIL_LIBRARY_DESC_resize(&libraries, binaryCount, alloc, e_rr));
+	gotoIfError3(clean, ListD3D12_EXPORT_DESC_resize(&exportDescs, stageCount, alloc, e_rr));
+	gotoIfError3(clean, ListD3D12_STATE_SUBOBJECT_resize(&stateObjects, 3 + hitGroups.length + libraries.length, alloc, e_rr));
+	gotoIfError3(clean, ListU32_resize(&binaryOffset, libraries.length, alloc, e_rr));
 
 	U64 groupNameStart = stageCount * 2;        //Only if group size > stageCount, otherwise reuses strings
 	U64 strings = groupNameStart + (I64)stageCount;
 
-	gotoIfError2(clean, ListListU16_resizex(&nameArr, strings))
+	gotoIfError3(clean, ListListU16_resize(&nameArr, strings, alloc, e_rr));
 
 	//Easy properties
 
@@ -158,9 +161,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	for(U32 j = 0; j < stageCount; ++j) {
 
-		gotoIfError2(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
-		gotoIfError2(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[j * 2]));
-		CharString_freex(&tmp);
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "#%"PRIu32, j));
+		gotoIfError3(clean, CharString_toUTF16(tmp, alloc, &nameArr.ptrNonConst[j * 2], e_rr));
+		CharString_free(&tmp, alloc);
 
 		PipelineStage *stage = &pipeline->stages.ptrNonConst[j];
 
@@ -174,7 +177,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		SHEntry entry = bin.entries.ptr[entrypointId];
 		U32 resolvedId = entry.binaryIds.ptr[binaryId] | ((U32) shaderId << 16);
 
-		gotoIfError2(clean, CharString_toUTF16x(entry.name, &nameArr.ptrNonConst[j * 2 + 1]))
+		gotoIfError3(clean, CharString_toUTF16(entry.name, alloc, &nameArr.ptrNonConst[j * 2 + 1], e_rr));
 
 		U64 libId = ListU32_findFirst(binaryIndices, resolvedId, 0, NULL);
 		++libraries.ptrNonConst[libId].NumExports;
@@ -253,9 +256,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 		ListU16 loc;
 
-		gotoIfError2(clean, CharString_formatx(&tmp, "H%"PRIu32, j))
-		gotoIfError2(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[groupNameStart + j]));
-		CharString_freex(&tmp);
+		gotoIfError3(clean, CharString_format(alloc, &tmp, e_rr, "H%"PRIu32, j));
+		gotoIfError3(clean, CharString_toUTF16(tmp, alloc, &nameArr.ptrNonConst[groupNameStart + j], e_rr));
+		CharString_free(&tmp, alloc);
 		loc = nameArr.ptr[groupNameStart + j];
 
 		hitGroups.ptrNonConst[j] = (D3D12_HIT_GROUP_DESC) {
@@ -291,21 +294,21 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
 	ID3D12StateObject **stateObject = &dxPipeline->stateObject;
 
-	gotoIfError2(clean, dxCheck(deviceExt->device->lpVtbl->CreateStateObject(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateStateObject(
 		deviceExt->device,
 		&stateObjectInfo,
 		&IID_ID3D12StateObject,
 		(void**) stateObject
-	)))
+	), e_rr));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-		gotoIfError2(clean, CharString_toUTF16x(name, &tmp16))
-		gotoIfError2(clean, dxCheck((*stateObject)->lpVtbl->SetName(*stateObject, (const wchar_t*) tmp16.ptr)))
+		gotoIfError3(clean, CharString_toUTF16(name, alloc, &tmp16, e_rr));
+		gotoIfError3(clean, dxCheck((*stateObject)->lpVtbl->SetName(*stateObject, (const wchar_t*) tmp16.ptr), e_rr));
 	}
 
-	gotoIfError2(clean, dxCheck((*stateObject)->lpVtbl->QueryInterface(
+	gotoIfError3(clean, dxCheck((*stateObject)->lpVtbl->QueryInterface(
 		*stateObject, &IID_ID3D12StateObjectProperties, (void**) &dxPipeline->stateObjectProps
-	)))
+	), e_rr));
 
 	//Resolve shader ids in SBT (individual shaders: raygen, callable and miss)
 
@@ -325,13 +328,12 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		);
 
 		Buffer dst = Buffer_createNull();
-		gotoIfError2(clean, Buffer_createSubset(
+		gotoIfError3(clean, Buffer_createSubset(
 			shaderTable,
 			stage.groupId * raytracingShaderAlignment,
 			raytracingShaderIdSize,
 			false,
-			&dst
-		))
+			&dst, e_rr));
 
 		Buffer_memcpy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
 	}
@@ -347,13 +349,12 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		//raytracingShaderAlignment
 
 		Buffer dst = Buffer_createNull();
-		gotoIfError2(clean, Buffer_createSubset(
+		gotoIfError3(clean, Buffer_createSubset(
 			shaderTable,
 			j * raytracingShaderAlignment,
 			raytracingShaderIdSize,
 			false,
-			&dst
-		))
+			&dst, e_rr));
 
 		Buffer_memcpy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
 	}
@@ -362,30 +363,29 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	//The SBT has a stride of 64 as well (since that's expected).
 	//Then we link the SBT per pipeline.
 
-	gotoIfError2(clean, GraphicsDeviceRef_createBufferData(
+	gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
 		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None,
 		NULL,
 		CharString_createRefCStrConst("Shader binding table"),
 		&shaderTable,
-		&sbt
-	))
+		&sbt, e_rr));
 
 	pipelineRt->shaderBindingTable = sbt;
 	sbt = NULL;
 
 clean:
 
-	DeviceBufferRef_dec(&sbt);
+	RefPtr_dec(&sbt);
 
-	Buffer_freex(&shaderTable);
+	Buffer_free(&shaderTable, alloc);
 
-	ListListU16_freeUnderlyingx(&nameArr);
-	ListU32_freex(&binaryOffset);
-	ListU16_freex(&tmp16);
-	CharString_freex(&tmp);
-	ListD3D12_STATE_SUBOBJECT_freex(&stateObjects);
-	ListD3D12_DXIL_LIBRARY_DESC_freex(&libraries);
-	ListD3D12_HIT_GROUP_DESC_freex(&hitGroups);
-	ListD3D12_EXPORT_DESC_freex(&exportDescs);
+	ListListU16_freeUnderlying(&nameArr, alloc);
+	ListU32_free(&binaryOffset, alloc);
+	ListU16_free(&tmp16, alloc);
+	CharString_free(&tmp, alloc);
+	ListD3D12_STATE_SUBOBJECT_free(&stateObjects, alloc);
+	ListD3D12_DXIL_LIBRARY_DESC_free(&libraries, alloc);
+	ListD3D12_HIT_GROUP_DESC_free(&hitGroups, alloc);
+	ListD3D12_EXPORT_DESC_free(&exportDescs, alloc);
 	return s_uccess;
 }

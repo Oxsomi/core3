@@ -20,33 +20,33 @@
 
 //graphics/d3d12/generic/dx_descriptor_layout.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
 #include "types/container/string.h"
-#include "platforms/ext/stringx.h"
-#include "formats/oiSH/entries.h"
+#include "types/container/string.h"
+#include "formats/oiSH/sh_entries.h"
 #include "types/base/constants.h"
 
 TListImpl(D3D12_DESCRIPTOR_RANGE1)
 TListImpl(D3D12_ROOT_PARAMETER1)
 
-void DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
+void DX_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, const Allocator *alloc) {
 	(void) alloc;
 	DxDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Dx);
-	ListU32_freex(&layoutExt->bindingOffsets);
-	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesResources);
-	ListD3D12_DESCRIPTOR_RANGE1_freex(&layoutExt->rangesSamplers);
-	ListU8_freex(&layoutExt->rootParamOffsets);
-	ListD3D12_ROOT_PARAMETER1_freex(&layoutExt->rootParams);
+	ListU32_free(&layoutExt->bindingOffsets, alloc);
+	ListD3D12_DESCRIPTOR_RANGE1_free(&layoutExt->rangesResources, alloc);
+	ListD3D12_DESCRIPTOR_RANGE1_free(&layoutExt->rangesSamplers, alloc);
+	ListU8_free(&layoutExt->rootParamOffsets, alloc);
+	ListD3D12_ROOT_PARAMETER1_free(&layoutExt->rootParams, alloc);
 }
 
 D3D12_DESCRIPTOR_RANGE_TYPE dxGetDescriptorType(ESHRegisterType regType) {
-	
+
 	switch (regType & ESHRegisterType_TypeMask) {
-		
+
 		case ESHRegisterType_Sampler:
 		case ESHRegisterType_SamplerComparisonState:
 			return D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
@@ -117,24 +117,27 @@ D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 a) {
 TList(SortingKey);
 TListImpl(SortingKey);
 
-Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	GraphicsDeviceRef *dev,
 	DescriptorLayout *layout,
-	CharString name
+	CharString name,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
 	(void) name;
 
-	Error err = Error_none();
 	ListSortingKey sortedList = (ListSortingKey) { 0 };
 
 	DxDescriptorLayout *layoutExt = DescriptorLayout_ext(layout, Dx);
 
 	const DescriptorLayoutInfo info = layout->info;
 
-	gotoIfError(clean, ListSortingKey_reservex(&sortedList, info.bindings.length))
-	gotoIfError(clean, ListU8_resizex(&layoutExt->rootParamOffsets, info.bindings.length))
-	gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_reservex(&layoutExt->rootParams, 4))    //Sampler, resource, NV, pad
+	gotoIfError3(clean, ListSortingKey_reserve(&sortedList, info.bindings.length, alloc, e_rr));
+	gotoIfError3(clean, ListU8_resize(&layoutExt->rootParamOffsets, info.bindings.length, alloc, e_rr));
+	gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_reserve(&layoutExt->rootParams, 4, alloc, e_rr));    //Sampler, resource, NV, pad
 
 	//Sort by set and merge shaders that allow it and check we only have 4 sets bound
 
@@ -177,7 +180,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				rootFlags = 0;
 			}
 
-			gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
+			gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_pushBack(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
 				.ParameterType = type,
 				.Descriptor = (D3D12_ROOT_DESCRIPTOR1) {
 					.ShaderRegister = binding->binding.binding,
@@ -185,7 +188,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 					.Flags = rootFlags
 				},
 				.ShaderVisibility = DxDescriptorLayout_convertVisibility(binding->visibility)
-			}))
+			}, alloc, e_rr));
 
 			continue;
 		}
@@ -201,7 +204,12 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			if(samplerParam == U8_MAX) {        //Reserve root param
 				samplerParam = (U8) layoutExt->rootParams.length;
-				gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) { 0 }))
+				gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_pushBack(
+					&layoutExt->rootParams,
+					(D3D12_ROOT_PARAMETER1) { 0 },
+					alloc,
+					e_rr
+				));
 			}
 
 			layoutExt->rootParamOffsets.ptrNonConst[i] = samplerParam;
@@ -213,19 +221,23 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			if(resourceParam == U8_MAX) {        //Reserve root param
 				resourceParam = (U8) layoutExt->rootParams.length;
-				gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) { 0 }))
+				gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_pushBack(
+					&layoutExt->rootParams,
+					(D3D12_ROOT_PARAMETER1) { 0 },
+					alloc,
+					e_rr
+				));
 			}
 
 			layoutExt->rootParamOffsets.ptrNonConst[i] = resourceParam;
 		}
 
-		gotoIfError(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { binding }, (Allocator) { 0 }))
+		gotoIfError3(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { binding }, (Allocator) { 0 }, e_rr));
 	}
 
 	if(!ListSortingKey_sortCustom(sortedList, (CompareFunction) SortingKey_compare))
-		gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"
-		))
+		retError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"));
 
 	//Collapse nearby bindings if possible
 
@@ -251,7 +263,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 		//We've found a match, let's shorten the array and remember how many we merge
 
-		gotoIfError(clean, ListSortingKey_popLocation(&sortedList, i, NULL))
+		gotoIfError3(clean, ListSortingKey_popLocation(&sortedList, i, NULL, e_rr));
 		sortedList.ptrNonConst[i - 1].mergedCount = aCount + bCount;
 	}
 
@@ -259,9 +271,9 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	Bool isNv = GraphicsDeviceRef_ptr(dev)->info.vendor == EGraphicsVendorId_NV;
 
-	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, sortedList.length + isNv))
-	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, sortedList.length))
-	gotoIfError(clean, ListU32_resizex(&layoutExt->bindingOffsets, layout->info.bindings.length))
+	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(&layoutExt->rangesResources, sortedList.length + isNv, alloc, e_rr));
+	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(&layoutExt->rangesSamplers, sortedList.length, alloc, e_rr));
+	gotoIfError3(clean, ListU32_resize(&layoutExt->bindingOffsets, layout->info.bindings.length, alloc, e_rr));
 
 	U32 offset1 = 0, offset2 = 0;
 	U64 resourceRange = 0, samplerRange = 0;
@@ -321,7 +333,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				)
 			)
 				continue;
-			
+
 			layoutExt->bindingOffsets.ptrNonConst[j] =
 				range.OffsetInDescriptorsFromTableStart + bindj.binding.binding - key.binding->binding.binding;
 		}
@@ -330,16 +342,16 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	//Dummy UAV for NVAPI extensions
 
 	if (isNv && !isPushDescriptors)
-		gotoIfError(clean, ListD3D12_ROOT_PARAMETER1_pushBackx(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
+		gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_pushBack(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV,
 			.Descriptor = (D3D12_ROOT_DESCRIPTOR1) {
 				.ShaderRegister = 99999,
 				.RegisterSpace = 99999
 			},
-		}))
-	
-	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesResources, resourceRange))
-	gotoIfError(clean, ListD3D12_DESCRIPTOR_RANGE1_resizex(&layoutExt->rangesSamplers, samplerRange))
+		}, alloc, e_rr));
+
+	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(&layoutExt->rangesResources, resourceRange, alloc, e_rr));
+	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(&layoutExt->rangesSamplers, samplerRange, alloc, e_rr));
 
 	//Root params fo sampler and resource ranges
 
@@ -364,6 +376,6 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			};
 
 clean:
-	ListSortingKey_freex(&sortedList);
-	return err;
+	ListSortingKey_free(&sortedList, alloc);
+	return s_uccess;
 }

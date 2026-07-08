@@ -20,7 +20,7 @@
 
 //graphics/vulkan/generic/vk_command_list.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
 #include "graphics/generic/command_list.h"
@@ -36,12 +36,12 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/errorx.h"
+#include "types/container/buffer.h"
+#include "types/container/log.h"
 #include "platforms/logx.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
-#include "formats/oiSH/registers.h"
+#include "formats/oiSH/sh_registers.h"
 #include "types/base/constants.h"
 
 Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
@@ -75,6 +75,13 @@ void VK_WRAP_FUNC(CommandList_process)(
 	const U8 *data,
 	void *commandListExt
 ) {
+
+	//CommandList_process can't fail upward; errors are printed and the op is skipped.
+
+	Bool s_uccess = true;
+	Error err = Error_none();
+	Error *e_rr = &err;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -189,9 +196,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					.layerCount = 1
 				};
 
-				Error err = Error_none();
-
-				gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
+				gotoIfError3(next, ListVkImageCopy_pushBack(&deviceExt->imageCopyRanges, (VkImageCopy) {
 					.srcSubresource = subResource,
 					.srcOffset = (VkOffset3D) {
 						.x = (I32) image.srcX,
@@ -209,12 +214,12 @@ void VK_WRAP_FUNC(CommandList_process)(
 						.height = image.height,
 						.depth = image.length
 					}
-				}))
+				}, alloc, e_rr));
 
 			next:
 
-				if(err.genericError) {
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+				if(!s_uccess) {
+					Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 					break;
 				}
 			}
@@ -232,7 +237,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 				deviceExt->imageCopyRanges.ptr
 			);
 
-			ListVkImageCopy_clear(&deviceExt->imageCopyRanges);
+			ListVkImageCopy_clear(&deviceExt->imageCopyRanges, e_rr);
 			break;
 		}
 
@@ -282,7 +287,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				Descriptor descriptor = (Descriptor) { .resource = attachmentsj->image };
 				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
-				
+
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView color at ECommandOp_StartRenderingExt, this is problematic!");
 					break;
@@ -343,7 +348,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				Descriptor descriptor = (Descriptor) { .resource = startRender->depthStencil };
 				ESHRegisterType registerType = ESHRegisterType_Texture2D;        //TODO: Add support for other resources
-				
+
 				if (!VkUnifiedTexture_getView(descriptor, registerType, &view, &viewId, NULL)) {
 					Log_errorLnx("VkUnifiedTexture_getView depth at ECommandOp_StartRenderingExt, this is problematic!");
 					break;
@@ -497,7 +502,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 			//Bind blend constants and/or stencil ref
 
-			if (F32x4_neq4(temp->tempBlendConstants, temp->blendConstants)) {
+			if (F32x4_neqExact4(temp->tempBlendConstants, temp->blendConstants)) {
 				temp->blendConstants = temp->tempBlendConstants;
 				deviceExt->cmdSetBlendConstants(buffer, (const float*) &temp->blendConstants);
 			}
@@ -686,11 +691,17 @@ void VK_WRAP_FUNC(CommandList_process)(
 		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
 
 		case ECommandOp_UpdateBLASExt:
-			(VK_WRAP_FUNC(BLASRef_flush))(temp, deviceRef, *(BLASRef**)data);
+
+			if(!(VK_WRAP_FUNC(BLASRef_flush))(temp, deviceRef, *(BLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
 			break;
 
 		case ECommandOp_UpdateTLASExt:
-			(VK_WRAP_FUNC(TLASRef_flush))(temp, deviceRef, *(TLASRef**)data);
+
+			if(!(VK_WRAP_FUNC(TLASRef_flush))(temp, deviceRef, *(TLASRef**)data, e_rr))
+				Error_print(alloc, e_rr, ELogLevel_Error, ELogOptions_Default);
+
 			break;
 
 		//case ECommandOp_DispatchRaysIndirect:
@@ -779,8 +790,6 @@ void VK_WRAP_FUNC(CommandList_process)(
 			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
-			Error err = Error_none();
-
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
@@ -821,9 +830,9 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				//If it's on the GPU then we have to rely on manual RTAS transitions
 
-				Bool isTLAS = transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
+				Bool isTLAS = transition.resource->refPtrType->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
 
-				if (isTLAS || transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
+				if (isTLAS || transition.resource->refPtrType->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
 
 					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
 
@@ -833,7 +842,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					if (!rtas.isCompleted && transition.type != ETransitionType_ShaderWrite)
 						continue;
 
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError3(nextTransition, VkDeviceBuffer_transition(
 
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Vk),
 						pipelineStage,
@@ -844,8 +853,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						graphicsQueueId,
 						0, 0,
 						&deviceExt->bufferTransitions,
-						&dependency
-					))
+						&dependency, alloc, e_rr));
 
 					continue;
 				}
@@ -971,7 +979,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 							range.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
 					}
 
-					gotoIfError(nextTransition, VkUnifiedTexture_transition(
+					gotoIfError3(nextTransition, VkUnifiedTexture_transition(
 
 						imageExt,
 						pipelineStage,
@@ -981,8 +989,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 						&range,
 
 						&deviceExt->imageTransitions,
-						&dependency
-					))
+						&dependency, alloc, e_rr));
 				}
 
 				else {
@@ -990,7 +997,7 @@ void VK_WRAP_FUNC(CommandList_process)(
 					DeviceBuffer *devBuffer = DeviceBufferRef_ptr(transition.resource);
 					VkDeviceBuffer *bufferExt = DeviceBuffer_ext(devBuffer, Vk);
 
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError3(nextTransition, VkDeviceBuffer_transition(
 						bufferExt,
 						pipelineStage,
 						access,
@@ -998,21 +1005,20 @@ void VK_WRAP_FUNC(CommandList_process)(
 						0,                        //TODO: range
 						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
-						&dependency
-					))
+						&dependency, alloc, e_rr));
 				}
 
 			nextTransition:
 
-				if(err.genericError)
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+				if(!s_uccess)
+					Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 			}
 
 			if(dependency.imageMemoryBarrierCount || dependency.bufferMemoryBarrierCount)
 				deviceExt->cmdPipelineBarrier2(buffer, &dependency);
 
-			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
-			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
+			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions, e_rr);
+			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions, e_rr);
 			break;
 		}
 

@@ -20,20 +20,16 @@
 
 //graphics/generic/resource.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/resource.h"
-#include "graphics/generic/allocator.h"
+#include "graphics/generic/device_allocator.h"
 #include "graphics/generic/device.h"
 #include "types/base/constants.h"
 
 TListImpl(DeviceResourceVersion);
 
 const C8 *EResourceType_names[EResourceType_Count] = {
-	"Undefined",
-	"DeviceTexture",
-	"RenderTargetOrDepthStencil",
-	"DeviceBuffer",
-	"Swapchain"
+	"Undefined", "DeviceTexture", "RenderTargetOrDepthStencil", "DeviceBuffer", "Swapchain"
 };
 
 U16 TextureRange_width(TextureRange r) { return r.endRange[0] - r.startRange[0]; }
@@ -52,5 +48,5 @@ void GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef) {
 	GraphicsDeviceRef_removePending(resource->device, resourceRef);
 
 	if(!(resource->flags & EGraphicsResourceFlag_InternalWeakDeviceRef))
-		GraphicsDeviceRef_dec(&resource->device);
+		RefPtr_dec(&resource->device);
 }

@@ -26,35 +26,29 @@
 #include "graphics/generic/device.h"
 #include "platforms/window.h"
 #include "platforms/logx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/ref_ptr.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
 
-void SwapchainRef_dec(SwapchainRef **swapchain) { RefPtr_dec(swapchain); }
+Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 
-Error SwapchainRef_inc(SwapchainRef *swapchain) {
-	return !RefPtr_inc(swapchain) ?
-		Error_invalidOperation(0, "SwapchainRef_inc()::swapchain is invalid") : Error_none();
-}
+	Bool s_uccess = true;
 
-Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
-
-	if(!swapchainRef || swapchainRef->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
-		return Error_nullPointer(0, "Swapchain_resize()::swapchain is required");
+	if(!swapchainRef || swapchainRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
+		retError(clean, Error_nullPointer(0, "Swapchain_resize()::swapchain is required"));
 
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->base.resource.device);
 
 	if(SpinLock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
-		return Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain");
+		retError(clean, Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain"));
 
 	//Check if swapchain was in flight. If yes, warn that the user has to flush manually
 
-	Error err = Error_none();
 	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"))
+		retError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"));
 
 	Bool any = false;
 
@@ -68,15 +62,19 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 		SpinLock_unlock(&device->lock);
 
 	if (any)
-		gotoIfError(clean, Error_invalidState(
-			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"
-		))
+		retError(clean, Error_invalidState(
+			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"));
 
 	//Resize with same format and same size is a NOP
 
-	I32x2 newSize = swapchain->info.window->size;
-	EWindowFormat newFormat = swapchain->info.window->format;
-	WindowOrientation orientation = swapchain->info.window->orientation;
+	Window *window = Swapchain_getWindow(swapchain);
+
+	if(!window)
+		retError(clean, Error_invalidState(0, "SwapchainRef_resize() window is invalid"));
+
+	I32x2 newSize = window->size;
+	EWindowFormat newFormat = window->format;
+	WindowOrientation orientation = window->orientation;
 
 	ETextureFormatId textureFormatId = 0;
 
@@ -87,7 +85,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 		case EWindowFormat_RGBA16f:        textureFormatId = ETextureFormatId_RGBA16f;        break;
 		case EWindowFormat_RGBA32f:        textureFormatId = ETextureFormatId_RGBA32f;        break;
 		default:
-			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"))
+			retError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
 
 	if(
@@ -99,8 +97,8 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
 	//Otherwise, we properly resize
 
-	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef))
-	gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title))        //Re-create views
+	gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef, e_rr));
+	gotoIfError3(clean, UnifiedTexture_createExt(swapchainRef, window->title, e_rr));        //Re-create views
 	++swapchain->versionId;
 
 	swapchain->base.textureFormatId = (U8) textureFormatId;
@@ -112,62 +110,55 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&swapchain->lock);
 
-	return err;
+	return s_uccess;
 }
 
-void Swapchain_free(Swapchain *swapchain, Allocator alloc) {
+void Swapchain_free(Swapchain *swapchain, const Allocator *alloc) {
 	SpinLock_lock(&swapchain->lock, U64_MAX);
 	Swapchain_freeExt(swapchain, alloc);
 	UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
 }
 
-Error GraphicsDeviceRef_createSwapchain(
+Bool GraphicsDeviceRef_createSwapchain(
 	GraphicsDeviceRef *dev,
 	SwapchainInfo info,
 	Bool allowWriteExt,
 	DescriptorTableRef *bindlessDescriptorTable,
-	SwapchainRef **scRef
+	SwapchainRef **scRef,
+	Error *e_rr
 ) {
 
-	if(!info.window || !info.window->nativeHandle)
-		return Error_nullPointer(
+	Bool s_uccess = true;
+
+	Window *window = info.window ? (Window*)(info.window + 1) : NULL;
+
+	if(!window || !window->nativeHandle)
+		retError(clean, Error_nullPointer(
 			0, "GraphicsDeviceRef_createSwapchain()::deviceRef and info.window (physical) are required"
-		);
+		));
 
 	//On some platforms the images we get back != the images we request.
 	//Even though we request 3, we might get 5 even.
 	//https://github.com/googlesamples/vulkan-basic-samples/issues/24#issuecomment-442626040
 	//Unfortunately we still have to allocate up to (48 + 16) * 2 = 128 bytes extra, not too bad though.
 
-	Error err = RefPtr_createx(
-		(U32)(
-			sizeof(Swapchain) +
-			(GraphicsDeviceRef_getObjectSizes(dev)->image + sizeof(UnifiedTextureImage)) * SWAPCHAIN_MAX_IMAGES +
-			GraphicsDeviceRef_getObjectSizes(dev)->swapchain
-		),
-		(ObjectFreeFunc) Swapchain_free,
-		(ETypeId) EGraphicsTypeId_Swapchain,
-		scRef
-	);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->swapchain, scRef, e_rr));
 
 	ETextureFormatId formatId = ETextureFormatId_BGRA8;
 
-	switch (info.window->format) {
+	switch (window->format) {
 		case EWindowFormat_BGRA8:        formatId = ETextureFormatId_BGRA8;        break;
 		case EWindowFormat_RGBA8:        formatId = ETextureFormatId_RGBA8;        break;
 		case EWindowFormat_BGR10A2:        formatId = ETextureFormatId_BGR10A2;    break;
 		case EWindowFormat_RGBA16f:        formatId = ETextureFormatId_RGBA16f;    break;
 		case EWindowFormat_RGBA32f:        formatId = ETextureFormatId_RGBA32f;    break;
 		default:
-			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"))
+			retError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
 
 	Swapchain *swapchain = SwapchainRef_ptr(*scRef);
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
+	gotoIfError3(clean, RefPtr_inc(dev));
 
 	swapchain->info = info;
 	swapchain->base = (UnifiedTexture) {
@@ -178,8 +169,8 @@ Error GraphicsDeviceRef_createSwapchain(
 		},
 		.textureFormatId = (U8) formatId,
 		.type = (U8) ETextureType_2D,
-		.width = (U16) I32x2_x(info.window->size),
-		.height = (U16) I32x2_y(info.window->size),
+		.width = (U16) I32x2_x(window->size),
+		.height = (U16) I32x2_y(window->size),
 		.length = 1,
 		.levels = 1,
 		.images = 3,        //Probably there are 3 images, but it's possible impl changes this later (up to 5), don't assume
@@ -200,13 +191,13 @@ Error GraphicsDeviceRef_createSwapchain(
 		#endif
 	}
 
-	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef))
-	gotoIfError(clean, UnifiedTexture_create(*scRef, bindlessDescriptorTable, info.window->title))
+	gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef, e_rr));
+	gotoIfError3(clean, UnifiedTexture_create(*scRef, bindlessDescriptorTable, window->title, e_rr));
 
 clean:
 
-	if(err.genericError)
-		SwapchainRef_dec(scRef);
+	if(!s_uccess)
+		RefPtr_dec(scRef);
 
-	return err;
+	return s_uccess;
 }

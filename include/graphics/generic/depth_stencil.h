@@ -38,10 +38,7 @@ typedef RefPtr DescriptorTableRef;
 
 #define DepthStencilRef_ptr(ptr) RefPtr_data(ptr, DepthStencil)
 
-void DepthStencilRef_dec(DepthStencilRef **depthStencil);
-Error DepthStencilRef_inc(DepthStencilRef *depthStencil);
-
-Error GraphicsDeviceRef_createDepthStencil(
+Bool GraphicsDeviceRef_createDepthStencil(
 	GraphicsDeviceRef *deviceRef,
 	U16 width,
 	U16 height,
@@ -50,7 +47,8 @@ Error GraphicsDeviceRef_createDepthStencil(
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	DepthStencilRef **depthStencil
+	DepthStencilRef **depthStencil,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

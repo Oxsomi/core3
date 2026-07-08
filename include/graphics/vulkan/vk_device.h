@@ -25,7 +25,8 @@
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/command_list.h"
 #include "types/container/list.h"
-#include "types/math/vec.h"
+#include "types/math/vec4f.h"
+#include "types/container/list_basic_types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS       //For fallback to query memory usage
 	#define UNICODE
@@ -227,7 +228,7 @@ typedef struct VkGraphicsDevice {
 	Bool hasDistinctMemory;
 	Bool hasOnlyLocalMemory;
 	U8 padding1[6];
-	
+
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS        //For fallback to query memory usage
 		IDXGIAdapter3 *dxgiAdapter;
 	#else
@@ -304,6 +305,6 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	U8 fifCount
 );
 
-Error VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt);
+Bool VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt, Error *e_rr);
 
-Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer);
+Bool VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer, Error *e_rr);

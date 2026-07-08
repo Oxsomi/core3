@@ -20,7 +20,7 @@
 
 //graphics/d3d12/generic/dx_texture.c
 
-#include "platforms/ext/listx.h"
+#include "types/container/list.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/d3d12/dx_device.h"
@@ -28,11 +28,12 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
 #include "platforms/logx.h"
 #include "types/container/texture_format.h"
 #include "types/base/constants.h"
+#include "types/container/string_unicode.h"
 
 void DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
@@ -49,13 +50,16 @@ void DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name) {
+Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = textureRef ?
+		GraphicsDeviceRef_getAlloc(TextureRef_getUnifiedTexture(textureRef, NULL).resource.device) : NULL;
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 
 	//Prepare temporary free-ables and extended data.
 
-	Error err = Error_none();
 	ListU16 temp16 = (ListU16) { 0 };
 	ELockAcquire acq = ELockAcquire_Invalid;
 
@@ -79,7 +83,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		case ETextureFormatId_RG8 : case ETextureFormatId_RG8s: case ETextureFormatId_RG8u: case ETextureFormatId_RG8i:
 			dxFormat = DXGI_FORMAT_R8G8_TYPELESS;
 			break;
-		
+
 		case ETextureFormatId_RGBA8 : case ETextureFormatId_RGBA8s: case ETextureFormatId_RGBA8u: case ETextureFormatId_RGBA8i:
 			dxFormat = DXGI_FORMAT_R8G8B8A8_TYPELESS;
 			break;
@@ -128,7 +132,10 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		case ETextureFormatId_BC7: case ETextureFormatId_BC7_sRGB:    dxFormat = DXGI_FORMAT_BC7_TYPELESS;            break;
 
 		default:
-			return Error_unsupportedOperation(0, "UnifiedTexture_create() was called with unsupported texture format");
+			retError(clean, Error_unsupportedOperation(
+				0,
+				"UnifiedTexture_create() was called with unsupported texture format"
+			));
 	}
 
 	if(!texture->depthFormat)
@@ -211,12 +218,12 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		);
 
 		if(!res)
-			gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't query allocInfo"))
+			retError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't query allocInfo"));
 
 		//TODO: versioned image
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, 0);
-		
+
 		Bool cpuSided = texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;
 
 		//Dedicated allocations for depth stencil and render targets that are >=512px
@@ -239,34 +246,44 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
 
 			if(allocInfo.SizeInBytes > device->info.capabilities.maxAllocationSize)
-				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"))
+				retError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate resource size!"));
 
 			U64 usedMem = DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(device, !cpuSided);
 			U64 maxAlloc = cpuSided ? device->info.capabilities.sharedMemory : device->info.capabilities.dedicatedMemory;
 
 			if(usedMem != U64_MAX && usedMem + allocInfo.SizeInBytes > maxAlloc)
-				gotoIfError(clean, Error_outOfMemory(0, "Dedicated memory block allocation would exceed available memory"))
+				retError(clean, Error_outOfMemory(0, "Dedicated memory block allocation would exceed available memory"));
 
 			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
 
 			if(device->allocator.blocks.length >= U32_MAX)
-				gotoIfError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate dedicated block"))
+				retError(clean, Error_invalidState(0, "D3D12UnifiedTexture_create() couldn't allocate dedicated block"));
 
 			U32 blockId = (U32) device->allocator.blocks.length;
-			gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&device->allocator.blocks, block))
+			gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&device->allocator.blocks, block, alloc, e_rr));
 
 			AllocationBuffer *allocBuf = &device->allocator.blocks.ptrNonConst[blockId].allocations;
 
-			gotoIfError(clean, AllocationBuffer_createx(allocInfo.SizeInBytes, true, 0, allocBuf))
+			gotoIfError3(clean, AllocationBuffer_create(
+				&(AllocationBufferCreate) {
+					.size = allocInfo.SizeInBytes,
+					.nonLinearAlignment = 0,
+					.alloc = alloc,
+					.allocationBuffer = allocBuf
+				},
+				true, e_rr
+			));
 
 			U8 *dummy = NULL;
-			gotoIfError(clean, AllocationBuffer_allocateBlockx(
-				allocBuf,
-				allocInfo.SizeInBytes,
-				allocInfo.Alignment,
-				false,
-				(const U8**) &dummy
-			))
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(
+				&(AllocationBufferAllocate) {
+					.allocationBuffer = allocBuf,
+					.alignment = allocInfo.Alignment,
+					.isNonLinearResource = false,
+					.alloc = alloc
+				},
+				allocInfo.SizeInBytes, (const U8**) &dummy, e_rr
+			));
 
 			if(acq == ELockAcquire_Acquired)
 				SpinLock_unlock(&device->allocator.lock);
@@ -276,7 +293,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			D3D12_HEAP_DESC heap = getDxHeapDesc(device, &cpuSided, allocInfo.Alignment, EResourceType_Undefined);
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
-			
+
 			if(device->flags & EGraphicsDeviceFlags_IsDebug)
 				Log_debugLnx(
 					"-- Graphics: Allocating dedicated memory block (%"PRIu32" with size %"PRIu64")\n"
@@ -287,7 +304,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 					maxAlloc - usedMem
 				);
 
-			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommittedResource3(
+			gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommittedResource3(
 				deviceExt->device,
 				&heap.Properties,
 				heap.Flags,
@@ -297,7 +314,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				NULL, 0, NULL,
 				&IID_ID3D12Resource,
 				(void**)&managedImageExt->image
-			)))
+			), e_rr));
 
 			texture->resource.allocated = true;
 			texture->resource.blockId = blockId;
@@ -313,7 +330,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 			};
 
 			DeviceMemoryBlock block;
-			gotoIfError(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
+			gotoIfError3(clean, DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 				&device->allocator,
 				&req,
 				cpuSided,
@@ -321,14 +338,13 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				&texture->resource.blockOffset,
 				texture->resource.type,
 				name,
-				&block
-			))
+				&block, e_rr));
 
 			texture->resource.allocated = true;
 
 			D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormatFullyQualified };
 
-			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
+			gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
 				deviceExt->device,
 				block.ext,
 				texture->resource.blockOffset,
@@ -338,7 +354,7 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 				0, NULL,
 				&IID_ID3D12Resource,
 				(void**)&managedImageExt->image
-			)))
+			), e_rr));
 		}
 	}
 
@@ -351,9 +367,9 @@ Error DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString nam
 		managedImageExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-			gotoIfError(clean, CharString_toUTF16x(name, &temp16))
-			gotoIfError(clean, dxCheck(managedImageExt->image->lpVtbl->SetName(managedImageExt->image, temp16.ptr)))
-			ListU16_freex(&temp16);
+			gotoIfError3(clean, CharString_toUTF16(name, alloc, &temp16, e_rr));
+			gotoIfError3(clean, dxCheck(managedImageExt->image->lpVtbl->SetName(managedImageExt->image, temp16.ptr), e_rr));
+			ListU16_free(&temp16, alloc);
 		}
 	}
 
@@ -362,19 +378,23 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&device->allocator.lock);
 
-	ListU16_freex(&temp16);
-	return err;
+	ListU16_free(&temp16, alloc);
+	return s_uccess;
 }
 
-Error DxUnifiedTexture_transition(
+Bool DxUnifiedTexture_transition(
 	DxUnifiedTexture *image,
 	D3D12_BARRIER_SYNC sync,
 	D3D12_BARRIER_ACCESS access,
 	D3D12_BARRIER_LAYOUT layout,
 	const D3D12_BARRIER_SUBRESOURCE_RANGE *range,
 	ListD3D12_TEXTURE_BARRIER *imageBarriers,
-	D3D12_BARRIER_GROUP *dependency
+	D3D12_BARRIER_GROUP *dependency,
+	const Allocator *alloc,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
 
 	//Avoid duplicate barriers except in one case:
 	//direct3d12.has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
@@ -388,7 +408,7 @@ Error DxUnifiedTexture_transition(
 		access != D3D12_BARRIER_ACCESS_COPY_DEST &&
 		access != D3D12_BARRIER_ACCESS_RESOLVE_DEST
 	)
-		return Error_none();
+		return s_uccess;
 
 	//Handle image barrier
 
@@ -408,10 +428,7 @@ Error DxUnifiedTexture_transition(
 		.Subresources = *range
 	};
 
-	const Error err = ListD3D12_TEXTURE_BARRIER_pushBackx(imageBarriers, imageBarrier);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, ListD3D12_TEXTURE_BARRIER_pushBack(imageBarriers, imageBarrier, alloc, e_rr));
 
 	image->lastLayout = imageBarrier.LayoutAfter;
 	image->lastSync = imageBarrier.SyncAfter;
@@ -420,5 +437,6 @@ Error DxUnifiedTexture_transition(
 	dependency->pTextureBarriers = imageBarriers->ptr;
 	dependency->NumBarriers = (U32) imageBarriers->length;
 
-	return Error_none();
+clean:
+	return s_uccess;
 }

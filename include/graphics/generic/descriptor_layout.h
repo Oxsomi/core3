@@ -21,10 +21,10 @@
 //graphics/generic/descriptor_layout.h
 
 #pragma once
-#include "platforms/ext/listx.h"
+#include "types/container/list.h"
 #include "types/base/error.h"
 #include "types/container/ref_ptr.h"
-#include "formats/oiSH/registers.h"
+#include "formats/oiSH/sh_registers.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -130,7 +130,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntry(
 	Error *e_rr
 );
 
-void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, Allocator alloc);
+void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, const Allocator *alloc);
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DescriptorLayoutRef;
@@ -151,14 +151,12 @@ typedef struct DescriptorLayout {
 #define DescriptorLayout_ext(ptr, T) (!ptr ? NULL : (T##DescriptorLayout*)(ptr + 1))        //impl
 #define DescriptorLayoutRef_ptr(ptr) RefPtr_data(ptr, DescriptorLayout)
 
-void DescriptorLayoutRef_dec(DescriptorLayoutRef **layout);
-Error DescriptorLayoutRef_inc(DescriptorLayoutRef *layout);
-
-Error GraphicsDeviceRef_createDescriptorLayout(
+Bool GraphicsDeviceRef_createDescriptorLayout(
 	GraphicsDeviceRef *dev,
 	DescriptorLayoutInfo *info,        //Moves info
 	CharString name,
-	DescriptorLayoutRef **layout
+	DescriptorLayoutRef **layout,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

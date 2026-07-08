@@ -20,19 +20,19 @@
 
 //graphics/vulkan/generic/vk_descriptor_layout.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "types/container/string.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/string.h"
 #include "platforms/logx.h"
-#include "formats/oiSH/entries.h"
+#include "formats/oiSH/sh_entries.h"
 #include "types/base/constants.h"
 
-void VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator alloc) {
+void VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, const Allocator *alloc) {
 
 	(void) alloc;
 
@@ -46,9 +46,9 @@ void VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, Allocator all
 }
 
 VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
-	
+
 	switch (regType & ESHRegisterType_TypeMask) {
-		
+
 		case ESHRegisterType_Sampler:
 		case ESHRegisterType_SamplerComparisonState:
 			return regType & ESHRegisterType_IsCombinedSampler ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
@@ -131,13 +131,16 @@ TListImpl(VkDescriptorSetLayoutBinding);
 TList(VkDescriptorBindingFlags);
 TListImpl(VkDescriptorBindingFlags);
 
-Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	GraphicsDeviceRef *dev,
 	DescriptorLayout *layout,
-	CharString name
+	CharString name,
+	Error *e_rr
 ) {
 
-	Error err = Error_none();
+	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+
 	CharString tmpName = CharString_createNull();
 	ListU64 sortedList = (ListU64) { 0 };
 	ListVkDescriptorSetLayoutBinding bindings = (ListVkDescriptorSetLayoutBinding) { 0 };
@@ -172,11 +175,11 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		partiallyBound[i] = partiallyBound[0];
 	}
 
-	gotoIfError(clean, ListU64_reservex(&sortedList, info.bindings.length))
-	gotoIfError(clean, ListVkDescriptorSetLayoutBinding_resizex(&bindings, info.bindings.length))
+	gotoIfError3(clean, ListU64_reserve(&sortedList, info.bindings.length, alloc, e_rr));
+	gotoIfError3(clean, ListVkDescriptorSetLayoutBinding_resize(&bindings, info.bindings.length, alloc, e_rr));
 
 	if(anyBindless)
-		gotoIfError(clean, ListVkDescriptorBindingFlags_resizex(&flags, info.bindings.length))
+		gotoIfError3(clean, ListVkDescriptorBindingFlags_resize(&flags, info.bindings.length, alloc, e_rr));
 
 	U8 uniqueSetCounter = 0, isBindlessSet = 0;
 	U32 sets[4];
@@ -185,9 +188,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	for(U32 i = 0; i < (U32) info.bindings.length; ++i) {
 
-		gotoIfError(clean, ListU64_pushBack(
-			&sortedList, ((U64)info.bindings.ptr[i].binding.space << 32) | i, (Allocator) { 0 }
-		))
+		gotoIfError3(clean, ListU64_pushBack(
+			&sortedList, ((U64)info.bindings.ptr[i].binding.space << 32) | i, NULL, e_rr));
 
 		//Make sure the set is registered to avoid going over 4 sets
 
@@ -198,14 +200,13 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		for(; j < uniqueSetCounter; ++j)
 			if(sets[j] == binding.binding.space)
 				break;
-			
+
 		if (j == uniqueSetCounter) {
 
 			if(uniqueSetCounter == 4)
-				gotoIfError(clean, Error_outOfBounds(
-					0, 4, 4, "GraphicsDeviceRef_createDescriptorLayout can only have 4 unique descriptor sets bound at once"
-				))
-			
+				retError(clean, Error_outOfBounds(
+					0, 4, 4, "GraphicsDeviceRef_createDescriptorLayout can only have 4 unique descriptor sets bound at once"));
+
 			layoutExt->setIds[uniqueSetCounter] = binding.binding.space;
 			sets[uniqueSetCounter] = binding.binding.space;
 			++uniqueSetCounter;
@@ -219,9 +220,8 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	}
 
 	if(!ListU64_sort(sortedList))
-		gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"
-		))
+		retError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"));
 
 	//Create our sets and bindings
 
@@ -297,13 +297,21 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		if(!setInfo[i].pBindings)
 			continue;
 
-		gotoIfError(clean, checkVkError(deviceExt->createDescriptorSetLayout(
+		gotoIfError3(clean, checkVkError(deviceExt->createDescriptorSetLayout(
 			deviceExt->device, &setInfo[i], NULL, &layoutExt->layouts[i]
-		)))
+		), e_rr));
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
-			gotoIfError(clean, CharString_formatx(&tmpName, "%.*s set %"PRIu8, (int) CharString_length(name), name.ptr, i))
+			gotoIfError3(clean, CharString_format(
+				alloc,
+				&tmpName,
+				e_rr,
+				"%.*s set %"PRIu8,
+				(int) CharString_length(name),
+				name.ptr,
+				i
+			));
 
 			const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -312,15 +320,15 @@ Error VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				.objectHandle = (U64) layoutExt->layouts[i]
 			};
 
-			gotoIfError(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName)))
-			CharString_freex(&tmpName);
+			gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName), e_rr));
+			CharString_free(&tmpName, alloc);
 		}
 	}
 
 clean:
-	ListVkDescriptorSetLayoutBinding_freex(&bindings);
-	ListVkDescriptorBindingFlags_freex(&flags);
-	ListU64_freex(&sortedList);
-	CharString_freex(&tmpName);
-	return err;
+	ListVkDescriptorSetLayoutBinding_free(&bindings, alloc);
+	ListVkDescriptorBindingFlags_free(&flags, alloc);
+	ListU64_free(&sortedList, alloc);
+	CharString_free(&tmpName, alloc);
+	return s_uccess;
 }

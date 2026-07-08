@@ -42,7 +42,7 @@ typedef enum ERTASBuildFlags {
 	ERTASBuildFlags_FastBuild                  = 1 << 3,        //Prefer fast builds over longer builds (might be worse RT perf)
 	ERTASBuildFlags_MinimizeMemory             = 1 << 4,        //Ensure both scratch and output mem is reduced (slower builds)
 
-	ERTASBuildFlags_IsUpdate                   = 1 << 5,        //If the current update is a refit (requires parent AS to be set)
+	ERTASBuildFlags_IsUpdate                   = 1 << 5,        //If current update is refit (requires parent AS to be set)
 
 	ERTASBuildFlags_Count                      = 6,
 
@@ -75,7 +75,7 @@ typedef struct RTAS {
 
 } RTAS;
 
-Error RTAS_validateDeviceBuffer(DeviceData *bufPtr);        //Check if buffer is accessible by RTAS (BLAS/TLAS)
+Bool RTAS_validateDeviceBuffer(DeviceData *bufPtr, Error *e_rr);        //Check if buffer is accessible by RTAS (BLAS/TLAS)
 
 #ifdef __cplusplus
 	}

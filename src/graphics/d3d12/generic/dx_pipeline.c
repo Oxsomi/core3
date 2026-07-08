@@ -20,15 +20,15 @@
 
 //graphics/d3d12/generic/dx_pipeline.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
-#include "platforms/ext/bufferx.h"
+#include "types/container/buffer.h"
 
-void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, Allocator allocator) {
+void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 
-	(void)allocator;
+	(void)alloc;
 
 	if(!pipeline)
 		return;

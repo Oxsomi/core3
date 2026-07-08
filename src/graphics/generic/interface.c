@@ -43,7 +43,7 @@
 
 const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *deviceRef) {
 
-	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return NULL;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -55,19 +55,21 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	GraphicsInterface *GraphicsInterface_instance = 0, graphicsInterfaceInstance = { 0 };
 
-	Bool GraphicsInterface_register(FileInfo info, void *dat, Error *e_rr) {
+	Bool GraphicsInterface_register(const FileInfo *info, void *dat, const Allocator *alloc, Error *e_rr) {
+
+		Bool s_uccess = true;
 
 		(void) dat;
+		(void) alloc;
 
-		if(info.type != EFileType_File)
+		if(info->type != EFileType_File)
 			return true;
 
-		if(!DynamicLibrary_isValidPath(info.path))
+		if(!DynamicLibrary_isValidPath(info->path))
 			return true;
 
 		DynamicLibrary library = (DynamicLibrary) { 0 };
-		Bool s_uccess = true;
-		gotoIfError3(clean, DynamicLibrary_load(info.path, true, &library, e_rr))
+		gotoIfError3(clean, DynamicLibrary_load(info->path, true, &library, e_rr));
 
 		void *tableFunc = NULL;
 		if(!DynamicLibrary_loadSymbol(library, CharString_createRefCStrConst("GraphicsInterface_getTable"), &tableFunc, NULL))
@@ -78,19 +80,19 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		);
 
 		if (table.api >= EGraphicsApi_Count) {
-			Log_warnLnx("GraphicsInterface_register() found \"%s\" but was unable to initialize it", info.path.ptr);
+			Log_warnLnx("GraphicsInterface_register() found \"%s\" but was unable to initialize it", info->path.ptr);
 			goto clean;
 		}
 
 		if(GraphicsInterface_instance->tables[table.api].instanceCreate)
-			retError(clean, Error_invalidState(0, "GraphicsInterface_register() dynamic library was already initialized"))
+			retError(clean, Error_invalidState(0, "GraphicsInterface_register() dynamic library was already initialized"));
 
 		GraphicsInterface_instance->tables[table.api] = table;
-		Log_debugLnx("-- Dynamically loaded %s", info.path.ptr);
+		Log_debugLnx("-- Dynamically loaded %s", info->path.ptr);
 
 	clean:
 		if(!s_uccess)
-			DynamicLibrary_free(&library);
+			DynamicLibrary_free(library);
 
 		return s_uccess;
 	}
@@ -105,15 +107,18 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		GraphicsInterface_instance = &graphicsInterfaceInstance;
 
 		gotoIfError3(clean, File_foreach(
-			CharString_createRefCStrConst("."), true, GraphicsInterface_register, NULL, false, e_rr
-		))
+			&Platform_instance->appDirectory, true, GraphicsInterface_register, NULL, false,
+			Platform_instance->alloc, e_rr
+		));
 
 	clean:
 		return s_uccess;
 	}
 
 	Bool GraphicsInterface_supports(EGraphicsApi api) {
-		return api <= EGraphicsApi_Count && GraphicsInterface_instance && GraphicsInterface_instance->tables[api].instanceCreate;
+		return
+			api <= EGraphicsApi_Count && GraphicsInterface_instance &&
+			GraphicsInterface_instance->tables[api].instanceCreate;
 	}
 
 	//These are kept for ease of use, these are just a wrapper for the interface
@@ -124,17 +129,17 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	//RTAS
 
 	void BLAS_freeExt(BLAS *blas) { WrapperFunction(blas->base.device, blasFree)(blas); }
-	Error BLAS_initExt(BLAS *blas) { return WrapperFunction(blas->base.device, blasInit)(blas); }
+	Bool BLAS_initExt(BLAS *blas, Error *e_rr) { return WrapperFunction(blas->base.device, blasInit)(blas, e_rr); }
 
-	Error BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
-		return WrapperFunction(deviceRef, blasFlush)(commandBuffer, deviceRef, pending);
+	Bool BLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr) {
+		return WrapperFunction(deviceRef, blasFlush)(commandBuffer, deviceRef, pending, e_rr);
 	}
 
 	void TLAS_freeExt(TLAS *tlas) { WrapperFunction(tlas->base.device, tlasFree)(tlas); }
-	Error TLAS_initExt(TLAS *tlas) { return WrapperFunction(tlas->base.device, tlasInit)(tlas); }
+	Bool TLAS_initExt(TLAS *tlas, Error *e_rr) { return WrapperFunction(tlas->base.device, tlasInit)(tlas, e_rr); }
 
-	Error TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
-		return WrapperFunction(deviceRef, tlasFlush)(commandBuffer, deviceRef, pending);
+	Bool TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending, Error *e_rr) {
+		return WrapperFunction(deviceRef, tlasFlush)(commandBuffer, deviceRef, pending, e_rr);
 	}
 
 	//Pipelines
@@ -174,38 +179,38 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		);
 	}
 
-	void Pipeline_freeExt(Pipeline *pipeline, Allocator alloc) {
+	void Pipeline_freeExt(Pipeline *pipeline, const Allocator *alloc) {
 		WrapperFunction(pipeline->device, pipelineFree)(pipeline, alloc);
 	}
 
 	//Sampler
 
-	Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
-		return WrapperFunction(dev, samplerCreate)(dev, sampler, name);
+	Bool GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr) {
+		return WrapperFunction(dev, samplerCreate)(dev, sampler, name, e_rr);
 	}
 
 	void Sampler_freeExt(Sampler *sampler) { WrapperFunction(sampler->device, samplerFree)(sampler); }
 
 	//Device buffer
 
-	Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
-		return WrapperFunction(dev, bufferCreate)(dev, buf, name);
+	Bool GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name, Error *e_rr) {
+		return WrapperFunction(dev, bufferCreate)(dev, buf, name, e_rr);
 	}
 
 	void DeviceBuffer_freeExt(DeviceBuffer *buffer) { WrapperFunction(buffer->resource.device, bufferFree)(buffer); }
 
-	Error DeviceBufferRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
-		return WrapperFunction(deviceRef, bufferFlush)(commandBuffer, deviceRef, pending);
+	Bool DeviceBufferRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending, Error *e_rr) {
+		return WrapperFunction(deviceRef, bufferFlush)(commandBuffer, deviceRef, pending, e_rr);
 	}
 
 	//Device texture
 
-	Error UnifiedTexture_createExt(TextureRef *texture, CharString name) {
-		return WrapperFunction(TextureRef_getUnifiedTexture(texture, NULL).resource.device, textureCreate)(texture, name);
+	Bool UnifiedTexture_createExt(TextureRef *texture, CharString name, Error *e_rr) {
+		return WrapperFunction(TextureRef_getUnifiedTexture(texture, NULL).resource.device, textureCreate)(texture, name, e_rr);
 	}
 
-	Error DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
-		return WrapperFunction(deviceRef, textureFlush)(commandBuffer, deviceRef, pending);
+	Bool DeviceTextureRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr) {
+		return WrapperFunction(deviceRef, textureFlush)(commandBuffer, deviceRef, pending, e_rr);
 	}
 
 	void UnifiedTexture_freeExt(TextureRef *texture) {
@@ -214,41 +219,56 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//Swapchain
 
-	Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain) {
-		return WrapperFunction(dev, swapchainCreate)(dev, swapchain);
+	Bool GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain, Error *e_rr) {
+		return WrapperFunction(dev, swapchainCreate)(dev, swapchain, e_rr);
 	}
 
-	void Swapchain_freeExt(Swapchain *data, Allocator alloc) {
+	void Swapchain_freeExt(Swapchain *data, const Allocator *alloc) {
 		WrapperFunction(data->base.resource.device, swapchainFree)(data, alloc);
 	}
 
 	//DescriptorLayout
 
-	Error GraphicsDeviceRef_createDescriptorLayoutExt(GraphicsDeviceRef *dev, DescriptorLayout *layout, CharString name) {
-		return WrapperFunction(dev, descriptorLayoutCreate)(dev, layout, name);
+	Bool GraphicsDeviceRef_createDescriptorLayoutExt(
+		GraphicsDeviceRef *dev,
+		DescriptorLayout *layout,
+		CharString name,
+		Error *e_rr
+	) {
+		return WrapperFunction(dev, descriptorLayoutCreate)(dev, layout, name, e_rr);
 	}
-	
-	void DescriptorLayout_freeExt(DescriptorLayout *layout, Allocator alloc) {
+
+	void DescriptorLayout_freeExt(DescriptorLayout *layout, const Allocator *alloc) {
 		WrapperFunction(layout->device, descriptorLayoutFree)(layout, alloc);
 	}
 
 	//PipelineLayout
 
-	Error GraphicsDeviceRef_createPipelineLayoutExt(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name) {
-		return WrapperFunction(dev, pipelineLayoutCreate)(dev, layout, name);
+	Bool GraphicsDeviceRef_createPipelineLayoutExt(
+		GraphicsDeviceRef *dev,
+		PipelineLayout *layout,
+		CharString name,
+		Error *e_rr
+	) {
+		return WrapperFunction(dev, pipelineLayoutCreate)(dev, layout, name, e_rr);
 	}
-	
-	void PipelineLayout_freeExt(PipelineLayout *layout, Allocator alloc) {
+
+	void PipelineLayout_freeExt(PipelineLayout *layout, const Allocator *alloc) {
 		WrapperFunction(layout->device, pipelineLayoutFree)(layout, alloc);
 	}
 
 	//DescriptorTable
 
-	Error DescriptorHeap_createDescriptorTableExt(DescriptorHeapRef *heap, DescriptorTable *table, CharString name) {
-		return WrapperFunction(DescriptorHeapRef_ptr(heap)->device, descriptorTableCreate)(heap, table, name);
+	Bool DescriptorHeap_createDescriptorTableExt(
+		DescriptorHeapRef *heap,
+		DescriptorTable *table,
+		CharString name,
+		Error *e_rr
+	) {
+		return WrapperFunction(DescriptorHeapRef_ptr(heap)->device, descriptorTableCreate)(heap, table, name, e_rr);
 	}
-	
-	void DescriptorTable_freeExt(DescriptorTable *table, Allocator alloc) {
+
+	void DescriptorTable_freeExt(DescriptorTable *table, const Allocator *alloc) {
 		WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableFree)(table, alloc);
 	}
 
@@ -275,20 +295,20 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 			table, bindingId, arrayId, count, e_rr
 		);
 	}
-	
+
 	//DescriptorHeap
 
-	Error GraphicsDeviceRef_createDescriptorHeapExt(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name) {
-		return WrapperFunction(dev, descriptorHeapCreate)(dev, heap, name);
+	Bool GraphicsDeviceRef_createDescriptorHeapExt(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name, Error *e_rr) {
+		return WrapperFunction(dev, descriptorHeapCreate)(dev, heap, name, e_rr);
 	}
 
-	void DescriptorHeap_freeExt(DescriptorHeap *heap, Allocator alloc) {
+	void DescriptorHeap_freeExt(DescriptorHeap *heap, const Allocator *alloc) {
 		WrapperFunction(heap->device, descriptorHeapFree)(heap, alloc);
 	}
 
 	//Allocator
 
-	Error DeviceMemoryAllocator_allocateExt(
+	Bool DeviceMemoryAllocator_allocateExt(
 		DeviceMemoryAllocator *allocator,
 		void *requirementsExt,
 		Bool cpuSided,
@@ -296,10 +316,11 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		U64 *blockOffset,
 		EResourceType resourceType,
 		CharString objectName,
-		DeviceMemoryBlock *resultBlock
+		DeviceMemoryBlock *resultBlock,
+		Error *e_rr
 	) {
 		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(allocator->device->instance)->api].memoryAllocate(
-			allocator, requirementsExt, cpuSided, blockId, blockOffset, resourceType, objectName, resultBlock
+			allocator, requirementsExt, cpuSided, blockId, blockOffset, resourceType, objectName, resultBlock, e_rr
 		);
 	}
 
@@ -309,12 +330,13 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//Device
 
-	Error GraphicsDevice_initExt(
+	Bool GraphicsDevice_initExt(
 		const GraphicsInstance *instance,
 		const GraphicsDeviceInfo *deviceInfo,
-		GraphicsDeviceRef **deviceRef
+		GraphicsDeviceRef **deviceRef,
+		Error *e_rr
 	) {
-		return GraphicsInterface_instance->tables[instance->api].deviceInit(instance, deviceInfo, deviceRef);
+		return GraphicsInterface_instance->tables[instance->api].deviceInit(instance, deviceInfo, deviceRef, e_rr);
 	}
 
 	U64 GraphicsDevice_getMemoryBudgetExt(GraphicsDevice *device, Bool isDeviceLocal) {
@@ -327,17 +349,18 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		GraphicsInterface_instance->tables[instance->api].deviceFree(instance, ext);
 	}
 
-	Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
-		return WrapperFunction(deviceRef, deviceWait)(deviceRef);
+	Bool GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef, Error *e_rr) {
+		return WrapperFunction(deviceRef, deviceWait)(deviceRef, e_rr);
 	}
 
-	Error GraphicsDevice_submitCommandsExt(
+	Bool GraphicsDevice_submitCommandsExt(
 		GraphicsDeviceRef *deviceRef,
 		ListCommandListRef commandLists,
 		ListSwapchainRef swapchains,
-		CBufferData data
+		CBufferData data,
+		Error *e_rr
 	) {
-		return WrapperFunction(deviceRef, deviceSubmitCommands)(deviceRef, commandLists, swapchains, data);
+		return WrapperFunction(deviceRef, deviceSubmitCommands)(deviceRef, commandLists, swapchains, data, e_rr);
 	}
 
 	void CommandList_processExt(
@@ -352,16 +375,16 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//Instance
 
-	Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
-		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef);
+	Bool GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
+		return GraphicsInterface_instance->tables[GraphicsInstanceRef_ptr(*instanceRef)->api].instanceCreate(info, instanceRef, e_rr);
 	}
 
-	void GraphicsInstance_freeExt(GraphicsInstance *inst, Allocator alloc) {
+	void GraphicsInstance_freeExt(GraphicsInstance *inst, const Allocator *alloc) {
 		GraphicsInterface_instance->tables[inst->api].instanceFree(inst, alloc);
 	}
 
-	Error GraphicsInstance_getDeviceInfosExt(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos) {
-		return GraphicsInterface_instance->tables[inst->api].instanceGetDevices(inst, infos);
+	Bool GraphicsInstance_getDeviceInfosExt(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr) {
+		return GraphicsInterface_instance->tables[inst->api].instanceGetDevices(inst, infos, e_rr);
 	}
 
 	const GraphicsObjectSizes *GraphicsInterface_getObjectSizes(EGraphicsApi api) {

@@ -21,7 +21,7 @@
 //graphics/generic/render_texture.h
 
 #pragma once
-#include "types/math/vec.h"
+#include "types/math/vec2.h"
 #include "types/container/ref_ptr.h"
 #include "graphics/generic/texture.h"
 
@@ -38,10 +38,7 @@ typedef RefPtr DescriptorTableRef;
 
 #define RenderTextureRef_ptr(ptr) RefPtr_data(ptr, RenderTexture)
 
-void RenderTextureRef_dec(RenderTextureRef **renderTexture);
-Error RenderTextureRef_inc(RenderTextureRef *renderTexture);
-
-Error GraphicsDeviceRef_createRenderTexture(
+Bool GraphicsDeviceRef_createRenderTexture(
 	GraphicsDeviceRef *deviceRef,
 	ETextureType type,
 	U16 width,
@@ -52,7 +49,8 @@ Error GraphicsDeviceRef_createRenderTexture(
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	RenderTextureRef **renderTexture
+	RenderTextureRef **renderTexture,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

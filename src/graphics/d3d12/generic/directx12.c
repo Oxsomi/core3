@@ -20,7 +20,7 @@
 
 //graphics/d3d12/generic/directx12.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline_structs.h"
@@ -44,80 +44,82 @@ D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op) {
 	}
 }
 
-Error dxCheck(HRESULT result) {
+Bool dxCheck(HRESULT result, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(SUCCEEDED(result))
-		return Error_none();
+		return s_uccess;
 
 	switch (result) {
 
 		case DXGI_ERROR_WAIT_TIMEOUT:
-			return Error_timedOut(0, 0, "dxCheck() timed out");
+			retError(clean, Error_timedOut(0, 0, "dxCheck() timed out"));
 
 		case E_OUTOFMEMORY:
-			return Error_outOfMemory(0, "dxCheck() out of memory");
+			retError(clean, Error_outOfMemory(0, "dxCheck() out of memory"));
 		case DXGI_ERROR_MORE_DATA:
-			return Error_outOfMemory(0, "dxCheck() more data was required but wasn't provided");
+			retError(clean, Error_outOfMemory(0, "dxCheck() more data was required but wasn't provided"));
 
 		case DXGI_ERROR_DEVICE_HUNG:
-			return Error_invalidState(0, "dxCheck() device hung");
+			retError(clean, Error_invalidState(0, "dxCheck() device hung"));
 		case DXGI_ERROR_DEVICE_REMOVED:
-			return Error_invalidState(1, "dxCheck() device removed");
+			retError(clean, Error_invalidState(1, "dxCheck() device removed"));
 		case DXGI_ERROR_DEVICE_RESET:
-			return Error_invalidState(2, "dxCheck() device reset");
+			retError(clean, Error_invalidState(2, "dxCheck() device reset"));
 		case DXGI_ERROR_ACCESS_LOST:
-			return Error_invalidState(3, "dxCheck() access lost");
+			retError(clean, Error_invalidState(3, "dxCheck() access lost"));
 		case DXGI_ERROR_DRIVER_INTERNAL_ERROR:
-			return Error_invalidState(4, "dxCheck() internal driver error");
+			retError(clean, Error_invalidState(4, "dxCheck() internal driver error"));
 		case D3D12_ERROR_DRIVER_VERSION_MISMATCH:
-			return Error_invalidState(5, "dxCheck() driver version mismatch");
+			retError(clean, Error_invalidState(5, "dxCheck() driver version mismatch"));
 		case DXGI_ERROR_GRAPHICS_VIDPN_SOURCE_IN_USE:
-			return Error_invalidState(6, "dxCheck() graphics source in use");
+			retError(clean, Error_invalidState(6, "dxCheck() graphics source in use"));
 		case E_FAIL:
-			return Error_invalidState(7, "dxCheck() failed");
+			retError(clean, Error_invalidState(7, "dxCheck() failed"));
 		case DXGI_ERROR_CANNOT_PROTECT_CONTENT:
-			return Error_invalidState(8, "dxCheck() can't protected content");
+			retError(clean, Error_invalidState(8, "dxCheck() can't protected content"));
 		case DXGI_ERROR_WAS_STILL_DRAWING:
-			return Error_invalidState(9, "dxCheck() device is still busy");
+			retError(clean, Error_invalidState(9, "dxCheck() device is still busy"));
 		case DXGI_ERROR_NAME_ALREADY_EXISTS:
-			return Error_invalidState(10, "dxCheck() name already exists");
+			retError(clean, Error_invalidState(10, "dxCheck() name already exists"));
 		case DXGI_ERROR_NOT_CURRENTLY_AVAILABLE:
-			return Error_invalidState(11, "dxCheck() not currently available");
+			retError(clean, Error_invalidState(11, "dxCheck() not currently available"));
 		case DXGI_ERROR_SESSION_DISCONNECTED:
-			return Error_invalidState(12, "dxCheck() session disconnected");
+			retError(clean, Error_invalidState(12, "dxCheck() session disconnected"));
 		case DXGI_ERROR_FRAME_STATISTICS_DISJOINT:
-			return Error_invalidState(13, "dxCheck() statistics gathering was interrupted");
+			retError(clean, Error_invalidState(13, "dxCheck() statistics gathering was interrupted"));
 		case DXGI_ERROR_NONEXCLUSIVE:
-			return Error_invalidState(14, "dxCheck() can't acquire global resource counter");
+			retError(clean, Error_invalidState(14, "dxCheck() can't acquire global resource counter"));
 		case DXGI_ERROR_RESTRICT_TO_OUTPUT_STALE:
-			return Error_invalidState(15, "dxCheck() swapchain output is stale");
+			retError(clean, Error_invalidState(15, "dxCheck() swapchain output is stale"));
 
 		case E_INVALIDARG:
-			return Error_invalidParameter(0, 0, "dxCheck() invalid argument");
+			retError(clean, Error_invalidParameter(0, 0, "dxCheck() invalid argument"));
 		case DXGI_ERROR_INVALID_CALL:
-			return Error_invalidParameter(0, 0, "dxCheck() invalid call");
+			retError(clean, Error_invalidParameter(0, 0, "dxCheck() invalid call"));
 
 		case DXGI_ERROR_UNSUPPORTED:
-			return Error_unsupportedOperation(0, "dxCheck() unsupported operation");
+			retError(clean, Error_unsupportedOperation(0, "dxCheck() unsupported operation"));
 
 		case DXGI_ERROR_ALREADY_EXISTS:
-			return Error_invalidParameter(0, 0, "dxCheck() already exists");
+			retError(clean, Error_invalidParameter(0, 0, "dxCheck() already exists"));
 
 		case D3D12_ERROR_ADAPTER_NOT_FOUND:
-			return Error_notFound(0, 0, "dxCheck() adapter not found");
+			retError(clean, Error_notFound(0, 0, "dxCheck() adapter not found"));
 		case DXGI_ERROR_NOT_FOUND:
-			return Error_notFound(1, 0, "dxCheck() not found");
+			retError(clean, Error_notFound(1, 0, "dxCheck() not found"));
 		case DXGI_ERROR_SDK_COMPONENT_MISSING:
-			return Error_notFound(2, 0, "dxCheck() sdk component is missing");
+			retError(clean, Error_notFound(2, 0, "dxCheck() sdk component is missing"));
 
 		case DXGI_ERROR_ACCESS_DENIED:
-			return Error_unauthorized(0, "dxCheck() not permitted");
+			retError(clean, Error_unauthorized(0, "dxCheck() not permitted"));
 
 		case E_NOTIMPL:
-			return Error_unimplemented(0, "dxCheck() not implemented");
+			retError(clean, Error_unimplemented(0, "dxCheck() not implemented"));
 
 		default:
-			return Error_unsupportedOperation(3, "dxCheck() has unknown error");
+			retError(clean, Error_unsupportedOperation(3, "dxCheck() has unknown error"));
 	}
 }
 

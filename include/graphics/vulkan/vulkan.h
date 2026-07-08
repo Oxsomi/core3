@@ -115,7 +115,7 @@ typedef struct VkTLAS {
 static const U32 raytracingShaderIdSize = 32;
 static const U32 raytracingShaderAlignment = 64;
 
-Error checkVkError(VkResult result);
+Bool checkVkError(VkResult result, Error *e_rr);
 
 //Pass types as non NULL to allow validating if the texture format is supported.
 //Sometimes you don't want this, for example when serializing.
@@ -131,7 +131,7 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType);
 
 //Transitions entire resource rather than sub-resources
 
-Error VkUnifiedTexture_transition(
+Bool VkUnifiedTexture_transition(
 	VkUnifiedTexture *image,
 	VkPipelineStageFlags2 stage,
 	VkAccessFlagBits2 access,
@@ -139,5 +139,7 @@ Error VkUnifiedTexture_transition(
 	U32 graphicsQueueId,
 	const VkImageSubresourceRange *range,
 	ListVkImageMemoryBarrier2 *imageBarriers,
-	VkDependencyInfo *dependency
+	VkDependencyInfo *dependency,
+	const Allocator *alloc,
+	Error *e_rr
 );

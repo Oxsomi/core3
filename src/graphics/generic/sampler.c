@@ -20,29 +20,22 @@
 
 //graphics/generic/sampler.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/bindless_descriptor.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
 #include "types/container/string.h"
-#include "formats/oiSH/registers.h"
+#include "formats/oiSH/sh_registers.h"
 
-void SamplerRef_dec(SamplerRef **sampler) { RefPtr_dec(sampler); }
+void Sampler_free(Sampler *sampler, const Allocator *alloc) {
 
-Error SamplerRef_inc(SamplerRef *sampler) {
-	return !RefPtr_inc(sampler) ?
-		Error_invalidOperation(0, "SamplerRef_inc()::sampler is required") : Error_none();
-}
-
-void Sampler_free(Sampler *sampler, Allocator allocator) {
-
-	(void)allocator;
+	(void)alloc;
 
 	//Log_debugLnx("Destroy: %p", sampler);
 
@@ -52,86 +45,87 @@ void Sampler_free(Sampler *sampler, Allocator allocator) {
 			sampler->device, sampler->bindlessDescriptorTable, sampler->samplerLocation, NULL
 		);
 
-		DescriptorTableRef_dec(&sampler->bindlessDescriptorTable);
+		RefPtr_dec(&sampler->bindlessDescriptorTable);
 	}
 
 	Sampler_freeExt(sampler);
-	GraphicsDeviceRef_dec(&sampler->device);
+	RefPtr_dec(&sampler->device);
 }
 
-Error GraphicsDeviceRef_createSampler(
+Bool GraphicsDeviceRef_createSampler(
 	GraphicsDeviceRef *dev,
 	SamplerInfo info,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	SamplerRef **sampler
+	SamplerRef **sampler,
+	Error *e_rr
 ) {
 
-	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		return Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::dev is required");
+	Bool s_uccess = true;
+
+	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::dev is required"));
 
 	if(bindlessDescriptorTable && disallowBindlessDescriptor)
-		return Error_invalidState(0, "GraphicsDeviceRef_createSampler() bindlessDescriptorTable is set, but disallowed");
+		retError(clean, Error_invalidState(
+			0,
+			"GraphicsDeviceRef_createSampler() bindlessDescriptorTable is set, but disallowed"
+		));
 
-	if(bindlessDescriptorTable && bindlessDescriptorTable->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
-		return Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::bindlessDescriptorTable should be valid if non NULL");
+	if(bindlessDescriptorTable && bindlessDescriptorTable->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
+		retError(clean, Error_nullPointer(
+			0,
+			"GraphicsDeviceRef_createSampler()::bindlessDescriptorTable should be valid if non NULL"
+		));
 
 	if (!disallowBindlessDescriptor && !bindlessDescriptorTable)
 		bindlessDescriptorTable = GraphicsDeviceRef_ptr(dev)->defaultDescriptorTable;
 
 	if(info.filter &~ ESamplerFilterMode_All)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createSampler()::info.filter contains invalid bits"
-		);
+		));
 
 	if(
 		info.addressU >= ESamplerAddressMode_Count ||
 		info.addressV >= ESamplerAddressMode_Count ||
 		info.addressW >= ESamplerAddressMode_Count
 	)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 1, "GraphicsDeviceRef_createSampler()::info.addressU, addressV or addressW is invalid"
-		);
+		));
 
 	if(info.aniso > 16)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 4, "GraphicsDeviceRef_createSampler()::info.aniso needs to be <=16 if anisotropy is used"
-		);
+		));
 
 	if(info.borderColor >= ESamplerBorderColor_Count)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 5, "GraphicsDeviceRef_createSampler()::info.borderColor is out of bounds"
-		);
+		));
 
 	if(info.comparisonFunction >= ECompareOp_Count)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 6, "GraphicsDeviceRef_createSampler()::info.comparisonFunction is out of bounds"
-		);
+		));
 
 	if(
 		!EFloatType_isFinite(EFloatType_F16, info.mipBias) ||
 		!EFloatType_isFinite(EFloatType_F16, info.minLod) ||
 		!EFloatType_isFinite(EFloatType_F16, info.maxLod)
 	)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 8, "GraphicsDeviceRef_createSampler()::info.mipBias, minLod or maxLod is invalid"
-		);
+		));
 
 	if(!info.maxLod)
 		info.maxLod = F32_castF16(65504.f);        //Set to F16 max
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(Sampler) + GraphicsDeviceRef_getObjectSizes(dev)->sampler),
-		(ObjectFreeFunc) Sampler_free,
-		(ETypeId) EGraphicsTypeId_Sampler,
-		sampler
-	);
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->sampler, sampler, e_rr));
 
-	if(err.genericError)
-		return err;
-
-	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
+	gotoIfError3(clean, RefPtr_inc(dev));
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
 
@@ -140,11 +134,11 @@ Error GraphicsDeviceRef_createSampler(
 	*samp = (Sampler) { .device = dev, .info = info };
 
 	if(bindlessDescriptorTable) {
-		gotoIfError(clean, DescriptorTableRef_inc(bindlessDescriptorTable))
+		gotoIfError3(clean, RefPtr_inc(bindlessDescriptorTable));
 		samp->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
-	gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name))
+	gotoIfError3(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name, e_rr));
 
 	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
 		dev,
@@ -154,14 +148,16 @@ Error GraphicsDeviceRef_createSampler(
 		false,
 		Descriptor_sampler(*sampler),
 		&samp->samplerLocation,
-		&err
-	))
+		e_rr
+	)) {
+		s_uccess = false;
 		goto clean;
+	}
 
 clean:
 
-	if(err.genericError)
-		SamplerRef_dec(sampler);
+	if(!s_uccess)
+		RefPtr_dec(sampler);
 
-	return err;
+	return s_uccess;
 }

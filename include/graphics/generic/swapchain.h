@@ -21,7 +21,7 @@
 //graphics/generic/swapchain.h
 
 #pragma once
-#include "types/math/vec.h"
+#include "types/math/vec2.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/lock.h"
 #include "graphics/generic/texture.h"
@@ -32,6 +32,7 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DescriptorTableRef;
+typedef RefPtr WindowRef;
 typedef struct Window Window;
 typedef enum EWindowFormat EWindowFormat;
 
@@ -46,8 +47,16 @@ typedef enum ESwapchainPresentMode {
 
 typedef struct SwapchainInfo {
 
-	//Window that this swapchain is created for. Call SwapchainRef_resize on resize
-	Window *window;
+	//Window that this swapchain is created for. Call SwapchainRef_resize on resize.
+	//
+	//IMPORTANT: This is a WEAK reference; the swapchain does NOT keep the window alive.
+	//The swapchain only knows the window is gone through the window's onDestroy callback,
+	//so the swapchain (and everything presenting to it) MUST be destroyed (RefPtr_dec'd)
+	//from within that destroy callback (or earlier), before the window's memory is released.
+	//Dereferencing this pointer after the window was destroyed is undefined behavior.
+	//The render loop should only touch the window from within the window's callbacks
+	//(onDraw/onResize/onDestroy), which guarantees the window is still alive.
+	WindowRef *window;
 
 	//Priorities using ESwapchainPresentMode.
 	//Tries to use presentModePriorities[i] until it reaches one that's supported.
@@ -90,18 +99,21 @@ typedef RefPtr SwapchainRef;
 
 #define SwapchainRef_ptr(ptr) RefPtr_data(ptr, Swapchain)
 
-void SwapchainRef_dec(SwapchainRef **swapchain);
-Error SwapchainRef_inc(SwapchainRef *swapchain);
+//Weak window access: only valid while the window is alive (see SwapchainInfo::window).
+static inline Window *Swapchain_getWindow(const Swapchain *swapchain) {
+	return !swapchain || !swapchain->info.window ? NULL : (Window*)(swapchain->info.window + 1);
+}
 
-Error GraphicsDeviceRef_createSwapchain(
+Bool GraphicsDeviceRef_createSwapchain(
 	GraphicsDeviceRef *device,
 	SwapchainInfo info,
 	Bool allowComputeExt,
 	DescriptorTableRef *bindlessDescriptorTable,
-	SwapchainRef **ref
+	SwapchainRef **ref,
+	Error *e_rr
 );
 
-Error SwapchainRef_resize(SwapchainRef *swapchain);
+Bool SwapchainRef_resize(SwapchainRef *swapchain, Error *e_rr);
 
 #ifdef __cplusplus
 	}

@@ -33,12 +33,14 @@ typedef struct DxDeviceBuffer {
 	D3D12_BARRIER_ACCESS lastAccess;
 } DxDeviceBuffer;
 
-Error DxDeviceBuffer_transition(
+Bool DxDeviceBuffer_transition(
 	DxDeviceBuffer *buffer,
 	D3D12_BARRIER_SYNC sync,
 	D3D12_BARRIER_ACCESS access,
 	ListD3D12_BUFFER_BARRIER *bufferBarriers,
-	D3D12_BARRIER_GROUP *dependency
+	D3D12_BARRIER_GROUP *dependency,
+	const Allocator *alloc,
+	Error *e_rr
 );
 
 #ifdef __cplusplus

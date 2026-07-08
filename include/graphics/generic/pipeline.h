@@ -157,11 +157,6 @@ typedef RefPtr PipelineRef;
 void *Pipeline_infoOffset(Pipeline *ref);
 #define Pipeline_info(ptr, T) ((T*)Pipeline_infoOffset(ptr))
 
-void PipelineRef_dec(PipelineRef **pipeline);
-Error PipelineRef_inc(PipelineRef *pipeline);
-
-void Pipeline_free(Pipeline *pipeline, Allocator alloc);
-
 typedef struct SHFile SHFile;
 typedef struct ListSHFile ListSHFile;
 

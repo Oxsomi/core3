@@ -20,7 +20,7 @@
 
 //graphics/vulkan/generic/vulkan.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/device_buffer.h"
@@ -37,69 +37,74 @@ TListImpl(VkBufferMemoryBarrier2);
 TListImpl(VkPipeline);
 TListImpl(VkImageViewMapping);
 
-Error checkVkError(VkResult result) {
+Bool checkVkError(VkResult result, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(result >= VK_SUCCESS)
-		return Error_none();
+		return s_uccess;
 
 	switch (result) {
 
 		case VK_ERROR_OUT_OF_HOST_MEMORY:
-			return Error_outOfMemory(0, "checkVkError() out of host memory");
+			retError(clean, Error_outOfMemory(0, "checkVkError() out of host memory"));
 		case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-			return Error_outOfMemory(1, "checkVkError() out of device memory");
+			retError(clean, Error_outOfMemory(1, "checkVkError() out of device memory"));
 		case VK_ERROR_OUT_OF_POOL_MEMORY:
-			return Error_outOfMemory(2, "checkVkError() out of pool memory");
+			retError(clean, Error_outOfMemory(2, "checkVkError() out of pool memory"));
 		case VK_ERROR_TOO_MANY_OBJECTS:
-			return Error_outOfMemory(3, "checkVkError() too many objects");
+			retError(clean, Error_outOfMemory(3, "checkVkError() too many objects"));
 		case VK_ERROR_FRAGMENTED_POOL:
-			return Error_outOfMemory(4, "checkVkError() fragmented pool");
+			retError(clean, Error_outOfMemory(4, "checkVkError() fragmented pool"));
 		case VK_ERROR_FRAGMENTATION:
-			return Error_outOfMemory(5, "checkVkError() fragmentation");
+			retError(clean, Error_outOfMemory(5, "checkVkError() fragmentation"));
 		case VK_ERROR_COMPRESSION_EXHAUSTED_EXT:
-			return Error_outOfMemory(6, "checkVkError() compression exhausted");
+			retError(clean, Error_outOfMemory(6, "checkVkError() compression exhausted"));
 
 		case VK_ERROR_DEVICE_LOST:
-			return Error_invalidState(0, "checkVkError() device lost");
+			retError(clean, Error_invalidState(0, "checkVkError() device lost"));
 		case VK_ERROR_SURFACE_LOST_KHR:
-			return Error_invalidState(1, "checkVkError() surface lost");
+			retError(clean, Error_invalidState(1, "checkVkError() surface lost"));
 		case VK_ERROR_MEMORY_MAP_FAILED:
-			return Error_invalidState(2, "checkVkError() memory map failed");
+			retError(clean, Error_invalidState(2, "checkVkError() memory map failed"));
 		case VK_ERROR_VALIDATION_FAILED_EXT:
-			return Error_invalidState(3, "checkVkError() validation failed");
+			retError(clean, Error_invalidState(3, "checkVkError() validation failed"));
 		case VK_ERROR_OUT_OF_DATE_KHR:
-			return Error_invalidState(4, "checkVkError() out of date");
+			retError(clean, Error_invalidState(4, "checkVkError() out of date"));
 		case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
-			return Error_invalidState(5, "checkVkError() native window in use");
+			retError(clean, Error_invalidState(5, "checkVkError() native window in use"));
 
 		case VK_ERROR_INCOMPATIBLE_DRIVER:
-			return Error_unsupportedOperation(0, "checkVkError() incompatible driver");
+			retError(clean, Error_unsupportedOperation(0, "checkVkError() incompatible driver"));
 		case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:
-			return Error_unsupportedOperation(1, "checkVkError() incompatible display");
+			retError(clean, Error_unsupportedOperation(1, "checkVkError() incompatible display"));
 		case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR:
-			return Error_unsupportedOperation(2, "checkVkError() invalid image usage");
+			retError(clean, Error_unsupportedOperation(2, "checkVkError() invalid image usage"));
 
 		case VK_ERROR_INVALID_EXTERNAL_HANDLE:
-			return Error_invalidParameter(0, 0, "checkVkError() invalid ext handle");
+			retError(clean, Error_invalidParameter(0, 0, "checkVkError() invalid ext handle"));
 		case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS:
-			return Error_invalidParameter(1, 0, "checkVkError() invalid capture addr");
+			retError(clean, Error_invalidParameter(1, 0, "checkVkError() invalid capture addr"));
 
 		case VK_ERROR_LAYER_NOT_PRESENT:
-			return Error_notFound(0, 0, "checkVkError() layer not present");
+			retError(clean, Error_notFound(0, 0, "checkVkError() layer not present"));
 		case VK_ERROR_EXTENSION_NOT_PRESENT:
-			return Error_notFound(1, 0, "checkVkError() extension not present");
+			retError(clean, Error_notFound(1, 0, "checkVkError() extension not present"));
 		case VK_ERROR_FEATURE_NOT_PRESENT:
-			return Error_notFound(2, 0, "checkVkError() feature not present");
+			retError(clean, Error_notFound(2, 0, "checkVkError() feature not present"));
 		case VK_ERROR_FORMAT_NOT_SUPPORTED:
-			return Error_notFound(3, 0, "checkVkError() format not supported");
+			retError(clean, Error_notFound(3, 0, "checkVkError() format not supported"));
 
 		case VK_ERROR_NOT_PERMITTED_KHR:
-			return Error_unauthorized(0, "checkVkError() not permitted");
+			retError(clean, Error_unauthorized(0, "checkVkError() not permitted"));
 
 		case VK_ERROR_UNKNOWN:
 		default:
-			return Error_unsupportedOperation(3, "checkVkError() has unknown error");
+			retError(clean, Error_unsupportedOperation(3, "checkVkError() has unknown error"));
 	}
+
+clean:
+	return s_uccess;
 }
 
 VkFormat mapVkFormat(ETextureFormat format) {

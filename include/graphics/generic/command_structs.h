@@ -21,7 +21,7 @@
 //graphics/generic/command_structs.h
 
 #pragma once
-#include "types/math/vec.h"
+#include "types/math/vec2.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/resource.h"
 #include "graphics/generic/pipeline_structs.h"

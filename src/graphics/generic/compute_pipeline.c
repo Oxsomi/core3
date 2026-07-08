@@ -20,14 +20,14 @@
 
 //graphics/generic/compute_pipeline.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
 
@@ -43,6 +43,8 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 ) {
 
 	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(deviceRef);
+
 	U16 entrypointId = (U16) entryId;
 	U16 binaryId = (U16) (entryId >> 16);
 
@@ -50,18 +52,18 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 		retError(clean, Error_nullPointer(
 			!deviceRef ? 0 : (!pipeline ? 2 : 1),
 			"GraphicsDeviceRef_createPipelineCompute()::deviceRef, shaderBinary and pipeline are required"
-		))
+		));
 
-	if(deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_createPipelineCompute()::deviceRef is an invalid type"
-		))
+		));
 
 	if(*pipeline)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute()::*pipeline is non NULL, indicating a possible memleak"
-		))
+		));
 
 	SHEntry entry = shaderBinary.entries.ptr[entrypointId];
 
@@ -69,59 +71,54 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() entry is not a compute shader"
-		))
+		));
 
 	if(binaryId >= entry.binaryIds.length)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() entry binaryId out of bounds"
-		))
+		));
 
-	if(layout && layout->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
+	if(layout && layout->refPtrType->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() pipeline layout is invalid"
-		))
+		));
 
 	U32 finalBinaryId = entry.binaryIds.ptr[binaryId];
 	SHBinaryInfo binary = shaderBinary.binaries.ptr[finalBinaryId];
 
-	gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, binary, entry, e_rr))
+	gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, binary, entry, e_rr));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	gotoIfError2(clean, RefPtr_createx(
-		(U32)(sizeof(Pipeline) + GraphicsDeviceRef_getObjectSizes(deviceRef)->pipeline),
-		(ObjectFreeFunc) Pipeline_free,
-		(ETypeId) EGraphicsTypeId_Pipeline,
-		pipeline
-	))
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipeline, pipeline, e_rr));
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);
 
 	//Log_debugLnx("Create: ComputePipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipelinePtr);
 
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
-		gotoIfError2(clean, GraphicsDeviceRef_inc(deviceRef))
+		gotoIfError3(clean, RefPtr_inc(deviceRef));
 
 	*pipelinePtr = (Pipeline) {
 		.device = deviceRef,
 		.type = EPipelineType_Compute,
 		.flags = flags
 	};
-	
+
 	if(!layout)
 		layout = device->defaultPipelineLayout;
 
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
-		gotoIfError2(clean, PipelineLayoutRef_inc(layout))
+		gotoIfError3(clean, RefPtr_inc(layout));
 
 	pipelinePtr->layout = layout;
 
-	gotoIfError2(clean, ListPipelineStage_resizex(&pipelinePtr->stages, 1))
+	gotoIfError3(clean, ListPipelineStage_resize(&pipelinePtr->stages, 1, alloc, e_rr));
 	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute, .binaryId = entryId };
 
-	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, pipelinePtr, binary, e_rr))
+	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, pipelinePtr, binary, e_rr));
 
 	goto success;
 

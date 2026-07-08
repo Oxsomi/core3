@@ -20,20 +20,21 @@
 
 //graphics/d3d12/generic/dx_graphics_pipeline.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
 #include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/string.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
+#include "types/container/string_unicode.h"
 
 D3D12_STENCIL_OP mapDxStencilOp(EStencilOp op) {
 	switch (op) {
@@ -94,6 +95,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 ) {
 
 	Bool s_uccess = true;
+	const Allocator *alloc = GraphicsDevice_getAlloc(device);
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ListU16 tmp = (ListU16) { 0 };
@@ -302,19 +304,19 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 
 	ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
 
-	gotoIfError2(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
 		deviceExt->device,
 		&graphics,
 		&IID_ID3D12PipelineState,
 		(void**) pipelinei
-	)))
+	), e_rr));
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-		gotoIfError2(clean, CharString_toUTF16x(name, &tmp))
-		gotoIfError2(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
+		gotoIfError3(clean, CharString_toUTF16(name, alloc, &tmp, e_rr));
+		gotoIfError3(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr), e_rr));
 	}
 
 clean:
-	ListU16_freex(&tmp);
+	ListU16_free(&tmp, alloc);
 	return s_uccess;
 }

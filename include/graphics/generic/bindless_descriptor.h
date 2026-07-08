@@ -22,7 +22,7 @@
 
 #pragma once
 #include "types/container/list.h"
-#include "types/math/vec.h"
+#include "types/math/vec4.h"
 
 #ifdef __cplusplus
 	extern "C" {

@@ -20,7 +20,7 @@
 
 //graphics/d3d12/generic/dx_swapchain.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -30,25 +30,25 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "types/container/ref_ptr.h"
-#include "platforms/ext/bufferx.h"
+#include "types/container/buffer.h"
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	SwapchainInfo *info = &swapchain->info;
 
 	//Prepare temporary free-ables and extended data.
 
-	Error err;
-
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchainRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	DxGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Dx);
 
-	const Window *window = info->window;
+	const Window *window = info->window ? (const Window*)(info->window + 1) : NULL;
 
 	ESwapchainPresentMode mode = ESwapchainPresentMode_Count;
 
@@ -75,14 +75,12 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 	}
 
 	if(mode == ESwapchainPresentMode_Count)
-		gotoIfError(clean, Error_unsupportedOperation(
-			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support the current write mode"
-		))
+		retError(clean, Error_unsupportedOperation(
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support the current write mode"));
 
 	if(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite)
-		gotoIfError(clean, Error_unsupportedOperation(
-			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"
-		))
+		retError(clean, Error_unsupportedOperation(
+			1, "D3D12GraphicsDeviceRef_createSwapchain() D3D12 doesn't support writable swapchains"));
 
 	DXGI_SWAP_CHAIN_FLAG flags = mode == ESwapchainPresentMode_Immediate ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
@@ -99,9 +97,8 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			case EWindowFormat_BGR10A2:        format = DXGI_FORMAT_R10G10B10A2_UNORM;        break;
 
 			case EWindowFormat_RGBA32f:
-				gotoIfError(clean, Error_unsupportedOperation(
-					1, "D3D12GraphicsDeviceRef_createSwapchain() RGBA32f isn't supported"
-				))
+				retError(clean, Error_unsupportedOperation(
+					1, "D3D12GraphicsDeviceRef_createSwapchain() RGBA32f isn't supported"));
 		}
 
 		DXGI_SWAP_CHAIN_DESC1 desc1 = (DXGI_SWAP_CHAIN_DESC1) {
@@ -115,7 +112,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			.Flags = flags
 		};
 
-		gotoIfError(clean, dxCheck(instance->factory->lpVtbl->CreateSwapChainForHwnd(
+		gotoIfError3(clean, dxCheck(instance->factory->lpVtbl->CreateSwapChainForHwnd(
 			instance->factory,
 			(IUnknown*) deviceExt->queues[EDxCommandQueue_Graphics].queue,
 			window->nativeHandle,
@@ -123,7 +120,7 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 			NULL,
 			NULL,
 			&swapchainExt->swapchain
-		)))
+		), e_rr));
 
 		swapchain->requiresManualComposite = false;
 		swapchain->presentMode = mode;
@@ -147,26 +144,26 @@ Error DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceR
 				img->lpVtbl->Release(img);
 		}
 
-		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
+		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
 			swapchainExt->swapchain,
 			3, 0, 0, DXGI_FORMAT_UNKNOWN,
 			flags
-		)))
+		), e_rr));
 	}
 
 	//Acquire images
 
 	for(U8 i = 0; i < swapchain->base.images; ++i)
-		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->GetBuffer(
+		gotoIfError3(clean, dxCheck(swapchainExt->swapchain->lpVtbl->GetBuffer(
 			swapchainExt->swapchain, i,
 			&IID_ID3D12Resource, (void**) &TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image
-		)))
+		), e_rr));
 
 clean:
-	return err;
+	return s_uccess;
 }
 
-void DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, Allocator alloc) {
+void DX_WRAP_FUNC(Swapchain_free)(Swapchain *swapchain, const Allocator *alloc) {
 
 	(void)alloc;
 

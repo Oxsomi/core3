@@ -32,10 +32,15 @@
 #include "platforms/linux/lwindow_structs.h"
 #include "types/base/error.h"
 
-Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
+Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!device || !window || !surface)
-		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1), "VkSurface_create()::device, window or surface is NULL");
+		retError(clean, Error_nullPointer(
+			!device ? 0 : (!window ? 0 : 1),
+			"VkSurface_create()::device, window or surface is NULL"
+		));
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
@@ -50,9 +55,12 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateWaylandSurfaceKHR");
 
 	if (!instanceExt->createSurfaceExt)
-		return Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!");
+		retError(clean, Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!"));
 
-	return checkVkError(
+	gotoIfError3(clean, checkVkError(
 		((PFN_vkCreateWaylandSurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
-	);
+	, e_rr));
+
+clean:
+	return s_uccess;
 }

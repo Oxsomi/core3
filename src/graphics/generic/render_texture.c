@@ -24,24 +24,17 @@
 #include "graphics/generic/render_texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
 #include "types/base/error.h"
 #include "types/container/string.h"
 
-void RenderTextureRef_dec(RenderTextureRef **renderTexture) { RefPtr_dec(renderTexture); }
-
-Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
-	return !RefPtr_inc(renderTexture) ?
-		Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") : Error_none();
-}
-
-void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator alloc) {
+void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, const Allocator *alloc) {
 	(void)alloc;
 	UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
 }
 
-Error GraphicsDeviceRef_createRenderTexture(
+Bool GraphicsDeviceRef_createRenderTexture(
 	GraphicsDeviceRef *deviceRef,
 	ETextureType type,
 	U16 width,
@@ -52,20 +45,15 @@ Error GraphicsDeviceRef_createRenderTexture(
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
-	RenderTextureRef **renderTextureRef
+	RenderTextureRef **renderTextureRef,
+	Error *e_rr
 ) {
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(RenderTexture) + GraphicsDeviceRef_getObjectSizes(deviceRef)->image + sizeof(UnifiedTextureImage)),
-		(ObjectFreeFunc) GraphicsDevice_freeRenderTexture,
-		(ETypeId) EGraphicsTypeId_RenderTexture,
-		renderTextureRef
-	);
+	Bool s_uccess = true;
 
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->renderTexture, renderTextureRef, e_rr));
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef))
+	gotoIfError3(clean, RefPtr_inc(deviceRef));
 
 	*RenderTextureRef_ptr(*renderTextureRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -83,12 +71,12 @@ Error GraphicsDeviceRef_createRenderTexture(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, bindlessDescriptorTable, name))
+	gotoIfError3(clean, UnifiedTexture_create(*renderTextureRef, bindlessDescriptorTable, name, e_rr));
 
 clean:
 
-	if(err.genericError)
-		RenderTextureRef_dec(renderTextureRef);
+	if(!s_uccess)
+		RefPtr_dec(renderTextureRef);
 
-	return err;
+	return s_uccess;
 }

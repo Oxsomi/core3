@@ -33,4 +33,4 @@ typedef struct VkSwapchain {
 	VkSurfaceFormatKHR format;
 } VkSwapchain;
 
-impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface);
+impl Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface, Error *e_rr);

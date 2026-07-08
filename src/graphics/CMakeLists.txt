@@ -86,3 +86,27 @@ endif()
 if(graphicsAllowD3D12)
 	add_subdirectory(d3d12)
 endif()
+
+if(EnableTests)
+
+	# Interface test: headless-safe checks always run, device tests skip without an adapter.
+	# add_virtual_dependencies is required so device creation can load the //OxC3_graphics prebuilt shaders.
+
+	include(../../cmake/oxc3.cmake)
+	file(GLOB testsInterfaceC "test/interface/*.c")
+
+	add_executable(
+		OxC3_graphics_interface_test
+		${testsInterfaceC}
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_graphics_interface_test PUBLIC OxC3_graphics_target OxC3_platforms OxC3_types_test)
+	set_target_properties(OxC3_graphics_interface_test PROPERTIES FOLDER Oxsomi/test/graphics)
+
+	add_virtual_dependencies(TARGET OxC3_graphics_interface_test DEPENDENCIES OxC3_graphics)
+
+	apply_dependencies(OxC3_graphics_interface_test)
+	add_test(NAME OxC3_graphics_interface_test COMMAND OxC3_graphics_interface_test)
+
+endif()

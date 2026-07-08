@@ -49,10 +49,7 @@ typedef struct DeviceTexture {
 
 #define DeviceTextureRef_ptr(ptr) RefPtr_data(ptr, DeviceTexture)
 
-void DeviceTextureRef_dec(DeviceTextureRef **texture);
-Error DeviceTextureRef_inc(DeviceTextureRef *texture);
-
-Error GraphicsDeviceRef_createTexture(
+Bool GraphicsDeviceRef_createTexture(
 	GraphicsDeviceRef *dev,
 	ETextureType type,
 	ETextureFormatId format,
@@ -63,7 +60,8 @@ Error GraphicsDeviceRef_createTexture(
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
-	DeviceTextureRef **tex
+	DeviceTextureRef **tex,
+	Error *e_rr
 );
 
 //Mark the underlying data for the DeviceTexture as dirty.
@@ -72,7 +70,7 @@ Error GraphicsDeviceRef_createTexture(
 //Call this as little as possible while still not copying too much data.
 //Only possible if texture has a backed CPU texture.
 
-Error DeviceTextureRef_markDirty(DeviceTextureRef *texture, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l);
+Bool DeviceTextureRef_markDirty(DeviceTextureRef *texture, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l, Error *e_rr);
 
 #ifdef __cplusplus
 	}

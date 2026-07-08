@@ -92,7 +92,7 @@ typedef struct VkGraphicsInstance {
 	PFN_vkCmdBeginDebugUtilsLabelEXT cmdDebugMarkerBegin;
 	PFN_vkCmdEndDebugUtilsLabelEXT cmdDebugMarkerEnd;
 	PFN_vkCmdInsertDebugUtilsLabelEXT cmdDebugMarkerInsert;
-	
+
 	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
 	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities;
 	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModes;

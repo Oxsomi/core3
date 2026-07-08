@@ -20,7 +20,7 @@
 
 //graphics/vulkan/generic/vk_instance.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -29,13 +29,16 @@
 #include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "types/base/string_read.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "platforms/dynamic_library.h"
 #include "types/base/error.h"
 #include "types/container/buffer.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/base/constants.h"
 
 GraphicsObjectSizes VkGraphicsObjectSizes = {
@@ -164,7 +167,7 @@ VkBool32 onDebugReport(
 	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function);             \
 																								\
 	if(!v)                                                                                        \
-		gotoIfError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"))        \
+		retError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"));        \
 																								\
 	*(void**)&result = (void*) v;                                                                \
 }
@@ -176,7 +179,11 @@ TListImpl(VkLayerProperties);
 
 //#define _GRAPHICS_VERBOSE_DEBUGGING
 
-Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
+Bool VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
+
+	const Allocator *alloc = instanceRef && *instanceRef ? GraphicsInstanceRef_ptr(*instanceRef)->alloc : NULL;
+
+	Bool s_uccess = true;
 
 	U32 layerCount = 0, extensionCount = 0;
 	CharString title = (CharString) { 0 };
@@ -188,7 +195,6 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-	Error err = Error_none();
 
 	//Start with loading the functions
 
@@ -201,20 +207,19 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Enumerate instance info
 
-	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, NULL)))
-	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)))
+	gotoIfError3(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, NULL), e_rr));
+	gotoIfError3(clean, checkVkError(instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, NULL), e_rr));
 
-	gotoIfError(clean, CharString_createCopyx(info.name, &title))
-	gotoIfError(clean, ListVkExtensionProperties_createx(extensionCount, &extensions))
-	gotoIfError(clean, ListVkLayerProperties_createx(layerCount, &layers))
+	gotoIfError3(clean, CharString_createCopy(info.name, alloc, &title, e_rr));
+	gotoIfError3(clean, ListVkExtensionProperties_create(extensionCount, alloc, &extensions, e_rr));
+	gotoIfError3(clean, ListVkLayerProperties_create(layerCount, alloc, &layers, e_rr));
 
-	gotoIfError(clean, ListConstC8_reservex(&enabledLayers, layerCount))
-	gotoIfError(clean, ListConstC8_reservex(&enabledExtensions, extensionCount))
+	gotoIfError3(clean, ListConstC8_reserve(&enabledLayers, layerCount, alloc, e_rr));
+	gotoIfError3(clean, ListConstC8_reserve(&enabledExtensions, extensionCount, alloc, e_rr));
 
-	gotoIfError(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)))
-	gotoIfError(clean, checkVkError(
-		instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)
-	))
+	gotoIfError3(clean, checkVkError(instanceExt->enumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst), e_rr));
+	gotoIfError3(clean, checkVkError(
+		instanceExt->enumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst), e_rr));
 
 	Bool supportsDebug[2] = { 0 };
 
@@ -223,22 +228,24 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	Bool supportsColorSpace = false;
 
-	CharString swapchainColorspace = CharString_createRefCStrConst();
+	const CharString swapchainColorspace = CharString_createRefCStrConst("VK_EXT_swapchain_colorspace");
+	const CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
+	const CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
 
 	for(U64 i = 0; i < extensionCount; ++i) {
 
 		const C8 *name = extensions.ptr[i].extensionName;
 		CharString nameStr = CharString_createRefCStrConst(name);
 
-		if(CharString_equalsCStringSensitive(nameStr, "VK_EXT_swapchain_colorspace"))
+		if(CharString_equalsString(&nameStr, &swapchainColorspace, EStringCase_Sensitive))
 			supportsColorSpace = true;
 
 		else if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-			if(CharString_equalsCStringSensitive(nameStr, "VK_EXT_debug_report"))
+			if(CharString_equalsString(&nameStr, &debugReport, EStringCase_Sensitive))
 				supportsDebug[0] = true;
 
-			else if(CharString_equalsCStringSensitive(nameStr, "VK_EXT_debug_utils"))
+			else if(CharString_equalsString(&nameStr, &debugUtils, EStringCase_Sensitive))
 				supportsDebug[1] = true;
 		}
 
@@ -255,32 +262,32 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	}
 
 	if(supportsDebug[0])
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugReport.ptr))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, debugReport.ptr, alloc, e_rr));
 
 	if(supportsDebug[1])
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugUtils.ptr))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, debugUtils.ptr, alloc, e_rr));
 
 	//Force physical device properties and external memory
 
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_get_physical_device_properties2"))
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_external_memory_capabilities"))
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_get_physical_device_properties2", alloc, e_rr));
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_external_memory_capabilities", alloc, e_rr));
 
 	//MoltenVK requires us to enable portability enumeration
 
 	Bool isMoltenVk = false;
 
 	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_portability_enumeration"))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_portability_enumeration", alloc, e_rr));
 		isMoltenVk = true;
 	#endif
 
 	//Enable so we can use swapchain khr
 
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_surface"))
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, _VK_SURFACE_EXT))
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, "VK_KHR_surface", alloc, e_rr));
+	gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, _VK_SURFACE_EXT, alloc, e_rr));
 
 	if (supportsColorSpace)
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledExtensions, swapchainColorspace.ptr, alloc, e_rr));
 
 	U8 hasDebugLayer = 0;
 
@@ -289,12 +296,12 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 			CharString name = CharString_createRefCStrConst(layers.ptr[i].layerName);
 			U64 len = CharString_length(name);
-			
+
 			switch(len ? name.ptr[len - 1] : ' ') {
 
 				case 'n':    //validatioN
 
-					if(CharString_equalsCStringSensitive(name, "VK_LAYER_KHRONOS_validation"))
+					if(CharString_equalsCString(&name, "VK_LAYER_KHRONOS_validation", EStringCase_Sensitive))
 						hasDebugLayer |= 1;
 
 					break;
@@ -303,7 +310,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 					case 'p':    //dumP
 
-						if(CharString_equalsCStringSensitive(name, "VK_LAYER_LUNARG_api_dump"))
+						if(CharString_equalsCString(&name, "VK_LAYER_LUNARG_api_dump", EStringCase_Sensitive))
 							hasDebugLayer |= 2;
 
 						break;
@@ -322,10 +329,10 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 		Log_warnLnx("VkGraphicsInstance_create tried to enable debug layer, but no debug layer was present");
 
 	if(hasDebugLayer & 1)
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, "VK_LAYER_KHRONOS_validation"))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledLayers, "VK_LAYER_KHRONOS_validation", alloc, e_rr));
 
 	if(hasDebugLayer & 2)
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledLayers, "VK_LAYER_LUNARG_api_dump"))
+		gotoIfError3(clean, ListConstC8_pushBack(&enabledLayers, "VK_LAYER_LUNARG_api_dump", alloc, e_rr));
 
 	VkApplicationInfo application = (VkApplicationInfo) {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -386,10 +393,10 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	//Create instance
 
-	gotoIfError(clean, checkVkError(instanceExt->createInstance(&instanceInfo, NULL, &instanceExt->instance)))
+	gotoIfError3(clean, checkVkError(instanceExt->createInstance(&instanceInfo, NULL, &instanceExt->instance), e_rr));
 
 	//Functions that aren't device dependent, but do need an instance
-	
+
 	getVkFunction(clean, vkDestroyInstance, instanceExt->destroyInstance)
 	getVkFunction(clean, vkCreateDevice, instanceExt->createDevice)
 	getVkFunction(clean, vkDestroyDevice, instanceExt->destroyDevice)
@@ -414,13 +421,13 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 	getVkFunction(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2)
 	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties, instanceExt->getPhysicalDeviceMemoryProperties)
 	getVkFunction(clean, vkGetPhysicalDeviceQueueFamilyProperties, instanceExt->getPhysicalDeviceQueueFamilyProperties)
-	
+
 	getVkFunction(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats)
 	getVkFunction(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities)
 	getVkFunction(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes)
 	getVkFunction(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport)
 	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties2, instanceExt->getPhysicalDeviceMemoryProperties2)
-	
+
 	getVkFunction(clean, vkDestroySurfaceKHR, instanceExt->destroySurface)
 
 	//Add debug callback
@@ -441,9 +448,9 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
 		};
 
-		gotoIfError(clean, checkVkError(instanceExt->debugCreateReportCallback(
+		gotoIfError3(clean, checkVkError(instanceExt->debugCreateReportCallback(
 			instanceExt->instance, &callbackInfo, NULL, &instanceExt->debugReportCallback
-		)))
+		), e_rr));
 	}
 
 	instance->api = EGraphicsApi_Vulkan;
@@ -451,23 +458,23 @@ Error VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, Graphi
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		if(FAILED(CreateDXGIFactory2(0, &IID_IDXGIFactory6, (void**) &instanceExt->dxgiFactory)))
-			gotoIfError(clean, Error_invalidState(0, "VkGraphicsInstance_create couldn't create DXGI factory"))
+			retError(clean, Error_invalidState(0, "VkGraphicsInstance_create couldn't create DXGI factory"));
 	#endif
 
 clean:
 
-	CharString_freex(&title);
+	CharString_free(&title, alloc);
 
-	ListConstC8_freex(&enabledLayers);
-	ListConstC8_freex(&enabledExtensions);
+	ListConstC8_free(&enabledLayers, alloc);
+	ListConstC8_free(&enabledExtensions, alloc);
 
-	ListVkExtensionProperties_freex(&extensions);
-	ListVkLayerProperties_freex(&layers);
+	ListVkExtensionProperties_free(&extensions, alloc);
+	ListVkLayerProperties_free(&layers, alloc);
 
-	return err;
+	return s_uccess;
 }
 
-void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc) {
+void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator *alloc) {
 
 	(void)alloc;
 
@@ -485,28 +492,17 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, Allocator alloc
 }
 
 const C8 *reqExtensionsName[] = {
-	"VK_KHR_push_descriptor",
-	"VK_KHR_synchronization2",
-	"VK_KHR_swapchain"
+	"VK_KHR_push_descriptor", "VK_KHR_synchronization2", "VK_KHR_swapchain"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
 
 const C8 *optExtensionsName[] = {
 
-	"VK_KHR_performance_query",
-	"VK_KHR_ray_tracing_pipeline",
-	"VK_KHR_ray_query",
-	"VK_KHR_acceleration_structure",
-	"VK_NV_ray_tracing_motion_blur",
-	"VK_NV_ray_tracing_invocation_reorder",
-	"VK_EXT_mesh_shader",
-	"VK_KHR_fragment_shading_rate",
-	"VK_KHR_dynamic_rendering",
-	"VK_EXT_opacity_micromap",
-	"VK_EXT_shader_atomic_float",
-	"VK_KHR_deferred_host_operations",
-	"VK_NV_ray_tracing_validation",
+	"VK_KHR_performance_query", "VK_KHR_ray_tracing_pipeline", "VK_KHR_ray_query", "VK_KHR_acceleration_structure",
+	"VK_NV_ray_tracing_motion_blur", "VK_NV_ray_tracing_invocation_reorder", "VK_EXT_mesh_shader",
+	"VK_KHR_fragment_shading_rate", "VK_KHR_dynamic_rendering", "VK_EXT_opacity_micromap", "VK_EXT_shader_atomic_float",
+	"VK_KHR_deferred_host_operations", "VK_NV_ray_tracing_validation",
 
 	#ifdef VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME
 		"VK_KHR_compute_shader_derivatives",
@@ -514,14 +510,8 @@ const C8 *optExtensionsName[] = {
 		"VK_NV_compute_shader_derivatives",
 	#endif
 
-	"VK_KHR_maintenance4",
-	"VK_KHR_buffer_device_address",
-	"VK_EXT_descriptor_indexing",
-	"VK_KHR_driver_properties",
-	"VK_KHR_shader_atomic_int64",
-	"VK_KHR_shader_float16_int8",
-	"VK_KHR_draw_indirect_count",
-	"VK_EXT_memory_budget"
+	"VK_KHR_maintenance4", "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
+	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8", "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -543,31 +533,38 @@ U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsNam
 TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
 
-Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
+Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = inst ? inst->alloc : NULL;
 
 	if(!inst || !result)
-		return Error_nullPointer(!inst ? 0 : 2, "VkGraphicsInstance_getDeviceInfos()::inst and result are required");
+		retError(clean, Error_nullPointer(!inst ? 0 : 2, "VkGraphicsInstance_getDeviceInfos()::inst and result are required"));
 
 	if(result->ptr)
-		return Error_invalidParameter(1, 0, "VkGraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak");
+		retError(clean, Error_invalidParameter(
+			1,
+			0,
+			"VkGraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
+		));
 
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
 
 	U32 deviceCount = 0;
-	Error err = checkVkError(instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, NULL));
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, checkVkError(instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, NULL), e_rr));
 
 	ListVkPhysicalDevice temp = (ListVkPhysicalDevice) { 0 };
 	ListGraphicsDeviceInfo temp2 = (ListGraphicsDeviceInfo) { 0 };
 	ListVkLayerProperties temp3 = (ListVkLayerProperties) { 0 };
 	ListVkExtensionProperties temp4 = (ListVkExtensionProperties) { 0 };
 
-	gotoIfError(clean, ListVkPhysicalDevice_createx(deviceCount, &temp))
-	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&temp2, deviceCount))
+	gotoIfError3(clean, ListVkPhysicalDevice_create(deviceCount, alloc, &temp, e_rr));
+	gotoIfError3(clean, ListGraphicsDeviceInfo_reserve(&temp2, deviceCount, alloc, e_rr));
 
-	gotoIfError(clean, checkVkError(instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, temp.ptrNonConst)))
+	gotoIfError3(clean, checkVkError(
+		instanceExt->enumeratePhysicalDevices(instanceExt->instance, &deviceCount, temp.ptrNonConst),
+		e_rr
+	));
 
 	for (U32 i = 0, j = 0; i < deviceCount; ++i) {
 
@@ -585,7 +582,11 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			CharString deviceName = CharString_createRefCStrConst(properties2.properties.deviceName);
 
-			if (CharString_startsWithStringSensitive(deviceName, CharString_createRefCStrConst("Microsoft Direct3D12"), 0))
+			const CharString d3d12Warp = CharString_createRefCStrConst("Microsoft Direct3D12");
+
+			if (CharString_startsWithString(
+				&(CharStringSensOff) { .str = &deviceName, .caseSensitive = EStringCase_Sensitive }, &d3d12Warp
+			))
 				continue;
 		}
 
@@ -593,15 +594,20 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		U32 layerCount = 0, extensionCount = 0;
 
-		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, NULL)))
-		gotoIfError(clean, ListVkLayerProperties_resizex(&temp3, layerCount))
-		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst)))
+		gotoIfError3(clean, checkVkError(instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, NULL), e_rr));
+		gotoIfError3(clean, ListVkLayerProperties_resize(&temp3, layerCount, alloc, e_rr));
+		gotoIfError3(clean, checkVkError(
+			instanceExt->enumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst),
+			e_rr
+		));
 
-		gotoIfError(clean, checkVkError(instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)))
-		gotoIfError(clean, ListVkExtensionProperties_resizex(&temp4, extensionCount))
-		gotoIfError(clean, checkVkError(
-			instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)
-		))
+		gotoIfError3(clean, checkVkError(
+			instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL),
+			e_rr
+		));
+		gotoIfError3(clean, ListVkExtensionProperties_resize(&temp4, extensionCount, alloc, e_rr));
+		gotoIfError3(clean, checkVkError(
+			instanceExt->enumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst), e_rr));
 
 		//Log device for debugging
 
@@ -631,25 +637,29 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 			Bool found = false;
 
-			for(U64 l = 0; l < sizeof(reqExtensions); ++l)
-				if (CharString_equalsCStringSensitive(
-					CharString_createRefCStrConst(reqExtensionsName[l]), name
-				)) {
+			for(U64 l = 0; l < sizeof(reqExtensions); ++l) {
+
+				const CharString reqExt = CharString_createRefCStrConst(reqExtensionsName[l]);
+
+				if (CharString_equalsCString(&reqExt, name, EStringCase_Sensitive)) {
 					reqExtensions[l] = true;
 					found = true;
 					break;
 				}
+			}
 
 			//Check if optional extension
 
 			if (!found)
-				for(U64 l = 0; l < sizeof(optExtensions); ++l)
-					if (CharString_equalsCStringSensitive(
-						CharString_createRefCStrConst(optExtensionsName[l]), name
-					)) {
+				for(U64 l = 0; l < sizeof(optExtensions); ++l) {
+
+					const CharString optExt = CharString_createRefCStrConst(optExtensionsName[l]);
+
+					if (CharString_equalsCString(&optExt, name, EStringCase_Sensitive)) {
 						optExtensions[l] = true;
 						break;
 					}
+				}
 		}
 
 		Bool supported = true;
@@ -1555,7 +1565,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 		VkGraphicsDevice fakeDevice = (VkGraphicsDevice) { 0 };
 		instanceExt->getPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
 
-		gotoIfError(clean, VkGraphicsDevice_findAllMemory(&fakeDevice))
+		gotoIfError3(clean, VkGraphicsDevice_findAllMemory(&fakeDevice, e_rr));
 
 		U64 cpuHeapSize = fakeDevice.maxHeapSizes[0];
 		U64 gpuHeapSize = fakeDevice.maxHeapSizes[1];
@@ -1648,7 +1658,7 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 
 		//Fully converted type
 
-		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, (Allocator){ 0 }))
+		gotoIfError3(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, alloc, e_rr));
 
 		GraphicsDeviceInfo *info = temp2.ptrNonConst + j;
 
@@ -1681,17 +1691,17 @@ Error VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst
 	}
 
 	if(!temp2.length)
-		gotoIfError(clean, Error_unsupportedOperation(0, "VkGraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
+		retError(clean, Error_unsupportedOperation(0, "VkGraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
 
 	*result = temp2;
 
 clean:
 
-	if(err.genericError)
-		ListGraphicsDeviceInfo_freex(&temp2);
+	if(!s_uccess)
+		ListGraphicsDeviceInfo_free(&temp2, alloc);
 
-	ListVkPhysicalDevice_freex(&temp);
-	ListVkLayerProperties_freex(&temp3);
-	ListVkExtensionProperties_freex(&temp4);
-	return err;
+	ListVkPhysicalDevice_free(&temp, alloc);
+	ListVkLayerProperties_free(&temp3, alloc);
+	ListVkExtensionProperties_free(&temp4, alloc);
+	return s_uccess;
 }

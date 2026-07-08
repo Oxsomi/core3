@@ -20,23 +20,16 @@
 
 //graphics/generic/pipeline_layout.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/ref_ptrx.h"
+#include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
 #include "types/container/string.h"
 
-void PipelineLayoutRef_dec(PipelineLayoutRef **layout) { RefPtr_dec(layout); }
-
-Error PipelineLayoutRef_inc(PipelineLayoutRef *layout) {
-	return !RefPtr_inc(layout) ?
-		Error_invalidOperation(0, "PipelineLayoutRef_inc()::layout is required") : Error_none();
-}
-
-void PipelineLayout_free(PipelineLayout *layout, Allocator alloc) {
+void PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc) {
 
 	(void)alloc;
 
@@ -45,33 +38,36 @@ void PipelineLayout_free(PipelineLayout *layout, Allocator alloc) {
 	PipelineLayout_freeExt(layout, alloc);
 
 	if(!(layout->info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef)) {
-		GraphicsDeviceRef_dec(&layout->device);
-		DescriptorLayoutRef_dec(&layout->info.bindings);
-		DescriptorLayoutRef_dec(&layout->info.pushDescriptors);
+		RefPtr_dec(&layout->device);
+		RefPtr_dec(&layout->info.bindings);
+		RefPtr_dec(&layout->info.pushDescriptors);
 	}
 }
 
-Error GraphicsDeviceRef_createPipelineLayout(
+Bool GraphicsDeviceRef_createPipelineLayout(
 	GraphicsDeviceRef *dev,
 	PipelineLayoutInfo info,
 	CharString name,
-	PipelineLayoutRef **layoutRef
+	PipelineLayoutRef **layoutRef,
+	Error *e_rr
 ) {
 
-	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
-		return Error_nullPointer(0, "GraphicsDeviceRef_createPipelineLayout()::dev is required");
+	Bool s_uccess = true;
+
+	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createPipelineLayout()::dev is required"));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(info.bindings && info.bindings->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
-		return Error_nullPointer(
+	if(info.bindings && info.bindings->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+		retError(clean, Error_nullPointer(
 			1, "GraphicsDeviceRef_createPipelineLayout()::info.bindings must be DescriptorLayout if present"
-		);
+		));
 
-	if(info.pushDescriptors && info.pushDescriptors->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
-		return Error_nullPointer(
+	if(info.pushDescriptors && info.pushDescriptors->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+		retError(clean, Error_nullPointer(
 			1, "GraphicsDeviceRef_createPipelineLayout()::info.pushDescriptors must be DescriptorLayout if present"
-		);
+		));
 
 	//Validate push constants
 
@@ -80,14 +76,14 @@ Error GraphicsDeviceRef_createPipelineLayout(
 		info.pushConstants.constantBufferSize > 128 ||
 		(info.pushConstants.constantBufferSize & 3)
 	))
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must be 4-128 bytes (multiple of 4)"
-		);
+		));
 
 	if(info.pushConstants.count && !info.pushConstants.visibility)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must have at least one visibility"
-		);
+		));
 
 	Bool isVulkan = GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Vulkan;
 	ESHBinaryType binaryType = isVulkan ? ESHBinaryType_SPIRV : ESHBinaryType_DXIL;
@@ -97,16 +93,16 @@ Error GraphicsDeviceRef_createPipelineLayout(
 		info.pushConstants.registerType == ESHRegisterType_PushConstants;
 
 	if(info.pushConstants.count && !canBePushConstant)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0,
 			"GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must be a constant buffer (DXIL) or "
 			"push constants (SPV)"
-		);
+		));
 
 	if(info.pushConstants.count > 1)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants.count must be 1 or 0"
-		);
+		));
 
 	//Validate DWORD root signature limit (DirectX).
 	//At the same time; ensure the descriptor sets don't exceed 4 active sets if SPIRV is used.
@@ -125,9 +121,9 @@ Error GraphicsDeviceRef_createPipelineLayout(
 		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.pushDescriptors);
 
 		if(!(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors))
-			return Error_invalidParameter(
+			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushDescriptors doesn't have the right flags"
-			);
+			));
 
 		dwords += (U32)(layout->info.bindings.length << 1);
 
@@ -145,9 +141,9 @@ Error GraphicsDeviceRef_createPipelineLayout(
 				binaryType,
 				false
 			))
-				return Error_invalidParameter(
+				retError(clean, Error_invalidParameter(
 					1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants overlaps with push descriptors"
-				);
+				));
 
 			if(isVulkan) {        //Grab sets of binding, DescriptorLayout already protects these to be <=4
 
@@ -170,9 +166,9 @@ Error GraphicsDeviceRef_createPipelineLayout(
 		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.bindings);
 
 		if(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
-			return Error_invalidParameter(
+			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.bindings doesn't have the right flags"
-			);
+			));
 
 		dwords += (U32)layout->anySampler + layout->anyResource;
 
@@ -188,10 +184,10 @@ Error GraphicsDeviceRef_createPipelineLayout(
 
 				for(; j < setCounterPushDesc; ++j)
 					if(uniqueSets[j] == bind.binding.space)
-						return Error_invalidParameter(
+						retError(clean, Error_invalidParameter(
 							1, 0,
 							"GraphicsDeviceRef_createPipelineLayout() push descriptors and descriptors can't share same sets"
-						);
+						));
 
 				for(; j < setCounter; ++j)
 					if(uniqueSets[j] == bind.binding.space)
@@ -200,10 +196,10 @@ Error GraphicsDeviceRef_createPipelineLayout(
 				if(j == setCounter) {
 
 					if(setCounter == 4)
-						return Error_invalidParameter(
+						retError(clean, Error_invalidParameter(
 							1, 0,
 							"GraphicsDeviceRef_createPipelineLayout() push descriptor + descriptors set count exceeds 4"
-						);
+						));
 
 					uniqueSets[setCounter++] = bind.binding.space;
 				}
@@ -240,20 +236,20 @@ Error GraphicsDeviceRef_createPipelineLayout(
 				match = true;
 
 			if(match)
-				return Error_invalidParameter(
+				retError(clean, Error_invalidParameter(
 					1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.bindings has an overlapping register"
-				);
+				));
 		}
 	}
 
 	if(dwords > 64)
-		return Error_invalidParameter(
+		retError(clean, Error_invalidParameter(
 			1, 0,
 			"GraphicsDeviceRef_createPipelineLayout() "
 			"root signature shouldn't exceed 64 DWORDs in case a DirectX backend is used, "
 			"push constants bytes are 4:1, push descriptors 1:2 and "
 			"bindings +1 if non static samplers are used, +1 if other resources are used"
-		);
+		));
 
 	if(dwords > 13)
 		Log_performanceLnx(
@@ -262,18 +258,10 @@ Error GraphicsDeviceRef_createPipelineLayout(
 
 	//Create object
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(PipelineLayout) + GraphicsDeviceRef_getObjectSizes(dev)->pipelineLayout),
-		(ObjectFreeFunc) PipelineLayout_free,
-		(ETypeId) EGraphicsTypeId_PipelineLayout,
-		layoutRef
-	);
-
-	if(err.genericError)
-		return err;
+	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->pipelineLayout, layoutRef, e_rr));
 
 	if(!(info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
-		gotoIfError(clean, GraphicsDeviceRef_inc(dev))
+		gotoIfError3(clean, RefPtr_inc(dev));
 
 	PipelineLayout *layout = PipelineLayoutRef_ptr(*layoutRef);
 
@@ -282,14 +270,14 @@ Error GraphicsDeviceRef_createPipelineLayout(
 	*layout = (PipelineLayout) { .device = dev, .info = info };
 
 	if(!(info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
-		gotoIfError(clean, DescriptorLayoutRef_inc(layout->info.bindings))
+		gotoIfError3(clean, RefPtr_inc(layout->info.bindings));
 
-	gotoIfError(clean, GraphicsDeviceRef_createPipelineLayoutExt(dev, layout, name))
+	gotoIfError3(clean, GraphicsDeviceRef_createPipelineLayoutExt(dev, layout, name, e_rr));
 
 clean:
 
-	if(err.genericError)
-		PipelineLayoutRef_dec(layoutRef);
+	if(!s_uccess)
+		RefPtr_dec(layoutRef);
 
-	return err;
+	return s_uccess;
 }

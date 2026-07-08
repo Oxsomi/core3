@@ -22,7 +22,6 @@
 
 #pragma once
 #include "graphics/generic/resource.h"
-#include "types/math/vec.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -87,7 +86,7 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
 //Only for child classes
 
 void UnifiedTexture_free(TextureRef *textureRef);
-Error UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name);
+Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name, Error *e_rr);
 
 //Internal (only use inside GraphicsDeviceRef_submitCommands)
 

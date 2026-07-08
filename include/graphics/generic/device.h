@@ -22,7 +22,7 @@
 
 #pragma once
 #include "graphics/generic/device_info.h"
-#include "graphics/generic/allocator.h"
+#include "graphics/generic/device_allocator.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
 
@@ -31,6 +31,8 @@
 #endif
 
 typedef RefPtr GraphicsInstanceRef;
+typedef struct Allocator Allocator;
+typedef struct GraphicsObjectTypes GraphicsObjectTypes;
 typedef RefPtr DeviceBufferRef;
 typedef RefPtr PipelineRef;
 typedef RefPtr DescriptorLayoutRef;
@@ -138,15 +140,22 @@ typedef struct SHEntry SHEntry;
 #define GraphicsDevice_ext(ptr, T) (!ptr ? NULL : (T##GraphicsDevice*)(ptr + 1))        //impl
 #define GraphicsDeviceRef_ptr(ptr) RefPtr_data(ptr, GraphicsDevice)
 
-void GraphicsDeviceRef_dec(GraphicsDeviceRef **device);
-Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device);
+//Shorthands for the allocator and object RefPtrTypes the device's instance was created with.
+//Both are valid for as long as the device is alive (the device holds a ref on the instance).
 
-Error GraphicsDeviceRef_create(
+const Allocator *GraphicsDevice_getAlloc(const GraphicsDevice *device);
+const Allocator *GraphicsDeviceRef_getAlloc(GraphicsDeviceRef *device);
+
+const GraphicsObjectTypes *GraphicsDevice_getTypes(const GraphicsDevice *device);
+const GraphicsObjectTypes *GraphicsDeviceRef_getTypes(GraphicsDeviceRef *device);
+
+Bool GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
 	EGraphicsDeviceFlags flags,
 	EGraphicsBufferingMode bufferingMode,
-	GraphicsDeviceRef **device
+	GraphicsDeviceRef **device,
+	Error *e_rr
 );
 
 Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *device, SHBinaryInfo info, SHEntry entry, Error *e_rr);
@@ -168,7 +177,7 @@ U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDevic
 
 //Submit commands to device
 //appData is up to a 368 byte per frame array used for transmitting render critical info.
-Error GraphicsDeviceRef_submitCommands(
+Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDeviceRef *deviceRef,
 	ListCommandListRef commandLists,
@@ -179,16 +188,17 @@ Error GraphicsDeviceRef_submitCommands(
 	//But this is not recommended when the deltaTime is constant for example.
 
 	F32 deltaTime,
-	F32 time
+	F32 time,
+	Error *e_rr
 );
 
 //Wait on previously submitted commands
-Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
+Bool GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef, Error *e_rr);
 
 //Private
 
-Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer);
-Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize);
+Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer, Error *e_rr);
+Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize, Error *e_rr);
 
 #ifdef __cplusplus
 	}

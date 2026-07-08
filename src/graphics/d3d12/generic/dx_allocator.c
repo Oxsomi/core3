@@ -20,20 +20,22 @@
 
 //graphics/d3d12/generic/dx_allocator.c
 
-#include "platforms/ext/listx_impl.h"
-#include "graphics/generic/allocator.h"
+#include "types/container/list_impl.h"
+#include "graphics/generic/device_allocator.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
+#include "types/container/buffer.h"
+#include "types/container/string.h"
 #include "platforms/logx.h"
 #include "types/base/error.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
+#include "types/base/mathf.h"
 #include "types/container/string.h"
 #include "types/base/constants.h"
+#include "types/container/string_unicode.h"
 
 D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType) {
 
@@ -43,7 +45,7 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 
 	if(!isGpu || hasReBAR)            //Force shared allocations if not dedicated or if ReBAR is available
 		*cpuSided = true;
-	
+
 	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
 		.Properties = (D3D12_HEAP_PROPERTIES) {
 			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT),
@@ -90,7 +92,7 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 	return heapDesc;
 }
 
-Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
+Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	DeviceMemoryAllocator *allocator,
 	void *requirementsExt,
 	Bool cpuSided,
@@ -98,14 +100,18 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	U64 *blockOffset,
 	EResourceType resourceType,
 	CharString objectName,
-	DeviceMemoryBlock *resultBlock
+	DeviceMemoryBlock *resultBlock,
+	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
+	const Allocator *alloc = allocator ? GraphicsDevice_getAlloc(allocator->device) : NULL;
+
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
-		return Error_nullPointer(
+		retError(clean, Error_nullPointer(
 			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
 			"D3D12DeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
-		);
+		));
 
 	GraphicsDevice *device = allocator->device;
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -118,10 +124,10 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
 
 	if(req.length > maxAllocationSize)
-		return Error_outOfBounds(
+		retError(clean, Error_outOfBounds(
 			2, req.length, maxAllocationSize,
 			"D3D12DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
-		);
+		));
 
 	//We lock this early to avoid other mem alloc from allocating too many memory blocks at once.
 	//Maybe what we end up allocating now can be used for the next.
@@ -130,9 +136,9 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	CharString temp = CharString_createNull();
 	ListU16 temp16 = (ListU16) { 0 };
+	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
 
 	ID3D12Heap *heap = NULL;
-	Error err = Error_none();
 
 	U8 heapType = 0;
 
@@ -154,10 +160,22 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		)
 			continue;
 
-		const U8 *alloc = NULL;
-		const Error err1 = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, false, &alloc);
+		const U8 *allocated = NULL;
+		Error err1 = Error_none();
 
-		if(err1.genericError)
+		Bool didAllocate = AllocationBuffer_allocateBlock(
+			&(AllocationBufferAllocate) {
+				.allocationBuffer = &block->allocations,
+				.alignment = req.alignment,
+				.isNonLinearResource = false,
+				.alloc = alloc
+			},
+			req.length,
+			&allocated,
+			&err1
+		);
+
+		if(!didAllocate)
 			continue;
 
 		if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
@@ -166,12 +184,12 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 				"(%"PRIu64" from allocation of size %"PRIu64" at offset %"PRIx64" and alignment %"PRIu32")",
 				i,
 				req.length,
-				(U64) alloc,
+				(U64) allocated,
 				req.alignment
 			);
 
 		*blockId = (U32) i;
-		*blockOffset = (U64) alloc;
+		*blockOffset = (U64) allocated;
 		*resultBlock = *block;
 		goto clean;
 	}
@@ -185,14 +203,14 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	);
 
 	heapDesc.SizeInBytes = realBlockSize;
-	
+
 	U64 usedMem = DX_WRAP_FUNC(GraphicsDevice_getMemoryBudget)(allocator->device, !cpuSided);
 	U64 maxAlloc =
 		cpuSided ? allocator->device->info.capabilities.sharedMemory :
 		allocator->device->info.capabilities.dedicatedMemory;
 
 	if(usedMem != U64_MAX && usedMem + heapDesc.SizeInBytes > maxAlloc)
-		gotoIfError(clean, Error_outOfMemory(0, "Memory block allocation would exceed available memory"))
+		retError(clean, Error_outOfMemory(0, "Memory block allocation would exceed available memory"));
 
 	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_debugLnx(
@@ -204,14 +222,14 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			cpuSided ? "Cpu sided allocation" : "Gpu sided allocation",
 			maxAlloc - usedMem
 		);
-	
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateHeap(
+
+	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateHeap(
 		deviceExt->device, &heapDesc, &IID_ID3D12Heap, (void**) &heap
-	)))
+	), e_rr));
 
 	//Initialize block
 
-	DeviceMemoryBlock block = (DeviceMemoryBlock) {
+	block = (DeviceMemoryBlock) {
 		.isActive = true,
 		.typeExt = req.alignment,                                //Only place things with the same alignment in this block
 		.allocationTypeExt = (!cpuSided) | (heapType << 1),        //Don't share GPU mem and CPU mem or heap sharing if no support
@@ -219,7 +237,15 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		.ext = heap
 	};
 
-	gotoIfError(clean, AllocationBuffer_createx(realBlockSize, true, 0, &block.allocations))
+	gotoIfError3(clean, AllocationBuffer_create(
+		&(AllocationBufferCreate) {
+			.size = realBlockSize,
+			.nonLinearAlignment = 0,
+			.alloc = alloc,
+			.allocationBuffer = &block.allocations
+		},
+		true, e_rr
+	));
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
 		Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
@@ -233,14 +259,22 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 			break;
 
 	const U8 *allocLoc = NULL;
-	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, req.length, req.alignment, false, &allocLoc))
+	gotoIfError3(clean, AllocationBuffer_allocateBlock(
+		&(AllocationBufferAllocate) {
+			.allocationBuffer = &block.allocations,
+			.alignment = req.alignment,
+			.isNonLinearResource = false,
+			.alloc = alloc
+		},
+		req.length, &allocLoc, e_rr
+	));
 
 	if(i == allocator->blocks.length) {
 
 		if(i == U32_MAX)
-			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "D3D12DeviceMemoryAllocator_allocate() block out of bounds"))
+			retError(clean, Error_outOfBounds(0, i, U32_MAX, "D3D12DeviceMemoryAllocator_allocate() block out of bounds"));
 
-		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
+		gotoIfError3(clean, ListDeviceMemoryBlock_pushBack(&allocator->blocks, block, alloc, e_rr));
 	}
 
 	else allocator->blocks.ptrNonConst[i] = block;
@@ -251,17 +285,18 @@ Error DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	if(CharString_length(objectName) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
 
-		gotoIfError(clean, CharString_formatx(
+		gotoIfError3(clean, CharString_format(
+			alloc,
 			&temp,
+			e_rr,
 			"Memory block %"PRIu32" (host: %s, device: %s)",
 			(U32) i,
-			cpuSided ? "true" : "false",
-			hasReBAR || !cpuSided ? "true" : "false"
-		))
+			cpuSided ? "true" : "false", hasReBAR || !cpuSided ? "true" : "false"
+		));
 
-		gotoIfError(clean, CharString_toUTF16x(temp, &temp16));
-		gotoIfError(clean, dxCheck(heap->lpVtbl->SetName(heap, temp16.ptr)))
-		CharString_freex(&temp);
+		gotoIfError3(clean, CharString_toUTF16(temp, alloc, &temp16, e_rr));
+		gotoIfError3(clean, dxCheck(heap->lpVtbl->SetName(heap, temp16.ptr), e_rr));
+		CharString_free(&temp, alloc);
 	}
 
 clean:
@@ -269,18 +304,18 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&allocator->lock);
 
-	ListU16_freex(&temp16);
-	CharString_freex(&temp);
+	ListU16_free(&temp16, alloc);
+	CharString_free(&temp, alloc);
 
-	if(err.genericError) {
+	if(!s_uccess) {
 
-		AllocationBuffer_freex(&block.allocations);
+		AllocationBuffer_free(&block.allocations, alloc);
 
 		if(heap)
 			heap->lpVtbl->Release(heap);
 	}
 
-	return err;
+	return s_uccess;
 }
 
 Bool DX_WRAP_FUNC(DeviceMemoryAllocator_freeAllocation)(GraphicsDevice *device, void *ext) {

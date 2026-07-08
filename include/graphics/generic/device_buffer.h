@@ -87,31 +87,30 @@ typedef struct DeviceBuffer {
 #define DeviceBuffer_ext(ptr, T) (!ptr ? NULL : (T##DeviceBuffer*)(ptr + 1))        //impl
 #define DeviceBufferRef_ptr(ptr) RefPtr_data(ptr, DeviceBuffer)
 
-void DeviceBufferRef_dec(DeviceBufferRef **buffer);
-Error DeviceBufferRef_inc(DeviceBufferRef *buffer);
-
 //Create empty buffer or initialized with data.
 //Initializing to non-zero isn't free due to copies.
 //    Initializing to non-zero will move the buffer to created DeviceBuffer, unless it's a ref (then it will create a new one)
 
-Error GraphicsDeviceRef_createBuffer(
+Bool GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	U64 len,
-	DeviceBufferRef **buf
+	DeviceBufferRef **buf,
+	Error *e_rr
 );
 
-Error GraphicsDeviceRef_createBufferData(
+Bool GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
 	DescriptorTableRef *bindlessDescriptorTable,
 	CharString name,
 	Buffer *dat,
-	DeviceBufferRef **buf
+	DeviceBufferRef **buf,
+	Error *e_rr
 );
 
 //Mark the underlying data for the DeviceBuffer as dirty.
@@ -120,7 +119,7 @@ Error GraphicsDeviceRef_createBufferData(
 //Call this as little as possible while still not copying too much data.
 //Only possible if buffer has a backed CPU buffer.
 
-Error DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count);
+Bool DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count, Error *e_rr);
 
 #ifdef __cplusplus
 	}
