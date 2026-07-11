@@ -56,10 +56,10 @@ clean:
 
 Bool GraphicsDeviceRef_createPipelineGraphics(
 	GraphicsDeviceRef *deviceRef,
-	ListSHFile binaries,
+	const ListSHFile *binaries,
 	ListPipelineStage *stages,
-	PipelineGraphicsInfo info,
-	CharString name,
+	const PipelineGraphicsInfo *info,
+	const CharString *name,
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,

@@ -50,7 +50,7 @@ TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, Qua
 	return srt;
 }
 
-F32x4 TLASTransformSRT_getScale(TLASTransformSRT srt) {
+F32x4 TLASTransformSRT_getScale(const TLASTransformSRT *srt) {
 	return F32x4_create3(srt.sx, srt.sy, srt.sz);
 }
 
@@ -65,7 +65,7 @@ Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value) {
 	return true;
 }
 
-F32x4 TLASTransformSRT_getPivot(TLASTransformSRT srt) {
+F32x4 TLASTransformSRT_getPivot(const TLASTransformSRT *srt) {
 	return F32x4_create3(srt.pvx, srt.pvy, srt.pvz);
 }
 
@@ -80,7 +80,7 @@ Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value) {
 	return true;
 }
 
-F32x4 TLASTransformSRT_getTranslate(TLASTransformSRT srt) {
+F32x4 TLASTransformSRT_getTranslate(const TLASTransformSRT *srt) {
 	return F32x4_create3(srt.tx, srt.ty, srt.tz);
 }
 
@@ -95,7 +95,7 @@ Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value) {
 	return true;
 }
 
-QuatF32 TLASTransformSRT_getQuat(TLASTransformSRT srt) {
+QuatF32 TLASTransformSRT_getQuat(const TLASTransformSRT *srt) {
 	return QuatF32_create(srt.q0, srt.q1, srt.q2, srt.q3);
 }
 
@@ -111,7 +111,7 @@ Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value) {
 	return true;
 }
 
-F32x4 TLASTransformSRT_getShearing(TLASTransformSRT srt) {
+F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt) {
 	return F32x4_create3(srt.a, srt.b, srt.c);
 }
 
@@ -137,7 +137,7 @@ TLASInstanceData *TLASInstanceMotion_getDataInternal(TLASInstanceMotion *mot) {
 	}
 }
 
-TLASInstanceData TLASInstanceMotion_getData(TLASInstanceMotion mot) {
+TLASInstanceData TLASInstanceMotion_getData(const TLASInstanceMotion *mot) {
 	return *TLASInstanceMotion_getDataInternal(&mot);
 }
 
@@ -491,10 +491,10 @@ Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,                    //If specified, indicates refit
-	ListTLASInstanceStatic instances,
+	const ListTLASInstanceStatic *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	TLASRef **tlas,
 	Error *e_rr
 ) {
@@ -516,10 +516,10 @@ Bool GraphicsDeviceRef_createTLASMotionExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,
-	ListTLASInstanceMotion instances,
+	const ListTLASInstanceMotion *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	TLASRef **tlas,
 	Error *e_rr
 ) {
@@ -542,10 +542,10 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 	ERTASBuildFlags buildFlags,
 	Bool isMotionBlurExt,
 	TLASRef *parent,
-	DeviceData instancesDevice,
+	const DeviceData *instancesDevice,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	TLASRef **tlas,
 	Error *e_rr
 ) {
@@ -567,8 +567,8 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 
 //Creating TLAS from cache
 
-//Error GraphicsDeviceRef_createTLASFromCacheExt(
-// GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas
+//Bool GraphicsDeviceRef_createTLASFromCacheExt(
+// GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas, Error *e_rr
 //) {
 //
 //    TLAS tlasInfo = (TLAS) {

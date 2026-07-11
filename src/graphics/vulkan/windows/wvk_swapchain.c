@@ -36,7 +36,7 @@ Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR
 
 	if(!device || !window || !surface)
 		retError(clean, Error_nullPointer(
-			!device ? 0 : (!window ? 0 : 1),
+			!device ? 0 : (!window ? 1 : 2),
 			"VkSurface_create()::device, window or surface is NULL"
 		));
 
@@ -55,7 +55,10 @@ Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR
 	if (!instanceExt->createSurfaceExt)
 		retError(clean, Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!"));
 
-	return checkVkError(
-		((PFN_vkCreateWin32SurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
-	);
+	gotoIfError3(clean, checkVkError(
+		((PFN_vkCreateWin32SurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface), e_rr
+	));
+
+clean:
+	return s_uccess;
 }

@@ -20,17 +20,15 @@
 
 //graphics/d3d12/generic/dx_sampler.c
 
-#include "graphics/generic/sampler.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/descriptor_heap.h"
 #include "graphics/d3d12/dx_device.h"
-#include "types/container/string.h"
+
+typedef struct Sampler Sampler;
 
 void DX_WRAP_FUNC(Sampler_free)(Sampler *sampler) { (void)sampler; }
 
-Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr) {
-
-	Bool s_uccess = true;
+Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSampler)(
+	GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr
+) {
 	(void)name; (void) dev; (void) sampler; (void) e_rr;
-	return s_uccess;
+	return true;
 }

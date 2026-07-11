@@ -22,8 +22,8 @@
 
 #pragma once
 #include "types/base/types.h"
-#include "types/container/list.h"
 #include "types/math/vec2.h"
+#include "types/container/list.h"
 #include "types/container/texture_format.h"
 
 #ifdef __cplusplus

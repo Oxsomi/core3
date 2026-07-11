@@ -177,9 +177,10 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		blas->base.name,
+		&blas->base.name,
 		sizes.accelerationStructureSize,
-		&blas->base.asBuffer, e_rr));
+		&blas->base.asBuffer, e_rr
+	));
 
 	gotoIfError3(clean, CharString_format(
 		alloc,
@@ -195,9 +196,10 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		tmp,
+		&tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
-		&blas->base.tempScratchBuffer, e_rr));
+		&blas->base.tempScratchBuffer, e_rr
+	));
 
 	VkAccelerationStructureCreateInfoKHR createInfo = (VkAccelerationStructureCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,

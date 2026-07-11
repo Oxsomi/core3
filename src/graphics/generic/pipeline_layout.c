@@ -46,8 +46,8 @@ void PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc) {
 
 Bool GraphicsDeviceRef_createPipelineLayout(
 	GraphicsDeviceRef *dev,
-	PipelineLayoutInfo info,
-	CharString name,
+	const PipelineLayoutInfo *info,
+	const CharString *name,
 	PipelineLayoutRef **layoutRef,
 	Error *e_rr
 ) {

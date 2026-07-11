@@ -49,7 +49,7 @@ Bool GraphicsDeviceRef_createDepthStencil(
 	Bool allowShaderRead,
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	DepthStencilRef **depthStencil,
 	Error *e_rr
 );

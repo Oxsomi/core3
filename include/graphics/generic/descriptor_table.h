@@ -159,12 +159,12 @@ typedef struct DescriptorTable {
 
 	DescriptorTableFlags flags;
 	Bool acquiredAtomic;
-	U8 padding[6];
-
-	SpinLock lock;                                   //To access resources
+	U8 padding[3];
 
 	ListDescriptorTableResourceRef resources;        //All resources that are bound by the table
 	ListDescriptorTableBinding bindings;
+
+	SpinLock lock;                                   //To access resources
 
 } DescriptorTable;
 

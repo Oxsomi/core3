@@ -21,12 +21,13 @@
 //graphics/vulkan/vk_device.h
 
 #pragma once
-#include "types/base/platform_types.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/device.h"
 #include "types/container/list.h"
-#include "types/math/vec4f.h"
 #include "types/container/list_basic_types.h"
+#include "types/math/vec4.h"
+#include "types/base/platform_types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS       //For fallback to query memory usage
 	#define UNICODE
@@ -234,6 +235,8 @@ typedef struct VkGraphicsDevice {
 	#else
 		U64 padding2;
 	#endif
+
+	U64 padding3;
 
 } VkGraphicsDevice;
 

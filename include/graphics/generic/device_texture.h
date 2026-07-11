@@ -58,7 +58,7 @@ Bool GraphicsDeviceRef_createTexture(
 	U16 height,                    //^
 	U16 length,                    //<= 256
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	Buffer *dat,
 	DeviceTextureRef **tex,
 	Error *e_rr
@@ -69,7 +69,6 @@ Bool GraphicsDeviceRef_createTexture(
 //Each region that doesn't intersect will be considered as 1 copy (otherwise it will be merged).
 //Call this as little as possible while still not copying too much data.
 //Only possible if texture has a backed CPU texture.
-
 Bool DeviceTextureRef_markDirty(DeviceTextureRef *texture, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l, Error *e_rr);
 
 #ifdef __cplusplus

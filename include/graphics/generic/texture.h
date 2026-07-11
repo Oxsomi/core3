@@ -71,6 +71,9 @@ typedef RefPtr TextureRef;                     //DeviceTexture, RenderTexture, D
 // the commandList can't be re-submitted if the versionId has changed.
 UnifiedTexture TextureRef_getUnifiedTexture(TextureRef *tex, DeviceResourceVersion *version);
 
+//If the texture ref isn't a swapchain, you can lockfree/copyfree get the info.
+const UnifiedTexture *TextureRef_getUnifiedTextureFast(TextureRef *tex);
+
 U32 TextureRef_getReadHandle(TextureRef *tex, U32 subResource, U8 imageId);
 U32 TextureRef_getWriteHandle(TextureRef *tex, U32 subResource, U8 imageId);
 
@@ -86,7 +89,7 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
 //Only for child classes
 
 void UnifiedTexture_free(TextureRef *textureRef);
-Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name, Error *e_rr);
+Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, const CharString *name, Error *e_rr);
 
 //Internal (only use inside GraphicsDeviceRef_submitCommands)
 

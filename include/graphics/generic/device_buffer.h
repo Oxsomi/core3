@@ -22,7 +22,6 @@
 
 #pragma once
 #include "types/base/lock.h"
-#include "graphics/generic/device.h"
 #include "graphics/generic/resource.h"
 
 #ifdef __cplusplus
@@ -67,17 +66,17 @@ typedef struct DeviceBuffer {
 
 	EDeviceBufferUsage usage;
 	Bool isPendingFullCopy, isPending, isFirstFrame;
-	U8 padding0[9];
+	U8 padding0;
 
 	DescriptorTableRef *bindlessDescriptorTable;
 
-	Buffer cpuData;                            //Null if not cpu backed & uploaded. If not cpu backed this will free post upload
+	Buffer cpuData;                           //Null if not cpu backed & uploaded. If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
 
-	SpinLock lock;
-
 	U32 readHandle, writeHandle;
+
+	SpinLock lock;
 
 } DeviceBuffer;
 
@@ -96,7 +95,7 @@ Bool GraphicsDeviceRef_createBuffer(
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	U64 len,
 	DeviceBufferRef **buf,
 	Error *e_rr
@@ -107,7 +106,7 @@ Bool GraphicsDeviceRef_createBufferData(
 	EDeviceBufferUsage usage,
 	EGraphicsResourceFlag resourceFlags,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	Buffer *dat,
 	DeviceBufferRef **buf,
 	Error *e_rr

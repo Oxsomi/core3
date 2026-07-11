@@ -20,11 +20,8 @@
 
 //graphics/d3d12/generic/dx_pipeline.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
-#include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
-#include "types/container/buffer.h"
 
 void DX_WRAP_FUNC(Pipeline_free)(Pipeline *pipeline, const Allocator *alloc) {
 

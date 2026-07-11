@@ -25,7 +25,6 @@
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/string.h"
 
 void VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, const Allocator *alloc) {
 
@@ -39,10 +38,10 @@ void VK_WRAP_FUNC(DescriptorHeap_free)(DescriptorHeap *heap, const Allocator *al
 		deviceExt->destroyDescriptorPool(deviceExt->device, heapExt->pool, NULL);
 }
 
-Bool VK_WRAP_FUNC(
-	GraphicsDeviceRef_createDescriptorHeap)(GraphicsDeviceRef *dev,
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorHeap)(
+	GraphicsDeviceRef *dev,
 	DescriptorHeap *heap,
-	CharString name,
+	const CharString *name,
 	Error *e_rr
 ) {
 
@@ -101,12 +100,12 @@ Bool VK_WRAP_FUNC(
 		e_rr
 	));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_DESCRIPTOR_POOL,
-			.pObjectName = name.ptr,
+			.pObjectName = name->ptr,
 			.objectHandle = (U64) heapExt->pool
 		};
 

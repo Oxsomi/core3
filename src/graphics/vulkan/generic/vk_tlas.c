@@ -92,9 +92,10 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocatedBit,
 				NULL,
-				tmp,
+				&tmp,
 				stride * instancesU64,
-				&tlas->tempInstanceBuffer, e_rr));
+				&tlas->tempInstanceBuffer, e_rr
+			));
 
 			CharString_free(&tmp, alloc);
 
@@ -214,9 +215,10 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		tlas->base.name,
+		&tlas->base.name,
 		sizes.accelerationStructureSize,
-		&tlas->base.asBuffer, e_rr));
+		&tlas->base.asBuffer, e_rr
+	));
 
 	gotoIfError3(clean, CharString_format(
 		alloc,
@@ -232,9 +234,11 @@ Bool VK_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		tmp,
+		&tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
-		&tlas->base.tempScratchBuffer, e_rr));
+		&tlas->base.tempScratchBuffer,
+		e_rr
+	));
 
 	CharString_free(&tmp, alloc);
 

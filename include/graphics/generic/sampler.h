@@ -23,13 +23,13 @@
 #pragma once
 #include "types/base/types.h"
 #include "types/math/flp.h"
-#include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
 typedef struct CharString CharString;
+typedef struct RefPtr RefPtr;
 
 typedef enum ESamplerFilterMode {
 
@@ -109,7 +109,7 @@ Bool GraphicsDeviceRef_createSampler(
 	SamplerInfo info,
 	Bool disallowBindlessDescriptor,                //Won't try to allocate into bindlessDescriptorTable or device's default
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	SamplerRef **sampler,
 	Error *e_rr
 );

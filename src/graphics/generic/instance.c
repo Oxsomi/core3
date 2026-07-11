@@ -52,7 +52,7 @@ const C8 *EGraphicsApi_name[EGraphicsApi_Count] = {
 
 Bool GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
-	GraphicsDeviceCapabilities requiredCapabilities,
+	const GraphicsDeviceCapabilities *requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
 	GraphicsDeviceInfo *deviceInfo,
@@ -321,7 +321,7 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 }
 
 Bool GraphicsInstance_create(
-	GraphicsApplicationInfo info,
+	GraphicsApplicationInfo *info,
 	EGraphicsApi api,
 	EGraphicsInstanceFlags flags,
 	const Allocator *alloc,

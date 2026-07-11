@@ -22,7 +22,6 @@
 
 #pragma once
 #include "types/container/list.h"
-#include "types/base/error.h"
 #include "types/container/allocation_buffer.h"
 #include "types/base/lock.h"
 
@@ -30,6 +29,7 @@
 	extern "C" {
 #endif
 
+typedef struct Error Error;
 typedef struct GraphicsDevice GraphicsDevice;
 
 typedef enum EResourceType EResourceType;
@@ -62,9 +62,9 @@ typedef struct DeviceMemoryAllocator {
 
 	GraphicsDevice *device;
 
-	SpinLock lock;
-
 	ListDeviceMemoryBlock blocks;
+
+	SpinLock lock;
 
 } DeviceMemoryAllocator;
 

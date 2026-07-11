@@ -72,9 +72,9 @@ void Pipeline_free(Pipeline *pipeline, const Allocator *alloc) {
 
 U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
-	SHFile shaderBinary,
-	CharString entrypointName,
-	ListCharString defines,
+	const SHFile *shaderBinary,
+	const CharString *entrypointName,
+	const ListCharString *defines,
 	ESHExtension disallow,
 	ESHExtension require
 ) {

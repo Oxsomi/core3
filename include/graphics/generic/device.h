@@ -40,7 +40,7 @@ typedef RefPtr PipelineLayoutRef;
 typedef RefPtr DescriptorHeapRef;
 typedef RefPtr DescriptorTableRef;
 
-typedef struct CBufferData {
+typedef struct CBufferData {        //TODO: Replace this entirely when we can.
 
 	U32 frameId;                    //Can loop back to 0 after U32_MAX!
 	F32 time;                       //Time since launch of app
@@ -158,7 +158,9 @@ Bool GraphicsDeviceRef_create(
 	Error *e_rr
 );
 
-Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *device, SHBinaryInfo info, SHEntry entry, Error *e_rr);
+Bool GraphicsDeviceRef_checkShaderFeatures(
+	GraphicsDeviceRef *device, const SHBinaryInfo *info, const SHEntry *entry, Error *e_rr
+);
 
 //Ensure there are no pending changes from non-existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
@@ -180,9 +182,9 @@ U64 GraphicsDeviceRef_getMemoryBudget(GraphicsDeviceRef *deviceRef, Bool isDevic
 Bool GraphicsDeviceRef_submitCommands(
 
 	GraphicsDeviceRef *deviceRef,
-	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains,
-	Buffer appData,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	const Buffer *appData,
 
 	//Set deltaTime < 0 to indicate it has to auto calculate time and deltaTime.
 	//But this is not recommended when the deltaTime is constant for example.

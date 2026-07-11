@@ -35,27 +35,27 @@
 
 	Bool VkGraphicsDevice_createPipelineCompute(
 		GraphicsDevice *device,
-		CharString name,
+		const CharString *name,
 		Pipeline *pipeline,
-		SHBinaryInfo buf,
+		const SHBinaryInfo *buf,
 		Error *e_rr
 	);
 
 	Bool VkGraphicsDevice_createPipelineGraphics(
 		GraphicsDevice *dev,
-		ListSHFile binaries,
-		CharString name,
+		const ListSHFile *binaries,
+		const CharString *name,
 		Pipeline *pipeline,
 		Error *e_rr
 	);
 
 	Bool VkGraphicsDevice_createPipelineRaytracingInternal(
 		GraphicsDeviceRef *deviceRef,
-		ListSHFile binaries,
-		CharString name,
+		const ListSHFile *binaries,
+		const CharString *name,
 		U8 maxPayloadSize,
 		U8 maxAttributeSize,
-		ListU32 binaryIndices,
+		const ListU32 *binaryIndices,
 		Pipeline *pipeline,
 		Error *e_rr
 	);
@@ -64,18 +64,18 @@
 
 	//Sampler
 
-	Bool VkGraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr);
+	Bool VkGraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr);
 	void  VkSampler_free(Sampler *sampler);
 
 	//Device buffer
 
-	Bool VkGraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name, Error *e_rr);
+	Bool VkGraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, const CharString *name, Error *e_rr);
 	void  VkDeviceBuffer_free(DeviceBuffer *buffer);
 	Bool VkDeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending, Error *e_rr);
 
 	//Device texture
 
-	Bool VkUnifiedTexture_create(TextureRef *textureRef, CharString name, Error *e_rr);
+	Bool VkUnifiedTexture_create(TextureRef *textureRef, const CharString *name, Error *e_rr);
 	Bool VkDeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr);
 	void  VkUnifiedTexture_free(TextureRef *textureRef);
 
@@ -86,19 +86,25 @@
 
 	//DescriptorHeap
 
-	Bool VkGraphicsDeviceRef_createDescriptorHeap(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name, Error *e_rr);
+	Bool VkGraphicsDeviceRef_createDescriptorHeap(
+		GraphicsDeviceRef *dev, DescriptorHeap *heap, const CharString *name, Error *e_rr
+	);
+
 	void VkDescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc);
 
 	//DescriptorTable
 
-	Bool VkDescriptorHeap_createDescriptorTable(DescriptorHeapRef *heap, DescriptorTable *table, CharString name, Error *e_rr);
+	Bool VkDescriptorHeap_createDescriptorTable(
+		DescriptorHeapRef *heap, DescriptorTable *table, const CharString *name, Error *e_rr
+	);
+
 	void VkDescriptorTable_free(DescriptorTable *table, const Allocator *alloc);
 
 	Bool VkDescriptorTable_setDescriptors(
 		DescriptorTable *table,
 		U64 bindId,
 		U64 arrayId,
-		ListDescriptor darr,
+		const ListDescriptor *darr,
 		Error *e_rr
 	);
 
@@ -115,14 +121,18 @@
 	Bool VkGraphicsDeviceRef_createDescriptorLayout(
 		GraphicsDeviceRef *dev,
 		DescriptorLayout *layout,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	);
+
 	void VkDescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc);
 
 	//PipelineLayout
 
-	Bool VkGraphicsDeviceRef_createPipelineLayout(GraphicsDeviceRef *dev, PipelineLayout *layout, CharString name, Error *e_rr);
+	Bool VkGraphicsDeviceRef_createPipelineLayout(
+		GraphicsDeviceRef *dev, PipelineLayout *layout, const CharString *name, Error *e_rr
+	);
+
 	void VkPipelineLayout_free(PipelineLayout *layout, const Allocator *alloc);
 
 	//Allocator
@@ -135,7 +145,7 @@
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName,                //Name of the object that allocates (for dedicated allocations)
+		const CharString *objectName,          //Name of the object that allocates (for dedicated allocations)
 		DeviceMemoryBlock *resultBlock,
 		Error *e_rr
 	);
@@ -159,9 +169,9 @@
 
 	Bool VkGraphicsDevice_submitCommands(
 		GraphicsDeviceRef *deviceRef,
-		ListCommandListRef commandLists,
-		ListSwapchainRef swapchains,
-		CBufferData data,
+		const ListCommandListRef *commandLists,
+		const ListSwapchainRef *swapchains,
+		const CBufferData *data,
 		Error *e_rr
 	);
 

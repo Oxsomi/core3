@@ -23,14 +23,13 @@
 #pragma once
 #include "types/container/list.h"
 #include "types/container/string.h"
-#include "types/container/texture_format.h"
-#include "types/container/ref_ptr.h"
 #include "graphics/generic/pipeline_structs.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DeviceBufferRef;
 typedef RefPtr PipelineLayoutRef;
@@ -167,17 +166,17 @@ typedef enum ESHExtension ESHExtension;
 //Returns (U16 entryId, U16 binaryId) or U32_MAX if invalid
 U32 GraphicsDeviceRef_getFirstShaderEntry(
 	GraphicsDeviceRef *deviceRef,
-	SHFile shaderBinary,
-	CharString entrypointName,
-	ListCharString defines,                     //[ key, value ][]
+	const SHFile *shaderBinary,
+	const CharString *entrypointName,
+	const ListCharString *defines,              //[ key, value ][]
 	ESHExtension disallow,                      //Extensions that should be disallowed (only find with extension disabled)
 	ESHExtension require                        //Extensions that should be required (only find with extension enabled)
 );
 
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
-	SHFile shaderBinary,
-	CharString name,                            //Temporary name for debugging
+	const SHFile *shaderBinary,
+	const CharString *name,                     //Temporary name for debugging
 	U32 entryId,                                //Identifier from getFirstShaderEntry
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
@@ -187,10 +186,10 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 
 Bool GraphicsDeviceRef_createPipelineGraphics(
 	GraphicsDeviceRef *deviceRef,
-	ListSHFile shaderBinary,
+	const ListSHFile *shaderBinary,
 	ListPipelineStage *stages,                  //Will be moved
-	PipelineGraphicsInfo info,
-	CharString name,                            //Temporary name for debugging
+	const PipelineGraphicsInfo *info,
+	const CharString *name,                     //Temporary name for debugging
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipelines,
@@ -201,10 +200,10 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	GraphicsDeviceRef *deviceRef,
 	ListPipelineStage *stages,                  //Will be moved
-	ListSHFile binaries,
+	const ListSHFile *binaries,
 	ListPipelineRaytracingGroup *groups,        //Will be moved
-	PipelineRaytracingInfo info,
-	CharString name,                            //Temporary name for debugging
+	const PipelineRaytracingInfo *info,
+	const CharString *name,                     //Temporary name for debugging
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,

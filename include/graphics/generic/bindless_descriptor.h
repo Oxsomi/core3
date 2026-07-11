@@ -23,6 +23,7 @@
 #pragma once
 #include "types/container/list.h"
 #include "types/math/vec4.h"
+#include "types/math/pack.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -63,7 +64,7 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	ESHRegisterType type,
 	U32 strideOrLength,                   //For structured/storage buffers
 	Bool maintainRef,                     //Only if the resource isn't in charge of managing the descriptor
-	Descriptor desc,
+	const Descriptor *desc,
 	BindlessDescriptor *descriptorHandle,
 	Error *e_rr
 );
@@ -75,11 +76,22 @@ Bool GraphicsDeviceRef_freeDescriptorBindless(
 	Error *e_rr
 );
 
-U64 BindlessDescriptor_pack3(BindlessDescriptor a, BindlessDescriptor b, BindlessDescriptor c);
-I32x4 BindlessDescriptor_unpack3(U64 v);
+static inline U64 BindlessDescriptor_pack3(BindlessDescriptor a, BindlessDescriptor b, BindlessDescriptor c) {
+	return U64_pack21x3(a, b, c);
+}
 
-U8 BindlessDescriptor_getBindlessType(BindlessDescriptor handle);
-U32 BindlessDescriptor_getId(BindlessDescriptor handle);
+static inline I32x4 BindlessDescriptor_unpack3(U64 v) {
+	return I32x4_create3(U64_unpack20x3u4(v, 0), U64_unpack20x3u4(v, 1), U64_unpack20x3u4(v, 2));
+}
+
+static inline U8 BindlessDescriptor_getBindlessType(BindlessDescriptor handle) {
+	return (U8)(handle >> 17);
+}
+
+static inline U32 BindlessDescriptor_getId(BindlessDescriptor handle) {
+	return handle & ((1 << 17) - 1);
+}
+
 Bool BindlessDescriptor_isValid(GraphicsDeviceRef *device, DescriptorTableRef *descTable, BindlessDescriptor handle);
 
 #ifdef __cplusplus

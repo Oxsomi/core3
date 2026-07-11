@@ -687,14 +687,17 @@ Bool GraphicsDeviceRef_create(
 
 	//Allocate UBO
 
+	CharString perFrameData = CharString_createRefCStrConst("Per frame data");
+
 	for(U64 i = 0; i < device->framesInFlight; ++i)
 		gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 			*deviceRef,
 			EDeviceBufferUsage_Uniform,
 			EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 			NULL,
-			CharString_createRefCStrConst("Per frame data"),
-			sizeof(CBufferData), &device->frameData[i], e_rr));
+			&perFrameData,
+			sizeof(CBufferData), &device->frameData[i], e_rr
+		));
 
 	//Load prebuilt shaders
 
@@ -932,13 +935,16 @@ Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 new
 		RefPtr_dec(&device->staging);
 	}
 
+	CharString stagingBufferName = CharString_createRefCStrConst("Staging buffer");
+
 	gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_None,
 		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 		NULL,
-		CharString_createRefCStrConst("Staging buffer"),
-		newSize, &device->staging, e_rr));
+		&stagingBufferName,
+		newSize, &device->staging, e_rr
+	));
 
 	const DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 	const Buffer stagingBuffer = Buffer_createRef(staging->resource.mappedMemoryExt, newSize);
@@ -959,9 +965,9 @@ clean:
 
 Bool GraphicsDeviceRef_submitCommands(
 	GraphicsDeviceRef *deviceRef,
-	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains,
-	Buffer appData,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	const Buffer *appData,
 	F32 deltaTime,
 	F32 time,
 	Error *e_rr

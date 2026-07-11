@@ -22,12 +22,12 @@
 
 #include "graphics/generic/interface.h"
 #include "graphics/generic/render_texture.h"
+#include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
 #include "types/base/error.h"
-#include "types/container/string.h"
 
 void GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, const Allocator *alloc) {
 	(void)alloc;
@@ -44,14 +44,16 @@ Bool GraphicsDeviceRef_createRenderTexture(
 	EGraphicsResourceFlag flag,
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	RenderTextureRef **renderTextureRef,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
+	Bool allocated = false;
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->renderTexture, renderTextureRef, e_rr));
+	allocated = true;
 
 	gotoIfError3(clean, RefPtr_inc(deviceRef));
 
@@ -75,7 +77,7 @@ Bool GraphicsDeviceRef_createRenderTexture(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocated)
 		RefPtr_dec(renderTextureRef);
 
 	return s_uccess;

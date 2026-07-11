@@ -35,9 +35,9 @@
 
 	Bool D3D12GraphicsDevice_createPipelineCompute(
 		GraphicsDevice *device,
-		CharString name,
+		const CharString *name,
 		Pipeline *pipeline,
-		SHBinaryInfo buf,
+		const SHBinaryInfo *buf,
 		Error *e_rr
 	);
 
@@ -69,7 +69,7 @@
 
 	//Device buffer
 
-	Bool D3D12GraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name, Error *e_rr);
+	Bool D3D12GraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, DeviceBuffer *buf, const CharString *name, Error *e_rr);
 	void  D3D12DeviceBuffer_free(DeviceBuffer *buffer);
 	Bool D3D12DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending, Error *e_rr);
 
@@ -89,9 +89,10 @@
 	Bool D3D12GraphicsDeviceRef_createDescriptorHeap(
 		GraphicsDeviceRef *dev,
 		DescriptorHeap *heap,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	);
+
 	void D3D12DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc);
 
 	//DescriptorTable

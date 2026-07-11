@@ -20,33 +20,11 @@
 
 //graphics/generic/bindless_descriptor.c
 
-#include "types/container/list.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/descriptor_table.h"
 #include "types/base/constants.h"
-
-U64 BindlessDescriptor_pack3(BindlessDescriptor a, BindlessDescriptor b, BindlessDescriptor c) {
-	return a | ((U64)b << 21) |  ((U64)c << 42);
-}
-
-I32x4 BindlessDescriptor_unpack3(U64 v) {
-
-	const U32 a = v & ((1 << 21) - 1);
-	const U32 b = (v >> 21) & ((1 << 21) - 1);
-	const U32 c = v >> 42;
-
-	return I32x4_create3((I32)a, (I32)b, (I32)c);
-}
-
-U8 BindlessDescriptor_getBindlessType(BindlessDescriptor handle) {
-	return (U8)(handle >> 17);
-}
-
-U32 BindlessDescriptor_getId(BindlessDescriptor handle) {
-	return handle & ((1 << 17) - 1);
-}
 
 Bool BindlessDescriptor_isValid(GraphicsDeviceRef *deviceRef, DescriptorTableRef *descTableRef, BindlessDescriptor handle) {
 
@@ -83,7 +61,7 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 	ESHRegisterType type,
 	U32 strideOrLength,
 	Bool maintainRef,
-	Descriptor desc,
+	const Descriptor *desc,
 	BindlessDescriptor *descriptorHandle,
 	Error *e_rr
 ) {
@@ -111,12 +89,12 @@ Bool GraphicsDeviceRef_allocateDescriptorBindless(
 
 	*descriptorHandle = (((BindlessDescriptor) bindlessTypeId + 1) << 17) | (BindlessDescriptor) arrayId;
 
-	if(*descriptorHandle == BindlessDescriptor_InvalidAllocation)
+	if(arrayId == BindlessDescriptor_InvalidAllocation)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_allocateDescriptorBindless() can't make descriptor handle"));
 
 clean:
 
-	if(!s_uccess && arrayId != U64_MAX)
+	if(!s_uccess && arrayId != U64_MAX && arrayId != BindlessDescriptor_InvalidAllocation)
 		DescriptorTableRef_unsetDescriptors(descTableRef, bindId, arrayId, 1, NULL);
 
 	return s_uccess;

@@ -52,24 +52,24 @@ TListImpl(CopyImageRegion);
 
 //Clear, append, begin and end
 
-#define CommandListRef_validate(v)                                                                                \
+#define CommandListRef_validate(v)                                                                              \
 																												\
 	CommandList *commandList = NULL;                                                                            \
 																												\
-	if(!(v) || (v)->refPtrType->typeId != (ETypeId)EGraphicsTypeId_CommandList)                                                \
-		retError(clean, Error_nullPointer(0, "CommandListRef_validate() cmdlist is invalid"));                            \
+	if(!(v) || (v)->refPtrType->typeId != (ETypeId)EGraphicsTypeId_CommandList)                                 \
+		retError(clean, Error_nullPointer(0, "CommandListRef_validate() cmdlist is invalid"));                  \
 																												\
 	commandList = CommandListRef_ptr(v);                                                                        \
 																												\
-	if(!SpinLock_isLockedForThread(&commandList->lock))                                                            \
-		retError(clean, Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked"));                        \
+	if(!SpinLock_isLockedForThread(&commandList->lock))                                                         \
+		retError(clean, Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked"));           \
 																												\
 	if(commandList->state != ECommandListState_Open)                                                            \
 		retError(clean, Error_invalidOperation(1, "CommandListRef_validate() cmdlist isn't open"));
 
-#define CommandListRef_validateScope(v, label)                                                                    \
+#define CommandListRef_validateScope(v, label)                                                                  \
 																												\
-	CommandListRef_validate(v);                                                                                    \
+	CommandListRef_validate(v);                                                                                 \
 																												\
 	if(!(commandList->tempStateFlags & ECommandStateFlags_HasScope))                                            \
 		retError(label, Error_invalidOperation(0, "CommandListRef_validateScope() scope isn't open"));

@@ -69,7 +69,7 @@ typedef enum ETLASInstanceType {
 } ETLASInstanceType;
 
 //These are the different type of TLASInstances;
-//TLASInstance itself is CPU-only & wraps two types; so the TLAS could be used to support HW motion blur with a simple flag.
+//TLASInstanceData is CPU-only & wraps two types; so the TLAS could be used to support HW motion blur with a simple flag.
 //TLASInstanceDevice is the default, while TLASInstanceMotionDevice is the specific one for the HW RT motion blur extension.
 
 //https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkSRTDataNV.html
@@ -92,19 +92,19 @@ typedef struct TLASTransformSRT {
 TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing);
 TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat);
 
-F32x4 TLASTransformSRT_getScale(TLASTransformSRT srt);
+F32x4 TLASTransformSRT_getScale(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value);
 
-F32x4 TLASTransformSRT_getPivot(TLASTransformSRT srt);
+F32x4 TLASTransformSRT_getPivot(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value);
 
-F32x4 TLASTransformSRT_getTranslate(TLASTransformSRT srt);
+F32x4 TLASTransformSRT_getTranslate(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value);
 
-QuatF32 TLASTransformSRT_getQuat(TLASTransformSRT srt);
+QuatF32 TLASTransformSRT_getQuat(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value);
 
-F32x4 TLASTransformSRT_getShearing(TLASTransformSRT srt);
+F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value);
 
 typedef struct TLASInstanceStatic {
@@ -135,7 +135,7 @@ typedef struct TLASInstanceMotion {
 
 } TLASInstanceMotion;
 
-TLASInstanceData TLASInstanceMotion_getData(TLASInstanceMotion mot);
+TLASInstanceData TLASInstanceMotion_getData(const TLASInstanceMotion *mot);
 
 TList(TLASInstanceMotion);
 TList(TLASInstanceStatic);
@@ -153,7 +153,7 @@ typedef struct TLAS {
 
 	Bool useDeviceMemory;
 	Bool disallowBindlessDescriptor;
-	U8 padding[10];
+	U8 padding[2];
 
 	BindlessDescriptor handle;
 
@@ -192,10 +192,10 @@ Bool GraphicsDeviceRef_createTLASExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,                    //If specified, indicates refit
-	ListTLASInstanceStatic instances,
+	const ListTLASInstanceStatic *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	TLASRef **tlas,
 	Error *e_rr
 );
@@ -204,10 +204,10 @@ Bool GraphicsDeviceRef_createTLASMotionExt(
 	GraphicsDeviceRef *dev,
 	ERTASBuildFlags buildFlags,
 	TLASRef *parent,                    //If specified, indicates refit
-	ListTLASInstanceMotion instances,
+	const ListTLASInstanceMotion *instances,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	TLASRef **tlas,
 	Error *e_rr
 );
@@ -217,16 +217,16 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 	ERTASBuildFlags buildFlags,
 	Bool isMotionBlurExt,               //Requires extension
 	TLASRef *parent,                    //If specified, indicates refit
-	DeviceData instancesDevice,         //Instances on the GPU, should be sized correctly
+	const DeviceData *instancesDevice,  //Instances on the GPU, should be sized correctly
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	TLASRef **tlas,
 	Error *e_rr
 );
 
-//Error GraphicsDeviceRef_createTLASFromCacheExt(
-//    GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas
+//Bool GraphicsDeviceRef_createTLASFromCacheExt(
+//    GraphicsDeviceRef *dev, Buffer cache, Bool disallowBindlessDescriptor, CharString name, TLASRef **tlas, Error *e_rr
 //);
 
 #ifdef __cplusplus

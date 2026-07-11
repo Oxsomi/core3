@@ -24,8 +24,8 @@
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline_structs.h"
+#include "types/container/ref_ptr.h"
 #include "types/base/error.h"
-#include "types/base/constants.h"
 
 TListImpl(D3D12_TEXTURE_BARRIER);
 TListImpl(D3D12_BUFFER_BARRIER);
@@ -34,13 +34,13 @@ TListImpl(ID3D12PipelineState);
 D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op) {
 	switch(op) {
 		default:                return D3D12_COMPARISON_FUNC_NEVER;
-		case ECompareOp_Lt:        return D3D12_COMPARISON_FUNC_LESS;
-		case ECompareOp_Eq:        return D3D12_COMPARISON_FUNC_EQUAL;
+		case ECompareOp_Lt:     return D3D12_COMPARISON_FUNC_LESS;
+		case ECompareOp_Eq:     return D3D12_COMPARISON_FUNC_EQUAL;
 		case ECompareOp_Leq:    return D3D12_COMPARISON_FUNC_LESS_EQUAL;
-		case ECompareOp_Gt:        return D3D12_COMPARISON_FUNC_GREATER;
+		case ECompareOp_Gt:     return D3D12_COMPARISON_FUNC_GREATER;
 		case ECompareOp_Neq:    return D3D12_COMPARISON_FUNC_NOT_EQUAL;
 		case ECompareOp_Geq:    return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-		case ECompareOp_Always:    return D3D12_COMPARISON_FUNC_ALWAYS;
+		case ECompareOp_Always: return D3D12_COMPARISON_FUNC_ALWAYS;
 	}
 }
 
@@ -58,6 +58,7 @@ Bool dxCheck(HRESULT result, Error *e_rr) {
 
 		case E_OUTOFMEMORY:
 			retError(clean, Error_outOfMemory(0, "dxCheck() out of memory"));
+
 		case DXGI_ERROR_MORE_DATA:
 			retError(clean, Error_outOfMemory(0, "dxCheck() more data was required but wasn't provided"));
 
@@ -128,8 +129,4 @@ clean:
 
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data) {
 	return DeviceBufferRef_ptr(data.buffer)->resource.deviceAddress + data.offset;
-}
-
-D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset) {
-	return getDxDeviceAddress(data) + localOffset;
 }

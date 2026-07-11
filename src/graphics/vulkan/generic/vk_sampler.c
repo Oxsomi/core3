@@ -25,7 +25,6 @@
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/string.h"
 
 void VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
@@ -39,24 +38,26 @@ void VK_WRAP_FUNC(Sampler_free)(Sampler *sampler) {
 
 VkSamplerAddressMode mapVkAddressMode(ESamplerAddressMode addressMode) {
 	switch (addressMode) {
-		case ESamplerAddressMode_MirrorRepeat:        return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+		case ESamplerAddressMode_MirrorRepeat:       return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 		case ESamplerAddressMode_ClampToEdge:        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-		case ESamplerAddressMode_ClampToBorder:        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-		default:                                    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		case ESamplerAddressMode_ClampToBorder:      return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		default:                                     return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	}
 }
 
 VkBorderColor mapVkBorderColor(ESamplerBorderColor borderColor) {
 	switch (borderColor) {
-		case ESamplerBorderColor_OpaqueBlackFloat:        return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-		case ESamplerBorderColor_OpaqueBlackInt:        return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-		case ESamplerBorderColor_OpaqueWhiteFloat:        return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		case ESamplerBorderColor_OpaqueWhiteInt:        return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
-		default:                                        return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+		case ESamplerBorderColor_OpaqueBlackFloat:   return VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+		case ESamplerBorderColor_OpaqueBlackInt:     return VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+		case ESamplerBorderColor_OpaqueWhiteFloat:   return VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		case ESamplerBorderColor_OpaqueWhiteInt:     return VK_BORDER_COLOR_INT_OPAQUE_WHITE;
+		default:                                     return VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 	}
 }
 
-Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr) {
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(
+	GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
@@ -99,12 +100,12 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSampler)(GraphicsDeviceRef *dev, Sampl
 
 	gotoIfError3(clean, checkVkError(deviceExt->createSampler(deviceExt->device, &samplerInfo, NULL, samplerExt), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_SAMPLER,
-			.pObjectName = name.ptr,
+			.pObjectName = name->ptr,
 			.objectHandle = (U64) *samplerExt
 		};
 

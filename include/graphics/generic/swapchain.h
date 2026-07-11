@@ -21,8 +21,6 @@
 //graphics/generic/swapchain.h
 
 #pragma once
-#include "types/math/vec2.h"
-#include "types/container/ref_ptr.h"
 #include "types/base/lock.h"
 #include "graphics/generic/texture.h"
 
@@ -30,6 +28,7 @@
 	extern "C" {
 #endif
 
+typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DescriptorTableRef;
 typedef RefPtr WindowRef;
@@ -56,7 +55,7 @@ typedef struct SwapchainInfo {
 	//Dereferencing this pointer after the window was destroyed is undefined behavior.
 	//The render loop should only touch the window from within the window's callbacks
 	//(onDraw/onResize/onDestroy), which guarantees the window is still alive.
-	WindowRef *window;
+	Window *window;
 
 	//Priorities using ESwapchainPresentMode.
 	//Tries to use presentModePriorities[i] until it reaches one that's supported.
@@ -92,17 +91,12 @@ typedef struct Swapchain {
 } Swapchain;
 
 #define SWAPCHAIN_VERSIONING 3        //How many swapchain images should be requested, should always be 3
-#define SWAPCHAIN_MAX_DELTA 2        //How many swapchain images extra can be available (important for android devices)
+#define SWAPCHAIN_MAX_DELTA 2         //How many swapchain images extra can be available (important for android devices)
 #define SWAPCHAIN_MAX_IMAGES (SWAPCHAIN_VERSIONING + SWAPCHAIN_MAX_DELTA)
 
 typedef RefPtr SwapchainRef;
 
 #define SwapchainRef_ptr(ptr) RefPtr_data(ptr, Swapchain)
-
-//Weak window access: only valid while the window is alive (see SwapchainInfo::window).
-static inline Window *Swapchain_getWindow(const Swapchain *swapchain) {
-	return !swapchain || !swapchain->info.window ? NULL : (Window*)(swapchain->info.window + 1);
-}
 
 Bool GraphicsDeviceRef_createSwapchain(
 	GraphicsDeviceRef *device,

@@ -20,18 +20,15 @@
 
 //graphics/generic/descriptor_heap.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/device.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/string.h"
+#include "types/base/string_base.h"
 
 void DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc) {
 
 	(void)alloc;
-
-	//Log_debugLnx("Destroy: %p", heap);
 
 	DescriptorHeap_freeExt(heap, alloc);
 
@@ -42,7 +39,7 @@ void DescriptorHeap_free(DescriptorHeap *heap, const Allocator *alloc) {
 Bool GraphicsDeviceRef_createDescriptorHeap(
 	GraphicsDeviceRef *dev,
 	const DescriptorHeapInfo *info,
-	CharString name,
+	const CharString *name,
 	DescriptorHeapRef **heapRef,
 	Error *e_rr
 ) {
@@ -53,8 +50,8 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorHeap()::dev is required"));
 
 	U64 srvCbvUav =
-		(U64) info.maxAccelerationStructures + info.maxTextures + info.maxConstantBuffers +
-		info.maxTexturesRW + info.maxBuffersRW;
+		(U64) info->maxAccelerationStructures + info->maxTextures + info->maxConstantBuffers +
+		info->maxTexturesRW + info->maxBuffersRW;
 
 	if(srvCbvUav > 1000000)
 		retError(clean, Error_outOfBounds(
@@ -62,42 +59,43 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 			"GraphicsDeviceRef_createDescriptorHeap()::info must not exceed over 1M descriptors (CBV, UAV, SRV)"
 		));
 
-	if(info.maxSamplers > 2048)
+	if(info->maxSamplers > 2048)
 		retError(clean, Error_outOfBounds(
-			0, info.maxSamplers, 2048,
+			0, info->maxSamplers, 2048,
 			"GraphicsDeviceRef_createDescriptorHeap()::info must not exceed over 2048 samplers"
 		));
 
-	if(!srvCbvUav && !info.maxSamplers)
+	if(!srvCbvUav && !info->maxSamplers)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info contains no valid descriptors"
 		));
 
-	if(!info.maxDescriptorTables)
+	if(!info->maxDescriptorTables)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info contains maxDescriptorTables of 0"
 		));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if((info.flags & EDescriptorHeapFlags_AllowBindless) && !(device->info.capabilities.features & EGraphicsFeatures_Bindless))
+	if(
+		(info->flags & EDescriptorHeapFlags_AllowBindless) &&
+		!(device->info.capabilities.features & EGraphicsFeatures_Bindless)
+	)
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info.flags can't include bindless if bindless feature is missing"
 		));
 
-	if(info.maxAccelerationStructures && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
+	if(info->maxAccelerationStructures && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_createDescriptorHeap()::info.maxAccelerationStructures can't be >0 if raytracing is missing"
 		));
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->descriptorHeap, heapRef, e_rr));
 
-	if(!(info.flags & EDescriptorHeapFlags_InternalWeakDeviceRef))
+	if(!(info->flags & EDescriptorHeapFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(dev));
 
 	DescriptorHeap *heap = DescriptorHeapRef_ptr(*heapRef);
-
-	//Log_debugLnx("Create: DescriptorHeap %.*s (%p)", (int) CharString_length(name), name.ptr, heap);
 
 	*heap = (DescriptorHeap) { .device = dev, .info = info };
 

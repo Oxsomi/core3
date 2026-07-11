@@ -20,13 +20,10 @@
 
 //graphics/generic/rtas.c
 
-#include "types/container/list.h"
-#include "types/container/string.h"
-#include "types/container/buffer.h"
-#include "types/container/ref_ptr.h"
 #include "graphics/generic/acceleration_structure.h"
 #include "graphics/generic/device_buffer.h"
-#include "types/container/buffer.h"
+#include "graphics/generic/graphics_types.h"
+#include "types/container/ref_ptr.h"
 
 Bool RTAS_validateDeviceBuffer(DeviceData *bufPtr, Error *e_rr) {
 

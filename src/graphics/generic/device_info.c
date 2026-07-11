@@ -39,7 +39,8 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
 		"Max buffer size: %"PRIu64" bytes, max allocation size: %"PRIu64" bytes\n\t"
 		"%s %"PRIu64"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64"\n\t"
-		"Vendor: %s", api == EGraphicsApi_Direct3D12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
+		"Vendor: %s",
+		api == EGraphicsApi_Direct3D12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
 		deviceInfo->capabilities.sharedMemory,
@@ -302,7 +303,7 @@ Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETe
 		case ETextureFormat_RGB32f:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32f;
 		case ETextureFormat_RGB32i:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32i;
 		case ETextureFormat_RGB32u:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32u;
-		default:                        return true;
+		default:                           return true;
 	}
 }
 
@@ -322,9 +323,9 @@ Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
 	switch(format) {
-		case EDepthStencilFormat_D24S8Ext:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
-		case EDepthStencilFormat_D32S8X24Ext:    return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
-		case EDepthStencilFormat_S8X24Ext:        return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
+		case EDepthStencilFormat_D24S8Ext:      return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
+		case EDepthStencilFormat_D32S8X24Ext:   return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
+		case EDepthStencilFormat_S8X24Ext:      return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
 		default:                                return true;
 	}
 }

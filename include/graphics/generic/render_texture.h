@@ -21,14 +21,19 @@
 //graphics/generic/render_texture.h
 
 #pragma once
-#include "types/math/vec2.h"
-#include "types/container/ref_ptr.h"
-#include "graphics/generic/texture.h"
+#include "types/base/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
+typedef enum ETextureType ETextureType;
+typedef enum ETextureFormatId ETextureFormatId;
+typedef enum EGraphicsResourceFlag EGraphicsResourceFlag;
+typedef enum EMSAASamples EMSAASamples;
+typedef struct CharString CharString;
+
+typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 
 typedef UnifiedTexture RenderTexture;
@@ -48,7 +53,7 @@ Bool GraphicsDeviceRef_createRenderTexture(
 	EGraphicsResourceFlag flag,
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	RenderTextureRef **renderTexture,
 	Error *e_rr
 );

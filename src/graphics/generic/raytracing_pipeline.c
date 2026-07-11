@@ -41,10 +41,10 @@ TListImpl(PipelineRaytracingInfo);
 Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	GraphicsDeviceRef *deviceRef,
 	ListPipelineStage *stages,
-	ListSHFile binaries,
+	const ListSHFile *binaries,
 	ListPipelineRaytracingGroup *groups,
-	PipelineRaytracingInfo info,
-	CharString name,
+	const PipelineRaytracingInfo *info,
+	const CharString *name,
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipelineRef,

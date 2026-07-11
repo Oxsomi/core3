@@ -115,9 +115,10 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocated,
 				NULL,
-				tmp,
+				&tmp,
 				stride * instancesU64,
-				&tlas->tempInstanceBuffer, e_rr));
+				&tlas->tempInstanceBuffer, e_rr
+			));
 
 			CharString_free(&tmp, alloc);
 
@@ -166,9 +167,11 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		tlas->base.name,
+		&tlas->base.name,
 		sizes.ResultDataMaxSizeInBytes,
-		&tlas->base.asBuffer, e_rr));
+		&tlas->base.asBuffer,
+		e_rr
+	));
 
 	gotoIfError3(clean, CharString_format(
 		alloc,
@@ -186,7 +189,9 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		NULL,
 		tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
-		&tlas->base.tempScratchBuffer, e_rr));
+		&tlas->base.tempScratchBuffer,
+		e_rr
+	));
 
 clean:
 	CharString_free(&tmp, alloc);

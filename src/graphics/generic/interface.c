@@ -146,9 +146,9 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool GraphicsDevice_createPipelineComputeExt(
 		GraphicsDevice *device,
-		CharString name,
+		const CharString *name,
 		Pipeline *pipeline,
-		SHBinaryInfo buf,
+		const SHBinaryInfo *buf,
 		Error *e_rr
 	) {
 		return WrapperFunction(pipeline->device, pipelineCreateCompute)(device, name, pipeline, buf, e_rr);
@@ -166,8 +166,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 		GraphicsDeviceRef *deviceRef,
-		ListSHFile binaries,
-		CharString name,
+		const ListSHFile *binaries,
+		const CharString *name,
 		U8 maxPayloadSize,
 		U8 maxAttributeSize,
 		ListU32 binaryIndices,
@@ -185,7 +185,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//Sampler
 
-	Bool GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr) {
+	Bool GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr) {
 		return WrapperFunction(dev, samplerCreate)(dev, sampler, name, e_rr);
 	}
 
@@ -193,7 +193,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//Device buffer
 
-	Bool GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name, Error *e_rr) {
+	Bool GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, const CharString *name, Error *e_rr) {
 		return WrapperFunction(dev, bufferCreate)(dev, buf, name, e_rr);
 	}
 
@@ -205,7 +205,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//Device texture
 
-	Bool UnifiedTexture_createExt(TextureRef *texture, CharString name, Error *e_rr) {
+	Bool UnifiedTexture_createExt(TextureRef *texture, const CharString *name, Error *e_rr) {
 		return WrapperFunction(TextureRef_getUnifiedTexture(texture, NULL).resource.device, textureCreate)(texture, name, e_rr);
 	}
 
@@ -232,7 +232,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	Bool GraphicsDeviceRef_createDescriptorLayoutExt(
 		GraphicsDeviceRef *dev,
 		DescriptorLayout *layout,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	) {
 		return WrapperFunction(dev, descriptorLayoutCreate)(dev, layout, name, e_rr);
@@ -247,7 +247,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	Bool GraphicsDeviceRef_createPipelineLayoutExt(
 		GraphicsDeviceRef *dev,
 		PipelineLayout *layout,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	) {
 		return WrapperFunction(dev, pipelineLayoutCreate)(dev, layout, name, e_rr);
@@ -262,7 +262,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 	Bool DescriptorHeap_createDescriptorTableExt(
 		DescriptorHeapRef *heap,
 		DescriptorTable *table,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	) {
 		return WrapperFunction(DescriptorHeapRef_ptr(heap)->device, descriptorTableCreate)(heap, table, name, e_rr);
@@ -276,7 +276,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		DescriptorTable *table,
 		U64 bindingId,
 		U64 arrayId,
-		ListDescriptor darr,
+		const ListDescriptor *darr,
 		Error *e_rr
 	) {
 		return WrapperFunction(DescriptorHeapRef_ptr(table->parent)->device, descriptorTableSet)(
@@ -298,7 +298,9 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	//DescriptorHeap
 
-	Bool GraphicsDeviceRef_createDescriptorHeapExt(GraphicsDeviceRef *dev, DescriptorHeap *heap, CharString name, Error *e_rr) {
+	Bool GraphicsDeviceRef_createDescriptorHeapExt(
+		GraphicsDeviceRef *dev, DescriptorHeap *heap, const CharString *name, Error *e_rr
+	) {
 		return WrapperFunction(dev, descriptorHeapCreate)(dev, heap, name, e_rr);
 	}
 
@@ -315,7 +317,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName,
+		const CharString *objectName,
 		DeviceMemoryBlock *resultBlock,
 		Error *e_rr
 	) {
@@ -355,9 +357,9 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool GraphicsDevice_submitCommandsExt(
 		GraphicsDeviceRef *deviceRef,
-		ListCommandListRef commandLists,
-		ListSwapchainRef swapchains,
-		CBufferData data,
+		const ListCommandListRef *commandLists,
+		const ListSwapchainRef *swapchains,
+		const CBufferData *data,
 		Error *e_rr
 	) {
 		return WrapperFunction(deviceRef, deviceSubmitCommands)(deviceRef, commandLists, swapchains, data, e_rr);

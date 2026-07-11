@@ -87,12 +87,15 @@ Bool DX_WRAP_FUNC(
 
 	if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
+		CharString dedicatedStaging = CharString_createRefCStrConst("Dedicated staging buffer");
+
 		gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 			deviceRef,
 			EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 			NULL,
-			CharString_createRefCStrConst("Dedicated staging buffer"),
-			allocRange, &tempStagingResource, e_rr));
+			&dedicatedStaging,
+			allocRange, &tempStagingResource, e_rr
+		));
 
 		DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 		DxDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Dx);

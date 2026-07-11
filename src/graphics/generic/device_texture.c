@@ -257,7 +257,7 @@ Bool GraphicsDeviceRef_createTexture(
 	U16 height,
 	U16 length,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	Buffer *dat,
 	DeviceTextureRef **tex,
 	Error *e_rr

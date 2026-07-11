@@ -363,12 +363,16 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	//The SBT has a stride of 64 as well (since that's expected).
 	//Then we link the SBT per pipeline.
 
+	CharString sbtName = CharString_createRefCStrConst("Shader binding table");
+
 	gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
 		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None,
 		NULL,
-		CharString_createRefCStrConst("Shader binding table"),
+		&sbtName,
 		&shaderTable,
-		&sbt, e_rr));
+		&sbt,
+		e_rr
+	));
 
 	pipelineRt->shaderBindingTable = sbt;
 	sbt = NULL;

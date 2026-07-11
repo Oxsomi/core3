@@ -24,9 +24,7 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/device_allocator.h"
 #include "graphics/generic/device.h"
-#include "types/container/buffer.h"
 #include "platforms/logx.h"
-#include "types/container/buffer.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
 

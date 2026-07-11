@@ -57,7 +57,7 @@ Bool GraphicsDeviceRef_createSampler(
 	SamplerInfo info,
 	Bool disallowBindlessDescriptor,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	SamplerRef **sampler,
 	Error *e_rr
 ) {

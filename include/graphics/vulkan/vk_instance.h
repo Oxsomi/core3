@@ -21,8 +21,8 @@
 //graphics/vulkan/vk_instance.h
 
 #pragma once
-#include "types/base/platform_types.h"
 #include "graphics/vulkan/vulkan.h"
+#include "types/base/platform_types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -111,5 +111,7 @@ typedef struct VkGraphicsInstance {
 	#else
 		U64 padding;
 	#endif
+
+	U64 padding1;
 
 } VkGraphicsInstance;

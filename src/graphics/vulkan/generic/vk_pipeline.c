@@ -23,16 +23,9 @@
 #include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
-#include "platforms/logx.h"
-#include "types/container/string.h"
 #include "types/base/error.h"
-#include "types/base/constants.h"
 
 TList(VkPipelineShaderStageCreateInfo);
 TListImpl(VkPipelineShaderStageCreateInfo);
@@ -42,7 +35,7 @@ Bool createShaderModule(
 	VkShaderModule *mod,
 	VkGraphicsDevice *device,
 	VkGraphicsInstance *instanceExt,
-	CharString name,
+	const CharString *name,
 	EPipelineStage stage,
 	const Allocator *alloc,
 	Error *e_rr
@@ -74,7 +67,7 @@ Bool createShaderModule(
 
 	const GraphicsDevice *baseDevice = (const GraphicsDevice*)device - 1;
 
-	if((baseDevice->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+	if((baseDevice->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 		const Bool isRt = stage >= EPipelineStage_RtStart && stage <= EPipelineStage_RtEnd;
 
@@ -83,8 +76,8 @@ Bool createShaderModule(
 			&temp,
 			e_rr,
 			"Shader module (\"%.*s\": %s)",
-			CharString_length(name),
-			name.ptr,
+			(int) CharString_length(*name),
+			name->ptr,
 			isRt ? "Raytracing" : EPipelineStage_names[stage]
 		));
 
@@ -104,7 +97,7 @@ clean:
 
 	CharString_free(&temp, alloc);
 
-	if (!s_uccess)
+	if (!s_uccess && *mod)
 		device->destroyShaderModule(device->device, *mod, NULL);
 
 	return s_uccess;

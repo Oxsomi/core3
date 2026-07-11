@@ -170,6 +170,10 @@ void *TextureRef_getCurrImgExt(TextureRef *ref, U32 subResource) {
 	return TextureRef_getImgExt(ref, subResource, tex->currentImageId);
 }
 
+const UnifiedTexture *TextureRef_getUnifiedTextureFast(TextureRef *tex) {
+	return TextureRef_getUnifiedTextureIntern(tex, NULL);
+}
+
 UnifiedTexture TextureRef_getUnifiedTexture(TextureRef *tex, DeviceResourceVersion *version) {
 
 	UnifiedTexture *utexPtr = TextureRef_getUnifiedTextureIntern(tex, version);
@@ -241,7 +245,7 @@ void UnifiedTexture_free(TextureRef *textureRef) {
 	texture->resource = (GraphicsResource) { 0 };
 }
 
-Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, CharString name, Error *e_rr) {
+Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescriptorTable, const CharString *name, Error *e_rr) {
 
 	Bool s_uccess = true;
 

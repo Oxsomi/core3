@@ -20,8 +20,6 @@
 
 //graphics/d3d12/generic/dx_blas.c
 
-#include "types/container/list_impl.h"
-#include "types/container/string.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/blas.h"
@@ -29,6 +27,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/direct3d12.h"
+#include "types/container/string.h"
 #include "types/base/constants.h"
 
 void DX_WRAP_FUNC(BLAS_free)(BLAS *blas) { (void) blas; }        //No-op
@@ -75,7 +74,8 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
 	if(primitives >> 32)
 		retError(clean, Error_outOfBounds(
-			0, primitives, U32_MAX, "D3D12BLAS_init() only primitive count of <U32_MAX is supported"));
+			0, primitives, U32_MAX, "D3D12BLAS_init() only primitive count of <U32_MAX is supported"
+		));
 
 	blasExt->primitives = (U32) primitives;
 
@@ -166,9 +166,11 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		blas->base.name,
+		&blas->base.name,
 		sizes.ResultDataMaxSizeInBytes,
-		&blas->base.asBuffer, e_rr));
+		&blas->base.asBuffer,
+		e_rr
+	));
 
 	gotoIfError3(clean, CharString_format(
 		alloc,
@@ -184,9 +186,11 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		tmp,
+		&tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
-		&blas->base.tempScratchBuffer, e_rr));
+		&blas->base.tempScratchBuffer,
+		e_rr
+	));
 
 clean:
 	CharString_free(&tmp, alloc);

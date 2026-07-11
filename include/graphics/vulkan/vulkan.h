@@ -21,9 +21,10 @@
 //graphics/vulkan/vulkan.h
 
 #pragma once
-#include "types/container/list.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/descriptor_table.h"
+#include "types/container/list.h"
+
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 
@@ -48,7 +49,8 @@
 	VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_NV |           \
 	VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |      \
 	VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT |                    \
-	VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV)
+	VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV                   \
+)
 
 TList(VkMappedMemoryRange);
 TList(VkBufferCopy);
@@ -117,14 +119,15 @@ static const U32 raytracingShaderAlignment = 64;
 
 Bool checkVkError(VkResult result, Error *e_rr);
 
-//Pass types as non NULL to allow validating if the texture format is supported.
-//Sometimes you don't want this, for example when serializing.
 VkFormat mapVkFormat(ETextureFormat format);
 
 VkCompareOp mapVkCompareOp(ECompareOp op);
 
 VkDeviceAddress getVkDeviceAddress(DeviceData data);
-VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset);
+
+static inline VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset) {
+	return (VkDeviceOrHostAddressConstKHR) { .deviceAddress = getVkDeviceAddress(data) + localOffset };
+}
 
 VkShaderStageFlags vkGetShaderStages(U32 vis);
 VkDescriptorType vkGetDescriptorType(ESHRegisterType regType);

@@ -80,7 +80,7 @@ typedef struct DescriptorHeap {
 Bool GraphicsDeviceRef_createDescriptorHeap(
 	GraphicsDeviceRef *dev,
 	const DescriptorHeapInfo *info,
-	CharString name,
+	const CharString *name,
 	DescriptorHeapRef **heap,
 	Error *e_rr
 );

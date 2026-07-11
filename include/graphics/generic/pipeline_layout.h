@@ -59,8 +59,8 @@ typedef struct PipelineLayout {
 
 Bool GraphicsDeviceRef_createPipelineLayout(
 	GraphicsDeviceRef *dev,
-	PipelineLayoutInfo info,        //Moves info
-	CharString name,
+	const PipelineLayoutInfo *info,    //Moves info
+	const CharString *name,
 	PipelineLayoutRef **layout,
 	Error *e_rr
 );

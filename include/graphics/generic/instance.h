@@ -22,13 +22,15 @@
 
 #pragma once
 #include "types/container/string.h"
-#include "types/container/ref_ptr.h"
-#include "types/base/allocator.h"
 #include "graphics/generic/device_info.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+typedef struct RefPtr RefPtr;
+typedef struct RefPtrType RefPtrType;
+typedef struct Allocator Allocator;
 
 typedef struct GraphicsApplicationInfo {
 	CharString name;
@@ -101,7 +103,7 @@ EGraphicsApi EGraphicsApi_resolve(EGraphicsApi api);
 RefPtrType GraphicsInstance_makeType(EGraphicsApi api, const Allocator *alloc);
 
 Bool GraphicsInstance_create(
-	GraphicsApplicationInfo info,
+	const GraphicsApplicationInfo *info,
 	EGraphicsApi api,                                    //EGraphicsApi_Count = Default
 	EGraphicsInstanceFlags flags,
 	const Allocator *alloc,                              //Must match type->alloc
@@ -119,7 +121,7 @@ static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
 
 Bool GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
-	GraphicsDeviceCapabilities requiredCapabilities,
+	const GraphicsDeviceCapabilities *requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
 	GraphicsDeviceInfo *deviceInfo,

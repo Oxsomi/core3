@@ -20,15 +20,12 @@
 
 //graphics/generic/blas.c
 
-#include "types/container/list.h"
 #include "graphics/generic/interface.h"
-#include "types/container/string.h"
-#include "types/container/buffer.h"
-#include "types/container/ref_ptr.h"
-#include "platforms/logx.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
-#include "types/container/buffer.h"
+#include "graphics/generic/device.h"
+#include "types/container/string.h"
+#include "types/container/ref_ptr.h"
 #include "types/base/constants.h"
 
 void BLAS_free(BLAS *blas, const Allocator *alloc) {
@@ -38,7 +35,6 @@ void BLAS_free(BLAS *blas, const Allocator *alloc) {
 	SpinLock_lock(&blas->base.lock, U64_MAX);
 
 	BLAS_freeExt(blas);
-	//Log_debugLnx("Destroy: %s (%p)", blas->base.name.ptr, blas);
 	CharString_free(&blas->base.name, alloc);
 
 	RefPtr_dec(&blas->base.asBuffer);
@@ -188,8 +184,7 @@ Bool GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, const BLAS *blas, Char
 
 				if(indexBuffer.buffer)
 					retError(clean, Error_unsupportedOperation(
-						1,
-						"GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
+						1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
 					));
 
 				break;
@@ -201,18 +196,14 @@ Bool GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, const BLAS *blas, Char
 
 				if(!indexBuffer.buffer || (indexBuffer.len & (indexStride - 1)))
 					retError(clean, Error_unsupportedOperation(
-						1,
-						"GraphicsDeviceRef_createBLAS()::indexBuffer should be multiple of indexFormat and not NULL"
+						1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be multiple of indexFormat and not NULL"
 					));
 
 				break;
 			}
 
 			default:
-				retError(clean, Error_unsupportedOperation(
-					2,
-					"GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"
-				));
+				retError(clean, Error_unsupportedOperation(2, "GraphicsDeviceRef_createBLAS()::indexFormat must be R32u or R16u"));
 		}
 	}
 
@@ -293,7 +284,6 @@ Bool GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, const BLAS *blas, Char
 	blasPtr->base.device = dev;
 
 	gotoIfError3(clean, CharString_createCopy(name, alloc, &blasPtr->base.name, e_rr));
-	//Log_debugLnx("Create: %s (%p)", blasPtr->base.name.ptr, blasPtr);
 	gotoIfError3(clean, BLAS_initExt(blasPtr, e_rr));
 
 clean:
@@ -362,8 +352,9 @@ Bool GraphicsDeviceRef_createBLASUnindexedExt(
 		(DeviceData) { 0 },
 		parent,
 		name,
-		blas
-	, e_rr);
+		blas,
+		e_rr
+	);
 }
 
 //Creating BLAS from AABBs
@@ -397,12 +388,14 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 
 //Creating BLAS from cache
 
-//Error GraphicsDeviceRef_createBLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, BLASRef **blas) {
+//Bool GraphicsDeviceRef_createBLASFromCacheExt(
+// GraphicsDeviceRef *dev, Buffer cache, CharString name, BLASRef **blas, Error *e_rr
+//) {
 //
 //    BLAS blasInfo = (BLAS) {
 //        .base = (RTAS) { .asConstructionType = (U8) EBLASConstructionType_Serialized, },
 //        .cpuData = cache
 //    };
 //
-//    return GraphicsDeviceRef_createBLAS(dev, blasInfo, name, blas);
+//    return GraphicsDeviceRef_createBLAS(dev, &blasInfo, name, blas, e_rr);
 //}

@@ -20,17 +20,12 @@
 
 //graphics/vulkan/generic/vk_pipeline_layout.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/string.h"
-#include "types/container/string.h"
-#include "platforms/logx.h"
-#include "formats/oiSH/sh_entries.h"
 
 void VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, const Allocator *alloc) {
 
@@ -46,7 +41,7 @@ void VK_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, const Allocator *
 Bool VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	GraphicsDeviceRef *dev,
 	PipelineLayout *layout,
-	CharString name,
+	const CharString *name,
 	Error *e_rr
 ) {
 
@@ -103,15 +98,15 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 
 	gotoIfError3(clean, checkVkError(deviceExt->createPipelineLayout(deviceExt->device, &create, NULL, layoutExt), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
-		if(!CharString_isNullTerminated(name))
-			gotoIfError3(clean, CharString_createCopy(name, alloc, &tmpName, e_rr));
+		if(!CharString_isNullTerminated(*name))
+			gotoIfError3(clean, CharString_createCopy(*name, alloc, &tmpName, e_rr));
 
 		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_PIPELINE_LAYOUT,
-			.pObjectName = tmpName.ptr ? tmpName.ptr : name.ptr,
+			.pObjectName = tmpName.ptr ? tmpName.ptr : name->ptr,
 			.objectHandle = (U64) *layoutExt
 		};
 

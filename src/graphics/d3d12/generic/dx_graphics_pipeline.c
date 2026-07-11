@@ -30,11 +30,10 @@
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/container/texture_format.h"
+#include "types/container/string_unicode.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/container/string.h"
 #include "types/base/error.h"
 #include "types/base/constants.h"
-#include "types/container/string_unicode.h"
 
 D3D12_STENCIL_OP mapDxStencilOp(EStencilOp op) {
 	switch (op) {

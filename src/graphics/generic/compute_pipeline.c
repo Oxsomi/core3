@@ -20,21 +20,17 @@
 
 //graphics/generic/compute_pipeline.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/texture.h"
-#include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
-#include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
 
 Bool GraphicsDeviceRef_createPipelineCompute(
 	GraphicsDeviceRef *deviceRef,
-	SHFile shaderBinary,
-	CharString name,
+	const SHFile *shaderBinary,
+	const CharString *name,
 	U32 entryId,
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
@@ -47,8 +43,9 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 
 	U16 entrypointId = (U16) entryId;
 	U16 binaryId = (U16) (entryId >> 16);
+	Bool allocated = false;
 
-	if(!deviceRef || entrypointId >= shaderBinary.entries.length || !pipeline)
+	if(!deviceRef || !shaderBinary || entrypointId >= shaderBinary->entries.length || !pipeline)
 		retError(clean, Error_nullPointer(
 			!deviceRef ? 0 : (!pipeline ? 2 : 1),
 			"GraphicsDeviceRef_createPipelineCompute()::deviceRef, shaderBinary and pipeline are required"
@@ -65,15 +62,15 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 			"GraphicsDeviceRef_createPipelineCompute()::*pipeline is non NULL, indicating a possible memleak"
 		));
 
-	SHEntry entry = shaderBinary.entries.ptr[entrypointId];
+	const SHEntry *entry = &shaderBinary->entries.ptr[entrypointId];
 
-	if(entry.stage != ESHPipelineStage_Compute)
+	if(entry->stage != ESHPipelineStage_Compute)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() entry is not a compute shader"
 		));
 
-	if(binaryId >= entry.binaryIds.length)
+	if(binaryId >= entry->binaryIds.length)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineCompute() entry binaryId out of bounds"
@@ -85,18 +82,17 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 			"GraphicsDeviceRef_createPipelineCompute() pipeline layout is invalid"
 		));
 
-	U32 finalBinaryId = entry.binaryIds.ptr[binaryId];
-	SHBinaryInfo binary = shaderBinary.binaries.ptr[finalBinaryId];
+	U32 finalBinaryId = entry->binaryIds.ptr[binaryId];
+	const SHBinaryInfo *binary = &shaderBinary->binaries.ptr[finalBinaryId];
 
 	gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, binary, entry, e_rr));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipeline, pipeline, e_rr));
+	allocated = true;
 
 	Pipeline *pipelinePtr = PipelineRef_ptr(*pipeline);
-
-	//Log_debugLnx("Create: ComputePipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipelinePtr);
 
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(deviceRef));
@@ -123,7 +119,8 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	goto success;
 
 clean:
-	RefPtr_dec(pipeline);
+	if(allocated)
+		RefPtr_dec(pipeline);
 
 success:
 	return s_uccess;

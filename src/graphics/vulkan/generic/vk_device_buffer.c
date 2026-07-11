@@ -103,7 +103,9 @@ void VK_WRAP_FUNC(DeviceBuffer_free)(DeviceBuffer *buffer) {
 	}
 }
 
-Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name, Error *e_rr) {
+Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
+	GraphicsDeviceRef *dev, DeviceBuffer *buf, const CharString *name, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
@@ -346,12 +348,15 @@ Bool VK_WRAP_FUNC(
 
 		if (allocRange >= DeviceBufferRef_ptr(device->staging)->resource.size / 4) {
 
+			CharString dedicatedStagingName = CharString_createRefCStrConst("Dedicated staging buffer");
+
 			gotoIfError3(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
 				EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 				NULL,
-				CharString_createRefCStrConst("Dedicated staging buffer"),
-				allocRange, &tempStagingResource, e_rr));
+				&dedicatedStagingName,
+				allocRange, &tempStagingResource, e_rr
+			));
 
 			DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 			VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);

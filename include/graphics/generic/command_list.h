@@ -24,6 +24,7 @@
 #include "graphics/generic/command_structs.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "types/container/ref_ptr.h"
+#include "graphics/generic/resource.h"
 
 #ifdef __cplusplus
 	extern "C" {

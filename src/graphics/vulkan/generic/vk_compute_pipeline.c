@@ -20,30 +20,21 @@
 
 //graphics/vulkan/generic/vk_compute_pipeline.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
-#include "platforms/logx.h"
-#include "types/container/texture_format.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
 #include "types/base/error.h"
-#include "types/base/constants.h"
 
 Bool createShaderModule(
 	Buffer buf,
 	VkShaderModule *mod,
 	VkGraphicsDevice *device,
 	VkGraphicsInstance *instance,
-	CharString name,
+	const CharString *name,
 	EPipelineStage stage,
 	const Allocator *alloc,
 	Error *e_rr
@@ -54,9 +45,9 @@ TListImpl(VkComputePipelineCreateInfo);
 
 Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,
-	CharString name,
+	const CharString *name,
 	Pipeline *pipeline,
-	SHBinaryInfo buf,
+	const SHBinaryInfo *buf,
 	Error *e_rr
 ) {
 
@@ -82,12 +73,13 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	};
 
 	gotoIfError3(clean, createShaderModule(
-		buf.binaries[ESHBinaryType_SPIRV],
+		buf->binaries[ESHBinaryType_SPIRV],
 		&pipelineInfo.stage.module,
 		deviceExt,
 		instanceExt,
 		name,
-		EPipelineStage_Compute, alloc, e_rr));
+		EPipelineStage_Compute, alloc, e_rr
+	));
 
 	gotoIfError3(clean, checkVkError(deviceExt->createComputePipelines(
 		deviceExt->device,
@@ -97,16 +89,16 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		&pipelineHandle
 	), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && CharString_length(name)) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && name && CharString_length(*name)) {
 
-		if(!CharString_isNullTerminated(name))
-			gotoIfError3(clean, CharString_createCopy(name, alloc, &temp, e_rr));
+		if(!CharString_isNullTerminated(*name))
+			gotoIfError3(clean, CharString_createCopy(*name, alloc, &temp, e_rr));
 
 		VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_PIPELINE,
 			.objectHandle = (U64) pipelineHandle,
-			.pObjectName = temp.ptr ? temp.ptr : name.ptr
+			.pObjectName = temp.ptr ? temp.ptr : name->ptr
 		};
 
 		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2), e_rr));

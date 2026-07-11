@@ -20,24 +20,21 @@
 
 //graphics/d3d12/generic/dx_compute_pipeline.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_device.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
-#include "types/container/string.h"
-#include "types/base/error.h"
 #include "formats/oiSH/sh_file.h"
 #include "types/container/string_unicode.h"
+#include "types/container/list_basic_types.h"
+#include "types/base/buffer_base.h"
+#include "types/base/error.h"
 
 Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,
-	CharString name,
+	const CharString *name,
 	Pipeline *pipeline,
-	SHBinaryInfo binary,
+	const SHBinaryInfo *binary,
 	Error *e_rr
 ) {
 
@@ -46,7 +43,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	ListU16 tmp = (ListU16) { 0 };
-	Buffer dxil = binary.binaries[ESHBinaryType_DXIL];
+	Buffer dxil = binary->binaries[ESHBinaryType_DXIL];
 
 	//TODO: Push constants
 
@@ -67,8 +64,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		(void**) pipelinei
 	), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-		gotoIfError3(clean, CharString_toUTF16(name, alloc, &tmp, e_rr));
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {
+		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &tmp, e_rr));
 		gotoIfError3(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr), e_rr));
 	}
 

@@ -20,13 +20,14 @@
 
 //graphics/generic/depth_stencil.c
 
-#include "graphics/generic/interface.h"
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
+#include "graphics/generic/texture.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
+#include "types/base/string_base.h"
 #include "types/base/error.h"
-#include "types/container/string.h"
 
 void GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, const Allocator *alloc) {
 	(void)alloc;
@@ -41,14 +42,16 @@ Bool GraphicsDeviceRef_createDepthStencil(
 	Bool allowShaderRead,
 	EMSAASamples msaa,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	DepthStencilRef **depthStencilRef,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
+	Bool alloc = false;
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->depthStencil, depthStencilRef, e_rr));
+	alloc = true;
 
 	gotoIfError3(clean, RefPtr_inc(deviceRef));
 
@@ -72,7 +75,7 @@ Bool GraphicsDeviceRef_createDepthStencil(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && alloc)
 		RefPtr_dec(depthStencilRef);
 
 	return s_uccess;

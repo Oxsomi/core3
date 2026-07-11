@@ -310,9 +310,11 @@ static void Test_graphicsDevice(Test *t) {
 
 	//8. DeviceBuffer
 
+	CharString testVertexBuffer = CharString_createRefCStrConst("Test vertex buffer");
+
 	Test_assert(t, "bufferCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL,
-		CharString_createRefCStrConst("Test vertex buffer"), 256, &buffer, &t->err
+		&testVertexBuffer, 256, &buffer, &t->err
 	));
 
 	Test_assert(t, "bufferTypeId", buffer && buffer->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer);
@@ -323,9 +325,11 @@ static void Test_graphicsDevice(Test *t) {
 	Test_assert(t, "markDirtyNotBacked", !DeviceBufferRef_markDirty(buffer, 0, 0, &err));
 	Test_assert(t, "markDirtyNull", !DeviceBufferRef_markDirty(NULL, 0, 0, &err));
 
+	CharString testCpuBuffer = CharString_createRefCStrConst("Test cpu buffer");
+
 	Test_assert(t, "cpuBufferCreate", GraphicsDeviceRef_createBuffer(
 		deviceRef, EDeviceBufferUsage_None, EGraphicsResourceFlag_CPUBacked, NULL,
-		CharString_createRefCStrConst("Test cpu buffer"), 128, &cpuBuffer, &t->err
+		&testCpuBuffer, 128, &cpuBuffer, &t->err
 	));
 
 	if(cpuBuffer) {
