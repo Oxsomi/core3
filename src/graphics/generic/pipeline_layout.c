@@ -20,20 +20,17 @@
 
 //graphics/generic/pipeline_layout.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
+#include "formats/oiSH/sh_file.h"
 #include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
-#include "types/container/string.h"
 
 void PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc) {
 
 	(void)alloc;
-
-	//Log_debugLnx("Destroy: %p", layout);
 
 	PipelineLayout_freeExt(layout, alloc);
 
@@ -57,51 +54,54 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createPipelineLayout()::dev is required"));
 
+	if(!info)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_createPipelineLayout()::info is required"));
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
-	if(info.bindings && info.bindings->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+	if(info->bindings && info->bindings->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
 		retError(clean, Error_nullPointer(
-			1, "GraphicsDeviceRef_createPipelineLayout()::info.bindings must be DescriptorLayout if present"
+			1, "GraphicsDeviceRef_createPipelineLayout()::info->bindings must be DescriptorLayout if present"
 		));
 
-	if(info.pushDescriptors && info.pushDescriptors->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
+	if(info->pushDescriptors && info->pushDescriptors->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorLayout)
 		retError(clean, Error_nullPointer(
-			1, "GraphicsDeviceRef_createPipelineLayout()::info.pushDescriptors must be DescriptorLayout if present"
+			1, "GraphicsDeviceRef_createPipelineLayout()::info->pushDescriptors must be DescriptorLayout if present"
 		));
 
 	//Validate push constants
 
-	if(info.pushConstants.count && (
-		!info.pushConstants.constantBufferSize ||
-		info.pushConstants.constantBufferSize > 128 ||
-		(info.pushConstants.constantBufferSize & 3)
+	if(info->pushConstants.count && (
+		!info->pushConstants.constantBufferSize ||
+		info->pushConstants.constantBufferSize > 128 ||
+		(info->pushConstants.constantBufferSize & 3)
 	))
 		retError(clean, Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must be 4-128 bytes (multiple of 4)"
+			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info->pushConstants must be 4-128 bytes (multiple of 4)"
 		));
 
-	if(info.pushConstants.count && !info.pushConstants.visibility)
+	if(info->pushConstants.count && !info->pushConstants.visibility)
 		retError(clean, Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must have at least one visibility"
+			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info->pushConstants must have at least one visibility"
 		));
 
 	Bool isVulkan = GraphicsInstanceRef_ptr(device->instance)->api == EGraphicsApi_Vulkan;
 	ESHBinaryType binaryType = isVulkan ? ESHBinaryType_SPIRV : ESHBinaryType_DXIL;
 
 	Bool canBePushConstant =
-		(binaryType == ESHBinaryType_DXIL && info.pushConstants.registerType == ESHRegisterType_ConstantBuffer) ||
-		info.pushConstants.registerType == ESHRegisterType_PushConstants;
+		(binaryType == ESHBinaryType_DXIL && info->pushConstants.registerType == ESHRegisterType_ConstantBuffer) ||
+		info->pushConstants.registerType == ESHRegisterType_PushConstants;
 
-	if(info.pushConstants.count && !canBePushConstant)
+	if(info->pushConstants.count && !canBePushConstant)
 		retError(clean, Error_invalidParameter(
 			1, 0,
-			"GraphicsDeviceRef_createPipelineLayout()::info.pushConstants must be a constant buffer (DXIL) or "
+			"GraphicsDeviceRef_createPipelineLayout()::info->pushConstants must be a constant buffer (DXIL) or "
 			"push constants (SPV)"
 		));
 
-	if(info.pushConstants.count > 1)
+	if(info->pushConstants.count > 1)
 		retError(clean, Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info.pushConstants.count must be 1 or 0"
+			1, 0, "GraphicsDeviceRef_createPipelineLayout()::info->pushConstants.count must be 1 or 0"
 		));
 
 	//Validate DWORD root signature limit (DirectX).
@@ -113,12 +113,12 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 	U32 uniqueSets[4];
 	U8 setCounter = 0;
 
-	if(info.pushConstants.count)    //Push constants take 1 DWORD each
-		dwords += info.pushConstants.constantBufferSize >> 2;
+	if(info->pushConstants.count)     //Push constants take 1 DWORD each
+		dwords += info->pushConstants.constantBufferSize >> 2;
 
-	if (info.pushDescriptors) {        //Push descriptors take 2 DWORDs each
+	if (info->pushDescriptors) {      //Push descriptors take 2 DWORDs each
 
-		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.pushDescriptors);
+		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info->pushDescriptors);
 
 		if(!(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors))
 			retError(clean, Error_invalidParameter(
@@ -133,8 +133,8 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 			DescriptorBinding bind = layout->info.bindings.ptr[i];
 
-			if(info.pushConstants.count && DescriptorBinding_overlaps(
-				info.pushConstants,
+			if(info->pushConstants.count && DescriptorBinding_overlaps(
+				&info->pushConstants,
 				bind.registerType,
 				bind.binding,
 				bind.count,
@@ -161,9 +161,9 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 	U8 setCounterPushDesc = setCounter;
 
-	if (info.bindings) {            //Descriptor tables take 1 DWORD each
+	if (info->bindings) {          //Descriptor tables take 1 DWORD each
 
-		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info.bindings);
+		DescriptorLayout *layout = DescriptorLayoutRef_ptr(info->bindings);
 
 		if(layout->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
 			retError(clean, Error_invalidParameter(
@@ -207,13 +207,13 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 			Bool match = false;
 
-			if(info.pushDescriptors) {
+			if(info->pushDescriptors) {
 
-				DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(info.pushDescriptors);
+				DescriptorLayout *pushLayout = DescriptorLayoutRef_ptr(info->pushDescriptors);
 
 				for (U64 j = 0; j < pushLayout->info.bindings.length; ++j)
 					if (DescriptorBinding_overlaps(
-						pushLayout->info.bindings.ptr[j],
+						&pushLayout->info.bindings.ptr[j],
 						bind.registerType,
 						bind.binding,
 						bind.count,
@@ -225,8 +225,8 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 					}
 			}
 
-			if(!match && info.pushConstants.count && DescriptorBinding_overlaps(
-				info.pushConstants,
+			if(!match && info->pushConstants.count && DescriptorBinding_overlaps(
+				&info->pushConstants,
 				bind.registerType,
 				bind.binding,
 				bind.count,
@@ -260,16 +260,14 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->pipelineLayout, layoutRef, e_rr));
 
-	if(!(info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
+	if(!(info->flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(dev));
 
 	PipelineLayout *layout = PipelineLayoutRef_ptr(*layoutRef);
 
-	//Log_debugLnx("Create: PipelineLayout %.*s (%p)", (int) CharString_length(name), name.ptr, layout);
+	*layout = (PipelineLayout) { .device = dev, .info = *info };
 
-	*layout = (PipelineLayout) { .device = dev, .info = info };
-
-	if(!(info.flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
+	if(!(info->flags & EPipelineLayoutFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(layout->info.bindings));
 
 	gotoIfError3(clean, GraphicsDeviceRef_createPipelineLayoutExt(dev, layout, name, e_rr));

@@ -191,7 +191,7 @@
 
 	//Interface
 
-	Bool D3D12GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr);
+	Bool D3D12GraphicsInstance_create(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr);
 	void  D3D12GraphicsInstance_free(GraphicsInstance *inst, const Allocator *alloc);
 	Bool D3D12GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr);
 

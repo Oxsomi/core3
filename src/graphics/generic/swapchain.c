@@ -25,10 +25,8 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "platforms/window.h"
-#include "platforms/logx.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"
-#include "types/base/constants.h"
 
 Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 
@@ -68,11 +66,12 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 
 	if (any)
 		retError(clean, Error_invalidState(
-			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"));
+			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"
+		));
 
 	//Resize with same format and same size is a NOP
 
-	Window *window = Swapchain_getWindow(swapchain);
+	Window *window = swapchain->info.window;
 
 	if(!window)
 		retError(clean, Error_invalidState(0, "SwapchainRef_resize() window is invalid"));
@@ -86,9 +85,9 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 	switch (newFormat) {
 		case EWindowFormat_BGRA8:        textureFormatId = ETextureFormatId_BGRA8;        break;
 		case EWindowFormat_RGBA8:        textureFormatId = ETextureFormatId_RGBA8;        break;
-		case EWindowFormat_BGR10A2:        textureFormatId = ETextureFormatId_BGR10A2;        break;
-		case EWindowFormat_RGBA16f:        textureFormatId = ETextureFormatId_RGBA16f;        break;
-		case EWindowFormat_RGBA32f:        textureFormatId = ETextureFormatId_RGBA32f;        break;
+		case EWindowFormat_BGR10A2:      textureFormatId = ETextureFormatId_BGR10A2;      break;
+		case EWindowFormat_RGBA16f:      textureFormatId = ETextureFormatId_RGBA16f;      break;
+		case EWindowFormat_RGBA32f:      textureFormatId = ETextureFormatId_RGBA32f;      break;
 		default:
 			retError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
@@ -103,7 +102,7 @@ Bool SwapchainRef_resize(SwapchainRef *swapchainRef, Error *e_rr) {
 	//Otherwise, we properly resize
 
 	gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef, e_rr));
-	gotoIfError3(clean, UnifiedTexture_createExt(swapchainRef, window->title, e_rr));        //Re-create views
+	gotoIfError3(clean, UnifiedTexture_createExt(swapchainRef, &window->title, e_rr));        //Re-create views
 	++swapchain->versionId;
 
 	swapchain->base.textureFormatId = (U8) textureFormatId;
@@ -134,8 +133,9 @@ Bool GraphicsDeviceRef_createSwapchain(
 ) {
 
 	Bool s_uccess = true;
+	Bool alloc = false;
 
-	Window *window = info.window ? (Window*)(info.window + 1) : NULL;
+	Window *window = info.window;
 
 	if(!window || !window->nativeHandle)
 		retError(clean, Error_nullPointer(
@@ -148,15 +148,16 @@ Bool GraphicsDeviceRef_createSwapchain(
 	//Unfortunately we still have to allocate up to (48 + 16) * 2 = 128 bytes extra, not too bad though.
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->swapchain, scRef, e_rr));
+	alloc = true;
 
 	ETextureFormatId formatId = ETextureFormatId_BGRA8;
 
 	switch (window->format) {
 		case EWindowFormat_BGRA8:        formatId = ETextureFormatId_BGRA8;        break;
 		case EWindowFormat_RGBA8:        formatId = ETextureFormatId_RGBA8;        break;
-		case EWindowFormat_BGR10A2:        formatId = ETextureFormatId_BGR10A2;    break;
-		case EWindowFormat_RGBA16f:        formatId = ETextureFormatId_RGBA16f;    break;
-		case EWindowFormat_RGBA32f:        formatId = ETextureFormatId_RGBA32f;    break;
+		case EWindowFormat_BGR10A2:      formatId = ETextureFormatId_BGR10A2;      break;
+		case EWindowFormat_RGBA16f:      formatId = ETextureFormatId_RGBA16f;      break;
+		case EWindowFormat_RGBA32f:      formatId = ETextureFormatId_RGBA32f;      break;
 		default:
 			retError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
@@ -197,11 +198,11 @@ Bool GraphicsDeviceRef_createSwapchain(
 	}
 
 	gotoIfError3(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef, e_rr));
-	gotoIfError3(clean, UnifiedTexture_create(*scRef, bindlessDescriptorTable, window->title, e_rr));
+	gotoIfError3(clean, UnifiedTexture_create(*scRef, bindlessDescriptorTable, &window->title, e_rr));
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && alloc)
 		RefPtr_dec(scRef);
 
 	return s_uccess;

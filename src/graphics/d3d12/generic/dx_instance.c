@@ -191,7 +191,7 @@ void DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, const Allocator
 		instanceExt->deviceFactorySingleton->lpVtbl->Release(instanceExt->deviceFactorySingleton);
 }
 
-Bool DX_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
+Bool DX_WRAP_FUNC(GraphicsInstance_create)(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = instanceRef && *instanceRef ? GraphicsInstanceRef_ptr(*instanceRef)->alloc : NULL;

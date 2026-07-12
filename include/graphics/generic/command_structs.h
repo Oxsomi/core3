@@ -23,6 +23,7 @@
 #pragma once
 #include "types/math/vec2.h"
 #include "graphics/generic/pipeline_structs.h"
+#include "graphics/generic/resource.h"
 
 #ifdef __cplusplus
 	extern "C" {

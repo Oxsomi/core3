@@ -23,6 +23,7 @@
 #pragma once
 #include "types/container/list.h"
 #include "types/container/string.h"
+#include "types/container/texture_format.h"
 #include "graphics/generic/pipeline_structs.h"
 
 #ifdef __cplusplus

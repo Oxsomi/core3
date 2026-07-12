@@ -39,9 +39,6 @@
 //
 //Run in CI, no display, no human interaction required.
 
-#include "platforms/platform.h"
-#include "platforms/file.h"
-#include "platforms/logx.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device.h"
@@ -61,11 +58,12 @@
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/graphics_types.h"
+#include "platforms/platform.h"
+#include "platforms/file.h"
 #include "types/test/test.h"
-#include "types/container/string.h"
-#include "types/container/buffer.h"
 #include "types/container/memory_stream.h"
 #include "types/container/texture_format.h"
+#include "types/base/string_base.h"
 #include "types/base/error.h"
 
 // -- 1. GraphicsInterface ------------------------------------------------------
@@ -97,7 +95,7 @@ static void Test_graphicsInstanceType(Test *t) {
 	Test_assert(t, "typeId", type.typeId == (ETypeId) EGraphicsTypeId_GraphicsInstance);
 	Test_assert(t, "length", type.length >= sizeof(GraphicsInstance));
 	Test_assert(t, "alloc", type.alloc == alloc);
-	Test_assert(t, "freeFunc", type.free != NULL);
+	Test_assert(t, "freeFunc", type.free);
 }
 
 // -- 3/4. Instance create / free + object type table ---------------------------
@@ -119,19 +117,22 @@ static void Test_graphicsInstance(Test *t) {
 		.version = 1
 	};
 
+	//TODO: Foreach all supported apis
+
 	//Parameter validation: missing instance output
+
+	GraphicsInstanceRef *instRef = NULL;
 
 	Error err = Error_none();
 	RefPtrType type = GraphicsInstance_makeType(EGraphicsApi_Count, alloc);
 
-	Test_assert(t, "createNullInst", !GraphicsInstance_create(appInfo, EGraphicsApi_Count, 0, alloc, &type, NULL, &err));
-	Test_assert(t, "createNullType", !GraphicsInstance_create(appInfo, EGraphicsApi_Count, 0, alloc, NULL, NULL, &err));
+	Test_assert(t, "createNullApp", !GraphicsInstance_create(NULL, EGraphicsApi_Count, 0, alloc, &type, &instRef, &err));
+	Test_assert(t, "createNullInst", !GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, &type, NULL, &err));
+	Test_assert(t, "createNullType", !GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, NULL, NULL, &err));
 
 	//Real create
 
-	GraphicsInstanceRef *instRef = NULL;
-
-	if(!Test_assert(t, "create", GraphicsInstance_create(appInfo, EGraphicsApi_Count, 0, alloc, &type, &instRef, &t->err)))
+	if(!Test_assert(t, "create", GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, &type, &instRef, &t->err)))
 		return;
 
 	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
@@ -220,8 +221,11 @@ static void Test_graphicsFormats(Test *t) {
 	Test_assert(t, "rgba8Uncompressed", !ETextureFormat_getIsCompressed(ETextureFormat_RGBA8));
 	Test_assert(t, "bc7Compressed", ETextureFormat_getIsCompressed(ETextureFormat_BC7));
 
-	//4x4 BC7 block = 16 bytes
-	Test_assert(t, "bc7BlockSize", ETextureFormat_getSize(ETextureFormat_BC7, 4, 4, 1) == 16);
+	//4x4 BC7 block = 16 bytes (misaligned blocks handled the same)
+
+	Test_assert(t, "bc7BlockSize4", ETextureFormat_getSize(ETextureFormat_BC7, 4, 4, 1) == 16);
+	Test_assert(t, "bc7BlockSize2", ETextureFormat_getSize(ETextureFormat_BC7, 2, 2, 1) == 16);
+	Test_assert(t, "bc7BlockSize1", ETextureFormat_getSize(ETextureFormat_BC7, 1, 1, 1) == 16);
 
 	//Vertex attributes exclude compressed formats
 	Test_assert(t, "rgba8VertexAttrib", GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat_RGBA8));
@@ -252,48 +256,46 @@ static void Test_graphicsDevice(Test *t) {
 	DeviceBufferRef *cpuBuffer = NULL;
 	CommandListRef *commandList = NULL;
 	ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
-	Error err = Error_none();
 
-	if(!Test_assert(t, "instanceCreate", GraphicsInstance_create(appInfo, EGraphicsApi_Count, 0, alloc, &type, &instRef, &t->err)))
+	if(!Test_assert(t, "instanceCreate", GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, &type, &instRef, &t->err)))
 		return;
 
 	GraphicsInstance *inst = GraphicsInstanceRef_ptr(instRef);
 
 	//getDeviceInfos validation
 
-	Test_assert(t, "getDeviceInfosNullResult", !GraphicsInstance_getDeviceInfos(inst, NULL, &err));
-	Test_assert(t, "getDeviceInfosNullInst", !GraphicsInstance_getDeviceInfos(NULL, &infos, &err));
+	Test_assert(t, "getDeviceInfosNullResult", !GraphicsInstance_getDeviceInfos(inst, NULL, NULL));
+	Test_assert(t, "getDeviceInfosNullInst", !GraphicsInstance_getDeviceInfos(NULL, &infos, NULL));
 
 	//getPreferredDevice validation
 
 	GraphicsDeviceInfo preferred = (GraphicsDeviceInfo) { 0 };
-	GraphicsDeviceCapabilities requiredCaps = (GraphicsDeviceCapabilities) { 0 };
 
 	Test_assert(t, "getPreferredNullInfo", !GraphicsInstance_getPreferredDevice(
-		inst, requiredCaps, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, NULL, &err
+		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, NULL, NULL
 	));
 
 	//A GPU (or software rasterizer like lavapipe) is never guaranteed here; skip if absent
 
-	if (!GraphicsInstance_getDeviceInfos(inst, &infos, &err) || !infos.length) {
+	if (!GraphicsInstance_getDeviceInfos(inst, &infos, NULL) || !infos.length) {
 		Test_print(t, "No graphics adapter present, skipping device tests");
 		goto clean;
 	}
 
 	//Device creation loads the prebuilt shaders from the //OxC3_graphics section,
-	//which are only packaged when the build has the shader compiler enabled
+	// which are only packaged when the build has the shader compiler enabled
 
 	const CharString graphicsSection = CharString_createRefCStrConst("//OxC3_graphics");
 	const CharString prebuiltShader = CharString_createRefCStrConst("//OxC3_graphics/shaders/image_copy.oiSH");
 	const RefPtrType memStreamType = MemoryStream_makeType(alloc);
 
-	if (!File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, &err) || !File_hasFile(&prebuiltShader, alloc)) {
+	if (!File_loadVirtual(&graphicsSection, &memStreamType, NULL, NULL, alloc, NULL) || !File_hasFile(&prebuiltShader, alloc)) {
 		Test_print(t, "Prebuilt shaders unavailable (built without shader compiler), skipping device tests");
 		goto clean;
 	}
 
 	Test_assert(t, "getPreferredDevice", GraphicsInstance_getPreferredDevice(
-		inst, requiredCaps, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, &preferred, &t->err
+		inst, NULL, GraphicsInstance_vendorMaskAll, GraphicsInstance_deviceTypeAll, &preferred, &t->err
 	));
 
 	//7. Device create / wait
@@ -322,8 +324,8 @@ static void Test_graphicsDevice(Test *t) {
 
 	//markDirty requires a CPU-backed buffer; the vertex buffer above isn't
 
-	Test_assert(t, "markDirtyNotBacked", !DeviceBufferRef_markDirty(buffer, 0, 0, &err));
-	Test_assert(t, "markDirtyNull", !DeviceBufferRef_markDirty(NULL, 0, 0, &err));
+	Test_assert(t, "markDirtyNotBacked", !DeviceBufferRef_markDirty(buffer, 0, 0, NULL));
+	Test_assert(t, "markDirtyNull", !DeviceBufferRef_markDirty(NULL, 0, 0, NULL));
 
 	CharString testCpuBuffer = CharString_createRefCStrConst("Test cpu buffer");
 
@@ -334,7 +336,7 @@ static void Test_graphicsDevice(Test *t) {
 
 	if(cpuBuffer) {
 		Test_assert(t, "markDirty", DeviceBufferRef_markDirty(cpuBuffer, 0, 64, &t->err));
-		Test_assert(t, "markDirtyOOB", !DeviceBufferRef_markDirty(cpuBuffer, 256, 1, &err));
+		Test_assert(t, "markDirtyOOB", !DeviceBufferRef_markDirty(cpuBuffer, 256, 1, NULL));
 	}
 
 	//9. CommandList create (recording is validated by functional tests; here just lifecycle)
@@ -354,7 +356,7 @@ static void Test_graphicsDevice(Test *t) {
 	SwapchainInfo swapchainInfo = (SwapchainInfo) { .window = NULL };
 
 	Test_assert(t, "swapchainNullWindow", !GraphicsDeviceRef_createSwapchain(
-		deviceRef, swapchainInfo, false, NULL, &swapchain, &err
+		deviceRef, swapchainInfo, false, NULL, &swapchain, NULL
 	));
 
 clean:
@@ -366,7 +368,7 @@ clean:
 	RefPtr_dec(&buffer);
 
 	if(deviceRef)
-		GraphicsDeviceRef_wait(deviceRef, &err);
+		GraphicsDeviceRef_wait(deviceRef, NULL);
 
 	RefPtr_dec(&deviceRef);
 	RefPtr_dec(&instRef);
@@ -377,10 +379,8 @@ clean:
 Platform_defineEntrypoint() {
 
 	Error err = Error_none();
-	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err)) {
-		//Can't even set up the platform, hard fail
+	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err))
 		Platform_return(1);
-	}
 
 	Test t = (Test) { .alloc = Platform_instance->alloc };
 

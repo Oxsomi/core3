@@ -23,6 +23,7 @@
 #include "types/container/list_impl.h"
 #include "graphics/d3d12/direct3d12.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/resource.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"

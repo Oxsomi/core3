@@ -22,6 +22,7 @@
 
 #pragma once
 #include "types/container/string.h"
+#include "types/base/lock.h"
 
 #ifdef __cplusplus
 	extern "C" {

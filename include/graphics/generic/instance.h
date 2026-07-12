@@ -21,8 +21,9 @@
 //graphics/generic/instance.h
 
 #pragma once
-#include "types/container/string.h"
 #include "graphics/generic/device_info.h"
+#include "types/container/string.h"
+#include "types/container/ref_ptr.h"
 
 #ifdef __cplusplus
 	extern "C" {

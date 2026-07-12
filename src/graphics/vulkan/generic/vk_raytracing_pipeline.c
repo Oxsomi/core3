@@ -29,13 +29,11 @@
 #include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
+#include "formats/oiSH/sh_file.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
 #include "types/base/error.h"
-#include "formats/oiSH/sh_file.h"
 #include "types/base/constants.h"
 
 Bool createShaderModule(
@@ -43,7 +41,7 @@ Bool createShaderModule(
 	VkShaderModule *mod,
 	VkGraphicsDevice *device,
 	VkGraphicsInstance *instance,
-	CharString name,
+	const CharString *name,
 	EPipelineStage stage,
 	const Allocator *alloc,
 	Error *e_rr
@@ -60,11 +58,11 @@ TListImpl(VkRayTracingShaderGroupCreateInfoKHR);
 
 Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	GraphicsDeviceRef *deviceRef,
-	ListSHFile binaries,
-	CharString name,
+	const ListSHFile *binaries,
+	const CharString *name,
 	U8 maxPayloadSize,
 	U8 maxAttributeSize,
-	ListU32 binaryIndices,
+	const ListU32 *binaryIndices,
 	Pipeline *pipeline,
 	Error *e_rr
 ) {
@@ -83,7 +81,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	U64 stageCount = pipeline->stages.length;
 	U64 hitGroupCount = rtPipeline->groups.length;
-	U64 binaryCount = binaryIndices.length;
+	U64 binaryCount = binaryIndices->length;
 
 	VkPipeline pipelineHandle = NULL;
 	ListVkShaderModule modules = (ListVkShaderModule) { 0 };
@@ -96,38 +94,41 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 	gotoIfError3(clean, ListVkShaderModule_resize(&modules, binaryCount, alloc, e_rr));
 	gotoIfError3(clean, ListVkPipelineShaderStageCreateInfo_resize(&stages, stageCount, alloc, e_rr));
 	gotoIfError3(clean, GenericList_resize(&shaderHandles, stageCount, alloc, e_rr));
+
 	gotoIfError3(clean, Buffer_createEmptyBytes(
 		(hitGroupCount + stageCount) * raytracingShaderAlignment,
 		alloc,
 		&shaderBindings,
 		e_rr
 	));
+
 	gotoIfError3(clean, ListVkRayTracingShaderGroupCreateInfoKHR_resize(&groups, hitGroupCount + stageCount, alloc, e_rr));
 
 	//Create binaries
 
 	for(U64 j = 0; j < binaryCount; ++j) {
 
-		if(CharString_length(name))
+		if(name && CharString_length(*name))
 			gotoIfError3(clean, CharString_format(
 				alloc,
 				&temp,
 				e_rr,
 				"%.*s binary %"PRIu64,
-				(int) CharString_length(name),
-				name.ptr,
+				(int) CharString_length(*name),
+				name->ptr,
 				j
 			));
 
-		U32 binId = binaryIndices.ptr[j];
+		U32 binId = binaryIndices->ptr[j];
 		U16 realBinaryId = (U16) binId;
 		U16 shFileId = (U16)(binId >> 16);
 
-		SHBinaryInfo info = binaries.ptr[shFileId].binaries.ptr[realBinaryId];
+		const SHBinaryInfo *info = &binaries->ptr[shFileId].binaries.ptr[realBinaryId];
 
 		gotoIfError3(clean, createShaderModule(
-			info.binaries[ESHBinaryType_SPIRV], &modules.ptrNonConst[j],
-			deviceExt, instanceExt, temp, EPipelineStage_RtStart, alloc, e_rr));
+			info->binaries[ESHBinaryType_SPIRV], &modules.ptrNonConst[j],
+			deviceExt, instanceExt, &temp, EPipelineStage_RtStart, alloc, e_rr
+		));
 
 		CharString_free(&temp, alloc);
 	}
@@ -164,7 +165,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		switch (stage->stageType) {
 
 			default:                                shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;            break;
-			case EPipelineStage_ClosestHitExt:        shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;        break;
+			case EPipelineStage_ClosestHitExt:      shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;        break;
 			case EPipelineStage_IntersectionExt:    shaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;        break;
 
 			case EPipelineStage_MissExt:
@@ -204,11 +205,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		U16 entrypointId = (U16) stage->binaryId;
 		U16 binaryId = (U16) (stage->binaryId >> 16);
 
-		SHEntry entry = binaries.ptr[stage->shFileId].entries.ptr[entrypointId];
+		SHEntry entry = binaries->ptr[stage->shFileId].entries.ptr[entrypointId];
 		U16 realBinId = entry.binaryIds.ptr[binaryId];
 		U32 binId = ((U32)stage->shFileId << 16) | realBinId;
 
-		U64 libId = ListU32_findFirst(binaryIndices, binId, 0, NULL);
+		U64 libId = ListU32_findFirst(*binaryIndices, binId, 0, NULL);
 
 		if(!CharString_isNullTerminated(entry.name))
 			gotoIfError3(clean, CharString_createCopy(entry.name, alloc, &temp, e_rr));
@@ -272,16 +273,16 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 
 	//Create RefPtrs for OxC3 usage.
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && CharString_length(name)) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && name && CharString_length(*name)) {
 
-		if(!CharString_isNullTerminated(name))
-			gotoIfError3(clean, CharString_createCopy(name, alloc, &temp, e_rr));
+		if(!CharString_isNullTerminated(*name))
+			gotoIfError3(clean, CharString_createCopy(*name, alloc, &temp, e_rr));
 
 		VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_PIPELINE,
 			.objectHandle = (U64) pipelineHandle,
-			.pObjectName = temp.ptr ? temp.ptr : name.ptr
+			.pObjectName = temp.ptr ? temp.ptr : name->ptr
 		};
 
 		gotoIfError3(clean, checkVkError(instanceExt->debugSetName(deviceExt->device, &debugName2), e_rr));
@@ -338,14 +339,17 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineRaytracingInternal)(
 		);
 	}
 
+	CharString sbtName = CharString_createRefCStrConst("Shader binding table");
+
 	gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
 		deviceRef,
 		EDeviceBufferUsage_SBTExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		CharString_createRefCStrConst("Shader binding table"),
+		&sbtName,
 		&shaderBindings,
-		&Pipeline_info(pipeline, PipelineRaytracingInfo)->shaderBindingTable, e_rr));
+		&Pipeline_info(pipeline, PipelineRaytracingInfo)->shaderBindingTable, e_rr
+	));
 
 clean:
 

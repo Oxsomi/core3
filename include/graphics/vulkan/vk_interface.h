@@ -185,7 +185,7 @@
 
 	//Interface
 
-	Bool VkGraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr);
+	Bool VkGraphicsInstance_create(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr);
 	void  VkGraphicsInstance_free(GraphicsInstance *inst, const Allocator *alloc);
 	Bool VkGraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos, Error *e_rr);
 

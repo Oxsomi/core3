@@ -22,36 +22,19 @@
 
 #include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
-#include "types/container/string.h"
-#include "types/container/buffer.h"
-#include "types/container/ref_ptr.h"
-#include "platforms/logx.h"
+#include "graphics/generic/device.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/descriptor_table.h"
-#include "types/container/buffer.h"
 #include "formats/oiSH/sh_registers.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
 #include "types/base/constants.h"
 
-TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing) {
-	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);
-	TLASTransformSRT_setPivot(&srt, pivot);
-	TLASTransformSRT_setShearing(&srt, shearing);
-	return srt;
-
-}
-
-TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat) {
-	TLASTransformSRT srt = (TLASTransformSRT) { 0 };
-	TLASTransformSRT_setScale(&srt, scale);
-	TLASTransformSRT_setTranslate(&srt, translate);
-	TLASTransformSRT_setQuat(&srt, quat);
-	return srt;
-}
-
 F32x4 TLASTransformSRT_getScale(const TLASTransformSRT *srt) {
-	return F32x4_create3(srt.sx, srt.sy, srt.sz);
+	return !srt ? F32x4_zero() : F32x4_create3(srt->sx, srt->sy, srt->sz);
 }
 
 Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value) {
@@ -66,7 +49,7 @@ Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value) {
 }
 
 F32x4 TLASTransformSRT_getPivot(const TLASTransformSRT *srt) {
-	return F32x4_create3(srt.pvx, srt.pvy, srt.pvz);
+	return !srt ? F32x4_zero() : F32x4_create3(srt->pvx, srt->pvy, srt->pvz);
 }
 
 Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value) {
@@ -81,7 +64,7 @@ Bool TLASTransformSRT_setPivot(TLASTransformSRT *srt, F32x4 value) {
 }
 
 F32x4 TLASTransformSRT_getTranslate(const TLASTransformSRT *srt) {
-	return F32x4_create3(srt.tx, srt.ty, srt.tz);
+	return !srt ? F32x4_zero() : F32x4_create3(srt->tx, srt->ty, srt->tz);
 }
 
 Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value) {
@@ -96,7 +79,7 @@ Bool TLASTransformSRT_setTranslate(TLASTransformSRT *srt, F32x4 value) {
 }
 
 QuatF32 TLASTransformSRT_getQuat(const TLASTransformSRT *srt) {
-	return QuatF32_create(srt.q0, srt.q1, srt.q2, srt.q3);
+	return !srt ? QuatF32_identity() : QuatF32_create(srt->q0, srt->q1, srt->q2, srt->q3);
 }
 
 Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value) {
@@ -112,7 +95,7 @@ Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value) {
 }
 
 F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt) {
-	return F32x4_create3(srt.a, srt.b, srt.c);
+	return !srt ? F32x4_zero() : F32x4_create3(srt->a, srt->b, srt->c);
 }
 
 Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value) {
@@ -132,8 +115,8 @@ TListImpl(TLASInstanceStatic);
 TLASInstanceData *TLASInstanceMotion_getDataInternal(TLASInstanceMotion *mot) {
 	switch (mot->type) {
 		default:                            return &mot->staticInst.data;
-		case ETLASInstanceType_Matrix:        return &mot->matrixInst.data;
-		case ETLASInstanceType_SRT:            return &mot->srtInst.data;
+		case ETLASInstanceType_Matrix:      return &mot->matrixInst.data;
+		case ETLASInstanceType_SRT:         return &mot->srtInst.data;
 	}
 }
 
@@ -186,7 +169,6 @@ void TLAS_free(TLAS *tlas, const Allocator *alloc) {
 	SpinLock_lock(&tlas->base.lock, U64_MAX);
 
 	TLAS_freeExt(tlas);
-	//Log_debugLnx("Destroy: %s (%p)", tlas->base.name.ptr, tlas);
 	CharString_free(&tlas->base.name, alloc);
 
 	RefPtr_dec(&tlas->base.asBuffer);
@@ -228,13 +210,14 @@ Bool GraphicsDeviceRef_createTLAS(
 	GraphicsDeviceRef *dev,
 	const TLAS *tlas,
 	DescriptorTableRef *bindlessDescriptorTable,
-	CharString name,
+	const CharString *name,
 	TLASRef **tlasRef,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+	Bool allocated = false;
 
 	//Validate
 
@@ -362,6 +345,7 @@ Bool GraphicsDeviceRef_createTLAS(
 	//Allocate refPtr
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->tlas, tlasRef, e_rr));
+	allocated = true;
 
 	//Fill ptr
 
@@ -380,6 +364,7 @@ Bool GraphicsDeviceRef_createTLAS(
 		tlasPtr->cpuData = Buffer_createNull();
 		gotoIfError3(clean, Buffer_createCopy(tlas->cpuData, alloc, &tlasPtr->cpuData, e_rr));
 	}
+
 	else {
 
 		if (tlas->useDeviceMemory) {
@@ -448,7 +433,8 @@ Bool GraphicsDeviceRef_createTLAS(
 			if(invalidData)
 				retError(clean, Error_invalidOperation(
 					15,
-					"GraphicsDeviceRef_createTLAS() One of the BLASes couldn't be found or couldn't be increased"));
+					"GraphicsDeviceRef_createTLAS() One of the BLASes couldn't be found or couldn't be increased"
+				));
 		}
 	}
 
@@ -460,10 +446,12 @@ Bool GraphicsDeviceRef_createTLAS(
 		tlasPtr->bindlessDescriptorTable = bindlessDescriptorTable;
 	}
 
-	gotoIfError3(clean, CharString_createCopy(name, alloc, &tlasPtr->base.name, e_rr));
-	//Log_debugLnx("Create: %s", tlasPtr->base.name.ptr);
+	if(name)
+		gotoIfError3(clean, CharString_createCopy(*name, alloc, &tlasPtr->base.name, e_rr));
 
 	gotoIfError3(clean, TLAS_initExt(tlasPtr, e_rr));
+
+	Descriptor tlasDesc = Descriptor_tlas(*tlasRef);
 
 	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
 		dev,
@@ -471,7 +459,7 @@ Bool GraphicsDeviceRef_createTLAS(
 		ESHRegisterType_AccelerationStructure,
 		0,
 		false,
-		Descriptor_tlas(*tlasRef),
+		&tlasDesc,
 		&tlasPtr->handle,
 		e_rr
 	)) {
@@ -481,7 +469,7 @@ Bool GraphicsDeviceRef_createTLAS(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocated)
 		RefPtr_dec(tlasRef);
 
 	return s_uccess;
@@ -577,5 +565,5 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 //        .disallowBindlessDescriptor = disallowBindlessDescriptor
 //    };
 //
-//    return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas);
+//    return GraphicsDeviceRef_createTLAS(dev, tlasInfo, name, tlas, e_rr);
 //}

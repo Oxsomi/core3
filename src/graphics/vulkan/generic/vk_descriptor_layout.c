@@ -26,11 +26,8 @@
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/string.h"
-#include "types/container/string.h"
-#include "platforms/logx.h"
 #include "formats/oiSH/sh_entries.h"
-#include "types/base/constants.h"
+#include "types/container/log.h"
 
 void VK_WRAP_FUNC(DescriptorLayout_free)(DescriptorLayout *layout, const Allocator *alloc) {
 
@@ -62,8 +59,8 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
 			return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
 		case ESHRegisterType_ConstantBuffer:            return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		case ESHRegisterType_AccelerationStructure:        return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-		case ESHRegisterType_SubpassInput:                return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+		case ESHRegisterType_AccelerationStructure:     return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		case ESHRegisterType_SubpassInput:              return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
 
 		default:
 		case ESHRegisterType_Texture1D:
@@ -71,8 +68,7 @@ VkDescriptorType vkGetDescriptorType(ESHRegisterType regType) {
 		case ESHRegisterType_Texture3D:
 		case ESHRegisterType_TextureCube:
 		case ESHRegisterType_Texture2DMS:
-			return regType & ESHRegisterType_IsWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE :
-			VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+			return regType & ESHRegisterType_IsWrite ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	}
 }
 
@@ -134,7 +130,7 @@ TListImpl(VkDescriptorBindingFlags);
 Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	GraphicsDeviceRef *dev,
 	DescriptorLayout *layout,
-	CharString name,
+	const CharString *name,
 	Error *e_rr
 ) {
 
@@ -189,7 +185,8 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	for(U32 i = 0; i < (U32) info.bindings.length; ++i) {
 
 		gotoIfError3(clean, ListU64_pushBack(
-			&sortedList, ((U64)info.bindings.ptr[i].binding.space << 32) | i, NULL, e_rr));
+			&sortedList, ((U64)info.bindings.ptr[i].binding.space << 32) | i, NULL, e_rr
+		));
 
 		//Make sure the set is registered to avoid going over 4 sets
 
@@ -205,7 +202,8 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			if(uniqueSetCounter == 4)
 				retError(clean, Error_outOfBounds(
-					0, 4, 4, "GraphicsDeviceRef_createDescriptorLayout can only have 4 unique descriptor sets bound at once"));
+					0, 4, 4, "GraphicsDeviceRef_createDescriptorLayout can only have 4 unique descriptor sets bound at once"
+				));
 
 			layoutExt->setIds[uniqueSetCounter] = binding.binding.space;
 			sets[uniqueSetCounter] = binding.binding.space;
@@ -220,8 +218,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 	}
 
 	if(!ListU64_sort(sortedList))
-		retError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"));
+		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"));
 
 	//Create our sets and bindings
 
@@ -301,15 +298,15 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			deviceExt->device, &setInfo[i], NULL, &layoutExt->layouts[i]
 		), e_rr));
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 			gotoIfError3(clean, CharString_format(
 				alloc,
 				&tmpName,
 				e_rr,
 				"%.*s set %"PRIu8,
-				(int) CharString_length(name),
-				name.ptr,
+				(int) CharString_length(*name),
+				name->ptr,
 				i
 			));
 

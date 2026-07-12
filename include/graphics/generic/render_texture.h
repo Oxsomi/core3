@@ -36,6 +36,7 @@ typedef struct CharString CharString;
 typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 
+typedef struct UnifiedTexture UnifiedTexture;
 typedef UnifiedTexture RenderTexture;
 
 typedef RefPtr RenderTextureRef;

@@ -30,6 +30,7 @@
 
 typedef struct CharString CharString;
 typedef struct RefPtr RefPtr;
+typedef struct Error Error;
 
 typedef enum ESamplerFilterMode {
 

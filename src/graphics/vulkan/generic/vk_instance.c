@@ -179,7 +179,7 @@ TListImpl(VkLayerProperties);
 
 //#define _GRAPHICS_VERBOSE_DEBUGGING
 
-Bool VK_WRAP_FUNC(GraphicsInstance_create)(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
+Bool VK_WRAP_FUNC(GraphicsInstance_create)(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
 
 	const Allocator *alloc = instanceRef && *instanceRef ? GraphicsInstanceRef_ptr(*instanceRef)->alloc : NULL;
 

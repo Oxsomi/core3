@@ -39,10 +39,8 @@
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/command_list.h"
-#include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
 #include "types/base/error.h"
-#include "types/base/constants.h"
 
 TListImpl(GraphicsDeviceInfo);
 
@@ -63,11 +61,11 @@ Bool GraphicsInstance_getPreferredDevice(
 
 	ListGraphicsDeviceInfo tmp = (ListGraphicsDeviceInfo) { 0 };
 
-	if(!inst)
-		retError(clean, Error_nullPointer(0, "GraphicsInstance_getPreferredDevice()::inst is required"));
-
-	if(!deviceInfo)
-		retError(clean, Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required"));
+	if(!inst || !deviceInfo)
+		retError(clean, Error_nullPointer(
+			!inst ? 0 : 4,
+			"GraphicsInstance_getPreferredDevice()::inst, requiredCapabilities and deviceInfo are required"
+		));
 
 	if(deviceInfo->name[0])
 		retError(clean, Error_invalidParameter(
@@ -94,25 +92,28 @@ Bool GraphicsInstance_getPreferredDevice(
 
 		//Check capabilities
 
-		if((info.capabilities.dataTypes & requiredCapabilities.dataTypes) != requiredCapabilities.dataTypes)
-			continue;
+		if(requiredCapabilities) {
 
-		if((info.capabilities.features & requiredCapabilities.features) != requiredCapabilities.features)
-			continue;
+			if((info.capabilities.dataTypes & requiredCapabilities->dataTypes) != requiredCapabilities->dataTypes)
+				continue;
 
-		if((info.capabilities.features2 & requiredCapabilities.features2) != requiredCapabilities.features2)
-			continue;
+			if((info.capabilities.features & requiredCapabilities->features) != requiredCapabilities->features)
+				continue;
 
-		if((info.capabilities.featuresExt & requiredCapabilities.featuresExt) != requiredCapabilities.featuresExt)
-			continue;
+			if((info.capabilities.features2 & requiredCapabilities->features2) != requiredCapabilities->features2)
+				continue;
 
-		if(
-			info.capabilities.sharedMemory < requiredCapabilities.sharedMemory ||
-			info.capabilities.dedicatedMemory < requiredCapabilities.dedicatedMemory ||
-			info.capabilities.maxBufferSize < requiredCapabilities.maxBufferSize ||
-			info.capabilities.maxAllocationSize < requiredCapabilities.maxAllocationSize
-		)
-			continue;
+			if((info.capabilities.featuresExt & requiredCapabilities->featuresExt) != requiredCapabilities->featuresExt)
+				continue;
+
+			if(
+				info.capabilities.sharedMemory < requiredCapabilities->sharedMemory ||
+				info.capabilities.dedicatedMemory < requiredCapabilities->dedicatedMemory ||
+				info.capabilities.maxBufferSize < requiredCapabilities->maxBufferSize ||
+				info.capabilities.maxAllocationSize < requiredCapabilities->maxAllocationSize
+			)
+				continue;
+		}
 
 		if(info.type == EGraphicsDeviceType_Dedicated) {
 			preferredDedicated = i;
@@ -140,7 +141,8 @@ Bool GraphicsInstance_getPreferredDevice(
 	*deviceInfo = tmp.ptr[picked];
 
 clean:
-	ListGraphicsDeviceInfo_free(&tmp, inst ? inst->alloc : NULL);
+	if(inst)
+		ListGraphicsDeviceInfo_free(&tmp, inst->alloc);
 	return s_uccess;
 }
 

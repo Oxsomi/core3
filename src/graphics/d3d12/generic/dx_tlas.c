@@ -20,10 +20,7 @@
 
 //graphics/d3d12/generic/dx_tlas.c
 
-#include "types/container/list_impl.h"
-#include "types/container/string.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/descriptor_heap.h"
@@ -31,6 +28,7 @@
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/direct3d12.h"
+#include "types/container/string.h"
 
 void DX_WRAP_FUNC(TLAS_free)(TLAS *tlas) { (void)tlas; }        //No-op
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
@@ -187,7 +185,7 @@ Bool DX_WRAP_FUNC(TLAS_init)(TLAS *tlas, Error *e_rr) {
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		NULL,
-		tmp,
+		&tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
 		&tlas->base.tempScratchBuffer,
 		e_rr

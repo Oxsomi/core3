@@ -20,22 +20,16 @@
 
 //graphics/d3d12/generic/dx_allocator.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/device_allocator.h"
-#include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/interface.h"
-#include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
+#include "graphics/d3d12/dx_device.h"
+#include "graphics/d3d12/dx_interface.h"
 #include "platforms/logx.h"
+#include "types/container/string_unicode.h"
 #include "types/base/error.h"
 #include "types/base/mathi.h"
-#include "types/base/mathf.h"
-#include "types/container/string.h"
 #include "types/base/constants.h"
-#include "types/container/string_unicode.h"
 
 D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType) {
 
@@ -99,13 +93,20 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	U32 *blockId,
 	U64 *blockOffset,
 	EResourceType resourceType,
-	CharString objectName,
+	const CharString *objectName,
 	DeviceMemoryBlock *resultBlock,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = allocator ? GraphicsDevice_getAlloc(allocator->device) : NULL;
+
+	CharString temp = CharString_createNull();
+	ListU16 temp16 = (ListU16) { 0 };
+	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
+	ELockAcquire acq = ELockAcquire_Invalid;
+
+	ID3D12Heap *heap = NULL;
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		retError(clean, Error_nullPointer(
@@ -132,13 +133,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	//We lock this early to avoid other mem alloc from allocating too many memory blocks at once.
 	//Maybe what we end up allocating now can be used for the next.
 
-	ELockAcquire acq = SpinLock_lock(&allocator->lock, U64_MAX);
-
-	CharString temp = CharString_createNull();
-	ListU16 temp16 = (ListU16) { 0 };
-	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
-
-	ID3D12Heap *heap = NULL;
+	acq = SpinLock_lock(&allocator->lock, U64_MAX);
 
 	U8 heapType = 0;
 
@@ -163,17 +158,14 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		const U8 *allocated = NULL;
 		Error err1 = Error_none();
 
-		Bool didAllocate = AllocationBuffer_allocateBlock(
-			&(AllocationBufferAllocate) {
-				.allocationBuffer = &blocki->allocations,
-				.alignment = req.alignment,
-				.isNonLinearResource = false,
-				.alloc = alloc
-			},
-			req.length,
-			&allocated,
-			&err1
-		);
+		AllocationBufferAllocate allocation = (AllocationBufferAllocate) {
+			.allocationBuffer = &blocki->allocations,
+			.alignment = req.alignment,
+			.isNonLinearResource = false,
+			.alloc = alloc
+		};
+
+		Bool didAllocate = AllocationBuffer_allocateBlock(&allocation, req.length, &allocated, &err1);
 
 		if(!didAllocate)
 			continue;
@@ -231,21 +223,20 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 
 	block = (DeviceMemoryBlock) {
 		.isActive = true,
-		.typeExt = req.alignment,                                //Only place things with the same alignment in this block
+		.typeExt = req.alignment,                                  //Only place things with the same alignment in this block
 		.allocationTypeExt = (!cpuSided) | (heapType << 1),        //Don't share GPU mem and CPU mem or heap sharing if no support
 		.isDedicated = false,
 		.ext = heap
 	};
 
-	gotoIfError3(clean, AllocationBuffer_create(
-		&(AllocationBufferCreate) {
-			.size = realBlockSize,
-			.nonLinearAlignment = 0,
-			.alloc = alloc,
-			.allocationBuffer = &block.allocations
-		},
-		true, e_rr
-	));
+	AllocationBufferCreate allocationCreate = (AllocationBufferCreate) {
+		.size = realBlockSize,
+		.nonLinearAlignment = 0,
+		.alloc = alloc,
+		.allocationBuffer = &block.allocations
+	};
+
+	gotoIfError3(clean, AllocationBuffer_create(&allocationCreate, true, e_rr));
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
 		Error_captureStackTrace(block.stackTrace, (U8)(sizeof(block.stackTrace) / sizeof(void*)), 1);
@@ -258,16 +249,15 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 		if (!allocator->blocks.ptr[i].isActive)
 			break;
 
+	AllocationBufferAllocate allocation = (AllocationBufferAllocate) {
+		.allocationBuffer = &block.allocations,
+		.alignment = req.alignment,
+		.isNonLinearResource = false,
+		.alloc = alloc
+	};
+
 	const U8 *allocLoc = NULL;
-	gotoIfError3(clean, AllocationBuffer_allocateBlock(
-		&(AllocationBufferAllocate) {
-			.allocationBuffer = &block.allocations,
-			.alignment = req.alignment,
-			.isNonLinearResource = false,
-			.alloc = alloc
-		},
-		req.length, &allocLoc, e_rr
-	));
+	gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocation, req.length, &allocLoc, e_rr));
 
 	if(i == allocator->blocks.length) {
 
@@ -283,7 +273,7 @@ Bool DX_WRAP_FUNC(DeviceMemoryAllocator_allocate)(
 	*blockOffset = (U64) allocLoc;
 	*resultBlock = block;
 
-	if(CharString_length(objectName) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
+	if(objectName && CharString_length(*objectName) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
 
 		gotoIfError3(clean, CharString_format(
 			alloc,

@@ -1270,7 +1270,9 @@ clean:
 		SpinLock_unlock(&device->lock);
 
 	return s_uccess;
-}const Allocator *GraphicsDevice_getAlloc(const GraphicsDevice *device) {
+}
+
+const Allocator *GraphicsDevice_getAlloc(const GraphicsDevice *device) {
 	return device ? GraphicsInstanceRef_ptr(device->instance)->alloc : NULL;
 }
 

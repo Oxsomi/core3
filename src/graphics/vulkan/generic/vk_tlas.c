@@ -20,17 +20,14 @@
 
 //graphics/vulkan/generic/vk_tlas.c
 
-#include "types/container/list_impl.h"
-#include "types/container/string.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
+#include "types/container/string.h"
 #include "types/base/constants.h"
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);

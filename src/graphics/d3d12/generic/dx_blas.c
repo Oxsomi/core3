@@ -21,7 +21,6 @@
 //graphics/d3d12/generic/dx_blas.c
 
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/d3d12/dx_device.h"
@@ -53,6 +52,10 @@ Bool DX_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 	U64 vertexCount = 0;
 
 	switch (type) {
+
+		case EBLASConstructionType_Serialized:
+			primitives = Buffer_length(blas->cpuData) / 12;        //Conservative estimate
+			break;
 
 		case EBLASConstructionType_Procedural:
 			primitives = blas->aabbBuffer.len / (sizeof(F32) * 3 * 2);

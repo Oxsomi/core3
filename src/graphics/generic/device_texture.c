@@ -20,25 +20,23 @@
 
 //graphics/generic/device_texture.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
+#include "graphics/generic/device.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "types/container/buffer.h"
 #include "types/container/ref_ptr.h"
-#include "platforms/logx.h"
 #include "types/container/texture_format.h"
-#include "types/base/mathi.h"
-#include "types/base/mathf.h"
 #include "types/container/string.h"
+#include "types/base/mathi.h"
 #include "types/base/constants.h"
 
-U16 alignDown(U16 x, U16 alignment) {
+static inline U16 alignDown(U16 x, U16 alignment) {
 	return x / alignment * alignment;
 }
 
-U16 alignUp(U16 x, U16 alignment) {
+static inline U16 alignUp(U16 x, U16 alignment) {
 	return (x + alignment - 1) / alignment * alignment;
 }
 
@@ -241,8 +239,6 @@ void DeviceTexture_free(DeviceTexture *texture, const Allocator *alloc) {
 
 	SpinLock_lock(&texture->lock, U64_MAX);
 
-	//Log_debugLnx("Destroy: DeviceTexture (%p)", texture);
-
 	UnifiedTexture_free(refPtr);
 	Buffer_free(&texture->cpuData, alloc);
 	ListDevicePendingRange_free(&texture->pendingChanges, alloc);
@@ -264,6 +260,7 @@ Bool GraphicsDeviceRef_createTexture(
 ) {
 
 	Bool s_uccess = true;
+	Bool allocated = false;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
 
 	if(!formatId || formatId >= ETextureFormatId_Count)
@@ -283,6 +280,7 @@ Bool GraphicsDeviceRef_createTexture(
 		));
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->deviceTexture, tex, e_rr));
+	allocated = true;
 
 	if(!(flag & EGraphicsResourceFlag_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(dev));
@@ -323,14 +321,14 @@ Bool GraphicsDeviceRef_createTexture(
 	}
 
 	gotoIfError3(clean, ListDevicePendingRange_reserve(
-		&texture->pendingChanges, flag & EGraphicsResourceFlag_CPUBacked ? 16 : 1
-	, alloc, e_rr));
+		&texture->pendingChanges, flag & EGraphicsResourceFlag_CPUBacked ? 16 : 1, alloc, e_rr
+	));
 
 	gotoIfError3(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0, e_rr));
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocated)
 		RefPtr_dec(tex);
 
 	return s_uccess;

@@ -21,6 +21,7 @@
 //graphics/generic/descriptor_layout.h
 
 #pragma once
+#include "formats/oiSH/sh_file.h"
 #include "types/container/list.h"
 
 #ifdef __cplusplus

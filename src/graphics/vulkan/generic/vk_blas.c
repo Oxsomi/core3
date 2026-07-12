@@ -20,16 +20,13 @@
 
 //graphics/vulkan/generic/vk_blas.c
 
-#include "types/container/list_impl.h"
-#include "types/container/string.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
+#include "types/container/string.h"
 #include "types/base/constants.h"
 
 Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
@@ -78,7 +75,8 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 
 	if(primitives >> 32)
 		retError(clean, Error_outOfBounds(
-			0, primitives, U32_MAX, "VkBLAS_init() only primitive count of <U32_MAX is supported"));
+			0, primitives, U32_MAX, "VkBLAS_init() only primitive count of <U32_MAX is supported"
+		));
 
 	blasExt->range = (VkAccelerationStructureBuildRangeInfoKHR) { .primitiveCount = (U32) primitives };
 
@@ -212,6 +210,7 @@ Bool VK_WRAP_FUNC(BLAS_init)(BLAS *blas, Error *e_rr) {
 		deviceExt->createAccelerationStructure(deviceExt->device, &createInfo, NULL, &blasExt->as),
 		e_rr
 	));
+
 	blasExt->geometries.dstAccelerationStructure = blasExt->as;
 
 	blasExt->geometries.scratchData = (VkDeviceOrHostAddressKHR) {
