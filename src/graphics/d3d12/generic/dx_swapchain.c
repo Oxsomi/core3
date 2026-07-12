@@ -20,17 +20,14 @@
 
 //graphics/d3d12/generic/dx_swapchain.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/generic/texture.h"
 #include "graphics/d3d12/dx_swapchain.h"
 #include "graphics/d3d12/dx_device.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/buffer.h"
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
@@ -92,13 +89,14 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 		switch(window->format) {
 
-			default:                        format = DXGI_FORMAT_B8G8R8A8_UNORM;        break;
+			default:                           format = DXGI_FORMAT_B8G8R8A8_UNORM;        break;
 			case EWindowFormat_RGBA16f:        format = DXGI_FORMAT_R16G16B16A16_FLOAT;    break;
-			case EWindowFormat_BGR10A2:        format = DXGI_FORMAT_R10G10B10A2_UNORM;        break;
+			case EWindowFormat_BGR10A2:        format = DXGI_FORMAT_R10G10B10A2_UNORM;     break;
 
 			case EWindowFormat_RGBA32f:
 				retError(clean, Error_unsupportedOperation(
-					1, "D3D12GraphicsDeviceRef_createSwapchain() RGBA32f isn't supported"));
+					1, "D3D12GraphicsDeviceRef_createSwapchain() RGBA32f isn't supported"
+				));
 		}
 
 		DXGI_SWAP_CHAIN_DESC1 desc1 = (DXGI_SWAP_CHAIN_DESC1) {

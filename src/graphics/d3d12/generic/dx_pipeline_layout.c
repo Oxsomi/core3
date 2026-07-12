@@ -20,17 +20,14 @@
 
 //graphics/d3d12/generic/dx_pipeline_layout.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/d3d12/dx_device.h"
-#include "types/container/string.h"
-#include "types/container/string.h"
 #include "platforms/logx.h"
-#include "formats/oiSH/sh_entries.h"
 #include "types/container/string_unicode.h"
+#include "types/container/list_basic_types.h"
 
 void DX_WRAP_FUNC(PipelineLayout_free)(PipelineLayout *layout, const Allocator *alloc) {
 
@@ -47,7 +44,7 @@ D3D12_SHADER_VISIBILITY DxDescriptorLayout_convertVisibility(U32 a);
 Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 	GraphicsDeviceRef *dev,
 	PipelineLayout *layout,
-	CharString name,
+	const CharString *name,
 	Error *e_rr
 ) {
 
@@ -176,8 +173,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 		&IID_ID3D12RootSignature, (void**) &layoutExt->rootSig
 	), e_rr));
 
-	if (CharString_length(name) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
-		gotoIfError3(clean, CharString_toUTF16(name, alloc, &nameUtf16, e_rr));
+	if (name && CharString_length(*name) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
+		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &nameUtf16, e_rr));
 		gotoIfError3(clean, dxCheck(
 			layoutExt->rootSig->lpVtbl->SetName(layoutExt->rootSig, (const wchar_t*) nameUtf16.ptr),
 			e_rr

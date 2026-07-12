@@ -21,19 +21,13 @@
 //graphics/generic/pipeline.c
 
 #include "types/container/list_impl.h"
-#include "graphics/generic/interface.h"
 #include "graphics/generic/pipeline.h"
-#include "types/base/string_read.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/texture.h"
-#include "graphics/generic/device_buffer.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
-#include "types/container/log.h"
+#include "graphics/generic/interface.h"
 #include "platforms/logx.h"
 #include "formats/oiSH/sh_file.h"
-#include "types/base/constants.h"
+#include "types/base/string_read.h"
 
 const C8 *EPipelineStage_names[] = {
 	"vertex", "pixel", "compute", "geometry", "hull", "domain", "raygeneration", "callable", "miss", "closesthit",
@@ -53,8 +47,6 @@ void *Pipeline_infoOffset(Pipeline *pipeline) {
 void Pipeline_free(Pipeline *pipeline, const Allocator *alloc) {
 
 	Pipeline_freeExt(pipeline, alloc);
-
-	//Log_debugLnx("Destroy: %p", pipeline);
 
 	if (pipeline->type == EPipelineType_RaytracingExt) {
 		PipelineRaytracingInfo *info = Pipeline_info(pipeline, PipelineRaytracingInfo);
@@ -79,40 +71,40 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	ESHExtension require
 ) {
 
-	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || !shaderBinary || deviceRef->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
 		return U32_MAX;
 
-	for (U64 i = 0; i < shaderBinary.entries.length; ++i) {
+	for (U64 i = 0; i < shaderBinary->entries.length; ++i) {
 
-		SHEntry entry = shaderBinary.entries.ptr[i];
+		SHEntry entry = shaderBinary->entries.ptr[i];
 
-		if(!CharString_equalsString(&entry.name, &entrypointName, EStringCase_Sensitive))
+		if(!CharString_equalsString(&entry.name, entrypointName, EStringCase_Sensitive))
 			continue;
 
 		for (U64 j = 0; j < entry.binaryIds.length; ++j) {
 
 			U16 binj = entry.binaryIds.ptr[j];
-			SHBinaryInfo binInfo = shaderBinary.binaries.ptr[binj];
+			SHBinaryInfo binInfo = shaderBinary->binaries.ptr[binj];
 
 			ListCharString defines2 = binInfo.identifier.defines;
 
 			//Find all defines
 
-			if (defines2.length != defines.length)
+			if (defines2.length != (!defines ? 0 : defines->length))
 				continue;
 
 			Bool missing = false;
 
-			for (U64 k = 0; k < defines.length / 2; ++k) {
+			for (U64 k = 0; k < (defines ? defines->length / 2 : 0); ++k) {
 
 				Bool contains = false;
 
-				for (U64 l = 0; l < defines.length / 2; ++l) {
+				for (U64 l = 0; l < defines->length / 2; ++l) {
 
 					if (
-						!CharString_equalsString(&(defines.ptr[l << 1]), &(defines2.ptr[l << 1]), EStringCase_Sensitive) ||
+						!CharString_equalsString(&(defines->ptr[l << 1]), &(defines2.ptr[l << 1]), EStringCase_Sensitive) ||
 						!CharString_equalsString(
-							&(defines.ptr[(l << 1) | 1]),
+							&(defines->ptr[(l << 1) | 1]),
 							&(defines2.ptr[(l << 1) | 1]),
 							EStringCase_Sensitive
 						)
@@ -139,7 +131,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 
 			Error err = Error_none();
 
-			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, binInfo, entry, &err)) {
+			if(!GraphicsDeviceRef_checkShaderFeatures(deviceRef, &binInfo, &entry, &err)) {
 				Error_print(GraphicsDeviceRef_getAlloc(deviceRef), &err, ELogLevel_Error, ELogOptions_NewLine);
 				continue;
 			}

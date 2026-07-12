@@ -20,24 +20,18 @@
 
 //graphics/generic/sampler.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/interface.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/bindless_descriptor.h"
-#include "types/container/buffer.h"
-#include "types/container/ref_ptr.h"
-#include "platforms/logx.h"
-#include "types/container/string.h"
 #include "formats/oiSH/sh_registers.h"
+#include "types/container/ref_ptr.h"
 
 void Sampler_free(Sampler *sampler, const Allocator *alloc) {
 
 	(void)alloc;
-
-	//Log_debugLnx("Destroy: %p", sampler);
 
 	if(sampler->bindlessDescriptorTable) {
 
@@ -129,8 +123,6 @@ Bool GraphicsDeviceRef_createSampler(
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
 
-	//Log_debugLnx("Create: Sampler %.*s (%p)", (int) CharString_length(name), name.ptr, samp);
-
 	*samp = (Sampler) { .device = dev, .info = info };
 
 	if(bindlessDescriptorTable) {
@@ -140,13 +132,15 @@ Bool GraphicsDeviceRef_createSampler(
 
 	gotoIfError3(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name, e_rr));
 
+	Descriptor sampDesc = Descriptor_sampler(*sampler);
+
 	if(bindlessDescriptorTable && !GraphicsDeviceRef_allocateDescriptorBindless(
 		dev,
 		bindlessDescriptorTable,
 		info.enableComparison ? ESHRegisterType_SamplerComparisonState : ESHRegisterType_Sampler,
 		0,
 		false,
-		Descriptor_sampler(*sampler),
+		&sampDesc,
 		&samp->samplerLocation,
 		e_rr
 	)) {
