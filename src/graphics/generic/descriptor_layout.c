@@ -487,7 +487,7 @@ clean:
 Bool GraphicsDeviceRef_createDescriptorLayout(
 	GraphicsDeviceRef *dev,
 	DescriptorLayoutInfo *info,
-	CharString name,
+	const CharString *name,
 	DescriptorLayoutRef **layoutRef,
 	Error *e_rr
 ) {

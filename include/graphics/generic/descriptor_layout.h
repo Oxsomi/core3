@@ -156,7 +156,7 @@ typedef struct DescriptorLayout {
 Bool GraphicsDeviceRef_createDescriptorLayout(
 	GraphicsDeviceRef *dev,
 	DescriptorLayoutInfo *info,        //Moves info
-	CharString name,
+	const CharString *name,
 	DescriptorLayoutRef **layout,
 	Error *e_rr
 );

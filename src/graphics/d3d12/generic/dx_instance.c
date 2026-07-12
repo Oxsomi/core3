@@ -29,27 +29,20 @@
 #include "graphics/d3d12/dx_swapchain.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
 #include "platforms/platform.h"
-#include "types/container/file_base.h"
 #include "platforms/logx.h"
 #include "platforms/dynamic_library.h"
-#include "types/base/platform_types.h"
-#include "types/base/error.h"
+#include "types/container/string.h"
+#include "types/container/string_unicode.h"
+#include "types/container/file_base.h"
 #include "types/container/buffer.h"
+#include "types/base/error.h"
+#include "types/base/platform_types.h"
 #include "types/base/mathi.h"
-#include "types/base/mathf.h"
 #include "types/base/constants.h"
 
 #include <dxgi1_6.h>
 #include <d3d11.h>            //AMD AGS needs it...
-#include "types/container/string_unicode.h"
-
-//D3D_SHADER_MODEL_6_10 isn't present in every Agility SDK header yet; define it if missing.
-#ifndef D3D_SHADER_MODEL_6_10
-	#define D3D_SHADER_MODEL_6_10 ((D3D_SHADER_MODEL) 0x6a)
-#endif
 
 #if defined(_HAS_NV_API) && _ARCH == ARCH_X86_64    //TODO: Enable for arm later
 	#include <nvapi.h>
@@ -456,14 +449,14 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		EGraphicsVendorId vendorId = EGraphicsVendorId_Unknown;
 
 		switch(desc.VendorId) {
-			case EGraphicsVendorPCIE_NV:    vendorId = EGraphicsVendorId_NV;        break;
-			case EGraphicsVendorPCIE_AMD:    vendorId = EGraphicsVendorId_AMD;        break;
-			case EGraphicsVendorPCIE_ARM:    vendorId = EGraphicsVendorId_ARM;        break;
+			case EGraphicsVendorPCIE_NV:     vendorId = EGraphicsVendorId_NV;        break;
+			case EGraphicsVendorPCIE_AMD:    vendorId = EGraphicsVendorId_AMD;       break;
+			case EGraphicsVendorPCIE_ARM:    vendorId = EGraphicsVendorId_ARM;       break;
 			case EGraphicsVendorPCIE_QCOM2:
-			case EGraphicsVendorPCIE_QCOM:    vendorId = EGraphicsVendorId_QCOM;        break;
-			case EGraphicsVendorPCIE_INTC:    vendorId = EGraphicsVendorId_INTC;        break;
-			case EGraphicsVendorPCIE_IMGT:    vendorId = EGraphicsVendorId_IMGT;        break;
-			case EGraphicsVendorPCIE_MSFT:    vendorId = EGraphicsVendorId_MSFT;        break;
+			case EGraphicsVendorPCIE_QCOM:   vendorId = EGraphicsVendorId_QCOM;      break;
+			case EGraphicsVendorPCIE_INTC:   vendorId = EGraphicsVendorId_INTC;      break;
+			case EGraphicsVendorPCIE_IMGT:   vendorId = EGraphicsVendorId_IMGT;      break;
+			case EGraphicsVendorPCIE_MSFT:   vendorId = EGraphicsVendorId_MSFT;      break;
 			default: Log_debugLnx("Unrecognized vendor: %"PRIX32, desc.VendorId);    break;
 		}
 
@@ -510,7 +503,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
 			EGraphicsDataTypes_D32S8;
 
-		if(vendorId != EGraphicsVendorId_AMD)
+		if(vendorId != EGraphicsVendorId_AMD)			//AMD creates D24X8 and S8X24 internally, don't want to report D24S8.
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
 
 		caps.features |= EGraphicsFeatures_DirectRendering;
@@ -538,7 +531,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		D3D12_FEATURE_DATA_HARDWARE_COPY hwCopy = (D3D12_FEATURE_DATA_HARDWARE_COPY) { 0 };
 		D3D12_FEATURE_DATA_ROOT_SIGNATURE rootSig = (D3D12_FEATURE_DATA_ROOT_SIGNATURE) { 0 };
 
-		#if D3D12_PREVIEW_SDK_VERSION >= 716 && !defined(_DISABLE_TIGHT_ALIGNMENT)
+		#if D3D12_SDK_VERSION >= 618
 			D3D12_FEATURE_DATA_TIGHT_ALIGNMENT tightAlignment = (D3D12_FEATURE_DATA_TIGHT_ALIGNMENT) { 0 };
 		#endif
 
@@ -693,16 +686,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
 			caps.featuresExt |= EDxGraphicsFeatures_SM6_9;
 
-		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_10;
-		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
-			caps.featuresExt |= EDxGraphicsFeatures_SM6_10;
-
-		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);
-			goto next;
-		}
-
-		#if D3D12_PREVIEW_SDK_VERSION >= 716 && !defined(_DISABLE_TIGHT_ALIGNMENT)
+		#if D3D12_SDK_VERSION >= 618
 
 			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
 				device, D3D12_FEATURE_D3D12_TIGHT_ALIGNMENT, &tightAlignment, sizeof(tightAlignment)
@@ -710,6 +694,17 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				caps.featuresExt |= EDxGraphicsFeatures_TightAlignment;
 
 		#endif
+
+		#if D3D12_PREVIEW_SDK_VERSION >= 720
+			shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_10;
+			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+				caps.featuresExt |= EDxGraphicsFeatures_SM6_10;
+		#endif
+
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);
+			goto next;
+		}
 
 		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;
@@ -828,7 +823,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		//We hardcode the reported sizes from Vulkan and the hardlimit as defined by HLSL.
 		//ByteAddressBuffer.Load takes an int, so only 2GiB accessible,
 		// even though it's against the spec, intel does support it (by converting int to uint).
-		// NV supports it only for structured buffers and VBV/IBV for now (no BAB support).
 
 		caps.maxAllocationSize = vendorId == EGraphicsVendorId_AMD ? 2 * GIBI : 42 * GIGA / 10;
 		caps.maxBufferSize = vendorId != EGraphicsVendorId_INTC ? 2 * GIBI : 42 * GIGA / 10;

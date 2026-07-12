@@ -66,16 +66,16 @@ void onDebugReport(
 	switch(category) {
 		default:                                                                                    break;
 		case D3D12_MESSAGE_CATEGORY_APPLICATION_DEFINED:    categoryStr = "Application defined";    break;
-		case D3D12_MESSAGE_CATEGORY_MISCELLANEOUS:            categoryStr = "Misc";                    break;
-		case D3D12_MESSAGE_CATEGORY_INITIALIZATION:            categoryStr = "Initialization";            break;
+		case D3D12_MESSAGE_CATEGORY_MISCELLANEOUS:          categoryStr = "Misc";                   break;
+		case D3D12_MESSAGE_CATEGORY_INITIALIZATION:         categoryStr = "Initialization";         break;
 		case D3D12_MESSAGE_CATEGORY_CLEANUP:                categoryStr = "Cleanup";                break;
 		case D3D12_MESSAGE_CATEGORY_COMPILATION:            categoryStr = "Compilation";            break;
-		case D3D12_MESSAGE_CATEGORY_STATE_CREATION:            categoryStr = "State creation";            break;
-		case D3D12_MESSAGE_CATEGORY_STATE_SETTING:            categoryStr = "State setting";            break;
-		case D3D12_MESSAGE_CATEGORY_STATE_GETTING:            categoryStr = "State getting";            break;
-		case D3D12_MESSAGE_CATEGORY_RESOURCE_MANIPULATION:    categoryStr = "Resource manipulation";    break;
-		case D3D12_MESSAGE_CATEGORY_EXECUTION:                categoryStr = "Execution";                break;
-		case D3D12_MESSAGE_CATEGORY_SHADER:                    categoryStr = "Shader";                    break;
+		case D3D12_MESSAGE_CATEGORY_STATE_CREATION:         categoryStr = "State creation";         break;
+		case D3D12_MESSAGE_CATEGORY_STATE_SETTING:          categoryStr = "State setting";          break;
+		case D3D12_MESSAGE_CATEGORY_STATE_GETTING:          categoryStr = "State getting";          break;
+		case D3D12_MESSAGE_CATEGORY_RESOURCE_MANIPULATION:  categoryStr = "Resource manipulation";  break;
+		case D3D12_MESSAGE_CATEGORY_EXECUTION:              categoryStr = "Execution";              break;
+		case D3D12_MESSAGE_CATEGORY_SHADER:                 categoryStr = "Shader";                 break;
 	}
 
 	switch(severity) {
@@ -138,7 +138,7 @@ Bool DxGraphicsDevice_createDescriptorHeapSingle(
 
 	ListU16 tmpName16 = (ListU16) { 0 };
 
-	if(name->ptr)
+	if(name && name->ptr)
 		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &tmpName16, e_rr));
 
 	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
@@ -202,13 +202,14 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		), e_rr));
 	}
 
-	else {
-		gotoIfError3(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->CreateDevice(
-		instanceExt->deviceFactorySingleton,
-		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_0,
-		&IID_ID3D12Device10, (void**) &deviceExt->device
-	), e_rr));
-	}
+	else gotoIfError3(clean, dxCheck(
+		instanceExt->deviceFactorySingleton->lpVtbl->CreateDevice(
+			instanceExt->deviceFactorySingleton,
+			(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_11_0,
+			&IID_ID3D12Device10, (void**) &deviceExt->device
+		),
+		e_rr
+	));
 
 	gotoIfError3(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
 		deviceExt->device, &IID_ID3D12DeviceConfiguration1, (void**) &deviceExt->deviceConfig
@@ -296,7 +297,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 					if(status != NVAPI_OK)
 						retError(clean, Error_invalidState(
-							0, "NvAPI_D3D12_RegisterRaytracingValidationMessageCallback couldn't be called"));
+							0, "NvAPI_D3D12_RegisterRaytracingValidationMessageCallback couldn't be called"
+						));
 				}
 			}
 
@@ -311,7 +313,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 
 		EGraphicsFeatures nvExt =
 			EGraphicsFeatures_RayMicromapOpacity |
-			EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayValidation;
+			EGraphicsFeatures_RayReorder;
 
 		if(isNv && (device->info.capabilities.features & nvExt)) {
 
@@ -392,7 +394,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		tmpName = CharString_createRefCStrConst("DSV heap");
 
 	gotoIfError3(clean, DxGraphicsDevice_createDescriptorHeapSingle(
-		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV], false, alloc, e_rr));
+		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_DSV], false, alloc, e_rr
+	));
 
 	//Create RTVs
 
@@ -405,7 +408,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		tmpName = CharString_createRefCStrConst("RTV heap");
 
 	gotoIfError3(clean, DxGraphicsDevice_createDescriptorHeapSingle(
-		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV], false, alloc, e_rr));
+		deviceExt, heapDesc, &tmpName, &deviceExt->cpuHeaps[ECPUDescriptorHeapType_RTV], false, alloc, e_rr
+	));
 
 	//Allocate temp storage for transitions
 
@@ -422,10 +426,10 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 	};
 
 	D3D12_COMMAND_SIGNATURE_DESC signatures[] = {
-		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DispatchIndirectCmd), .pArgumentDescs = &sigDesc[0] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DispatchIndirectCmd),       .pArgumentDescs = &sigDesc[0] },
 		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(D3D12DispatchRaysIndirect), .pArgumentDescs = &sigDesc[1] },
-		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallIndexed), .pArgumentDescs = &sigDesc[2] },
-		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallUnindexed), .pArgumentDescs = &sigDesc[3] }
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallIndexed),           .pArgumentDescs = &sigDesc[2] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallUnindexed),         .pArgumentDescs = &sigDesc[3] }
 	};
 
 	for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i) {
@@ -560,7 +564,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_wait)(GraphicsDeviceRef *deviceRef, Error *e
 	if (completedValue >= deviceExt->fenceId)
 		return s_uccess;
 
-	const HANDLE eventHandle = CreateEventEx(NULL, NULL, 0, EVENT_ALL_ACCESS);
+	const HANDLE eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 	gotoIfError3(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
 		deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
@@ -586,6 +590,9 @@ DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
 		return NULL;
 
 	const U64 id = resolvedQueueId + (backBufferId * threadCount + threadId) * 3;
+
+	if(id >= device->commandPools.length)    //This can technically happen if thread count changes at runtime (servers?)
+		return NULL;
 
 	return device->commandPools.ptrNonConst + id;
 }
@@ -631,9 +638,9 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, DxCommandBuffer *c
 
 Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
-	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains,
-	CBufferData cbufferData,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	CBufferData *cbufferData,
 	Error *e_rr
 ) {
 
@@ -655,7 +662,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	if (deviceExt->fenceId > device->framesInFlight) {
 
-		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
+		eventHandle = CreateEventExA(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 		gotoIfError3(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
 			deviceExt->commitSemaphore, deviceExt->fenceId - device->framesInFlight, eventHandle
@@ -670,20 +677,23 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 
-	for (U32 i = 0; i < swapchains.length; ++i) {
+	for (U32 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-		SwapchainRef *swapchainRef = swapchains.ptr[i];
+		SwapchainRef *swapchainRef = swapchains->ptr[i];
 		Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
 		Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
 		UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
-		cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
-		cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+		if(cbufferData) {
+			cbufferData->swapchains[i * 2 + 0] = managedImage.readHandle;
+			cbufferData->swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+		}
 	}
 
-	*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
+	if(cbufferData)
+		*(CBufferData*)frameData->resource.mappedMemoryExt = *cbufferData;
 
 	//Record command list
 
@@ -693,7 +703,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
-	if (commandLists.length) {
+	if (commandLists && commandLists->length) {
 
 		U32 threadId = 0;
 
@@ -758,7 +768,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 					alloc, &temp, e_rr, "%s command buffer (thread: %"PRIu32", frame id: %"PRIu32")",
 					queue.type == EDxCommandQueue_Graphics ? "Graphics" : (
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
-					), threadId, device->fifId));
+					), threadId, device->fifId
+				));
 
 				gotoIfError3(clean, CharString_toUTF16(temp, alloc, &temp16, e_rr));
 				gotoIfError3(clean, dxCheck(allocator->cmd->lpVtbl->SetName(allocator->cmd, temp16.ptr), e_rr));
@@ -794,7 +805,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			D3D12_BARRIER_SYNC_VERTEX_SHADING,
 			D3D12_BARRIER_ACCESS_CONSTANT_BUFFER,
 			&deviceExt->bufferTransitions,
-			&dependency, alloc, e_rr));
+			&dependency, alloc, e_rr
+		));
 
 		if(dependency.NumBarriers)
 			commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
@@ -805,10 +817,10 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		//Record commands
 
-		for (U64 i = 0; i < commandLists.length; ++i) {
+		for (U64 i = 0; i < (commandLists ? commandLists->length : 0); ++i) {
 
 			state.scopeCounter = 0;
-			CommandList *commandList = CommandListRef_ptr(commandLists.ptr[i]);
+			CommandList *commandList = CommandListRef_ptr(commandLists->ptr[i]);
 			const U8 *ptr = commandList->data.ptr;
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
@@ -824,9 +836,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
-		for (U64 i = 0; i < swapchains.length; ++i) {
+		for (U64 i = 0; i < (swapchains ? swapchains->length : 0); ++i) {
 
-			SwapchainRef *swapchainRef = swapchains.ptr[i];
+			SwapchainRef *swapchainRef = swapchains->ptr[i];
 			DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Dx, 0);
 
 			D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
@@ -842,7 +854,8 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				D3D12_BARRIER_LAYOUT_PRESENT,
 				&range,
 				&deviceExt->imageTransitions,
-				&dependency, alloc, e_rr));
+				&dependency, alloc, e_rr
+			));
 
 			if(RefPtr_inc(swapchainRef))
 				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
@@ -865,10 +878,10 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Presents
 
-	for(U64 i = 0; i < swapchains.length; ++i) {
+	for(U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
-		DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains.ptr[i]);
+		Swapchain *swapchain = SwapchainRef_ptr(swapchains->ptr[i]);
+		DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains->ptr[i]);
 
 		DXGI_PRESENT_PARAMETERS regions = (DXGI_PRESENT_PARAMETERS) { 0 };
 
@@ -879,9 +892,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			&regions
 		), e_rr));
 
-		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
+		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains->ptr[i], NULL);
 		++unifiedTexture->currentImageId;
-		unifiedTexture->currentImageId %= 3; //Always triple buffering, %3
+		unifiedTexture->currentImageId %= 3;	//Always triple buffering, %3
 	}
 
 	//Fence value after present

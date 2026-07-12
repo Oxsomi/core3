@@ -62,14 +62,6 @@ void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc) {
 	if(!device)
 		return;
 
-	for(U64 i = 0; i < device->framesInFlight; ++i) {
-
-		for(U64 j = 0; j < device->resourcesInFlight[i].length; ++j)
-			RefPtr_dec(device->resourcesInFlight[i].ptrNonConst + j);
-
-		ListRefPtr_free(&device->resourcesInFlight[i], alloc);
-	}
-
 	for(U64 i = 0; i < 2; ++i)
 		RefPtr_dec(&device->copyShaders[i]);
 
@@ -126,6 +118,17 @@ void GraphicsDevice_free(GraphicsDevice *device, const Allocator *alloc) {
 	ListDeviceMemoryBlock_free(&device->allocator.blocks, alloc);
 	ListSpinLockPtr_free(&device->currentLocks, alloc);
 
+	for(U64 i = 0; i < device->framesInFlight; ++i) {
+
+		if(device->resourcesInFlight[i].length)
+			Log_warnLnx(
+			"GraphicsDevice_free detected resourcesInFlight still left on free. "
+			"This shouldn't be possible, as all resources should already be released!"
+		);
+
+		ListRefPtr_free(&device->resourcesInFlight[i], alloc);
+	}
+
 	RefPtr_dec(&device->instance);
 }
 
@@ -173,11 +176,13 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 		if(i)
 			gotoIfError3(clean, ListCharString_createRefConst(defines, 2, &definesList, e_rr));
 
+		CharString entry = CharString_createRefCStrConst("mainSingle");
+
 		U32 mainSingle = GraphicsDeviceRef_getFirstShaderEntry(
 			deviceRef,
-			tmpBinary,
-			CharString_createRefCStrConst("mainSingle"),
-			definesList,
+			&tmpBinary,
+			&entry,
+			&definesList,
 			ESHExtension_None,
 			ESHExtension_None
 		);
@@ -192,28 +197,34 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 
 			DescriptorBinding pushConstants = (DescriptorBinding) { 0 };
 
+
 			gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntry(
 				deviceRef,
-				tmpBinary,
-				mainSingle,
+				&tmpBinary,
+				&mainSingle,
 				EDescriptorLayoutFlags_InternalWeakDeviceRef,
 				EDetectDescriptorLayoutFlags_AssumePushDescriptors | EDetectDescriptorLayoutFlags_AssumePushConstants,
-				(ListCharString) { 0 },
-				(CharString) { 0 },
+				NULL,
+				NULL,
 				&pushConstants,
 				&info,
 				&pushDescriptors,
 				e_rr
 			));
 
-			if(info.bindings.length)
+			if(info.bindings.length) {
+				const CharString copyDescLayoutName = CharString_createRefCStrConst("Copy image desc layout");
 				gotoIfError3(clean, GraphicsDeviceRef_createDescriptorLayout(
-					deviceRef, &info, CharString_createRefCStrConst("Copy image desc layout"), &device->copyDescLayout, e_rr));
+					deviceRef, &info, &copyDescLayoutName, &device->copyDescLayout, e_rr
+				));
+			}
 
-			if(pushDescriptors.bindings.length)
+			if(pushDescriptors.bindings.length) {
+				const CharString copyDescPushName = CharString_createRefCStrConst("Copy image push desc layout");
 				gotoIfError3(clean, GraphicsDeviceRef_createDescriptorLayout(
-					deviceRef, &pushDescriptors, CharString_createRefCStrConst("Copy image push desc layout"),
-					&device->copyDescPushDesc, e_rr));
+					deviceRef, &pushDescriptors, &copyDescPushName, &device->copyDescPushDesc, e_rr
+				));
+			}
 
 			PipelineLayoutInfo pipelineInfo = (PipelineLayoutInfo) {
 				.flags = EPipelineLayoutFlags_InternalWeakDeviceRef,
@@ -222,17 +233,23 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 				.pushConstants = pushConstants
 			};
 
+			const CharString copyPipelineLayout = CharString_createRefCStrConst("Copy image pipeline layout");
+
 			gotoIfError3(clean, GraphicsDeviceRef_createPipelineLayout(
 				deviceRef,
-				pipelineInfo,
-				CharString_createRefCStrConst("Copy image pipeline layout"),
-				&device->copyPipelineLayout, e_rr));
+				&pipelineInfo,
+				&copyPipelineLayout,
+				&device->copyPipelineLayout,
+				e_rr
+			));
 		}
+
+		CharString copyImageName = CharString_createRefCStrConst("Copy image shader");
 
 		gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
 			deviceRef,
-			tmpBinary,
-			CharString_createRefCStrConst("Copy image shader"),
+			&tmpBinary,
+			&copyImageName,
 			mainSingle,
 			EPipelineFlags_InternalWeakDeviceRef,
 			device->copyPipelineLayout,
@@ -245,55 +262,55 @@ clean:
 	DescriptorLayoutInfo_free(&info, alloc);
 	DescriptorLayoutInfo_free(&pushDescriptors, alloc);
 	SHFile_free(&tmpBinary, alloc);
-	RefPtr_dec((RefPtr**)&tempStream);
+	RefPtr_dec(&tempStream);
 	Buffer_free(&tempBuffer, alloc);
 	return s_uccess;
 }
 
 typedef enum EDescriptorTypeCount {
 
-	EDescriptorTypeCount_Texture2D            = 131072,
+	EDescriptorTypeCount_Texture2D          = 131072,
 	EDescriptorTypeCount_TextureCube        = 32768,
-	EDescriptorTypeCount_Texture3D            = 32768,
+	EDescriptorTypeCount_Texture3D          = 32768,
 
-	EDescriptorTypeCount_Buffer                = 131072,
-	EDescriptorTypeCount_RWBuffer            = 131072,
+	EDescriptorTypeCount_Buffer             = 131072,
+	EDescriptorTypeCount_RWBuffer           = 131072,
 
 	EDescriptorTypeCount_RWTexture3D        = 32768,
-	EDescriptorTypeCount_RWTexture3Di        = 8192,
-	EDescriptorTypeCount_RWTexture3Du        = 8192,
+	EDescriptorTypeCount_RWTexture3Di       = 8192,
+	EDescriptorTypeCount_RWTexture3Du       = 8192,
 	EDescriptorTypeCount_RWTexture2D        = 131072,
-	EDescriptorTypeCount_RWTexture2Di        = 16384,
-	EDescriptorTypeCount_RWTexture2Du        = 16384,
+	EDescriptorTypeCount_RWTexture2Di       = 16384,
+	EDescriptorTypeCount_RWTexture2Du       = 16384,
 
 	EDescriptorTypeCount_Sampler            = 1024,
 	EDescriptorTypeCount_TLASExt            = 16,
 
 	//DirectX bindings
 
-	EDescriptorTypeOffset_Texture2D            = 0,
-	EDescriptorTypeOffset_TextureCube        = EDescriptorTypeOffset_Texture2D + EDescriptorTypeCount_Texture2D,
-	EDescriptorTypeOffset_Texture3D            = EDescriptorTypeOffset_TextureCube + EDescriptorTypeCount_TextureCube,
+	EDescriptorTypeOffset_Texture2D         = 0,
+	EDescriptorTypeOffset_TextureCube       = EDescriptorTypeOffset_Texture2D + EDescriptorTypeCount_Texture2D,
+	EDescriptorTypeOffset_Texture3D         = EDescriptorTypeOffset_TextureCube + EDescriptorTypeCount_TextureCube,
 	EDescriptorTypeOffset_Buffer            = EDescriptorTypeOffset_Texture3D + EDescriptorTypeCount_Texture3D,
-	EDescriptorTypeOffset_TLASExt            = EDescriptorTypeOffset_Buffer + EDescriptorTypeCount_Buffer,
+	EDescriptorTypeOffset_TLASExt           = EDescriptorTypeOffset_Buffer + EDescriptorTypeCount_Buffer,
 
-	EDescriptorTypeOffset_RWBuffer            = 0,
-	EDescriptorTypeOffset_RWTexture3D        = EDescriptorTypeOffset_RWBuffer + EDescriptorTypeCount_RWBuffer,
-	EDescriptorTypeOffset_RWTexture3Di        = EDescriptorTypeOffset_RWTexture3D + EDescriptorTypeCount_RWTexture3D,
-	EDescriptorTypeOffset_RWTexture3Du        = EDescriptorTypeOffset_RWTexture3Di + EDescriptorTypeCount_RWTexture3Di,
-	EDescriptorTypeOffset_RWTexture2D        = EDescriptorTypeOffset_RWTexture3Du + EDescriptorTypeCount_RWTexture3Du,
-	EDescriptorTypeOffset_RWTexture2Di        = EDescriptorTypeOffset_RWTexture2D + EDescriptorTypeCount_RWTexture2D,
-	EDescriptorTypeOffset_RWTexture2Du        = EDescriptorTypeOffset_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
+	EDescriptorTypeOffset_RWBuffer          = 0,
+	EDescriptorTypeOffset_RWTexture3D       = EDescriptorTypeOffset_RWBuffer + EDescriptorTypeCount_RWBuffer,
+	EDescriptorTypeOffset_RWTexture3Di      = EDescriptorTypeOffset_RWTexture3D + EDescriptorTypeCount_RWTexture3D,
+	EDescriptorTypeOffset_RWTexture3Du      = EDescriptorTypeOffset_RWTexture3Di + EDescriptorTypeCount_RWTexture3Di,
+	EDescriptorTypeOffset_RWTexture2D       = EDescriptorTypeOffset_RWTexture3Du + EDescriptorTypeCount_RWTexture3Du,
+	EDescriptorTypeOffset_RWTexture2Di      = EDescriptorTypeOffset_RWTexture2D + EDescriptorTypeCount_RWTexture2D,
+	EDescriptorTypeOffset_RWTexture2Du      = EDescriptorTypeOffset_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
 
-	EDescriptorTypeOffset_Sampler            = 0,
+	EDescriptorTypeOffset_Sampler           = 0,
 
-	EDescriptorTypeCount_Buffers =
+	EDescriptorTypeCount_Buffers            =
 		EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer,
 
-	EDescriptorTypeCount_TexturesRead =
+	EDescriptorTypeCount_TexturesRead       =
 		EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,
 
-	EDescriptorTypeCount_TexturesRW =
+	EDescriptorTypeCount_TexturesRW         =
 		EDescriptorTypeCount_RWTexture2D + EDescriptorTypeCount_RWTexture2Du + EDescriptorTypeCount_RWTexture2Di +
 		EDescriptorTypeCount_RWTexture3D + EDescriptorTypeCount_RWTexture3Du + EDescriptorTypeCount_RWTexture3Di
 
@@ -309,6 +326,7 @@ Bool GraphicsDeviceRef_create(
 ) {
 
 	Bool s_uccess = true;
+	Bool allocated = false;
 
 	if(!instanceRef || !info || !deviceRef)
 		retError(clean, Error_nullPointer(
@@ -332,6 +350,7 @@ Bool GraphicsDeviceRef_create(
 	const Allocator *alloc = instance->alloc;
 
 	gotoIfError3(clean, RefPtr_create(&instance->types.device, deviceRef, e_rr));
+	allocated = true;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
 
@@ -346,12 +365,12 @@ Bool GraphicsDeviceRef_create(
 
 	if(device->flags & EGraphicsDeviceFlags_DisableRt)
 		device->info.capabilities.features &=~ (
-			EGraphicsFeatures_Raytracing                |
-			EGraphicsFeatures_RayPipeline                |
-			EGraphicsFeatures_RayQuery                    |
-			EGraphicsFeatures_RayMicromapOpacity        |
-			EGraphicsFeatures_RayMotionBlur                |
-			EGraphicsFeatures_RayReorder                |
+			EGraphicsFeatures_Raytracing         |
+			EGraphicsFeatures_RayPipeline        |
+			EGraphicsFeatures_RayQuery           |
+			EGraphicsFeatures_RayMicromapOpacity |
+			EGraphicsFeatures_RayMotionBlur      |
+			EGraphicsFeatures_RayReorder         |
 			EGraphicsFeatures_RayValidation
 		);
 
@@ -359,7 +378,8 @@ Bool GraphicsDeviceRef_create(
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && !isDebugInstance)
 		retError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_create() tried to create debug device but the instance had it disabled"));
+			0, "GraphicsDeviceRef_create() tried to create debug device but the instance had it disabled"
+		));
 
 	#ifndef NDEBUG
 		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug) && isDebugInstance)
@@ -371,6 +391,7 @@ Bool GraphicsDeviceRef_create(
 
 	gotoIfError3(clean, RefPtr_inc(instanceRef));
 	device->instance = instanceRef;
+
 	//Create mem alloc, set info/instance/pending resources
 
 	device->allocator = (DeviceMemoryAllocator) { .device = device };
@@ -408,11 +429,7 @@ Bool GraphicsDeviceRef_create(
 		};
 
 		gotoIfError3(clean, GraphicsDeviceRef_createDescriptorHeap(
-			*deviceRef,
-			heapInfo,
-			name,
-			&device->defaultDescriptorHeaps,
-			e_rr
+			*deviceRef, &heapInfo, &name, &device->defaultDescriptorHeaps, e_rr
 		));
 
 		//Create default descriptor layout
@@ -577,11 +594,7 @@ Bool GraphicsDeviceRef_create(
 
 		name = CharString_createRefCStrConst("Default descriptor layout");
 		gotoIfError3(clean, GraphicsDeviceRef_createDescriptorLayout(
-			*deviceRef,
-			&descLayoutInfo,
-			name,
-			&device->defaultDescLayout,
-			e_rr
+			*deviceRef, &descLayoutInfo, &name, &device->defaultDescLayout, e_rr
 		));
 
 		name = CharString_createRefCStrConst("Default descriptor table");
@@ -590,7 +603,8 @@ Bool GraphicsDeviceRef_create(
 			device->defaultDescLayout,
 			EDescriptorTableFlags_InternalWeakDeviceRef,
 			name,
-			&device->defaultDescriptorTable, e_rr));
+			&device->defaultDescriptorTable, e_rr
+		));
 
 		//Create push descriptor
 
@@ -616,11 +630,7 @@ Bool GraphicsDeviceRef_create(
 
 		name = CharString_createRefCStrConst("Constant buffer push descriptor");
 		gotoIfError3(clean, GraphicsDeviceRef_createDescriptorLayout(
-			*deviceRef,
-			&descLayoutInfo,
-			name,
-			&device->defaultCBufferLayout,
-			e_rr
+			*deviceRef, &descLayoutInfo, &name, &device->defaultCBufferLayout, e_rr
 		));
 
 		//Create pipeline layout
@@ -633,7 +643,8 @@ Bool GraphicsDeviceRef_create(
 		};
 
 		gotoIfError3(clean, GraphicsDeviceRef_createPipelineLayout(
-			*deviceRef, pipelineLayoutInfo, name, &device->defaultPipelineLayout, e_rr));
+			*deviceRef, &pipelineLayoutInfo, &name, &device->defaultPipelineLayout, e_rr
+		));
 	}
 
 	//Determine some flushing and block size sizes for the current GPU
@@ -643,6 +654,9 @@ Bool GraphicsDeviceRef_create(
 	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
 	// (as long as it doesn't exceed 33%).
 	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
+	//TODO: Instead, we should base this on a quick PCIE benchmark,
+	// which is tricky because there might be other things using PCIE right now.
+	// Maybe we can read out this speed directly? It's more future proof than this (PCIE8 for example could be so much faster)
 
 	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
 	U64 cpuHeapSize = device->info.capabilities.sharedMemory;
@@ -654,7 +668,7 @@ Bool GraphicsDeviceRef_create(
 		cpuHeapSize / 5
 	);
 
-	device->flushThresholdPrimitives = 20 * MIBI / 3;        //20M vertices per frame limit
+	device->flushThresholdPrimitives = 20 * MIBI / 3;        //20M vertices per frame limit (TODO: Base this on build time benchmark too)
 
 	//Block sizes based on memory of each device (CPU or GPU):
 	// 0 -  6GB ("4GB"):   64MB
@@ -705,7 +719,7 @@ Bool GraphicsDeviceRef_create(
 
 clean:
 
-	if (!s_uccess)
+	if (!s_uccess && allocated)
 		RefPtr_dec(deviceRef);
 
 	return s_uccess;
@@ -728,45 +742,45 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 
 	if(extensions & ESHExtension_SubgroupOperations)        features |= EGraphicsFeatures_SubgroupOperations;
 	if(extensions & ESHExtension_SubgroupArithmetic)        features |= EGraphicsFeatures_SubgroupArithmetic;
-	if(extensions & ESHExtension_SubgroupShuffle)            features |= EGraphicsFeatures_SubgroupShuffle;
+	if(extensions & ESHExtension_SubgroupShuffle)           features |= EGraphicsFeatures_SubgroupShuffle;
 
-	if(extensions & ESHExtension_Multiview)                    features |= EGraphicsFeatures_Multiview;
+	if(extensions & ESHExtension_Multiview)                 features |= EGraphicsFeatures_Multiview;
 
-	if(extensions & ESHExtension_RayQuery)                    features |= EGraphicsFeatures_RayQuery;
+	if(extensions & ESHExtension_RayQuery)                  features |= EGraphicsFeatures_RayQuery;
 	if(extensions & ESHExtension_RayMicromapOpacity)        features |= EGraphicsFeatures_RayMicromapOpacity;
-	if(extensions & ESHExtension_RayMotionBlur)                features |= EGraphicsFeatures_RayMotionBlur;
+	if(extensions & ESHExtension_RayMotionBlur)             features |= EGraphicsFeatures_RayMotionBlur;
 	if(extensions & ESHExtension_RayReorder)                features |= EGraphicsFeatures_RayReorder;
 
-	if(extensions & ESHExtension_ComputeDeriv)                features |= EGraphicsFeatures_ComputeDeriv;
-	if(extensions & ESHExtension_MeshTaskTexDeriv)            features |= EGraphicsFeatures_MeshTaskTexDeriv;
+	if(extensions & ESHExtension_ComputeDeriv)              features |= EGraphicsFeatures_ComputeDeriv;
+	if(extensions & ESHExtension_MeshTaskTexDeriv)          features |= EGraphicsFeatures_MeshTaskTexDeriv;
 
 	if(extensions & ESHExtension_WriteMSTexture)            features |= EGraphicsFeatures_WriteMSTexture;
 
-	if(extensions & ESHExtension_Bindless)                    features |= EGraphicsFeatures_Bindless;
+	if(extensions & ESHExtension_Bindless)                  features |= EGraphicsFeatures_Bindless;
 
-	if(extensions & ESHExtension_F64)                        dataTypes |= EGraphicsDataTypes_F64;
-	if(extensions & ESHExtension_I64)                        dataTypes |= EGraphicsDataTypes_I64;
+	if(extensions & ESHExtension_F64)                       dataTypes |= EGraphicsDataTypes_F64;
+	if(extensions & ESHExtension_I64)                       dataTypes |= EGraphicsDataTypes_I64;
 
 	if(extensions & ESHExtension_16BitTypes)                dataTypes |= EGraphicsDataTypes_I16 | EGraphicsDataTypes_F16;
 
-	if(extensions & ESHExtension_AtomicI64)                    dataTypes |= EGraphicsDataTypes_AtomicI64;
-	if(extensions & ESHExtension_AtomicF32)                    dataTypes |= EGraphicsDataTypes_AtomicF32;
-	if(extensions & ESHExtension_AtomicF64)                    dataTypes |= EGraphicsDataTypes_AtomicF64;
+	if(extensions & ESHExtension_AtomicI64)                 dataTypes |= EGraphicsDataTypes_AtomicI64;
+	if(extensions & ESHExtension_AtomicF32)                 dataTypes |= EGraphicsDataTypes_AtomicF32;
+	if(extensions & ESHExtension_AtomicF64)                 dataTypes |= EGraphicsDataTypes_AtomicF64;
 
-	if(extensions & ESHExtension_PAQ)                        featuresDx |= EDxGraphicsFeatures_PAQ;
+	if(extensions & ESHExtension_PAQ)                       featuresDx |= EDxGraphicsFeatures_PAQ;
 
-	if ((bin.identifier.shaderVersion >> 8) == 6)            //Check shader model compatibility
+	if ((bin.identifier.shaderVersion >> 8) == 6)           //Check shader model compatibility
 		switch ((U8) bin.identifier.shaderVersion) {
-			case 6:                                            featuresDx |= EDxGraphicsFeatures_SM6_6;    break;
-			case 7:                                            featuresDx |= EDxGraphicsFeatures_SM6_7;    break;
-			case 8:                                            featuresDx |= EDxGraphicsFeatures_SM6_8;    break;
-			case 9:                                            featuresDx |= EDxGraphicsFeatures_SM6_9;    break;
-			case 10:                                           featuresDx |= EDxGraphicsFeatures_SM6_10;   break;
-			default:                                                                                       break;
+			case 6:                                         featuresDx |= EDxGraphicsFeatures_SM6_6;    break;
+			case 7:                                         featuresDx |= EDxGraphicsFeatures_SM6_7;    break;
+			case 8:                                         featuresDx |= EDxGraphicsFeatures_SM6_8;    break;
+			case 9:                                         featuresDx |= EDxGraphicsFeatures_SM6_9;    break;
+			case 10:                                        featuresDx |= EDxGraphicsFeatures_SM6_10;   break;
+			default:                                                                                    break;
 		}
 
-	if(entry.waveSize >> 4)                                    featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
-	else if(entry.waveSize)                                    featuresDx |= EDxGraphicsFeatures_WaveSize;
+	if(entry.waveSize >> 4)                                 featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
+	else if(entry.waveSize)                                 featuresDx |= EDxGraphicsFeatures_WaveSize;
 
 	if((device->info.capabilities.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
@@ -777,8 +791,7 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	if(bin.vendorMask != ((1 << ESHVendor_Count) - 1))
 		if(!((bin.vendorMask >> device->info.vendor) & 1))
 			retError(clean, Error_invalidState(
-				0,
-				"GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"
+				0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"
 			));
 
 	//Check for D3D12 features, shader models and DXIL
@@ -902,7 +915,8 @@ Bool GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comma
 
 			default:
 				retError(clean, Error_unsupportedOperation(
-					5, "GraphicsDeviceRef_handleNextFrame() unsupported pending graphics object"));
+					5, "GraphicsDeviceRef_handleNextFrame() unsupported pending graphics object"
+				));
 		}
 	}
 
@@ -949,15 +963,16 @@ Bool GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 new
 	const DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 	const Buffer stagingBuffer = Buffer_createRef(staging->resource.mappedMemoryExt, newSize);
 
-	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
-		gotoIfError3(clean, AllocationBuffer_createRefFromRegion(
-			&(AllocationBufferCreate) {
-				.size = newSize / 3,
-				.alloc = alloc,
-				.allocationBuffer = &device->stagingAllocations[i]
-			},
-			stagingBuffer, newSize / 3 * i, e_rr
-		));
+	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i) {
+
+		const AllocationBufferCreate create = (AllocationBufferCreate) {
+			.size = newSize / 3,
+			.alloc = alloc,
+			.allocationBuffer = &device->stagingAllocations[i]
+		};
+
+		gotoIfError3(clean, AllocationBuffer_createRefFromRegion(&create, stagingBuffer, newSize / 3 * i, e_rr));
+	}
 
 clean:
 	return s_uccess;
@@ -984,17 +999,17 @@ Bool GraphicsDeviceRef_submitCommands(
 	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_submitCommands()::deviceRef is required"));
 
-	if(!swapchains.length && !commandLists.length)
+	if((!swapchains || !swapchains->length) && (!commandLists || !commandLists->length))
 		retError(clean, Error_invalidOperation(
 			0, "GraphicsDeviceRef_submitCommands()::swapchains or commandLists is required"
 		));
 
-	if(swapchains.length > sizeof(((CBufferData*)NULL)->swapchains) / 8)
+	if(swapchains && swapchains->length > sizeof(((CBufferData*)NULL)->swapchains) / 8)
 		retError(clean, Error_invalidParameter(
 			2, 1, "GraphicsDeviceRef_submitCommands()::swapchains.length is limited to 16"
 		));
 
-	if(Buffer_length(appData) > sizeof(((CBufferData*)NULL)->appData))
+	if(appData && Buffer_length(*appData) > sizeof(((CBufferData*)NULL)->appData))
 		retError(clean, Error_invalidParameter(
 			3, 0, "GraphicsDeviceRef_submitCommands()::appData is limited to 368 bytes"
 		));
@@ -1014,9 +1029,9 @@ Bool GraphicsDeviceRef_submitCommands(
 
 	//Validate command lists
 
-	for(U64 i = 0; i < commandLists.length; ++i) {
+	for(U64 i = 0; i < (!commandLists ? 0 : commandLists->length); ++i) {
 
-		CommandListRef *cmdRef = commandLists.ptr[i];
+		CommandListRef *cmdRef = commandLists->ptr[i];
 
 		if(!cmdRef || cmdRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_CommandList)
 			retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_submitCommands()::commandLists[i] is required"));
@@ -1025,15 +1040,15 @@ Bool GraphicsDeviceRef_submitCommands(
 
 		if(cmd->device != deviceRef)
 			retError(clean, Error_unsupportedOperation(
-				0, "GraphicsDeviceRef_submitCommands()::commandLists[i]'s device and the current device are different"));
+				0, "GraphicsDeviceRef_submitCommands()::commandLists[i]'s device and the current device are different"
+			));
 
 		lockPtr = &cmd->lock;
 		acq = SpinLock_lock(lockPtr, U64_MAX);
 
 		if(acq < ELockAcquire_Success) {
 			lockPtr = NULL;
-			retError(clean, Error_invalidState(
-				1, "GraphicsDeviceRef_submitCommands()::commandLists[i] couldn't be acquired"));
+			retError(clean, Error_invalidState(1, "GraphicsDeviceRef_submitCommands()::commandLists[i] couldn't be acquired"));
 		}
 
 		if(acq == ELockAcquire_Acquired)
@@ -1046,14 +1061,15 @@ Bool GraphicsDeviceRef_submitCommands(
 				1, (U32)i, "GraphicsDeviceRef_submitCommands()::commandLists[i] wasn't closed properly"));
 	}
 
-	for (U64 i = 0; i < swapchains.length; ++i) {
+	for (U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-		SwapchainRef *swapchainRef = swapchains.ptr[i];
+		SwapchainRef *swapchainRef = swapchains->ptr[i];
 
 		for(U64 j = 0; j < i; ++j)
-			if(swapchainRef == swapchains.ptr[j])
+			if(swapchainRef == swapchains->ptr[j])
 				retError(clean, Error_invalidParameter(
-					2, 2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is duplicated"));
+					2, 2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is duplicated"
+				));
 
 		if(!swapchainRef || swapchainRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
 			retError(clean, Error_nullPointer(2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is required"));
@@ -1062,7 +1078,8 @@ Bool GraphicsDeviceRef_submitCommands(
 
 		if(swapchaini->base.resource.device != deviceRef)
 			retError(clean, Error_unsupportedOperation(
-				1, "GraphicsDeviceRef_submitCommands()::swapchains[i]'s device and the current device are different"));
+				1, "GraphicsDeviceRef_submitCommands()::swapchains[i]'s device and the current device are different"
+			));
 
 		lockPtr = &swapchaini->lock;
 		acq = SpinLock_lock(lockPtr, U64_MAX);
@@ -1082,9 +1099,9 @@ Bool GraphicsDeviceRef_submitCommands(
 
 		//Validate if the swapchain with a different version is bound, if yes, we have a stale cmdlist
 
-		for (U64 j = 0; j < commandLists.length; ++j) {
+		for (U64 j = 0; j < (!commandLists ? 0 : commandLists->length); ++j) {
 
-			CommandListRef *cmdRef = commandLists.ptr[i];
+			CommandListRef *cmdRef = commandLists->ptr[i];
 			CommandList *cmd = CommandListRef_ptr(cmdRef);
 
 			for(U64 k = 0; k < cmd->activeSwapchains.length; ++k) {
@@ -1093,8 +1110,7 @@ Bool GraphicsDeviceRef_submitCommands(
 
 				if(vK.resource == swapchainRef && vK.version != swapchaini->versionId)
 					retError(clean, Error_invalidState(
-						0,
-						"GraphicsDeviceRef_submitCommands()::swapchains[i] has outdated commands in submitted command list"
+						0, "GraphicsDeviceRef_submitCommands()::swapchains[i] has outdated commands in submitted command list"
 					));
 			}
 		}
@@ -1120,7 +1136,8 @@ Bool GraphicsDeviceRef_submitCommands(
 
 			default:
 				retError(clean, Error_unimplemented(
-					0, "GraphicsDeviceRef_submitCommands() pendingResources contains unsupported type"));
+					0, "GraphicsDeviceRef_submitCommands() pendingResources contains unsupported type"
+				));
 		}
 
 		if(!lockPtr)
@@ -1153,7 +1170,7 @@ Bool GraphicsDeviceRef_submitCommands(
 		.frameId = (U32) device->submitId,
 		.time = device->firstSubmit ? (F32)((F64)(now - device->firstSubmit) / SECOND) : 0,
 		.deltaTime = device->firstSubmit ? (F32)((F64)(now - device->lastSubmit) / SECOND) : 0,
-		.swapchainCount = (U32) swapchains.length
+		.swapchainCount = (U32) (!swapchains ? 0 : swapchains->length)
 	};
 
 	if (deltaTime >= 0) {
@@ -1161,20 +1178,21 @@ Bool GraphicsDeviceRef_submitCommands(
 		data.time = time;
 	}
 
-	Buffer_memcpy(Buffer_createRef(data.appData, sizeof(data.appData)), appData);
+	if(appData)
+		Buffer_memcpy(Buffer_createRef(data.appData, sizeof(data.appData)), *appData);
 
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.
 
-	gotoIfError3(clean, GraphicsDevice_submitCommandsExt(deviceRef, commandLists, swapchains, data, e_rr));
+	gotoIfError3(clean, GraphicsDevice_submitCommandsExt(deviceRef, commandLists, swapchains, &data, e_rr));
 
 	//Add resources from command lists to resources in flight
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
-	for (U64 j = 0; j < commandLists.length; ++j) {
+	for (U64 j = 0; j < (!commandLists ? 0 : commandLists->length); ++j) {
 
-		CommandListRef *cmdRef = commandLists.ptr[j];
+		CommandListRef *cmdRef = commandLists->ptr[j];
 		CommandList *cmd = CommandListRef_ptr(cmdRef);
 
 		for(U64 i = 0; i < cmd->resources.length; ++i) {

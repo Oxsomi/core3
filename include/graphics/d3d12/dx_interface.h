@@ -175,9 +175,9 @@
 
 	Bool D3D12GraphicsDevice_submitCommands(
 		GraphicsDeviceRef *deviceRef,
-		ListCommandListRef commandLists,
-		ListSwapchainRef swapchains,
-		CBufferData data,
+		const ListCommandListRef *commandLists,
+		const ListSwapchainRef *swapchains,
+		CBufferData *data,
 		Error *e_rr
 	);
 

@@ -21,21 +21,19 @@
 //graphics/generic/interface.c
 
 #ifdef GRAPHICS_API_DYNAMIC
-	#include "formats/oiSH/sh_file.h"
 	#include "graphics/generic/blas.h"
 	#include "graphics/generic/tlas.h"
 	#include "graphics/generic/pipeline.h"
 	#include "graphics/generic/sampler.h"
 	#include "graphics/generic/swapchain.h"
 	#include "graphics/generic/descriptor_heap.h"
-	#include "graphics/generic/descriptor_layout.h"
 	#include "graphics/generic/descriptor_table.h"
 	#include "graphics/generic/pipeline_layout.h"
-	#include "graphics/generic/command_list.h"
 	#include "platforms/file.h"
 	#include "platforms/logx.h"
 	#include "platforms/dynamic_library.h"
 	#include "platforms/platform.h"
+	#include "formats/oiSH/sh_file.h"
 #endif
 
 #include "graphics/generic/interface.h"
@@ -156,8 +154,8 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 
 	Bool GraphicsDevice_createPipelineGraphicsExt(
 		GraphicsDevice *dev,
-		ListSHFile binaries,
-		CharString name,
+		const ListSHFile *binaries,
+		const CharString *name,
 		Pipeline *pipeline,
 		Error *e_rr
 	) {
@@ -170,7 +168,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		const CharString *name,
 		U8 maxPayloadSize,
 		U8 maxAttributeSize,
-		ListU32 binaryIndices,
+		const ListU32 *binaryIndices,
 		Pipeline *pipeline,
 		Error *e_rr
 	) {
@@ -359,7 +357,7 @@ const GraphicsObjectSizes *GraphicsDeviceRef_getObjectSizes(GraphicsDeviceRef *d
 		GraphicsDeviceRef *deviceRef,
 		const ListCommandListRef *commandLists,
 		const ListSwapchainRef *swapchains,
-		const CBufferData *data,
+		CBufferData *data,
 		Error *e_rr
 	) {
 		return WrapperFunction(deviceRef, deviceSubmitCommands)(deviceRef, commandLists, swapchains, data, e_rr);

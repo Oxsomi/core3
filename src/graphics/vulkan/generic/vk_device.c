@@ -21,26 +21,24 @@
 //graphics/vulkan/generic/vk_device.c
 
 #include "types/container/list_impl.h"
-#include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/vulkan/vk_buffer.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline_layout.h"
-#include "types/container/buffer.h"
 #include "types/container/string.h"
 #include "platforms/logx.h"
 #include "platforms/platform.h"
 #include "platforms/window.h"
+#include "types/base/buffer_base.h"
 #include "types/base/mathi.h"
-#include "types/base/mathf.h"
-#include "types/base/thread.h"
 #include "types/base/constants.h"
 
 TListImpl(VkCommandAllocator);
@@ -49,12 +47,12 @@ TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
 
-#define bindNextVkStruct(T, condition, ...)    \
-	T tmp##T = __VA_ARGS__;                \
-										\
-	if(condition) {                        \
-		*currPNext = &tmp##T;            \
-		currPNext = &tmp##T.pNext;        \
+#define bindNextVkStruct(T, condition, ...) \
+	T tmp##T = __VA_ARGS__;                 \
+											\
+	if(condition) {                         \
+		*currPNext = &tmp##T;               \
+		currPNext = &tmp##T.pNext;          \
 	}
 
 TList(VkDeviceQueueCreateInfo);
@@ -67,14 +65,14 @@ TListImpl(VkDescriptorImageInfo);
 TListImpl(VkAccelerationStructureKHR);
 TListImpl(VkDescriptorTableRange);
 
-#define getVkFunctionDevice(label, function, result) {                                            \
+#define getVkFunctionDevice(label, function, result) {                                          \
 																								\
-	PFN_vkVoidFunction v = vkGetDeviceProcAddr(deviceExt->device, #function);                     \
+	PFN_vkVoidFunction v = vkGetDeviceProcAddr(deviceExt->device, #function);                   \
 																								\
-	if(!v)                                                                                        \
-		retError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"));        \
+	if(!v)                                                                                      \
+		retError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"));          \
 																								\
-	*(void**)&result = (void*) v;                                                                \
+	*(void**)&result = (void*) v;                                                               \
 }
 
 Bool VK_WRAP_FUNC(GraphicsDevice_init)(
@@ -84,7 +82,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	Error *e_rr
 ) {
 
-	const Allocator *alloc = instance ? instance->alloc : NULL;
+	const Allocator *alloc = instance->alloc;
 
 	Bool s_uccess = true;
 
@@ -360,28 +358,28 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 
 		switch (i) {
 
-			case EOptExtensions_PerfQuery:                    on = featEx & EVkGraphicsFeatures_PerfQuery;            break;
-			case EOptExtensions_RayPipeline:                on = feat & EGraphicsFeatures_RayPipeline;                break;
-			case EOptExtensions_RayQuery:                    on = feat & EGraphicsFeatures_RayQuery;                    break;
-			case EOptExtensions_RayAcceleration:            on = feat & EGraphicsFeatures_Raytracing;                break;
-			case EOptExtensions_RayMotionBlur:                on = feat & EGraphicsFeatures_RayMotionBlur;            break;
-			case EOptExtensions_RayReorder:                    on = feat & EGraphicsFeatures_RayReorder;                break;
-			case EOptExtensions_MeshShader:                    on = feat & EGraphicsFeatures_MeshShader;                break;
-			case EOptExtensions_VariableRateShading:        on = feat & EGraphicsFeatures_VariableRateShading;        break;
-			case EOptExtensions_DynamicRendering:            on = feat & EGraphicsFeatures_DirectRendering;            break;
-			case EOptExtensions_RayMicromapOpacity:            on = feat & EGraphicsFeatures_RayMicromapOpacity;        break;
-			case EOptExtensions_AtomicF32:                    on = types & EGraphicsDataTypes_AtomicF32;                break;
-			case EOptExtensions_DeferredHostOperations:        on = feat & EGraphicsFeatures_Raytracing;                break;
-			case EOptExtensions_RaytracingValidation:        on = feat & EGraphicsFeatures_RayValidation;            break;
-			case EOptExtensions_ComputeDeriv:                on = feat & EGraphicsFeatures_ComputeDeriv;                break;
-			case EOptExtensions_Maintenance4:                on = featEx & EVkGraphicsFeatures_Maintenance4;            break;
-			case EOptExtensions_BufferDeviceAddress:        on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;    break;
-			case EOptExtensions_Bindless:                    on = feat & EGraphicsFeatures_Bindless;                    break;
-			case EOptExtensions_DriverProperties:            on = featEx & EVkGraphicsFeatures_DriverProperties;        break;
-			case EOptExtensions_AtomicI64:                    on = types & EGraphicsDataTypes_AtomicI64;                break;
+			case EOptExtensions_PerfQuery:                  on = featEx & EVkGraphicsFeatures_PerfQuery;            break;
+			case EOptExtensions_RayPipeline:                on = feat & EGraphicsFeatures_RayPipeline;              break;
+			case EOptExtensions_RayQuery:                   on = feat & EGraphicsFeatures_RayQuery;                 break;
+			case EOptExtensions_RayAcceleration:            on = feat & EGraphicsFeatures_Raytracing;               break;
+			case EOptExtensions_RayMotionBlur:              on = feat & EGraphicsFeatures_RayMotionBlur;            break;
+			case EOptExtensions_RayReorder:                 on = feat & EGraphicsFeatures_RayReorder;               break;
+			case EOptExtensions_MeshShader:                 on = feat & EGraphicsFeatures_MeshShader;               break;
+			case EOptExtensions_VariableRateShading:        on = feat & EGraphicsFeatures_VariableRateShading;      break;
+			case EOptExtensions_DynamicRendering:           on = feat & EGraphicsFeatures_DirectRendering;          break;
+			case EOptExtensions_RayMicromapOpacity:         on = feat & EGraphicsFeatures_RayMicromapOpacity;       break;
+			case EOptExtensions_AtomicF32:                  on = types & EGraphicsDataTypes_AtomicF32;              break;
+			case EOptExtensions_DeferredHostOperations:     on = feat & EGraphicsFeatures_Raytracing;               break;
+			case EOptExtensions_RaytracingValidation:       on = feat & EGraphicsFeatures_RayValidation;            break;
+			case EOptExtensions_ComputeDeriv:               on = feat & EGraphicsFeatures_ComputeDeriv;             break;
+			case EOptExtensions_Maintenance4:               on = featEx & EVkGraphicsFeatures_Maintenance4;         break;
+			case EOptExtensions_BufferDeviceAddress:        on = featEx & EVkGraphicsFeatures_BufferDeviceAddress;  break;
+			case EOptExtensions_Bindless:                   on = feat & EGraphicsFeatures_Bindless;                 break;
+			case EOptExtensions_DriverProperties:           on = featEx & EVkGraphicsFeatures_DriverProperties;     break;
+			case EOptExtensions_AtomicI64:                  on = types & EGraphicsDataTypes_AtomicI64;              break;
 			case EOptExtensions_F16:                        on = types & EGraphicsDataTypes_F16;                    break;
-			case EOptExtensions_MultiDrawIndirectCount:        on = feat & EGraphicsFeatures_MultiDrawIndirectCount;    break;
-			case EOptExtensions_MemoryBudget:                on = featEx & EVkGraphicsFeatures_MemoryBudget;            break;
+			case EOptExtensions_MultiDrawIndirectCount:     on = feat & EGraphicsFeatures_MultiDrawIndirectCount;   break;
+			case EOptExtensions_MemoryBudget:               on = featEx & EVkGraphicsFeatures_MemoryBudget;         break;
 
 			default:
 				continue;
@@ -825,9 +823,9 @@ Bool VkGraphicsDevice_findAllMemory(VkGraphicsDevice *deviceExt, Error *e_rr) {
 	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
 
 		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
-		heap.flags &= 1;                                                        //OOB
+		heap.flags &= 1;                                                //OOB
 
-		//Ignore 256MB to allow AMD APU to work.
+		//Ignore 256MB 'BAR' aperture to allow AMD APU to work.
 		if (heap.size > deviceExt->maxHeapSizes[heap.flags] && heap.size > 256 * MIBI) {
 			deviceExt->maxHeapSizes[heap.flags] = heap.size;
 			deviceExt->heapIds[heap.flags] = i;
@@ -993,6 +991,9 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 	const U64 id = resolvedQueueId + (frameInFlightId * threadCount + threadId) * device->resolvedQueues;
 
+	if(id >= device->commandPools.length)    //This can technically happen if thread count changes at runtime (servers?)
+		return NULL;
+
 	return device->commandPools.ptrNonConst + id;
 }
 
@@ -1058,9 +1059,9 @@ void GraphicsDevice_rebindDescriptors(GraphicsDevice *device, VkCommandBuffer co
 
 Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	GraphicsDeviceRef *deviceRef,
-	ListCommandListRef commandLists,
-	ListSwapchainRef swapchains,
-	CBufferData cbufferData,
+	const ListCommandListRef *commandLists,
+	const ListSwapchainRef *swapchains,
+	CBufferData *cbufferData,
 	Error *e_rr
 ) {
 
@@ -1080,19 +1081,25 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	//Reserve temp storage
 
 	gotoIfError3(clean, ListVkSwapchainKHR_clear(&deviceExt->swapchainHandles, e_rr));
-	gotoIfError3(clean, ListVkSwapchainKHR_reserve(&deviceExt->swapchainHandles, swapchains.length, alloc, e_rr));
+	gotoIfError3(clean, ListVkSwapchainKHR_reserve(
+		&deviceExt->swapchainHandles, !swapchains ? 0 : swapchains->length, alloc, e_rr
+	));
 
 	gotoIfError3(clean, ListU32_clear(&deviceExt->swapchainIndices, e_rr));
-	gotoIfError3(clean, ListU32_reserve(&deviceExt->swapchainIndices, swapchains.length, alloc, e_rr));
+	gotoIfError3(clean, ListU32_reserve(&deviceExt->swapchainIndices, !swapchains ? 0 : swapchains->length, alloc, e_rr));
 
 	gotoIfError3(clean, ListVkResult_clear(&deviceExt->results, e_rr));
-	gotoIfError3(clean, ListVkResult_resize(&deviceExt->results, swapchains.length, alloc, e_rr));
+	gotoIfError3(clean, ListVkResult_resize(&deviceExt->results, !swapchains ? 0 : swapchains->length, alloc, e_rr));
 
 	gotoIfError3(clean, ListVkSemaphore_clear(&deviceExt->waitSemaphoresList, e_rr));
-	gotoIfError3(clean, ListVkSemaphore_reserve(&deviceExt->waitSemaphoresList, swapchains.length + 1, alloc, e_rr));
+	gotoIfError3(clean, ListVkSemaphore_reserve(
+		&deviceExt->waitSemaphoresList, (!swapchains ? 0 : swapchains->length) + 1, alloc, e_rr
+	));
 
 	gotoIfError3(clean, ListVkPipelineStageFlags_clear(&deviceExt->waitStages, e_rr));
-	gotoIfError3(clean, ListVkPipelineStageFlags_reserve(&deviceExt->waitStages, swapchains.length + 1, alloc, e_rr));
+	gotoIfError3(clean, ListVkPipelineStageFlags_reserve(
+		&deviceExt->waitStages, (!swapchains ? 0 : swapchains->length) + 1, alloc, e_rr
+	));
 
 	//Wait for previous frame semaphore
 
@@ -1104,7 +1111,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			deviceExt->device,
 			1, fence,
 			true,
-			10 * SECOND
+			1 * SECOND
 		), e_rr));
 
 		gotoIfError3(clean, checkVkError(deviceExt->resetFences(deviceExt->device, 1, fence), e_rr));
@@ -1112,20 +1119,20 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Acquire swapchain images
 
-	for(U64 i = 0; i < swapchains.length; ++i) {
+	for(U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
-		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains.ptr[i]);
+		Swapchain *swapchain = SwapchainRef_ptr(swapchains->ptr[i]);
+		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains->ptr[i]);
 
 		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->fifId];
 
-		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
+		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains->ptr[i], NULL);
 		U32 currImg = 0;
 
 		gotoIfError3(clean, checkVkError(deviceExt->acquireNextImage(
 			deviceExt->device,
 			swapchainExt->swapchain,
-			10 * SECOND,
+			1 * SECOND,
 			semaphore,
 			VK_NULL_HANDLE,
 			&currImg
@@ -1151,20 +1158,23 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 	{
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData[device->fifId]);
 
-		for (U32 i = 0; i < swapchains.length; ++i) {
+		for (U32 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-			SwapchainRef *swapchainRef = swapchains.ptr[i];
+			SwapchainRef *swapchainRef = swapchains->ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
 			Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
 			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
-			cbufferData.swapchains[i * 2 + 0] = managedImage.readHandle;
-			cbufferData.swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+			if(cbufferData) {
+				cbufferData->swapchains[i * 2 + 0] = managedImage.readHandle;
+				cbufferData->swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
+			}
 		}
 
-		*(CBufferData*)frameData->resource.mappedMemoryExt = cbufferData;
+		if(cbufferData)
+			*(CBufferData*)frameData->resource.mappedMemoryExt = *cbufferData;
 
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -1191,7 +1201,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->fifId];
 
-	if (commandLists.length) {
+	if (commandLists && commandLists->length) {
 
 		U32 threadId = 0;
 
@@ -1246,11 +1256,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			}
 		}
 
-		else {
-			gotoIfError3(clean, checkVkError(deviceExt->resetCommandPool(
-			deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-		), e_rr));
-		}
+		else gotoIfError3(clean, checkVkError(deviceExt->resetCommandPool(
+				deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+			), e_rr
+		));
 
 		//Allocate command buffer if not present yet
 
@@ -1321,7 +1330,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			0,
 			0,
 			&deviceExt->bufferTransitions,
-			&dependency, alloc, e_rr));
+			&dependency, alloc, e_rr
+		));
 
 		if(dependency.bufferMemoryBarrierCount)
 			deviceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
@@ -1332,10 +1342,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		//Record commands
 
-		for (U64 i = 0; i < commandLists.length; ++i) {
+		for (U64 i = 0; i < (!commandLists ? 0 : commandLists->length); ++i) {
 
 			state.scopeCounter = 0;
-			CommandList *commandList = CommandListRef_ptr(commandLists.ptr[i]);
+			CommandList *commandList = CommandListRef_ptr(commandLists->ptr[i]);
 			const U8 *ptr = commandList->data.ptr;
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
@@ -1354,9 +1364,9 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 			.dependencyFlags = 0
 		};
 
-		for (U64 i = 0; i < swapchains.length; ++i) {
+		for (U64 i = 0; i < (!swapchains ? 0 : swapchains->length); ++i) {
 
-			SwapchainRef *swapchainRef = swapchains.ptr[i];
+			SwapchainRef *swapchainRef = swapchains->ptr[i];
 			VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Vk, 0);
 
 			VkImageSubresourceRange range = (VkImageSubresourceRange) {
@@ -1373,7 +1383,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				graphicsQueueId,
 				&range,
 				&deviceExt->imageTransitions,
-				&dependency, alloc, e_rr));
+				&dependency, alloc, e_rr
+			));
 
 			if(RefPtr_inc(swapchainRef))
 				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, swapchainRef, alloc, e_rr));
@@ -1398,8 +1409,8 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.waitSemaphoreCount = (U32) deviceExt->waitSemaphoresList.length,
 		.pWaitSemaphores = deviceExt->waitSemaphoresList.ptr,
-		.signalSemaphoreCount = (Bool) swapchains.length,
-		.pSignalSemaphores = swapchains.length ? &signalSemaphores : NULL,
+		.signalSemaphoreCount = (Bool) (!swapchains ? 0 : swapchains->length),
+		.pSignalSemaphores = swapchains && swapchains->length ? &signalSemaphores : NULL,
 		.pCommandBuffers = &commandBuffer,
 		.commandBufferCount = commandBuffer ? 1 : 0,
 		.pWaitDstStageMask = deviceExt->waitStages.ptr
@@ -1409,13 +1420,13 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 	//Presents
 
-	if(swapchains.length) {
+	if(swapchains && swapchains->length) {
 
 		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
 			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 			.waitSemaphoreCount = 1,
 			.pWaitSemaphores = &signalSemaphores,
-			.swapchainCount = (U32) swapchains.length,
+			.swapchainCount = (U32) (!swapchains ? 0 : swapchains->length),
 			.pSwapchains = deviceExt->swapchainHandles.ptr,
 			.pImageIndices = deviceExt->swapchainIndices.ptr,
 			.pResults = deviceExt->results.ptrNonConst
@@ -1430,7 +1441,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 			if(res == VK_SUBOPTIMAL_KHR) {
 
-				SwapchainRef *swapchainRef = swapchains.ptr[i];
+				SwapchainRef *swapchainRef = swapchains->ptr[i];
 				Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
 				Window *window = Swapchain_getWindow(swapchain);

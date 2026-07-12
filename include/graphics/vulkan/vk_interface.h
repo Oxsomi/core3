@@ -171,7 +171,7 @@
 		GraphicsDeviceRef *deviceRef,
 		const ListCommandListRef *commandLists,
 		const ListSwapchainRef *swapchains,
-		const CBufferData *data,
+		CBufferData *data,
 		Error *e_rr
 	);
 

@@ -257,7 +257,7 @@ typedef struct GraphicsObjectSizes {
 		GraphicsDeviceRef *deviceRef,
 		const ListCommandListRef *commandLists,
 		const ListSwapchainRef *swapchains,
-		const CBufferData *data,
+		CBufferData *data,
 		Error *e_rr
 	);
 
@@ -520,7 +520,7 @@ Bool GraphicsDevice_submitCommandsExt(
 	GraphicsDeviceRef *deviceRef,
 	const ListCommandListRef *commandLists,
 	const ListSwapchainRef *swapchains,
-	const CBufferData *data,
+	CBufferData *data,
 	Error *e_rr
 );
 

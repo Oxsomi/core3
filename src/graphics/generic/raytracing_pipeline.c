@@ -25,14 +25,9 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/texture.h"
-#include "types/container/buffer.h"
-#include "types/container/string.h"
-#include "types/container/ref_ptr.h"
-#include "platforms/logx.h"
-#include "types/base/mathi.h"
-#include "types/base/mathf.h"
 #include "formats/oiSH/sh_file.h"
+#include "types/container/ref_ptr.h"
+#include "types/base/mathi.h"
 #include "types/base/constants.h"
 
 TListImpl(PipelineRaytracingGroup);
@@ -61,9 +56,11 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	//Validate sizes
 
-	if(!deviceRef || !stages || !stages->length || !binaries.length || !groups || !pipelineRef)
+	if(!deviceRef || !stages || !stages->length || !binaries || !binaries->length || !groups || !pipelineRef || !info)
 		retError(clean, Error_nullPointer(
-			!deviceRef ? 0 : (!stages || !stages->length ? 1 : (!binaries.length ? 2 : (!groups ? 3 : 6))),
+			!deviceRef ? 0 : (!stages || !stages->length ? 1 : (
+				!binaries || !binaries->length ? 2 : (!groups ? 3 : (!info ? 4 : 6))
+			)),
 			"GraphicsDeviceRef_createPipelineRaytracing()::device, binaries, stages, groups and pipelineRef are required"
 		));
 
@@ -78,28 +75,27 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing()::*pipelineRef is non NULL, indicating a possible memleak"
 		));
 
-	if(binaries.length >> 16)
+	if(binaries->length >> 16)
 		retError(clean, Error_invalidParameter(
 			3, 0,
 			"GraphicsDeviceRef_createPipelineRaytracing()::binaries is limited to a size of 65535"
 		));
 
-	for(U64 i = 0; i < binaries.length; ++i)
-		if(!binaries.ptr[i].entries.length)
+	for(U64 i = 0; i < binaries->length; ++i)
+		if(!binaries->ptr[i].entries.length)
 			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::binaries[i] is required"
 			));
 
-	for(U64 i = 0; i < binaries.length; ++i)
-		totalBinaryCount += binaries.ptr[i].binaries.length;
+	for(U64 i = 0; i < binaries->length; ++i)
+		totalBinaryCount += binaries->ptr[i].binaries.length;
 
 	gotoIfError3(clean, ListU32_reserve(&binaryIndices, totalBinaryCount, alloc, e_rr));
 
 	U8 maxPayloadSize = 0;
 	U8 maxAttributeSize = 0;
 
-	if(ListPipelineStage_isRef(*stages))
-	{
+	if(ListPipelineStage_isRef(*stages)) {
 		gotoIfError3(clean, ListPipelineStage_createCopy(*stages, alloc, &tmpStages, e_rr));
 	}
 
@@ -117,47 +113,47 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		U16 binaryId = (U16) (stage.binaryId >> 16);
 		U16 shFileId = stage.shFileId;
 
-		if(shFileId >= binaries.length)
+		if(shFileId >= binaries->length)
 			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::shFileId is out of bounds"
 			));
 
-		SHFile file = binaries.ptr[shFileId];
+		const SHFile *file = &binaries->ptr[shFileId];
 
-		if(entrypointId >= file.entries.length)
+		if(entrypointId >= file->entries.length)
 			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::entrypointId is out of bounds"
 			));
 
-		SHEntry entry = file.entries.ptr[entrypointId];
+		const SHEntry *entry = &file->entries.ptr[entrypointId];
 
-		if(entry.stage < ESHPipelineStage_RtStartExt || entry.stage > ESHPipelineStage_RtEndExt)
+		if(entry->stage < ESHPipelineStage_RtStartExt || entry->stage > ESHPipelineStage_RtEndExt)
 			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::stageType is not RT capable"
 			));
 
-		switch (entry.stage) {
-			case ESHPipelineStage_AnyHitExt:        stagePtr->stageType = EPipelineStage_AnyHitExt;            break;
-			case ESHPipelineStage_ClosestHitExt:    stagePtr->stageType = EPipelineStage_ClosestHitExt;        break;
-			case ESHPipelineStage_MissExt:            stagePtr->stageType = EPipelineStage_MissExt;            break;
-			case ESHPipelineStage_IntersectionExt:    stagePtr->stageType = EPipelineStage_IntersectionExt;    break;
-			case ESHPipelineStage_CallableExt:        stagePtr->stageType = EPipelineStage_CallableExt;        break;
-			default:                                stagePtr->stageType = EPipelineStage_RaygenExt;            break;
+		switch (entry->stage) {
+			case ESHPipelineStage_AnyHitExt:        stagePtr->stageType = EPipelineStage_AnyHitExt;          break;
+			case ESHPipelineStage_ClosestHitExt:    stagePtr->stageType = EPipelineStage_ClosestHitExt;      break;
+			case ESHPipelineStage_MissExt:          stagePtr->stageType = EPipelineStage_MissExt;            break;
+			case ESHPipelineStage_IntersectionExt:  stagePtr->stageType = EPipelineStage_IntersectionExt;    break;
+			case ESHPipelineStage_CallableExt:      stagePtr->stageType = EPipelineStage_CallableExt;        break;
+			default:                                stagePtr->stageType = EPipelineStage_RaygenExt;          break;
 		}
 
 		if(
-			stage.binaryId == U32_MAX && entry.stage == ESHPipelineStage_MissExt &&
-			!(info.flags & EPipelineRaytracingFlags_NoNullMiss)
+			stage.binaryId == U32_MAX && entry->stage == ESHPipelineStage_MissExt &&
+			!(info->flags & EPipelineRaytracingFlags_NoNullMiss)
 		)
 			continue;
 
-		if(binaryId >= entry.binaryIds.length)
+		if(binaryId >= entry->binaryIds.length)
 			retError(clean, Error_invalidParameter(
 				1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::binaryId is out of bounds"
 			));
 
-		U16 realBinaryId = entry.binaryIds.ptr[binaryId];
-		SHBinaryInfo bin = file.binaries.ptr[realBinaryId];
+		U16 realBinaryId = entry->binaryIds.ptr[binaryId];
+		const SHBinaryInfo *bin = &file->binaries.ptr[realBinaryId];
 
 		gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, bin, entry, e_rr));
 
@@ -173,11 +169,11 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		if(!ListU32_contains(binaryIndices, id, 0, NULL))
 			gotoIfError3(clean, ListU32_pushBack(&binaryIndices, id, alloc, e_rr));
 
-		maxPayloadSize = U8_max(maxPayloadSize, entry.payloadSize);
-		maxAttributeSize = U8_max(maxAttributeSize, entry.intersectionSize);
+		maxPayloadSize = U8_max(maxPayloadSize, entry->payloadSize);
+		maxAttributeSize = U8_max(maxAttributeSize, entry->intersectionSize);
 	}
 
-	Bool anyMotionBlurExt = info.flags & EPipelineRaytracingFlags_AllowMotionBlurExt;
+	Bool anyMotionBlurExt = info->flags & EPipelineRaytracingFlags_AllowMotionBlurExt;
 
 	if((((U64)groups->length + tmpStages.length) >> 32) || ((tmpStages.length) >> 32))
 		retError(clean, Error_outOfBounds(
@@ -185,7 +181,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing() tmpStages.length + groups.length out of bounds"
 		));
 
-	if(info.flags >> EPipelineRaytracingFlags_Count)
+	if(info->flags >> EPipelineRaytracingFlags_Count)
 		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::info.flags is invalid"
 		));
@@ -196,21 +192,21 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelineRaytracing()::info.maxPayloadSize and maxAttributeSize need to be 2 byte aligned"
 		));
 
-	if(maxAttributeSize > 32 || info.maxRecursionDepth > 2 || maxPayloadSize > 32)
+	if(maxAttributeSize > 32 || info->maxRecursionDepth > 2 || maxPayloadSize > 32)
 		retError(clean, Error_invalidParameter(
 			1, 0,
 			"GraphicsDeviceRef_createPipelineRaytracing()::info."
 			"maxAttributeSize, maxRecursionDepth and maxRayHitAttributeSize need to be <=32, <=2 and <=32 respectively"
 		));
 
-	if(maxAttributeSize < 8 || maxPayloadSize < 2 || !info.maxRecursionDepth)
+	if(maxAttributeSize < 8 || maxPayloadSize < 2 || !info->maxRecursionDepth)
 		retError(clean, Error_invalidParameter(
 			1, 0,
 			"GraphicsDeviceRef_createPipelineRaytracing()::info.maxAttributeSize, "
 			"maxPayloadSize and maxRecursionDepth need to be >=8, >=2 and >=1 respectively"
 		));
 
-	if(info.groups.length)
+	if(info->groups.length)
 		retError(clean, Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelineRaytracing()::info.groups should be NULL"
 		));
@@ -223,21 +219,21 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 		//Validate with flags
 
-		if(group.intersection != U32_MAX && (info.flags & EPipelineRaytracingFlags_SkipAABBs))
+		if(group.intersection != U32_MAX && (info->flags & EPipelineRaytracingFlags_SkipAABBs))
 			retError(clean, Error_invalidParameter(
 				1, 0,
 				"GraphicsDeviceRef_createPipelineRaytracing()::groups[i].intersection is "
 				"disallowed if aabbs are skipped"
 			));
 
-		if(group.anyHit == U32_MAX && (info.flags & EPipelineRaytracingFlags_NoNullAnyHit))
+		if(group.anyHit == U32_MAX && (info->flags & EPipelineRaytracingFlags_NoNullAnyHit))
 			retError(clean, Error_invalidParameter(
 				1, 0,
 				"GraphicsDeviceRef_createPipelineRaytracing()::groups[i].anyHit is null, but "
 				"NoNullAnyHit is used"
 			));
 
-		if(group.closestHit == U32_MAX && (info.flags & EPipelineRaytracingFlags_NoNullClosestHit))
+		if(group.closestHit == U32_MAX && (info->flags & EPipelineRaytracingFlags_NoNullClosestHit))
 			retError(clean, Error_invalidParameter(
 				1, 0,
 				"GraphicsDeviceRef_createPipelineRaytracing()::groups[i].closestHit is null, but "
@@ -294,20 +290,17 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	if(!(dev->info.capabilities.features & EGraphicsFeatures_RayPipeline))
 		retError(clean, Error_invalidParameter(
-			1, 0,
-			"GraphicsDeviceRef_createPipelineRaytracing() can't be called if RayPipeline isn't supported"
+			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't be called if RayPipeline isn't supported"
 		));
 
 	if(anyMotionBlurExt && !(dev->info.capabilities.features & EGraphicsFeatures_RayMotionBlur))
 		retError(clean, Error_invalidParameter(
-			1, 0,
-			"GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
+			1, 0, "GraphicsDeviceRef_createPipelineRaytracing() can't enable motion blur if the feature isn't supported"
 		));
 
 	if(layout && layout->refPtrType->typeId != (ETypeId) EGraphicsTypeId_PipelineLayout)
 		retError(clean, Error_invalidParameter(
-			3, 0,
-			"GraphicsDeviceRef_createPipelineRaytracing() pipeline layout is invalid"
+			3, 0, "GraphicsDeviceRef_createPipelineRaytracing() pipeline layout is invalid"
 		));
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(deviceRef)->pipeline, pipelineRef, e_rr));
@@ -317,8 +310,6 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	if(!(flags & EPipelineFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(deviceRef));
-
-	//Log_debugLnx("Create: RaytracingPipeline %.*s (%p)", (int) CharString_length(name), name.ptr, pipeline);
 
 	*pipeline = (Pipeline) {
 		.device = deviceRef,
@@ -335,13 +326,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 	pipeline->layout = layout;
 
 	PipelineRaytracingInfo *dstInfo = Pipeline_info(pipeline, PipelineRaytracingInfo);
-	*dstInfo = info;
+	*dstInfo = *info;
 
 	pipeline->stages = tmpStages;
 	tmpStages = (ListPipelineStage) { 0 };
 
-	if(ListPipelineRaytracingGroup_isRef(*groups))
-	{
+	if(ListPipelineRaytracingGroup_isRef(*groups)) {
 		gotoIfError3(clean, ListPipelineRaytracingGroup_createCopy(*groups, alloc, &dstInfo->groups, e_rr));
 	}
 

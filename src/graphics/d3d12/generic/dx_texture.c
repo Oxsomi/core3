@@ -173,7 +173,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead) && texture->depthFormat)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
-	#if D3D12_PREVIEW_SDK_VERSION >= 716 && !defined(_DISABLE_TIGHT_ALIGNMENT)
+	#if D3D12_SDK_VERSION >= 618
 		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
 	#endif
