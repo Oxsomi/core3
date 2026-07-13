@@ -58,11 +58,10 @@ void VK_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name, Error *e_rr) {
+Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharString *name, Error *e_rr) {
 
 	Bool s_uccess = true;
-	const Allocator *alloc = textureRef ?
-		GraphicsDeviceRef_getAlloc(TextureRef_getUnifiedTexture(textureRef, NULL).resource.device) : NULL;
+	const Allocator *alloc = GraphicsDeviceRef_getAlloc(TextureRef_getUnifiedTexture(textureRef, NULL).resource.device);
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 
@@ -77,11 +76,11 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 	VkFormat vkFormat = VK_FORMAT_UNDEFINED;
 
 	switch(texture->depthFormat) {
-		case EDepthStencilFormat_D16:            vkFormat = VK_FORMAT_D16_UNORM;                    break;
-		case EDepthStencilFormat_D32:            vkFormat = VK_FORMAT_D32_SFLOAT;                break;
-		case EDepthStencilFormat_D24S8Ext:        vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;            break;
-		case EDepthStencilFormat_D32S8X24Ext:    vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;        break;
-		case EDepthStencilFormat_S8X24Ext:        vkFormat = VK_FORMAT_S8_UINT;                    break;
+		case EDepthStencilFormat_D16:         vkFormat = VK_FORMAT_D16_UNORM;          break;
+		case EDepthStencilFormat_D32:         vkFormat = VK_FORMAT_D32_SFLOAT;         break;
+		case EDepthStencilFormat_D24S8Ext:    vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;  break;
+		case EDepthStencilFormat_D32S8X24Ext: vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT; break;
+		case EDepthStencilFormat_S8X24Ext:    vkFormat = VK_FORMAT_S8_UINT;            break;
 	}
 
 	if(!vkFormat)
@@ -149,7 +148,8 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 			&texture->resource.blockOffset,
 			texture->resource.type,
 			name,
-			&block, e_rr));
+			&block, e_rr
+		));
 
 		texture->resource.allocated = true;
 
@@ -162,12 +162,12 @@ Bool VK_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 
 		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, i);
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 				.objectType = VK_OBJECT_TYPE_IMAGE,
-				.pObjectName = name.ptr,
+				.pObjectName = name->ptr,
 				.objectHandle =  (U64) managedImageExt->image
 			};
 
@@ -265,8 +265,8 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 		switch(tex.depthFormat) {
 
 			default:
-			case EDepthStencilFormat_D32:            vkFormat = VK_FORMAT_D32_SFLOAT;    break;
-			case EDepthStencilFormat_D16:            vkFormat = VK_FORMAT_D16_UNORM;        break;
+			case EDepthStencilFormat_D32: vkFormat = VK_FORMAT_D32_SFLOAT; break;
+			case EDepthStencilFormat_D16: vkFormat = VK_FORMAT_D16_UNORM;  break;
 
 			case EDepthStencilFormat_D32S8X24Ext:
 				vkFormat = d.texture.planeId ? VK_FORMAT_S8_UINT : VK_FORMAT_D32_SFLOAT;
@@ -354,8 +354,7 @@ Bool VkUnifiedTexture_getView(Descriptor d, ESHRegisterType type, VkImageView *v
 		.refCount = 1
 	};
 
-	if(firstEmptyViewId == U32_MAX)
-	{
+	if(firstEmptyViewId == U32_MAX) {
 		gotoIfError3(clean, ListVkImageViewMapping_pushBack(&texExt->views, mapping, alloc, e_rr));
 	}
 

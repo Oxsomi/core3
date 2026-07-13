@@ -40,7 +40,7 @@
 
 #define OXC3_MAJOR 3
 #define OXC3_MINOR 2
-#define OXC3_PATCH 98
+#define OXC3_PATCH 102
 #define OXC3_VERSION OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 
 //A hint to show that something is implementation dependent

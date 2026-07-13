@@ -21,11 +21,10 @@
 //graphics/d3d12/direct3d12.h
 
 #pragma once
-#include <dxgi1_6.h>
-
 #include "types/container/list.h"
 #include "types/container/string.h"
 #include "d3d12.h"
+#include <dxgi1_6.h>
 
 #ifndef GRAPHICS_API_DYNAMIC
 	#define DX_WRAP_FUNC(name) name##Ext
@@ -36,6 +35,9 @@
 #ifdef __cplusplus
 	extern "C" {
 #endif
+
+typedef struct GraphicsDevice GraphicsDevice;
+typedef enum EResourceType EResourceType;
 
 typedef struct DxUnifiedTexture {
 	ID3D12Resource *image;
@@ -129,10 +131,7 @@ Bool dxCheck(HRESULT result, Error *e_rr);
 D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data);
-
-static inline D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset) {
-	return getDxDeviceAddress(data) + localOffset;
-}
+D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset);
 
 D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignment, EResourceType resourceType);
 

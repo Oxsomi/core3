@@ -49,6 +49,9 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorHeap()::dev is required"));
 
+	if(!info)
+		retError(clean, Error_nullPointer(1, "GraphicsDeviceRef_createDescriptorHeap()::info is required"));
+
 	U64 srvCbvUav =
 		(U64) info->maxAccelerationStructures + info->maxTextures + info->maxConstantBuffers +
 		info->maxTexturesRW + info->maxBuffersRW;
@@ -97,7 +100,7 @@ Bool GraphicsDeviceRef_createDescriptorHeap(
 
 	DescriptorHeap *heap = DescriptorHeapRef_ptr(*heapRef);
 
-	*heap = (DescriptorHeap) { .device = dev, .info = info };
+	*heap = (DescriptorHeap) { .device = dev, .info = *info };
 
 	gotoIfError3(clean, GraphicsDeviceRef_createDescriptorHeapExt(dev, heap, name, e_rr));
 

@@ -121,7 +121,7 @@ TLASInstanceData *TLASInstanceMotion_getDataInternal(TLASInstanceMotion *mot) {
 }
 
 TLASInstanceData TLASInstanceMotion_getData(const TLASInstanceMotion *mot) {
-	return *TLASInstanceMotion_getDataInternal(&mot);
+	return *TLASInstanceMotion_getDataInternal(mot);
 }
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result) {

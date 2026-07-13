@@ -89,22 +89,6 @@ typedef struct TLASTransformSRT {
 
 } TLASTransformSRT;
 
-static inline TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing) {
-	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);
-	TLASTransformSRT_setPivot(&srt, pivot);
-	TLASTransformSRT_setShearing(&srt, shearing);
-	return srt;
-
-}
-
-static inline TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat) {
-	TLASTransformSRT srt = (TLASTransformSRT) { 0 };
-	TLASTransformSRT_setScale(&srt, scale);
-	TLASTransformSRT_setTranslate(&srt, translate);
-	TLASTransformSRT_setQuat(&srt, quat);
-	return srt;
-}
-
 F32x4 TLASTransformSRT_getScale(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setScale(TLASTransformSRT *srt, F32x4 value);
 
@@ -119,6 +103,21 @@ Bool TLASTransformSRT_setQuat(TLASTransformSRT *srt, QuatF32 value);
 
 F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value);
+
+static inline TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat) {
+	TLASTransformSRT srt = (TLASTransformSRT) { 0 };
+	TLASTransformSRT_setScale(&srt, scale);
+	TLASTransformSRT_setTranslate(&srt, translate);
+	TLASTransformSRT_setQuat(&srt, quat);
+	return srt;
+}
+
+static inline TLASTransformSRT TLASTransformSRT_create(F32x4 scale, F32x4 pivot, F32x4 translate, QuatF32 quat, F32x4 shearing) {
+	TLASTransformSRT srt = TLASTransformSRT_createSimple(scale, translate, quat);
+	TLASTransformSRT_setPivot(&srt, pivot);
+	TLASTransformSRT_setShearing(&srt, shearing);
+	return srt;
+}
 
 typedef struct TLASInstanceStatic {
 	TLASTransform transform;

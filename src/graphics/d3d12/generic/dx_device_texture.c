@@ -20,7 +20,6 @@
 
 //graphics/d3d12/generic/dx_device_texture.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
@@ -29,11 +28,11 @@
 #include "graphics/d3d12/dx_buffer.h"
 #include "types/container/texture_format.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/string.h"
 #include "types/container/buffer.h"
+#include "types/base/string_base.h"
 
-Bool DX_WRAP_FUNC(
-	DeviceTextureRef_flush)(void *commandBufferExt,
+Bool DX_WRAP_FUNC(DeviceTextureRef_flush)(
+	void *commandBufferExt,
 	GraphicsDeviceRef *deviceRef,
 	DeviceTextureRef *pending,
 	Error *e_rr
@@ -160,7 +159,8 @@ Bool DX_WRAP_FUNC(
 				D3D12_BARRIER_SYNC_COPY,
 				D3D12_BARRIER_ACCESS_COPY_SOURCE,
 				&deviceExt->bufferTransitions,
-				&bufDep, alloc, e_rr));
+				&bufDep, alloc, e_rr
+			));
 
 			D3D12_BARRIER_SUBRESOURCE_RANGE range2 = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
 				.NumMipLevels = 1,
@@ -175,7 +175,8 @@ Bool DX_WRAP_FUNC(
 				D3D12_BARRIER_LAYOUT_COPY_DEST,
 				&range2,
 				&deviceExt->imageTransitions,
-				&imgDep, alloc, e_rr));
+				&imgDep, alloc, e_rr
+			));
 
 			if(bufDep.NumBarriers || imgDep.NumBarriers) {
 
@@ -214,12 +215,12 @@ Bool DX_WRAP_FUNC(
 			};
 
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left        = x,
-				.top        = y,
-				.front        = z,
-				.right        = x + w,
-				.bottom        = y + h,
-				.back        = z + l
+				.left   = x,
+				.top    = y,
+				.front  = z,
+				.right  = x + w,
+				.bottom = y + h,
+				.back   = z + l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
@@ -246,16 +247,15 @@ Bool DX_WRAP_FUNC(
 		DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
-		Error temp = Error_none();
 
-		Bool allocated = AllocationBuffer_allocateBlock(
-			&(AllocationBufferAllocate) {
-				.allocationBuffer = stagingBuffer,
-				.alignment = compressed ? 16 : 4,
-				.alloc = alloc
-			},
-			allocRange, (const U8**) &location, &temp
-		);
+		AllocationBufferAllocate allocBuffer = (AllocationBufferAllocate) {
+			.allocationBuffer = stagingBuffer,
+			.alignment = compressed ? 16 : 4,
+			.alloc = alloc
+		};
+
+		Error temp = Error_none();
+		Bool allocated = AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, &temp);
 
 		if(!allocated && location == defaultLocation) {        //Something major went wrong
 			if(e_rr) *e_rr = temp;
@@ -274,14 +274,13 @@ Bool DX_WRAP_FUNC(
 			U64 newSize = prevSize * 2 + allocRange * 3;
 			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
 
-			gotoIfError3(clean, AllocationBuffer_allocateBlock(
-				&(AllocationBufferAllocate) {
-					.allocationBuffer = stagingBuffer,
-					.alignment = compressed ? 16 : 4,
-					.alloc = alloc
-				},
-				allocRange, (const U8**) &location, e_rr
-			));
+			allocBuffer = (AllocationBufferAllocate) {
+				.allocationBuffer = stagingBuffer,
+				.alignment = compressed ? 16 : 4,
+				.alloc = alloc
+			};
+
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, e_rr));
 
 			staging = DeviceBufferRef_ptr(device->staging);
 			stagingExt = DeviceBuffer_ext(staging, Dx);
@@ -406,12 +405,12 @@ Bool DX_WRAP_FUNC(
 			};
 
 			D3D12_BOX srcBox = (D3D12_BOX) {
-				.left        = x,
-				.top        = y,
-				.front        = z,
-				.right        = x + w,
-				.bottom        = y + h,
-				.back        = z + l
+				.left   = x,
+				.top    = y,
+				.front  = z,
+				.right  = x + w,
+				.bottom = y + h,
+				.back   = z + l
 			};
 
 			commandBuffer->buffer->lpVtbl->CopyTextureRegion(

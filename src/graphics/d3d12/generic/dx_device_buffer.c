@@ -301,8 +301,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 			bufExt->buffer, &IID_ID3D12ManualWriteTrackingResource, (void**) &buf->resource.debugExt
 		), e_rr));
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-		gotoIfError3(clean, CharString_toUTF16(name, alloc, &name16, e_rr));
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {
+		gotoIfError3(clean, CharString_toUTF16(*name, alloc, &name16, e_rr));
 		gotoIfError3(clean, dxCheck(bufExt->buffer->lpVtbl->SetName(bufExt->buffer, name16.ptr), e_rr));
 	}
 

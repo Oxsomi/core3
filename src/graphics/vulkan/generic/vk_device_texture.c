@@ -20,7 +20,6 @@
 
 //graphics/vulkan/generic/vk_device_texture.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
@@ -30,13 +29,12 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "types/container/texture_format.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/string.h"
-#include "types/container/string.h"
 #include "types/container/buffer.h"
+#include "types/base/string_base.h"
 #include "types/base/constants.h"
 
-Bool VK_WRAP_FUNC(
-	DeviceTextureRef_flush)(void *commandBufferExt,
+Bool VK_WRAP_FUNC(DeviceTextureRef_flush)(
+	void *commandBufferExt,
 	GraphicsDeviceRef *deviceRef,
 	DeviceTextureRef *pending,
 	Error *e_rr
@@ -225,7 +223,8 @@ Bool VK_WRAP_FUNC(
 			graphicsQueueId,
 			&range2,
 			&deviceExt->imageTransitions,
-			&dependency, alloc, e_rr));
+			&dependency, alloc, e_rr
+		));
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
 			deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
@@ -263,14 +262,13 @@ Bool VK_WRAP_FUNC(
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 		Error temp = Error_none();
 
-		Bool allocated = AllocationBuffer_allocateBlock(
-			&(AllocationBufferAllocate) {
-				.allocationBuffer = stagingBuffer,
-				.alignment = compressed ? 16 : 4,
-				.alloc = alloc
-			},
-			allocRange, (const U8**) &location, &temp
-		);
+		AllocationBufferAllocate allocBuffer = (AllocationBufferAllocate) {
+			.allocationBuffer = stagingBuffer,
+			.alignment = compressed ? 16 : 4,
+			.alloc = alloc
+		};
+
+		Bool allocated = AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, &temp);
 
 		if(!allocated && location == defaultLocation) {        //Something major went wrong
 			if(e_rr) *e_rr = temp;
@@ -289,14 +287,13 @@ Bool VK_WRAP_FUNC(
 			U64 newSize = prevSize * 2 + allocRange * 3;
 			gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
 
-			gotoIfError3(clean, AllocationBuffer_allocateBlock(
-				&(AllocationBufferAllocate) {
-					.allocationBuffer = stagingBuffer,
-					.alignment = compressed ? 16 : 4,
-					.alloc = alloc
-				},
-				allocRange, (const U8**) &location, e_rr
-			));
+			allocBuffer = (AllocationBufferAllocate) {
+				.allocationBuffer = stagingBuffer,
+				.alignment = compressed ? 16 : 4,
+				.alloc = alloc
+			};
+
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocBuffer, allocRange, (const U8**) &location, e_rr));
 
 			staging = DeviceBufferRef_ptr(device->staging);
 			stagingExt = DeviceBuffer_ext(staging, Vk);
@@ -392,7 +389,8 @@ Bool VK_WRAP_FUNC(
 				device->fifId * (staging->resource.size / device->framesInFlight),
 				staging->resource.size / device->framesInFlight,
 				&deviceExt->bufferTransitions,
-				&dependency, alloc, e_rr));
+				&dependency, alloc, e_rr
+			));
 
 			RefPtr_inc(device->staging);
 			gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));        //Add to in flight

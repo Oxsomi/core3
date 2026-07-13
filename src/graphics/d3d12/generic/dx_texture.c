@@ -337,8 +337,9 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 				&texture->resource.blockId,
 				&texture->resource.blockOffset,
 				texture->resource.type,
-				name,
-				&block, e_rr));
+				&name,
+				&block, e_rr
+			));
 
 			texture->resource.allocated = true;
 

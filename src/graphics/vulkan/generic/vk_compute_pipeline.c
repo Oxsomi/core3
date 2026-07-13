@@ -20,6 +20,7 @@
 
 //graphics/vulkan/generic/vk_compute_pipeline.c
 
+#include "types/container/list_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/pipeline_layout.h"
 #include "graphics/generic/device.h"

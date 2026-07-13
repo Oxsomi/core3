@@ -151,7 +151,7 @@
 		U32 *blockId,
 		U64 *blockOffset,
 		EResourceType resourceType,
-		CharString objectName,                //Name of the object that allocates (for dedicated allocations)
+		const CharString *objectName,            //Name of the object that allocates (for dedicated allocations)
 		DeviceMemoryBlock *resultBlock,
 		Error *e_rr
 	);

@@ -223,12 +223,12 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	//Debug name
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VK_OBJECT_TYPE_BUFFER,
-			.pObjectName = name.ptr,
+			.pObjectName = name->ptr,
 			.objectHandle = (U64) bufExt->buffer
 		};
 

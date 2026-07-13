@@ -131,3 +131,7 @@ clean:
 D3D12_GPU_VIRTUAL_ADDRESS getDxDeviceAddress(DeviceData data) {
 	return DeviceBufferRef_ptr(data.buffer)->resource.deviceAddress + data.offset;
 }
+
+D3D12_GPU_VIRTUAL_ADDRESS getDxLocation(DeviceData data, U64 localOffset) {
+	return getDxDeviceAddress(data) + localOffset;
+}

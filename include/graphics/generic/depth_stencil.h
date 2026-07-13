@@ -27,6 +27,9 @@
 	extern "C" {
 #endif
 
+typedef struct CharString CharString;
+typedef struct Error Error;
+
 typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 
