@@ -20,20 +20,17 @@
 
 //graphics/d3d12/generic/dx_texture.c
 
-#include "types/container/list.h"
-#include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
 #include "graphics/d3d12/dx_device.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/instance.h"
-#include "types/container/string.h"
-#include "types/container/buffer.h"
 #include "platforms/logx.h"
+#include "types/container/list_basic_types.h"
 #include "types/container/texture_format.h"
-#include "types/base/constants.h"
 #include "types/container/string_unicode.h"
+#include "types/base/constants.h"
 
 void DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
@@ -50,7 +47,7 @@ void DX_WRAP_FUNC(UnifiedTexture_free)(TextureRef *textureRef) {
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
-Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name, Error *e_rr) {
+Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharString *name, Error *e_rr) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = textureRef ?
@@ -76,7 +73,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 
 	else switch(texture->textureFormatId) {
 
-		case ETextureFormatId_R8 : case ETextureFormatId_R8s: case ETextureFormatId_R8u: case ETextureFormatId_R8i:
+		case ETextureFormatId_R8: case ETextureFormatId_R8s: case ETextureFormatId_R8u: case ETextureFormatId_R8i:
 			dxFormat = DXGI_FORMAT_R8_TYPELESS;
 			break;
 
@@ -123,18 +120,17 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 			dxFormat = DXGI_FORMAT_R32G32B32A32_TYPELESS;
 			break;
 
-		case ETextureFormatId_BGR10A2:                                dxFormat = DXGI_FORMAT_R10G10B10A2_TYPELESS;    break;
-		case ETextureFormatId_BC6H:                                    dxFormat = DXGI_FORMAT_BC6H_TYPELESS;            break;
+		case ETextureFormatId_BGR10A2:                             dxFormat = DXGI_FORMAT_R10G10B10A2_TYPELESS;  break;
+		case ETextureFormatId_BC6H:                                dxFormat = DXGI_FORMAT_BC6H_TYPELESS;         break;
 
-		case ETextureFormatId_BC4:    case ETextureFormatId_BC4s:        dxFormat = DXGI_FORMAT_BC4_TYPELESS;            break;
-		case ETextureFormatId_BC5:    case ETextureFormatId_BC5s:        dxFormat = DXGI_FORMAT_BC5_TYPELESS;            break;
+		case ETextureFormatId_BC4:    case ETextureFormatId_BC4s:  dxFormat = DXGI_FORMAT_BC4_TYPELESS;          break;
+		case ETextureFormatId_BC5:    case ETextureFormatId_BC5s:  dxFormat = DXGI_FORMAT_BC5_TYPELESS;          break;
 
-		case ETextureFormatId_BC7: case ETextureFormatId_BC7_sRGB:    dxFormat = DXGI_FORMAT_BC7_TYPELESS;            break;
+		case ETextureFormatId_BC7: case ETextureFormatId_BC7_sRGB: dxFormat = DXGI_FORMAT_BC7_TYPELESS;          break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
-				0,
-				"UnifiedTexture_create() was called with unsupported texture format"
+				0, "UnifiedTexture_create() was called with unsupported texture format"
 			));
 	}
 
@@ -264,26 +260,24 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 
 			AllocationBuffer *allocBuf = &device->allocator.blocks.ptrNonConst[blockId].allocations;
 
-			gotoIfError3(clean, AllocationBuffer_create(
-				&(AllocationBufferCreate) {
-					.size = allocInfo.SizeInBytes,
-					.nonLinearAlignment = 0,
-					.alloc = alloc,
-					.allocationBuffer = allocBuf
-				},
-				true, e_rr
-			));
+			const AllocationBufferCreate bufferCreate = (AllocationBufferCreate) {
+				.size = allocInfo.SizeInBytes,
+				.nonLinearAlignment = 0,
+				.alloc = alloc,
+				.allocationBuffer = allocBuf
+			};
+
+			gotoIfError3(clean, AllocationBuffer_create(&bufferCreate, true, e_rr));
+
+			const AllocationBufferAllocate allocate = (AllocationBufferAllocate) {
+				.allocationBuffer = allocBuf,
+				.alignment = allocInfo.Alignment,
+				.isNonLinearResource = false,
+				.alloc = alloc
+			};
 
 			U8 *dummy = NULL;
-			gotoIfError3(clean, AllocationBuffer_allocateBlock(
-				&(AllocationBufferAllocate) {
-					.allocationBuffer = allocBuf,
-					.alignment = allocInfo.Alignment,
-					.isNonLinearResource = false,
-					.alloc = alloc
-				},
-				allocInfo.SizeInBytes, (const U8**) &dummy, e_rr
-			));
+			gotoIfError3(clean, AllocationBuffer_allocateBlock(&allocate, allocInfo.SizeInBytes, (const U8**) &dummy, e_rr));
 
 			if(acq == ELockAcquire_Acquired)
 				SpinLock_unlock(&device->allocator.lock);
@@ -367,8 +361,8 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, CharString name
 
 		managedImageExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-			gotoIfError3(clean, CharString_toUTF16(name, alloc, &temp16, e_rr));
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name)) {
+			gotoIfError3(clean, CharString_toUTF16(*name, alloc, &temp16, e_rr));
 			gotoIfError3(clean, dxCheck(managedImageExt->image->lpVtbl->SetName(managedImageExt->image, temp16.ptr), e_rr));
 			ListU16_free(&temp16, alloc);
 		}
@@ -382,6 +376,19 @@ clean:
 	ListU16_free(&temp16, alloc);
 	return s_uccess;
 }
+
+static const D3D12_BARRIER_ACCESS D3D12BarrierAccess_Write = 
+	D3D12_BARRIER_ACCESS_RENDER_TARGET |
+	D3D12_BARRIER_ACCESS_UNORDERED_ACCESS |
+	D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE |
+	D3D12_BARRIER_ACCESS_STREAM_OUTPUT |
+	D3D12_BARRIER_ACCESS_INDIRECT_ARGUMENT |
+	D3D12_BARRIER_ACCESS_COPY_DEST |
+	D3D12_BARRIER_ACCESS_RESOLVE_DEST |
+	D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE |
+	D3D12_BARRIER_ACCESS_VIDEO_DECODE_WRITE |
+	D3D12_BARRIER_ACCESS_VIDEO_PROCESS_WRITE |
+	D3D12_BARRIER_ACCESS_VIDEO_ENCODE_WRITE;
 
 Bool DxUnifiedTexture_transition(
 	DxUnifiedTexture *image,
@@ -398,17 +405,10 @@ Bool DxUnifiedTexture_transition(
 	Bool s_uccess = true;
 
 	//Avoid duplicate barriers except in one case:
-	//direct3d12.has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
+	//direct3d12 has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
 	//Otherwise, it's not synchronized correctly.
 
-	if(
-		image->lastSync == sync && image->lastAccess == access &&
-		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS &&
-		access != D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE &&
-		access != D3D12_BARRIER_ACCESS_RENDER_TARGET &&
-		access != D3D12_BARRIER_ACCESS_COPY_DEST &&
-		access != D3D12_BARRIER_ACCESS_RESOLVE_DEST
-	)
+	if(image->lastSync == sync && image->lastAccess == access && !(access & D3D12BarrierAccess_Write))
 		return s_uccess;
 
 	//Handle image barrier

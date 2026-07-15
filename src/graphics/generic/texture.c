@@ -20,8 +20,8 @@
 
 //graphics/generic/texture.c
 
-#include "types/container/list.h"
 #include "graphics/generic/interface.h"
+#include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/render_texture.h"
@@ -30,11 +30,11 @@
 #include "graphics/generic/resource.h"
 #include "graphics/generic/bindless_descriptor.h"
 #include "graphics/generic/descriptor_table.h"
-#include "platforms/logx.h"
-#include "types/container/texture_format.h"
-#include "types/math/vec2i.h"
-#include "types/container/string.h"
+#include "graphics/generic/pipeline_structs.h"
 #include "formats/oiSH/sh_registers.h"
+#include "types/container/texture_format.h"
+#include "types/base/string_base.h"
+#include "types/math/vec2i.h"
 #include "types/base/constants.h"
 
 //Specifying DeviceResourceVersion* will force lock the resource to get the texture format, size and version id.
@@ -46,14 +46,14 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 	if(version)
 		*version = (DeviceResourceVersion) { 0 };
 
-	EGraphicsTypeId graphicsTypeId = (EGraphicsTypeId)(tex ? tex->refPtrType->typeId : ETypeId_Undefined);
+	EGraphicsTypeId graphicsTypeId = (EGraphicsTypeId) (tex ? tex->refPtrType->typeId : ETypeId_Undefined);
 
 	switch (graphicsTypeId) {
 
-		default:                                return NULL;
-		case EGraphicsTypeId_DeviceTexture:        return &DeviceTextureRef_ptr(tex)->base;
-		case EGraphicsTypeId_RenderTexture:        return RenderTextureRef_ptr(tex);
-		case EGraphicsTypeId_DepthStencil:        return DepthStencilRef_ptr(tex);
+		default:                             return NULL;
+		case EGraphicsTypeId_DeviceTexture:  return &DeviceTextureRef_ptr(tex)->base;
+		case EGraphicsTypeId_RenderTexture:  return RenderTextureRef_ptr(tex);
+		case EGraphicsTypeId_DepthStencil:   return DepthStencilRef_ptr(tex);
 
 		case EGraphicsTypeId_Swapchain: {
 
@@ -152,7 +152,7 @@ void *TextureRef_getImgExt(TextureRef *ref, U32 subResource, U8 imageId) {
 	if(subResource)                //TODO: subResource
 		return NULL;
 
-	return (UnifiedTextureImage*)(
+	return (UnifiedTextureImage*) (
 		(U8*)tex +
 		sizeof(*tex) +
 		sizeof(UnifiedTextureImage) * tex->images +
@@ -225,8 +225,6 @@ void UnifiedTexture_free(TextureRef *textureRef) {
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 	GraphicsDeviceRef *device = texture->resource.device;
 
-	//Log_debugLnx("Destroy: Texture (%p)", texture);
-
 	if(texture->resource.flags & EGraphicsResourceFlag_ExposeBindless) {
 
 		const UnifiedTextureImage *img = TextureRef_getImageIntern(textureRef, 0, 0);
@@ -258,8 +256,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 
 	if(texture.resource.allocated)
 		retError(clean, Error_nullPointer(
-			0,
-			"UnifiedTexture_create()::texturePtr contains initialized resource, possible memleak"
+			0, "UnifiedTexture_create()::texturePtr contains initialized resource, possible memleak"
 		));
 
 	if(!texture.resource.device || texture.resource.device->refPtrType->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
@@ -279,8 +276,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 
 	if(!texture.depthFormat && !texture.textureFormatId)
 		retError(clean, Error_nullPointer(
-			0,
-			"UnifiedTexture_create()::texturePtr->depthFormat or textureFormatId is required"
+			0, "UnifiedTexture_create()::texturePtr->depthFormat or textureFormatId is required"
 		));
 
 	if(texture.textureFormatId && texture.textureFormatId >= ETextureFormatId_Count)
@@ -300,9 +296,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 
 	if(texture.resource.type == EResourceType_DeviceTexture && texture.sampleCount)
 		retError(clean, Error_invalidParameter(
-			1,
-			0,
-			"UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture"
+			1, 0, "UnifiedTexture_create()::texturePtr->msaa isn't allowed on a DeviceTexture"
 		));
 
 	if (texture.resource.type == EResourceType_Swapchain) {
@@ -314,9 +308,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 
 	else if(texture.images != 1)
 		retError(clean, Error_invalidParameter(
-			1,
-			0,
-			"UnifiedTexture_create()::texturePtr->images is only allowed to be 1 swapchains"
+			1, 0, "UnifiedTexture_create()::texturePtr->images is only allowed to be 1 swapchains"
 		));
 
 	if(texture.resource.flags & EGraphicsResourceFlag_CPUAllocated && texture.resource.type != EResourceType_DeviceTexture)
@@ -357,8 +349,8 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 
 	if(texture.levels > 1)
 		retError(clean, Error_invalidParameter(
-			2, 0, "UnifiedTexture_create()::texturePtr->levels > 1 isn't supported yet"
-		));        //TODO:
+			2, 0, "UnifiedTexture_create()::texturePtr->levels > 1 isn't supported yet"  //TODO:
+		));
 
 	if(texture.width > 16384 || texture.height > 16384 || texture.length > 256)
 		retError(clean, Error_invalidParameter(
@@ -374,8 +366,8 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 
 	if(texture.type != ETextureType_2D)
 		retError(clean, Error_invalidParameter(
-			1, 0, "UnifiedTexture_create()::texturePtr->type only supports 2D for now"
-		));        //TODO:
+			1, 0, "UnifiedTexture_create()::texturePtr->type only supports 2D for now" //TODO:
+		));
 
 	if(texture.sampleCount == EMSAASamples_x2Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x))
 		retError(clean, Error_unsupportedOperation(
@@ -407,7 +399,6 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 
 	//Create resource
 
-	//Log_debugLnx("Create: Texture %.*s (%p)", (int) CharString_length(name), name.ptr, ref);
 	gotoIfError3(clean, UnifiedTexture_createExt(ref, name, e_rr));
 
 	//Allocate in descriptors
@@ -419,6 +410,7 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 		for(U8 i = 0; i < texture.images; ++i) {
 
 			UnifiedTextureImage *img = TextureRef_getImageIntern(ref, 0 /* TODO: subResource */, i);
+			Descriptor textureDesc = Descriptor_texture(ref, 0, 0, 0, i, 0, 0);
 
 			if(
 				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessRead) &&
@@ -428,14 +420,12 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 					texture.type == ETextureType_2D ? ESHRegisterType_Texture2D : ESHRegisterType_Texture3D,
 					0,
 					false,
-					Descriptor_texture(ref, 0, 0, 0, i, 0, 0),
+					&textureDesc,
 					&img->readHandle,
 					e_rr
 				)
-			) {
-				s_uccess = false;
-				goto clean;
-			}
+			)
+				retError(clean, Error_invalidState(0, "UnifiedTexture_create() readHandle couldn't be allocated"));
 
 			if(
 				(texture.resource.flags & EGraphicsResourceFlag_ExposeBindlessWrite) &&
@@ -446,14 +436,12 @@ Bool UnifiedTexture_create(TextureRef *ref, DescriptorTableRef *bindlessDescript
 					ESHRegisterType_IsWrite,
 					0,
 					false,
-					Descriptor_texture(ref, 0, 0, 0, i, 0, 0),
+					&textureDesc,
 					&img->writeHandle,
 					e_rr
 				)
-			) {
-				s_uccess = false;
-				goto clean;
-			}
+			)
+				retError(clean, Error_invalidState(0, "UnifiedTexture_create() writeHandle couldn't be allocated"));
 		}
 	}
 

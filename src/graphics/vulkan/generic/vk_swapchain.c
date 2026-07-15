@@ -28,13 +28,9 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "platforms/window.h"
-#include "platforms/monitor.h"
-#include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "types/container/ref_ptr.h"
-#include "types/container/buffer.h"
 #include "types/container/string.h"
-#include "types/base/constants.h"
 
 TList(VkSurfaceFormatKHR);
 TList(VkPresentModeKHR);
@@ -62,7 +58,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	VkPhysicalDevice physicalDevice = (VkPhysicalDevice) device->info.ext;
-	const Window *window = info->window ? (const Window*)(info->window + 1) : NULL;
+	const Window *window = info->window;
 
 	//Since this function is called for both resize and init, it's possible our surface already exists.
 
@@ -204,7 +200,8 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 	if(!(capabilities.supportedCompositeAlpha & (VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)))
 		retError(clean, Error_invalidOperation(
-			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"));
+			3, "VkGraphicsDeviceRef_createSwapchain() doesn't have required composite alpha"
+		));
 
 	//Don't use the already requested images, since we might get a different image count
 	U32 requestedImages = SWAPCHAIN_VERSIONING;
@@ -214,7 +211,8 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 	if(capabilities.minImageCount > requestedImages || (capabilities.maxImageCount < 3 && capabilities.maxImageCount))
 		retError(clean, Error_invalidOperation(
-			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 3 or 4 images"));
+			4, "VkGraphicsDeviceRef_createSwapchain() requires support for 3 or 4 images"
+		));
 
 	VkFlags anyRotate =
 		VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR |
@@ -227,10 +225,10 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 	if(swapchain->requiresManualComposite)
 		switch (capabilities.currentTransform) {
-			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:    expectOrientation = 90;        break;
-			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:    expectOrientation = 180;    break;
-			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:    expectOrientation = 270;    break;
-			default:                                        expectOrientation = 0;        break;
+			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:   expectOrientation = 90;   break;
+			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:  expectOrientation = 180;  break;
+			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:  expectOrientation = 270;  break;
+			default:                                       expectOrientation = 0;    break;
 		}
 
 	if(window->orientation != expectOrientation) {
@@ -243,7 +241,8 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 		);
 
 		retError(clean, Error_invalidState(
-			0, "VkGraphicsDeviceRef_createSwapchain() expected orientation didn't match real orientation"));
+			0, "VkGraphicsDeviceRef_createSwapchain() expected orientation didn't match real orientation"
+		));
 	}
 
 	//Get present mode
@@ -268,10 +267,10 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 
 		switch(modei) {
 
-			default:                                                                                            break;
-			case VK_PRESENT_MODE_IMMEDIATE_KHR:        supports[ESwapchainPresentMode_Immediate - 1] = true;        break;
-			case VK_PRESENT_MODE_FIFO_KHR:            supports[ESwapchainPresentMode_Fifo - 1] = true;            break;
-			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:    supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;        break;
+			default:                                                                                         break;
+			case VK_PRESENT_MODE_IMMEDIATE_KHR:     supports[ESwapchainPresentMode_Immediate - 1] = true;    break;
+			case VK_PRESENT_MODE_FIFO_KHR:          supports[ESwapchainPresentMode_Fifo - 1] = true;         break;
+			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:  supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;  break;
 
 			//Mailbox can allocate additional images on Android,
 			//we don't want to deal with versioning 4x.
@@ -296,11 +295,11 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 			swapchain->presentMode = mode;
 
 			switch(mode) {
-				default:                                                                                        break;
-				case ESwapchainPresentMode_Immediate:        presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;        break;
-				case ESwapchainPresentMode_Fifo:            presentMode = VK_PRESENT_MODE_FIFO_KHR;                break;
-				case ESwapchainPresentMode_FifoRelaxed:        presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;        break;
-				case ESwapchainPresentMode_Mailbox:            presentMode = VK_PRESENT_MODE_MAILBOX_KHR;            break;
+				default:                                                                                  break;
+				case ESwapchainPresentMode_Immediate:    presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;     break;
+				case ESwapchainPresentMode_Fifo:         presentMode = VK_PRESENT_MODE_FIFO_KHR;          break;
+				case ESwapchainPresentMode_FifoRelaxed:  presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;  break;
+				case ESwapchainPresentMode_Mailbox:      presentMode = VK_PRESENT_MODE_MAILBOX_KHR;       break;
 			}
 
 			break;
@@ -368,8 +367,7 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 			Log_debugLnx("Swapchain: Invalid image count: %"PRIu32, imageCount);
 
 		retError(clean, Error_invalidState(
-			1,
-			"VkGraphicsDeviceRef_createSwapchain() imageCount returned exceeds max or subseeds min images permitted by OxC3"
+			1, "VkGraphicsDeviceRef_createSwapchain() imageCount returned exceeds max or subseeds min images permitted by OxC3"
 		));
 	}
 
@@ -417,8 +415,6 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createSwapchain)(GraphicsDeviceRef *deviceRe
 	gotoIfError3(clean, checkVkError(deviceExt->getSwapchainImages(
 		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
 	), e_rr));
-
-	//Destroy image views
 
 	for(U8 i = 0; i < imageCount; ++i) {
 
