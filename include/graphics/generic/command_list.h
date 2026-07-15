@@ -26,6 +26,7 @@
 #include "graphics/generic/resource.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/list.h"
+#include "types/base/lock.h"
 
 #ifdef __cplusplus
 	extern "C" {

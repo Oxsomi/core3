@@ -20,7 +20,9 @@
 
 //graphics/vulkan/generic/vk_descriptor_table.c
 
-#include "types/container/list_impl.h"
+#include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_instance.h"
+#include "graphics/vulkan/vk_buffer.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/descriptor_layout.h"
@@ -30,12 +32,8 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_buffer.h"
 #include "types/container/string.h"
 #include "platforms/logx.h"
-#include "types/container/string.h"
 #include "types/base/constants.h"
 
 void VkDescriptor_loseRef(RefPtr *resource, TextureDescriptorRange texture) {
@@ -152,10 +150,10 @@ void VK_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, const Allocator 
 	ListVkDescriptorTableRange_free(&tableExt->ranges, alloc);
 }
 
-Bool VK_WRAP_FUNC(
-	DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heapRef,
+Bool VK_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(
+	DescriptorHeapRef *heapRef,
 	DescriptorTable *table,
-	CharString name,
+	const CharString *name,
 	Error *e_rr
 ) {
 
@@ -204,15 +202,15 @@ Bool VK_WRAP_FUNC(
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	for (U8 i = 0; i < count; ++i)
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && name && CharString_length(*name) && instanceExt->debugSetName) {
 
 			gotoIfError3(clean, CharString_format(
 				alloc,
 				&tmpName,
 				e_rr,
 				"%.*s set %"PRIu8,
-				(int) CharString_length(name),
-				name.ptr,
+				(int) CharString_length(*name),
+				name->ptr,
 				i
 			));
 
@@ -285,7 +283,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	DescriptorTable *table,
 	U64 bindId,
 	U64 arrayId,
-	ListDescriptor darr,
+	const ListDescriptor *darr,
 	Error *e_rr
 ) {
 
@@ -320,7 +318,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		.dstBinding = binding.binding.binding,
 		.dstArrayElement = (U32) arrayId,
 		.dstSet = set,
-		.descriptorCount = (U32) darr.length
+		.descriptorCount = (U32) darr->length
 	};
 
 	VkWriteDescriptorSetAccelerationStructureKHR tlasDesc = (VkWriteDescriptorSetAccelerationStructureKHR) {
@@ -344,25 +342,25 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 		case ESHRegisterType_ConstantBuffer: {
 
-			if(darr.length > 1)
-				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr.length, alloc, e_rr));
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr->length, alloc, e_rr));
 
-			VkDescriptorBufferInfo *buf = darr.length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
+			VkDescriptorBufferInfo *buf = darr->length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
 
-			for(U64 i = 0; i < darr.length; ++i) {
+			for(U64 i = 0; i < darr->length; ++i) {
 
-				Descriptor d = darr.ptr[i];
+				Descriptor d = darr->ptr[i];
 
-				if(d.resource && !Descriptor_endBuffer(d)) {
+				if(d.resource && !Descriptor_endBuffer(&d)) {
 					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
-					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(&d);
 				}
 
 				if (d.resource)
 					buf[i] = (VkDescriptorBufferInfo) {
 						.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
-						.offset = Descriptor_startBuffer(d),
-						.range = Descriptor_bufferLength(d)
+						.offset = Descriptor_startBuffer(&d),
+						.range = Descriptor_bufferLength(&d)
 					};
 
 				else buf[i] = (VkDescriptorBufferInfo) { 0 };
@@ -376,17 +374,17 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_Sampler:
 		case ESHRegisterType_SamplerComparisonState: {
 
-			if(darr.length > 1)
-				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr.length, alloc, e_rr));
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr->length, alloc, e_rr));
 
-			VkDescriptorImageInfo *img = darr.length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
+			VkDescriptorImageInfo *img = darr->length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
 
-			for(U64 i = 0; i < darr.length; ++i) {
+			for(U64 i = 0; i < darr->length; ++i) {
 
-				Descriptor d = darr.ptr[i];
+				const Descriptor *d = &darr->ptr[i];
 
-				if (d.resource)
-					img[i] = (VkDescriptorImageInfo) { .sampler = *Sampler_ext(SamplerRef_ptr(d.resource), Vk) };
+				if (d->resource)
+					img[i] = (VkDescriptorImageInfo) { .sampler = *Sampler_ext(SamplerRef_ptr(d->resource), Vk) };
 
 				else img[i] = (VkDescriptorImageInfo) { 0 };
 			}
@@ -398,22 +396,22 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 		case ESHRegisterType_AccelerationStructure: {
 
-			if(darr.length > 1)
-				gotoIfError3(clean, ListVkAccelerationStructureKHR_resize(&range->tlases, darr.length, alloc, e_rr));
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkAccelerationStructureKHR_resize(&range->tlases, darr->length, alloc, e_rr));
 
-			VkAccelerationStructureKHR *tlas = darr.length > 1 ? range->tlases.ptrNonConst : &tmpDesc.tlas;
+			VkAccelerationStructureKHR *tlas = darr->length > 1 ? range->tlases.ptrNonConst : &tmpDesc.tlas;
 
-			for(U64 i = 0; i < darr.length; ++i) {
+			for(U64 i = 0; i < darr->length; ++i) {
 
-				Descriptor d = darr.ptr[i];
+				const Descriptor *d = &darr->ptr[i];
 
-				if (d.resource)
-					tlas[i] = (VkAccelerationStructureKHR) { TLAS_ext(TLASRef_ptr(d.resource), Vk)->as };
+				if (d->resource)
+					tlas[i] = (VkAccelerationStructureKHR) { TLAS_ext(TLASRef_ptr(d->resource), Vk)->as };
 
 				else tlas[i] = (VkAccelerationStructureKHR) { 0 };
 			}
 
-			tlasDesc.accelerationStructureCount = (U32) darr.length;
+			tlasDesc.accelerationStructureCount = (U32) darr->length;
 			tlasDesc.pAccelerationStructures = tlas;
 
 			descriptor.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
@@ -427,18 +425,18 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_StructuredBuffer:
 		case ESHRegisterType_StructuredBufferAtomic: {
 
-			if(darr.length > 1)
-				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr.length, alloc, e_rr));
+			if(darr->length > 1)
+				gotoIfError3(clean, ListVkDescriptorBufferInfo_resize(&range->updateBuffers, darr->length, alloc, e_rr));
 
-			VkDescriptorBufferInfo *buf = darr.length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
+			VkDescriptorBufferInfo *buf = darr->length > 1 ? range->updateBuffers.ptrNonConst : &tmpDesc.buffer;
 
-			for(U64 i = 0; i < darr.length; ++i) {
+			for(U64 i = 0; i < darr->length; ++i) {
 
-				Descriptor d = darr.ptr[i];
+				Descriptor d = darr->ptr[i];
 
-				if(d.resource && !Descriptor_endBuffer(d)) {
+				if(d.resource && !Descriptor_endBuffer(&d)) {
 					U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
-					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(&d);
 				}
 
 				if(d.buffer.counter)
@@ -449,8 +447,8 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				if (d.resource)
 					buf[i] = (VkDescriptorBufferInfo) {
 						.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Vk)->buffer,
-						.offset = Descriptor_startBuffer(d),
-						.range = Descriptor_bufferLength(d)
+						.offset = Descriptor_startBuffer(&d),
+						.range = Descriptor_bufferLength(&d)
 					};
 
 				else buf[i] = (VkDescriptorBufferInfo) { 0 };
@@ -467,22 +465,22 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 		case ESHRegisterType_TextureCube:
 		case ESHRegisterType_Texture2DMS: {
 
-			if(darr.length > 1) {
-				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr.length, alloc, e_rr));
-				gotoIfError3(clean, ListU32_resize(&range->newViews, darr.length, alloc, e_rr));
+			if(darr->length > 1) {
+				gotoIfError3(clean, ListVkDescriptorImageInfo_resize(&range->updateImages, darr->length, alloc, e_rr));
+				gotoIfError3(clean, ListU32_resize(&range->newViews, darr->length, alloc, e_rr));
 			}
 
-			VkDescriptorImageInfo *img = darr.length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
-			U32 *newViews = darr.length > 1 ? range->newViews.ptrNonConst : &newViewId;
+			VkDescriptorImageInfo *img = darr->length > 1 ? range->updateImages.ptrNonConst : &tmpDesc.image;
+			U32 *newViews = darr->length > 1 ? range->newViews.ptrNonConst : &newViewId;
 
-			for(U64 i = 0; i < darr.length; ++i)
+			for(U64 i = 0; i < darr->length; ++i)
 				newViews[i] = U32_MAX;
 
 			allocatedNewViews = true;
 
-			for(U64 i = 0; i < darr.length; ++i) {
+			for(U64 i = 0; i < darr->length; ++i) {
 
-				Descriptor d = darr.ptr[i];
+				Descriptor d = darr->ptr[i];
 
 				if(d.resource) {
 
@@ -522,7 +520,7 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 			allocatedNewViews = false;        //Success, no need to free the views
 
-			for(U64 i = 0; i < darr.length; ++i)
+			for(U64 i = 0; i < darr->length; ++i)
 				tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = newViews[i];
 
 			break;
@@ -542,19 +540,19 @@ clean:
 
 	if (allocatedNewViews) {        //Release temporary views if invalid
 
-		U32 *newViews = darr.length > 1 ? range->newViews.ptrNonConst : &newViewId;
+		U32 *newViews = darr->length > 1 ? range->newViews.ptrNonConst : &newViewId;
 
 		ELockAcquire acq = ELockAcquire_Invalid;
 		SpinLock *lock = NULL;
 
-		for(U64 i = 0; i < darr.length; ++i) {
+		for(U64 i = 0; i < darr->length; ++i) {
 
-			Descriptor d = darr.ptr[i];
+			const Descriptor *d = &darr->ptr[i];
 
-			if (!d.resource)
+			if (!d->resource)
 				continue;
 
-			VkUnifiedTexture *texExt = TextureRef_getImgExtT(d.resource, Vk, 0, d.texture.imageId);
+			VkUnifiedTexture *texExt = TextureRef_getImgExtT(d->resource, Vk, 0, d->texture.imageId);
 
 			if(!lock) {
 
@@ -576,9 +574,9 @@ clean:
 
 			Bool releaseLock = true;
 
-			if (i + 1 < darr.length) {
-				Descriptor dnext = darr.ptr[i + 1];
-				releaseLock = dnext.resource != d.resource || dnext.texture.imageId != d.texture.imageId;
+			if (i + 1 < darr->length) {
+				Descriptor dnext = darr->ptr[i + 1];
+				releaseLock = dnext.resource != d->resource || dnext.texture.imageId != d->texture.imageId;
 			}
 
 			if(releaseLock) {

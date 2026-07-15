@@ -323,7 +323,7 @@ static GraphicsObjectTypes GraphicsInstance_makeObjectTypes(EGraphicsApi api, co
 }
 
 Bool GraphicsInstance_create(
-	GraphicsApplicationInfo *info,
+	const GraphicsApplicationInfo *info,
 	EGraphicsApi api,
 	EGraphicsInstanceFlags flags,
 	const Allocator *alloc,
@@ -349,13 +349,16 @@ Bool GraphicsInstance_create(
 			4, 0, "GraphicsInstance_create()::type is invalid, use GraphicsInstance_makeType with a matching api and alloc"
 		));
 
+	if(!info)
+		retError(clean, Error_nullPointer(0, "GraphicsInstance_create()::info is required"));
+
 	gotoIfError3(clean, RefPtr_create(type, instanceRef, e_rr));
 	initRefPtr = true;
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 
 	*instance = (GraphicsInstance) {
-		.application = info,
+		.application = *info,
 		.api = api,
 		.flags = flags,
 		.alloc = alloc,

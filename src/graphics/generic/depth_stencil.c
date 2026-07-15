@@ -24,6 +24,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
+#include "graphics/generic/pipeline_structs.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/texture_format.h"
 #include "types/base/string_base.h"

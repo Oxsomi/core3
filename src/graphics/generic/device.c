@@ -201,7 +201,7 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 			gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntry(
 				deviceRef,
 				&tmpBinary,
-				&mainSingle,
+				mainSingle,
 				EDescriptorLayoutFlags_InternalWeakDeviceRef,
 				EDetectDescriptorLayoutFlags_AssumePushDescriptors | EDetectDescriptorLayoutFlags_AssumePushConstants,
 				NULL,
@@ -725,16 +725,23 @@ clean:
 	return s_uccess;
 }
 
-Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinaryInfo bin, SHEntry entry, Error *e_rr) {
+Bool GraphicsDeviceRef_checkShaderFeatures(
+	GraphicsDeviceRef *deviceRef, const SHBinaryInfo *bin, const SHEntry *entry, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 
 	if(!deviceRef || deviceRef->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_checkShaderFeatures()::deviceRef is required"));
 
+	if(!bin || !entry)
+		retError(clean, Error_nullPointer(
+			!bin ? 1 : 2, "GraphicsDeviceRef_checkShaderFeatures()::bin and entry are required"
+		));
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ESHExtension extensions = (bin.identifier.extensions &~ bin.dormantExtensions) & ESHExtension_All;
+	ESHExtension extensions = (bin->identifier.extensions &~ bin->dormantExtensions) & ESHExtension_All;
 
 	EGraphicsFeatures features = EGraphicsFeatures_None;
 	EDxGraphicsFeatures featuresDx = EDxGraphicsFeatures_None;
@@ -769,8 +776,8 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 
 	if(extensions & ESHExtension_PAQ)                       featuresDx |= EDxGraphicsFeatures_PAQ;
 
-	if ((bin.identifier.shaderVersion >> 8) == 6)           //Check shader model compatibility
-		switch ((U8) bin.identifier.shaderVersion) {
+	if ((bin->identifier.shaderVersion >> 8) == 6)           //Check shader model compatibility
+		switch ((U8) bin->identifier.shaderVersion) {
 			case 6:                                         featuresDx |= EDxGraphicsFeatures_SM6_6;    break;
 			case 7:                                         featuresDx |= EDxGraphicsFeatures_SM6_7;    break;
 			case 8:                                         featuresDx |= EDxGraphicsFeatures_SM6_8;    break;
@@ -779,8 +786,8 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 			default:                                                                                    break;
 		}
 
-	if(entry.waveSize >> 4)                                 featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
-	else if(entry.waveSize)                                 featuresDx |= EDxGraphicsFeatures_WaveSize;
+	if(entry->waveSize >> 4)                                featuresDx |= EDxGraphicsFeatures_WaveSizeMinMax;
+	else if(entry->waveSize)                                featuresDx |= EDxGraphicsFeatures_WaveSize;
 
 	if((device->info.capabilities.features & features) != features)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the features is missing"));
@@ -788,8 +795,8 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 	if((device->info.capabilities.dataTypes & dataTypes) != dataTypes)
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the dataTypes is missing"));
 
-	if(bin.vendorMask != ((1 << ESHVendor_Count) - 1))
-		if(!((bin.vendorMask >> device->info.vendor) & 1))
+	if(bin->vendorMask != ((1 << ESHVendor_Count) - 1))
+		if(!((bin->vendorMask >> device->info.vendor) & 1))
 			retError(clean, Error_invalidState(
 				0, "GraphicsDeviceRef_checkShaderFeatures() binary is incompatible with vendor"
 			));
@@ -801,13 +808,13 @@ Bool GraphicsDeviceRef_checkShaderFeatures(GraphicsDeviceRef *deviceRef, SHBinar
 		if((device->info.capabilities.featuresExt & (U32)featuresDx) != (U32)featuresDx)
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() one of the featuresDx is missing"));
 
-		if(!Buffer_length(bin.binaries[ESHBinaryType_DXIL]))
+		if(!Buffer_length(bin->binaries[ESHBinaryType_DXIL]))
 			retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() DXIL binary is missing"));
 	}
 
 	//Check for SPIRV
 
-	else if(!Buffer_length(bin.binaries[ESHBinaryType_SPIRV]))
+	else if(!Buffer_length(bin->binaries[ESHBinaryType_SPIRV]))
 		retError(clean, Error_invalidState(0, "GraphicsDeviceRef_checkShaderFeatures() SPIRV binary is missing"));
 
 clean:

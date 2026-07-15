@@ -404,7 +404,7 @@ Bool GraphicsDevice_createPipelineRaytracingInternalExt(
 	const CharString *name,
 	U8 maxPayloadSize,
 	U8 maxAttributeSize,
-	ListU32 binaryIndices,
+	const ListU32 *binaryIndices,
 	Pipeline *pipeline,
 	Error *e_rr
 );

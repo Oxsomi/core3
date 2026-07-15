@@ -1444,7 +1444,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_submitCommands)(
 				SwapchainRef *swapchainRef = swapchains->ptr[i];
 				Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
-				Window *window = Swapchain_getWindow(swapchain);
+				Window *window = swapchain->info.window;
 
 				if(window)
 					window->requireResize = true;
