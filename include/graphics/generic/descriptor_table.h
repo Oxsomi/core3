@@ -266,11 +266,11 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 );
 
 //Resolves register name to binding index, returns U64_MAX if invalid
-U64 DescriptorTableRef_resolveRegisterName(DescriptorTableRef *table, CharString registerName);
+U64 DescriptorTableRef_resolveRegisterName(DescriptorTableRef *table, const CharString *registerName);
 
 Bool DescriptorTableRef_setDescriptorByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
 	const Descriptor *d,
@@ -279,7 +279,7 @@ Bool DescriptorTableRef_setDescriptorByName(
 
 Bool DescriptorTableRef_setDescriptorsByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 arrayId,            //arrayId into descriptor
 	Bool maintainRef,
 	const ListDescriptor *d,
@@ -288,7 +288,7 @@ Bool DescriptorTableRef_setDescriptorsByName(
 
 Bool DescriptorTableRef_unsetDescriptorsByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 arrayId,
 	U64 count,
 	Error *e_rr
@@ -296,7 +296,7 @@ Bool DescriptorTableRef_unsetDescriptorsByName(
 
 Bool DescriptorTableRef_allocDescriptorByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 *arrayId,           //outputs arrayId into descriptor if success
 	Bool maintainRef,
 	const Descriptor *d,

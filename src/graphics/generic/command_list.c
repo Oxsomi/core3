@@ -2089,10 +2089,9 @@ Bool CommandListRef_startRenderExt(
 		retError(clean, Error_invalidOperation(
 			5, "CommandListRef_startRenderExt()::stencil clear value can't be non zero if there's no stencil bound"
 		));
-
-	if(depthStencil && depthStencil->clearDepth < 0 || depthStencil->clearDepth > 1)
-		retError(clean, Error_invalidOperation(4, "CommandListRef_startRenderExt()::depth clear should be 0-1"
-	));
+		
+	if(depthStencil && (depthStencil->clearDepth < 0 || depthStencil->clearDepth > 1))
+		retError(clean, Error_invalidOperation(4, "CommandListRef_startRenderExt()::depth clear should be 0-1"));
 
 	if(depthStencil && !depthStencil->image && depthStencil->clearDepth)
 		retError(clean, Error_invalidOperation(

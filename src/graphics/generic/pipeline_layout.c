@@ -136,7 +136,7 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 			if(info->pushConstants.count && DescriptorBinding_overlaps(
 				&info->pushConstants,
 				bind.registerType,
-				bind.binding,
+				&bind.binding,
 				bind.count,
 				binaryType,
 				false
@@ -215,7 +215,7 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 					if (DescriptorBinding_overlaps(
 						&pushLayout->info.bindings.ptr[j],
 						bind.registerType,
-						bind.binding,
+						&bind.binding,
 						bind.count,
 						binaryType,
 						false
@@ -228,7 +228,7 @@ Bool GraphicsDeviceRef_createPipelineLayout(
 			if(!match && info->pushConstants.count && DescriptorBinding_overlaps(
 				&info->pushConstants,
 				bind.registerType,
-				bind.binding,
+				&bind.binding,
 				bind.count,
 				binaryType,
 				true

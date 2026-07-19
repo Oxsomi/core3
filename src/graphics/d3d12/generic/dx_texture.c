@@ -20,9 +20,9 @@
 
 //graphics/d3d12/generic/dx_texture.c
 
-#include "graphics/d3d12/dx_interface.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/interface.h"
+#include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -331,7 +331,7 @@ Bool DX_WRAP_FUNC(UnifiedTexture_create)(TextureRef *textureRef, const CharStrin
 				&texture->resource.blockId,
 				&texture->resource.blockOffset,
 				texture->resource.type,
-				&name,
+				name,
 				&block, e_rr
 			));
 

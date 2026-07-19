@@ -197,7 +197,6 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 
 			DescriptorBinding pushConstants = (DescriptorBinding) { 0 };
 
-
 			gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntry(
 				deviceRef,
 				&tmpBinary,
@@ -602,7 +601,7 @@ Bool GraphicsDeviceRef_create(
 			device->defaultDescriptorHeaps,
 			device->defaultDescLayout,
 			EDescriptorTableFlags_InternalWeakDeviceRef,
-			name,
+			&name,
 			&device->defaultDescriptorTable, e_rr
 		));
 
@@ -668,7 +667,8 @@ Bool GraphicsDeviceRef_create(
 		cpuHeapSize / 5
 	);
 
-	device->flushThresholdPrimitives = 20 * MIBI / 3;        //20M vertices per frame limit (TODO: Base this on build time benchmark too)
+	//20M vertices per frame limit (TODO: Base this on build time benchmark too)
+	device->flushThresholdPrimitives = 20 * MIBI / 3;
 
 	//Block sizes based on memory of each device (CPU or GPU):
 	// 0 -  6GB ("4GB"):   64MB

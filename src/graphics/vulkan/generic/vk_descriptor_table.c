@@ -273,8 +273,12 @@ Bool VK_WRAP_FUNC(DescriptorTable_unsetDescriptors)(
 	if(!(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd))
 		return true;
 
-	for(U64 i = 0; i < count; ++i)
+	VkDescriptorTable *tableExt = DescriptorTable_ext(table, Vk);
+
+	for(U64 i = 0; i < count; ++i) {
 		VkDescriptorTable_loseRef(table, bindId, arrayId + i);
+		tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = 0;        //Mark as never set again
+	}
 
 	return true;
 }
@@ -520,8 +524,12 @@ Bool VK_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 			allocatedNewViews = false;        //Success, no need to free the views
 
+			//Stored as viewId + 1: the value is only used as a "was set" flag
+			//(free re-derives the view from the texture descriptor), but viewId 0 is valid
+			//(first view of a texture), so 0 is reserved to mean "never set".
+
 			for(U64 i = 0; i < darr->length; ++i)
-				tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = newViews[i];
+				tableExt->ranges.ptr[bindId].views.ptrNonConst[arrayId + i] = newViews[i] + 1;
 
 			break;
 		}
@@ -553,6 +561,7 @@ clean:
 				continue;
 
 			VkUnifiedTexture *texExt = TextureRef_getImgExtT(d->resource, Vk, 0, d->texture.imageId);
+			Bool canFree = true;
 
 			if(!lock) {
 
@@ -562,19 +571,22 @@ clean:
 				if(acq < ELockAcquire_Success) {
 					Log_warnLnx("Couldn't free view while cleaning up (%"PRIu64")", i);
 					lock = NULL;
-					continue;
+					canFree = false;
 				}
 			}
 
-			if(newViews[i] == U32_MAX)
-				continue;
+			if (canFree && newViews[i] != U32_MAX) {
 
-			U64 refCnt = --texExt->views.ptrNonConst[newViews[i]].refCount;
+				U64 refCnt = --texExt->views.ptrNonConst[newViews[i]].refCount;
 
-			if (!refCnt) {
-				deviceExt->destroyImageView(deviceExt->device, texExt->views.ptr[newViews[i]].view, NULL);
-				texExt->views.ptrNonConst[newViews[i]].view = NULL;
+				if (!refCnt) {
+					deviceExt->destroyImageView(deviceExt->device, texExt->views.ptr[newViews[i]].view, NULL);
+					texExt->views.ptrNonConst[newViews[i]].view = NULL;
+				}
 			}
+
+			//The lock release decision has to run for every entry
+			//(even skipped ones), otherwise a held lock could be reused for the next texture.
 
 			Bool releaseLock = true;
 
@@ -583,7 +595,7 @@ clean:
 				releaseLock = dnext.resource != d->resource || dnext.texture.imageId != d->texture.imageId;
 			}
 
-			if(releaseLock) {
+			if(releaseLock && lock) {
 
 				if(acq == ELockAcquire_Acquired)
 					SpinLock_unlock(lock);

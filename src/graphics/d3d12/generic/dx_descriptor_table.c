@@ -419,9 +419,9 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
 						.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 						.Buffer = (D3D12_BUFFER_SRV) {
-							.FirstElement = Descriptor_startBuffer(d) / reflStride,
+							.FirstElement = Descriptor_startBuffer(&d) / reflStride,
 							.StructureByteStride = reflStride,
-							.NumElements = (U32)(Descriptor_bufferLength(d) / reflStride)
+							.NumElements = (U32)(Descriptor_bufferLength(&d) / reflStride)
 						}
 					};
 

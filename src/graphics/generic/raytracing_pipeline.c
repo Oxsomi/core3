@@ -345,7 +345,7 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 		name,
 		maxPayloadSize,
 		maxAttributeSize,
-		binaryIndices,
+		&binaryIndices,
 		pipeline,
 		e_rr
 	));

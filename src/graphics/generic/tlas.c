@@ -520,7 +520,6 @@ Bool GraphicsDeviceRef_createTLASMotionExt(
 			.flags = (U8) buildFlags,
 			.parent = parent
 		},
-		.cpuInstancesMotion = instances,
 		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
 
@@ -543,7 +542,7 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 	Error *e_rr
 ) {
 
-	const TLAS tlasInfo = (TLAS) {
+	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,

@@ -184,7 +184,9 @@ void DX_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *data, const Allocator
 		instanceExt->deviceFactorySingleton->lpVtbl->Release(instanceExt->deviceFactorySingleton);
 }
 
-Bool DX_WRAP_FUNC(GraphicsInstance_create)(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
+Bool DX_WRAP_FUNC(GraphicsInstance_create)(
+	const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = instanceRef && *instanceRef ? GraphicsInstanceRef_ptr(*instanceRef)->alloc : NULL;
@@ -343,6 +345,12 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 	Bool s_uccess = true;
 	const Allocator *alloc = inst ? inst->alloc : NULL;
 
+	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Dx);
+	ListIDXGIAdapter4 adapters = (ListIDXGIAdapter4) { 0 };
+	ListGraphicsDeviceInfo tempInfos = (ListGraphicsDeviceInfo) { 0 };
+	ID3D12Device10 *device = NULL;        //Temporary device, we need to know
+	CharString tmp = CharString_createNull();
+
 	if(!inst || !result)
 		retError(clean, Error_nullPointer(
 			!inst ? 0 : 2,
@@ -353,12 +361,6 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		retError(clean, Error_invalidParameter(
 			1, 0, "D3D12GraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
 		));
-
-	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Dx);
-	ListIDXGIAdapter4 adapters = (ListIDXGIAdapter4) { 0 };
-	ListGraphicsDeviceInfo tempInfos = (ListGraphicsDeviceInfo) { 0 };
-	ID3D12Device10 *device = NULL;        //Temporary device, we need to know
-	CharString tmp = CharString_createNull();
 
 	//Get all possible adapters
 
@@ -503,7 +505,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
 			EGraphicsDataTypes_D32S8;
 
-		if(vendorId != EGraphicsVendorId_AMD)			//AMD creates D24X8 and S8X24 internally, don't want to report D24S8.
+		if(vendorId != EGraphicsVendorId_AMD)            //AMD creates D24X8 and S8X24 internally, don't want to report D24S8.
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
 
 		caps.features |= EGraphicsFeatures_DirectRendering;
@@ -972,7 +974,8 @@ clean:
 		device->lpVtbl->Release(device);        //Release device. We might re-create, but we can't pass it around
 
 	for(U64 i = 0; i < adapters.length; ++i)
-		adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);
+		if(adapters.ptr[i])
+			adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);
 
 	CharString_free(&tmp, alloc);
 	ListIDXGIAdapter4_free(&adapters, alloc);

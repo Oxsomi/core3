@@ -271,7 +271,9 @@ typedef struct GraphicsObjectSizes {
 
 	//Instance
 
-	typedef Bool (*GraphicsInstance_createImpl)(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr);
+	typedef Bool (*GraphicsInstance_createImpl)(
+		const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr
+	);
 	typedef void (*GraphicsInstance_freeImpl)(GraphicsInstance *inst, const Allocator *alloc);
 	typedef Bool (*GraphicsInstance_getDeviceInfosImpl)(
 		const GraphicsInstance *inst,

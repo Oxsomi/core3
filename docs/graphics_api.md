@@ -45,11 +45,13 @@ gotoIfError3(clean, GraphicsInterface_create(e_rr));
 
 RefPtrType instanceType = GraphicsInstance_makeType(EGraphicsApi_Count /* default api */, alloc);
 
+const GraphicsApplicationInfo appInfo = (GraphicsApplicationInfo) {
+	.name = CharString_createRefCStrConst("Rt core test"),
+	.version = OXC3_MAKE_VERSION(0, 2, 0)
+};
+
 gotoIfError3(clean, GraphicsInstance_create(
-	(GraphicsApplicationInfo) {
-	    .name = CharString_createRefCStrConst("Rt core test"),
-    	.version = OXC3_MAKE_VERSION(0, 2, 0)
-	},
+	&appInfo,
 	EGraphicsApi_Count,                //Default api for this platform (or e.g. EGraphicsApi_Vulkan)
 	EGraphicsInstanceFlags_None,
 	alloc,
@@ -91,7 +93,7 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 ### Used functions and obtained
 
-- Obtained through `Bool GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsApi api, EGraphicsInstanceFlags flags, const Allocator *alloc, const RefPtrType *type, GraphicsInstanceRef **inst, Error *e_rr);` see summary.
+- Obtained through `Bool GraphicsInstance_create(const GraphicsApplicationInfo *info, EGraphicsApi api, EGraphicsInstanceFlags flags, const Allocator *alloc, const RefPtrType *type, GraphicsInstanceRef **inst, Error *e_rr);` see summary.
 - Mostly used as `GraphicsInstanceRef` in `GraphicsDeviceRef_create` as well as GraphicsInstance's member functions.
 
 ## Graphics device info
@@ -250,8 +252,8 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
 
 - ```c
   Bool createPipelineCompute(
-  	SHFile shaderBinary,
-  	CharString name,				//Temporary name for debugging
+  	const SHFile *shaderBinary,
+  	const CharString *name,			//Temporary name for debugging
   	U32 entryId,					//Identifier from getFirstShaderEntry
   	EPipelineFlags flags,
   	PipelineLayoutRef *layout,		//NULL = default bindless pipeline layout
@@ -262,10 +264,10 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
 
 - ```c
   Bool createPipelineGraphics(
-  	ListSHFile shaderBinary,
+  	const ListSHFile *shaderBinary,
   	ListPipelineStage *stages,		//Will be moved
-  	PipelineGraphicsInfo info,
-  	CharString name,				//Temporary name for debugging
+  	const PipelineGraphicsInfo *info,
+  	const CharString *name,			//Temporary name for debugging
   	EPipelineFlags flags,
   	PipelineLayoutRef *layout,		//NULL = default bindless pipeline layout
   	PipelineRef **pipelines,
@@ -278,7 +280,7 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
   	EDeviceBufferUsage usage,
   	EGraphicsResourceFlag resourceFlags,
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	CharString name,
+  	const CharString *name,
   	U64 len,
   	DeviceBufferRef **buf,
   	Error *e_rr
@@ -290,7 +292,7 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
     	EDeviceBufferUsage usage,
     	EGraphicsResourceFlag resourceFlags,
     	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-    	CharString name,
+    	const CharString *name,
     	Buffer *dat,			//Can move data to device buffer (doesn't always)
     	DeviceBufferRef **buf,
     	Error *e_rr
@@ -302,7 +304,7 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
   	SamplerInfo info,
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	CharString name,
+  	const CharString *name,
   	SamplerRef **sampler,
   	Error *e_rr
   );
@@ -318,7 +320,7 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
   	EGraphicsResourceFlag flag,
   	EMSAASamples msaa,
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	CharString name,
+  	const CharString *name,
   	RenderTextureRef **renderTexture,
   	Error *e_rr
   );
@@ -332,7 +334,7 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
   	Bool allowShaderRead,
   	EMSAASamples msaa,
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	CharString name,
+  	const CharString *name,
   	DepthStencilRef **depthStencil,
   	Error *e_rr
   );
@@ -388,10 +390,10 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
   Bool createTLASExt(
   	ERTASBuildFlags buildFlags,
   	TLASRef *parent,					//If specified, indicates refit
-  	ListTLASInstanceStatic instances,
+  	const ListTLASInstanceStatic *instances,
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	CharString name,
+  	const CharString *name,
   	TLASRef **tlas,
   	Error *e_rr
   );
@@ -401,10 +403,10 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
   Bool createTLASMotionExt(
   	ERTASBuildFlags buildFlags,
   	TLASRef *parent,					//If specified, indicates refit
-  	ListTLASInstanceMotion instances,
+  	const ListTLASInstanceMotion *instances,
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	CharString name,
+  	const CharString *name,
   	TLASRef **tlas,
   	Error *e_rr
   );
@@ -415,10 +417,10 @@ gotoIfError3(clean, GraphicsDeviceRef_create(
   	ERTASBuildFlags buildFlags,
   	Bool isMotionBlurExt,				//Requires extension
   	TLASRef *parent,					//If specified, indicates refit
-  	DeviceData instancesDevice,			//Instances on the GPU, should be sized correctly
+  	const DeviceData *instancesDevice,	//Instances on the GPU, should be sized correctly
   	Bool disallowBindlessDescriptor,				//Won't allocate into a bindless table
   	DescriptorTableRef *bindlessDescriptorTable,	//NULL = device's default bindless table
-  	CharString name,
+  	const CharString *name,
   	TLASRef **tlas,
   	Error *e_rr
   );
@@ -610,23 +612,35 @@ Other helpers are internal use only, such as getImgExtT and getImplExtT,
 A swapchain is the interface between the platform Window and the API-dependent way of handling the surface, swapchain and any synchronization methods that are required.
 
 ```c
-//onCreate
+//onCreate window callback ('w' is the Window* the callback was invoked with)
 
 SwapchainRef *swapchain = NULL;
 gotoIfError3(clean, GraphicsDeviceRef_createSwapchain(
-    device, 		//See "Graphics device"
-    (SwapchainInfo) { .window = w },
-    false,			//allowComputeExt
-    NULL,			//bindlessDescriptorTable; NULL = device's default bindless table
-    &swapchain,
-    e_rr
+	device, 		//See "Graphics device"
+	(SwapchainInfo) { .window = w },
+	false,			//allowComputeExt
+	NULL,			//bindlessDescriptorTable; NULL = device's default bindless table
+	&swapchain,
+	e_rr
 ));
 
 //onResize: Window callback to make sure format + size stays the same:
 
 if(!(w->flags & EWindowFlags_IsVirtual))
-    SwapchainRef_resize(swapchain, e_rr);
+	SwapchainRef_resize(swapchain, e_rr);
+
+//onDestroy: Window callback; the swapchain MUST be released here (or earlier), see below.
+
+RefPtr_dec(&swapchain);
 ```
+
+### Window lifetime (weak reference)
+
+The swapchain only holds a **weak** reference to the window: it does **not** keep the window alive, and it has no way of knowing the window was destroyed other than through the window's own callbacks. This leads to a hard requirement:
+
+- The swapchain (and every command list / pending present that targets it) **must be destroyed from within the window's onDestroy callback** (or earlier). After onDestroy returns, the window's memory is gone and the swapchain's `info.window` is a dangling pointer; any use of it after that point (resize, present, submit) is undefined behavior.
+- The render loop should only touch the window (and thus the swapchain) from within the window's callbacks (onDraw/onResize/onDestroy); the window is guaranteed to be alive for the duration of those.
+- Since the window doesn't own the swapchain either, dropping the last swapchain reference outside of the window's lifetime callbacks is legal, as long as no GPU work that presents to it is still pending (wait on the device first).
 
 info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate as well otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
 
@@ -645,7 +659,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 
 ### Properties
 
-- info.window: the Window handle created using OxC3 platforms.
+- info.window: the Window handle created using OxC3 platforms. This is a **weak** pointer: it's only valid while the window is alive (see Swapchain/Window lifetime); destroy the swapchain in the window's onDestroy callback.
 - info.requiresManualComposite: whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor.
 - info.presentModePriorities: what present modes were requested on create.
 - device: the owning device.
@@ -1012,15 +1026,15 @@ CharString entrypoint = CharString_createRefCStrConst("main");
 
 U32 entryId = GraphicsDeviceRef_getFirstShaderEntry(
 	device,
-	tempShader,
-	entrypoint,
-	(ListCharString) { 0 },		//Defines
+	&tempShader,
+	&entrypoint,
+	NULL,						//Defines ([ key, value ][], NULL = none)
 	ESHExtension_None,			//Extensions to disallow
 	ESHExtension_None			//Extensions to require
 );
 
 gotoIfError3(clean, GraphicsDeviceRef_createPipelineCompute(
-	device, tempShader, name, entryId, EPipelineFlags_None, NULL, &computeShaders, e_rr
+	device, &tempShader, &name, entryId, EPipelineFlags_None, NULL, &computeShaders, e_rr
 ));
 
 SHFile_free(&tempShader, alloc);
@@ -1064,7 +1078,7 @@ PipelineGraphicsInfo info = (PipelineGraphicsInfo) {
 CharString name = CharString_createRefCStrConst("Test graphics pipeline");
 
 gotoIfError3(clean, GraphicsDeviceRef_createPipelineGraphics(
-    device, tempShaders, &stageInfos, info, name, EPipelineFlags_None, NULL, &graphicsShaders, e_rr
+	device, &tempShaders, &stageInfos, &info, &name, EPipelineFlags_None, NULL, &graphicsShaders, e_rr
 ));
 
 ...;	//Free binaries (tempShaders)
@@ -1119,14 +1133,15 @@ gotoIfError3(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount,
 
 //Finalize into pipeline
 
+const CharString rtName = CharString_createRefCStrConst("Raytracing pipeline test");
+
 gotoIfError3(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
-    device,
+	device,
 	&stages,
-	tempShaders,
+	&tempShaders,
 	&hitGroups,
-	info,
-	&entrypoints
-	CharString_createRefCStrConst("Raytracing pipeline test"),
+	&info,
+	&rtName,
 	EPipelineFlags_None,
 	NULL,
 	&raytracingShaders,
@@ -1174,7 +1189,7 @@ VertexPosBuffer vertexPos[] = {
 Buffer vertexData = Buffer_createRefConst(vertexPos, sizeof(vertexPos));
 CharString name = CharString_createRefCStrConst("Vertex position buffer");
 gotoIfError3(clean, GraphicsDeviceRef_createBufferData(
-    device, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, name, &vertexData, &vertexBuffers[0], e_rr
+	device, EDeviceBufferUsage_Vertex, EGraphicsResourceFlag_None, NULL, &name, &vertexData, &vertexBuffers[0], e_rr
 ));
 ```
 

@@ -894,7 +894,7 @@ Bool DX_WRAP_FUNC(GraphicsDevice_submitCommands)(
 
 		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains->ptr[i], NULL);
 		++unifiedTexture->currentImageId;
-		unifiedTexture->currentImageId %= 3;	//Always triple buffering, %3
+		unifiedTexture->currentImageId %= 3;        //Always triple buffering, %3
 	}
 
 	//Fence value after present
@@ -934,6 +934,7 @@ clean:
 Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer, Error *e_rr) {
 
 	Bool s_uccess = true;
+	HANDLE eventHandle = NULL;
 
 	if(commandBuffer->inRender)
 		retError(clean, Error_invalidState(
@@ -945,7 +946,6 @@ Bool DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *
 
 	//End current command list
 
-	HANDLE eventHandle = NULL;
 	gotoIfError3(clean, dxCheck(commandBuffer->buffer->lpVtbl->Close(commandBuffer->buffer), e_rr));
 
 	//Submit only the copy command list

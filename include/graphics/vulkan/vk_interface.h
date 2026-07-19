@@ -23,6 +23,11 @@
 #pragma once
 #ifdef GRAPHICS_API_DYNAMIC
 
+	//Needs the generic graphics type forward declarations (BLAS, TLAS, Pipeline, ...);
+	//included here so this header is order-independent for its includers.
+
+	#include "graphics/generic/interface.h"
+
 	void  VkBLAS_free(BLAS *blas);
 	Bool VkBLAS_init(BLAS *blas, Error *e_rr);
 	Bool VkBLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);

@@ -20,10 +20,10 @@
 
 //graphics/d3d12/generic/dx_command_list.c
 
-#include "graphics/d3d12/dx_interface.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/generic/interface.h"
+#include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"

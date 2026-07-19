@@ -917,13 +917,13 @@ void VK_WRAP_FUNC(GraphicsDevice_free)(const GraphicsInstance *instance, void *e
 
 		for(U64 i = 0; i < deviceExt->commandPools.length; ++i) {
 
-			const VkCommandAllocator alloc = deviceExt->commandPools.ptr[i];
+			const VkCommandAllocator vkAlloc = deviceExt->commandPools.ptr[i];
 
-			if(alloc.cmd)
-				deviceExt->freeCommandBuffers(deviceExt->device, alloc.pool, 1, &alloc.cmd);
+			if(vkAlloc.cmd)
+				deviceExt->freeCommandBuffers(deviceExt->device, vkAlloc.pool, 1, &vkAlloc.cmd);
 
-			if(alloc.pool)
-				deviceExt->destroyCommandPool(deviceExt->device, alloc.pool, NULL);
+			if(vkAlloc.pool)
+				deviceExt->destroyCommandPool(deviceExt->device, vkAlloc.pool, NULL);
 		}
 
 		for(U64 i = 0; i < deviceExt->submitSemaphores.length; ++i) {

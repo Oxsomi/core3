@@ -39,7 +39,7 @@
 typedef struct GraphicsDevice GraphicsDevice;
 typedef enum EResourceType EResourceType;
 
-static const D3D12_BARRIER_ACCESS D3D12BarrierAccess_Write = 
+static const D3D12_BARRIER_ACCESS D3D12BarrierAccess_Write =
 	D3D12_BARRIER_ACCESS_RENDER_TARGET |
 	D3D12_BARRIER_ACCESS_UNORDERED_ACCESS |
 	D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE |

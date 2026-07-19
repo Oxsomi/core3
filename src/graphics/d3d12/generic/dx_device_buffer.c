@@ -20,10 +20,10 @@
 
 //graphics/d3d12/generic/dx_device_buffer.c
 
-#include "graphics/d3d12/dx_interface.h"
 #include "graphics/d3d12/dx_buffer.h"
 #include "graphics/d3d12/dx_device.h"
 #include "graphics/generic/interface.h"
+#include "graphics/d3d12/dx_interface.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/descriptor_heap.h"

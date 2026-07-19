@@ -265,7 +265,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			DescriptorBinding binding = (DescriptorBinding) {
 				.registerType = reg->reg.registerType,
 				.count = count,
-				.binding = regMatch,
+				.binding = *regMatch,
 				.visibility = visibility
 			};
 

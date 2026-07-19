@@ -1062,7 +1062,7 @@ Bool DescriptorTableRef_setDescriptor(
 	Bool s_uccess = true;
 	ListDescriptor descriptors = (ListDescriptor) { 0 };
 
-	gotoIfError3(clean, ListDescriptor_createRefConst(&d, 1, &descriptors, e_rr));
+	gotoIfError3(clean, ListDescriptor_createRefConst(d, 1, &descriptors, e_rr));
 	gotoIfError3(clean, DescriptorTableRef_setDescriptors(table, bindId, arrayId, maintainRef, &descriptors, e_rr));
 
 clean:

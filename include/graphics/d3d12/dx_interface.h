@@ -23,6 +23,11 @@
 #pragma once
 #ifdef GRAPHICS_API_DYNAMIC
 
+	//Needs the generic graphics type forward declarations (BLAS, TLAS, Pipeline, ...);
+	//included here so this header is order-independent for its includers.
+
+	#include "graphics/generic/interface.h"
+
 	void  D3D12BLAS_free(BLAS *blas);
 	Bool D3D12BLAS_init(BLAS *blas, Error *e_rr);
 	Bool D3D12BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending, Error *e_rr);
@@ -43,19 +48,19 @@
 
 	Bool D3D12GraphicsDevice_createPipelineGraphics(
 		GraphicsDevice *dev,
-		ListSHFile binaries,
-		CharString name,
+		const ListSHFile *binaries,
+		const CharString *name,
 		Pipeline *pipeline,
 		Error *e_rr
 	);
 
 	Bool D3D12GraphicsDevice_createPipelineRaytracingInternal(
 		GraphicsDeviceRef *deviceRef,
-		ListSHFile binaries,
-		CharString name,
+		const ListSHFile *binaries,
+		const CharString *name,
 		U8 maxPayloadSize,
 		U8 maxAttributeSize,
-		ListU32 binaryIndices,
+		const ListU32 *binaryIndices,
 		Pipeline *pipeline,
 		Error *e_rr
 	);
@@ -64,7 +69,7 @@
 
 	//Sampler
 
-	Bool D3D12GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, CharString name, Error *e_rr);
+	Bool D3D12GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, Sampler *sampler, const CharString *name, Error *e_rr);
 	void  D3D12Sampler_free(Sampler *sampler);
 
 	//Device buffer
@@ -75,7 +80,7 @@
 
 	//Device texture
 
-	Bool D3D12UnifiedTexture_create(TextureRef *textureRef, CharString name, Error *e_rr);
+	Bool D3D12UnifiedTexture_create(TextureRef *textureRef, const CharString *name, Error *e_rr);
 	Bool D3D12DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending, Error *e_rr);
 	void  D3D12UnifiedTexture_free(TextureRef *textureRef);
 
@@ -100,7 +105,7 @@
 	Bool D3D12DescriptorHeap_createDescriptorTable(
 		DescriptorHeapRef *heap,
 		DescriptorTable *table,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	);
 	void D3D12DescriptorTable_free(DescriptorTable *table, const Allocator *alloc);
@@ -109,7 +114,7 @@
 		DescriptorTable *table,
 		U64 bindId,
 		U64 arrayId,
-		ListDescriptor darr,
+		const ListDescriptor *darr,
 		Error *e_rr
 	);
 
@@ -126,7 +131,7 @@
 	Bool D3D12GraphicsDeviceRef_createDescriptorLayout(
 		GraphicsDeviceRef *dev,
 		DescriptorLayout *layout,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	);
 	void D3D12DescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc);
@@ -136,7 +141,7 @@
 	Bool D3D12GraphicsDeviceRef_createPipelineLayout(
 		GraphicsDeviceRef *dev,
 		PipelineLayout *layout,
-		CharString name,
+		const CharString *name,
 		Error *e_rr
 	);
 	void D3D12PipelineLayout_free(PipelineLayout *layout, const Allocator *alloc);

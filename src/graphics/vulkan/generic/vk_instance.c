@@ -177,7 +177,9 @@ TListImpl(VkLayerProperties);
 
 //#define _GRAPHICS_VERBOSE_DEBUGGING
 
-Bool VK_WRAP_FUNC(GraphicsInstance_create)(const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr) {
+Bool VK_WRAP_FUNC(GraphicsInstance_create)(
+	const GraphicsApplicationInfo *info, GraphicsInstanceRef **instanceRef, Error *e_rr
+) {
 
 	const Allocator *alloc = GraphicsInstanceRef_ptr(*instanceRef)->alloc;
 
@@ -484,10 +486,14 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 			instanceExt->dxgiFactory->lpVtbl->Release(instanceExt->dxgiFactory);
 	#endif
 
-	if(instanceExt->debugDestroyReportCallback)
+	if(instanceExt->debugDestroyReportCallback && instanceExt->debugReportCallback)
 		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
 
-	instanceExt->destroyInstance(instanceExt->instance, NULL);
+	//Instance creation can fail partway (e.g. no compatible driver);
+	//in that case the RefPtr is still dec'd, so the ext might not be initialized yet.
+
+	if(instanceExt->destroyInstance && instanceExt->instance)
+		instanceExt->destroyInstance(instanceExt->instance, NULL);
 }
 
 const C8 *reqExtensionsName[] = {
@@ -773,7 +779,7 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 			)
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 256MiB", i);
-			continue;		//This hack is because BAR aperture is 256 MiB, this is used to distinguish AMD APUs
+			continue;        //This hack is because BAR aperture is 256 MiB, this is used to distinguish AMD APUs
 		}
 
 		if (pushDescriptor.maxPushDescriptors < 32) {

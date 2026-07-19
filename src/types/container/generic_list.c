@@ -690,7 +690,7 @@ Bool GenericList_resizeInternal(GenericList *list, U64 size, const Allocator *al
 
 	if (size <= list->capacityAndRefInfo) {
 
-		if(doClear && list->length)
+		if(doClear && size > list->length)
 			gotoIfError3(clean, Buffer_unsetAllBits(
 				Buffer_createRef((U8*)list->ptrNonConst + list->stride * list->length, (size - list->length) * list->stride),
 				e_rr
