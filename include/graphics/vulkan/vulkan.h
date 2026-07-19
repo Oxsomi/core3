@@ -60,6 +60,8 @@ TList(VkImageMemoryBarrier2);
 TList(VkBufferMemoryBarrier2);
 TList(VkPipeline);
 
+TList(VkPipelineShaderStageCreateInfo);
+
 typedef struct VkImageViewMapping {
 
 	union {

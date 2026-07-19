@@ -20,21 +20,17 @@
 
 //graphics/vulkan/generic/vk_device_buffer.c
 
-#include "types/container/list_impl.h"
-#include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
-#include "graphics/generic/device_buffer.h"
-#include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "types/container/buffer.h"
-#include "types/container/log.h"
-#include "platforms/logx.h"
+#include "graphics/generic/interface.h"
+#include "graphics/generic/device_buffer.h"
+#include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
+#include "types/base/buffer_base.h"
 #include "types/base/mathi.h"
-#include "types/base/mathf.h"
 #include "types/base/constants.h"
 
 Bool VkDeviceBuffer_transition(
@@ -108,8 +104,6 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 ) {
 
 	Bool s_uccess = true;
-
-	(void)name;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -193,7 +187,8 @@ Bool VK_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		&buf->resource.blockOffset,
 		EResourceType_DeviceBuffer,
 		name,
-		&block, e_rr));
+		&block, e_rr
+	));
 
 	buf->resource.allocated = true;
 
@@ -239,8 +234,8 @@ clean:
 	return s_uccess;
 }
 
-Bool VK_WRAP_FUNC(
-	DeviceBufferRef_flush)(void *commandBufferExt,
+Bool VK_WRAP_FUNC(DeviceBufferRef_flush)(
+	void *commandBufferExt,
 	GraphicsDeviceRef *deviceRef,
 	DeviceBufferRef *pending,
 	Error *e_rr
@@ -282,19 +277,19 @@ Bool VK_WRAP_FUNC(
 
 		acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
 
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[buffer->resource.blockId];
+		const DeviceMemoryBlock *block = &device->allocator.blocks.ptr[buffer->resource.blockId];
 
 		if(acq == ELockAcquire_Acquired)
 			SpinLock_unlock(&device->allocator.lock);
 
 		acq = ELockAcquire_Invalid;
 
-		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		Bool incoherent = !(block->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if(incoherent)
 			gotoIfError3(clean, ListVkMappedMemoryRange_resize(
-				&deviceExt->mappedMemoryRange, buffer->pendingChanges.length + 1
-			, alloc, e_rr));
+				&deviceExt->mappedMemoryRange, buffer->pendingChanges.length + 1, alloc, e_rr
+			));
 
 		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
@@ -311,7 +306,7 @@ Bool VK_WRAP_FUNC(
 			if(incoherent)
 				deviceExt->mappedMemoryRange.ptrNonConst[j] = (VkMappedMemoryRange) {
 					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-					.memory = (VkDeviceMemory) block.ext,
+					.memory = (VkDeviceMemory) block->ext,
 					.offset = start + buffer->resource.blockOffset,
 					.size = len
 				};
@@ -364,14 +359,14 @@ Bool VK_WRAP_FUNC(
 
 			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
 
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
+			const DeviceMemoryBlock *block = &device->allocator.blocks.ptr[stagingResource->resource.blockId];
 
 			if(acq == ELockAcquire_Acquired)
 				SpinLock_unlock(&device->allocator.lock);
 
 			acq = ELockAcquire_Invalid;
 
-			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			Bool incoherent = !(block->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer
 
@@ -395,7 +390,8 @@ Bool VK_WRAP_FUNC(
 					bufferj.startRange,
 					len,
 					&deviceExt->bufferTransitions,
-					&dependency, alloc, e_rr));
+					&dependency, alloc, e_rr
+				));
 
 				deviceExt->bufferCopies.ptrNonConst[j] = (VkBufferCopy) {
 					.srcOffset = allocRange,
@@ -410,7 +406,7 @@ Bool VK_WRAP_FUNC(
 
 				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
 					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-					.memory = (VkDeviceMemory) block.ext,
+					.memory = (VkDeviceMemory) block->ext,
 					.offset = stagingResource->resource.blockOffset,
 					.size = allocRange
 				};
@@ -426,7 +422,8 @@ Bool VK_WRAP_FUNC(
 				0,
 				allocRange,
 				&deviceExt->bufferTransitions,
-				&dependency, alloc, e_rr));
+				&dependency, alloc, e_rr
+			));
 
 			if(dependency.bufferMemoryBarrierCount)
 				deviceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
@@ -458,14 +455,13 @@ Bool VK_WRAP_FUNC(
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = Error_none();
 
-			Bool allocated = AllocationBuffer_allocateBlock(
-				&(AllocationBufferAllocate) {
-					.allocationBuffer = stagingBuffer,
-					.alignment = 4,
-					.alloc = alloc
-				},
-				allocRange, (const U8**) &location, &temp
-			);
+			const AllocationBufferAllocate bufferAllocate = (AllocationBufferAllocate) {
+				.allocationBuffer = stagingBuffer,
+				.alignment = 4,
+				.alloc = alloc
+			};
+
+			Bool allocated = AllocationBuffer_allocateBlock(&bufferAllocate, allocRange, (const U8**) &location, &temp);
 
 			if(!allocated && location == defaultLocation) {        //Something else went wrong
 				if(e_rr) *e_rr = temp;
@@ -498,14 +494,14 @@ Bool VK_WRAP_FUNC(
 
 			acq = SpinLock_lock(&device->allocator.lock, U64_MAX);
 
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
+			const DeviceMemoryBlock *block = &device->allocator.blocks.ptr[staging->resource.blockId];
 
 			if(acq == ELockAcquire_Acquired)
 				SpinLock_unlock(&device->allocator.lock);
 
 			acq = ELockAcquire_Invalid;
 
-			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			Bool incoherent = !(block->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer
 
@@ -535,7 +531,8 @@ Bool VK_WRAP_FUNC(
 					bufferj.startRange,
 					len,
 					&deviceExt->bufferTransitions,
-					&dependency, alloc, e_rr));
+					&dependency, alloc, e_rr
+				));
 
 				allocRange += len;
 			}
@@ -544,8 +541,8 @@ Bool VK_WRAP_FUNC(
 
 				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
 					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-					.memory = (VkDeviceMemory) block.ext,
-					.offset = location - block.mappedMemoryExt,
+					.memory = (VkDeviceMemory) block->ext,
+					.offset = location - block->mappedMemoryExt,
 					.size = allocRange
 				};
 
@@ -562,7 +559,8 @@ Bool VK_WRAP_FUNC(
 					device->fifId * (staging->resource.size / device->framesInFlight),
 					staging->resource.size / device->framesInFlight,
 					&deviceExt->bufferTransitions,
-					&dependency, alloc, e_rr));
+					&dependency, alloc, e_rr
+				));
 
 				RefPtr_inc(device->staging);
 				gotoIfError3(clean, ListRefPtr_pushBack(currentFlight, device->staging, alloc, e_rr));        //Add to in flight

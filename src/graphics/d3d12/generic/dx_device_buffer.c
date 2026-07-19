@@ -473,7 +473,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = Error_none();
 
-			const AllocationBufferAllocate bufferAlloc = (AllocationBufferAllocate) {
+			AllocationBufferAllocate bufferAlloc = (AllocationBufferAllocate) {
 				.allocationBuffer = stagingBuffer,
 				.alignment = 4,
 				.alloc = alloc
@@ -500,7 +500,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 				U64 newSize = prevSize * 2 + allocRange * 3;
 				gotoIfError3(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize, e_rr));
 
-				const AllocationBufferAlloc bufferAlloc = (AllocationBufferAllocate) {
+				bufferAlloc = (AllocationBufferAllocate) {
 					.allocationBuffer = stagingBuffer,
 					.alignment = 4,
 					.alloc = alloc
@@ -587,7 +587,7 @@ Bool DX_WRAP_FUNC(DeviceBufferRef_flush)(
 		gotoIfError3(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer, e_rr));
 
 clean:
-	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, e_rr);
+	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions, NULL);
 	RefPtr_dec(&tempStagingResource);
 	return s_uccess;
 }

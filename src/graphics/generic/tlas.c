@@ -121,7 +121,7 @@ TLASInstanceData *TLASInstanceMotion_getDataInternal(TLASInstanceMotion *mot) {
 }
 
 TLASInstanceData TLASInstanceMotion_getData(const TLASInstanceMotion *mot) {
-	return *TLASInstanceMotion_getDataInternal(mot);
+	return *TLASInstanceMotion_getDataInternal((TLASInstanceMotion*)mot);
 }
 
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result) {
@@ -487,15 +487,17 @@ Bool GraphicsDeviceRef_createTLASExt(
 	Error *e_rr
 ) {
 
-	const TLAS tlasInfo = (TLAS) {
+	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
 			.parent = parent
 		},
-		.cpuInstancesStatic = instances,
 		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
+
+	if(instances)
+		tlasInfo.cpuInstancesStatic = *instances;
 
 	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
 }
@@ -512,7 +514,7 @@ Bool GraphicsDeviceRef_createTLASMotionExt(
 	Error *e_rr
 ) {
 
-	const TLAS tlasInfo = (TLAS) {
+	TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
@@ -521,6 +523,9 @@ Bool GraphicsDeviceRef_createTLASMotionExt(
 		.cpuInstancesMotion = instances,
 		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
+
+	if(instances)
+		tlasInfo.cpuInstancesMotion = *instances;
 
 	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
 }
@@ -546,9 +551,11 @@ Bool GraphicsDeviceRef_createTLASDeviceExt(
 			.parent = parent
 		},
 		.useDeviceMemory = true,
-		.disallowBindlessDescriptor = disallowBindlessDescriptor,
-		.deviceData = instancesDevice
+		.disallowBindlessDescriptor = disallowBindlessDescriptor
 	};
+
+	if(instancesDevice)
+		tlasInfo.deviceData = *instancesDevice;
 
 	return GraphicsDeviceRef_createTLAS(dev, &tlasInfo, bindlessDescriptorTable, name, tlas, e_rr);
 }

@@ -72,7 +72,7 @@ typedef struct DescriptorBinding {
 Bool DescriptorBinding_overlaps(
 	const DescriptorBinding *binding,
 	ESHRegisterType regType,
-	SHBinding b,
+	const SHBinding *b,
 	U32 bcount,
 	ESHBinaryType type,
 	Bool isPushConstant

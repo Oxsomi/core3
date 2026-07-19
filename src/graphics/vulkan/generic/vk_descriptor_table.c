@@ -561,9 +561,13 @@ clean:
 
 				if(acq < ELockAcquire_Success) {
 					Log_warnLnx("Couldn't free view while cleaning up (%"PRIu64")", i);
+					lock = NULL;
 					continue;
 				}
 			}
+
+			if(newViews[i] == U32_MAX)
+				continue;
 
 			U64 refCnt = --texExt->views.ptrNonConst[newViews[i]].refCount;
 

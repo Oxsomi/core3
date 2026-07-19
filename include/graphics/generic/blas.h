@@ -103,7 +103,7 @@ Bool GraphicsDeviceRef_createBLASExt(
 	DeviceData positionBuffer,          //Required
 	DeviceData indexBuffer,             //Optional if indexFormat == Undefined
 	BLASRef *parent,                    //If specified, indicates refit
-	CharString name,
+	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr
 );
@@ -117,7 +117,7 @@ Bool GraphicsDeviceRef_createBLASUnindexedExt(
 	U16 positionBufferStride,           //<=2048 and multiple of 2 (if not 32f) or 4 (RGBA32f)
 	DeviceData positionBuffer,          //Required
 	BLASRef *parent,                    //If specified, indicates refit
-	CharString name,
+	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr
 );
@@ -132,7 +132,7 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 	U32 aabbOffset,                     //Offset into the aabb array
 	DeviceData buffer,                  //Required
 	BLASRef *parent,                    //If specified, indicates refit
-	CharString name,
+	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr
 );

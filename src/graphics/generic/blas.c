@@ -54,7 +54,9 @@ void BLAS_free(BLAS *blas, const Allocator *alloc) {
 	RefPtr_dec(&blas->base.device);
 }
 
-Bool GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, const BLAS *blas, CharString name, BLASRef **blasRef, Error *e_rr) {
+Bool GraphicsDeviceRef_createBLAS(
+	GraphicsDeviceRef *dev, const BLAS *blas, const CharString *name, BLASRef **blasRef, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
@@ -283,7 +285,9 @@ Bool GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, const BLAS *blas, Char
 	gotoIfError3(clean, RefPtr_inc(dev));
 	blasPtr->base.device = dev;
 
-	gotoIfError3(clean, CharString_createCopy(name, alloc, &blasPtr->base.name, e_rr));
+	if(name)
+		gotoIfError3(clean, CharString_createCopy(*name, alloc, &blasPtr->base.name, e_rr));
+
 	gotoIfError3(clean, BLAS_initExt(blasPtr, e_rr));
 
 clean:
@@ -305,7 +309,7 @@ Bool GraphicsDeviceRef_createBLASExt(
 	DeviceData positionBuffer,
 	DeviceData indexBuffer,
 	BLASRef *parent,
-	CharString name,
+	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr
 ) {
@@ -336,7 +340,7 @@ Bool GraphicsDeviceRef_createBLASUnindexedExt(
 	U16 positionBufferStride,
 	DeviceData positionBuffer,
 	BLASRef *parent,
-	CharString name,
+	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr
 ) {
@@ -367,7 +371,7 @@ Bool GraphicsDeviceRef_createBLASProceduralExt(
 	U32 aabbOffset,
 	DeviceData buffer,
 	BLASRef *parent,
-	CharString name,
+	const CharString *name,
 	BLASRef **blas,
 	Error *e_rr
 ) {

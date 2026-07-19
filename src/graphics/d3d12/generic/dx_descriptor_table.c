@@ -20,7 +20,6 @@
 
 //graphics/d3d12/generic/dx_descriptor_table.c
 
-#include "types/container/list_impl.h"
 #include "graphics/generic/descriptor_table.h"
 #include "graphics/generic/descriptor_heap.h"
 #include "graphics/generic/descriptor_layout.h"
@@ -41,10 +40,10 @@ void DX_WRAP_FUNC(DescriptorTable_free)(DescriptorTable *table, const Allocator 
 	DxDescriptorHeap_freeTable(heapExt, DescriptorTable_ext(table, Dx));
 }
 
-Bool DX_WRAP_FUNC(
-	DescriptorHeap_createDescriptorTable)(DescriptorHeapRef *heap,
+Bool DX_WRAP_FUNC(DescriptorHeap_createDescriptorTable)(
+	DescriptorHeapRef *heap,
 	DescriptorTable *table,
-	CharString name,
+	const CharString *name,
 	Error *e_rr
 ) {
 
@@ -91,10 +90,10 @@ clean:
 
 D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
 	switch (addressMode) {
-		case ESamplerAddressMode_MirrorRepeat:        return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-		case ESamplerAddressMode_ClampToEdge:        return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		case ESamplerAddressMode_ClampToBorder:        return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-		default:                                    return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		case ESamplerAddressMode_MirrorRepeat:   return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+		case ESamplerAddressMode_ClampToEdge:    return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		case ESamplerAddressMode_ClampToBorder:  return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+		default:                                 return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	}
 }
 
@@ -102,7 +101,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_unsetDescriptors)(
 	DescriptorTable *table,
 	U64 bindId,
 	U64 arrayId,
-	ListDescriptor darr,
+	const ListDescriptor *darr,
 	Error *e_rr
 ) {
 	(void) table; (void) bindId; (void) arrayId; (void) darr; (void) e_rr;
@@ -113,7 +112,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	DescriptorTable *table,
 	U64 bindId,
 	U64 arrayId,
-	ListDescriptor darr,
+	const ListDescriptor *darr,
 	Error *e_rr
 ) {
 
@@ -125,8 +124,9 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 	DxDescriptorTable *tableExt = DescriptorTable_ext(table, Dx);
 	DescriptorLayout *layout = DescriptorLayoutRef_ptr(table->layout);
-	ListDescriptorBinding bindings = layout->info.bindings;
-	DescriptorBinding binding = bindings.ptr[bindId];
+	const ListDescriptorBinding *bindings = &layout->info.bindings;
+	const DescriptorBinding *binding = &bindings->ptr[bindId];
+	ESHRegisterType registerType = binding->registerType;
 
 	U64 offsetCbvSrvUav = arrayId + DescriptorLayout_ext(layout, Dx)->bindingOffsets.ptr[bindId];
 	U64 offsetSamplers = offsetCbvSrvUav;
@@ -134,16 +134,16 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 	offsetCbvSrvUav += tableExt->allocationLocations[0];
 	offsetSamplers += tableExt->allocationLocations[1];
 
-	ESHRegisterType type = binding.registerType & ESHRegisterType_TypeMask;
-	Bool isWrite = binding.registerType & ESHRegisterType_IsWrite;
-	Bool isArrayType = binding.registerType & ESHRegisterType_IsArray;
+	ESHRegisterType type = registerType & ESHRegisterType_TypeMask;
+	Bool isWrite = registerType & ESHRegisterType_IsWrite;
+	Bool isArrayType = registerType & ESHRegisterType_IsArray;
 
 	U64 heapPtrRes = heapExt->resourcesHeap.cpuHandle.ptr;
 	U64 heapIncRes = heapExt->resourcesHeap.cpuIncrement;
 
-	for(U64 i = 0; i < darr.length; ++i) {
+	for(U64 i = 0; i < darr->length; ++i) {
 
-		Descriptor d = darr.ptr[i];
+		Descriptor d = darr->ptr[i];
 
 		if(d.resource) {
 
@@ -151,8 +151,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 				U64 len = DeviceBufferRef_ptr(d.resource)->resource.size;
 
-				if(!Descriptor_endBuffer(d))
-					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(d);
+				if(!Descriptor_endBuffer(&d))
+					d.buffer.endRegionAndCounterOffset.region48 |= len - Descriptor_startBuffer(&d);
 
 			} else if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
 
@@ -178,8 +178,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 				D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = (D3D12_CONSTANT_BUFFER_VIEW_DESC) { 0 };
 
 				if (d.resource) {
-					cbv.BufferLocation = DeviceBufferRef_ptr(d.resource)->resource.deviceAddress + Descriptor_startBuffer(d);
-					cbv.SizeInBytes = (U32) Descriptor_bufferLength(d);
+					cbv.BufferLocation = DeviceBufferRef_ptr(d.resource)->resource.deviceAddress + Descriptor_startBuffer(&d);
+					cbv.SizeInBytes = (U32) Descriptor_bufferLength(&d);
 				}
 
 				deviceExt->device->lpVtbl->CreateConstantBufferView(
@@ -345,8 +345,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.Format = DXGI_FORMAT_R32_TYPELESS,
 						.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
 						.Buffer = (D3D12_BUFFER_UAV) {
-							.FirstElement = Descriptor_startBuffer(d) / 4,
-							.NumElements = (U32)(Descriptor_bufferLength(d) / 4),
+							.FirstElement = Descriptor_startBuffer(&d) / 4,
+							.NumElements = (U32)(Descriptor_bufferLength(&d) / 4),
 							.Flags = D3D12_BUFFER_UAV_FLAG_RAW
 						}
 					};
@@ -367,8 +367,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
 						.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 						.Buffer = (D3D12_BUFFER_SRV) {
-							.FirstElement = Descriptor_startBuffer(d) / 4,
-							.NumElements = (U32)(Descriptor_bufferLength(d) / 4),
+							.FirstElement = Descriptor_startBuffer(&d) / 4,
+							.NumElements = (U32)(Descriptor_bufferLength(&d) / 4),
 							.Flags = D3D12_BUFFER_SRV_FLAG_RAW
 						}
 					};
@@ -388,7 +388,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 			case ESHRegisterType_StructuredBufferAtomic: {
 
 				DxDeviceBuffer *deviceBuffer = d.resource ? DeviceBuffer_ext(DeviceBufferRef_ptr(d.resource), Dx) : NULL;
-				U32 reflStride = binding.structedBufferStride;
+				U32 reflStride = binding->structedBufferStride;
 
 				if (isWrite) {
 
@@ -396,10 +396,10 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.Format = DXGI_FORMAT_UNKNOWN,
 						.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
 						.Buffer = (D3D12_BUFFER_UAV) {
-							.FirstElement = Descriptor_startBuffer(d) / reflStride,
+							.FirstElement = Descriptor_startBuffer(&d) / reflStride,
 							.StructureByteStride = reflStride,
-							.NumElements = (U32)(Descriptor_bufferLength(d) / reflStride),
-							.CounterOffsetInBytes = Descriptor_counterOffset(d)
+							.NumElements = (U32)(Descriptor_bufferLength(&d) / reflStride),
+							.CounterOffsetInBytes = Descriptor_counterOffset(&d)
 						}
 					};
 
@@ -455,8 +455,8 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 					switch(tex.depthFormat) {
 
 						default:
-						case EDepthStencilFormat_D32:            dxFormat = DXGI_FORMAT_R32_FLOAT;    break;
-						case EDepthStencilFormat_D16:            dxFormat = DXGI_FORMAT_R16_UNORM;    break;
+						case EDepthStencilFormat_D32:  dxFormat = DXGI_FORMAT_R32_FLOAT;  break;
+						case EDepthStencilFormat_D16:  dxFormat = DXGI_FORMAT_R16_UNORM;  break;
 
 						case EDepthStencilFormat_D32S8X24Ext:
 							dxFormat = d.texture.planeId ? DXGI_FORMAT_X32_TYPELESS_G8X24_UINT : DXGI_FORMAT_R32_FLOAT;
@@ -477,7 +477,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 						.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
 					};
 
-					switch(binding.registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
+					switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
 
 						case ESHRegisterType_Texture3D:
 							srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
@@ -551,7 +551,7 @@ Bool DX_WRAP_FUNC(DescriptorTable_setDescriptors)(
 
 					D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) { .Format = dxFormat };
 
-					switch(binding.registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
+					switch(registerType & (ESHRegisterType_TypeMask | ESHRegisterType_IsArray)) {
 
 						case ESHRegisterType_Texture3D:
 							uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;

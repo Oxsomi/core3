@@ -24,15 +24,15 @@
 #include "graphics/generic/interface.h"
 #include "graphics/generic/descriptor_layout.h"
 #include "graphics/generic/device.h"
+#include "formats/oiSH/sh_file.h"
 #include "types/container/ref_ptr.h"
 #include "types/container/string.h"
 #include "types/base/string_read.h"
-#include "formats/oiSH/sh_file.h"
 #include "types/base/constants.h"
 
 TListImpl(DescriptorBinding);
 
-U8 getDxilRegisterType(ESHRegisterType type) {
+static inline U8 getDxilRegisterType(ESHRegisterType type) {
 
 	U8 regType = type & ESHRegisterType_TypeMask;
 
@@ -48,27 +48,30 @@ U8 getDxilRegisterType(ESHRegisterType type) {
 Bool DescriptorBinding_overlaps(
 	const DescriptorBinding *binding,
 	ESHRegisterType regType,
-	SHBinding b,
+	const SHBinding *b,
 	U32 bcount,
 	ESHBinaryType type,
 	Bool isPushConstant
 ) {
 
-	SHBinding a = binding.binding;
+	if(!binding || !b)
+		return false;
+
+	SHBinding a = binding->binding;
 
 	switch (type) {
 
 		//SPIRV; register intersection only happens if they're identical
 
 		case ESHBinaryType_SPIRV:
-			return a.space == b.space && a.binding == b.binding && !isPushConstant;
+			return a.space == b->space && a.binding == b->binding && !isPushConstant;
 
 		//DXIL; register intersection happens when the range overlaps
 
 		case ESHBinaryType_DXIL:
 
-			if (a.space == b.space && regType == getDxilRegisterType(binding.registerType))
-				return a.binding + binding.count > b.binding && a.binding < b.binding + bcount;
+			if (a.space == b->space && regType == getDxilRegisterType(binding->registerType))
+				return a.binding + binding->count > b->binding && a.binding < b->binding + bcount;
 
 			return false;
 
@@ -96,9 +99,10 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 	Bool init = false;
 
-	if(!info || !entrypoints.length)
+	if(!info || !entrypoints || !binary || !entrypoints->length)
 		retError(clean, Error_nullPointer(
-			!entrypoints.length ? 2 : 4, "DescriptorLayoutInfo_detect()::info and entrypoints are required"
+			!entrypoints || !entrypoints->length ? 2 : (!binary ? 1 : 4),
+			"DescriptorLayoutInfo_detect()::info, binary and entrypoints are required"
 		));
 
 	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
@@ -110,8 +114,10 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 		));
 
 	if(
-		(CharString_length(pushConstantName) || (detectFlags & EDetectDescriptorLayoutFlags_AssumePushConstants)) !=
-		!!pushConstantOut
+		(
+			(pushConstantName && CharString_length(*pushConstantName)) ||
+			(detectFlags & EDetectDescriptorLayoutFlags_AssumePushConstants)
+		) != !!pushConstantOut
 	)
 		retError(clean, Error_invalidParameter(
 			4, 0,
@@ -119,7 +125,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 		));
 
 	if(
-		(pushDescriptors.length || (detectFlags & EDetectDescriptorLayoutFlags_AssumePushDescriptors)) !=
+		((pushDescriptors && pushDescriptors->length) || (detectFlags & EDetectDescriptorLayoutFlags_AssumePushDescriptors)) !=
 		!!pushDescriptorInfo
 	)
 		retError(clean, Error_invalidParameter(
@@ -139,8 +145,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 	if(pushDescriptorInfo && pushDescriptorInfo->bindings.length)
 		retError(clean, Error_invalidParameter(
-			4, 0,
-			"DescriptorLayoutInfo_detect()::pushDescriptorInfo must be empty"
+			4, 0, "DescriptorLayoutInfo_detect()::pushDescriptorInfo must be empty"
 		));
 
 	info->flags = flags;
@@ -155,22 +160,23 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 	CharString tmp = CharString_createNull();
 
-	for (U64 i = 0; i < entrypoints.length; ++i) {
+	for (U64 i = 0; i < entrypoints->length; ++i) {
 
-		U16 entrypointId = (U16) entrypoints.ptr[i];
-		U16 binaryId = entrypoints.ptr[i] >> 16;
+		U32 epPacked = entrypoints->ptr[i];
+		U16 entrypointId = (U16) epPacked;
+		U16 binaryId = epPacked >> 16;
 
-		if(binaryId >= binary.binaries.length || entrypointId >= binary.entries.length)
+		if(binaryId >= binary->binaries.length || entrypointId >= binary->entries.length)
 			retError(clean, Error_invalidParameter(
 				3, 0, "DescriptorLayoutInfo_detect()::entrypoints binary or entry index out of bounds"
 			));
 
-		SHBinaryInfo bin = binary.binaries.ptr[binaryId];
+		const SHBinaryInfo *bin = &binary->binaries.ptr[binaryId];
 
 		Bool hasPushConstants = false;
 
-		for(U64 j = 0; j < bin.registers.length; ++j)
-			if(bin.registers.ptr[j].reg.registerType == ESHRegisterType_PushConstants) {
+		for(U64 j = 0; j < bin->registers.length; ++j)
+			if(bin->registers.ptr[j].reg.registerType == ESHRegisterType_PushConstants) {
 
 				if(hasPushConstants)
 					retError(clean, Error_invalidParameter(
@@ -180,46 +186,46 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 				hasPushConstants = true;
 			}
 
-		for(U64 j = 0; j < bin.registers.length; ++j) {
+		for(U64 j = 0; j < bin->registers.length; ++j) {
 
-			SHRegisterRuntime reg = bin.registers.ptr[j];
+			const SHRegisterRuntime *reg = &bin->registers.ptr[j];
 			U64 registerNameMatch = U64_MAX;
 			U64 registerBindingsMatch = U64_MAX;
-			SHBinding regMatch = reg.reg.bindings.arr[binaryType];
+			const SHBinding *regMatch = &reg->reg.bindings.arr[binaryType];
 
 			U32 count = 1;
 
-			for(U64 k = 0; k < reg.arrays.length; ++k)
-				count *= reg.arrays.ptr[k];
+			for(U64 k = 0; k < reg->arrays.length; ++k)
+				count *= reg->arrays.ptr[k];
 
 			//PushConstants are the only one where the bindings can be invalid for SPIRV
 			//This is because they don't map to a register, while in DXIL they do
 
-			Bool validBinding = !(regMatch.binding == U32_MAX && regMatch.space == U32_MAX);
+			Bool validBinding = !(regMatch->binding == U32_MAX && regMatch->space == U32_MAX);
 			Bool anyBinding = validBinding;
 
-			if(reg.reg.registerType == ESHRegisterType_PushConstants && binaryType == ESHBinaryType_SPIRV)
-				validBinding = (reg.reg.isUsedFlag >> binaryType) & 1;
+			if(reg->reg.registerType == ESHRegisterType_PushConstants && binaryType == ESHBinaryType_SPIRV)
+				validBinding = (reg->reg.isUsedFlag >> binaryType) & 1;
 
 			if(!validBinding)    //Doesn't exist in current binary type
 				continue;
 
-			U8 regType = getDxilRegisterType(reg.reg.registerType);
+			U8 regType = getDxilRegisterType(reg->reg.registerType);
 
 			//Find matching register by name or binding
 
 			for(U64 k = 0; k < info->bindingNames.length; ++k) {
 
-				if (CharString_equalsString(&info->bindingNames.ptr[k], &reg.name, EStringCase_Sensitive))
+				if (CharString_equalsString(&info->bindingNames.ptr[k], &reg->name, EStringCase_Sensitive))
 					registerNameMatch = k;
 
 				if(
 					anyBinding &&
-					DescriptorBinding_overlaps(info->bindings.ptr[k], regType, regMatch, count, binaryType, false)
+					DescriptorBinding_overlaps(&info->bindings.ptr[k], regType, regMatch, count, binaryType, false)
 				) {
 
 					if(
-						info->bindings.ptr[k].binding.binding != regMatch.binding ||
+						info->bindings.ptr[k].binding.binding != regMatch->binding ||
 						info->bindings.ptr[k].count != count
 					)
 						retError(clean, Error_invalidParameter(
@@ -239,17 +245,17 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			U32 visibility = 0;
 
-			if ((reg.reg.isUsedFlag >> binaryType) & 1)
-				visibility |= (U32)1 << binary.entries.ptr[i].stage;
+			if ((reg->reg.isUsedFlag >> binaryType) & 1)
+				visibility |= (U32)1 << binary->entries.ptr[i].stage;
 
 			//Unique register, create another
 
-			ESHRegisterType regType4 = reg.reg.registerType & ESHRegisterType_TypeMask;
+			ESHRegisterType regType4 = reg->reg.registerType & ESHRegisterType_TypeMask;
 			Bool isCBuffer = regType4 == ESHRegisterType_ConstantBuffer;
 
 			Bool hasStrideOrLen =
 				isCBuffer ||
-				reg.reg.registerType == ESHRegisterType_PushConstants ||
+				reg->reg.registerType == ESHRegisterType_PushConstants ||
 				regType4 == ESHRegisterType_StructuredBuffer ||
 				regType4 == ESHRegisterType_StructuredBufferAtomic;
 
@@ -257,17 +263,17 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			Bool isSampler = regType4 == ESHRegisterType_Sampler || regType4 == ESHRegisterType_SamplerComparisonState;
 
 			DescriptorBinding binding = (DescriptorBinding) {
-				.registerType = reg.reg.registerType,
+				.registerType = reg->reg.registerType,
 				.count = count,
 				.binding = regMatch,
 				.visibility = visibility
 			};
 
 			if(hasStrideOrLen)
-				binding.data = reg.shaderBuffer.bufferSize;        //Same as setting structuredBufferSize/constantBufferSize
+				binding.data = reg->shaderBuffer.bufferSize;    //Same as setting structuredBufferSize/constantBufferSize
 
 			else if(isTexture)
-				binding.textureFormat = reg.reg.texture;
+				binding.textureFormat = reg->reg.texture;
 
 			//Push constants don't generate any descriptor bindings to allow sharing DescriptorLayout
 
@@ -279,12 +285,13 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 					isPushConstants ||
 					(
 						(detectFlags & EDetectDescriptorLayoutFlags_AssumePushConstants) &&
-						!CharString_length(pushConstantName) && reg.shaderBuffer.bufferSize <= 128
+						(!pushConstantName || !CharString_length(*pushConstantName)) &&
+						reg->shaderBuffer.bufferSize <= 128
 					) ||
-					CharString_equalsString(&reg.name, &pushConstantName, EStringCase_Sensitive)
+					CharString_equalsString(&reg->name, pushConstantName, EStringCase_Sensitive)
 				) {
 
-					if(reg.shaderBuffer.bufferSize > 128)
+					if(reg->shaderBuffer.bufferSize > 128)
 						retError(clean, Error_invalidParameter(
 							3, 0,
 							"DescriptorLayoutInfo_detect() pushConstant referenced a constant buffer >128 "
@@ -302,8 +309,8 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			if((detectFlags & EDetectDescriptorLayoutFlags_AssumePushDescriptors) && count == 1 && !isSampler)
 				isPushDescriptor = true;
 
-			else for(U64 k = 0; k < pushDescriptors.length; ++k)        //TODO: Hash
-				if (CharString_equalsString(&reg.name, &pushDescriptors.ptr[k], EStringCase_Sensitive)) {
+			else for(U64 k = 0; k < (!pushDescriptors ? 0 : pushDescriptors->length); ++k)        //TODO: Hash
+				if (CharString_equalsString(&reg->name, &pushDescriptors->ptr[k], EStringCase_Sensitive)) {
 
 					if(isSampler)
 						retError(clean, Error_invalidParameter(
@@ -316,8 +323,8 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			if(isPushDescriptor) {
 
-				if(CharString_length(reg.name)) {
-					gotoIfError3(clean, CharString_createCopy(reg.name, alloc, &tmp, e_rr));
+				if(CharString_length(reg->name)) {
+					gotoIfError3(clean, CharString_createCopy(reg->name, alloc, &tmp, e_rr));
 					gotoIfError3(clean, ListCharString_pushBack(&pushDescriptorInfo->bindingNames, tmp, alloc, e_rr));
 					tmp = CharString_createNull();
 				}
@@ -328,7 +335,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			if (registerNameMatch == U64_MAX) {
 
-				gotoIfError3(clean, CharString_createCopy(reg.name, alloc, &tmp, e_rr));
+				gotoIfError3(clean, CharString_createCopy(reg->name, alloc, &tmp, e_rr));
 				gotoIfError3(clean, ListCharString_pushBack(&info->bindingNames, tmp, alloc, e_rr));
 				tmp = CharString_createNull();
 
@@ -338,15 +345,15 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 
 			//Validate bindings
 
-			DescriptorBinding dk = info->bindings.ptr[registerNameMatch];
+			const DescriptorBinding *dk = &info->bindings.ptr[registerNameMatch];
 
-			if(reg.reg.registerType != dk.registerType || count != dk.count)
+			if(reg->reg.registerType != dk->registerType || count != dk->count)
 				retError(clean, Error_invalidParameter(
 					3, 0, "DescriptorLayoutInfo_detect() mismatching register count or register type"
 				));
 
 			if (hasStrideOrLen) {
-				if(dk.data != reg.shaderBuffer.bufferSize)
+				if(dk->data != reg->shaderBuffer.bufferSize)
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorLayoutInfo_detect() mismatching stride/buffer length"
 					));
@@ -355,8 +362,8 @@ Bool GraphicsDeviceRef_detectLayoutFromEntries(
 			//Validate compatibility of primitive and format
 
 			else if (isTexture && (
-				dk.textureFormat.primitive != reg.reg.texture.primitive ||
-				dk.textureFormat.formatId != reg.reg.texture.formatId
+				dk->textureFormat.primitive != reg->reg.texture.primitive ||
+				dk->textureFormat.formatId != reg->reg.texture.formatId
 			))
 				retError(clean, Error_invalidParameter(
 					3, 0, "DescriptorLayoutInfo_detect() mismatching texture primitive or format id"
@@ -403,7 +410,7 @@ Bool GraphicsDeviceRef_detectLayoutFromEntry(
 	gotoIfError3(clean, GraphicsDeviceRef_detectLayoutFromEntries(
 		dev,
 		binary,
-		entrypoints,
+		&entrypoints,
 		flags,
 		detectFlags,
 		pushDescriptors,
@@ -428,8 +435,6 @@ void DescriptorLayoutInfo_free(DescriptorLayoutInfo *info, const Allocator *allo
 }
 
 void DescriptorLayout_free(DescriptorLayout *layout, const Allocator *alloc) {
-
-	//Log_debugLnx("Destroy: %p", layout);
 
 	DescriptorLayout_freeExt(layout, alloc);
 
@@ -469,15 +474,13 @@ Bool DescriptorBinding_validate(GraphicsDevice *device, DescriptorBinding b, Boo
 		!b.structedBufferStride
 	)
 		retError(clean, Error_invalidOperation(
-			0,
-			"GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the structured buffer size"
+			0, "GraphicsDeviceRef_createDescriptorLayout() requires strideOrLength to be equal to the structured buffer size"
 		));
 
 	if(isPushDescriptor)
 		if(type == ESHRegisterType_Sampler || type == ESHRegisterType_SamplerComparisonState)
 			retError(clean, Error_invalidOperation(
-				0,
-				"GraphicsDeviceRef_createDescriptorLayout() can't create a push descriptor for a sampler"
+				0, "GraphicsDeviceRef_createDescriptorLayout() can't create a push descriptor for a sampler"
 			));
 
 clean:
@@ -494,6 +497,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDeviceRef_getAlloc(dev);
+	Bool allocated = false;
 
 	if(!dev || dev->refPtrType->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		retError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createDescriptorLayout()::dev is required"));
@@ -565,6 +569,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 		));
 
 	gotoIfError3(clean, RefPtr_create(&GraphicsDeviceRef_getTypes(dev)->descriptorLayout, layoutRef, e_rr));
+	allocated = true;
 
 	if(!(info->flags & EDescriptorLayoutFlags_InternalWeakDeviceRef))
 		gotoIfError3(clean, RefPtr_inc(dev));
@@ -585,8 +590,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 	gotoIfError3(clean, ListCharString_move(&info->bindingNames, alloc, &layout->info.bindingNames, e_rr));
 
-	if(ListDescriptorBinding_isRef(info->bindings))
-	{
+	if(ListDescriptorBinding_isRef(info->bindings)) {
 		gotoIfError3(clean, ListDescriptorBinding_createCopy(info->bindings, alloc, &layout->info.bindings, e_rr));
 	}
 
@@ -621,7 +625,7 @@ Bool GraphicsDeviceRef_createDescriptorLayout(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && allocated)
 		RefPtr_dec(layoutRef);
 
 	return s_uccess;

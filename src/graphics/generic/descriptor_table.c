@@ -29,15 +29,13 @@
 #include "graphics/generic/texture.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
-#include "types/container/ref_ptr.h"
 #include "platforms/logx.h"
-#include "types/container/string.h"
-#include "types/base/string_read.h"
-#include "types/container/big_int.h"
-#include "types/base/mathi.h"
-#include "types/base/mathf.h"
-#include "types/base/constants.h"
+#include "types/container/ref_ptr.h"
 #include "types/container/u128.h"
+#include "types/base/string_base.h"
+#include "types/base/string_read.h"
+#include "types/base/mathi.h"
+#include "types/base/constants.h"
 
 TListImpl(TextureDescriptorRange);
 TListImpl(BufferDescriptorRange);
@@ -72,33 +70,33 @@ void DescriptorTable_free(DescriptorTable *table, const Allocator *alloc) {
 	DescriptorHeap *parentPtr = DescriptorHeapRef_ptr(table->parent);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(parentPtr->device);
 
-	DescriptorLayoutInfo info = DescriptorLayoutRef_ptr(table->layout)->info;
-	ListDescriptorBinding bindings = info.bindings;
+	const DescriptorLayoutInfo *info = &DescriptorLayoutRef_ptr(table->layout)->info;
+	ListDescriptorBinding bindings = info->bindings;
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
 		for (U64 i = 0; i < table->bindings.length; ++i) {
 
-			DescriptorBinding b = bindings.ptr[i];
-			DescriptorTableBinding tb = table->bindings.ptr[i];
-			CharString name = i < info.bindingNames.length ? info.bindingNames.ptr[i] : CharString_createNull();
+			const DescriptorBinding *b = &bindings.ptr[i];
+			const DescriptorTableBinding *tb = &table->bindings.ptr[i];
+			CharString name = i < info->bindingNames.length ? info->bindingNames.ptr[i] : CharString_createNull();
 
-			if (b.count > 1) {
+			if (b->count > 1) {
 
 				DescriptorStackTrace stack = (DescriptorStackTrace) { 0 };
 				Buffer stackBuf = Buffer_createRef(stack.stackTrace, sizeof(stack.stackTrace));
 
-				for(U64 j = 0, k = 0; j < b.count; ++j)
-					if((tb.multiple.activeList.ptr[j >> 6] >> (j & 63)) & 1) {
+				for(U64 j = 0, k = 0; j < b->count; ++j)
+					if((tb->multiple.activeList.ptr[j >> 6] >> (j & 63)) & 1) {
 
 						Log_warnLnx(
 							"Leaked descriptor at %.*s[%"PRIu64"] (#%"PRIu64", id % "PRIu64", space % "PRIu64")",
-							(int) CharString_length(name), name.ptr, j, i, b.binding.binding, b.binding.space
+							(int) CharString_length(name), name.ptr, j, i, b->binding.binding, b->binding.space
 						);
 
-						if (tb.multiple.stackTraces.length) {
+						if (tb->multiple.stackTraces.length) {
 
 							Buffer stackBufj = Buffer_createRefConst(
-								tb.multiple.stackTraces.ptr[j].stackTrace, sizeof(stack.stackTrace)
+								tb->multiple.stackTraces.ptr[j].stackTrace, sizeof(stack.stackTrace)
 							);
 
 							if (!Buffer_eq(stackBuf, stackBufj)) {
@@ -121,18 +119,18 @@ void DescriptorTable_free(DescriptorTable *table, const Allocator *alloc) {
 					}
 			}
 
-			else if(tb.single.resource) {
+			else if(tb->single.resource) {
 
 				Log_warnLnx(
 					"Leaked descriptor at %.*s (#%"PRIu64", id %"PRIu64", space %"PRIu64")",
-					(int) CharString_length(name), name.ptr, i, b.binding.binding, b.binding.space
+					(int) CharString_length(name), name.ptr, i, b->binding.binding, b->binding.space
 				);
 
-				if(tb.single.stackTrace.stackTrace[0])
+				if(tb->single.stackTrace.stackTrace[0])
 					Log_printCapturedStackTraceCustom(
 										alloc,
-						(const void**) tb.single.stackTrace.stackTrace,
-						sizeof(tb.single.stackTrace) / sizeof(void*),
+						(const void**) tb->single.stackTrace.stackTrace,
+						sizeof(tb->single.stackTrace) / sizeof(void*),
 						ELogLevel_Warn,
 						ELogOptions_None
 					);
@@ -140,8 +138,6 @@ void DescriptorTable_free(DescriptorTable *table, const Allocator *alloc) {
 		}
 
 	//Destroy
-
-	//Log_debugLnx("Destroy: %p", table);
 
 	if(table->acquiredAtomic)
 		AtomicI64_dec(&parentPtr->descriptorTableCount);
@@ -180,7 +176,7 @@ Bool DescriptorHeapRef_createDescriptorTable(
 	DescriptorHeapRef *parent,
 	DescriptorLayoutRef *layout,
 	EDescriptorTableFlags flags,
-	CharString name,
+	const CharString *name,
 	DescriptorTableRef **tableRef,
 	Error *e_rr
 ) {
@@ -223,8 +219,6 @@ Bool DescriptorHeapRef_createDescriptorTable(
 
 	DescriptorTable *table = DescriptorTableRef_ptr(*tableRef);
 
-	//Log_debugLnx("Create: DescriptorTable %.*s (%p)", (int) CharString_length(name), name.ptr, heap);
-
 	*table = (DescriptorTable) {
 		.parent = parent,
 		.layout = layout,
@@ -237,7 +231,8 @@ Bool DescriptorHeapRef_createDescriptorTable(
 
 		retError(clean, Error_outOfBounds(
 			0, parentPtr->info.maxDescriptorTables, parentPtr->info.maxDescriptorTables,
-			"DescriptorHeapRef_createDescriptorTable() descriptor heap is out of descriptor table slots"));
+			"DescriptorHeapRef_createDescriptorTable() descriptor heap is out of descriptor table slots"
+		));
 	}
 
 	table->acquiredAtomic = true;
@@ -262,8 +257,7 @@ Bool DescriptorHeapRef_createDescriptorTable(
 
 		ESHRegisterType type = bindings.ptr[i].registerType & ESHRegisterType_TypeMask;
 
-		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
-		{
+		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd) {
 			gotoIfError3(clean, ListTextureDescriptorRange_resize(&multiple->textures, j, alloc, e_rr));
 		}
 
@@ -326,21 +320,21 @@ Descriptor Descriptor_tlas(TLASRef *tlas) { return (Descriptor) { .resource = tl
 Descriptor Descriptor_sampler(SamplerRef *sampler) { return (Descriptor) { .resource = sampler }; }
 
 U64 Descriptor_startBuffer(const Descriptor *d) {
-	return d.buffer.startRegionAndCounterOffset.region48 << 16 >> 16;
+	return !d ? 0 : d->buffer.startRegionAndCounterOffset.region48 << 16 >> 16;
 }
 
 U64 Descriptor_endBuffer(const Descriptor *d) {
-	return d.buffer.endRegionAndCounterOffset.region48 << 16 >> 16;
+	return !d ? 0 : d->buffer.endRegionAndCounterOffset.region48 << 16 >> 16;
 }
 
 U64 Descriptor_bufferLength(const Descriptor *d) {
 	return Descriptor_endBuffer(d) - Descriptor_startBuffer(d);
 }
 
-U32 Descriptor_counterOffset(const Descriptor* d) {
+U32 Descriptor_counterOffset(const Descriptor *d) {
 	return
-		d.buffer.startRegionAndCounterOffset.counter16.counterOffset16 |
-		((U32)d.buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
+		d->buffer.startRegionAndCounterOffset.counter16.counterOffset16 |
+		((U32)d->buffer.endRegionAndCounterOffset.counter16.counterOffset16 << 16);
 }
 
 Bool DescriptorTable_loseRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
@@ -396,8 +390,8 @@ Bool DescriptorTable_addRef(DescriptorTable *table, RefPtr *ref, Error *e_rr) {
 		}
 
 	gotoIfError3(clean, ListDescriptorTableResourceRef_pushBack(
-		&table->resources, (DescriptorTableResourceRef) { .resource = ref, .count = 1 }
-	, alloc, e_rr));
+		&table->resources, (DescriptorTableResourceRef) { .resource = ref, .count = 1 }, alloc, e_rr
+	));
 
 clean:
 
@@ -502,26 +496,26 @@ clean:
 
 Bool Descriptor_eq(const Descriptor *a, const DescriptorTableBindingSingle *b, ESHRegisterType type) {
 
-	if (a.resource != b.resource)
+	if (!a || !b || a->resource != b->resource)
 		return false;
 
 	static_assert(
-		sizeof(a.texture) == sizeof(U64),
+		sizeof(a->texture) == sizeof(U64),
 		"Descriptor_eq() checks for texture by using data[0] (U64)"
 	);
 
 	static_assert(
-		sizeof(a.buffer) == sizeof(U64) * 3,
+		sizeof(a->buffer) == sizeof(U64) * 3,
 		"Descriptor_eq() checks for texture by using data[0, 1 and 2] (U64[3])"
 	);
 
 	if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
-		return a.data[0] == b.data[0];
+		return a->data[0] == b->data[0];
 
 	else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
 		return Buffer_eq(
-			Buffer_createRefConst(a.data, sizeof(U64) * 3),
-			Buffer_createRefConst(b.data, sizeof(U64) * 3)
+			Buffer_createRefConst(a->data, sizeof(U64) * 3),
+			Buffer_createRefConst(b->data, sizeof(U64) * 3)
 		);
 
 	return true;
@@ -543,6 +537,9 @@ Bool DescriptorTableRef_setDescriptors(
 	if(!table || table->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
 		retError(clean, Error_nullPointer(0, "DescriptorTableRef_setDescriptors()::table is required"));
 
+	if(!darr)
+		retError(clean, Error_nullPointer(4, "DescriptorTableRef_setDescriptors()::darr is required"));
+
 	DescriptorTable *tablePtr = DescriptorTableRef_ptr(table);
 	DescriptorLayout *layoutPtr = DescriptorLayoutRef_ptr(tablePtr->layout);
 	DescriptorHeap *heapPtr = DescriptorHeapRef_ptr(tablePtr->parent);
@@ -558,20 +555,20 @@ Bool DescriptorTableRef_setDescriptors(
 	if(layoutPtr->info.flags & EDescriptorLayoutFlags_HasPushDescriptors)
 		retError(clean, Error_invalidOperation(0, "DescriptorTableRef_setDescriptors() called on a push descriptor"));
 
-	DescriptorBinding b = bindings.ptr[bindId];
-	ESHRegisterType type = b.registerType & ESHRegisterType_TypeMask;
+	const DescriptorBinding *b = &bindings.ptr[bindId];
+	ESHRegisterType type = b->registerType & ESHRegisterType_TypeMask;
 
-	if(arrayId >= b.count)
-		retError(clean, Error_outOfBounds(0, arrayId, b.count, "DescriptorTableRef_setDescriptors()::arrayId out of bounds"));
+	if(arrayId >= b->count)
+		retError(clean, Error_outOfBounds(0, arrayId, b->count, "DescriptorTableRef_setDescriptors()::arrayId out of bounds"));
 
-	if(arrayId + darr.length > b.count)
+	if(arrayId + darr->length > b->count)
 		retError(clean, Error_outOfBounds(
-			0, arrayId + darr.length, b.count, "DescriptorTableRef_setDescriptors()::arrayId + darr.length out of bounds"
+			0, arrayId + darr->length, b->count, "DescriptorTableRef_setDescriptors()::arrayId + darr.length out of bounds"
 		));
 
-	for(U64 j = 0; j < darr.length; ++j) {
+	for(U64 j = 0; j < darr->length; ++j) {
 
-		Descriptor d = darr.ptr[j];
+		Descriptor d = darr->ptr[j];
 
 		if(!d.resource) {
 
@@ -597,7 +594,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 			case EGraphicsTypeId_DeviceBuffer: {
 
-				U32 counterOffset = Descriptor_counterOffset(d);
+				U32 counterOffset = Descriptor_counterOffset(&d);
 
 				//Validate counter resource
 
@@ -641,23 +638,23 @@ Bool DescriptorTableRef_setDescriptors(
 				GraphicsResource res = DeviceBufferRef_ptr(d.resource)->resource;
 				U64 len = res.size;
 
-				if(!(res.flags & EGraphicsResourceFlag_ShaderWrite) && (b.registerType & ESHRegisterType_IsWrite))
+				if(!(res.flags & EGraphicsResourceFlag_ShaderWrite) && (b->registerType & ESHRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be written by shader"
 					));
 
-				U64 start = Descriptor_startBuffer(d);
+				U64 start = Descriptor_startBuffer(&d);
 
-				if(Descriptor_endBuffer(d) > len || start >= len)
+				if(Descriptor_endBuffer(&d) > len || start >= len)
 					retError(clean, Error_outOfBounds(
-						0, Descriptor_endBuffer(d) > len ? Descriptor_endBuffer(d) : start, len,
+						0, Descriptor_endBuffer(&d) > len ? Descriptor_endBuffer(&d) : start, len,
 						"DescriptorTableRef_setDescriptors()::buffer start/end range out of bounds"
 					));
 
-				if(!Descriptor_endBuffer(d))
+				if(!Descriptor_endBuffer(&d))
 					d.buffer.endRegionAndCounterOffset.region48 |= len - start;
 
-				U64 descLen = Descriptor_bufferLength(d);
+				U64 descLen = Descriptor_bufferLength(&d);
 
 				if(!(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd))
 					retError(clean, Error_invalidParameter(
@@ -676,7 +673,7 @@ Bool DescriptorTableRef_setDescriptors(
 							3, 0, "DescriptorTableRef_setDescriptors() constant buffer length needs to be 256-byte aligned"
 						));
 
-					if(descLen != b.constantBufferSize)
+					if(descLen != b->constantBufferSize)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() constant buffer offset needs to be 256-byte aligned"
 						));
@@ -694,7 +691,7 @@ Bool DescriptorTableRef_setDescriptors(
 
 				//ShaderRead is not used for ConstantBuffer; it's EDeviceBufferUsage_Uniform
 
-				else if(!(res.flags & EGraphicsResourceFlag_ShaderRead) && !(b.registerType & ESHRegisterType_IsWrite))
+				else if(!(res.flags & EGraphicsResourceFlag_ShaderRead) && !(b->registerType & ESHRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be read by shader"
 					));
@@ -706,17 +703,17 @@ Bool DescriptorTableRef_setDescriptors(
 
 				if (type == ESHRegisterType_StructuredBuffer || type == ESHRegisterType_StructuredBufferAtomic) {
 
-					if(descLen / b.structedBufferStride > 2 * GIBI)
+					if(descLen / b->structedBufferStride > 2 * GIBI)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() structured buffer is limited to 2Gi elements"
 						));
 
-					if(descLen % b.structedBufferStride)
+					if(descLen % b->structedBufferStride)
 						retError(clean, Error_invalidParameter(
 							3, 0, "DescriptorTableRef_setDescriptors() structured buffer length should be aligned to stride"
 						));
 
-					if(start % b.structedBufferStride)
+					if(start % b->structedBufferStride)
 						retError(clean, Error_invalidParameter(
 							3, 0,
 							"DescriptorTableRef_setDescriptors() structured buffer startRange should be aligned to stride"
@@ -813,20 +810,20 @@ Bool DescriptorTableRef_setDescriptors(
 
 				UnifiedTexture tex = TextureRef_getUnifiedTexture(d.resource, NULL);
 
-				Bool isArray = b.registerType & ESHRegisterType_IsArray;
-				Bool isWrite = b.registerType & ESHRegisterType_IsWrite;
+				Bool isArray = b->registerType & ESHRegisterType_IsArray;
+				Bool isWrite = b->registerType & ESHRegisterType_IsWrite;
 				Bool isDepthBuffer = d.resource->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DepthStencil;
 				Bool hasStencil = false;
 
 				if(isDepthBuffer)
 					hasStencil = tex.depthFormat >= EDepthStencilFormat_StencilStart;
 
-				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderRead) && !(b.registerType & ESHRegisterType_IsWrite))
+				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderRead) && !(b->registerType & ESHRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be read by shader"
 					));
 
-				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderWrite) && (b.registerType & ESHRegisterType_IsWrite))
+				if(!(tex.resource.flags & EGraphicsResourceFlag_ShaderWrite) && (b->registerType & ESHRegisterType_IsWrite))
 					retError(clean, Error_invalidParameter(
 						3, 0, "DescriptorTableRef_setDescriptors() resource isn't allowed to be written by shader"
 					));
@@ -947,12 +944,12 @@ Bool DescriptorTableRef_setDescriptors(
 	if((acq = SpinLock_lock(lock, 1 * SECOND)) < ELockAcquire_Success)
 		retError(clean, Error_timedOut(0, 1 * SECOND, "DescriptorTableRef_setDescriptors() couldn't acquire descriptor range"));
 
-	if(b.count > 1) {
+	if(b->count > 1) {
 
 		Bool allEq = true;
 		DescriptorTableBindingSingle single = (DescriptorTableBindingSingle) { 0 };
 
-		for(U64 j = arrayId; j < arrayId + darr.length; ++j) {
+		for(U64 j = arrayId; j < arrayId + darr->length; ++j) {
 
 			single.resource = binding->multiple.resources.ptr[j];
 
@@ -962,7 +959,7 @@ Bool DescriptorTableRef_setDescriptors(
 			else if (type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
 				single.buffer = binding->multiple.buffers.ptr[j];
 
-			if (!Descriptor_eq(darr.ptr[j - arrayId], single, type)) {
+			if (!Descriptor_eq(&darr->ptr[j - arrayId], &single, type)) {
 				allEq = false;
 				break;
 			}
@@ -972,36 +969,36 @@ Bool DescriptorTableRef_setDescriptors(
 			goto clean;
 	}
 
-	else if(Descriptor_eq(darr.ptr[0], binding->single, type))
+	else if(Descriptor_eq(&darr->ptr[0], &binding->single, type))
 		goto clean;
 
 	//Release previous descriptors and set new ones
 
-	gotoIfError3(clean, DescriptorTableRef_unsetDescriptors(table, bindId, arrayId, darr.length, e_rr));
+	gotoIfError3(clean, DescriptorTableRef_unsetDescriptors(table, bindId, arrayId, darr->length, e_rr));
 	gotoIfError3(clean, DescriptorTable_setDescriptorsExt(tablePtr, bindId, arrayId, darr, e_rr));
 
 	if(maintainRef)
-		for(U64 j = 0; j < darr.length; ++j) {
+		for(U64 j = 0; j < darr->length; ++j) {
 
-			RefPtr *res = darr.ptr[j].resource;
+			RefPtr *res = darr->ptr[j].resource;
 			Bool isBuffer = res && res->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer;
 
 			Bool addRes = DescriptorTable_addRef(tablePtr, res, e_rr);
-			Bool addCounter = !isBuffer ? true : addRes && DescriptorTable_addRef(tablePtr, darr.ptr[j].buffer.counter, e_rr);
+			Bool addCounter = !isBuffer ? true : addRes && DescriptorTable_addRef(tablePtr, darr->ptr[j].buffer.counter, e_rr);
 
 			if (!addRes || !addCounter) {
 
 				for(U64 k = 0; k < j; ++k) {
 
-					RefPtr *resk = darr.ptr[k].resource;
+					RefPtr *resk = darr->ptr[k].resource;
 					DescriptorTable_loseRef(tablePtr, resk, e_rr);
 
 					if(resk && resk->refPtrType->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
-						DescriptorTable_loseRef(tablePtr, darr.ptr[k].buffer.counter, e_rr);
+						DescriptorTable_loseRef(tablePtr, darr->ptr[k].buffer.counter, e_rr);
 				}
 
 				if(addRes)
-					DescriptorTable_loseRef(tablePtr, darr.ptr[j].resource, e_rr);
+					DescriptorTable_loseRef(tablePtr, darr->ptr[j].resource, e_rr);
 
 				goto clean;
 			}
@@ -1009,10 +1006,10 @@ Bool DescriptorTableRef_setDescriptors(
 
 	//Now that we have registered all resources, it should be safe to set them properly
 
-	if(b.count > 1)
-		for(U64 j = arrayId; j < arrayId + darr.length; ++j) {
+	if(b->count > 1)
+		for(U64 j = arrayId; j < arrayId + darr->length; ++j) {
 
-			binding->multiple.resources.ptrNonConst[j] = darr.ptr[j - arrayId].resource;
+			binding->multiple.resources.ptrNonConst[j] = darr->ptr[j - arrayId].resource;
 			binding->multiple.activeList.ptrNonConst[j >> 6] |= (U64)1 << (j & 63);
 
 			U64 *maintainRefPtr = &binding->multiple.maintainRef.ptrNonConst[j >> 6];
@@ -1026,23 +1023,23 @@ Bool DescriptorTableRef_setDescriptors(
 				binding->multiple.stackTraces.ptrNonConst[j] = stack;
 
 			if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
-				binding->multiple.textures.ptrNonConst[j] = darr.ptr[j - arrayId].texture;
+				binding->multiple.textures.ptrNonConst[j] = darr->ptr[j - arrayId].texture;
 
 			else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
-				binding->multiple.buffers.ptrNonConst[j] = darr.ptr[j - arrayId].buffer;
+				binding->multiple.buffers.ptrNonConst[j] = darr->ptr[j - arrayId].buffer;
 		}
 
 	else {
 
-		binding->single.resource = darr.ptr[0].resource;
+		binding->single.resource = darr->ptr[0].resource;
 		binding->single.stackTrace = stack;
 		binding->single.maintainRef = maintainRef;
 
 		if(type >= ESHRegisterType_TextureStart && type < ESHRegisterType_TextureEnd)
-			binding->single.texture = darr.ptr[0].texture;
+			binding->single.texture = darr->ptr[0].texture;
 
 		else if(type >= ESHRegisterType_BufferStart && type < ESHRegisterType_BufferEnd)
-			binding->single.buffer = darr.ptr[0].buffer;
+			binding->single.buffer = darr->ptr[0].buffer;
 	}
 
 clean:
@@ -1066,21 +1063,21 @@ Bool DescriptorTableRef_setDescriptor(
 	ListDescriptor descriptors = (ListDescriptor) { 0 };
 
 	gotoIfError3(clean, ListDescriptor_createRefConst(&d, 1, &descriptors, e_rr));
-	gotoIfError3(clean, DescriptorTableRef_setDescriptors(table, bindId, arrayId, maintainRef, descriptors, e_rr));
+	gotoIfError3(clean, DescriptorTableRef_setDescriptors(table, bindId, arrayId, maintainRef, &descriptors, e_rr));
 
 clean:
 	return s_uccess;
 }
 
-U64 DescriptorTableRef_resolveRegisterName(DescriptorTableRef *table, CharString registerName) {
+U64 DescriptorTableRef_resolveRegisterName(DescriptorTableRef *table, const CharString *registerName) {
 
 	if(!table || table->refPtrType->typeId != (ETypeId) EGraphicsTypeId_DescriptorTable)
 		return U64_MAX;
 
-	DescriptorLayoutInfo info = DescriptorLayoutRef_ptr(DescriptorTableRef_ptr(table)->layout)->info;
+	const DescriptorLayoutInfo *info = &DescriptorLayoutRef_ptr(DescriptorTableRef_ptr(table)->layout)->info;
 
-	for(U64 i = 0; i < info.bindingNames.length; ++i)
-		if(CharString_equalsString(&info.bindingNames.ptr[i], &registerName, EStringCase_Sensitive))
+	for(U64 i = 0; i < info->bindingNames.length; ++i)
+		if(CharString_equalsString(&info->bindingNames.ptr[i], registerName, EStringCase_Sensitive))
 			return i;
 
 	return U64_MAX;
@@ -1088,7 +1085,7 @@ U64 DescriptorTableRef_resolveRegisterName(DescriptorTableRef *table, CharString
 
 Bool DescriptorTableRef_setDescriptorByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 arrayId,
 	Bool maintainRef,
 	const Descriptor *d,
@@ -1110,7 +1107,7 @@ clean:
 
 Bool DescriptorTableRef_setDescriptorsByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 arrayId,
 	Bool maintainRef,
 	const ListDescriptor *d,
@@ -1132,7 +1129,7 @@ clean:
 
 Bool DescriptorTableRef_unsetDescriptorsByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 arrayId,
 	U64 count,
 	Error *e_rr
@@ -1153,7 +1150,7 @@ clean:
 
 Bool DescriptorTableRef_allocDescriptorByName(
 	DescriptorTableRef *table,
-	CharString registerName,
+	const CharString *registerName,
 	U64 *arrayId,           //outputs arrayId into descriptor if success
 	Bool maintainRef,
 	const Descriptor *d,
@@ -1456,14 +1453,17 @@ Bool DescriptorTableRef_allocDescriptorBindless(
 	ESHRegisterType type4 = type & ESHRegisterType_TypeMask;
 	Bool isTexture = type4 >= ESHRegisterType_TextureStart && type4 < ESHRegisterType_TextureEnd;
 
+	if(!d)
+		retError(clean, Error_nullPointer(7, "DescriptorTableRef_allocDescriptorBindless()::d is required"));
+
 	gotoIfError3(clean, DescriptorTableRef_findBindlessRegister(
 		table,
 		type,
 		strideOrLength,
 		bindId,
 		bindlessTypeId,
-		d.resource,
-		isTexture ? d.texture.planeId : 0,
+		d->resource,
+		isTexture ? d->texture.planeId : 0,
 		e_rr
 	));
 

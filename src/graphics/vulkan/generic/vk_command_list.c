@@ -20,9 +20,12 @@
 
 //graphics/vulkan/generic/vk_command_list.c
 
-#include "types/container/list_impl.h"
-#include "graphics/generic/interface.h"
 #include "graphics/vulkan/vk_interface.h"
+#include "graphics/vulkan/vulkan.h"
+#include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_instance.h"
+#include "graphics/vulkan/vk_buffer.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -32,26 +35,20 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
-#include "graphics/vulkan/vulkan.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_buffer.h"
-#include "types/container/buffer.h"
-#include "types/container/log.h"
 #include "platforms/logx.h"
-#include "types/container/buffer.h"
-#include "types/base/error.h"
 #include "formats/oiSH/sh_registers.h"
+#include "types/base/buffer_base.h"
+#include "types/base/error.h"
 #include "types/base/constants.h"
 
-Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
+static inline Bool addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 
 	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
 
 	switch (attachment.resolveMode) {
-		default:                        result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;    break;
-		case EMSAAResolveMode_Min:        result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;        break;
-		case EMSAAResolveMode_Max:        result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;        break;
+		default:                    result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;  break;
+		case EMSAAResolveMode_Min:  result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;      break;
+		case EMSAAResolveMode_Max:  result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;      break;
 	}
 
 	U32 viewId = U32_MAX;
@@ -801,11 +798,11 @@ void VK_WRAP_FUNC(CommandList_process)(
 
 				switch (transition.stage) {
 
-					default:                                                                                        break;
-					case EPipelineStage_Compute:        pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;        break;
-					case EPipelineStage_Vertex:            pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;        break;
-					case EPipelineStage_Pixel:            pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;    break;
-					case EPipelineStage_GeometryExt:    pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;    break;
+					default:                                                                                    break;
+					case EPipelineStage_Compute:      pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;   break;
+					case EPipelineStage_Vertex:       pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;    break;
+					case EPipelineStage_Pixel:        pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;  break;
+					case EPipelineStage_GeometryExt:  pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;  break;
 
 					case EPipelineStage_Hull:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;

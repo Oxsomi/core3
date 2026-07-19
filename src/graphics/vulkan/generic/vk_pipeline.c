@@ -27,7 +27,6 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "types/base/error.h"
 
-TList(VkPipelineShaderStageCreateInfo);
 TListImpl(VkPipelineShaderStageCreateInfo);
 
 Bool createShaderModule(

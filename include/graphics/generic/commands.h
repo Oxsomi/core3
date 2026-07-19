@@ -75,9 +75,9 @@ TList(CommandScopeDependency);
 
 Bool CommandListRef_startScope(
 	CommandListRef *commandList,
-	ListTransition transitions,
+	const ListTransition *transitions,
 	U32 id,
-	ListCommandScopeDependency dependencies,
+	const ListCommandScopeDependency *dependencies,
 	Error *e_rr
 );
 
@@ -88,9 +88,9 @@ Bool CommandListRef_setComputePipeline(CommandListRef *commandList, PipelineRef 
 Bool CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRef *pipeline, Error *e_rr);
 Bool CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineRef *pipeline, Error *e_rr);
 
-Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, SetPrimitiveBuffersCmd buffers, Error *e_rr);
+Bool CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, const SetPrimitiveBuffersCmd *buffers, Error *e_rr);
 
-Bool CommandListRef_draw(CommandListRef *commandList, DrawCmd draw, Error *e_rr);
+Bool CommandListRef_draw(CommandListRef *commandList, const DrawCmd *draw, Error *e_rr);
 
 Bool CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount, Error *e_rr);
 Bool CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount, Error *e_rr);
@@ -171,8 +171,8 @@ Bool CommandListRef_startRenderExt(
 	CommandListRef *commandList,
 	I32x2 offset,
 	I32x2 size,
-	ListAttachmentInfo colors,
-	DepthStencilAttachmentInfo depthStencil,
+	const ListAttachmentInfo *colors,
+	const DepthStencilAttachmentInfo *depthStencil,
 	Error *e_rr
 );
 
@@ -180,8 +180,8 @@ Bool CommandListRef_endRenderExt(CommandListRef *commandList, Error *e_rr);
 
 //DebugMarkers feature
 
-Bool CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name, Error *e_rr);
-Bool CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name, Error *e_rr);
+Bool CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, const CharString *name, Error *e_rr);
+Bool CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, const CharString *name, Error *e_rr);
 Bool CommandListRef_endRegionDebugExt(CommandListRef *commandList, Error *e_rr);
 
 #ifdef __cplusplus

@@ -20,9 +20,10 @@
 
 //graphics/d3d12/generic/dx_command_list.c
 
-#include "types/container/list_impl.h"
-#include "graphics/generic/interface.h"
 #include "graphics/d3d12/dx_interface.h"
+#include "graphics/d3d12/dx_device.h"
+#include "graphics/d3d12/dx_buffer.h"
+#include "graphics/generic/interface.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -32,17 +33,13 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
-#include "graphics/d3d12/dx_device.h"
-#include "graphics/d3d12/dx_buffer.h"
 #include "types/container/buffer.h"
 #include "types/math/vec4i_swizzle.h"
 #include "types/container/log.h"
 #include "platforms/logx.h"
 #include "types/container/buffer.h"
 #include "types/base/error.h"
-
 #include "types/base/mathi.h"
-#include "types/base/mathf.h"
 
 //RTVs and DSVs are temporary in DirectX.
 

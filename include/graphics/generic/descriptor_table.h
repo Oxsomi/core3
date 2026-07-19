@@ -175,7 +175,7 @@ Bool DescriptorHeapRef_createDescriptorTable(
 	DescriptorHeapRef *parent,
 	DescriptorLayoutRef *layout,
 	EDescriptorTableFlags flags,
-	CharString name,
+	const CharString *name,
 	DescriptorTableRef **table,
 	Error *e_rr
 );

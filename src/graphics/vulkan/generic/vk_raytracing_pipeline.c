@@ -49,7 +49,6 @@ Bool createShaderModule(
 
 TList(VkRayTracingPipelineCreateInfoKHR);
 TList(VkShaderModule);
-TList(VkPipelineShaderStageCreateInfo);
 TList(VkRayTracingShaderGroupCreateInfoKHR);
 
 TListImpl(VkRayTracingPipelineCreateInfoKHR);
