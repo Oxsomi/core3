@@ -304,12 +304,16 @@ static inline Bool GenericList_eraseFirstLast(
 	if (!list)
 		retError(clean, Error_nullPointer(0, "GenericList_eraseFirstLast()::list is required"));
 
-	const U64 ind = isFirst ? GenericList_findFirst(*list, buf, offset, eq) : GenericList_findLast(*list, buf, offset, eq);
+	//Scoped so the goto above doesn't cross initialization (required when consumed as C++)
 
-	if (ind == U64_MAX)
-		goto clean;
+	{
+		const U64 ind = isFirst ? GenericList_findFirst(*list, buf, offset, eq) : GenericList_findLast(*list, buf, offset, eq);
 
-	gotoIfError3(clean, GenericList_erase(list, ind, e_rr));
+		if (ind == U64_MAX)
+			goto clean;
+
+		gotoIfError3(clean, GenericList_erase(list, ind, e_rr));
+	}
 
 clean:
 	return s_uccess;

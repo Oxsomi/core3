@@ -27,8 +27,9 @@
 #include "platforms/ext/formatx.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
+#include "types/base/allocator.h"
 #include "types/math/flp.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
 #include "types/base/type_id.h"
 #include "types/base/constants.h"
 
@@ -170,7 +171,7 @@ Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStrin
 
 	//Info about includes
 
-	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst("Includes:\n"), alloc, tempStr))
+	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst("Includes:\n"), alloc, tempStr));
 
 	for(U64 i = 0; i < files.length; ++i) {
 
@@ -187,7 +188,7 @@ Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStrin
 				includeInfo.crc32c, includeInfo.fileSize,
 				includeInfo.timestamp ? format : "", includeInfo.timestamp ? " " : "",
 				includeInfo.file.ptr
-			))
+			));
 
 		else gotoIfError2(clean, CharString_format(
 			alloc, &tempStr2,
@@ -196,9 +197,9 @@ Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStrin
 			includeInfo.crc32c, includeInfo.fileSize,
 			includeInfo.timestamp ? format : "", includeInfo.timestamp ? " " : "",
 			includeInfo.file.ptr
-		))
+		));
 
-		gotoIfError2(clean, CharString_appendString(tempStr, tempStr2, alloc))
+		gotoIfError2(clean, CharString_appendString(tempStr, tempStr2, alloc));
 		CharString_free(&tempStr2, alloc);
 	}
 
@@ -360,7 +361,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 			if(end == U64_MAX)
 				dist = CharString_length(tempStr3) - o;
 
-			gotoIfError2(clean, CharString_eraseAtCount(&tempStr3, o, dist))
+			gotoIfError2(clean, CharString_eraseAtCount(&tempStr3, o, dist));
 		}
 
 		errs = CharString_createRefStrConst(tempStr3);
@@ -393,7 +394,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 	if (CharString_equalsStringSensitive(errs, internalCompileErrorRef)) {
 		CompileError cerr = (CompileError) { .error = errs };
-		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc));
 		goto clean;
 	}
 
@@ -474,7 +475,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 				multiplier *= 10;
 
 				if(num >> 32)        //Out of bounds
-					retError(clean, Error_invalidState(0, "Compiler_parseErrors() num is limited to U32"))
+					retError(clean, Error_invalidState(0, "Compiler_parseErrors() num is limited to U32"));
 			}
 
 			if(it == U64_MAX || it == 0)    //Invalid, skip
@@ -514,7 +515,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 					multiplier *= 10;
 
 					if(num >> 32)        //Out of bounds
-						retError(clean, Error_invalidState(1, "Compiler_parseErrors() lineId is limited to U32"))
+						retError(clean, Error_invalidState(1, "Compiler_parseErrors() lineId is limited to U32"));
 				}
 			}
 
@@ -524,7 +525,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 			if (hasSecondNum) {
 
 				if(secondNum >> 16)        //Out of U16
-					retError(clean, Error_invalidState(1, "Compiler_parseErrors() charId is limited to U16"))
+					retError(clean, Error_invalidState(1, "Compiler_parseErrors() charId is limited to U16"));
 
 				lineId = (U32) num;
 				lineOff = (U16) secondNum;
@@ -569,8 +570,8 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 		if (prevOff != U64_MAX && !ignoreNextWarning) {
 
 			CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, ourErrorLineStart - prevOff, false);
-			gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
-			gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2))
+			gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr));
+			gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2));
 
 			CompileError cerr = (CompileError) {
 				.lineId = (U16) prevLineId,
@@ -580,7 +581,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 				.file = tempStr2
 			};
 
-			gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+			gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc));
 			tempStr = tempStr2 = CharString_createNull();
 		}
 
@@ -621,8 +622,8 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	if (prevOff != U64_MAX && !ignoreNextWarning) {
 
 		CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, CharString_length(errs) - prevOff + 1, false);
-		gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
-		gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2))
+		gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr));
+		gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2));
 
 		CompileError cerr = (CompileError) {
 			.lineId = (U16) prevLineId,
@@ -632,7 +633,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 			.file = tempStr2
 		};
 
-		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc));
 		tempStr = tempStr2 = CharString_createNull();
 	}
 
@@ -747,7 +748,7 @@ Bool Compiler_paddingCheck(
 
 		gotoIfError3(clean, Compiler_paddingCheck(
 			sb, binaryId, binaryType, i, unpaddedOffset, stride, reg, alloc, e_rr
-		))
+		));
 
 		if(!isPacked && var1D > 1 && (stride & 15))
 			Log_warnLn(
@@ -847,7 +848,7 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 						if(!hadFirstPaddingScan)
 							gotoIfError3(clean, Compiler_paddingCheck(
 								sb, i, k, U16_MAX, 0, reg.shaderBuffer.bufferSize, reg, alloc, e_rr
-							))
+							));
 
 						hadFirstPaddingScan = true;
 					}
@@ -869,15 +870,15 @@ Bool Compiler_disassemble(Compiler comp, ESHBinaryType type, Buffer buf, Allocat
 	switch (type) {
 
 		case ESHBinaryType_SPIRV:
-			gotoIfError3(clean, Compiler_disassembleSPIRV(buf, alloc, result, e_rr))
+			gotoIfError3(clean, Compiler_disassembleSPIRV(buf, alloc, result, e_rr));
 			break;
 
 		case ESHBinaryType_DXIL:
-			gotoIfError3(clean, Compiler_disassembleDXIL(comp, buf, alloc, result, e_rr))
+			gotoIfError3(clean, Compiler_disassembleDXIL(comp, buf, alloc, result, e_rr));
 				break;
 
 		default:
-			retError(clean, Error_unimplemented(0, "Compiler_createDisassembly() has invalid type"))
+			retError(clean, Error_unimplemented(0, "Compiler_createDisassembly() has invalid type"));
 	}
 
 clean:
@@ -936,7 +937,7 @@ Bool Compiler_process(
 
 			gotoIfError3(clean, Compiler_processSPIRV(
 				result, registers, isDebug, toCompile, lock, entries, isLib, demotions, errors, alloc, e_rr
-			))
+			));
 
 			break;
 
@@ -944,12 +945,12 @@ Bool Compiler_process(
 
 			gotoIfError3(clean, Compiler_processDXIL(
 				compiler, result, registers, isDebug, toCompile, lock, entries, demotions, errors, alloc, e_rr
-			))
+			));
 
 			break;
 
 		default:
-			retError(clean, Error_unimplemented(0, "Compiler_process() has invalid type"))
+			retError(clean, Error_unimplemented(0, "Compiler_process() has invalid type"));
 	}
 
 clean:
@@ -1004,7 +1005,7 @@ Bool Compiler_link(
 	Bool s_uccess = true;
 
 	if(uniforms.length >> 8)
-		retError(clean, Error_invalidState(0, "Compiler_link() uniforms.length is capped to 256"))
+		retError(clean, Error_invalidState(0, "Compiler_link() uniforms.length is capped to 256"));
 
 	switch (type) {
 
@@ -1012,7 +1013,7 @@ Bool Compiler_link(
 
 			gotoIfError3(clean, Compiler_linkSPIRV(
 				compiler, inputs, uniforms, uniformData, entrypoint, stageType, exts, errors, result, alloc, e_rr
-			))
+			));
 
 			break;
 
@@ -1021,12 +1022,12 @@ Bool Compiler_link(
 			gotoIfError3(clean, Compiler_linkDXIL(
 				compiler, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, errors, result,
 				alloc, e_rr
-			))
+			));
 
 			break;
 
 		default:
-			retError(clean, Error_unimplemented(0, "Compiler_link() has invalid type"))
+			retError(clean, Error_unimplemented(0, "Compiler_link() has invalid type"));
 	}
 
 clean:

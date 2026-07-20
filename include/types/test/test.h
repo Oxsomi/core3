@@ -23,6 +23,10 @@
 #pragma once
 #include "types/base/error.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 
 typedef struct Test {
@@ -42,3 +46,7 @@ void Test_print(Test *test, const C8 *str);
 void Test_setModule(Test *test, const C8 *moduleName);
 
 int Test_end(Test *test);
+
+#ifdef __cplusplus
+	}
+#endif

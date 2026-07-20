@@ -42,6 +42,9 @@ int main() {
 	Test_bigInt(&t);
 	Test_u128(&t);
 	Test_string(&t);
+	Test_list(&t);
+	Test_jobQueue(&t);
+	Test_hpp(&t);
 	Test_memoryStream(&t);
 	Test_encryptionStream(&t);
 

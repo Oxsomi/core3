@@ -35,6 +35,12 @@ TListNamedBase(ListU8); TListNamedBase(ListU16); TListNamedBase(ListU32);
 TListNamedBase(ListI8); TListNamedBase(ListI16); TListNamedBase(ListI32); TListNamedBase(ListI64);
 TListNamedBase(ListF32); TListNamedBase(ListF64);
 
+//Implemented via TListSortImpl in list.c
+
+Bool ListU8_sort(ListU8 l);   Bool ListU16_sort(ListU16 l); Bool ListU32_sort(ListU32 l);
+Bool ListI8_sort(ListI8 l);   Bool ListI16_sort(ListI16 l); Bool ListI32_sort(ListI32 l); Bool ListI64_sort(ListI64 l);
+Bool ListF32_sort(ListF32 l); Bool ListF64_sort(ListF64 l);
+
 TListNamedBase(ListListU8);
 TListNamedBase(ListListU16);
 TListNamedBase(ListListU32);

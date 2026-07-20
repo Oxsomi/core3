@@ -88,11 +88,13 @@ if(EnableTests)
 	set_target_properties(OxC3_types_container_test_util PROPERTIES FOLDER Oxsomi/test/types)
 
 	file(GLOB testsC "test/*.c")
+	file(GLOB testsCpp "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
 	file(GLOB testsH "test/*.h")
 
 	add_executable(
 		OxC3_types_container_test
 		${testsC}
+		${testsCpp}
 		${testsH}
 		CMakeLists.txt
 	)

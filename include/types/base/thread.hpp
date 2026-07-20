@@ -34,12 +34,10 @@ namespace oxc {
 		c::Thread *thread;
 		const c::Allocator *alloc;
 
-		void release() {
+		void release() noexcept {
 
-			if (thread) {
-				Thread_wait(thread);
-				Thread_free(alloc, &thread);
-			}
+			if (thread)
+				Thread_waitAndCleanup(alloc, &thread, nullptr);
 
 			thread = nullptr;
 		}
@@ -65,17 +63,18 @@ namespace oxc {
 			return *this;
 		}
 
-		void join() { if(thread) Thread_wait(thread); }
-		
-		[[nodiscard]] static c::Error init(
+		c::Bool join(c::Error *e_rr = nullptr) noexcept { return !thread || Thread_wait(thread, e_rr); }
+
+		[[nodiscard]] static c::Bool init(
 			Thread &thread,
 			const c::Allocator *alloc,
 			c::ThreadCallbackFunction callback,
-			void *obj
+			void *obj,
+			c::Error *e_rr = nullptr
 		) noexcept {
 			thread.release();
 			thread.alloc = alloc;
-			return Thread_create(alloc, callback, obj, &thread.thread);
+			return Thread_create(alloc, callback, obj, &thread.thread, e_rr);
 		}
 
 		[[nodiscard]] static c::U64 getId() { return c::Thread_getId(); }
