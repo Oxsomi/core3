@@ -43,7 +43,7 @@ typedef struct Compiler {
 
 TList(Compiler);
 
-void ListCompiler_freeUnderlying(ListCompiler *compilers, Allocator alloc);
+void ListCompiler_freeUnderlying(ListCompiler *compilers, const Allocator *alloc);
 
 typedef struct CompilerSettings {
 
@@ -54,7 +54,7 @@ typedef struct CompilerSettings {
 	ECompilerFormat format;
 	ESHBinaryType outputType;
 
-	CharString includeDir;      //Optional extra includeDir to search for
+	ListCharString includeDirs; //Optional extra include dirs to search
 
 	Bool debug;
 	Bool infoAboutIncludes;     //Saves extra include info, useful for debugging includes or hot shader reload
@@ -89,8 +89,8 @@ U32 CompileError_lineId(CompileError err);
 
 TList(CompileError);
 
-void CompileError_free(CompileError *err, Allocator alloc);
-void ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc);
+void CompileError_free(CompileError *err, const Allocator *alloc);
+void ListCompileError_freeUnderlying(ListCompileError *compileErrors, const Allocator *alloc);
 
 typedef struct IncludeInfo {
 
@@ -108,11 +108,11 @@ typedef struct IncludeInfo {
 TList(IncludeInfo);
 
 ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b);
-void IncludeInfo_free(IncludeInfo *info, Allocator alloc);
+void IncludeInfo_free(IncludeInfo *info, const Allocator *alloc);
 
-void ListIncludeInfo_freeUnderlying(ListIncludeInfo *infos, Allocator alloc);
+void ListIncludeInfo_freeUnderlying(ListIncludeInfo *infos, const Allocator *alloc);
 
-Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *output, Error *e_rr);
+Bool ListIncludeInfo_stringify(const ListIncludeInfo *files, const Allocator *alloc, CharString *output, Error *e_rr);
 
 typedef enum ECompileResultType {
 	ECompileResultType_Binary,
@@ -167,69 +167,71 @@ TList(CompilerEntrypoint);
 TListNamed(const U16*, ListU16PtrConst);
 TListNamed(const U32*, ListU32PtrConst);
 
-void IncludedFile_free(IncludedFile *file, Allocator alloc);
-void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
+void IncludedFile_free(IncludedFile *file, const Allocator *alloc);
+void ListIncludedFile_freeUnderlying(ListIncludedFile *file, const Allocator *alloc);
 
-void CompileResult_free(CompileResult *result, Allocator alloc);
-void ListCompileResult_freeUnderlying(ListCompileResult *result, Allocator alloc);
+void CompileResult_free(CompileResult *result, const Allocator *alloc);
+void ListCompileResult_freeUnderlying(ListCompileResult *result, const Allocator *alloc);
 
-void ListCompilerEntrypoint_freeUnderlying(ListCompilerEntrypoint *entry, Allocator alloc);
+void ListCompilerEntrypoint_freeUnderlying(ListCompilerEntrypoint *entry, const Allocator *alloc);
 
 //A separate Compiler should be created per thread
 
-Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr);
-void Compiler_free(Compiler *comp, Allocator alloc);
+Bool Compiler_create(const Allocator *alloc, Compiler *comp, Error *e_rr);
+void Compiler_free(Compiler *comp, const Allocator *alloc);
 
 //Call this on shutdown for a clean exit
 void Compiler_shutdown();
 
 //Generate disassembly from buffer
 
-Bool Compiler_disassemble(Compiler comp, ESHBinaryType type, Buffer buf, Allocator alloc, CharString *result, Error *e_rr);
+Bool Compiler_disassemble(
+	const Compiler *comp, ESHBinaryType type, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
+);
 
 //Query entrypoints embedded in a binary
 
 Bool Compiler_getUniqueEntrypoints(
-	Compiler compiler,
+	const Compiler *compiler,
 	ESHBinaryType binaryType,
 	Buffer binary,                                   //Must be a lib
 	Bool showAll,                                    //true: show all entrypoints, false: only show targets to link
 	ListCompilerEntrypoint *uniqueEntrypoints,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
 //Convert assembly (SPIRV and DXIL) to oiSH by using the assembly
 
 Bool Compiler_process(
-	Compiler compiler,                  //To be able to get reflection data
+	const Compiler *compiler,           //To be able to get reflection data
 	ESHBinaryType type,
 	Buffer *result,                     //Required; input & output binary
 	ListSHRegisterRuntime *registers,   //Required; Output registers
 	Bool isDebug,
-	SHBinaryIdentifier toCompile,
+	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,                     //If not NULL will be used before writing into entries
-	ListSHEntryRuntime entries,         //Array contains the current buffer's reflection for the entry and compatibility checks
+	const ListSHEntryRuntime *entries,  //Array contains the current buffer's reflection for the entry and compatibility checks
 	Bool isLib,                         //If input file was compiled as lib
 	ESHExtension *demotions,            //Required; specifies which extensions aren't used (useful for demoting unused ones)
 	ListCompileError *errors,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
 Bool Compiler_link(
-	Compiler compiler,
+	const Compiler *compiler,
 	ESHBinaryType type,
-	ListBuffer inputs,                  //Input binary/binaries
-	ListSHUniformRuntime uniforms,      //Uniform descriptions (to index uniformData and to link)
-	Buffer uniformData,                 //Contents of the current compilation
-	CharString entrypoint,              //Entrypoint specialization (empty = keep as lib, otherwise specialize)
-	U16 shaderVersion,                  //U8 maj, minor
+	const ListBuffer *inputs,              //Input binary/binaries
+	const ListSHUniformRuntime *uniforms,  //Uniform descriptions (to index uniformData and to link)
+	Buffer uniformData,                    //Contents of the current compilation
+	const CharString *entrypoint,          //Entrypoint specialization (empty = keep as lib, otherwise specialize)
+	U16 shaderVersion,                     //U8 maj, minor
 	ESHPipelineStage stageType,
 	ESHExtension exts,
 	ListCompileError *errors,
-	Buffer *result,                     //Output binary: Either library or specialized binary (PS/GS/CS/etc.)
-	Allocator alloc,
+	Buffer *result,                        //Output binary: Either library or specialized binary (PS/GS/CS/etc.)
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -244,16 +246,16 @@ Bool Compiler_finalizeEntrypoint(       //Push reflection data into final entryp
 	ListCharString *uniqueSemantics,    //All semantic names; e.g. NORMAL. Excluding TEXCOORD or SV_TARGET
 	U8 inputSemantics[16],              //U4 each; semanticId and uniqueSemanticOff (0 = TEXCOORD or SV_TARGET)
 	U8 outputSemantics[16],             //^ but for output semantics for graphics shaders
-	CharString entryName,               //Can be empty in case of RT shaders
+	const CharString *entryName,        //Can be NULL/empty in case of RT shaders
 	SpinLock *lock,                     //If not NULL will be used before writing/validating against previous entry
-	ListSHEntryRuntime entries,         //Array contains the current buffer's reflection for the entry and compatibility checks
-	Allocator alloc,
+	const ListSHEntryRuntime *entries,  //Array contains the current buffer's reflection for the entry and compatibility checks
+	const Allocator *alloc,
 	Error *e_rr
 );
 
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.
-Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos, Error *e_rr);
+Bool Compiler_mergeIncludeInfo(Compiler *comp, const Allocator *alloc, ListIncludeInfo *infos, Error *e_rr);
 
 //Determine what minimum shader version is required
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize);
@@ -261,13 +263,13 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext);
 
 Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr);
 
-Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr);
+Bool Compiler_parseErrors(CharString errs, const Allocator *alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr);
 
 //Invoke HLSL reflection, to obtain & parse annotations
 Bool Compiler_parse(
-	Compiler comp,
-	CompilerSettings settings,
-	Allocator alloc,
+	const Compiler *comp,
+	const CompilerSettings *settings,
+	const Allocator *alloc,
 	CompileResult *result,
 	Error *e_rr
 );
@@ -281,10 +283,10 @@ typedef enum ECompileBinaryTypes {
 
 //Compile preprocessed file's entry
 Bool Compiler_compile(
-	Compiler comp,
-	CompilerSettings settings,
-	SHBinaryIdentifier toCompile,
-	Allocator alloc,
+	const Compiler *comp,
+	const CompilerSettings *settings,
+	const SHBinaryIdentifier *toCompile,
+	const Allocator *alloc,
 	CompileResult *result,
 	Error *e_rr
 );
@@ -293,7 +295,7 @@ Bool Compiler_compile(
 
 typedef enum ECompilerWarning ECompilerWarning;
 
-Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocator alloc, Error *e_rr);
+Bool Compiler_handleExtraWarnings(const SHFile *file, ECompilerWarning warning, const Allocator *alloc, Error *e_rr);
 
 //Simplied compiler workflow, this is what the CLI calls too; it automatically handles threading and other things.
 
@@ -308,7 +310,7 @@ Bool Compiler_getTargetsFromFile(
 	Bool multipleModes,
 	Bool combineFlag,
 	Bool enableLogging,
-	Allocator alloc,
+	const Allocator *alloc,
 	Bool *isFolder,                   //Optional (out); if the input is a folder or not
 	CharString *output,               //Optional; the output directory. If NULL, will output file names only (relative to none)
 	ListCharString *allFiles,         //Fully resolved file names (may contain duplicates per compile mode)
@@ -318,55 +320,21 @@ Bool Compiler_getTargetsFromFile(
 );
 
 Bool Compiler_compileShaders(
-	ListCharString allFiles,
-	ListCharString allShaderText,
-	ListCharString allOutputs,
-	ListU8 allCompileOutputs,
+	const ListCharString *allFiles,
+	const ListCharString *allShaderText,
+	const ListCharString *allOutputs,
+	const ListU8 *allCompileOutputs,
 	U64 threadCount,
 	Bool isDebug,
 	ECompilerWarning extraWarnings,
 	Bool ignoreEmptyFiles,
 	ECompileType type,
-	CharString includeDir,            //Optional
+	const ListCharString *includeDirs,   //Optional list of extra include dirs
 	Bool enableLogging,
-	Allocator alloc,
+	const Allocator *alloc,
 	ListBuffer *allBuffers,           //Optional: buffer outputs (if NULL, outputs to file)
 	Error *e_rr
 );
-
-//Extended functions for basic allocators
-
-void CompileResult_freex(CompileResult *result);
-void ListCompileResult_freeUnderlyingx(ListCompileResult *result);
-
-void ListCompiler_freeUnderlyingx(ListCompiler *compilers);
-
-void CompileError_freex(CompileError *err);
-void ListCompileError_freeUnderlyingx(ListCompileError *compileErrors);
-
-void IncludeInfo_freex(IncludeInfo *info);
-void ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos);
-Bool ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr, Error *e_rr);
-
-void IncludedFile_freex(IncludedFile *file);
-void ListIncludedFile_freeUnderlyingx(ListIncludedFile *file);
-
-Bool Compiler_createx(Compiler *comp, Error *e_rr);
-void Compiler_freex(Compiler *comp);
-
-Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
-Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
-Bool Compiler_disassemblex(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr);
-
-Bool Compiler_compilex(
-	Compiler comp,
-	CompilerSettings settings,
-	SHBinaryIdentifier toCompile,
-	CompileResult *result,
-	Error *e_rr
-);
-
-Bool Compiler_handleExtraWarningsx(SHFile file, ECompilerWarning warning, Error *e_rr);
 
 #ifdef __cplusplus
 	}

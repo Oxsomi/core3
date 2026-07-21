@@ -985,16 +985,16 @@ typedef struct CompilerInterfaces {
 } CompilerInterfaces;
 
 extern "C" Bool Compiler_processDXIL(
-	Compiler compiler,
+	const Compiler *compiler,
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
 	Bool isDebug,
-	SHBinaryIdentifier toCompile,
+	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,
-	ListSHEntryRuntime entries,
+	const ListSHEntryRuntime *entries,
 	ESHExtension *demotions,
 	ListCompileError *errors,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -1009,11 +1009,11 @@ extern "C" Bool Compiler_processDXIL(
 
 	HRESULT hr = S_OK;
 
-	Bool isLib = !CharString_length(toCompile.entrypoint);
+	Bool isLib = !CharString_length(toCompile->entrypoint);
 	ESHExtension exts = ESHExtension_None;
 	ListCharString strings{};
 	U8 inputSemanticCount = 0;
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler.interfaces;
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler->interfaces;
 
 	DxcBuffer inputBuf = DxcBuffer{};
 
@@ -1189,7 +1189,7 @@ extern "C" Bool Compiler_processDXIL(
 				if(FAILED(funcRefl->GetResourceBindingDesc(j, &input)))
 					retError(clean, Error_invalidState(0, "Compiler_processDXIL() DXIL contained invalid resource"));
 
-				gotoIfError3(clean, Compiler_convertRegisterDXIL(registers, &input, funcRefl, NULL, &alloc, e_rr));
+				gotoIfError3(clean, Compiler_convertRegisterDXIL(registers, &input, funcRefl, NULL, alloc, e_rr));
 			}
 
 			CharString demangled = CharString_createRefCStrConst(funcDesc0.Name);
@@ -1208,7 +1208,7 @@ extern "C" Bool Compiler_processDXIL(
 				groupSize, payloadSize, attributeSize, waveSizes,
 				inputs, outputs,
 				uniqueInputSemantics, &uniqueSemantics, inputSemantics, outputSemantics,
-				demangled, lock, entries,
+				&demangled, lock, entries,
 				alloc, e_rr
 			));
 		}
@@ -1233,18 +1233,18 @@ extern "C" Bool Compiler_processDXIL(
 		U64 reqFlags = dxilRefl->GetRequiresFlags();
 		gotoIfError3(clean, DxilMapToESHExtension(reqFlags, &exts, demotions, e_rr));
 
-		Bool isPixelShader = toCompile.stageType == ESHPipelineStage_Pixel;
+		Bool isPixelShader = toCompile->stageType == ESHPipelineStage_Pixel;
 
 		if (
-			toCompile.stageType == ESHPipelineStage_Compute ||
-			toCompile.stageType == ESHPipelineStage_MeshExt ||
-			toCompile.stageType == ESHPipelineStage_TaskExt
+			toCompile->stageType == ESHPipelineStage_Compute ||
+			toCompile->stageType == ESHPipelineStage_MeshExt ||
+			toCompile->stageType == ESHPipelineStage_TaskExt
 		) {
 			dxilRefl->GetThreadGroupSize(&groupSize[0], &groupSize[1], &groupSize[2]);
 			gotoIfError3(clean, Compiler_validateGroupSize(groupSize, e_rr));
 		}
 
-		if (toCompile.stageType == ESHPipelineStage_Compute) {
+		if (toCompile->stageType == ESHPipelineStage_Compute) {
 
 			U32 waveSizeRecommended, waveSizeMin, waveSizeMax;
 			dxilRefl->GetWaveSize(&waveSizeRecommended, &waveSizeMin, &waveSizeMax);
@@ -1305,7 +1305,7 @@ extern "C" Bool Compiler_processDXIL(
 				if(k == end) {    //Not found, so insert
 
 					gotoIfError3(clean, ListCharString_insert(
-						&strings, k, CharString_createRefCStrConst(signature.SemanticName), &alloc, e_rr
+						&strings, k, CharString_createRefCStrConst(signature.SemanticName), alloc, e_rr
 					));
 
 					if(!isOutput)
@@ -1327,17 +1327,17 @@ extern "C" Bool Compiler_processDXIL(
 
 			switch (signature.ComponentType) {
 
-				case  D3D_REGISTER_COMPONENT_FLOAT16:    prim = ESBPrimitive_Float;    stride = ESBStride_X16;        break;
-				case  D3D_REGISTER_COMPONENT_UINT16:    prim = ESBPrimitive_UInt;    stride = ESBStride_X16;        break;
-				case  D3D_REGISTER_COMPONENT_SINT16:    prim = ESBPrimitive_Int;    stride = ESBStride_X16;        break;
+				case  D3D_REGISTER_COMPONENT_FLOAT16:  prim = ESBPrimitive_Float;  stride = ESBStride_X16;  break;
+				case  D3D_REGISTER_COMPONENT_UINT16:   prim = ESBPrimitive_UInt;   stride = ESBStride_X16;  break;
+				case  D3D_REGISTER_COMPONENT_SINT16:   prim = ESBPrimitive_Int;    stride = ESBStride_X16;  break;
 
-				case  D3D_REGISTER_COMPONENT_FLOAT32:    prim = ESBPrimitive_Float;    stride = ESBStride_X32;        break;
-				case  D3D_REGISTER_COMPONENT_UINT32:    prim = ESBPrimitive_UInt;    stride = ESBStride_X32;        break;
-				case  D3D_REGISTER_COMPONENT_SINT32:    prim = ESBPrimitive_Int;    stride = ESBStride_X32;        break;
+				case  D3D_REGISTER_COMPONENT_FLOAT32:  prim = ESBPrimitive_Float;  stride = ESBStride_X32;  break;
+				case  D3D_REGISTER_COMPONENT_UINT32:   prim = ESBPrimitive_UInt;   stride = ESBStride_X32;  break;
+				case  D3D_REGISTER_COMPONENT_SINT32:   prim = ESBPrimitive_Int;    stride = ESBStride_X32;  break;
 
-				case  D3D_REGISTER_COMPONENT_FLOAT64:    prim = ESBPrimitive_Float;    stride = ESBStride_X64;        break;
-				case  D3D_REGISTER_COMPONENT_UINT64:    prim = ESBPrimitive_UInt;    stride = ESBStride_X64;        break;
-				case  D3D_REGISTER_COMPONENT_SINT64:    prim = ESBPrimitive_Int;    stride = ESBStride_X64;        break;
+				case  D3D_REGISTER_COMPONENT_FLOAT64:  prim = ESBPrimitive_Float;  stride = ESBStride_X64;  break;
+				case  D3D_REGISTER_COMPONENT_UINT64:   prim = ESBPrimitive_UInt;   stride = ESBStride_X64;  break;
+				case  D3D_REGISTER_COMPONENT_SINT64:   prim = ESBPrimitive_Int;    stride = ESBStride_X64;  break;
 				default:
 					retError(clean, Error_invalidState(
 						0, "Compiler_processDXIL() invalid component type; expected one of F32, U32 or I32"
@@ -1347,10 +1347,10 @@ extern "C" Bool Compiler_processDXIL(
 			ESBVector vec = ESBVector_N1;
 
 			switch (signature.Mask) {
-				case  1:    vec = ESBVector_N1;        break;
-				case  3:    vec = ESBVector_N2;        break;
-				case  7:    vec = ESBVector_N3;        break;
-				case 15:    vec = ESBVector_N4;        break;
+				case  1:  vec = ESBVector_N1;  break;
+				case  3:  vec = ESBVector_N2;  break;
+				case  7:  vec = ESBVector_N3;  break;
+				case 15:  vec = ESBVector_N4;  break;
 				default:
 					retError(clean, Error_invalidState(
 						0, "Compiler_processDXIL() invalid signature mask; expected one of 1,3,7,15"
@@ -1404,19 +1404,19 @@ extern "C" Bool Compiler_processDXIL(
 			if(FAILED(dxilRefl->GetResourceBindingDesc(j, &input)))
 				retError(clean, Error_invalidState(1, "Compiler_processDXIL() DXIL contained invalid resource"));
 
-			gotoIfError3(clean, Compiler_convertRegisterDXIL(registers, &input, NULL, dxilRefl, &alloc, e_rr));
+			gotoIfError3(clean, Compiler_convertRegisterDXIL(registers, &input, NULL, dxilRefl, alloc, e_rr));
 		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
 			groupSize, 0, 0, waveSizes,
 			inputs, outputs,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
-			toCompile.entrypoint, lock, entries,
+			&toCompile->entrypoint, lock, entries,
 			alloc, e_rr
 		));
 	}
 
-	if((toCompile.extensions & exts) != exts)
+	if((toCompile->extensions & exts) != exts)
 		retError(clean, Error_invalidState(
 			2, "Compiler_processDXIL() DXIL contained capability that wasn't enabled by oiSH file (use annotations)"
 		));
@@ -1459,7 +1459,7 @@ extern "C" Bool Compiler_processDXIL(
 		if (FAILED(hr))
 			retError(clean, Error_invalidOperation(0, "Compiler_processDXIL() DXIL couldn't be obtained"));
 
-		if(!Buffer_resize(result, finalVersion->GetBufferSize(), false, false, &alloc, e_rr))
+		if(!Buffer_resize(result, finalVersion->GetBufferSize(), false, false, alloc, e_rr))
 			retError(clean, Error_invalidState(2, "Compiler_processDXIL() Couldn't allocate copy"));
 
 		Buffer_memcpy(*result, Buffer_createRefConst(finalVersion->GetBufferPointer(), finalVersion->GetBufferSize()));
@@ -1476,7 +1476,7 @@ extern "C" Bool Compiler_processDXIL(
 
 clean:
 
-	ListCharString_freeUnderlying(&strings, &alloc);
+	ListCharString_freeUnderlying(&strings, alloc);
 
 	if(dxilRefl)
 		dxilRefl->Release();
@@ -1502,12 +1502,12 @@ clean:
 	return s_uccess;
 }
 
-extern "C" Bool Compiler_disassembleDXIL(Compiler comp, Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
+extern "C" Bool Compiler_disassembleDXIL(const Compiler *comp, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr) {
 
 	Bool s_uccess = true;
 	U64 binLen = Buffer_length(buf);
 
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
 	HRESULT hr = 0;
 	CharString str;
 	IDxcResult *dxcResult = NULL;
@@ -1536,7 +1536,7 @@ extern "C" Bool Compiler_disassembleDXIL(Compiler comp, Buffer buf, Allocator al
 		retError(clean, Error_invalidOperation(1, "Compiler_createDisassembly() DXIL disassembly couldn't be obtained"));
 
 	str = CharString_createRefSizedConst(blobUtf8->GetStringPointer(), blobUtf8->GetStringLength(), false);
-	gotoIfError3(clean, CharString_createCopy(str, &alloc, result, e_rr));
+	gotoIfError3(clean, CharString_createCopy(str, alloc, result, e_rr));
 	
 clean:
 
@@ -1550,11 +1550,11 @@ clean:
 }
 
 extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
-	Compiler compiler,
+	const Compiler *compiler,
 	Buffer binary,
 	Bool showAll,
 	ListCompilerEntrypoint *uniqueEntrypoints,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -1565,7 +1565,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 	ID3D12LibraryReflection1 *dxilReflLib{};
 
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler.interfaces;
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) compiler->interfaces;
 
 	Bool freeEp = false;
 	Bool alreadyContainsLib = false;    //Avoid re-inserting uniqueEntrypoint of lib
@@ -1611,22 +1611,22 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 		switch (funcDesc1.ShaderType) {
 
-			case D3D12_SHVER_RAY_GENERATION_SHADER:    stage = ESHPipelineStage_RaygenExt;            break;
-			case D3D12_SHVER_INTERSECTION_SHADER:    stage = ESHPipelineStage_IntersectionExt;    break;
-			case D3D12_SHVER_ANY_HIT_SHADER:        stage = ESHPipelineStage_AnyHitExt;            break;
-			case D3D12_SHVER_CLOSEST_HIT_SHADER:    stage = ESHPipelineStage_ClosestHitExt;        break;
-			case D3D12_SHVER_MISS_SHADER:            stage = ESHPipelineStage_MissExt;            break;
-			case D3D12_SHVER_CALLABLE_SHADER:        stage = ESHPipelineStage_CallableExt;        break;
-			case D3D12_SHVER_NODE_SHADER:            stage = ESHPipelineStage_WorkgraphExt;        break;
+			case D3D12_SHVER_RAY_GENERATION_SHADER: stage = ESHPipelineStage_RaygenExt;        break;
+			case D3D12_SHVER_INTERSECTION_SHADER:   stage = ESHPipelineStage_IntersectionExt;  break;
+			case D3D12_SHVER_ANY_HIT_SHADER:        stage = ESHPipelineStage_AnyHitExt;        break;
+			case D3D12_SHVER_CLOSEST_HIT_SHADER:    stage = ESHPipelineStage_ClosestHitExt;    break;
+			case D3D12_SHVER_MISS_SHADER:           stage = ESHPipelineStage_MissExt;          break;
+			case D3D12_SHVER_CALLABLE_SHADER:       stage = ESHPipelineStage_CallableExt;      break;
+			case D3D12_SHVER_NODE_SHADER:           stage = ESHPipelineStage_WorkgraphExt;     break;
 
-			case D3D12_SHVER_PIXEL_SHADER:            stage = ESHPipelineStage_Pixel;                break;
-			case D3D12_SHVER_VERTEX_SHADER:            stage = ESHPipelineStage_Vertex;            break;
-			case D3D12_SHVER_GEOMETRY_SHADER:        stage = ESHPipelineStage_GeometryExt;        break;
-			case D3D12_SHVER_HULL_SHADER:            stage = ESHPipelineStage_Hull;                break;
-			case D3D12_SHVER_DOMAIN_SHADER:            stage = ESHPipelineStage_Domain;            break;
-			case D3D12_SHVER_COMPUTE_SHADER:        stage = ESHPipelineStage_Compute;            break;
-			case D3D12_SHVER_MESH_SHADER:            stage = ESHPipelineStage_MeshExt;            break;
-			case D3D12_SHVER_AMPLIFICATION_SHADER:    stage = ESHPipelineStage_TaskExt;            break;
+			case D3D12_SHVER_PIXEL_SHADER:          stage = ESHPipelineStage_Pixel;            break;
+			case D3D12_SHVER_VERTEX_SHADER:         stage = ESHPipelineStage_Vertex;           break;
+			case D3D12_SHVER_GEOMETRY_SHADER:       stage = ESHPipelineStage_GeometryExt;      break;
+			case D3D12_SHVER_HULL_SHADER:           stage = ESHPipelineStage_Hull;             break;
+			case D3D12_SHVER_DOMAIN_SHADER:         stage = ESHPipelineStage_Domain;           break;
+			case D3D12_SHVER_COMPUTE_SHADER:        stage = ESHPipelineStage_Compute;          break;
+			case D3D12_SHVER_MESH_SHADER:           stage = ESHPipelineStage_MeshExt;          break;
+			case D3D12_SHVER_AMPLIFICATION_SHADER:  stage = ESHPipelineStage_TaskExt;          break;
 
 			default:
 				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsDXIL() had an invalid shader type"));
@@ -1639,11 +1639,14 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 
 		else {
 
-			if((stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) || stage == ESHPipelineStage_WorkgraphExt) {
+			if(
+				(stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) ||
+				stage == ESHPipelineStage_WorkgraphExt
+			) {
 
 				if(!alreadyContainsLib)
 					gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, &alloc, e_rr));
+						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, alloc, e_rr));
 
 				alreadyContainsLib = true;
 			}
@@ -1654,7 +1657,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 		if(insertPlain) {
 
 			gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, &alloc, e_rr));
+				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, alloc, e_rr));
 
 			CharString nameStr = CharString_createRefCStrConst(name);
 			U64 questionMark = CharString_findFirstSensitive(&nameStr, '?', 0, 0);
@@ -1670,7 +1673,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 			}
 
 			gotoIfError3(clean, CharString_createCopy(
-				nameStr, &alloc, &ListCompilerEntrypoint_last(*uniqueEntrypoints)->name, e_rr
+				nameStr, alloc, &ListCompilerEntrypoint_last(*uniqueEntrypoints)->name, e_rr
 			));
 		}
 	}
@@ -1687,23 +1690,23 @@ clean:
 }
 
 extern "C" Bool Compiler_linkDXIL(
-	Compiler comp,
-	ListBuffer inputs,
-	ListSHUniformRuntime uniforms,
+	const Compiler *comp,
+	const ListBuffer *inputs,
+	const ListSHUniformRuntime *uniforms,
 	Buffer uniformData,
-	CharString entrypoint,
+	const CharString *entrypoint,
 	U16 shaderVersion,
 	ESHPipelineStage stageType,
 	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *finalResult,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 	
 	Bool s_uccess = true;
 
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
 	IDxcLinker *linker = nullptr;
 	IDxcOperationResult *result = nullptr;
 	IDxcBlob *finalShader = nullptr;
@@ -1743,7 +1746,7 @@ extern "C" Bool Compiler_linkDXIL(
 
 	//Compile DXIL with only the uniform exports;
 
-	if(uniforms.length) {
+	if(uniforms && uniforms->length) {
 
 		EHLSLStringifyFlags flags = EHLSLStringifyFlags_None;
 
@@ -1759,11 +1762,11 @@ extern "C" Bool Compiler_linkDXIL(
 		//Stringify uniforms into exports
 		//export Type $$specConst_Name() { return ...; }
 
-		for (U64 i = 0; i < uniforms.length; ++i) {
+		for (U64 i = 0; i < uniforms->length; ++i) {
 
 			//Uniform info
 
-			SHUniformRuntime uniform = uniforms.ptr[i];
+			SHUniformRuntime uniform = uniforms->ptr[i];
 
 			if(uniform.typeIdShort >= ETypeId_Max)
 				retError(clean, Error_invalidState(2, "Compiler_linkDXIL() typeIdShort out of bounds"));
@@ -1776,18 +1779,18 @@ extern "C" Bool Compiler_linkDXIL(
 
 			//Format start of function export
 
-			gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, &alloc, &tempStr3, e_rr));
+			gotoIfError3(clean, CharString_createFromETypeIdHLSL(typeId, flags, alloc, &tempStr3, e_rr));
 
-			gotoIfError3(clean, CharString_format(&alloc, &tempStr2, e_rr,
+			gotoIfError3(clean, CharString_format(alloc, &tempStr2, e_rr,
 				"export %s $$specConst_%.*s() { return ",
 				tempStr3.ptr,
 				(int) CharString_length(uniform.name), uniform.name.ptr
 			));
 
-			CharString_free(&tempStr3, &alloc);
+			CharString_free(&tempStr3, alloc);
 
-			gotoIfError3(clean, CharString_appendString(&tempStr, &tempStr2, &alloc, e_rr));
-			CharString_free(&tempStr2, &alloc);
+			gotoIfError3(clean, CharString_appendString(&tempStr, &tempStr2, alloc, e_rr));
+			CharString_free(&tempStr2, alloc);
 
 			//Turn uniform into real constructor
 
@@ -1797,14 +1800,14 @@ extern "C" Bool Compiler_linkDXIL(
 				Buffer_createRefConst(uniformData.ptr + uniform.dataOffset, len)
 			);
 
-			gotoIfError3(clean, SHValue_stringifyHLSL(&value, typeId, flags, &alloc, &tempStr2, e_rr));
-			gotoIfError3(clean, CharString_appendString(&tempStr, &tempStr2, &alloc, e_rr));
-			CharString_free(&tempStr2, &alloc);
+			gotoIfError3(clean, SHValue_stringifyHLSL(&value, typeId, flags, alloc, &tempStr2, e_rr));
+			gotoIfError3(clean, CharString_appendString(&tempStr, &tempStr2, alloc, e_rr));
+			CharString_free(&tempStr2, alloc);
 
 			//Finish function export
 
 			CharString appendClose = CharString_createRefCStrConst("; }\n");
-			gotoIfError3(clean, CharString_appendString(&tempStr, &appendClose, &alloc, e_rr));
+			gotoIfError3(clean, CharString_appendString(&tempStr, &appendClose, alloc, e_rr));
 		}
 		
 		//Compile binary
@@ -1825,7 +1828,7 @@ extern "C" Bool Compiler_linkDXIL(
 		if (FAILED(hr))
 			retError(clean, Error_invalidState(0, "Compiler_linkDXIL() Compile uniforms failed"));
 		
-		CharString_free(&tempStr, &alloc);
+		CharString_free(&tempStr, alloc);
 
 		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
 
@@ -1857,80 +1860,81 @@ extern "C" Bool Compiler_linkDXIL(
 			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Couldn't register uniforms binary"));
 			
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			gotoIfError3(clean, ListU16PtrConst_pushBack(&wstrConstArr, (const U16*) lib, &alloc, e_rr));
+			gotoIfError3(clean, ListU16PtrConst_pushBack(&wstrConstArr, (const U16*) lib, alloc, e_rr));
 		#else
-			gotoIfError3(clean, ListU32PtrConst_pushBack(&wstrConstArr, (const U32*) lib, &alloc, e_rr));
+			gotoIfError3(clean, ListU32PtrConst_pushBack(&wstrConstArr, (const U32*) lib, alloc, e_rr));
 		#endif
 	}
 
 	//Add all libraries
 
-	for (U64 i = 0; i < inputs.length; ++i) {
+	for (U64 i = 0; i < (!inputs ? 0 : inputs->length); ++i) {
 
-		U64 len = Buffer_length(inputs.ptr[i]);
+		U64 len = Buffer_length(inputs->ptr[i]);
 
 		if(!len || len >= U32_MAX)
 			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Inputs contained an empty binary"));
 
-		hr = interfaces->utils->CreateBlobFromPinned(inputs.ptr[i].ptr, (U32) len, DXC_CP_ACP, &temp);
+		hr = interfaces->utils->CreateBlobFromPinned(inputs->ptr[i].ptr, (U32) len, DXC_CP_ACP, &temp);
 
 		if (FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Couldn't create IDxcBlob"));
 
-		gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr, "%" PRIu64, i));
+		gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "%" PRIu64, i));
 			
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			gotoIfError3(clean, CharString_toUTF16(tempStr, &alloc, &tmpWStr, e_rr));
+			gotoIfError3(clean, CharString_toUTF16(tempStr, alloc, &tmpWStr, e_rr));
 		#else
-			gotoIfError3(clean, CharString_toUTF32(tempStr, &alloc, &tmpWStr, e_rr));
+			gotoIfError3(clean, CharString_toUTF32(tempStr, alloc, &tmpWStr, e_rr));
 		#endif
 
-		CharString_free(&tempStr, &alloc);
+		CharString_free(&tempStr, alloc);
 		hr = linker->RegisterLibrary((const wchar_t*) tmpWStr.ptr, temp);
 
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_linkDXIL() Couldn't register binary"));
 			
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			gotoIfError3(clean, ListListU16_pushBack(&wstrArr, tmpWStr, &alloc, e_rr));
-			gotoIfError3(clean, ListU16PtrConst_pushBack(&wstrConstArr, tmpWStr.ptr, &alloc, e_rr));
+			gotoIfError3(clean, ListListU16_pushBack(&wstrArr, tmpWStr, alloc, e_rr));
+			gotoIfError3(clean, ListU16PtrConst_pushBack(&wstrConstArr, tmpWStr.ptr, alloc, e_rr));
 			tmpWStr = ListU16{};
 		#else
-			gotoIfError3(clean, ListListU32_pushBack(&wstrArr, tmpWStr, &alloc, e_rr));
-			gotoIfError3(clean, ListU32PtrConst_pushBack(&wstrConstArr, tmpWStr.ptr, &alloc, e_rr));
+			gotoIfError3(clean, ListListU32_pushBack(&wstrArr, tmpWStr, alloc, e_rr));
+			gotoIfError3(clean, ListU32PtrConst_pushBack(&wstrConstArr, tmpWStr.ptr, alloc, e_rr));
 			tmpWStr = ListU32{};
 		#endif
 
-		temp = NULL;        //Moved
+		temp = NULL;  //Moved
 	}
 
 	//Turn inputs into UTF16/UTF32
 
-	if (CharString_length(entrypoint)) {
+	if (CharString_length(*entrypoint)) {
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			gotoIfError3(clean, CharString_toUTF16(entrypoint, &alloc, &tmpWStr2, e_rr));
+			gotoIfError3(clean, CharString_toUTF16(*entrypoint, alloc, &tmpWStr2, e_rr));
 		#else
-			gotoIfError3(clean, CharString_toUTF32(entrypoint, &alloc, &tmpWStr2, e_rr));
+			gotoIfError3(clean, CharString_toUTF32(*entrypoint, alloc, &tmpWStr2, e_rr));
 		#endif
 	}
 
-	if (isShaderAnnotation)
-		{ gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr, "lib_%" PRIu8 "_%" PRIu8,
+	if (isShaderAnnotation) {
+		gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "lib_%" PRIu8 "_%" PRIu8,
 			(U8)(shaderVersion >> 8), (U8)shaderVersion
-		)); }
+		));
+	}
 
-	else gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr, "%s_%" PRIu8 "_%" PRIu8,
+	else gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr, "%s_%" PRIu8 "_%" PRIu8,
 		ESHPipelineStage_getStagePrefix(stageType),
 		(U8)(shaderVersion >> 8), (U8)shaderVersion
 	));
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		gotoIfError3(clean, CharString_toUTF16(tempStr, &alloc, &tmpWStr3, e_rr));
+		gotoIfError3(clean, CharString_toUTF16(tempStr, alloc, &tmpWStr3, e_rr));
 	#else
-		gotoIfError3(clean, CharString_toUTF32(tempStr, &alloc, &tmpWStr3, e_rr));
+		gotoIfError3(clean, CharString_toUTF32(tempStr, alloc, &tmpWStr3, e_rr));
 	#endif
 
-	CharString_free(&tempStr, &alloc);
+	CharString_free(&tempStr, alloc);
 
 	//Link
 
@@ -1961,7 +1965,7 @@ extern "C" Bool Compiler_linkDXIL(
 	
 	//Copy to final destination
 
-	gotoIfError3(clean, Buffer_createUninitializedBytes(finalShader->GetBufferSize(), &alloc, finalResult, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(finalShader->GetBufferSize(), alloc, finalResult, e_rr));
 	Buffer_memcpy(*finalResult, Buffer_createRefConst(finalShader->GetBufferPointer(), finalShader->GetBufferSize()));
 
 clean:
@@ -1991,21 +1995,21 @@ clean:
 		errs->Release();
 
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		ListU16_free(&tmpWStr, &alloc);
-		ListU16_free(&tmpWStr2, &alloc);
-		ListU16_free(&tmpWStr3, &alloc);
-		ListListU16_freeUnderlying(&wstrArr, &alloc);
-		ListU16PtrConst_free(&wstrConstArr, &alloc);
+		ListU16_free(&tmpWStr, alloc);
+		ListU16_free(&tmpWStr2, alloc);
+		ListU16_free(&tmpWStr3, alloc);
+		ListListU16_freeUnderlying(&wstrArr, alloc);
+		ListU16PtrConst_free(&wstrConstArr, alloc);
 	#else
-		ListU32_free(&tmpWStr, &alloc);
-		ListU32_free(&tmpWStr2, &alloc);
-		ListU32_free(&tmpWStr3, &alloc);
-		ListListU32_freeUnderlying(&wstrArr, &alloc);
-		ListU32PtrConst_free(&wstrConstArr, &alloc);
+		ListU32_free(&tmpWStr, alloc);
+		ListU32_free(&tmpWStr2, alloc);
+		ListU32_free(&tmpWStr3, alloc);
+		ListListU32_freeUnderlying(&wstrArr, alloc);
+		ListU32PtrConst_free(&wstrConstArr, alloc);
 	#endif
 
-	CharString_free(&tempStr, &alloc);
-	CharString_free(&tempStr2, &alloc);
-	CharString_free(&tempStr3, &alloc);
+	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr2, alloc);
+	CharString_free(&tempStr3, alloc);
 	return s_uccess;
 }

@@ -754,9 +754,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 							if(!(args.parameters & EOperationHasParameter_Output)) {
 
-								gotoIfError3(cleanSh, Compiler_createx(&comp, e_rr))
+								gotoIfError3(cleanSh, Compiler_create(*Platform_instance->alloc, &comp, e_rr))
 
-								if (!Compiler_disassemblex(comp, binaryType, binary, &tmp, e_rr)) {
+								if (!Compiler_disassemble(comp, binaryType, binary, *Platform_instance->alloc, &tmp, e_rr)) {
 									Log_errorLnx("%s disassembly failed at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
 									goto cleanSh;
 								}
@@ -832,7 +832,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			SHFile_freex(&file);
 
 			#ifdef CLI_SHADER_COMPILER
-				Compiler_freex(&comp);
+				Compiler_free(&comp, *Platform_instance->alloc);
 			#endif
 
 			if(!s_uccess)

@@ -20,18 +20,16 @@
 
 //shader_compiler/compiler_spv.cpp
 
-#include "types/container/list_impl.h"
+#include "shader_compiler/compiler.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
 #include "types/container/buffer.h"
 #include "types/base/string_read_helper.h"
-#include "types/base/string_mut_helper.h"
 #include "types/base/allocator.h"
 #include "types/base/c8.h"
 #include "types/base/mathi.h"
-#include "shader_compiler/compiler.h"
-#include "types/base/constants.h"
+
 #include "optimizer.hpp"
 #include "linker.hpp"
 #include "SPIRV-Reflect/spirv_reflect.h"
@@ -101,10 +99,10 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 
 	switch(numeric.scalar.width) {
 
-		case  8:    stride = ESBStride_X8;        break;
-		case 16:    stride = ESBStride_X16;        break;
-		case 32:    stride = ESBStride_X32;        break;
-		case 64:    stride = ESBStride_X64;        break;
+		case  8:  stride = ESBStride_X8;   break;
+		case 16:  stride = ESBStride_X16;  break;
+		case 32:  stride = ESBStride_X32;  break;
+		case 64:  stride = ESBStride_X64;  break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
@@ -115,11 +113,11 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 	switch(numeric.matrix.column_count ? numeric.matrix.column_count : numeric.vector.component_count) {
 
 		case 0:
-		case 1:        vector = ESBVector_N1;        break;
+		case 1:  vector = ESBVector_N1;  break;
 
-		case 2:        vector = ESBVector_N2;        break;
-		case 3:        vector = ESBVector_N3;        break;
-		case 4:        vector = ESBVector_N4;        break;
+		case 2:  vector = ESBVector_N2;  break;
+		case 3:  vector = ESBVector_N3;  break;
+		case 4:  vector = ESBVector_N4;  break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
@@ -130,11 +128,11 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 	switch(numeric.matrix.row_count) {
 
 		case 0:
-		case 1:        matrix = ESBMatrix_N1;        break;
+		case 1:  matrix = ESBMatrix_N1;  break;
 
-		case 2:        matrix = ESBMatrix_N2;        break;
-		case 3:        matrix = ESBMatrix_N3;        break;
-		case 4:        matrix = ESBMatrix_N4;        break;
+		case 2:  matrix = ESBMatrix_N2;  break;
+		case 3:  matrix = ESBMatrix_N3;  break;
+		case 4:  matrix = ESBMatrix_N4;  break;
 
 		default:
 			retError(clean, Error_unsupportedOperation(
@@ -527,53 +525,53 @@ Bool SpvReflectFormatToESBType(SpvReflectFormat format, ESBType *type, Error *e_
 
 	switch (format) {
 
-		case SPV_REFLECT_FORMAT_R16_UINT:                *type = ESBType_U16;        break;
-		case SPV_REFLECT_FORMAT_R16_SINT:                *type = ESBType_I16;        break;
-		case SPV_REFLECT_FORMAT_R16_SFLOAT:                *type = ESBType_F16;        break;
+		case SPV_REFLECT_FORMAT_R16_UINT:             *type = ESBType_U16;    break;
+		case SPV_REFLECT_FORMAT_R16_SINT:             *type = ESBType_I16;    break;
+		case SPV_REFLECT_FORMAT_R16_SFLOAT:           *type = ESBType_F16;    break;
 
-		case SPV_REFLECT_FORMAT_R16G16_UINT:            *type = ESBType_U16x2;        break;
-		case SPV_REFLECT_FORMAT_R16G16_SINT:            *type = ESBType_I16x2;        break;
-		case SPV_REFLECT_FORMAT_R16G16_SFLOAT:            *type = ESBType_F16x2;        break;
+		case SPV_REFLECT_FORMAT_R16G16_UINT:          *type = ESBType_U16x2;  break;
+		case SPV_REFLECT_FORMAT_R16G16_SINT:          *type = ESBType_I16x2;  break;
+		case SPV_REFLECT_FORMAT_R16G16_SFLOAT:        *type = ESBType_F16x2;  break;
 
-		case SPV_REFLECT_FORMAT_R16G16B16_UINT:            *type = ESBType_U16x3;        break;
-		case SPV_REFLECT_FORMAT_R16G16B16_SINT:            *type = ESBType_I16x3;        break;
-		case SPV_REFLECT_FORMAT_R16G16B16_SFLOAT:        *type = ESBType_F16x3;        break;
+		case SPV_REFLECT_FORMAT_R16G16B16_UINT:       *type = ESBType_U16x3;  break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SINT:       *type = ESBType_I16x3;  break;
+		case SPV_REFLECT_FORMAT_R16G16B16_SFLOAT:     *type = ESBType_F16x3;  break;
 
-		case SPV_REFLECT_FORMAT_R16G16B16A16_UINT:        *type = ESBType_U16x4;        break;
-		case SPV_REFLECT_FORMAT_R16G16B16A16_SINT:        *type = ESBType_I16x4;        break;
-		case SPV_REFLECT_FORMAT_R16G16B16A16_SFLOAT:    *type = ESBType_F16x4;        break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_UINT:    *type = ESBType_U16x4;  break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SINT:    *type = ESBType_I16x4;  break;
+		case SPV_REFLECT_FORMAT_R16G16B16A16_SFLOAT:  *type = ESBType_F16x4;  break;
 
-		case SPV_REFLECT_FORMAT_R32_UINT:                *type = ESBType_U32;        break;
-		case SPV_REFLECT_FORMAT_R32_SINT:                *type = ESBType_I32;        break;
-		case SPV_REFLECT_FORMAT_R32_SFLOAT:                *type = ESBType_F32;        break;
+		case SPV_REFLECT_FORMAT_R32_UINT:             *type = ESBType_U32;    break;
+		case SPV_REFLECT_FORMAT_R32_SINT:             *type = ESBType_I32;    break;
+		case SPV_REFLECT_FORMAT_R32_SFLOAT:           *type = ESBType_F32;    break;
 
-		case SPV_REFLECT_FORMAT_R32G32_UINT:            *type = ESBType_U32x2;        break;
-		case SPV_REFLECT_FORMAT_R32G32_SINT:            *type = ESBType_I32x2;        break;
-		case SPV_REFLECT_FORMAT_R32G32_SFLOAT:            *type = ESBType_F32x2;        break;
+		case SPV_REFLECT_FORMAT_R32G32_UINT:          *type = ESBType_U32x2;  break;
+		case SPV_REFLECT_FORMAT_R32G32_SINT:          *type = ESBType_I32x2;  break;
+		case SPV_REFLECT_FORMAT_R32G32_SFLOAT:        *type = ESBType_F32x2;  break;
 
-		case SPV_REFLECT_FORMAT_R32G32B32_UINT:            *type = ESBType_U32x3;        break;
-		case SPV_REFLECT_FORMAT_R32G32B32_SINT:            *type = ESBType_I32x3;        break;
-		case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:        *type = ESBType_F32x3;        break;
+		case SPV_REFLECT_FORMAT_R32G32B32_UINT:       *type = ESBType_U32x3;  break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SINT:       *type = ESBType_I32x3;  break;
+		case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:     *type = ESBType_F32x3;  break;
 
-		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:        *type = ESBType_U32x4;        break;
-		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:        *type = ESBType_I32x4;        break;
-		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:    *type = ESBType_F32x4;        break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:    *type = ESBType_U32x4;  break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:    *type = ESBType_I32x4;  break;
+		case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:  *type = ESBType_F32x4;  break;
 
-		case SPV_REFLECT_FORMAT_R64_UINT:                *type = ESBType_U64;        break;
-		case SPV_REFLECT_FORMAT_R64_SINT:                *type = ESBType_I64;        break;
-		case SPV_REFLECT_FORMAT_R64_SFLOAT:                *type = ESBType_F64;        break;
+		case SPV_REFLECT_FORMAT_R64_UINT:             *type = ESBType_U64;    break;
+		case SPV_REFLECT_FORMAT_R64_SINT:             *type = ESBType_I64;    break;
+		case SPV_REFLECT_FORMAT_R64_SFLOAT:           *type = ESBType_F64;    break;
 
-		case SPV_REFLECT_FORMAT_R64G64_UINT:            *type = ESBType_U64x2;        break;
-		case SPV_REFLECT_FORMAT_R64G64_SINT:            *type = ESBType_I64x2;        break;
-		case SPV_REFLECT_FORMAT_R64G64_SFLOAT:            *type = ESBType_F64x2;        break;
+		case SPV_REFLECT_FORMAT_R64G64_UINT:          *type = ESBType_U64x2;  break;
+		case SPV_REFLECT_FORMAT_R64G64_SINT:          *type = ESBType_I64x2;  break;
+		case SPV_REFLECT_FORMAT_R64G64_SFLOAT:        *type = ESBType_F64x2;  break;
 
-		case SPV_REFLECT_FORMAT_R64G64B64_UINT:            *type = ESBType_U64x3;        break;
-		case SPV_REFLECT_FORMAT_R64G64B64_SINT:            *type = ESBType_I64x3;        break;
-		case SPV_REFLECT_FORMAT_R64G64B64_SFLOAT:        *type = ESBType_F64x3;        break;
+		case SPV_REFLECT_FORMAT_R64G64B64_UINT:       *type = ESBType_U64x3;  break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SINT:       *type = ESBType_I64x3;  break;
+		case SPV_REFLECT_FORMAT_R64G64B64_SFLOAT:     *type = ESBType_F64x3;  break;
 
-		case SPV_REFLECT_FORMAT_R64G64B64A64_UINT:        *type = ESBType_U64x4;        break;
-		case SPV_REFLECT_FORMAT_R64G64B64A64_SINT:        *type = ESBType_I64x4;        break;
-		case SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT:    *type = ESBType_F64x4;        break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_UINT:    *type = ESBType_U64x4;  break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SINT:    *type = ESBType_I64x4;  break;
+		case SPV_REFLECT_FORMAT_R64G64B64A64_SFLOAT:  *type = ESBType_F64x4;  break;
 
 		default:
 			retError(clean, Error_invalidState(
@@ -652,9 +650,7 @@ Bool SpvCalculateStructLength(const SpvReflectTypeDescription *typeDesc, U64 *re
 		len += currLen;
 
 		if(len < prevLen)
-			retError(clean, Error_overflow(
-				0, len, prevLen, "SpvCalculateStructLength() len overflow"
-			));
+			retError(clean, Error_overflow(0, len, prevLen, "SpvCalculateStructLength() len overflow"));
 	}
 
 clean:
@@ -684,9 +680,7 @@ Bool Compiler_convertMemberSPIRV(
 	ListU32 arrays = ListU32{};
 
 	if(var->array.dims_count > SPV_REFLECT_MAX_ARRAY_DIMS)
-		retError(clean, Error_invalidState(
-			0, "Compiler_convertMemberSPIRV() array dimensions out of bounds"
-		));
+		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() array dimensions out of bounds"));
 
 	if(var->array.dims_count && !var->array.stride)
 		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() array stride unset"));
@@ -698,9 +692,7 @@ Bool Compiler_convertMemberSPIRV(
 			));
 
 	if(var->flags && var->flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED)
-		retError(clean, Error_invalidState(
-			0, "Compiler_convertMemberSPIRV() unsupported value in cbuffer member"
-		));
+		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() unsupported value in cbuffer member"));
 
 	if(!(var->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT)) {
 		gotoIfError3(clean, spvTypeToESBType(var->type_description, &shType, e_rr));
@@ -722,18 +714,14 @@ Bool Compiler_convertMemberSPIRV(
 			SBStruct strct = sbFile->structs.ptr[j];
 			CharString structNamej = sbFile->names.entryStrings.ptr[j];
 
-			if(
-				CharString_equalsStringSensitive(&structName, &structNamej) && strct.stride == stride
-			)
+			if(CharString_equalsStringSensitive(&structName, &structNamej) && strct.stride == stride)
 				break;
 		}
 
 		//Insert type
 
 		if (j == sbFile->structs.length)
-			gotoIfError3(clean, SBFile_addStruct(
-				sbFile, &structName, SBStruct{ .stride = stride }, alloc, e_rr
-			));
+			gotoIfError3(clean, SBFile_addStruct(sbFile, &structName, SBStruct{ .stride = stride }, alloc, e_rr));
 
 		structId = (U16) j;
 	}
@@ -749,15 +737,16 @@ Bool Compiler_convertMemberSPIRV(
 	if(var->array.dims_count)
 		gotoIfError3(clean, ListU32_createRefConst(var->array.dims, var->array.dims_count, &arrays, e_rr));
 
-	if(shType != (ESBType) 0)
-		{ gotoIfError3(clean, SBFile_addVariableAsType(
+	if(shType != (ESBType) 0) {
+		gotoIfError3(clean, SBFile_addVariableAsType(
 			sbFile,
 			&str,
 			offset + var->offset, parent, shType,
 			var->flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
 			arrays.length ? &arrays : NULL,
 			alloc, e_rr
-		)); }
+		));
+	}
 
 	else {
 
@@ -827,7 +816,9 @@ Bool Compiler_convertShaderBufferSPIRV(
 			ListU32 arrays{};
 
 			if(innerStruct->array.dims_count)
-				gotoIfError3(clean, ListU32_createRefConst(innerStruct->array.dims, innerStruct->array.dims_count, &arrays, e_rr));
+				gotoIfError3(clean, ListU32_createRefConst(
+					innerStruct->array.dims, innerStruct->array.dims_count, &arrays, e_rr
+				));
 
 			gotoIfError3(clean, SBFile_addVariableAsType(
 				sbFile,
@@ -951,9 +942,7 @@ Bool Compiler_convertRegisterSPIRV(
 	bindings.arr[ESHBinaryType_SPIRV] = SHBinding{ .space = binding->set, .binding = binding->binding };
 
 	if(expectedSet != binding->set)
-		retError(clean, Error_invalidState(
-			1, "Compiler_convertRegisterSPIRV() binding->set != parent->set"
-		));
+		retError(clean, Error_invalidState(1, "Compiler_convertRegisterSPIRV() binding->set != parent->set"));
 
 	if(binding->binding == U32_MAX && binding->set == U32_MAX)
 		retError(clean, Error_invalidState(
@@ -1011,9 +1000,7 @@ Bool Compiler_convertRegisterSPIRV(
 				!binding->block.members ||
 				(binding->decoration_flags &~ sbufferFlags)
 			)
-				retError(clean, Error_invalidState(
-					0, "Compiler_convertRegisterSPIRV() invalid constant buffer data"
-				));
+				retError(clean, Error_invalidState(0, "Compiler_convertRegisterSPIRV() invalid constant buffer data"));
 
 			CharString typeName = CharString_createRefCStrConst(binding->type_description->type_name);
 			Bool isAtomic = binding->uav_counter_id != U32_MAX || binding->uav_counter_binding;
@@ -1259,10 +1246,10 @@ Bool Compiler_convertRegisterSPIRV(
 
 			else switch(binding->image.dim) {
 
-				case SpvDim1D:                reqDepth = 1;    type = ESHTextureType_Texture1D;    break;
-				case SpvDim2D:                reqDepth = 2;    type = ESHTextureType_Texture2D;    break;
-				case SpvDim3D:                reqDepth = 3;    type = ESHTextureType_Texture3D;    break;
-				case SpvDimCube:            reqDepth = 3;    type = ESHTextureType_TextureCube;    break;
+				case SpvDim1D:    reqDepth = 1;  type = ESHTextureType_Texture1D;    break;
+				case SpvDim2D:    reqDepth = 2;  type = ESHTextureType_Texture2D;    break;
+				case SpvDim3D:    reqDepth = 3;  type = ESHTextureType_Texture3D;    break;
+				case SpvDimCube:  reqDepth = 3;  type = ESHTextureType_TextureCube;  break;
 
 				case SpvDimRect:
 				case SpvDimBuffer:
@@ -1299,44 +1286,44 @@ Bool Compiler_convertRegisterSPIRV(
 
 				switch (binding->image.image_format) {
 
-					case SpvImageFormatRgba32f:        formatId = ETextureFormatId_RGBA32f;    break;
-					case SpvImageFormatRgba16f:        formatId = ETextureFormatId_RGBA16f;    break;
-					case SpvImageFormatR32f:        formatId = ETextureFormatId_R32f;        break;
-					case SpvImageFormatRgba8:        formatId = ETextureFormatId_RGBA8;        break;
-					case SpvImageFormatRgba8Snorm:    formatId = ETextureFormatId_RGBA8s;        break;
-					case SpvImageFormatRg32f:        formatId = ETextureFormatId_RG32f;        break;
-					case SpvImageFormatRg16f:        formatId = ETextureFormatId_RG16f;        break;
-					case SpvImageFormatR16f:        formatId = ETextureFormatId_R16f;        break;
-					case SpvImageFormatRgba16:        formatId = ETextureFormatId_RGBA16;        break;
-					case SpvImageFormatRgb10A2:        formatId = ETextureFormatId_BGR10A2;    break;
-					case SpvImageFormatRg16:        formatId = ETextureFormatId_RG16;        break;
-					case SpvImageFormatRg8:            formatId = ETextureFormatId_RG8;        break;
-					case SpvImageFormatR16:            formatId = ETextureFormatId_R16;        break;
-					case SpvImageFormatR8:            formatId = ETextureFormatId_R8;            break;
-					case SpvImageFormatRgba16Snorm:    formatId = ETextureFormatId_RGBA16s;    break;
-					case SpvImageFormatRg16Snorm:    formatId = ETextureFormatId_RG16s;        break;
-					case SpvImageFormatRg8Snorm:    formatId = ETextureFormatId_RG8s;        break;
-					case SpvImageFormatR16Snorm:    formatId = ETextureFormatId_R16s;        break;
-					case SpvImageFormatR8Snorm:        formatId = ETextureFormatId_R8s;        break;
-					case SpvImageFormatRgba32i:        formatId = ETextureFormatId_RGBA32i;    break;
-					case SpvImageFormatRgba16i:        formatId = ETextureFormatId_RGBA16i;    break;
-					case SpvImageFormatRgba8i:        formatId = ETextureFormatId_RGBA8i;        break;
-					case SpvImageFormatR32i:        formatId = ETextureFormatId_R32i;        break;
-					case SpvImageFormatRg32i:        formatId = ETextureFormatId_RG32i;        break;
-					case SpvImageFormatRg16i:        formatId = ETextureFormatId_RG16i;        break;
-					case SpvImageFormatRg8i:        formatId = ETextureFormatId_RG8i;        break;
-					case SpvImageFormatR16i:        formatId = ETextureFormatId_R16i;        break;
-					case SpvImageFormatR8i:            formatId = ETextureFormatId_R8i;        break;
-					case SpvImageFormatRgba32ui:    formatId = ETextureFormatId_RGBA32u;    break;
-					case SpvImageFormatRgba16ui:    formatId = ETextureFormatId_RGBA16u;    break;
-					case SpvImageFormatRgba8ui:        formatId = ETextureFormatId_RGBA8u;        break;
-					case SpvImageFormatR32ui:        formatId = ETextureFormatId_R32u;        break;
-					case SpvImageFormatRg32ui:        formatId = ETextureFormatId_RG32u;        break;
-					case SpvImageFormatRg16ui:        formatId = ETextureFormatId_RG16u;        break;
-					case SpvImageFormatRg8ui:        formatId = ETextureFormatId_RG8u;        break;
-					case SpvImageFormatR16ui:        formatId = ETextureFormatId_R16u;        break;
-					case SpvImageFormatR8ui:        formatId = ETextureFormatId_R8u;        break;
-					case SpvImageFormatUnknown:                                                break;
+					case SpvImageFormatRgba32f:      formatId = ETextureFormatId_RGBA32f;  break;
+					case SpvImageFormatRgba16f:      formatId = ETextureFormatId_RGBA16f;  break;
+					case SpvImageFormatR32f:         formatId = ETextureFormatId_R32f;     break;
+					case SpvImageFormatRgba8:        formatId = ETextureFormatId_RGBA8;    break;
+					case SpvImageFormatRgba8Snorm:   formatId = ETextureFormatId_RGBA8s;   break;
+					case SpvImageFormatRg32f:        formatId = ETextureFormatId_RG32f;    break;
+					case SpvImageFormatRg16f:        formatId = ETextureFormatId_RG16f;    break;
+					case SpvImageFormatR16f:         formatId = ETextureFormatId_R16f;     break;
+					case SpvImageFormatRgba16:       formatId = ETextureFormatId_RGBA16;   break;
+					case SpvImageFormatRgb10A2:      formatId = ETextureFormatId_BGR10A2;  break;
+					case SpvImageFormatRg16:         formatId = ETextureFormatId_RG16;     break;
+					case SpvImageFormatRg8:          formatId = ETextureFormatId_RG8;      break;
+					case SpvImageFormatR16:          formatId = ETextureFormatId_R16;      break;
+					case SpvImageFormatR8:           formatId = ETextureFormatId_R8;       break;
+					case SpvImageFormatRgba16Snorm:  formatId = ETextureFormatId_RGBA16s;  break;
+					case SpvImageFormatRg16Snorm:    formatId = ETextureFormatId_RG16s;    break;
+					case SpvImageFormatRg8Snorm:     formatId = ETextureFormatId_RG8s;     break;
+					case SpvImageFormatR16Snorm:     formatId = ETextureFormatId_R16s;     break;
+					case SpvImageFormatR8Snorm:      formatId = ETextureFormatId_R8s;      break;
+					case SpvImageFormatRgba32i:      formatId = ETextureFormatId_RGBA32i;  break;
+					case SpvImageFormatRgba16i:      formatId = ETextureFormatId_RGBA16i;  break;
+					case SpvImageFormatRgba8i:       formatId = ETextureFormatId_RGBA8i;   break;
+					case SpvImageFormatR32i:         formatId = ETextureFormatId_R32i;     break;
+					case SpvImageFormatRg32i:        formatId = ETextureFormatId_RG32i;    break;
+					case SpvImageFormatRg16i:        formatId = ETextureFormatId_RG16i;    break;
+					case SpvImageFormatRg8i:         formatId = ETextureFormatId_RG8i;     break;
+					case SpvImageFormatR16i:         formatId = ETextureFormatId_R16i;     break;
+					case SpvImageFormatR8i:          formatId = ETextureFormatId_R8i;      break;
+					case SpvImageFormatRgba32ui:     formatId = ETextureFormatId_RGBA32u;  break;
+					case SpvImageFormatRgba16ui:     formatId = ETextureFormatId_RGBA16u;  break;
+					case SpvImageFormatRgba8ui:      formatId = ETextureFormatId_RGBA8u;   break;
+					case SpvImageFormatR32ui:        formatId = ETextureFormatId_R32u;     break;
+					case SpvImageFormatRg32ui:       formatId = ETextureFormatId_RG32u;    break;
+					case SpvImageFormatRg16ui:       formatId = ETextureFormatId_RG16u;    break;
+					case SpvImageFormatRg8ui:        formatId = ETextureFormatId_RG8u;     break;
+					case SpvImageFormatR16ui:        formatId = ETextureFormatId_R16u;     break;
+					case SpvImageFormatR8ui:         formatId = ETextureFormatId_R8u;      break;
+					case SpvImageFormatUnknown:                                            break;
 
 					default:
 					case SpvImageFormatRgb10a2ui:
@@ -1416,9 +1403,7 @@ Bool Compiler_convertRegisterSPIRV(
 				));
 
 			if(imagePtrU64[0] || imagePtrU64[1] || imagePtrU64[2])
-				retError(clean, Error_invalidState(
-					1, "Compiler_convertRegisterSPIRV() invalid RTAS register"
-				));
+				retError(clean, Error_invalidState(1, "Compiler_convertRegisterSPIRV() invalid RTAS register"));
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
 				registers,
@@ -1559,13 +1544,13 @@ extern "C" Bool Compiler_processSPIRV(
 	Buffer *result,
 	ListSHRegisterRuntime *registers,
 	Bool isDebug,
-	SHBinaryIdentifier toCompile,
+	const SHBinaryIdentifier *toCompile,
 	SpinLock *lock,
-	ListSHEntryRuntime entries,
+	const ListSHEntryRuntime *entries,
 	Bool isLib,
 	ESHExtension *demotions,
 	ListCompileError *errors,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -1578,7 +1563,7 @@ extern "C" Bool Compiler_processSPIRV(
 	SpvReflectResult res = SPV_REFLECT_RESULT_ERROR_NULL_POINTER;
 	ESHExtension exts = ESHExtension_None;
 	SpvReflectShaderModule spvMod{};
-	Bool isRt = !!(toCompile.extensions & ESHExtension_RayQuery);
+	Bool isRt = !!(toCompile->extensions & ESHExtension_RayQuery);
 	spvtools::Optimizer optimizerRt{ SPV_ENV_UNIVERSAL_1_4 };
 	spvtools::Optimizer optimizerNoRt{ SPV_ENV_UNIVERSAL_1_3 };
 
@@ -1620,7 +1605,7 @@ extern "C" Bool Compiler_processSPIRV(
 			exts = (ESHExtension) (exts | ext);
 	}
 
-	if((toCompile.extensions & exts) != exts)
+	if((toCompile->extensions & exts) != exts)
 		retError(clean, Error_invalidState(
 			2, "Compiler_processSPIRV() SPIRV contained capability that wasn't enabled by oiSH file (use annotations)"
 		));
@@ -1662,7 +1647,7 @@ extern "C" Bool Compiler_processSPIRV(
 			));
 
 		if(!isLib)
-			name = CharString_createRefStrConst(toCompile.entrypoint);
+			name = CharString_createRefStrConst(toCompile->entrypoint);
 
 		U32 localSize[3] = { 0 };
 
@@ -1701,9 +1686,9 @@ extern "C" Bool Compiler_processSPIRV(
 			case SpvExecutionModelGLCompute: {
 
 				switch (entrypoint.spirv_execution_model) {
-					case SpvExecutionModelMeshEXT:    stage = ESHPipelineStage_MeshExt;    break;
-					case SpvExecutionModelTaskEXT:    stage = ESHPipelineStage_TaskExt;    break;
-					default:                        stage = ESHPipelineStage_Compute;    break;
+					case SpvExecutionModelMeshEXT:  stage = ESHPipelineStage_MeshExt;  break;
+					case SpvExecutionModelTaskEXT:  stage = ESHPipelineStage_TaskExt;  break;
+					default:                        stage = ESHPipelineStage_Compute;  break;
 
 				}
 
@@ -1714,12 +1699,12 @@ extern "C" Bool Compiler_processSPIRV(
 				break;
 			}
 
-			case SpvExecutionModelRayGenerationKHR:            stage = ESHPipelineStage_RaygenExt;        break;
-			case SpvExecutionModelVertex:                    stage = ESHPipelineStage_Vertex;        break;
-			case SpvExecutionModelFragment:                    stage = ESHPipelineStage_Pixel;            break;
-			case SpvExecutionModelGeometry:                    stage = ESHPipelineStage_GeometryExt;    break;
-			case SpvExecutionModelTessellationControl:        stage = ESHPipelineStage_Hull;            break;
-			case SpvExecutionModelTessellationEvaluation:    stage = ESHPipelineStage_Domain;        break;
+			case SpvExecutionModelRayGenerationKHR:        stage = ESHPipelineStage_RaygenExt;    break;
+			case SpvExecutionModelVertex:                  stage = ESHPipelineStage_Vertex;       break;
+			case SpvExecutionModelFragment:                stage = ESHPipelineStage_Pixel;        break;
+			case SpvExecutionModelGeometry:                stage = ESHPipelineStage_GeometryExt;  break;
+			case SpvExecutionModelTessellationControl:     stage = ESHPipelineStage_Hull;         break;
+			case SpvExecutionModelTessellationEvaluation:  stage = ESHPipelineStage_Domain;       break;
 
 			default:
 				retError(clean, Error_invalidState(
@@ -1888,7 +1873,7 @@ extern "C" Bool Compiler_processSPIRV(
 							break;
 
 					if(k == end)
-						gotoIfError3(clean, ListCharString_pushBack(&strings, realSemanticName, &alloc, e_rr));
+						gotoIfError3(clean, ListCharString_pushBack(&strings, realSemanticName, alloc, e_rr));
 
 					if(!isOutput && k == end)
 						++inputSemanticCount;
@@ -1897,14 +1882,10 @@ extern "C" Bool Compiler_processSPIRV(
 				}
 
 				if(semanticName >= 16)
-					retError(clean, Error_invalidState(
-						1, "Compiler_processSPIRV() unique semantic name out of bounds"
-					));
+					retError(clean, Error_invalidState(1, "Compiler_processSPIRV() unique semantic name out of bounds"));
 
 				if(semanticValue >= 15)
-					retError(clean, Error_invalidState(
-						1, "Compiler_processSPIRV() unique semantic id out of bounds"
-					));
+					retError(clean, Error_invalidState(1, "Compiler_processSPIRV() unique semantic id out of bounds"));
 
 				semanticValue |= (U8)(semanticName << 4);
 				inputSemantic[input->location] = !semanticName ? 0 : (U8) semanticValue;
@@ -1924,7 +1905,7 @@ extern "C" Bool Compiler_processSPIRV(
 				if(!binding)
 					continue;
 
-				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, descriptorSet.set, &alloc, e_rr));
+				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, descriptorSet.set, alloc, e_rr));
 			}
 		}
 
@@ -1953,7 +1934,7 @@ extern "C" Bool Compiler_processSPIRV(
 			gotoIfError3(clean, Compiler_convertShaderBufferSPIRV(
 				&var,
 				false,
-				&alloc,
+				alloc,
 				&sbFile,
 				e_rr
 			));
@@ -1973,7 +1954,7 @@ extern "C" Bool Compiler_processSPIRV(
 				NULL,
 				&sbFile,
 				bindings,
-				&alloc,
+				alloc,
 				e_rr
 			));
 		}
@@ -1982,7 +1963,7 @@ extern "C" Bool Compiler_processSPIRV(
 			localSize, payloadSize, intersectSize, 0,
 			inputs, outputs,
 			inputSemanticCount, &strings, inputSemantics, outputSemantics,
-			name,
+			&name,
 			lock, entries,
 			alloc, e_rr
 		));
@@ -1997,7 +1978,7 @@ extern "C" Bool Compiler_processSPIRV(
 			[alloc, errors, &s_uccess, e_rr](
 				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
 			) -> void {
-				(void) Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, &alloc, e_rr);
+				(void) Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
 			}
 		);
 
@@ -2016,19 +1997,19 @@ extern "C" Bool Compiler_processSPIRV(
 			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"));
 	}
 
-	Buffer_free(result, &alloc);
-	gotoIfError3(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), &alloc, result, e_rr));
+	Buffer_free(result, alloc);
+	gotoIfError3(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result, e_rr));
 
 clean:
 
-	ListCharString_freeUnderlying(&strings, &alloc);
-	SBFile_free(&sbFile, &alloc);
+	ListCharString_freeUnderlying(&strings, alloc);
+	SBFile_free(&sbFile, alloc);
 
 	spvReflectDestroyShaderModule(&spvMod);
 	return s_uccess;
 }
 
-extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharString *result, Error *e_rr) {
+extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr) {
 	
 	Bool s_uccess = true;
 	U64 binLen = Buffer_length(buf);
@@ -2064,18 +2045,18 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharStrin
 	if(!tool.Disassemble((const U32*)resultPtr, binLen >> 2, &str, opts))
 		retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() SPIRV couldn't be disassembled"));
 
-	gotoIfError3(clean, CharString_createCopy(CharString_createRefSizedConst(str.c_str(), str.size(), true), &alloc, result, e_rr));
+	gotoIfError3(clean, CharString_createCopy(CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result, e_rr));
 
 clean:
 	return s_uccess;
 }
 
 extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
-	Compiler compiler,
+	const Compiler *compiler,
 	Buffer binary,
 	Bool showAll,
 	ListCompilerEntrypoint *uniqueEntrypoints,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -2113,26 +2094,26 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 		switch (entrypoint.spirv_execution_model) {
 
-			case SpvExecutionModelRayGenerationKHR:            stage = ESHPipelineStage_RaygenExt;            break;
-			case SpvExecutionModelIntersectionKHR:            stage = ESHPipelineStage_IntersectionExt;    break;
-			case SpvExecutionModelAnyHitKHR:                stage = ESHPipelineStage_AnyHitExt;            break;
-			case SpvExecutionModelClosestHitKHR:            stage = ESHPipelineStage_ClosestHitExt;        break;
-			case SpvExecutionModelMissKHR:                    stage = ESHPipelineStage_MissExt;            break;
-			case SpvExecutionModelCallableKHR:                stage = ESHPipelineStage_CallableExt;        break;
+			case SpvExecutionModelRayGenerationKHR:        stage = ESHPipelineStage_RaygenExt;        break;
+			case SpvExecutionModelIntersectionKHR:         stage = ESHPipelineStage_IntersectionExt;  break;
+			case SpvExecutionModelAnyHitKHR:               stage = ESHPipelineStage_AnyHitExt;        break;
+			case SpvExecutionModelClosestHitKHR:           stage = ESHPipelineStage_ClosestHitExt;    break;
+			case SpvExecutionModelMissKHR:                 stage = ESHPipelineStage_MissExt;          break;
+			case SpvExecutionModelCallableKHR:             stage = ESHPipelineStage_CallableExt;      break;
 
-			case SpvExecutionModelVertex:                    stage = ESHPipelineStage_Vertex;            break;
-			case SpvExecutionModelFragment:                    stage = ESHPipelineStage_Pixel;                break;
-			case SpvExecutionModelGeometry:                    stage = ESHPipelineStage_GeometryExt;        break;
-			case SpvExecutionModelTessellationControl:        stage = ESHPipelineStage_Hull;                break;
-			case SpvExecutionModelTessellationEvaluation:    stage = ESHPipelineStage_Domain;            break;
+			case SpvExecutionModelVertex:                  stage = ESHPipelineStage_Vertex;           break;
+			case SpvExecutionModelFragment:                stage = ESHPipelineStage_Pixel;            break;
+			case SpvExecutionModelGeometry:                stage = ESHPipelineStage_GeometryExt;      break;
+			case SpvExecutionModelTessellationControl:     stage = ESHPipelineStage_Hull;             break;
+			case SpvExecutionModelTessellationEvaluation:  stage = ESHPipelineStage_Domain;           break;
 		
-			case SpvExecutionModelGLCompute:                stage = ESHPipelineStage_Compute;            break;
+			case SpvExecutionModelGLCompute:               stage = ESHPipelineStage_Compute;          break;
 
 			case SpvExecutionModelTaskEXT:
-			case SpvExecutionModelTaskNV:                    stage = ESHPipelineStage_TaskExt;            break;
+			case SpvExecutionModelTaskNV:                  stage = ESHPipelineStage_TaskExt;          break;
 
 			case SpvExecutionModelMeshEXT:
-			case SpvExecutionModelMeshNV:                    stage = ESHPipelineStage_MeshExt;            break;
+			case SpvExecutionModelMeshNV:                  stage = ESHPipelineStage_MeshExt;          break;
 
 			default:
 				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsSPIRV() had an invalid shader type"));
@@ -2149,7 +2130,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 				if(!alreadyContainsLib)
 					gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, &alloc, e_rr));
+						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, alloc, e_rr));
 
 				alreadyContainsLib = true;
 			}
@@ -2160,10 +2141,10 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 		if(insertPlain) {
 
 			gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, &alloc, e_rr));
+				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, alloc, e_rr));
 
 			gotoIfError3(clean, CharString_createCopy(
-				CharString_createRefCStrConst(name), &alloc, &ListCompilerEntrypoint_last(*uniqueEntrypoints)->name, e_rr
+				CharString_createRefCStrConst(name), alloc, &ListCompilerEntrypoint_last(*uniqueEntrypoints)->name, e_rr
 			));
 		}
 	}
@@ -2172,77 +2153,17 @@ clean:
 	return s_uccess;
 }
 
-/*
-* TODO: This is ChatGPT coded, probably garbage, test and compare carefully!
-*
-class StripAllButOneEntryPointPass : public spvtools::opt::Pass {
-public:
-	explicit StripAllButOneEntryPointPass(const std::string& keep_entry_point)
-		: keep_entry_name_(keep_entry_point) {}
-
-	const char* name() const override { return "strip-all-but-one-entry-point"; }
-
-	Status Process() override {
-		using namespace spvtools::opt;
-
-		auto* module = get_module();
-		auto* ctx = context();
-
-		// Step 1: Find entry point instruction to keep
-		Instruction* target_entry = nullptr;
-		for (auto& entry : module->entry_points()) {
-			std::string name = reinterpret_cast<const char*>(entry.GetInOperand(2).words.data());
-			if (name == keep_entry_name_) {
-				target_entry = &entry;
-				break;
-			}
-		}
-
-		if (!target_entry) {
-			std::cerr << "Entry point \"" << keep_entry_name_ << "\" not found.\n";
-			return Status::SuccessWithoutChange;
-		}
-
-		// Step 2: Remove all other entry points
-		std::vector<Instruction*> to_remove;
-		for (auto& entry : module->entry_points()) {
-			if (&entry != target_entry) {
-				to_remove.push_back(&entry);
-			}
-		}
-
-		// Remove all non-matching entry points
-		for (auto* ep : to_remove) {
-			ctx->KillNamesAndDecorates(ep);
-			ctx->module()->RemoveEntryPoint(ep);
-		}
-
-		// Step 3: Now safely rename the retained entry point to "main"
-		uint32_t string_id = ctx->get_feature_mgr()->GetStringId("main");
-		target_entry->SetInOperand(2, {string_id});
-
-		return Status::SuccessWithChange;
-	}
-
-private:
-	std::string keep_entry_name_;
-};
-
-spvtools::opt::PassToken CreateStripAllButOneEntryPointPass(const std::string& name) {
-	return spvtools::opt::PassToken(std::make_unique<StripAllButOneEntryPointPass>(name));
-}*/
-
 extern "C" Bool Compiler_linkSPIRV(
-	Compiler compiler,
-	ListBuffer inputs,
-	ListSHUniformRuntime uniforms,
+	const Compiler *compiler,
+	const ListBuffer *inputs,
+	const ListSHUniformRuntime *uniforms,
 	Buffer uniformData,
-	CharString entrypoint,
+	const CharString *entrypoint,
 	ESHPipelineStage stage,
 	ESHExtension exts,
 	ListCompileError *errors,
 	Buffer *result,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -2263,11 +2184,11 @@ extern "C" Bool Compiler_linkSPIRV(
 	const U32 *linkedBinPtr = NULL;
 	U64 linkedBinSiz = 0;
 
-	if (inputs.length > 1)
+	if (inputs->length > 1)
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_linkSPIRV() linking multiple spirv modules isn't supported"));
 
-	linkedBinPtr = (const U32*) inputs.ptr[0].ptr;
-	linkedBinSiz = Buffer_length(inputs.ptr[0]);
+	linkedBinPtr = (const U32*) inputs->ptr[0].ptr;
+	linkedBinSiz = Buffer_length(inputs->ptr[0]);
 
 	if (linkedBinSiz & 3)
 		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"));
@@ -2276,7 +2197,7 @@ extern "C" Bool Compiler_linkSPIRV(
 
 	//Run optimizer to get rid of uniforms
 
-	if (uniforms.length || CharString_length(entrypoint)) {
+	if (uniforms->length || CharString_length(*entrypoint)) {
 
 		//TODO: Think about this; what if a binary with RT enabled produces a non RT entrypoint.
 		//We need to produce SPV1.4 but afterwards we need to go back to SPV1.3?
@@ -2286,7 +2207,7 @@ extern "C" Bool Compiler_linkSPIRV(
 			[alloc, errors, e_rr, &s_uccess](
 				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
 			) -> void {
-				(void) Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, &alloc, e_rr);
+				(void) Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
 			}
 		);
 		
@@ -2296,15 +2217,15 @@ extern "C" Bool Compiler_linkSPIRV(
 
 		//Resolve spec constants to real constants
 
-		if (uniforms.length) {
+		if (uniforms->length) {
 
 			std::unordered_map<U32, std::vector<U32>> uniformMap;
 
-			for (U32 i = 0; i < (U32) uniforms.length; ++i) {
+			for (U32 i = 0; i < (U32) uniforms->length; ++i) {
 				
 				//Uniform info
 
-				SHUniformRuntime uniform = uniforms.ptr[i];
+				SHUniformRuntime uniform = uniforms->ptr[i];
 
 				if(uniform.typeIdShort >= ETypeId_Max)
 					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() typeIdShort out of bounds"));
@@ -2346,13 +2267,13 @@ extern "C" Bool Compiler_linkSPIRV(
 				if (isBool || isX8 || (!is16 && isX16))
 					for (U64 j = 0; j < width * height; ++j) {
 
-						if (is16)                        //Expand 8-bit to 16-bit
+						if (is16)                         //Expand 8-bit to 16-bit
 							asU16[j] = inputAsU8[j];
 
 						else if (isX8)                    //Expand 8-bit to 32-bit
 							asU32[j] = inputAsU8[j];
 
-						else if (isBool)                //Expand B1 to 32-bit
+						else if (isBool)                  //Expand B1 to 32-bit
 							asU32[j] = (inputAsU16[0] >> j) & 1;
 
 						else asU32[j] = inputAsU16[j];    //Expand 16-bit to 32-bit
@@ -2385,7 +2306,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	
 	//Output to final target
 
-	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, &alloc, e_rr));
+	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, alloc, e_rr));
 
 	Buffer_memcpy(
 		*result,

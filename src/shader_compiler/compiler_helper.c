@@ -56,7 +56,7 @@ typedef struct ShaderFileRecursion {
 
 	ECompileType compileType;
 
-	Allocator alloc;
+	const Allocator *alloc;
 
 } ShaderFileRecursion;
 
@@ -73,7 +73,7 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 	CharString copy = CharString_createNull();
 	CharString tempStr = CharString_createNull();
 
-	Allocator alloc = shaderFiles->alloc;
+	const Allocator *alloc = shaderFiles->alloc;
 
 	if (file.type == EFileType_File) {
 
@@ -81,11 +81,11 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 
 		if (CharString_endsWithStringInsensitive(&file.path, &hlsl, 0)) {
 
-			gotoIfError3(clean, CharString_createCopy(file.path, &alloc, &copy, e_rr));
+			gotoIfError3(clean, CharString_createCopy(file.path, alloc, &copy, e_rr));
 
 			//Move to allShaders
 
-			gotoIfError3(clean, ListCharString_pushBack(shaderFiles->allShaders, copy, &alloc, e_rr));
+			gotoIfError3(clean, ListCharString_pushBack(shaderFiles->allShaders, copy, alloc, e_rr));
 			copy = CharString_createNull();
 
 			//Grab subPath
@@ -97,11 +97,11 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 
 			//Copy subPath
 
-			gotoIfError3(clean, CharString_createCopy(subPath, &alloc, &copy, e_rr));
+			gotoIfError3(clean, CharString_createCopy(subPath, alloc, &copy, e_rr));
 
 			//Move subPath into new folder
 
-			gotoIfError3(clean, CharString_insertString(&copy, &shaderFiles->output, 0, &alloc, e_rr));
+			gotoIfError3(clean, CharString_insertString(&copy, &shaderFiles->output, 0, alloc, e_rr));
 
 			//Handle multiple modes by inserting .spv.hlsl at the end
 
@@ -112,7 +112,7 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 				if(!((shaderFiles->compileModeU64 >> i) & 1))
 					continue;
 
-				gotoIfError3(clean, ListU8_pushBack(shaderFiles->allModes, i, &alloc, e_rr));
+				gotoIfError3(clean, ListU8_pushBack(shaderFiles->allModes, i, alloc, e_rr));
 
 				//Add double reference to input, so we don't waste memory (besides 24 for CharString struct itself)
 				//Because we want to compile it with two different modes
@@ -123,7 +123,7 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 					CharString input = *ListCharString_last(*shaderFiles->allShaders);
 					input = CharString_createRefStrConst(input);
 
-					gotoIfError3(clean, ListCharString_pushBack(shaderFiles->allShaders, input, &alloc, e_rr));
+					gotoIfError3(clean, ListCharString_pushBack(shaderFiles->allShaders, input, alloc, e_rr));
 				}
 
 				//Append .oiSH/.spv.oiSH/etc.
@@ -131,7 +131,7 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 				const CharString hlslSuffix = CharString_createRefCStrConst(".hlsl");
 
 				gotoIfError3(clean, CharString_format(
-					&alloc, &tempStr, e_rr, "%.*s%s",
+					alloc, &tempStr, e_rr, "%.*s%s",
 					(int)U64_min(
 						CharString_length(copy),
 						CharString_findLastStringInsensitive(&copy, &hlslSuffix, 0, 0)
@@ -140,32 +140,32 @@ Bool registerFile(FileInfo file, ShaderFileRecursion *shaderFiles, Error *e_rr) 
 					shaderFiles->hasCombineFlag ? oiSHCombineSuffix : oiSHSuffixes[i]
 				));
 
-				gotoIfError3(clean, File_add(&tempStr, EFileType_File, true, &alloc, e_rr));
-				gotoIfError3(clean, ListCharString_pushBack(shaderFiles->allOutputs, tempStr, &alloc, e_rr));
+				gotoIfError3(clean, File_add(&tempStr, EFileType_File, true, alloc, e_rr));
+				gotoIfError3(clean, ListCharString_pushBack(shaderFiles->allOutputs, tempStr, alloc, e_rr));
 				tempStr = CharString_createNull();
 				foundFirstMode = true;
 			}
 
-			CharString_free(&copy, &alloc);
+			CharString_free(&copy, alloc);
 		}
 	}
 
 clean:
-	CharString_free(&copy, &alloc);
-	CharString_free(&tempStr, &alloc);
+	CharString_free(&copy, alloc);
+	CharString_free(&tempStr, alloc);
 	return s_uccess;
 }
 
 Bool Compiler_precompileShader(
-	Compiler compiler,
+	const Compiler *compiler,
 	ESHBinaryType outputType,
 	Bool isDebug,
 	CharString inputPath,
 	CharString input,
 	ListSHEntryRuntime *shEntriesRuntime,
-	CharString includeDir,
+	const ListCharString *includeDirs,
 	Bool enableLogging,
-	Allocator alloc
+	const Allocator *alloc
 ) {
 
 	CompilerSettings settings = (CompilerSettings) {
@@ -175,14 +175,14 @@ Bool Compiler_precompileShader(
 		.format = ECompilerFormat_HLSL,
 		.outputType = outputType,
 		.infoAboutIncludes = false,
-		.includeDir = includeDir
+		.includeDirs = *includeDirs
 	};
 	 
 	Error errTemp = Error_none(), *e_rr = &errTemp;
 	Bool s_uccess = true;
 
 	CompileResult compileResult = (CompileResult) { 0 };
-	gotoIfError3(clean, Compiler_parse(compiler, settings, alloc, &compileResult, e_rr));
+	gotoIfError3(clean, Compiler_parse(compiler, &settings, alloc, &compileResult, e_rr));
 
 	if(enableLogging)
 		for(U64 i = 0; i < compileResult.compileErrors.length; ++i) {
@@ -190,10 +190,10 @@ Bool Compiler_precompileShader(
 			CompileError e = compileResult.compileErrors.ptr[i];
 
 			if((e.typeLineId >> 7) == ECompileErrorType_Warn)
-				Log_warnLn(&alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+				Log_warnLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
 
 			else Log_errorLn(
-				&alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr
+				alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr
 			);
 		}
 
@@ -228,7 +228,7 @@ Bool Compiler_precompileShader(
 
 				if (usePrev) {
 					entry->uniforms = (ListSHUniformRuntime) { 0 };
-					gotoIfError3(clean, ListSHUniformRuntime_createCopy(prev, &alloc, &entry->uniforms, e_rr));
+					gotoIfError3(clean, ListSHUniformRuntime_createCopy(prev, alloc, &entry->uniforms, e_rr));
 				}
 
 				for(U64 j = 0; j < entry->uniforms.length; ++j) {
@@ -237,13 +237,13 @@ Bool Compiler_precompileShader(
 
 					if (usePrev || CharString_isRef(str)) {
 						entry->uniforms.ptrNonConst[j].name = CharString_createNull();
-						gotoIfError3(clean, CharString_createCopy(str, &alloc, &entry->uniforms.ptrNonConst[j].name, e_rr));
+						gotoIfError3(clean, CharString_createCopy(str, alloc, &entry->uniforms.ptrNonConst[j].name, e_rr));
 					}
 				}
 
 				if (ListU8_isRef(entry->uniformData)) {
 					ListU8 tmp = (ListU8) { 0 };
-					gotoIfError3(clean, ListU8_createCopy(entry->uniformData, &alloc, &tmp, e_rr));
+					gotoIfError3(clean, ListU8_createCopy(entry->uniformData, alloc, &tmp, e_rr));
 					entry->uniformData = tmp;
 				}
 
@@ -257,7 +257,7 @@ Bool Compiler_precompileShader(
 					if(!CharString_isRef(*curr))
 						continue;
 
-					gotoIfError3(clean, CharString_createCopy(*curr, &alloc, &temp, e_rr));
+					gotoIfError3(clean, CharString_createCopy(*curr, alloc, &temp, e_rr));
 					*curr = temp;
 				}
 
@@ -267,7 +267,7 @@ Bool Compiler_precompileShader(
 					continue;
 
 				CharString temp = CharString_createNull();
-				gotoIfError3(clean, CharString_createCopy(entry->entry.name, &alloc, &temp, e_rr));
+				gotoIfError3(clean, CharString_createCopy(entry->entry.name, alloc, &temp, e_rr));
 				entry->entry.name = temp;
 			}
 		}
@@ -277,17 +277,17 @@ clean:
 	s_uccess &= compileResult.isSuccess;
 
 	if(!s_uccess)
-		ListSHEntryRuntime_freeUnderlying(shEntriesRuntime, &alloc);
+		ListSHEntryRuntime_freeUnderlying(shEntriesRuntime, alloc);
 
 	CompileResult_free(&compileResult, alloc);
-	Error_print(&alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
+	Error_print(alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
 	return s_uccess;
 }
 
 Bool Compiler_getUniqueCompiles(
-	ListSHEntryRuntime runtimeEntries,
+	const ListSHEntryRuntime *runtimeEntries,
 	ListU32 *compileCombinations,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -298,12 +298,12 @@ Bool Compiler_getUniqueCompiles(
 	//Linking is a different story;
 	//Each combination of uniforms and entrypoints will have to be linked later.
 
-	for (U64 i = 0; i < runtimeEntries.length; ++i) {
+	for (U64 i = 0; i < runtimeEntries->length; ++i) {
 
 		if(i >> 15)
 			retError(clean, Error_overflow(0, i, 1 << 15, "Compiler_getUniqueCompiles() i out of bounds"));
 
-		SHEntryRuntime runtime = runtimeEntries.ptr[i];
+		SHEntryRuntime runtime = runtimeEntries->ptr[i];
 
 		//Note: Since compiled combinations excludes uniforms, it'll "compile" for uniformId 0 which will later be
 		//        explicitly linked for the real uniform information.
@@ -330,10 +330,10 @@ Bool Compiler_getUniqueCompiles(
 
 			if(k == identifiers.length) {
 
-				gotoIfError3(clean, ListSHBinaryIdentifier_pushBack(&identifiers, binaryIdentifier, &alloc, e_rr));
+				gotoIfError3(clean, ListSHBinaryIdentifier_pushBack(&identifiers, binaryIdentifier, alloc, e_rr));
 
 				if(compileCombinations)
-					gotoIfError3(clean, ListU32_pushBack(compileCombinations, (U32)(j | (i << 16)), &alloc, e_rr));
+					gotoIfError3(clean, ListU32_pushBack(compileCombinations, (U32)(j | (i << 16)), alloc, e_rr));
 			}
 
 			//Update flags of compileCombinations->ptr[k] stored in bit 15 (isRt), 31 (isGfxOrComp)
@@ -354,11 +354,11 @@ Bool Compiler_getUniqueCompiles(
 
 clean:
 	//We will never allocate nested memory into this, so it's fine to just free it (no underlying data)
-	ListSHBinaryIdentifier_free(&identifiers, &alloc);
+	ListSHBinaryIdentifier_free(&identifiers, alloc);
 	return s_uccess;
 }
 
-void Compiler_printErrors(ListCompileError errors, Allocator alloc) {
+void Compiler_printErrors(ListCompileError errors, const Allocator *alloc) {
 	
 	for(U64 i = 0; i < errors.length; ++i) {
 
@@ -367,15 +367,15 @@ void Compiler_printErrors(ListCompileError errors, Allocator alloc) {
 		if(e.file.ptr) {
 
 			if((e.typeLineId >> 7) == ECompileErrorType_Warn)
-				Log_warnLn(&alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+				Log_warnLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
 
-			else Log_errorLn(&alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+			else Log_errorLn(alloc, "%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
 		}
 
 		else if((e.typeLineId >> 7) == ECompileErrorType_Warn)
-			Log_warnLn(&alloc, "%s", e.error.ptr);
+			Log_warnLn(alloc, "%s", e.error.ptr);
 
-		else Log_errorLn(&alloc, "%s", e.error.ptr);
+		else Log_errorLn(alloc, "%s", e.error.ptr);
 	}
 }
 void Compiler_logStatus(
@@ -384,7 +384,7 @@ void Compiler_logStatus(
 	CharString inputPath,
 	U16 runtimeEntryId,
 	U16 combinationId,
-	Allocator alloc,
+	const Allocator *alloc,
 	Bool s_uccess
 ) {
 	
@@ -392,44 +392,44 @@ void Compiler_logStatus(
 
 		if(s_uccess)
 			Log_debugLn(
-				&alloc, "%s success: %.*s (%s, %"PRIu32":%"PRIu32")",
+				alloc, "%s success: %.*s (%s, %"PRIu32":%"PRIu32")",
 				type, (int) CharString_length(inputPath), inputPath.ptr,
 				binType, runtimeEntryId, combinationId
 			);
 
 		else
 			Log_errorLn(
-				&alloc, "%s failed: %.*s (%s, %"PRIu32":%"PRIu32")",
+				alloc, "%s failed: %.*s (%s, %"PRIu32":%"PRIu32")",
 				type, (int) CharString_length(inputPath), inputPath.ptr,
 				binType, runtimeEntryId, combinationId
 			);
 }
 
 Bool Compiler_getUniqueEntrypointsDXIL(
-	Compiler compiler,
+	const Compiler *compiler,
 	Buffer binary,
 	Bool showAll,
 	ListCompilerEntrypoint *uniqueEntrypoints,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
 Bool Compiler_getUniqueEntrypointsSPIRV(
-	Compiler compiler,
+	const Compiler *compiler,
 	Buffer binary,
 	Bool showAll,
 	ListCompilerEntrypoint *uniqueEntrypoints,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
 Bool Compiler_getUniqueEntrypoints(
-	Compiler compiler,
+	const Compiler *compiler,
 	ESHBinaryType binaryType,
 	Buffer binary,
 	Bool showAll,
 	ListCompilerEntrypoint *uniqueEntrypoints,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 	
@@ -454,7 +454,7 @@ clean:
 }
 
 Bool Compiler_compileShaderSingle(
-	Compiler compiler,
+	const Compiler *compiler,
 	ESHBinaryType binaryType,
 	Bool isDebug,
 	Bool isRt,
@@ -462,12 +462,12 @@ Bool Compiler_compileShaderSingle(
 	CharString inputPath,
 	CharString input,
 	CompileResult *dest,
-	ListSHEntryRuntime runtimeEntries,
+	const ListSHEntryRuntime *runtimeEntries,
 	U16 runtimeEntryId,
 	U16 combinationId,
-	CharString includeDir,
+	const ListCharString *includeDirs,
 	Bool enableLogging,
-	Allocator alloc
+	const Allocator *alloc
 ) {
 
 	Error errTemp = Error_none(), *e_rr = &errTemp;
@@ -488,13 +488,13 @@ Bool Compiler_compileShaderSingle(
 		.format = ECompilerFormat_HLSL,
 		.outputType = binaryType,
 		.infoAboutIncludes = true,        //Required to supply oiSH info about includes
-		.includeDir = includeDir
+		.includeDirs = *includeDirs
 	};
 
 	//First we need to go from text with includes and defines to easy to parse text
 	//Accessing SHEntryRuntime here without locking is safe, since we don't access these properties from asBinaryIdentifier
 
-	SHEntryRuntime entry = runtimeEntries.ptrNonConst[runtimeEntryId];
+	SHEntryRuntime entry = runtimeEntries->ptrNonConst[runtimeEntryId];
 	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&entry, combinationId, &binaryIdentifier, e_rr));
 
@@ -502,7 +502,7 @@ Bool Compiler_compileShaderSingle(
 	settings.containsGfxOrComp = entry.containsGfxOrComp;
 	settings.isRt = entry.isRt;
 
-	gotoIfError3(clean, Compiler_compile(compiler, settings, binaryIdentifier, alloc, dest, e_rr));
+	gotoIfError3(clean, Compiler_compile(compiler, &settings, &binaryIdentifier, alloc, dest, e_rr));
 
 	if(enableLogging)
 		Compiler_printErrors(dest->compileErrors, alloc);
@@ -514,18 +514,18 @@ clean:
 	if(enableLogging)
 		Compiler_logStatus(binaryType, "Compile", inputPath, runtimeEntryId, combinationId, alloc, s_uccess);
 		
-	Error_print(&alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
+	Error_print(alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
 	return s_uccess;
 }
 
 Bool Compiler_linkSingle(
-	Compiler compiler,
+	const Compiler *compiler,
 	CharString path,
 	U16 runtimeEntryId,
 	U16 combinationId,
 	ESHBinaryType type,
-	ListBuffer inputs,
-	ListSHUniformRuntime uniforms,
+	const ListBuffer *inputs,
+	const ListSHUniformRuntime *uniforms,
 	Buffer uniformData,
 	CharString entrypoint,
 	U16 shaderVersion,
@@ -533,7 +533,7 @@ Bool Compiler_linkSingle(
 	ESHExtension exts,
 	Bool enableLogging,
 	Buffer *result,
-	Allocator alloc
+	const Allocator *alloc
 ) {
 
 	Error errTemp = Error_none(), *e_rr = &errTemp;
@@ -547,7 +547,7 @@ Bool Compiler_linkSingle(
 		retError(clean, Error_invalidParameter(5, 0, "Compiler_linkSingle()::result was present, but not empty"));
 
 	gotoIfError3(clean, Compiler_link(
-		compiler, type, inputs, uniforms, uniformData, entrypoint, shaderVersion, stageType, exts, &errors, result,
+		compiler, type, inputs, uniforms, uniformData, &entrypoint, shaderVersion, stageType, exts, &errors, result,
 		alloc, e_rr
 	));
 
@@ -559,25 +559,25 @@ clean:
 	if (enableLogging)
 		Compiler_logStatus(type, "Link", path, runtimeEntryId, combinationId, alloc, s_uccess);
 		
-	Error_print(&alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
+	Error_print(alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
 	ListCompileError_freeUnderlying(&errors, alloc);
 	return s_uccess;
 }
 
 Bool Compiler_processSingle(
-	Compiler compiler,
+	const Compiler *compiler,
 	CharString path,
 	U16 runtimeEntryId,
 	U16 combinationId,
 	ESHBinaryType binaryType,
 	CompileResult *tempResult,
 	Bool isDebug,
-	SHBinaryIdentifier binaryIdentifier,
+	const SHBinaryIdentifier *binaryIdentifier,
 	SpinLock *lock,
-	ListSHEntryRuntime runtimeEntries,
+	const ListSHEntryRuntime *runtimeEntries,
 	Bool isShaderAnnotation,
 	Bool enableLogging,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -628,40 +628,40 @@ typedef struct LinkEntry {
 TList(LinkEntry);
 TListImpl(LinkEntry);
 
-void ListListSHEntryRuntime_freeUnderlying(ListListSHEntryRuntime *entry, Allocator alloc) {
+void ListListSHEntryRuntime_freeUnderlying(ListListSHEntryRuntime *entry, const Allocator *alloc) {
 
 	if(!entry)
 		return;
 
 	for(U64 i = 0; i < entry->length; ++i)
-		ListSHEntryRuntime_freeUnderlying(&entry->ptrNonConst[i], &alloc);
+		ListSHEntryRuntime_freeUnderlying(&entry->ptrNonConst[i], alloc);
 
-	ListListSHEntryRuntime_free(entry, &alloc);
+	ListListSHEntryRuntime_free(entry, alloc);
 }
 
-void ListLinkEntry_freeUnderlying(ListLinkEntry* entries, Allocator alloc) {
+void ListLinkEntry_freeUnderlying(ListLinkEntry* entries, const Allocator *alloc) {
 
 	if (!entries)
 		return;
 
 	for (U64 i = 0; i < entries->length; ++i) {
 		LinkEntry* entry = &entries->ptrNonConst[i];
-		Buffer_free(&entry->uniformData, &alloc);
-		ListU16_free(&entry->runtimeEntries, &alloc);
+		Buffer_free(&entry->uniformData, alloc);
+		ListU16_free(&entry->runtimeEntries, alloc);
 	}
 
-	ListLinkEntry_free(entries, &alloc);
+	ListLinkEntry_free(entries, alloc);
 }
 
 Bool Compiler_getLinkEntries(
-	Compiler compiler,
+	const Compiler *compiler,
 	const ListSHEntryRuntime *runtimeEntries,
 	const SHBinaryIdentifier *binaryIdentifier,
 	ESHBinaryType binaryType,
 	Buffer *binary,
 	ListCompilerEntrypoint *entrypoints,
 	ListLinkEntry *linkEntries,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -684,14 +684,14 @@ Bool Compiler_getLinkEntries(
 	if (!isLib) {
 		
 		gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
-			entrypoints, (CompilerEntrypoint) { .stage = binaryIdentifier->stageType }, &alloc, e_rr
+			entrypoints, (CompilerEntrypoint) { .stage = binaryIdentifier->stageType }, alloc, e_rr
 		));
 
 		freeEntrypoints = true;
 
 		gotoIfError3(clean, CharString_createCopy(
 			binaryIdentifier->entrypoint,
-			&alloc,
+			alloc,
 			&ListCompilerEntrypoint_last(*entrypoints)->name,
 			e_rr
 		));
@@ -855,16 +855,16 @@ Bool Compiler_getLinkEntries(
 				}
 
 				if (l != linkEntries->length) {
-					gotoIfError3(clean, ListU16_pushBack(&linkEntries->ptrNonConst[k].runtimeEntries, (U16)j, &alloc, e_rr));
+					gotoIfError3(clean, ListU16_pushBack(&linkEntries->ptrNonConst[k].runtimeEntries, (U16)j, alloc, e_rr));
 					continue;
 				}
 
 				linkEntry.entrypointId = U16_MAX;
-				gotoIfError3(clean, ListU16_pushBack(&tmpEntries, (U16)j, &alloc, e_rr));
+				gotoIfError3(clean, ListU16_pushBack(&tmpEntries, (U16)j, alloc, e_rr));
 				linkEntry.runtimeEntries = tmpEntries;
 			}
 
-			gotoIfError3(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, &alloc, e_rr));
+			gotoIfError3(clean, ListLinkEntry_pushBack(linkEntries, linkEntry, alloc, e_rr));
 			tmpEntries = (ListU16) { 0 };    //Moved
 			freeLinkEntries = true;
 		}
@@ -884,7 +884,7 @@ clean:
 			ListLinkEntry_freeUnderlying(linkEntries, alloc);
 	}
 
-	ListU16_free(&tmpEntries, &alloc);
+	ListU16_free(&tmpEntries, alloc);
 	return s_uccess;
 }
 
@@ -911,9 +911,9 @@ typedef struct CompilerShaderFileJob {
 
 	ListCompiler compilers;             //Shared (read only); one Compiler per JobQueue execution context
 
-	CharString includeDir;              //Shared (read only)
+	ListCharString includeDirs;         //Shared (read only)
 
-	Allocator alloc;
+	const Allocator *alloc;
 
 	U64 fileId;
 
@@ -937,15 +937,15 @@ Bool Compiler_registerShaderBinary(
 	CharString sourceFile,
 	const SHEntryRuntime *runtimeEntry,
 	const SHBinaryIdentifier *binaryIdentifier,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
 Bool Compiler_registerShaderEntries(
 	SHFile *shFile,
-	ListSHEntryRuntime entries,
+	const ListSHEntryRuntime *entries,
 	ListU32 binaryIndices,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 );
 
@@ -994,7 +994,7 @@ typedef struct CompilerComboCtx {
 
 	JobGroup group;                         //Combination latch; finalize = Compiler_finalizeCombination
 
-	Allocator alloc;                        //Self-contained so the destructor never derefs sibling contexts
+	const Allocator *alloc;                        //Self-contained so the destructor never derefs sibling contexts
 
 	U16 runtimeEntryId;
 	U16 combinationId;
@@ -1005,7 +1005,7 @@ typedef struct CompilerComboCtx {
 
 typedef struct CompilerLeafCtx {
 	CompilerComboCtx *combo;                //Parent; alive until this combination's finalize (after all leaves)
-	Allocator alloc;                        //Self-contained so the destructor never derefs sibling contexts
+	const Allocator *alloc;                        //Self-contained so the destructor never derefs sibling contexts
 	U64 linkIndex;                          //Index into combo->linkEntries
 } CompilerLeafCtx;
 
@@ -1018,14 +1018,14 @@ void CompilerFileCtx_free(void *ptr) {
 	if(!ctx)
 		return;
 
-	Allocator alloc = ctx->job->alloc;      //job outlives the queue (owned by Compiler_compileShaders), so this is safe
+	const Allocator *alloc = ctx->job->alloc;      //job outlives the queue (owned by Compiler_compileShaders), so this is safe
 
-	SHFile_free(&ctx->shFile, &alloc);
-	ListU32_free(&ctx->binaryIndices, &alloc);
-	ListSHEntryRuntime_freeUnderlying(&ctx->runtimeEntries, &alloc);
-	ListU32_free(&ctx->compileCombinations, &alloc);
+	SHFile_free(&ctx->shFile, alloc);
+	ListU32_free(&ctx->binaryIndices, alloc);
+	ListSHEntryRuntime_freeUnderlying(&ctx->runtimeEntries, alloc);
+	ListU32_free(&ctx->compileCombinations, alloc);
 
-	alloc.free(alloc.ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
+	alloc->free(alloc->ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
 }
 
 //Frees a combination context and everything it owns (its compiled binary included).
@@ -1037,13 +1037,13 @@ void CompilerComboCtx_free(void *ptr) {
 	if(!ctx)
 		return;
 
-	Allocator alloc = ctx->alloc;
+	const Allocator *alloc = ctx->alloc;
 
 	CompileResult_free(&ctx->tempResult, alloc);
 	ListLinkEntry_freeUnderlying(&ctx->linkEntries, alloc);
 	ListCompilerEntrypoint_freeUnderlying(&ctx->uniqueEntrypoints, alloc);
 
-	alloc.free(alloc.ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
+	alloc->free(alloc->ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
 }
 
 //Frees a leaf context. Only used as the shutdown-discard destructor; a leaf that runs frees itself.
@@ -1054,8 +1054,8 @@ void CompilerLeafCtx_freeDiscarded(void *ptr) {
 	if(!leaf)
 		return;
 
-	Allocator alloc = leaf->alloc;
-	alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+	const Allocator *alloc = leaf->alloc;
+	alloc->free(alloc->ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
 }
 
 //Leaf: link (for lib/annotation) + reflection + register one binary into the shared SHFile.
@@ -1073,8 +1073,8 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 	CompilerFileCtx *file = combo->file;
 	CompilerShaderFileJob *job = file->job;
 
-	Allocator alloc = job->alloc;
-	Compiler compiler = job->compilers.ptr[threadId];
+	const Allocator *alloc = job->alloc;
+	const Compiler *compiler = &job->compilers.ptr[threadId];
 
 	Error errTmp = Error_none(), *e_rr = &errTmp;
 	Bool s_uccess = true;
@@ -1136,8 +1136,8 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 			combo->runtimeEntryId,
 			currentCombinationId,
 			file->binaryType,
-			inputs,
-			runtimeEntry.uniforms,
+			&inputs,
+			&runtimeEntry.uniforms,
 			uniformData,
 			entry.name,
 			binaryIdentifier.shaderVersion,
@@ -1172,9 +1172,9 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		file->binaryType,
 		tempResult2.binary.ptr ? &tempResult2 : &combo->tempResult,
 		job->isDebug,
-		binaryIdentifier,
+		&binaryIdentifier,
 		&file->lock,
-		file->runtimeEntries,
+		&file->runtimeEntries,
 		isShaderAnnotation,
 		job->enableLogging,
 		alloc,
@@ -1185,7 +1185,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
 
 	//Register the binary and link its runtime entries to it. binaryId is derived from the current
-	//SHFile size, so the read + registerShaderBinary + binaryIndices push must be one atomic section.
+	//const SHFile *size, so the read + registerShaderBinary + binaryIndices push must be one atomic section.
 
 	if(SpinLock_lock(&file->lock, U64_MAX) < ELockAcquire_Success)
 		retError(clean, Error_invalidState(0, "Compiler_compileLinkJob() couldn't lock SHFile"));
@@ -1207,7 +1207,7 @@ Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
 
 	for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)       //Link runtime entry to binary
 		gotoIfError3(clean, ListU32_pushBack(
-			&file->binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), &alloc, e_rr
+			&file->binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), alloc, e_rr
 		));
 
 	SpinLock_unlock(&file->lock);
@@ -1221,7 +1221,7 @@ clean:
 	if(!s_uccess) {
 
 		if(job->enableLogging)
-			Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+			Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 
 		Error e2 = Error_none();
 		JobGroup_fail(&file->group, &e2);       //Mark the whole file failed; finalize will be skipped
@@ -1229,7 +1229,7 @@ clean:
 
 	CompileResult_free(&tempResult2, alloc);
 
-	alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+	alloc->free(alloc->ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
 
 	Error e3 = Error_none();
 	JobGroup_leave(&combo->group, &e3);         //Release this leaf's combination token (may fire the combo finalize)
@@ -1276,8 +1276,8 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 	CompilerFileCtx *file = ctx->file;
 	CompilerShaderFileJob *job = file->job;
 
-	Allocator alloc = job->alloc;
-	Compiler compiler = job->compilers.ptr[threadId];
+	const Allocator *alloc = job->alloc;
+	const Compiler *compiler = &job->compilers.ptr[threadId];
 
 	Error errTmp = Error_none(), *e_rr = &errTmp;
 	Bool s_uccess = true;
@@ -1299,17 +1299,17 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		inputPath,
 		inputData,
 		&ctx->tempResult,
-		file->runtimeEntries,
+		&file->runtimeEntries,
 		ctx->runtimeEntryId,
 		ctx->combinationId,
-		job->includeDir,
+		&job->includeDirs,
 		job->enableLogging,
 		alloc
 	)) {
 
 		if(job->enableLogging)
 			Log_errorLn(
-				&alloc, "Compile failed for file \"%.*s\"",
+				alloc, "Compile failed for file \"%.*s\"",
 				(int)CharString_length(inputPath), inputPath.ptr
 			);
 
@@ -1344,7 +1344,7 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 	for (U64 k = 0; k < ctx->linkEntries.length; ++k) {
 
 		Buffer buf = Buffer_createNull();
-		gotoIfError3(cleanSpawn, Buffer_createUninitializedBytes(sizeof(CompilerLeafCtx), &alloc, &buf, e_rr));
+		gotoIfError3(cleanSpawn, Buffer_createUninitializedBytes(sizeof(CompilerLeafCtx), alloc, &buf, e_rr));
 
 		CompilerLeafCtx *leaf = (CompilerLeafCtx*) buf.ptrNonConst;
 		*leaf = (CompilerLeafCtx) { .combo = ctx, .alloc = alloc, .linkIndex = k };
@@ -1354,14 +1354,14 @@ Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
 		if(!JobQueue_pushDestructor(queue, Compiler_compileLinkJob, leaf, CompilerLeafCtx_freeDiscarded, e_rr)) {
 			Error e2 = Error_none();
 			JobGroup_leave(&ctx->group, &e2);       //Undo this leaf's token; the push never took ownership
-			alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+			alloc->free(alloc->ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
 			retError(cleanSpawn, Error_invalidState(0, "Compiler_compileCombinationJob() couldn't push leaf"));
 		}
 
 		continue;
 
 	cleanLeaf:
-		alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+		alloc->free(alloc->ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
 		goto cleanSpawn;
 	}
 
@@ -1378,7 +1378,7 @@ cleanSpawn:
 	//drain and free ctx via Compiler_finalizeCombination.
 
 	if(job->enableLogging)
-		Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+		Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 	{
 		Error e2 = Error_none();
 		JobGroup_fail(&file->group, &e2);
@@ -1393,7 +1393,7 @@ clean:
 	//tokens exist yet, so free ctx directly, fail the file and release this combination's file token.
 
 	if(!s_uccess && job->enableLogging)
-		Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+		Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 
 	CompilerComboCtx_free(ctx);
 	{
@@ -1415,14 +1415,14 @@ Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 	if(!ctx)
 		return false;
 
-	Allocator alloc = ctx->job->alloc;
+	const Allocator *alloc = ctx->job->alloc;
 	Error errTmp = Error_none();
 	Bool s_uccess = true;
 
 	if(!ListU32_sort(ctx->binaryIndices))
 		s_uccess = false;
 
-	else if(!Compiler_registerShaderEntries(&ctx->shFile, ctx->runtimeEntries, ctx->binaryIndices, alloc, &errTmp))
+	else if(!Compiler_registerShaderEntries(&ctx->shFile, &ctx->runtimeEntries, ctx->binaryIndices, alloc, &errTmp))
 		s_uccess = false;
 
 	if(s_uccess) {
@@ -1432,7 +1432,7 @@ Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
 	}
 
 	else if(ctx->job->enableLogging)
-		Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+		Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 
 	CompilerFileCtx_free(ctx);
 	return s_uccess;
@@ -1444,9 +1444,9 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 	Bool s_uccess = true;
 
-	Allocator alloc = job->alloc;
+	const Allocator *alloc = job->alloc;
 	const U64 i = job->fileId;
-	Compiler compiler = job->compilers.ptr[threadId];
+	const Compiler *compiler = &job->compilers.ptr[threadId];
 
 	CharString inputPath = job->allFiles.ptr[i];
 	CharString inputData = job->allShaderText.ptr[i];
@@ -1465,12 +1465,12 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 	//Preprocess to get information necessary for real compiles.
 
 	if(!Compiler_precompileShader(
-		compiler, binaryType, job->isDebug, inputPath, inputData, &runtimeEntries, job->includeDir, job->enableLogging, alloc
+		compiler, binaryType, job->isDebug, inputPath, inputData, &runtimeEntries, &job->includeDirs, job->enableLogging, alloc
 	)) {
 
 		if(job->enableLogging)
 			Log_errorLn(
-				&alloc, "Precompile failed for file \"%.*s\"",
+				alloc, "Precompile failed for file \"%.*s\"",
 				(int)CharString_length(inputPath), inputPath.ptr
 			);
 
@@ -1485,7 +1485,7 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 			if(job->enableLogging)
 				Log_errorLn(
-					&alloc, "Precompile couldn't find entrypoints for file \"%.*s\"",
+					alloc, "Precompile couldn't find entrypoints for file \"%.*s\"",
 					(int)CharString_length(inputPath), inputPath.ptr
 				);
 
@@ -1498,13 +1498,13 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 	U32 crc32c = Buffer_crc32c(CharString_bufferConst(inputData));
 
-	gotoIfError3(clean, SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, crc32c, &alloc, &shFile, e_rr));
-	gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, alloc, e_rr));
+	gotoIfError3(clean, SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, crc32c, alloc, &shFile, e_rr));
+	gotoIfError3(clean, Compiler_getUniqueCompiles(&runtimeEntries, &compileCombinations, alloc, e_rr));
 
 	//Move the accumulators into a heap file context shared by the whole fan-out tree.
 
 	Buffer buf = Buffer_createNull();
-	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(CompilerFileCtx), &alloc, &buf, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(CompilerFileCtx), alloc, &buf, e_rr));
 
 	ctx = (CompilerFileCtx*) buf.ptrNonConst;
 	*ctx = (CompilerFileCtx) {
@@ -1542,7 +1542,7 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 		combinationId  &= (U16) I16_MAX;
 
 		Buffer cbuf = Buffer_createNull();
-		gotoIfError3(cleanSpawn, Buffer_createUninitializedBytes(sizeof(CompilerComboCtx), &alloc, &cbuf, e_rr));
+		gotoIfError3(cleanSpawn, Buffer_createUninitializedBytes(sizeof(CompilerComboCtx), alloc, &cbuf, e_rr));
 
 		CompilerComboCtx *combo = (CompilerComboCtx*) cbuf.ptrNonConst;
 		*combo = (CompilerComboCtx) {
@@ -1597,9 +1597,9 @@ cleanCtx:
 
 clean:
 
-	SHFile_free(&shFile, &alloc);
-	ListSHEntryRuntime_freeUnderlying(&runtimeEntries, &alloc);
-	ListU32_free(&compileCombinations, &alloc);
+	SHFile_free(&shFile, alloc);
+	ListSHEntryRuntime_freeUnderlying(&runtimeEntries, alloc);
+	ListU32_free(&compileCombinations, alloc);
 
 	return s_uccess;
 }
@@ -1618,7 +1618,7 @@ Bool Compiler_compileShaderFileJob(void *data, U64 threadId, JobQueue *queue) {
 	Bool spawned = Compiler_compileShaderFile(job, queue, threadId, &errTmp);
 
 	if(!spawned && job->enableLogging)
-		Error_print(&job->alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+		Error_print(job->alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 
 	return spawned;
 }
@@ -1630,7 +1630,7 @@ Bool Compiler_registerShaderBinary(
 	CharString sourceFile,
 	const SHEntryRuntime *runtimeEntry,
 	const SHBinaryIdentifier *binaryIdentifier,        //Make sure this binary identifier only contains references
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -1665,48 +1665,48 @@ Bool Compiler_registerShaderBinary(
 		if (!CharString_startsWithSensitive(shInclude.relativePath, '@', 0)) {
 
 			gotoIfError3(clean, File_makeRelative(
-				Platform_instance->defaultDir, sourceFile, shInclude.relativePath, 256, &alloc, &tempStr, e_rr
+				Platform_instance->defaultDir, sourceFile, shInclude.relativePath, 256, alloc, &tempStr, e_rr
 			));
 
-			CharString_free(&shInclude.relativePath, &alloc);
+			CharString_free(&shInclude.relativePath, alloc);
 			shInclude.relativePath = tempStr;
 			tempStr = CharString_createNull();
 		}
 
-		gotoIfError3(clean, SHFile_addInclude(shFile, &shInclude, &alloc, e_rr));
+		gotoIfError3(clean, SHFile_addInclude(shFile, &shInclude, alloc, e_rr));
 	}
 
 	//Move binary there to avoid copying mem if possible
 
 	binaryInfo.registers = tempResult->registers;
 	binaryInfo.binaries[compileMode] = tempResult->binary;
-	gotoIfError3(clean, SHFile_addBinary(shFile, &binaryInfo, &alloc, e_rr));
+	gotoIfError3(clean, SHFile_addBinary(shFile, &binaryInfo, alloc, e_rr));
 	tempResult->binary = Buffer_createNull();
 	tempResult->registers = (ListSHRegisterRuntime) { 0 };
 
 	CompileResult_free(tempResult, alloc);
 
 clean:
-	SHInclude_free(&shInclude, &alloc);
-	SHBinaryInfo_free(&binaryInfo, &alloc);
-	CharString_free(&tempStr, &alloc);
+	SHInclude_free(&shInclude, alloc);
+	SHBinaryInfo_free(&binaryInfo, alloc);
+	CharString_free(&tempStr, alloc);
 	return s_uccess;
 }
 
 Bool Compiler_registerShaderEntries(
 	SHFile *shFile,
-	ListSHEntryRuntime entries,
+	const ListSHEntryRuntime *entries,
 	ListU32 binaryIndices,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
 	Bool s_uccess = true;
 	ListU16 binaryIndicesShort = (ListU16) { 0 };
 
-	for (U64 j = 0, k = 0; j < entries.length; ++j) {
+	for (U64 j = 0, k = 0; j < entries->length; ++j) {
 
-		SHEntryRuntime *runtime = &entries.ptrNonConst[j];
+		SHEntryRuntime *runtime = &entries->ptrNonConst[j];
 
 		U32 l = SHEntryRuntime_getCombinations(runtime);
 
@@ -1734,19 +1734,19 @@ Bool Compiler_registerShaderEntries(
 				0, "CLI_compileShader() runtime already included binaryIds"
 			));
 
-		gotoIfError3(clean, ListU16_resize(&binaryIndicesShort, l, &alloc, e_rr));
+		gotoIfError3(clean, ListU16_resize(&binaryIndicesShort, l, alloc, e_rr));
 
 		for(U64 m = 0; m < l; ++m)
 			binaryIndicesShort.ptrNonConst[m] = (U16) binaryIndices.ptr[k + m];
 
 		runtime->entry.binaryIds = ListU16_createRefFromList(binaryIndicesShort);
-		gotoIfError3(clean, SHFile_addEntrypoint(shFile, &runtime->entry, &alloc, e_rr));
+		gotoIfError3(clean, SHFile_addEntrypoint(shFile, &runtime->entry, alloc, e_rr));
 
 		k += l;
 	}
 
 clean:
-	ListU16_free(&binaryIndicesShort, &alloc);
+	ListU16_free(&binaryIndicesShort, alloc);
 	return s_uccess;
 }
 
@@ -1757,7 +1757,7 @@ Bool Compiler_getTargetsFromFile(
 	Bool multipleModes,
 	Bool combineFlag,
 	Bool enableLogging,
-	Allocator alloc,
+	const Allocator *alloc,
 	Bool *isFolder,
 	CharString *output,
 	ListCharString *allFiles,
@@ -1769,7 +1769,7 @@ Bool Compiler_getTargetsFromFile(
 	Bool s_uccess = true;
 
 	if (!allCompileModes || !allFiles || !allShaderText || !allOutputs) {
-		if(enableLogging) Log_debugLn(&alloc, "Compiler_getTargetsFromFile one of outputs is missing");
+		if(enableLogging) Log_debugLn(alloc, "Compiler_getTargetsFromFile one of outputs is missing");
 		return false;
 	}
 
@@ -1780,19 +1780,19 @@ Bool Compiler_getTargetsFromFile(
 
 	Error errTmp = Error_none(), *e_rr = &errTmp;
 
-	const RefPtrType fileHandleType = FileHandle_makeType(&alloc);
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	//Get all shaders
 
-	if (File_hasFolder(&input, &alloc)) {
+	if (File_hasFolder(&input, alloc)) {
 
 		Bool isVirtual;
-		gotoIfError3(clean, File_resolve(&input, &isVirtual, 128, &Platform_instance->defaultDir, &alloc, &resolved, e_rr));
-		gotoIfError3(clean, CharString_append(&resolved, '/', &alloc, e_rr));
+		gotoIfError3(clean, File_resolve(&input, &isVirtual, 128, &Platform_instance->defaultDir, alloc, &resolved, e_rr));
+		gotoIfError3(clean, CharString_append(&resolved, '/', alloc, e_rr));
 
 		if(output) {
-			gotoIfError3(clean, File_resolve(output, &isVirtual, 128, &Platform_instance->defaultDir, &alloc, &resolved2, e_rr));
-			gotoIfError3(clean, CharString_append(&resolved2, '/', &alloc, e_rr));
+			gotoIfError3(clean, File_resolve(output, &isVirtual, 128, &Platform_instance->defaultDir, alloc, &resolved2, e_rr));
+			gotoIfError3(clean, CharString_append(&resolved2, '/', alloc, e_rr));
 		}
 
 		ShaderFileRecursion shaderFileRecursion = (ShaderFileRecursion) {
@@ -1814,14 +1814,14 @@ Bool Compiler_getTargetsFromFile(
 			(FileCallback) registerFile,
 			&shaderFileRecursion,
 			true,
-			&alloc,
+			alloc,
 			e_rr
 		));
 
 		//Make sure we can have a folder at output
 
 		if(output)
-			gotoIfError3(clean, File_add(&resolved2, EFileType_Folder, false, &alloc, e_rr));
+			gotoIfError3(clean, File_add(&resolved2, EFileType_Folder, false, alloc, e_rr));
 
 		if(isFolder) *isFolder = true;
 	}
@@ -1838,7 +1838,7 @@ Bool Compiler_getTargetsFromFile(
 		const CharString hlslSuffix = CharString_createRefCStrConst(".hlsl");
 
 		gotoIfError3(clean, CharString_format(
-			&alloc, &tempStr, e_rr, "%.*s%s",
+			alloc, &tempStr, e_rr, "%.*s%s",
 			output ? (int)U64_min(
 				CharString_length(*output),
 				CharString_findLastStringInsensitive(output, &hlslSuffix, 0, 0)
@@ -1849,12 +1849,12 @@ Bool Compiler_getTargetsFromFile(
 
 		//Register mode and input/output name
 
-		gotoIfError3(clean, ListCharString_pushBack(allFiles, input, &alloc, e_rr));
+		gotoIfError3(clean, ListCharString_pushBack(allFiles, input, alloc, e_rr));
 
-		gotoIfError3(clean, ListCharString_pushBack(allOutputs, tempStr, &alloc, e_rr));        //Moved here
+		gotoIfError3(clean, ListCharString_pushBack(allOutputs, tempStr, alloc, e_rr));        //Moved here
 		tempStr = CharString_createNull();
 
-		gotoIfError3(clean, ListU8_pushBack(allCompileModes, i, &alloc, e_rr));
+		gotoIfError3(clean, ListU8_pushBack(allCompileModes, i, alloc, e_rr));
 	}
 
 	//Only continue if there are any files and then fetch all files
@@ -1873,7 +1873,7 @@ Bool Compiler_getTargetsFromFile(
 			CharString shader = *ListCharString_last(*allShaderText);
 			shader = CharString_createRefStrConst(shader);
 
-			gotoIfError3(clean, ListCharString_pushBack(allShaderText, shader, &alloc, e_rr));
+			gotoIfError3(clean, ListCharString_pushBack(allShaderText, shader, alloc, e_rr));
 			continue;
 		}
 
@@ -1882,47 +1882,47 @@ Bool Compiler_getTargetsFromFile(
 		gotoIfError3(clean, File_read(&allFiles->ptr[i], 10 * MS, 0, 0, &fileHandleType, &temp, e_rr));
 
 		if(!Buffer_length(temp)) {
-			gotoIfError3(clean, ListCharString_pushBack(allShaderText, CharString_createNull(), &alloc, e_rr));
+			gotoIfError3(clean, ListCharString_pushBack(allShaderText, CharString_createNull(), alloc, e_rr));
 			continue;
 		}
 
 		gotoIfError3(clean, CharString_createCopy(
-			CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), &alloc, &tempStr, e_rr
+			CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), alloc, &tempStr, e_rr
 		));
 
 		if(!CharString_eraseAllSensitive(&tempStr, '\r', 0, 0))
 			retError(clean, Error_invalidState(1, "Compiler_getTargetsFromFile couldn't erase \\rs"));
 
-		gotoIfError3(clean, ListCharString_pushBack(allShaderText, tempStr, &alloc, e_rr));
+		gotoIfError3(clean, ListCharString_pushBack(allShaderText, tempStr, alloc, e_rr));
 		tempStr = CharString_createNull();
 
-		Buffer_free(&temp, &alloc);
+		Buffer_free(&temp, alloc);
 
 		prevStr = allFiles->ptr[i];
 	}
 
 clean:
-	Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
-	CharString_free(&resolved, &alloc);
-	CharString_free(&resolved2, &alloc);
-	Buffer_free(&temp, &alloc);
-	CharString_free(&tempStr, &alloc);
+	Error_print(alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+	CharString_free(&resolved, alloc);
+	CharString_free(&resolved2, alloc);
+	Buffer_free(&temp, alloc);
+	CharString_free(&tempStr, alloc);
 	return s_uccess;
 }
 
 Bool Compiler_compileShaders(
-	ListCharString allFiles,
-	ListCharString allShaderText,
-	ListCharString allOutputs,
-	ListU8 allCompileOutputs,
+	const ListCharString *allFiles,
+	const ListCharString *allShaderText,
+	const ListCharString *allOutputs,
+	const ListU8 *allCompileOutputs,
 	U64 threadCount,
 	Bool isDebug,
 	ECompilerWarning extraWarnings,
 	Bool ignoreEmptyFiles,
 	ECompileType compileType,
-	CharString includeDir,
+	const ListCharString *includeDirs,
 	Bool enableLogging,
-	Allocator alloc,
+	const Allocator *alloc,
 	ListBuffer *allBuffers,
 	Error *e_rr
 ) {
@@ -1939,24 +1939,24 @@ Bool Compiler_compileShaders(
 	Bool errorInPrevious = false;
 
 	MemoryStreamRef *ms = NULL;
-	const RefPtrType msType = MemoryStream_makeType(&alloc);
-	const RefPtrType fileHandleType = FileHandle_makeType(&alloc);
+	const RefPtrType msType = MemoryStream_makeType(alloc);
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	if(allBuffers)
-		gotoIfError3(clean, ListBuffer_resize(allBuffers, allOutputs.length, &alloc, e_rr));
+		gotoIfError3(clean, ListBuffer_resize(allBuffers, allOutputs->length, alloc, e_rr));
 
 	//All compiles run as per file jobs on a JobQueue.
 	//threadCount <= 1 puts the queue in single threaded mode: no threads are spawned and all
 	//jobs run inline (in push order) during JobQueue_wait, which keeps a deterministic flow
 	//around for debugging. Higher counts run the same jobs on threadCount execution contexts.
 
-	gotoIfError3(clean, JobQueue_create(threadCount, &alloc, &queue, e_rr));
+	gotoIfError3(clean, JobQueue_create(threadCount, alloc, &queue, e_rr));
 
 	const U64 contexts = JobQueue_threadCount(&queue);
 
 	//A separate Compiler per execution context, indexed by the job's threadId.
 
-	gotoIfError3(clean, ListCompiler_resize(&compilers, contexts, &alloc, e_rr));
+	gotoIfError3(clean, ListCompiler_resize(&compilers, contexts, alloc, e_rr));
 
 	for(U64 i = 0; i < contexts; ++i)
 		gotoIfError3(clean, Compiler_create(alloc, &compilers.ptrNonConst[i], e_rr));
@@ -1964,17 +1964,17 @@ Bool Compiler_compileShaders(
 	//Kick off one job per file. Jobs only write to their own slot, so no locking is needed.
 	//The jobs list is stable for the queue's lifetime (resized up front, never touched after).
 
-	gotoIfError3(clean, ListCompilerShaderFileJob_resize(&jobs, allFiles.length, &alloc, e_rr));
+	gotoIfError3(clean, ListCompilerShaderFileJob_resize(&jobs, allFiles->length, alloc, e_rr));
 
-	for (U64 i = 0; i < allFiles.length; ++i) {
+	for (U64 i = 0; i < allFiles->length; ++i) {
 
 		jobs.ptrNonConst[i] = (CompilerShaderFileJob) {
 
-			.allFiles = allFiles,
-			.allShaderText = allShaderText,
-			.allCompileOutputs = allCompileOutputs,
+			.allFiles = *allFiles,
+			.allShaderText = *allShaderText,
+			.allCompileOutputs = *allCompileOutputs,
 			.compilers = compilers,
-			.includeDir = includeDir,
+			.includeDirs = *includeDirs,
 			.alloc = alloc,
 			.fileId = i,
 
@@ -1995,13 +1995,13 @@ Bool Compiler_compileShaders(
 	//and write them to allBuffers or disk. Files with the same output are adjacent.
 	//This stays sequential on purpose; it's cheap compared to compiling and merging is ordered.
 
-	for (U64 i = 0; i < allFiles.length; ++i) {
+	for (U64 i = 0; i < allFiles->length; ++i) {
 
 		CompilerShaderFileJob *job = &jobs.ptrNonConst[i];
 
 		const Bool lastOfGroup =
-			i + 1 == allOutputs.length ||
-			!CharString_equalsStringSensitive(&allOutputs.ptr[i + 1], &allOutputs.ptr[i]);
+			i + 1 == allOutputs->length ||
+			!CharString_equalsStringSensitive(&allOutputs->ptr[i + 1], &allOutputs->ptr[i]);
 
 		if(!job->success)
 			errorInPrevious = true;
@@ -2017,9 +2017,9 @@ Bool Compiler_compileShaders(
 
 			else {
 				SHFile tmp = (SHFile) { 0 };
-				gotoIfError3(clean, SHFile_combine(&previous, &job->result, &alloc, &tmp, e_rr));
-				SHFile_free(&previous, &alloc);
-				SHFile_free(&job->result, &alloc);
+				gotoIfError3(clean, SHFile_combine(&previous, &job->result, alloc, &tmp, e_rr));
+				SHFile_free(&previous, alloc);
+				SHFile_free(&job->result, alloc);
 				previous = tmp;
 			}
 		}
@@ -2031,19 +2031,19 @@ Bool Compiler_compileShaders(
 
 		if(errorInPrevious) {
 			if(enableLogging)
-				Log_warnLn(&alloc, "One of the previous oiSH compilations failed, not producing a binary");
+				Log_warnLn(alloc, "One of the previous oiSH compilations failed, not producing a binary");
 		}
 
 		else if (previous.entries.ptr) {
 
 			if(extraWarnings)
-				gotoIfError3(clean, Compiler_handleExtraWarnings(previous, extraWarnings, alloc, e_rr));
+				gotoIfError3(clean, Compiler_handleExtraWarnings(&previous, extraWarnings, alloc, e_rr));
 
 			//Serialize through a resizable memory stream, then hand the buffer to the caller or disk
 
 			U64 writeOff = 0;
 			gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, e_rr));
-			gotoIfError3(clean, SHFile_write((StreamRef*)ms, &writeOff, &previous, &alloc, e_rr));
+			gotoIfError3(clean, SHFile_write((StreamRef*)ms, &writeOff, &previous, alloc, e_rr));
 			gotoIfError3(clean, MemoryStream_move(&ms, &temp, e_rr));
 			RefPtr_dec(&ms);
 
@@ -2053,12 +2053,12 @@ Bool Compiler_compileShaders(
 			}
 
 			else {
-				gotoIfError3(clean, File_write(&temp, &allOutputs.ptr[i], 0, 0, 100 * MS, true, &fileHandleType, e_rr));
-				Buffer_free(&temp, &alloc);
+				gotoIfError3(clean, File_write(&temp, &allOutputs->ptr[i], 0, 0, 100 * MS, true, &fileHandleType, e_rr));
+				Buffer_free(&temp, alloc);
 			}
 		}
 
-		SHFile_free(&previous, &alloc);
+		SHFile_free(&previous, alloc);
 		errorInPrevious = false;
 	}
 
@@ -2067,14 +2067,14 @@ clean:
 	JobQueue_free(&queue);      //Must go first; jobs reference compilers and the jobs list
 
 	for(U64 i = 0; i < jobs.length; ++i)
-		SHFile_free(&jobs.ptrNonConst[i].result, &alloc);
+		SHFile_free(&jobs.ptrNonConst[i].result, alloc);
 
-	ListCompilerShaderFileJob_free(&jobs, &alloc);
+	ListCompilerShaderFileJob_free(&jobs, alloc);
 	ListCompiler_freeUnderlying(&compilers, alloc);
 
 	RefPtr_dec(&ms);
-	SHFile_free(&previous, &alloc);
-	Buffer_free(&temp, &alloc);
+	SHFile_free(&previous, alloc);
+	Buffer_free(&temp, alloc);
 
 	return s_uccess;
 }
