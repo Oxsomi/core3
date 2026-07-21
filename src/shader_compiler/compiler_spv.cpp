@@ -20,11 +20,16 @@
 
 //shader_compiler/compiler_spv.cpp
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/string.h"
+#include "types/container/log.h"
+#include "types/container/buffer.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
 #include "types/base/allocator.h"
 #include "types/base/c8.h"
-#include "types/container/buffer.h"
-#include "platforms/logx.h"
+#include "types/base/mathi.h"
 #include "shader_compiler/compiler.h"
 #include "types/base/constants.h"
 #include "optimizer.hpp"
@@ -42,7 +47,7 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 	ESBMatrix matrix = ESBMatrix_N1;
 
 	if(!desc || !type)
-		retError(clean, Error_nullPointer(!desc ? 0 : 1, "spvTypeToESBType()::desc and type are required"))
+		retError(clean, Error_nullPointer(!desc ? 0 : 1, "spvTypeToESBType()::desc and type are required"));
 
 	switch (desc->type_flags) {
 
@@ -56,7 +61,7 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 			if(numeric.scalar.signedness || numeric.scalar.width != 32)
 				retError(clean, Error_unsupportedOperation(
 					0, "spvTypeToESBType()::desc has an unrecognized type (signed bool or size != 32)"
-				))
+				));
 
 			prim = ESBPrimitive_UInt;
 			break;
@@ -86,12 +91,12 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 			))
 				retError(clean, Error_unsupportedOperation(
 					0, "spvTypeToESBType()::desc has an unrecognized type (signed floatXX or size != [16, 32, 64])"
-				))
+				));
 
 			break;
 
 		default:
-			retError(clean, Error_unsupportedOperation(0, "spvTypeToESBType()::desc has an unrecognized type"))
+			retError(clean, Error_unsupportedOperation(0, "spvTypeToESBType()::desc has an unrecognized type"));
 	}
 
 	switch(numeric.scalar.width) {
@@ -104,7 +109,7 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 		default:
 			retError(clean, Error_unsupportedOperation(
 				0, "spvTypeToESBType()::desc has an unrecognized type (8, 16, 32, 64)"
-			))
+			));
 	}
 
 	switch(numeric.matrix.column_count ? numeric.matrix.column_count : numeric.vector.component_count) {
@@ -119,7 +124,7 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 		default:
 			retError(clean, Error_unsupportedOperation(
 				0, "spvTypeToESBType()::desc has an unrecognized type (vecN)"
-			))
+			));
 	}
 
 	switch(numeric.matrix.row_count) {
@@ -134,11 +139,11 @@ Bool spvTypeToESBType(SpvReflectTypeDescription *desc, ESBType *type, Error *e_r
 		default:
 			retError(clean, Error_unsupportedOperation(
 				0, "spvTypeToESBType()::desc has an unrecognized type (matWxH)"
-			))
+			));
 	}
 
 	if(numeric.matrix.stride && numeric.matrix.stride != 0x10)
-		retError(clean, Error_unsupportedOperation(0, "spvTypeToESBType()::desc has matrix with stride != 16"))
+		retError(clean, Error_unsupportedOperation(0, "spvTypeToESBType()::desc has matrix with stride != 16"));
 
 	*type = (ESBType) ESBType_create(stride, prim, vector, matrix);
 
@@ -494,12 +499,12 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 
 			retError(clean, Error_invalidState(
 				2, "spvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"
-			))
+			));
 
 		case SpvCapabilityMax:
 			retError(clean, Error_invalidState(
 				2, "spvMapCapabilityToESHExtension() SPIRV contained invalid capability that isn't supported in SPIRV-Headers"
-			))
+			));
 	}
 
 	//Handled separately to ensure there's no default case in the switch,
@@ -508,7 +513,7 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 	if(capability > SpvCapabilityMax)
 		retError(clean, Error_invalidState(
 			2, "spvMapCapabilityToESHExtension() SPIRV contained invalid capability that isn't supported in SPIRV-Headers"
-		))
+		));
 
 	*extension = ext;
 
@@ -573,7 +578,7 @@ Bool SpvReflectFormatToESBType(SpvReflectFormat format, ESBType *type, Error *e_
 		default:
 			retError(clean, Error_invalidState(
 				0, "SpvReflectFormatToESBType() couldn't map SPV_REFLECT_FORMAT to ESBType"
-			))
+			));
 	}
 
 clean:
@@ -595,7 +600,7 @@ Bool SpvCalculateStructLength(const SpvReflectTypeDescription *typeDesc, U64 *re
 		if(typeDesck.type_flags & disallowed)
 			retError(clean, Error_invalidState(
 				0, "SpvCalculateStructLength() can't be called on a struct that contains external data or a ref or void"
-			))
+			));
 
 		U64 currLen = 0;
 
@@ -613,7 +618,7 @@ Bool SpvCalculateStructLength(const SpvReflectTypeDescription *typeDesc, U64 *re
 				if(arrayLen < prevArrayLen)
 					retError(clean, Error_overflow(
 						0, arrayLen, prevArrayLen, "SpvCalculateStructLength() arrayLen overflow"
-					))
+					));
 			}
 
 			currLen = arrayLen;
@@ -621,8 +626,9 @@ Bool SpvCalculateStructLength(const SpvReflectTypeDescription *typeDesc, U64 *re
 
 		//Struct causes recursion
 
-		else if(typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT)
-			gotoIfError3(clean, SpvCalculateStructLength(typeDesck.struct_type_description, &currLen, e_rr))
+		else if(typeDesck.type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT) {
+			gotoIfError3(clean, SpvCalculateStructLength(typeDesck.struct_type_description, &currLen, e_rr));
+		}
 
 		//Otherwise, we can easily calculate it via SpvReflectNumericTraits
 
@@ -648,7 +654,7 @@ Bool SpvCalculateStructLength(const SpvReflectTypeDescription *typeDesc, U64 *re
 		if(len < prevLen)
 			retError(clean, Error_overflow(
 				0, len, prevLen, "SpvCalculateStructLength() len overflow"
-			))
+			));
 	}
 
 clean:
@@ -665,7 +671,7 @@ Bool Compiler_convertMemberSPIRV(
 	U16 parent,
 	U32 offset,
 	Bool isPacked,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 	Bool s_uccess = true;
@@ -680,24 +686,24 @@ Bool Compiler_convertMemberSPIRV(
 	if(var->array.dims_count > SPV_REFLECT_MAX_ARRAY_DIMS)
 		retError(clean, Error_invalidState(
 			0, "Compiler_convertMemberSPIRV() array dimensions out of bounds"
-		))
+		));
 
 	if(var->array.dims_count && !var->array.stride)
-		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() array stride unset"))
+		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() array stride unset"));
 
 	for(U64 m = 0; m < var->array.dims_count; ++m)
 		if(!var->array.dims[m] || var->array.spec_constant_op_ids[m] != U32_MAX)
 			retError(clean, Error_invalidState(
 				0, "Compiler_convertMemberSPIRV() invalid array data (0 or has spec constant op)"
-			))
+			));
 
 	if(var->flags && var->flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED)
 		retError(clean, Error_invalidState(
 			0, "Compiler_convertMemberSPIRV() unsupported value in cbuffer member"
-		))
+		));
 
 	if(!(var->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT)) {
-		gotoIfError3(clean, spvTypeToESBType(var->type_description, &shType, e_rr))
+		gotoIfError3(clean, spvTypeToESBType(var->type_description, &shType, e_rr));
 		perElementStride = var->array.dims_count ? var->array.stride : ESBType_getSize(shType, isPacked);
 	}
 
@@ -714,10 +720,10 @@ Bool Compiler_convertMemberSPIRV(
 		for (; j < sbFile->structs.length; ++j) {
 
 			SBStruct strct = sbFile->structs.ptr[j];
-			CharString structNamej = sbFile->structNames.ptr[j];
+			CharString structNamej = sbFile->names.entryStrings.ptr[j];
 
 			if(
-				CharString_equalsStringSensitive(structName, structNamej) && strct.stride == stride
+				CharString_equalsStringSensitive(&structName, &structNamej) && strct.stride == stride
 			)
 				break;
 		}
@@ -727,7 +733,7 @@ Bool Compiler_convertMemberSPIRV(
 		if (j == sbFile->structs.length)
 			gotoIfError3(clean, SBFile_addStruct(
 				sbFile, &structName, SBStruct{ .stride = stride }, alloc, e_rr
-			))
+			));
 
 		structId = (U16) j;
 	}
@@ -738,20 +744,20 @@ Bool Compiler_convertMemberSPIRV(
 		expectedSize *= var->array.dims[m];
 
 	if(var->size > expectedSize)
-		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() var had mismatching size"))
+		retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() var had mismatching size"));
 
 	if(var->array.dims_count)
-		gotoIfError2(clean, ListU32_createRefConst(var->array.dims, var->array.dims_count, &arrays))
+		gotoIfError3(clean, ListU32_createRefConst(var->array.dims, var->array.dims_count, &arrays, e_rr));
 
 	if(shType != (ESBType) 0)
-		gotoIfError3(clean, SBFile_addVariableAsType(
+		{ gotoIfError3(clean, SBFile_addVariableAsType(
 			sbFile,
 			&str,
 			offset + var->offset, parent, shType,
 			var->flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
 			arrays.length ? &arrays : NULL,
 			alloc, e_rr
-		))
+		)); }
 
 	else {
 
@@ -764,15 +770,15 @@ Bool Compiler_convertMemberSPIRV(
 			var->flags & SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
 			arrays.length ? &arrays : NULL,
 			alloc, e_rr
-		))
+		));
 
 		if(!var->member_count || !var->members)
-			retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() missing member_count or members"))
+			retError(clean, Error_invalidState(0, "Compiler_convertMemberSPIRV() missing member_count or members"));
 
 		for (U64 j = 0; j < var->member_count; ++j)
 			gotoIfError3(clean, Compiler_convertMemberSPIRV(
 				sbFile, &var->members[j], newParent, offset + var->offset, isPacked, alloc, e_rr
-			))
+			));
 	}
 
 clean:
@@ -782,7 +788,7 @@ clean:
 Bool Compiler_convertShaderBufferSPIRV(
 	SpvReflectBlockVariable *block,
 	Bool isPacked,
-	Allocator alloc,
+	const Allocator *alloc,
 	SBFile *sbFile,
 	Error *e_rr
 ) {
@@ -797,31 +803,31 @@ Bool Compiler_convertShaderBufferSPIRV(
 		if(block->member_count != 1 || !block->members)
 			retError(clean, Error_invalidState(
 				0, "Compiler_convertShaderBufferSPIRV()::block is missing member count or members"
-			))
+			));
 
 		SpvReflectBlockVariable *innerStruct = block->members;
 
 		if(!innerStruct->member_count || !innerStruct->members || !innerStruct->padded_size) {
 
 			ESBType type{};
-			gotoIfError3(clean, spvTypeToESBType(innerStruct->type_description, &type, e_rr))
+			gotoIfError3(clean, spvTypeToESBType(innerStruct->type_description, &type, e_rr));
 
 			if(type && (innerStruct->members || innerStruct->member_count || innerStruct->padded_size))
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertShaderBufferSPIRV() inner struct is assumed to be a type, but has invalid members"
-				))
+				));
 
 			U32 paddedSize = ESBType_getSize(type, isPacked);
 
 			if(!isPacked)
 				paddedSize = (paddedSize + 15) &~ 15;
 
-			gotoIfError3(clean, SBFile_create(packedFlags, paddedSize, alloc, sbFile, e_rr))
+			gotoIfError3(clean, SBFile_create(packedFlags, paddedSize, alloc, sbFile, e_rr));
 			CharString elementName = CharString_createRefCStrConst("$Element");
 			ListU32 arrays{};
 
 			if(innerStruct->array.dims_count)
-				gotoIfError2(clean, ListU32_createRefConst(innerStruct->array.dims, innerStruct->array.dims_count, &arrays))
+				gotoIfError3(clean, ListU32_createRefConst(innerStruct->array.dims, innerStruct->array.dims_count, &arrays, e_rr));
 
 			gotoIfError3(clean, SBFile_addVariableAsType(
 				sbFile,
@@ -830,7 +836,7 @@ Bool Compiler_convertShaderBufferSPIRV(
 				block->flags != SPV_REFLECT_VARIABLE_FLAGS_UNUSED ? ESBVarFlag_None : ESBVarFlag_IsUsedVarSPIRV,
 				arrays.length ? &arrays : NULL,
 				alloc, e_rr
-			))
+			));
 
 			goto clean;
 		}
@@ -838,8 +844,8 @@ Bool Compiler_convertShaderBufferSPIRV(
 		const C8 *structNameC = innerStruct->type_description->type_name;
 		CharString structName = CharString_createRefCStrConst(structNameC);
 
-		gotoIfError3(clean, SBFile_create(packedFlags, innerStruct->padded_size, alloc, sbFile, e_rr))
-		gotoIfError3(clean, SBFile_addStruct(sbFile, &structName, SBStruct{ .stride = innerStruct->padded_size }, alloc, e_rr))
+		gotoIfError3(clean, SBFile_create(packedFlags, innerStruct->padded_size, alloc, sbFile, e_rr));
+		gotoIfError3(clean, SBFile_addStruct(sbFile, &structName, SBStruct{ .stride = innerStruct->padded_size }, alloc, e_rr));
 
 		CharString element = CharString_createRefCStrConst("$Element");
 
@@ -851,11 +857,11 @@ Bool Compiler_convertShaderBufferSPIRV(
 			NULL,
 			alloc,
 			e_rr
-		))
+		));
 
 		for (U64 l = 0; l < innerStruct->member_count; ++l) {
 			SpvReflectBlockVariable var = innerStruct->members[l];
-			gotoIfError3(clean, Compiler_convertMemberSPIRV(sbFile, &var, 0, 0, isPacked, alloc, e_rr))
+			gotoIfError3(clean, Compiler_convertMemberSPIRV(sbFile, &var, 0, 0, isPacked, alloc, e_rr));
 		}
 
 		goto clean;
@@ -863,11 +869,11 @@ Bool Compiler_convertShaderBufferSPIRV(
 
 	//CBuffer or storage buffer (without dynamic entries)
 
-	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, block->padded_size, alloc, sbFile, e_rr))
+	gotoIfError3(clean, SBFile_create(ESBSettingsFlags_None, block->padded_size, alloc, sbFile, e_rr));
 
 	for (U64 l = 0; l < block->member_count; ++l) {
 		SpvReflectBlockVariable var = block->members[l];
-		gotoIfError3(clean, Compiler_convertMemberSPIRV(sbFile, &var, U16_MAX, 0, isPacked, alloc, e_rr))
+		gotoIfError3(clean, Compiler_convertMemberSPIRV(sbFile, &var, U16_MAX, 0, isPacked, alloc, e_rr));
 	}
 
 clean:
@@ -881,7 +887,7 @@ Bool Compiler_convertRegisterSPIRV(
 	ListSHRegisterRuntime *registers,
 	SpvReflectDescriptorBinding *binding,
 	U32 expectedSet,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -947,26 +953,26 @@ Bool Compiler_convertRegisterSPIRV(
 	if(expectedSet != binding->set)
 		retError(clean, Error_invalidState(
 			1, "Compiler_convertRegisterSPIRV() binding->set != parent->set"
-		))
+		));
 
 	if(binding->binding == U32_MAX && binding->set == U32_MAX)
 		retError(clean, Error_invalidState(
 			1, "Compiler_convertRegisterSPIRV() binding = U32_MAX, set = U32_MAX is reserved"
-		))
+		));
 
 	if(binding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_INPUT_ATTACHMENT && binding->input_attachment_index)
 		retError(clean, Error_invalidState(
 			1, "Compiler_convertRegisterSPIRV() input attachment index is invalid on non input attachment"
-		))
+		));
 
 	if(binding->byte_address_buffer_offset_count || binding->byte_address_buffer_offsets || binding->user_type)
 		retError(clean, Error_invalidState(
 			1, "Compiler_convertRegisterSPIRV() unsupported BAB offsets/count and user_type"
-		))
+		));
 
 	if(binding->array.dims_count) {
 
-		gotoIfError2(clean, ListU32_createRefConst(binding->array.dims, binding->array.dims_count, &arrays))
+		gotoIfError3(clean, ListU32_createRefConst(binding->array.dims, binding->array.dims_count, &arrays, e_rr));
 
 		for(U64 i = 0; i < binding->array.dims_count; ++i) {
 
@@ -975,13 +981,13 @@ Bool Compiler_convertRegisterSPIRV(
 			if(!flatLen || flatLen >> 32)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() invalid flat length (out of bounds or 0)"
-				))
+				));
 		}
 
 		if(flatLen != binding->count)
 			retError(clean, Error_invalidState(
 				1, "Compiler_convertRegisterSPIRV() register flat length mismatches binding count"
-			))
+			));
 	}
 
 	switch (binding->descriptor_type) {
@@ -1007,7 +1013,7 @@ Bool Compiler_convertRegisterSPIRV(
 			)
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertRegisterSPIRV() invalid constant buffer data"
-				))
+				));
 
 			CharString typeName = CharString_createRefCStrConst(binding->type_description->type_name);
 			Bool isAtomic = binding->uav_counter_id != U32_MAX || binding->uav_counter_binding;
@@ -1017,20 +1023,20 @@ Bool Compiler_convertRegisterSPIRV(
 			if(binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
 				bufferType = ESHBufferType_ConstantBuffer;
 
-			else if(CharString_startsWithStringSensitive(typeName, CharString_createRefCStrConst("type."), 0)) {
+			else if(CharString_startsWithCStringSensitive(&typeName, "type.", 0)) {
 
 				typeName.ptr += 5;
 				typeName.lenAndNullTerminated -= 5;
 
 				Bool shouldBeWrite = false;
 
-				if (CharString_startsWithStringSensitive(typeName, CharString_createRefCStrConst("RW"), 0)) {
+				if (CharString_startsWithCStringSensitive(&typeName, "RW", 0)) {
 					typeName.ptr += 2;
 					typeName.lenAndNullTerminated -= 2;
 					shouldBeWrite = true;
 				}
 
-				if (CharString_equalsCStringSensitive(typeName, "ByteAddressBuffer"))
+				if (CharString_equalsCStringSensitive(&typeName, "ByteAddressBuffer"))
 					bufferType = ESHBufferType_ByteAddressBuffer;
 
 				else {
@@ -1040,14 +1046,14 @@ Bool Compiler_convertRegisterSPIRV(
 					CharString structuredBuffer = CharString_createRefCStrConst("StructuredBuffer.");
 
 					if (
-						CharString_startsWithStringSensitive(typeName, appendBuffer, 0) ||
-						CharString_startsWithStringSensitive(typeName, consumeBuffer, 0)
+						CharString_startsWithStringSensitive(&typeName, &appendBuffer, 0) ||
+						CharString_startsWithStringSensitive(&typeName, &consumeBuffer, 0)
 					) {
 
 						if(shouldBeWrite)
 							retError(clean, Error_invalidState(
 								0, "Compiler_convertRegisterSPIRV() invalid RW prefix for append/consume buffer"
-							))
+							));
 
 						bufferType = ESHBufferType_StructuredBufferAtomic;
 						shouldBeWrite = true;
@@ -1055,15 +1061,15 @@ Bool Compiler_convertRegisterSPIRV(
 
 					//TODO: Remember counter binding for SPIRV.
 
-					else if(CharString_equalsCStringSensitive(typeName, "ACSBuffer.counter"))
+					else if(CharString_equalsCStringSensitive(&typeName, "ACSBuffer.counter"))
 						goto clean;
 
-					else if(CharString_startsWithStringSensitive(typeName, structuredBuffer, 0))
+					else if(CharString_startsWithStringSensitive(&typeName, &structuredBuffer, 0))
 						bufferType = ESHBufferType_StructuredBuffer;
 
 					else retError(clean, Error_invalidState(
 						0, "Compiler_convertRegisterSPIRV() invalid RW prefix for append/consume buffer"
-					))
+					));
 				}
 
 				shouldBeBufferWrite = shouldBeWrite;
@@ -1079,7 +1085,7 @@ Bool Compiler_convertRegisterSPIRV(
 			)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (has atomic, but invalid type)"
-				))
+				));
 
 			if(bufferType != ESHBufferType_ByteAddressBuffer && bufferType != ESHBufferType_AccelerationStructure) {
 
@@ -1095,7 +1101,7 @@ Bool Compiler_convertRegisterSPIRV(
 				)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() buffer requires size and/or padded size to be set/unset"
-					))
+					));
 
 				gotoIfError3(clean, Compiler_convertShaderBufferSPIRV(
 					&binding->block,
@@ -1103,7 +1109,7 @@ Bool Compiler_convertRegisterSPIRV(
 					alloc,
 					&sbFile,
 					e_rr
-				))
+				));
 			}
 
 			break;
@@ -1119,7 +1125,7 @@ Bool Compiler_convertRegisterSPIRV(
 			if(blockPtrU64[i])
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() invalid register had buffer decorations but wasn't one"
-				))
+				));
 
 		if(
 			binding->uav_counter_binding ||
@@ -1131,7 +1137,7 @@ Bool Compiler_convertRegisterSPIRV(
 		)
 			retError(clean, Error_invalidState(
 				1, "Compiler_convertRegisterSPIRV() invalid register had buffer decorations but wasn't one"
-			))
+			));
 	}
 
 	switch (binding->descriptor_type) {
@@ -1141,22 +1147,22 @@ Bool Compiler_convertRegisterSPIRV(
 			if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_CBV)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (not cbv)"
-				))
+				));
 
 			if(arrays.ptr)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() arrays aren't allowed on uniform buffers"
-				))
+				));
 
 			if(binding->decoration_flags)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() unexpected decoration flags on resource"
-				))
+				));
 
 			if(binding->uav_counter_id != U32_MAX || binding->uav_counter_binding)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() uav_counter_id or uav_counter_binding can't be set on cbv"
-				))
+				));
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
 				registers,
@@ -1169,7 +1175,7 @@ Bool Compiler_convertRegisterSPIRV(
 				bindings,
 				alloc,
 				e_rr
-			))
+			));
 
 			goto clean;
 
@@ -1178,12 +1184,12 @@ Bool Compiler_convertRegisterSPIRV(
 			if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SAMPLER)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (not sampler)"
-				))
+				));
 
 			if(imagePtrU64[0] || imagePtrU64[1] || imagePtrU64[2])
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() invalid sampler register"
-				))
+				));
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSampler(
 				registers,
@@ -1194,14 +1200,14 @@ Bool Compiler_convertRegisterSPIRV(
 				bindings,
 				alloc,
 				e_rr
-			))
+			));
 
 			goto clean;
 		}
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
 			Log_errorLn(alloc, "Unsupported combined image sampler");        //TODO:
-			retError(clean, Error_invalidState(1, "Compiler_convertRegisterSPIRV() combined image samplers not supported yet"))
+			retError(clean, Error_invalidState(1, "Compiler_convertRegisterSPIRV() combined image samplers not supported yet"));
 			break;
 
 		case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE:
@@ -1212,35 +1218,35 @@ Bool Compiler_convertRegisterSPIRV(
 				if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SRV)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() sampled image didn't have SRV resource flag"
-					))
+					));
 
 				if(binding->image.image_format || binding->image.sampled != 1)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() unexpected image data on sampled image"
-					))
+					));
 			}
 			else {
 
 				if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_UAV)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() storage image didn't have UAV resource flag"
-					))
+					));
 
 				if(binding->image.sampled != 2)
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() unexpected image data on storage image"
-					))
+					));
 			}
 
 			if(binding->decoration_flags)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() unexpected decoration flags on image"
-				))
+				));
 
 			if(binding->image.ms && (binding->image.dim != SpvDim2D || binding->image.depth != 2))
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() unexpected multi sample image"
-				))
+				));
 
 			ESHTextureType type = ESHTextureType_Texture2D;
 			Bool isArray = binding->image.arrayed;
@@ -1264,16 +1270,16 @@ Bool Compiler_convertRegisterSPIRV(
 				default:
 					retError(clean, Error_invalidState(
 						1, "Compiler_convertRegisterSPIRV() unsupported image type"
-					))
+					));
 			}
 
 			if(binding->image.depth != reqDepth)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() Unexpected image depth"
-				))
+				));
 
 			if(binding->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-				gotoIfError3(clean, ListSHRegisterRuntime_addTexture(
+				{ gotoIfError3(clean, ListSHRegisterRuntime_addTexture(
 					registers,
 					type,
 					isArray,
@@ -1285,7 +1291,7 @@ Bool Compiler_convertRegisterSPIRV(
 					bindings,
 					alloc,
 					e_rr
-				))
+				)); }
 
 			else {
 
@@ -1339,7 +1345,7 @@ Bool Compiler_convertRegisterSPIRV(
 					case SpvImageFormatR11fG11fB10f:
 						retError(clean, Error_invalidState(
 							1, "Compiler_convertRegisterSPIRV() unsupported image format: rg11fb10f, r64i, r64ui, rgb10a2ui"
-						))
+						));
 				}
 
 				gotoIfError3(clean, ListSHRegisterRuntime_addRWTexture(
@@ -1354,7 +1360,7 @@ Bool Compiler_convertRegisterSPIRV(
 					bindings,
 					alloc,
 					e_rr
-				))
+				));
 			}
 
 			break;
@@ -1368,19 +1374,19 @@ Bool Compiler_convertRegisterSPIRV(
 			)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (not uav/srv)"
-				))
+				));
 
 			Bool isWrite = !(binding->block.decoration_flags & SPV_REFLECT_DECORATION_NON_WRITABLE);
 
 			if((binding->resource_type == SPV_REFLECT_RESOURCE_FLAG_UAV) != isWrite)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (expected uav or srv but got the opposite)"
-				))
+				));
 
 			if(shouldBeBufferWrite != isWrite)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (type had RW, but buffer didn't)"
-				))
+				));
 
 			Bool hasSBFile =
 				bufferType != ESHBufferType_ByteAddressBuffer &&
@@ -1397,7 +1403,7 @@ Bool Compiler_convertRegisterSPIRV(
 				bindings,
 				alloc,
 				e_rr
-			))
+			));
 
 			goto clean;
 		}
@@ -1407,12 +1413,12 @@ Bool Compiler_convertRegisterSPIRV(
 			if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SRV)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() mismatching resource_type (not SRV)"
-				))
+				));
 
 			if(imagePtrU64[0] || imagePtrU64[1] || imagePtrU64[2])
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() invalid RTAS register"
-				))
+				));
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addBuffer(
 				registers,
@@ -1425,7 +1431,7 @@ Bool Compiler_convertRegisterSPIRV(
 				bindings,
 				alloc,
 				e_rr
-			))
+			));
 
 			break;
 		}
@@ -1435,17 +1441,17 @@ Bool Compiler_convertRegisterSPIRV(
 			if(binding->resource_type != SPV_REFLECT_RESOURCE_FLAG_SRV)
 				retError(clean, Error_invalidState(
 					2, "Compiler_convertRegisterSPIRV() mismatching resource_type (not SRV)"
-				))
+				));
 
 			if(imagePtrU64[0] || imagePtrU64[1] || imagePtrU64[2])
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertRegisterSPIRV() invalid input attachment register"
-				))
+				));
 
 			if(binding->input_attachment_index >> 16)
 				retError(clean, Error_invalidState(
 					0, "Compiler_convertRegisterSPIRV() input attachment register out of bounds"
-				))
+				));
 
 			gotoIfError3(clean, ListSHRegisterRuntime_addSubpassInput(
 				registers,
@@ -1455,7 +1461,7 @@ Bool Compiler_convertRegisterSPIRV(
 				(U16) binding->input_attachment_index,
 				alloc,
 				e_rr
-			))
+			));
 
 			break;
 
@@ -1468,7 +1474,7 @@ Bool Compiler_convertRegisterSPIRV(
 				1,
 				"Compiler_convertRegisterSPIRV() unsupported descriptor type "
 				"(uniform/storage buffer dynamic or storage/uniform texel buffer)"
-			))
+			));
 	}
 
 clean:
@@ -1476,14 +1482,14 @@ clean:
 	return s_uccess;
 }
 
-void Compiler_spvToolsCallback(
+Bool Compiler_spvToolsCallback(
 	spv_message_level_t level,
 	const C8 *source,
 	const spv_position_t &position,
 	const C8 *msg,
 	ListCompileError *errors,
 	Bool *success,
-	Allocator alloc,
+	const Allocator *alloc,
 	Error *e_rr
 ) {
 
@@ -1501,10 +1507,10 @@ void Compiler_spvToolsCallback(
 		case SPV_MSG_WARNING: {
 
 			if(position.column > U8_MAX || position.line >= (1 << (7 + 16)))
-				retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() referenced line or colum out of bounds"))
+				retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() referenced line or colum out of bounds"));
 
-			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(source), alloc, &file))
-			gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst(msg), alloc, &error))
+			gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(source), alloc, &file, e_rr));
+			gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst(msg), alloc, &error, e_rr));
 
 			CompileError err = CompileError{
 						
@@ -1521,7 +1527,7 @@ void Compiler_spvToolsCallback(
 				.file = file
 			};
 
-			gotoIfError2(clean, ListCompileError_pushBack(errors, err, alloc))
+			gotoIfError3(clean, ListCompileError_pushBack(errors, err, alloc, e_rr));
 			error = CharString_createNull();
 			file = CharString_createNull();
 			break;
@@ -1540,12 +1546,13 @@ clean:
 	CharString_free(&file, alloc);
 
 	if(!s_uccess)
-		Log_errorLnx(
+		Log_errorLn(alloc, 
 			"Couldn't return error as CompileError: %s:L#%zu:%zu (index: %zu): %s",
 			format, source, position.line, position.column, position.index, msg
 		);
 
 	*success = s_uccess;
+	return s_uccess;
 }
 
 extern "C" Bool Compiler_processSPIRV(
@@ -1585,19 +1592,19 @@ extern "C" Bool Compiler_processSPIRV(
 	if(
 		binLen < 0x8 ||
 		(binLen & 3) ||
-		Buffer_readU32(*result, 0, NULL) != 0x07230203
+		Buffer_readU32(*result, 0, NULL, NULL) != 0x07230203
 	)
-		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned is invalid"))
+		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned is invalid"));
 
 	if(!demotions || !result || !registers)
-		retError(clean, Error_nullPointer(0, "Compiler_processSPIRV() demotions, result and registers are required"))
+		retError(clean, Error_nullPointer(0, "Compiler_processSPIRV() demotions, result and registers are required"));
 
 	//Reflect binary information, since our own parser doesn't have the info yet.
 
 	res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
 
 	if(res != SPV_REFLECT_RESULT_SUCCESS)
-		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned couldn't be reflected"))
+		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() SPIRV returned couldn't be reflected"));
 
 	//Validate capabilities.
 	//This makes sure that we only output a binary that's supported by oiSH and no unknown extensions are used.
@@ -1605,7 +1612,7 @@ extern "C" Bool Compiler_processSPIRV(
 	for (U64 i = 0; i < spvMod.capability_count; ++i) {
 
 		ESHExtension ext = (ESHExtension)(1 << ESHExtension_Count);
-		gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr))
+		gotoIfError3(clean, spvMapCapabilityToESHExtension(spvMod.capabilities[i].value, &ext, e_rr));
 
 		//Check if extension was known to oiSH
 
@@ -1616,7 +1623,7 @@ extern "C" Bool Compiler_processSPIRV(
 	if((toCompile.extensions & exts) != exts)
 		retError(clean, Error_invalidState(
 			2, "Compiler_processSPIRV() SPIRV contained capability that wasn't enabled by oiSH file (use annotations)"
-		))
+		));
 
 	//Extensions that can be generated by spvMapCapabilityToESHExtension.
 	//This is used to see if demotion is possible
@@ -1627,15 +1634,15 @@ extern "C" Bool Compiler_processSPIRV(
 		if(spvMod.push_constant_blocks[i].offset)
 			retError(clean, Error_invalidState(
 				2, "Compiler_processSPIRV() oiSH doesn't support push constants with an offset"
-			))
+			));
 
 	if(spvMod.spec_constant_count)
-		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() doesn't support spec constants"))
+		retError(clean, Error_invalidState(2, "Compiler_processSPIRV() doesn't support spec constants"));
 
 	if(!isLib && spvMod.entry_point_count != 1)
 		retError(clean, Error_invalidState(
 			2, "Compiler_processSPIRV() requires to have only 1 entrypoint in binary for compute/gfx"
-		))
+		));
 
 	//Check entrypoints
 
@@ -1649,10 +1656,10 @@ extern "C" Bool Compiler_processSPIRV(
 
 		CharString name = CharString_createRefCStrConst(entrypoint.name);
 
-		if(!isLib && !CharString_equalsCStringSensitive(name, "main"))
+		if(!isLib && !CharString_equalsCStringSensitive(&name, "main"))
 			retError(clean, Error_invalidState(
 				2, "Compiler_processSPIRV() with gfx/compute must have 1 entrypoint named \"main\""
-			))
+			));
 
 		if(!isLib)
 			name = CharString_createRefStrConst(toCompile.entrypoint);
@@ -1703,7 +1710,7 @@ extern "C" Bool Compiler_processSPIRV(
 				localSize[0] = entrypoint.local_size.x;
 				localSize[1] = entrypoint.local_size.y;
 				localSize[2] = entrypoint.local_size.z;
-				gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr))
+				gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr));
 				break;
 			}
 
@@ -1717,7 +1724,7 @@ extern "C" Bool Compiler_processSPIRV(
 			default:
 				retError(clean, Error_invalidState(
 					2, "Compiler_processSPIRV() SPIRV contained unsupported execution model"
-				))
+				));
 		}
 
 		if (searchPayload || searchIntersection)
@@ -1740,10 +1747,10 @@ extern "C" Bool Compiler_processSPIRV(
 				)
 					retError(clean, Error_invalidState(
 						0, "Compiler_processSPIRV() struct payload or intersection isn't a struct"
-					))
+					));
 
 				U64 structSize = 0;
-				gotoIfError3(clean, SpvCalculateStructLength(var.type_description, &structSize, e_rr))
+				gotoIfError3(clean, SpvCalculateStructLength(var.type_description, &structSize, e_rr));
 
 				//Validate payload/intersect size
 
@@ -1752,7 +1759,7 @@ extern "C" Bool Compiler_processSPIRV(
 					if(structSize > 128)
 						retError(clean, Error_outOfBounds(
 							0, structSize, 128, "Compiler_processSPIRV() payload out of bounds"
-						))
+						));
 
 					payloadSize = (U8) structSize;
 					continue;
@@ -1761,16 +1768,16 @@ extern "C" Bool Compiler_processSPIRV(
 				if(structSize > 32)
 					retError(clean, Error_outOfBounds(
 						0, structSize, 32, "Compiler_processSPIRV() intersection attribute out of bounds"
-					))
+					));
 
 				intersectSize = (U8) structSize;
 			}
 
 		if(searchPayload && !payloadSize)
-			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() payload wasn't found in SPIRV"))
+			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() payload wasn't found in SPIRV"));
 
 		if(searchIntersection && !intersectSize)
-			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() intersection attribute wasn't found in SPIRV"))
+			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() intersection attribute wasn't found in SPIRV"));
 
 		if(searchPayload || searchIntersection)
 			isRt = true;
@@ -1778,7 +1785,7 @@ extern "C" Bool Compiler_processSPIRV(
 		if(stage == ESHPipelineStage_Count)
 			retError(clean, Error_invalidState(
 				0, "Compiler_processSPIRV() SPIRV entrypoint couldn't be mapped to ESHPipelineStage"
-			))
+			));
 
 		Bool isStageRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
 		Bool isGfx = !isStageRt && stage != ESHPipelineStage_WorkgraphExt && stage != ESHPipelineStage_Compute;
@@ -1811,14 +1818,14 @@ extern "C" Bool Compiler_processSPIRV(
 				if(input->location >= 16)
 					retError(clean, Error_invalidState(
 						0, "Compiler_processSPIRV() input/output location out of bounds (allowed up to 16)"
-					))
+					));
 
 				if(inputType[input->location])
 					retError(clean, Error_invalidState(
 						0, "Compiler_processSPIRV() input/output location is already defined"
-					))
+					));
 
-				gotoIfError3(clean, SpvReflectFormatToESBType(input->format, &inputType[input->location], e_rr))
+				gotoIfError3(clean, SpvReflectFormatToESBType(input->format, &inputType[input->location], e_rr));
 
 				//Grab and parse semantic
 
@@ -1829,8 +1836,8 @@ extern "C" Bool Compiler_processSPIRV(
 				CharString inVar = CharString_createRefCStrConst("in.var.");
 				CharString outVar = CharString_createRefCStrConst("out.var.");
 
-				Bool isInVar = CharString_startsWithStringSensitive(semantic, inVar, 0);
-				Bool isOutVar = CharString_startsWithStringSensitive(semantic, outVar, 0);
+				Bool isInVar = CharString_startsWithStringSensitive(&semantic, &inVar, 0);
+				Bool isOutVar = CharString_startsWithStringSensitive(&semantic, &outVar, 0);
 
 				if(!isInVar && !isOutVar)
 					continue;
@@ -1851,7 +1858,7 @@ extern "C" Bool Compiler_processSPIRV(
 				if(!firstSemanticId)
 					retError(clean, Error_invalidState(
 						0, "Compiler_processSPIRV() bitfield accidentally detected as semantic"
-					))
+					));
 
 				CharString semanticValueStr = CharString_createRefSizedConst(
 					semantic.ptr + firstSemanticId, semanticl - firstSemanticId, true
@@ -1864,24 +1871,24 @@ extern "C" Bool Compiler_processSPIRV(
 				if (firstSemanticId != semanticl && !CharString_parseDec(semanticValueStr, &semanticValue))
 					retError(clean, Error_invalidState(
 						0, "Compiler_processSPIRV() couldn't parse semantic value"
-					))
+					));
 
 				U64 semanticName = 0;
 
 				if(
-					!CharString_equalsCStringInsensitive(realSemanticName, "SV_TARGET") &&
-					!CharString_equalsCStringInsensitive(realSemanticName, "TEXCOORD")
+					!CharString_equalsCStringInsensitive(&realSemanticName, "SV_TARGET") &&
+					!CharString_equalsCStringInsensitive(&realSemanticName, "TEXCOORD")
 				) {
 					U64 start = isOutput ? inputSemanticCount : 0;
 					U64 end = isOutput ? strings.length : inputSemanticCount;
 					U64 k = start;
 
 					for(; k < end; ++k)
-						if(CharString_equalsStringInsensitive(strings.ptr[k], realSemanticName))
+						if(CharString_equalsStringInsensitive(&strings.ptr[k], &realSemanticName))
 							break;
 
 					if(k == end)
-						gotoIfError2(clean, ListCharString_pushBack(&strings, realSemanticName, alloc))
+						gotoIfError3(clean, ListCharString_pushBack(&strings, realSemanticName, &alloc, e_rr));
 
 					if(!isOutput && k == end)
 						++inputSemanticCount;
@@ -1892,12 +1899,12 @@ extern "C" Bool Compiler_processSPIRV(
 				if(semanticName >= 16)
 					retError(clean, Error_invalidState(
 						1, "Compiler_processSPIRV() unique semantic name out of bounds"
-					))
+					));
 
 				if(semanticValue >= 15)
 					retError(clean, Error_invalidState(
 						1, "Compiler_processSPIRV() unique semantic id out of bounds"
-					))
+					));
 
 				semanticValue |= (U8)(semanticName << 4);
 				inputSemantic[input->location] = !semanticName ? 0 : (U8) semanticValue;
@@ -1917,14 +1924,14 @@ extern "C" Bool Compiler_processSPIRV(
 				if(!binding)
 					continue;
 
-				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, descriptorSet.set, alloc, e_rr))
+				gotoIfError3(clean, Compiler_convertRegisterSPIRV(registers, binding, descriptorSet.set, &alloc, e_rr));
 			}
 		}
 
 		if(entrypoint.used_push_constant_count > 1)
 			retError(clean, Error_invalidState(
 				2, "Compiler_processSPIRV() not supporting more than 1 set of push constants per entrypoint"
-			))
+			));
 
 		for (U64 j = 0; j < entrypoint.used_push_constant_count; ++j) {
 
@@ -1939,17 +1946,17 @@ extern "C" Bool Compiler_processSPIRV(
 			if(k == spvMod.push_constant_block_count)
 				retError(clean, Error_invalidState(
 					2, "Compiler_processSPIRV() push constants not found"
-				))
+				));
 
 			SpvReflectBlockVariable var = spvMod.push_constant_blocks[k];
 
 			gotoIfError3(clean, Compiler_convertShaderBufferSPIRV(
 				&var,
 				false,
-				alloc,
+				&alloc,
 				&sbFile,
 				e_rr
-			))
+			));
 
 			CharString bufferName = CharString_createRefCStrConst(var.name);
 			SHBindings bindings = SHBindings{};
@@ -1966,9 +1973,9 @@ extern "C" Bool Compiler_processSPIRV(
 				NULL,
 				&sbFile,
 				bindings,
-				alloc,
+				&alloc,
 				e_rr
-			))
+			));
 		}
 
 		gotoIfError3(clean, Compiler_finalizeEntrypoint(
@@ -1978,7 +1985,7 @@ extern "C" Bool Compiler_processSPIRV(
 			name,
 			lock, entries,
 			alloc, e_rr
-		))
+		));
 	}
 
 	//Strip debug and optimize
@@ -1990,7 +1997,7 @@ extern "C" Bool Compiler_processSPIRV(
 			[alloc, errors, &s_uccess, e_rr](
 				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
 			) -> void {
-				Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
+				(void) Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, &alloc, e_rr);
 			}
 		);
 
@@ -2006,16 +2013,16 @@ extern "C" Bool Compiler_processSPIRV(
 		}
 
 		if(!optimizer.Run((const U32*)resultPtr, binLen >> 2, &tmp))
-			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"))
+			retError(clean, Error_invalidState(0, "Compiler_processSPIRV() stripping spirv failed"));
 	}
 
-	Buffer_free(result, alloc);
-	gotoIfError2(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), alloc, result))
+	Buffer_free(result, &alloc);
+	gotoIfError3(clean, Buffer_createCopy(Buffer_createRefConst(tmp.data(), (U64)tmp.size() << 2), &alloc, result, e_rr));
 
 clean:
 
-	ListCharString_freeUnderlying(&strings, alloc);
-	SBFile_free(&sbFile, alloc);
+	ListCharString_freeUnderlying(&strings, &alloc);
+	SBFile_free(&sbFile, &alloc);
 
 	spvReflectDestroyShaderModule(&spvMod);
 	return s_uccess;
@@ -2044,9 +2051,9 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharStrin
 	if(
 		binLen < 0x8 ||
 		(binLen & 3) ||
-		Buffer_readU32(buf, 0, NULL) != 0x07230203
+		Buffer_readU32(buf, 0, NULL, NULL) != 0x07230203
 	)
-		retError(clean, Error_invalidState(0, "Compiler_createDisassembly() SPIRV is invalid"))
+		retError(clean, Error_invalidState(0, "Compiler_createDisassembly() SPIRV is invalid"));
 
 	if ((U64)resultPtr & 3) {        //Fix alignment
 		copied.resize(binLen >> 2);
@@ -2055,11 +2062,9 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, Allocator alloc, CharStrin
 	}
 
 	if(!tool.Disassemble((const U32*)resultPtr, binLen >> 2, &str, opts))
-		retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() SPIRV couldn't be disassembled"))
+		retError(clean, Error_invalidOperation(0, "Compiler_createDisassembly() SPIRV couldn't be disassembled"));
 
-	gotoIfError2(clean, CharString_createCopy(
-		CharString_createRefSizedConst(str.c_str(), str.size(), true), alloc, result
-	))
+	gotoIfError3(clean, CharString_createCopy(CharString_createRefSizedConst(str.c_str(), str.size(), true), &alloc, result, e_rr));
 
 clean:
 	return s_uccess;
@@ -2087,16 +2092,16 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 	if(
 		binLen < 0x8 ||
 		(binLen & 3) ||
-		Buffer_readU32(binary, 0, NULL) != 0x07230203
+		Buffer_readU32(binary, 0, NULL, NULL) != 0x07230203
 	)
-		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned is invalid"))
+		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned is invalid"));
 
 	//Reflect binary information, since our own parser doesn't have the info yet.
 
 	res = spvReflectCreateShaderModule2(SPV_REFLECT_MODULE_FLAG_NO_COPY, binLen, resultPtr, &spvMod);
 
 	if(res != SPV_REFLECT_RESULT_SUCCESS)
-		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned couldn't be reflected"))
+		retError(clean, Error_invalidState(2, "Compiler_getUniqueEntrypointsSPIRV() SPIRV returned couldn't be reflected"));
 
 	for(U32 i = 0; i < spvMod.entry_point_count; ++i) {
 
@@ -2130,7 +2135,7 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 			case SpvExecutionModelMeshNV:                    stage = ESHPipelineStage_MeshExt;            break;
 
 			default:
-				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsSPIRV() had an invalid shader type"))
+				retError(clean, Error_invalidState(0, "Compiler_getUniqueEntrypointsSPIRV() had an invalid shader type"));
 		}
 
 		Bool insertPlain = false;
@@ -2143,9 +2148,8 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 			if((stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt) || stage == ESHPipelineStage_WorkgraphExt) {
 
 				if(!alreadyContainsLib)
-					gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
-						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, alloc
-					))
+					gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
+						uniqueEntrypoints, CompilerEntrypoint{ .stage = ESHPipelineStage_Count }, &alloc, e_rr));
 
 				alreadyContainsLib = true;
 			}
@@ -2155,15 +2159,12 @@ extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 
 		if(insertPlain) {
 
-			gotoIfError2(clean, ListCompilerEntrypoint_pushBack(
-				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, alloc
-			))
+			gotoIfError3(clean, ListCompilerEntrypoint_pushBack(
+				uniqueEntrypoints, CompilerEntrypoint{ .stage = stage }, &alloc, e_rr));
 
-			gotoIfError2(clean, CharString_createCopy(
-				CharString_createRefCStrConst(name),
-				alloc,
-				&ListCompilerEntrypoint_last(*uniqueEntrypoints)->name
-			))
+			gotoIfError3(clean, CharString_createCopy(
+				CharString_createRefCStrConst(name), &alloc, &ListCompilerEntrypoint_last(*uniqueEntrypoints)->name, e_rr
+			));
 		}
 	}
 
@@ -2269,7 +2270,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	linkedBinSiz = Buffer_length(inputs.ptr[0]);
 
 	if (linkedBinSiz & 3)
-		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"))
+		retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() binary provided was not a U32[]"));
 
 	linkedBinSiz >>= 2;
 
@@ -2285,7 +2286,7 @@ extern "C" Bool Compiler_linkSPIRV(
 			[alloc, errors, e_rr, &s_uccess](
 				spv_message_level_t level, const C8 *source, const spv_position_t &position, const C8 *msg
 			) -> void {
-				Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, alloc, e_rr);
+				(void) Compiler_spvToolsCallback(level, source, position, msg, errors, &s_uccess, &alloc, e_rr);
 			}
 		);
 		
@@ -2306,13 +2307,13 @@ extern "C" Bool Compiler_linkSPIRV(
 				SHUniformRuntime uniform = uniforms.ptr[i];
 
 				if(uniform.typeIdShort >= ETypeId_Max)
-					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() typeIdShort out of bounds"))
+					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() typeIdShort out of bounds"));
 
 				ETypeId typeId = ETypeId_arr[uniform.typeIdShort];
 				U64 len = ETypeId_getBytes(typeId);
 			
 				if(uniform.dataOffset + len > Buffer_length(uniformData))
-					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() uniformData out of bounds"))
+					retError(clean, Error_invalidState(2, "Compiler_linkSPIRV() uniformData out of bounds"));
 
 				U8 width = ETypeId_getWidth(typeId);
 				U8 height = ETypeId_getHeight(typeId);
@@ -2373,7 +2374,7 @@ extern "C" Bool Compiler_linkSPIRV(
 
 		std::vector<U32> tmp;
 		if(!opt.Run(linkedBinPtr, linkedBinSiz, &tmp))
-			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() couldn't run optimizer"))
+			retError(clean, Error_invalidState(0, "Compiler_linkSPIRV() couldn't run optimizer"));
 
 		//Note: we don't strip reflection here, Compiler_process will handle that.
 
@@ -2384,7 +2385,7 @@ extern "C" Bool Compiler_linkSPIRV(
 	
 	//Output to final target
 
-	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, alloc, e_rr))
+	gotoIfError3(clean, Buffer_resize(result, linkedBinSiz << 2, false, false, &alloc, e_rr));
 
 	Buffer_memcpy(
 		*result,

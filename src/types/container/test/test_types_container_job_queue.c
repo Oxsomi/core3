@@ -88,6 +88,42 @@ static Bool jobCheckThreadId(void *data, U64 threadId, JobQueue *queue) {
 	return true;
 }
 
+//--- JobGroup payloads & callbacks --------------------------------------------
+
+typedef struct GroupResult {
+	AtomicI64 finalizeRan;
+	AtomicI64 destructorRan;
+} GroupResult;
+
+typedef struct GroupWork {
+	JobGroup *group;
+	AtomicI64 *workDone;
+	Bool fail;
+} GroupWork;
+
+//Does a unit of work, optionally fails the group, then releases its token.
+
+static Bool jobGroupWorker(void *data, U64 threadId, JobQueue *queue) {
+	(void) threadId; (void) queue;
+	GroupWork *w = (GroupWork*) data;
+	AtomicI64_inc(w->workDone);
+	if(w->fail)
+		(void) JobGroup_fail(w->group, NULL);
+	return JobGroup_leave(w->group, NULL);
+}
+
+//Group finalize (data = GroupResult*).
+
+static Bool jobGroupFinalize(void *data, U64 threadId, JobQueue *queue) {
+	(void) threadId; (void) queue;
+	AtomicI64_inc(&((GroupResult*) data)->finalizeRan);
+	return true;
+}
+
+static void jobGroupDestructor(void *data) {
+	AtomicI64_inc(&((GroupResult*) data)->destructorRan);
+}
+
 //--- Test ---------------------------------------------------------------------
 
 void Test_jobQueue(Test *t) {
@@ -231,5 +267,67 @@ void Test_jobQueue(Test *t) {
 
 		JobQueue_free(&q);      //No wait: remaining jobs are discarded
 		Test_assert(t, "free without wait discards jobs cleanly", true);
+	}
+
+	//7. JobGroup success: last token released fires finalize exactly once (not the destructor).
+
+	{
+		JobQueue q = (JobQueue) { 0 };
+
+		if (Test_assert(t, "create for JobGroup success", JobQueue_create(4, alloc, &q, e_rr))) {
+
+			GroupResult result = { 0 };
+			AtomicI64 workDone = (AtomicI64) { 0 };
+			const U64 N = 100;
+
+			JobGroup group = (JobGroup) { 0 };
+			Test_assert(t, "JobGroup: create", JobGroup_create(&group, &q, jobGroupFinalize, &result, jobGroupDestructor, e_rr));
+			Test_assert(t, "JobGroup: enter", JobGroup_enter(&group, N, e_rr));      //Count known up front
+
+			GroupWork works[100];
+			for (U64 i = 0; i < N; ++i) {
+				works[i] = (GroupWork) { .group = &group, .workDone = &workDone, .fail = false };
+				JobQueue_push(&q, jobGroupWorker, &works[i], e_rr);
+			}
+
+			Test_assert(t, "JobGroup: wait", JobQueue_wait(&q, e_rr));
+			Test_assert(t, "JobGroup: all work ran", AtomicI64_load(&workDone) == (I64) N);
+			Test_assert(t, "JobGroup: finalize ran exactly once", AtomicI64_load(&result.finalizeRan) == 1);
+			Test_assert(t, "JobGroup: destructor did not run on success", AtomicI64_load(&result.destructorRan) == 0);
+			Test_assert(t, "JobGroup: isSuccess", JobGroup_isSuccess(&group));
+		}
+
+		JobQueue_free(&q);
+	}
+
+	//8. JobGroup failure: a failed unit skips finalize and runs the destructor instead.
+
+	{
+		JobQueue q = (JobQueue) { 0 };
+
+		if (Test_assert(t, "create for JobGroup failure", JobQueue_create(4, alloc, &q, e_rr))) {
+
+			GroupResult result = { 0 };
+			AtomicI64 workDone = (AtomicI64) { 0 };
+			const U64 N = 100;
+
+			JobGroup group = (JobGroup) { 0 };
+			Test_assert(t, "JobGroup: create", JobGroup_create(&group, &q, jobGroupFinalize, &result, jobGroupDestructor, e_rr));
+			Test_assert(t, "JobGroup: enter", JobGroup_enter(&group, N, e_rr));
+
+			GroupWork works[100];
+			for (U64 i = 0; i < N; ++i) {
+				works[i] = (GroupWork) { .group = &group, .workDone = &workDone, .fail = (i == 50) };
+				JobQueue_push(&q, jobGroupWorker, &works[i], e_rr);
+			}
+
+			Test_assert(t, "JobGroup(fail): wait", JobQueue_wait(&q, e_rr));
+			Test_assert(t, "JobGroup(fail): all work still ran", AtomicI64_load(&workDone) == (I64) N);
+			Test_assert(t, "JobGroup(fail): finalize skipped", AtomicI64_load(&result.finalizeRan) == 0);
+			Test_assert(t, "JobGroup(fail): destructor ran once", AtomicI64_load(&result.destructorRan) == 1);
+			Test_assert(t, "JobGroup(fail): isSuccess false", !JobGroup_isSuccess(&group));
+		}
+
+		JobQueue_free(&q);
 	}
 }

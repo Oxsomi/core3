@@ -20,18 +20,20 @@
 
 //shader_compiler/compiler.c
 
-#include "platforms/ext/listx_impl.h"
-#include "shader_compiler/compiler.h"
-#include "platforms/platform.h"
-#include "platforms/logx.h"
-#include "platforms/ext/formatx.h"
+#include "types/container/list_impl.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/string.h"
+#include "types/container/log.h"
+#include "types/container/buffer.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
+#include "types/base/allocator.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
-#include "types/base/allocator.h"
-#include "types/math/flp.h"
 #include "types/base/mathi.h"
-#include "types/base/type_id.h"
 #include "types/base/constants.h"
+#include "shader_compiler/compiler.h"
+#include "platforms/platform.h"
 
 TListImpl(Compiler);
 TListImpl(CompileError);
@@ -54,7 +56,7 @@ void ListCompiler_freeUnderlying(ListCompiler *compilers, Allocator alloc) {
 	for(U64 i = 0; i < compilers->length; ++i)
 		Compiler_free(&compilers->ptrNonConst[i], alloc);
 
-	ListCompiler_free(compilers, alloc);
+	ListCompiler_free(compilers, &alloc);
 }
 
 void CompileError_free(CompileError *err, Allocator alloc) {
@@ -62,8 +64,8 @@ void CompileError_free(CompileError *err, Allocator alloc) {
 	if(!err)
 		return;
 
-	CharString_free(&err->file, alloc);
-	CharString_free(&err->error, alloc);
+	CharString_free(&err->file, &alloc);
+	CharString_free(&err->error, &alloc);
 }
 
 ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b) {
@@ -79,19 +81,19 @@ void IncludeInfo_free(IncludeInfo *info, Allocator alloc) {
 	if(!info)
 		return;
 
-	CharString_free(&info->file, alloc);
+	CharString_free(&info->file, &alloc);
 }
 
 void CompileResult_freex(CompileResult *result) {
-	CompileResult_free(result, Platform_instance->alloc);
+	CompileResult_free(result, *Platform_instance->alloc);
 }
 
 void ListCompileResult_freeUnderlyingx(ListCompileResult* result) {
-	ListCompileResult_freeUnderlying(result, Platform_instance->alloc);
+	ListCompileResult_freeUnderlying(result, *Platform_instance->alloc);
 }
 
 void ListCompiler_freeUnderlyingx(ListCompiler *compilers) {
-	ListCompiler_freeUnderlying(compilers, Platform_instance->alloc);
+	ListCompiler_freeUnderlying(compilers, *Platform_instance->alloc);
 }
 
 void ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc) {
@@ -102,7 +104,7 @@ void ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator 
 	for(U64 i = 0; i < compileErrors->length; ++i)
 		CompileError_free(&compileErrors->ptrNonConst[i], alloc);
 
-	ListCompileError_free(compileErrors, alloc);
+	ListCompileError_free(compileErrors, &alloc);
 }
 
 void ListIncludeInfo_freeUnderlying(ListIncludeInfo *includeInfos, Allocator alloc) {
@@ -113,35 +115,35 @@ void ListIncludeInfo_freeUnderlying(ListIncludeInfo *includeInfos, Allocator all
 	for(U64 i = 0; i < includeInfos->length; ++i)
 		IncludeInfo_free(&includeInfos->ptrNonConst[i], alloc);
 
-	ListIncludeInfo_free(includeInfos, alloc);
+	ListIncludeInfo_free(includeInfos, &alloc);
 }
 
 void CompileError_freex(CompileError *err) {
-	CompileError_free(err, Platform_instance->alloc);
+	CompileError_free(err, *Platform_instance->alloc);
 }
 
 void ListCompileError_freeUnderlyingx(ListCompileError *compileErrors) {
-	ListCompileError_freeUnderlying(compileErrors, Platform_instance->alloc);
+	ListCompileError_freeUnderlying(compileErrors, *Platform_instance->alloc);
 }
 
 void IncludeInfo_freex(IncludeInfo *info) {
-	IncludeInfo_free(info, Platform_instance->alloc);
+	IncludeInfo_free(info, *Platform_instance->alloc);
 }
 
 void ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos) {
-	ListIncludeInfo_freeUnderlying(infos, Platform_instance->alloc);
+	ListIncludeInfo_freeUnderlying(infos, *Platform_instance->alloc);
 }
 
 Bool ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr, Error *e_rr) {
-	return ListIncludeInfo_stringify(files, Platform_instance->alloc, tempStr, e_rr);
+	return ListIncludeInfo_stringify(files, *Platform_instance->alloc, tempStr, e_rr);
 }
 
 void IncludedFile_freex(IncludedFile *file) {
-	IncludedFile_free(file, Platform_instance->alloc);
+	IncludedFile_free(file, *Platform_instance->alloc);
 }
 
 void ListIncludedFile_freeUnderlyingx(ListIncludedFile *file) {
-	ListIncludedFile_freeUnderlying(file, Platform_instance->alloc);
+	ListIncludedFile_freeUnderlying(file, *Platform_instance->alloc);
 }
 
 void IncludedFile_free(IncludedFile *file, Allocator alloc) {
@@ -149,7 +151,7 @@ void IncludedFile_free(IncludedFile *file, Allocator alloc) {
 	if(!file)
 		return;
 
-	CharString_free(&file->data, alloc);
+	CharString_free(&file->data, &alloc);
 	IncludeInfo_free(&file->includeInfo, alloc);
 }
 
@@ -161,7 +163,7 @@ void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc) {
 	for(U64 i = 0; i < file->length; ++i)
 		IncludedFile_free(&file->ptrNonConst[i], alloc);
 
-	ListIncludedFile_free(file, alloc);
+	ListIncludedFile_free(file, &alloc);
 }
 
 Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *tempStr, Error *e_rr) {
@@ -171,7 +173,7 @@ Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStrin
 
 	//Info about includes
 
-	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst("Includes:\n"), alloc, tempStr));
+	gotoIfError3(clean, CharString_createCopy(CharString_createRefCStrConst("Includes:\n"), &alloc, tempStr, e_rr));
 
 	for(U64 i = 0; i < files.length; ++i) {
 
@@ -181,34 +183,37 @@ Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStrin
 		if(includeInfo.timestamp)
 			Time_format(includeInfo.timestamp, format, true);
 
-		if(includeInfo.counter == 1)
-			gotoIfError2(clean, CharString_format(
-				alloc, &tempStr2,
+		if(includeInfo.counter == 1) {
+			gotoIfError3(clean, CharString_format(
+				&alloc, &tempStr2, e_rr,
 				"%08"PRIx32" %05"PRIu32" %s%s%s\n",
 				includeInfo.crc32c, includeInfo.fileSize,
 				includeInfo.timestamp ? format : "", includeInfo.timestamp ? " " : "",
 				includeInfo.file.ptr
 			));
+		}
 
-		else gotoIfError2(clean, CharString_format(
-			alloc, &tempStr2,
-			"%03"PRIu64" reference(s): %08"PRIx32" %05"PRIu32" %s%s%s\n",
-			includeInfo.counter,
-			includeInfo.crc32c, includeInfo.fileSize,
-			includeInfo.timestamp ? format : "", includeInfo.timestamp ? " " : "",
-			includeInfo.file.ptr
-		));
+		else {
+			gotoIfError3(clean, CharString_format(
+				&alloc, &tempStr2, e_rr,
+				"%03"PRIu64" reference(s): %08"PRIx32" %05"PRIu32" %s%s%s\n",
+				includeInfo.counter,
+				includeInfo.crc32c, includeInfo.fileSize,
+				includeInfo.timestamp ? format : "", includeInfo.timestamp ? " " : "",
+				includeInfo.file.ptr
+			));
+		}
 
-		gotoIfError2(clean, CharString_appendString(tempStr, tempStr2, alloc));
-		CharString_free(&tempStr2, alloc);
+		gotoIfError3(clean, CharString_appendString(tempStr, &tempStr2, &alloc, e_rr));
+		CharString_free(&tempStr2, &alloc);
 	}
 
 clean:
 
 	if(!s_uccess)
-		CharString_free(tempStr, alloc);
+		CharString_free(tempStr, &alloc);
 
-	CharString_free(&tempStr2, alloc);
+	CharString_free(&tempStr2, &alloc);
 	return s_uccess;
 }
 
@@ -217,7 +222,7 @@ void CompileResult_free(CompileResult *result, Allocator alloc) {
 	if(!result)
 		return;
 
-	ListSHRegisterRuntime_freeUnderlying(&result->registers, alloc);
+	ListSHRegisterRuntime_freeUnderlying(&result->registers, &alloc);
 	ListCompileError_freeUnderlying(&result->compileErrors, alloc);
 	ListIncludeInfo_freeUnderlying(&result->includeInfo, alloc);
 
@@ -225,11 +230,11 @@ void CompileResult_free(CompileResult *result, Allocator alloc) {
 
 		default:
 		case ECompileResultType_Binary:
-			Buffer_free(&result->binary, alloc);
+			Buffer_free(&result->binary, &alloc);
 			break;
 
 		case ECompileResultType_SHEntryRuntime:
-			ListSHEntryRuntime_freeUnderlying(&result->shEntriesRuntime, alloc);
+			ListSHEntryRuntime_freeUnderlying(&result->shEntriesRuntime, &alloc);
 			break;
 	}
 
@@ -244,15 +249,15 @@ void ListCompileResult_freeUnderlying(ListCompileResult *result, Allocator alloc
 	for (U64 i = 0; i < result->length; ++i)
 		CompileResult_free(&result->ptrNonConst[i], alloc);
 
-	ListCompileResult_free(result, alloc);
+	ListCompileResult_free(result, &alloc);
 }
 
 Bool Compiler_createx(Compiler *comp, Error *e_rr) {
-	return Compiler_create(Platform_instance->alloc, comp, e_rr);
+	return Compiler_create(*Platform_instance->alloc, comp, e_rr);
 }
 
 void Compiler_freex(Compiler *comp) {
-	Compiler_free(comp, Platform_instance->alloc);
+	Compiler_free(comp, *Platform_instance->alloc);
 }
 
 Bool Compiler_compilex(
@@ -262,23 +267,23 @@ Bool Compiler_compilex(
 	CompileResult *result,
 	Error *e_rr
 ) {
-	return Compiler_compile(comp, settings, toCompile, Platform_instance->alloc, result, e_rr);
+	return Compiler_compile(comp, settings, toCompile, *Platform_instance->alloc, result, e_rr);
 }
 
 Bool Compiler_handleExtraWarningsx(SHFile file, ECompilerWarning warning, Error *e_rr) {
-	return Compiler_handleExtraWarnings(file, warning, Platform_instance->alloc, e_rr);
+	return Compiler_handleExtraWarnings(file, warning, *Platform_instance->alloc, e_rr);
 }
 
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
-	return Compiler_parse(comp, settings, Platform_instance->alloc, result, e_rr);
+	return Compiler_parse(comp, settings, *Platform_instance->alloc, result, e_rr);
 }
 
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr) {
-	return Compiler_mergeIncludeInfo(comp, Platform_instance->alloc, infos, e_rr);
+	return Compiler_mergeIncludeInfo(comp, *Platform_instance->alloc, infos, e_rr);
 }
 
 Bool Compiler_disassemblex(Compiler comp, ESHBinaryType type, Buffer buf, CharString *result, Error *e_rr) {
-	return Compiler_disassemble(comp, type, buf, Platform_instance->alloc, result, e_rr);
+	return Compiler_disassemble(comp, type, buf, *Platform_instance->alloc, result, e_rr);
 }
 
 const C8 *ignoredWarnings[] = {
@@ -308,22 +313,34 @@ const C8 *ignoredWarnings[] = {
 
 Bool Compiler_filterWarning(CharString str) {
 
-	if (CharString_startsWithStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[1]), 0)) {
-		return
-			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[2])) ||
-			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[3])) ||
-			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[4])) ||
-			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[5])) ||
-			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[6])) ||
-			CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[7]));
+	//The *Sensitive helpers take const CharString*, so materialize each ref into a named temp
+	//(CharString_createRefCStrConst returns an rvalue whose address can't be taken).
+
+	const CharString w1 = CharString_createRefCStrConst(ignoredWarnings[1]);
+
+	if (CharString_startsWithStringSensitive(&str, &w1, 0)) {
+
+		for (U64 i = 2; i <= 7; ++i) {
+			const CharString w = CharString_createRefCStrConst(ignoredWarnings[i]);
+			if (CharString_equalsStringSensitive(&str, &w))
+				return true;
+		}
+
+		return false;
 	}
 
-	return
-		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[0]), 0) ||
-		CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[8])) ||
-		CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[9])) ||
-		CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[10])) ||
-		CharString_equalsStringSensitive(str, CharString_createRefCStrConst(ignoredWarnings[11]));
+	const CharString w0 = CharString_createRefCStrConst(ignoredWarnings[0]);
+
+	if (CharString_startsWithStringSensitive(&str, &w0, 0))
+		return true;
+
+	for (U64 i = 8; i <= 11; ++i) {
+		const CharString w = CharString_createRefCStrConst(ignoredWarnings[i]);
+		if (CharString_equalsStringSensitive(&str, &w))
+			return true;
+	}
+
+	return false;
 }
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
@@ -332,7 +349,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 	errs = CharString_createRefStrConst(errs);
 
-	U64 loc = CharString_findFirstStringSensitive(errs, validationFailed, 0, 0);
+	U64 loc = CharString_findFirstStringSensitive(&errs, &validationFailed, 0, 0);
 
 	if(loc != U64_MAX)
 		errs.lenAndNullTerminated = loc;
@@ -348,20 +365,20 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	//We fix that.
 
 	CharString lameString = CharString_createRefCStrConst("In file included from ");
-	if (CharString_containsStringSensitive(errs, lameString, 0, 0)) {
+	if (CharString_containsStringSensitive(&errs, &lameString, 0, 0)) {
 
-		gotoIfError2(clean, CharString_createCopy(errs, alloc, &tempStr3));
+		gotoIfError3(clean, CharString_createCopy(errs, &alloc, &tempStr3, e_rr));
 
 		U64 o = 0;
-		while ((o = CharString_findFirstStringSensitive(tempStr3, lameString, o, 0)) != U64_MAX) {
+		while ((o = CharString_findFirstStringSensitive(&tempStr3, &lameString, o, 0)) != U64_MAX) {
 
-			U64 end = CharString_findFirstSensitive(tempStr3, '\n', o, 0);
+			U64 end = CharString_findFirstSensitive(&tempStr3, '\n', o, 0);
 			U64 dist = end - o + 1;
 
 			if(end == U64_MAX)
 				dist = CharString_length(tempStr3) - o;
 
-			gotoIfError2(clean, CharString_eraseAtCount(&tempStr3, o, dist));
+			gotoIfError3(clean, CharString_eraseAtCount(&tempStr3, o, dist, e_rr));
 		}
 
 		errs = CharString_createRefStrConst(tempStr3);
@@ -392,17 +409,17 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 	CharString internalCompileErrorRef = CharString_createRefCStrConst("Internal Compiler error: ");
 
-	if (CharString_equalsStringSensitive(errs, internalCompileErrorRef)) {
+	if (CharString_equalsStringSensitive(&errs, &internalCompileErrorRef)) {
 		CompileError cerr = (CompileError) { .error = errs };
-		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc));
+		gotoIfError3(clean, ListCompileError_pushBack(errors, cerr, &alloc, e_rr));
 		goto clean;
 	}
 
 	//Regular parsing
 
-	U64 nextWarning = CharString_findFirstStringSensitive(errs, warning, off, 0);
-	U64 nextError = CharString_findFirstStringSensitive(errs, errStr, off, 0);
-	U64 nextNote = CharString_findFirstStringSensitive(errs, note, off, 0);
+	U64 nextWarning = CharString_findFirstStringSensitive(&errs, &warning, off, 0);
+	U64 nextError = CharString_findFirstStringSensitive(&errs, &errStr, off, 0);
+	U64 nextNote = CharString_findFirstStringSensitive(&errs, &note, off, 0);
 	U64 nextProblem = U64_min(U64_min(nextWarning, nextError), nextNote);
 	U8 nextProblemType = nextProblem == nextWarning ? 0 : (nextProblem == nextNote ? 1 : 2);
 
@@ -419,7 +436,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 			if(
 				nextError >= CharString_length(fatalOnly) &&
-				CharString_startsWithStringSensitive(errs, fatalOnly, nextError - CharString_length(fatalOnly))
+				CharString_startsWithStringSensitive(&errs, &fatalOnly, nextError - CharString_length(fatalOnly))
 			) {
 				nextError -= CharString_length(fatalOnly);
 				nextProblem = nextError;
@@ -570,8 +587,8 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 		if (prevOff != U64_MAX && !ignoreNextWarning) {
 
 			CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, ourErrorLineStart - prevOff, false);
-			gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr));
-			gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2));
+			gotoIfError3(clean, CharString_createCopy(errorStr, &alloc, &tempStr, e_rr));
+			gotoIfError3(clean, CharString_createCopy(prevFile, &alloc, &tempStr2, e_rr));
 
 			CompileError cerr = (CompileError) {
 				.lineId = (U16) prevLineId,
@@ -581,7 +598,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 				.file = tempStr2
 			};
 
-			gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc));
+			gotoIfError3(clean, ListCompileError_pushBack(errors, cerr, &alloc, e_rr));
 			tempStr = tempStr2 = CharString_createNull();
 		}
 
@@ -606,12 +623,12 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 		//Search again to ensure we didn't accidentally skip anything
 
 		if (nextProblemType == 0)
-			nextWarning = CharString_findFirstStringSensitive(errs, warning, off, 0);
+			nextWarning = CharString_findFirstStringSensitive(&errs, &warning, off, 0);
 
 		else if(nextProblemType == 1)
-			nextNote = CharString_findFirstStringSensitive(errs, note, off, 0);
+			nextNote = CharString_findFirstStringSensitive(&errs, &note, off, 0);
 
-		else nextError = CharString_findFirstStringSensitive(errs, errStr, off, 0);
+		else nextError = CharString_findFirstStringSensitive(&errs, &errStr, off, 0);
 
 		nextProblem = U64_min(U64_min(nextWarning, nextError), nextNote);
 		nextProblemType = nextProblem == nextWarning ? 0 : (nextProblem == nextNote ? 1 : 2);
@@ -622,8 +639,8 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	if (prevOff != U64_MAX && !ignoreNextWarning) {
 
 		CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, CharString_length(errs) - prevOff + 1, false);
-		gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr));
-		gotoIfError2(clean, CharString_createCopy(prevFile, alloc, &tempStr2));
+		gotoIfError3(clean, CharString_createCopy(errorStr, &alloc, &tempStr, e_rr));
+		gotoIfError3(clean, CharString_createCopy(prevFile, &alloc, &tempStr2, e_rr));
 
 		CompileError cerr = (CompileError) {
 			.lineId = (U16) prevLineId,
@@ -633,14 +650,14 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 			.file = tempStr2
 		};
 
-		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc));
+		gotoIfError3(clean, ListCompileError_pushBack(errors, cerr, &alloc, e_rr));
 		tempStr = tempStr2 = CharString_createNull();
 	}
 
 clean:
-	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr2, alloc);
-	CharString_free(&tempStr3, alloc);
+	CharString_free(&tempStr, &alloc);
+	CharString_free(&tempStr2, &alloc);
+	CharString_free(&tempStr3, &alloc);
 	return s_uccess;
 }
 
@@ -663,7 +680,7 @@ Bool Compiler_paddingCheck(
 	U32 startOffset = offset;
 	U32 unpaddedOffset = offset;
 
-	CharString parentName = parentId == U16_MAX ? reg.name : sb.varNames.ptr[parentId];
+	CharString parentName = parentId == U16_MAX ? reg.name : sb.names.entryStrings.ptr[sb.structs.length + parentId];
 
 	for (U16 i = 0; i < (U16) sb.vars.length; ++i) {
 
@@ -672,12 +689,19 @@ Bool Compiler_paddingCheck(
 		if(var.parentId != parentId)
 			continue;
 
-		CharString varName = sb.varNames.ptr[i];
+		CharString varName = sb.names.entryStrings.ptr[sb.structs.length + i];
 		U32 var1D = 1;
 
-		if(var.arrayIndex != U16_MAX) {
+		if(var.arrayDimOrArrayId) {
 
-			ListU32 array = sb.arrays.ptr[var.arrayIndex];
+			//arrayDimOrArrayId: bit 15 set = arrayId into sb.arrays (multi-dim); otherwise an inline dimension.
+
+			ListU32 array = (ListU32) { 0 };
+			U32 v = var.arrayDimOrArrayId;
+
+			if (var.arrayDimOrArrayId >> 15)
+				array = sb.arrays.ptr[var.arrayDimOrArrayId & (U16)I16_MAX];
+			else ListU32_createRefConst(&v, 1, &array, NULL);
 
 			for(U64 j = 0; j < array.length; ++j)
 				var1D *= array.ptr[j];
@@ -687,7 +711,7 @@ Bool Compiler_paddingCheck(
 
 			if(var.offset > unpaddedOffset)
 				Log_warnLn(
-					alloc,
+					&alloc,
 					"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs "
 					"%"PRIu32" bytes of padding in front of it. Might be inefficient and/or unexpected",
 					binaryId,
@@ -712,7 +736,7 @@ Bool Compiler_paddingCheck(
 
 				if(packedSize != siz)
 					Log_warnLn(
-						alloc,
+						&alloc,
 						"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding. "
 						"Might be inefficient and/or unexpected",
 						binaryId,
@@ -724,7 +748,7 @@ Bool Compiler_paddingCheck(
 
 				if(var1D > 1 && (siz & 15))
 					Log_warnLn(
-						alloc,
+						&alloc,
 						"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding per array index. "
 						"Might be inefficient and/or unexpected (total of %"PRIu32" bytes)",
 						binaryId,
@@ -752,7 +776,7 @@ Bool Compiler_paddingCheck(
 
 		if(!isPacked && var1D > 1 && (stride & 15))
 			Log_warnLn(
-				alloc,
+				&alloc,
 				"Binary %"PRIu64" has variable \"%.*s.%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding per array index. "
 				"Might be inefficient and/or unexpected (total of %"PRIu32" bytes)",
 				binaryId,
@@ -770,7 +794,7 @@ Bool Compiler_paddingCheck(
 
 	if (unpaddedOffset - startOffset < expectedSize)
 		Log_warnLn(
-			alloc,
+			&alloc,
 			"Binary %"PRIu64" has variable \"%.*s\" (%.*s) which incurs %"PRIu32" bytes of padding at the end. "
 			"Might be inefficient and/or unexpected",
 			binaryId,
@@ -805,7 +829,7 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 					reg.reg.bindings.arrU64[k] != U64_MAX && !((reg.reg.isUsedFlag >> k) & 1)
 				)
 					Log_warnLn(
-						alloc, "Binary %"PRIu64":%s has unused register \"%.*s\"",
+						&alloc, "Binary %"PRIu64":%s has unused register \"%.*s\"",
 						i,
 						ESHBinaryType_names[k],
 						(int) CharString_length(reg.name), reg.name.ptr
@@ -827,13 +851,13 @@ Bool Compiler_handleExtraWarnings(SHFile file, ECompilerWarning warning, Allocat
 						for (U64 l = 0; l < sb.vars.length; ++l) {
 
 							SBVar var = sb.vars.ptr[l];
-							CharString varName = sb.varNames.ptr[l];
+							CharString varName = sb.names.entryStrings.ptr[sb.structs.length + l];
 
 							if(var.parentId != parent || ((var.flags >> k) & 1))
 								continue;
 
 							Log_warnLn(
-								alloc, "Binary %"PRIu64":%s has unused constant \"%.*s.%.*s\"",
+								&alloc, "Binary %"PRIu64":%s has unused constant \"%.*s.%.*s\"",
 								i,
 								ESHBinaryType_names[k],
 								(int) CharString_length(reg.name), reg.name.ptr,
@@ -1040,7 +1064,7 @@ void ListCompilerEntrypoint_freeUnderlying(ListCompilerEntrypoint *entry, Alloca
 		return;
 
 	for (U64 i = 0; i < entry->length; ++i)
-		CharString_free(&entry->ptrNonConst[i].name, alloc);
+		CharString_free(&entry->ptrNonConst[i].name, &alloc);
 
-	ListCompilerEntrypoint_free(entry, alloc);
+	ListCompilerEntrypoint_free(entry, &alloc);
 }

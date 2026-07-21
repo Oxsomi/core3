@@ -105,7 +105,7 @@ F32x4 TLASTransformSRT_getShearing(const TLASTransformSRT *srt);
 Bool TLASTransformSRT_setShearing(TLASTransformSRT *srt, F32x4 value);
 
 static inline TLASTransformSRT TLASTransformSRT_createSimple(F32x4 scale, F32x4 translate, QuatF32 quat) {
-	TLASTransformSRT srt = (TLASTransformSRT) { 0 };
+	TLASTransformSRT srt = { 0 };
 	TLASTransformSRT_setScale(&srt, scale);
 	TLASTransformSRT_setTranslate(&srt, translate);
 	TLASTransformSRT_setQuat(&srt, quat);

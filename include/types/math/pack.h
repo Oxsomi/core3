@@ -160,7 +160,8 @@ static inline QuatS16 QuatF32_pack(QuatF32 q) {
 
 	sign <<= 63;
 
-	return (QuatS16) { sign | (U64)(F32x4_x(asI16)) | ((U64)(F32x4_y(asI16)) << 21) | ((U64)(F32x4_z(asI16)) << 42) };
+	const QuatS16 ret = { sign | (U64)(F32x4_x(asI16)) | ((U64)(F32x4_y(asI16)) << 21) | ((U64)(F32x4_z(asI16)) << 42) };
+	return ret;
 }
 
 #ifdef __cplusplus

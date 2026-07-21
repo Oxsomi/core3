@@ -38,6 +38,11 @@ static inline Bool CharString_startsWithStringSensitive(const CharString *str, c
 	return CharString_startsWithString(&strSensOff, other);
 }
 
+static inline Bool CharString_startsWithCStringSensitive(const CharString *str, const C8 *other, U64 off) {
+	CharString otherStr = CharString_createRefCStrConst(other);
+	return CharString_startsWithStringSensitive(str, &otherStr, off);
+}
+
 static inline Bool CharString_endsWithSensitive(const CharString str, C8 c, U64 off) {
 	return CharString_endsWith(str, c, EStringCase_Sensitive, off);
 }
@@ -64,6 +69,11 @@ static inline Bool CharString_startsWithInsensitive(const CharString str, C8 c, 
 static inline Bool CharString_startsWithStringInsensitive(const CharString *str, const CharString *other, U64 off) {
 	CharStringSensOff strSensOff = { str, EStringCase_Insensitive, off };
 	return CharString_startsWithString(&strSensOff, other);
+}
+
+static inline Bool CharString_startsWithCStringInsensitive(const CharString *str, const C8 *other, U64 off) {
+	CharString otherStr = CharString_createRefCStrConst(other);
+	return CharString_startsWithStringInsensitive(str, &otherStr, off);
 }
 
 static inline Bool CharString_endsWithInsensitive(const CharString str, C8 c, U64 off) {

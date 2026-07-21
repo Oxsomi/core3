@@ -60,8 +60,8 @@ static inline F32x4 F32x4_create1_1_2(F32 a, F32 b, F32x2 c) { return F32x4_crea
 static inline F32x4 F32x4_create2_1(F32x2 a, F32 b) { return F32x4_create3(F32x2_x(a), F32x2_y(a), b); }
 static inline F32x4 F32x4_create1_2(F32 a, F32x2 b) { return F32x4_create3(a, F32x2_x(b), F32x2_y(b)); }
 
-static inline I32x2 I32x2_fromF32x2(F32x2 a) { return (I32x2) { .v = { (I32) F32x2_x(a), (I32) F32x2_y(a) } }; }
-static inline F32x2 F32x2_fromI32x2(I32x2 a) { return (F32x2) { .v = { (F32) I32x2_x(a), (F32) I32x2_y(a) } }; }
+static inline I32x2 I32x2_fromF32x2(F32x2 a) { const I32x2 ret = { .v = { (I32) F32x2_x(a), (I32) F32x2_y(a) } }; return ret; }
+static inline F32x2 F32x2_fromI32x2(I32x2 a) { const F32x2 ret = { .v = { (F32) I32x2_x(a), (F32) I32x2_y(a) } }; return ret; }
 
 #ifdef __cplusplus
 		}

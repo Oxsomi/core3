@@ -172,13 +172,16 @@ static inline F32 *InputDevice_getAxisValue(const InputDevice *dev, U16 localHan
 
 static inline BitRef InputDevice_getButtonValue(const InputDevice *dev, U16 localHandle, Bool isCurrent) {
 
-	if(!dev || localHandle >= dev->buttons)
-		return (BitRef) { 0 };
+	if(!dev || localHandle >= dev->buttons) {
+		const BitRef ret = { 0 };
+		return ret;
+	}
 
 	const U64 bitOff = ((U32)localHandle << 1) + isCurrent;
 	U8 *off = dev->states.ptrNonConst + dev->axes * 2 * sizeof(F32) + (bitOff >> 3);
 
-	return (BitRef) { .ptr = off, .off = (bitOff & 7) };
+	const BitRef ret = { .ptr = off, .off = (bitOff & 7) };
+	return ret;
 }
 
 static inline EInputState InputDevice_getState(const InputDevice *d, InputHandle handle) {

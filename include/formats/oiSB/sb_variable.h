@@ -85,19 +85,19 @@ typedef enum ESBType {
 } ESBType;
 
 static inline ESBVector ESBType_getVector(ESBType type) {
-	return type & 3;
+	return (ESBVector)(type & 3);
 }
 
 static inline ESBMatrix ESBType_getMatrix(ESBType type) {
-	return (type >> 6) & 3;
+	return (ESBMatrix)((type >> 6) & 3);
 }
 
 static inline ESBPrimitive ESBType_getPrimitive(ESBType type) {
-	return (type >> 2) & 3;
+	return (ESBPrimitive)((type >> 2) & 3);
 }
 
 static inline ESBStride ESBType_getStride(ESBType type) {
-	return (type >> 4) & 3;
+	return (ESBStride)((type >> 4) & 3);
 }
 
 static inline U8 ESBType_getSize(ESBType type, Bool isPacked) {

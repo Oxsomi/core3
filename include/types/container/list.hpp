@@ -22,6 +22,7 @@
 
 #pragma once
 #include <utility>
+#include <type_traits>
 
 //Pre-include system headers used by the C headers below at global scope;
 //they must not be pulled in for the first time inside a namespace.
@@ -66,58 +67,84 @@ namespace oxc {
 	template<typename CList>
 	struct ListTraits;      //Specialized via OXC_BIND_LIST / OXC_BIND_LIST_UNDERLYING
 
-	#define OXC_BIND_LIST_IMPL(Name, FreeFunc)                                                                      \
-	template<>                                                                                                      \
-	struct oxc::ListTraits<oxc::c::Name> {                                                                          \
-                                                                                                                   \
-		using Elem = oxc::c::Name##_Type;                                                                           \
-                                                                                                                   \
-		static oxc::c::Bool pushBack(oxc::c::Name &l, const Elem &t, const oxc::c::Allocator &a, oxc::c::Error *e) { \
-			return oxc::c::Name##_pushBack(&l, t, &a, e);                                                           \
-		}                                                                                                          \
-		static oxc::c::Bool pushFront(oxc::c::Name &l, const Elem &t, const oxc::c::Allocator &a, oxc::c::Error *e) {\
-			return oxc::c::Name##_pushFront(&l, t, &a, e);                                                          \
-		}                                                                                                          \
-		static oxc::c::Bool popBack(oxc::c::Name &l, Elem *out, oxc::c::Error *e) {                                 \
-			return oxc::c::Name##_popBack(&l, out, e);                                                              \
-		}                                                                                                          \
-		static oxc::c::Bool popFront(oxc::c::Name &l, Elem *out, oxc::c::Error *e) {                                \
-			return oxc::c::Name##_popFront(&l, out, e);                                                             \
-		}                                                                                                          \
-		static oxc::c::Bool insert(                                                                                 \
-			oxc::c::Name &l, oxc::c::U64 i, const Elem &t, const oxc::c::Allocator &a, oxc::c::Error *e             \
-		) { return oxc::c::Name##_insert(&l, i, t, &a, e); }                                                        \
-		static oxc::c::Bool erase(oxc::c::Name &l, oxc::c::U64 i, oxc::c::Error *e) {                               \
-			return oxc::c::Name##_erase(&l, i, e);                                                                  \
-		}                                                                                                          \
-		static oxc::c::Bool eraseAll(                                                                               \
-			oxc::c::Name &l, const Elem &t, const oxc::c::Allocator &a, oxc::c::EqualsFunction eq, oxc::c::Error *e \
-		) { return oxc::c::Name##_eraseAll(&l, t, &a, eq, e); }                                                     \
-		static oxc::c::U64 findFirst(                                                                               \
-			const oxc::c::Name &l, const Elem &t, oxc::c::U64 index, oxc::c::EqualsFunction eq                      \
-		) { return oxc::c::Name##_findFirst(l, t, index, eq); }                                                     \
-		static oxc::c::Bool contains(                                                                               \
-			const oxc::c::Name &l, const Elem &t, oxc::c::U64 off, oxc::c::EqualsFunction eq                        \
-		) { return oxc::c::Name##_contains(l, t, off, eq); }                                                        \
-		static oxc::c::Bool sortCustom(oxc::c::Name &l, oxc::c::CompareFunction func) {                             \
-			return oxc::c::Name##_sortCustom(l, func);                                                              \
-		}                                                                                                          \
-		static oxc::c::Bool reverse(oxc::c::Name &l) { return oxc::c::Name##_reverse(l); }                          \
-		static oxc::c::Bool swap(oxc::c::Name &l, oxc::c::U64 i, oxc::c::U64 j, oxc::c::Error *e) {                  \
-			return oxc::c::Name##_swap(l, i, j, e);                                                                 \
-		}                                                                                                          \
-		static oxc::c::Bool eq(const oxc::c::Name &a, const oxc::c::Name &b) { return oxc::c::Name##_eq(a, b); }    \
-		static oxc::c::Bool createRepeated(                                                                         \
-			oxc::c::U64 len, const Elem &t, const oxc::c::Allocator &a, oxc::c::Name *result, oxc::c::Error *e      \
-		) { return oxc::c::Name##_createRepeated(len, t, &a, result, e); }                                          \
-		static oxc::c::Bool resize(oxc::c::Name &l, oxc::c::U64 len, const oxc::c::Allocator &a, oxc::c::Error *e) { \
-			return oxc::c::Name##_resize(&l, len, &a, e);                                                           \
-		}                                                                                                          \
-		static oxc::c::Bool reserve(oxc::c::Name &l, oxc::c::U64 cap, const oxc::c::Allocator &a, oxc::c::Error *e) {\
-			return oxc::c::Name##_reserve(&l, cap, &a, e);                                                          \
-		}                                                                                                          \
-		static oxc::c::Bool clear(oxc::c::Name &l) { return oxc::c::Name##_clear(&l, nullptr); }                    \
-		static void freeList(oxc::c::Name &l, const oxc::c::Allocator &a) { FreeFunc; }                             \
+	#define OXC_BIND_LIST_IMPL(Name, FreeFunc)                                                                          \
+	template<>                                                                                                          \
+	struct oxc::ListTraits<oxc::c::Name> {                                                                              \
+																														\
+		using Elem = oxc::c::Name##_Type;                                                                               \
+																														\
+		static oxc::c::Bool pushBack(oxc::c::Name &l, const Elem &t, const oxc::c::Allocator &a, oxc::c::Error *e) {    \
+			return oxc::c::Name##_pushBack(&l, t, &a, e);                                                               \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool pushFront(oxc::c::Name &l, const Elem &t, const oxc::c::Allocator &a, oxc::c::Error *e) {   \
+			return oxc::c::Name##_pushFront(&l, t, &a, e);                                                              \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool popBack(oxc::c::Name &l, Elem *out, oxc::c::Error *e) {                                     \
+			return oxc::c::Name##_popBack(&l, out, e);                                                                  \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool popFront(oxc::c::Name &l, Elem *out, oxc::c::Error *e) {                                    \
+			return oxc::c::Name##_popFront(&l, out, e);                                                                 \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool insert(                                                                                     \
+			oxc::c::Name &l, oxc::c::U64 i, const Elem &t, const oxc::c::Allocator &a, oxc::c::Error *e                 \
+		) {                                                                                                             \
+			return oxc::c::Name##_insert(&l, i, t, &a, e);                                                              \
+		}                                                                                                               \
+																														\
+																														\
+		static oxc::c::Bool erase(oxc::c::Name &l, oxc::c::U64 i, oxc::c::Error *e) {                                   \
+			return oxc::c::Name##_erase(&l, i, e);                                                                      \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool eraseAll(                                                                                   \
+			oxc::c::Name &l, const Elem &t, const oxc::c::Allocator &a, oxc::c::EqualsFunction eq, oxc::c::Error *e     \
+		) {                                                                                                             \
+			return oxc::c::Name##_eraseAll(&l, t, &a, eq, e);                                                           \
+		}                                                                                                               \
+																														\
+		static oxc::c::U64 findFirst(                                                                                   \
+			const oxc::c::Name &l, const Elem &t, oxc::c::U64 index, oxc::c::EqualsFunction eq                          \
+		) {                                                                                                             \
+			return oxc::c::Name##_findFirst(l, t, index, eq);                                                           \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool contains(                                                                                   \
+			const oxc::c::Name &l, const Elem &t, oxc::c::U64 off, oxc::c::EqualsFunction eq                            \
+		) {                                                                                                             \
+			return oxc::c::Name##_contains(l, t, off, eq);                                                              \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool sortCustom(oxc::c::Name &l, oxc::c::CompareFunction func) {                                 \
+			return oxc::c::Name##_sortCustom(l, func);                                                                  \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool reverse(oxc::c::Name &l) { return oxc::c::Name##_reverse(l); }                              \
+		static oxc::c::Bool swap(oxc::c::Name &l, oxc::c::U64 i, oxc::c::U64 j, oxc::c::Error *e) {                     \
+			return oxc::c::Name##_swap(l, i, j, e);                                                                     \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool eq(const oxc::c::Name &a, const oxc::c::Name &b) { return oxc::c::Name##_eq(a, b); }        \
+																														\
+		static oxc::c::Bool createRepeated(                                                                             \
+			oxc::c::U64 len, const Elem &t, const oxc::c::Allocator &a, oxc::c::Name *result, oxc::c::Error *e          \
+		) {                                                                                                             \
+			return oxc::c::Name##_createRepeated(len, t, &a, result, e);                                                \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool resize(oxc::c::Name &l, oxc::c::U64 len, const oxc::c::Allocator &a, oxc::c::Error *e) {    \
+			return oxc::c::Name##_resize(&l, len, &a, e);                                                               \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool reserve(oxc::c::Name &l, oxc::c::U64 cap, const oxc::c::Allocator &a, oxc::c::Error *e) {   \
+			return oxc::c::Name##_reserve(&l, cap, &a, e);                                                              \
+		}                                                                                                               \
+																														\
+		static oxc::c::Bool clear(oxc::c::Name &l) { return oxc::c::Name##_clear(&l, nullptr); }                        \
+		static void freeList(oxc::c::Name &l, const oxc::c::Allocator &a) { FreeFunc; }                                 \
 	};
 
 	#define OXC_BIND_LIST(Name) OXC_BIND_LIST_IMPL(Name, oxc::c::Name##_free(&l, &a))
@@ -135,6 +162,14 @@ namespace oxc {
 	public:
 
 		using Elem = typename Traits::Elem;
+
+		//The underlying C TList stores elements as raw bytes (memcpy) and never runs C++ ctors/dtors,
+		//and the RAII free just releases the buffer. A non-trivial element type would therefore leak
+		//its resources (dtor never called) or corrupt on copy, so only C-style POD elements are allowed.
+		static_assert(
+			std::is_trivially_copyable<Elem>::value && std::is_trivially_destructible<Elem>::value,
+			"oxc::List element type must be trivially copyable and trivially destructible (a C-style POD)"
+		);
 
 	private:
 

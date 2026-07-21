@@ -30,7 +30,7 @@
 TListImpl(Job);
 TListNamedImpl(ListThreadHandle);
 
-static const Ns JobQueue_idleSleep = 100 * MU;
+static const Ns JobQueue_idleSleep = 100000;		//100 * MU
 
 //Pop the next job. Returns false if the queue is currently empty.
 
@@ -239,4 +239,91 @@ void JobQueue_free(JobQueue *queue) {
 	ListJob_free(&queue->jobs, queue->alloc);
 
 	*queue = (JobQueue) { 0 };
+}
+
+Bool JobGroup_create(
+	JobGroup *group, JobQueue *queue, JobCallback finalize, void *data, JobDestructor dataDestructor, Error *e_rr
+) {
+	Bool s_uccess = true;
+
+	if(!group)
+		retError(clean, Error_nullPointer(0, "JobGroup_create()::group is required"));
+
+	if(finalize && !queue)
+		retError(clean, Error_nullPointer(1, "JobGroup_create()::queue is required when finalize is set"));
+
+	if(group->finalize || group->data || AtomicI64_load(&group->outstanding))
+		retError(clean, Error_invalidParameter(0, 0, "JobGroup_create()::group wasn't zero initialized"));
+
+	*group = (JobGroup) {
+		.queue = queue,
+		.finalize = finalize,
+		.data = data,
+		.dataDestructor = dataDestructor
+	};
+
+clean:
+	return s_uccess;
+}
+
+Bool JobGroup_enter(JobGroup *group, U64 count, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!group)
+		retError(clean, Error_nullPointer(0, "JobGroup_enter()::group is required"));
+
+	if(count)
+		AtomicI64_add(&group->outstanding, (I64) count);
+
+clean:
+	return s_uccess;
+}
+
+Bool JobGroup_fail(JobGroup *group, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!group)
+		retError(clean, Error_nullPointer(0, "JobGroup_fail()::group is required"));
+
+	AtomicI64_store(&group->failed, 1);
+
+clean:
+	return s_uccess;
+}
+
+Bool JobGroup_isSuccess(const JobGroup *group) {
+	return group && !AtomicI64_load((AtomicI64*) &group->failed);
+}
+
+Bool JobGroup_leave(JobGroup *group, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!group)
+		retError(clean, Error_nullPointer(0, "JobGroup_leave()::group is required"));
+
+	const I64 remaining = AtomicI64_dec(&group->outstanding);
+
+	if(remaining > 0)                   //Not the last token; nothing to do yet
+		goto clean;
+
+	if(remaining < 0)                   //Underflow: more leaves than enters (usage bug)
+		retError(clean, Error_invalidState(0, "JobGroup_leave() released more tokens than were entered"));
+
+	//Last token: fire finalize on success, otherwise free the accumulator.
+	//The finalize job carries dataDestructor so data is still freed if it is discarded on shutdown.
+
+	if(!AtomicI64_load(&group->failed) && group->finalize) {
+		gotoIfError3(clean, JobQueue_pushDestructor(
+			group->queue, group->finalize, group->data, group->dataDestructor, e_rr
+		));
+	}
+
+	else if(group->dataDestructor)
+		group->dataDestructor(group->data);
+
+clean:
+	return s_uccess;
 }

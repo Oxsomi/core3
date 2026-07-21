@@ -128,7 +128,8 @@ VkCompareOp mapVkCompareOp(ECompareOp op);
 VkDeviceAddress getVkDeviceAddress(DeviceData data);
 
 static inline VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset) {
-	return (VkDeviceOrHostAddressConstKHR) { .deviceAddress = getVkDeviceAddress(data) + localOffset };
+	const VkDeviceOrHostAddressConstKHR ret = { .deviceAddress = getVkDeviceAddress(data) + localOffset };
+	return ret;
 }
 
 VkShaderStageFlags vkGetShaderStages(U32 vis);

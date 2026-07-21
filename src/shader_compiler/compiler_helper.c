@@ -20,7 +20,7 @@
 
 //shader_compiler/compiler_helper.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
 #include "types/container/buffer.h"
@@ -949,12 +949,504 @@ Bool Compiler_registerShaderEntries(
 	Error *e_rr
 );
 
-Bool Compiler_compileShaderFile(Compiler compiler, CompilerShaderFileJob *job, Error *e_rr) {
+//A file's work runs as a 3-level JobGroup fan-out tree on the shared queue:
+//  file latch  ->  per-combination compile jobs  ->  per-linkEntry leaf jobs.
+//
+//Each combination holds one token of the file latch until *its* leaves drain (released in the
+//combination's finalize), so the file context - which owns the shared SHFile, its lock and the
+//binaryIndices every leaf writes - provably outlives every leaf. A combination's compiled binary
+//is freed the moment its own leaves finish (per-combination finalize), bounding peak memory to
+//in-flight combinations. The file latch's finalize assembles the oiSH (registerShaderEntries) and
+//moves it into job->result; on any failure the finalize is skipped and the context is reclaimed by
+//the group's dataDestructor. Every enter is matched by exactly one leave along the normal drain, so
+//a single JobQueue_wait completes the whole tree with balanced tokens and no leaks.
+//
+//Sub-jobs run on arbitrary execution contexts, so each selects its own Compiler via
+//job->compilers.ptr[threadId] (lock free, like the old per-file jobs). The only shared mutable
+//state is the file's SHFile + binaryIndices, guarded by file->lock; the reflection pass
+//(Compiler_processSingle) takes that same lock internally.
+
+typedef struct CompilerFileCtx {
+
+	CompilerShaderFileJob *job;             //Back-ref for outputs (result/success) + shared read-only inputs
+
+	ListSHEntryRuntime runtimeEntries;      //Owned; shared read-only during fan-out
+	ListU32 compileCombinations;            //Owned
+
+	SHFile shFile;                          //Shared; mutated by leaves under lock
+	ListU32 binaryIndices;                  //Shared; mutated by leaves under lock
+	SpinLock lock;                          //Guards shFile + binaryIndices (and the processSingle reflection pass)
+
+	JobGroup group;                         //File latch; finalize = Compiler_finalizeShaderFile
+
+	ESHBinaryType binaryType;
+	U8 padding[4];
+
+} CompilerFileCtx;
+
+typedef struct CompilerComboCtx {
+
+	CompilerFileCtx *file;
+
+	CompileResult tempResult;               //This combination's compiled binary; owned, read by its leaves
+	ListLinkEntry linkEntries;              //Owned
+	ListCompilerEntrypoint uniqueEntrypoints;   //Owned
+
+	JobGroup group;                         //Combination latch; finalize = Compiler_finalizeCombination
+
+	Allocator alloc;                        //Self-contained so the destructor never derefs sibling contexts
+
+	U16 runtimeEntryId;
+	U16 combinationId;
+	Bool isRt;
+	Bool isGfxOrComp;
+
+} CompilerComboCtx;
+
+typedef struct CompilerLeafCtx {
+	CompilerComboCtx *combo;                //Parent; alive until this combination's finalize (after all leaves)
+	Allocator alloc;                        //Self-contained so the destructor never derefs sibling contexts
+	U64 linkIndex;                          //Index into combo->linkEntries
+} CompilerLeafCtx;
+
+//Frees the file context and everything it still owns. shFile is moved out by finalize on the
+//success path (left null here). Doubles as the group dataDestructor for the shutdown-discard case.
+void CompilerFileCtx_free(void *ptr) {
+
+	CompilerFileCtx *ctx = (CompilerFileCtx*) ptr;
+
+	if(!ctx)
+		return;
+
+	Allocator alloc = ctx->job->alloc;      //job outlives the queue (owned by Compiler_compileShaders), so this is safe
+
+	SHFile_free(&ctx->shFile, &alloc);
+	ListU32_free(&ctx->binaryIndices, &alloc);
+	ListSHEntryRuntime_freeUnderlying(&ctx->runtimeEntries, &alloc);
+	ListU32_free(&ctx->compileCombinations, &alloc);
+
+	alloc.free(alloc.ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
+}
+
+//Frees a combination context and everything it owns (its compiled binary included).
+//Doubles as the combination group's dataDestructor for the shutdown-discard case.
+void CompilerComboCtx_free(void *ptr) {
+
+	CompilerComboCtx *ctx = (CompilerComboCtx*) ptr;
+
+	if(!ctx)
+		return;
+
+	Allocator alloc = ctx->alloc;
+
+	CompileResult_free(&ctx->tempResult, alloc);
+	ListLinkEntry_freeUnderlying(&ctx->linkEntries, alloc);
+	ListCompilerEntrypoint_freeUnderlying(&ctx->uniqueEntrypoints, alloc);
+
+	alloc.free(alloc.ptr, Buffer_createManagedPtr(ctx, sizeof(*ctx)));
+}
+
+//Frees a leaf context. Only used as the shutdown-discard destructor; a leaf that runs frees itself.
+void CompilerLeafCtx_freeDiscarded(void *ptr) {
+
+	CompilerLeafCtx *leaf = (CompilerLeafCtx*) ptr;
+
+	if(!leaf)
+		return;
+
+	Allocator alloc = leaf->alloc;
+	alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+}
+
+//Leaf: link (for lib/annotation) + reflection + register one binary into the shared SHFile.
+//This is the old inner linkEntries-loop body, one iteration per job.
+Bool Compiler_compileLinkJob(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) queue;
+
+	CompilerLeafCtx *leaf = (CompilerLeafCtx*) data;
+
+	if(!leaf)
+		return false;
+
+	CompilerComboCtx *combo = leaf->combo;
+	CompilerFileCtx *file = combo->file;
+	CompilerShaderFileJob *job = file->job;
+
+	Allocator alloc = job->alloc;
+	Compiler compiler = job->compilers.ptr[threadId];
+
+	Error errTmp = Error_none(), *e_rr = &errTmp;
+	Bool s_uccess = true;
+	Bool locked = false;
+
+	CharString inputPath = job->allFiles.ptr[job->fileId];
+	CompileResult tempResult2 = (CompileResult) { 0 };
+
+	//runtimeEntry is a private shallow copy (refs into file->runtimeEntries, alive for the whole file);
+	//the annotation branch below mutates it, which is why each leaf needs its own.
+
+	SHEntryRuntime runtimeEntry = file->runtimeEntries.ptr[combo->runtimeEntryId];
+	LinkEntry linkEntry = combo->linkEntries.ptr[leaf->linkIndex];
+	Buffer uniformData = linkEntry.uniformData;
+	U16 currentCombinationId = linkEntry.combinationId;
+
+	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, currentCombinationId, &binaryIdentifier, e_rr));
+
+	ListBuffer inputs = (ListBuffer) { 0 };
+	gotoIfError3(clean, ListBuffer_createRefConst(&combo->tempResult.binary, 1, &inputs, e_rr));
+
+	Bool isShaderAnnotation = runtimeEntry.isShaderAnnotation;
+
+	if(isShaderAnnotation) {
+
+		CompilerEntrypoint entry = (CompilerEntrypoint) { 0 };
+
+		if (linkEntry.entrypointId != U16_MAX) {
+
+			//entrypointId doesn't map to uniqueEntrypoints as some might be missing there;
+			//it maps to our parsed runtimeEntries.
+
+			CharString entrypointName = file->runtimeEntries.ptr[linkEntry.entrypointId].entry.name;
+
+			U64 l = 0;
+
+			for (; l < combo->uniqueEntrypoints.length; ++l)
+				if (CharString_equalsStringSensitive(&entrypointName, &combo->uniqueEntrypoints.ptr[l].name))
+					break;
+
+			if(l == combo->uniqueEntrypoints.length)
+				retError(clean, Error_invalidState(
+					0,
+					"Compiler_compileLinkJob() somehow an entrypointId was referenced by a linkEntry "
+					"that doesn't exist"
+				));
+
+			entry = combo->uniqueEntrypoints.ptr[l];
+		}
+
+		else entry.stage = ESHPipelineStage_Count;      //Mark as lib
+
+		tempResult2.type = ECompileResultType_Binary;
+
+		gotoIfError3(clean, Compiler_linkSingle(
+			compiler,
+			inputPath,
+			combo->runtimeEntryId,
+			currentCombinationId,
+			file->binaryType,
+			inputs,
+			runtimeEntry.uniforms,
+			uniformData,
+			entry.name,
+			binaryIdentifier.shaderVersion,
+			entry.stage,
+			binaryIdentifier.extensions,
+			job->enableLogging,
+			&tempResult2.binary,
+			alloc
+		));
+
+		binaryIdentifier.stageType = entry.stage;
+
+		Bool currGfxOrComp = !(
+			(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
+			entry.stage >= ESHPipelineStage_Count ||
+			entry.stage == ESHPipelineStage_WorkgraphExt
+		);
+
+		if(currGfxOrComp)
+			binaryIdentifier.entrypoint = CharString_createRefStrConst(entry.name);
+
+		runtimeEntry.isShaderAnnotation = !currGfxOrComp;
+	}
+
+	//Process reflection and strip debug/reflection info if necessary
+
+	gotoIfError3(clean, Compiler_processSingle(
+		compiler,
+		inputPath,
+		combo->runtimeEntryId,
+		currentCombinationId,
+		file->binaryType,
+		tempResult2.binary.ptr ? &tempResult2 : &combo->tempResult,
+		job->isDebug,
+		binaryIdentifier,
+		&file->lock,
+		file->runtimeEntries,
+		isShaderAnnotation,
+		job->enableLogging,
+		alloc,
+		e_rr
+	));
+
+	if (linkEntry.entrypointId == U16_MAX)
+		binaryIdentifier.stageType = combo->isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
+
+	//Register the binary and link its runtime entries to it. binaryId is derived from the current
+	//SHFile size, so the read + registerShaderBinary + binaryIndices push must be one atomic section.
+
+	if(SpinLock_lock(&file->lock, U64_MAX) < ELockAcquire_Success)
+		retError(clean, Error_invalidState(0, "Compiler_compileLinkJob() couldn't lock SHFile"));
+
+	locked = true;
+
+	U16 binaryId = (U16) file->shFile.binaries.length;
+
+	gotoIfError3(clean, Compiler_registerShaderBinary(
+		&file->shFile,
+		tempResult2.binary.ptr ? &tempResult2 : &combo->tempResult,
+		file->binaryType,
+		inputPath,
+		&runtimeEntry,
+		&binaryIdentifier,
+		alloc,
+		e_rr
+	));
+
+	for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)       //Link runtime entry to binary
+		gotoIfError3(clean, ListU32_pushBack(
+			&file->binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), &alloc, e_rr
+		));
+
+	SpinLock_unlock(&file->lock);
+	locked = false;
+
+clean:
+
+	if(locked)
+		SpinLock_unlock(&file->lock);
+
+	if(!s_uccess) {
+
+		if(job->enableLogging)
+			Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+
+		Error e2 = Error_none();
+		JobGroup_fail(&file->group, &e2);       //Mark the whole file failed; finalize will be skipped
+	}
+
+	CompileResult_free(&tempResult2, alloc);
+
+	alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+
+	Error e3 = Error_none();
+	JobGroup_leave(&combo->group, &e3);         //Release this leaf's combination token (may fire the combo finalize)
+
+	return s_uccess;
+}
+
+//Combination finalize: runs once all of this combination's leaves have drained. Frees the
+//combination (its compiled binary included) and releases the combination's file-latch token.
+//The combination group is never failed, so this always runs - a failing leaf fails the file latch
+//instead, letting the tree still drain and free itself cleanly.
+Bool Compiler_finalizeCombination(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) threadId; (void) queue;
+
+	CompilerComboCtx *ctx = (CompilerComboCtx*) data;
+
+	if(!ctx)
+		return false;
+
+	//Grab the file group before freeing ctx (which contains the back-ref). The file context stays
+	//alive because this token hasn't been released yet.
+
+	JobGroup *fileGroup = &ctx->file->group;
+
+	CompilerComboCtx_free(ctx);
+
+	Error e2 = Error_none();
+	JobGroup_leave(fileGroup, &e2);
+
+	return true;
+}
+
+//Combination job: compile this combination's binary, discover its link entries, then fan out one
+//leaf job per link entry under a combination latch. Holds a self token while spawning so the latch
+//can't reach zero mid-spawn (the documented enter(1)/enter(k)/leave pattern).
+Bool Compiler_compileCombinationJob(void *data, U64 threadId, JobQueue *queue) {
+
+	CompilerComboCtx *ctx = (CompilerComboCtx*) data;
+
+	if(!ctx)
+		return false;
+
+	CompilerFileCtx *file = ctx->file;
+	CompilerShaderFileJob *job = file->job;
+
+	Allocator alloc = job->alloc;
+	Compiler compiler = job->compilers.ptr[threadId];
+
+	Error errTmp = Error_none(), *e_rr = &errTmp;
+	Bool s_uccess = true;
+	Bool spawning = false;
+
+	CharString inputPath = job->allFiles.ptr[job->fileId];
+	CharString inputData = job->allShaderText.ptr[job->fileId];
+
+	SHEntryRuntime runtimeEntry = file->runtimeEntries.ptr[ctx->runtimeEntryId];
+
+	//Compile and return error if failed
+
+	if(!Compiler_compileShaderSingle(
+		compiler,
+		file->binaryType,
+		job->isDebug,
+		ctx->isRt,
+		ctx->isGfxOrComp,
+		inputPath,
+		inputData,
+		&ctx->tempResult,
+		file->runtimeEntries,
+		ctx->runtimeEntryId,
+		ctx->combinationId,
+		job->includeDir,
+		job->enableLogging,
+		alloc
+	)) {
+
+		if(job->enableLogging)
+			Log_errorLn(
+				&alloc, "Compile failed for file \"%.*s\"",
+				(int)CharString_length(inputPath), inputPath.ptr
+			);
+
+		retError(clean, Error_invalidState(2, "Compiler_compileCombinationJob() compile failed"));
+	}
+
+	SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&runtimeEntry, ctx->combinationId, &binaryIdentifier, e_rr));
+
+	//Lib files need to be specialized per shader annotation or per entrypoint; non libs loop once.
+
+	gotoIfError3(clean, Compiler_getLinkEntries(
+		compiler,
+		&file->runtimeEntries,
+		&binaryIdentifier,
+		file->binaryType,
+		&ctx->tempResult.binary,
+		&ctx->uniqueEntrypoints,
+		&ctx->linkEntries,
+		alloc,
+		e_rr
+	));
+
+	//Activate the combination latch and fan out its leaves. From here cleanup is via the latch:
+	//we hold a self token, fail the file latch on error, then release the self token and let the
+	//already-pushed leaves drain into Compiler_finalizeCombination (which frees ctx + leaves the file).
+
+	gotoIfError3(clean, JobGroup_create(&ctx->group, queue, Compiler_finalizeCombination, ctx, CompilerComboCtx_free, e_rr));
+	gotoIfError3(clean, JobGroup_enter(&ctx->group, 1, e_rr));
+	spawning = true;
+
+	for (U64 k = 0; k < ctx->linkEntries.length; ++k) {
+
+		Buffer buf = Buffer_createNull();
+		gotoIfError3(cleanSpawn, Buffer_createUninitializedBytes(sizeof(CompilerLeafCtx), &alloc, &buf, e_rr));
+
+		CompilerLeafCtx *leaf = (CompilerLeafCtx*) buf.ptrNonConst;
+		*leaf = (CompilerLeafCtx) { .combo = ctx, .alloc = alloc, .linkIndex = k };
+
+		gotoIfError3(cleanLeaf, JobGroup_enter(&ctx->group, 1, e_rr));
+
+		if(!JobQueue_pushDestructor(queue, Compiler_compileLinkJob, leaf, CompilerLeafCtx_freeDiscarded, e_rr)) {
+			Error e2 = Error_none();
+			JobGroup_leave(&ctx->group, &e2);       //Undo this leaf's token; the push never took ownership
+			alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+			retError(cleanSpawn, Error_invalidState(0, "Compiler_compileCombinationJob() couldn't push leaf"));
+		}
+
+		continue;
+
+	cleanLeaf:
+		alloc.free(alloc.ptr, Buffer_createManagedPtr(leaf, sizeof(*leaf)));
+		goto cleanSpawn;
+	}
+
+	spawning = false;
+	{
+		Error e2 = Error_none();
+		JobGroup_leave(&ctx->group, &e2);           //Release the self token
+	}
+	return true;
+
+cleanSpawn:
+
+	//Error after the latch went active: fail the file, release the self token, let pushed leaves
+	//drain and free ctx via Compiler_finalizeCombination.
+
+	if(job->enableLogging)
+		Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+	{
+		Error e2 = Error_none();
+		JobGroup_fail(&file->group, &e2);
+		if(spawning)
+			JobGroup_leave(&ctx->group, &e2);
+	}
+	return false;
+
+clean:
+
+	//Error before the latch went active (compile / link discovery / latch create). No combination
+	//tokens exist yet, so free ctx directly, fail the file and release this combination's file token.
+
+	if(!s_uccess && job->enableLogging)
+		Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+
+	CompilerComboCtx_free(ctx);
+	{
+		Error e2 = Error_none();
+		JobGroup_fail(&file->group, &e2);
+		JobGroup_leave(&file->group, &e2);
+	}
+	return false;
+}
+
+//File finalize: runs once every combination has drained and nothing failed. Sorts the binary
+//indices, links entrypoints to binaries and hands the finished SHFile to the job's output slot.
+Bool Compiler_finalizeShaderFile(void *data, U64 threadId, JobQueue *queue) {
+
+	(void) threadId; (void) queue;
+
+	CompilerFileCtx *ctx = (CompilerFileCtx*) data;
+
+	if(!ctx)
+		return false;
+
+	Allocator alloc = ctx->job->alloc;
+	Error errTmp = Error_none();
+	Bool s_uccess = true;
+
+	if(!ListU32_sort(ctx->binaryIndices))
+		s_uccess = false;
+
+	else if(!Compiler_registerShaderEntries(&ctx->shFile, ctx->runtimeEntries, ctx->binaryIndices, alloc, &errTmp))
+		s_uccess = false;
+
+	if(s_uccess) {
+		ctx->job->result = ctx->shFile;             //Move to the job's output slot
+		ctx->shFile = (SHFile) { 0 };
+		ctx->job->success = true;
+	}
+
+	else if(ctx->job->enableLogging)
+		Error_print(&alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
+
+	CompilerFileCtx_free(ctx);
+	return s_uccess;
+}
+
+//Spawner (per file): preprocess, then fan out one compile job per combination under the file latch.
+//Runs as the file's queue job; the actual compiles/links happen in the spawned sub-jobs.
+Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64 threadId, Error *e_rr) {
 
 	Bool s_uccess = true;
 
 	Allocator alloc = job->alloc;
 	const U64 i = job->fileId;
+	Compiler compiler = job->compilers.ptr[threadId];
 
 	CharString inputPath = job->allFiles.ptr[i];
 	CharString inputData = job->allShaderText.ptr[i];
@@ -962,15 +1454,10 @@ Bool Compiler_compileShaderFile(Compiler compiler, CompilerShaderFileJob *job, E
 
 	ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
 	ListU32 compileCombinations = (ListU32) { 0 };
-	ListU32 binaryIndices = (ListU32) { 0 };
-	ListLinkEntry linkEntries = (ListLinkEntry) { 0 };
-	ListCompilerEntrypoint uniqueEntrypoints = (ListCompilerEntrypoint) { 0 };
-
-	CompileResult tempResult = (CompileResult) { 0 };
-	CompileResult tempResult2 = (CompileResult) { 0 };
-
 	SHFile shFile = (SHFile) { 0 };
-	SpinLock lock = (SpinLock) { 0 };       //Reflection lock; uncontended here since entries are per file
+
+	CompilerFileCtx *ctx = NULL;
+	Bool enteredSelf = false;
 
 	if(job->result.entries.ptr)
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_compileShaderFile()::job->result must be empty"));
@@ -978,15 +1465,7 @@ Bool Compiler_compileShaderFile(Compiler compiler, CompilerShaderFileJob *job, E
 	//Preprocess to get information necessary for real compiles.
 
 	if(!Compiler_precompileShader(
-		compiler,
-		binaryType,
-		job->isDebug,
-		inputPath,
-		inputData,
-		&runtimeEntries,
-		job->includeDir,
-		job->enableLogging,
-		alloc
+		compiler, binaryType, job->isDebug, inputPath, inputData, &runtimeEntries, job->includeDir, job->enableLogging, alloc
 	)) {
 
 		if(job->enableLogging)
@@ -1013,28 +1492,48 @@ Bool Compiler_compileShaderFile(Compiler compiler, CompilerShaderFileJob *job, E
 			retError(clean, Error_invalidState(1, "Compiler_compileShaderFile() couldn't find entrypoints"));
 		}
 
+		job->success = true;        //Allowed empty file
 		goto clean;
 	}
 
 	U32 crc32c = Buffer_crc32c(CharString_bufferConst(inputData));
 
-	gotoIfError3(clean, SHFile_create(
-		ESHSettingsFlags_None,
-		OXC3_VERSION,
-		crc32c,
-		&alloc,
-		&shFile,
-		e_rr
-	));
-
+	gotoIfError3(clean, SHFile_create(ESHSettingsFlags_None, OXC3_VERSION, crc32c, &alloc, &shFile, e_rr));
 	gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, alloc, e_rr));
 
-	//Only for non lib entries, and then once per lib entry
+	//Move the accumulators into a heap file context shared by the whole fan-out tree.
 
-	for(U64 j = 0; j < compileCombinations.length; ++j) {
+	Buffer buf = Buffer_createNull();
+	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(CompilerFileCtx), &alloc, &buf, e_rr));
 
-		U16 runtimeEntryId = (U16) (compileCombinations.ptr[j] >> 16);
-		U16 combinationId  = (U16) compileCombinations.ptr[j];
+	ctx = (CompilerFileCtx*) buf.ptrNonConst;
+	*ctx = (CompilerFileCtx) {
+		.job = job,
+		.runtimeEntries = runtimeEntries,
+		.compileCombinations = compileCombinations,
+		.shFile = shFile,
+		.binaryType = binaryType
+	};
+
+	runtimeEntries = (ListSHEntryRuntime) { 0 };        //Moved
+	compileCombinations = (ListU32) { 0 };              //Moved
+	shFile = (SHFile) { 0 };                            //Moved
+
+	//From here the context is owned by the file latch: finalize frees it on success, dataDestructor
+	//(CompilerFileCtx_free) on failure or shutdown-discard. If create/enter fails no tokens exist
+	//yet, so free it directly (cleanCtx).
+
+	gotoIfError3(cleanCtx, JobGroup_create(
+		&ctx->group, queue, Compiler_finalizeShaderFile, ctx, CompilerFileCtx_free, e_rr
+	));
+
+	gotoIfError3(cleanCtx, JobGroup_enter(&ctx->group, 1, e_rr));    //Self token held while spawning
+	enteredSelf = true;
+
+	for(U64 j = 0; j < ctx->compileCombinations.length; ++j) {
+
+		U16 runtimeEntryId = (U16) (ctx->compileCombinations.ptr[j] >> 16);
+		U16 combinationId  = (U16) ctx->compileCombinations.ptr[j];
 
 		Bool isRt = combinationId >> 15;
 		Bool isGfxOrComp = runtimeEntryId >> 15;
@@ -1042,219 +1541,73 @@ Bool Compiler_compileShaderFile(Compiler compiler, CompilerShaderFileJob *job, E
 		runtimeEntryId &= (U16) I16_MAX;
 		combinationId  &= (U16) I16_MAX;
 
-		SHEntryRuntime runtimeEntry = runtimeEntries.ptr[runtimeEntryId];
+		Buffer cbuf = Buffer_createNull();
+		gotoIfError3(cleanSpawn, Buffer_createUninitializedBytes(sizeof(CompilerComboCtx), &alloc, &cbuf, e_rr));
 
-		//Compile and return error if failed
+		CompilerComboCtx *combo = (CompilerComboCtx*) cbuf.ptrNonConst;
+		*combo = (CompilerComboCtx) {
+			.file = ctx,
+			.alloc = alloc,
+			.runtimeEntryId = runtimeEntryId,
+			.combinationId = combinationId,
+			.isRt = isRt,
+			.isGfxOrComp = isGfxOrComp
+		};
 
-		if(!Compiler_compileShaderSingle(
-			compiler,
-			binaryType,
-			job->isDebug,
-			isRt,
-			isGfxOrComp,
-			inputPath,
-			inputData,
-			&tempResult,
-			runtimeEntries,
-			runtimeEntryId,
-			combinationId,
-			job->includeDir,
-			job->enableLogging,
-			alloc
-		)) {
+		gotoIfError3(cleanCombo, JobGroup_enter(&ctx->group, 1, e_rr));      //File token for this combination
 
-			if(job->enableLogging)
-				Log_errorLn(
-					&alloc, "Compile failed for file \"%.*s\"",
-					(int)CharString_length(inputPath), inputPath.ptr
-				);
-
-			retError(clean, Error_invalidState(2, "Compiler_compileShaderFile() compile failed"));
+		if(!JobQueue_pushDestructor(queue, Compiler_compileCombinationJob, combo, CompilerComboCtx_free, e_rr)) {
+			Error e2 = Error_none();
+			JobGroup_leave(&ctx->group, &e2);       //Undo this combination's token
+			CompilerComboCtx_free(combo);
+			retError(cleanSpawn, Error_invalidState(0, "Compiler_compileShaderFile() couldn't push combination job"));
 		}
 
-		SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier){ 0 };
-		gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
-			&runtimeEntry, combinationId, &binaryIdentifier, e_rr
-		));
+		continue;
 
-		//Lib files need to be specialized per shader annotation if uniforms are present
-		//or per entrypoint for graphics shaders.
-		//For non libs this wil just loop once and only call process.
-		//It uses both the oxc data (uniforms, defines, etc.) and binary data to know the relevant entrypoints.
-		//For example; it might compile a function, but it's unused or a function is not present in the final binary.
-
-		gotoIfError3(clean, Compiler_getLinkEntries(
-			compiler,
-			&runtimeEntries,
-			&binaryIdentifier,
-			binaryType,
-			&tempResult.binary,
-			&uniqueEntrypoints,
-			&linkEntries,
-			alloc,
-			e_rr
-		));
-
-		for (U64 k = 0; k < linkEntries.length; ++k) {
-
-			LinkEntry linkEntry = linkEntries.ptr[k];
-			Buffer uniformData = linkEntry.uniformData;
-
-			U16 currentCombinationId = linkEntry.combinationId;
-
-			binaryIdentifier = (SHBinaryIdentifier){ 0 };
-			gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(
-				&runtimeEntry, currentCombinationId, &binaryIdentifier, e_rr
-			));
-
-			ListBuffer inputs = (ListBuffer) { 0 };
-			gotoIfError3(clean, ListBuffer_createRefConst(&tempResult.binary, 1, &inputs, e_rr));
-
-			Bool isShaderAnnotation = runtimeEntry.isShaderAnnotation;
-
-			if(isShaderAnnotation) {
-
-				CompilerEntrypoint entry = (CompilerEntrypoint) { 0 };
-
-				if (linkEntry.entrypointId != U16_MAX) {
-
-					//entrypointId doesn't map to uniqueEntrypoints as some might be missing there;
-					//it maps to our parsed runtimeEntries.
-
-					CharString entrypointName = runtimeEntries.ptr[linkEntry.entrypointId].entry.name;
-
-					U64 l = 0;
-
-					for (; l < uniqueEntrypoints.length; ++l)
-						if (CharString_equalsStringSensitive(&entrypointName, &uniqueEntrypoints.ptr[l].name))
-							break;
-
-					if(l == uniqueEntrypoints.length)
-						retError(clean, Error_invalidState(
-							0,
-							"Compiler_compileShaderFile() somehow an entrypointId was referenced by a linkEntry "
-							"that doesn't exist"
-						));
-
-					entry = uniqueEntrypoints.ptr[l];
-				}
-
-				else entry.stage = ESHPipelineStage_Count;      //Mark as lib
-
-				tempResult2.type = ECompileResultType_Binary;
-
-				gotoIfError3(clean, Compiler_linkSingle(
-					compiler,
-					inputPath,
-					runtimeEntryId,
-					currentCombinationId,
-					binaryType,
-					inputs,
-					runtimeEntry.uniforms,
-					uniformData,
-					entry.name,
-					binaryIdentifier.shaderVersion,
-					entry.stage,
-					binaryIdentifier.extensions,
-					job->enableLogging,
-					&tempResult2.binary,
-					alloc
-				));
-
-				binaryIdentifier.stageType = entry.stage;
-
-				Bool currGfxOrComp = !(
-					(entry.stage >= ESHPipelineStage_RtStartExt && entry.stage >= ESHPipelineStage_RtEndExt) ||
-					entry.stage >= ESHPipelineStage_Count ||
-					entry.stage == ESHPipelineStage_WorkgraphExt
-				);
-
-				if(currGfxOrComp)
-					binaryIdentifier.entrypoint = CharString_createRefStrConst(entry.name);
-
-				runtimeEntry.isShaderAnnotation = !currGfxOrComp;
-			}
-
-			//Process reflection and strip debug/reflection info if necessary
-
-			gotoIfError3(clean, Compiler_processSingle(
-				compiler,
-				inputPath,
-				runtimeEntryId,
-				currentCombinationId,
-				binaryType,
-				tempResult2.binary.ptr ? &tempResult2 : &tempResult,
-				job->isDebug,
-				binaryIdentifier,
-				&lock,
-				runtimeEntries,
-				isShaderAnnotation,
-				job->enableLogging,
-				alloc,
-				e_rr
-			));
-
-			if (linkEntry.entrypointId == U16_MAX)
-				binaryIdentifier.stageType = isRt ? ESHPipelineStage_RtStartExt : ESHPipelineStage_WorkgraphExt;
-
-			U16 binaryId = (U16) shFile.binaries.length;
-
-			gotoIfError3(clean, Compiler_registerShaderBinary(
-				&shFile,
-				tempResult2.binary.ptr ? &tempResult2 : &tempResult,
-				binaryType,
-				inputPath,
-				&runtimeEntry,
-				&binaryIdentifier,
-				alloc,
-				e_rr
-			));
-
-			for (U64 l = 0; l < linkEntry.runtimeEntries.length; ++l)       //Link runtime entry to binary
-				gotoIfError3(clean, ListU32_pushBack(
-					&binaryIndices, binaryId | (((U32)linkEntry.runtimeEntries.ptr[l]) << 16), &alloc, e_rr
-				));
-
-			runtimeEntry.isShaderAnnotation = isShaderAnnotation;
-			CompileResult_free(&tempResult2, alloc);
-		}
-
-		ListLinkEntry_freeUnderlying(&linkEntries, alloc);
-		ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
-		CompileResult_free(&tempResult, alloc);
+	cleanCombo:
+		CompilerComboCtx_free(combo);
+		goto cleanSpawn;
 	}
 
-	if(!ListU32_sort(binaryIndices))
-		retError(clean, Error_invalidState(0, "Compiler_compileShaderFile() sort failed"));
+	enteredSelf = false;
+	{
+		Error e2 = Error_none();
+		JobGroup_leave(&ctx->group, &e2);           //Release the self token; the tree now completes on its own
+	}
+	return true;
 
-	//Link entrypoint to binaries
+cleanSpawn:
 
-	gotoIfError3(clean, Compiler_registerShaderEntries(&shFile, runtimeEntries, binaryIndices, alloc, e_rr));
+	//Error mid-spawn after the latch went active: fail it, release the self token, let the pushed
+	//combinations drain and reclaim the context via finalize/dataDestructor.
+	{
+		Error e2 = Error_none();
+		JobGroup_fail(&ctx->group, &e2);
+		if(enteredSelf)
+			JobGroup_leave(&ctx->group, &e2);
+	}
+	return false;
 
-	//Move to output
+cleanCtx:
 
-	job->result = shFile;
-	shFile = (SHFile) { 0 };
+	//Latch create/enter failed: no tokens exist, so reclaim the context directly.
+	CompilerFileCtx_free(ctx);
+	ctx = NULL;
 
 clean:
 
 	SHFile_free(&shFile, &alloc);
-	CompileResult_free(&tempResult, alloc);
-	CompileResult_free(&tempResult2, alloc);
-	ListLinkEntry_freeUnderlying(&linkEntries, alloc);
-	ListCompilerEntrypoint_freeUnderlying(&uniqueEntrypoints, alloc);
-	ListU32_free(&compileCombinations, &alloc);
-	ListU32_free(&binaryIndices, &alloc);
 	ListSHEntryRuntime_freeUnderlying(&runtimeEntries, &alloc);
+	ListU32_free(&compileCombinations, &alloc);
 
 	return s_uccess;
 }
 
-//JobQueue entrypoint; a thin wrapper that selects the per thread compiler and records the result.
+//JobQueue entrypoint; a thin wrapper that spawns the file's fan-out tree and logs any spawn error.
+//The file's actual success/result is produced asynchronously by the file latch's finalize.
 
 Bool Compiler_compileShaderFileJob(void *data, U64 threadId, JobQueue *queue) {
-
-	(void) queue;
 
 	CompilerShaderFileJob *job = (CompilerShaderFileJob*) data;
 
@@ -1262,14 +1615,12 @@ Bool Compiler_compileShaderFileJob(void *data, U64 threadId, JobQueue *queue) {
 		return false;
 
 	Error errTmp = Error_none();
-	Compiler compiler = job->compilers.ptr[threadId];
+	Bool spawned = Compiler_compileShaderFile(job, queue, threadId, &errTmp);
 
-	job->success = Compiler_compileShaderFile(compiler, job, &errTmp);
-
-	if(!job->success && job->enableLogging)
+	if(!spawned && job->enableLogging)
 		Error_print(&job->alloc, &errTmp, ELogLevel_Error, ELogOptions_Default);
 
-	return job->success;
+	return spawned;
 }
 
 Bool Compiler_registerShaderBinary(

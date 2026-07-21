@@ -20,16 +20,24 @@
 
 //shader_compiler/compiler.cpp
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_impl.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/string.h"
+#include "types/container/string_unicode.h"
+#include "types/container/log.h"
+#include "types/container/buffer.h"
+#include "types/container/ref_ptr.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/string_mut_helper.h"
+#include "types/base/allocator.h"
+#include "types/base/c8.h"
+#include "types/base/mathi.h"
+#include "types/math/flp.h"
+#include "types/base/constants.h"
 #include "platforms/file.h"
+#include "types/container/file_base.h"
 #include "platforms/platform.h"
 #include "shader_compiler/compiler.h"
-#include "types/container/file_base.h"
-#include "types/container/log.h"
-#include "types/base/c8.h"
-#include "types/math/flp.h"
-#include "types/math/math.h"
-#include "types/base/constants.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -109,19 +117,19 @@ public:
 		for (U64 i = 0; i < includedFiles.length; ++i)
 			includedFiles.ptrNonConst[i].includeInfo.counter = 0;
 
-		Buffer_unsetAllBits(ListU64_buffer(isPresent));
+		Buffer_unsetAllBits(ListU64_buffer(isPresent), NULL);
 	}
 
 	inline U64 getCounter() const { return counter; }
 	inline ListIncludedFile getIncludedFiles() const {
 		ListIncludedFile res = ListIncludedFile{};
-		ListIncludedFile_createRefConst(includedFiles.ptr, includedFiles.length, &res);
+		ListIncludedFile_createRefConst(includedFiles.ptr, includedFiles.length, &res, NULL);
 		return res;
 	}
 
 	virtual ~IncludeHandler() {
 		ListIncludedFile_freeUnderlying(&includedFiles, alloc);
-		ListU64_free(&isPresent, alloc);
+		ListU64_free(&isPresent, &alloc);
 	}
 
 	HRESULT STDMETHODCALLTYPE LoadSource(
@@ -136,6 +144,7 @@ public:
 		Error *e_rr = NULL;
 		Bool s_uccess = true;
 
+		const RefPtrType fileHandleType = FileHandle_makeType(&alloc);
 		HRESULT hr = S_OK;
 		Buffer tempBuffer = Buffer_createNull();
 		CharString tempFile = CharString_createNull();
@@ -146,32 +155,33 @@ public:
 		U64 lastAt = U64_MAX;
 
 		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			gotoIfError2(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName))
+			gotoIfError3(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, &alloc, &fileName, e_rr));
 		#else
-			gotoIfError2(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, alloc, &fileName))
+			gotoIfError3(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, &alloc, &fileName, e_rr));
 		#endif
 
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsli
 
-		lastAt = CharString_findLastStringSensitive(fileName, CharString_createRefCStrConst("@"), 0, 0);
+		const CharString atStr = CharString_createRefCStrConst("@");
+		lastAt = CharString_findLastStringSensitive(&fileName, &atStr, 0, 0);
 		isBuiltin = lastAt != U64_MAX;
 
 		if (isBuiltin) {
 
 			CharString tmp = CharString_createNull();
 
-			if(!CharString_cut(fileName, lastAt, 0, &tmp) || !CharString_length(tmp))
-				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after @"))
+			if(!CharString_cut(&fileName, lastAt, 0, &tmp) || !CharString_length(tmp))
+				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after @"));
 
-			gotoIfError2(clean, CharString_createCopy(tmp, alloc, &resolved))
+			gotoIfError3(clean, CharString_createCopy(tmp, &alloc, &resolved, e_rr));
 		}
 
 		else gotoIfError3(clean, File_resolve(
-			fileName, &isVirtual, 256, Platform_instance->defaultDir, alloc, &resolved, e_rr
-		))
+			&fileName, &isVirtual, 256, &Platform_instance->defaultDir, &alloc, &resolved, e_rr
+		));
 
 		for (; i < includedFiles.length; ++i)
-			if(CharString_equalsStringSensitive(resolved, includedFiles.ptr[i].includeInfo.file))
+			if(CharString_equalsStringSensitive(&resolved, &includedFiles.ptr[i].includeInfo.file))
 				break;
 
 		//We already included it in an earlier run.
@@ -186,7 +196,7 @@ public:
 
 			if(!isBuiltin) {        //Builtins don't exist on disk, so they can't really be hot reloaded
 
-				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
+				gotoIfError3(clean, File_getInfo(&resolved, &fileInfo, &alloc, e_rr));
 
 				IncludeInfo prevInclude = includedFiles.ptr[i].includeInfo;
 
@@ -200,21 +210,22 @@ public:
 
 					if (fileInfo.fileSize == prevInclude.fileSize) {
 
-						gotoIfError3(clean, File_read(resolved, 100 * MS, 0, 0, alloc, &tempBuffer, e_rr))
+						gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, &fileHandleType, &tempBuffer, e_rr));
 
-						gotoIfError2(clean, CharString_createCopy(
+						gotoIfError3(clean, CharString_createCopy(
 							CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
-							alloc,
-							&tempFile
-						))
+							&alloc,
+							&tempFile,
+							e_rr
+						));
 
-						Buffer_free(&tempBuffer, alloc);
+						Buffer_free(&tempBuffer, &alloc);
 
 						if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
-							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"))
+							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
 						U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
-						CharString_free(&tempFile, alloc);
+						CharString_free(&tempFile, &alloc);
 
 						if(crc32c != prevInclude.crc32c)
 							validCache = false;
@@ -223,7 +234,7 @@ public:
 					else validCache = false;
 				}
 
-				FileInfo_free(&fileInfo, alloc);
+				FileInfo_free(&fileInfo, &alloc);
 			}
 
 			//Continue with the next if we don't have a valid cache
@@ -231,7 +242,7 @@ public:
 			if(!validCache) {
 
 				IncludedFile includedFile = IncludedFile{};
-				gotoIfError2(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile))
+				gotoIfError3(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile, e_rr));
 
 				IncludedFile_free(&includedFile, alloc);
 
@@ -269,26 +280,27 @@ public:
 
 			if(!isBuiltin) {
 
-				gotoIfError3(clean, File_getInfo(resolved, &fileInfo, alloc, e_rr))
-				gotoIfError3(clean, File_read(resolved, 100 * MS, 0, 0, alloc, &tempBuffer, e_rr))
+				gotoIfError3(clean, File_getInfo(&resolved, &fileInfo, &alloc, e_rr));
+				gotoIfError3(clean, File_read(&resolved, 100 * MS, 0, 0, &fileHandleType, &tempBuffer, e_rr));
 
 				Ns timestamp = fileInfo.timestamp;
-				FileInfo_free(&fileInfo, alloc);
+				FileInfo_free(&fileInfo, &alloc);
 
 				if(Buffer_length(tempBuffer) >> 32)
 					retError(clean, Error_outOfBounds(
 						0, Buffer_length(tempBuffer), U32_MAX,
 						"IncludeHandler::LoadSource CreateBlobFromPinned requires 32-bit buffers max"
-					))
+					));
 
-				gotoIfError2(clean, CharString_createCopy(
+				gotoIfError3(clean, CharString_createCopy(
 					CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
-					alloc,
-					&tempFile
-				))
+					&alloc,
+					&tempFile,
+					e_rr
+				));
 
 				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
-					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
+					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
 				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 
@@ -305,12 +317,12 @@ public:
 
 				//Move buffer to includedData
 
-				Buffer_free(&tempBuffer, alloc);
+				Buffer_free(&tempBuffer, &alloc);
 
 				inc.includeInfo.file = resolved;
 				inc.data = tempFile;
 
-				gotoIfError2(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				gotoIfError3(clean, ListIncludedFile_pushBack(&includedFiles, inc, &alloc, e_rr));
 				resolved = CharString_createNull();
 				tempFile = CharString_createNull();
 
@@ -318,47 +330,47 @@ public:
 
 				CharString tmpTmp = CharString_createNull();
 
-				if(CharString_equalsCStringInsensitive(resolved, "@resources.hlsli"))
+				if(CharString_equalsCStringInsensitive(&resolved, "@resources.hlsli"))
 					tmpTmp = CharString_createRefCStrConst(resources);
 
-				else if(CharString_equalsCStringInsensitive(resolved, "@types.hlsli"))
+				else if(CharString_equalsCStringInsensitive(&resolved, "@types.hlsli"))
 					tmpTmp = CharString_createRefCStrConst(types);
 
-				else if(CharString_equalsCStringInsensitive(resolved, "@nvShaderExtnEnums.h"))
+				else if(CharString_equalsCStringInsensitive(&resolved, "@nvShaderExtnEnums.h"))
 					tmpTmp = CharString_createRefCStrConst(nvShaderExtnEnums);
 
-				else if(CharString_equalsCStringInsensitive(resolved, "@nvHLSLExtnsInternal.h")) {
+				else if(CharString_equalsCStringInsensitive(&resolved, "@nvHLSLExtnsInternal.h")) {
 					
 					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
 
 					CharString tmp = CharString_createRefCStrConst(nvHLSLExtnsInternal);
-					gotoIfError2(clean, CharString_createCopy(tmp, alloc, &tempFile))
+					gotoIfError3(clean, CharString_createCopy(tmp, &alloc, &tempFile, e_rr));
 
 					tmp = CharString_createRefCStrConst(nvHLSLExtnsInternal2);
-					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
+					gotoIfError3(clean, CharString_appendString(&tempFile, &tmp, &alloc, e_rr));
 				}
 
-				else if(CharString_equalsStringInsensitive(resolved, "@nvHLSLExtns.h")) {
+				else if(CharString_equalsCStringInsensitive(&resolved, "@nvHLSLExtns.h")) {
 
 					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
 
 					CharString tmp = CharString_createRefCStrConst(nvHLSLExtns);
-					gotoIfError2(clean, CharString_createCopy(tmp, alloc, &tempFile))
+					gotoIfError3(clean, CharString_createCopy(tmp, &alloc, &tempFile, e_rr));
 
 					tmp = CharString_createRefCStrConst(nvHLSLExtns2);
-					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
+					gotoIfError3(clean, CharString_appendString(&tempFile, &tmp, &alloc, e_rr));
 
 					tmp = CharString_createRefCStrConst(nvHLSLExtns3);
-					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
+					gotoIfError3(clean, CharString_appendString(&tempFile, &tmp, &alloc, e_rr));
 				}
 
-				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"))
+				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"));
 
 				if(tmpTmp.ptr)
-					gotoIfError2(clean, CharString_createCopy(tmpTmp, alloc, &tempFile))
+					gotoIfError3(clean, CharString_createCopy(tmpTmp, &alloc, &tempFile, e_rr));
 
 				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
-					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
+					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"));
 
 				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 
@@ -375,13 +387,13 @@ public:
 				inc.globalCounter = 1;
 				inc.data = tempFile;
 
-				gotoIfError2(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				gotoIfError3(clean, ListIncludedFile_pushBack(&includedFiles, inc, &alloc, e_rr));
 				resolved = CharString_createNull();
 				tempFile = CharString_createNull();
 			}
 
 			if((i >> 6) >= isPresent.length)
-				gotoIfError2(clean, ListU64_pushBack(&isPresent, 0, alloc))
+				gotoIfError3(clean, ListU64_pushBack(&isPresent, 0, &alloc, e_rr));
 
 			hr = utils->CreateBlobFromPinned(
 				includedFiles.ptr[i].data.ptr, (U32) CharString_length(includedFiles.ptr[i].data), DXC_CP_UTF8, &encoding
@@ -405,11 +417,11 @@ public:
 		if(encoding)
 			encoding->Release();
 
-		FileInfo_free(&fileInfo, alloc);
-		CharString_free(&resolved, alloc);
-		CharString_free(&fileName, alloc);
-		CharString_free(&tempFile, alloc);
-		Buffer_free(&tempBuffer, alloc);
+		FileInfo_free(&fileInfo, &alloc);
+		CharString_free(&resolved, &alloc);
+		CharString_free(&fileName, &alloc);
+		CharString_free(&tempFile, &alloc);
+		Buffer_free(&tempBuffer, &alloc);
 		return hr;
 	}
 
@@ -447,7 +459,7 @@ Bool Compiler_setup(Error *e_rr) {
 	else acq = SpinLock_lock(&lockThread, U64_MAX);
 
 	if(!hasInitialized)
-		retError(clean, Error_invalidState(0, "Compiler_setup() one of the other threads couldn't initialize DXC"))
+		retError(clean, Error_invalidState(0, "Compiler_setup() one of the other threads couldn't initialize DXC"));
 
 clean:
 
@@ -462,15 +474,15 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 	Bool s_uccess = true;
 	CompilerInterfaces *interfaces = NULL;
 
-	gotoIfError3(clean, Compiler_setup(e_rr))
+	gotoIfError3(clean, Compiler_setup(e_rr));
 
 	if(!comp)
-		retError(clean, Error_nullPointer(1, "Compiler_create()::comp is required"))
+		retError(clean, Error_nullPointer(1, "Compiler_create()::comp is required"));
 
 	interfaces = (CompilerInterfaces*) comp->interfaces;
 
 	if(interfaces->utils)
-		retError(clean, Error_alreadyDefined(1, "Compiler_create()::comp must be empty"))
+		retError(clean, Error_alreadyDefined(1, "Compiler_create()::comp must be empty"));
 
 	try {
 
@@ -485,14 +497,14 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 		HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&interfaces->utils));
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created"))
+			retError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created"));
 
 		//Create reflector
 
 		hr = DxcCreateInstance(CLSID_DxcReflector, IID_PPV_ARGS(&interfaces->reflector));
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_create() IHLSLReflector couldn't be created"))
+			retError(clean, Error_invalidState(0, "Compiler_create() IHLSLReflector couldn't be created"));
 
 		//Create include handler
 
@@ -503,10 +515,10 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 		hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&interfaces->compiler));
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"))
+			retError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"));
 
 	} catch (...) {
-		retError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"))
+		retError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"));
 	}
 
 clean:
@@ -550,14 +562,14 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 	ListIncludedFile files = ListIncludedFile{};
 
 	if(!comp || !infos)
-		retError(clean, Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required"))
+		retError(clean, Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required"));
 
 	interfaces = (CompilerInterfaces*) comp->interfaces;
 
 	if(!interfaces->includeHandler)
 		retError(clean, Error_nullPointer(
 			!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp->interfaces includeHandler is missing"
-		))
+		));
 
 	files = interfaces->includeHandler->getIncludedFiles();
 
@@ -572,7 +584,7 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 
 		for(; j < infos->length; ++j)
 			if(
-				CharString_equalsStringSensitive(infos->ptr[j].file, info.includeInfo.file) &&
+				CharString_equalsStringSensitive(&infos->ptr[j].file, &info.includeInfo.file) &&
 				infos->ptr[j].crc32c == info.includeInfo.crc32c && infos->ptr[j].fileSize == info.includeInfo.fileSize
 			)
 				break;
@@ -581,11 +593,11 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 
 		if(j == infos->length) {
 
-			gotoIfError2(clean, CharString_createCopy(info.includeInfo.file, alloc, &tmp))
+			gotoIfError3(clean, CharString_createCopy(info.includeInfo.file, &alloc, &tmp, e_rr));
 
 			info.includeInfo.counter = info.globalCounter;
 			info.includeInfo.file = tmp;
-			gotoIfError2(clean, ListIncludeInfo_pushBack(infos, info.includeInfo, alloc))
+			gotoIfError3(clean, ListIncludeInfo_pushBack(infos, info.includeInfo, &alloc, e_rr));
 			tmp = CharString_createNull();
 		}
 
@@ -599,7 +611,7 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 	}
 
 clean:
-	CharString_free(&tmp, alloc);
+	CharString_free(&tmp, &alloc);
 	return s_uccess;
 }
 
@@ -634,15 +646,15 @@ clean:
 		ListU16PtrConst strings = ListU16PtrConst{}
 
 	#define Compiler_freeStrings                                                                        \
-		ListU16_free(&tempStrUTF16, alloc);                                                                \
-		ListListU16_freeUnderlying(&stringsUTF16, alloc);                                                \
-		ListU16PtrConst_free(&strings, alloc)
+		ListU16_free(&tempStrUTF16, &alloc);                                                                \
+		ListListU16_freeUnderlying(&stringsUTF16, &alloc);                                                \
+		ListU16PtrConst_free(&strings, &alloc)
 
 	#define Compiler_convertToWString(strs, label)                                                         \
 		for(U64 ii = 0; ii < strs.length; ++ii) {                                                        \
-			gotoIfError2(label, CharString_toUTF16(strs.ptr[ii], alloc, &tempStrUTF16))                    \
-			gotoIfError2(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, alloc))            \
-			gotoIfError2(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc))                \
+			gotoIfError3(label, CharString_toUTF16(strs.ptr[ii], &alloc, &tempStrUTF16, e_rr));                    \
+			gotoIfError3(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, &alloc, e_rr));            \
+			gotoIfError3(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, &alloc, e_rr));                \
 			tempStrUTF16 = ListU16{};                                                                    \
 		}
 #else
@@ -652,15 +664,15 @@ clean:
 		ListU32PtrConst strings = ListU32PtrConst{}
 
 	#define Compiler_freeStrings                                                                        \
-		ListU32_free(&tempStrUTF32, alloc);                                                                \
-		ListListU32_freeUnderlying(&stringsUTF32, alloc);                                                \
-		ListU32PtrConst_free(&strings, alloc)
+		ListU32_free(&tempStrUTF32, &alloc);                                                                \
+		ListListU32_freeUnderlying(&stringsUTF32, &alloc);                                                \
+		ListU32PtrConst_free(&strings, &alloc)
 
 	#define Compiler_convertToWString(strs, label)                                                         \
 		for(U64 ii = 0; ii < strs.length; ++ii) {                                                        \
-			gotoIfError2(label, CharString_toUTF32(strs.ptr[ii], alloc, &tempStrUTF32))                    \
-			gotoIfError2(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, alloc))            \
-			gotoIfError2(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc))                \
+			gotoIfError3(label, CharString_toUTF32(strs.ptr[ii], &alloc, &tempStrUTF32, e_rr));                    \
+			gotoIfError3(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, &alloc, e_rr));            \
+			gotoIfError3(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, &alloc, e_rr));                \
 			tempStrUTF32 = ListU32{};                                                                    \
 		}
 #endif
@@ -677,11 +689,11 @@ Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, 
 	if(CharString_length(settings.includeDir)) {
 
 		gotoIfError3(clean, File_resolve(
-			settings.includeDir, &isVirtual, 256, Platform_instance->defaultDir, alloc, &tempStr, e_rr
-		))
+			&settings.includeDir, &isVirtual, 256, &Platform_instance->defaultDir, &alloc, &tempStr, e_rr
+		));
 
-		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
-		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))
+		gotoIfError3(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), &alloc, e_rr));
+		gotoIfError3(clean, ListCharString_pushBack(dst, tempStr, &alloc, e_rr));
 		tempStr = CharString_createNull();
 	}
 
@@ -690,23 +702,23 @@ Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, 
 	if(CharString_length(settings.path)) {
 
 		gotoIfError3(clean, File_resolve(
-			settings.path, &isVirtual, 256, Platform_instance->defaultDir, alloc, &tempStr, e_rr
-		))
+			&settings.path, &isVirtual, 256, &Platform_instance->defaultDir, &alloc, &tempStr, e_rr
+		));
 
-		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))
+		gotoIfError3(clean, ListCharString_pushBack(dst, tempStr, &alloc, e_rr));
 		tempStr = CharString_createRefStrConst(tempStr);
 
-		if(!CharString_cutAfterLastSensitive(tempStr, '/', &tempStr2))
-			retError(clean, Error_invalidState(0, "Compiler_setupIncludePaths() can't find parent directory"))
+		if(!CharString_cutAfterLastSensitive(&tempStr, '/', &tempStr2))
+			retError(clean, Error_invalidState(0, "Compiler_setupIncludePaths() can't find parent directory"));
 
-		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
-		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr2, alloc))
+		gotoIfError3(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), &alloc, e_rr));
+		gotoIfError3(clean, ListCharString_pushBack(dst, tempStr2, &alloc, e_rr));
 		tempStr2 = tempStr = CharString_createNull();
 	}
 
 clean:
-	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr2, alloc);
+	CharString_free(&tempStr, &alloc);
+	CharString_free(&tempStr2, &alloc);
 	return s_uccess;
 }
 
@@ -716,7 +728,7 @@ Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler
 	CharString tempStr = CharString_createNull();
 	ListIncludedFile files = ListIncludedFile{};
 
-	gotoIfError2(clean, ListIncludeInfo_resize(&result->includeInfo, includeHandler->getCounter(), alloc))
+	gotoIfError3(clean, ListIncludeInfo_resize(&result->includeInfo, includeHandler->getCounter(), &alloc, e_rr));
 
 	files = includeHandler->getIncludedFiles();
 
@@ -724,7 +736,7 @@ Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler
 		if (files.ptr[i].includeInfo.counter) {        //Exclude inactive includes
 
 			IncludeInfo copy = files.ptr[i].includeInfo;
-			gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
+			gotoIfError3(clean, CharString_createCopy(copy.file, &alloc, &tempStr, e_rr));
 
 			copy.file = tempStr;
 			result->includeInfo.ptrNonConst[j] = copy;
@@ -734,13 +746,13 @@ Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler
 		}
 
 clean:
-	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr, &alloc);
 	return s_uccess;
 }
 
 Bool Compiler_registerArgStr(ListCharString *strings, CharString str, Allocator alloc, Error *e_rr) {
 	Bool s_uccess = true;
-	gotoIfError2(clean, ListCharString_pushBack(strings, str, alloc))
+	gotoIfError3(clean, ListCharString_pushBack(strings, str, &alloc, e_rr));
 clean:
 	return s_uccess;
 }
@@ -760,21 +772,21 @@ Bool Compiler_validateGroupSize(U32 threads[3], Error *e_rr) {
 	U64 totalGroup = 0;
 
 	if(!threads)
-		retError(clean, Error_nullPointer(0, "Compiler_validateGroupSize() invalid threads"))
+		retError(clean, Error_nullPointer(0, "Compiler_validateGroupSize() invalid threads"));
 
 	totalGroup = (U64)threads[0] * threads[1] * threads[2];
 
 	if(!totalGroup)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() needs group size for compute"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() needs group size for compute"));
 
 	if(totalGroup > 512)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count out of bounds (512)"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count out of bounds (512)"));
 
 	if(U32_max(threads[0], threads[1]) > 512)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count x or y out of bounds (512)"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count x or y out of bounds (512)"));
 
 	if(threads[2] > 64)
-		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count z out of bounds (64)"))
+		retError(clean, Error_invalidOperation(2, "Compiler_validateGroupSize() group count z out of bounds (64)"));
 
 clean:
 	return s_uccess;
@@ -788,7 +800,7 @@ typedef union TempInOutput {
 Bool Compiler_findEntry(ListSHEntryRuntime entry, CharString name, SHEntryRuntime **ptr, Error *e_rr) {
 
 	for(U64 i = 0; i < entry.length; ++i)
-		if (CharString_equalsStringSensitive(entry.ptr[i].entry.name, name)) {
+		if (CharString_equalsStringSensitive(&entry.ptr[i].entry.name, &name)) {
 			*ptr = entry.ptrNonConst + i;
 			return true;
 		}
@@ -825,16 +837,16 @@ Bool Compiler_finalizeEntrypoint(
 	if(!localSize || !inputs || !outputs || !uniqueSemantics || !inputSemantics || !outputSemantics)
 		retError(clean, Error_nullPointer(
 			0, "Compiler_finalizeEntrypoint() localSize, inputs, outputs, unique/output/inputSemantics are required"
-		))
+		));
 
 	if(payloadSize > 128)
-		retError(clean, Error_outOfBounds(0, payloadSize, 128, "Compiler_finalizeEntrypoint() payload out of bounds"))
+		retError(clean, Error_outOfBounds(0, payloadSize, 128, "Compiler_finalizeEntrypoint() payload out of bounds"));
 
 	if(intersectSize > 32)
-		retError(clean, Error_outOfBounds(0, intersectSize, 32, "Compiler_finalizeEntrypoint() attribute out of bounds"))
+		retError(clean, Error_outOfBounds(0, intersectSize, 32, "Compiler_finalizeEntrypoint() attribute out of bounds"));
 
 	if(localSize[0] || localSize[1] || localSize[2])
-		gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr))
+		gotoIfError3(clean, Compiler_validateGroupSize(localSize, e_rr));
 
 	TempInOutput input, output;
 	TempInOutput inputSemantic, outputSemantic;
@@ -846,12 +858,12 @@ Bool Compiler_finalizeEntrypoint(
 		outputSemantic.a[i] = (U8) outputSemantics[i];
 	}
 
-	gotoIfError3(clean, Compiler_findEntry(entries, entryName, &entry, e_rr))
+	gotoIfError3(clean, Compiler_findEntry(entries, entryName, &entry, e_rr));
 
 	if(lock) {
 		acq = SpinLock_lock(lock, 1 * SECOND);
 		if(acq < ELockAcquire_Success)
-			retError(clean, Error_invalidState(0, "Compiler_finalizeEntrypoint() couldn't acquire spin lock"))
+			retError(clean, Error_invalidState(0, "Compiler_finalizeEntrypoint() couldn't acquire spin lock"));
 	}
 
 	didInit = false;
@@ -884,7 +896,7 @@ Bool Compiler_finalizeEntrypoint(
 		entry->entry.outputSemanticNamesU64[0] = outputSemantic.aU64[0];
 		entry->entry.outputSemanticNamesU64[1] = outputSemantic.aU64[1];
 
-		gotoIfError3(clean, ListCharString_move(uniqueSemantics, alloc, &entry->entry.semanticNames, e_rr))
+		gotoIfError3(clean, ListCharString_move(uniqueSemantics, &alloc, &entry->entry.semanticNames, e_rr));
 
 		entry->isInitializedFlags |= 1;
 	}
@@ -908,12 +920,13 @@ Bool Compiler_finalizeEntrypoint(
 		entry->entry.outputSemanticNamesU64[0] != outputSemantic.aU64[0] ||
 		entry->entry.outputSemanticNamesU64[1] != outputSemantic.aU64[1] ||
 		entry->entry.semanticNames.length != uniqueSemantics->length
-	)
+	) {
 		retError(clean, Error_invalidState(
 			0,
 			"Compiler_finalizeEntrypoint() had two mismatching inputs from reflection:\n"
 			"numthreads, payloadSize, intersectSize, waveSize, inputs or outputs"
-		))
+		));
+	}
 
 	//More thorough compare with semantics
 
@@ -922,11 +935,11 @@ Bool Compiler_finalizeEntrypoint(
 		//TODO: Semantics could be ordered differently, might still be okay to merge?
 
 		for(U64 i = 0; i < entry->entry.semanticNames.length; ++i)
-			if(!CharString_equalsStringSensitive(entry->entry.semanticNames.ptr[i], uniqueSemantics->ptr[i]))
+			if(!CharString_equalsStringSensitive(&entry->entry.semanticNames.ptr[i], &uniqueSemantics->ptr[i]))
 				retError(clean, Error_invalidState(
 					0,
 					"Compiler_finalizeEntrypoint() had two mismatching semantic names"
-				))
+				));
 	}
 
 clean:
@@ -934,7 +947,7 @@ clean:
 		SpinLock_unlock(lock);
 
 	if(!didInit && s_uccess)        //Avoid memleak
-		ListCharString_freeUnderlying(uniqueSemantics, alloc);
+		ListCharString_freeUnderlying(uniqueSemantics, &alloc);
 
 	return s_uccess;
 }
@@ -966,18 +979,18 @@ Bool Compiler_compile(
 	Compiler_defineStrings;
 
 	if(!interfaces->utils || !result)
-		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"))
+		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"));
 
 	if(!CharString_length(settings.string))
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings.string is required"))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings.string is required"));
 
 	if(toCompile.defines.length & 1)
-		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile.defines.length should be aligned to 2"))
+		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile.defines.length should be aligned to 2"));
 
 	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"));
 
-	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
+	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr));
 
 	try {
 
@@ -994,42 +1007,43 @@ Bool Compiler_compile(
 		Bool isRt = !!(toCompile.extensions & ESHExtension_RayQuery);
 
 		if(settings.isRt) {
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC_EXT_RAYTRACING", alloc, e_rr));
 			isRt = true;
 		}
 
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fhlsl-unused-resource-bindings=reserve-all", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fhlsl-unused-resource-bindings=reserve-all", alloc, e_rr));
 
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-O3", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr));
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr));
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-O3", alloc, e_rr));
 
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr));
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr));
 
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wconversion", alloc, e_rr))
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wdouble-promotion", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wconversion", alloc, e_rr));
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wdouble-promotion", alloc, e_rr));
 
 		if(settings.debug || requiresLink) {
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qembed_debug", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr));
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qembed_debug", alloc, e_rr));
 		}
 
 		if(toCompile.extensions & ESHExtension_16BitTypes)
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
 
 		if (settings.outputType == ESHBinaryType_SPIRV) {
 
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr));
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr));
 
 			if(settings.debug)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-debug=vulkan-with-source", alloc, e_rr))
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-debug=vulkan-with-source", alloc, e_rr));
 
-			if(!isRt)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr))
+			if(!isRt) {
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr));
+			}
 
-			else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1spirv1.4", alloc, e_rr))
+			else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1spirv1.4", alloc, e_rr));
 				
 			if(
 				toCompile.stageType == ESHPipelineStage_Vertex ||
@@ -1038,17 +1052,17 @@ Bool Compiler_compile(
 				toCompile.stageType == ESHPipelineStage_MeshExt ||
 				settings.isLib
 			)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr))
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr));
 
 			if(toCompile.stageType == ESHPipelineStage_Pixel || settings.isLib)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-position-w", alloc, e_rr))
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-position-w", alloc, e_rr));
 
 			if(CharString_length(toCompile.entrypoint))
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-entrypoint-name=main", alloc, e_rr))
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-entrypoint-name=main", alloc, e_rr));
 
 			gotoIfError3(clean, Compiler_registerArgCStr(
 				&stringsUTF8, "-fspv-extension=SPV_EXT_descriptor_indexing", alloc, e_rr
-			))
+			));
 
 			if(
 				toCompile.stageType >= ESHPipelineStage_RtStartExt &&
@@ -1056,7 +1070,7 @@ Bool Compiler_compile(
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_tracing", alloc, e_rr
-				))
+				));
 
 			if(
 				toCompile.stageType == ESHPipelineStage_MeshExt ||
@@ -1064,74 +1078,74 @@ Bool Compiler_compile(
 			)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_mesh_shader", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & ESHExtension_ComputeDeriv)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_compute_shader_derivatives", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & ESHExtension_16BitTypes)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_16bit_storage", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & ESHExtension_Multiview)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & ESHExtension_RayReorder)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_shader_invocation_reorder", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & ESHExtension_RayMotionBlur)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_ray_tracing_motion_blur", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & ESHExtension_RayQuery)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & ESHExtension_RayMicromapOpacity)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_opacity_micromap", alloc, e_rr
-				))
+				));
 
 			if(toCompile.extensions & (ESHExtension_AtomicF32 | ESHExtension_AtomicF64)) {
 
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_add", alloc, e_rr
-				))
+				));
 
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_min_max", alloc, e_rr
-				))
+				));
 			}
 		}
 
 		else {
 
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-auto-binding-space", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "0", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-auto-binding-space", alloc, e_rr));
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "0", alloc, e_rr));
 
 			if(toCompile.extensions & ESHExtension_PAQ)
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr))
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr));
 		}
 
 		//-E <entrypointName>
 
 		if (CharString_length(toCompile.entrypoint)) {
-			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-E", alloc, e_rr))
-			gotoIfError3(clean, Compiler_registerArgStrConst(&stringsUTF8, toCompile.entrypoint, alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-E", alloc, e_rr));
+			gotoIfError3(clean, Compiler_registerArgStrConst(&stringsUTF8, toCompile.entrypoint, alloc, e_rr));
 		}
 
 		//-T <target>
 
-		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
 
 		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix(
 			settings.isLib ? ESHPipelineStage_Count : (ESHPipelineStage) toCompile.stageType
@@ -1140,8 +1154,8 @@ Bool Compiler_compile(
 		U32 major = toCompile.shaderVersion >> 8;
 		U32 minor = (U8)toCompile.shaderVersion;
 
-		gotoIfError2(clean, CharString_format(alloc, &tempStr, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor))
-		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+		gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor));
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
 		tempStr = CharString_createNull();
 
 		//$$<X> foreach uniform
@@ -1154,9 +1168,7 @@ Bool Compiler_compile(
 			
 				CharString uniformName = toCompile.uniforms.ptr[i].name;
 
-				gotoIfError2(clean, CharString_format(
-
-					alloc, &tempStr,
+				gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr,
 
 					"-D$$%.*s=($$specConst_%.*s())",
 
@@ -1165,9 +1177,9 @@ Bool Compiler_compile(
 
 					(int) CharString_length(uniformName),
 					uniformName.ptr
-				))
+				));
 
-				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
 				tempStr = CharString_createNull();
 			}
 
@@ -1183,13 +1195,14 @@ Bool Compiler_compile(
 
 		if (toCompile.uniforms.length) {
 
-			gotoIfError2(clean, CharString_createCopy(
+			gotoIfError3(clean, CharString_createCopy(
 				CharString_createRefCStrConst(
 					isDXIL ? "#line 1 \"Spec constants (DXIL)\"\n" : "#line 1 \"Spec constants (SPIRV)\"\n"
 				),
-				alloc,
-				&tmpFile
-			))
+				&alloc,
+				&tmpFile,
+				e_rr
+			));
 
 			Bool has16Bit = toCompile.extensions & ESHExtension_16BitTypes;
 			Bool hasInt64 = toCompile.extensions & ESHExtension_I64;
@@ -1211,37 +1224,39 @@ Bool Compiler_compile(
 				SHUniformRuntime uniform = toCompile.uniforms.ptr[i];
 				ETypeId type = ETypeId_arr[uniform.typeIdShort];
 
-				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, alloc, &tempStr, e_rr))
+				gotoIfError3(clean, CharString_createFromETypeIdHLSL(type, flags, &alloc, &tempStr, e_rr));
 
-				if(isDXIL)
-					gotoIfError2(clean, CharString_format(
-						alloc, &tempStr1, "%s $$specConst_%.*s();\n",
+				if(isDXIL) {
+					gotoIfError3(clean, CharString_format(&alloc, &tempStr1, e_rr, "%s $$specConst_%.*s();\n",
 						tempStr.ptr,
 						(int) CharString_length(uniform.name), uniform.name.ptr
-					))
+					));
+				}
 
 				else {
 
 					SHValue value = SHValue{};
-					gotoIfError3(clean, SHValue_stringifyHLSL(&value, type, flags, alloc, &tempStr2, e_rr))
+					gotoIfError3(clean, SHValue_stringifyHLSL(&value, type, flags, &alloc, &tempStr2, e_rr));
 
-					gotoIfError2(clean, CharString_format(
-						alloc, &tempStr1, "[[vk::constant_id(%" PRIu64 ")]] const %s $$%.*s = %s;\n",
+					gotoIfError3(clean, CharString_format(&alloc, &tempStr1, e_rr, "[[vk::constant_id(%" PRIu64 ")]] const %s $$%.*s = %s;\n",
 						i,
 						tempStr.ptr,
 						(int) CharString_length(uniform.name), uniform.name.ptr,
 						tempStr2.ptr
-					))
+					));
 				}
 
-				gotoIfError2(clean, CharString_appendString(&tmpFile, tempStr1, alloc))
-				CharString_free(&tempStr, alloc);
-				CharString_free(&tempStr1, alloc);
-				CharString_free(&tempStr2, alloc);
+				gotoIfError3(clean, CharString_appendString(&tmpFile, &tempStr1, &alloc, e_rr));
+				CharString_free(&tempStr, &alloc);
+				CharString_free(&tempStr1, &alloc);
+				CharString_free(&tempStr2, &alloc);
 			}
 
-			gotoIfError2(clean, CharString_appendString(&tmpFile, CharString_createRefCStrConst("#line 1\n"), alloc))
-			gotoIfError2(clean, CharString_appendString(&tmpFile, settings.string, alloc))
+			{
+				const CharString lineStr = CharString_createRefCStrConst("#line 1\n");
+				gotoIfError3(clean, CharString_appendString(&tmpFile, &lineStr, &alloc, e_rr));
+			}
+			gotoIfError3(clean, CharString_appendString(&tmpFile, &settings.string, &alloc, e_rr));
 		}
 
 		//$<X> foreach define
@@ -1251,9 +1266,7 @@ Bool Compiler_compile(
 			CharString defineName  = toCompile.defines.ptr[i];
 			CharString defineValue = toCompile.defines.ptr[i + 1];
 
-			gotoIfError2(clean, CharString_format(
-
-				alloc, &tempStr,
+			gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr,
 
 				!CharString_length(defineValue) ? "-D$%.*s" : "-D$%.*s=%.*s",
 
@@ -1262,9 +1275,9 @@ Bool Compiler_compile(
 
 				(int) CharString_length(defineValue),
 				defineValue.ptr
-			))
+			));
 
-			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
 			tempStr = CharString_createNull();
 		}
 
@@ -1272,8 +1285,8 @@ Bool Compiler_compile(
 
 		for(U32 i = 0; i < lastExtension; ++i)
 			if ((toCompile.extensions >> i) & 1) {
-				gotoIfError2(clean, CharString_format(alloc, &tempStr, "-D__OXC_EXT_%s", ESHExtension_defines[i]))
-				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+				gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
 				tempStr = CharString_createNull();
 			}
 
@@ -1294,8 +1307,8 @@ Bool Compiler_compile(
 		};
 
 		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-			gotoIfError2(clean, CharString_format(alloc, &tempStr, formats[i], formatInts[i]))
-			gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tempStr, alloc))
+			gotoIfError3(clean, CharString_format(&alloc, &tempStr, e_rr, formats[i], formatInts[i]));
+			gotoIfError3(clean, ListCharString_pushBack(&stringsUTF8, tempStr, &alloc, e_rr));
 			tempStr = CharString_createNull();
 		}
 
@@ -1317,16 +1330,16 @@ Bool Compiler_compile(
 		);
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(0, "Compiler_compile() \"Compile\" failed"))
+			retError(clean, Error_invalidState(0, "Compiler_compile() \"Compile\" failed"));
 
 		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(1, "Compiler_compile() fetch errors failed"))
+			retError(clean, Error_invalidState(1, "Compiler_compile() fetch errors failed"));
 
 		if(error && error->GetStringLength()) {
 			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
-			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
+			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr));
 		}
 
 		if(error) {
@@ -1340,22 +1353,23 @@ Bool Compiler_compile(
 		hr = dxcResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&resultBlob), NULL);
 
 		if(FAILED(hr))
-			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"))
+			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"));
 
-		gotoIfError2(clean, Buffer_createCopy(
+		gotoIfError3(clean, Buffer_createCopy(
 			Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
-			alloc,
-			&result->binary
-		))
+			&alloc,
+			&result->binary,
+			e_rr
+		));
 
 		if (settings.infoAboutIncludes)
-			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))
+			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr));
 
 		result->type = ECompileResultType_Binary;
 		result->isSuccess = true;
 
 	} catch (std::exception&) {
-		retError(clean, Error_invalidState(1, "Compiler_compile() raised an internal exception"))
+		retError(clean, Error_invalidState(1, "Compiler_compile() raised an internal exception"));
 	}
 
 clean:
@@ -1373,11 +1387,11 @@ clean:
 		error->Release();
 
 	Compiler_freeStrings;
-	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr1, alloc);
-	CharString_free(&tempStr2, alloc);
-	CharString_free(&tmpFile, alloc);
-	ListCharString_freeUnderlying(&stringsUTF8, alloc);
+	CharString_free(&tempStr, &alloc);
+	CharString_free(&tempStr1, &alloc);
+	CharString_free(&tempStr2, &alloc);
+	CharString_free(&tmpFile, &alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, &alloc);
 	return s_uccess;
 }
 
@@ -1387,7 +1401,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 	Buffer buf = CharString_bufferConst(stageName);
 	U64 stageNameLen = CharString_length(stageName);
-	U32 c8x4 = Buffer_readU32(buf, 0, NULL);
+	U32 c8x4 = Buffer_readU32(buf, 0, NULL, NULL);
 
 	switch (c8x4) {
 
@@ -1396,14 +1410,14 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('v', 'e', 'r', 't'):        //vertex
 
-			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('e', 'x'))
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('e', 'x'))
 				return ESHPipelineStage_Vertex;
 
 			break;
 
 		case C8x4('d', 'o', 'm', 'a'):        //domain
 
-			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 'n'))
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('i', 'n'))
 				return ESHPipelineStage_Domain;
 
 			break;
@@ -1417,14 +1431,14 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('g', 'e', 'o', 'm'):        //geometry
 
-			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('e', 't', 'r', 'y'))
+			if(stageNameLen == 8 && Buffer_readU32(buf, 4, NULL, NULL) == C8x4('e', 't', 'r', 'y'))
 				return ESHPipelineStage_GeometryExt;
 
 			break;
 
 		case C8x4('c', 'o', 'm', 'p'):        //compute
 
-			if(stageNameLen == 7 && Buffer_readU32(buf, 3, NULL) == C8x4('p', 'u', 't', 'e'))
+			if(stageNameLen == 7 && Buffer_readU32(buf, 3, NULL, NULL) == C8x4('p', 'u', 't', 'e'))
 				return ESHPipelineStage_Compute;
 
 			break;
@@ -1453,14 +1467,14 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('a', 'n', 'y', 'h'):        //anyhit
 
-			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('i', 't'))
+			if(stageNameLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('i', 't'))
 				return ESHPipelineStage_AnyHitExt;
 
 			break;
 
 		case C8x4('c', 'l', 'o', 's'):        //closesthit
 
-			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't'))
+			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL, NULL) == C8x8('o', 's', 'e', 's', 't', 'h', 'i', 't'))
 				return ESHPipelineStage_ClosestHitExt;
 
 			break;
@@ -1469,7 +1483,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 			if(
 				stageNameLen == 13 &&
-				Buffer_readU64(buf, 4, NULL) == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
+				Buffer_readU64(buf, 4, NULL, NULL) == C8x8('e', 'n', 'e', 'r', 'a', 't', 'i', 'o') &&
 				stageName.ptr[12] == 'n'
 			)
 				return ESHPipelineStage_RaygenExt;
@@ -1478,7 +1492,7 @@ ESHPipelineStage Compiler_parseStage(CharString stageName) {
 
 		case C8x4('i', 'n', 't', 'e'):        //intersection
 
-			if(stageNameLen == 12 && Buffer_readU64(buf, 4, NULL) == C8x8('r', 's', 'e', 'c', 't', 'i', 'o', 'n'))
+			if(stageNameLen == 12 && Buffer_readU64(buf, 4, NULL, NULL) == C8x8('r', 's', 'e', 'c', 't', 'i', 'o', 'n'))
 				return ESHPipelineStage_IntersectionExt;
 
 			break;
@@ -1498,17 +1512,17 @@ ESHVendor Compiler_parseVendor(CharString vendor) {
 			return ESHVendor_Count;
 
 		case 2:        //NV
-			return Buffer_readU16(buf, 0, NULL) == C8x2('N', 'V') ? ESHVendor_NV : ESHVendor_Count;
+			return Buffer_readU16(buf, 0, NULL, NULL) == C8x2('N', 'V') ? ESHVendor_NV : ESHVendor_Count;
 
 		case 3:        //AMD, ARM
-			switch (Buffer_readU16(buf, 0, NULL)) {
+			switch (Buffer_readU16(buf, 0, NULL, NULL)) {
 				default:                return ESHVendor_Count;
 				case C8x2('A', 'M'):    return vendor.ptr[2] == 'D' ? ESHVendor_AMD : ESHVendor_Count;
 				case C8x2('A', 'R'):    return vendor.ptr[2] == 'M' ? ESHVendor_ARM : ESHVendor_Count;
 			}
 
 		case 4:        //QCOM, INTC, IMGT, MSFT, APPL, SMSG, HWEI
-			switch (Buffer_readU32(buf, 0, NULL)) {
+			switch (Buffer_readU32(buf, 0, NULL, NULL)) {
 				default:                            return ESHVendor_Count;
 				case C8x4('Q', 'C', 'O', 'M'):        return ESHVendor_QCOM;
 				case C8x4('I', 'N', 'T', 'C'):        return ESHVendor_INTC;
@@ -1525,7 +1539,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 	Buffer buf = CharString_bufferConst(extensionName);
 	U64 stageNameLen = CharString_length(extensionName);
-	U16 c8x2 = Buffer_readU16(buf, 0, NULL);
+	U16 c8x2 = Buffer_readU16(buf, 0, NULL, NULL);
 
 	switch (c8x2) {
 
@@ -1543,14 +1557,14 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 		case C8x2('1', '6'):    //16BitTypes
 
-			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL) == C8x8('B', 'i', 't', 'T', 'y', 'p', 'e', 's'))
+			if(stageNameLen == 10 && Buffer_readU64(buf, 2, NULL, NULL) == C8x8('B', 'i', 't', 'T', 'y', 'p', 'e', 's'))
 				return ESHExtension_16BitTypes;
 
 			break;
 
 		case C8x2('M', 'u'):    //Multiview
 
-			if(stageNameLen == 9 && Buffer_readU64(buf, 1, NULL) == C8x8('u', 'l', 't', 'i', 'v', 'i', 'e', 'w'))
+			if(stageNameLen == 9 && Buffer_readU64(buf, 1, NULL, NULL) == C8x8('u', 'l', 't', 'i', 'v', 'i', 'e', 'w'))
 				return ESHExtension_Multiview;
 
 			break;
@@ -1559,8 +1573,8 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if(
 				stageNameLen == 12 &&
-				Buffer_readU64(buf,  2, NULL) == C8x8('m', 'p', 'u', 't', 'e', 'D', 'e', 'r') &&
-				Buffer_readU16(buf, 10, NULL) == C8x2('i', 'v')
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('m', 'p', 'u', 't', 'e', 'D', 'e', 'r') &&
+				Buffer_readU16(buf, 10, NULL, NULL) == C8x2('i', 'v')
 			)
 				return ESHExtension_ComputeDeriv;
 
@@ -1570,8 +1584,8 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if (
 				stageNameLen == 14 &&
-				Buffer_readU64(buf,  2, NULL) == C8x8('i', 't', 'e', 'M', 'S', 'T', 'e', 'x') &&
-				Buffer_readU32(buf, 10, NULL) == C8x4('t', 'u', 'r', 'e')
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('i', 't', 'e', 'M', 'S', 'T', 'e', 'x') &&
+				Buffer_readU32(buf, 10, NULL, NULL) == C8x4('t', 'u', 'r', 'e')
 			)
 				return ESHExtension_WriteMSTexture;
 
@@ -1581,9 +1595,9 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if (
 				stageNameLen == 16 &&
-				Buffer_readU64(buf,  2, NULL) == C8x8('s', 'h', 'T', 'a', 's', 'k', 'T', 'e') &&
-				Buffer_readU32(buf, 10, NULL) == C8x4('x', 'D', 'e', 'r') &&
-				Buffer_readU16(buf, 14, NULL) == C8x2('i', 'v')
+				Buffer_readU64(buf,  2, NULL, NULL) == C8x8('s', 'h', 'T', 'a', 's', 'k', 'T', 'e') &&
+				Buffer_readU32(buf, 10, NULL, NULL) == C8x4('x', 'D', 'e', 'r') &&
+				Buffer_readU16(buf, 14, NULL, NULL) == C8x2('i', 'v')
 			)
 				return ESHExtension_MeshTaskTexDeriv;
 
@@ -1592,7 +1606,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 		case C8x2('A', 't'):    //AtomicI64, AtomicF32, AtomicF64
 
 			if(stageNameLen == 9)
-				switch (Buffer_readU64(buf, 1, NULL)) {
+				switch (Buffer_readU64(buf, 1, NULL, NULL)) {
 					case C8x8('t', 'o', 'm', 'i', 'c', 'I', '6', '4'):        return ESHExtension_AtomicI64;
 					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '3', '2'):        return ESHExtension_AtomicF32;
 					case C8x8('t', 'o', 'm', 'i', 'c', 'F', '6', '4'):        return ESHExtension_AtomicF64;
@@ -1604,8 +1618,8 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			if(stageNameLen == 15) {            //SubgroupShuffle
 				if(
-					Buffer_readU64(buf, 0, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
-					Buffer_readU64(buf, 7, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
+					Buffer_readU64(buf, 0, NULL, NULL) == C8x8('S', 'u', 'b', 'g', 'r', 'o', 'u', 'p') &&
+					Buffer_readU64(buf, 7, NULL, NULL) == C8x8('p', 'S', 'h', 'u', 'f', 'f', 'l', 'e')
 				)
 					return ESHExtension_SubgroupShuffle;
 			}
@@ -1613,14 +1627,14 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			else if (stageNameLen == 18) {        //SubgroupArithmetic, SubgroupOperations
 
 				if(
-					Buffer_readU64(buf,  2, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
-					Buffer_readU64(buf, 10, NULL) == C8x8('i', 't', 'h', 'm', 'e', 't', 'i', 'c')
+					Buffer_readU64(buf,  2, NULL, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'A', 'r') &&
+					Buffer_readU64(buf, 10, NULL, NULL) == C8x8('i', 't', 'h', 'm', 'e', 't', 'i', 'c')
 				)
 					return ESHExtension_SubgroupArithmetic;
 					
 				else if(
-					Buffer_readU64(buf,  2, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'O', 'p') &&
-					Buffer_readU64(buf, 10, NULL) == C8x8('e', 'r', 'a', 't', 'i', 'o', 'n', 's')
+					Buffer_readU64(buf,  2, NULL, NULL) == C8x8('b', 'g', 'r', 'o', 'u', 'p', 'O', 'p') &&
+					Buffer_readU64(buf, 10, NULL, NULL) == C8x8('e', 'r', 'a', 't', 'i', 'o', 'n', 's')
 				)
 					return ESHExtension_SubgroupOperations;
 
@@ -1630,16 +1644,16 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 		case C8x2('R', 'a'):    //RayQuery, RayMicromapOpacity, RayMotionBlur, RayReorder
 
-			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
+			if(stageNameLen == 8 && Buffer_readU64(buf, 0, NULL, NULL) == C8x8('R', 'a', 'y', 'Q', 'u', 'e', 'r', 'y'))
 				return ESHExtension_RayQuery;
 
 			else if(stageNameLen >= 10)
-				switch (Buffer_readU64(buf, 2, NULL)) {
+				switch (Buffer_readU64(buf, 2, NULL, NULL)) {
 
 					case C8x8('y', 'M', 'i', 'c', 'r', 'o', 'm', 'a'):        //RayMicromapOpacity
 
 						if(
-							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
+							stageNameLen == 18 && Buffer_readU64(buf, 10, NULL, NULL) == C8x8('p', 'O', 'p', 'a', 'c', 'i', 't', 'y')
 						)
 							return ESHExtension_RayMicromapOpacity;
 
@@ -1647,7 +1661,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 					case C8x8('y', 'M', 'o', 't', 'i', 'o', 'n', 'B'):        //RayMotionBlur
 
-						if(stageNameLen == 13 && Buffer_readU32(buf, 10, NULL) == C8x4('B', 'l', 'u', 'r'))
+						if(stageNameLen == 13 && Buffer_readU32(buf, 10, NULL, NULL) == C8x4('B', 'l', 'u', 'r'))
 							return ESHExtension_RayMotionBlur;
 
 						break;
@@ -1675,12 +1689,12 @@ Bool Compiler_registerExtension(U32 *extensions, CharString extensionName, Error
 	if(extension >> ESHExtension_Count)
 		retError(clean, Error_invalidParameter(
 			0, 5, "Compiler_registerExtension() unrecognized extension in extension annotation"
-		))
+		));
 
 	if(*extensions & extension)
 		retError(clean, Error_invalidParameter(
 			0, 6, "Compiler_registerExtension() duplicate extension found"
-		))
+		));
 
 	*extensions |= extension;
 
@@ -1693,9 +1707,9 @@ Bool Compiler_registerExtensions(ListU32 *extensionsRegistered, U32 extensions, 
 	Bool s_uccess = true;
 
 	if(ListU32_contains(*extensionsRegistered, extensions, 0, NULL))
-		retError(clean, Error_alreadyDefined(0, "Compiler_registerExtensions() extensions already defined"))
+		retError(clean, Error_alreadyDefined(0, "Compiler_registerExtensions() extensions already defined"));
 
-	gotoIfError2(clean, ListU32_pushBack(extensionsRegistered, extensions, alloc));
+	gotoIfError3(clean, ListU32_pushBack(extensionsRegistered, extensions, &alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -1712,12 +1726,12 @@ Bool Compiler_registerVendor(U16 *vendors, CharString vendorName, Error *e_rr) {
 	if(vendor == ESHVendor_Count)
 		retError(clean, Error_invalidParameter(
 			0, 1, "Compiler_registerVendor() unrecognized vendor in vendor annotation"
-		))
+		));
 
 	if((*vendors >> vendor) & 1)
 		retError(clean, Error_invalidParameter(
 			0, 2, "Compiler_registerVendor() duplicate vendor found"
-		))
+		));
 
 	*vendors |= (U16)(1 << vendor);
 
@@ -1783,9 +1797,9 @@ Bool Compiler_registerModel(ListU16 *vendors, const C8 *strStart, const C8 *strE
 	if(ListU16_contains(*vendors, version, 0, NULL))
 		retError(clean, Error_invalidParameter(
 			0, 1, "Compiler_registerModel() model version was referenced multiple times"
-		))
+		));
 
-	gotoIfError2(clean, ListU16_pushBack(vendors, version, alloc))
+	gotoIfError3(clean, ListU16_pushBack(vendors, version, &alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -1991,7 +2005,7 @@ Bool Compiler_parseShaderStageAnnot(
 			0, 1, "Compiler_parseShaderStageAnnot() unrecognized stage in shader annotation"
 		));
 
-	gotoIfError2(clean, CharString_createCopy(functionName, alloc, &entry.entry.name));
+	gotoIfError3(clean, CharString_createCopy(functionName, &alloc, &entry.entry.name, e_rr));
 
 	entry.entry.stage = SHPipelineStage(stage);
 	entry.isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
@@ -2019,12 +2033,12 @@ Bool Compiler_parseShaderAnnot(
 	if (!annot.IsBuiltin)    //not [shader("")]
 		goto clean;
 
-	c8x4 = Buffer_readU32(buf, 0, NULL);
+	c8x4 = Buffer_readU32(buf, 0, NULL, NULL);
 
 	//[shader("vertex")]
 	// ^
 
-	if (c8x4 != C8x4('s', 'h', 'a', 'd') || Buffer_readU16(buf, 4, NULL) != C8x2('e', 'r'))
+	if (c8x4 != C8x4('s', 'h', 'a', 'd') || Buffer_readU16(buf, 4, NULL, NULL) != C8x2('e', 'r'))
 		goto clean;
 
 	str += annotLen;
@@ -2032,7 +2046,7 @@ Bool Compiler_parseShaderAnnot(
 	//[shader("vertex")]
 	//       ^
 
-	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr))
+	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr));
 	entry.isShaderAnnotation = true;
 
 clean:
@@ -2046,7 +2060,7 @@ Bool Compiler_parseStageAnnot(SHEntryRuntime &entry, CharString functionName, co
 	//[[oxc::stage("vertex")]]
 	//              ^
 
-	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr))
+	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr));
 
 	entry.isShaderAnnotation = false;
 	entry.containsGfxOrComp = true;
@@ -2064,16 +2078,16 @@ Bool Compiler_parseModelAnnot(SHEntryRuntime &entry, const C8 *&str, Allocator a
 	//oxc::model ( "6.5" )
 	//          ^^^^^^^^^^
 
-	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr))
-	gotoIfError3(clean, Compiler_consumeString(str, strStart, strEnd, e_rr))
-	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+	gotoIfError3(clean, Compiler_consumeString(str, strStart, strEnd, e_rr));
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
 		
 	//Ensure nothing is leftover
 
 	if (Compiler_skipWhitespace(str))
-		retError(clean, Error_invalidState(0, "Compiler_parseModelAnnot() expected end of token"))
+		retError(clean, Error_invalidState(0, "Compiler_parseModelAnnot() expected end of token"));
 
-	gotoIfError3(clean, Compiler_registerModel(&entry.shaderVersions, strStart, strEnd, alloc, e_rr))
+	gotoIfError3(clean, Compiler_registerModel(&entry.shaderVersions, strStart, strEnd, alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -2135,12 +2149,12 @@ Bool Compiler_parseVendorAnnot(SHEntryRuntime &entry, const C8 *&str, Error *e_r
 	//oxc::vendor ( "NV" , "AMD" )
 	//                           ^
 
-	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
 		
 	//Ensure nothing is leftover
 
 	if (Compiler_skipWhitespace(str))
-		retError(clean, Error_invalidState(0, "Compiler_parseVendorAnnot() expected end of token"))
+		retError(clean, Error_invalidState(0, "Compiler_parseVendorAnnot() expected end of token"));
 
 clean:
 	return s_uccess;
@@ -2222,18 +2236,18 @@ Bool Compiler_parseExtensionAnnot(SHEntryRuntime &entry, const C8 *&str, Allocat
 	//oxc::extension ( "16BitTypes" , "I64" )
 	//                                      ^
 
-	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
 		
 	//Ensure nothing is leftover
 
 	if (Compiler_skipWhitespace(str))
-		retError(clean, Error_invalidState(0, "Compiler_parseExtensionAnnot() expected end of token"))
+		retError(clean, Error_invalidState(0, "Compiler_parseExtensionAnnot() expected end of token"));
 
 clean:
 	if(s_uccess)
 		gotoIfError3(clean1, Compiler_registerExtensions(
 			&entry.extensions, extensions, alloc, e_rr
-		))
+		));
 
 clean1:
 	return s_uccess;
@@ -2266,7 +2280,7 @@ Bool Compiler_parseDefine(SHEntryRuntime &entry, const C8 *&str, U8 &defineCount
 
 	for(U64 i = 0; i < CharString_length(defineName); ++i)
 		if((C8_isSymbol(defineName.ptr[i]) && defineName.ptr[i] != '_') || C8_isWhitespace(defineName.ptr[i]))
-			retError(clean, Error_alreadyDefined(0, "Compiler_parseDefine() can't contain symbols or whitespace"))
+			retError(clean, Error_alreadyDefined(0, "Compiler_parseDefine() can't contain symbols or whitespace"));
 			
 	//Scan last strings for the same define
 
@@ -2275,16 +2289,16 @@ Bool Compiler_parseDefine(SHEntryRuntime &entry, const C8 *&str, U8 &defineCount
 		i != (entry.defineNameValues.length >> 1) - defineCount - 1;
 		--i
 	)
-		if (CharString_equalsStringSensitive(defineName, entry.defineNameValues.ptr[i << 1]))
-			retError(clean, Error_alreadyDefined(0, "Compiler_parseDefine() already contains define"))
+		if (CharString_equalsStringSensitive(&defineName, &entry.defineNameValues.ptr[i << 1]))
+			retError(clean, Error_alreadyDefined(0, "Compiler_parseDefine() already contains define"));
 
 	//Let caller handle invalid syntax or ,).
 	//And push current define / with empty value to allow , to work.
 
-	gotoIfError2(clean, ListCharString_pushBack(&entry.defineNameValues, defineName, alloc));
+	gotoIfError3(clean, ListCharString_pushBack(&entry.defineNameValues, defineName, &alloc, e_rr));
 
 	if (*str != '=') {
-		gotoIfError2(clean, ListCharString_pushBack(&entry.defineNameValues, defineValue, alloc));
+		gotoIfError3(clean, ListCharString_pushBack(&entry.defineNameValues, defineValue, &alloc, e_rr));
 		goto clean;
 	}
 
@@ -2296,7 +2310,7 @@ Bool Compiler_parseDefine(SHEntryRuntime &entry, const C8 *&str, U8 &defineCount
 	gotoIfError3(clean, Compiler_consumeString(str, strStart, strEnd, e_rr));
 	defineValue = CharString_createRefSizedConst(strStart, strEnd - strStart, false);
 
-	gotoIfError2(clean, ListCharString_pushBack(&entry.defineNameValues, defineValue, alloc))
+	gotoIfError3(clean, ListCharString_pushBack(&entry.defineNameValues, defineValue, &alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -2339,7 +2353,7 @@ Bool Compiler_parseDefinesAnnot(SHEntryRuntime &entry, const C8 *&str, Allocator
 	//oxc::defines ( "X" )
 	//               ^
 
-	gotoIfError3(clean, Compiler_parseDefine(entry, str, defineCount, alloc, e_rr))
+	gotoIfError3(clean, Compiler_parseDefine(entry, str, defineCount, alloc, e_rr));
 	++defineCount;
 
 	while (true) {
@@ -2371,24 +2385,24 @@ Bool Compiler_parseDefinesAnnot(SHEntryRuntime &entry, const C8 *&str, Allocator
 		//oxc::defines ( "X" = "Y" , "Z" )
 		//                          ^^^^
 
-		gotoIfError3(clean, Compiler_parseDefine(entry, str, defineCount, alloc, e_rr))
+		gotoIfError3(clean, Compiler_parseDefine(entry, str, defineCount, alloc, e_rr));
 		++defineCount;
 	}
 
 	//oxc::defines ( "X" = "Y" , "Z" )
 	//                               ^
 
-	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr))
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
 		
 	//Ensure nothing is leftover
 
 	if (Compiler_skipWhitespace(str))
-		retError(clean, Error_invalidState(0, "Compiler_parseDefinesAnnot() expected end of token"))
+		retError(clean, Error_invalidState(0, "Compiler_parseDefinesAnnot() expected end of token"));
 
 clean:
 
 	if (s_uccess)
-		gotoIfError2(clean, ListU8_pushBack(&entry.definesPerCompilation, defineCount, alloc))
+		gotoIfError3(clean, ListU8_pushBack(&entry.definesPerCompilation, defineCount, &alloc, e_rr));
 
 	goto clean1;
 
@@ -2476,12 +2490,12 @@ Bool Compiler_parseValue(
 					++str;
 
 				if(str == fStart)
-					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"));
 
 				CharString val = CharString_createRefSizedConst(fStart, str - fStart, false);
 				F64 res = 0;
 				if(!CharString_parseDouble(val, &res))
-					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a float value"));
 
 				switch(typeStride) {
 
@@ -2492,7 +2506,7 @@ Bool Compiler_parseValue(
 						if(!EFloatType_isFinite(EFloatType_F16, v))
 							retError(clean, Error_invalidParameter(
 								0, 0, "Compiler_parseValue() passed float value not representable as F16"
-							))
+							));
 
 						value->vu16[dstOff] = v;
 						break;
@@ -2505,7 +2519,7 @@ Bool Compiler_parseValue(
 						if (!EFloatType_isFinite(EFloatType_F32, *(const U32*)&v))
 							retError(clean, Error_invalidParameter(
 								0, 0, "Compiler_parseValue() passed float value not representable as F32"
-							))
+							));
 
 						value->vf32[dstOff] = v;
 						break;
@@ -2516,7 +2530,7 @@ Bool Compiler_parseValue(
 						if (!EFloatType_isFinite(EFloatType_F64, *(const U64*)&res))
 							retError(clean, Error_invalidParameter(
 								0, 0, "Compiler_parseValue() passed float value not representable as F64"
-							))
+							));
 
 						value->vf64[dstOff] = res;
 						break;
@@ -2537,19 +2551,19 @@ Bool Compiler_parseValue(
 					++str;
 
 				if(str == strStart)
-					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a uint value"))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a uint value"));
 
 				CharString val = CharString_createRefSizedConst(strStart, str - strStart, false);
 				U64 res = 0;
 				if (!CharString_parseU64(val, &res))
-					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a uint value"))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected a uint value"));
 
 				U8 bits = ETypeId_getDataTypeBytes(typeId) << 3;
 
 				if(bits != 64 && (res >> bits))
 					retError(clean, Error_outOfBounds(
 						0, res, ((U64)1 << bits) - 1, "Compiler_parseValue() parsed uint couldn't fit in the target bits"
-					))
+					));
 
 				switch(bits) {
 					default:    value->vu8[dstOff] = (U8) res;        break;
@@ -2575,17 +2589,17 @@ Bool Compiler_parseValue(
 					++str;
 
 				if (str == strStart)
-					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an int value"))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an int value"));
 
 				CharString val = CharString_createRefSizedConst(strStart, str - strStart, false);
 				U64 ures = 0;
 				if (!CharString_parseU64(val, &ures))
-					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an int value"))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() expected an int value"));
 
 				//Easier than allowing I64_MIN
 
 				if(ures >> 63)
-					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() overflow on int value"))
+					retError(clean, Error_invalidParameter(0, 0, "Compiler_parseValue() overflow on int value"));
 
 				I64 res = neg ? -(I64)ures : (I64)ures;
 
@@ -2598,7 +2612,7 @@ Bool Compiler_parseValue(
 				if(bits != 64 && (neg ? (res < mi) : (res > ma)))
 					retError(clean, Error_invalidParameter(
 						0, 0, "Compiler_parseValue() parsed int couldn't fit in the target bits"
-					))
+					));
 
 				switch(bits) {
 					default:    value->vi8[dstOff]  = (I8) res;        break;
@@ -2612,7 +2626,7 @@ Bool Compiler_parseValue(
 			}
 
 			default:
-				retError(clean, Error_invalidState(0, "Compiler_parseValue() is an invalid type"))
+				retError(clean, Error_invalidState(0, "Compiler_parseValue() is an invalid type"));
 		}
 
 		goto clean;
@@ -2636,7 +2650,7 @@ Bool Compiler_parseValue(
 			//(x, y, z, w)
 			// ^  ^  ^  ^
 
-			gotoIfError3(clean, Compiler_parseValue(value, dstOff, singleType, str, e_rr))
+			gotoIfError3(clean, Compiler_parseValue(value, dstOff, singleType, str, e_rr));
 				
 			//(x, y, z, w)
 			//  ^  ^  ^
@@ -2784,30 +2798,31 @@ Bool Compiler_registerUniform(
 	//type name = value;
 	//              ^
 
-	gotoIfError3(clean, Compiler_parseValue(&value, dstOff, typeId, str, e_rr))
+	gotoIfError3(clean, Compiler_parseValue(&value, dstOff, typeId, str, e_rr));
 
 	//Validate if uniform already exists
 
 	for(U64 i = 0; i < entry.uniforms.length; ++i)
-		if (CharString_equalsStringSensitive(entry.uniforms.ptr[i].name, uniformName)) {
+		if (CharString_equalsStringSensitive(&entry.uniforms.ptr[i].name, &uniformName)) {
 			contains = true;
 			break;
 		}
 	
-	if (!didInit && contains)
-		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform already present"))
+	if (!didInit && contains) {
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform already present"));
+	}
 
 	else if(didInit && !contains)
-		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform not present in previous definition"))
+		retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform not present in previous definition"));
 
 	//Insert uniform
 
 	if(!didInit) {
 
-		gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &tmp))
+		gotoIfError3(clean, CharString_createCopy(uniformName, &alloc, &tmp, e_rr));
 
 		if(uniformDatLen + valLen >= U16_MAX)
-			retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform buffer data is limited to 65535"))
+			retError(clean, Error_invalidState(0, "Compiler_registerUniform() uniform buffer data is limited to 65535"));
 
 		SHUniformRuntime uniform = SHUniformRuntime{
 			.name = tmp,
@@ -2820,13 +2835,13 @@ Bool Compiler_registerUniform(
 		if(val != typeId)
 			retError(clean, Error_invalidState(0, "Compiler_registerUniform() ETypeId_toShortId misfunctioning"));
 
-		gotoIfError2(clean, ListSHUniformRuntime_pushBack(&entry.uniforms, uniform, alloc))
+		gotoIfError3(clean, ListSHUniformRuntime_pushBack(&entry.uniforms, uniform, &alloc, e_rr));
 		entry.uniformStride += (U16) valLen;
 	}
 
 	//Insert uniform data
 	
-	gotoIfError2(clean, ListU8_resize(&entry.uniformData, uniformDatLen + valLen, alloc))
+	gotoIfError3(clean, ListU8_resize(&entry.uniformData, uniformDatLen + valLen, &alloc, e_rr));
 
 	Buffer_memcpy(
 		Buffer_createRef(entry.uniformData.ptrNonConst + uniformDatLen, valLen),
@@ -2836,7 +2851,7 @@ Bool Compiler_registerUniform(
 	tmp = CharString_createNull();        //Moved
 
 clean:
-	CharString_free(&tmp, alloc);
+	CharString_free(&tmp, &alloc);
 	return s_uccess;
 }
 
@@ -2941,7 +2956,7 @@ Bool Compiler_parseUniformsAnnot(SHEntryRuntime &entry, const C8 *&str, Allocato
 	if (uniformCount != entry.uniforms.length)
 		retError(clean, Error_invalidParameter(
 			0, 4, "Compiler_parseUniformsAnnot() oxc::uniforms mismatches in count with other oxc::uniforms"
-		))
+		));
 
 	entry.isInitializedFlags |= 2;
 
@@ -2966,7 +2981,7 @@ Bool Compiler_parseOxcAnnot(
 	//oxc
 	//^
 
-	if (Buffer_readU16(buf, 0, NULL) != C8x2('o', 'x') || buf.ptr[2] != 'c')
+	if (Buffer_readU16(buf, 0, NULL, NULL) != C8x2('o', 'x') || buf.ptr[2] != 'c')
 		goto clean;
 
 	//oxc::X
@@ -2995,7 +3010,7 @@ Bool Compiler_parseOxcAnnot(
 		goto clean;
 
 	buf = Buffer_createRefConst(str, annotLen);
-	c8x4 = Buffer_readU32(buf, 0, NULL);
+	c8x4 = Buffer_readU32(buf, 0, NULL, NULL);
 
 	switch (c8x4) {
 
@@ -3025,7 +3040,7 @@ Bool Compiler_parseOxcAnnot(
 
 		//[[oxc::vendor("NV", "AMD")]]
 		//       ^
-		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL) == C8x2('o', 'r')) {
+		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('o', 'r')) {
 			str += 6;
 			gotoIfError3(clean, Compiler_parseVendorAnnot(entry, str, e_rr));
 		}
@@ -3037,7 +3052,7 @@ Bool Compiler_parseOxcAnnot(
 		//[[oxc::defines("X", "Y", "Z")]]
 		//[[oxc::defines("X" = "123", "Y" = "ABC")]]
 		//         ^
-		if (annotLen == 7 && Buffer_readU16(buf, 4, NULL) == C8x2('n', 'e') && buf.ptr[6] == 's') {
+		if (annotLen == 7 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('n', 'e') && buf.ptr[6] == 's') {
 			str += 7;
 			gotoIfError3(clean, Compiler_parseDefinesAnnot(entry, str, alloc, e_rr));
 		}
@@ -3049,7 +3064,7 @@ Bool Compiler_parseOxcAnnot(
 		//[[oxc::uniforms(U8x4 x = (1, 2, 3, 4))]]
 		//[[oxc::uniforms(B1 b = true)]]
 		//         ^
-		if (annotLen == 8 && Buffer_readU32(buf, 4, NULL) == C8x4('o', 'r', 'm', 's')) {
+		if (annotLen == 8 && Buffer_readU32(buf, 4, NULL, NULL) == C8x4('o', 'r', 'm', 's')) {
 			str += 8;
 			gotoIfError3(clean, Compiler_parseUniformsAnnot(entry, str, alloc, e_rr));
 		}
@@ -3062,7 +3077,7 @@ Bool Compiler_parseOxcAnnot(
 		//       ^
 		if (
 			annotLen == 9 &&
-			Buffer_readU64(buf, 1, NULL) == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
+			Buffer_readU64(buf, 1, NULL, NULL) == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
 		) {
 			str += 9;
 			gotoIfError3(clean, Compiler_parseExtensionAnnot(entry, str, alloc, e_rr));
@@ -3122,7 +3137,7 @@ Bool Compiler_parseAnnot(
 	//[[oxc::uniforms()]]
 	//    ^
 
-	gotoIfError3(clean, Compiler_parseOxcAnnot(funcName, str, annotLen, entry, alloc, e_rr))
+	gotoIfError3(clean, Compiler_parseOxcAnnot(funcName, str, annotLen, entry, alloc, e_rr));
 
 clean:
 	return s_uccess;
@@ -3163,9 +3178,9 @@ Bool Compiler_parse(
 		retError(clean, Error_nullPointer(3, "Compiler_parse()::result is required"));
 		
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &tmpWStr))
+		gotoIfError3(clean, CharString_toUTF16(settings.path, &alloc, &tmpWStr, e_rr));
 	#else
-		gotoIfError2(clean, CharString_toUTF32(settings.path, alloc, &tmpWStr))
+		gotoIfError3(clean, CharString_toUTF32(settings.path, alloc, &tmpWStr));
 	#endif
 
 	interfaces = (CompilerInterfaces*)comp.interfaces;
@@ -3174,7 +3189,7 @@ Bool Compiler_parse(
 		retError(clean, Error_nullPointer(3, "Compiler_parse()::interfaces->reflector & utils are required"));
 
 	if (!CharString_length(settings.string))
-		retError(clean, Error_invalidParameter(1, 0, "Compiler_parse()::settings.string is required"))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_parse()::settings.string is required"));
 
 	if(CharString_length(settings.string) >> 32)
 		retError(clean, Error_invalidOperation(0, "Compiler_parse() string out of bounds"));
@@ -3188,7 +3203,7 @@ Bool Compiler_parse(
 	if (FAILED(hr))
 		retError(clean, Error_invalidState(0, "Compiler_parse() source couldn't be wrapped into IDxcBlobEncoding"));
 
-	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
+	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr));
 
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-reflect-functions", alloc, e_rr));
 	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr));
@@ -3224,15 +3239,15 @@ Bool Compiler_parse(
 	};
 
 	for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-		gotoIfError2(clean, CharString_format(alloc, &tmp, formats[i], formatInts[i]));
-		gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tmp, alloc));
+		gotoIfError3(clean, CharString_format(&alloc, &tmp, e_rr, formats[i], formatInts[i]));
+		gotoIfError3(clean, ListCharString_pushBack(&stringsUTF8, tmp, &alloc, e_rr));
 		tmp = CharString_createNull();
 	}
 
 	//__OXC_EXT_<X> foreach extension
 
 	for(U32 i = 0; i < ESHExtension_Count; ++i) {
-		gotoIfError2(clean, CharString_format(alloc, &tmp, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
+		gotoIfError3(clean, CharString_format(&alloc, &tmp, e_rr, "-D__OXC_EXT_%s", ESHExtension_defines[i]));
 		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
 		tmp = CharString_createNull();
 	}
@@ -3260,7 +3275,7 @@ Bool Compiler_parse(
 
 		if (err && err->GetStringLength()) {
 			CharString errs = CharString_createRefSizedConst(err->GetStringPointer(), err->GetStringLength(), false);
-			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
+			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr));
 		}
 	}
 
@@ -3319,7 +3334,7 @@ Bool Compiler_parse(
 		//If we didn't find a stage, but we did find annotations that match, we need to free them
 
 		if (runtimeEntry.entry.stage == ESHPipelineStage_Count)
-			SHEntryRuntime_free(&runtimeEntry, alloc);
+			SHEntryRuntime_free(&runtimeEntry, &alloc);
 
 		//Otherwise we found an entry
 
@@ -3410,7 +3425,7 @@ Bool Compiler_parse(
 					0, "Compiler_parse() found way too many SHEntries. Found U16_MAX!"
 				));
 
-			if(SHEntryRuntime_getCombinations(runtimeEntry) + 1 >= U16_MAX)
+			if(SHEntryRuntime_getCombinations(&runtimeEntry) + 1 >= U16_MAX)
 				retError(clean, Error_invalidState(
 					0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
 				));
@@ -3447,8 +3462,8 @@ Bool Compiler_parse(
 
 					for (; k < runtimeEntry.uniforms.length; ++k)
 						if (CharString_equalsStringSensitive(
-							runtimeEntry.uniforms.ptr[k].name,
-							first.uniforms.ptr[j].name
+							&runtimeEntry.uniforms.ptr[k].name,
+							&first.uniforms.ptr[j].name
 						))
 							break;
 
@@ -3490,12 +3505,12 @@ Bool Compiler_parse(
 
 			if(runtimeEntry.defineNameValues.length) {
 				ListCharString tmpArr = ListCharString{};
-				gotoIfError2(clean, ListCharString_createCopyUnderlying(runtimeEntry.defineNameValues, alloc, &tmpArr))
-				ListCharString_freeUnderlying(&runtimeEntry.defineNameValues, alloc);
+				gotoIfError3(clean, ListCharString_createCopyUnderlying(&runtimeEntry.defineNameValues, &alloc, &tmpArr, e_rr));
+				ListCharString_freeUnderlying(&runtimeEntry.defineNameValues, &alloc);
 				runtimeEntry.defineNameValues = tmpArr;
 			}
 
-			gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
+			gotoIfError3(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, &alloc, e_rr));
 			runtimeEntry = SHEntryRuntime{};
 		}
 	}
@@ -3508,16 +3523,16 @@ clean:
 	if(!s_uccess && result)
 		CompileResult_free(result, alloc);
 
-	SHEntryRuntime_free(&runtimeEntry, alloc);
+	SHEntryRuntime_free(&runtimeEntry, &alloc);
 	
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		ListU16_free(&tmpWStr, alloc);
+		ListU16_free(&tmpWStr, &alloc);
 	#else
-		ListU32_free(&tmpWStr, alloc);
+		ListU32_free(&tmpWStr, &alloc);
 	#endif
 
 	Compiler_freeStrings;
-	CharString_free(&tmp, alloc);
-	ListCharString_freeUnderlying(&stringsUTF8, alloc);
+	CharString_free(&tmp, &alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, &alloc);
 	return s_uccess;
 }

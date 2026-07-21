@@ -100,7 +100,7 @@ static inline EResolution EResolution_create(I32x2 v) {
 	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero, I32x2_xx2(U16_MAX)), v))
 		return EResolution_Undefined;
 
-	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
+	return (EResolution)(_RESOLUTION(I32x2_x(v), I32x2_y(v)));
 }
 
 //Window callbacks

@@ -24,6 +24,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+//Anonymous struct/union members are standard in C11 but only an extension in C++ (MSVC warns C4201).
+//OxC3 uses them throughout, so suppress the warning for C++ so it doesn't become an error under /WX.
+
+#if defined(_MSC_VER) && defined(__cplusplus)
+	#pragma warning(disable: 4201)
+#endif
+
 //Null is apparently non-standard
 
 #ifndef NULL

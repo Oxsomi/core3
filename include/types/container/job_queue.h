@@ -118,6 +118,58 @@ U64 JobQueue_threadCount(const JobQueue *queue);
 //Call JobQueue_wait first if all pushed jobs should complete.
 void JobQueue_free(JobQueue *queue);
 
+//JobGroup: a completion latch for fan-out on a JobQueue.
+//
+//No job's lifetime spans its subtree (a job finishes as soon as it has pushed its children),
+//so "all work for X is done" cannot be observed by waiting on any single job. A JobGroup tracks
+//that with a token count instead: register work with JobGroup_enter before pushing the jobs that
+//will complete it, and release a token with JobGroup_leave as each unit finishes. When the last
+//token drops the group is done - "last one out" fires the finalize (pushed as its own job, so its
+//work, e.g. combining + writing an oiSH, overlaps other compiles). If any unit called
+//JobGroup_fail, finalize is skipped instead. Groups nest: a group's finalize (or a plain job) can
+//JobGroup_leave a parent group, giving the SHFile-latch -> output-group-latch hierarchy.
+//
+//Counts are often not known up front (a precompile discovers how many compiles to spawn), so hold
+//one token yourself while spawning: JobGroup_enter(g, 1) up front, JobGroup_enter(g, k) before
+//pushing k children, JobGroup_leave(g) once you finish spawning. This prevents the latch from
+//hitting 0 before all children are registered.
+//
+//data is the shared accumulator handed to finalize; it is owned by finalize on the success path
+//(finalize frees it) and by dataDestructor otherwise (failure, or the finalize job being discarded
+//on shutdown). group must outlive all its jobs (address stable, like JobQueue).
+
+typedef struct JobGroup {
+
+	JobQueue *queue;                //Where finalize is pushed
+	JobCallback finalize;           //May be NULL; runs once when the group completes successfully
+	void *data;                     //Shared accumulator passed to finalize
+	JobDestructor dataDestructor;   //May be NULL; frees data when finalize won't run
+
+	AtomicI64 outstanding;          //Tokens; the group completes when this reaches 0
+	AtomicI64 failed;               //Sticky; set via JobGroup_fail
+
+} JobGroup;
+
+//finalize (may be NULL) runs once when the last token is released and nothing failed.
+//dataDestructor (may be NULL) frees data when finalize won't run. group must be zero initialized.
+//queue must be valid when finalize is set (that is where finalize is pushed).
+Bool JobGroup_create(
+	JobGroup *group, JobQueue *queue, JobCallback finalize, void *data, JobDestructor dataDestructor, Error *e_rr
+);
+
+//Register 'count' more tokens. Call before pushing the jobs that will release them.
+Bool JobGroup_enter(JobGroup *group, U64 count, Error *e_rr);
+
+//Release one token. When the last one drops: pushes finalize (success) or runs dataDestructor
+//(if any JobGroup_fail happened, or there is no finalize). Returns false only on invalid usage.
+Bool JobGroup_leave(JobGroup *group, Error *e_rr);
+
+//Mark the group failed (sticky). Downstream should stop spawning; finalize will be skipped.
+Bool JobGroup_fail(JobGroup *group, Error *e_rr);
+
+//False if JobGroup_fail was called since create.
+Bool JobGroup_isSuccess(const JobGroup *group);
+
 #ifdef __cplusplus
 	}
 #endif

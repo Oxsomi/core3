@@ -82,8 +82,8 @@ extern "C" void Test_hpp(oxc::c::Test *t) {
 		Test_assert(t, "List: eraseAll", list.eraseAll(999, e_rr) && !list.contains(999));
 
 		c::U32 popped = 0;
-		Test_assert(t, "List: popBack", list.popBack(popped, e_rr));
-		Test_assert(t, "List: popFront", list.popFront(popped, e_rr));
+		Test_assert(t, "List: popBack", list.popBack(popped, e_rr) && popped == 45);
+		Test_assert(t, "List: popFront", list.popFront(popped, e_rr) && popped == 0);
 
 		Test_assert(t, "List: reserve", list.reserve(128, e_rr));
 		Test_assert(t, "List: resize", list.resize(4, e_rr) && list.size() == 4);

@@ -122,11 +122,11 @@ typedef struct AudioStreamInfo {
 } AudioStreamInfo;
 
 static inline EAudioStreamInfoFlags AudioStreamInfo_flags(const AudioStreamInfo *info) {
-	return info ? (info->flags4_format4 & 0xF) : EAudioStreamInfoFlags_None;
+	return info ? (EAudioStreamInfoFlags)(info->flags4_format4 & 0xF) : EAudioStreamInfoFlags_None;
 }
 
 static inline EAudioStreamFormat AudioStreamInfo_format(const AudioStreamInfo *info) {
-	return info ? (info->flags4_format4 >> 4) : EAudioStreamFormat_Count;
+	return info ? (EAudioStreamFormat)(info->flags4_format4 >> 4) : EAudioStreamFormat_Count;
 }
 
 static inline Bool AudioStreamInfo_isLoop(const AudioStreamInfo *info) {

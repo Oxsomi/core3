@@ -87,14 +87,14 @@ static inline Bool File_queryFolderCount(
 }
 
 static inline Bool File_has(const CharString *loc, const Allocator *alloc) {
-	FileInfo info = (FileInfo) { 0 };
+	FileInfo info = { 0 };
 	Bool s_uccess = File_getInfo(loc, &info, alloc, NULL);
 	FileInfo_free(&info, alloc);
 	return s_uccess;
 }
 
 static inline Bool File_hasType(const CharString *loc, EFileType type, const Allocator *alloc) {
-	FileInfo info = (FileInfo) { 0 };
+	FileInfo info = { 0 };
 	Bool s_uccess = File_getInfo(loc, &info, alloc, NULL);
 	const Bool sameType = info.type == type;
 	FileInfo_free(&info, alloc);
@@ -145,7 +145,7 @@ static inline U64 FileHandle_makeFileSizeType(U64 fileSize, EFileOpenType type) 
 static inline U64 FileHandle_fileSize(const FileHandle *handle) { return handle ? handle->fileSizeType << 2 >> 2 : 0; }
 
 static inline EFileOpenType FileHandle_fileType(const FileHandle *handle) {
-	return handle ? handle->fileSizeType >> 62 : EFileOpenType_Read;
+	return handle ? (EFileOpenType)(handle->fileSizeType >> 62) : EFileOpenType_Read;
 }
 
 static inline Bool EFileHandle_isRead(const FileHandle *handle) {

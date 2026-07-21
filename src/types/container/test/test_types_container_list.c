@@ -83,8 +83,8 @@ void Test_list(Test *t) {
 	//popBack + popFront
 
 	U32 popped = 0;
-	Test_assert(t, "popBack", ListU32_popBack(&list, &popped, e_rr));
-	Test_assert(t, "popFront", ListU32_popFront(&list, &popped, e_rr));
+	Test_assert(t, "popBack", ListU32_popBack(&list, &popped, e_rr) && popped == 45);
+	Test_assert(t, "popFront", ListU32_popFront(&list, &popped, e_rr) && popped == 0);
 
 	//reserve keeps length; resize grows (zero fill) then shrinks
 

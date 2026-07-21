@@ -140,7 +140,7 @@
 	} U128_U64x2;
 
 	static inline U128 U128_createU64x2(U64 a, U64 b) {
-		U128_U64x2 data = (U128_U64x2){ .v2 = { a, b } };
+		U128_U64x2 data = { .v2 = { a, b } };
 		return data.v;
 	}
 

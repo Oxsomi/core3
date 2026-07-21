@@ -129,7 +129,7 @@ typedef struct Error {
 impl void Error_captureStackTrace(void **stackTrace, U8 stackSize, U8 skip);    //May fail if (stackSize + skip + 1 > 128)
 void Error_fillStackTrace(Error *err);
 
-#define Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
+#define Error_base(...) Error err = { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
 
 Error Error_platformError(U32 subId, U64 platformError, const C8 *errorStr);
 Error Error_outOfMemory(U32 subId, const C8 *errorStr);

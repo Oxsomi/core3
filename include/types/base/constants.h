@@ -55,9 +55,9 @@ static const U32 U24_MIN = 0;
 static const U32 U32_MIN = 0;
 static const U64 U64_MIN = 0;
 
-static const I8  I8_MIN = 0x80;
-static const C8  C8_MIN = 0x80;
-static const I16 I16_MIN = 0x8000;
+static const I8  I8_MIN = -128;
+extern const C8  C8_MIN;
+static const I16 I16_MIN = -32768;
 static const U32 I24_MIN = 0x800000;
 static const I32 I32_MIN = 0x80000000;
 static const I64 I64_MIN = 0x8000000000000000;
