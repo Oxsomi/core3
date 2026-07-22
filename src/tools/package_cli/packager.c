@@ -130,6 +130,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 	ListCharString allOutputs = (ListCharString) { 0 };
 	ListU8 allCompileOutputs = (ListU8) { 0 };
 	ListBuffer allBuffers = (ListBuffer) { 0 };
+	ListCharString includeDirs = (ListCharString) { 0 };
 
 	Ns start = Time_now();
 
@@ -200,20 +201,31 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 	#ifdef CLI_SHADER_COMPILER
 
-		if(allFiles.length)
+		if(allFiles.length) {
+
+			//Split the ';'-delimited include dir (e.g. "a;b;c") into separate -I search paths
+
+			if(CharString_length(settings->includeDir)) {
+				CharStringSplit includeSplit = (CharStringSplit) {
+					.s = &settings->includeDir, .allocator = alloc, .result = &includeDirs
+				};
+				gotoIfError3(clean, CharString_splitSensitive(&includeSplit, ';', e_rr));
+			}
+
 			gotoIfError3(clean, Compiler_compileShaders(
-				allFiles, allShaderText, allOutputs, allCompileOutputs,
+				&allFiles, &allShaderText, &allOutputs, &allCompileOutputs,
 				settings->threadCount,
 				settings->isDebug,
 				settings->extraWarnings,
 				settings->ignoreEmptyFiles,
 				ECompileType_Compile,
-				settings->includeDir,
+				&includeDirs,
 				true,
 				alloc,
 				&allBuffers,
 				e_rr
 			));
+		}
 
 		for(U64 i = 0; i < allOutputs.length; ++i)
 
@@ -263,6 +275,7 @@ clean:
 	ListCharString_freeUnderlying(&allFiles, alloc);
 	ListCharString_freeUnderlying(&allShaderText, alloc);
 	ListCharString_freeUnderlying(&allOutputs, alloc);
+	ListCharString_free(&includeDirs, alloc);        //Elements are refs into settings->includeDir; free the list only
 	ListU8_free(&allCompileOutputs, alloc);
 
 	RefPtr_dec(&stream);

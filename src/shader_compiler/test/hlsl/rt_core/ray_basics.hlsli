@@ -1,5 +1,5 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+/* OxC3/RT Core(Oxsomi core 3/RT Core), a general framework for raytracing applications.
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -18,29 +18,14 @@
 *  This is called dual licensing.
 */
 
-//shader_compiler/test/test_shader_compiler_main.c
+#pragma once
+#include "@resources.hlsli"
 
-#include "test_shader_compiler_shared.h"
-#include "platforms/platform.h"
-#include "types/base/error.h"
+RayDesc createRay(F32x3 origin, F32 minT, F32x3 direction, F32 maxT) {
+	RayDesc r = { origin, minT, direction, maxT };
+	return r;
+}
 
-Platform_defineEntrypoint() {
-
-	Error err = Error_none();
-	if (!Platform_create(Platform_argc, Platform_argv, Platform_getData(), NULL, true, &err))
-		Platform_return(1);
-
-	Test t = (Test) { 0 };
-	t.alloc = Platform_instance->alloc;
-
-	Test_shaderCompilerParse(&t);
-	Test_shaderCompilerAnnotations(&t);
-	Test_shaderCompilerFeatures(&t);
-	Test_shaderCompilerDriver(&t);
-	Test_shaderCompilerCorpus(&t);
-
-	int status = Test_end(&t);
-
-	Platform_cleanup();
-	Platform_return(status);
+F32x3 posOnRay(RayDesc r, F32 t) {
+	return r.Origin + r.Direction * t;
 }

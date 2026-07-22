@@ -394,6 +394,7 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 			CharString name = CharString_createRefStrConst(strings.entryStrings.ptr[reg->nameId + registerNameStart]);
 
 			ListU32 arr = (ListU32) { 0 };
+			U32 arrayDim1D = 0;         //Storage for the small-1D-array case; must outlive the addRegister ref below
 
 			if (reg->arrayDimOrId) {
 
@@ -407,8 +408,13 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 					arr = ListU32_createRefFromList(arrays.ptr[arrayId]);
 				}
 
-				//Small 1D array: arrayDimOrId is the dimension directly
-				else gotoIfError3(clean, ListU32_createRefConst((const U32*)&reg->arrayDimOrId, 1, &arr, e_rr));
+				//Small 1D array: arrayDimOrId is the dimension directly. Copy into a U32 first — casting the
+				//U16 field to (const U32*) would read the adjacent nameId into the high bits (e.g. a sampler
+				//with arrayDimOrId=1024, nameId=1 became 1024 | (1<<16) = 66560, overflowing the register cap).
+				else {
+					arrayDim1D = reg->arrayDimOrId;
+					gotoIfError3(clean, ListU32_createRefConst(&arrayDim1D, 1, &arr, e_rr));
+				}
 			}
 
 			SBFile *sbFile = NULL;

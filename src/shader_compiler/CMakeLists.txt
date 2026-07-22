@@ -61,11 +61,20 @@ if(EnableTests)
 	)
 
 	target_link_libraries(OxC3_shader_compiler_test PUBLIC OxC3_shader_compiler OxC3_platforms OxC3_types_test)
-	target_compile_definitions(
-		OxC3_shader_compiler_test PRIVATE
-		OXC3_SHADER_COMPILER_TEST_HLSL_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/hlsl"
+
+	# The corpus test reads/writes shaders + their reference oiSH relative to the working directory, so
+	# run it from the corpus folder (OxC3 restricts file access to the working dir).
+	# Set it for both the VS debugger and ctest.
+
+	set_target_properties(OxC3_shader_compiler_test PROPERTIES
+		FOLDER Oxsomi/test/graphics
+		VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test"
 	)
-	set_target_properties(OxC3_shader_compiler_test PROPERTIES FOLDER Oxsomi/test/graphics)
-	add_test(NAME OxC3_shader_compiler_test COMMAND OxC3_shader_compiler_test)
+
+	add_test(
+		NAME OxC3_shader_compiler_test
+		COMMAND OxC3_shader_compiler_test
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/test"
+	)
 
 endif()

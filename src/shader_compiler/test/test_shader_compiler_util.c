@@ -1,0 +1,118 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//shader_compiler/test/test_shader_compiler_util.c
+
+#include "test_shader_compiler_shared.h"
+#include <inttypes.h>
+#include "shader_compiler/compiler.h"
+#include "formats/oiSH/sh_file.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/memory_stream.h"
+#include "types/container/ref_ptr.h"
+
+Bool compileInlineShaders(
+	const Allocator *alloc,
+	const C8 *const *srcs,
+	U64 count,
+	U8 mode,
+	U64 threadCount,
+	Bool enableLogging,
+	ListBuffer *out,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	ListCharString allFiles = (ListCharString) { 0 };
+	ListCharString allShaderText = (ListCharString) { 0 };
+	ListCharString allOutputs = (ListCharString) { 0 };
+	ListU8 allCompileModes = (ListU8) { 0 };
+	ListCharString includeDirs = (ListCharString) { 0 };
+	CharString name = CharString_createNull();
+
+	for (U64 i = 0; i < count; ++i) {
+
+		//Distinct dummy names so each compiles into its own oiSH. The names never hit disk; the path
+		//only feeds an -I <parent> arg, which resolves harmlessly within the working directory.
+
+		CharString_free(&name, alloc);
+		gotoIfError3(clean, CharString_format(alloc, &name, e_rr, "inline%"PRIu64".hlsl", i));
+		gotoIfError3(clean, ListCharString_pushBack(&allFiles, name, alloc, e_rr));
+		name = CharString_createNull();     //Moved into the list
+
+		gotoIfError3(clean, ListCharString_pushBack(
+			&allShaderText, CharString_createRefCStrConst(srcs[i]), alloc, e_rr
+		));
+
+		gotoIfError3(clean, CharString_format(alloc, &name, e_rr, "inline%"PRIu64".oiSH", i));
+		gotoIfError3(clean, ListCharString_pushBack(&allOutputs, name, alloc, e_rr));
+		name = CharString_createNull();
+
+		gotoIfError3(clean, ListU8_pushBack(&allCompileModes, mode, alloc, e_rr));
+	}
+
+	gotoIfError3(clean, Compiler_compileShaders(
+		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
+		threadCount,
+		false,                              //isDebug
+		(ECompilerWarning) 0,
+		false,                              //ignoreEmptyFiles: we expect real output
+		ECompileType_Compile,
+		&includeDirs,
+		enableLogging,
+		alloc,
+		out,
+		e_rr
+	));
+
+clean:
+	CharString_free(&name, alloc);
+	ListCharString_freeUnderlying(&allFiles, alloc);
+	ListCharString_free(&allShaderText, alloc);         //Elements are refs into srcs
+	ListCharString_freeUnderlying(&allOutputs, alloc);
+	ListU8_free(&allCompileModes, alloc);
+	ListCharString_free(&includeDirs, alloc);
+	return s_uccess;
+}
+
+Bool readOiSH(const Allocator *alloc, Buffer buf, SHFile *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const RefPtrType msType = MemoryStream_makeType(alloc);
+	MemoryStreamRef *ms = NULL;
+	U64 off = 0;
+
+	//Pass a ref: createFromBufferRegion keeps the buffer's ref bits, and MemoryStream frees owned data
+	//on dec. A ref keeps the stream non-owning so the caller still owns `buf`.
+	Buffer ref = Buffer_createRefFromBuffer(buf, true);
+
+	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
+		ref, 0, Buffer_length(ref), EMemoryStreamFlags_None, &msType, &ms, e_rr
+	));
+	gotoIfError3(clean, SHFile_read((StreamRef*) ms, &off, false, alloc, out, e_rr));
+
+clean:
+	RefPtr_dec(&ms);
+	return s_uccess;
+}

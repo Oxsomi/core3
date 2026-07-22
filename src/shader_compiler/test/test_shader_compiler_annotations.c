@@ -1,0 +1,250 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//shader_compiler/test/test_shader_compiler_annotations.c
+
+#include "test_shader_compiler_shared.h"
+#include "shader_compiler/compiler.h"
+#include "formats/oiSH/sh_entries.h"
+#include "formats/oiSH/sh_binaries.h"
+#include "platforms/platform.h"
+#include "types/container/string.h"
+#include "types/container/log.h"
+#include "types/base/error.h"
+#include "types/base/string_base.h"
+
+//Parse `src` as HLSL (this runs real DXC reflection + our oxc:: annotation parser) and hand back the
+//reflection. The error is swallowed on purpose so the caller can assert on the boolean result and keep
+//iterating over many small shaders without aborting the whole module on the first expected failure.
+static Bool parseShader(
+	const Compiler *comp, CharString src, const Allocator *alloc, CompileResult *result, Bool failIsOk
+) {
+
+	Error err = Error_none();
+
+	CompilerSettings settings = (CompilerSettings) {
+		.string = src,
+		.path = CharString_createRefCStrConst("test_annot.hlsl"),
+		.format = ECompilerFormat_HLSL,
+		.outputType = ESHBinaryType_SPIRV
+	};
+
+	Bool ok = Compiler_parse(comp, &settings, alloc, result, &err);
+	Bool clean = ok && !err.genericError && result->isSuccess;
+
+	if(!failIsOk)
+		Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+	return clean;
+}
+
+void Test_shaderCompilerAnnotations(Test *t) {
+
+	Test_setModule(t, "Compiler annotations");
+
+	const Allocator *alloc = Platform_instance->alloc;
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = true;
+
+	Compiler comp = (Compiler) { 0 };
+	Bool created = false;
+
+	CharString src = CharString_createNull();
+	CompileResult r = (CompileResult) { 0 };
+
+	gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
+	created = true;
+
+	//--- Every ESHExtension name is accepted by [[oxc::extension(...)]] and mapped to its bit ---
+
+	for (U64 i = 0; i < ESHExtension_Count; ++i) {
+
+		//Skip bits a compute annotation can't set (tested elsewhere / not annotation-settable)
+		switch (1 << i) {
+
+			case ESHExtension_Reserved:             //Placeholder bit
+			case ESHExtension_RayMotionBlur:        //CPU-side only
+			case ESHExtension_Bindless:             //Derived from the binary, not annotation-settable
+			case ESHExtension_UnboundArraySize:
+			case ESHExtension_RayReorder:           //Requires a raygen stage
+			case ESHExtension_PAQ:                  //Requires an RT stage
+				continue;
+		}
+
+		CharString_free(&src, alloc);
+		gotoIfError3(clean, CharString_format(
+			alloc, &src, e_rr,
+			"RWByteAddressBuffer buf;\n"
+			"[[oxc::extension(\"%s\")]]\n"
+			"[[oxc::stage(\"compute\")]]\n"
+			"[numthreads(1, 1, 1)]\n"
+			"void main(uint id : SV_DispatchThreadID) { buf.Store<uint>(id * 4, 1); }\n",
+			ESHExtension_names[i]
+		));
+
+		CompileResult_free(&r, alloc);
+		Bool ok = parseShader(&comp, src, alloc, &r, false);
+
+		Bool mapped =
+			ok && r.shEntriesRuntime.length == 1 &&
+			r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
+			(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & (1u << i));
+
+		Test_assert(t, ESHExtension_names[i], mapped);
+	}
+
+	CharString_free(&src, alloc);
+
+	//--- Stage-constrained extensions on their required stage: RayReorder needs raygen, PAQ needs an
+	//--- RT stage (raygen qualifies as one). RT entrypoints use the [shader(...)] intrinsic. ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"RayReorder\")]]\n"
+		"[shader(\"raygeneration\")]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "RayReorder on raygen",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
+		(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & ESHExtension_RayReorder)
+	);
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"PAQ\")]]\n"
+		"[shader(\"raygeneration\")]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "PAQ on raygen",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].extensions.length >= 1 &&
+		(r.shEntriesRuntime.ptr[0].extensions.ptr[0] & ESHExtension_PAQ)
+	);
+
+	//--- Unknown extension names are rejected ---
+
+	CharString_free(&src, alloc);
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"ThisIsNotARealExtension\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(t, "unknown extension rejected", !parseShader(&comp, src, alloc, &r, true));
+
+	//--- [[oxc::model(...)]] records the requested shader model ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::model(\"6.7\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "model 6.7 recorded",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].shaderVersions.length >= 1 &&
+		r.shEntriesRuntime.ptr[0].shaderVersions.ptr[0] == (U16)((6 << 8) | 7)
+	);
+
+	//--- [[oxc::vendor(...)]] records a vendor mask (non-zero for a real vendor) ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::vendor(\"NV\", \"AMD\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "vendor mask recorded",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].vendorMask != 0
+	);
+
+	//--- [[oxc::defines(...)]] records define name/value pairs ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::defines(\"THREAD_COUNT\" = \"16\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "defines accepted",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1
+	);
+
+	//--- [[oxc::uniforms(...)]] records uniform permutations. Uniforms are illegal together with
+	//--- [[oxc::stage(...)]] (they compile as a lib), so the entrypoint uses the [shader(...)] intrinsic.
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::uniforms(B1 ROTATE = true)]]\n"
+		"[shader(\"compute\")]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "uniform recorded",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].uniforms.length >= 1
+	);
+
+	//--- Graphics stages parse with a valid signature ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::stage(\"vertex\")]]\n"
+		"float4 main() : SV_Position { return 0; }\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "vertex stage parses",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1
+	);
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::stage(\"pixel\")]]\n"
+		"float4 main() : SV_Target { return 1; }\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "pixel stage parses",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1
+	);
+
+clean:
+
+	Test_assert(t, "annotations module produced no error", s_uccess);
+
+	CompileResult_free(&r, alloc);
+	CharString_free(&src, alloc);
+
+	if (created)
+		Compiler_free(&comp, alloc);
+
+	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+}

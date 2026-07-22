@@ -23,7 +23,37 @@
 #pragma once
 #include "types/test/test.h"
 
+typedef struct Buffer Buffer;
+typedef struct ListBuffer ListBuffer;
+typedef struct SHFile SHFile;
+
 //Each test module is one Test_* function invoked from test_shader_compiler_main.c.
 //They compile HLSL through the real DXC/SPIRV pipeline, so they require a live Platform_instance.
 
 void Test_shaderCompilerParse(Test *t);         //Parse annotations -> SHEntryRuntime reflection
+void Test_shaderCompilerAnnotations(Test *t);   //oxc:: extensions / model / vendor / defines / uniforms / stages
+void Test_shaderCompilerCorpus(Test *t);        //Compile the whole test/hlsl corpus -> in-memory oiSH (snapshot)
+void Test_shaderCompilerFeatures(Test *t);      //Shaders *using* extension features -> compiled + reflected
+void Test_shaderCompilerDriver(Test *t);        //compiler_helper compile driver: threads / modes / errors
+
+//--- Shared helpers (test_shader_compiler_util.c) ---
+
+//Compile `count` inline HLSL sources (each into its own oiSH, all with the same binary type `mode`)
+//through the real Compiler_compileShaders driver with `threadCount` execution contexts. Uses dummy file
+//names and pre-loaded text, so it never touches the filesystem. Fills `out` with one oiSH buffer per
+//source (empty for shaders that produced nothing). Caller frees `out`.
+//Pass enableLogging=false when a failure is *expected* and the caller asserts on it itself (the compiler
+//then stays quiet instead of printing diagnostics/status for a failure the test is deliberately provoking).
+Bool compileInlineShaders(
+	const Allocator *alloc,
+	const C8 *const *srcs,
+	U64 count,
+	U8 mode,                //ESHBinaryType
+	U64 threadCount,
+	Bool enableLogging,
+	ListBuffer *out,
+	Error *e_rr
+);
+
+//Parse an in-memory oiSH buffer into an SHFile (buffer must stay valid for the read; SHFile is owned).
+Bool readOiSH(const Allocator *alloc, Buffer buf, SHFile *out, Error *e_rr);

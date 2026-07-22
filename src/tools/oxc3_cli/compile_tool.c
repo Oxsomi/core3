@@ -166,6 +166,7 @@
 		ListCharString allShaderText = (ListCharString) { 0 };
 		ListCharString allOutputs = (ListCharString) { 0 };
 		ListU8 allCompileModes = (ListU8) { 0 };
+		ListCharString includeDirs = (ListCharString) { 0 };
 
 		Error errTemp = Error_none(), *e_rr = &errTemp;
 		Bool s_uccess = true;
@@ -215,6 +216,15 @@
 		if (args.parameters & EOperationHasParameter_IncludeDir)
 			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
 
+		//Split the ';'-delimited include dir arg (e.g. "a;b;c") into separate -I search paths
+
+		if (CharString_length(includeDir)) {
+			CharStringSplit split = (CharStringSplit) {
+				.s = &includeDir, .allocator = Platform_instance->alloc, .result = &includeDirs
+			};
+			gotoIfError3(clean, CharString_splitSensitive(&split, ';', e_rr))
+		}
+
 		//Grab all files that need compilation
 
 		Bool isFolder = false;
@@ -241,13 +251,13 @@
 		//Compile
 
 		gotoIfError3(clean, Compiler_compileShaders(
-			allFiles, allShaderText, allOutputs, allCompileModes,
+			&allFiles, &allShaderText, &allOutputs, &allCompileModes,
 			threadCount,
 			args.flags & EOperationFlags_Debug,
 			extraWarnings,
 			args.flags & EOperationFlags_IgnoreEmptyFiles,
 			ECompileType_Compile,
-			includeDir,
+			&includeDirs,
 			true,
 			Platform_instance->alloc,
 			NULL,
@@ -268,6 +278,7 @@
 		ListCharString_freeUnderlyingx(&allFiles);
 		ListCharString_freeUnderlyingx(&allShaderText);
 		ListCharString_freeUnderlyingx(&allOutputs);
+		ListCharString_freex(&includeDirs);        //Elements are refs into includeDir; free the list only
 		ListU8_freex(&allCompileModes);
 
 		return s_uccess;

@@ -1,0 +1,185 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//shader_compiler/test/test_shader_compiler_corpus.c
+
+#include "test_shader_compiler_shared.h"
+#include "shader_compiler/compiler.h"
+#include "formats/oiSH/sh_binaries.h"
+#include "formats/oiSH/sh_file.h"
+#include "platforms/platform.h"
+#include "platforms/file.h"
+#include "types/container/string.h"
+#include "types/container/buffer.h"
+#include "types/container/list_basic_types.h"
+#include "types/container/memory_stream.h"
+#include "types/container/ref_ptr.h"
+#include "types/container/log.h"
+#include "types/base/time.h"
+#include "types/base/error.h"
+
+//Parse an in-memory oiSH and dump its reflection, so a snapshot mismatch shows *what* changed.
+static void printOiSH(const Allocator *alloc, Buffer buf, const C8 *label) {
+
+	Error err = Error_none();
+	const RefPtrType msType = MemoryStream_makeType(alloc);
+	MemoryStreamRef *ms = NULL;
+	SHFile file = (SHFile) { 0 };
+	U64 off = 0;
+
+	Log_debugLn(alloc, "--- oiSH (%s) ---", label);
+
+	if (
+		MemoryStream_createFromBufferRegion(Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf), EMemoryStreamFlags_None, &msType, &ms, &err) &&
+		SHFile_read((StreamRef*) ms, &off, false, alloc, &file, &err)
+	)
+		SHFile_print(&file, true, alloc);
+
+	else Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	SHFile_free(&file, alloc);
+	RefPtr_dec(&ms);
+}
+
+//End-to-end snapshot test: enumerate the whole test/hlsl corpus (relative to the working directory,
+//which CMake points at the corpus folder) and run it through the real pipeline (preprocess -> DXC
+//compile -> reflect -> link -> oiSH assembly) targeting SPIRV, entirely in memory. Each produced oiSH
+//must match its committed reference (allOutputs[i], e.g. dummy.oiSH) byte-for-byte, so any change in the
+//compiler output is caught. A missing reference is generated once and the assertion fails, so new
+//references are noticed, reviewed and committed rather than silently accepted.
+
+void Test_shaderCompilerCorpus(Test *t) {
+
+	Test_setModule(t, "Compiler corpus");
+
+	const Allocator *alloc = Platform_instance->alloc;
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = true;
+
+	ListCharString allFiles = (ListCharString) { 0 };
+	ListCharString allShaderText = (ListCharString) { 0 };
+	ListCharString allOutputs = (ListCharString) { 0 };
+	ListU8 allCompileModes = (ListU8) { 0 };
+	ListBuffer allBuffers = (ListBuffer) { 0 };
+	ListCharString includeDirs = (ListCharString) { 0 };
+	Buffer golden = Buffer_createNull();
+	Bool isFolder = false;
+
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const CharString here = CharString_createRefCStrConst("hlsl");     //Named folder under the working dir (test/)
+
+	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV
+
+	gotoIfError3(clean, Compiler_getTargetsFromFile(
+		here,
+		ECompileType_Compile,
+		(U64)1 << ESHBinaryType_SPIRV,      //Single SPIRV target
+		false,                              //multipleModes
+		true,                               //combineFlag
+		true,                               //enableLogging
+		alloc,
+		&isFolder,
+		NULL,
+		&allFiles,
+		&allShaderText,
+		&allOutputs,
+		&allCompileModes
+	));
+
+	Test_assert(t, "corpus folder enumerated .hlsl shaders", isFolder && allFiles.length >= 1);
+
+	//Shaders that can't be compiled here (e.g. inheritance, which provokes an uncatchable DXC assert on a
+	//multi-base-class StructuredBuffer element) are renamed to *.hlsl.disabled on disk so the .hlsl-only
+	//enumerator skips them, while keeping the source around as a repro. No in-test filtering needed.
+
+	//Sibling .hlsli includes resolve relative to the corpus folder
+
+	gotoIfError3(clean, ListCharString_createRefConst(&here, 1, &includeDirs, e_rr));
+
+	//Compile the whole corpus into in-memory oiSH buffers. ignoreEmptyFiles tolerates include-only files.
+
+	//Don't abort on a single failing shader: assert the whole corpus compiled, but still snapshot every
+	//oiSH that was produced (failed entries come back as empty buffers and are skipped below).
+
+	Bool compiledAll = Compiler_compileShaders(
+		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
+		1,                                  //threadCount (single-threaded, deterministic)
+		false,                              //isDebug
+		(ECompilerWarning) 0,               //no extra warnings
+		true,                               //ignoreEmptyFiles
+		ECompileType_Compile,
+		&includeDirs,
+		true,                               //enableLogging
+		alloc,
+		&allBuffers,
+		&err
+	);
+
+	Test_assert(t, "entire corpus compiled", compiledAll && !err.genericError);
+	err = Error_none();
+
+	//Snapshot each produced oiSH against its committed reference
+
+	for (U64 i = 0; i < allBuffers.length; ++i) {
+
+		const Buffer produced = allBuffers.ptr[i];
+
+		if (!Buffer_length(produced))       //Include-only / ignored empty files produce nothing
+			continue;
+
+		const CharString ref = allOutputs.ptr[i];
+
+		if (File_has(&ref, alloc)) {
+
+			Buffer_free(&golden, alloc);
+			gotoIfError3(clean, File_read(&ref, 1 * SECOND, 0, 0, &fileHandleType, &golden, e_rr));
+
+			Bool matches = Buffer_eq(produced, golden);
+
+			if (!matches) {
+				Log_errorLn(alloc, "oiSH mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);
+				printOiSH(alloc, produced, "produced");
+				printOiSH(alloc, golden, "reference");
+			}
+
+			Test_assert(t, ref.ptr, matches);
+		}
+
+		else {
+			gotoIfError3(clean, File_write(&produced, &ref, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
+			Log_warnLn(alloc, "Generated missing reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr);
+			Test_assert(t, ref.ptr, false);         //Red until the new reference is reviewed & committed
+		}
+	}
+
+clean:
+
+	Test_assert(t, "corpus module produced no error", s_uccess);
+
+	Buffer_free(&golden, alloc);
+	ListBuffer_freeUnderlying(&allBuffers, alloc);
+	ListCharString_freeUnderlying(&allFiles, alloc);
+	ListCharString_freeUnderlying(&allShaderText, alloc);
+	ListCharString_freeUnderlying(&allOutputs, alloc);
+	ListU8_free(&allCompileModes, alloc);
+	ListCharString_free(&includeDirs, alloc);
+
+	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+}
