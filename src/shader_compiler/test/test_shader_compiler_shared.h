@@ -34,6 +34,7 @@ void Test_shaderCompilerParse(Test *t);         //Parse annotations -> SHEntryRu
 void Test_shaderCompilerAnnotations(Test *t);   //oxc:: extensions / model / vendor / defines / uniforms / stages
 void Test_shaderCompilerCorpus(Test *t);        //Compile the whole test/hlsl corpus -> in-memory oiSH (snapshot)
 void Test_shaderCompilerFeatures(Test *t);      //Shaders *using* extension features -> compiled + reflected
+void Test_shaderCompilerStages(Test *t);        //One shader per pipeline stage -> reflected stage matches
 void Test_shaderCompilerDriver(Test *t);        //compiler_helper compile driver: threads / modes / errors
 
 //--- Shared helpers (test_shader_compiler_util.c) ---
@@ -50,6 +51,18 @@ Bool compileInlineShaders(
 	U64 count,
 	U8 mode,                //ESHBinaryType
 	U64 threadCount,
+	const C8 *namePrefix,   //Names each shader "<prefix>N.hlsl" so logs/errors are identifiable
+	Bool enableLogging,
+	ListBuffer *out,
+	Error *e_rr
+);
+
+//Compile a single HLSL shader loaded from `path` (relative to the working dir) into an oiSH of binary type
+//`mode`. Self-contained shaders only (@virtual includes). Fills `out` with one oiSH buffer. Caller frees.
+Bool compileFileShader(
+	const Allocator *alloc,
+	const C8 *path,
+	U8 mode,                //ESHBinaryType
 	Bool enableLogging,
 	ListBuffer *out,
 	Error *e_rr

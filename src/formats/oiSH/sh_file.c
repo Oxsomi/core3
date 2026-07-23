@@ -44,6 +44,29 @@ void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc) {
 		OXC3_GET_PATCH(a->compilerVersion)
 	);
 
+	//Which binary types this oiSH actually serialized (aggregated over every SHBinaryInfo). With per-entrypoint
+	//[[oxc::binary(...)]] this can differ from what was requested, so it's worth surfacing at a glance.
+
+	Log_debug(alloc, ELogOptions_None, "Serialized binary types:");
+
+	Bool anyBinaryType = false;
+
+	for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
+
+		Bool has = false;
+
+		for (U64 i = 0; i < a->binaries.length && !has; ++i)
+			if (Buffer_length(a->binaries.ptr[i].binaries[j]))
+				has = true;
+
+		if (has) {
+			Log_debug(alloc, ELogOptions_None, " %s", ESHBinaryType_names[j]);
+			anyBinaryType = true;
+		}
+	}
+
+	Log_debugLn(alloc, "%s", anyBinaryType ? "" : " (none)");
+
 	for(U64 i = 0; i < a->binaries.length; ++i) {
 		Log_debugLn(alloc, "SHBinaryInfo at %"PRIu64, i);
 		SHBinaryInfo_print(&a->binaries.ptr[i], isVerbose, alloc);

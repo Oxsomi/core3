@@ -23,12 +23,14 @@
 #include "test_shader_compiler_shared.h"
 #include "shader_compiler/compiler.h"
 #include "formats/oiSH/sh_binaries.h"
+#include "formats/oiSH/sh_entries.h"
 #include "formats/oiSH/sh_file.h"
 #include "platforms/platform.h"
 #include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/log.h"
 #include "types/base/error.h"
+#include "types/base/string_read_helper.h"
 
 //Exercises the Compiler_compileShaders driver in compiler_helper.c: batching many files, the JobGroup
 //fan-out under different thread counts, the DXIL backend, and error handling. These are the paths the
@@ -68,7 +70,7 @@ void Test_shaderCompilerDriver(Test *t) {
 	//--- Multi-file batch (single-threaded) ---
 
 	ListBuffer single = (ListBuffer) { 0 };
-	Bool okSingle = compileInlineShaders(alloc, shaders, n, ESHBinaryType_SPIRV, 1, true, &single, &err);
+	Bool okSingle = compileInlineShaders(alloc, shaders, n, ESHBinaryType_SPIRV, 1, "driver_batch", true, &single, &err);
 
 	U64 produced = 0;
 	if (okSingle)
@@ -82,7 +84,7 @@ void Test_shaderCompilerDriver(Test *t) {
 	//--- output regardless of thread count (deterministic compile). ---
 
 	ListBuffer multi = (ListBuffer) { 0 };
-	Bool okMulti = compileInlineShaders(alloc, shaders, n, ESHBinaryType_SPIRV, 4, true, &multi, &err);
+	Bool okMulti = compileInlineShaders(alloc, shaders, n, ESHBinaryType_SPIRV, 4, "driver_batch", true, &multi, &err);
 
 	Bool deterministic = okMulti && multi.length == single.length;
 
@@ -102,7 +104,7 @@ void Test_shaderCompilerDriver(Test *t) {
 		SHFile sh = (SHFile) { 0 };
 
 		Bool hasDxil =
-			compileInlineShaders(alloc, one, 1, ESHBinaryType_DXIL, 1, true, &dxil, &err) &&
+			compileInlineShaders(alloc, one, 1, ESHBinaryType_DXIL, 1, "driver_dxil", true, &dxil, &err) &&
 			dxil.length == 1 && Buffer_length(dxil.ptr[0]) &&
 			readOiSH(alloc, dxil.ptr[0], &sh, &err) && sh.binaries.length >= 1 &&
 			Buffer_length(sh.binaries.ptr[0].binaries[ESHBinaryType_DXIL]);
@@ -111,6 +113,53 @@ void Test_shaderCompilerDriver(Test *t) {
 
 		SHFile_free(&sh, alloc);
 		ListBuffer_freeUnderlying(&dxil, alloc);
+	}
+
+	//--- [[oxc::binary(...)]] restricts, per-entrypoint, which backend an entrypoint is emitted for ---
+	//An RT library with a both-backends raygen and a DXIL-only miss: SPIRV keeps only the raygen, DXIL keeps
+	//both. This exercises per-entrypoint filtering inside a shared lib compile (the case the driver must get
+	//right) while keeping >=1 entrypoint per backend, so neither side degenerates to an empty oiSH.
+
+	{
+		const C8 *lib[1] = {
+			"RWStructuredBuffer<float> o;\n"
+			"struct Payload { float v; };\n"
+			"[shader(\"raygeneration\")]\n"
+			"void mainRaygen() { o[0] = 1; }\n"
+			"[[oxc::binary(\"dxil\")]]\n"
+			"[shader(\"miss\")]\n"
+			"void mainMiss(inout Payload p) { p.v = 0; }\n"
+		};
+
+		//DXIL: both entrypoints survive.
+
+		ListBuffer d = (ListBuffer) { 0 };
+		SHFile sd = (SHFile) { 0 };
+		Bool onDxil =
+			compileInlineShaders(alloc, lib, 1, ESHBinaryType_DXIL, 1, "binary_dxil", true, &d, &err) &&
+			d.length == 1 && Buffer_length(d.ptr[0]) &&
+			readOiSH(alloc, d.ptr[0], &sd, &err) && sd.entries.length == 2;
+
+		Test_assert(t, "binary: DXIL keeps both raygen + DXIL-only miss", onDxil);
+
+		SHFile_free(&sd, alloc);
+		ListBuffer_freeUnderlying(&d, alloc);
+
+		//SPIRV: the DXIL-only miss is filtered out, leaving just the raygen.
+
+		ListBuffer s = (ListBuffer) { 0 };
+		SHFile ss = (SHFile) { 0 };
+		Bool onSpirv =
+			compileInlineShaders(alloc, lib, 1, ESHBinaryType_SPIRV, 1, "binary_spv", true, &s, &err) &&
+			s.length == 1 && Buffer_length(s.ptr[0]) &&
+			readOiSH(alloc, s.ptr[0], &ss, &err) && ss.entries.length == 1;
+
+		Bool onlyRaygen = onSpirv && CharString_equalsCStringSensitive(&ss.entries.ptr[0].name, "mainRaygen");
+
+		Test_assert(t, "binary: SPIRV drops the DXIL-only miss, keeps raygen", onlyRaygen);
+
+		SHFile_free(&ss, alloc);
+		ListBuffer_freeUnderlying(&s, alloc);
 	}
 
 	//--- Invalid HLSL is reported as failure, not a crash ---
@@ -122,7 +171,7 @@ void Test_shaderCompilerDriver(Test *t) {
 
 		//enableLogging=false: the failure is expected and asserted on below, so keep the compiler quiet
 		//instead of printing DXC diagnostics for a shader we deliberately broke.
-		Bool compiledBad = compileInlineShaders(alloc, bad, 1, ESHBinaryType_SPIRV, 1, false, &out, &e2);
+		Bool compiledBad = compileInlineShaders(alloc, bad, 1, ESHBinaryType_SPIRV, 1, "driver_invalid", false, &out, &e2);
 
 		Test_assert(t, "invalid shader fails cleanly", !compiledBad);
 

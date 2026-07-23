@@ -227,13 +227,21 @@ const C8 *ignoredWarnings[] = {
 	"unknown attribute 'defines' ignored [-Wunknown-attributes]",
 	"unknown attribute 'extension' ignored [-Wunknown-attributes]",
 	"unknown attribute 'vendor' ignored [-Wunknown-attributes]",
+	"unknown attribute 'binary' ignored [-Wunknown-attributes]",
 
 	//Vulkan attributes:
 
 	"'binding' attribute ignored",
 	"'combinedImageSampler' attribute ignored",
 	"'push_constant' attribute ignored",
-	"'image_format' attribute ignored"
+	"'image_format' attribute ignored",
+
+	//Inline SPIR-V attributes (used to hand-declare capabilities/extensions/instructions, e.g. atomic float add)
+
+	"'ext_capability' attribute ignored",
+	"'ext_extension' attribute ignored",
+	"'ext_instruction' attribute ignored",
+	"'ext_reference' attribute ignored"
 };
 
 static Bool Compiler_filterWarning(CharString str) {
@@ -245,7 +253,7 @@ static Bool Compiler_filterWarning(CharString str) {
 
 	if (CharString_startsWithStringSensitive(&str, &w1, 0)) {
 
-		for (U64 i = 2; i <= 7; ++i) {
+		for (U64 i = 2; i <= 8; ++i) {
 			const CharString w = CharString_createRefCStrConst(ignoredWarnings[i]);
 			if (CharString_equalsStringSensitive(&str, &w))
 				return true;
@@ -259,7 +267,7 @@ static Bool Compiler_filterWarning(CharString str) {
 	if (CharString_startsWithStringSensitive(&str, &w0, 0))
 		return true;
 
-	for (U64 i = 8; i <= 11; ++i) {
+	for (U64 i = 9; i <= 16; ++i) {
 		const CharString w = CharString_createRefCStrConst(ignoredWarnings[i]);
 		if (CharString_equalsStringSensitive(&str, &w))
 			return true;

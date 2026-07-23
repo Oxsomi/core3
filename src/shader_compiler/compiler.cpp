@@ -1120,16 +1120,11 @@ Bool Compiler_compile(
 					&stringsUTF8, "-fspv-extension=SPV_EXT_opacity_micromap", alloc, e_rr
 				));
 
-			if(toCompile->extensions & (ESHExtension_AtomicF32 | ESHExtension_AtomicF64)) {
-
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_add", alloc, e_rr
-				));
-
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_shader_atomic_float_min_max", alloc, e_rr
-				));
-			}
+			//NOTE: F32/F64 atomics have no native HLSL intrinsic and are expressed via inline SPIR-V
+			//([[vk::ext_extension("SPV_EXT_shader_atomic_float_add")]] on the atomic function). That inline
+			//attribute already declares the extension, and passing -fspv-extension=SPV_EXT_shader_atomic_float_add
+			//makes DXC fail with "unknown SPIR-V extension" (it isn't in DXC's -fspv-extension whitelist). So we
+			//deliberately do NOT whitelist it here; DXC emits OpAtomicFAddEXT from the inline declaration.
 		}
 
 		else {
@@ -2013,8 +2008,16 @@ Bool Compiler_parseShaderStageAnnot(
 	gotoIfError3(clean, CharString_createCopy(functionName, alloc, &entry.entry.name, e_rr));
 
 	entry.entry.stage = SHPipelineStage(stage);
-	entry.isRt = stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt;
-	entry.containsGfxOrComp = !entry.isRt && stage != ESHPipelineStage_WorkgraphExt;
+
+	//isRt = RT stage; containsGfxOrComp = not RT and not workgraph (folded into runtimeFlags)
+
+	entry.runtimeFlags &= (U8)~(ESHEntryRuntimeFlag_IsRt | ESHEntryRuntimeFlag_ContainsGfxOrComp);
+
+	if (stage >= ESHPipelineStage_RtStartExt && stage <= ESHPipelineStage_RtEndExt)
+		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_IsRt;
+
+	else if (stage != ESHPipelineStage_WorkgraphExt)
+		entry.runtimeFlags |= (U8)ESHEntryRuntimeFlag_ContainsGfxOrComp;
 
 clean:
 	return s_uccess;
@@ -2068,7 +2071,7 @@ Bool Compiler_parseStageAnnot(SHEntryRuntime &entry, CharString functionName, co
 	gotoIfError3(clean, Compiler_parseShaderStageAnnot(str, entry, functionName, alloc, e_rr));
 
 	entry.isShaderAnnotation = false;
-	entry.containsGfxOrComp = true;
+	entry.runtimeFlags |= ESHEntryRuntimeFlag_ContainsGfxOrComp;
 
 clean:
 	return s_uccess;
@@ -2155,11 +2158,109 @@ Bool Compiler_parseVendorAnnot(SHEntryRuntime &entry, const C8 *&str, Error *e_r
 	//                           ^
 
 	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
-		
+
 	//Ensure nothing is leftover
 
 	if (Compiler_skipWhitespace(str))
 		retError(clean, Error_invalidState(0, "Compiler_parseVendorAnnot() expected end of token"));
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_registerBinaryType(U8 *binaryTypes, CharString name, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ESHBinaryType type = ESHBinaryType_Count;
+
+	//"spv" / "spirv" -> SPIRV, "dxil" -> DXIL (case insensitive)
+
+	if(CharString_equalsCStringInsensitive(&name, "spv") || CharString_equalsCStringInsensitive(&name, "spirv"))
+		type = ESHBinaryType_SPIRV;
+
+	else if(CharString_equalsCStringInsensitive(&name, "dxil"))
+		type = ESHBinaryType_DXIL;
+
+	else retError(clean, Error_invalidParameter(
+		0, 1, "Compiler_registerBinaryType() unrecognized binary type (expected \"spv\"/\"spirv\" or \"dxil\")"
+	));
+
+	if((*binaryTypes >> type) & 1)
+		retError(clean, Error_invalidParameter(
+			0, 2, "Compiler_registerBinaryType() duplicate binary type found"
+		));
+
+	*binaryTypes |= (U8)(1 << type);
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_parseBinaryAnnot(SHEntryRuntime &entry, const C8 *&str, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const C8 *annotStart = NULL;
+	const C8 *annotEnd = NULL;
+	U8 binaryTypes = 0;
+
+	//oxc::binary ( "spv" , "dxil" )
+	//           ^^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, true, e_rr));
+
+	//oxc::binary ( "spv" , "dxil" )
+	//             ^^^^^
+
+	gotoIfError3(clean, Compiler_consumeString(str, annotStart, annotEnd, e_rr));
+
+	gotoIfError3(clean, Compiler_registerBinaryType(
+		&binaryTypes, CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false), e_rr
+	));
+
+	while (true) {
+
+		//oxc::binary ( "spv" , "dxil" )
+		//                   ^        ^
+
+		if (!Compiler_skipWhitespace(str))
+			retError(clean, Error_invalidState(0, "Compiler_parseBinaryAnnot() binary annotation ended unexpectedly"));
+
+		//oxc::binary ( "spv" , "dxil" )
+		//                             ^
+
+		if (*str == ')')
+			break;
+
+		//oxc::binary ( "spv" , "dxil" )
+		//                    ^
+
+		if(*str != ',')
+			retError(clean, Error_invalidState(0, "Compiler_parseBinaryAnnot() binary annotation expected ,"));
+
+		++str;
+
+		//oxc::binary ( "spv" , "dxil" )
+		//                      ^^^^^^
+
+		gotoIfError3(clean, Compiler_consumeString(str, annotStart, annotEnd, e_rr));
+
+		gotoIfError3(clean, Compiler_registerBinaryType(
+			&binaryTypes, CharString_createRefSizedConst(annotStart, annotEnd - annotStart, false), e_rr
+		));
+	}
+
+	//oxc::binary ( "spv" , "dxil" )
+	//                             ^
+
+	gotoIfError3(clean, Compiler_skipRndBracket(str, false, e_rr));
+
+	//Ensure nothing is leftover
+
+	if (Compiler_skipWhitespace(str))
+		retError(clean, Error_invalidState(0, "Compiler_parseBinaryAnnot() expected end of token"));
+
+	entry.binaryTypes = binaryTypes;
 
 clean:
 	return s_uccess;
@@ -3048,6 +3149,17 @@ Bool Compiler_parseOxcAnnot(
 		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('o', 'r')) {
 			str += 6;
 			gotoIfError3(clean, Compiler_parseVendorAnnot(entry, str, e_rr));
+		}
+
+		break;
+
+	case C8x4('b', 'i', 'n', 'a'):        //oxc::binary()
+
+		//[[oxc::binary("spv", "dxil")]]
+		//       ^
+		if (annotLen == 6 && Buffer_readU16(buf, 4, NULL, NULL) == C8x2('r', 'y')) {
+			str += 6;
+			gotoIfError3(clean, Compiler_parseBinaryAnnot(entry, str, e_rr));
 		}
 
 		break;

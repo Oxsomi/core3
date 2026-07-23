@@ -131,6 +131,12 @@ typedef struct SHEntry {
 
 extern const C8 *SHEntry_stageNames[ESHPipelineStage_Count];
 
+typedef enum ESHEntryRuntimeFlag {
+	ESHEntryRuntimeFlag_None              = 0,
+	ESHEntryRuntimeFlag_IsRt              = 1 << 0,    //Raytracing stage (raygen/miss/closesthit/anyhit/intersection/callable)
+	ESHEntryRuntimeFlag_ContainsGfxOrComp = 1 << 1     //Graphics or compute stage (not RT, not workgraph)
+} ESHEntryRuntimeFlag;
+
 typedef struct SHEntryRuntime {
 
 	SHEntry entry;
@@ -139,8 +145,8 @@ typedef struct SHEntryRuntime {
 	Bool isShaderAnnotation;              //Switches [shader("string")] and [[oxc::stage("string")]]
 	U8 isInitializedFlags;                //1 = init, 2 = init oxc::uniforms
 
-	Bool isRt;
-	Bool containsGfxOrComp;
+	U8 runtimeFlags;                      //ESHEntryRuntimeFlag (folds isRt / containsGfxOrComp)
+	U8 binaryTypes;                       //[[oxc::binary(...)]] mask of (1 << ESHBinaryType); 0 = unset (all supported)
 	U16 uniformStride;                    //How many bytes all uniforms combined take
 
 	ListU32 extensions;                   //Explicitly enabled extensions (ESHExtension[])
@@ -159,6 +165,22 @@ typedef struct SHBinaryIdentifier SHBinaryIdentifier;
 typedef struct SHBinaryInfo SHBinaryInfo;
 typedef enum ESHBinaryType ESHBinaryType;
 typedef enum ESHExtension ESHExtension;
+
+static inline Bool SHEntryRuntime_isRt(SHEntryRuntime runtime) {
+	return (runtime.runtimeFlags & ESHEntryRuntimeFlag_IsRt) != 0;
+}
+
+static inline Bool SHEntryRuntime_containsGfxOrComp(SHEntryRuntime runtime) {
+	return (runtime.runtimeFlags & ESHEntryRuntimeFlag_ContainsGfxOrComp) != 0;
+}
+
+//Backends (mask of 1 << ESHBinaryType) this entrypoint's stage + extensions can be expressed on, ignoring
+//the annotation. Uniform across all entrypoints sharing a compile, so it's safe to skip a whole compile with.
+U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime);
+
+//Full effective set of backends this entrypoint may be compiled for.
+//= (the [[oxc::binary(...)]] annotation, or all backends if unset) AND SHEntryRuntime_getSupportedBinaryTypes.
+U8 SHEntryRuntime_getBinaryTypes(const SHEntryRuntime *runtime);
 
 U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime);             //How many binaries are stored (compile + link)
 U32 SHEntryRuntime_getCombinationsCompiled(const SHEntryRuntime *runtime);     //How many binaries are compiled

@@ -32,15 +32,29 @@
 #include "types/base/string_read_helper.h"
 #include "types/base/error.h"
 
-//Unlike the annotation module (which only checks an extension can be *declared*), this module compiles
-//shaders that actually *use* each feature and verifies (a) the feature compiles end-to-end through DXC,
-//and (b) the resulting binary reflects the extension. So it exercises the real code paths behind each
-//extension, not just the annotation parser.
+//Each case compiles a shader that actually *uses* an extension's feature (from test/features/) and asserts
+//the produced binary reflects that extension bit. Unlike the annotation module (which only checks an
+//extension can be *declared*), this exercises the real DXC/SPIRV|DXIL code path behind each extension.
+//These live in test/features (not the hlsl/ corpus) because they're semantic reflection tests, not
+//byte-snapshots, and several would otherwise flake or fail the SPIRV-only corpus. Each carries its own
+//backend target: SPIRV-native features, plus DXIL-native ones (MeshTaskTexDeriv, PAQ, WriteMSTexture).
+//
+//Coverage still parked as *.hlsl.disabled in test/features (kept as repros, not asserted here), with cause:
+// - RayReorder / RayMicromapOpacity: SM6.9 (dx::HitObject SER / OMM ray flags) > the bundled DXC (~6.8).
+//PAQ and WriteMSTexture used to be parked here too but now pass on DXIL after OxC3-side fixes:
+// - PAQ needed the payload-access qualifiers declared on *both* entrypoints (raygen + closesthit share the
+//   payload), plus Compiler_convertMemberDXIL now reflects the opaque RWStructuredBuffer<float4> $Element
+//   (DXC leaves it D3D_SVT_VOID on DXIL) as a raw 32-bit block instead of erroring on "invalid primitive".
+// - WriteMSTexture: DxilMapToESHExtension now folds ADVANCED_TEXTURE_OPS (which DXC co-reports with
+//   WRITEABLE_MSAA_TEXTURES for an RWTexture2DMS write) into ESHExtension_WriteMSTexture.
+//AtomicF32/F64 used to be parked here too but now pass: OxC3 was whitelisting -fspv-extension=
+//SPV_EXT_shader_atomic_float_add, which DXC rejects as "unknown extension"; the inline [[vk::ext_extension]]
+//already declares it, so that flag was removed (compiler.cpp) and DXC emits OpAtomicFAddEXT.
 
 typedef struct FeatureCase {
-	const C8 *name;
-	ESHExtension ext;
-	const C8 *src;
+	const C8 *file;
+	ESHExtension ext;       //Expected reflected extension bit
+	U8 target;              //ESHBinaryType
 } FeatureCase;
 
 void Test_shaderCompilerFeatures(Test *t) {
@@ -53,59 +67,33 @@ void Test_shaderCompilerFeatures(Test *t) {
 
 	static const FeatureCase features[] = {
 
-		{ "I64 (uint64 arithmetic)", ESHExtension_I64,
-			"RWStructuredBuffer<uint64_t> buf;\n"
-			"[[oxc::extension(\"I64\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\n"
-			"void main(uint id : SV_DispatchThreadID) { buf[id] = buf[id] * 3ull + 1ull; }\n" },
+		//SPIRV-native features
+		{ "features/i64.hlsl",                 ESHExtension_I64,                ESHBinaryType_SPIRV },
+		{ "features/f64.hlsl",                 ESHExtension_F64,                ESHBinaryType_SPIRV },
+		{ "features/bit16.hlsl",               ESHExtension_16BitTypes,         ESHBinaryType_SPIRV },
+		{ "features/atomic_i64.hlsl",          ESHExtension_AtomicI64,          ESHBinaryType_SPIRV },
+		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, ESHBinaryType_SPIRV },
+		{ "features/subgroup_operations.hlsl", ESHExtension_SubgroupOperations, ESHBinaryType_SPIRV },
+		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    ESHBinaryType_SPIRV },
+		{ "features/multiview.hlsl",           ESHExtension_Multiview,          ESHBinaryType_SPIRV },
+		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       ESHBinaryType_SPIRV },
+		{ "features/atomic_f32.hlsl",          ESHExtension_AtomicF32,          ESHBinaryType_SPIRV },
+		{ "features/atomic_f64.hlsl",          ESHExtension_AtomicF64,          ESHBinaryType_SPIRV },
+		{ "features/ray_query.hlsl",           ESHExtension_RayQuery,           ESHBinaryType_SPIRV },
 
-		{ "F64 (double arithmetic)", ESHExtension_F64,
-			"RWStructuredBuffer<double> buf;\n"
-			"[[oxc::extension(\"F64\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\n"
-			"void main(uint id : SV_DispatchThreadID) { buf[id] = buf[id] * buf[id] + buf[id]; }\n" },
-
-		{ "16BitTypes (float16 arithmetic)", ESHExtension_16BitTypes,
-			"RWStructuredBuffer<float16_t> buf;\n"
-			"[[oxc::extension(\"16BitTypes\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\n"
-			"void main(uint id : SV_DispatchThreadID) { buf[id] = buf[id] + (float16_t)1; }\n" },
-
-		//AtomicI64 via RWStructuredBuffer<int64_t> (NOT RWByteAddressBuffer.InterlockedAdd64, which is
-		//impossible in SPIRV logical addressing: DXC #5965, closed wontfix). SpvCapabilityInt64Atomics
-		//reflects as ESHExtension_(I64 | AtomicI64), so both are declared. Needs SM6.6 for 64-bit atomics.
-		{ "AtomicI64 (uint64 InterlockedAdd)", ESHExtension_AtomicI64,
-			"RWStructuredBuffer<uint64_t> buf;\n"
-			"[[oxc::extension(\"I64\", \"AtomicI64\")]]\n[[oxc::model(\"6.6\")]]\n[[oxc::stage(\"compute\")]]\n"
-			"[numthreads(1,1,1)]\n"
-			"void main(uint id : SV_DispatchThreadID) {\n"
-			"	uint64_t prev;\n"
-			"	InterlockedAdd(buf[0], (uint64_t)(id + 1), prev);\n"
-			"	buf[id + 1] = prev;\n"
-			"}\n" },
-
-		{ "RayQuery (inline raytracing)", ESHExtension_RayQuery,
-			"RaytracingAccelerationStructure tlas;\n"
-			"RWStructuredBuffer<float> buf;\n"
-			"[[oxc::extension(\"RayQuery\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\n"
-			"void main(uint id : SV_DispatchThreadID) {\n"
-			"	RayDesc r; r.Origin = float3(0,0,0); r.Direction = float3(0,0,1); r.TMin = 0; r.TMax = 1e30f;\n"
-			"	RayQuery<RAY_FLAG_NONE> q;\n"
-			"	q.TraceRayInline(tlas, 0, 0xFF, r);\n"
-			"	q.Proceed();\n"
-			"	buf[id] = q.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? q.CommittedRayT() : -1;\n"
-			"}\n" },
-
-		{ "SubgroupArithmetic (WaveActiveSum)", ESHExtension_SubgroupArithmetic,
-			"RWStructuredBuffer<uint> buf;\n"
-			"[[oxc::extension(\"SubgroupArithmetic\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(64,1,1)]\n"
-			"void main(uint id : SV_DispatchThreadID) { buf[id] = WaveActiveSum(id + 1); }\n" }
+		//DXIL-native features (DXC's SPIR-V backend can't express them), driven here on DXIL by explicit path
+		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   ESHBinaryType_DXIL },
+		{ "features/paq.hlsl",                 ESHExtension_PAQ,                ESHBinaryType_DXIL },
+		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     ESHBinaryType_DXIL }
 	};
 
 	for (U64 i = 0; i < sizeof(features) / sizeof(features[0]); ++i) {
 
-		const C8 *srcs[1] = { features[i].src };
+		const C8 *file = features[i].file;
 		ListBuffer out = (ListBuffer) { 0 };
 		SHFile shFile = (SHFile) { 0 };
 
-		Bool compiled = compileInlineShaders(alloc, srcs, 1, ESHBinaryType_SPIRV, 1, true, &out, &err);
+		Bool compiled = compileFileShader(alloc, file, features[i].target, true, &out, &err);
 		Bool hasBinary = compiled && out.length == 1 && Buffer_length(out.ptr[0]);
 
 		Bool reflected =
@@ -116,7 +104,7 @@ void Test_shaderCompilerFeatures(Test *t) {
 		if (!reflected)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 
-		Test_assert(t, features[i].name, reflected);
+		Test_assert(t, file, reflected);
 
 		SHFile_free(&shFile, alloc);
 		ListBuffer_freeUnderlying(&out, alloc);
@@ -126,12 +114,6 @@ void Test_shaderCompilerFeatures(Test *t) {
 	//--- Disassembly: a compiled SPIRV binary round-trips to non-empty, plausible SPIRV text ---
 
 	{
-		const C8 *srcs[1] = {
-			"RWStructuredBuffer<uint> buf;\n"
-			"[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\n"
-			"void main(uint id : SV_DispatchThreadID) { buf[id] = id; }\n"
-		};
-
 		ListBuffer out = (ListBuffer) { 0 };
 		SHFile shFile = (SHFile) { 0 };
 		Compiler comp = (Compiler) { 0 };
@@ -139,7 +121,7 @@ void Test_shaderCompilerFeatures(Test *t) {
 		Bool created = false;
 
 		Bool ok =
-			compileInlineShaders(alloc, srcs, 1, ESHBinaryType_SPIRV, 1, true, &out, &err) &&
+			compileFileShader(alloc, "features/i64.hlsl", ESHBinaryType_SPIRV, true, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &shFile, &err) && shFile.binaries.length >= 1;
 

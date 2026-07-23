@@ -36,6 +36,7 @@ Platform_defineEntrypoint() {
 	Test_shaderCompilerParse(&t);
 	Test_shaderCompilerAnnotations(&t);
 	Test_shaderCompilerFeatures(&t);
+	Test_shaderCompilerStages(&t);
 	Test_shaderCompilerDriver(&t);
 	Test_shaderCompilerCorpus(&t);
 

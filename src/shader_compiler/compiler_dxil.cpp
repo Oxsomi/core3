@@ -66,6 +66,9 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED,
 		D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS,
 		D3D_SHADER_REQUIRES_WRITEABLE_MSAA_TEXTURES,
+		//DXC also reports ADVANCED_TEXTURE_OPS for an RWTexture2DMS write (it's the parent SM6.7 feature).
+		//OxC3 has no dedicated bit for it, so fold it into WriteMSTexture, which is the use case that trips it.
+		D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS,
 		D3D_SHADER_REQUIRES_WAVE_OPS
 	};
 
@@ -80,6 +83,7 @@ static inline Bool DxilMapToESHExtension(U64 flags, ESHExtension *ext, ESHExtens
 		ESHExtension_AtomicI64,
 		ESHExtension_MeshTaskTexDeriv,
 		ESHExtension_WriteMSTexture,
+		ESHExtension_WriteMSTexture,        //ADVANCED_TEXTURE_OPS folded into WriteMSTexture (see above)
 		ESHExtension_SubgroupOperations
 	};
 
@@ -227,6 +231,23 @@ Bool Compiler_convertMemberDXIL(
 			case D3D_SVT_INT16:    stride = ESBStride_X16;  prim = ESBPrimitive_Int;    break;
 			case D3D_SVT_INT:      stride = ESBStride_X32;  prim = ESBPrimitive_Int;    break;
 			case D3D_SVT_INT64:    stride = ESBStride_X64;  prim = ESBPrimitive_Int;    break;
+
+			//Opaque element: on DXIL, DXC does not describe a non-struct structured-buffer element's type
+			//(e.g. RWStructuredBuffer<float4> reflects its "$Element" as D3D_SVT_VOID with no rows/cols),
+			//whereas SPIRV reflects the real type. Preserve the element *size* by reflecting it as a raw
+			//1..4-wide 32-bit block, so RT/structured-buffer shaders still reflect on DXIL.
+			case D3D_SVT_VOID:
+
+				if(!size || (size & 3) || (size >> 2) > 4)
+					retError(clean, Error_invalidState(
+						0, "Compiler_convertMemberDXIL() opaque element isn't a 1..4-wide 32-bit block"
+					));
+
+				stride = ESBStride_X32;
+				prim = ESBPrimitive_UInt;
+				typeDesc.Columns = size >> 2;
+				typeDesc.Rows = 1;
+				break;
 
 			default:
 				retError(clean, Error_invalidState(

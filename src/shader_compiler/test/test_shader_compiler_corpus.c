@@ -85,12 +85,14 @@ void Test_shaderCompilerCorpus(Test *t) {
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 	const CharString here = CharString_createRefCStrConst("hlsl");     //Named folder under the working dir (test/)
 
-	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV
+	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV for the byte-snapshot.
+	//(A separate DXIL compile+reflect coverage pass follows below; a combined SPIRV+DXIL snapshot is blocked
+	//on a driver issue when a folder is enumerated for both modes with combineFlag - see that pass.)
 
 	gotoIfError3(clean, Compiler_getTargetsFromFile(
 		here,
 		ECompileType_Compile,
-		(U64)1 << ESHBinaryType_SPIRV,      //Single SPIRV target
+		(U64)1 << ESHBinaryType_SPIRV,      //Single SPIRV target (byte-snapshot)
 		false,                              //multipleModes
 		true,                               //combineFlag
 		true,                               //enableLogging
@@ -167,6 +169,58 @@ void Test_shaderCompilerCorpus(Test *t) {
 			Log_warnLn(alloc, "Generated missing reference %.*s (review & commit)", (int) CharString_length(ref), ref.ptr);
 			Test_assert(t, ref.ptr, false);         //Red until the new reference is reviewed & committed
 		}
+	}
+
+	//--- DXIL coverage: compile the same on-disk corpus for DXIL too, so it isn't SPIRV-only. There's no
+	//--- byte-snapshot here (the SPIRV pass above is the byte reference; DXIL is exercised for compile +
+	//--- reflection coverage) - this stays robust to benign DXIL output churn while still catching any
+	//--- DXIL-specific compile or reflection regression across the whole corpus. Every corpus shader that
+	//--- produced a SPIRV binary must also produce a DXIL one (none here are backend-restricted).
+	//---
+	//--- NOTE: a single *combined* SPIRV+DXIL snapshot (one oiSH per shader carrying both) would be stronger,
+	//--- but enumerating a folder for both modes with combineFlag currently fails inside Compiler_compileShaders
+	//--- (SHFile_combine step) before any per-shader compile runs - separate OxC3-side item to chase.
+
+	{
+		ListCharString dxFiles = (ListCharString) { 0 };
+		ListCharString dxText = (ListCharString) { 0 };
+		ListCharString dxOutputs = (ListCharString) { 0 };
+		ListU8 dxModes = (ListU8) { 0 };
+		ListBuffer dxBuffers = (ListBuffer) { 0 };
+		Bool dxFolder = false;
+		Error dxErr = Error_none();
+
+		U64 spvProduced = 0;
+		for (U64 i = 0; i < allBuffers.length; ++i)
+			if (Buffer_length(allBuffers.ptr[i]))
+				++spvProduced;
+
+		Bool dxCompiled =
+			Compiler_getTargetsFromFile(
+				here, ECompileType_Compile, (U64)1 << ESHBinaryType_DXIL, false, true, true,
+				alloc, &dxFolder, NULL, &dxFiles, &dxText, &dxOutputs, &dxModes
+			) &&
+			Compiler_compileShaders(
+				&dxFiles, &dxText, &dxOutputs, &dxModes, 1, false, (ECompilerWarning) 0, true,
+				ECompileType_Compile, &includeDirs, true, alloc, &dxBuffers, &dxErr
+			);
+
+		U64 dxProduced = 0;
+		for (U64 i = 0; dxCompiled && i < dxBuffers.length; ++i)
+			if (Buffer_length(dxBuffers.ptr[i]))
+				++dxProduced;
+
+		if (!dxCompiled || dxErr.genericError)
+			Error_print(alloc, &dxErr, ELogLevel_Error, ELogOptions_Default);
+
+		Test_assert(t, "entire corpus compiled for DXIL", dxCompiled && !dxErr.genericError);
+		Test_assert(t, "DXIL produced a binary for every SPIRV corpus shader", dxProduced == spvProduced && dxProduced >= 1);
+
+		ListBuffer_freeUnderlying(&dxBuffers, alloc);
+		ListCharString_freeUnderlying(&dxFiles, alloc);
+		ListCharString_freeUnderlying(&dxText, alloc);
+		ListCharString_freeUnderlying(&dxOutputs, alloc);
+		ListU8_free(&dxModes, alloc);
 	}
 
 clean:

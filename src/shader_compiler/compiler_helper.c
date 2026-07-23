@@ -499,8 +499,8 @@ Bool Compiler_compileShaderSingle(
 	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(&entry, combinationId, &binaryIdentifier, e_rr));
 
 	settings.isLib = entry.isShaderAnnotation;
-	settings.containsGfxOrComp = entry.containsGfxOrComp;
-	settings.isRt = entry.isRt;
+	settings.containsGfxOrComp = SHEntryRuntime_containsGfxOrComp(entry);
+	settings.isRt = SHEntryRuntime_isRt(entry);
 
 	gotoIfError3(clean, Compiler_compile(compiler, &settings, &binaryIdentifier, alloc, dest, e_rr));
 
@@ -728,6 +728,20 @@ Bool Compiler_getLinkEntries(
 			retError(clean, Error_invalidState(
 				0, "Compiler_getLinkEntries() had a reflection stage type that mismatched with what was parsed"
 			));
+
+		//Skip this entrypoint if its [[oxc::binary(...)]] mask (AND its stage/extension backend support)
+		//excludes the backend we're currently compiling. A shader targeting all backends thus only emits an
+		//entrypoint for the backends it actually declared / can be expressed on (see SHEntryRuntime_getBinaryTypes).
+		//
+		//TODO: this only filters the oiSH *reflection* - the entrypoint is not reported for this backend, but
+		//      the compiled DXIL/SPIRV blob still physically contains its code (it was compiled as part of the
+		//      shared lib). Truly removing it requires explicitly stripping the entrypoint from the binary and
+		//      re-running DCE per backend. Until then, reflection and the actual binary disagree for restricted
+		//      entrypoints. (Doesn't apply to the compile-level skip in Compiler_compileShaderFile, where the
+		//      whole compile is skipped so the code is genuinely absent.)
+
+		if (!((SHEntryRuntime_getBinaryTypes(&entry) >> binaryType) & 1))
+			continue;
 
 		//Ensure we're actually present for what we're currently compiling and that we do really need linking (otherwise skip)
 		//This is not relevant for single entrypoints, as they're always only compiled with the defines / extensions they need.
@@ -1540,6 +1554,15 @@ Bool Compiler_compileShaderFile(CompilerShaderFileJob *job, JobQueue *queue, U64
 
 		runtimeEntryId &= (U16) I16_MAX;
 		combinationId  &= (U16) I16_MAX;
+
+		//Skip compiling this combination entirely if the entry's stage / extensions can't be expressed on the
+		//backend we're compiling for (e.g. a workgraph on SPIRV, or an inline-SPIRV atomic on DXIL). This
+		//prevents a guaranteed compile failure. Only the stage/extension support is checked here (not the
+		//[[oxc::binary(...)]] annotation) because it's identical for every entrypoint sharing this compile;
+		//the annotation is applied per-entrypoint later at link time (Compiler_getLinkEntries).
+
+		if (!((SHEntryRuntime_getSupportedBinaryTypes(&ctx->runtimeEntries.ptr[runtimeEntryId]) >> binaryType) & 1))
+			continue;
 
 		Buffer cbuf = Buffer_createNull();
 		gotoIfError3(cleanSpawn, Buffer_createUninitializedBytes(sizeof(CompilerComboCtx), alloc, &cbuf, e_rr));

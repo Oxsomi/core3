@@ -237,7 +237,10 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = (ESHExtension)(ESHExtension_I64 | ESHExtension_AtomicI64);
 			break;
 
+		//Both compute-derivative group modes are the same OxC3 feature (ComputeDeriv). DXC emits the Quads
+		//variant for even 2D thread groups (ddx/ddy in compute); the Linear variant for other layouts.
 		case SpvCapabilityComputeDerivativeGroupLinearNV:
+		case SpvCapabilityComputeDerivativeGroupQuadsNV:
 			ext = ESHExtension_ComputeDeriv;
 			break;
 
@@ -314,7 +317,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityPerViewAttributesNV:
 		case SpvCapabilityMeshShadingNV:
 		case SpvCapabilityImageFootprintNV:
-		case SpvCapabilityComputeDerivativeGroupQuadsNV:
 		case SpvCapabilityGroupNonUniformPartitionedNV:
 		case SpvCapabilityRayTracingNV:
 		case SpvCapabilityCooperativeMatrixNV:

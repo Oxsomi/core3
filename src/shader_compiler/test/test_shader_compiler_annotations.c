@@ -184,6 +184,94 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		r.shEntriesRuntime.ptr[0].vendorMask != 0
 	);
 
+	//--- [[oxc::binary(...)]] records a per-entrypoint backend mask (bit = 1 << ESHBinaryType) ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::binary(\"dxil\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "binary(dxil) records DXIL-only mask",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].binaryTypes == (1 << ESHBinaryType_DXIL)
+	);
+
+	//"spv" and "spirv" are both accepted; listing both backends sets both bits
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::binary(\"spv\", \"dxil\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "binary(spv, dxil) records both bits",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].binaryTypes == ((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+	);
+
+	//Absence of the annotation leaves the mask unset (0), which the driver treats as "all supported"
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "binary absent leaves mask unset",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].binaryTypes == 0
+	);
+
+	//A backend name that isn't a currently-supported binary type is rejected. "air" (Apple IR) is the
+	//reserved name for the planned Apple backend; until ESHBinaryType_AIR exists it's rejected here, so this
+	//assertion flips (and prompts wiring the mapping) the day AIR support lands.
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::binary(\"air\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(t, "binary(air) rejected until AIR is supported", !parseShader(&comp, src, alloc, &r, true));
+
+	//--- Backend auto-restrict: SHEntryRuntime_getSupportedBinaryTypes AND's the stage + extension support,
+	//--- independent of the annotation. A SPIRV-only extension (ComputeDeriv) restricts to SPIRV; a plain
+	//--- compute entrypoint supports both. This is the mechanism behind "workgraph is DXIL-only", etc. ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"ComputeDeriv\")]]\n"
+		"[[oxc::model(\"6.6\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(2, 2, 1)]\n"
+		"void main(uint3 id : SV_DispatchThreadID) {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "ComputeDeriv entrypoint auto-restricts to SPIRV",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << ESHBinaryType_SPIRV)
+	);
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "plain compute entrypoint supports both backends",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
+			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+	);
+
 	//--- [[oxc::defines(...)]] records define name/value pairs ---
 
 	src = CharString_createRefCStrConst(

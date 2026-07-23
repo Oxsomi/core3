@@ -24,11 +24,13 @@
 #include <inttypes.h>
 #include "shader_compiler/compiler.h"
 #include "formats/oiSH/sh_file.h"
+#include "platforms/file.h"
 #include "types/container/string.h"
 #include "types/container/buffer.h"
 #include "types/container/list_basic_types.h"
 #include "types/container/memory_stream.h"
 #include "types/container/ref_ptr.h"
+#include "types/base/time.h"
 
 Bool compileInlineShaders(
 	const Allocator *alloc,
@@ -36,6 +38,7 @@ Bool compileInlineShaders(
 	U64 count,
 	U8 mode,
 	U64 threadCount,
+	const C8 *namePrefix,   //Descriptive name so logs/errors read "<prefix>0.hlsl" instead of a generic one
 	Bool enableLogging,
 	ListBuffer *out,
 	Error *e_rr
@@ -56,7 +59,7 @@ Bool compileInlineShaders(
 		//only feeds an -I <parent> arg, which resolves harmlessly within the working directory.
 
 		CharString_free(&name, alloc);
-		gotoIfError3(clean, CharString_format(alloc, &name, e_rr, "inline%"PRIu64".hlsl", i));
+		gotoIfError3(clean, CharString_format(alloc, &name, e_rr, "%s%"PRIu64".hlsl", namePrefix, i));
 		gotoIfError3(clean, ListCharString_pushBack(&allFiles, name, alloc, e_rr));
 		name = CharString_createNull();     //Moved into the list
 
@@ -92,6 +95,64 @@ clean:
 	ListCharString_freeUnderlying(&allOutputs, alloc);
 	ListU8_free(&allCompileModes, alloc);
 	ListCharString_free(&includeDirs, alloc);
+	return s_uccess;
+}
+
+Bool compileFileShader(
+	const Allocator *alloc,
+	const C8 *path,
+	U8 mode,
+	Bool enableLogging,
+	ListBuffer *out,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	Buffer fileData = Buffer_createNull();
+
+	ListCharString allFiles = (ListCharString) { 0 };
+	ListCharString allShaderText = (ListCharString) { 0 };
+	ListCharString allOutputs = (ListCharString) { 0 };
+	ListU8 allCompileModes = (ListU8) { 0 };
+	ListCharString includeDirs = (ListCharString) { 0 };
+	CharString outName = CharString_createNull();
+
+	const CharString pathStr = CharString_createRefCStrConst(path);
+
+	//Load the source and drive the real pipeline with the *actual* file name, so logs/errors point at the
+	//shader instead of a placeholder. Feature/stage shaders are self-contained (@virtual includes only).
+
+	gotoIfError3(clean, File_read(&pathStr, 1 * SECOND, 0, 0, &fileHandleType, &fileData, e_rr));
+
+	gotoIfError3(clean, ListCharString_pushBack(&allFiles, CharString_createRefCStrConst(path), alloc, e_rr));
+
+	gotoIfError3(clean, ListCharString_pushBack(
+		&allShaderText,
+		CharString_createRefSizedConst((const C8*) fileData.ptr, Buffer_length(fileData), false),
+		alloc, e_rr
+	));
+
+	gotoIfError3(clean, CharString_format(alloc, &outName, e_rr, "%s.oiSH", path));
+	gotoIfError3(clean, ListCharString_pushBack(&allOutputs, outName, alloc, e_rr));
+	outName = CharString_createNull();
+
+	gotoIfError3(clean, ListU8_pushBack(&allCompileModes, mode, alloc, e_rr));
+
+	gotoIfError3(clean, Compiler_compileShaders(
+		&allFiles, &allShaderText, &allOutputs, &allCompileModes,
+		1, false, (ECompilerWarning) 0, false, ECompileType_Compile, &includeDirs, enableLogging, alloc, out, e_rr
+	));
+
+clean:
+	CharString_free(&outName, alloc);
+	ListCharString_free(&allFiles, alloc);              //elements ref `path`
+	ListCharString_free(&allShaderText, alloc);         //element refs fileData
+	ListCharString_freeUnderlying(&allOutputs, alloc);
+	ListU8_free(&allCompileModes, alloc);
+	ListCharString_free(&includeDirs, alloc);
+	Buffer_free(&fileData, alloc);                      //after the (synchronous) compile consumed the ref
 	return s_uccess;
 }
 

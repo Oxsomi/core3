@@ -463,7 +463,7 @@ The following define the requirements of binaries embedded in oiSH files.
   - RayTracingOpacityMicromapEXT as RayMicromapOpacity.
   - AtomicFloat32AddEXT or AtomicFloat32MinMaxEXT as AtomicF32.
   - AtomicFloat64AddEXT or AtomicFloat64MinMaxEXT as AtomicF64.
-  - ComputeDerivativeGroupLinearNV as ComputeDeriv.
+  - ComputeDerivativeGroupLinearNV / ComputeDerivativeGroupQuadsNV as ComputeDeriv (DXC emits the Quads variant for ddx/ddy in even 2D compute groups).
   - GroupNonUniformArithmetic as SubgroupArithmetic.
   - GroupNonUniformShuffle as SubgroupShuffle.
   - ImageMSArray as WriteMSTexture.
@@ -492,6 +492,7 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_TYPED_RESOURCE or D3D_SHADER_REQUIRES_ATOMIC_INT64_ON_GROUP_SHARED as AtomicI64.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
   - D3D_SHADER_REQUIRES_WAVE_OPS as SubgroupOperations.
+  - D3D_SHADER_REQUIRES_WRITEABLE_MSAA_TEXTURES or D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS as WriteMSTexture. An RWTexture2DMS write reports both flags; OxC3 has no dedicated bit for the parent AdvancedTextureOps feature, so it is folded into WriteMSTexture (the use case that trips it).
 - NV extensions should be properly marked using annotations, or the oiSH is illegal. The OxC3 validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
 
 ## ESHExtension_Bindless / ESHExtension_UnboundArraySize
@@ -557,3 +558,5 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 1.2(.3): No major bump, no oiSH files exist in the wild yet. Added uniforms, which are like defines except they're not strings; they're a type, name and value. These are a replacement for defines and will allow the linker to take care of the shader variants rather than the defines. They're comparable to specialization constants (Vulkan) or linking library functions (DirectX). They will still store duplicate shader binaries, but will be quicker to compile.
 
 1.2(.4): No major bump, no oiSH files exist in the wild yet. Optimized allocations when reading, fixed bug with callable shaders and added binary de-duplication.
+
+1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. workgraph is DXIL-only, ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.

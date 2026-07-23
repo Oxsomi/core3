@@ -18,6 +18,18 @@
 *  This is called dual licensing.
 */
 
+// DISABLED from the corpus byte-snapshot (renamed .hlsl.disabled).
+//
+// This shader compiles and reflects correctly, but its final SPIR-V is not byte-reproducible: two
+// equivalent `OpDecorate <id> Location 0` instructions (mainVS's location-0 input and output interface
+// variables) are emitted in a bistable order across process runs, which also perturbs the oiSH content
+// hash. DXC itself is deterministic (verified: -O0 and -O3 produce identical SPIR-V); the reordering is
+// introduced by the SPIR-V post-processing OxC3 runs (spvtools optimizer `-O`/`--legalize-hlsl` +
+// RegisterPerformancePasses and/or the link step) on this bindless, many-decoration shader. A standalone
+// bindless vertex shader through `spirv-opt -O --legalize-hlsl` did NOT reproduce it, so the trigger is
+// graphics_test's specific structure. Tracked as a spirv-tools issue; re-enable once the toolchain emits
+// decorations deterministically here.
+
 #include "resource_bindings.hlsli"
 
 //Generate triangle

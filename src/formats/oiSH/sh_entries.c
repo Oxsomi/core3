@@ -397,6 +397,54 @@ clean:
 	return s_uccess;
 }
 
+U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
+
+	if (!runtime)
+		return 0;
+
+	//Backends this entrypoint's stage + extensions can actually be expressed on (ignores the annotation).
+	//This depends only on stage + extensions, both of which are part of the SHBinaryIdentifier, so every
+	//entrypoint sharing a compile agrees on it - which is what makes it safe to skip a whole compile with.
+
+	U8 mask = (U8)((1 << ESHBinaryType_Count) - 1);
+
+	//Stage support: workgraphs (nodes) only exist on DXIL.
+
+	if (runtime->entry.stage == ESHPipelineStage_WorkgraphExt)
+		mask &= (U8)(1 << ESHBinaryType_DXIL);
+
+	//Extension support: an extension native to only one backend forces that backend. SpirvNative / DxilNative
+	//are the compiler's own per-backend capability sets, so an extension in one but not the other is exclusive
+	//(e.g. ComputeDeriv / AtomicF32 are SPIRV-only, MeshTaskTexDeriv is DXIL-only).
+
+	ESHExtension used = ESHExtension_None;
+
+	for (U64 i = 0; i < runtime->extensions.length; ++i)
+		used = (ESHExtension)(used | runtime->extensions.ptr[i]);
+
+	if (used & (ESHExtension_SpirvNative & ~ESHExtension_DxilNative))
+		mask &= (U8)(1 << ESHBinaryType_SPIRV);
+
+	if (used & (ESHExtension_DxilNative & ~ESHExtension_SpirvNative))
+		mask &= (U8)(1 << ESHBinaryType_DXIL);
+
+	return mask;
+}
+
+U8 SHEntryRuntime_getBinaryTypes(const SHEntryRuntime *runtime) {
+
+	if (!runtime)
+		return 0;
+
+	//Full effective set: the [[oxc::binary(...)]] annotation (or all backends if unset) AND the backends the
+	//stage + extensions support. Applied per-entrypoint at link time.
+
+	U8 all = (U8)((1 << ESHBinaryType_Count) - 1);
+	U8 annotated = runtime->binaryTypes ? runtime->binaryTypes : all;
+
+	return (U8)(annotated & SHEntryRuntime_getSupportedBinaryTypes(runtime));
+}
+
 U32 SHEntryRuntime_getCombinations(const SHEntryRuntime *runtime) {
 
 	if (!runtime)
