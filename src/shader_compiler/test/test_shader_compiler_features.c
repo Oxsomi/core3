@@ -62,8 +62,7 @@ void Test_shaderCompilerFeatures(Test *t) {
 	Test_setModule(t, "Compiler features");
 
 	const Allocator *alloc = Platform_instance->alloc;
-	Error err = Error_none(), *e_rr = &err;
-	Bool s_uccess = true;
+	Error err = Error_none();
 
 	static const FeatureCase features[] = {
 
@@ -152,6 +151,5 @@ void Test_shaderCompilerFeatures(Test *t) {
 		err = Error_none();
 	}
 
-	(void) s_uccess; (void) e_rr;
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }

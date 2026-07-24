@@ -24,11 +24,13 @@
 #include "shader_compiler/compiler.h"
 #include "formats/oiSH/sh_entries.h"
 #include "formats/oiSH/sh_binaries.h"
+#include "formats/oiSH/sh_file.h"
 #include "platforms/platform.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
 #include "types/base/error.h"
 #include "types/base/string_base.h"
+#include "types/base/string_read_helper.h"
 
 //Parse `src` as HLSL (this runs real DXC reflection + our oxc:: annotation parser) and hand back the
 //reflection. The error is swallowed on purpose so the caller can assert on the boolean result and keep
@@ -166,7 +168,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		t, "model 6.7 recorded",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		r.shEntriesRuntime.ptr[0].shaderVersions.length >= 1 &&
-		r.shEntriesRuntime.ptr[0].shaderVersions.ptr[0] == (U16)((6 << 8) | 7)
+		r.shEntriesRuntime.ptr[0].shaderVersions.ptr[0] == OISH_SHADER_MODEL(6, 7)
 	);
 
 	//--- [[oxc::vendor(...)]] records a vendor mask (non-zero for a real vendor) ---
@@ -272,7 +274,7 @@ void Test_shaderCompilerAnnotations(Test *t) {
 			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
 	);
 
-	//--- [[oxc::defines(...)]] records define name/value pairs ---
+	//--- [[oxc::defines(...)]] records the define name/value pair (not just "parsed ok") ---
 
 	src = CharString_createRefCStrConst(
 		"[[oxc::defines(\"THREAD_COUNT\" = \"16\")]]\n"
@@ -281,9 +283,53 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		"void main() {}\n"
 	);
 	CompileResult_free(&r, alloc);
+	{
+		Bool ok = parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1;
+		const SHEntryRuntime *e = ok ? &r.shEntriesRuntime.ptr[0] : NULL;
+
+		//defineNameValues is a flat [name, value][] list; one define => two entries with the exact strings
+		const CharString wantName = CharString_createRefCStrConst("THREAD_COUNT");
+		const CharString wantVal  = CharString_createRefCStrConst("16");
+
+		Test_assert(
+			t, "defines records name and value",
+			e && e->defineNameValues.length == 2 &&
+			CharString_equalsStringSensitive(&e->defineNameValues.ptr[0], &wantName) &&
+			CharString_equalsStringSensitive(&e->defineNameValues.ptr[1], &wantVal)
+		);
+	}
+
+	//--- Permutation counts: two [[oxc::defines]] annotations produce two compile combinations; two
+	//--- [[oxc::model]] annotations record two shader versions (each multiplies the combination space). ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::defines(\"MODE\" = \"0\")]]\n"
+		"[[oxc::defines(\"MODE\" = \"1\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
 	Test_assert(
-		t, "defines accepted",
-		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1
+		t, "two define-sets -> two compile combinations",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].definesPerCompilation.length == 2 &&
+		SHEntryRuntime_getCombinationsCompiled(&r.shEntriesRuntime.ptr[0]) == 2
+	);
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::model(\"6.6\")]]\n"
+		"[[oxc::model(\"6.8\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "two models -> two shader versions",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].shaderVersions.length == 2 &&
+		SHEntryRuntime_getCombinationsCompiled(&r.shEntriesRuntime.ptr[0]) == 2
 	);
 
 	//--- [[oxc::uniforms(...)]] records uniform permutations. Uniforms are illegal together with
@@ -322,6 +368,65 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	Test_assert(
 		t, "pixel stage parses",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1
+	);
+
+	//--- Negative validation: each of these is valid HLSL but an illegal OxC3 annotation combination, so
+	//--- Compiler_parse must reject it cleanly (return failure, not crash). failIsOk=true keeps them quiet. ---
+
+	{
+		static const struct { const C8 *label; const C8 *src; } negatives[] = {
+
+			{ "RayReorder on a non-raygen stage rejected",
+			  "[[oxc::extension(\"RayReorder\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "PAQ on a non-raytracing stage rejected",
+			  "[[oxc::extension(\"PAQ\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "ComputeDeriv on a pixel stage rejected",
+			  "[[oxc::extension(\"ComputeDeriv\")]]\n[[oxc::model(\"6.6\")]]\n[[oxc::stage(\"pixel\")]]\n"
+			  "float4 main() : SV_Target { return 0; }\n" },
+
+			{ "shader model below the 6.5 floor rejected",
+			  "[[oxc::model(\"6.0\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "extension needing a higher model than declared rejected",   //AtomicI64 needs 6.6, only 6.5 given
+			  "[[oxc::extension(\"AtomicI64\")]]\n[[oxc::model(\"6.5\")]]\n[[oxc::stage(\"compute\")]]\n"
+			  "[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "oxc::uniforms together with oxc::stage rejected",
+			  "[[oxc::uniforms(B1 X = true)]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "conflicting oxc::stage + [shader] on one function rejected",
+			  "[[oxc::stage(\"compute\")]]\n[shader(\"compute\")]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "unknown stage name rejected",
+			  "[[oxc::stage(\"foobar\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "empty oxc::binary() rejected",
+			  "[[oxc::binary()]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+
+			{ "duplicate binary type in one annotation rejected",
+			  "[[oxc::binary(\"spv\", \"spv\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" }
+		};
+
+		for (U64 i = 0; i < sizeof(negatives) / sizeof(negatives[0]); ++i) {
+			src = CharString_createRefCStrConst(negatives[i].src);
+			CompileResult_free(&r, alloc);
+			Test_assert(t, negatives[i].label, !parseShader(&comp, src, alloc, &r, true));
+		}
+	}
+
+	//--- binary(spv) mirrors binary(dxil): the effective set collapses to SPIRV only ---
+
+	src = CharString_createRefCStrConst(
+		"[[oxc::binary(\"spv\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "binary(spv) restricts effective set to SPIRV",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		r.shEntriesRuntime.ptr[0].binaryTypes == (1 << ESHBinaryType_SPIRV) &&
+		SHEntryRuntime_getBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << ESHBinaryType_SPIRV)
 	);
 
 clean:

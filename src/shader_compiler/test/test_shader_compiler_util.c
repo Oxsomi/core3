@@ -177,3 +177,21 @@ clean:
 	RefPtr_dec(&ms);
 	return s_uccess;
 }
+
+Bool writeOiSH(const Allocator *alloc, const SHFile *file, Buffer *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	const RefPtrType msType = MemoryStream_makeType(alloc);
+	MemoryStreamRef *ms = NULL;
+	U64 off = 0;
+
+	//Serialize through a resizable memory stream, then move its buffer out to the caller (who owns it).
+	gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &msType, &ms, e_rr));
+	gotoIfError3(clean, SHFile_write((StreamRef*) ms, &off, file, alloc, e_rr));
+	gotoIfError3(clean, MemoryStream_move(&ms, out, e_rr));
+
+clean:
+	RefPtr_dec(&ms);
+	return s_uccess;
+}

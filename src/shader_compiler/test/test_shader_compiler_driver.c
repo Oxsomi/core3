@@ -42,7 +42,6 @@ void Test_shaderCompilerDriver(Test *t) {
 
 	const Allocator *alloc = Platform_instance->alloc;
 	Error err = Error_none();
-	Bool s_uccess = true;
 
 	//A small batch of distinct, self-contained compute shaders (auto-bound resources, no includes).
 
@@ -162,6 +161,36 @@ void Test_shaderCompilerDriver(Test *t) {
 		ListBuffer_freeUnderlying(&s, alloc);
 	}
 
+	//--- A produced oiSH round-trips: read it into an SHFile, serialize it back, and the bytes are
+	//--- identical (canonical, deterministic serialization); the re-read SHFile keeps the same shape. ---
+
+	{
+		const C8 *one[1] = { shaders[0] };
+		ListBuffer rt = (ListBuffer) { 0 };
+		SHFile a = (SHFile) { 0 }, b = (SHFile) { 0 };
+		Buffer rewritten = Buffer_createNull();
+
+		Bool readOk =
+			compileInlineShaders(alloc, one, 1, ESHBinaryType_SPIRV, 1, "roundtrip", true, &rt, &err) &&
+			rt.length == 1 && Buffer_length(rt.ptr[0]) &&
+			readOiSH(alloc, rt.ptr[0], &a, &err);
+
+		Bool rewrote = readOk && writeOiSH(alloc, &a, &rewritten, &err);
+
+		Test_assert(t, "oiSH read -> write is byte-identical", rewrote && Buffer_eq(rt.ptr[0], rewritten));
+
+		Bool reread = rewrote && readOiSH(alloc, rewritten, &b, &err);
+
+		Test_assert(t, "re-read oiSH keeps entry + binary counts",
+			reread && a.entries.length == b.entries.length && a.binaries.length == b.binaries.length);
+
+		Buffer_free(&rewritten, alloc);
+		SHFile_free(&a, alloc);
+		SHFile_free(&b, alloc);
+		ListBuffer_freeUnderlying(&rt, alloc);
+		err = Error_none();
+	}
+
 	//--- Invalid HLSL is reported as failure, not a crash ---
 
 	{
@@ -178,6 +207,5 @@ void Test_shaderCompilerDriver(Test *t) {
 		ListBuffer_freeUnderlying(&out, alloc);
 	}
 
-	(void) s_uccess;
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }

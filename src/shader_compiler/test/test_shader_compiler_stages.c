@@ -44,7 +44,6 @@
 typedef struct StageCase {
 	const C8 *file;
 	const C8 *stageName;    //Expected SHEntry_stageName (identical on both backends)
-	Bool spirvOnly;         //Skip the DXIL leg for shaders that hit a known DXIL-reflection gap
 } StageCase;
 
 void Test_shaderCompilerStages(Test *t) {
@@ -53,7 +52,6 @@ void Test_shaderCompilerStages(Test *t) {
 
 	const Allocator *alloc = Platform_instance->alloc;
 	Error err = Error_none();
-	Bool s_uccess = true;
 
 	static const StageCase stages[] = {
 		{ "stages/vertex.hlsl",        "vertex"        },
@@ -75,9 +73,6 @@ void Test_shaderCompilerStages(Test *t) {
 
 	for (U64 i = 0; i < sizeof(stages) / sizeof(stages[0]); ++i)
 		for (U64 tg = 0; tg < sizeof(targets) / sizeof(targets[0]); ++tg) {
-
-			if (stages[i].spirvOnly && targets[tg].mode == ESHBinaryType_DXIL)
-				continue;   //known DXIL-reflection gap; see the note on the case
 
 			const C8 *file = stages[i].file;
 			ListBuffer out = (ListBuffer) { 0 };
@@ -122,6 +117,5 @@ void Test_shaderCompilerStages(Test *t) {
 			err = Error_none();
 		}
 
-	(void) s_uccess;
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
 }

@@ -1239,19 +1239,16 @@ Bool Compiler_convertRegisterSPIRV(
 
 			ESHTextureType type = ESHTextureType_Texture2D;
 			Bool isArray = binding->image.arrayed;
-			U8 reqDepth = 0;
 
-			if(binding->image.ms) {
+			if(binding->image.ms)
 				type = ESHTextureType_Texture2DMS;
-				reqDepth = 2;
-			}
 
 			else switch(binding->image.dim) {
 
-				case SpvDim1D:    reqDepth = 1;  type = ESHTextureType_Texture1D;    break;
-				case SpvDim2D:    reqDepth = 2;  type = ESHTextureType_Texture2D;    break;
-				case SpvDim3D:    reqDepth = 3;  type = ESHTextureType_Texture3D;    break;
-				case SpvDimCube:  reqDepth = 3;  type = ESHTextureType_TextureCube;  break;
+				case SpvDim1D:    type = ESHTextureType_Texture1D;    break;
+				case SpvDim2D:    type = ESHTextureType_Texture2D;    break;
+				case SpvDim3D:    type = ESHTextureType_Texture3D;    break;
+				case SpvDimCube:  type = ESHTextureType_TextureCube;  break;
 
 				case SpvDimRect:
 				case SpvDimBuffer:
@@ -1262,7 +1259,13 @@ Bool Compiler_convertRegisterSPIRV(
 					));
 			}
 
-			if(binding->image.depth != reqDepth)
+			//The SPIRV image "Depth" operand (0 = non-depth, 1 = depth/comparison, 2 = no indication) describes
+			//how the image is sampled, not the register type: DXC emits 2 for a regular sampled image and 1 for
+			//one used with SampleCmp (a SamplerComparisonState). It doesn't change the reflected texture type,
+			//the comparison is carried by the separate sampler register, so accept any of the three valid
+			//values. (Previously this compared depth against a per-dimension constant, which rejected all of
+			//Texture1D / Texture3D / TextureCube and every comparison-sampled texture on SPIRV.)
+			if(binding->image.depth > 2)
 				retError(clean, Error_invalidState(
 					1, "Compiler_convertRegisterSPIRV() Unexpected image depth"
 				));

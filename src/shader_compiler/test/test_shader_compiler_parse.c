@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-//shader_compiler/test/test_shader_compiler_compile.c
+//shader_compiler/test/test_shader_compiler_parse.c
 
 #include "test_shader_compiler_shared.h"
 #include "shader_compiler/compiler.h"

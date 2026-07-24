@@ -29,13 +29,16 @@ typedef struct SHFile SHFile;
 
 //Each test module is one Test_* function invoked from test_shader_compiler_main.c.
 //They compile HLSL through the real DXC/SPIRV pipeline, so they require a live Platform_instance.
+//Declared in invocation order (see test_shader_compiler_main.c).
 
 void Test_shaderCompilerParse(Test *t);         //Parse annotations -> SHEntryRuntime reflection
-void Test_shaderCompilerAnnotations(Test *t);   //oxc:: extensions / model / vendor / defines / uniforms / stages
-void Test_shaderCompilerCorpus(Test *t);        //Compile the whole test/hlsl corpus -> in-memory oiSH (snapshot)
+void Test_shaderCompilerAnnotations(Test *t);   //oxc:: extensions / model / vendor / defines / uniforms / stages / binary
 void Test_shaderCompilerFeatures(Test *t);      //Shaders *using* extension features -> compiled + reflected
 void Test_shaderCompilerStages(Test *t);        //One shader per pipeline stage -> reflected stage matches
-void Test_shaderCompilerDriver(Test *t);        //compiler_helper compile driver: threads / modes / errors
+void Test_shaderCompilerReflection(Test *t);    //Resource registers reflect with correct type/write/array/stride
+void Test_shaderCompilerDriver(Test *t);        //compiler_helper compile driver: threads / modes / errors / round-trip
+void Test_shaderCompilerPermutations(Test *t);  //Multi-entrypoint files with disagreeing oxc:: annotations
+void Test_shaderCompilerCorpus(Test *t);        //Compile the whole test/hlsl corpus (SPIRV snapshot + DXIL coverage)
 
 //--- Shared helpers (test_shader_compiler_util.c) ---
 
@@ -70,3 +73,6 @@ Bool compileFileShader(
 
 //Parse an in-memory oiSH buffer into an SHFile (buffer must stay valid for the read; SHFile is owned).
 Bool readOiSH(const Allocator *alloc, Buffer buf, SHFile *out, Error *e_rr);
+
+//Serialize an SHFile back into a freshly-allocated oiSH buffer (caller frees `out`).
+Bool writeOiSH(const Allocator *alloc, const SHFile *file, Buffer *out, Error *e_rr);

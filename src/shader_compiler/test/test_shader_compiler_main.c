@@ -37,7 +37,9 @@ Platform_defineEntrypoint() {
 	Test_shaderCompilerAnnotations(&t);
 	Test_shaderCompilerFeatures(&t);
 	Test_shaderCompilerStages(&t);
+	Test_shaderCompilerReflection(&t);
 	Test_shaderCompilerDriver(&t);
+	Test_shaderCompilerPermutations(&t);
 	Test_shaderCompilerCorpus(&t);
 
 	int status = Test_end(&t);
