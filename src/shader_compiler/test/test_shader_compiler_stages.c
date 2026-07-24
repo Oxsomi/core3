@@ -102,6 +102,9 @@ void Test_shaderCompilerStages(Test *t) {
 				}
 			}
 
+			//The produced oiSH must also round-trip (read -> write -> byte-identical) on this backend.
+			stageOk = stageOk && oiSHRoundtrips(alloc, out.ptr[0], &err);
+
 			if (!stageOk)
 				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
 

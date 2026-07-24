@@ -68,18 +68,11 @@ void Test_shaderCompilerPermutations(Test *t) {
 	//--- 16BitTypes. Exactly one of the two produced binaries may carry that extension bit. ---
 
 	{
-		const C8 *src[1] = {
-			"[[oxc::extension(\"16BitTypes\")]]\n[[oxc::model(\"6.6\")]]\n[[oxc::stage(\"vertex\")]]\n"
-			"float4 mainA(uint i : SV_VertexID) : SV_Position { half h = (half) i; return h.xxxx; }\n"
-			"[[oxc::stage(\"pixel\")]]\n"
-			"float4 mainB() : SV_Target { return 1; }\n"
-		};
-
 		ListBuffer out = (ListBuffer) { 0 };
 		SHFile sh = (SHFile) { 0 };
 
 		Bool ok =
-			compileInlineShaders(alloc, src, 1, ESHBinaryType_SPIRV, 1, "perm_ext", true, &out, &err) &&
+			compileFileShader(alloc, "permutations/mixed_extensions.hlsl", ESHBinaryType_SPIRV, true, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) && readOiSH(alloc, out.ptr[0], &sh, &err);
 
 		Test_assert(t, "per-entrypoint extension isolation (only 1 of 2 binaries has 16BitTypes)",
@@ -95,18 +88,11 @@ void Test_shaderCompilerPermutations(Test *t) {
 	//--- its own requested model rather than collapsing to one. ---
 
 	{
-		const C8 *src[1] = {
-			"[[oxc::model(\"6.7\")]]\n[[oxc::stage(\"vertex\")]]\n"
-			"float4 mainA() : SV_Position { return 0; }\n"
-			"[[oxc::model(\"6.5\")]]\n[[oxc::stage(\"pixel\")]]\n"
-			"float4 mainB() : SV_Target { return 1; }\n"
-		};
-
 		ListBuffer out = (ListBuffer) { 0 };
 		SHFile sh = (SHFile) { 0 };
 
 		Bool ok =
-			compileInlineShaders(alloc, src, 1, ESHBinaryType_SPIRV, 1, "perm_model", true, &out, &err) &&
+			compileFileShader(alloc, "permutations/mixed_models.hlsl", ESHBinaryType_SPIRV, true, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) && readOiSH(alloc, out.ptr[0], &sh, &err);
 
 		Bool has67 = false, has65 = false;
@@ -131,22 +117,11 @@ void Test_shaderCompilerPermutations(Test *t) {
 	//--- dxil only. So SPIRV keeps {raygen, miss}, DXIL keeps {raygen, closesthit}. ---
 
 	{
-		const C8 *lib[1] = {
-			"RWStructuredBuffer<float> o;\n"
-			"struct Payload { float v; };\n"
-			"[shader(\"raygeneration\")]\n"
-			"void mainRaygen() { o[0] = 1; }\n"
-			"[[oxc::binary(\"spv\")]]\n[shader(\"miss\")]\n"
-			"void mainMiss(inout Payload p) { p.v = 0; }\n"
-			"[[oxc::binary(\"dxil\")]]\n[shader(\"closesthit\")]\n"
-			"void mainCH(inout Payload p, BuiltInTriangleIntersectionAttributes a) { p.v = 1; }\n"
-		};
-
 		ListBuffer spv = (ListBuffer) { 0 }, dx = (ListBuffer) { 0 };
 		SHFile ssh = (SHFile) { 0 }, dsh = (SHFile) { 0 };
 
 		Bool spvOk =
-			compileInlineShaders(alloc, lib, 1, ESHBinaryType_SPIRV, 1, "perm_bin_spv", true, &spv, &err) &&
+			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_SPIRV, true, &spv, &err) &&
 			spv.length == 1 && Buffer_length(spv.ptr[0]) && readOiSH(alloc, spv.ptr[0], &ssh, &err);
 
 		Test_assert(t, "SPIRV keeps raygen + spv-only miss, drops dxil-only closesthit",
@@ -154,7 +129,7 @@ void Test_shaderCompilerPermutations(Test *t) {
 			hasEntry(&ssh, "mainRaygen") && hasEntry(&ssh, "mainMiss") && !hasEntry(&ssh, "mainCH"));
 
 		Bool dxOk =
-			compileInlineShaders(alloc, lib, 1, ESHBinaryType_DXIL, 1, "perm_bin_dxil", true, &dx, &err) &&
+			compileFileShader(alloc, "permutations/mixed_binary_lib.hlsl", ESHBinaryType_DXIL, true, &dx, &err) &&
 			dx.length == 1 && Buffer_length(dx.ptr[0]) && readOiSH(alloc, dx.ptr[0], &dsh, &err);
 
 		Test_assert(t, "DXIL keeps raygen + dxil-only closesthit, drops spv-only miss",
@@ -172,16 +147,11 @@ void Test_shaderCompilerPermutations(Test *t) {
 	//--- linking step). Two entrypoints declaring DIFFERENT uniforms is illegal and must be rejected cleanly. ---
 
 	{
-		const C8 *bad[1] = {
-			"[[oxc::uniforms(B1 X = true)]]\n[shader(\"compute\")]\n[numthreads(1,1,1)]\nvoid mainA() {}\n"
-			"[[oxc::uniforms(B1 Y = true)]]\n[shader(\"compute\")]\n[numthreads(1,1,1)]\nvoid mainB() {}\n"
-		};
-
 		ListBuffer out = (ListBuffer) { 0 };
 		Error e2 = Error_none();
 
 		//enableLogging=false: the failure is expected and asserted on, so keep the compiler quiet.
-		Bool compiled = compileInlineShaders(alloc, bad, 1, ESHBinaryType_SPIRV, 1, "perm_uni", false, &out, &e2);
+		Bool compiled = compileFileShader(alloc, "permutations/mixed_uniforms.hlsl", ESHBinaryType_SPIRV, false, &out, &e2);
 
 		Test_assert(t, "mismatched uniforms across entrypoints rejected", !compiled);
 

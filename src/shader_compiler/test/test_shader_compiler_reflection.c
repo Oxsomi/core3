@@ -41,46 +41,8 @@
 //backends, so a whole class of reflection regressions (a buffer misclassified, IsWrite dropped, a descriptor
 //array collapsed, a resource silently dropped) is caught semantically instead of as an opaque corpus byte diff.
 
-//A single compute entrypoint with one of (almost) every ESHRegisterType, each actually used so DXC keeps it.
-//Kept self-contained (raw HLSL types, no includes), which the driver module already proves compiles inline.
-//RayQuery gives us an AccelerationStructure register and compiles inline RT on both backends (SM6.5).
-static const C8 *reflectionShader =
-	"struct Particle { uint x, y, z, w; };\n"        //16 bytes
-	"StructuredBuffer<Particle> inBuf;\n"
-	"RWStructuredBuffer<Particle> outBuf;\n"
-	"ByteAddressBuffer rawIn;\n"
-	"RWByteAddressBuffer rawOut;\n"
-	"Texture1D<float4> tex1d;\n"
-	"Texture2D<float4> tex;\n"
-	"Texture3D<float4> tex3d;\n"
-	"TextureCube<float4> texCube;\n"
-	"Texture2DMS<float4> texMS;\n"
-	"Texture2D<float> shadowMap;\n"
-	"RWTexture2D<float4> img;\n"
-	"Texture2D<float4> texArr[4];\n"
-	"SamplerState samp;\n"
-	"SamplerComparisonState sampCmp;\n"
-	"RaytracingAccelerationStructure tlas;\n"
-	"[[oxc::extension(\"RayQuery\")]]\n"                //inline RT (RayQuery + acceleration structure)
-	"[[oxc::stage(\"compute\")]]\n[numthreads(1, 1, 1)]\n"
-	"void main(uint id : SV_DispatchThreadID) {\n"
-	"  float4 c = (float)inBuf[0].x;\n"
-	"  c += tex1d.SampleLevel(samp, 0.5, 0);\n"
-	"  c += tex.SampleLevel(samp, float2(0, 0), 0);\n"
-	"  c += texArr[id & 3].SampleLevel(samp, float2(0, 0), 0);\n"
-	"  c += tex3d.SampleLevel(samp, float3(0, 0, 0), 0);\n"
-	"  c += texCube.SampleLevel(samp, float3(0, 0, 1), 0);\n"
-	"  c += texMS.Load(int2(0, 0), 0);\n"
-	"  c += shadowMap.SampleCmpLevelZero(sampCmp, float2(0, 0), 0.5);\n"
-	"  RayQuery<RAY_FLAG_NONE> q;\n"
-	"  RayDesc ray; ray.Origin = float3(0, 0, 0); ray.TMin = 0; ray.Direction = float3(0, 0, 1); ray.TMax = 1e30;\n"
-	"  q.TraceRayInline(tlas, RAY_FLAG_NONE, 0xFF, ray);\n"
-	"  q.Proceed();\n"
-	"  if (q.CommittedStatus() != COMMITTED_NOTHING) c += 1;\n"
-	"  rawOut.Store<uint>(0, rawIn.Load<uint>(0) + (uint)c.x);\n"
-	"  outBuf[0] = inBuf[0];\n"
-	"  img[uint2(0, 0)] = c;\n"
-	"}\n";
+//The shader lives at reflection/resources.hlsl: one compute entrypoint with one of (almost) every
+//ESHRegisterType, each actually used so DXC keeps it (RayQuery yields the AccelerationStructure register).
 
 //Find a reflected register by name across all binaries (registers hang off each SHBinaryInfo).
 static const SHRegisterRuntime *findReg(const SHFile *sh, const C8 *nm) {
@@ -116,13 +78,12 @@ void Test_shaderCompilerReflection(Test *t) {
 		const U8 mode = targets[tg].mode;
 		const C8 *bk = targets[tg].name;
 
-		const C8 *srcs[1] = { reflectionShader };
 		ListBuffer out = (ListBuffer) { 0 };
 		SHFile sh = (SHFile) { 0 };
 		CharString label = CharString_createNull();
 
 		Bool ok =
-			compileInlineShaders(alloc, srcs, 1, mode, 1, "reflect", true, &out, &err) &&
+			compileFileShader(alloc, "reflection/resources.hlsl", mode, true, &out, &err) &&
 			out.length == 1 && Buffer_length(out.ptr[0]) &&
 			readOiSH(alloc, out.ptr[0], &sh, &err) && sh.binaries.length >= 1;
 
@@ -198,6 +159,14 @@ void Test_shaderCompilerReflection(Test *t) {
 		}
 
 		#undef ASSERT_REG
+
+		//The whole reflected oiSH round-trips (read -> write -> byte-identical) on this backend.
+		{
+			if (!CharString_format(alloc, &label, &err, "oiSH round-trips (%s)", bk))
+				label = CharString_createRefCStrConst("oiSH round-trips");
+			Test_assert(t, label.ptr, ok && oiSHRoundtrips(alloc, out.ptr[0], &err));
+			CharString_free(&label, alloc);
+		}
 
 		if (!ok)
 			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);

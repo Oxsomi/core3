@@ -120,22 +120,12 @@ void Test_shaderCompilerDriver(Test *t) {
 	//right) while keeping >=1 entrypoint per backend, so neither side degenerates to an empty oiSH.
 
 	{
-		const C8 *lib[1] = {
-			"RWStructuredBuffer<float> o;\n"
-			"struct Payload { float v; };\n"
-			"[shader(\"raygeneration\")]\n"
-			"void mainRaygen() { o[0] = 1; }\n"
-			"[[oxc::binary(\"dxil\")]]\n"
-			"[shader(\"miss\")]\n"
-			"void mainMiss(inout Payload p) { p.v = 0; }\n"
-		};
-
 		//DXIL: both entrypoints survive.
 
 		ListBuffer d = (ListBuffer) { 0 };
 		SHFile sd = (SHFile) { 0 };
 		Bool onDxil =
-			compileInlineShaders(alloc, lib, 1, ESHBinaryType_DXIL, 1, "binary_dxil", true, &d, &err) &&
+			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_DXIL, true, &d, &err) &&
 			d.length == 1 && Buffer_length(d.ptr[0]) &&
 			readOiSH(alloc, d.ptr[0], &sd, &err) && sd.entries.length == 2;
 
@@ -149,7 +139,7 @@ void Test_shaderCompilerDriver(Test *t) {
 		ListBuffer s = (ListBuffer) { 0 };
 		SHFile ss = (SHFile) { 0 };
 		Bool onSpirv =
-			compileInlineShaders(alloc, lib, 1, ESHBinaryType_SPIRV, 1, "binary_spv", true, &s, &err) &&
+			compileFileShader(alloc, "driver/binary_rt_lib.hlsl", ESHBinaryType_SPIRV, true, &s, &err) &&
 			s.length == 1 && Buffer_length(s.ptr[0]) &&
 			readOiSH(alloc, s.ptr[0], &ss, &err) && ss.entries.length == 1;
 

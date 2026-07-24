@@ -244,9 +244,25 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	Test_assert(t, "binary(air) rejected until AIR is supported", !parseShader(&comp, src, alloc, &r, true));
 
 	//--- Backend auto-restrict: SHEntryRuntime_getSupportedBinaryTypes AND's the stage + extension support,
-	//--- independent of the annotation. A SPIRV-only extension (ComputeDeriv) restricts to SPIRV; a plain
-	//--- compute entrypoint supports both. This is the mechanism behind "workgraph is DXIL-only", etc. ---
+	//--- independent of the annotation. A backend-exclusive extension (AtomicF32, inline-SPIRV atomics)
+	//--- restricts to SPIRV; a plain compute entrypoint supports both. This is the mechanism behind
+	//--- "workgraph is DXIL-only", etc. ---
 
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"AtomicF32\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(2, 2, 1)]\n"
+		"void main(uint3 id : SV_DispatchThreadID) {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "AtomicF32 entrypoint auto-restricts to SPIRV",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << ESHBinaryType_SPIRV)
+	);
+
+	//ComputeDeriv is only natively *detected* on SPIRV (ComputeDerivativeGroupQuads) but DXC compiles compute
+	//derivatives on DXIL too (SM6.6), so it must NOT auto-restrict - it stays dual-backend.
 	src = CharString_createRefCStrConst(
 		"[[oxc::extension(\"ComputeDeriv\")]]\n"
 		"[[oxc::model(\"6.6\")]]\n"
@@ -256,9 +272,10 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	);
 	CompileResult_free(&r, alloc);
 	Test_assert(
-		t, "ComputeDeriv entrypoint auto-restricts to SPIRV",
+		t, "ComputeDeriv entrypoint stays dual-backend (compiles on DXIL too)",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
-		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) == (1 << ESHBinaryType_SPIRV)
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
+			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
 	);
 
 	src = CharString_createRefCStrConst(

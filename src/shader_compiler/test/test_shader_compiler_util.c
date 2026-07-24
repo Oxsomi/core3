@@ -178,6 +178,24 @@ clean:
 	return s_uccess;
 }
 
+Bool oiSHRoundtrips(const Allocator *alloc, Buffer produced, Error *e_rr) {
+
+	SHFile file = (SHFile) { 0 };
+	Buffer rewritten = Buffer_createNull();
+
+	//Read the produced oiSH into an SHFile, serialize it back, and require byte-for-byte identity. This
+	//confirms the compiler's serialization is a canonical fixed point (and that read+write agree), so a DXC
+	//update or reflection change that quietly perturbs the oiSH is caught.
+	Bool ok =
+		readOiSH(alloc, produced, &file, e_rr) &&
+		writeOiSH(alloc, &file, &rewritten, e_rr) &&
+		Buffer_eq(produced, rewritten);
+
+	Buffer_free(&rewritten, alloc);
+	SHFile_free(&file, alloc);
+	return ok;
+}
+
 Bool writeOiSH(const Allocator *alloc, const SHFile *file, Buffer *out, Error *e_rr) {
 
 	Bool s_uccess = true;

@@ -280,7 +280,12 @@ clean:
 		ListSHEntryRuntime_freeUnderlying(shEntriesRuntime, alloc);
 
 	CompileResult_free(&compileResult, alloc);
-	Error_print(alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
+
+	//Respect enableLogging: an expected-failure compile (e.g. a unit test provoking a precompile error) passes
+	//enableLogging=false to stay quiet, so don't print the parse error unconditionally.
+	if(enableLogging)
+		Error_print(alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
+
 	return s_uccess;
 }
 

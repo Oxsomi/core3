@@ -76,3 +76,6 @@ Bool readOiSH(const Allocator *alloc, Buffer buf, SHFile *out, Error *e_rr);
 
 //Serialize an SHFile back into a freshly-allocated oiSH buffer (caller frees `out`).
 Bool writeOiSH(const Allocator *alloc, const SHFile *file, Buffer *out, Error *e_rr);
+
+//Verify a produced oiSH buffer round-trips: read it, serialize it back, and require byte-for-byte identity.
+Bool oiSHRoundtrips(const Allocator *alloc, Buffer produced, Error *e_rr);

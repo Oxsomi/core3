@@ -54,8 +54,12 @@
 typedef struct FeatureCase {
 	const C8 *file;
 	ESHExtension ext;       //Expected reflected extension bit
-	U8 target;              //ESHBinaryType
+	U8 backends;            //Mask of (1 << ESHBinaryType) this feature can be expressed on
 } FeatureCase;
+
+#define B_SPV  (1 << ESHBinaryType_SPIRV)
+#define B_DXIL (1 << ESHBinaryType_DXIL)
+#define B_BOTH (B_SPV | B_DXIL)
 
 void Test_shaderCompilerFeatures(Test *t) {
 
@@ -66,49 +70,76 @@ void Test_shaderCompilerFeatures(Test *t) {
 
 	static const FeatureCase features[] = {
 
-		//SPIRV-native features
-		{ "features/i64.hlsl",                 ESHExtension_I64,                ESHBinaryType_SPIRV },
-		{ "features/f64.hlsl",                 ESHExtension_F64,                ESHBinaryType_SPIRV },
-		{ "features/bit16.hlsl",               ESHExtension_16BitTypes,         ESHBinaryType_SPIRV },
-		{ "features/atomic_i64.hlsl",          ESHExtension_AtomicI64,          ESHBinaryType_SPIRV },
-		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, ESHBinaryType_SPIRV },
-		{ "features/subgroup_operations.hlsl", ESHExtension_SubgroupOperations, ESHBinaryType_SPIRV },
-		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    ESHBinaryType_SPIRV },
-		{ "features/multiview.hlsl",           ESHExtension_Multiview,          ESHBinaryType_SPIRV },
-		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       ESHBinaryType_SPIRV },
-		{ "features/atomic_f32.hlsl",          ESHExtension_AtomicF32,          ESHBinaryType_SPIRV },
-		{ "features/atomic_f64.hlsl",          ESHExtension_AtomicF64,          ESHBinaryType_SPIRV },
-		{ "features/ray_query.hlsl",           ESHExtension_RayQuery,           ESHBinaryType_SPIRV },
+		//Expressible on BOTH backends (DXC emits the capability for SPIRV and DXIL alike)
+		{ "features/i64.hlsl",                 ESHExtension_I64,                B_BOTH },
+		{ "features/f64.hlsl",                 ESHExtension_F64,                B_BOTH },
+		{ "features/bit16.hlsl",               ESHExtension_16BitTypes,         B_BOTH },
+		{ "features/atomic_i64.hlsl",          ESHExtension_AtomicI64,          B_BOTH },
+		{ "features/multiview.hlsl",           ESHExtension_Multiview,          B_BOTH },
+		{ "features/subgroup_operations.hlsl", ESHExtension_SubgroupOperations, B_BOTH },
+		{ "features/ray_query.hlsl",           ESHExtension_RayQuery,           B_BOTH },
 
-		//DXIL-native features (DXC's SPIR-V backend can't express them), driven here on DXIL by explicit path
-		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   ESHBinaryType_DXIL },
-		{ "features/paq.hlsl",                 ESHExtension_PAQ,                ESHBinaryType_DXIL },
-		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     ESHBinaryType_DXIL }
+		//SPIRV-only: inline-SPIRV atomics, or capabilities OxC3/DXC restrict to SPIRV (see SpirvNative set)
+		{ "features/subgroup_arithmetic.hlsl", ESHExtension_SubgroupArithmetic, B_SPV },
+		{ "features/subgroup_shuffle.hlsl",    ESHExtension_SubgroupShuffle,    B_SPV },
+		{ "features/atomic_f32.hlsl",          ESHExtension_AtomicF32,          B_SPV },
+		{ "features/atomic_f64.hlsl",          ESHExtension_AtomicF64,          B_SPV },
+
+		//ComputeDeriv (derivatives in a compute shader) compiles on both backends, even though it's only
+		//natively detected on SPIRV (see SHEntryRuntime_getSupportedBinaryTypes).
+		{ "features/compute_deriv.hlsl",       ESHExtension_ComputeDeriv,       B_BOTH },
+
+		//DXIL-only: DXC's SPIR-V backend genuinely fails to compile these (verified: SPIRV compile error)
+		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   B_DXIL },
+		{ "features/paq.hlsl",                 ESHExtension_PAQ,                B_DXIL },
+		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     B_DXIL }
 	};
 
-	for (U64 i = 0; i < sizeof(features) / sizeof(features[0]); ++i) {
+	static const struct { U8 mode; const C8 *name; } backends[] = {
+		{ ESHBinaryType_SPIRV, "spirv" },
+		{ ESHBinaryType_DXIL,  "dxil"  }
+	};
 
-		const C8 *file = features[i].file;
-		ListBuffer out = (ListBuffer) { 0 };
-		SHFile shFile = (SHFile) { 0 };
+	//Each feature is compiled on every backend it supports. The produced binary must reflect the expected
+	//extension AND round-trip through oiSH read/write (byte-identical) - so a DXC/reflection change that
+	//breaks a backend or perturbs the serialized oiSH is caught here rather than by manual inspection.
 
-		Bool compiled = compileFileShader(alloc, file, features[i].target, true, &out, &err);
-		Bool hasBinary = compiled && out.length == 1 && Buffer_length(out.ptr[0]);
+	for (U64 i = 0; i < sizeof(features) / sizeof(features[0]); ++i)
+		for (U64 b = 0; b < sizeof(backends) / sizeof(backends[0]); ++b) {
 
-		Bool reflected =
-			hasBinary && readOiSH(alloc, out.ptr[0], &shFile, &err) &&
-			shFile.binaries.length >= 1 &&
-			(shFile.binaries.ptr[0].identifier.extensions & features[i].ext);
+			if (!(features[i].backends & (1 << backends[b].mode)))
+				continue;
 
-		if (!reflected)
-			Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+			ListBuffer out = (ListBuffer) { 0 };
+			SHFile shFile = (SHFile) { 0 };
+			CharString label = CharString_createNull();
 
-		Test_assert(t, file, reflected);
+			Bool compiled = compileFileShader(alloc, features[i].file, backends[b].mode, true, &out, &err);
+			Bool hasBinary = compiled && out.length == 1 && Buffer_length(out.ptr[0]);
 
-		SHFile_free(&shFile, alloc);
-		ListBuffer_freeUnderlying(&out, alloc);
-		err = Error_none();
-	}
+			Bool reflected =
+				hasBinary && readOiSH(alloc, out.ptr[0], &shFile, &err) &&
+				shFile.binaries.length >= 1 &&
+				(shFile.binaries.ptr[0].identifier.extensions & features[i].ext) &&
+				oiSHRoundtrips(alloc, out.ptr[0], &err);
+
+			if (!reflected)
+				Error_print(alloc, &err, ELogLevel_Debug, ELogOptions_Default);
+
+			if (!CharString_format(alloc, &label, &err, "%s (%s)", features[i].file, backends[b].name))
+				label = CharString_createRefCStrConst(features[i].file);
+
+			Test_assert(t, label.ptr, reflected);
+
+			CharString_free(&label, alloc);
+			SHFile_free(&shFile, alloc);
+			ListBuffer_freeUnderlying(&out, alloc);
+			err = Error_none();
+		}
+
+	#undef B_SPV
+	#undef B_DXIL
+	#undef B_BOTH
 
 	//--- Disassembly: a compiled SPIRV binary round-trips to non-empty, plausible SPIRV text ---
 

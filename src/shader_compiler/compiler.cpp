@@ -3293,6 +3293,8 @@ Bool Compiler_parse(
 
 	if (!result)
 		retError(clean, Error_nullPointer(3, "Compiler_parse()::result is required"));
+
+	result->type = ECompileResultType_SHEntryRuntime;
 		
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		gotoIfError3(clean, CharString_toUTF16(settings->path, alloc, &tmpWStr, e_rr));
