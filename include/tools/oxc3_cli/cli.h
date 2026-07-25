@@ -35,60 +35,70 @@ typedef struct FileInfo FileInfo;
 
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f);
 
-Bool CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
-Bool CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
-Bool CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
-Bool CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encKey[8], Error *e_rr);
+typedef struct CLIConvert {
+	const ParsedArgs *args;
+	const CharString *input;
+	const FileInfo *inputInfo;
+	const CharString *output;
+	U32 encKey[8];
+} CLIConvert;
 
-Bool CLI_convertTo(ParsedArgs args);
-Bool CLI_convertFrom(ParsedArgs args);
-Bool CLI_fileCombine(ParsedArgs args);
+Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr);
+Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr);
+Bool CLI_convertToCA(const CLIConvert *convert, Error *e_rr);
+Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr);
 
-Bool CLI_encryptDo(ParsedArgs args);
-Bool CLI_encryptUndo(ParsedArgs args);
+Bool CLI_convertTo(const ParsedArgs *args);
+Bool CLI_convertFrom(const ParsedArgs *args);
+Bool CLI_fileCombine(const ParsedArgs *args);
 
-Bool CLI_hashFile(ParsedArgs args);
-Bool CLI_hashString(ParsedArgs args);
+Bool CLI_encryptDo(const ParsedArgs *args);
+Bool CLI_encryptUndo(const ParsedArgs *args);
 
-Bool CLI_randKey(ParsedArgs args);
-Bool CLI_randChar(ParsedArgs args);
-Bool CLI_randData(ParsedArgs args);
-Bool CLI_randNum(ParsedArgs args);
+Bool CLI_hashFile(const ParsedArgs *args);
+Bool CLI_hashString(const ParsedArgs *args);
 
-Bool CLI_profileCast(ParsedArgs args);
-Bool CLI_profileRNG(ParsedArgs args);
-Bool CLI_profileCRC32C(ParsedArgs args);
-Bool CLI_profileFNV1A64(ParsedArgs args);
-Bool CLI_profileSHA256(ParsedArgs args);
-Bool CLI_profileMD5(ParsedArgs args);
-Bool CLI_profileAES256(ParsedArgs args);
-Bool CLI_profileAES128(ParsedArgs args);
+Bool CLI_randKey(const ParsedArgs *args);
+Bool CLI_randChar(const ParsedArgs *args);
+Bool CLI_randData(const ParsedArgs *args);
+Bool CLI_randNum(const ParsedArgs *args);
 
-Bool CLI_helpOperation(ParsedArgs args);
+Bool CLI_profileCast(const ParsedArgs *args);
+Bool CLI_profileRNG(const ParsedArgs *args);
+Bool CLI_profileCRC32C(const ParsedArgs *args);
+Bool CLI_profileFNV1A64(const ParsedArgs *args);
+Bool CLI_profileSHA256(const ParsedArgs *args);
+Bool CLI_profileMD5(const ParsedArgs *args);
+Bool CLI_profileAES256(const ParsedArgs *args);
+Bool CLI_profileAES128(const ParsedArgs *args);
 
-Bool CLI_inspectHeader(ParsedArgs args);
-Bool CLI_inspectData(ParsedArgs args);
+Bool CLI_helpOperation(const ParsedArgs *args);
 
-U64 CLI_parseGraphicsAPIs(ParsedArgs args);        //U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
+Bool CLI_inspectHeader(const ParsedArgs *args);
+Bool CLI_inspectData(const ParsedArgs *args);
+
+Bool CLI_cpuDevices(const ParsedArgs *args);
+
+U64 CLI_parseGraphicsAPIs(const ParsedArgs *args);        //U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
 
 #ifdef CLI_SHADER_COMPILER
 
-	Bool CLI_package(ParsedArgs args);
+	Bool CLI_package(const ParsedArgs *args);
 
-	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes);
-	Bool CLI_parseThreads(ParsedArgs args, U64 *threadCount, U64 defaultThreadCount);
+	Bool CLI_parseCompileTypes(const ParsedArgs *args, U64 *maskBinaryType, Bool *multipleModes);
+	Bool CLI_parseThreads(const ParsedArgs *args, U64 *threadCount, U64 defaultThreadCount);
 
-	ECompilerWarning CLI_getExtraWarnings(ParsedArgs args);
+	ECompilerWarning CLI_getExtraWarnings(const ParsedArgs *args);
 
 #endif
 
-Bool CLI_compileShader(ParsedArgs args);
+Bool CLI_compileShader(const ParsedArgs *args);
 
-Bool CLI_graphicsDevices(ParsedArgs args);
-Bool CLI_graphicsCreate(ParsedArgs args);
+Bool CLI_graphicsDevices(const ParsedArgs *args);
+Bool CLI_graphicsCreate(const ParsedArgs *args);
 
-Bool CLI_audioDevices(ParsedArgs args);
-Bool CLI_audioConvert(ParsedArgs args);
+Bool CLI_audioDevices(const ParsedArgs *args);
+Bool CLI_audioConvert(const ParsedArgs *args);
 
 Bool CLI_execute(ListCharString argList);
 

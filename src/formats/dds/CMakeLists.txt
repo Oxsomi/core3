@@ -19,8 +19,8 @@
 
 set(AllowOxC3PlatformsDDS ON)
 
-file(GLOB formatsDDSHeaders "../../../include/formats/dds/*.h")
-file(GLOB formatsDDSSources "*.c")
+file(GLOB formatsDDSHeaders CONFIGURE_DEPENDS "../../../include/formats/dds/*.h")
+file(GLOB formatsDDSSources CONFIGURE_DEPENDS "*.c")
 
 add_library(
 	OxC3_formats_dds
@@ -35,8 +35,8 @@ target_link_libraries(OxC3_formats_dds PUBLIC OxC3_types_base OxC3_types_math Ox
 
 if(EnableTests)
 
-	file(GLOB testsC "test/*.c")
-	file(GLOB testsH "test/*.h")
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
 
 	add_executable(
 		OxC3_formats_dds_test

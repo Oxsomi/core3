@@ -29,6 +29,7 @@
 #include "types/container/file_base.h"
 #include "types/container/buffer.h"
 #include "types/container/encryption_stream.h"
+#include "types/container/string_helper.h"
 #include "types/container/log.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/time.h"
@@ -121,6 +122,7 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 	CAFile archive = (CAFile) { 0 };
 	CharString resolved = CharString_createNull();
+	CharString leafCopy = CharString_createNull();
 	Bool isVirtual = false;
 	Bool s_uccess = true;
 	StreamRef *stream = NULL;
@@ -227,11 +229,9 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 			));
 		}
 
-		for(U64 i = 0; i < allOutputs.length; ++i)
+		for(U64 i = 0; i < allOutputs.length; ++i) {
 
-			if(Buffer_length(allBuffers.ptrNonConst[i])) {
-				gotoIfError3(clean, CAFile_addFile(&archive, allOutputs.ptr[i], &allBuffers.ptrNonConst[i], 0, alloc, e_rr));
-			} else {
+			if(!Buffer_length(allBuffers.ptrNonConst[i])) {
 
 				if(                                                            //Merged binaries contain empty buffers
 					settings->merge &&
@@ -242,6 +242,41 @@ Bool Packager_package(const PackageSettings *settings, const Allocator *alloc, E
 
 				retError(clean, Error_invalidState(0, "Packager_package() one of the shaders didn't compile, aborting packaging"));
 			}
+
+			//allOutputs[i] is an archive-relative path (same rooting as packageFile's subPath), so split it into
+			//parent folder + leaf name, resolve the parent (already added during the file walk), add the leaf and
+			//attach the compiled buffer. CAFile_addFile moves the name and CAFile_setData moves the buffer out.
+
+			CharString outPath = allOutputs.ptr[i];
+
+			CharString parentPath = CharString_createNull();
+			CharString_cutAfterLastSensitive(&outPath, '/', &parentPath);
+
+			CAHandle parent = CAHandle_Root;
+
+			if (CharString_length(parentPath)) {
+
+				parent = CAFile_resolve(&archive, parentPath);
+
+				if(parent == CAHandle_Invalid)
+					retError(clean, Error_invalidState(0, "Packager_package() shader output parent folder lookup failed"));
+			}
+
+			CharString leaf = CharString_createNull();
+			CharString_cutBeforeLastSensitive(&outPath, '/', &leaf);
+
+			if(!leaf.ptr)
+				leaf = outPath;
+
+			gotoIfError3(clean, CharString_createCopy(leaf, alloc, &leafCopy, e_rr));
+
+			CAHandle handle = CAFile_addFile(&archive, parent, &leafCopy, 0, alloc, e_rr);
+
+			if(handle == CAHandle_Invalid)
+				retError(clean, Error_invalidState(0, "Packager_package() couldn't add shader output"));
+
+			gotoIfError3(clean, CAFile_setData(&archive, handle, alloc, &allBuffers.ptrNonConst[i], e_rr));
+		}
 
 	#endif
 
@@ -281,6 +316,7 @@ clean:
 	RefPtr_dec(&stream);
 	CAFile_free(&archive, alloc);
 	CharString_free(&resolved, alloc);
+	CharString_free(&leafCopy, alloc);        //No-op on success (CAFile_addFile moved it); frees on error path
 
 	return s_uccess;
 }

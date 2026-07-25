@@ -17,8 +17,8 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB formatsCAHeaders "../../../include/formats/oiCA/*.h")
-file(GLOB formatsCASources "*.c")
+file(GLOB formatsCAHeaders CONFIGURE_DEPENDS "../../../include/formats/oiCA/*.h")
+file(GLOB formatsCASources CONFIGURE_DEPENDS "*.c")
 
 add_library(
 	OxC3_formats_oiCA
@@ -33,8 +33,8 @@ target_link_libraries(OxC3_formats_oiCA PUBLIC OxC3_types_base OxC3_types_math O
 
 if(EnableTests)
 
-	file(GLOB testsC "test/*.c")
-	file(GLOB testsH "test/*.h")
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
 
 	add_executable(
 		OxC3_formats_oiCA_test

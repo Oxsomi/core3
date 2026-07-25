@@ -19,8 +19,8 @@
 
 # CLI, useful for manually calling CLI utility functions
 
-file(GLOB headers "../.../../include/tools/oxc3_cli/*.h")
-file(GLOB sources "*.c")
+file(GLOB headers CONFIGURE_DEPENDS "../.../../include/tools/oxc3_cli/*.h")
+file(GLOB sources CONFIGURE_DEPENDS "*.c")
 
 add_library(
 	OxC3CLI STATIC
@@ -52,7 +52,7 @@ target_include_directories(OxC3CLI PUBLIC include/tools/oxc3_cli)
 
 # OxC3 executable, for easily executing OxC3CLI commands
 
-file(GLOB sources "executable/*.c")
+file(GLOB sources CONFIGURE_DEPENDS "executable/*.c")
 
 add_executable(
 	OxC3

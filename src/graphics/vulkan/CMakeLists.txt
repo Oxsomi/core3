@@ -19,9 +19,9 @@
 
 message("-- Enabling Vulkan support...")
 
-file(GLOB_RECURSE graphicsApiHeaders "../../../include/graphics/vulkan/*.h")
-file(GLOB_RECURSE graphicsApiSources "generic/*.c")
-file(GLOB_RECURSE graphicsApiPlatformSources "${platform}/*.c")
+file(GLOB_RECURSE graphicsApiHeaders CONFIGURE_DEPENDS "../../../include/graphics/vulkan/*.h")
+file(GLOB_RECURSE graphicsApiSources CONFIGURE_DEPENDS "generic/*.c")
+file(GLOB_RECURSE graphicsApiPlatformSources CONFIGURE_DEPENDS "${platform}/*.c")
 
 set(TARGET_NAME OxC3_graphics_vk)
 

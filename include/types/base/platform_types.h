@@ -98,6 +98,31 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 	#define _CRYPTO_ALWAYS
 #endif
 
+//Runtime CPU capability flags, detected once and stored in Platform_instance->cpuFeatures.
+//These say whether a given operation has a hardware / wide-SIMD "full speed" path on this machine,
+//so the runtime (and CLI) can reason about how fast something should be without re-running cpuid.
+
+typedef enum ECPUFeatures {
+
+	ECPUFeatures_None       = 0,
+
+	ECPUFeatures_HwCRC32C   = 1 << 0,        //Hardware CRC32C (SSE4.2 / ARMv8 CRC)
+	ECPUFeatures_HwAES      = 1 << 1,        //Hardware AES (AES-NI / ARM AESE), AES128 fast path
+	ECPUFeatures_HwAES256   = 1 << 2,        //Wide AES path (VAES + AVX512), full-speed AES256
+	ECPUFeatures_HwSHA256   = 1 << 3,        //Hardware SHA-256 (SHA-NI / ARMv8 SHA2)
+
+	ECPUFeatures_F16C       = 1 << 4,        //Fast F16 <-> F32 conversion
+	ECPUFeatures_Vec8i      = 1 << 5,        //256-bit integer SIMD (AVX2)
+	ECPUFeatures_Vec16i     = 1 << 6,        //512-bit integer SIMD (AVX512 F+BW+DQ+VL)
+
+	ECPUFeatures_PCLMULQDQ  = 1 << 7,        //Carry-less multiply (GHASH / GCM)
+	ECPUFeatures_FMA        = 1 << 8,        //Fused multiply-add
+	ECPUFeatures_AVX        = 1 << 9,        //256-bit float SIMD (AVX, OS-enabled)
+
+	ECPUFeatures_Int8Dot    = 1 << 10        //int8 dot-product accel (AVX-VNNI / AVX512-VNNI / ARM DotProd) - ML/AIU
+
+} ECPUFeatures;
+
 #ifdef __cplusplus
 	extern "C" {
 #endif
@@ -105,6 +130,10 @@ static_assert(sizeof(void*) == 8, "OxC3 is only supported on 64-bit");
 #if _ARCH == ARCH_X86_64
 	void Platform_getCPUId(int leaf, U32 result[4]);
 #endif
+
+//Detects the ECPUFeatures above (cpuid + xgetbv on x86; ECPUFeatures_None on unsupported arch).
+//Called once at Platform_create, prefer reading Platform_instance->cpuFeatures at runtime.
+ECPUFeatures Platform_detectCPUFeatures();
 
 #ifdef __cplusplus
 	}

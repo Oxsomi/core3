@@ -17,13 +17,13 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesBaseHeaders "../../../include/types/base/*.h")
-file(GLOB typesBaseSources "*.c")
+file(GLOB_RECURSE typesBaseHeaders CONFIGURE_DEPENDS "../../../include/types/base/*.h")
+file(GLOB typesBaseSources CONFIGURE_DEPENDS "*.c")
 
 if(WIN32)
-	file(GLOB_RECURSE typesBasePlatformSources "platforms/windows/*.c")
+	file(GLOB_RECURSE typesBasePlatformSources CONFIGURE_DEPENDS "platforms/windows/*.c")
 elseif(UNIX)
-	file(GLOB_RECURSE typesBasePlatformSources "platforms/unix/*.c")
+	file(GLOB_RECURSE typesBasePlatformSources CONFIGURE_DEPENDS "platforms/unix/*.c")
 endif()
 
 add_library(
@@ -38,7 +38,7 @@ add_library(
 target_compile_definitions(OxC3_types_base PUBLIC -D_ENABLE_SIMD=${SIMD})
 
 if(ANDROID)
-	file(GLOB_RECURSE typesBaseAndroidSources "platforms/android/*.c")
+	file(GLOB_RECURSE typesBaseAndroidSources CONFIGURE_DEPENDS "platforms/android/*.c")
 	target_sources(OxC3_types_base PRIVATE ${typesBaseAndroidSources})
 endif()
 
@@ -48,7 +48,7 @@ endif()
 
 if(MSVC AND ARM)
 	enable_language(ASM_MARMASM)
-	file(GLOB_RECURSE armAsmWin "platforms/windows/arm/*.asm")
+	file(GLOB_RECURSE armAsmWin CONFIGURE_DEPENDS "platforms/windows/arm/*.asm")
 	target_sources(OxC3_types_base PRIVATE ${armAsmWin})
 	set_source_files_properties(
 		${armAsmWin}
@@ -63,8 +63,8 @@ target_include_directories(OxC3_types_base PUBLIC "../../../include")
 
 if(EnableTests)
 
-	file(GLOB typesTestHeaders "../../../include/types/test/*.h")
-	file(GLOB testsSharedC "test/shared/*.c")
+	file(GLOB typesTestHeaders CONFIGURE_DEPENDS "../../../include/types/test/*.h")
+	file(GLOB testsSharedC CONFIGURE_DEPENDS "test/shared/*.c")
 
 	add_library(
 		OxC3_types_test
@@ -77,8 +77,8 @@ if(EnableTests)
 	set_target_properties(OxC3_types_test PROPERTIES FOLDER Oxsomi/test/types)
 	target_include_directories(OxC3_types_test PUBLIC "../../../include")
 
-	file(GLOB testsC "test/*.c")
-	file(GLOB testsH "test/*.h")
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
 
 	add_executable(
 		OxC3_types_base_test

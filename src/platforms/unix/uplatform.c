@@ -28,6 +28,12 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdio.h>
+#include <string.h>
+
+#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+	#include <mach/mach.h>
+#endif
 
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
@@ -51,6 +57,145 @@ void Platform_cleanupExt() {
 #endif
 
 U64 Platform_getThreads() { return sysconf(_SC_NPROCESSORS_ONLN); }
+
+#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+	#include <sys/sysctl.h>
+#endif
+
+U64 Platform_getPhysicalRAM() {
+
+	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+
+		U64 mem = 0;
+		size_t len = sizeof(mem);
+		return sysctlbyname("hw.memsize", &mem, &len, NULL, 0) == 0 ? mem : 0;
+
+	#else        //Linux / Android
+
+		long pages    = sysconf(_SC_PHYS_PAGES);
+		long pageSize = sysconf(_SC_PAGE_SIZE);
+		return pages > 0 && pageSize > 0 ? (U64) pages * (U64) pageSize : 0;
+
+	#endif
+}
+
+U64 Platform_getAvailableRAM() {
+
+	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+
+		const mach_port_t host = mach_host_self();
+
+		vm_size_t pageSize = 0;
+		if(host_page_size(host, &pageSize) != KERN_SUCCESS)
+			return 0;
+
+		vm_statistics64_data_t vmStat;
+		mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+
+		if(host_statistics64(host, HOST_VM_INFO64, (host_info64_t) &vmStat, &count) != KERN_SUCCESS)
+			return 0;
+
+		//"Available" = free + reclaimable (inactive + purgeable) pages
+		return (U64) (vmStat.free_count + vmStat.inactive_count + vmStat.purgeable_count) * (U64) pageSize;
+
+	#else        //Linux / Android
+
+		long pages    = sysconf(_SC_AVPHYS_PAGES);
+		long pageSize = sysconf(_SC_PAGE_SIZE);
+		return pages > 0 && pageSize > 0 ? (U64) pages * (U64) pageSize : 0;
+
+	#endif
+}
+
+void Platform_detectCPUInfo(PlatformCPUInfo *out) {
+
+	if(!out)
+		return;
+
+	*out = (PlatformCPUInfo) { 0 };
+	out->logicalCores = (U32) Platform_getThreads();
+
+	//Vendor + brand via cpuid (x86 only); on ARM leave brand empty and mark the vendor generically.
+
+	#if _ARCH == ARCH_X86_64
+
+		U32 reg[4] = { 0 };
+		Platform_getCPUId(0, reg);
+
+		if(reg[1] == 0x756E6547 && reg[3] == 0x49656E69 && reg[2] == 0x6C65746E)        //"GenuineIntel"
+			out->vendor = ECPUVendor_Intel;
+		else if(reg[1] == 0x68747541 && reg[3] == 0x69746E65 && reg[2] == 0x444D4163)   //"AuthenticAMD"
+			out->vendor = ECPUVendor_AMD;
+
+		U32 brand[12] = { 0 };
+		Platform_getCPUId((int) 0x80000002, &brand[0]);
+		Platform_getCPUId((int) 0x80000003, &brand[4]);
+		Platform_getCPUId((int) 0x80000004, &brand[8]);
+
+		for(U64 i = 0; i < sizeof(brand) && i < sizeof(out->brand) - 1; ++i)
+			out->brand[i] = ((const C8*) brand)[i];
+
+	#elif _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+
+		out->vendor = ECPUVendor_Apple;        //Apple silicon (or Apple-branded Intel Macs; still Apple here)
+
+		size_t bsz = sizeof(out->brand);
+		sysctlbyname("machdep.cpu.brand_string", out->brand, &bsz, NULL, 0);
+		out->brand[sizeof(out->brand) - 1] = 0;
+
+	#else        //Linux / Android on ARM: identify the implementer from /proc/cpuinfo
+
+		out->vendor = ECPUVendor_Arm;
+
+		FILE *f = fopen("/proc/cpuinfo", "r");
+
+		if(f) {
+
+			C8 line[256];
+
+			while(fgets(line, sizeof(line), f)) {
+
+				if(!strstr(line, "CPU implementer"))
+					continue;
+
+				const C8 *hex = strstr(line, "0x");
+
+				if(hex)
+					switch((unsigned) strtoul(hex, NULL, 16)) {
+						case 0x4e: out->vendor = ECPUVendor_Nvidia;   break;
+						case 0x51: out->vendor = ECPUVendor_Qualcomm; break;
+						case 0x53: out->vendor = ECPUVendor_Samsung;  break;
+						case 0xc0: out->vendor = ECPUVendor_Ampere;   break;
+						case 0x61: out->vendor = ECPUVendor_Apple;    break;
+						default:   out->vendor = ECPUVendor_Arm;      break;
+					}
+
+				break;
+			}
+
+			fclose(f);
+		}
+
+	#endif
+
+	//Without parsing /sys/devices/system/cpu topology we can't reliably separate SMT or P/E cores, so fall back
+	//to logical == physical (accurate on the no-SMT ARM parts this branch mostly targets).
+	//TODO: parse /sys topology for true physical core count, hybrid P/E split and NUMA node count.
+
+	out->physicalCores = out->logicalCores;
+
+	#ifdef _SC_LEVEL1_DCACHE_SIZE
+		{ long v = sysconf(_SC_LEVEL1_DCACHE_SIZE); if(v > 0) out->l1DataCacheBytes = (U64) v; }
+	#endif
+	#ifdef _SC_LEVEL2_CACHE_SIZE
+		{ long v = sysconf(_SC_LEVEL2_CACHE_SIZE); if(v > 0) out->l2CacheBytes = (U64) v; }
+	#endif
+	#ifdef _SC_LEVEL3_CACHE_SIZE
+		{ long v = sysconf(_SC_LEVEL3_CACHE_SIZE); if(v > 0) out->l3CacheBytes = (U64) v; }
+	#endif
+
+	out->numaNodes = 1;
+}
 
 Bool Platform_initExt(Error *e_rr) {
 

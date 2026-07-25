@@ -20,19 +20,20 @@
 
 //tools/oxc3_cli/inspect_header.c
 
-#include "platforms/ext/listx.h"
 #include "types/base/error.h"
-#include "types/math/math.h"
+#include "types/base/mathi.h"
 #include "types/container/buffer.h"
 #include "types/container/string.h"
+#include "types/container/log.h"
 #include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_headers.h"
 #include "formats/oiDL/dl_file.h"
-#include "formats/oiSH/headers.h"
+#include "formats/oiDL/dl_headers.h"
+#include "formats/oiSH/sh_headers.h"
+#include "formats/oiXX/oiXX.h"
 #include "platforms/logx.h"
 #include "platforms/file.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/errorx.h"
+#include "platforms/platform.h"
 #include "tools/oxc3_cli/cli.h"
 #include "types/base/constants.h"
 
@@ -59,17 +60,10 @@ VersionString VersionCharString_get(U8 version) {
 
 void XXFile_printType(U8 type) {
 
-	if (type >> 4) {
+	//Compression is currently unsupported (only EXXCompressionType_None), so a set compression nibble is unexpected.
 
-		const C8 *typeStr = "Unrecognized";
-
-		switch (type >> 4) {
-			case EXXCompressionType_Brotli11:    typeStr = "Brotli:11";        break;
-			case EXXCompressionType_Brotli1:    typeStr = "Brotli:1";        break;
-		}
-
-		Log_debugLnx("Compression type: %s.", typeStr);
-	}
+	if (type >> 4)
+		Log_debugLnx("Compression type: Unrecognized (compression is unsupported).");
 
 	if (type & 0xF) {
 		const C8 *typeStr = (type & 0xF) == EXXEncryptionType_AES256GCM ? "AES256GCM" : "Unrecognized";
@@ -93,11 +87,16 @@ static const C8 *dataTypes[] = {
 //To get a more detailed view you can use OxC3 file data instead.
 //Viewing the header doesn't require a key (if encrypted), but the data does.
 
-Bool CLI_inspectHeader(ParsedArgs args) {
+Bool CLI_inspectHeader(const ParsedArgs *args) {
+
+	if(!args) return false;
 
 	Buffer buf = Buffer_createNull();
 	Error err;
 	Bool success = false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	RefPtrType fileHandleType = FileHandle_makeType(alloc);
 
 	CharString path = CharString_createNull();
 	CharString tmp = CharString_createNull();
@@ -107,7 +106,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		goto clean;
 	}
 
-	if (!File_readx(path, 100 * MS, 0, 0, &buf, &err)) {
+	if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &buf, &err)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
@@ -217,20 +216,34 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			XXFile_printVersion(caHeader.version);
 
-			//File sizes
+			//Type (oiCA stores only an encryption type; the archive itself isn't compressed)
 
-			Log_debugLnx(
-				"Data size type uses %s.",
-				dataTypes[(caHeader.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask]
-			);
+			XXFile_printType(caHeader.type);
 
-			if (caHeader.type >> 4)
-				Log_debugLnx(
-					"Compression size type uses %s.",
-					dataTypes[(caHeader.flags >> ECAFlags_CompressedSizeType_Shift) & ECAFlags_CompressedSizeType_Mask]
+			//Extended data sits right after the header, before the file/directory counts
+
+			if (caHeader.flags & ECAFlags_HasExtendedData) {
+
+				reqLen += sizeof(CAExtraInfo);
+
+				if (Buffer_length(buf) < reqLen) {
+					Log_errorLnx("File wasn't the right size.");
+					goto clean;
+				}
+
+				CAExtraInfo extraInfo = (CAExtraInfo) { 0 };
+				Buffer_memcpy(
+					Buffer_createRef(&extraInfo, sizeof(extraInfo)),
+					Buffer_createRefConst(buf.ptr + sizeof(CAHeader), sizeof(extraInfo))
 				);
 
-			//File and directory count
+				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
+				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.headerExtensionSize);
+				Log_debugLnx("Extended per directory size: %"PRIu32, (U32)extraInfo.directoryExtensionSize);
+				Log_debugLnx("Extended per file size: %"PRIu32, (U32)extraInfo.fileExtensionSize);
+			}
+
+			//File and directory counts (their byte size depends on the *CountLong flags)
 
 			const U64 fileCountPtr = reqLen;
 			reqLen += caHeader.flags & ECAFlags_FilesCountLong ? sizeof(U32) : sizeof(U16);
@@ -242,8 +255,6 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				Log_errorLnx("File wasn't the right size.");
 				goto clean;
 			}
-
-			//Entry count
 
 			const U64 fileCount = Buffer_forceReadSizeType(
 				buf.ptr + fileCountPtr,
@@ -258,78 +269,23 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			Log_debugLnx("Directory count: %"PRIu64, dirCount);
 			Log_debugLnx("File count: %"PRIu64, fileCount);
 
-			//AES chunking
-
-			const U32 aesChunking = caHeader.flags & ECAFlags_AESChunkMask;
-
-			if (aesChunking) {
-
-				static const C8 *chunking[] = {
-					"10 MiB",
-					"100 MiB",
-					"500 MiB"
-				};
-
-				Log_debugLnx(
-					"AES Chunking uses %s per chunk.",
-					chunking[(aesChunking >> ECAFlags_AESChunkShift) - 1]
-				);
-			}
-
-			//Types
-
-			XXFile_printType(caHeader.type);
-
-			//Extended data
-
-			if (caHeader.flags & ECAFlags_HasExtendedData) {
-
-				if (Buffer_length(buf) < reqLen) {
-					Log_errorLnx("File wasn't the right size.");
-					goto clean;
-				}
-
-				CAExtraInfo extraInfo = (CAExtraInfo) { 0 };
-				Buffer_memcpy(
-					Buffer_createRef(&extraInfo, sizeof(extraInfo)),
-					Buffer_createRefConst(buf.ptr + reqLen, sizeof(extraInfo))
-				);
-
-				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.headerExtensionSize);
-				Log_debugLnx("Extended per directory size: %"PRIu32, (U32)extraInfo.directoryExtensionSize);
-				Log_debugLnx("Extended per file size: %"PRIu32, (U32)extraInfo.fileExtensionSize);
-			}
-
-			//Flags
+			//Flags (ECAFlags, one bit each)
 
 			static const C8 *flags[] = {
-				"\tHash is SHA256 instead of CRC32C (a 256-bit hash instead of a 32-bit one).",
-				"\tFiles store a date in interval of two seconds or up to a nanosecond.",
-				"\tFile stores a full date, up to nanoseconds.",
-				NULL,
-				NULL,
-				NULL,
-				NULL,
+				"\tFiles store a date.",
+				"\tFiles store an extended date (up to a nanosecond).",
 				"\tFile has an extended data section.",
-				NULL,
-				NULL,
-				"\tFile stores directory references/count as a U16 (16-bit) as opposed to U8 (8-bit).",
-				"\tFile stores file references/count as a U32 (32-bit) as opposed to U16 (16-bit).",
-				"\tUnrecognized flag"
+				"\tDirectory count is stored as a U16 (16-bit) instead of a U8 (8-bit).",
+				"\tFile count is stored as a U32 (32-bit) instead of a U16 (16-bit)."
 			};
 
-			if(caHeader.flags & ~ECAFlags_NonFlagTypes) {
+			if(caHeader.flags) {
 
 				Log_debugLnx("Flags: ");
 
-				for(U64 i = 0; i < sizeof(caHeader.flags) << 3; ++i) {
-
-					const C8 *flag = flags[U64_min(i, sizeof(flags) / sizeof(flags[0]) - 1)];
-
-					if((caHeader.flags >> i) & 1 && flag)
-						Log_debugLnx(flag);
-				}
+				for(U64 i = 0; i < sizeof(flags) / sizeof(flags[0]); ++i)
+					if((caHeader.flags >> i) & 1)
+						Log_debugLnx(flags[i]);
 			}
 
 			break;
@@ -452,9 +408,9 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 clean:
 
 	if(err.genericError)
-		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 
-	CharString_freex(&tmp);
-	Buffer_freex(&buf);
+	CharString_free(&tmp, alloc);
+	Buffer_free(&buf, alloc);
 	return success;
 }

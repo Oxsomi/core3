@@ -22,21 +22,28 @@
 
 #include "formats/oiSH/sh_file.h"
 #include "formats/oiCA/ca_file.h"
+#include "formats/oiCA/ca_combine.h"
 #include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_entry.h"
 #include "types/container/buffer.h"
+#include "types/container/memory_stream.h"
+#include "types/container/encryption_stream.h"
+#include "types/container/log.h"
+#include "types/base/error.h"
 #include "types/base/string_read_helper.h"
 #include "types/base/string_read.h"
 #include "types/base/time.h"
 #include "types/base/c8.h"
+#include "types/math/vec4.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/formatx.h"
-#include "platforms/ext/bufferx.h"
 #include "platforms/file.h"
 #include "tools/oxc3_cli/cli.h"
 #include "types/base/constants.h"
 
-Bool CLI_fileCombine(ParsedArgs args) {
+Bool CLI_fileCombine(const ParsedArgs *args) {
+
+	if(!args) return false;
 
 	Ns start = Time_now();
 
@@ -45,13 +52,19 @@ Bool CLI_fileCombine(ParsedArgs args) {
 	Buffer buf[3] = { 0 };
 	U32 *encryptionKey = NULL;            //Only if we have aes should encryption key be set.
 
-	if (args.parameters & EOperationHasParameter_SplitBy) {
+	const Allocator *alloc = Platform_instance->alloc;
+
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const RefPtrType memoryStreamType = MemoryStream_makeType(alloc);
+	const RefPtrType encryptionStreamType = EncryptionStream_makeType(alloc);
+
+	if (args->parameters & EOperationHasParameter_SplitBy) {
 		Log_debugLnx("CLI_fileCombine() failed, -split can't be used");
 		s_uccess = false;
 		goto clean;
 	}
 
-	if (!(args.parameters & EOperationHasParameter_Input2)) {
+	if (!(args->parameters & EOperationHasParameter_Input2)) {
 		Log_debugLnx("CLI_fileCombine() failed, -input2 is required");
 		s_uccess = false;
 		goto clean;
@@ -74,7 +87,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	U32 encryptionKeyV[8] = { 0 };
 
-	if (args.parameters & EOperationHasParameter_AES) {
+	if (args->parameters & EOperationHasParameter_AES) {
 
 		CharString key = CharString_createNull();
 
@@ -112,41 +125,59 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 	//Read input buffers
 
-	if (!File_readx(inputArg, 100 * MS, 0, 0, &buf[0], e_rr)) {
+	if (!File_read(&inputArg, 100 * MS, 0, 0, &fileHandleType, &buf[0], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (1)");
 		goto clean;
 	}
 
-	if (!File_readx(inputArg2, 100 * MS, 0, 0, &buf[1], e_rr)) {
+	if (!File_read(&inputArg2, 100 * MS, 0, 0, &fileHandleType, &buf[1], e_rr)) {
 		Log_debugLnx("CLI_fileCombine() missing input (2)");
 		goto clean;
 	}
 
-	switch (args.format) {
+	switch (args->format) {
 
 		case EFormat_oiSH: {
 
 			SHFile tmp[3] = { 0 };
 
-			if (!SHFile_readx(buf[0], false, &tmp[0], e_rr) || !SHFile_readx(buf[1], false, &tmp[1], e_rr)) {
+			MemoryStreamRef *readStream[2] = { 0 };
+			MemoryStreamRef *writeStream = NULL;
+			U64 readOff[2] = { 0 };
+			U64 writeOff = 0;
+
+			if (
+				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &memoryStreamType, &readStream[0], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &memoryStreamType, &readStream[1], e_rr) ||
+				!SHFile_read((StreamRef*)readStream[0], &readOff[0], false, alloc, &tmp[0], e_rr) ||
+				!SHFile_read((StreamRef*)readStream[1], &readOff[1], false, alloc, &tmp[1], e_rr)
+			) {
 				Log_warnLnx("CLI_fileCombine() one of two SHFile couldn't be parsed");
 				goto cleanSH;
 			}
 
-			if(!SHFile_combinex(tmp[0], tmp[1], &tmp[2], e_rr)) {
+			if(!SHFile_combine(&tmp[0], &tmp[1], alloc, &tmp[2], e_rr)) {
 				Log_warnLnx("CLI_fileCombine() SHFile can't be merged");
 				goto cleanSH;
 			}
 
-			if (!SHFile_writex(tmp[2], &buf[2], e_rr)) {
+			if (
+				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr) ||
+				!SHFile_write((StreamRef*)writeStream, &writeOff, &tmp[2], alloc, e_rr) ||
+				!MemoryStream_move(&writeStream, &buf[2], e_rr)
+			) {
 				Log_warnLnx("CLI_fileCombine() SHFile can't be serialized");
 				goto cleanSH;
 			}
 
 		cleanSH:
 
+			RefPtr_dec(&readStream[0]);
+			RefPtr_dec(&readStream[1]);
+			RefPtr_dec(&writeStream);
+
 			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
-				SHFile_freex(&tmp[i]);
+				SHFile_free(&tmp[i], alloc);
 
 			if(s_uccess)
 				break;
@@ -158,12 +189,29 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 			CAFile tmp[3] = { 0 };
 
-			if (!CAFile_readx(buf[0], encryptionKey, &tmp[0], e_rr) || !CAFile_readx(buf[1], encryptionKey, &tmp[1], e_rr)) {
+			MemoryStreamRef *readStream[2] = { 0 };
+			MemoryStreamRef *writeStream = NULL;
+			U64 writeOff = 0;
+
+			if (
+				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &memoryStreamType, &readStream[0], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &memoryStreamType, &readStream[1], e_rr) ||
+				!CAFile_read(
+					(StreamRef*)readStream[0], encryptionKey ? &encryptionStreamType : NULL, 0, encryptionKey, alloc,
+					&tmp[0], e_rr
+				) ||
+				!CAFile_read(
+					(StreamRef*)readStream[1], encryptionKey ? &encryptionStreamType : NULL, 0, encryptionKey, alloc,
+					&tmp[1], e_rr
+				)
+			) {
 				Log_warnLnx("CLI_fileCombine() one of two CAFile couldn't be parsed");
 				goto cleanCA;
 			}
 
-			if(!CAFile_combinex(tmp[0], tmp[1], &tmp[2], e_rr)) {
+			if(!CAFile_combine(
+				&tmp[0], &tmp[1], EArchiveCombineMode_RequireSame, EArchiveCombineFlags_None, alloc, &tmp[2], e_rr
+			)) {
 				Log_warnLnx("CLI_fileCombine() CAFile can't be merged");
 				goto cleanCA;
 			}
@@ -174,11 +222,17 @@ Bool CLI_fileCombine(ParsedArgs args) {
 					Buffer_createRefConst(encryptionKey, sizeof(encryptionKeyV))
 				);
 
-			if (!CAFile_writex(tmp[2], &buf[2], e_rr)) {
+			if (
+				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr) ||
+				!CAFile_write(
+					&tmp[2], encryptionKey ? &encryptionStreamType : NULL, (StreamRef*)writeStream, &writeOff, alloc, e_rr
+				) ||
+				!MemoryStream_move(&writeStream, &buf[2], e_rr)
+			) {
 
 				if(encryptionKey)
 					Buffer_clearAllSecure(
-						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey))
 					);
 
 				Log_warnLnx("CLI_fileCombine() CAFile can't be serialized");
@@ -187,13 +241,17 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 			if(encryptionKey)
 				Buffer_clearAllSecure(
-					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey))
 				);
 
 		cleanCA:
 
+			RefPtr_dec(&readStream[0]);
+			RefPtr_dec(&readStream[1]);
+			RefPtr_dec(&writeStream);
+
 			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
-				CAFile_freex(&tmp[i]);
+				CAFile_free(&tmp[i], alloc);
 
 			if(s_uccess)
 				break;
@@ -205,15 +263,28 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 			DLFile tmp[3] = { 0 };
 
+			MemoryStreamRef *readStream[2] = { 0 };
+			MemoryStreamRef *writeStream = NULL;
+			U64 readOff[2] = { 0 };
+			U64 writeOff = 0;
+
 			if (
-				!DLFile_readx(buf[0], encryptionKey, false, &tmp[0], e_rr) ||
-				!DLFile_readx(buf[1], encryptionKey, false, &tmp[1], e_rr)
+				!MemoryStream_createFromBuffer(&buf[0], EMemoryStreamFlags_None, &memoryStreamType, &readStream[0], e_rr) ||
+				!MemoryStream_createFromBuffer(&buf[1], EMemoryStreamFlags_None, &memoryStreamType, &readStream[1], e_rr) ||
+				!DLFile_read(
+					(StreamRef*)readStream[0], &readOff[0], encryptionKey, I32x4_zero(), false, false, alloc,
+					encryptionKey ? &encryptionStreamType : NULL, &tmp[0], e_rr
+				) ||
+				!DLFile_read(
+					(StreamRef*)readStream[1], &readOff[1], encryptionKey, I32x4_zero(), false, false, alloc,
+					encryptionKey ? &encryptionStreamType : NULL, &tmp[1], e_rr
+				)
 			) {
 				Log_warnLnx("CLI_fileCombine() one of two DLFile couldn't be parsed");
 				goto cleanDL;
 			}
 
-			if(!DLFile_combinex(tmp[0], tmp[1], &tmp[2], e_rr)) {
+			if(!DLFile_combine(&tmp[0], &tmp[1], alloc, &tmp[2], e_rr)) {
 				Log_warnLnx("CLI_fileCombine() DLFile can't be merged");
 				goto cleanDL;
 			}
@@ -224,11 +295,18 @@ Bool CLI_fileCombine(ParsedArgs args) {
 					Buffer_createRefConst(encryptionKey, sizeof(encryptionKeyV))
 				);
 
-			if (!DLFile_writex(tmp[2], &buf[2], e_rr)) {
+			if (
+				!MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memoryStreamType, &writeStream, e_rr) ||
+				!DLFile_write(
+					&tmp[2], alloc, (StreamRef*)writeStream, encryptionKey ? &encryptionStreamType : NULL, I32x4_zero(),
+					&writeOff, e_rr
+				) ||
+				!MemoryStream_move(&writeStream, &buf[2], e_rr)
+			) {
 
 				if(encryptionKey)
 					Buffer_clearAllSecure(
-						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+						Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey))
 					);
 
 				Log_warnLnx("CLI_fileCombine() DLFile can't be serialized");
@@ -237,13 +315,17 @@ Bool CLI_fileCombine(ParsedArgs args) {
 
 			if(encryptionKey)
 				Buffer_clearAllSecure(
-					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey)), NULL
+					Buffer_createRef(tmp[2].settings.encryptionKey, sizeof(tmp[2].settings.encryptionKey))
 				);
 
 		cleanDL:
 
+			RefPtr_dec(&readStream[0]);
+			RefPtr_dec(&readStream[1]);
+			RefPtr_dec(&writeStream);
+
 			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
-				DLFile_freex(&tmp[i]);
+				DLFile_free(&tmp[i], alloc);
 
 			if(s_uccess)
 				break;
@@ -256,7 +338,7 @@ Bool CLI_fileCombine(ParsedArgs args) {
 			goto clean;
 	}
 
-	if (!File_writex(buf[2], outputArg, 0, 0, 1 * SECOND, true, e_rr)) {
+	if (!File_write(&buf[2], &outputArg, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr)) {
 		Log_warnLnx("CLI_fileCombine() can't write to output file");
 		goto clean;
 	}
@@ -266,11 +348,11 @@ Bool CLI_fileCombine(ParsedArgs args) {
 clean:
 
 	if(encryptionKey)
-		Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
+		Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 	for(U8 i = 0; i < sizeof(buf) / sizeof(buf[0]); ++i)
-		Buffer_freex(&buf[i]);
+		Buffer_free(&buf[i], alloc);
 
-	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 	return false;
 }

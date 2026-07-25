@@ -17,15 +17,15 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB typesContainerHeaders "../../../include/types/container/*.h")
-file(GLOB typesContainerHeadersSimd "../../../include/types/container/simd/*.h")
-file(GLOB typesContainerHeadersSimdTarg "../../../include/types/container/simd/${SIMD}/*.h")
-file(GLOB typesContainerSources "*.c")
-file(GLOB_RECURSE typesContainerPlatformSources "platforms/${platform}/*.c")
-file(GLOB_RECURSE typesContainerSIMDSources "simd/${simd}/*.c")
+file(GLOB typesContainerHeaders CONFIGURE_DEPENDS "../../../include/types/container/*.h")
+file(GLOB typesContainerHeadersSimd CONFIGURE_DEPENDS "../../../include/types/container/simd/*.h")
+file(GLOB typesContainerHeadersSimdTarg CONFIGURE_DEPENDS "../../../include/types/container/simd/${SIMD}/*.h")
+file(GLOB typesContainerSources CONFIGURE_DEPENDS "*.c")
+file(GLOB_RECURSE typesContainerPlatformSources CONFIGURE_DEPENDS "platforms/${platform}/*.c")
+file(GLOB_RECURSE typesContainerSIMDSources CONFIGURE_DEPENDS "simd/${simd}/*.c")
 
 if(UNIX)
-	file(GLOB_RECURSE typesContainerUnixSources "platforms/unix/*.c")
+	file(GLOB_RECURSE typesContainerUnixSources CONFIGURE_DEPENDS "platforms/unix/*.c")
 endif()
 
 add_library(
@@ -74,8 +74,8 @@ endif()
 
 if(EnableTests)
 
-	file(GLOB typesContainerTestfH "../../../include/types/container/test/*.h")
-	file(GLOB typesContainerTestfC "test/shared/*.c")
+	file(GLOB typesContainerTestfH CONFIGURE_DEPENDS "../../../include/types/container/test/*.h")
+	file(GLOB typesContainerTestfC CONFIGURE_DEPENDS "test/shared/*.c")
 
 	add_library(
 		OxC3_types_container_test_util STATIC
@@ -87,9 +87,9 @@ if(EnableTests)
 	target_link_libraries(OxC3_types_container_test_util PUBLIC OxC3_types_container OxC3_types_test)
 	set_target_properties(OxC3_types_container_test_util PROPERTIES FOLDER Oxsomi/test/types)
 
-	file(GLOB testsC "test/*.c")
-	file(GLOB testsCpp "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
-	file(GLOB testsH "test/*.h")
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsCpp CONFIGURE_DEPENDS "test/*.cpp")    #C++ TUs (e.g. hpp wrapper tests)
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
 
 	add_executable(
 		OxC3_types_container_test
@@ -107,8 +107,8 @@ endif()
 
 if(EnableOxC3CLI)
 
-	file(GLOB typesContainerPerfH "../../../include/types/container/perf/*.h")
-	file(GLOB typesContainerPerfC "perf/*.c")
+	file(GLOB typesContainerPerfH CONFIGURE_DEPENDS "../../../include/types/container/perf/*.h")
+	file(GLOB typesContainerPerfC CONFIGURE_DEPENDS "perf/*.c")
 
 	add_library(
 		OxC3_types_container_perf_lib STATIC
@@ -120,7 +120,7 @@ if(EnableOxC3CLI)
 	target_link_libraries(OxC3_types_container_perf_lib PUBLIC OxC3_types_container)
 	set_target_properties(OxC3_types_container_perf_lib PROPERTIES FOLDER Oxsomi/perf)
 
-	file(GLOB testsExecC "perf/exec/*.c")
+	file(GLOB testsExecC CONFIGURE_DEPENDS "perf/exec/*.c")
 
 	add_executable(
 		OxC3_types_container_perf

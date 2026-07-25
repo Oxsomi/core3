@@ -22,37 +22,43 @@
 
 #include "tools/oxc3_cli/cli.h"
 #include "types/container/buffer.h"
+#include "types/container/buffer_encrypt.h"
 #include "types/container/string.h"
+#include "types/container/log.h"
 #include "types/base/time.h"
+#include "types/base/error.h"
 #include "types/math/flp.h"
+#include "types/math/vec4i.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/errorx.h"
 #include "types/base/constants.h"
 
-typedef Error (*ProfileOperation)(ParsedArgs, Buffer);
+typedef Error (*ProfileOperation)(const ParsedArgs*, Buffer);
 
-Bool CLI_profileData(ParsedArgs args, ProfileOperation op) {
+Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
+
+	if(!args) return false;
 
 	const U64 bufferSize = GIBI;
 
 	Buffer dat = Buffer_createNull();
-	Error err;
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
 
-	gotoIfError(clean, Buffer_createUninitializedBytesx(bufferSize, &dat))
+	gotoIfError3(clean, Buffer_createUninitializedBytes(bufferSize, Platform_instance->alloc, &dat, e_rr));
 
 	if(!Buffer_csprng(dat))
-		gotoIfError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"))
+		retError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"));
 
-	gotoIfError(clean, op(args, dat))
+	gotoIfError2(clean, op(args, dat))
 
 clean:
 
 	if(err.genericError)
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 
-	Buffer_freex(&dat);
-	return !err.genericError;
+	Buffer_free(&dat, Platform_instance->alloc);
+	return s_uccess;
 }
 
 typedef enum EProfileCastStep {
@@ -134,7 +140,7 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 	return EFloatType_convert(inputType, v, outputType);
 }
 
-Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
+Error _CLI_profileCast(const ParsedArgs *args, Buffer buf) {
 
 	(void)args;
 	Error err = Error_none();
@@ -192,11 +198,12 @@ clean:
 	return err;
 }
 
-Bool CLI_profileCast(ParsedArgs args) {
+Bool CLI_profileCast(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, _CLI_profileCast);
 }
 
-Error CLI_profileRNGImpl(ParsedArgs args, Buffer buf) {
+Error CLI_profileRNGImpl(const ParsedArgs *args, Buffer buf) {
 
 	(void)args;
 
@@ -218,11 +225,12 @@ Error CLI_profileRNGImpl(ParsedArgs args, Buffer buf) {
 	return Error_none();
 }
 
-Bool CLI_profileRNG(ParsedArgs args) {
+Bool CLI_profileRNG(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, CLI_profileRNGImpl);
 }
 
-Error CLI_profileCRC32CImpl(ParsedArgs args, Buffer buf) {
+Error CLI_profileCRC32CImpl(const ParsedArgs *args, Buffer buf) {
 
 	(void)args;
 
@@ -242,11 +250,12 @@ Error CLI_profileCRC32CImpl(ParsedArgs args, Buffer buf) {
 	return Error_none();
 }
 
-Bool CLI_profileCRC32C(ParsedArgs args) {
+Bool CLI_profileCRC32C(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, CLI_profileCRC32CImpl);
 }
 
-Error CLI_profileFNV1A64Impl(ParsedArgs args, Buffer buf) {
+Error CLI_profileFNV1A64Impl(const ParsedArgs *args, Buffer buf) {
 
 	(void)args;
 
@@ -266,11 +275,12 @@ Error CLI_profileFNV1A64Impl(ParsedArgs args, Buffer buf) {
 	return Error_none();
 }
 
-Bool CLI_profileFNV1A64(ParsedArgs args) {
+Bool CLI_profileFNV1A64(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, CLI_profileFNV1A64Impl);
 }
 
-Error CLI_profileSHA256Impl(ParsedArgs args, Buffer buf) {
+Error CLI_profileSHA256Impl(const ParsedArgs *args, Buffer buf) {
 
 	(void)args;
 
@@ -294,11 +304,12 @@ Error CLI_profileSHA256Impl(ParsedArgs args, Buffer buf) {
 	return Error_none();
 }
 
-Bool CLI_profileSHA256(ParsedArgs args) {
+Bool CLI_profileSHA256(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, CLI_profileSHA256Impl);
 }
 
-Error CLI_profileMD5Impl(ParsedArgs args, Buffer buf) {
+Error CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf) {
 
 	(void)args;
 
@@ -318,11 +329,12 @@ Error CLI_profileMD5Impl(ParsedArgs args, Buffer buf) {
 	return Error_none();
 }
 
-Bool CLI_profileMD5(ParsedArgs args) {
+Bool CLI_profileMD5(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, CLI_profileMD5Impl);
 }
 
-Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionType encryptionType) {
+Error CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncryptionType encryptionType) {
 
 	(void)args;
 
@@ -333,15 +345,16 @@ Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionTy
 
 	Error err = Error_none();
 
-	gotoIfError(clean, Buffer_encrypt(
-		buf,
-		Buffer_createNull(),
-		encryptionType,
-		EBufferEncryptionFlags_GenerateKey,
-		key,
-		&iv,
-		&tag
-	))
+	const Buffer additionalData = Buffer_createNull();
+
+	if(!Buffer_encryptAdvanced(&(BufferEncrypt) {
+		.target = &buf,
+		.additionalData = &additionalData,
+		.type = encryptionType,
+		.flags = EBufferEncryptionFlags_GenerateKey,
+		.nonConstEncrypt = { .key = key, .tag = &tag, .iv = &iv }
+	}, &err))
+		goto clean;
 
 	Ns now = Time_now();
 
@@ -355,14 +368,13 @@ Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionTy
 
 	then = now;
 
-	gotoIfError(clean, Buffer_decrypt(
-		buf,
-		Buffer_createNull(),
-		encryptionType,
-		key,
-		tag,
-		iv
-	))
+	if(!Buffer_decryptAdvanced(&(BufferEncrypt) {
+		.target = &buf,
+		.additionalData = &additionalData,
+		.type = encryptionType,
+		.constDecrypt = { .key = key, .tag = &tag, .iv = &iv }
+	}, &err))
+		goto clean;
 
 	now = Time_now();
 
@@ -378,18 +390,20 @@ clean:
 	return err;
 }
 
-Error CLI_profileAES256Impl(ParsedArgs args, Buffer buf) {
+Error CLI_profileAES256Impl(const ParsedArgs *args, Buffer buf) {
 	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES256GCM);
 }
 
-Error CLI_profileAES128Impl(ParsedArgs args, Buffer buf) {
+Error CLI_profileAES128Impl(const ParsedArgs *args, Buffer buf) {
 	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES128GCM);
 }
 
-Bool CLI_profileAES256(ParsedArgs args) {
+Bool CLI_profileAES256(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, CLI_profileAES256Impl);
 }
 
-Bool CLI_profileAES128(ParsedArgs args) {
+Bool CLI_profileAES128(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_profileData(args, CLI_profileAES128Impl);
 }

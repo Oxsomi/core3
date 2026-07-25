@@ -19,15 +19,15 @@
 
 message("-- Targeting platform: ${platform}")
 
-file(GLOB platformsHeaders "../../include/platforms/*.h")
+file(GLOB platformsHeaders CONFIGURE_DEPENDS "../../include/platforms/*.h")
 
-file(GLOB_RECURSE platformsPlatformSources "${platform}/*.c")
-file(GLOB_RECURSE platformsPlatformIncludes "../../include/platforms/${platform}/*.h")
-file(GLOB_RECURSE platformsSources "generic/*.c")
-file(GLOB_RECURSE platformsSIMDSources "simd/${simd}/*.c")
+file(GLOB_RECURSE platformsPlatformSources CONFIGURE_DEPENDS "${platform}/*.c")
+file(GLOB_RECURSE platformsPlatformIncludes CONFIGURE_DEPENDS "../../include/platforms/${platform}/*.h")
+file(GLOB_RECURSE platformsSources CONFIGURE_DEPENDS "generic/*.c")
+file(GLOB_RECURSE platformsSIMDSources CONFIGURE_DEPENDS "simd/${simd}/*.c")
 
 if(UNIX)
-	file(GLOB_RECURSE platformsUnixSources "unix/*.c")
+	file(GLOB_RECURSE platformsUnixSources CONFIGURE_DEPENDS "unix/*.c")
 	list(APPEND platformsSources ${platformsUnixSources})
 endif()
 
@@ -70,8 +70,8 @@ if(EnableTests)
 
 	# Functional test is standalone, but can't be run by CI, needs someone to manually re-run and approve.
 	
-	file(GLOB testsFunctionalH "test/functional/*.h")
-	file(GLOB testsFunctionalC "test/functional/*.c")
+	file(GLOB testsFunctionalH CONFIGURE_DEPENDS "test/functional/*.h")
+	file(GLOB testsFunctionalC CONFIGURE_DEPENDS "test/functional/*.c")
 
 	add_executable(
 		OxC3_platforms_functional_test
@@ -85,7 +85,7 @@ if(EnableTests)
 
 	# Interface test needs a dummy dylib, virtual files and interface test
 
-	file(GLOB testsDylibC "test/dylib/*.c")
+	file(GLOB testsDylibC CONFIGURE_DEPENDS "test/dylib/*.c")
 	add_library(OxC3_platforms_interface_dylib_test SHARED
 		${testsDylibC}
 		CMakeLists.txt
@@ -95,7 +95,7 @@ if(EnableTests)
 	set_target_properties(OxC3_platforms_interface_dylib_test PROPERTIES FOLDER Oxsomi/test/platforms)
 
 	include(../../cmake/oxc3.cmake)
-	file(GLOB testsInterfaceC "test/interface/*.c")
+	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
 
 	add_executable(
 		OxC3_plinttst

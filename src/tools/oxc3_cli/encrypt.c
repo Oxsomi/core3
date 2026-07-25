@@ -20,62 +20,70 @@
 
 //tools/oxc3_cli/encrypt.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/string.h"
 #include "types/container/buffer.h"
+#include "types/container/log.h"
+#include "types/base/error.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
 #include "tools/oxc3_cli/cli.h"
 
-Bool CLI_encryptDo(ParsedArgs args) {
+Bool CLI_encryptDo(const ParsedArgs *args) {
 
-	const Bool generateOutput = !(args.parameters & EOperationHasParameter_Output);
+	if(!args) return false;
+
+	ParsedArgs argsMut = *args;
+
+	const Bool generateOutput = !(argsMut.parameters & EOperationHasParameter_Output);
 	const U64 generatedOutputIndex = 1;
 	CharString tmpString = CharString_createNull();
-	Bool b = false;
-	Error err = Error_none();
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
 
 	//Modify arguments so it can be passed to oiCA convert function.
 
 	if (generateOutput) {
-		gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString))
-		gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")))
-		gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString))
+		const CharString oiCA = CharString_createRefCStrConst(".oiCA");
+		gotoIfError3(clean, CharString_createCopy(*argsMut.args.ptr, Platform_instance->alloc, &tmpString, e_rr));
+		gotoIfError3(clean, CharString_appendString(&tmpString, &oiCA, Platform_instance->alloc, e_rr));
+		gotoIfError3(clean, ListCharString_insert(&argsMut.args, generatedOutputIndex, tmpString, Platform_instance->alloc, e_rr));
 	}
 
 	const ParsedArgs caArgs = (ParsedArgs) {
 		.operation = EOperation_FileTo,
 		.format = EFormat_oiCA,
 		.flags = EOperationFlags_Uncompressed,
-		.parameters = args.parameters | EOperationHasParameter_Output,
-		.args = args.args
+		.parameters = argsMut.parameters | EOperationHasParameter_Output,
+		.args = argsMut.args
 	};
 
-	b = CLI_convertTo(caArgs);
+	s_uccess = CLI_convertTo(&caArgs);
 
 clean:
 
-	if(!b) {
+	if(!s_uccess) {
 		Log_errorLnx("CLI_encryptDo failed.");
-		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 	}
 
 	if(generateOutput)
-		ListCharString_popLocation(&args.args, generatedOutputIndex, NULL);
+		ListCharString_popLocation(&argsMut.args, generatedOutputIndex, NULL, NULL);
 
-	CharString_freex(&tmpString);
+	CharString_free(&tmpString, Platform_instance->alloc);
 
-	return b;
+	return s_uccess;
 }
 
-Bool CLI_encryptUndo(ParsedArgs args) {
+Bool CLI_encryptUndo(const ParsedArgs *args) {
+
+	if(!args) return false;
 
 	const ParsedArgs caArgs = (ParsedArgs) {
 		.operation = EOperation_FileFrom,
 		.format = EFormat_oiCA,
-		.parameters = args.parameters,
-		.args = args.args
+		.parameters = args->parameters,
+		.args = args->args
 	};
 
-	return CLI_convertFrom(caArgs);
+	return CLI_convertFrom(&caArgs);
 }

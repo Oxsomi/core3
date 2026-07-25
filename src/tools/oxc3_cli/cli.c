@@ -20,12 +20,12 @@
 
 //tools/oxc3_cli/cli.c
 
-#include "platforms/ext/listx_impl.h"
 #include "types/container/string.h"
+#include "types/container/string_helper.h"
 #include "types/base/error.h"
+#include "types/base/string_read_helper.h"
 #include "platforms/logx.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
+#include "platforms/platform.h"
 #include "graphics/generic/instance.h"
 #include "tools/oxc3_cli/cli.h"
 #include "types/base/constants.h"
@@ -177,20 +177,25 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	}
 }
 
-Bool CLI_helpOperation(ParsedArgs args) {
+Bool CLI_helpOperation(const ParsedArgs *args) {
 
-	Error err = Error_none();
+	if(!args) return false;
+
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
 	ListCharString split = (ListCharString) { 0 };
 
-	if(args.parameters & EOperationHasParameter_Input)
-		gotoIfError(clean, CharString_splitSensitivex(*args.args.ptr, ':', &split))
+	if(args->parameters & EOperationHasParameter_Input)
+		gotoIfError3(clean, CharString_splitSensitive(&(CharStringSplit) {
+			.s = args->args.ptr, .allocator = Platform_instance->alloc, .result = &split
+		}, ':', e_rr));
 
 	if(split.length > 0)
 		for (EOperationCategory cat = EOperationCategory_Start; cat < EOperationCategory_End; ++cat) {
 
 			const CharString catStr = CharString_createRefCStrConst(EOperationCategory_names[cat - 1]);
 
-			if(CharString_equalsStringInsensitive(split.ptr[0], catStr)) {
+			if(CharString_equalsStringInsensitive(&split.ptr[0], &catStr)) {
 
 				EOperation operation = EOperation_Invalid;
 
@@ -201,7 +206,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 
 						if (
 							cat == Operation_values[i].category &&
-							CharString_equalsCStringInsensitive(split.ptr[1], Operation_values[i].name)
+							CharString_equalsCStringInsensitive(&split.ptr[1], Operation_values[i].name)
 						) {
 							operation = i;
 							break;
@@ -215,7 +220,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 
 					for(U64 i = 0; i < EFormat_Invalid; ++i)
 
-						if (CharString_equalsCStringInsensitive(split.ptr[2], Format_values[i].name)) {
+						if (CharString_equalsCStringInsensitive(&split.ptr[2], Format_values[i].name)) {
 							format = i;
 							break;
 						}
@@ -241,8 +246,8 @@ Bool CLI_helpOperation(ParsedArgs args) {
 	CLI_showHelp(EOperationCategory_Invalid, EOperation_Invalid, EFormat_Invalid);
 
 clean:
-	ListCharString_freex(&split);
-	return !err.genericError;
+	ListCharString_free(&split, Platform_instance->alloc);
+	return s_uccess;
 }
 
 Bool CLI_execute(ListCharString argList) {
@@ -262,7 +267,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
 
-		if (CharString_equalsCStringInsensitive(arg0, EOperationCategory_names[i - 1])) {
+		if (CharString_equalsCStringInsensitive(&arg0, EOperationCategory_names[i - 1])) {
 			category = i;
 			break;
 		}
@@ -289,7 +294,7 @@ Bool CLI_execute(ListCharString argList) {
 
 		if (
 			category == Operation_values[i].category &&
-			CharString_equalsCStringInsensitive(arg1, Operation_values[i].name)
+			CharString_equalsCStringInsensitive(&arg1, Operation_values[i].name)
 		) {
 			operation = i;
 			break;
@@ -304,15 +309,16 @@ Bool CLI_execute(ListCharString argList) {
 
 	ParsedArgs args = (ParsedArgs) { .operation = operation };
 
-	Error err = Error_none();
-	gotoIfError(clean, ListCharString_reservex(&args.args, 16))
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+	gotoIfError3(clean, ListCharString_reserve(&args.args, 16, Platform_instance->alloc, e_rr));
 
 	//Grab all flags
 
 	for(U64 i = 0; i < EOperationFlags_Count; ++i)
 		for(U64 j = 2; j < argList.length; ++j)
 
-			if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationFlags_names[i])) {
+			if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationFlags_names[i])) {
 
 				if ((args.flags >> i) & 1) {
 					Log_errorLnx("Duplicate flag: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
@@ -329,7 +335,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	for(U64 i = 0; i < EOperationHasParameter_CountEnum; ++i)
 		for(U64 j = 2; j < argList.length; ++j)
-			if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationHasParameter_names[i])) {
+			if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationHasParameter_names[i])) {
 
 				EOperationHasParameter param = (EOperationHasParameter)(1 << i);
 
@@ -354,7 +360,7 @@ Bool CLI_execute(ListCharString argList) {
 					if (param == EOperationHasParameter_FileFormat) {
 
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
-							if (CharString_equalsCStringInsensitive(argList.ptr[j + 1], Format_values[k].name)) {
+							if (CharString_equalsCStringInsensitive(&argList.ptr[j + 1], Format_values[k].name)) {
 								args.format = (EFormat) k;
 								break;
 							}
@@ -373,7 +379,7 @@ Bool CLI_execute(ListCharString argList) {
 
 					//Store param for parsing later
 
-					gotoIfError(clean, ListCharString_pushBackx(&args.args, argList.ptr[j + 1]))
+					gotoIfError3(clean, ListCharString_pushBack(&args.args, argList.ptr[j + 1], Platform_instance->alloc, e_rr));
 				}
 
 				++j;            //Skip next argument
@@ -415,7 +421,7 @@ Bool CLI_execute(ListCharString argList) {
 				U64 i = 0;
 
 				for (; i < EOperationHasParameter_CountEnum; ++i)
-					if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationHasParameter_names[i]))
+					if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationHasParameter_names[i]))
 						break;
 
 				if(i == EOperationHasParameter_CountEnum) {
@@ -433,7 +439,7 @@ Bool CLI_execute(ListCharString argList) {
 			U64 i = 0;
 
 			for (; i < EOperationFlags_Count; ++i)
-				if (CharString_equalsCStringInsensitive(argList.ptr[j], EOperationFlags_names[i]))
+				if (CharString_equalsCStringInsensitive(&argList.ptr[j], EOperationFlags_names[i]))
 					break;
 
 			if(i == EOperationFlags_Count) {
@@ -498,32 +504,38 @@ Bool CLI_execute(ListCharString argList) {
 
 	//Now we can enter the function
 
-	Bool res = Operation_values[operation].func(args);
-	ListCharString_freex(&args.args);
+	Bool res = Operation_values[operation].func(&args);
+	ListCharString_free(&args.args, Platform_instance->alloc);
 	return res;
 
 clean:
 
-	if(err.genericError)
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+	(void) s_uccess;
 
-	ListCharString_freex(&args.args);
+	if(err.genericError)
+		Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	ListCharString_free(&args.args, Platform_instance->alloc);
 	return false;
 }
 
-U64 CLI_parseGraphicsAPIs(ParsedArgs args) {
-	
+U64 CLI_parseGraphicsAPIs(const ParsedArgs *args) {
+
+	if(!args) return U64_MAX;
+
 	U64 queried = 0;
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 	ListCharString strings = (ListCharString) { 0 };
 
-	if(args.parameters & EOperationHasParameter_GraphicsApi) {
+	if(args->parameters & EOperationHasParameter_GraphicsApi) {
 
 		CharString arg = CharString_createNull();
 		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_GraphicsApiShift, &arg))
 
-		gotoIfError2(clean, CharString_splitSensitivex(arg, ',', &strings))
+		gotoIfError3(clean, CharString_splitSensitive(&(CharStringSplit) {
+			.s = &arg, .allocator = Platform_instance->alloc, .result = &strings
+		}, ',', e_rr));
 
 		U64 nativeBit = (U64)1 << (
 			Platform_instance->platformType == PLATFORM_WINDOWS ? EGraphicsApi_Direct3D12 : EGraphicsApi_Vulkan
@@ -534,23 +546,23 @@ U64 CLI_parseGraphicsAPIs(ParsedArgs args) {
 			CharString str = strings.ptr[i];
 
 			if(
-				CharString_equalsCStringInsensitive(str, "d3d12") ||
-				CharString_equalsCStringInsensitive(str, "directx12") ||
-				CharString_equalsCStringInsensitive(str, "direct3d12") ||
-				CharString_equalsCStringInsensitive(str, "dx12")
+				CharString_equalsCStringInsensitive(&str, "d3d12") ||
+				CharString_equalsCStringInsensitive(&str, "directx12") ||
+				CharString_equalsCStringInsensitive(&str, "direct3d12") ||
+				CharString_equalsCStringInsensitive(&str, "dx12")
 			)
 				queried |= (U64)1 << EGraphicsApi_Direct3D12;
 
 			else if(
-				CharString_equalsCStringInsensitive(str, "vulkan") ||
-				CharString_equalsCStringInsensitive(str, "vk")
+				CharString_equalsCStringInsensitive(&str, "vulkan") ||
+				CharString_equalsCStringInsensitive(&str, "vk")
 			)
 				queried |= (U64)1 << EGraphicsApi_Vulkan;
 
-			else if(CharString_equalsCStringInsensitive(str, "all"))
+			else if(CharString_equalsCStringInsensitive(&str, "all"))
 				queried = U32_MAX;
 
-			else if(CharString_equalsCStringInsensitive(str, "native") || CharString_equalsCStringInsensitive(str, "def"))
+			else if(CharString_equalsCStringInsensitive(&str, "native") || CharString_equalsCStringInsensitive(&str, "def"))
 				queried |= nativeBit;
 
 			else {
@@ -569,7 +581,7 @@ U64 CLI_parseGraphicsAPIs(ParsedArgs args) {
 	else queried = U32_MAX;
 
 clean:
-	ListCharString_freex(&strings);
-	Error_printLnx(err);
+	ListCharString_free(&strings, Platform_instance->alloc);
+	Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_Default);
 	return s_uccess ? queried : U64_MAX;
 }

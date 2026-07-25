@@ -17,8 +17,8 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB formatsWAVHeaders "../../../include/formats/wav/*.h")
-file(GLOB formatsWAVSources "*.c")
+file(GLOB formatsWAVHeaders CONFIGURE_DEPENDS "../../../include/formats/wav/*.h")
+file(GLOB formatsWAVSources CONFIGURE_DEPENDS "*.c")
 
 add_library(
 	OxC3_formats_wav
@@ -33,8 +33,8 @@ target_link_libraries(OxC3_formats_wav PUBLIC OxC3_types_base OxC3_types_contain
 
 if(EnableTests)
 
-	file(GLOB testsC "test/*.c")
-	file(GLOB testsH "test/*.h")
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
 
 	add_executable(
 		OxC3_formats_wav_test

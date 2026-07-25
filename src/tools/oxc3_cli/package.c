@@ -20,11 +20,15 @@
 
 //tools/oxc3_cli/package.c
 
-#include "platforms/ext/listx.h"
+#include "types/container/list_basic_types.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "types/base/c8.h"
+#include "types/base/error.h"
+#include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
 #include "types/container/buffer.h"
+#include "types/container/string_helper.h"
 #include "tools/oxc3_cli/cli.h"
 
 #ifdef CLI_SHADER_COMPILER
@@ -32,7 +36,9 @@
 	#include "tools/package_cli/packager.h"
 	#include "shader_compiler/compiler.h"
 
-	Bool CLI_package(ParsedArgs args) {
+	Bool CLI_package(const ParsedArgs *args) {
+
+		if(!args) return false;
 
 		//Parse encryption key
 
@@ -41,7 +47,7 @@
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
 
-		if (args.parameters & EOperationHasParameter_AES) {
+		if (args->parameters & EOperationHasParameter_AES) {
 
 			CharString key = CharString_createNull();
 
@@ -53,7 +59,8 @@
 				return false;
 			}
 
-			U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
+			const CharString prefix0x = CharString_createRefCStrConst("0x");
+			U64 off = CharString_startsWithStringInsensitive(&key, &prefix0x, 0) ? 2 : 0;
 
 			if (CharString_length(key) - off != 64) {
 				Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -89,32 +96,34 @@
 		U64 threadCount = 0;
 		CharString includeDir = (CharString) { 0 };
 		ECompilerWarning extraWarnings = (ECompilerWarning) 0;
-		Bool merge = !(args.flags & EOperationFlags_Split);
+		Bool merge = !(args->flags & EOperationFlags_Split);
 
-		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes))
-		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 1))
+		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes));
+		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 1));
 
-		if (args.parameters & EOperationHasParameter_IncludeDir)
+		if (args->parameters & EOperationHasParameter_IncludeDir)
 			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
 
 		extraWarnings = CLI_getExtraWarnings(args);
 
-		gotoIfError3(clean, Packager_package(
-			input,
-			output,
-			encryptionKey,
-			multipleModes,
-			compileModeU64,
-			threadCount,
-			includeDir,
-			merge,
-			extraWarnings,
-			true,
-			!!(args.flags & EOperationFlags_Debug),
-			!!(args.flags & EOperationFlags_IgnoreEmptyFiles),
-			Platform_instance->alloc,
-			&err
-		))
+		{
+			const PackageSettings packageSettings = {
+				.input = input,
+				.output = output,
+				.encryptionKey = (const U32 (*)[8]) encryptionKey,
+				.compileMode = (U32) compileModeU64,
+				.threadCount = (U32) threadCount,
+				.includeDir = includeDir,
+				.extraWarnings = (CompilerWarning) extraWarnings,
+				.merge = merge,
+				.enableLogging = true,
+				.isDebug = !!(args->flags & EOperationFlags_Debug),
+				.ignoreEmptyFiles = !!(args->flags & EOperationFlags_IgnoreEmptyFiles),
+				.multipleModes = multipleModes
+			};
+
+			gotoIfError3(clean, Packager_package(&packageSettings, Platform_instance->alloc, &err));
+		}
 
 	clean:
 
@@ -125,7 +134,8 @@
 	}
 
 #else
-	Bool CLI_package(ParsedArgs args) {
+	Bool CLI_package(const ParsedArgs *args) {
+		if(!args) return false;
 		(void) args;
 		return false;
 	}

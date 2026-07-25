@@ -40,7 +40,7 @@
 	Bool s_uccess = CharString_formatVariadic(alloc, &res, &err, format, arg1);    \
 	va_end(arg1);                                                                \
 																				\
-	if(!s_uccess)                                                                \
+	if(s_uccess)                                                                \
 		Log_log(alloc, lvl, opt, &res);                                            \
 																				\
 	CharString_free(&res, alloc)

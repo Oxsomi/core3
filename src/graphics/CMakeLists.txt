@@ -41,8 +41,8 @@ if(NOT graphicsAllowVk AND NOT graphicsAllowD3D12)
 	message(FATAL_ERROR "-- No valid graphics API found, aborting...")
 endif()
 
-file(GLOB_RECURSE graphicsHeaders "../../include/graphics/generic/*.h")
-file(GLOB_RECURSE graphicsSources "generic/*.c")
+file(GLOB_RECURSE graphicsHeaders CONFIGURE_DEPENDS "../../include/graphics/generic/*.h")
+file(GLOB_RECURSE graphicsSources CONFIGURE_DEPENDS "generic/*.c")
 
 add_library(
 	OxC3_graphics
@@ -93,7 +93,7 @@ if(EnableTests)
 	# add_virtual_dependencies is required so device creation can load the //OxC3_graphics prebuilt shaders.
 
 	include(../../cmake/oxc3.cmake)
-	file(GLOB testsInterfaceC "test/interface/*.c")
+	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
 
 	add_executable(
 		OxC3_graphics_interface_test

@@ -20,12 +20,11 @@
 
 //tools/oxc3_cli/graphics.c
 
-#include "platforms/ext/listx_impl.h"
 #include "tools/oxc3_cli/cli.h"
-#include "types/base/error.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
+#include "platforms/platform.h"
 #include "platforms/logx.h"
+#include "types/base/error.h"
+#include "types/base/string_read.h"
 #include "types/base/constants.h"
 
 #ifdef CLI_GRAPHICS
@@ -34,7 +33,9 @@
 	#include "graphics/generic/device.h"
 	#include "graphics/generic/device_info.h"
 
-	Bool CLI_graphicsCreate(ParsedArgs args) {
+	Bool CLI_graphicsCreate(const ParsedArgs *args) {
+
+		if(!args) return false;
 
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
@@ -44,12 +45,12 @@
 		GraphicsDeviceRef *deviceRef = NULL;
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 
-		gotoIfError3(clean, GraphicsInterface_create(e_rr))
+		gotoIfError3(clean, GraphicsInterface_create(e_rr));
 
 		U64 queried = CLI_parseGraphicsAPIs(args);
 
 		if(queried == U64_MAX)
-			retError(clean, Error_invalidState(0, "CLI_graphicsCreate() CLI_parseGraphicsAPIs failed"))
+			retError(clean, Error_invalidState(0, "CLI_graphicsCreate() CLI_parseGraphicsAPIs failed"));
 		
 		Bool wasExplicit = queried != U32_MAX;
 
@@ -70,24 +71,26 @@
 			
 			instanceType = GraphicsInstance_makeType(api, alloc);
 
+			const GraphicsApplicationInfo applicationInfo = {
+				.name = CharString_createRefCStrConst("OxC3 CLI"),
+				.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
+			};
+
 			gotoIfError3(clean, GraphicsInstance_create(
-				(GraphicsApplicationInfo) {
-					.name = CharString_createRefCStrConst("OxC3 CLI"),
-					.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
-				},
+				&applicationInfo,
 				api,
 				EGraphicsInstanceFlags_None,
 				alloc,
 				&instanceType,
 				&instanceRef,
 				e_rr
-			))
+			));
 
-			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr))
+			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
 			
 			U64 entry = 0;
 
-			if (args.parameters & EOperationHasParameter_Entry) {
+			if (args->parameters & EOperationHasParameter_Entry) {
 
 				CharString arg = CharString_createNull();
 				gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
@@ -101,7 +104,7 @@
 			
 			U64 count = 0;
 
-			if (args.parameters & EOperationHasParameter_CountArg) {
+			if (args->parameters & EOperationHasParameter_CountArg) {
 
 				CharString arg = CharString_createNull();
 				gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
@@ -120,7 +123,7 @@
 
 				gotoIfError3(clean, GraphicsDeviceRef_create(
 					instanceRef, &infos.ptr[i], EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef, e_rr
-				))
+				));
 				
 				RefPtr_dec(&deviceRef);
 				Log_debugLnx("Create device success %"PRIu64" (%s)", i, EGraphicsApi_name[api]);
@@ -138,7 +141,9 @@
 		return s_uccess;
 	}
 
-	Bool CLI_graphicsDevices(ParsedArgs args) {
+	Bool CLI_graphicsDevices(const ParsedArgs *args) {
+
+		if(!args) return false;
 
 		Bool s_uccess = true;
 		Error err = Error_none(), *e_rr = &err;
@@ -148,12 +153,12 @@
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 		ListCharString strings = (ListCharString) { 0 };
 
-		gotoIfError3(clean, GraphicsInterface_create(e_rr))
+		gotoIfError3(clean, GraphicsInterface_create(e_rr));
 
 		U64 queried = CLI_parseGraphicsAPIs(args);
 
 		if(queried == U64_MAX)
-			retError(clean, Error_invalidState(0, "CLI_graphicsDevices(): CLI_parseGraphicsAPIs failed"))
+			retError(clean, Error_invalidState(0, "CLI_graphicsDevices(): CLI_parseGraphicsAPIs failed"));
 
 		Bool wasExplicit = queried != U32_MAX;
 
@@ -174,28 +179,30 @@
 
 			instanceType = GraphicsInstance_makeType(api, alloc);
 
+			const GraphicsApplicationInfo applicationInfo = {
+				.name = CharString_createRefCStrConst("OxC3 CLI"),
+				.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
+			};
+
 			gotoIfError3(clean, GraphicsInstance_create(
-				(GraphicsApplicationInfo) {
-					.name = CharString_createRefCStrConst("OxC3 CLI"),
-					.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
-				},
+				&applicationInfo,
 				api,
 				EGraphicsInstanceFlags_None,
 				alloc,
 				&instanceType,
 				&instanceRef,
 				e_rr
-			))
+			));
 
-			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr))
+			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
 
 			//If entry or length is there, we will print full info
 
-			if (args.parameters & (EOperationHasParameter_CountArg | EOperationHasParameter_Entry)) {
+			if (args->parameters & (EOperationHasParameter_CountArg | EOperationHasParameter_Entry)) {
 
 				U64 count = 0;
 
-				if (args.parameters & EOperationHasParameter_CountArg) {
+				if (args->parameters & EOperationHasParameter_CountArg) {
 
 					CharString arg = CharString_createNull();
 					gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
@@ -206,7 +213,7 @@
 
 				U64 entry = 0;
 
-				if (args.parameters & EOperationHasParameter_Entry) {
+				if (args->parameters & EOperationHasParameter_Entry) {
 
 					CharString arg = CharString_createNull();
 					gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
@@ -214,7 +221,7 @@
 					if(!CharString_parseU64(arg, &entry))
 						gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
 
-					if (!(args.parameters & EOperationHasParameter_CountArg))
+					if (!(args->parameters & EOperationHasParameter_CountArg))
 						count = 1;
 				}
 
@@ -234,7 +241,7 @@
 				Log_debugLnx("%s: %"PRIu64" graphics devices:", EGraphicsApi_name[api], infos.length);
 
 				for(U64 i = 0; i < infos.length; ++i)
-					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], args.flags & EOperationFlags_Verbose);
+					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], args->flags & EOperationFlags_Verbose);
 			}
 
 			ListGraphicsDeviceInfo_free(&infos, alloc);
@@ -250,5 +257,5 @@
 	}
 
 #else
-	Bool CLI_graphicsDevices(ParsedArgs args) { (void)args; return false; }
+	Bool CLI_graphicsDevices(const ParsedArgs *args) { if(!args) return false; (void)args; return false; }
 #endif

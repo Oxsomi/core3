@@ -23,8 +23,8 @@ find_package(spirv_reflect REQUIRED)
 
 # Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.
 
-file(GLOB_RECURSE compilerHeaders "../../include/shader_compiler/*.h")
-file(GLOB_RECURSE compilerSources "*.c" "*.cpp")	# Some CPP to interface with DXC
+file(GLOB_RECURSE compilerHeaders CONFIGURE_DEPENDS "../../include/shader_compiler/*.h")
+file(GLOB_RECURSE compilerSources CONFIGURE_DEPENDS "*.c" "*.cpp")	# Some CPP to interface with DXC
 list(FILTER compilerSources EXCLUDE REGEX "/test/")	# Test TUs build into their own target, not the lib
 
 add_library(
@@ -45,11 +45,11 @@ if(EnableTests)
 	# oxc:: annotations, extensions and disassembly. The test/hlsl corpus is exposed to the
 	# test at build time via OXC3_SHADER_COMPILER_TEST_HLSL_DIR.
 
-	file(GLOB shaderCompilerTestsC "test/*.c")
+	file(GLOB shaderCompilerTestsC CONFIGURE_DEPENDS "test/*.c")
 
 	# The HLSL corpus is test data, not compiled by the build; mark it header-only so it shows up
 	# in the IDE (under an "hlsl" group) without CMake trying to invoke a shader compiler on it.
-	file(GLOB_RECURSE shaderCompilerTestHlsl "test/hlsl/*.hlsl" "test/hlsl/*.hlsli")
+	file(GLOB_RECURSE shaderCompilerTestHlsl CONFIGURE_DEPENDS "test/hlsl/*.hlsl" "test/hlsl/*.hlsli")
 	set_source_files_properties(${shaderCompilerTestHlsl} PROPERTIES HEADER_FILE_ONLY ON)
 	source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/test/hlsl" PREFIX "hlsl" FILES ${shaderCompilerTestHlsl})
 

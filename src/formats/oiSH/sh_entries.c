@@ -423,9 +423,12 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 		used = (ESHExtension)(used | runtime->extensions.ptr[i]);
 
 	//ComputeDeriv (texture derivatives in a compute shader) compiles on BOTH backends, even though OxC3 only
-	//detects it natively on SPIRV (ComputeDerivativeGroupQuads). The native sets track detection, not which
-	//backends can express the feature, so exclude it from the SPIRV-only restriction. (MeshTaskTexDeriv and
-	//WriteMSTexture stay DXIL-only: DXC's SPIR-V backend genuinely fails to compile those.)
+	//detects it natively on SPIRV (ComputeDerivativeGroupQuads). These native sets track which backend a feature
+	//can be *detected* from, not which backends DXC can *compile* it for, so without this exclusion ComputeDeriv
+	//(SpirvNative & ~DxilNative) would be wrongly pinned to SPIRV. The DXIL-only branch below still pins
+	//MeshTaskTexDeriv - the sole extension in DxilNative & ~SpirvNative.
+	//TODO: WriteMSTexture is in *both* native sets, so this function reports it as dual-backend even though
+	//DXC's SPIR-V backend can't compile it; its DXIL-only restriction currently lives only in the features test.
 	ESHExtension spirvOnly = (ESHExtension)((ESHExtension_SpirvNative & ~ESHExtension_DxilNative) & ~ESHExtension_ComputeDeriv);
 
 	if (used & spirvOnly)

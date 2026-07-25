@@ -358,7 +358,7 @@ macro(add_virtual_dependencies_external)
 
 			if(EXISTS "${PACKAGE_DIR}")
 
-				file(GLOB_RECURSE PACKAGE_FILES "${PACKAGE_DIR}/*/*.oiCA")
+				file(GLOB_RECURSE PACKAGE_FILES CONFIGURE_DEPENDS "${PACKAGE_DIR}/*/*.oiCA")
 
 				foreach(PACKAGE_FILE ${PACKAGE_FILES})
 					get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)

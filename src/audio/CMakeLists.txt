@@ -20,11 +20,11 @@
 message("-- Targeting audio API: OpenAL")
 find_package(openal_soft REQUIRED)
 
-file(GLOB_RECURSE graphicsHeaders "../../include/audio/*.h")
-file(GLOB graphicsSources "*.c")
+file(GLOB_RECURSE graphicsHeaders CONFIGURE_DEPENDS "../../include/audio/*.h")
+file(GLOB graphicsSources CONFIGURE_DEPENDS "*.c")
 
-file(GLOB_RECURSE apiPlatformSources "openal_soft/*.c")
-file(GLOB_RECURSE apiPlatformIncludes "../../include/audio/openal_soft/*.h")
+file(GLOB_RECURSE apiPlatformSources CONFIGURE_DEPENDS "openal_soft/*.c")
+file(GLOB_RECURSE apiPlatformIncludes CONFIGURE_DEPENDS "../../include/audio/openal_soft/*.h")
 
 add_library(
 	OxC3_audio
@@ -51,8 +51,8 @@ endif()
 
 if(EnableTests)
 
-	file(GLOB testsInterfaceC "test/interface/*.c")
-	file(GLOB testsInterfaceH "test/interface/*.h")
+	file(GLOB testsInterfaceC CONFIGURE_DEPENDS "test/interface/*.c")
+	file(GLOB testsInterfaceH CONFIGURE_DEPENDS "test/interface/*.h")
 
 	add_executable(
 		OxC3_audio_interface_test
@@ -65,8 +65,8 @@ if(EnableTests)
 	set_target_properties(OxC3_audio_interface_test PROPERTIES FOLDER Oxsomi/test/audio)
 	add_test(NAME OxC3_audio_interface_test COMMAND OxC3_audio_interface_test)
 
-	file(GLOB testsFunctionalC "test/functional/*.c")
-	file(GLOB testsFunctionalH "test/functional/*.h")
+	file(GLOB testsFunctionalC CONFIGURE_DEPENDS "test/functional/*.c")
+	file(GLOB testsFunctionalH CONFIGURE_DEPENDS "test/functional/*.h")
 
 	add_executable(
 		OxC3_audio_functional_test

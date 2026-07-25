@@ -17,8 +17,8 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB formatsHeaders "../../../include/formats/oiXX/*.h")
-file(GLOB formatsSources "*.c")
+file(GLOB formatsHeaders CONFIGURE_DEPENDS "../../../include/formats/oiXX/*.h")
+file(GLOB formatsSources CONFIGURE_DEPENDS "*.c")
 
 add_library(
 	OxC3_formats_oiXX

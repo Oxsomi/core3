@@ -28,11 +28,14 @@
 #include "types/base/string_read.h"
 #include "types/base/string_read_helper.h"
 #include "platforms/logx.h"
-#include "platforms/ext/errorx.h"
+#include "platforms/platform.h"
 #include "platforms/file.h"
+#include "types/base/error.h"
 #include "types/base/constants.h"
 
-Bool CLI_convert(ParsedArgs args, Bool isTo) {
+Bool CLI_convert(const ParsedArgs *args, Bool isTo) {
+
+	if(!args) return false;
 
 	const CharString ox = CharString_createRefCStrConst("0x");
 
@@ -41,7 +44,7 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Prepare for convert to/from
 
-	Format f = Format_values[args.format];
+	Format f = Format_values[args->format];
 
 	FileInfo info = (FileInfo) { 0 };
 
@@ -63,22 +66,22 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Check if input file and file type are valid
 
-	gotoIfError3(clean, File_getInfox(inputArg, &info, e_rr))
+	gotoIfError3(clean, File_getInfo(&inputArg, &info, Platform_instance->alloc, e_rr));
 
 	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File)
-		retError(clean, Error_invalidState(0, "CLI_convert() Invalid file passed to convertTo. Only accepting folders."))
+		retError(clean, Error_invalidState(0, "CLI_convert() Invalid file passed to convertTo. Only accepting folders."));
 
 	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder)
-		retError(clean, Error_invalidState(1, "CLI_convert() Invalid file passed to convertTo. Only accepting files."))
+		retError(clean, Error_invalidState(1, "CLI_convert() Invalid file passed to convertTo. Only accepting files."));
 
-	if(args.parameters & EOperationHasParameter_Input2)
-		retError(clean, Error_invalidState(1, "CLI_convert() Doesn't support -input2."))
+	if(args->parameters & EOperationHasParameter_Input2)
+		retError(clean, Error_invalidState(1, "CLI_convert() Doesn't support -input2."));
 
 	//Parse encryption key
 
 	U32 encryptionKeyV[8] = { 0 };
 
-	if (args.parameters & EOperationHasParameter_AES) {
+	if (args->parameters & EOperationHasParameter_AES) {
 
 		CharString key = CharString_createNull();
 
@@ -95,7 +98,7 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 		if (CharString_length(key) - off != 64)
 			retError(clean, Error_invalidState(
 				3, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
-			))
+			));
 
 		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
 
@@ -111,28 +114,36 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Now convert it
 
-	switch (args.format) {
+	CLIConvert convert = { .args = args, .input = &inputArg, .inputInfo = &info, .output = &outputArg };
+
+	if(encryptionKey)
+		Buffer_memcpy(
+			Buffer_createRef(convert.encKey, sizeof(convert.encKey)),
+			Buffer_createRefConst(encryptionKey, sizeof(convert.encKey))
+		);
+
+	switch (args->format) {
 
 		case EFormat_oiDL:
 
 			if(isTo)
-				gotoIfError3(clean, CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey, e_rr))
+				{ gotoIfError3(clean, CLI_convertToDL(&convert, e_rr)); }
 
-			else gotoIfError3(clean, CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey, e_rr))
+			else gotoIfError3(clean, CLI_convertFromDL(&convert, e_rr));
 
 			break;
 
 		case EFormat_oiCA:
 
 			if(isTo)
-				gotoIfError3(clean, CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey, e_rr))
+				{ gotoIfError3(clean, CLI_convertToCA(&convert, e_rr)); }
 
-			else gotoIfError3(clean, CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey, e_rr))
+			else gotoIfError3(clean, CLI_convertFromCA(&convert, e_rr));
 
 			break;
 
 		default:
-			retError(clean, Error_invalidOperation(0, "CLI_convert() Unsupported format"))
+			retError(clean, Error_invalidOperation(0, "CLI_convert() Unsupported format"));
 	}
 
 	//Tell CLI users
@@ -142,20 +153,22 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 clean:
 
 	if(encryptionKey)
-		Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)), NULL);
+		Buffer_clearAllSecure(Buffer_createRef(encryptionKeyV, sizeof(encryptionKeyV)));
 
 	if (!s_uccess)
 		Log_errorLnx("File conversion failed!");
 
-	FileInfo_freex(&info);
-	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+	FileInfo_free(&info, Platform_instance->alloc);
+	Error_print(Platform_instance->alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 	return s_uccess;
 }
 
-Bool CLI_convertTo(ParsedArgs args) {
+Bool CLI_convertTo(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_convert(args, true);
 }
 
-Bool CLI_convertFrom(ParsedArgs args) {
+Bool CLI_convertFrom(const ParsedArgs *args) {
+	if(!args) return false;
 	return CLI_convert(args, false);
 }

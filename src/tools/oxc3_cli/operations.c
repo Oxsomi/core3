@@ -26,9 +26,9 @@
 #include "types/container/string.h"
 #include "platforms/logx.h"
 
-Bool CLI_info(ParsedArgs args) {
+Bool CLI_info(const ParsedArgs *args) {
 
-	(void)args;
+	if(!args) return false;
 
 	Log_debugLnx(
 
@@ -40,7 +40,7 @@ Bool CLI_info(ParsedArgs args) {
 		(U32) OXC3_MINOR,
 		(U32) OXC3_PATCH,
 
-		args.operation != EOperation_InfoLicense ? "" :
+		args->operation != EOperation_InfoLicense ? "" :
 		"\n\n"
 		"This program is free software: you can redistribute it and/or modify\n"
 		"it under the terms of the GNU General Public License as published by\n"
@@ -594,6 +594,18 @@ void Operations_init() {
 		.isFormatLess = true
 	};
 
+	Operation_values[EOperation_InfoCPU] = (Operation) {
+
+		.category = EOperationCategory_Info,
+
+		.name = "cpu",
+		.desc = "Shows this machine's CPU: logical cores, physical memory and hardware capability flags.",
+
+		.func = &CLI_cpuDevices,
+
+		.isFormatLess = true
+	};
+
 	//Profile
 
 	Operation_values[EOperation_ProfileCast] = (Operation) {
@@ -749,23 +761,23 @@ void Operations_init() {
 	};
 }
 
-Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, CharString *arg) {
+Error ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterId, CharString *arg) {
 
-	if(!arg || !parameterId)
-		return Error_nullPointer(!arg ? 2 : 0, "ParsedArgs_getArg()::arg and parameterId are required");
+	if(!args || !arg || !parameterId)
+		return Error_nullPointer(!args ? 0 : (!arg ? 2 : 1), "ParsedArgs_getArg()::args, arg and parameterId are required");
 
-	if(!((args.parameters >> parameterId) & 1))
+	if(!((args->parameters >> parameterId) & 1))
 		return Error_notFound(0, 1, "ParsedArgs_getArg()::parameterId not found");
 
 	U64 ourLoc = 0;
 
 	for(U64 j = EOperationHasParameter_InputShift; j < parameterId; ++j)
-		if((args.parameters >> j) & 1)
+		if((args->parameters >> j) & 1)
 			++ourLoc;
 
-	const Error err = ListCharString_get(args.args, ourLoc, arg);
+	Error err = Error_none();
 
-	if(err.genericError)
+	if(!ListCharString_get(args->args, ourLoc, arg, &err))
 		return err;
 
 	return Error_none();

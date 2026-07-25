@@ -17,9 +17,9 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-file(GLOB_RECURSE typesMathHeaders "../../../include/types/math/*.h")
-file(GLOB typesMathSources "*.c")
-file(GLOB_RECURSE typesMathSIMDSources "simd/${simd}/*.c")
+file(GLOB_RECURSE typesMathHeaders CONFIGURE_DEPENDS "../../../include/types/math/*.h")
+file(GLOB typesMathSources CONFIGURE_DEPENDS "*.c")
+file(GLOB_RECURSE typesMathSIMDSources CONFIGURE_DEPENDS "simd/${simd}/*.c")
 
 add_library(
 	OxC3_types_math
@@ -41,8 +41,8 @@ target_compile_definitions(OxC3_types_math PUBLIC -D_ENABLE_SIMD=${SIMD} -D_FORC
 
 if(EnableTests)
 
-	file(GLOB testsC "test/*.c")
-	file(GLOB testsH "test/*.h")
+	file(GLOB testsC CONFIGURE_DEPENDS "test/*.c")
+	file(GLOB testsH CONFIGURE_DEPENDS "test/*.h")
 
 	add_executable(
 		OxC3_types_math_test

@@ -432,9 +432,12 @@ Bool Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocat
 	Platform_instance = &platformInstance;
 	*Platform_instance = (Platform) {
 		.platformType = _PLATFORM_TYPE,
+		.cpuFeatures = Platform_detectCPUFeatures(),
 		.data = data,
 		.alloc = &Allocator_trackedAllocator
 	};
+
+	Platform_detectCPUInfo(&Platform_instance->cpuInfo);
 
 	ListCharString sl = (ListCharString) { 0 };
 

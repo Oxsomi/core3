@@ -20,33 +20,36 @@
 
 //tools/oxc3_cli/compile_tool.c
 
-#include "platforms/ext/listx_impl.h"
+#include "types/container/list_basic_types.h"
 #include "types/container/buffer.h"
+#include "types/container/string.h"
+#include "types/container/string_helper.h"
+#include "types/container/log.h"
+#include "types/base/error.h"
+#include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
 #include "types/base/thread.h"
-#include "types/math/math.h"
+#include "types/base/mathf.h"
 #include "types/base/time.h"
+#include "types/base/constants.h"
+#include "platforms/platform.h"
 #include "platforms/file.h"
 #include "platforms/logx.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/threadx.h"
-#include "platforms/ext/formatx.h"
-#include "platforms/ext/errorx.h"
 #include "shader_compiler/compiler.h"
 #include "tools/oxc3_cli/cli.h"
-#include "types/base/constants.h"
 
 #ifdef CLI_SHADER_COMPILER
 
-	Bool CLI_parseThreads(ParsedArgs args, U64 *threadCount, U64 defaultThreadCount) {
+	Bool CLI_parseThreads(const ParsedArgs *args, U64 *threadCount, U64 defaultThreadCount) {
+
+		if(!args) return false;
 
 		if(!threadCount)
 			return false;
 
 		U64 maxThreads = Platform_getThreads();
 
-		if(!(args.parameters & EOperationHasParameter_ThreadCount)) {
+		if(!(args->parameters & EOperationHasParameter_ThreadCount)) {
 			*threadCount = !defaultThreadCount ? maxThreads : defaultThreadCount;
 			return true;
 		}
@@ -81,12 +84,14 @@
 		return true;
 	}
 
-	Bool CLI_parseCompileTypes(ParsedArgs args, U64 *maskBinaryType, Bool *multipleModes) {
+	Bool CLI_parseCompileTypes(const ParsedArgs *args, U64 *maskBinaryType, Bool *multipleModes) {
+
+		if(!args) return false;
 
 		if(!maskBinaryType || !multipleModes)
 			return false;
 
-		if(!(args.parameters & EOperationHasParameter_ShaderOutputMode)) {
+		if(!(args->parameters & EOperationHasParameter_ShaderOutputMode)) {
 			*multipleModes = true;
 			*maskBinaryType = (1 << ESHBinaryType_Count) - 1;
 			return true;
@@ -98,7 +103,11 @@
 
 		ListCharString splits = (ListCharString) { 0 };
 
-		if(CharString_splitSensitivex(compileMode, ',', &splits).genericError)
+		CharStringSplit split = (CharStringSplit) {
+			.s = &compileMode, .allocator = Platform_instance->alloc, .result = &splits
+		};
+
+		if(!CharString_splitSensitive(&split, ',', NULL))
 			return false;
 
 		const C8 *modes[] = { "spv", "dxil", "all" };
@@ -112,7 +121,7 @@
 			Bool match = false;
 
 			for(U64 j = 0; j < modeCount; ++j)
-				if (CharString_equalsCStringInsensitive(splits.ptr[i], modes[j])) {
+				if (CharString_equalsCStringInsensitive(&splits.ptr[i], modes[j])) {
 
 					if(j == modeCount - 1) {
 						compileModeU64 = (1 << ESHBinaryType_Count) - 1;
@@ -135,30 +144,34 @@
 		*maskBinaryType = compileModeU64;
 
 	clean:
-		ListCharString_freex(&splits);
+		ListCharString_free(&splits, Platform_instance->alloc);
 		return compileModeU64 != U64_MAX;
 	}
 
-	ECompilerWarning CLI_getExtraWarnings(ParsedArgs args) {
+	ECompilerWarning CLI_getExtraWarnings(const ParsedArgs *args) {
+
+		if(!args) return (ECompilerWarning)0;
 
 		ECompilerWarning extraWarnings = ECompilerWarning_None;
 
-		if(args.flags & EOperationFlags_CompilerWarnings) {
+		if(args->flags & EOperationFlags_CompilerWarnings) {
 
-			if(args.flags & EOperationFlags_WarnUnusedRegisters)
+			if(args->flags & EOperationFlags_WarnUnusedRegisters)
 				extraWarnings |= ECompilerWarning_UnusedRegisters;
 
-			if(args.flags & EOperationFlags_WarnUnusedConstants)
+			if(args->flags & EOperationFlags_WarnUnusedConstants)
 				extraWarnings |= ECompilerWarning_UnusedConstants;
 
-			if(args.flags & EOperationFlags_WarnBufferPadding)
+			if(args->flags & EOperationFlags_WarnBufferPadding)
 				extraWarnings |= ECompilerWarning_BufferPadding;
 		}
 
 		return extraWarnings;
 	}
 
-	Bool CLI_compileShader(ParsedArgs args) {
+	Bool CLI_compileShader(const ParsedArgs *args) {
+
+		if(!args) return false;
 
 		//Get input
 
@@ -183,23 +196,23 @@
 
 		Bool multipleModes = false;
 		U64 compileModeU64 = 0;
-		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes))
+		gotoIfError3(clean, CLI_parseCompileTypes(args, &compileModeU64, &multipleModes));
 
 		//Check thread count
 
 		U64 threadCount = 0;
-		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 0))
+		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 0));
 
 		//Compile type
 
 		CharString compileTypeStr = (CharString) { 0 };
 		ECompileType compileType = ECompileType_Compile;
 
-		if(args.parameters & EOperationHasParameter_ShaderCompileMode) {
+		if(args->parameters & EOperationHasParameter_ShaderCompileMode) {
 
 			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr))
 
-			if (CharString_equalsCStringInsensitive(compileTypeStr, "compile"))
+			if (CharString_equalsCStringInsensitive(&compileTypeStr, "compile"))
 				compileType = ECompileType_Compile;
 
 			else {
@@ -213,7 +226,7 @@
 
 		CharString includeDir = (CharString) { 0 };
 
-		if (args.parameters & EOperationHasParameter_IncludeDir)
+		if (args->parameters & EOperationHasParameter_IncludeDir)
 			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
 
 		//Split the ';'-delimited include dir arg (e.g. "a;b;c") into separate -I search paths
@@ -222,7 +235,7 @@
 			CharStringSplit split = (CharStringSplit) {
 				.s = &includeDir, .allocator = Platform_instance->alloc, .result = &includeDirs
 			};
-			gotoIfError3(clean, CharString_splitSensitive(&split, ';', e_rr))
+			gotoIfError3(clean, CharString_splitSensitive(&split, ';', e_rr));
 		}
 
 		//Grab all files that need compilation
@@ -233,7 +246,7 @@
 			compileType,
 			compileModeU64,
 			multipleModes,
-			!(args.flags & EOperationFlags_Split),
+			!(args->flags & EOperationFlags_Split),
 			true,
 			Platform_instance->alloc,
 			&isFolder,
@@ -242,7 +255,7 @@
 			&allShaderText,
 			&allOutputs,
 			&allCompileModes
-		))
+		));
 
 		//Grab info about extra detailed compiler warnings
 
@@ -253,16 +266,16 @@
 		gotoIfError3(clean, Compiler_compileShaders(
 			&allFiles, &allShaderText, &allOutputs, &allCompileModes,
 			threadCount,
-			args.flags & EOperationFlags_Debug,
+			args->flags & EOperationFlags_Debug,
 			extraWarnings,
-			args.flags & EOperationFlags_IgnoreEmptyFiles,
+			args->flags & EOperationFlags_IgnoreEmptyFiles,
 			ECompileType_Compile,
 			&includeDirs,
 			true,
 			Platform_instance->alloc,
 			NULL,
 			e_rr
-		))
+		));
 
 	clean:
 
@@ -273,16 +286,16 @@
 
 		else Log_errorLnx("-- Compile %.*s failed in %fs!", (int)CharString_length(input), input.ptr, dt);
 
-		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+		Error_print(Platform_instance->alloc, &errTemp, ELogLevel_Error, ELogOptions_Default);
 
-		ListCharString_freeUnderlyingx(&allFiles);
-		ListCharString_freeUnderlyingx(&allShaderText);
-		ListCharString_freeUnderlyingx(&allOutputs);
-		ListCharString_freex(&includeDirs);        //Elements are refs into includeDir; free the list only
-		ListU8_freex(&allCompileModes);
+		ListCharString_freeUnderlying(&allFiles, Platform_instance->alloc);
+		ListCharString_freeUnderlying(&allShaderText, Platform_instance->alloc);
+		ListCharString_freeUnderlying(&allOutputs, Platform_instance->alloc);
+		ListCharString_free(&includeDirs, Platform_instance->alloc);        //Elements are refs into includeDir; free the list only
+		ListU8_free(&allCompileModes, Platform_instance->alloc);
 
 		return s_uccess;
 	}
 #else
-	Bool CLI_compileShader(ParsedArgs args) { (void) args; return false; }
+	Bool CLI_compileShader(const ParsedArgs *args) { if(!args) return false; (void) args; return false; }
 #endif

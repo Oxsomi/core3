@@ -19,8 +19,8 @@
 
 # Package CLI simple, useful for virtual file system checks
 
-file(GLOB headers "../../../include/tools/package_cli/*.h")
-file(GLOB sources "../package_cli/*.c")
+file(GLOB headers CONFIGURE_DEPENDS "../../../include/tools/package_cli/*.h")
+file(GLOB sources CONFIGURE_DEPENDS "../package_cli/*.c")
 
 add_library(
 	OxC3_package_simple_CLI STATIC
@@ -39,7 +39,7 @@ target_link_libraries(
 
 target_include_directories(OxC3_package_simple_CLI PUBLIC include/tools/package_cli)
 
-file(GLOB sources "../package_cli/executable/*.c")
+file(GLOB sources CONFIGURE_DEPENDS "../package_cli/executable/*.c")
 
 add_executable(
 	OxC3_package_simple

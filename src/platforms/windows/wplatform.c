@@ -38,10 +38,162 @@
 
 #include <stdlib.h>
 
+#if _ARCH == ARCH_ARM64
+
+	#include <string.h>
+
+	//Map a registry VendorIdentifier / brand string to a vendor (Windows-on-ARM has no cpuid).
+	static ECPUVendor Platform_cpuVendorFromString(const C8 *s) {
+		if(!s)                                               return ECPUVendor_Unknown;
+		if(strstr(s, "Qualcomm") || strstr(s, "Snapdragon")) return ECPUVendor_Qualcomm;
+		if(strstr(s, "NVIDIA")   || strstr(s, "Nvidia"))     return ECPUVendor_Nvidia;
+		if(strstr(s, "Ampere"))                              return ECPUVendor_Ampere;
+		if(strstr(s, "Samsung"))                             return ECPUVendor_Samsung;
+		if(strstr(s, "Apple"))                               return ECPUVendor_Apple;
+		if(strstr(s, "ARM")      || strstr(s, "Arm"))        return ECPUVendor_Arm;
+		return ECPUVendor_Unknown;
+	}
+
+#endif
+
 U64 Platform_getThreads() {
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
 	return systemInfo.dwNumberOfProcessors;
+}
+
+U64 Platform_getPhysicalRAM() {
+	MEMORYSTATUSEX status = (MEMORYSTATUSEX) { 0 };
+	status.dwLength = sizeof(status);
+	return GlobalMemoryStatusEx(&status) ? status.ullTotalPhys : 0;
+}
+
+U64 Platform_getAvailableRAM() {
+	MEMORYSTATUSEX status = (MEMORYSTATUSEX) { 0 };
+	status.dwLength = sizeof(status);
+	return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys : 0;
+}
+
+void Platform_detectCPUInfo(PlatformCPUInfo *out) {
+
+	if(!out)
+		return;
+
+	*out = (PlatformCPUInfo) { 0 };
+	out->logicalCores = (U32) Platform_getThreads();
+
+	//Vendor + brand string via cpuid (x86 only; compare the vendor registers as raw U32s to avoid <string.h>)
+
+	#if _ARCH == ARCH_X86_64
+
+		U32 reg[4] = { 0 };
+		Platform_getCPUId(0, reg);
+
+		if(reg[1] == 0x756E6547 && reg[3] == 0x49656E69 && reg[2] == 0x6C65746E)        //"GenuineIntel"
+			out->vendor = ECPUVendor_Intel;
+		else if(reg[1] == 0x68747541 && reg[3] == 0x69746E65 && reg[2] == 0x444D4163)   //"AuthenticAMD"
+			out->vendor = ECPUVendor_AMD;
+
+		U32 brand[12] = { 0 };
+		Platform_getCPUId((int) 0x80000002, &brand[0]);
+		Platform_getCPUId((int) 0x80000003, &brand[4]);
+		Platform_getCPUId((int) 0x80000004, &brand[8]);
+
+		for(U64 i = 0; i < sizeof(brand) && i < sizeof(out->brand) - 1; ++i)
+			out->brand[i] = ((const C8*) brand)[i];
+
+	#else
+
+		//Windows-on-ARM has no cpuid; the brand + vendor live in the registry instead.
+
+		HKEY key;
+
+		if(RegOpenKeyExA(
+			HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", 0, KEY_READ, &key
+		) == ERROR_SUCCESS) {
+
+			DWORD size = (DWORD) sizeof(out->brand);
+			RegQueryValueExA(key, "ProcessorNameString", NULL, NULL, (LPBYTE) out->brand, &size);
+			out->brand[sizeof(out->brand) - 1] = 0;
+
+			C8 vendorId[64] = { 0 };
+			size = (DWORD) sizeof(vendorId) - 1;
+
+			if(RegQueryValueExA(key, "VendorIdentifier", NULL, NULL, (LPBYTE) vendorId, &size) == ERROR_SUCCESS)
+				out->vendor = Platform_cpuVendorFromString(vendorId);
+
+			//VendorIdentifier is often generic ("ARM Limited"), so fall back to the marketing brand string
+			if(out->vendor == ECPUVendor_Unknown || out->vendor == ECPUVendor_Arm)
+				out->vendor = Platform_cpuVendorFromString(out->brand);
+
+			RegCloseKey(key);
+		}
+
+		if(out->vendor == ECPUVendor_Unknown)
+			out->vendor = ECPUVendor_Arm;
+
+	#endif
+
+	//Topology (physical cores, hybrid P/E split, cache sizes, NUMA nodes) via GetLogicalProcessorInformationEx
+
+	DWORD len = 0;
+	GetLogicalProcessorInformationEx(RelationAll, NULL, &len);
+
+	if(len) {
+
+		U8 *buffer = (U8*) malloc(len);
+
+		if(buffer && GetLogicalProcessorInformationEx(RelationAll, (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) buffer, &len)) {
+
+			U32 perfCores = 0;
+
+			for(U8 *ptr = buffer; ptr < buffer + len; ) {
+
+				const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info = (const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX*) ptr;
+
+				switch(info->Relationship) {
+
+					case RelationProcessorCore:
+						++out->physicalCores;
+						if(info->Processor.EfficiencyClass > 0)        //Higher class = performance core
+							++perfCores;
+						break;
+
+					case RelationCache: {
+						const CACHE_RELATIONSHIP *c = &info->Cache;
+						if(c->Level == 1 && (c->Type == CacheData || c->Type == CacheUnified))
+							out->l1DataCacheBytes = c->CacheSize;
+						else if(c->Level == 2)
+							out->l2CacheBytes = c->CacheSize;
+						else if(c->Level == 3)
+							out->l3CacheBytes = c->CacheSize;
+						break;
+					}
+
+					case RelationNumaNode:
+						++out->numaNodes;
+						break;
+
+					default:
+						break;
+				}
+
+				ptr += info->Size;
+			}
+
+			//Only report a hybrid split when there genuinely is one (P-cores present but not all cores)
+
+			if(perfCores > 0 && perfCores < out->physicalCores) {
+				out->performanceCores = perfCores;
+				out->efficiencyCores  = out->physicalCores - perfCores;
+			}
+		}
+
+		free(buffer);
+	}
+
+	if(!out->numaNodes)
+		out->numaNodes = 1;
 }
 
 Bool Platform_setKeyboardVisible(Bool isVisible) {

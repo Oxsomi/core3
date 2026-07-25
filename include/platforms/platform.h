@@ -49,12 +49,51 @@ typedef struct VirtualSection {
 
 TList(VirtualSection);
 
+typedef enum ECPUVendor {
+	ECPUVendor_Unknown,
+	ECPUVendor_Intel,
+	ECPUVendor_AMD,
+	ECPUVendor_Apple,
+	ECPUVendor_Arm,
+	ECPUVendor_Qualcomm,
+	ECPUVendor_Nvidia,
+	ECPUVendor_Ampere,
+	ECPUVendor_Samsung,
+	ECPUVendor_Count
+} ECPUVendor;
+
+//Richer CPU topology, gathered once at Platform_create (see Platform_detectCPUInfo). Fields that couldn't be
+//determined on the current OS/arch are left 0. Cache sizes are in bytes; hybrid P/E counts are 0 when the CPU
+//isn't hybrid (or the split is unknown).
+
+typedef struct PlatformCPUInfo {
+
+	ECPUVendor vendor;
+	U32 numaNodes;                      //NUMA node count (0/1 if not applicable)
+
+	U32 logicalCores;                   //Hardware threads (== Platform_getThreads)
+	U32 physicalCores;                  //Physical cores (0 if unknown)
+
+	U32 performanceCores;               //Hybrid P-cores (0 if not hybrid / unknown)
+	U32 efficiencyCores;                //Hybrid E-cores
+
+	U64 l1DataCacheBytes;               //Per physical core L1 data cache
+	U64 l2CacheBytes;                   //Per physical core / per cluster L2 cache
+	U64 l3CacheBytes;                   //Total shared L3 cache
+
+	C8 brand[48];                       //CPU brand string (null-terminated; empty if unknown)
+
+} PlatformCPUInfo;
+
 typedef struct Platform {
 
 	EPlatform platformType;
+	ECPUFeatures cpuFeatures;            //Detected once at Platform_create (see Platform_detectCPUFeatures)
 
 	Bool useWorkingDir;        //TODO: Find a better solution for this for dlls
-	U8 pad1[3];
+	U8 pad1[7];
+
+	PlatformCPUInfo cpuInfo;             //Detected once at Platform_create (see Platform_detectCPUInfo)
 
 	ListCharString args;
 	CharString defaultDir;              //Either workDir or appDir based on 'useWorkingDir'
@@ -84,6 +123,9 @@ impl Bool Platform_initExt(Error *e_rr);
 
 impl Bool Platform_checkCPUSupport();   //SIMD dependent: SSE, None, NEON
 impl U64 Platform_getThreads();
+impl U64 Platform_getPhysicalRAM();     //Total installed physical memory in bytes (0 if unknown)
+impl U64 Platform_getAvailableRAM();    //Currently free/available physical memory in bytes (0 if unknown)
+impl void Platform_detectCPUInfo(PlatformCPUInfo *out);   //Fills topology (called once at Platform_create)
 
 //If the device has an on screen keyboard (e.g. Android) you need to call this before handling text input.
 //Also make sure to hide it later with isVisible=false to avoid having a keyboard taking up half of your screen.
