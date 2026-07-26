@@ -396,6 +396,10 @@ F32x2 F32x2_fromU32x2(U32x2 u) { return asfloat(u); }
 F32x3 F32x3_fromU32x3(U32x3 u) { return asfloat(u); }
 F32x4 F32x4_fromU32x4(U32x4 u) { return asfloat(u); }
 
+//Fused multiply-add (a * b + c)
+
+F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return mad(a, b, c); }
+
 //Fixed point math
 
 #ifdef __OXC_EXT_I64

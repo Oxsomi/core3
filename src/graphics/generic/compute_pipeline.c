@@ -62,6 +62,11 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 			"GraphicsDeviceRef_createPipelineCompute()::*pipeline is non NULL, indicating a possible memleak"
 		));
 
+	if(!SHFile_isComplete(shaderBinary))
+		retError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createPipelineCompute()::shaderBinary is reflection-only (has no compiled binary)"
+		));
+
 	const SHEntry *entry = &shaderBinary->entries.ptr[entrypointId];
 
 	if(entry->stage != ESHPipelineStage_Compute)

@@ -116,6 +116,29 @@ clean:
 	return s_uccess;
 }
 
+Bool SHFile_isComplete(const SHFile *shFile) {
+
+	if(!shFile || !shFile->binaries.length)
+		return false;
+
+	for(U64 i = 0; i < shFile->binaries.length; ++i) {
+
+		const SHBinaryInfo *binary = &shFile->binaries.ptr[i];
+		Bool hasBinary = false;
+
+		for(U64 j = 0; j < ESHBinaryType_Count; ++j)
+			if(Buffer_length(binary->binaries[j])) {
+				hasBinary = true;
+				break;
+			}
+
+		if(!hasBinary)
+			return false;
+	}
+
+	return true;
+}
+
 void SHFile_free(SHFile *shFile, const Allocator *alloc) {
 
 	if(!shFile || !shFile->entries.ptr)

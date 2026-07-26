@@ -53,6 +53,7 @@ namespace oxc {
 
 		c::JobQueue queue;
 		c::Bool initialized;
+		c::U8 pad[7];
 
 		//Storage for a pushed callable; freed by the trampoline after execution.
 

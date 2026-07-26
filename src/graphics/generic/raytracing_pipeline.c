@@ -153,6 +153,12 @@ Bool GraphicsDeviceRef_createPipelineRaytracingExt(
 			));
 
 		U16 realBinaryId = entry->binaryIds.ptr[binaryId];
+
+		if(!SHFile_isComplete(file))
+			retError(clean, Error_invalidState(
+				0, "GraphicsDeviceRef_createPipelineRaytracing()::stage shFile is reflection-only (has no compiled binary)"
+			));
+
 		const SHBinaryInfo *bin = &file->binaries.ptr[realBinaryId];
 
 		gotoIfError3(clean, GraphicsDeviceRef_checkShaderFeatures(deviceRef, bin, entry, e_rr));

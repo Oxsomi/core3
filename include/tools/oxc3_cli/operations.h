@@ -192,6 +192,22 @@ typedef enum EOperation {
 	EOperation_FileHeader,
 	EOperation_FileData,
 
+	EOperation_FileList,
+	EOperation_FileTree,
+	EOperation_FileStat,
+	EOperation_FileCount,
+	EOperation_FileCopy,
+	EOperation_FileMove,
+	EOperation_FileDelete,
+	EOperation_FileMkdir,
+	EOperation_FileTouch,
+
+	EOperation_FileCmp,
+	EOperation_FileDiff,
+	EOperation_FileWipe,
+	EOperation_FileHexdump,
+	EOperation_FileGmac,
+
 	EOperation_Package,
 
 	#ifdef CLI_SHADER_COMPILER
@@ -222,6 +238,7 @@ typedef enum EOperation {
 	EOperation_ProfileMemcpy,
 	EOperation_ProfileMemset,
 	EOperation_ProfileVec,
+	EOperation_ProfileAll,
 
 	EOperation_HelpCategories,
 	EOperation_HelpOperations,

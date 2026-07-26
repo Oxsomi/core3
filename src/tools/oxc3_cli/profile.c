@@ -541,3 +541,21 @@ Bool CLI_profileVec(const ParsedArgs *args) {
 	if(!args) return false;
 	return CLI_profileData(args, CLI_profileVecImpl);
 }
+
+Bool CLI_profileAll(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const OperationFunc all[] = {
+		CLI_profileCast, CLI_profileRNG, CLI_profileCRC32C, CLI_profileFNV1A64, CLI_profileSHA256, CLI_profileMD5,
+		CLI_profileAES256, CLI_profileAES128, CLI_profileMemcpy, CLI_profileMemset, CLI_profileVec
+	};
+
+	Bool s_uccess = true;
+
+	for(U64 i = 0; i < sizeof(all) / sizeof(all[0]); ++i)
+		if(!all[i](args))            //Keep going so one failure doesn't hide the other results
+			s_uccess = false;
+
+	return s_uccess;
+}

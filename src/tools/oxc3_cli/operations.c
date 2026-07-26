@@ -319,6 +319,101 @@ void Operations_init() {
 			EOperationHasParameter_ShaderOutputMode
 	};
 
+	//File utilities (also work on virtual "//" paths)
+
+	Operation_values[EOperation_FileList] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "list", .desc = "List the entries of a directory (size, timestamp, name).",
+		.func = &CLI_fileList, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileTree] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "tree", .desc = "List the entries of a directory recursively.",
+		.func = &CLI_fileTree, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileStat] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "stat", .desc = "Show type, size, access and modified time of a file or folder.",
+		.func = &CLI_fileStat, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileCount] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "count", .desc = "Count the files and folders under a path.",
+		.func = &CLI_fileCount, .isFormatLess = true,
+		.operationFlags = EOperationFlags_NonRecursive,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileCopy] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "copy", .desc = "Copy a file to a new location.",
+		.func = &CLI_fileCopy, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output
+	};
+
+	Operation_values[EOperation_FileMove] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "move", .desc = "Move a file into a destination directory.",
+		.func = &CLI_fileMove, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output
+	};
+
+	Operation_values[EOperation_FileDelete] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "del", .desc = "Delete a file or folder (recursive for folders).",
+		.func = &CLI_fileDelete, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileMkdir] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "mkdir", .desc = "Create a folder (creating parent folders as needed).",
+		.func = &CLI_fileMkdir, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileTouch] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "touch", .desc = "Create an empty file.",
+		.func = &CLI_fileTouch, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileCmp] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "cmp", .desc = "Byte-compare two files and report the first difference.",
+		.func = &CLI_fileCmp, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Input2
+	};
+
+	Operation_values[EOperation_FileWipe] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "wipe", .desc = "Overwrite a file's contents with zeros.",
+		.func = &CLI_fileWipe, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileHexdump] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "hexdump", .desc = "Print a hex + ASCII dump of a file or region.",
+		.func = &CLI_fileHexdump, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters = EOperationHasParameter_StartOffset | EOperationHasParameter_Length
+	};
+
+	Operation_values[EOperation_FileGmac] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "gmac", .desc = "Compute an AES-GMAC authentication tag over a file (-aes key).",
+		.func = &CLI_fileGmac, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_AES
+	};
+
 	//Hash category
 
 	Format_values[EFormat_CRC32C] = (Format) {
@@ -748,6 +843,18 @@ void Operations_init() {
 		.desc = "Profiles 128-bit float SIMD throughput (vec4f add / mul / fma).",
 
 		.func = &CLI_profileVec,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileAll] = (Operation) {
+
+		.category = EOperationCategory_Profile,
+
+		.name = "all",
+		.desc = "Runs every profile in sequence (cast, rng, hashes, aes, memcpy, memset, vec).",
+
+		.func = &CLI_profileAll,
 
 		.isFormatLess = true
 	};

@@ -148,7 +148,7 @@ static inline F32x4 F32x4_normalize3(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(
 static inline F32x4 F32x4_normalize4(F32x4 v) { return F32x4_mul(v, F32x4_rsqrt(F32x4_xxxx4(F32x4_sqLen4(v)))); }
 
 static inline F32x4 F32x4_sign(F32x4 v) {
-	return F32x4_add(F32x4_mul(F32x4_lt(v, F32x4_zero()), F32x4_negTwo()), F32x4_one());
+	return F32x4_fma(F32x4_lt(v, F32x4_zero()), F32x4_negTwo(), F32x4_one());
 }
 
 static inline F32x4 F32x4_abs(F32x4 v) { return F32x4_mul(F32x4_sign(v), v); }
@@ -158,8 +158,7 @@ static inline F32 F32x4_satDot3(F32x4 x, F32x4 y) { return F32_saturate(F32x4_do
 static inline F32 F32x4_satDot4(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot4(x, y)); }
 
 static inline F32x4 F32x4_lerp(F32x4 a, F32x4 b, F32 perc) {
-	b = F32x4_sub(b, a);
-	return F32x4_add(a, F32x4_mul(b, F32x4_xxxx4(perc)));
+	return F32x4_fma(F32x4_sub(b, a), F32x4_xxxx4(perc), a);
 }
 
 //Texture packing

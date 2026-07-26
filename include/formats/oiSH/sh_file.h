@@ -145,6 +145,10 @@ Bool SHFile_combine(const SHFile *a, const SHFile *b, const Allocator *alloc, SH
 
 void SHFile_print(const SHFile *a, Bool isVerbose, const Allocator *alloc);
 
+//Runtime check: true only if every binary carries compiled code for at least one backend.
+//A reflection-only oiSH (e.g. produced by a reflect pass) returns false; creating a pipeline from it is invalid.
+Bool SHFile_isComplete(const SHFile *a);
+
 #ifdef __cplusplus
 	}
 #endif

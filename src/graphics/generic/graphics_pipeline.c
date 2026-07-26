@@ -164,6 +164,11 @@ Bool GraphicsDeviceRef_createPipelineGraphics(
 
 		const SHFile *binary = &binaries->ptr[stage.shFileId];
 
+		if(!SHFile_isComplete(binary))
+			retError(clean, Error_invalidState(
+				0, "GraphicsDeviceRef_createPipelineGraphics()::stages[j].shFile is reflection-only (has no compiled binary)"
+			));
+
 		U32 shaderId = stage.binaryId;
 
 		U16 entrypointId = (U16) shaderId;

@@ -74,11 +74,28 @@ Bool CLI_profileAES128(const ParsedArgs *args);
 Bool CLI_profileMemcpy(const ParsedArgs *args);
 Bool CLI_profileMemset(const ParsedArgs *args);
 Bool CLI_profileVec(const ParsedArgs *args);
+Bool CLI_profileAll(const ParsedArgs *args);        //Runs every profile in sequence
 
 Bool CLI_helpOperation(const ParsedArgs *args);
 
 Bool CLI_inspectHeader(const ParsedArgs *args);
 Bool CLI_inspectData(const ParsedArgs *args);
+
+Bool CLI_fileList(const ParsedArgs *args);           //List a directory (ls)
+Bool CLI_fileTree(const ParsedArgs *args);           //List a directory recursively (tree)
+Bool CLI_fileStat(const ParsedArgs *args);           //Show size/type/timestamp/access of a path
+Bool CLI_fileCount(const ParsedArgs *args);          //Count files + folders
+Bool CLI_fileCopy(const ParsedArgs *args);           //Copy a file
+Bool CLI_fileMove(const ParsedArgs *args);           //Move a file into a directory
+Bool CLI_fileDelete(const ParsedArgs *args);         //Delete a file or folder
+Bool CLI_fileMkdir(const ParsedArgs *args);          //Create a folder
+Bool CLI_fileTouch(const ParsedArgs *args);          //Create an empty file
+
+Bool CLI_fileCmp(const ParsedArgs *args);            //Byte-compare two files
+Bool CLI_fileDiff(const ParsedArgs *args);           //Deep-compare two oiCA/oiDL archives
+Bool CLI_fileWipe(const ParsedArgs *args);           //Securely overwrite a file's contents
+Bool CLI_fileHexdump(const ParsedArgs *args);        //Hexdump a file or region
+Bool CLI_fileGmac(const ParsedArgs *args);           //AES-GMAC (AAD-only authentication tag) over a file
 
 Bool CLI_cpuDevices(const ParsedArgs *args);
 Bool CLI_infoAll(const ParsedArgs *args);        //CPU + graphics + audio in one dump (support diagnostics)

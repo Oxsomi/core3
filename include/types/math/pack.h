@@ -155,7 +155,7 @@ static inline QuatS16 QuatF32_pack(QuatF32 q) {
 	q = QuatF32_normalize(q);
 	U64 sign = F32x4_w(q) < 0;
 
-	q = F32x4_saturate(F32x4_add(F32x4_mul(q, F32x4_xxxx4(0.5)), F32x4_xxxx4(0.5)));
+	q = F32x4_saturate(F32x4_fma(q, F32x4_xxxx4(0.5), F32x4_xxxx4(0.5)));
 	const F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4((1 << 21) - 1));
 
 	sign <<= 63;

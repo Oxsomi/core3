@@ -1,0 +1,701 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
+*  Copyright (C) 2023 - 2026 Oxsomi / Nielsbishere (Niels Brunekreef)
+*
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
+//tools/oxc3_cli/file_util.c
+//Small cross-platform file utilities (ls/tree/stat/count/copy/move/del/mkdir/touch, cmp/wipe/hexdump/gmac).
+//All of these transparently work on physical paths as well as virtual "//" (embedded VFS) paths, because File_*
+//dispatches both.
+
+#include "tools/oxc3_cli/cli.h"
+#include "platforms/platform.h"
+#include "platforms/file.h"
+#include "platforms/logx.h"
+#include "types/container/buffer.h"
+#include "types/container/buffer_encrypt.h"
+#include "types/container/stream.h"
+#include "types/math/vec4i.h"
+#include "types/base/algorithm.h"
+#include "types/base/string_read.h"
+#include "types/base/string_read_helper.h"
+#include "types/base/c8.h"
+#include "types/base/time.h"
+#include "types/base/error.h"
+#include "types/base/mathi.h"
+#include "types/base/constants.h"
+#include "types/base/string_base.h"
+
+//Streaming chunk size. Multiple of 64 so it's block-aligned for AES-GMAC's chunked AAD and 16-aligned for hexdump lines.
+
+#define CLI_FILE_CHUNK (1024 * 1024)
+
+//Helper: fetch an input path argument
+
+static Bool CLI_fileArg(const ParsedArgs *args, EOperationHasParameter shift, CharString *out) {
+	return !ParsedArgs_getArg(args, shift, out).genericError;
+}
+
+//ls / tree: print a single directory entry (used as a File_foreach callback)
+
+static Bool CLI_filePrintEntry(const FileInfo *info, void *userData, const Allocator *alloc, Error *e_rr) {
+
+	(void) userData; (void) alloc; (void) e_rr;
+
+	TimeFormat tf = { 0 };
+	Time_format(info->timestamp, tf, true);
+
+	Log_debugLnx(
+		"%s %12"PRIu64"  %s  %.*s",
+		info->type == EFileType_Folder ? "<DIR>" : "     ",
+		info->fileSize,
+		tf,
+		(int) CharString_length(info->path), info->path.ptr
+	);
+
+	return true;
+}
+
+static Bool CLI_fileListImpl(const ParsedArgs *args, Bool isRecursive) {
+
+	if(!args)
+		return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("Invalid argument -input <path>.");
+		return false;
+	}
+
+	return File_foreach(&input, false, (FileCallback) CLI_filePrintEntry, NULL, isRecursive, alloc, NULL);
+}
+
+Bool CLI_fileList(const ParsedArgs *args) { return CLI_fileListImpl(args, false); }
+Bool CLI_fileTree(const ParsedArgs *args) { return CLI_fileListImpl(args, true); }
+
+//stat
+
+Bool CLI_fileStat(const ParsedArgs *args) {
+
+	if(!args)
+		return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("Invalid argument -input <path>.");
+		return false;
+	}
+
+	FileInfo info = (FileInfo) { 0 };
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_getInfo(&input, &info, alloc, e_rr));
+
+	TimeFormat tf = { 0 };
+	Time_format(info.timestamp, tf, true);
+
+	const C8 *access = info.access == EFileAccess_ReadWrite ? "read/write" : (
+		info.access == EFileAccess_Write ? "write" : (info.access == EFileAccess_Read ? "read" : "none")
+	);
+
+	Log_debugLnx(
+		"%.*s\n\tType:      %s\n\tSize:      %"PRIu64" bytes\n\tAccess:    %s\n\tModified:  %s",
+		(int) CharString_length(info.path), info.path.ptr,
+		info.type == EFileType_Folder ? "folder" : "file",
+		info.fileSize,
+		access,
+		tf
+	);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	FileInfo_free(&info, alloc);
+	return s_uccess;
+}
+
+//count
+
+Bool CLI_fileCount(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("Invalid argument -input <path>.");
+		return false;
+	}
+
+	const Bool recursive = !(args->flags & EOperationFlags_NonRecursive);
+
+	U64 files = 0, folders = 0;
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_queryFileCount(&input, recursive, &files, alloc, e_rr));
+	gotoIfError3(clean, File_queryFolderCount(&input, recursive, &folders, alloc, e_rr));
+
+	Log_debugLnx(
+		"%.*s: %"PRIu64" files, %"PRIu64" folders (%s)",
+		(int) CharString_length(input), input.ptr, files, folders, recursive ? "recursive" : "non-recursive"
+	);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	return s_uccess;
+}
+
+//copy
+
+Bool CLI_fileCopy(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	RefPtrType streamType = FileStream_makeType(alloc);
+
+	CharString input = CharString_createNull(), output = CharString_createNull();
+	if(
+		!CLI_fileArg(args, EOperationHasParameter_InputShift, &input) ||
+		!CLI_fileArg(args, EOperationHasParameter_OutputShift, &output)
+	) {
+		Log_errorLnx("file copy requires -input <src> and -output <dst>.");
+		return false;
+	}
+
+	if(File_hasFolder(&input, alloc)) {
+		Log_errorLnx("file copy currently supports files only (not folders).");
+		return false;
+	}
+
+	StreamRef *inStream = NULL, *outStream = NULL;
+	StreamCursor inCur = (StreamCursor) { 0 }, outCur = (StreamCursor) { 0 };
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_openStream(
+		&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &inStream, e_rr
+	));
+	gotoIfError3(clean, File_openStream(
+		&output, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &outStream, e_rr
+	));
+
+	gotoIfError3(clean, StreamCursor_create(inStream, CLI_FILE_CHUNK, false, alloc, &inCur, e_rr));
+	gotoIfError3(clean, StreamCursor_create(outStream, CLI_FILE_CHUNK, true, alloc, &outCur, e_rr));
+
+	gotoIfError3(clean, StreamCursor_copyStream(&outCur, &inCur, 0, 0, 0, alloc, e_rr));        //length 0 = all remaining
+	gotoIfError3(clean, StreamCursor_flush(&outCur, alloc, e_rr));
+
+	Log_debugLnx(
+		"Copied %.*s -> %.*s",
+		(int) CharString_length(input), input.ptr, (int) CharString_length(output), output.ptr
+	);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	StreamCursor_close(&inCur, alloc);
+	StreamCursor_close(&outCur, alloc);
+	RefPtr_dec(&inStream);
+	RefPtr_dec(&outStream);
+	return s_uccess;
+}
+
+//move (into a directory)
+
+Bool CLI_fileMove(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	CharString input = CharString_createNull(), output = CharString_createNull();
+	if(
+		!CLI_fileArg(args, EOperationHasParameter_InputShift, &input) ||
+		!CLI_fileArg(args, EOperationHasParameter_OutputShift, &output)
+	) {
+		Log_errorLnx("file move requires -input <src> and -output <destination directory>.");
+		return false;
+	}
+
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_move(&input, &output, 1 * SECOND, alloc, e_rr));
+
+	Log_debugLnx(
+		"Moved %.*s -> %.*s",
+		(int) CharString_length(input), input.ptr, (int) CharString_length(output), output.ptr
+	);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	return s_uccess;
+}
+
+//del
+
+Bool CLI_fileDelete(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("Invalid argument -input <path>.");
+		return false;
+	}
+
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_remove(&input, 1 * SECOND, alloc, e_rr));
+
+	Log_debugLnx("Deleted %.*s", (int) CharString_length(input), input.ptr);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	return s_uccess;
+}
+
+//mkdir / touch
+
+static Bool CLI_fileAddImpl(const ParsedArgs *args, EFileType type) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("Invalid argument -input <path>.");
+		return false;
+	}
+
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_add(&input, type, false, alloc, e_rr));
+
+	Log_debugLnx(
+		"Created %s %.*s", type == EFileType_Folder ? "folder" : "file", (int) CharString_length(input), input.ptr
+	);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	return s_uccess;
+}
+
+Bool CLI_fileMkdir(const ParsedArgs *args) { return CLI_fileAddImpl(args, EFileType_Folder); }
+Bool CLI_fileTouch(const ParsedArgs *args) { return CLI_fileAddImpl(args, EFileType_File); }
+
+//cmp (byte compare of two files)
+
+Bool CLI_fileCmp(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	RefPtrType streamType = FileStream_makeType(alloc);
+
+	CharString a = CharString_createNull(), b = CharString_createNull();
+	if(
+		!CLI_fileArg(args, EOperationHasParameter_InputShift, &a) ||
+		!CLI_fileArg(args, EOperationHasParameter_Input2Shift, &b)
+	) {
+		Log_errorLnx("file cmp requires -input <a> and -input2 <b>.");
+		return false;
+	}
+
+	FileInfo infoA = (FileInfo) { 0 }, infoB = (FileInfo) { 0 };
+	StreamRef *sa = NULL, *sb = NULL;
+	StreamCursor ca = (StreamCursor) { 0 }, cb = (StreamCursor) { 0 };
+	Buffer chunkA = Buffer_createNull(), chunkB = Buffer_createNull();
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_getInfo(&a, &infoA, alloc, e_rr));
+	gotoIfError3(clean, File_getInfo(&b, &infoB, alloc, e_rr));
+
+	const U64 lenA = infoA.fileSize, lenB = infoB.fileSize;
+	const U64 minLen = U64_min(lenA, lenB);
+
+	gotoIfError3(clean, File_openStream(&a, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sa, e_rr));
+	gotoIfError3(clean, File_openStream(&b, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sb, e_rr));
+	gotoIfError3(clean, StreamCursor_create(sa, CLI_FILE_CHUNK, false, alloc, &ca, e_rr));
+	gotoIfError3(clean, StreamCursor_create(sb, CLI_FILE_CHUNK, false, alloc, &cb, e_rr));
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(CLI_FILE_CHUNK, alloc, &chunkA, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(CLI_FILE_CHUNK, alloc, &chunkB, e_rr));
+
+	U64 firstDiff = U64_MAX;
+
+	for(U64 off = 0; off < minLen && firstDiff == U64_MAX; off += CLI_FILE_CHUNK) {
+
+		const U64 n = U64_min((U64) CLI_FILE_CHUNK, minLen - off);
+
+		gotoIfError3(clean, StreamCursor_read(&ca, chunkA, off, 0, n, false, alloc, e_rr));
+		gotoIfError3(clean, StreamCursor_read(&cb, chunkB, off, 0, n, false, alloc, e_rr));
+
+		for(U64 i = 0; i < n; ++i)
+			if(chunkA.ptr[i] != chunkB.ptr[i]) {
+				firstDiff = off + i;
+				break;
+			}
+	}
+
+	if(firstDiff == U64_MAX && lenA == lenB)
+		Log_debugLnx("Files are identical (%"PRIu64" bytes).", lenA);
+
+	else if(firstDiff == U64_MAX)
+		Log_debugLnx(
+			"Files share the first %"PRIu64" bytes but differ in length (%"PRIu64" vs %"PRIu64").", minLen, lenA, lenB
+		);
+
+	else Log_debugLnx(
+		"Files differ at byte 0x%"PRIx64" (%"PRIu64"): 0x%02x vs 0x%02x.",
+		firstDiff, firstDiff, chunkA.ptr[firstDiff % CLI_FILE_CHUNK], chunkB.ptr[firstDiff % CLI_FILE_CHUNK]
+	);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	Buffer_free(&chunkA, alloc);
+	Buffer_free(&chunkB, alloc);
+	StreamCursor_close(&ca, alloc);
+	StreamCursor_close(&cb, alloc);
+	RefPtr_dec(&sa);
+	RefPtr_dec(&sb);
+	FileInfo_free(&infoA, alloc);
+	FileInfo_free(&infoB, alloc);
+	return s_uccess;
+}
+
+//wipe (overwrite a file's contents with zeros)
+
+Bool CLI_fileWipe(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("Invalid argument -input <path>.");
+		return false;
+	}
+
+	RefPtrType streamType = FileStream_makeType(alloc);
+
+	FileInfo info = (FileInfo) { 0 };
+	Buffer zero = Buffer_createNull();
+	StreamRef *stream = NULL;
+	StreamCursor cur = (StreamCursor) { 0 };
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	gotoIfError3(clean, File_getInfo(&input, &info, alloc, e_rr));
+
+	if(info.type != EFileType_File)
+		retError(clean, Error_invalidState(0, "file wipe only works on files."));
+
+	const U64 size = info.fileSize;
+
+	if(size) {
+
+		//Overwrite the existing bytes in place (ReadWrite, no truncation) a chunk at a time
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(U64_min((U64) CLI_FILE_CHUNK, size), alloc, &zero, e_rr));
+		gotoIfError3(clean, Buffer_unsetAllBits(zero, e_rr));
+
+		gotoIfError3(clean, File_openStream(
+			&input, 1 * SECOND, EFileOpenType_ReadWrite, false, &fileHandleType, &streamType, &stream, e_rr
+		));
+		gotoIfError3(clean, StreamCursor_create(stream, CLI_FILE_CHUNK, true, alloc, &cur, e_rr));
+
+		for(U64 off = 0; off < size; off += CLI_FILE_CHUNK) {
+			const U64 n = U64_min((U64) CLI_FILE_CHUNK, size - off);
+			gotoIfError3(clean, StreamCursor_write(&cur, zero, 0, off, n, false, alloc, e_rr));
+		}
+
+		gotoIfError3(clean, StreamCursor_flush(&cur, alloc, e_rr));
+	}
+
+	Log_debugLnx("Wiped %"PRIu64" bytes of %.*s", size, (int) CharString_length(input), input.ptr);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	StreamCursor_close(&cur, alloc);
+	RefPtr_dec(&stream);
+	Buffer_free(&zero, alloc);
+	FileInfo_free(&info, alloc);
+	return s_uccess;
+}
+
+//hexdump
+
+Bool CLI_fileHexdump(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+
+	CharString input = CharString_createNull();
+	if(!CLI_fileArg(args, EOperationHasParameter_InputShift, &input)) {
+		Log_errorLnx("Invalid argument -input <path>.");
+		return false;
+	}
+
+	RefPtrType streamType = FileStream_makeType(alloc);
+
+	Buffer buf = Buffer_createNull();
+	StreamRef *stream = NULL;
+	StreamCursor cur = (StreamCursor) { 0 };
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	//Optional -start / -length. Default dumps up to 2KiB; everything is clamped to the file size.
+
+	U64 start = 0, length = 0;
+	const Bool hasLength = (args->parameters & EOperationHasParameter_Length) != 0;
+	CharString tmp = CharString_createNull();
+
+	if((args->parameters & EOperationHasParameter_StartOffset) && CLI_fileArg(args, EOperationHasParameter_StartOffsetShift, &tmp))
+		if(!CharString_parseDec(tmp, &start))
+			start = 0;
+
+	if(hasLength && CLI_fileArg(args, EOperationHasParameter_LengthShift, &tmp))
+		if(!CharString_parseDec(tmp, &length))
+			length = 0;
+
+	FileInfo info = (FileInfo) { 0 };
+	gotoIfError3(clean, File_getInfo(&input, &info, alloc, e_rr));
+	const U64 fileSize = info.fileSize;
+	FileInfo_free(&info, alloc);
+
+	if(start > fileSize)
+		start = fileSize;
+
+	const U64 avail = fileSize - start;
+
+	if(!hasLength)
+		length = avail < 2 * KIBI ? avail : 2 * KIBI;
+	else if(length > avail)
+		length = avail;
+
+	if(!length) {
+		Log_debugLnx("(no data at offset %"PRIu64")", start);
+		goto clean;
+	}
+
+	gotoIfError3(clean, File_openStream(
+		&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, e_rr
+	));
+	gotoIfError3(clean, StreamCursor_create(stream, CLI_FILE_CHUNK, false, alloc, &cur, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(CLI_FILE_CHUNK, alloc, &buf, e_rr));
+
+	for(U64 chunkOff = 0; chunkOff < length; chunkOff += CLI_FILE_CHUNK) {
+
+		const U64 n = U64_min((U64) CLI_FILE_CHUNK, length - chunkOff);
+		gotoIfError3(clean, StreamCursor_read(&cur, buf, start + chunkOff, 0, n, false, alloc, e_rr));
+
+		const U8 *ptr = buf.ptr;
+
+		for(U64 i = 0; i < n; i += 16) {
+
+			C8 line[80];
+			U64 c = 0;
+
+			//Offset
+
+			for(int shift = 28; shift >= 0; shift -= 4)
+				line[c++] = C8_createHex((U8)((start + chunkOff + i) >> shift) & 0xF);
+
+			line[c++] = ':';
+			line[c++] = ' ';
+
+			//Hex bytes
+
+			for(U64 j = 0; j < 16; ++j) {
+				if(i + j < n) {
+					line[c++] = C8_createHex(ptr[i + j] >> 4);
+					line[c++] = C8_createHex(ptr[i + j] & 0xF);
+				}
+				else { line[c++] = ' '; line[c++] = ' '; }
+				line[c++] = ' ';
+			}
+
+			line[c++] = ' ';
+
+			//Ascii
+
+			for(U64 j = 0; j < 16 && i + j < n; ++j) {
+				const U8 v = ptr[i + j];
+				line[c++] = (v >= 0x20 && v < 0x7F) ? (C8) v : '.';
+			}
+
+			line[c] = '\0';
+			Log_debugLnx("%s", line);
+		}
+	}
+
+	Log_debugLnx("(%"PRIu64" bytes from offset %"PRIu64")", length, start);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	StreamCursor_close(&cur, alloc);
+	RefPtr_dec(&stream);
+	Buffer_free(&buf, alloc);
+	return s_uccess;
+}
+
+//gmac (AES-GMAC: authenticate a file with AES-GCM using the file as additional data and empty plaintext)
+
+Bool CLI_fileGmac(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+
+	CharString input = CharString_createNull(), key = CharString_createNull();
+	if(
+		!CLI_fileArg(args, EOperationHasParameter_InputShift, &input) ||
+		!CLI_fileArg(args, EOperationHasParameter_AESShift, &key)
+	) {
+		Log_errorLnx("file gmac requires -input <file> and -aes <32-byte hex key>.");
+		return false;
+	}
+
+	RefPtrType streamType = FileStream_makeType(alloc);
+
+	Buffer buf = Buffer_createNull();
+	StreamRef *stream = NULL;
+	StreamCursor cur = (StreamCursor) { 0 };
+	FileInfo info = (FileInfo) { 0 };
+	AESEncryptionContext ctx = (AESEncryptionContext) { 0 };
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	//Parse the 32-byte (256-bit) hex key, same rules as -aes elsewhere
+
+	const CharString ox = CharString_createRefCStrConst("0x");
+
+	if(!CharString_isHex(key))
+		retError(clean, Error_invalidState(0, "file gmac -aes must be a hex key (32 bytes)."));
+
+	const U64 off = CharString_startsWithStringInsensitive(&key, &ox, 0) ? 2 : 0;
+
+	if(CharString_length(key) - off != 64)
+		retError(clean, Error_invalidState(1, "file gmac -aes must be exactly 32 bytes (64 hex chars)."));
+
+	U32 keyV[8] = { 0 };
+
+	for(U64 i = off; i + 1 < CharString_length(key); ++i) {
+		const U8 v0 = C8_hex(key.ptr[i]);
+		const U8 v1 = C8_hex(key.ptr[++i]);
+		*((U8*)keyV + ((i - off) >> 1)) = (U8)((v0 << 4) | v1);
+	}
+
+	//Stream the whole file as GCM additional-data with a fixed zero IV, so the tag is a deterministic MAC (GMAC).
+
+	gotoIfError3(clean, File_getInfo(&input, &info, alloc, e_rr));
+	const U64 size = info.fileSize;
+
+	AESEncryptionKey aesKey = (AESEncryptionKey) { 0 };
+	for(U8 i = 0; i < 8; ++i)
+		aesKey.u32x8[i] = keyV[i];
+
+	U8 blockSizeMax = 0, use256Or512 = 0;
+
+	gotoIfError3(clean, Buffer_aesExpertCreate(
+		I32x4_zero(), EBufferEncryptionType_AES256GCM, aesKey,
+		0,          //streamSizeHint: prefer large streams
+		0,          //oneTimeHint
+		0xFF,       //use256Or512Override: auto-detect what the hardware supports
+		&blockSizeMax, &use256Or512, &ctx, e_rr
+	));
+
+	//Every AAD chunk except the last must be a whole multiple of the GHASH block size; round the chunk down to it.
+
+	const U64 effectiveChunk = blockSizeMax ? (CLI_FILE_CHUNK / blockSizeMax) * blockSizeMax : CLI_FILE_CHUNK;
+
+	if(size) {
+
+		gotoIfError3(clean, Buffer_createUninitializedBytes(U64_min(effectiveChunk, size), alloc, &buf, e_rr));
+
+		gotoIfError3(clean, File_openStream(
+			&input, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, e_rr
+		));
+		gotoIfError3(clean, StreamCursor_create(stream, effectiveChunk, false, alloc, &cur, e_rr));
+
+		for(U64 pos = 0; pos < size; pos += effectiveChunk) {
+			const U64 n = U64_min(effectiveChunk, size - pos);
+			gotoIfError3(clean, StreamCursor_read(&cur, buf, pos, 0, n, false, alloc, e_rr));
+			Buffer_aesExpertUpdateAAD(&ctx, Buffer_createRefConst(buf.ptr, n), blockSizeMax, use256Or512);
+		}
+	}
+
+	(void) Buffer_aesExpertFinalize(&ctx, size, 0, I32x4_zero());        //dataLen 0; expectTag unused when generating
+
+	const I32x4 tag = ctx.tag;
+
+	Log_debugLnx(
+		"GMAC of %.*s (%"PRIu64" bytes, AES-256-GCM, zero IV)\n"
+		"\tTag: 0x%08x%08x%08x%08x",
+		(int) CharString_length(input), input.ptr, size,
+		(U32) I32x4_x(tag), (U32) I32x4_y(tag), (U32) I32x4_z(tag), (U32) I32x4_w(tag)
+	);
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	StreamCursor_close(&cur, alloc);
+	RefPtr_dec(&stream);
+	Buffer_free(&buf, alloc);
+	FileInfo_free(&info, alloc);
+	return s_uccess;
+}
