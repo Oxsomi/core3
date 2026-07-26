@@ -1523,7 +1523,9 @@ clean:
 	return s_uccess;
 }
 
-extern "C" Bool Compiler_disassembleDXIL(const Compiler *comp, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr) {
+extern "C" Bool Compiler_disassembleDXIL(
+	const Compiler *comp, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 	U64 binLen = Buffer_length(buf);

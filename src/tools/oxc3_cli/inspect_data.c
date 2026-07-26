@@ -333,6 +333,8 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		goto clean;
 	}
 
+	CLI_ensureVirtualLoaded(&path);        //If it's a "//section/..." path, load the section so File_read can resolve it
+
 	if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;

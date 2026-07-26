@@ -1536,7 +1536,7 @@ clean:
 	CharString_free(&file, alloc);
 
 	if(!s_uccess)
-		Log_errorLn(alloc, 
+		Log_errorLn(alloc,
 			"Couldn't return error as CompileError: %s:L#%zu:%zu (index: %zu): %s",
 			format, source, position.line, position.column, position.index, msg
 		);

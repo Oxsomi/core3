@@ -188,10 +188,12 @@ Bool File_resolve(
 
 	if(!fakeSplitLen) {
 
-		if (isVirtual) {
+		if (*isVirtual) {                          //A virtual root (e.g. "//") stays empty
 			CharString_free(result, alloc);        //Release temp result
 			goto clean;
 		}
+
+		//A non-virtual path that collapsed to nothing (e.g. "." or "./") means the working/app directory
 
 		CharString_free(result, alloc);        //Release temp result
 		gotoIfError3(clean, CharString_createCopy(absoluteDir, alloc, result, e_rr));

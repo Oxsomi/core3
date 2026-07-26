@@ -30,7 +30,7 @@
 TListImpl(Job);
 TListNamedImpl(ListThreadHandle);
 
-static const Ns JobQueue_idleSleep = 100000;		//100 * MU
+static const Ns JobQueue_idleSleep = 100000;        //100 * MU
 
 //Pop the next job. Returns false if the queue is currently empty.
 

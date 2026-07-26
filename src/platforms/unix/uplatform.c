@@ -26,6 +26,7 @@
 #include "types/base/atomic.h"
 
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
@@ -147,18 +148,23 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 
 		out->vendor = ECPUVendor_Arm;
 
-		FILE *f = fopen("/proc/cpuinfo", "r");
+		//Read /proc/cpuinfo directly (raw open/read; the File API is sandboxed to the working dir and can't reach /proc).
+		//The first core's "CPU implementer" line is well within the first read, so a single bounded read is enough.
 
-		if(f) {
+		const int f = open("/proc/cpuinfo", O_RDONLY);
 
-			C8 line[256];
+		if(f >= 0) {
 
-			while(fgets(line, sizeof(line), f)) {
+			C8 buf[8192];
+			const ssize_t n = read(f, buf, sizeof(buf) - 1);
+			close(f);
 
-				if(!strstr(line, "CPU implementer"))
-					continue;
+			if(n > 0) {
 
-				const C8 *hex = strstr(line, "0x");
+				buf[n] = 0;
+
+				const C8 *impl = strstr(buf, "CPU implementer");
+				const C8 *hex = impl ? strstr(impl, "0x") : NULL;
 
 				if(hex)
 					switch((unsigned) strtoul(hex, NULL, 16)) {
@@ -169,11 +175,7 @@ void Platform_detectCPUInfo(PlatformCPUInfo *out) {
 						case 0x61: out->vendor = ECPUVendor_Apple;    break;
 						default:   out->vendor = ECPUVendor_Arm;      break;
 					}
-
-				break;
 			}
-
-			fclose(f);
 		}
 
 	#endif

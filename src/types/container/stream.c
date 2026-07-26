@@ -594,8 +594,10 @@ Bool StreamCursor_read(
 				Buffer_createRefConst(cursor->cacheData.ptr + srcRel, bytesToCopy)
 			);
 
-		//If bufLen isn't present, it will force the stream to start from this new position instead.
-		if (bufLen || streamEnd - srcOff >= length) {
+		//If bufLen isn't present, the caller (e.g. StreamCursor_copyStream) needs the requested data to
+		//start at cacheData[0]. A cache hit at srcRel != 0 leaves it at cacheData[srcRel], so we must NOT
+		//consume here; falling through forces a reload from srcOff so the cache starts at this position.
+		if (bufLen) {
 			srcOff += bytesToCopy;
 			dstOff += bytesToCopy;
 			length -= bytesToCopy;

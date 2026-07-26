@@ -34,8 +34,8 @@
 	#define timegm _mkgmtime
 	#define localtime_r(a, b) (!localtime_s(b, a))
 	#define gmtime_r(a, b) (!gmtime_s(b, a))
-#elif !defined(__clang__)
-	#include <x86intrin.h>
+#elif _ARCH == ARCH_X86_64 && !defined(__clang__)
+	#include <x86intrin.h>        //Only x86 GCC needs this (for __rdtsc); ARM uses cntvct_el0, clang uses a builtin
 #endif
 
 Ns Time_now() {

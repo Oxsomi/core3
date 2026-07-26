@@ -76,10 +76,18 @@ Bool CLI_profileMemset(const ParsedArgs *args);
 Bool CLI_profileVec(const ParsedArgs *args);
 Bool CLI_profileAll(const ParsedArgs *args);        //Runs every profile in sequence
 
+Bool CLI_floatConvert(const ParsedArgs *args);       //Convert a value to a float format (or --fixed)
+Bool CLI_floatDissect(const ParsedArgs *args);       //Show sign/exponent/mantissa of a float value
+Bool CLI_timeNow(const ParsedArgs *args);            //Current time (ISO 8601 + epoch ns)
+Bool CLI_timeConvert(const ParsedArgs *args);        //epoch ns <-> ISO 8601
+
 Bool CLI_helpOperation(const ParsedArgs *args);
 
 Bool CLI_inspectHeader(const ParsedArgs *args);
 Bool CLI_inspectData(const ParsedArgs *args);
+
+//If path is a virtual "//section/..." path, loads the containing section so File_read/getInfo can resolve it.
+void CLI_ensureVirtualLoaded(const CharString *path);
 
 Bool CLI_fileList(const ParsedArgs *args);           //List a directory (ls)
 Bool CLI_fileTree(const ParsedArgs *args);           //List a directory recursively (tree)

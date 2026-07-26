@@ -59,6 +59,9 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_GraphicsApiShift,
 
+	EOperationHasParameter_TypeShift,
+	EOperationHasParameter_oiCAShift,
+
 	EOperationHasParameter_CountEnum,                //How many enums there are
 
 	EOperationHasParameter_Start                     = EOperationHasParameter_FileFormatShift,
@@ -90,7 +93,11 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_Input2                    = 1 << EOperationHasParameter_Input2Shift,
 
-	EOperationHasParameter_GraphicsApi               = 1 << EOperationHasParameter_GraphicsApiShift
+	EOperationHasParameter_GraphicsApi               = 1 << EOperationHasParameter_GraphicsApiShift,
+
+	EOperationHasParameter_Type                      = 1 << EOperationHasParameter_TypeShift,
+
+	EOperationHasParameter_oiCA                      = 1 << EOperationHasParameter_oiCAShift
 
 } EOperationHasParameter;
 
@@ -163,7 +170,9 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_Verbose             = 1 << 24,
 
-	EOperationFlags_Count               = 25
+	EOperationFlags_Fixed               = 1 << 25,        //float convert: emit fixed-point instead of a float format
+
+	EOperationFlags_Count               = 26
 
 } EOperationFlags;
 
@@ -240,6 +249,12 @@ typedef enum EOperation {
 	EOperation_ProfileVec,
 	EOperation_ProfileAll,
 
+	EOperation_FloatConvert,
+	EOperation_FloatDissect,
+
+	EOperation_TimeNow,
+	EOperation_TimeConvert,
+
 	EOperation_HelpCategories,
 	EOperation_HelpOperations,
 	EOperation_HelpOperation,
@@ -266,6 +281,8 @@ typedef enum EOperationCategory {
 
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
+	EOperationCategory_Float,
+	EOperationCategory_Time,
 	EOperationCategory_Info,
 	EOperationCategory_Profile,
 	EOperationCategory_Help,

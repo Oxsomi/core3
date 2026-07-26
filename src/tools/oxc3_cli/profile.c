@@ -25,6 +25,8 @@
 #include "types/container/buffer_encrypt.h"
 #include "types/container/string.h"
 #include "types/container/log.h"
+#include "types/base/string_read.h"
+#include "types/base/thread.h"
 #include "types/base/time.h"
 #include "types/base/error.h"
 #include "types/math/flp.h"
@@ -36,6 +38,74 @@
 
 typedef Bool (*ProfileOperation)(const ParsedArgs*, Buffer, Error*);
 
+//Multi-threaded harness: each thread runs the op over its own slice, we time the whole thing and report aggregate.
+
+typedef struct ProfileThreadArg {
+	const ParsedArgs *args;
+	ProfileOperation op;
+	Buffer slice;
+	Error err;
+} ProfileThreadArg;
+
+void CLI_profileThreadCb(void *ptr) {
+	ProfileThreadArg *a = (ProfileThreadArg*) ptr;
+	if(!a->op(a->args, a->slice, &a->err) && !a->err.genericError)
+		a->err = Error_invalidState(0, "CLI_profileThreadCb() op failed");
+}
+
+Bool CLI_profileDataThreaded(const ParsedArgs *args, ProfileOperation op, Buffer dat, U64 threads, Error *e_rr) {
+
+	Bool s_uccess = true;
+	const Allocator *alloc = Platform_instance->alloc;
+	Buffer targsBuf = Buffer_createNull(), thsBuf = Buffer_createNull();
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(ProfileThreadArg) * threads, alloc, &targsBuf, e_rr));
+	gotoIfError3(clean, Buffer_createUninitializedBytes(sizeof(Thread*) * threads, alloc, &thsBuf, e_rr));
+
+	ProfileThreadArg *targs = (ProfileThreadArg*) targsBuf.ptrNonConst;
+	Thread **ths = (Thread**) thsBuf.ptrNonConst;
+
+	const U64 sliceSize = (Buffer_length(dat) / threads) & ~(U64)63;        //64-byte aligned slices (AES/SIMD safe)
+
+	Log_debugLnx("Running on %"PRIu64" threads, %"PRIu64" bytes each:", threads, sliceSize);
+
+	const Ns then = Time_now();
+
+	U64 spawned = 0;
+
+	for(U64 i = 0; i < threads; ++i) {
+
+		targs[i] = (ProfileThreadArg) {
+			.args = args, .op = op,
+			.slice = Buffer_createRef(dat.ptrNonConst + i * sliceSize, sliceSize),
+			.err = Error_none()
+		};
+
+		ths[i] = NULL;
+
+		if(!Thread_create(alloc, CLI_profileThreadCb, &targs[i], &ths[i], e_rr))
+			break;
+
+		++spawned;
+	}
+
+	for(U64 i = 0; i < spawned; ++i)
+		Thread_waitAndCleanup(alloc, &ths[i], NULL);
+
+	const Ns now = Time_now();
+	const U64 total = sliceSize * spawned;
+
+	Log_debugLnx(
+		"Aggregate over %"PRIu64" threads: %"PRIu64" bytes in %fs (%f bytes/sec)",
+		spawned, total, (F64)(now - then) / SECOND, (F64) total / (now - then) * SECOND
+	);
+
+clean:
+	Buffer_free(&targsBuf, alloc);
+	Buffer_free(&thsBuf, alloc);
+	return s_uccess;
+}
+
 Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 
 	if(!args) return false;
@@ -46,12 +116,37 @@ Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
 
+	//Parse -threads (default 1 = single threaded; 0 = all hardware threads)
+
+	U64 threads = 1;
+
+	if(args->parameters & EOperationHasParameter_ThreadCount) {
+
+		CharString t = CharString_createNull();
+		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &t))
+
+		if(!CharString_parseU64(t, &threads))
+			retError(clean, Error_invalidState(0, "CLI_profileData() -threads must be a number (0 = all hardware threads)"));
+
+		if(!threads)
+			threads = Platform_getThreads();
+
+		if(!threads)
+			threads = 1;
+	}
+
 	gotoIfError3(clean, Buffer_createUninitializedBytes(bufferSize, Platform_instance->alloc, &dat, e_rr));
 
 	if(!Buffer_csprng(dat))
 		retError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"));
 
-	gotoIfError3(clean, op(args, dat, e_rr));
+	if(threads <= 1) {
+		gotoIfError3(clean, op(args, dat, e_rr));
+	}
+
+	else {
+		gotoIfError3(clean, CLI_profileDataThreaded(args, op, dat, threads, e_rr));
+	}
 
 clean:
 

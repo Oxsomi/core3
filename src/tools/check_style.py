@@ -68,6 +68,8 @@
 #
 # Exits with code 0 on success, 1 if any violation is found.
 
+from __future__ import annotations        # PEP 585/604 style hints must not be evaluated on older Python (3.7/3.8)
+
 import os
 import re
 import sys

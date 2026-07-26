@@ -141,6 +141,38 @@
 		return s_uccess;
 	}
 
+	//Live memory usage requires actually creating the device (there's no cross-API way to query it otherwise).
+	//Non-fatal: if the device can't be created we just note it and continue listing.
+
+	static void CLI_printMemoryBudget(
+		GraphicsInstanceRef *instanceRef, const GraphicsDeviceInfo *info, const Allocator *alloc
+	) {
+
+		(void) alloc;
+
+		GraphicsDeviceRef *deviceRef = NULL;
+		Error err = Error_none();
+
+		//Querying live memory requires a real device. If creation fails (e.g. a build without embedded graphics
+		//shaders, or a driver issue) we just note it rather than dumping the full error/stacktrace per device.
+
+		if(!GraphicsDeviceRef_create(
+			instanceRef, info, EGraphicsDeviceFlags_None, EGraphicsBufferingMode_Default, &deviceRef, &err
+		)) {
+			Log_debugLnx("\tMemory in use: (unavailable, couldn't create a device to query)");
+			return;
+		}
+
+		const U64 deviceLocal = GraphicsDeviceRef_getMemoryBudget(deviceRef, true);
+		const U64 shared = GraphicsDeviceRef_getMemoryBudget(deviceRef, false);
+
+		Log_debugLnx(
+			"\tMemory in use: %"PRIu64" bytes device-local, %"PRIu64" bytes shared", deviceLocal, shared
+		);
+
+		RefPtr_dec(&deviceRef);
+	}
+
 	Bool CLI_graphicsDevices(const ParsedArgs *args) {
 
 		if(!args) return false;
@@ -230,8 +262,10 @@
 
 				Log_debugLnx("Graphics device matching ranges [%"PRIu64", %"PRIu64">", entry, entry + count);
 
-				for(U64 i = entry; i < infos.length && i < entry + count; ++i)
+				for(U64 i = entry; i < infos.length && i < entry + count; ++i) {
 					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], true);
+					CLI_printMemoryBudget(instanceRef, &infos.ptr[i], alloc);
+				}
 			}
 
 			//Otherwise, we will simply list the basic information of the devices
@@ -240,8 +274,13 @@
 
 				Log_debugLnx("%s: %"PRIu64" graphics devices:", EGraphicsApi_name[api], infos.length);
 
-				for(U64 i = 0; i < infos.length; ++i)
-					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], args->flags & EOperationFlags_Verbose);
+				const Bool verbose = args->flags & EOperationFlags_Verbose;
+
+				for(U64 i = 0; i < infos.length; ++i) {
+					GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], verbose);
+					if(verbose)
+						CLI_printMemoryBudget(instanceRef, &infos.ptr[i], alloc);
+				}
 			}
 
 			ListGraphicsDeviceInfo_free(&infos, alloc);

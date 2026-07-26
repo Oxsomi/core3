@@ -394,36 +394,36 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		static const struct { const C8 *label; const C8 *src; } negatives[] = {
 
 			{ "RayReorder on a non-raygen stage rejected",
-			  "[[oxc::extension(\"RayReorder\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::extension(\"RayReorder\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "PAQ on a non-raytracing stage rejected",
-			  "[[oxc::extension(\"PAQ\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::extension(\"PAQ\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "ComputeDeriv on a pixel stage rejected",
-			  "[[oxc::extension(\"ComputeDeriv\")]]\n[[oxc::model(\"6.6\")]]\n[[oxc::stage(\"pixel\")]]\n"
-			  "float4 main() : SV_Target { return 0; }\n" },
+				"[[oxc::extension(\"ComputeDeriv\")]]\n[[oxc::model(\"6.6\")]]\n[[oxc::stage(\"pixel\")]]\n"
+				"float4 main() : SV_Target { return 0; }\n" },
 
 			{ "shader model below the 6.5 floor rejected",
-			  "[[oxc::model(\"6.0\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::model(\"6.0\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "extension needing a higher model than declared rejected",   //AtomicI64 needs 6.6, only 6.5 given
-			  "[[oxc::extension(\"AtomicI64\")]]\n[[oxc::model(\"6.5\")]]\n[[oxc::stage(\"compute\")]]\n"
-			  "[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::extension(\"AtomicI64\")]]\n[[oxc::model(\"6.5\")]]\n[[oxc::stage(\"compute\")]]\n"
+				"[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "oxc::uniforms together with oxc::stage rejected",
-			  "[[oxc::uniforms(B1 X = true)]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::uniforms(B1 X = true)]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "conflicting oxc::stage + [shader] on one function rejected",
-			  "[[oxc::stage(\"compute\")]]\n[shader(\"compute\")]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::stage(\"compute\")]]\n[shader(\"compute\")]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "unknown stage name rejected",
-			  "[[oxc::stage(\"foobar\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::stage(\"foobar\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "empty oxc::binary() rejected",
-			  "[[oxc::binary()]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
+				"[[oxc::binary()]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" },
 
 			{ "duplicate binary type in one annotation rejected",
-			  "[[oxc::binary(\"spv\", \"spv\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" }
+				"[[oxc::binary(\"spv\", \"spv\")]]\n[[oxc::stage(\"compute\")]]\n[numthreads(1,1,1)]\nvoid main() {}\n" }
 		};
 
 		for (U64 i = 0; i < sizeof(negatives) / sizeof(negatives[0]); ++i) {

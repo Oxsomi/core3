@@ -62,7 +62,7 @@ static inline F32x4 F32x4_add(F32x4 a, F32x4 b) { return _mm_add_ps(a, b); }
 static inline F32x4 F32x4_sub(F32x4 a, F32x4 b) { return _mm_sub_ps(a, b); }
 static inline F32x4 F32x4_mul(F32x4 a, F32x4 b) { return _mm_mul_ps(a, b); }
 static inline F32x4 F32x4_div(F32x4 a, F32x4 b) { return _mm_div_ps(a, b); }
-static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return _mm_fmadd_ps(a, b, c); }        //a * b + c (FMA is required, see Platform_checkCPUSupport)
+static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return _mm_fmadd_ps(a, b, c); }        //a * b + c (FMA required)
 
 static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, F32x4_trunc2(b), 0xFF)); }
 static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, F32x4_trunc3(b), 0xFF)); }

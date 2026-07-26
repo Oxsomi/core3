@@ -119,7 +119,7 @@ class oxc3(ConanFile):
 			self.requires("nvapi/2025.04.01.01")
 
 		if hasD3D12:
-			self.requires("agility_sdk/2025.03.08")
+			self.requires("agility_sdk/2025.07.26")
 
 		if hasD3D12 and self.settings.arch == "x86_64":
 			self.requires("ags/2024.09.21")

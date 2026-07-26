@@ -159,7 +159,8 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	gotoIfError3(clean, File_read(&path, U64_MAX, 0, 0, &fileHandleType, &tempBuffer, e_rr));
 
 	gotoIfError3(clean, MemoryStream_createFromBufferRegion(
-		tempBuffer, 0, 0, EMemoryStreamFlags_None, &memStreamType, &tempStream, e_rr
+		Buffer_createRefFromBuffer(tempBuffer, true), 0, Buffer_length(tempBuffer),
+		EMemoryStreamFlags_None, &memStreamType, &tempStream, e_rr
 	));
 
 	U64 streamOffset = 0;

@@ -31,6 +31,15 @@
 #include "formats/oiDL/dl_headers.h"
 #include "formats/oiSH/sh_headers.h"
 #include "formats/oiXX/oiXX.h"
+#include "formats/bmp/bmp_file.h"
+#include "formats/bmp/bmp_headers.h"
+#include "formats/dds/dds_file.h"
+#include "formats/dds/dds_headers.h"
+#include "formats/wav/wav_file.h"
+#include "formats/wav/wav_headers.h"
+#include "types/container/texture_format.h"
+#include "types/container/stream.h"
+#include "types/container/memory_stream.h"
 #include "platforms/logx.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
@@ -83,6 +92,62 @@ static const C8 *dataTypes[] = {
 	"U64 (64-bit number)"
 };
 
+//Image / audio formats are parsed via their stream readers (header only). BMP has a 2-byte magic; DDS/WAV are 4-byte.
+
+static Bool CLI_inspectMediaHeader(StreamRef *stream, U16 magic16, U32 magic32, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	ListSubResourceData subs = (ListSubResourceData) { 0 };
+
+	if(magic16 == BMP_MAGIC) {
+
+		BMPInfo info = (BMPInfo) { 0 };
+		U64 off = 0, dataOff = 0;
+		gotoIfError3(clean, BMP_read(stream, &off, &dataOff, &info, alloc, e_rr));
+
+		Log_debugLnx(
+			"Detected BMP file:\n\t%"PRIu32" x %"PRIu32", format %s\n\t%"PRIi32" x %"PRIi32" pixels/meter%s",
+			info.w, info.h, ETextureFormatId_name[info.textureFormatId],
+			info.xPixPerM, info.yPixPerM, info.discardAlpha ? "\n\tAlpha discarded (stored as RGB8)" : ""
+		);
+	}
+
+	else if(magic32 == ddsMagic) {
+
+		DDSInfo info = (DDSInfo) { 0 };
+		U64 off = 0;
+		gotoIfError3(clean, DDS_read(stream, &off, &info, alloc, &subs, e_rr));
+
+		Log_debugLnx(
+			"Detected DDS file:\n\t%"PRIu32" x %"PRIu32" x %"PRIu32"\n\t%"PRIu32" mips, %"PRIu32" layers\n\t"
+			"format %s, texture type %"PRIu32", %"PRIu64" subresources",
+			info.w, info.h, info.l, info.mips, info.layers,
+			ETextureFormatId_name[info.textureFormatId], (U32) info.type, subs.length
+		);
+	}
+
+	else {        //RIFFHeader_magic (WAV)
+
+		WAVFile wav = (WAVFile) { 0 };
+		gotoIfError3(clean, WAV_read(stream, 0, 0, alloc, &wav, e_rr));
+
+		const C8 *fmt =
+			wav.fmt.format == ERIFFAudioFormat_IEEE754 ? "IEEE754 float" :
+			(wav.fmt.format == ERIFFAudioFormat_PCM ? "PCM" : "unknown");
+
+		Log_debugLnx(
+			"Detected WAV file:\n\t%s, %"PRIu16" channel(s), %"PRIu32" Hz, %"PRIu16"-bit\n\t"
+			"%"PRIu16" bytes/block, %"PRIu32" bytes/second, %"PRIu32" data bytes",
+			fmt, wav.fmt.channels, wav.fmt.frequency, wav.fmt.stride,
+			wav.fmt.bytesPerBlock, wav.fmt.bytesPerSecond, wav.dataLength
+		);
+	}
+
+clean:
+	ListSubResourceData_freeUnderlying(&subs, alloc);
+	return s_uccess;
+}
+
 //Inspect header is a lightweight checker for the header.
 //To get a more detailed view you can use OxC3 file data instead.
 //Viewing the header doesn't require a key (if encrypted), but the data does.
@@ -91,29 +156,85 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 
 	if(!args) return false;
 
-	Buffer buf = Buffer_createNull();
-	Error err;
+	Error err = Error_none();
 	Bool success = false;
 
 	const Allocator *alloc = Platform_instance->alloc;
 	RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	RefPtrType streamType = FileStream_makeType(alloc);
+	RefPtrType memStreamType = MemoryStream_makeType(alloc);
 
 	CharString path = CharString_createNull();
-	CharString tmp = CharString_createNull();
+	StreamRef *stream = NULL;
+	StreamCursor cursor = (StreamCursor) { 0 };
+	U8 hdr[512];
+	Buffer buf = Buffer_createNull(), virtualBuf = Buffer_createNull();
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
 		Log_errorLnx("Invalid argument -input <string>.");
 		goto clean;
 	}
 
-	if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &buf, &err)) {
+	CLI_ensureVirtualLoaded(&path);        //If it's a "//section/..." path, load the section so File_* can resolve it
+
+	//We only ever read a small, bounded header region via a stream cursor - never the whole (possibly huge) file.
+	//The 4-byte magic dispatches; the image/audio parsers then read what they need straight from the same stream.
+
+	FileInfo info = (FileInfo) { 0 };
+	if (!File_getInfo(&path, &info, alloc, &err)) {
 		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
 
-	if (Buffer_length(buf) < 4) {
-		Log_errorLnx("File has to start with magic number.");
+	const U64 size = info.fileSize;
+	FileInfo_free(&info, alloc);
+
+	if (size < 4) {
+		Log_errorLnx("File has to start with a magic number.");
 		goto clean;
+	}
+
+	//File_open(Stream) isn't supported on virtual files, so for those we read the (in-memory, embedded) file into a
+	//buffer and wrap it in a memory stream; physical files stream straight from disk (bounded read below).
+
+	if (File_isVirtual(path)) {
+
+		if (!File_read(&path, 100 * MS, 0, 0, &fileHandleType, &virtualBuf, &err)) {
+			Log_errorLnx("Couldn't read virtual file.");
+			goto clean;
+		}
+
+		if (!MemoryStream_createFromBuffer(&virtualBuf, EMemoryStreamFlags_None, &memStreamType, &stream, &err))
+			goto clean;
+	}
+
+	else if (!File_openStream(&path, 100 * MS, EFileOpenType_Read, false, &fileHandleType, &streamType, &stream, &err)) {
+		Log_errorLnx("Couldn't open file.");
+		goto clean;
+	}
+
+	if (!StreamCursor_create(stream, 64 * KIBI, false, alloc, &cursor, &err))
+		goto clean;
+
+	//Every supported header (oiXX header + counts, or just the magic the image/audio parsers key off) fits in hdr
+
+	const U64 headerRead = U64_min(size, (U64) sizeof(hdr));
+
+	if (!StreamCursor_read(&cursor, Buffer_createRef(hdr, sizeof(hdr)), 0, 0, headerRead, false, alloc, &err))
+		goto clean;
+
+	buf = Buffer_createRefConst(hdr, headerRead);
+
+	//Image / audio formats are read via their own stream parsers rather than the oiXX header layout below
+
+	{
+		const U16 magic16 = *(const U16*)buf.ptr;
+		const U32 magic32 = *(const U32*)buf.ptr;
+
+		if (magic16 == BMP_MAGIC || magic32 == ddsMagic || magic32 == RIFFHeader_magic) {
+			success = CLI_inspectMediaHeader(stream, magic16, magic32, alloc, &err);
+			goto clean;
+		}
 	}
 
 	U64 reqLen = 0;
@@ -410,7 +531,8 @@ clean:
 	if(err.genericError)
 		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
 
-	CharString_free(&tmp, alloc);
-	Buffer_free(&buf, alloc);
+	StreamCursor_close(&cursor, alloc);
+	RefPtr_dec(&stream);
+	Buffer_free(&virtualBuf, alloc);
 	return success;
 }

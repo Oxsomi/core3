@@ -81,7 +81,9 @@ const C8 *EOperationHasParameter_names[] = {
 	"-compile-type",
 	"-include-dir",
 	"-input2",
-	"-graphics-api"
+	"-graphics-api",
+	"-type",
+	"-oiCA"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -101,7 +103,9 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Shader compile mode (compile)",
 	"Set extra include path",
 	"Input file to merge with",
-	"Graphics api to use. Default is either all or the native one depending on command."
+	"Graphics api to use. Default is either all or the native one depending on command.",
+	"Numeric type (e.g. a float format: F8, F16, F32, F64, BF16, TF19, PXR24, FP24).",
+	"Operate inside the given oiCA archive instead of the working directory."
 };
 
 //Flags
@@ -131,7 +135,8 @@ const C8 *EOperationFlags_names[EOperationFlags_Count] = {
 	"--warn-unused-registers",
 	"--warn-unused-constants",
 	"--warn-buffer-padding",
-	"--verbose"
+	"--verbose",
+	"--fixed"
 };
 
 const C8 *EOperationFlags_descriptions[EOperationFlags_Count] = {
@@ -180,6 +185,8 @@ const C8 *EOperationCategory_names[] = {
 
 	"hash",
 	"rand",
+	"float",
+	"time",
 	"info",
 	"profile",
 	"help"
@@ -201,6 +208,8 @@ const C8 *EOperationCategory_description[] = {
 
 	"Converting a file or string to a hash.",
 	"Generating random data.",
+	"Float format conversion and inspection.",
+	"Time conversion (epoch nanoseconds <-> ISO 8601).",
 	"Information about the tool.",
 	"Profiles operations on the current system.",
 	"Help about the instructions in the tool."
@@ -323,38 +332,40 @@ void Operations_init() {
 
 	Operation_values[EOperation_FileList] = (Operation) {
 		.category = EOperationCategory_File,
-		.name = "list", .desc = "List the entries of a directory (size, timestamp, name).",
+		.name = "list", .desc = "List the entries of a directory (defaults to the working directory).",
 		.func = &CLI_fileList, .isFormatLess = true,
-		.requiredParameters = EOperationHasParameter_Input
+		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA
 	};
 
 	Operation_values[EOperation_FileTree] = (Operation) {
 		.category = EOperationCategory_File,
-		.name = "tree", .desc = "List the entries of a directory recursively.",
+		.name = "tree", .desc = "List the entries of a directory recursively (defaults to the working directory).",
 		.func = &CLI_fileTree, .isFormatLess = true,
-		.requiredParameters = EOperationHasParameter_Input
+		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA
 	};
 
 	Operation_values[EOperation_FileStat] = (Operation) {
 		.category = EOperationCategory_File,
 		.name = "stat", .desc = "Show type, size, access and modified time of a file or folder.",
 		.func = &CLI_fileStat, .isFormatLess = true,
-		.requiredParameters = EOperationHasParameter_Input
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters = EOperationHasParameter_oiCA
 	};
 
 	Operation_values[EOperation_FileCount] = (Operation) {
 		.category = EOperationCategory_File,
-		.name = "count", .desc = "Count the files and folders under a path.",
+		.name = "count", .desc = "Count the files and folders under a path (defaults to the working directory).",
 		.func = &CLI_fileCount, .isFormatLess = true,
 		.operationFlags = EOperationFlags_NonRecursive,
-		.requiredParameters = EOperationHasParameter_Input
+		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA
 	};
 
 	Operation_values[EOperation_FileCopy] = (Operation) {
 		.category = EOperationCategory_File,
 		.name = "copy", .desc = "Copy a file to a new location.",
 		.func = &CLI_fileCopy, .isFormatLess = true,
-		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+		.optionalParameters = EOperationHasParameter_oiCA
 	};
 
 	Operation_values[EOperation_FileMove] = (Operation) {
@@ -368,7 +379,8 @@ void Operations_init() {
 		.category = EOperationCategory_File,
 		.name = "del", .desc = "Delete a file or folder (recursive for folders).",
 		.func = &CLI_fileDelete, .isFormatLess = true,
-		.requiredParameters = EOperationHasParameter_Input
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_Output
 	};
 
 	Operation_values[EOperation_FileMkdir] = (Operation) {
@@ -724,6 +736,7 @@ void Operations_init() {
 
 		.func = &CLI_profileCast,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -736,6 +749,7 @@ void Operations_init() {
 
 		.func = &CLI_profileRNG,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -748,6 +762,7 @@ void Operations_init() {
 
 		.func = &CLI_profileCRC32C,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -760,6 +775,7 @@ void Operations_init() {
 
 		.func = &CLI_profileFNV1A64,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -772,6 +788,7 @@ void Operations_init() {
 
 		.func = &CLI_profileSHA256,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -784,6 +801,7 @@ void Operations_init() {
 
 		.func = &CLI_profileMD5,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -796,6 +814,7 @@ void Operations_init() {
 
 		.func = &CLI_profileAES256,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -808,6 +827,7 @@ void Operations_init() {
 
 		.func = &CLI_profileAES128,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -820,6 +840,7 @@ void Operations_init() {
 
 		.func = &CLI_profileMemcpy,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -832,6 +853,7 @@ void Operations_init() {
 
 		.func = &CLI_profileMemset,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -844,6 +866,7 @@ void Operations_init() {
 
 		.func = &CLI_profileVec,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
 	};
 
@@ -856,7 +879,50 @@ void Operations_init() {
 
 		.func = &CLI_profileAll,
 
+		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.isFormatLess = true
+	};
+
+	//Float format conversion / inspection
+
+	Operation_values[EOperation_FloatConvert] = (Operation) {
+		.category = EOperationCategory_Float,
+		.name = "convert",
+		.desc = "Convert a decimal value to a float format (-type F8/F16/F32/F64/BF16/TF19/PXR24/FP24) or --fixed.",
+		.func = &CLI_floatConvert,
+		.isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters = EOperationHasParameter_Type,
+		.operationFlags = EOperationFlags_Fixed
+	};
+
+	Operation_values[EOperation_FloatDissect] = (Operation) {
+		.category = EOperationCategory_Float,
+		.name = "dissect",
+		.desc = "Show sign/exponent/mantissa/class of a value (decimal or 0x bits) in a float format (-type).",
+		.func = &CLI_floatDissect,
+		.isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters = EOperationHasParameter_Type
+	};
+
+	//Time conversion
+
+	Operation_values[EOperation_TimeNow] = (Operation) {
+		.category = EOperationCategory_Time,
+		.name = "now",
+		.desc = "Print the current UTC time as ISO 8601 and Unix-epoch nanoseconds.",
+		.func = &CLI_timeNow,
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_TimeConvert] = (Operation) {
+		.category = EOperationCategory_Time,
+		.name = "convert",
+		.desc = "Convert between Unix-epoch nanoseconds and ISO 8601 (auto-detected from -input).",
+		.func = &CLI_timeConvert,
+		.isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
 	};
 
 	//Help operations

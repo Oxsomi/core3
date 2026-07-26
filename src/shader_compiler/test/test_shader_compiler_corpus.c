@@ -47,7 +47,9 @@ static void printOiSH(const Allocator *alloc, Buffer buf, const C8 *label) {
 	Log_debugLn(alloc, "--- oiSH (%s) ---", label);
 
 	if (
-		MemoryStream_createFromBufferRegion(Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf), EMemoryStreamFlags_None, &msType, &ms, &err) &&
+		MemoryStream_createFromBufferRegion(
+			Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf), EMemoryStreamFlags_None, &msType, &ms, &err
+		) &&
 		SHFile_read((StreamRef*) ms, &off, false, alloc, &file, &err)
 	)
 		SHFile_print(&file, true, alloc);

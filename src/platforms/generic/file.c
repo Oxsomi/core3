@@ -874,8 +874,10 @@ Bool File_resolveVirtual(
 		gotoIfError3(clean, CharString_append(&secSlash, '/', alloc, e_rr));
 
 		if(CharString_startsWithStringInsensitive(&locLower, &secSlash, 0)) {
+			//Section matching is case-insensitive, but the subPath must keep its original case: archive entry lookup
+			//(CAFile_resolve) is case-sensitive. locLower and loc have the same length, so the offset is valid for both.
 			CharString sub = CharString_createNull();
-			CharString_cut(&locLower, CharString_length(secSlash), 0, &sub);
+			CharString_cut(loc, CharString_length(secSlash), 0, &sub);
 			gotoIfError3(clean, CharString_createCopy(sub, alloc, subPath, e_rr));
 			*section = sec;
 			goto clean;

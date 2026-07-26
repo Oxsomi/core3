@@ -157,7 +157,7 @@ Bool CLI_hashFile(const ParsedArgs *args) {
 	//Otherwise we just go to the file directly
 
 	if (File_hasFolder(&str, alloc)) {
-		EFormat format = args->format;        //Local (non-const) copy: File_foreach's userData is void* and CLI_hashAllTheFiles reads it
+		EFormat format = args->format;        //Local non-const copy (File_foreach's userData is a void*)
 		return File_foreach(&str, false, (FileCallback) CLI_hashAllTheFiles, &format, true, alloc, NULL);
 	}
 

@@ -192,7 +192,7 @@ jobs:
       - uses: ruby/setup-ruby@v1
         if: always()
         with:
-          ruby-version: '3.3'
+          ruby-version: '3.4'
           bundler-cache: true
 
       - name: Send Webhook Notification

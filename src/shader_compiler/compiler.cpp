@@ -2061,7 +2061,9 @@ clean:
 	return s_uccess;
 }
 
-Bool Compiler_parseStageAnnot(SHEntryRuntime &entry, CharString functionName, const C8 *&str, const Allocator *alloc, Error *e_rr) {
+Bool Compiler_parseStageAnnot(
+	SHEntryRuntime &entry, CharString functionName, const C8 *&str, const Allocator *alloc, Error *e_rr
+) {
 
 	Bool s_uccess = true;
 

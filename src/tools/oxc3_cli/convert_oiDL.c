@@ -341,7 +341,10 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 	CharString txt = CharString_createRefCStrConst(".txt");
 
 	if(
-		(CharString_endsWithStringInsensitive(convert->output, &txt, 0) || (convert->args->parameters & EOperationHasParameter_SplitBy)) &&
+		(
+			CharString_endsWithStringInsensitive(convert->output, &txt, 0) ||
+			(convert->args->parameters & EOperationHasParameter_SplitBy)
+		) &&
 		file.settings.dataType == EDLDataType_String
 	)
 		type = EFileType_File;
