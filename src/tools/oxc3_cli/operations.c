@@ -606,6 +606,18 @@ void Operations_init() {
 		.isFormatLess = true
 	};
 
+	Operation_values[EOperation_InfoAll] = (Operation) {
+
+		.category = EOperationCategory_Info,
+
+		.name = "all",
+		.desc = "Dumps CPU + graphics devices + audio devices in one go (handy for support / bug reports).",
+
+		.func = &CLI_infoAll,
+
+		.isFormatLess = true
+	};
+
 	//Profile
 
 	Operation_values[EOperation_ProfileCast] = (Operation) {
@@ -700,6 +712,42 @@ void Operations_init() {
 		.desc = "Profiles encrypting and decrypting random data using aes128-gcm.",
 
 		.func = &CLI_profileAES128,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileMemcpy] = (Operation) {
+
+		.category = EOperationCategory_Profile,
+
+		.name = "memcpy",
+		.desc = "Profiles memory copy bandwidth (Buffer_memcpy).",
+
+		.func = &CLI_profileMemcpy,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileMemset] = (Operation) {
+
+		.category = EOperationCategory_Profile,
+
+		.name = "memset",
+		.desc = "Profiles memory clear bandwidth (Buffer_unsetAllBits).",
+
+		.func = &CLI_profileMemset,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileVec] = (Operation) {
+
+		.category = EOperationCategory_Profile,
+
+		.name = "vec",
+		.desc = "Profiles 128-bit float SIMD throughput (vec4f add / mul / fma).",
+
+		.func = &CLI_profileVec,
 
 		.isFormatLess = true
 	};

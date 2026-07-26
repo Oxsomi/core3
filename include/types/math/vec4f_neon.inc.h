@@ -57,6 +57,7 @@ static inline F32x4 F32x4_add(F32x4 a, F32x4 b) { return vaddq_f32(a, b); }
 static inline F32x4 F32x4_sub(F32x4 a, F32x4 b) { return vsubq_f32(a, b); }
 static inline F32x4 F32x4_mul(F32x4 a, F32x4 b) { return vmulq_f32(a, b); }
 static inline F32x4 F32x4_div(F32x4 a, F32x4 b) { return vdivq_f32(a, b); }
+static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return vfmaq_f32(c, a, b); }        //a * b + c (baseline on ARMv8)
 
 static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, F32x4_trunc2(b))); }
 static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_reduce(F32x4_mul(a, F32x4_trunc3(b))); }

@@ -61,20 +61,8 @@ U32 Buffer_crc32cChained(const Buffer buf, U32 prevCrc) {
 
 	//Check if CRC32C is present
 	
-	if(hasCRC32 < 0) {
-		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			hasCRC32 = !!IsProcessorFeaturePresent(PF_ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE);
-		#elif _PLATFORM_TYPE == PLATFORM_IOS ||  _PLATFORM_TYPE == PLATFORM_OSX
-			int v = 0;
-			size_t siz = sizeof(v);
-			sysctlbyname("hw.optional.armv8_crc32", &v, &siz, NULL, 0);
-			hasCRC32 = v;
-		#elif defined(HWCAP_CRC32)
-			hasCRC32 = getauxval(AT_HWCAP) & HWCAP_CRC32;
-		#else
-			hasCRC32 = 0;
-		#endif
-	}
+	if(hasCRC32 < 0)        //Cached after first use; detection centralized in Platform_detectCPUFeatures
+		hasCRC32 = (Platform_detectCPUFeatures() & ECPUFeatures_HwCRC32C) != 0;
 
 	if (!hasCRC32)
 		return Buffer_crc32cFallbackChained(buf, prevCrc);
@@ -134,15 +122,8 @@ void Buffer_sha256(const Buffer buf, U32 output[8]) {
 	//Check if SHA256 is present
 	
 	#ifndef _CRYPTO_ALWAYS
-		if(hasSHA256 < 0) {
-			#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-				hasSHA256 = !!IsProcessorFeaturePresent(PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE);
-			#elif defined(HWCAP_SHA2)
-				hasSHA256 = getauxval(AT_HWCAP) & HWCAP_SHA2;
-			#else
-				hasSHA256 = 0;
-			#endif
-		}
+		if(hasSHA256 < 0)        //Cached after first use; detection centralized in Platform_detectCPUFeatures
+			hasSHA256 = (Platform_detectCPUFeatures() & ECPUFeatures_HwSHA256) != 0;
 
 		if(!hasSHA256) {
 			Buffer_sha256Fallback(buf, output);

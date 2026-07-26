@@ -29,11 +29,12 @@
 #include "types/base/error.h"
 #include "types/math/flp.h"
 #include "types/math/vec4i.h"
+#include "types/math/vec4f.h"
 #include "platforms/platform.h"
 #include "platforms/logx.h"
 #include "types/base/constants.h"
 
-typedef Error (*ProfileOperation)(const ParsedArgs*, Buffer);
+typedef Bool (*ProfileOperation)(const ParsedArgs*, Buffer, Error*);
 
 Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 
@@ -50,7 +51,7 @@ Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 	if(!Buffer_csprng(dat))
 		retError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"));
 
-	gotoIfError2(clean, op(args, dat))
+	gotoIfError3(clean, op(args, dat, e_rr));
 
 clean:
 
@@ -140,13 +141,13 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 	return EFloatType_convert(inputType, v, outputType);
 }
 
-Error _CLI_profileCast(const ParsedArgs *args, Buffer buf) {
+Bool _CLI_profileCast(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	(void)args;
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	if(Buffer_length(buf) < GIBI)
-		gotoIfError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"))
+		retError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"));
 
 	const U64 number = GIBI / sizeof(F64) / 32;
 	const C8 *iterationNames[] = { "Non denormalized", "(Un)Signed zero", "NaN", "Inf", "DeN" };
@@ -195,7 +196,7 @@ Error _CLI_profileCast(const ParsedArgs *args, Buffer buf) {
 	);
 
 clean:
-	return err;
+	return s_uccess;
 }
 
 Bool CLI_profileCast(const ParsedArgs *args) {
@@ -203,14 +204,17 @@ Bool CLI_profileCast(const ParsedArgs *args) {
 	return CLI_profileData(args, _CLI_profileCast);
 }
 
-Error CLI_profileRNGImpl(const ParsedArgs *args, Buffer buf) {
+Bool CLI_profileRNGImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	(void)args;
+	(void) e_rr;
 
 	const Ns then = Time_now();
 
-	if(!Buffer_csprng(buf))
-		return Error_invalidState(0, "CLI_profileRNGImpl() Buffer_csprng failed");
+	if(!Buffer_csprng(buf)) {
+		if(e_rr) *e_rr = Error_invalidState(0, "CLI_profileRNGImpl() Buffer_csprng failed");
+		return false;
+	}
 
 	const Ns now = Time_now();
 
@@ -222,7 +226,7 @@ Error CLI_profileRNGImpl(const ParsedArgs *args, Buffer buf) {
 		(F64)Buffer_length(buf) / (now - then) * SECOND
 	);
 
-	return Error_none();
+	return true;
 }
 
 Bool CLI_profileRNG(const ParsedArgs *args) {
@@ -230,9 +234,10 @@ Bool CLI_profileRNG(const ParsedArgs *args) {
 	return CLI_profileData(args, CLI_profileRNGImpl);
 }
 
-Error CLI_profileCRC32CImpl(const ParsedArgs *args, Buffer buf) {
+Bool CLI_profileCRC32CImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	(void)args;
+	(void) e_rr;
 
 	const Ns then = Time_now();
 	const U32 hash = Buffer_crc32c(buf);
@@ -247,7 +252,7 @@ Error CLI_profileCRC32CImpl(const ParsedArgs *args, Buffer buf) {
 		hash
 	);
 
-	return Error_none();
+	return true;
 }
 
 Bool CLI_profileCRC32C(const ParsedArgs *args) {
@@ -255,9 +260,10 @@ Bool CLI_profileCRC32C(const ParsedArgs *args) {
 	return CLI_profileData(args, CLI_profileCRC32CImpl);
 }
 
-Error CLI_profileFNV1A64Impl(const ParsedArgs *args, Buffer buf) {
+Bool CLI_profileFNV1A64Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	(void)args;
+	(void) e_rr;
 
 	const Ns then = Time_now();
 	const U32 hash = Buffer_crc32c(buf);
@@ -272,7 +278,7 @@ Error CLI_profileFNV1A64Impl(const ParsedArgs *args, Buffer buf) {
 		hash
 	);
 
-	return Error_none();
+	return true;
 }
 
 Bool CLI_profileFNV1A64(const ParsedArgs *args) {
@@ -280,9 +286,10 @@ Bool CLI_profileFNV1A64(const ParsedArgs *args) {
 	return CLI_profileData(args, CLI_profileFNV1A64Impl);
 }
 
-Error CLI_profileSHA256Impl(const ParsedArgs *args, Buffer buf) {
+Bool CLI_profileSHA256Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	(void)args;
+	(void) e_rr;
 
 	const Ns then = Time_now();
 
@@ -301,7 +308,7 @@ Error CLI_profileSHA256Impl(const ParsedArgs *args, Buffer buf) {
 		hash[4], hash[5], hash[6], hash[7]
 	);
 
-	return Error_none();
+	return true;
 }
 
 Bool CLI_profileSHA256(const ParsedArgs *args) {
@@ -309,9 +316,10 @@ Bool CLI_profileSHA256(const ParsedArgs *args) {
 	return CLI_profileData(args, CLI_profileSHA256Impl);
 }
 
-Error CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf) {
+Bool CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	(void)args;
+	(void) e_rr;
 
 	const Ns then = Time_now();
 	I32x4 md5 = Buffer_md5(buf);
@@ -326,7 +334,7 @@ Error CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf) {
 		I32x4_x(md5), I32x4_y(md5), I32x4_z(md5), I32x4_w(md5)
 	);
 
-	return Error_none();
+	return true;
 }
 
 Bool CLI_profileMD5(const ParsedArgs *args) {
@@ -334,16 +342,15 @@ Bool CLI_profileMD5(const ParsedArgs *args) {
 	return CLI_profileData(args, CLI_profileMD5Impl);
 }
 
-Error CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncryptionType encryptionType) {
+Bool CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncryptionType encryptionType, Error *e_rr) {
 
 	(void)args;
 
+	Bool s_uccess = true;
 	Ns then = Time_now();
 
 	U32 key[8];
 	I32x4 iv, tag;
-
-	Error err = Error_none();
 
 	const Buffer additionalData = Buffer_createNull();
 
@@ -353,8 +360,10 @@ Error CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncry
 		.type = encryptionType,
 		.flags = EBufferEncryptionFlags_GenerateKey,
 		.nonConstEncrypt = { .key = key, .tag = &tag, .iv = &iv }
-	}, &err))
+	}, e_rr)) {
+		s_uccess = false;
 		goto clean;
+	}
 
 	Ns now = Time_now();
 
@@ -373,8 +382,10 @@ Error CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncry
 		.additionalData = &additionalData,
 		.type = encryptionType,
 		.constDecrypt = { .key = key, .tag = &tag, .iv = &iv }
-	}, &err))
+	}, e_rr)) {
+		s_uccess = false;
 		goto clean;
+	}
 
 	now = Time_now();
 
@@ -387,15 +398,15 @@ Error CLI_profileEncryptionImpl(const ParsedArgs *args, Buffer buf, EBufferEncry
 	);
 
 clean:
-	return err;
+	return s_uccess;
 }
 
-Error CLI_profileAES256Impl(const ParsedArgs *args, Buffer buf) {
-	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES256GCM);
+Bool CLI_profileAES256Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
+	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES256GCM, e_rr);
 }
 
-Error CLI_profileAES128Impl(const ParsedArgs *args, Buffer buf) {
-	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES128GCM);
+Bool CLI_profileAES128Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
+	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES128GCM, e_rr);
 }
 
 Bool CLI_profileAES256(const ParsedArgs *args) {
@@ -406,4 +417,127 @@ Bool CLI_profileAES256(const ParsedArgs *args) {
 Bool CLI_profileAES128(const ParsedArgs *args) {
 	if(!args) return false;
 	return CLI_profileData(args, CLI_profileAES128Impl);
+}
+
+//Memory bandwidth: how fast the CPU can move / clear bytes (the number that bounds a lot of everything else).
+
+Bool CLI_profileMemcpyImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
+
+	(void) args;
+
+	Bool s_uccess = true;
+	Buffer dst = Buffer_createNull();
+
+	gotoIfError3(clean, Buffer_createUninitializedBytes(Buffer_length(buf), Platform_instance->alloc, &dst, e_rr));
+
+	const U64 iters = 16;
+	const Ns then = Time_now();
+
+	for(U64 i = 0; i < iters; ++i)
+		Buffer_memcpy(dst, buf);
+
+	const Ns now = Time_now();
+	const U64 total = Buffer_length(buf) * iters;
+
+	//Consume a byte of the copy so the compiler can't elide the memcpys under LTO/-O2.
+	const U8 sink = dst.ptr[Buffer_length(dst) - 1];
+
+	Log_debugLnx(
+		"Profile memcpy: %"PRIu64" bytes (%"PRIu64" x %"PRIu64") in %fs (%f GB/s). (sink 0x%02x)",
+		total, iters, Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64) total / (F64)(now - then),
+		sink
+	);
+
+clean:
+	Buffer_free(&dst, Platform_instance->alloc);
+	return s_uccess;
+}
+
+Bool CLI_profileMemcpy(const ParsedArgs *args) {
+	if(!args) return false;
+	return CLI_profileData(args, CLI_profileMemcpyImpl);
+}
+
+Bool CLI_profileMemsetImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
+
+	(void) args;
+	(void) e_rr;
+
+	const U64 iters = 16;
+	const Ns then = Time_now();
+
+	for(U64 i = 0; i < iters; ++i)
+		Buffer_unsetAllBits(buf, NULL);
+
+	const Ns now = Time_now();
+	const U64 total = Buffer_length(buf) * iters;
+
+	//Consume a byte so the compiler can't elide the memsets.
+	const U8 sink = buf.ptr[Buffer_length(buf) - 1];
+
+	Log_debugLnx(
+		"Profile memset: %"PRIu64" bytes (%"PRIu64" x %"PRIu64") in %fs (%f GB/s). (sink 0x%02x)",
+		total, iters, Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64) total / (F64)(now - then),
+		sink
+	);
+
+	return true;
+}
+
+Bool CLI_profileMemset(const ParsedArgs *args) {
+	if(!args) return false;
+	return CLI_profileData(args, CLI_profileMemsetImpl);
+}
+
+//128-bit float SIMD throughput (add / mul / fma).
+
+Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
+
+	(void) args;
+	(void) buf;
+	(void) e_rr;
+
+	const U64 iters = (U64) 1 << 28;        //~268M ops per test
+	const F32x4 v = F32x4_create4(1.0000001f, 1.0000002f, 1.0000003f, 1.0000004f);
+
+	F32x4 acc = F32x4_zero();
+	Ns then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		acc = F32x4_add(acc, v);
+	Ns now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f add: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
+	);
+
+	acc = v;
+	then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		acc = F32x4_mul(acc, v);
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f mul: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
+	);
+
+	acc = F32x4_zero();
+	then = Time_now();
+	for(U64 i = 0; i < iters; ++i)
+		acc = F32x4_fma(v, v, acc);
+	now = Time_now();
+	Log_debugLnx(
+		"Profile vec4f fma: %"PRIu64" ops in %fs (%f Gop/s). (sink %f)",
+		iters, (F64)(now - then) / SECOND, (F64) iters / (F64)(now - then), (F64) F32x4_x(acc)
+	);
+
+	return true;
+}
+
+Bool CLI_profileVec(const ParsedArgs *args) {
+	if(!args) return false;
+	return CLI_profileData(args, CLI_profileVecImpl);
 }

@@ -276,11 +276,8 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 				//Worst case it just results in multiple threads checking cpu info and then writing the same value anyways.
 				//This is better than protecting hasF16C with a SpinLock,
 				// which would be slower for the common case than just reading a U8.
-				if (hasF16C < 0) {
-					U32 cpuInfo[4];
-					Platform_getCPUId(1, cpuInfo);
-					hasF16C = (cpuInfo[2] >> 29) & 1;
-				}
+				if (hasF16C < 0)        //Cached after first use; detection centralized in Platform_detectCPUFeatures
+					hasF16C = (Platform_detectCPUFeatures() & ECPUFeatures_F16C) != 0;
 
 				const EFloatType targ = type == EFloatType_F16 ? conversionType : type;
 

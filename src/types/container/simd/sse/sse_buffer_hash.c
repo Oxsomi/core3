@@ -72,11 +72,8 @@ void Buffer_sha256(const Buffer buf, U32 output[8]) {
 
 	//Fallback if the hardware doesn't support SHA extension
 
-	if(hasSHA256 < 0) {
-		U32 cpuInfo1[4];
-		Platform_getCPUId(7, cpuInfo1);        //TODO: Find a cleaner way
-		hasSHA256 = (cpuInfo1[1] >> 29) & 1;
-	}
+	if(hasSHA256 < 0)        //Cached after first use; detection is centralized in Platform_detectCPUFeatures
+		hasSHA256 = (Platform_detectCPUFeatures() & ECPUFeatures_HwSHA256) != 0;
 
 	if(!hasSHA256) {
 		Buffer_sha256Fallback(buf, output);

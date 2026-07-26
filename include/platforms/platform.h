@@ -57,7 +57,7 @@ typedef enum ECPUVendor {
 	ECPUVendor_Arm,
 	ECPUVendor_Qualcomm,
 	ECPUVendor_Nvidia,
-	ECPUVendor_Ampere,
+	ECPUVendor_Ampere,          //Ampere Computing (ARM64 server CPUs: Altra/AmpereOne)
 	ECPUVendor_Samsung,
 	ECPUVendor_Count
 } ECPUVendor;

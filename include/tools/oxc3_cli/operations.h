@@ -209,6 +209,7 @@ typedef enum EOperation {
 	EOperation_InfoLicense,
 	EOperation_InfoAbout,
 	EOperation_InfoCPU,
+	EOperation_InfoAll,
 
 	EOperation_ProfileCast,
 	EOperation_ProfileRNG,
@@ -218,6 +219,9 @@ typedef enum EOperation {
 	EOperation_ProfileMD5,
 	EOperation_ProfileAES256,
 	EOperation_ProfileAES128,
+	EOperation_ProfileMemcpy,
+	EOperation_ProfileMemset,
+	EOperation_ProfileVec,
 
 	EOperation_HelpCategories,
 	EOperation_HelpOperations,

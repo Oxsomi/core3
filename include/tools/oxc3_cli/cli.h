@@ -71,6 +71,9 @@ Bool CLI_profileSHA256(const ParsedArgs *args);
 Bool CLI_profileMD5(const ParsedArgs *args);
 Bool CLI_profileAES256(const ParsedArgs *args);
 Bool CLI_profileAES128(const ParsedArgs *args);
+Bool CLI_profileMemcpy(const ParsedArgs *args);
+Bool CLI_profileMemset(const ParsedArgs *args);
+Bool CLI_profileVec(const ParsedArgs *args);
 
 Bool CLI_helpOperation(const ParsedArgs *args);
 
@@ -78,6 +81,7 @@ Bool CLI_inspectHeader(const ParsedArgs *args);
 Bool CLI_inspectData(const ParsedArgs *args);
 
 Bool CLI_cpuDevices(const ParsedArgs *args);
+Bool CLI_infoAll(const ParsedArgs *args);        //CPU + graphics + audio in one dump (support diagnostics)
 
 U64 CLI_parseGraphicsAPIs(const ParsedArgs *args);        //U64_MAX indicates invalid, U32_MAX means all, otherwise bitmask
 

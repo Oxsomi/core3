@@ -102,3 +102,28 @@ Bool CLI_cpuDevices(const ParsedArgs *args) {
 
 	return true;
 }
+
+//One-shot diagnostic dump: CPU + graphics devices + audio devices.
+//Handy for "please run OxC3 info all and paste the output" support requests.
+//CLI_graphicsDevices is a no-op stub when graphics is compiled out, so no #ifdef here.
+
+Bool CLI_infoAll(const ParsedArgs *args) {
+
+	if(!args)
+		return false;
+
+	//Force the verbose device print so a pasted dump includes each GPU's full capability/feature list.
+
+	ParsedArgs verbose = *args;
+	verbose.flags |= EOperationFlags_Verbose;
+
+	const Bool cpu = CLI_cpuDevices(args);
+
+	Log_debugLnx("");
+	const Bool gpu = CLI_graphicsDevices(&verbose);
+
+	Log_debugLnx("");
+	const Bool audio = CLI_audioDevices(args);
+
+	return cpu && gpu && audio;
+}

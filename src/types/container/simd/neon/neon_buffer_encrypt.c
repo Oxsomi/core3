@@ -21,6 +21,7 @@
 //types/container/simd/neon/neon_buffer_encrypt.c
 
 #include "types/base/types.h"
+#include "types/base/platform_types.h"
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
@@ -38,15 +39,6 @@
 #endif
 
 void AES_checkSupport(I8 *hasAES256) {
-	if(*hasAES256 < 0) {
-		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-			*hasAES256 = !!IsProcessorFeaturePresent(PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE);
-		#elif _PLATFORM_TYPE == PLATFORM_IOS ||  _PLATFORM_TYPE == PLATFORM_OSX
-			*hasAES256 = 1;        //Apple says they support this always
-		#elif defined(HWCAP_AES)
-			*hasAES256 = getauxval(AT_HWCAP) & HWCAP_AES;
-		#else
-			*hasAES256 = 0;
-		#endif
-	}
+	if(*hasAES256 < 0)        //Cached after first use; detection centralized in Platform_detectCPUFeatures
+		*hasAES256 = (Platform_detectCPUFeatures() & ECPUFeatures_HwAES) != 0;
 }
