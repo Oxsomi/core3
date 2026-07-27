@@ -232,13 +232,20 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 			&IID_ID3D12InfoQueue, (void**) &deviceExt->infoQueue0
 		))) {
 
-			gotoIfError3(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
-				deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_CORRUPTION, true
-			), e_rr));
+			//Only break into the debugger on validation errors when one is actually attached.
+			//The D3D12 debug layer implements "break on severity" via a RaiseException;
+			// with no debugger present that becomes an unhandled second-chance exception and hard-crashes the process.
 
-			gotoIfError3(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
-				deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_ERROR, true
-			), e_rr));
+			if(IsDebuggerPresent()) {
+
+				gotoIfError3(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
+					deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_CORRUPTION, true
+				), e_rr));
+
+				gotoIfError3(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
+					deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_ERROR, true
+				), e_rr));
+			}
 
 			D3D12_MESSAGE_ID hide[] = {
 				D3D12_MESSAGE_ID_CREATEDEVICE_DEBUG_LAYER_STARTUP_OPTIONS,

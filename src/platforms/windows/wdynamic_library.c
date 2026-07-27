@@ -78,6 +78,37 @@ clean:
 	return s_uccess;
 }
 
+Bool DynamicLibrary_loadSystem(CharString str, DynamicLibrary *dynamicLib, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(!dynamicLib)
+		retError(clean, Error_invalidState(0, "DynamicLibrary_loadSystem()::dynamicLib is required"));
+
+	if(*dynamicLib)
+		retError(clean, Error_invalidParameter(1, 0, "DynamicLibrary_loadSystem()::dynamicLib was already set, indicates memleak"));
+
+	if(!CharString_isNullTerminated(str))
+		retError(clean, Error_invalidParameter(0, 0, "DynamicLibrary_loadSystem()::str must be null-terminated"));
+
+	//Only allow a bare library name so this can't be abused to load an arbitrary DLL from a caller-chosen path;
+	//reject any path separator, leaving resolution to the OS's standard (system) search path.
+	for(U64 i = 0; i < CharString_length(str); ++i)
+		if(str.ptr[i] == '/' || str.ptr[i] == '\\')
+			retError(clean, Error_invalidParameter(
+				0, 0, "DynamicLibrary_loadSystem()::str must be a bare library name (no path separators)"
+			));
+
+	//A bare name lets Windows resolve the DLL via its standard search path (System32, PATH, ...).
+	*dynamicLib = (void*)LoadLibraryA(str.ptr);
+
+	if(!*dynamicLib)
+		retError(clean, Error_platformError(0, GetLastError(), "DynamicLibrary_loadSystem() LoadLibrary failed"));
+
+clean:
+	return s_uccess;
+}
+
 Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr) {
 
 	Bool s_uccess = true;

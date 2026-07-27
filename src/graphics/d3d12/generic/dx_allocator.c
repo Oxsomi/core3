@@ -40,6 +40,16 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 	if(!isGpu || hasReBAR)            //Force shared allocations if not dedicated or if ReBAR is available
 		*cpuSided = true;
 
+	//A heap's own alignment must be one of the legal D3D12 values:
+	//- 64KiB (D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT)
+	//- 4MiB (MSAA)
+	//NOT the resource's own alignment.
+	//Tight alignment (D3D12_TIGHT_ALIGNMENT) can hand us small resource alignments (e.g. 128).
+
+	U64 heapAlignment =
+		alignment > D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT ?
+		D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+
 	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
 		.Properties = (D3D12_HEAP_PROPERTIES) {
 			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_CUSTOM : D3D12_HEAP_TYPE_DEFAULT),
@@ -47,7 +57,7 @@ D3D12_HEAP_DESC getDxHeapDesc(GraphicsDevice *device, Bool *cpuSided, U64 alignm
 			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE
 		},
 		.Flags = D3D12_HEAP_FLAG_CREATE_NOT_ZEROED,        //Equal to vulkan behavior, clear manually
-		.Alignment = alignment
+		.Alignment = heapAlignment
 	};
 
 	if (!(device->info.capabilities.featuresExt & EDxGraphicsFeatures_AllowCombineHeaps))

@@ -179,7 +179,7 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
 				SHFile_free(&tmp[i], alloc);
 
-			if(s_uccess)
+			if(!err.genericError)        //Branch failures populate err (via e_rr); only break to write on success
 				break;
 
 			goto clean;
@@ -253,7 +253,7 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
 				CAFile_free(&tmp[i], alloc);
 
-			if(s_uccess)
+			if(!err.genericError)        //Branch failures populate err (via e_rr); only break to write on success
 				break;
 
 			goto clean;
@@ -327,7 +327,7 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 			for(U8 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
 				DLFile_free(&tmp[i], alloc);
 
-			if(s_uccess)
+			if(!err.genericError)        //Branch failures populate err (via e_rr); only break to write on success
 				break;
 
 			goto clean;
@@ -335,6 +335,7 @@ Bool CLI_fileCombine(const ParsedArgs *args) {
 
 		default:
 			Log_errorLnx("CLI_fileCombine() doesn't support the specified format");
+			s_uccess = false;
 			goto clean;
 	}
 
@@ -354,5 +355,5 @@ clean:
 		Buffer_free(&buf[i], alloc);
 
 	Error_print(alloc, &err, ELogLevel_Error, ELogOptions_NewLine);
-	return false;
+	return s_uccess && !err.genericError;
 }

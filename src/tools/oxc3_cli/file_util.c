@@ -36,6 +36,9 @@
 #include "formats/oiCA/ca_lookup.h"
 #include "formats/oiCA/ca_props.h"
 #include "formats/oiCA/ca_edit.h"
+#include "formats/oiCA/ca_headers.h"
+#include "formats/oiDL/dl_file.h"
+#include "formats/oiDL/dl_headers.h"
 #include "types/math/vec4i.h"
 #include "types/base/algorithm.h"
 #include "types/base/string_read.h"
@@ -100,10 +103,11 @@ void CLI_ensureVirtualLoaded(const CharString *path) {
 			break;
 		}
 
-	//No real section component (the root listing) -> nothing to load
+	//The virtual root ("//", "//.", "//./") has no specific section. Rather than skip loading, load EVERY
+	//section so the root listing (file tree //) can enumerate them all. Passing the root path to
+	//File_loadVirtual matches all sections since every section path starts with the (empty) root.
 
-	if(slash <= 2 || (slash == 3 && path->ptr[2] == '.'))
-		return;
+	const Bool isRoot = slash <= 2 || (slash == 3 && path->ptr[2] == '.');
 
 	//The loaded section (and the memory stream backing it) outlives this call and stays in Platform_instance, so the
 	//RefPtrType its RefPtr points at must outlive it too. A local RefPtrType would dangle -> keep it program-lifetime.
@@ -116,10 +120,15 @@ void CLI_ensureVirtualLoaded(const CharString *path) {
 		memStreamTypeInit = true;
 	}
 
-	const CharString section = CharString_createRefSizedConst(path->ptr, slash, false);
+	const CharString section =
+		isRoot ? CharString_createRefCStrConst("//") :
+		CharString_createRefSizedConst(path->ptr, slash, false);
+
 	Error err = Error_none();
 
-	if(!File_isVirtualLoaded(&section, alloc, NULL))
+	//File_loadVirtual is idempotent (already-loaded sections are skipped), so at root we just load unconditionally.
+
+	if(isRoot || !File_isVirtualLoaded(&section, alloc, NULL))
 		File_loadVirtual(&section, &memStreamType, NULL, NULL, alloc, &err);        //Best effort; the op reports real errors
 
 	if(err.genericError)
@@ -731,6 +740,278 @@ clean:
 	RefPtr_dec(&sb);
 	FileInfo_free(&infoA, alloc);
 	FileInfo_free(&infoB, alloc);
+	return s_uccess;
+}
+
+//file diff: structural comparison of two archives (oiCA or oiDL), reporting added / removed / modified entries.
+
+//Read the first U32 (magic number) of a file, to detect the archive format.
+
+static Bool CLI_peekMagic(
+	const CharString *path,
+	const RefPtrType *fileHandleType,
+	const RefPtrType *streamType,
+	const Allocator *alloc,
+	U32 *magic,
+	Error *e_rr
+) {
+	Bool s_uccess = true;
+	StreamRef *s = NULL;
+	StreamCursor c = (StreamCursor) { 0 };
+
+	*magic = 0;
+
+	gotoIfError3(clean, File_openStream(path, 1 * SECOND, EFileOpenType_Read, false, fileHandleType, streamType, &s, e_rr));
+	gotoIfError3(clean, StreamCursor_create(s, CLI_STREAM_CACHE, false, alloc, &c, e_rr));
+	gotoIfError3(clean, StreamCursor_read(&c, Buffer_createRef(magic, sizeof(U32)), 0, 0, sizeof(U32), true, alloc, e_rr));
+
+clean:
+	StreamCursor_close(&c, alloc);
+	RefPtr_dec(&s);
+	return s_uccess;
+}
+
+//Read an oiCA entry's bytes (loaded buffer or stream-backed) into out as an owned copy.
+
+static Bool CLI_caReadEntry(const CAFile *ca, CAHandle h, const Allocator *alloc, Buffer *out, Error *e_rr) {
+
+	Bool s_uccess = true;
+	StreamRef *ds = NULL;
+	StreamCursor dc = (StreamCursor) { 0 };
+
+	Bool valid = false;
+	const Buffer data = CAFile_getDataConst(ca, h, &valid);
+
+	if(valid) {
+		gotoIfError3(clean, Buffer_createCopy(data, alloc, out, e_rr));
+		goto clean;
+	}
+
+	U64 streamOff = 0;
+	ds = CAFile_getDataStream(ca, h, &streamOff);
+
+	if(!ds || streamOff == U64_MAX)
+		retError(clean, Error_invalidState(0, "file diff: couldn't read archive entry data."));
+
+	const U64 size = CAFile_fileSize(ca, h);
+	gotoIfError3(clean, Buffer_createUninitializedBytes(size, alloc, out, e_rr));
+	gotoIfError3(clean, StreamCursor_create(ds, CLI_STREAM_CACHE, false, alloc, &dc, e_rr));
+	gotoIfError3(clean, StreamCursor_read(&dc, *out, streamOff, 0, size, true, alloc, e_rr));
+
+clean:
+	StreamCursor_close(&dc, alloc);
+	RefPtr_dec(&ds);
+	return s_uccess;
+}
+
+typedef struct CLIDiffState {
+	const CAFile *a, *b;
+	U64 added, removed, modified, typeChanged, unchanged;
+} CLIDiffState;
+
+//A -> B: classify each entry of A as removed / type-changed / modified / unchanged.
+
+static Bool CLI_diffEntryAB(const FileInfo *info, void *userData, const Allocator *alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CLIDiffState *st = (CLIDiffState*) userData;
+	FileInfo infoB = (FileInfo) { 0 };
+	Buffer da = Buffer_createNull(), db = Buffer_createNull();
+
+	const CAHandle hb = CAFile_resolve(st->b, info->path);
+
+	if(hb == CAHandle_Invalid) {
+		Log_debugLnx("  - %.*s", (int) CharString_length(info->path), info->path.ptr);
+		++st->removed;
+		goto clean;
+	}
+
+	gotoIfError3(clean, CAFile_getInfo(st->b, hb, &infoB, alloc, e_rr));
+
+	if(infoB.type != info->type) {
+		Log_debugLnx("  ! %.*s (type changed)", (int) CharString_length(info->path), info->path.ptr);
+		++st->typeChanged;
+		goto clean;
+	}
+
+	if(info->type == EFileType_Folder)        //Folders carry no content to compare
+		goto clean;
+
+	if(info->fileSize != infoB.fileSize) {
+		Log_debugLnx(
+			"  ~ %.*s (%"PRIu64" -> %"PRIu64" bytes)",
+			(int) CharString_length(info->path), info->path.ptr, info->fileSize, infoB.fileSize
+		);
+		++st->modified;
+		goto clean;
+	}
+
+	//Equal size: compare content byte-for-byte.
+
+	const CAHandle ha = CAFile_resolveFile(st->a, info->path);
+	gotoIfError3(clean, CLI_caReadEntry(st->a, ha, alloc, &da, e_rr));
+	gotoIfError3(clean, CLI_caReadEntry(st->b, hb, alloc, &db, e_rr));
+
+	if(!Buffer_eq(da, db)) {
+		Log_debugLnx(
+			"  ~ %.*s (%"PRIu64" bytes, content differs)",
+			(int) CharString_length(info->path), info->path.ptr, info->fileSize
+		);
+		++st->modified;
+	}
+
+	else ++st->unchanged;
+
+clean:
+	FileInfo_free(&infoB, alloc);
+	Buffer_free(&da, alloc);
+	Buffer_free(&db, alloc);
+	return s_uccess;
+}
+
+//B -> A: report entries present only in B as added.
+
+static Bool CLI_diffEntryBA(const FileInfo *info, void *userData, const Allocator *alloc, Error *e_rr) {
+
+	(void) alloc; (void) e_rr;
+	CLIDiffState *st = (CLIDiffState*) userData;
+
+	if(CAFile_resolve(st->a, info->path) == CAHandle_Invalid) {
+		Log_debugLnx("  + %.*s", (int) CharString_length(info->path), info->path.ptr);
+		++st->added;
+	}
+
+	return true;
+}
+
+Bool CLI_fileDiff(const ParsedArgs *args) {
+
+	if(!args) return false;
+
+	const Allocator *alloc = Platform_instance->alloc;
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+	const RefPtrType streamType = FileStream_makeType(alloc);
+
+	CharString a = CharString_createNull(), b = CharString_createNull();
+
+	if(
+		!CLI_fileArg(args, EOperationHasParameter_InputShift, &a) ||
+		!CLI_fileArg(args, EOperationHasParameter_Input2Shift, &b)
+	) {
+		Log_errorLnx("file diff requires -input <a> and -input2 <b> (two oiCA or two oiDL archives).");
+		return false;
+	}
+
+	StreamRef *sa = NULL, *sb = NULL;
+	CAFile caA = (CAFile) { 0 }, caB = (CAFile) { 0 };
+	DLFile dlA = (DLFile) { 0 }, dlB = (DLFile) { 0 };
+	Bool s_uccess = true;
+	Error err = Error_none(), *e_rr = &err;
+
+	//Detect format from the magic number. Both inputs must be the same archive type.
+
+	U32 magicA = 0, magicB = 0;
+	gotoIfError3(clean, CLI_peekMagic(&a, &fileHandleType, &streamType, alloc, &magicA, e_rr));
+	gotoIfError3(clean, CLI_peekMagic(&b, &fileHandleType, &streamType, alloc, &magicB, e_rr));
+
+	if(magicA != magicB)
+		retError(clean, Error_invalidParameter(
+			0, 0, "file diff: inputs are different formats (both must be oiCA or both oiDL)."
+		));
+
+	gotoIfError3(clean, File_openStream(&a, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sa, e_rr));
+	gotoIfError3(clean, File_openStream(&b, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &sb, e_rr));
+
+	if(magicA == CAHeader_MAGIC) {
+
+		gotoIfError3(clean, CAFile_read(sa, NULL, 0, NULL, alloc, &caA, e_rr));
+		gotoIfError3(clean, CAFile_read(sb, NULL, 0, NULL, alloc, &caB, e_rr));
+
+		CLIDiffState st = (CLIDiffState) { .a = &caA, .b = &caB };
+
+		Log_debugLnx(
+			"Diff %.*s -> %.*s (oiCA):",
+			(int) CharString_length(a), a.ptr, (int) CharString_length(b), b.ptr
+		);
+
+		gotoIfError3(clean, CAFile_foreach(&caA, CAHandle_Root, CLI_diffEntryAB, &st, true, alloc, e_rr));
+		gotoIfError3(clean, CAFile_foreach(&caB, CAHandle_Root, CLI_diffEntryBA, &st, true, alloc, e_rr));
+
+		Log_debugLnx(
+			"%"PRIu64" added, %"PRIu64" removed, %"PRIu64" modified, %"PRIu64" type-changed, %"PRIu64" unchanged.",
+			st.added, st.removed, st.modified, st.typeChanged, st.unchanged
+		);
+	}
+
+	else if(magicA == DLHeader_MAGIC) {
+
+		U64 offA = 0, offB = 0;
+		gotoIfError3(clean, DLFile_read(sa, &offA, NULL, I32x4_zero(), false, false, alloc, NULL, &dlA, e_rr));
+		gotoIfError3(clean, DLFile_read(sb, &offB, NULL, I32x4_zero(), false, false, alloc, NULL, &dlB, e_rr));
+
+		const U64 na = dlA.entryStreams.length, nb = dlB.entryStreams.length;
+		const U64 common = U64_min(na, nb);
+		U64 modified = 0, unchanged = 0;
+
+		Log_debugLnx(
+			"Diff %.*s -> %.*s (oiDL, %"PRIu64" vs %"PRIu64" entries):",
+			(int) CharString_length(a), a.ptr, (int) CharString_length(b), b.ptr, na, nb
+		);
+
+		for(U64 i = 0; i < common; ++i) {
+
+			const U64 sizeA = DLFile_entrySize(&dlA, i), sizeB = DLFile_entrySize(&dlB, i);
+
+			if(sizeA != sizeB) {
+				Log_debugLnx("  ~ entry[%"PRIu64"] (%"PRIu64" -> %"PRIu64" bytes)", i, sizeA, sizeB);
+				++modified;
+				continue;
+			}
+
+			//Equal size: compare content when both entries are fully loaded (small entries are).
+
+			if(!DLFile_isFullyLoaded(&dlA, i) || !DLFile_isFullyLoaded(&dlB, i)) {
+				++unchanged;        //Can't cheaply compare stream-backed entries of equal size
+				continue;
+			}
+
+			Bool eq =
+				dlA.settings.dataType == EDLDataType_String ?
+				CharString_equalsStringSensitive(&dlA.entryStrings.ptr[i], &dlB.entryStrings.ptr[i]) :
+				Buffer_eq(dlA.entryBuffers.ptr[i], dlB.entryBuffers.ptr[i]);
+
+			if(!eq) {
+				Log_debugLnx("  ~ entry[%"PRIu64"] (%"PRIu64" bytes, content differs)", i, sizeA);
+				++modified;
+			}
+
+			else ++unchanged;
+		}
+
+		if(nb > na)
+			Log_debugLnx("  + entries [%"PRIu64"..%"PRIu64"] only in second (added)", na, nb - 1);
+
+		if(na > nb)
+			Log_debugLnx("  - entries [%"PRIu64"..%"PRIu64"] only in first (removed)", nb, na - 1);
+
+		Log_debugLnx(
+			"%"PRIu64" added, %"PRIu64" removed, %"PRIu64" modified, %"PRIu64" unchanged.",
+			nb > na ? nb - na : 0, na > nb ? na - nb : 0, modified, unchanged
+		);
+	}
+
+	else retError(clean, Error_invalidParameter(0, 0, "file diff: inputs aren't oiCA or oiDL archives."));
+
+clean:
+	if(err.genericError)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	CAFile_free(&caA, alloc);
+	CAFile_free(&caB, alloc);
+	DLFile_free(&dlA, alloc);
+	DLFile_free(&dlB, alloc);
+	RefPtr_dec(&sa);
+	RefPtr_dec(&sb);
 	return s_uccess;
 }
 

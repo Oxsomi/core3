@@ -49,7 +49,8 @@ Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR
 	};
 
 	if (!instanceExt->createSurfaceExt)
-		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateAndroidSurfaceKHR");
+		instanceExt->createSurfaceExt =
+			(void*) instanceExt->getInstanceProcAddr(instanceExt->instance, "vkCreateAndroidSurfaceKHR");
 
 	if (!instanceExt->createSurfaceExt)
 		retError(clean, Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!"));

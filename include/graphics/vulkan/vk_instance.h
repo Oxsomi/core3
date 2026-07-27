@@ -67,6 +67,12 @@ typedef struct VkGraphicsInstance {
 	VkInstance instance;
 	VkDebugReportCallbackEXT debugReportCallback;
 
+	//The Vulkan loader is loaded dynamically (not statically linked) so we don't depend on an arch-specific
+	//vulkan-1.lib. vulkanLib is the loaded loader; every other entry point is resolved through these two.
+	void *vulkanLib;
+	PFN_vkGetInstanceProcAddr getInstanceProcAddr;
+	PFN_vkGetDeviceProcAddr getDeviceProcAddr;
+
 	PFN_vkCreateInstance createInstance;
 	PFN_vkEnumerateInstanceLayerProperties enumerateInstanceLayerProperties;
 	PFN_vkEnumerateInstanceExtensionProperties enumerateInstanceExtensionProperties;

@@ -60,6 +60,11 @@ static inline Bool FileStream_write(OxStream *stream, U64 offset, U64 length, Bu
 
 	gotoIfError3(clean, FileHandleRef_write(((FileStream*)stream)->handle, offset, length, &buf, e_rr));
 
+	const U64 end = offset + (length ? length : Buffer_length(buf));
+
+	if(end > stream->size)
+		stream->size = end;
+
 clean:
 	return s_uccess;
 }

@@ -67,13 +67,13 @@ TListImpl(VkDescriptorTableRange);
 
 #define getVkFunctionDevice(label, function, result) {                                          \
 																								\
-	PFN_vkVoidFunction v = vkGetDeviceProcAddr(deviceExt->device, #function);                   \
+	PFN_vkVoidFunction v = instanceExt->getDeviceProcAddr(deviceExt->device, #function);        \
 																								\
 	if(!v)                                                                                      \
 		retError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"));          \
 																								\
 	*(void**)&result = (void*) v;                                                               \
-}
+} (void) 0
 
 Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	const GraphicsInstance *instance,
@@ -513,112 +513,112 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	//This is not done statically to prevent hard to track down issues if a function is missing.
 	//Which can happen if an old vulkan runtime is present.
 
-	getVkFunctionDevice(clean, vkAllocateMemory, deviceExt->allocateMemory)
-	getVkFunctionDevice(clean, vkMapMemory, deviceExt->mapMemory)
-	getVkFunctionDevice(clean, vkFreeMemory, deviceExt->freeMemory)
-	getVkFunctionDevice(clean, vkCmdClearColorImage, deviceExt->cmdClearColorImage)
-	getVkFunctionDevice(clean, vkCmdCopyImage, deviceExt->cmdCopyImage)
-	getVkFunctionDevice(clean, vkCmdSetViewport, deviceExt->cmdSetViewport)
-	getVkFunctionDevice(clean, vkCmdSetScissor, deviceExt->cmdSetScissor)
-	getVkFunctionDevice(clean, vkCmdSetBlendConstants, deviceExt->cmdSetBlendConstants)
-	getVkFunctionDevice(clean, vkCmdSetStencilReference, deviceExt->cmdSetStencilReference)
-	getVkFunctionDevice(clean, vkCmdBindPipeline, deviceExt->cmdBindPipeline)
-	getVkFunctionDevice(clean, vkCmdBindIndexBuffer, deviceExt->cmdBindIndexBuffer)
-	getVkFunctionDevice(clean, vkCmdBindVertexBuffers, deviceExt->cmdBindVertexBuffers)
-	getVkFunctionDevice(clean, vkCmdDrawIndexed, deviceExt->cmdDrawIndexed)
-	getVkFunctionDevice(clean, vkCmdDraw, deviceExt->cmdDraw)
-	getVkFunctionDevice(clean, vkCmdDrawIndexedIndirect, deviceExt->cmdDrawIndexedIndirect)
-	getVkFunctionDevice(clean, vkCmdDrawIndirect, deviceExt->cmdDrawIndirect)
-	getVkFunctionDevice(clean, vkCmdDispatch, deviceExt->cmdDispatch)
-	getVkFunctionDevice(clean, vkCmdDispatchIndirect, deviceExt->cmdDispatchIndirect)
-	getVkFunctionDevice(clean, vkCreateComputePipelines, deviceExt->createComputePipelines)
-	getVkFunctionDevice(clean, vkDestroyPipeline, deviceExt->destroyPipeline)
-	getVkFunctionDevice(clean, vkDestroyShaderModule, deviceExt->destroyShaderModule)
-	getVkFunctionDevice(clean, vkDestroyBuffer, deviceExt->destroyBuffer)
-	getVkFunctionDevice(clean, vkCreateBuffer, deviceExt->createBuffer)
-	getVkFunctionDevice(clean, vkGetBufferMemoryRequirements2, deviceExt->getBufferMemoryRequirements2)
-	getVkFunctionDevice(clean, vkBindBufferMemory, deviceExt->bindBufferMemory)
-	getVkFunctionDevice(clean, vkUpdateDescriptorSets, deviceExt->updateDescriptorSets)
-	getVkFunctionDevice(clean, vkFlushMappedMemoryRanges, deviceExt->flushMappedMemoryRanges)
-	getVkFunctionDevice(clean, vkCmdCopyBuffer, deviceExt->cmdCopyBuffer)
-	getVkFunctionDevice(clean, vkCmdCopyBufferToImage, deviceExt->cmdCopyBufferToImage)
-	getVkFunctionDevice(clean, vkGetDeviceQueue, deviceExt->getDeviceQueue)
-	getVkFunctionDevice(clean, vkCreateSemaphore, deviceExt->createSemaphore)
-	getVkFunctionDevice(clean, vkCreateDescriptorSetLayout, deviceExt->createDescriptorSetLayout)
-	getVkFunctionDevice(clean, vkCreatePipelineLayout, deviceExt->createPipelineLayout)
-	getVkFunctionDevice(clean, vkCreateDescriptorPool, deviceExt->createDescriptorPool)
-	getVkFunctionDevice(clean, vkAllocateDescriptorSets, deviceExt->allocateDescriptorSets)
-	getVkFunctionDevice(clean, vkFreeCommandBuffers, deviceExt->freeCommandBuffers)
-	getVkFunctionDevice(clean, vkDestroyCommandPool, deviceExt->destroyCommandPool)
-	getVkFunctionDevice(clean, vkDestroySemaphore, deviceExt->destroySemaphore)
-	getVkFunctionDevice(clean, vkDestroyDescriptorSetLayout, deviceExt->destroyDescriptorSetLayout)
-	getVkFunctionDevice(clean, vkDestroyDescriptorPool, deviceExt->destroyDescriptorPool)
-	getVkFunctionDevice(clean, vkDestroyPipelineLayout, deviceExt->destroyPipelineLayout)
-	getVkFunctionDevice(clean, vkDeviceWaitIdle, deviceExt->deviceWaitIdle)
-	getVkFunctionDevice(clean, vkCreateCommandPool, deviceExt->createCommandPool)
-	getVkFunctionDevice(clean, vkResetCommandPool, deviceExt->resetCommandPool)
-	getVkFunctionDevice(clean, vkAllocateCommandBuffers, deviceExt->allocateCommandBuffers)
-	getVkFunctionDevice(clean, vkBeginCommandBuffer, deviceExt->beginCommandBuffer)
-	getVkFunctionDevice(clean, vkCmdBindDescriptorSets, deviceExt->cmdBindDescriptorSets)
-	getVkFunctionDevice(clean, vkCmdPushDescriptorSetKHR, deviceExt->cmdPushDescriptorSet)
-	getVkFunctionDevice(clean, vkEndCommandBuffer, deviceExt->endCommandBuffer)
-	getVkFunctionDevice(clean, vkQueueSubmit, deviceExt->queueSubmit)
-	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR)
-	getVkFunctionDevice(clean, vkCreateGraphicsPipelines, deviceExt->createGraphicsPipelines)
-	getVkFunctionDevice(clean, vkDestroyImageView, deviceExt->destroyImageView)
-	getVkFunctionDevice(clean, vkCreateImage, deviceExt->createImage)
-	getVkFunctionDevice(clean, vkGetImageMemoryRequirements2, deviceExt->getImageMemoryRequirements2)
-	getVkFunctionDevice(clean, vkBindImageMemory, deviceExt->bindImageMemory)
-	getVkFunctionDevice(clean, vkCreateImageView, deviceExt->createImageView)
-	getVkFunctionDevice(clean, vkDestroySampler, deviceExt->destroySampler)
-	getVkFunctionDevice(clean, vkCreateSampler, deviceExt->createSampler)
-	getVkFunctionDevice(clean, vkCreateShaderModule, deviceExt->createShaderModule)
-	getVkFunctionDevice(clean, vkDestroyImage, deviceExt->destroyImage)
-	getVkFunctionDevice(clean, vkCreateFence, deviceExt->createFence)
-	getVkFunctionDevice(clean, vkWaitForFences, deviceExt->waitForFences)
-	getVkFunctionDevice(clean, vkResetFences, deviceExt->resetFences)
-	getVkFunctionDevice(clean, vkDestroyFence, deviceExt->destroyFence)
-	getVkFunctionDevice(clean, vkFreeDescriptorSets, deviceExt->freeDescriptorSets)
+	getVkFunctionDevice(clean, vkAllocateMemory, deviceExt->allocateMemory);
+	getVkFunctionDevice(clean, vkMapMemory, deviceExt->mapMemory);
+	getVkFunctionDevice(clean, vkFreeMemory, deviceExt->freeMemory);
+	getVkFunctionDevice(clean, vkCmdClearColorImage, deviceExt->cmdClearColorImage);
+	getVkFunctionDevice(clean, vkCmdCopyImage, deviceExt->cmdCopyImage);
+	getVkFunctionDevice(clean, vkCmdSetViewport, deviceExt->cmdSetViewport);
+	getVkFunctionDevice(clean, vkCmdSetScissor, deviceExt->cmdSetScissor);
+	getVkFunctionDevice(clean, vkCmdSetBlendConstants, deviceExt->cmdSetBlendConstants);
+	getVkFunctionDevice(clean, vkCmdSetStencilReference, deviceExt->cmdSetStencilReference);
+	getVkFunctionDevice(clean, vkCmdBindPipeline, deviceExt->cmdBindPipeline);
+	getVkFunctionDevice(clean, vkCmdBindIndexBuffer, deviceExt->cmdBindIndexBuffer);
+	getVkFunctionDevice(clean, vkCmdBindVertexBuffers, deviceExt->cmdBindVertexBuffers);
+	getVkFunctionDevice(clean, vkCmdDrawIndexed, deviceExt->cmdDrawIndexed);
+	getVkFunctionDevice(clean, vkCmdDraw, deviceExt->cmdDraw);
+	getVkFunctionDevice(clean, vkCmdDrawIndexedIndirect, deviceExt->cmdDrawIndexedIndirect);
+	getVkFunctionDevice(clean, vkCmdDrawIndirect, deviceExt->cmdDrawIndirect);
+	getVkFunctionDevice(clean, vkCmdDispatch, deviceExt->cmdDispatch);
+	getVkFunctionDevice(clean, vkCmdDispatchIndirect, deviceExt->cmdDispatchIndirect);
+	getVkFunctionDevice(clean, vkCreateComputePipelines, deviceExt->createComputePipelines);
+	getVkFunctionDevice(clean, vkDestroyPipeline, deviceExt->destroyPipeline);
+	getVkFunctionDevice(clean, vkDestroyShaderModule, deviceExt->destroyShaderModule);
+	getVkFunctionDevice(clean, vkDestroyBuffer, deviceExt->destroyBuffer);
+	getVkFunctionDevice(clean, vkCreateBuffer, deviceExt->createBuffer);
+	getVkFunctionDevice(clean, vkGetBufferMemoryRequirements2, deviceExt->getBufferMemoryRequirements2);
+	getVkFunctionDevice(clean, vkBindBufferMemory, deviceExt->bindBufferMemory);
+	getVkFunctionDevice(clean, vkUpdateDescriptorSets, deviceExt->updateDescriptorSets);
+	getVkFunctionDevice(clean, vkFlushMappedMemoryRanges, deviceExt->flushMappedMemoryRanges);
+	getVkFunctionDevice(clean, vkCmdCopyBuffer, deviceExt->cmdCopyBuffer);
+	getVkFunctionDevice(clean, vkCmdCopyBufferToImage, deviceExt->cmdCopyBufferToImage);
+	getVkFunctionDevice(clean, vkGetDeviceQueue, deviceExt->getDeviceQueue);
+	getVkFunctionDevice(clean, vkCreateSemaphore, deviceExt->createSemaphore);
+	getVkFunctionDevice(clean, vkCreateDescriptorSetLayout, deviceExt->createDescriptorSetLayout);
+	getVkFunctionDevice(clean, vkCreatePipelineLayout, deviceExt->createPipelineLayout);
+	getVkFunctionDevice(clean, vkCreateDescriptorPool, deviceExt->createDescriptorPool);
+	getVkFunctionDevice(clean, vkAllocateDescriptorSets, deviceExt->allocateDescriptorSets);
+	getVkFunctionDevice(clean, vkFreeCommandBuffers, deviceExt->freeCommandBuffers);
+	getVkFunctionDevice(clean, vkDestroyCommandPool, deviceExt->destroyCommandPool);
+	getVkFunctionDevice(clean, vkDestroySemaphore, deviceExt->destroySemaphore);
+	getVkFunctionDevice(clean, vkDestroyDescriptorSetLayout, deviceExt->destroyDescriptorSetLayout);
+	getVkFunctionDevice(clean, vkDestroyDescriptorPool, deviceExt->destroyDescriptorPool);
+	getVkFunctionDevice(clean, vkDestroyPipelineLayout, deviceExt->destroyPipelineLayout);
+	getVkFunctionDevice(clean, vkDeviceWaitIdle, deviceExt->deviceWaitIdle);
+	getVkFunctionDevice(clean, vkCreateCommandPool, deviceExt->createCommandPool);
+	getVkFunctionDevice(clean, vkResetCommandPool, deviceExt->resetCommandPool);
+	getVkFunctionDevice(clean, vkAllocateCommandBuffers, deviceExt->allocateCommandBuffers);
+	getVkFunctionDevice(clean, vkBeginCommandBuffer, deviceExt->beginCommandBuffer);
+	getVkFunctionDevice(clean, vkCmdBindDescriptorSets, deviceExt->cmdBindDescriptorSets);
+	getVkFunctionDevice(clean, vkCmdPushDescriptorSetKHR, deviceExt->cmdPushDescriptorSet);
+	getVkFunctionDevice(clean, vkEndCommandBuffer, deviceExt->endCommandBuffer);
+	getVkFunctionDevice(clean, vkQueueSubmit, deviceExt->queueSubmit);
+	getVkFunctionDevice(clean, vkQueuePresentKHR, deviceExt->queuePresentKHR);
+	getVkFunctionDevice(clean, vkCreateGraphicsPipelines, deviceExt->createGraphicsPipelines);
+	getVkFunctionDevice(clean, vkDestroyImageView, deviceExt->destroyImageView);
+	getVkFunctionDevice(clean, vkCreateImage, deviceExt->createImage);
+	getVkFunctionDevice(clean, vkGetImageMemoryRequirements2, deviceExt->getImageMemoryRequirements2);
+	getVkFunctionDevice(clean, vkBindImageMemory, deviceExt->bindImageMemory);
+	getVkFunctionDevice(clean, vkCreateImageView, deviceExt->createImageView);
+	getVkFunctionDevice(clean, vkDestroySampler, deviceExt->destroySampler);
+	getVkFunctionDevice(clean, vkCreateSampler, deviceExt->createSampler);
+	getVkFunctionDevice(clean, vkCreateShaderModule, deviceExt->createShaderModule);
+	getVkFunctionDevice(clean, vkDestroyImage, deviceExt->destroyImage);
+	getVkFunctionDevice(clean, vkCreateFence, deviceExt->createFence);
+	getVkFunctionDevice(clean, vkWaitForFences, deviceExt->waitForFences);
+	getVkFunctionDevice(clean, vkResetFences, deviceExt->resetFences);
+	getVkFunctionDevice(clean, vkDestroyFence, deviceExt->destroyFence);
+	getVkFunctionDevice(clean, vkFreeDescriptorSets, deviceExt->freeDescriptorSets);
 
-	getVkFunctionDevice(clean, vkCmdPipelineBarrier2KHR, deviceExt->cmdPipelineBarrier2)
-	getVkFunctionDevice(clean, vkGetSwapchainImagesKHR, deviceExt->getSwapchainImages)
+	getVkFunctionDevice(clean, vkCmdPipelineBarrier2KHR, deviceExt->cmdPipelineBarrier2);
+	getVkFunctionDevice(clean, vkGetSwapchainImagesKHR, deviceExt->getSwapchainImages);
 
-	getVkFunctionDevice(clean, vkAcquireNextImageKHR, deviceExt->acquireNextImage)
-	getVkFunctionDevice(clean, vkCreateSwapchainKHR, deviceExt->createSwapchain)
-	getVkFunctionDevice(clean, vkDestroySwapchainKHR, deviceExt->destroySwapchain)
+	getVkFunctionDevice(clean, vkAcquireNextImageKHR, deviceExt->acquireNextImage);
+	getVkFunctionDevice(clean, vkCreateSwapchainKHR, deviceExt->createSwapchain);
+	getVkFunctionDevice(clean, vkDestroySwapchainKHR, deviceExt->destroySwapchain);
 
 	if(feat & EGraphicsFeatures_MultiDrawIndirectCount) {
-		getVkFunctionDevice(clean, vkCmdDrawIndexedIndirectCountKHR, deviceExt->cmdDrawIndexedIndirectCount)
-		getVkFunctionDevice(clean, vkCmdDrawIndirectCountKHR, deviceExt->cmdDrawIndirectCount)
+		getVkFunctionDevice(clean, vkCmdDrawIndexedIndirectCountKHR, deviceExt->cmdDrawIndexedIndirectCount);
+		getVkFunctionDevice(clean, vkCmdDrawIndirectCountKHR, deviceExt->cmdDrawIndirectCount);
 	}
 
 	if(feat & EGraphicsFeatures_Raytracing) {
-		getVkFunctionDevice(clean, vkCmdBuildAccelerationStructuresKHR, deviceExt->cmdBuildAccelerationStructures)
-		getVkFunctionDevice(clean, vkCreateAccelerationStructureKHR, deviceExt->createAccelerationStructure)
-		getVkFunctionDevice(clean, vkCmdCopyAccelerationStructureKHR, deviceExt->copyAccelerationStructure)
-		getVkFunctionDevice(clean, vkDestroyAccelerationStructureKHR, deviceExt->destroyAccelerationStructure)
-		getVkFunctionDevice(clean, vkGetAccelerationStructureBuildSizesKHR, deviceExt->getAccelerationStructureBuildSizes)
+		getVkFunctionDevice(clean, vkCmdBuildAccelerationStructuresKHR, deviceExt->cmdBuildAccelerationStructures);
+		getVkFunctionDevice(clean, vkCreateAccelerationStructureKHR, deviceExt->createAccelerationStructure);
+		getVkFunctionDevice(clean, vkCmdCopyAccelerationStructureKHR, deviceExt->copyAccelerationStructure);
+		getVkFunctionDevice(clean, vkDestroyAccelerationStructureKHR, deviceExt->destroyAccelerationStructure);
+		getVkFunctionDevice(clean, vkGetAccelerationStructureBuildSizesKHR, deviceExt->getAccelerationStructureBuildSizes);
 		getVkFunctionDevice(
 			clean,
 			vkGetDeviceAccelerationStructureCompatibilityKHR,
 			deviceExt->getAccelerationStructureCompatibility
-		)
+		);
 	}
 
 	if (feat & EGraphicsFeatures_RayPipeline) {
-		getVkFunctionDevice(clean, vkCmdTraceRaysKHR, deviceExt->traceRays)
-		getVkFunctionDevice(clean, vkCmdTraceRaysIndirectKHR, deviceExt->traceRaysIndirect)
-		getVkFunctionDevice(clean, vkCreateRayTracingPipelinesKHR, deviceExt->createRaytracingPipelines)
-		getVkFunctionDevice(clean, vkGetRayTracingShaderGroupHandlesKHR, deviceExt->getRayTracingShaderGroupHandles)
+		getVkFunctionDevice(clean, vkCmdTraceRaysKHR, deviceExt->traceRays);
+		getVkFunctionDevice(clean, vkCmdTraceRaysIndirectKHR, deviceExt->traceRaysIndirect);
+		getVkFunctionDevice(clean, vkCreateRayTracingPipelinesKHR, deviceExt->createRaytracingPipelines);
+		getVkFunctionDevice(clean, vkGetRayTracingShaderGroupHandlesKHR, deviceExt->getRayTracingShaderGroupHandles);
 	}
 
 	if(feat & EGraphicsFeatures_DirectRendering) {
-		getVkFunctionDevice(clean, vkCmdBeginRenderingKHR, deviceExt->cmdBeginRendering)
-		getVkFunctionDevice(clean, vkCmdEndRenderingKHR, deviceExt->cmdEndRendering)
+		getVkFunctionDevice(clean, vkCmdBeginRenderingKHR, deviceExt->cmdBeginRendering);
+		getVkFunctionDevice(clean, vkCmdEndRenderingKHR, deviceExt->cmdEndRendering);
 	}
 
 	if(featEx & EVkGraphicsFeatures_BufferDeviceAddress)
-		getVkFunctionDevice(clean, vkGetBufferDeviceAddressKHR, deviceExt->getBufferDeviceAddress)
+		getVkFunctionDevice(clean, vkGetBufferDeviceAddressKHR, deviceExt->getBufferDeviceAddress);
 
 	//Get queues
 

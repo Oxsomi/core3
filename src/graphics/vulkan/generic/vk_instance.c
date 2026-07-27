@@ -39,6 +39,23 @@
 #include "types/base/mathi.h"
 #include "types/base/constants.h"
 
+//The Vulkan loader (vkGetInstanceProcAddr / vkGetDeviceProcAddr) is loaded at runtime rather than statically linked,
+// so the build doesn't depend on an arch-specific vulkan-1.lib (which fails to link on e.g. Windows arm64).
+//Every other Vulkan entry point is then resolved through the loaded getInstanceProcAddr/getDeviceProcAddr.
+//The actual loading uses the platform-abstracted DynamicLibrary API; only the library name is platform-specific.
+
+static const C8 *VkGraphicsInstance_loaderName() {
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		return "vulkan-1.dll";
+	#elif _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+		return "libvulkan.dylib";
+	#elif _PLATFORM_TYPE == PLATFORM_ANDROID
+		return "libvulkan.so";
+	#else
+		return "libvulkan.so.1";
+	#endif
+}
+
 GraphicsObjectSizes VkGraphicsObjectSizes = {
 	.blas = sizeof(VkBLAS),
 	.tlas = sizeof(VkTLAS),
@@ -162,13 +179,13 @@ VkBool32 onDebugReport(
 
 #define getVkFunction(label, function, result) {                                                \
 																								\
-	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function);             \
+	PFN_vkVoidFunction v = instanceExt->getInstanceProcAddr(instanceExt->instance, #function);  \
 																								\
 	if(!v)                                                                                      \
 		retError(clean, Error_nullPointer(0, "getVkFunction() " #function " failed"));          \
 																								\
 	*(void**)&result = (void*) v;                                                               \
-}
+} (void) 0
 
 TList(VkExtensionProperties);
 TList(VkLayerProperties);
@@ -198,12 +215,23 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 
 	//Start with loading the functions
 
+	//Load the Vulkan loader dynamically and grab vkGetInstanceProcAddr from it (system search, not the app dir).
+
+	gotoIfError3(clean, DynamicLibrary_loadSystem(
+		CharString_createRefCStrConst(VkGraphicsInstance_loaderName()), &instanceExt->vulkanLib, e_rr
+	));
+
+	gotoIfError3(clean, DynamicLibrary_loadSymbol(
+		instanceExt->vulkanLib, CharString_createRefCStrConst("vkGetInstanceProcAddr"),
+		(void**) &instanceExt->getInstanceProcAddr, e_rr
+	));
+
 	//These instances are okay with using NULL as the instance
 
-	getVkFunction(clean, vkCreateInstance, instanceExt->createInstance)
+	getVkFunction(clean, vkCreateInstance, instanceExt->createInstance);
 
-	getVkFunction(clean, vkEnumerateInstanceLayerProperties, instanceExt->enumerateInstanceLayerProperties)
-	getVkFunction(clean, vkEnumerateInstanceExtensionProperties, instanceExt->enumerateInstanceExtensionProperties)
+	getVkFunction(clean, vkEnumerateInstanceLayerProperties, instanceExt->enumerateInstanceLayerProperties);
+	getVkFunction(clean, vkEnumerateInstanceExtensionProperties, instanceExt->enumerateInstanceExtensionProperties);
 
 	//Enumerate instance info
 
@@ -398,38 +426,41 @@ Bool VK_WRAP_FUNC(GraphicsInstance_create)(
 
 	//Functions that aren't device dependent, but do need an instance
 
-	getVkFunction(clean, vkDestroyInstance, instanceExt->destroyInstance)
-	getVkFunction(clean, vkCreateDevice, instanceExt->createDevice)
-	getVkFunction(clean, vkDestroyDevice, instanceExt->destroyDevice)
+	getVkFunction(clean, vkDestroyInstance, instanceExt->destroyInstance);
+	getVkFunction(clean, vkCreateDevice, instanceExt->createDevice);
+	getVkFunction(clean, vkDestroyDevice, instanceExt->destroyDevice);
+
+	//Device-level entry points are resolved via vkGetDeviceProcAddr (also fetched through the loader).
+	getVkFunction(clean, vkGetDeviceProcAddr, instanceExt->getDeviceProcAddr);
 
 	if (supportsDebug[0]) {
-		getVkFunction(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback)
-		getVkFunction(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback)
+		getVkFunction(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback);
+		getVkFunction(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback);
 	}
 
 	if (supportsDebug[1]) {
-		getVkFunction(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName)
-		getVkFunction(clean, vkCmdBeginDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerBegin)
-		getVkFunction(clean, vkCmdEndDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerEnd)
-		getVkFunction(clean, vkCmdInsertDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerInsert)
+		getVkFunction(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName);
+		getVkFunction(clean, vkCmdBeginDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerBegin);
+		getVkFunction(clean, vkCmdEndDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerEnd);
+		getVkFunction(clean, vkCmdInsertDebugUtilsLabelEXT, instanceExt->cmdDebugMarkerInsert);
 	}
 
-	getVkFunction(clean, vkEnumeratePhysicalDevices, instanceExt->enumeratePhysicalDevices)
-	getVkFunction(clean, vkEnumerateDeviceLayerProperties, instanceExt->enumerateDeviceLayerProperties)
-	getVkFunction(clean, vkEnumerateDeviceExtensionProperties, instanceExt->enumerateDeviceExtensionProperties)
-	getVkFunction(clean, vkGetPhysicalDeviceFormatProperties, instanceExt->getPhysicalDeviceFormatProperties)
-	getVkFunction(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2)
-	getVkFunction(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2)
-	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties, instanceExt->getPhysicalDeviceMemoryProperties)
-	getVkFunction(clean, vkGetPhysicalDeviceQueueFamilyProperties, instanceExt->getPhysicalDeviceQueueFamilyProperties)
+	getVkFunction(clean, vkEnumeratePhysicalDevices, instanceExt->enumeratePhysicalDevices);
+	getVkFunction(clean, vkEnumerateDeviceLayerProperties, instanceExt->enumerateDeviceLayerProperties);
+	getVkFunction(clean, vkEnumerateDeviceExtensionProperties, instanceExt->enumerateDeviceExtensionProperties);
+	getVkFunction(clean, vkGetPhysicalDeviceFormatProperties, instanceExt->getPhysicalDeviceFormatProperties);
+	getVkFunction(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2);
+	getVkFunction(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2);
+	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties, instanceExt->getPhysicalDeviceMemoryProperties);
+	getVkFunction(clean, vkGetPhysicalDeviceQueueFamilyProperties, instanceExt->getPhysicalDeviceQueueFamilyProperties);
 
-	getVkFunction(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats)
-	getVkFunction(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities)
-	getVkFunction(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes)
-	getVkFunction(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport)
-	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties2, instanceExt->getPhysicalDeviceMemoryProperties2)
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats);
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities);
+	getVkFunction(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes);
+	getVkFunction(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport);
+	getVkFunction(clean, vkGetPhysicalDeviceMemoryProperties2, instanceExt->getPhysicalDeviceMemoryProperties2);
 
-	getVkFunction(clean, vkDestroySurfaceKHR, instanceExt->destroySurface)
+	getVkFunction(clean, vkDestroySurfaceKHR, instanceExt->destroySurface);
 
 	//Add debug callback
 
@@ -494,6 +525,9 @@ void VK_WRAP_FUNC(GraphicsInstance_free)(GraphicsInstance *inst, const Allocator
 
 	if(instanceExt->destroyInstance && instanceExt->instance)
 		instanceExt->destroyInstance(instanceExt->instance, NULL);
+
+	if(instanceExt->vulkanLib)
+		DynamicLibrary_free(instanceExt->vulkanLib);
 }
 
 const C8 *reqExtensionsName[] = {

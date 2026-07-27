@@ -51,6 +51,24 @@ Bool File_resolve(
 	CharString loc = CharString_createRefStrConst(*locPtr);
 	CharString absoluteDir = CharString_createRefStrConst(*absoluteDirPtr);
 
+	//The bare virtual root ("//", "//.", "//./") has no section component and resolves to the empty virtual root.
+	//Handle it explicitly: the trailing-slash trim below would collapse "//" into "/" (no longer virtual),
+	// and the split machinery can't represent the empty remainder left after popping "//".
+
+	if(File_isVirtual(loc)) {
+
+		U64 afterLen = CharString_length(loc) - 2;                             //Part after the leading "//"
+
+		if(afterLen && loc.ptr[CharString_length(loc) - 1] == '/')             //Ignore one trailing slash
+			--afterLen;
+
+		if(!afterLen || (afterLen == 1 && loc.ptr[2] == '.')) {                //Empty or a single "."
+			*isVirtual = true;
+			*result = CharString_createNull();                                 //Empty == virtual root
+			goto clean;
+		}
+	}
+
 	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')                    //myTest/ <--
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;
 

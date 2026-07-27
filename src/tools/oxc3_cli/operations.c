@@ -188,6 +188,7 @@ const C8 *EOperationCategory_names[] = {
 	"float",
 	"time",
 	"info",
+	"devices",
 	"profile",
 	"help"
 };
@@ -211,6 +212,7 @@ const C8 *EOperationCategory_description[] = {
 	"Float format conversion and inspection.",
 	"Time conversion (epoch nanoseconds <-> ISO 8601).",
 	"Information about the tool.",
+	"This machine's hardware: CPU, graphics and audio devices.",
 	"Profiles operations on the current system.",
 	"Help about the instructions in the tool."
 };
@@ -401,6 +403,13 @@ void Operations_init() {
 		.category = EOperationCategory_File,
 		.name = "cmp", .desc = "Byte-compare two files and report the first difference.",
 		.func = &CLI_fileCmp, .isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Input2
+	};
+
+	Operation_values[EOperation_FileDiff] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "diff", .desc = "Structurally compare two archives (oiCA or oiDL): added / removed / modified entries.",
+		.func = &CLI_fileDiff, .isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Input2
 	};
 
@@ -701,9 +710,9 @@ void Operations_init() {
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_InfoCPU] = (Operation) {
+	Operation_values[EOperation_DevicesCPU] = (Operation) {
 
-		.category = EOperationCategory_Info,
+		.category = EOperationCategory_Devices,
 
 		.name = "cpu",
 		.desc = "Shows this machine's CPU: logical cores, physical memory and hardware capability flags.",
@@ -713,9 +722,9 @@ void Operations_init() {
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_InfoAll] = (Operation) {
+	Operation_values[EOperation_DevicesAll] = (Operation) {
 
-		.category = EOperationCategory_Info,
+		.category = EOperationCategory_Devices,
 
 		.name = "all",
 		.desc = "Dumps CPU + graphics devices + audio devices in one go (handy for support / bug reports).",
@@ -736,7 +745,7 @@ void Operations_init() {
 
 		.func = &CLI_profileCast,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -749,7 +758,7 @@ void Operations_init() {
 
 		.func = &CLI_profileRNG,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -762,7 +771,7 @@ void Operations_init() {
 
 		.func = &CLI_profileCRC32C,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -775,7 +784,7 @@ void Operations_init() {
 
 		.func = &CLI_profileFNV1A64,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -788,7 +797,7 @@ void Operations_init() {
 
 		.func = &CLI_profileSHA256,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -801,7 +810,7 @@ void Operations_init() {
 
 		.func = &CLI_profileMD5,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -814,7 +823,7 @@ void Operations_init() {
 
 		.func = &CLI_profileAES256,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -827,7 +836,7 @@ void Operations_init() {
 
 		.func = &CLI_profileAES128,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -840,7 +849,7 @@ void Operations_init() {
 
 		.func = &CLI_profileMemcpy,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -853,7 +862,7 @@ void Operations_init() {
 
 		.func = &CLI_profileMemset,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -866,7 +875,7 @@ void Operations_init() {
 
 		.func = &CLI_profileVec,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 
@@ -879,7 +888,7 @@ void Operations_init() {
 
 		.func = &CLI_profileAll,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_Length,
 		.isFormatLess = true
 	};
 

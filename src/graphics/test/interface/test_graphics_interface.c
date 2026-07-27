@@ -243,9 +243,10 @@ static void Test_graphicsFormats(Test *t) {
 
 // -- 6-10. Device dependent (skipped without an adapter) -------------------------
 
-static void Test_graphicsDevice(Test *t) {
+static void Test_graphicsDeviceForApi(Test *t, EGraphicsApi api) {
 
 	Test_setModule(t, "GraphicsDevice");
+	Test_print(t, EGraphicsApi_name[api]);        //Marks which graphics API this device-test run targets
 
 	const Allocator *alloc = Platform_instance->alloc;
 
@@ -254,7 +255,7 @@ static void Test_graphicsDevice(Test *t) {
 		.version = 1
 	};
 
-	RefPtrType type = GraphicsInstance_makeType(EGraphicsApi_Count, alloc);
+	RefPtrType type = GraphicsInstance_makeType(api, alloc);
 	GraphicsInstanceRef *instRef = NULL;
 	GraphicsDeviceRef *deviceRef = NULL;
 	DeviceBufferRef *buffer = NULL;
@@ -262,7 +263,7 @@ static void Test_graphicsDevice(Test *t) {
 	CommandListRef *commandList = NULL;
 	ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 
-	if (!GraphicsInstance_create(&appInfo, EGraphicsApi_Count, 0, alloc, &type, &instRef, &t->err)) {
+	if (!GraphicsInstance_create(&appInfo, api, 0, alloc, &type, &instRef, &t->err)) {
 		Test_print(t, "No compatible graphics driver, skipping device tests");
 		t->err = Error_none();
 		return;
@@ -380,6 +381,28 @@ clean:
 
 	RefPtr_dec(&deviceRef);
 	RefPtr_dec(&instRef);
+}
+
+//Run the full device test suite for every graphics api the build actually supports, so under dynamic
+//linking we exercise e.g. both Direct3D12 and Vulkan (instead of only the platform's default api).
+
+static void Test_graphicsDevice(Test *t) {
+
+	Test_setModule(t, "GraphicsDevice");
+
+	Bool any = false;
+
+	for (EGraphicsApi api = 0; api < EGraphicsApi_Count; ++api) {
+
+		if(!GraphicsInterface_supportsApi(api))
+			continue;
+
+		any = true;
+		Test_graphicsDeviceForApi(t, api);
+	}
+
+	if(!any)
+		Test_print(t, "No supported graphics api, skipping device tests");
 }
 
 // -- entry point ---------------------------------------------------------------

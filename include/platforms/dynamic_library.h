@@ -36,6 +36,11 @@ impl Bool DynamicLibrary_isValidPath(CharString str);
 
 #ifdef SUPPORTS_DYNAMIC_LINKING
 	impl Bool DynamicLibrary_load(CharString str, Bool isAppDir, DynamicLibrary *dynamicLib, Error *e_rr);
+
+	//Load a SYSTEM library by bare name (e.g. "vulkan-1.dll" / "libvulkan.so.1"), resolved via the OS's standard
+	//library search path rather than the app/working directory. str must be null-terminated.
+	impl Bool DynamicLibrary_loadSystem(CharString str, DynamicLibrary *dynamicLib, Error *e_rr);
+
 	impl Bool DynamicLibrary_loadSymbol(DynamicLibrary dynamicLib, CharString str, void **ptr, Error *e_rr);
 	impl void DynamicLibrary_free(DynamicLibrary dynamicLib);
 #endif

@@ -128,8 +128,13 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 
 	#if D3D12_SDK_VERSION >= 618
-		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment)
+		if(device->info.capabilities.featuresExt & EDxGraphicsFeatures_TightAlignment) {
 			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT;
+
+			//Tight alignment lets D3D12 pick a smaller alignment; an explicit 64 KiB placement alignment is
+			//incompatible with it and makes GetResourceAllocationInfo2 fail (SizeInBytes = U64_MAX), so clear it.
+			resourceDesc.Alignment = 0;
+		}
 	#endif
 
 	D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
@@ -140,7 +145,9 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createBuffer)(
 
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	if(!res)
+	//GetResourceAllocationInfo2 returns its (non-null) retVal pointer even on failure, signalling it via
+	//SizeInBytes = U64_MAX, so check the sentinel too (the texture path does the same) instead of only !res.
+	if(!res || allocInfo.SizeInBytes == U64_MAX)
 		retError(clean, Error_invalidState(0, "D3D12GraphicsDeviceRef_createBuffer() couldn't query allocInfo"));
 
 	Bool cpuSided = buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit;

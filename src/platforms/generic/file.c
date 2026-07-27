@@ -1099,6 +1099,11 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 	for(U64 i = 0; i < Platform_instance->virtualSections.length; ++i) {
 		const VirtualSection *section = Platform_instance->virtualSections.ptr + i;
 
+		//Only loaded sections are accessible. A registered-but-unloaded section is invisible (matching File_has),
+		//so the root listing/count stays empty when nothing is loaded. Callers load sections before walking them.
+		if(!section->loadedAndId)
+			continue;
+
 		CharString_free(&secLower, alloc);
 		CharString_free(&secSlash, alloc);
 
@@ -1113,7 +1118,10 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 		//- section equals query exactly
 		//- our path starts with section/ (query is inside section)
 
-		Bool sectionBelowQuery  = CharString_startsWithStringInsensitive(&secLower,   &resolvedSlash, 0);
+		//At root the query is empty; every section is below it. startsWith(secLower, "/") is false because
+		//section paths carry no leading slash, so treat an empty query as matching all sections.
+		Bool sectionBelowQuery  = !CharString_length(resolvedLower) ||
+			CharString_startsWithStringInsensitive(&secLower, &resolvedSlash, 0);
 		Bool sectionIsQuery     = CharString_equalsStringInsensitive(&secLower,        &resolvedLower);
 		Bool queryInsideSection = CharString_startsWithStringInsensitive(&resolvedLower, &secSlash, 0);
 
@@ -1122,9 +1130,12 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 
 		foundAny = true;
 
-		//When iterating root, emit immediate child directories as virtual folders
-		//De-duplicate since multiple sections may share the same top-level dir
-		if(!CharString_length(resolvedLower)) {
+		U64 secSlashCount = CharString_countAllSensitive(&secLower, '/', 0);
+
+		//When iterating root, emit the top-level ancestor directory of nested sections (a/b -> "a") as a
+		//virtual folder, de-duplicated since multiple sections may share it. Top-level (slashless) sections
+		//are emitted by the block below instead, so only nested sections need this.
+		if(!CharString_length(resolvedLower) && secSlashCount) {
 
 			CharString parent = CharString_createNull();
 
@@ -1140,10 +1151,13 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 
 			if(!contains) {
 
-				gotoIfError3(clean, ListCharString_pushBack(&visited, parent, alloc, e_rr));
+				//visited outlives secLower (freed at the top of the next iteration), so store an owned copy.
+				CharString parentCopy = CharString_createNull();
+				gotoIfError3(clean, CharString_createCopy(parent, alloc, &parentCopy, e_rr));
+				gotoIfError3(clean, ListCharString_pushBack(&visited, parentCopy, alloc, e_rr));
 
 				FileInfo info = (FileInfo) {
-					.path   = parent,
+					.path   = parentCopy,
 					.type   = EFileType_Folder,
 					.access = EFileAccess_Read
 				};
@@ -1153,7 +1167,6 @@ Bool File_foreachVirtualInternal(void *userData, const CharString *resolved, con
 		}
 
 		//Emit the section itself as a folder at the right depth
-		U64 secSlashCount = CharString_countAllSensitive(&secLower, '/', 0);
 		Bool emitSection = foreach->isRecursive ? secSlashCount >= baseCount : secSlashCount == baseCount;
 
 		if(emitSection) {
@@ -1206,7 +1219,7 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		SpinLock_unlock(&Platform_instance->virtualSectionsLock);
 
-	ListCharString_free(&visited, alloc);
+	ListCharString_freeUnderlying(&visited, alloc);        //visited holds owned copies of the top-level dir names
 	CharString_free(&resolvedLower, alloc);
 	CharString_free(&resolvedSlash, alloc);
 	CharString_free(&secLower, alloc);

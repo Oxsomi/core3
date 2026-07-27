@@ -81,3 +81,25 @@ if(UNIX AND TARGET OxC3_graphics_vk)
 
 endif()
 
+# Functional CLI test (ctest): drives the built OxC3 binary through tools/test.py,
+# asserting on real command output (known hashes, round-trips, virtual "//" files, -oiCA operations, negative cases).
+# Runs from the binary directory so embedded virtual sections resolve.
+
+if(EnableTests)
+
+	if(NOT Python3_EXECUTABLE)
+		find_package(Python3 COMPONENTS Interpreter)
+	endif()
+
+	if(Python3_EXECUTABLE)
+		add_test(
+			NAME OxC3_cli_test
+			COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/test.py $<TARGET_FILE_DIR:OxC3>
+			WORKING_DIRECTORY $<TARGET_FILE_DIR:OxC3>
+		)
+	else()
+		message(WARNING "OxC3_cli_test skipped: Python3 interpreter not found")
+	endif()
+
+endif()
+

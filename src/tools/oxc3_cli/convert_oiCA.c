@@ -326,8 +326,6 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 	RefPtrType encStreamType = EncryptionStream_makeType(alloc);
 	MemoryStreamRef *memStream = NULL;
 
-	(void)convert->args;
-
 	//TODO: Batch multiple files
 
 	if (convert->inputInfo->type != EFileType_File) {
@@ -335,11 +333,17 @@ Bool CLI_convertFromCA(const CLIConvert *convert, Error *e_rr) {
 		retError(clean, Error_invalidOperation(0, "CLI_convertFromCA()::inputInfo.type needs to be file"));
 	}
 
+	//Only hand CAFile_read an encryption key when -aes was actually given. encKey is a fixed array (always a
+	//valid pointer), so passing it unconditionally makes reading a plaintext archive fail with
+	//"encryptionKey is provided but no encryption is used".
+
+	const Bool hasAES = convert->args && (convert->args->parameters & EOperationHasParameter_AES);
+
 	//Read file
 
 	gotoIfError3(clean, File_read(convert->input, 100 * MS, 0, 0, &fileHandleType, &buf, e_rr));
 	gotoIfError3(clean, MemoryStream_createFromBuffer(&buf, EMemoryStreamFlags_None, &memStreamType, &memStream, e_rr));
-	gotoIfError3(clean, CAFile_read(memStream, &encStreamType, 0, convert->encKey, alloc, &file, e_rr));
+	gotoIfError3(clean, CAFile_read(memStream, &encStreamType, 0, hasAES ? convert->encKey : NULL, alloc, &file, e_rr));
 
 	U64 entryCount = CAFile_fileObjectCount(&file, CAHandle_Root, true);
 	Bool outputAsSingle = entryCount == 1;

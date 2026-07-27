@@ -52,7 +52,8 @@ Bool VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR
 	};
 
 	if (!instanceExt->createSurfaceExt)
-		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateWaylandSurfaceKHR");
+		instanceExt->createSurfaceExt =
+			(void*) instanceExt->getInstanceProcAddr(instanceExt->instance, "vkCreateWaylandSurfaceKHR");
 
 	if (!instanceExt->createSurfaceExt)
 		retError(clean, Error_nullPointer(0, "VkSurface_create()::createSurfaceExt is NULL!"));

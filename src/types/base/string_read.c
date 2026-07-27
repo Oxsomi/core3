@@ -101,9 +101,24 @@ static inline Bool CharString_isSupportedInFilePath(CharString str) {
 
 Bool CharString_isValidFilePath(CharString str) {
 
-	//myTest/ <-- or myTest\ to myTest
-
 	str = CharString_createRefStrConst(str);
+
+	//A bare virtual root ("//", "//.", "//./") is a valid path referring to the virtual root. It has no name
+	//component, so the general validation below (which requires a non-empty remainder) would reject it. Detect
+	//it up-front, before the trailing-slash trim collapses "//" into "/".
+
+	if(CharString_getAt(str, 0) == '/' && CharString_getAt(str, 1) == '/') {
+
+		U64 afterLen = CharString_length(str) - 2;                          //Part after the leading "//"
+
+		if(afterLen && str.ptr[CharString_length(str) - 1] == '/')          //Ignore one trailing slash
+			--afterLen;
+
+		if(!afterLen || (afterLen == 1 && str.ptr[2] == '.'))              //Empty or a single "."
+			return true;
+	}
+
+	//myTest/ <-- or myTest\ to myTest
 
 	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
 		str.lenAndNullTerminated = CharString_length(str) - 1;

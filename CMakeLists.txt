@@ -99,6 +99,11 @@ else()
 	add_compile_options(-fno-unsafe-math-optimizations)
 	add_compile_options(-fms-extensions)
 	add_compile_options(-flto -Wall -Wextra -Werror)
+
+	# `{ 0 }` is OxC3's idiomatic zero-initializer (every field ends up zeroed).
+	# -Wextra's -Wmissing-field-initializers still flags it when the C headers are compiled as C++
+	# (the oxc::c compat layer), where `{}` would be needed but isn't valid C. The idiom is intentional, so silence this one.
+	add_compile_options(-Wno-missing-field-initializers)
 	
 	if(NOT CMAKE_${lang}_COMPILER_VERSION VERSION_LESS 4.7)
 		add_compile_options(-fno-fat-lto-objects)

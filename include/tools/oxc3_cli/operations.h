@@ -233,8 +233,9 @@ typedef enum EOperation {
 
 	EOperation_InfoLicense,
 	EOperation_InfoAbout,
-	EOperation_InfoCPU,
-	EOperation_InfoAll,
+
+	EOperation_DevicesCPU,
+	EOperation_DevicesAll,
 
 	EOperation_ProfileCast,
 	EOperation_ProfileRNG,
@@ -284,6 +285,7 @@ typedef enum EOperationCategory {
 	EOperationCategory_Float,
 	EOperationCategory_Time,
 	EOperationCategory_Info,
+	EOperationCategory_Devices,
 	EOperationCategory_Profile,
 	EOperationCategory_Help,
 	EOperationCategory_End,

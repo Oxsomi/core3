@@ -76,4 +76,8 @@ set_target_properties(${TARGET_NAME} PROPERTIES FOLDER Oxsomi/graphics)
 
 source_group("Source Files (${platform})" FILES ${graphicsApiPlatformSources})
 
-target_link_libraries(${TARGET_NAME} PUBLIC Vulkan::Vulkan)
+# Use the Vulkan headers from find_package, but do NOT link vulkan-1.lib:
+# the loader is loaded dynamically at runtime (see vk_instance.c),
+# so we avoid depending on an arch-specific import lib 
+# (which fails to link on e.g. Windows arm64, where the SDK's prebuilt lib is x64).
+target_include_directories(${TARGET_NAME} PUBLIC ${Vulkan_INCLUDE_DIRS})

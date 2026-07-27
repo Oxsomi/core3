@@ -110,11 +110,23 @@ Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 
 	if(!args) return false;
 
-	const U64 bufferSize = GIBI;
-
 	Buffer dat = Buffer_createNull();
 	Bool s_uccess = true;
 	Error err = Error_none(), *e_rr = &err;
+
+	//Buffer to profile on. -length overrides the 1 GiB default so quick runs (e.g. the CLI test) can use a
+	//small buffer instead of allocating and processing a full gigabyte.
+
+	U64 bufferSize = GIBI;
+
+	if(args->parameters & EOperationHasParameter_Length) {
+
+		CharString l = CharString_createNull();
+		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &l))
+
+		if(!CharString_parseU64(l, &bufferSize) || !bufferSize)
+			retError(clean, Error_invalidState(0, "CLI_profileData() -length must be a non-zero byte count"));
+	}
 
 	//Parse -threads (default 1 = single threaded; 0 = all hardware threads)
 
@@ -241,10 +253,13 @@ Bool _CLI_profileCast(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	(void)args;
 	Bool s_uccess = true;
 
-	if(Buffer_length(buf) < GIBI)
-		retError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"));
+	//Scale the cast count to the buffer so a smaller -length still works. Each step reads at most number*8
+	//(= bufferLen/32) bytes, so any buffer >= 256 bytes stays in bounds.
 
-	const U64 number = GIBI / sizeof(F64) / 32;
+	if(Buffer_length(buf) < 256)
+		retError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() requires buf to be >= 256 bytes"));
+
+	const U64 number = Buffer_length(buf) / sizeof(F64) / 32;
 	const C8 *iterationNames[] = { "Non denormalized", "(Un)Signed zero", "NaN", "Inf", "DeN" };
 	const C8 *floatTypeNames[] = { "F64", "F32", "F16" };
 
@@ -593,10 +608,10 @@ Bool CLI_profileMemset(const ParsedArgs *args) {
 Bool CLI_profileVecImpl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 
 	(void) args;
-	(void) buf;
 	(void) e_rr;
 
-	const U64 iters = (U64) 1 << 28;        //~268M ops per test
+	//Scale the op count to the profiling buffer so -length controls the runtime (default 1 GiB -> ~268M ops).
+	const U64 iters = Buffer_length(buf) / 4;
 	const F32x4 v = F32x4_create4(1.0000001f, 1.0000002f, 1.0000003f, 1.0000004f);
 
 	F32x4 acc = F32x4_zero();

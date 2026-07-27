@@ -189,12 +189,6 @@ jobs:
         run: rm -rf ~/.conan2/p/b/*/b
 
       # ── Discord notification ───────────────────────────────────────────────
-      - uses: ruby/setup-ruby@v1
-        if: always()
-        with:
-          ruby-version: '3.4'
-          bundler-cache: true
-
       - name: Send Webhook Notification
         if: always()
         shell: bash
