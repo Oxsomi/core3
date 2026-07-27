@@ -198,5 +198,12 @@ jobs:
           HOOK_OS_NAME: ${{ inputs.hook_name }}
           WORKFLOW_NAME: ${{ github.workflow }}
         run: |
-          git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
-          bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+          # Post directly to the Discord webhook
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "WEBHOOK_URL not set; skipping Discord notification"
+            exit 0
+          fi
+          COLOR=$([ "$JOB_STATUS" = "success" ] && echo 3066993 || echo 15158332)
+          curl -fsS -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"${WORKFLOW_NAME} (${HOOK_OS_NAME})\",\"description\":\"Status: ${JOB_STATUS}\",\"color\":${COLOR}}]}" \
+            "$WEBHOOK_URL"

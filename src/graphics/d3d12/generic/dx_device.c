@@ -233,8 +233,9 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		))) {
 
 			//Only break into the debugger on validation errors when one is actually attached.
-			//The D3D12 debug layer implements "break on severity" via a RaiseException;
-			// with no debugger present that becomes an unhandled second-chance exception and hard-crashes the process.
+			//The D3D12 debug layer implements "break on severity" via a RaiseException.
+			//With no debugger present that becomes an unhandled second-chance exception and hard-crashes the process.
+			//Without the break the failing HRESULT just propagates as an Error, like the Vulkan backend does.
 
 			if(IsDebuggerPresent()) {
 

@@ -67,6 +67,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	const SHFile *shaderBinary,
 	const CharString *entrypointName,
 	const ListCharString *defines,
+	const ListCharString *uniforms,
 	ESHExtension disallow,
 	ESHExtension require
 ) {
@@ -122,6 +123,56 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 			}
 
 			if(missing)
+				continue;
+
+			//Match uniforms the same way as defines: the binary's uniform set must equal the requested set.
+			//A uniform carries a typed value, so compare the requested value against the stored value stringified.
+
+			ListSHUniformRuntime uniforms2 = binInfo.identifier.uniforms;
+
+			if (uniforms2.length != (!uniforms ? 0 : uniforms->length / 2))
+				continue;
+
+			Bool uniformMissing = false;
+
+			for (U64 k = 0; k < (uniforms ? uniforms->length / 2 : 0); ++k) {
+
+				const CharString reqName  = uniforms->ptr[k << 1];
+				const CharString reqValue = uniforms->ptr[(k << 1) | 1];
+
+				Bool contains = false;
+
+				for (U64 l = 0; l < uniforms2.length; ++l) {
+
+					const SHUniformRuntime u = uniforms2.ptr[l];
+
+					if (!CharString_equalsString(&u.name, &reqName, EStringCase_Sensitive))
+						continue;
+
+					const ETypeId typeId = ETypeId_arr[u.typeIdShort];
+
+					SHValue value = (SHValue) { 0 };
+					Buffer_memcpy(
+						Buffer_createRef(&value, sizeof(value)),
+						Buffer_createRefConst(binInfo.identifier.uniformData.ptr + u.dataOffset, ETypeId_getBytes(typeId))
+					);
+
+					CharString valStr = CharString_createNull();
+
+					if (SHValue_stringify(&value, typeId, GraphicsDeviceRef_getAlloc(deviceRef), &valStr, NULL))
+						contains = CharString_equalsString(&valStr, &reqValue, EStringCase_Sensitive);
+
+					CharString_free(&valStr, GraphicsDeviceRef_getAlloc(deviceRef));
+					break;
+				}
+
+				if (!contains) {
+					uniformMissing = true;
+					break;
+				}
+			}
+
+			if (uniformMissing)
 				continue;
 
 			//Ensure it's compatible

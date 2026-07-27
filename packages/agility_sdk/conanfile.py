@@ -17,7 +17,7 @@ class agility_sdk(ConanFile):
 
 	exports_sources = [ "agility/build/native/include/*.h", "agility/LICENSE.txt", "agility/LICENSE-CODE.txt", "warp/LICENSE.txt" ]
 
-	settings = "arch"
+	settings = "os", "arch"
 
 	def source(self):
 
@@ -39,22 +39,25 @@ class agility_sdk(ConanFile):
 		copy(self, "LICENSE.txt", os.path.join(self.source_folder, "warp"), self.package_folder)
 		rename(self, os.path.join(self.package_folder, "LICENSE.txt"), os.path.join(self.package_folder, "LICENSE-WARP.txt"))
 
-		if self.settings.arch == "x86_64":
-			copy(self, "*.dll", os.path.join(self.source_folder, "warp/build/native/bin/x64"), os.path.join(self.package_folder, "bin"))
-			copy(self, "*.pdb", os.path.join(self.source_folder, "warp/build/native/bin/x64"), os.path.join(self.package_folder, "bin"))
-			copy(self, "*.dll", os.path.join(self.source_folder, "agility/build/native/bin/x64"), os.path.join(self.package_folder, "bin/D3D12"))
-			copy(self, "*.pdb", os.path.join(self.source_folder, "agility/build/native/bin/x64"), os.path.join(self.package_folder, "bin/D3D12"))
-			rm(self, "d3dconfig.pdb", os.path.join(self.package_folder, "bin/D3D12"))
+		# The WARP + agility runtimes are Windows DLLs. Everywhere else (e.g. Linux/macOS building the shader compiler)
+		# only the headers are needed (DXC's dxcreflect.h includes d3d12shader.h),
+		# so this is an include-only package there, just like nvapi on non-(Windows x64).
 
-		else:
-			copy(self, "*.dll", os.path.join(self.source_folder, "warp/build/native/bin/arm64"), os.path.join(self.package_folder, "bin"))
-			copy(self, "*.pdb", os.path.join(self.source_folder, "warp/build/native/bin/arm64"), os.path.join(self.package_folder, "bin"))
-			copy(self, "*.dll", os.path.join(self.source_folder, "agility/build/native/bin/arm64"), os.path.join(self.package_folder, "bin/D3D12"))
-			copy(self, "*.pdb", os.path.join(self.source_folder, "agility/build/native/bin/arm64"), os.path.join(self.package_folder, "bin/D3D12"))
+		if self.settings.os == "Windows":
+
+			archName = "x64" if self.settings.arch == "x86_64" else "arm64"
+
+			copy(self, "*.dll", os.path.join(self.source_folder, "warp/build/native/bin/" + archName), os.path.join(self.package_folder, "bin"))
+			copy(self, "*.pdb", os.path.join(self.source_folder, "warp/build/native/bin/" + archName), os.path.join(self.package_folder, "bin"))
+			copy(self, "*.dll", os.path.join(self.source_folder, "agility/build/native/bin/" + archName), os.path.join(self.package_folder, "bin/D3D12"))
+			copy(self, "*.pdb", os.path.join(self.source_folder, "agility/build/native/bin/" + archName), os.path.join(self.package_folder, "bin/D3D12"))
 			rm(self, "d3dconfig.pdb", os.path.join(self.package_folder, "bin/D3D12"))
 
 	def package_info(self):
 		self.cpp_info.set_property("cmake_file_name", "agility_sdk")
 		self.cpp_info.set_property("cmake_target_name", "agility_sdk::agility_sdk")
 		self.cpp_info.set_property("pkg_config_name", "agility_sdk")
-		self.cpp_info.system_libs = [ "dxgi", "d3d12" ]
+
+		# dxgi/d3d12 only exist on Windows; elsewhere this is headers-only (for DXC's d3d12shader.h).
+		if self.settings.os == "Windows":
+			self.cpp_info.system_libs = [ "dxgi", "d3d12" ]

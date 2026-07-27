@@ -145,6 +145,10 @@ def main():
 		return os.path.join(work, name)
 
 	try:
+		# ---- machine (log the CPU/RAM so CI runs record what hardware they ran on) -----------------
+		section("machine")
+		print(run(exe, ["devices", "cpu"], contains=["CPU:", "Cores"]))
+
 		# ---- basics + rand ------------------------------------------------------------------------
 		section("basics + rand")
 		run(exe, [], want_fail=True)        # bare invocation prints usage, exits non-zero

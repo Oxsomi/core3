@@ -118,7 +118,8 @@ class oxc3(ConanFile):
 		if self.options.enableShaderCompiler or hasD3D12:
 			self.requires("nvapi/2025.04.01.01")
 
-		if hasD3D12:
+		# agility_sdk ships d3d12shader.h, which DXC's dxcreflect.h includes.
+		if hasD3D12 or self.options.enableShaderCompiler:
 			self.requires("agility_sdk/2026.07.26")
 
 		if hasD3D12 and self.settings.arch == "x86_64":

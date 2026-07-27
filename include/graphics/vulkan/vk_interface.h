@@ -41,6 +41,7 @@
 	Bool VkGraphicsDevice_createPipelineCompute(
 		GraphicsDevice *device,
 		const CharString *name,
+		const CharString *entryName,
 		Pipeline *pipeline,
 		const SHBinaryInfo *buf,
 		Error *e_rr

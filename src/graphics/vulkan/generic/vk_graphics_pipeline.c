@@ -276,10 +276,18 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 		const SHEntry *entry = &bin->entries.ptr[entrypointId];
 		const SHBinaryInfo *buf = &bin->binaries.ptr[entry->binaryIds.ptr[binaryId]];
 
+		//Bind the SPIR-V entrypoint, using the entry's own name (e.g. "mainVS" from the oiSH).
+		//Unlike DXIL, a SPIR-V module keeps its original entrypoint name.
+		//Fall back to "main" only when it's unnamed; entry->name lives in the SHFile for the call's duration.
+		//vkCreateGraphicsPipelines enforces that pName is a real OpEntryPoint.
+
+		const Buffer stageSpirv = buf->binaries[ESHBinaryType_SPIRV];
+		const C8 *entryPoint = CharString_length(entry->name) ? entry->name.ptr : "main";
+
 		VkShaderModule module = NULL;
 
 		gotoIfError3(clean, createShaderModule(
-			buf->binaries[ESHBinaryType_SPIRV],
+			stageSpirv,
 			&module,
 			deviceExt,
 			instanceExt,
@@ -293,7 +301,7 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineGraphics)(
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = stageBit,
 			.module = module,
-			.pName = "main"
+			.pName = entryPoint
 		};
 	}
 

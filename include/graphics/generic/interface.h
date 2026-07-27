@@ -100,6 +100,7 @@ typedef struct GraphicsObjectSizes {
 	typedef Bool (*GraphicsDevice_createPipelineComputeImpl)(
 		GraphicsDevice *device,
 		const CharString *name,
+		const CharString *entryName,
 		Pipeline *pipeline,
 		const SHBinaryInfo *buf,
 		Error *e_rr
@@ -387,6 +388,7 @@ Bool TLASRef_flushExt(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef
 Bool GraphicsDevice_createPipelineComputeExt(
 	GraphicsDevice *device,
 	const CharString *name,
+	const CharString *entryName,        //Optional SPIRV entrypoint override (NULL/empty = "main"); ignored for DXIL
 	Pipeline *pipeline,
 	const SHBinaryInfo *buf,
 	Error *e_rr

@@ -39,6 +39,14 @@ set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
 target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
 target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
 
+# On Windows d3d12shader.h (included by DXC's dxcreflect.h) comes from the Windows SDK.
+# Off Windows there is no such SDK, so pull it in headers-only from agility_sdk
+# (an include-only package there), matching conanfile.py.
+if(NOT WIN32)
+	find_package(agility_sdk REQUIRED)
+	target_link_libraries(OxC3_shader_compiler PUBLIC agility_sdk::agility_sdk)
+endif()
+
 if(EnableTests)
 
 	# Compiles HLSL through the real DXC/SPIRV pipeline and validates parsing, reflection,

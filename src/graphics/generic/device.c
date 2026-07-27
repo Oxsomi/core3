@@ -166,16 +166,20 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 	U64 streamOffset = 0;
 	gotoIfError3(clean, SHFile_read((StreamRef*)tempStream, &streamOffset, false, alloc, &tmpBinary, e_rr));
 
-	CharString defines[2] = {
-		CharString_createRefCStrConst("ROTATE"), CharString_createRefCStrConst("1")
+	//ROTATE is a uniform (not a define), so select the permutation by its stringified value ("false" / "true").
+
+	CharString uniformsFalse[2] = {
+		CharString_createRefCStrConst("ROTATE"), CharString_createRefCStrConst("false")
+	};
+
+	CharString uniformsTrue[2] = {
+		CharString_createRefCStrConst("ROTATE"), CharString_createRefCStrConst("true")
 	};
 
 	for(U64 i = 0; i < 2; ++i) {
 
-		ListCharString definesList = (ListCharString) { 0 };
-
-		if(i)
-			gotoIfError3(clean, ListCharString_createRefConst(defines, 2, &definesList, e_rr));
+		ListCharString uniformsList = (ListCharString) { 0 };
+		gotoIfError3(clean, ListCharString_createRefConst(i ? uniformsTrue : uniformsFalse, 2, &uniformsList, e_rr));
 
 		CharString entry = CharString_createRefCStrConst("mainSingle");
 
@@ -183,7 +187,8 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 			deviceRef,
 			&tmpBinary,
 			&entry,
-			&definesList,
+			NULL,                  //defines
+			&uniformsList,         //uniforms: select the ROTATE permutation
 			ESHExtension_None,
 			ESHExtension_None
 		);
@@ -251,6 +256,7 @@ Bool GraphicsDeviceRef_createPrebuiltShaders(GraphicsDeviceRef *deviceRef, Error
 			&tmpBinary,
 			&copyImageName,
 			mainSingle,
+			&entry,        //Packaged shaders keep their original SPIRV entrypoint name ("mainSingle", not "main")
 			EPipelineFlags_InternalWeakDeviceRef,
 			device->copyPipelineLayout,
 			&device->copyShaders[i],

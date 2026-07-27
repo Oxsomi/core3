@@ -170,6 +170,7 @@ U32 GraphicsDeviceRef_getFirstShaderEntry(
 	const SHFile *shaderBinary,
 	const CharString *entrypointName,
 	const ListCharString *defines,              //[ key, value ][]
+	const ListCharString *uniforms,             //[ name, value ][]; value compared against the binary's uniform stringified
 	ESHExtension disallow,                      //Extensions that should be disallowed (only find with extension disabled)
 	ESHExtension require                        //Extensions that should be required (only find with extension enabled)
 );
@@ -179,6 +180,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	const SHFile *shaderBinary,
 	const CharString *name,                     //Temporary name for debugging
 	U32 entryId,                                //Identifier from getFirstShaderEntry
+	const CharString *entryName,                //Optional: SPIRV entrypoint to use (NULL/empty = "main"); ignored for DXIL
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,

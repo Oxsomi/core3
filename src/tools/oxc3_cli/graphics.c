@@ -185,7 +185,13 @@
 		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 		ListCharString strings = (ListCharString) { 0 };
 
-		gotoIfError3(clean, GraphicsInterface_create(e_rr));
+		//Listing devices is informational, so a missing graphics stack (headless CI, no driver/ICD) isn't fatal.
+
+		if(!GraphicsInterface_create(&err)) {
+			Log_debugLnx("No graphics interface available (headless / no driver); no graphics devices to show");
+			err = Error_none();
+			goto clean;
+		}
 
 		U64 queried = CLI_parseGraphicsAPIs(args);
 
@@ -216,15 +222,21 @@
 				.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 			};
 
-			gotoIfError3(clean, GraphicsInstance_create(
+			//A driverless API on this machine (e.g. no Vulkan ICD in headless CI) shouldn't abort the listing.
+
+			if(!GraphicsInstance_create(
 				&applicationInfo,
 				api,
 				EGraphicsInstanceFlags_None,
 				alloc,
 				&instanceType,
 				&instanceRef,
-				e_rr
-			));
+				&err
+			)) {
+				Log_debugLnx("Couldn't create a %s instance (headless / no driver); skipping", EGraphicsApi_name[api]);
+				err = Error_none();
+				continue;
+			}
 
 			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
 

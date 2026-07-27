@@ -1159,34 +1159,34 @@ Bool Compiler_compile(
 		tempStr = CharString_createNull();
 
 		//$$<X> foreach uniform
-		//This will point towards the function export if DXIL, otherwise it'll be the spec constant directly
+		//Define $$<X> as a real preprocessor macro for BOTH backends, so `#ifdef $$<X>` works either way.
+		//DXIL points it at the function export, SPIRV at the spec-constant global (both named $$specConst_<X>).
 
 		Bool isDXIL = settings->outputType == ESHBinaryType_DXIL;
 
-		if (isDXIL)
-			for (U32 i = 0; i < toCompile->uniforms.length; ++i) {
-			
-				CharString uniformName = toCompile->uniforms.ptr[i].name;
+		for (U32 i = 0; i < toCompile->uniforms.length; ++i) {
 
-				gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr,
+			CharString uniformName = toCompile->uniforms.ptr[i].name;
 
-					"-D$$%.*s=($$specConst_%.*s())",
+			gotoIfError3(clean, CharString_format(alloc, &tempStr, e_rr,
 
-					(int) CharString_length(uniformName),
-					uniformName.ptr,
+				isDXIL ? "-D$$%.*s=($$specConst_%.*s())" : "-D$$%.*s=$$specConst_%.*s",
 
-					(int) CharString_length(uniformName),
-					uniformName.ptr
-				));
+				(int) CharString_length(uniformName),
+				uniformName.ptr,
 
-				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
-				tempStr = CharString_createNull();
-			}
+				(int) CharString_length(uniformName),
+				uniformName.ptr
+			));
+
+			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr));
+			tempStr = CharString_createNull();
+		}
 
 		//Add exports or spec constants to input
 		//SPIRV:
 		//#line 1 "Spec constants (SPIRV)"
-		//[[vk::constant_id(N)]] const T $$%.*s = (zero);
+		//[[vk::constant_id(N)]] const T $$specConst_%.*s = (zero);
 		//#line 1
 		//DXIL:
 		//#line 1 "Spec constants (DXIL)"
@@ -1238,7 +1238,7 @@ Bool Compiler_compile(
 					SHValue value = SHValue{};
 					gotoIfError3(clean, SHValue_stringifyHLSL(&value, type, flags, alloc, &tempStr2, e_rr));
 
-					gotoIfError3(clean, CharString_format(alloc, &tempStr1, e_rr, "[[vk::constant_id(%" PRIu64 ")]] const %s $$%.*s = %s;\n",
+					gotoIfError3(clean, CharString_format(alloc, &tempStr1, e_rr, "[[vk::constant_id(%" PRIu64 ")]] const %s $$specConst_%.*s = %s;\n",
 						i,
 						tempStr.ptr,
 						(int) CharString_length(uniform.name), uniform.name.ptr,

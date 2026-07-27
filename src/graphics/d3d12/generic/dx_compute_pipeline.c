@@ -33,10 +33,13 @@
 Bool DX_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,
 	const CharString *name,
+	const CharString *entryName,
 	Pipeline *pipeline,
 	const SHBinaryInfo *binary,
 	Error *e_rr
 ) {
+
+	(void) entryName;        //DXIL carries its own entrypoint metadata; the override only matters for SPIRV
 
 	Bool s_uccess = true;
 	const Allocator *alloc = GraphicsDevice_getAlloc(device);

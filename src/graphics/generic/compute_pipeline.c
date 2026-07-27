@@ -32,6 +32,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	const SHFile *shaderBinary,
 	const CharString *name,
 	U32 entryId,
+	const CharString *entryName,
 	EPipelineFlags flags,
 	PipelineLayoutRef *layout,
 	PipelineRef **pipeline,
@@ -119,7 +120,7 @@ Bool GraphicsDeviceRef_createPipelineCompute(
 	gotoIfError3(clean, ListPipelineStage_resize(&pipelinePtr->stages, 1, alloc, e_rr));
 	pipelinePtr->stages.ptrNonConst[0] = (PipelineStage) { .stageType = EPipelineStage_Compute, .binaryId = entryId };
 
-	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, pipelinePtr, binary, e_rr));
+	gotoIfError3(clean, GraphicsDevice_createPipelineComputeExt(device, name, entryName, pipelinePtr, binary, e_rr));
 
 	goto success;
 

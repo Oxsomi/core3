@@ -40,6 +40,13 @@
 	Bool hasXdotool();
 	Bool isSingleWindow();
 
+	//xdotool click/focus simulations are best-effort; the effect is verified via window state, not the exit code.
+
+	static void runXdotool(const C8 *cmd) {
+		const int ret = system(cmd);
+		(void) ret;
+	}
+
 	static Bool F16_onResize(Window *w, Error *e_rr) {
 		(void) e_rr;
 		if(!f16MaximizeSeen && I32x2_x(w->size) >= 800)  //Maximize on Wayland sends a configure with a larger size.
@@ -105,7 +112,7 @@
 
 			//Minimize button
 
-			system(
+			runXdotool(
 				"xdotool search --name 'F16:' windowfocus && "
 				"WIN=$(xdotool search --name 'F16:') && "
 				"GEOM=$(xdotool getwindowgeometry $WIN) && "
@@ -123,12 +130,12 @@
 
 			else Test_print(t, "WARN: minimize click didn't set IsMinimized (compositor-dependent)");
 
-			system("xdotool search --name 'F16:' windowactivate --sync");    //Restore via windowactivate
+			runXdotool("xdotool search --name 'F16:' windowactivate --sync");    //Restore via windowactivate
 			pump(500 * MS);
 
 			//Maximize button (x = width - BTN_W * 3 / 2 + BTN_W / 2 = width - BTN_W)
 
-			system(
+			runXdotool(
 				"WIN=$(xdotool search --name 'F16:') && "
 				"xdotool mousemove --window $WIN "
 					"$(($(xdotool getwindowgeometry --shell $WIN | grep WIDTH | cut -d= -f2) - 115)) 16 "
@@ -144,7 +151,7 @@
 
 			//Un-maximize
 
-			system(
+			runXdotool(
 				"WIN=$(xdotool search --name 'F16:') && "
 				"xdotool mousemove --window $WIN "
 					"$(($(xdotool getwindowgeometry --shell $WIN | grep WIDTH | cut -d= -f2) - 115)) 16 "

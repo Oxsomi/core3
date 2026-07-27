@@ -47,6 +47,7 @@ TListImpl(VkComputePipelineCreateInfo);
 Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	GraphicsDevice *device,
 	const CharString *name,
+	const CharString *entryName,
 	Pipeline *pipeline,
 	const SHBinaryInfo *buf,
 	Error *e_rr
@@ -59,7 +60,33 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	VkPipeline pipelineHandle = NULL;
+	VkShaderModule shaderModule = NULL;
 	CharString temp = CharString_createNull();
+	CharString entryCopy = CharString_createNull();
+
+	//Pick the SPIR-V entrypoint to bind.
+	//Unlike DXIL, a SPIR-V module keeps its original entrypoint name, so use the caller's entryName (e.g. "mainSingle").
+	//Fall back to "main" only when none was given.
+	//vkCreateComputePipelines enforces validity: it fails if pName isn't an OpEntryPoint in the module.
+
+	const C8 *entryPoint = "main";
+
+	if(entryName && CharString_length(*entryName)) {
+
+		if(!CharString_isNullTerminated(*entryName))
+			gotoIfError3(clean, CharString_createCopy(*entryName, alloc, &entryCopy, e_rr));
+
+		entryPoint = entryCopy.ptr ? entryCopy.ptr : entryName->ptr;
+	}
+
+	gotoIfError3(clean, createShaderModule(
+		buf->binaries[ESHBinaryType_SPIRV],
+		&shaderModule,
+		deviceExt,
+		instanceExt,
+		name,
+		EPipelineStage_Compute, alloc, e_rr
+	));
 
 	//TODO: Push constants
 
@@ -68,19 +95,11 @@ Bool VK_WRAP_FUNC(GraphicsDevice_createPipelineCompute)(
 		.stage = (VkPipelineShaderStageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.pName = "main"
+			.module = shaderModule,
+			.pName = entryPoint
 		},
 		.layout = *PipelineLayout_ext(PipelineLayoutRef_ptr(pipeline->layout), Vk)
 	};
-
-	gotoIfError3(clean, createShaderModule(
-		buf->binaries[ESHBinaryType_SPIRV],
-		&pipelineInfo.stage.module,
-		deviceExt,
-		instanceExt,
-		name,
-		EPipelineStage_Compute, alloc, e_rr
-	));
 
 	gotoIfError3(clean, checkVkError(deviceExt->createComputePipelines(
 		deviceExt->device,
@@ -114,11 +133,10 @@ clean:
 	if(pipelineHandle)
 		deviceExt->destroyPipeline(deviceExt->device, pipelineHandle, NULL);
 
-	const VkShaderModule mod = pipelineInfo.stage.module;
+	if(shaderModule)
+		deviceExt->destroyShaderModule(deviceExt->device, shaderModule, NULL);
 
-	if(mod)
-		deviceExt->destroyShaderModule(deviceExt->device, mod, NULL);
-
+	CharString_free(&entryCopy, alloc);
 	CharString_free(&temp, alloc);
 	return s_uccess;
 }
