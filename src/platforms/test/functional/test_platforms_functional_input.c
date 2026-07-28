@@ -46,6 +46,12 @@
 	#include <stdio.h>
 	#include "platforms/linux/lwindow_structs.h"
 	Bool hasXdotool();
+
+	//xdotool simulations are best-effort; the effect is verified via window/input state, not the exit code.
+	static void runXdotool(const C8 *cmd) {
+		const int ret = system(cmd);
+		(void) ret;
+	}
 #endif
 
 Bool isSingleWindow();
@@ -229,7 +235,7 @@ static void Test_mouse(Test *t) {
 
 		if (!isSingleWindow() && hasXdotool()) {
 
-			system("xdotool search --name 'F8: Left-click anywhere to pass' windowfocus click 1");
+			runXdotool("xdotool search --name 'F8: Left-click anywhere to pass' windowfocus click 1");
 
 			Ns waited = 0;
 
@@ -849,7 +855,7 @@ static void Test_mouseDraw(Test *t) {
 
 			//Move to centre, mousedown, drag, mouseup
 
-			system(
+			runXdotool(
 				"WIN=$(xdotool search --name 'F18:') && "
 				"xdotool mousemove --window $WIN 128 128 && "
 				"xdotool mousedown 1"
@@ -863,7 +869,7 @@ static void Test_mouseDraw(Test *t) {
 					"xdotool mousemove --window $WIN %d 128", 128 + dx
 				);
 
-				system(cmd);
+				runXdotool(cmd);
 				Thread_sleep(16 * MS);
 				WindowManager_step(&windowManager, NULL, NULL);
 
@@ -874,7 +880,7 @@ static void Test_mouseDraw(Test *t) {
 					presentQuiet(w);
 			}
 
-			system("xdotool mouseup 1");
+			runXdotool("xdotool mouseup 1");
 			pump(200 * MS);
 		}
 

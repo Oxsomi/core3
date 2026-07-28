@@ -317,5 +317,11 @@
 	}
 
 #else
-	Bool CLI_graphicsDevices(const ParsedArgs *args) { if(!args) return false; (void)args; return false; }
+	//No graphics in this build: listing devices is informational, so report it and succeed rather than fail
+	//(e.g. so "devices all" still dumps CPU + audio).
+	Bool CLI_graphicsDevices(const ParsedArgs *args) {
+		if(!args) return false;
+		Log_debugLnx("No graphics support in this build; no graphics devices to show");
+		return true;
+	}
 #endif

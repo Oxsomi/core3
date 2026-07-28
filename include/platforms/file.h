@@ -87,14 +87,14 @@ static inline Bool File_queryFolderCount(
 }
 
 static inline Bool File_has(const CharString *loc, const Allocator *alloc) {
-	FileInfo info = { 0 };
+	FileInfo info = { (EFileType) 0 };
 	Bool s_uccess = File_getInfo(loc, &info, alloc, NULL);
 	FileInfo_free(&info, alloc);
 	return s_uccess;
 }
 
 static inline Bool File_hasType(const CharString *loc, EFileType type, const Allocator *alloc) {
-	FileInfo info = { 0 };
+	FileInfo info = { (EFileType) 0 };
 	Bool s_uccess = File_getInfo(loc, &info, alloc, NULL);
 	const Bool sameType = info.type == type;
 	FileInfo_free(&info, alloc);

@@ -34,6 +34,7 @@
 #include "types/container/log.h"
 #include "types/base/time.h"
 #include "types/base/error.h"
+#include "types/base/string_read_helper.h"
 
 //Parse an in-memory oiSH and dump its reflection, so a snapshot mismatch shows *what* changed.
 static void printOiSH(const Allocator *alloc, Buffer buf, const C8 *label) {
@@ -58,6 +59,111 @@ static void printOiSH(const Allocator *alloc, Buffer buf, const C8 *label) {
 
 	SHFile_free(&file, alloc);
 	RefPtr_dec(&ms);
+}
+
+//Read an in-memory oiSH into an SHFile (returns false + prints on failure).
+static Bool shReadFile(const Allocator *alloc, Buffer buf, SHFile *out) {
+
+	Error err = Error_none();
+	const RefPtrType msType = MemoryStream_makeType(alloc);
+	MemoryStreamRef *ms = NULL;
+	U64 off = 0;
+
+	Bool ok =
+		MemoryStream_createFromBufferRegion(
+			Buffer_createRefFromBuffer(buf, true), 0, Buffer_length(buf), EMemoryStreamFlags_None, &msType, &ms, &err
+		) &&
+		SHFile_read((StreamRef*) ms, &off, false, alloc, out, &err);
+
+	RefPtr_dec(&ms);
+
+	if(!ok)
+		Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+	return ok;
+}
+
+//Resolve the semantic name for one I/O slot. A zero name index is the default (TEXCOORD for an input,
+// SV_TARGET for an output); otherwise it indexes semanticNames (inputs first, outputs after uniqueInputSemantics).
+static CharString shSemanticName(const SHEntry *e, Bool isOutput, U8 slot) {
+
+	const U8 v = isOutput ? e->outputSemanticNames[slot] : e->inputSemanticNames[slot];
+	const U8 nameIdx = (U8) (v >> 4);
+
+	if(!nameIdx)
+		return CharString_createRefCStrConst(isOutput ? "SV_TARGET" : "TEXCOORD");
+
+	const U64 li = isOutput ? ((U64) e->uniqueInputSemantics + nameIdx - 1) : ((U64) nameIdx - 1);
+	return e->semanticNames.ptr[li];
+}
+
+static const SHEntry *shFindEntry(const SHFile *f, CharString name) {
+
+	for(U64 i = 0; i < f->entries.length; ++i)
+		if(CharString_equalsStringSensitive(&f->entries.ptr[i].name, &name))
+			return &f->entries.ptr[i];
+
+	return NULL;
+}
+
+//Cross-backend reflection check: the same shader compiled to SPIRV and DXIL must expose the same entrypoints
+//and, per entrypoint, the same input/output signature (type + semantic).
+//Resources are intentionally NOT compared here: bindings differ by backend, but so does the very representation
+// of some resources -- e.g. a push constant is a distinct PushConstants register in SPIRV but an ordinary cbuffer
+// ($Globals / ConstantBuffer) in DXIL, which has no push-constant concept -- so a resource comparison needs a
+// dedicated reconciliation pass rather than a naive name/type match.
+static void shCrossCheckReflection(Test *t, const Allocator *alloc, Buffer spvBuf, Buffer dxBuf) {
+
+	SHFile spv = (SHFile) { 0 }, dx = (SHFile) { 0 };
+
+	if(!shReadFile(alloc, spvBuf, &spv) || !shReadFile(alloc, dxBuf, &dx)) {
+		Test_assert(t, "cross-check: both oiSH read", false);
+		goto clean;
+	}
+
+	Test_assert(t, "cross-check: same entrypoint count", spv.entries.length == dx.entries.length);
+
+	for(U64 i = 0; i < spv.entries.length; ++i) {
+
+		const SHEntry *se = &spv.entries.ptr[i];
+		const SHEntry *de = shFindEntry(&dx, se->name);
+
+		if(!de) {
+			Test_assert(t, "cross-check: DXIL has matching entrypoint", false);
+			continue;
+		}
+
+		Test_assert(t, "cross-check: same stage", se->stage == de->stage);
+
+		//inputs[16]/outputs[16] are backend-agnostic ESBType arrays indexed by register, so a missing or extra
+		// input (the reflection bug this guards against) shows up directly as a mismatch here.
+		Test_assert(t, "cross-check: same input types", Buffer_eq(
+			Buffer_createRefConst(se->inputs, sizeof(se->inputs)), Buffer_createRefConst(de->inputs, sizeof(de->inputs))
+		));
+		Test_assert(t, "cross-check: same output types", Buffer_eq(
+			Buffer_createRefConst(se->outputs, sizeof(se->outputs)), Buffer_createRefConst(de->outputs, sizeof(de->outputs))
+		));
+
+		//Semantic name + index per used slot, resolved so it's independent of each backend's semanticNames ordering.
+		for(U8 s = 0; s < 16; ++s) {
+
+			if(se->inputs[s] || de->inputs[s]) {
+				const CharString sn = shSemanticName(se, false, s), dn = shSemanticName(de, false, s);
+				Test_assert(t, "cross-check: same input semantic", CharString_equalsStringInsensitive(&sn, &dn) &&
+					(se->inputSemanticNames[s] & 0xF) == (de->inputSemanticNames[s] & 0xF));
+			}
+
+			if(se->outputs[s] || de->outputs[s]) {
+				const CharString sn = shSemanticName(se, true, s), dn = shSemanticName(de, true, s);
+				Test_assert(t, "cross-check: same output semantic", CharString_equalsStringInsensitive(&sn, &dn) &&
+					(se->outputSemanticNames[s] & 0xF) == (de->outputSemanticNames[s] & 0xF));
+			}
+		}
+	}
+
+clean:
+	SHFile_free(&spv, alloc);
+	SHFile_free(&dx, alloc);
 }
 
 //End-to-end snapshot test: enumerate the whole test/hlsl corpus (relative to the working directory,
@@ -217,6 +323,14 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 		Test_assert(t, "entire corpus compiled for DXIL", dxCompiled && !dxErr.genericError);
 		Test_assert(t, "DXIL produced a binary for every SPIRV corpus shader", dxProduced == spvProduced && dxProduced >= 1);
+
+		//Every shader that produced both a SPIRV and a DXIL oiSH must expose the same reflection interface.
+		//SPIRV is byte-snapshotted above, so this ties the (unsnapshotted) DXIL reflection to it and catches any
+		// backend disagreement in entrypoints, input/output signature or resources (bindings excluded).
+		if (dxCompiled && allBuffers.length == dxBuffers.length)
+			for (U64 i = 0; i < allBuffers.length; ++i)
+				if (Buffer_length(allBuffers.ptr[i]) && Buffer_length(dxBuffers.ptr[i]))
+					shCrossCheckReflection(t, alloc, allBuffers.ptr[i], dxBuffers.ptr[i]);
 
 		ListBuffer_freeUnderlying(&dxBuffers, alloc);
 		ListCharString_freeUnderlying(&dxFiles, alloc);
