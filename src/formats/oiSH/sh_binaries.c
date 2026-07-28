@@ -117,7 +117,9 @@ Bool SHFile_addBinary(SHFile *shFile, SHBinaryInfo *binaries, const Allocator *a
 			break;
 		}
 
-	if(!containsBinary)
+	//A reflection-only oiSH keeps register/entry reflection but no compiled code, so empty binaries are allowed.
+
+	if(!containsBinary && !(shFile->flags & ESHSettingsFlags_ReflectionOnly))
 		retError(clean, Error_nullPointer(
 			!shFile ? 0 : 2, "SHFile_addBinary() at least one of binaries->binaries[i] is required"
 		));

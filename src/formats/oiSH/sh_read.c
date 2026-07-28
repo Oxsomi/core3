@@ -203,7 +203,14 @@ Bool SHFile_read(StreamRef *streamRef, U64 *offset, Bool isSubFile, const Alloca
 
 	//Create SHFile container
 
-	ESHSettingsFlags flags = isSubFile ? ESHSettingsFlags_HideMagicNumber : ESHSettingsFlags_None;
+	//HideMagicNumber is derived from whether we're a subfile; the rest (e.g. ReflectionOnly) is persisted in the header.
+
+	ESHSettingsFlags flags = (isSubFile ? ESHSettingsFlags_HideMagicNumber : ESHSettingsFlags_None) |
+		((ESHSettingsFlags) header.flags & ~(ESHSettingsFlags) ESHSettingsFlags_HideMagicNumber);
+
+	if(flags & ESHSettingsFlags_Invalid)
+		retError(clean, Error_invalidParameter(0, 2, "SHFile_read() header.flags has invalid bits"));
+
 	gotoIfError3(clean, SHFile_create(flags, header.compilerVersion, header.sourceHash, alloc, shFile, e_rr));
 	allocate = true;
 

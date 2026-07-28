@@ -205,9 +205,9 @@ def main():
 		pa = profile_args_for_mode(mode)
 
 		if system == "Windows":
-			conan_create_if_changed("packages/agility_sdk",    profile_for_mode(mode), mode, pa, cache)
 			conan_create_if_changed("packages/amd_ags",        profile_for_mode(mode), mode, pa, cache)
 
+		conan_create_if_changed("packages/agility_sdk",        profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/nvapi",              profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/spirv_reflect",      profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/dxc",                profile_for_mode(mode), mode, pa, cache)

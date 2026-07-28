@@ -51,9 +51,18 @@ typedef struct SHHeader {		//4-byte aligned
     U16 registerNameCount;
 
 	U16 uniformNameCount;
-	U16 padding;
+	U16 flags;					//Persisted ESHSettingsFlags (see below); HideMagicNumber is derived, not persisted
 
 } SHHeader;
+
+//Settings that are persisted in SHHeader::flags (the low 16 bits are stored; the rest must be 0)
+
+typedef enum ESHSettingsFlags {
+	ESHSettingsFlags_None				= 0,
+	ESHSettingsFlags_HideMagicNumber	= 1 << 0,	//Derived on read from whether we're a subfile; never written into flags
+	ESHSettingsFlags_ReflectionOnly		= 1 << 1,	//Carries reflection but no compiled binaries (SHFile_isComplete is false)
+	ESHSettingsFlags_Invalid			= 0xFFFFFFFF << 2
+} ESHSettingsFlags;
 
 //Loosely maps to EPipelineStage in OxC3 graphics
 
@@ -386,6 +395,14 @@ The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed 
 
 The magic number in the header can only be absent if embedded in another file. An example is when embedded in an oiSC file.
 
+## Header flags
+
+`SHHeader::flags` persists an `ESHSettingsFlags` value. Only the low 16 bits are stored; the `ESHSettingsFlags_Invalid` range must be zero, and a reader rejects the file if any invalid bit is set.
+
+`ESHSettingsFlags_HideMagicNumber` is never persisted here. It is a serialization detail derived on read from whether the file is embedded as a subfile (and thus has no leading magic number), so the writer masks it out of the stored value.
+
+`ESHSettingsFlags_ReflectionOnly` marks an oiSH that carries reflection metadata (entrypoints, registers, includes and feature information) while every binary's compiled code is empty. `SHFile_isComplete` returns false for such a file, so it cannot be used to create a pipeline; it can only be inspected (entrypoints, includes, feature set). This is what `OxC3 shader reflect` emits: it compiles the HLSL for reflection, then strips the binary blobs and sets this flag. Because the flag lives inside the header, and `SHHeader::hash` covers everything from `uniqueDefines` to the end of the file, the reflection-only state is integrity-checked like the rest of the contents.
+
 ## CRC32C
 
 CRC32C hashes are used for the source and include directories to see if they're dirty. CRC32C first checks for \r and removes it. This is because Windows uses \r\n and Unix/OSX use \n. Windows can allow either, but will sometimes pick \r\n and sometimes \n. To mitigate this triggering random recompiles, even though the real source isn't dirty. CRC32C is a variation of CRC32 optimized for performance, since there is integrated hardware support for it.
@@ -560,3 +577,5 @@ When combining DXIL and SPIRV binaries and/or switching binary type, there are a
 1.2(.4): No major bump, no oiSH files exist in the wild yet. Optimized allocations when reading, fixed bug with callable shaders and added binary de-duplication.
 
 1.2(.5): No major bump, no oiSH files exist in the wild yet. Added the `[[oxc::binary("spv", "dxil")]]` entrypoint annotation for per-entrypoint backend selection (see OxC3_tool.md); absent = all supported backends, and it AND's with the backends the stage + extensions can be expressed on (e.g. workgraph is DXIL-only, ComputeDeriv/AtomicF32 are SPIRV-only). No format change: which backends an entrypoint targets is already expressed by which binaries its referenced SHBinaryInfo carry (ESHBinaryFlags). Also fixed DXIL reflection of opaque non-struct structured-buffer elements (RWStructuredBuffer&lt;float4&gt; whose $Element DXC leaves as D3D_SVT_VOID) and folded D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS into WriteMSTexture.
+
+1.2(.6): No major bump, no oiSH files exist in the wild yet. Repurposed the trailing `SHHeader::padding` U16 as `flags`, persisting `ESHSettingsFlags` (see Header flags section). This adds `ESHSettingsFlags_ReflectionOnly`, marking an oiSH that carries reflection but no compiled binaries; it is what `OxC3 shader reflect` emits and what lets such a file load even though `SHFile_isComplete` is false. Backwards compatible: existing files wrote the padding as zero, which reads back as `ESHSettingsFlags_None`. The field is inside the hashed range, so the reflection-only state is integrity-checked.

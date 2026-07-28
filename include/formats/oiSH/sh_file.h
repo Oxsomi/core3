@@ -45,7 +45,8 @@ static const U8 OISH_SHADER_MODEL_MAX8 = OISH_SHADER_MODEL8(6, 10);   //6.10 max
 typedef enum ESHSettingsFlags {
 	ESHSettingsFlags_None               = 0,
 	ESHSettingsFlags_HideMagicNumber    = 1 << 0,          //Only valid if the oiSH can be 100% confidently detected otherwise
-	ESHSettingsFlags_Invalid            = 0xFFFFFFFF << 1
+	ESHSettingsFlags_ReflectionOnly     = 1 << 1,          //Carries reflection but no compiled binaries
+	ESHSettingsFlags_Invalid            = 0xFFFFFFFF << 2
 } ESHSettingsFlags;
 
 typedef enum ECompilerWarning {                            //Present here in case shader compiler isn't present

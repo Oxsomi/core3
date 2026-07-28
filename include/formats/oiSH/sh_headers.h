@@ -82,7 +82,7 @@ typedef struct SHHeader {
 	U16 registerNameCount;
 
 	U16 uniformNameCount;
-	U16 padding;
+	U16 flags;                  //Persisted ESHSettingsFlags (currently just ReflectionOnly; HideMagicNumber is derived)
 
 } SHHeader;
 

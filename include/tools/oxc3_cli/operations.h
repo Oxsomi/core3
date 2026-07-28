@@ -221,6 +221,14 @@ typedef enum EOperation {
 
 	#ifdef CLI_SHADER_COMPILER
 		EOperation_CompileShader,
+
+		EOperation_ShaderCompile,
+		EOperation_ShaderReflect,
+		EOperation_ShaderEntrypoints,
+		EOperation_ShaderIncludes,
+		EOperation_ShaderFeatureSet,
+		EOperation_ShaderDisassemble,
+		EOperation_ShaderAssemble,
 	#endif
 
 	//EOperation_CompileChimera,
@@ -272,6 +280,7 @@ typedef enum EOperationCategory {
 
 	#ifdef CLI_SHADER_COMPILER
 		EOperationCategory_Compile,
+		EOperationCategory_Shader,
 	#endif
 
 	#ifdef CLI_GRAPHICS

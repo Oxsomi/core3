@@ -922,7 +922,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			RefPtr_dec(&stream);
 
-			if(!s_uccess)
+			if(err.genericError)
 				goto clean;
 
 			break;
@@ -953,7 +953,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 			RefPtr_dec(&stream);
 
-			if(!s_uccess)
+			if(err.genericError)
 				goto clean;
 
 			break;

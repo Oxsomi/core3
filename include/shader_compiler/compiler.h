@@ -189,6 +189,12 @@ Bool Compiler_disassemble(
 	const Compiler *comp, ESHBinaryType type, Buffer buf, const Allocator *alloc, CharString *result, Error *e_rr
 );
 
+//Assemble text back into a binary (SPIRV text via spirv-tools, DXIL LL text via DXC's IDxcAssembler)
+
+Bool Compiler_assemble(
+	const Compiler *comp, ESHBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
+);
+
 //Query entrypoints embedded in a binary
 
 Bool Compiler_getUniqueEntrypoints(

@@ -844,6 +844,33 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_assembleSPIRV(CharString text, const Allocator *alloc, Buffer *result, Error *e_rr);
+Bool Compiler_assembleDXIL(const Compiler *comp, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr);
+
+Bool Compiler_assemble(
+	const Compiler *comp, ESHBinaryType type, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	switch (type) {
+
+		case ESHBinaryType_SPIRV:
+			gotoIfError3(clean, Compiler_assembleSPIRV(text, alloc, result, e_rr));
+			break;
+
+		case ESHBinaryType_DXIL:
+			gotoIfError3(clean, Compiler_assembleDXIL(comp, text, alloc, result, e_rr));
+			break;
+
+		default:
+			retError(clean, Error_unimplemented(0, "Compiler_assemble() has invalid type"));
+	}
+
+clean:
+	return s_uccess;
+}
+
 Bool Compiler_processSPIRV(
 	Buffer *result,                      //Required; input & output SPIRV (will be optimized)
 	ListSHRegisterRuntime *registers,    //Required; Output registers

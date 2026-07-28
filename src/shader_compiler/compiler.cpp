@@ -1238,7 +1238,9 @@ Bool Compiler_compile(
 					SHValue value = SHValue{};
 					gotoIfError3(clean, SHValue_stringifyHLSL(&value, type, flags, alloc, &tempStr2, e_rr));
 
-					gotoIfError3(clean, CharString_format(alloc, &tempStr1, e_rr, "[[vk::constant_id(%" PRIu64 ")]] const %s $$specConst_%.*s = %s;\n",
+					gotoIfError3(clean, CharString_format(
+						alloc, &tempStr1, e_rr,
+						"[[vk::constant_id(%" PRIu64 ")]] const %s $$specConst_%.*s = %s;\n",
 						i,
 						tempStr.ptr,
 						(int) CharString_length(uniform.name), uniform.name.ptr,

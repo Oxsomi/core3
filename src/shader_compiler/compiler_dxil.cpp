@@ -1572,6 +1572,58 @@ clean:
 	return s_uccess;
 }
 
+extern "C" Bool Compiler_assembleDXIL(
+	const Compiler *comp, CharString text, const Allocator *alloc, Buffer *result, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
+	HRESULT hr = 0, status = 0;
+	IDxcAssembler *assembler = NULL;
+	IDxcBlobEncoding *textBlob = NULL;
+	IDxcOperationResult *opResult = NULL;
+	IDxcBlob *container = NULL;
+
+	if(!result)
+		retError(clean, Error_nullPointer(3, "Compiler_assembleDXIL()::result is required"));
+
+	if(!CharString_length(text))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_assembleDXIL()::text is empty"));
+
+	//Wrap the LL text and assemble it into a DXIL container (AssembleToContainer accepts LL or bitcode)
+
+	hr = interfaces->utils->CreateBlobFromPinned(text.ptr, (U32) CharString_length(text), DXC_CP_UTF8, &textBlob);
+	if(FAILED(hr))
+		retError(clean, Error_invalidOperation(0, "Compiler_assembleDXIL() couldn't wrap the input text"));
+
+	hr = DxcCreateInstance(CLSID_DxcAssembler, IID_PPV_ARGS(&assembler));
+	if(FAILED(hr))
+		retError(clean, Error_invalidOperation(1, "Compiler_assembleDXIL() couldn't create the DXC assembler"));
+
+	hr = assembler->AssembleToContainer(textBlob, &opResult);
+	if(FAILED(hr))
+		retError(clean, Error_invalidOperation(2, "Compiler_assembleDXIL() AssembleToContainer failed"));
+
+	if(FAILED(opResult->GetStatus(&status)) || FAILED(status))
+		retError(clean, Error_invalidState(0, "Compiler_assembleDXIL() DXIL text couldn't be assembled"));
+
+	hr = opResult->GetResult(&container);
+	if(FAILED(hr) || !container)
+		retError(clean, Error_invalidOperation(3, "Compiler_assembleDXIL() couldn't get the assembled container"));
+
+	gotoIfError3(clean, Buffer_createCopy(
+		Buffer_createRefConst(container->GetBufferPointer(), (U64) container->GetBufferSize()), alloc, result, e_rr
+	));
+
+clean:
+	if(container) container->Release();
+	if(opResult) opResult->Release();
+	if(assembler) assembler->Release();
+	if(textBlob) textBlob->Release();
+	return s_uccess;
+}
+
 extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 	const Compiler *compiler,
 	Buffer binary,

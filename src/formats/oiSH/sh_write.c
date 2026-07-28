@@ -450,7 +450,12 @@ Bool SHFile_write(StreamRef *streamRef, U64 *offset, const SHFile *shFile, const
 			.semanticCount = (U16) uniqueSemantics,
 			.arrayDimCount = (U16) arrays.length,
 			.registerNameCount = (U16) (includeStart - regNameStart),
-			.uniformNameCount = (U16) (regNameStart - uniNamesStart)
+			.uniformNameCount = (U16) (regNameStart - uniNamesStart),
+
+			//Persist the settings flags. HideMagicNumber is a serialization detail derived from the magic on read,
+			//so it isn't stored; ReflectionOnly (and any future content flags) round-trips here.
+
+			.flags = (U16) (shFile->flags & ~(ESHSettingsFlags) ESHSettingsFlags_HideMagicNumber)
 		}
 	};
 

@@ -337,6 +337,36 @@ def main():
 		else:
 			skip("compile shaders", "shader compiler not in this build")
 
+		# ---- shader category (probed) -------------------------------------------------------------
+		section("shader")
+		if available(exe, "shader", "compile"):
+			sh = p("s.hlsl")
+			write(sh, "[shader(\"compute\")]\n[numthreads(1,1,1)]\nvoid main() {}\n")
+			# compile (format detected from .hlsl); the compiler emits one oiSH per binary type
+			run(exe, ["shader", "compile", "-input", sh, "-output", p("s.oiSH")], contains=["success"])
+			soiSH = p("s.oiSH.spv.oiSH")
+			run(exe, ["shader", "entrypoints", "-input", soiSH], contains=["entrypoint", "main"])
+			run(exe, ["shader", "feature_set", "-input", soiSH], contains=["shader model"])
+			run(exe, ["shader", "includes", "-input", soiSH], contains=["include"])
+			# reflect: strips binaries -> reflection-only oiSH (round-trips back through entrypoints)
+			run(exe, ["shader", "reflect", "-input", sh, "-output", p("sr.oiSH")], contains=["reflection-only"])
+			run(exe, ["shader", "entrypoints", "-input", p("sr.oiSH.spv.oiSH")], contains=["main"])
+			# disassemble + assemble round-trip on a standalone .spv extracted from the oiSH
+			spv = p("s.spv")
+			run(exe, ["file", "data", "-input", soiSH, "--bin", "-compile-output", "spv", "-entry", "0", "-output", spv])
+			run(exe, ["shader", "disassemble", "-input", spv, "-output", p("s.spv.txt")])
+			run(exe, ["shader", "assemble", "-input", p("s.spv.txt"), "-output", p("s2.spv")], contains=["Assembled"])
+			run(exe, ["shader", "disassemble", "-input", p("s2.spv")], contains=["SPIR-V"])
+			# same round-trip for DXIL (extracted from the dxil oiSH); assemble goes through DXC's IDxcAssembler
+			doiSH = p("s.oiSH.dxil.oiSH")
+			dxil = p("s.dxil")
+			run(exe, ["file", "data", "-input", doiSH, "--bin", "-compile-output", "dxil", "-entry", "0", "-output", dxil])
+			run(exe, ["shader", "disassemble", "-input", dxil, "-output", p("s.dxil.txt")])
+			run(exe, ["shader", "assemble", "-input", p("s.dxil.txt"), "-output", p("s2.dxil")], contains=["Assembled"])
+			run(exe, ["shader", "disassemble", "-input", p("s2.dxil")], contains=["target triple"])
+		else:
+			skip("shader", "shader compiler not in this build")
+
 		# ---- graphics (probed; create is deferred) ------------------------------------------------
 		section("graphics")
 		if available(exe, "graphics", "devices"):

@@ -2056,6 +2056,30 @@ clean:
 	return s_uccess;
 }
 
+extern "C" Bool Compiler_assembleSPIRV(CharString text, const Allocator *alloc, Buffer *result, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_4 };
+	std::vector<U32> spirv;
+
+	if(!result)
+		retError(clean, Error_nullPointer(2, "Compiler_assembleSPIRV()::result is required"));
+
+	if(!CharString_length(text))
+		retError(clean, Error_invalidParameter(0, 0, "Compiler_assembleSPIRV()::text is empty"));
+
+	if(!tool.Assemble(std::string(text.ptr, (size_t) CharString_length(text)), &spirv))
+		retError(clean, Error_invalidOperation(0, "Compiler_assembleSPIRV() SPIRV text couldn't be assembled"));
+
+	gotoIfError3(clean, Buffer_createCopy(
+		Buffer_createRefConst(spirv.data(), (U64) spirv.size() * sizeof(U32)), alloc, result, e_rr
+	));
+
+clean:
+	return s_uccess;
+}
+
 extern "C" Bool Compiler_getUniqueEntrypointsSPIRV(
 	const Compiler *compiler,
 	Buffer binary,

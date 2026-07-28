@@ -175,6 +175,7 @@ const C8 *EOperationCategory_names[] = {
 
 	#ifdef CLI_SHADER_COMPILER
 		"compile",
+		"shader",
 	#endif
 
 	#ifdef CLI_GRAPHICS
@@ -199,6 +200,7 @@ const C8 *EOperationCategory_description[] = {
 
 	#ifdef CLI_SHADER_COMPILER
 		"Compile shaders or to intermediate binary (Chimera).",
+		"Shader tools: compile, reflect, inspect (entrypoints/includes/features), disassemble and assemble.",
 	#endif
 
 	#ifdef CLI_GRAPHICS
@@ -609,6 +611,82 @@ void Operations_init() {
 			.name = "shaders",
 			.desc = "Compile shader from text to application ready format",
 			.func = &CLI_compileShader
+		};
+
+		//Shader category: compile + reflect + inspect + (dis)assemble
+
+		Operation_values[EOperation_ShaderCompile] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "compile",
+			.desc = "Compile a shader to an oiSH; the source format is detected from the input extension (.hlsl).",
+			.func = &CLI_compileShader,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+			.optionalParameters =
+				EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir |
+				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode,
+			.operationFlags =
+				EOperationFlags_Debug | EOperationFlags_Split |
+				EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
+		};
+
+		Operation_values[EOperation_ShaderReflect] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "reflect",
+			.desc = "Produce a reflection-only oiSH from a shader source (no compiled binary; not usable for a pipeline).",
+			.func = &CLI_shaderReflect,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+			.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
+			.operationFlags =
+				EOperationFlags_Debug | EOperationFlags_CompilerWarnings | EOperationFlags_IgnoreEmptyFiles
+		};
+
+		Operation_values[EOperation_ShaderEntrypoints] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "entrypoints",
+			.desc = "List the entrypoints (name + stage) declared in an oiSH shader.",
+			.func = &CLI_shaderEntrypoints,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input,
+			.operationFlags = EOperationFlags_Verbose
+		};
+
+		Operation_values[EOperation_ShaderIncludes] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "includes",
+			.desc = "List the include files (relative path + CRC32C) an oiSH shader was compiled from.",
+			.func = &CLI_shaderIncludes,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input
+		};
+
+		Operation_values[EOperation_ShaderFeatureSet] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "feature_set",
+			.desc = "Show the extensions, shader models and binary types used across an oiSH shader's binaries.",
+			.func = &CLI_shaderFeatureSet,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input
+		};
+
+		Operation_values[EOperation_ShaderDisassemble] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "disassemble",
+			.desc = "Disassemble a standalone .spv or .dxil binary to text (stdout, or -output <file>).",
+			.func = &CLI_shaderDisassemble,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input,
+			.optionalParameters = EOperationHasParameter_Output
+		};
+
+		Operation_values[EOperation_ShaderAssemble] = (Operation) {
+			.category = EOperationCategory_Shader,
+			.name = "assemble",
+			.desc = "Assemble SPIR-V text (.spv.txt) into a .spv binary. DXIL assembly isn't supported yet.",
+			.func = &CLI_shaderAssemble,
+			.isFormatLess = true,
+			.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output
 		};
 
 	#endif

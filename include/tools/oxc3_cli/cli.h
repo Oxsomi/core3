@@ -123,6 +123,14 @@ U64 CLI_parseGraphicsAPIs(const ParsedArgs *args);        //U64_MAX indicates in
 
 Bool CLI_compileShader(const ParsedArgs *args);
 
+//shader category
+Bool CLI_shaderReflect(const ParsedArgs *args);
+Bool CLI_shaderEntrypoints(const ParsedArgs *args);
+Bool CLI_shaderIncludes(const ParsedArgs *args);
+Bool CLI_shaderFeatureSet(const ParsedArgs *args);
+Bool CLI_shaderDisassemble(const ParsedArgs *args);
+Bool CLI_shaderAssemble(const ParsedArgs *args);
+
 Bool CLI_graphicsDevices(const ParsedArgs *args);
 Bool CLI_graphicsCreate(const ParsedArgs *args);
 
