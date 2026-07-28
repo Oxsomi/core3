@@ -16,10 +16,6 @@ on:
         type: string
         required: false
         default: ''
-      vulkan:
-        type: boolean
-        required: false
-        default: false
       build_flags:
         type: string
         required: false
@@ -63,26 +59,6 @@ jobs:
       # ── Ninja (Android only) ───────────────────────────────────────────────
       - uses: seanmiddleditch/gha-setup-ninja@master
         if: inputs.os == 'android'
-
-      # ── Vulkan SDK ─────────────────────────────────────────────────────────
-      # Windows/macOS: prebuilt tarball via humbletim action
-      - name: Install Vulkan SDK (Windows / macOS)
-        if: inputs.vulkan && (inputs.os == 'windows' || inputs.os == 'macos' || startsWith(inputs.runner, 'windows'))
-        uses: humbletim/install-vulkan-sdk@v1.2
-        with:
-          version: 1.4.309.0
-          cache: true
-
-      # Linux: apt, works on x64 and ARM64 equally, no prebuilt arch mismatch
-      - name: Install Vulkan SDK (Linux)
-        if: inputs.vulkan && (inputs.os == 'linux' || startsWith(inputs.runner, 'ubuntu'))
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libvulkan-dev \
-            glslang-tools \
-            spirv-tools \
-            vulkan-utility-libraries-dev
 
       # ── Conan ──────────────────────────────────────────────────────────────
       - name: Install Conan

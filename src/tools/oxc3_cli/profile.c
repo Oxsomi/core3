@@ -122,7 +122,7 @@ Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 	if(args->parameters & EOperationHasParameter_Length) {
 
 		CharString l = CharString_createNull();
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &l))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &l, e_rr));
 
 		if(!CharString_parseU64(l, &bufferSize) || !bufferSize)
 			retError(clean, Error_invalidState(0, "CLI_profileData() -length must be a non-zero byte count"));
@@ -135,7 +135,7 @@ Bool CLI_profileData(const ParsedArgs *args, ProfileOperation op) {
 	if(args->parameters & EOperationHasParameter_ThreadCount) {
 
 		CharString t = CharString_createNull();
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &t))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &t, e_rr));
 
 		if(!CharString_parseU64(t, &threads))
 			retError(clean, Error_invalidState(0, "CLI_profileData() -threads must be a number (0 = all hardware threads)"));

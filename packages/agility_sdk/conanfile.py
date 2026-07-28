@@ -27,6 +27,20 @@ class agility_sdk(ConanFile):
 		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.619.4", "d3d12.zip")
 		unzip(self, "d3d12.zip", "agility")
 
+	#Find a LICENSE.txt case-insensitively under `folder` and stage it into the package as `dstName`.
+	#nuget packages vary in casing and copy()'s fnmatch is case-sensitive on Linux, so a plain copy can miss it.
+
+	def _stage_license(self, folder, dstName):
+
+		for root, _, files in os.walk(folder):
+			for name in files:
+				if name.lower() == "license.txt":
+					copy(self, name, root, self.package_folder)
+					rename(self, os.path.join(self.package_folder, name), os.path.join(self.package_folder, dstName))
+					return
+
+		self.output.warning("agility_sdk: no LICENSE.txt found in " + folder + "; skipping " + dstName)
+
 	def package(self):
 
 		copy(self, "*.h", os.path.join(self.source_folder, "agility/build/native/include"), os.path.join(self.package_folder, "include"))
@@ -36,8 +50,9 @@ class agility_sdk(ConanFile):
 
 		copy(self, "LICENSE-CODE.txt", os.path.join(self.source_folder, "agility"), self.package_folder)
 
-		copy(self, "LICENSE.txt", os.path.join(self.source_folder, "warp"), self.package_folder)
-		rename(self, os.path.join(self.package_folder, "LICENSE.txt"), os.path.join(self.package_folder, "LICENSE-WARP.txt"))
+		# The WARP nuget's license file casing varies (LICENSE.txt vs license.txt) and copy()'s fnmatch is
+		# case-sensitive on Linux, so find it explicitly and stage it as LICENSE-WARP.txt.
+		self._stage_license(os.path.join(self.source_folder, "warp"), "LICENSE-WARP.txt")
 
 		# The WARP + agility runtimes are Windows DLLs. Everywhere else (e.g. Linux/macOS building the shader compiler)
 		# only the headers are needed (DXC's dxcreflect.h includes d3d12shader.h),

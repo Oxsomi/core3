@@ -148,9 +148,8 @@ Bool CLI_hashFile(const ParsedArgs *args) {
 	const Allocator *alloc = Platform_instance->alloc;
 
 	CharString str = CharString_createNull();
-	Error err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str);
 
-	if(err.genericError)
+	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str, NULL))
 		return false;
 
 	//If it's a folder, then we have to find all files in it and hash them
@@ -169,9 +168,8 @@ Bool CLI_hashString(const ParsedArgs *args) {
 	if(!args) return false;
 
 	CharString str = CharString_createNull();
-	Error err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str);
 
-	if(err.genericError)
+	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str, NULL))
 		return false;
 
 	return CLI_hash(str, false, args->format, NULL);

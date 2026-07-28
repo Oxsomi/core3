@@ -93,13 +93,13 @@
 			if (args->parameters & EOperationHasParameter_Entry) {
 
 				CharString arg = CharString_createNull();
-				gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
+				gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg, e_rr));
 
 				if(!CharString_parseU64(arg, &entry))
-					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() expected entry as U64"))
+					retError(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() expected entry as U64"));
 
 				if(entry >= infos.length)
-					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() device entry not found"))
+					retError(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() device entry not found"));
 			}
 			
 			U64 count = 0;
@@ -107,13 +107,13 @@
 			if (args->parameters & EOperationHasParameter_CountArg) {
 
 				CharString arg = CharString_createNull();
-				gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
+				gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg, e_rr));
 
 				if(!CharString_parseU64(arg, &entry))
-					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() expected count as U64"))
+					retError(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() expected count as U64"));
 
 				if(entry + count > infos.length)
-					gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() device index not found"))
+					retError(clean, Error_invalidParameter(0, 0, "CLI_graphicsCreate() device index not found"));
 			}
 
 			if(!count)
@@ -238,7 +238,16 @@
 				continue;
 			}
 
-			gotoIfError3(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, e_rr));
+			//Enumeration can fail per-API (e.g. a driver that creates an instance but errors listing adapters on
+			// headless CI); like instance creation above, that shouldn't abort the whole informational listing.
+
+			if(!GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos, &err)) {
+				Log_debugLnx("Couldn't enumerate %s devices (driver error / headless); skipping", EGraphicsApi_name[api]);
+				err = Error_none();
+				ListGraphicsDeviceInfo_free(&infos, alloc);
+				RefPtr_dec(&instanceRef);
+				continue;
+			}
 
 			//If entry or length is there, we will print full info
 
@@ -249,10 +258,10 @@
 				if (args->parameters & EOperationHasParameter_CountArg) {
 
 					CharString arg = CharString_createNull();
-					gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg))
+					gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &arg, e_rr));
 
 					if(!CharString_parseU64(arg, &count))
-						gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"))
+						retError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"));
 				}
 
 				U64 entry = 0;
@@ -260,10 +269,10 @@
 				if (args->parameters & EOperationHasParameter_Entry) {
 
 					CharString arg = CharString_createNull();
-					gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg))
+					gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &arg, e_rr));
 
 					if(!CharString_parseU64(arg, &entry))
-						gotoIfError2(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
+						retError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"));
 
 					if (!(args->parameters & EOperationHasParameter_CountArg))
 						count = 1;

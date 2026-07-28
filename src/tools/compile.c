@@ -51,7 +51,7 @@
 		}
 
 		CharString str = (CharString) { 0 };
-		if(ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &str).genericError)
+		if(!ParsedArgs_getArg(args, EOperationHasParameter_ThreadCountShift, &str, NULL))
 			return false;
 
 		if(CharString_endsWithSensitive(str, '%', 0)) {                    //-threads 50%
@@ -92,7 +92,7 @@
 		}
 
 		CharString compileMode = CharString_createNull();
-		if(ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &compileMode).genericError)
+		if(!ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &compileMode, NULL))
 			return false;
 
 		ListCharString splits = (ListCharString) { 0 };
@@ -176,10 +176,10 @@
 		Ns start = Time_now();
 
 		CharString input = (CharString) { 0 };
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
 
 		CharString output = (CharString) { 0 };
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
 
 		//Get compile types
 
@@ -199,7 +199,7 @@
 
 		if(args.parameters & EOperationHasParameter_ShaderCompileMode) {
 
-			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr))
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_ShaderCompileModeShift, &compileTypeStr, e_rr));
 
 			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
 				compileType = ECompileType_Preprocess;
@@ -225,7 +225,7 @@
 		CharString includeDir = (CharString) { 0 };
 
 		if (args.parameters & EOperationHasParameter_IncludeDir)
-			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir, e_rr));
 
 		//Grab all files that need compilation
 

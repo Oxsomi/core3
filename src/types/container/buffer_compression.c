@@ -60,13 +60,9 @@ Error Brotli_compress(
 	Error err = Error_none();
 	AllocationBuffer ringBuffer = (AllocationBuffer) { 0 };
 
-	gotoIfError(
-		clean,
-		AllocationBuffer_create(
-			(U64_max(BROTLI_WINDOW_SIZE, maxInputBlockBits) + 7) >> 3,
-			allocator, &ringBuffer
-		)
-	)
+	err = AllocationBuffer_create( (U64_max(BROTLI_WINDOW_SIZE, maxInputBlockBits) + 7) >> 3, allocator, &ringBuffer );
+	if(err.genericError)
+		goto clean;
 
 	//TODO: Literal cost mask?
 

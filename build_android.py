@@ -69,6 +69,7 @@ def doBuild(mode, conanHome, llvmRootDir, arch, level, generator, generatorValid
 
 	subprocess.call("conan profile detect")
 	subprocess.check_output("conan create packages/openal_soft -s build_type=" + mode + " --profile=" + profile + " --build=missing")
+	subprocess.check_output("conan create packages/vulkan_headers -s build_type=" + mode + " --profile=" + profile + " --build=missing")
 
 	if enableShaderCompiler:
 		subprocess.check_output("conan create packages/nvapi -s build_type=" + mode + " --profile=" + profile + " --build=missing")

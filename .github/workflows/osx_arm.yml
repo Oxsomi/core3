@@ -8,7 +8,6 @@ jobs:
       name: macOS ARM64 Vulkan static
       runner: macos-15
       os: macos
-      vulkan: true
       build_flags: '-o cliGraphics=False'
       python_cmd: python
       setup_python: true

@@ -170,7 +170,7 @@ Bool CLI_inspectHeader(const ParsedArgs *args) {
 	U8 hdr[512];
 	Buffer buf = Buffer_createNull(), virtualBuf = Buffer_createNull();
 
-	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
+	if (!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path, &err)) {
 		Log_errorLnx("Invalid argument -input <string>.");
 		goto clean;
 	}

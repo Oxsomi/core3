@@ -8,7 +8,6 @@ jobs:
       name: Android Vulkan
       runner: windows-2022
       os: android
-      vulkan: true
       build_flags: ''
       python_cmd: python
       setup_python: false

@@ -531,7 +531,7 @@ U64 CLI_parseGraphicsAPIs(const ParsedArgs *args) {
 	if(args->parameters & EOperationHasParameter_GraphicsApi) {
 
 		CharString arg = CharString_createNull();
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_GraphicsApiShift, &arg))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_GraphicsApiShift, &arg, e_rr));
 
 		gotoIfError3(clean, CharString_splitSensitive(&(CharStringSplit) {
 			.s = &arg, .allocator = Platform_instance->alloc, .result = &strings

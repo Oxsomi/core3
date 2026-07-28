@@ -121,7 +121,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 	if (args->parameters & EOperationHasParameter_SplitBy) {
 
 		CharString str = CharString_createNull();
-		if (ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &str).genericError || CharString_length(str) <= 2) {
+		if (!ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &str, NULL) || CharString_length(str) <= 2) {
 			Log_debugLnx("CLI_audioConvert() invalid -split argument. Expected left, right or average");
 			success = false;
 			goto clean2;
@@ -146,7 +146,7 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 	if (args->parameters & EOperationHasParameter_Bit) {
 
 		CharString str = CharString_createNull();
-		if (ParsedArgs_getArg(args, EOperationHasParameter_BitShift, &str).genericError || !CharString_length(str)) {
+		if (!ParsedArgs_getArg(args, EOperationHasParameter_BitShift, &str, NULL) || !CharString_length(str)) {
 			Log_debugLnx("CLI_audioConvert() invalid -bits argument. Expected 8, 16, 24, 32 or 64 or a combo split by ,");
 			success = false;
 			goto clean2;
@@ -181,14 +181,14 @@ Bool CLI_audioConvert(const ParsedArgs *args) {
 	}
 
 	CharString inputStr = CharString_createNull();
-	if (ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputStr).genericError) {
+	if (!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputStr, NULL)) {
 		Log_debugLnx("CLI_audioConvert() invalid -input argument. Expected folder or file path");
 		success = false;
 		goto clean2;
 	}
 
 	CharString outputStr = CharString_createNull();
-	if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputStr).genericError) {
+	if (!ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputStr, NULL)) {
 		Log_debugLnx("CLI_audioConvert() invalid -output argument. Expected folder or file path");
 		success = false;
 		goto clean2;

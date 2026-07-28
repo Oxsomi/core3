@@ -335,7 +335,7 @@ typedef struct ParsedArgs {
 
 typedef Bool (*OperationFunc)(const ParsedArgs*);
 
-Error ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterId, CharString *arg);
+Bool ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterId, CharString *arg, Error *e_rr);
 
 typedef enum EFormatFlags {
 	EFormatFlags_None                = 0,

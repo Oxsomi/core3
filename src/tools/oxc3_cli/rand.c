@@ -61,7 +61,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 		CharString str = CharString_createNull();
 
 		if (
-			ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &str).genericError ||
+			!ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &str, NULL) ||
 			!CharString_parseU64(str, &n) ||
 			(n >> 32)
 		) {
@@ -77,7 +77,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 		CharString str = CharString_createNull();
 
 		if (
-			ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &str).genericError ||
+			!ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &str, NULL) ||
 			!CharString_parseU64(str, &l) ||
 			(l >> 32)
 		) {
@@ -93,7 +93,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 		CharString str = CharString_createNull();
 
 		if (
-			ParsedArgs_getArg(args, EOperationHasParameter_BitShift, &str).genericError ||
+			!ParsedArgs_getArg(args, EOperationHasParameter_BitShift, &str, NULL) ||
 			!CharString_parseU64(str, &b) ||
 			(b >> 16)
 		) {
@@ -270,7 +270,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 
 							CharString str = CharString_createNull();
 
-							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
+							if (!ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str, NULL)) {
 								errorString = "Invalid argument -chars <string>.";
 								retError(clean, Error_invalidParameter(
 									0, 0, "CLI_rand() Invalid argument -chars <string>."
@@ -385,7 +385,7 @@ Bool CLI_rand(const ParsedArgs *args) {
 		CharString outputPath = CharString_createNull();
 		RefPtrType fhType = FileHandle_makeType(alloc);
 
-		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
+		if (!ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath, NULL)) {
 			errorString = "Invalid argument -output <string>, file path expected.";
 			retError(clean, Error_invalidParameter(
 				0, 0, "CLI_rand() Invalid argument -output <string>, file path expected."

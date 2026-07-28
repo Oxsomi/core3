@@ -209,6 +209,7 @@ def main():
 
 		conan_create_if_changed("packages/agility_sdk",        profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/nvapi",              profile_for_mode(mode), mode, pa, cache)
+		conan_create_if_changed("packages/vulkan_headers",     profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/spirv_reflect",      profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/dxc",                profile_for_mode(mode), mode, pa, cache)
 		conan_create_if_changed("packages/openal_soft",        profile_for_mode(mode), mode, pa, cache)

@@ -146,7 +146,7 @@ Bool CLI_showFile(const ParsedArgs *args, Buffer b, U64 start, U64 length, Bool 
 
 		CharString out = CharString_createNull();
 
-		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out).genericError) {
+		if (!ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out, NULL)) {
 			Log_errorLnx("Invalid argument -output <string>.");
 			goto clean;
 		}
@@ -251,7 +251,7 @@ Bool CLI_storeFileOrFolder(const ParsedArgs *args, const CAFile *a, CAHandle han
 
 		CharString out = CharString_createNull();
 
-		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out).genericError) {
+		if (!ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out, NULL)) {
 			Log_errorLnx("Invalid argument -output <string>.");
 			goto clean;
 		}
@@ -328,7 +328,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 	//Get file
 
-	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
+	if (!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path, &err)) {
 		Log_errorLnx("Invalid argument -input <string>.");
 		goto clean;
 	}
@@ -350,7 +350,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 	CharString entry = CharString_createNull();
 
 	if (args->parameters & EOperationHasParameter_Entry)
-		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry)).genericError) {
+		if (!ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry, &err)) {
 			Log_errorLnx("Invalid argument -entry <string or uint>.");
 			goto clean;
 		}
@@ -362,7 +362,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 	if (args->parameters & EOperationHasParameter_StartOffset)
 		if (
-			(err = ParsedArgs_getArg(args, EOperationHasParameter_StartOffsetShift, &starts)).genericError ||
+			!ParsedArgs_getArg(args, EOperationHasParameter_StartOffsetShift, &starts, &err) ||
 			!CharString_parseU64(starts, &start) ||
 			(start >> 32)
 		) {
@@ -377,7 +377,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 
 	if (args->parameters & EOperationHasParameter_Length)
 		if (
-			(err = ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &lengths)).genericError ||
+			!ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &lengths, &err) ||
 			!CharString_parseU64(lengths, &length) ||
 			(length >> 32)
 		) {
@@ -395,7 +395,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		CharString key = CharString_createNull();
 
 		if (
-			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
+			!ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key, NULL) ||
 			!CharString_isHex(key)
 		) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -439,7 +439,7 @@ Bool CLI_inspectData(const ParsedArgs *args) {
 		}
 
 		CharString shaderOutputMode = CharString_createNull();
-		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &shaderOutputMode)).genericError) {
+		if (!ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &shaderOutputMode, &err)) {
 			Log_errorLnx("Missing argument -compile-output");
 			goto clean;
 		}

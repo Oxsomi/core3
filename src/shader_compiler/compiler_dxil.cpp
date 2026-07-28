@@ -1294,7 +1294,19 @@ extern "C" Bool Compiler_processDXIL(
 			if(!isPixelShader && signature.SystemValueType != D3D_NAME_UNDEFINED)
 				continue;
 
-			if(isPixelShader && signature.SystemValueType != D3D_NAME_TARGET)
+			//A pixel shader's inputs are ordinary user semantics (interpolated attributes), like any other stage.
+			//Only its outputs are restricted to SV_TARGET; applying that filter to inputs too dropped every pixel
+			// input (they're D3D_NAME_UNDEFINED, never D3D_NAME_TARGET), so SPIRV and DXIL reflection disagreed.
+			if(isPixelShader && isOutput && signature.SystemValueType != D3D_NAME_TARGET)
+				continue;
+
+			if(isPixelShader && !isOutput && signature.SystemValueType != D3D_NAME_UNDEFINED)
+				continue;
+
+			//SPIRV dead-code-eliminates a fully-unused input, so it isn't in the SPIRV binary at all; DXIL instead
+			// keeps it in the signature (ReadWriteMask == 0, nothing read). Skip it for DXIL too so a shader that
+			// declares but never reads an input reflects identically on both backends.
+			if(!isOutput && !signature.ReadWriteMask)
 				continue;
 
 			if(signature.SemanticIndex >= 16)
@@ -1306,7 +1318,11 @@ extern "C" Bool Compiler_processDXIL(
 
 			CharString semanticNameStr = CharString_createRefCStrConst(signature.SemanticName);
 
-			if (!isPixelShader && !CharString_equalsCStringInsensitive(&semanticNameStr, "TEXCOORD")) {
+			//A pixel output's default semantic is SV_TARGET; every other param (all inputs, non-pixel outputs)
+			// defaults to TEXCOORD.
+			//Only a non-default name is recorded, so pixel inputs must go through here too; otherwise they'd
+			// report as the default TEXCOORD instead of their real semantic.
+			if (!(isPixelShader && isOutput) && !CharString_equalsCStringInsensitive(&semanticNameStr, "TEXCOORD")) {
 
 				U64 start = isOutput ? inputSemanticCount : 0;
 				U64 end = isOutput ? strings.length : inputSemanticCount;

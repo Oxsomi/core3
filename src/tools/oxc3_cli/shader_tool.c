@@ -94,7 +94,7 @@
 		SHFile file = (SHFile) { 0 };
 		CharString input = (CharString) { 0 };
 
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
 		gotoIfError3(clean, CLI_shaderReadOiSH(input, &file, e_rr));
 
 		Log_debugLnx("%"PRIu64" entrypoint(s):", file.entries.length);
@@ -131,7 +131,7 @@
 		SHFile file = (SHFile) { 0 };
 		CharString input = (CharString) { 0 };
 
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
 		gotoIfError3(clean, CLI_shaderReadOiSH(input, &file, e_rr));
 
 		Log_debugLnx("%"PRIu64" include(s):", file.includes.length);
@@ -164,7 +164,7 @@
 		SHFile file = (SHFile) { 0 };
 		CharString input = (CharString) { 0 };
 
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
 		gotoIfError3(clean, CLI_shaderReadOiSH(input, &file, e_rr));
 
 		Log_debugLnx("%"PRIu64" binary/binaries:", file.binaries.length);
@@ -212,7 +212,7 @@
 		Bool hasCompiler = false;
 		CharString input = (CharString) { 0 };
 
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
 		gotoIfError3(clean, CLI_shaderReadFile(input, &buf, e_rr));
 
 		gotoIfError3(clean, Compiler_create(alloc, &comp, e_rr));
@@ -223,7 +223,7 @@
 		if(args->parameters & EOperationHasParameter_Output) {
 
 			CharString output = (CharString) { 0 };
-			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
 
 			const Buffer textBuf = Buffer_createRefConst(text.ptr, CharString_length(text));
 			gotoIfError3(clean, File_write(&textBuf, &output, 0, 0, 1 * SECOND, true, &fileHandleType, e_rr));
@@ -258,8 +258,8 @@
 		Bool hasCompiler = false;
 		CharString input = (CharString) { 0 }, output = (CharString) { 0 };
 
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
 
 		gotoIfError3(clean, CLI_shaderReadFile(input, &buf, e_rr));
 
@@ -352,7 +352,7 @@
 		CharString spvPath = CharString_createNull(), dxilPath = CharString_createNull();
 		Bool stripped = false;
 
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
 
 		//Strip each candidate output (the explicit path, plus the per-type split names the compiler emits)
 

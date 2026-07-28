@@ -8,7 +8,6 @@ jobs:
       name: Linux x64 Vulkan static
       runner: ubuntu-latest
       os: linux
-      vulkan: true
       build_flags: '-o cliGraphics=False'
       python_cmd: python3
       setup_python: false

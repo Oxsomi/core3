@@ -338,14 +338,14 @@ void Operations_init() {
 		.category = EOperationCategory_File,
 		.name = "list", .desc = "List the entries of a directory (defaults to the working directory).",
 		.func = &CLI_fileList, .isFormatLess = true,
-		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA
+		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA | EOperationHasParameter_AES
 	};
 
 	Operation_values[EOperation_FileTree] = (Operation) {
 		.category = EOperationCategory_File,
 		.name = "tree", .desc = "List the entries of a directory recursively (defaults to the working directory).",
 		.func = &CLI_fileTree, .isFormatLess = true,
-		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA
+		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA | EOperationHasParameter_AES
 	};
 
 	Operation_values[EOperation_FileStat] = (Operation) {
@@ -353,7 +353,7 @@ void Operations_init() {
 		.name = "stat", .desc = "Show type, size, access and modified time of a file or folder.",
 		.func = &CLI_fileStat, .isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input,
-		.optionalParameters = EOperationHasParameter_oiCA
+		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_AES
 	};
 
 	Operation_values[EOperation_FileCount] = (Operation) {
@@ -361,7 +361,7 @@ void Operations_init() {
 		.name = "count", .desc = "Count the files and folders under a path (defaults to the working directory).",
 		.func = &CLI_fileCount, .isFormatLess = true,
 		.operationFlags = EOperationFlags_NonRecursive,
-		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA
+		.optionalParameters = EOperationHasParameter_Input | EOperationHasParameter_oiCA | EOperationHasParameter_AES
 	};
 
 	Operation_values[EOperation_FileCopy] = (Operation) {
@@ -369,7 +369,7 @@ void Operations_init() {
 		.name = "copy", .desc = "Copy a file to a new location.",
 		.func = &CLI_fileCopy, .isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
-		.optionalParameters = EOperationHasParameter_oiCA
+		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_AES
 	};
 
 	Operation_values[EOperation_FileMove] = (Operation) {
@@ -384,7 +384,7 @@ void Operations_init() {
 		.name = "del", .desc = "Delete a file or folder (recursive for folders).",
 		.func = &CLI_fileDelete, .isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input,
-		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_Output
+		.optionalParameters = EOperationHasParameter_oiCA | EOperationHasParameter_Output | EOperationHasParameter_AES
 	};
 
 	Operation_values[EOperation_FileMkdir] = (Operation) {
@@ -1069,13 +1069,15 @@ void Operations_init() {
 	};
 }
 
-Error ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterId, CharString *arg) {
+Bool ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameterId, CharString *arg, Error *e_rr) {
+
+	Bool s_uccess = true;
 
 	if(!args || !arg || !parameterId)
-		return Error_nullPointer(!args ? 0 : (!arg ? 2 : 1), "ParsedArgs_getArg()::args, arg and parameterId are required");
+		retError(clean, Error_nullPointer(!args ? 0 : (!arg ? 2 : 1), "ParsedArgs_getArg()::args, arg and parameterId are required"));
 
 	if(!((args->parameters >> parameterId) & 1))
-		return Error_notFound(0, 1, "ParsedArgs_getArg()::parameterId not found");
+		retError(clean, Error_notFound(0, 1, "ParsedArgs_getArg()::parameterId not found"));
 
 	U64 ourLoc = 0;
 
@@ -1083,10 +1085,8 @@ Error ParsedArgs_getArg(const ParsedArgs *args, EOperationHasParameter parameter
 		if((args->parameters >> j) & 1)
 			++ourLoc;
 
-	Error err = Error_none();
+	gotoIfError3(clean, ListCharString_get(args->args, ourLoc, arg, e_rr));
 
-	if(!ListCharString_get(args->args, ourLoc, arg, &err))
-		return err;
-
-	return Error_none();
+clean:
+	return s_uccess;
 }

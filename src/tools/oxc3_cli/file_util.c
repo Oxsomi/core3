@@ -31,6 +31,7 @@
 #include "types/container/buffer_encrypt.h"
 #include "types/container/stream.h"
 #include "types/container/memory_stream.h"
+#include "types/container/encryption_stream.h"
 #include "types/container/string.h"
 #include "formats/oiCA/ca_file.h"
 #include "formats/oiCA/ca_lookup.h"
@@ -58,7 +59,45 @@
 //Helper: fetch an input path argument
 
 static Bool CLI_fileArg(const ParsedArgs *args, EOperationHasParameter shift, CharString *out) {
-	return !ParsedArgs_getArg(args, shift, out).genericError;
+	return ParsedArgs_getArg(args, shift, out, NULL);
+}
+
+//Helper: parse the optional -aes <32-byte hex> key.
+//Sets *hasKey and fills key[8] only when -aes is present.
+
+static Bool CLI_fileParseAes(const ParsedArgs *args, U32 key[8], Bool *hasKey, Error *e_rr) {
+
+	Bool s_uccess = true;
+	*hasKey = false;
+
+	if(!(args->parameters & EOperationHasParameter_AES))
+		goto clean;
+
+	CharString keyStr = CharString_createNull();
+
+	if(!CLI_fileArg(args, EOperationHasParameter_AESShift, &keyStr))
+		retError(clean, Error_invalidState(0, "-aes requires a 32-byte hex key."));
+
+	const CharString ox = CharString_createRefCStrConst("0x");
+
+	if(!CharString_isHex(keyStr))
+		retError(clean, Error_invalidState(1, "-aes must be a hex key (32 bytes)."));
+
+	const U64 off = CharString_startsWithStringInsensitive(&keyStr, &ox, 0) ? 2 : 0;
+
+	if(CharString_length(keyStr) - off != 64)
+		retError(clean, Error_invalidState(2, "-aes must be exactly 32 bytes (64 hex chars)."));
+
+	for(U64 i = off; i + 1 < CharString_length(keyStr); ++i) {
+		const U8 v0 = C8_hex(keyStr.ptr[i]);
+		const U8 v1 = C8_hex(keyStr.ptr[++i]);
+		*((U8*)key + ((i - off) >> 1)) = (U8)((v0 << 4) | v1);
+	}
+
+	*hasKey = true;
+
+clean:
+	return s_uccess;
 }
 
 //ls / tree: print a single directory entry (used as a File_foreach callback)
@@ -152,6 +191,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 	const RefPtrType streamType = FileStream_makeType(alloc);
 	const RefPtrType memType = MemoryStream_makeType(alloc);
+	const RefPtrType encType = EncryptionStream_makeType(alloc);
 
 	CharString caPath = CharString_createNull(), input = CharString_createNull(), output = CharString_createNull();
 
@@ -168,15 +208,22 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 	StreamRef *readStream = NULL, *writeStream = NULL, *dataStream = NULL;
 	StreamCursor dataCursor = (StreamCursor) { 0 };
 	CAFile caFile = (CAFile) { 0 };
+	U32 keyV[8] = { 0 };
+	Bool hasKey = false;
 	Bool s_uccess = true, mutated = false;
 	Error err = Error_none(), *e_rr = &err;
+
+	//An encrypted archive needs its -aes key both to decrypt on read and to re-encrypt if we rewrite it (copy/del).
+	//CAFile_read stores the key into caFile.settings, so CAFile_write re-encrypts automatically.
+
+	gotoIfError3(clean, CLI_fileParseAes(args, keyV, &hasKey, e_rr));
 
 	//Read from the archive file via a stream so we never pull the whole (possibly huge) oiCA into memory.
 
 	gotoIfError3(clean, File_openStream(
 		&caPath, 1 * SECOND, EFileOpenType_Read, false, &fileHandleType, &streamType, &readStream, e_rr
 	));
-	gotoIfError3(clean, CAFile_read(readStream, NULL, 0, NULL, alloc, &caFile, e_rr));
+	gotoIfError3(clean, CAFile_read(readStream, &encType, 0, hasKey ? keyV : NULL, alloc, &caFile, e_rr));
 
 	switch(op) {
 
@@ -303,7 +350,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 			gotoIfError3(clean, File_openStream(
 				dest, 1 * SECOND, EFileOpenType_Write, true, &fileHandleType, &streamType, &writeStream, e_rr
 			));
-			gotoIfError3(clean, CAFile_write(&caFile, NULL, writeStream, &writeOff, alloc, e_rr));
+			gotoIfError3(clean, CAFile_write(&caFile, &encType, writeStream, &writeOff, alloc, e_rr));
 		}
 
 		else {
@@ -312,7 +359,7 @@ static Bool CLI_fileArchive(const ParsedArgs *args, EFileArchiveOp op) {
 			//(the fallback), then release the source handles and overwrite the file.
 
 			gotoIfError3(clean, MemoryStream_create(0, EMemoryStreamFlags_WriteResize, &memType, &writeStream, e_rr));
-			gotoIfError3(clean, CAFile_write(&caFile, NULL, writeStream, &writeOff, alloc, e_rr));
+			gotoIfError3(clean, CAFile_write(&caFile, &encType, writeStream, &writeOff, alloc, e_rr));
 			gotoIfError3(clean, MemoryStream_move(&writeStream, &outBuf, e_rr));
 
 			CAFile_free(&caFile, alloc);

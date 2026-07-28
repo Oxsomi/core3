@@ -8,7 +8,6 @@ jobs:
       name: SteamOS x64 static
       runner: ubuntu-latest
       os: steamos
-      vulkan: false
       build_flags: '-o cliGraphics=False'
       python_cmd: python3
       setup_python: false

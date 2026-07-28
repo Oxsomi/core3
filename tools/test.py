@@ -124,6 +124,11 @@ def section(name: str):
 def available(exe, category, needle) -> bool:
 	"""True if 'category' lists a subcommand containing needle (i.e. the feature is compiled in)."""
 	_, out = call(exe, [category])
+	# An unknown/unavailable category falls back to the top-level "All categories:" help, whose text
+	# happens to contain other categories' names (e.g. "devices"). Treat that fallback as not-available
+	# so e.g. graphics (whose DLLs may fail to load on a headless CI) is skipped rather than false-matched.
+	if "All categories" in out:
+		return False
 	return needle in out
 
 
@@ -288,6 +293,16 @@ def main():
 		run(exe, ["file", "tree",  "-oiCA", knownCA], contains=["f1.txt", "f2.txt", "sub/f3.txt"])    # recursive
 		run(exe, ["file", "stat",  "-oiCA", knownCA, "-input", "f2.txt"], contains=["Size:      6 bytes", "file"])
 		run(exe, ["file", "stat",  "-oiCA", knownCA, "-input", "sub/f3.txt"], contains=["Size:      5 bytes"])
+
+		# encrypted archive: -aes decrypts on read; a mutate (del) re-encrypts, so the key is still required after.
+		aesKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+		encCA = p("known.enc.oiCA")
+		run(exe, ["file", "to", "-format", "oiCA", "-input", known, "-output", encCA, "-aes", aesKey], contains=["Converted"])
+		run(exe, ["file", "list", "-oiCA", encCA, "-aes", aesKey], contains=["f1.txt", "f2.txt", "sub"])
+		check(call(exe, ["file", "list", "-oiCA", encCA])[0] != 0, "encrypted -oiCA list fails without -aes")
+		run(exe, ["file", "del", "-oiCA", encCA, "-input", "f1.txt", "-aes", aesKey], contains=["Updated archive"])
+		run(exe, ["file", "count", "-oiCA", encCA, "-aes", aesKey], contains=["2 files, 1 folders"])
+		check(call(exe, ["file", "count", "-oiCA", encCA])[0] != 0, "mutated archive is still encrypted (needs -aes)")
 
 		# ---- file package -------------------------------------------------------------------------
 		section("file package")

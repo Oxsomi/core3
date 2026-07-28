@@ -8,7 +8,6 @@ jobs:
       name: Windows ARM64 Vulkan static
       runner: windows-11-arm
       os: windows
-      vulkan: true
       build_flags: '-o forceVulkan=True -o cliGraphics=False'
       python_cmd: python
       setup_python: true

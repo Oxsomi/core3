@@ -8,7 +8,6 @@ jobs:
       name: Windows x64 D3D12 static
       runner: windows-2022
       os: windows
-      vulkan: false
       build_flags: '-o cliGraphics=False'
       python_cmd: python
       setup_python: false

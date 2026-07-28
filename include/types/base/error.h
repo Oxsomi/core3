@@ -94,23 +94,7 @@ typedef struct Error {
 
 } Error;
 
-//Legacy error handling, don't use anymore
-
-#define gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
-
-//Migration error handling, building towards returning Bool success and optional Error.
-//Interop with functions that return Error.
-
-#define gotoIfError2(x, ...) {        \
-	Error tempErr = __VA_ARGS__;    \
-	if(tempErr.genericError) {        \
-		s_uccess = false;            \
-		if(e_rr) *e_rr = tempErr;    \
-		goto x;                        \
-	}                                \
-}
-
-//Functions with new error handling; returning Bool and optional error.
+//Error handling; functions return Bool success and set an optional Error.
 //(void) 0 is a trick to require a ; after the statement
 
 #define gotoIfError3(x, ...) {        \

@@ -142,7 +142,7 @@ Bool CLI_convertToDL(const CLIConvert *convert, Error *e_rr) {
 
 			if (convert->args->parameters & EOperationHasParameter_SplitBy) {
 				CharString splitBy;
-				gotoIfError2(clean, ParsedArgs_getArg(convert->args, EOperationHasParameter_SplitByShift, &splitBy));
+				gotoIfError3(clean, ParsedArgs_getArg(convert->args, EOperationHasParameter_SplitByShift, &splitBy, e_rr));
 				gotoIfError3(clean, CharString_splitStringSensitive(
 					&(CharStringSplit) { .s = &str, .allocator = alloc, .result = &split }, &splitBy, e_rr
 				));
@@ -406,7 +406,7 @@ Bool CLI_convertFromDL(const CLIConvert *convert, Error *e_rr) {
 			if (convert->args->parameters & EOperationHasParameter_SplitBy) {
 
 				CharString split = CharString_createNull();
-				gotoIfError2(clean, ParsedArgs_getArg(convert->args, EOperationHasParameter_SplitByShift, &split));
+				gotoIfError3(clean, ParsedArgs_getArg(convert->args, EOperationHasParameter_SplitByShift, &split, e_rr));
 
 				gotoIfError3(clean, CharString_appendString(&concatFile, &split, alloc, e_rr));
 			}

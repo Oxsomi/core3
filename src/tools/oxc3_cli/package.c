@@ -52,7 +52,7 @@
 			CharString key = CharString_createNull();
 
 			if (
-				(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
+				!ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key, NULL) ||
 				!CharString_isHex(key)
 			) {
 				Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -82,12 +82,12 @@
 		//Get input
 
 		CharString input = (CharString) { 0 };
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, e_rr));
 
 		//Check if output is valid
 
 		CharString output = (CharString) { 0 };
-		gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output))
+		gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &output, e_rr));
 
 		//Get compile settings
 
@@ -102,7 +102,7 @@
 		gotoIfError3(clean, CLI_parseThreads(args, &threadCount, 1));
 
 		if (args->parameters & EOperationHasParameter_IncludeDir)
-			gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir))
+			gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_IncludeDirShift, &includeDir, e_rr));
 
 		extraWarnings = CLI_getExtraWarnings(args);
 

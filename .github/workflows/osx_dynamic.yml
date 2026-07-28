@@ -8,7 +8,6 @@ jobs:
       name: macOS x64 Vulkan dynamic
       runner: macos-26
       os: macos
-      vulkan: true
       build_flags: '-dynamic_linking True -o cliGraphics=False'
       python_cmd: python
       setup_python: true

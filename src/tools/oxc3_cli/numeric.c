@@ -84,7 +84,7 @@ Bool CLI_floatConvert(const ParsedArgs *args) {
 	if(!args) return false;
 
 	CharString input = CharString_createNull();
-	if(ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input).genericError) {
+	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, NULL)) {
 		Log_errorLnx("float convert requires -input <value>.");
 		return false;
 	}
@@ -119,7 +119,7 @@ Bool CLI_floatConvert(const ParsedArgs *args) {
 	EFloatType dst = EFloatType_F32;
 	CharString typeStr = CharString_createNull();
 
-	if(!ParsedArgs_getArg(args, EOperationHasParameter_TypeShift, &typeStr).genericError) {
+	if(ParsedArgs_getArg(args, EOperationHasParameter_TypeShift, &typeStr, NULL)) {
 		if(!CLI_parseFloatType(&typeStr, &dst)) {
 			Log_errorLnx("Unknown -type. Use one of F8, F16, F32, F64, BF16, TF19, PXR24, FP24.");
 			return false;
@@ -149,7 +149,7 @@ Bool CLI_floatDissect(const ParsedArgs *args) {
 	if(!args) return false;
 
 	CharString input = CharString_createNull();
-	if(ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input).genericError) {
+	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, NULL)) {
 		Log_errorLnx("float dissect requires -input <value or 0xbits>.");
 		return false;
 	}
@@ -157,7 +157,7 @@ Bool CLI_floatDissect(const ParsedArgs *args) {
 	EFloatType type = EFloatType_F32;
 	CharString typeStr = CharString_createNull();
 
-	if(!ParsedArgs_getArg(args, EOperationHasParameter_TypeShift, &typeStr).genericError) {
+	if(ParsedArgs_getArg(args, EOperationHasParameter_TypeShift, &typeStr, NULL)) {
 		if(!CLI_parseFloatType(&typeStr, &type)) {
 			Log_errorLnx("Unknown -type. Use one of F8, F16, F32, F64, BF16, TF19, PXR24, FP24.");
 			return false;
@@ -221,7 +221,7 @@ Bool CLI_timeConvert(const ParsedArgs *args) {
 	if(!args) return false;
 
 	CharString input = CharString_createNull();
-	if(ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input).genericError) {
+	if(!ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &input, NULL)) {
 		Log_errorLnx("time convert requires -input <epoch-ns or ISO-8601>.");
 		return false;
 	}

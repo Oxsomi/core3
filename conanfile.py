@@ -133,7 +133,14 @@ class oxc3(ConanFile):
 			self.requires("xdg_shell/2024.10.21")
 			self.requires("xdg_decoration/2024.12.22")
 
-		# We need to manually build Vulkan layers
+		# Vulkan headers come from the Oxsomi fork (headers-only), so building no longer needs a system VULKAN_SDK.
+		# The loader is still loaded dynamically at runtime. Required wherever the Vulkan backend is compiled.
+		usesVulkan = self.settings.os != "Windows" or self.options.forceVulkan or self.options.dynamicLinkingGraphics
+
+		if usesVulkan:
+			self.requires("vulkan_headers/2026.07.28")
+
+		# Validation layers must be built manually for Android; not needed elsewhere.
 		if self.settings.os == "Android" and str(self.settings.build_type) == "Debug":
 			self.requires("vulkan_validation_layers/2025.01.25")
 
@@ -214,31 +221,13 @@ class oxc3(ConanFile):
 		else:
 			self.cpp_info.system_libs = [ "m", "xkbcommon", "wayland-cursor" ]
 
-		vulkan = False
-
 		self.cpp_info.libs = [ "OxC3_formats_bmp", "OxC3_formats_oiBC" ]
 		self.cpp_info.libs += [ "OxC3_graphics", "OxC3_formats_oiSH", "OxC3_formats_oiSB", "OxC3_platforms", "OxC3_formats_dds", "OxC3_formats_oiCA", "OxC3_formats_oiDL", "OxC3_formats_oiXX", "OxC3_types_container", "OxC3_types_math", "OxC3_types_base" ]
 
-		if self.settings.os != "Windows":
-			self.cpp_info.system_libs += [ "vulkan" ]
-			vulkan = True
-
-		elif self.options.forceVulkan or self.options.dynamicLinkingGraphics:
-			self.cpp_info.libs += [ "vulkan-1" ]
-			vulkan = True
-
+		# The Vulkan loader is loaded dynamically at runtime (see vk_instance.c) and its headers come from the
+		# vulkan_headers package, so there's no Vulkan import lib, system lib or SDK dir to link/include here.
 		if self.settings.os == "Android":
 			self.cpp_info.system_libs += [ "android", "log" ]
-
-		vulkanMacos = os.path.join(os.environ['VULKAN_SDK'], "macOS")
-
-		if os.path.isdir(vulkanMacos):
-			self.cpp_info.libdirs += [ os.path.join(vulkanMacos, "lib") ]
-			self.cpp_info.includedirs += [ os.path.join(vulkanMacos, "include") ]
-
-		elif vulkan and os.path.isdir(os.path.join(os.environ['VULKAN_SDK'], "include")):
-			self.cpp_info.libdirs += [ os.path.join(os.environ['VULKAN_SDK'], "lib") ]
-			self.cpp_info.includedirs += [ os.path.join(os.environ['VULKAN_SDK'], "include") ]
 
 		self.cpp_info.set_property("cmake_file_name", "oxc3")
 		self.cpp_info.set_property("cmake_target_name", "oxc3::oxc3")

@@ -53,12 +53,12 @@ Bool CLI_convert(const ParsedArgs *args, Bool isTo) {
 	Error err = Error_none(), *e_rr = &err;
 
 	CharString inputArg = CharString_createNull();
-	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg))
+	gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &inputArg, e_rr));
 
 	//Check if output is valid
 
 	CharString outputArg = CharString_createNull();
-	gotoIfError2(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputArg))
+	gotoIfError3(clean, ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputArg, e_rr));
 
 	//TODO: Support multiple files
 
@@ -86,7 +86,7 @@ Bool CLI_convert(const ParsedArgs *args, Bool isTo) {
 		CharString key = CharString_createNull();
 
 		if (
-			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
+			!ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key, NULL) ||
 			!CharString_isHex(key)
 		)
 			retError(clean, Error_invalidState(
