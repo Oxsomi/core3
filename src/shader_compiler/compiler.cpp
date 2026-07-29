@@ -1018,6 +1018,13 @@ Bool Compiler_compile(
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fhlsl-unused-resource-bindings=reserve-all", alloc, e_rr));
 
+		//Libraries are linked (e.g. raytracing pipelines) before their reflection is read.
+		//DXC moves reflection metadata out of the DXIL part into a separate STAT part by default, and the linker
+		//keeps only the DXIL parts, so the linked module reflects every cbuffer with 0 variables.
+		//Keep reflection in the DXIL part for libraries so the struct annotations survive linking.
+		if(settings->isLib && settings->outputType == ESHBinaryType_DXIL)
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qkeep_reflect_in_dxil", alloc, e_rr));
+
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC", alloc, e_rr));
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr));
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-O3", alloc, e_rr));
