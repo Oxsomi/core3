@@ -100,6 +100,8 @@ typedef enum EDxGraphicsFeatures {
 
 	EDxGraphicsFeatures_IndependentDevices      = 1 << 10,
 
+	EDxGraphicsFeatures_BatchedAsyncCommandList = 1 << 11,        //ExecuteCommandLists batching across async queues
+
 	EDxGraphicsFeatures_ReallyReportReBARWrites = EDxGraphicsFeatures_ReportReBARWrites | EDxGraphicsFeatures_ReBAR,
 
 	EDxGraphicsFeatures_SM6_6                   = 1 << 16,        //Last bits are for shader model
@@ -154,6 +156,7 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_RayMotionBlur             = 1 << 12,
 	EGraphicsFeatures_RayReorder                = 1 << 13,
 	EGraphicsFeatures_RayValidation             = 1 << 14,        //Debugging for raytracing validation
+	EGraphicsFeatures_RayTriPosition            = 1 << 26,        //SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
 
 	//LUID for sharing devices
 
@@ -174,7 +177,17 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_WriteMSTexture            = 1 << 23,        //image2DMS or RWTexture2DMS
 	EGraphicsFeatures_Bindless                  = 1 << 24,
 
-	EGraphicsFeatures_SubgroupOperations        = 1 << 25
+	EGraphicsFeatures_SubgroupOperations        = 1 << 25,
+
+	//(bit 26 is EGraphicsFeatures_RayTriPosition, grouped with the raytracing features above)
+
+	//SM6.10 linalg, split to mirror the oiSH extensions (CoopVec/CoopMat/CoopFP8). FP16 + INT8 are the base tier of
+	//CoopVec/CoopMat; CoopFP8 is the additive FP8 tier; CoopVecTraining exposes the Tier-1.1 outer-product/reduce-sum ops.
+
+	EGraphicsFeatures_CoopVec                   = 1 << 27,        //Cooperative vectors (per-thread matvec)
+	EGraphicsFeatures_CoopMat                   = 1 << 28,        //Cooperative matrix (subgroup GEMM)
+	EGraphicsFeatures_CoopFP8                   = 1 << 29,        //FP8 (e4m3/e5m2) cooperative type support
+	EGraphicsFeatures_CoopVecTraining           = 1 << 30         //CoopVec training (outer-product / reduce-sum accumulate)
 
 } EGraphicsFeatures;
 
@@ -230,11 +243,18 @@ typedef struct GraphicsDeviceCapabilities {
 	EGraphicsFeatures features;
 	EGraphicsFeatures2 features2;
 
+	//Subset of `features` that is experimental/preview on this device+build (not final; can change or be removed across
+	//SDK/driver updates). On D3D12 the SM6.10-gated cooperative features land here (enabled via the preview SDK +
+	//D3D12ExperimentalShaderModels + Developer Mode); on Vulkan they're real extensions, so this stays empty.
+	EGraphicsFeatures experimentalFeatures;
+	EGraphicsFeatures2 experimentalFeatures2;
+
 	EGraphicsDataTypes dataTypes;
 	U32 featuresExt;                //Extended device features, API dependent
+	
+	U64 padding;
 
 	U64 dedicatedMemory;            //Memory accessible directly to the device
-
 	U64 sharedMemory;               //Memory accessible through the CPU (can be equal to dedicatedMemory if iGPU or CPU)
 
 	U64 maxBufferSize;

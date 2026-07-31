@@ -66,9 +66,19 @@ Bool DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count, Erro
 	if(buffer->isPendingFullCopy)        //Already has a full pending change, so no need to check anything.
 		goto clean;
 
-	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
+	//The first-frame exception only permits the internal initial upload of a not-CPU-backed buffer.
+	//That upload always has staged data in cpuData, so require it here.
+	//Otherwise a freshly-created, not-backed buffer with no data would be wrongly accepted.
+
+	if(
+		!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) &&
+		!(buffer->isFirstFrame && !offset && !count && Buffer_length(buffer->cpuData))
+	)
 		retError(clean, Error_invalidOperation(
-			2, "DeviceBufferRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"));
+			2,
+			"DeviceBufferRef_markDirty() can only be called on first frame for the entire resource "
+			"with staged CPU data, or if it's CPU backed"
+		));
 
 	if(!count)
 		count = bufLen - offset;
@@ -362,11 +372,9 @@ Bool GraphicsDeviceRef_createBufferData(
 		dev, usage, flags, bindlessDescriptorTable, name, Buffer_length(*dat), Buffer_isRef(*dat), buf, e_rr
 	));
 
-	if (!DeviceBufferRef_markDirty(*buf, 0, 0, e_rr)) {
-		RefPtr_dec(buf);
-		s_uccess = false;
-		goto clean;
-	}
+	//Stage the CPU data into cpuData before markDirty.
+	//markDirty now requires cpuData to be present for a not-CPU-backed first-frame upload.
+	//For the ref path createBufferIntern already allocated cpuData (and ran its own markDirty).
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
@@ -376,6 +384,12 @@ Bool GraphicsDeviceRef_createBufferData(
 	else {                            //Move
 		buffer->cpuData = *dat;
 		*dat = Buffer_createNull();
+	}
+
+	if (!DeviceBufferRef_markDirty(*buf, 0, 0, e_rr)) {
+		RefPtr_dec(buf);
+		s_uccess = false;
+		goto clean;
 	}
 
 clean:

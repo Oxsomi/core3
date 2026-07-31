@@ -153,6 +153,39 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 			layoutExt->rootParamOffsets.ptrNonConst[i] = (U8) layoutExt->rootParams.length;
 
+			//Textures can't be bound as root SRV/UAV descriptors in D3D12 (only buffers, AS and CBVs can).
+			//A root SRV/UAV holds a raw GPU virtual address, which has no room for a texture's format/mip/swizzle.
+			//So route texture-like push descriptors through a single-entry descriptor table instead.
+			//The range pointer is patched in after the loop, since pushBack can reallocate the range list.
+
+			if((binding->registerType & ESHRegisterType_TypeMask) >= ESHRegisterType_TextureStart) {
+
+				D3D12_DESCRIPTOR_RANGE_TYPE rangeType =
+					binding->registerType & ESHRegisterType_IsWrite ?
+					D3D12_DESCRIPTOR_RANGE_TYPE_UAV : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+
+				gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_pushBack(
+					&layoutExt->rangesResources,
+					(D3D12_DESCRIPTOR_RANGE1) {
+						.RangeType = rangeType,
+						.NumDescriptors = binding->count ? binding->count : 1,
+						.BaseShaderRegister = binding->binding.binding,
+						.RegisterSpace = binding->binding.space,
+						.OffsetInDescriptorsFromTableStart = 0
+					},
+					alloc,
+					e_rr
+				));
+
+				gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_pushBack(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
+					.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+					.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE1) { .NumDescriptorRanges = 1 },
+					.ShaderVisibility = DxDescriptorLayout_convertVisibility(binding->visibility)
+				}, alloc, e_rr));
+
+				continue;
+			}
+
 			D3D12_ROOT_PARAMETER_TYPE type = D3D12_ROOT_PARAMETER_TYPE_SRV;
 
 			if(binding->registerType == ESHRegisterType_ConstantBuffer)
@@ -161,21 +194,16 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 			else if(binding->registerType & ESHRegisterType_IsWrite)
 				type = D3D12_ROOT_PARAMETER_TYPE_UAV;
 
-			D3D12_DESCRIPTOR_RANGE_FLAGS bindFlags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
 			D3D12_ROOT_DESCRIPTOR_FLAGS rootFlags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
 
-			if (type == D3D12_ROOT_PARAMETER_TYPE_CBV) {
-				bindFlags = 0;
+			if (type == D3D12_ROOT_PARAMETER_TYPE_CBV)
 				rootFlags = 0;
-			}
 
 			if(
 				!(info.flags & EDescriptorLayoutFlags_AllowBindlessEverywhere) &&
 				!((info.flags & EDescriptorLayoutFlags_AllowBindlessOnArrays) && binding->count > 1)
-			) {
-				bindFlags = 0;
+			)
 				rootFlags = 0;
-			}
 
 			gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_pushBack(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
 				.ParameterType = type,
@@ -232,6 +260,28 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 		gotoIfError3(clean, ListSortingKey_pushBack(&sortedList, (SortingKey) { binding }, alloc, e_rr));
 	}
 
+	//Push-descriptor layouts don't use the sorted range/table-merge logic below.
+	//Patch each texture table's range pointer now that rangesResources won't grow again, then return.
+	//(Root descriptors for buffers/AS/CBVs are already fully set up in the loop above.)
+
+	if(isPushDescriptors) {
+
+		U64 rangeIdx = 0;
+
+		for(U64 i = 0; i < info.bindings.length; ++i) {
+
+			const DescriptorBinding *bindingi = &info.bindings.ptr[i];
+
+			if((bindingi->registerType & ESHRegisterType_TypeMask) < ESHRegisterType_TextureStart)
+				continue;
+
+			layoutExt->rootParams.ptrNonConst[layoutExt->rootParamOffsets.ptr[i]].DescriptorTable.pDescriptorRanges =
+				&layoutExt->rangesResources.ptr[rangeIdx++];
+		}
+
+		goto clean;
+	}
+
 	if(!ListSortingKey_sortCustom(sortedList, (CompareFunction) SortingKey_compare))
 		retError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createDescriptorLayout can't sort list"
@@ -267,10 +317,8 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 
 	//Create our ranges
 
-	Bool isNv = GraphicsDeviceRef_ptr(dev)->info.vendor == EGraphicsVendorId_NV;
-
 	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(
-		&layoutExt->rangesResources, sortedList.length + isNv, alloc, e_rr
+		&layoutExt->rangesResources, sortedList.length, alloc, e_rr
 	));
 
 	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(&layoutExt->rangesSamplers, sortedList.length, alloc, e_rr));
@@ -339,17 +387,6 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createDescriptorLayout)(
 				range.OffsetInDescriptorsFromTableStart + bindj.binding.binding - key.binding->binding.binding;
 		}
 	}
-
-	//Dummy UAV for NVAPI extensions
-
-	if (isNv && !isPushDescriptors)
-		gotoIfError3(clean, ListD3D12_ROOT_PARAMETER1_pushBack(&layoutExt->rootParams, (D3D12_ROOT_PARAMETER1) {
-			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV,
-			.Descriptor = (D3D12_ROOT_DESCRIPTOR1) {
-				.ShaderRegister = 99999,
-				.RegisterSpace = 99999
-			},
-		}, alloc, e_rr));
 
 	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(&layoutExt->rangesResources, resourceRange, alloc, e_rr));
 	gotoIfError3(clean, ListD3D12_DESCRIPTOR_RANGE1_resize(&layoutExt->rangesSamplers, samplerRange, alloc, e_rr));

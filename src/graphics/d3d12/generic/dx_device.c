@@ -313,26 +313,6 @@ Bool DX_WRAP_FUNC(GraphicsDevice_init)(
 		#endif
 	}
 
-	static const U32 nvExtSlot = 99999;        //space and u slot
-
-	#if _ARCH == ARCH_X86_64
-
-		//Enable NV extensions
-
-		EGraphicsFeatures nvExt =
-			EGraphicsFeatures_RayMicromapOpacity |
-			EGraphicsFeatures_RayReorder;
-
-		if(isNv && (device->info.capabilities.features & nvExt)) {
-
-			NvAPI_Status status = NvAPI_D3D12_SetNvShaderExtnSlotSpace((IUnknown*)deviceExt->device, nvExtSlot, nvExtSlot);
-
-			if(status != NVAPI_OK)
-				retError(clean, Error_invalidState(0, "NvAPI_D3D12_SetNvShaderExtnSlotSpace couldn't be called"));
-		}
-
-	#endif
-
 	//Get queues
 
 	deviceExt->queues[EDxCommandQueue_Copy] = (DxCommandQueue) {

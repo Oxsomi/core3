@@ -179,8 +179,43 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 			ext = ESHExtension_RayMotionBlur;
 			break;
 
-		case SpvCapabilityShaderInvocationReorderNV:
+		//SPV_EXT_shader_invocation_reorder (ShaderInvocationReorderEXT) is what DXC emits for dx::HitObject SER.
+		case SpvCapabilityShaderInvocationReorderEXT:
 			ext = ESHExtension_RayReorder;
+			break;
+
+		//SM6.10 ray triangle vertex position fetch (SPV_KHR_ray_tracing_position_fetch): the ray-pipeline
+		//(RayTracingPositionFetchKHR) and RayQuery (RayQueryPositionFetchKHR) capabilities share one extension.
+		case SpvCapabilityRayTracingPositionFetchKHR:
+		case SpvCapabilityRayQueryPositionFetchKHR:
+			ext = ESHExtension_RayTriPosition;
+			break;
+
+		//SM6.10 cooperative vectors (per-thread matrix*vector) lower to SPV_NV_cooperative_vector (NV-only).
+		case SpvCapabilityCooperativeVectorNV:
+			ext = ESHExtension_CoopVec;
+			break;
+
+		//The training capability (outer-product / reduce-sum accumulate) is a distinct device tier (Tier 1.1), gated separately.
+		case SpvCapabilityCooperativeVectorTrainingNV:
+			ext = ESHExtension_CoopVecTraining;
+			break;
+
+		//SM6.10 cooperative matrix (subgroup matrix*matrix / GEMM) lowers to the cross-vendor SPV_KHR_cooperative_matrix.
+		case SpvCapabilityCooperativeMatrixKHR:
+			ext = ESHExtension_CoopMat;
+			break;
+
+		//Cooperative matrix (and, per spec, cooperative vector) require the Vulkan memory model; DXC upgrades
+		//OpMemoryModel to Vulkan and declares these. They enable no oiSH extension of their own, but must be allowed.
+		case SpvCapabilityVulkanMemoryModel:
+		case SpvCapabilityVulkanMemoryModelDeviceScope:
+			break;
+
+		//FP8 (e4m3/e5m2) in cooperative matrix (SPV_EXT_float8): the reflection-detectable half of the CoopFP8 tier
+		//(cooperative-vector FP8 is only an interpretation, so it's annotation-driven - see ESHExtension_CoopFP8).
+		case SpvCapabilityFloat8CooperativeMatrixEXT:
+			ext = ESHExtension_CoopFP8;
 			break;
 
 		case SpvCapabilityAtomicFloat32AddEXT:
@@ -284,6 +319,89 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 
 		case SpvCapabilityStorageImageReadWithoutFormat:
 		case SpvCapabilityStorageImageWriteWithoutFormat:
+
+		//Capabilities introduced by the SPIRV-Headers update that OxC3 doesn't expose as oiSH extensions
+		//(ML / tensors / cooperative matrix / bfloat / small floats / vendor FPGA & subgroup ops). Allowed but
+		//map to no extension.
+		case SpvCapabilityTensorsARM:
+		case SpvCapabilityStorageTensorArrayDynamicIndexingARM:
+		case SpvCapabilityStorageTensorArrayNonUniformIndexingARM:
+		case SpvCapabilityGraphARM:
+		case SpvCapabilityCooperativeMatrixLayoutsARM:
+		case SpvCapabilityFloat8EXT:
+		case SpvCapabilityFloat6EXT:
+		case SpvCapabilityFloat4EXT:
+		case SpvCapabilityFloat8UnsignedE8M0EXT:
+		case SpvCapabilityMXInt8EXT:
+		case SpvCapabilityBitcastExtractEXT:
+		case SpvCapabilityUntypedPointersKHR:
+		case SpvCapabilityTileShadingQCOM:
+		case SpvCapabilityCooperativeMatrixConversionQCOM:
+		case SpvCapabilityTextureBlockMatch2QCOM:
+		case SpvCapabilityMultipleWaitQueuesQCOM:
+		case SpvCapabilityImageGatherLinearQCOM:
+		case SpvCapabilityImageGatherExtendedModesQCOM:
+		case SpvCapabilityShaderEnqueueAMDX:
+		case SpvCapabilityQuadControlKHR:
+		case SpvCapabilityInt4TypeINTEL:
+		case SpvCapabilityInt4CooperativeMatrixINTEL:
+		case SpvCapabilityBFloat16TypeKHR:
+		case SpvCapabilityBFloat16DotProductKHR:
+		case SpvCapabilityBFloat16CooperativeMatrixKHR:
+		case SpvCapabilityAbortKHR:
+		case SpvCapabilityDescriptorHeapEXT:
+		case SpvCapabilityConstantDataKHR:
+		case SpvCapabilityPoisonFreezeKHR:
+		case SpvCapabilityWeakLinkageAMD:
+		case SpvCapabilityDisplacementMicromapNV:
+		case SpvCapabilityAtomicFloat16VectorNV:
+		case SpvCapabilityRayTracingDisplacementMicromapNV:
+		case SpvCapabilityRawAccessChainsNV:
+		case SpvCapabilityRayTracingSpheresGeometryNV:
+		case SpvCapabilityRayTracingLinearSweptSpheresGeometryNV:
+		case SpvCapabilityPushConstantBanksNV:
+		case SpvCapabilityLongVectorEXT:
+		case SpvCapabilityShader64BitIndexingEXT:
+		case SpvCapabilityCooperativeMatrixReductionsNV:
+		case SpvCapabilityCooperativeMatrixConversionsNV:
+		case SpvCapabilityCooperativeMatrixPerElementOperationsNV:
+		case SpvCapabilityCooperativeMatrixTensorAddressingNV:
+		case SpvCapabilityCooperativeMatrixBlockLoadsNV:
+		case SpvCapabilityRayTracingClusterAccelerationStructureNV:
+		case SpvCapabilityTensorAddressingNV:
+		case SpvCapabilityCooperativeMatrixDecodeVectorNV:
+		case SpvCapabilityReplicatedCompositesEXT:
+		case SpvCapabilityFloatControls2:
+		case SpvCapabilityFMAKHR:
+		case SpvCapabilityRayTracingOpacityMicromapExecutionModeKHR:
+		case SpvCapabilityLongCompositesINTEL:
+		case SpvCapabilityArithmeticFenceEXT:
+		case SpvCapabilityFPGAClusterAttributesV2ALTERA:
+		case SpvCapabilityTaskSequenceALTERA:
+		case SpvCapabilityFPMaxErrorINTEL:
+		case SpvCapabilityGlobalVariableHostAccessINTEL:
+		case SpvCapabilityGlobalVariableFPGADecorationsALTERA:
+		case SpvCapabilitySubgroupBufferPrefetchINTEL:
+		case SpvCapabilitySubgroup2DBlockIOINTEL:
+		case SpvCapabilitySubgroup2DBlockTransformINTEL:
+		case SpvCapabilitySubgroup2DBlockTransposeINTEL:
+		case SpvCapabilitySubgroupMatrixMultiplyAccumulateINTEL:
+		case SpvCapabilityTernaryBitwiseFunctionINTEL:
+		case SpvCapabilityUntypedVariableLengthArrayINTEL:
+		case SpvCapabilitySpecConditionalINTEL:
+		case SpvCapabilityFunctionVariantsINTEL:
+		case SpvCapabilityPredicatedIOINTEL:
+		case SpvCapabilityRoundedDivideSqrtINTEL:
+		case SpvCapabilityTensorFloat32RoundingINTEL:
+		case SpvCapabilityMaskedGatherScatterINTEL:
+		case SpvCapabilityCacheControlsINTEL:
+		case SpvCapabilityRegisterLimitsINTEL:
+		case SpvCapabilityBindlessImagesINTEL:
+		case SpvCapabilityDotProductFloat16AccFloat32VALVE:
+		case SpvCapabilityDotProductFloat16AccFloat16VALVE:
+		case SpvCapabilityDotProductBFloat16AccVALVE:
+		case SpvCapabilityDotProductFloat8AccFloat32VALVE:
+		case SpvCapabilityIntrinsicSAMSUNG:
 			break;
 
 		//Unsupported
@@ -366,7 +484,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityBlockingPipesINTEL:
 		case SpvCapabilityFPGARegINTEL:
 
-		case SpvCapabilityLongConstantCompositeINTEL:
 		case SpvCapabilityOptNoneINTEL:
 
 		case SpvCapabilityDebugInfoModuleINTEL:
@@ -382,7 +499,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityFragmentBarycentricKHR:
 		case SpvCapabilityDemoteToHelperInvocation:
 		case SpvCapabilityExpectAssumeKHR:
-		case SpvCapabilityCooperativeMatrixKHR:
 		case SpvCapabilityBitInstructions:
 
 		case SpvCapabilityMultiViewport:
@@ -394,8 +510,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityFragmentShaderPixelInterlockEXT:
 
 		case SpvCapabilityRayTraversalPrimitiveCullingKHR:
-		case SpvCapabilityRayTracingPositionFetchKHR:
-		case SpvCapabilityRayQueryPositionFetchKHR:
 		case SpvCapabilityRayCullMaskKHR:
 
 		case SpvCapabilityAtomicFloat16AddEXT:
@@ -414,9 +528,6 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilityDotProductInput4x8Bit:
 		case SpvCapabilityDotProductInput4x8BitPacked:
 		case SpvCapabilityDotProduct:
-
-		case SpvCapabilityVulkanMemoryModel:
-		case SpvCapabilityVulkanMemoryModelDeviceScope:
 
 		case SpvCapabilityShaderClockKHR:
 		case SpvCapabilityFragmentFullyCoveredEXT:
@@ -496,6 +607,9 @@ Bool spvMapCapabilityToESHExtension(SpvCapability capability, ESHExtension *exte
 		case SpvCapabilitySubgroupDispatch:
 		case SpvCapabilityNamedBarrier:
 		case SpvCapabilityPipeStorage:
+
+		//NV SER is unsupported; OxC3 maps the EXT form (SPV_EXT_shader_invocation_reorder) instead.
+		case SpvCapabilityShaderInvocationReorderNV:
 
 			retError(clean, Error_invalidState(
 				2, "spvMapCapabilityToESHExtension() SPIRV contained capability that isn't supported in oiSH"
@@ -1569,8 +1683,19 @@ extern "C" Bool Compiler_processSPIRV(
 	ESHExtension exts = ESHExtension_None;
 	SpvReflectShaderModule spvMod{};
 	Bool isRt = !!(toCompile->extensions & ESHExtension_RayQuery);
+
+	//Linalg (cooperative vectors) is compiled at vulkan1.3 (SPIR-V 1.6) so its storage buffers get the StorageBuffer
+	//class the matmul requires, so its optimizer must run at a matching (>= 1.6) environment.
+
+	ESHExtension linalg = (ESHExtension) (
+		ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
+	);
+
+	Bool isLinalg = !!(toCompile->extensions & linalg);
+
 	spvtools::Optimizer optimizerRt{ SPV_ENV_UNIVERSAL_1_4 };
 	spvtools::Optimizer optimizerNoRt{ SPV_ENV_UNIVERSAL_1_3 };
+	spvtools::Optimizer optimizerLinalg{ SPV_ENV_UNIVERSAL_1_6 };
 
 	std::vector<U32> tmp;
 	std::vector<U32> copied;
@@ -1977,7 +2102,7 @@ extern "C" Bool Compiler_processSPIRV(
 	//Strip debug and optimize
 
 	{
-		spvtools::Optimizer &optimizer = isRt ? optimizerRt : optimizerNoRt;
+		spvtools::Optimizer &optimizer = isLinalg ? optimizerLinalg : (isRt ? optimizerRt : optimizerNoRt);
 
 		optimizer.SetMessageConsumer(
 			[alloc, errors, &s_uccess, e_rr](
@@ -2020,7 +2145,9 @@ extern "C" Bool Compiler_disassembleSPIRV(Buffer buf, const Allocator *alloc, Ch
 	U64 binLen = Buffer_length(buf);
 	const void *resultPtr = buf.ptr;
 
-	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_4 };
+	//Disassemble at the highest env so SPIR-V 1.6 modules (cooperative vectors/matrix) and their opcodes are known;
+	//disassembling lower-version modules at a higher env is backward-compatible.
+	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_6 };
 	std::string str;
 
 	spv_binary_to_text_options_t opts = (spv_binary_to_text_options_t) (
@@ -2060,7 +2187,9 @@ extern "C" Bool Compiler_assembleSPIRV(CharString text, const Allocator *alloc, 
 
 	Bool s_uccess = true;
 
-	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_4 };
+	//Assemble at the highest env (superset grammar) so text from SPIR-V 1.6 modules (cooperative vectors/matrix)
+	//parses; the assembler stamps the version the text itself requests.
+	spvtools::SpirvTools tool{ SPV_ENV_UNIVERSAL_1_6 };
 	std::vector<U32> spirv;
 
 	if(!result)
@@ -2203,7 +2332,11 @@ extern "C" Bool Compiler_linkSPIRV(
 
 	isRt |= !!(exts & ESHExtension_RayQuery);
 
-	spv_target_env env = isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3;
+	//Cooperative vectors/matrix compile at vulkan1.3 (SPIR-V 1.6), so their optimizer/validator must match (mirrors
+	//Compiler_processSPIRV). 1.6 is a superset of 1.4, so RT + coop is safe too.
+	Bool isLinalg = !!(exts & (ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining));
+
+	spv_target_env env = isLinalg ? SPV_ENV_UNIVERSAL_1_6 : (isRt ? SPV_ENV_UNIVERSAL_1_4 : SPV_ENV_UNIVERSAL_1_3);
 
 	spvtools::Optimizer opt(env);
 

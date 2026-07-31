@@ -18,7 +18,6 @@
 # This is called dual licensing.
 
 find_package(dxc REQUIRED)
-find_package(nvapi REQUIRED)
 find_package(spirv_reflect REQUIRED)
 
 # Our parser & calling DXC and spirv-opt, spirv-reflect, DXIL reflect, etc.
@@ -37,7 +36,7 @@ add_library(
 
 set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi/graphics)
 target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_types_base OxC3_types_math OxC3_types_container OxC3_platforms OxC3_formats_oiSH)
-target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect nvapi::nvapi)
+target_link_libraries(OxC3_shader_compiler PUBLIC dxc::dxc spirv_reflect::spirv_reflect)
 
 # On Windows d3d12shader.h (included by DXC's dxcreflect.h) comes from the Windows SDK.
 # Off Windows there is no such SDK, so pull it in headers-only from agility_sdk

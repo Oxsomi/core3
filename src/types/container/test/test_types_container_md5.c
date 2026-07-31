@@ -48,8 +48,9 @@ void Test_md5(Test *test) {
 
 	for (U64 i = 0; i < sizeof(strVecs) / sizeof(strVecs[0]); ++i) {
 		const Buffer buf = Buffer_createRefConst(strVecs[i].str, CharString_calcStrLen(strVecs[i].str, U64_MAX));
-		const I32x4 got  = Buffer_md5(buf);
+		const MD5Hash gotH  = Buffer_md5(buf);
 		const I32x4 want = I32x4_yxwz(I32x4_createFromU64x2(strVecs[i].hi, strVecs[i].lo));
+		const I32x4 got = I32x4_create4((I32)gotH.v[0], (I32)gotH.v[1], (I32)gotH.v[2], (I32)gotH.v[3]);
 		Test_assert(test, strVecs[i].str, I32x4_eq4(got, want));
 	}
 
@@ -149,8 +150,9 @@ void Test_md5(Test *test) {
 	static const U8 empty[194] = { 0 };
 
 	for (U64 i = 0; i < sizeof(nullVecSizes) / sizeof(nullVecSizes[0]); ++i) {
-		const I32x4 got  = Buffer_md5(Buffer_createRefConst(empty, nullVecSizes[i]));
+		const MD5Hash gotH  = Buffer_md5(Buffer_createRefConst(empty, nullVecSizes[i]));
 		const I32x4 want = I32x4_yxwz(I32x4_createFromU64x2(nullVecHiLo[i][0], nullVecHiLo[i][1]));
+		const I32x4 got = I32x4_create4((I32)gotH.v[0], (I32)gotH.v[1], (I32)gotH.v[2], (I32)gotH.v[3]);
 		Test_assert(test, "MD5 null bytes", I32x4_eq4(got, want));
 	}
 }

@@ -51,7 +51,7 @@ typedef enum ESHExtension {
 
 	ESHExtension_RayQuery                    = 1 << 8,
 	ESHExtension_RayMicromapOpacity          = 1 << 9,
-	ESHExtension_Reserved                    = 1 << 10,
+	ESHExtension_RayTriPosition              = 1 << 10,       //SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
 	ESHExtension_RayMotionBlur               = 1 << 11,
 	ESHExtension_RayReorder                  = 1 << 12,
 
@@ -69,6 +69,24 @@ typedef enum ESHExtension {
 
 	ESHExtension_SubgroupOperations          = 1 << 20,
 
+	//SM6.10 cooperative vectors (per-thread matrix*vector): DXIL dx::linalg, SPIR-V SPV_NV_cooperative_vector (NV-only).
+	ESHExtension_CoopVec                     = 1 << 21,
+
+	//SM6.10 cooperative matrix (subgroup matrix*matrix / GEMM): DXIL dx::linalg, SPIR-V SPV_KHR_cooperative_matrix (cross-vendor).
+	ESHExtension_CoopMat                     = 1 << 22,
+
+	//FP8 (e4m3/e5m2) cooperative vector/matrix support: an additive gate on top of CoopVec/CoopMat (whose base tier is
+	//FP16 + INT8). FP8 is not universally supported (newer HW on Vulkan; a vendor/EXT extension for KHR cooperative
+	//matrix), so it is a separate flag the runtime matches against device cooperative properties. Annotation-driven:
+	//NV cooperative-vector FP8 is only an interpretation, not a SPIR-V capability, so it isn't reflection-detectable
+	//(hence not in the SpirvNative/DxilNative sets, or it would be demoted).
+	ESHExtension_CoopFP8                     = 1 << 23,
+
+	//Cooperative-vector training (D3D12 Tier 1.1 / SPV_NV_cooperative_vector CooperativeVectorTrainingNV): the outer-
+	//product / reduce-sum accumulate ops (weight/bias gradients). Additive gate on top of CoopVec, reflection-detectable
+	//(a real capability) but kept out of the Native sets so adding it doesn't churn every oiSH's dormant mask.
+	ESHExtension_CoopVecTraining             = 1 << 24,
+
 	ESHExtension_DxilNative =                                  //Extensions that can be found from DXIL natively
 		ESHExtension_RayQuery |
 		ESHExtension_16BitTypes |
@@ -83,6 +101,7 @@ typedef enum ESHExtension {
 	ESHExtension_SpirvNative =                                 //Extensions that map directly to SPIRV capabilities
 		ESHExtension_RayMicromapOpacity |
 		ESHExtension_RayQuery |
+		ESHExtension_RayTriPosition |
 		ESHExtension_RayMotionBlur |
 		ESHExtension_RayReorder |
 		ESHExtension_AtomicF32 |
@@ -96,9 +115,32 @@ typedef enum ESHExtension {
 		ESHExtension_I64 |
 		ESHExtension_AtomicI64 |
 		ESHExtension_ComputeDeriv |
-		ESHExtension_WriteMSTexture,
+		ESHExtension_WriteMSTexture |
+		ESHExtension_CoopVec |
+		ESHExtension_CoopMat,
 
-	ESHExtension_Count                       = 21,
+	//Which backend DXC can *compile* an extension to, as opposed to the DxilNative / SpirvNative sets above which
+	// say which backend it can be *detected* (reflected) from.
+	//DXC lowers an HLSL intrinsic to a single backend, but the other backend is still reachable when the shader
+	// writes the operation as inline SPIR-V ([[vk::ext_*]]). Inline SPIR-V is itself SPIR-V, so it's an escape
+	// hatch onto SPIRV only - never onto DXIL. An extension is therefore listed as single-backend below ONLY when
+	// the other backend has no path at all; a DXIL-only *intrinsic* (OMM / SER / triangle position fetch /
+	// cooperative vectors) is NOT single-backend because a SPIRV build can still express it inline, so it stays
+	// dual (absent from both sets).
+	//When adding an extension above: leave it out of both sets to keep it dual (the default), and only add it here
+	// if one backend is genuinely impossible.
+
+	ESHExtension_NoDxilCompile =                              //SPIRV-only to compile: no DXIL intrinsic exists
+		ESHExtension_AtomicF32 |
+		ESHExtension_AtomicF64 |
+		ESHExtension_SubgroupArithmetic |
+		ESHExtension_SubgroupShuffle |
+		ESHExtension_RayMotionBlur,
+
+	ESHExtension_NoSpirvCompile =                             //DXIL-only to compile: no SPIR-V intrinsic or inline op
+		ESHExtension_MeshTaskTexDeriv,
+
+	ESHExtension_Count                       = 25,
 
 	ESHExtension_All                         = (1 << ESHExtension_Count) - 1
 

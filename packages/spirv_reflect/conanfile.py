@@ -9,7 +9,7 @@ required_conan_version = ">=2.0"
 class spirv_reflect(ConanFile):
 
 	name = "spirv_reflect"
-	version = "2024.09.22"
+	version = "2026.07.29"
 
 	license = "Apache License 2.0"
 	author = "KhronosGroup"

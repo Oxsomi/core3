@@ -7,12 +7,12 @@ required_conan_version = ">=2.0"
 class agility_sdk(ConanFile):
 
 	name = "agility_sdk"
-	version = "2026.07.26"
+	version = "2026.07.29"
 
 	license = "Microsoft DirectX, Direct3D WARP and MIT licenses"
 	author = "Microsoft"
 	url = "https://www.nuget.org/profiles/Direct3D"
-	description = "Library that contains both d3d10warp.dll (1.0.20) and the agility sdk (1.619.3)"
+	description = "Library that contains both d3d10warp.dll (1.0.20) and the agility sdk (1.721.2-preview)"
 	topics = ("microsoft", "d3d12", "agility", "directx", "warp", "pre-built")
 
 	exports_sources = [ "agility/build/native/include/*.h", "agility/LICENSE.txt", "agility/LICENSE-CODE.txt", "warp/LICENSE.txt" ]
@@ -24,7 +24,7 @@ class agility_sdk(ConanFile):
 		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/1.0.20", "warp.zip")
 		unzip(self, "warp.zip", "warp")
 
-		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.619.4", "d3d12.zip")
+		download(self, "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.721.2-preview", "d3d12.zip")
 		unzip(self, "d3d12.zip", "agility")
 
 	#Find a LICENSE.txt case-insensitively under `folder` and stage it into the package as `dstName`.

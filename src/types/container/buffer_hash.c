@@ -304,7 +304,7 @@ static inline void Buffer_md5Generic(const Buffer buf, MD5State *state) {
 		MD5State_update(state, Buffer_createRefConst(buf.ptr + (i << 6), 64));
 }
 
-I32x4 Buffer_md5(const Buffer buf) {
+MD5Hash Buffer_md5(const Buffer buf) {
 
 	MD5State state;
 	Buffer_md5Generic(buf, &state);
@@ -336,10 +336,12 @@ I32x4 Buffer_md5(const Buffer buf) {
 
 	//Finish
 
-	for(U8 i = 0; i < 4; ++i)
-		state.v[i] = U32_swapEndianness(state.v[i]);
+	MD5Hash hash = (MD5Hash) { 0 };
 
-	return state.vec;
+	for(U8 i = 0; i < 4; ++i)
+		hash.v[i] = U32_swapEndianness(state.v[i]);
+
+	return hash;
 }
 
 U64 Buffer_fnv1a64Single(U64 a, U64 hash) {

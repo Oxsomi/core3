@@ -48,7 +48,7 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"SUBGROUPSHUFFLE",
 	"RAYQUERY",
 	"RAYMICROMAPOPACITY",
-	"RESERVED",
+	"RAYTRIPOSITION",
 	"RAYMOTIONBLUR",
 	"RAYREORDER",
 	"MULTIVIEW",
@@ -58,7 +58,11 @@ const C8 *ESHExtension_defines[ESHExtension_Count] = {
 	"WRITEMSTEXTURE",
 	"BINDLESS",                //Unused, bindless is automatically turned on when it's detected
 	"UNBOUNDARRAYSIZE",
-	"SUBGROUPOPERATIONS"
+	"SUBGROUPOPERATIONS",
+	"COOPVEC",
+	"COOPMAT",
+	"COOPFP8",
+	"COOPVECTRAINING"
 };
 
 const C8 *ESHExtension_names[ESHExtension_Count] = {
@@ -72,7 +76,7 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"SubgroupShuffle",
 	"RayQuery",
 	"RayMicromapOpacity",
-	"RESERVED",
+	"RayTriPosition",
 	"RayMotionBlur",
 	"RayReorder",
 	"Multiview",
@@ -82,7 +86,11 @@ const C8 *ESHExtension_names[ESHExtension_Count] = {
 	"WriteMSTexture",
 	"Bindless",
 	"UnboundArraySize",
-	"SubgroupOperations"
+	"SubgroupOperations",
+	"CoopVec",
+	"CoopMat",
+	"CoopFP8",
+	"CoopVecTraining"
 };
 
 const C8 *ESHVendor_names[ESHVendor_Count + 1] = {

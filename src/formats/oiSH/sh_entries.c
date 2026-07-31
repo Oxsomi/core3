@@ -413,28 +413,20 @@ U8 SHEntryRuntime_getSupportedBinaryTypes(const SHEntryRuntime *runtime) {
 	if (runtime->entry.stage == ESHPipelineStage_WorkgraphExt)
 		mask &= (U8)(1 << ESHBinaryType_DXIL);
 
-	//Extension support: an extension native to only one backend forces that backend. SpirvNative / DxilNative
-	//are the compiler's own per-backend capability sets, so an extension in one but not the other is exclusive
-	//(e.g. ComputeDeriv / AtomicF32 are SPIRV-only, MeshTaskTexDeriv is DXIL-only).
+	//Extension compile support: a feature restricts to one backend only when the other has no path at all, per
+	//the ESHExtension_NoDxilCompile / ESHExtension_NoSpirvCompile sets in sh_binaries.h. Everything else stays
+	//dual - a DXIL-only intrinsic (OMM / SER / triangle position fetch / cooperative vectors) is still reachable
+	//on SPIRV via inline SPIR-V, so which backend a shader targets is left to the shader, not forced here.
 
 	ESHExtension used = ESHExtension_None;
 
 	for (U64 i = 0; i < runtime->extensions.length; ++i)
 		used = (ESHExtension)(used | runtime->extensions.ptr[i]);
 
-	//ComputeDeriv (texture derivatives in a compute shader) compiles on BOTH backends, even though OxC3 only
-	//detects it natively on SPIRV (ComputeDerivativeGroupQuads). These native sets track which backend a feature
-	//can be *detected* from, not which backends DXC can *compile* it for, so without this exclusion ComputeDeriv
-	//(SpirvNative & ~DxilNative) would be wrongly pinned to SPIRV. The DXIL-only branch below still pins
-	//MeshTaskTexDeriv - the sole extension in DxilNative & ~SpirvNative.
-	//TODO: WriteMSTexture is in *both* native sets, so this function reports it as dual-backend even though
-	//DXC's SPIR-V backend can't compile it; its DXIL-only restriction currently lives only in the features test.
-	ESHExtension spirvOnly = (ESHExtension)((ESHExtension_SpirvNative & ~ESHExtension_DxilNative) & ~ESHExtension_ComputeDeriv);
-
-	if (used & spirvOnly)
+	if (used & ESHExtension_NoDxilCompile)
 		mask &= (U8)(1 << ESHBinaryType_SPIRV);
 
-	if (used & (ESHExtension_DxilNative & ~ESHExtension_SpirvNative))
+	if (used & ESHExtension_NoSpirvCompile)
 		mask &= (U8)(1 << ESHBinaryType_DXIL);
 
 	return mask;

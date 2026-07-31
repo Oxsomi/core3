@@ -23,7 +23,6 @@
 #pragma once
 #include "types/base/constants.h"
 #include "types/base/buffer_base.h"
-#include "types/math/vec4.h"
 
 #ifdef __cplusplus
 	extern "C" {
@@ -127,7 +126,9 @@ U64 Buffer_fnv1a64(const Buffer buf, U64 hash);        //Put hash as Buffer_fnv1
 
 //MD5
 
-I32x4 Buffer_md5(const Buffer buf);
+typedef struct MD5Hash { U32 v[4]; } MD5Hash;
+
+MD5Hash Buffer_md5(const Buffer buf);
 
 //SHA256
 

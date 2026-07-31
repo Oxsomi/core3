@@ -432,7 +432,7 @@ Bool CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 	(void) e_rr;
 
 	const Ns then = Time_now();
-	I32x4 md5 = Buffer_md5(buf);
+	MD5Hash md5 = Buffer_md5(buf);
 	const Ns now = Time_now();
 
 	Log_debugLnx(
@@ -441,7 +441,7 @@ Bool CLI_profileMD5Impl(const ParsedArgs *args, Buffer buf, Error *e_rr) {
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
 		(F64)Buffer_length(buf) / (now - then) * SECOND,
-		I32x4_x(md5), I32x4_y(md5), I32x4_z(md5), I32x4_w(md5)
+		md5.v[0], md5.v[1], md5.v[2], md5.v[3]
 	);
 
 	return true;

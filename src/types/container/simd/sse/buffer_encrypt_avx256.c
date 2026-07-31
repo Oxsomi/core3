@@ -113,31 +113,9 @@ void AESEncryptionContext_ghashN2(I32x4 *restrict a, const I32x4 *restrict H, U8
 				clmulFused_8[left] = I32x8_xor(clmulFused_8[left], clmulFused_8[left | 2]);
 			}
 
-			if (N2 > 4) {
-
-				for (U32 i = 0; i < (U32)(N2 >> 3); ++i) {
-					U32 left = i << 3;
-					clmul00_8[left] = I32x8_xor(clmul00_8[left], clmul00_8[left | 4]);
-					clmul11_8[left] = I32x8_xor(clmul11_8[left], clmul11_8[left | 4]);
-					clmulFused_8[left] = I32x8_xor(clmulFused_8[left], clmulFused_8[left | 4]);
-				}
-
-				if (N2 > 8) {
-
-					for (U32 i = 0; i < (U32)(N2 >> 4); ++i) {
-						U32 left = i << 4;
-						clmul00_8[left] = I32x8_xor(clmul00_8[left], clmul00_8[left | 8]);
-						clmul11_8[left] = I32x8_xor(clmul11_8[left], clmul11_8[left | 8]);
-						clmulFused_8[left] = I32x8_xor(clmulFused_8[left], clmulFused_8[left | 8]);
-					}
-
-					if (N2 > 16) {
-						clmul00_8[0] = I32x8_xor(clmul00_8[0], clmul00_8[16]);
-						clmul11_8[0] = I32x8_xor(clmul11_8[0], clmul11_8[16]);
-						clmulFused_8[0] = I32x8_xor(clmulFused_8[0], clmulFused_8[16]);
-					}
-				}
-			}
+			//ghashN2 only ever handles up to 8 blocks (N2 <= 4, bounded by the [4] accumulator arrays), so the
+			//tree reduction stops at stride 2. Deeper strides would index [4]/[8]/[16] out of bounds (ghashN4
+			//covers the 16-block case); keeping that dead code trips gcc's -Warray-bounds under fat LTO.
 		}
 	}
 

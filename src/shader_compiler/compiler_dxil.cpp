@@ -36,10 +36,20 @@
 #include "types/base/constants.h"
 #include "types/base/platform_types.h"
 
-#include "directx/d3d12shader.h"
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+	#define UNICODE
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#include <Windows.h>
+	#include <Unknwn.h>
+#endif
 
+//dxcapi.h must precede d3d12shader.h: on non-Windows it pulls in the WinAdapter that defines IUnknown,
+//which directx/d3d12shader.h (via d3dcommon.h) needs before it declares its reflection interfaces.
+//On Windows those COM types (IUnknown, REFCLSID, BOOL, LPCWSTR, ...) come from <Windows.h>/<Unknwn.h> above.
 #define ENABLE_DXC_STATIC_LINKING
 #include "dxcompiler/dxcapi.h"
+#include "directx/d3d12shader.h"
 #include "dxcompiler/dxcreflect.h"
 #include <exception>
 
@@ -1100,6 +1110,10 @@ extern "C" Bool Compiler_processDXIL(
 						"Hull, domain, compute, mesh, amplification, compute, geometry, vertex or pixel shaders have to be "
 						"finalized through linking before adding to oiSH file"
 					));
+
+				//Library / raytracing / node / callable stages are handled below (they don't require prior linking)
+				default:
+					break;
 			}
 
 			//Reflect payload size & attribute size
@@ -1504,10 +1518,14 @@ extern "C" Bool Compiler_processDXIL(
 
 	//Ensure we have a valid DXIL file
 
+	//DXC signs DXIL through the bundled validator, which only knows shader models up to 6.9, so a 6.10 module
+	// (cooperative vectors / triangle position fetch) comes back structurally valid but unsigned (zero hash).
+	//D3D12 only accepts 6.10 with experimental shader models enabled anyway, so an unsigned hash is expected there.
 	if(
 		Buffer_length(*result) <= 0x14 ||
 		Buffer_readU32(*result, 0, NULL, NULL) != C8x4('D', 'X', 'B', 'C') ||
-		I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero())        //Unsigned
+		(toCompile->shaderVersion < OISH_SHADER_MODEL(6, 10) &&
+			I32x4_eq4(I32x4_load4(result->ptr + sizeof(U32)), I32x4_zero()))                  //Unsigned
 	)
 		retError(clean, Error_invalidState(2, "Compiler_processDXIL() DXIL returned is invalid"));
 
@@ -1652,7 +1670,6 @@ extern "C" Bool Compiler_getUniqueEntrypointsDXIL(
 	Bool s_uccess = true;
 	DxcBuffer inputBuf = DxcBuffer{ .Ptr = binary.ptr, .Size = Buffer_length(binary), .Encoding = 0 };
 	HRESULT hr = S_OK;
-	DxcBuffer reflDat{};
 
 	ID3D12LibraryReflection1 *dxilReflLib{};
 

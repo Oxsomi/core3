@@ -166,6 +166,116 @@ clean:
 	SHFile_free(&dx, alloc);
 }
 
+//True if two oiSH buffers carry the same reflection (entry signatures + extensions), i.e. only the compiled
+//SPIRV/DXIL bytecode differs. That's the benign case where a DXC update churns bytecode without changing meaning.
+static Bool shReflectionMatches(const Allocator *alloc, Buffer a, Buffer b) {
+
+	SHFile fa = (SHFile) { 0 }, fb = (SHFile) { 0 };
+	Bool match = false;
+
+	if(!shReadFile(alloc, a, &fa) || !shReadFile(alloc, b, &fb))
+		goto clean;
+
+	if(fa.entries.length != fb.entries.length || fa.binaries.length != fb.binaries.length)
+		goto clean;
+
+	match = true;
+
+	for(U64 i = 0; i < fa.binaries.length && match; ++i)
+		if(fa.binaries.ptr[i].identifier.extensions != fb.binaries.ptr[i].identifier.extensions)
+			match = false;
+
+	for(U64 i = 0; i < fa.entries.length && match; ++i) {
+
+		const SHEntry *ea = &fa.entries.ptr[i];
+		const SHEntry *eb = shFindEntry(&fb, ea->name);
+
+		if(
+			!eb || ea->stage != eb->stage ||
+			!Buffer_eq(
+				Buffer_createRefConst(ea->inputs, sizeof(ea->inputs)),
+				Buffer_createRefConst(eb->inputs, sizeof(eb->inputs))
+			) ||
+			!Buffer_eq(
+				Buffer_createRefConst(ea->outputs, sizeof(ea->outputs)),
+				Buffer_createRefConst(eb->outputs, sizeof(eb->outputs))
+			)
+		)
+			match = false;
+	}
+
+clean:
+	SHFile_free(&fa, alloc);
+	SHFile_free(&fb, alloc);
+	return match;
+}
+
+//For each binary type present in BOTH oiSH (SPIRV and/or DXIL), disassemble the reference and produced blobs
+//and, only when the disassembly actually differs, write <ref>.ref.<ext> / <ref>.new.<ext> so it can be diffed
+//(`git diff --no-index`). Identical disassembly (e.g. only the binary header's generator-version word churned,
+//as a DXC update does) writes nothing and is just logged - so this stays quiet on benign version bumps.
+static void dumpDisasmDiff(const Allocator *alloc, Compiler *comp, Buffer produced, Buffer golden, CharString ref) {
+
+	SHFile fp = (SHFile) { 0 }, fg = (SHFile) { 0 };
+	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
+
+	if(!shReadFile(alloc, produced, &fp) || !shReadFile(alloc, golden, &fg))
+		goto clean;
+
+	if(!fp.binaries.length || !fg.binaries.length)
+		goto clean;
+
+	const ESHBinaryType types[2] = { ESHBinaryType_SPIRV, ESHBinaryType_DXIL };
+	const C8 *exts[2] = { "spvasm", "dxil" };
+
+	for(U64 k = 0; k < 2; ++k) {
+
+		const Buffer gBin = fg.binaries.ptr[0].binaries[types[k]];
+		const Buffer pBin = fp.binaries.ptr[0].binaries[types[k]];
+
+		if(!Buffer_length(gBin) || !Buffer_length(pBin))        //The corpus snapshots SPIRV only, so DXIL is absent
+			continue;
+
+		Error err = Error_none();
+		CharString gDis = CharString_createNull(), pDis = CharString_createNull();
+
+		if(
+			Compiler_disassemble(comp, types[k], gBin, alloc, &gDis, &err) &&
+			Compiler_disassemble(comp, types[k], pBin, alloc, &pDis, &err)
+		) {
+			if(CharString_equalsStringSensitive(&gDis, &pDis))
+				Log_debugLn(alloc, "\t%s disassembly identical - only the binary header (generator version) churned", exts[k]);
+
+			else {
+
+				CharString refPath = CharString_createNull(), newPath = CharString_createNull();
+
+				if(
+					CharString_format(alloc, &refPath, &err, "%.*s.ref.%s", (int) CharString_length(ref), ref.ptr, exts[k]) &&
+					CharString_format(alloc, &newPath, &err, "%.*s.new.%s", (int) CharString_length(ref), ref.ptr, exts[k])
+				) {
+					Buffer gb = CharString_bufferConst(gDis), pb = CharString_bufferConst(pDis);
+					File_write(&gb, &refPath, 0, 0, 1 * SECOND, true, &fileHandleType, &err);
+					File_write(&pb, &newPath, 0, 0, 1 * SECOND, true, &fileHandleType, &err);
+					Log_warnLn(alloc, "\t%s disassembly differs -> wrote .ref.%s / .new.%s", exts[k], exts[k], exts[k]);
+				}
+
+				CharString_free(&refPath, alloc);
+				CharString_free(&newPath, alloc);
+			}
+		}
+
+		else Error_print(alloc, &err, ELogLevel_Error, ELogOptions_Default);
+
+		CharString_free(&gDis, alloc);
+		CharString_free(&pDis, alloc);
+	}
+
+clean:
+	SHFile_free(&fp, alloc);
+	SHFile_free(&fg, alloc);
+}
+
 //End-to-end snapshot test: enumerate the whole test/hlsl corpus (relative to the working directory,
 //which CMake points at the corpus folder) and run it through the real pipeline (preprocess -> DXC
 //compile -> reflect -> link -> oiSH assembly) targeting SPIRV, entirely in memory. Each produced oiSH
@@ -192,6 +302,11 @@ void Test_shaderCompilerCorpus(Test *t) {
 
 	const RefPtrType fileHandleType = FileHandle_makeType(alloc);
 	const CharString here = CharString_createRefCStrConst("hlsl");     //Named folder under the working dir (test/)
+
+	//A disassembler used only to emit before/after SPIRV text on a byte-snapshot mismatch (see below).
+	Compiler disasmComp = (Compiler) { 0 };
+	const Bool disasmCompCreated = Compiler_create(alloc, &disasmComp, &err);
+	err = Error_none();
 
 	//Enumerate + resolve every .hlsl entrypoint in the corpus folder, targeting SPIRV for the byte-snapshot.
 	//(A separate DXIL compile+reflect coverage pass follows below; a combined SPIRV+DXIL snapshot is blocked
@@ -264,9 +379,20 @@ void Test_shaderCompilerCorpus(Test *t) {
 			Bool matches = Buffer_eq(produced, golden);
 
 			if (!matches) {
+
 				Log_errorLn(alloc, "oiSH mismatch vs reference %.*s", (int) CharString_length(ref), ref.ptr);
 				printOiSH(alloc, produced, "produced");
 				printOiSH(alloc, golden, "reference");
+
+				//When only the bytecode changed (reflection identical), emit before/after SPIRV disassembly next
+				//to the reference (<ref>.ref.spvasm vs <ref>.new.spvasm) so `git diff --no-index` shows the delta a
+				//DXC update introduced. If reflection *also* differs, that's a real change - the dumps above show it.
+				if(disasmCompCreated && shReflectionMatches(alloc, produced, golden)) {
+					Log_warnLn(alloc, "\treflection unchanged - only bytecode differs; comparing disassembly");
+					dumpDisasmDiff(alloc, &disasmComp, produced, golden, ref);
+				}
+
+				else Log_warnLn(alloc, "\treflection ALSO differs (not just bytecode) - inspect the reflection dumps above");
 			}
 
 			Test_assert(t, ref.ptr, matches);
@@ -342,6 +468,9 @@ void Test_shaderCompilerCorpus(Test *t) {
 clean:
 
 	Test_assert(t, "corpus module produced no error", s_uccess);
+
+	if(disasmCompCreated)
+		Compiler_free(&disasmComp, alloc);
 
 	Buffer_free(&golden, alloc);
 	ListBuffer_freeUnderlying(&allBuffers, alloc);

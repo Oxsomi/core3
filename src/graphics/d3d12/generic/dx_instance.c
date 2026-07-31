@@ -230,25 +230,83 @@ setup:
 		&CLSID_D3D12SDKConfiguration, &IID_ID3D12SDKConfiguration1, (void**) &instanceExt->config
 	), e_rr));
 
-	gotoIfError3(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
-		instanceExt->config,
-		D3D12_SDK_VERSION, locationD3D12.ptr,
-		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactoryNoSingleton
-	), e_rr));
+	//CreateDeviceFactory must request the SDK version matching the D3D12Core.dll deployed next to us.
+	//A preview Agility SDK ships a preview core (exports D3D12_PREVIEW_SDK_VERSION); a stable SDK ships the stable core.
+	//Prefer the preview core (unlocks SM6.9/6.10 - cooperative vectors/matrix - but needs Windows Developer Mode),
+	//and fall back to the stable version when the preview core isn't there so we still run on non-dev-mode machines.
+
+	U32 sdkVersions[2];
+	U32 sdkVersionCount = 0;
+
+	#if defined(D3D12_PREVIEW_SDK_VERSION) && D3D12_PREVIEW_SDK_VERSION >= 720
+		sdkVersions[sdkVersionCount++] = D3D12_PREVIEW_SDK_VERSION;
+	#endif
+
+	sdkVersions[sdkVersionCount++] = D3D12_SDK_VERSION;
+
+	U32 usedSdkVersion = 0;
+	HRESULT factoryHr = E_FAIL;
+
+	for(U32 i = 0; i < sdkVersionCount; ++i) {
+
+		factoryHr = instanceExt->config->lpVtbl->CreateDeviceFactory(
+			instanceExt->config, sdkVersions[i], locationD3D12.ptr,
+			&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactoryNoSingleton
+		);
+
+		if(SUCCEEDED(factoryHr)) {
+			usedSdkVersion = sdkVersions[i];
+			break;
+		}
+
+		if(i + 1 < sdkVersionCount)
+			Log_debugLnx(
+				"D3D12: preview SDK core unavailable (needs Windows Developer Mode + preview Agility SDK); "
+				"falling back to the stable SDK version - SM6.10 / cooperative features are off"
+			);
+	}
+
+	gotoIfError3(clean, dxCheck(factoryHr, e_rr));
 
 	gotoIfError3(clean, dxCheck(instanceExt->deviceFactoryNoSingleton->lpVtbl->SetFlags(
 		instanceExt->deviceFactoryNoSingleton, D3D12_DEVICE_FACTORY_FLAG_DISALLOW_STORING_NEW_DEVICE_AS_SINGLETON
 	), e_rr));
 
+	//Second factory reuses the version that just worked - no need to re-probe.
+
 	gotoIfError3(clean, dxCheck(instanceExt->config->lpVtbl->CreateDeviceFactory(
 		instanceExt->config,
-		D3D12_SDK_VERSION, locationD3D12.ptr,
+		usedSdkVersion, locationD3D12.ptr,
 		&IID_ID3D12DeviceFactory, (void**) &instanceExt->deviceFactorySingleton
 	), e_rr));
 
 	gotoIfError3(clean, dxCheck(instanceExt->deviceFactorySingleton->lpVtbl->SetFlags(
 		instanceExt->deviceFactorySingleton, D3D12_DEVICE_FACTORY_FLAG_ALLOW_RETURNING_EXISTING_DEVICE
 	), e_rr));
+
+	//Preview shader models (SM6.9/6.10, required for the cooperative-vector/matrix ops) are experimental on D3D12.
+	//Only meaningful when we actually got the preview core; enable per-instance on both factories (before any device).
+	//Failure is non-fatal - SM6.10 simply isn't reported and the coop features aren't advertised (they'd also be
+	//flagged in caps.experimentalFeatures). It's an opt-in preview path, never a hard requirement.
+
+	#if defined(D3D12_PREVIEW_SDK_VERSION) && D3D12_PREVIEW_SDK_VERSION >= 720
+
+		if(usedSdkVersion == D3D12_PREVIEW_SDK_VERSION) {
+
+			if(FAILED(instanceExt->deviceFactoryNoSingleton->lpVtbl->EnableExperimentalFeatures(
+				instanceExt->deviceFactoryNoSingleton, 1, &D3D12ExperimentalShaderModels, NULL, NULL
+			)))
+				Log_debugLnx(
+					"D3D12: experimental shader models unavailable "
+					"(needs Windows Developer Mode); SM6.10 / cooperative features are off"
+				);
+
+			(void) instanceExt->deviceFactorySingleton->lpVtbl->EnableExperimentalFeatures(
+				instanceExt->deviceFactorySingleton, 1, &D3D12ExperimentalShaderModels, NULL, NULL
+			);
+		}
+
+	#endif
 
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
@@ -333,12 +391,48 @@ setup:
 	#endif
 
 	instance->api = EGraphicsApi_Direct3D12;
-	instance->apiVersion = D3D12_SDK_VERSION;
+	instance->apiVersion = usedSdkVersion;
 
 clean:
 	CharString_free(&locationD3D12, alloc);
 	return s_uccess;
 }
+
+#if D3D12_PREVIEW_SDK_VERSION >= 720
+
+	//Query whether a thread-scope cooperative-vector matrix*vector (matvec) is supported for the given matrix element
+	//type, with an FP16 vector input, bias and result (the shape guaranteed by the linalg Minimum Support Set).
+	//Optionally reports whether the driver has to emulate it (e.g. FP8 up-converted to FP16 where there's no FP8 unit).
+	//Returns false if the per-operation linalg query itself isn't supported.
+
+	Bool DxGraphicsInstance_supportsCoopVecMatVec(
+		ID3D12Device10 *device, D3D12_LINEAR_ALGEBRA_DATATYPE matrixType, Bool *emulated
+	) {
+
+		D3D12_FEATURE_DATA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT op =
+			(D3D12_FEATURE_DATA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT) { 0 };
+
+		op.OperationType = D3D12_LINEAR_ALGEBRA_OPERATION_TYPE_THREAD_VECTOR_MATRIX_MULTIPLY;
+		op.ThreadVectorMatrixMultiply.VectorInputType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+		op.ThreadVectorMatrixMultiply.MatrixInputType = matrixType;
+		op.ThreadVectorMatrixMultiply.BiasInputType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+		op.ThreadVectorMatrixMultiply.VectorResultType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(
+			device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT, &op, sizeof(op)
+		)))
+			return false;
+
+		if(emulated)
+			*emulated = !!(op.ThreadVectorMatrixMultiply.SupportFlags & (
+				D3D12_LINEAR_ALGEBRA_MULTIPLICATION_SUPPORT_FLAG_EMULATED_INPUTS |
+				D3D12_LINEAR_ALGEBRA_MULTIPLICATION_SUPPORT_FLAG_EMULATED_OUTPUTS
+			));
+
+		return !!(op.ThreadVectorMatrixMultiply.SupportFlags & D3D12_LINEAR_ALGEBRA_MULTIPLICATION_SUPPORT_FLAG_SUPPORTED);
+	}
+
+#endif
 
 Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result, Error *e_rr) {
 
@@ -588,6 +682,11 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1)
 				caps.features |= EGraphicsFeatures_RayQuery;
+
+			//DXR 1.2 natively supports SER (shader execution reordering, dx::HitObject) and opacity micromaps,
+			//vendor-neutrally.
+			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2)
+				caps.features |= EGraphicsFeatures_RayReorder | EGraphicsFeatures_RayMicromapOpacity;
 		}
 
 		if(
@@ -699,8 +798,115 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 		#if D3D12_PREVIEW_SDK_VERSION >= 720
 			shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_10;
-			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+			if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+
 				caps.featuresExt |= EDxGraphicsFeatures_SM6_10;
+
+				//Ray tri vertex position fetch is an SM6.9 raytracing feature; still proxied off SM6.10 (no query wired).
+
+				caps.features |= EGraphicsFeatures_RayTriPosition;
+				caps.experimentalFeatures |= EGraphicsFeatures_RayTriPosition;
+
+				//Cooperative vectors/matrix (DXIL "Linear Algebra") need the real linalg tier query IN ADDITION to the
+				//shader model - a device can report SM6.10 yet expose no linalg tier, so SM6.10 alone would over-report.
+				//Gate the coop features on the actual tier, then confirm each family with the per-operation support query
+				//(which also reports native vs emulated). Only reachable because experimental shader models were enabled
+				//above, so they stay flagged in experimentalFeatures until the linalg API leaves preview.
+
+				D3D12_FEATURE_DATA_LINEAR_ALGEBRA_SUPPORT linalg = (D3D12_FEATURE_DATA_LINEAR_ALGEBRA_SUPPORT) { 0 };
+
+				if(
+					SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+						device, D3D12_FEATURE_LINEAR_ALGEBRA_SUPPORT, &linalg, sizeof(linalg)
+					)) &&
+					linalg.LinearAlgebraTier >= D3D12_LINEAR_ALGEBRA_TIER_1_0
+				) {
+
+					EGraphicsFeatures coopFeatures = EGraphicsFeatures_None;
+
+					//Thread matvec = cooperative vectors (OxC3 CoopVec). FP16 is in the guaranteed minimum support set.
+
+					if(DxGraphicsInstance_supportsCoopVecMatVec(device, D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16, NULL))
+						coopFeatures |= EGraphicsFeatures_CoopVec;
+
+					//FP8 (E4M3/E5M2) weights are also in the minimum set, but may be emulated (up-cast to FP16) on GPUs
+					//without native FP8 - the query reports which, so we can log it (both interpretations count as CoopFP8).
+
+					Bool fp8Emulated = false;
+
+					if(
+						DxGraphicsInstance_supportsCoopVecMatVec(
+							device, D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT8_E4M3FN, &fp8Emulated
+						) ||
+						DxGraphicsInstance_supportsCoopVecMatVec(
+							device, D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT8_E5M2, &fp8Emulated
+						)
+					) {
+						coopFeatures |= EGraphicsFeatures_CoopFP8;
+
+						if(fp8Emulated)
+							Log_debugLnx(
+								"D3D12: cooperative-vector FP8 is emulated (no native FP8 hardware; up-converted to FP16)"
+							);
+					}
+
+					//Thread outer-product accumulate = cooperative-vector training (the TIER_1_1 op set).
+
+					D3D12_FEATURE_DATA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT outer =
+						(D3D12_FEATURE_DATA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT) { 0 };
+
+					outer.OperationType = D3D12_LINEAR_ALGEBRA_OPERATION_TYPE_THREAD_OUTER_PRODUCT;
+					outer.ThreadOuterProductSupport.InputComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+					outer.ThreadOuterProductSupport.ResultComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+
+					if(
+						SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+							device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
+							&outer, sizeof(outer)
+						)) &&
+						outer.ThreadOuterProductSupport.Supported
+					)
+						coopFeatures |= EGraphicsFeatures_CoopVecTraining;
+
+					//Wave-scope matrix*matrix (GEMM) = cooperative matrix (OxC3 CoopMat).
+
+					D3D12_FEATURE_DATA_D3D12_OPTIONS1 waveOpt = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };
+					(void) device->lpVtbl->CheckFeatureSupport(
+						device, D3D12_FEATURE_D3D12_OPTIONS1, &waveOpt, sizeof(waveOpt)
+					);
+
+					D3D12_FEATURE_DATA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT wave =
+						(D3D12_FEATURE_DATA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT) { 0 };
+
+					wave.OperationType = D3D12_LINEAR_ALGEBRA_OPERATION_TYPE_WAVE_MATRIX_MULTIPLY;
+					wave.WaveMatrixMultiply.Inputs.WaveSize = waveOpt.WaveLaneCountMin ? waveOpt.WaveLaneCountMin : 32;
+					wave.WaveMatrixMultiply.Inputs.MatrixAComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+					wave.WaveMatrixMultiply.Inputs.MatrixBComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+					wave.WaveMatrixMultiply.Inputs.AccumulatorComponentType = D3D12_LINEAR_ALGEBRA_DATATYPE_FLOAT16;
+
+					if(
+						SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+							device, D3D12_FEATURE_LINEAR_ALGEBRA_LINEAR_ALGEBRA_MATRIX_OPERATION_SUPPORT,
+							&wave, sizeof(wave)
+						)) &&
+						(wave.WaveMatrixMultiply.SupportFlags & D3D12_LINEAR_ALGEBRA_MULTIPLICATION_SUPPORT_FLAG_SUPPORTED)
+					)
+						coopFeatures |= EGraphicsFeatures_CoopMat;
+
+					caps.features |= coopFeatures;
+					caps.experimentalFeatures |= coopFeatures;
+				}
+			}
+
+			//Batched asynchronous command list submission (D3D12_FEATURE_ASYNC_COMMANDS, Agility 1.720-preview).
+			D3D12_FEATURE_DATA_ASYNC_COMMANDS asyncCmds = (D3D12_FEATURE_DATA_ASYNC_COMMANDS) { 0 };
+
+			if(
+				SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+					device, D3D12_FEATURE_ASYNC_COMMANDS, &asyncCmds, sizeof(asyncCmds)
+				)) && asyncCmds.Supported
+			)
+				caps.featuresExt |= EDxGraphicsFeatures_BatchedAsyncCommandList;
 		#endif
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
@@ -883,33 +1089,7 @@ Bool DX_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 				if(status == NVAPI_OK)
 					info->capabilities.features |= EGraphicsFeatures_RayValidation;
 
-				//SER (Shader execution reordering)
-
-				NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS ser = (NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS) { 0 };
-
-				status = NvAPI_D3D12_GetRaytracingCaps(
-					(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING, &ser, sizeof(ser)
-				);
-
-				if(status != NVAPI_OK)
-					Log_debugLnx("D3D12: NVAPI: Couldn't query for SER on device %"PRIu32"", i);
-
-				else if(ser == NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAP_STANDARD)
-					info->capabilities.features |= EGraphicsFeatures_RayReorder;
-
-				//Opacity micromaps
-
-				NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS omm = (NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS) { 0 };
-
-				status = NvAPI_D3D12_GetRaytracingCaps(
-					(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP, &omm, sizeof(omm)
-				);
-
-				if(status != NVAPI_OK)
-					Log_debugLnx("D3D12: NVAPI: Couldn't query for OMM on device %"PRIu32"", i);
-
-				else if(omm == NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAP_STANDARD)
-					info->capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+				//SER and opacity micromaps are detected vendor-neutrally via D3D12_RAYTRACING_TIER_1_2 (see above).
 
 			#endif
 		}

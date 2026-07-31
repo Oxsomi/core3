@@ -116,6 +116,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_RayValidation)
 			Log_debugLnx("\t\tRay validation");
 
+		if(feat & EGraphicsFeatures_RayTriPosition)
+			Log_debugLnx("\t\tRay triangle vertex position fetch");
+
 		if(feat & EGraphicsFeatures_Wireframe)
 			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 
@@ -145,6 +148,21 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(feat & EGraphicsFeatures_SubgroupOperations)
 			Log_debugLnx("\t\tSubgroup operations");
+
+		if(feat & EGraphicsFeatures_CoopVec)
+			Log_debugLnx("\t\tCooperative vectors (matvec)");
+
+		if(feat & EGraphicsFeatures_CoopMat)
+			Log_debugLnx("\t\tCooperative matrix (GEMM)");
+
+		if(feat & EGraphicsFeatures_CoopFP8)
+			Log_debugLnx("\t\tCooperative FP8 (e4m3/e5m2)");
+
+		if(feat & EGraphicsFeatures_CoopVecTraining)
+			Log_debugLnx("\t\tCooperative vector training");
+
+		if(cap.experimentalFeatures)
+			Log_debugLnx("\t\t(some of the features above are experimental preview)");
 
 		//Data types
 
@@ -243,6 +261,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EDxGraphicsFeatures_IndependentDevices)
 				Log_debugLnx("\t\tIndependent devices");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_BatchedAsyncCommandList)
+				Log_debugLnx("\t\tBatched async command list");
 
 			if(cap.featuresExt & EDxGraphicsFeatures_RGBX32fMSAA)
 				Log_debugLnx("\t\tRGB(A)32f supports MSAA");

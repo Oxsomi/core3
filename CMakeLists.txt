@@ -74,11 +74,18 @@ if(MSVC)
 	endif()
 
 	# add_compile_options(/fsanitize=address)
-	
+
 	add_compile_options(
 		"$<$<COMPILE_LANGUAGE:C>:${BUILD_FLAGS}>"
 		"$<$<COMPILE_LANGUAGE:CXX>:${BUILD_FLAGS}>"
 	)
+
+	# Whole-program optimization (MSVC LTO): /GL to compile, /LTCG to link. lib.exe needs /LTCG told separately
+	# via the static-linker flags or every archive step warns (LNK4075/D9035). /LTCG makes the link the
+	# bottleneck, so this is gated to Release only - a ship/CI config, keeping local Debug/RelWithDebInfo fast.
+	add_compile_options("$<$<CONFIG:Release>:/GL>")
+	add_link_options("$<$<CONFIG:Release>:/LTCG>")
+	string(APPEND CMAKE_STATIC_LINKER_FLAGS_RELEASE " /LTCG")
 
 else()
 
@@ -98,16 +105,17 @@ else()
 
 	add_compile_options(-fno-unsafe-math-optimizations)
 	add_compile_options(-fms-extensions)
-	add_compile_options(-flto -Wall -Wextra -Werror)
+	add_compile_options(-Wall -Wextra -Werror)
+
+	# LTO only for optimized configs, on both compile and link. Debug stays fast (LTO makes the link the
+	# bottleneck). -flto=auto parallelizes the link-time work across cores.
+	add_compile_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
+	add_link_options("$<$<NOT:$<CONFIG:Debug>>:-flto=auto>")
 
 	# `{ 0 }` is OxC3's idiomatic zero-initializer (every field ends up zeroed).
 	# -Wextra's -Wmissing-field-initializers still flags it when the C headers are compiled as C++
 	# (the oxc::c compat layer), where `{}` would be needed but isn't valid C. The idiom is intentional, so silence this one.
 	add_compile_options(-Wno-missing-field-initializers)
-	
-	if(NOT CMAKE_${lang}_COMPILER_VERSION VERSION_LESS 4.7)
-		add_compile_options(-fno-fat-lto-objects)
-	endif()
 
 	# Fix for certain GCC versions misbehaving with struct copies.
 	# (Yes, I did run into this, but it seems fixed in 14.3, 13.4)

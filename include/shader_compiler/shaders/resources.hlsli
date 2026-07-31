@@ -22,21 +22,6 @@ R"(
 #pragma once
 #include "@types.hlsli"
 
-//We only include nv extensions if DXIL compilation and ray: reorder, motion blur, micromap opacity is required
-//This saves us from parsing, preprocessing and compiling useless stuff.
-
-#if !defined(__spirv__) && (																	\
-	defined(__OXC_EXT_RAYMICROMAPOPACITY)	||													\
-	defined(__OXC_EXT_RAYMOTIONBLUR)		|| defined(__OXC_EXT_RAYREORDER)					\
-)
-
-	#define NV_SHADER_EXTN_SLOT u99999
-	#define NV_SHADER_EXTN_REGISTER_SPACE space99999
-
-	#include "@nvHLSLExtns.h"
-
-#endif
-
 static const U32 ResourceId_mask = (1 << 17) - 1;
 static const U32 U32_MAX = 0xFFFFFFFFu;
 

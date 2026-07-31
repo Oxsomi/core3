@@ -36,20 +36,17 @@
 //the produced binary reflects that extension bit. Unlike the annotation module (which only checks an
 //extension can be *declared*), this exercises the real DXC/SPIRV|DXIL code path behind each extension.
 //These live in test/features (not the hlsl/ corpus) because they're semantic reflection tests, not
-//byte-snapshots, and several would otherwise flake or fail the SPIRV-only corpus. Each carries its own
-//backend target: SPIRV-native features, plus DXIL-native ones (MeshTaskTexDeriv, PAQ, WriteMSTexture).
+//byte-snapshots. Each carries its own backend target: SPIRV-native features, plus DXIL-native ones.
 //
-//Coverage still parked as *.hlsl.disabled in test/features (kept as repros, not asserted here), with cause:
-// - RayReorder / RayMicromapOpacity: SM6.9 (dx::HitObject SER / OMM ray flags) > the bundled DXC (~6.8).
-//PAQ and WriteMSTexture used to be parked here too but now pass on DXIL after OxC3-side fixes:
-// - PAQ needed the payload-access qualifiers declared on *both* entrypoints (raygen + closesthit share the
-//   payload), plus Compiler_convertMemberDXIL now reflects the opaque RWStructuredBuffer<float4> $Element
-//   (DXC leaves it D3D_SVT_VOID on DXIL) as a raw 32-bit block instead of erroring on "invalid primitive".
-// - WriteMSTexture: DxilMapToESHExtension now folds ADVANCED_TEXTURE_OPS (which DXC co-reports with
+//A few backend-specific quirks worth knowing:
+// - PAQ declares the payload-access qualifiers on *both* entrypoints (raygen + closesthit share the payload);
+//   Compiler_convertMemberDXIL reflects the opaque RWStructuredBuffer<float4> $Element (D3D_SVT_VOID on DXIL)
+//   as a raw 32-bit block.
+// - WriteMSTexture: DxilMapToESHExtension folds ADVANCED_TEXTURE_OPS (which DXC co-reports with
 //   WRITEABLE_MSAA_TEXTURES for an RWTexture2DMS write) into ESHExtension_WriteMSTexture.
-//AtomicF32/F64 used to be parked here too but now pass: OxC3 was whitelisting -fspv-extension=
-//SPV_EXT_shader_atomic_float_add, which DXC rejects as "unknown extension"; the inline [[vk::ext_extension]]
-//already declares it, so that flag was removed (compiler.cpp) and DXC emits OpAtomicFAddEXT.
+// - AtomicF32/F64: the inline [[vk::ext_extension]] on the atomic function declares the extension, so OxC3
+//   doesn't also pass -fspv-extension=SPV_EXT_shader_atomic_float_add (DXC rejects it as unknown); DXC emits
+//   OpAtomicFAddEXT.
 
 typedef struct FeatureCase {
 	const C8 *file;
@@ -92,7 +89,48 @@ void Test_shaderCompilerFeatures(Test *t) {
 		//DXIL-only: DXC's SPIR-V backend genuinely fails to compile these (verified: SPIRV compile error)
 		{ "features/mesh_task_tex_deriv.hlsl", ESHExtension_MeshTaskTexDeriv,   B_DXIL },
 		{ "features/paq.hlsl",                 ESHExtension_PAQ,                B_DXIL },
-		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     B_DXIL }
+		{ "features/write_ms_texture.hlsl",    ESHExtension_WriteMSTexture,     B_DXIL },
+
+		//SM6.9 OMM: native intrinsic on DXIL; on SPIRV the ray query stays native HLSL and only the opacity-micromap
+		//capability is added via inline SPIR-V, so it works on both behind #ifdef __spirv__.
+		{ "features/ray_micromap_opacity.hlsl", ESHExtension_RayMicromapOpacity, B_BOTH },
+
+		//SM6.9 SER: native dx::HitObject on DXIL; on SPIRV the hit object + reorder are inline SPIR-V
+		//(SPV_EXT_shader_invocation_reorder, opaque OpTypeHitObjectEXT via vk::SpirvOpaqueType), so it works on both.
+		{ "features/ray_reorder.hlsl",          ESHExtension_RayReorder,         B_BOTH },
+
+		//SM6.10 ray tri vertex position fetch: native intrinsic on DXIL; on SPIRV the ray query stays native HLSL
+		//and only the position-fetch op is inline SPIR-V (a valid RayQuery<> can be handed to it by reference),
+		//so it works on both. The fully-inline opaque-type route (SER / linalg) instead fails OxC3's spirv-opt.
+		{ "features/ray_tri_position.hlsl",     ESHExtension_RayTriPosition,     B_BOTH },
+
+		//Ray-pipeline (closesthit) form of position fetch via the HitTriangleVertexPositionsKHR builtin / DXIL global.
+		{ "features/ray_tri_position_pipeline.hlsl", ESHExtension_RayTriPosition, B_BOTH },
+
+		//SM6.10 cooperative vectors (per-thread matvec): native __builtin_MatVecMul(Add) on DXIL; on SPIRV inline
+		//SPV_NV_cooperative_vector (opaque OpTypeCooperativeVectorNV loaded / matmul'd / stored via ops 5302/5289/5292/5303).
+		//NV-only on Vulkan (no cross-vendor KHR form). Compiled at vulkan1.3 for the StorageBuffer class + Vulkan mem model.
+		{ "features/coop_vec.hlsl",             ESHExtension_CoopVec,            B_BOTH },
+		{ "features/coop_vec_bias.hlsl",        ESHExtension_CoopVec,            B_BOTH },
+
+		//Quantized FP8-weight matvec (e4m3/e5m2 weights * F16 activations): the modern LLM weight-quantization path.
+		//FP8 is gated behind the additive CoopFP8 extension (not universally supported); the test asserts that bit.
+		{ "features/coop_vec_fp8.hlsl",         ESHExtension_CoopFP8,            B_BOTH },
+		{ "features/coop_vec_fp8_e5m2.hlsl",    ESHExtension_CoopFP8,            B_BOTH },
+
+		//Quantized INT8 matvec (int8 weights * int8 activations -> int32): the classic quantized-inference path.
+		{ "features/coop_vec_int8.hlsl",        ESHExtension_CoopVec,            B_BOTH },
+
+		//Training: outer-product (weight grad) + reduce-sum (bias grad) accumulate. Gated behind CoopVecTraining (Tier 1.1).
+		{ "features/coop_vec_train.hlsl",       ESHExtension_CoopVecTraining,    B_BOTH },
+
+		//SM6.10 cooperative matrix (subgroup GEMM): native dx::linalg Wave Multiply on DXIL; on SPIRV the cross-vendor
+		//SPV_KHR_cooperative_matrix via DXC's vk::khr::CooperativeMatrix (load / mul-add / store). Works on both.
+		{ "features/coop_mat.hlsl",             ESHExtension_CoopMat,            B_BOTH },
+
+		//FP8 (e4m3) cooperative-matrix GEMM (F16 accumulate): DXIL Matrix<F8_E4M3FN,Wave>; SPIRV SPV_EXT_float8 +
+		//Float8CooperativeMatrixEXT (an inline FP8 OpTypeFloat). Gated behind CoopFP8.
+		{ "features/coop_mat_fp8.hlsl",         ESHExtension_CoopFP8,            B_BOTH }
 	};
 
 	static const struct { U8 mode; const C8 *name; } backends[] = {

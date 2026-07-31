@@ -56,7 +56,11 @@ typedef enum EOptExtensions {
 	EOptExtensions_AtomicI64,
 	EOptExtensions_F16,
 	EOptExtensions_MultiDrawIndirectCount,
-	EOptExtensions_MemoryBudget
+	EOptExtensions_MemoryBudget,
+	EOptExtensions_CooperativeVector,
+	EOptExtensions_CooperativeMatrix,
+	EOptExtensions_ShaderFloat8,
+	EOptExtensions_RayTriPosition
 } EOptExtensions;
 
 extern const C8 *optExtensionsName[];

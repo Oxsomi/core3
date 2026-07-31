@@ -83,12 +83,19 @@ Bool DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 
 	if(texture->isPendingFullCopy)        //Already has a full pending change, so no need to check anything.
 		goto clean;
 
+	//The first-frame exception only permits the internal initial upload of a not-CPU-backed texture.
+	//That upload always has staged data in cpuData, so require it here.
+	//Otherwise a not-backed texture with no data would be wrongly accepted.
+
 	if(
 		!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked) &&
-		!(texture->isFirstFrame && !x && !y && !z && !w && !h && !l)
+		!(texture->isFirstFrame && !x && !y && !z && !w && !h && !l && Buffer_length(texture->cpuData))
 	)
 		retError(clean, Error_invalidOperation(
-			2, "DeviceTextureRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"));
+			2,
+			"DeviceTextureRef_markDirty() can only be called on first frame for the entire resource "
+			"with staged CPU data, or if it's CPU backed"
+		));
 
 	if(!w)
 		w = utex->width - x;

@@ -10,7 +10,7 @@ required_conan_version = ">=2.0"
 class oxc3(ConanFile):
 
 	name = "oxc3"
-	version = "0.2.102"
+	version = "0.2.103"
 
 	# Optional metadata
 	license = "GPLv3 and dual licensable"
@@ -97,7 +97,7 @@ class oxc3(ConanFile):
 
 	def build_requirements(self):
 		if not self.options.enableShaderCompiler:
-			self.tool_requires("oxc3/0.2.102", options = {
+			self.tool_requires("oxc3/0.2.103", options = {
 				"forceVulkan": self.options.forceVulkan,
 				"enableSIMD": self.options.enableSIMD,
 				"enableTests": False,
@@ -115,19 +115,20 @@ class oxc3(ConanFile):
 		if self.options.dynamicLinkingGraphics and self.settings.os == "Windows":
 			hasD3D12 = True
 
-		if self.options.enableShaderCompiler or hasD3D12:
-			self.requires("nvapi/2025.04.01.01")
+		# NVAPI is only needed for the D3D12 backend (RT validation, and future cluster / mega geometry).
+		if hasD3D12:
+			self.requires("nvapi/2026.07.29")
 
 		# agility_sdk ships d3d12shader.h, which DXC's dxcreflect.h includes.
 		if hasD3D12 or self.options.enableShaderCompiler:
-			self.requires("agility_sdk/2026.07.26")
+			self.requires("agility_sdk/2026.07.29")
 
 		if hasD3D12 and self.settings.arch == "x86_64":
 			self.requires("ags/2024.09.21")
 
 		if self.options.enableShaderCompiler:
-			self.requires("dxc/2026.02.06.03")
-			self.requires("spirv_reflect/2024.09.22")
+			self.requires("dxc/2026.07.30")
+			self.requires("spirv_reflect/2026.07.29")
 
 		if self.settings.os == "Linux":
 			self.requires("xdg_shell/2024.10.21")

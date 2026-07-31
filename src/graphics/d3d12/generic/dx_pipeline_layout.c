@@ -158,7 +158,7 @@ Bool DX_WRAP_FUNC(GraphicsDeviceRef_createPipelineLayout)(
 		deviceExt->deviceConfig, &rootSig, &rootSigBlob, &errBlob
 	), e_rr)) {
 
-		if(errBlob && (device->flags & EGraphicsDeviceFlags_IsDebug))
+		if(errBlob)
 			Log_errorLnx(
 				"D3D12: Create root signature failed: %s", (const C8*) errBlob->lpVtbl->GetBufferPointer(errBlob)
 			);

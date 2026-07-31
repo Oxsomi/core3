@@ -22,6 +22,7 @@
 
 #pragma once
 #include "graphics/generic/command_structs.h"
+#include "types/math/vec4.h"
 
 #ifdef __cplusplus
 	extern "C" {

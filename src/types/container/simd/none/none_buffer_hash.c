@@ -25,8 +25,8 @@
 #include "types/container/buffer.h"
 #include "types/base/mathi.h"
 
-U32 Buffer_crc32c(const Buffer buf) {
-	return Buffer_crc32cFallback(buf);
+U32 Buffer_crc32cChained(const Buffer buf, U32 prevCrc) {
+	return Buffer_crc32cFallbackChained(buf, prevCrc);
 }
 
 void Buffer_sha256(const Buffer buf, U32 output[8]) {

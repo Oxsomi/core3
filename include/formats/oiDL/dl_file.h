@@ -24,6 +24,7 @@
 #include "types/container/string.h"
 #include "types/container/list_predeclare.h"
 #include "formats/oiXX/oiXX.h"
+#include "types/math/vec4.h"
 
 #ifdef __cplusplus
 	extern "C" {

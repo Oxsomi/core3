@@ -25,7 +25,6 @@
 #endif
 
 #include <smmintrin.h>
-#include <immintrin.h>
 
 //Loads
 
@@ -62,7 +61,6 @@ static inline F32x4 F32x4_add(F32x4 a, F32x4 b) { return _mm_add_ps(a, b); }
 static inline F32x4 F32x4_sub(F32x4 a, F32x4 b) { return _mm_sub_ps(a, b); }
 static inline F32x4 F32x4_mul(F32x4 a, F32x4 b) { return _mm_mul_ps(a, b); }
 static inline F32x4 F32x4_div(F32x4 a, F32x4 b) { return _mm_div_ps(a, b); }
-static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return _mm_fmadd_ps(a, b, c); }        //a * b + c (FMA required)
 
 static inline F32 F32x4_dot2(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, F32x4_trunc2(b), 0xFF)); }
 static inline F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, F32x4_trunc3(b), 0xFF)); }
@@ -91,6 +89,8 @@ static inline F32x4 F32x4_rsqrt(F32x4 a) { return _mm_rsqrt_ps(a); }
 
 #if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
+	#include <immintrin.h>
+
 	static inline F32x4 F32x4_pow(F32x4 v, F32x4 e) { return _mm_pow_ps(v, e); }
 	static inline F32x4 F32x4_loge(F32x4 v) { return _mm_log_ps(v); }
 	static inline F32x4 F32x4_log10(F32x4 v) { return _mm_log10_ps(v); }
@@ -108,6 +108,12 @@ static inline F32x4 F32x4_rsqrt(F32x4 a) { return _mm_rsqrt_ps(a); }
 	static inline F32x4 F32x4_atan2(F32x4 y, F32x4 x) { return _mm_atan2_ps(y, x); }
 	static inline F32x4 F32x4_tan(F32x4 v) { return _mm_tan_ps(v); }
 
+	static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) { return _mm_fmadd_ps(a, b, c); } //a * b + c (FMA required)
+
+#else
+	static inline F32x4 F32x4_fma(F32x4 a, F32x4 b, F32x4 c) {    //a * b + c (FMA required)
+		return (__m128) __builtin_ia32_vfmaddps((__v4sf)a, (__v4sf)b, (__v4sf)c);
+	}
 #endif
 
 //Boolean

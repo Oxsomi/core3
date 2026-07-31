@@ -81,7 +81,6 @@ void Test_shaderCompilerAnnotations(Test *t) {
 		//Skip bits a compute annotation can't set (tested elsewhere / not annotation-settable)
 		switch (1 << i) {
 
-			case ESHExtension_Reserved:             //Placeholder bit
 			case ESHExtension_RayMotionBlur:        //CPU-side only
 			case ESHExtension_Bindless:             //Derived from the binary, not annotation-settable
 			case ESHExtension_UnboundArraySize:
@@ -273,6 +272,55 @@ void Test_shaderCompilerAnnotations(Test *t) {
 	CompileResult_free(&r, alloc);
 	Test_assert(
 		t, "ComputeDeriv entrypoint stays dual-backend (compiles on DXIL too)",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
+			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+	);
+
+	//RayTriPosition (SM6.10 triangle position fetch) has a DXIL-only intrinsic but is reachable on SPIRV via
+	//inline SPIR-V, so it must NOT auto-restrict - it stays dual-backend (regression guard for either direction).
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"RayQuery\", \"RayTriPosition\")]]\n"
+		"[[oxc::model(\"6.10\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "RayTriPosition entrypoint stays dual-backend (SPIRV via inline SPIR-V)",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
+			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+	);
+
+	//CoopVec (SM6.10 cooperative vectors) has a DXIL intrinsic and a SPIRV inline route (NV), so it stays dual.
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"CoopVec\")]]\n"
+		"[[oxc::model(\"6.10\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(1, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "CoopVec entrypoint stays dual-backend (SPIRV via inline SPIR-V)",
+		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
+		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
+			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))
+	);
+
+	//CoopMat (SM6.10 cooperative matrix) has a DXIL intrinsic and the cross-vendor SPV_KHR_cooperative_matrix, so dual.
+	src = CharString_createRefCStrConst(
+		"[[oxc::extension(\"CoopMat\")]]\n"
+		"[[oxc::model(\"6.10\")]]\n"
+		"[[oxc::stage(\"compute\")]]\n"
+		"[numthreads(32, 1, 1)]\n"
+		"void main() {}\n"
+	);
+	CompileResult_free(&r, alloc);
+	Test_assert(
+		t, "CoopMat entrypoint stays dual-backend (SPIRV via SPV_KHR_cooperative_matrix)",
 		parseShader(&comp, src, alloc, &r, false) && r.shEntriesRuntime.length == 1 &&
 		SHEntryRuntime_getSupportedBinaryTypes(&r.shEntriesRuntime.ptr[0]) ==
 			((1 << ESHBinaryType_SPIRV) | (1 << ESHBinaryType_DXIL))

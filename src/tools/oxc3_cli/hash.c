@@ -90,11 +90,11 @@ Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 
 		case EFormat_MD5: {
 
-			const I32x4 output = Buffer_md5(buf);
+			const MD5Hash output = Buffer_md5(buf);
 
 			for (U8 i = 0; i < 4; ++i) {
 				const CharStringCreateNumber number = (CharStringCreateNumber) {
-					.v = (U32) I32x4_get(output, i), .leadingZeros = 8, .allocator = alloc, .result = &tmpi
+					.v = output.v[i], .leadingZeros = 8, .allocator = alloc, .result = &tmpi
 				};
 				gotoIfError3(clean, CharString_createHex(&number, e_rr));
 				gotoIfError3(clean, CharString_popFrontCount(&tmpi, 2, e_rr));

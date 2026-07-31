@@ -295,6 +295,44 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 	)
 
 	bindNextVkStruct(
+		VkPhysicalDeviceCooperativeVectorFeaturesNV,
+		feat & EGraphicsFeatures_CoopVec,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV,
+			.cooperativeVector = true,
+			.cooperativeVectorTraining = !!(feat & EGraphicsFeatures_CoopVecTraining)
+		}
+	)
+
+	bindNextVkStruct(
+		VkPhysicalDeviceCooperativeMatrixFeaturesKHR,
+		feat & EGraphicsFeatures_CoopMat,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR,
+			.cooperativeMatrix = true
+		}
+	)
+
+	bindNextVkStruct(
+		VkPhysicalDeviceShaderFloat8FeaturesEXT,
+		feat & EGraphicsFeatures_CoopFP8,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT,
+			.shaderFloat8 = true,
+			.shaderFloat8CooperativeMatrix = !!(feat & EGraphicsFeatures_CoopMat)
+		}
+	)
+
+	bindNextVkStruct(
+		VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
+		feat & EGraphicsFeatures_RayTriPosition,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR,
+			.rayTracingPositionFetch = true
+		}
+	)
+
+	bindNextVkStruct(
 		VkPhysicalDeviceShaderAtomicInt64Features,
 		types & EGraphicsDataTypes_AtomicI64,
 		{
@@ -380,6 +418,10 @@ Bool VK_WRAP_FUNC(GraphicsDevice_init)(
 			case EOptExtensions_F16:                        on = types & EGraphicsDataTypes_F16;                    break;
 			case EOptExtensions_MultiDrawIndirectCount:     on = feat & EGraphicsFeatures_MultiDrawIndirectCount;   break;
 			case EOptExtensions_MemoryBudget:               on = featEx & EVkGraphicsFeatures_MemoryBudget;         break;
+			case EOptExtensions_CooperativeVector:          on = feat & EGraphicsFeatures_CoopVec;                  break;
+			case EOptExtensions_CooperativeMatrix:          on = feat & EGraphicsFeatures_CoopMat;                  break;
+			case EOptExtensions_ShaderFloat8:               on = feat & EGraphicsFeatures_CoopFP8;                  break;
+			case EOptExtensions_RayTriPosition:             on = feat & EGraphicsFeatures_RayTriPosition;           break;
 
 			default:
 				continue;

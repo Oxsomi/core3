@@ -60,28 +60,36 @@ const C8 *types =
 	#include "shader_compiler/shaders/types.hlsli"
 	;
 
-const C8 *nvHLSLExtns =
-	#include "nvHLSLExtns.h"
+const C8 *extensionsHlsli =
+	#include "shader_compiler/shaders/extensions.hlsli"
 	;
 
-const C8 *nvHLSLExtns2 =
-	#include "nvHLSLExtns2.h"
+const C8 *extensionRayReorderHlsl =
+	#include "shader_compiler/shaders/extension.RayReorder.hlsli"
 	;
 
-const C8 *nvHLSLExtns3 =
-	#include "nvHLSLExtns3.h"
+const C8 *extensionRayTriPositionHlsl =
+	#include "shader_compiler/shaders/extension.RayTriPosition.hlsli"
 	;
 
-const C8 *nvShaderExtnEnums =
-	#include "nvShaderExtnEnums.h"
+const C8 *extensionRayMicromapOpacityHlsl =
+	#include "shader_compiler/shaders/extension.RayMicromapOpacity.hlsli"
 	;
 
-const C8 *nvHLSLExtnsInternal =
-	#include "nvHLSLExtnsInternal.h"
+const C8 *extensionAtomicF32Hlsl =
+	#include "shader_compiler/shaders/extension.AtomicF32.hlsli"
 	;
 
-const C8 *nvHLSLExtnsInternal2 =
-	#include "nvHLSLExtnsInternal2.h"
+const C8 *extensionAtomicF64Hlsl =
+	#include "shader_compiler/shaders/extension.AtomicF64.hlsli"
+	;
+
+const C8 *extensionCoopVecHlsl =
+	#include "shader_compiler/shaders/extension.CoopVec.hlsli"
+	;
+
+const C8 *extensionCoopMatHlsl =
+	#include "shader_compiler/shaders/extension.CoopMat.hlsli"
 	;
 
 //This file is only because DXC doesn't have a C interface.
@@ -106,7 +114,7 @@ class IncludeHandler : public IDxcIncludeHandler {
 
 public:
 
-	inline IncludeHandler(IDxcUtils *utils, const Allocator *alloc): utils(utils), alloc(alloc) { }
+	inline IncludeHandler(IDxcUtils *utils, const Allocator *alloc): utils(utils), alloc(alloc) {}
 
 	//Useful so includes can be cached instead of re-fetched from file each time.
 	//This has to be called in between compiles to ensure the include handler knows it's the first time re-using.
@@ -160,10 +168,17 @@ public:
 			gotoIfError3(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, alloc, &fileName, e_rr));
 		#endif
 
+		//DXC's own builtin headers (dx/linalg.h and the <enable_if> / <type_traits> it pulls in) are served by
+		//DXC's compiled-in header fallback, which only triggers for angled includes it can't otherwise resolve.
+		//We let those fall through as not-found here so that fallback serves them (see linalg.hlsl).
+
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsli
 
-		const CharString atStr = CharString_createRefCStrConst("@");
-		lastAt = CharString_findLastStringSensitive(&fileName, &atStr, 0, 0);
+		//Braced so the earlier gotoIfError3(clean, ...) doesn't jump across atStr's initializer (GCC C++).
+		{
+			const CharString atStr = CharString_createRefCStrConst("@");
+			lastAt = CharString_findLastStringSensitive(&fileName, &atStr, 0, 0);
+		}
 		isBuiltin = lastAt != U64_MAX;
 
 		if (isBuiltin) {
@@ -336,33 +351,29 @@ public:
 				else if(CharString_equalsCStringInsensitive(&resolved, "@types.hlsli"))
 					tmpTmp = CharString_createRefCStrConst(types);
 
-				else if(CharString_equalsCStringInsensitive(&resolved, "@nvShaderExtnEnums.h"))
-					tmpTmp = CharString_createRefCStrConst(nvShaderExtnEnums);
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extensions.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionsHlsli);
 
-				else if(CharString_equalsCStringInsensitive(&resolved, "@nvHLSLExtnsInternal.h")) {
-					
-					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.RayReorder.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionRayReorderHlsl);
 
-					CharString tmp = CharString_createRefCStrConst(nvHLSLExtnsInternal);
-					gotoIfError3(clean, CharString_createCopy(tmp, alloc, &tempFile, e_rr));
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.RayTriPosition.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionRayTriPositionHlsl);
 
-					tmp = CharString_createRefCStrConst(nvHLSLExtnsInternal2);
-					gotoIfError3(clean, CharString_appendString(&tempFile, &tmp, alloc, e_rr));
-				}
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.RayMicromapOpacity.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionRayMicromapOpacityHlsl);
 
-				else if(CharString_equalsCStringInsensitive(&resolved, "@nvHLSLExtns.h")) {
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.AtomicF32.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionAtomicF32Hlsl);
 
-					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.AtomicF64.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionAtomicF64Hlsl);
 
-					CharString tmp = CharString_createRefCStrConst(nvHLSLExtns);
-					gotoIfError3(clean, CharString_createCopy(tmp, alloc, &tempFile, e_rr));
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.CoopVec.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionCoopVecHlsl);
 
-					tmp = CharString_createRefCStrConst(nvHLSLExtns2);
-					gotoIfError3(clean, CharString_appendString(&tempFile, &tmp, alloc, e_rr));
-
-					tmp = CharString_createRefCStrConst(nvHLSLExtns3);
-					gotoIfError3(clean, CharString_appendString(&tempFile, &tmp, alloc, e_rr));
-				}
+				else if(CharString_equalsCStringInsensitive(&resolved, "@extension.CoopMat.hlsli"))
+					tmpTmp = CharString_createRefCStrConst(extensionCoopMatHlsl);
 
 				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"));
 
@@ -1052,7 +1063,16 @@ Bool Compiler_compile(
 				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-debug=vulkan-with-source", alloc, e_rr));
 
 			if(!isRt) {
-				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr));
+
+				ESHExtension vk13 = (ESHExtension) (
+					ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining
+				);
+
+				if(toCompile->extensions & vk13) {
+					gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.3", alloc, e_rr));
+				}
+
+				else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1", alloc, e_rr));
 			}
 
 			else gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.1spirv1.4", alloc, e_rr));
@@ -1107,11 +1127,6 @@ Bool Compiler_compile(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_multiview", alloc, e_rr
 				));
 
-			if(toCompile->extensions & ESHExtension_RayReorder)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_NV_shader_invocation_reorder", alloc, e_rr
-				));
-
 			if(toCompile->extensions & ESHExtension_RayMotionBlur)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_NV_ray_tracing_motion_blur", alloc, e_rr
@@ -1120,11 +1135,6 @@ Bool Compiler_compile(
 			if(toCompile->extensions & ESHExtension_RayQuery)
 				gotoIfError3(clean, Compiler_registerArgCStr(
 					&stringsUTF8, "-fspv-extension=SPV_KHR_ray_query", alloc, e_rr
-				));
-
-			if(toCompile->extensions & ESHExtension_RayMicromapOpacity)
-				gotoIfError3(clean, Compiler_registerArgCStr(
-					&stringsUTF8, "-fspv-extension=SPV_EXT_opacity_micromap", alloc, e_rr
 				));
 
 			//NOTE: F32/F64 atomics have no native HLSL intrinsic and are expressed via inline SPIR-V
@@ -1364,6 +1374,14 @@ Bool Compiler_compile(
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"));
 
+			//Fail loudly rather than silently emitting an empty binary that only trips a confusing SHFile_read
+			//error much later. DXC can produce no object without a reported error (e.g. a DXIL validation reject
+			//of a still-experimental op), so guard against a zero-length blob explicitly.
+			if(!resultBlob || !resultBlob->GetBufferSize())
+				retError(clean, Error_invalidState(
+					3, "Compiler_compile() DXC produced an empty binary (compile or validation failed silently)"
+				));
+
 		gotoIfError3(clean, Buffer_createCopy(
 			Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
 			alloc,
@@ -1578,7 +1596,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 			break;
 
-		case C8x2('C', 'o'):    //ComputeDeriv
+		case C8x2('C', 'o'):    //ComputeDeriv, CoopVec, CoopMat
 
 			if(
 				stageNameLen == 12 &&
@@ -1586,6 +1604,28 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 				Buffer_readU16(buf, 10, NULL, NULL) == C8x2('i', 'v')
 			)
 				return ESHExtension_ComputeDeriv;
+
+			if(stageNameLen == 7 && Buffer_readU16(buf, 2, NULL, NULL) == C8x2('o', 'p')) {
+
+				const U32 tail = Buffer_readU32(buf, 3, NULL, NULL);      //buf[3..6]: "pVec" / "pMat" / "pFP8"
+
+				if(tail == C8x4('p', 'V', 'e', 'c'))
+					return ESHExtension_CoopVec;
+
+				if(tail == C8x4('p', 'M', 'a', 't'))
+					return ESHExtension_CoopMat;
+
+				if(tail == C8x4('p', 'F', 'P', '8'))
+					return ESHExtension_CoopFP8;
+			}
+
+			//CoopVecTraining (len 15): "CoopVecTraining"
+			if(
+				stageNameLen == 15 &&
+				Buffer_readU32(buf, 3, NULL, NULL) == C8x4('p', 'V', 'e', 'c') &&
+				Buffer_readU64(buf, 7, NULL, NULL) == C8x8('T', 'r', 'a', 'i', 'n', 'i', 'n', 'g')
+			)
+				return ESHExtension_CoopVecTraining;
 
 			break;
 
@@ -1679,6 +1719,13 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 
 						if(stageNameLen == 10)
 							return ESHExtension_RayReorder;
+
+						break;
+
+					case C8x8('y', 'T', 'r', 'i', 'P', 'o', 's', 'i'):        //RayTriPosition
+
+						if(stageNameLen == 14 && Buffer_readU32(buf, 10, NULL, NULL) == C8x4('t', 'i', 'o', 'n'))
+							return ESHExtension_RayTriPosition;
 
 						break;
 				}
@@ -1839,6 +1886,22 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 
 	if(ext & ESHExtension_WriteMSTexture)
 		minVersion = U16_max(OISH_SHADER_MODEL(6, 7), minVersion);
+
+	//SM6.9 native ray features: SER (dx::HitObject reorder) and OMM (RayQuery opacity-micromap flags).
+	if(ext & (ESHExtension_RayReorder | ESHExtension_RayMicromapOpacity))
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 9), minVersion);
+
+	//SM6.10 features: cooperative vectors/matrix and ray triangle vertex position fetch.
+	//Neither is detectable from DXIL,
+	// so requiring the model here is what forces a compatible shader model on the DXIL path.
+
+	ESHExtension sm10 = (ESHExtension) (
+		ESHExtension_CoopVec | ESHExtension_CoopMat | ESHExtension_CoopFP8 | ESHExtension_CoopVecTraining |
+		ESHExtension_RayTriPosition
+	);
+
+	if(ext & sm10)
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 10), minVersion);
 
 	return minVersion;
 }
@@ -2633,7 +2696,10 @@ Bool Compiler_parseValue(
 
 						F32 v = F64_castF32(res);
 
-						if (!EFloatType_isFinite(EFloatType_F32, *(const U32*)&v))
+						//Reinterpret the float bits via a void* launder (strict-aliasing-safe).
+						const void *vptr = &v;
+
+						if (!EFloatType_isFinite(EFloatType_F32, *(const U32*)vptr))
 							retError(clean, Error_invalidParameter(
 								0, 0, "Compiler_parseValue() passed float value not representable as F32"
 							));
@@ -2642,15 +2708,18 @@ Bool Compiler_parseValue(
 						break;
 					}
 
-					default:
+					default: {
 
-						if (!EFloatType_isFinite(EFloatType_F64, *(const U64*)&res))
+						const void *resptr = &res;
+
+						if (!EFloatType_isFinite(EFloatType_F64, *(const U64*)resptr))
 							retError(clean, Error_invalidParameter(
 								0, 0, "Compiler_parseValue() passed float value not representable as F64"
 							));
 
 						value->vf64[dstOff] = res;
 						break;
+					}
 				}
 
 				++dstOff;
@@ -3310,7 +3379,7 @@ Bool Compiler_parse(
 	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 		gotoIfError3(clean, CharString_toUTF16(settings->path, alloc, &tmpWStr, e_rr));
 	#else
-		gotoIfError3(clean, CharString_toUTF32(settings->path, alloc, &tmpWStr));
+		gotoIfError3(clean, CharString_toUTF32(settings->path, alloc, &tmpWStr, e_rr));
 	#endif
 
 	interfaces = (CompilerInterfaces*)comp->interfaces;
@@ -3381,6 +3450,13 @@ Bool Compiler_parse(
 		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tmp, alloc, e_rr));
 		tmp = CharString_createNull();
 	}
+
+	//Reflect at the highest shader model (a SM6.10 library) so every feature is available to the reflection
+	//parse, including the SM6.9/6.10 raytracing ops (SER / OMM / triangle position fetch). Reflection is
+	//stage-agnostic here (the oxc::stage / [shader(...)] annotation drives the real stage), so a lib target
+	//that can hold any stage is the right choice.
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr));
+	gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "lib_6_10", alloc, e_rr));
 
 	Compiler_convertToWString(stringsUTF8, clean);
 

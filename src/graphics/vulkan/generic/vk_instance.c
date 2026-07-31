@@ -551,7 +551,8 @@ const C8 *optExtensionsName[] = {
 	#endif
 
 	"VK_KHR_maintenance4",        "VK_KHR_buffer_device_address", "VK_EXT_descriptor_indexing", "VK_KHR_driver_properties",
-	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget"
+	"VK_KHR_shader_atomic_int64", "VK_KHR_shader_float16_int8",   "VK_KHR_draw_indirect_count", "VK_EXT_memory_budget",
+	"VK_NV_cooperative_vector",   "VK_KHR_cooperative_matrix",    "VK_EXT_shader_float8",      "VK_KHR_ray_tracing_position_fetch"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -937,6 +938,34 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		);
 
 		getDeviceFeatures(
+			optExtensions[EOptExtensions_CooperativeVector],
+			VkPhysicalDeviceCooperativeVectorFeaturesNV,
+			coopVectorFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_CooperativeMatrix],
+			VkPhysicalDeviceCooperativeMatrixFeaturesKHR,
+			coopMatrixFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_ShaderFloat8],
+			VkPhysicalDeviceShaderFloat8FeaturesEXT,
+			shaderFloat8Feat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayTriPosition],
+			VkPhysicalDeviceRayTracingPositionFetchFeaturesKHR,
+			rayPositionFetchFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_POSITION_FETCH_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
 			optExtensions[EOptExtensions_F16],
 			VkPhysicalDeviceShaderFloat16Int8Features,
 			float16,
@@ -1319,6 +1348,20 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 		if(computeDeriv.computeDerivativeGroupLinear)
 			capabilities.features |= EGraphicsFeatures_ComputeDeriv;
 
+		//Cooperative vectors/matrix (linalg) aren't gated on raytracing, so set them here rather than in the RT block.
+		//Base tier of each is FP16 + INT8; CoopFP8 is the additive FP8 tier; training exposes the outer-product/reduce ops.
+		if(coopVectorFeat.cooperativeVector)
+			capabilities.features |= EGraphicsFeatures_CoopVec;
+
+		if(coopVectorFeat.cooperativeVectorTraining)
+			capabilities.features |= EGraphicsFeatures_CoopVecTraining;
+
+		if(coopMatrixFeat.cooperativeMatrix)
+			capabilities.features |= EGraphicsFeatures_CoopMat;
+
+		if(shaderFloat8Feat.shaderFloat8)
+			capabilities.features |= EGraphicsFeatures_CoopFP8;
+
 		if(!optExtensions[EOptExtensions_DeferredHostOperations])
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
@@ -1414,6 +1457,9 @@ Bool VK_WRAP_FUNC(GraphicsInstance_getDeviceInfos)(const GraphicsInstance *inst,
 
 					if(rayOpacityMicroFeat.micromap)
 						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+
+					if(rayPositionFetchFeat.rayTracingPositionFetch)
+						capabilities.features |= EGraphicsFeatures_RayTriPosition;
 				}
 			}
 		}

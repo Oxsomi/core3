@@ -143,7 +143,7 @@ typedef enum ESHExtension {
 
 	ESHExtension_RayQuery					= 1 << 8,
 	ESHExtension_RayMicromapOpacity			= 1 << 9,
-	ESHExtension_Reserved					= 1 << 10,
+	ESHExtension_RayTriPosition				= 1 << 10,		//SM6.10 tri vertex position fetch (RayQuery + ray-pipeline)
 	ESHExtension_RayMotionBlur				= 1 << 11,
 	ESHExtension_RayReorder					= 1 << 12,
 
@@ -159,7 +159,12 @@ typedef enum ESHExtension {
 	ESHExtension_Bindless					= 1 << 18,
 	ESHExtension_UnboundArraySize			= 1 << 19,
     
-	ESHExtension_SubgroupOperations			= 1 << 20
+	ESHExtension_SubgroupOperations			= 1 << 20,
+
+	ESHExtension_CoopVec					= 1 << 21		//SM6.10 cooperative vectors (matvec, SPV_NV_cooperative_vector)
+	ESHExtension_CoopMat					= 1 << 22		//SM6.10 cooperative matrix (GEMM, SPV_KHR_cooperative_matrix)
+	ESHExtension_CoopFP8					= 1 << 23		//FP8 (e4m3/e5m2) cooperative tier (additive gate; base is FP16 + INT8)
+	ESHExtension_CoopVecTraining			= 1 << 24		//Cooperative-vector training (outer-product / reduce-sum accumulate; Tier 1.1)
 
 } ESHExtension;
 
@@ -474,10 +479,14 @@ The following define the requirements of binaries embedded in oiSH files.
     - GroupNonUniform
     - GroupNonUniformVote or SubgroupVoteKHR
     - GroupNonUniformBallot or SubgroupBallotKHR
-  - ShaderInvocationReorderNV as RayReorder.
+  - ShaderInvocationReorderEXT as RayReorder.
   - RayTracingMotionBlurNV as RayMotionBlur.
   - RayQueryKHR as RayQuery.
   - RayTracingOpacityMicromapEXT as RayMicromapOpacity.
+  - RayTracingPositionFetchKHR or RayQueryPositionFetchKHR as RayTriPosition.
+  - CooperativeVectorNV or CooperativeVectorTrainingNV as CoopVec.
+  - CooperativeMatrixKHR as CoopMat.
+  - Float8CooperativeMatrixEXT as CoopFP8 (cooperative-vector FP8 is an interpretation, not a capability, so it's annotation-driven).
   - AtomicFloat32AddEXT or AtomicFloat32MinMaxEXT as AtomicF32.
   - AtomicFloat64AddEXT or AtomicFloat64MinMaxEXT as AtomicF64.
   - ComputeDerivativeGroupLinearNV / ComputeDerivativeGroupQuadsNV as ComputeDeriv (DXC emits the Quads variant for ddx/ddy in even 2D compute groups).
@@ -510,7 +519,8 @@ The following define the requirements of binaries embedded in oiSH files.
   - D3D_SHADER_REQUIRES_DERIVATIVES_IN_MESH_AND_AMPLIFICATION_SHADERS as MeshTaskTexDeriv.
   - D3D_SHADER_REQUIRES_WAVE_OPS as SubgroupOperations.
   - D3D_SHADER_REQUIRES_WRITEABLE_MSAA_TEXTURES or D3D_SHADER_REQUIRES_ADVANCED_TEXTURE_OPS as WriteMSTexture. An RWTexture2DMS write reports both flags; OxC3 has no dedicated bit for the parent AdvancedTextureOps feature, so it is folded into WriteMSTexture (the use case that trips it).
-- NV extensions should be properly marked using annotations, or the oiSH is illegal. The OxC3 validator can't check this yet, since DXIL doesn't understand these; it's the driver which parses DXIL into these special opcodes.
+- SER (dx::HitObject) and OMM (RayQuery opacity-micromap flags) are native (DXR 1.2 / SM6.9).
+- cooperative vectors/matrix (CoopVec/CoopMat/CoopFP8) and RayTriPosition (ray tri vertex position fetch) are SM6.10 features that can't be detected from DXIL flags; they must be marked with annotations (they only bump the target shader model), or the oiSH is illegal - the OxC3 validator can't verify this.
 
 ## ESHExtension_Bindless / ESHExtension_UnboundArraySize
 
